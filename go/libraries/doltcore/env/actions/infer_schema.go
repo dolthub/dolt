@@ -26,6 +26,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -68,6 +69,8 @@ type InferenceArgs struct {
 	// KeepTypes is a flag which tells the inferrer, that if a column already exists in the ExistinchSch then use it's type
 	// without modification.
 	KeepTypes bool
+	// Update is a flag which tells the inferrer, not to change existing columns
+	Update bool
 }
 
 // InferSchemaFromTableReader will infer a tables schema.
@@ -129,31 +132,44 @@ func newInferrer(pkColToIdx map[string]int, sch schema.Schema, args *InferenceAr
 }
 
 func (inf *inferrer) inferSchema() (schema.Schema, error) {
-	cols := make([]schema.Column, 0, inf.colCount)
-	pkCols := make([]schema.Column, 0, inf.colCount)
+	nonPkCols, _ := schema.NewColCollection()
+	pkCols, _ := schema.NewColCollection()
+
+	if inf.impArgs.Update {
+		nonPkCols = inf.impArgs.ExistingSch.GetNonPKCols()
+		pkCols = inf.impArgs.ExistingSch.GetPKCols()
+	}
+
 	existingCols := inf.impArgs.ExistingSch.GetAllCols()
 
 	tag := uint64(0)
+	colNamesSet := set.NewStrSet(inf.colNames)
 	for i, name := range inf.colNames {
 		if mappedName, ok := inf.impArgs.ColMapper.Map(name); ok {
 			name = mappedName
 		}
 
+		colNamesSet.Add(name)
 		_, partOfPK := inf.pkColToIdx[name]
 		typeToCount := inf.colType[i]
 		hasNegatives := inf.negatives[i]
 		kind, nullable := typeCountsToKind(name, typeToCount, hasNegatives)
 
-		constraints := make([]schema.ColConstraint, 0, 1)
-		if !nullable {
-			constraints = append(constraints, schema.NotNullConstraint{})
-		}
-
 		tag = nextTag(tag, existingCols)
 		thisTag := tag
 		var col *schema.Column
 		if existingCol, ok := existingCols.GetByName(name); ok {
-			if inf.impArgs.KeepTypes {
+			if inf.impArgs.Update {
+				if nullable {
+					if partOfPK {
+						pkCols = removeNullConstraint(pkCols, existingCol)
+					} else {
+						nonPkCols = removeNullConstraint(nonPkCols, existingCol)
+					}
+				}
+
+				continue
+			} else if inf.impArgs.KeepTypes {
 				col = &existingCol
 			} else {
 				thisTag = existingCol.Tag
@@ -163,33 +179,56 @@ func (inf *inferrer) inferSchema() (schema.Schema, error) {
 		}
 
 		if col == nil {
+			constraints := make([]schema.ColConstraint, 0, 1)
+			if !nullable {
+				constraints = append(constraints, schema.NotNullConstraint{})
+			}
+
 			tmp := schema.NewColumn(name, thisTag, kind, partOfPK, constraints...)
 			col = &tmp
 		}
 
+		var err error
 		if col.IsPartOfPK {
-			pkCols = append(pkCols, *col)
+			pkCols, err = pkCols.Append(*col)
 		} else {
-			cols = append(cols, *col)
+			nonPkCols, err = nonPkCols.Append(*col)
+		}
+
+		if err != nil {
+			return nil, err
 		}
 	}
 
-	if len(pkCols) != len(inf.pkColToIdx) {
+	if pkCols.Size() != len(inf.pkColToIdx) {
 		return nil, errors.New("some pk columns were not found")
 	}
 
-	orderedPKCols := make([]schema.Column, len(pkCols))
-	for _, col := range pkCols {
+	pkCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if !colNamesSet.Contains(col.Name) {
+			pkCols = removeNullConstraint(pkCols, col)
+		}
+		return false, nil
+	})
+
+	nonPkCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if !colNamesSet.Contains(col.Name) {
+			nonPkCols = removeNullConstraint(nonPkCols, col)
+		}
+		return false, nil
+	})
+
+	orderedPKCols := make([]schema.Column, pkCols.Size())
+	err := pkCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		idx, ok := inf.pkColToIdx[col.Name]
 
 		if !ok {
-			return nil, errors.New("could not find key column")
+			return false, errors.New("could not find key column")
 		}
 
 		orderedPKCols[idx] = col
-	}
-
-	colColl, err := schema.NewColCollection(cols...)
+		return false, nil
+	})
 
 	if err != nil {
 		return nil, err
@@ -201,7 +240,28 @@ func (inf *inferrer) inferSchema() (schema.Schema, error) {
 		return nil, err
 	}
 
-	return schema.SchemaFromPKAndNonPKCols(pkColColl, colColl)
+	return schema.SchemaFromPKAndNonPKCols(pkColColl, nonPkCols)
+}
+
+func removeNullConstraint(colColl *schema.ColCollection, col schema.Column) *schema.ColCollection {
+	_, ok := colColl.GetByTag(col.Tag)
+	if !ok {
+		return colColl
+	}
+
+	constraints := col.Constraints
+	numConstraints := len(constraints)
+	if numConstraints > 0 {
+		notNullConstraintIdx := schema.IndexOfConstraint(constraints, schema.NotNullConstraintType)
+
+		if notNullConstraintIdx != -1 {
+			constraints = append(constraints[:notNullConstraintIdx], constraints[notNullConstraintIdx+1:]...)
+			newCol := schema.NewColumn(col.Name, col.Tag, col.Kind, col.IsPartOfPK, constraints...)
+			colColl, _ = colColl.Replace(col, newCol)
+		}
+	}
+
+	return colColl
 }
 
 func nextTag(tag uint64, cols *schema.ColCollection) uint64 {

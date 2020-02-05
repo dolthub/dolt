@@ -58,10 +58,10 @@ var schImportShortDesc = "Creates a new table with an inferred schema."
 var schImportLongDesc = "If <b>--create | -c</b> is given the operation will create <table> with a schema that it infers" +
 	"from the supplied file. One or more primary key columns must be specified using the <b>--pks</b> parameter.\n" +
 	"\n" +
-	//"If <b>--update | -u</b> is given the operation will update <table> any additional columns, or change the types of columns" +
-	//"based on the file supplied.  If the <b>--keep-types</b> parameter is supplied then the types for existing columns will" +
-	//"not be modified, even if they differ from what is in the supplied file." +
-	//"\n" +
+	"If <b>--update | -u</b> is given the operation will update <table> any additional columns, or change the types of columns" +
+	"based on the file supplied.  If the <b>--keep-types</b> parameter is supplied then the types for existing columns will" +
+	"not be modified, even if they differ from what is in the supplied file." +
+	"\n" +
 	"If <b>--replace | -r</b> is given the operation will replace <table> with a new, empty table which has a schema inferred from" +
 	"the supplied file but columns tags will be maintained across schemas.  <b>--keep-types</b> can also be supplied here" +
 	"to guarantee that types are the same in the file and in the pre-existing table.\n" +
@@ -134,7 +134,7 @@ func (cmd ImportCmd) createArgParser() *argparser.ArgParser {
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "Name of the table to be created."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "The file being used to infer the schema."})
 	ap.SupportsFlag(createFlag, "c", "Create a table with the schema inferred from the <file> provided.")
-	//ap.SupportsFlag(updateFlag, "u", "Update a table to match the inferred schema of the <file> provided")
+	ap.SupportsFlag(updateFlag, "u", "Update a table to match the inferred schema of the <file> provided")
 	ap.SupportsFlag(replaceFlag, "r", "Replace a table with a new schema that has the inferred schema from the <file> provided. All previous data will be lost.")
 	ap.SupportsFlag(dryRunFlag, "", "Print the sql statement that would be run if executed without the flag.")
 	ap.SupportsFlag(keepTypesParam, "", "When a column already exists in the table, and it's also in the <file> provided, use the type from the table.")
@@ -282,6 +282,7 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 			ColMapper:      colMapper,
 			FloatThreshold: floatThreshold,
 			KeepTypes:      apr.Contains(keepTypesParam),
+			Update:         op == updateOp,
 		},
 	}
 
