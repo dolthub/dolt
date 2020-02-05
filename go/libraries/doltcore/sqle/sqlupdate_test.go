@@ -74,7 +74,7 @@ var systemTableUpdateTests = []UpdateTest {
 		Name: "update dolt_schemas",
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
 			mustGetDoltSchema(SchemasTableSchema()),
-			NewRow(types.String("view"), types.String("name"), types.String("select 2+2 from dual"))),
+			NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual"))),
 		UpdateQuery: "update dolt_schemas set type = 'not a view'",
 		SelectQuery:  "select * from dolt_schemas",
 		ExpectedRows: CompressRows(mustGetDoltSchema(SchemasTableSchema()),
