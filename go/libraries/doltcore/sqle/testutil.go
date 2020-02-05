@@ -36,6 +36,11 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 	db := NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState)
 	engine.AddDatabase(db)
 
+	err := RegisterSchemaFragments(sql.NewContext(context.Background()), engine.Catalog, db)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, query := range strings.Split(statements, ";\n") {
 		if len(strings.Trim(query, " ")) == 0 {
 			continue

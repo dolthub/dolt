@@ -41,7 +41,7 @@ func GetOrCreateDoltSchemasTable(ctx *sql.Context, db *Database) (*WritableDoltT
 	if found {
 		return tbl.(*WritableDoltTable), nil
 	}
-	err = db.CreateTable(ctx, doltdb.SchemasTableName, SchemasTableSchema())
+	err = db.createTable(ctx, doltdb.SchemasTableName, SchemasTableSchema())
 	if err != nil {
 		return nil, err
 	}

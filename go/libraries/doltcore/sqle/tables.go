@@ -39,13 +39,13 @@ type DoltTable struct {
 	db       *Database
 }
 
-// WritableDoltTable allows updating, deleting, and inserting new rows.
+// WritableDoltTable allows updating, deleting, and inserting new rows. It implements sql.UpdatableTable and friends.
 type WritableDoltTable struct {
 	DoltTable
 	ed *tableEditor
 }
 
-// AlterableDoltTable allows altering the schema of the table.
+// AlterableDoltTable allows altering the schema of the table. It implements sql.AlterableTable.
 type AlterableDoltTable struct {
 	WritableDoltTable
 }

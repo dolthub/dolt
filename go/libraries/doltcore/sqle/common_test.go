@@ -36,9 +36,15 @@ func executeSelect(ctx context.Context, dEnv *env.DoltEnv, targetSch schema.Sche
 	engine.AddDatabase(db)
 	engine.Catalog.RegisterIndexDriver(&DoltIndexDriver{db})
 	engine.Init()
-	sqlCtx := sql.NewContext(ctx)
 
+	sqlCtx := sql.NewContext(ctx)
 	var err error
+
+	err = RegisterSchemaFragments(sql.NewContext(ctx), engine.Catalog, db)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	_, iter, err := engine.Query(sqlCtx, query)
 	if err != nil {
 		return nil, nil, err

@@ -232,6 +232,11 @@ func (db *Database) CreateTable(ctx *sql.Context, tableName string, schema sql.S
 		return ErrInvalidTableName.New(tableName)
 	}
 
+	return db.createTable(ctx, tableName, schema)
+}
+
+// Unlike the exported version, createTable doesn't enforce any table name checks.
+func (db *Database) createTable(ctx *sql.Context, tableName string, schema sql.Schema) error {
 	if exists, err := db.root.HasTable(ctx, tableName); err != nil {
 		return err
 	} else if exists {
@@ -346,6 +351,7 @@ func (db *Database) DropView(ctx *sql.Context, name string) error {
 	if err != nil {
 		return err
 	}
+
 	return deleter.Close(ctx)
 }
 
@@ -363,11 +369,11 @@ func RegisterSchemaFragments(ctx *sql.Context, catalog *sql.Catalog, db *Databas
 		return nil
 	}
 
-	tbl := stbl.(*DoltTable)
+	tbl := stbl.(*WritableDoltTable)
 	if err != nil {
 		return err
 	}
-	iter, err := newRowIterator(tbl, ctx)
+	iter, err := newRowIterator(&tbl.DoltTable, ctx)
 	if err != nil {
 		return err
 	}
