@@ -147,15 +147,16 @@ func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sq
 
 	var toReturn sql.Table
 
-	table := DoltTable{name: exactName, table: tbl, sch: sch, db: db}
-	toReturn = &table
-	if !doltdb.HasDoltPrefix(exactName) {
-		toReturn = &AlterableDoltTable{WritableDoltTable{DoltTable: table}}
-	} else if !doltdb.IsSystemTable(exactName) {
-		toReturn = &WritableDoltTable{DoltTable: table}
+	readonlyTable := DoltTable{name: exactName, table: tbl, sch: sch, db: db}
+	if doltdb.IsSystemTable(exactName) {
+		toReturn = &readonlyTable
+	} else if doltdb.HasDoltPrefix(exactName) {
+		toReturn = &WritableDoltTable{DoltTable: readonlyTable}
+	} else {
+		toReturn = &AlterableDoltTable{WritableDoltTable{DoltTable: readonlyTable}}
 	}
 
-	db.tables[exactName] = &table
+	db.tables[exactName] = toReturn
 	return toReturn, true, nil
 }
 
