@@ -291,3 +291,29 @@ type TableFileStore interface {
 	// SetRootChunk changes the root chunk hash from the previous value to the new root.
 	SetRootChunk(ctx context.Context, root, previous hash.Hash) error
 }
+
+// TableFileStoreMetricsWrapper is a wrapped TableFileStore and ChunkStore used to get metrics from the chunkstore.
+type TableFileStoreMetricsWrapper struct {
+	*chunks.CSMetricWrapper
+	tfs TableFileStore
+}
+
+// NewTableFileStoreMetricsWrapper creates a TableFileStoreMetricsWrapper
+func NewTableFileStoreMetricsWrapper(cs chunks.ChunkStore, tfs TableFileStore) *TableFileStoreMetricsWrapper {
+	return &TableFileStoreMetricsWrapper{chunks.NewCSMetricWrapper(cs), tfs}
+}
+
+// Sources retrieves the current root hash, and a list of all the table files
+func (tfsMW *TableFileStoreMetricsWrapper) Sources(ctx context.Context) (hash.Hash, []TableFile, error) {
+	return tfsMW.tfs.Sources(ctx)
+}
+
+// WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
+func (tfsMW *TableFileStoreMetricsWrapper) WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader, contentLength uint64, contentHash []byte) error {
+	return tfsMW.tfs.WriteTableFile(ctx, fileId, numChunks, rd, contentLength, contentHash)
+}
+
+// SetRootChunk changes the root chunk hash from the previous value to the new root.
+func (tfsMW *TableFileStoreMetricsWrapper) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
+	return tfsMW.tfs.SetRootChunk(ctx, root, previous)
+}

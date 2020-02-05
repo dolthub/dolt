@@ -20,8 +20,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/liquidata-inc/dolt/go/store/chunks"
-
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/store/datas"
 	"github.com/liquidata-inc/dolt/go/store/nbs"
@@ -61,5 +59,5 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 		return nil, err
 	}
 
-	return datas.NewDatabase(chunks.NewCSMetricWrapper(st)), nil
+	return datas.NewDatabase(nbs.NewTableFileStoreMetricsWrapper(st, st)), nil
 }

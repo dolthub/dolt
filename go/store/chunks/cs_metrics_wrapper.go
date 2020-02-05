@@ -46,12 +46,12 @@ func NewCSMetrics(csMW *CSMetricWrapper) CSMetrics {
 // String prints CSMetrics as JSON with indenting
 func (csm CSMetrics) String() string {
 	return fmt.Sprintf(`{
-		"totalChunkGets":       %d,
-		"uniqueGets":           %d,
-		"totalChunkHasChecks":  %d,
-		"uniqueChunkHasChecks": %d,
-		"uniquePuts":           %d,
-	}`, csm.TotalChunkGets, csm.UniqueGets, csm.TotalChunkHasChecks, csm.UniqueChunkHasChecks, csm.UniquePuts)
+	"totalChunkGets":       %d,
+	"uniqueGets":           %d,
+	"totalChunkHasChecks":  %d,
+	"uniqueChunkHasChecks": %d,
+	"uniquePuts":           %d,
+}`, csm.TotalChunkGets, csm.UniqueGets, csm.TotalChunkHasChecks, csm.UniqueChunkHasChecks, csm.UniquePuts)
 }
 
 // CSMetricWrapper is a ChunkStore implementation that wraps a ChunkStore, and collects metrics on the calls.
