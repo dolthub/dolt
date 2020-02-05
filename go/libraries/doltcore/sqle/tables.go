@@ -217,7 +217,7 @@ func (t *DoltTable) updateTable(ctx context.Context, mapEditor *types.MapEditor)
 }
 
 // AddColumn implements sql.AlterableTable
-func (t *DoltTable) AddColumn(ctx *sql.Context, column *sql.Column, order *sql.ColumnOrder) error {
+func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, order *sql.ColumnOrder) error {
 	table, _, err := t.db.Root().GetTable(ctx, t.name)
 	if err != nil {
 		return err
@@ -280,7 +280,7 @@ func orderToOrder(order *sql.ColumnOrder) *alterschema.ColumnOrder {
 }
 
 // DropColumn implements sql.AlterableTable
-func (t *DoltTable) DropColumn(ctx *sql.Context, columnName string) error {
+func (t *AlterableDoltTable) DropColumn(ctx *sql.Context, columnName string) error {
 	table, _, err := t.db.Root().GetTable(ctx, t.name)
 	if err != nil {
 		return err
@@ -301,7 +301,7 @@ func (t *DoltTable) DropColumn(ctx *sql.Context, columnName string) error {
 }
 
 // ModifyColumn implements sql.AlterableTable
-func (t *DoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sql.Column, order *sql.ColumnOrder) error {
+func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sql.Column, order *sql.ColumnOrder) error {
 	table, _, err := t.db.Root().GetTable(ctx, t.name)
 	if err != nil {
 		return err

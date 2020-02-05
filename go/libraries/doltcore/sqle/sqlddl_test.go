@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -992,9 +993,15 @@ func TestAlterSystemTables(t *testing.T) {
 		mustGetDoltSchema(SchemasTableSchema()),
 		NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual")))
 
+	// The _history and _diff tables give not found errors right now because of https://github.com/liquidata-inc/dolt/issues/373.
+	// We can remove the divergent failure logic when the issue is fixed.
 	t.Run("Drop", func(t *testing.T) {
 		for _, tableName := range systemTableNames {
-			assertFails(t, dEnv, fmt.Sprintf("drop table %s", tableName), "system table")
+			expectedErr := "system table"
+			if strings.HasPrefix(tableName, "dolt_diff") || strings.HasPrefix(tableName, "dolt_history") {
+				expectedErr = "not found"
+			}
+			assertFails(t, dEnv, fmt.Sprintf("drop table %s", tableName), expectedErr)
 		}
 		for _, tableName := range reservedTableNames {
 			assertSucceeds(t, dEnv, fmt.Sprintf("drop table %s", tableName))
@@ -1003,7 +1010,11 @@ func TestAlterSystemTables(t *testing.T) {
 
 	t.Run("Rename", func(t *testing.T) {
 		for _, tableName := range systemTableNames {
-			assertFails(t, dEnv, fmt.Sprintf("rename table %s to newname", tableName), "system table")
+			expectedErr := "system table"
+			if strings.HasPrefix(tableName, "dolt_diff") || strings.HasPrefix(tableName, "dolt_history") {
+				expectedErr = "not found"
+			}
+			assertFails(t, dEnv, fmt.Sprintf("rename table %s to newname", tableName), expectedErr)
 		}
 		for _, tableName := range reservedTableNames {
 			assertSucceeds(t, dEnv, fmt.Sprintf("rename table %s to newname", tableName))
@@ -1012,7 +1023,11 @@ func TestAlterSystemTables(t *testing.T) {
 
 	t.Run("Alter", func(t *testing.T) {
 		for _, tableName := range append(systemTableNames, reservedTableNames...) {
-			assertFails(t, dEnv, fmt.Sprintf("alter table %s add column a int", tableName), "system table")
+			expectedErr := "cannot be altered"
+			if strings.HasPrefix(tableName, "dolt_diff") || strings.HasPrefix(tableName, "dolt_history") {
+				expectedErr = "not found"
+			}
+			assertFails(t, dEnv, fmt.Sprintf("alter table %s add column a int", tableName), expectedErr)
 		}
 	})
 }
