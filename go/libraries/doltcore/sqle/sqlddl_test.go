@@ -970,7 +970,7 @@ func TestRenameTable(t *testing.T) {
 }
 
 func TestAlterSystemTables(t *testing.T) {
-	systemTableNames := []string{"dolt_docs", "dolt_history", "dolt_log", "dolt_diff"}
+	systemTableNames := []string{"dolt_docs", "dolt_log", "dolt_history_people", "dolt_diff_people"}
 	reservedTableNames := []string{"dolt_schemas", "dolt_query_catalog"}
 
 	dEnv := dtestutils.CreateTestEnv()
@@ -994,7 +994,7 @@ func TestAlterSystemTables(t *testing.T) {
 
 	t.Run("Drop", func(t *testing.T) {
 		for _, tableName := range systemTableNames {
-			assertFails(t, dEnv, fmt.Sprintf("drop table %s", tableName), "reserved")
+			assertFails(t, dEnv, fmt.Sprintf("drop table %s", tableName), "system table")
 		}
 		for _, tableName := range reservedTableNames {
 			assertSucceeds(t, dEnv, fmt.Sprintf("drop table %s", tableName))
@@ -1003,7 +1003,7 @@ func TestAlterSystemTables(t *testing.T) {
 
 	t.Run("Rename", func(t *testing.T) {
 		for _, tableName := range systemTableNames {
-			assertFails(t, dEnv, fmt.Sprintf("rename table %s to newname", tableName), "reserved")
+			assertFails(t, dEnv, fmt.Sprintf("rename table %s to newname", tableName), "system table")
 		}
 		for _, tableName := range reservedTableNames {
 			assertSucceeds(t, dEnv, fmt.Sprintf("rename table %s to newname", tableName))
@@ -1012,7 +1012,7 @@ func TestAlterSystemTables(t *testing.T) {
 
 	t.Run("Alter", func(t *testing.T) {
 		for _, tableName := range append(systemTableNames, reservedTableNames...) {
-			assertFails(t, dEnv, fmt.Sprintf("alter table %s add column a int", tableName), "reserved")
+			assertFails(t, dEnv, fmt.Sprintf("alter table %s add column a int", tableName), "system table")
 		}
 	})
 }

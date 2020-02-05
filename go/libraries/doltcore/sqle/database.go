@@ -34,6 +34,7 @@ type batchMode bool
 
 var ErrInvalidTableName = errors.NewKind("Invalid table name %s. Table names must match the regular expression " + doltdb.TableNameRegexStr)
 var ErrReservedTableName = errors.NewKind("Invalid table name %s. Table names beginning with `dolt_` are reserved for internal use")
+var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables cannot be dropped or altered")
 
 const (
 	batched batchMode = true
@@ -201,6 +202,10 @@ func (db *Database) SetRoot(newRoot *doltdb.RootValue) {
 
 // DropTable drops the table with the name given
 func (db *Database) DropTable(ctx *sql.Context, tableName string) error {
+	if doltdb.IsSystemTable(tableName) {
+		return ErrSystemTableAlter.New(tableName)
+	}
+
 	tableExists, err := db.root.HasTable(ctx, tableName)
 	if err != nil {
 		return err
@@ -260,6 +265,10 @@ func (db *Database) createTable(ctx *sql.Context, tableName string, schema sql.S
 
 // RenameTable implements sql.TableRenamer
 func (db *Database) RenameTable(ctx *sql.Context, oldName, newName string) error {
+	if doltdb.IsSystemTable(oldName) {
+		return ErrSystemTableAlter.New(oldName)
+	}
+
 	if doltdb.HasDoltPrefix(newName) {
 		return ErrReservedTableName.New(newName)
 	}
