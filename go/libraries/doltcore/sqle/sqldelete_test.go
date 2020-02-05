@@ -16,6 +16,9 @@ package sqle
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/store/types"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -38,6 +41,46 @@ func TestExecuteDelete(t *testing.T) {
 		})
 	}
 }
+
+func TestExecuteDeleteSystemTables(t *testing.T) {
+	for _, test := range systemTableDeleteTests {
+		t.Run(test.Name, func(t *testing.T) {
+			testDeleteQuery(t, test)
+		})
+	}
+}
+
+var systemTableDeleteTests = []DeleteTest {
+	{
+		Name: "update dolt_docs",
+		AdditionalSetup: CreateTableFn("dolt_docs",
+			env.DoltDocsSchema,
+			NewRow(types.String("LICENSE.md"), types.String("A license"))),
+		DeleteQuery: "delete from dolt_docs",
+		ExpectedErr: "cannot delete from table",
+	},
+	{
+		Name: "update dolt_query_catalog",
+		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
+			DoltQueryCatalogSchema,
+			NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 2+2 from dual"), types.String("description"))),
+		DeleteQuery: "delete from dolt_query_catalog",
+		SelectQuery:  "select * from dolt_query_catalog",
+		ExpectedRows: CompressRows(DoltQueryCatalogSchema),
+		ExpectedSchema: CompressSchema(DoltQueryCatalogSchema),
+	},
+	{
+		Name: "update dolt_schemas",
+		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
+			mustGetDoltSchema(SchemasTableSchema()),
+			NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual"))),
+		DeleteQuery: "delete from dolt_schemas",
+		SelectQuery:  "select * from dolt_schemas",
+		ExpectedRows: CompressRows(mustGetDoltSchema(SchemasTableSchema())),
+		ExpectedSchema: CompressSchema(mustGetDoltSchema(SchemasTableSchema())),
+	},
+}
+
 
 // Tests the given query on a freshly created dataset, asserting that the result has the given schema and rows. If
 // expectedErr is set, asserts instead that the execution returns an error that matches.
