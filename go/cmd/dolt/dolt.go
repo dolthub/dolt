@@ -39,7 +39,7 @@ import (
 )
 
 const (
-	Version = "0.13.1"
+	Version = "0.13.2"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -80,6 +80,7 @@ func init() {
 
 const chdirFlag = "--chdir"
 const profFlag = "--prof"
+const csMetricsFlag = "--csmetrics"
 const cpuProf = "cpu"
 const memProf = "mem"
 const blockingProf = "blocking"
@@ -92,6 +93,7 @@ func main() {
 func runMain() int {
 	args := os.Args[1:]
 
+	csMetrics := false
 	if len(args) > 0 {
 		var doneDebugFlags bool
 		for !doneDebugFlags {
@@ -126,6 +128,10 @@ func runMain() int {
 				}
 
 				args = args[2:]
+
+			case csMetricsFlag:
+				csMetrics = true
+				args = args[1:]
 
 			default:
 				doneDebugFlags = true
@@ -178,7 +184,14 @@ func runMain() int {
 		return 1
 	}
 
-	return doltCommand.Exec(context.Background(), "dolt", args, dEnv)
+	res := doltCommand.Exec(context.Background(), "dolt", args, dEnv)
+
+	if csMetrics && dEnv.DoltDB != nil {
+		metricsSummary := dEnv.DoltDB.CSMetricsSummary()
+		cli.PrintErrln(metricsSummary)
+	}
+
+	return res
 }
 
 // processEventsDir runs the dolt send-metrics command in a new process

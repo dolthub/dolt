@@ -62,7 +62,7 @@ func (cmd AddCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) er
 func (cmd AddCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "Working table(s) to add to the list tables staged to be committed. The abbreviation '.' can be used to add all tables."})
-	ap.SupportsFlag(allParam, "a", "Stages any and all changes (adds, deletes, and modifications).")
+	ap.SupportsFlag(allParam, "A", "Stages any and all changes (adds, deletes, and modifications).")
 	return ap
 }
 

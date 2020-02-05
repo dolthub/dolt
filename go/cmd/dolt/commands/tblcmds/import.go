@@ -339,7 +339,7 @@ func executeMove(ctx context.Context, dEnv *env.DoltEnv, force bool, mvOpts *mvd
 			cli.Println(color.RedString(err.Error()))
 			return 1
 		} else if exists {
-			cli.PrintErrln(color.RedString("Data already exists.  Use -f to overwrite."))
+			cli.PrintErrln(color.RedString(fmt.Sprintf("%s already exists. Use -f to overwrite.", mvOpts.Dest.String())))
 			return 1
 		}
 	}
