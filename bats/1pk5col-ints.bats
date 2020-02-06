@@ -556,7 +556,9 @@ pk,c1," ",c3,c4,c5
 0,1,2,3,4,5
 DELIM
         run dolt table import test -u bad.csv
-        [ "$status" -eq 0 ]
+        [ "$status" -eq 1 ]
+        [[ "$output" =~ "bad header line: column cannot be NULL or empty string" ]] || false
+        [[ ! "$output" =~ "panic" ]] || false
 }
 
 @test "import data from a psv file after table created" {
