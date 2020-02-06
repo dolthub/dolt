@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package actions
+package rebase
 
 import (
 	"context"
@@ -26,6 +26,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	nd "github.com/liquidata-inc/dolt/go/store/diff"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -35,11 +36,11 @@ type parentMap map[hash.Hash][]*doltdb.Commit
 // TODO: get commit from DoltRef
 // TODO: allow rebasing of multiple tags
 // replaces all instances of oldTag with newTag.
-func RebaseSwapTag(ctx context.Context, dref ref.DoltRef, ddb *doltdb.DoltDB, oldTag, newTag uint64) error {
-	cs, err := doltdb.NewCommitSpec("head", dref.String())
+func RebaseSwapTag(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, oldTag, newTag uint64) (*doltdb.Commit, error) {
+	cs, err := doltdb.NewCommitSpec("head", dRef.String())
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	cm, err := ddb.Resolve(ctx, cs)
@@ -47,7 +48,7 @@ func RebaseSwapTag(ctx context.Context, dref ref.DoltRef, ddb *doltdb.DoltDB, ol
 	commitHistory, otherParents, err := rewindCommitHistory(ctx, ddb, cm, oldTag)
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if len(commitHistory) < 2 {
@@ -57,7 +58,7 @@ func RebaseSwapTag(ctx context.Context, dref ref.DoltRef, ddb *doltdb.DoltDB, ol
 	parent := commitHistory[0]
 	rebasedParent := parent
 	commitHistory = commitHistory[1:]
-
+	var rebasedCommit *doltdb.Commit
 
 	for _, commit := range commitHistory {
 
@@ -65,51 +66,51 @@ func RebaseSwapTag(ctx context.Context, dref ref.DoltRef, ddb *doltdb.DoltDB, ol
 		root, err := commit.GetRootValue()
 
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		parentRoot, err := parent.GetRootValue()
 
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		rebasedParentRoot, err := rebasedParent.GetRootValue()
 
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		rebasedRoot, err := replayCommitWithNewTag(ctx, root, parentRoot, rebasedParentRoot, oldTag, newTag)
 
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		valueHash, err := ddb.WriteRootValue(ctx, rebasedRoot)
 
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		oldMeta, err := commit.GetCommitMeta()
 
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		ch, _ := commit.HashOf()
 		parents := append(otherParents[ch], rebasedParent)
-		rebasedCommit, err := ddb.CommitWithParentCommits(ctx, valueHash, dref, parents, oldMeta)
+		rebasedCommit, err = ddb.CommitWithParentCommits(ctx, valueHash, dRef, parents, oldMeta)
 
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		parent = commit
 		rebasedParent = rebasedCommit
 	}
-	return nil
+	return rebasedCommit, nil
 }
 
 func rewindCommitHistory(ctx context.Context, ddb *doltdb.DoltDB, c *doltdb.Commit, oldTag uint64) ([]*doltdb.Commit, parentMap, error) {
@@ -264,7 +265,7 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 	// schema rebase
 	// TODO: do we rebase primary keys?
 	var isPkTag bool
-	var newCC *schema.ColCollection
+	newCC, _ := schema.NewColCollection()
 	err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if tag == oldTag {
 			col = schema.Column{
@@ -391,8 +392,12 @@ func replayRowDiffs(ctx context.Context,rSch schema.Schema, tbl, parentTbl, reba
 	ad.Start(ctx, rows, parentRows)
 	defer ad.Close()
 
-	for !ad.IsDone() {
+	for {
 		diffs, err := ad.GetDiffs(1, time.Second)
+
+		if ad.IsDone() {
+			break
+		}
 
 		if err != nil {
 			return types.EmptyMap, err
@@ -411,36 +416,11 @@ func replayRowDiffs(ctx context.Context,rSch schema.Schema, tbl, parentTbl, reba
 			panic("lol, wut")
 		}
 
-		// breakout
-		// modify differences to use newTag
-		var key types.LesserValuable
-		var newVal types.Valuable
-		if pkTag {
-			tv, err := row.ParseTaggedValues(d.KeyValue.(types.Tuple))
+		key, newVal, err := modifyDifferenceTag(d, oldTag, newTag, pkTag, rebasedNBF, rebasedTags)
 
-			if err != nil {
-				return types.EmptyMap, err
-			}
-
-			tv[newTag] = tv[oldTag]
-			delete(tv, oldTag)
-
-			key = tv.NomsTupleForTags(rebasedNBF, rebasedTags, true)
-			newVal = d.NewValue
-		} else if d.NewValue != nil {
-			tv, err := row.ParseTaggedValues(d.NewValue.(types.Tuple))
-
-			if err != nil {
-				return types.EmptyMap, err
-			}
-
-			tv[newTag] = tv[oldTag]
-			delete(tv, oldTag)
-
-			newVal = tv.NomsTupleForTags(rebasedNBF, rebasedTags, false)
-			key = d.KeyValue
+		if err != nil {
+			return types.EmptyMap, nil
 		}
-		// breakout
 
 		if d.OldValue != nil && d.NewValue != nil { // update
 			rebasedRowEditor.Set(key, newVal)
@@ -454,4 +434,31 @@ func replayRowDiffs(ctx context.Context,rSch schema.Schema, tbl, parentTbl, reba
 	}
 
 	return rebasedRowEditor.Map(ctx)
+}
+
+func modifyDifferenceTag(d *nd.Difference, old, new uint64, pkTag bool, nbf *types.NomsBinFormat, tags []uint64) (key types.LesserValuable, val types.Valuable, err error) {
+	if pkTag {
+		tv, err := row.ParseTaggedValues(d.KeyValue.(types.Tuple))
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		tv[new] = tv[old]
+		delete(tv, old)
+
+		return tv.NomsTupleForTags(nbf, tags, true), d.NewValue, nil
+	} else if d.NewValue != nil {
+		tv, err := row.ParseTaggedValues(d.NewValue.(types.Tuple))
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		tv[new] = tv[old]
+		delete(tv, old)
+
+		return d.KeyValue, tv.NomsTupleForTags(nbf, tags, false), nil
+	}
+	return d.KeyValue, d.NewValue, nil
 }
