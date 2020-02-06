@@ -37,7 +37,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
-	dtypes "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/types"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/fwt"
@@ -494,17 +493,11 @@ func tabularSchemaDiff(tableName string, tags []uint64, diffs map[uint64]diff.Sc
 			cli.Println(color.RedString("- " + sql.FmtCol(2, 0, 0, *dff.Old)))
 		case diff.SchDiffColModified:
 			// changed in sch2
-			oldType, err := dtypes.NomsKindToSqlTypeString(dff.Old.Kind)
-			if err != nil {
-				return errhand.BuildDError("error: failed to diff schemas").AddCause(err).Build()
-			}
-			newType, err := dtypes.NomsKindToSqlTypeString(dff.New.Kind)
-			if err != nil {
-				return errhand.BuildDError("error: failed to diff schemas").AddCause(err).Build()
-			}
+			oldSqlType := dff.Old.TypeInfo.ToSqlType()
+			newSqlType := dff.New.TypeInfo.ToSqlType()
 
-			n0, t0, pk0 := dff.Old.Name, oldType, dff.Old.IsPartOfPK
-			n1, t1, pk1 := dff.New.Name, newType, dff.New.IsPartOfPK
+			n0, t0, pk0 := dff.Old.Name, oldSqlType.String(), dff.Old.IsPartOfPK
+			n1, t1, pk1 := dff.New.Name, newSqlType.String(), dff.New.IsPartOfPK
 
 			nameLen := 0
 			typeLen := 0

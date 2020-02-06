@@ -16,6 +16,7 @@ package row
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/valutil"
@@ -112,6 +113,11 @@ func findInvalidCol(r Row, sch schema.Schema) (*schema.Column, schema.ColConstra
 			return true, nil
 		}
 
+		if !col.TypeInfo.IsValid(val) {
+			badCol = &col
+			return true, fmt.Errorf(`"%v" is not valid for "%v"`, val, col.TypeInfo.String())
+		}
+
 		if len(col.Constraints) > 0 {
 			for _, cnst := range col.Constraints {
 				if !cnst.SatisfiesConstraint(val) {
@@ -125,11 +131,7 @@ func findInvalidCol(r Row, sch schema.Schema) (*schema.Column, schema.ColConstra
 		return false, nil
 	})
 
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return badCol, badCnst, nil
+	return badCol, badCnst, err
 }
 
 func AreEqual(row1, row2 Row, sch schema.Schema) bool {
