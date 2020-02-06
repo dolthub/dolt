@@ -48,23 +48,6 @@ teardown() {
     [ "${#lines[@]}" -eq 8 ]
 }
 
-@test "save query" {
-    run dolt sql -q "desc dolt_query_catalog"
-    [ "$status" -eq 1 ]
-    run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1" -s -m "my message" -n "my name"
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 8 ]
-    run dolt sql -q "desc dolt_query_catalog"
-    [ "$status" -eq 0 ]
-    run dolt sql -q "select * from dolt_query_catalog" -r csv
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
-    [[ "$output" =~ "id,display_order,name,query,description" ]] || false
-    [[ "$output" =~ "my message" ]] || false
-    [[ "$output" =~ "my name" ]] || false
-    [[ "$output" =~ "select pk,pk1,pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1" ]] || false
-}
-
 @test "sql ambiguous column name" {
     run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where c1=0"
     [ "$status" -eq 1 ]
