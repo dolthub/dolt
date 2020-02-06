@@ -64,7 +64,6 @@ teardown() {
     [[ "$output" =~ "dolt_log" ]] || false
     [[ "$output" =~ "dolt_history_test" ]] || false
     [[ "$output" =~ "dolt_diff_test" ]] || false
-
 }
 
 @test "query dolt_log system table" {
@@ -89,9 +88,9 @@ teardown() {
     dolt sql -q "insert into test values (1,1)"
     dolt add test
     dolt commit -m "Added (1,1) row"
-    run dolt sql -q "select * from dolt_diff_test"
+    run dolt sql -q 'select * from dolt_diff_test where from_commit="HEAD^"'
     [ $status -eq 0 ]
-    skip "This returns no data right now."
+    [ "${#lines[@]}" -eq 5 ]
 }
 
 @test "query dolt_history_ system table" {
