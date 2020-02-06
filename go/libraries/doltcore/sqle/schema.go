@@ -22,7 +22,7 @@ import (
 	"github.com/src-d/go-mysql-server/sql"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/types"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 )
 
 // doltSchemaToSqlSchema returns the sql.Schema corresponding to the dolt schema given.
@@ -99,13 +99,10 @@ func SqlSchemaToDoltSchema(sqlSchema sql.Schema) (schema.Schema, error) {
 
 // doltColToSqlCol returns the SQL column corresponding to the dolt column given.
 func doltColToSqlCol(tableName string, col schema.Column) (*sql.Column, error) {
-	colType, err := types.NomsKindToSqlType(col.Kind)
-	if err != nil {
-		return nil, err
-	}
+	sqlType := col.TypeInfo.ToSqlType()
 	return &sql.Column{
 		Name:       col.Name,
-		Type:       colType,
+		Type:       sqlType,
 		Default:    nil,
 		Nullable:   col.IsNullable(),
 		Source:     tableName,
@@ -120,12 +117,12 @@ func SqlColToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 	if !col.Nullable {
 		constraints = append(constraints, schema.NotNullConstraint{})
 	}
-	kind, err := types.SqlTypeToNomsKind(col.Type)
+	typeInfo, err := typeinfo.FromSqlType(col.Type)
 	if err != nil {
 		return schema.Column{}, err
 	}
 
-	return schema.NewColumn(col.Name, tag, kind, col.PrimaryKey, constraints...), nil
+	return schema.NewColumnWithTypeInfo(col.Name, tag, typeInfo, col.PrimaryKey, constraints...)
 }
 
 const tagCommentPrefix = "tag:"

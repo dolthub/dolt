@@ -24,6 +24,7 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -53,18 +54,21 @@ func TestReader(t *testing.T) {
 			Tag:        0,
 			Kind:       types.IntKind,
 			IsPartOfPK: true,
+			TypeInfo:   typeinfo.Int64Type,
 		},
 		schema.Column{
 			Name:       "first name",
 			Tag:        1,
 			Kind:       types.StringKind,
 			IsPartOfPK: false,
+			TypeInfo:   typeinfo.StringDefaultType,
 		},
 		schema.Column{
 			Name:       "last name",
 			Tag:        2,
 			Kind:       types.StringKind,
 			IsPartOfPK: false,
+			TypeInfo:   typeinfo.StringDefaultType,
 		},
 	)
 	require.NoError(t, err)
@@ -129,18 +133,21 @@ func TestReaderBadJson(t *testing.T) {
 			Tag:        0,
 			Kind:       types.IntKind,
 			IsPartOfPK: true,
+			TypeInfo:   typeinfo.Int64Type,
 		},
 		schema.Column{
 			Name:       "first name",
 			Tag:        1,
 			Kind:       types.StringKind,
 			IsPartOfPK: false,
+			TypeInfo:   typeinfo.StringDefaultType,
 		},
 		schema.Column{
 			Name:       "last name",
 			Tag:        2,
 			Kind:       types.StringKind,
 			IsPartOfPK: false,
+			TypeInfo:   typeinfo.StringDefaultType,
 		},
 	)
 	require.NoError(t, err)

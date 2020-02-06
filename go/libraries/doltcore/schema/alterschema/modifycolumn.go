@@ -66,7 +66,7 @@ func validateModifyColumn(ctx context.Context, tbl *doltdb.Table, existingCol sc
 		return err
 	}
 
-	if existingCol.Kind != modifiedCol.Kind {
+	if existingCol.Kind != modifiedCol.Kind || !existingCol.TypeInfo.Equals(modifiedCol.TypeInfo) {
 		return errors.New("unsupported feature: column types cannot be changed")
 	}
 

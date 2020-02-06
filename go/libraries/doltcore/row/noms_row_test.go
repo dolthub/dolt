@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -48,14 +49,14 @@ var ageVal = types.Uint(53)
 var titleVal = types.NullValue
 
 var testKeyCols = []schema.Column{
-	{Name: lnColName, Tag: lnColTag, Kind: types.StringKind, IsPartOfPK: true, Constraints: []schema.ColConstraint{schema.NotNullConstraint{}}},
-	{Name: fnColName, Tag: fnColTag, Kind: types.StringKind, IsPartOfPK: true, Constraints: []schema.ColConstraint{schema.NotNullConstraint{}}},
+	{Name: lnColName, Tag: lnColTag, Kind: types.StringKind, IsPartOfPK: true, TypeInfo: typeinfo.StringDefaultType, Constraints: []schema.ColConstraint{schema.NotNullConstraint{}}},
+	{Name: fnColName, Tag: fnColTag, Kind: types.StringKind, IsPartOfPK: true, TypeInfo: typeinfo.StringDefaultType, Constraints: []schema.ColConstraint{schema.NotNullConstraint{}}},
 }
 var testCols = []schema.Column{
-	{Name: addrColName, Tag: addrColTag, Kind: types.StringKind, IsPartOfPK: false, Constraints: nil},
-	{Name: ageColName, Tag: ageColTag, Kind: types.UintKind, IsPartOfPK: false, Constraints: nil},
-	{Name: titleColName, Tag: titleColTag, Kind: types.StringKind, IsPartOfPK: false, Constraints: nil},
-	{Name: reservedColName, Tag: reservedColTag, Kind: types.StringKind, IsPartOfPK: false, Constraints: nil},
+	{Name: addrColName, Tag: addrColTag, Kind: types.StringKind, IsPartOfPK: false, TypeInfo: typeinfo.StringDefaultType, Constraints: nil},
+	{Name: ageColName, Tag: ageColTag, Kind: types.UintKind, IsPartOfPK: false, TypeInfo: typeinfo.StringDefaultType, Constraints: nil},
+	{Name: titleColName, Tag: titleColTag, Kind: types.StringKind, IsPartOfPK: false, TypeInfo: typeinfo.StringDefaultType, Constraints: nil},
+	{Name: reservedColName, Tag: reservedColTag, Kind: types.StringKind, IsPartOfPK: false, TypeInfo: typeinfo.StringDefaultType, Constraints: nil},
 }
 var testKeyColColl, _ = schema.NewColCollection(testKeyCols...)
 var testNonKeyColColl, _ = schema.NewColCollection(testCols...)

@@ -17,14 +17,17 @@ package sqle
 import (
 	"context"
 	"io"
+	"testing"
 
 	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
+	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -82,4 +85,12 @@ func executeModify(ctx context.Context, root *doltdb.RootValue, query string) (*
 	sqlCtx := sql.NewContext(ctx)
 	_, _, err := engine.Query(sqlCtx, query)
 	return db.Root(), err
+}
+
+func schemaNewColumn(t *testing.T, name string, tag uint64, sqlType sql.Type, partOfPK bool, constraints ...schema.ColConstraint) schema.Column {
+	typeInfo, err := typeinfo.FromSqlType(sqlType)
+	require.NoError(t, err)
+	col, err := schema.NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, constraints...)
+	require.NoError(t, err)
+	return col
 }

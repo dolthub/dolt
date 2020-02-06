@@ -89,7 +89,6 @@ func createPeopleTestSchema() schema.Schema {
 		schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 		schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
 		schema.NewColumn("age", AgeTag, types.IntKind, false),
-		//		schema.NewColumn("empty", emptyTag, types.IntKind, false),
 		schema.NewColumn("rating", RatingTag, types.FloatKind, false),
 		schema.NewColumn("uuid", UuidTag, types.UUIDKind, false),
 		schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),

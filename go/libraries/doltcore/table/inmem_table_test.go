@@ -21,6 +21,7 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -32,10 +33,10 @@ const (
 )
 
 var fields, _ = schema.NewColCollection(
-	schema.Column{Name: "name", Tag: nameTag, Kind: types.StringKind, IsPartOfPK: true, Constraints: nil},
-	schema.Column{Name: "age", Tag: ageTag, Kind: types.UintKind, IsPartOfPK: true, Constraints: nil},
-	schema.Column{Name: "title", Tag: titleTag, Kind: types.StringKind, IsPartOfPK: true, Constraints: nil},
-	schema.Column{Name: "is_great", Tag: greatTag, Kind: types.BoolKind, IsPartOfPK: true, Constraints: nil},
+	schema.Column{Name: "name", Tag: nameTag, Kind: types.StringKind, IsPartOfPK: true, TypeInfo: typeinfo.StringDefaultType, Constraints: nil},
+	schema.Column{Name: "age", Tag: ageTag, Kind: types.UintKind, IsPartOfPK: true, TypeInfo: typeinfo.Uint64Type, Constraints: nil},
+	schema.Column{Name: "title", Tag: titleTag, Kind: types.StringKind, IsPartOfPK: true, TypeInfo: typeinfo.StringDefaultType, Constraints: nil},
+	schema.Column{Name: "is_great", Tag: greatTag, Kind: types.BoolKind, IsPartOfPK: true, TypeInfo: typeinfo.BoolType, Constraints: nil},
 )
 
 var rowSch = schema.SchemaFromCols(fields)
