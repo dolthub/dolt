@@ -16,9 +16,10 @@ package rebase
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
+	"fmt"
+
 	"github.com/stretchr/testify/assert"
+	"io"
 	"testing"
 	"time"
 
@@ -27,12 +28,14 @@ import (
 	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	stu "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
-
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 
@@ -44,24 +47,88 @@ var initPeople = `insert into people
 
 var patty = `insert into people 
   (id, first_name, last_name, is_married, age, rating, drip) values
-  (11, "Selma", "Bouvier", false, 40, 7, 8.5);`
+  (11, "Selma", "Bouvier", false, 40, 7, 8);`
 
 var selma = `insert into people 
   (id, first_name, last_name, is_married, age, rating, drip) values
-  (10, "Patty", "Bouvier", false, 40, 7, 8.5);`
+  (10, "Patty", "Bouvier", false, 40, 7, 8);`
 
-var rows = []row.Row{
-	stu.NewPeopleRow(7, "Maggie", "Simpson", false, 1, 5.1),
-	stu.NewPeopleRow(8, "Milhouse", "Van Houten", false, 8, 3.5),
-	stu.NewPeopleRow(9, "Jacqueline", "Bouvier", true, 80, 2),
-	stu.NewPeopleRow(10, "Patty", "Bouvier", false, 40, 7),
-	stu.NewPeopleRow(11, "Selma", "Bouvier", false, 40, 7),
+
+func newPeopleRow(id int, first, last string, isMarried bool, age int, rating float64) row.Row {
+	vals := row.TaggedValues{
+		IdTag:        types.Int(id),
+		FirstNameTag: types.String(first),
+		LastNameTag:  types.String(last),
+		IsMarriedTag: types.Bool(isMarried),
+		AgeTag:       types.Int(age),
+		RatingTag:    types.Float(rating),
+	}
+
+	r, err := row.New(types.Format_7_18, schema.SchemaFromCols(PeopleColColl()), vals)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return r
 }
 
+func newPeopleRowWithDrip(id int, first, last string, isMarried bool, age int, rating float64, drip int) row.Row {
+	vals := row.TaggedValues{
+		IdTag:        types.Int(id),
+		FirstNameTag: types.String(first),
+		LastNameTag:  types.String(last),
+		IsMarriedTag: types.Bool(isMarried),
+		AgeTag:       types.Int(age),
+		RatingTag:    types.Float(rating),
+		postTag:	  types.Int(drip),
+	}
+
+	pcc, _ := PeopleColColl().Append(schema.NewColumn("drip", postTag, types.IntKind, false))
+	r, err := row.New(types.Format_7_18, schema.SchemaFromCols(pcc), vals)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return r
+}
+
+var PeopleRows = []row.Row{
+	newPeopleRow(7, "Maggie", "Simpson", false, 1, 5.1),
+	newPeopleRow(8, "Milhouse", "Van Houten", false, 8, 3.5),
+	newPeopleRow(9, "Jacqueline", "Bouvier", true, 80, 2),
+	newPeopleRowWithDrip(10, "Patty", "Bouvier", false, 40, 7, 8),
+	newPeopleRowWithDrip(11, "Selma", "Bouvier", false, 40, 7, 8),
+}
+
+const (
+	IdTag = iota
+	FirstNameTag
+	LastNameTag
+	IsMarriedTag
+	AgeTag
+	emptyTag
+	RatingTag
+)
+
+func PeopleColColl() *schema.ColCollection {
+	pcc, _ := schema.NewColCollection(
+		schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("first_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
+		schema.NewColumn("age", AgeTag, types.IntKind, false),
+		//		schema.NewColumn("empty", emptyTag, types.IntKind, false),
+		schema.NewColumn("rating", RatingTag, types.FloatKind, false),
+	)
+	return pcc
+}
 
 func setup(t *testing.T) *env.DoltEnv {
 	dEnv := dtestutils.CreateTestEnv()
-	stu.CreateEmptyTestDatabase(dEnv, t)
+	peopleSch := schema.SchemaFromCols(PeopleColColl())
+	dtestutils.CreateTestTable(t, dEnv, "people", peopleSch)
 	executeQuery(dEnv, initPeople)
 	_ = actions.StageAllTables(context.Background(), dEnv, false)
 	_ = actions.CommitStaged(context.Background(), dEnv, "ship it", time.Now(), false)
@@ -96,12 +163,45 @@ func checkTags(t *testing.T, r *doltdb.RootValue, tableName string, in []uint64,
 	}
 }
 
+func checkRows(t *testing.T, root *doltdb.RootValue, sch schema.Schema, query string, rows []row.Row) {
+	sqlDb := dsqle.NewDatabase("dolt", root, nil, nil)
+	engine := sqle.NewDefault()
+	engine.AddDatabase(sqlDb)
+	_ = engine.Init()
+	sqlCtx := sql.NewContext(context.Background())
+
+	s, rowIter, err := engine.Query(sqlCtx, query)
+	_, _ = dsqle.SqlSchemaToDoltSchema(s)
+	require.NoError(t, err)
+
+	var r sql.Row
+	var rr row.Row
+	idx := 0
+	for err == nil {
+		r, err = rowIter.Next()
+		if err == io.EOF {
+			return
+		}
+		require.NoError(t, err)
+		rr, err = dsqle.SqlRowToDoltRow(root.VRW().Format(), r, sch)
+		require.NoError(t, err)
+		assert.True(t, idx < len(rows))
+		assert.Equal(t, rows[idx], rr)
+		idx++
+	}
+}
+
+const preTag = 13
+const postTag = 19
 func TestRebaseTag(t *testing.T) {
 	dEnv := setup(t)
 
-	executeQuery(dEnv, "alter table people add drip bigint comment 'tag:13';")
-	_ = actions.StageAllTables(context.Background(), dEnv, false)
-	_ = actions.CommitStaged(context.Background(), dEnv, "ship it", time.Now(), false)
+	var err error
+	executeQuery(dEnv, fmt.Sprintf("alter table people add drip bigint comment 'tag:%d';", preTag))
+	err = actions.StageAllTables(context.Background(), dEnv, false)
+	require.NoError(t, err)
+	err = actions.CommitStaged(context.Background(), dEnv, "ship it", time.Now(), false)
+	require.NoError(t, err)
 
 	executeQuery(dEnv, selma)
 	executeQuery(dEnv, patty)
@@ -109,15 +209,20 @@ func TestRebaseTag(t *testing.T) {
 	_ = actions.CommitStaged(context.Background(), dEnv, "ship it", time.Now(), false)
 
 	root, err := dEnv.WorkingRoot(context.Background())
+	//p, _, _ := root.GetTable(context.Background(), "people")
+	//fmt.Println(p.HashOf())
 	require.NoError(t, err)
-	checkTags(t, root, "people", []uint64{13}, []uint64{19})
+	checkTags(t, root, "people", []uint64{preTag}, []uint64{postTag})
 
 	bs, _ := dEnv.DoltDB.GetBranches(context.Background())
-	cm, err := RebaseSwapTag(context.Background(), bs[0], dEnv.DoltDB, 13, 19)
+	cm, err := RebaseSwapTag(context.Background(), bs[0], dEnv.DoltDB, preTag, postTag)
 	require.NoError(t, err)
 
 	root, _ = cm.GetRootValue()
 	require.NoError(t, err)
-	checkTags(t, root, "people", []uint64{19}, []uint64{13})
+	checkTags(t, root, "people", []uint64{postTag}, []uint64{preTag})
+	pcc, _ := PeopleColColl().Append(schema.NewColumn("drip", postTag, types.IntKind, false))
+	checkRows(t, root, schema.SchemaFromCols(pcc), "select * from people;", PeopleRows)
+
 }
 

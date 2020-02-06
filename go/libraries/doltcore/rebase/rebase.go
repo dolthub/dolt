@@ -133,6 +133,7 @@ func rewindCommitHistory(ctx context.Context, ddb *doltdb.DoltDB, c *doltdb.Comm
 		h, _ := cur.HashOf()
 		otherParents[h] = []*doltdb.Commit{}
 		tagUsed := false
+		history = append(history, cur)
 
 		for i := 0; i < n; i++ {
 			pc, err := ddb.ResolveParent(ctx, cur, i)
@@ -149,9 +150,10 @@ func rewindCommitHistory(ctx context.Context, ddb *doltdb.DoltDB, c *doltdb.Comm
 			}
 
 			if pcUsed {
-				// tag can only be used by one parent
+				if tagUsed {
+					panic("tag can be used by at most one parent")
+				}
 				tagUsed = true
-				history = append(history, cur)
 				cur = pc
 			} else {
 				otherParents[h] = append(otherParents[h], pc)
@@ -160,8 +162,10 @@ func rewindCommitHistory(ctx context.Context, ddb *doltdb.DoltDB, c *doltdb.Comm
 
 		if !tagUsed {
 			// reached first usage of oldTag
-			// oldest commit (cur) is start of rebase history
-			history = append(history, cur)
+			if len(otherParents[h]) != 1 {
+				panic("this doesn't work, disambiguate merge commit")
+			}
+			history = append(history, otherParents[h]...)
 			break
 		}
 	}
@@ -250,7 +254,13 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		return nil, err
 	}
 
-	parentTblName, parentTable, err := tableFromRootAndTag(ctx, parentRoot, oldTag)
+	parentTable, found, err := parentRoot.GetTable(ctx, tblName)
+	if !found {
+		// todo: this will break on rename commit, find via tagset once tags are gloabl
+		panic("parent table has different name")
+	}
+	parentTblName := tblName
+	//parentTblName, parentTable, err := tableFromRootAndTag(ctx, parentRoot, oldTag)
 
 	if err != nil {
 		return nil, err
@@ -332,8 +342,6 @@ func tableFromRootAndTag(ctx context.Context, root *doltdb.RootValue, tag uint64
 		return "", nil, err
 	}
 
-	var tbl *doltdb.Table
-	var tblName string
 	for _, tn := range tblNames {
 		t, _, _ := root.GetTable(ctx, tn)
 
@@ -346,18 +354,12 @@ func tableFromRootAndTag(ctx context.Context, root *doltdb.RootValue, tag uint64
 		_, found := sch.GetAllCols().GetByTag(tag)
 
 		if found {
-			tbl = t
-			tblName = tn
-			break
+			return tn, t, nil
 		}
 	}
 
-	if tbl == nil {
-		h, _ := root.HashOf()
-		return "", nil, errors.New(fmt.Sprintf("tag: %d not found in any table at commit: %s", tag, h.String()))
-	}
-
-	return tblName, tbl, nil
+	h, _ := root.HashOf()
+	return "", nil, errors.New(fmt.Sprintf("tag: %d not found in any table at commit: %s", tag, h.String()))
 }
 
 func replayRowDiffs(ctx context.Context,rSch schema.Schema, tbl, parentTbl, rebasedParentTable *doltdb.Table, oldTag, newTag uint64, pkTag bool) (types.Map, error) {
