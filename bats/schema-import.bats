@@ -54,9 +54,10 @@ teardown() {
     [[ "$output" =~ "\`pk\` BIGINT" ]] || false
     [[ "$output" =~ "\`int\` BIGINT" ]] || false
     [[ "$output" =~ "\`string\` LONGTEXT" ]] || false
-    [[ "$output" =~ "\`boolean\` BOOLEAN" ]] || false
+    [[ "$output" =~ "\`boolean\` BIT(1)" ]] || false
+    [[ "$output" =~ "\`float\` DOUBLE" ]] || false
     [[ "$output" =~ "\`uint\` BIGINT" ]] || false
-    [[ "$output" =~ "\`uuid\` LONGTEXT" ]] || false
+    [[ "$output" =~ "\`uuid\` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin" ]] || false
 }
 
 @test "schema import with an empty csv" {
@@ -76,9 +77,10 @@ teardown() {
     [[ "$output" =~ "\`pk\` BIGINT" ]] || false
     [[ "$output" =~ "\`int\` BIGINT" ]] || false
     [[ "$output" =~ "\`string\` LONGTEXT" ]] || false
-    [[ "$output" =~ "\`boolean\` BOOLEAN" ]] || false
+    [[ "$output" =~ "\`boolean\` BIT(1)" ]] || false
+    [[ "$output" =~ "\`float\` DOUBLE" ]] || false
     [[ "$output" =~ "\`uint\` BIGINT" ]] || false
-    [[ "$output" =~ "\`uuid\` LONGTEXT" ]] || false
+    [[ "$output" =~ "\`uuid\` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin" ]] || false
 }
 
 @test "schema import with invalid names" {

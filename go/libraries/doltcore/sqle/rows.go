@@ -22,7 +22,6 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	sqlTypes "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/types"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -86,7 +85,7 @@ func doltRowToSqlRow(doltRow row.Row, sch schema.Schema) (sql.Row, error) {
 	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		var innerErr error
 		value, _ := doltRow.GetColVal(tag)
-		colVals[i], innerErr = sqlTypes.NomsValToSqlVal(value)
+		colVals[i], innerErr = col.TypeInfo.ConvertNomsValueToValue(value)
 		if innerErr != nil {
 			return true, innerErr
 		}
@@ -110,7 +109,7 @@ func SqlRowToDoltRow(nbf *types.NomsBinFormat, r sql.Row, doltSchema schema.Sche
 		schCol := allCols.TagToCol[tag]
 		if val != nil {
 			var err error
-			taggedVals[tag], err = sqlTypes.SqlValToNomsVal(val, schCol.Kind)
+			taggedVals[tag], err = schCol.TypeInfo.ConvertValueToNomsValue(val)
 			if err != nil {
 				return nil, err
 			}

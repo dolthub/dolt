@@ -31,10 +31,10 @@ const expectedCreateSQL = "CREATE TABLE `table_name` (\n" +
 	"  `id` BIGINT NOT NULL COMMENT 'tag:0',\n" +
 	"  `first_name` LONGTEXT NOT NULL COMMENT 'tag:1',\n" +
 	"  `last_name` LONGTEXT NOT NULL COMMENT 'tag:2',\n" +
-	"  `is_married` BOOLEAN COMMENT 'tag:3',\n" +
+	"  `is_married` BIT(1) COMMENT 'tag:3',\n" +
 	"  `age` BIGINT COMMENT 'tag:4',\n" +
 	"  `rating` DOUBLE COMMENT 'tag:6',\n" +
-	"  `uuid` LONGTEXT COMMENT 'tag:7',\n" +
+	"  `uuid` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin COMMENT 'tag:7',\n" +
 	"  `num_episodes` BIGINT UNSIGNED COMMENT 'tag:8',\n" +
 	"  PRIMARY KEY (`id`)\n" +
 	");"

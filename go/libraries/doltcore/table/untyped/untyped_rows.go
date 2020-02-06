@@ -17,6 +17,7 @@ package untyped
 import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -81,6 +82,7 @@ func UntypeSchema(sch schema.Schema) (schema.Schema, error) {
 	var cols []schema.Column
 	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		col.Kind = types.StringKind
+		col.TypeInfo = typeinfo.StringDefaultType
 		cols = append(cols, col)
 		return false, nil
 	})
@@ -130,6 +132,7 @@ func UntypeUnkeySchema(sch schema.Schema) (schema.Schema, error) {
 		col.Kind = types.StringKind
 		col.IsPartOfPK = false
 		col.Constraints = nil
+		col.TypeInfo = typeinfo.StringDefaultType
 		cols = append(cols, col)
 		return false, nil
 	})
