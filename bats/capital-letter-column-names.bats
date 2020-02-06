@@ -10,7 +10,7 @@ teardown() {
     teardown_common
 }
 
-@test "capital letter col names. dolt table select with a where clause" {
+@test "capital letter col names. sql select with a where clause" {
     run dolt sql -q "select * from test where Aaa = 2"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "BBB" ]] || false
@@ -55,4 +55,11 @@ teardown() {
     [[ "$output" =~ "Bbb" ]] || false
     [[ "$output" =~ "Aaa" ]] || false
     [[ "$output" =~ "aaa" ]] || false
+}
+
+@test "capital letter column names. select with an as" {
+    run dolt sql -q "select Aaa as AAA from test"
+    [ "$status" -eq 0 ]
+    skip "select as lowercases everything right now"
+    [[ "$output" =~ "AAA" ]] || false
 }
