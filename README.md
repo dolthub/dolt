@@ -47,9 +47,9 @@ These installation instructions assume that you have Go installed, and that `go`
 
 To install on Linux or Mac based systems run:
 
-```curl -L https://github.com/liquidata-inc/dolt/releases/latest/download/install.sh | bash```
+```sudo bash -c 'curl -L https://github.com/liquidata-inc/dolt/releases/latest/download/install.sh | bash'```
 
-This will download the latest ```dolt``` release and put it in your ```PATH```.
+This will download the latest ```dolt``` release and put it in ```/usr/local/bin/```, which is probably on your ```PATH```.
 
 For Windows, locate the latest Microsoft Installer (`.msi` file) in [releases](https://github.com/liquidata-inc/dolt/releases), and run it. This will install the latest dolt. 
 
