@@ -15,6 +15,7 @@
 package edits
 
 import (
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -66,34 +67,38 @@ func testASE(t *testing.T, rng *rand.Rand) {
 	asyncSortConcurrency := int(minAsyncSortCon + rng.Int31n(maxAsyncSortCon-minAsyncSortCon))
 	sortConcurrency := int(minSortCon + rng.Int31n(maxSortCon-minSortCon))
 
-	kvps := createKVPs(rng, numKVPs)
-	asyncSorted := NewAsyncSortedEdits(types.Format_7_18, buffSize, asyncSortConcurrency, sortConcurrency)
+	name := fmt.Sprintf("kvps_%d_bs_%d_asc_%d_sc_%d", numKVPs, buffSize, asyncSortConcurrency, sortConcurrency)
 
-	for _, kvp := range kvps {
-		asyncSorted.AddEdit(kvp.Key, kvp.Val)
-	}
+	t.Run(name, func(t *testing.T) {
+		kvps := createKVPs(rng, numKVPs)
+		asyncSorted := NewAsyncSortedEdits(types.Format_7_18, buffSize, asyncSortConcurrency, sortConcurrency)
 
-	itr, err := asyncSorted.FinishedEditing()
+		for _, kvp := range kvps {
+			asyncSorted.AddEdit(kvp.Key, kvp.Val)
+		}
 
-	assert.NoError(t, err)
+		itr, err := asyncSorted.FinishedEditing()
 
-	if asyncSorted.Size() != int64(numKVPs) {
-		t.Error("Invalid count", asyncSorted.Size(), "!=", numKVPs)
-	}
+		assert.NoError(t, err)
 
-	if itr.NumEdits() != int64(numKVPs) {
-		t.Error("Invalid itr count", itr.NumEdits(), "!=", numKVPs)
-	}
+		if asyncSorted.Size() != int64(numKVPs) {
+			t.Error("Invalid count", asyncSorted.Size(), "!=", numKVPs)
+		}
 
-	inOrder, count, err := IsInOrder(itr)
+		if itr.NumEdits() != int64(numKVPs) {
+			t.Error("Invalid itr count", itr.NumEdits(), "!=", numKVPs)
+		}
 
-	assert.NoError(t, err)
+		inOrder, count, err := IsInOrder(itr)
 
-	if count != numKVPs {
-		t.Error("Invalid count", count, "!=", numKVPs)
-	}
+		assert.NoError(t, err)
 
-	if !inOrder {
-		t.Error("Not in order")
-	}
+		if count != numKVPs {
+			t.Error("Invalid count", count, "!=", numKVPs)
+		}
+
+		if !inOrder {
+			t.Error("Not in order")
+		}
+	})
 }
