@@ -28,7 +28,8 @@ var Commands = cli.NewSubCommandHandler("table", "Commands for copying, renaming
 	CpCmd{},
 })
 
-// Validates the given table name for creation as a user table.
+// ValidateTableNameForCreate validates the given table name for creation as a user table, returning an error if the
+// table name is not valid.
 func ValidateTableNameForCreate(tableName string) errhand.VerboseError {
 	if !doltdb.IsValidTableName(tableName) {
 		return errhand.BuildDError("'%s' is not a valid table name\ntable names must match the regular expression: %s",

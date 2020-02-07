@@ -354,7 +354,7 @@ func PutTable(ctx context.Context, root *RootValue, vrw types.ValueReadWriter, t
 	return newRootValue(root.vrw, rootValSt), nil
 }
 
-// Creates an empty table in this root with the name and schema given, returning the new root value.
+// CreateEmptyTable creates an empty table in this root with the name and schema given, returning the new root value.
 func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch schema.Schema) (*RootValue, error) {
 	schVal, err := encoding.MarshalAsNomsValue(ctx, root.VRW(), sch)
 	if err != nil {

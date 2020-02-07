@@ -80,7 +80,6 @@ const (
 	formatFlag  = "result-format"
 	saveFlag    = "save"
 	messageFlag = "message"
-	nameFlag    = "name"
 	welcomeMsg  = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit.`
@@ -107,10 +106,9 @@ func (cmd SqlCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) er
 func (cmd SqlCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(queryFlag, "q", "SQL query to run", "Runs a single query and exits")
-	ap.SupportsString(formatFlag, "r", "Result output format", "How to format result output. Valid values are tabular, csv. Defaults to tabular. ")
-	ap.SupportsFlag(saveFlag, "s", "Used with --query, save the query to the query catalog. Saved queries can be examined in the dolt_query_catalog system table.")
-	ap.SupportsString(nameFlag, "n", "Name to save the query with", "Used with --query and --save, saves the query with the human readable name given. See also --message")
-	ap.SupportsString(messageFlag, "m", "Descriptive message to save the query with", "Used with --query and --save, saves the query with the descriptive message given. See also --name")
+	ap.SupportsString(formatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv. Defaults to tabular. ")
+	ap.SupportsString(saveFlag, "s", "saved query name", "Used with --query, save the query to the query catalog with the name provided. Saved queries can be examined in the dolt_query_catalog system table.")
+	ap.SupportsString(messageFlag, "m", "saved query description", "Used with --query and --save, saves the query with the descriptive message given. See also --name")
 	return ap
 }
 
@@ -142,9 +140,8 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	origRoot := root
 
-	_, saveQuery := apr.GetValue(saveFlag)
 	saveMessage := apr.GetValueOrDefault(messageFlag, "")
-	saveName := apr.GetValueOrDefault(nameFlag, "")
+	saveName := apr.GetValueOrDefault(saveFlag, "")
 
 	err := validateSqlArgs(apr)
 	if err != nil {
@@ -162,7 +159,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		} else if se.sdb.Root() != origRoot {
 			return HandleVErrAndExitCode(UpdateWorkingWithVErr(dEnv, se.sdb.Root()), usage)
 		} else {
-			if saveQuery {
+			if saveName != "" {
 				return HandleVErrAndExitCode(cmd.saveQuery(context.Background(), se.sdb.Root(), dEnv, query, saveName, saveMessage), usage)
 			}
 			return 0
@@ -218,7 +215,6 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 	_, query := apr.GetValue(queryFlag)
 	_, save := apr.GetValue(saveFlag)
 	_, msg := apr.GetValue(messageFlag)
-	_, name := apr.GetValue(nameFlag)
 
 	if len(apr.Args()) > 0 && !query {
 		return errhand.BuildDError("Invalid Argument: use --query or -q to pass inline SQL queries").Build()
@@ -228,18 +224,12 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 		if !save && msg {
 			return errhand.BuildDError("Invalid Argument: --message|-m is only used with --query|-q and --save|-s").Build()
 		}
-		if !save && name {
-			return errhand.BuildDError("Invalid Argument: --name|-n is only used with --query|-q and --save|-s").Build()
-		}
 	} else {
 		if save {
 			return errhand.BuildDError("Invalid Argument: --save|-s is only used with --query|-q").Build()
 		}
 		if msg {
-			return errhand.BuildDError("Invalid Argument: --message|-m is only used with --query|-q").Build()
-		}
-		if name {
-			return errhand.BuildDError("Invalid Argument: --name|-n is only used with --query|-q").Build()
+			return errhand.BuildDError("Invalid Argument: --message|-m is only used with --query|-q and --save|-s").Build()
 		}
 	}
 

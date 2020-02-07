@@ -40,7 +40,7 @@ const (
 	// TableNameRegexStr is the regular expression that valid tables must match.
 	TableNameRegexStr = `^[a-zA-Z]{1}$|^[a-zA-Z]+[-_0-9a-zA-Z]*[0-9a-zA-Z]+$`
 
-	// We reserve all tables that begin with dolt_ for system use.
+	// DoltNamespace is the name prefix of dolt system tables. We reserve all tables that begin with dolt_ for system use.
 	DoltNamespace = "dolt_"
 
 	// DoltQueryCatalogTableName is the name of the query catalog table

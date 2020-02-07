@@ -161,10 +161,10 @@ func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sq
 	return toReturn, true, nil
 }
 
-// Returns the names of all user tables. System tables in user space (e.g. dolt_docs, dolt_query_catalog) are filtered
-// out. This method is used for queries that examine the schema of the database, e.g. show tables. Table name resolution
-// in queries is handled by GetTableInsensitive. Use GetAllTableNames for an unfiltered list of all tables in user
-// space.
+// GetTableNames returns the names of all user tables. System tables in user space (e.g. dolt_docs, dolt_query_catalog)
+// are filtered out. This method is used for queries that examine the schema of the database, e.g. show tables. Table
+// name resolution in queries is handled by GetTableInsensitive. Use GetAllTableNames for an unfiltered list of all
+// tables in user space.
 func (db *Database) GetTableNames(ctx context.Context) ([]string, error) {
 	tblNames, err := db.GetAllTableNames(ctx)
 	if err != nil {
@@ -173,7 +173,8 @@ func (db *Database) GetTableNames(ctx context.Context) ([]string, error) {
 	return filterDoltInternalTables(tblNames), nil
 }
 
-// Returns all user-space tables, including system tables in user space (e.g. dolt_docs, dolt_query_catalog).
+// GetAllTableNames returns all user-space tables, including system tables in user space
+// (e.g. dolt_docs, dolt_query_catalog).
 func (db *Database) GetAllTableNames(ctx context.Context) ([]string, error) {
 	return db.root.GetTableNames(ctx)
 }
@@ -288,7 +289,7 @@ func (db *Database) RenameTable(ctx *sql.Context, oldName, newName string) error
 	return nil
 }
 
-// Flushes the current batch of outstanding changes and returns any errors.
+// Flush flushes the current batch of outstanding changes and returns any errors.
 func (db *Database) Flush(ctx context.Context) error {
 	for name, table := range db.tables {
 		if writable, ok := table.(*WritableDoltTable); ok {
@@ -305,7 +306,7 @@ func (db *Database) Flush(ctx context.Context) error {
 	return nil
 }
 
-// Implements sql.ViewCreator. Persists the view in the dolt database, so
+// CreateView implements sql.ViewCreator. Persists the view in the dolt database, so
 // it can exist in a sql session later. Returns sql.ErrExistingView a view
 // with that name already exists.
 func (db *Database) CreateView(ctx *sql.Context, name string, definition string) error {
@@ -332,7 +333,7 @@ func (db *Database) CreateView(ctx *sql.Context, name string, definition string)
 	return inserter.Close(ctx)
 }
 
-// Implements sql.ViewDropper. Removes a view from persistence in the
+// DropView implements sql.ViewDropper. Removes a view from persistence in the
 // dolt database. Returns sql.ErrNonExistingView if the view did not
 // exist.
 func (db *Database) DropView(ctx *sql.Context, name string) error {
@@ -364,7 +365,7 @@ func (db *Database) DropView(ctx *sql.Context, name string) error {
 	return deleter.Close(ctx)
 }
 
-// Register SQL schema fragments that are persisted in the given
+// RegisterSchemaFragments register SQL schema fragments that are persisted in the given
 // `Database` with the provided `sql.Catalog`. Returns an error if
 // there are I/O issues, but currently silently fails to register some
 // schema fragments if they don't parse, or if registries within the

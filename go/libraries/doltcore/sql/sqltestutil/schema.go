@@ -69,13 +69,13 @@ func NewResultSetRow(colVals ...types.Value) row.Row {
 	return r
 }
 
-// Creates a new row with the values given, using ascending tag numbers starting at 0.
+// NewRow creates a new row with the values given, using ascending tag numbers starting at 0.
 // Uses the first value as the primary key.
 func NewRow(colVals ...types.Value) row.Row {
 	return NewRowWithPks(colVals[0:1], colVals[1:]...)
 }
 
-// Creates a new row with the values given, using ascending tag numbers starting at 0.
+// NewRowWithPks creates a new row with the values given, using ascending tag numbers starting at 0.
 func NewRowWithPks(pkColVals []types.Value, nonPkVals ...types.Value) row.Row {
 	var cols []schema.Column
 	taggedVals := make(row.TaggedValues)

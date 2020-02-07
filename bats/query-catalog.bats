@@ -37,7 +37,7 @@ teardown() {
 @test "save query" {
     run dolt sql -q "desc dolt_query_catalog"
     [ "$status" -eq 1 ]
-    run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1" -s -m "my message" -n "my name"
+    run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1" -s "my name" -m "my message"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 8 ]
     run dolt sql -q "desc dolt_query_catalog"
@@ -49,4 +49,50 @@ teardown() {
     [[ "$output" =~ "my message" ]] || false
     [[ "$output" =~ "my name" ]] || false
     [[ "$output" =~ "select pk,pk1,pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_query_catalog" ]] || false
+
+    run dolt add dolt_query_catalog
+    [ "$status" -eq 0 ]
+
+    run dolt commit -m "Added query catalog"
+    [ "$status" -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "dolt_query_catalog" ]] || false
+
+    run dolt sql -q "select * from dolt_query_catalog" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+}
+
+@test "query catalog conflict" {
+    dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1" -s "name1" -m "my message"
+    dolt add .
+    dolt commit -m 'Added a test query'
+
+    dolt checkout -b edit_a
+    dolt sql -q "update dolt_query_catalog set name='name_a'"
+    dolt add .
+    dolt commit -m 'Changed name to edit_a'
+
+    dolt checkout master
+    dolt checkout -b edit_b
+    dolt sql -q "update dolt_query_catalog set name='name_b'"
+    dolt add .
+    dolt commit -m 'Changed name to edit_b'
+
+    dolt checkout master
+    dolt merge edit_a
+    run dolt merge edit_b
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Merge conflict in dolt_query_catalog" ]] || false
+
+    run dolt conflicts cat .
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "name_a" ]] || false
+    [[ "$output" =~ "name_b" ]] || false
 }

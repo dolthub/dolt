@@ -39,23 +39,7 @@ type DoltTable struct {
 	db     *Database
 }
 
-// WritableDoltTable allows updating, deleting, and inserting new rows. It implements sql.UpdatableTable and friends.
-type WritableDoltTable struct {
-	DoltTable
-	ed *tableEditor
-}
-
-// AlterableDoltTable allows altering the schema of the table. It implements sql.AlterableTable.
-type AlterableDoltTable struct {
-	WritableDoltTable
-}
-
 var _ sql.Table = (*DoltTable)(nil)
-var _ sql.UpdatableTable = (*WritableDoltTable)(nil)
-var _ sql.DeletableTable = (*WritableDoltTable)(nil)
-var _ sql.InsertableTable = (*WritableDoltTable)(nil)
-var _ sql.ReplaceableTable = (*WritableDoltTable)(nil)
-var _ sql.AlterableTable = (*AlterableDoltTable)(nil)
 
 // Implements sql.IndexableTable
 func (t *DoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
@@ -120,6 +104,17 @@ func (t *DoltTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 func (t *DoltTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
 	return newRowIterator(t, ctx)
 }
+
+// WritableDoltTable allows updating, deleting, and inserting new rows. It implements sql.UpdatableTable and friends.
+type WritableDoltTable struct {
+	DoltTable
+	ed *tableEditor
+}
+
+var _ sql.UpdatableTable = (*WritableDoltTable)(nil)
+var _ sql.DeletableTable = (*WritableDoltTable)(nil)
+var _ sql.InsertableTable = (*WritableDoltTable)(nil)
+var _ sql.ReplaceableTable = (*WritableDoltTable)(nil)
 
 // Inserter implements sql.InsertableTable
 func (t *WritableDoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
@@ -215,6 +210,13 @@ func (t *DoltTable) updateTable(ctx context.Context, mapEditor *types.MapEditor)
 	t.db.root = newRoot
 	return nil
 }
+
+// AlterableDoltTable allows altering the schema of the table. It implements sql.AlterableTable.
+type AlterableDoltTable struct {
+	WritableDoltTable
+}
+
+var _ sql.AlterableTable = (*AlterableDoltTable)(nil)
 
 // AddColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, order *sql.ColumnOrder) error {

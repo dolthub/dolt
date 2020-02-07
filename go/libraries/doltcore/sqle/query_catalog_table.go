@@ -75,7 +75,8 @@ func createQueryCatalogIfNotExists(ctx context.Context, root *doltdb.RootValue) 
 	return root, nil
 }
 
-// Saves a new entry in the query catalog table and returns the new root value. An ID will be chosen automatically.
+// NewQueryCatalogEntry saves a new entry in the query catalog table and returns the new root value. An ID will be
+// chosen automatically.
 func NewQueryCatalogEntry(ctx context.Context, root *doltdb.RootValue, name, query, description string) (*doltdb.RootValue, error) {
 	root, err := createQueryCatalogIfNotExists(ctx, root)
 	if err != nil {
