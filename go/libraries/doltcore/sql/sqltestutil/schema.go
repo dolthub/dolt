@@ -69,20 +69,28 @@ func NewResultSetRow(colVals ...types.Value) row.Row {
 	return r
 }
 
-// Creates a new row with the values given, using ascending tag numbers starting at 0.
+// NewRow creates a new row with the values given, using ascending tag numbers starting at 0.
 // Uses the first value as the primary key.
 func NewRow(colVals ...types.Value) row.Row {
+	return NewRowWithPks(colVals[0:1], colVals[1:]...)
+}
+
+// NewRowWithPks creates a new row with the values given, using ascending tag numbers starting at 0.
+func NewRowWithPks(pkColVals []types.Value, nonPkVals ...types.Value) row.Row {
 	var cols []schema.Column
 	taggedVals := make(row.TaggedValues)
 	var tag int64
-	for _, val := range colVals {
-		isPk := tag == 0
-		var constraints []schema.ColConstraint
-		if isPk {
-			constraints = append(constraints, schema.NotNullConstraint{})
-		}
-		cols = append(cols, schema.NewColumn(strconv.FormatInt(tag, 10), uint64(tag), val.Kind(), isPk, constraints...))
 
+	for _, val := range pkColVals {
+		var constraints []schema.ColConstraint
+		constraints = append(constraints, schema.NotNullConstraint{})
+		cols = append(cols, schema.NewColumn(strconv.FormatInt(tag, 10), uint64(tag), val.Kind(), true, constraints...))
+		taggedVals[uint64(tag)] = val
+		tag++
+	}
+
+	for _, val := range nonPkVals {
+		cols = append(cols, schema.NewColumn(strconv.FormatInt(tag, 10), uint64(tag), val.Kind(), false))
 		taggedVals[uint64(tag)] = val
 		tag++
 	}

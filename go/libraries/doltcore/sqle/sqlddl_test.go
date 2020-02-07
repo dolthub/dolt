@@ -16,12 +16,16 @@ package sqle
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
@@ -65,6 +69,11 @@ func TestCreateTable(t *testing.T) {
 		{
 			name:        "Test bad table name",
 			query:       "create table _testTable (id int primary key, age int)",
+			expectedErr: "Invalid table name",
+		},
+		{
+			name:        "Test reserved table name",
+			query:       "create table dolt_table (id int primary key, age int)",
 			expectedErr: "Invalid table name",
 		},
 		{
@@ -898,6 +907,16 @@ func TestRenameTable(t *testing.T) {
 			expectedErr: "table not found: notFound",
 		},
 		{
+			name:        "invalid table name",
+			query:       "rename table people to `123`",
+			expectedErr: "Invalid table name",
+		},
+		{
+			name:        "reserved table name",
+			query:       "rename table people to dolt_table",
+			expectedErr: "Invalid table name",
+		},
+		{
 			name:        "table name in use",
 			query:       "rename table people to appearances",
 			expectedErr: "table already exists",
@@ -949,4 +968,81 @@ func TestRenameTable(t *testing.T) {
 			assert.ElementsMatch(t, tt.expectedRows, foundRows)
 		})
 	}
+}
+
+func TestAlterSystemTables(t *testing.T) {
+	systemTableNames := []string{"dolt_docs", "dolt_log", "dolt_history_people", "dolt_diff_people"}
+	reservedTableNames := []string{"dolt_schemas", "dolt_query_catalog"}
+
+	dEnv := dtestutils.CreateTestEnv()
+	CreateTestDatabase(dEnv, t)
+
+	t.Run("Create", func(t *testing.T) {
+		for _, tableName := range append(systemTableNames, reservedTableNames...) {
+			assertFails(t, dEnv, fmt.Sprintf("create table %s (a int primary key not null)", tableName), "reserved")
+		}
+	})
+
+	dtestutils.CreateTestTable(t, dEnv, "dolt_docs",
+		env.DoltDocsSchema,
+		NewRow(types.String("LICENSE.md"), types.String("A license")))
+	dtestutils.CreateTestTable(t, dEnv, doltdb.DoltQueryCatalogTableName,
+		DoltQueryCatalogSchema,
+		NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 2+2 from dual"), types.String("description")))
+	dtestutils.CreateTestTable(t, dEnv, doltdb.SchemasTableName,
+		mustGetDoltSchema(SchemasTableSchema()),
+		NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual")))
+
+	// The _history and _diff tables give not found errors right now because of https://github.com/liquidata-inc/dolt/issues/373.
+	// We can remove the divergent failure logic when the issue is fixed.
+	t.Run("Drop", func(t *testing.T) {
+		for _, tableName := range systemTableNames {
+			expectedErr := "system table"
+			if strings.HasPrefix(tableName, "dolt_diff") || strings.HasPrefix(tableName, "dolt_history") {
+				expectedErr = "not found"
+			}
+			assertFails(t, dEnv, fmt.Sprintf("drop table %s", tableName), expectedErr)
+		}
+		for _, tableName := range reservedTableNames {
+			assertSucceeds(t, dEnv, fmt.Sprintf("drop table %s", tableName))
+		}
+	})
+
+	t.Run("Rename", func(t *testing.T) {
+		for _, tableName := range systemTableNames {
+			expectedErr := "system table"
+			if strings.HasPrefix(tableName, "dolt_diff") || strings.HasPrefix(tableName, "dolt_history") {
+				expectedErr = "not found"
+			}
+			assertFails(t, dEnv, fmt.Sprintf("rename table %s to newname", tableName), expectedErr)
+		}
+		for _, tableName := range reservedTableNames {
+			assertSucceeds(t, dEnv, fmt.Sprintf("rename table %s to newname", tableName))
+		}
+	})
+
+	t.Run("Alter", func(t *testing.T) {
+		for _, tableName := range append(systemTableNames, reservedTableNames...) {
+			expectedErr := "cannot be altered"
+			if strings.HasPrefix(tableName, "dolt_diff") || strings.HasPrefix(tableName, "dolt_history") {
+				expectedErr = "not found"
+			}
+			assertFails(t, dEnv, fmt.Sprintf("alter table %s add column a int", tableName), expectedErr)
+		}
+	})
+}
+
+func assertFails(t *testing.T, dEnv *env.DoltEnv, query, expectedErr string) {
+	ctx := context.Background()
+	root, _ := dEnv.WorkingRoot(ctx)
+	_, err := ExecuteSql(dEnv, root, query)
+	require.Error(t, err, query)
+	assert.Contains(t, err.Error(), expectedErr)
+}
+
+func assertSucceeds(t *testing.T, dEnv *env.DoltEnv, query string) {
+	ctx := context.Background()
+	root, _ := dEnv.WorkingRoot(ctx)
+	_, err := ExecuteSql(dEnv, root, query)
+	assert.NoError(t, err, query)
 }

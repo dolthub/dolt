@@ -85,6 +85,7 @@ require (
 	google.golang.org/api v0.15.0
 	google.golang.org/grpc v1.26.0
 	gopkg.in/square/go-jose.v2 v2.4.1
+	gopkg.in/src-d/go-errors.v1 v1.0.0
 	gopkg.in/yaml.v2 v2.2.7 // indirect
 	modernc.org/strutil v1.1.0 // indirect
 	vitess.io/vitess v3.0.0-rc.3.0.20190602171040-12bfde34629c+incompatible

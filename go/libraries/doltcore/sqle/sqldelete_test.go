@@ -21,8 +21,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 // Set to the name of a single test to run just that test, useful for debugging
@@ -37,6 +40,45 @@ func TestExecuteDelete(t *testing.T) {
 			testDeleteQuery(t, test)
 		})
 	}
+}
+
+func TestExecuteDeleteSystemTables(t *testing.T) {
+	for _, test := range systemTableDeleteTests {
+		t.Run(test.Name, func(t *testing.T) {
+			testDeleteQuery(t, test)
+		})
+	}
+}
+
+var systemTableDeleteTests = []DeleteTest{
+	{
+		Name: "delete dolt_docs",
+		AdditionalSetup: CreateTableFn("dolt_docs",
+			env.DoltDocsSchema,
+			NewRow(types.String("LICENSE.md"), types.String("A license"))),
+		DeleteQuery: "delete from dolt_docs",
+		ExpectedErr: "cannot delete from table",
+	},
+	{
+		Name: "delete dolt_query_catalog",
+		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
+			DoltQueryCatalogSchema,
+			NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 2+2 from dual"), types.String("description"))),
+		DeleteQuery:    "delete from dolt_query_catalog",
+		SelectQuery:    "select * from dolt_query_catalog",
+		ExpectedRows:   CompressRows(DoltQueryCatalogSchema),
+		ExpectedSchema: CompressSchema(DoltQueryCatalogSchema),
+	},
+	{
+		Name: "delete dolt_schemas",
+		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
+			mustGetDoltSchema(SchemasTableSchema()),
+			NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual"))),
+		DeleteQuery:    "delete from dolt_schemas",
+		SelectQuery:    "select * from dolt_schemas",
+		ExpectedRows:   CompressRows(mustGetDoltSchema(SchemasTableSchema())),
+		ExpectedSchema: CompressSchema(mustGetDoltSchema(SchemasTableSchema())),
+	},
 }
 
 // Tests the given query on a freshly created dataset, asserting that the result has the given schema and rows. If

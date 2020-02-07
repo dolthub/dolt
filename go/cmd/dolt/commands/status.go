@@ -27,7 +27,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
@@ -164,7 +163,7 @@ func printStagedDiffs(wr io.Writer, stagedTbls *actions.TableDiffs, stagedDocs *
 
 		lines := make([]string, 0, stagedTbls.Len()+stagedDocs.Len())
 		for _, tblName := range stagedTbls.Tables {
-			if !sqle.HasDoltPrefix(tblName) {
+			if !doltdb.IsSystemTable(tblName) {
 				tdt := stagedTbls.TableToType[tblName]
 				lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
 			}

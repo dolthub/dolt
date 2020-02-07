@@ -18,6 +18,9 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"strings"
+
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -36,7 +39,24 @@ const (
 
 	// TableNameRegexStr is the regular expression that valid tables must match.
 	TableNameRegexStr = `^[a-zA-Z]{1}$|^[a-zA-Z]+[-_0-9a-zA-Z]*[0-9a-zA-Z]+$`
+
+	// DoltNamespace is the name prefix of dolt system tables. We reserve all tables that begin with dolt_ for system use.
+	DoltNamespace = "dolt_"
+
+	// DoltQueryCatalogTableName is the name of the query catalog table
+	DoltQueryCatalogTableName = "dolt_query_catalog"
+
+	// SchemasTableName is the name of the dolt schema fragment table
+	SchemasTableName = "dolt_schemas"
 )
+
+// The set of reserved dolt_ tables that should be considered part of user space, like any other user-created table,
+// for the purposes of the dolt command line. These tables cannot be created or altered explicitly, but can be updated
+// like normal SQL tables.
+var userSpaceReservedTables = set.NewStrSet([]string{
+	DoltQueryCatalogTableName,
+	SchemasTableName,
+})
 
 var tableNameRegex, _ = regexp.Compile(TableNameRegexStr)
 
@@ -45,6 +65,20 @@ var tableNameRegex, _ = regexp.Compile(TableNameRegexStr)
 func IsValidTableName(name string) bool {
 	return tableNameRegex.MatchString(name)
 }
+
+// HasDoltPrefix returns a boolean whether or not the provided string is prefixed with the DoltNamespace. Users should
+// not be able to create tables in this reserved namespace.
+func HasDoltPrefix(s string) bool {
+	return strings.HasPrefix(s, DoltNamespace)
+}
+
+// IsSystemTable returns whether the table name given is a system table that should not be included in command line
+// output (e.g. dolt status) by default.
+func IsSystemTable(name string) bool {
+	return HasDoltPrefix(name) && !userSpaceReservedTables.Contains(name)
+}
+
+var ErrSystemTableCannotBeModified = errors.New("system tables cannot be dropped or altered")
 
 // Table is a struct which holds row data, as well as a reference to it's schema.
 type Table struct {

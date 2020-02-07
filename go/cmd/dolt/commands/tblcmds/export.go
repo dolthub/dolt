@@ -21,7 +21,6 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
@@ -155,10 +154,6 @@ func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	if mvOpts == nil {
 		return 1
-	}
-
-	if mvOpts.TableName == doltdb.DocTableName {
-		return commands.HandleDocTableVErrAndExitCode()
 	}
 
 	result := executeMove(ctx, dEnv, force, mvOpts)

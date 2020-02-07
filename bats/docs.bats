@@ -586,38 +586,34 @@ SQL
     [[ ! "$output" =~ "LICENSE" ]] || false
 }
 
-@test "dolt table * does not allow operations on dolt_docs" {
+@test "dolt table commands do not allow write operations on dolt_docs" {
     dolt add .
     dolt commit -m "First commit of docs"
     run dolt table cp dolt_docs another_table
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    [ "$status" -eq 0 ]
     run dolt table export dolt_docs test.csv
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    [ "$status" -eq 0 ]
     run dolt table import dolt_docs -c `batshelper 1pk5col-ints.csv`
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    [[ "$output" =~ "reserved" ]] || false
     run dolt table mv dolt_docs new
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    [[ "$output" =~ "system table" ]] || false
     run dolt table rm dolt_docs
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    [[ "$output" =~ "system table" ]] || false
 }
 
-@test "dolt schema * does not allow operations on dolt_docs" {
+@test "dolt schema command only does read operations for dolt_docs" {
     dolt add .
     dolt commit -m "First commit of docs"
     run dolt schema export dolt_docs export.schema
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    [ "$status" -eq 0 ]
     run dolt schema import -c --pks=pk dolt_docs `batshelper 1pk5col-ints.csv`
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    [[ "$output" =~ "reserved" ]] || false
     run dolt schema show dolt_docs
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    [ "$status" -eq 0 ]
     run dolt schema show
     [ "$status" -eq 0 ]
     [[ "$output" =~ "No tables in working set" ]] || false
@@ -628,7 +624,7 @@ SQL
     [[ ! "$output" =~ "dolt_docs" ]] || false
 }
 
- @test "dolt ls should not show dolt_docs table" {
+@test "dolt ls should not show dolt_docs table" {
     run dolt ls
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "dolt_docs" ]] || false
@@ -643,11 +639,15 @@ SQL
  }
 
 
-# TO DO: Expose dolt_docs for read commands
-@test "dolt sql does not expose dolt_docs" {
+@test "dolt sql operation on dolt_docs" {
     run dolt sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "dolt_docs" ]] || false
+
+    run dolt sql -q "CREATE TABLE dolt_docs (doc_name TEXT, doc_text LONGTEXT, PRIMARY KEY(doc_name))"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "reserved" ]] || false
+    
     dolt add .
     dolt commit -m "initial doc commits"
 
@@ -655,25 +655,31 @@ SQL
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "dolt_docs" ]] || false
 
-    run dolt sql -q "INSERT INTO dolt_docs VALUES (new_doc, new_text)"
+    run dolt sql -q "INSERT INTO dolt_docs VALUES ('new_doc', 'new_text')"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "table not found: dolt_docs" ]] || false
+    [[ "$output" =~ "table doesn't support" ]] || false
 
-    run dolt sql -q "DELETE FROM dolt_docs WHERE pk=REAMDE.md"
+    run dolt sql -q "DELETE FROM dolt_docs WHERE doc_name='REAMDE.md'"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "table not found: dolt_docs" ]] || false
+    [[ "$output" =~ "table doesn't support" ]] || false
 
-    run dolt sql -q "UPDATE dolt_docs SET pk=NotValid WHERE pk=README.md"
+    run dolt sql -q "UPDATE dolt_docs SET doc_name='new_doc' WHERE doc_name='README.md'"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "table not found: dolt_docs" ]] || false
+    [[ "$output" =~ "table doesn't support" ]] || false
 
-    run dolt sql -q "SELECT * FROM dolt_docs"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "table not found: dolt_docs" ]] || false
+    run dolt sql -q "SELECT * FROM dolt_docs" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "doc_name,doc_text" ]] || false
+    [[ "$output" =~ "README.md" ]] || false
+    [[ "$output" =~ "LICENSE.md" ]] || false
 
-    run dolt sql -q "CREATE TABLE dolt_docs (doc_name TEXT, doc_text LONGTEXT, PRIMARY KEY(doc_name))"
+    run dolt sql -q "ALTER TABLE dolt_docs ADD a int"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Invalid table name: 'dolt_docs'" ]] || false
+    [[ "$output" =~ "cannot be altered" ]] || false
+
+    run dolt sql -q "RENAME TABLE dolt_docs TO new_table"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "system tables cannot be dropped or altered" ]] || false
 }
 
 @test "dolt branch/merge with conflicts for docs" {

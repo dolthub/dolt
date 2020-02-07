@@ -158,13 +158,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 1
 	}
 
-	if apr.ContainsArg(doltdb.DocTableName) {
-		return commands.HandleDocTableVErrAndExitCode()
-	}
-
-	verr := importSchema(ctx, dEnv, apr)
-
-	return commands.HandleVErrAndExitCode(verr, usage)
+	return commands.HandleVErrAndExitCode(importSchema(ctx, dEnv, apr), usage)
 }
 
 func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
@@ -181,6 +175,10 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 
 	if !fileExists {
 		return errhand.BuildDError("error: file '%s' not found.", fileName).Build()
+	}
+
+	if err := tblcmds.ValidateTableNameForCreate(tblName); err != nil {
+		return err
 	}
 
 	op := createOp

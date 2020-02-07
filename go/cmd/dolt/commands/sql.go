@@ -59,6 +59,8 @@ var sqlShortDesc = "Runs a SQL query"
 var sqlLongDesc = `Runs a SQL query you specify. By default, begins an interactive shell to run queries and view the
 results. With the -q option, runs the given query and prints any results, then exits.
 
+Pipe SQL statements to dolt sql (no -q) to execute a SQL import or update script. 
+
 Known limitations:
 * No support for creating indexes
 * No support for foreign keys
@@ -73,12 +75,15 @@ var sqlSynopsis = []string{
 	"",
 	"-q <query>",
 	"-q <query> -r <result format>",
+	"-q <query> -s <name> -m <message>",
 }
 
 const (
-	queryFlag  = "query"
-	formatFlag = "result-format"
-	welcomeMsg = `# Welcome to the DoltSQL shell.
+	queryFlag   = "query"
+	formatFlag  = "result-format"
+	saveFlag    = "save"
+	messageFlag = "message"
+	welcomeMsg  = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit.`
 )
@@ -104,7 +109,9 @@ func (cmd SqlCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) er
 func (cmd SqlCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(queryFlag, "q", "SQL query to run", "Runs a single query and exits")
-	ap.SupportsString(formatFlag, "r", "Result output format", "How to format result output. Valid values are tabular, csv. Defaults to tabular. ")
+	ap.SupportsString(formatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv. Defaults to tabular. ")
+	ap.SupportsString(saveFlag, "s", "saved query name", "Used with --query, save the query to the query catalog with the name provided. Saved queries can be examined in the dolt_query_catalog system table.")
+	ap.SupportsString(messageFlag, "m", "saved query description", "Used with --query and --save, saves the query with the descriptive message given. See also --name")
 	return ap
 }
 
@@ -136,6 +143,14 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	origRoot := root
 
+	saveMessage := apr.GetValueOrDefault(messageFlag, "")
+	saveName := apr.GetValueOrDefault(saveFlag, "")
+
+	err := validateSqlArgs(apr)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
 	// run a single command and exit
 	if query, ok := apr.GetValue(queryFlag); ok {
 		se, err := newSqlEngine(ctx, dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
@@ -147,10 +162,11 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		} else if se.sdb.Root() != origRoot {
 			return HandleVErrAndExitCode(UpdateWorkingWithVErr(dEnv, se.sdb.Root()), usage)
 		} else {
+			if saveName != "" {
+				return HandleVErrAndExitCode(cmd.saveQuery(context.Background(), se.sdb.Root(), dEnv, query, saveName, saveMessage), usage)
+			}
 			return 0
 		}
-	} else if len(args) > 0 {
-		return HandleVErrAndExitCode(errhand.BuildDError("Invalid Argument: use --query or -q to pass inline SQL queries").Build(), usage)
 	}
 
 	// Run in either batch mode for piped input, or shell mode for interactive
@@ -196,6 +212,41 @@ func getFormat(format string) (resultFormat, errhand.VerboseError) {
 	default:
 		return formatTabular, errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular,csv").Build()
 	}
+}
+
+func validateSqlArgs(apr *argparser.ArgParseResults) error {
+	_, query := apr.GetValue(queryFlag)
+	_, save := apr.GetValue(saveFlag)
+	_, msg := apr.GetValue(messageFlag)
+
+	if len(apr.Args()) > 0 && !query {
+		return errhand.BuildDError("Invalid Argument: use --query or -q to pass inline SQL queries").Build()
+	}
+
+	if query {
+		if !save && msg {
+			return errhand.BuildDError("Invalid Argument: --message|-m is only used with --query|-q and --save|-s").Build()
+		}
+	} else {
+		if save {
+			return errhand.BuildDError("Invalid Argument: --save|-s is only used with --query|-q").Build()
+		}
+		if msg {
+			return errhand.BuildDError("Invalid Argument: --message|-m is only used with --query|-q and --save|-s").Build()
+		}
+	}
+
+	return nil
+}
+
+// Saves the query given to the catalog with the name and message given.
+func (cmd SqlCmd) saveQuery(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, query string, name string, message string) errhand.VerboseError {
+	newRoot, err := dsqle.NewQueryCatalogEntry(ctx, root, name, query, message)
+	if err != nil {
+		return errhand.BuildDError("Couldn't save query").AddCause(err).Build()
+	}
+
+	return UpdateWorkingWithVErr(dEnv, newRoot)
 }
 
 // ScanStatements is a split function for a Scanner that returns each SQL statement in the input as a token. It doesn't
@@ -738,6 +789,12 @@ func (se *sqlEngine) checkThenDeleteAllRows(ctx context.Context, s *sqlparser.De
 				tName := ste.Name.String()
 				table, ok, err := root.GetTable(ctx, tName)
 				if err == nil && ok {
+
+					// Let the SQL engine handle system table deletes to avoid duplicating business logic here
+					if doltdb.HasDoltPrefix(tName) {
+						return false
+					}
+
 					rowData, err := table.GetRowData(ctx)
 					if err != nil {
 						return false

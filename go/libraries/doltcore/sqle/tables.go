@@ -37,15 +37,9 @@ type DoltTable struct {
 	sch    schema.Schema
 	sqlSch sql.Schema
 	db     *Database
-	ed     *tableEditor
 }
 
 var _ sql.Table = (*DoltTable)(nil)
-var _ sql.UpdatableTable = (*DoltTable)(nil)
-var _ sql.DeletableTable = (*DoltTable)(nil)
-var _ sql.InsertableTable = (*DoltTable)(nil)
-var _ sql.ReplaceableTable = (*DoltTable)(nil)
-var _ sql.AlterableTable = (*DoltTable)(nil)
 
 // Implements sql.IndexableTable
 func (t *DoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
@@ -111,12 +105,23 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIte
 	return newRowIterator(t, ctx)
 }
 
+// WritableDoltTable allows updating, deleting, and inserting new rows. It implements sql.UpdatableTable and friends.
+type WritableDoltTable struct {
+	DoltTable
+	ed *tableEditor
+}
+
+var _ sql.UpdatableTable = (*WritableDoltTable)(nil)
+var _ sql.DeletableTable = (*WritableDoltTable)(nil)
+var _ sql.InsertableTable = (*WritableDoltTable)(nil)
+var _ sql.ReplaceableTable = (*WritableDoltTable)(nil)
+
 // Inserter implements sql.InsertableTable
-func (t *DoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
+func (t *WritableDoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
 	return t.getTableEditor()
 }
 
-func (t *DoltTable) getTableEditor() *tableEditor {
+func (t *WritableDoltTable) getTableEditor() *tableEditor {
 	if t.db.batchMode == batched {
 		if t.ed != nil {
 			return t.ed
@@ -127,7 +132,7 @@ func (t *DoltTable) getTableEditor() *tableEditor {
 	return newTableEditor(t)
 }
 
-func (t *DoltTable) flushBatchedEdits(ctx context.Context) error {
+func (t *WritableDoltTable) flushBatchedEdits(ctx context.Context) error {
 	if t.ed != nil {
 		err := t.ed.flush(ctx)
 		t.ed = nil
@@ -137,17 +142,17 @@ func (t *DoltTable) flushBatchedEdits(ctx context.Context) error {
 }
 
 // Deleter implements sql.DeletableTable
-func (t *DoltTable) Deleter(*sql.Context) sql.RowDeleter {
+func (t *WritableDoltTable) Deleter(*sql.Context) sql.RowDeleter {
 	return t.getTableEditor()
 }
 
 // Replacer implements sql.ReplaceableTable
-func (t *DoltTable) Replacer(ctx *sql.Context) sql.RowReplacer {
+func (t *WritableDoltTable) Replacer(ctx *sql.Context) sql.RowReplacer {
 	return t.getTableEditor()
 }
 
 // Updater implements sql.UpdatableTable
-func (t *DoltTable) Updater(ctx *sql.Context) sql.RowUpdater {
+func (t *WritableDoltTable) Updater(ctx *sql.Context) sql.RowUpdater {
 	return t.getTableEditor()
 }
 
@@ -206,8 +211,15 @@ func (t *DoltTable) updateTable(ctx context.Context, mapEditor *types.MapEditor)
 	return nil
 }
 
+// AlterableDoltTable allows altering the schema of the table. It implements sql.AlterableTable.
+type AlterableDoltTable struct {
+	WritableDoltTable
+}
+
+var _ sql.AlterableTable = (*AlterableDoltTable)(nil)
+
 // AddColumn implements sql.AlterableTable
-func (t *DoltTable) AddColumn(ctx *sql.Context, column *sql.Column, order *sql.ColumnOrder) error {
+func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, order *sql.ColumnOrder) error {
 	table, _, err := t.db.Root().GetTable(ctx, t.name)
 	if err != nil {
 		return err
@@ -270,7 +282,7 @@ func orderToOrder(order *sql.ColumnOrder) *alterschema.ColumnOrder {
 }
 
 // DropColumn implements sql.AlterableTable
-func (t *DoltTable) DropColumn(ctx *sql.Context, columnName string) error {
+func (t *AlterableDoltTable) DropColumn(ctx *sql.Context, columnName string) error {
 	table, _, err := t.db.Root().GetTable(ctx, t.name)
 	if err != nil {
 		return err
@@ -291,7 +303,7 @@ func (t *DoltTable) DropColumn(ctx *sql.Context, columnName string) error {
 }
 
 // ModifyColumn implements sql.AlterableTable
-func (t *DoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sql.Column, order *sql.ColumnOrder) error {
+func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sql.Column, order *sql.ColumnOrder) error {
 	table, _, err := t.db.Root().GetTable(ctx, t.name)
 	if err != nil {
 		return err

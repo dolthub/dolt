@@ -195,6 +195,24 @@ SQL
     [ "$status" -eq 1 ]
 }
 
+@test "try to create a table with dolt table import with invalid name" {
+    run dolt table import -c --pk=pk 123 `batshelper 1pk5col-ints.csv`
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "not a valid table name" ]] || false
+    run dolt table import -c --pk=pk dolt_docs `batshelper 1pk5col-ints.csv`
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "not a valid table name" ]] || false
+    [[ "$output" =~ "reserved" ]] || false
+    run dolt table import -c --pk=pk dolt_query_catalog `batshelper 1pk5col-ints.csv`
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "not a valid table name" ]] || false
+    [[ "$output" =~ "reserved" ]] || false
+    run dolt table import -c --pk=pk dolt_reserved `batshelper 1pk5col-ints.csv`
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "not a valid table name" ]] || false
+    [[ "$output" =~ "reserved" ]] || false
+}
+
 @test "create a table with two primary keys from csv import" {
     run dolt table import -c --pk=pk1,pk2 test `batshelper 2pk5col-ints.csv`
     [ "$status" -eq 0 ]

@@ -33,7 +33,7 @@ var ErrDuplicatePrimaryKeyFmt = "duplicate primary key given: (%v)"
 // attempts to produce correct results when doing so. But this probably (definitely) doesn't work in every case, and
 // higher-level clients should carefully flush the editor when necessary (i.e. before an update after many inserts).
 type tableEditor struct {
-	t            *DoltTable
+	t            *WritableDoltTable
 	ed           *types.MapEditor
 	insertedKeys map[hash.Hash]types.Value
 	addedKeys    map[hash.Hash]types.Value
@@ -45,7 +45,7 @@ var _ sql.RowUpdater = (*tableEditor)(nil)
 var _ sql.RowInserter = (*tableEditor)(nil)
 var _ sql.RowDeleter = (*tableEditor)(nil)
 
-func newTableEditor(t *DoltTable) *tableEditor {
+func newTableEditor(t *WritableDoltTable) *tableEditor {
 	return &tableEditor{
 		t:            t,
 		insertedKeys: make(map[hash.Hash]types.Value),

@@ -75,8 +75,11 @@ func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 		return 1
 	}
 
-	if apr.ContainsArg(doltdb.DocTableName) {
-		return commands.HandleDocTableVErrAndExitCode()
+	for _, tableName := range apr.Args() {
+		if doltdb.IsSystemTable(tableName) {
+			return commands.HandleVErrAndExitCode(
+				errhand.BuildDError("error removing table %s", tableName).AddCause(doltdb.ErrSystemTableCannotBeModified).Build(), usage)
+		}
 	}
 
 	working, verr := commands.GetWorkingWithVErr(dEnv)

@@ -23,24 +23,22 @@ import (
 	"github.com/src-d/go-mysql-server/sql"
 	"github.com/src-d/go-mysql-server/sql/parse"
 	"github.com/src-d/go-mysql-server/sql/plan"
+	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-var _ sql.Database = (*Database)(nil)
-var _ sql.TableRenamer = (*Database)(nil)
-
 type batchMode bool
+
+var ErrInvalidTableName = errors.NewKind("Invalid table name %s. Table names must match the regular expression " + doltdb.TableNameRegexStr)
+var ErrReservedTableName = errors.NewKind("Invalid table name %s. Table names beginning with `dolt_` are reserved for internal use")
+var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables cannot be dropped or altered")
 
 const (
 	batched batchMode = true
 	single  batchMode = false
-
-	DoltNamespace = "dolt_"
 )
 
 // Database implements sql.Database for a dolt DB.
@@ -50,8 +48,13 @@ type Database struct {
 	ddb       *doltdb.DoltDB
 	rs        *env.RepoState
 	batchMode batchMode
-	tables    map[string]*DoltTable
+	tables    map[string]sql.Table
 }
+
+var _ sql.Database = (*Database)(nil)
+var _ sql.TableDropper = (*Database)(nil)
+var _ sql.TableCreator = (*Database)(nil)
+var _ sql.TableRenamer = (*Database)(nil)
 
 // NewDatabase returns a new dolt database to use in queries.
 func NewDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB, rs *env.RepoState) *Database {
@@ -61,7 +64,7 @@ func NewDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB, rs *en
 		ddb:       ddb,
 		rs:        rs,
 		batchMode: single,
-		tables:    make(map[string]*DoltTable),
+		tables:    make(map[string]sql.Table),
 	}
 }
 
@@ -74,7 +77,7 @@ func NewBatchedDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB,
 		ddb:       ddb,
 		rs:        rs,
 		batchMode: batched,
-		tables:    make(map[string]*DoltTable),
+		tables:    make(map[string]sql.Table),
 	}
 }
 
@@ -83,6 +86,8 @@ func (db *Database) Name() string {
 	return db.name
 }
 
+// GetTableInsensitive is used when resolving tables in queries. It returns a best-effort case-insensitive match for
+// the table name given.
 func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sql.Table, bool, error) {
 	lwrName := strings.ToLower(tblName)
 	if strings.HasPrefix(lwrName, DoltDiffTablePrefix) {
@@ -111,7 +116,7 @@ func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sq
 		return NewLogTable(db.ddb, db.rs), true, nil
 	}
 
-	tableNames, err := db.GetTableNames(ctx)
+	tableNames, err := db.GetAllTableNames(ctx)
 
 	if err != nil {
 		return nil, false, err
@@ -141,32 +146,47 @@ func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sq
 		return nil, false, err
 	}
 
-	table := &DoltTable{name: exactName, table: tbl, sch: sch, db: db}
-	db.tables[exactName] = table
-	return table, true, nil
+	var toReturn sql.Table
+
+	readonlyTable := DoltTable{name: exactName, table: tbl, sch: sch, db: db}
+	if doltdb.IsSystemTable(exactName) {
+		toReturn = &readonlyTable
+	} else if doltdb.HasDoltPrefix(exactName) {
+		toReturn = &WritableDoltTable{DoltTable: readonlyTable}
+	} else {
+		toReturn = &AlterableDoltTable{WritableDoltTable{DoltTable: readonlyTable}}
+	}
+
+	db.tables[exactName] = toReturn
+	return toReturn, true, nil
 }
 
+// GetTableNames returns the names of all user tables. System tables in user space (e.g. dolt_docs, dolt_query_catalog)
+// are filtered out. This method is used for queries that examine the schema of the database, e.g. show tables. Table
+// name resolution in queries is handled by GetTableInsensitive. Use GetAllTableNames for an unfiltered list of all
+// tables in user space.
 func (db *Database) GetTableNames(ctx context.Context) ([]string, error) {
-	tblNames, err := db.root.GetTableNames(ctx)
+	tblNames, err := db.GetAllTableNames(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return filterDoltInternalTables(tblNames), nil
 }
 
+// GetAllTableNames returns all user-space tables, including system tables in user space
+// (e.g. dolt_docs, dolt_query_catalog).
+func (db *Database) GetAllTableNames(ctx context.Context) ([]string, error) {
+	return db.root.GetTableNames(ctx)
+}
+
 func filterDoltInternalTables(tblNames []string) []string {
 	result := []string{}
 	for _, tbl := range tblNames {
-		if tbl != doltdb.DocTableName {
+		if !doltdb.HasDoltPrefix(tbl) {
 			result = append(result, tbl)
 		}
 	}
 	return result
-}
-
-// HasDoltPrefix returns a boolean whether or not the provided string is prefixed with the DoltNamespace.
-func HasDoltPrefix(s string) bool {
-	return strings.HasPrefix(s, DoltNamespace)
 }
 
 // Root returns the root value for the database.
@@ -183,6 +203,10 @@ func (db *Database) SetRoot(newRoot *doltdb.RootValue) {
 
 // DropTable drops the table with the name given
 func (db *Database) DropTable(ctx *sql.Context, tableName string) error {
+	if doltdb.IsSystemTable(tableName) {
+		return ErrSystemTableAlter.New(tableName)
+	}
+
 	tableExists, err := db.root.HasTable(ctx, tableName)
 	if err != nil {
 		return err
@@ -206,11 +230,19 @@ func (db *Database) DropTable(ctx *sql.Context, tableName string) error {
 
 // CreateTable creates a table with the name and schema given.
 func (db *Database) CreateTable(ctx *sql.Context, tableName string, schema sql.Schema) error {
-
-	if !doltdb.IsValidTableName(tableName) || tableName == doltdb.DocTableName {
-		return fmt.Errorf("Invalid table name: '%v'", tableName)
+	if doltdb.HasDoltPrefix(tableName) {
+		return ErrReservedTableName.New(tableName)
 	}
 
+	if !doltdb.IsValidTableName(tableName) {
+		return ErrInvalidTableName.New(tableName)
+	}
+
+	return db.createTable(ctx, tableName, schema)
+}
+
+// Unlike the exported version, createTable doesn't enforce any table name checks.
+func (db *Database) createTable(ctx *sql.Context, tableName string, schema sql.Schema) error {
 	if exists, err := db.root.HasTable(ctx, tableName); err != nil {
 		return err
 	} else if exists {
@@ -222,22 +254,7 @@ func (db *Database) CreateTable(ctx *sql.Context, tableName string, schema sql.S
 		return err
 	}
 
-	schVal, err := encoding.MarshalAsNomsValue(ctx, db.root.VRW(), doltSch)
-	if err != nil {
-		return err
-	}
-
-	m, err := types.NewMap(ctx, db.root.VRW())
-	if err != nil {
-		return err
-	}
-
-	tbl, err := doltdb.NewTable(ctx, db.root.VRW(), schVal, m)
-	if err != nil {
-		return err
-	}
-
-	newRoot, err := db.root.PutTable(ctx, tableName, tbl)
+	newRoot, err := db.root.CreateEmptyTable(ctx, tableName, doltSch)
 	if err != nil {
 		return err
 	}
@@ -249,6 +266,18 @@ func (db *Database) CreateTable(ctx *sql.Context, tableName string, schema sql.S
 
 // RenameTable implements sql.TableRenamer
 func (db *Database) RenameTable(ctx *sql.Context, oldName, newName string) error {
+	if doltdb.IsSystemTable(oldName) {
+		return ErrSystemTableAlter.New(oldName)
+	}
+
+	if doltdb.HasDoltPrefix(newName) {
+		return ErrReservedTableName.New(newName)
+	}
+
+	if !doltdb.IsValidTableName(newName) {
+		return ErrInvalidTableName.New(newName)
+	}
+
 	root, err := alterschema.RenameTable(ctx, db.Root(), oldName, newName)
 	if err != nil {
 		return err
@@ -260,18 +289,24 @@ func (db *Database) RenameTable(ctx *sql.Context, oldName, newName string) error
 	return nil
 }
 
-// Flushes the current batch of outstanding changes and returns any errors.
+// Flush flushes the current batch of outstanding changes and returns any errors.
 func (db *Database) Flush(ctx context.Context) error {
 	for name, table := range db.tables {
-		if err := table.flushBatchedEdits(ctx); err != nil {
-			return err
+		if writable, ok := table.(*WritableDoltTable); ok {
+			if err := writable.flushBatchedEdits(ctx); err != nil {
+				return err
+			}
+		} else if alterable, ok := table.(*AlterableDoltTable); ok {
+			if err := alterable.flushBatchedEdits(ctx); err != nil {
+				return err
+			}
 		}
 		delete(db.tables, name)
 	}
 	return nil
 }
 
-// Implements sql.ViewCreator. Persists the view in the dolt database, so
+// CreateView implements sql.ViewCreator. Persists the view in the dolt database, so
 // it can exist in a sql session later. Returns sql.ErrExistingView a view
 // with that name already exists.
 func (db *Database) CreateView(ctx *sql.Context, name string, definition string) error {
@@ -298,11 +333,11 @@ func (db *Database) CreateView(ctx *sql.Context, name string, definition string)
 	return inserter.Close(ctx)
 }
 
-// Implements sql.ViewDropper. Removes a view from persistence in the
+// DropView implements sql.ViewDropper. Removes a view from persistence in the
 // dolt database. Returns sql.ErrNonExistingView if the view did not
 // exist.
 func (db *Database) DropView(ctx *sql.Context, name string) error {
-	stbl, found, err := db.GetTableInsensitive(ctx, SchemasTableName)
+	stbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return err
 	}
@@ -310,7 +345,7 @@ func (db *Database) DropView(ctx *sql.Context, name string) error {
 		return sql.ErrNonExistingView.New(name)
 	}
 
-	tbl := stbl.(*DoltTable)
+	tbl := stbl.(*WritableDoltTable)
 	exists, err := viewExistsInSchemasTable(ctx, tbl, name)
 	if err != nil {
 		return err
@@ -326,16 +361,17 @@ func (db *Database) DropView(ctx *sql.Context, name string) error {
 	if err != nil {
 		return err
 	}
+
 	return deleter.Close(ctx)
 }
 
-// Register SQL schema fragments that are persisted in the given
+// RegisterSchemaFragments register SQL schema fragments that are persisted in the given
 // `Database` with the provided `sql.Catalog`. Returns an error if
 // there are I/O issues, but currently silently fails to register some
 // schema fragments if they don't parse, or if registries within the
 // `catalog` return errors.
 func RegisterSchemaFragments(ctx *sql.Context, catalog *sql.Catalog, db *Database) error {
-	stbl, found, err := db.GetTableInsensitive(ctx, SchemasTableName)
+	stbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return err
 	}
@@ -343,11 +379,11 @@ func RegisterSchemaFragments(ctx *sql.Context, catalog *sql.Catalog, db *Databas
 		return nil
 	}
 
-	tbl := stbl.(*DoltTable)
+	tbl := stbl.(*WritableDoltTable)
 	if err != nil {
 		return err
 	}
-	iter, err := newRowIterator(tbl, ctx)
+	iter, err := newRowIterator(&tbl.DoltTable, ctx)
 	if err != nil {
 		return err
 	}
