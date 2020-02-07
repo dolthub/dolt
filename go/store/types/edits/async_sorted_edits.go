@@ -154,7 +154,8 @@ func (ase *AsyncSortedEdits) FinishedEditing() (types.EditProvider, error) {
 			return nil, err
 		}
 
-		ase.resultChan <- sl
+		coll := NewKVPCollection(ase.nbf, sl)
+		ase.sortedColls = append(ase.sortedColls, coll)
 	}
 
 	ase.wait()
