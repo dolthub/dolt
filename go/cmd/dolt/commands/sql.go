@@ -59,6 +59,8 @@ var sqlShortDesc = "Runs a SQL query"
 var sqlLongDesc = `Runs a SQL query you specify. By default, begins an interactive shell to run queries and view the
 results. With the -q option, runs the given query and prints any results, then exits.
 
+Pipe SQL statements to dolt sql (no -q) to execute a SQL import or update script. 
+
 Known limitations:
 * No support for creating indexes
 * No support for foreign keys
@@ -73,6 +75,7 @@ var sqlSynopsis = []string{
 	"",
 	"-q <query>",
 	"-q <query> -r <result format>",
+	"-q <query> -s <name> -m <message>",
 }
 
 const (
