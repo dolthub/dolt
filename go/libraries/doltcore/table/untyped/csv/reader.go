@@ -118,7 +118,11 @@ func getColHeaders(br *bufio.Reader, info *CSVFileInfo) ([]string, error) {
 		if colStrs == nil {
 			cols := make([]string, len(colStrsFromFile))
 			for i := range colStrsFromFile {
-				cols[i] = *colStrsFromFile[i]
+				s := colStrsFromFile[i]
+				if s == nil || strings.TrimSpace(*s) == "" {
+					return nil, errors.New("bad header line: column cannot be NULL or empty string")
+				}
+				cols[i] = *s
 			}
 			colStrs = cols
 		}
