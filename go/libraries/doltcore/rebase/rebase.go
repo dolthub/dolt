@@ -18,25 +18,25 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
 	"time"
+
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	nd "github.com/liquidata-inc/dolt/go/store/diff"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
+	ndiff "github.com/liquidata-inc/dolt/go/store/diff"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 type parentMap map[hash.Hash][]*doltdb.Commit
 
-// TODO: get commit from DoltRef
 // TODO: allow rebasing of multiple tags
 // replaces all instances of oldTag with newTag.
-func RebaseSwapTag(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, oldTag, newTag uint64) (*doltdb.Commit, error) {
+func RebaseTag(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, oldTag, newTag uint64) (*doltdb.Commit, error) {
 	cs, err := doltdb.NewCommitSpec("head", dRef.String())
 
 	if err != nil {
@@ -172,7 +172,7 @@ func rewindCommitHistory(ctx context.Context, ddb *doltdb.DoltDB, c *doltdb.Comm
 
 	// reverse slice: oldest first
 	for i := 0; i < len(history)/2; i++ {
-		opp := len(history)-1-i
+		opp := len(history) - 1 - i
 		history[i], history[opp] = history[opp], history[i]
 	}
 
@@ -324,7 +324,7 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		return nil, err
 	}
 
-	rebasedTable, err :=  doltdb.NewTable(ctx, rebasedParentRoot.VRW(), rebasedSchVal, rebasedRows)
+	rebasedTable, err := doltdb.NewTable(ctx, rebasedParentRoot.VRW(), rebasedSchVal, rebasedRows)
 
 	if err != nil {
 		return nil, err
@@ -362,7 +362,7 @@ func tableFromRootAndTag(ctx context.Context, root *doltdb.RootValue, tag uint64
 	return "", nil, errors.New(fmt.Sprintf("tag: %d not found in any table at commit: %s", tag, h.String()))
 }
 
-func replayRowDiffs(ctx context.Context,rSch schema.Schema, tbl, parentTbl, rebasedParentTable *doltdb.Table, oldTag, newTag uint64, pkTag bool) (types.Map, error) {
+func replayRowDiffs(ctx context.Context, rSch schema.Schema, tbl, parentTbl, rebasedParentTable *doltdb.Table, oldTag, newTag uint64, pkTag bool) (types.Map, error) {
 
 	rows, err := tbl.GetRowData(ctx)
 
@@ -387,7 +387,6 @@ func replayRowDiffs(ctx context.Context,rSch schema.Schema, tbl, parentTbl, reba
 
 	// we will apply modified differences to the rebasedParent
 	rebasedRowEditor := rebasedParentRows.Edit()
-
 
 	ad := diff.NewAsyncDiffer(1024)
 	// get all differences (including merges) between original commit and its parent
@@ -438,7 +437,7 @@ func replayRowDiffs(ctx context.Context,rSch schema.Schema, tbl, parentTbl, reba
 	return rebasedRowEditor.Map(ctx)
 }
 
-func modifyDifferenceTag(d *nd.Difference, old, new uint64, pkTag bool, nbf *types.NomsBinFormat, tags []uint64) (key types.LesserValuable, val types.Valuable, err error) {
+func modifyDifferenceTag(d *ndiff.Difference, old, new uint64, pkTag bool, nbf *types.NomsBinFormat, tags []uint64) (key types.LesserValuable, val types.Valuable, err error) {
 	if pkTag {
 		tv, err := row.ParseTaggedValues(d.KeyValue.(types.Tuple))
 
