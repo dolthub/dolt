@@ -261,6 +261,7 @@ CREATE TABLE test (
   PRIMARY KEY (pk)
 );
 SQL
+    dolt sql -q 'insert into test (pk, c1, c2, c3, c4, c5) values (0,1,2,3,4,5);'
     dolt add test
     dolt commit -m "table created"
     dolt branch add-column
@@ -277,6 +278,10 @@ SQL
     [[ "$output" =~ "Updating" ]] || false
     [[ "$output" =~ "1 tables changed" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
+
+    run dolt sql -q 'select * from test;'
+    [ $status -eq 0 ]
+    [[ "${lines[3]}" =~ "| 0  | 1  | 2  | 3  | 4  | 5  | <NULL> | <NULL> |" ]] || false
 }
 
 @test "two branches add same column, different types. merge. conflict" {

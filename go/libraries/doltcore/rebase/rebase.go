@@ -135,12 +135,13 @@ func rewindCommitHistory(ctx context.Context, ddb *doltdb.DoltDB, c *doltdb.Comm
 		tagUsed := false
 		history = append(history, cur)
 
-		for i := 0; i < n; i++ {
-			pc, err := ddb.ResolveParent(ctx, cur, i)
+		allParents, err := ddb.ResolveAllParents(ctx, cur)
 
-			if err != nil {
-				return nil, nil, err
-			}
+		if err != nil {
+			return nil, nil, err
+		}
+
+		for _, pc := range allParents {
 
 			// todo: double bools is confusing
 			pcUsed, err := tagUsedInHistory(ctx, ddb, pc, oldTag)
@@ -195,12 +196,13 @@ func tagUsedInHistory(ctx context.Context, ddb *doltdb.DoltDB, c *doltdb.Commit,
 		return false, err
 	}
 
-	for i := 0; i < n; i++ {
-		pc, err := ddb.ResolveParent(ctx, c, i)
+	allParents, err := ddb.ResolveAllParents(ctx, c)
 
-		if err != nil {
-			return false, err
-		}
+	if err != nil {
+		return false, err
+	}
+
+	for _, pc := range allParents {
 
 		found, err := tagUsedInHistory(ctx, ddb, pc, tag)
 
@@ -260,7 +262,6 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		panic("parent table has different name")
 	}
 	parentTblName := tblName
-	//parentTblName, parentTable, err := tableFromRootAndTag(ctx, parentRoot, oldTag)
 
 	if err != nil {
 		return nil, err

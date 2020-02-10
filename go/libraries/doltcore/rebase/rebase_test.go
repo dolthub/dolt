@@ -17,6 +17,7 @@ package rebase
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"io"
 	"strconv"
 	"testing"
@@ -48,13 +49,17 @@ const (
 const DripTag = 13
 const DripTagRebased = 19
 
+const query = "query"
 const commit = "commit"
+const branch = "branch"
+const checkout = "checkout"
+const merge = "merge"
 
 type RebaseTagTest struct {
 	// The name of this test. Names should be unique and descriptive.
 	Name string
 	// The modifying queries to run
-	ModifyingQueries []string
+	Commands []string
 	// The pairs {old, new} of tags that need to be exchanged
 	TagMap map[uint64]uint64
 	// The select query to run to verify the results
@@ -99,6 +104,7 @@ var peopleWithDrip = columnCollection(
 )
 
 var peopleRows = []row.Row{
+	newRow(row.TaggedValues{IdTag: types.Int(6), NameTag: types.String("Homer Simpson"), AgeTag: types.Int(44)}, people),
 	newRow(row.TaggedValues{IdTag: types.Int(7), NameTag: types.String("Maggie Simpson"), AgeTag: types.Int(1)}, people),
 	newRow(row.TaggedValues{IdTag: types.Int(8), NameTag: types.String("Milhouse Van Houten"), AgeTag: types.Int(8)}, people),
 	newRow(row.TaggedValues{IdTag: types.Int(9), NameTag: types.String("Jacqueline Bouvier"), AgeTag: types.Int(80)}, people),
@@ -109,8 +115,8 @@ var peopleRows = []row.Row{
 var RebaseTagTests = []RebaseTagTest{
 	{
 		Name: "rebase non-existent tag",
-		ModifyingQueries: []string{
-			createPeopleTable,
+		Commands: []string{
+			query + createPeopleTable,
 			commit,
 		},
 		TagMap:            map[uint64]uint64{DripTag: DripTagRebased},
@@ -118,28 +124,25 @@ var RebaseTagTests = []RebaseTagTest{
 	},
 	{
 		Name: "create new column, rebase column's tag",
-		ModifyingQueries: []string{
-			createPeopleTable,
+		Commands: []string{
+			query + createPeopleTable,
 			commit,
-			`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`,
+			query +`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`,
 			commit,
 		},
 		TagMap:            map[uint64]uint64{DripTag: DripTagRebased},
 		SelectResultQuery: "select * from people;",
 		ExpectedSchema:    schema.SchemaFromCols(peopleWithDrip),
-		ExpectedRows: []row.Row{
-			newRow(row.TaggedValues{IdTag: types.Int(9), NameTag: types.String("Jacqueline Bouvier"), AgeTag: types.Int(80)}, people),
-			newRow(row.TaggedValues{IdTag: types.Int(11), NameTag: types.String("Selma Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(8.5)}, peopleWithDrip),
-		},
+		ExpectedRows: []row.Row{},
 	},
 	{
 		Name: "create new column, insert value to column, rebase column's tag",
-		ModifyingQueries: []string{
-			createPeopleTable,
-			`insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`,
+		Commands: []string{
+			query + createPeopleTable,
+			query +`insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`,
 			commit,
-			`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`,
-			`insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`,
+			query +`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`,
+			query +`insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`,
 			commit,
 		},
 		TagMap:            map[uint64]uint64{DripTag: DripTagRebased},
@@ -152,12 +155,12 @@ var RebaseTagTests = []RebaseTagTest{
 	},
 	{
 		Name: "create new column, update column value in existing row, rebase column's tag",
-		ModifyingQueries: []string{
-			createPeopleTable,
-			`insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`,
+		Commands: []string{
+			query + createPeopleTable,
+			query + `insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`,
 			commit,
-			`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`,
-			`update people set drip=9.9 where id=9;`,
+			query + `alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`,
+			query + `update people set drip=9.9 where id=9;`,
 			commit,
 		},
 		TagMap:            map[uint64]uint64{DripTag: DripTagRebased},
@@ -169,14 +172,14 @@ var RebaseTagTests = []RebaseTagTest{
 	},
 	{
 		Name: "create new column, insert value to column, update column value in inserted row, rebase column's tag",
-		ModifyingQueries: []string{
-			createPeopleTable,
-			`insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`,
+		Commands: []string{
+			query + createPeopleTable,
+			query + `insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`,
 			commit,
-			`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`,
-			`insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`,
+			query + `alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`,
+			query + `insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`,
 			commit,
-			`update people set drip=9.9 where id=11;`,
+			query + `update people set drip=9.9 where id=11;`,
 			commit,
 		},
 		TagMap:            map[uint64]uint64{DripTag: DripTagRebased},
@@ -189,37 +192,38 @@ var RebaseTagTests = []RebaseTagTest{
 	},
 	{
 		Name: "create new column, insert value to column, update column value in inserted row, rebase column's tag",
-		ModifyingQueries: []string{
-			createPeopleTable,
-			`insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`,
+		Commands: []string{
+			query + createPeopleTable,
+			query + `insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`,
 			commit,
-			`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`,
-			`insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`,
+			query + `alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`,
+			query + `insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`,
 			commit,
-			`update people set drip=9.9 where id=11;`,
+			query + `update people set drip=9.9 where id=11;`,
+			query + `update people set drip=1.1 where id=9;`,
 			commit,
 		},
 		TagMap:            map[uint64]uint64{DripTag: DripTagRebased},
 		SelectResultQuery: "select * from people;",
 		ExpectedSchema:    schema.SchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
-			newRow(row.TaggedValues{IdTag: types.Int(9), NameTag: types.String("Jacqueline Bouvier"), AgeTag: types.Int(80)}, people),
+			newRow(row.TaggedValues{IdTag: types.Int(9), NameTag: types.String("Jacqueline Bouvier"), AgeTag: types.Int(80), DripTagRebased: types.Float(1.1)}, peopleWithDrip),
 			newRow(row.TaggedValues{IdTag: types.Int(11), NameTag: types.String("Selma Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(9.9)}, peopleWithDrip),
 		},
 	},
 	{
 		Name: "create new column, modify rows without value for column, rebase column's tag",
-		ModifyingQueries: []string{
-			createPeopleTable,
-			`insert into people (id, name, age) values 
+		Commands: []string{
+			query + createPeopleTable,
+			query + `insert into people (id, name, age) values 
 				(7, "Maggie Simpson", 1),
 				(8, "Milhouse Van Houten", 8);`,
 			commit,
-			`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`,
+			query + `alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`,
 			commit,
-			`update people set age=2 where id=7;`,
-			`delete from people where id=8`,
-			`insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`,
+			query + `update people set age=2 where id=7;`,
+			query + `delete from people where id=8`,
+			query + `insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`,
 			commit,
 		},
 		TagMap:            map[uint64]uint64{DripTag: DripTagRebased},
@@ -228,6 +232,65 @@ var RebaseTagTests = []RebaseTagTest{
 		ExpectedRows: []row.Row{
 			newRow(row.TaggedValues{IdTag: types.Int(7), NameTag: types.String("Maggie Simpson"), AgeTag: types.Int(2)}, people),
 			newRow(row.TaggedValues{IdTag: types.Int(9), NameTag: types.String("Jacqueline Bouvier"), AgeTag: types.Int(80)}, people),
+		},
+	},
+	{
+		Name: "create new column on master, insert to table on other branch, merge",
+		Commands: []string{
+			query + createPeopleTable,
+			commit,
+			branch + "newBranch",
+			query +`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`,
+			query +`insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`,
+			commit,
+			checkout + "newBranch",
+			query +`insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`,
+			commit,
+			checkout + "master",
+			merge + "newBranch",
+			commit,
+		},
+		TagMap:            map[uint64]uint64{DripTag: DripTagRebased},
+		SelectResultQuery: "select * from people;",
+		ExpectedSchema:    schema.SchemaFromCols(peopleWithDrip),
+		ExpectedRows: []row.Row{
+			newRow(row.TaggedValues{IdTag: types.Int(9), NameTag: types.String("Jacqueline Bouvier"), AgeTag: types.Int(80)}, people),
+			newRow(row.TaggedValues{IdTag: types.Int(11), NameTag: types.String("Selma Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(8.5)}, peopleWithDrip),
+		},
+	},
+	{
+		Name: "create new column on master; insert, update, delete on both branches; merge",
+		Commands: []string{
+			query + createPeopleTable,
+			query + `insert into people (id, name, age) values
+				(6, "Homer Simpson", 44),
+				(7, "Maggie Simpson", 1),
+				(8, "Milhouse Van Houten", 8),
+				(9, "Jacqueline Bouvier", 80);`,
+			commit,
+			branch + "newBranch",
+			query + `alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`,
+			query + `delete from people where id=6;`,
+			query + `update people set drip=99.9 where id=7;`,
+			query + `insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`,
+			commit,
+			checkout + "newBranch",
+			query + `insert into people (id, name, age) values (10, "Patty Bouvier", 40);`,
+			query + `delete from people where id=8;`,
+			query + `update people set age=40 where id=9;`,
+			commit,
+			checkout + "master",
+			merge + "newBranch",
+			commit,
+		},
+		TagMap:            map[uint64]uint64{DripTag: DripTagRebased},
+		SelectResultQuery: "select * from people;",
+		ExpectedSchema:    schema.SchemaFromCols(peopleWithDrip),
+		ExpectedRows: []row.Row{
+			newRow(row.TaggedValues{IdTag: types.Int(7), NameTag: types.String("Maggie Simpson"), AgeTag: types.Int(1), DripTagRebased: types.Float(99.9)}, peopleWithDrip),
+			newRow(row.TaggedValues{IdTag: types.Int(9), NameTag: types.String("Jacqueline Bouvier"), AgeTag: types.Int(40)}, people),
+			newRow(row.TaggedValues{IdTag: types.Int(10), NameTag: types.String("Patty Bouvier"), AgeTag: types.Int(40)}, people),
+			newRow(row.TaggedValues{IdTag: types.Int(11), NameTag: types.String("Selma Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(8.5)}, peopleWithDrip),
 		},
 	},
 }
@@ -243,11 +306,18 @@ func TestRebaseTag(t *testing.T) {
 func testRebaseTag(t *testing.T, test RebaseTagTest) {
 	dEnv := dtestutils.CreateTestEnv()
 
-	for _, q := range test.ModifyingQueries {
-		if q == commit {
-			commitAll(dEnv, "made changes")
-		} else {
-			executeQuery(t, dEnv, q)
+	for _, cmd := range test.Commands {
+		switch {
+		case cmd[:len(query)] == query:
+			executeQuery(t, dEnv, cmd[len(query):])
+		case cmd[:len(commit)] == commit:
+			commitAll(t, dEnv, "made changes")
+		case cmd[:len(branch)] == branch:
+			createNewBranch(t, dEnv, cmd[len(branch):])
+		case cmd[:len(checkout)] == checkout:
+			checkoutBranch(t, dEnv, cmd[len(checkout):])
+		case cmd[:len(merge)] == merge:
+			mergeBranch(t, dEnv, cmd[len(merge):])
 		}
 	}
 
@@ -275,6 +345,9 @@ func testRebaseTag(t *testing.T, test RebaseTagTest) {
 		checkTags(t, rebasedRoot, "people", test.TagMap)
 		checkRows(t, rebasedRoot, test.ExpectedSchema, test.SelectResultQuery, test.ExpectedRows)
 	}
+
+	//rebasedRoot := root
+	//checkRows(t, rebasedRoot, test.ExpectedSchema, test.SelectResultQuery, test.ExpectedRows)
 }
 
 func executeQuery(t *testing.T, dEnv *env.DoltEnv, query string) {
@@ -292,9 +365,31 @@ func executeQuery(t *testing.T, dEnv *env.DoltEnv, query string) {
 	require.NoError(t, err)
 }
 
-func commitAll(dEnv *env.DoltEnv, msg string) {
-	_ = actions.StageAllTables(context.Background(), dEnv, false)
-	_ = actions.CommitStaged(context.Background(), dEnv, msg, time.Now(), false)
+func commitAll(t *testing.T, dEnv *env.DoltEnv, msg string) {
+	err := actions.StageAllTables(context.Background(), dEnv, false)
+	require.NoError(t, err)
+	err = actions.CommitStaged(context.Background(), dEnv, msg, time.Now(), false)
+	require.NoError(t, err)
+	cm, _ := commands.ResolveCommitWithVErr(dEnv, "HEAD", dEnv.RepoState.Head.Ref.String())
+	ch, _ := cm.HashOf()
+	fmt.Println(fmt.Sprintf("commit: %s", ch.String()))
+}
+
+func createNewBranch(t *testing.T, dEnv *env.DoltEnv, branchName string) {
+	cwb := dEnv.RepoState.Head.Ref.String()
+	err := actions.CreateBranch(context.Background(), dEnv, branchName, cwb, false)
+	require.NoError(t, err)
+}
+
+func checkoutBranch(t *testing.T, dEnv *env.DoltEnv, branchName string) {
+	err := actions.CheckoutBranch(context.Background(), dEnv, branchName)
+	require.NoError(t, err)
+}
+
+func mergeBranch(t *testing.T, dEnv *env.DoltEnv, branchName string) {
+	m := commands.MergeCmd{}
+	status := m.Exec(context.Background(), "dolt merge", []string{branchName}, dEnv)
+	assert.Equal(t, status, 0)
 }
 
 func reverseTags(m map[uint64]uint64) map[uint64]uint64 {
@@ -331,19 +426,23 @@ func checkRows(t *testing.T, root *doltdb.RootValue, sch schema.Schema, selectQu
 	_, _ = dsqle.SqlSchemaToDoltSchema(s)
 	require.NoError(t, err)
 
-	var r sql.Row
-	var rr row.Row
-	idx := 0
-	for err == nil {
-		r, err = rowIter.Next()
+	actualRows := []row.Row{}
+	for {
+		r, err := rowIter.Next()
 		if err == io.EOF {
-			return
+			break
 		}
 		require.NoError(t, err)
-		rr, err = dsqle.SqlRowToDoltRow(root.VRW().Format(), r, sch)
+		rr, err := dsqle.SqlRowToDoltRow(root.VRW().Format(), r, sch)
 		require.NoError(t, err)
+		actualRows = append(actualRows, rr)
+	}
+
+	require.Equal(t, len(actualRows), len(expectedRows))
+
+	for idx := 0; idx < len(expectedRows); idx++ {
 		assert.True(t, idx < len(expectedRows))
-		assert.Equal(t, expectedRows[idx], rr)
+		assert.Equal(t, expectedRows[idx], actualRows[idx])
 		idx++
 	}
 }

@@ -266,7 +266,7 @@ func mergeTableSchema(sch, mergeSch, ancSch schema.Schema) (schema.Schema, error
 		return nil, err
 	}
 
-	union, err := typed.TypedColCollUnion(sub, mergeSub, intersection)
+	union, err := typed.TypedColCollUnion(intersection, sub, mergeSub)
 
 	if err != nil {
 		return nil, err
