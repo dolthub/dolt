@@ -34,7 +34,6 @@ import (
 
 type parentMap map[hash.Hash][]*doltdb.Commit
 
-// TODO: allow rebasing of multiple tags
 // replaces all instances of oldTag with newTag.
 func RebaseTag(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, oldTag, newTag uint64) (*doltdb.Commit, error) {
 	cs, err := doltdb.NewCommitSpec("head", dRef.String())

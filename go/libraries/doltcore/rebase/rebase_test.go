@@ -61,7 +61,8 @@ type RebaseTagTest struct {
 	// The modifying queries to run
 	Commands []string
 	// The pairs {old, new} of tags that need to be exchanged
-	TagMap map[uint64]uint64
+	OldTag uint64
+	NewTag uint64
 	// The select query to run to verify the results
 	SelectResultQuery string
 	// The schema of the result of the query, nil if an error is expected
@@ -119,7 +120,8 @@ var RebaseTagTests = []RebaseTagTest{
 			query + createPeopleTable,
 			commit,
 		},
-		TagMap:            map[uint64]uint64{DripTag: DripTagRebased},
+		OldTag: DripTag,
+		NewTag: DripTagRebased,
 		ExpectedErrStr: "not found in any table at commit:",
 	},
 	{
@@ -130,7 +132,8 @@ var RebaseTagTests = []RebaseTagTest{
 			query +`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`,
 			commit,
 		},
-		TagMap:            map[uint64]uint64{DripTag: DripTagRebased},
+		OldTag: DripTag,
+		NewTag: DripTagRebased,
 		SelectResultQuery: "select * from people;",
 		ExpectedSchema:    schema.SchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{},
@@ -145,7 +148,8 @@ var RebaseTagTests = []RebaseTagTest{
 			query +`insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`,
 			commit,
 		},
-		TagMap:            map[uint64]uint64{DripTag: DripTagRebased},
+		OldTag: DripTag,
+		NewTag: DripTagRebased,
 		SelectResultQuery: "select * from people;",
 		ExpectedSchema:    schema.SchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
@@ -163,7 +167,8 @@ var RebaseTagTests = []RebaseTagTest{
 			query + `update people set drip=9.9 where id=9;`,
 			commit,
 		},
-		TagMap:            map[uint64]uint64{DripTag: DripTagRebased},
+		OldTag: DripTag,
+		NewTag: DripTagRebased,
 		SelectResultQuery: "select * from people;",
 		ExpectedSchema:    schema.SchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
@@ -182,7 +187,8 @@ var RebaseTagTests = []RebaseTagTest{
 			query + `update people set drip=9.9 where id=11;`,
 			commit,
 		},
-		TagMap:            map[uint64]uint64{DripTag: DripTagRebased},
+		OldTag: DripTag,
+		NewTag: DripTagRebased,
 		SelectResultQuery: "select * from people;",
 		ExpectedSchema:    schema.SchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
@@ -203,7 +209,8 @@ var RebaseTagTests = []RebaseTagTest{
 			query + `update people set drip=1.1 where id=9;`,
 			commit,
 		},
-		TagMap:            map[uint64]uint64{DripTag: DripTagRebased},
+		OldTag: DripTag,
+		NewTag: DripTagRebased,
 		SelectResultQuery: "select * from people;",
 		ExpectedSchema:    schema.SchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
@@ -226,7 +233,8 @@ var RebaseTagTests = []RebaseTagTest{
 			query + `insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`,
 			commit,
 		},
-		TagMap:            map[uint64]uint64{DripTag: DripTagRebased},
+		OldTag: DripTag,
+		NewTag: DripTagRebased,
 		SelectResultQuery: "select * from people;",
 		ExpectedSchema:    schema.SchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
@@ -250,7 +258,8 @@ var RebaseTagTests = []RebaseTagTest{
 			merge + "newBranch",
 			commit,
 		},
-		TagMap:            map[uint64]uint64{DripTag: DripTagRebased},
+		OldTag: DripTag,
+		NewTag: DripTagRebased,
 		SelectResultQuery: "select * from people;",
 		ExpectedSchema:    schema.SchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
@@ -283,7 +292,8 @@ var RebaseTagTests = []RebaseTagTest{
 			merge + "newBranch",
 			commit,
 		},
-		TagMap:            map[uint64]uint64{DripTag: DripTagRebased},
+		OldTag: DripTag,
+		NewTag: DripTagRebased,
 		SelectResultQuery: "select * from people;",
 		ExpectedSchema:    schema.SchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
@@ -323,14 +333,8 @@ func testRebaseTag(t *testing.T, test RebaseTagTest) {
 
 	root, _ := dEnv.WorkingRoot(context.Background())
 
-	var oldTag, newTag uint64
-	for oldTag, newTag = range test.TagMap {
-		// TODO: update this once we have tagMap in rebase
-		break
-	}
-
 	bs, _ := dEnv.DoltDB.GetBranches(context.Background()) // master
-	rebasedCommit, err := RebaseTag(context.Background(), bs[0], dEnv.DoltDB, oldTag, newTag)
+	rebasedCommit, err := RebaseTag(context.Background(), bs[0], dEnv.DoltDB, test.OldTag, test.NewTag)
 
 	if test.ExpectedErrStr != "" {
 		assert.NotNil(t, err)
@@ -339,10 +343,10 @@ func testRebaseTag(t *testing.T, test RebaseTagTest) {
 		require.NoError(t, err)
 
 		// verify the pre-rebase tags
-		checkTags(t, root, "people", reverseTags(test.TagMap))
+		checkTags(t, root, "people", map[uint64]uint64{test.NewTag: test.OldTag})
 
 		rebasedRoot, _ := rebasedCommit.GetRootValue()
-		checkTags(t, rebasedRoot, "people", test.TagMap)
+		checkTags(t, rebasedRoot, "people", map[uint64]uint64{test.OldTag: test.NewTag})
 		checkRows(t, rebasedRoot, test.ExpectedSchema, test.SelectResultQuery, test.ExpectedRows)
 	}
 
