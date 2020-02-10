@@ -17,25 +17,24 @@ package rebase
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"io"
 	"strconv"
 	"testing"
 	"time"
 
-	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -120,8 +119,8 @@ var RebaseTagTests = []RebaseTagTest{
 			query + createPeopleTable,
 			commit,
 		},
-		OldTag: DripTag,
-		NewTag: DripTagRebased,
+		OldTag:         DripTag,
+		NewTag:         DripTagRebased,
 		ExpectedErrStr: "not found in any table at commit:",
 	},
 	{
@@ -129,27 +128,27 @@ var RebaseTagTests = []RebaseTagTest{
 		Commands: []string{
 			query + createPeopleTable,
 			commit,
-			query +`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`,
+			query + `alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`,
 			commit,
 		},
-		OldTag: DripTag,
-		NewTag: DripTagRebased,
+		OldTag:            DripTag,
+		NewTag:            DripTagRebased,
 		SelectResultQuery: "select * from people;",
 		ExpectedSchema:    schema.SchemaFromCols(peopleWithDrip),
-		ExpectedRows: []row.Row{},
+		ExpectedRows:      []row.Row{},
 	},
 	{
 		Name: "create new column, insert value to column, rebase column's tag",
 		Commands: []string{
 			query + createPeopleTable,
-			query +`insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`,
+			query + `insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`,
 			commit,
-			query +`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`,
-			query +`insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`,
+			query + `alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`,
+			query + `insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`,
 			commit,
 		},
-		OldTag: DripTag,
-		NewTag: DripTagRebased,
+		OldTag:            DripTag,
+		NewTag:            DripTagRebased,
 		SelectResultQuery: "select * from people;",
 		ExpectedSchema:    schema.SchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
@@ -167,8 +166,8 @@ var RebaseTagTests = []RebaseTagTest{
 			query + `update people set drip=9.9 where id=9;`,
 			commit,
 		},
-		OldTag: DripTag,
-		NewTag: DripTagRebased,
+		OldTag:            DripTag,
+		NewTag:            DripTagRebased,
 		SelectResultQuery: "select * from people;",
 		ExpectedSchema:    schema.SchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
@@ -187,8 +186,8 @@ var RebaseTagTests = []RebaseTagTest{
 			query + `update people set drip=9.9 where id=11;`,
 			commit,
 		},
-		OldTag: DripTag,
-		NewTag: DripTagRebased,
+		OldTag:            DripTag,
+		NewTag:            DripTagRebased,
 		SelectResultQuery: "select * from people;",
 		ExpectedSchema:    schema.SchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
@@ -209,8 +208,8 @@ var RebaseTagTests = []RebaseTagTest{
 			query + `update people set drip=1.1 where id=9;`,
 			commit,
 		},
-		OldTag: DripTag,
-		NewTag: DripTagRebased,
+		OldTag:            DripTag,
+		NewTag:            DripTagRebased,
 		SelectResultQuery: "select * from people;",
 		ExpectedSchema:    schema.SchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
@@ -233,8 +232,8 @@ var RebaseTagTests = []RebaseTagTest{
 			query + `insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`,
 			commit,
 		},
-		OldTag: DripTag,
-		NewTag: DripTagRebased,
+		OldTag:            DripTag,
+		NewTag:            DripTagRebased,
 		SelectResultQuery: "select * from people;",
 		ExpectedSchema:    schema.SchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
@@ -248,18 +247,18 @@ var RebaseTagTests = []RebaseTagTest{
 			query + createPeopleTable,
 			commit,
 			branch + "newBranch",
-			query +`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`,
-			query +`insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`,
+			query + `alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`,
+			query + `insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`,
 			commit,
 			checkout + "newBranch",
-			query +`insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`,
+			query + `insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`,
 			commit,
 			checkout + "master",
 			merge + "newBranch",
 			commit,
 		},
-		OldTag: DripTag,
-		NewTag: DripTagRebased,
+		OldTag:            DripTag,
+		NewTag:            DripTagRebased,
 		SelectResultQuery: "select * from people;",
 		ExpectedSchema:    schema.SchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
@@ -292,8 +291,8 @@ var RebaseTagTests = []RebaseTagTest{
 			merge + "newBranch",
 			commit,
 		},
-		OldTag: DripTag,
-		NewTag: DripTagRebased,
+		OldTag:            DripTag,
+		NewTag:            DripTagRebased,
 		SelectResultQuery: "select * from people;",
 		ExpectedSchema:    schema.SchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
