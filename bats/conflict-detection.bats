@@ -16,6 +16,47 @@ teardown() {
     [[ ! "$output" =~ "panic" ]] || false
 }
 
+@test "cannot merge into dirty working table" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
+    dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
+    dolt add test
+    dolt commit -m "table created"
+
+    dolt checkout -b other
+    dolt sql -q "replace into test values (1, 1, 1, 1, 1, 11)"
+    dolt add test
+    dolt commit -m "changed pk=1 c5 to 11"
+
+    dolt checkout master
+    dolt sql -q "replace into test values (0, 11, 0, 0, 0, 0)"
+
+    run dolt merge other
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "error: Your local changes would be overwritten." ]] || false
+    [[ "$output" =~ "Please commit your changes before you merge." ]] || false
+    [[ "$output" =~ "Aborting" ]] || false
+
+    dolt add test
+    dolt commit -m "changes pk=0 c1 t0 11"
+    run dolt merge other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Updating" ]] || false
+    [[ "$output" =~ "1 tables changed" ]] || false
+    [[ "$output" =~ "1 rows modified" ]] || false
+
+}
+
 @test "two branches modify different cell different row. merge. no conflict" {
     dolt sql <<SQL
 CREATE TABLE test (
