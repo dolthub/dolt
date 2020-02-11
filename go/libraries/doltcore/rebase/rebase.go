@@ -60,7 +60,6 @@ func RebaseTag(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, oldTag
 
 	for _, commit := range commitHistory {
 
-		// TODO: reuse root vals
 		root, err := commit.GetRootValue()
 
 		if err != nil {
@@ -141,14 +140,13 @@ func rewindCommitHistory(ctx context.Context, ddb *doltdb.DoltDB, c *doltdb.Comm
 
 		for _, pc := range allParents {
 
-			// todo: double bools is confusing
-			pcUsed, err := tagUsedInHistory(ctx, ddb, pc, oldTag)
+			tagUsedInParent, err := tagUsedInHistory(ctx, ddb, pc, oldTag)
 
 			if err != nil {
 				return nil, nil, err
 			}
 
-			if pcUsed {
+			if tagUsedInParent {
 				if tagUsed {
 					panic("tag can be used by at most one parent")
 				}
@@ -162,7 +160,7 @@ func rewindCommitHistory(ctx context.Context, ddb *doltdb.DoltDB, c *doltdb.Comm
 		if !tagUsed {
 			// reached first usage of oldTag
 			if len(otherParents[h]) != 1 {
-				panic("this doesn't work, disambiguate merge commit")
+				panic("unreachable: if multiple parents exist, one must use the tag")
 			}
 			history = append(history, otherParents[h]...)
 			break
@@ -254,11 +252,6 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		return nil, err
 	}
 
-	parentTable, found, err := parentRoot.GetTable(ctx, tblName)
-	if !found {
-		// todo: this will break on rename commit, find via tagset once tags are gloabl
-		panic("parent table has different name")
-	}
 	parentTblName := tblName
 
 	if err != nil {
@@ -300,18 +293,39 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 	rebasedSch := schema.SchemaFromCols(newCC)
 
 	// row rebase
-	rebasedParentTbl, found, err := rebasedParentRoot.GetTable(ctx, parentTblName)
-
-	if !found {
-		prh, _ := parentRoot.HashOf()
-		panic(fmt.Sprintf("table: %s at commit: %s changed during tag rebase", parentTblName, prh))
+	var parentRows types.Map
+	parentTbl, found, err := parentRoot.GetTable(ctx, tblName)
+	if found && parentTbl != nil {
+		parentRows, err = parentTbl.GetRowData(ctx)
+	} else {
+		// TODO: this could also be a renamed table
+		parentRows, err = types.NewMap(ctx, parentRoot.VRW())
 	}
 
 	if err != nil {
 		return nil, err
 	}
 
-	rebasedRows, err := replayRowDiffs(ctx, rebasedSch, tbl, parentTable, rebasedParentTbl, oldTag, newTag, isPkTag)
+	var rebasedParentRows types.Map
+	rebasedParentTbl, found, err := rebasedParentRoot.GetTable(ctx, parentTblName)
+	if found && rebasedParentTbl != nil {
+		rebasedParentRows, err = rebasedParentTbl.GetRowData(ctx)
+	} else {
+		// TODO: this could also be a renamed table
+		rebasedParentRows, err = types.NewMap(ctx, rebasedParentRoot.VRW())
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := tbl.GetRowData(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	rebasedRows, err := replayRowDiffs(ctx, rebasedSch, rows, parentRows, rebasedParentRows, oldTag, newTag, isPkTag)
 
 	if err != nil {
 		return nil, err
@@ -334,7 +348,6 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 }
 
 func tableFromRootAndTag(ctx context.Context, root *doltdb.RootValue, tag uint64) (string, *doltdb.Table, error) {
-	// TODO: create iterTables method
 	tblNames, err := root.GetTableNames(ctx)
 
 	if err != nil {
@@ -361,29 +374,10 @@ func tableFromRootAndTag(ctx context.Context, root *doltdb.RootValue, tag uint64
 	return "", nil, errors.New(fmt.Sprintf("tag: %d not found in any table at commit: %s", tag, h.String()))
 }
 
-func replayRowDiffs(ctx context.Context, rSch schema.Schema, tbl, parentTbl, rebasedParentTable *doltdb.Table, oldTag, newTag uint64, pkTag bool) (types.Map, error) {
-
-	rows, err := tbl.GetRowData(ctx)
-
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	parentRows, err := parentTbl.GetRowData(ctx)
-
-	if err != nil {
-		return types.EmptyMap, err
-	}
+func replayRowDiffs(ctx context.Context, rSch schema.Schema, rows, parentRows, rebasedParentRows types.Map, oldTag, newTag uint64, pkTag bool) (types.Map, error) {
 
 	rebasedTags := rSch.GetAllCols().Tags
-	rebasedNBF := rebasedParentTable.Format()
-
-	rebasedParentRows, err := rebasedParentTable.GetRowData(ctx)
-
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
+	rebasedNBF := rows.Format()
 	// we will apply modified differences to the rebasedParent
 	rebasedRowEditor := rebasedParentRows.Edit()
 

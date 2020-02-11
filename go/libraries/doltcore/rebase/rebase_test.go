@@ -124,6 +124,25 @@ var RebaseTagTests = []RebaseTagTest{
 		ExpectedErrStr: "not found in any table at commit:",
 	},
 	{
+		Name: "rebase entire history",
+		Commands: []string{
+			query + createPeopleTable,
+			query + `alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`,
+			query + `insert into people (id, name, age, drip) values
+				(10, "Patty Bouvier", 40, 8.5),
+				(11, "Selma Bouvier", 40, 8.5);`,
+			commit,
+		},
+		OldTag:            DripTag,
+		NewTag:            DripTagRebased,
+		SelectResultQuery: "select * from people;",
+		ExpectedSchema:    schema.SchemaFromCols(peopleWithDrip),
+		ExpectedRows: []row.Row{
+			newRow(row.TaggedValues{IdTag: types.Int(10), NameTag: types.String("Patty Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(8.5)}, peopleWithDrip),
+			newRow(row.TaggedValues{IdTag: types.Int(11), NameTag: types.String("Selma Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(8.5)}, peopleWithDrip),
+		},
+	},
+	{
 		Name: "create new column, rebase column's tag",
 		Commands: []string{
 			query + createPeopleTable,
@@ -302,6 +321,55 @@ var RebaseTagTests = []RebaseTagTest{
 			newRow(row.TaggedValues{IdTag: types.Int(11), NameTag: types.String("Selma Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(8.5)}, peopleWithDrip),
 		},
 	},
+	{
+		Name: "create new column on other branch, merge into mater",
+		Commands: []string{
+			query + createPeopleTable,
+			commit,
+			branch + "newBranch",
+			checkout + "newBranch",
+			query + `alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`,
+			query + `insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`,
+			commit,
+			checkout + "master",
+			query + `insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`,
+			commit,
+			merge + "newBranch",
+			commit,
+		},
+		OldTag:            DripTag,
+		NewTag:            DripTagRebased,
+		SelectResultQuery: "select * from people;",
+		ExpectedSchema:    schema.SchemaFromCols(peopleWithDrip),
+		ExpectedRows: []row.Row{
+			newRow(row.TaggedValues{IdTag: types.Int(9), NameTag: types.String("Jacqueline Bouvier"), AgeTag: types.Int(80)}, people),
+			newRow(row.TaggedValues{IdTag: types.Int(11), NameTag: types.String("Selma Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(8.5)}, peopleWithDrip),
+		},
+	},
+	//{  TODO: make a bats test to confirm that you cannot merge into a dirty working set
+	//	Name: "create new column on and merge in same commit",
+	//	Commands: []string{
+	//		query + createPeopleTable,
+	//		commit,
+	//		branch + "newBranch",
+	//		checkout + "newBranch",
+	//		query + `insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`,
+	//		commit,
+	//		checkout + "master",
+	//		query + `alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`,
+	//		query + `insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`,
+	//		merge + "newBranch",
+	//		commit,
+	//	},
+	//	OldTag:            DripTag,
+	//	NewTag:            DripTagRebased,
+	//	SelectResultQuery: "select * from people;",
+	//	ExpectedSchema:    schema.SchemaFromCols(peopleWithDrip),
+	//	ExpectedRows: []row.Row{
+	//		newRow(row.TaggedValues{IdTag: types.Int(9), NameTag: types.String("Jacqueline Bouvier"), AgeTag: types.Int(80)}, people),
+	//		newRow(row.TaggedValues{IdTag: types.Int(11), NameTag: types.String("Selma Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(8.5)}, peopleWithDrip),
+	//	},
+	//},
 }
 
 func TestRebaseTag(t *testing.T) {
@@ -313,8 +381,9 @@ func TestRebaseTag(t *testing.T) {
 }
 
 func testRebaseTag(t *testing.T, test RebaseTagTest) {
-	dEnv := dtestutils.CreateTestEnv()
+	validateTest(t, test)
 
+	dEnv := dtestutils.CreateTestEnv()
 	for _, cmd := range test.Commands {
 		switch {
 		case cmd[:len(query)] == query:
@@ -348,9 +417,18 @@ func testRebaseTag(t *testing.T, test RebaseTagTest) {
 		checkTags(t, rebasedRoot, "people", map[uint64]uint64{test.OldTag: test.NewTag})
 		checkRows(t, rebasedRoot, test.ExpectedSchema, test.SelectResultQuery, test.ExpectedRows)
 	}
+}
 
-	//rebasedRoot := root
-	//checkRows(t, rebasedRoot, test.ExpectedSchema, test.SelectResultQuery, test.ExpectedRows)
+func validateTest(t *testing.T, test RebaseTagTest) {
+	require.NotNil(t, test.Name)
+	require.NotNil(t, test.Commands)
+	require.NotNil(t, test.OldTag)
+	require.NotNil(t, test.NewTag)
+	require.NotNil(t, test.SelectResultQuery)
+	if test.ExpectedErrStr == "" {
+		require.NotNil(t, test.ExpectedSchema)
+		require.NotNil(t, test.ExpectedRows)
+	}
 }
 
 func executeQuery(t *testing.T, dEnv *env.DoltEnv, query string) {
@@ -392,16 +470,16 @@ func checkoutBranch(t *testing.T, dEnv *env.DoltEnv, branchName string) {
 func mergeBranch(t *testing.T, dEnv *env.DoltEnv, branchName string) {
 	m := commands.MergeCmd{}
 	status := m.Exec(context.Background(), "dolt merge", []string{branchName}, dEnv)
-	assert.Equal(t, status, 0)
+	assert.Equal(t, 0, status)
 }
 
-func reverseTags(m map[uint64]uint64) map[uint64]uint64 {
-	newMap := make(map[uint64]uint64)
-	for k, v := range m {
-		newMap[v] = k
-	}
-	return newMap
-}
+//func reverseTags(m map[uint64]uint64) map[uint64]uint64 {
+//	newMap := make(map[uint64]uint64)
+//	for k, v := range m {
+//		newMap[v] = k
+//	}
+//	return newMap
+//}
 
 func checkTags(t *testing.T, r *doltdb.RootValue, tableName string, tagMap map[uint64]uint64) {
 	tbl, _, err := r.GetTable(context.Background(), tableName)
@@ -426,7 +504,8 @@ func checkRows(t *testing.T, root *doltdb.RootValue, sch schema.Schema, selectQu
 	sqlCtx := sql.NewContext(context.Background())
 
 	s, rowIter, err := engine.Query(sqlCtx, selectQuery)
-	_, _ = dsqle.SqlSchemaToDoltSchema(s)
+	require.NoError(t, err)
+	_, err = dsqle.SqlSchemaToDoltSchema(s)
 	require.NoError(t, err)
 
 	actualRows := []row.Row{}
