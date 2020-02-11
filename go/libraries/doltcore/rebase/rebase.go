@@ -116,17 +116,6 @@ func rewindCommitHistory(ctx context.Context, ddb *doltdb.DoltDB, c *doltdb.Comm
 	var history []*doltdb.Commit
 	cur := c
 	for {
-		n, err := cur.NumParents()
-
-		if n == 0 {
-			// beginning of history & first commit uses oldTag
-			panic("can't rebase from the beginning of history")
-		}
-
-		if err != nil {
-			return nil, nil, err
-		}
-
 		h, _ := cur.HashOf()
 		otherParents[h] = []*doltdb.Commit{}
 		tagUsed := false
@@ -136,6 +125,10 @@ func rewindCommitHistory(ctx context.Context, ddb *doltdb.DoltDB, c *doltdb.Comm
 
 		if err != nil {
 			return nil, nil, err
+		}
+
+		if len(allParents) < 1 {
+			panic(fmt.Sprintf("commit: %s has no parents", h.String()))
 		}
 
 		for _, pc := range allParents {
@@ -186,15 +179,9 @@ func tagUsedInHistory(ctx context.Context, ddb *doltdb.DoltDB, c *doltdb.Commit,
 	}
 
 	// DSF of parents
-	n, err := c.NumParents()
-
-	if n == 0 || err != nil {
-		return false, err
-	}
-
 	allParents, err := ddb.ResolveAllParents(ctx, c)
 
-	if err != nil {
+	if err != nil || len(allParents) < 1 {
 		return false, err
 	}
 
