@@ -27,6 +27,46 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+var TypedRowsSansAge []row.Row
+var TypedRowsSansTitle []row.Row
+
+func init() {
+	for i := 0; i < len(dtestutils.UUIDS); i++ {
+
+		taggedValsSansAge := row.TaggedValues{
+			dtestutils.IdTag:        types.UUID(dtestutils.UUIDS[i]),
+			dtestutils.NameTag:      types.String(dtestutils.Names[i]),
+			dtestutils.TitleTag:     types.String(dtestutils.Titles[i]),
+			dtestutils.IsMarriedTag: types.Bool(dtestutils.MaritalStatus[i]),
+		}
+
+		schSansAge := dtestutils.RemoveColumnFromSchema(dtestutils.TypedSchema, dtestutils.AgeTag)
+		r, err := row.New(types.Format_7_18, schSansAge, taggedValsSansAge)
+
+		if err != nil {
+			panic(err)
+		}
+
+		TypedRowsSansAge = append(TypedRowsSansAge, r)
+
+		taggedValsSansTitle := row.TaggedValues{
+			dtestutils.IdTag:        types.UUID(dtestutils.UUIDS[i]),
+			dtestutils.NameTag:      types.String(dtestutils.Names[i]),
+			dtestutils.AgeTag:       types.Uint(dtestutils.Ages[i]),
+			dtestutils.IsMarriedTag: types.Bool(dtestutils.MaritalStatus[i]),
+		}
+
+		schSansTitle := dtestutils.RemoveColumnFromSchema(dtestutils.TypedSchema, dtestutils.TitleTag)
+		r, err = row.New(types.Format_7_18, schSansTitle, taggedValsSansTitle)
+
+		if err != nil {
+			panic(err)
+		}
+
+		TypedRowsSansTitle = append(TypedRowsSansTitle, r)
+	}
+}
+
 func TestDropColumn(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -39,13 +79,13 @@ func TestDropColumn(t *testing.T) {
 			name:           "remove int",
 			colName:        "age",
 			expectedSchema: dtestutils.RemoveColumnFromSchema(dtestutils.TypedSchema, dtestutils.AgeTag),
-			expectedRows:   dtestutils.TypedRows,
+			expectedRows:   TypedRowsSansAge,
 		},
 		{
 			name:           "remove string",
 			colName:        "title",
 			expectedSchema: dtestutils.RemoveColumnFromSchema(dtestutils.TypedSchema, dtestutils.TitleTag),
-			expectedRows:   dtestutils.TypedRows,
+			expectedRows:   TypedRowsSansTitle,
 		},
 		{
 			name:        "column not found",
