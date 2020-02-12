@@ -31,7 +31,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-type parentMap map[hash.Hash][]*doltdb.Commit
 type visitedSet map[hash.Hash]*doltdb.Commit
 
 // replaces all instances of oldTag with newTag.
@@ -155,6 +154,11 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		return nil, err
 	}
 
+	if tbl == nil {
+		// tag doesn't exist in this commit
+		return root, nil
+	}
+
 	parentTblName := tblName
 
 	sch, err := tbl.GetSchema(ctx)
@@ -268,8 +272,8 @@ func tableFromRootAndTag(ctx context.Context, root *doltdb.RootValue, tag uint64
 		}
 	}
 
-	h, _ := root.HashOf()
-	return "", nil, errors.New(fmt.Sprintf("tag: %d not found in any table at commit: %s", tag, h.String()))
+	// tag doesn't exist in this commit
+	return "", nil, nil
 }
 
 func replayRowDiffs(ctx context.Context, rSch schema.Schema, rows, parentRows, rebasedParentRows types.Map, oldTag, newTag uint64, pkTag bool) (types.Map, error) {

@@ -85,7 +85,7 @@ func newRow(vals row.TaggedValues, cc *schema.ColCollection) row.Row {
 var createPeopleTable = fmt.Sprintf(`
 	create table people (
 		id bigint comment 'tag:%d',
-		name varchar(20) comment 'tag:%d',
+		name varchar(20) not null comment 'tag:%d',
 		age bigint comment 'tag:%d',
 		primary key (id)
 	);`, IdTag, NameTag, AgeTag)
@@ -374,6 +374,30 @@ var RebaseTagTests = []RebaseTagTest{
 			newRow(row.TaggedValues{IdTag: types.Int(11), NameTag: types.String("Selma Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(8.5)}, peopleWithDrip),
 		},
 	},
+	{
+		Name: "rebase tag that exists in history but not at the head commit",
+		Commands: []command{
+			query(createPeopleTable),
+			query(`insert into people (id, name, age) values 
+				(7, "Maggie Simpson", 1);`),
+			commit{},
+			query(`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`),
+			commit{},
+			query(`insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`),
+			commit{},
+			query(`delete from people where id=9;`),
+			commit{},
+			query(`alter table people drop column drip;`),
+			commit{},
+		},
+		OldTag:            DripTag,
+		NewTag:            DripTagRebased,
+		SelectResultQuery: "select * from people;",
+		ExpectedSchema:    schema.SchemaFromCols(people),
+		ExpectedRows: []row.Row{
+			newRow(row.TaggedValues{IdTag: types.Int(7), NameTag: types.String("Maggie Simpson"), AgeTag: types.Int(1)}, people),
+		},
+	},
 }
 
 func TestRebaseTag(t *testing.T) {
@@ -406,8 +430,6 @@ func testRebaseTag(t *testing.T, test RebaseTagTest) {
 		}
 	}
 
-	root, _ := dEnv.WorkingRoot(context.Background())
-
 	bs, _ := dEnv.DoltDB.GetBranches(context.Background()) // master
 	rebasedCommit, err := TagRebase(context.Background(), bs[0], dEnv.DoltDB, test.OldTag, test.NewTag)
 
@@ -416,12 +438,8 @@ func testRebaseTag(t *testing.T, test RebaseTagTest) {
 		assert.Contains(t, err.Error(), test.ExpectedErrStr)
 	} else {
 		require.NoError(t, err)
-
-		// verify the pre-rebase tags
-		checkTags(t, root, "people", map[uint64]uint64{test.NewTag: test.OldTag})
-
 		rebasedRoot, _ := rebasedCommit.GetRootValue()
-		checkTags(t, rebasedRoot, "people", map[uint64]uint64{test.OldTag: test.NewTag})
+		checkSchema(t, rebasedRoot, "people", test.ExpectedSchema)
 		checkRows(t, rebasedRoot, test.ExpectedSchema, test.SelectResultQuery, test.ExpectedRows)
 	}
 }
@@ -480,19 +498,14 @@ func mergeBranch(t *testing.T, dEnv *env.DoltEnv, branchName merge) {
 	assert.Equal(t, 0, status)
 }
 
-func checkTags(t *testing.T, r *doltdb.RootValue, tableName string, tagMap map[uint64]uint64) {
+func checkSchema(t *testing.T, r *doltdb.RootValue, tableName string, expectedSch schema.Schema) {
 	tbl, _, err := r.GetTable(context.Background(), tableName)
 	require.NoError(t, err)
 	sch, err := tbl.GetSchema(context.Background())
 	require.NoError(t, err)
-
-	require.True(t, len(tagMap) > 0)
-	for absentTag, existingTag := range tagMap {
-		_, found := sch.GetAllCols().GetByTag(absentTag)
-		assert.False(t, found)
-		_, found = sch.GetAllCols().GetByTag(existingTag)
-		assert.True(t, found)
-	}
+	eq, err := schema.SchemasAreEqual(sch, expectedSch)
+	require.NoError(t, err)
+	require.True(t, eq)
 }
 
 func checkRows(t *testing.T, root *doltdb.RootValue, sch schema.Schema, selectQuery string, expectedRows []row.Row) {
