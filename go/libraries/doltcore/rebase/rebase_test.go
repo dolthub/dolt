@@ -406,6 +406,7 @@ func TestRebaseTag(t *testing.T) {
 			testRebaseTag(t, test)
 		})
 	}
+	t.Run("ensure that rebased history does not overlap with previous history", testRebaseTagHistory)
 }
 
 func testRebaseTag(t *testing.T, test RebaseTagTest) {
@@ -442,6 +443,73 @@ func testRebaseTag(t *testing.T, test RebaseTagTest) {
 		checkSchema(t, rebasedRoot, "people", test.ExpectedSchema)
 		checkRows(t, rebasedRoot, test.ExpectedSchema, test.SelectResultQuery, test.ExpectedRows)
 	}
+}
+
+func testRebaseTagHistory(t *testing.T) {
+	cmds := []command{
+		query(createPeopleTable),
+		query(`insert into people (id, name, age) values 
+				(7, "Maggie Simpson", 1);`),
+
+		// common ancestor of post-rebase-master and pre-rebase-master
+		commit{},
+		query(`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`),
+
+		// common ancestor of other and pre-rebase-master
+		commit{},
+		branch("other"),
+		query(`insert into people (id, name, age, drip) values (10, "Patty Bouvier", 40, 8.5);`),
+		commit{},
+	}
+
+	dEnv := dtestutils.CreateTestEnv()
+	for _, cmd := range cmds {
+
+		switch v := cmd.(type) {
+		case query:
+			executeQuery(t, dEnv, v)
+		case commit:
+			commitAll(t, dEnv, "made changes")
+		case branch:
+			createNewBranch(t, dEnv, v)
+		case checkout:
+			checkoutBranch(t, dEnv, v)
+		case merge:
+			mergeBranch(t, dEnv, v)
+		default:
+			t.Fatal("unknown command", cmd)
+		}
+	}
+
+	mcs, _ := doltdb.NewCommitSpec("HEAD", "master")
+	masterCm, _ := dEnv.DoltDB.Resolve(context.Background(), mcs)
+	ocs, _ := doltdb.NewCommitSpec("HEAD", "other")
+	otherCm, _ := dEnv.DoltDB.Resolve(context.Background(), ocs)
+
+
+	bs, _ := dEnv.DoltDB.GetBranches(context.Background()) // master
+	rebasedMasterCm, err := TagRebase(context.Background(), bs[0], dEnv.DoltDB, DripTag, DripTagRebased)
+	require.NoError(t, err)
+
+	expectedSch := schema.SchemaFromCols(peopleWithDrip)
+	rebasedRoot, _ := rebasedMasterCm.GetRootValue()
+	checkSchema(t, rebasedRoot, "people", expectedSch)
+	checkRows(t, rebasedRoot, expectedSch, "select * from people;", []row.Row{
+		newRow(row.TaggedValues{IdTag: types.Int(7), NameTag: types.String("Maggie Simpson"), AgeTag: types.Int(1)}, people),
+		newRow(row.TaggedValues{IdTag: types.Int(10), NameTag: types.String("Patty Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(8.5)}, peopleWithDrip),
+	})
+
+	// assert that histories have been forked
+	anc1, err := doltdb.GetCommitAncestor(context.Background(), masterCm, otherCm)
+	require.NoError(t, err)
+	anc2, err := doltdb.GetCommitAncestor(context.Background(), rebasedMasterCm, masterCm)
+	require.NoError(t, err)
+	ch1, err := anc1.HashOf()
+	require.NoError(t, err)
+	ch2, err := anc2.HashOf()
+	require.NoError(t, err)
+
+	require.NotEqual(t, ch1, ch2)
 }
 
 func validateTest(t *testing.T, test RebaseTagTest) {
