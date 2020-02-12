@@ -118,9 +118,11 @@ func dropColumnValuesForTag(ctx context.Context, nbf *types.NomsBinFormat, newSc
 			return types.EmptyMap, err
 		}
 
-		delete(tv, dropTag)
-
-		re.Set(k, tv.NomsTupleForTags(nbf, newSch.GetNonPKCols().Tags, false))
+		_, found := tv[dropTag]
+		if found {
+			delete(tv, dropTag)
+			re.Set(k, tv.NomsTupleForTags(nbf, newSch.GetNonPKCols().Tags, false))
+		}
 	}
 
 	prunedRowData, err := re.Map(ctx)
