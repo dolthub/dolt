@@ -32,9 +32,10 @@ import (
 )
 
 type parentMap map[hash.Hash][]*doltdb.Commit
+type visitedSet map[hash.Hash]*doltdb.Commit
 
 // replaces all instances of oldTag with newTag.
-func RebaseTag(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, oldTag, newTag uint64) (*doltdb.Commit, error) {
+func TagRebase(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, oldTag, newTag uint64) (*doltdb.Commit, error) {
 	cs, err := doltdb.NewCommitSpec("head", dRef.String())
 
 	if err != nil {
@@ -43,192 +44,107 @@ func RebaseTag(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, oldTag
 
 	cm, err := ddb.Resolve(ctx, cs)
 
-	commitHistory, otherParents, err := rewindCommitHistory(ctx, ddb, cm, oldTag)
+	if err != nil {
+		return nil, err
+	}
+
+	found, err := tagUsedInHistory(ctx, ddb, cm, oldTag)
+
+	if !found {
+		ch, _ := cm.HashOf()
+		return nil, errors.New(fmt.Sprintf("tag: %d not found in commit history for commit: %s", oldTag, ch))
+	}
+
+	vs := make(visitedSet)
+
+	return tagRebaseRecursive(ctx, dRef, ddb, cm, &vs, oldTag, newTag)
+}
+
+func tagRebaseRecursive(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, commit *doltdb.Commit, vs *visitedSet, oldTag, newTag uint64) (*doltdb.Commit, error) {
+	ch, err := commit.HashOf()
+	if err != nil {
+		return nil, err
+	}
+	rc, found := (*vs)[ch]
+	if found {
+		return rc, nil
+	}
+
+	needToRebase, err := tagUsedInHistory(ctx, ddb, commit, oldTag)
+	if err != nil {
+		return nil, err
+	}
+	if !needToRebase {
+		// reached bottom off DFS
+		return commit, nil
+	}
+
+	allParents, err := ddb.ResolveAllParents(ctx, commit)
+
+	if len(allParents) < 1 {
+		// TODO: handle beginning-of-history
+		h, _ := commit.HashOf()
+		panic(fmt.Sprintf("commit: %s has no parents", h.String()))
+	}
+
+	var parent *doltdb.Commit
+	var rebasedParent *doltdb.Commit
+	var rebasedParentSet []*doltdb.Commit
+	for _, parent = range allParents {
+		rebasedParent, err = tagRebaseRecursive(ctx, dRef, ddb, parent, vs, oldTag, newTag)
+
+		if err != nil {
+			return nil, err
+		}
+
+		rebasedParentSet = append(rebasedParentSet, rebasedParent)
+	}
+
+	root, err := commit.GetRootValue()
 
 	if err != nil {
 		return nil, err
 	}
 
-	if len(commitHistory) < 2 {
-		panic("need base commit and at least one change commit using oldTag")
+	parentRoot, err := parent.GetRootValue()
+
+	if err != nil {
+		return nil, err
 	}
 
-	parent := commitHistory[0]
-	rebasedParent := parent
-	commitHistory = commitHistory[1:]
-	var rebasedCommit *doltdb.Commit
+	// we can diff off of any parent
+	rebasedParentRoot, err := rebasedParent.GetRootValue()
 
-	for _, commit := range commitHistory {
-
-		root, err := commit.GetRootValue()
-
-		if err != nil {
-			return nil, err
-		}
-
-		parentRoot, err := parent.GetRootValue()
-
-		if err != nil {
-			return nil, err
-		}
-
-		rebasedParentRoot, err := rebasedParent.GetRootValue()
-
-		if err != nil {
-			return nil, err
-		}
-
-		rebasedRoot, err := replayCommitWithNewTag(ctx, root, parentRoot, rebasedParentRoot, oldTag, newTag)
-
-		if err != nil {
-			return nil, err
-		}
-
-		valueHash, err := ddb.WriteRootValue(ctx, rebasedRoot)
-
-		if err != nil {
-			return nil, err
-		}
-
-		oldMeta, err := commit.GetCommitMeta()
-
-		if err != nil {
-			return nil, err
-		}
-
-		ch, _ := commit.HashOf()
-		parents := append(otherParents[ch], rebasedParent)
-		rebasedCommit, err = ddb.CommitWithParentCommits(ctx, valueHash, dRef, parents, oldMeta)
-
-		if err != nil {
-			return nil, err
-		}
-
-		parent = commit
-		rebasedParent = rebasedCommit
+	if err != nil {
+		return nil, err
 	}
+
+	rebasedRoot, err := replayCommitWithNewTag(ctx, root, parentRoot, rebasedParentRoot, oldTag, newTag)
+
+	if err != nil {
+		return nil, err
+	}
+
+	valueHash, err := ddb.WriteRootValue(ctx, rebasedRoot)
+
+	if err != nil {
+		return nil, err
+	}
+
+	oldMeta, err := commit.GetCommitMeta()
+
+	if err != nil {
+		return nil, err
+	}
+
+	rebasedCommit, err := ddb.CommitWithParentCommits(ctx, valueHash, dRef, rebasedParentSet, oldMeta)
+
+	if err != nil {
+		return nil, err
+	}
+
+	(*vs)[ch] = rebasedCommit
 	return rebasedCommit, nil
-}
-
-func rewindCommitHistory(ctx context.Context, ddb *doltdb.DoltDB, c *doltdb.Commit, oldTag uint64) ([]*doltdb.Commit, parentMap, error) {
-
-	otherParents := make(parentMap)
-	var history []*doltdb.Commit
-	cur := c
-	for {
-		h, _ := cur.HashOf()
-		otherParents[h] = []*doltdb.Commit{}
-		tagUsed := false
-		history = append(history, cur)
-
-		allParents, err := ddb.ResolveAllParents(ctx, cur)
-
-		if err != nil {
-			return nil, nil, err
-		}
-
-		if len(allParents) < 1 {
-			panic(fmt.Sprintf("commit: %s has no parents", h.String()))
-		}
-
-		for _, pc := range allParents {
-
-			tagUsedInParent, err := tagUsedInHistory(ctx, ddb, pc, oldTag)
-
-			if err != nil {
-				return nil, nil, err
-			}
-
-			if tagUsedInParent {
-				if tagUsed {
-					panic("tag can be used by at most one parent")
-				}
-				tagUsed = true
-				cur = pc
-			} else {
-				otherParents[h] = append(otherParents[h], pc)
-			}
-		}
-
-		if !tagUsed {
-			// reached first usage of oldTag
-			if len(otherParents[h]) != 1 {
-				panic("unreachable: if multiple parents exist, one must use the tag")
-			}
-			history = append(history, otherParents[h]...)
-			break
-		}
-	}
-
-	// reverse slice: oldest first
-	for i := 0; i < len(history)/2; i++ {
-		opp := len(history) - 1 - i
-		history[i], history[opp] = history[opp], history[i]
-	}
-
-	return history, otherParents, nil
-}
-
-// TODO: optimize this function with a visitedNode set
-func tagUsedInHistory(ctx context.Context, ddb *doltdb.DoltDB, c *doltdb.Commit, tag uint64) (bool, error) {
-
-	found, err := tagUsedInCommit(ctx, c, tag)
-
-	if found {
-		return found, nil
-	}
-
-	// DSF of parents
-	allParents, err := ddb.ResolveAllParents(ctx, c)
-
-	if err != nil || len(allParents) < 1 {
-		return false, err
-	}
-
-	for _, pc := range allParents {
-
-		found, err := tagUsedInHistory(ctx, ddb, pc, tag)
-
-		if err != nil {
-			return false, err
-		}
-
-		if found {
-			return found, nil
-		}
-	}
-	return false, nil
-}
-
-func tagUsedInCommit(ctx context.Context, c *doltdb.Commit, tag uint64) (bool, error) {
-	root, err := c.GetRootValue()
-
-	if err != nil {
-		return false, err
-	}
-
-	tblNames, err := root.GetTableNames(ctx)
-
-	if err != nil {
-		return false, nil
-	}
-
-	for _, tn := range tblNames {
-		t, _, _ := root.GetTable(ctx, tn)
-
-		sch, err := t.GetSchema(ctx)
-
-		if err != nil {
-			return false, err
-		}
-
-		_, found := sch.GetAllCols().GetByTag(tag)
-
-		if found {
-			return found, nil
-		}
-	}
-	return false, nil
 }
 
 func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue, oldTag, newTag uint64) (*doltdb.RootValue, error) {
@@ -241,10 +157,6 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 
 	parentTblName := tblName
 
-	if err != nil {
-		return nil, err
-	}
-
 	sch, err := tbl.GetSchema(ctx)
 
 	if err != nil {
@@ -252,7 +164,6 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 	}
 
 	// schema rebase
-	// TODO: do we rebase primary keys?
 	var isPkTag bool
 	newCC, _ := schema.NewColCollection()
 	err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
@@ -442,4 +353,67 @@ func modifyDifferenceTag(d *ndiff.Difference, old, new uint64, pkTag bool, nbf *
 		return d.KeyValue, tv.NomsTupleForTags(nbf, tags, false), nil
 	}
 	return d.KeyValue, d.NewValue, nil
+}
+
+
+// TODO: replace this traversal with a check of SuperSchema once we have it
+func tagUsedInHistory(ctx context.Context, ddb *doltdb.DoltDB, c *doltdb.Commit, tag uint64) (bool, error) {
+
+	found, err := tagUsedInCommit(ctx, c, tag)
+
+	if found {
+		return found, nil
+	}
+
+	// DSF of parents
+	allParents, err := ddb.ResolveAllParents(ctx, c)
+
+	if err != nil || len(allParents) < 1 {
+		return false, err
+	}
+
+	for _, pc := range allParents {
+
+		found, err := tagUsedInHistory(ctx, ddb, pc, tag)
+
+		if err != nil {
+			return false, err
+		}
+
+		if found {
+			return found, nil
+		}
+	}
+	return false, nil
+}
+
+func tagUsedInCommit(ctx context.Context, c *doltdb.Commit, tag uint64) (bool, error) {
+	root, err := c.GetRootValue()
+
+	if err != nil {
+		return false, err
+	}
+
+	tblNames, err := root.GetTableNames(ctx)
+
+	if err != nil {
+		return false, nil
+	}
+
+	for _, tn := range tblNames {
+		t, _, _ := root.GetTable(ctx, tn)
+
+		sch, err := t.GetSchema(ctx)
+
+		if err != nil {
+			return false, err
+		}
+
+		_, found := sch.GetAllCols().GetByTag(tag)
+
+		if found {
+			return found, nil
+		}
+	}
+	return false, nil
 }

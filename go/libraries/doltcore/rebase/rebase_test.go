@@ -121,7 +121,7 @@ var RebaseTagTests = []RebaseTagTest{
 		},
 		OldTag:         DripTag,
 		NewTag:         DripTagRebased,
-		ExpectedErrStr: "not found in any table at commit:",
+		ExpectedErrStr: "tag: " + strconv.Itoa(DripTag) + " not found in commit history for commit: ",
 	},
 	{
 		Name: "rebase entire history",
@@ -322,7 +322,7 @@ var RebaseTagTests = []RebaseTagTest{
 		},
 	},
 	{
-		Name: "create new column on other branch, merge into mater",
+		Name: "create new column on other branch, merge into master",
 		Commands: []command{
 			query(createPeopleTable),
 			commit{},
@@ -343,6 +343,34 @@ var RebaseTagTests = []RebaseTagTest{
 		ExpectedSchema:    schema.SchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
 			newRow(row.TaggedValues{IdTag: types.Int(9), NameTag: types.String("Jacqueline Bouvier"), AgeTag: types.Int(80)}, people),
+			newRow(row.TaggedValues{IdTag: types.Int(11), NameTag: types.String("Selma Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(8.5)}, peopleWithDrip),
+		},
+	},
+	{
+		Name: "create new column, use on multiple branches, merge",
+		Commands: []command{
+			query(createPeopleTable),
+			commit{},
+			query(`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`),
+			query(`insert into people (id, name, age, drip) values (9, "Jacqueline Bouvier", 80, 8.5);`),
+			commit{},
+			branch("newBranch"),
+			checkout("newBranch"),
+			query(`insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`),
+			commit{},
+			checkout("master"),
+			query(`insert into people (id, name, age, drip) values (10, "Patty Bouvier", 40, 8.5);`),
+			commit{},
+			merge("newBranch"),
+			commit{},
+		},
+		OldTag:            DripTag,
+		NewTag:            DripTagRebased,
+		SelectResultQuery: "select * from people;",
+		ExpectedSchema:    schema.SchemaFromCols(peopleWithDrip),
+		ExpectedRows: []row.Row{
+			newRow(row.TaggedValues{IdTag: types.Int(9), NameTag: types.String("Jacqueline Bouvier"), AgeTag: types.Int(80), DripTagRebased: types.Float(8.5)}, peopleWithDrip),
+			newRow(row.TaggedValues{IdTag: types.Int(10), NameTag: types.String("Patty Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(8.5)}, peopleWithDrip),
 			newRow(row.TaggedValues{IdTag: types.Int(11), NameTag: types.String("Selma Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(8.5)}, peopleWithDrip),
 		},
 	},
@@ -381,7 +409,7 @@ func testRebaseTag(t *testing.T, test RebaseTagTest) {
 	root, _ := dEnv.WorkingRoot(context.Background())
 
 	bs, _ := dEnv.DoltDB.GetBranches(context.Background()) // master
-	rebasedCommit, err := RebaseTag(context.Background(), bs[0], dEnv.DoltDB, test.OldTag, test.NewTag)
+	rebasedCommit, err := TagRebase(context.Background(), bs[0], dEnv.DoltDB, test.OldTag, test.NewTag)
 
 	if test.ExpectedErrStr != "" {
 		assert.NotNil(t, err)
