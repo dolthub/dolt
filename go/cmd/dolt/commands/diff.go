@@ -842,7 +842,7 @@ func printDocDiffs(ctx context.Context, dEnv *env.DoltEnv, tblName string, tbl1,
 			} else if len(lines) > 0 && newer != older {
 				printModifiedDoc(bold, doc.DocPk, lines)
 			}
-		} else {
+		} else if doc.Value == nil && doc.NewerText != nil {
 			printAddedDoc(bold, doc.DocPk)
 		}
 	}
