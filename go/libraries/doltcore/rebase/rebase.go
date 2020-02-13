@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
@@ -53,97 +54,137 @@ func TagRebase(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, oldTag
 		ch, _ := cm.HashOf()
 		return nil, errors.New(fmt.Sprintf("tag: %d not found in commit history for commit: %s", oldTag, ch))
 	}
+	err = ddb.DeleteBranch(ctx, dRef)
 
-	vs := make(visitedSet)
-
-	return tagRebaseRecursive(ctx, dRef, ddb, cm, &vs, oldTag, newTag)
-}
-
-func tagRebaseRecursive(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, commit *doltdb.Commit, vs *visitedSet, oldTag, newTag uint64) (*doltdb.Commit, error) {
-	ch, err := commit.HashOf()
 	if err != nil {
 		return nil, err
 	}
-	rc, found := (*vs)[ch]
+
+	vs := make(visitedSet)
+	dr, rebasedCommit, err := tagRebaseRecursive(ctx, ddb, cm, &vs, oldTag, newTag)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// clean up anonymous branch
+	err = ddb.DeleteBranch(ctx, dr)
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = ddb.NewBranchAtCommit(ctx, dRef, rebasedCommit)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return rebasedCommit, nil
+}
+
+func tagRebaseRecursive(ctx context.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, vs *visitedSet, oldTag, newTag uint64) (ref.DoltRef, *doltdb.Commit, error) {
+	commitHash, err := commit.HashOf()
+	if err != nil {
+		return nil, nil, err
+	}
+	visitedCommit, found := (*vs)[commitHash]
 	if found {
-		return rc, nil
+		// base case: reached previously rebased node
+		anonRef := ref.NewBranchRef(strconv.Itoa(int(time.Now().Unix())))
+		// create anonymous branch
+		return anonRef, visitedCommit, ddb.NewBranchAtCommit(ctx, anonRef, visitedCommit)
 	}
 
 	needToRebase, err := tagUsedInHistory(ctx, ddb, commit, oldTag)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if !needToRebase {
-		// reached bottom off DFS
-		return commit, nil
+		// base case: reached bottom of DFS,
+		anonRef := ref.NewBranchRef(strconv.Itoa(int(time.Now().Unix())))
+		//create anonymous branch
+		return anonRef, commit, ddb.NewBranchAtCommit(ctx, anonRef, commit)
 	}
+
+	var dRef ref.DoltRef
+	var parent *doltdb.Commit
+	var rebasedParent *doltdb.Commit
+	var rebasedParentSet []*doltdb.Commit
 
 	allParents, err := ddb.ResolveAllParents(ctx, commit)
 
 	if len(allParents) < 1 {
-		// TODO: handle beginning-of-history
-		h, _ := commit.HashOf()
-		panic(fmt.Sprintf("commit: %s has no parents", h.String()))
+		panic(fmt.Sprintf("commit: %s has no parents", commitHash.String()))
 	}
 
-	var parent *doltdb.Commit
-	var rebasedParent *doltdb.Commit
-	var rebasedParentSet []*doltdb.Commit
-	for _, parent = range allParents {
-		rebasedParent, err = tagRebaseRecursive(ctx, dRef, ddb, parent, vs, oldTag, newTag)
+	for i, p := range allParents {
+		dr, rp, err := tagRebaseRecursive(ctx, ddb, p, vs, oldTag, newTag)
 
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
-		rebasedParentSet = append(rebasedParentSet, rebasedParent)
+		rebasedParentSet = append(rebasedParentSet, rp)
+
+		if i == 0 {
+			dRef = dr
+			parent = p
+			rebasedParent = rp
+		} else {
+			// clean up anonymous branches
+			err = ddb.DeleteBranch(ctx, dRef)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
 	}
 
 	root, err := commit.GetRootValue()
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	parentRoot, err := parent.GetRootValue()
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// we can diff off of any parent
 	rebasedParentRoot, err := rebasedParent.GetRootValue()
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	rebasedRoot, err := replayCommitWithNewTag(ctx, root, parentRoot, rebasedParentRoot, oldTag, newTag)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	valueHash, err := ddb.WriteRootValue(ctx, rebasedRoot)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	oldMeta, err := commit.GetCommitMeta()
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	rebasedCommit, err := ddb.CommitWithParentCommits(ctx, valueHash, dRef, rebasedParentSet, oldMeta)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	(*vs)[ch] = rebasedCommit
-	return rebasedCommit, nil
+	(*vs)[commitHash] = rebasedCommit
+	return dRef, rebasedCommit, nil
 }
 
 func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue, oldTag, newTag uint64) (*doltdb.RootValue, error) {
@@ -358,7 +399,6 @@ func modifyDifferenceTag(d *ndiff.Difference, old, new uint64, pkTag bool, nbf *
 	}
 	return d.KeyValue, d.NewValue, nil
 }
-
 
 // TODO: replace this traversal with a check of SuperSchema once we have it
 func tagUsedInHistory(ctx context.Context, ddb *doltdb.DoltDB, c *doltdb.Commit, tag uint64) (bool, error) {

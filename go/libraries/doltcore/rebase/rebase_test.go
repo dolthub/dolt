@@ -435,10 +435,18 @@ func testRebaseTag(t *testing.T, test RebaseTagTest) {
 	rebasedCommit, err := TagRebase(context.Background(), bs[0], dEnv.DoltDB, test.OldTag, test.NewTag)
 
 	if test.ExpectedErrStr != "" {
-		assert.NotNil(t, err)
-		assert.Contains(t, err.Error(), test.ExpectedErrStr)
+		require.NotNil(t, err)
+		require.Contains(t, err.Error(), test.ExpectedErrStr)
 	} else {
 		require.NoError(t, err)
+		require.NotNil(t, rebasedCommit)
+
+		mcs, _ := doltdb.NewCommitSpec("HEAD", "master")
+		masterCm, _ := dEnv.DoltDB.Resolve(context.Background(), mcs)
+		rch, _ := rebasedCommit.HashOf()
+		mch, _ := masterCm.HashOf()
+		require.Equal(t, rch, mch)
+
 		rebasedRoot, _ := rebasedCommit.GetRootValue()
 		checkSchema(t, rebasedRoot, "people", test.ExpectedSchema)
 		checkRows(t, rebasedRoot, test.ExpectedSchema, test.SelectResultQuery, test.ExpectedRows)
@@ -450,13 +458,11 @@ func testRebaseTagHistory(t *testing.T) {
 		query(createPeopleTable),
 		query(`insert into people (id, name, age) values 
 				(7, "Maggie Simpson", 1);`),
+		commit{}, // common ancestor of (newMaster, oldMaster) and (newMaster, other)
 
-		// common ancestor of post-rebase-master and pre-rebase-master
-		commit{},
 		query(`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`),
+		commit{}, // common ancestor of (oldMaster, other)
 
-		// common ancestor of other and pre-rebase-master
-		commit{},
 		branch("other"),
 		query(`insert into people (id, name, age, drip) values (10, "Patty Bouvier", 40, 8.5);`),
 		commit{},
@@ -482,17 +488,16 @@ func testRebaseTagHistory(t *testing.T) {
 	}
 
 	mcs, _ := doltdb.NewCommitSpec("HEAD", "master")
-	masterCm, _ := dEnv.DoltDB.Resolve(context.Background(), mcs)
+	oldMasterCm, _ := dEnv.DoltDB.Resolve(context.Background(), mcs)
 	ocs, _ := doltdb.NewCommitSpec("HEAD", "other")
 	otherCm, _ := dEnv.DoltDB.Resolve(context.Background(), ocs)
 
-
 	bs, _ := dEnv.DoltDB.GetBranches(context.Background()) // master
-	rebasedMasterCm, err := TagRebase(context.Background(), bs[0], dEnv.DoltDB, DripTag, DripTagRebased)
+	newMasterCm, err := TagRebase(context.Background(), bs[0], dEnv.DoltDB, DripTag, DripTagRebased)
 	require.NoError(t, err)
 
 	expectedSch := schema.SchemaFromCols(peopleWithDrip)
-	rebasedRoot, _ := rebasedMasterCm.GetRootValue()
+	rebasedRoot, _ := newMasterCm.GetRootValue()
 	checkSchema(t, rebasedRoot, "people", expectedSch)
 	checkRows(t, rebasedRoot, expectedSch, "select * from people;", []row.Row{
 		newRow(row.TaggedValues{IdTag: types.Int(7), NameTag: types.String("Maggie Simpson"), AgeTag: types.Int(1)}, people),
@@ -500,16 +505,21 @@ func testRebaseTagHistory(t *testing.T) {
 	})
 
 	// assert that histories have been forked
-	anc1, err := doltdb.GetCommitAncestor(context.Background(), masterCm, otherCm)
+	anc1, err := doltdb.GetCommitAncestor(context.Background(), oldMasterCm, otherCm)
 	require.NoError(t, err)
-	anc2, err := doltdb.GetCommitAncestor(context.Background(), rebasedMasterCm, masterCm)
-	require.NoError(t, err)
-	ch1, err := anc1.HashOf()
-	require.NoError(t, err)
-	ch2, err := anc2.HashOf()
-	require.NoError(t, err)
+	ancHash1, _ := anc1.HashOf()
 
-	require.NotEqual(t, ch1, ch2)
+	anc2, err := doltdb.GetCommitAncestor(context.Background(), newMasterCm, oldMasterCm)
+	require.NoError(t, err)
+	ancHash2, _ := anc2.HashOf()
+
+	anc3, err := doltdb.GetCommitAncestor(context.Background(), newMasterCm, otherCm)
+	require.NoError(t, err)
+	ancHash3, _ := anc3.HashOf()
+
+	require.NotEqual(t, ancHash1, ancHash2)
+	require.NotEqual(t, ancHash1, ancHash3)
+	require.Equal(t, ancHash2, ancHash3)
 }
 
 func validateTest(t *testing.T, test RebaseTagTest) {
@@ -603,8 +613,8 @@ func checkRows(t *testing.T, root *doltdb.RootValue, sch schema.Schema, selectQu
 	require.Equal(t, len(actualRows), len(expectedRows))
 
 	for idx := 0; idx < len(expectedRows); idx++ {
-		assert.True(t, idx < len(expectedRows))
-		assert.Equal(t, expectedRows[idx], actualRows[idx])
+		require.True(t, idx < len(expectedRows))
+		require.Equal(t, expectedRows[idx], actualRows[idx])
 		idx++
 	}
 }
