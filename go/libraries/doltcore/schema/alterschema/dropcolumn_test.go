@@ -27,8 +27,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-var TypedRowsSansAge []row.Row
-var TypedRowsSansTitle []row.Row
+var TypedRowsWithoutAge []row.Row
+var TypedRowsWithoutTitle []row.Row
 
 func init() {
 	for i := 0; i < len(dtestutils.UUIDS); i++ {
@@ -47,7 +47,7 @@ func init() {
 			panic(err)
 		}
 
-		TypedRowsSansAge = append(TypedRowsSansAge, r)
+		TypedRowsWithoutAge = append(TypedRowsWithoutAge, r)
 
 		taggedValsSansTitle := row.TaggedValues{
 			dtestutils.IdTag:        types.UUID(dtestutils.UUIDS[i]),
@@ -63,7 +63,7 @@ func init() {
 			panic(err)
 		}
 
-		TypedRowsSansTitle = append(TypedRowsSansTitle, r)
+		TypedRowsWithoutTitle = append(TypedRowsWithoutTitle, r)
 	}
 }
 
@@ -79,13 +79,13 @@ func TestDropColumn(t *testing.T) {
 			name:           "remove int",
 			colName:        "age",
 			expectedSchema: dtestutils.RemoveColumnFromSchema(dtestutils.TypedSchema, dtestutils.AgeTag),
-			expectedRows:   TypedRowsSansAge,
+			expectedRows:   TypedRowsWithoutAge,
 		},
 		{
 			name:           "remove string",
 			colName:        "title",
 			expectedSchema: dtestutils.RemoveColumnFromSchema(dtestutils.TypedSchema, dtestutils.TitleTag),
-			expectedRows:   TypedRowsSansTitle,
+			expectedRows:   TypedRowsWithoutTitle,
 		},
 		{
 			name:        "column not found",
