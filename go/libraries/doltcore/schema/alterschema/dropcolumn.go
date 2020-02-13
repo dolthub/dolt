@@ -19,11 +19,13 @@ import (
 	"errors"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-// DropColumn drops a column from a table. No existing rows are modified, but a new schema entry is written.
+// DropColumn drops a column from a table, and removes its associated cell values
 func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string) (*doltdb.Table, error) {
 	if tbl == nil {
 		panic("invalid parameters")
@@ -37,10 +39,13 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string) (*doltdb
 
 	allCols := tblSch.GetAllCols()
 
+	var dropTag uint64
 	if col, ok := allCols.GetByName(colName); !ok {
 		return nil, schema.ErrColNotFound
 	} else if col.IsPartOfPK {
 		return nil, errors.New("Cannot drop column in primary key")
+	} else {
+		dropTag = col.Tag
 	}
 
 	cols := make([]schema.Column, 0)
@@ -71,15 +76,60 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string) (*doltdb
 
 	rd, err := tbl.GetRowData(ctx)
 
+	prunedRowData, err := dropColumnValuesForTag(ctx, tbl.Format(), newSch, rd, dropTag)
+
 	if err != nil {
 		return nil, err
 	}
 
-	newTable, err := doltdb.NewTable(ctx, vrw, schemaVal, rd)
+	newTable, err := doltdb.NewTable(ctx, vrw, schemaVal, prunedRowData)
 
 	if err != nil {
 		return nil, err
 	}
 
 	return newTable, nil
+}
+
+func dropColumnValuesForTag(ctx context.Context, nbf *types.NomsBinFormat, newSch schema.Schema, rowData types.Map, dropTag uint64) (types.Map, error) {
+	re := rowData.Edit()
+
+	mi, err := rowData.BufferedIterator(ctx)
+
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	for {
+		k, v, err := mi.Next(ctx)
+
+		if k == nil || v == nil {
+			break
+		}
+
+		if err != nil {
+			return types.EmptyMap, err
+		}
+
+		// can't drop primary key columns, tag is in map value
+		tv, err := row.ParseTaggedValues(v.(types.Tuple))
+
+		if err != nil {
+			return types.EmptyMap, err
+		}
+
+		_, found := tv[dropTag]
+		if found {
+			delete(tv, dropTag)
+			re.Set(k, tv.NomsTupleForTags(nbf, newSch.GetNonPKCols().Tags, false))
+		}
+	}
+
+	prunedRowData, err := re.Map(ctx)
+
+	if err != nil {
+		return types.EmptyMap, nil
+	}
+
+	return prunedRowData, nil
 }
