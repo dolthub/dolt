@@ -386,5 +386,6 @@ teardown() {
 }
 
 @test "sql shell works after failing query" {
+    skiponwindows "Need to install expect and make this script work on windows."
     $BATS_TEST_DIRNAME/sql-works-after-failing-query.expect
 }
