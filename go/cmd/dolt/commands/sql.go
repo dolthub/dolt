@@ -533,6 +533,7 @@ func processQuery(ctx context.Context, query string, se *sqlEngine) error {
 	case *sqlparser.Select, *sqlparser.Insert, *sqlparser.Update, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain:
 		sqlSch, rowIter, err := se.query(ctx, query)
 		if err == nil {
+			defer rowIter.Close()
 			err = se.prettyPrintResults(ctx, se.ddb.ValueReadWriter().Format(), sqlSch, rowIter)
 		}
 		return err
@@ -543,6 +544,7 @@ func processQuery(ctx context.Context, query string, se *sqlEngine) error {
 		}
 		sqlSch, rowIter, err := se.query(ctx, query)
 		if err == nil {
+			defer rowIter.Close()
 			err = se.prettyPrintResults(ctx, se.ddb.Format(), sqlSch, rowIter)
 		}
 		return err
@@ -585,6 +587,7 @@ func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 		if err != nil {
 			return fmt.Errorf("Error inserting rows: %v", err.Error())
 		}
+		defer rowIter.Close()
 
 		err = mergeInsertResultIntoStats(rowIter, &batchEditStats)
 		if err != nil {
