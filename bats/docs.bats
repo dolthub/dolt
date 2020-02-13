@@ -508,6 +508,7 @@ SQL
  }
 
 @test "dolt diff shows diffs between working root and file system docs" {
+    # 2 added docs
     echo "testing readme" > README.md
     echo "testing license" > LICENSE.md
     run dolt diff
@@ -520,6 +521,8 @@ SQL
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     dolt commit -m "docs"
+
+    # 1 modified doc, 1 other doc on working root with no changes
     echo "a new readme" > README.md
     run dolt diff
     [ "$status" -eq 0 ]
@@ -529,12 +532,28 @@ SQL
     [[ "$output" =~  "- testing readme" ]] || false
     [[ "$output" =~  "+ a new readme" ]] || false
     [[ ! "$output" =~  "LICENSE.md" ]] || false
+    dolt add .
+    dolt commit -m "modified README.md"
+
+    # 1 deleted doc, 1 other doc on working root with no changes
     rm LICENSE.md
     run dolt diff
     [ "$status" -eq 0 ]
     [[ "$output" =~ "diff --dolt a/LICENSE.md b/LICENSE.md" ]] || false
     [[ "$output" =~ "- testing license" ]] || false
     [[ "$output" =~ "deleted doc" ]] || false
+    [[ ! "$output" =~ "README.md" ]] || false
+    dolt add .
+    dolt commit -m "deleted LICENSE.md"
+
+    # 1 modified doc, no other docs on working root
+    echo "A new README.md " > README.md
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "diff --dolt a/README.md b/README.md" ]] || false
+    [[ "$output" =~  "--- a/README.md" ]] || false
+    [[ "$output" =~  "+++ b/README.md" ]] || false
+    [[ ! "$output" =~  "LICENSE.md" ]] || false
 }
 
 @test "dolt diff <doc> shows diff of one <doc> between working root and file system docs" {
