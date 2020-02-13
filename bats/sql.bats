@@ -384,3 +384,7 @@ teardown() {
     [ "${#lines[@]}" -eq 5 ]
     [[ "${lines[3]}" =~ " <NULL> " ]] || false
 }
+
+@test "sql shell works after failing query" {
+    $BATS_TEST_DIRNAME/sql-works-after-failing-query.expect
+}
