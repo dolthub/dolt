@@ -347,7 +347,6 @@ teardown() {
 }
 
 @test "sql unix_timestamp function" {
-    skip "unix_timestamp is not supported"
     run dolt sql -q "SELECT UNIX_TIMESTAMP(NOW()) FROM dual;"
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
@@ -365,10 +364,12 @@ teardown() {
     run dolt sql -q "SELECT 2+2 FROM dual UNION SELECT 2+2 FROM dual UNION SELECT 2+3 FROM dual;"
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
+    run dolt sql -q "SELECT 2+2 FROM dual UNION DISTINCT SELECT 2+2 FROM dual UNION SELECT 2+3 FROM dual;"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
 }
 
 @test "sql greatest/least with a timestamp" {
-    skip "greatest/least do not support timestamp"
     run dolt sql -q "SELECT GREATEST(NOW(), DATE_ADD(NOW(), INTERVAL 2 DAY)) FROM dual;"
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
@@ -378,7 +379,6 @@ teardown() {
 }
 
 @test "sql greatest with converted null" {
-    skip "this currently leaves mysql-server is a bad state"
     run dolt sql -q "SELECT GREATEST(CAST(NOW() AS CHAR), CAST(NULL AS CHAR)) FROM dual;"
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
