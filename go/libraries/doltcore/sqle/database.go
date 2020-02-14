@@ -28,6 +28,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
+	dsql "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
 )
 
 type batchMode bool
@@ -400,11 +401,12 @@ func RegisterSchemaFragments(ctx *sql.Context, catalog *sql.Catalog, db *Databas
 		if r[0] == "view" {
 			name := r[1].(string)
 			definition := r[2].(string)
-			cv, err := parse.Parse(sql.NewContext(ctx), fmt.Sprintf("create view %s as %s", name, definition))
+			cv, err := parse.Parse(sql.NewContext(ctx), fmt.Sprintf("create view %s as %s", dsql.QuoteIdentifier(name), definition))
 			if err != nil {
 				parseErrors = append(parseErrors, err)
+			} else {
+				vr.Register(db.Name(), sql.NewView(name, cv.(*plan.CreateView).Definition))
 			}
-			vr.Register(db.Name(), sql.NewView(name, cv.(*plan.CreateView).Definition))
 		}
 		r, err = iter.Next()
 	}
