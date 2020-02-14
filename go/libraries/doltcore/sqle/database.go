@@ -404,8 +404,9 @@ func RegisterSchemaFragments(ctx *sql.Context, catalog *sql.Catalog, db *Databas
 			cv, err := parse.Parse(sql.NewContext(ctx), fmt.Sprintf("create view %s as %s", dsql.QuoteIdentifier(name), definition))
 			if err != nil {
 				parseErrors = append(parseErrors, err)
+			} else {
+				vr.Register(db.Name(), sql.NewView(name, cv.(*plan.CreateView).Definition))
 			}
-			vr.Register(db.Name(), sql.NewView(name, cv.(*plan.CreateView).Definition))
 		}
 		r, err = iter.Next()
 	}
