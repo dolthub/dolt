@@ -48,7 +48,7 @@ func TagRebase(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, oldTag
 		return nil, err
 	}
 
-	found, err := tagUsedInHistory(ctx, ddb, cm, oldTag)
+	found, err := tagExistsInHistory(ctx, ddb, cm, oldTag)
 
 	if !found {
 		ch, _ := cm.HashOf()
@@ -60,8 +60,7 @@ func TagRebase(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, oldTag
 		return nil, err
 	}
 
-	vs := make(visitedSet)
-	dr, rebasedCommit, err := tagRebaseRecursive(ctx, ddb, cm, &vs, oldTag, newTag)
+	dr, rebasedCommit, err := tagRebaseRecursive(ctx, ddb, cm, make(visitedSet), oldTag, newTag)
 
 	if err != nil {
 		return nil, err
@@ -83,12 +82,12 @@ func TagRebase(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, oldTag
 	return rebasedCommit, nil
 }
 
-func tagRebaseRecursive(ctx context.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, vs *visitedSet, oldTag, newTag uint64) (ref.DoltRef, *doltdb.Commit, error) {
+func tagRebaseRecursive(ctx context.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, vs visitedSet, oldTag, newTag uint64) (ref.DoltRef, *doltdb.Commit, error) {
 	commitHash, err := commit.HashOf()
 	if err != nil {
 		return nil, nil, err
 	}
-	visitedCommit, found := (*vs)[commitHash]
+	visitedCommit, found := vs[commitHash]
 	if found {
 		// base case: reached previously rebased node
 		anonRef := ref.NewBranchRef(strconv.Itoa(int(time.Now().Unix())))
@@ -96,7 +95,7 @@ func tagRebaseRecursive(ctx context.Context, ddb *doltdb.DoltDB, commit *doltdb.
 		return anonRef, visitedCommit, ddb.NewBranchAtCommit(ctx, anonRef, visitedCommit)
 	}
 
-	needToRebase, err := tagUsedInHistory(ctx, ddb, commit, oldTag)
+	needToRebase, err := tagExistsInHistory(ctx, ddb, commit, oldTag)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -183,7 +182,7 @@ func tagRebaseRecursive(ctx context.Context, ddb *doltdb.DoltDB, commit *doltdb.
 		return nil, nil, err
 	}
 
-	(*vs)[commitHash] = rebasedCommit
+	vs[commitHash] = rebasedCommit
 	return dRef, rebasedCommit, nil
 }
 
@@ -300,16 +299,14 @@ func tableFromRootAndTag(ctx context.Context, root *doltdb.RootValue, tag uint64
 	for _, tn := range tblNames {
 		t, _, _ := root.GetTable(ctx, tn)
 
-		sch, err := t.GetSchema(ctx)
+		found, err := tagExistsInTable(ctx, t, tag)
+
+		if found {
+			return tn, t, err
+		}
 
 		if err != nil {
 			return "", nil, err
-		}
-
-		_, found := sch.GetAllCols().GetByTag(tag)
-
-		if found {
-			return tn, t, nil
 		}
 	}
 
@@ -401,9 +398,9 @@ func modifyDifferenceTag(d *ndiff.Difference, old, new uint64, pkTag bool, nbf *
 }
 
 // TODO: replace this traversal with a check of SuperSchema once we have it
-func tagUsedInHistory(ctx context.Context, ddb *doltdb.DoltDB, c *doltdb.Commit, tag uint64) (bool, error) {
+func tagExistsInHistory(ctx context.Context, ddb *doltdb.DoltDB, c *doltdb.Commit, tag uint64) (bool, error) {
 
-	found, err := tagUsedInCommit(ctx, c, tag)
+	found, err := tagExistsInCommit(ctx, c, tag)
 
 	if found {
 		return found, nil
@@ -418,7 +415,7 @@ func tagUsedInHistory(ctx context.Context, ddb *doltdb.DoltDB, c *doltdb.Commit,
 
 	for _, pc := range allParents {
 
-		found, err := tagUsedInHistory(ctx, ddb, pc, tag)
+		found, err := tagExistsInHistory(ctx, ddb, pc, tag)
 
 		if err != nil {
 			return false, err
@@ -431,7 +428,7 @@ func tagUsedInHistory(ctx context.Context, ddb *doltdb.DoltDB, c *doltdb.Commit,
 	return false, nil
 }
 
-func tagUsedInCommit(ctx context.Context, c *doltdb.Commit, tag uint64) (bool, error) {
+func tagExistsInCommit(ctx context.Context, c *doltdb.Commit, tag uint64) (bool, error) {
 	root, err := c.GetRootValue()
 
 	if err != nil {
@@ -447,17 +444,22 @@ func tagUsedInCommit(ctx context.Context, c *doltdb.Commit, tag uint64) (bool, e
 	for _, tn := range tblNames {
 		t, _, _ := root.GetTable(ctx, tn)
 
-		sch, err := t.GetSchema(ctx)
+		found, err := tagExistsInTable(ctx, t, tag)
 
-		if err != nil {
-			return false, err
-		}
-
-		_, found := sch.GetAllCols().GetByTag(tag)
-
-		if found {
-			return found, nil
+		if found || err != nil {
+			return found, err
 		}
 	}
 	return false, nil
+}
+
+func tagExistsInTable(ctx context.Context, t *doltdb.Table, tag uint64) (bool, error) {
+	sch, err := t.GetSchema(ctx)
+
+	if err != nil {
+		return false, err
+	}
+
+	_, found := sch.GetAllCols().GetByTag(tag)
+	return found, nil
 }
