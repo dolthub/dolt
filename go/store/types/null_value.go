@@ -88,12 +88,6 @@ func (v Null) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 
 func (v Null) skip(nbf *NomsBinFormat, b *binaryNomsReader) {}
 
-func (Null) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
-	return func(Value) (Value, error) {
-		return NullValue, nil
-	}, nil
-}
-
 func (v Null) HumanReadableString() string {
 	return "null_value"
 }

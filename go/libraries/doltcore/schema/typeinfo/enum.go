@@ -31,11 +31,11 @@ const (
 
 // This is a dolt implementation of the MySQL type Enum, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
-type enumImpl struct {
+type enumType struct {
 	sqlEnumType sql.EnumType
 }
 
-var _ TypeInfo = (*enumImpl)(nil)
+var _ TypeInfo = (*enumType)(nil)
 
 func CreateEnumTypeFromParams(params map[string]string) (TypeInfo, error) {
 	var collation sql.Collation
@@ -62,11 +62,11 @@ func CreateEnumTypeFromParams(params map[string]string) (TypeInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &enumImpl{sqlEnumType}, nil
+	return &enumType{sqlEnumType}, nil
 }
 
 // ConvertNomsValueToValue implements TypeInfo interface.
-func (ti *enumImpl) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
+func (ti *enumType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.String); ok {
 		res, err := ti.sqlEnumType.Convert(string(val))
 		if err != nil {
@@ -81,23 +81,27 @@ func (ti *enumImpl) ConvertNomsValueToValue(v types.Value) (interface{}, error) 
 }
 
 // ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *enumImpl) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
-	if artifact, ok := ti.isValid(v); ok {
-		switch v.(type) {
-		case nil, types.Null:
-			return types.NullValue, nil
-		}
-		return types.String(artifact), nil
+func (ti *enumType) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
+	if v == nil {
+		return types.NullValue, nil
 	}
-	return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
+	strVal, err := ti.sqlEnumType.Convert(v)
+	if err != nil {
+		return nil, err
+	}
+	val, ok := strVal.(string)
+	if ok {
+		return types.String(val), nil
+	}
+	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
 }
 
 // Equals implements TypeInfo interface.
-func (ti *enumImpl) Equals(other TypeInfo) bool {
+func (ti *enumType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	if ti2, ok := other.(*enumImpl); ok && ti.sqlEnumType.NumberOfElements() == ti2.sqlEnumType.NumberOfElements() {
+	if ti2, ok := other.(*enumType); ok && ti.sqlEnumType.NumberOfElements() == ti2.sqlEnumType.NumberOfElements() {
 		tiVals := ti.sqlEnumType.Values()
 		ti2Vals := ti2.sqlEnumType.Values()
 		for i := range tiVals {
@@ -110,13 +114,29 @@ func (ti *enumImpl) Equals(other TypeInfo) bool {
 	return false
 }
 
+// FormatValue implements TypeInfo interface.
+func (ti *enumType) FormatValue(v types.Value) (*string, error) {
+	if _, ok := v.(types.Null); ok || v == nil {
+		return nil, nil
+	}
+	strVal, err := ti.ConvertNomsValueToValue(v)
+	if err != nil {
+		return nil, err
+	}
+	val, ok := strVal.(string)
+	if !ok {
+		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
+	}
+	return &val, nil
+}
+
 // GetTypeIdentifier implements TypeInfo interface.
-func (ti *enumImpl) GetTypeIdentifier() Identifier {
+func (ti *enumType) GetTypeIdentifier() Identifier {
 	return EnumTypeIdentifier
 }
 
 // GetTypeParams implements TypeInfo interface.
-func (ti *enumImpl) GetTypeParams() map[string]string {
+func (ti *enumType) GetTypeParams() map[string]string {
 	var sb strings.Builder
 	enc := gob.NewEncoder(&sb)
 	err := enc.Encode(ti.sqlEnumType.Values())
@@ -131,48 +151,37 @@ func (ti *enumImpl) GetTypeParams() map[string]string {
 }
 
 // IsValid implements TypeInfo interface.
-func (ti *enumImpl) IsValid(v interface{}) bool {
-	_, ok := ti.isValid(v)
-	return ok
+func (ti *enumType) IsValid(v types.Value) bool {
+	_, err := ti.ConvertNomsValueToValue(v)
+	return err == nil
 }
 
 // NomsKind implements TypeInfo interface.
-func (ti *enumImpl) NomsKind() types.NomsKind {
+func (ti *enumType) NomsKind() types.NomsKind {
 	return types.StringKind
 }
 
+// ParseValue implements TypeInfo interface.
+func (ti *enumType) ParseValue(str *string) (types.Value, error) {
+	if str == nil || *str == "" {
+		return types.NullValue, nil
+	}
+	strVal, err := ti.sqlEnumType.Convert(*str)
+	if err != nil {
+		return nil, err
+	}
+	if val, ok := strVal.(string); ok {
+		return types.String(val), nil
+	}
+	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
+}
+
 // String implements TypeInfo interface.
-func (ti *enumImpl) String() string {
+func (ti *enumType) String() string {
 	return fmt.Sprintf(`Enum(Collation: %v, Values: %v)`, ti.sqlEnumType.Collation().String(), strings.Join(ti.sqlEnumType.Values(), ", "))
 }
 
 // ToSqlType implements TypeInfo interface.
-func (ti *enumImpl) ToSqlType() sql.Type {
+func (ti *enumType) ToSqlType() sql.Type {
 	return ti.sqlEnumType
-}
-
-// isValid is an internal implementation for the TypeInfo interface function IsValid.
-// Some validity checks process the value into its final form, which may be returned
-// as an artifact so that a value doesn't need to be processed twice in some scenarios.
-func (ti *enumImpl) isValid(v interface{}) (artifact string, ok bool) {
-	// convert some Noms values to their standard golang equivalents, except Null
-	switch val := v.(type) {
-	case nil:
-		return "", true
-	case types.Null:
-		return "", true
-	case types.Bool:
-		v = bool(val)
-	case types.Int:
-		v = int64(val)
-	case types.Uint:
-		v = uint64(val)
-	case types.Float:
-		v = float64(val)
-	case types.String:
-		v = string(val)
-	}
-	res, err := ti.sqlEnumType.Convert(v)
-	resStr, ok := res.(string)
-	return resStr, err == nil && ok
 }

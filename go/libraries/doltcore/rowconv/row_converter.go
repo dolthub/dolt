@@ -17,9 +17,9 @@ package rowconv
 import (
 	"fmt"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -56,13 +56,35 @@ func NewRowConverter(mapping *FieldMapping) (*RowConverter, error) {
 			return nil, fmt.Errorf("Could not find column being mapped. src tag: %d, dest tag: %d", srcTag, destTag)
 		}
 
-		convFunc, err := doltcore.GetConvFunc(srcCol.Kind, destCol.Kind)
-
-		if err != nil {
-			return nil, fmt.Errorf("Unsupported conversion from type %s to %s", srcCol.KindString(), destCol.KindString())
+		if srcCol.TypeInfo.Equals(destCol.TypeInfo) {
+			convFuncs[srcTag] = func(v types.Value) (types.Value, error) {
+				return v, nil
+			}
 		}
-
-		convFuncs[srcTag] = convFunc
+		if destCol.TypeInfo.Equals(typeinfo.StringDefaultType) {
+			convFuncs[srcTag] = func(v types.Value) (types.Value, error) {
+				val, err := srcCol.TypeInfo.FormatValue(v)
+				if err != nil {
+					return nil, err
+				}
+				if val == nil {
+					return types.NullValue, nil
+				}
+				return types.String(*val), nil
+			}
+		} else {
+			convFuncs[srcTag] = func(v types.Value) (types.Value, error) {
+				str, err := srcCol.TypeInfo.FormatValue(v)
+				if err != nil {
+					return nil, err
+				}
+				val, err := destCol.TypeInfo.ParseValue(str)
+				if err != nil {
+					return nil, err
+				}
+				return val, nil
+			}
+		}
 	}
 
 	return &RowConverter{mapping, false, convFuncs}, nil

@@ -24,7 +24,6 @@ package types
 import (
 	"context"
 	"strconv"
-	"time"
 
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
@@ -94,69 +93,6 @@ func (v Int) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 
 func (v Int) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
 	b.skipInt()
-}
-
-func (Int) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
-	switch targetKind {
-	case BoolKind:
-		return func(val Value) (Value, error) {
-			if val == nil {
-				return nil, nil
-			}
-			n := int64(val.(Int))
-			return Bool(n != 0), nil
-		}, nil
-	case FloatKind:
-		return func(val Value) (Value, error) {
-			if val == nil {
-				return nil, nil
-			}
-			n := int64(val.(Int))
-			return Float(float64(n)), nil
-		}, nil
-	case IntKind:
-		return func(val Value) (Value, error) {
-			return val, nil
-		}, nil
-	case NullKind:
-		return func(Value) (Value, error) {
-			return NullValue, nil
-		}, nil
-	case StringKind:
-		return func(val Value) (Value, error) {
-			if val == nil {
-				return nil, nil
-			}
-			n := int64(val.(Int))
-			str := strconv.FormatInt(n, 10)
-			return String(str), nil
-		}, nil
-	case TimestampKind:
-		return func(val Value) (Value, error) {
-			if val == nil {
-				return nil, nil
-			}
-			n := int64(val.(Int))
-			// There are comparison issues for times too large, so "200000000-12-31 23:59:59 UTC" seems like a reasonable maximum.
-			if n > 6311328264403199 {
-				n = 6311328264403199
-				// I could not find anything pointing to a minimum allowed time, so "-200000000-01-01 00:00:00" seems reasonable
-			} else if n < -6311452567219200 {
-				n = -6311452567219200
-			}
-			return Timestamp(time.Unix(n, 0).UTC()), nil
-		}, nil
-	case UintKind:
-		return func(val Value) (Value, error) {
-			if val == nil {
-				return nil, nil
-			}
-			n := int64(val.(Int))
-			return Uint(uint64(n)), nil
-		}, nil
-	}
-
-	return nil, CreateNoConversionError(IntKind, targetKind)
 }
 
 func (v Int) HumanReadableString() string {

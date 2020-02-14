@@ -429,10 +429,6 @@ func newEmptyListSequenceChunker(ctx context.Context, vrw ValueReadWriter) (*seq
 	return newEmptySequenceChunker(ctx, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
 }
 
-func (List) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
-	return nil, CreateNoConversionError(ListKind, targetKind)
-}
-
 func (l List) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	panic("unreachable")
 }

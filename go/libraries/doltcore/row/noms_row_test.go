@@ -54,7 +54,7 @@ var testKeyCols = []schema.Column{
 }
 var testCols = []schema.Column{
 	{Name: addrColName, Tag: addrColTag, Kind: types.StringKind, IsPartOfPK: false, TypeInfo: typeinfo.StringDefaultType, Constraints: nil},
-	{Name: ageColName, Tag: ageColTag, Kind: types.UintKind, IsPartOfPK: false, TypeInfo: typeinfo.StringDefaultType, Constraints: nil},
+	{Name: ageColName, Tag: ageColTag, Kind: types.UintKind, IsPartOfPK: false, TypeInfo: typeinfo.Uint64Type, Constraints: nil},
 	{Name: titleColName, Tag: titleColTag, Kind: types.StringKind, IsPartOfPK: false, TypeInfo: typeinfo.StringDefaultType, Constraints: nil},
 	{Name: reservedColName, Tag: reservedColTag, Kind: types.StringKind, IsPartOfPK: false, TypeInfo: typeinfo.StringDefaultType, Constraints: nil},
 }

@@ -20,7 +20,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
@@ -142,14 +143,15 @@ func ParseKeyValues(nbf *types.NomsBinFormat, sch schema.Schema, args []string) 
 		}
 	}
 
-	convFuncs := make(map[uint64]types.MarshalCallback)
+	convFuncs := make(map[uint64]func(*string) (types.Value, error))
 	err := sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		convFunc, err := doltcore.GetConvFunc(types.StringKind, col.Kind)
-		if err != nil {
-			return false, ColumnError{col.Name, "Conversion from string to " + col.KindString() + "is not defined."}
+		if col.TypeInfo.Equals(typeinfo.StringDefaultType) {
+			convFuncs[tag] = func(v *string) (types.Value, error) {
+				return types.String(*v), nil
+			}
+		} else {
+			convFuncs[tag] = col.TypeInfo.ParseValue
 		}
-
-		convFuncs[tag] = convFunc
 		return false, nil
 	})
 
@@ -161,7 +163,7 @@ func ParseKeyValues(nbf *types.NomsBinFormat, sch schema.Schema, args []string) 
 	for _, pkMap := range pkMaps {
 		taggedVals := make(row.TaggedValues)
 		for k, v := range pkMap {
-			val, err := convFuncs[k](types.String(v))
+			val, err := convFuncs[k](&v)
 
 			if err != nil {
 				return nil, err

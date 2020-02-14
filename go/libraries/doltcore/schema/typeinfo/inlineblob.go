@@ -15,10 +15,8 @@
 package typeinfo
 
 import (
-	"encoding/hex"
 	"fmt"
 	"math"
-	"strings"
 
 	"github.com/src-d/go-mysql-server/sql"
 	"vitess.io/vitess/go/sqltypes"
@@ -26,16 +24,18 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-type inlineBlobImpl struct{}
+type inlineBlobType struct {
+	sqlBinaryType sql.StringType
+}
 
-var _ TypeInfo = (*inlineBlobImpl)(nil)
+var _ TypeInfo = (*inlineBlobType)(nil)
 
-var InlineBlobType TypeInfo = &inlineBlobImpl{}
+var InlineBlobType = &inlineBlobType{sql.MustCreateBinary(sqltypes.VarBinary, math.MaxUint16)}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
-func (ti *inlineBlobImpl) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
+func (ti *inlineBlobType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.InlineBlob); ok {
-		return strings.ToUpper(hex.EncodeToString(val)), nil
+		return string(val), nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -44,86 +44,91 @@ func (ti *inlineBlobImpl) ConvertNomsValueToValue(v types.Value) (interface{}, e
 }
 
 // ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *inlineBlobImpl) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
-	if _, ok := ti.isValid(v); ok {
-		switch val := v.(type) {
-		case nil:
-			return types.NullValue, nil
-		case []byte:
-			return types.InlineBlob(val), nil
-		case string:
-			return types.InlineBlob(val), nil
-		case types.Null:
-			return types.NullValue, nil
-		case types.InlineBlob:
-			return val, nil
-		case types.String:
-			return types.InlineBlob(val), nil
-		default:
-			return nil, fmt.Errorf(`"%v" has falsely evaluated value "%v" of type "%T" as valid`, ti.String(), val, val)
-		}
+func (ti *inlineBlobType) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
+	if v == nil {
+		return types.NullValue, nil
 	}
-	return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
+	strVal, err := ti.sqlBinaryType.Convert(v)
+	if err != nil {
+		return nil, err
+	}
+	val, ok := strVal.(string)
+	if ok {
+		return types.InlineBlob(val), nil
+	}
+	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
 }
 
 // Equals implements TypeInfo interface.
-func (ti *inlineBlobImpl) Equals(other TypeInfo) bool {
+func (ti *inlineBlobType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	_, ok := other.(*inlineBlobImpl)
+	_, ok := other.(*inlineBlobType)
 	return ok
 }
 
+// FormatValue implements TypeInfo interface.
+func (ti *inlineBlobType) FormatValue(v types.Value) (*string, error) {
+	if val, ok := v.(types.InlineBlob); ok {
+		convVal, err := ti.ConvertNomsValueToValue(val)
+		if err != nil {
+			return nil, err
+		}
+		res, ok := convVal.(string)
+		if !ok {
+			return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
+		}
+		return &res, nil
+	}
+	if _, ok := v.(types.Null); ok || v == nil {
+		return nil, nil
+	}
+	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti.String(), v.Kind())
+}
+
 // GetTypeIdentifier implements TypeInfo interface.
-func (ti *inlineBlobImpl) GetTypeIdentifier() Identifier {
+func (ti *inlineBlobType) GetTypeIdentifier() Identifier {
 	return InlineBlobTypeIdentifier
 }
 
 // GetTypeParams implements TypeInfo interface.
-func (ti *inlineBlobImpl) GetTypeParams() map[string]string {
+func (ti *inlineBlobType) GetTypeParams() map[string]string {
 	return nil
 }
 
 // IsValid implements TypeInfo interface.
-func (ti *inlineBlobImpl) IsValid(v interface{}) bool {
-	_, ok := ti.isValid(v)
-	return ok
+func (ti *inlineBlobType) IsValid(v types.Value) bool {
+	_, err := ti.ConvertNomsValueToValue(v)
+	return err == nil
 }
 
 // NomsKind implements TypeInfo interface.
-func (ti *inlineBlobImpl) NomsKind() types.NomsKind {
+func (ti *inlineBlobType) NomsKind() types.NomsKind {
 	return types.InlineBlobKind
 }
 
+// ParseValue implements TypeInfo interface.
+func (ti *inlineBlobType) ParseValue(str *string) (types.Value, error) {
+	if str == nil || *str == "" {
+		return types.NullValue, nil
+	}
+	strVal, err := ti.sqlBinaryType.Convert(*str)
+	if err != nil {
+		return nil, err
+	}
+	if val, ok := strVal.(string); ok {
+		return types.InlineBlob(val), nil
+	}
+	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
+}
+
 // String implements TypeInfo interface.
-func (ti *inlineBlobImpl) String() string {
+func (ti *inlineBlobType) String() string {
 	return "InlineBlob"
 }
 
 // ToSqlType implements TypeInfo interface.
-func (ti *inlineBlobImpl) ToSqlType() sql.Type {
-	return sql.MustCreateBinary(sqltypes.VarBinary, math.MaxUint16)
-}
-
-// isValid is an internal implementation for the TypeInfo interface function IsValid.
-// Some validity checks process the value into its final form, which may be returned
-// as an artifact so that a value doesn't need to be processed twice in some scenarios.
-func (ti *inlineBlobImpl) isValid(v interface{}) (artifact []byte, ok bool) {
-	switch val := v.(type) {
-	case nil:
-		return nil, true
-	case []byte:
-		return nil, len(val) <= math.MaxUint16
-	case string:
-		return nil, len(val) <= math.MaxUint16
-	case types.Null:
-		return nil, true
-	case types.InlineBlob:
-		return nil, len(val) <= math.MaxUint16
-	case types.String:
-		return nil, len(val) <= math.MaxUint16
-	default:
-		return nil, false
-	}
+func (ti *inlineBlobType) ToSqlType() sql.Type {
+	return ti.sqlBinaryType
 }
