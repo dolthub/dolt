@@ -95,65 +95,6 @@ func (b Bool) skip(nbf *NomsBinFormat, bnr *binaryNomsReader) {
 	bnr.skipUint8()
 }
 
-func (Bool) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
-	switch targetKind {
-	case BoolKind:
-		return func(val Value) (Value, error) {
-			return val, nil
-		}, nil
-	case FloatKind:
-		return func(val Value) (Value, error) {
-			if val == nil {
-				return nil, nil
-			}
-			b := val.(Bool)
-			if b {
-				return Float(1), nil
-			}
-			return Float(0), nil
-		}, nil
-	case IntKind:
-		return func(val Value) (Value, error) {
-			if val == nil {
-				return nil, nil
-			}
-			b := val.(Bool)
-			if b {
-				return Int(1), nil
-			}
-			return Int(0), nil
-		}, nil
-	case NullKind:
-		return func(Value) (Value, error) {
-			return NullValue, nil
-		}, nil
-	case StringKind:
-		return func(val Value) (Value, error) {
-			if val == nil {
-				return nil, nil
-			}
-			b := val.(Bool)
-			if b {
-				return String("true"), nil
-			}
-			return String("false"), nil
-		}, nil
-	case UintKind:
-		return func(val Value) (Value, error) {
-			if val == nil {
-				return nil, nil
-			}
-			b := val.(Bool)
-			if b {
-				return Uint(1), nil
-			}
-			return Uint(0), nil
-		}, nil
-	}
-
-	return nil, CreateNoConversionError(BoolKind, targetKind)
-}
-
 func (b Bool) HumanReadableString() string {
 	return strconv.FormatBool(bool(b))
 }

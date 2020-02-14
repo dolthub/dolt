@@ -476,10 +476,6 @@ func readBlob(ctx context.Context, r io.Reader, vrw ValueReadWriter) (Blob, erro
 	return newBlob(seq), nil
 }
 
-func (Blob) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
-	return nil, CreateNoConversionError(BlobKind, targetKind)
-}
-
 func (b Blob) readFrom(nbf *NomsBinFormat, bnr *binaryNomsReader) (Value, error) {
 	panic("unreachable")
 }

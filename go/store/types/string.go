@@ -23,15 +23,9 @@ package types
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"math"
 	"strconv"
-	"strings"
-
-	"github.com/araddon/dateparse"
-	"github.com/google/uuid"
 
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
@@ -120,143 +114,6 @@ func parseNumber(s String) (isNegative bool, decPos int, err error) {
 	}
 
 	return isNegative, decPos, nil
-}
-
-func (String) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
-	switch targetKind {
-	case BoolKind:
-		return func(val Value) (Value, error) {
-			if val == nil {
-				return nil, nil
-			}
-			s := val.(String)
-			if len(s) == 0 {
-				return NullValue, nil
-			}
-			b, err := strconv.ParseBool(strings.ToLower(string(s)))
-			if err != nil {
-				return Bool(false), CreateConversionError(s.Kind(), BoolKind, err)
-			}
-			return Bool(b), nil
-		}, nil
-	case FloatKind:
-		return func(val Value) (Value, error) {
-			if val == nil {
-				return nil, nil
-			}
-			s := val.(String)
-			if len(s) == 0 {
-				return NullValue, nil
-			}
-			f, err := strconv.ParseFloat(string(s), 64)
-			if err != nil {
-				return Float(math.NaN()), CreateConversionError(s.Kind(), FloatKind, err)
-			}
-			return Float(f), nil
-		}, nil
-	case InlineBlobKind:
-		return func(val Value) (Value, error) {
-			if val == nil {
-				return nil, nil
-			}
-			s := val.(String)
-			if len(s) == 0 {
-				return NullValue, nil
-			}
-			data, err := hex.DecodeString(string(s))
-			if err != nil {
-				return InlineBlob{}, CreateConversionError(s.Kind(), InlineBlobKind, err)
-			}
-			return InlineBlob(data), nil
-		}, nil
-	case IntKind:
-		return func(val Value) (Value, error) {
-			if val == nil {
-				return nil, nil
-			}
-			s := val.(String)
-			if len(s) == 0 {
-				return NullValue, nil
-			}
-			isNegative, decPos, err := parseNumber(s)
-			if err != nil {
-				b, boolErr := strconv.ParseBool(string(s))
-				if boolErr == nil {
-					if b {
-						return Int(1), nil
-					}
-					return Int(0), nil
-				}
-				return Int(0), CreateConversionError(s.Kind(), IntKind, err)
-			}
-			if decPos == 0 || (decPos == 1 && isNegative) {
-				return Int(0), nil
-			}
-			if decPos != -1 {
-				s = s[:decPos]
-			}
-			n, err := strconv.ParseInt(string(s), 10, 64)
-			if err != nil {
-				return Int(0), CreateConversionError(s.Kind(), IntKind, err)
-			}
-			return Int(n), nil
-		}, nil
-	case NullKind:
-		return func(Value) (Value, error) {
-			return NullValue, nil
-		}, nil
-	case StringKind:
-		return func(val Value) (Value, error) {
-			return val, nil
-		}, nil
-	case TimestampKind:
-		return func(val Value) (Value, error) {
-			if val == nil {
-				return nil, nil
-			}
-			s := val.(String)
-			if len(s) == 0 {
-				return NullValue, nil
-			}
-			t, err := dateparse.ParseStrict(string(s))
-			if err != nil {
-				return nil, err
-			}
-			return Timestamp(t), nil
-		}, nil
-	case UintKind:
-		return func(val Value) (Value, error) {
-			if val == nil {
-				return nil, nil
-			}
-			s := val.(String)
-			if len(s) == 0 {
-				return NullValue, nil
-			}
-			n, err := strconv.ParseUint(string(s), 10, 64)
-			if err != nil {
-				return Uint(0), CreateConversionError(s.Kind(), UintKind, err)
-			}
-			return Uint(n), nil
-		}, nil
-	case UUIDKind:
-		return func(val Value) (Value, error) {
-			if val == nil {
-				return nil, nil
-			}
-			s := val.(String)
-			if len(s) == 0 {
-				return NullValue, nil
-			}
-			u, err := uuid.Parse(string(s))
-			if err != nil {
-				return UUID(u), CreateConversionError(s.Kind(), UUIDKind, err)
-			}
-			return UUID(u), nil
-		}, nil
-	}
-
-	return nil, CreateNoConversionError(StringKind, targetKind)
 }
 
 func (s String) HumanReadableString() string {

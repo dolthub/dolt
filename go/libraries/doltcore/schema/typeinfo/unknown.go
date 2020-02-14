@@ -43,6 +43,11 @@ func (ti *unknownImpl) Equals(TypeInfo) bool {
 	return false
 }
 
+// FormatValue implements TypeInfo interface.
+func (ti *unknownImpl) FormatValue(types.Value) (*string, error) {
+	return nil, fmt.Errorf(`"Unknown" cannot convert any Noms value to a string`)
+}
+
 // GetTypeIdentifier implements TypeInfo interface.
 func (ti *unknownImpl) GetTypeIdentifier() Identifier {
 	return UnknownTypeIdentifier
@@ -50,17 +55,22 @@ func (ti *unknownImpl) GetTypeIdentifier() Identifier {
 
 // GetTypeParams implements TypeInfo interface.
 func (ti *unknownImpl) GetTypeParams() map[string]string {
-	return nil
+	panic("cannot persist unknown type")
 }
 
 // IsValid implements TypeInfo interface.
-func (ti *unknownImpl) IsValid(v interface{}) bool {
+func (ti *unknownImpl) IsValid(types.Value) bool {
 	return false
 }
 
 // NomsKind implements TypeInfo interface.
 func (ti *unknownImpl) NomsKind() types.NomsKind {
 	return types.UnknownKind
+}
+
+// ParseValue implements TypeInfo interface.
+func (ti *unknownImpl) ParseValue(*string) (types.Value, error) {
+	return nil, fmt.Errorf(`"Unknown" cannot convert any strings to a Noms value`)
 }
 
 // String implements TypeInfo interface.

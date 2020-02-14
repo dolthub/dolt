@@ -36,7 +36,6 @@ var srcCols, _ = schema.NewColCollection(
 	schema.NewColumn("inttostr", 4, types.IntKind, false),
 	schema.NewColumn("stringtostr", 5, types.StringKind, false),
 	schema.NewColumn("timestamptostr", 6, types.TimestampKind, false),
-	schema.NewColumn("nulltostr", 7, types.NullKind, false),
 )
 
 var srcSch = schema.SchemaFromCols(srcCols)
@@ -62,7 +61,6 @@ func TestRowConverter(t *testing.T) {
 		4: types.Int(-1234),
 		5: types.String("string string string"),
 		6: tt,
-		7: types.NullValue,
 	})
 
 	assert.NoError(t, err)
@@ -74,11 +72,10 @@ func TestRowConverter(t *testing.T) {
 		0: types.String(id.String()),
 		1: types.String("1.25"),
 		2: types.String("12345678"),
-		3: types.String("true"),
+		3: types.String("1"),
 		4: types.String("-1234"),
 		5: types.String("string string string"),
 		6: types.String(tt.String()),
-		7: types.NullValue,
 	})
 
 	assert.NoError(t, err)

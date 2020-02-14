@@ -103,28 +103,6 @@ func (v UUID) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
 	b.skipBytes(uuidNumBytes)
 }
 
-func (UUID) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
-	switch targetKind {
-	case NullKind:
-		return func(Value) (Value, error) {
-			return NullValue, nil
-		}, nil
-	case StringKind:
-		return func(val Value) (Value, error) {
-			if val == nil {
-				return nil, nil
-			}
-			return String(val.(UUID).String()), nil
-		}, nil
-	case UUIDKind:
-		return func(val Value) (Value, error) {
-			return val, nil
-		}, nil
-	}
-
-	return nil, CreateNoConversionError(UUIDKind, targetKind)
-}
-
 func (v UUID) String() string {
 	return uuid.UUID(v).String()
 }

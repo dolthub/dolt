@@ -189,10 +189,6 @@ func indexOfType(t *Type, tl []*Type) (uint32, bool) {
 	return 0, false
 }
 
-func (*Type) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
-	return nil, CreateNoConversionError(TypeKind, targetKind)
-}
-
 func (t *Type) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	panic("unreachable")
 }

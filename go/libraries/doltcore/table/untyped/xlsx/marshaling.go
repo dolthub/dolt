@@ -20,7 +20,6 @@ import (
 
 	"github.com/tealeg/xlsx"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -62,7 +61,7 @@ func decodeXLSXRows(nbf *types.NomsBinFormat, xlData [][][]string, sch schema.Sc
 					return nil, errors.New(v + "is not a valid column")
 				}
 				valString := dataVals[i+1][k]
-				taggedVals[col.Tag], err = doltcore.StringToValue(valString, col.Kind)
+				taggedVals[col.Tag], err = col.TypeInfo.ParseValue(&valString)
 				if err != nil {
 					return nil, err
 				}

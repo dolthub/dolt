@@ -18,11 +18,12 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/liquidata-inc/dolt/go/store/types"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 type FilterFn = func(r row.Row) (matchesFilter bool)
@@ -67,14 +68,15 @@ func ParseWhere(sch schema.Schema, whereClause string) (FilterFn, error) {
 			tags = append(tags, curr.Tag)
 		}
 
-		convFunc, err := doltcore.GetConvFunc(types.StringKind, cols[0].Kind)
-		if err != nil {
-			return nil, err
-		}
-
-		val, err := convFunc(types.String(valStr))
-		if err != nil {
-			return nil, errors.New("unable to convert '" + valStr + "' to " + col.KindString())
+		var val types.Value
+		if cols[0].TypeInfo.Equals(typeinfo.StringDefaultType) {
+			val = types.String(valStr)
+		} else {
+			var err error
+			val, err = cols[0].TypeInfo.ParseValue(&valStr)
+			if err != nil {
+				return nil, errors.New("unable to convert '" + valStr + "' to " + col.TypeInfo.String())
+			}
 		}
 
 		return func(r row.Row) bool {

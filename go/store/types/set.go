@@ -354,10 +354,6 @@ func newEmptySetSequenceChunker(ctx context.Context, vrw ValueReadWriter) (*sequ
 	return newEmptySequenceChunker(ctx, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, vrw), hashValueBytes)
 }
 
-func (Set) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
-	return nil, CreateNoConversionError(SetKind, targetKind)
-}
-
 func (s Set) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	panic("unreachable")
 }

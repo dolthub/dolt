@@ -16,55 +16,48 @@ package typeinfo
 
 import (
 	"fmt"
-	"math"
 	"strconv"
 
 	"github.com/src-d/go-mysql-server/sql"
+	"vitess.io/vitess/go/sqltypes"
 
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-type IntWidth int8
-
 const (
-	IntWidth8  IntWidth = 8
-	IntWidth16 IntWidth = 16
-	IntWidth24 IntWidth = 24
-	IntWidth32 IntWidth = 32
-	IntWidth64 IntWidth = 64
+	intTypeParams_Width    = "width"
+	intTypeParams_Width_8  = "8"
+	intTypeParams_Width_16 = "16"
+	intTypeParams_Width_24 = "24"
+	intTypeParams_Width_32 = "32"
+	intTypeParams_Width_64 = "64"
 )
 
-const (
-	MaxInt24            = 1<<23 - 1
-	MinInt24            = -1 << 23
-	intTypeParams_Width = "width"
-)
-
-type intImpl struct {
-	Width IntWidth
+type intType struct {
+	sqlIntType sql.NumberType
 }
 
-var _ TypeInfo = (*intImpl)(nil)
+var _ TypeInfo = (*intType)(nil)
 var (
-	Int8Type  TypeInfo = &intImpl{IntWidth8}
-	Int16Type TypeInfo = &intImpl{IntWidth16}
-	Int24Type TypeInfo = &intImpl{IntWidth24}
-	Int32Type TypeInfo = &intImpl{IntWidth32}
-	Int64Type TypeInfo = &intImpl{IntWidth64}
+	Int8Type  = &intType{sql.Int8}
+	Int16Type = &intType{sql.Int16}
+	Int24Type = &intType{sql.Int24}
+	Int32Type = &intType{sql.Int32}
+	Int64Type = &intType{sql.Int64}
 )
 
 func CreateIntTypeFromParams(params map[string]string) (TypeInfo, error) {
 	if width, ok := params[intTypeParams_Width]; ok {
 		switch width {
-		case "8":
+		case intTypeParams_Width_8:
 			return Int8Type, nil
-		case "16":
+		case intTypeParams_Width_16:
 			return Int16Type, nil
-		case "24":
+		case intTypeParams_Width_24:
 			return Int24Type, nil
-		case "32":
+		case intTypeParams_Width_32:
 			return Int32Type, nil
-		case "64":
+		case intTypeParams_Width_64:
 			return Int64Type, nil
 		default:
 			return nil, fmt.Errorf(`create int type info has "%v" param with value "%v"`, intTypeParams_Width, width)
@@ -74,22 +67,9 @@ func CreateIntTypeFromParams(params map[string]string) (TypeInfo, error) {
 }
 
 // ConvertNomsValueToValue implements TypeInfo interface.
-func (ti *intImpl) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
+func (ti *intType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Int); ok {
-		switch ti.Width {
-		case IntWidth8:
-			return int8(val), nil
-		case IntWidth16:
-			return int16(val), nil
-		case IntWidth24:
-			return int32(val), nil
-		case IntWidth32:
-			return int32(val), nil
-		case IntWidth64:
-			return int64(val), nil
-		default:
-			panic(fmt.Errorf(`int width "%v" is not valid`, ti.Width))
-		}
+		return ti.sqlIntType.Convert(int64(val))
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -98,204 +78,129 @@ func (ti *intImpl) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 }
 
 // ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *intImpl) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
-	if artifact, ok := ti.isValid(v); ok {
-		switch val := v.(type) {
-		case nil:
-			return types.NullValue, nil
-		case bool:
-			if val {
-				return types.Int(1), nil
-			}
-			return types.Int(0), nil
-		case int:
-			return types.Int(val), nil
-		case int8:
-			return types.Int(val), nil
-		case int16:
-			return types.Int(val), nil
-		case int32:
-			return types.Int(val), nil
-		case int64:
-			return types.Int(val), nil
-		case uint:
-			return types.Int(val), nil
-		case uint8:
-			return types.Int(val), nil
-		case uint16:
-			return types.Int(val), nil
-		case uint32:
-			return types.Int(val), nil
-		case uint64:
-			return types.Int(val), nil
-		case float32:
-			return types.Int(val), nil
-		case float64:
-			return types.Int(val), nil
-		case string:
-			return types.Int(artifact), nil
-		case types.Null:
-			return types.NullValue, nil
-		case types.Bool:
-			if val {
-				return types.Int(1), nil
-			}
-			return types.Int(0), nil
-		case types.Int:
-			return val, nil
-		case types.Uint:
-			return types.Int(val), nil
-		case types.Float:
-			return types.Int(val), nil
-		case types.String:
-			return types.Int(artifact), nil
-		default:
-			return nil, fmt.Errorf(`"%v" has falsely evaluated value "%v" of type "%T" as valid`, ti.String(), val, val)
-		}
+func (ti *intType) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
+	if v == nil {
+		return types.NullValue, nil
 	}
-	return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
+	intVal, err := ti.sqlIntType.Convert(v)
+	if err != nil {
+		return nil, err
+	}
+	switch val := intVal.(type) {
+	case int8:
+		return types.Int(val), nil
+	case int16:
+		return types.Int(val), nil
+	case int32:
+		return types.Int(val), nil
+	case int64:
+		return types.Int(val), nil
+	default:
+		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
+	}
 }
 
 // Equals implements TypeInfo interface.
-func (ti *intImpl) Equals(other TypeInfo) bool {
+func (ti *intType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	if ti2, ok := other.(*intImpl); ok {
-		return ti.Width == ti2.Width
+	if ti2, ok := other.(*intType); ok {
+		return ti.sqlIntType.Type() == ti2.sqlIntType.Type()
 	}
 	return false
 }
 
+// FormatValue implements TypeInfo interface.
+func (ti *intType) FormatValue(v types.Value) (*string, error) {
+	if _, ok := v.(types.Null); ok || v == nil {
+		return nil, nil
+	}
+	intVal, err := ti.ConvertNomsValueToValue(v)
+	if err != nil {
+		return nil, err
+	}
+	switch val := intVal.(type) {
+	case int8:
+		res := strconv.FormatInt(int64(val), 10)
+		return &res, nil
+	case int16:
+		res := strconv.FormatInt(int64(val), 10)
+		return &res, nil
+	case int32:
+		res := strconv.FormatInt(int64(val), 10)
+		return &res, nil
+	case int64:
+		res := strconv.FormatInt(val, 10)
+		return &res, nil
+	default:
+		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
+	}
+}
+
 // GetTypeIdentifier implements TypeInfo interface.
-func (ti *intImpl) GetTypeIdentifier() Identifier {
+func (ti *intType) GetTypeIdentifier() Identifier {
 	return IntTypeIdentifier
 }
 
 // GetTypeParams implements TypeInfo interface.
-func (ti *intImpl) GetTypeParams() map[string]string {
-	return map[string]string{intTypeParams_Width: strconv.Itoa(int(ti.Width))}
+func (ti *intType) GetTypeParams() map[string]string {
+	sqlParam := ""
+	switch ti.sqlIntType.Type() {
+	case sqltypes.Int8:
+		sqlParam = intTypeParams_Width_8
+	case sqltypes.Int16:
+		sqlParam = intTypeParams_Width_16
+	case sqltypes.Int24:
+		sqlParam = intTypeParams_Width_24
+	case sqltypes.Int32:
+		sqlParam = intTypeParams_Width_32
+	case sqltypes.Int64:
+		sqlParam = intTypeParams_Width_64
+	default:
+		panic(fmt.Errorf(`unknown int type info sql type "%v"`, ti.sqlIntType.Type().String()))
+	}
+	return map[string]string{intTypeParams_Width: sqlParam}
 }
 
 // IsValid implements TypeInfo interface.
-func (ti *intImpl) IsValid(v interface{}) bool {
-	_, ok := ti.isValid(v)
-	return ok
+func (ti *intType) IsValid(v types.Value) bool {
+	_, err := ti.ConvertNomsValueToValue(v)
+	return err == nil
 }
 
 // NomsKind implements TypeInfo interface.
-func (ti *intImpl) NomsKind() types.NomsKind {
+func (ti *intType) NomsKind() types.NomsKind {
 	return types.IntKind
 }
 
+// ParseValue implements TypeInfo interface.
+func (ti *intType) ParseValue(str *string) (types.Value, error) {
+	if str == nil || *str == "" {
+		return types.NullValue, nil
+	}
+	return ti.ConvertValueToNomsValue(*str)
+}
+
 // String implements TypeInfo interface.
-func (ti *intImpl) String() string {
-	switch ti.Width {
-	case IntWidth8:
+func (ti *intType) String() string {
+	switch ti.sqlIntType.Type() {
+	case sqltypes.Int8:
 		return "Int8"
-	case IntWidth16:
+	case sqltypes.Int16:
 		return "Int16"
-	case IntWidth24:
+	case sqltypes.Int24:
 		return "Int24"
-	case IntWidth32:
+	case sqltypes.Int32:
 		return "Int32"
-	case IntWidth64:
+	case sqltypes.Int64:
 		return "Int64"
 	default:
-		panic(fmt.Errorf(`int width "%v" is not valid`, ti.Width))
+		panic(fmt.Errorf(`unknown int type info sql type "%v"`, ti.sqlIntType.Type().String()))
 	}
 }
 
 // ToSqlType implements TypeInfo interface.
-func (ti *intImpl) ToSqlType() sql.Type {
-	switch ti.Width {
-	case IntWidth8:
-		return sql.Int8
-	case IntWidth16:
-		return sql.Int16
-	case IntWidth24:
-		return sql.Int24
-	case IntWidth32:
-		return sql.Int32
-	case IntWidth64:
-		return sql.Int64
-	default:
-		panic(fmt.Errorf(`int width "%v" is not valid`, ti.Width))
-	}
-}
-
-// isValid is an internal implementation for the TypeInfo interface function IsValid.
-// Some validity checks process the value into its final form, which may be returned
-// as an artifact so that a value doesn't need to be processed twice in some scenarios.
-func (ti *intImpl) isValid(v interface{}) (artifact int64, ok bool) {
-	var minValue int64
-	var maxValue int64
-	switch ti.Width {
-	case IntWidth8:
-		minValue = math.MinInt8
-		maxValue = math.MaxInt8
-	case IntWidth16:
-		minValue = math.MinInt16
-		maxValue = math.MaxInt16
-	case IntWidth24:
-		minValue = MinInt24
-		maxValue = MaxInt24
-	case IntWidth32:
-		minValue = math.MinInt32
-		maxValue = math.MaxInt32
-	case IntWidth64:
-		minValue = math.MinInt64
-		maxValue = math.MaxInt64
-	default:
-		panic(fmt.Errorf(`int width "%v" is not valid`, ti.Width))
-	}
-
-	switch val := v.(type) {
-	case nil:
-		return 0, true
-	case bool:
-		return 0, true
-	case int:
-		return 0, int64(val) >= minValue && int64(val) <= maxValue
-	case int8:
-		return 0, int64(val) >= minValue && int64(val) <= maxValue
-	case int16:
-		return 0, int64(val) >= minValue && int64(val) <= maxValue
-	case int32:
-		return 0, int64(val) >= minValue && int64(val) <= maxValue
-	case int64:
-		return 0, val >= minValue && val <= maxValue
-	case uint:
-		return 0, int64(val) <= maxValue
-	case uint8:
-		return 0, int64(val) <= maxValue
-	case uint16:
-		return 0, int64(val) <= maxValue
-	case uint32:
-		return 0, int64(val) <= maxValue
-	case uint64:
-		return 0, val <= uint64(maxValue)
-	case float32:
-		return 0, int64(val) >= minValue && int64(val) <= maxValue
-	case float64:
-		return 0, int64(val) >= minValue && int64(val) <= maxValue
-	case string:
-		intVal, err := strconv.ParseInt(val, 10, 64)
-		return intVal, err == nil
-	case types.Null:
-		return 0, true
-	case types.Bool:
-		return 0, true
-	case types.Int:
-		return 0, int64(val) >= minValue && int64(val) <= maxValue
-	case types.Uint:
-		return 0, uint64(val) <= uint64(maxValue)
-	case types.Float:
-		return 0, int64(val) >= minValue && int64(val) <= maxValue
-	case types.String:
-		intVal, err := strconv.ParseInt(string(val), 10, 64)
-		return intVal, err == nil
-	default:
-		return 0, false
-	}
+func (ti *intType) ToSqlType() sql.Type {
+	return ti.sqlIntType
 }

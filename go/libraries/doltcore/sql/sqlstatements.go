@@ -18,11 +18,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/google/uuid"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 const doubleQuot = `"`
@@ -283,25 +284,16 @@ func valueAsSqlString(value types.Value) (string, error) {
 			return "FALSE", nil
 		}
 	case types.UUIDKind:
-		convFn, err := doltcore.GetConvFunc(value.Kind(), types.StringKind)
-		if err != nil {
-			return "", err
-		}
-		str, _ := convFn(value)
-		return doubleQuot + string(str.(types.String)) + doubleQuot, nil
+		return doubleQuot + uuid.UUID(value.(types.UUID)).String() + doubleQuot, nil
 	case types.StringKind:
 		s := string(value.(types.String))
 		s = strings.ReplaceAll(s, doubleQuot, "\\\"")
 		return doubleQuot + s + doubleQuot, nil
 	default:
-		convFn, err := doltcore.GetConvFunc(value.Kind(), types.StringKind)
+		str, err := typeinfo.FromKind(value.Kind()).FormatValue(value)
 		if err != nil {
 			return "", err
 		}
-		str, err := convFn(value)
-		if err != nil {
-			return "", err
-		}
-		return string(str.(types.String)), nil
+		return *str, nil
 	}
 }

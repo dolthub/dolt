@@ -205,10 +205,6 @@ func (r Ref) isSameTargetType(other Ref) bool {
 	return bytes.Equal(targetTypeBytes, otherTargetTypeBytes)
 }
 
-func (Ref) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
-	return nil, CreateNoConversionError(RefKind, targetKind)
-}
-
 func (r Ref) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	panic("unreachable")
 }

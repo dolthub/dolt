@@ -21,8 +21,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -43,10 +43,14 @@ func TestDecodeXLSXRows(t *testing.T) {
 	}
 
 	taggedVals := make(row.TaggedValues, sch.GetAllCols().Size())
-	taggedVals[uint64(0)], _ = doltcore.StringToValue("1", types.StringKind)
-	taggedVals[uint64(1)], _ = doltcore.StringToValue("osheiza", types.StringKind)
-	taggedVals[uint64(2)], _ = doltcore.StringToValue("otori", types.StringKind)
-	taggedVals[uint64(3)], _ = doltcore.StringToValue("24", types.StringKind)
+	str := "1"
+	taggedVals[uint64(0)], _ = typeinfo.StringDefaultType.ParseValue(&str)
+	str = "osheiza"
+	taggedVals[uint64(1)], _ = typeinfo.StringDefaultType.ParseValue(&str)
+	str = "otori"
+	taggedVals[uint64(2)], _ = typeinfo.StringDefaultType.ParseValue(&str)
+	str = "24"
+	taggedVals[uint64(3)], _ = typeinfo.StringDefaultType.ParseValue(&str)
 
 	newRow, err := row.New(types.Format_7_18, sch, taggedVals)
 

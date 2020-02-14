@@ -44,7 +44,7 @@ var (
 		InvalidTag,
 		types.NullKind,
 		false,
-		typeinfo.NullType,
+		typeinfo.UnknownType,
 		nil,
 	}
 )

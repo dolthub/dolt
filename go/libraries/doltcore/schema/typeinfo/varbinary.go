@@ -25,50 +25,59 @@ import (
 )
 
 const (
-	varBinaryTypeParam_Length    = "length"
-	varBinaryTypeParam_PadBytes  = "pad"
-	varBinaryTypeParam_IsSqlBlob = "blob"
+	varBinaryTypeParam_Length        = "length"
+	varBinaryTypeParam_SQL           = "sql"
+	varBinaryTypeParam_SQL_Binary    = "bin"
+	varBinaryTypeParam_SQL_VarBinary = "varbin"
+	varBinaryTypeParam_SQL_Blob      = "blob"
 )
 
 // As a type, this is modeled more after MySQL's story for binary data. There, it's treated
 // as a string that is interpreted as raw bytes, rather than as a bespoke data structure,
 // and thus this is mirrored here in its implementation. This will minimize any differences
 // that could arise.
-type varBinaryImpl struct {
-	MaxLength int64
-	PadBytes  bool
-	IsSqlBlob bool // When converting to a SQL type, this ensures a distinction between BLOB and VARBINARY
+type varBinaryType struct {
+	sqlBinaryType sql.StringType
 }
 
-var _ TypeInfo = (*varBinaryImpl)(nil)
+var _ TypeInfo = (*varBinaryType)(nil)
 
 func CreateVarBinaryTypeFromParams(params map[string]string) (TypeInfo, error) {
-	ti := &varBinaryImpl{}
+	var length int64
 	var err error
 	if lengthStr, ok := params[varBinaryTypeParam_Length]; ok {
-		ti.MaxLength, err = strconv.ParseInt(lengthStr, 10, 64)
+		length, err = strconv.ParseInt(lengthStr, 10, 64)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		return nil, fmt.Errorf(`create varbinary type info is missing param "%v"`, varBinaryTypeParam_Length)
 	}
-	if _, ok := params[varBinaryTypeParam_PadBytes]; ok {
-		ti.PadBytes = true
+	if sqlStr, ok := params[varBinaryTypeParam_SQL]; ok {
+		var sqlType sql.StringType
+		switch sqlStr {
+		case varBinaryTypeParam_SQL_Binary:
+			sqlType, err = sql.CreateBinary(sqltypes.Binary, length)
+		case varBinaryTypeParam_SQL_VarBinary:
+			sqlType, err = sql.CreateBinary(sqltypes.VarBinary, length)
+		case varBinaryTypeParam_SQL_Blob:
+			sqlType, err = sql.CreateBinary(sqltypes.Blob, length)
+		default:
+			return nil, fmt.Errorf(`create varbinary type info has "%v" param with value "%v"`, varBinaryTypeParam_SQL, sqlStr)
+		}
+		if err != nil {
+			return nil, err
+		}
+		return &varBinaryType{sqlType}, nil
+	} else {
+		return nil, fmt.Errorf(`create varbinary type info is missing param "%v"`, varBinaryTypeParam_SQL)
 	}
-	if _, ok := params[varBinaryTypeParam_IsSqlBlob]; ok {
-		ti.IsSqlBlob = true
-	}
-	return ti, nil
 }
 
 // ConvertNomsValueToValue implements TypeInfo interface.
-func (ti *varBinaryImpl) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
+func (ti *varBinaryType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.String); ok {
-		if ti.PadBytes {
-			return ti.padBytes(string(val)), nil
-		}
-		return string(val), nil
+		return ti.sqlBinaryType.Convert(string(val))
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -77,221 +86,117 @@ func (ti *varBinaryImpl) ConvertNomsValueToValue(v types.Value) (interface{}, er
 }
 
 // ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *varBinaryImpl) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
-	if artifact, ok := ti.isValid(v); ok {
-		switch val := v.(type) {
-		case nil:
-			return types.NullValue, nil
-		case bool:
-			if val {
-				return types.String("1"), nil
-			}
-			return types.String("0"), nil
-		case int:
-			return types.String(artifact), nil
-		case int8:
-			return types.String(artifact), nil
-		case int16:
-			return types.String(artifact), nil
-		case int32:
-			return types.String(artifact), nil
-		case int64:
-			return types.String(artifact), nil
-		case uint:
-			return types.String(artifact), nil
-		case uint8:
-			return types.String(artifact), nil
-		case uint16:
-			return types.String(artifact), nil
-		case uint32:
-			return types.String(artifact), nil
-		case uint64:
-			return types.String(artifact), nil
-		case float32:
-			return types.String(artifact), nil
-		case float64:
-			return types.String(artifact), nil
-		case string:
-			if ti.PadBytes {
-				return types.String(ti.padBytes(val)), nil
-			}
-			return types.String(val), nil
-		case types.Null:
-			return types.NullValue, nil
-		case types.Bool:
-			if val {
-				return types.String("1"), nil
-			}
-			return types.String("0"), nil
-		case types.Int:
-			return types.String(artifact), nil
-		case types.Uint:
-			return types.String(artifact), nil
-		case types.Float:
-			return types.String(artifact), nil
-		case types.String:
-			if ti.PadBytes {
-				return types.String(ti.padBytes(string(val))), nil
-			}
-			return val, nil
-		default:
-			return nil, fmt.Errorf(`"%v" has falsely evaluated value "%v" of type "%T" as valid`, ti.String(), val, val)
-		}
+func (ti *varBinaryType) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
+	if v == nil {
+		return types.NullValue, nil
+	}
+	strVal, err := ti.sqlBinaryType.Convert(v)
+	if err != nil {
+		return nil, err
+	}
+	val, ok := strVal.(string)
+	if ok {
+		return types.String(val), nil
 	}
 	return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
 }
 
 // Equals implements TypeInfo interface.
-func (ti *varBinaryImpl) Equals(other TypeInfo) bool {
+func (ti *varBinaryType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	if ti2, ok := other.(*varBinaryImpl); ok {
-		return ti.MaxLength == ti2.MaxLength && ti.PadBytes == ti2.PadBytes
+	if ti2, ok := other.(*varBinaryType); ok {
+		return ti.sqlBinaryType.MaxCharacterLength() == ti2.sqlBinaryType.MaxCharacterLength() &&
+			ti.sqlBinaryType.Type() == ti2.sqlBinaryType.Type()
 	}
 	return false
 }
 
+// FormatValue implements TypeInfo interface.
+func (ti *varBinaryType) FormatValue(v types.Value) (*string, error) {
+	if val, ok := v.(types.String); ok {
+		res, err := ti.sqlBinaryType.Convert(string(val))
+		if err != nil {
+			return nil, err
+		}
+		if resStr, ok := res.(string); ok {
+			return &resStr, nil
+		}
+		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
+	}
+	if _, ok := v.(types.Null); ok || v == nil {
+		return nil, nil
+	}
+	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti.String(), v.Kind())
+}
+
 // GetTypeIdentifier implements TypeInfo interface.
-func (ti *varBinaryImpl) GetTypeIdentifier() Identifier {
+func (ti *varBinaryType) GetTypeIdentifier() Identifier {
 	return VarBinaryTypeIdentifier
 }
 
 // GetTypeParams implements TypeInfo interface.
-func (ti *varBinaryImpl) GetTypeParams() map[string]string {
+func (ti *varBinaryType) GetTypeParams() map[string]string {
 	typeParams := map[string]string{
-		varBinaryTypeParam_Length: strconv.FormatInt(ti.MaxLength, 10),
+		varBinaryTypeParam_Length: strconv.FormatInt(ti.sqlBinaryType.MaxCharacterLength(), 10),
 	}
-	if ti.PadBytes {
-		typeParams[varBinaryTypeParam_PadBytes] = ""
-	}
-	if ti.IsSqlBlob {
-		typeParams[varBinaryTypeParam_IsSqlBlob] = ""
+	switch ti.sqlBinaryType.Type() {
+	case sqltypes.Binary:
+		typeParams[varBinaryTypeParam_SQL] = varBinaryTypeParam_SQL_Binary
+	case sqltypes.VarBinary:
+		typeParams[varBinaryTypeParam_SQL] = varBinaryTypeParam_SQL_VarBinary
+	case sqltypes.Blob:
+		typeParams[varBinaryTypeParam_SQL] = varBinaryTypeParam_SQL_Blob
+	default:
+		panic(fmt.Errorf(`unknown varbinary type info sql type "%v"`, ti.sqlBinaryType.Type().String()))
 	}
 	return typeParams
 }
 
 // IsValid implements TypeInfo interface.
-func (ti *varBinaryImpl) IsValid(v interface{}) bool {
-	_, ok := ti.isValid(v)
-	return ok
+func (ti *varBinaryType) IsValid(v types.Value) bool {
+	_, err := ti.ConvertNomsValueToValue(v)
+	return err == nil
 }
 
 // NomsKind implements TypeInfo interface.
-func (ti *varBinaryImpl) NomsKind() types.NomsKind {
+func (ti *varBinaryType) NomsKind() types.NomsKind {
 	return types.StringKind
 }
 
+// ParseValue implements TypeInfo interface.
+func (ti *varBinaryType) ParseValue(str *string) (types.Value, error) {
+	if str == nil {
+		return types.NullValue, nil
+	}
+	strVal, err := ti.sqlBinaryType.Convert(*str)
+	if err != nil {
+		return nil, err
+	}
+	if val, ok := strVal.(string); ok {
+		return types.String(val), nil
+	}
+	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
+}
+
 // String implements TypeInfo interface.
-func (ti *varBinaryImpl) String() string {
-	additionalText := ""
-	if ti.PadBytes {
-		additionalText = ", PadBytes"
+func (ti *varBinaryType) String() string {
+	sqlType := ""
+	switch ti.sqlBinaryType.Type() {
+	case sqltypes.Binary:
+		sqlType = "Binary"
+	case sqltypes.VarBinary:
+		sqlType = "VarBinary"
+	case sqltypes.Blob:
+		sqlType = "Blob"
+	default:
+		panic(fmt.Errorf(`unknown varbinary type info sql type "%v"`, ti.sqlBinaryType.Type().String()))
 	}
-	if ti.IsSqlBlob {
-		additionalText = ", SqlBlob"
-	}
-	return fmt.Sprintf(`VarBinary(%v%v)`, ti.MaxLength, additionalText)
+	return fmt.Sprintf(`VarBinary(%v, SQL: %v)`, ti.sqlBinaryType.MaxCharacterLength(), sqlType)
 }
 
 // ToSqlType implements TypeInfo interface.
-func (ti *varBinaryImpl) ToSqlType() sql.Type {
-	// Binary is the only type that pads bytes.
-	if ti.PadBytes {
-		sqlType, err := sql.CreateBinary(sqltypes.Binary, ti.MaxLength)
-		if err == nil {
-			return sqlType
-		}
-	}
-	if !ti.IsSqlBlob {
-		sqlType, err := sql.CreateBinary(sqltypes.VarBinary, ti.MaxLength)
-		if err == nil {
-			return sqlType
-		}
-	}
-	// The SQL type has a max character limit
-	maxLength := ti.MaxLength
-	if maxLength > sql.LongBlob.MaxCharacterLength() {
-		maxLength = sql.LongBlob.MaxCharacterLength()
-	}
-	sqlType, err := sql.CreateBinary(sqltypes.Blob, maxLength)
-	if err != nil {
-		panic(err)
-	}
-	return sqlType
-}
-
-// isValid is an internal implementation for the TypeInfo interface function IsValid.
-// Some validity checks process the value into its final form, which may be returned
-// as an artifact so that a value doesn't need to be processed twice in some scenarios.
-func (ti *varBinaryImpl) isValid(v interface{}) (artifact string, ok bool) {
-	switch val := v.(type) {
-	case nil:
-		return "", true
-	case bool:
-		return "", ti.MaxLength >= 1
-	case int:
-		strVal := strconv.FormatInt(int64(val), 10)
-		return strVal, int64(len(strVal)) <= ti.MaxLength
-	case int8:
-		strVal := strconv.FormatInt(int64(val), 10)
-		return strVal, int64(len(strVal)) <= ti.MaxLength
-	case int16:
-		strVal := strconv.FormatInt(int64(val), 10)
-		return strVal, int64(len(strVal)) <= ti.MaxLength
-	case int32:
-		strVal := strconv.FormatInt(int64(val), 10)
-		return strVal, int64(len(strVal)) <= ti.MaxLength
-	case int64:
-		strVal := strconv.FormatInt(val, 10)
-		return strVal, int64(len(strVal)) <= ti.MaxLength
-	case uint:
-		strVal := strconv.FormatUint(uint64(val), 10)
-		return strVal, int64(len(strVal)) <= ti.MaxLength
-	case uint8:
-		strVal := strconv.FormatUint(uint64(val), 10)
-		return strVal, int64(len(strVal)) <= ti.MaxLength
-	case uint16:
-		strVal := strconv.FormatUint(uint64(val), 10)
-		return strVal, int64(len(strVal)) <= ti.MaxLength
-	case uint32:
-		strVal := strconv.FormatUint(uint64(val), 10)
-		return strVal, int64(len(strVal)) <= ti.MaxLength
-	case uint64:
-		strVal := strconv.FormatUint(val, 10)
-		return strVal, int64(len(strVal)) <= ti.MaxLength
-	case float32:
-		strVal := strconv.FormatFloat(float64(val), 'g', -1, 64)
-		return strVal, int64(len(strVal)) <= ti.MaxLength
-	case float64:
-		strVal := strconv.FormatFloat(val, 'g', -1, 64)
-		return strVal, int64(len(strVal)) <= ti.MaxLength
-	case string:
-		return "", int64(len(val)) <= ti.MaxLength
-	case types.Null:
-		return "", true
-	case types.Bool:
-		return "", ti.MaxLength >= 1
-	case types.Int:
-		strVal := strconv.FormatInt(int64(val), 10)
-		return strVal, int64(len(strVal)) <= ti.MaxLength
-	case types.Uint:
-		strVal := strconv.FormatUint(uint64(val), 10)
-		return strVal, int64(len(strVal)) <= ti.MaxLength
-	case types.Float:
-		strVal := strconv.FormatFloat(float64(val), 'g', -1, 64)
-		return strVal, int64(len(strVal)) <= ti.MaxLength
-	case types.String:
-		return "", int64(len(val)) <= ti.MaxLength
-	default:
-		return "", false
-	}
-}
-
-// padBytes pads a string with zero bytes if the string length is less than the max length.
-func (ti *varBinaryImpl) padBytes(v string) string {
-	if int64(len(v)) < ti.MaxLength {
-		return string(append([]byte(v), make([]byte, ti.MaxLength-int64(len(v)))...))
-	}
-	return v
+func (ti *varBinaryType) ToSqlType() sql.Type {
+	return ti.sqlBinaryType
 }

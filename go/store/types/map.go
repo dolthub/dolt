@@ -562,10 +562,6 @@ func newEmptyMapSequenceChunker(ctx context.Context, vrw ValueReadWriter) (*sequ
 	return newEmptySequenceChunker(ctx, vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
 }
 
-func (Map) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
-	return nil, CreateNoConversionError(MapKind, targetKind)
-}
-
 func (m Map) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	panic("unreachable")
 }

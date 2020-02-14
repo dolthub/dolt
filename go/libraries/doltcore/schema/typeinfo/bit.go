@@ -29,11 +29,11 @@ const (
 
 // This is a dolt implementation of the MySQL type Bit, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
-type bitImpl struct {
+type bitType struct {
 	sqlBitType sql.BitType
 }
 
-var _ TypeInfo = (*bitImpl)(nil)
+var _ TypeInfo = (*bitType)(nil)
 
 func CreateBitTypeFromParams(params map[string]string) (TypeInfo, error) {
 	if bitStr, ok := params[bitTypeParam_Bits]; ok {
@@ -45,14 +45,14 @@ func CreateBitTypeFromParams(params map[string]string) (TypeInfo, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &bitImpl{sqlBitType}, nil
+		return &bitType{sqlBitType}, nil
 	} else {
 		return nil, fmt.Errorf(`create bit type info is missing param "%v"`, bitTypeParam_Bits)
 	}
 }
 
 // ConvertNomsValueToValue implements TypeInfo interface.
-func (ti *bitImpl) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
+func (ti *bitType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Uint); ok {
 		res, err := ti.sqlBitType.Convert(uint64(val))
 		if err != nil {
@@ -67,83 +67,102 @@ func (ti *bitImpl) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 }
 
 // ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *bitImpl) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
-	if artifact, ok := ti.isValid(v); ok {
-		switch v.(type) {
-		case nil, types.Null:
-			return types.NullValue, nil
-		}
-		return types.Uint(artifact), nil
+func (ti *bitType) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
+	if v == nil {
+		return types.NullValue, nil
 	}
-	return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
+	uintVal, err := ti.sqlBitType.Convert(v)
+	if err != nil {
+		return nil, err
+	}
+	val, ok := uintVal.(uint64)
+	if ok {
+		return types.Uint(val), nil
+	}
+	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
 }
 
 // Equals implements TypeInfo interface.
-func (ti *bitImpl) Equals(other TypeInfo) bool {
+func (ti *bitType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	if ti2, ok := other.(*bitImpl); ok {
+	if ti2, ok := other.(*bitType); ok {
 		return ti.sqlBitType.NumberOfBits() == ti2.sqlBitType.NumberOfBits()
 	}
 	return false
 }
 
+// FormatValue implements TypeInfo interface.
+func (ti *bitType) FormatValue(v types.Value) (*string, error) {
+	if _, ok := v.(types.Null); ok || v == nil {
+		return nil, nil
+	}
+	uintVal, err := ti.ConvertNomsValueToValue(v)
+	if err != nil {
+		return nil, err
+	}
+	val, ok := uintVal.(uint64)
+	if !ok {
+		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
+	}
+	res := strconv.FormatUint(val, 10)
+	return &res, nil
+}
+
 // GetTypeIdentifier implements TypeInfo interface.
-func (ti *bitImpl) GetTypeIdentifier() Identifier {
+func (ti *bitType) GetTypeIdentifier() Identifier {
 	return BitTypeIdentifier
 }
 
 // GetTypeParams implements TypeInfo interface.
-func (ti *bitImpl) GetTypeParams() map[string]string {
+func (ti *bitType) GetTypeParams() map[string]string {
 	return map[string]string{
 		bitTypeParam_Bits: strconv.FormatInt(int64(ti.sqlBitType.NumberOfBits()), 10),
 	}
 }
 
 // IsValid implements TypeInfo interface.
-func (ti *bitImpl) IsValid(v interface{}) bool {
-	_, ok := ti.isValid(v)
-	return ok
+func (ti *bitType) IsValid(v types.Value) bool {
+	_, err := ti.ConvertNomsValueToValue(v)
+	return err == nil
 }
 
 // NomsKind implements TypeInfo interface.
-func (ti *bitImpl) NomsKind() types.NomsKind {
+func (ti *bitType) NomsKind() types.NomsKind {
 	return types.UintKind
 }
 
+// ParseValue implements TypeInfo interface.
+func (ti *bitType) ParseValue(str *string) (types.Value, error) {
+	if str == nil || *str == "" {
+		return types.NullValue, nil
+	}
+	if val, err := strconv.ParseUint(*str, 10, 64); err == nil {
+		uintVal, err := ti.sqlBitType.Convert(val)
+		if err != nil {
+			return nil, err
+		}
+		if val, ok := uintVal.(uint64); ok {
+			return types.Uint(val), nil
+		}
+	}
+	strVal, err := ti.sqlBitType.Convert(*str)
+	if err != nil {
+		return nil, err
+	}
+	if val, ok := strVal.(uint64); ok {
+		return types.Uint(val), nil
+	}
+	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
+}
+
 // String implements TypeInfo interface.
-func (ti *bitImpl) String() string {
+func (ti *bitType) String() string {
 	return fmt.Sprintf("Bit(%v)", ti.sqlBitType.NumberOfBits())
 }
 
 // ToSqlType implements TypeInfo interface.
-func (ti *bitImpl) ToSqlType() sql.Type {
+func (ti *bitType) ToSqlType() sql.Type {
 	return ti.sqlBitType
-}
-
-// isValid is an internal implementation for the TypeInfo interface function IsValid.
-// Some validity checks process the value into its final form, which may be returned
-// as an artifact so that a value doesn't need to be processed twice in some scenarios.
-func (ti *bitImpl) isValid(v interface{}) (artifact uint64, ok bool) {
-	// convert some Noms values to their standard golang equivalents, except Null
-	switch val := v.(type) {
-	case nil:
-		return 0, true
-	case types.Null:
-		return 0, true
-	case types.Bool:
-		v = bool(val)
-	case types.Int:
-		v = int64(val)
-	case types.Uint:
-		v = uint64(val)
-	case types.Float:
-		v = float64(val)
-	case types.String:
-		v = string(val)
-	}
-	res, err := ti.sqlBitType.Convert(v)
-	resUint, ok := res.(uint64)
-	return resUint, err == nil && ok
 }
