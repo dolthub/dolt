@@ -49,11 +49,10 @@ SQL
 }
 
 @test "can create view with escaped name" {
-    run dolt sql <<SQL
-create table \`my-users\` (id int primary key);
-insert into \`my-users\` (id) values (0);
-SQL
+    run dolt sql -q 'create table `my-users` (id int primary key);'
     [ "$status" -eq 0 ]
+
+    dolt sql -q 'insert into `my-users` (id) values (0);'
 
     run dolt sql -q 'create view `will-work` as select id from `my-users`;'
     [ "$status" -eq 0 ]
