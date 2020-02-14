@@ -656,10 +656,6 @@ func verifyStructName(name string) {
 	}
 }
 
-func (Struct) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
-	return nil, CreateNoConversionError(StructKind, targetKind)
-}
-
 func (s Struct) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	panic("unreachable")
 }

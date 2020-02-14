@@ -22,7 +22,6 @@ import (
 
 	"github.com/bcicen/jstream"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
@@ -146,31 +145,9 @@ func (r *JSONReader) convToRow(rowMap map[string]interface{}) (row.Row, error) {
 			return nil, fmt.Errorf("column %s not found in schema", k)
 		}
 
-		switch val := v.(type) {
-		case int:
-			f, err := doltcore.GetConvFunc(types.IntKind, col.Kind)
-			if err != nil {
-				return nil, err
-			}
-			taggedVals[col.Tag], _ = f(types.Int(val))
-		case string:
-			f, err := doltcore.GetConvFunc(types.StringKind, col.Kind)
-			if err != nil {
-				return nil, err
-			}
-			taggedVals[col.Tag], _ = f(types.String(val))
-		case bool:
-			f, err := doltcore.GetConvFunc(types.BoolKind, col.Kind)
-			if err != nil {
-				return nil, err
-			}
-			taggedVals[col.Tag], _ = f(types.Bool(val))
-		case float64:
-			f, err := doltcore.GetConvFunc(types.FloatKind, col.Kind)
-			if err != nil {
-				return nil, err
-			}
-			taggedVals[col.Tag], _ = f(types.Float(val))
+		switch v.(type) {
+		case int, string, bool, float64:
+			taggedVals[col.Tag], _ = col.TypeInfo.ConvertValueToNomsValue(v)
 		}
 
 	}

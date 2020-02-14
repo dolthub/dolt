@@ -16,6 +16,7 @@ package typeinfo
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/src-d/go-mysql-server/sql"
 
@@ -24,20 +25,18 @@ import (
 
 // This is a dolt implementation of the MySQL type Year, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
-type yearImpl struct{}
+type yearType struct {
+	sqlYearType sql.YearType
+}
 
-var _ TypeInfo = (*yearImpl)(nil)
+var _ TypeInfo = (*yearType)(nil)
 
-var YearType TypeInfo = &yearImpl{}
+var YearType = &yearType{sql.Year}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
-func (ti *yearImpl) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
+func (ti *yearType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Int); ok {
-		res, err := sql.Year.Convert(int16(val))
-		if err != nil {
-			return nil, fmt.Errorf(`"%v" cannot convert year "%v" to value`, ti.String(), val)
-		}
-		return res, nil
+		return ti.sqlYearType.Convert(int64(val))
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -46,79 +45,92 @@ func (ti *yearImpl) ConvertNomsValueToValue(v types.Value) (interface{}, error) 
 }
 
 // ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *yearImpl) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
-	if artifact, ok := ti.isValid(v); ok {
-		switch v.(type) {
-		case nil, types.Null:
-			return types.NullValue, nil
-		}
-		return types.Int(artifact), nil
+func (ti *yearType) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
+	if v == nil {
+		return types.NullValue, nil
 	}
-	return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
+	intVal, err := ti.sqlYearType.Convert(v)
+	if err != nil {
+		return nil, err
+	}
+	val, ok := intVal.(int16)
+	if ok {
+		return types.Int(val), nil
+	}
+	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
 }
 
 // Equals implements TypeInfo interface.
-func (ti *yearImpl) Equals(other TypeInfo) bool {
+func (ti *yearType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	_, ok := other.(*yearImpl)
+	_, ok := other.(*yearType)
 	return ok
 }
 
+// FormatValue implements TypeInfo interface.
+func (ti *yearType) FormatValue(v types.Value) (*string, error) {
+	if val, ok := v.(types.Int); ok {
+		convVal, err := ti.ConvertNomsValueToValue(val)
+		if err != nil {
+			return nil, err
+		}
+		val, ok := convVal.(int16)
+		if !ok {
+			return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
+		}
+		res := strconv.FormatInt(int64(val), 10)
+		return &res, nil
+	}
+	if _, ok := v.(types.Null); ok || v == nil {
+		return nil, nil
+	}
+	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti.String(), v.Kind())
+}
+
 // GetTypeIdentifier implements TypeInfo interface.
-func (ti *yearImpl) GetTypeIdentifier() Identifier {
+func (ti *yearType) GetTypeIdentifier() Identifier {
 	return YearTypeIdentifier
 }
 
 // GetTypeParams implements TypeInfo interface.
-func (ti *yearImpl) GetTypeParams() map[string]string {
+func (ti *yearType) GetTypeParams() map[string]string {
 	return nil
 }
 
 // IsValid implements TypeInfo interface.
-func (ti *yearImpl) IsValid(v interface{}) bool {
-	_, ok := ti.isValid(v)
-	return ok
+func (ti *yearType) IsValid(v types.Value) bool {
+	_, err := ti.ConvertNomsValueToValue(v)
+	return err == nil
 }
 
 // NomsKind implements TypeInfo interface.
-func (ti *yearImpl) NomsKind() types.NomsKind {
+func (ti *yearType) NomsKind() types.NomsKind {
 	return types.IntKind
 }
 
+// ParseValue implements TypeInfo interface.
+func (ti *yearType) ParseValue(str *string) (types.Value, error) {
+	if str == nil || *str == "" {
+		return types.NullValue, nil
+	}
+	intVal, err := ti.sqlYearType.Convert(*str)
+	if err != nil {
+		return nil, err
+	}
+	if val, ok := intVal.(int16); ok {
+		return types.Int(val), nil
+	}
+	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
+}
+
 // String implements TypeInfo interface.
-func (ti *yearImpl) String() string {
+func (ti *yearType) String() string {
 	return "Year"
 }
 
 // ToSqlType implements TypeInfo interface.
-func (ti *yearImpl) ToSqlType() sql.Type {
-	return sql.Year
-}
-
-// isValid is an internal implementation for the TypeInfo interface function IsValid.
-// Some validity checks process the value into its final form, which may be returned
-// as an artifact so that a value doesn't need to be processed twice in some scenarios.
-func (ti *yearImpl) isValid(v interface{}) (artifact int16, ok bool) {
-	// convert some Noms values to their standard golang equivalents, except Null
-	switch val := v.(type) {
-	case nil:
-		return 0, true
-	case types.Null:
-		return 0, true
-	case types.Bool:
-		v = bool(val)
-	case types.Int:
-		v = int64(val)
-	case types.Uint:
-		v = uint64(val)
-	case types.Float:
-		v = float64(val)
-	case types.String:
-		v = string(val)
-	}
-	res, err := sql.Year.Convert(v)
-	resInt, ok := res.(int16)
-	return resInt, err == nil && ok
+func (ti *yearType) ToSqlType() sql.Type {
+	return ti.sqlYearType
 }

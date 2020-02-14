@@ -496,10 +496,6 @@ func (t Tuple) fieldsToMap() (map[Value]Value, error) {
 	return valMap, nil
 }
 
-func (Tuple) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
-	return nil, CreateNoConversionError(TupleKind, targetKind)
-}
-
 func (t Tuple) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	panic("unreachable")
 }

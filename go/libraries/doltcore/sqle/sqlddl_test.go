@@ -121,15 +121,11 @@ func TestCreateTable(t *testing.T) {
 							c10 tinytext comment 'tag:10',
 							c11 mediumtext comment 'tag:11',
 							c12 longtext comment 'tag:12',
-							c13 tinyblob comment 'tag:13',
-							c14 blob comment 'tag:14',
-							c15 longblob comment 'tag:15',
 							c16 char(5) comment 'tag:16',
 							c17 varchar(255) comment 'tag:17',
 							c18 varchar(80) comment 'tag:18',
 							c19 float comment 'tag:19',
 							c20 double comment 'tag:20',
-							c21 decimal(10,5) comment 'tag:21',
 							c22 int unsigned comment 'tag:22',
 							c23 tinyint unsigned comment 'tag:23',
 							c24 smallint unsigned comment 'tag:24',
@@ -149,15 +145,15 @@ func TestCreateTable(t *testing.T) {
 				schemaNewColumn(t, "c10", 10, sql.TinyText, false),
 				schemaNewColumn(t, "c11", 11, sql.MediumText, false),
 				schemaNewColumn(t, "c12", 12, sql.LongText, false),
-				schemaNewColumn(t, "c13", 13, sql.TinyBlob, false),
-				schemaNewColumn(t, "c14", 14, sql.Blob, false),
-				schemaNewColumn(t, "c15", 15, sql.LongBlob, false),
+				//schemaNewColumn(t, "c13", 13, sql.TinyBlob, false),
+				//schemaNewColumn(t, "c14", 14, sql.Blob, false),
+				//schemaNewColumn(t, "c15", 15, sql.LongBlob, false),
 				schemaNewColumn(t, "c16", 16, sql.MustCreateStringWithDefaults(sqltypes.Char, 5), false),
 				schemaNewColumn(t, "c17", 17, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false),
 				schemaNewColumn(t, "c18", 18, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false),
 				schemaNewColumn(t, "c19", 19, sql.Float32, false),
 				schemaNewColumn(t, "c20", 20, sql.Float64, false),
-				schemaNewColumn(t, "c21", 21, sql.MustCreateDecimalType(10, 5), false),
+				//schemaNewColumn(t, "c21", 21, sql.MustCreateDecimalType(10, 5), false),
 				schemaNewColumn(t, "c22", 22, sql.Uint32, false),
 				schemaNewColumn(t, "c23", 23, sql.Uint8, false),
 				schemaNewColumn(t, "c24", 24, sql.Uint16, false),
@@ -501,8 +497,6 @@ func TestAddColumn(t *testing.T) {
 }
 
 func TestModifyAndChangeColumn(t *testing.T) {
-	// This worked previously as LONGTEXT & VARCHAR(80) are both LONGTEXT to dolt, so it thought there was no change
-	t.Skip("We don't yet support column type changes")
 	tests := []struct {
 		name           string
 		query          string
@@ -512,11 +506,11 @@ func TestModifyAndChangeColumn(t *testing.T) {
 	}{
 		{
 			name:  "alter modify column reorder middle",
-			query: "alter table people modify column first_name varchar(80) not null after last_name",
+			query: "alter table people modify column first_name longtext not null after last_name",
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "first_name", FirstNameTag, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false, schema.NotNullConstraint{}),
+				schema.NewColumn("first_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
 				schema.NewColumn("age", AgeTag, types.IntKind, false),
 				schema.NewColumn("rating", RatingTag, types.FloatKind, false),
@@ -527,9 +521,9 @@ func TestModifyAndChangeColumn(t *testing.T) {
 		},
 		{
 			name:  "alter modify column reorder first",
-			query: "alter table people modify column first_name varchar(80) not null first",
+			query: "alter table people modify column first_name longtext not null first",
 			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumn(t, "first_name", FirstNameTag, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false, schema.NotNullConstraint{}),
+				schema.NewColumn("first_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
@@ -542,10 +536,10 @@ func TestModifyAndChangeColumn(t *testing.T) {
 		},
 		{
 			name:  "alter modify column drop null constraint",
-			query: "alter table people modify column first_name varchar(80) null",
+			query: "alter table people modify column first_name longtext null",
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "first_name", FirstNameTag, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false),
+				schema.NewColumn("first_name", FirstNameTag, types.StringKind, false),
 				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
 				schema.NewColumn("age", AgeTag, types.IntKind, false),
@@ -557,11 +551,11 @@ func TestModifyAndChangeColumn(t *testing.T) {
 		},
 		{
 			name:  "alter change column rename and reorder",
-			query: "alter table people change first_name christian_name varchar(80) not null after last_name",
+			query: "alter table people change first_name christian_name longtext not null after last_name",
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "christian_name", FirstNameTag, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false, schema.NotNullConstraint{}),
+				schema.NewColumn("christian_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
 				schema.NewColumn("age", AgeTag, types.IntKind, false),
 				schema.NewColumn("rating", RatingTag, types.FloatKind, false),
@@ -572,9 +566,9 @@ func TestModifyAndChangeColumn(t *testing.T) {
 		},
 		{
 			name:  "alter change column rename and reorder first",
-			query: "alter table people change column first_name christian_name varchar(80) not null first",
+			query: "alter table people change column first_name christian_name longtext not null first",
 			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumn(t, "christian_name", FirstNameTag, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false, schema.NotNullConstraint{}),
+				schema.NewColumn("christian_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
@@ -587,10 +581,10 @@ func TestModifyAndChangeColumn(t *testing.T) {
 		},
 		{
 			name:  "alter change column drop null constraint",
-			query: "alter table people change column first_name first_name varchar(80) null",
+			query: "alter table people change column first_name first_name longtext null",
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "first_name", FirstNameTag, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false),
+				schema.NewColumn("first_name", FirstNameTag, types.StringKind, false),
 				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
 				schema.NewColumn("age", AgeTag, types.IntKind, false),
@@ -602,17 +596,17 @@ func TestModifyAndChangeColumn(t *testing.T) {
 		},
 		{
 			name:        "alter modify column change tag",
-			query:       "alter table people modify column first_name varchar(80) not null comment 'tag:100'",
+			query:       "alter table people modify column first_name longtext not null comment 'tag:100'",
 			expectedErr: "A column with the name first_name already exists",
 		},
 		{
 			name:        "alter modify column not null with type mismatch in default",
-			query:       "alter table people modify rating float default 'not a number'",
+			query:       "alter table people modify rating double default 'not a number'",
 			expectedErr: "incompatible type for default value",
 		},
 		{
 			name:        "alter modify column with tag conflict",
-			query:       "alter table people modify rating float default 1.0 comment 'tag:1'",
+			query:       "alter table people modify rating double default 1.0 comment 'tag:1'",
 			expectedErr: "A column with the name rating already exists",
 		},
 		{
@@ -622,7 +616,7 @@ func TestModifyAndChangeColumn(t *testing.T) {
 		},
 		{
 			name:        "alter modify column not null, existing null values",
-			query:       "alter table people modify num_episodes int unsigned not null",
+			query:       "alter table people modify num_episodes bigint unsigned not null",
 			expectedErr: "cannot change column to NOT NULL",
 		},
 	}

@@ -35,10 +35,9 @@ const (
 	FloatTypeIdentifier      Identifier = "float"
 	InlineBlobTypeIdentifier Identifier = "inlineblob"
 	IntTypeIdentifier        Identifier = "int"
-	NullTypeIdentifier       Identifier = "null"
 	SetTypeIdentifier        Identifier = "set"
 	TimeTypeIdentifier       Identifier = "time"
-	TupleIdentifier          Identifier = "tuple"
+	TupleTypeIdentifier      Identifier = "tuple"
 	UintTypeIdentifier       Identifier = "uint"
 	UuidTypeIdentifier       Identifier = "uuid"
 	VarBinaryTypeIdentifier  Identifier = "varbinary"
@@ -56,10 +55,9 @@ var Identifiers = map[Identifier]struct{}{
 	FloatTypeIdentifier:      {},
 	InlineBlobTypeIdentifier: {},
 	IntTypeIdentifier:        {},
-	NullTypeIdentifier:       {},
 	SetTypeIdentifier:        {},
 	TimeTypeIdentifier:       {},
-	TupleIdentifier:          {},
+	TupleTypeIdentifier:      {},
 	UintTypeIdentifier:       {},
 	UuidTypeIdentifier:       {},
 	VarBinaryTypeIdentifier:  {},
@@ -80,6 +78,9 @@ type TypeInfo interface {
 	// Equals returns whether the given TypeInfo is equivalent to this TypeInfo.
 	Equals(other TypeInfo) bool
 
+	// FormatValue returns the stringified version of the value.
+	FormatValue(v types.Value) (*string, error)
+
 	// GetTypeIdentifier returns an identifier for this type used for serialization.
 	GetTypeIdentifier() Identifier
 
@@ -88,10 +89,13 @@ type TypeInfo interface {
 	GetTypeParams() map[string]string
 
 	// IsValid takes in a value (go or Noms) and returns whether the value is valid for this type.
-	IsValid(v interface{}) bool
+	IsValid(v types.Value) bool
 
 	// NomsKind returns the NomsKind that best matches this TypeInfo.
 	NomsKind() types.NomsKind
+
+	// ParseValue parses a string and returns a go value that represents it according to this type.
+	ParseValue(str *string) (types.Value, error)
 
 	// ToSqlType returns the TypeInfo as a sql.Type. If an exact match is able to be made then that is
 	// the one returned, otherwise the sql.Type is the closest match possible.
@@ -105,7 +109,7 @@ type TypeInfo interface {
 func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 	switch sqlType.Type() {
 	case sqltypes.Null:
-		return NullType, nil
+		return UnknownType, nil
 	case sqltypes.Int8:
 		return Int8Type, nil
 	case sqltypes.Int16:
@@ -131,114 +135,103 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 	case sqltypes.Float64:
 		return Float64Type, nil
 	case sqltypes.Timestamp:
-		datetimeType, ok := sqlType.(sql.DatetimeType)
-		if !ok {
-			return nil, fmt.Errorf(`expected "DatetimeTypeIdentifier" from SQL basetype "Timestamp"`)
-		}
-		return &datetimeImpl{
-			Min:      datetimeType.MinimumTime(),
-			Max:      datetimeType.MaximumTime(),
-			DateOnly: false,
-		}, nil
+		return TimestampType, nil
 	case sqltypes.Date:
-		datetimeType, ok := sqlType.(sql.DatetimeType)
-		if !ok {
-			return nil, fmt.Errorf(`expected "DatetimeTypeIdentifier" from SQL basetype "Date"`)
-		}
-		return &datetimeImpl{
-			Min:      datetimeType.MinimumTime(),
-			Max:      datetimeType.MaximumTime(),
-			DateOnly: true,
-		}, nil
+		return DateType, nil
 	case sqltypes.Time:
+		//TODO: determine the storage format
+		if fmt.Sprintf("a") != "" { // always evaluates to true, compiler won't complain about unreachable code
+			return nil, fmt.Errorf(`"%v" has not yet been implemented`, sqlType.String())
+		}
 		return TimeType, nil
 	case sqltypes.Datetime:
-		datetimeType, ok := sqlType.(sql.DatetimeType)
-		if !ok {
-			return nil, fmt.Errorf(`expected "DatetimeTypeIdentifier" from SQL basetype "Datetime"`)
-		}
-		return &datetimeImpl{
-			Min:      datetimeType.MinimumTime(),
-			Max:      datetimeType.MaximumTime(),
-			DateOnly: false,
-		}, nil
+		return DatetimeType, nil
 	case sqltypes.Year:
 		return YearType, nil
 	case sqltypes.Decimal:
-		decimalType, ok := sqlType.(sql.DecimalType)
+		//TODO: determine the storage format
+		if fmt.Sprintf("a") != "" { // always evaluates to true, compiler won't complain about unreachable code
+			return nil, fmt.Errorf(`"%v" has not yet been implemented`, sqlType.String())
+		}
+		decimalSQLType, ok := sqlType.(sql.DecimalType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "DecimalTypeIdentifier" from SQL basetype "Decimal"`)
 		}
-		return &decimalImpl{decimalType}, nil
+		return &decimalType{decimalSQLType}, nil
 	case sqltypes.Text:
 		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Text"`)
 		}
-		return &varStringImpl{
-			stringType.Collation(),
-			stringType.MaxCharacterLength(),
-			false,
-			true,
-		}, nil
+		return &varStringType{stringType}, nil
 	case sqltypes.Blob:
+		//TODO: determine the storage format
+		if fmt.Sprintf("a") != "" { // always evaluates to true, compiler won't complain about unreachable code
+			return nil, fmt.Errorf(`"%v" has not yet been implemented`, sqlType.String())
+		}
 		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Blob"`)
 		}
-		return &varBinaryImpl{stringType.MaxByteLength(), false, true}, nil
+		return &varBinaryType{stringType}, nil
 	case sqltypes.VarChar:
 		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "VarChar"`)
 		}
-		return &varStringImpl{
-			stringType.Collation(),
-			stringType.MaxCharacterLength(),
-			false,
-			false,
-		}, nil
+		return &varStringType{stringType}, nil
 	case sqltypes.VarBinary:
+		//TODO: determine the storage format
+		if fmt.Sprintf("a") != "" { // always evaluates to true, compiler won't complain about unreachable code
+			return nil, fmt.Errorf(`"%v" has not yet been implemented`, sqlType.String())
+		}
 		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "VarBinary"`)
 		}
-		return &varBinaryImpl{stringType.MaxByteLength(), false, false}, nil
+		return &varBinaryType{stringType}, nil
 	case sqltypes.Char:
 		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Char"`)
 		}
-		return &varStringImpl{
-			stringType.Collation(),
-			stringType.MaxCharacterLength(),
-			true,
-			false,
-		}, nil
+		return &varStringType{stringType}, nil
 	case sqltypes.Binary:
+		//TODO: determine the storage format
+		if fmt.Sprintf("a") != "" { // always evaluates to true, compiler won't complain about unreachable code
+			return nil, fmt.Errorf(`"%v" has not yet been implemented`, sqlType.String())
+		}
 		stringType, ok := sqlType.(sql.StringType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "StringType" from SQL basetype "Binary"`)
 		}
-		return &varBinaryImpl{stringType.MaxByteLength(), true, false}, nil
+		return &varBinaryType{stringType}, nil
 	case sqltypes.Bit:
-		bitType, ok := sqlType.(sql.BitType)
+		bitSQLType, ok := sqlType.(sql.BitType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "BitTypeIdentifier" from SQL basetype "Bit"`)
 		}
-		return &bitImpl{bitType}, nil
+		return &bitType{bitSQLType}, nil
 	case sqltypes.Enum:
-		enumType, ok := sqlType.(sql.EnumType)
+		//TODO: determine the storage format
+		if fmt.Sprintf("a") != "" { // always evaluates to true, compiler won't complain about unreachable code
+			return nil, fmt.Errorf(`"%v" has not yet been implemented`, sqlType.String())
+		}
+		enumSQLType, ok := sqlType.(sql.EnumType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "EnumTypeIdentifier" from SQL basetype "Enum"`)
 		}
-		return &enumImpl{enumType}, nil
+		return &enumType{enumSQLType}, nil
 	case sqltypes.Set:
-		setType, ok := sqlType.(sql.SetType)
+		//TODO: determine the storage format
+		if fmt.Sprintf("a") != "" { // always evaluates to true, compiler won't complain about unreachable code
+			return nil, fmt.Errorf(`"%v" has not yet been implemented`, sqlType.String())
+		}
+		setSQLType, ok := sqlType.(sql.SetType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "SetTypeIdentifier" from SQL basetype "Set"`)
 		}
-		return &setImpl{setType}, nil
+		return &setType{setSQLType}, nil
 	default:
 		return nil, fmt.Errorf(`no type info can be created from SQL base type "%v"`, sqlType.String())
 	}
@@ -263,13 +256,11 @@ func FromTypeParams(id Identifier, params map[string]string) (TypeInfo, error) {
 		return InlineBlobType, nil
 	case IntTypeIdentifier:
 		return CreateIntTypeFromParams(params)
-	case NullTypeIdentifier:
-		return NullType, nil
 	case SetTypeIdentifier:
 		return CreateSetTypeFromParams(params)
 	case TimeTypeIdentifier:
 		return TimeType, nil
-	case TupleIdentifier:
+	case TupleTypeIdentifier:
 		return TupleType, nil
 	case UintTypeIdentifier:
 		return CreateUintTypeFromParams(params)
@@ -298,18 +289,11 @@ func FromKind(kind types.NomsKind) TypeInfo {
 	case types.IntKind:
 		return Int64Type
 	case types.NullKind:
-		return NullType
+		return UnknownType
 	case types.StringKind:
 		return StringDefaultType
 	case types.TimestampKind:
-		// Here we set it to the limits of the SQL Datetime type just so conversions
-		// between the two types are straightforward. This is an arbitrary decision and
-		// this can definitely be widened later if we decide to.
-		return &datetimeImpl{
-			sql.Datetime.MinimumTime(),
-			sql.Datetime.MaximumTime(),
-			false,
-		}
+		return DatetimeType
 	case types.TupleKind:
 		return TupleType
 	case types.UintKind:

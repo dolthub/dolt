@@ -102,28 +102,6 @@ func (v InlineBlob) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
 	b.skipBytes(size)
 }
 
-func (InlineBlob) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
-	switch targetKind {
-	case InlineBlobKind:
-		return func(val Value) (Value, error) {
-			return val, nil
-		}, nil
-	case NullKind:
-		return func(Value) (Value, error) {
-			return NullValue, nil
-		}, nil
-	case StringKind:
-		return func(val Value) (Value, error) {
-			if val == nil {
-				return nil, nil
-			}
-			return String(strings.ToUpper(hex.EncodeToString(val.(InlineBlob)))), nil
-		}, nil
-	}
-
-	return nil, CreateNoConversionError(InlineBlobKind, targetKind)
-}
-
 func (v InlineBlob) HumanReadableString() string {
 	return strings.ToUpper(hex.EncodeToString(v))
 }

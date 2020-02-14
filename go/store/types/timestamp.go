@@ -23,7 +23,7 @@ import (
 
 const (
 	timestampNumBytes = 15
-	timestampFormat   = "2006-01-02 15:04:05.999999999 -0700"
+	timestampFormat   = "2006-01-02 15:04:05.999999"
 )
 
 type Timestamp time.Time
@@ -105,59 +105,8 @@ func (v Timestamp) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
 	b.skipBytes(timestampNumBytes)
 }
 
-func (Timestamp) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
-	switch targetKind {
-	case FloatKind:
-		return func(val Value) (Value, error) {
-			if val == nil {
-				return nil, nil
-			}
-			t := time.Time(val.(Timestamp))
-			seconds := t.Unix()
-			// Since Float allows decimals, we represent the nanoseconds as a decimal
-			nanoseconds := t.Nanosecond()
-			combination := float64(seconds) + (float64(nanoseconds) / float64(time.Second/time.Nanosecond))
-			return Float(combination), nil
-		}, nil
-	case IntKind:
-		return func(val Value) (Value, error) {
-			if val == nil {
-				return nil, nil
-			}
-			t := time.Time(val.(Timestamp))
-			return Int(t.Unix()), nil
-		}, nil
-	case NullKind:
-		return func(Value) (Value, error) {
-			return NullValue, nil
-		}, nil
-	case StringKind:
-		return func(val Value) (Value, error) {
-			if val == nil {
-				return nil, nil
-			}
-			t := val.(Timestamp)
-			return String(t.String()), nil
-		}, nil
-	case TimestampKind:
-		return func(val Value) (Value, error) {
-			return val, nil
-		}, nil
-	case UintKind:
-		return func(val Value) (Value, error) {
-			if val == nil {
-				return nil, nil
-			}
-			t := time.Time(val.(Timestamp))
-			return Uint(t.Unix()), nil
-		}, nil
-	}
-
-	return nil, CreateNoConversionError(TimestampKind, targetKind)
-}
-
 func (v Timestamp) String() string {
-	return time.Time(v).Format(timestampFormat)
+	return time.Time(v).UTC().Format(timestampFormat)
 }
 
 func (v Timestamp) HumanReadableString() string {

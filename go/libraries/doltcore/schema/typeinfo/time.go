@@ -24,20 +24,19 @@ import (
 
 // This is a dolt implementation of the MySQL type Time, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
-type timeImpl struct{}
+type timeType struct {
+	sqlTimeType sql.TimeType
+}
 
-var _ TypeInfo = (*timeImpl)(nil)
+var _ TypeInfo = (*timeType)(nil)
 
-var TimeType TypeInfo = &timeImpl{}
+var TimeType = &timeType{sql.Time}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
-func (ti *timeImpl) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
+func (ti *timeType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
+	//TODO: expose the MySQL type's microsecond implementation and persist that to disk? Enables sorting
 	if val, ok := v.(types.String); ok {
-		res, err := sql.Time.Convert(string(val))
-		if err != nil {
-			return nil, fmt.Errorf(`"%v" cannot convert "%v" to value`, ti.String(), val)
-		}
-		return res, nil
+		return string(val), nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -46,79 +45,84 @@ func (ti *timeImpl) ConvertNomsValueToValue(v types.Value) (interface{}, error) 
 }
 
 // ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *timeImpl) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
-	if artifact, ok := ti.isValid(v); ok {
-		switch v.(type) {
-		case nil, types.Null:
-			return types.NullValue, nil
-		}
-		return types.String(artifact), nil
+func (ti *timeType) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
+	if v == nil {
+		return types.NullValue, nil
+	}
+	strVal, err := ti.sqlTimeType.Convert(v)
+	if err != nil {
+		return nil, err
+	}
+	val, ok := strVal.(string)
+	if ok {
+		return types.String(val), nil
 	}
 	return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
 }
 
 // Equals implements TypeInfo interface.
-func (ti *timeImpl) Equals(other TypeInfo) bool {
+func (ti *timeType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	_, ok := other.(*timeImpl)
+	_, ok := other.(*timeType)
 	return ok
 }
 
+// FormatValue implements TypeInfo interface.
+func (ti *timeType) FormatValue(v types.Value) (*string, error) {
+	if val, ok := v.(types.String); ok {
+		res := string(val)
+		return &res, nil
+	}
+	if _, ok := v.(types.Null); ok || v == nil {
+		return nil, nil
+	}
+	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti.String(), v.Kind())
+}
+
 // GetTypeIdentifier implements TypeInfo interface.
-func (ti *timeImpl) GetTypeIdentifier() Identifier {
+func (ti *timeType) GetTypeIdentifier() Identifier {
 	return TimeTypeIdentifier
 }
 
 // GetTypeParams implements TypeInfo interface.
-func (ti *timeImpl) GetTypeParams() map[string]string {
+func (ti *timeType) GetTypeParams() map[string]string {
 	return nil
 }
 
 // IsValid implements TypeInfo interface.
-func (ti *timeImpl) IsValid(v interface{}) bool {
-	_, ok := ti.isValid(v)
-	return ok
+func (ti *timeType) IsValid(v types.Value) bool {
+	_, err := ti.ConvertNomsValueToValue(v)
+	return err == nil
 }
 
 // NomsKind implements TypeInfo interface.
-func (ti *timeImpl) NomsKind() types.NomsKind {
+func (ti *timeType) NomsKind() types.NomsKind {
 	return types.StringKind
 }
 
+// ParseValue implements TypeInfo interface.
+func (ti *timeType) ParseValue(str *string) (types.Value, error) {
+	if str == nil || *str == "" {
+		return types.NullValue, nil
+	}
+	strVal, err := ti.sqlTimeType.Convert(*str)
+	if err != nil {
+		return nil, err
+	}
+	if val, ok := strVal.(string); ok {
+		return types.String(val), nil
+	}
+	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
+}
+
 // String implements TypeInfo interface.
-func (ti *timeImpl) String() string {
+func (ti *timeType) String() string {
 	return "Time"
 }
 
 // ToSqlType implements TypeInfo interface.
-func (ti *timeImpl) ToSqlType() sql.Type {
-	return sql.Time
-}
-
-// isValid is an internal implementation for the TypeInfo interface function IsValid.
-// Some validity checks process the value into its final form, which may be returned
-// as an artifact so that a value doesn't need to be processed twice in some scenarios.
-func (ti *timeImpl) isValid(v interface{}) (artifact string, ok bool) {
-	// convert some Noms values to their standard golang equivalents, except Null
-	switch val := v.(type) {
-	case nil:
-		return "", true
-	case types.Null:
-		return "", true
-	case types.Bool:
-		v = bool(val)
-	case types.Int:
-		v = int64(val)
-	case types.Uint:
-		v = uint64(val)
-	case types.Float:
-		v = float64(val)
-	case types.String:
-		v = string(val)
-	}
-	res, err := sql.Time.Convert(v)
-	resStr, ok := res.(string)
-	return resStr, err == nil && ok
+func (ti *timeType) ToSqlType() sql.Type {
+	return ti.sqlTimeType
 }

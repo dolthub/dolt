@@ -79,12 +79,12 @@ func encodeColumn(col schema.Column) encodedColumn {
 func (nfd encodedColumn) decodeColumn() (schema.Column, error) {
 	var typeInfo typeinfo.TypeInfo
 	var err error
-	if nfd.Kind == "" && nfd.TypeInfo.Type != "" { // new format
+	if nfd.TypeInfo.Type != "" {
 		typeInfo, err = nfd.TypeInfo.decodeTypeInfo()
 		if err != nil {
 			return schema.Column{}, err
 		}
-	} else if nfd.Kind != "" && nfd.TypeInfo.Type == "" { // old format
+	} else if nfd.Kind != "" {
 		typeInfo = typeinfo.FromKind(schema.LwrStrToKind[nfd.Kind])
 	} else {
 		return schema.Column{}, errors.New("cannot decode column due to unknown schema format")

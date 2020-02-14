@@ -110,10 +110,6 @@ type Value interface {
 	// chunked then this will return the refs of th sub trees of the prolly-tree.
 	WalkRefs(*NomsBinFormat, RefCallback) error
 
-	// GetMarshalFunc takes in a Kind and returns a function that accepts a Value of the calling type.
-	// The returned function then marshals the given type into the given Kind.
-	GetMarshalFunc(NomsKind) (MarshalCallback, error)
-
 	// HumanReadableString returns a human-readable string version of this Value (not meant for re-parsing)
 	HumanReadableString() string
 

@@ -24,14 +24,16 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-type boolImpl struct{}
+type boolType struct {
+	sqlBitType sql.BitType
+}
 
-var _ TypeInfo = (*boolImpl)(nil)
+var _ TypeInfo = (*boolType)(nil)
 
-var BoolType TypeInfo = &boolImpl{}
+var BoolType TypeInfo = &boolType{sql.MustCreateBitType(1)}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
-func (ti *boolImpl) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
+func (ti *boolType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Bool); ok {
 		if val {
 			return uint64(1), nil
@@ -45,162 +47,114 @@ func (ti *boolImpl) ConvertNomsValueToValue(v types.Value) (interface{}, error) 
 }
 
 // ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *boolImpl) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
-	if artifact, ok := ti.isValid(v); ok {
-		switch val := v.(type) {
-		case nil:
-			return types.NullValue, nil
-		case bool:
-			return types.Bool(val), nil
-		case int:
-			return types.Bool(val != 0), nil
-		case int8:
-			return types.Bool(val != 0), nil
-		case int16:
-			return types.Bool(val != 0), nil
-		case int32:
-			return types.Bool(val != 0), nil
-		case int64:
-			return types.Bool(val != 0), nil
-		case uint:
-			return types.Bool(val != 0), nil
-		case uint8:
-			return types.Bool(val != 0), nil
-		case uint16:
-			return types.Bool(val != 0), nil
-		case uint32:
-			return types.Bool(val != 0), nil
-		case uint64:
-			return types.Bool(val != 0), nil
-		case float32:
-			return types.Bool(int64(math.Round(float64(val))) != 0), nil
-		case float64:
-			return types.Bool(int64(math.Round(val)) != 0), nil
-		case string:
-			return types.Bool(artifact != 0), nil
-		case types.Null:
-			return types.NullValue, nil
-		case types.Bool:
-			return val, nil
-		case types.Int:
-			return types.Bool(val != 0), nil
-		case types.Uint:
-			return types.Bool(val != 0), nil
-		case types.Float:
-			return types.Bool(int64(math.Round(float64(val))) != 0), nil
-		case types.String:
-			return types.Bool(artifact != 0), nil
-		default:
-			return nil, fmt.Errorf(`"%v" has falsely evaluated value "%v" of type "%T" as valid`, ti.String(), val, val)
+func (ti *boolType) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
+	switch val := v.(type) {
+	case nil:
+		return types.NullValue, nil
+	case bool:
+		return types.Bool(val), nil
+	case int:
+		return types.Bool(val != 0), nil
+	case int8:
+		return types.Bool(val != 0), nil
+	case int16:
+		return types.Bool(val != 0), nil
+	case int32:
+		return types.Bool(val != 0), nil
+	case int64:
+		return types.Bool(val != 0), nil
+	case uint:
+		return types.Bool(val != 0), nil
+	case uint8:
+		return types.Bool(val != 0), nil
+	case uint16:
+		return types.Bool(val != 0), nil
+	case uint32:
+		return types.Bool(val != 0), nil
+	case uint64:
+		return types.Bool(val != 0), nil
+	case float32:
+		return types.Bool(int64(math.Round(float64(val))) != 0), nil
+	case float64:
+		return types.Bool(int64(math.Round(val)) != 0), nil
+	case string:
+		b, err := strconv.ParseBool(val)
+		if err == nil {
+			return types.Bool(b), nil
 		}
+		valInt, err := strconv.ParseInt(val, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf(`"%v" cannot convert value "%v" as it is invalid`, ti.String(), val)
+		}
+		return types.Bool(valInt != 0), nil
+	case []byte:
+		return ti.ConvertValueToNomsValue(string(val))
+	default:
+		return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
 	}
-	return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
 }
 
 // Equals implements TypeInfo interface.
-func (ti *boolImpl) Equals(other TypeInfo) bool {
+func (ti *boolType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	_, ok := other.(*boolImpl)
+	_, ok := other.(*boolType)
 	return ok
 }
 
+// FormatValue implements TypeInfo interface.
+func (ti *boolType) FormatValue(v types.Value) (*string, error) {
+	if val, ok := v.(types.Bool); ok {
+		res := ""
+		if val {
+			res = "1"
+		} else {
+			res = "0"
+		}
+		return &res, nil
+	}
+	if _, ok := v.(types.Null); ok || v == nil {
+		return nil, nil
+	}
+	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti.String(), v.Kind())
+}
+
 // GetTypeIdentifier implements TypeInfo interface.
-func (ti *boolImpl) GetTypeIdentifier() Identifier {
+func (ti *boolType) GetTypeIdentifier() Identifier {
 	return BoolTypeIdentifier
 }
 
 // GetTypeParams implements TypeInfo interface.
-func (ti *boolImpl) GetTypeParams() map[string]string {
+func (ti *boolType) GetTypeParams() map[string]string {
 	return nil
 }
 
 // IsValid implements TypeInfo interface.
-func (ti *boolImpl) IsValid(v interface{}) bool {
-	_, ok := ti.isValid(v)
-	return ok
+func (ti *boolType) IsValid(v types.Value) bool {
+	_, err := ti.ConvertNomsValueToValue(v)
+	return err == nil
 }
 
 // NomsKind implements TypeInfo interface.
-func (ti *boolImpl) NomsKind() types.NomsKind {
+func (ti *boolType) NomsKind() types.NomsKind {
 	return types.BoolKind
 }
 
+// ParseValue implements TypeInfo interface.
+func (ti *boolType) ParseValue(str *string) (types.Value, error) {
+	if str == nil || *str == "" {
+		return types.NullValue, nil
+	}
+	return ti.ConvertValueToNomsValue(*str)
+}
+
 // String implements TypeInfo interface.
-func (ti *boolImpl) String() string {
+func (ti *boolType) String() string {
 	return "Bool"
 }
 
 // ToSqlType implements TypeInfo interface.
-func (ti *boolImpl) ToSqlType() sql.Type {
-	return sql.MustCreateBitType(1)
-}
-
-// isValid is an internal implementation for the TypeInfo interface function IsValid.
-// Some validity checks process the value into its final form, which may be returned
-// as an artifact so that a value doesn't need to be processed twice in some scenarios.
-func (ti *boolImpl) isValid(v interface{}) (artifact int64, ok bool) {
-	switch val := v.(type) {
-	case nil:
-		return 0, true
-	case bool:
-		return 0, true
-	case int:
-		return 0, true
-	case int8:
-		return 0, true
-	case int16:
-		return 0, true
-	case int32:
-		return 0, true
-	case int64:
-		return 0, true
-	case uint:
-		return 0, true
-	case uint8:
-		return 0, true
-	case uint16:
-		return 0, true
-	case uint32:
-		return 0, true
-	case uint64:
-		return 0, true
-	case float32:
-		return 0, true
-	case float64:
-		return 0, true
-	case string:
-		b, err := strconv.ParseBool(val)
-		if err == nil {
-			if b {
-				return 1, true
-			}
-			return 0, true
-		}
-		valInt, err := strconv.ParseInt(val, 10, 64)
-		return valInt, err == nil
-	case types.Null:
-		return 0, true
-	case types.Bool:
-		return 0, true
-	case types.Int:
-		return 0, true
-	case types.Uint:
-		return 0, true
-	case types.Float:
-		return 0, true
-	case types.String:
-		b, err := strconv.ParseBool(string(val))
-		if err == nil {
-			if b {
-				return 1, true
-			}
-			return 0, true
-		}
-		valInt, err := strconv.ParseInt(string(val), 10, 64)
-		return valInt, err == nil
-	default:
-		return 0, false
-	}
+func (ti *boolType) ToSqlType() sql.Type {
+	return ti.sqlBitType
 }

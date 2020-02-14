@@ -21,7 +21,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
+
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -171,10 +172,7 @@ func getSQLHeader(cols []*SeedColumn, tableName, format string) string {
 		colStr = fmt.Sprintf("%s COMMENT 'tag:%d'", colStr, i)
 
 		// translate noms type
-		sqlType, ok := sql.DoltToSQLType[col.Type]
-		if !ok {
-			log.Fatalf("unable to format sql string, unknown noms to sql conversion for type %v \n", col.Type)
-		}
+		sqlType := typeinfo.FromKind(col.Type).ToSqlType().String()
 
 		schema = append(schema, fmt.Sprintf(colStr, col.Name, strings.ToUpper(sqlType)))
 	}
