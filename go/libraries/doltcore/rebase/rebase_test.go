@@ -65,11 +65,11 @@ type RebaseTagTest struct {
 	ExpectedErrStr string
 }
 
-type command interface{
+type command interface {
 	exec(t *testing.T, dEnv *env.DoltEnv)
 }
 
-type commit struct{
+type commit struct {
 	message string
 }
 
@@ -138,7 +138,6 @@ var createPeopleTable = fmt.Sprintf(`
 		age bigint comment 'tag:%d',
 		primary key (id)
 	);`, IdTag, NameTag, AgeTag)
-
 
 func columnCollection(cols ...schema.Column) *schema.ColCollection {
 	pcc, _ := schema.NewColCollection(cols...)

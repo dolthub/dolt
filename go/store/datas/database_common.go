@@ -249,7 +249,7 @@ func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts 
 	)
 }
 
-func (db *database) CommitOrphan(ctx context.Context, v types.Value, opts CommitOptions)  (types.Struct ,error) {
+func (db *database) CommitOrphan(ctx context.Context, v types.Value, opts CommitOptions) (types.Struct, error) {
 	if (opts.Parents == types.Set{}) {
 		return types.Struct{}, errors.New("cannot create commit without parents")
 	}
