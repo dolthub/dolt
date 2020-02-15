@@ -485,6 +485,68 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 	return &Commit{ddb.db, commitSt}, nil
 }
 
+func (ddb *DoltDB) CommitOrphanWithParentCommits(ctx context.Context, valHash hash.Hash, parentCommits []*Commit, cm *CommitMeta) (*Commit, error) {
+	var commitSt types.Struct
+	err := pantoerr.PanicToError("error committing value "+valHash.String(), func() error {
+		val, err := ddb.db.ReadValue(ctx, valHash)
+
+		if err != nil {
+			return err
+		}
+
+		if st, ok := val.(types.Struct); !ok || st.Name() != ddbRootStructName {
+			return errors.New("can't commit a value that is not a valid root value")
+		}
+
+		s, err := types.NewSet(ctx, ddb.db)
+
+		if err != nil {
+			return err
+		}
+
+		parentEditor := s.Edit()
+
+		for _, cm := range parentCommits {
+			rf, err := types.NewRef(cm.commitSt, ddb.db.Format())
+
+			if err != nil {
+				return err
+			}
+
+			_, err = parentEditor.Insert(rf)
+
+			if err != nil {
+				return err
+			}
+		}
+
+		// even orphans have parents
+		parents, err := parentEditor.Set(ctx)
+
+		if err != nil {
+			return err
+		}
+
+		st, err := cm.toNomsStruct(ddb.db.Format())
+
+		if err != nil {
+			return err
+		}
+
+		commitOpts := datas.CommitOptions{Parents: parents, Meta: st, Policy: nil}
+
+		commitSt, err = ddb.db.CommitOrphan(ctx, val, commitOpts)
+
+		return err
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &Commit{ddb.db, commitSt}, nil
+}
+
 // ValueReadWriter returns the underlying noms database as a types.ValueReadWriter.
 func (ddb *DoltDB) ValueReadWriter() types.ValueReadWriter {
 	return ddb.db
