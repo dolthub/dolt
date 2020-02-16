@@ -3,14 +3,10 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    mkdir $BATS_TMPDIR/config-test$$
-    nativevar DOLT_ROOT_PATH $BATS_TMPDIR/config-test$$ /p
-    cd $BATS_TMPDIR/dolt-repo-$$
 }
 
 teardown() {
     teardown_common
-    rm -rf "$BATS_TMPDIR/config-test$$"
 }
 
 @test "dolt supports Nix style argument parsing" {
