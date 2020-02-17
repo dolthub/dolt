@@ -399,6 +399,13 @@ teardown() {
     dolt sql -q "select date_format(date_created, '%Y-%m-%d') from has_datetimes"
 }
 
+@test "sql substr() and cast() functions" {
+    run dolt sql -q "select substr(cast(date_created as char), 1, 4) from has_datetimes"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "2020" ]] || false
+    [[ ! "$output" =~ "17" ]] || false
+}
+
 @test "sql shell works after failing query" {
     skiponwindows "Need to install expect and make this script work on windows."
     $BATS_TEST_DIRNAME/sql-works-after-failing-query.expect
