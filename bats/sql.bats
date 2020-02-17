@@ -26,8 +26,16 @@ CREATE TABLE two_pk (
   PRIMARY KEY (pk1,pk2)
 );
 SQL
+    dolt sql <<SQL
+CREATE TABLE has_datetimes (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  date_created DATETIME COMMENT 'tag:1',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt sql -q "insert into one_pk (pk,c1,c2,c3,c4,c5) values (0,0,0,0,0,0),(1,10,10,10,10,10),(2,20,20,20,20,20),(3,30,30,30,30,30)"
     dolt sql -q "insert into two_pk (pk1,pk2,c1,c2,c3,c4,c5) values (0,0,0,0,0,0,0),(0,1,10,10,10,10,10),(1,0,20,20,20,20,20),(1,1,30,30,30,30,30)"
+    dolt sql -q "insert into has_datetimes (pk, date_created) values (0, '2020-02-17 00:00:00')"
 }
 
 teardown() {
@@ -247,9 +255,10 @@ teardown() {
     run dolt sql -q "show tables"
     [ $status -eq 0 ]
     echo ${#lines[@]}
-    [ "${#lines[@]}" -eq 6 ]
+    [ "${#lines[@]}" -eq 7 ]
     [[ "$output" =~ "one_pk" ]] || false
     [[ "$output" =~ "two_pk" ]] || false
+    [[ "$output" =~ "has_datetimes" ]] || false
 }
 
 @test "sql describe" {
@@ -383,6 +392,11 @@ teardown() {
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
     [[ "${lines[3]}" =~ " <NULL> " ]] || false
+}
+
+@test "sql date_format function" {
+    skip "date_format() not supported" 
+    dolt sql -q "select date_format(date_created, '%Y-%m-%d') from has_datetimes"
 }
 
 @test "sql shell works after failing query" {
