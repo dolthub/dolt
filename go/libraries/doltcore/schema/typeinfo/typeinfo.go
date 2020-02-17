@@ -88,7 +88,7 @@ type TypeInfo interface {
 	// serialization and deserialization of type information.
 	GetTypeParams() map[string]string
 
-	// IsValid takes in a value (go or Noms) and returns whether the value is valid for this type.
+	// IsValid takes in a types.Value and returns whether it is valid for this type.
 	IsValid(v types.Value) bool
 
 	// NomsKind returns the NomsKind that best matches this TypeInfo.
@@ -303,6 +303,26 @@ func FromKind(kind types.NomsKind) TypeInfo {
 	default:
 		panic(fmt.Errorf(`no default type info for NomsKind "%v"`, kind.String()))
 	}
+}
+
+// Convert takes in a types.Value, as well as the source and destination TypeInfos, and
+// converts the TypeInfo into the applicable types.Value.
+func Convert(v types.Value, srcTi TypeInfo, destTi TypeInfo) (types.Value, error) {
+	str, err := srcTi.FormatValue(v)
+	if err != nil {
+		return nil, err
+	}
+	val, err := destTi.ParseValue(str)
+	if err != nil {
+		return nil, err
+	}
+	return val, nil
+}
+
+// IsStringType returns whether the given TypeInfo represents a CHAR, VARCHAR, or TEXT-derivative.
+func IsStringType(ti TypeInfo) bool {
+	_, ok := ti.(*varStringType)
+	return ok
 }
 
 // ParseIdentifier takes in an Identifier in string form and returns the matching Identifier.

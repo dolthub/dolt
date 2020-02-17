@@ -61,7 +61,7 @@ func NewRowConverter(mapping *FieldMapping) (*RowConverter, error) {
 				return v, nil
 			}
 		}
-		if destCol.TypeInfo.Equals(typeinfo.StringDefaultType) {
+		if typeinfo.IsStringType(destCol.TypeInfo) {
 			convFuncs[srcTag] = func(v types.Value) (types.Value, error) {
 				val, err := srcCol.TypeInfo.FormatValue(v)
 				if err != nil {
@@ -74,15 +74,7 @@ func NewRowConverter(mapping *FieldMapping) (*RowConverter, error) {
 			}
 		} else {
 			convFuncs[srcTag] = func(v types.Value) (types.Value, error) {
-				str, err := srcCol.TypeInfo.FormatValue(v)
-				if err != nil {
-					return nil, err
-				}
-				val, err := destCol.TypeInfo.ParseValue(str)
-				if err != nil {
-					return nil, err
-				}
-				return val, nil
+				return typeinfo.Convert(v, srcCol.TypeInfo, destCol.TypeInfo)
 			}
 		}
 	}

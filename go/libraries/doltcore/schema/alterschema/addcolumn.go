@@ -187,8 +187,8 @@ func validateNewColumn(ctx context.Context, tbl *doltdb.Table, tag uint64, newCo
 		}
 	}
 
-	if !types.IsNull(defaultVal) && defaultVal.Kind() != typeInfo.NomsKind() {
-		return fmt.Errorf("Type of default value (%v) doesn't match type of column (%v)", types.KindToString[defaultVal.Kind()], types.KindToString[typeInfo.NomsKind()])
+	if !types.IsNull(defaultVal) && !typeInfo.IsValid(defaultVal) {
+		return fmt.Errorf("Default value (%v) is invalid for column (%v)", defaultVal, typeInfo.String())
 	}
 
 	return nil
