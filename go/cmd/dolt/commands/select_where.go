@@ -69,7 +69,7 @@ func ParseWhere(sch schema.Schema, whereClause string) (FilterFn, error) {
 		}
 
 		var val types.Value
-		if cols[0].TypeInfo.Equals(typeinfo.StringDefaultType) {
+		if typeinfo.IsStringType(cols[0].TypeInfo) {
 			val = types.String(valStr)
 		} else {
 			var err error

@@ -266,7 +266,7 @@ func TestAddColumnToTable(t *testing.T) {
 			colKind:     types.IntKind,
 			nullable:    NotNull,
 			defaultVal:  types.String("this shouldn't work"),
-			expectedErr: "Type of default value (String) doesn't match type of column (Int)",
+			expectedErr: "Default value (this shouldn't work) is invalid for column (Int64)",
 		},
 	}
 

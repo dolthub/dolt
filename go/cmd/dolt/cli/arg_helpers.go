@@ -145,7 +145,7 @@ func ParseKeyValues(nbf *types.NomsBinFormat, sch schema.Schema, args []string) 
 
 	convFuncs := make(map[uint64]func(*string) (types.Value, error))
 	err := sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if col.TypeInfo.Equals(typeinfo.StringDefaultType) {
+		if typeinfo.IsStringType(col.TypeInfo) {
 			convFuncs[tag] = func(v *string) (types.Value, error) {
 				return types.String(*v), nil
 			}
