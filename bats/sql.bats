@@ -402,7 +402,7 @@ teardown() {
 @test "sql substr() and cast() functions" {
     run dolt sql -q "select substr(cast(date_created as char), 1, 4) from has_datetimes"
     [ $status -eq 0 ]
-    [[ "$output" =~ "2020" ]] || false
+    [[ "$output" =~ " 2020 " ]] || false
     [[ ! "$output" =~ "17" ]] || false
 }
 
