@@ -1,0 +1,17 @@
+#!/usr/bin/expect
+
+set timeout 1
+spawn dolt sql
+expect {
+  "doltsql> " { send "select json_unquote('\\\\');\r"; }
+}
+expect {
+  "error processing results: Missing a closing quotation mark in string"
+}
+expect {
+  "doltsql> " { send "select 1;\r"; }
+}
+expect {
+  "pid 0 is already in use" { exit 1 }
+  " 1 " { exit 0 }
+}
