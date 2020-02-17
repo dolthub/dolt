@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"strings"
 
@@ -401,11 +400,14 @@ func RegisterSchemaFragments(ctx *sql.Context, catalog *sql.Catalog, db *Databas
 		if r[0] == "view" {
 			name := r[1].(string)
 			definition := r[2].(string)
-			cv, err := parse.Parse(sql.NewContext(ctx), fmt.Sprintf("create view %s as %s", dsql.QuoteIdentifier(name), definition))
+			cv, err := parse.Parse(sql.NewContext(ctx), dsql.CreateViewStmt(name, definition))
 			if err != nil {
 				parseErrors = append(parseErrors, err)
 			} else {
-				vr.Register(db.Name(), sql.NewView(name, cv.(*plan.CreateView).Definition))
+				err = vr.Register(db.Name(), sql.NewView(name, cv.(*plan.CreateView).Definition))
+				if err != nil {
+					return err
+				}
 			}
 		}
 		r, err = iter.Next()

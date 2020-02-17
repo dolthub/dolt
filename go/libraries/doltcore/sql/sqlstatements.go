@@ -73,6 +73,15 @@ func SchemaAsCreateStmt(tableName string, sch schema.Schema) string {
 	return sb.String()
 }
 
+func CreateViewStmt(viewName string, viewDefinition string) string {
+	var b strings.Builder
+	b.WriteString("CREATE VIEW ")
+	b.WriteString(QuoteIdentifier(viewName))
+	b.WriteString(" AS ")
+	b.WriteString(viewDefinition)
+	return b.String()
+}
+
 func DropTableStmt(tableName string) string {
 	var b strings.Builder
 	b.WriteString("DROP TABLE ")
