@@ -91,6 +91,10 @@ func (ti *varStringType) ConvertNomsValueToValue(v types.Value) (interface{}, er
 		if !ok {
 			return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
 		}
+		// As per the MySQL documentation, trailing spaces are removed when retrieved for CHAR types only.
+		// go-mysql-server does not currently have a concept of storage nor retrieval for its types, thus it must be
+		// implemented here. This function is used to retrieve dolt values, hence its inclusion here and not elsewhere.
+		// https://dev.mysql.com/doc/refman/8.0/en/char.html
 		if ti.sqlStringType.Type() == sqltypes.Char {
 			res = strings.TrimRightFunc(res, unicode.IsSpace)
 		}
