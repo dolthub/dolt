@@ -20,9 +20,7 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` BIGINT COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 4611686018427387903);"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 4611686018427387903);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 4611686018427387903 " ]] || false
@@ -47,9 +45,7 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` BIGINT UNSIGNED COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 9223372036854775807);"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 9223372036854775807);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 9223372036854775807 " ]] || false
@@ -76,9 +72,7 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` BINARY(10) COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " abcdefg " ]] || false
@@ -101,9 +95,7 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` BIT(10) COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 511);"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 511);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 511 " ]] || false
@@ -129,15 +121,14 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` BLOB COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " abcdefg " ]] || false
     dolt sql -q "UPDATE test SET v='1234567890' WHERE pk=1;"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 1234567890 " ]] || false
 }
 
 @test "types: BOOLEAN" {
@@ -151,6 +142,14 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` TINYINT COMMENT 'tag:1'" ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, true);"
+    run dolt sql -q "SELECT * FROM test"
+    [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "REPLACE INTO test VALUES (1, false);"
+    run dolt sql -q "SELECT * FROM test"
+    [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 0 " ]] || false
 }
 
 @test "types: CHAR(10)" {
@@ -164,9 +163,7 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` CHAR(10) COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " abcdefg " ]] || false
@@ -189,19 +186,15 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` DATE COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, '2020-02-10 11:12:13.456789');"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, '2020-02-10 11:12:13.456789');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 2020-02-10 00:00:00 +0000 UTC " ]] || false
-    run dolt sql -q "REPLACE INTO test VALUES (1, '1000-01-01 00:00:00');"
-    [ "$status" -eq "0" ]
+    dolt sql -q "REPLACE INTO test VALUES (1, '1000-01-01 00:00:00');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 1000-01-01 00:00:00 +0000 UTC " ]] || false
-    run dolt sql -q "REPLACE INTO test VALUES (1, '9999-01-01 23:59:59.999999');"
-    [ "$status" -eq "0" ]
+    dolt sql -q "REPLACE INTO test VALUES (1, '9999-01-01 23:59:59.999999');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 9999-01-01 00:00:00 +0000 UTC " ]] || false
@@ -222,19 +215,15 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` DATETIME COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, '2020-02-10 11:12:13.456789');"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, '2020-02-10 11:12:13.456789');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 2020-02-10 11:12:13.456789 +0000 UTC " ]] || false
-    run dolt sql -q "REPLACE INTO test VALUES (1, '1000-01-01 00:00:00');"
-    [ "$status" -eq "0" ]
+    dolt sql -q "REPLACE INTO test VALUES (1, '1000-01-01 00:00:00');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 1000-01-01 00:00:00 +0000 UTC " ]] || false
-    run dolt sql -q "REPLACE INTO test VALUES (1, '9999-01-01 23:59:59.999999');"
-    [ "$status" -eq "0" ]
+    dolt sql -q "REPLACE INTO test VALUES (1, '9999-01-01 23:59:59.999999');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 9999-01-01 23:59:59.999999 +0000 UTC " ]] || false
@@ -284,9 +273,7 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` DECIMAL(10, 5) COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 1234.56789);"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 1234.56789);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 1234.56789 " ]] || false
@@ -309,10 +296,12 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` DOUBLE COMMENT 'tag:1'" ]] || false
-    skip "We can't parse large float values in go-mysql-server yet"
-    run dolt sql -q "INSERT INTO test VALUES (1, 8.988465674311578540726371186585217839905e+307);"
+    dolt sql -q "INSERT INTO test VALUES (1, 1.25);"
+    run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    [[ "${lines[3]}" =~ " 1.25 " ]] || false
+    skip "We can't parse large float values in go-mysql-server yet"
+    dolt sql -q "REPLACE INTO test VALUES (1, 8.988465674311578540726371186585217839905e+307);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 8.988465674311578540726371186585217839905e+307 " ]] || false
@@ -338,9 +327,7 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` ENUM('a','b','c') COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 'a');"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 'a');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " a " ]] || false
@@ -365,10 +352,12 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` FLOAT COMMENT 'tag:1'" ]] || false
-    skip "We can't parse large float values in go-mysql-server yet"
-    run dolt sql -q "INSERT INTO test VALUES (1, 170141173319264429905852091742258462720);"
+    dolt sql -q "INSERT INTO test VALUES (1, 1.25);"
+    run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    [[ "${lines[3]}" =~ " 1.25 " ]] || false
+    skip "We can't parse large float values in go-mysql-server yet"
+    dolt sql -q "REPLACE INTO test VALUES (1, 170141173319264429905852091742258462720);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 170141173319264429905852091742258462720 " ]] || false
@@ -393,9 +382,7 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` INT COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 1073741823);"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 1073741823);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 1073741823 " ]] || false
@@ -420,9 +407,7 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` INT UNSIGNED COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 2147483647);"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 2147483647);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 2147483647 " ]] || false
@@ -474,15 +459,14 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` LONGBLOB COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " abcdefg " ]] || false
     dolt sql -q "UPDATE test SET v='1234567890' WHERE pk=1;"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 1234567890 " ]] || false
 }
 
 @test "types: LONGTEXT" {
@@ -496,15 +480,14 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` LONGTEXT COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " abcdefg " ]] || false
     dolt sql -q "UPDATE test SET v='1234567890' WHERE pk=1;"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 1234567890 " ]] || false
 }
 
 @test "types: MEDIUMBLOB" {
@@ -519,15 +502,14 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` MEDIUMBLOB COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " abcdefg " ]] || false
     dolt sql -q "UPDATE test SET v='1234567890' WHERE pk=1;"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 1234567890 " ]] || false
 }
 
 @test "types: MEDIUMINT" {
@@ -541,9 +523,7 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` MEDIUMINT COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 4194303);"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 4194303);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 4194303 " ]] || false
@@ -568,9 +548,7 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` MEDIUMINT UNSIGNED COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 8388607);"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 8388607);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 8388607 " ]] || false
@@ -595,15 +573,14 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` MEDIUMTEXT COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " abcdefg " ]] || false
     dolt sql -q "UPDATE test SET v='1234567890' WHERE pk=1;"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 1234567890 " ]] || false
 }
 
 @test "types: REAL" {
@@ -631,9 +608,7 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` SET('a','b','c') COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 'b,a');"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 'b,a');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " a,b " ]] || false
@@ -641,8 +616,7 @@ SQL
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " a,b,c " ]] || false
-    run dolt sql -q "REPLACE INTO test VALUES (1, '');"
-    [ "$status" -eq "0" ]
+    dolt sql -q "REPLACE INTO test VALUES (1, '');"
     run dolt sql -q "INSERT INTO test VALUES (2, 'd');"
     [ "$status" -eq "1" ]
     run dolt sql -q "INSERT INTO test VALUES (2, 'a,d');"
@@ -660,9 +634,7 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` SMALLINT COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 16383);"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 16383);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 16383 " ]] || false
@@ -687,9 +659,7 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` SMALLINT UNSIGNED COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 32767);"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 32767);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 32767 " ]] || false
@@ -714,15 +684,14 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` TEXT COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " abcdefg " ]] || false
     dolt sql -q "UPDATE test SET v='1234567890' WHERE pk=1;"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 1234567890 " ]] || false
 }
 
 @test "types: TIME" {
@@ -737,9 +706,7 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` TIME COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, '11:22:33.444444');"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, '11:22:33.444444');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 11:22:33.444444 " ]] || false
@@ -747,13 +714,11 @@ SQL
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 11:22:00 " ]] || false
-    run dolt sql -q "REPLACE INTO test VALUES (1, '850:00:00');"
-    [ "$status" -eq "0" ]
+    dolt sql -q "REPLACE INTO test VALUES (1, '850:00:00');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 838:59:59 " ]] || false
-    run dolt sql -q "REPLACE INTO test VALUES (1, '-850:00:00');"
-    [ "$status" -eq "0" ]
+    dolt sql -q "REPLACE INTO test VALUES (1, '-850:00:00');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " -838:59:59 " ]] || false
@@ -770,19 +735,15 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` TIMESTAMP COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, '2020-02-10 11:12:13.456789');"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, '2020-02-10 11:12:13.456789');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 2020-02-10 11:12:13.456789 +0000 UTC " ]] || false
-    run dolt sql -q "REPLACE INTO test VALUES (1, '1970-01-01 00:00:01');"
-    [ "$status" -eq "0" ]
+    dolt sql -q "REPLACE INTO test VALUES (1, '1970-01-01 00:00:01');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 1970-01-01 00:00:01 +0000 UTC " ]] || false
-    run dolt sql -q "REPLACE INTO test VALUES (1, '2038-01-19 03:14:07.999999');"
-    [ "$status" -eq "0" ]
+    dolt sql -q "REPLACE INTO test VALUES (1, '2038-01-19 03:14:07.999999');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 2038-01-19 03:14:07.999999 +0000 UTC " ]] || false
@@ -804,15 +765,14 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` TINYBLOB COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " abcdefg " ]] || false
     dolt sql -q "UPDATE test SET v='1234567890' WHERE pk=1;"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 1234567890 " ]] || false
 }
 
 @test "types: TINYINT" {
@@ -826,9 +786,7 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` TINYINT COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 63);"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 63);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 63 " ]] || false
@@ -853,9 +811,7 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` TINYINT UNSIGNED COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 127);"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 127);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 127 " ]] || false
@@ -880,15 +836,14 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` TINYTEXT COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " abcdefg " ]] || false
     dolt sql -q "UPDATE test SET v='1234567890' WHERE pk=1;"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
+    [[ "${lines[3]}" =~ " 1234567890 " ]] || false
 }
 
 @test "types: VARBINARY(10)" {
@@ -903,9 +858,7 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` VARBINARY(10) COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " abcdefg " ]] || false
@@ -928,9 +881,7 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` VARCHAR(10) COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " abcdefg " ]] || false
@@ -953,9 +904,7 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` VARCHAR(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " abcdefg " ]] || false
@@ -978,9 +927,7 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` YEAR COMMENT 'tag:1'" ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (1, 1901);"
-    [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    dolt sql -q "INSERT INTO test VALUES (1, 1901);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
     [[ "${lines[3]}" =~ " 1901 " ]] || false

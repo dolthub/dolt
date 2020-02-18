@@ -13,8 +13,7 @@ teardown() {
 @test "back-compat: data check" {
     for testdir in */; do
         cd "$testdir"
-        run dolt status
-        [ "$status" -eq "0" ]
+        dolt status
         run dolt branch
         [ "$status" -eq "0" ]
         [[ "$output" =~ "master" ]] || false
@@ -68,10 +67,8 @@ teardown() {
 @test "back-compat: table operations" {
     for testdir in */; do
         cd "$testdir"
-        run dolt table cp abc copy
-        [ "$status" -eq "0" ]
-        run dolt table mv abc move
-        [ "$status" -eq "0" ]
+        dolt table cp abc copy
+        dolt table mv abc move
         run dolt ls
         [ "$status" -eq "0" ]
         [[ "$output" =~ "copy" ]] || false
@@ -83,12 +80,9 @@ teardown() {
 @test "back-compat: adding commits" {
     for testdir in */; do
         cd "$testdir"
-        run dolt sql -q "insert into abc values (2, 'text', '2020-01-15 20:49:22.28427')"
-        [ "$status" -eq "0" ]
-        run dolt add .
-        [ "$status" -eq "0" ]
-        run dolt commit -m "Add value during test"
-        [ "$status" -eq "0" ]
+        dolt sql -q "insert into abc values (2, 'text', '2020-01-15 20:49:22.28427')"
+        dolt add .
+        dolt commit -m "Add value during test"
         run dolt sql -q "select * from abc order by pk asc"
         [ "$status" -eq "0" ]
         [[ "${lines[4]}" =~ " 2 " ]] || false
@@ -96,12 +90,9 @@ teardown() {
         [[ "${lines[4]}" =~ " 2020-01-15 20:49:22.28427 " ]] || false
         dolt checkout newcolumn
         dolt checkout -b testaddcommit
-        run dolt sql -q "insert into abc values (3, 'text', '2020-01-15 20:49:22.28427', 9241)"
-        [ "$status" -eq "0" ]
-        run dolt add .
-        [ "$status" -eq "0" ]
-        run dolt commit -m "Add value during test"
-        [ "$status" -eq "0" ]
+        dolt sql -q "insert into abc values (3, 'text', '2020-01-15 20:49:22.28427', 9241)"
+        dolt add .
+        dolt commit -m "Add value during test"
         run dolt sql -q "select * from abc order by pk asc"
         [ "$status" -eq "0" ]
         [[ "${lines[5]}" =~ " 3 " ]] || false
@@ -141,12 +132,9 @@ teardown() {
         [[ "${lines[4]}" =~ " something " ]] || false
         [[ "${lines[4]}" =~ " 2020-01-13 20:48:37.13061 " ]] || false
         [[ "${lines[4]}" =~ " 1132020 " ]] || false
-        run dolt conflicts resolve --theirs abc
-        [ "$status" -eq "0" ]
-        run dolt add .
-        [ "$status" -eq "0" ]
-        run dolt commit -m "Merged newcolumn into conflict"
-        [ "$status" -eq "0" ]
+        dolt conflicts resolve --theirs abc
+        dolt add .
+        dolt commit -m "Merged newcolumn into conflict"
         run dolt sql -q "select * from abc order by pk asc"
         [ "$status" -eq "0" ]
         [[ "${lines[3]}" =~ " 1 " ]] || false

@@ -19,8 +19,15 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/src-d/go-mysql-server/sql"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/sqltypes"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/liquidata-inc/dolt/go/store/constants"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -79,5 +86,79 @@ func TestJSONMarshalling(t *testing.T) {
 
 	if !reflect.DeepEqual(tSchema, jsonUnmarshalled) {
 		t.Error("Value different after marshalling and unmarshalling.")
+	}
+}
+
+func TestTypeInfoMarshalling(t *testing.T) {
+	//TODO: determine the storage format for BINARY
+	//TODO: determine the storage format for BLOB
+	//TODO: determine the storage format for DECIMAL
+	//TODO: determine the storage format for ENUM
+	//TODO: determine the storage format for LONGBLOB
+	//TODO: determine the storage format for MEDIUMBLOB
+	//TODO: determine the storage format for SET
+	//TODO: determine the storage format for TIME
+	//TODO: determine the storage format for TINYBLOB
+	//TODO: determine the storage format for VARBINARY
+	sqlTypes := []sql.Type{
+		sql.Int64,  //BIGINT
+		sql.Uint64, //BIGINT UNSIGNED
+		//sql.MustCreateBinary(sqltypes.Binary, 10), //BINARY(10)
+		sql.MustCreateBitType(10), //BIT(10)
+		//sql.Blob, //BLOB
+		sql.Boolean, //BOOLEAN
+		sql.MustCreateStringWithDefaults(sqltypes.Char, 10), //CHAR(10)
+		sql.Date,     //DATE
+		sql.Datetime, //DATETIME
+		//sql.MustCreateDecimalType(9, 5), //DECIMAL(9, 5)
+		sql.Float64, //DOUBLE
+		//sql.MustCreateEnumType([]string{"a", "b", "c"}, sql.Collation_Default), //ENUM('a','b','c')
+		sql.Float32, //FLOAT
+		sql.Int32,   //INT
+		sql.Uint32,  //INT UNSIGNED
+		//sql.LongBlob, //LONGBLOB
+		sql.LongText, //LONGTEXT
+		//sql.MediumBlob, //MEDIUMBLOB
+		sql.Int24,      //MEDIUMINT
+		sql.Uint24,     //MEDIUMINT UNSIGNED
+		sql.MediumText, //MEDIUMTEXT
+		//sql.MustCreateSetType([]string{"a", "b", "c"}, sql.Collation_Default), //SET('a','b','c')
+		sql.Int16,  //SMALLINT
+		sql.Uint16, //SMALLINT UNSIGNED
+		sql.Text,   //TEXT
+		//sql.Time, //TIME
+		sql.Timestamp, //TIMESTAMP
+		//sql.TinyBlob, //TINYBLOB
+		sql.Int8,     //TINYINT
+		sql.Uint8,    //TINYINT UNSIGNED
+		sql.TinyText, //TINYTEXT
+		//sql.MustCreateBinary(sqltypes.VarBinary, 10), //VARBINARY(10)
+		sql.MustCreateStringWithDefaults(sqltypes.VarChar, 10),                //VARCHAR(10)
+		sql.MustCreateString(sqltypes.VarChar, 10, sql.Collation_utf8mb3_bin), //VARCHAR(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin
+		sql.Year, //YEAR
+	}
+
+	for _, sqlType := range sqlTypes {
+		t.Run(sqlType.String(), func(t *testing.T) {
+			ti, err := typeinfo.FromSqlType(sqlType)
+			require.NoError(t, err)
+			col, err := schema.NewColumnWithTypeInfo("pk", 1, ti, true)
+			require.NoError(t, err)
+			colColl, err := schema.NewColCollection(col)
+			require.NoError(t, err)
+			originalSch := schema.SchemaFromCols(colColl)
+
+			nbf, err := types.GetFormatForVersionString(constants.FormatDefaultString)
+			require.NoError(t, err)
+			db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), nbf, nil, nil)
+			require.NoError(t, err)
+			val, err := MarshalAsNomsValue(context.Background(), db, originalSch)
+			require.NoError(t, err)
+			unmarshalledSch, err := UnmarshalNomsValue(context.Background(), nbf, val)
+			require.NoError(t, err)
+			ok, err := schema.SchemasAreEqual(originalSch, unmarshalledSch)
+			assert.NoError(t, err)
+			assert.True(t, ok)
+		})
 	}
 }
