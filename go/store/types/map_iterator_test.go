@@ -23,6 +23,7 @@ package types
 
 import (
 	"context"
+	"github.com/stretchr/testify/require"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -68,4 +69,60 @@ func TestMapIterator(t *testing.T) {
 	test(mustMIter(m.IteratorFrom(context.Background(), String("E"))), 4, "IteratorFrom(E)")
 	test(mustMIter(m.IteratorFrom(context.Background(), String("F"))), 5, "IteratorFrom(F)")
 	test(mustMIter(m.IteratorFrom(context.Background(), String("G"))), 5, "IteratorFrom(G)")
+}
+
+func TestReverseMapIterator(t *testing.T) {
+	ctx := context.Background()
+	vrw := newTestValueStore()
+	m, err := NewMap(ctx, vrw)
+	assert.NoError(t, err)
+
+	me := m.Edit()
+	for i := 0; i <= 100; i += 2 {
+		me.Set(Int(i), Int(100-i))
+	}
+
+	m, err = me.Map(context.Background())
+	assert.NoError(t, err)
+
+	test := func(start, expected int, name string) {
+		t.Run(name, func(t *testing.T) {
+			it, err := m.IteratorFromEnd(context.Background(), Int(start))
+			require.NoError(t, err)
+
+			expectedItemIterCount := (expected / 2) + 1
+			var valsIteratedOver int
+
+			for {
+				k, v, err := it.Next(ctx)
+				assert.NoError(t, err)
+
+				if k == nil {
+					break
+				}
+
+				kn, vn := int(k.(Int)), int(v.(Int))
+
+				assert.Equal(t, expected, kn)
+				assert.Equal(t, 100-kn, vn)
+
+				expected = kn - 2
+				valsIteratedOver++
+			}
+
+			if start < 0 {
+				assert.Equal(t, valsIteratedOver, 0)
+			} else {
+				assert.Equal(t, expected, -2)
+				assert.Equal(t, valsIteratedOver, expectedItemIterCount)
+			}
+		})
+
+	}
+
+	test(100, 100, "Iterate in reverse from end")
+	test(200, 100, "Iterate in reverse from beyond the end")
+	test(50, 50, "Iterate in reverse from the middle")
+	test(0, 0, "Iterate in reverse from the first key")
+	test(-1, 0, "Iterate in reverse from before the first day")
 }

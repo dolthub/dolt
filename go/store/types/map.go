@@ -386,6 +386,43 @@ func (m Map) IteratorFrom(ctx context.Context, key Value) (MapIterator, error) {
 	return &mapIterator{sequenceIter: cur}, nil
 }
 
+func (m Map) IteratorFromEnd(ctx context.Context, key Value) (MapIterator, error) {
+	cur, err := newCursorAtValue(ctx, m.orderedSequence, key, false, false)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// kinda hacky, but a lot less work than implementing newCursorFromValueAtEnd which would have to search back
+	cur.reverse = true
+	if !cur.valid() {
+		cur.advance(ctx)
+	}
+
+	item, err := cur.current()
+
+	if err != nil {
+		return nil, err
+	}
+
+	entry := item.(mapEntry)
+	isLess, err := entry.key.Less(m.Format(), key)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !isLess && !key.Equals(entry.key) {
+		_, err := cur.advance(ctx)
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &mapIterator{sequenceIter: cur}, nil
+}
+
 type mapIterAllCallback func(key, value Value) error
 
 func (m Map) IterAll(ctx context.Context, cb mapIterAllCallback) error {
