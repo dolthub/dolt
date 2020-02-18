@@ -9,8 +9,6 @@ Whenever the format is updated, a new repository should be created from scratch 
 ```bash
 dolt init
 "UPDATE README.md"
-dolt add .
-dolt commit -m "Initialize data repository"
 dolt sql -q "CREATE TABLE abc(pk BIGINT PRIMARY KEY, a LONGTEXT COMMENT 'tag:694', b DATETIME COMMENT 'tag:2902')"
 dolt add .
 dolt commit -m "Created table abc"
