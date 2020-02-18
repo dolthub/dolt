@@ -399,6 +399,16 @@ teardown() {
     dolt sql -q "select date_format(date_created, '%Y-%m-%d') from has_datetimes"
 }
 
+@test "sql DATE_ADD and DATE_SUB in where clause" {
+    skip "DATE_ADD and DATE_SUB in the where clause causes panic"
+    run dolt sql -q "select * from has_datetimes where date_created > DATE_SUB('2020-02-18 00:00:00', INTERVAL 2 DAY)"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "17 " ]] || false
+    run dolt sql -q "select * from has_datetimes where date_created > DATE_ADD('2020-02-14 00:00:00', INTERVAL 2 DAY)"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "17 " ]] || false
+}
+
 @test "sql group by statements" {
     dolt sql -q "insert into one_pk (pk,c1,c2,c3,c4,c5) values (4,0,0,0,0,0),(5,0,0,0,0,0)"
     run dolt sql -q "select max(pk) from one_pk group by c1"
