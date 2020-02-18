@@ -233,21 +233,3 @@ func TestBitParseValue(t *testing.T) {
 		})
 	}
 }
-
-func generateBitTypes(t *testing.T, numOfTypes uint16) []TypeInfo {
-	var res []TypeInfo
-	loop(t, 1, 64, numOfTypes, func(i int64) {
-		res = append(res, generateBitType(t, uint8(i)))
-	})
-	return res
-}
-
-func generateBitType(t *testing.T, bits uint8) *bitType {
-	typ, err := CreateBitTypeFromParams(map[string]string{
-		bitTypeParam_Bits: strconv.FormatInt(int64(bits), 10),
-	})
-	require.NoError(t, err)
-	realType, ok := typ.(*bitType)
-	require.True(t, ok)
-	return realType
-}
