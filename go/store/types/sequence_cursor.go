@@ -37,15 +37,24 @@ type sequenceIterator interface {
 
 // sequenceCursor explores a tree of sequence items.
 type sequenceCursor struct {
-	parent *sequenceCursor
-	seq    sequence
-	idx    int
-	seqLen int
+	parent  *sequenceCursor
+	seq     sequence
+	idx     int
+	seqLen  int
+	reverse bool
 }
 
 // newSequenceCursor creates a cursor on seq positioned at idx.
 // If idx < 0, count backward from the end of seq.
 func newSequenceCursor(parent *sequenceCursor, seq sequence, idx int) *sequenceCursor {
+	return newSequenceCursorWithDirection(parent, seq, idx, false)
+}
+
+func newReverseSequenceCursor(parent *sequenceCursor, seq sequence, idx int) *sequenceCursor {
+	return newSequenceCursorWithDirection(parent, seq, idx, true)
+}
+
+func newSequenceCursorWithDirection(parent *sequenceCursor, seq sequence, idx int, reverse bool) *sequenceCursor {
 	d.PanicIfTrue(seq == nil)
 	seqLen := seq.seqLen()
 	if idx < 0 {
@@ -53,7 +62,7 @@ func newSequenceCursor(parent *sequenceCursor, seq sequence, idx int) *sequenceC
 		d.PanicIfFalse(idx >= 0)
 	}
 
-	return &sequenceCursor{parent, seq, idx, seqLen}
+	return &sequenceCursor{parent, seq, idx, seqLen, reverse}
 }
 
 func (cur *sequenceCursor) length() int {
@@ -105,7 +114,11 @@ func (cur *sequenceCursor) atLastItem() bool {
 }
 
 func (cur *sequenceCursor) advance(ctx context.Context) (bool, error) {
-	return cur.advanceMaybeAllowPastEnd(ctx, true)
+	if !cur.reverse {
+		return cur.advanceMaybeAllowPastEnd(ctx, true)
+	} else {
+		return cur.retreatMaybeAllowBeforeStart(ctx, true)
+	}
 }
 
 func (cur *sequenceCursor) advanceMaybeAllowPastEnd(ctx context.Context, allowPastEnd bool) (bool, error) {
@@ -146,7 +159,11 @@ func (cur *sequenceCursor) advanceMaybeAllowPastEnd(ctx context.Context, allowPa
 }
 
 func (cur *sequenceCursor) retreat(ctx context.Context) (bool, error) {
-	return cur.retreatMaybeAllowBeforeStart(ctx, true)
+	if !cur.reverse {
+		return cur.retreatMaybeAllowBeforeStart(ctx, true)
+	} else {
+		return cur.advanceMaybeAllowPastEnd(ctx, true)
+	}
 }
 
 func (cur *sequenceCursor) retreatMaybeAllowBeforeStart(ctx context.Context, allowBeforeStart bool) (bool, error) {
@@ -259,6 +276,14 @@ func newSequenceIteratorAtIndex(ctx context.Context, seq sequence, idx uint64) (
 // sequence cursor includes a back pointer to its parent so that it can follow the path
 // to the next leaf chunk when the cursor exhausts the entries in the current chunk.
 func newCursorAtIndex(ctx context.Context, seq sequence, idx uint64) (*sequenceCursor, error) {
+	return newCursorAtIndexWithDirection(ctx, seq, idx, false)
+}
+
+func newReverseCursorAtIndex(ctx context.Context, seq sequence, idx uint64) (*sequenceCursor, error) {
+	return newCursorAtIndexWithDirection(ctx, seq, idx, true)
+}
+
+func newCursorAtIndexWithDirection(ctx context.Context, seq sequence, idx uint64, reverse bool) (*sequenceCursor, error) {
 	var cur *sequenceCursor
 	for {
 		cur = newSequenceCursor(cur, seq, 0)
