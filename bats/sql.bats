@@ -151,12 +151,22 @@ teardown() {
     run dolt sql -q "select * from one_pk order by pk limit 1"
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
-    [[ "$output" =~ "0" ]] || false
-    [[ ! "$output" =~ "10" ]] || false
+    [[ "$output" =~ " 0 " ]] || false
+    [[ ! "$output" =~ " 10 " ]] || false
+    run dolt sql -q "select * from one_pk order by pk limit 0,1"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ " 0 " ]] || false
+    [[ ! "$output" =~ " 10 " ]] || false
     run dolt sql -q "select * from one_pk order by pk limit 1,1"
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
-    [[ "$output" =~ "10" ]] || false
+    [[ "$output" =~ " 10 " ]] || false
+    [[ ! "$output" =~ " 0 " ]] || false
+    run dolt sql -q "select * from one_pk order by pk limit 1,0"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ ! "$output" =~ " 0 " ]] || false
     run dolt sql -q "select * from one_pk order by pk desc limit 1"
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
