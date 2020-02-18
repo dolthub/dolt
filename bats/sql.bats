@@ -399,6 +399,29 @@ teardown() {
     dolt sql -q "select date_format(date_created, '%Y-%m-%d') from has_datetimes"
 }
 
+@test "sql group by statements" {
+    dolt sql -q "insert into one_pk (pk,c1,c2,c3,c4,c5) values (4,0,0,0,0,0),(5,0,0,0,0,0)"
+    run dolt sql -q "select max(pk) from one_pk group by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ " 5 " ]] || false
+    [[ ! "$output" =~ " 4 " ]] || false
+    run dolt sql -q "select max(pk), min(c2) from one_pk group by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ " 5 " ]] || false
+    [[ "$output" =~ " 0 " ]] || false
+    [[ ! "$output" =~ " 4 " ]] || false
+    run dolt sql -q "select max(pk),c2 from one_pk group by c1"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "doesn't appear in the grouping columns" ]] || false
+    skip "group by behavior is inconsistent"
+    run dolt sql -q "select max(pk),c2 from one_pk group by c1 limit 1"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "doesn't appear in the grouping columns" ]] || false
+    run dolt sql -q "select max(pk) as broke_group_by, c2 from one_pk group by c1"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "doesn't appear in the grouping columns" ]] || false
+}
+
 @test "sql substr() and cast() functions" {
     run dolt sql -q "select substr(cast(date_created as char), 1, 4) from has_datetimes"
     [ $status -eq 0 ]
