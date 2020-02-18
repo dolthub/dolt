@@ -23,12 +23,10 @@ package types
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMapIterator(t *testing.T) {
