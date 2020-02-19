@@ -145,7 +145,7 @@ func parseCommitSpecAndTableName(dEnv *env.DoltEnv, apr *argparser.ArgParseResul
 	// if passed a single arg, assume it's a table name and revision is HEAD
 	if apr.NArg() == 1 {
 		tableName := apr.Arg(0)
-		return dEnv.RepoState.CWBHeadSpec(), tableName, nil
+		return dEnv.RepoState.CwbHeadSpec(), tableName, nil
 	}
 
 	comSpecStr := apr.Arg(0)
@@ -153,10 +153,10 @@ func parseCommitSpecAndTableName(dEnv *env.DoltEnv, apr *argparser.ArgParseResul
 
 	// support being passed -- as a revision like git does even though it's a little gross
 	if comSpecStr == "--" {
-		return dEnv.RepoState.CWBHeadSpec(), tableName, nil
+		return dEnv.RepoState.CwbHeadSpec(), tableName, nil
 	}
 
-	cs, err := doltdb.NewCommitSpec(comSpecStr, dEnv.RepoState.Head.Ref.String())
+	cs, err := doltdb.NewCommitSpec(comSpecStr, dEnv.RepoState.CwbHeadRef().String())
 	if err != nil {
 		return nil, "", fmt.Errorf("invalid commit %s", comSpecStr)
 	}

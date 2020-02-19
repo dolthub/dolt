@@ -47,7 +47,7 @@ type Database struct {
 	name      string
 	root      *doltdb.RootValue
 	ddb       *doltdb.DoltDB
-	rs        *env.RepoState
+	rsr       env.RepoStateReader
 	batchMode batchMode
 	tables    map[string]sql.Table
 }
@@ -58,12 +58,12 @@ var _ sql.TableCreator = (*Database)(nil)
 var _ sql.TableRenamer = (*Database)(nil)
 
 // NewDatabase returns a new dolt database to use in queries.
-func NewDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB, rs *env.RepoState) *Database {
+func NewDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB, rsr env.RepoStateReader) *Database {
 	return &Database{
 		name:      name,
 		root:      root,
 		ddb:       ddb,
-		rs:        rs,
+		rsr:       rsr,
 		batchMode: single,
 		tables:    make(map[string]sql.Table),
 	}
@@ -71,12 +71,12 @@ func NewDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB, rs *en
 
 // NewBatchedDatabase returns a new dolt database executing in batch insert mode. Integrators must call Flush() to
 // commit any outstanding edits.
-func NewBatchedDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB, rs *env.RepoState) *Database {
+func NewBatchedDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB, rsr env.RepoStateReader) *Database {
 	return &Database{
 		name:      name,
 		root:      root,
 		ddb:       ddb,
-		rs:        rs,
+		rsr:       rsr,
 		batchMode: batched,
 		tables:    make(map[string]sql.Table),
 	}
@@ -93,7 +93,7 @@ func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sq
 	lwrName := strings.ToLower(tblName)
 	if strings.HasPrefix(lwrName, DoltDiffTablePrefix) {
 		tblName = tblName[len(DoltDiffTablePrefix):]
-		dt, err := NewDiffTable(ctx, tblName, db.ddb, db.rs)
+		dt, err := NewDiffTable(ctx, tblName, db.ddb, db.rsr)
 
 		if err != nil {
 			return nil, false, err
@@ -114,7 +114,7 @@ func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sq
 	}
 
 	if lwrName == LogTableName {
-		return NewLogTable(db.ddb, db.rs), true, nil
+		return NewLogTable(db.ddb, db.rsr), true, nil
 	}
 
 	tableNames, err := db.GetAllTableNames(ctx)

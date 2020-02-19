@@ -198,7 +198,7 @@ func getRoots(ctx context.Context, args []string, dEnv *env.DoltEnv) (r1, r2 *do
 
 	i := 0
 	for _, arg := range args {
-		cs, err := doltdb.NewCommitSpec(arg, dEnv.RepoState.Head.Ref.String())
+		cs, err := doltdb.NewCommitSpec(arg, dEnv.RepoState.CwbHeadRef().String())
 		if err != nil {
 			break
 		}
@@ -267,7 +267,7 @@ func getRoots(ctx context.Context, args []string, dEnv *env.DoltEnv) (r1, r2 *do
 }
 
 func getRootForCommitSpecStr(ctx context.Context, csStr string, dEnv *env.DoltEnv) (string, *doltdb.RootValue, errhand.VerboseError) {
-	cs, err := doltdb.NewCommitSpec(csStr, dEnv.RepoState.Head.Ref.String())
+	cs, err := doltdb.NewCommitSpec(csStr, dEnv.RepoState.CwbHeadRef().String())
 
 	if err != nil {
 		bdr := errhand.BuildDError(`"%s" is not a validly formatted branch, or commit reference.`, csStr)

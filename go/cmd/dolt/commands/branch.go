@@ -144,7 +144,7 @@ func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to read refs from db").AddCause(err).Build(), nil)
 	}
 
-	currentBranch := dEnv.RepoState.Head.Ref
+	currentBranch := dEnv.RepoState.CwbHeadRef()
 	sort.Slice(branches, func(i, j int) bool {
 		return branches[i].String() < branches[j].String()
 	})

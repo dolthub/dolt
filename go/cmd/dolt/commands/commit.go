@@ -197,7 +197,7 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
 	initialNoColor := color.NoColor
 	color.NoColor = true
 
-	currBranch := dEnv.RepoState.Head.Ref
+	currBranch := dEnv.RepoState.CwbHeadRef()
 	stagedTblDiffs, notStagedTblDiffs, _ := actions.GetTableDiffs(ctx, dEnv)
 
 	workingTblsInConflict, _, _, err := actions.GetTablesInConflict(ctx, dEnv)

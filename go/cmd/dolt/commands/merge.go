@@ -170,13 +170,13 @@ func abortMerge(ctx context.Context, doltEnv *env.DoltEnv) errhand.VerboseError 
 }
 
 func mergeBranch(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRef) errhand.VerboseError {
-	cm1, verr := ResolveCommitWithVErr(dEnv, "HEAD", dEnv.RepoState.Head.Ref.String())
+	cm1, verr := ResolveCommitWithVErr(dEnv, "HEAD", dEnv.RepoState.CwbHeadRef().String())
 
 	if verr != nil {
 		return verr
 	}
 
-	cm2, verr := ResolveCommitWithVErr(dEnv, dref.String(), dEnv.RepoState.Head.Ref.String())
+	cm2, verr := ResolveCommitWithVErr(dEnv, dref.String(), dEnv.RepoState.CwbHeadRef().String())
 
 	if verr != nil {
 		return verr
@@ -226,7 +226,7 @@ func executeFFMerge(ctx context.Context, dEnv *env.DoltEnv, cm2 *doltdb.Commit) 
 		return errhand.BuildDError("Failed to write database").AddCause(err).Build()
 	}
 
-	err = dEnv.DoltDB.FastForward(ctx, dEnv.RepoState.Head.Ref, cm2)
+	err = dEnv.DoltDB.FastForward(ctx, dEnv.RepoState.CwbHeadRef(), cm2)
 
 	if err != nil {
 		return errhand.BuildDError("Failed to write database").AddCause(err).Build()

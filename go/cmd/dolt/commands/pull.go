@@ -70,7 +70,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, pullShortDesc, pullLongDesc, pullSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
-	branch := dEnv.RepoState.Head.Ref
+	branch := dEnv.RepoState.CwbHeadRef()
 
 	var verr errhand.VerboseError
 	var remoteName string
