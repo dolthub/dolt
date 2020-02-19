@@ -83,7 +83,7 @@ type LogItr struct {
 
 // NewLogItr creates a LogItr from the current environment.
 func NewLogItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (*LogItr, error) {
-	commit, err := ddb.Resolve(sqlCtx, rsr.CwbHeadSpec())
+	commit, err := ddb.Resolve(sqlCtx, rsr.CWBHeadSpec())
 
 	if err != nil {
 		return nil, err

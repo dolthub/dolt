@@ -105,7 +105,7 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	remoteName := "origin"
 	remote, remoteOK := remotes[remoteName]
 
-	currentBranch := dEnv.RepoState.CwbHeadRef()
+	currentBranch := dEnv.RepoState.CWBHeadRef()
 	upstream, hasUpstream := dEnv.RepoState.Branches[currentBranch.GetPath()]
 
 	var refSpec ref.RefSpec

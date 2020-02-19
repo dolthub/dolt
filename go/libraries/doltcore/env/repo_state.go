@@ -24,8 +24,8 @@ import (
 )
 
 type RepoStateReader interface {
-	CwbHeadRef() ref.DoltRef
-	CwbHeadSpec() *doltdb.CommitSpec
+	CWBHeadRef() ref.DoltRef
+	CWBHeadSpec() *doltdb.CommitSpec
 	WorkingHash() hash.Hash
 	StagedHash() hash.Hash
 }
@@ -127,12 +127,12 @@ func (rs *RepoState) Save(fs filesys.ReadWriteFS) error {
 	return fs.WriteFile(path, data)
 }
 
-func (rs *RepoState) CwbHeadRef() ref.DoltRef {
+func (rs *RepoState) CWBHeadRef() ref.DoltRef {
 	return rs.Head.Ref
 }
 
-func (rs *RepoState) CwbHeadSpec() *doltdb.CommitSpec {
-	spec, _ := doltdb.NewCommitSpec("HEAD", rs.CwbHeadRef().String())
+func (rs *RepoState) CWBHeadSpec() *doltdb.CommitSpec {
+	spec, _ := doltdb.NewCommitSpec("HEAD", rs.CWBHeadRef().String())
 
 	return spec
 }

@@ -338,7 +338,7 @@ func (dt *DiffTable) WithFilters(filters []sql.Expression) sql.Table {
 
 		value = strings.Trim(value, " \t\n\r\"")
 
-		cs, err := doltdb.NewCommitSpec(value, dt.rsr.CwbHeadRef().String())
+		cs, err := doltdb.NewCommitSpec(value, dt.rsr.CWBHeadRef().String())
 
 		if err != nil {
 			panic(err)

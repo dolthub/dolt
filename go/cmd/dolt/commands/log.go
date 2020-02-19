@@ -136,11 +136,11 @@ func logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dE
 
 func parseCommitSpec(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (*doltdb.CommitSpec, error) {
 	if apr.NArg() == 0 || apr.Arg(0) == "--" {
-		return dEnv.RepoState.CwbHeadSpec(), nil
+		return dEnv.RepoState.CWBHeadSpec(), nil
 	}
 
 	comSpecStr := apr.Arg(0)
-	cs, err := doltdb.NewCommitSpec(comSpecStr, dEnv.RepoState.CwbHeadRef().String())
+	cs, err := doltdb.NewCommitSpec(comSpecStr, dEnv.RepoState.CWBHeadRef().String())
 
 	if err != nil {
 		return nil, fmt.Errorf("invalid commit %s\n", comSpecStr)
