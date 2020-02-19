@@ -104,7 +104,7 @@ func CreateRepoState(fs filesys.ReadWriteFS, br string, rootHash hash.Hash) (*Re
 		nil,
 		make(map[string]Remote),
 		make(map[string]BranchConfig),
-		}
+	}
 
 	err = rs.Save(fs)
 
