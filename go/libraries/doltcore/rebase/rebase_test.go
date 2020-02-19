@@ -17,17 +17,16 @@ package rebase
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"io"
 	"strconv"
 	"testing"
 	"time"
-	"vitess.io/vitess/go/sqltypes"
 
 	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/sqltypes"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -36,6 +35,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -153,13 +153,13 @@ func newRow(vals row.TaggedValues, cc *schema.ColCollection) row.Row {
 
 func newColTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, partOfPK bool, constraints ...schema.ColConstraint) schema.Column {
 	c, err := schema.NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, constraints...)
-	if  err != nil {
+	if err != nil {
 		panic("could not create column")
 	}
 	return c
 }
 
-func varchar(length int64) typeinfo.TypeInfo{
+func varchar(length int64) typeinfo.TypeInfo {
 	ti, _ := typeinfo.FromSqlType(sql.MustCreateStringWithDefaults(sqltypes.VarChar, length))
 	return ti
 }
