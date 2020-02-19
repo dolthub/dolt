@@ -185,13 +185,7 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 	newCC, _ := schema.NewColCollection()
 	err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if tag == oldTag {
-			col = schema.Column{
-				Name:        col.Name,
-				Tag:         newTag,
-				Kind:        col.Kind,
-				IsPartOfPK:  col.IsPartOfPK,
-				Constraints: col.Constraints,
-			}
+			col.Tag = newTag
 			isPkTag = col.IsPartOfPK
 		}
 		newCC, err = newCC.Append(col)

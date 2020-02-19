@@ -17,10 +17,12 @@ package rebase
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"io"
 	"strconv"
 	"testing"
 	"time"
+	"vitess.io/vitess/go/sqltypes"
 
 	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
@@ -133,9 +135,9 @@ func (m merge) exec(t *testing.T, dEnv *env.DoltEnv) {
 
 var createPeopleTable = fmt.Sprintf(`
 	create table people (
-		id bigint comment 'tag:%d',
+		id int comment 'tag:%d',
 		name varchar(20) not null comment 'tag:%d',
-		age bigint comment 'tag:%d',
+		age int comment 'tag:%d',
 		primary key (id)
 	);`, IdTag, NameTag, AgeTag)
 
@@ -149,17 +151,30 @@ func newRow(vals row.TaggedValues, cc *schema.ColCollection) row.Row {
 	return r
 }
 
+func newColTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, partOfPK bool, constraints ...schema.ColConstraint) schema.Column {
+	c, err := schema.NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, constraints...)
+	if  err != nil {
+		panic("could not create column")
+	}
+	return c
+}
+
+func varchar(length int64) typeinfo.TypeInfo{
+	ti, _ := typeinfo.FromSqlType(sql.MustCreateStringWithDefaults(sqltypes.VarChar, length))
+	return ti
+}
+
 var people = columnCollection(
-	schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
-	schema.NewColumn("name", NameTag, types.StringKind, false, schema.NotNullConstraint{}),
-	schema.NewColumn("age", AgeTag, types.IntKind, false),
+	newColTypeInfo("id", IdTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
+	newColTypeInfo("name", NameTag, varchar(20), false, schema.NotNullConstraint{}),
+	newColTypeInfo("age", AgeTag, typeinfo.Int32Type, false),
 )
 
 var peopleWithDrip = columnCollection(
-	schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
-	schema.NewColumn("name", NameTag, types.StringKind, false, schema.NotNullConstraint{}),
-	schema.NewColumn("age", AgeTag, types.IntKind, false),
-	schema.NewColumn("drip", DripTagRebased, types.FloatKind, false),
+	newColTypeInfo("id", IdTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
+	newColTypeInfo("name", NameTag, varchar(20), false, schema.NotNullConstraint{}),
+	newColTypeInfo("age", AgeTag, typeinfo.Int32Type, false),
+	newColTypeInfo("drip", DripTagRebased, typeinfo.Float64Type, false),
 )
 
 var peopleRows = []row.Row{
@@ -186,7 +201,7 @@ var RebaseTagTests = []RebaseTagTest{
 		Name: "rebase entire history",
 		Commands: []command{
 			query{createPeopleTable},
-			query{`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+			query{`alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
 			query{`insert into people (id, name, age, drip) values
 				(10, "Patty Bouvier", 40, 8.5),
 				(11, "Selma Bouvier", 40, 8.5);`},
@@ -206,7 +221,7 @@ var RebaseTagTests = []RebaseTagTest{
 		Commands: []command{
 			query{createPeopleTable},
 			commit{"made changes"},
-			query{`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+			query{`alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
 			commit{"made changes"},
 		},
 		OldTag:            DripTag,
@@ -221,7 +236,7 @@ var RebaseTagTests = []RebaseTagTest{
 			query{createPeopleTable},
 			query{`insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`},
 			commit{"made changes"},
-			query{`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+			query{`alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
 			query{`insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`},
 			commit{"made changes"},
 		},
@@ -240,7 +255,7 @@ var RebaseTagTests = []RebaseTagTest{
 			query{createPeopleTable},
 			query{`insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`},
 			commit{"made changes"},
-			query{`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+			query{`alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
 			query{`update people set drip=9.9 where id=9;`},
 			commit{"made changes"},
 		},
@@ -258,7 +273,7 @@ var RebaseTagTests = []RebaseTagTest{
 			query{createPeopleTable},
 			query{`insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`},
 			commit{"made changes"},
-			query{`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+			query{`alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
 			query{`insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`},
 			commit{"made changes"},
 			query{`update people set drip=9.9 where id=11;`},
@@ -279,7 +294,7 @@ var RebaseTagTests = []RebaseTagTest{
 			query{createPeopleTable},
 			query{`insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`},
 			commit{"made changes"},
-			query{`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+			query{`alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
 			query{`insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`},
 			commit{"made changes"},
 			query{`update people set drip=9.9 where id=11;`},
@@ -303,7 +318,7 @@ var RebaseTagTests = []RebaseTagTest{
 				(7, "Maggie Simpson", 1),
 				(8, "Milhouse Van Houten", 8);`},
 			commit{"made changes"},
-			query{`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+			query{`alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
 			commit{"made changes"},
 			query{`update people set age=2 where id=7;`},
 			query{`delete from people where id=8;`},
@@ -325,7 +340,7 @@ var RebaseTagTests = []RebaseTagTest{
 			query{createPeopleTable},
 			commit{"made changes"},
 			branch{"newBranch"},
-			query{`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+			query{`alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
 			query{`insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`},
 			commit{"made changes"},
 			checkout{"newBranch"},
@@ -355,7 +370,7 @@ var RebaseTagTests = []RebaseTagTest{
 				(9, "Jacqueline Bouvier", 80);`},
 			commit{"made changes"},
 			branch{"newBranch"},
-			query{`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+			query{`alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
 			query{`delete from people where id=6;`},
 			query{`update people set drip=99.9 where id=7;`},
 			query{`insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`},
@@ -387,7 +402,7 @@ var RebaseTagTests = []RebaseTagTest{
 			commit{"made changes"},
 			branch{"newBranch"},
 			checkout{"newBranch"},
-			query{`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+			query{`alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
 			query{`insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`},
 			commit{"made changes"},
 			checkout{"master"},
@@ -410,7 +425,7 @@ var RebaseTagTests = []RebaseTagTest{
 		Commands: []command{
 			query{createPeopleTable},
 			commit{"made changes"},
-			query{`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+			query{`alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
 			query{`insert into people (id, name, age, drip) values (9, "Jacqueline Bouvier", 80, 8.5);`},
 			commit{"made changes"},
 			branch{"newBranch"},
@@ -440,7 +455,7 @@ var RebaseTagTests = []RebaseTagTest{
 			query{`insert into people (id, name, age) values 
 				(7, "Maggie Simpson", 1);`},
 			commit{"made changes"},
-			query{`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+			query{`alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
 			commit{"made changes"},
 			query{`insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`},
 			commit{"made changes"},
@@ -505,7 +520,7 @@ func testRebaseTagHistory(t *testing.T) {
 				(7, "Maggie Simpson", 1);`},
 		commit{"made changes"}, // common ancestor of (newMaster, oldMaster) and (newMaster, other)
 
-		query{`alter table people add drip float comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+		query{`alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
 		commit{"made changes"}, // common ancestor of (oldMaster, other)
 
 		branch{"other"},
