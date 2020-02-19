@@ -34,14 +34,17 @@ import (
 // Runs the query given and returns the result. The schema result of the query's execution is currently ignored, and
 // the targetSchema given is used to prepare all rows.
 func executeSelect(ctx context.Context, dEnv *env.DoltEnv, targetSch schema.Schema, root *doltdb.RootValue, query string) ([]row.Row, schema.Schema, error) {
+	var err error
 	db := NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState)
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
 	engine.Catalog.RegisterIndexDriver(&DoltIndexDriver{db})
-	engine.Init()
+	err = engine.Init()
+	if err != nil {
+		return nil, nil, err
+	}
 
 	sqlCtx := sql.NewContext(ctx)
-	var err error
 
 	err = RegisterSchemaFragments(sql.NewContext(ctx), engine.Catalog, db)
 	if err != nil {

@@ -105,7 +105,7 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	remoteName := "origin"
 	remote, remoteOK := remotes[remoteName]
 
-	currentBranch := dEnv.RepoState.Head.Ref
+	currentBranch := dEnv.RepoState.CWBHeadRef()
 	upstream, hasUpstream := dEnv.RepoState.Branches[currentBranch.GetPath()]
 
 	var refSpec ref.RefSpec
@@ -213,10 +213,6 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			}
 
 			if verr == nil && apr.Contains(SetUpstreamFlag) {
-				if dEnv.RepoState.Branches == nil {
-					dEnv.RepoState.Branches = map[string]env.BranchConfig{}
-				}
-
 				dEnv.RepoState.Branches[src.GetPath()] = env.BranchConfig{
 					Merge:  ref.MarshalableRef{Ref: dest},
 					Remote: remoteName,

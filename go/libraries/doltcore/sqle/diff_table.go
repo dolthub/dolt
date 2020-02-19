@@ -45,7 +45,7 @@ var _ sql.FilteredTable = (*DiffTable)(nil)
 type DiffTable struct {
 	name          string
 	ddb           *doltdb.DoltDB
-	rs            *env.RepoState
+	rsr           env.RepoStateReader
 	ss            rowconv.SuperSchema
 	joiner        *rowconv.Joiner
 	sqlSch        sql.Schema
@@ -56,7 +56,7 @@ type DiffTable struct {
 	filters       []sql.Expression
 }
 
-func NewDiffTable(ctx context.Context, name string, ddb *doltdb.DoltDB, rs *env.RepoState) (*DiffTable, error) {
+func NewDiffTable(ctx context.Context, name string, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (*DiffTable, error) {
 	diffTblName := DoltDiffTablePrefix + name
 	ssg := rowconv.NewSuperSchemaGen()
 	err := ssg.AddHistoryOfTable(ctx, name, ddb)
@@ -88,13 +88,13 @@ func NewDiffTable(ctx context.Context, name string, ddb *doltdb.DoltDB, rs *env.
 		return nil, err
 	}
 
-	root1, err := ddb.ReadRootValue(ctx, rs.WorkingHash())
+	root1, err := ddb.ReadRootValue(ctx, rsr.WorkingHash())
 
 	if err != nil {
 		return nil, err
 	}
 
-	root2, err := ddb.ReadRootValue(ctx, rs.StagedHash())
+	root2, err := ddb.ReadRootValue(ctx, rsr.StagedHash())
 
 	if err != nil {
 		return nil, err
@@ -115,7 +115,7 @@ func NewDiffTable(ctx context.Context, name string, ddb *doltdb.DoltDB, rs *env.
 		Source:   diffTblName,
 	})
 
-	return &DiffTable{name, ddb, rs, ss, j, sqlSch, root2, root1, "current", "HEAD", nil}, nil
+	return &DiffTable{name, ddb, rsr, ss, j, sqlSch, root2, root1, "current", "HEAD", nil}, nil
 }
 
 func (dt *DiffTable) Name() string {
@@ -338,7 +338,7 @@ func (dt *DiffTable) WithFilters(filters []sql.Expression) sql.Table {
 
 		value = strings.Trim(value, " \t\n\r\"")
 
-		cs, err := doltdb.NewCommitSpec(value, dt.rs.Head.Ref.String())
+		cs, err := doltdb.NewCommitSpec(value, dt.rsr.CWBHeadRef().String())
 
 		if err != nil {
 			panic(err)

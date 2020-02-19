@@ -156,7 +156,7 @@ func parseCommitSpecAndTableName(dEnv *env.DoltEnv, apr *argparser.ArgParseResul
 		return dEnv.RepoState.CWBHeadSpec(), tableName, nil
 	}
 
-	cs, err := doltdb.NewCommitSpec(comSpecStr, dEnv.RepoState.Head.Ref.String())
+	cs, err := doltdb.NewCommitSpec(comSpecStr, dEnv.RepoState.CWBHeadRef().String())
 	if err != nil {
 		return nil, "", fmt.Errorf("invalid commit %s", comSpecStr)
 	}

@@ -349,8 +349,7 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.Root
 }
 
 func (dEnv *DoltEnv) HeadRoot(ctx context.Context) (*doltdb.RootValue, error) {
-	cs, _ := doltdb.NewCommitSpec("head", dEnv.RepoState.Head.Ref.String())
-	commit, err := dEnv.DoltDB.Resolve(ctx, cs)
+	commit, err := dEnv.DoltDB.Resolve(ctx, dEnv.RepoState.CWBHeadSpec())
 
 	if err != nil {
 		return nil, err
@@ -531,10 +530,6 @@ func (dEnv *DoltEnv) GrpcConn(hostAndPort string, insecure bool) (*grpc.ClientCo
 func (dEnv *DoltEnv) GetRemotes() (map[string]Remote, error) {
 	if dEnv.RSLoadErr != nil {
 		return nil, dEnv.RSLoadErr
-	}
-
-	if dEnv.RepoState.Remotes == nil {
-		return map[string]Remote{}, nil
 	}
 
 	return dEnv.RepoState.Remotes, nil

@@ -23,6 +23,13 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
+type RepoStateReader interface {
+	CWBHeadRef() ref.DoltRef
+	CWBHeadSpec() *doltdb.CommitSpec
+	WorkingHash() hash.Hash
+	StagedHash() hash.Hash
+}
+
 type BranchConfig struct {
 	Merge  ref.MarshalableRef `json:"head"`
 	Remote string             `json:"remote"`
@@ -64,7 +71,14 @@ func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
 func CloneRepoState(fs filesys.ReadWriteFS, r Remote) (*RepoState, error) {
 	h := hash.Hash{}
 	hashStr := h.String()
-	rs := &RepoState{ref.MarshalableRef{Ref: ref.NewBranchRef("master")}, hashStr, hashStr, nil, map[string]Remote{r.Name: r}, nil}
+	rs := &RepoState{ref.MarshalableRef{
+		Ref: ref.NewBranchRef("master")},
+		hashStr,
+		hashStr,
+		nil,
+		map[string]Remote{r.Name: r},
+		make(map[string]BranchConfig),
+	}
 
 	err := rs.Save(fs)
 
@@ -83,7 +97,14 @@ func CreateRepoState(fs filesys.ReadWriteFS, br string, rootHash hash.Hash) (*Re
 		return nil, err
 	}
 
-	rs := &RepoState{ref.MarshalableRef{Ref: headRef}, hashStr, hashStr, nil, nil, nil}
+	rs := &RepoState{
+		ref.MarshalableRef{Ref: headRef},
+		hashStr,
+		hashStr,
+		nil,
+		make(map[string]Remote),
+		make(map[string]BranchConfig),
+	}
 
 	err = rs.Save(fs)
 
@@ -106,8 +127,12 @@ func (rs *RepoState) Save(fs filesys.ReadWriteFS) error {
 	return fs.WriteFile(path, data)
 }
 
+func (rs *RepoState) CWBHeadRef() ref.DoltRef {
+	return rs.Head.Ref
+}
+
 func (rs *RepoState) CWBHeadSpec() *doltdb.CommitSpec {
-	spec, _ := doltdb.NewCommitSpec("HEAD", rs.Head.Ref.String())
+	spec, _ := doltdb.NewCommitSpec("HEAD", rs.CWBHeadRef().String())
 
 	return spec
 }
@@ -128,10 +153,6 @@ func (rs *RepoState) ClearMerge(fs filesys.Filesys) error {
 }
 
 func (rs *RepoState) AddRemote(r Remote) {
-	if rs.Remotes == nil {
-		rs.Remotes = make(map[string]Remote)
-	}
-
 	rs.Remotes[r.Name] = r
 }
 

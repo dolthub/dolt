@@ -225,7 +225,7 @@ func testSelectDiffQuery(t *testing.T, test SelectTest) {
 	}
 
 	assert.Equal(t, test.ExpectedSchema, sch)
-	assert.Equal(t, len(test.ExpectedRows), len(actualRows))
+	require.Equal(t, len(test.ExpectedRows), len(actualRows))
 	for i := 0; i < len(test.ExpectedRows); i++ {
 		eq := row.AreEqual(test.ExpectedRows[i], actualRows[i], test.ExpectedSchema)
 

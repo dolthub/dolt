@@ -34,12 +34,12 @@ var _ sql.Table = (*LogTable)(nil)
 // LogTable is a sql.Table implementation that implements a system table which shows the dolt commit log
 type LogTable struct {
 	ddb *doltdb.DoltDB
-	rs  *env.RepoState
+	rsr env.RepoStateReader
 }
 
 // NewLogTable creates a LogTable
-func NewLogTable(ddb *doltdb.DoltDB, rs *env.RepoState) *LogTable {
-	return &LogTable{ddb: ddb, rs: rs}
+func NewLogTable(ddb *doltdb.DoltDB, rs env.RepoStateReader) *LogTable {
+	return &LogTable{ddb: ddb, rsr: rs}
 }
 
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant
@@ -72,7 +72,7 @@ func (dt *LogTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
 func (dt *LogTable) PartitionRows(sqlCtx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	return NewLogItr(sqlCtx, dt.ddb, dt.rs)
+	return NewLogItr(sqlCtx, dt.ddb, dt.rsr)
 }
 
 // LogItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
@@ -82,14 +82,8 @@ type LogItr struct {
 }
 
 // NewLogItr creates a LogItr from the current environment.
-func NewLogItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB, rs *env.RepoState) (*LogItr, error) {
-	cs, err := doltdb.NewCommitSpec("HEAD", rs.Head.Ref.GetPath())
-
-	if err != nil {
-		return nil, err
-	}
-
-	commit, err := ddb.Resolve(sqlCtx, cs)
+func NewLogItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (*LogItr, error) {
+	commit, err := ddb.Resolve(sqlCtx, rsr.CWBHeadSpec())
 
 	if err != nil {
 		return nil, err
