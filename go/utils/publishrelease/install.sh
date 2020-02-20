@@ -98,6 +98,7 @@ install_binary_release() {
   curl -A "$CURL_USER_AGENT" -fsL "$URL" > "$FILE"
   tar zxf "$FILE"
   echo "Installing dolt, git-dolt and git-dolt-smudge to /usr/local/bin."
+  [ -d /usr/local/bin ] || install -o 0 -g 0 -d /usr/local/bin
   install -o 0 -g 0 dolt-$PLATFORM_TUPLE/bin/dolt /usr/local/bin
   install -o 0 -g 0 dolt-$PLATFORM_TUPLE/bin/git-dolt /usr/local/bin
   install -o 0 -g 0 dolt-$PLATFORM_TUPLE/bin/git-dolt-smudge /usr/local/bin
