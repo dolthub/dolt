@@ -99,9 +99,7 @@ install_binary_release() {
   tar zxf "$FILE"
   echo "Installing dolt, git-dolt and git-dolt-smudge to /usr/local/bin."
   [ -d /usr/local/bin ] || install -o 0 -g 0 -d /usr/local/bin
-  install -o 0 -g 0 dolt-$PLATFORM_TUPLE/bin/dolt /usr/local/bin
-  install -o 0 -g 0 dolt-$PLATFORM_TUPLE/bin/git-dolt /usr/local/bin
-  install -o 0 -g 0 dolt-$PLATFORM_TUPLE/bin/git-dolt-smudge /usr/local/bin
+  install -o 0 -g 0 dolt-$PLATFORM_TUPLE/bin/{dolt,git-dolt,git-dolt-smudge} /usr/local/bin
   install -o 0 -g 0 -d /usr/local/share/doc/dolt/
   install -o 0 -g 0 -m 644 dolt-$PLATFORM_TUPLE/LICENSES /usr/local/share/doc/dolt/
 }
