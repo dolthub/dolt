@@ -585,7 +585,6 @@ func writeValAndGetRef(ctx context.Context, vrw types.ValueReadWriter, val types
 // ResolveParent returns the n-th ancestor of a given commit (direct parent is index 0). error return value will be
 // non-nil in the case that the commit cannot be resolved, there aren't as many ancestors as requested, or the
 // underlying storage cannot be accessed.
-// TODO: this method is broken
 func (ddb *DoltDB) ResolveParent(ctx context.Context, commit *Commit, parentIdx int) (*Commit, error) {
 	var parentCommitSt types.Struct
 	parentSet, err := commit.getParents()
