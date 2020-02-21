@@ -249,6 +249,35 @@ func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts 
 	)
 }
 
+func (db *database) CommitDangling(ctx context.Context, v types.Value, opts CommitOptions) (types.Struct, error) {
+	if (opts.Parents == types.Set{}) {
+		return types.Struct{}, errors.New("cannot create commit without parents")
+	}
+
+	if opts.Meta.IsZeroValue() {
+		opts.Meta = types.EmptyStruct(db.Format())
+	}
+	commitStruct, err := NewCommit(v, opts.Parents, opts.Meta)
+
+	if err != nil {
+		return types.Struct{}, err
+	}
+
+	_, err = db.WriteValue(ctx, commitStruct)
+
+	if err != nil {
+		return types.Struct{}, err
+	}
+
+	err = db.Flush(ctx)
+
+	if err != nil {
+		return types.Struct{}, err
+	}
+
+	return commitStruct, nil
+}
+
 func (db *database) CommitValue(ctx context.Context, ds Dataset, v types.Value) (Dataset, error) {
 	return db.Commit(ctx, ds, v, CommitOptions{})
 }

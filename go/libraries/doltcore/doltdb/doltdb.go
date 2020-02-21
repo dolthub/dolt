@@ -335,7 +335,8 @@ func (ddb *DoltDB) Commit(ctx context.Context, valHash hash.Hash, dref ref.DoltR
 		panic("can't commit to ref that isn't branch atm.  will probably remove this.")
 	}
 
-	return ddb.CommitWithParents(ctx, valHash, dref, nil, cm)
+	// TODO: this nil seems wrong
+	return ddb.CommitWithParentSpecs(ctx, valHash, dref, nil, cm)
 }
 
 // FastForward fast-forwards the branch given to the commit given.
@@ -373,9 +374,22 @@ func (ddb *DoltDB) CanFastForward(ctx context.Context, branch ref.DoltRef, new *
 	return current.CanFastForwardTo(ctx, new)
 }
 
-// CommitWithParents commits the value hash given to the branch given, using the list of parent hashes given. Returns an
+// CommitWithParentSpecs commits the value hash given to the branch given, using the list of parent hashes given. Returns an
 // error if the value or any parents can't be resolved, or if anything goes wrong accessing the underlying storage.
-func (ddb *DoltDB) CommitWithParents(ctx context.Context, valHash hash.Hash, dref ref.DoltRef, parentCmSpecs []*CommitSpec, cm *CommitMeta) (*Commit, error) {
+func (ddb *DoltDB) CommitWithParentSpecs(ctx context.Context, valHash hash.Hash, dref ref.DoltRef, parentCmSpecs []*CommitSpec, cm *CommitMeta) (*Commit, error) {
+	var parentCommits []*Commit
+	for _, parentCmSpec := range parentCmSpecs {
+		cm, err := ddb.Resolve(ctx, parentCmSpec)
+
+		if err != nil {
+			return nil, err
+		}
+		parentCommits = append(parentCommits, cm)
+	}
+	return ddb.CommitWithParentCommits(ctx, valHash, dref, parentCommits, cm)
+}
+
+func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Hash, dref ref.DoltRef, parentCommits []*Commit, cm *CommitMeta) (*Commit, error) {
 	var commitSt types.Struct
 	err := pantoerr.PanicToError("error committing value "+valHash.String(), func() error {
 		val, err := ddb.db.ReadValue(ctx, valHash)
@@ -416,14 +430,8 @@ func (ddb *DoltDB) CommitWithParents(ctx context.Context, valHash hash.Hash, dre
 			}
 		}
 
-		for _, parentCmSpec := range parentCmSpecs {
-			cs, err := ddb.Resolve(ctx, parentCmSpec)
-
-			if err != nil {
-				return err
-			}
-
-			rf, err := types.NewRef(cs.commitSt, ddb.db.Format())
+		for _, cm := range parentCommits {
+			rf, err := types.NewRef(cm.commitSt, ddb.db.Format())
 
 			if err != nil {
 				return err
@@ -466,6 +474,70 @@ func (ddb *DoltDB) CommitWithParents(ctx context.Context, valHash hash.Hash, dre
 		if !ok {
 			return errors.New("commit has no head but commit succeeded (How?!?!?)")
 		}
+
+		return err
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &Commit{ddb.db, commitSt}, nil
+}
+
+// dangling commits are unreferenced by any branch or ref. They are created in the course of programmatic updates
+// such as rebase. You must create a ref to a dangling commit for it to be reachable
+func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash hash.Hash, parentCommits []*Commit, cm *CommitMeta) (*Commit, error) {
+	var commitSt types.Struct
+	err := pantoerr.PanicToError("error committing value "+valHash.String(), func() error {
+		val, err := ddb.db.ReadValue(ctx, valHash)
+
+		if err != nil {
+			return err
+		}
+
+		if st, ok := val.(types.Struct); !ok || st.Name() != ddbRootStructName {
+			return errors.New("can't commit a value that is not a valid root value")
+		}
+
+		s, err := types.NewSet(ctx, ddb.db)
+
+		if err != nil {
+			return err
+		}
+
+		parentEditor := s.Edit()
+
+		for _, cm := range parentCommits {
+			rf, err := types.NewRef(cm.commitSt, ddb.db.Format())
+
+			if err != nil {
+				return err
+			}
+
+			_, err = parentEditor.Insert(rf)
+
+			if err != nil {
+				return err
+			}
+		}
+
+		// even orphans have parents
+		parents, err := parentEditor.Set(ctx)
+
+		if err != nil {
+			return err
+		}
+
+		st, err := cm.toNomsStruct(ddb.db.Format())
+
+		if err != nil {
+			return err
+		}
+
+		commitOpts := datas.CommitOptions{Parents: parents, Meta: st, Policy: nil}
+
+		commitSt, err = ddb.db.CommitDangling(ctx, val, commitOpts)
 
 		return err
 	})
@@ -542,6 +614,40 @@ func (ddb *DoltDB) ResolveParent(ctx context.Context, commit *Commit, parentIdx 
 	parentCommitSt = parentVal.(types.Struct)
 
 	return &Commit{ddb.ValueReadWriter(), parentCommitSt}, nil
+}
+
+func (ddb *DoltDB) ResolveAllParents(ctx context.Context, commit *Commit) ([]*Commit, error) {
+	var parentCommitSt types.Struct
+	parentSet, err := commit.getParents()
+
+	if err != nil {
+		return nil, err
+	}
+
+	itr, err := parentSet.IteratorAt(ctx, 0)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var allParents []*Commit
+	for i := 0; i < int(parentSet.Len()); i++ {
+		parentCommRef, err := itr.Next(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		parentVal, err := parentCommRef.(types.Ref).TargetValue(ctx, ddb.ValueReadWriter())
+
+		if err != nil {
+			return nil, err
+		}
+
+		parentCommitSt = parentVal.(types.Struct)
+
+		allParents = append(allParents, &Commit{ddb.ValueReadWriter(), parentCommitSt})
+	}
+	return allParents, nil
 }
 
 // HasBranch returns whether the branch given exists in this database.

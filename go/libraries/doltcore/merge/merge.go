@@ -248,25 +248,31 @@ func stopAndDrain(stop chan<- struct{}, drain <-chan types.ValueChanged) {
 func mergeTableSchema(sch, mergeSch, ancSch schema.Schema) (schema.Schema, error) {
 	// (sch - ancSch) ∪ (mergeSch - ancSch) ∪ (sch ∩ mergeSch)
 
-	sub, err := typed.TypedColCollectionSubtraction(sch, ancSch)
-
-	if err != nil {
-		return nil, err
-	}
-
-	mergeSub, err := typed.TypedColCollectionSubtraction(mergeSch, ancSch)
-
-	if err != nil {
-		return nil, err
-	}
-
+	// columns remaining on both branches since the common ancestor
 	intersection, err := typed.TypedColCollectionIntersection(sch, mergeSch)
 
 	if err != nil {
 		return nil, err
 	}
 
-	union, err := typed.TypedColCollUnion(sub, mergeSub, intersection)
+	// columns added on the main branch since the common ancestor
+	sub, err := typed.TypedColCollectionSubtraction(sch, ancSch)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// columns added on the merge branch since the common ancestor
+	mergeSub, err := typed.TypedColCollectionSubtraction(mergeSch, ancSch)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// order of args here is important for correct column ordering in merged schema
+	// TODO: column ordering will break if a column added on sub or merge was reordered
+	// to be before any column in the intersection
+	union, err := typed.TypedColCollUnion(intersection, sub, mergeSub)
 
 	if err != nil {
 		return nil, err
