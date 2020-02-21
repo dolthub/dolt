@@ -149,7 +149,7 @@ func tagRebaseRecursive(ctx context.Context, ddb *doltdb.DoltDB, commit *doltdb.
 		return nil, err
 	}
 
-	rebasedCommit, err := ddb.CommitOrphanWithParentCommits(ctx, valueHash, allRebasedParents, oldMeta)
+	rebasedCommit, err := ddb.CommitDanglingWithParentCommits(ctx, valueHash, allRebasedParents, oldMeta)
 
 	if err != nil {
 		return nil, err
@@ -304,17 +304,13 @@ func replayRowDiffs(ctx context.Context, rSch schema.Schema, rows, parentRows, r
 			return types.EmptyMap, err
 		}
 
-		if len(diffs) == 0 {
-			return types.EmptyMap, errors.New("async diff timeout")
-		}
-
 		if len(diffs) != 1 {
 			panic("only a single diff requested, multiple returned.  bug in AsyncDiffer")
 		}
 
 		d := diffs[0]
 		if d.KeyValue == nil {
-			panic("lol, wut")
+			panic("Unexpected commit diff result: with nil key value encountered")
 		}
 
 		key, newVal, err := modifyDifferenceTag(d, oldTag, newTag, pkTag, rebasedNBF, rebasedTags)
@@ -330,7 +326,7 @@ func replayRowDiffs(ctx context.Context, rSch schema.Schema, rows, parentRows, r
 		} else if d.NewValue == nil { // delete
 			rebasedRowEditor.Remove(key)
 		} else {
-			panic("bad diff")
+			panic("Unexpected commit diff result: all values are nil")
 		}
 	}
 
