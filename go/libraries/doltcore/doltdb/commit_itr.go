@@ -225,26 +225,26 @@ func (cmItr *CommitIndexingCommitItr) Unfiltered() *CommitHashItr {
 	return &CommitHashItr{cmItr.ddb.ValueReadWriter(), cmItr.commits, 0}
 }
 
-type CommitCheck func(hash.Hash, string, time.Time) bool
+type CommitCheck func(context.Context, hash.Hash, string, time.Time) (bool, error)
 
-func (cmItr *CommitIndexingCommitItr) Filter(check CommitCheck) *CommitHashItr {
+func (cmItr *CommitIndexingCommitItr) Filter(ctx context.Context, check CommitCheck) (*CommitHashItr, error) {
 	hashes := make([]hash.Hash, 0, len(cmItr.commits))
 	for i, h := range cmItr.commits {
 		author := cmItr.authors[i]
 		ts := cmItr.commitTimes[i]
 
-		passes := true
-		if !check(h, author, ts) {
-			passes = false
-			break
+		passed, err := check(ctx, h, author, ts)
+
+		if err != nil {
+			return nil, err
 		}
 
-		if passes {
+		if passed {
 			hashes = append(hashes, h)
 		}
 	}
 
-	return &CommitHashItr{cmItr.ddb.ValueReadWriter(), hashes, 0}
+	return &CommitHashItr{cmItr.ddb.ValueReadWriter(), hashes, 0}, nil
 }
 
 type CommitHashItr struct {
