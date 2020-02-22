@@ -25,9 +25,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMapIterator(t *testing.T) {
@@ -88,7 +87,7 @@ func TestReverseMapIterator(t *testing.T) {
 
 	test := func(start, expected int, name string) {
 		t.Run(name, func(t *testing.T) {
-			it, err := m.IteratorFromEnd(context.Background(), Int(start))
+			it, err := m.IteratorBackFrom(context.Background(), Int(start))
 			require.NoError(t, err)
 
 			expectedItemIterCount := (expected / 2) + 1
@@ -124,6 +123,7 @@ func TestReverseMapIterator(t *testing.T) {
 	test(100, 100, "Iterate in reverse from end")
 	test(200, 100, "Iterate in reverse from beyond the end")
 	test(50, 50, "Iterate in reverse from the middle")
+	test(51, 50, "Iterate in reverse from a key not in the map")
 	test(0, 0, "Iterate in reverse from the first key")
 	test(-1, 0, "Iterate in reverse from before the first day")
 }
