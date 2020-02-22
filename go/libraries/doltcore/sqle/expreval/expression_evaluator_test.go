@@ -23,6 +23,7 @@ import (
 	"github.com/src-d/go-mysql-server/sql"
 	"github.com/src-d/go-mysql-server/sql/expression"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -242,7 +243,7 @@ func TestNewComparisonFunc(t *testing.T) {
 			sch:  testSch,
 			be: expression.BinaryExpression{
 				Left:  expression.NewLiteral(int8(-1), sql.Int8),
-				Right: expression.NewLiteral(-1, sql.Int32),
+				Right: expression.NewLiteral(int64(-1), sql.Int64),
 			},
 			expectNewErr: false,
 			testVals: []funcTestVal{
@@ -485,12 +486,12 @@ func TestNewComparisonFunc(t *testing.T) {
 			for opId := range ops {
 				t.Run(opId, func(t *testing.T) {
 					op := ops[opId]
-					f, err := newCamparisonFunc(op, test.be, test.sch)
+					f, err := newComparisonFunc(op, test.be, test.sch)
 
 					if test.expectNewErr {
 						assert.Error(t, err)
 					} else {
-						assert.NoError(t, err)
+						require.NoError(t, err)
 					}
 
 					for i := range test.testVals {

@@ -15,9 +15,6 @@
 package expreval
 
 import (
-	"strings"
-
-	"github.com/src-d/go-mysql-server/sql"
 	"github.com/src-d/go-mysql-server/sql/expression"
 
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -32,161 +29,13 @@ const (
 )
 
 func compareLiterals(l1, l2 *expression.Literal) (int, error) {
-	cat1 := categorizeType(l1)
-	cat2 := categorizeType(l2)
-
-	compareCat := intCat
-	if cat1 == cat2 {
-		compareCat = cat1
-	} else if cat1 == stringCat || cat2 == stringCat || cat1 == dateCat || cat2 == dateCat {
-		compareCat = stringCat
-	} else if cat1 == floatCat || cat2 == floatCat {
-		compareCat = floatCat
-	} else if cat1 == uintCat || cat2 == uintCat {
-		compareCat = uintCat
-	}
-
-	switch compareCat {
-	case intCat:
-		v1, err := literalAsInt64(l1)
-
-		if err != nil {
-			return 0, err
-		}
-
-		v2, err := literalAsInt64(l2)
-
-		if err != nil {
-			return 0, err
-		}
-
-		switch {
-		case v1 > v2:
-			return 1, nil
-		case v1 < v2:
-			return -1, nil
-		default:
-			return 0, nil
-		}
-
-	case uintCat:
-		v1, err := literalAsUint64(l1)
-
-		if err != nil {
-			return 0, err
-		}
-
-		v2, err := literalAsUint64(l2)
-
-		if err != nil {
-			return 0, err
-		}
-
-		switch {
-		case v1 > v2:
-			return 1, nil
-		case v1 < v2:
-			return -1, nil
-		default:
-			return 0, nil
-		}
-
-	case floatCat:
-		v1, err := literalAsFloat64(l1)
-
-		if err != nil {
-			return 0, err
-		}
-
-		v2, err := literalAsFloat64(l2)
-
-		if err != nil {
-			return 0, err
-		}
-
-		switch {
-		case v1 > v2:
-			return 1, nil
-		case v1 < v2:
-			return -1, nil
-		default:
-			return 0, nil
-		}
-
-	case stringCat:
-		v1, err := literalAsString(l1)
-
-		if err != nil {
-			return 0, err
-		}
-
-		v2, err := literalAsString(l2)
-
-		if err != nil {
-			return 0, err
-		}
-
-		return strings.Compare(v1, v2), nil
-
-	case dateCat:
-		v1, err := literalAsTimestamp(l1)
-
-		if err != nil {
-			return 0, err
-		}
-
-		v2, err := literalAsTimestamp(l2)
-
-		if err != nil {
-			return 0, err
-		}
-
-		diff := v1.Sub(v2).Seconds()
-
-		switch {
-		case diff > 0:
-			return 1, nil
-		case diff < 0:
-			return -1, nil
-		default:
-			return 0, nil
-		}
-	}
-
-	return 0, errUnsupportedComparisonType.New()
-}
-
-func categorizeType(l *expression.Literal) int {
-	switch l.Type() {
-	case sql.Int8, sql.Int16, sql.Int32, sql.Int64, sql.Boolean, sql.Uint8, sql.Uint16, sql.Uint32:
-		return intCat
-	case sql.Uint64:
-		u64 := l.Value().(uint64)
-		if u64&0xF000000000000000 != 0 {
-			return uintCat
-		}
-		return intCat
-	case sql.Float32, sql.Float64:
-		return floatCat
-	case sql.Datetime:
-		return dateCat
-	case sql.Text, sql.LongText, sql.MediumText, sql.TinyText:
-		if _, err := parseDate(l.Value().(string)); err == nil {
-			return dateCat
-		} else if _, err := literalAsInt64(l); err == nil {
-			return intCat
-		} else if _, err := literalAsFloat64(l); err == nil {
-			return floatCat
-		}
-	}
-
-	return stringCat
+	return l1.Type().Compare(l1.Value(), l2.Value())
 }
 
 type CompareOp interface {
 	CompareLiterals(l1, l2 *expression.Literal) (bool, error)
 	CompareNomsValues(v1, v2 types.Value) (bool, error)
-	CompareToNull(v2 types.Value) (bool, error)
+	CompareToNil(v2 types.Value) (bool, error)
 }
 
 type EqualsOp struct{}
@@ -205,8 +54,8 @@ func (op EqualsOp) CompareNomsValues(v1, v2 types.Value) (bool, error) {
 	return v1.Equals(v2), nil
 }
 
-func (op EqualsOp) CompareToNull(v2 types.Value) (bool, error) {
-	return types.IsNull(v2), nil
+func (op EqualsOp) CompareToNil(v2 types.Value) (bool, error) {
+	return false, nil
 }
 
 type GreaterOp struct {
@@ -239,7 +88,7 @@ func (op GreaterOp) CompareNomsValues(v1, v2 types.Value) (bool, error) {
 	return !lt, err
 }
 
-func (op GreaterOp) CompareToNull(v2 types.Value) (bool, error) {
+func (op GreaterOp) CompareToNil(v2 types.Value) (bool, error) {
 	return false, nil
 }
 
@@ -267,7 +116,7 @@ func (op GreaterEqualOp) CompareNomsValues(v1, v2 types.Value) (bool, error) {
 	return !res, nil
 }
 
-func (op GreaterEqualOp) CompareToNull(v2 types.Value) (bool, error) {
+func (op GreaterEqualOp) CompareToNil(v2 types.Value) (bool, error) {
 	return false, nil
 }
 
@@ -289,7 +138,7 @@ func (op LessOp) CompareNomsValues(v1, v2 types.Value) (bool, error) {
 	return v1.Less(op.NBF, v2)
 }
 
-func (op LessOp) CompareToNull(v2 types.Value) (bool, error) {
+func (op LessOp) CompareToNil(v2 types.Value) (bool, error) {
 	return false, nil
 }
 
@@ -317,6 +166,6 @@ func (op LessEqualOp) CompareNomsValues(v1, v2 types.Value) (bool, error) {
 	return v1.Less(op.NBF, v2)
 }
 
-func (op LessEqualOp) CompareToNull(v2 types.Value) (bool, error) {
+func (op LessEqualOp) CompareToNil(v2 types.Value) (bool, error) {
 	return false, nil
 }

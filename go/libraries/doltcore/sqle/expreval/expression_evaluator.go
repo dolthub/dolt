@@ -57,15 +57,15 @@ func ExpressionFuncFromSQLExpressions(nbf *types.NomsBinFormat, sch schema.Schem
 func getExpFunc(nbf *types.NomsBinFormat, sch schema.Schema, exp sql.Expression) (ExpressionFunc, error) {
 	switch typedExpr := exp.(type) {
 	case *expression.Equals:
-		return newCamparisonFunc(EqualsOp{}, typedExpr.BinaryExpression, sch)
+		return newComparisonFunc(EqualsOp{}, typedExpr.BinaryExpression, sch)
 	case *expression.GreaterThan:
-		return newCamparisonFunc(GreaterOp{nbf}, typedExpr.BinaryExpression, sch)
+		return newComparisonFunc(GreaterOp{nbf}, typedExpr.BinaryExpression, sch)
 	case *expression.GreaterThanOrEqual:
-		return newCamparisonFunc(GreaterEqualOp{nbf}, typedExpr.BinaryExpression, sch)
+		return newComparisonFunc(GreaterEqualOp{nbf}, typedExpr.BinaryExpression, sch)
 	case *expression.LessThan:
-		return newCamparisonFunc(LessOp{nbf}, typedExpr.BinaryExpression, sch)
+		return newComparisonFunc(LessOp{nbf}, typedExpr.BinaryExpression, sch)
 	case *expression.LessThanOrEqual:
-		return newCamparisonFunc(LessEqualOp{nbf}, typedExpr.BinaryExpression, sch)
+		return newComparisonFunc(LessEqualOp{nbf}, typedExpr.BinaryExpression, sch)
 	case *expression.Or:
 		leftFunc, err := getExpFunc(nbf, sch, typedExpr.Left)
 
@@ -175,7 +175,7 @@ func GetComparisonType(be expression.BinaryExpression) ([]*expression.GetField, 
 var trueFunc = func(ctx context.Context, vals map[uint64]types.Value) (b bool, err error) { return true, nil }
 var falseFunc = func(ctx context.Context, vals map[uint64]types.Value) (b bool, err error) { return false, nil }
 
-func newCamparisonFunc(op CompareOp, exp expression.BinaryExpression, sch schema.Schema) (ExpressionFunc, error) {
+func newComparisonFunc(op CompareOp, exp expression.BinaryExpression, sch schema.Schema) (ExpressionFunc, error) {
 	vars, consts, compType, err := GetComparisonType(exp)
 
 	if err != nil {
@@ -210,7 +210,7 @@ func newCamparisonFunc(op CompareOp, exp expression.BinaryExpression, sch schema
 		}
 
 		compareNomsValues := op.CompareNomsValues
-		compareToNull := op.CompareToNull
+		compareToNil := op.CompareToNil
 
 		return func(ctx context.Context, vals map[uint64]types.Value) (b bool, err error) {
 			colVal, ok := vals[tag]
@@ -218,7 +218,7 @@ func newCamparisonFunc(op CompareOp, exp expression.BinaryExpression, sch schema
 			if ok && !types.IsNull(colVal) {
 				return compareNomsValues(colVal, nomsVal)
 			} else {
-				return compareToNull(nomsVal)
+				return compareToNil(nomsVal)
 			}
 		}, nil
 	} else {
@@ -237,7 +237,7 @@ func newCamparisonFunc(op CompareOp, exp expression.BinaryExpression, sch schema
 		}
 
 		compareNomsValues := op.CompareNomsValues
-		compareToNull := op.CompareToNull
+		compareToNull := op.CompareToNil
 
 		tag1, tag2 := col1.Tag, col2.Tag
 		return func(ctx context.Context, vals map[uint64]types.Value) (b bool, err error) {

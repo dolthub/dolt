@@ -49,7 +49,7 @@ const (
 
 var _ sql.Table = &HistoryTable{}
 
-// HistoryTable is a system table that show the history of rows over time
+// HistoryTable is a system table that shows the history of rows over time
 type HistoryTable struct {
 	name          string
 	ddb           *doltdb.DoltDB

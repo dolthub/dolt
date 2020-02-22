@@ -18,8 +18,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/src-d/go-mysql-server/sql"
-	"github.com/src-d/go-mysql-server/sql/expression"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -110,215 +108,6 @@ func assertOnUnexpectedErr(t *testing.T, expectErr bool, err error) {
 	}
 }
 
-func TestCompareLiterals(t *testing.T) {
-	tests := []struct {
-		name string
-		l1   *expression.Literal
-		l2   *expression.Literal
-		gt   bool
-		gte  bool
-		lt   bool
-		lte  bool
-		eq   bool
-	}{
-		{
-			name: "int 1 and int 1",
-			l1:   expression.NewLiteral(int8(1), sql.Int8),
-			l2:   expression.NewLiteral(1, sql.Int32),
-			gt:   false,
-			gte:  true,
-			lt:   false,
-			lte:  true,
-			eq:   true,
-		},
-		{
-			name: "int 9 and int 10",
-			l1:   expression.NewLiteral(int32(9), sql.Int32),
-			l2:   expression.NewLiteral(int64(10), sql.Int64),
-			gt:   false,
-			gte:  false,
-			lt:   true,
-			lte:  true,
-			eq:   false,
-		},
-		{
-			name: "uint 10 and int -20",
-			l1:   expression.NewLiteral(int8(10), sql.Uint8),
-			l2:   expression.NewLiteral(int16(-20), sql.Int16),
-			gt:   true,
-			gte:  true,
-			lt:   false,
-			lte:  false,
-			eq:   false,
-		},
-		{
-			name: "int 1 and string 1",
-			l1:   expression.NewLiteral(int8(1), sql.Int8),
-			l2:   expression.NewLiteral("1", sql.Text),
-			gt:   false,
-			gte:  true,
-			lt:   false,
-			lte:  true,
-			eq:   true,
-		},
-		{
-			name: "int 9 and string 10",
-			l1:   expression.NewLiteral(int32(9), sql.Int32),
-			l2:   expression.NewLiteral("10", sql.Text),
-			gt:   false,
-			gte:  false,
-			lt:   true,
-			lte:  true,
-			eq:   false,
-		},
-		{
-			name: "uint 10 and string -20",
-			l1:   expression.NewLiteral(uint64(10), sql.Uint64),
-			l2:   expression.NewLiteral("-20", sql.Text),
-			gt:   true,
-			gte:  true,
-			lt:   false,
-			lte:  false,
-			eq:   false,
-		},
-		{
-			name: "equal uints",
-			l1:   expression.NewLiteral(uint64(0xAAAAAAAAAAAAAAAA), sql.Uint64),
-			l2:   expression.NewLiteral(uint64(0xAAAAAAAAAAAAAAAA), sql.Uint64),
-			gt:   false,
-			gte:  true,
-			lt:   false,
-			lte:  true,
-			eq:   true,
-		},
-		{
-			name: "uints",
-			l1:   expression.NewLiteral(uint64(0xAAAAAAAAAAAAAAAA), sql.Uint64),
-			l2:   expression.NewLiteral(uint64(0xBBBBBBBBBBBBBBBB), sql.Uint64),
-			gt:   false,
-			gte:  false,
-			lt:   true,
-			lte:  true,
-			eq:   false,
-		},
-		{
-			name: "uint and int",
-			l1:   expression.NewLiteral(uint64(0xBBBBBBBBBBBBBBBB), sql.Uint64),
-			l2:   expression.NewLiteral(int8(77), sql.Int8),
-			gt:   true,
-			gte:  true,
-			lt:   false,
-			lte:  false,
-			eq:   false,
-		},
-		{
-			name: "strings",
-			l1:   expression.NewLiteral("b", sql.Text),
-			l2:   expression.NewLiteral("a", sql.Text),
-			gt:   true,
-			gte:  true,
-			lt:   false,
-			lte:  false,
-			eq:   false,
-		},
-		{
-			name: "string dates",
-			l1:   expression.NewLiteral("1999-12-31", sql.Text),
-			l2:   expression.NewLiteral("2000-01-01", sql.Text),
-			gt:   false,
-			gte:  false,
-			lt:   true,
-			lte:  true,
-			eq:   false,
-		},
-		{
-			name: "equal dates",
-			l1:   expression.NewLiteral("2000-01-01", sql.Datetime),
-			l2:   expression.NewLiteral("1999-12-31", sql.Datetime),
-			gt:   true,
-			gte:  true,
-			lt:   false,
-			lte:  false,
-			eq:   false,
-		},
-		{
-			name: "equal dates",
-			l1:   expression.NewLiteral("2000-01-01", sql.Datetime),
-			l2:   expression.NewLiteral("2000-01-01", sql.Text),
-			gt:   false,
-			gte:  true,
-			lt:   false,
-			lte:  true,
-			eq:   true,
-		},
-		{
-			name: "string float 1.5 int 1",
-			l1:   expression.NewLiteral("1.5", sql.Text),
-			l2:   expression.NewLiteral(1, sql.Int32),
-			gt:   true,
-			gte:  true,
-			lt:   false,
-			lte:  false,
-			eq:   false,
-		}, {
-			name: "float 1.5 float 2.5",
-			l1:   expression.NewLiteral(1.5, sql.Float64),
-			l2:   expression.NewLiteral(float32(2.5), sql.Float32),
-			gt:   false,
-			gte:  false,
-			lt:   true,
-			lte:  true,
-			eq:   false,
-		}, {
-			name: "float 1.5 float 1.5",
-			l1:   expression.NewLiteral(1.5, sql.Float64),
-			l2:   expression.NewLiteral(float32(1.5), sql.Float32),
-			gt:   false,
-			gte:  true,
-			lt:   false,
-			lte:  true,
-			eq:   true,
-		},
-		{
-			name: "string b int 0",
-			l1:   expression.NewLiteral("b", sql.TinyText),
-			l2:   expression.NewLiteral(0, sql.Int8),
-			gt:   true,
-			gte:  true,
-			lt:   false,
-			lte:  false,
-			eq:   false,
-		},
-	}
-
-	eqOp := EqualsOp{}
-	gtOp := GreaterOp{}
-	gteOp := GreaterEqualOp{}
-	ltOp := LessOp{}
-	lteOp := LessEqualOp{}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			resEq, err := eqOp.CompareLiterals(test.l1, test.l2)
-			assert.NoError(t, err)
-			resGt, err := gtOp.CompareLiterals(test.l1, test.l2)
-			assert.NoError(t, err)
-			resGte, err := gteOp.CompareLiterals(test.l1, test.l2)
-			assert.NoError(t, err)
-			resLt, err := ltOp.CompareLiterals(test.l1, test.l2)
-			assert.NoError(t, err)
-			resLte, err := lteOp.CompareLiterals(test.l1, test.l2)
-			assert.NoError(t, err)
-
-			assert.True(t, resEq == test.eq, "equals failure. Expected: %t Actual %t", test.lte, resLte)
-			assert.True(t, resGt == test.gt, "greater failure. Expected: %t Actual %t", test.lte, resLte)
-			assert.True(t, resGte == test.gte, "greater equals failure. Expected: %t Actual %t", test.lte, resLte)
-			assert.True(t, resLt == test.lt, "less than failure. Expected: %t Actual %t", test.lte, resLte)
-			assert.True(t, resLte == test.lte, "less than equals failure. Expected: %t Actual %t", test.lte, resLte)
-		})
-	}
-}
-
 func TestCompareToNull(t *testing.T) {
 	tests := []struct {
 		name string
@@ -330,13 +119,13 @@ func TestCompareToNull(t *testing.T) {
 		eq   bool
 	}{
 		{
-			name: "nil",
+			name: "nil not equal to nil",
 			v:    types.NullValue,
 			gt:   false,
 			gte:  false,
 			lt:   false,
 			lte:  false,
-			eq:   true,
+			eq:   false,
 		},
 		{
 			name: "not nil",
@@ -358,11 +147,11 @@ func TestCompareToNull(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			mustBool := getMustBool(t)
-			resEq := mustBool(eqOp.CompareToNull(test.v))
-			resGt := mustBool(gtOp.CompareToNull(test.v))
-			resGte := mustBool(gteOp.CompareToNull(test.v))
-			resLt := mustBool(ltOp.CompareToNull(test.v))
-			resLte := mustBool(lteOp.CompareToNull(test.v))
+			resEq := mustBool(eqOp.CompareToNil(test.v))
+			resGt := mustBool(gtOp.CompareToNil(test.v))
+			resGte := mustBool(gteOp.CompareToNil(test.v))
+			resLt := mustBool(ltOp.CompareToNil(test.v))
+			resLte := mustBool(lteOp.CompareToNil(test.v))
 
 			assert.True(t, resEq == test.eq, "equals failure. Expected: %t Actual %t", test.lte, resLte)
 			assert.True(t, resGt == test.gt, "greater failure. Expected: %t Actual %t", test.lte, resLte)
