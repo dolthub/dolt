@@ -140,6 +140,8 @@ const (
 	ConstConstCompare
 )
 
+// GetComparisonType looks at a go-mysql-server BinaryExpression classifies the left and right arguments
+// as variables or constants.
 func GetComparisonType(be expression.BinaryExpression) ([]*expression.GetField, []*expression.Literal, ComparisonType, error) {
 	var variables []*expression.GetField
 	var consts []*expression.Literal

@@ -72,12 +72,7 @@ func TestGetComparisonType(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			gfs, lits, compType, err := GetComparisonType(test.binExp)
-
-			if test.expectErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
+			assertOnUnexpectedErr(t, test.expectErr, err)
 
 			assert.Equal(t, test.expectedNumGFs, len(gfs))
 			assert.Equal(t, test.expectedNumLits, len(lits))
@@ -181,20 +176,16 @@ func TestNewAndAndOrFuncs(t *testing.T) {
 			and := newAndFunc(test.f1, test.f2)
 
 			actualOr, err := or(ctx, nil)
+			assertOnUnexpectedErr(t, test.expectOrErr, err)
 
-			if test.expectOrErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
+			if err == nil {
 				assert.Equal(t, test.expectedOr, actualOr)
 			}
 
 			actualAnd, err := and(ctx, nil)
+			assertOnUnexpectedErr(t, test.expectAndErr, err)
 
-			if test.expectAndErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
+			if err != nil {
 				assert.Equal(t, test.expectedAnd, actualAnd)
 			}
 		})
@@ -502,11 +493,7 @@ func TestNewComparisonFunc(t *testing.T) {
 							expected := testVal.expectRes[opId]
 							expectErr := testVal.expectErr[opId]
 
-							if expectErr {
-								assert.Error(t, err)
-							} else {
-								assert.NoError(t, err)
-							}
+							assertOnUnexpectedErr(t, expectErr, err)
 
 							if err == nil {
 								assert.Equal(t, expected, actual)

@@ -273,6 +273,7 @@ func literalAsTimestamp(literal *expression.Literal) (time.Time, error) {
 	return time.Time{}, errInvalidConversion.New(literal.String(), literal.Type().String(), "datetime")
 }
 
+// LiteralToNomsValue converts a go-mysql-servel Literal into a noms value.
 func LiteralToNomsValue(kind types.NomsKind, literal *expression.Literal) (types.Value, error) {
 	switch kind {
 	case types.IntKind:

@@ -152,12 +152,7 @@ func TestLiteralAsInt64(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			res, err := literalAsInt64(test.l)
-
-			if test.expectErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
+			assertOnUnexpectedErr(t, test.expectErr, err)
 
 			if err == nil {
 				assert.Equal(t, test.expected, res)
@@ -316,12 +311,7 @@ func TestLiteralAsUint64(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			res, err := literalAsUint64(test.l)
-
-			if test.expectErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
+			assertOnUnexpectedErr(t, test.expectErr, err)
 
 			if err == nil {
 				assert.Equal(t, test.expected, res)
@@ -432,12 +422,7 @@ func TestLiteralAsFloat64(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			res, err := literalAsFloat64(test.l)
-
-			if test.expectErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
+			assertOnUnexpectedErr(t, test.expectErr, err)
 
 			if err == nil {
 				assert.Equal(t, test.expected, res)
@@ -549,12 +534,7 @@ func TestLiteralAsBool(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			res, err := literalAsBool(test.l)
-
-			if test.expectErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
+			assertOnUnexpectedErr(t, test.expectErr, err)
 
 			if err == nil {
 				assert.Equal(t, test.expected, res)
@@ -605,12 +585,7 @@ func TestLiteralAsString(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			res, err := literalAsString(test.l)
-
-			if test.expectErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
+			assertOnUnexpectedErr(t, test.expectErr, err)
 
 			if err == nil {
 				assert.Equal(t, test.expected, res)
@@ -649,12 +624,7 @@ func TestParseDate(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			res, err := parseDate(test.str)
-
-			if test.expectErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
+			assertOnUnexpectedErr(t, test.expectErr, err)
 
 			if err == nil {
 				assert.Equal(t, test.expected, res)
@@ -699,12 +669,7 @@ func TestLiteralAsTimestamp(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			res, err := literalAsTimestamp(test.l)
-
-			if test.expectErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
+			assertOnUnexpectedErr(t, test.expectErr, err)
 
 			if err == nil {
 				assert.Equal(t, test.expected, res)
@@ -746,12 +711,7 @@ func TestLiteralToNomsValue(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			res, err := LiteralToNomsValue(test.expected.Kind(), test.l)
-
-			if test.expectErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
+			assertOnUnexpectedErr(t, test.expectErr, err)
 
 			if err == nil {
 				assert.Equal(t, test.expected, res)
