@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"io"
 	"strings"
 	"time"
@@ -27,7 +28,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/expreval"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -174,6 +174,8 @@ func isCommitFilter(filter sql.Expression) bool {
 }
 
 func splitFilters(filters []sql.Expression) (commitFilters, rowFilters []sql.Expression) {
+	commitFilters = make([]sql.Expression, 0, len(filters))
+	rowFilters = make([]sql.Expression, 0, len(filters))
 	for _, f := range filters {
 		if isCommitFilter(f) {
 			commitFilters = append(commitFilters, f)
@@ -289,7 +291,7 @@ func (cp commitPartitioner) Close() error {
 }
 
 type rowItrForTableAtCommit struct {
-	rd             *noms.NomsMapReader
+	rd             table.TableReadCloser
 	sch            schema.Schema
 	toSuperSchConv *rowconv.RowConverter
 	extraVals      map[uint64]types.Value
@@ -331,7 +333,7 @@ func newRowItrForTableAtCommit(ctx context.Context, h hash.Hash, cm *doltdb.Comm
 		return nil, err
 	}
 
-	rd, err := noms.NewNomsMapReader(ctx, m, tblSch)
+	rd, err := MapReaderLimitedByExpressions(ctx, m, tblSch, filters)
 
 	if err != nil {
 		return nil, err
