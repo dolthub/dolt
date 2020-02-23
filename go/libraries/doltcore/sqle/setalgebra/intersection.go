@@ -19,6 +19,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+// finiteSetIntersection returns the set of points that are in both fs1 and fs2
 func finiteSetIntersection(fs1, fs2 FiniteSet) (Set, error) {
 	hashToVal := make(map[hash.Hash]types.Value, len(fs1.HashToVal)+len(fs2.HashToVal))
 	for h, v := range fs1.HashToVal {
@@ -34,6 +35,7 @@ func finiteSetIntersection(fs1, fs2 FiniteSet) (Set, error) {
 	}
 }
 
+// finiteSetInterval will return the set of points that are in the interval, or an EmptySet instance
 func finiteSetIntervalIntersection(fs FiniteSet, in Interval) (Set, error) {
 	hashToVal := make(map[hash.Hash]types.Value, len(fs.HashToVal))
 	for h, v := range fs.HashToVal {
@@ -55,6 +57,7 @@ func finiteSetIntervalIntersection(fs FiniteSet, in Interval) (Set, error) {
 	}
 }
 
+// finiteSetInterval will return the set of points that are in the composite set, or an EmptySet instance
 func finiteSetCompositeSetIntersection(fs FiniteSet, composite CompositeSet) (Set, error) {
 	hashToVal := make(map[hash.Hash]types.Value)
 	for h, v := range fs.HashToVal {
@@ -84,6 +87,8 @@ func finiteSetCompositeSetIntersection(fs FiniteSet, composite CompositeSet) (Se
 	}
 }
 
+// intervalIntersection will return the intersection of two intervals.  This will either be the interval where they
+// overlap, or an EmptySet instance.
 func intervalIntersection(in1, in2 Interval) (Set, error) {
 	intComparison, err := compareIntervals(in1, in2)
 
@@ -116,6 +121,8 @@ func intervalIntersection(in1, in2 Interval) (Set, error) {
 	return simplifyInterval(resIntervToReduce)
 }
 
+// intervalCompositeSetIntersection will intersect the interval with all sets in the composite and return the resulting
+// set of points and intervals that are in the interval and the CompositeSet
 func intervalCompositeSetIntersection(in Interval, cs CompositeSet) (Set, error) {
 	hashToVal := make(map[hash.Hash]types.Value)
 
@@ -150,6 +157,8 @@ func intervalCompositeSetIntersection(in Interval, cs CompositeSet) (Set, error)
 	}
 }
 
+// intersectIntervalWithMultipleIntervals returns a slice of Interval objects containing all intersections between the
+// input interval and the slice of multiple intervals.
 func intersectIntervalWithMultipleIntervals(in Interval, multipleIntervals []Interval, hashToVal map[hash.Hash]types.Value) ([]Interval, error) {
 	intervals := make([]Interval, 0, len(multipleIntervals))
 	for _, curr := range multipleIntervals {
@@ -175,7 +184,9 @@ func intersectIntervalWithMultipleIntervals(in Interval, multipleIntervals []Int
 	return intervals, nil
 }
 
+// compositeIntersection finds the intersection of two composite sets
 func compositeIntersection(cs1, cs2 CompositeSet) (Set, error) {
+	// intersect cs1.Set with cs2 and cs2.Set with cs1 to get the discreet values in the resulting intersection.
 	temp1, err := finiteSetCompositeSetIntersection(cs1.Set, cs2)
 
 	if err != nil {
@@ -204,8 +215,8 @@ func compositeIntersection(cs1, cs2 CompositeSet) (Set, error) {
 		panic("unexpected set type")
 	}
 
+	// intersect the intervals
 	var intervals []Interval
-
 	for _, curr := range cs1.Intervals {
 		newIntervals, err := intersectIntervalWithMultipleIntervals(curr, cs2.Intervals, hashToVal)
 
@@ -216,8 +227,8 @@ func compositeIntersection(cs1, cs2 CompositeSet) (Set, error) {
 		intervals = append(intervals, newIntervals...)
 	}
 
+	// combine the intervals and the discreet values into a result
 	if len(hashToVal) == 0 && len(intervals) == 1 {
-		// could possibly be universal set
 		return simplifyInterval(intervals[0])
 	} else if len(hashToVal) > 0 && len(intervals) == 0 {
 		return FiniteSet{hashToVal}, nil

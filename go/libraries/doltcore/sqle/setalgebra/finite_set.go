@@ -19,10 +19,14 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+// FiniteSet is your typical computer science set representing a finite number of unique objects stored in a map. An
+// example would be the set of strings {"red","blue","green"}, or the set of numbers {5, 73, 127}.
 type FiniteSet struct {
+	// HashToVal is a map from the noms hash of a value to it's value
 	HashToVal map[hash.Hash]types.Value
 }
 
+// NewFiniteSet returns a FiniteSet constructed from the provided values
 func NewFiniteSet(nbf *types.NomsBinFormat, vals ...types.Value) (FiniteSet, error) {
 	hashToVal := make(map[hash.Hash]types.Value, len(vals))
 
@@ -39,6 +43,7 @@ func NewFiniteSet(nbf *types.NomsBinFormat, vals ...types.Value) (FiniteSet, err
 	return FiniteSet{HashToVal: hashToVal}, nil
 }
 
+// Union takes the current set and another set and returns a set containing all values from both.
 func (fs FiniteSet) Union(other Set) (Set, error) {
 	switch otherTyped := other.(type) {
 	// set / set union is all the values from both sets
@@ -57,6 +62,7 @@ func (fs FiniteSet) Union(other Set) (Set, error) {
 	panic("unknown set type")
 }
 
+// Interset takes the current set and another set and returns a set containing the values that are in both
 func (fs FiniteSet) Intersect(other Set) (Set, error) {
 	switch otherTyped := other.(type) {
 	case FiniteSet:

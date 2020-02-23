@@ -14,27 +14,40 @@
 
 package setalgebra
 
+// Set is a well-defined collection of distint objects
 type Set interface {
+	// Union takes the current set and another set and returns a set containing all values from both.
 	Union(other Set) (Set, error)
+	// Interset takes the current set and another set and returns a set containing the values that are in both
 	Intersect(other Set) (Set, error)
 }
 
+// EmptySet is a Set implementation that has no values
 type EmptySet struct{}
 
+// Union takes the current set and another set and returns a set containing all values from both. When EmptySet is
+// unioned against any other set X, X will be the result.
 func (es EmptySet) Union(other Set) (Set, error) {
 	return other, nil
 }
 
+// Intersect takes the current set and another set and returns a set containing the values that are in both. When
+// EmptySet is intersected with any other set X, EmptySet will be returned.
 func (es EmptySet) Intersect(other Set) (Set, error) {
 	return es, nil
 }
 
+// UniversalSet is the set containing all values
 type UniversalSet struct{}
 
+// Union takes the current set and another set and returns a set containing all values from both. When
+// UniversalSet is unioned with any other set X, UniversalSet will be returned.
 func (us UniversalSet) Union(other Set) (Set, error) {
 	return us, nil
 }
 
+// Interset takes the current set and another set and returns a set containing the values that are in both. When
+// UniversalSet is intersected with any other set X, X will be the result.
 func (us UniversalSet) Intersect(other Set) (Set, error) {
 	return other, nil
 }
