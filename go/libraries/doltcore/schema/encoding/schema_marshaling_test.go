@@ -16,6 +16,7 @@ package encoding
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/store/constants"
+	"github.com/liquidata-inc/dolt/go/store/marshal"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -66,6 +68,16 @@ func TestNomsMarshalling(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(tSchema, unMarshalled) {
+		t.Error("Value different after marshalling and unmarshalling.")
+	}
+
+	validated, err := validateUnmarshaledNomsValue(context.Background(), types.Format_7_18, val)
+
+	if err != nil {
+		t.Fatal("Failed compatibility test")
+	}
+
+	if !reflect.DeepEqual(tSchema, validated) {
 		t.Error("Value different after marshalling and unmarshalling.")
 	}
 }
@@ -161,4 +173,75 @@ func TestTypeInfoMarshalling(t *testing.T) {
 			assert.True(t, ok)
 		})
 	}
+}
+
+
+func validateUnmarshaledNomsValue(ctx context.Context, nbf *types.NomsBinFormat, schemaVal types.Value) (schema.Schema, error) {
+	var sd testSchemaData
+	err := marshal.Unmarshal(ctx, nbf, schemaVal, &sd)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return sd.decodeSchema()
+}
+
+// testEncodedColumn is a mirror type that helps ensure compatibility between Dolt versions
+type testEncodedColumn struct {
+	Tag uint64 `noms:"tag" json:"tag"`
+
+	// Name is the name of the field
+	Name string `noms:"name" json:"name"`
+
+	// Kind is the type of the field.  See types/noms_kind.go in the liquidata fork for valid values
+	Kind string `noms:"kind" json:"kind"`
+
+	IsPartOfPK bool `noms:"is_part_of_pk" json:"is_part_of_pk"`
+
+	TypeInfo encodedTypeInfo `noms:"typeinfo" json:"typeinfo"`
+
+	Constraints []encodedConstraint `noms:"col_constraints" json:"col_constraints"`
+}
+
+type testSchemaData struct {
+	Columns []testEncodedColumn `noms:"columns" json:"columns"`
+}
+
+func (tec testEncodedColumn) decodeColumn() (schema.Column, error) {
+	var typeInfo typeinfo.TypeInfo
+	var err error
+	if tec.TypeInfo.Type != "" {
+		typeInfo, err = tec.TypeInfo.decodeTypeInfo()
+		if err != nil {
+			return schema.Column{}, err
+		}
+	} else if tec.Kind != "" {
+		typeInfo = typeinfo.FromKind(schema.LwrStrToKind[tec.Kind])
+	} else {
+		return schema.Column{}, errors.New("cannot decode column due to unknown schema format")
+	}
+	colConstraints := decodeAllColConstraint(tec.Constraints)
+	return schema.NewColumnWithTypeInfo(tec.Name, tec.Tag, typeInfo, tec.IsPartOfPK, colConstraints...)
+}
+
+func (tsd testSchemaData) decodeSchema() (schema.Schema, error) {
+	numCols := len(tsd.Columns)
+	cols := make([]schema.Column, numCols)
+
+	var err error
+	for i, col := range tsd.Columns {
+		cols[i], err = col.decodeColumn()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	colColl, err := schema.NewColCollection(cols...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return schema.SchemaFromCols(colColl), nil
 }

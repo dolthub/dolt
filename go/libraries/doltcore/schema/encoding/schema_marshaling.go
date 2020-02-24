@@ -32,7 +32,7 @@ type encodedColumn struct {
 	Name string `noms:"name" json:"name"`
 
 	// Kind is the type of the field.  See types/noms_kind.go in the liquidata fork for valid values
-	Kind string `noms:"kind,omitempty" json:"kind,omitempty"`
+	Kind string `noms:"kind" json:"kind"`
 
 	IsPartOfPK bool `noms:"is_part_of_pk" json:"is_part_of_pk"`
 
@@ -70,7 +70,7 @@ func encodeColumn(col schema.Column) encodedColumn {
 	return encodedColumn{
 		col.Tag,
 		col.Name,
-		"",
+		col.KindString(),
 		col.IsPartOfPK,
 		encodeTypeInfo(col.TypeInfo),
 		encodeAllColConstraints(col.Constraints)}
