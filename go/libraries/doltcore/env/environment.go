@@ -50,9 +50,7 @@ const (
 	DefaultMetricsPort    = "443"
 	DefaultRemotesApiHost = "doltremoteapi.dolthub.com"
 	DefaultRemotesApiPort = "443"
-
-	tempTablesDir   = "temptf"
-	userAgentFormat = "dolt_cli %s %s %s"
+	tempTablesDir         = "temptf"
 )
 
 var ErrPreexistingDoltDir = errors.New(".dolt dir already exists")
