@@ -37,18 +37,36 @@ func main() {
 
 	if args[0] == "run" {
 		h := &dolt.DoltHarness{}
-		logictest.RunTestFiles(h, args[1:]...)
+		if len(args) == 3 && args[1] == "withdurations" {
+			logictest.RunTestFilesWithTestTimes(h, args[2:]...)
+		} else {
+			logictest.RunTestFiles(h, args[1:]...)
+		}
 	} else if args[0] == "parse" {
-		parseTestResults(args[1])
+		if len(args) == 3 && args[1] == "withdurations" {
+			parseTestResults(args[2], true)
+		} else {
+			parseTestResults(args[1], false)
+		}
 	} else {
 		panic("Unrecognized command " + args[0])
 	}
 }
 
-func parseTestResults(f string) {
-	entries, err := logictest.ParseResultFile(f)
-	if err != nil {
-		panic(err)
+func parseTestResults(f string, resultsIncludeDurations bool) {
+	var entries []*logictest.ResultLogEntry
+	var err error
+
+	if resultsIncludeDurations {
+		entries, err = logictest.ParseResultFileWithDuration(f)
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		entries, err = logictest.ParseResultFile(f)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	records := make([]*DoltResultRecord, len(entries))
@@ -91,6 +109,7 @@ func NewDoltRecordResult(e *logictest.ResultLogEntry) *DoltResultRecord {
 		TestFile:     e.TestFile,
 		LineNum:      e.LineNum,
 		Query:        e.Query,
+		Duration:     e.Duration.String(),
 		Result:       result,
 		ErrorMessage: e.ErrorMessage,
 	}
@@ -104,6 +123,7 @@ type DoltResultRecord struct {
 	TestFile     string `json:"test_file"`
 	LineNum      int    `json:"line_num"`
 	Query        string `json:"query_string"`
+	Duration     string `json:"duration"`
 	Result       string `json:"result"`
 	ErrorMessage string `json:"error_message,omitempty"`
 }
