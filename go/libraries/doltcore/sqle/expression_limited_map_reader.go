@@ -82,7 +82,8 @@ func getSetForKeyColumn(nbf *types.NomsBinFormat, col schema.Column, filter sql.
 	case *expression.LessThanOrEqual:
 		lteOp.NBF = nbf
 		return setForComparisonExp(nbf, col, typedExpr.BinaryExpression, lteOp, setForLteOp)
-		// case *expression.In:
+	case *expression.In:
+		return setForInExp(nbf, col, typedExpr.BinaryExpression)
 		// case *expression.Subquery:
 	}
 
@@ -181,8 +182,41 @@ func setForComparisonExp(
 	panic("Unexpected case value")
 }
 
+// setForComparisonExp returns the set of values which satisfies the set membership test for the specified column.
+func setForInExp(nbf *types.NomsBinFormat, col schema.Column, be expression.BinaryExpression) (setalgebra.Set, error) {
+	variables, literals, compType, err := expreval.GetComparisonType(be)
+
+	if err != nil || compType != expreval.VariableInLiteralList {
+		// Unsupported in will not limit key set
+		return setalgebra.UniversalSet{}, nil
+	}
+
+	// check to see if this comparison is with the primary key column
+	if strings.EqualFold(variables[0].Name(), col.Name) {
+		vals := make([]types.Value, len(literals))
+		for i, literal := range literals {
+			val, err := expreval.LiteralToNomsValue(col.Kind, literal)
+
+			if err != nil {
+				return nil, err
+			}
+
+			vals[i] = val
+		}
+
+		// not the primary key column, so this will not limit the set of key values, so the universal set is returned.
+		return setalgebra.NewFiniteSet(nbf, vals...)
+	}
+
+	return setalgebra.UniversalSet{}, nil
+}
+
+// CreateReaderFunc creates a new instance of an object implementing TableReadCloser for the given types.Map.  The
+// readers created by calling this function will have the rows they return limited by a setalgebra.Set implementation.
 type CreateReaderFunc func(ctx context.Context, m types.Map) (table.TableReadCloser, error)
 
+// CreateReaderFuncLimitedByExpressions takes a table schema and a slice of sql filters and returns a CreateReaderFunc
+// which limits the rows read based on the filters supplied.
 func CreateReaderFuncLimitedByExpressions(nbf *types.NomsBinFormat, tblSch schema.Schema, filters []sql.Expression) (CreateReaderFunc, error) {
 	pkCols := tblSch.GetPKCols()
 	if pkCols.Size() == 1 {
@@ -216,6 +250,8 @@ func CreateReaderFuncLimitedByExpressions(nbf *types.NomsBinFormat, tblSch schem
 	}, nil
 }
 
+// finiteSetToKeySlice takes a setalgebra.FiniteSet instance and converts it to a slice of types.Tuple which can
+// be used as the keys when reading from a types.Map
 func finiteSetToKeySlice(nbf *types.NomsBinFormat, tag types.Uint, fs setalgebra.FiniteSet) ([]types.Tuple, error) {
 	keys := make([]types.Tuple, len(fs.HashToVal))
 
@@ -233,21 +269,27 @@ func finiteSetToKeySlice(nbf *types.NomsBinFormat, tag types.Uint, fs setalgebra
 	return keys, nil
 }
 
+// rangeForInterval converts a setalgebra.Interval into a noms.ReadRange for reading the values within the interval
+// from a types.Map
 func rangeForInterval(nbf *types.NomsBinFormat, tag types.Uint, in setalgebra.Interval) (*noms.ReadRange, error) {
 	var inclusive bool
 	var startVal types.Value
 	var reverse bool
 	var check noms.InRangeCheck
 
+	// Has a start point so will iterate forward
 	if in.Start != nil {
 		startVal = in.Start.Val
 		inclusive = in.Start.Inclusive
 
+		// no upper bound so the check will always return true
 		if in.End == nil {
 			check = func(t types.Tuple) (b bool, err error) {
 				return true, nil
 			}
 		} else if in.End.Inclusive {
+			// has an endpoint which is inclusive of the endpoint value.  Return true while the value is less than or
+			// equal to the endpoint
 			check = func(t types.Tuple) (b bool, err error) {
 				keyVal, err := t.Get(1)
 
@@ -264,6 +306,8 @@ func rangeForInterval(nbf *types.NomsBinFormat, tag types.Uint, in setalgebra.In
 				return keyVal.Less(nbf, in.End.Val)
 			}
 		} else {
+			// has an endpoint which is exclusive of the endpoint value.  Return true while the value is less than
+			// the endpoint
 			check = func(t types.Tuple) (b bool, err error) {
 				keyVal, err := t.Get(1)
 
@@ -275,10 +319,12 @@ func rangeForInterval(nbf *types.NomsBinFormat, tag types.Uint, in setalgebra.In
 			}
 		}
 	} else {
+		// No starting point so start at the end point and iterate backwards
 		startVal = in.End.Val
 		inclusive = in.End.Inclusive
 		reverse = true
 
+		// there is no lower bound so always return true
 		check = func(tuple types.Tuple) (b bool, err error) {
 			return true, nil
 		}
@@ -293,6 +339,8 @@ func rangeForInterval(nbf *types.NomsBinFormat, tag types.Uint, in setalgebra.In
 	return &noms.ReadRange{Start: startKey, Inclusive: inclusive, Reverse: reverse, Check: check}, nil
 }
 
+// getCreateFuncForKeySet returns the CreateReaderFunc for a given setalgebra.Set which specifies which keys should
+// be returned.
 func getCreateFuncForKeySet(nbf *types.NomsBinFormat, keySet setalgebra.Set, sch schema.Schema) (CreateReaderFunc, error) {
 	pkCols := sch.GetPKCols()
 

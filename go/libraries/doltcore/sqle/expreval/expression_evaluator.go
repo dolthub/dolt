@@ -137,6 +137,7 @@ const (
 	InvalidCompare ComparisonType = iota
 	VariableConstCompare
 	VariableVariableCompare
+	VariableInLiteralList
 	ConstConstCompare
 )
 
@@ -157,6 +158,15 @@ func GetComparisonType(be expression.BinaryExpression) ([]*expression.GetField, 
 			variables = append(variables, v)
 		case *expression.Literal:
 			consts = append(consts, v)
+		case expression.Tuple:
+			children := v.Children()
+			for _, currChild := range children {
+				lit, ok := currChild.(*expression.Literal)
+				if !ok {
+					return nil, nil, InvalidCompare, errUnsupportedComparisonType.New()
+				}
+				consts = append(consts, lit)
+			}
 		default:
 			return nil, nil, InvalidCompare, errUnsupportedComparisonType.New()
 		}
@@ -167,8 +177,12 @@ func GetComparisonType(be expression.BinaryExpression) ([]*expression.GetField, 
 		compType = ConstConstCompare
 	} else if len(variables) == 2 {
 		compType = VariableVariableCompare
-	} else {
-		compType = VariableConstCompare
+	} else if len(variables) == 1 {
+		if len(consts) == 1 {
+			compType = VariableConstCompare
+		} else if len(consts) > 1 {
+			compType = VariableInLiteralList
+		}
 	}
 
 	return variables, consts, compType, nil
@@ -223,7 +237,7 @@ func newComparisonFunc(op CompareOp, exp expression.BinaryExpression, sch schema
 				return compareToNil(nomsVal)
 			}
 		}, nil
-	} else {
+	} else if compType == VariableVariableCompare {
 		col1Name := vars[0].Name()
 		col1, ok := sch.GetAllCols().GetByNameCaseInsensitive(col1Name)
 
@@ -252,5 +266,9 @@ func newComparisonFunc(op CompareOp, exp expression.BinaryExpression, sch schema
 				return compareNomsValues(v1, v2)
 			}
 		}, nil
+	} else if compType == VariableInLiteralList {
+		return nil, errUnsupportedComparisonType.New()
+	} else {
+		return nil, errUnsupportedComparisonType.New()
 	}
 }

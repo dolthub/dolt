@@ -34,6 +34,8 @@ func TestGetComparisonType(t *testing.T) {
 	getMedian := expression.NewGetField(1, sql.Int64, "median", false)
 	getAverage := expression.NewGetField(2, sql.Float64, "average", false)
 	litOne := expression.NewLiteral(int64(1), sql.Int64)
+	litTwo := expression.NewLiteral(int64(1), sql.Int64)
+	litThree := expression.NewLiteral(int64(1), sql.Int64)
 
 	tests := []struct {
 		name             string
@@ -65,6 +67,14 @@ func TestGetComparisonType(t *testing.T) {
 			2,
 			0,
 			VariableVariableCompare,
+			false,
+		},
+		{
+			" > float(median)",
+			expression.NewIn(getId, expression.NewTuple(litOne, litTwo, litThree)).BinaryExpression,
+			1,
+			3,
+			VariableInLiteralList,
 			false,
 		},
 	}
