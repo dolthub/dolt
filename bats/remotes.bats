@@ -564,8 +564,8 @@ SQL
     [[ "$output" =~ "* master" ]] || false
 }
 
-@test "file based remotes" {
-    # seed with some data
+@test "dolt pull onto a dirty working set fails" {
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -578,78 +578,18 @@ CREATE TABLE test (
 );
 SQL
     dolt add test
-    dolt commit -m "test commit"
-
-    # push to a file based remote
-    mkdir remotedir
-    dolt remote add origin file://remotedir
-    dolt push origin master
-
-    # clone from a directory
-    cd dolt-repo-clones
-    dolt clone file://../remotedir test-repo
-    cd test-repo
-
-    # make modifications
-    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 1)"
+    dolt commit -m "created table"
+    dolt push test-remote master
+    cd "dolt-repo-clones"
+    dolt clone http://localhost:50051/test-org/test-repo
+    cd ..
+    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt add test
-    dolt commit -m "put row"
-
-    # push back to the other directory
-    dolt push origin master
-    run dolt branch --list master -v
-    master_state1=$output
-
-    # check that the remote master was updated
-    cd ../..
-    dolt pull
-    run dolt branch --list master -v
-    [[ "$output" = "$master_state1" ]] || false
-}
-
-@test "multiple remotes" {
-    # seed with some data
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
-  PRIMARY KEY (pk)
-);
-SQL
-    dolt add test
-    dolt commit -m "test commit"
-
-    # create the remote data storage directories
-    mkdir remote1
-    mkdir remote2
-
-    # push to a file based remote
-    dolt remote add remote2 file://remote2
-    dolt push remote2 master
-
-    # fetch fail for unspecified remote
-    run dolt fetch
-    [ "$status" -eq 1 ]
-
-    # succeed when specifying a remote
-    dolt fetch remote2
-
-    #add origin push and fetch
-    dolt remote add origin file://remote1
-    dolt push master:notmaster
-
-    #fetch should now work without a specified remote because origin exists
-    dolt fetch
-
-    # fetch master into some garbage tracking branches
-    dolt fetch refs/heads/notmaster:refs/remotes/anything/master
-    dolt fetch remote2 refs/heads/master:refs/remotes/something/master
-
-    run dolt branch -a
-    [[ "$output" =~ "remotes/anything/master" ]] || false
-    [[ "$output" =~ "remotes/something/master" ]] || false
+    dolt commit -m "row to generate conflict"
+    dolt push test-remote master
+    cd "dolt-repo-clones/test-repo"
+    dolt sql -q "insert into test values (0, 1, 1, 1, 1, 1)"
+    run dolt pull origin
+    skip "dolt pull stomps a dirty working directory."
+    [ "$status" -ne 0 ]
 }
