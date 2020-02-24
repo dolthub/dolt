@@ -41,7 +41,7 @@ func testHomeDirFunc() (string, error) {
 func createUninitializedEnv() *env.DoltEnv {
 	initialDirs := []string{testHomeDir, workingDir}
 	fs := filesys.NewInMemFS(initialDirs, nil, workingDir)
-	dEnv := env.Load(context.Background(), testHomeDirFunc, fs, doltdb.InMemDoltDB)
+	dEnv := env.Load(context.Background(), testHomeDirFunc, fs, doltdb.InMemDoltDB, "test")
 	return dEnv
 }
 

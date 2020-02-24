@@ -39,7 +39,8 @@ import (
 var _ logictest.Harness = &DoltHarness{}
 
 type DoltHarness struct {
-	engine *sqle.Engine
+	Version string
+	engine  *sqle.Engine
 }
 
 func (h *DoltHarness) EngineStr() string {
@@ -47,7 +48,7 @@ func (h *DoltHarness) EngineStr() string {
 }
 
 func (h *DoltHarness) Init() error {
-	dEnv := env.Load(context.Background(), env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB)
+	dEnv := env.Load(context.Background(), env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, "test")
 	if !dEnv.HasDoltDir() {
 		panic("Current directory must be a valid dolt repository")
 	}

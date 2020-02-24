@@ -37,7 +37,7 @@ func CreateTestEnv() *env.DoltEnv {
 	const email = "bigbillieb@fake.horse"
 	initialDirs := []string{TestHomeDir, WorkingDir}
 	fs := filesys.NewInMemFS(initialDirs, nil, WorkingDir)
-	dEnv := env.Load(context.Background(), testHomeDirFunc, fs, doltdb.InMemDoltDB)
+	dEnv := env.Load(context.Background(), testHomeDirFunc, fs, doltdb.InMemDoltDB, "test")
 	cfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
 	cfg.SetStrings(map[string]string{
 		env.UserNameKey:  name,

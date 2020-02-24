@@ -20,8 +20,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -48,7 +50,9 @@ const (
 	DefaultMetricsPort    = "443"
 	DefaultRemotesApiHost = "doltremoteapi.dolthub.com"
 	DefaultRemotesApiPort = "443"
-	tempTablesDir         = "temptf"
+
+	tempTablesDir   = "temptf"
+	userAgentFormat = "dolt_cli %s %s %s"
 )
 
 var ErrPreexistingDoltDir = errors.New(".dolt dir already exists")
@@ -59,6 +63,8 @@ var ErrDocsUpdate = errors.New("error updating local docs")
 
 // DoltEnv holds the state of the current environment used by the cli.
 type DoltEnv struct {
+	Version string
+
 	Config     *DoltCliConfig
 	CfgLoadErr error
 
@@ -77,13 +83,14 @@ type DoltEnv struct {
 }
 
 // Load loads the DoltEnv for the current directory of the cli
-func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr string) *DoltEnv {
+func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, version string) *DoltEnv {
 	config, cfgErr := loadDoltCliConfig(hdp, fs)
 	repoState, rsErr := LoadRepoState(fs)
 	docs, docsErr := LoadDocs(fs)
 	ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, types.Format_Default, urlStr)
 
 	dEnv := &DoltEnv{
+		version,
 		config,
 		cfgErr,
 		repoState,
@@ -488,6 +495,27 @@ func (dEnv *DoltEnv) getRPCCreds() (credentials.PerRPCCredentials, error) {
 	return dCreds, nil
 }
 
+func (dEnv *DoltEnv) getUserAgentString() string {
+	tokens := []string{
+		"dolt_cli",
+		dEnv.Version,
+		runtime.GOOS,
+		runtime.GOARCH,
+	}
+
+	for i, t := range tokens {
+		tokens[i] = strings.Map(func(r rune) rune {
+			if unicode.IsSpace(r) {
+				return '_'
+			}
+
+			return r
+		}, strings.TrimSpace(t))
+	}
+
+	return strings.Join(tokens, " ")
+}
+
 func (dEnv *DoltEnv) GrpcConnWithCreds(hostAndPort string, insecure bool, rpcCreds credentials.PerRPCCredentials) (*grpc.ClientConn, error) {
 	if strings.IndexRune(hostAndPort, ':') == -1 {
 		if insecure {
@@ -497,15 +525,19 @@ func (dEnv *DoltEnv) GrpcConnWithCreds(hostAndPort string, insecure bool, rpcCre
 		}
 	}
 
-	var dialOpts grpc.DialOption
+	var dialOpt grpc.DialOption
 	if insecure {
-		dialOpts = grpc.WithInsecure()
+		dialOpt = grpc.WithInsecure()
 	} else {
 		tc := credentials.NewTLS(&tls.Config{})
-		dialOpts = grpc.WithTransportCredentials(tc)
+		dialOpt = grpc.WithTransportCredentials(tc)
 	}
 
-	opts := []grpc.DialOption{dialOpts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(128 * 1024 * 1024))}
+	opts := []grpc.DialOption{
+		dialOpt,
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(128 * 1024 * 1024)),
+		grpc.WithUserAgent(dEnv.getUserAgentString()),
+	}
 
 	if rpcCreds != nil {
 		opts = append(opts, grpc.WithPerRPCCredentials(rpcCreds))
