@@ -125,7 +125,7 @@ func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			r, srcDB, verr = createRemote(ctx, remoteName, remoteUrl, params)
 
 			if verr == nil {
-				dEnv, verr = envForClone(ctx, srcDB.ValueReadWriter().Format(), r, dir, dEnv.FS)
+				dEnv, verr = envForClone(ctx, srcDB.ValueReadWriter().Format(), r, dir, dEnv.FS, dEnv.Version)
 
 				if verr == nil {
 					verr = cloneRemote(ctx, srcDB, remoteName, branch, dEnv)
@@ -181,7 +181,7 @@ func parseArgs(apr *argparser.ArgParseResults) (string, string, errhand.VerboseE
 	return dir, urlStr, nil
 }
 
-func envForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, dir string, fs filesys.Filesys) (*env.DoltEnv, errhand.VerboseError) {
+func envForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, dir string, fs filesys.Filesys, version string) (*env.DoltEnv, errhand.VerboseError) {
 	exists, _ := fs.Exists(filepath.Join(dir, dbfactory.DoltDir))
 
 	if exists {
@@ -200,7 +200,7 @@ func envForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 		return nil, errhand.BuildDError("error: unable to access directory " + dir).Build()
 	}
 
-	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB)
+	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB, version)
 	err = dEnv.InitRepoWithNoData(ctx, nbf)
 
 	if err != nil {

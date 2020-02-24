@@ -36,7 +36,7 @@ func CreateTestEnv(ctx context.Context) *env.DoltEnv {
 	}
 
 	fs := filesys.NewInMemFS([]string{homeDir + "/datasets/test"}, map[string][]byte{}, homeDir+"/datasets/test")
-	return env.Load(ctx, hdp, fs, "mem://")
+	return env.Load(ctx, hdp, fs, "mem://", "test")
 }
 
 // CreateInitializedTestEnv creates an initialized DoltEnv.  This is the state of a dolt repository after 'dolt init' is
