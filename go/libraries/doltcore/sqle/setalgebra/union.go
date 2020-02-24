@@ -53,7 +53,7 @@ func finiteSetIntervalUnion(fs FiniteSet, in Interval) (Set, error) {
 
 	hashToVal := make(map[hash.Hash]types.Value, len(fs.HashToVal))
 	for h, v := range fs.HashToVal {
-		inRange, err := ValueInInterval(in, v)
+		inRange, err := in.Contains(v)
 
 		if err != nil {
 			return nil, err
@@ -100,7 +100,7 @@ func finiteSetCompositeSetUnion(fs FiniteSet, cs CompositeSet) (Set, error) {
 		var inRange bool
 		var err error
 		for _, r := range cs.Intervals {
-			inRange, err = ValueInInterval(r, v)
+			inRange, err = r.Contains(v)
 
 			if err != nil {
 				return nil, err
@@ -179,7 +179,7 @@ func intervalUnionWithComparison(in1, in2 Interval, intComparison intervalCompar
 func intervalCompositeSetUnion(in Interval, cs CompositeSet) (Set, error) {
 	hashToVal := make(map[hash.Hash]types.Value)
 	for h, v := range cs.Set.HashToVal {
-		contained, err := ValueInInterval(in, v)
+		contained, err := in.Contains(v)
 
 		if err != nil {
 			return nil, err
@@ -277,7 +277,7 @@ func addIfNotInIntervals(hashToValue map[hash.Hash]types.Value, fs FiniteSet, in
 	for h, v := range fs.HashToVal {
 		var found bool
 		for _, in := range intervals {
-			found, err = ValueInInterval(in, v)
+			found, err = in.Contains(v)
 			if err != nil {
 				return err
 			}

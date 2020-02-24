@@ -21,7 +21,7 @@ import (
 
 // finiteSetIntersection returns the set of points that are in both fs1 and fs2
 func finiteSetIntersection(fs1, fs2 FiniteSet) (Set, error) {
-	hashToVal := make(map[hash.Hash]types.Value, len(fs1.HashToVal)+len(fs2.HashToVal))
+	hashToVal := make(map[hash.Hash]types.Value)
 	for h, v := range fs1.HashToVal {
 		if _, ok := fs2.HashToVal[h]; ok {
 			hashToVal[h] = v
@@ -37,9 +37,9 @@ func finiteSetIntersection(fs1, fs2 FiniteSet) (Set, error) {
 
 // finiteSetInterval will return the set of points that are in the interval, or an EmptySet instance
 func finiteSetIntervalIntersection(fs FiniteSet, in Interval) (Set, error) {
-	hashToVal := make(map[hash.Hash]types.Value, len(fs.HashToVal))
+	hashToVal := make(map[hash.Hash]types.Value)
 	for h, v := range fs.HashToVal {
-		inRange, err := ValueInInterval(in, v)
+		inRange, err := in.Contains(v)
 
 		if err != nil {
 			return nil, err
@@ -68,7 +68,7 @@ func finiteSetCompositeSetIntersection(fs FiniteSet, composite CompositeSet) (Se
 
 	for _, r := range composite.Intervals {
 		for h, v := range fs.HashToVal {
-			inRange, err := ValueInInterval(r, v)
+			inRange, err := r.Contains(v)
 
 			if err != nil {
 				return nil, err
@@ -128,7 +128,7 @@ func intervalCompositeSetIntersection(in Interval, cs CompositeSet) (Set, error)
 
 	// check the existing finite set and eliminate values not in the new interval
 	for h, v := range cs.Set.HashToVal {
-		contained, err := ValueInInterval(in, v)
+		contained, err := in.Contains(v)
 
 		if err != nil {
 			return nil, err

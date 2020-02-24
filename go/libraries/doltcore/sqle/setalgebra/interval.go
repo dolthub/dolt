@@ -83,8 +83,8 @@ func (in Interval) Intersect(other Set) (Set, error) {
 
 }
 
-// ValueInInterval returns true if the value falls within the bounds of the interval
-func ValueInInterval(in Interval, val types.Value) (bool, error) {
+// Contains returns true if the value falls within the bounds of the interval
+func (in Interval) Contains(val types.Value) (bool, error) {
 	if in.Start == nil && in.End == nil {
 		// interval is open on both sides. full range includes everything
 		return true, nil
@@ -186,79 +186,99 @@ var noOverlapGreater = intervalComparison{1, 1, 1, 1}
 // of 0 indicates equality, and a value of 1 indicates the value in interval 1 is greater than
 // the value in interval 2.
 func compareIntervals(in1, in2 Interval) (intervalComparison, error) {
-	comp := intervalComparison{}
-	endpoints := [2][2]*IntervalEndpoint{{in1.Start, in1.End}, {in2.Start, in2.End}}
-
 	var err error
-	for i := 0; i < 2; i++ {
-		for j := 0; j < 2; j++ {
-			ep1, ep2 := endpoints[0][i], endpoints[1][j]
-			lt, eq := false, false
+	var comp intervalComparison
 
-			if ep1 == nil && ep2 == nil {
-				// if both points are null they are only equivalent when comparing start points
-				// or end points, and they are less when comparing a start point to an end point
-				// but greater when comparing an end point to a start point
-				if i == j {
-					eq = true
-				} else {
-					lt = i < j
-				}
-			} else if ep1 == nil {
-				// if an intervalEndpoint is nil in the first point it will be less than the
-				// second point if it is a nil start point. In all other cases it is greater,
-				// and it can never be equal to a non nil intervalEndpoint
-				lt = i == 0
-			} else if ep2 == nil {
-				// if an intervalEndpoint is nil in the second point then the first point will be less
-				// if it is a nil end point. In all other cases it is greater greater, and it can never
-				// be equal to a non nil intervalEndpoint
-				lt = j == 1
-			} else {
-				// compare 2 valid intervalEndpoints
-				eq = ep1.Val.Equals(ep2.Val)
+	comp[start1start2], err = comparePoints(in1.nbf, in1.Start, in2.Start, false, false)
 
-				if eq {
-					if !ep1.Inclusive && !ep2.Inclusive {
-						// If equal, but both intervalEndpoints are open, they are only equal if comparing two
-						// start points or to end points. Otherwise they are not equal.
-						if i != j {
-							eq = false
-							lt = i > j
-						}
-					} else if !ep1.Inclusive {
-						// intervalEndpoints are not equal unless both are open, or both are closed
-						eq = false
-						lt = i == 1
-					} else if !ep2.Inclusive {
-						// intervalEndpoints are not equal unless both are open, or both are closed
-						eq = false
-						lt = j == 0
-					}
-				} else {
-					// both points are non nil and not equal so simply check to see if the first point is less
-					// than the second.
-					lt, err = ep1.Val.Less(in1.nbf, ep2.Val)
+	if err != nil {
+		return intervalComparison{}, nil
+	}
 
-					if err != nil {
-						return intervalComparison{}, err
-					}
-				}
-			}
+	comp[start1end2], err = comparePoints(in1.nbf, in1.Start, in2.End, false, true)
 
-			var res int
-			if lt {
-				res = -1
-			} else if !eq {
-				res = 1
-			}
+	if err != nil {
+		return intervalComparison{}, nil
+	}
 
-			resIdx := i*2 + j
-			comp[resIdx] = res
-		}
+	comp[end1start2], err = comparePoints(in1.nbf, in1.End, in2.Start, true, false)
+
+	if err != nil {
+		return intervalComparison{}, nil
+	}
+
+	comp[end1end2], err = comparePoints(in1.nbf, in1.End, in2.End, true, true)
+
+	if err != nil {
+		return intervalComparison{}, nil
 	}
 
 	return comp, nil
+}
+
+// comparePoints compares two points from an interval
+func comparePoints(nbf *types.NomsBinFormat, ep1, ep2 *IntervalEndpoint, p1IsEnd, p2IsEnd bool) (int, error) {
+	lt, eq := false, false
+
+	if ep1 == nil && ep2 == nil {
+		// if both points are null they are only equivalent when comparing start points
+		// or end points, and they are less when comparing a start point to an end point
+		// but greater when comparing an end point to a start point
+		if p1IsEnd == p2IsEnd {
+			eq = true
+		} else {
+			lt = !p1IsEnd
+		}
+	} else if ep1 == nil {
+		// if an intervalEndpoint is nil in the first point it will be less than the
+		// second point if it is a nil start point. In all other cases it is greater,
+		// and it can never be equal to a non nil intervalEndpoint
+		lt = !p1IsEnd
+	} else if ep2 == nil {
+		// if an intervalEndpoint is nil in the second point then the first point will be less
+		// if it is a nil end point. In all other cases it is greater, and it can never
+		// be equal to a non nil intervalEndpoint
+		lt = p2IsEnd
+	} else {
+		// compare 2 valid intervalEndpoints
+		eq = ep1.Val.Equals(ep2.Val)
+
+		if eq {
+			if !ep1.Inclusive && !ep2.Inclusive {
+				// If equal, but both intervalEndpoints are open, they are only equal if comparing two
+				// start points or to end points. Otherwise they are not equal.
+				if p1IsEnd != p2IsEnd {
+					eq = false
+					lt = p1IsEnd
+				}
+			} else if !ep1.Inclusive {
+				// intervalEndpoints are not equal unless both are open, or both are closed
+				eq = false
+				lt = p1IsEnd
+			} else if !ep2.Inclusive {
+				// intervalEndpoints are not equal unless both are open, or both are closed
+				eq = false
+				lt = !p2IsEnd
+			}
+		} else {
+			// both points are non nil and not equal so simply check to see if the first point is less
+			// than the second.
+			var err error
+			lt, err = ep1.Val.Less(nbf, ep2.Val)
+
+			if err != nil {
+				return 0, err
+			}
+		}
+	}
+
+	if lt {
+		return -1, nil
+	} else if !eq {
+		return 1, nil
+	}
+
+	return 0, nil
 }
 
 // simplifyInterval will return:

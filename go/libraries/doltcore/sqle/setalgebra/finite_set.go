@@ -57,9 +57,9 @@ func (fs FiniteSet) Union(other Set) (Set, error) {
 		return fs, nil
 	case UniversalSet:
 		return otherTyped, nil
+	default:
+		panic("unknown set type")
 	}
-
-	panic("unknown set type")
 }
 
 // Interset takes the current set and another set and returns a set containing the values that are in both
@@ -75,7 +75,7 @@ func (fs FiniteSet) Intersect(other Set) (Set, error) {
 		return otherTyped, nil
 	case UniversalSet:
 		return fs, nil
+	default:
+		panic("unknown set type")
 	}
-
-	panic("unknown set type")
 }
