@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"io"
 	"strings"
 	"time"
@@ -28,6 +27,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/expreval"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -51,13 +51,14 @@ var _ sql.Table = &HistoryTable{}
 
 // HistoryTable is a system table that shows the history of rows over time
 type HistoryTable struct {
-	name          string
-	ddb           *doltdb.DoltDB
-	ss            rowconv.SuperSchema
-	sqlSch        sql.Schema
-	commitFilters []sql.Expression
-	rowFilters    []sql.Expression
-	cmItr         doltdb.CommitItr
+	name                  string
+	ddb                   *doltdb.DoltDB
+	ss                    rowconv.SuperSchema
+	sqlSch                sql.Schema
+	commitFilters         []sql.Expression
+	rowFilters            []sql.Expression
+	cmItr                 doltdb.CommitItr
+	readerCreateFuncCache map[hash.Hash]CreateReaderFunc
 }
 
 // NewHistoryTable creates a history table
@@ -101,11 +102,12 @@ func NewHistoryTable(ctx context.Context, name string, ddb *doltdb.DoltDB) (*His
 	}
 
 	return &HistoryTable{
-		name:   name,
-		ddb:    ddb,
-		ss:     ss,
-		sqlSch: sqlSch,
-		cmItr:  indCmItr,
+		name:                  name,
+		ddb:                   ddb,
+		ss:                    ss,
+		sqlSch:                sqlSch,
+		cmItr:                 indCmItr,
+		readerCreateFuncCache: make(map[hash.Hash]CreateReaderFunc),
 	}, nil
 }
 
@@ -255,7 +257,7 @@ func (ht *HistoryTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) 
 func (ht *HistoryTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	cp := part.(*commitPartition)
 
-	return newRowItrForTableAtCommit(ctx, cp.h, cp.cm, ht.name, ht.ss, ht.rowFilters)
+	return newRowItrForTableAtCommit(ctx, cp.h, cp.cm, ht.name, ht.ss, ht.rowFilters, ht.readerCreateFuncCache)
 }
 
 // commitPartition is a single commit
@@ -298,7 +300,14 @@ type rowItrForTableAtCommit struct {
 	empty          bool
 }
 
-func newRowItrForTableAtCommit(ctx context.Context, h hash.Hash, cm *doltdb.Commit, tblName string, ss rowconv.SuperSchema, filters []sql.Expression) (*rowItrForTableAtCommit, error) {
+func newRowItrForTableAtCommit(
+	ctx context.Context,
+	h hash.Hash,
+	cm *doltdb.Commit,
+	tblName string,
+	ss rowconv.SuperSchema,
+	filters []sql.Expression,
+	readerCreateFuncCache map[hash.Hash]CreateReaderFunc) (*rowItrForTableAtCommit, error) {
 	root, err := cm.GetRootValue()
 
 	if err != nil {
@@ -321,7 +330,14 @@ func newRowItrForTableAtCommit(ctx context.Context, h hash.Hash, cm *doltdb.Comm
 		return nil, err
 	}
 
-	tblSch, err := tbl.GetSchema(ctx)
+	schRef, err := tbl.GetSchemaRef()
+	schHash := schRef.TargetHash()
+
+	if err != nil {
+		return nil, err
+	}
+
+	tblSch, err := doltdb.RefToSchema(ctx, root.VRW(), schRef)
 
 	if err != nil {
 		return nil, err
@@ -333,7 +349,18 @@ func newRowItrForTableAtCommit(ctx context.Context, h hash.Hash, cm *doltdb.Comm
 		return nil, err
 	}
 
-	rd, err := MapReaderLimitedByExpressions(ctx, m, tblSch, filters)
+	var createReaderFunc CreateReaderFunc
+	if createReaderFunc, ok = readerCreateFuncCache[schHash]; !ok {
+		createReaderFunc, err = CreateReaderFuncLimitedByExpressions(tbl.Format(), tblSch, filters)
+
+		if err != nil {
+			return nil, err
+		}
+
+		readerCreateFuncCache[schHash] = createReaderFunc
+	}
+
+	rd, err := createReaderFunc(ctx, m)
 
 	if err != nil {
 		return nil, err

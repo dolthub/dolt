@@ -23,15 +23,19 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+// KeyIterator is an interface for iterating through a collection of keys
 type KeyIterator interface {
+	// Next returns the next key in the collection. When all keys are exhausted nil, io.EOF must be returned.
 	Next() (types.Value, error)
 }
 
+// SliceOfKeysIterator is a KeyIterator implementation backed by a slice of keys which are iterated in order
 type SliceOfKeysIterator struct {
 	keys []types.Tuple
 	idx  int
 }
 
+// Next returns the next key in the slice. When all keys are exhausted nil, io.EOF is be returned.
 func (sokItr *SliceOfKeysIterator) Next() (types.Value, error) {
 	if sokItr.idx < len(sokItr.keys) {
 		k := sokItr.keys[sokItr.idx]
@@ -43,6 +47,7 @@ func (sokItr *SliceOfKeysIterator) Next() (types.Value, error) {
 	return nil, io.EOF
 }
 
+// NomsMapReaderForKeys implements TableReadCloser
 type NomsMapReaderForKeys struct {
 	sch    schema.Schema
 	m      types.Map
@@ -59,6 +64,7 @@ func NewNomsMapReaderForKeyItr(m types.Map, sch schema.Schema, keyItr KeyIterato
 	return &NomsMapReaderForKeys{sch, m, keyItr}
 }
 
+// GetSchema gets the schema of the rows being read.
 func (nmr *NomsMapReaderForKeys) GetSchema() schema.Schema {
 	return nmr.sch
 }

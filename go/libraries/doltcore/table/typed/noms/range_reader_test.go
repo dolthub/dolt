@@ -1,4 +1,4 @@
-// Copyright 2020 Liquidata, Inc.
+// Copyright 2019 Liquidata, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,19 +22,23 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"github.com/liquidata-inc/dolt/go/store/datas"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-const (
-	pkTag uint64 = iota
-	valTag
-)
+func mustTuple(id int64) types.Tuple {
+	t, err := types.NewTuple(types.Format_Default, types.Uint(0), types.Int(id))
 
-func TestReaderForKeys(t *testing.T) {
+	if err != nil {
+		panic(err)
+	}
+
+	return t
+}
+
+func TestRangeReader(t *testing.T) {
 	ctx := context.Background()
 	colColl, err := schema.NewColCollection(
 		schema.NewColumn("id", pkTag, types.IntKind, true),
@@ -64,38 +68,52 @@ func TestReaderForKeys(t *testing.T) {
 	assert.NoError(t, err)
 
 	tests := []struct {
-		name     string
-		keys     []int
-		expected []int
+		name       string
+		ranges     []*ReadRange
+		expectKeys []int64
 	}{
 		{
-			name:     "tens",
-			keys:     []int{10, 20, 30, 40, 50, 60, 70, 80, 90},
-			expected: []int{10, 20, 30, 40, 50, 60, 70, 80, 90},
+			"",
+			[]*ReadRange{NewRangeEndingAt(mustTuple(10), greaterThanCheck(2))},
+			[]int64{10, 8, 6, 4},
 		},
 		{
-			name:     "fives",
-			keys:     []int{5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95},
-			expected: []int{10, 20, 30, 40, 50, 60, 70, 80, 90},
+			"",
+			[]*ReadRange{NewRangeEndingBefore(mustTuple(10), greaterThanCheck(2))},
+			[]int64{8, 6, 4},
 		},
 		{
-			name:     "empty",
-			keys:     []int{},
-			expected: []int{},
+			"",
+			[]*ReadRange{NewRangeStartingAt(mustTuple(10), lessThanCheck(20))},
+			[]int64{10, 12, 14, 16, 18},
 		},
 		{
-			name:     "no keys that are in the map",
-			keys:     []int{-5, -3, -1, 1, 3, 5, 102, 104, 106},
-			expected: []int{},
+			"",
+			[]*ReadRange{NewRangeStartingAfter(mustTuple(10), lessThanCheck(20))},
+			[]int64{12, 14, 16, 18},
+		},
+		{
+			"",
+			[]*ReadRange{NewRangeStartingAt(mustTuple(100), lessThanCheck(200))},
+			[]int64{100},
+		},
+
+		{
+			"",
+			[]*ReadRange{
+				NewRangeEndingBefore(mustTuple(10), greaterThanCheck(2)),
+				NewRangeStartingAt(mustTuple(10), lessThanCheck(20)),
+			},
+			[]int64{8, 6, 4, 10, 12, 14, 16, 18},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
-			rd := NewNomsMapReaderForKeys(m, sch, intKeysToTupleKeys(t, db.Format(), test.keys))
+			rd := NewNomsRangeReader(sch, m, test.ranges)
 
-			var rows []row.Row
+			var keys []int64
 			for {
 				r, err := rd.ReadRow(ctx)
 
@@ -104,43 +122,40 @@ func TestReaderForKeys(t *testing.T) {
 				}
 
 				assert.NoError(t, err)
-				rows = append(rows, r)
+				col0, ok := r.GetColVal(0)
+				assert.True(t, ok)
+
+				keys = append(keys, int64(col0.(types.Int)))
 			}
 
-			testAgainstExpected(t, rows, test.expected)
-			rd.Close(ctx)
+			err = rd.Close(ctx)
+			assert.NoError(t, err)
+
+			assert.Equal(t, test.expectKeys, keys)
 		})
 	}
 }
 
-func intKeysToTupleKeys(t *testing.T, nbf *types.NomsBinFormat, keys []int) []types.Tuple {
-	tupleKeys := make([]types.Tuple, len(keys))
+func greaterThanCheck(n int64) func(k types.Tuple) (bool, error) {
+	return func(k types.Tuple) (bool, error) {
+		col0, err := k.Get(1)
 
-	for i, key := range keys {
-		tuple, err := types.NewTuple(nbf, types.Uint(pkTag), types.Int(key))
-		require.NoError(t, err)
+		if err != nil {
+			panic(err)
+		}
 
-		tupleKeys[i] = tuple
+		return int64(col0.(types.Int)) > n, nil
 	}
-
-	return tupleKeys
 }
 
-func testAgainstExpected(t *testing.T, rows []row.Row, expected []int) {
-	assert.Equal(t, len(expected), len(rows))
-	for i, r := range rows {
-		k, ok := r.GetColVal(pkTag)
-		require.True(t, ok)
-		v, ok := r.GetColVal(valTag)
-		require.True(t, ok)
+func lessThanCheck(n int64) func(k types.Tuple) (bool, error) {
+	return func(k types.Tuple) (bool, error) {
+		col0, err := k.Get(1)
 
-		kn := int(k.(types.Int))
-		vn := int(v.(types.Int))
+		if err != nil {
+			panic(err)
+		}
 
-		expectedK := expected[i]
-		expectedV := 100 - expectedK
-
-		assert.Equal(t, expectedK, kn)
-		assert.Equal(t, expectedV, vn)
+		return int64(col0.(types.Int)) < n, nil
 	}
 }
