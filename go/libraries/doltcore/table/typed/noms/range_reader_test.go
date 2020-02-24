@@ -73,33 +73,33 @@ func TestRangeReader(t *testing.T) {
 		expectKeys []int64
 	}{
 		{
-			"",
+			"test range ending at",
 			[]*ReadRange{NewRangeEndingAt(mustTuple(10), greaterThanCheck(2))},
 			[]int64{10, 8, 6, 4},
 		},
 		{
-			"",
+			"test range ending before",
 			[]*ReadRange{NewRangeEndingBefore(mustTuple(10), greaterThanCheck(2))},
 			[]int64{8, 6, 4},
 		},
 		{
-			"",
+			"test range starting at",
 			[]*ReadRange{NewRangeStartingAt(mustTuple(10), lessThanCheck(20))},
 			[]int64{10, 12, 14, 16, 18},
 		},
 		{
-			"",
+			"test range starting after",
 			[]*ReadRange{NewRangeStartingAfter(mustTuple(10), lessThanCheck(20))},
 			[]int64{12, 14, 16, 18},
 		},
 		{
-			"",
+			"test range iterating to the end",
 			[]*ReadRange{NewRangeStartingAt(mustTuple(100), lessThanCheck(200))},
 			[]int64{100},
 		},
 
 		{
-			"",
+			"test multiple ranges",
 			[]*ReadRange{
 				NewRangeEndingBefore(mustTuple(10), greaterThanCheck(2)),
 				NewRangeStartingAt(mustTuple(10), lessThanCheck(20)),
