@@ -14,8 +14,7 @@ teardown() {
 }
 
 @test "Add a file system based remote" {
-    run dolt remote add origin file:///var/tmp/
-    [ $status -eq 0 ]
+    dolt remote add origin file:///var/tmp/
     run dolt remote -v
     [ $status -eq 0 ]
     [[ "$output" =~ "file:///var/tmp" ]] || false 
