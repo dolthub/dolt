@@ -2,55 +2,62 @@
 
 if [[ $(git diff --stat) != '' ]]; then
   echo "cannot run compatibility test with git working changes"
-  exit
+#  exit
 fi
+
+echo "one"
 
 starting_branch=$(git rev-parse --abbrev-ref HEAD)
 
-mkdir "head"
-pushd head || exit
+echo "two"
+
+if [ -d head ]; then rm -r head; fi
+mkdir head && cd head
+echo "three"
 dolt init
 ../setup_repo.sh
-popd || exit
+cd ..
 
 # https://github.com/koalaman/shellcheck/wiki/SC2013
 while IFS= read -r ver
 do
-  echo "checking compatibility for: $ver"
-  mkdir "$ver"
-  pushd "$ver" || exit
-
-  pushd ../../../go/dolt/cmd/ || exit
+  pushd ../../go/cmd/dolt || exit
   git checkout tags/"$ver"
   go install .
   popd || exit
 
+  if [ -d "$ver" ]; then rm -r head; fi
+  mkdir "$ver" && cd "$ver"
+
+  echo "creating repo with dolt @ $ver"
   ../setup_repo.sh
 
   pushd ../head || exit
   # ensure we can read the repo
   dolt schema show
-  popd || exit
 
-  popd || exit
+  cd ..
+
 done < <(grep -v '^ *#' < versions.txt)
 
 # go back to initial branch
-pushd ../../../go/dolt/cmd/ || exit
-git checkout $"starting_branch"
+pushd ../../go/cmd/dolt/ || exit
+git checkout $starting_branch
+echo "installing dolt @ $starting_branch"
 go install .
 popd || exit
 
 while IFS= read -r ver
 do
   echo "checking compatibility for: $ver"
-  pushd "$ver" || exit
+  cd "$ver" || exit
+  pwd
 
   # ensure we can read the repo
   dolt schema show
 
-  popd || exit
-  rm -r $"ver"
+  cd .. || exit
+#  rm -r $"$ver"
 
 done < <(grep -v '^ *#' < versions.txt)
 
