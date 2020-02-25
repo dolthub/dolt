@@ -1,5 +1,11 @@
 #!/bin/bash
 
+
+if [[ $(git diff --stat) != '' ]]; then
+  echo "cannot run compatibility test with git working changes"
+  exit
+fi
+
 dolt_dir="../../../go/cmd/dolt/"
 
 starting_branch=$(git rev-parse --abbrev-ref HEAD)
@@ -25,16 +31,10 @@ function setup_dir() {
 
 function run_bats_tests() {
   pushd "$1" || exit
-  cp "$top_dir"/../../*bats .
-  cp -r "$top_dir"/../../helper .
+  cp -r "$top_dir"/bats .
   bats .
   popd || exit
 }
-
-if [[ $(git diff --stat) != '' ]]; then
-  echo "cannot run compatibility test with git working changes"
-  exit
-fi
 
 setup_dir "head"
 
@@ -50,7 +50,7 @@ do
   dolt schema show
   popd || exit
 
-done < <(grep -v '^ *#' < versions.txt)
+done < <(grep -v '^ *#' < dolt_versions.txt)
 
 # now build dolt@head and make sure we can read
 # all of the legacy repositories we created
@@ -65,4 +65,4 @@ do
   dolt schema show
   popd || exit
 
-done < <(grep -v '^ *#' < versions.txt)
+done < <(grep -v '^ *#' < dolt_versions.txt)
