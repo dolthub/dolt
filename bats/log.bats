@@ -48,7 +48,7 @@ teardown() {
 }
 
 @test "dolt log properly orders merge commits" {
-    dolt sql -q	"create table test (pk int, c1 int, primary key(pk))"
+    dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test
     dolt commit -m "Commit1"
     dolt checkout -b test-branch
@@ -86,7 +86,7 @@ teardown() {
     run dolt log -n 2
     regex='Merge:.*MergeCommit.*Commit3'
     [[ "$output" =~ $regex ]] || false
-    run	dolt log -n 1
+    run dolt log -n 1
     regex='Merge:.*MergeCommit.*'
     [[ "$output" =~ $regex ]] || false
 }
