@@ -21,7 +21,7 @@ cd ..
 # https://github.com/koalaman/shellcheck/wiki/SC2013
 while IFS= read -r ver
 do
-  pushd ../../go/cmd/dolt || exit
+  pushd ../../../go/cmd/dolt || exit
   git checkout tags/"$ver"
   go install .
   popd || exit
@@ -41,7 +41,7 @@ do
 done < <(grep -v '^ *#' < versions.txt)
 
 # go back to initial branch
-pushd ../../go/cmd/dolt/ || exit
+pushd ../../../go/cmd/dolt/ || exit
 git checkout $starting_branch
 echo "installing dolt @ $starting_branch"
 go install .
