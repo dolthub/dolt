@@ -7,7 +7,7 @@ test_env="test_env"
 # we need the test files to remain
 rm -r $test_env
 mkdir $test_env
-cp test_files/* $test_env
+cp -r test_files/* $test_env
 cd $test_env
 
 ./compatibility.sh

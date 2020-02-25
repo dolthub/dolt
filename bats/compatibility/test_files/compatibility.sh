@@ -26,12 +26,13 @@ function setup_dir() {
   mkdir "$1"
   pushd "$1" || exit
   "$top_dir"/setup_repo.sh
+  cp -r "$top_dir"/bats/* .
+  ls -l *bats
   popd || exit
 }
 
 function run_bats_tests() {
   pushd "$1" || exit
-  cp -r "$top_dir"/bats .
   bats .
   popd || exit
 }
@@ -43,26 +44,20 @@ do
 
   build_dolt "$ver"
   setup_dir "$ver"
-  run_bats_tests "$ver"
 
   # ensure we can read the repo
-  pushd head || exit
-  dolt schema show
-  popd || exit
+  # create with dolt @ head
+  run_bats_tests head
 
 done < <(grep -v '^ *#' < dolt_versions.txt)
 
-# now build dolt@head and make sure we can read
+# now build dolt @ head and make sure we can read
 # all of the legacy repositories we created
 build_dolt "$starting_branch"
 
 while IFS= read -r ver
 do
 
-  echo "checking compatibility for: $ver"
-  pushd "$ver" || exit
-  # ensure we can read the repo
-  dolt schema show
-  popd || exit
+  run_bats_tests "$ver"
 
 done < <(grep -v '^ *#' < dolt_versions.txt)

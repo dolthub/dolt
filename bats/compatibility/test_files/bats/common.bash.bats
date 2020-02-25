@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-load $BATS_TEST_DIRNAME/common.bash
+load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
