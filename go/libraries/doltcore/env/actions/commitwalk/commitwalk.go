@@ -187,6 +187,10 @@ func GetDotDotRevisions(ctx context.Context, ddb *doltdb.DoltDB, includedHead ha
 // in reverse topological order, with tiebreaking done by the height of the commit graph -- higher commits
 // appear first. Remaining ties are broken by timestamp; newer commits appear first.
 func GetTopologicalOrderCommits(ctx context.Context, ddb *doltdb.DoltDB, startCommitHash hash.Hash) ([]*doltdb.Commit, error) {
+	return GetTopNTopoOrderedCommits(ctx, ddb, startCommitHash, -1)
+}
+
+func GetTopNTopoOrderedCommits(ctx context.Context, ddb *doltdb.DoltDB, startCommitHash hash.Hash, n int) ([]*doltdb.Commit, error) {
 	var commitList []*doltdb.Commit
 	q := newQueue(ddb)
 	if err := q.AddPendingIfUnseen(ctx, startCommitHash); err != nil {
@@ -204,6 +208,11 @@ func GetTopologicalOrderCommits(ctx context.Context, ddb *doltdb.DoltDB, startCo
 			}
 		}
 		commitList = append(commitList, nextC.commit)
+
+		if n > 0 && len(commitList) >= n {
+			break
+		}
 	}
+
 	return commitList, nil
 }
