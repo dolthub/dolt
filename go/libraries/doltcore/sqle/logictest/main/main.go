@@ -92,7 +92,7 @@ func NewDoltRecordResult(e *logictest.ResultLogEntry) *DoltResultRecord {
 		TestFile:     e.TestFile,
 		LineNum:      e.LineNum,
 		Query:        e.Query,
-		Duration: 	  fmt.Sprintf("%dms", e.Duration.Milliseconds()),
+		Duration:     fmt.Sprintf("%dms", e.Duration.Milliseconds()),
 		Result:       result,
 		ErrorMessage: e.ErrorMessage,
 	}
