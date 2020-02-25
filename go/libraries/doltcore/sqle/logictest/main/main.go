@@ -37,69 +37,26 @@ func main() {
 
 	if args[0] == "run" {
 		h := &dolt.DoltHarness{}
-		if len(args) == 3 && args[1] == "withdurations" {
-			logictest.RunTestFilesWithTestTimes(h, args[2:]...)
-		} else {
-			logictest.RunTestFiles(h, args[1:]...)
-		}
+		logictest.RunTestFiles(h, args[1:]...)
 	} else if args[0] == "parse" {
-		if len(args) == 3 && args[1] == "withdurations" {
-			parseTestResults(args[2], true)
-		} else {
-			parseTestResults(args[1], false)
-		}
+		parseTestResults(args[1])
 	} else {
 		panic("Unrecognized command " + args[0])
 	}
 }
 
-func parseTestResults(f string, resultsIncludeDurations bool) {
-	var entries []*logictest.ResultLogEntry
-	var err error
-
-	if resultsIncludeDurations {
-		entries, err = logictest.ParseResultFileWithDuration(f)
-		if err != nil {
-			panic(err)
-		}
-	} else {
-		entries, err = logictest.ParseResultFile(f)
-		if err != nil {
-			panic(err)
-		}
+func parseTestResults(f string) {
+	entries, err := logictest.ParseResultFile(f)
+	if err != nil {
+		panic(err)
 	}
 
-	if resultsIncludeDurations{
-		writeResultsWithDurations(entries)
-	} else {
-		writeResults(entries)
-	}
-}
-
-func writeResults(entries []*logictest.ResultLogEntry) {
 	records := make([]*DoltResultRecord, len(entries))
 	for i, e := range entries {
 		records[i] = NewDoltRecordResult(e)
 	}
 
 	b, err := JSONMarshal(records)
-	if err != nil {
-		panic(err)
-	}
-
-	_, err = os.Stdout.Write(b)
-	if err != nil {
-		panic(err)
-	}
-}
-
-func writeResultsWithDurations(entries []*logictest.ResultLogEntry) {
-	records := make([]*DoltResultRecordWithDuration, len(entries))
-	for i, e := range entries {
-		records[i] = NewDoltRecordResultWithDuration(e)
-	}
-
-	b, err := JSONMarshalWithDuration(records)
 	if err != nil {
 		panic(err)
 	}
@@ -134,6 +91,7 @@ func NewDoltRecordResult(e *logictest.ResultLogEntry) *DoltResultRecord {
 		TestFile:     e.TestFile,
 		LineNum:      e.LineNum,
 		Query:        e.Query,
+		Duration: 	  e.Duration.String(),
 		Result:       result,
 		ErrorMessage: e.ErrorMessage,
 	}
@@ -147,49 +105,7 @@ type DoltResultRecord struct {
 	TestFile     string `json:"test_file"`
 	LineNum      int    `json:"line_num"`
 	Query        string `json:"query_string"`
-	Result       string `json:"result"`
-	ErrorMessage string `json:"error_message,omitempty"`
-}
-
-type TestResultArrayWithDuration struct {
-	Rows []*DoltResultRecordWithDuration `json:"rows"`
-}
-
-func NewDoltRecordResultWithDuration(e *logictest.ResultLogEntry) *DoltResultRecordWithDuration {
-	var result string
-	switch e.Result {
-	case logictest.Ok:
-		result = "ok"
-	case logictest.NotOk:
-		result = "not ok"
-	case logictest.Skipped:
-		result = "skipped"
-	}
-	return &DoltResultRecordWithDuration{
-		TestFile:     e.TestFile,
-		LineNum:      e.LineNum,
-		Query:        e.Query,
-		Duration:     e.Duration.String(),
-		Result:       result,
-		ErrorMessage: e.ErrorMessage,
-	}
-}
-
-type DoltResultRecordWithDuration struct {
-	TestFile     string `json:"test_file"`
-	LineNum      int    `json:"line_num"`
-	Query        string `json:"query_string"`
 	Duration     string `json:"duration"`
 	Result       string `json:"result"`
 	ErrorMessage string `json:"error_message,omitempty"`
-}
-
-// Custom json marshalling function is necessary to avoid escaping <, > and & to html unicode escapes
-func JSONMarshalWithDuration(records []*DoltResultRecordWithDuration) ([]byte, error) {
-	rows := &TestResultArrayWithDuration{Rows: records}
-	buffer := &bytes.Buffer{}
-	encoder := json.NewEncoder(buffer)
-	encoder.SetEscapeHTML(false)
-	err := encoder.Encode(rows)
-	return buffer.Bytes(), err
 }
