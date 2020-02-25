@@ -1,0 +1,161 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package noms
+
+import (
+	"context"
+	"io"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/store/chunks"
+	"github.com/liquidata-inc/dolt/go/store/datas"
+	"github.com/liquidata-inc/dolt/go/store/types"
+)
+
+func mustTuple(id int64) types.Tuple {
+	t, err := types.NewTuple(types.Format_Default, types.Uint(0), types.Int(id))
+
+	if err != nil {
+		panic(err)
+	}
+
+	return t
+}
+
+func TestRangeReader(t *testing.T) {
+	ctx := context.Background()
+	colColl, err := schema.NewColCollection(
+		schema.NewColumn("id", pkTag, types.IntKind, true),
+		schema.NewColumn("val", valTag, types.IntKind, false))
+	require.NoError(t, err)
+
+	sch := schema.SchemaFromCols(colColl)
+
+	var db datas.Database
+	storage := &chunks.MemoryStorage{}
+	db = datas.NewDatabase(storage.NewView())
+	m, err := types.NewMap(ctx, db)
+	assert.NoError(t, err)
+
+	me := m.Edit()
+	for i := 0; i <= 100; i += 2 {
+		k, err := types.NewTuple(db.Format(), types.Uint(pkTag), types.Int(i))
+		require.NoError(t, err)
+
+		v, err := types.NewTuple(db.Format(), types.Uint(valTag), types.Int(100-i))
+		require.NoError(t, err)
+
+		me.Set(k, v)
+	}
+
+	m, err = me.Map(ctx)
+	assert.NoError(t, err)
+
+	tests := []struct {
+		name       string
+		ranges     []*ReadRange
+		expectKeys []int64
+	}{
+		{
+			"test range ending at",
+			[]*ReadRange{NewRangeEndingAt(mustTuple(10), greaterThanCheck(2))},
+			[]int64{10, 8, 6, 4},
+		},
+		{
+			"test range ending before",
+			[]*ReadRange{NewRangeEndingBefore(mustTuple(10), greaterThanCheck(2))},
+			[]int64{8, 6, 4},
+		},
+		{
+			"test range starting at",
+			[]*ReadRange{NewRangeStartingAt(mustTuple(10), lessThanCheck(20))},
+			[]int64{10, 12, 14, 16, 18},
+		},
+		{
+			"test range starting after",
+			[]*ReadRange{NewRangeStartingAfter(mustTuple(10), lessThanCheck(20))},
+			[]int64{12, 14, 16, 18},
+		},
+		{
+			"test range iterating to the end",
+			[]*ReadRange{NewRangeStartingAt(mustTuple(100), lessThanCheck(200))},
+			[]int64{100},
+		},
+
+		{
+			"test multiple ranges",
+			[]*ReadRange{
+				NewRangeEndingBefore(mustTuple(10), greaterThanCheck(2)),
+				NewRangeStartingAt(mustTuple(10), lessThanCheck(20)),
+			},
+			[]int64{8, 6, 4, 10, 12, 14, 16, 18},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			rd := NewNomsRangeReader(sch, m, test.ranges)
+
+			var keys []int64
+			for {
+				r, err := rd.ReadRow(ctx)
+
+				if err == io.EOF {
+					break
+				}
+
+				assert.NoError(t, err)
+				col0, ok := r.GetColVal(0)
+				assert.True(t, ok)
+
+				keys = append(keys, int64(col0.(types.Int)))
+			}
+
+			err = rd.Close(ctx)
+			assert.NoError(t, err)
+
+			assert.Equal(t, test.expectKeys, keys)
+		})
+	}
+}
+
+func greaterThanCheck(n int64) func(k types.Tuple) (bool, error) {
+	return func(k types.Tuple) (bool, error) {
+		col0, err := k.Get(1)
+
+		if err != nil {
+			panic(err)
+		}
+
+		return int64(col0.(types.Int)) > n, nil
+	}
+}
+
+func lessThanCheck(n int64) func(k types.Tuple) (bool, error) {
+	return func(k types.Tuple) (bool, error) {
+		col0, err := k.Get(1)
+
+		if err != nil {
+			panic(err)
+		}
+
+		return int64(col0.(types.Int)) < n, nil
+	}
+}
