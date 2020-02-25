@@ -76,7 +76,6 @@ teardown() {
     run dolt log -n 5
     regex='Merge:.*MergeCommit.*Commit3.*Commit2.*Commit1.*Initialize data repository'
     [[ "$output" =~ $regex ]] || false
-    skip "This outputs MergeCommit, Commit2, Commit1, Initialize which is not toposort"
     run dolt log -n 4
     regex='Merge:.*MergeCommit.*Commit3.*Commit2.*Commit1'
     [[ "$output" =~ $regex ]] || false
