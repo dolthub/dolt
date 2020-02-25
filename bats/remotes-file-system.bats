@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    [ -d /var/tmp ]
     cd $BATS_TMPDIR
     cd dolt-repo-$$
     mkdir "dolt-repo-clones"
@@ -14,10 +13,12 @@ teardown() {
 }
 
 @test "Add a file system based remote" {
-    dolt remote add origin file:///var/tmp/
+    mkdir remote
+    dolt remote add origin file://remote/
     run dolt remote -v
     [ $status -eq 0 ]
-    [[ "$output" =~ "file:///var/tmp" ]] || false 
+    regex='file://.*/remote'
+    [[ "$output" =~ $regex ]] || false 
 }
 
 @test "Add a file system remote with a bad path" {
