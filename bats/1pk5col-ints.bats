@@ -72,19 +72,6 @@ teardown() {
 
 }
 
-@test "dolt log with -n specified" {
-    dolt add test
-    dolt commit -m "first commit"
-    run dolt log
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "first commit" ]] || false
-    [[ "$output" =~ "Initialize data repository" ]] || false
-    run dolt log -n 1
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "first commit" ]] || false
-    [[ ! "$output" =~ "Initialize data repository" ]] || false
-}
-
 @test "add a row to a created table using dolt table put-row" {
     dolt add test
     dolt commit -m "create table"
