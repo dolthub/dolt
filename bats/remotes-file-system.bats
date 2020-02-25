@@ -4,6 +4,9 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 setup() {
     setup_common
     [ -d /var/tmp ]
+    cd $BATS_TMPDIR
+    cd dolt-repo-$$
+    mkdir "dolt-repo-clones"
 }
 
 teardown() {
