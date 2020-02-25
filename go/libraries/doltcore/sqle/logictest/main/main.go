@@ -17,6 +17,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 
 	"github.com/liquidata-inc/sqllogictest/go/logictest"
@@ -56,12 +57,12 @@ func parseTestResults(f string) {
 		records[i] = NewDoltRecordResult(e)
 	}
 
-	bytes, err := JSONMarshal(records)
+	b, err := JSONMarshal(records)
 	if err != nil {
 		panic(err)
 	}
 
-	_, err = os.Stdout.Write(bytes)
+	_, err = os.Stdout.Write(b)
 	if err != nil {
 		panic(err)
 	}
@@ -91,6 +92,7 @@ func NewDoltRecordResult(e *logictest.ResultLogEntry) *DoltResultRecord {
 		TestFile:     e.TestFile,
 		LineNum:      e.LineNum,
 		Query:        e.Query,
+		Duration:     fmt.Sprintf("%dms", e.Duration.Milliseconds()),
 		Result:       result,
 		ErrorMessage: e.ErrorMessage,
 	}
@@ -104,6 +106,7 @@ type DoltResultRecord struct {
 	TestFile     string `json:"test_file"`
 	LineNum      int    `json:"line_num"`
 	Query        string `json:"query_string"`
+	Duration     string `json:"duration"`
 	Result       string `json:"result"`
 	ErrorMessage string `json:"error_message,omitempty"`
 }
