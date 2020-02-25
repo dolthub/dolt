@@ -17,6 +17,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 
 	"github.com/liquidata-inc/sqllogictest/go/logictest"
@@ -91,7 +92,7 @@ func NewDoltRecordResult(e *logictest.ResultLogEntry) *DoltResultRecord {
 		TestFile:     e.TestFile,
 		LineNum:      e.LineNum,
 		Query:        e.Query,
-		Duration: 	  e.Duration.String(),
+		Duration: 	  fmt.Sprintf("%dms", e.Duration.Milliseconds()),
 		Result:       result,
 		ErrorMessage: e.ErrorMessage,
 	}
