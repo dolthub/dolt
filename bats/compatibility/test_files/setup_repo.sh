@@ -6,7 +6,7 @@ dolt sql <<SQL
 CREATE TABLE abc (
   pk BIGINT NOT NULL COMMENT 'tag:0',
   a LONGTEXT COMMENT 'tag:100',
-  b FLOAT COMMENT 'tag:101',
+  b DOUBLE COMMENT 'tag:101',
   w BIGINT COMMENT 'tag:102',
   x BIGINT COMMENT 'tag:103',
   PRIMARY KEY (pk)
@@ -28,8 +28,9 @@ SQL
 dolt add .
 dolt commit -m "initialized data"
 dolt branch init
-dolt branch other
 
+
+# dolt branch other
 # dolt sql <<SQL
 # DELETE FROM abc WHERE pk=1;
 # INSERT INTO abc VALUES (3, 'data');
@@ -66,7 +67,7 @@ dolt branch other
 # dolt merge other
 # dolt add .
 # dolt commit -m "merge other into master"
-
+#
 # dolt sql -q "INSERT INTO abc VALUES (2, 'something', '2020-01-14 20:48:37.13061')"
 # dolt add .
 # dolt commit -m "Added something row"

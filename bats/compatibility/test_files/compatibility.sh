@@ -13,28 +13,29 @@ top_dir=$(pwd)
 
 function build_dolt() {
   # go back to initial branch
-  pushd "$dolt_dir" || exit
-  git checkout "$1"
-  echo "installing dolt @ $1"
+  pushd "$dolt_dir" > /dev/null || exit
+  git checkout "$1" > /dev/null
   go install .
-  popd || exit
+  popd > /dev/null || exit
 }
 
 function setup_dir() {
-  echo "creating repo with dolt @ $1"
   if [ -d "$1" ]; then rm -r "$1"; fi
   mkdir "$1"
-  pushd "$1" || exit
-  "$top_dir"/setup_repo.sh
+  pushd "$1" > /dev/null || exit
+  "$top_dir"/setup_repo.sh > /dev/null
   cp -r "$top_dir"/bats/* .
-  ls -l *bats
-  popd || exit
+  popd > /dev/null || exit
 }
 
 function run_bats_tests() {
-  pushd "$1" || exit
+  pushd "$1" > /dev/null || exit
+  cwd=$(pwd)
+  hash=$(git rev-parse HEAD)
+  echo "testing dolt @ $hash against repo in $cwd"
   bats .
-  popd || exit
+  echo
+  popd > /dev/null || exit
 }
 
 setup_dir "head"
@@ -47,6 +48,8 @@ do
 
   # ensure we can read the repo
   # create with dolt @ head
+  ver_hash=$(git rev-parse HEAD)
+  echo "hash for dolt @ $ver: $ver_hash"
   run_bats_tests head
 
 done < <(grep -v '^ *#' < dolt_versions.txt)
@@ -57,7 +60,8 @@ build_dolt "$starting_branch"
 
 while IFS= read -r ver
 do
-
+  head_hash=$(git rev-parse HEAD)
+  echo "hash for dolt @ head: $head_hash"
   run_bats_tests "$ver"
 
 done < <(grep -v '^ *#' < dolt_versions.txt)

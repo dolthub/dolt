@@ -42,14 +42,11 @@ setup_no_dolt_init() {
 }
 
 setup_common() {
-    echo "setup"
-    # setup_no_dolt_init
-    # dolt init
+    echo "setup" > /dev/null
 }
 
 teardown_common() {
-    echo "teardown"
-#    rm -rf "$BATS_TMPDIR/dolt-repo-$$"
+    echo "teardown" > /dev/null
 }
 
 # nativevar DOLT_ROOT_PATH $BATS_TMPDIR/config-$$ /p
