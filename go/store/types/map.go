@@ -386,7 +386,7 @@ func (m Map) IteratorFrom(ctx context.Context, key Value) (MapIterator, error) {
 	return &mapIterator{sequenceIter: cur}, nil
 }
 
-func (m Map) IteratorFromEnd(ctx context.Context, key Value) (MapIterator, error) {
+func (m Map) IteratorBackFrom(ctx context.Context, key Value) (MapIterator, error) {
 	cur, err := newCursorAtValue(ctx, m.orderedSequence, key, false, false)
 
 	if err != nil {

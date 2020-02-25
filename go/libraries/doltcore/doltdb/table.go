@@ -264,9 +264,9 @@ func (t *Table) GetConflictSchemas(ctx context.Context) (base, sch, mergeSch sch
 		mergeRef := schemas.MergeValue.(types.Ref)
 
 		var baseSch, sch, mergeSch schema.Schema
-		if baseSch, err = refToSchema(ctx, t.vrw, baseRef); err == nil {
-			if sch, err = refToSchema(ctx, t.vrw, valRef); err == nil {
-				mergeSch, err = refToSchema(ctx, t.vrw, mergeRef)
+		if baseSch, err = RefToSchema(ctx, t.vrw, baseRef); err == nil {
+			if sch, err = RefToSchema(ctx, t.vrw, valRef); err == nil {
+				mergeSch, err = RefToSchema(ctx, t.vrw, mergeRef)
 			}
 		}
 
@@ -275,7 +275,7 @@ func (t *Table) GetConflictSchemas(ctx context.Context) (base, sch, mergeSch sch
 	return nil, nil, nil, ErrNoConflicts
 }
 
-func refToSchema(ctx context.Context, vrw types.ValueReadWriter, ref types.Ref) (schema.Schema, error) {
+func RefToSchema(ctx context.Context, vrw types.ValueReadWriter, ref types.Ref) (schema.Schema, error) {
 	schemaVal, err := ref.TargetValue(ctx, vrw)
 
 	if err != nil {
@@ -300,7 +300,7 @@ func (t *Table) GetSchema(ctx context.Context) (schema.Schema, error) {
 	}
 
 	schemaRef := schemaRefVal.(types.Ref)
-	return refToSchema(ctx, t.vrw, schemaRef)
+	return RefToSchema(ctx, t.vrw, schemaRef)
 }
 
 func (t *Table) GetSchemaRef() (types.Ref, error) {
