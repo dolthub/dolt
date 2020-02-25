@@ -190,6 +190,9 @@ func GetTopologicalOrderCommits(ctx context.Context, ddb *doltdb.DoltDB, startCo
 	return GetTopNTopoOrderedCommits(ctx, ddb, startCommitHash, -1)
 }
 
+// GetTopNTopoOrderedCommits returns the first N commits (If N <= 0 then all commits) reachable from the commit at hash
+// `startCommitHash` in reverse topological order, with tiebreaking done by the height of the commit graph -- higher
+// commits appear first. Remaining ties are broken by timestamp; newer commits appear first.
 func GetTopNTopoOrderedCommits(ctx context.Context, ddb *doltdb.DoltDB, startCommitHash hash.Hash, n int) ([]*doltdb.Commit, error) {
 	var commitList []*doltdb.Commit
 	q := newQueue(ddb)
