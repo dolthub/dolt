@@ -1,65 +1,68 @@
 #!/bin/bash
 
-if [[ $(git diff --stat) != '' ]]; then
-  echo "cannot run compatibility test with git working changes"
-#  exit
-fi
-
-echo "one"
+dolt_dir="../../../go/cmd/dolt/"
 
 starting_branch=$(git rev-parse --abbrev-ref HEAD)
+top_dir=$(pwd)
 
-echo "two"
-
-if [ -d head ]; then rm -r head; fi
-mkdir head && cd head
-echo "three"
-dolt init
-../setup_repo.sh
-cd ..
-
-# https://github.com/koalaman/shellcheck/wiki/SC2013
-while IFS= read -r ver
-do
-  pushd ../../../go/cmd/dolt || exit
-  git checkout tags/"$ver"
+function build_dolt() {
+  # go back to initial branch
+  pushd "$dolt_dir" || exit
+  git checkout "$1"
+  echo "installing dolt @ $1"
   go install .
   popd || exit
+}
 
-  if [ -d "$ver" ]; then rm -r head; fi
-  mkdir "$ver" && cd "$ver"
+function setup_dir() {
+  echo "creating repo with dolt @ $1"
+  if [ -d "$1" ]; then rm -r "$1"; fi
+  mkdir "$1"
+  pushd "$1" || exit
+  "$top_dir"/setup_repo.sh
+  popd || exit
+}
 
-  echo "creating repo with dolt @ $ver"
-  ../setup_repo.sh
+function run_bats_tests() {
+  pushd "$1" || exit
+  cp "$top_dir"/../../*bats .
+  cp -r "$top_dir"/../../helper .
+  bats .
+  popd || exit
+}
 
-  pushd ../head || exit
-  # ensure we can read the repo
-  dolt schema show
+if [[ $(git diff --stat) != '' ]]; then
+  echo "cannot run compatibility test with git working changes"
+  exit
+fi
 
-  cd ..
-
-done < <(grep -v '^ *#' < versions.txt)
-
-# go back to initial branch
-pushd ../../../go/cmd/dolt/ || exit
-git checkout $starting_branch
-echo "installing dolt @ $starting_branch"
-go install .
-popd || exit
+setup_dir "head"
 
 while IFS= read -r ver
 do
-  echo "checking compatibility for: $ver"
-  cd "$ver" || exit
-  pwd
+
+  build_dolt "$ver"
+  setup_dir "$ver"
+  run_bats_tests "$ver"
 
   # ensure we can read the repo
+  pushd head || exit
   dolt schema show
-
-  cd .. || exit
-#  rm -r $"$ver"
+  popd || exit
 
 done < <(grep -v '^ *#' < versions.txt)
 
-# cleanup
-rm -r head
+# now build dolt@head and make sure we can read
+# all of the legacy repositories we created
+build_dolt "$starting_branch"
+
+while IFS= read -r ver
+do
+
+  echo "checking compatibility for: $ver"
+  pushd "$ver" || exit
+  # ensure we can read the repo
+  dolt schema show
+  popd || exit
+
+done < <(grep -v '^ *#' < versions.txt)
