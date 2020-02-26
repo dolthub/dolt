@@ -372,18 +372,22 @@ teardown() {
 }
 
 @test "sql select union all" {
-    skip "union all is not supported"
     run dolt sql -q "SELECT 2+2 FROM dual UNION ALL SELECT 2+2 FROM dual UNION ALL SELECT 2+3 FROM dual;"
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 7 ]
 }
 
 @test "sql select union" {
-    skip "union is not supported"
     run dolt sql -q "SELECT 2+2 FROM dual UNION SELECT 2+2 FROM dual UNION SELECT 2+3 FROM dual;"
     [ $status -eq 0 ]
-    [ "${#lines[@]}" -eq 6 ]
+    [ "${#lines[@]}" -eq 7 ]
     run dolt sql -q "SELECT 2+2 FROM dual UNION DISTINCT SELECT 2+2 FROM dual UNION SELECT 2+3 FROM dual;"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
+    run dolt sql -q "(SELECT 2+2 FROM dual UNION DISTINCT SELECT 2+2 FROM dual) UNION SELECT 2+3 FROM dual;"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
+    run dolt sql -q "SELECT 2+2 FROM dual UNION DISTINCT (SELECT 2+2 FROM dual UNION SELECT 2+3 FROM dual);"
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
 }
