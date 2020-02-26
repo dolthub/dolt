@@ -23,7 +23,7 @@ function setup_dir() {
   if [ -d "$1" ]; then rm -r "$1"; fi
   mkdir "$1"
   pushd "$1" > /dev/null || exit
-  "$top_dir"/setup_repo.sh > /dev/null
+  "$top_dir"/setup_repo.sh > setup_repo.log
   cp -r "$top_dir"/bats/* .
   popd > /dev/null || exit
 }
