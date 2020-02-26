@@ -3,6 +3,7 @@
     {
       "tag": 0,
       "name": "pk",
+      "kind": "int",
       "is_part_of_pk": true,
       "typeinfo": {
         "type": "int",
@@ -20,6 +21,7 @@
     {
       "tag": 1,
       "name": "c1",
+      "kind": "int",
       "is_part_of_pk": false,
       "typeinfo": {
         "type": "int",
@@ -32,6 +34,7 @@
     {
       "tag": 2,
       "name": "c2",
+      "kind": "int",
       "is_part_of_pk": false,
       "typeinfo": {
         "type": "int",
@@ -44,6 +47,7 @@
     {
       "tag": 3,
       "name": "c3",
+      "kind": "int",
       "is_part_of_pk": false,
       "typeinfo": {
         "type": "int",
@@ -56,6 +60,7 @@
     {
       "tag": 4,
       "name": "c4",
+      "kind": "int",
       "is_part_of_pk": false,
       "typeinfo": {
         "type": "int",
@@ -68,6 +73,7 @@
     {
       "tag": 5,
       "name": "c5",
+      "kind": "int",
       "is_part_of_pk": false,
       "typeinfo": {
         "type": "int",
