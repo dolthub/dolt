@@ -41,3 +41,20 @@ dolt add .
 dolt commit -m "made changes to other"
 
 dolt checkout master
+
+# add info to the log
+echo
+echo "dolt status"
+dolt status
+
+echo
+echo "dolt branch"
+dolt branch
+
+echo
+echo "dolt schema show"
+dolt schema show
+
+echo
+echo "dolt sql -q 'select * from abc;'"
+dolt sql -q 'select * from abc;'
