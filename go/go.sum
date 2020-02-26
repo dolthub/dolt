@@ -65,8 +65,6 @@ github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d h1:UQZhZ2O0vMHr2c
 github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d/go.mod h1:rBZYJk541a8SKzHPHnH3zbiI+7dagKZ0cgpgrD7Fyho=
 github.com/andreyvit/diff v0.0.0-20170406064948-c7f18ee00883 h1:bvNMNQO63//z+xNgfBlViaCIJKLlCJ6/fmUseuG0wVQ=
 github.com/andreyvit/diff v0.0.0-20170406064948-c7f18ee00883/go.mod h1:rCTlJbsFo29Kk6CurOXKm700vrz8f0KW0JNfpkRJY/8=
-github.com/araddon/dateparse v0.0.0-20190622164848-0fb0a474d195 h1:c4mLfegoDw6OhSJXTd2jUEQgZUQuJWtocudb97Qn9EM=
-github.com/araddon/dateparse v0.0.0-20190622164848-0fb0a474d195/go.mod h1:SLqhdZcd+dF3TEVL2RMoob5bBP5R1P1qkox+HtCBgGI=
 github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6/go.mod h1:grANhF5doyWs3UAsr3K4I6qtAmlQcZDesFNEHPZAzj8=
 github.com/armon/go-metrics v0.0.0-20180917152333-f0300d1749da/go.mod h1:Q73ZrmVTwzkszR9V5SSuryQ31EELlFMUz1kKyl939pY=
 github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878 h1:EFSB7Zo9Eg91v7MJPVsifUysc/wPdN+NOnVe6bWbdBM=
@@ -341,10 +339,8 @@ github.com/krishicks/yaml-patch v0.0.10/go.mod h1:Sm5TchwZS6sm7RJoyg87tzxm2ZcKzd
 github.com/lib/pq v1.0.0/go.mod h1:5WUZQaWbwv1U+lTReE5YruASi9Al49XbQIvNi/34Woo=
 github.com/lib/pq v1.3.0 h1:/qkRGz8zljWiDcFvgpwUpwIAPu3r07TDvs3Rws+o/pU=
 github.com/lib/pq v1.3.0/go.mod h1:5WUZQaWbwv1U+lTReE5YruASi9Al49XbQIvNi/34Woo=
-github.com/liquidata-inc/go-mysql-server v0.4.1-0.20200214233634-e82bed780f43 h1:mzDAPBTZBjt+tSRlhQ0pGjIfjGJ0K94JYncn0tAIzIE=
-github.com/liquidata-inc/go-mysql-server v0.4.1-0.20200214233634-e82bed780f43/go.mod h1:Lh0pg7jnO08HxFm6oj6gtcSTUeeOTu4Spt50Aeo2mes=
-github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200213191913-709d6546a1d8 h1:ONsKTlbNvi2frCctcqk8mQsQkRgqnf452i1uyhi+HWY=
-github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200213191913-709d6546a1d8/go.mod h1:Lh0pg7jnO08HxFm6oj6gtcSTUeeOTu4Spt50Aeo2mes=
+github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200226213608-d094902116be h1:U92XLX9Su5cySJy53dV8SZGP6yBSVMCb8GD4lzoPnZ8=
+github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200226213608-d094902116be/go.mod h1:Lh0pg7jnO08HxFm6oj6gtcSTUeeOTu4Spt50Aeo2mes=
 github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0 h1:phMgajKClMUiIr+hF2LGt8KRuUa2Vd2GI1sNgHgSXoU=
 github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0/go.mod h1:YC1rI9k5gx8D02ljlbxDfZe80s/iq8bGvaaQsvR+qxs=
 github.com/liquidata-inc/mmap-go v1.0.3 h1:2LndAeAtup9rpvUmu4wZSYCsjCQ0Zpc+NqE+6+PnT7g=

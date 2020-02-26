@@ -530,7 +530,7 @@ func processQuery(ctx context.Context, query string, se *sqlEngine) error {
 	}
 
 	switch s := sqlStatement.(type) {
-	case *sqlparser.Select, *sqlparser.Insert, *sqlparser.Update, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain:
+	case *sqlparser.Select, *sqlparser.Insert, *sqlparser.Update, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union:
 		sqlSch, rowIter, err := se.query(ctx, query)
 		if err == nil {
 			defer rowIter.Close()
