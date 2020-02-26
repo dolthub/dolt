@@ -41,6 +41,8 @@ dolt add .
 dolt commit -m "made changes to other"
 
 dolt checkout master
+dolt table export abc abc.csv
+dolt schema export abc abc_schema.json
 
 # add info to the log
 echo

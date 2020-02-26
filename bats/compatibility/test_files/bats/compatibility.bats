@@ -148,3 +148,11 @@ clear
 
     dolt checkout master
 }
+
+@test "dolt table import" {
+    run dolt table import -c -s abc_schema.json abc2 abc.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
+
+    dolt sql -q 'drop table abc2'
+}
