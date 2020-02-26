@@ -449,6 +449,13 @@ teardown() {
     [[ ! "$output" =~ "17" ]] || false
 }
 
+@test "sql divide by zero does not panic" {
+    run dolt sql -q "select 1/0 from dual"
+    [ $status -ne 0 ]
+    skip "Divide by zero panics dolt right now"
+    [[ ! "$output" =~ "panic: " ]] || false
+}
+
 @test "sql shell works after failing query" {
     skiponwindows "Need to install expect and make this script work on windows."
     $BATS_TEST_DIRNAME/sql-works-after-failing-query.expect
