@@ -175,7 +175,6 @@ func TestTypeInfoMarshalling(t *testing.T) {
 	}
 }
 
-
 func validateUnmarshaledNomsValue(ctx context.Context, nbf *types.NomsBinFormat, schemaVal types.Value) (schema.Schema, error) {
 	var sd testSchemaData
 	err := marshal.Unmarshal(ctx, nbf, schemaVal, &sd)
