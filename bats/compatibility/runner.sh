@@ -33,8 +33,8 @@ function run_bats_tests() {
 
 
 # copy all the test files to take them out of source control
-# when we checkout different releases in compatilibility.sh
-# we need the test files to remain
+# when we checkout different Dolt releases we don't want to
+# delete our environment
 test_env="env_test"
 rm -r $test_env
 mkdir $test_env

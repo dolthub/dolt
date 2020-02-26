@@ -25,6 +25,13 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+// Correct Marshalling & Unmarshalling is essential to compatibility across Dolt versions
+// any changes to the fields of Schema or other persisted objects must be append only, no
+// fields can ever be removed without break compatibility.
+//
+// the marshalling annotations of new fields must have the "omitempty" option to allow newer
+// versions of Dolt to read objects serialized by older Dolt versions where the field did not
+// yet exists. However, all fields must always be written.
 type encodedColumn struct {
 	Tag uint64 `noms:"tag" json:"tag"`
 

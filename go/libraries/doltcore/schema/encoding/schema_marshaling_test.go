@@ -186,14 +186,14 @@ func validateUnmarshaledNomsValue(ctx context.Context, nbf *types.NomsBinFormat,
 	return sd.decodeSchema()
 }
 
-// testEncodedColumn is a mirror type that helps ensure compatibility between Dolt versions
+// testEncodedColumn is a mirror type of encodedColumn that helps ensure compatibility between Dolt versions
+// fields in this test struct should be added WITHOUT the "omitempty" annotation in order to guarentee that
+// all fields are being always being written when encodedColumn is serialized.
 type testEncodedColumn struct {
 	Tag uint64 `noms:"tag" json:"tag"`
 
-	// Name is the name of the field
 	Name string `noms:"name" json:"name"`
 
-	// Kind is the type of the field.  See types/noms_kind.go in the liquidata fork for valid values
 	Kind string `noms:"kind" json:"kind"`
 
 	IsPartOfPK bool `noms:"is_part_of_pk" json:"is_part_of_pk"`

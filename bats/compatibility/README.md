@@ -17,7 +17,7 @@ and the repositories created with those versions.
 
 The BATS tests used to verify compatibility are inherently fragile.
 Our primary integration tests in `/dolt/bats/` setup and tear down their environment for each test.
-Because these the compatibility tests rely on creating a repo with one version of Dolt and running BATS tests with a
-different version, we cannot isolate their environment without building twice per test.
-The initial version of these tests does all data mutating in the `setup_repo.sh` script, and limits state modifications
+Because the tests rely on creating a repo with one version of Dolt and running BATS tests with a different version, 
+we cannot isolate their environment without building Dolt twice per test.
+The initial version of these tests does all write operations in the `setup_repo.sh` script, and limits state modifications
 within the BATS test to `dolt checkout` branch changes. Take care when editing the BATS tests to follow this pattern.
