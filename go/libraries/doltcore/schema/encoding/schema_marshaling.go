@@ -25,6 +25,13 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+// Correct Marshalling & Unmarshalling is essential to compatibility across Dolt versions
+// any changes to the fields of Schema or other persisted objects must be append only, no
+// fields can ever be removed without breaking compatibility.
+//
+// the marshalling annotations of new fields must have the "omitempty" option to allow newer
+// versions of Dolt to read objects serialized by older Dolt versions where the field did not
+// yet exists. However, all fields must always be written.
 type encodedColumn struct {
 	Tag uint64 `noms:"tag" json:"tag"`
 
@@ -32,13 +39,15 @@ type encodedColumn struct {
 	Name string `noms:"name" json:"name"`
 
 	// Kind is the type of the field.  See types/noms_kind.go in the liquidata fork for valid values
-	Kind string `noms:"kind,omitempty" json:"kind,omitempty"`
+	Kind string `noms:"kind" json:"kind"`
 
 	IsPartOfPK bool `noms:"is_part_of_pk" json:"is_part_of_pk"`
 
 	TypeInfo encodedTypeInfo `noms:"typeinfo,omitempty" json:"typeinfo,omitempty"`
 
 	Constraints []encodedConstraint `noms:"col_constraints" json:"col_constraints"`
+
+	// NB: all new fields must have the 'omitempty' annotation. See comment above
 }
 
 func encodeAllColConstraints(constraints []schema.ColConstraint) []encodedConstraint {
@@ -70,10 +79,11 @@ func encodeColumn(col schema.Column) encodedColumn {
 	return encodedColumn{
 		col.Tag,
 		col.Name,
-		"",
+		col.KindString(),
 		col.IsPartOfPK,
 		encodeTypeInfo(col.TypeInfo),
-		encodeAllColConstraints(col.Constraints)}
+		encodeAllColConstraints(col.Constraints),
+	}
 }
 
 func (nfd encodedColumn) decodeColumn() (schema.Column, error) {
