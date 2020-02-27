@@ -439,7 +439,7 @@ func (dEnv *DoltEnv) GetTablesWithConflicts(ctx context.Context) ([]string, erro
 	return root.TablesInConflict(ctx)
 }
 
-func (dEnv *DoltEnv) MergeWouldStompChanges(ctx context.Context, mergeCommit *doltdb.Commit) ([]string, error){
+func (dEnv *DoltEnv) MergeWouldStompChanges(ctx context.Context, mergeCommit *doltdb.Commit) ([]string, error) {
 	headRoot, err := dEnv.HeadRoot(ctx)
 
 	if err != nil {
@@ -482,7 +482,7 @@ func (dEnv *DoltEnv) MergeWouldStompChanges(ctx context.Context, mergeCommit *do
 	stompedTables := make([]string, 0, len(headWorkingDiffs))
 	for tName, _ := range headWorkingDiffs {
 		if _, ok := mergeWorkingDiffs[tName]; ok {
-			// even if the working changes match the merge changes, don't allow (matches git behavior.
+			// even if the working changes match the merge changes, don't allow (matches git behavior).
 			stompedTables = append(stompedTables, tName)
 		}
 	}

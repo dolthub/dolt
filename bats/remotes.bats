@@ -591,4 +591,7 @@ SQL
     dolt sql -q "insert into test values (0, 1, 1, 1, 1, 1)"
     run dolt pull origin
     [ "$status" -ne 0 ]
+    [[ "$output" =~ "error: Your local changes to the following tables would be overwritten by merge:" ]] || false
+    [[ "$output" =~ "test" ]] || false
+    [[ "$output" =~ "Please commit your changes before you merge." ]] || false
 }
