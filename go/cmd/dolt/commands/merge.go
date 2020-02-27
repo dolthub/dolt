@@ -118,15 +118,6 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			return HandleVErrAndExitCode(verr, usage)
 		}
 
-		isUnchanged, _ := dEnv.IsUnchangedFromHead(ctx)
-
-		if !isUnchanged {
-			cli.Println("error: Your local changes would be overwritten.")
-			cli.Println("Please commit your changes before you merge.")
-			cli.PrintErrln("Aborting")
-			return 1
-		}
-
 		var root *doltdb.RootValue
 		root, verr = GetWorkingWithVErr(dEnv)
 
@@ -200,6 +191,21 @@ func mergeBranch(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRef) errha
 	}
 
 	cli.Println("Updating", h1.String()+".."+h2.String())
+
+	tblNames, err := actions.MergeWouldStompChanges(ctx, dEnv, cm2)
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to determine mergability.").AddCause(err).Build()
+	}
+
+	if len(tblNames) != 0 {
+		bldr := errhand.BuildDError("error: Your local changes to the following tables would be overwritten by merge:")
+		for _, tName := range tblNames {
+			bldr.AddDetails(tName)
+		}
+		bldr.AddDetails("Please commit your changes before you merge.")
+		return bldr.Build()
+	}
 
 	if ok, err := cm1.CanFastForwardTo(ctx, cm2); ok {
 		return executeFFMerge(ctx, dEnv, cm2)

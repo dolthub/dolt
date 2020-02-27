@@ -590,6 +590,5 @@ SQL
     cd "dolt-repo-clones/test-repo"
     dolt sql -q "insert into test values (0, 1, 1, 1, 1, 1)"
     run dolt pull origin
-    skip "dolt pull stomps a dirty working directory."
     [ "$status" -ne 0 ]
 }

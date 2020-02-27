@@ -439,25 +439,102 @@ func (dEnv *DoltEnv) GetTablesWithConflicts(ctx context.Context) ([]string, erro
 	return root.TablesInConflict(ctx)
 }
 
-func (dEnv *DoltEnv) IsUnchangedFromHead(ctx context.Context) (bool, error) {
-	root, err := dEnv.HeadRoot(ctx)
+func (dEnv *DoltEnv) MergeWouldStompChanges(ctx context.Context, mergeCommit *doltdb.Commit) ([]string, error){
+	headRoot, err := dEnv.HeadRoot(ctx)
 
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
-	headHash, err := root.HashOf()
+	workingRoot, err := dEnv.WorkingRoot(ctx)
 
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
-	headHashStr := headHash.String()
-	if dEnv.RepoState.Working == headHashStr && dEnv.RepoState.Staged == headHashStr {
-		return true, nil
+	mergeRoot, err := mergeCommit.GetRootValue()
+
+	if err != nil {
+		return nil, err
 	}
 
-	return false, nil
+	headTableHashes, err := mapTableHashes(ctx, headRoot)
+
+	if err != nil {
+		return nil, err
+	}
+
+	workingTableHashes, err := mapTableHashes(ctx, workingRoot)
+
+	if err != nil {
+		return nil, err
+	}
+
+	mergeTableHashes, err := mapTableHashes(ctx, mergeRoot)
+
+	if err != nil {
+		return nil, err
+	}
+
+	headWorkingDiffs := diffTableHashes(headTableHashes, workingTableHashes)
+	mergeWorkingDiffs := diffTableHashes(headTableHashes, mergeTableHashes)
+
+	stompedTables := make([]string, 0, len(headWorkingDiffs))
+	for tName, _ := range headWorkingDiffs {
+		if _, ok := mergeWorkingDiffs[tName]; ok {
+			// even if the working changes match the merge changes, don't allow (matches git behavior.
+			stompedTables = append(stompedTables, tName)
+		}
+	}
+
+	return stompedTables, nil
+}
+
+func mapTableHashes(ctx context.Context, root *doltdb.RootValue) (map[string]hash.Hash, error) {
+	names, err := root.GetTableNames(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	nameToHash := make(map[string]hash.Hash)
+	for _, name := range names {
+		h, ok, err := root.GetTableHash(ctx, name)
+
+		if err != nil {
+			return nil, err
+		} else if !ok {
+			panic("GetTableNames returned a table that GetTableHash says isn't there.")
+		} else {
+			nameToHash[name] = h
+		}
+	}
+
+	return nameToHash, nil
+}
+
+func diffTableHashes(headTableHashes, otherTableHashes map[string]hash.Hash) map[string]hash.Hash {
+	diffs := make(map[string]hash.Hash)
+	for tName, hh := range headTableHashes {
+		if h, ok := otherTableHashes[tName]; ok {
+			if h != hh {
+				// modification
+				diffs[tName] = h
+			}
+		} else {
+			// deletion
+			diffs[tName] = hash.Hash{}
+		}
+	}
+
+	for tName, h := range otherTableHashes {
+		if _, ok := headTableHashes[tName]; !ok {
+			// addition
+			diffs[tName] = h
+		}
+	}
+
+	return diffs
 }
 
 func (dEnv *DoltEnv) CredsDir() (string, error) {
