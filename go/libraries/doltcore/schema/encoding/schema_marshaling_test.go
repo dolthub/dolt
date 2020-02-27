@@ -74,7 +74,7 @@ func TestNomsMarshalling(t *testing.T) {
 	validated, err := validateUnmarshaledNomsValue(context.Background(), types.Format_7_18, val)
 
 	if err != nil {
-		t.Fatal("Failed compatibility test")
+		t.Fatal("Failed compatibility test. Schema could not be unmarshalled with mirror type")
 	}
 
 	if !reflect.DeepEqual(tSchema, validated) {
@@ -186,9 +186,22 @@ func validateUnmarshaledNomsValue(ctx context.Context, nbf *types.NomsBinFormat,
 	return sd.decodeSchema()
 }
 
+func TestMirroredTypes(t *testing.T) {
+	realType := reflect.ValueOf(&encodedColumn{}).Elem()
+	mirrorType := reflect.ValueOf(&testEncodedColumn{}).Elem()
+	require.Equal(t, mirrorType.NumField(), realType.NumField())
+
+	// TODO: create reflection tests to ensure that:
+	// - no fields in testEncodeColumn have the 'omitempty' annotation
+	// - no legacy fields in encodeColumn have the 'omitempty' annotation (with whitelist)
+	// - all new fields in encodeColumn have the 'omitempty' annotation
+}
+
 // testEncodedColumn is a mirror type of encodedColumn that helps ensure compatibility between Dolt versions
-// fields in this test struct should be added WITHOUT the "omitempty" annotation in order to guarentee that
-// all fields are being always being written when encodedColumn is serialized.
+//
+// Fields in this test struct should be added WITHOUT the "omitempty" annotation in order to guarantee that
+// all fields in encodeColumn are always being written when encodedColumn is serialized.
+// See the comment above type encodeColumn.
 type testEncodedColumn struct {
 	Tag uint64 `noms:"tag" json:"tag"`
 

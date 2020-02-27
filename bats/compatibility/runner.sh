@@ -1,10 +1,5 @@
 #!/bin/bash
 
-if [[ $(git diff --stat) != '' ]]; then
-  echo "cannot run compatibility tests with git working changes"
-  exit
-fi
-
 function build_dolt() {
   pushd "$dolt_dir" > /dev/null || exit
   git checkout "$1" > /dev/null
@@ -31,6 +26,11 @@ function run_bats_tests() {
   popd > /dev/null || exit
 }
 
+# ensure that we have a clean working change set before we begin
+if [[ $(git diff --stat) != '' ]]; then
+  echo "cannot run compatibility tests with git working changes"
+  exit
+fi
 
 # copy all the test files to take them out of source control
 # when we checkout different Dolt releases we don't want to

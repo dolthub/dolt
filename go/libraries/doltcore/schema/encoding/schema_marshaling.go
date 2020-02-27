@@ -27,7 +27,7 @@ import (
 
 // Correct Marshalling & Unmarshalling is essential to compatibility across Dolt versions
 // any changes to the fields of Schema or other persisted objects must be append only, no
-// fields can ever be removed without break compatibility.
+// fields can ever be removed without breaking compatibility.
 //
 // the marshalling annotations of new fields must have the "omitempty" option to allow newer
 // versions of Dolt to read objects serialized by older Dolt versions where the field did not
@@ -46,6 +46,8 @@ type encodedColumn struct {
 	TypeInfo encodedTypeInfo `noms:"typeinfo,omitempty" json:"typeinfo,omitempty"`
 
 	Constraints []encodedConstraint `noms:"col_constraints" json:"col_constraints"`
+
+	// NB: all new fields must have the 'omitempty' annotation. See comment above
 }
 
 func encodeAllColConstraints(constraints []schema.ColConstraint) []encodedConstraint {
@@ -80,7 +82,8 @@ func encodeColumn(col schema.Column) encodedColumn {
 		col.KindString(),
 		col.IsPartOfPK,
 		encodeTypeInfo(col.TypeInfo),
-		encodeAllColConstraints(col.Constraints)}
+		encodeAllColConstraints(col.Constraints),
+	}
 }
 
 func (nfd encodedColumn) decodeColumn() (schema.Column, error) {
