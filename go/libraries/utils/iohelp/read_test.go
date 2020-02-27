@@ -239,6 +239,7 @@ func (rc *ReaderCollection) Close() error {
 }
 
 func TestReadWithMinThroughput(t *testing.T) {
+	t.Skip("Skipping test in all cases as it is inconsistent on Unix")
 	if osutil.IsWindows {
 		t.Skip("Skipping test as it is too inconsistent on Windows and will randomly pass or fail")
 	}
