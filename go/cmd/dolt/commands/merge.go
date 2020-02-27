@@ -192,7 +192,7 @@ func mergeBranch(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRef) errha
 
 	cli.Println("Updating", h1.String()+".."+h2.String())
 
-	tblNames, err := actions.MergeWouldStompChanges(ctx, dEnv, cm2)
+	tblNames, err := dEnv.MergeWouldStompChanges(ctx, cm2)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to determine mergability.").AddCause(err).Build()
