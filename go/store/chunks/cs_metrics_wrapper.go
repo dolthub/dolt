@@ -34,9 +34,9 @@ type CSMetrics struct {
 // NewCSMetrics creates a CSMetrics instance
 func NewCSMetrics(csMW *CSMetricWrapper) CSMetrics {
 	return CSMetrics{
-		TotalChunkGets:      csMW.TotalChunkGets,
-		TotalChunkHasChecks: csMW.TotalChunkHasChecks,
-		TotalChunkPuts:      csMW.TotalChunkPuts,
+		TotalChunkGets:      atomic.LoadInt32(&csMW.TotalChunkGets),
+		TotalChunkHasChecks: atomic.LoadInt32(&csMW.TotalChunkHasChecks),
+		TotalChunkPuts:      atomic.LoadInt32(&csMW.TotalChunkPuts),
 		Delegate:            csMW.cs.Stats(),
 		DelegateSummary:     csMW.cs.StatsSummary(),
 	}
@@ -85,7 +85,7 @@ func (csMW *CSMetricWrapper) GetMany(ctx context.Context, hashes hash.HashSet, f
 // Returns true iff the value at the address |h| is contained in the
 // store
 func (csMW *CSMetricWrapper) Has(ctx context.Context, h hash.Hash) (bool, error) {
-	csMW.TotalChunkHasChecks++
+	atomic.AddInt32(&csMW.TotalChunkHasChecks, 1)
 	return csMW.cs.Has(ctx, h)
 }
 
