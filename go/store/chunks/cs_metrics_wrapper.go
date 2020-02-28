@@ -17,15 +17,16 @@ package chunks
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 // CSMetrics contains the metrics aggregated by a CSMetricsWrapper
 type CSMetrics struct {
-	TotalChunkGets      int
-	TotalChunkHasChecks int
-	TotalChunkPuts      int
+	TotalChunkGets      int32
+	TotalChunkHasChecks int32
+	TotalChunkPuts      int32
 	Delegate            interface{}
 	DelegateSummary     string
 }
@@ -53,9 +54,9 @@ func (csm CSMetrics) String() string {
 
 // CSMetricWrapper is a ChunkStore implementation that wraps a ChunkStore, and collects metrics on the calls.
 type CSMetricWrapper struct {
-	TotalChunkGets      int
-	TotalChunkHasChecks int
-	TotalChunkPuts      int
+	TotalChunkGets      int32
+	TotalChunkHasChecks int32
+	TotalChunkPuts      int32
 	cs                  ChunkStore
 }
 
@@ -69,7 +70,7 @@ func NewCSMetricWrapper(cs ChunkStore) *CSMetricWrapper {
 // Get the Chunk for the value of the hash in the store. If the hash is
 // absent from the store EmptyChunk is returned.
 func (csMW *CSMetricWrapper) Get(ctx context.Context, h hash.Hash) (Chunk, error) {
-	csMW.TotalChunkGets++
+	atomic.AddInt32(&csMW.TotalChunkGets, 1)
 	return csMW.cs.Get(ctx, h)
 }
 
@@ -77,7 +78,7 @@ func (csMW *CSMetricWrapper) Get(ctx context.Context, h hash.Hash) (Chunk, error
 // |foundChunks| will have been fully sent all chunks which have been
 // found. Any non-present chunks will silently be ignored.
 func (csMW *CSMetricWrapper) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan<- *Chunk) error {
-	csMW.TotalChunkGets += len(hashes)
+	atomic.AddInt32(&csMW.TotalChunkGets, int32(len(hashes)))
 	return csMW.cs.GetMany(ctx, hashes, foundChunks)
 }
 
@@ -91,7 +92,7 @@ func (csMW *CSMetricWrapper) Has(ctx context.Context, h hash.Hash) (bool, error)
 // Returns a new HashSet containing any members of |hashes| that are
 // absent from the store.
 func (csMW *CSMetricWrapper) HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet, err error) {
-	csMW.TotalChunkHasChecks += len(hashes)
+	atomic.AddInt32(&csMW.TotalChunkHasChecks, int32(len(hashes)))
 	return csMW.cs.HasMany(ctx, hashes)
 }
 
@@ -100,7 +101,7 @@ func (csMW *CSMetricWrapper) HasMany(ctx context.Context, hashes hash.HashSet) (
 // to Flush(). Put may be called concurrently with other calls to Put(),
 // Get(), GetMany(), Has() and HasMany().
 func (csMW *CSMetricWrapper) Put(ctx context.Context, c Chunk) error {
-	csMW.TotalChunkPuts++
+	atomic.AddInt32(&csMW.TotalChunkPuts, 1)
 	return csMW.cs.Put(ctx, c)
 }
 
