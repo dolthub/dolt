@@ -43,9 +43,9 @@ SQL
 
     run dolt merge other
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "error: Your local changes would be overwritten." ]] || false
+    [[ "$output" =~ "error: Your local changes to the following tables would be overwritten by merge:" ]] || false
+    [[ "$output" =~ "test" ]] || false
     [[ "$output" =~ "Please commit your changes before you merge." ]] || false
-    [[ "$output" =~ "Aborting" ]] || false
 
     dolt add test
     dolt commit -m "changes pk=0 c1 t0 11"
