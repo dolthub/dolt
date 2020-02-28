@@ -17,6 +17,7 @@ package nbs
 import (
 	"context"
 	"io"
+	"sync/atomic"
 
 	"github.com/liquidata-inc/dolt/go/store/chunks"
 
@@ -57,10 +58,6 @@ func (nbsMW *NBSMetricWrapper) SetRootChunk(ctx context.Context, root, previous 
 // |foundChunks| will have been fully sent all chunks which have been
 // found. Any non-present chunks will silently be ignored.
 func (nbsMW *NBSMetricWrapper) GetManyCompressed(ctx context.Context, hashes hash.HashSet, cmpChChan chan<- CompressedChunk) error {
-	nbsMW.TotalChunkGets += len(hashes)
-	for h := range hashes {
-		nbsMW.UniqueGets.Insert(h)
-	}
-
+	atomic.AddInt32(&nbsMW.TotalChunkGets, int32(len(hashes)))
 	return nbsMW.nbs.GetManyCompressed(ctx, hashes, cmpChChan)
 }
