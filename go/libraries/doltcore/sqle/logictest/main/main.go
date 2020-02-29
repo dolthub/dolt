@@ -110,7 +110,7 @@ type DoltResultRecord struct {
 	TestFile     string `json:"test_file"`
 	LineNum      int    `json:"line_num"`
 	Query        string `json:"query_string"`
-	Duration     int64 `json:"duration"`
+	Duration     int64  `json:"duration"`
 	Result       string `json:"result"`
 	ErrorMessage string `json:"error_message,omitempty"`
 }
