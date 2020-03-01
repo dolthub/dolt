@@ -423,6 +423,14 @@ teardown() {
     [[ "$output" =~ "17 " ]] || false
 }
 
+@test "sql update a datetime column" {
+    dolt sql -q "insert into has_datetimes (pk) values (1)"
+    run dolt sql -q "update has_datetimes set date_created='2020-02-11 00:00:00' where pk=1"
+    skip "Can't use update on a datetime field"
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "Expected GetField expression" ]] || false
+}
+
 @test "sql group by statements" {
     dolt sql -q "insert into one_pk (pk,c1,c2,c3,c4,c5) values (4,0,0,0,0,0),(5,0,0,0,0,0)"
     run dolt sql -q "select max(pk) from one_pk group by c1"
