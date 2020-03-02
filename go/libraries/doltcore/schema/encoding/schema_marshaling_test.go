@@ -55,13 +55,13 @@ func TestNomsMarshalling(t *testing.T) {
 		t.Fatal("Could not create in mem noms db.")
 	}
 
-	val, err := MarshalAsNomsValue(context.Background(), db, tSchema)
+	val, err := MarshalSchemaAsNomsValue(context.Background(), db, tSchema)
 
 	if err != nil {
 		t.Fatal("Failed to marshal Schema as a types.Value.")
 	}
 
-	unMarshalled, err := UnmarshalNomsValue(context.Background(), types.Format_7_18, val)
+	unMarshalled, err := UnmarshalSchemaNomsValue(context.Background(), types.Format_7_18, val)
 
 	if err != nil {
 		t.Fatal("Failed to unmarshal types.Value as Schema")
@@ -80,6 +80,20 @@ func TestNomsMarshalling(t *testing.T) {
 	if !reflect.DeepEqual(tSchema, validated) {
 		t.Error("Value different after marshalling and unmarshalling.")
 	}
+
+	tSuperSchema, err := schema.NewSuperSchema(tSchema)
+	require.NoError(t, err)
+
+	ssVal, err := MarshalSuperSchemaAsNomsValue(context.Background(), db, tSuperSchema)
+	require.NoError(t, err)
+
+	unMarshalledSS, err := UnmarshalSuperSchemaNomsValue(context.Background(), types.Format_7_18, ssVal)
+	require.NoError(t, err)
+
+	if !reflect.DeepEqual(tSuperSchema, unMarshalledSS) {
+		t.Error("Value different after marshalling and unmarshalling.")
+	}
+
 }
 
 func TestJSONMarshalling(t *testing.T) {
@@ -164,9 +178,9 @@ func TestTypeInfoMarshalling(t *testing.T) {
 			require.NoError(t, err)
 			db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), nbf, nil, nil)
 			require.NoError(t, err)
-			val, err := MarshalAsNomsValue(context.Background(), db, originalSch)
+			val, err := MarshalSchemaAsNomsValue(context.Background(), db, originalSch)
 			require.NoError(t, err)
-			unmarshalledSch, err := UnmarshalNomsValue(context.Background(), nbf, val)
+			unmarshalledSch, err := UnmarshalSchemaNomsValue(context.Background(), nbf, val)
 			require.NoError(t, err)
 			ok, err := schema.SchemasAreEqual(originalSch, unmarshalledSch)
 			assert.NoError(t, err)

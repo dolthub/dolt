@@ -66,7 +66,7 @@ func AddColumnToTable(ctx context.Context, tbl *doltdb.Table, tag uint64, newCol
 // and returns the new table.
 func updateTableWithNewSchema(ctx context.Context, tbl *doltdb.Table, tag uint64, newSchema schema.Schema, defaultVal types.Value) (*doltdb.Table, error) {
 	vrw := tbl.ValueReadWriter()
-	newSchemaVal, err := encoding.MarshalAsNomsValue(ctx, vrw, newSchema)
+	newSchemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, newSchema)
 	if err != nil {
 		return nil, err
 	}

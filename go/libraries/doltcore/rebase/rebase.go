@@ -240,7 +240,7 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		return nil, err
 	}
 
-	rebasedSchVal, err := encoding.MarshalAsNomsValue(ctx, rebasedParentRoot.VRW(), rebasedSch)
+	rebasedSchVal, err := encoding.MarshalSchemaAsNomsValue(ctx, rebasedParentRoot.VRW(), rebasedSch)
 
 	if err != nil {
 		return nil, err

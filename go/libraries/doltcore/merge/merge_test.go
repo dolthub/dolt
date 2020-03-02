@@ -356,7 +356,7 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 		panic(err)
 	}
 
-	schVal, _ := encoding.MarshalAsNomsValue(context.Background(), vrw, sch)
+	schVal, _ := encoding.MarshalSchemaAsNomsValue(context.Background(), vrw, sch)
 	tbl, err := doltdb.NewTable(context.Background(), vrw, schVal, initialRows)
 
 	if err != nil {
