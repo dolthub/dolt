@@ -519,6 +519,7 @@ SQL
 # Altering types and properties of the schema are not really supported by the
 # command line. Have to upload schema files for these next few tests.
 @test "two branches change type of same column to same type. merge. no conflict" {
+    skip "type changes are not allowed without changing tag"
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -570,6 +571,7 @@ SQL
 }
 
 @test "two branches change type of same column to different type. merge. conflict" {
+    skip "type changes are not allowed without changing tag"
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -623,6 +625,7 @@ SQL
 }
 
 @test "two branches make same column primary key. merge. no conflict" {
+    skip "cannot resuse tags on table drop/add"
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
