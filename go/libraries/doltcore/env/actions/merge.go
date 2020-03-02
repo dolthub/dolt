@@ -39,19 +39,21 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Comm
 		return nil, nil, err
 	}
 
-	rv, err := cm2.GetRootValue()
+	mergeRoot, err := cm2.GetRootValue()
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	tblNames, err := doltdb.UnionTableNames(ctx, root, rv)
+	tblNames, err := doltdb.UnionTableNames(ctx, root, mergeRoot)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
 	tblToStats := make(map[string]*merge.MergeStats)
+
+	var unconflicted []string
 
 	// need to validate merges can be done on all tables before starting the actual merges.
 	for _, tblName := range tblNames {
@@ -63,6 +65,10 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Comm
 
 		if mergedTable != nil {
 			tblToStats[tblName] = stats
+
+			if stats.Conflicts == 0 {
+				unconflicted = append(unconflicted, tblName)
+			}
 
 			var err error
 			root, err = root.PutTable(ctx, tblName, mergedTable)
@@ -82,6 +88,12 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Comm
 		} else {
 			panic("?")
 		}
+	}
+
+	root, err = root.UpdateSuperSchemasFromOther(ctx, unconflicted, mergeRoot)
+
+	if err != nil {
+		return nil, nil, err
 	}
 
 	return root, tblToStats, nil

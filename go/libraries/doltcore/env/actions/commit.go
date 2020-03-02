@@ -90,13 +90,37 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, date time.
 		mergeCmSpec = []*doltdb.CommitSpec{spec}
 	}
 
-	root, err := dEnv.StagedRoot(ctx)
+	srt, err := dEnv.StagedRoot(ctx)
 
 	if err != nil {
 		return err
 	}
 
-	h, err := dEnv.UpdateStagedRoot(ctx, root)
+	srt, err = srt.UpdateSuperSchemasFromOther(ctx, stagedTbls.Tables, srt)
+
+	if err != nil {
+		return err
+	}
+
+	h, err := dEnv.UpdateStagedRoot(ctx, srt)
+
+	if err != nil {
+		return err
+	}
+
+	wrt, err := dEnv.WorkingRoot(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	wrt, err = wrt.UpdateSuperSchemasFromOther(ctx, stagedTbls.Tables, srt)
+
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.UpdateWorkingRoot(ctx, wrt)
 
 	if err != nil {
 		return err
