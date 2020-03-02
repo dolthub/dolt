@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/merge"
 	"os"
 	"strings"
 	"time"
@@ -201,7 +202,7 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
 	currBranch := dEnv.RepoState.CWBHeadRef()
 	stagedTblDiffs, notStagedTblDiffs, _ := diff.GetTableDiffs(ctx, dEnv)
 
-	workingTblsInConflict, _, _, err := actions.GetTablesInConflict(ctx, dEnv)
+	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, dEnv)
 	if err != nil {
 		workingTblsInConflict = []string{}
 	}

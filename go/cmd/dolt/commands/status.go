@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/merge"
 	"io"
 	"strings"
 
@@ -77,7 +78,7 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 		cli.PrintErrln(toStatusVErr((err)))
 		return 1
 	}
-	workingTblsInConflict, _, _, err := actions.GetTablesInConflict(ctx, dEnv)
+	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, dEnv)
 
 	if err != nil {
 		cli.PrintErrln(toStatusVErr((err)))
@@ -91,7 +92,7 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 1
 	}
 
-	workingDocsInConflict, err := actions.GetDocsInConflict(ctx, dEnv)
+	workingDocsInConflict, err := merge.GetDocsInConflict(ctx, dEnv)
 
 	if err != nil {
 		cli.PrintErrln(toStatusVErr((err)))
