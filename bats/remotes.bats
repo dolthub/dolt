@@ -79,6 +79,19 @@ teardown() {
     [[ "$output" = "up to date" ]] || false
 }
 
+@test "push and pull from non-master branch and use --set-upstream" {
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt checkout -b test-branch
+    run dolt push --set-upstream test-remote test-branch
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "panic:" ]] || false
+    dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
+    dolt add .
+    dolt commit -m "Added test table"
+    run dolt push
+    [ "$status" -eq 0 ]
+}
+
 @test "push and pull with docs from remote" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     echo "license-text" > LICENSE.md
