@@ -363,56 +363,32 @@ func modifyDifferenceTag(d *ndiff.Difference, old, new uint64, pkTag bool, nbf *
 // TODO: replace this traversal with a check of SuperSchema once we have it
 func tagExistsInHistory(ctx context.Context, ddb *doltdb.DoltDB, c *doltdb.Commit, tag uint64) (bool, error) {
 
-	found, err := tagExistsInCommit(ctx, c, tag)
+	crt, err := c.GetRootValue()
 
-	if found {
-		return found, nil
-	}
-
-	// DSF of parents
-	allParents, err := ddb.ResolveAllParents(ctx, c)
-
-	if err != nil || len(allParents) < 1 {
+	if err != nil {
 		return false, err
 	}
 
-	for _, pc := range allParents {
+	tblNames, err := crt.GetTableNames(ctx)
 
-		found, err := tagExistsInHistory(ctx, ddb, pc, tag)
+	if err != nil {
+		return false, err
+	}
+
+	for _, tn := range tblNames {
+		ss, err := crt.GetSuperSchema(ctx, tn)
 
 		if err != nil {
 			return false, err
 		}
 
+		_, found := ss.GetColumn(tag)
+
 		if found {
-			return found, nil
+			return true, nil
 		}
 	}
-	return false, nil
-}
 
-func tagExistsInCommit(ctx context.Context, c *doltdb.Commit, tag uint64) (bool, error) {
-	root, err := c.GetRootValue()
-
-	if err != nil {
-		return false, err
-	}
-
-	tblNames, err := root.GetTableNames(ctx)
-
-	if err != nil {
-		return false, nil
-	}
-
-	for _, tn := range tblNames {
-		t, _, _ := root.GetTable(ctx, tn)
-
-		found, err := tagExistsInTable(ctx, t, tag)
-
-		if found || err != nil {
-			return found, err
-		}
-	}
 	return false, nil
 }
 
