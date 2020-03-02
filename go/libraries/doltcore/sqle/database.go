@@ -104,7 +104,7 @@ func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sq
 
 	if strings.HasPrefix(lwrName, DoltHistoryTablePrefix) {
 		tblName = tblName[len(DoltHistoryTablePrefix):]
-		dh, err := NewHistoryTable(ctx, tblName, db.ddb)
+		dh, err := NewHistoryTable(ctx, tblName, db.ddb, db.rsr)
 
 		if err != nil {
 			return nil, false, err

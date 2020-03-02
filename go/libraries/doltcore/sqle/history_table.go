@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"io"
 	"strings"
 	"time"
@@ -47,13 +48,20 @@ const (
 	CommitDateCol = "commit_date"
 )
 
+const (
+	_ uint64 = iota
+	committerColTag = iota + schema.ReservedTagMin - 1
+	commitHashColTag
+	commitDateColTag
+)
+
 var _ sql.Table = &HistoryTable{}
 
 // HistoryTable is a system table that shows the history of rows over time
 type HistoryTable struct {
 	name                  string
 	ddb                   *doltdb.DoltDB
-	ss                    rowconv.SuperSchema
+	ss                    *schema.SuperSchema
 	sqlSch                sql.Schema
 	commitFilters         []sql.Expression
 	rowFilters            []sql.Expression
@@ -62,9 +70,7 @@ type HistoryTable struct {
 }
 
 // NewHistoryTable creates a history table
-func NewHistoryTable(ctx context.Context, name string, ddb *doltdb.DoltDB) (*HistoryTable, error) {
-	ssg := rowconv.NewSuperSchemaGen()
-
+func NewHistoryTable(ctx context.Context, name string, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (*HistoryTable, error) {
 	cmItr, err := doltdb.CommitItrForAllBranches(ctx, ddb)
 
 	if err != nil {
@@ -73,22 +79,23 @@ func NewHistoryTable(ctx context.Context, name string, ddb *doltdb.DoltDB) (*His
 
 	indCmItr := doltdb.NewCommitIndexingCommitItr(ddb, cmItr)
 
-	err = ssg.AddHistoryOfCommits(ctx, name, ddb, indCmItr)
+	ss, err := SuperSchemaForAllBranches(ctx, indCmItr, ddb, rsr, name)
 
 	if err != nil {
 		return nil, err
 	}
 
-	ss, err := ssg.GenerateSuperSchema(
-		rowconv.NameKindPair{Name: CommitHashCol, Kind: types.StringKind},
-		rowconv.NameKindPair{Name: CommitterCol, Kind: types.StringKind},
-		rowconv.NameKindPair{Name: CommitDateCol, Kind: types.TimestampKind})
+	_ = ss.AddColumn(schema.NewColumn(CommitHashCol, commitHashColTag, types.StringKind, false))
+	_ = ss.AddColumn(schema.NewColumn(CommitterCol, committerColTag, types.StringKind, false))
+	_ = ss.AddColumn(schema.NewColumn(CommitDateCol, commitDateColTag, types.TimestampKind, false))
+
+
+
+	sch, err := ss.GenerateSchema()
 
 	if err != nil {
 		return nil, err
 	}
-
-	sch := ss.GetSchema()
 
 	if sch.GetAllCols().Size() <= 3 {
 		return nil, sql.ErrTableNotFound.New(DoltHistoryTablePrefix + name)
@@ -187,12 +194,6 @@ func splitFilters(filters []sql.Expression) (commitFilters, rowFilters []sql.Exp
 	}
 	return commitFilters, rowFilters
 }
-
-const (
-	committerColTag uint64 = iota
-	commitHashColTag
-	commitDateColTag
-)
 
 func commitSchema() schema.Schema {
 	cols := []schema.Column{
@@ -305,7 +306,7 @@ func newRowItrForTableAtCommit(
 	h hash.Hash,
 	cm *doltdb.Commit,
 	tblName string,
-	ss rowconv.SuperSchema,
+	ss *schema.SuperSchema,
 	filters []sql.Expression,
 	readerCreateFuncCache map[hash.Hash]CreateReaderFunc) (*rowItrForTableAtCommit, error) {
 	root, err := cm.GetRootValue()
@@ -343,7 +344,7 @@ func newRowItrForTableAtCommit(
 		return nil, err
 	}
 
-	toSuperSchConv, err := ss.RowConvForSchema(tblSch)
+	toSuperSchConv, err := rowConvForSchema(ss, tblSch)
 
 	if err != nil {
 		return nil, err
@@ -366,9 +367,15 @@ func newRowItrForTableAtCommit(
 		return nil, err
 	}
 
-	hashCol, hashOK := ss.GetSchema().GetAllCols().GetByName(CommitHashCol)
-	dateCol, dateOK := ss.GetSchema().GetAllCols().GetByName(CommitDateCol)
-	committerCol, commiterOK := ss.GetSchema().GetAllCols().GetByName(CommitterCol)
+	sch, err := ss.GenerateSchema()
+
+	if err != nil {
+		return nil, err
+	}
+
+	hashCol, hashOK := sch.GetAllCols().GetByName(CommitHashCol)
+	dateCol, dateOK := sch.GetAllCols().GetByName(CommitDateCol)
+	committerCol, commiterOK := sch.GetAllCols().GetByName(CommitterCol)
 
 	if !hashOK || !dateOK || !commiterOK {
 		panic("Bug: History table super schema should always have commit_hash")
@@ -382,7 +389,7 @@ func newRowItrForTableAtCommit(
 
 	return &rowItrForTableAtCommit{
 		rd:             rd,
-		sch:            ss.GetSchema(),
+		sch:            sch,
 		toSuperSchConv: toSuperSchConv,
 		extraVals: map[uint64]types.Value{
 			hashCol.Tag:      types.String(h.String()),

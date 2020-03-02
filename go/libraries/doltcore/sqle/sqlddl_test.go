@@ -995,7 +995,7 @@ func TestAlterSystemTables(t *testing.T) {
 		for _, tableName := range systemTableNames {
 			expectedErr := "system table"
 			if strings.HasPrefix(tableName, "dolt_diff") || strings.HasPrefix(tableName, "dolt_history") {
-				expectedErr = "not found"
+				expectedErr = "system tables cannot be dropped or altered"
 			}
 			assertFails(t, dEnv, fmt.Sprintf("drop table %s", tableName), expectedErr)
 		}
@@ -1008,7 +1008,7 @@ func TestAlterSystemTables(t *testing.T) {
 		for _, tableName := range systemTableNames {
 			expectedErr := "system table"
 			if strings.HasPrefix(tableName, "dolt_diff") || strings.HasPrefix(tableName, "dolt_history") {
-				expectedErr = "not found"
+				expectedErr = "system tables cannot be dropped or altered"
 			}
 			assertFails(t, dEnv, fmt.Sprintf("rename table %s to newname", tableName), expectedErr)
 		}
@@ -1021,7 +1021,7 @@ func TestAlterSystemTables(t *testing.T) {
 		for _, tableName := range append(systemTableNames, reservedTableNames...) {
 			expectedErr := "cannot be altered"
 			if strings.HasPrefix(tableName, "dolt_diff") || strings.HasPrefix(tableName, "dolt_history") {
-				expectedErr = "not found"
+				expectedErr = " cannot be altered"
 			}
 			assertFails(t, dEnv, fmt.Sprintf("alter table %s add column a int", tableName), expectedErr)
 		}

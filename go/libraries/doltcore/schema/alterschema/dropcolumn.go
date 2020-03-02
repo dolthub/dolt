@@ -68,7 +68,7 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string) (*doltdb
 	newSch := schema.SchemaFromCols(colColl)
 
 	vrw := tbl.ValueReadWriter()
-	schemaVal, err := encoding.MarshalAsNomsValue(ctx, vrw, newSch)
+	schemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, newSch)
 
 	if err != nil {
 		return nil, err

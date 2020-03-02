@@ -282,7 +282,7 @@ func RefToSchema(ctx context.Context, vrw types.ValueReadWriter, ref types.Ref) 
 		return nil, err
 	}
 
-	schema, err := encoding.UnmarshalNomsValue(ctx, vrw.Format(), schemaVal)
+	schema, err := encoding.UnmarshalSchemaNomsValue(ctx, vrw.Format(), schemaVal)
 
 	if err != nil {
 		return nil, err

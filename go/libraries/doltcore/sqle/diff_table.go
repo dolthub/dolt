@@ -16,6 +16,10 @@ package sqle
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"github.com/liquidata-inc/dolt/go/store/hash"
+	"io"
 	"strings"
 
 	"github.com/src-d/go-mysql-server/sql"
@@ -46,7 +50,7 @@ type DiffTable struct {
 	name          string
 	ddb           *doltdb.DoltDB
 	rsr           env.RepoStateReader
-	ss            rowconv.SuperSchema
+	ss            *schema.SuperSchema
 	joiner        *rowconv.Joiner
 	sqlSch        sql.Schema
 	fromRoot      *doltdb.RootValue
@@ -58,20 +62,26 @@ type DiffTable struct {
 
 func NewDiffTable(ctx context.Context, name string, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (*DiffTable, error) {
 	diffTblName := DoltDiffTablePrefix + name
-	ssg := rowconv.NewSuperSchemaGen()
-	err := ssg.AddHistoryOfTable(ctx, name, ddb)
+
+	cmItr, err := doltdb.CommitItrForAllBranches(ctx, ddb)
 
 	if err != nil {
 		return nil, err
 	}
 
-	ss, err := ssg.GenerateSuperSchema(rowconv.NameKindPair{Name: "commit", Kind: types.StringKind})
+	ss, err := SuperSchemaForAllBranches(ctx, cmItr, ddb, rsr, name)
 
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	sch := ss.GetSchema()
+	_ = ss.AddColumn(schema.NewColumn("commit", schema.ReservedTagMin, types.StringKind, false))
+
+	sch, err := ss.GenerateSchema()
+
+	if err != nil {
+		return nil, err
+	}
 
 	if sch.GetAllCols().Size() <= 1 {
 		return nil, sql.ErrTableNotFound.New(diffTblName)
@@ -182,13 +192,13 @@ func (dt *DiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.Ro
 		return nil, err
 	}
 
-	fromConv, err := dt.ss.RowConvForSchema(fromSch)
+	fromConv, err := rowConvForSchema(dt.ss, fromSch)
 
 	if err != nil {
 		return nil, err
 	}
 
-	toConv, err := dt.ss.RowConvForSchema(toSch)
+	toConv, err := rowConvForSchema(dt.ss, toSch)
 
 	if err != nil {
 		return nil, err
@@ -373,4 +383,109 @@ func (dt *DiffTable) WithFilters(filters []sql.Expression) sql.Table {
 // Filters returns the list of filters that are applied to this table.
 func (dt *DiffTable) Filters() []sql.Expression {
 	return dt.filters
+}
+
+
+func SuperSchemaForAllBranches(ctx context.Context, cmItr doltdb.CommitItr, ddb *doltdb.DoltDB, rsr env.RepoStateReader, tblName string) (*schema.SuperSchema, error) {
+	wr, err := ddb.ReadRootValue(ctx, rsr.WorkingHash())
+
+	if err != nil {
+		return nil, err
+	}
+
+	t, ok, err := wr.GetTable(ctx, tblName)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !ok {
+		return nil, errors.New(fmt.Sprintf("table: %s does not exist", tblName))
+	}
+
+	sch, err := t.GetSchema(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	ss, err := schema.NewSuperSchema(sch)
+
+	if err != nil {
+		return nil, err
+	}
+
+	addedSchemas := make(map[hash.Hash]bool)
+
+	for {
+		_, cm, err := cmItr.Next(ctx)
+
+		if err != nil {
+			if err == io.EOF {
+				return ss, nil
+			}
+
+			return nil, err
+		}
+
+		root, err := cm.GetRootValue()
+
+		if err != nil {
+			return nil, err
+		}
+
+		tbl, _, ok, err := root.GetTableInsensitive(ctx, tblName)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if ok {
+			schRef, err := tbl.GetSchemaRef()
+
+			if err != nil {
+				return nil, err
+			}
+
+			h := schRef.TargetHash()
+
+			if !addedSchemas[h] {
+				addedSchemas[h] = true
+				sch, err := tbl.GetSchema(ctx)
+
+				if err != nil {
+					return nil, err
+				}
+
+				err = ss.AddSchemas(sch)
+
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+}
+
+// creates a RowConverter for transforming rows with the the given schema to this super schema.
+func rowConvForSchema(ss *schema.SuperSchema, sch schema.Schema) (*rowconv.RowConverter, error) {
+	inNameToOutName, err := ss.NameMapForSchema(sch)
+
+	if err != nil {
+		return nil, err
+	}
+
+	ssch, err := ss.GenerateSchema()
+
+	if err != nil {
+		return nil, err
+	}
+
+	fm, err := rowconv.NewFieldMappingFromNameMap(sch, ssch, inNameToOutName)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return rowconv.NewRowConverter(fm)
 }
