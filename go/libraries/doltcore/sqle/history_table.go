@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"io"
 	"strings"
 	"time"
@@ -25,6 +24,7 @@ import (
 	"github.com/src-d/go-mysql-server/sql/expression"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/expreval"
@@ -49,8 +49,8 @@ const (
 )
 
 const (
-	_ uint64 = iota
-	committerColTag = iota + schema.ReservedTagMin - 1
+	_               uint64 = iota
+	committerColTag        = iota + schema.ReservedTagMin - 1
 	commitHashColTag
 	commitDateColTag
 )
@@ -88,8 +88,6 @@ func NewHistoryTable(ctx context.Context, name string, ddb *doltdb.DoltDB, rsr e
 	_ = ss.AddColumn(schema.NewColumn(CommitHashCol, commitHashColTag, types.StringKind, false))
 	_ = ss.AddColumn(schema.NewColumn(CommitterCol, committerColTag, types.StringKind, false))
 	_ = ss.AddColumn(schema.NewColumn(CommitDateCol, commitDateColTag, types.TimestampKind, false))
-
-
 
 	sch, err := ss.GenerateSchema()
 

@@ -208,7 +208,7 @@ func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, sch
 }
 
 type superSchemaData struct {
-	Columns  []encodedColumn `noms:"columns" json:"columns"`
+	Columns  []encodedColumn     `noms:"columns" json:"columns"`
 	TagNames map[uint64][]string `noms:"col_constraints" json:"col_constraints"`
 }
 

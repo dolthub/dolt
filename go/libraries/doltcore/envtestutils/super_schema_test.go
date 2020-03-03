@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 package envtestutils
 
 import (
@@ -21,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	sqle "github.com/src-d/go-mysql-server"
+	"github.com/src-d/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -31,8 +32,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
-	sqle "github.com/src-d/go-mysql-server"
-	"github.com/src-d/go-mysql-server/sql"
 )
 
 const (
@@ -62,9 +61,9 @@ type SuperSchemaTest struct {
 
 var testableDef = fmt.Sprintf("create table testable (pk int not null primary key comment 'tag:%d');", pkTag)
 
-var SuperSchemaTests = []SuperSchemaTest {
+var SuperSchemaTests = []SuperSchemaTest{
 	{
-		Name: "can create super schema",
+		Name:      "can create super schema",
 		TableName: "testable",
 		Commands: []Command{
 			Query{testableDef},
@@ -79,7 +78,7 @@ var SuperSchemaTests = []SuperSchemaTest {
 		)),
 	},
 	{
-		Name: "get super schema without commit",
+		Name:      "get super schema without commit",
 		TableName: "testable",
 		Commands: []Command{
 			Query{testableDef},
@@ -93,7 +92,7 @@ var SuperSchemaTests = []SuperSchemaTest {
 		)),
 	},
 	{
-		Name: "add column",
+		Name:      "add column",
 		TableName: "testable",
 		Commands: []Command{
 			Query{testableDef},
@@ -111,7 +110,7 @@ var SuperSchemaTests = []SuperSchemaTest {
 		)),
 	},
 	{
-		Name: "drop column",
+		Name:      "drop column",
 		TableName: "testable",
 		Commands: []Command{
 			Query{testableDef},
@@ -130,7 +129,7 @@ var SuperSchemaTests = []SuperSchemaTest {
 		)),
 	},
 	{
-		Name: "modify column",
+		Name:      "modify column",
 		TableName: "testable",
 		Commands: []Command{
 			Query{testableDef},
@@ -148,7 +147,7 @@ var SuperSchemaTests = []SuperSchemaTest {
 		)),
 	},
 	{
-		Name: "drop column from working set",
+		Name:      "drop column from working set",
 		TableName: "testable",
 		Commands: []Command{
 			Query{testableDef},
@@ -164,7 +163,7 @@ var SuperSchemaTests = []SuperSchemaTest {
 		)),
 	},
 	{
-		Name: "staged column persisted on commit, not working column",
+		Name:      "staged column persisted on commit, not working column",
 		TableName: "testable",
 		Commands: []Command{
 			Query{testableDef},
@@ -183,11 +182,10 @@ var SuperSchemaTests = []SuperSchemaTest {
 		ExpectedSuperSchema: superSchemaFromCols(columnCollection(
 			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
 			newColTypeInfo("c0", c0Tag, typeinfo.Int32Type, false),
-
 		)),
 	},
 	{
-		Name: "super schema on branch master",
+		Name:      "super schema on branch master",
 		TableName: "testable",
 		Commands: []Command{
 			Query{testableDef},
@@ -213,7 +211,7 @@ var SuperSchemaTests = []SuperSchemaTest {
 		)),
 	},
 	{
-		Name: "super schema on branch other",
+		Name:      "super schema on branch other",
 		TableName: "testable",
 		Commands: []Command{
 			Query{testableDef},
@@ -241,7 +239,7 @@ var SuperSchemaTests = []SuperSchemaTest {
 		)),
 	},
 	{
-		Name: "super schema merge",
+		Name:      "super schema merge",
 		TableName: "testable",
 		Commands: []Command{
 			Query{testableDef},
@@ -271,7 +269,7 @@ var SuperSchemaTests = []SuperSchemaTest {
 		)),
 	},
 	{
-		Name: "super schema merge with drops",
+		Name:      "super schema merge with drops",
 		TableName: "testable",
 		Commands: []Command{
 			Query{testableDef},
@@ -305,7 +303,7 @@ var SuperSchemaTests = []SuperSchemaTest {
 		)),
 	},
 	{
-		Name: "super schema with table add/drops",
+		Name:      "super schema with table add/drops",
 		TableName: "testable",
 		Commands: []Command{
 			Query{testableDef},
@@ -330,40 +328,41 @@ var SuperSchemaTests = []SuperSchemaTest {
 		)),
 	},
 	{
-	//	dolt checkout -b firstbranch
-	//	dolt sql <<SQL
-	//	CREATE TABLE test (
-	//	pk BIGINT NOT NULL COMMENT 'tag:0',
-	//	c1 BIGINT COMMENT 'tag:1',
-	//	c2 BIGINT COMMENT 'tag:2',
-	//	c3 BIGINT COMMENT 'tag:3',
-	//	c4 BIGINT COMMENT 'tag:4',
-	//	c5 BIGINT COMMENT 'tag:5',
-	//	PRIMARY KEY (pk)
-	//);
-	//	SQL
-	//	dolt sql -q 'insert into test values (1,1,1,1,1,1)'
-	//	dolt add .
-	//	dolt commit -m "setup table"
-		Name: "sql diff bats test",
+		//	dolt checkout -b firstbranch
+		//	dolt sql <<SQL
+		//	CREATE TABLE test (
+		//	pk BIGINT NOT NULL COMMENT 'tag:0',
+		//	c1 BIGINT COMMENT 'tag:1',
+		//	c2 BIGINT COMMENT 'tag:2',
+		//	c3 BIGINT COMMENT 'tag:3',
+		//	c4 BIGINT COMMENT 'tag:4',
+		//	c5 BIGINT COMMENT 'tag:5',
+		//	PRIMARY KEY (pk)
+		//);
+		//	SQL
+		//	dolt sql -q 'insert into test values (1,1,1,1,1,1)'
+		//	dolt add .
+		//	dolt commit -m "setup table"
+		Name:      "sql diff bats test",
 		TableName: "testable",
 		Commands: []Command{
+			Branch{"first"},
+			Checkout{"first"},
+			Query{testableDef},
+			Query{"insert into testable values (1);"},
+			CommitAll{"setup table"},
 			Branch{"other"},
 			Checkout{"other"},
-			Query{testableDef},
-			Query{fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
-			CommitAll{"created tables testable and foo"},
+			Query{"drop table testable;"},
+			CommitAll{"removed table"},
+			Checkout{"first"},
 		},
-		ExpectedBranch: "master",
+		ExpectedBranch: "first",
 		ExpectedSchema: schema.SchemaFromCols(columnCollection(
 			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
-			newColTypeInfo("c0", c0Tag, typeinfo.Int32Type, false),
-			newColTypeInfo("c1", c1Tag, typeinfo.Int32Type, false),
 		)),
 		ExpectedSuperSchema: superSchemaFromCols(columnCollection(
 			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
-			newColTypeInfo("c0", c0Tag, typeinfo.Int32Type, false),
-			newColTypeInfo("c1", c1Tag, typeinfo.Int32Type, false),
 		)),
 	},
 }
@@ -383,7 +382,7 @@ func testSuperSchema(t *testing.T, test SuperSchemaTest) {
 	}
 
 	spec := dEnv.RepoState.CWBHeadRef()
-	require.Equal(t, "refs/heads/" + test.ExpectedBranch, spec.String())
+	require.Equal(t, "refs/heads/"+test.ExpectedBranch, spec.String())
 
 	r, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
@@ -401,7 +400,6 @@ func testSuperSchema(t *testing.T, test SuperSchemaTest) {
 	require.NoError(t, err)
 	assert.Equal(t, test.ExpectedSchema, sch)
 }
-
 
 func superSchemaFromCols(cols *schema.ColCollection) *schema.SuperSchema {
 	sch := schema.SchemaFromCols(cols)
@@ -429,13 +427,11 @@ func newColTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, partOfP
 //	newColTypeInfo("age", AgeTag, typeinfo.Int32Type, false),
 //)
 
-
 type Command interface {
 	Exec(t *testing.T, dEnv *env.DoltEnv)
 }
 
-
-type AddAll struct {}
+type AddAll struct{}
 
 func (c AddAll) Exec(t *testing.T, dEnv *env.DoltEnv) {
 	err := actions.StageAllTables(context.Background(), dEnv, false)
@@ -483,11 +479,6 @@ func (q Query) Exec(t *testing.T, dEnv *env.DoltEnv) {
 	sqlCtx := sql.NewContext(context.Background())
 	_, _, err = engine.Query(sqlCtx, q.Query)
 	require.NoError(t, err)
-
-	tbl, _, _ := sqlDb.Root().GetTable(context.Background(), "testable")
-	sch, _ := tbl.GetSchema(context.Background())
-	sch.GetAllCols().Size()
-
 	err = dEnv.UpdateWorkingRoot(context.Background(), sqlDb.Root())
 	require.NoError(t, err)
 }
@@ -521,7 +512,7 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) {
 	assert.Equal(t, 0, status)
 }
 
-type ResetHard struct {}
+type ResetHard struct{}
 
 // NOTE: does not handle untracked tables
 func (r ResetHard) Exec(t *testing.T, dEnv *env.DoltEnv) {
