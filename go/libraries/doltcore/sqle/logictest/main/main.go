@@ -17,7 +17,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"os"
 
 	"github.com/liquidata-inc/sqllogictest/go/logictest"
@@ -26,27 +25,30 @@ import (
 )
 
 // Runs all sqllogictest test files (or directories containing them) given as arguments.
-// Usage: $command (run|parse) [file1.test dir1/ dir2/]
+// Usage: $command (run|parse) [version] [file1.test dir1/ dir2/]
 // In run mode, runs the tests and prints results to stdout.
 // In parse mode, parses test results from the file given and prints them to STDOUT in a format to be imported by dolt.
 func main() {
 	args := os.Args[1:]
 
 	if len(args) < 1 {
-		panic("Usage: logictest (run|parse) file1 file2 ...")
+		panic("Usage: logictest (run|parse) [version] file1 file2 ...")
 	}
 
 	if args[0] == "run" {
 		h := &dolt.DoltHarness{}
 		logictest.RunTestFiles(h, args[1:]...)
 	} else if args[0] == "parse" {
-		parseTestResults(args[1])
+		if len(args) < 3 {
+			panic("Usage: logictest parse <version> (file | dir/)")
+		}
+		parseTestResults(args[1], args[2])
 	} else {
 		panic("Unrecognized command " + args[0])
 	}
 }
 
-func parseTestResults(f string) {
+func parseTestResults(version, f string) {
 	entries, err := logictest.ParseResultFile(f)
 	if err != nil {
 		panic(err)
@@ -54,7 +56,7 @@ func parseTestResults(f string) {
 
 	records := make([]*DoltResultRecord, len(entries))
 	for i, e := range entries {
-		records[i] = NewDoltRecordResult(e)
+		records[i] = NewDoltRecordResult(e, version)
 	}
 
 	b, err := JSONMarshal(records)
@@ -78,7 +80,7 @@ func JSONMarshal(records []*DoltResultRecord) ([]byte, error) {
 	return buffer.Bytes(), err
 }
 
-func NewDoltRecordResult(e *logictest.ResultLogEntry) *DoltResultRecord {
+func NewDoltRecordResult(e *logictest.ResultLogEntry, version string) *DoltResultRecord {
 	var result string
 	switch e.Result {
 	case logictest.Ok:
@@ -89,10 +91,11 @@ func NewDoltRecordResult(e *logictest.ResultLogEntry) *DoltResultRecord {
 		result = "skipped"
 	}
 	return &DoltResultRecord{
+		Version:      version,
 		TestFile:     e.TestFile,
 		LineNum:      e.LineNum,
 		Query:        e.Query,
-		Duration:     fmt.Sprintf("%dms", e.Duration.Milliseconds()),
+		Duration:     e.Duration.Milliseconds(),
 		Result:       result,
 		ErrorMessage: e.ErrorMessage,
 	}
@@ -103,10 +106,11 @@ type TestResultArray struct {
 }
 
 type DoltResultRecord struct {
+	Version      string `json:"version"`
 	TestFile     string `json:"test_file"`
 	LineNum      int    `json:"line_num"`
 	Query        string `json:"query_string"`
-	Duration     string `json:"duration"`
+	Duration     int64  `json:"duration"`
 	Result       string `json:"result"`
 	ErrorMessage string `json:"error_message,omitempty"`
 }
