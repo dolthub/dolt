@@ -162,7 +162,7 @@ func newEpsRow(id int, name string, airdate string, rating float64) row.Row {
 }
 
 func datetimeStrToTimestamp(datetime string) time.Time {
-	time, err := time.Parse("2006-01-02 03:04:05", datetime)
+	time, err := time.Parse("2006-01-02 15:04:05", datetime)
 	if err != nil {
 		panic(fmt.Sprintf("unable to parse datetime %s", datetime))
 	}
@@ -294,6 +294,8 @@ func MutateRow(r row.Row, tagsAndVals ...interface{}) row.Row {
 				nomsVal = types.UUID(v)
 			case bool:
 				nomsVal = types.Bool(v)
+			case time.Time:
+				nomsVal = types.Timestamp(v)
 			default:
 				panic("Unhandled type " + reflect.TypeOf(val).String())
 			}
