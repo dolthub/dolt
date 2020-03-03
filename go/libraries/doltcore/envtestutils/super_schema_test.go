@@ -328,21 +328,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 		)),
 	},
 	{
-		//	dolt checkout -b firstbranch
-		//	dolt sql <<SQL
-		//	CREATE TABLE test (
-		//	pk BIGINT NOT NULL COMMENT 'tag:0',
-		//	c1 BIGINT COMMENT 'tag:1',
-		//	c2 BIGINT COMMENT 'tag:2',
-		//	c3 BIGINT COMMENT 'tag:3',
-		//	c4 BIGINT COMMENT 'tag:4',
-		//	c5 BIGINT COMMENT 'tag:5',
-		//	PRIMARY KEY (pk)
-		//);
-		//	SQL
-		//	dolt sql -q 'insert into test values (1,1,1,1,1,1)'
-		//	dolt add .
-		//	dolt commit -m "setup table"
+		// This test corresponds to @test "diff sql reconciles DROP TABLE" in sql_diff.bats
 		Name:      "sql diff bats test",
 		TableName: "testable",
 		Commands: []Command{
@@ -419,13 +405,6 @@ func newColTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, partOfP
 	}
 	return c
 }
-
-//
-//var people = columnCollection(
-//	newColTypeInfo("id", IdTag, typeinfo.Int32Type, true, NotNullConstraint{}),
-//	newColTypeInfo("name", NameTag, varchar(20), false, NotNullConstraint{}),
-//	newColTypeInfo("age", AgeTag, typeinfo.Int32Type, false),
-//)
 
 type Command interface {
 	Exec(t *testing.T, dEnv *env.DoltEnv)
