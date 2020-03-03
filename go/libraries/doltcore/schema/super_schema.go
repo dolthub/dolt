@@ -97,6 +97,7 @@ func (ss *SuperSchema) AddColumn(col Column) (err error) {
 	return err
 }
 
+// TODO: make this functional
 func (ss *SuperSchema) AddSchemas(schemas ...Schema) error {
 	for _, sch := range schemas {
 		err := sch.GetAllCols().Iter(func( _ uint64, col Column) (stop bool, err error) {

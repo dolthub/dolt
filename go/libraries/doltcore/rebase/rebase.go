@@ -376,7 +376,7 @@ func tagExistsInHistory(ctx context.Context, ddb *doltdb.DoltDB, c *doltdb.Commi
 	}
 
 	for _, tn := range tblNames {
-		ss, err := crt.GetSuperSchema(ctx, tn)
+		ss, _, err := crt.GetSuperSchema(ctx, tn)
 
 		if err != nil {
 			return false, err

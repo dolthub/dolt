@@ -138,74 +138,79 @@ func (root *RootValue) HasTable(ctx context.Context, tName string) (bool, error)
 	return tableMap.Has(ctx, types.String(tName))
 }
 
-func (root *RootValue) GetSuperSchema(ctx context.Context, tName string) (*schema.SuperSchema, error) {
-	t, found, err := root.GetTable(ctx, tName)
+func (root *RootValue) GetSuperSchema(ctx context.Context, tName string) (*schema.SuperSchema, bool, error) {
+	// SuperSchema is only persisted on Commit()
+	ss, found, err := root.getStaleSuperSchema(ctx, tName)
 
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if !found {
-		h, _ := root.HashOf()
-		return nil, errors.New(fmt.Sprintf("table %s does not exist in root %s", tName, h.String()))
+		ss, _ = schema.NewSuperSchema()
 	}
 
-	// SuperSchema is only persisted on Commit()
-	ss,  err := root.getStaleSuperSchema(ctx, tName)
+	t, tblFound, err := root.GetTable(ctx, tName)
 
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
-	sch, err := t.GetSchema(ctx)
-
-	if err != nil {
-		return nil, err
+	if !found && !tblFound {
+		// table doesn't exist in current commit or in history
+		return nil, false, nil
 	}
 
-	err = ss.AddSchemas(sch)
+	if tblFound {
+		sch, err := t.GetSchema(ctx)
 
-	if err != nil {
-		return nil, err
+		if err != nil {
+			return nil, false, err
+		}
+
+		err = ss.AddSchemas(sch)
+
+		if err != nil {
+			return nil, false, err
+		}
 	}
 
-	return ss, err
+	return ss, true, err
 }
 
-func (root *RootValue) getStaleSuperSchema(ctx context.Context, tName string) (*schema.SuperSchema, error) {
-
+func (root *RootValue) getStaleSuperSchema(ctx context.Context, tName string) (*schema.SuperSchema, bool, error) {
 	ssm, err := root.getOrCreateSuperSchemaMap(ctx)
 
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	vv, found, err := ssm.MaybeGet(ctx, types.String(tName))
 
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if !found {
-		ss, _ := schema.NewSuperSchema()
-		return ss, nil
+		// Super Schema doesn't exist for new or nonexistent table
+		return nil, false, nil
 	}
 
 	ssValRef := vv.(types.Ref)
 	ssVal, err := ssValRef.TargetValue(ctx, root.vrw)
 
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	ss, err := encoding.UnmarshalSuperSchemaNomsValue(ctx, root.vrw.Format(), ssVal)
 
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
-	return ss, nil
+	return ss, true, nil
 }
 
-// TODO: get or create from history
+// TODO: get or create from history of root
 func (root *RootValue) getOrCreateSuperSchemaMap(ctx context.Context) (types.Map, error) {
 	v, found, err := root.valueSt.MaybeGet(superSchemasKey)
 
@@ -615,10 +620,9 @@ func (root *RootValue) UpdateTablesFromOther(ctx context.Context, tblNames []str
 	return newRootValue(root.vrw, rootValSt), nil
 }
 
-// Updates SuperSchemas of tblNames using SuperSchemas from other. All tblNames must be in both roots
+// Updates SuperSchemas of tblNames using SuperSchemas from other.
 func (root *RootValue) UpdateSuperSchemasFromOther(ctx context.Context, tblNames []string, other *RootValue) (*RootValue, error) {
 	newRoot := root
-
 	ssm, err := newRoot.getOrCreateSuperSchemaMap(ctx)
 
 	if err != nil {
@@ -629,19 +633,34 @@ func (root *RootValue) UpdateSuperSchemasFromOther(ctx context.Context, tblNames
 
 	for _, tn := range tblNames {
 
-		oss, err := other.GetSuperSchema(ctx, tn)
+		ss, found, err := root.GetSuperSchema(ctx, tn)
 
 		if err != nil {
 			return nil, err
 		}
 
-		ss, err := newRoot.GetSuperSchema(ctx, tn)
+		if !found {
+
+		}
+
+		oss, foundOther, err := other.GetSuperSchema(ctx, tn)
 
 		if err != nil {
 			return nil, err
 		}
 
-		newSS, err := schema.SuperSchemaUnion(ss, oss)
+		var newSS *schema.SuperSchema
+		if found && foundOther {
+			newSS, err = schema.SuperSchemaUnion(ss, oss)
+		} else if found {
+			newSS = ss
+		} else if foundOther {
+			newSS = oss
+		} else {
+			h, _ := root.HashOf()
+			oh, _ := other.HashOf()
+			return nil, errors.New(fmt.Sprintf("table %s does not exist in root %s or root %s", tn, h.String(), oh.String()))
+		}
 
 		if err != nil {
 			return nil, err
