@@ -260,7 +260,7 @@ func rowsEqual(expected, actual row.Row) (bool, string) {
 		panic(err)
 	}
 
-	opts := cmp.Options{cmp.AllowUnexported(), dtestutils.FloatComparer}
+	opts := cmp.Options{cmp.AllowUnexported(), dtestutils.FloatComparer, dtestutils.TimestampComparer}
 	eq := cmp.Equal(er, ar, opts)
 	var diff string
 	if !eq {

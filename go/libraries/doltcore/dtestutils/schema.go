@@ -89,6 +89,10 @@ var FloatComparer = cmp.Comparer(func(x, y types.Float) bool {
 	return math.Abs(float64(x)-float64(y)) < .001
 })
 
+var TimestampComparer = cmp.Comparer(func(x, y types.Timestamp) bool {
+	return x.Equals(y)
+})
+
 // CreateTestTable creates a new test table with the name, schema, and rows given.
 func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch schema.Schema, rs ...row.Row) {
 	imt := table.NewInMemTable(sch)
