@@ -360,7 +360,6 @@ func modifyDifferenceTag(d *ndiff.Difference, old, new uint64, pkTag bool, nbf *
 	return d.KeyValue, d.NewValue, nil
 }
 
-// TODO: replace this traversal with a check of SuperSchema once we have it
 func tagExistsInHistory(ctx context.Context, ddb *doltdb.DoltDB, c *doltdb.Commit, tag uint64) (bool, error) {
 
 	crt, err := c.GetRootValue()
