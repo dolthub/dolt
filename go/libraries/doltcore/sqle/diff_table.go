@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/store/hash"
 	"io"
 	"strings"
 
@@ -30,6 +29,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -384,7 +384,6 @@ func (dt *DiffTable) WithFilters(filters []sql.Expression) sql.Table {
 func (dt *DiffTable) Filters() []sql.Expression {
 	return dt.filters
 }
-
 
 func SuperSchemaForAllBranches(ctx context.Context, cmItr doltdb.CommitItr, ddb *doltdb.DoltDB, rsr env.RepoStateReader, tblName string) (*schema.SuperSchema, error) {
 	wr, err := ddb.ReadRootValue(ctx, rsr.WorkingHash())

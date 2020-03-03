@@ -32,7 +32,7 @@ type SuperSchema struct {
 	// Names of the columns are not stored in this collection as they can change
 	// over time.
 	// Constraints are not tracked in this collection or anywhere in SuperSchema
-	allCols  *ColCollection
+	allCols *ColCollection
 
 	// All names in each column's history, keyed by tag. No order is guaranteed
 	tagNames map[uint64][]string
@@ -100,7 +100,7 @@ func (ss *SuperSchema) AddColumn(col Column) (err error) {
 // TODO: make this functional
 func (ss *SuperSchema) AddSchemas(schemas ...Schema) error {
 	for _, sch := range schemas {
-		err := sch.GetAllCols().Iter(func( _ uint64, col Column) (stop bool, err error) {
+		err := sch.GetAllCols().Iter(func(_ uint64, col Column) (stop bool, err error) {
 			err = ss.AddColumn(col)
 			stop = err != nil
 			return stop, err
@@ -263,7 +263,8 @@ func (ss *SuperSchema) NameMapForSchema(sch Schema) (map[string]string, error) {
 	uniqNames := ss.nameColumns()
 	allCols := sch.GetAllCols()
 	err := allCols.Iter(func(tag uint64, col Column) (stop bool, err error) {
-		_, ok := uniqNames[tag]; if !ok {
+		_, ok := uniqNames[tag]
+		if !ok {
 			return true, errors.New("failed to map columns")
 		}
 		inNameToOutName[col.Name] = uniqNames[tag]
@@ -307,7 +308,6 @@ func SuperSchemaUnion(superSchemas ...*SuperSchema) (*SuperSchema, error) {
 
 	return &SuperSchema{cc, tn}, nil
 }
-
 
 // preps column for insertion to super schema
 func stripColumn(col Column) Column {

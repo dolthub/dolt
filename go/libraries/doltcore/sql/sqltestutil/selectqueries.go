@@ -718,7 +718,7 @@ var BasicSelectTests = []SelectTest{
 		Name:  "select * from log system table",
 		Query: "select * from dolt_log",
 		ExpectedRows: []row.Row{mustRow(row.New(types.Format_7_18, LogSchema, row.TaggedValues{
-			0: types.String("73aupasq0va8lic1t5703nacn6n6kb8g"),
+			0: types.String("26e3q4fup0uotaqk24quluf2pmbgmn85"),
 			1: types.String("billy bob"),
 			2: types.String("bigbillieb@fake.horse"),
 			3: types.Timestamp(time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)),

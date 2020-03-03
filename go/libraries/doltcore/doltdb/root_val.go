@@ -58,7 +58,7 @@ type DocDetails struct {
 	File      string
 }
 
-func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[string]hash.Hash) (*RootValue, error) {
+func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[string]hash.Hash, ssMap types.Map) (*RootValue, error) {
 	values := make([]types.Value, 2*len(tables))
 
 	index := 0
@@ -89,7 +89,7 @@ func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[str
 		return nil, err
 	}
 
-	return newRootFromTblMap(vrw, tblMap)
+	return newRootFromMaps(vrw, tblMap, ssMap)
 }
 
 func newRootValue(vrw types.ValueReadWriter, st types.Struct) *RootValue {
@@ -102,12 +102,20 @@ func emptyRootValue(ctx context.Context, vrw types.ValueReadWriter) (*RootValue,
 	if err != nil {
 		return nil, err
 	}
-	return newRootFromTblMap(vrw, m)
+
+	mm, err := types.NewMap(ctx, vrw)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return newRootFromMaps(vrw, m, mm)
 }
 
-func newRootFromTblMap(vrw types.ValueReadWriter, tblMap types.Map) (*RootValue, error) {
+func newRootFromMaps(vrw types.ValueReadWriter, tblMap types.Map, ssMap types.Map) (*RootValue, error) {
 	sd := types.StructData{
-		tablesKey: tblMap,
+		tablesKey:       tblMap,
+		superSchemasKey: ssMap,
 	}
 
 	st, err := types.NewStruct(vrw.Format(), ddbRootStructName, sd)
@@ -175,6 +183,10 @@ func (root *RootValue) GetSuperSchema(ctx context.Context, tName string) (*schem
 	}
 
 	return ss, true, err
+}
+
+func (root *RootValue) GetSuperSchemaMap(ctx context.Context) (types.Map, error) {
+	return root.getOrCreateSuperSchemaMap(ctx)
 }
 
 func (root *RootValue) getStaleSuperSchema(ctx context.Context, tName string) (*schema.SuperSchema, bool, error) {
