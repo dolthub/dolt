@@ -304,6 +304,68 @@ var SuperSchemaTests = []SuperSchemaTest {
 			newColTypeInfo("c12", c12Tag, typeinfo.Int32Type, false),
 		)),
 	},
+	{
+		Name: "super schema with table add/drops",
+		TableName: "testable",
+		Commands: []Command{
+			Query{testableDef},
+			Query{fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
+			Query{"create table foo (pk int not null primary key);"},
+			CommitAll{"created tables testable and foo"},
+			Query{fmt.Sprintf("alter table testable add column c1 int comment 'tag:%d';", c1Tag)},
+			Query{"create table qux (pk int not null primary key);"},
+			Query{"drop table foo;"},
+			CommitAll{"added column c1 on branch master, created table qux, dropped table foo"},
+		},
+		ExpectedBranch: "master",
+		ExpectedSchema: schema.SchemaFromCols(columnCollection(
+			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
+			newColTypeInfo("c0", c0Tag, typeinfo.Int32Type, false),
+			newColTypeInfo("c1", c1Tag, typeinfo.Int32Type, false),
+		)),
+		ExpectedSuperSchema: superSchemaFromCols(columnCollection(
+			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
+			newColTypeInfo("c0", c0Tag, typeinfo.Int32Type, false),
+			newColTypeInfo("c1", c1Tag, typeinfo.Int32Type, false),
+		)),
+	},
+	{
+	//	dolt checkout -b firstbranch
+	//	dolt sql <<SQL
+	//	CREATE TABLE test (
+	//	pk BIGINT NOT NULL COMMENT 'tag:0',
+	//	c1 BIGINT COMMENT 'tag:1',
+	//	c2 BIGINT COMMENT 'tag:2',
+	//	c3 BIGINT COMMENT 'tag:3',
+	//	c4 BIGINT COMMENT 'tag:4',
+	//	c5 BIGINT COMMENT 'tag:5',
+	//	PRIMARY KEY (pk)
+	//);
+	//	SQL
+	//	dolt sql -q 'insert into test values (1,1,1,1,1,1)'
+	//	dolt add .
+	//	dolt commit -m "setup table"
+		Name: "sql diff bats test",
+		TableName: "testable",
+		Commands: []Command{
+			Branch{"other"},
+			Checkout{"other"},
+			Query{testableDef},
+			Query{fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
+			CommitAll{"created tables testable and foo"},
+		},
+		ExpectedBranch: "master",
+		ExpectedSchema: schema.SchemaFromCols(columnCollection(
+			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
+			newColTypeInfo("c0", c0Tag, typeinfo.Int32Type, false),
+			newColTypeInfo("c1", c1Tag, typeinfo.Int32Type, false),
+		)),
+		ExpectedSuperSchema: superSchemaFromCols(columnCollection(
+			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
+			newColTypeInfo("c0", c0Tag, typeinfo.Int32Type, false),
+			newColTypeInfo("c1", c1Tag, typeinfo.Int32Type, false),
+		)),
+	},
 }
 
 func TestSuperSchema(t *testing.T) {
@@ -330,7 +392,8 @@ func testSuperSchema(t *testing.T, test SuperSchemaTest) {
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	ss, err := r.GetSuperSchema(context.Background(), test.TableName)
+	ss, found, err := r.GetSuperSchema(context.Background(), test.TableName)
+	require.True(t, found)
 	require.NoError(t, err)
 	assert.Equal(t, test.ExpectedSuperSchema, ss)
 
