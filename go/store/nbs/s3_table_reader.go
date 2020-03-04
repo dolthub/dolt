@@ -145,10 +145,10 @@ func (s3or *s3ObjectReader) readRange(ctx context.Context, name addr, p []byte, 
 		}
 
 		result, err := s3or.s3.GetObjectWithContext(ctx, input)
-
 		if err != nil {
 			return 0, err
 		}
+		defer result.Body.Close()
 
 		if *result.ContentLength != int64(len(p)) {
 			return 0, fmt.Errorf("failed to read get entire range")

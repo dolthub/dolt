@@ -336,6 +336,7 @@ func (s3p awsTablePersister) loadIntoCache(ctx context.Context, name addr) error
 	if err != nil {
 		return err
 	}
+	defer result.Body.Close()
 
 	return s3p.tc.store(name, result.Body, uint64(*result.ContentLength))
 }
