@@ -16,7 +16,6 @@ package sqltestutil
 
 import (
 	"github.com/google/uuid"
-
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 )
@@ -180,15 +179,15 @@ var BasicUpdateTests = []UpdateTest{
 		),
 		ExpectedSchema: CompressSchema(EpisodesTestSchema),
 	},
-	//{
-	//	Name:        "update datetime field",
-	//	UpdateQuery: `update episodes set name = "fake_name" where id = 1;`,
-	//	SelectQuery: `select * from episodes where id = 1;`,
-	//	ExpectedRows: CompressRows(EpisodesTestSchema,
-	//		MutateRow(Ep1, EpNameTag, "fake_name"),
-	//	),
-	//	ExpectedSchema: CompressSchema(EpisodesTestSchema),
-	//},
+	{
+		Name:        "update datetime field",
+		UpdateQuery: `update episodes set name = "fake_name" where id = 1;`,
+		SelectQuery: `select * from episodes where id = 1;`,
+		ExpectedRows: CompressRows(EpisodesTestSchema,
+			MutateRow(Ep1, EpNameTag, "fake_name"),
+		),
+		ExpectedSchema: CompressSchema(EpisodesTestSchema),
+	},
 	{
 		Name:        "update multiple rows, =",
 		UpdateQuery: `update people set first_name = "Homer" where last_name = "Simpson"`,

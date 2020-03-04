@@ -426,7 +426,6 @@ teardown() {
 @test "sql update a datetime column" {
     dolt sql -q "insert into has_datetimes (pk) values (1)"
     run dolt sql -q "update has_datetimes set date_created='2020-02-11 00:00:00' where pk=1"
-    skip "Can't use update on a datetime field"
     [ $status -eq 0 ]
     [[ ! "$output" =~ "Expected GetField expression" ]] || false
 }
