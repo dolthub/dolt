@@ -54,6 +54,12 @@ var resetSynopsis = []string{
 	"[--hard | --soft]",
 }
 
+var resetDocumentation = cli.CommandDocumentation{
+	ShortDesc: resetShortDesc,
+	LongDesc: resetLongDesc,
+	Synopsis: resetSynopsis,
+}
+
 type ResetCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -69,7 +75,7 @@ func (cmd ResetCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ResetCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, resetShortDesc, resetLongDesc, resetSynopsis, ap)
+	return CreateMarkdown(fs, path, commandStr, resetDocumentation, ap)
 }
 
 func (cmd ResetCmd) createArgParser() *argparser.ArgParser {
@@ -82,7 +88,7 @@ func (cmd ResetCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, resetShortDesc, resetLongDesc, resetSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, resetDocumentation, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.ContainsArg(doltdb.DocTableName) {

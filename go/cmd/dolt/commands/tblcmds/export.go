@@ -16,6 +16,7 @@ package tblcmds
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"os"
 
 	"github.com/fatih/color"
@@ -36,6 +37,12 @@ var exportLongDesc = `dolt table export will export the contents of <table> to <
 See the help for <b>dolt table import</b> as the options are the same.`
 var exportSynopsis = []string{
 	"[-f] [-pk <field>] [-schema <file>] [-map <file>] [-continue] [-file-type <type>] <table> <file>",
+}
+
+var exportDocumentation = cli.CommandDocumentation{
+	ShortDesc: exportShortDesc,
+	LongDesc: exportLongDesc,
+	Synopsis: exportSynopsis,
 }
 
 // validateExportArgs validates the input from the arg parser, and returns the tuple:
@@ -87,7 +94,7 @@ func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 }
 
 func parseExportArgs(ap *argparser.ArgParser, commandStr string, args []string) (bool, *mvdata.MoveOptions) {
-	help, usage := cli.HelpAndUsagePrinters(commandStr, exportShortDesc, exportLongDesc, exportSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, exportDocumentation, ap)
 	apr := cli.ParseArgs(ap, args, help)
 	tableName, tableLoc, fileLoc := validateExportArgs(apr, usage)
 
@@ -126,7 +133,7 @@ func (cmd ExportCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ExportCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, exportShortDesc, exportLongDesc, exportSynopsis, ap)
+	return commands.CreateMarkdown(fs, path, commandStr, exportDocumentation, ap)
 }
 
 func (cmd ExportCmd) createArgParser() *argparser.ArgParser {

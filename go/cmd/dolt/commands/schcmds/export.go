@@ -35,6 +35,12 @@ var schExportSynopsis = []string{
 	"<table> <file>",
 }
 
+var schExportDocumentation = cli.CommandDocumentation{
+	ShortDesc: schExportShortDesc,
+	LongDesc: schExportLongDesc,
+	Synopsis: schExportSynopsis,
+}
+
 const (
 	defaultParam = "default"
 	tagParam     = "tag"
@@ -56,7 +62,7 @@ func (cmd ExportCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ExportCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, schExportShortDesc, schExportLongDesc, schExportSynopsis, ap)
+	return commands.CreateMarkdown(fs, path, commandStr, schExportDocumentation, ap)
 }
 
 func (cmd ExportCmd) createArgParser() *argparser.ArgParser {
@@ -77,7 +83,7 @@ func (cmd ExportCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, schExportShortDesc, schExportLongDesc, schExportSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, schExportDocumentation, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
 	root, verr := commands.GetWorkingWithVErr(dEnv)

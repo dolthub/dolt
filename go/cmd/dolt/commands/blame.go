@@ -39,7 +39,13 @@ var blameShortDesc = `Show what revision and author last modified each row of a 
 var blameLongDesc = `Annotates each row in the given table with information from the revision which last modified the row. Optionally, start annotating from the given revision.`
 
 var blameSynopsis = []string{
-	`[<rev>] <tablename>`,
+	`[{{.LessThan}}rev{{.GreaterThan}}] {{.LessThan}}tablename{{.GreaterThan}}`,
+}
+
+var blameDocumentation = cli.CommandDocumentation{
+	ShortDesc: blameShortDesc,
+	LongDesc: blameLongDesc,
+	Synopsis: blameSynopsis,
 }
 
 // blameInfo contains blame information for a row
@@ -88,7 +94,7 @@ func (cmd BlameCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd BlameCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, blameShortDesc, blameLongDesc, blameSynopsis, ap)
+	return CreateMarkdown(fs, path, commandStr, blameDocumentation, ap)
 }
 
 func (cmd BlameCmd) createArgParser() *argparser.ArgParser {
@@ -119,7 +125,7 @@ func (cmd BlameCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, blameShortDesc, blameLongDesc, blameSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, blameDocumentation, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() == 0 || apr.NArg() > 2 {

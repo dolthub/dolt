@@ -17,11 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"os"
-	"path"
-	"path/filepath"
-	"sync"
-
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -38,6 +33,10 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/strhelp"
 	"github.com/liquidata-inc/dolt/go/store/datas"
 	"github.com/liquidata-inc/dolt/go/store/types"
+	"os"
+	"path"
+	"path/filepath"
+	"sync"
 )
 
 const (
@@ -46,17 +45,21 @@ const (
 )
 
 var cloneShortDesc = "Clone a data repository into a new directory"
-var cloneLongDesc = "Clones a repository into a newly created directory, creates remote-tracking branches for each " +
-	"branch in the cloned repository (visible using dolt branch -a), and creates and checks out an initial branch that " +
-	"is forked from the cloned repository's currently active branch.\n" +
-	"\n" +
-	"After the clone, a plain <b>dolt fetch</b> without arguments will update all the remote-tracking branches, and a <b>dolt " +
-	"pull</b> without arguments will in addition merge the remote branch into the current branch\n" +
-	"\n" +
-	"This default configuration is achieved by creating references to the remote branch heads under refs/remotes/origin " +
-	"and by creating a remote named 'origin'."
+var cloneLongDesc = `Clones a repository into a newly created directory, creates remote-tracking branches for each branch in the cloned repository (visible using {{.LessThan}}dolt branch -a{{.GreaterThan}}), and creates and checks out an initial branch that is forked from the cloned repository's currently active branch.
+
+After the clone, a plain {{.EmphasisLeft}}dolt fetch{{.EmphasisRight}} without arguments will update all the remote-tracking branches, and a {{.EmphasisLeft}}dolt pull{{.EmphasisRight}} without arguments will in addition merge the remote branch into the current branch.
+
+This default configuration is achieved by creating references to the remote branch heads under {{.LessThan}}refs/remotes/origin{{.GreaterThan}}  and by creating a remote named 'origin'.
+`
+
 var cloneSynopsis = []string{
-	"[-remote <remote>] [-branch <branch>]  [--aws-region <region>] [--aws-creds-type <creds-type>] [--aws-creds-file <file>] [--aws-creds-profile <profile>] <remote-url> <new-dir>",
+		"[-remote <remote>] [-branch <branch>]  [--aws-region <region>] [--aws-creds-type <creds-type>] [--aws-creds-file <file>] [--aws-creds-profile <profile>] <remote-url> <new-dir>",
+	}
+
+var cloneDocumentation = cli.CommandDocumentation{
+	ShortDesc: cloneShortDesc,
+	LongDesc: cloneLongDesc,
+	Synopsis: cloneSynopsis,
 }
 
 type CloneCmd struct{}
@@ -80,7 +83,7 @@ func (cmd CloneCmd) RequiresRepo() bool {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd CloneCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, cloneShortDesc, cloneLongDesc, cloneSynopsis, ap)
+	return CreateMarkdown(fs, path, commandStr, cloneDocumentation, ap)
 }
 
 func (cmd CloneCmd) createArgParser() *argparser.ArgParser {
@@ -102,7 +105,7 @@ func (cmd CloneCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, cloneShortDesc, cloneLongDesc, cloneSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, cloneDocumentation, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
 	remoteName := apr.GetValueOrDefault(remoteParam, "origin")

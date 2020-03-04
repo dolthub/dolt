@@ -17,11 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
-	"sort"
-	"strings"
-
 	"github.com/fatih/color"
-
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -32,20 +28,25 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
+
+	"sort"
+	"strings"
 )
 
+var branchLongDesc = `If {{.EmphasisLeft}}--list{{.EmphasisRight}} is given, or if there are no non-option arguments, existing branches are listed; the current branch will be highlighted with an asterisk.
+
+The command's second form creates a new branch head named {{.LessThan}}branchname{{.GreaterThan}} which points to the current {{.EmphasisLeft}}HEAD{{.EmphasisRight}}, or {{.LessThan}}start-point{{.GreaterThan}} if given.
+
+Note that this will create the new branch, but it will not switch the working tree to it; use {{.EmphasisLeft}}dolt checkout <newbranch>{{.EmphasisRight}} to switch to the new branch.
+
+With a {{.EmphasisLeft}}-m{{.EmphasisRight}}, {{.LessThan}}oldbranch{{.GreaterThan}} will be renamed to {{.LessThan}}newbranch{{.GreaterThan}}. If {{.LessThan}}newbranch{{.GreaterThan}} exists, -f must be used to force the rename to happen.
+
+The {{.EmphasisLeft}}-c{{.EmphasisRight}} options have the exact same semantics as {{.EmphasisLeft}}-m{{.EmphasisRight}}, except instead of the branch being renamed it will be copied to a new name.
+
+With a {{.EmphasisLeft}}-d{{.EmphasisRight}}, {{.LessThan}}branchname{{.GreaterThan}} will be deleted. You may specify more than one branch for deletion.`
+
+
 var branchShortDesc = `List, create, or delete branches`
-var branchLongDesc = `If <b>--list</b> is given, or if there are no non-option arguments, existing branches are listed; the current branch will be highlighted with an asterisk. 
-
-The command's second form creates a new branch head named <branchname> which points to the current <b>HEAD</b>, or <start-point> if given.
-
-Note that this will create the new branch, but it will not switch the working tree to it; use "dolt checkout <newbranch>" to switch to the new branch.
-
-With a <b>-m</b>, <oldbranch> will be renamed to <newbranch>. If <newbranch> exists, -f must be used to force the rename to happen.
-
-The <b>-c</b> options have the exact same semantics as <b>-m</b>, except instead of the branch being renamed it will be copied to a new name.
-
-With a <b>-d</b>, <branchname> will be deleted. You may specify more than one branch for deletion.`
 
 var branchForceFlagDesc = "Reset <branchname> to <startpoint>, even if <branchname> exists already. Without -f, dolt branch " +
 	"refuses to change an existing branch. In combination with -d (or --delete), allow deleting the branch irrespective " +
@@ -53,11 +54,17 @@ var branchForceFlagDesc = "Reset <branchname> to <startpoint>, even if <branchna
 	"already exists, the same applies for -c (or --copy)."
 
 var branchSynopsis = []string{
-	`[--list] [-v] [-a]`,
-	`[-f] <branchname> [<start-point>]`,
-	`-m [-f] [<oldbranch>] <newbranch>`,
-	`-c [-f] [<oldbranch>] <newbranch>`,
-	`-d [-f] <branchname>...`,
+		`[--list] [-v] [-a]`,
+		`[-f] {{.LessThan}}branchname{{.GreaterThan}} [{{.LessThan}}start{{.GreaterThan}}point>]`,
+		`-m [-f] [{{.LessThan}}oldbranch{{.GreaterThan}}] {{.LessThan}}newbranch{{.GreaterThan}}`,
+		`-c [-f] [{{.LessThan}}oldbranch{{.GreaterThan}}] {{.LessThan}}newbranch{{.GreaterThan}}`,
+		`-d [-f] {{.LessThan}}branchname{{.GreaterThan}}...`,
+	}
+
+var BranchDocumentation = cli.CommandDocumentation{
+	ShortDesc: branchShortDesc,
+	LongDesc: branchLongDesc,
+	Synopsis: branchSynopsis,
 }
 
 const (
@@ -86,7 +93,7 @@ func (cmd BranchCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd BranchCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, branchShortDesc, branchLongDesc, branchSynopsis, ap)
+	return CreateMarkdown(fs, path, commandStr, BranchDocumentation, ap)
 }
 
 func (cmd BranchCmd) createArgParser() *argparser.ArgParser {
@@ -111,7 +118,7 @@ func (cmd BranchCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, branchShortDesc, branchLongDesc, branchSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, BranchDocumentation, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
 	switch {

@@ -35,8 +35,11 @@ import (
 const (
 	SendMetricsCommand  = "send-metrics"
 	outputFlag          = "output"
-	sendMetricsShortDec = "Send metrics to the events server or print them to stdout"
+	sendMetricsShortDesc = "Send metrics to the events server or print them to stdout"
 )
+
+var sendMetricsDocumentation = cli.CommandDocumentation{ShortDesc: sendMetricsShortDesc}
+
 
 type SendMetricsCmd struct{}
 
@@ -72,7 +75,7 @@ func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []st
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(outputFlag, "o", "Flush events to stdout.")
 
-	help, _ := cli.HelpAndUsagePrinters(commandStr, sendMetricsShortDec, "", []string{}, ap)
+	help, _ := cli.HelpAndUsagePrinters(commandStr, sendMetricsDocumentation, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
 	metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")

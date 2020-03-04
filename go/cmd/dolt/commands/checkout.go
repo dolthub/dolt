@@ -29,22 +29,30 @@ import (
 )
 
 var coShortDesc = `Switch branches or restore working tree tables`
-var coLongDesc = `Updates tables in the working set to match the staged versions. If no paths are given, dolt checkout will also update HEAD to set the specified branch as the current branch.
+var coLongDesc = `
+Updates tables in the working set to match the staged versions. If no paths are given, dolt checkout will also update HEAD to set the specified branch as the current branch.
 
-dolt checkout <branch>
-   To prepare for working on <branch>, switch to it by updating the index and the tables in the working tree, and by pointing HEAD at the branch. Local modifications to the tables in the working
-   tree are kept, so that they can be committed to the <branch>.
+dolt checkout {{.LessThan}}}branch{{.GreaterThan}}
+   To prepare for working on {{.LessThan}}}branch{{.GreaterThan}}, switch to it by updating the index and the tables in the working tree, and by pointing HEAD at the branch. Local modifications to the tables in the working
+   tree are kept, so that they can be committed to the {{.LessThan}}}branch{{.GreaterThan}}.
 
-dolt checkout -b <new_branch> [<start_point>]
+dolt checkout -b {{.LessThan}}}new_branch{{.GreaterThan}} [{{.LessThan}}}start_point{{.GreaterThan}}]
    Specifying -b causes a new branch to be created as if dolt branch were called and then checked out.
 
-dolt checkout <table>...
+dolt checkout {{.LessThan}}}table{{.GreaterThan}}...
   To update table(s) with their values in HEAD `
 
-var coSynopsis = []string{
-	`<branch>`,
-	`<table>...`,
-	`-b <new-branch> [<start-point>]`,
+
+var coSynopsis = []string {
+		`<branch>`,
+		`<table>...`,
+		`-b <new-branch> [<start-point>]`,
+	}
+
+var coDocumentation = cli.CommandDocumentation{
+	ShortDesc: coShortDesc,
+	LongDesc: coLongDesc,
+	Synopsis: coSynopsis,
 }
 
 const coBranchArg = "b"
@@ -64,7 +72,7 @@ func (cmd CheckoutCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd CheckoutCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, coShortDesc, coLongDesc, coSynopsis, ap)
+	return CreateMarkdown(fs, path, commandStr, coDocumentation, ap)
 }
 
 func (cmd CheckoutCmd) createArgParser() *argparser.ArgParser {
@@ -81,7 +89,7 @@ func (cmd CheckoutCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	helpPrt, usagePrt := cli.HelpAndUsagePrinters(commandStr, coShortDesc, coLongDesc, coSynopsis, ap)
+	helpPrt, usagePrt := cli.HelpAndUsagePrinters(commandStr, coDocumentation, ap)
 	apr := cli.ParseArgs(ap, args, helpPrt)
 
 	if (apr.Contains(coBranchArg) && apr.NArg() > 1) || (!apr.Contains(coBranchArg) && apr.NArg() == 0) {

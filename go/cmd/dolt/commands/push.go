@@ -17,11 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
-	"sync"
-	"time"
-
 	"github.com/dustin/go-humanize"
-
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -35,6 +31,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/earl"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/store/datas"
+	"sync"
+	"time"
 )
 
 const (
@@ -43,21 +41,23 @@ const (
 
 var pushShortDesc = "Update remote refs along with associated objects"
 
-var pushLongDesc = "Updates remote refs using local refs, while sending objects necessary to complete the given refs." +
-	"\n" +
-	"\nWhen the command line does not specify where to push with the <remote> argument, an attempt is made to infer the " +
-	"remote.  If only one remote exists it will be used, if multiple remotes exists, a remote named 'origin' will be " +
-	"attempted.  If there is more than one remote, and none of them are named 'origin' then the command will fail and " +
-	"you will need to specify the correct remote explicitly." +
-	"\n" +
-	"\nWhen the command line does not specify what to push with <refspec>... then the current branch will be used." +
-	"\n" +
-	"\nWhen neither the command-line does not specify what to push, the default behavior is used, which corresponds to the " +
-	"current branch being pushed to the corresponding upstream branch, but as a safety measure, the push is aborted if " +
-	"the upstream branch does not have the same name as the local one."
+var pushLongDesc = `Updates remote refs using local refs, while sending objects necessary to complete the given refs. 
+
+When the command line does not specify where to push with the <remote> argument, an attempt is made to infer the remote.  If only one remote exists it will be used, if multiple remotes exists, a remote named 'origin' will be attempted.  If there is more than one remote, and none of them are named 'origin' then the command will fail and you will need to specify the correct remote explicitly.
+
+When the command line does not specify what to push with <refspec>... then the current branch will be used.
+
+When neither the command-line does not specify what to push, the default behavior is used, which corresponds to the current branch being pushed to the corresponding upstream branch, but as a safety measure, the push is aborted if the upstream branch does not have the same name as the local one.
+`
 
 var pushSynopsis = []string{
-	"[-u | --set-upstream] [<remote>] [<refspec>]",
+	"[-u | --set-upstream] [{{.LessThan}}remote{{.GreaterThan}}] [{{.LessThan}}refspec{{.GreaterThan}}]",
+}
+
+var pushDocumentation = cli.CommandDocumentation{
+	ShortDesc: pushShortDesc,
+	LongDesc: pushLongDesc,
+	Synopsis: pushSynopsis,
 }
 
 type PushCmd struct{}
@@ -75,7 +75,7 @@ func (cmd PushCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd PushCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, pushShortDesc, pushLongDesc, pushSynopsis, ap)
+	return CreateMarkdown(fs, path, commandStr, pushDocumentation, ap)
 }
 
 func (cmd PushCmd) createArgParser() *argparser.ArgParser {
@@ -92,7 +92,7 @@ func (cmd PushCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, pushShortDesc, pushLongDesc, pushSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, pushDocumentation, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
 	remotes, err := dEnv.GetRemotes()

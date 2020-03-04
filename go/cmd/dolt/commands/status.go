@@ -41,6 +41,12 @@ before running <b>dolt commit</b>.`
 
 var statusSynopsis = []string{""}
 
+var statusDocumentation = cli.CommandDocumentation{
+	ShortDesc: statusShortDesc,
+	LongDesc: statusLongDesc,
+	Synopsis: statusSynopsis,
+}
+
 type StatusCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -56,7 +62,7 @@ func (cmd StatusCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd StatusCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, statusShortDesc, statusLongDesc, statusSynopsis, ap)
+	return CreateMarkdown(fs, path, commandStr, statusDocumentation, ap)
 }
 
 func (cmd StatusCmd) createArgParser() *argparser.ArgParser {
@@ -67,7 +73,7 @@ func (cmd StatusCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, _ := cli.HelpAndUsagePrinters(commandStr, statusShortDesc, statusLongDesc, statusSynopsis, ap)
+	help, _ := cli.HelpAndUsagePrinters(commandStr, statusDocumentation, ap)
 	cli.ParseArgs(ap, args, help)
 
 	stagedTblDiffs, notStagedTblDiffs, err := actions.GetTableDiffs(ctx, dEnv)

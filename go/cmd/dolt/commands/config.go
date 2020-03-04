@@ -39,17 +39,26 @@ const (
 )
 
 var cfgShortDesc = `Get and set repository or global options`
-var cfgLongDesc = `You can query/set/replace/unset options with this command.
+var cfgLongDesc= `You can query/set/replace/unset options with this command.
+	
+When reading, the values are read from the global and repository local configuration files, and options {{.LessThan}}--global{{.GreaterThan}}, and {{.LessThan}}--local{{.GreaterThan}} can be used to tell the command to read from only that location.
 
-When reading, the values are read from the global and repository local configuration files, and options --global, and --local can be used to tell the command to read from only that location.
+When writing, the new value is written to the repository local configuration file by default, and options {{.LessThan}}--global{{.GreaterThan}}, can be used to tell the command to write to that location (you can say {{.LessThan}}--local{{.GreaterThan}} but that is the default).
+	`
 
-When writing, the new value is written to the repository local configuration file by default, and options --global, can be used to tell the command to write to that location (you can say --local but that is the default).`
 var cfgSynopsis = []string{
-	"[--global|--local] --list",
-	"[--global|--local] --add <name> <value>",
-	"[--global|--local] --get <name>",
-	"[--global|--local] --unset <name>...",
+		`[--global|--local] --list`,
+		`[--global|--local] --add {{.LessThan}}name{{.GreaterThan}} {{.LessThan}}value{{.GreaterThan}}`,
+		`[--global|--local] --get {{.LessThan}}name{{.GreaterThan}}`,
+		`[--global|--local] --unset {{.LessThan}}name{{.GreaterThan}}...`,
+	}
+
+var cfgDocumentation = cli.CommandDocumentation{
+	ShortDesc: cfgShortDesc,
+	LongDesc: cfgLongDesc,
+	Synopsis: cfgSynopsis,
 }
+
 
 type ConfigCmd struct{}
 
@@ -72,7 +81,7 @@ func (cmd ConfigCmd) RequiresRepo() bool {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ConfigCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, cfgShortDesc, cfgLongDesc, cfgSynopsis, ap)
+	return CreateMarkdown(fs, path, commandStr, cfgDocumentation, ap)
 }
 
 func (cmd ConfigCmd) createArgParser() *argparser.ArgParser {
@@ -90,7 +99,7 @@ func (cmd ConfigCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd ConfigCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, cfgShortDesc, cfgLongDesc, cfgSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, cfgDocumentation, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
 	cfgTypes := apr.FlagsEqualTo([]string{globalParamName, localParamName}, true)

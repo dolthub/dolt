@@ -32,6 +32,12 @@ var rmShortDesc = "Remove a stored public/private keypair."
 var rmLongDesc = `Removes an existing keypair from dolt's credential storage.`
 var rmSynopsis = []string{"<public_key_as_appears_in_ls>"}
 
+var rmDocumentation = cli.CommandDocumentation{
+	ShortDesc: rmShortDesc,
+	LongDesc: rmLongDesc,
+	Synopsis: rmSynopsis,
+}
+
 type RmCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -47,7 +53,7 @@ func (cmd RmCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd RmCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, rmShortDesc, rmLongDesc, rmSynopsis, ap)
+	return commands.CreateMarkdown(fs, path, commandStr, rmDocumentation, ap)
 }
 
 func (cmd RmCmd) createArgParser() *argparser.ArgParser {
@@ -69,7 +75,7 @@ func (cmd RmCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, rmShortDesc, rmLongDesc, rmSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, rmDocumentation, ap)
 	apr := cli.ParseArgs(ap, args, help)
 	args = apr.Args()
 

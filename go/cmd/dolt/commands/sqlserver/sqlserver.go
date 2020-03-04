@@ -47,6 +47,12 @@ var sqlServerSynopsis = []string{
 	"[-H <host>] [-P <port>] [-u <user>] [-p <password>] [-t <timeout>] [-l <loglevel>] [-r]",
 }
 
+var sqlServerDocumentation = cli.CommandDocumentation{
+	ShortDesc: sqlServerShortDesc,
+	LongDesc:  sqlServerLongDesc,
+	Synopsis:  sqlServerSynopsis,
+}
+
 type SqlServerCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -62,7 +68,7 @@ func (cmd SqlServerCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd SqlServerCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := createArgParser(DefaultServerConfig())
-	return cli.CreateMarkdown(fs, path, commandStr, sqlServerShortDesc, sqlServerLongDesc, sqlServerSynopsis, ap)
+	return commands.CreateMarkdown(fs, path, commandStr, sqlServerDocumentation, ap)
 }
 
 func createArgParser(serverConfig *ServerConfig) *argparser.ArgParser {
@@ -92,7 +98,7 @@ func SqlServerImpl(ctx context.Context, commandStr string, args []string, dEnv *
 	serverConfig := DefaultServerConfig()
 
 	ap := createArgParser(serverConfig)
-	help, usage := cli.HelpAndUsagePrinters(commandStr, sqlServerShortDesc, sqlServerLongDesc, sqlServerSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, sqlServerDocumentation, ap)
 
 	apr := cli.ParseArgs(ap, args, help)
 	args = apr.Args()

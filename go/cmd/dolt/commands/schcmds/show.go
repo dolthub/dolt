@@ -16,9 +16,7 @@ package schcmds
 
 import (
 	"context"
-
 	"github.com/fatih/color"
-
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
@@ -31,12 +29,18 @@ import (
 )
 
 var tblSchemaShortDesc = "Shows the schema of one or more tables."
-var tblSchemaLongDesc = "dolt table schema displays the schema of tables at a given commit.  If no commit is provided the working set will be used." +
-	"\n" +
-	"A list of tables can optionally be provided.  If it is omitted all table schemas will be shown."
+var tblSchemaLongDesc = `dolt table schema displays the schema of tables at a given commit.  If no commit is provided the working set will be used. +
+
+A list of tables can optionally be provided.  If it is omitted all table schemas will be shown.`
 
 var tblSchemaSynopsis = []string{
-	"[<commit>] [<table>...]",
+	"[{{.LessThan}}commit{{.GreaterThan}}] [{{.LessThan}}table{{.GreaterThan}}...]",
+}
+
+var tblSchemaDocumentation = cli.CommandDocumentation{
+	ShortDesc: tblSchemaShortDesc,
+	LongDesc: tblSchemaLongDesc,
+	Synopsis: tblSchemaSynopsis,
 }
 
 var bold = color.New(color.Bold)
@@ -56,7 +60,7 @@ func (cmd ShowCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ShowCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, tblSchemaShortDesc, tblSchemaLongDesc, tblSchemaSynopsis, ap)
+	return commands.CreateMarkdown(fs, path, commandStr, tblSchemaDocumentation, ap)
 }
 
 func (cmd ShowCmd) createArgParser() *argparser.ArgParser {
@@ -74,7 +78,7 @@ func (cmd ShowCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, tblSchemaShortDesc, tblSchemaLongDesc, tblSchemaSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, tblSchemaDocumentation, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
 	verr := printSchemas(ctx, apr, dEnv)

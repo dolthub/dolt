@@ -17,10 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"time"
-
-	"github.com/skratchdot/open-golang/open"
-
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -30,6 +26,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/skratchdot/open-golang/open"
+	"time"
 )
 
 const (
@@ -37,9 +35,15 @@ const (
 )
 
 var loginShortDesc = ""
-var loginLongDesc = ""
-var loginSynopsis = []string{
-	"[<creds>]",
+var loginLongDesc = `Login into DoltHub using the email in your config so you can pull from private repos and push to those you have permission to.
+`
+
+var loginSynopsis = []string{"[<creds>]"}
+
+var loginDocumentation = cli.CommandDocumentation{
+	ShortDesc: loginShortDesc,
+	LongDesc: loginLongDesc,
+	Synopsis: loginSynopsis,
 }
 
 type LoginCmd struct{}
@@ -63,7 +67,7 @@ func (cmd LoginCmd) RequiresRepo() bool {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd LoginCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, loginShortDesc, loginLongDesc, loginSynopsis, ap)
+	return CreateMarkdown(fs, path, commandStr, loginDocumentation, ap)
 }
 
 func (cmd LoginCmd) createArgParser() *argparser.ArgParser {
@@ -80,7 +84,7 @@ func (cmd LoginCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd LoginCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, loginShortDesc, loginLongDesc, loginSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, loginDocumentation, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
 	var verr errhand.VerboseError

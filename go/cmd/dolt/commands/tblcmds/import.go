@@ -122,6 +122,12 @@ var importSynopsis = []string{
 	"-r [--map <file>] [--file-type <type>] <table> <file>",
 }
 
+var importDocumenation = cli.CommandDocumentation{
+	ShortDesc: importShortDesc,
+	LongDesc: importLongDesc,
+	Synopsis: importSynopsis,
+}
+
 func getMoveParameters(apr *argparser.ArgParseResults) (mvdata.MoveOperation, mvdata.TableDataLocation, mvdata.DataLocation, interface{}) {
 	var mvOp mvdata.MoveOperation
 	if apr.Contains(createParam) {
@@ -246,7 +252,7 @@ func (cmd ImportCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ImportCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, importShortDesc, importLongDesc, importSynopsis, ap)
+	return commands.CreateMarkdown(fs, path, commandStr, importDocumenation, ap)
 }
 
 func (cmd ImportCmd) createArgParser() *argparser.ArgParser {
@@ -263,7 +269,7 @@ func (cmd ImportCmd) EventType() eventsapi.ClientEventType {
 func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 
-	help, usage := cli.HelpAndUsagePrinters(commandStr, importShortDesc, importLongDesc, importSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, importDocumenation, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
 	err := validateImportArgs(apr)

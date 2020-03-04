@@ -36,6 +36,12 @@ Prints the public portion of the keypair, which can entered into the credentials
 settings page of dolthub.`
 var newSynopsis = []string{}
 
+var newDocumentation = cli.CommandDocumentation{
+	ShortDesc: newShortDesc,
+	LongDesc: newLongDesc,
+	Synopsis: newSynopsis,
+}
+
 type NewCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -51,7 +57,7 @@ func (cmd NewCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd NewCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, newShortDesc, newLongDesc, newSynopsis, ap)
+	return commands.CreateMarkdown(fs, path, commandStr, newDocumentation, ap)
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -73,7 +79,7 @@ func (cmd NewCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd NewCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, newShortDesc, newLongDesc, newSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, newDocumentation, ap)
 	cli.ParseArgs(ap, args, help)
 
 	_, newCreds, verr := actions.NewCredsFile(dEnv)

@@ -55,39 +55,31 @@ const (
 )
 
 var schImportShortDesc = "Creates a new table with an inferred schema."
-var schImportLongDesc = "If <b>--create | -c</b> is given the operation will create <table> with a schema that it infers" +
-	"from the supplied file. One or more primary key columns must be specified using the <b>--pks</b> parameter.\n" +
-	"\n" +
-	"If <b>--update | -u</b> is given the operation will update <table> any additional columns, or change the types of columns" +
-	"based on the file supplied.  If the <b>--keep-types</b> parameter is supplied then the types for existing columns will" +
-	"not be modified, even if they differ from what is in the supplied file." +
-	"\n" +
-	"If <b>--replace | -r</b> is given the operation will replace <table> with a new, empty table which has a schema inferred from" +
-	"the supplied file but columns tags will be maintained across schemas.  <b>--keep-types</b> can also be supplied here" +
-	"to guarantee that types are the same in the file and in the pre-existing table.\n" +
-	"\n" +
-	"A mapping file can be used to map fields between the file being imported and the table's schema being inferred.  This can" +
-	"be used when creating a new table, or updating or replacing an existing table.\n" +
-	"\n" +
-	tblcmds.MappingFileHelp +
-	"\n" +
-	"In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not" +
-	"have the expected extension then the <b>--file-type</b> parameter should be used to explicitly define the format of" +
-	"the file in one of the supported formats (Currently only csv is supported).  For files separated by a delimiter other than a" +
-	"',', the --delim parameter can be used to specify a delimeter.\n" +
-	"\n" +
-	"If the parameter <b>--dry-run</b> is supplied a sql statement will be generated showing what would be executed if this" +
-	"were run without the --dry-run flag\n" +
-	"\n" +
-	"<b>--float-threshold</b> is the threshold at which a string representing a floating point number should be interpreted as" +
-	"a float versus an int.  If FloatThreshold is 0.0 then any number with a decimal point will be interpreted as a" +
-	"float (such as 0.0, 1.0, etc).  If FloatThreshold is 1.0 then any number with a decimal point will be converted" +
-	"to an int (0.5 will be the int 0, 1.99 will be the int 1, etc.  If the FloatThreshold is 0.001 then numbers with" +
-	"a fractional component greater than or equal to 0.001 will be treated as a float (1.0 would be an int, 1.0009 would" +
-	"be an int, 1.001 would be a float, 1.1 would be a float, etc)"
+var schImportLongDesc = `If <b>--create | -c</b> is given the operation will create <table> with a schema that it infers from the supplied file. One or more primary key columns must be specified using the <b>--pks</b> parameter.
+
+If <b>--update | -u</b> is given the operation will update <table> any additional columns, or change the types of columns based on the file supplied.  If the <b>--keep-types</b> parameter is supplied then the types for existing columns will not be modified, even if they differ from what is in the supplied file.
+
+If <b>--replace | -r</b> is given the operation will replace <table> with a new, empty table which has a schema inferred from the supplied file but columns tags will be maintained across schemas.  <b>--keep-types</b> can also be supplied here to guarantee that types are the same in the file and in the pre-existing table.
+
+A mapping file can be used to map fields between the file being imported and the table's schema being inferred.  This can be used when creating a new table, or updating or replacing an existing table.
+
+tblcmds.MappingFileHelp
+
+In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not have the expected extension then the <b>--file-type</b> parameter should be used to explicitly define the format of the file in one of the supported formats (Currently only csv is supported).  For files separated by a delimiter other than a ',', the --delim parameter can be used to specify a delimeter.
+
+If the parameter <b>--dry-run</b> is supplied a sql statement will be generated showing what would be executed if this were run without the --dry-run flag
+
+<b>--float-threshold</b> is the threshold at which a string representing a floating point number should be interpreted as a float versus an int.  If FloatThreshold is 0.0 then any number with a decimal point will be interpreted as a float (such as 0.0, 1.0, etc).  If FloatThreshold is 1.0 then any number with a decimal point will be converted to an int (0.5 will be the int 0, 1.99 will be the int 1, etc.  If the FloatThreshold is 0.001 then numbers with a fractional component greater than or equal to 0.001 will be treated as a float (1.0 would be an int, 1.0009 would be an int, 1.001 would be a float, 1.1 would be a float, etc)
+`
 
 var schImportSynopsis = []string{
-	"[--create|--replace] [--force] [--dry-run] [--lower|--upper] [--keep-types] [--file-type <type>] [--float-threshold] [--map <mapping-file>] [--delim <delimiter>]--pks <field>,... <table> <file>",
+	`[--create|--replace] [--force] [--dry-run] [--lower|--upper] [--keep-types] [--file-type {{.LessThan}}type{{.GreaterThan}}] [--float-threshold] [--map {{.LessThan}}mapping-file{{.GreaterThan}}] [--delim {{.LessThan}}delimiter{{.GreaterThan}}]--pks {{.LessThan}}field{{.GreaterThan}},... {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}`,
+}
+
+var schImportDocumentation = cli.CommandDocumentation{
+	ShortDesc: schImportShortDesc,
+	LongDesc: schImportShortDesc,
+	Synopsis: schImportSynopsis,
 }
 
 type importOp int
@@ -126,7 +118,7 @@ func (cmd ImportCmd) EventType() eventsapi.ClientEventType {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ImportCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, schImportShortDesc, schImportLongDesc, schImportSynopsis, ap)
+	return commands.CreateMarkdown(fs, path, commandStr, schImportDocumentation, ap)
 }
 
 func (cmd ImportCmd) createArgParser() *argparser.ArgParser {
@@ -150,7 +142,7 @@ func (cmd ImportCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, schImportShortDesc, schImportLongDesc, schImportSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, schImportDocumentation, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() != 2 {

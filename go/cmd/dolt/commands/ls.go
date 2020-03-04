@@ -16,10 +16,6 @@ package commands
 
 import (
 	"context"
-	"io"
-	"sort"
-	"strings"
-
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -30,6 +26,9 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/funcitr"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
+	"io"
+	"sort"
+	"strings"
 )
 
 const (
@@ -37,17 +36,21 @@ const (
 )
 
 var lsShortDesc = "List tables"
-var lsLongDesc = "With no arguments lists the tables in the current working set but if a commit is specified it will list " +
-	"the tables in that commit.  If the --verbose flag is provided a row count and a hash of the table will also be " +
-	"displayed.\n" +
-	"\n" +
-	"If the --system flag is supplied this will show the dolt system tables which are queryable with SQL.  Some system " +
-	"tables can be queried even if they are not in the working set by specifying appropriate parameters in the SQL " +
-	"queries.  To see these tables too you may pass the --verbose flag.\n" +
-	"\n" +
-	"If the --all flag is supplied both user and system tables will be printed."
+var lsLongDesc = `With no arguments lists the tables in the current working set but if a commit is specified it will list the tables in that commit.  If the --verbose flag is provided a row count and a hash of the table will also be displayed.
+
+If the --system flag is supplied this will show the dolt system tables which are queryable with SQL.  Some system tables can be queried even if they are not in the working set by specifying appropriate parameters in the SQL queries.  To see these tables too you may pass the --verbose flag.
+
+If the --all flag is supplied both user and system tables will be printed.
+`
+
 var lsSynopsis = []string{
-	"[--options] [<commit>]",
+	"[--options] [{{.LessThan}}commit{{.GreaterThan}}]",
+}
+
+var lsDocumentation = cli.CommandDocumentation{
+	ShortDesc: lsShortDesc,
+	LongDesc: lsLongDesc,
+	Synopsis: lsSynopsis,
 }
 
 type LsCmd struct{}
@@ -65,7 +68,7 @@ func (cmd LsCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd LsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, lsShortDesc, lsLongDesc, lsSynopsis, ap)
+	return CreateMarkdown(fs, path, commandStr, lsDocumentation, ap)
 }
 
 func (cmd LsCmd) createArgParser() *argparser.ArgParser {
@@ -84,7 +87,7 @@ func (cmd LsCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, lsShortDesc, lsLongDesc, lsSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, lsDocumentation, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() > 1 {

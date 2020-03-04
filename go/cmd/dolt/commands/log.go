@@ -36,12 +36,20 @@ const (
 )
 
 var logShortDesc = `Show commit logs`
-var logLongDesc = "Shows the commit logs.\n" +
-	"\n" +
-	"The command takes options to control what is shown and how."
+
+var logLongDesc = `Shows the commit logs
+
+The command takes options to control what is shown and how.`
+
 
 var logSynopsis = []string{
-	"[-n <num_commits>] [<commit>]",
+		`[-n {{.LessThan}}num_commits{{.GreaterThan}}] [{{.LessThan}}commit{{.GreaterThan}}]`,
+	}
+
+var logDocumentation = cli.CommandDocumentation{
+	ShortDesc: loginShortDesc,
+	LongDesc: logLongDesc,
+	Synopsis: logSynopsis,
 }
 
 type commitLoggerFunc func(*doltdb.CommitMeta, []hash.Hash, hash.Hash)
@@ -100,7 +108,7 @@ func (cmd LogCmd) EventType() eventsapi.ClientEventType {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd LogCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := createLogArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, logShortDesc, logLongDesc, logSynopsis, ap)
+	return CreateMarkdown(fs, path, commandStr, logDocumentation, ap)
 }
 
 func createLogArgParser() *argparser.ArgParser {
@@ -116,7 +124,7 @@ func (cmd LogCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 func logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, loggerFunc commitLoggerFunc) int {
 	ap := createLogArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, logShortDesc, logLongDesc, logSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, logDocumentation, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() > 1 {

@@ -78,6 +78,12 @@ var sqlSynopsis = []string{
 	"-q <query> -s <name> -m <message>",
 }
 
+var sqlDocumentation = cli.CommandDocumentation{
+	ShortDesc: sqlShortDesc,
+	LongDesc: sqlLongDesc,
+	Synopsis: sqlSynopsis,
+}
+
 const (
 	queryFlag   = "query"
 	formatFlag  = "result-format"
@@ -103,7 +109,7 @@ func (cmd SqlCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd SqlCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, sqlShortDesc, sqlLongDesc, sqlSynopsis, ap)
+	return CreateMarkdown(fs, path, commandStr, sqlDocumentation, ap)
 }
 
 func (cmd SqlCmd) createArgParser() *argparser.ArgParser {
@@ -123,7 +129,7 @@ func (cmd SqlCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, sqlShortDesc, sqlLongDesc, sqlSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, sqlDocumentation, ap)
 
 	apr := cli.ParseArgs(ap, args, help)
 	args = apr.Args()

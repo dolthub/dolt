@@ -34,11 +34,18 @@ const (
 )
 
 var initShortDesc = "Create an empty Dolt data repository"
-var initLongDesc = `This command creates an empty Dolt data repository in the current directory.
+var initLongDesc = `
+This command creates an empty Dolt data repository in the current directory.
 
-Running dolt init in an already initialized directory will fail.`
-var initSynopsis = []string{
-	"[<options>] [<path>]",
+Running dolt init in an already initialized directory will fail.
+`
+
+var initSynopsis = []string{`[{{.LessThan}}options{{.GreaterThan}}] [{{.LessThan}}path{{.GreaterThan}}]`,}
+
+var initDocumentation = cli.CommandDocumentation{
+	ShortDesc: initShortDesc,
+	LongDesc: initLongDesc,
+	Synopsis: initSynopsis,
 }
 
 type InitCmd struct{}
@@ -59,11 +66,11 @@ func (cmd InitCmd) RequiresRepo() bool {
 	return false
 }
 
+
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd InitCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-
-	return cli.CreateMarkdown(fs, path, commandStr, initShortDesc, initLongDesc, initSynopsis, ap)
+	return CreateMarkdown(fs, path, commandStr, initDocumentation, ap)
 }
 
 func (cmd InitCmd) createArgParser() *argparser.ArgParser {
@@ -78,7 +85,7 @@ func (cmd InitCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, initShortDesc, initLongDesc, initSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, initDocumentation, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
 	if dEnv.HasDoltDir() {

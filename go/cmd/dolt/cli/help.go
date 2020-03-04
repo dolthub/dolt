@@ -24,9 +24,7 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/funcitr"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 )
 
 var underline = color.New(color.Underline)
@@ -68,58 +66,6 @@ func PrintHelpText(commandStr, shortDesc, longDesc string, synopsis []string, pa
 	}
 }
 
-func CreateMarkdown(fs filesys.Filesys, path, commandStr, shortDesc, longDesc string, synopsis []string, parser *argparser.ArgParser) error {
-	wr, err := fs.OpenForWrite(path)
-
-	if err != nil {
-		return err
-	}
-
-	defer wr.Close()
-
-	err = iohelp.WriteIfNoErr(wr, []byte("## Command\n\n"), nil)
-	err = iohelp.WriteIfNoErr(wr, []byte(commandStr+" - "+shortDesc+"\n\n"), err)
-
-	if len(synopsis) > 0 {
-		err = iohelp.WriteIfNoErr(wr, []byte("## Synopsis\n\n"), err)
-
-		err = iohelp.WriteIfNoErr(wr, []byte("```sh\n"), err)
-		for _, synopsisLine := range synopsis {
-			err = iohelp.WriteIfNoErr(wr, []byte(commandStr+" "+synopsisLine+"\n"), err)
-		}
-		err = iohelp.WriteIfNoErr(wr, []byte("```\n\n"), err)
-	}
-
-	err = iohelp.WriteIfNoErr(wr, []byte("## Description\n\n"), err)
-	err = iohelp.WriteIfNoErr(wr, []byte(markdownEscape(longDesc)+"\n\n"), err)
-
-	if len(parser.Supported) > 0 || len(parser.ArgListHelp) > 0 {
-		err = iohelp.WriteIfNoErr(wr, []byte("## Options\n\n"), err)
-
-		for _, kvTuple := range parser.ArgListHelp {
-			k, v := kvTuple[0], kvTuple[1]
-			err = iohelp.WriteIfNoErr(wr, []byte("&lt;"+k+"&gt;\n"+v+"\n\n"), err)
-		}
-
-		for _, supOpt := range parser.Supported {
-			argHelpFmt := "--%[2]s"
-
-			if supOpt.Abbrev != "" && supOpt.ValDesc != "" {
-				argHelpFmt = "-%[1]s &lt;%[3]s&gt;, --%[2]s=&lt;%[3]s&gt;"
-			} else if supOpt.Abbrev != "" {
-				argHelpFmt = "-%[1]s, --%[2]s"
-			} else if supOpt.ValDesc != "" {
-				argHelpFmt = "--%[2]s=&lt;%[3]s&gt;"
-			}
-
-			argHelp := fmt.Sprintf(argHelpFmt, supOpt.Abbrev, supOpt.Name, supOpt.ValDesc)
-			err = iohelp.WriteIfNoErr(wr, []byte(argHelp+"\n"), err)
-			err = iohelp.WriteIfNoErr(wr, []byte(supOpt.Desc+"\n\n"), err)
-		}
-	}
-
-	return err
-}
 
 func PrintUsage(commandStr string, synopsis []string, parser *argparser.ArgParser) {
 	_, termWidth := terminalSize()
@@ -155,15 +101,6 @@ const (
 )
 
 var bold = color.New(color.Bold)
-
-func markdownEscape(str string) string {
-	str = strings.ReplaceAll(str, "<b>", "**")
-	str = strings.ReplaceAll(str, "</b>", "**")
-	str = strings.ReplaceAll(str, "<", "&lt;")
-	str = strings.ReplaceAll(str, ">", "&gt;")
-
-	return str
-}
 
 func embolden(str string) string {
 	res := ""

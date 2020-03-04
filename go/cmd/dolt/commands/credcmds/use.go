@@ -38,6 +38,12 @@ You can see your available credentials with 'dolt creds ls'.`
 
 var useSynopsis = []string{"<public_key_as_appears_in_ls | public_key_id_as_appears_in_ls"}
 
+var useDocumentation = cli.CommandDocumentation{
+	ShortDesc: useShortDesc,
+	LongDesc: useLongDesc,
+	Synopsis: useSynopsis,
+}
+
 type UseCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -53,7 +59,7 @@ func (cmd UseCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd UseCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, useShortDesc, useLongDesc, useSynopsis, ap)
+	return commands.CreateMarkdown(fs, path, commandStr, useDocumentation, ap)
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -75,7 +81,7 @@ func (cmd UseCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd UseCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, useShortDesc, useLongDesc, useSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, useDocumentation, ap)
 	apr := cli.ParseArgs(ap, args, help)
 	args = apr.Args()
 	if len(args) != 1 {

@@ -41,6 +41,12 @@ var tblMvSynopsis = []string{
 	"[-f] <oldtable> <newtable>",
 }
 
+var tblMvDocumentation = cli.CommandDocumentation{
+	ShortDesc: tblMvShortDesc,
+	LongDesc:  tblMvLongDesc,
+	Synopsis:  tblMvSynopsis,
+}
+
 type MvCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -56,7 +62,7 @@ func (cmd MvCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd MvCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, tblMvShortDesc, tblMvLongDesc, tblMvSynopsis, ap)
+	return commands.CreateMarkdown(fs, path, commandStr, tblMvDocumentation, ap)
 }
 
 func (cmd MvCmd) createArgParser() *argparser.ArgParser {
@@ -75,7 +81,7 @@ func (cmd MvCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd MvCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, tblMvShortDesc, tblMvLongDesc, tblMvSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, tblMvDocumentation, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() != 2 {

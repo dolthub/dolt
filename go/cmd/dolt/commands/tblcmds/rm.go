@@ -35,6 +35,12 @@ var tblRmSynopsis = []string{
 	"<table>...",
 }
 
+var tblRmDocumentation = cli.CommandDocumentation{
+	ShortDesc: tblRmShortDesc,
+	LongDesc: tblRmLongDesc,
+	Synopsis: tblRmSynopsis,
+}
+
 type RmCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -55,7 +61,7 @@ func (cmd RmCmd) EventType() eventsapi.ClientEventType {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd RmCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, tblRmShortDesc, tblRmLongDesc, tblRmSynopsis, ap)
+	return commands.CreateMarkdown(fs, path, commandStr, tblRmDocumentation, ap)
 }
 
 func (cmd RmCmd) createArgParser() *argparser.ArgParser {
@@ -67,7 +73,7 @@ func (cmd RmCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, tblRmShortDesc, tblRmLongDesc, tblRmSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, tblRmDocumentation, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() == 0 {

@@ -34,6 +34,12 @@ var checkShortDesc = "Check authenticating with a credential keypair against a d
 var checkLongDesc = `Tests calling a doltremoteapi with dolt credentials and reports the authentication result.`
 var checkSynopsis = []string{"[--endpoint doltremoteapi.dolthub.com:443] [--creds <eak95022q3vskvumn2fcrpibdnheq1dtr8t...>]"}
 
+var checkDocumentation = cli.CommandDocumentation{
+	ShortDesc: checkShortDesc,
+	LongDesc: checkLongDesc,
+	Synopsis: checkSynopsis,
+}
+
 type CheckCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -49,7 +55,7 @@ func (cmd CheckCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd CheckCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, checkShortDesc, checkLongDesc, checkSynopsis, ap)
+	return commands.CreateMarkdown(fs, path, commandStr, checkDocumentation, ap)
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -73,7 +79,7 @@ func (cmd CheckCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd CheckCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, lsShortDesc, lsLongDesc, lsSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, checkDocumentation, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
 	endpoint := loadEndpoint(dEnv, apr)

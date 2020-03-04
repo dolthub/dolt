@@ -43,6 +43,12 @@ var catSynopsis = []string{
 	"[<commit>] <table>...",
 }
 
+var catDocumentation = cli.CommandDocumentation{
+	ShortDesc: catShortDesc,
+	LongDesc: catLongDesc,
+	Synopsis: catSynopsis,
+}
+
 type CatCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -58,7 +64,7 @@ func (cmd CatCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd CatCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, catShortDesc, catLongDesc, catSynopsis, ap)
+	return commands.CreateMarkdown(fs, path, commandStr, catDocumentation, ap)
 }
 
 // EventType returns the type of the event to log
@@ -76,7 +82,7 @@ func (cmd CatCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, catShortDesc, catLongDesc, catSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, catDocumentation, ap)
 	apr := cli.ParseArgs(ap, args, help)
 	args = apr.Args()
 

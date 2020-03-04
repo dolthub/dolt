@@ -42,6 +42,12 @@ var tblCpSynopsis = []string{
 	"[-f] [<commit>] <oldtable> <newtable>",
 }
 
+var tblCpDocumentation = cli.CommandDocumentation{
+	ShortDesc: tblCpShortDesc,
+	LongDesc: tblCpLongDesc,
+	Synopsis: tblCpSynopsis,
+}
+
 type CpCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -57,7 +63,7 @@ func (cmd CpCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd CpCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, tblCpShortDesc, tblCpLongDesc, tblCpSynopsis, ap)
+	return commands.CreateMarkdown(fs, path, commandStr, tblCpDocumentation, ap)
 }
 
 func (cmd CpCmd) createArgParser() *argparser.ArgParser {
@@ -77,7 +83,7 @@ func (cmd CpCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, tblCpShortDesc, tblCpLongDesc, tblCpSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(commandStr, tblCpDocumentation, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() < 2 || apr.NArg() > 3 {

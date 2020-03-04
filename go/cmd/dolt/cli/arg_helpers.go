@@ -50,9 +50,19 @@ func ParseArgs(ap *argparser.ArgParser, args []string, usagePrinter UsagePrinter
 	return apr
 }
 
-func HelpAndUsagePrinters(commandStr, shortDesc, longDesc string, synopsis []string, ap *argparser.ArgParser) (UsagePrinter, UsagePrinter) {
+func HelpAndUsagePrinters(commandStr string, cmdDoc CommandDocumentation, ap *argparser.ArgParser) (UsagePrinter, UsagePrinter) {
+	// TODO handle error states
+	longDesc, _ := cmdDoc.GetLongDesc(CliFormat)
+	//if longDescErr != nil {
+	//	return 1
+	//}
+	synopsis, _ := cmdDoc.GetSynopsis(CliFormat)
+	//if synopsisErr != nil {
+	//	return 1
+	//}
+
 	return func() {
-			PrintHelpText(commandStr, shortDesc, longDesc, synopsis, ap)
+			PrintHelpText(commandStr, cmdDoc.GetShortDesc(), longDesc, synopsis, ap)
 		}, func() {
 			PrintUsage(commandStr, synopsis, ap)
 		}
