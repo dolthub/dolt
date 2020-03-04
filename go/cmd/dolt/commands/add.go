@@ -39,7 +39,7 @@ This command can be performed multiple times before a commit. It only adds the c
 
 The dolt status command can be used to obtain a summary of which tables have changes that are staged for the next commit.`
 var addSynopsis = []string{
-	`[<table>...]`,
+	`[{{.LessThan}}table{{.GreaterThan}}...]`,
 }
 
 var AddDocumentation = cli.CommandDocumentation{

@@ -80,7 +80,7 @@ func (cmd ResetCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) 
 
 func (cmd ResetCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsFlag(HardResetParam, "", "Resets the working tables and staged tables. Any changes to tracked tables in the working tree since <commit> are discarded.")
+	ap.SupportsFlag(HardResetParam, "", "Resets the working tables and staged tables. Any changes to tracked tables in the working tree since {{.LessThan}}commit{{.GreaterThan}} are discarded.")
 	ap.SupportsFlag(SoftResetParam, "", "Does not touch the working tables, but removes all tables staged to be committed.")
 	return ap
 }

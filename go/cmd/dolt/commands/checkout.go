@@ -77,7 +77,7 @@ func (cmd CheckoutCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr strin
 
 func (cmd CheckoutCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsString(coBranchArg, "", "branch", "Create a new branch named <new_branch> and start it at <start_point>.")
+	ap.SupportsString(coBranchArg, "", "branch", "Create a new branch named {{.LessThan}}new_branch{{.GreaterThan}} and start it at {{.LessThan}}start_point{{.GreaterThan}}.")
 	return ap
 }
 

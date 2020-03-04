@@ -53,7 +53,7 @@ This default configuration is achieved by creating references to the remote bran
 `
 
 var cloneSynopsis = []string{
-		"[-remote <remote>] [-branch <branch>]  [--aws-region <region>] [--aws-creds-type <creds-type>] [--aws-creds-file <file>] [--aws-creds-profile <profile>] <remote-url> <new-dir>",
+		"[-remote {{.LessThan}}remote{{.GreaterThan}}] [-branch {{.LessThan}}branch{{.GreaterThan}}]  [--aws-region {{.LessThan}}region{{.GreaterThan}}] [--aws-creds-type {{.LessThan}}creds-type{{.GreaterThan}}] [--aws-creds-file {{.LessThan}}file{{.GreaterThan}}] [--aws-creds-profile {{.LessThan}}profile{{.GreaterThan}}] {{.LessThan}}remote-url{{.GreaterThan}} <new-dir{{.GreaterThan}}",
 	}
 
 var cloneDocumentation = cli.CommandDocumentation{

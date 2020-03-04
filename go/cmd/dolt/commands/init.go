@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/fatih/color"
@@ -75,8 +76,8 @@ func (cmd InitCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) e
 
 func (cmd InitCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsString(usernameParamName, "", "name", "The name used in commits to this repo. If not provided will be taken from \""+env.UserNameKey+"\" in the global config.")
-	ap.SupportsString(emailParamName, "", "email", "The email address used. If not provided will be taken from \""+env.UserEmailKey+"\" in the global config.")
+	ap.SupportsString(usernameParamName, "", "name", fmt.Sprint("The name used in commits to this repo. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config.", env.UserNameKey))
+	ap.SupportsString(emailParamName, "", "email", fmt.Sprint("The email address used. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config.", env.UserEmailKey))
 	ap.SupportsString(dateParam, "", "date", "Specify the date used in the initial commit. If not specified the current system time is used.")
 
 	return ap

@@ -57,11 +57,10 @@ var mergeDocumentation  = cli.CommandDocumentation{
 	Synopsis: mergeSynopsis,
 }
 
-var abortDetails = "Abort the current conflict resolution process, and try to reconstruct the pre-merge state.\n" +
-	"\n" +
-	"If there were uncommitted working set changes present when the merge started, dolt merge --abort will be " +
-	"unable to reconstruct these changes. It is therefore recommended to always commit or stash your changes before " +
-	"running git merge."
+var abortDetails = `Abort the current conflict resolution process, and try to reconstruct the pre-merge state.
+
+If there were uncommitted working set changes present when the merge started, {{.EmphasisLeft}}dolt merge --abort{{.EmphasisRight}} will be unable to reconstruct these changes. It is therefore recommended to always commit or stash your changes before running git merge.
+`
 
 type MergeCmd struct{}
 
@@ -128,13 +127,13 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				verr = errhand.BuildDError("error: failed to get conflicts").AddCause(err).Build()
 			} else if has {
 				cli.Println("error: Merging is not possible because you have unmerged files.")
-				cli.Println("hint: Fix them up in the work tree, and then use 'dolt add <table>'")
+				cli.Println("hint: Fix them up in the work tree, and then use {{.EmphasisLeft}}dolt add <table>{{.EmphasisRight}}")
 				cli.Println("hint: as appropriate to mark resolution and make a commit.")
 				cli.Println("fatal: Exiting because of an unresolved conflict.")
 				return 1
 			} else if dEnv.IsMergeActive() {
 				cli.Println("error: Merging is not possible because you have not committed an active merge.")
-				cli.Println("hint: add affected tables using 'dolt add <table>' and commit using 'dolt commit -m <msg>'")
+				cli.Println("hint: add affected tables using {{.EmphasisLeft}}dolt add <table>{{.EmphasisRight}} and commit using {{.EmphasisLeft}}dolt commit -m <msg>{{.EmphasisRight}}")
 				cli.Println("fatal: Exiting because of active merge")
 				return 1
 			}

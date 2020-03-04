@@ -48,14 +48,11 @@ With a {{.EmphasisLeft}}-d{{.EmphasisRight}}, {{.LessThan}}branchname{{.GreaterT
 
 var branchShortDesc = `List, create, or delete branches`
 
-var branchForceFlagDesc = "Reset <branchname> to <startpoint>, even if <branchname> exists already. Without -f, dolt branch " +
-	"refuses to change an existing branch. In combination with -d (or --delete), allow deleting the branch irrespective " +
-	"of its merged status. In combination with -m (or --move), allow renaming the branch even if the new branch name " +
-	"already exists, the same applies for -c (or --copy)."
+var branchForceFlagDesc = "Reset {{.LessThan}}branchname{{.LessThan}} to {{.LessThan}}startpoint{{.LessThan}}, even if {{.LessThan}}branchname{{.LessThan}} exists already. Without {{.EmphasisLeft}}-f{{.EmphasisRight}}, {{.EmphasisLeft}}dolt branch{{.EmphasisRight}} refuses to change an existing branch. In combination with {{.EmphasisLeft}}-d{{.EmphasisRight}} (or {{.EmphasisLeft}}--delete{{.EmphasisRight}}), allow deleting the branch irrespective of its merged status. In combination with -m (or {{.EmphasisLeft}}--move{{.EmphasisRight}}), allow renaming the branch even if the new branch name already exists, the same applies for {{.EmphasisLeft}}-c{{.EmphasisRight}} (or {{.EmphasisLeft}}--copy{{.EmphasisRight}})."
 
 var branchSynopsis = []string{
 		`[--list] [-v] [-a]`,
-		`[-f] {{.LessThan}}branchname{{.GreaterThan}} [{{.LessThan}}start{{.GreaterThan}}point>]`,
+		`[-f] {{.LessThan}}branchname{{.GreaterThan}} [{{.LessThan}}start-point>{{.GreaterThan}}]`,
 		`-m [-f] [{{.LessThan}}oldbranch{{.GreaterThan}}] {{.LessThan}}newbranch{{.GreaterThan}}`,
 		`-c [-f] [{{.LessThan}}oldbranch{{.GreaterThan}}] {{.LessThan}}newbranch{{.GreaterThan}}`,
 		`-d [-f] {{.LessThan}}branchname{{.GreaterThan}}...`,
@@ -104,7 +101,7 @@ func (cmd BranchCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(copyFlag, "c", "Create a copy of a branch.")
 	ap.SupportsFlag(moveFlag, "m", "Move/rename a branch")
 	ap.SupportsFlag(deleteFlag, "d", "Delete a branch. The branch must be fully merged in its upstream branch.")
-	ap.SupportsFlag(deleteForceFlag, "", "Shortcut for --delete --force.")
+	ap.SupportsFlag(deleteForceFlag, "", "Shortcut for {{.EmphasisLeft}}--delete --force{{.EmphasisRight}}.")
 	ap.SupportsFlag(verboseFlag, "v", "When in list mode, show the hash and commit subject line for each head")
 	ap.SupportsFlag(allFlag, "a", "When in list mode, shows remote tracked branches")
 	return ap

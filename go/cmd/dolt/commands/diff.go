@@ -141,8 +141,8 @@ func (cmd DiffCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
 	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
 	ap.SupportsFlag(SummaryFlag, "", "Show summary of data changes")
-	ap.SupportsFlag(SQLFlag, "q", "Output diff as a SQL patch file of INSERT / UPDATE / DELETE statements")
-	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See dolt diff --help for details.")
+	ap.SupportsFlag(SQLFlag, "q", "Output diff as a SQL patch file of {{.EmphasisLeft}}INSERT{{.EmphasisRight}} / {{.EmphasisLeft}}UPDATE{{.EmphasisRight}} / {{.EmphasisLeft}}DELETE{{.EmphasisRight}} statements")
+	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
 	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
 	return ap
 }

@@ -45,7 +45,11 @@ func (cmdDoc CommandDocumentation) CmdDocToMd(commandStr string, parser *argpars
 		// Iterate across arguments and template them
 		for _, kvTuple := range parser.ArgListHelp {
 			arg, desc := kvTuple[0], kvTuple[1]
-			argStruct := Agument{arg, desc}
+			templatedDesc, err := templateDocStringHelper(desc, MarkdownFormat)
+			if err != nil {
+				return "", err
+			}
+			argStruct := Agument{arg, templatedDesc}
 			outputStr, err := templateArgument(argStruct)
 			if err != nil {
 				return "", err
@@ -55,7 +59,11 @@ func (cmdDoc CommandDocumentation) CmdDocToMd(commandStr string, parser *argpars
 
 		// Iterate accross supported options, templating each one of them
 		for _, supOpt := range parser.Supported {
-			argStruct := Supported{supOpt.Abbrev, supOpt.Name, supOpt.ValDesc}
+			templatedDesc, err := templateDocStringHelper(supOpt.Desc, MarkdownFormat)
+			if err != nil {
+				return "", err
+			}
+			argStruct := Supported{supOpt.Abbrev, supOpt.Name, templatedDesc}
 			outputStr, err := templateSupported(argStruct)
 			if err != nil {
 				return "", err
@@ -208,7 +216,6 @@ func templateSupported(supported Supported) (string, error) {
 		formatString = "`--{{.Name}}`\n\n"
 	} else if supported.Abbreviation == "" && supported.Description != ""  {
 		formatString = "`--{{.Name}}`:\n{{.Description}}\n\n"
-
 	} else if supported.Abbreviation != "" && supported.Description == "" {
 		formatString = "`-{{.Abbreviation}}`, `--{{.Name}}`\n\n"
 	} else {
@@ -226,7 +233,5 @@ func templateSupported(supported Supported) (string, error) {
 	ret := templBuffer.String()
 	return ret, nil
 }
-
-
 
 

@@ -80,7 +80,7 @@ func (cmd PushCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) e
 
 func (cmd PushCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsFlag(SetUpstreamFlag, "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less dolt pull and other commands.")
+	ap.SupportsFlag(SetUpstreamFlag, "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less {{.EmphasisLeft}}dolt pull{{.EmphasisRight}} and other commands.")
 	return ap
 }
 

@@ -79,7 +79,7 @@ func (cmd CommitCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string)
 
 func (cmd CommitCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsString(commitMessageArg, "m", "msg", "Use the given <msg> as the commit message.")
+	ap.SupportsString(commitMessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
 	ap.SupportsFlag(allowEmptyFlag, "", "Allow recording a commit that has the exact same data as its sole parent. This is usually a mistake, so it is disabled by default. This option bypasses that safety.")
 	ap.SupportsString(dateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
 	return ap
