@@ -23,7 +23,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
-	"io"
 	"path/filepath"
 	"strings"
 )
@@ -83,25 +82,7 @@ func (cmd *DumpDocsCmd) Exec(_ context.Context, commandStr string, args []string
 		return 1
 	}
 
-	indexPath := filepath.Join(dirStr, "command_line_index.md")
-	idxWr, err := dEnv.FS.OpenForWrite(indexPath)
-
-	if err != nil {
-		verr := errhand.BuildDError("error writing to command_line.md").AddCause(err).Build()
-		cli.PrintErrln(verr.Verbose())
-		return 1
-	}
-
-	defer idxWr.Close()
-	err = iohelp.WriteAll(idxWr, []byte("# Dolt Commands\n"))
-
-	if err != nil {
-		verr := errhand.BuildDError("error writing to command_line.md").AddCause(err).Build()
-		cli.PrintErrln(verr.Verbose())
-		return 1
-	}
-
-	err = cmd.dumpDocs(idxWr, dEnv, dirStr, cmd.DoltCommand.Name(), cmd.DoltCommand.Subcommands)
+	err := cmd.dumpDocs(dEnv, dirStr, cmd.DoltCommand.Name(), cmd.DoltCommand.Subcommands)
 
 	if err != nil {
 		verr := errhand.BuildDError("error: Failed to dump docs.").AddCause(err).Build()
@@ -113,7 +94,7 @@ func (cmd *DumpDocsCmd) Exec(_ context.Context, commandStr string, args []string
 	return 0
 }
 
-func (cmd *DumpDocsCmd) dumpDocs(idxWr io.Writer, dEnv *env.DoltEnv, dirStr, cmdStr string, subCommands []cli.Command) error {
+func (cmd *DumpDocsCmd) dumpDocs(dEnv *env.DoltEnv, dirStr, cmdStr string, subCommands []cli.Command) error {
 	for _, curr := range subCommands {
 		var hidden bool
 		if hidCmd, ok := curr.(cli.HiddenCommand); ok {
@@ -122,26 +103,18 @@ func (cmd *DumpDocsCmd) dumpDocs(idxWr io.Writer, dEnv *env.DoltEnv, dirStr, cmd
 
 		if !hidden {
 			if subCmdHandler, ok := curr.(cli.SubCommandHandler); ok {
-				err := cmd.dumpDocs(idxWr, dEnv, dirStr, cmdStr+" "+subCmdHandler.Name(), subCmdHandler.Subcommands)
+				err := cmd.dumpDocs(dEnv, dirStr, cmdStr+" "+subCmdHandler.Name(), subCmdHandler.Subcommands)
 
 				if err != nil {
 					return err
 				}
 			} else {
-				currCmdStr := cmdStr + " " + curr.Name()
+				currCmdStr := fmt.Sprintf("%s %s", cmdStr, curr.Name())
 				filename := strings.ReplaceAll(currCmdStr, " ", "-")
-				filename = strings.ReplaceAll(filename, "-", "_")
 
 				absPath := filepath.Join(dirStr, filename+".md")
 
-				indexLine := fmt.Sprintf("* [%s](%s)\n", currCmdStr, filename)
-				err := iohelp.WriteAll(idxWr, []byte(indexLine))
-
-				if err != nil {
-					return err
-				}
-
-				err = curr.CreateMarkdown(dEnv.FS, absPath, currCmdStr)
+				err := curr.CreateMarkdown(dEnv.FS, absPath, currCmdStr)
 
 				if err != nil {
 					return err
