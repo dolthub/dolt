@@ -40,11 +40,10 @@ const (
 var sqlServerShortDesc = "Start a MySQL-compatible server."
 var sqlServerLongDesc = `Start a MySQL-compatible server which can be connected to by MySQL clients.
 
-Currently, only SELECT statements are operational, as support for other statements is
-still being developed.
+Currently, only {{.EmphasisLeft}}SELECT{{.EmphasisRight}} statements are operational, as support for other statements is still being developed.
 `
 var sqlServerSynopsis = []string{
-	"[-H <host>] [-P <port>] [-u <user>] [-p <password>] [-t <timeout>] [-l <loglevel>] [-r]",
+	"[-H {{.LessThan}}host{{.GreaterThan}}] [-P {{.LessThan}}port{{.GreaterThan}}] [-u {{.LessThan}}user{{.GreaterThan}}] [-p {{.LessThan}}password{{.GreaterThan}}] [-t {{.LessThan}}timeout{{.GreaterThan}}] [-l {{.LessThan}}loglevel{{.GreaterThan}}] [-r]",
 }
 
 var sqlServerDocumentation = cli.CommandDocumentation{

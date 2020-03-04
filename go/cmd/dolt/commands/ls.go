@@ -36,11 +36,11 @@ const (
 )
 
 var lsShortDesc = "List tables"
-var lsLongDesc = `With no arguments lists the tables in the current working set but if a commit is specified it will list the tables in that commit.  If the --verbose flag is provided a row count and a hash of the table will also be displayed.
+var lsLongDesc = `With no arguments lists the tables in the current working set but if a commit is specified it will list the tables in that commit.  If the {{.EmphasisLeft}}--verbose{{.EmphasisRight}} flag is provided a row count and a hash of the table will also be displayed.
 
-If the --system flag is supplied this will show the dolt system tables which are queryable with SQL.  Some system tables can be queried even if they are not in the working set by specifying appropriate parameters in the SQL queries.  To see these tables too you may pass the --verbose flag.
+If the {{.EmphasisLeft}}--system{{.EmphasisRight}} flag is supplied this will show the dolt system tables which are queryable with SQL.  Some system tables can be queried even if they are not in the working set by specifying appropriate parameters in the SQL queries. To see these tables too you may pass the {{.EmphasisLeft}}--verbose{{.EmphasisRight}} flag.
 
-If the --all flag is supplied both user and system tables will be printed.
+If the {{.EmphasisLeft}}--all{{.EmphasisRight}} flag is supplied both user and system tables will be printed.
 `
 
 var lsSynopsis = []string{

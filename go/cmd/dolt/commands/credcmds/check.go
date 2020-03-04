@@ -32,7 +32,7 @@ import (
 
 var checkShortDesc = "Check authenticating with a credential keypair against a doltremoteapi."
 var checkLongDesc = `Tests calling a doltremoteapi with dolt credentials and reports the authentication result.`
-var checkSynopsis = []string{"[--endpoint doltremoteapi.dolthub.com:443] [--creds <eak95022q3vskvumn2fcrpibdnheq1dtr8t...>]"}
+var checkSynopsis = []string{"[--endpoint doltremoteapi.dolthub.com:443] [--creds {{.LessThan}}eak95022q3vskvumn2fcrpibdnheq1dtr8t...{{.GreaterThan}}]"}
 
 var checkDocumentation = cli.CommandDocumentation{
 	ShortDesc: checkShortDesc,

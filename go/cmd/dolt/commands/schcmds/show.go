@@ -29,7 +29,7 @@ import (
 )
 
 var tblSchemaShortDesc = "Shows the schema of one or more tables."
-var tblSchemaLongDesc = `dolt table schema displays the schema of tables at a given commit.  If no commit is provided the working set will be used. +
+var tblSchemaLongDesc = `{{.EmphasisLeft}}dolt table schema{{.EmphasisRight}} displays the schema of tables at a given commit.  If no commit is provided the working set will be used. +
 
 A list of tables can optionally be provided.  If it is omitted all table schemas will be shown.`
 

@@ -30,15 +30,15 @@ import (
 var tblMvShortDesc = "Renames a table"
 var tblMvLongDesc = `
 The dolt table mv command will rename a table. If a table exists with the target name this command will 
-fail unless the <b>--force|-f</b> flag is provided.  In that case the table at the target location will be overwritten 
+fail unless the {{.EmphasisLeft}}--force|-f{{.EmphasisRight}} flag is provided.  In that case the table at the target location will be overwritten 
 by the table being renamed.
 
-The result is equivalent of running <b>dolt table cp <old> <new></b> followed by <b>dolt table rm <old></b>, resulting 
-in a new table and a deleted table in the working set. These changes can be staged using <b>dolt add</b> and committed
-using <b>dolt commit</b>.`
+The result is equivalent of running {{.EmphasisLeft}}dolt table cp <old> <new>{{.EmphasisRight}} followed by {{.EmphasisLeft}}dolt table rm <old>{{.EmphasisRight}}, resulting 
+in a new table and a deleted table in the working set. These changes can be staged using {{.EmphasisLeft}}dolt add{{.EmphasisRight}} and committed
+using {{.EmphasisLeft}}dolt commit{{.EmphasisRight}}.`
 
 var tblMvSynopsis = []string{
-	"[-f] <oldtable> <newtable>",
+	"[-f] {{.LessThan}}oldtable{{.EmphasisRight}} {{.LessThan}}newtable{{.EmphasisRight}}",
 }
 
 var tblMvDocumentation = cli.CommandDocumentation{

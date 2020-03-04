@@ -38,19 +38,19 @@ var resetShortDesc = "Resets staged tables to their HEAD state"
 var resetLongDesc = `Sets the state of a table in the staging area to be that table's value at HEAD
 
 dolt reset <tables>...
-	This form resets the values for all staged <tables> to their values at HEAD. (It does not affect the working tree or
+	This form resets the values for all staged {{.LessThan}}tables{{.GreaterThan}} to their values at {{.EmphasisLeft}}HEAD{{.EmphasisRight}}. (It does not affect the working tree or
 	the current branch.)
 
-	This means that </b>dolt reset <tables></b> is the opposite of <b>dolt add <tables></b>.
+	This means that {{.EmphasisLeft}}dolt reset <tables>{{.EmphasisRight}} is the opposite of {{.EmphasisLeft}}dolt add <tables>{{.EmphasisRight}}.
 
-	After running <b>dolt reset <tables></b> to update the staged tables, you can use <b>dolt checkout</b> to check the
+	After running {{.EmphasisLeft}}dolt reset <tables>{{.EmphasisRight}} to update the staged tables, you can use {{.EmphasisLeft}}dolt checkout{{.EmphasisRight}} to check the
 	contents out of the staged tables to the working tables.
 
 dolt reset .
-	This form resets <b>all</b> staged tables to their values at HEAD. It is the opposite of <b>dolt add .</b>`
+	This form resets {{.EmphasisLeft}}all{{.EmphasisRight}} staged tables to their values at HEAD. It is the opposite of {{.EmphasisLeft}}dolt add .{{.EmphasisRight}}`
 
 var resetSynopsis = []string{
-	"<tables>...",
+	"{{.LessThan}}tables{{.GreaterThan}}...",
 	"[--hard | --soft]",
 }
 

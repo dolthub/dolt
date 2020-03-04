@@ -32,7 +32,7 @@ import (
 var schExportShortDesc = "Exports a table's schema."
 var schExportLongDesc = ""
 var schExportSynopsis = []string{
-	"<table> <file>",
+	"{{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 }
 
 var schExportDocumentation = cli.CommandDocumentation{

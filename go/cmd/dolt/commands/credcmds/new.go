@@ -32,8 +32,7 @@ import (
 var newShortDesc = "Create a new public/private keypair for authenticating with doltremoteapi."
 var newLongDesc = `Creates a new keypair for authenticating with doltremoteapi.
 
-Prints the public portion of the keypair, which can entered into the credentials
-settings page of dolthub.`
+Prints the public portion of the keypair, which can entered into the credentials settings page of dolthub.`
 var newSynopsis = []string{}
 
 var newDocumentation = cli.CommandDocumentation{

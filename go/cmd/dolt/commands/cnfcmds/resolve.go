@@ -35,14 +35,14 @@ var resShortDesc = "Removes rows from list of conflicts"
 var resLongDesc = `
 When a merge operation finds conflicting changes, the rows with the conflicts are added to list of conflicts that must be resolved.  Once the value for the row is resolved in the working set of tables, then the conflict should be resolved.
 		
-In it's first form <b>dolt conflicts resolve <table> <key>...</b>, resolve runs in manual merge mode resolving the conflicts whose keys are provided.\n +
+In it's first form {{.EmphasisLeft}}dolt conflicts resolve <table> <key>...{{.EmphasisRight}}, resolve runs in manual merge mode resolving the conflicts whose keys are provided.
 
-In it's second form <b>dolt conflicts resolve --ours|--theirs <table>...</b>, resolve runs in auto resolve mode. Where conflicts are resolved using a rule to determine which version of a row should be used.
+In it's second form {{.EmphasisLeft}}dolt conflicts resolve --ours|--theirs <table>...{{.EmphasisRight}}, resolve runs in auto resolve mode. Where conflicts are resolved using a rule to determine which version of a row should be used.
 `
 
 var resSynopsis = []string{
-		`<table> [<key_definition>] <key>...`,
-		`--ours|--theirs <table>...`,
+		`{{.LessThan}}table{{.GreaterThan}} [{{.LessThan}}key_definition{{.GreaterThan}}] {{.LessThan}}key{{.GreaterThan}}...`,
+		`--ours|--theirs {{.LessThan}}table{{.GreaterThan}}...`,
 	}
 
 var resDocumentation = cli.CommandDocumentation{

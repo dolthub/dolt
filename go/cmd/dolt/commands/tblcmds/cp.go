@@ -29,17 +29,15 @@ import (
 )
 
 var tblCpShortDesc = "Makes a copy of a table"
-var tblCpLongDesc = `The dolt table cp command makes a copy of a table at a given commit.  If a commit is not specified the copy is made of
-the table from the current working set.
+var tblCpLongDesc = `The dolt table cp command makes a copy of a table at a given commit. If a commit is not specified the copy is made of the table from the current working set.
 
-If a table exists at the target location this command will fail unless the <b>--force|-f</b> flag is provided.  In this
-case the table at the target location will be overwritten with the copied table.
+If a table exists at the target location this command will fail unless the {{.EmphasisLeft}}--force|-f{{.EmphasisRight}} flag is provided.  In this case the table at the target location will be overwritten with the copied table.
 
-All changes will be applied to the working tables and will need to be staged using <b>dolt add</b> and committed
-using <b>dolt commit</b>.`
+All changes will be applied to the working tables and will need to be staged using {{.EmphasisLeft}}dolt add{{.EmphasisRight}} and committed using {{.EmphasisLeft}}dolt commit{{.EmphasisRight}}.
+`
 
 var tblCpSynopsis = []string{
-	"[-f] [<commit>] <oldtable> <newtable>",
+	"[-f] [{{.LessThan}}commit{{.GreaterThan}}] {{.LessThan}}oldtable{{.GreaterThan}} {{.LessThan}}newtable{{.GreaterThan}}",
 }
 
 var tblCpDocumentation = cli.CommandDocumentation{

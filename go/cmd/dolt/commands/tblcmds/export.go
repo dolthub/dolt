@@ -32,11 +32,11 @@ import (
 )
 
 var exportShortDesc = `Export the contents of a table to a file.`
-var exportLongDesc = `dolt table export will export the contents of <table> to <file>
+var exportLongDesc = `dolt table export will export the contents of {{.LessThan}table{{.GreaterThan}} to {{.LessThan}file{{.GreaterThan}}
 
-See the help for <b>dolt table import</b> as the options are the same.`
+See the help for {{.EmphasisLeft}dolt table import{{.EmphasisRight}} as the options are the same.`
 var exportSynopsis = []string{
-	"[-f] [-pk <field>] [-schema <file>] [-map <file>] [-continue] [-file-type <type>] <table> <file>",
+	"[-f] [-pk {{.LessThan}}field{{.GreaterThan}}] [-schema {{.LessThan}}file{{.GreaterThan}}] [-map {{.LessThan}}file{{.GreaterThan}}] [-continue] [-file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 }
 
 var exportDocumentation = cli.CommandDocumentation{

@@ -40,12 +40,12 @@ var ErrInvalidPort = errors.New("invalid port")
 var remoteShortDesc = "Manage set of tracked repositories"
 var remoteLongDesc = `With no arguments, shows a list of existing remotes. Several subcommands are available to perform operations on the remotes.
 
-\n<b>add</b>
-Adds a remote named <name> for the repository at <url>. The command dolt fetch <name> can then be used to create and update remote-tracking branches <name>/<branch>.
+{{.EmphasisLeft}}add{{.EmphasisRight}}
+Adds a remote named {{.LessThan}}name{{.GreaterThan}} for the repository at {{.LessThan}}url{{.GreaterThan}}. The command dolt fetch {{.LessThan}}name{{.GreaterThan}} can then be used to create and update remote-tracking branches {{.EmphasisLeft}}<name>/<branch>{{.EmphasisRight}}.
 
-The <url> parameter supports url schemes of http, https, aws, gs, and file.  If a url scheme does not prefix the url then https is assumed.  If the <url> paramenter is in the format <organization>/<repository> then dolt will use the remotes.default_host from your configuration file (Which will be dolthub.com unless changed).
+The {{.LessThan}}url{{.GreaterThan}} parameter supports url schemes of http, https, aws, gs, and file.  If a url scheme does not prefix the url then https is assumed.  If the {{.LessThan}}url{{.GreaterThan}} paramenter is in the format {{.EmphasisLeft}}<organization>/<repository>{{.EmphasisRight}} then dolt will use the {{.EmphasisLeft}}remotes.default_host{{.EmphasisRight}} from your configuration file (Which will be dolthub.com unless changed).
 
-AWS cloud remote urls should be of the form aws://[dynamo-table:s3-bucket]/database.  You may configure your aws cloud remote using the optional parameters aws-region, aws-creds-type, aws-creds-file.
+AWS cloud remote urls should be of the form {{.EmphasisLeft}}aws://[dynamo-table:s3-bucket]/database{{.EmphasisRight}}.  You may configure your aws cloud remote using the optional parameters {{.EmphasisLeft}}aws-region{{.EmphasisRight}}, {{.EmphasisLeft}}aws-creds-type{{.EmphasisRight}}, {{.EmphasisLeft}}aws-creds-file{{.EmphasisRight}}.
 
 aws-creds-type specifies the means by which credentials should be retrieved in order to access the specified cloud resources (specifically the dynamo table, and the s3 bucket). Valid values are 'role', 'env', or 'file'.
 
@@ -55,11 +55,9 @@ aws-creds-type specifies the means by which credentials should be retrieved in o
 	
 GCP remote urls should be of the form gs://gcs-bucket/database and will use the credentials setup using the gcloud command line available from Google +
 
-The local filesystem can be used as a remote by providing a repository url in the format file://absolute path. See https://en.wikipedia.org/wiki/File_URI_scheme for details.
-
-<b>remove, rm</b>\n +
-Remove the remote named <name>. All remote-tracking branches and configuration settings +
-for the remote are removed.`
+The local filesystem can be used as a remote by providing a repository url in the format file://absolute path. See https://en.wikipedia.org/wiki/File_URI_schemethi
+{{.EmphasisLeft}}remove{{.EmphasisRight}}, {{.EmphasisLeft}}rm{{.EmphasisRight}}, 
+Remove the remote named {{.LessThan}}name{{.GreaterThan}}. All remote-tracking branches and configuration settings for the remote are removed.`
 
 var remoteSynopsis = []string{
 	"[-v | --verbose]",

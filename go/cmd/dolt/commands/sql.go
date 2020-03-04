@@ -57,9 +57,9 @@ import (
 
 var sqlShortDesc = "Runs a SQL query"
 var sqlLongDesc = `Runs a SQL query you specify. By default, begins an interactive shell to run queries and view the
-results. With the -q option, runs the given query and prints any results, then exits.
+results. With the {{.EmphasisLeft}}-q{{.EmphasisRight}} option, runs the given query and prints any results, then exits.
 
-Pipe SQL statements to dolt sql (no -q) to execute a SQL import or update script. 
+Pipe SQL statements to dolt sql (no {{.EmphasisLeft}}-q{{.EmphasisRight}}) to execute a SQL import or update script. 
 
 Known limitations:
 * No support for creating indexes
@@ -73,9 +73,9 @@ Known limitations:
 `
 var sqlSynopsis = []string{
 	"",
-	"-q <query>",
-	"-q <query> -r <result format>",
-	"-q <query> -s <name> -m <message>",
+	"-q {{.LessThan}}query{{.GreaterThan}}",
+	"-q {{.LessThan}}query{{.GreaterThan}} -r {{.LessThan}}result format{{.GreaterThan}}",
+	"-q {{.LessThan}}query{{.GreaterThan}} -s {{.LessThan}}name{{.GreaterThan}} -m {{.LessThan}}message{{.GreaterThan}}",
 }
 
 var sqlDocumentation = cli.CommandDocumentation{

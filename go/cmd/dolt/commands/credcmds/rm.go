@@ -30,7 +30,7 @@ import (
 
 var rmShortDesc = "Remove a stored public/private keypair."
 var rmLongDesc = `Removes an existing keypair from dolt's credential storage.`
-var rmSynopsis = []string{"<public_key_as_appears_in_ls>"}
+var rmSynopsis = []string{"{{.LessThan}}public_key_as_appears_in_ls{{.GreaterThan}}"}
 
 var rmDocumentation = cli.CommandDocumentation{
 	ShortDesc: rmShortDesc,

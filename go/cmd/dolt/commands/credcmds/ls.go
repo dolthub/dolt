@@ -33,7 +33,7 @@ import (
 var lsShortDesc = "List keypairs available for authenticating with doltremoteapi."
 var lsLongDesc = `Lists known public keys from keypairs for authenticating with doltremoteapi.
 
-The currently selected keypair appears with a '*' next to it.`
+The currently selected keypair appears with a {{.EmphasisLeft}}*{{.EmphasisRight}} next to it.`
 var lsSynopsis = []string{"[-v | --verbose]"}
 
 var lsDocumentation = cli.CommandDocumentation{

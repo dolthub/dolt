@@ -29,10 +29,9 @@ import (
 )
 
 var tblRmShortDesc = "Removes table(s) from the working set of tables."
-var tblRmLongDesc = "dolt table rm removes table(s) from the working set.  These changes can be staged using " +
-	"<b>dolt add</b> and committed using <b>dolt commit</b>"
+var tblRmLongDesc = "dolt table rm removes table(s) from the working set.  These changes can be staged using {{.EmphasisLeft}}dolt add{{EmphasisRight}} and committed using {{.EmphasisLeft}}dolt commit{{EmphasisRight}}"
 var tblRmSynopsis = []string{
-	"<table>...",
+	"{{.LessThan}}table{{.GreaterThan}}...",
 }
 
 var tblRmDocumentation = cli.CommandDocumentation{

@@ -26,13 +26,13 @@ import (
 )
 
 var pullShortDesc = "Fetch from and integrate with another repository or a local branch"
-var pullLongDesc = `Incorporates changes from a remote repository into the current branch. In its default mode, <b>dolt pull</b> is shorthand for <b>dolt fetch</b> followed by <b>dolt merge <remote>/<branch></b>.
+var pullLongDesc = `Incorporates changes from a remote repository into the current branch. In its default mode, {{.EmphasisLeft}}dolt pull{{.EmphasisRight}} is shorthand for {{.EmphasisLeft}}dolt fetch{{.EmphasisRight}} followed by {{.EmphasisLeft}}dolt merge <remote>/<branch>{{.EmphasisRight}}.
 
 More precisely, dolt pull runs dolt fetch with the given parameters and calls dolt merge to merge the retrieved branch heads into the current branch.
 `
 
 var pullSynopsis = []string{
-	"<remote>",
+	"{{.LessThan}}remote{{.GreaterThan}}",
 }
 
 var pullDocumentation = cli.CommandDocumentation{

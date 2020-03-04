@@ -40,7 +40,7 @@ import (
 var catShortDesc = "print conflicts"
 var catLongDesc = `The dolt conflicts cat command reads table conflicts and writes them to the standard output.`
 var catSynopsis = []string{
-	"[<commit>] <table>...",
+	"[{{.LessThan}}commit{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}}...",
 }
 
 var catDocumentation = cli.CommandDocumentation{
