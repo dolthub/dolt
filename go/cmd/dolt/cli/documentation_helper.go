@@ -108,8 +108,9 @@ func (cmdDoc CommandDocumentation) GetLongDesc(format DocFormat) (string, error)
 }
 
 func templateDocStringHelper(docString string, docFormat DocFormat) (string, error) {
-	templ, err := template.New("shortDesc").Parse(docString)
+	templ, err := template.New("description").Parse(docString)
 	if err != nil {
+		Printf(docString)
 		return "", err
 	}
 	var templBuffer bytes.Buffer

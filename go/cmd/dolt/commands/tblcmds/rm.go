@@ -29,7 +29,7 @@ import (
 )
 
 var tblRmShortDesc = "Removes table(s) from the working set of tables."
-var tblRmLongDesc = "dolt table rm removes table(s) from the working set.  These changes can be staged using {{.EmphasisLeft}}dolt add{{EmphasisRight}} and committed using {{.EmphasisLeft}}dolt commit{{EmphasisRight}}"
+var tblRmLongDesc = "{{.EmphasisLeft}}dolt table rm{{.EmphasisRight}} removes table(s) from the working set.  These changes can be staged using {{.EmphasisLeft}}dolt add{{.EmphasisRight}} and committed using {{.EmphasisLeft}}dolt commit{{.EmphasisRight}}"
 var tblRmSynopsis = []string{
 	"{{.LessThan}}table{{.GreaterThan}}...",
 }
