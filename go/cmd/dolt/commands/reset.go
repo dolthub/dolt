@@ -37,7 +37,7 @@ const (
 var resetShortDesc = "Resets staged tables to their HEAD state"
 var resetLongDesc = `Sets the state of a table in the staging area to be that table's value at HEAD
 
-dolt reset <tables>...
+{{.EmphasisLeft}}dolt reset <tables>...{{.EmphasisRight}}"
 	This form resets the values for all staged {{.LessThan}}tables{{.GreaterThan}} to their values at {{.EmphasisLeft}}HEAD{{.EmphasisRight}}. (It does not affect the working tree or
 	the current branch.)
 

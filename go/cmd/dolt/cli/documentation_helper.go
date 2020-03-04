@@ -16,8 +16,7 @@ type CmdMdDoc struct {
 	Options string
 }
 
-var cmdMdDocTempl = `
----
+var cmdMdDocTempl = `---
 title: {{.Command}}
 ---
 
@@ -69,7 +68,7 @@ func (cmdDoc CommandDocumentation) CmdDocToMd(commandStr string, parser *argpars
 	if longDescErr != nil {
 		return "", longDescErr
 	}
-	synopsis, synopsisErr := cmdDoc.GetSynopsis(MarkdownFormat)
+	synopsis, synopsisErr := cmdDoc.GetSynopsis(SynopsisMarkdownFormat)
 	if synopsisErr != nil {
 		return "", synopsisErr
 	}
@@ -208,12 +207,12 @@ func templateSupported(supported Supported) (string, error) {
 	if supported.Abbreviation == "" && supported.Description == "" {
 		formatString = "`--{{.Name}}`\n\n"
 	} else if supported.Abbreviation == "" && supported.Description != ""  {
-		formatString = "`--{{.Name}}`:\n\n    {{.Description}}\n\n"
+		formatString = "`--{{.Name}}`:\n{{.Description}}\n\n"
 
 	} else if supported.Abbreviation != "" && supported.Description == "" {
 		formatString = "`-{{.Abbreviation}}`, `--{{.Name}}`\n\n"
 	} else {
-		formatString = "`-{{.Abbreviation}}`, `--{{.Name}}`:\n\n    {{.Description}}\n\n"
+		formatString = "`-{{.Abbreviation}}`, `--{{.Name}}`:\n{{.Description}}\n\n"
 	}
 
 	templ, err := template.New("argString").Parse(formatString)
