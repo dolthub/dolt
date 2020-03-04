@@ -52,7 +52,7 @@ var branchForceFlagDesc = "Reset {{.LessThan}}branchname{{.LessThan}} to {{.Less
 
 var branchSynopsis = []string{
 		`[--list] [-v] [-a]`,
-		`[-f] {{.LessThan}}branchname{{.GreaterThan}} [{{.LessThan}}start-point>{{.GreaterThan}}]`,
+		`[-f] {{.LessThan}}branchname{{.GreaterThan}} [{{.LessThan}}start-point{{.GreaterThan}}]`,
 		`-m [-f] [{{.LessThan}}oldbranch{{.GreaterThan}}] {{.LessThan}}newbranch{{.GreaterThan}}`,
 		`-c [-f] [{{.LessThan}}oldbranch{{.GreaterThan}}] {{.LessThan}}newbranch{{.GreaterThan}}`,
 		`-d [-f] {{.LessThan}}branchname{{.GreaterThan}}...`,
