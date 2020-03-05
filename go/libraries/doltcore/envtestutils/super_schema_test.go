@@ -42,6 +42,10 @@ const (
 	c12Tag
 )
 
+type Command interface {
+	Exec(t *testing.T, dEnv *env.DoltEnv)
+}
+
 type SuperSchemaTest struct {
 	// The name of this test. Names should be unique and descriptive.
 	Name string
@@ -404,10 +408,6 @@ func newColTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, partOfP
 		panic("could not create column")
 	}
 	return c
-}
-
-type Command interface {
-	Exec(t *testing.T, dEnv *env.DoltEnv)
 }
 
 type AddAll struct{}

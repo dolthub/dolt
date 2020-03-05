@@ -146,6 +146,7 @@ func (root *RootValue) HasTable(ctx context.Context, tName string) (bool, error)
 	return tableMap.Has(ctx, types.String(tName))
 }
 
+// GetSuperSchema returns the SuperSchema for the table name specified if that table exists.
 func (root *RootValue) GetSuperSchema(ctx context.Context, tName string) (*schema.SuperSchema, bool, error) {
 	// SuperSchema is only persisted on Commit()
 	ss, found, err := root.getStaleSuperSchema(ctx, tName)
@@ -185,6 +186,7 @@ func (root *RootValue) GetSuperSchema(ctx context.Context, tName string) (*schem
 	return ss, true, err
 }
 
+// GerSuperSchemaMap returns the Noms map that tracks SuperSchemas, used to create new RootValues on checkout branch.
 func (root *RootValue) GetSuperSchemaMap(ctx context.Context) (types.Map, error) {
 	return root.getOrCreateSuperSchemaMap(ctx)
 }
@@ -196,7 +198,7 @@ func (root *RootValue) getStaleSuperSchema(ctx context.Context, tName string) (*
 		return nil, false, err
 	}
 
-	vv, found, err := ssm.MaybeGet(ctx, types.String(tName))
+	v, found, err := ssm.MaybeGet(ctx, types.String(tName))
 
 	if err != nil {
 		return nil, false, err
@@ -206,7 +208,7 @@ func (root *RootValue) getStaleSuperSchema(ctx context.Context, tName string) (*
 		return nil, false, nil
 	}
 
-	ssValRef := vv.(types.Ref)
+	ssValRef := v.(types.Ref)
 	ssVal, err := ssValRef.TargetValue(ctx, root.vrw)
 
 	if err != nil {
@@ -632,7 +634,7 @@ func (root *RootValue) UpdateTablesFromOther(ctx context.Context, tblNames []str
 	return newRootValue(root.vrw, rootValSt), nil
 }
 
-// Updates SuperSchemas of tblNames using SuperSchemas from other.
+// UpdateSuperSchemasFromOther updates SuperSchemas of tblNames using SuperSchemas from other.
 func (root *RootValue) UpdateSuperSchemasFromOther(ctx context.Context, tblNames []string, other *RootValue) (*RootValue, error) {
 	newRoot := root
 	ssm, err := newRoot.getOrCreateSuperSchemaMap(ctx)
@@ -649,10 +651,6 @@ func (root *RootValue) UpdateSuperSchemasFromOther(ctx context.Context, tblNames
 
 		if err != nil {
 			return nil, err
-		}
-
-		if !found {
-
 		}
 
 		oss, foundOther, err := other.GetSuperSchema(ctx, tn)

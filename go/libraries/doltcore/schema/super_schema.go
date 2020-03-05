@@ -25,7 +25,7 @@ import (
 // TODO: track latest name for each column
 const arbitraryIdx = 0
 
-// A SuperSchema is the union of all Schemas over the history of a table
+// SuperSchema is the union of all Schemas over the history of a table
 // the nameTag map tracks all names corresponding to a column tag
 type SuperSchema struct {
 	// All columns that have existed in the history of the corresponding schema.
@@ -38,6 +38,7 @@ type SuperSchema struct {
 	tagNames map[uint64][]string
 }
 
+// NewSuperSchema creates a SuperSchema from the columns of schemas.
 func NewSuperSchema(schemas ...Schema) (*SuperSchema, error) {
 	cc, _ := NewColCollection()
 	tn := make(map[uint64][]string)
@@ -53,16 +54,13 @@ func NewSuperSchema(schemas ...Schema) (*SuperSchema, error) {
 	return &ss, nil
 }
 
-func EmptySuperSchema() *SuperSchema {
-	ss, _ := NewSuperSchema()
-	return ss
-}
-
+// UnmarshalSuperSchema creates a SuperSchema, it is only used by the encoding package.
 func UnmarshalSuperSchema(allCols *ColCollection, tagNames map[uint64][]string) *SuperSchema {
 	return &SuperSchema{allCols, tagNames}
 }
 
 // TODO: take a variadic param
+// AddColumn adds a column and its name to the SuperSchema
 func (ss *SuperSchema) AddColumn(col Column) (err error) {
 	ct := col.Tag
 	ac := ss.allCols
@@ -92,12 +90,13 @@ func (ss *SuperSchema) AddColumn(col Column) (err error) {
 
 	// we haven't seen this column before
 	ss.tagNames[col.Tag] = append(names, col.Name)
-	ss.allCols, err = ss.allCols.Append(stripColumn(col))
+	ss.allCols, err = ss.allCols.Append(stripColNameAndConstraints(col))
 
 	return err
 }
 
 // TODO: make this functional
+// AddSchemas adds all names and columns of each schema to the SuperSchema
 func (ss *SuperSchema) AddSchemas(schemas ...Schema) error {
 	for _, sch := range schemas {
 		err := sch.GetAllCols().Iter(func(_ uint64, col Column) (stop bool, err error) {
@@ -117,18 +116,22 @@ func (ss *SuperSchema) GetColumn(tag uint64) (Column, bool) {
 	return ss.allCols.GetByTag(tag)
 }
 
+// Iter processes each column in the SuperSchema with the specified function
 func (ss *SuperSchema) Iter(cb func(tag uint64, col Column) (stop bool, err error)) error {
 	return ss.allCols.Iter(cb)
 }
 
+// AllColumnNames returns all names of the column corresponding to tag
 func (ss *SuperSchema) AllColumnNames(tag uint64) []string {
 	return ss.tagNames[tag]
 }
 
+// Size returns the number of columns in the SuperSchema
 func (ss *SuperSchema) Size() int {
 	return ss.allCols.Size()
 }
 
+// Equals returns true iff the SuperSchemas have the same ColCollections and tagNames maps
 func (ss *SuperSchema) Equals(oss *SuperSchema) bool {
 	// check equality of column collections
 	if ss.Size() != oss.Size() {
@@ -181,6 +184,7 @@ func (ss *SuperSchema) Equals(oss *SuperSchema) bool {
 	return true
 }
 
+// IsSuperSetOfSchema returns true iff all cols in sch are in the SuperSchema
 func (ss *SuperSchema) IsSuperSetOfSchema(sch Schema) bool {
 	isSuperSet := true
 	_ = sch.GetAllCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
@@ -237,9 +241,9 @@ func (ss *SuperSchema) nameColumns() map[uint64]string {
 	return uniqNames
 }
 
-// TODO: track latest name for each column
 // Creates a Schema by choosing an arbitrary name for each column in the SuperSchema
 func (ss *SuperSchema) GenerateSchema() (Schema, error) {
+	// TODO: track latest name for each column
 	uniqNames := ss.nameColumns()
 	cc, _ := NewColCollection()
 	err := ss.Iter(func(tag uint64, col Column) (stop bool, err error) {
@@ -256,8 +260,8 @@ func (ss *SuperSchema) GenerateSchema() (Schema, error) {
 	return SchemaFromCols(cc), nil
 }
 
-// NameMapForSchema creates a field name mapping needed to construct a RowConverter
-// Schema columns are mapped by tag to the corresponding SuperSchema columns
+// NameMapForSchema creates a field name mapping needed to construct a rowconv.RowConverter
+// sch columns are mapped by tag to the corresponding SuperSchema columns
 func (ss *SuperSchema) NameMapForSchema(sch Schema) (map[string]string, error) {
 	inNameToOutName := make(map[string]string)
 	uniqNames := ss.nameColumns()
@@ -278,6 +282,7 @@ func (ss *SuperSchema) NameMapForSchema(sch Schema) (map[string]string, error) {
 	return inNameToOutName, nil
 }
 
+// SuperSchemaUnion combines multiple SuperSchemas.
 func SuperSchemaUnion(superSchemas ...*SuperSchema) (*SuperSchema, error) {
 	cc, _ := NewColCollection()
 	tagNameSets := make(map[uint64]*set.StrSet)
@@ -287,7 +292,7 @@ func SuperSchemaUnion(superSchemas ...*SuperSchema) (*SuperSchema, error) {
 
 			if !found {
 				tagNameSets[tag] = set.NewStrSet(ss.AllColumnNames(tag))
-				cc, err = cc.Append(stripColumn(col))
+				cc, err = cc.Append(stripColNameAndConstraints(col))
 			} else {
 				tagNameSets[tag].Add(ss.AllColumnNames(tag)...)
 			}
@@ -309,9 +314,8 @@ func SuperSchemaUnion(superSchemas ...*SuperSchema) (*SuperSchema, error) {
 	return &SuperSchema{cc, tn}, nil
 }
 
-// preps column for insertion to super schema
-func stripColumn(col Column) Column {
-	// track column names in tagNames, not in allCols
+func stripColNameAndConstraints(col Column) Column {
+	// track column names in SuperSchema.tagNames
 	col.Name = ""
 	// don't track constraints
 	col.Constraints = []ColConstraint(nil)

@@ -257,6 +257,7 @@ func (ssd superSchemaData) decodeSuperSchema() (*schema.SuperSchema, error) {
 	return schema.UnmarshalSuperSchema(colColl, ssd.TagNames), nil
 }
 
+// MarshalSuperSchemaAsNomsValue creates a Noms value from a SuperSchema to be written to a RootValue.
 func MarshalSuperSchemaAsNomsValue(ctx context.Context, vrw types.ValueReadWriter, ss *schema.SuperSchema) (types.Value, error) {
 	ssd, err := toSuperSchemaData(ss)
 
@@ -277,6 +278,7 @@ func MarshalSuperSchemaAsNomsValue(ctx context.Context, vrw types.ValueReadWrite
 	return types.EmptyStruct(vrw.Format()), errors.New("Table Super Schema could not be converted to types.Struct")
 }
 
+// UnmarshalSuperSchemaNomsValue takes a Noms value read from a RootValue and constructs a SuperSchema from it.
 func UnmarshalSuperSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, ssVal types.Value) (*schema.SuperSchema, error) {
 	var ssd superSchemaData
 	err := marshal.Unmarshal(ctx, nbf, ssVal, &ssd)
