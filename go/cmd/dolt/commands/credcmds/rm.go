@@ -34,8 +34,8 @@ var rmSynopsis = []string{"{{.LessThan}}public_key_as_appears_in_ls{{.GreaterTha
 
 var rmDocumentation = cli.CommandDocumentation{
 	ShortDesc: rmShortDesc,
-	LongDesc: rmLongDesc,
-	Synopsis: rmSynopsis,
+	LongDesc:  rmLongDesc,
+	Synopsis:  rmSynopsis,
 }
 
 type RmCmd struct{}

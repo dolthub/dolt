@@ -17,6 +17,10 @@ package commands
 import (
 	"context"
 	"fmt"
+	"time"
+
+	"github.com/skratchdot/open-golang/open"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -26,8 +30,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-	"github.com/skratchdot/open-golang/open"
-	"time"
 )
 
 const (
@@ -42,8 +44,8 @@ var loginSynopsis = []string{"[<creds>]"}
 
 var loginDocumentation = cli.CommandDocumentation{
 	ShortDesc: loginShortDesc,
-	LongDesc: loginLongDesc,
-	Synopsis: loginSynopsis,
+	LongDesc:  loginLongDesc,
+	Synopsis:  loginSynopsis,
 }
 
 type LoginCmd struct{}

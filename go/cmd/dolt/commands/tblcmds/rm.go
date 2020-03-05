@@ -36,8 +36,8 @@ var tblRmSynopsis = []string{
 
 var tblRmDocumentation = cli.CommandDocumentation{
 	ShortDesc: tblRmShortDesc,
-	LongDesc: tblRmLongDesc,
-	Synopsis: tblRmSynopsis,
+	LongDesc:  tblRmLongDesc,
+	Synopsis:  tblRmSynopsis,
 }
 
 type RmCmd struct{}

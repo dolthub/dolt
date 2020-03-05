@@ -78,8 +78,8 @@ var schImportSynopsis = []string{
 
 var schImportDocumentation = cli.CommandDocumentation{
 	ShortDesc: schImportShortDesc,
-	LongDesc: schImportShortDesc,
-	Synopsis: schImportSynopsis,
+	LongDesc:  schImportShortDesc,
+	Synopsis:  schImportSynopsis,
 }
 
 type importOp int

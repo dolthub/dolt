@@ -39,8 +39,8 @@ var statusSynopsis = []string{""}
 
 var statusDocumentation = cli.CommandDocumentation{
 	ShortDesc: statusShortDesc,
-	LongDesc: statusLongDesc,
-	Synopsis: statusSynopsis,
+	LongDesc:  statusLongDesc,
+	Synopsis:  statusSynopsis,
 }
 
 type StatusCmd struct{}

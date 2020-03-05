@@ -38,8 +38,8 @@ var lsSynopsis = []string{"[-v | --verbose]"}
 
 var lsDocumentation = cli.CommandDocumentation{
 	ShortDesc: lsShortDesc,
-	LongDesc: lsLongDesc,
-	Synopsis: lsSynopsis,
+	LongDesc:  lsLongDesc,
+	Synopsis:  lsSynopsis,
 }
 
 var lsVerbose = false

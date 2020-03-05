@@ -16,8 +16,9 @@ package tblcmds
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"os"
+
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 
 	"github.com/fatih/color"
 
@@ -43,8 +44,8 @@ var exportSynopsis = []string{
 
 var exportDocumentation = cli.CommandDocumentation{
 	ShortDesc: exportShortDesc,
-	LongDesc: exportLongDesc,
-	Synopsis: exportSynopsis,
+	LongDesc:  exportLongDesc,
+	Synopsis:  exportSynopsis,
 }
 
 // validateExportArgs validates the input from the arg parser, and returns the tuple:

@@ -66,7 +66,6 @@ func PrintHelpText(commandStr, shortDesc, longDesc string, synopsis []string, pa
 	}
 }
 
-
 func PrintUsage(commandStr string, synopsis []string, parser *argparser.ArgParser) {
 	_, termWidth := terminalSize()
 

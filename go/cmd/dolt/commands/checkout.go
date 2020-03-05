@@ -42,17 +42,16 @@ dolt checkout -b {{.LessThan}}}new_branch{{.GreaterThan}} [{{.LessThan}}}start_p
 dolt checkout {{.LessThan}}}table{{.GreaterThan}}...
   To update table(s) with their values in HEAD `
 
-
-var coSynopsis = []string {
-		`<branch>`,
-		`<table>...`,
-		`-b <new-branch> [<start-point>]`,
-	}
+var coSynopsis = []string{
+	`<branch>`,
+	`<table>...`,
+	`-b <new-branch> [<start-point>]`,
+}
 
 var coDocumentation = cli.CommandDocumentation{
 	ShortDesc: coShortDesc,
-	LongDesc: coLongDesc,
-	Synopsis: coSynopsis,
+	LongDesc:  coLongDesc,
+	Synopsis:  coSynopsis,
 }
 
 const coBranchArg = "b"

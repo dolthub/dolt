@@ -40,8 +40,8 @@ var useSynopsis = []string{"<public_key_as_appears_in_ls | public_key_id_as_appe
 
 var useDocumentation = cli.CommandDocumentation{
 	ShortDesc: useShortDesc,
-	LongDesc: useLongDesc,
-	Synopsis: useSynopsis,
+	LongDesc:  useLongDesc,
+	Synopsis:  useSynopsis,
 }
 
 type UseCmd struct{}

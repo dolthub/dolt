@@ -106,8 +106,8 @@ var importSynopsis = []string{
 
 var importDocumenation = cli.CommandDocumentation{
 	ShortDesc: importShortDesc,
-	LongDesc: importLongDesc,
-	Synopsis: importSynopsis,
+	LongDesc:  importLongDesc,
+	Synopsis:  importSynopsis,
 }
 
 func getMoveParameters(apr *argparser.ArgParseResults) (mvdata.MoveOperation, mvdata.TableDataLocation, mvdata.DataLocation, interface{}) {

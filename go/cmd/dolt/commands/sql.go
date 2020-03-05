@@ -80,8 +80,8 @@ var sqlSynopsis = []string{
 
 var sqlDocumentation = cli.CommandDocumentation{
 	ShortDesc: sqlShortDesc,
-	LongDesc: sqlLongDesc,
-	Synopsis: sqlSynopsis,
+	LongDesc:  sqlLongDesc,
+	Synopsis:  sqlSynopsis,
 }
 
 const (

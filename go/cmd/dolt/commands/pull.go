@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -37,8 +38,8 @@ var pullSynopsis = []string{
 
 var pullDocumentation = cli.CommandDocumentation{
 	ShortDesc: pullShortDesc,
-	LongDesc: pullLongDesc,
-	Synopsis: pullSynopsis,
+	LongDesc:  pullLongDesc,
+	Synopsis:  pullSynopsis,
 }
 
 type PullCmd struct{}

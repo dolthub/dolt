@@ -95,15 +95,15 @@ The diffs displayed can be limited to show the first N by providing the paramete
 In order to filter which diffs are displayed {{.EmphasisLeft}}--where key=value{{.EmphasisRight}} can be used.  The key in this case would be either {{.EmphasisLeft}}to_COLUMN_NAME{{.EmphasisRight}} or {{.EmphasisLeft}}from_COLUMN_NAME{{.EmphasisRight}}. where {{.EmphasisLeft}}from_COLUMN_NAME=value{{.EmphasisRight}} would filter based on the original value and {{.EmphasisLeft}}to_COLUMN_NAME{{.EmphasisRight}} would select based on its updated value.
 `
 
-var diffSynopsis= []string{
-		`[options] [{{.LessThan}}commit{{.GreaterThan}}] [{{.LessThan}}tables{{.GreaterThan}}...]`,
-		`[options] {{.LessThan}}commit{{.GreaterThan}} {{.LessThan}}commit{{.GreaterThan}} [{{.LessThan}}tables{{.GreaterThan}}...]`,
-	}
+var diffSynopsis = []string{
+	`[options] [{{.LessThan}}commit{{.GreaterThan}}] [{{.LessThan}}tables{{.GreaterThan}}...]`,
+	`[options] {{.LessThan}}commit{{.GreaterThan}} {{.LessThan}}commit{{.GreaterThan}} [{{.LessThan}}tables{{.GreaterThan}}...]`,
+}
 
 var diffDocumnetation = cli.CommandDocumentation{
 	ShortDesc: diffShortDesc,
-	LongDesc: diffLongDesc,
-	Synopsis: diffSynopsis,
+	LongDesc:  diffLongDesc,
+	Synopsis:  diffSynopsis,
 }
 
 type diffArgs struct {

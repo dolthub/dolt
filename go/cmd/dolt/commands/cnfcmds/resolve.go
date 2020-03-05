@@ -41,14 +41,14 @@ In it's second form {{.EmphasisLeft}}dolt conflicts resolve --ours|--theirs <tab
 `
 
 var resSynopsis = []string{
-		`{{.LessThan}}table{{.GreaterThan}} [{{.LessThan}}key_definition{{.GreaterThan}}] {{.LessThan}}key{{.GreaterThan}}...`,
-		`--ours|--theirs {{.LessThan}}table{{.GreaterThan}}...`,
-	}
+	`{{.LessThan}}table{{.GreaterThan}} [{{.LessThan}}key_definition{{.GreaterThan}}] {{.LessThan}}key{{.GreaterThan}}...`,
+	`--ours|--theirs {{.LessThan}}table{{.GreaterThan}}...`,
+}
 
 var resDocumentation = cli.CommandDocumentation{
 	ShortDesc: resShortDesc,
-	LongDesc: resLongDesc,
-	Synopsis: resSynopsis,
+	LongDesc:  resLongDesc,
+	Synopsis:  resSynopsis,
 }
 
 const (

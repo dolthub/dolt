@@ -44,8 +44,8 @@ var addSynopsis = []string{
 
 var AddDocumentation = cli.CommandDocumentation{
 	ShortDesc: addShortDesc,
-	LongDesc: addLongDesc,
-	Synopsis: addSynopsis,
+	LongDesc:  addLongDesc,
+	Synopsis:  addSynopsis,
 }
 
 type AddCmd struct{}

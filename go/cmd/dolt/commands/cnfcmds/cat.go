@@ -45,8 +45,8 @@ var catSynopsis = []string{
 
 var catDocumentation = cli.CommandDocumentation{
 	ShortDesc: catShortDesc,
-	LongDesc: catLongDesc,
-	Synopsis: catSynopsis,
+	LongDesc:  catLongDesc,
+	Synopsis:  catSynopsis,
 }
 
 type CatCmd struct{}

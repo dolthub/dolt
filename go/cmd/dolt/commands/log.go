@@ -41,15 +41,14 @@ var logLongDesc = `Shows the commit logs
 
 The command takes options to control what is shown and how.`
 
-
 var logSynopsis = []string{
-		`[-n {{.LessThan}}num_commits{{.GreaterThan}}] [{{.LessThan}}commit{{.GreaterThan}}]`,
-	}
+	`[-n {{.LessThan}}num_commits{{.GreaterThan}}] [{{.LessThan}}commit{{.GreaterThan}}]`,
+}
 
 var logDocumentation = cli.CommandDocumentation{
 	ShortDesc: loginShortDesc,
-	LongDesc: logLongDesc,
-	Synopsis: logSynopsis,
+	LongDesc:  logLongDesc,
+	Synopsis:  logSynopsis,
 }
 
 type commitLoggerFunc func(*doltdb.CommitMeta, []hash.Hash, hash.Hash)

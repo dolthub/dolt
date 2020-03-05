@@ -42,8 +42,8 @@ var tblCpSynopsis = []string{
 
 var tblCpDocumentation = cli.CommandDocumentation{
 	ShortDesc: tblCpShortDesc,
-	LongDesc: tblCpLongDesc,
-	Synopsis: tblCpSynopsis,
+	LongDesc:  tblCpLongDesc,
+	Synopsis:  tblCpSynopsis,
 }
 
 type CpCmd struct{}

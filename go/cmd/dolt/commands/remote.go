@@ -67,8 +67,8 @@ var remoteSynopsis = []string{
 
 var remoteDocumentation = cli.CommandDocumentation{
 	ShortDesc: pushShortDesc,
-	LongDesc: pushLongDesc,
-	Synopsis: pushSynopsis,
+	LongDesc:  pushLongDesc,
+	Synopsis:  pushSynopsis,
 }
 
 const (

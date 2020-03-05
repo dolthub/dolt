@@ -37,8 +37,8 @@ var schExportSynopsis = []string{
 
 var schExportDocumentation = cli.CommandDocumentation{
 	ShortDesc: schExportShortDesc,
-	LongDesc: schExportLongDesc,
-	Synopsis: schExportSynopsis,
+	LongDesc:  schExportLongDesc,
+	Synopsis:  schExportSynopsis,
 }
 
 const (

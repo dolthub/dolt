@@ -16,6 +16,10 @@ package commands
 
 import (
 	"context"
+	"io"
+	"sort"
+	"strings"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -26,9 +30,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/funcitr"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
-	"io"
-	"sort"
-	"strings"
 )
 
 const (
@@ -49,8 +50,8 @@ var lsSynopsis = []string{
 
 var lsDocumentation = cli.CommandDocumentation{
 	ShortDesc: lsShortDesc,
-	LongDesc: lsLongDesc,
-	Synopsis: lsSynopsis,
+	LongDesc:  lsLongDesc,
+	Synopsis:  lsSynopsis,
 }
 
 type LsCmd struct{}

@@ -56,8 +56,8 @@ var resetSynopsis = []string{
 
 var resetDocumentation = cli.CommandDocumentation{
 	ShortDesc: resetShortDesc,
-	LongDesc: resetLongDesc,
-	Synopsis: resetSynopsis,
+	LongDesc:  resetLongDesc,
+	Synopsis:  resetSynopsis,
 }
 
 type ResetCmd struct{}

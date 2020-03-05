@@ -51,10 +51,10 @@ var mergeSynopsis = []string{
 	"--abort",
 }
 
-var mergeDocumentation  = cli.CommandDocumentation{
+var mergeDocumentation = cli.CommandDocumentation{
 	ShortDesc: mergeShortDesc,
-	LongDesc: mergeLongDesc,
-	Synopsis: mergeSynopsis,
+	LongDesc:  mergeLongDesc,
+	Synopsis:  mergeSynopsis,
 }
 
 var abortDetails = `Abort the current conflict resolution process, and try to reconstruct the pre-merge state.

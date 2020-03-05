@@ -3,17 +3,18 @@ package cli
 import (
 	"bytes"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"strings"
 	"text/template"
+
+	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 )
 
 type CmdMdDoc struct {
-	Command string
+	Command             string
 	CommandAndShortDesc string
-	Synopsis string
-	Description string
-	Options string
+	Synopsis            string
+	Description         string
+	Options             string
 }
 
 var cmdMdDocTempl = `---
@@ -82,7 +83,7 @@ func (cmdDoc CommandDocumentation) CmdDocToMd(commandStr string, parser *argpars
 	}
 
 	cmdMdDoc := CmdMdDoc{
-		Command:			 commandStr,
+		Command:             commandStr,
 		CommandAndShortDesc: fmt.Sprintf("`%s` - %s\n\n", commandStr, cmdDoc.GetShortDesc()),
 		Synopsis:            getSynopsis(commandStr, synopsis),
 		Description:         longDesc,
@@ -102,8 +103,8 @@ func (cmdDoc CommandDocumentation) CmdDocToMd(commandStr string, parser *argpars
 
 type CommandDocumentation struct {
 	ShortDesc string
-	LongDesc string
-	Synopsis []string
+	LongDesc  string
+	Synopsis  []string
 }
 
 func (cmdDoc CommandDocumentation) GetShortDesc() string {
@@ -141,9 +142,9 @@ func (cmdDoc CommandDocumentation) GetSynopsis(format DocFormat) ([]string, erro
 }
 
 type DocFormat struct {
-	LessThan string
-	GreaterThan string
-	EmphasisLeft string
+	LessThan      string
+	GreaterThan   string
+	EmphasisLeft  string
 	EmphasisRight string
 }
 
@@ -158,7 +159,7 @@ func getSynopsis(commandStr string, synopsis []string) string {
 	synopsisStr := fmt.Sprintf("%s %s<br />\n", commandStr, synopsis[0])
 	if len(synopsis) > 1 {
 		temp := make([]string, len(synopsis)-1)
-		for i, el := range(synopsis[1:]) {
+		for i, el := range synopsis[1:] {
 			temp[i] = fmt.Sprintf("\t\t\t%s %s<br />\n", commandStr, el)
 		}
 		synopsisStr += strings.Join(temp, "")
@@ -179,10 +180,9 @@ func getSynopsis(commandStr string, synopsis []string) string {
 }
 
 type Agument struct {
-	Name string
+	Name        string
 	Description string
 }
-
 
 func templateArgument(supportedArg Agument) (string, error) {
 	var formatString string
@@ -206,15 +206,15 @@ func templateArgument(supportedArg Agument) (string, error) {
 
 type Supported struct {
 	Abbreviation string
-	Name string
-	Description string
+	Name         string
+	Description  string
 }
 
 func templateSupported(supported Supported) (string, error) {
 	var formatString string
 	if supported.Abbreviation == "" && supported.Description == "" {
 		formatString = "`--{{.Name}}`\n\n"
-	} else if supported.Abbreviation == "" && supported.Description != ""  {
+	} else if supported.Abbreviation == "" && supported.Description != "" {
 		formatString = "`--{{.Name}}`:\n{{.Description}}\n\n"
 	} else if supported.Abbreviation != "" && supported.Description == "" {
 		formatString = "`-{{.Abbreviation}}`, `--{{.Name}}`\n\n"
@@ -233,5 +233,3 @@ func templateSupported(supported Supported) (string, error) {
 	ret := templBuffer.String()
 	return ret, nil
 }
-
-

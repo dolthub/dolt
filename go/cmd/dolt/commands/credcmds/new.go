@@ -37,8 +37,8 @@ var newSynopsis = []string{}
 
 var newDocumentation = cli.CommandDocumentation{
 	ShortDesc: newShortDesc,
-	LongDesc: newLongDesc,
-	Synopsis: newSynopsis,
+	LongDesc:  newLongDesc,
+	Synopsis:  newSynopsis,
 }
 
 type NewCmd struct{}

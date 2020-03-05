@@ -33,13 +33,12 @@ import (
 
 // SendMetricsCommand is the command used for sending metrics
 const (
-	SendMetricsCommand  = "send-metrics"
-	outputFlag          = "output"
+	SendMetricsCommand   = "send-metrics"
+	outputFlag           = "output"
 	sendMetricsShortDesc = "Send metrics to the events server or print them to stdout"
 )
 
 var sendMetricsDocumentation = cli.CommandDocumentation{ShortDesc: sendMetricsShortDesc}
-
 
 type SendMetricsCmd struct{}
 

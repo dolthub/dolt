@@ -50,13 +50,13 @@ The log message can be added with the parameter {{.LessThan}}-m <msg>{{.GreaterT
 The commit timestamp can be modified using the --date parameter.  Dates can be specified in the formats {{.LessThan}}YYYY-MM-DD{{.GreaterThan}}, {{.LessThan}}YYYY-MM-DDTHH:MM:SS{{.GreaterThan}}, or {{.LessThan}}YYYY-MM-DDTHH:MM:SSZ07:00{{.GreaterThan}} (where {{.LessThan}}07:00{{.GreaterThan}} is the time zone offset)."
 `
 var commitSynopsis = []string{
-		"[options]",
-	}
+	"[options]",
+}
 
 var commitDocumentation = cli.CommandDocumentation{
 	ShortDesc: commitShortDesc,
-	LongDesc: commitLongDesc,
-	Synopsis: commitSynopsis,
+	LongDesc:  commitLongDesc,
+	Synopsis:  commitSynopsis,
 }
 
 type CommitCmd struct{}

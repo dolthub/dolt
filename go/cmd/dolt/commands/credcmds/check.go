@@ -36,8 +36,8 @@ var checkSynopsis = []string{"[--endpoint doltremoteapi.dolthub.com:443] [--cred
 
 var checkDocumentation = cli.CommandDocumentation{
 	ShortDesc: checkShortDesc,
-	LongDesc: checkLongDesc,
-	Synopsis: checkSynopsis,
+	LongDesc:  checkLongDesc,
+	Synopsis:  checkSynopsis,
 }
 
 type CheckCmd struct{}

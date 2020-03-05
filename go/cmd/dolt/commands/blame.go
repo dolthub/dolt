@@ -44,8 +44,8 @@ var blameSynopsis = []string{
 
 var blameDocumentation = cli.CommandDocumentation{
 	ShortDesc: blameShortDesc,
-	LongDesc: blameLongDesc,
-	Synopsis: blameSynopsis,
+	LongDesc:  blameLongDesc,
+	Synopsis:  blameSynopsis,
 }
 
 // blameInfo contains blame information for a row

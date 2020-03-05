@@ -17,6 +17,11 @@ package commands
 import (
 	"context"
 	"fmt"
+	"os"
+	"path"
+	"path/filepath"
+	"sync"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -33,10 +38,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/strhelp"
 	"github.com/liquidata-inc/dolt/go/store/datas"
 	"github.com/liquidata-inc/dolt/go/store/types"
-	"os"
-	"path"
-	"path/filepath"
-	"sync"
 )
 
 const (
@@ -53,13 +54,13 @@ This default configuration is achieved by creating references to the remote bran
 `
 
 var cloneSynopsis = []string{
-		"[-remote {{.LessThan}}remote{{.GreaterThan}}] [-branch {{.LessThan}}branch{{.GreaterThan}}]  [--aws-region {{.LessThan}}region{{.GreaterThan}}] [--aws-creds-type {{.LessThan}}creds-type{{.GreaterThan}}] [--aws-creds-file {{.LessThan}}file{{.GreaterThan}}] [--aws-creds-profile {{.LessThan}}profile{{.GreaterThan}}] {{.LessThan}}remote-url{{.GreaterThan}} <new-dir{{.GreaterThan}}",
-	}
+	"[-remote {{.LessThan}}remote{{.GreaterThan}}] [-branch {{.LessThan}}branch{{.GreaterThan}}]  [--aws-region {{.LessThan}}region{{.GreaterThan}}] [--aws-creds-type {{.LessThan}}creds-type{{.GreaterThan}}] [--aws-creds-file {{.LessThan}}file{{.GreaterThan}}] [--aws-creds-profile {{.LessThan}}profile{{.GreaterThan}}] {{.LessThan}}remote-url{{.GreaterThan}} <new-dir{{.GreaterThan}}",
+}
 
 var cloneDocumentation = cli.CommandDocumentation{
 	ShortDesc: cloneShortDesc,
-	LongDesc: cloneLongDesc,
-	Synopsis: cloneSynopsis,
+	LongDesc:  cloneLongDesc,
+	Synopsis:  cloneSynopsis,
 }
 
 type CloneCmd struct{}

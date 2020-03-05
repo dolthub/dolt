@@ -39,7 +39,7 @@ const (
 )
 
 var cfgShortDesc = `Get and set repository or global options`
-var cfgLongDesc= `You can query/set/replace/unset options with this command.
+var cfgLongDesc = `You can query/set/replace/unset options with this command.
 	
 When reading, the values are read from the global and repository local configuration files, and options {{.LessThan}}--global{{.GreaterThan}}, and {{.LessThan}}--local{{.GreaterThan}} can be used to tell the command to read from only that location.
 
@@ -47,18 +47,17 @@ When writing, the new value is written to the repository local configuration fil
 	`
 
 var cfgSynopsis = []string{
-		`[--global|--local] --list`,
-		`[--global|--local] --add {{.LessThan}}name{{.GreaterThan}} {{.LessThan}}value{{.GreaterThan}}`,
-		`[--global|--local] --get {{.LessThan}}name{{.GreaterThan}}`,
-		`[--global|--local] --unset {{.LessThan}}name{{.GreaterThan}}...`,
-	}
+	`[--global|--local] --list`,
+	`[--global|--local] --add {{.LessThan}}name{{.GreaterThan}} {{.LessThan}}value{{.GreaterThan}}`,
+	`[--global|--local] --get {{.LessThan}}name{{.GreaterThan}}`,
+	`[--global|--local] --unset {{.LessThan}}name{{.GreaterThan}}...`,
+}
 
 var cfgDocumentation = cli.CommandDocumentation{
 	ShortDesc: cfgShortDesc,
-	LongDesc: cfgLongDesc,
-	Synopsis: cfgSynopsis,
+	LongDesc:  cfgLongDesc,
+	Synopsis:  cfgSynopsis,
 }
-
 
 type ConfigCmd struct{}
 

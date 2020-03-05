@@ -17,7 +17,11 @@ package commands
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/dustin/go-humanize"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -31,8 +35,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/earl"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/store/datas"
-	"sync"
-	"time"
 )
 
 const (
@@ -56,8 +58,8 @@ var pushSynopsis = []string{
 
 var pushDocumentation = cli.CommandDocumentation{
 	ShortDesc: pushShortDesc,
-	LongDesc: pushLongDesc,
-	Synopsis: pushSynopsis,
+	LongDesc:  pushLongDesc,
+	Synopsis:  pushSynopsis,
 }
 
 type PushCmd struct{}

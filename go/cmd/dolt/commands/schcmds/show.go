@@ -16,7 +16,9 @@ package schcmds
 
 import (
 	"context"
+
 	"github.com/fatih/color"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
@@ -39,8 +41,8 @@ var tblSchemaSynopsis = []string{
 
 var tblSchemaDocumentation = cli.CommandDocumentation{
 	ShortDesc: tblSchemaShortDesc,
-	LongDesc: tblSchemaLongDesc,
-	Synopsis: tblSchemaSynopsis,
+	LongDesc:  tblSchemaLongDesc,
+	Synopsis:  tblSchemaSynopsis,
 }
 
 var bold = color.New(color.Bold)

@@ -17,7 +17,9 @@ package commands
 import (
 	"context"
 	"fmt"
+
 	"github.com/fatih/color"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -45,23 +47,22 @@ The {{.EmphasisLeft}}-c{{.EmphasisRight}} options have the exact same semantics 
 
 With a {{.EmphasisLeft}}-d{{.EmphasisRight}}, {{.LessThan}}branchname{{.GreaterThan}} will be deleted. You may specify more than one branch for deletion.`
 
-
 var branchShortDesc = `List, create, or delete branches`
 
 var branchForceFlagDesc = "Reset {{.LessThan}}branchname{{.LessThan}} to {{.LessThan}}startpoint{{.LessThan}}, even if {{.LessThan}}branchname{{.LessThan}} exists already. Without {{.EmphasisLeft}}-f{{.EmphasisRight}}, {{.EmphasisLeft}}dolt branch{{.EmphasisRight}} refuses to change an existing branch. In combination with {{.EmphasisLeft}}-d{{.EmphasisRight}} (or {{.EmphasisLeft}}--delete{{.EmphasisRight}}), allow deleting the branch irrespective of its merged status. In combination with -m (or {{.EmphasisLeft}}--move{{.EmphasisRight}}), allow renaming the branch even if the new branch name already exists, the same applies for {{.EmphasisLeft}}-c{{.EmphasisRight}} (or {{.EmphasisLeft}}--copy{{.EmphasisRight}})."
 
 var branchSynopsis = []string{
-		`[--list] [-v] [-a]`,
-		`[-f] {{.LessThan}}branchname{{.GreaterThan}} [{{.LessThan}}start-point{{.GreaterThan}}]`,
-		`-m [-f] [{{.LessThan}}oldbranch{{.GreaterThan}}] {{.LessThan}}newbranch{{.GreaterThan}}`,
-		`-c [-f] [{{.LessThan}}oldbranch{{.GreaterThan}}] {{.LessThan}}newbranch{{.GreaterThan}}`,
-		`-d [-f] {{.LessThan}}branchname{{.GreaterThan}}...`,
-	}
+	`[--list] [-v] [-a]`,
+	`[-f] {{.LessThan}}branchname{{.GreaterThan}} [{{.LessThan}}start-point{{.GreaterThan}}]`,
+	`-m [-f] [{{.LessThan}}oldbranch{{.GreaterThan}}] {{.LessThan}}newbranch{{.GreaterThan}}`,
+	`-c [-f] [{{.LessThan}}oldbranch{{.GreaterThan}}] {{.LessThan}}newbranch{{.GreaterThan}}`,
+	`-d [-f] {{.LessThan}}branchname{{.GreaterThan}}...`,
+}
 
 var BranchDocumentation = cli.CommandDocumentation{
 	ShortDesc: branchShortDesc,
-	LongDesc: branchLongDesc,
-	Synopsis: branchSynopsis,
+	LongDesc:  branchLongDesc,
+	Synopsis:  branchSynopsis,
 }
 
 const (

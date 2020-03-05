@@ -41,12 +41,12 @@ This command creates an empty Dolt data repository in the current directory.
 Running dolt init in an already initialized directory will fail.
 `
 
-var initSynopsis = []string{`[{{.LessThan}}options{{.GreaterThan}}] [{{.LessThan}}path{{.GreaterThan}}]`,}
+var initSynopsis = []string{`[{{.LessThan}}options{{.GreaterThan}}] [{{.LessThan}}path{{.GreaterThan}}]`}
 
 var initDocumentation = cli.CommandDocumentation{
 	ShortDesc: initShortDesc,
-	LongDesc: initLongDesc,
-	Synopsis: initSynopsis,
+	LongDesc:  initLongDesc,
+	Synopsis:  initSynopsis,
 }
 
 type InitCmd struct{}
@@ -66,7 +66,6 @@ func (cmd InitCmd) Description() string {
 func (cmd InitCmd) RequiresRepo() bool {
 	return false
 }
-
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd InitCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {

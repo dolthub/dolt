@@ -39,13 +39,13 @@ When no refspec(s) are specified on the command line, the fetch_specs for the de
 `
 
 var fetchSynopsis = []string{
-		"[{{.LessThan}}remote{{.GreaterThan}}] [{{.LessThan}}refspec{{.GreaterThan}} ...]",
-	}
+	"[{{.LessThan}}remote{{.GreaterThan}}] [{{.LessThan}}refspec{{.GreaterThan}} ...]",
+}
 
 var fetchDocumentation = cli.CommandDocumentation{
 	ShortDesc: fetchShortDesc,
-	LongDesc: fetchLongDesc,
-	Synopsis: fetchSynopsis,
+	LongDesc:  fetchLongDesc,
+	Synopsis:  fetchSynopsis,
 }
 
 type FetchCmd struct{}
