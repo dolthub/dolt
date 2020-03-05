@@ -1,0 +1,68 @@
+pipeline {
+    agent none
+    stages {
+        stage('TestSQL') {
+            parallel {
+                stage ("update Liquidata/dolt-sql-performance") {
+                    agent {
+                        kubernetes {
+                            label "liquidata-inc-ld-build"
+                        }
+                    }
+                    environment {
+                        PATH = "${pwd()}/.ci_bin:${pwd()}/.ci_bin/node_modules/.bin:${env.PATH}"
+                        DOLT_VERSION = sh(returnStdout: true, script: "(git rev-parse HEAD | tr -d '\n')")
+                        TMPDIR = "${pwd()}/tempDir"
+                        CREDSDIR = "/home/jenkins/.dolt/creds"
+                        DOLT_CREDS = credentials("system-account-dolthub-creds")
+                    }
+                    steps {
+                        dir ("sqllogictest") {
+                            git url: "https://github.com/liquidata-inc/sqllogictest.git"
+                        }
+                        dir ("go") {
+                            sh "rm -rf $TMPDIR && mkdir $TMPDIR"
+                            sh "go get -mod=readonly ./..."
+                            sh "go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/."
+                        }
+                        sh "rm -rf dolt-sql-performance && dolt clone Liquidata/dolt-sql-performance"
+                        dir ("go/libraries/doltcore/sqle/logictest/main") {
+                            sh "dolt config --global --add user.name 'LiquidataSystemAccount'"
+                            sh "dolt config --global --add user.email 'liquidatasys@gmail.com'"
+                            sh "rm -rf .dolt && dolt init"
+                            sh "rm -rf $CREDSDIR && mkdir $CREDSDIR"
+                            sh "cat $DOLT_CREDS > /home/jenkins/.dolt/creds/5jl65iugbs7olde8n8qqgvujs1bhp8c84bopgi78n26is.jwk"
+                            sh "dolt config --global --add user.creds 5jl65iugbs7olde8n8qqgvujs1bhp8c84bopgi78n26is"
+                            sh "dolt config --global --add metrics.disabled true"
+                            sh "dolt creds use 5jl65iugbs7olde8n8qqgvujs1bhp8c84bopgi78n26is"
+                            sh "rm -rf temp && mkdir temp"
+                            sh "go run . run ../../../../../../sqllogictest/test/select1.test > temp/results.log"
+                            sh(returnStdout: true, script: "go run . parse \"$DOLT_VERSION\" temp/results.log > temp/parsed.json")
+                        }
+                        dir ("dolt-sql-performance") {
+                            sh "dolt table import -u ld_dolt_results ../go/libraries/doltcore/sqle/logictest/main/temp/parsed.json"
+                            sh "dolt add ld_dolt_results"
+                            sh "dolt commit -m \"update dolt sql performance results\""
+                            script {
+                                env.DURATION_REGRESSIONS = sh(returnStdout: true, script: "dolt sql -q 'select * from duration_change' -r csv | wc -l | tr -d '[:space:]'")
+                                env.RESULT_REGRESSIONS = sh(returnStdout: true, script: "dolt sql -q 'select * from result_change' -r csv | wc -l | tr -d '[:space:]'")
+                            }
+                            sh "if [ $DURATION_REGRESSIONS != 1 ]; then echo 'PLEASE FAIL ME!!'; fi"
+                            sh "if [ $RESULT_REGRESSIONS != 1 ]; then echo 'PLEASE FAIL ME!!'; fi"
+                            sh "if [ $DURATION_REGRESSIONS = 1 ]; then echo 'PLEASE PASS ME!!'; fi"
+                            sh "if [ $RESULT_REGRESSIONS = 1 ]; then echo 'PLEASE PASS ME!!'; fi"
+//                             sh "dolt push origin master"
+                        }
+                    }
+                }
+            }
+        }
+    }
+    post {
+        always {
+            node ("liquidata-inc-ld-build") {
+                deleteDir() // cleanup
+            }
+        }
+    }
+}
