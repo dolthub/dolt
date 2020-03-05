@@ -820,3 +820,65 @@ SQL
     [[ "$output" =~ "Updating" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
 }
+
+@test "two branches drop different tables. merge. no conflict" {
+  dolt sql <<SQL
+CREATE TABLE foo (
+  pk BIGINT NOT NULL PRIMARY KEY COMMENT 'tag:0'
+);
+CREATE TABLE bar (
+  pk BIGINT NOT NULL PRIMARY KEY COMMENT 'tag:1'
+);
+SQL
+    dolt add .
+    dolt commit -m "created two tables"
+
+    dolt branch other
+
+    dolt sql -q 'drop table foo'
+    dolt add .
+    dolt commit -m "dropped table foo"
+
+    dolt checkout other
+    dolt sql -q 'drop table bar'
+    dolt add .
+    dolt commit -m "dropped table bar"
+
+    dolt checkout master
+    skip "test currently panics on merge at doltcore/env/actions/merge.go:79"
+    run dolt merge other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Updating" ]] || false
+    [[ ! "$output" =~ "CONFLICT" ]] || false
+}
+
+@test "two branch rename different tables. merge. no conflict" {
+    dolt sql <<SQL
+CREATE TABLE foo (
+  pk BIGINT NOT NULL PRIMARY KEY COMMENT 'tag:0'
+);
+CREATE TABLE bar (
+  pk BIGINT NOT NULL PRIMARY KEY COMMENT 'tag:1'
+);
+SQL
+    dolt add .
+    dolt commit -m "created two tables"
+
+    dolt branch other
+
+    dolt sql -q 'alter table foo rename to foofoo;'
+    dolt add .
+    dolt commit -m "renamed table foo to foofoo"
+
+    dolt checkout other
+    dolt sql -q 'alter table bar rename to barbar'
+    dolt add .
+    dolt commit -m "renamed table bar to barbar"
+
+    dolt checkout master
+    skip "test currently panics on merge at doltcore/env/actions/merge.go:79"
+    run dolt merge other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Updating" ]] || false
+    [[ ! "$output" =~ "CONFLICT" ]] || false
+}
