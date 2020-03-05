@@ -146,6 +146,43 @@ func (root *RootValue) HasTable(ctx context.Context, tName string) (bool, error)
 	return tableMap.Has(ctx, types.String(tName))
 }
 
+func (root *RootValue) HasTag(ctx context.Context, tag uint64) (found bool, tblName string, err error) {
+	m, err := root.getOrCreateSuperSchemaMap(ctx)
+
+	if err != nil {
+		return false, "", err
+	}
+
+	err = m.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+		ssValRef := value.(types.Ref)
+		ssVal, err := ssValRef.TargetValue(ctx, root.vrw)
+
+		if err != nil {
+			return true, err
+		}
+
+		ss, err := encoding.UnmarshalSuperSchemaNomsValue(ctx, root.vrw.Format(), ssVal)
+
+		if err != nil {
+			return true, err
+		}
+
+		_, found = ss.GetColumn(tag)
+
+		if found {
+			tblName = value.(types.String).HumanReadableString()
+		}
+
+		return found, nil
+	})
+
+	if err != nil {
+		return false, "", err
+	}
+
+	return found, tblName, err
+}
+
 // GetSuperSchema returns the SuperSchema for the table name specified if that table exists.
 func (root *RootValue) GetSuperSchema(ctx context.Context, tName string) (*schema.SuperSchema, bool, error) {
 	// SuperSchema is only persisted on Commit()

@@ -231,6 +231,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 
 	tag := extractTag(column)
 	if tag == schema.InvalidTag {
+		// TODO: are we sure we want to silently autogen if we fail to parse?
 		tag = schema.AutoGenerateTag(sch)
 	}
 
@@ -248,15 +249,19 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		nullable = alterschema.Null
 	}
 
-	var defVal types.Value
+	var defaultVal types.Value
 	if column.Default != nil {
-		defVal, err = col.TypeInfo.ConvertValueToNomsValue(column.Default)
+		defaultVal, err = col.TypeInfo.ConvertValueToNomsValue(column.Default)
 		if err != nil {
 			return err
 		}
 	}
 
-	updatedTable, err := alterschema.AddColumnToTable(ctx, table, col.Tag, col.Name, col.TypeInfo, nullable, defVal, orderToOrder(order))
+	if err := alterschema.ValidateNewColumn(ctx, t.db.root, table, t.name, col.Tag, col.Name, col.TypeInfo, nullable, defaultVal); err != nil {
+		return err
+	}
+
+	updatedTable, err := alterschema.AddColumnToTable(ctx, table, col.Tag, col.Name, col.TypeInfo, nullable, defaultVal, orderToOrder(order))
 	if err != nil {
 		return err
 	}
