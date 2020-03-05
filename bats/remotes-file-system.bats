@@ -182,12 +182,12 @@ SQL
 
     # should not be able to create branch with same
     # name as remote branch
-    skip run dolt checkout -b tester
+    skip "Allows creation of branch with same name as remote branch" run dolt checkout -b tester
     skip "Allows creation of branch with same name as remote branch" [ "$status" -eq 1 ]
     skip "Allows creation of branch with same name as remote branch" [[ "${lines[0]}" =~ "fatal: A branch named 'tester' already exists." ]] || false
 
     # should not be able to checkout branch that is not displayed
-    run dolt checkout tester
+    skip "Allows checkout of branch not displayed in branch list" run dolt checkout tester
     skip "Allows checkout of branch not displayed in branch list" [ "$status" -eq 1 ]
     skip "Allows checkout of branch not displayed in branch list" [[ "${lines[0]}" =~ "error: could not find tester" ]] || false
 }
