@@ -38,8 +38,6 @@ const (
 	sendMetricsShortDesc = "Send metrics to the events server or print them to stdout"
 )
 
-var sendMetricsDocumentation = cli.CommandDocumentation{ShortDesc: sendMetricsShortDesc}
-
 type SendMetricsCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -74,7 +72,7 @@ func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []st
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(outputFlag, "o", "Flush events to stdout.")
 
-	help, _ := cli.HelpAndUsagePrinters(commandStr, sendMetricsDocumentation, ap)
+	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{ShortDesc: sendMetricsShortDesc}, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")

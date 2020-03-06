@@ -38,25 +38,21 @@ const (
 	unsetOperationStr = "unset"
 )
 
-var cfgShortDesc = `Get and set repository or global options`
-var cfgLongDesc = `You can query/set/replace/unset options with this command.
+var cfgDocs = cli.CommandDocumentationContent{
+	ShortDesc: `Get and set repository or global options`,
+	LongDesc: `You can query/set/replace/unset options with this command.
+		
+	When reading, the values are read from the global and repository local configuration files, and options {{.LessThan}}--global{{.GreaterThan}}, and {{.LessThan}}--local{{.GreaterThan}} can be used to tell the command to read from only that location.
 	
-When reading, the values are read from the global and repository local configuration files, and options {{.LessThan}}--global{{.GreaterThan}}, and {{.LessThan}}--local{{.GreaterThan}} can be used to tell the command to read from only that location.
+	When writing, the new value is written to the repository local configuration file by default, and options {{.LessThan}}--global{{.GreaterThan}}, can be used to tell the command to write to that location (you can say {{.LessThan}}--local{{.GreaterThan}} but that is the default).
+`,
 
-When writing, the new value is written to the repository local configuration file by default, and options {{.LessThan}}--global{{.GreaterThan}}, can be used to tell the command to write to that location (you can say {{.LessThan}}--local{{.GreaterThan}} but that is the default).
-	`
-
-var cfgSynopsis = []string{
-	`[--global|--local] --list`,
-	`[--global|--local] --add {{.LessThan}}name{{.GreaterThan}} {{.LessThan}}value{{.GreaterThan}}`,
-	`[--global|--local] --get {{.LessThan}}name{{.GreaterThan}}`,
-	`[--global|--local] --unset {{.LessThan}}name{{.GreaterThan}}...`,
-}
-
-var cfgDocumentation = cli.CommandDocumentation{
-	ShortDesc: cfgShortDesc,
-	LongDesc:  cfgLongDesc,
-	Synopsis:  cfgSynopsis,
+	Synopsis: []string{
+		`[--global|--local] --list`,
+		`[--global|--local] --add {{.LessThan}}name{{.GreaterThan}} {{.LessThan}}value{{.GreaterThan}}`,
+		`[--global|--local] --get {{.LessThan}}name{{.GreaterThan}}`,
+		`[--global|--local] --unset {{.LessThan}}name{{.GreaterThan}}...`,
+	},
 }
 
 type ConfigCmd struct{}
@@ -80,7 +76,7 @@ func (cmd ConfigCmd) RequiresRepo() bool {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ConfigCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, commandStr, cfgDocumentation, ap)
+	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, cfgDocs, ap))
 }
 
 func (cmd ConfigCmd) createArgParser() *argparser.ArgParser {
@@ -98,7 +94,7 @@ func (cmd ConfigCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd ConfigCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, cfgDocumentation, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cfgDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	cfgTypes := apr.FlagsEqualTo([]string{globalParamName, localParamName}, true)

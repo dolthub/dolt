@@ -30,19 +30,15 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
-var tblSchemaShortDesc = "Shows the schema of one or more tables."
-var tblSchemaLongDesc = `{{.EmphasisLeft}}dolt table schema{{.EmphasisRight}} displays the schema of tables at a given commit.  If no commit is provided the working set will be used. +
 
-A list of tables can optionally be provided.  If it is omitted all table schemas will be shown.`
+var tblSchemaDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Shows the schema of one or more tables.",
+	LongDesc: `{{.EmphasisLeft}}dolt table schema{{.EmphasisRight}} displays the schema of tables at a given commit.  If no commit is provided the working set will be used. +
 
-var tblSchemaSynopsis = []string{
-	"[{{.LessThan}}commit{{.GreaterThan}}] [{{.LessThan}}table{{.GreaterThan}}...]",
-}
-
-var tblSchemaDocumentation = cli.CommandDocumentation{
-	ShortDesc: tblSchemaShortDesc,
-	LongDesc:  tblSchemaLongDesc,
-	Synopsis:  tblSchemaSynopsis,
+A list of tables can optionally be provided.  If it is omitted all table schemas will be shown.`,
+	Synopsis: []string{
+		"[{{.LessThan}}commit{{.GreaterThan}}] [{{.LessThan}}table{{.GreaterThan}}...]",
+	},
 }
 
 var bold = color.New(color.Bold)
@@ -62,7 +58,7 @@ func (cmd ShowCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ShowCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, commandStr, tblSchemaDocumentation, ap)
+	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, tblSchemaDocs, ap))
 }
 
 func (cmd ShowCmd) createArgParser() *argparser.ArgParser {
@@ -80,7 +76,7 @@ func (cmd ShowCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, tblSchemaDocumentation, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tblSchemaDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	verr := printSchemas(ctx, apr, dEnv)

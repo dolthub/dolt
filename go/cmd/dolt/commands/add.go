@@ -31,21 +31,17 @@ const (
 	allParam = "all"
 )
 
-var addShortDesc = `Add table contents to the list of staged tables`
-var addLongDesc = `
+var addDocs = cli.CommandDocumentationContent{
+	ShortDesc: `Add table contents to the list of staged tables`,
+	LongDesc: `
 This command updates the list of tables using the current content found in the working root, to prepare the content staged for the next commit. It adds the current content of existing tables as a whole or remove tables that do not exist in the working root anymore.
 
 This command can be performed multiple times before a commit. It only adds the content of the specified table(s) at the time the add command is run; if you want subsequent changes included in the next commit, then you must run dolt add again to add the new content to the index.
 
-The dolt status command can be used to obtain a summary of which tables have changes that are staged for the next commit.`
-var addSynopsis = []string{
-	`[{{.LessThan}}table{{.GreaterThan}}...]`,
-}
-
-var AddDocumentation = cli.CommandDocumentation{
-	ShortDesc: addShortDesc,
-	LongDesc:  addLongDesc,
-	Synopsis:  addSynopsis,
+The dolt status command can be used to obtain a summary of which tables have changes that are staged for the next commit.`,
+	Synopsis: []string{
+		`[{{.LessThan}}table{{.GreaterThan}}...]`,
+	},
 }
 
 type AddCmd struct{}
@@ -63,7 +59,7 @@ func (cmd AddCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd AddCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, commandStr, AddDocumentation, ap)
+	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, addDocs, ap))
 }
 
 func (cmd AddCmd) createArgParser() *argparser.ArgParser {
@@ -76,7 +72,7 @@ func (cmd AddCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	helpPr, _ := cli.HelpAndUsagePrinters(commandStr, AddDocumentation, ap)
+	helpPr, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, addDocs, ap))
 	apr := cli.ParseArgs(ap, args, helpPr)
 
 	if apr.ContainsArg(doltdb.DocTableName) {

@@ -26,20 +26,15 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
-var pullShortDesc = "Fetch from and integrate with another repository or a local branch"
-var pullLongDesc = `Incorporates changes from a remote repository into the current branch. In its default mode, {{.EmphasisLeft}}dolt pull{{.EmphasisRight}} is shorthand for {{.EmphasisLeft}}dolt fetch{{.EmphasisRight}} followed by {{.EmphasisLeft}}dolt merge <remote>/<branch>{{.EmphasisRight}}.
+var pullDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Fetch from and integrate with another repository or a local branch",
+	LongDesc: `Incorporates changes from a remote repository into the current branch. In its default mode, {{.EmphasisLeft}}dolt pull{{.EmphasisRight}} is shorthand for {{.EmphasisLeft}}dolt fetch{{.EmphasisRight}} followed by {{.EmphasisLeft}}dolt merge <remote>/<branch>{{.EmphasisRight}}.
 
 More precisely, dolt pull runs dolt fetch with the given parameters and calls dolt merge to merge the retrieved branch heads into the current branch.
-`
-
-var pullSynopsis = []string{
-	"{{.LessThan}}remote{{.GreaterThan}}",
-}
-
-var pullDocumentation = cli.CommandDocumentation{
-	ShortDesc: pullShortDesc,
-	LongDesc:  pullLongDesc,
-	Synopsis:  pullSynopsis,
+`,
+	Synopsis: []string{
+		"{{.LessThan}}remote{{.GreaterThan}}",
+	},
 }
 
 type PullCmd struct{}
@@ -57,7 +52,7 @@ func (cmd PullCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd PullCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, commandStr, pullDocumentation, ap)
+	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, pullDocs, ap))
 }
 
 func (cmd PullCmd) createArgParser() *argparser.ArgParser {
@@ -73,7 +68,7 @@ func (cmd PullCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, pullDocumentation, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pullDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 	branch := dEnv.RepoState.CWBHeadRef()
 

@@ -66,7 +66,7 @@ func (cmd *DumpDocsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr stri
 func (cmd *DumpDocsCmd) Exec(_ context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(dirParamName, "", "dir", "The directory where the md files should be dumped")
-	help, usage := cli.HelpAndUsagePrinters(commandStr, initDocumentation, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{}, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	dirStr := apr.GetValueOrDefault(dirParamName, ".")
@@ -127,8 +127,8 @@ func (cmd *DumpDocsCmd) dumpDocs(dEnv *env.DoltEnv, dirStr, cmdStr string, subCo
 	return nil
 }
 
-func CreateMarkdown(fs filesys.Filesys, path, commandStr string, cmdDoc cli.CommandDocumentation, parser *argparser.ArgParser) error {
-	markdownDoc, err := cmdDoc.CmdDocToMd(commandStr, parser)
+func CreateMarkdown(fs filesys.Filesys, path string, cmdDoc cli.CommandDocumentation) error {
+	markdownDoc, err := cmdDoc.CmdDocToMd()
 	if err != nil {
 		return err
 	}

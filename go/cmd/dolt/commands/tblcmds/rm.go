@@ -28,16 +28,12 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 )
 
-var tblRmShortDesc = "Removes table(s) from the working set of tables."
-var tblRmLongDesc = "{{.EmphasisLeft}}dolt table rm{{.EmphasisRight}} removes table(s) from the working set.  These changes can be staged using {{.EmphasisLeft}}dolt add{{.EmphasisRight}} and committed using {{.EmphasisLeft}}dolt commit{{.EmphasisRight}}"
-var tblRmSynopsis = []string{
-	"{{.LessThan}}table{{.GreaterThan}}...",
-}
-
-var tblRmDocumentation = cli.CommandDocumentation{
-	ShortDesc: tblRmShortDesc,
-	LongDesc:  tblRmLongDesc,
-	Synopsis:  tblRmSynopsis,
+var tblRmDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Removes table(s) from the working set of tables.",
+	LongDesc: "{{.EmphasisLeft}}dolt table rm{{.EmphasisRight}} removes table(s) from the working set.  These changes can be staged using {{.EmphasisLeft}}dolt add{{.EmphasisRight}} and committed using {{.EmphasisLeft}}dolt commit{{.EmphasisRight}}",
+	Synopsis: []string{
+		"{{.LessThan}}table{{.GreaterThan}}...",
+	},
 }
 
 type RmCmd struct{}
@@ -60,7 +56,7 @@ func (cmd RmCmd) EventType() eventsapi.ClientEventType {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd RmCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, commandStr, tblRmDocumentation, ap)
+	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, tblRmDocs, ap))
 }
 
 func (cmd RmCmd) createArgParser() *argparser.ArgParser {
@@ -72,7 +68,7 @@ func (cmd RmCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, tblRmDocumentation, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tblRmDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() == 0 {

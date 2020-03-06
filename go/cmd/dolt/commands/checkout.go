@@ -28,8 +28,9 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
-var coShortDesc = `Switch branches or restore working tree tables`
-var coLongDesc = `
+var checkoutDocs = cli.CommandDocumentationContent{
+	ShortDesc: `Switch branches or restore working tree tables`,
+	LongDesc: `
 Updates tables in the working set to match the staged versions. If no paths are given, dolt checkout will also update HEAD to set the specified branch as the current branch.
 
 dolt checkout {{.LessThan}}}branch{{.GreaterThan}}
@@ -40,18 +41,12 @@ dolt checkout -b {{.LessThan}}}new_branch{{.GreaterThan}} [{{.LessThan}}}start_p
    Specifying -b causes a new branch to be created as if dolt branch were called and then checked out.
 
 dolt checkout {{.LessThan}}}table{{.GreaterThan}}...
-  To update table(s) with their values in HEAD `
-
-var coSynopsis = []string{
-	`<branch>`,
-	`<table>...`,
-	`-b <new-branch> [<start-point>]`,
-}
-
-var coDocumentation = cli.CommandDocumentation{
-	ShortDesc: coShortDesc,
-	LongDesc:  coLongDesc,
-	Synopsis:  coSynopsis,
+  To update table(s) with their values in HEAD `,
+	Synopsis: []string{
+		`{{.LessThan}}branch{{.GreaterThan}}`,
+		`{{.LessThan}}table{{.GreaterThan}}...`,
+		`-b {{.LessThan}}new-branch{{.GreaterThan}} [{{.LessThan}}start-point{{.GreaterThan}}]`,
+	},
 }
 
 const coBranchArg = "b"
@@ -71,7 +66,7 @@ func (cmd CheckoutCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd CheckoutCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, commandStr, coDocumentation, ap)
+	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, checkoutDocs, ap))
 }
 
 func (cmd CheckoutCmd) createArgParser() *argparser.ArgParser {
@@ -88,7 +83,7 @@ func (cmd CheckoutCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	helpPrt, usagePrt := cli.HelpAndUsagePrinters(commandStr, coDocumentation, ap)
+	helpPrt, usagePrt := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, checkoutDocs, ap))
 	apr := cli.ParseArgs(ap, args, helpPrt)
 
 	if (apr.Contains(coBranchArg) && apr.NArg() > 1) || (!apr.Contains(coBranchArg) && apr.NArg() == 0) {

@@ -28,22 +28,17 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 )
 
-var tblCpShortDesc = "Makes a copy of a table"
-var tblCpLongDesc = `The dolt table cp command makes a copy of a table at a given commit. If a commit is not specified the copy is made of the table from the current working set.
+var tblCpDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Makes a copy of a table",
+	LongDesc: `The dolt table cp command makes a copy of a table at a given commit. If a commit is not specified the copy is made of the table from the current working set.
 
 If a table exists at the target location this command will fail unless the {{.EmphasisLeft}}--force|-f{{.EmphasisRight}} flag is provided.  In this case the table at the target location will be overwritten with the copied table.
 
 All changes will be applied to the working tables and will need to be staged using {{.EmphasisLeft}}dolt add{{.EmphasisRight}} and committed using {{.EmphasisLeft}}dolt commit{{.EmphasisRight}}.
-`
-
-var tblCpSynopsis = []string{
-	"[-f] [{{.LessThan}}commit{{.GreaterThan}}] {{.LessThan}}oldtable{{.GreaterThan}} {{.LessThan}}newtable{{.GreaterThan}}",
-}
-
-var tblCpDocumentation = cli.CommandDocumentation{
-	ShortDesc: tblCpShortDesc,
-	LongDesc:  tblCpLongDesc,
-	Synopsis:  tblCpSynopsis,
+`,
+	Synopsis: []string{
+		"[-f] [{{.LessThan}}commit{{.GreaterThan}}] {{.LessThan}}oldtable{{.GreaterThan}} {{.LessThan}}newtable{{.GreaterThan}}",
+	},
 }
 
 type CpCmd struct{}
@@ -61,7 +56,7 @@ func (cmd CpCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd CpCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, commandStr, tblCpDocumentation, ap)
+	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, tblCpDocs, ap))
 }
 
 func (cmd CpCmd) createArgParser() *argparser.ArgParser {
@@ -81,7 +76,7 @@ func (cmd CpCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, tblCpDocumentation, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tblCpDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() < 2 || apr.NArg() > 3 {

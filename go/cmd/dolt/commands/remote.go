@@ -37,8 +37,9 @@ import (
 
 var ErrInvalidPort = errors.New("invalid port")
 
-var remoteShortDesc = "Manage set of tracked repositories"
-var remoteLongDesc = `With no arguments, shows a list of existing remotes. Several subcommands are available to perform operations on the remotes.
+var remoteDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Manage set of tracked repositories",
+	LongDesc: `With no arguments, shows a list of existing remotes. Several subcommands are available to perform operations on the remotes.
 
 {{.EmphasisLeft}}add{{.EmphasisRight}}
 Adds a remote named {{.LessThan}}name{{.GreaterThan}} for the repository at {{.LessThan}}url{{.GreaterThan}}. The command dolt fetch {{.LessThan}}name{{.GreaterThan}} can then be used to create and update remote-tracking branches {{.EmphasisLeft}}<name>/<branch>{{.EmphasisRight}}.
@@ -57,18 +58,13 @@ GCP remote urls should be of the form gs://gcs-bucket/database and will use the 
 
 The local filesystem can be used as a remote by providing a repository url in the format file://absolute path. See https://en.wikipedia.org/wiki/File_URI_schemethi
 {{.EmphasisLeft}}remove{{.EmphasisRight}}, {{.EmphasisLeft}}rm{{.EmphasisRight}}, 
-Remove the remote named {{.LessThan}}name{{.GreaterThan}}. All remote-tracking branches and configuration settings for the remote are removed.`
+Remove the remote named {{.LessThan}}name{{.GreaterThan}}. All remote-tracking branches and configuration settings for the remote are removed.`,
 
-var remoteSynopsis = []string{
-	"[-v | --verbose]",
-	"add [--aws-region {{.LessThan}}region{{.GreaterThan}}] [--aws-creds-type {{.LessThan}}creds-type{{.GreaterThan}}] [--aws-creds-file {{.LessThan}}file{{.GreaterThan}}] [--aws-creds-profile {{.LessThan}}profile{{.GreaterThan}}] {{.LessThan}}name{{.GreaterThan}} {{.LessThan}}url{{.GreaterThan}}",
-	"remove {{.LessThan}}name{{.GreaterThan}}",
-}
-
-var remoteDocumentation = cli.CommandDocumentation{
-	ShortDesc: pushShortDesc,
-	LongDesc:  pushLongDesc,
-	Synopsis:  pushSynopsis,
+	Synopsis: []string{
+		"[-v | --verbose]",
+		"add [--aws-region {{.LessThan}}region{{.GreaterThan}}] [--aws-creds-type {{.LessThan}}creds-type{{.GreaterThan}}] [--aws-creds-file {{.LessThan}}file{{.GreaterThan}}] [--aws-creds-profile {{.LessThan}}profile{{.GreaterThan}}] {{.LessThan}}name{{.GreaterThan}} {{.LessThan}}url{{.GreaterThan}}",
+		"remove {{.LessThan}}name{{.GreaterThan}}",
+	},
 }
 
 const (
@@ -94,7 +90,7 @@ func (cmd RemoteCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd RemoteCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, commandStr, remoteDocumentation, ap)
+	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, remoteDocs, ap))
 }
 
 func (cmd RemoteCmd) createArgParser() *argparser.ArgParser {
@@ -118,7 +114,7 @@ func (cmd RemoteCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd RemoteCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, remoteDocumentation, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, remoteDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	var verr errhand.VerboseError

@@ -36,22 +36,18 @@ const (
 	systemFlag = "system"
 )
 
-var lsShortDesc = "List tables"
-var lsLongDesc = `With no arguments lists the tables in the current working set but if a commit is specified it will list the tables in that commit.  If the {{.EmphasisLeft}}--verbose{{.EmphasisRight}} flag is provided a row count and a hash of the table will also be displayed.
+var lsDocs = cli.CommandDocumentationContent{
+	ShortDesc: "List tables",
+	LongDesc: `With no arguments lists the tables in the current working set but if a commit is specified it will list the tables in that commit.  If the {{.EmphasisLeft}}--verbose{{.EmphasisRight}} flag is provided a row count and a hash of the table will also be displayed.
 
 If the {{.EmphasisLeft}}--system{{.EmphasisRight}} flag is supplied this will show the dolt system tables which are queryable with SQL.  Some system tables can be queried even if they are not in the working set by specifying appropriate parameters in the SQL queries. To see these tables too you may pass the {{.EmphasisLeft}}--verbose{{.EmphasisRight}} flag.
 
 If the {{.EmphasisLeft}}--all{{.EmphasisRight}} flag is supplied both user and system tables will be printed.
-`
+`,
 
-var lsSynopsis = []string{
-	"[--options] [{{.LessThan}}commit{{.GreaterThan}}]",
-}
-
-var lsDocumentation = cli.CommandDocumentation{
-	ShortDesc: lsShortDesc,
-	LongDesc:  lsLongDesc,
-	Synopsis:  lsSynopsis,
+	Synopsis: []string{
+		"[--options] [{{.LessThan}}commit{{.GreaterThan}}]",
+	},
 }
 
 type LsCmd struct{}
@@ -69,7 +65,7 @@ func (cmd LsCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd LsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, commandStr, lsDocumentation, ap)
+	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, lsDocs, ap))
 }
 
 func (cmd LsCmd) createArgParser() *argparser.ArgParser {
@@ -88,7 +84,7 @@ func (cmd LsCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, lsDocumentation, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, lsDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() > 1 {

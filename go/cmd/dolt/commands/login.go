@@ -36,16 +36,11 @@ const (
 	loginRetryInterval = 5
 )
 
-var loginShortDesc = ""
-var loginLongDesc = `Login into DoltHub using the email in your config so you can pull from private repos and push to those you have permission to.
-`
-
-var loginSynopsis = []string{"[<creds>]"}
-
-var loginDocumentation = cli.CommandDocumentation{
-	ShortDesc: loginShortDesc,
-	LongDesc:  loginLongDesc,
-	Synopsis:  loginSynopsis,
+var loginDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Login to DoltHub",
+	LongDesc: `Login into DoltHub using the email in your config so you can pull from private repos and push to those you have permission to.
+`,
+	Synopsis: []string{"[{{.LessThan}}creds{{.GreaterThan}}]"},
 }
 
 type LoginCmd struct{}
@@ -69,7 +64,7 @@ func (cmd LoginCmd) RequiresRepo() bool {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd LoginCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, commandStr, loginDocumentation, ap)
+	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, loginDocs, ap))
 }
 
 func (cmd LoginCmd) createArgParser() *argparser.ArgParser {
@@ -86,7 +81,7 @@ func (cmd LoginCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd LoginCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, loginDocumentation, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, loginDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	var verr errhand.VerboseError

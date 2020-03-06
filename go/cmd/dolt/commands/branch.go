@@ -35,7 +35,11 @@ import (
 	"strings"
 )
 
-var branchLongDesc = `If {{.EmphasisLeft}}--list{{.EmphasisRight}} is given, or if there are no non-option arguments, existing branches are listed; the current branch will be highlighted with an asterisk.
+var branchForceFlagDesc = "Reset {{.LessThan}}branchname{{.GreaterThan}} to {{.LessThan}}startpoint{{.GreaterThan}}, even if {{.LessThan}}branchname{{.GreaterThan}} exists already. Without {{.EmphasisLeft}}-f{{.EmphasisRight}}, {{.EmphasisLeft}}dolt branch{{.EmphasisRight}} refuses to change an existing branch. In combination with {{.EmphasisLeft}}-d{{.EmphasisRight}} (or {{.EmphasisLeft}}--delete{{.EmphasisRight}}), allow deleting the branch irrespective of its merged status. In combination with -m (or {{.EmphasisLeft}}--move{{.EmphasisRight}}), allow renaming the branch even if the new branch name already exists, the same applies for {{.EmphasisLeft}}-c{{.EmphasisRight}} (or {{.EmphasisLeft}}--copy{{.EmphasisRight}})."
+
+var branchDocs = cli.CommandDocumentationContent{
+	ShortDesc: `List, create, or delete branches`,
+	LongDesc: `If {{.EmphasisLeft}}--list{{.EmphasisRight}} is given, or if there are no non-option arguments, existing branches are listed; the current branch will be highlighted with an asterisk.
 
 The command's second form creates a new branch head named {{.LessThan}}branchname{{.GreaterThan}} which points to the current {{.EmphasisLeft}}HEAD{{.EmphasisRight}}, or {{.LessThan}}start-point{{.GreaterThan}} if given.
 
@@ -45,24 +49,14 @@ With a {{.EmphasisLeft}}-m{{.EmphasisRight}}, {{.LessThan}}oldbranch{{.GreaterTh
 
 The {{.EmphasisLeft}}-c{{.EmphasisRight}} options have the exact same semantics as {{.EmphasisLeft}}-m{{.EmphasisRight}}, except instead of the branch being renamed it will be copied to a new name.
 
-With a {{.EmphasisLeft}}-d{{.EmphasisRight}}, {{.LessThan}}branchname{{.GreaterThan}} will be deleted. You may specify more than one branch for deletion.`
-
-var branchShortDesc = `List, create, or delete branches`
-
-var branchForceFlagDesc = "Reset {{.LessThan}}branchname{{.LessThan}} to {{.LessThan}}startpoint{{.LessThan}}, even if {{.LessThan}}branchname{{.LessThan}} exists already. Without {{.EmphasisLeft}}-f{{.EmphasisRight}}, {{.EmphasisLeft}}dolt branch{{.EmphasisRight}} refuses to change an existing branch. In combination with {{.EmphasisLeft}}-d{{.EmphasisRight}} (or {{.EmphasisLeft}}--delete{{.EmphasisRight}}), allow deleting the branch irrespective of its merged status. In combination with -m (or {{.EmphasisLeft}}--move{{.EmphasisRight}}), allow renaming the branch even if the new branch name already exists, the same applies for {{.EmphasisLeft}}-c{{.EmphasisRight}} (or {{.EmphasisLeft}}--copy{{.EmphasisRight}})."
-
-var branchSynopsis = []string{
-	`[--list] [-v] [-a]`,
-	`[-f] {{.LessThan}}branchname{{.GreaterThan}} [{{.LessThan}}start-point{{.GreaterThan}}]`,
-	`-m [-f] [{{.LessThan}}oldbranch{{.GreaterThan}}] {{.LessThan}}newbranch{{.GreaterThan}}`,
-	`-c [-f] [{{.LessThan}}oldbranch{{.GreaterThan}}] {{.LessThan}}newbranch{{.GreaterThan}}`,
-	`-d [-f] {{.LessThan}}branchname{{.GreaterThan}}...`,
-}
-
-var BranchDocumentation = cli.CommandDocumentation{
-	ShortDesc: branchShortDesc,
-	LongDesc:  branchLongDesc,
-	Synopsis:  branchSynopsis,
+With a {{.EmphasisLeft}}-d{{.EmphasisRight}}, {{.LessThan}}branchname{{.GreaterThan}} will be deleted. You may specify more than one branch for deletion.`,
+	Synopsis: []string{
+		`[--list] [-v] [-a]`,
+		`[-f] {{.LessThan}}branchname{{.GreaterThan}} [{{.LessThan}}start-point{{.GreaterThan}}]`,
+		`-m [-f] [{{.LessThan}}oldbranch{{.GreaterThan}}] {{.LessThan}}newbranch{{.GreaterThan}}`,
+		`-c [-f] [{{.LessThan}}oldbranch{{.GreaterThan}}] {{.LessThan}}newbranch{{.GreaterThan}}`,
+		`-d [-f] {{.LessThan}}branchname{{.GreaterThan}}...`,
+	},
 }
 
 const (
@@ -91,7 +85,7 @@ func (cmd BranchCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd BranchCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, commandStr, BranchDocumentation, ap)
+	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, branchDocs, ap))
 }
 
 func (cmd BranchCmd) createArgParser() *argparser.ArgParser {
@@ -116,7 +110,7 @@ func (cmd BranchCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, BranchDocumentation, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, branchDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	switch {

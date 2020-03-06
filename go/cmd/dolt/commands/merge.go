@@ -38,23 +38,19 @@ const (
 	abortParam = "abort"
 )
 
-var mergeShortDesc = "Join two or more development histories together"
-var mergeLongDesc = `Incorporates changes from the named commits (since the time their histories diverged from the current branch) into the current branch.
+var mergeDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Join two or more development histories together",
+	LongDesc: `Incorporates changes from the named commits (since the time their histories diverged from the current branch) into the current branch.
 
 The second syntax ({{.LessThan}}dolt merge --abort{{.GreaterThan}}) can only be run after the merge has resulted in conflicts. git merge {{.EmphasisLeft}}--abort{{.EmphasisRight}} will abort the merge process and try to reconstruct the pre-merge state. However, if there were uncommitted changes when the merge started (and especially if those changes were further modified after the merge was started), dolt merge {{.EmphasisLeft}}--abort{{.EmphasisRight}} will in some cases be unable to reconstruct the original (pre-merge) changes. Therefore: 
 
 {{.LessThan}}Warning{{.GreaterThan}}: Running dolt merge with non-trivial uncommitted changes is discouraged: while possible, it may leave you in a state that is hard to back out of in the case of a conflict.
-`
+`,
 
-var mergeSynopsis = []string{
-	"{{.LessThan}}branch{{.GreaterThan}}",
-	"--abort",
-}
-
-var mergeDocumentation = cli.CommandDocumentation{
-	ShortDesc: mergeShortDesc,
-	LongDesc:  mergeLongDesc,
-	Synopsis:  mergeSynopsis,
+	Synopsis: []string{
+		"{{.LessThan}}branch{{.GreaterThan}}",
+		"--abort",
+	},
 }
 
 var abortDetails = `Abort the current conflict resolution process, and try to reconstruct the pre-merge state.
@@ -77,7 +73,7 @@ func (cmd MergeCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd MergeCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, commandStr, mergeDocumentation, ap)
+	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, mergeDocs, ap))
 }
 
 func (cmd MergeCmd) createArgParser() *argparser.ArgParser {
@@ -94,7 +90,7 @@ func (cmd MergeCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, mergeDocumentation, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, mergeDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	var verr errhand.VerboseError

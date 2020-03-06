@@ -27,24 +27,22 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
-var tblMvShortDesc = "Renames a table"
-var tblMvLongDesc = `
+
+
+var tblMvDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Renames a table",
+	LongDesc: `
 The dolt table mv command will rename a table. If a table exists with the target name this command will 
 fail unless the {{.EmphasisLeft}}--force|-f{{.EmphasisRight}} flag is provided.  In that case the table at the target location will be overwritten 
 by the table being renamed.
 
 The result is equivalent of running {{.EmphasisLeft}}dolt table cp <old> <new>{{.EmphasisRight}} followed by {{.EmphasisLeft}}dolt table rm <old>{{.EmphasisRight}}, resulting 
 in a new table and a deleted table in the working set. These changes can be staged using {{.EmphasisLeft}}dolt add{{.EmphasisRight}} and committed
-using {{.EmphasisLeft}}dolt commit{{.EmphasisRight}}.`
+using {{.EmphasisLeft}}dolt commit{{.EmphasisRight}}.`,
 
-var tblMvSynopsis = []string{
+	Synopsis: []string{
 	"[-f] {{.LessThan}}oldtable{{.EmphasisRight}} {{.LessThan}}newtable{{.EmphasisRight}}",
-}
-
-var tblMvDocumentation = cli.CommandDocumentation{
-	ShortDesc: tblMvShortDesc,
-	LongDesc:  tblMvLongDesc,
-	Synopsis:  tblMvSynopsis,
+},
 }
 
 type MvCmd struct{}
@@ -62,7 +60,7 @@ func (cmd MvCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd MvCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, commandStr, tblMvDocumentation, ap)
+	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, tblMvDocs, ap))
 }
 
 func (cmd MvCmd) createArgParser() *argparser.ArgParser {
@@ -81,7 +79,7 @@ func (cmd MvCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd MvCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, tblMvDocumentation, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tblMvDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() != 2 {

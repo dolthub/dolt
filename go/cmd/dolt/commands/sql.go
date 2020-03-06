@@ -55,8 +55,11 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-var sqlShortDesc = "Runs a SQL query"
-var sqlLongDesc = `Runs a SQL query you specify. By default, begins an interactive shell to run queries and view the
+
+
+var sqlDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Runs a SQL query",
+	LongDesc: `Runs a SQL query you specify. By default, begins an interactive shell to run queries and view the
 results. With the {{.EmphasisLeft}}-q{{.EmphasisRight}} option, runs the given query and prints any results, then exits.
 
 Pipe SQL statements to dolt sql (no {{.EmphasisLeft}}-q{{.EmphasisRight}}) to execute a SQL import or update script. 
@@ -70,18 +73,13 @@ Known limitations:
     length; FLOAT, INTEGER columns are 64 bit
 * Joins can only use indexes for two table joins. Three or more tables in a join query will use a non-indexed
     join, which is very slow.
-`
-var sqlSynopsis = []string{
-	"",
-	"-q {{.LessThan}}query{{.GreaterThan}}",
-	"-q {{.LessThan}}query{{.GreaterThan}} -r {{.LessThan}}result format{{.GreaterThan}}",
-	"-q {{.LessThan}}query{{.GreaterThan}} -s {{.LessThan}}name{{.GreaterThan}} -m {{.LessThan}}message{{.GreaterThan}}",
-}
-
-var sqlDocumentation = cli.CommandDocumentation{
-	ShortDesc: sqlShortDesc,
-	LongDesc:  sqlLongDesc,
-	Synopsis:  sqlSynopsis,
+`,
+	Synopsis: []string{
+		"",
+		"-q {{.LessThan}}query{{.GreaterThan}}",
+		"-q {{.LessThan}}query{{.GreaterThan}} -r {{.LessThan}}result format{{.GreaterThan}}",
+		"-q {{.LessThan}}query{{.GreaterThan}} -s {{.LessThan}}name{{.GreaterThan}} -m {{.LessThan}}message{{.GreaterThan}}",
+	},
 }
 
 const (
@@ -109,7 +107,7 @@ func (cmd SqlCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd SqlCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, commandStr, sqlDocumentation, ap)
+	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, sqlDocs, ap))
 }
 
 func (cmd SqlCmd) createArgParser() *argparser.ArgParser {
@@ -129,7 +127,7 @@ func (cmd SqlCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, sqlDocumentation, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlDocs, ap))
 
 	apr := cli.ParseArgs(ap, args, help)
 	args = apr.Args()

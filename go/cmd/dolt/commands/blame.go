@@ -35,19 +35,13 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-var blameShortDesc = `Show what revision and author last modified each row of a table`
-var blameLongDesc = `Annotates each row in the given table with information from the revision which last modified the row. Optionally, start annotating from the given revision.`
-
-var blameSynopsis = []string{
-	`[{{.LessThan}}rev{{.GreaterThan}}] {{.LessThan}}tablename{{.GreaterThan}}`,
+var blameDocs = cli.CommandDocumentationContent{
+	ShortDesc: `Show what revision and author last modified each row of a table`,
+	LongDesc: `Annotates each row in the given table with information from the revision which last modified the row. Optionally, start annotating from the given revision.`,
+	Synopsis: []string{
+		`[{{.LessThan}}rev{{.GreaterThan}}] {{.LessThan}}tablename{{.GreaterThan}}`,
+	},
 }
-
-var blameDocumentation = cli.CommandDocumentation{
-	ShortDesc: blameShortDesc,
-	LongDesc:  blameLongDesc,
-	Synopsis:  blameSynopsis,
-}
-
 // blameInfo contains blame information for a row
 type blameInfo struct {
 	// Key represents the primary key of the row
@@ -94,7 +88,7 @@ func (cmd BlameCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd BlameCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, commandStr, blameDocumentation, ap)
+	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, blameDocs, ap))
 }
 
 func (cmd BlameCmd) createArgParser() *argparser.ArgParser {
@@ -125,7 +119,7 @@ func (cmd BlameCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, blameDocumentation, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, blameDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() == 0 || apr.NArg() > 2 {

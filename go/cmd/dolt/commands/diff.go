@@ -77,8 +77,9 @@ type DiffSink interface {
 	Close() error
 }
 
-var diffShortDesc = "Show changes between commits, commit and working tree, etc"
-var diffLongDesc = `
+var diffDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Show changes between commits, commit and working tree, etc",
+	LongDesc: `
 Show changes between the working and staged tables, changes between the working tables and the tables within a commit, or changes between tables at two commits.
 
 {{.EmphasisLeft}}dolt diff [--options] [<tables>...]{{.EmphasisRight}}
@@ -93,17 +94,11 @@ Show changes between the working and staged tables, changes between the working 
 The diffs displayed can be limited to show the first N by providing the parameter {{.EmphasisLeft}}--limit N{{.EmphasisRight}} where {{.EmphasisLeft}}N{{.EmphasisRight}} is the number of diffs to display.
 
 In order to filter which diffs are displayed {{.EmphasisLeft}}--where key=value{{.EmphasisRight}} can be used.  The key in this case would be either {{.EmphasisLeft}}to_COLUMN_NAME{{.EmphasisRight}} or {{.EmphasisLeft}}from_COLUMN_NAME{{.EmphasisRight}}. where {{.EmphasisLeft}}from_COLUMN_NAME=value{{.EmphasisRight}} would filter based on the original value and {{.EmphasisLeft}}to_COLUMN_NAME{{.EmphasisRight}} would select based on its updated value.
-`
-
-var diffSynopsis = []string{
-	`[options] [{{.LessThan}}commit{{.GreaterThan}}] [{{.LessThan}}tables{{.GreaterThan}}...]`,
-	`[options] {{.LessThan}}commit{{.GreaterThan}} {{.LessThan}}commit{{.GreaterThan}} [{{.LessThan}}tables{{.GreaterThan}}...]`,
-}
-
-var diffDocumnetation = cli.CommandDocumentation{
-	ShortDesc: diffShortDesc,
-	LongDesc:  diffLongDesc,
-	Synopsis:  diffSynopsis,
+`,
+	Synopsis: []string{
+		`[options] [{{.LessThan}}commit{{.GreaterThan}}] [{{.LessThan}}tables{{.GreaterThan}}...]`,
+		`[options] {{.LessThan}}commit{{.GreaterThan}} {{.LessThan}}commit{{.GreaterThan}} [{{.LessThan}}tables{{.GreaterThan}}...]`,
+	},
 }
 
 type diffArgs struct {
@@ -133,7 +128,7 @@ func (cmd DiffCmd) EventType() eventsapi.ClientEventType {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd DiffCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, commandStr, diffDocumnetation, ap)
+	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, diffDocs, ap))
 }
 
 func (cmd DiffCmd) createArgParser() *argparser.ArgParser {
@@ -150,7 +145,7 @@ func (cmd DiffCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, _ := cli.HelpAndUsagePrinters(commandStr, diffDocumnetation, ap)
+	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, diffDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	diffParts := SchemaAndDataDiff

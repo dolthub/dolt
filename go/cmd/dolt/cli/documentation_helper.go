@@ -35,16 +35,16 @@ title: {{.Command}}
 
 `
 
-func (cmdDoc CommandDocumentation) CmdDocToMd(commandStr string, parser *argparser.ArgParser) (string, error) {
+func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {
 
 	// Accumulate the options and args in a string
 	options := ""
-	if len(parser.Supported) > 0 || len(parser.ArgListHelp) > 0 {
+	if len(cmdDoc.ArgParser.Supported) > 0 || len(cmdDoc.ArgParser.ArgListHelp) > 0 {
 		// no need to write
 		//err = iohelp.WriteIfNoErr(wr, titleHelper("Options"), err)
 
 		// Iterate across arguments and template them
-		for _, kvTuple := range parser.ArgListHelp {
+		for _, kvTuple := range cmdDoc.ArgParser.ArgListHelp {
 			arg, desc := kvTuple[0], kvTuple[1]
 			templatedDesc, err := templateDocStringHelper(desc, MarkdownFormat)
 			if err != nil {
@@ -59,7 +59,7 @@ func (cmdDoc CommandDocumentation) CmdDocToMd(commandStr string, parser *argpars
 		}
 
 		// Iterate accross supported options, templating each one of them
-		for _, supOpt := range parser.Supported {
+		for _, supOpt := range cmdDoc.ArgParser.Supported {
 			templatedDesc, err := templateDocStringHelper(supOpt.Desc, MarkdownFormat)
 			if err != nil {
 				return "", err
@@ -83,9 +83,9 @@ func (cmdDoc CommandDocumentation) CmdDocToMd(commandStr string, parser *argpars
 	}
 
 	cmdMdDoc := CmdMdDoc{
-		Command:             commandStr,
-		CommandAndShortDesc: fmt.Sprintf("`%s` - %s\n\n", commandStr, cmdDoc.GetShortDesc()),
-		Synopsis:            getSynopsis(commandStr, synopsis),
+		Command:             cmdDoc.CommandStr,
+		CommandAndShortDesc: fmt.Sprintf("`%s` - %s\n\n", cmdDoc.CommandStr, cmdDoc.GetShortDesc()),
+		Synopsis:            transformSynopsisToHtml(cmdDoc.CommandStr, synopsis),
 		Description:         longDesc,
 		Options:             options,
 	}
@@ -101,10 +101,23 @@ func (cmdDoc CommandDocumentation) CmdDocToMd(commandStr string, parser *argpars
 	return templBuffer.String(), nil
 }
 
+// This handles creating
 type CommandDocumentation struct {
-	ShortDesc string
-	LongDesc  string
-	Synopsis  []string
+	CommandStr string
+	ShortDesc  string
+	LongDesc   string
+	Synopsis   []string
+	ArgParser  *argparser.ArgParser
+}
+
+func GetCommandDocumentation(commandStr string, cmdDoc CommandDocumentationContent, argParser *argparser.ArgParser) CommandDocumentation {
+	return  CommandDocumentation{
+		CommandStr: commandStr,
+		ShortDesc:  cmdDoc.ShortDesc,
+		LongDesc:   cmdDoc.LongDesc,
+		Synopsis:   cmdDoc.Synopsis,
+		ArgParser:  argParser,
+	}
 }
 
 func (cmdDoc CommandDocumentation) GetShortDesc() string {
@@ -118,7 +131,6 @@ func (cmdDoc CommandDocumentation) GetLongDesc(format DocFormat) (string, error)
 func templateDocStringHelper(docString string, docFormat DocFormat) (string, error) {
 	templ, err := template.New("description").Parse(docString)
 	if err != nil {
-		Printf(docString)
 		return "", err
 	}
 	var templBuffer bytes.Buffer
@@ -152,7 +164,7 @@ var MarkdownFormat = DocFormat{"`<", ">`", "`", "`"}
 var CliFormat = DocFormat{"<", ">", "<b>", "</b>"}
 var SynopsisMarkdownFormat = DocFormat{"&lt;", "&gt;", "`", "`"}
 
-func getSynopsis(commandStr string, synopsis []string) string {
+func transformSynopsisToHtml(commandStr string, synopsis []string) string {
 	if len(synopsis) == 0 {
 		return ""
 	}

@@ -54,8 +54,9 @@ const (
 	delimParam          = "delim"
 )
 
-var schImportShortDesc = "Creates a new table with an inferred schema."
-var schImportLongDesc = `If {{.EmphasisLeft}}--create | -c{{.EmphasisRight}} is given the operation will create {{.LessThan}}table{{.GreaterThan}} with a schema that it infers from the supplied file. One or more primary key columns must be specified using the {{.EmphasisLeft}}--pks{{.EmphasisRight}} parameter.
+var schImportDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Creates a new table with an inferred schema.",
+	LongDesc: `If {{.EmphasisLeft}}--create | -c{{.EmphasisRight}} is given the operation will create {{.LessThan}}table{{.GreaterThan}} with a schema that it infers from the supplied file. One or more primary key columns must be specified using the {{.EmphasisLeft}}--pks{{.EmphasisRight}} parameter.
 
 If {{.EmphasisLeft}}--update | -u{{.EmphasisRight}} is given the operation will update {{.LessThan}}table{{.GreaterThan}} any additional columns, or change the types of columns based on the file supplied.  If the {{.EmphasisLeft}}--keep-types{{.EmphasisRight}} parameter is supplied then the types for existing columns will not be modified, even if they differ from what is in the supplied file.
 
@@ -70,16 +71,11 @@ In create, update, and replace scenarios the file's extension is used to infer t
 If the parameter {{.EmphasisLeft}}--dry-run{{.EmphasisRight}} is supplied a sql statement will be generated showing what would be executed if this were run without the --dry-run flag
 
 {{.EmphasisLeft}}--float-threshold{{.EmphasisRight}} is the threshold at which a string representing a floating point number should be interpreted as a float versus an int.  If FloatThreshold is 0.0 then any number with a decimal point will be interpreted as a float (such as 0.0, 1.0, etc).  If FloatThreshold is 1.0 then any number with a decimal point will be converted to an int (0.5 will be the int 0, 1.99 will be the int 1, etc.  If the FloatThreshold is 0.001 then numbers with a fractional component greater than or equal to 0.001 will be treated as a float (1.0 would be an int, 1.0009 would be an int, 1.001 would be a float, 1.1 would be a float, etc)
-`
+`,
 
-var schImportSynopsis = []string{
-	`[--create|--replace] [--force] [--dry-run] [--lower|--upper] [--keep-types] [--file-type {{.LessThan}}type{{.GreaterThan}}] [--float-threshold] [--map {{.LessThan}}mapping-file{{.GreaterThan}}] [--delim {{.LessThan}}delimiter{{.GreaterThan}}]--pks {{.LessThan}}field{{.GreaterThan}},... {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}`,
-}
-
-var schImportDocumentation = cli.CommandDocumentation{
-	ShortDesc: schImportShortDesc,
-	LongDesc:  schImportShortDesc,
-	Synopsis:  schImportSynopsis,
+	Synopsis: []string{
+		`[--create|--replace] [--force] [--dry-run] [--lower|--upper] [--keep-types] [--file-type {{.LessThan}}type{{.GreaterThan}}] [--float-threshold] [--map {{.LessThan}}mapping-file{{.GreaterThan}}] [--delim {{.LessThan}}delimiter{{.GreaterThan}}]--pks {{.LessThan}}field{{.GreaterThan}},... {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}`,
+	},
 }
 
 type importOp int
@@ -118,21 +114,21 @@ func (cmd ImportCmd) EventType() eventsapi.ClientEventType {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ImportCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, commandStr, schImportDocumentation, ap)
+	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, schImportDocs, ap))
 }
 
 func (cmd ImportCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "Name of the table to be created."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "The file being used to infer the schema."})
-	ap.SupportsFlag(createFlag, "c", "Create a table with the schema inferred from the <file> provided.")
-	ap.SupportsFlag(updateFlag, "u", "Update a table to match the inferred schema of the <file> provided")
-	ap.SupportsFlag(replaceFlag, "r", "Replace a table with a new schema that has the inferred schema from the <file> provided. All previous data will be lost.")
+	ap.SupportsFlag(createFlag, "c", "Create a table with the schema inferred from the {{.LessThan}}file{{.GreaterThan}} provided.")
+	ap.SupportsFlag(updateFlag, "u", "Update a table to match the inferred schema of the {{.LessThan}}file{{.GreaterThan}} provided")
+	ap.SupportsFlag(replaceFlag, "r", "Replace a table with a new schema that has the inferred schema from the {{.LessThan}}file{{.GreaterThan}} provided. All previous data will be lost.")
 	ap.SupportsFlag(dryRunFlag, "", "Print the sql statement that would be run if executed without the flag.")
-	ap.SupportsFlag(keepTypesParam, "", "When a column already exists in the table, and it's also in the <file> provided, use the type from the table.")
+	ap.SupportsFlag(keepTypesParam, "", "When a column already exists in the table, and it's also in the {{.LessThan}}file{{.GreaterThan}} provided, use the type from the table.")
 	ap.SupportsString(fileTypeParam, "", "type", "Explicitly define the type of the file if it can't be inferred from the file extension.")
 	ap.SupportsString(pksParam, "", "comma-separated-col-names", "List of columns used as the primary key cols.  Order of the columns will determine sort order.")
-	ap.SupportsString(mappingParam, "", "mapping-file", "A file that can map a column name in <file> to a new value.")
+	ap.SupportsString(mappingParam, "", "mapping-file", "A file that can map a column name in {{.LessThan}}file{{.GreaterThan}} to a new value.")
 	ap.SupportsString(floatThresholdParam, "", "float", "Minimum value at which the fractional component of a value must exceed in order to be considered a float.")
 	ap.SupportsString(delimParam, "", "delimiter", "Specify a delimiter for a csv style file with a non-comma delimiter.")
 	return ap
@@ -142,7 +138,7 @@ func (cmd ImportCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, schImportDocumentation, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, schImportDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() != 2 {
