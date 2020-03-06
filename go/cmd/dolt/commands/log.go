@@ -45,7 +45,6 @@ The command takes options to control what is shown and how.`,
 	},
 }
 
-
 type commitLoggerFunc func(*doltdb.CommitMeta, []hash.Hash, hash.Hash)
 
 func logToStdOutFunc(cm *doltdb.CommitMeta, parentHashes []hash.Hash, ch hash.Hash) {

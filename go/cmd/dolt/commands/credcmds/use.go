@@ -28,7 +28,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
-
 var useDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Select an existing dolt credential for authenticating with doltremoteapi.",
 	LongDesc: `Selects an existing dolt credential for authenticating with doltremoteapi.

@@ -29,10 +29,9 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 )
 
-
 var schExportDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Exports a table's schema.",
-	LongDesc: "",
+	LongDesc:  "",
 	Synopsis: []string{
 		"{{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 	},

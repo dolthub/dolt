@@ -30,7 +30,7 @@ import (
 
 var tblRmDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Removes table(s) from the working set of tables.",
-	LongDesc: "{{.EmphasisLeft}}dolt table rm{{.EmphasisRight}} removes table(s) from the working set.  These changes can be staged using {{.EmphasisLeft}}dolt add{{.EmphasisRight}} and committed using {{.EmphasisLeft}}dolt commit{{.EmphasisRight}}",
+	LongDesc:  "{{.EmphasisLeft}}dolt table rm{{.EmphasisRight}} removes table(s) from the working set.  These changes can be staged using {{.EmphasisLeft}}dolt add{{.EmphasisRight}} and committed using {{.EmphasisLeft}}dolt commit{{.EmphasisRight}}",
 	Synopsis: []string{
 		"{{.LessThan}}table{{.GreaterThan}}...",
 	},

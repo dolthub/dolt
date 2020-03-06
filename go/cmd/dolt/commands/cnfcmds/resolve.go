@@ -30,8 +30,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 )
 
-
-
 var resDocumentation = cli.CommandDocumentationContent{
 	ShortDesc: "Removes rows from list of conflicts",
 	LongDesc: `

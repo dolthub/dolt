@@ -30,8 +30,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
-
-
 var lsDocs = cli.CommandDocumentationContent{
 	ShortDesc: "List keypairs available for authenticating with doltremoteapi.",
 	LongDesc: `Lists known public keys from keypairs for authenticating with doltremoteapi.

@@ -55,8 +55,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-
-
 var sqlDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Runs a SQL query",
 	LongDesc: `Runs a SQL query you specify. By default, begins an interactive shell to run queries and view the

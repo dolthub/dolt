@@ -30,8 +30,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
-
-
 var fetchDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Download objects and refs from another repository",
 	LongDesc: `Fetch refs, along with the objects necessary to complete their histories and update remote-tracking branches.

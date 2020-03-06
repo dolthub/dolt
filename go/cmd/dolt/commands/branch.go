@@ -17,6 +17,8 @@ package commands
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/fatih/color"
 
@@ -30,9 +32,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
-
-	"sort"
-	"strings"
 )
 
 var branchForceFlagDesc = "Reset {{.LessThan}}branchname{{.GreaterThan}} to {{.LessThan}}startpoint{{.GreaterThan}}, even if {{.LessThan}}branchname{{.GreaterThan}} exists already. Without {{.EmphasisLeft}}-f{{.EmphasisRight}}, {{.EmphasisLeft}}dolt branch{{.EmphasisRight}} refuses to change an existing branch. In combination with {{.EmphasisLeft}}-d{{.EmphasisRight}} (or {{.EmphasisLeft}}--delete{{.EmphasisRight}}), allow deleting the branch irrespective of its merged status. In combination with -m (or {{.EmphasisLeft}}--move{{.EmphasisRight}}), allow renaming the branch even if the new branch name already exists, the same applies for {{.EmphasisLeft}}-c{{.EmphasisRight}} (or {{.EmphasisLeft}}--copy{{.EmphasisRight}})."

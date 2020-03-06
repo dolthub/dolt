@@ -36,9 +36,8 @@ var checkSynopsis = []string{"[--endpoint doltremoteapi.dolthub.com:443] [--cred
 
 var checkDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Check authenticating with a credential keypair against a doltremoteapi.",
-	LongDesc: `Tests calling a doltremoteapi with dolt credentials and reports the authentication result.`,
-	Synopsis: []string{"[--endpoint doltremoteapi.dolthub.com:443] [--creds {{.LessThan}}eak95022q3vskvumn2fcrpibdnheq1dtr8t...{{.GreaterThan}}]"},
-
+	LongDesc:  `Tests calling a doltremoteapi with dolt credentials and reports the authentication result.`,
+	Synopsis:  []string{"[--endpoint doltremoteapi.dolthub.com:443] [--creds {{.LessThan}}eak95022q3vskvumn2fcrpibdnheq1dtr8t...{{.GreaterThan}}]"},
 }
 
 type CheckCmd struct{}

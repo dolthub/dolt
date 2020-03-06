@@ -37,11 +37,12 @@ import (
 
 var blameDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Show what revision and author last modified each row of a table`,
-	LongDesc: `Annotates each row in the given table with information from the revision which last modified the row. Optionally, start annotating from the given revision.`,
+	LongDesc:  `Annotates each row in the given table with information from the revision which last modified the row. Optionally, start annotating from the given revision.`,
 	Synopsis: []string{
 		`[{{.LessThan}}rev{{.GreaterThan}}] {{.LessThan}}tablename{{.GreaterThan}}`,
 	},
 }
+
 // blameInfo contains blame information for a row
 type blameInfo struct {
 	// Key represents the primary key of the row

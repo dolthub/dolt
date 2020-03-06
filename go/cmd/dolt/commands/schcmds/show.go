@@ -30,7 +30,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
-
 var tblSchemaDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Shows the schema of one or more tables.",
 	LongDesc: `{{.EmphasisLeft}}dolt table schema{{.EmphasisRight}} displays the schema of tables at a given commit.  If no commit is provided the working set will be used. +

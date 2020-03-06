@@ -33,12 +33,10 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 )
 
-
-
 var statusDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Show the working status",
-	LongDesc: `Displays working tables that differ from the current HEAD commit, tables that differ from the staged tables, and tables that are in the working tree that are not tracked by dolt. The first are what you would commit by running {{.EmphasisLeft}}dolt commit{{.GreaterThan}}; the second and third are what you could commit by running {{.EmphasisLeft}}dolt add .{{.GreaterThan}} before running {{.EmphasisLeft}}dolt commit{{.GreaterThan}}.`,
-	Synopsis: []string{""},
+	LongDesc:  `Displays working tables that differ from the current HEAD commit, tables that differ from the staged tables, and tables that are in the working tree that are not tracked by dolt. The first are what you would commit by running {{.EmphasisLeft}}dolt commit{{.GreaterThan}}; the second and third are what you could commit by running {{.EmphasisLeft}}dolt add .{{.GreaterThan}} before running {{.EmphasisLeft}}dolt commit{{.GreaterThan}}.`,
+	Synopsis:  []string{""},
 }
 
 type StatusCmd struct{}

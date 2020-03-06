@@ -30,8 +30,8 @@ import (
 
 var rmDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Remove a stored public/private keypair.",
-	LongDesc: `Removes an existing keypair from dolt's credential storage.`,
-	Synopsis: []string{"{{.LessThan}}public_key_as_appears_in_ls{{.GreaterThan}}"},
+	LongDesc:  `Removes an existing keypair from dolt's credential storage.`,
+	Synopsis:  []string{"{{.LessThan}}public_key_as_appears_in_ls{{.GreaterThan}}"},
 }
 
 type RmCmd struct{}

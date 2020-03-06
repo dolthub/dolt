@@ -62,8 +62,8 @@ type Command interface {
 // other structs that are used to generate documentation at the command line and in markdown files.
 type CommandDocumentationContent struct {
 	ShortDesc string
-	LongDesc string
-	Synopsis []string
+	LongDesc  string
+	Synopsis  []string
 }
 
 //type CommandDocumentation

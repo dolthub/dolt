@@ -44,8 +44,8 @@ var sqlServerDocs = cli.CommandDocumentationContent{
 Currently, only {{.EmphasisLeft}}SELECT{{.EmphasisRight}} statements are operational, as support for other statements is still being developed.
 `,
 	Synopsis: []string{
-	"[-H {{.LessThan}}host{{.GreaterThan}}] [-P {{.LessThan}}port{{.GreaterThan}}] [-u {{.LessThan}}user{{.GreaterThan}}] [-p {{.LessThan}}password{{.GreaterThan}}] [-t {{.LessThan}}timeout{{.GreaterThan}}] [-l {{.LessThan}}loglevel{{.GreaterThan}}] [-r]",
-},
+		"[-H {{.LessThan}}host{{.GreaterThan}}] [-P {{.LessThan}}port{{.GreaterThan}}] [-u {{.LessThan}}user{{.GreaterThan}}] [-p {{.LessThan}}password{{.GreaterThan}}] [-t {{.LessThan}}timeout{{.GreaterThan}}] [-l {{.LessThan}}loglevel{{.GreaterThan}}] [-r]",
+	},
 }
 
 type SqlServerCmd struct{}

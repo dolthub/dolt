@@ -29,8 +29,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
-
-
 var newDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Create a new public/private keypair for authenticating with doltremoteapi.",
 	LongDesc: `Creates a new keypair for authenticating with doltremoteapi.

@@ -57,7 +57,6 @@ When neither the command-line does not specify what to push, the default behavio
 	},
 }
 
-
 type PushCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command

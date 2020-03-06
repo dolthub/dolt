@@ -9,7 +9,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 )
 
-type CmdMdDoc struct {
+type CommandDocumentForMarkdown struct {
 	Command             string
 	CommandAndShortDesc string
 	Synopsis            string
@@ -40,9 +40,6 @@ func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {
 	// Accumulate the options and args in a string
 	options := ""
 	if len(cmdDoc.ArgParser.Supported) > 0 || len(cmdDoc.ArgParser.ArgListHelp) > 0 {
-		// no need to write
-		//err = iohelp.WriteIfNoErr(wr, titleHelper("Options"), err)
-
 		// Iterate across arguments and template them
 		for _, kvTuple := range cmdDoc.ArgParser.ArgListHelp {
 			arg, desc := kvTuple[0], kvTuple[1]
@@ -71,28 +68,17 @@ func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {
 			}
 			options += outputStr
 		}
+	} else {
+		options = `No options for this command.`
 	}
 
-	longDesc, longDescErr := cmdDoc.GetLongDesc(MarkdownFormat)
-	if longDescErr != nil {
-		return "", longDescErr
+	cmdMdDoc, cmdMdDocErr := cmdDoc.CmdDocToCmdDocMd(options)
+	if cmdMdDocErr != nil {
+		return "", nil
 	}
-	synopsis, synopsisErr := cmdDoc.GetSynopsis(SynopsisMarkdownFormat)
-	if synopsisErr != nil {
-		return "", synopsisErr
-	}
-
-	cmdMdDoc := CmdMdDoc{
-		Command:             cmdDoc.CommandStr,
-		CommandAndShortDesc: fmt.Sprintf("`%s` - %s\n\n", cmdDoc.CommandStr, cmdDoc.GetShortDesc()),
-		Synopsis:            transformSynopsisToHtml(cmdDoc.CommandStr, synopsis),
-		Description:         longDesc,
-		Options:             options,
-	}
-
-	templ, err := template.New("shortDesc").Parse(cmdMdDocTempl)
-	if err != nil {
-		return "", err
+	templ, templErr := template.New("shortDesc").Parse(cmdMdDocTempl)
+	if templErr != nil {
+		return "", templErr
 	}
 	var templBuffer bytes.Buffer
 	if err := templ.Execute(&templBuffer, cmdMdDoc); err != nil {
@@ -101,7 +87,6 @@ func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {
 	return templBuffer.String(), nil
 }
 
-// This handles creating
 type CommandDocumentation struct {
 	CommandStr string
 	ShortDesc  string
@@ -110,8 +95,27 @@ type CommandDocumentation struct {
 	ArgParser  *argparser.ArgParser
 }
 
+func (cmdDoc CommandDocumentation) CmdDocToCmdDocMd(options string) (CommandDocumentForMarkdown, error) {
+	longDesc, longDescErr := cmdDoc.GetLongDesc(MarkdownFormat)
+	if longDescErr != nil {
+		return CommandDocumentForMarkdown{}, longDescErr
+	}
+	synopsis, synopsisErr := cmdDoc.GetSynopsis(SynopsisMarkdownFormat)
+	if synopsisErr != nil {
+		return CommandDocumentForMarkdown{}, synopsisErr
+	}
+
+	return CommandDocumentForMarkdown{
+		Command:             cmdDoc.CommandStr,
+		CommandAndShortDesc: fmt.Sprintf("`%s` - %s\n\n", cmdDoc.CommandStr, cmdDoc.GetShortDesc()),
+		Synopsis:            transformSynopsisToHtml(cmdDoc.CommandStr, synopsis),
+		Description:         longDesc,
+		Options:             options,
+	}, nil
+}
+
 func GetCommandDocumentation(commandStr string, cmdDoc CommandDocumentationContent, argParser *argparser.ArgParser) CommandDocumentation {
-	return  CommandDocumentation{
+	return CommandDocumentation{
 		CommandStr: commandStr,
 		ShortDesc:  cmdDoc.ShortDesc,
 		LongDesc:   cmdDoc.LongDesc,

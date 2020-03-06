@@ -37,10 +37,9 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 )
 
-
 var catDocs = cli.CommandDocumentationContent{
 	ShortDesc: "print conflicts",
-	LongDesc: `The dolt conflicts cat command reads table conflicts and writes them to the standard output.`,
+	LongDesc:  `The dolt conflicts cat command reads table conflicts and writes them to the standard output.`,
 	Synopsis: []string{
 		"[{{.LessThan}}commit{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}}...",
 	},

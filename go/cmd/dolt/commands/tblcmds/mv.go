@@ -27,8 +27,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
-
-
 var tblMvDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Renames a table",
 	LongDesc: `
@@ -41,8 +39,8 @@ in a new table and a deleted table in the working set. These changes can be stag
 using {{.EmphasisLeft}}dolt commit{{.EmphasisRight}}.`,
 
 	Synopsis: []string{
-	"[-f] {{.LessThan}}oldtable{{.EmphasisRight}} {{.LessThan}}newtable{{.EmphasisRight}}",
-},
+		"[-f] {{.LessThan}}oldtable{{.EmphasisRight}} {{.LessThan}}newtable{{.EmphasisRight}}",
+	},
 }
 
 type MvCmd struct{}
