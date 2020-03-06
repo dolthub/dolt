@@ -33,8 +33,8 @@ import (
 )
 
 type SQLDiffSink struct {
-	wr		  io.WriteCloser
-	sch 	  schema.Schema
+	wr        io.WriteCloser
+	sch       schema.Schema
 	tableName string
 }
 

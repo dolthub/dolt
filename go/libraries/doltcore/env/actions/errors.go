@@ -15,8 +15,9 @@
 package actions
 
 import (
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 	"strings"
+
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 )
 
 type tblErrorType string

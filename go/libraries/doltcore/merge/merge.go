@@ -522,7 +522,6 @@ func rowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, 
 	return v, false, nil
 }
 
-
 func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Commit) (*doltdb.RootValue, map[string]*MergeStats, error) {
 	merger, err := NewMerger(ctx, cm1, cm2, ddb.ValueReadWriter())
 
@@ -639,4 +638,3 @@ func GetDocsInConflict(ctx context.Context, dEnv *env.DoltEnv) (*diff.DocDiffs, 
 
 	return diff.NewDocDiffs(ctx, dEnv, workingRoot, nil, docDetails)
 }
-

@@ -16,18 +16,18 @@ package testcommands
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/merge"
 	"testing"
 
+	sqle "github.com/src-d/go-mysql-server"
+	"github.com/src-d/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/merge"
 	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
-	sqle "github.com/src-d/go-mysql-server"
-	"github.com/src-d/go-mysql-server/sql"
 )
 
 type Command interface {

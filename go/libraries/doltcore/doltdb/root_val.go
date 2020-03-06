@@ -16,14 +16,13 @@ package doltdb
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"strconv"
 	"strings"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
-
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )

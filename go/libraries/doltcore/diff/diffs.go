@@ -54,7 +54,6 @@ type DocDiffs struct {
 	Docs        []string
 }
 
-
 type RootType int
 
 func (rt RootType) String() string {
