@@ -28,7 +28,7 @@ func CheckoutAllTables(ctx context.Context, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	tbls, err := AllTables(ctx, roots[WorkingRoot], roots[StagedRoot], roots[HeadRoot])
+	tbls, err := doltdb.UnionTableNames(ctx, roots[WorkingRoot], roots[StagedRoot], roots[HeadRoot])
 
 	if err != nil {
 		return err

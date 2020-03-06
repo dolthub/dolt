@@ -16,6 +16,7 @@ package actions
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
@@ -41,7 +42,7 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Comm
 		return nil, nil, err
 	}
 
-	tblNames, err := AllTables(ctx, root, rv)
+	tblNames, err := doltdb.UnionTableNames(ctx, root, rv)
 
 	if err != nil {
 		return nil, nil, err
@@ -125,7 +126,7 @@ func GetTablesInConflict(ctx context.Context, dEnv *env.DoltEnv) (workingInConfl
 	return workingInConflict, stagedInConflict, headInConflict, err
 }
 
-func GetDocsInConflict(ctx context.Context, dEnv *env.DoltEnv) (*DocDiffs, error) {
+func GetDocsInConflict(ctx context.Context, dEnv *env.DoltEnv) (*diff.DocDiffs, error) {
 	docDetails, err := dEnv.GetAllValidDocDetails()
 	if err != nil {
 		return nil, err
@@ -136,5 +137,5 @@ func GetDocsInConflict(ctx context.Context, dEnv *env.DoltEnv) (*DocDiffs, error
 		return nil, err
 	}
 
-	return NewDocDiffs(ctx, dEnv, workingRoot, nil, docDetails)
+	return diff.NewDocDiffs(ctx, dEnv, workingRoot, nil, docDetails)
 }

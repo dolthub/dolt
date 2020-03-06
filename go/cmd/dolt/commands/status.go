@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 	"io"
 	"strings"
 
@@ -70,7 +71,7 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 	help, _ := cli.HelpAndUsagePrinters(commandStr, statusShortDesc, statusLongDesc, statusSynopsis, ap)
 	cli.ParseArgs(ap, args, help)
 
-	stagedTblDiffs, notStagedTblDiffs, err := actions.GetTableDiffs(ctx, dEnv)
+	stagedTblDiffs, notStagedTblDiffs, err := diff.GetTableDiffs(ctx, dEnv)
 
 	if err != nil {
 		cli.PrintErrln(toStatusVErr((err)))
@@ -83,7 +84,7 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 1
 	}
 
-	stagedDocDiffs, notStagedDocDiffs, err := actions.GetDocDiffs(ctx, dEnv)
+	stagedDocDiffs, notStagedDocDiffs, err := diff.GetDocDiffs(ctx, dEnv)
 
 	if err != nil {
 		cli.PrintErrln(toStatusVErr((err)))
@@ -101,28 +102,28 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 	return 0
 }
 
-var tblDiffTypeToLabel = map[actions.TableDiffType]string{
-	actions.ModifiedTable: "modified:",
-	actions.RemovedTable:  "deleted:",
-	actions.AddedTable:    "new table:",
+var tblDiffTypeToLabel = map[diff.TableDiffType]string{
+	diff.ModifiedTable: "modified:",
+	diff.RemovedTable:  "deleted:",
+	diff.AddedTable:    "new table:",
 }
 
-var tblDiffTypeToShortLabel = map[actions.TableDiffType]string{
-	actions.ModifiedTable: "M",
-	actions.RemovedTable:  "D",
-	actions.AddedTable:    "N",
+var tblDiffTypeToShortLabel = map[diff.TableDiffType]string{
+	diff.ModifiedTable: "M",
+	diff.RemovedTable:  "D",
+	diff.AddedTable:    "N",
 }
 
-var docDiffTypeToLabel = map[actions.DocDiffType]string{
-	actions.ModifiedDoc: "modified:",
-	actions.RemovedDoc:  "deleted:",
-	actions.AddedDoc:    "new doc:",
+var docDiffTypeToLabel = map[diff.DocDiffType]string{
+	diff.ModifiedDoc: "modified:",
+	diff.RemovedDoc:  "deleted:",
+	diff.AddedDoc:    "new doc:",
 }
 
-var docDiffTypeToShortLabel = map[actions.DocDiffType]string{
-	actions.ModifiedDoc: "M",
-	actions.RemovedDoc:  "D",
-	actions.AddedDoc:    "N",
+var docDiffTypeToShortLabel = map[diff.DocDiffType]string{
+	diff.ModifiedDoc: "M",
+	diff.RemovedDoc:  "D",
+	diff.AddedDoc:    "N",
 }
 
 const (
@@ -153,7 +154,7 @@ const (
 	bothModifiedLabel = "both modified:"
 )
 
-func printStagedDiffs(wr io.Writer, stagedTbls *actions.TableDiffs, stagedDocs *actions.DocDiffs, printHelp bool) int {
+func printStagedDiffs(wr io.Writer, stagedTbls *diff.TableDiffs, stagedDocs *diff.DocDiffs, printHelp bool) int {
 	if stagedTbls.Len()+stagedDocs.Len() > 0 {
 		iohelp.WriteLine(wr, stagedHeader)
 
@@ -180,7 +181,7 @@ func printStagedDiffs(wr io.Writer, stagedTbls *actions.TableDiffs, stagedDocs *
 	return 0
 }
 
-func printDiffsNotStaged(ctx context.Context, dEnv *env.DoltEnv, wr io.Writer, notStagedTbls *actions.TableDiffs, notStagedDocs *actions.DocDiffs, printHelp bool, linesPrinted int, workingTblsInConflict []string) int {
+func printDiffsNotStaged(ctx context.Context, dEnv *env.DoltEnv, wr io.Writer, notStagedTbls *diff.TableDiffs, notStagedDocs *diff.DocDiffs, printHelp bool, linesPrinted int, workingTblsInConflict []string) int {
 	inCnfSet := set.NewStrSet(workingTblsInConflict)
 
 	if len(workingTblsInConflict) > 0 {
@@ -254,12 +255,12 @@ func printDiffsNotStaged(ctx context.Context, dEnv *env.DoltEnv, wr io.Writer, n
 	return linesPrinted
 }
 
-func getModifiedAndRemovedNotStaged(notStagedTbls *actions.TableDiffs, notStagedDocs *actions.DocDiffs, inCnfSet *set.StrSet) (lines []string) {
+func getModifiedAndRemovedNotStaged(notStagedTbls *diff.TableDiffs, notStagedDocs *diff.DocDiffs, inCnfSet *set.StrSet) (lines []string) {
 	lines = make([]string, 0, notStagedTbls.Len()+notStagedDocs.Len())
 	for _, tblName := range notStagedTbls.Tables {
 		tdt := notStagedTbls.TableToType[tblName]
 
-		if tdt != actions.AddedTable && !inCnfSet.Contains(tblName) && tblName != doltdb.DocTableName {
+		if tdt != diff.AddedTable && !inCnfSet.Contains(tblName) && tblName != doltdb.DocTableName {
 			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
 		}
 	}
@@ -268,7 +269,7 @@ func getModifiedAndRemovedNotStaged(notStagedTbls *actions.TableDiffs, notStaged
 		for _, docName := range notStagedDocs.Docs {
 			dtt := notStagedDocs.DocToType[docName]
 
-			if dtt != actions.AddedDoc {
+			if dtt != diff.AddedDoc {
 				lines = append(lines, fmt.Sprintf(statusFmt, docDiffTypeToLabel[dtt], docName))
 			}
 		}
@@ -276,12 +277,12 @@ func getModifiedAndRemovedNotStaged(notStagedTbls *actions.TableDiffs, notStaged
 	return lines
 }
 
-func getAddedNotStaged(notStagedTbls *actions.TableDiffs, notStagedDocs *actions.DocDiffs) (lines []string) {
+func getAddedNotStaged(notStagedTbls *diff.TableDiffs, notStagedDocs *diff.DocDiffs) (lines []string) {
 	lines = make([]string, 0, notStagedTbls.Len()+notStagedDocs.Len())
 	for _, tblName := range notStagedTbls.Tables {
 		tdt := notStagedTbls.TableToType[tblName]
 
-		if tdt == actions.AddedTable {
+		if tdt == diff.AddedTable {
 			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
 		}
 	}
@@ -289,7 +290,7 @@ func getAddedNotStaged(notStagedTbls *actions.TableDiffs, notStagedDocs *actions
 	for _, docName := range notStagedDocs.Docs {
 		doct := notStagedDocs.DocToType[docName]
 
-		if doct == actions.AddedDoc {
+		if doct == diff.AddedDoc {
 			lines = append(lines, fmt.Sprintf(statusFmt, docDiffTypeToLabel[doct], docName))
 		}
 	}
@@ -297,7 +298,7 @@ func getAddedNotStaged(notStagedTbls *actions.TableDiffs, notStagedDocs *actions
 	return lines
 }
 
-func printStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTbls *actions.TableDiffs, workingTblsInConflict []string, workingDocsInConflict *actions.DocDiffs, stagedDocs, notStagedDocs *actions.DocDiffs) {
+func printStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTbls *diff.TableDiffs, workingTblsInConflict []string, workingDocsInConflict *diff.DocDiffs, stagedDocs, notStagedDocs *diff.DocDiffs) {
 	cli.Printf(branchHeader, dEnv.RepoState.CWBHeadRef().GetPath())
 
 	if dEnv.RepoState.Merge != nil {

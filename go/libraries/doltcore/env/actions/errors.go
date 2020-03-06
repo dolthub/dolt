@@ -14,7 +14,10 @@
 
 package actions
 
-import "strings"
+import (
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
+	"strings"
+)
 
 type tblErrorType string
 
@@ -189,8 +192,8 @@ func CheckoutWouldOverwriteTables(err error) []string {
 }
 
 type NothingStaged struct {
-	NotStagedTbls *TableDiffs
-	NotStagedDocs *DocDiffs
+	NotStagedTbls *diff.TableDiffs
+	NotStagedDocs *diff.DocDiffs
 }
 
 func (ns NothingStaged) Error() string {
@@ -202,7 +205,7 @@ func IsNothingStaged(err error) bool {
 	return ok
 }
 
-func NothingStagedTblDiffs(err error) *TableDiffs {
+func NothingStagedTblDiffs(err error) *diff.TableDiffs {
 	ns, ok := err.(NothingStaged)
 
 	if !ok {
@@ -212,7 +215,7 @@ func NothingStagedTblDiffs(err error) *TableDiffs {
 	return ns.NotStagedTbls
 }
 
-func NothingStagedDocsDiffs(err error) *DocDiffs {
+func NothingStagedDocsDiffs(err error) *diff.DocDiffs {
 	ns, ok := err.(NothingStaged)
 
 	if !ok {

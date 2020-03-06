@@ -16,6 +16,7 @@ package doltdb
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"strconv"
 	"strings"
 
@@ -790,4 +791,19 @@ func appendDocDiffs(added, modified, removed []string, olderVal types.Value, new
 		}
 	}
 	return added, modified, removed
+}
+
+func UnionTableNames(ctx context.Context, roots ...*RootValue) ([]string, error) {
+	allTblNames := make([]string, 0, 16)
+	for _, root := range roots {
+		tblNames, err := root.GetTableNames(ctx)
+
+		if err != nil {
+			return nil, err
+		}
+
+		allTblNames = append(allTblNames, tblNames...)
+	}
+
+	return set.Unique(allTblNames), nil
 }
