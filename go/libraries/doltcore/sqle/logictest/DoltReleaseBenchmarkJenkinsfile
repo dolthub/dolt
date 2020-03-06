@@ -11,9 +11,8 @@ pipeline {
                     }
                     environment {
                         PATH = "${pwd()}/.ci_bin:${pwd()}/.ci_bin/node_modules/.bin:${env.PATH}"
-                        // DOLT_VERSION = sh(returnStdout: true, script: "(git rev-parse HEAD | tr -d '\n')")
-                        DOLT_RELEASE = "22b4e97ec5eaff9670f18522d0604af27ad11295" // like to pass this from the Jenkins UI
-                        TEST_N_TIMES = 5 // like to pass this from the Jenkins UI
+                        DOLT_RELEASE = "b0e4817a80af769c70871d62b82c4a006f49186f" // like to pass this from the Jenkins UI?
+                        TEST_N_TIMES = 5 // like to pass this from the Jenkins UI?
                         TMPDIR = "${pwd()}/tempDir"
                         CREDSDIR = "/home/jenkins/.dolt/creds"
                         DOLT_CREDS = credentials("system-account-dolthub-creds")
@@ -33,7 +32,7 @@ pipeline {
                             sh "go build -mod=readonly -o ../../.ci_bin/dolt ./cmd/dolt/."
                         }
                         dir ("go/libraries/doltcore/sqle/logictest/main") {
-                            sh "rm $DOLT_GLOBAL_CONFIG"
+                            sh "rm -f $DOLT_GLOBAL_CONFIG"
                             sh "dolt config --global --add user.name 'LiquidataSystemAccount'"
                             sh "dolt config --global --add user.email 'liquidatasys@gmail.com'"
                             sh "rm -rf .dolt && dolt init"
@@ -52,16 +51,16 @@ pipeline {
                         }
                         sh "rm -rf dolt-sql-performance && dolt clone Liquidata/dolt-sql-performance"
                         dir ("dolt-sql-performance") {
-                            sh "dolt checkout tester"
+                            sh "dolt checkout releases"
                             script {
                                 def j = env.TEST_N_TIMES.toInteger()
                                 for (int i = 1; i <= j; ++i) {
-                                    sh "dolt table import -u ld_dolt_results ../go/libraries/doltcore/sqle/logictest/main/temp/parsed${i}.json"
-                                    sh "dolt add ld_dolt_results"
+                                    sh "dolt table import -u releases_dolt_results ../go/libraries/doltcore/sqle/logictest/main/temp/parsed${i}.json"
+                                    sh "dolt add releases_dolt_results"
                                     sh "dolt commit -m \"update dolt sql performance results\""
                                 }
                             }
-//                            sh "dolt push origin tester"
+                            sh "dolt push origin releases"
                         }
                     }
                 }
