@@ -57,8 +57,7 @@ import (
 
 var sqlDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Runs a SQL query",
-	LongDesc: `Runs a SQL query you specify. By default, begins an interactive shell to run queries and view the
-results. With the {{.EmphasisLeft}}-q{{.EmphasisRight}} option, runs the given query and prints any results, then exits.
+	LongDesc: `Runs a SQL query you specify. By default, begins an interactive shell to run queries and view the results. With the {{.EmphasisLeft}}-q{{.EmphasisRight}} option, runs the given query and prints any results, then exits.
 
 Pipe SQL statements to dolt sql (no {{.EmphasisLeft}}-q{{.EmphasisRight}}) to execute a SQL import or update script. 
 
@@ -67,10 +66,7 @@ Known limitations:
 * No support for foreign keys
 * No support for column constraints besides NOT NULL
 * No support for default values
-* Column types aren't always preserved accurately from SQL create table statements. VARCHAR columns are unlimited 
-    length; FLOAT, INTEGER columns are 64 bit
-* Joins can only use indexes for two table joins. Three or more tables in a join query will use a non-indexed
-    join, which is very slow.
+* Joins can only use indexes for two table joins. Three or more tables in a join query will use a non-indexed join, which is very slow.
 `,
 	Synopsis: []string{
 		"",
