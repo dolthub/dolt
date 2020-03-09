@@ -106,13 +106,13 @@ type CommandDocumentation struct {
 	// The command/sub-command string passed to a command by the caller
 	CommandStr string
 	// The short description of the command
-	ShortDesc  string
+	ShortDesc string
 	// The long description of the command
-	LongDesc   string
+	LongDesc string
 	// The synopsis, an array of strings showing how to use the command
-	Synopsis   []string
+	Synopsis []string
 	// A structure that
-	ArgParser  *argparser.ArgParser
+	ArgParser *argparser.ArgParser
 }
 
 func (cmdDoc CommandDocumentation) cmdDocToCmdDocMd(options string) (commandDocumentForMarkdown, error) {
@@ -190,8 +190,10 @@ type docFormat struct {
 
 // mdx format
 var MarkdownFormat = docFormat{"`<", ">`", "`", "`"}
+
 // Shell help output format
 var CliFormat = docFormat{"<", ">", "<b>", "</b>"}
+
 // Special format for the synopsis which is rendered inside raw HTML in markdown
 var SynopsisMarkdownFormat = docFormat{"&lt;", "&gt;", "`", "`"}
 

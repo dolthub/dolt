@@ -60,4 +60,3 @@ func TestEmbolden(t *testing.T) {
 		}
 	}
 }
-
