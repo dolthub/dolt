@@ -16,6 +16,7 @@ package sqlserver
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"net"
 	"strconv"
 	"time"
@@ -33,7 +34,7 @@ import (
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
-func Serve(ctx context.Context, serverConfig *ServerConfig, rootValue *doltdb.RootValue, serverController *ServerController) (startError error, closeError error) {
+func Serve(ctx context.Context, serverConfig *ServerConfig, rootValue *doltdb.RootValue, serverController *ServerController, dEnv *env.DoltEnv) (startError error, closeError error) {
 	if serverConfig == nil {
 		cli.Println("No configuration given, using defaults")
 		serverConfig = DefaultServerConfig()
@@ -76,7 +77,7 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, rootValue *doltdb.Ro
 
 	userAuth := auth.NewAudit(auth.NewNativeSingle(serverConfig.User, serverConfig.Password, permissions), auth.NewAuditLog(logrus.StandardLogger()))
 	sqlEngine := sqle.NewDefault()
-	db := dsqle.NewDatabase("dolt", rootValue, nil, nil)
+	db := dsqle.NewDatabase("dolt", rootValue, dEnv.DoltDB, dEnv.RepoState)
 	sqlEngine.AddDatabase(db)
 
 	startError = dsqle.RegisterSchemaFragments(sql.NewContext(ctx), sqlEngine.Catalog, db)

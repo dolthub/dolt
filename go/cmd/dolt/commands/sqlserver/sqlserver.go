@@ -124,7 +124,7 @@ func SqlServerImpl(ctx context.Context, commandStr string, args []string, dEnv *
 	if logLevel, ok := apr.GetValue(logLevelFlag); ok {
 		serverConfig.LogLevel = LogLevel(logLevel)
 	}
-	if startError, closeError := Serve(ctx, serverConfig, root, serverController); startError != nil || closeError != nil {
+	if startError, closeError := Serve(ctx, serverConfig, root, serverController, dEnv); startError != nil || closeError != nil {
 		if startError != nil {
 			cli.PrintErrln(startError)
 		}
