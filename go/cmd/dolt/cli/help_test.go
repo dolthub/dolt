@@ -61,31 +61,3 @@ func TestEmbolden(t *testing.T) {
 	}
 }
 
-// not clear that we need this any more now that we are using templates
-//func TestMarkdownEscape(t *testing.T) {
-//	tests := []struct {
-//		name     string
-//		str      string
-//		expected string
-//	}{
-//		{"Nothing to do", "some text no angle brackets", "some text no angle brackets"},
-//		{"Open with no close", "x < y, ", "x &lt; y, "},
-//		{"Close with no open", "x &gt; y, ", "x &gt; y, "},
-//		{"Begin with open, no close", "<something", "&lt;something"},
-//		{"End with close with no begin", "something&gt;", "something&gt;"},
-//		{"Basic escape", "test <test> test", "test &lt;test&gt; test"},
-//		{"Start", "<test> test", "&lt;test&gt; test"},
-//		{"End", "test <test>", "test &lt;test&gt;"},
-//		{"Start and end", "<test>", "&lt;test&gt;"},
-//		{"Start after end", "this > that, <test>, that < this", "this &gt; that, &lt;test&gt;, that &lt; this"},
-//		{"has spaces", "<has spaces>", "&lt;has spaces&gt;"},
-//		{"bold tags", "regular text, <b>bolt text</b>, more regular", "regular text, **bolt text**, more regular"},
-//	}
-//
-//	for _, test := range tests {
-//		t.Run(test.name, func(t *testing.T) {
-//			res := markdownEscape(test.str)
-//			assert.Equal(t, test.expected, res)
-//		})
-//	}
-//}

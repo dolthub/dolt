@@ -23,7 +23,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 )
 
-type CommandDocumentForMarkdown struct {
+type commandDocumentForMarkdown struct {
 	Command             string
 	CommandAndShortDesc string
 	Synopsis            string
@@ -61,7 +61,7 @@ func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {
 			if err != nil {
 				return "", err
 			}
-			argStruct := Agument{arg, templatedDesc}
+			argStruct := argument{arg, templatedDesc}
 			outputStr, err := templateArgument(argStruct)
 			if err != nil {
 				return "", err
@@ -75,7 +75,7 @@ func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {
 			if err != nil {
 				return "", err
 			}
-			argStruct := Supported{supOpt.Abbrev, supOpt.Name, templatedDesc}
+			argStruct := supported{supOpt.Abbrev, supOpt.Name, templatedDesc}
 			outputStr, err := templateSupported(argStruct)
 			if err != nil {
 				return "", err
@@ -86,7 +86,7 @@ func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {
 		options = `No options for this command.`
 	}
 
-	cmdMdDoc, cmdMdDocErr := cmdDoc.CmdDocToCmdDocMd(options)
+	cmdMdDoc, cmdMdDocErr := cmdDoc.cmdDocToCmdDocMd(options)
 	if cmdMdDocErr != nil {
 		return "", nil
 	}
@@ -101,25 +101,31 @@ func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {
 	return templBuffer.String(), nil
 }
 
+// A struct that represents all the data structures required to create the documentation for a command.
 type CommandDocumentation struct {
+	// The command/sub-command string passed to a command by the caller
 	CommandStr string
+	// The short description of the command
 	ShortDesc  string
+	// The long description of the command
 	LongDesc   string
+	// The synopsis, an array of strings showing how to use the command
 	Synopsis   []string
+	// A structure that
 	ArgParser  *argparser.ArgParser
 }
 
-func (cmdDoc CommandDocumentation) CmdDocToCmdDocMd(options string) (CommandDocumentForMarkdown, error) {
+func (cmdDoc CommandDocumentation) cmdDocToCmdDocMd(options string) (commandDocumentForMarkdown, error) {
 	longDesc, longDescErr := cmdDoc.GetLongDesc(MarkdownFormat)
 	if longDescErr != nil {
-		return CommandDocumentForMarkdown{}, longDescErr
+		return commandDocumentForMarkdown{}, longDescErr
 	}
 	synopsis, synopsisErr := cmdDoc.GetSynopsis(SynopsisMarkdownFormat)
 	if synopsisErr != nil {
-		return CommandDocumentForMarkdown{}, synopsisErr
+		return commandDocumentForMarkdown{}, synopsisErr
 	}
 
-	return CommandDocumentForMarkdown{
+	return commandDocumentForMarkdown{
 		Command:             cmdDoc.CommandStr,
 		CommandAndShortDesc: fmt.Sprintf("`%s` - %s\n\n", cmdDoc.CommandStr, cmdDoc.GetShortDesc()),
 		Synopsis:            transformSynopsisToHtml(cmdDoc.CommandStr, synopsis),
@@ -128,6 +134,7 @@ func (cmdDoc CommandDocumentation) CmdDocToCmdDocMd(options string) (CommandDocu
 	}, nil
 }
 
+// Creates a CommandDocumentation given command string, arg parser, and a CommandDocumentationContent
 func GetCommandDocumentation(commandStr string, cmdDoc CommandDocumentationContent, argParser *argparser.ArgParser) CommandDocumentation {
 	return CommandDocumentation{
 		CommandStr: commandStr,
@@ -138,15 +145,17 @@ func GetCommandDocumentation(commandStr string, cmdDoc CommandDocumentationConte
 	}
 }
 
+// Returns the ShortDesc field of the receiver CommandDocumentation with the passed DocFormat injected into the template
 func (cmdDoc CommandDocumentation) GetShortDesc() string {
 	return cmdDoc.ShortDesc
 }
 
-func (cmdDoc CommandDocumentation) GetLongDesc(format DocFormat) (string, error) {
+// Returns the LongDesc field of the receiver CommandDocumentation with the passed DocFormat injected into the template
+func (cmdDoc CommandDocumentation) GetLongDesc(format docFormat) (string, error) {
 	return templateDocStringHelper(cmdDoc.LongDesc, format)
 }
 
-func templateDocStringHelper(docString string, docFormat DocFormat) (string, error) {
+func templateDocStringHelper(docString string, docFormat docFormat) (string, error) {
 	templ, err := template.New("description").Parse(docString)
 	if err != nil {
 		return "", err
@@ -158,7 +167,8 @@ func templateDocStringHelper(docString string, docFormat DocFormat) (string, err
 	return templBuffer.String(), nil
 }
 
-func (cmdDoc CommandDocumentation) GetSynopsis(format DocFormat) ([]string, error) {
+// Returns the synopsis iterating over each element and injecting the supplied DocFormat
+func (cmdDoc CommandDocumentation) GetSynopsis(format docFormat) ([]string, error) {
 	lines := cmdDoc.Synopsis
 	for i, line := range lines {
 		formatted, err := templateDocStringHelper(line, format)
@@ -171,16 +181,19 @@ func (cmdDoc CommandDocumentation) GetSynopsis(format DocFormat) ([]string, erro
 	return lines, nil
 }
 
-type DocFormat struct {
+type docFormat struct {
 	LessThan      string
 	GreaterThan   string
 	EmphasisLeft  string
 	EmphasisRight string
 }
 
-var MarkdownFormat = DocFormat{"`<", ">`", "`", "`"}
-var CliFormat = DocFormat{"<", ">", "<b>", "</b>"}
-var SynopsisMarkdownFormat = DocFormat{"&lt;", "&gt;", "`", "`"}
+// mdx format
+var MarkdownFormat = docFormat{"`<", ">`", "`", "`"}
+// Shell help output format
+var CliFormat = docFormat{"<", ">", "<b>", "</b>"}
+// Special format for the synopsis which is rendered inside raw HTML in markdown
+var SynopsisMarkdownFormat = docFormat{"&lt;", "&gt;", "`", "`"}
 
 func transformSynopsisToHtml(commandStr string, synopsis []string) string {
 	if len(synopsis) == 0 {
@@ -209,12 +222,12 @@ func transformSynopsisToHtml(commandStr string, synopsis []string) string {
 	return fmt.Sprintf(html, synopsisStr)
 }
 
-type Agument struct {
+type argument struct {
 	Name        string
 	Description string
 }
 
-func templateArgument(supportedArg Agument) (string, error) {
+func templateArgument(supportedArg argument) (string, error) {
 	var formatString string
 	if supportedArg.Description == "" {
 		formatString = "`<{{.Name}}>`\n\n"
@@ -234,13 +247,13 @@ func templateArgument(supportedArg Agument) (string, error) {
 	return ret, nil
 }
 
-type Supported struct {
+type supported struct {
 	Abbreviation string
 	Name         string
 	Description  string
 }
 
-func templateSupported(supported Supported) (string, error) {
+func templateSupported(supported supported) (string, error) {
 	var formatString string
 	if supported.Abbreviation == "" && supported.Description == "" {
 		formatString = "`--{{.Name}}`\n\n"

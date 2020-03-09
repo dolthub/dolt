@@ -58,7 +58,7 @@ type Command interface {
 	CreateMarkdown(fs filesys.Filesys, path, commandStr string) error
 }
 
-// This type is to store the content of a documented command, elsehwere we can transform this struct into
+// This type is to store the content of a documented command, elsewhere we can transform this struct into
 // other structs that are used to generate documentation at the command line and in markdown files.
 type CommandDocumentationContent struct {
 	ShortDesc string
