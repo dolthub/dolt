@@ -423,7 +423,7 @@ func testRebaseTag(t *testing.T, test RebaseTagTest) {
 	}
 
 	bs, _ := dEnv.DoltDB.GetBranches(context.Background()) // master
-	rebasedCommit, err := TagRebase(context.Background(), bs[0], dEnv.DoltDB, test.OldTag, test.NewTag)
+	rebasedCommit, err := TagRebaseForRef(context.Background(), bs[0], dEnv.DoltDB, test.OldTag, test.NewTag)
 
 	if test.ExpectedErrStr != "" {
 		require.NotNil(t, err)
@@ -470,7 +470,7 @@ func testRebaseTagHistory(t *testing.T) {
 	otherCm, _ := dEnv.DoltDB.Resolve(context.Background(), ocs)
 
 	bs, _ := dEnv.DoltDB.GetBranches(context.Background()) // master
-	newMasterCm, err := TagRebase(context.Background(), bs[0], dEnv.DoltDB, DripTag, DripTagRebased)
+	newMasterCm, err := TagRebaseForRef(context.Background(), bs[0], dEnv.DoltDB, DripTag, DripTagRebased)
 	require.NoError(t, err)
 
 	expectedSch := schema.SchemaFromCols(peopleWithDrip)

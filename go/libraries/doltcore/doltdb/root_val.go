@@ -170,7 +170,7 @@ func (root *RootValue) HasTag(ctx context.Context, tag uint64) (found bool, tblN
 		_, found = ss.GetColumn(tag)
 
 		if found {
-			tblName = value.(types.String).HumanReadableString()
+			tblName = key.(types.String).HumanReadableString()
 		}
 
 		return found, nil

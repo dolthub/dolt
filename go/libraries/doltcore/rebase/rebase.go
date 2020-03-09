@@ -34,7 +34,7 @@ import (
 type visitedSet map[hash.Hash]*doltdb.Commit
 
 // replaces all instances of oldTag with newTag.
-func TagRebase(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, oldTag, newTag uint64) (*doltdb.Commit, error) {
+func TagRebaseForRef(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, oldTag, newTag uint64) (*doltdb.Commit, error) {
 	cs, err := doltdb.NewCommitSpec("head", dRef.String())
 
 	if err != nil {
@@ -47,14 +47,7 @@ func TagRebase(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, oldTag
 		return nil, err
 	}
 
-	found, err := tagExistsInHistory(ctx, ddb, cm, oldTag)
-
-	if !found {
-		ch, _ := cm.HashOf()
-		return nil, errors.New(fmt.Sprintf("tag: %d not found in commit history for commit: %s", oldTag, ch))
-	}
-
-	rebasedCommit, err := tagRebaseRecursive(ctx, ddb, cm, make(visitedSet), oldTag, newTag)
+	rebasedCommit, err := TagRebaseForCommit(ctx, cm, ddb, oldTag, newTag)
 
 	if err != nil {
 		return nil, err
@@ -73,6 +66,21 @@ func TagRebase(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, oldTag
 	}
 
 	return rebasedCommit, nil
+}
+
+func TagRebaseForCommit(ctx context.Context, cm *doltdb.Commit, ddb *doltdb.DoltDB, oldTag, newTag uint64) (*doltdb.Commit, error) {
+	found, err := tagExistsInHistory(ctx, ddb, cm, oldTag)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !found {
+		ch, _ := cm.HashOf()
+		return nil, errors.New(fmt.Sprintf("tag: %d not found in commit history for commit: %s", oldTag, ch))
+	}
+
+	return tagRebaseRecursive(ctx, ddb, cm, make(visitedSet), oldTag, newTag)
 }
 
 func tagRebaseRecursive(ctx context.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, vs visitedSet, oldTag, newTag uint64) (*doltdb.Commit, error) {

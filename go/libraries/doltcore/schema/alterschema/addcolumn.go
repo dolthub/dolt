@@ -169,6 +169,10 @@ func ValidateNewColumn(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.
 		return false, nil
 	})
 
+	if err != nil {
+		return err
+	}
+
 	found, tn, err := root.HasTag(ctx, tag)
 	if found {
 		return fmt.Errorf("A column with the tag %d already exists in table %s.", tag, tn)

@@ -16,9 +16,9 @@ package alterschema
 
 import (
 	"context"
+	"github.com/google/uuid"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -237,7 +237,7 @@ func TestAddColumnToTable(t *testing.T) {
 			tag:         dtestutils.AgeTag,
 			newColName:  "newCol",
 			colKind:     types.IntKind,
-			nullable:    NotNull,
+			nullable:    Null,
 			defaultVal:  nil,
 			expectedErr: "A column with the tag 2 already exists",
 		},
@@ -246,7 +246,7 @@ func TestAddColumnToTable(t *testing.T) {
 			tag:         dtestutils.NextTag,
 			newColName:  "age",
 			colKind:     types.IntKind,
-			nullable:    NotNull,
+			nullable:    Null,
 			defaultVal:  types.Int(10),
 			expectedErr: "A column with the name age already exists",
 		},
@@ -280,12 +280,15 @@ func TestAddColumnToTable(t *testing.T) {
 			tbl, _, err := root.GetTable(ctx, tableName)
 			assert.NoError(t, err)
 
+			// t.db.root, table, t.name, col.Tag, col.Name, col.TypeInfo, nullable, defaultVal); err != nil {
+			valErr := ValidateNewColumn(ctx, root, tbl, tableName, tt.tag, tt.newColName, typeinfo.FromKind(tt.colKind), tt.nullable, tt.defaultVal)
 			updatedTable, err := AddColumnToTable(ctx, tbl, tt.tag, tt.newColName, typeinfo.FromKind(tt.colKind), tt.nullable, tt.defaultVal, tt.order)
 			if len(tt.expectedErr) > 0 {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tt.expectedErr)
+				require.Error(t, valErr)
+				assert.Contains(t, valErr.Error(), tt.expectedErr)
 				return
 			} else {
+				require.NoError(t, valErr)
 				require.NoError(t, err)
 			}
 

@@ -17,7 +17,6 @@ package merge
 import (
 	"context"
 	"errors"
-
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 
@@ -35,6 +34,7 @@ import (
 var ErrFastForward = errors.New("fast forward")
 var ErrSameTblAddedTwice = errors.New("table with same name added in 2 commits can't be merged")
 
+// TODO: do we need this class?
 type Merger struct {
 	root      *doltdb.RootValue
 	mergeRoot *doltdb.RootValue
@@ -481,7 +481,7 @@ func rowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, 
 }
 
 func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Commit) (*doltdb.RootValue, map[string]*MergeStats, error) {
-	merger, err := NewMerger(ctx, cm1, cm2, ddb.ValueReadWriter())
+	ancCm, err := doltdb.GetCommitAncestor(ctx, cm1, cm2)
 
 	if err != nil {
 		return nil, nil, err
@@ -493,13 +493,21 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Comm
 		return nil, nil, err
 	}
 
-	rv, err := cm2.GetRootValue()
+	mergeRoot, err := cm2.GetRootValue()
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	tblNames, err := doltdb.UnionTableNames(ctx, root, rv)
+	ancRoot, err := ancCm.GetRootValue()
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	merger := NewMerger(ctx, root, mergeRoot, ancRoot, ddb.ValueReadWriter())
+
+	tblNames, err := doltdb.UnionTableNames(ctx, root, mergeRoot)
 
 	if err != nil {
 		return nil, nil, err
