@@ -792,6 +792,7 @@ func appendDocDiffs(added, modified, removed []string, olderVal types.Value, new
 	return added, modified, removed
 }
 
+// UnionTableNames returns an array of all table names in all roots passed as params.
 func UnionTableNames(ctx context.Context, roots ...*RootValue) ([]string, error) {
 	allTblNames := make([]string, 0, 16)
 	for _, root := range roots {

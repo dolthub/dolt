@@ -24,6 +24,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/merge"
 )
 
+// MergeCommits is the implementation of Dolt's merge algorithm. It produces a new RootValue with merged table data, and a map containing
+// metrics about the merge including any conflicts produced by the merge.
 func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Commit) (*doltdb.RootValue, map[string]*merge.MergeStats, error) {
 	merger, err := merge.NewMerger(ctx, cm1, cm2, ddb.ValueReadWriter())
 
@@ -85,6 +87,7 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Comm
 	return root, tblToStats, nil
 }
 
+// GetTablesInConflict returns a list of table names that have conflicts for each of the roots working, staged, and HEAD.
 func GetTablesInConflict(ctx context.Context, dEnv *env.DoltEnv) (workingInConflict, stagedInConflict, headInConflict []string, err error) {
 	var headRoot, stagedRoot, workingRoot *doltdb.RootValue
 
@@ -127,6 +130,7 @@ func GetTablesInConflict(ctx context.Context, dEnv *env.DoltEnv) (workingInConfl
 	return workingInConflict, stagedInConflict, headInConflict, err
 }
 
+// GetDocsInConflict returns a DocDiff object for conflicts in the working root.
 func GetDocsInConflict(ctx context.Context, dEnv *env.DoltEnv) (*diff.DocDiffs, error) {
 	docDetails, err := dEnv.GetAllValidDocDetails()
 	if err != nil {

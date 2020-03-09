@@ -39,8 +39,10 @@ type Commit struct {
 	Message string
 }
 
+// CommandName returns "commit".
 func (c Commit) CommandName() string { return "commit" }
 
+// Exec executes a Commit command on a test dolt environment.
 func (c Commit) Exec(t *testing.T, dEnv *env.DoltEnv) {
 	err := actions.StageAllTables(context.Background(), dEnv, false)
 	require.NoError(t, err)
@@ -77,8 +79,10 @@ type Query struct {
 	Query string
 }
 
+// CommandName returns "query".
 func (q Query) CommandName() string { return "query" }
 
+// Exec executes a Query command on a test dolt environment.
 func (q Query) Exec(t *testing.T, dEnv *env.DoltEnv) {
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
@@ -98,8 +102,10 @@ type Branch struct {
 	BranchName string
 }
 
+// CommandName returns "branch".
 func (b Branch) CommandName() string { return "branch" }
 
+// Exec executes a Branch command on a test dolt environment.
 func (b Branch) Exec(t *testing.T, dEnv *env.DoltEnv) {
 	cwb := dEnv.RepoState.Head.Ref.String()
 	err := actions.CreateBranch(context.Background(), dEnv, b.BranchName, cwb, false)
@@ -110,8 +116,10 @@ type Checkout struct {
 	BranchName string
 }
 
+// CommandName returns "checkout".
 func (c Checkout) CommandName() string { return "checkout" }
 
+// Exec executes a Checkout command on a test dolt environment.
 func (c Checkout) Exec(t *testing.T, dEnv *env.DoltEnv) {
 	err := actions.CheckoutBranch(context.Background(), dEnv, c.BranchName)
 	require.NoError(t, err)
@@ -121,10 +129,12 @@ type Merge struct {
 	BranchName string
 }
 
-func (c Merge) CommandName() string { return "merge" }
+// CommandName returns "merge".
+func (m Merge) CommandName() string { return "merge" }
 
-// Adapted from commands/merge.go:Exec()
+// Exec executes a Merge command on a test dolt environment.
 func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) {
+	// Adapted from commands/merge.go:Exec()
 	dref, err := dEnv.FindRef(context.Background(), m.BranchName)
 	assert.NoError(t, err)
 

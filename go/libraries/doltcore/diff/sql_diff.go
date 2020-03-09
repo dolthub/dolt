@@ -38,14 +38,17 @@ type SQLDiffSink struct {
 	tableName string
 }
 
+// NewSQLDiffSink creates a SQLDiffSink for a diff pipeline.
 func NewSQLDiffSink(wr io.WriteCloser, sch schema.Schema, tableName string) (*SQLDiffSink, error) {
 	return &SQLDiffSink{wr, sch, tableName}, nil
 }
 
+// GetSchema gets the schema that the SQLDiffSink was created with.
 func (sds *SQLDiffSink) GetSchema() schema.Schema {
 	return sds.sch
 }
 
+// ProcRowWithProps satisfies pipeline.SinkFunc; it writes SQL diff statements to output.
 func (sds *SQLDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) error {
 
 	taggedVals := make(row.TaggedValues)
@@ -115,6 +118,7 @@ func (sds *SQLDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) 
 	return err
 }
 
+// ProcRowWithProps satisfies pipeline.SinkFunc; it writes rows as SQL statements.
 func (sds *SQLDiffSink) ProcRowForExport(r row.Row, _ pipeline.ReadableMap) error {
 	stmt, err := sql.RowAsInsertStmt(r, sds.tableName, sds.sch)
 
@@ -139,6 +143,7 @@ func (sds *SQLDiffSink) Close() error {
 	}
 }
 
+// PrintSqlTableDiffs writes diffs of table definitions to output.
 func PrintSqlTableDiffs(ctx context.Context, r1, r2 *doltdb.RootValue, wr io.WriteCloser) error {
 	creates, _, drops, err := r1.TableDiff(ctx, r2)
 
