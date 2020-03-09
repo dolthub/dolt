@@ -15,6 +15,8 @@ pipeline {
                         TMPDIR = "${pwd()}/tempDir"
                         CREDSDIR = "/home/jenkins/.dolt/creds"
                         DOLT_CREDS = credentials("system-account-dolthub-creds")
+                        TEST_N_TIMES = 5 // like to pass this from the Jenkins UI?
+                        DOLT_GLOBAL_CONFIG = "/home/jenkins/.dolt/config_global.json"
                     }
                     steps {
                         dir ("sqllogictest") {
@@ -36,22 +38,25 @@ pipeline {
                             sh "dolt config --global --add metrics.disabled true"
                             sh "dolt creds use 5jl65iugbs7olde8n8qqgvujs1bhp8c84bopgi78n26is"
                             sh "rm -rf temp && mkdir temp"
-                            sh "go run . run ../../../../../../sqllogictest/test/select1.test > temp/results.log"
-                            sh(returnStdout: true, script: "go run . parse \"$DOLT_VERSION\" temp/results.log > temp/parsed.json")
+                            script {
+                                def j = env.TEST_N_TIMES.toInteger()
+                                for (int i = 1; i <= j; ++i) {
+                                    sh "go run . run ../../../../../../sqllogictest/test/select1.test > temp/results${i}.log"
+                                    sh "go run . parse \"$DOLT_VERSION\" temp/results${i}.log > temp/parsed${i}.json"
+                                }
+                            }
                         }
                         dir ("dolt-sql-performance") {
-                            sh "dolt table import -u ld_dolt_results ../go/libraries/doltcore/sqle/logictest/main/temp/parsed.json"
-                            sh "dolt add ld_dolt_results"
-                            sh "dolt commit -m \"update dolt sql performance results\""
+                            sh "dolt checkout nightly"
                             script {
-                                env.DURATION_REGRESSIONS = sh(returnStdout: true, script: "dolt sql -q 'select * from duration_change' -r csv | wc -l | tr -d '[:space:]'")
-                                env.RESULT_REGRESSIONS = sh(returnStdout: true, script: "dolt sql -q 'select * from result_change' -r csv | wc -l | tr -d '[:space:]'")
+                                def j = env.TEST_N_TIMES.toInteger()
+                                for (int i = 1; i <= j; ++i) {
+                                    sh "dolt table import -u nightly_dolt_results ../go/libraries/doltcore/sqle/logictest/main/temp/parsed${i}.json"
+                                    sh "dolt add nightly_dolt_results"
+                                    sh "dolt commit -m \"update dolt sql performance results\""
+                                }
                             }
-                            sh "if [ $DURATION_REGRESSIONS != 1 ]; then echo 'PLEASE FAIL ME!!'; fi"
-                            sh "if [ $RESULT_REGRESSIONS != 1 ]; then echo 'PLEASE FAIL ME!!'; fi"
-                            sh "if [ $DURATION_REGRESSIONS = 1 ]; then echo 'PLEASE PASS ME!!'; fi"
-                            sh "if [ $RESULT_REGRESSIONS = 1 ]; then echo 'PLEASE PASS ME!!'; fi"
-//                             sh "dolt push origin master"
+//                            sh "dolt push origin nightly"
                         }
                     }
                 }
