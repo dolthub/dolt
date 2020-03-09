@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package actions
+package diff
 
 import (
 	"context"
@@ -52,6 +52,40 @@ type DocDiffs struct {
 	NumRemoved  int
 	DocToType   map[string]DocDiffType
 	Docs        []string
+}
+
+type RootType int
+
+func (rt RootType) String() string {
+	switch rt {
+	case WorkingRoot:
+		return "working root"
+	case StagedRoot:
+		return "staged root"
+	case CommitRoot:
+		return "root value for commit"
+	case HeadRoot:
+		return "HEAD commit root value"
+	}
+
+	return "unknown"
+}
+
+const (
+	WorkingRoot RootType = iota
+	StagedRoot
+	CommitRoot
+	HeadRoot
+	InvalidRoot
+)
+
+type RootValueUnreadable struct {
+	rootType RootType
+	Cause    error
+}
+
+func (rvu RootValueUnreadable) Error() string {
+	return "error: Unable to read " + rvu.rootType.String()
 }
 
 func NewTableDiffs(ctx context.Context, newer, older *doltdb.RootValue) (*TableDiffs, error) {

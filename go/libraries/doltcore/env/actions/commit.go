@@ -21,6 +21,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/config"
@@ -52,7 +53,7 @@ func getNameAndEmail(cfg *env.DoltCliConfig) (string, string, error) {
 }
 
 func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, date time.Time, allowEmpty bool) error {
-	stagedTbls, notStagedTbls, err := GetTableDiffs(ctx, dEnv)
+	stagedTbls, notStagedTbls, err := diff.GetTableDiffs(ctx, dEnv)
 
 	if msg == "" {
 		return ErrEmptyCommitMessage
@@ -62,7 +63,7 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, date time.
 		return err
 	}
 
-	_, notStagedDocs, err := GetDocDiffs(ctx, dEnv)
+	_, notStagedDocs, err := diff.GetDocDiffs(ctx, dEnv)
 
 	if err != nil {
 		return err

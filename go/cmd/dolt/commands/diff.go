@@ -298,7 +298,7 @@ func getRootForCommitSpecStr(ctx context.Context, csStr string, dEnv *env.DoltEn
 func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string, docDetails []doltdb.DocDetails, dEnv *env.DoltEnv, dArgs *diffArgs) errhand.VerboseError {
 	var err error
 	if len(tblNames) == 0 {
-		tblNames, err = actions.AllTables(ctx, r1, r2)
+		tblNames, err = doltdb.UnionTableNames(ctx, r1, r2)
 	}
 
 	if err != nil {

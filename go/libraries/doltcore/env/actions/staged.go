@@ -20,7 +20,6 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 )
 
 var ErrTablesInConflict = errors.New("table is in conflict")
@@ -80,7 +79,7 @@ func StageAllTables(ctx context.Context, dEnv *env.DoltEnv, allowConflicts bool)
 		return err
 	}
 
-	tbls, err := AllTables(ctx, staged, working)
+	tbls, err := doltdb.UnionTableNames(ctx, staged, working)
 
 	if err != nil {
 		return err
@@ -172,21 +171,6 @@ func stageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, staged *
 	}
 
 	return doltdb.ErrNomsIO
-}
-
-func AllTables(ctx context.Context, roots ...*doltdb.RootValue) ([]string, error) {
-	allTblNames := make([]string, 0, 16)
-	for _, root := range roots {
-		tblNames, err := root.GetTableNames(ctx)
-
-		if err != nil {
-			return nil, err
-		}
-
-		allTblNames = append(allTblNames, tblNames...)
-	}
-
-	return set.Unique(allTblNames), nil
 }
 
 func ValidateTables(ctx context.Context, tbls []string, roots ...*doltdb.RootValue) error {

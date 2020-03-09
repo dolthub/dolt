@@ -17,6 +17,7 @@ package actions
 import (
 	"context"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 )
@@ -58,7 +59,7 @@ func SaveDocsFromRoot(ctx context.Context, root *doltdb.RootValue, dEnv *env.Dol
 
 // SaveTrackedDocs writes the docs from the targetRoot to the filesystem. The working root is used to identify untracked docs, which are left unchanged.
 func SaveTrackedDocs(ctx context.Context, dEnv *env.DoltEnv, workRoot, targetRoot *doltdb.RootValue, localDocs env.Docs) error {
-	docDiffs, err := NewDocDiffs(ctx, dEnv, workRoot, nil, localDocs)
+	docDiffs, err := diff.NewDocDiffs(ctx, dEnv, workRoot, nil, localDocs)
 	if err != nil {
 		return err
 	}
@@ -89,7 +90,7 @@ func docIsUntracked(doc string, untracked []string) bool {
 	return false
 }
 
-func removeUntrackedDocs(docs []doltdb.DocDetails, docDiffs *DocDiffs) []doltdb.DocDetails {
+func removeUntrackedDocs(docs []doltdb.DocDetails, docDiffs *diff.DocDiffs) []doltdb.DocDetails {
 	result := []doltdb.DocDetails{}
 	untracked := getUntrackedDocs(docs, docDiffs)
 
@@ -101,11 +102,11 @@ func removeUntrackedDocs(docs []doltdb.DocDetails, docDiffs *DocDiffs) []doltdb.
 	return result
 }
 
-func getUntrackedDocs(docs []doltdb.DocDetails, docDiffs *DocDiffs) []string {
+func getUntrackedDocs(docs []doltdb.DocDetails, docDiffs *diff.DocDiffs) []string {
 	untracked := []string{}
 	for _, docName := range docDiffs.Docs {
 		dt := docDiffs.DocToType[docName]
-		if dt == AddedDoc {
+		if dt == diff.AddedDoc {
 			untracked = append(untracked, docName)
 		}
 	}

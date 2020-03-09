@@ -23,6 +23,7 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
@@ -182,7 +183,7 @@ func resetSoft(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 
 	if len(tbls) == 0 || (len(tbls) == 1 && tbls[0] == ".") {
 		var err error
-		tbls, err = actions.AllTables(ctx, stagedRoot, headRoot)
+		tbls, err = doltdb.UnionTableNames(ctx, stagedRoot, headRoot)
 
 		if err != nil {
 			return errhand.BuildDError("error: failed to get all tables").AddCause(err).Build()
@@ -241,12 +242,12 @@ func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootV
 		return
 	}
 
-	notStagedTbls, err := actions.NewTableDiffs(ctx, working, staged)
+	notStagedTbls, err := diff.NewTableDiffs(ctx, working, staged)
 	if err != nil {
 		return
 	}
 
-	notStagedDocs, err := actions.NewDocDiffs(ctx, dEnv, working, nil, nil)
+	notStagedDocs, err := diff.NewDocDiffs(ctx, dEnv, working, nil, nil)
 	if err != nil {
 		return
 	}
@@ -258,14 +259,14 @@ func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootV
 		for _, tblName := range notStagedTbls.Tables {
 			tdt := notStagedTbls.TableToType[tblName]
 
-			if tdt != actions.AddedTable && !doltdb.IsSystemTable(tblName) {
+			if tdt != diff.AddedTable && !doltdb.IsSystemTable(tblName) {
 				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[tdt], tblName))
 			}
 		}
 
 		for _, docName := range notStagedDocs.Docs {
 			ddt := notStagedDocs.DocToType[docName]
-			if ddt != actions.AddedDoc {
+			if ddt != diff.AddedDoc {
 				lines = append(lines, fmt.Sprintf("%s\t%s", docDiffTypeToShortLabel[ddt], docName))
 			}
 		}

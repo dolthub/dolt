@@ -21,7 +21,9 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
@@ -518,4 +520,121 @@ func rowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, 
 	}
 
 	return v, false, nil
+}
+
+func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Commit) (*doltdb.RootValue, map[string]*MergeStats, error) {
+	merger, err := NewMerger(ctx, cm1, cm2, ddb.ValueReadWriter())
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	root, err := cm1.GetRootValue()
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	rv, err := cm2.GetRootValue()
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	tblNames, err := doltdb.UnionTableNames(ctx, root, rv)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	tblToStats := make(map[string]*MergeStats)
+
+	// need to validate merges can be done on all tables before starting the actual merges.
+	for _, tblName := range tblNames {
+		mergedTable, stats, err := merger.MergeTable(ctx, tblName)
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if mergedTable != nil {
+			tblToStats[tblName] = stats
+
+			var err error
+			root, err = root.PutTable(ctx, tblName, mergedTable)
+
+			if err != nil {
+				return nil, nil, err
+			}
+		} else if has, err := root.HasTable(ctx, tblName); err != nil {
+			return nil, nil, err
+		} else if has {
+			tblToStats[tblName] = &MergeStats{Operation: TableRemoved}
+			root, err = root.RemoveTables(ctx, tblName)
+
+			if err != nil {
+				return nil, nil, err
+			}
+		} else {
+			panic("?")
+		}
+	}
+
+	return root, tblToStats, nil
+}
+
+func GetTablesInConflict(ctx context.Context, dEnv *env.DoltEnv) (workingInConflict, stagedInConflict, headInConflict []string, err error) {
+	var headRoot, stagedRoot, workingRoot *doltdb.RootValue
+
+	headRoot, err = dEnv.HeadRoot(ctx)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	stagedRoot, err = dEnv.StagedRoot(ctx)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	workingRoot, err = dEnv.WorkingRoot(ctx)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	headInConflict, err = headRoot.TablesInConflict(ctx)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	stagedInConflict, err = stagedRoot.TablesInConflict(ctx)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	workingInConflict, err = workingRoot.TablesInConflict(ctx)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return workingInConflict, stagedInConflict, headInConflict, err
+}
+
+func GetDocsInConflict(ctx context.Context, dEnv *env.DoltEnv) (*diff.DocDiffs, error) {
+	docDetails, err := dEnv.GetAllValidDocDetails()
+	if err != nil {
+		return nil, err
+	}
+
+	workingRoot, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return diff.NewDocDiffs(ctx, dEnv, workingRoot, nil, docDetails)
 }

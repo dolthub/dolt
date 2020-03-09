@@ -21,7 +21,6 @@ import (
 
 	"github.com/fatih/color"
 
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -29,30 +28,27 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/nullprinter"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/sqlexport"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 type SQLDiffSink struct {
-	sch schema.Schema
-	sw  *sqlexport.SqlExportWriter
+	wr        io.WriteCloser
+	sch       schema.Schema
+	tableName string
 }
 
+// NewSQLDiffSink creates a SQLDiffSink for a diff pipeline.
 func NewSQLDiffSink(wr io.WriteCloser, sch schema.Schema, tableName string) (*SQLDiffSink, error) {
-	sw, err := sqlexport.NewSQLDiffWriter(wr, tableName, sch)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &SQLDiffSink{sch, sw}, nil
+	return &SQLDiffSink{wr, sch, tableName}, nil
 }
 
+// GetSchema gets the schema that the SQLDiffSink was created with.
 func (sds *SQLDiffSink) GetSchema() schema.Schema {
 	return sds.sch
 }
 
+// ProcRowWithProps satisfies pipeline.SinkFunc; it writes SQL diff statements to output.
 func (sds *SQLDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) error {
 
 	taggedVals := make(row.TaggedValues)
@@ -87,14 +83,32 @@ func (sds *SQLDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) 
 		if dt, convertedOK := prop.(DiffChType); convertedOK {
 			switch dt {
 			case DiffAdded:
-				return sds.sw.WriteInsertRow(context.TODO(), r)
+				stmt, err := sql.RowAsInsertStmt(r, sds.tableName, sds.sch)
+
+				if err != nil {
+					return err
+				}
+
+				return iohelp.WriteLine(sds.wr, stmt)
 			case DiffRemoved:
-				return sds.sw.WriteDeleteRow(context.TODO(), r)
+				stmt, err := sql.RowAsDeleteStmt(r, sds.tableName, sds.sch)
+
+				if err != nil {
+					return err
+				}
+
+				return iohelp.WriteLine(sds.wr, stmt)
 			case DiffModifiedOld:
 				return nil
 			case DiffModifiedNew:
 				// TODO: minimize update statement to modified rows
-				return sds.sw.WriteUpdateRow(context.TODO(), r)
+				stmt, err := sql.RowAsUpdateStmt(r, sds.tableName, sds.sch)
+
+				if err != nil {
+					return err
+				}
+
+				return iohelp.WriteLine(sds.wr, stmt)
 			}
 			// Treat the diff indicator string as a diff of the same type
 			colDiffs[diffColName] = dt
@@ -104,23 +118,32 @@ func (sds *SQLDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) 
 	return err
 }
 
-func (sds *SQLDiffSink) ProcRowForExport(r row.Row, props pipeline.ReadableMap) error {
-	return sds.sw.WriteInsertRow(context.TODO(), r)
+// ProcRowWithProps satisfies pipeline.SinkFunc; it writes rows as SQL statements.
+func (sds *SQLDiffSink) ProcRowForExport(r row.Row, _ pipeline.ReadableMap) error {
+	stmt, err := sql.RowAsInsertStmt(r, sds.tableName, sds.sch)
+
+	if err != nil {
+		return err
+	}
+
+	return iohelp.WriteLine(sds.wr, stmt)
 }
 
 // Close should release resources being held
 func (sds *SQLDiffSink) Close() error {
-	if sds.sw != nil {
-		if err := sds.sw.Close(context.TODO()); err != nil {
+	if sds.wr != nil {
+		err := sds.wr.Close()
+		if err != nil {
 			return err
 		}
-		sds.sw = nil
+		sds.wr = nil
 		return nil
 	} else {
 		return errors.New("Already closed.")
 	}
 }
 
+// PrintSqlTableDiffs writes diffs of table definitions to output.
 func PrintSqlTableDiffs(ctx context.Context, r1, r2 *doltdb.RootValue, wr io.WriteCloser) error {
 	creates, _, drops, err := r1.TableDiff(ctx, r2)
 
@@ -185,7 +208,7 @@ func PrintSqlTableDiffs(ctx context.Context, r1, r2 *doltdb.RootValue, wr io.Wri
 				}
 
 				badRowCallback := func(tff *pipeline.TransformRowFailure) (quit bool) {
-					cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(ctx, tff.Row, sch)))
+					_ = iohelp.WriteLine(wr, color.RedString("error: failed to transform row %s.", row.Fmt(ctx, tff.Row, sch)))
 					return true
 				}
 

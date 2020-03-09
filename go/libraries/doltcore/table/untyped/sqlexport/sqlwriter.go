@@ -102,33 +102,3 @@ func (w *SqlExportWriter) Close(ctx context.Context) error {
 	}
 	return nil
 }
-
-func (w *SqlExportWriter) WriteInsertRow(ctx context.Context, r row.Row) error {
-	stmt, err := sql.RowAsInsertStmt(r, w.tableName, w.sch)
-
-	if err != nil {
-		return err
-	}
-
-	return iohelp.WriteLine(w.wr, stmt)
-}
-
-func (w *SqlExportWriter) WriteDeleteRow(ctx context.Context, r row.Row) error {
-	stmt, err := sql.RowAsDeleteStmt(r, w.tableName, w.sch)
-
-	if err != nil {
-		return err
-	}
-
-	return iohelp.WriteLine(w.wr, stmt)
-}
-
-func (w *SqlExportWriter) WriteUpdateRow(ctx context.Context, r row.Row) error {
-	stmt, err := sql.RowAsUpdateStmt(r, w.tableName, w.sch)
-
-	if err != nil {
-		return err
-	}
-
-	return iohelp.WriteLine(w.wr, stmt)
-}

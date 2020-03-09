@@ -25,7 +25,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/merge"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -125,7 +124,7 @@ func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 func printConflicts(ctx context.Context, root *doltdb.RootValue, tblNames []string) errhand.VerboseError {
 	if len(tblNames) == 1 && tblNames[0] == "." {
 		var err error
-		tblNames, err = actions.AllTables(ctx, root)
+		tblNames, err = doltdb.UnionTableNames(ctx, root)
 
 		if err != nil {
 			return errhand.BuildDError("unable to read tables").AddCause(err).Build()
