@@ -49,6 +49,11 @@ pipeline {
                                 }
                             }
                         }
+                        dir ("go") {
+                            sh "rm -rf $TMPDIR && mkdir $TMPDIR"
+                            sh "go get -mod=readonly ./..."
+                            sh "go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/."
+                        }
                         sh "rm -rf dolt-sql-performance && dolt clone Liquidata/dolt-sql-performance"
                         dir ("dolt-sql-performance") {
                             sh "dolt checkout releases"
@@ -65,7 +70,11 @@ pipeline {
                             sh "dolt table import -u releases_dolt_mean_results mean.csv"
                             sh "dolt add releases_dolt_mean_results"
                             sh "dolt commit -m \"update dolt sql performance mean results\""
-                            // sh "dolt push origin releases"
+                            sh "dolt push origin releases"
+                            sh "dolt checkout regressions"
+                            sh "dolt merge releases"
+                            sh "dolt add ."
+                            sh "dolt commit -m \"merge releases\""
                         }
                     }
                 }
