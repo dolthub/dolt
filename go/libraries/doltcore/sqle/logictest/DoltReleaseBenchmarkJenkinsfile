@@ -11,8 +11,8 @@ pipeline {
                     }
                     environment {
                         PATH = "${pwd()}/.ci_bin:${pwd()}/.ci_bin/node_modules/.bin:${env.PATH}"
-                        DOLT_RELEASE = "b0e4817a80af769c70871d62b82c4a006f49186f" // like to pass this from the Jenkins UI?
-                        TEST_N_TIMES = 5 // like to pass this from the Jenkins UI?
+                        DOLT_RELEASE = "516e4bff2e3cb952174731b067717cf6d275ffc9"
+                        TEST_N_TIMES = 5
                         TMPDIR = "${pwd()}/tempDir"
                         CREDSDIR = "/home/jenkins/.dolt/creds"
                         DOLT_CREDS = credentials("system-account-dolthub-creds")
@@ -60,7 +60,12 @@ pipeline {
                                     sh "dolt commit -m \"update dolt sql performance results\""
                                 }
                             }
-                            sh "dolt push origin releases"
+                            sh "rm -f mean.csv"
+                            sh "dolt sql -r csv -q \'select version, test_file, line_num, avg(duration) as mean_duration, result from dolt_history_releases_dolt_results where version=\"${DOLT_RELEASE}\" group by line_num;\' > mean.csv"
+                            sh "dolt table import -u releases_dolt_mean_results mean.csv"
+                            sh "dolt add releases_dolt_mean_results"
+                            sh "dolt commit -m \"update dolt sql performance mean results\""
+                            // sh "dolt push origin releases"
                         }
                     }
                 }
