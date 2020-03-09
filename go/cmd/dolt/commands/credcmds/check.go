@@ -32,7 +32,13 @@ import (
 
 var checkShortDesc = "Check authenticating with a credential keypair against a doltremoteapi."
 var checkLongDesc = `Tests calling a doltremoteapi with dolt credentials and reports the authentication result.`
-var checkSynopsis = []string{"[--endpoint doltremoteapi.dolthub.com:443] [--creds <eak95022q3vskvumn2fcrpibdnheq1dtr8t...>]"}
+var checkSynopsis = []string{"[--endpoint doltremoteapi.dolthub.com:443] [--creds {{.LessThan}}eak95022q3vskvumn2fcrpibdnheq1dtr8t...{{.GreaterThan}}]"}
+
+var checkDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Check authenticating with a credential keypair against a doltremoteapi.",
+	LongDesc:  `Tests calling a doltremoteapi with dolt credentials and reports the authentication result.`,
+	Synopsis:  []string{"[--endpoint doltremoteapi.dolthub.com:443] [--creds {{.LessThan}}eak95022q3vskvumn2fcrpibdnheq1dtr8t...{{.GreaterThan}}]"},
+}
 
 type CheckCmd struct{}
 
@@ -49,7 +55,7 @@ func (cmd CheckCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd CheckCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, checkShortDesc, checkLongDesc, checkSynopsis, ap)
+	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, checkDocs, ap))
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -73,7 +79,7 @@ func (cmd CheckCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd CheckCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, lsShortDesc, lsLongDesc, lsSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, checkDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	endpoint := loadEndpoint(dEnv, apr)

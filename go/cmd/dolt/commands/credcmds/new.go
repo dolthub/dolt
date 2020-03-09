@@ -29,12 +29,13 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
-var newShortDesc = "Create a new public/private keypair for authenticating with doltremoteapi."
-var newLongDesc = `Creates a new keypair for authenticating with doltremoteapi.
+var newDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Create a new public/private keypair for authenticating with doltremoteapi.",
+	LongDesc: `Creates a new keypair for authenticating with doltremoteapi.
 
-Prints the public portion of the keypair, which can entered into the credentials
-settings page of dolthub.`
-var newSynopsis = []string{}
+Prints the public portion of the keypair, which can entered into the credentials settings page of dolthub.`,
+	Synopsis: []string{},
+}
 
 type NewCmd struct{}
 
@@ -45,13 +46,13 @@ func (cmd NewCmd) Name() string {
 
 // Description returns a description of the command
 func (cmd NewCmd) Description() string {
-	return newShortDesc
+	return newDocs.ShortDesc
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd NewCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, newShortDesc, newLongDesc, newSynopsis, ap)
+	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, newDocs, ap))
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -73,7 +74,7 @@ func (cmd NewCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd NewCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, newShortDesc, newLongDesc, newSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, newDocs, ap))
 	cli.ParseArgs(ap, args, help)
 
 	_, newCreds, verr := actions.NewCredsFile(dEnv)

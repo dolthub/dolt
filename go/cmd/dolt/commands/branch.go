@@ -34,30 +34,28 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 )
 
-var branchShortDesc = `List, create, or delete branches`
-var branchLongDesc = `If <b>--list</b> is given, or if there are no non-option arguments, existing branches are listed; the current branch will be highlighted with an asterisk. 
+var branchForceFlagDesc = "Reset {{.LessThan}}branchname{{.GreaterThan}} to {{.LessThan}}startpoint{{.GreaterThan}}, even if {{.LessThan}}branchname{{.GreaterThan}} exists already. Without {{.EmphasisLeft}}-f{{.EmphasisRight}}, {{.EmphasisLeft}}dolt branch{{.EmphasisRight}} refuses to change an existing branch. In combination with {{.EmphasisLeft}}-d{{.EmphasisRight}} (or {{.EmphasisLeft}}--delete{{.EmphasisRight}}), allow deleting the branch irrespective of its merged status. In combination with -m (or {{.EmphasisLeft}}--move{{.EmphasisRight}}), allow renaming the branch even if the new branch name already exists, the same applies for {{.EmphasisLeft}}-c{{.EmphasisRight}} (or {{.EmphasisLeft}}--copy{{.EmphasisRight}})."
 
-The command's second form creates a new branch head named <branchname> which points to the current <b>HEAD</b>, or <start-point> if given.
+var branchDocs = cli.CommandDocumentationContent{
+	ShortDesc: `List, create, or delete branches`,
+	LongDesc: `If {{.EmphasisLeft}}--list{{.EmphasisRight}} is given, or if there are no non-option arguments, existing branches are listed; the current branch will be highlighted with an asterisk.
 
-Note that this will create the new branch, but it will not switch the working tree to it; use "dolt checkout <newbranch>" to switch to the new branch.
+The command's second form creates a new branch head named {{.LessThan}}branchname{{.GreaterThan}} which points to the current {{.EmphasisLeft}}HEAD{{.EmphasisRight}}, or {{.LessThan}}start-point{{.GreaterThan}} if given.
 
-With a <b>-m</b>, <oldbranch> will be renamed to <newbranch>. If <newbranch> exists, -f must be used to force the rename to happen.
+Note that this will create the new branch, but it will not switch the working tree to it; use {{.EmphasisLeft}}dolt checkout <newbranch>{{.EmphasisRight}} to switch to the new branch.
 
-The <b>-c</b> options have the exact same semantics as <b>-m</b>, except instead of the branch being renamed it will be copied to a new name.
+With a {{.EmphasisLeft}}-m{{.EmphasisRight}}, {{.LessThan}}oldbranch{{.GreaterThan}} will be renamed to {{.LessThan}}newbranch{{.GreaterThan}}. If {{.LessThan}}newbranch{{.GreaterThan}} exists, -f must be used to force the rename to happen.
 
-With a <b>-d</b>, <branchname> will be deleted. You may specify more than one branch for deletion.`
+The {{.EmphasisLeft}}-c{{.EmphasisRight}} options have the exact same semantics as {{.EmphasisLeft}}-m{{.EmphasisRight}}, except instead of the branch being renamed it will be copied to a new name.
 
-var branchForceFlagDesc = "Reset <branchname> to <startpoint>, even if <branchname> exists already. Without -f, dolt branch " +
-	"refuses to change an existing branch. In combination with -d (or --delete), allow deleting the branch irrespective " +
-	"of its merged status. In combination with -m (or --move), allow renaming the branch even if the new branch name " +
-	"already exists, the same applies for -c (or --copy)."
-
-var branchSynopsis = []string{
-	`[--list] [-v] [-a]`,
-	`[-f] <branchname> [<start-point>]`,
-	`-m [-f] [<oldbranch>] <newbranch>`,
-	`-c [-f] [<oldbranch>] <newbranch>`,
-	`-d [-f] <branchname>...`,
+With a {{.EmphasisLeft}}-d{{.EmphasisRight}}, {{.LessThan}}branchname{{.GreaterThan}} will be deleted. You may specify more than one branch for deletion.`,
+	Synopsis: []string{
+		`[--list] [-v] [-a]`,
+		`[-f] {{.LessThan}}branchname{{.GreaterThan}} [{{.LessThan}}start-point{{.GreaterThan}}]`,
+		`-m [-f] [{{.LessThan}}oldbranch{{.GreaterThan}}] {{.LessThan}}newbranch{{.GreaterThan}}`,
+		`-c [-f] [{{.LessThan}}oldbranch{{.GreaterThan}}] {{.LessThan}}newbranch{{.GreaterThan}}`,
+		`-d [-f] {{.LessThan}}branchname{{.GreaterThan}}...`,
+	},
 }
 
 const (
@@ -86,7 +84,7 @@ func (cmd BranchCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd BranchCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, branchShortDesc, branchLongDesc, branchSynopsis, ap)
+	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, branchDocs, ap))
 }
 
 func (cmd BranchCmd) createArgParser() *argparser.ArgParser {
@@ -97,7 +95,7 @@ func (cmd BranchCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(copyFlag, "c", "Create a copy of a branch.")
 	ap.SupportsFlag(moveFlag, "m", "Move/rename a branch")
 	ap.SupportsFlag(deleteFlag, "d", "Delete a branch. The branch must be fully merged in its upstream branch.")
-	ap.SupportsFlag(deleteForceFlag, "", "Shortcut for --delete --force.")
+	ap.SupportsFlag(deleteForceFlag, "", "Shortcut for {{.EmphasisLeft}}--delete --force{{.EmphasisRight}}.")
 	ap.SupportsFlag(verboseFlag, "v", "When in list mode, show the hash and commit subject line for each head")
 	ap.SupportsFlag(allFlag, "a", "When in list mode, shows remote tracked branches")
 	return ap
@@ -111,7 +109,7 @@ func (cmd BranchCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, branchShortDesc, branchLongDesc, branchSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, branchDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	switch {

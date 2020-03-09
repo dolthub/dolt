@@ -30,16 +30,18 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
-var fetchShortDesc = "Download objects and refs from another repository"
-var fetchLongDesc = "Fetch refs, along with the objects necessary to complete their histories and update " +
-	"remote-tracking branches." +
-	"\n" +
-	"\n By default dolt will attempt to fetch from a remote named 'origin'.  The <remote> parameter allows you to " +
-	"specify the name of a different remote you wish to pull from by the remote's name." +
-	"\n" +
-	"\nWhen no refspec(s) are specified on the command line, the fetch_specs for the default remote are used."
-var fetchSynopsis = []string{
-	"[<remote>] [<refspec> ...]",
+var fetchDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Download objects and refs from another repository",
+	LongDesc: `Fetch refs, along with the objects necessary to complete their histories and update remote-tracking branches.
+
+By default dolt will attempt to fetch from a remote named {{.EmphasisLeft}}origin{{.EmphasisRight}}.  The {{.LessThan}}remote{{.GreaterThan}} parameter allows you to specify the name of a different remote you wish to pull from by the remote's name.
+
+When no refspec(s) are specified on the command line, the fetch_specs for the default remote are used.
+`,
+
+	Synopsis: []string{
+		"[{{.LessThan}}remote{{.GreaterThan}}] [{{.LessThan}}refspec{{.GreaterThan}} ...]",
+	},
 }
 
 type FetchCmd struct{}
@@ -62,7 +64,7 @@ func (cmd FetchCmd) EventType() eventsapi.ClientEventType {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd FetchCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, fetchShortDesc, fetchLongDesc, fetchSynopsis, ap)
+	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, fetchDocs, ap))
 }
 
 func (cmd FetchCmd) createArgParser() *argparser.ArgParser {
@@ -73,7 +75,7 @@ func (cmd FetchCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, fetchShortDesc, fetchLongDesc, fetchSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, fetchDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	remotes, _ := dEnv.GetRemotes()

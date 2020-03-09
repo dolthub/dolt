@@ -28,9 +28,11 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
-var rmShortDesc = "Remove a stored public/private keypair."
-var rmLongDesc = `Removes an existing keypair from dolt's credential storage.`
-var rmSynopsis = []string{"<public_key_as_appears_in_ls>"}
+var rmDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Remove a stored public/private keypair.",
+	LongDesc:  `Removes an existing keypair from dolt's credential storage.`,
+	Synopsis:  []string{"{{.LessThan}}public_key_as_appears_in_ls{{.GreaterThan}}"},
+}
 
 type RmCmd struct{}
 
@@ -41,13 +43,13 @@ func (cmd RmCmd) Name() string {
 
 // Description returns a description of the command
 func (cmd RmCmd) Description() string {
-	return rmShortDesc
+	return rmDocs.ShortDesc
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd RmCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, rmShortDesc, rmLongDesc, rmSynopsis, ap)
+	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, rmDocs, ap))
 }
 
 func (cmd RmCmd) createArgParser() *argparser.ArgParser {
@@ -69,7 +71,7 @@ func (cmd RmCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, rmShortDesc, rmLongDesc, rmSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, rmDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 	args = apr.Args()
 

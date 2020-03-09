@@ -77,26 +77,28 @@ type DiffSink interface {
 	Close() error
 }
 
-var diffShortDesc = "Show changes between commits, commit and working tree, etc"
-var diffLongDesc = `Show changes between the working and staged tables, changes between the working tables and the tables within a commit, or changes between tables at two commits.
+var diffDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Show changes between commits, commit and working tree, etc",
+	LongDesc: `
+Show changes between the working and staged tables, changes between the working tables and the tables within a commit, or changes between tables at two commits.
 
-dolt diff [--options] [<tables>...]
+{{.EmphasisLeft}}dolt diff [--options] [<tables>...]{{.EmphasisRight}}
    This form is to view the changes you made relative to the staging area for the next commit. In other words, the differences are what you could tell Dolt to further add but you still haven't. You can stage these changes by using dolt add.
 
-dolt diff [--options] <commit> [<tables>...]
-   This form is to view the changes you have in your working tables relative to the named <commit>. You can use HEAD to compare it with the latest commit, or a branch name to compare with the tip of a different branch.
+{{.EmphasisLeft}}dolt diff [--options] <commit> [<tables>...]{{.EmphasisRight}}
+   This form is to view the changes you have in your working tables relative to the named {{.LessThan}}commit{{.GreaterThan}}. You can use HEAD to compare it with the latest commit, or a branch name to compare with the tip of a different branch.
 
-dolt diff [--options] <commit> <commit> [<tables>...]
-   This is to view the changes between two arbitrary <commit>.
+{{.EmphasisLeft}}dolt diff [--options] <commit> <commit> [<tables>...]{{.EmphasisRight}}
+   This is to view the changes between two arbitrary {{.EmphasisLeft}}commit{{.EmphasisRight}}.
 
-The diffs displayed can be limited to show the first N by providing the parameter <b>--limit N</b> where N is the number of diffs to display.
+The diffs displayed can be limited to show the first N by providing the parameter {{.EmphasisLeft}}--limit N{{.EmphasisRight}} where {{.EmphasisLeft}}N{{.EmphasisRight}} is the number of diffs to display.
 
-In order to filter which diffs are displayed <b>--where key=value</b> can be used.  The key in this case would be either to_COLUMN_NAME or from_COLUMN_NAME. where from_COLUMN_NAME=value would filter based on the original value and to_COLUMN_NAME would select based on its updated value.
-`
-
-var diffSynopsis = []string{
-	"[options] [<commit>] [<tables>...]",
-	"[options] <commit> <commit> [<tables>...]",
+In order to filter which diffs are displayed {{.EmphasisLeft}}--where key=value{{.EmphasisRight}} can be used.  The key in this case would be either {{.EmphasisLeft}}to_COLUMN_NAME{{.EmphasisRight}} or {{.EmphasisLeft}}from_COLUMN_NAME{{.EmphasisRight}}. where {{.EmphasisLeft}}from_COLUMN_NAME=value{{.EmphasisRight}} would filter based on the original value and {{.EmphasisLeft}}to_COLUMN_NAME{{.EmphasisRight}} would select based on its updated value.
+`,
+	Synopsis: []string{
+		`[options] [{{.LessThan}}commit{{.GreaterThan}}] [{{.LessThan}}tables{{.GreaterThan}}...]`,
+		`[options] {{.LessThan}}commit{{.GreaterThan}} {{.LessThan}}commit{{.GreaterThan}} [{{.LessThan}}tables{{.GreaterThan}}...]`,
+	},
 }
 
 type diffArgs struct {
@@ -126,7 +128,7 @@ func (cmd DiffCmd) EventType() eventsapi.ClientEventType {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd DiffCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, diffShortDesc, diffLongDesc, diffSynopsis, ap)
+	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, diffDocs, ap))
 }
 
 func (cmd DiffCmd) createArgParser() *argparser.ArgParser {
@@ -134,8 +136,8 @@ func (cmd DiffCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
 	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
 	ap.SupportsFlag(SummaryFlag, "", "Show summary of data changes")
-	ap.SupportsFlag(SQLFlag, "q", "Output diff as a SQL patch file of INSERT / UPDATE / DELETE statements")
-	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See dolt diff --help for details.")
+	ap.SupportsFlag(SQLFlag, "q", "Output diff as a SQL patch file of {{.EmphasisLeft}}INSERT{{.EmphasisRight}} / {{.EmphasisLeft}}UPDATE{{.EmphasisRight}} / {{.EmphasisLeft}}DELETE{{.EmphasisRight}} statements")
+	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
 	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
 	return ap
 }
@@ -143,7 +145,7 @@ func (cmd DiffCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, _ := cli.HelpAndUsagePrinters(commandStr, diffShortDesc, diffLongDesc, diffSynopsis, ap)
+	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, diffDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	diffParts := SchemaAndDataDiff

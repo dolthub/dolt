@@ -40,20 +40,20 @@ const (
 	commitMessageArg = "message"
 )
 
-var commitShortDesc = `Record changes to the repository`
-var commitLongDesc = "Stores the current contents of the staged tables in a new commit along with a log message from the " +
-	"user describing the changes.\n" +
-	"\n" +
-	"The content to be added can be specified by using dolt add to incrementally \"add\" changes to the staged tables " +
-	"before using the commit command (Note: even modified files must be \"added\");" +
-	"\n" +
-	"The log message can be added with the parameter -m <msg>.  If the -m parameter is not provided an editor will be " +
-	"opened where you can review the commit and provide a log message.\n" +
-	"\n" +
-	"The commit timestamp can be modified using the --date parameter.  Dates can be specified in the formats YYYY-MM-DD " +
-	"YYYY-MM-DDTHH:MM:SS, or YYYY-MM-DDTHH:MM:SSZ07:00 (where 07:00 is the time zone offset)."
-var commitSynopsis = []string{
-	"[options]",
+var commitDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Record changes to the repository",
+	LongDesc: `
+	Stores the current contents of the staged tables in a new commit along with a log message from the user describing the changes.
+	
+	The content to be added can be specified by using dolt add to incrementally \"add\" changes to the staged tables before using the commit command (Note: even modified files must be \"added\").
+	
+	The log message can be added with the parameter {{.EmphasisLeft}}-m <msg>{{.EmphasisRight}}.  If the {{.LessThan}}-m{{.GreaterThan}} parameter is not provided an editor will be opened where you can review the commit and provide a log message.
+	
+	The commit timestamp can be modified using the --date parameter.  Dates can be specified in the formats {{.LessThan}}YYYY-MM-DD{{.GreaterThan}}, {{.LessThan}}YYYY-MM-DDTHH:MM:SS{{.GreaterThan}}, or {{.LessThan}}YYYY-MM-DDTHH:MM:SSZ07:00{{.GreaterThan}} (where {{.LessThan}}07:00{{.GreaterThan}} is the time zone offset)."
+	`,
+	Synopsis: []string{
+		"[options]",
+	},
 }
 
 type CommitCmd struct{}
@@ -71,12 +71,12 @@ func (cmd CommitCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd CommitCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, commitShortDesc, commitLongDesc, commitSynopsis, ap)
+	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, commitDocs, ap))
 }
 
 func (cmd CommitCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsString(commitMessageArg, "m", "msg", "Use the given <msg> as the commit message.")
+	ap.SupportsString(commitMessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
 	ap.SupportsFlag(allowEmptyFlag, "", "Allow recording a commit that has the exact same data as its sole parent. This is usually a mistake, so it is disabled by default. This option bypasses that safety.")
 	ap.SupportsString(dateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
 	return ap
@@ -85,7 +85,7 @@ func (cmd CommitCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, commitShortDesc, commitLongDesc, commitSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, commitDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	msg, msgOk := apr.GetValue(commitMessageArg)

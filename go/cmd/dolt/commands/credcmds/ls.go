@@ -30,11 +30,13 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
-var lsShortDesc = "List keypairs available for authenticating with doltremoteapi."
-var lsLongDesc = `Lists known public keys from keypairs for authenticating with doltremoteapi.
+var lsDocs = cli.CommandDocumentationContent{
+	ShortDesc: "List keypairs available for authenticating with doltremoteapi.",
+	LongDesc: `Lists known public keys from keypairs for authenticating with doltremoteapi.
 
-The currently selected keypair appears with a '*' next to it.`
-var lsSynopsis = []string{"[-v | --verbose]"}
+The currently selected keypair appears with a {{.EmphasisLeft}}*{{.EmphasisRight}} next to it.`,
+	Synopsis: []string{"[-v | --verbose]"},
+}
 
 var lsVerbose = false
 
@@ -47,13 +49,13 @@ func (cmd LsCmd) Name() string {
 
 // Description returns a description of the command
 func (cmd LsCmd) Description() string {
-	return lsShortDesc
+	return lsDocs.ShortDesc
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd LsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, lsShortDesc, lsLongDesc, lsSynopsis, ap)
+	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, lsDocs, ap))
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -76,7 +78,7 @@ func (cmd LsCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, lsShortDesc, lsLongDesc, lsSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, lsDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.Contains("verbose") {

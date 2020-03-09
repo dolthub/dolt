@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"io"
 	"path/filepath"
 	"strings"
 
@@ -67,7 +66,7 @@ func (cmd *DumpDocsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr stri
 func (cmd *DumpDocsCmd) Exec(_ context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(dirParamName, "", "dir", "The directory where the md files should be dumped")
-	help, usage := cli.HelpAndUsagePrinters(commandStr, initShortDesc, initLongDesc, initSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{}, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	dirStr := apr.GetValueOrDefault(dirParamName, ".")
@@ -84,25 +83,7 @@ func (cmd *DumpDocsCmd) Exec(_ context.Context, commandStr string, args []string
 		return 1
 	}
 
-	indexPath := filepath.Join(dirStr, "command_line_index.md")
-	idxWr, err := dEnv.FS.OpenForWrite(indexPath)
-
-	if err != nil {
-		verr := errhand.BuildDError("error writing to command_line.md").AddCause(err).Build()
-		cli.PrintErrln(verr.Verbose())
-		return 1
-	}
-
-	defer idxWr.Close()
-	err = iohelp.WriteAll(idxWr, []byte("# Dolt Commands\n"))
-
-	if err != nil {
-		verr := errhand.BuildDError("error writing to command_line.md").AddCause(err).Build()
-		cli.PrintErrln(verr.Verbose())
-		return 1
-	}
-
-	err = cmd.dumpDocs(idxWr, dEnv, dirStr, cmd.DoltCommand.Name(), cmd.DoltCommand.Subcommands)
+	err := cmd.dumpDocs(dEnv, dirStr, cmd.DoltCommand.Name(), cmd.DoltCommand.Subcommands)
 
 	if err != nil {
 		verr := errhand.BuildDError("error: Failed to dump docs.").AddCause(err).Build()
@@ -114,7 +95,7 @@ func (cmd *DumpDocsCmd) Exec(_ context.Context, commandStr string, args []string
 	return 0
 }
 
-func (cmd *DumpDocsCmd) dumpDocs(idxWr io.Writer, dEnv *env.DoltEnv, dirStr, cmdStr string, subCommands []cli.Command) error {
+func (cmd *DumpDocsCmd) dumpDocs(dEnv *env.DoltEnv, dirStr, cmdStr string, subCommands []cli.Command) error {
 	for _, curr := range subCommands {
 		var hidden bool
 		if hidCmd, ok := curr.(cli.HiddenCommand); ok {
@@ -123,25 +104,18 @@ func (cmd *DumpDocsCmd) dumpDocs(idxWr io.Writer, dEnv *env.DoltEnv, dirStr, cmd
 
 		if !hidden {
 			if subCmdHandler, ok := curr.(cli.SubCommandHandler); ok {
-				err := cmd.dumpDocs(idxWr, dEnv, dirStr, cmdStr+" "+subCmdHandler.Name(), subCmdHandler.Subcommands)
+				err := cmd.dumpDocs(dEnv, dirStr, cmdStr+" "+subCmdHandler.Name(), subCmdHandler.Subcommands)
 
 				if err != nil {
 					return err
 				}
 			} else {
-				currCmdStr := cmdStr + " " + curr.Name()
-				filename := strings.ReplaceAll(currCmdStr, " ", "_")
-				filename = strings.ReplaceAll(filename, "-", "_")
+				currCmdStr := fmt.Sprintf("%s %s", cmdStr, curr.Name())
+				filename := strings.ReplaceAll(currCmdStr, " ", "-")
+
 				absPath := filepath.Join(dirStr, filename+".md")
 
-				indexLine := fmt.Sprintf("* [%s](%s)\n", currCmdStr, filename)
-				err := iohelp.WriteAll(idxWr, []byte(indexLine))
-
-				if err != nil {
-					return err
-				}
-
-				err = curr.CreateMarkdown(dEnv.FS, absPath, currCmdStr)
+				err := curr.CreateMarkdown(dEnv.FS, absPath, currCmdStr)
 
 				if err != nil {
 					return err
@@ -151,4 +125,16 @@ func (cmd *DumpDocsCmd) dumpDocs(idxWr io.Writer, dEnv *env.DoltEnv, dirStr, cmd
 	}
 
 	return nil
+}
+
+func CreateMarkdown(fs filesys.Filesys, path string, cmdDoc cli.CommandDocumentation) error {
+	markdownDoc, err := cmdDoc.CmdDocToMd()
+	if err != nil {
+		return err
+	}
+	wr, err := fs.OpenForWrite(path)
+	if err != nil {
+		return err
+	}
+	return iohelp.WriteIfNoErr(wr, []byte(markdownDoc), err)
 }

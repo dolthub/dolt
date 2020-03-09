@@ -38,28 +38,25 @@ const (
 	abortParam = "abort"
 )
 
-var mergeShortDesc = "Join two or more development histories together"
-var mergeLongDesc = "Incorporates changes from the named commits (since the time their histories diverged from the " +
-	"current branch) into the current branch.\n" +
-	"\n" +
-	"The second syntax (\"<b>dolt merge --abort</b>\") can only be run after the merge has resulted in conflicts. " +
-	"git merge --abort will abort the merge process and try to reconstruct the pre-merge state. However, if there were " +
-	"uncommitted changes when the merge started (and especially if those changes were further modified after the merge " +
-	"was started), dolt merge --abort will in some cases be unable to reconstruct the original (pre-merge) changes. " +
-	"Therefore: \n" +
-	"\n" +
-	"<b>Warning</b>: Running dolt merge with non-trivial uncommitted changes is discouraged: while possible, it may " +
-	"leave you in a state that is hard to back out of in the case of a conflict."
-var mergeSynopsis = []string{
-	"<branch>",
-	"--abort",
+var mergeDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Join two or more development histories together",
+	LongDesc: `Incorporates changes from the named commits (since the time their histories diverged from the current branch) into the current branch.
+
+The second syntax ({{.LessThan}}dolt merge --abort{{.GreaterThan}}) can only be run after the merge has resulted in conflicts. git merge {{.EmphasisLeft}}--abort{{.EmphasisRight}} will abort the merge process and try to reconstruct the pre-merge state. However, if there were uncommitted changes when the merge started (and especially if those changes were further modified after the merge was started), dolt merge {{.EmphasisLeft}}--abort{{.EmphasisRight}} will in some cases be unable to reconstruct the original (pre-merge) changes. Therefore: 
+
+{{.LessThan}}Warning{{.GreaterThan}}: Running dolt merge with non-trivial uncommitted changes is discouraged: while possible, it may leave you in a state that is hard to back out of in the case of a conflict.
+`,
+
+	Synopsis: []string{
+		"{{.LessThan}}branch{{.GreaterThan}}",
+		"--abort",
+	},
 }
 
-var abortDetails = "Abort the current conflict resolution process, and try to reconstruct the pre-merge state.\n" +
-	"\n" +
-	"If there were uncommitted working set changes present when the merge started, dolt merge --abort will be " +
-	"unable to reconstruct these changes. It is therefore recommended to always commit or stash your changes before " +
-	"running git merge."
+var abortDetails = `Abort the current conflict resolution process, and try to reconstruct the pre-merge state.
+
+If there were uncommitted working set changes present when the merge started, {{.EmphasisLeft}}dolt merge --abort{{.EmphasisRight}} will be unable to reconstruct these changes. It is therefore recommended to always commit or stash your changes before running git merge.
+`
 
 type MergeCmd struct{}
 
@@ -76,7 +73,7 @@ func (cmd MergeCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd MergeCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, mergeShortDesc, mergeLongDesc, mergeSynopsis, ap)
+	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, mergeDocs, ap))
 }
 
 func (cmd MergeCmd) createArgParser() *argparser.ArgParser {
@@ -93,7 +90,7 @@ func (cmd MergeCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, mergeShortDesc, mergeLongDesc, mergeSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, mergeDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	var verr errhand.VerboseError
@@ -126,13 +123,13 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				verr = errhand.BuildDError("error: failed to get conflicts").AddCause(err).Build()
 			} else if has {
 				cli.Println("error: Merging is not possible because you have unmerged files.")
-				cli.Println("hint: Fix them up in the work tree, and then use 'dolt add <table>'")
+				cli.Println("hint: Fix them up in the work tree, and then use {{.EmphasisLeft}}dolt add <table>{{.EmphasisRight}}")
 				cli.Println("hint: as appropriate to mark resolution and make a commit.")
 				cli.Println("fatal: Exiting because of an unresolved conflict.")
 				return 1
 			} else if dEnv.IsMergeActive() {
 				cli.Println("error: Merging is not possible because you have not committed an active merge.")
-				cli.Println("hint: add affected tables using 'dolt add <table>' and commit using 'dolt commit -m <msg>'")
+				cli.Println("hint: add affected tables using {{.EmphasisLeft}}dolt add <table>{{.EmphasisRight}} and commit using {{.EmphasisLeft}}dolt commit -m <msg>{{.EmphasisRight}}")
 				cli.Println("fatal: Exiting because of active merge")
 				return 1
 			}

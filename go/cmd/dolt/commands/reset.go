@@ -35,24 +35,26 @@ const (
 	HardResetParam = "hard"
 )
 
-var resetShortDesc = "Resets staged tables to their HEAD state"
-var resetLongDesc = `Sets the state of a table in the staging area to be that table's value at HEAD
+var resetDocContent = cli.CommandDocumentationContent{
+	ShortDesc: "Resets staged tables to their HEAD state",
+	LongDesc: `Sets the state of a table in the staging area to be that table's value at HEAD
 
-dolt reset <tables>...
-	This form resets the values for all staged <tables> to their values at HEAD. (It does not affect the working tree or
+{{.EmphasisLeft}}dolt reset <tables>...{{.EmphasisRight}}"
+	This form resets the values for all staged {{.LessThan}}tables{{.GreaterThan}} to their values at {{.EmphasisLeft}}HEAD{{.EmphasisRight}}. (It does not affect the working tree or
 	the current branch.)
 
-	This means that </b>dolt reset <tables></b> is the opposite of <b>dolt add <tables></b>.
+	This means that {{.EmphasisLeft}}dolt reset <tables>{{.EmphasisRight}} is the opposite of {{.EmphasisLeft}}dolt add <tables>{{.EmphasisRight}}.
 
-	After running <b>dolt reset <tables></b> to update the staged tables, you can use <b>dolt checkout</b> to check the
+	After running {{.EmphasisLeft}}dolt reset <tables>{{.EmphasisRight}} to update the staged tables, you can use {{.EmphasisLeft}}dolt checkout{{.EmphasisRight}} to check the
 	contents out of the staged tables to the working tables.
 
 dolt reset .
-	This form resets <b>all</b> staged tables to their values at HEAD. It is the opposite of <b>dolt add .</b>`
+	This form resets {{.EmphasisLeft}}all{{.EmphasisRight}} staged tables to their values at HEAD. It is the opposite of {{.EmphasisLeft}}dolt add .{{.EmphasisRight}}`,
 
-var resetSynopsis = []string{
-	"<tables>...",
-	"[--hard | --soft]",
+	Synopsis: []string{
+		"{{.LessThan}}tables{{.GreaterThan}}...",
+		"[--hard | --soft]",
+	},
 }
 
 type ResetCmd struct{}
@@ -70,12 +72,12 @@ func (cmd ResetCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ResetCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, resetShortDesc, resetLongDesc, resetSynopsis, ap)
+	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, resetDocContent, ap))
 }
 
 func (cmd ResetCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsFlag(HardResetParam, "", "Resets the working tables and staged tables. Any changes to tracked tables in the working tree since <commit> are discarded.")
+	ap.SupportsFlag(HardResetParam, "", "Resets the working tables and staged tables. Any changes to tracked tables in the working tree since {{.LessThan}}commit{{.GreaterThan}} are discarded.")
 	ap.SupportsFlag(SoftResetParam, "", "Does not touch the working tables, but removes all tables staged to be committed.")
 	return ap
 }
@@ -83,7 +85,7 @@ func (cmd ResetCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, resetShortDesc, resetLongDesc, resetSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, resetDocContent, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.ContainsArg(doltdb.DocTableName) {

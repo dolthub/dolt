@@ -36,10 +36,12 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 )
 
-var catShortDesc = "print conflicts"
-var catLongDesc = `The dolt conflicts cat command reads table conflicts and writes them to the standard output.`
-var catSynopsis = []string{
-	"[<commit>] <table>...",
+var catDocs = cli.CommandDocumentationContent{
+	ShortDesc: "print conflicts",
+	LongDesc:  `The dolt conflicts cat command reads table conflicts and writes them to the standard output.`,
+	Synopsis: []string{
+		"[{{.LessThan}}commit{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}}...",
+	},
 }
 
 type CatCmd struct{}
@@ -57,7 +59,7 @@ func (cmd CatCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd CatCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, catShortDesc, catLongDesc, catSynopsis, ap)
+	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, catDocs, ap))
 }
 
 // EventType returns the type of the event to log
@@ -75,7 +77,7 @@ func (cmd CatCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, catShortDesc, catLongDesc, catSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, catDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 	args = apr.Args()
 
