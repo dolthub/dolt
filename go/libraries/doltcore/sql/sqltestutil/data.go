@@ -16,8 +16,10 @@ package sqltestutil
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -27,6 +29,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/envtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -100,7 +103,7 @@ func createEpisodesTestSchema() schema.Schema {
 	colColl, _ := schema.NewColCollection(
 		schema.NewColumn("id", EpisodeIdTag, types.IntKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("name", EpNameTag, types.StringKind, false, schema.NotNullConstraint{}),
-		schema.NewColumn("air_date", EpAirDateTag, types.IntKind, false),
+		newColumnWithTypeInfo("air_date", EpAirDateTag, typeinfo.DatetimeType, false),
 		schema.NewColumn("rating", EpRatingTag, types.FloatKind, false),
 	)
 	return schema.SchemaFromCols(colColl)
@@ -113,6 +116,14 @@ func createAppearancesTestSchema() schema.Schema {
 		schema.NewColumn("comments", AppCommentsTag, types.StringKind, false),
 	)
 	return schema.SchemaFromCols(colColl)
+}
+
+func newColumnWithTypeInfo(name string, tag uint64, info typeinfo.TypeInfo, partOfPk bool, constraints ...schema.ColConstraint) schema.Column {
+	col, err := schema.NewColumnWithTypeInfo(name, tag, info, partOfPk, constraints...)
+	if err != nil {
+		panic(fmt.Sprintf("unexpected error creating column: %s", err.Error()))
+	}
+	return col
 }
 
 func NewPeopleRow(id int, first, last string, isMarried bool, age int, rating float64) row.Row {
@@ -134,14 +145,13 @@ func NewPeopleRow(id int, first, last string, isMarried bool, age int, rating fl
 	return r
 }
 
-func newEpsRow(id int, name string, airdate int, rating float64) row.Row {
+func newEpsRow(id int, name string, airdate string, rating float64) row.Row {
 	vals := row.TaggedValues{
 		EpisodeIdTag: types.Int(id),
 		EpNameTag:    types.String(name),
-		EpAirDateTag: types.Int(airdate),
+		EpAirDateTag: types.Timestamp(datetimeStrToTimestamp(airdate)),
 		EpRatingTag:  types.Float(rating),
 	}
-
 	r, err := row.New(types.Format_7_18, EpisodesTestSchema, vals)
 
 	if err != nil {
@@ -149,6 +159,14 @@ func newEpsRow(id int, name string, airdate int, rating float64) row.Row {
 	}
 
 	return r
+}
+
+func datetimeStrToTimestamp(datetime string) time.Time {
+	time, err := time.Parse("2006-01-02 15:04:05", datetime)
+	if err != nil {
+		panic(fmt.Sprintf("unable to parse datetime %s", datetime))
+	}
+	return time
 }
 
 func newAppsRow(charId, epId int, comment string) row.Row {
@@ -199,10 +217,10 @@ var Barney = NewPeopleRowWithOptionalFields(barneyId, "Barney", "Gumble", false,
 var AllPeopleRows = Rs(Homer, Marge, Bart, Lisa, Moe, Barney)
 
 // Actually the first 4 episodes of the show
-var Ep1 = newEpsRow(1, "Simpsons Roasting On an Open Fire", 629953200, 8.0)
-var Ep2 = newEpsRow(2, "Bart the Genius", 632372400, 9.0)
-var Ep3 = newEpsRow(3, "Homer's Odyssey", 632977200, 7.0)
-var Ep4 = newEpsRow(4, "There's No Disgrace Like Home", 633582000, 8.5)
+var Ep1 = newEpsRow(1, "Simpsons Roasting On an Open Fire", "1989-12-18 03:00:00", 8.0)
+var Ep2 = newEpsRow(2, "Bart the Genius", "1990-01-15 03:00:00", 9.0)
+var Ep3 = newEpsRow(3, "Homer's Odyssey", "1990-01-22 03:00:00", 7.0)
+var Ep4 = newEpsRow(4, "There's No Disgrace Like Home", "1990-01-29 03:00:00", 8.5)
 var AllEpsRows = Rs(Ep1, Ep2, Ep3, Ep4)
 
 // These are made up, not the actual show data
@@ -276,6 +294,8 @@ func MutateRow(r row.Row, tagsAndVals ...interface{}) row.Row {
 				nomsVal = types.UUID(v)
 			case bool:
 				nomsVal = types.Bool(v)
+			case time.Time:
+				nomsVal = types.Timestamp(v)
 			default:
 				panic("Unhandled type " + reflect.TypeOf(val).String())
 			}
