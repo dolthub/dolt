@@ -111,6 +111,11 @@ func NewRowWithPks(pkColVals []types.Value, nonPkVals ...types.Value) row.Row {
 	return r
 }
 
+func NewRowWithSchema(vals row.TaggedValues, sch schema.Schema) row.Row {
+	r, _ := row.New(types.Format_7_18, sch, vals)
+	return r
+}
+
 // Creates a new schema with the pairs of column names and types given, using ascending tag numbers starting at 0.
 // Uses the first column as the primary key.
 func NewSchema(colNamesAndTypes ...interface{}) schema.Schema {

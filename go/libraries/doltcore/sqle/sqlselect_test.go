@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"testing"
 	"time"
 
@@ -76,7 +77,10 @@ var systemTableSelectTests = []SelectTest{
 		Name: "select from dolt_docs",
 		AdditionalSetup: CreateTableFn("dolt_docs",
 			env.DoltDocsSchema,
-			NewRow(types.String("LICENSE.md"), types.String("A license"))),
+			NewRowWithSchema(row.TaggedValues{
+					schema.DocNameTag: types.String("LICENSE.md"),
+					schema.DocTextTag: types.String("A license")},
+				env.DoltDocsSchema)),
 		Query: "select * from dolt_docs",
 		ExpectedRows: CompressRows(CompressSchema(env.DoltDocsSchema),
 			NewRow(types.String("LICENSE.md"), types.String("A license"))),

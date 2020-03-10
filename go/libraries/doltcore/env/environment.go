@@ -914,7 +914,7 @@ func updateDocsOnRoot(ctx context.Context, dEnv *DoltEnv, root *doltdb.RootValue
 
 	me := m.Edit()
 	for _, doc := range docDetails {
-		docRow, exists, err := docTbl.GetRowByPKVals(context.Background(), row.TaggedValues{doltdb.DocNameTag: types.String(doc.DocPk)}, sch)
+		docRow, exists, err := docTbl.GetRowByPKVals(context.Background(), row.TaggedValues{schema.DocNameTag: types.String(doc.DocPk)}, sch)
 		if err != nil {
 			return nil, err
 		}
@@ -923,8 +923,8 @@ func updateDocsOnRoot(ctx context.Context, dEnv *DoltEnv, root *doltdb.RootValue
 			me = me.Remove(docRow.NomsMapKey(sch))
 		} else if doc.NewerText != nil {
 			docTaggedVals := row.TaggedValues{
-				doltdb.DocNameTag: types.String(doc.DocPk),
-				doltdb.DocTextTag: types.String(doc.NewerText),
+				schema.DocNameTag: types.String(doc.DocPk),
+				schema.DocTextTag: types.String(doc.NewerText),
 			}
 			docRow, err = row.New(types.Format_7_18, sch, docTaggedVals)
 			if err != nil {
@@ -952,8 +952,8 @@ func createDocsTableOnRoot(ctx context.Context, dEnv *DoltEnv, root *doltdb.Root
 		if doc.NewerText != nil {
 			createTable = true
 			docTaggedVals := row.TaggedValues{
-				doltdb.DocNameTag: types.String(doc.DocPk),
-				doltdb.DocTextTag: types.String(doc.NewerText),
+				schema.DocNameTag: types.String(doc.DocPk),
+				schema.DocTextTag: types.String(doc.NewerText),
 			}
 
 			docRow, err := row.New(types.Format_7_18, DoltDocsSchema, docTaggedVals)
