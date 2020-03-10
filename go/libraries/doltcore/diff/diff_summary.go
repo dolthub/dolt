@@ -19,12 +19,17 @@ import (
 	"errors"
 	"time"
 
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/diff"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 type DiffSummaryProgress struct {
 	Adds, Removes, Changes, CellChanges, NewSize, OldSize uint64
+}
+
+type DifferenceSummary struct {
+	RowsAdded, RowsDeleted, RowsUnmodified, RowsModified, CellsModified, NewTableCount, OldTableCount uint64
 }
 
 // Summary reports a summary of diff changes between two values
@@ -53,6 +58,50 @@ func Summary(ctx context.Context, ch chan DiffSummaryProgress, v1, v2 types.Map)
 	}
 
 	return nil
+}
+
+// DiffSummary returns a summary of diff changes between two values
+func DiffSummary(ctx context.Context, v1, v2 types.Map) (DifferenceSummary, error) {
+	ae := atomicerr.New()
+	ch := make(chan DiffSummaryProgress)
+	go func() {
+		defer close(ch)
+		err := Summary(ctx, ch, v1, v2)
+
+		ae.SetIfError(err)
+	}()
+
+	acc := DiffSummaryProgress{}
+	for p := range ch {
+		if ae.IsSet() {
+			break
+		}
+
+		acc.Adds += p.Adds
+		acc.Removes += p.Removes
+		acc.Changes += p.Changes
+		acc.CellChanges += p.CellChanges
+		acc.NewSize += p.NewSize
+		acc.OldSize += p.OldSize
+	}
+
+	summary := DifferenceSummary{}
+	if err := ae.Get(); err != nil {
+		return summary, err
+	}
+	if acc.NewSize == 0 && acc.OldSize == 0 {
+		return summary, nil
+	}
+
+	summary.RowsAdded = acc.Adds
+	summary.RowsDeleted = acc.Removes
+	summary.RowsModified = acc.Changes
+	summary.RowsUnmodified = acc.OldSize - acc.Changes - acc.Removes
+	summary.CellsModified = acc.CellChanges
+	summary.OldTableCount = acc.OldSize
+	summary.NewTableCount = acc.NewSize
+
+	return summary, nil
 }
 
 func reportChanges(change *diff.Difference, ch chan<- DiffSummaryProgress) error {
