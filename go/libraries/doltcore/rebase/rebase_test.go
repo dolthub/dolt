@@ -418,7 +418,8 @@ func testRebaseTag(t *testing.T, test RebaseTagTest) {
 	dEnv := dtu.CreateTestEnv()
 	for idx, cmd := range test.Commands {
 		fmt.Println(fmt.Sprintf("%d: %s: %s", idx, cmd.CommandName(), cmd))
-		cmd.Exec(t, dEnv)
+		setupErr := cmd.Exec(t, dEnv)
+		require.NoError(t, setupErr)
 	}
 
 	bs, _ := dEnv.DoltDB.GetBranches(context.Background()) // master

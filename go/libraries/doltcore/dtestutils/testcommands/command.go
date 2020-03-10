@@ -16,6 +16,7 @@ package testcommands
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"testing"
 	"time"
 
@@ -33,16 +34,15 @@ import (
 
 type Command interface {
 	CommandName() string
-	Exec(t *testing.T, dEnv *env.DoltEnv)
+	Exec(t *testing.T, dEnv *env.DoltEnv) error
 }
 
 type StageAll struct{}
 
 func (a StageAll) CommandName() string { return "stage_all" }
 
-func (a StageAll) Exec(t *testing.T, dEnv *env.DoltEnv) {
-	err := actions.StageAllTables(context.Background(), dEnv, false)
-	require.NoError(t, err)
+func (a StageAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
+	return actions.StageAllTables(context.Background(), dEnv, false)
 }
 
 // TODO: comments on exported functions
@@ -52,9 +52,8 @@ type CommitStaged struct {
 
 func (c CommitStaged) CommandName() string { return "commit_staged" }
 
-func (c CommitStaged) Exec(t *testing.T, dEnv *env.DoltEnv) {
-	err := actions.CommitStaged(context.Background(), dEnv, c.Message, time.Now(), false)
-	require.NoError(t, err)
+func (c CommitStaged) Exec(t *testing.T, dEnv *env.DoltEnv) error {
+	return actions.CommitStaged(context.Background(), dEnv, c.Message, time.Now(), false)
 }
 
 type CommitAll struct {
@@ -65,12 +64,11 @@ type CommitAll struct {
 func (c CommitAll) CommandName() string { return "commit" }
 
 // Exec executes a CommitAll command on a test dolt environment.
-func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) {
+func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	err := actions.StageAllTables(context.Background(), dEnv, false)
 	require.NoError(t, err)
 
-	err = actions.CommitStaged(context.Background(), dEnv, c.Message, time.Now(), false)
-	require.NoError(t, err)
+	return actions.CommitStaged(context.Background(), dEnv, c.Message, time.Now(), false)
 }
 
 // TODO: comments on exported functions
@@ -79,18 +77,24 @@ type ResetHard struct{}
 func (r ResetHard) CommandName() string { return "reset_hard" }
 
 // NOTE: does not handle untracked tables
-func (r ResetHard) Exec(t *testing.T, dEnv *env.DoltEnv) {
+func (r ResetHard) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	headRoot, err := dEnv.HeadRoot(context.Background())
-	require.NoError(t, err)
+	if err != nil {
+		return err
+	}
 
 	err = dEnv.UpdateWorkingRoot(context.Background(), headRoot)
-	require.NoError(t, err)
+	if err != nil {
+		return err
+	}
 
 	_, err = dEnv.UpdateStagedRoot(context.Background(), headRoot)
-	require.NoError(t, err)
+	if err != nil {
+		return err
+	}
 
 	err = actions.SaveTrackedDocsFromWorking(context.Background(), dEnv)
-	require.NoError(t, err)
+	return err
 }
 
 type Query struct {
@@ -101,7 +105,7 @@ type Query struct {
 func (q Query) CommandName() string { return "query" }
 
 // Exec executes a Query command on a test dolt environment.
-func (q Query) Exec(t *testing.T, dEnv *env.DoltEnv) {
+func (q Query) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
 	sqlDb := dsqle.NewDatabase("dolt", root, nil, nil)
@@ -111,9 +115,13 @@ func (q Query) Exec(t *testing.T, dEnv *env.DoltEnv) {
 	require.NoError(t, err)
 	sqlCtx := sql.NewContext(context.Background())
 	_, _, err = engine.Query(sqlCtx, q.Query)
-	require.NoError(t, err)
+
+	if err != nil {
+		return err
+	}
+
 	err = dEnv.UpdateWorkingRoot(context.Background(), sqlDb.Root())
-	require.NoError(t, err)
+	return err
 }
 
 type Branch struct {
@@ -124,10 +132,9 @@ type Branch struct {
 func (b Branch) CommandName() string { return "branch" }
 
 // Exec executes a Branch command on a test dolt environment.
-func (b Branch) Exec(t *testing.T, dEnv *env.DoltEnv) {
+func (b Branch) Exec(_ *testing.T, dEnv *env.DoltEnv) error {
 	cwb := dEnv.RepoState.Head.Ref.String()
-	err := actions.CreateBranch(context.Background(), dEnv, b.BranchName, cwb, false)
-	require.NoError(t, err)
+	return actions.CreateBranch(context.Background(), dEnv, b.BranchName, cwb, false)
 }
 
 type Checkout struct {
@@ -138,9 +145,8 @@ type Checkout struct {
 func (c Checkout) CommandName() string { return "checkout" }
 
 // Exec executes a Checkout command on a test dolt environment.
-func (c Checkout) Exec(t *testing.T, dEnv *env.DoltEnv) {
-	err := actions.CheckoutBranch(context.Background(), dEnv, c.BranchName)
-	require.NoError(t, err)
+func (c Checkout) Exec(_ *testing.T, dEnv *env.DoltEnv) error {
+	return actions.CheckoutBranch(context.Background(), dEnv, c.BranchName)
 }
 
 type Merge struct {
@@ -151,7 +157,7 @@ type Merge struct {
 func (m Merge) CommandName() string { return "merge" }
 
 // Exec executes a Merge command on a test dolt environment.
-func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) {
+func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	// Adapted from commands/merge.go:Exec()
 	dref, err := dEnv.FindRef(context.Background(), m.BranchName)
 	assert.NoError(t, err)
@@ -167,11 +173,17 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) {
 	assert.NotEqual(t, h1, h2)
 
 	tblNames, err := dEnv.MergeWouldStompChanges(context.Background(), cm2)
-	assert.NoError(t, err)
-	assert.True(t, len(tblNames) == 0)
+	if err != nil {
+		return err
+	}
+	if len(tblNames) != 0 {
+		return errhand.BuildDError("error: failed to determine mergability.").AddCause(err).Build()
+	}
 
 	if ok, err := cm1.CanFastForwardTo(context.Background(), cm2); ok {
-		assert.NoError(t, err)
+		if err != nil {
+			return err
+		}
 
 		rv, err := cm2.GetRootValue()
 		assert.NoError(t, err)
@@ -180,7 +192,9 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) {
 		assert.NoError(t, err)
 
 		err = dEnv.DoltDB.FastForward(context.Background(), dEnv.RepoState.CWBHeadRef(), cm2)
-		assert.NoError(t, err)
+		if err != nil {
+			return err
+		}
 
 		dEnv.RepoState.Working = h.String()
 		dEnv.RepoState.Staged = h.String()
@@ -200,17 +214,26 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) {
 		assert.NoError(t, err)
 
 		err = dEnv.RepoState.StartMerge(dref, h2.String(), dEnv.FS)
-		assert.NoError(t, err)
+		if err != nil {
+			return err
+		}
 
 		err = dEnv.UpdateWorkingRoot(context.Background(), mergedRoot)
-		assert.NoError(t, err)
+		if err != nil {
+			return err
+		}
 
 		err = actions.SaveTrackedDocsFromWorking(context.Background(), dEnv)
-		assert.NoError(t, err)
+		if err != nil {
+			return err
+		}
 
 		_, err = dEnv.UpdateStagedRoot(context.Background(), mergedRoot)
-		assert.NoError(t, err)
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func resolveCommit(t *testing.T, cSpecStr string, dEnv *env.DoltEnv) *doltdb.Commit {

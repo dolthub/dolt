@@ -21,8 +21,8 @@ import (
 )
 
 const (
+	// TODO: increase ReservedTagMin to 1 << 63 once numeric marshalling is fixed
 	// ReservedTagMin is the start of a range of tags which the user should not be able to use in their schemas.
-	//ReservedTagMin uint64 = 1 << 63
 	ReservedTagMin uint64 = 1 << 51
 
 	// InvalidTag is used as an invalid tag

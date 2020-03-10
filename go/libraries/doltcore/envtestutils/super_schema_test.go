@@ -23,7 +23,6 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	tc "github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils/testcommands"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 )
@@ -35,10 +34,6 @@ const (
 	c11Tag
 	c12Tag
 )
-
-type Command interface {
-	Exec(t *testing.T, dEnv *env.DoltEnv)
-}
 
 type SuperSchemaTest struct {
 	// The name of this test. Names should be unique and descriptive.
@@ -362,29 +357,35 @@ func TestSuperSchema(t *testing.T) {
 
 func testSuperSchema(t *testing.T, test SuperSchemaTest) {
 	dEnv := dtestutils.CreateTestEnv()
+
+	var ee error
 	for idx, cmd := range test.Commands {
 		fmt.Println(fmt.Sprintf("%d: %s: %s", idx, cmd.CommandName(), cmd))
-		cmd.Exec(t, dEnv)
+		ee = cmd.Exec(t, dEnv)
 	}
 
-	spec := dEnv.RepoState.CWBHeadRef()
-	require.Equal(t, "refs/heads/"+test.ExpectedBranch, spec.String())
+	if test.ExpectedErrStr != "" {
+		require.Error(t, ee, test.ExpectedErrStr)
+	} else {
+		spec := dEnv.RepoState.CWBHeadRef()
+		require.Equal(t, "refs/heads/"+test.ExpectedBranch, spec.String())
 
-	r, err := dEnv.WorkingRoot(context.Background())
-	require.NoError(t, err)
+		r, err := dEnv.WorkingRoot(context.Background())
+		require.NoError(t, err)
 
-	tbl, ok, err := r.GetTable(context.Background(), test.TableName)
-	require.NoError(t, err)
-	require.True(t, ok)
+		tbl, ok, err := r.GetTable(context.Background(), test.TableName)
+		require.NoError(t, err)
+		require.True(t, ok)
 
-	ss, found, err := r.GetSuperSchema(context.Background(), test.TableName)
-	require.True(t, found)
-	require.NoError(t, err)
-	assert.Equal(t, test.ExpectedSuperSchema, ss)
+		ss, found, err := r.GetSuperSchema(context.Background(), test.TableName)
+		require.True(t, found)
+		require.NoError(t, err)
+		assert.Equal(t, test.ExpectedSuperSchema, ss)
 
-	sch, err := tbl.GetSchema(context.Background())
-	require.NoError(t, err)
-	assert.Equal(t, test.ExpectedSchema, sch)
+		sch, err := tbl.GetSchema(context.Background())
+		require.NoError(t, err)
+		assert.Equal(t, test.ExpectedSchema, sch)
+	}
 }
 
 func superSchemaFromCols(cols *schema.ColCollection) *schema.SuperSchema {

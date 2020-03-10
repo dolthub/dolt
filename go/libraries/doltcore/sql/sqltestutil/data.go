@@ -352,7 +352,7 @@ var addrColTag3TypeStr = schema.NewColumn("addr", 3, types.StringKind, false)
 var ageColTag4TypeInt = schema.NewColumn("age", 4, types.IntKind, false)
 var ageColTag5TypeUint = schema.NewColumn("age", 5, types.UintKind, false)
 
-var diffSchema = envtestutils.MustSchema(
+var diffSchema = dtestutils.MustSchema(
 	schema.NewColumn("to_id", 0, types.IntKind, false),
 	schema.NewColumn("to_first_name", 1, types.StringKind, false),
 	schema.NewColumn("to_last_name", 2, types.StringKind, false),
@@ -372,10 +372,10 @@ var diffSchema = envtestutils.MustSchema(
 
 const tblName = "test_table"
 
-var initialSch = envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr)
-var addAddrAt3Sch = envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr)
-var addAgeAt4Sch = envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, ageColTag4TypeInt)
-var readdAgeAt5Sch = envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr, ageColTag5TypeUint)
+var initialSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr)
+var addAddrAt3Sch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr)
+var addAgeAt4Sch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, ageColTag4TypeInt)
+var readdAgeAt5Sch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr, ageColTag5TypeUint)
 
 func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envtestutils.HistoryNode {
 	vrw := dEnv.DoltDB.ValueReadWriter()
@@ -387,7 +387,7 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 			Updates: map[string]envtestutils.TableUpdate{
 				tblName: {
 					NewSch: initialSch,
-					NewRowData: envtestutils.MustRowData(t, ctx, vrw, initialSch, []row.TaggedValues{
+					NewRowData: dtestutils.MustRowData(t, ctx, vrw, initialSch, []row.TaggedValues{
 						{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son")},
 						{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks")},
 						{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn")},
@@ -401,7 +401,7 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 					Updates: map[string]envtestutils.TableUpdate{
 						tblName: {
 							NewSch: addAgeAt4Sch,
-							NewRowData: envtestutils.MustRowData(t, ctx, vrw, addAgeAt4Sch, []row.TaggedValues{
+							NewRowData: dtestutils.MustRowData(t, ctx, vrw, addAgeAt4Sch, []row.TaggedValues{
 								{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 4: types.Int(35)},
 								{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 4: types.Int(38)},
 								{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 4: types.Int(37)},
@@ -417,7 +417,7 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 					Updates: map[string]envtestutils.TableUpdate{
 						tblName: {
 							NewSch: addAddrAt3Sch,
-							NewRowData: envtestutils.MustRowData(t, ctx, vrw, addAddrAt3Sch, []row.TaggedValues{
+							NewRowData: dtestutils.MustRowData(t, ctx, vrw, addAddrAt3Sch, []row.TaggedValues{
 								{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St")},
 								{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln")},
 								{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct")},
@@ -433,7 +433,7 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 							Updates: map[string]envtestutils.TableUpdate{
 								tblName: {
 									NewSch: readdAgeAt5Sch,
-									NewRowData: envtestutils.MustRowData(t, ctx, vrw, readdAgeAt5Sch, []row.TaggedValues{
+									NewRowData: dtestutils.MustRowData(t, ctx, vrw, readdAgeAt5Sch, []row.TaggedValues{
 										{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St"), 5: types.Uint(35)},
 										{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln"), 5: types.Uint(38)},
 										{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct"), 5: types.Uint(37)},
