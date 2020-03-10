@@ -515,6 +515,8 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Comm
 
 	tblToStats := make(map[string]*MergeStats)
 
+	newRoot := root
+	var unconflicted []string
 	// need to validate merges can be done on all tables before starting the actual merges.
 	for _, tblName := range tblNames {
 		mergedTable, stats, err := merger.MergeTable(ctx, tblName)
@@ -526,17 +528,21 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Comm
 		if mergedTable != nil {
 			tblToStats[tblName] = stats
 
+			if stats.Conflicts == 0 {
+				unconflicted = append(unconflicted, tblName)
+			}
+
 			var err error
-			root, err = root.PutTable(ctx, tblName, mergedTable)
+			newRoot, err = newRoot.PutTable(ctx, tblName, mergedTable)
 
 			if err != nil {
 				return nil, nil, err
 			}
-		} else if has, err := root.HasTable(ctx, tblName); err != nil {
+		} else if has, err := newRoot.HasTable(ctx, tblName); err != nil {
 			return nil, nil, err
 		} else if has {
 			tblToStats[tblName] = &MergeStats{Operation: TableRemoved}
-			root, err = root.RemoveTables(ctx, tblName)
+			newRoot, err = newRoot.RemoveTables(ctx, tblName)
 
 			if err != nil {
 				return nil, nil, err
@@ -546,7 +552,13 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Comm
 		}
 	}
 
-	return root, tblToStats, nil
+	newRoot, err = newRoot.UpdateSuperSchemasFromOther(ctx, unconflicted, mergeRoot)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return newRoot, tblToStats, nil
 }
 
 func GetTablesInConflict(ctx context.Context, dEnv *env.DoltEnv) (workingInConflict, stagedInConflict, headInConflict []string, err error) {

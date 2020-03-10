@@ -17,6 +17,7 @@ package testcommands
 import (
 	"context"
 	"testing"
+	"time"
 
 	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
@@ -35,44 +36,61 @@ type Command interface {
 	Exec(t *testing.T, dEnv *env.DoltEnv)
 }
 
-type Commit struct {
+type StageAll struct{}
+
+func (a StageAll) CommandName() string { return "stage_all" }
+
+func (a StageAll) Exec(t *testing.T, dEnv *env.DoltEnv) {
+	err := actions.StageAllTables(context.Background(), dEnv, false)
+	require.NoError(t, err)
+}
+
+// TODO: comments on exported functions
+type CommitStaged struct {
+	Message string
+}
+
+func (c CommitStaged) CommandName() string { return "commit_staged" }
+
+func (c CommitStaged) Exec(t *testing.T, dEnv *env.DoltEnv) {
+	err := actions.CommitStaged(context.Background(), dEnv, c.Message, time.Now(), false)
+	require.NoError(t, err)
+}
+
+type CommitAll struct {
 	Message string
 }
 
 // CommandName returns "commit".
-func (c Commit) CommandName() string { return "commit" }
+func (c CommitAll) CommandName() string { return "commit" }
 
-// Exec executes a Commit command on a test dolt environment.
-func (c Commit) Exec(t *testing.T, dEnv *env.DoltEnv) {
+// Exec executes a CommitAll command on a test dolt environment.
+func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) {
 	err := actions.StageAllTables(context.Background(), dEnv, false)
 	require.NoError(t, err)
 
-	//stagedTbls, notStagedTbls, err := diff.GetTableDiffs(context.Background(), dEnv)
-	//require.NoError(t, err)
+	err = actions.CommitStaged(context.Background(), dEnv, c.Message, time.Now(), false)
+	require.NoError(t, err)
+}
 
-	var mergeCmSpec []*doltdb.CommitSpec
-	if dEnv.IsMergeActive() {
-		spec, err := doltdb.NewCommitSpec(dEnv.RepoState.Merge.Commit, dEnv.RepoState.Merge.Head.Ref.String())
+// TODO: comments on exported functions
+type ResetHard struct{}
 
-		if err != nil {
-			panic("Corrupted repostate. Active merge state is not valid.")
-		}
+func (r ResetHard) CommandName() string { return "reset_hard" }
 
-		mergeCmSpec = []*doltdb.CommitSpec{spec}
-	}
+// NOTE: does not handle untracked tables
+func (r ResetHard) Exec(t *testing.T, dEnv *env.DoltEnv) {
+	headRoot, err := dEnv.HeadRoot(context.Background())
+	require.NoError(t, err)
 
-	root, err := dEnv.StagedRoot(context.Background())
-	assert.NoError(t, err)
+	err = dEnv.UpdateWorkingRoot(context.Background(), headRoot)
+	require.NoError(t, err)
 
-	h, err := dEnv.UpdateStagedRoot(context.Background(), root)
-	assert.NoError(t, err)
+	_, err = dEnv.UpdateStagedRoot(context.Background(), headRoot)
+	require.NoError(t, err)
 
-	_, err = dEnv.DoltDB.CommitWithParentSpecs(context.Background(), h, dEnv.RepoState.CWBHeadRef(), mergeCmSpec, &doltdb.CommitMeta{})
-	assert.NoError(t, err)
-
-	//cm := resolveCommit(t, "HEAD", dEnv)
-	//ch, _ := cm.HashOf()
-	//fmt.Println(fmt.Sprintf("commit: %s", ch.String()))
+	err = actions.SaveTrackedDocsFromWorking(context.Background(), dEnv)
+	require.NoError(t, err)
 }
 
 type Query struct {

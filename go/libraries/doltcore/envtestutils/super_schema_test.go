@@ -17,21 +17,15 @@ package envtestutils
 import (
 	"context"
 	"fmt"
-	"testing"
-	"time"
-
-	sqle "github.com/src-d/go-mysql-server"
-	"github.com/src-d/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"testing"
 
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
+	tc "github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
-	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 )
 
 const (
@@ -52,7 +46,7 @@ type SuperSchemaTest struct {
 	// Name of the table to be verified
 	TableName string
 	// The modifying queries to run
-	Commands []Command
+	Commands []tc.Command
 	// Expected branch
 	ExpectedBranch string
 	// The schema of the result of the query, nil if an error is expected
@@ -69,9 +63,9 @@ var SuperSchemaTests = []SuperSchemaTest{
 	{
 		Name:      "can create super schema",
 		TableName: "testable",
-		Commands: []Command{
-			Query{testableDef},
-			CommitAll{"created table testable"},
+		Commands: []tc.Command{
+			tc.Query{Query: testableDef},
+			tc.CommitAll{Message: "created table testable"},
 		},
 		ExpectedBranch: "master",
 		ExpectedSchema: schema.SchemaFromCols(columnCollection(
@@ -84,8 +78,8 @@ var SuperSchemaTests = []SuperSchemaTest{
 	{
 		Name:      "get super schema without commit",
 		TableName: "testable",
-		Commands: []Command{
-			Query{testableDef},
+		Commands: []tc.Command{
+			tc.Query{Query: testableDef},
 		},
 		ExpectedBranch: "master",
 		ExpectedSchema: schema.SchemaFromCols(columnCollection(
@@ -98,10 +92,10 @@ var SuperSchemaTests = []SuperSchemaTest{
 	{
 		Name:      "add column",
 		TableName: "testable",
-		Commands: []Command{
-			Query{testableDef},
-			CommitAll{"created table testable"},
-			Query{fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
+		Commands: []tc.Command{
+			tc.Query{Query: testableDef},
+			tc.CommitAll{Message: "created table testable"},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
 		},
 		ExpectedBranch: "master",
 		ExpectedSchema: schema.SchemaFromCols(columnCollection(
@@ -116,12 +110,12 @@ var SuperSchemaTests = []SuperSchemaTest{
 	{
 		Name:      "drop column",
 		TableName: "testable",
-		Commands: []Command{
-			Query{testableDef},
-			Query{fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
-			CommitAll{"created table testable"},
-			Query{"alter table testable drop column c0"},
-			CommitAll{"dropped column c0"},
+		Commands: []tc.Command{
+			tc.Query{Query: testableDef},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
+			tc.CommitAll{Message: "created table testable"},
+			tc.Query{Query: "alter table testable drop column c0"},
+			tc.CommitAll{Message: "dropped column c0"},
 		},
 		ExpectedBranch: "master",
 		ExpectedSchema: schema.SchemaFromCols(columnCollection(
@@ -135,11 +129,11 @@ var SuperSchemaTests = []SuperSchemaTest{
 	{
 		Name:      "modify column",
 		TableName: "testable",
-		Commands: []Command{
-			Query{testableDef},
-			Query{fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
-			CommitAll{"created table testable"},
-			Query{"alter table testable drop column c0"},
+		Commands: []tc.Command{
+			tc.Query{Query: testableDef},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
+			tc.CommitAll{Message: "created table testable"},
+			tc.Query{Query: "alter table testable drop column c0"},
 		},
 		ExpectedBranch: "master",
 		ExpectedSchema: schema.SchemaFromCols(columnCollection(
@@ -153,10 +147,10 @@ var SuperSchemaTests = []SuperSchemaTest{
 	{
 		Name:      "drop column from working set",
 		TableName: "testable",
-		Commands: []Command{
-			Query{testableDef},
-			Query{fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
-			Query{"alter table testable drop column c0"},
+		Commands: []tc.Command{
+			tc.Query{Query: testableDef},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
+			tc.Query{Query: "alter table testable drop column c0"},
 		},
 		ExpectedBranch: "master",
 		ExpectedSchema: schema.SchemaFromCols(columnCollection(
@@ -169,14 +163,14 @@ var SuperSchemaTests = []SuperSchemaTest{
 	{
 		Name:      "staged column persisted on commit, not working column",
 		TableName: "testable",
-		Commands: []Command{
-			Query{testableDef},
-			CommitAll{"created table testable"},
-			Query{fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
-			AddAll{},
-			Query{fmt.Sprintf("alter table testable add column c1 int comment 'tag:%d';", c1Tag)},
-			CommitStaged{"adding staged column c0"},
-			ResetHard{},
+		Commands: []tc.Command{
+			tc.Query{Query: testableDef},
+			tc.CommitAll{Message: "created table testable"},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
+			tc.StageAll{},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c1 int comment 'tag:%d';", c1Tag)},
+			tc.CommitStaged{Message: "adding staged column c0"},
+			tc.ResetHard{},
 		},
 		ExpectedBranch: "master",
 		ExpectedSchema: schema.SchemaFromCols(columnCollection(
@@ -191,16 +185,16 @@ var SuperSchemaTests = []SuperSchemaTest{
 	{
 		Name:      "super schema on branch master",
 		TableName: "testable",
-		Commands: []Command{
-			Query{testableDef},
-			Query{fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
-			CommitAll{"created table testable"},
-			Branch{"other"},
-			Checkout{"other"},
-			Query{fmt.Sprintf("alter table testable add column c11 int comment 'tag:%d';", c11Tag)},
-			CommitAll{"added column c11 on branch other"},
-			Checkout{"master"},
-			Query{fmt.Sprintf("alter table testable add column c1 int comment 'tag:%d';", c1Tag)},
+		Commands: []tc.Command{
+			tc.Query{Query: testableDef},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
+			tc.CommitAll{Message: "created table testable"},
+			tc.Branch{BranchName: "other"},
+			tc.Checkout{BranchName: "other"},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c11 int comment 'tag:%d';", c11Tag)},
+			tc.CommitAll{Message: "added column c11 on branch other"},
+			tc.Checkout{BranchName: "master"},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c1 int comment 'tag:%d';", c1Tag)},
 		},
 		ExpectedBranch: "master",
 		ExpectedSchema: schema.SchemaFromCols(columnCollection(
@@ -217,18 +211,18 @@ var SuperSchemaTests = []SuperSchemaTest{
 	{
 		Name:      "super schema on branch other",
 		TableName: "testable",
-		Commands: []Command{
-			Query{testableDef},
-			Query{fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
-			CommitAll{"created table testable"},
-			Branch{"other"},
-			Checkout{"other"},
-			Query{fmt.Sprintf("alter table testable add column c11 int comment 'tag:%d';", c11Tag)},
-			CommitAll{"added column c11 on branch other"},
-			Checkout{"master"},
-			Query{fmt.Sprintf("alter table testable add column c1 int comment 'tag:%d';", c1Tag)},
-			CommitAll{"added column c1 on branch master"},
-			Checkout{"other"},
+		Commands: []tc.Command{
+			tc.Query{Query: testableDef},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
+			tc.CommitAll{Message: "created table testable"},
+			tc.Branch{BranchName: "other"},
+			tc.Checkout{BranchName: "other"},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c11 int comment 'tag:%d';", c11Tag)},
+			tc.CommitAll{Message: "added column c11 on branch other"},
+			tc.Checkout{BranchName: "master"},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c1 int comment 'tag:%d';", c1Tag)},
+			tc.CommitAll{Message: "added column c1 on branch master"},
+			tc.Checkout{BranchName: "other"},
 		},
 		ExpectedBranch: "other",
 		ExpectedSchema: schema.SchemaFromCols(columnCollection(
@@ -245,18 +239,18 @@ var SuperSchemaTests = []SuperSchemaTest{
 	{
 		Name:      "super schema merge",
 		TableName: "testable",
-		Commands: []Command{
-			Query{testableDef},
-			Query{fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
-			CommitAll{"created table testable"},
-			Branch{"other"},
-			Checkout{"other"},
-			Query{fmt.Sprintf("alter table testable add column c11 int comment 'tag:%d';", c11Tag)},
-			CommitAll{"added column c11 on branch other"},
-			Checkout{"master"},
-			Query{fmt.Sprintf("alter table testable add column c1 int comment 'tag:%d';", c1Tag)},
-			CommitAll{"added column c1 on branch master"},
-			Merge{"other"},
+		Commands: []tc.Command{
+			tc.Query{Query: testableDef},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
+			tc.CommitAll{Message: "created table testable"},
+			tc.Branch{BranchName: "other"},
+			tc.Checkout{BranchName: "other"},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c11 int comment 'tag:%d';", c11Tag)},
+			tc.CommitAll{Message: "added column c11 on branch other"},
+			tc.Checkout{BranchName: "master"},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c1 int comment 'tag:%d';", c1Tag)},
+			tc.CommitAll{Message: "added column c1 on branch master"},
+			tc.Merge{BranchName: "other"},
 		},
 		ExpectedBranch: "master",
 		ExpectedSchema: schema.SchemaFromCols(columnCollection(
@@ -275,21 +269,22 @@ var SuperSchemaTests = []SuperSchemaTest{
 	{
 		Name:      "super schema merge with drops",
 		TableName: "testable",
-		Commands: []Command{
-			Query{testableDef},
-			Query{fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
-			CommitAll{"created table testable"},
-			Branch{"other"},
-			Checkout{"other"},
-			Query{fmt.Sprintf("alter table testable add column c11 int comment 'tag:%d';", c11Tag)},
-			Query{fmt.Sprintf("alter table testable add column c12 int comment 'tag:%d';", c12Tag)},
-			CommitAll{"added columns c11 and c12 on branch other"},
-			Query{"alter table testable drop column c12;"},
-			CommitAll{"dropped column c12 on branch other"},
-			Checkout{"master"},
-			Query{fmt.Sprintf("alter table testable add column c1 int comment 'tag:%d';", c1Tag)},
-			CommitAll{"added column c1 on branch master"},
-			Merge{"other"},
+		Commands: []tc.Command{
+			tc.Query{Query: testableDef},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
+			tc.CommitAll{Message: "created table testable"},
+			tc.Branch{BranchName: "other"},
+			tc.Checkout{BranchName: "other"},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c11 int comment 'tag:%d';", c11Tag)},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c12 int comment 'tag:%d';", c12Tag)},
+			tc.CommitAll{Message: "added columns c11 and c12 on branch other"},
+			tc.Query{Query: "alter table testable drop column c12;"},
+			tc.CommitAll{Message: "dropped column c12 on branch other"},
+			tc.Checkout{BranchName: "master"},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c1 int comment 'tag:%d';", c1Tag)},
+			tc.CommitAll{Message: "added column c1 on branch master"},
+			tc.Merge{BranchName: "other"},
+			tc.CommitAll{Message: "Merged other into master"},
 		},
 		ExpectedBranch: "master",
 		ExpectedSchema: schema.SchemaFromCols(columnCollection(
@@ -309,15 +304,15 @@ var SuperSchemaTests = []SuperSchemaTest{
 	{
 		Name:      "super schema with table add/drops",
 		TableName: "testable",
-		Commands: []Command{
-			Query{testableDef},
-			Query{fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
-			Query{"create table foo (pk int not null primary key);"},
-			CommitAll{"created tables testable and foo"},
-			Query{fmt.Sprintf("alter table testable add column c1 int comment 'tag:%d';", c1Tag)},
-			Query{"create table qux (pk int not null primary key);"},
-			Query{"drop table foo;"},
-			CommitAll{"added column c1 on branch master, created table qux, dropped table foo"},
+		Commands: []tc.Command{
+			tc.Query{Query: testableDef},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
+			tc.Query{Query: "create table foo (pk int not null primary key);"},
+			tc.CommitAll{Message: "created tables testable and foo"},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c1 int comment 'tag:%d';", c1Tag)},
+			tc.Query{Query: "create table qux (pk int not null primary key);"},
+			tc.Query{Query: "drop table foo;"},
+			tc.CommitAll{Message: "added column c1 on branch master, created table qux, dropped table foo"},
 		},
 		ExpectedBranch: "master",
 		ExpectedSchema: schema.SchemaFromCols(columnCollection(
@@ -335,17 +330,17 @@ var SuperSchemaTests = []SuperSchemaTest{
 		// This test corresponds to @test "diff sql reconciles DROP TABLE" in sql_diff.bats
 		Name:      "sql diff bats test",
 		TableName: "testable",
-		Commands: []Command{
-			Branch{"first"},
-			Checkout{"first"},
-			Query{testableDef},
-			Query{"insert into testable values (1);"},
-			CommitAll{"setup table"},
-			Branch{"other"},
-			Checkout{"other"},
-			Query{"drop table testable;"},
-			CommitAll{"removed table"},
-			Checkout{"first"},
+		Commands: []tc.Command{
+			tc.Branch{BranchName: "first"},
+			tc.Checkout{BranchName: "first"},
+			tc.Query{Query: testableDef},
+			tc.Query{Query: "insert into testable values (1);"},
+			tc.CommitAll{Message: "setup table"},
+			tc.Branch{BranchName: "other"},
+			tc.Checkout{BranchName: "other"},
+			tc.Query{Query: "drop table testable;"},
+			tc.CommitAll{Message: "removed table"},
+			tc.Checkout{BranchName: "first"},
 		},
 		ExpectedBranch: "first",
 		ExpectedSchema: schema.SchemaFromCols(columnCollection(
@@ -367,7 +362,8 @@ func TestSuperSchema(t *testing.T) {
 
 func testSuperSchema(t *testing.T, test SuperSchemaTest) {
 	dEnv := dtestutils.CreateTestEnv()
-	for _, cmd := range test.Commands {
+	for idx, cmd := range test.Commands {
+		fmt.Println(fmt.Sprintf("%d: %s: %s", idx, cmd.CommandName(), cmd))
 		cmd.Exec(t, dEnv)
 	}
 
@@ -408,102 +404,4 @@ func newColTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, partOfP
 		panic("could not create column")
 	}
 	return c
-}
-
-type AddAll struct{}
-
-func (c AddAll) Exec(t *testing.T, dEnv *env.DoltEnv) {
-	err := actions.StageAllTables(context.Background(), dEnv, false)
-	require.NoError(t, err)
-}
-
-type CommitStaged struct {
-	Message string
-}
-
-func (c CommitStaged) Exec(t *testing.T, dEnv *env.DoltEnv) {
-	err := actions.CommitStaged(context.Background(), dEnv, c.Message, time.Now(), false)
-	require.NoError(t, err)
-	cm, _ := commands.ResolveCommitWithVErr(dEnv, "HEAD", dEnv.RepoState.Head.Ref.String())
-	ch, _ := cm.HashOf()
-	fmt.Println(fmt.Sprintf("commit: %s", ch.String()))
-}
-
-type CommitAll struct {
-	Message string
-}
-
-func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) {
-	err := actions.StageAllTables(context.Background(), dEnv, false)
-	require.NoError(t, err)
-	err = actions.CommitStaged(context.Background(), dEnv, c.Message, time.Now(), false)
-	require.NoError(t, err)
-	cm, _ := commands.ResolveCommitWithVErr(dEnv, "HEAD", dEnv.RepoState.Head.Ref.String())
-	ch, _ := cm.HashOf()
-	fmt.Println(fmt.Sprintf("commit: %s", ch.String()))
-}
-
-type Query struct {
-	Query string
-}
-
-func (q Query) Exec(t *testing.T, dEnv *env.DoltEnv) {
-	root, err := dEnv.WorkingRoot(context.Background())
-	require.NoError(t, err)
-	sqlDb := dsqle.NewDatabase("dolt", root, nil, nil)
-	engine := sqle.NewDefault()
-	engine.AddDatabase(sqlDb)
-	err = engine.Init()
-	require.NoError(t, err)
-	sqlCtx := sql.NewContext(context.Background())
-	_, _, err = engine.Query(sqlCtx, q.Query)
-	require.NoError(t, err)
-	err = dEnv.UpdateWorkingRoot(context.Background(), sqlDb.Root())
-	require.NoError(t, err)
-}
-
-type Branch struct {
-	branchName string
-}
-
-func (b Branch) Exec(t *testing.T, dEnv *env.DoltEnv) {
-	cwb := dEnv.RepoState.Head.Ref.String()
-	err := actions.CreateBranch(context.Background(), dEnv, b.branchName, cwb, false)
-	require.NoError(t, err)
-}
-
-type Checkout struct {
-	BranchName string
-}
-
-func (c Checkout) Exec(t *testing.T, dEnv *env.DoltEnv) {
-	err := actions.CheckoutBranch(context.Background(), dEnv, c.BranchName)
-	require.NoError(t, err)
-}
-
-type Merge struct {
-	BranchName string
-}
-
-func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) {
-	mm := commands.MergeCmd{}
-	status := mm.Exec(context.Background(), "dolt merge", []string{m.BranchName}, dEnv)
-	assert.Equal(t, 0, status)
-}
-
-type ResetHard struct{}
-
-// NOTE: does not handle untracked tables
-func (r ResetHard) Exec(t *testing.T, dEnv *env.DoltEnv) {
-	headRoot, err := dEnv.HeadRoot(context.Background())
-	require.NoError(t, err)
-
-	err = dEnv.UpdateWorkingRoot(context.Background(), headRoot)
-	require.NoError(t, err)
-
-	_, err = dEnv.UpdateStagedRoot(context.Background(), headRoot)
-	require.NoError(t, err)
-
-	err = actions.SaveTrackedDocsFromWorking(context.Background(), dEnv)
-	require.NoError(t, err)
 }
