@@ -75,7 +75,7 @@ func NewDiffTable(ctx context.Context, name string, ddb *doltdb.DoltDB, rsr env.
 		return nil, err
 	}
 
-	_ = ss.AddColumn(schema.NewColumn("commit", schema.ReservedTagMin, types.StringKind, false))
+	_ = ss.AddColumn(schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false))
 
 	sch, err := ss.GenerateSchema()
 

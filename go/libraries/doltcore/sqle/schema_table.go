@@ -22,6 +22,7 @@ import (
 
 // The fixed schema for the `dolt_schemas` table.
 func SchemasTableSchema() sql.Schema {
+	// TODO: move these columns into reserved tag space?
 	return []*sql.Column{
 		// Currently: `view`.
 		{Name: "type", Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},

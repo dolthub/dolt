@@ -23,7 +23,7 @@ import (
 const (
 	// ReservedTagMin is the start of a range of tags which the user should not be able to use in their schemas.
 	//ReservedTagMin uint64 = 1 << 63
-	ReservedTagMin uint64 = 1 << 50
+	ReservedTagMin uint64 = 1 << 51
 
 	// InvalidTag is used as an invalid tag
 	InvalidTag uint64 = math.MaxUint64
@@ -31,8 +31,24 @@ const (
 
 
 const (
-	DocNameTag = ReservedTagMin
-	DocTextTag = ReservedTagMin + 1
+	// Tags for dolt_docs table
+	DocNameTag = iota + ReservedTagMin
+	DocTextTag
+
+	// Tags for dolt_history_ table
+	HistoryCommitterTag
+	HistoryCommitHashTag
+	HistoryCommitDateTag
+
+	// Tags for dolt_query_catalog table
+	QueryCatalogIdTag
+	QueryCatalogOrderTag
+	QueryCatalogNameTag
+	QueryCatalogQueryTag
+	QueryCatalogDescriptionTag
+
+	// Tags for dolt_diff_ table
+	DiffCommitTag
 )
 
 var randGen = rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -62,5 +78,3 @@ func AutoGenerateTag(sch Schema) uint64 {
 
 	return randTag
 }
-
-

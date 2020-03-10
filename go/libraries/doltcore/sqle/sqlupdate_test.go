@@ -16,6 +16,8 @@ package sqle
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -63,11 +65,23 @@ var systemTableUpdateTests = []UpdateTest{
 		Name: "update dolt_query_catalog",
 		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
 			DoltQueryCatalogSchema,
-			NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 2+2 from dual"), types.String("description"))),
+			NewRowWithSchema(row.TaggedValues{
+				schema.QueryCatalogIdTag: types.String("abc123"),
+				schema.QueryCatalogOrderTag: types.Uint(1),
+				schema.QueryCatalogNameTag: types.String("example"),
+				schema.QueryCatalogQueryTag: types.String("select 2+2 from dual"),
+				schema.QueryCatalogDescriptionTag: types.String("description")},
+				DoltQueryCatalogSchema)),
 		UpdateQuery: "update dolt_query_catalog set display_order = display_order + 1",
 		SelectQuery: "select * from dolt_query_catalog",
 		ExpectedRows: CompressRows(DoltQueryCatalogSchema,
-			NewRow(types.String("abc123"), types.Uint(2), types.String("example"), types.String("select 2+2 from dual"), types.String("description"))),
+			NewRowWithSchema(row.TaggedValues{
+				schema.QueryCatalogIdTag: types.String("abc123"),
+				schema.QueryCatalogOrderTag: types.Uint(2),
+				schema.QueryCatalogNameTag: types.String("example"),
+				schema.QueryCatalogQueryTag: types.String("select 2+2 from dual"),
+				schema.QueryCatalogDescriptionTag: types.String("description")},
+				DoltQueryCatalogSchema)),
 		ExpectedSchema: CompressSchema(DoltQueryCatalogSchema),
 	},
 	{
