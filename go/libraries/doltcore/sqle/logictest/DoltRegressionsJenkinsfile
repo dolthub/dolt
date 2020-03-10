@@ -15,8 +15,8 @@ pipeline {
                         TMPDIR = "${pwd()}/tempDir"
                         CREDSDIR = "/home/jenkins/.dolt/creds"
                         DOLT_CREDS = credentials("system-account-dolthub-creds")
-                        TEST_N_TIMES = 5 // like to pass this from the Jenkins UI?
-                        DOLT_GLOBAL_CONFIG = "/home/jenkins/.dolt/config_global.json"
+                        DOLT_GLOBAL_CONFIG = credentials("system-account-dolthub-config")
+                        DOLT_CONFIG_PATH = "/home/jenkins/.dolt"
                     }
                     steps {
                         dir ("sqllogictest") {
@@ -29,14 +29,13 @@ pipeline {
                         }
                         sh "rm -rf dolt-sql-performance && dolt clone Liquidata/dolt-sql-performance"
                         dir ("go/libraries/doltcore/sqle/logictest/main") {
-                            sh "dolt config --global --add user.name 'LiquidataSystemAccount'"
-                            sh "dolt config --global --add user.email 'liquidatasys@gmail.com'"
+                            sh "rm -rf $DOLT_CONFIG_PATH && mkdir -p $DOLT_CONFIG_PATH"
+                            sh "echo '$DOLT_GLOBAL_CONFIG' > $DOLT_CONFIG_PATH/config_global.json"
                             sh "rm -rf .dolt && dolt init"
                             sh "rm -rf $CREDSDIR && mkdir $CREDSDIR"
-                            sh "cat $DOLT_CREDS > /home/jenkins/.dolt/creds/5jl65iugbs7olde8n8qqgvujs1bhp8c84bopgi78n26is.jwk"
-                            sh "dolt config --global --add user.creds 5jl65iugbs7olde8n8qqgvujs1bhp8c84bopgi78n26is"
+                            sh "cat $DOLT_CREDS > /home/jenkins/.dolt/creds/$CREDS_HASH.jwk"
+                            sh "dolt config --global --add user.creds $CREDS_HASH"
                             sh "dolt config --global --add metrics.disabled true"
-                            sh "dolt creds use 5jl65iugbs7olde8n8qqgvujs1bhp8c84bopgi78n26is"
                             sh "rm -rf temp && mkdir temp"
                             script {
                                 def j = env.TEST_N_TIMES.toInteger()
@@ -56,7 +55,6 @@ pipeline {
                                     sh "dolt commit -m \"update dolt sql performance results\""
                                 }
                             }
-                            sh "rm -f mean.csv"
                             sh "dolt sql -r csv -q \'select version, test_file, line_num, avg(duration) as mean_duration, result from dolt_history_nightly_dolt_results where version=\"${DOLT_VERSION}\" group by line_num;\' > mean.csv"
                             sh "dolt table import -u nightly_dolt_mean_results mean.csv"
                             sh "dolt add nightly_dolt_mean_results"
