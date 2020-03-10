@@ -255,6 +255,11 @@ func floatDecoder(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, 
 }
 
 func intDecoder(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, rv reflect.Value) error {
+	if n, ok := v.(types.Int); ok {
+		rv.SetInt(int64(n))
+		return nil
+	}
+	// code below is kept for backward compatibility
 	if n, ok := v.(types.Float); ok {
 		i := int64(n)
 		if rv.OverflowInt(i) {
@@ -269,6 +274,12 @@ func intDecoder(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, rv
 }
 
 func uintDecoder(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, rv reflect.Value) error {
+	if n, ok := v.(types.Uint); ok {
+		rv.SetUint(uint64(n))
+		return nil
+	}
+
+	// code below is kept for backward compatibility
 	if n, ok := v.(types.Float); ok {
 		u := uint64(n)
 		if rv.OverflowUint(u) {

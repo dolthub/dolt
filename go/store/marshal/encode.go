@@ -213,11 +213,11 @@ func float64Encoder(ctx context.Context, v reflect.Value, vrw types.ValueReadWri
 }
 
 func intEncoder(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) (types.Value, error) {
-	return types.Float(float64(v.Int())), nil
+	return types.Int(v.Int()), nil
 }
 
 func uintEncoder(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) (types.Value, error) {
-	return types.Float(float64(v.Uint())), nil
+	return types.Uint(v.Uint()), nil
 }
 
 func stringEncoder(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) (types.Value, error) {
