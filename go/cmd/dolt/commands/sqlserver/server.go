@@ -16,7 +16,6 @@ package sqlserver
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"net"
 	"strconv"
 	"time"
@@ -30,6 +29,7 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 )
 
