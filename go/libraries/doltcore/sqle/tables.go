@@ -224,17 +224,15 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		return err
 	}
 
-	sch, err := table.GetSchema(ctx)
-	if err != nil {
-		return err
-	}
-
 	tag := extractTag(column)
 	if tag == schema.InvalidTag {
 		// TODO: are we sure we want to silently autogen if we fail to parse?
-		tag = schema.AutoGenerateTag(sch)
+		ss, err := t.db.Root().GetUnionSuperSchema(ctx)
+		if err != nil {
+			return err
+		}
+		tag = schema.AutoGenerateTag(ss)
 	}
-
 	col, err := SqlColToDoltCol(tag, column)
 	if err != nil {
 		return err

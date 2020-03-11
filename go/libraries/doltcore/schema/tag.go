@@ -53,11 +53,10 @@ const (
 
 var randGen = rand.New(rand.NewSource(time.Now().UnixNano()))
 
-func AutoGenerateTag(sch Schema) uint64 {
+func AutoGenerateTag(ss *SuperSchema) uint64 {
 	var maxTagVal uint64 = 128 * 128
 
-	allCols := sch.GetAllCols()
-	for maxTagVal/2 < uint64(allCols.Size()) {
+	for maxTagVal/2 < uint64(ss.Size()) {
 		if maxTagVal == ReservedTagMin-1 {
 			panic("There is no way anyone should ever have this many columns.  You are a bad person if you hit this panic.")
 		} else if maxTagVal*128 < maxTagVal {
@@ -71,10 +70,30 @@ func AutoGenerateTag(sch Schema) uint64 {
 	for {
 		randTag = uint64(randGen.Int63n(int64(maxTagVal)))
 
-		if _, ok := allCols.GetByTag(randTag); !ok {
+		if _, found := ss.GetColumn(randTag); !found {
 			break
 		}
 	}
 
 	return randTag
+}
+
+func ResolveTagConflicts(ss *SuperSchema, sch Schema) (Schema, error) {
+	cc, _ := NewColCollection()
+	err := sch.GetAllCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
+		_, found := ss.GetColumn(tag)
+		if found {
+			col.Tag = AutoGenerateTag(ss)
+		}
+		cc, err = cc.Append(col)
+
+		stop = err != nil
+		return stop, err
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return SchemaFromCols(cc), nil
 }

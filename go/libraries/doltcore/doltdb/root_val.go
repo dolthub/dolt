@@ -176,7 +176,38 @@ func (root *RootValue) HasTag(ctx context.Context, tag uint64) (found bool, tblN
 		return false, "", err
 	}
 
-	return found, tblName, err
+	if found {
+		return found, tblName, err
+	}
+
+	// Now check if the tag exists in the working set of any table
+	tNames, err := root.GetTableNames(ctx)
+
+	if err != nil {
+		return false, "", err
+	}
+
+	for _, tn := range tNames {
+		t, _, err := root.GetTable(ctx, tn)
+
+		if err != nil {
+			return false, "", err
+		}
+
+		sch, err := t.GetSchema(ctx)
+
+		if err != nil {
+			return false, "", err
+		}
+
+		_, found = sch.GetAllCols().GetByTag(tag)
+
+		if found {
+			return found, tn, nil
+		}
+	}
+
+	return false, "", nil
 }
 
 // GetSuperSchema returns the SuperSchema for the table name specified if that table exists.
@@ -217,6 +248,46 @@ func (root *RootValue) GetSuperSchema(ctx context.Context, tName string) (*schem
 	}
 
 	return ss, true, err
+}
+
+// GetUnionSuperSchema returns the union of all SuperSchemas for all current and historical tables.
+func (root *RootValue) GetUnionSuperSchema(ctx context.Context) (*schema.SuperSchema, error) {
+	ssMap, err := root.getOrCreateSuperSchemaMap(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var sss []*schema.SuperSchema
+	err = ssMap.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+		ssValRef := value.(types.Ref)
+		ssVal, err := ssValRef.TargetValue(ctx, root.vrw)
+
+		if err != nil {
+			return true, err
+		}
+
+		ss, err := encoding.UnmarshalSuperSchemaNomsValue(ctx, root.vrw.Format(), ssVal)
+
+		if err != nil {
+			return true, err
+		}
+
+		sss = append(sss, ss) // go get -f parseltongue
+		return false, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	hs, err := schema.SuperSchemaUnion(sss...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return hs, err
 }
 
 // GerSuperSchemaMap returns the Noms map that tracks SuperSchemas, used to create new RootValues on checkout branch.

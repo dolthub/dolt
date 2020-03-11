@@ -17,6 +17,7 @@ package envtestutils
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,7 +26,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	tc "github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 )
 
 type UniqueTagsTest struct {
@@ -54,14 +54,6 @@ var UniqueTagsTests = []UniqueTagsTest{
 			newColTypeInfo("pk", 42, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
 		)),
 		ExpectedBranch: "master",
-	},
-	{
-		Name: "cannot create table with tags in reserved space",
-		Commands: []tc.Command{
-			tc.Query{Query: fmt.Sprintf(`create table test (pk int not null primary key comment 'tag:%d');`, schema.ReservedTagMin)},
-		},
-		ExpectedBranch: "master",
-		ExpectedErrStr: fmt.Sprintf("tag values must be between 0 and 2^%d-1", schema.ReservedTagMin),
 	},
 	{
 		Name: "cannot create duplicate tags within a table",
@@ -131,6 +123,24 @@ var UniqueTagsTests = []UniqueTagsTest{
 		ExpectedBranch: "master",
 		ExpectedErrStr: "two different columns with the same tag",
 	},
+	{
+		Name: "cannot add a tag that has previously existed in a merged branch's history",
+		Commands: []tc.Command{
+			tc.Query{Query: `create table test (pk int not null primary key comment 'tag:0');`},
+			tc.CommitAll{Message: "created table test"},
+			tc.Branch{BranchName: "other"},
+			tc.Checkout{BranchName: "other"},
+			tc.Query{Query: `alter table test add column c0 int comment 'tag:42';`},
+			tc.CommitAll{Message: "added column c0 to test on branch other"},
+			tc.Query{Query: `alter table test drop column c0;`},
+			tc.CommitAll{Message: "dropped c0 from test on other"},
+			tc.Checkout{BranchName: "master"},
+			tc.Merge{BranchName: "other"},
+			tc.Query{Query: `alter table test add column c1 int comment 'tag:42';`},
+		},
+		ExpectedBranch: "master",
+		ExpectedErrStr: "two different columns with the same tag",
+	},
 	//{
 	//	Name: "tag collisions within a table are automatically rebased on merge",
 	//	Commands: []tc.Command{
@@ -145,6 +155,7 @@ var UniqueTagsTests = []UniqueTagsTest{
 	//	ExpectedBranch: "master",
 	//	ExpectedErrStr: "two different columns with the same tag",
 	//},
+	// TODO: add test showing silent autogen behavior
 }
 
 func TestUniqueTags(t *testing.T) {

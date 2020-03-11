@@ -27,6 +27,7 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
 	dsql "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
 )
@@ -243,14 +244,32 @@ func (db *Database) CreateTable(ctx *sql.Context, tableName string, schema sql.S
 }
 
 // Unlike the exported version, createTable doesn't enforce any table name checks.
-func (db *Database) createTable(ctx *sql.Context, tableName string, schema sql.Schema) error {
+func (db *Database) createTable(ctx *sql.Context, tableName string, sch sql.Schema) error {
 	if exists, err := db.root.HasTable(ctx, tableName); err != nil {
 		return err
 	} else if exists {
 		return sql.ErrTableAlreadyExists.New(tableName)
 	}
 
-	doltSch, err := SqlSchemaToDoltSchema(schema)
+	doltSch, err := SqlSchemaToDoltSchema(sch)
+	if err != nil {
+		return err
+	}
+
+
+	//doltSch, err = schema.ResolveTagConflicts(ss, doltSch)
+	err = doltSch.GetAllCols().Iter(func(tag uint64, _ schema.Column) (stop bool, err error) {
+		found, tblName, err := db.root.HasTag(ctx, tag)
+		if err != nil {
+			return true, err
+		}
+		if found {
+			err = fmt.Errorf("A column with the tag %d already exists in table %s.", tag, tblName)
+		}
+		stop = err != nil
+		return stop, err
+	})
+
 	if err != nil {
 		return err
 	}

@@ -71,6 +71,7 @@ func SqlSchemaToDoltSchema(sqlSchema sql.Schema) (schema.Schema, error) {
 	var tag uint64
 	for i, col := range sqlSchema {
 		commentTag := extractTag(col)
+		// TODO: are we sure we want to silently autogen new tags here?
 		if commentTag != schema.InvalidTag {
 			tag = commentTag
 		} else {
@@ -138,6 +139,9 @@ func extractTag(col *sql.Column) uint64 {
 		startIdx := i + len(tagCommentPrefix)
 		tag, err := strconv.ParseUint(col.Comment[startIdx:], 10, 64)
 		if err != nil {
+			return schema.InvalidTag
+		}
+		if tag >= schema.ReservedTagMin {
 			return schema.InvalidTag
 		}
 		return tag
