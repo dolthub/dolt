@@ -20,12 +20,12 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-
 	"github.com/liquidata-inc/dolt/go/store/types"
-	"github.com/stretchr/testify/assert"
 )
 
 func setupTable(t *testing.T, tableName string) (context.Context, *env.DoltEnv, types.Map) {
