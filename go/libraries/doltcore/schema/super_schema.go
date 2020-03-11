@@ -282,6 +282,34 @@ func (ss *SuperSchema) NameMapForSchema(sch Schema) (map[string]string, error) {
 	return inNameToOutName, nil
 }
 
+// RebaseTag changes the tag of a column from oldTag to newTag.
+func (ss *SuperSchema) RebaseTag(oldTag, newTag uint64) (*SuperSchema, error) {
+	tn := make(map[uint64][]string)
+	var cc []Column
+	err := ss.allCols.Iter(func(tag uint64, col Column) (stop bool, err error) {
+		if tag == oldTag {
+			col.Tag = newTag
+			tn[newTag] = ss.tagNames[oldTag]
+		} else {
+			tn[tag] = ss.tagNames[tag]
+		}
+		cc = append(cc, col)
+		return false, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	ac, err := NewColCollection(cc...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &SuperSchema{ac, tn}, nil
+}
+
 // SuperSchemaUnion combines multiple SuperSchemas.
 func SuperSchemaUnion(superSchemas ...*SuperSchema) (*SuperSchema, error) {
 	cc, _ := NewColCollection()

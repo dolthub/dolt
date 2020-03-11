@@ -522,6 +522,43 @@ func (root *RootValue) HasConflicts(ctx context.Context) (bool, error) {
 	return len(cnfTbls) > 0, nil
 }
 
+// PutSuperSchema writes a new map entry for the table name and super schema supplied, it will overwrite an existing entry.
+func (root *RootValue) PutSuperSchema(ctx context.Context, tName string, ss *schema.SuperSchema) (*RootValue, error) {
+	newRoot := root
+	ssm, err := newRoot.getOrCreateSuperSchemaMap(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	ssVal, err := encoding.MarshalSuperSchemaAsNomsValue(ctx, newRoot.VRW(), ss)
+
+	if err != nil {
+		return nil, err
+	}
+
+	ssRef, err := writeValAndGetRef(ctx, newRoot.VRW(), ssVal)
+
+	if err != nil {
+		return nil, err
+	}
+
+	m, err := ssm.Edit().Set(types.String(tName), ssRef).Map(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	newRootSt := newRoot.valueSt
+	newRootSt, err = newRootSt.Set(superSchemasKey, m)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return newRootValue(root.vrw, newRootSt), nil
+}
+
 // PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
 func (root *RootValue) PutTable(ctx context.Context, tName string, table *Table) (*RootValue, error) {
 	return PutTable(ctx, root, root.VRW(), tName, table)

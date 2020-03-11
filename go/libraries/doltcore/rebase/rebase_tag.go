@@ -117,13 +117,13 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 
 	// schema rebase
 	var isPkTag bool
-	newCC, _ := schema.NewColCollection()
+	schCC, _ := schema.NewColCollection()
 	err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if tag == oldTag {
 			col.Tag = newTag
 			isPkTag = col.IsPartOfPK
 		}
-		newCC, err = newCC.Append(col)
+		schCC, err = schCC.Append(col)
 		if err != nil {
 			return true, err
 		}
@@ -134,7 +134,16 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		return nil, err
 	}
 
-	rebasedSch := schema.SchemaFromCols(newCC)
+	rebasedSch := schema.SchemaFromCols(schCC)
+
+	// super schema rebase
+	ss, _, err := root.GetSuperSchema(ctx, tblName)
+
+	if err != nil {
+		return nil, err
+	}
+
+	rebasedSS, err := ss.RebaseTag(oldTag, newTag)
 
 	// row rebase
 	var parentRows types.Map
@@ -187,8 +196,14 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		return nil, err
 	}
 
+	rebasedRoot, err := root.PutSuperSchema(ctx, tblName, rebasedSS)
+
+	if err != nil {
+		return nil, err
+	}
+
 	// create new RootValue by overwriting table with rebased rows and schema
-	return doltdb.PutTable(ctx, root, root.VRW(), tblName, rebasedTable)
+	return doltdb.PutTable(ctx, rebasedRoot, rebasedRoot.VRW(), tblName, rebasedTable)
 }
 
 func replayRowDiffs(ctx context.Context, rSch schema.Schema, rows, parentRows, rebasedParentRows types.Map, oldTag, newTag uint64, pkTag bool) (types.Map, error) {
