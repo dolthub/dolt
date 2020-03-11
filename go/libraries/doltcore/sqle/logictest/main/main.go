@@ -89,6 +89,8 @@ func NewDoltRecordResult(e *logictest.ResultLogEntry, version string) *DoltResul
 		result = "not ok"
 	case logictest.Skipped:
 		result = "skipped"
+	case logictest.Timeout:
+		result = "timeout"
 	}
 	return &DoltResultRecord{
 		Version:      version,
