@@ -659,6 +659,7 @@ type sqlEngine struct {
 func newSqlEngine(ctx context.Context, dEnv *env.DoltEnv, db *dsqle.Database, format resultFormat) (*sqlEngine, error) {
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
+	engine.AddDatabase(sql.NewInformationSchemaDatabase(engine.Catalog))
 
 	engine.Catalog.RegisterIndexDriver(dsqle.NewDoltIndexDriver(db))
 	err := engine.Init()

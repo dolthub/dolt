@@ -79,6 +79,7 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, rootValue *doltdb.Ro
 	sqlEngine := sqle.NewDefault()
 	db := dsqle.NewDatabase("dolt", rootValue, dEnv.DoltDB, dEnv.RepoState)
 	sqlEngine.AddDatabase(db)
+	sqlEngine.AddDatabase(sql.NewInformationSchemaDatabase(sqlEngine.Catalog))
 
 	startError = dsqle.RegisterSchemaFragments(sql.NewContext(ctx), sqlEngine.Catalog, db)
 	if startError != nil {
