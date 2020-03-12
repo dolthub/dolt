@@ -283,13 +283,13 @@ func (ss *SuperSchema) NameMapForSchema(sch Schema) (map[string]string, error) {
 }
 
 // RebaseTag changes the tag of a column from oldTag to newTag.
-func (ss *SuperSchema) RebaseTag(oldTag, newTag uint64) (*SuperSchema, error) {
+func (ss *SuperSchema) RebaseTag(tagMapping map[uint64]uint64) (*SuperSchema, error) {
 	tn := make(map[uint64][]string)
 	var cc []Column
 	err := ss.allCols.Iter(func(tag uint64, col Column) (stop bool, err error) {
-		if tag == oldTag {
+		if newTag, found := tagMapping[tag]; found {
 			col.Tag = newTag
-			tn[newTag] = ss.tagNames[oldTag]
+			tn[newTag] = ss.tagNames[tag]
 		} else {
 			tn[tag] = ss.tagNames[tag]
 		}

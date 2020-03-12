@@ -125,7 +125,7 @@ var RebaseTagTests = []RebaseTagTest{
 		},
 		OldTag:         DripTag,
 		NewTag:         DripTagRebased,
-		ExpectedErrStr: "tag: " + strconv.Itoa(DripTag) + " not found in commit history for commit: ",
+		ExpectedErrStr: "tags not found in commit history for commit: ",
 	},
 	{
 		Name: "rebase entire history",
@@ -244,7 +244,7 @@ var RebaseTagTests = []RebaseTagTest{
 		Name: "create new column, modify rows without value for column, rebase column's tag",
 		Commands: []tc.Command{
 			tc.Query{Query: createPeopleTable},
-			tc.Query{Query: `insert into people (id, name, age) values 
+			tc.Query{Query: `insert into people (id, name, age) values
 				(7, "Maggie Simpson", 1),
 				(8, "Milhouse Van Houten", 8);`},
 			tc.CommitAll{Message: "made changes"},
@@ -423,7 +423,7 @@ func testRebaseTag(t *testing.T, test RebaseTagTest) {
 	}
 
 	bs, _ := dEnv.DoltDB.GetBranches(context.Background()) // master
-	rebasedCommit, err := TagRebaseForRef(context.Background(), bs[0], dEnv.DoltDB, test.OldTag, test.NewTag)
+	rebasedCommit, err := TagRebaseForRef(context.Background(), bs[0], dEnv.DoltDB, "people", map[uint64]uint64{test.OldTag: test.NewTag})
 
 	if test.ExpectedErrStr != "" {
 		require.NotNil(t, err)
@@ -461,7 +461,8 @@ func testRebaseTagHistory(t *testing.T) {
 
 	dEnv := dtu.CreateTestEnv()
 	for _, cmd := range cmds {
-		cmd.Exec(t, dEnv)
+		err := cmd.Exec(t, dEnv)
+		require.NoError(t, err)
 	}
 
 	mcs, _ := doltdb.NewCommitSpec("HEAD", "master")
@@ -470,7 +471,7 @@ func testRebaseTagHistory(t *testing.T) {
 	otherCm, _ := dEnv.DoltDB.Resolve(context.Background(), ocs)
 
 	bs, _ := dEnv.DoltDB.GetBranches(context.Background()) // master
-	newMasterCm, err := TagRebaseForRef(context.Background(), bs[0], dEnv.DoltDB, DripTag, DripTagRebased)
+	newMasterCm, err := TagRebaseForRef(context.Background(), bs[0], dEnv.DoltDB, "people", map[uint64]uint64{DripTag: DripTagRebased})
 	require.NoError(t, err)
 
 	expectedSch := schema.SchemaFromCols(peopleWithDrip)

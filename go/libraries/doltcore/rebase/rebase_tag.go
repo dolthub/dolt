@@ -15,23 +15,23 @@
 package rebase
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"time"
+"context"
+"errors"
+"fmt"
+"time"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
-	ndiff "github.com/liquidata-inc/dolt/go/store/diff"
-	"github.com/liquidata-inc/dolt/go/store/types"
+"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
+"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
+"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
+ndiff "github.com/liquidata-inc/dolt/go/store/diff"
+"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 // replaces all instances of oldTag with newTag.
-func TagRebaseForRef(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, oldTag, newTag uint64) (*doltdb.Commit, error) {
+func TagRebaseForRef(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, tblName string, tagMapping map[uint64]uint64) (*doltdb.Commit, error) {
 	cs, err := doltdb.NewCommitSpec("head", dRef.String())
 
 	if err != nil {
@@ -44,7 +44,7 @@ func TagRebaseForRef(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, 
 		return nil, err
 	}
 
-	rebasedCommit, err := TagRebaseForCommit(ctx, cm, ddb, oldTag, newTag)
+	rebasedCommit, err := TagRebaseForCommit(ctx, cm, ddb, tblName, tagMapping)
 
 	if err != nil {
 		return nil, err
@@ -65,8 +65,14 @@ func TagRebaseForRef(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, 
 	return rebasedCommit, nil
 }
 
-func TagRebaseForCommit(ctx context.Context, startingCommit *doltdb.Commit, ddb *doltdb.DoltDB, oldTag, newTag uint64) (*doltdb.Commit, error) {
-	found, err := tagExistsInHistory(ctx, ddb, startingCommit, oldTag)
+func TagRebaseForCommit(ctx context.Context, startingCommit *doltdb.Commit, ddb *doltdb.DoltDB, tblName string, tagMapping map[uint64]uint64) (*doltdb.Commit, error) {
+	err := validateTagMapping(tagMapping)
+
+	if err != nil {
+		return nil, err
+	}
+
+	found, err := tagExistsInHistory(ctx, startingCommit, tagMapping)
 
 	if err != nil {
 		return nil, err
@@ -74,15 +80,15 @@ func TagRebaseForCommit(ctx context.Context, startingCommit *doltdb.Commit, ddb 
 
 	if !found {
 		ch, _ := startingCommit.HashOf()
-		return nil, errors.New(fmt.Sprintf("tag: %d not found in commit history for commit: %s", oldTag, ch))
+		return nil, errors.New(fmt.Sprintf("tags not found in commit history for commit: %s", ch))
 	}
 
 	replay := func(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue) (rebaseRoot *doltdb.RootValue, err error) {
-		return replayCommitWithNewTag(ctx, root, parentRoot, rebasedParentRoot, oldTag, newTag)
+		return replayCommitWithNewTag(ctx, root, parentRoot, rebasedParentRoot, tblName, tagMapping)
 	}
 
-	nerf := func(ctx context.Context, ddb *doltdb.DoltDB, cm *doltdb.Commit) (b bool, err error) {
-		return tagExistsInHistory(ctx, ddb, cm, oldTag)
+	nerf := func(ctx context.Context, cm *doltdb.Commit) (b bool, err error) {
+		return tagExistsInHistory(ctx, cm, tagMapping)
 	}
 
 	rc, err := rebase(ctx, ddb, replay, nerf, startingCommit)
@@ -94,34 +100,42 @@ func TagRebaseForCommit(ctx context.Context, startingCommit *doltdb.Commit, ddb 
 	return rc[0], nil
 }
 
-func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue, oldTag, newTag uint64) (*doltdb.RootValue, error) {
+func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue, tblName string, tagMapping map[uint64]uint64) (*doltdb.RootValue, error) {
 
-	tblName, tbl, err := tableFromRootAndTag(ctx, root, oldTag)
 
+	tbl, found, err := root.GetTable(ctx, tblName)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		rh, _ := root.HashOf()
+		return nil, fmt.Errorf("table %s not found in root: %s", tblName, rh.String())
+	}
+
+	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	if tbl == nil {
-		// tag doesn't exist in this commit
+	// tags may not exist in this commit
+	tagExists := false
+	for oldTag, _ := range tagMapping {
+		if _, found := sch.GetAllCols().GetByTag(oldTag); found {
+			tagExists = true
+			break
+		}
+	}
+	if !tagExists {
 		return root, nil
 	}
 
 	parentTblName := tblName
 
-	sch, err := tbl.GetSchema(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
 	// schema rebase
-	var isPkTag bool
 	schCC, _ := schema.NewColCollection()
 	err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if tag == oldTag {
+		if newTag, found := tagMapping[tag]; found {
 			col.Tag = newTag
-			isPkTag = col.IsPartOfPK
 		}
 		schCC, err = schCC.Append(col)
 		if err != nil {
@@ -143,7 +157,7 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		return nil, err
 	}
 
-	rebasedSS, err := ss.RebaseTag(oldTag, newTag)
+	rebasedSS, err := ss.RebaseTag(tagMapping)
 
 	// row rebase
 	var parentRows types.Map
@@ -178,7 +192,7 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		return nil, err
 	}
 
-	rebasedRows, err := replayRowDiffs(ctx, rebasedSch, rows, parentRows, rebasedParentRows, oldTag, newTag, isPkTag)
+	rebasedRows, err := replayRowDiffs(ctx, rebasedSch, rows, parentRows, rebasedParentRows, tagMapping)
 
 	if err != nil {
 		return nil, err
@@ -206,10 +220,8 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 	return doltdb.PutTable(ctx, rebasedRoot, rebasedRoot.VRW(), tblName, rebasedTable)
 }
 
-func replayRowDiffs(ctx context.Context, rSch schema.Schema, rows, parentRows, rebasedParentRows types.Map, oldTag, newTag uint64, pkTag bool) (types.Map, error) {
+func replayRowDiffs(ctx context.Context, rSch schema.Schema, rows, parentRows, rebasedParentRows types.Map, tagMapping map[uint64]uint64) (types.Map, error) {
 
-	rebasedTags := rSch.GetAllCols().Tags
-	rebasedNBF := rows.Format()
 	// we will apply modified differences to the rebasedParent
 	rebasedRowEditor := rebasedParentRows.Edit()
 
@@ -238,80 +250,62 @@ func replayRowDiffs(ctx context.Context, rSch schema.Schema, rows, parentRows, r
 			panic("Unexpected commit diff result: with nil key value encountered")
 		}
 
-		key, newVal, err := modifyDifferenceTag(d, oldTag, newTag, pkTag, rebasedNBF, rebasedTags)
+		key, newVal, err := modifyDifferenceTag(d, rows.Format(), rSch, tagMapping)
 
 		if err != nil {
 			return types.EmptyMap, nil
 		}
 
-		if d.OldValue != nil && d.NewValue != nil { // update
+		switch d.ChangeType {
+		case types.DiffChangeAdded:
 			rebasedRowEditor.Set(key, newVal)
-		} else if d.OldValue == nil { // insert
-			rebasedRowEditor.Set(key, newVal)
-		} else if d.NewValue == nil { // delete
+		case types.DiffChangeRemoved:
 			rebasedRowEditor.Remove(key)
-		} else {
-			panic("Unexpected commit diff result: all values are nil")
+		case types.DiffChangeModified:
+			rebasedRowEditor.Set(key, newVal)
 		}
 	}
 
 	return rebasedRowEditor.Map(ctx)
 }
 
-func modifyDifferenceTag(d *ndiff.Difference, old, new uint64, pkTag bool, nbf *types.NomsBinFormat, tags []uint64) (key types.LesserValuable, val types.Valuable, err error) {
-	if pkTag {
-		tv, err := row.ParseTaggedValues(d.KeyValue.(types.Tuple))
+func modifyDifferenceTag(d *ndiff.Difference, nbf *types.NomsBinFormat, rSch schema.Schema, tagMapping map[uint64]uint64) (key types.LesserValuable, val types.Valuable, err error) {
+	ktv, err := row.ParseTaggedValues(d.KeyValue.(types.Tuple))
 
-		if err != nil {
-			return nil, nil, err
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for oldTag, newTag := range tagMapping {
+		if v, ok := ktv[oldTag]; ok {
+			ktv[newTag] = v
+			delete(ktv, oldTag)
 		}
+	}
+	key = ktv.NomsTupleForTags(nbf, rSch.GetPKCols().Tags, true)
 
-		tv[new] = tv[old]
-		delete(tv, old)
-
-		return tv.NomsTupleForTags(nbf, tags, true), d.NewValue, nil
-	} else if d.NewValue != nil {
+	val = d.NewValue
+	if d.NewValue != nil {
 		tv, err := row.ParseTaggedValues(d.NewValue.(types.Tuple))
 
 		if err != nil {
 			return nil, nil, err
 		}
 
-		tv[new] = tv[old]
-		delete(tv, old)
-
-		return d.KeyValue, tv.NomsTupleForTags(nbf, tags, false), nil
-	}
-	return d.KeyValue, d.NewValue, nil
-}
-
-func tableFromRootAndTag(ctx context.Context, root *doltdb.RootValue, tag uint64) (string, *doltdb.Table, error) {
-	tblNames, err := root.GetTableNames(ctx)
-
-	if err != nil {
-		return "", nil, err
-	}
-
-	for _, tn := range tblNames {
-		t, _, _ := root.GetTable(ctx, tn)
-		sch, err := t.GetSchema(ctx)
-
-		if err != nil {
-			return "", nil, err
+		for oldTag, newTag := range tagMapping {
+			if v, ok := tv[oldTag]; ok {
+				tv[newTag] = v
+				delete(tv, oldTag)
+			}
 		}
 
-		_, found := sch.GetAllCols().GetByTag(tag)
-
-		if found {
-			return tn, t, err
-		}
+		val = tv.NomsTupleForTags(nbf, rSch.GetNonPKCols().Tags, false)
 	}
 
-	// tag doesn't exist in this commit
-	return "", nil, nil
+	return key, val, nil
 }
 
-func tagExistsInHistory(ctx context.Context, ddb *doltdb.DoltDB, c *doltdb.Commit, tag uint64) (bool, error) {
+func tagExistsInHistory(ctx context.Context, c *doltdb.Commit, tagMapping map[uint64]uint64) (bool, error) {
 
 	crt, err := c.GetRootValue()
 
@@ -332,13 +326,23 @@ func tagExistsInHistory(ctx context.Context, ddb *doltdb.DoltDB, c *doltdb.Commi
 			return false, err
 		}
 
-		_, found := ss.GetColumn(tag)
-
-		if found {
-			return true, nil
+		for oldTag, _ := range tagMapping {
+			if _, found := ss.GetColumn(oldTag); found {
+				return true, nil
+			}
 		}
 	}
 
 	return false, nil
 }
 
+func validateTagMapping(tagMapping map[uint64]uint64) error {
+	newTags := make(map[uint64]struct{})
+	for _, nt := range tagMapping {
+		if _, found := newTags[nt]; found {
+			return fmt.Errorf("duplicate tag %d found in tag mapping", nt)
+		}
+		newTags[nt] = struct{}{}
+	}
+	return nil
+}

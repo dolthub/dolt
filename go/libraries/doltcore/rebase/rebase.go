@@ -25,7 +25,7 @@ type visitedSet map[hash.Hash]*doltdb.Commit
 
 type replayCommitFn func(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue) (rebaseRoot *doltdb.RootValue, err error)
 
-type needsRebaseFn func(ctx context.Context, ddb *doltdb.DoltDB, cm *doltdb.Commit) (bool, error)
+type needsRebaseFn func(ctx context.Context, cm *doltdb.Commit) (bool, error)
 
 func rebase(ctx context.Context, ddb *doltdb.DoltDB, replay replayCommitFn, nerf needsRebaseFn, origins ...*doltdb.Commit) ([]*doltdb.Commit, error) {
 	var rebasedCommits []*doltdb.Commit
@@ -54,7 +54,7 @@ func rebaseRecursive(ctx context.Context, ddb *doltdb.DoltDB, replay replayCommi
 		return visitedCommit, nil
 	}
 
-	needToRebase, err := nerf(ctx, ddb, commit)
+	needToRebase, err := nerf(ctx, commit)
 	if err != nil {
 		return nil, err
 	}
