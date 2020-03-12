@@ -49,7 +49,7 @@ type Database struct {
 	ddb       *doltdb.DoltDB
 	rsr       env.RepoStateReader
 	batchMode batchMode
-	tables    map[string]sql.Table
+	tables    map[*doltdb.RootValue]map[string]sql.Table
 }
 
 var _ sql.Database = (*Database)(nil)
@@ -65,8 +65,15 @@ func NewDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB, rsr en
 		ddb:       ddb,
 		rsr:       rsr,
 		batchMode: single,
-		tables:    make(map[string]sql.Table),
+		tables:    initTableMap(root),
 	}
+}
+
+func initTableMap(root *doltdb.RootValue) map[*doltdb.RootValue]map[string]sql.Table {
+	tablesForRoot := make(map[string]sql.Table)
+	tables := make(map[*doltdb.RootValue]map[string]sql.Table)
+	tables[root] = tablesForRoot
+	return tables
 }
 
 // NewBatchedDatabase returns a new dolt database executing in batch insert mode. Integrators must call Flush() to
@@ -78,7 +85,7 @@ func NewBatchedDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB,
 		ddb:       ddb,
 		rsr:       rsr,
 		batchMode: batched,
-		tables:    make(map[string]sql.Table),
+		tables:    initTableMap(root),
 	}
 }
 
@@ -87,6 +94,7 @@ func (db *Database) Name() string {
 	return db.name
 }
 
+// TableAtCommit returns the table with the name given as it appeared at the commit given
 func (db *Database) TableAtCommit(ctx context.Context, tableName, commit string) (sql.Table, error) {
 	cs, err := doltdb.NewCommitSpec(commit, "")
 	if err != nil {
@@ -153,25 +161,28 @@ func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sq
 		return nil, false, nil
 	}
 
-	if table, ok := db.tables[exactName]; ok {
-		return table, true, nil
-	}
-
 	table, err := db.getTable(ctx, db.root, exactName)
 	if err != nil {
 		return nil, false, err
 	}
 
-	db.tables[exactName] = table
 	return table, true, nil
 }
 
+// getTable gets the table with the exact name given at the root value given. The database caches tables for all root
+// values to avoid doing schema lookups on every table lookup, which are expensive.
 func (db *Database) getTable(ctx context.Context, root *doltdb.RootValue, exactName string) (sql.Table, error) {
+	if tablesForRoot, ok := db.tables[root]; ok {
+		if table, ok := tablesForRoot[exactName]; ok {
+			return table, nil
+		}
+	}
+
 	tbl, ok, err := root.GetTable(ctx, exactName)
 	if err != nil {
 		return nil, err
 	} else if !ok {
-		panic("Name '" + exactName + "' should have already been verified... This is a bug")
+		return nil, doltdb.ErrTableNotFound
 	}
 
 	sch, err := tbl.GetSchema(ctx)
@@ -180,18 +191,24 @@ func (db *Database) getTable(ctx context.Context, root *doltdb.RootValue, exactN
 		return nil, err
 	}
 
-	var toReturn sql.Table
+	var table sql.Table
 
 	readonlyTable := DoltTable{name: exactName, table: tbl, sch: sch, db: db}
 	if doltdb.IsSystemTable(exactName) {
-		toReturn = &readonlyTable
+		table = &readonlyTable
 	} else if doltdb.HasDoltPrefix(exactName) {
-		toReturn = &WritableDoltTable{DoltTable: readonlyTable}
+		table = &WritableDoltTable{DoltTable: readonlyTable}
 	} else {
-		toReturn = &AlterableDoltTable{WritableDoltTable{DoltTable: readonlyTable}}
+		table = &AlterableDoltTable{WritableDoltTable{DoltTable: readonlyTable}}
 	}
 
-	return toReturn, nil
+	if db.tables[root] == nil {
+		db.tables[root] = make(map[string]sql.Table)
+	}
+
+	db.tables[root][exactName] = table
+
+	return table, nil
 }
 
 // GetTableNames returns the names of all user tables. System tables in user space (e.g. dolt_docs, dolt_query_catalog)
@@ -254,7 +271,7 @@ func (db *Database) DropTable(ctx *sql.Context, tableName string) error {
 		return err
 	}
 
-	delete(db.tables, tableName)
+	delete(db.tables[db.root], tableName)
 
 	db.SetRoot(newRoot)
 
@@ -316,7 +333,7 @@ func (db *Database) RenameTable(ctx *sql.Context, oldName, newName string) error
 		return err
 	}
 
-	delete(db.tables, oldName)
+	delete(db.tables[db.root], oldName)
 	db.SetRoot(root)
 
 	return nil
@@ -324,7 +341,7 @@ func (db *Database) RenameTable(ctx *sql.Context, oldName, newName string) error
 
 // Flush flushes the current batch of outstanding changes and returns any errors.
 func (db *Database) Flush(ctx context.Context) error {
-	for name, table := range db.tables {
+	for name, table := range db.tables[db.root] {
 		if writable, ok := table.(*WritableDoltTable); ok {
 			if err := writable.flushBatchedEdits(ctx); err != nil {
 				return err
@@ -334,13 +351,13 @@ func (db *Database) Flush(ctx context.Context) error {
 				return err
 			}
 		}
-		delete(db.tables, name)
+		delete(db.tables[db.root], name)
 	}
 	return nil
 }
 
 // CreateView implements sql.ViewCreator. Persists the view in the dolt database, so
-// it can exist in a sql session later. Returns sql.ErrExistingView a view
+// it can exist in a sql session later. Returns sql.ErrExistingView if a view
 // with that name already exists.
 func (db *Database) CreateView(ctx *sql.Context, name string, definition string) error {
 	tbl, err := GetOrCreateDoltSchemasTable(ctx, db)
