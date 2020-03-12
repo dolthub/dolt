@@ -39,6 +39,7 @@ type DoltTable struct {
 }
 
 var _ sql.Table = (*DoltTable)(nil)
+var _ sql.HistoricalTable = (*DoltTable)(nil)
 
 // Implements sql.IndexableTable
 func (t *DoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
@@ -102,6 +103,16 @@ func (t *DoltTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 // Returns the table rows for the partition given (all rows of the table).
 func (t *DoltTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
 	return newRowIterator(t, ctx)
+}
+
+// AsOfTime implements sql.HistoricalTable
+func (t *DoltTable) AsOfTime(ctx *sql.Context, time interface{}) (sql.Table, error) {
+	commitStr, ok := time.(string)
+	if !ok {
+		panic("expected commit string")
+	}
+
+	return t.db.TableAtCommit(ctx, t.name,  commitStr)
 }
 
 // WritableDoltTable allows updating, deleting, and inserting new rows. It implements sql.UpdatableTable and friends.

@@ -87,6 +87,30 @@ func (db *Database) Name() string {
 	return db.name
 }
 
+func (db *Database) TableAtCommit(ctx context.Context, tableName, commit string) (sql.Table, error) {
+	cs, err := doltdb.NewCommitSpec(commit, "")
+	if err != nil {
+		return nil, err
+	}
+
+	cm, err := db.ddb.Resolve(ctx, cs)
+	if err != nil {
+		return nil, err
+	}
+
+	root, err := cm.GetRootValue()
+	if err != nil {
+		return nil, err
+	}
+
+	table, err := db.getTable(ctx, root, tableName)
+	if err != nil {
+		return nil, err
+	}
+
+	return table, nil
+}
+
 // GetTableInsensitive is used when resolving tables in queries. It returns a best-effort case-insensitive match for
 // the table name given.
 func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sql.Table, bool, error) {
@@ -133,18 +157,27 @@ func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sq
 		return table, true, nil
 	}
 
-	tbl, ok, err := db.root.GetTable(ctx, exactName)
-
+	table, err := db.getTable(ctx, db.root, exactName)
 	if err != nil {
 		return nil, false, err
+	}
+
+	db.tables[exactName] = table
+	return table, true, nil
+}
+
+func (db *Database) getTable(ctx context.Context, root *doltdb.RootValue, exactName string) (sql.Table, error) {
+	tbl, ok, err := root.GetTable(ctx, exactName)
+	if err != nil {
+		return nil, err
 	} else if !ok {
-		panic("Name '" + exactName + "' had already been verified... This is a bug")
+		panic("Name '" + exactName + "' should have already been verified... This is a bug")
 	}
 
 	sch, err := tbl.GetSchema(ctx)
 
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
 	var toReturn sql.Table
@@ -158,8 +191,7 @@ func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sq
 		toReturn = &AlterableDoltTable{WritableDoltTable{DoltTable: readonlyTable}}
 	}
 
-	db.tables[exactName] = toReturn
-	return toReturn, true, nil
+	return toReturn, nil
 }
 
 // GetTableNames returns the names of all user tables. System tables in user space (e.g. dolt_docs, dolt_query_catalog)
