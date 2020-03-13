@@ -766,6 +766,45 @@ var SelectDiffTests = []SelectTest{
 	},
 }
 
+
+
+var AsOfTests = []SelectTest{
+	{
+		Name:  "select * from seed branch",
+		Query: "select * from test_table as of 'seed'",
+		ExpectedRows: []row.Row{
+			mustRow(row.New(types.Format_7_18, InitialHistSch, row.TaggedValues{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son")})),
+			mustRow(row.New(types.Format_7_18, InitialHistSch, row.TaggedValues{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks")})),
+			mustRow(row.New(types.Format_7_18, InitialHistSch, row.TaggedValues{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn")})),
+		},
+		ExpectedSchema: InitialHistSch,
+	},
+	{
+		Name:  "select * from add-age branch",
+		Query: "select * from test_table as of 'add-age'",
+		ExpectedRows: []row.Row{
+			mustRow(row.New(types.Format_7_18, AddAgeAt3HistSch, row.TaggedValues{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.Int(35)})),
+			mustRow(row.New(types.Format_7_18, AddAgeAt3HistSch, row.TaggedValues{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.Int(38)})),
+			mustRow(row.New(types.Format_7_18, AddAgeAt3HistSch, row.TaggedValues{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.Int(37)})),
+			mustRow(row.New(types.Format_7_18, AddAgeAt3HistSch, row.TaggedValues{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave"), 3: types.Int(37)})),
+		},
+		ExpectedSchema: AddAgeAt3HistSch,
+	},
+	{
+		Name:  "select * from master branch",
+		Query: "select * from test_table as of 'master'",
+		ExpectedRows: []row.Row{
+			mustRow(row.New(types.Format_7_18, ReaddAgeAt4HistSch, row.TaggedValues{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St"), 4: types.Uint(35)})),
+			mustRow(row.New(types.Format_7_18, ReaddAgeAt4HistSch, row.TaggedValues{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln"), 4: types.Uint(38)},)),
+			mustRow(row.New(types.Format_7_18, ReaddAgeAt4HistSch, row.TaggedValues{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct"), 4: types.Uint(37)})),
+			mustRow(row.New(types.Format_7_18, ReaddAgeAt4HistSch, row.TaggedValues{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave"), 3: types.String("-1 Imaginary Wy"), 4: types.Uint(37)})),
+			mustRow(row.New(types.Format_7_18, ReaddAgeAt4HistSch, row.TaggedValues{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele")})),
+			mustRow(row.New(types.Format_7_18, ReaddAgeAt4HistSch, row.TaggedValues{0: types.Int(5), 1: types.String("Daylon"), 2: types.String("Wilkins")})),
+		},
+		ExpectedSchema: ReaddAgeAt4HistSch,
+	},
+}
+
 // SQL is supposed to be case insensitive. These are tests of that promise.
 var CaseSensitivityTests = []SelectTest{
 	{

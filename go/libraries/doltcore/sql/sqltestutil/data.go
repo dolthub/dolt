@@ -392,10 +392,10 @@ var diffSchema = envtestutils.MustSchema(
 
 const tblName = "test_table"
 
-var initialSch = envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr)
-var addAddrAt3Sch = envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr)
-var addAgeAt3Sch = envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, ageColTag3TypeInt)
-var readdAgeAt4Sch = envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr, ageColTag4TypeUint)
+var InitialHistSch = envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr)
+var AddAddrAt3HistSch = envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr)
+var AddAgeAt3HistSch = envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, ageColTag3TypeInt)
+var ReaddAgeAt4HistSch = envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr, ageColTag4TypeUint)
 
 func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envtestutils.HistoryNode {
 	vrw := dEnv.DoltDB.ValueReadWriter()
@@ -406,8 +406,8 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 			CommitMsg: "Seeding with initial user data",
 			Updates: map[string]envtestutils.TableUpdate{
 				tblName: {
-					NewSch: initialSch,
-					NewRowData: envtestutils.MustRowData(t, ctx, vrw, initialSch, []row.TaggedValues{
+					NewSch: InitialHistSch,
+					NewRowData: envtestutils.MustRowData(t, ctx, vrw, InitialHistSch, []row.TaggedValues{
 						{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son")},
 						{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks")},
 						{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn")},
@@ -420,8 +420,8 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 					CommitMsg: "Adding int age to users with tag 3",
 					Updates: map[string]envtestutils.TableUpdate{
 						tblName: {
-							NewSch: addAgeAt3Sch,
-							NewRowData: envtestutils.MustRowData(t, ctx, vrw, addAgeAt3Sch, []row.TaggedValues{
+							NewSch: AddAgeAt3HistSch,
+							NewRowData: envtestutils.MustRowData(t, ctx, vrw, AddAgeAt3HistSch, []row.TaggedValues{
 								{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.Int(35)},
 								{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.Int(38)},
 								{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.Int(37)},
@@ -436,8 +436,8 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 					CommitMsg: "Adding string address to users with tag 3",
 					Updates: map[string]envtestutils.TableUpdate{
 						tblName: {
-							NewSch: addAddrAt3Sch,
-							NewRowData: envtestutils.MustRowData(t, ctx, vrw, addAddrAt3Sch, []row.TaggedValues{
+							NewSch: AddAddrAt3HistSch,
+							NewRowData: envtestutils.MustRowData(t, ctx, vrw, AddAddrAt3HistSch, []row.TaggedValues{
 								{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St")},
 								{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln")},
 								{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct")},
@@ -452,8 +452,8 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 							CommitMsg: "Re-add age as a uint with tag 4",
 							Updates: map[string]envtestutils.TableUpdate{
 								tblName: {
-									NewSch: readdAgeAt4Sch,
-									NewRowData: envtestutils.MustRowData(t, ctx, vrw, readdAgeAt4Sch, []row.TaggedValues{
+									NewSch: ReaddAgeAt4HistSch,
+									NewRowData: envtestutils.MustRowData(t, ctx, vrw, ReaddAgeAt4HistSch, []row.TaggedValues{
 										{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St"), 4: types.Uint(35)},
 										{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln"), 4: types.Uint(38)},
 										{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct"), 4: types.Uint(37)},
@@ -476,7 +476,7 @@ func CreateWorkingRootUpdate() map[string]envtestutils.TableUpdate {
 	return map[string]envtestutils.TableUpdate{
 		tblName: {
 			RowUpdates: []row.Row{
-				mustRow(row.New(types.Format_Default, readdAgeAt4Sch, row.TaggedValues{
+				mustRow(row.New(types.Format_Default, ReaddAgeAt4HistSch, row.TaggedValues{
 					0: types.Int(6), 1: types.String("Katie"), 2: types.String("McCulloch"),
 				})),
 			},

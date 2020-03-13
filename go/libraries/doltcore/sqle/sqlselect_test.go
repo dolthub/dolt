@@ -38,7 +38,7 @@ const singleSelectQueryTest = "" //"Natural join with join clause"
 // Set to false to run tests known to be broken
 const skipBrokenSelect = true
 
-func TestExecuteSelect(t *testing.T) {
+func TestSelect(t *testing.T) {
 	for _, test := range BasicSelectTests {
 		t.Run(test.Name, func(t *testing.T) {
 			testSelectQuery(t, test)
@@ -46,13 +46,23 @@ func TestExecuteSelect(t *testing.T) {
 	}
 }
 
-func TestExecuteSelectDiff(t *testing.T) {
+func TestDiffQueries(t *testing.T) {
 	for _, test := range SelectDiffTests {
 		t.Run(test.Name, func(t *testing.T) {
 			testSelectDiffQuery(t, test)
 		})
 	}
 }
+
+func TestAsOfQueries(t *testing.T) {
+	for _, test := range AsOfTests {
+		t.Run(test.Name, func(t *testing.T) {
+			// AS OF queries use the same history as the diff tests, so exercise the same test setup
+			testSelectDiffQuery(t, test)
+		})
+	}
+}
+
 
 func TestJoins(t *testing.T) {
 	for _, tt := range JoinTests {
