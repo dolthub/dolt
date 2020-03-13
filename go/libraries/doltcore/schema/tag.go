@@ -49,6 +49,11 @@ const (
 
 	// Tags for dolt_diff_ table
 	DiffCommitTag
+
+	// Tags for dolt_schemas table
+	DoltSchemasTypeTag
+	DoltSchemasNameTag
+	DoltSchemasFragmentTag
 )
 
 var randGen = rand.New(rand.NewSource(time.Now().UnixNano()))

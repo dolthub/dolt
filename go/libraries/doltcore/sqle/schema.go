@@ -15,7 +15,9 @@
 package sqle
 
 import (
+	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"strconv"
 	"strings"
 
@@ -65,17 +67,21 @@ func SqlSchemaToDoltResultSchema(sqlSchema sql.Schema) (schema.Schema, error) {
 
 // SqlSchemaToDoltResultSchema returns a dolt Schema from the sql schema given, suitable for use in creating a table.
 // For result set schemas, see SqlSchemaToDoltResultSchema.
-func SqlSchemaToDoltSchema(sqlSchema sql.Schema) (schema.Schema, error) {
+func SqlSchemaToDoltSchema(ctx context.Context, root *doltdb.RootValue, sqlSchema sql.Schema) (schema.Schema, error) {
 	var cols []schema.Column
+	var err error
 
 	var tag uint64
-	for i, col := range sqlSchema {
+	for _, col := range sqlSchema {
 		commentTag := extractTag(col)
 		// TODO: are we sure we want to silently autogen new tags here?
 		if commentTag != schema.InvalidTag {
 			tag = commentTag
 		} else {
-			tag = uint64(i)
+			tag, err = root.GetUniqueTag(ctx)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		convertedCol, err := SqlColToDoltCol(tag, col)
@@ -139,9 +145,6 @@ func extractTag(col *sql.Column) uint64 {
 		startIdx := i + len(tagCommentPrefix)
 		tag, err := strconv.ParseUint(col.Comment[startIdx:], 10, 64)
 		if err != nil {
-			return schema.InvalidTag
-		}
-		if tag >= schema.ReservedTagMin {
 			return schema.InvalidTag
 		}
 		return tag

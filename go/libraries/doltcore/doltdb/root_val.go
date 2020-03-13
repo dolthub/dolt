@@ -250,12 +250,12 @@ func (root *RootValue) GetSuperSchema(ctx context.Context, tName string) (*schem
 	return ss, true, err
 }
 
-// GetUnionSuperSchema returns the union of all SuperSchemas for all current and historical tables.
-func (root *RootValue) GetUnionSuperSchema(ctx context.Context) (*schema.SuperSchema, error) {
+// GetUniqueTag returns the union of all SuperSchemas for all current and historical tables.
+func (root *RootValue) GetUniqueTag(ctx context.Context) (uint64, error) {
 	ssMap, err := root.getOrCreateSuperSchemaMap(ctx)
 
 	if err != nil {
-		return nil, err
+		return schema.InvalidTag, err
 	}
 
 	var sss []*schema.SuperSchema
@@ -278,16 +278,16 @@ func (root *RootValue) GetUnionSuperSchema(ctx context.Context) (*schema.SuperSc
 	})
 
 	if err != nil {
-		return nil, err
+		return schema.InvalidTag, err
 	}
 
-	hs, err := schema.SuperSchemaUnion(sss...)
+	rootSuperSchema, err := schema.SuperSchemaUnion(sss...)
 
 	if err != nil {
-		return nil, err
+		return schema.InvalidTag, err
 	}
 
-	return hs, err
+	return schema.AutoGenerateTag(rootSuperSchema), nil
 }
 
 // GerSuperSchemaMap returns the Noms map that tracks SuperSchemas, used to create new RootValues on checkout branch.

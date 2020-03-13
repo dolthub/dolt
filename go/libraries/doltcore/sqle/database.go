@@ -231,7 +231,7 @@ func (db *Database) DropTable(ctx *sql.Context, tableName string) error {
 }
 
 // CreateTable creates a table with the name and schema given.
-func (db *Database) CreateTable(ctx *sql.Context, tableName string, schema sql.Schema) error {
+func (db *Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Schema) error {
 	if doltdb.HasDoltPrefix(tableName) {
 		return ErrReservedTableName.New(tableName)
 	}
@@ -240,7 +240,18 @@ func (db *Database) CreateTable(ctx *sql.Context, tableName string, schema sql.S
 		return ErrInvalidTableName.New(tableName)
 	}
 
-	return db.createTable(ctx, tableName, schema)
+	for _, col := range sch {
+		commentTag := extractTag(col)
+		if commentTag == schema.InvalidTag {
+			// we'll replace this invalid tag
+			continue
+		}
+		if commentTag >= schema.ReservedTagMin{
+			return fmt.Errorf("tag %d is within the reserved tag space", commentTag)
+		}
+	}
+
+	return db.createTable(ctx, tableName, sch)
 }
 
 // Unlike the exported version, createTable doesn't enforce any table name checks.
@@ -251,7 +262,7 @@ func (db *Database) createTable(ctx *sql.Context, tableName string, sch sql.Sche
 		return sql.ErrTableAlreadyExists.New(tableName)
 	}
 
-	doltSch, err := SqlSchemaToDoltSchema(sch)
+	doltSch, err := SqlSchemaToDoltSchema(ctx, db.root, sch)
 	if err != nil {
 		return err
 	}

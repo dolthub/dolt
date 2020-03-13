@@ -227,11 +227,10 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 	tag := extractTag(column)
 	if tag == schema.InvalidTag {
 		// TODO: are we sure we want to silently autogen if we fail to parse?
-		ss, err := t.db.Root().GetUnionSuperSchema(ctx)
+		tag, err = t.db.Root().GetUniqueTag(ctx)
 		if err != nil {
 			return err
 		}
-		tag = schema.AutoGenerateTag(ss)
 	}
 	col, err := SqlColToDoltCol(tag, column)
 	if err != nil {

@@ -66,14 +66,14 @@ var systemTableReplaceTests = []ReplaceTest{
 	{
 		Name: "replace into dolt_schemas",
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
-			mustGetDoltSchema(SchemasTableSchema()),
+			schemasTableDoltSchema(),
 			NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual"))),
 		ReplaceQuery: "replace into dolt_schemas (type, name, fragment) values ('view', 'name', 'select 1+1 from dual')",
 		SelectQuery:  "select * from dolt_schemas",
-		ExpectedRows: CompressRows(mustGetDoltSchema(SchemasTableSchema()),
+		ExpectedRows: CompressRows(schemasTableDoltSchema(),
 			NewRow(types.String("view"), types.String("name"), types.String("select 1+1 from dual")),
 		),
-		ExpectedSchema: CompressSchema(mustGetDoltSchema(SchemasTableSchema())),
+		ExpectedSchema: CompressSchema(schemasTableDoltSchema()),
 	},
 }
 

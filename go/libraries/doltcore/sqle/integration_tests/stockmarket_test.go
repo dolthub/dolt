@@ -46,27 +46,27 @@ CREATE TABLE daily_summary (
 );
 
 CREATE TABLE symbols (
-  Symbol varchar(10) NOT NULL,
-  Name varchar(1024),
-  Sector varchar(1024),
-  IPOYear int(11),
+  Symbol varchar(10) NOT NULL COMMENT 'tag:101',
+  Name varchar(1024) COMMENT 'tag:102',
+  Sector varchar(1024) COMMENT 'tag:103',
+  IPOYear int(11) COMMENT 'tag:104',
   PRIMARY KEY (Symbol)
 );
 
 CREATE TABLE join_result (
-  Type varchar(80)  COMMENT 'tag:0',
-  Symbol varchar(80) NOT NULL COMMENT 'tag:1',
-  Country varchar(80) NOT NULL COMMENT 'tag:2',
-  TradingDate varchar(80)  NOT NULL COMMENT 'tag:3',
-  Open float  COMMENT 'tag:4',
-  High float  COMMENT 'tag:5',
-  Low float  COMMENT 'tag:6',
-  Close float  COMMENT 'tag:7',
-  Volume float  COMMENT 'tag:8',
-  OpenInt varchar(80)  COMMENT 'tag:9',
-  Name varchar(1024) COMMENT 'tag:10',
-  Sector varchar(1024) COMMENT 'tag:11',
-  IPOYear int(11) COMMENT 'tag:12',
+  Type varchar(80)  COMMENT 'tag:200',
+  Symbol varchar(80) NOT NULL COMMENT 'tag:201',
+  Country varchar(80) NOT NULL COMMENT 'tag:202',
+  TradingDate varchar(80)  NOT NULL COMMENT 'tag:203',
+  Open float  COMMENT 'tag:204',
+  High float  COMMENT 'tag:205',
+  Low float  COMMENT 'tag:206',
+  Close float  COMMENT 'tag:207',
+  Volume float  COMMENT 'tag:208',
+  OpenInt varchar(80)  COMMENT 'tag:209',
+  Name varchar(1024) COMMENT 'tag:210',
+  Sector varchar(1024) COMMENT 'tag:211',
+  IPOYear int(11) COMMENT 'tag:212',
   PRIMARY KEY (Symbol,Country,TradingDate)
 );
 `

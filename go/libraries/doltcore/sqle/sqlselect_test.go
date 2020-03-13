@@ -112,13 +112,19 @@ var systemTableSelectTests = []SelectTest{
 	{
 		Name: "select from dolt_schemas",
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
-			mustGetDoltSchema(SchemasTableSchema()),
-			NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual"))),
+			schemasTableDoltSchema(),
+			NewRowWithSchema(row.TaggedValues{
+				schema.DoltSchemasTypeTag: types.String("view"),
+				schema.DoltSchemasNameTag: types.String("name"),
+				schema.DoltSchemasFragmentTag: types.String("select 2+2 from dual"),
+			}, schemasTableDoltSchema())),
 		Query: "select * from dolt_schemas",
-		ExpectedRows: CompressRows(mustGetDoltSchema(SchemasTableSchema()),
-			NewRow(types.String("view"), types.String("name"), types.String("select 2+2 from dual")),
-		),
-		ExpectedSchema: CompressSchema(mustGetDoltSchema(SchemasTableSchema())),
+		ExpectedRows: []row.Row{NewRowWithSchema(row.TaggedValues{
+			schema.DoltSchemasTypeTag: types.String("view"),
+			schema.DoltSchemasNameTag: types.String("name"),
+			schema.DoltSchemasFragmentTag: types.String("select 2+2 from dual"),
+		}, schemasTableDoltSchema())},
+		ExpectedSchema: schemasTableDoltSchema(),
 	},
 }
 

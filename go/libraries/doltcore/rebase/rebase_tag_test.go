@@ -531,7 +531,7 @@ func checkRows(t *testing.T, root *doltdb.RootValue, sch schema.Schema, selectQu
 
 	s, rowIter, err := engine.Query(sqlCtx, selectQuery)
 	require.NoError(t, err)
-	_, err = dsqle.SqlSchemaToDoltSchema(s)
+	_, err = dsqle.SqlSchemaToDoltSchema(context.Background(), root, s)
 	require.NoError(t, err)
 
 	actualRows := []row.Row{}

@@ -87,19 +87,25 @@ var systemTableInsertTests = []InsertTest{
 	},
 	{
 		Name: "insert into dolt_schemas",
-		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
-			mustGetDoltSchema(SchemasTableSchema())),
+		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, schemasTableDoltSchema()),
 		InsertQuery: "insert into dolt_schemas (type, name, fragment) values ('view', 'name', 'select 2+2 from dual')",
 		SelectQuery: "select * from dolt_schemas",
-		ExpectedRows: CompressRows(mustGetDoltSchema(SchemasTableSchema()),
-			NewRow(types.String("view"), types.String("name"), types.String("select 2+2 from dual")),
-		),
-		ExpectedSchema: CompressSchema(mustGetDoltSchema(SchemasTableSchema())),
+		ExpectedRows: []row.Row{NewRowWithSchema(row.TaggedValues{
+			schema.DoltSchemasTypeTag: types.String("view"),
+			schema.DoltSchemasNameTag: types.String("name"),
+			schema.DoltSchemasFragmentTag: types.String("select 2+2 from dual"),
+		}, schemasTableDoltSchema())},
+		ExpectedSchema: schemasTableDoltSchema(),
 	},
 }
 
-func mustGetDoltSchema(sch sql.Schema) schema.Schema {
-	doltSchema, err := SqlSchemaToDoltSchema(sch)
+func mustGetDoltSchema(sch sql.Schema, testEnv *env.DoltEnv) schema.Schema {
+	wrt, err := testEnv.WorkingRoot(context.Background())
+	if err != nil {
+		panic(err)
+	}
+
+	doltSchema, err := SqlSchemaToDoltSchema(context.Background(), wrt, sch)
 	if err != nil {
 		panic(err)
 	}

@@ -87,14 +87,20 @@ var systemTableUpdateTests = []UpdateTest{
 	{
 		Name: "update dolt_schemas",
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
-			mustGetDoltSchema(SchemasTableSchema()),
-			NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual"))),
+			schemasTableDoltSchema(),
+			NewRowWithSchema(row.TaggedValues{
+				schema.DoltSchemasTypeTag: types.String("view"),
+				schema.DoltSchemasNameTag: types.String("name"),
+				schema.DoltSchemasFragmentTag: types.String("select 2+2 from dual"),
+			}, schemasTableDoltSchema())),
 		UpdateQuery: "update dolt_schemas set type = 'not a view'",
 		SelectQuery: "select * from dolt_schemas",
-		ExpectedRows: CompressRows(mustGetDoltSchema(SchemasTableSchema()),
-			NewRow(types.String("not a view"), types.String("name"), types.String("select 2+2 from dual")),
-		),
-		ExpectedSchema: CompressSchema(mustGetDoltSchema(SchemasTableSchema())),
+		ExpectedRows: []row.Row{NewRowWithSchema(row.TaggedValues{
+				schema.DoltSchemasTypeTag: types.String("not a view"),
+				schema.DoltSchemasNameTag: types.String("name"),
+				schema.DoltSchemasFragmentTag: types.String("select 2+2 from dual"),
+			}, schemasTableDoltSchema())},
+		ExpectedSchema: schemasTableDoltSchema(),
 	},
 }
 
@@ -133,6 +139,6 @@ func testUpdateQuery(t *testing.T, test UpdateTest) {
 	actualRows, sch, err := executeSelect(context.Background(), dEnv, test.ExpectedSchema, root, test.SelectQuery)
 	require.NoError(t, err)
 
-	assert.Equal(t, test.ExpectedRows, actualRows)
 	assert.Equal(t, test.ExpectedSchema, sch)
+	assert.Equal(t, test.ExpectedRows, actualRows)
 }
