@@ -80,7 +80,7 @@ require (
 	golang.org/x/net v0.0.0-20200202094626-16171245cfb2
 	golang.org/x/sys v0.0.0-20200212091648-12a6c2dcc1e4
 	golang.org/x/tools v0.0.0-20200212150539-ea181f53ac56 // indirect
-	google.golang.org/api v0.17.0
+	google.golang.org/api v0.20.0
 	google.golang.org/genproto v0.0.0-20200212174721-66ed5ce911ce // indirect
 	google.golang.org/grpc v1.27.1
 	gopkg.in/square/go-jose.v2 v2.4.1
@@ -93,8 +93,10 @@ require (
 
 replace github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
 
-replace github.com/src-d/go-mysql-server => github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200309235514-a780aaace408
+// replace github.com/src-d/go-mysql-server => github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200309235514-a780aaace408
+replace github.com/src-d/go-mysql-server => ../../go-mysql-server
 
-replace vitess.io/vitess => github.com/liquidata-inc/vitess v0.0.0-20200102230944-f3410911d61f
+// replace vitess.io/vitess => github.com/liquidata-inc/vitess v0.0.0-20200102230944-f3410911d61f
+replace vitess.io/vitess => ../../vitess
 
 go 1.13
