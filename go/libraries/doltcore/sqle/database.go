@@ -128,23 +128,9 @@ func (db *Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.T
 	return db.getTable(ctx, db.root, tblName)
 }
 
+// GetTableInsensitiveAsOf implements sql.VersionedDatabase
 func (db *Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, time interface{}) (sql.Table, bool, error) {
-	commit, ok := time.(string)
-	if !ok {
-		panic("expected commit string")
-	}
-
-	cs, err := doltdb.NewCommitSpec(commit, "")
-	if err != nil {
-		return nil, false, err
-	}
-
-	cm, err := db.ddb.Resolve(ctx, cs)
-	if err != nil {
-		return nil, false, err
-	}
-
-	root, err := cm.GetRootValue()
+	root, err := db.rootAsOf(ctx, time)
 	if err != nil {
 		return nil, false, err
 	}
@@ -152,6 +138,43 @@ func (db *Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, 
 	return db.getTable(ctx, root, tableName)
 }
 
+func (db *Database) rootAsOf(ctx *sql.Context, time interface{}) (*doltdb.RootValue, error) {
+	commit, ok := time.(string)
+	if !ok {
+		panic("expected commit string")
+	}
+
+	cs, err := doltdb.NewCommitSpec(commit, "")
+	if err != nil {
+		return nil, err
+	}
+
+	cm, err := db.ddb.Resolve(ctx, cs)
+	if err != nil {
+		return nil, err
+	}
+
+	root, err := cm.GetRootValue()
+	if err != nil {
+		return nil, err
+	}
+
+	return root, nil
+}
+
+// GetTableNamesAsOf implements sql.VersionedDatabase
+func (db *Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]string, error) {
+	root, err := db.rootAsOf(ctx, time)
+	if err != nil {
+		return nil, err
+	}
+
+	tblNames, err := root.GetTableNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return filterDoltInternalTables(tblNames), nil
+}
 
 // getTable gets the table with the exact name given at the root value given. The database caches tables for all root
 // values to avoid doing schema lookups on every table lookup, which are expensive.
