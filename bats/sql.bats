@@ -42,6 +42,41 @@ teardown() {
     teardown_common
 }
 
+@test "sql AS OF queries" {
+    dolt add .
+    dolt commit -m "Initial master commit"
+    dolt sql -q "update one_pk set c1 = c1 + 1"
+    dolt sql -q "drop table two_pk"
+    dolt checkout -b new_branch
+    dolt add .
+    dolt commit -m "Updated a table, dropped a table"
+    run dolt sql -r csv -q "select pk,c1 from one_pk order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,1" ]] || false
+    [[ "$output" =~ "1,11" ]] || false
+    [[ "$output" =~ "2,21" ]] || false
+    [[ "$output" =~ "3,31" ]] || false
+    
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of 'master' order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "1,10" ]] || false
+    [[ "$output" =~ "2,20" ]] || false
+    [[ "$output" =~ "3,30" ]] || false
+    
+    run dolt sql -r csv -q "select count(*) from two_pk as of 'master'"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "4" ]] || false
+    
+    dolt checkout master
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of 'new_branch' order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,1" ]] || false
+    [[ "$output" =~ "1,11" ]] || false
+    [[ "$output" =~ "2,21" ]] || false
+    [[ "$output" =~ "3,31" ]] || false
+}
+
 @test "sql select from multiple tables" {
     run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk"
     [ "$status" -eq 0 ]
@@ -465,39 +500,6 @@ teardown() {
     [ $status -ne 0 ]
     skip "Divide by zero panics dolt right now"
     [[ ! "$output" =~ "panic: " ]] || false
-}
-
-@test "sql AS OF queries" {
-    dolt sql -q "update one_pk set c1 = c1 + 1"
-    dolt sql -q "drop table two_pk"
-    dolt checkout -b new_branch
-    dolt add .
-    dolt commit -m "Updated a table, dropped a table"
-    run dolt sql -r csv -q "select pk,c1 from one_pk order by c1"
-    [ $status -eq 0 ]
-    [[ "$output" =~ "0,1" ]] || false
-    [[ "$output" =~ "1,11" ]] || false
-    [[ "$output" =~ "2,21" ]] || false
-    [[ "$output" =~ "3,31" ]] || false
-    
-    run dolt sql -r csv -q "select pk,c1 from one_pk as of 'master'  order by c1"
-    [ $status -eq 0 ]
-    [[ "$output" =~ "0,0" ]] || false
-    [[ "$output" =~ "1,10" ]] || false
-    [[ "$output" =~ "2,20" ]] || false
-    [[ "$output" =~ "3,30" ]] || false
-    
-    run dolt sql -r csv -q "select count(*) from two_pk as of 'master'"
-    [ $status -eq 0 ]
-    [[ "$output" =~ "4" ]] || false
-    
-    dolt checkout master
-    run dolt sql -r csv -q "select pk,c1 from one_pk as of 'new_branch' order by c1"
-    [ $status -eq 0 ]
-    [[ "$output" =~ "0,1" ]] || false
-    [[ "$output" =~ "1,11" ]] || false
-    [[ "$output" =~ "2,21" ]] || false
-    [[ "$output" =~ "3,31" ]] || false
 }
 
 @test "sql shell works after failing query" {
