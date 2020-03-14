@@ -171,12 +171,12 @@ SQL
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt sql <<SQL
 CREATE TABLE employees (
-  \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
-  \`first name\` LONGTEXT COMMENT 'tag:1',
-  \`last name\` LONGTEXT COMMENT 'tag:2',
-  \`title\` LONGTEXT COMMENT 'tag:3',
-  \`start date\` LONGTEXT COMMENT 'tag:4',
-  \`end date\` LONGTEXT COMMENT 'tag:5',
+  \`id\` LONGTEXT NOT NULL COMMENT 'tag:10',
+  \`first name\` LONGTEXT COMMENT 'tag:11',
+  \`last name\` LONGTEXT COMMENT 'tag:12',
+  \`title\` LONGTEXT COMMENT 'tag:13',
+  \`start date\` LONGTEXT COMMENT 'tag:14',
+  \`end date\` LONGTEXT COMMENT 'tag:15',
   PRIMARY KEY (id)
 );
 SQL

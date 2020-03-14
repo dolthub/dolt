@@ -1,10 +1,10 @@
 CREATE TABLE `newtable`(
-    `pk` BIGINT NOT NULL COMMENT 'tag:0',
-    `int` BIGINT COMMENT 'tag:1',
-    `string` LONGTEXT COMMENT 'tag:2',
-    `boolean` BOOLEAN COMMENT 'tag:3',
-    `float` DOUBLE COMMENT 'tag:4',
-    `uint` BIGINT UNSIGNED COMMENT 'tag:5',
-    `uuid` LONGTEXT COMMENT 'tag:6',
+    `pk` BIGINT NOT NULL COMMENT 'tag:10',
+    `int` BIGINT COMMENT 'tag:11',
+    `string` LONGTEXT COMMENT 'tag:12',
+    `boolean` BOOLEAN COMMENT 'tag:13',
+    `float` DOUBLE COMMENT 'tag:14',
+    `uint` BIGINT UNSIGNED COMMENT 'tag:15',
+    `uuid` LONGTEXT COMMENT 'tag:16',
     PRIMARY KEY (`pk`)
 );

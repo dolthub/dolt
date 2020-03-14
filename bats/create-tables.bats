@@ -94,13 +94,13 @@ CREATE TABLE test1 (
 SQL
     dolt sql <<SQL
 CREATE TABLE test2 (
-  pk1 BIGINT NOT NULL COMMENT 'tag:0',
-  pk2 BIGINT NOT NULL COMMENT 'tag:1',
-  c1 BIGINT COMMENT 'tag:2',
-  c2 BIGINT COMMENT 'tag:3',
-  c3 BIGINT COMMENT 'tag:4',
-  c4 BIGINT COMMENT 'tag:5',
-  c5 BIGINT COMMENT 'tag:6',
+  pk1 BIGINT NOT NULL COMMENT 'tag:10',
+  pk2 BIGINT NOT NULL COMMENT 'tag:11',
+  c1 BIGINT COMMENT 'tag:12',
+  c2 BIGINT COMMENT 'tag:13',
+  c3 BIGINT COMMENT 'tag:14',
+  c4 BIGINT COMMENT 'tag:15',
+  c5 BIGINT COMMENT 'tag:16',
   PRIMARY KEY (pk1,pk2)
 );
 SQL
@@ -314,9 +314,18 @@ SQL
 }
 
 @test "create a basic table (int types) using sql" {
-    run dolt sql -q "CREATE TABLE test (pk BIGINT, c1 BIGINT, c2 BIGINT, c3 BIGINT, c4 BIGINT, c5 BIGINT, PRIMARY KEY (pk))"
+    run dolt sql <<SQL
+CREATE TABLE test (
+    pk BIGINT COMMENT 'tag:0',
+    c1 BIGINT COMMENT 'tag:1',
+    c2 BIGINT COMMENT 'tag:2',
+    c3 BIGINT COMMENT 'tag:3',
+    c4 BIGINT COMMENT 'tag:4',
+    c5 BIGINT COMMENT 'tag:5',
+    PRIMARY KEY (pk)
+);
+SQL
     [ "$status" -eq 0 ]
-    [ -z "$output" ]
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
@@ -333,9 +342,20 @@ SQL
 }
 
 @test "create a table with sql with multiple primary keys" {
-    run dolt sql -q "CREATE TABLE test (pk1 BIGINT, pk2 BIGINT, c1 BIGINT, c2 BIGINT, c3 BIGINT, c4 BIGINT, c5 BIGINT, PRIMARY KEY (pk1), PRIMARY KEY (pk2))"
+    run dolt sql <<SQL
+CREATE TABLE test (
+    pk1 BIGINT COMMENT 'tag:0',
+    pk2 BIGINT COMMENT 'tag:1',
+    c1 BIGINT COMMENT 'tag:2',
+    c2 BIGINT COMMENT 'tag:3',
+    c3 BIGINT COMMENT 'tag:4',
+    c4 BIGINT COMMENT 'tag:5',
+    c5 BIGINT COMMENT 'tag:6',
+    PRIMARY KEY (pk1),
+    PRIMARY KEY (pk2)
+);
+SQL
     [ "$status" -eq 0 ]
-    [ -z "$output" ]
     run dolt schema show
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
@@ -350,9 +370,18 @@ SQL
 }
 
 @test "create a table using sql with not null constraint" {
-    run dolt sql -q "CREATE TABLE test (pk BIGINT NOT NULL, c1 BIGINT, c2 BIGINT, c3 BIGINT, c4 BIGINT, c5 BIGINT, PRIMARY KEY (pk))"
+    run dolt sql <<SQL
+CREATE TABLE test (
+    pk BIGINT NOT NULL COMMENT 'tag:0',
+    c1 BIGINT COMMENT 'tag:1',
+    c2 BIGINT COMMENT 'tag:2',
+    c3 BIGINT COMMENT 'tag:3',
+    c4 BIGINT COMMENT 'tag:4',
+    c5 BIGINT COMMENT 'tag:5',
+    PRIMARY KEY (pk)
+);
+SQL
     [ "$status" -eq 0 ]
-    [ -z "$output" ]
     run dolt schema show test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
@@ -366,9 +395,14 @@ SQL
 }
 
 @test "create a table using sql with a float" {
-    run dolt sql -q "CREATE TABLE test (pk BIGINT NOT NULL, c1 DOUBLE, PRIMARY KEY (pk))"
+    run dolt sql <<SQL
+CREATE TABLE test (
+    pk BIGINT NOT NULL COMMENT 'tag:0',
+    c1 DOUBLE COMMENT 'tag:1',
+    PRIMARY KEY (pk)
+);
+SQL
     [ "$status" -eq 0 ]
-    [ -z "$output" ]
     run dolt schema show test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\` " ]] || false
@@ -379,9 +413,14 @@ SQL
 
 
 @test "create a table using sql with a string" {
-    run dolt sql -q "CREATE TABLE test (pk BIGINT NOT NULL, c1 LONGTEXT, PRIMARY KEY (pk))"
+    run dolt sql <<SQL
+CREATE TABLE test (
+    pk BIGINT NOT NULL COMMENT 'tag:0',
+    c1 LONGTEXT COMMENT 'tag:1',
+    PRIMARY KEY (pk)
+);
+SQL
     [ "$status" -eq 0 ]
-    [ -z "$output" ]
     run dolt schema show test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false

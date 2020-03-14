@@ -138,6 +138,7 @@ SQL
     dolt add test
     dolt commit -m "committed table so we can see diffs"
     dolt table rm test
+    skip "changing the primary key is not supported"
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -170,6 +171,7 @@ SQL
     dolt add test
     dolt commit -m "committed table so we can see diffs"
     dolt table rm test
+    skip "changing the primary key is not supported"
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -225,18 +227,7 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "committed table so we can see diffs"
-    dolt table rm test
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  column2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
-  PRIMARY KEY (pk)
-);
-SQL
+    dolt sql -q 'alter table test rename column c2 to column2'
     run dolt diff --schema
     [ "$status" -eq 0 ]
     [[ "$output" =~ "PRIMARY KEY" ]] || false
@@ -257,6 +248,7 @@ SQL
     dolt add test
     dolt commit -m "committed table so we can see diffs"
     dolt table rm test
+    skip "cannot change primary keys"
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -290,6 +282,7 @@ SQL
     dolt add test
     dolt commit -m "committed table so we can see diffs"
     dolt table rm test
+    skip "primary key changes are not supported"
     dolt sql <<SQL
 CREATE TABLE test (
   c1 BIGINT COMMENT 'tag:1',

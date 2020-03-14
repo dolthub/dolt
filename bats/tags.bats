@@ -63,7 +63,7 @@ SQL
     [[ "$output" =~ "tag:8910" ]] || false
     run dolt sql -q "alter table test add column c2 bigint comment 'tag:8910'"
     [ $status -ne 0 ]
-    [[ "$output" =~ "A column with the tag 8910 already exists." ]] || false
+    [[ "$output" =~ "A column with the tag 8910 already exists in table test." ]] || false
 }
 
 @test "Should not be able to reuse a committed tag number on a column with a different type" {
@@ -78,19 +78,7 @@ SQL
     dolt sql -q "alter table test drop column c1"
     dolt add test
     dolt commit	-m "Committed test table with c1 dropped"
-    # Adding the tag back with the same name and type should be allowed
-    dolt sql -q "alter table test add column c1 bigint comment 'tag:5678'"
-    run dolt schema show
-    [ $status -eq 0 ]
-    [[ "$output" =~ "tag:1234" ]] || false
-    [[ "$output" =~ "tag:5678" ]] || false
-    dolt sql -q "alter table test drop column c1"
-    # Adding the tag back with a different name but same type should be allowed
-    dolt sql -q "alter table test add column c2 bigint comment 'tag:5678'"
-    run dolt schema show
-    [ $status -eq 0 ]
-    [[ "$output" =~ "tag:1234" ]] || false
-    [[ "$output" =~ "tag:5678" ]] || false
+
     # Adding the tag back with a different type should error
     skip "No checks for tag reuse across commits right now"
     run dolt sql -q "alter table test add column c1 text comment 'tag:5678'"
@@ -109,6 +97,7 @@ SQL
     dolt add test
     dolt commit	-m "Committed test table"
     dolt sql -q "drop table test"
+    skip "Dropping and recreating tables does not enforce tag reuse rules"
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:1234',
@@ -116,7 +105,6 @@ CREATE TABLE test (
   PRIMARY KEY (pk));
 SQL
     dolt sql -q "drop table test"
-    skip "Dropping and recreating tables does not enforce tag reuse rules"
     run dolt sql <<SQL
 CREATE TABLE test (
   pk LONGTEXT  NOT NULL COMMENT 'tag:1234',
