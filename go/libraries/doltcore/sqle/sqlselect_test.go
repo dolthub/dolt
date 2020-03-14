@@ -63,7 +63,6 @@ func TestAsOfQueries(t *testing.T) {
 	}
 }
 
-
 func TestJoins(t *testing.T) {
 	for _, tt := range JoinTests {
 		t.Run(tt.Name, func(t *testing.T) {
