@@ -34,6 +34,9 @@ const (
 
 	tablesKey         = "tables"
 	superSchemasKey   = "super_schemas"
+
+	doltVersionKey    = "dolt_version"
+
 	DocTableName      = "dolt_docs"
 	LicensePk         = "LICENSE.md"
 	ReadmePk          = "README.md"
@@ -112,6 +115,7 @@ func newRootFromMaps(vrw types.ValueReadWriter, tblMap types.Map, ssMap types.Ma
 	sd := types.StructData{
 		tablesKey:       tblMap,
 		superSchemasKey: ssMap,
+		doltVersionKey:  types.String(DoltVersion),
 	}
 
 	st, err := types.NewStruct(vrw.Format(), ddbRootStructName, sd)
@@ -208,6 +212,17 @@ func (root *RootValue) HasTag(ctx context.Context, tag uint64) (found bool, tblN
 	}
 
 	return false, "", nil
+}
+
+func (root *RootValue) GetDoltVersion(ctx context.Context) (string, error) {
+	dv, found, err := root.valueSt.MaybeGet(doltVersionKey)
+	if err != nil {
+		return "", err
+	}
+	if !found {
+		return "", ErrDoltVersionNotFound
+	}
+	return dv.HumanReadableString(), nil
 }
 
 // GetSuperSchema returns the SuperSchema for the table name specified if that table exists.

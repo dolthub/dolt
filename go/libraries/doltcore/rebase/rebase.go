@@ -27,6 +27,11 @@ type replayCommitFn func(ctx context.Context, root, parentRoot, rebasedParentRoo
 
 type needsRebaseFn func(ctx context.Context, cm *doltdb.Commit) (bool, error)
 
+func entireHistory(_ context.Context, cm *doltdb.Commit) (bool, error) {
+	n, err := cm.NumParents()
+	return n != 0, err
+}
+
 func rebase(ctx context.Context, ddb *doltdb.DoltDB, replay replayCommitFn, nerf needsRebaseFn, origins ...*doltdb.Commit) ([]*doltdb.Commit, error) {
 	var rebasedCommits []*doltdb.Commit
 	vs := make(visitedSet)

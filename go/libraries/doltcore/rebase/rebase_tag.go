@@ -18,7 +18,8 @@ import (
 "context"
 "errors"
 "fmt"
-"time"
+	"sync/atomic"
+	"time"
 
 "github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 "github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -29,6 +30,51 @@ import (
 ndiff "github.com/liquidata-inc/dolt/go/store/diff"
 "github.com/liquidata-inc/dolt/go/store/types"
 )
+
+
+
+func MaybeMigrateUniqueTags(ctx context.Context, ddb *doltdb.DoltDB) error {
+	bb, err := ddb.GetBranches(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	migrate := false
+	for _, b := range bb {
+		cs, err := doltdb.NewCommitSpec("head", b.String())
+
+		if err != nil {
+			return err
+		}
+
+		c, err := ddb.Resolve(ctx, cs)
+
+		if err != nil {
+			return err
+		}
+
+		r, err := c.GetRootValue()
+
+		if err != nil {
+			return err
+		}
+
+		_, err = r.GetDoltVersion(ctx)
+
+		if err == doltdb.ErrDoltVersionNotFound {
+			migrate = true
+		} else if err != nil {
+			return err
+		}
+	}
+
+	if migrate {
+		err = migrateUniqueTags(ctx, ddb, bb)
+	}
+
+	return err
+}
 
 // replaces all instances of oldTag with newTag.
 func TagRebaseForRef(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, tblName string, tagMapping map[uint64]uint64) (*doltdb.Commit, error) {
@@ -108,8 +154,7 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		return nil, err
 	}
 	if !found {
-		rh, _ := root.HashOf()
-		return nil, fmt.Errorf("table %s not found in root: %s", tblName, rh.String())
+		return root, nil
 	}
 
 	sch, err := tbl.GetSchema(ctx)
@@ -343,6 +388,116 @@ func validateTagMapping(tagMapping map[uint64]uint64) error {
 			return fmt.Errorf("duplicate tag %d found in tag mapping", nt)
 		}
 		newTags[nt] = struct{}{}
+	}
+	return nil
+}
+
+func migrateUniqueTags(ctx context.Context, ddb *doltdb.DoltDB, branches []ref.DoltRef) error {
+	var headCommits []*doltdb.Commit
+	for _, dRef := range branches {
+
+		cs, err := doltdb.NewCommitSpec("head", dRef.String())
+
+		if err != nil {
+			return err
+		}
+
+		cm, err := ddb.Resolve(ctx, cs)
+
+		if err != nil {
+			return err
+		}
+
+		headCommits = append(headCommits, cm)
+	}
+
+	// DFS the commit graph find a unique new tag for all existing tags in every table in history
+	globalMapping := make(map[string]map[uint64]uint64)
+	globalCtr := new(uint64)
+
+	replay := func(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
+		err := buildGlobalTagMapping(ctx, root, globalMapping, globalCtr)
+
+		if err != nil {
+			return nil, err
+		}
+
+		return root, nil
+	}
+
+	_, err := rebase(ctx, ddb, replay, entireHistory, headCommits...)
+
+	if err != nil {
+		return err
+	}
+
+	if len(branches) != len(headCommits) {
+		panic("error in uniquifying tags")
+	}
+
+	for idx, dRef := range branches {
+		var err error
+		newCommit := headCommits[idx]
+		for tblName, tableMapping := range globalMapping {
+			// missing tables will be ignored
+			newCommit, err = TagRebaseForCommit(ctx, newCommit, ddb, tblName, tableMapping)
+
+			if err != nil {
+				return err
+			}
+		}
+		err = ddb.DeleteBranch(ctx, dRef)
+
+		if err != nil {
+			return err
+		}
+
+		err = ddb.NewBranchAtCommit(ctx, dRef, newCommit)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func buildGlobalTagMapping(ctx context.Context, root *doltdb.RootValue, globalMapping map[string]map[uint64]uint64, globalCtr *uint64) error  {
+	tblNames, err := root.GetTableNames(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	for _, tn := range tblNames {
+		if doltdb.IsSystemTable(tn) {
+			continue
+		}
+
+		if _, found := globalMapping[tn]; !found {
+			globalMapping[tn] = make(map[uint64]uint64)
+		}
+
+		t, _, err := root.GetTable(ctx, tn)
+
+		if err != nil {
+			return err
+		}
+
+		sch, err := t.GetSchema(ctx)
+
+		if err != nil {
+			return err
+		}
+
+
+		for _, t := range sch.GetAllCols().Tags {
+			if _, found := globalMapping[tn][t]; !found {
+				globalMapping[tn][t] = *globalCtr
+				println(*globalCtr)
+				atomic.AddUint64(globalCtr, 1)
+			}
+		}
 	}
 	return nil
 }

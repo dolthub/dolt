@@ -37,6 +37,8 @@ var ErrUpToDate = errors.New("up to date")
 var ErrIsAhead = errors.New("current fast forward from a to b. a is ahead of b already")
 var ErrIsBehind = errors.New("cannot reverse from b to a. b is a is behind a already")
 
+var ErrDoltVersionNotFound = errors.New("dolt version not found in root value")
+
 func IsInvalidFormatErr(err error) bool {
 	switch err {
 	case ErrInvBranchName, ErrInvTableName, ErrInvHash, ErrInvalidAncestorSpec, ErrInvalidBranchOrHash:
