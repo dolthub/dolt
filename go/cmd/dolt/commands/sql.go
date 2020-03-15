@@ -178,6 +178,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 		err = runBatchMode(ctx, se)
 		if err != nil {
+			_, _ = fmt.Fprintf(cli.CliErr, "Error processing batch: %s\n", err.Error())
 			return 1
 		}
 	} else if err != nil {
