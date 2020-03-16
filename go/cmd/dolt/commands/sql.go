@@ -567,8 +567,10 @@ type stats struct {
 var batchEditStats stats
 var displayStrLen int
 
-const maxBatchSize = 50000
-const updateInterval = 500
+const maxBatchSize = 200000
+const updateInterval = 1000
+
+
 
 // Processes a single query in batch mode. The Root of the sqlEngine may or may not be changed.
 func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
@@ -581,6 +583,8 @@ func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 	}
 
 	switch sqlStatement.(type) {
+	// As long as we keep processing insert statements, we can stay on the fast path of batched inserts, only flushing
+	// when required.
 	case *sqlparser.Insert:
 		_, rowIter, err := se.query(ctx, query)
 		if err != nil {
@@ -614,6 +618,12 @@ func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 		}
 
 		err = processQuery(ctx, query, se)
+		if err != nil {
+			return err
+		}
+
+		// And flush again afterwards, to make sure any following insert statements have the latest data
+		err = se.sdb.Flush(ctx)
 		if err != nil {
 			return err
 		}
