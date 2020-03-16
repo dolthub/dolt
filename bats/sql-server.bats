@@ -5,8 +5,7 @@ load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 setup() {
     setup_common
     export PYTEST_DIR=`batshelper`
-    export SQL_PORT=$(($ % (65536-1024) + 1024))
-    dolt sql-server --port=$SQL_PORT &
+    dolt sql-server --port=$$ &
     wait_for_connection 5000
 }
 

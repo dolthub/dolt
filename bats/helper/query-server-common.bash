@@ -10,7 +10,7 @@ os.chdir(working_dir)
 
 from pytest import wait_for_connection
 wait_for_connection(port=int(port_str), timeout_ms=int(timeout_ms))
-" -- $PYTEST_DIR $SQL_PORT $1
+" -- $PYTEST_DIR $$ $1
 }
 
 # server_query connects to a running mysql server, executes a query and compares the results against what is expected.
@@ -43,7 +43,7 @@ print('expected:', expected_rows, '\n  actual:', actual_rows)
 if expected_rows != actual_rows:
     print('expected:', expected_rows, '\n  actual:', actual_rows)
     sys.exit(1)
-" -- $PYTEST_DIR $SQL_PORT "$1" "$2"
+" -- $PYTEST_DIR $$ "$1" "$2"
 }
 
 # update_query runs an update query and should be called with 2 parameters
