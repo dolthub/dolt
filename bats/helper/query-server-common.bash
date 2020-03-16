@@ -1,6 +1,6 @@
 
 wait_for_connection() {
-    python -c "
+    python3 -c "
 import os
 import sys
 
@@ -19,7 +19,7 @@ wait_for_connection(port=int(port_str), timeout_ms=int(timeout_ms))
 #  * param2 is a csv representing the expected result set.  If a query is not expected to have a result set "" should
 #      be passed.
 server_query() {
-    python -c "
+    python3 -c "
 import os
 import sys
 
