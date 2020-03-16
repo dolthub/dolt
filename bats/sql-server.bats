@@ -3,7 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
 setup() {
-    pip3 install mysql-connector-python
+    python3 -m pip install mysql-connector-python
     setup_common
     export PYTEST_DIR=`batshelper`
     export SQL_PORT=$(($$ % (65536-1024) + 1024))
@@ -25,9 +25,9 @@ teardown() {
                     PRIMARY KEY (pk)
                   )" ""
      insert_query "INSERT INTO one_pk (pk) values (0)" 1
-     server_query "SELECT * from one_pk" "pk,c1,c2\n0,None,None"
+     server_query "SELECT * from one_pk ORDER BY pk" "pk,c1,c2\n0,None,None"
      insert_query "INSERT INTO one_pk (pk,c1) values (1,1)" 1
      insert_query "INSERT INTO one_pk (pk,c1,c2) values (2,2,2),(3,3,3)" 2
-     server_query "SELECT * from one_pk" "pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
+     server_query "SELECT * from one_pk ORDER by pk" "pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
      update_query "UPDATE one_pk SET c2=c1 WHERE c2 is NULL and c1 IS NOT NULL" 1
 }
