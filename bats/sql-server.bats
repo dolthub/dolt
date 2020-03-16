@@ -3,6 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
 setup() {
+    pip3 install mysql-connector-python
     setup_common
     export PYTEST_DIR=`batshelper`
     export SQL_PORT=$(($$ % (65536-1024) + 1024))
