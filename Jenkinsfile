@@ -32,7 +32,7 @@ pipeline {
                         }
                     }
                     environment {
-                        PATH = "${pwd()}/.ci_bin:${pwd()}/.ci_bin/node_modules/.bin:${env.PATH}"
+                        PATH = "${pwd()}/.ci_bin/pyenv/bin:${pwd()}/.ci_bin:${pwd()}/.ci_bin/node_modules/.bin:${env.PATH}"
                     }
                     steps {
                         dir (".ci_bin") {
@@ -45,6 +45,8 @@ pipeline {
                             sh "go build -mod=readonly -o ../.ci_bin/git-dolt-smudge ./cmd/git-dolt-smudge/."
                             sh "go build -mod=readonly -o ../.ci_bin/remotesrv ./utils/remotesrv/."
                         }
+                        sh "python3 -m venv .ci_bin/pyenv"
+                        sh "./.ci_bin/pyenv/bin/pip install doltpy"
                         sh "dolt config --global --add user.name 'Liquidata Jenkins'"
                         sh "dolt config --global --add user.email 'jenkins@liquidata.co'"
                         dir ("bats") {
