@@ -1,5 +1,7 @@
 
 wait_for_connection() {
+    PORT=python3
+    PYTEST_DIR=`batshelper`
     python3 -c "
 import os
 import sys
@@ -10,7 +12,18 @@ os.chdir(working_dir)
 
 from pytest import wait_for_connection
 wait_for_connection(port=int(port_str), timeout_ms=int(timeout_ms))
-" -- $PYTEST_DIR $$ $1
+" -- $PYTEST_DIR $1 $2
+}
+
+start_sql_server() {
+    let PORT="$$ % (65536-1024) + 1024"
+    dolt sql-server --port=$PORT &
+    wait_for_connection $PORT 5000
+}
+
+stop_sql_server() {
+    let PORT="$$ % (65536-1024) + 1024"
+    pkill -f "dolt sql-server --port=$PORT"
 }
 
 # server_query connects to a running mysql server, executes a query and compares the results against what is expected.
@@ -19,6 +32,8 @@ wait_for_connection(port=int(port_str), timeout_ms=int(timeout_ms))
 #  * param2 is a csv representing the expected result set.  If a query is not expected to have a result set "" should
 #      be passed.
 server_query() {
+    let PORT="$$ % (65536-1024) + 1024"
+    PYTEST_DIR=`batshelper`
     python3 -c "
 import os
 import sys
@@ -43,7 +58,7 @@ print('expected:', expected_rows, '\n  actual:', actual_rows)
 if expected_rows != actual_rows:
     print('expected:', expected_rows, '\n  actual:', actual_rows)
     sys.exit(1)
-" -- $PYTEST_DIR $$ "$1" "$2"
+" -- $PYTEST_DIR $PORT "$1" "$2"
 }
 
 # update_query runs an update query and should be called with 2 parameters

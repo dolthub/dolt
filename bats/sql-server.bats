@@ -4,13 +4,11 @@ load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
 setup() {
     setup_common
-    export PYTEST_DIR=`batshelper`
-    dolt sql-server --port=$$ &
-    wait_for_connection 5000
+    start_sql_server
 }
 
 teardown() {
-    pkill dolt
+    stop_sql_server
     teardown_common
 }
 
