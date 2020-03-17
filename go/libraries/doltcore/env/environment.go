@@ -800,22 +800,21 @@ func (dEnv *DoltEnv) GetOneDocDetail(docName string) (doc doltdb.DocDetails, err
 // When at least one doc.NewerText != nil. If the `dolt_docs` table exists and every doc.NewerText == nil, the table will be removed.
 // If no docDetails are provided, we put all valid docs to the working root.
 func (dEnv *DoltEnv) GetUpdatedRootWithDocs(ctx context.Context, root *doltdb.RootValue, docDetails []doltdb.DocDetails) (*doltdb.RootValue, error) {
-	//docTbl, found, err := root.GetTable(ctx, doltdb.DocTableName)
-	//
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//docDetails, err = getDocDetails(dEnv, docDetails)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//if found {
-	//	return updateDocsOnRoot(ctx, dEnv, root, docTbl, docDetails)
-	//}
-	//return createDocsTableOnRoot(ctx, dEnv, root, docDetails)
-	return root, nil
+	docTbl, found, err := root.GetTable(ctx, doltdb.DocTableName)
+
+	if err != nil {
+		return nil, err
+	}
+
+	docDetails, err = getDocDetails(dEnv, docDetails)
+	if err != nil {
+		return nil, err
+	}
+
+	if found {
+		return updateDocsOnRoot(ctx, dEnv, root, docTbl, docDetails)
+	}
+	return createDocsTableOnRoot(ctx, dEnv, root, docDetails)
 }
 
 // PutDocsToWorking adds, updates or removes the `dolt_docs` table on the working root using the provided docDetails.

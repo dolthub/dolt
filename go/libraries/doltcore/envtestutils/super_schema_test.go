@@ -17,9 +17,10 @@ package envtestutils
 import (
 	"context"
 	"fmt"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	tc "github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils/testcommands"
@@ -365,7 +366,7 @@ func testSuperSchema(t *testing.T, test SuperSchemaTest) {
 	}
 
 	if test.ExpectedErrStr != "" {
-		require.Error(t, ee, 	test.ExpectedErrStr)
+		require.Error(t, ee, test.ExpectedErrStr)
 	} else {
 		spec := dEnv.RepoState.CWBHeadRef()
 		require.Equal(t, "refs/heads/"+test.ExpectedBranch, spec.String())

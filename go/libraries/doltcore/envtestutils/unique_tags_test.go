@@ -17,7 +17,6 @@ package envtestutils
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,6 +25,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	tc "github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 )
 
 type UniqueTagsTest struct {
@@ -89,7 +89,6 @@ var UniqueTagsTests = []UniqueTagsTest{
 			tc.Query{Query: `create table test (pk int not null primary key comment 'tag:0');`},
 			tc.Query{Query: `create table other (pk int not null primary key comment 'tag:42');`},
 			tc.Query{Query: `alter table test add column c0 int comment 'tag:42';`},
-
 		},
 		ExpectedBranch: "master",
 		ExpectedErrStr: "two different columns with the same tag",
@@ -141,21 +140,6 @@ var UniqueTagsTests = []UniqueTagsTest{
 		ExpectedBranch: "master",
 		ExpectedErrStr: "two different columns with the same tag",
 	},
-	//{
-	//	Name: "tag collisions within a table are automatically rebased on merge",
-	//	Commands: []tc.Command{
-	//	},
-	//	ExpectedBranch: "master",
-	//	ExpectedErrStr: "two different columns with the same tag",
-	//},
-	//{
-	//	Name: "tag collisions across tables are automatically rebased on merge",
-	//	Commands: []tc.Command{
-	//	},
-	//	ExpectedBranch: "master",
-	//	ExpectedErrStr: "two different columns with the same tag",
-	//},
-	// TODO: add test showing silent autogen behavior
 }
 
 func TestUniqueTags(t *testing.T) {

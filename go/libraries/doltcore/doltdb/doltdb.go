@@ -41,7 +41,7 @@ func init() {
 }
 
 const (
-	DoltVersion      = "0.15.0"
+	DoltVersion = "0.15.0"
 
 	creationBranch   = "create"
 	MasterBranch     = "master"
@@ -49,8 +49,6 @@ const (
 
 	defaultChunksPerTF = 256 * 1024
 )
-
-
 
 // LocalDirDoltDB stores the db in the current directory
 var LocalDirDoltDB = "file://./" + dbfactory.DoltDataDir

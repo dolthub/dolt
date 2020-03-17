@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,6 +24,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )

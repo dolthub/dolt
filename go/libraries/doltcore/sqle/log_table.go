@@ -56,7 +56,6 @@ func (dt *LogTable) String() string {
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
 func (dt *LogTable) Schema() sql.Schema {
-	// TODO: give these reserved tags
 	return []*sql.Column{
 		{Name: "commit_hash", Type: sql.Text, Source: LogTableName, PrimaryKey: true},
 		{Name: "committer", Type: sql.Text, Source: LogTableName, PrimaryKey: false},

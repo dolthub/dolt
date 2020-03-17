@@ -17,7 +17,6 @@ package sqle
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"testing"
 	"time"
 
@@ -29,6 +28,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/envtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -78,8 +78,8 @@ var systemTableSelectTests = []SelectTest{
 		AdditionalSetup: CreateTableFn("dolt_docs",
 			env.DoltDocsSchema,
 			NewRowWithSchema(row.TaggedValues{
-					schema.DocNameTag: types.String("LICENSE.md"),
-					schema.DocTextTag: types.String("A license")},
+				schema.DocNameTag: types.String("LICENSE.md"),
+				schema.DocTextTag: types.String("A license")},
 				env.DoltDocsSchema)),
 		Query: "select * from dolt_docs",
 		ExpectedRows: CompressRows(CompressSchema(env.DoltDocsSchema),
@@ -91,21 +91,21 @@ var systemTableSelectTests = []SelectTest{
 		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
 			DoltQueryCatalogSchema,
 			NewRowWithSchema(row.TaggedValues{
-				schema.QueryCatalogIdTag: types.String("existingEntry"),
-				schema.QueryCatalogOrderTag: types.Uint(2),
-				schema.QueryCatalogNameTag: types.String("example"),
-				schema.QueryCatalogQueryTag: types.String("select 2+2 from dual"),
+				schema.QueryCatalogIdTag:          types.String("existingEntry"),
+				schema.QueryCatalogOrderTag:       types.Uint(2),
+				schema.QueryCatalogNameTag:        types.String("example"),
+				schema.QueryCatalogQueryTag:       types.String("select 2+2 from dual"),
 				schema.QueryCatalogDescriptionTag: types.String("description")},
-			DoltQueryCatalogSchema)),
+				DoltQueryCatalogSchema)),
 		Query: "select * from dolt_query_catalog",
 		ExpectedRows: CompressRows(DoltQueryCatalogSchema,
 			NewRowWithSchema(row.TaggedValues{
-				schema.QueryCatalogIdTag: types.String("existingEntry"),
-				schema.QueryCatalogOrderTag: types.Uint(2),
-				schema.QueryCatalogNameTag: types.String("example"),
-				schema.QueryCatalogQueryTag: types.String("select 2+2 from dual"),
+				schema.QueryCatalogIdTag:          types.String("existingEntry"),
+				schema.QueryCatalogOrderTag:       types.Uint(2),
+				schema.QueryCatalogNameTag:        types.String("example"),
+				schema.QueryCatalogQueryTag:       types.String("select 2+2 from dual"),
 				schema.QueryCatalogDescriptionTag: types.String("description")},
-			DoltQueryCatalogSchema),
+				DoltQueryCatalogSchema),
 		),
 		ExpectedSchema: CompressSchema(DoltQueryCatalogSchema),
 	},
@@ -114,14 +114,14 @@ var systemTableSelectTests = []SelectTest{
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
 			schemasTableDoltSchema(),
 			NewRowWithSchema(row.TaggedValues{
-				schema.DoltSchemasTypeTag: types.String("view"),
-				schema.DoltSchemasNameTag: types.String("name"),
+				schema.DoltSchemasTypeTag:     types.String("view"),
+				schema.DoltSchemasNameTag:     types.String("name"),
 				schema.DoltSchemasFragmentTag: types.String("select 2+2 from dual"),
 			}, schemasTableDoltSchema())),
 		Query: "select * from dolt_schemas",
 		ExpectedRows: []row.Row{NewRowWithSchema(row.TaggedValues{
-			schema.DoltSchemasTypeTag: types.String("view"),
-			schema.DoltSchemasNameTag: types.String("name"),
+			schema.DoltSchemasTypeTag:     types.String("view"),
+			schema.DoltSchemasNameTag:     types.String("name"),
 			schema.DoltSchemasFragmentTag: types.String("select 2+2 from dual"),
 		}, schemasTableDoltSchema())},
 		ExpectedSchema: schemasTableDoltSchema(),

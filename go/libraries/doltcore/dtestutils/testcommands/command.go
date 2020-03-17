@@ -17,8 +17,6 @@ package testcommands
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/cnfcmds"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"testing"
 	"time"
 
@@ -27,6 +25,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/cnfcmds"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
@@ -104,7 +104,7 @@ type Query struct {
 }
 
 // CommandString returns "query".
-func (q Query) CommandString() string { return fmt.Sprintf("query %s", q.Query)}
+func (q Query) CommandString() string { return fmt.Sprintf("query %s", q.Query) }
 
 // Exec executes a Query command on a test dolt environment.
 func (q Query) Exec(t *testing.T, dEnv *env.DoltEnv) error {
@@ -253,7 +253,7 @@ type ConflictsCat struct {
 func (c ConflictsCat) CommandString() string { return fmt.Sprintf("conflicts_cat: %s", c.TableName) }
 
 func (c ConflictsCat) Exec(t *testing.T, dEnv *env.DoltEnv) error {
-	out := cnfcmds.CatCmd{}.Exec(context.Background(),"dolt conflicts cat", []string{c.TableName}, dEnv)
+	out := cnfcmds.CatCmd{}.Exec(context.Background(), "dolt conflicts cat", []string{c.TableName}, dEnv)
 	require.Equal(t, 0, out)
 	return nil
 }

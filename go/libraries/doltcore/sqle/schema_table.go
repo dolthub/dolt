@@ -16,10 +16,11 @@ package sqle
 
 import (
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+
 	"github.com/src-d/go-mysql-server/sql"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 )
 
 const (

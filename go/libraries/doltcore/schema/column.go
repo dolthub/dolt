@@ -22,7 +22,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-
 var (
 	// KindToLwrStr maps a noms kind to the kinds lowercased name
 	KindToLwrStr = make(map[types.NomsKind]string)

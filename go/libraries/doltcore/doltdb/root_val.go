@@ -32,10 +32,10 @@ import (
 const (
 	ddbRootStructName = "dolt_db_root"
 
-	tablesKey         = "tables"
-	superSchemasKey   = "super_schemas"
+	tablesKey       = "tables"
+	superSchemasKey = "super_schemas"
 
-	doltVersionKey    = "dolt_version"
+	doltVersionKey = "dolt_version"
 
 	DocTableName      = "dolt_docs"
 	LicensePk         = "LICENSE.md"

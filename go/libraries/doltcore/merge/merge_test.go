@@ -16,12 +16,12 @@ package merge
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
 	"strconv"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
@@ -445,8 +445,6 @@ func TestMergeCommits(t *testing.T) {
 		t.Error("Actual stats differ from expected")
 	}
 
-	// root, err := commit.GetRootValue()
-	// assert.NoError(t, err)
 	tbl, _, err := root.GetTable(context.Background(), tableName)
 	assert.NoError(t, err)
 	schRef, err := tbl.GetSchemaRef()

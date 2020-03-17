@@ -17,6 +17,7 @@ package rebase
 import (
 	"context"
 	"fmt"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )

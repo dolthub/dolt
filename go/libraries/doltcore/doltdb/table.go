@@ -17,7 +17,6 @@ package doltdb
 import (
 	"context"
 	"errors"
-	"fmt"
 	"regexp"
 	"strings"
 
@@ -94,10 +93,6 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, schema types.Value
 	if err != nil {
 		return nil, err
 	}
-
-	srh, _ := schemaRef.Hash(vrw.Format())
-	srhs := srh.String()
-	fmt.Println(srhs)
 
 	rowDataRef, err := writeValAndGetRef(ctx, vrw, rowData)
 
@@ -305,10 +300,6 @@ func (t *Table) GetSchema(ctx context.Context) (schema.Schema, error) {
 	}
 
 	schemaRef := schemaRefVal.(types.Ref)
-
-	sh, _ := schemaRefVal.Hash(t.vrw.Format())
-	shs := sh.String()
-	fmt.Println(fmt.Sprintf("sch hash: %s", shs))
 
 	return RefToSchema(ctx, t.vrw, schemaRef)
 }

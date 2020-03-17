@@ -32,7 +32,6 @@ const (
 	InvalidTag uint64 = math.MaxUint64
 )
 
-
 const (
 	// Tags for dolt_docs table
 	DocNameTag = iota + SystemTableReservedMin

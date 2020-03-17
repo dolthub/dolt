@@ -17,10 +17,11 @@ package rebase
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"sync/atomic"
 	"time"
+
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -270,7 +271,7 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		}
 
 		rsh, _ := rebasedSchVal.Hash(newRoot.VRW().Format())
-		rshs  := rsh.String()
+		rshs := rsh.String()
 		fmt.Println(rshs)
 
 		rebasedTable, err := doltdb.NewTable(ctx, rebasedParentRoot.VRW(), rebasedSchVal, rebasedRows)
@@ -421,8 +422,8 @@ func validateTagMapping(tagMapping tagMapping) error {
 		newTags := make(map[uint64]struct{})
 		for _, nt := range tblMapping {
 			if _, found := newTags[nt]; found {
-			return fmt.Errorf("duplicate tag %d found in tag mapping for table %s", nt, tblName)
-		}
+				return fmt.Errorf("duplicate tag %d found in tag mapping for table %s", nt, tblName)
+			}
 			newTags[nt] = struct{}{}
 		}
 	}
@@ -507,7 +508,7 @@ func migrateUniqueTags(ctx context.Context, dEnv *env.DoltEnv, ddb *doltdb.DoltD
 	return nil
 }
 
-func buildGlobalTagMapping(ctx context.Context, root *doltdb.RootValue, globalMapping map[string]map[uint64]uint64, globalCtr *uint64) error  {
+func buildGlobalTagMapping(ctx context.Context, root *doltdb.RootValue, globalMapping map[string]map[uint64]uint64, globalCtr *uint64) error {
 	tblNames, err := root.GetTableNames(ctx)
 
 	if err != nil {
@@ -539,7 +540,6 @@ func buildGlobalTagMapping(ctx context.Context, root *doltdb.RootValue, globalMa
 			return err
 		}
 
-
 		for _, t := range sch.GetAllCols().Tags {
 			if _, found := globalMapping[tn][t]; !found {
 				globalMapping[tn][t] = *globalCtr
@@ -569,21 +569,21 @@ func handleDoltTableMappings(ctx context.Context, tblName string, root *doltdb.R
 	switch tblName {
 	case doltdb.DocTableName:
 		newTagsByColName = map[string]uint64{
-			doltdb.DocPkColumnName: schema.DocNameTag,
+			doltdb.DocPkColumnName:   schema.DocNameTag,
 			doltdb.DocTextColumnName: schema.DocTextTag,
 		}
 	case doltdb.DoltQueryCatalogTableName:
 		newTagsByColName = map[string]uint64{
-			sqle.QueryCatalogIdCol: schema.QueryCatalogIdTag,
-			sqle.QueryCatalogOrderCol: schema.QueryCatalogOrderTag,
-			sqle.QueryCatalogNameCol: schema.QueryCatalogNameTag,
-			sqle.QueryCatalogQueryCol: schema.QueryCatalogQueryTag,
+			sqle.QueryCatalogIdCol:          schema.QueryCatalogIdTag,
+			sqle.QueryCatalogOrderCol:       schema.QueryCatalogOrderTag,
+			sqle.QueryCatalogNameCol:        schema.QueryCatalogNameTag,
+			sqle.QueryCatalogQueryCol:       schema.QueryCatalogQueryTag,
 			sqle.QueryCatalogDescriptionCol: schema.QueryCatalogDescriptionTag,
 		}
 	case doltdb.SchemasTableName:
 		newTagsByColName = map[string]uint64{
-			sqle.SchemasTablesTypeCol: schema.DoltSchemasTypeTag,
-			sqle.SchemasTablesNameCol: schema.DoltSchemasNameTag,
+			sqle.SchemasTablesTypeCol:     schema.DoltSchemasTypeTag,
+			sqle.SchemasTablesNameCol:     schema.DoltSchemasNameTag,
 			sqle.SchemasTablesFragmentCol: schema.DoltSchemasFragmentTag,
 		}
 	}

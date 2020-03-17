@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"testing"
 
 	"github.com/src-d/go-mysql-server/sql"
@@ -26,6 +25,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -59,40 +59,40 @@ var systemTableInsertTests = []InsertTest{
 		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
 			DoltQueryCatalogSchema,
 			NewRowWithSchema(row.TaggedValues{
-				schema.QueryCatalogIdTag: types.String("existingEntry"),
-				schema.QueryCatalogOrderTag: types.Uint(2),
-				schema.QueryCatalogNameTag: types.String("example"),
-				schema.QueryCatalogQueryTag: types.String("select 2+2 from dual"),
+				schema.QueryCatalogIdTag:          types.String("existingEntry"),
+				schema.QueryCatalogOrderTag:       types.Uint(2),
+				schema.QueryCatalogNameTag:        types.String("example"),
+				schema.QueryCatalogQueryTag:       types.String("select 2+2 from dual"),
 				schema.QueryCatalogDescriptionTag: types.String("description")},
 				DoltQueryCatalogSchema)),
 		InsertQuery: "insert into dolt_query_catalog (id, display_order, name, query, description) values ('abc123', 1, 'example', 'select 1+1 from dual', 'description')",
 		SelectQuery: "select * from dolt_query_catalog",
 		ExpectedRows: CompressRows(DoltQueryCatalogSchema,
 			NewRowWithSchema(row.TaggedValues{
-				schema.QueryCatalogIdTag: types.String("abc123"),
-				schema.QueryCatalogOrderTag: types.Uint(1),
-				schema.QueryCatalogNameTag: types.String("example"),
-				schema.QueryCatalogQueryTag: types.String("select 1+1 from dual"),
+				schema.QueryCatalogIdTag:          types.String("abc123"),
+				schema.QueryCatalogOrderTag:       types.Uint(1),
+				schema.QueryCatalogNameTag:        types.String("example"),
+				schema.QueryCatalogQueryTag:       types.String("select 1+1 from dual"),
 				schema.QueryCatalogDescriptionTag: types.String("description")},
 				DoltQueryCatalogSchema),
 			NewRowWithSchema(row.TaggedValues{
-				schema.QueryCatalogIdTag: types.String("existingEntry"),
-				schema.QueryCatalogOrderTag: types.Uint(2),
-				schema.QueryCatalogNameTag: types.String("example"),
-				schema.QueryCatalogQueryTag: types.String("select 2+2 from dual"),
+				schema.QueryCatalogIdTag:          types.String("existingEntry"),
+				schema.QueryCatalogOrderTag:       types.Uint(2),
+				schema.QueryCatalogNameTag:        types.String("example"),
+				schema.QueryCatalogQueryTag:       types.String("select 2+2 from dual"),
 				schema.QueryCatalogDescriptionTag: types.String("description")},
 				DoltQueryCatalogSchema),
 		),
 		ExpectedSchema: CompressSchema(DoltQueryCatalogSchema),
 	},
 	{
-		Name: "insert into dolt_schemas",
+		Name:            "insert into dolt_schemas",
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, schemasTableDoltSchema()),
-		InsertQuery: "insert into dolt_schemas (type, name, fragment) values ('view', 'name', 'select 2+2 from dual')",
-		SelectQuery: "select * from dolt_schemas",
+		InsertQuery:     "insert into dolt_schemas (type, name, fragment) values ('view', 'name', 'select 2+2 from dual')",
+		SelectQuery:     "select * from dolt_schemas",
 		ExpectedRows: []row.Row{NewRowWithSchema(row.TaggedValues{
-			schema.DoltSchemasTypeTag: types.String("view"),
-			schema.DoltSchemasNameTag: types.String("name"),
+			schema.DoltSchemasTypeTag:     types.String("view"),
+			schema.DoltSchemasNameTag:     types.String("name"),
 			schema.DoltSchemasFragmentTag: types.String("select 2+2 from dual"),
 		}, schemasTableDoltSchema())},
 		ExpectedSchema: schemasTableDoltSchema(),

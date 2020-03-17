@@ -17,6 +17,7 @@ package merge
 import (
 	"context"
 	"errors"
+
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 
@@ -34,7 +35,6 @@ import (
 var ErrFastForward = errors.New("fast forward")
 var ErrSameTblAddedTwice = errors.New("table with same name added in 2 commits can't be merged")
 
-// TODO: do we need this class?
 type Merger struct {
 	root      *doltdb.RootValue
 	mergeRoot *doltdb.RootValue

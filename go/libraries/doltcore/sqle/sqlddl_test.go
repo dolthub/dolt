@@ -95,8 +95,8 @@ func TestCreateTable(t *testing.T) {
 			expectedSchema: PeopleTestSchema,
 		},
 		{
-			name:          "Test types",
-			query:         `create table testTable (
+			name: "Test types",
+			query: `create table testTable (
 								id int primary key comment 'tag:104', 
 								age int comment 'tag:105', 
 								first_name varchar(255) comment 'tag:106', 
@@ -166,8 +166,8 @@ func TestCreateTable(t *testing.T) {
 			),
 		},
 		{
-			name:          "Test primary keys",
-			query:         `create table testTable (
+			name: "Test primary keys",
+			query: `create table testTable (
 								id int comment 'tag:300', 
 								age int comment 'tag:301', 
 								first_name varchar(80) comment 'tag:302', 
@@ -181,8 +181,8 @@ func TestCreateTable(t *testing.T) {
 				schemaNewColumn(t, "is_married", 303, sql.Boolean, false)),
 		},
 		{
-			name:          "Test not null constraints",
-			query:         `create table testTable (
+			name: "Test not null constraints",
+			query: `create table testTable (
 								id int comment 'tag:304', 
 								age int comment 'tag:305', 
 								first_name varchar(80) not null comment 'tag:306', 
@@ -196,13 +196,13 @@ func TestCreateTable(t *testing.T) {
 				schemaNewColumn(t, "is_married", 307, sql.Boolean, false)),
 		},
 		{
-			name:          "Test quoted columns",
-			query:         "create table testTable (" +
-								"`id` int comment 'tag:308', " +
-								"`age` int comment 'tag:309', " +
-								"`timestamp` varchar(80) comment 'tag:310', " +
-								"`is married` bool comment 'tag:311', " +
-								"primary key (`id`, `age`))",
+			name: "Test quoted columns",
+			query: "create table testTable (" +
+				"`id` int comment 'tag:308', " +
+				"`age` int comment 'tag:309', " +
+				"`timestamp` varchar(80) comment 'tag:310', " +
+				"`is married` bool comment 'tag:311', " +
+				"primary key (`id`, `age`))",
 			expectedTable: "testTable",
 			expectedSchema: dtestutils.CreateSchema(
 				schemaNewColumn(t, "id", 308, sql.Int32, true, schema.NotNullConstraint{}),
@@ -211,8 +211,8 @@ func TestCreateTable(t *testing.T) {
 				schemaNewColumn(t, "is married", 311, sql.Boolean, false)),
 		},
 		{
-			name:          "Test tag comments",
-			query:         `create table testTable (
+			name: "Test tag comments",
+			query: `create table testTable (
 								id int primary key comment 'tag:5', age int comment 'tag:10')`,
 			expectedTable: "testTable",
 			expectedSchema: dtestutils.CreateSchema(

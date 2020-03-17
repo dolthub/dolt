@@ -246,7 +246,7 @@ func (db *Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Sche
 			// we'll replace this invalid tag
 			continue
 		}
-		if commentTag >= schema.ReservedTagMin{
+		if commentTag >= schema.ReservedTagMin {
 			return fmt.Errorf("tag %d is within the reserved tag space", commentTag)
 		}
 	}
@@ -267,8 +267,6 @@ func (db *Database) createTable(ctx *sql.Context, tableName string, sch sql.Sche
 		return err
 	}
 
-
-	//doltSch, err = schema.ResolveTagConflicts(ss, doltSch)
 	err = doltSch.GetAllCols().Iter(func(tag uint64, _ schema.Column) (stop bool, err error) {
 		found, tblName, err := db.root.HasTag(ctx, tag)
 		if err != nil {

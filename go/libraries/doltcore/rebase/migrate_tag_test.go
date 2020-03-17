@@ -17,10 +17,6 @@ package rebase
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/liquidata-inc/dolt/go/store/types"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -30,7 +26,11 @@ import (
 	dtu "github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	tc "github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils/testcommands"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 type MigrateTagsTest struct {
@@ -107,31 +107,12 @@ var MigrateTagsTests = []MigrateTagsTest{
 			tc.CommitAll{Message: "dropped tableTwo on master"},
 		},
 	},
-	//{
-	//	Name: "Docs test",
-	//	Commands: []tc.Command{
-	//		tc.Query{Query: "create table t (pk int not null primary key);"},
-	//		tc.CommitAll{Message: "Committing initial docs"},
-	//		tc.Branch{BranchName: "test-a"},
-	//		tc.Branch{BranchName: "test-b"},
-	//		tc.Checkout{BranchName: "test-a"},
-	//		putDoc{DocName: doltdb.ReadmePk, DocText: "test-a"},
-	//		tc.CommitAll{Message: "Changed README.md on test-a branch"},
-	//		tc.Checkout{BranchName: "test-b"},
-	//		putDoc{DocName: doltdb.ReadmePk, DocText: "test-b"},
-	//		tc.CommitAll{Message: "Changed README.md on test-b branch"},
-	//		tc.Checkout{BranchName: "master"},
-	//		tc.Merge{BranchName: "test-a"},
-	//		tc.Merge{BranchName: "test-b"},
-	//		tc.ConflictsCat{TableName: doltdb.DocTableName },
-	//	},
-	//},
 }
 
 // putTable allows us to create tables with conflicting tags
 type putTable struct {
 	TableName string
-	Schema 	  schema.Schema
+	Schema    schema.Schema
 }
 
 // CommandString returns "query".
