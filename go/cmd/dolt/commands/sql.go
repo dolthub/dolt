@@ -170,7 +170,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			defer rowIter.Close()
 			err = se.prettyPrintResults(ctx, se.ddb.ValueReadWriter().Format(), sqlSch, rowIter)
 			if err != nil {
-				cli.Println(color.RedString(err.Error()))
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 			}
 		}
 
