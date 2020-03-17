@@ -81,6 +81,7 @@ const (
 	formatFlag  = "result-format"
 	saveFlag    = "save"
 	messageFlag = "message"
+	batchFlag   = "batch"
 	welcomeMsg  = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit.`
@@ -110,6 +111,7 @@ func (cmd SqlCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsString(formatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv. Defaults to tabular. ")
 	ap.SupportsString(saveFlag, "s", "saved query name", "Used with --query, save the query to the query catalog with the name provided. Saved queries can be examined in the dolt_query_catalog system table.")
 	ap.SupportsString(messageFlag, "m", "saved query description", "Used with --query and --save, saves the query with the descriptive message given. See also --name")
+	ap.SupportsFlag(batchFlag, "b", "batch mode, to run more than one query with --query, separated by ';'. Piping input to sql with no arguments also uses batch mode")
 	return ap
 }
 
@@ -149,12 +151,15 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
+	_, forceBatchMode := apr.GetValue(batchFlag)
+
+	se, err := newSqlEngine(ctx, dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
 	// run a single command and exit
-	if query, ok := apr.GetValue(queryFlag); ok {
-		se, err := newSqlEngine(ctx, dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
+	if query, ok := apr.GetValue(queryFlag); !forceBatchMode && ok {
 
 		sqlSch, rowIter, err := processQuery(ctx, query, se);
 		if err != nil {
@@ -182,14 +187,18 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	// Run in either batch mode for piped input, or shell mode for interactive
 	fi, err := os.Stdin.Stat()
-	var se *sqlEngine
 	// Windows has a bug where STDIN can't be statted in some cases, see https://github.com/golang/go/issues/33570
-	if (err != nil && osutil.IsWindows) || (fi.Mode()&os.ModeCharDevice) == 0 {
-		se, err = newSqlEngine(ctx, dEnv, dsqle.NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	if (err != nil && osutil.IsWindows) || (fi.Mode()&os.ModeCharDevice) == 0 || forceBatchMode {
+		var batchInput io.Reader = os.Stdin
+		if forceBatchMode {
+			query, ok := apr.GetValue(queryFlag)
+			if !ok {
+				return HandleVErrAndExitCode(errhand.BuildDError("--batch only used with --query").Build(), usage)
+			}
+			batchInput = strings.NewReader(query)
 		}
-		err = runBatchMode(ctx, se)
+
+		err = runBatchMode(ctx, se, batchInput)
 		if err != nil {
 			_, _ = fmt.Fprintf(cli.CliErr, "Error processing batch: %s\n", err.Error())
 			return 1
@@ -197,10 +206,6 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	} else if err != nil {
 		HandleVErrAndExitCode(errhand.BuildDError("Couldn't stat STDIN. This is a bug.").Build(), usage)
 	} else {
-		se, err = newSqlEngine(ctx, dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
 		err = runShell(ctx, se, dEnv)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.BuildDError("unable to start shell").AddCause(err).Build(), usage)
@@ -280,8 +285,8 @@ func scanStatements(data []byte, atEOF bool) (advance int, token []byte, err err
 }
 
 // runBatchMode processes queries until EOF. The Root of the sqlEngine may be updated.
-func runBatchMode(ctx context.Context, se *sqlEngine) error {
-	scanner := bufio.NewScanner(os.Stdin)
+func runBatchMode(ctx context.Context, se *sqlEngine, input io.Reader) error {
+	scanner := bufio.NewScanner(input)
 	const maxCapacity = 512 * 1024
 	buf := make([]byte, maxCapacity)
 	scanner.Buffer(buf, maxCapacity)
@@ -640,6 +645,7 @@ func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 	}
 
 	if rowIter != nil {
+		defer rowIter.Close()
 		err = mergeResultIntoStats(sqlStatement, rowIter, batchEditStats)
 		if err != nil {
 			return fmt.Errorf("error executing statement: %v", err.Error())
@@ -653,7 +659,6 @@ func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 				cli.Print("\n")
 				displayStrLen = 0
 			}
-			defer rowIter.Close()
 			err = se.prettyPrintResults(ctx, se.ddb.ValueReadWriter().Format(), sqlSch, rowIter)
 			if err != nil {
 				return err
@@ -695,8 +700,15 @@ func updateBatchInsertOutput() {
 	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
 }
 
-// Updates the batch insert stats with the results of an insert operation.
+// Updates the batch insert stats with the results of an INSERT, UPDATE, or DELETE statement.
 func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s *stats) error {
+	switch statement.(type) {
+	case *sqlparser.Insert, *sqlparser.Delete, *sqlparser.Update:
+		break
+	default:
+		return nil
+	}
+
 	for {
 		row, err := rowIter.Next()
 		if err == io.EOF {
