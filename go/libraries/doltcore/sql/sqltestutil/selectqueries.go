@@ -766,8 +766,6 @@ var SelectDiffTests = []SelectTest{
 	},
 }
 
-
-
 var AsOfTests = []SelectTest{
 	{
 		Name:  "select * from seed branch",
@@ -795,7 +793,7 @@ var AsOfTests = []SelectTest{
 		Query: "select * from test_table as of 'master'",
 		ExpectedRows: []row.Row{
 			mustRow(row.New(types.Format_7_18, ReaddAgeAt4HistSch, row.TaggedValues{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St"), 4: types.Uint(35)})),
-			mustRow(row.New(types.Format_7_18, ReaddAgeAt4HistSch, row.TaggedValues{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln"), 4: types.Uint(38)},)),
+			mustRow(row.New(types.Format_7_18, ReaddAgeAt4HistSch, row.TaggedValues{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln"), 4: types.Uint(38)})),
 			mustRow(row.New(types.Format_7_18, ReaddAgeAt4HistSch, row.TaggedValues{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct"), 4: types.Uint(37)})),
 			mustRow(row.New(types.Format_7_18, ReaddAgeAt4HistSch, row.TaggedValues{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave"), 3: types.String("-1 Imaginary Wy"), 4: types.Uint(37)})),
 			mustRow(row.New(types.Format_7_18, ReaddAgeAt4HistSch, row.TaggedValues{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele")})),
