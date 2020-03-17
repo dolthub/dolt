@@ -57,20 +57,28 @@ import (
 
 var sqlDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Runs a SQL query",
-	LongDesc: `Runs a SQL query you specify. By default, begins an interactive shell to run queries and view the results. With the {{.EmphasisLeft}}-q{{.EmphasisRight}} option, runs the given query and prints any results, then exits.
+	LongDesc: "Runs a SQL query you specify. With no arguments, begins an interactive shell to run queries and view " +
+		"the results. With the {{.EmphasisLeft}}-q{{.EmphasisRight}} option, runs the given query and prints any " +
+		"results, then exits.\n" +
+		"\n" +
+		"By default, {{.EmphasisLeft}}-q{{.EmphasisRight}} executes a single statement. To execute multiple SQL " +
+		"statements separated by semicolons, use -b to enable batch mode.\n" +
+		"\n" +
+		"Pipe SQL statements to dolt sql (no {{.EmphasisLeft}}-q{{.EmphasisRight}}) to execute a SQL import or update " +
+		"script.\n" +
+		"\n" +
+		"Known limitations:\n" +
+		"* No support for creating indexes\n" +
+		"* No support for foreign keys\n" +
+		"* No support for column constraints besides NOT NULL\n" +
+		"* No support for default values\n" +
+		"* Joins can only use indexes for two table joins. Three or more tables in a join query will use a non-indexed " +
+		"join, which is very slow.",
 
-Pipe SQL statements to dolt sql (no {{.EmphasisLeft}}-q{{.EmphasisRight}}) to execute a SQL import or update script. 
-
-Known limitations:
-* No support for creating indexes
-* No support for foreign keys
-* No support for column constraints besides NOT NULL
-* No support for default values
-* Joins can only use indexes for two table joins. Three or more tables in a join query will use a non-indexed join, which is very slow.
-`,
 	Synopsis: []string{
 		"",
 		"-q {{.LessThan}}query{{.GreaterThan}}",
+		"-q {{.LessThan}}query;query{{.GreaterThan}} -b",
 		"-q {{.LessThan}}query{{.GreaterThan}} -r {{.LessThan}}result format{{.GreaterThan}}",
 		"-q {{.LessThan}}query{{.GreaterThan}} -s {{.LessThan}}name{{.GreaterThan}} -m {{.LessThan}}message{{.GreaterThan}}",
 	},
@@ -193,7 +201,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		if forceBatchMode {
 			query, ok := apr.GetValue(queryFlag)
 			if !ok {
-				return HandleVErrAndExitCode(errhand.BuildDError("--batch only used with --query").Build(), usage)
+				panic("No query found for --batch. This should already have been verified.")
 			}
 			batchInput = strings.NewReader(query)
 		}
@@ -235,9 +243,19 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 	_, query := apr.GetValue(queryFlag)
 	_, save := apr.GetValue(saveFlag)
 	_, msg := apr.GetValue(messageFlag)
+	_, batch := apr.GetValue(batchFlag)
 
 	if len(apr.Args()) > 0 && !query {
 		return errhand.BuildDError("Invalid Argument: use --query or -q to pass inline SQL queries").Build()
+	}
+
+	if batch {
+		if !query {
+			return errhand.BuildDError("Invalid Argument: --batch|-b must be used with --query|-q").Build()
+		}
+		if save || msg {
+			return errhand.BuildDError("Invalid Argument: --batch|-b is not compatible with --save|-s or --message|-m").Build()
+		}
 	}
 
 	if query {
@@ -574,10 +592,11 @@ func processQuery(ctx context.Context, query string, se *sqlEngine) (sql.Schema,
 }
 
 type stats struct {
-	numRowsInserted  int
-	numRowsUpdated   int
-	numRowsDeleted   int
-	numErrorsIgnored int
+	rowsInserted   int
+	rowsUpdated    int
+	rowsDeleted    int
+	unflushedEdits int
+	unprintedEdits int
 }
 
 var batchEditStats = &stats{}
@@ -587,11 +606,25 @@ const maxBatchSize = 200000
 const updateInterval = 1000
 
 func (s *stats) numUpdates() int {
-	return s.numRowsUpdated + s.numRowsDeleted + s.numRowsInserted
+	return s.rowsUpdated + s.rowsDeleted + s.rowsInserted
 }
 
-func (s *stats) shouldUpdateBatchEditStats() bool {
-	return s.numUpdates() > 0 && s.numUpdates()%updateInterval == 0
+func (s *stats) shouldUpdateBatchModeOutput() bool {
+	return s.unprintedEdits >= updateInterval
+}
+
+func (s *stats) shouldFlush() bool {
+	return s.unflushedEdits >= maxBatchSize
+}
+
+func flushBatchedEdits(ctx context.Context, se *sqlEngine) error {
+	err := se.sdb.Flush(ctx)
+	if err != nil {
+		return err
+	}
+
+	batchEditStats.unflushedEdits = 0
+	return nil
 }
 
 // Processes a single query in batch mode. The Root of the sqlEngine may or may not be changed.
@@ -605,36 +638,27 @@ func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 	}
 
 	if canProcessAsBatchInsert(sqlStatement) {
-		_, rowIter, err := se.query(ctx, query)
+		err = processBatchInsert(se, ctx, query, sqlStatement)
 		if err != nil {
-			return fmt.Errorf("Error inserting rows: %v", err.Error())
+			return err
 		}
-
-		if rowIter != nil {
-			defer rowIter.Close()
-			err = mergeResultIntoStats(sqlStatement, rowIter, batchEditStats)
-			if err != nil {
-				return fmt.Errorf("Error inserting rows: %v", err.Error())
-			}
+	} else {
+		err := processNonInsertBatchQuery(ctx, se, query, sqlStatement)
+		if err != nil {
+			return err
 		}
-
-		if batchEditStats.numUpdates()%maxBatchSize == 0 {
-			err := se.sdb.Flush(ctx)
-			if err != nil {
-				return err
-			}
-		}
-
-		if batchEditStats.shouldUpdateBatchEditStats() {
-			updateBatchInsertOutput()
-		}
-
-		return nil
 	}
 
-	// For any other kind of statement, we need to commit whatever batch edits we've accumulated so far before executing
-	// the query
-	err = se.sdb.Flush(ctx)
+	if batchEditStats.shouldUpdateBatchModeOutput() {
+		updateBatchInsertOutput()
+	}
+
+	return nil
+}
+
+func processNonInsertBatchQuery(ctx context.Context, se *sqlEngine, query string, sqlStatement sqlparser.Statement) error {
+	// We need to commit whatever batch edits we've accumulated so far before executing the query
+	err := flushBatchedEdits(ctx, se)
 	if err != nil {
 		return err
 	}
@@ -667,13 +691,25 @@ func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 	}
 
 	// And flush again afterwards, to make sure any following insert statements have the latest data
-	err = se.sdb.Flush(ctx)
+	return flushBatchedEdits(ctx, se)
+}
+
+func processBatchInsert(se *sqlEngine, ctx context.Context, query string, sqlStatement sqlparser.Statement) error {
+	_, rowIter, err := se.query(ctx, query)
 	if err != nil {
-		return err
+		return fmt.Errorf("Error inserting rows: %v", err.Error())
 	}
 
-	if batchEditStats.shouldUpdateBatchEditStats() {
-		updateBatchInsertOutput()
+	if rowIter != nil {
+		defer rowIter.Close()
+		err = mergeResultIntoStats(sqlStatement, rowIter, batchEditStats)
+		if err != nil {
+			return fmt.Errorf("Error inserting rows: %v", err.Error())
+		}
+	}
+
+	if batchEditStats.shouldFlush() {
+		return flushBatchedEdits(ctx, se)
 	}
 
 	return nil
@@ -696,8 +732,9 @@ func canProcessAsBatchInsert(sqlStatement sqlparser.Statement) bool {
 
 func updateBatchInsertOutput() {
 	displayStr := fmt.Sprintf("Rows inserted: %d Rows updated: %d Rows deleted: %d",
-		batchEditStats.numRowsInserted, batchEditStats.numRowsUpdated, batchEditStats.numRowsDeleted)
+		batchEditStats.rowsInserted, batchEditStats.rowsUpdated, batchEditStats.rowsDeleted)
 	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
+	batchEditStats.unprintedEdits = 0
 }
 
 // Updates the batch insert stats with the results of an INSERT, UPDATE, or DELETE statement.
@@ -716,13 +753,16 @@ func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s 
 		} else if err != nil {
 			return err
 		} else {
+			numRowsUpdated := row[0].(int64)
+			s.unflushedEdits += int(numRowsUpdated)
+			s.unprintedEdits += int(numRowsUpdated)
 			switch statement.(type) {
 			case *sqlparser.Insert:
-				s.numRowsInserted += int(row[0].(int64))
+				s.rowsInserted += int(numRowsUpdated)
 			case *sqlparser.Delete:
-				s.numRowsDeleted += int(row[0].(int64))
+				s.rowsDeleted += int(numRowsUpdated)
 			case *sqlparser.Update:
-				s.numRowsUpdated += int(row[0].(int64))
+				s.rowsUpdated += int(numRowsUpdated)
 			}
 		}
 	}
