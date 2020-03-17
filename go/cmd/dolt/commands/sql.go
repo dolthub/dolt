@@ -585,6 +585,10 @@ func (s *stats) numUpdates() int {
 	return s.numRowsUpdated + s.numRowsDeleted + s.numRowsInserted
 }
 
+func (s *stats) shouldUpdateBatchEditStats() bool {
+	return s.numUpdates() > 0 && s.numUpdates()%updateInterval == 0
+}
+
 // Processes a single query in batch mode. The Root of the sqlEngine may or may not be changed.
 func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 	sqlStatement, err := sqlparser.Parse(query)
@@ -616,7 +620,7 @@ func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 			}
 		}
 
-		if batchEditStats.numUpdates()%updateInterval == 0 {
+		if batchEditStats.shouldUpdateBatchEditStats() {
 			updateBatchInsertOutput()
 		}
 
@@ -644,6 +648,11 @@ func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 		// Some statement types should print results, even in batch mode.
 		switch sqlStatement.(type) {
 		case *sqlparser.Select, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union:
+			if displayStrLen > 0 {
+				// If we've been printing in batch mode, print a newline to put the regular output on its own line
+				cli.Print("\n")
+				displayStrLen = 0
+			}
 			defer rowIter.Close()
 			err = se.prettyPrintResults(ctx, se.ddb.ValueReadWriter().Format(), sqlSch, rowIter)
 			if err != nil {
@@ -658,7 +667,7 @@ func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 		return err
 	}
 
-	if batchEditStats.numRowsInserted%updateInterval == 0 {
+	if batchEditStats.shouldUpdateBatchEditStats() {
 		updateBatchInsertOutput()
 	}
 
