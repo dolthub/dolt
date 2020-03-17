@@ -157,7 +157,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
 		if err := processQuery(ctx, query, se); err != nil {
-			verr := FormatProcessQueryError(err)
+			verr := formatProcessQueryError(err)
 			return HandleVErrAndExitCode(verr, usage)
 		} else if se.sdb.Root() != origRoot {
 			return HandleVErrAndExitCode(UpdateWorkingWithVErr(dEnv, se.sdb.Root()), usage)
@@ -204,7 +204,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	return 0
 }
 
-func FormatProcessQueryError(err error) errhand.VerboseError {
+func formatProcessQueryError(err error) errhand.VerboseError {
 	const (
 		maxStatementLen = 128
 		maxPosWhenTruncated = 64
