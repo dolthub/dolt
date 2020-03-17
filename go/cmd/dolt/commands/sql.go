@@ -595,17 +595,14 @@ func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 		return fmt.Errorf("Error parsing SQL: %v.", err.Error())
 	}
 
-	switch sqlStatement.(type) {
-	// As long as we keep processing insert statements, we can stay on the fast path of batched inserts, only flushing
-	// when required.
-	case *sqlparser.Insert:
+	if canProcessAsBatchInsert(sqlStatement) {
 		_, rowIter, err := se.query(ctx, query)
 		if err != nil {
 			return fmt.Errorf("error inserting rows: %v", err.Error())
 		}
-		defer rowIter.Close()
 
-		err = mergeInsertResultIntoStats(sqlStatement, rowIter, batchEditStats)
+		defer rowIter.Close()
+		err = mergeResultIntoStats(sqlStatement, rowIter, batchEditStats)
 		if err != nil {
 			return fmt.Errorf("error inserting rows: %v", err.Error())
 		}
@@ -622,45 +619,60 @@ func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 		}
 
 		return nil
+	}
+
+	// For any other kind of statement, we need to commit whatever batch edits we've accumulated so far before executing
+	// the query
+	err = se.sdb.Flush(ctx)
+	if err != nil {
+		return err
+	}
+
+	sqlSch, rowIter, err := processQuery(ctx, query, se)
+	if err != nil {
+		return err
+	}
+
+	err = mergeResultIntoStats(sqlStatement, rowIter, batchEditStats)
+	if err != nil {
+		return fmt.Errorf("error executing statement: %v", err.Error())
+	}
+
+	// Some statement types should print results, even in batch mode.
+	switch sqlStatement.(type) {
+	case *sqlparser.Select, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union:
+		defer rowIter.Close()
+		err = se.prettyPrintResults(ctx, se.ddb.ValueReadWriter().Format(), sqlSch, rowIter)
+		if err != nil {
+			return err
+		}
+	}
+
+	// And flush again afterwards, to make sure any following insert statements have the latest data
+	err = se.sdb.Flush(ctx)
+	if err != nil {
+		return err
+	}
+
+	if batchEditStats.numRowsInserted%updateInterval == 0 {
+		updateBatchInsertOutput()
+	}
+
+	return nil
+}
+
+// canProcessBatchInsert returns whether the given statement can be processed as a batch insert. Only simple inserts
+// (inserting a list of values) can be processed in this way. Other kinds of insert (notably INSERT INTO SELECT AS) need
+// a flushed root and can't benefit from batch optimizations.
+func canProcessAsBatchInsert(sqlStatement sqlparser.Statement) bool {
+	switch s := sqlStatement.(type) {
+	case *sqlparser.Insert:
+		if _, ok := s.Rows.(sqlparser.Values); ok {
+			return true
+		}
+		return false
 	default:
-		// For any other kind of statement, we need to commit whatever batch edit we've accumulated so far before executing
-		// the query
-		err := se.sdb.Flush(ctx)
-		if err != nil {
-			return err
-		}
-
-		sqlSch, rowIter, err := processQuery(ctx, query, se)
-		if err != nil {
-			return err
-		}
-
-		err = mergeInsertResultIntoStats(sqlStatement, rowIter, batchEditStats)
-		if err != nil {
-			return fmt.Errorf("error executing statement: %v", err.Error())
-		}
-
-		// Some statement types should print results, even in batch mode.
-		switch sqlStatement.(type) {
-		case *sqlparser.Select, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union:
-			defer rowIter.Close()
-			err = se.prettyPrintResults(ctx, se.ddb.ValueReadWriter().Format(), sqlSch, rowIter)
-			if err != nil {
-				return err
-			}
-		}
-
-		// And flush again afterwards, to make sure any following insert statements have the latest data
-		err = se.sdb.Flush(ctx)
-		if err != nil {
-			return err
-		}
-
-		if batchEditStats.numRowsInserted%updateInterval == 0 {
-			updateBatchInsertOutput()
-		}
-
-		return nil
+		return false
 	}
 }
 
@@ -671,7 +683,7 @@ func updateBatchInsertOutput() {
 }
 
 // Updates the batch insert stats with the results of an insert operation.
-func mergeInsertResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s *stats) error {
+func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s *stats) error {
 	for {
 		row, err := rowIter.Next()
 		if err == io.EOF {
