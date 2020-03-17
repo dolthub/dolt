@@ -171,7 +171,7 @@ func testUniqueTags(t *testing.T, test UniqueTagsTest) {
 
 	var ee error
 	for idx, cmd := range test.Commands {
-		fmt.Println(fmt.Sprintf("%d: %s: %s", idx, cmd.CommandName(), cmd))
+		fmt.Println(fmt.Sprintf("%d: %s: %s", idx, cmd.CommandString(), cmd))
 		ee = cmd.Exec(t, dEnv)
 	}
 

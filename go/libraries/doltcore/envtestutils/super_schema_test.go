@@ -360,7 +360,7 @@ func testSuperSchema(t *testing.T, test SuperSchemaTest) {
 
 	var ee error
 	for idx, cmd := range test.Commands {
-		fmt.Println(fmt.Sprintf("%d: %s: %s", idx, cmd.CommandName(), cmd))
+		fmt.Println(fmt.Sprintf("%d: %s: %s", idx, cmd.CommandString(), cmd))
 		ee = cmd.Exec(t, dEnv)
 	}
 

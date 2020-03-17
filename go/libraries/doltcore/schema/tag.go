@@ -23,7 +23,10 @@ import (
 const (
 	// TODO: increase ReservedTagMin to 1 << 63 once numeric marshalling is fixed
 	// ReservedTagMin is the start of a range of tags which the user should not be able to use in their schemas.
-	ReservedTagMin uint64 = 1 << 51
+	ReservedTagMin uint64 = 1 << 50
+
+	//
+	SystemTableReservedMin uint64 = 1 << 51
 
 	// InvalidTag is used as an invalid tag
 	InvalidTag uint64 = math.MaxUint64
@@ -32,7 +35,7 @@ const (
 
 const (
 	// Tags for dolt_docs table
-	DocNameTag = iota + ReservedTagMin
+	DocNameTag = iota + SystemTableReservedMin
 	DocTextTag
 
 	// Tags for dolt_history_ table
@@ -40,15 +43,15 @@ const (
 	HistoryCommitHashTag
 	HistoryCommitDateTag
 
+	// Tags for dolt_diff_ table
+	DiffCommitTag
+
 	// Tags for dolt_query_catalog table
 	QueryCatalogIdTag
 	QueryCatalogOrderTag
 	QueryCatalogNameTag
 	QueryCatalogQueryTag
 	QueryCatalogDescriptionTag
-
-	// Tags for dolt_diff_ table
-	DiffCommitTag
 
 	// Tags for dolt_schemas table
 	DoltSchemasTypeTag

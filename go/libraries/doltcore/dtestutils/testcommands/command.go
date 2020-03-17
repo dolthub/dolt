@@ -16,6 +16,8 @@ package testcommands
 
 import (
 	"context"
+	"fmt"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/cnfcmds"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"testing"
 	"time"
@@ -33,13 +35,13 @@ import (
 )
 
 type Command interface {
-	CommandName() string
+	CommandString() string
 	Exec(t *testing.T, dEnv *env.DoltEnv) error
 }
 
 type StageAll struct{}
 
-func (a StageAll) CommandName() string { return "stage_all" }
+func (a StageAll) CommandString() string { return "stage_all" }
 
 func (a StageAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	return actions.StageAllTables(context.Background(), dEnv, false)
@@ -50,7 +52,7 @@ type CommitStaged struct {
 	Message string
 }
 
-func (c CommitStaged) CommandName() string { return "commit_staged" }
+func (c CommitStaged) CommandString() string { return fmt.Sprintf("commit_staged: %s", c.Message) }
 
 func (c CommitStaged) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	return actions.CommitStaged(context.Background(), dEnv, c.Message, time.Now(), false)
@@ -60,8 +62,8 @@ type CommitAll struct {
 	Message string
 }
 
-// CommandName returns "commit".
-func (c CommitAll) CommandName() string { return "commit" }
+// CommandString returns "commit".
+func (c CommitAll) CommandString() string { return fmt.Sprintf("commit: %s", c.Message) }
 
 // Exec executes a CommitAll command on a test dolt environment.
 func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
@@ -74,7 +76,7 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 // TODO: comments on exported functions
 type ResetHard struct{}
 
-func (r ResetHard) CommandName() string { return "reset_hard" }
+func (r ResetHard) CommandString() string { return "reset_hard" }
 
 // NOTE: does not handle untracked tables
 func (r ResetHard) Exec(t *testing.T, dEnv *env.DoltEnv) error {
@@ -101,8 +103,8 @@ type Query struct {
 	Query string
 }
 
-// CommandName returns "query".
-func (q Query) CommandName() string { return "query" }
+// CommandString returns "query".
+func (q Query) CommandString() string { return fmt.Sprintf("query %s", q.Query)}
 
 // Exec executes a Query command on a test dolt environment.
 func (q Query) Exec(t *testing.T, dEnv *env.DoltEnv) error {
@@ -128,8 +130,8 @@ type Branch struct {
 	BranchName string
 }
 
-// CommandName returns "branch".
-func (b Branch) CommandName() string { return "branch" }
+// CommandString returns "branch".
+func (b Branch) CommandString() string { return fmt.Sprintf("branch: %s", b.BranchName) }
 
 // Exec executes a Branch command on a test dolt environment.
 func (b Branch) Exec(_ *testing.T, dEnv *env.DoltEnv) error {
@@ -141,8 +143,8 @@ type Checkout struct {
 	BranchName string
 }
 
-// CommandName returns "checkout".
-func (c Checkout) CommandName() string { return "checkout" }
+// CommandString returns "checkout".
+func (c Checkout) CommandString() string { return fmt.Sprintf("checkout: %s", c.BranchName) }
 
 // Exec executes a Checkout command on a test dolt environment.
 func (c Checkout) Exec(_ *testing.T, dEnv *env.DoltEnv) error {
@@ -153,8 +155,8 @@ type Merge struct {
 	BranchName string
 }
 
-// CommandName returns "merge".
-func (m Merge) CommandName() string { return "merge" }
+// CommandString returns "merge".
+func (m Merge) CommandString() string { return fmt.Sprintf("merge: %s", m.BranchName) }
 
 // Exec executes a Merge command on a test dolt environment.
 func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
@@ -242,4 +244,16 @@ func resolveCommit(t *testing.T, cSpecStr string, dEnv *env.DoltEnv) *doltdb.Com
 	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs)
 	require.NoError(t, err)
 	return cm
+}
+
+type ConflictsCat struct {
+	TableName string
+}
+
+func (c ConflictsCat) CommandString() string { return fmt.Sprintf("conflicts_cat: %s", c.TableName) }
+
+func (c ConflictsCat) Exec(t *testing.T, dEnv *env.DoltEnv) error {
+	out := cnfcmds.CatCmd{}.Exec(context.Background(),"dolt conflicts cat", []string{c.TableName}, dEnv)
+	require.Equal(t, 0, out)
+	return nil
 }

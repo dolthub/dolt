@@ -48,11 +48,11 @@ clear
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "abc @ working" ]] || false
     [[ "${lines[1]}" =~ "CREATE TABLE \`abc\` (" ]] || false
-    [[ "${lines[2]}" =~ " \`pk\` BIGINT NOT NULL COMMENT 'tag:0'," ]] || false
-    [[ "${lines[3]}" =~ " \`a\` LONGTEXT COMMENT 'tag:100'," ]] || false
-    [[ "${lines[4]}" =~ " \`b\` DOUBLE COMMENT 'tag:101'," ]] || false
-    [[ "${lines[5]}" =~ " \`w\` BIGINT COMMENT 'tag:102'," ]] || false
-    [[ "${lines[6]}" =~ " \`x\` BIGINT COMMENT 'tag:103'," ]] || false
+    [[ "${lines[2]}" =~ " \`pk\` BIGINT NOT NULL COMMENT " ]] || false
+    [[ "${lines[3]}" =~ " \`a\` LONGTEXT COMMENT " ]] || false
+    [[ "${lines[4]}" =~ " \`b\` DOUBLE COMMENT " ]] || false
+    [[ "${lines[5]}" =~ " \`w\` BIGINT COMMENT " ]] || false
+    [[ "${lines[6]}" =~ " \`x\` BIGINT COMMENT " ]] || false
     [[ "${lines[7]}" =~ " PRIMARY KEY (\`pk\`)" ]] || false
     [[ "${lines[8]}" =~ ");" ]] || false
 }
@@ -85,11 +85,11 @@ clear
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "abc @ working" ]] || false
     [[ "${lines[1]}" =~ "CREATE TABLE \`abc\` (" ]] || false
-    [[ "${lines[2]}" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'," ]] || false
-    [[ "${lines[3]}" =~ "\`a\` LONGTEXT COMMENT 'tag:100'," ]] || false
-    [[ "${lines[4]}" =~ "\`b\` DOUBLE COMMENT 'tag:101'," ]] || false
-    [[ "${lines[5]}" =~ "\`x\` BIGINT COMMENT 'tag:103'," ]] || false
-    [[ "${lines[6]}" =~ "\`y\` BIGINT COMMENT 'tag:104'," ]] || false
+    [[ "${lines[2]}" =~ "\`pk\` BIGINT NOT NULL COMMENT " ]] || false
+    [[ "${lines[3]}" =~ "\`a\` LONGTEXT COMMENT " ]] || false
+    [[ "${lines[4]}" =~ "\`b\` DOUBLE COMMENT " ]] || false
+    [[ "${lines[5]}" =~ "\`x\` BIGINT COMMENT " ]] || false
+    [[ "${lines[6]}" =~ "\`y\` BIGINT COMMENT " ]] || false
     [[ "${lines[7]}" =~ "PRIMARY KEY (\`pk\`)" ]] || false
     [[ "${lines[8]}" =~ ");" ]] || false
 }
@@ -121,11 +121,11 @@ clear
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "abc @ working" ]] || false
     [[ "${lines[1]}" =~ "CREATE TABLE \`abc\` (" ]] || false
-    [[ "${lines[2]}" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'," ]] || false
-    [[ "${lines[3]}" =~ "\`a\` LONGTEXT COMMENT 'tag:100'," ]] || false
-    [[ "${lines[4]}" =~ "\`b\` DOUBLE COMMENT 'tag:101'," ]] || false
-    [[ "${lines[5]}" =~ "\`w\` BIGINT COMMENT 'tag:102'," ]] || false
-    [[ "${lines[6]}" =~ "\`z\` BIGINT COMMENT 'tag:105'," ]] || false
+    [[ "${lines[2]}" =~ "\`pk\` BIGINT NOT NULL COMMENT " ]] || false
+    [[ "${lines[3]}" =~ "\`a\` LONGTEXT COMMENT " ]] || false
+    [[ "${lines[4]}" =~ "\`b\` DOUBLE COMMENT " ]] || false
+    [[ "${lines[5]}" =~ "\`w\` BIGINT COMMENT " ]] || false
+    [[ "${lines[6]}" =~ "\`z\` BIGINT COMMENT " ]] || false
     [[ "${lines[7]}" =~ "PRIMARY KEY (\`pk\`)" ]] || false
     [[ "${lines[8]}" =~ ");" ]] || false
 }

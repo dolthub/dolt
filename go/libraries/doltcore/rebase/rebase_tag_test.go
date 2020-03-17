@@ -15,26 +15,25 @@
 package rebase
 
 import (
-"context"
-"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"context"
+	"fmt"
 	"io"
-"strconv"
-"testing"
+	"strconv"
+	"testing"
 
-sqle "github.com/src-d/go-mysql-server"
-"github.com/src-d/go-mysql-server/sql"
-"github.com/stretchr/testify/require"
-"vitess.io/vitess/go/sqltypes"
+	sqle "github.com/src-d/go-mysql-server"
+	"github.com/src-d/go-mysql-server/sql"
+	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/sqltypes"
 
-"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-dtu "github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
-tc "github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils/testcommands"
-"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
-dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
-"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	dtu "github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
+	tc "github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils/testcommands"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
+	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 const (
@@ -126,7 +125,9 @@ var RebaseTagTests = []RebaseTagTest{
 		},
 		OldTag:         DripTag,
 		NewTag:         DripTagRebased,
-		ExpectedErrStr: "tags not found in commit history for commit: ",
+		SelectResultQuery: "select * from people;",
+		ExpectedSchema:    schema.SchemaFromCols(people),
+		ExpectedRows: []row.Row{},
 	},
 	{
 		Name: "rebase entire history",
@@ -418,13 +419,13 @@ func testRebaseTag(t *testing.T, test RebaseTagTest) {
 
 	dEnv := dtu.CreateTestEnv()
 	for idx, cmd := range test.Commands {
-		fmt.Println(fmt.Sprintf("%d: %s: %s", idx, cmd.CommandName(), cmd))
+		fmt.Println(fmt.Sprintf("%d: %s: %s", idx, cmd.CommandString(), cmd))
 		setupErr := cmd.Exec(t, dEnv)
 		require.NoError(t, setupErr)
 	}
 
 	bs, _ := dEnv.DoltDB.GetBranches(context.Background()) // master
-	rebasedCommit, err := TagRebaseForRef(context.Background(), bs[0], dEnv.DoltDB, "people", map[uint64]uint64{test.OldTag: test.NewTag})
+	rebasedCommit, err := TagRebaseForRef(context.Background(), bs[0], dEnv.DoltDB, tagMapping{"people": map[uint64]uint64{test.OldTag: test.NewTag}})
 
 	if test.ExpectedErrStr != "" {
 		require.NotNil(t, err)
@@ -472,7 +473,7 @@ func testRebaseTagHistory(t *testing.T) {
 	otherCm, _ := dEnv.DoltDB.Resolve(context.Background(), ocs)
 
 	bs, _ := dEnv.DoltDB.GetBranches(context.Background()) // master
-	newMasterCm, err := TagRebaseForRef(context.Background(), bs[0], dEnv.DoltDB, "people", map[uint64]uint64{DripTag: DripTagRebased})
+	newMasterCm, err := TagRebaseForRef(context.Background(), bs[0], dEnv.DoltDB, tagMapping{"people": map[uint64]uint64{DripTag: DripTagRebased}})
 	require.NoError(t, err)
 
 	expectedSch := schema.SchemaFromCols(peopleWithDrip)
@@ -553,99 +554,5 @@ func checkRows(t *testing.T, root *doltdb.RootValue, sch schema.Schema, selectQu
 		require.True(t, idx < len(expectedRows))
 		require.Equal(t, expectedRows[idx], actualRows[idx])
 		idx++
-	}
-}
-
-
-type MigrateTagsTest struct {
-	// The name of this test. Names should be unique and descriptive.
-	Name string
-	// The modifying queries to run
-	Commands []tc.Command
-}
-
-var MigrateTagsTests = []MigrateTagsTest{
-	{
-		Name: "Can migrate tags",
-		Commands: []tc.Command{
-			putTable{TableName: "tableOne", Schema: schema.SchemaFromCols(columnCollection(
-				newColTypeInfo("pk", 0, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
-				newColTypeInfo("c0", 1, varchar(20), false)))},
-			putTable{TableName: "tableTwo", Schema: schema.SchemaFromCols(columnCollection(
-				newColTypeInfo("pk", 0, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
-				newColTypeInfo("c0", 1, varchar(20), false)))},
-			tc.CommitAll{Message: "created two tables"},
-		},
-	},
-}
-
-// putTable allows us to create tables with conflicting tags
-type putTable struct {
-	TableName string
-	Schema 	  schema.Schema
-}
-
-// CommandName returns "query".
-func (p putTable) CommandName() string { return "put_table" }
-
-// Exec executes a Query command on a test dolt environment.
-func (p putTable) Exec(t *testing.T, dEnv *env.DoltEnv) error {
-	root, err := dEnv.WorkingRoot(context.Background())
-	require.NoError(t, err)
-	newRoot, err := root.CreateEmptyTable(context.Background(), p.TableName, p.Schema)
-	if err != nil {
-		return err
-	}
-	return dEnv.UpdateWorkingRoot(context.Background(), newRoot)
-}
-
-func TestMigrateUniqueTags(t *testing.T) {
-	for _, test := range MigrateTagsTests {
-		t.Run(test.Name, func(t *testing.T) {
-			testMigrateUniqueTags(t, test)
-		})
-	}
-}
-
-func testMigrateUniqueTags(t *testing.T, test MigrateTagsTest) {
-	dEnv := dtu.CreateTestEnv()
-	for _, cmd := range test.Commands {
-		err := cmd.Exec(t, dEnv)
-		require.NoError(t, err)
-	}
-
-	bb, err := dEnv.DoltDB.GetBranches(context.Background())
-	require.NoError(t, err)
-
-	err = migrateUniqueTags(context.Background(), dEnv.DoltDB, bb)
-	require.NoError(t, err)
-
-	for _, b := range bb {
-		cs, err := doltdb.NewCommitSpec("head", b.String())
-		require.NoError(t, err)
-
-		c, err := dEnv.DoltDB.Resolve(context.Background(), cs)
-		require.NoError(t, err)
-
-		r, err := c.GetRootValue()
-		require.NoError(t, err)
-
-		allTags := make(map[uint64]struct{})
-		tblNames, err := r.GetTableNames(context.Background())
-		require.NoError(t, err)
-
-		for _, tn := range tblNames {
-			tbl, _, err := r.GetTable(context.Background(), tn)
-			require.NoError(t, err)
-
-			sch, err := tbl.GetSchema(context.Background())
-			require.NoError(t, err)
-
-			for _, tag := range sch.GetAllCols().Tags {
-				_, found := allTags[tag]
-				require.False(t, found)
-				allTags[tag] = struct{}{}
-			}
-		}
 	}
 }

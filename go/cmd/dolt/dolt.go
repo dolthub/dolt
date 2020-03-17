@@ -148,7 +148,7 @@ func runMain() int {
 	dEnv := env.Load(context.TODO(), env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, doltdb.DoltVersion)
 
 	if dEnv.DBLoadError == nil {
-		dEnv.DBLoadError = rebase.MaybeMigrateUniqueTags(context.Background(), dEnv.DoltDB)
+		dEnv.DBLoadError = rebase.MaybeMigrateUniqueTags(context.Background(), dEnv)
 	}
 
 	root, err := env.GetCurrentUserHomeDir()

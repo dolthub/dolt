@@ -21,9 +21,9 @@ teardown() {
         [[ "$output" =~ "newcolumn" ]] || false
         run dolt schema show
         [ "$status" -eq "0" ]
-        [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'" ]] || false
-        [[ "$output" =~ "\`a\` LONGTEXT COMMENT 'tag:694'" ]] || false
-        [[ "$output" =~ "\`b\` DATETIME COMMENT 'tag:2902'" ]] || false
+        [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT " ]] || false
+        [[ "$output" =~ "\`a\` LONGTEXT COMMENT " ]] || false
+        [[ "$output" =~ "\`b\` DATETIME COMMENT " ]] || false
         run dolt sql -q "select * from abc order by pk asc"
         [ "$status" -eq "0" ]
         [[ "${lines[3]}" =~ " 1 " ]] || false
@@ -32,9 +32,9 @@ teardown() {
         dolt checkout conflict
         run dolt schema show
         [ "$status" -eq "0" ]
-        [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'" ]] || false
-        [[ "$output" =~ "\`a\` LONGTEXT COMMENT 'tag:694'" ]] || false
-        [[ "$output" =~ "\`b\` DATETIME COMMENT 'tag:2902'" ]] || false
+        [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT " ]] || false
+        [[ "$output" =~ "\`a\` LONGTEXT COMMENT " ]] || false
+        [[ "$output" =~ "\`b\` DATETIME COMMENT " ]] || false
         run dolt sql -q "select * from abc order by pk asc"
         [ "$status" -eq "0" ]
         [[ "${lines[3]}" =~ " 1 " ]] || false
@@ -46,10 +46,10 @@ teardown() {
         dolt checkout newcolumn
         run dolt schema show
         [ "$status" -eq "0" ]
-        [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'" ]] || false
-        [[ "$output" =~ "\`a\` LONGTEXT COMMENT 'tag:694'" ]] || false
-        [[ "$output" =~ "\`b\` DATETIME COMMENT 'tag:2902'" ]] || false
-        [[ "$output" =~ "\`c\` BIGINT UNSIGNED COMMENT 'tag:4657'" ]] || false
+        [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT " ]] || false
+        [[ "$output" =~ "\`a\` LONGTEXT COMMENT " ]] || false
+        [[ "$output" =~ "\`b\` DATETIME COMMENT " ]] || false
+        [[ "$output" =~ "\`c\` BIGINT UNSIGNED COMMENT " ]] || false
         run dolt sql -q "select * from abc order by pk asc"
         [ "$status" -eq "0" ]
         [[ "${lines[3]}" =~ " 1 " ]] || false
