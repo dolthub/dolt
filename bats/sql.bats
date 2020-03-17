@@ -97,6 +97,20 @@ teardown() {
     [ $status -eq 0 ]
     [[ "$output" =~ "4" ]] || false
 
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of 'HEAD~' order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "1,10" ]] || false
+    [[ "$output" =~ "2,20" ]] || false
+    [[ "$output" =~ "3,30" ]] || false
+
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of 'new_branch^' order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "1,10" ]] || false
+    [[ "$output" =~ "2,20" ]] || false
+    [[ "$output" =~ "3,30" ]] || false
+    
     dolt checkout master
     run dolt sql -r csv -q "select pk,c1 from one_pk as of 'new_branch' order by c1"
     [ $status -eq 0 ]
@@ -111,7 +125,7 @@ teardown() {
     [[ "$output" =~ "1,11" ]] || false
     [[ "$output" =~ "2,21" ]] || false
     [[ "$output" =~ "3,31" ]] || false
-
+    
     # TODO: tests of date queries, when supported
 }
 
