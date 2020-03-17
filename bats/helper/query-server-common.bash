@@ -1,6 +1,5 @@
 
 wait_for_connection() {
-    PORT=python3
     PYTEST_DIR=`batshelper`
     python3 -c "
 import os
