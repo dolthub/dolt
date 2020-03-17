@@ -1,3 +1,17 @@
+SERVER_REQS_INSTALLED="FALSE"
+SERVER_PID=""
+
+set_server_reqs_installed() {
+    SERVER_REQS_INSTALLED=$(python3 -c "
+requirements_installed = True
+try:
+    import mysql.connector
+except:
+    requirements_installed = False
+
+print(str(requirements_installed).upper())
+")
+}
 
 wait_for_connection() {
     PYTEST_DIR="$BATS_TEST_DIRNAME/helper"
@@ -17,12 +31,13 @@ wait_for_connection(port=int(port_str), timeout_ms=int(timeout_ms))
 start_sql_server() {
     let PORT="$$ % (65536-1024) + 1024"
     dolt sql-server --port=$PORT &
+    SERVER_PID=$!
     wait_for_connection $PORT 5000
 }
 
 stop_sql_server() {
     let PORT="$$ % (65536-1024) + 1024"
-    pkill -f "dolt sql-server --port=$PORT"
+    kill $SERVER_PID
 }
 
 # server_query connects to a running mysql server, executes a query and compares the results against what is expected.
