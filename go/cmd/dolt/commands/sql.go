@@ -161,18 +161,20 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
 
-		defer rowIter.Close()
-		err = se.prettyPrintResults(ctx, se.ddb.ValueReadWriter().Format(), sqlSch, rowIter)
-		if err != nil {
-			cli.Println(color.RedString(err.Error()))
-		}
+		if rowIter != nil {
+			defer rowIter.Close()
+			err = se.prettyPrintResults(ctx, se.ddb.ValueReadWriter().Format(), sqlSch, rowIter)
+			if err != nil {
+				cli.Println(color.RedString(err.Error()))
+			}
 
-		if se.sdb.Root() != origRoot {
-			return HandleVErrAndExitCode(UpdateWorkingWithVErr(dEnv, se.sdb.Root()), usage)
-		}
+			if se.sdb.Root() != origRoot {
+				return HandleVErrAndExitCode(UpdateWorkingWithVErr(dEnv, se.sdb.Root()), usage)
+			}
 
-		if saveName != "" {
-			return HandleVErrAndExitCode(cmd.saveQuery(context.Background(), se.sdb.Root(), dEnv, query, saveName, saveMessage), usage)
+			if saveName != "" {
+				return HandleVErrAndExitCode(cmd.saveQuery(context.Background(), se.sdb.Root(), dEnv, query, saveName, saveMessage), usage)
+			}
 		}
 
 		return 0
@@ -400,7 +402,7 @@ func runShell(ctx context.Context, se *sqlEngine, dEnv *env.DoltEnv) error {
 
 		if sqlSch, rowIter, err := processQuery(ctx, query, se); err != nil {
 			shell.Println(color.RedString(err.Error()))
-		} else {
+		} else if rowIter != nil {
 			defer rowIter.Close()
 			err = se.prettyPrintResults(ctx, se.ddb.ValueReadWriter().Format(), sqlSch, rowIter)
 			if err != nil {
@@ -536,13 +538,14 @@ func prepend(s string, ss []string) []string {
 }
 
 // Processes a single query. The Root of the sqlEngine will be updated if necessary.
+// Returns the schema and the row iterator for the results, which may be nil, and an error if one occurs.
 func processQuery(ctx context.Context, query string, se *sqlEngine) (sql.Schema, sql.RowIter, error) {
 	sqlStatement, err := sqlparser.Parse(query)
 	if err == sqlparser.ErrEmpty {
 		// silently skip empty statements
 		return nil, nil, nil
 	} else if err != nil {
-		return nil, nil, fmt.Errorf("Error parsing SQL: %v.", err.Error())
+		return nil, nil, fmt.Errorf("error parsing SQL: %v", err.Error())
 	}
 
 	switch s := sqlStatement.(type) {
