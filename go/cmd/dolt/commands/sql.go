@@ -161,7 +161,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	// run a single command and exit
 	if query, ok := apr.GetValue(queryFlag); !forceBatchMode && ok {
 
-		sqlSch, rowIter, err := processQuery(ctx, query, se);
+		sqlSch, rowIter, err := processQuery(ctx, query, se)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}

@@ -60,8 +60,8 @@ func TestSqlBatchMode(t *testing.T) {
 	}{
 		{
 			"create table test (a int primary key);" +
-					"insert into test values (1),(2),(3);" +
-					"select * from test;",
+				"insert into test values (1),(2),(3);" +
+				"select * from test;",
 			0,
 		},
 	}
