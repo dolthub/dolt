@@ -155,16 +155,27 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
-		if err := processQuery(ctx, query, se); err != nil {
+
+		sqlSch, rowIter, err := processQuery(ctx, query, se);
+		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		} else if se.sdb.Root() != origRoot {
-			return HandleVErrAndExitCode(UpdateWorkingWithVErr(dEnv, se.sdb.Root()), usage)
-		} else {
-			if saveName != "" {
-				return HandleVErrAndExitCode(cmd.saveQuery(context.Background(), se.sdb.Root(), dEnv, query, saveName, saveMessage), usage)
-			}
-			return 0
 		}
+
+		defer rowIter.Close()
+		err = se.prettyPrintResults(ctx, se.ddb.ValueReadWriter().Format(), sqlSch, rowIter)
+		if err != nil {
+			cli.Println(color.RedString(err.Error()))
+		}
+
+		if se.sdb.Root() != origRoot {
+			return HandleVErrAndExitCode(UpdateWorkingWithVErr(dEnv, se.sdb.Root()), usage)
+		}
+
+		if saveName != "" {
+			return HandleVErrAndExitCode(cmd.saveQuery(context.Background(), se.sdb.Root(), dEnv, query, saveName, saveMessage), usage)
+		}
+
+		return 0
 	}
 
 	// Run in either batch mode for piped input, or shell mode for interactive
@@ -387,8 +398,14 @@ func runShell(ctx context.Context, se *sqlEngine, dEnv *env.DoltEnv) error {
 			return
 		}
 
-		if err := processQuery(ctx, query, se); err != nil {
+		if sqlSch, rowIter, err := processQuery(ctx, query, se); err != nil {
 			shell.Println(color.RedString(err.Error()))
+		} else {
+			defer rowIter.Close()
+			err = se.prettyPrintResults(ctx, se.ddb.ValueReadWriter().Format(), sqlSch, rowIter)
+			if err != nil {
+				shell.Println(color.RedString(err.Error()))
+			}
 		}
 
 		// TODO: there's a bug in the readline library when editing multi-line history entries.
@@ -519,58 +536,51 @@ func prepend(s string, ss []string) []string {
 }
 
 // Processes a single query. The Root of the sqlEngine will be updated if necessary.
-func processQuery(ctx context.Context, query string, se *sqlEngine) error {
+func processQuery(ctx context.Context, query string, se *sqlEngine) (sql.Schema, sql.RowIter, error) {
 	sqlStatement, err := sqlparser.Parse(query)
 	if err == sqlparser.ErrEmpty {
 		// silently skip empty statements
-		return nil
+		return nil, nil, nil
 	} else if err != nil {
-		return fmt.Errorf("Error parsing SQL: %v.", err.Error())
+		return nil, nil, fmt.Errorf("Error parsing SQL: %v.", err.Error())
 	}
 
 	switch s := sqlStatement.(type) {
 	case *sqlparser.Select, *sqlparser.Insert, *sqlparser.Update, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union:
-		sqlSch, rowIter, err := se.query(ctx, query)
-		if err == nil {
-			defer rowIter.Close()
-			err = se.prettyPrintResults(ctx, se.ddb.ValueReadWriter().Format(), sqlSch, rowIter)
-		}
-		return err
+		return se.query(ctx, query)
 	case *sqlparser.Delete:
 		ok := se.checkThenDeleteAllRows(ctx, s)
 		if ok {
-			return nil
+			return nil, nil, err
 		}
-		sqlSch, rowIter, err := se.query(ctx, query)
-		if err == nil {
-			defer rowIter.Close()
-			err = se.prettyPrintResults(ctx, se.ddb.Format(), sqlSch, rowIter)
-		}
-		return err
+		return se.query(ctx, query)
 	case *sqlparser.DDL:
 		_, err := sqlparser.ParseStrictDDL(query)
 		if err != nil {
-			return fmt.Errorf("Error parsing DDL: %v.", err.Error())
+			return nil, nil, fmt.Errorf("Error parsing DDL: %v.", err.Error())
 		}
 		return se.ddl(ctx, s, query)
 	default:
-		return fmt.Errorf("Unsupported SQL statement: '%v'.", query)
+		return nil, nil, fmt.Errorf("Unsupported SQL statement: '%v'.", query)
 	}
 }
 
 type stats struct {
 	numRowsInserted  int
 	numRowsUpdated   int
+	numRowsDeleted   int
 	numErrorsIgnored int
 }
 
-var batchEditStats stats
+var batchEditStats = &stats{}
 var displayStrLen int
 
 const maxBatchSize = 200000
 const updateInterval = 1000
 
-
+func (s *stats) numUpdates() int {
+	return s.numRowsUpdated + s.numRowsDeleted + s.numRowsInserted
+}
 
 // Processes a single query in batch mode. The Root of the sqlEngine may or may not be changed.
 func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
@@ -588,23 +598,23 @@ func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 	case *sqlparser.Insert:
 		_, rowIter, err := se.query(ctx, query)
 		if err != nil {
-			return fmt.Errorf("Error inserting rows: %v", err.Error())
+			return fmt.Errorf("error inserting rows: %v", err.Error())
 		}
 		defer rowIter.Close()
 
-		err = mergeInsertResultIntoStats(rowIter, &batchEditStats)
+		err = mergeInsertResultIntoStats(sqlStatement, rowIter, batchEditStats)
 		if err != nil {
-			return fmt.Errorf("Error inserting rows: %v", err.Error())
+			return fmt.Errorf("error inserting rows: %v", err.Error())
 		}
 
-		if batchEditStats.numRowsInserted%maxBatchSize == 0 {
+		if batchEditStats.numUpdates()%maxBatchSize == 0 {
 			err := se.sdb.Flush(ctx)
 			if err != nil {
 				return err
 			}
 		}
 
-		if batchEditStats.numRowsInserted%updateInterval == 0 {
+		if batchEditStats.numUpdates()%updateInterval == 0 {
 			updateBatchInsertOutput()
 		}
 
@@ -617,9 +627,24 @@ func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 			return err
 		}
 
-		err = processQuery(ctx, query, se)
+		sqlSch, rowIter, err := processQuery(ctx, query, se)
 		if err != nil {
 			return err
+		}
+
+		err = mergeInsertResultIntoStats(sqlStatement, rowIter, batchEditStats)
+		if err != nil {
+			return fmt.Errorf("error executing statement: %v", err.Error())
+		}
+
+		// Some statement types should print results, even in batch mode.
+		switch sqlStatement.(type) {
+		case *sqlparser.Select, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union:
+			defer rowIter.Close()
+			err = se.prettyPrintResults(ctx, se.ddb.ValueReadWriter().Format(), sqlSch, rowIter)
+			if err != nil {
+				return err
+			}
 		}
 
 		// And flush again afterwards, to make sure any following insert statements have the latest data
@@ -628,17 +653,22 @@ func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 			return err
 		}
 
+		if batchEditStats.numRowsInserted%updateInterval == 0 {
+			updateBatchInsertOutput()
+		}
+
 		return nil
 	}
 }
 
 func updateBatchInsertOutput() {
-	displayStr := fmt.Sprintf("Rows inserted: %d", batchEditStats.numRowsInserted)
+	displayStr := fmt.Sprintf("Rows inserted: %d Rows updated: %d Rows deleted: %d",
+		batchEditStats.numRowsInserted, batchEditStats.numRowsUpdated, batchEditStats.numRowsDeleted)
 	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
 }
 
 // Updates the batch insert stats with the results of an insert operation.
-func mergeInsertResultIntoStats(rowIter sql.RowIter, s *stats) error {
+func mergeInsertResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s *stats) error {
 	for {
 		row, err := rowIter.Next()
 		if err == io.EOF {
@@ -647,7 +677,14 @@ func mergeInsertResultIntoStats(rowIter sql.RowIter, s *stats) error {
 			return err
 		} else {
 			updated := row[0].(int64)
-			s.numRowsInserted += int(updated)
+			switch statement.(type) {
+			case *sqlparser.Insert:
+				s.numRowsInserted += int(updated)
+			case *sqlparser.Delete:
+				s.numRowsDeleted += int(updated)
+			case *sqlparser.Update:
+				s.numRowsUpdated += int(updated)
+			}
 		}
 	}
 }
@@ -837,15 +874,15 @@ func (se *sqlEngine) checkThenDeleteAllRows(ctx context.Context, s *sqlparser.De
 
 // Executes a SQL DDL statement (create, update, etc.). Updates the new root value in
 // the sqlEngine if necessary.
-func (se *sqlEngine) ddl(ctx context.Context, ddl *sqlparser.DDL, query string) error {
+func (se *sqlEngine) ddl(ctx context.Context, ddl *sqlparser.DDL, query string) (sql.Schema, sql.RowIter, error) {
 	switch ddl.Action {
 	case sqlparser.CreateStr, sqlparser.DropStr, sqlparser.AlterStr, sqlparser.RenameStr:
 		_, ri, err := se.query(ctx, query)
 		if err == nil {
 			ri.Close()
 		}
-		return err
+		return nil, nil, err
 	default:
-		return fmt.Errorf("Unhandled DDL action %v in query %v", ddl.Action, query)
+		return nil, nil, fmt.Errorf("Unhandled DDL action %v in query %v", ddl.Action, query)
 	}
 }
