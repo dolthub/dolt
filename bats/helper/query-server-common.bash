@@ -32,7 +32,7 @@ stop_sql_server() {
 #      be passed.
 server_query() {
     let PORT="$$ % (65536-1024) + 1024"
-    PYTEST_DIR=`batshelper`
+    PYTEST_DIR="$BATS_TEST_DIRNAME/helper"
     python3 -c "
 import os
 import sys
