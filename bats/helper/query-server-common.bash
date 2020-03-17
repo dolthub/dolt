@@ -1,6 +1,6 @@
 
 wait_for_connection() {
-    PYTEST_DIR=`batshelper`
+    PYTEST_DIR="$BATS_TEST_DIRNAME/helper"
     python3 -c "
 import os
 import sys
