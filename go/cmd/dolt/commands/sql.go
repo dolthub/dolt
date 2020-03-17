@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/abiosoft/readline"
 	"github.com/fatih/color"
@@ -156,7 +157,8 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
 		if err := processQuery(ctx, query, se); err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+			verr := FormatProcessQueryError(err)
+			return HandleVErrAndExitCode(verr, usage)
 		} else if se.sdb.Root() != origRoot {
 			return HandleVErrAndExitCode(UpdateWorkingWithVErr(dEnv, se.sdb.Root()), usage)
 		} else {
@@ -200,6 +202,47 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	}
 
 	return 0
+}
+
+func FormatProcessQueryError(err error) errhand.VerboseError {
+	const (
+		maxStatementLen = 128
+		maxPosWhenTruncated = 64
+	)
+
+	verrBuilder := errhand.BuildDError("Error parsing SQL")
+
+	if se, ok := vterrors.AsSyntaxError(err); ok {
+		verrBuilder.AddDetails("Error at position %d", se.Position)
+
+		statement := se.Statement
+		position := se.Position
+		if len(se.Statement) > maxStatementLen {
+			if position > maxPosWhenTruncated {
+				statement = statement[position-maxPosWhenTruncated:]
+				position = maxPosWhenTruncated
+			}
+
+			if len(statement) > maxStatementLen {
+				statement = statement[:maxStatementLen]
+			}
+		}
+
+		verrBuilder.AddDetails(statement)
+
+		marker := make([]rune, position+1)
+		for i := 0; i < position; i++ {
+			marker[i] = ' '
+		}
+
+		marker[position] = '^'
+		verrBuilder.AddDetails(string(marker))
+	} else {
+		verrBuilder.AddCause(err)
+	}
+
+	verr := verrBuilder.Build()
+	return verr
 }
 
 func getFormat(format string) (resultFormat, errhand.VerboseError) {
@@ -525,7 +568,7 @@ func processQuery(ctx context.Context, query string, se *sqlEngine) error {
 		// silently skip empty statements
 		return nil
 	} else if err != nil {
-		return fmt.Errorf("Error parsing SQL: %v.", err.Error())
+		return err
 	}
 
 	switch s := sqlStatement.(type) {
