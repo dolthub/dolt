@@ -803,6 +803,42 @@ var AsOfTests = []SelectTest{
 		},
 		ExpectedSchema: ReaddAgeAt4HistSch,
 	},
+	{
+		Name:  "select * from HEAD~",
+		Query: "select * from test_table as of 'HEAD~'",
+		ExpectedRows: []row.Row{
+			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St")})),
+			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln")})),
+			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct")})),
+			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave")})),
+			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele")})),
+		},
+		ExpectedSchema: ReaddAgeAt4HistSch,
+	},
+	{
+		Name:  "select * from HEAD^",
+		Query: "select * from test_table as of 'HEAD^'",
+		ExpectedRows: []row.Row{
+			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St")})),
+			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln")})),
+			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct")})),
+			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave")})),
+			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele")})),
+		},
+		ExpectedSchema: ReaddAgeAt4HistSch,
+	},
+	{
+		Name:  "select * from master^",
+		Query: "select * from test_table as of 'master^'",
+		ExpectedRows: []row.Row{
+			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St")})),
+			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln")})),
+			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct")})),
+			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave")})),
+			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele")})),
+		},
+		ExpectedSchema: ReaddAgeAt4HistSch,
+	},
 }
 
 // SQL is supposed to be case insensitive. These are tests of that promise.

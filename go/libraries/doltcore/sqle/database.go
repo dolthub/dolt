@@ -138,13 +138,13 @@ func (db *Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, 
 	return db.getTable(ctx, root, tableName)
 }
 
-func (db *Database) rootAsOf(ctx *sql.Context, time interface{}) (*doltdb.RootValue, error) {
-	commit, ok := time.(string)
+func (db *Database) rootAsOf(ctx *sql.Context, asOf interface{}) (*doltdb.RootValue, error) {
+	commitRef, ok := asOf.(string)
 	if !ok {
-		panic("expected commit string")
+		panic("expected commit ref string")
 	}
 
-	cs, err := doltdb.NewCommitSpec(commit, "")
+	cs, err := doltdb.NewCommitSpec(commitRef, db.rsr.CWBHeadRef().String())
 	if err != nil {
 		return nil, err
 	}
