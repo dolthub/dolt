@@ -56,6 +56,79 @@ teardown() {
     [ "${#lines[@]}" -eq 8 ]
 }
 
+@test "sql AS OF queries" {
+    dolt add .
+    dolt commit -m "Initial master commit"
+
+    master_commit=`dolt log | head -n1 | cut -d' ' -f2`
+    dolt sql -q "update one_pk set c1 = c1 + 1"
+    dolt sql -q "drop table two_pk"
+    dolt checkout -b new_branch
+    dolt add .
+    dolt commit -m "Updated a table, dropped a table"
+    new_commit=`dolt log | head -n1 | cut -d' ' -f2`
+    
+    run dolt sql -r csv -q "select pk,c1 from one_pk order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,1" ]] || false
+    [[ "$output" =~ "1,11" ]] || false
+    [[ "$output" =~ "2,21" ]] || false
+    [[ "$output" =~ "3,31" ]] || false
+    
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of 'master' order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "1,10" ]] || false
+    [[ "$output" =~ "2,20" ]] || false
+    [[ "$output" =~ "3,30" ]] || false
+
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of '$master_commit' order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "1,10" ]] || false
+    [[ "$output" =~ "2,20" ]] || false
+    [[ "$output" =~ "3,30" ]] || false
+    
+    run dolt sql -r csv -q "select count(*) from two_pk as of 'master'"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "4" ]] || false
+
+    run dolt sql -r csv -q "select count(*) from two_pk as of '$master_commit'"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "4" ]] || false
+
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of 'HEAD~' order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "1,10" ]] || false
+    [[ "$output" =~ "2,20" ]] || false
+    [[ "$output" =~ "3,30" ]] || false
+
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of 'new_branch^' order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "1,10" ]] || false
+    [[ "$output" =~ "2,20" ]] || false
+    [[ "$output" =~ "3,30" ]] || false
+    
+    dolt checkout master
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of 'new_branch' order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,1" ]] || false
+    [[ "$output" =~ "1,11" ]] || false
+    [[ "$output" =~ "2,21" ]] || false
+    [[ "$output" =~ "3,31" ]] || false
+
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of '$new_commit' order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,1" ]] || false
+    [[ "$output" =~ "1,11" ]] || false
+    [[ "$output" =~ "2,21" ]] || false
+    [[ "$output" =~ "3,31" ]] || false
+    
+    # TODO: tests of date queries, when supported
+}
+
 @test "sql ambiguous column name" {
     run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where c1=0"
     [ "$status" -eq 1 ]

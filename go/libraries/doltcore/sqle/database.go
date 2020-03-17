@@ -49,10 +49,11 @@ type Database struct {
 	ddb       *doltdb.DoltDB
 	rsr       env.RepoStateReader
 	batchMode batchMode
-	tables    map[string]sql.Table
+	tables    map[*doltdb.RootValue]map[string]sql.Table
 }
 
 var _ sql.Database = (*Database)(nil)
+var _ sql.VersionedDatabase = (*Database)(nil)
 var _ sql.TableDropper = (*Database)(nil)
 var _ sql.TableCreator = (*Database)(nil)
 var _ sql.TableRenamer = (*Database)(nil)
@@ -65,8 +66,15 @@ func NewDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB, rsr en
 		ddb:       ddb,
 		rsr:       rsr,
 		batchMode: single,
-		tables:    make(map[string]sql.Table),
+		tables:    initTableMap(root),
 	}
+}
+
+func initTableMap(root *doltdb.RootValue) map[*doltdb.RootValue]map[string]sql.Table {
+	tablesForRoot := make(map[string]sql.Table)
+	tables := make(map[*doltdb.RootValue]map[string]sql.Table)
+	tables[root] = tablesForRoot
+	return tables
 }
 
 // NewBatchedDatabase returns a new dolt database executing in batch insert mode. Integrators must call Flush() to
@@ -78,7 +86,7 @@ func NewBatchedDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB,
 		ddb:       ddb,
 		rsr:       rsr,
 		batchMode: batched,
-		tables:    make(map[string]sql.Table),
+		tables:    initTableMap(root),
 	}
 }
 
@@ -89,7 +97,7 @@ func (db *Database) Name() string {
 
 // GetTableInsensitive is used when resolving tables in queries. It returns a best-effort case-insensitive match for
 // the table name given.
-func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sql.Table, bool, error) {
+func (db *Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Table, bool, error) {
 	lwrName := strings.ToLower(tblName)
 	if strings.HasPrefix(lwrName, DoltDiffTablePrefix) {
 		tblName = tblName[len(DoltDiffTablePrefix):]
@@ -117,56 +125,114 @@ func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sq
 		return NewLogTable(db.ddb, db.rsr), true, nil
 	}
 
-	tableNames, err := db.GetAllTableNames(ctx)
+	return db.getTable(ctx, db.root, tblName)
+}
 
+// GetTableInsensitiveAsOf implements sql.VersionedDatabase
+func (db *Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, time interface{}) (sql.Table, bool, error) {
+	root, err := db.rootAsOf(ctx, time)
 	if err != nil {
 		return nil, false, err
 	}
 
-	exactName, ok := sql.GetTableNameInsensitive(tblName, tableNames)
+	return db.getTable(ctx, root, tableName)
+}
 
+func (db *Database) rootAsOf(ctx *sql.Context, asOf interface{}) (*doltdb.RootValue, error) {
+	commitRef, ok := asOf.(string)
+	if !ok {
+		panic("expected commit ref string")
+	}
+
+	cs, err := doltdb.NewCommitSpec(commitRef, db.rsr.CWBHeadRef().String())
+	if err != nil {
+		return nil, err
+	}
+
+	cm, err := db.ddb.Resolve(ctx, cs)
+	if err != nil {
+		return nil, err
+	}
+
+	root, err := cm.GetRootValue()
+	if err != nil {
+		return nil, err
+	}
+
+	return root, nil
+}
+
+// GetTableNamesAsOf implements sql.VersionedDatabase
+func (db *Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]string, error) {
+	root, err := db.rootAsOf(ctx, time)
+	if err != nil {
+		return nil, err
+	}
+
+	tblNames, err := root.GetTableNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return filterDoltInternalTables(tblNames), nil
+}
+
+// getTable gets the table with the exact name given at the root value given. The database caches tables for all root
+// values to avoid doing schema lookups on every table lookup, which are expensive.
+func (db *Database) getTable(ctx context.Context, root *doltdb.RootValue, tableName string) (sql.Table, bool, error) {
+	if tablesForRoot, ok := db.tables[root]; ok {
+		if table, ok := tablesForRoot[tableName]; ok {
+			return table, true, nil
+		}
+	}
+
+	tableNames, err := getAllTableNames(ctx, root)
+	if err != nil {
+		return nil, true, err
+	}
+
+	tableName, ok := sql.GetTableNameInsensitive(tableName, tableNames)
 	if !ok {
 		return nil, false, nil
 	}
 
-	if table, ok := db.tables[exactName]; ok {
-		return table, true, nil
-	}
-
-	tbl, ok, err := db.root.GetTable(ctx, exactName)
-
+	tbl, ok, err := root.GetTable(ctx, tableName)
 	if err != nil {
 		return nil, false, err
 	} else if !ok {
-		panic("Name '" + exactName + "' had already been verified... This is a bug")
+		// Should be impossible
+		return nil, false, doltdb.ErrTableNotFound
 	}
 
 	sch, err := tbl.GetSchema(ctx)
-
 	if err != nil {
 		return nil, false, err
 	}
 
-	var toReturn sql.Table
+	var table sql.Table
 
-	readonlyTable := DoltTable{name: exactName, table: tbl, sch: sch, db: db}
-	if doltdb.IsSystemTable(exactName) {
-		toReturn = &readonlyTable
-	} else if doltdb.HasDoltPrefix(exactName) {
-		toReturn = &WritableDoltTable{DoltTable: readonlyTable}
+	readonlyTable := DoltTable{name: tableName, table: tbl, sch: sch, db: db}
+	if doltdb.IsSystemTable(tableName) {
+		table = &readonlyTable
+	} else if doltdb.HasDoltPrefix(tableName) {
+		table = &WritableDoltTable{DoltTable: readonlyTable}
 	} else {
-		toReturn = &AlterableDoltTable{WritableDoltTable{DoltTable: readonlyTable}}
+		table = &AlterableDoltTable{WritableDoltTable{DoltTable: readonlyTable}}
 	}
 
-	db.tables[exactName] = toReturn
-	return toReturn, true, nil
+	if db.tables[root] == nil {
+		db.tables[root] = make(map[string]sql.Table)
+	}
+
+	db.tables[root][tableName] = table
+
+	return table, true, nil
 }
 
 // GetTableNames returns the names of all user tables. System tables in user space (e.g. dolt_docs, dolt_query_catalog)
 // are filtered out. This method is used for queries that examine the schema of the database, e.g. show tables. Table
 // name resolution in queries is handled by GetTableInsensitive. Use GetAllTableNames for an unfiltered list of all
 // tables in user space.
-func (db *Database) GetTableNames(ctx context.Context) ([]string, error) {
+func (db *Database) GetTableNames(ctx *sql.Context) ([]string, error) {
 	tblNames, err := db.GetAllTableNames(ctx)
 	if err != nil {
 		return nil, err
@@ -176,8 +242,12 @@ func (db *Database) GetTableNames(ctx context.Context) ([]string, error) {
 
 // GetAllTableNames returns all user-space tables, including system tables in user space
 // (e.g. dolt_docs, dolt_query_catalog).
-func (db *Database) GetAllTableNames(ctx context.Context) ([]string, error) {
-	return db.root.GetTableNames(ctx)
+func (db *Database) GetAllTableNames(ctx *sql.Context) ([]string, error) {
+	return getAllTableNames(ctx, db.root)
+}
+
+func getAllTableNames(ctx context.Context, root *doltdb.RootValue) ([]string, error) {
+	return root.GetTableNames(ctx)
 }
 
 func filterDoltInternalTables(tblNames []string) []string {
@@ -222,7 +292,7 @@ func (db *Database) DropTable(ctx *sql.Context, tableName string) error {
 		return err
 	}
 
-	delete(db.tables, tableName)
+	delete(db.tables[db.root], tableName)
 
 	db.SetRoot(newRoot)
 
@@ -284,7 +354,7 @@ func (db *Database) RenameTable(ctx *sql.Context, oldName, newName string) error
 		return err
 	}
 
-	delete(db.tables, oldName)
+	delete(db.tables[db.root], oldName)
 	db.SetRoot(root)
 
 	return nil
@@ -292,7 +362,7 @@ func (db *Database) RenameTable(ctx *sql.Context, oldName, newName string) error
 
 // Flush flushes the current batch of outstanding changes and returns any errors.
 func (db *Database) Flush(ctx context.Context) error {
-	for name, table := range db.tables {
+	for name, table := range db.tables[db.root] {
 		if writable, ok := table.(*WritableDoltTable); ok {
 			if err := writable.flushBatchedEdits(ctx); err != nil {
 				return err
@@ -302,13 +372,13 @@ func (db *Database) Flush(ctx context.Context) error {
 				return err
 			}
 		}
-		delete(db.tables, name)
+		delete(db.tables[db.root], name)
 	}
 	return nil
 }
 
 // CreateView implements sql.ViewCreator. Persists the view in the dolt database, so
-// it can exist in a sql session later. Returns sql.ErrExistingView a view
+// it can exist in a sql session later. Returns sql.ErrExistingView if a view
 // with that name already exists.
 func (db *Database) CreateView(ctx *sql.Context, name string, definition string) error {
 	tbl, err := GetOrCreateDoltSchemasTable(ctx, db)
