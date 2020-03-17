@@ -1,3 +1,4 @@
+
 pipeline {
     agent none
     stages {
@@ -75,7 +76,7 @@ pipeline {
                         dir ("bats/") {
                             bat "dolt config --global --add user.name \"Liquidata Jenkins\""
                             bat "dolt config --global --add user.email \"jenkins@liquidata.co\""
-                            bat "C:\\wsl.exe bats `pwd`"
+                            bat "C:\\Windows\\System32\\wsl.exe bats `pwd`"
                         }
                         dir ("./") {
                             bat(returnStatus: true, script: "setLocal EnableDelayedExpansion && pushd %LOCALAPPDATA%\\Temp && del /q/f/s .\\* >nul 2>&1 && rmdir /s/q . >nul 2>&1 && popd")
