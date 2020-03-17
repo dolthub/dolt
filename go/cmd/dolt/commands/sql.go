@@ -167,14 +167,14 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			if err != nil {
 				cli.Println(color.RedString(err.Error()))
 			}
+		}
 
-			if se.sdb.Root() != origRoot {
-				return HandleVErrAndExitCode(UpdateWorkingWithVErr(dEnv, se.sdb.Root()), usage)
-			}
+		if se.sdb.Root() != origRoot {
+			return HandleVErrAndExitCode(UpdateWorkingWithVErr(dEnv, se.sdb.Root()), usage)
+		}
 
-			if saveName != "" {
-				return HandleVErrAndExitCode(cmd.saveQuery(context.Background(), se.sdb.Root(), dEnv, query, saveName, saveMessage), usage)
-			}
+		if saveName != "" {
+			return HandleVErrAndExitCode(cmd.saveQuery(context.Background(), se.sdb.Root(), dEnv, query, saveName, saveMessage), usage)
 		}
 
 		return 0
@@ -545,7 +545,7 @@ func processQuery(ctx context.Context, query string, se *sqlEngine) (sql.Schema,
 		// silently skip empty statements
 		return nil, nil, nil
 	} else if err != nil {
-		return nil, nil, fmt.Errorf("error parsing SQL: %v", err.Error())
+		return nil, nil, fmt.Errorf("Error parsing SQL: %v", err.Error())
 	}
 
 	switch s := sqlStatement.(type) {
@@ -598,13 +598,15 @@ func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 	if canProcessAsBatchInsert(sqlStatement) {
 		_, rowIter, err := se.query(ctx, query)
 		if err != nil {
-			return fmt.Errorf("error inserting rows: %v", err.Error())
+			return fmt.Errorf("Error inserting rows: %v", err.Error())
 		}
 
-		defer rowIter.Close()
-		err = mergeResultIntoStats(sqlStatement, rowIter, batchEditStats)
-		if err != nil {
-			return fmt.Errorf("error inserting rows: %v", err.Error())
+		if rowIter != nil {
+			defer rowIter.Close()
+			err = mergeResultIntoStats(sqlStatement, rowIter, batchEditStats)
+			if err != nil {
+				return fmt.Errorf("Error inserting rows: %v", err.Error())
+			}
 		}
 
 		if batchEditStats.numUpdates()%maxBatchSize == 0 {
@@ -633,18 +635,20 @@ func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 		return err
 	}
 
-	err = mergeResultIntoStats(sqlStatement, rowIter, batchEditStats)
-	if err != nil {
-		return fmt.Errorf("error executing statement: %v", err.Error())
-	}
-
-	// Some statement types should print results, even in batch mode.
-	switch sqlStatement.(type) {
-	case *sqlparser.Select, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union:
-		defer rowIter.Close()
-		err = se.prettyPrintResults(ctx, se.ddb.ValueReadWriter().Format(), sqlSch, rowIter)
+	if rowIter != nil {
+		err = mergeResultIntoStats(sqlStatement, rowIter, batchEditStats)
 		if err != nil {
-			return err
+			return fmt.Errorf("error executing statement: %v", err.Error())
+		}
+
+		// Some statement types should print results, even in batch mode.
+		switch sqlStatement.(type) {
+		case *sqlparser.Select, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union:
+			defer rowIter.Close()
+			err = se.prettyPrintResults(ctx, se.ddb.ValueReadWriter().Format(), sqlSch, rowIter)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -691,14 +695,13 @@ func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s 
 		} else if err != nil {
 			return err
 		} else {
-			updated := row[0].(int64)
 			switch statement.(type) {
 			case *sqlparser.Insert:
-				s.numRowsInserted += int(updated)
+				s.numRowsInserted += int(row[0].(int64))
 			case *sqlparser.Delete:
-				s.numRowsDeleted += int(updated)
+				s.numRowsDeleted += int(row[0].(int64))
 			case *sqlparser.Update:
-				s.numRowsUpdated += int(updated)
+				s.numRowsUpdated += int(row[0].(int64))
 			}
 		}
 	}
