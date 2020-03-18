@@ -540,6 +540,15 @@ teardown() {
     [[ ! "$output" =~ "panic: " ]] || false
 }
 
+@test "sql delete all rows in table" {
+    run dolt sql <<SQL
+DELETE FROM one_pk;
+SELECT count(*) FROM one_pk;
+SQL
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0" ]] || false
+}
+
 @test "sql shell works after failing query" {
     skiponwindows "Need to install expect and make this script work on windows."
     $BATS_TEST_DIRNAME/sql-works-after-failing-query.expect
