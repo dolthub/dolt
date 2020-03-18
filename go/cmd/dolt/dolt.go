@@ -39,6 +39,10 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
+const (
+	Version = "0.15.0"
+)
+
 var dumpDocsCommand = &commands.DumpDocsCmd{}
 var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Command{
 	commands.InitCmd{},
@@ -61,7 +65,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.CloneCmd{},
 	credcmds.Commands,
 	commands.LoginCmd{},
-	commands.VersionCmd{VersionStr: doltdb.DoltVersion},
+	commands.VersionCmd{VersionStr: Version},
 	commands.ConfigCmd{},
 	commands.LsCmd{},
 	schcmds.Commands,
@@ -141,7 +145,7 @@ func runMain() int {
 
 	warnIfMaxFilesTooLow()
 
-	dEnv := env.Load(context.TODO(), env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, doltdb.DoltVersion)
+	dEnv := env.Load(context.TODO(), env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
 
 	if dEnv.DBLoadError == nil {
 		dEnv.DBLoadError = rebase.MaybeMigrateUniqueTags(context.Background(), dEnv)
@@ -172,7 +176,7 @@ func runMain() int {
 		}
 
 		// write events
-		_ = emitter.LogEvents(doltdb.DoltVersion, ces)
+		_ = emitter.LogEvents(Version, ces)
 
 		// flush events
 		if err := processEventsDir(args, dEnv); err != nil {

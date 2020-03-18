@@ -65,12 +65,12 @@ func MaybeMigrateUniqueTags(ctx context.Context, dEnv *env.DoltEnv) error {
 		//rh, _ := r.HashOf()
 		//cli.Printf("%s %s\n", b.String(), rh.String())
 
-		_, err = r.GetDoltVersion(ctx)
-
-		if err == doltdb.ErrDoltVersionNotFound {
-			migrate = true
-		} else if err != nil {
+		found, err := r.RootHasSuperSchema(ctx)
+		if err != nil {
 			return err
+		}
+		if !found {
+			migrate = true
 		}
 	}
 
@@ -79,6 +79,12 @@ func MaybeMigrateUniqueTags(ctx context.Context, dEnv *env.DoltEnv) error {
 	}
 
 	cwbSpec := dEnv.RepoState.CWBHeadSpec()
+	dd, err := dEnv.GetAllValidDocDetails()
+
+	if err != nil {
+		return err
+	}
+
 	err = migrateUniqueTags(ctx, nil, dEnv.DoltDB, bb)
 
 	if err != nil {
@@ -103,7 +109,20 @@ func MaybeMigrateUniqueTags(ctx context.Context, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	return dEnv.UpdateWorkingRoot(ctx, r)
+	err = dEnv.UpdateWorkingRoot(ctx, r)
+
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.PutDocsToWorking(ctx, dd)
+
+	if err != nil {
+		return err
+	}
+
+	_, err = dEnv.PutDocsToStaged(ctx, dd)
+	return err
 }
 
 // replaces all instances of oldTag with newTag.
@@ -517,7 +536,7 @@ func buildGlobalTagMapping(ctx context.Context, root *doltdb.RootValue, globalMa
 
 	for _, tn := range tblNames {
 		if doltdb.HasDoltPrefix(tn) {
-			err = handleDoltTableMappings(ctx, tn, root, globalMapping)
+			err = handleSystemTableMappings(ctx, tn, root, globalMapping)
 			if err != nil {
 				return err
 			}
@@ -550,7 +569,7 @@ func buildGlobalTagMapping(ctx context.Context, root *doltdb.RootValue, globalMa
 	return nil
 }
 
-func handleDoltTableMappings(ctx context.Context, tblName string, root *doltdb.RootValue, globalMapping map[string]map[uint64]uint64) error {
+func handleSystemTableMappings(ctx context.Context, tblName string, root *doltdb.RootValue, globalMapping map[string]map[uint64]uint64) error {
 	globalMapping[tblName] = make(map[uint64]uint64)
 
 	t, _, err := root.GetTable(ctx, tblName)

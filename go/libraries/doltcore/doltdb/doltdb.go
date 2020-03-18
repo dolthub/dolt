@@ -41,8 +41,6 @@ func init() {
 }
 
 const (
-	DoltVersion = "0.15.0"
-
 	creationBranch   = "create"
 	MasterBranch     = "master"
 	CommitStructName = "Commit"
