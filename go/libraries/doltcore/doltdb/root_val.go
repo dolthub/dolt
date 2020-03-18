@@ -143,6 +143,8 @@ func (root *RootValue) HasTable(ctx context.Context, tName string) (bool, error)
 	return tableMap.Has(ctx, types.String(tName))
 }
 
+// HasTag checks for the existence of a tag in the entire history of a root. If the tag exists the tablename
+// of the table containing the tag is also returned.
 func (root *RootValue) HasTag(ctx context.Context, tag uint64) (found bool, tblName string, err error) {
 	m, err := root.getOrCreateSuperSchemaMap(ctx)
 
@@ -211,14 +213,6 @@ func (root *RootValue) HasTag(ctx context.Context, tag uint64) (found bool, tblN
 	return false, "", nil
 }
 
-func (root *RootValue) RootHasSuperSchema(ctx context.Context) (bool, error) {
-	_, found, err := root.valueSt.MaybeGet(superSchemasKey)
-	if err != nil {
-		return false, err
-	}
-	return found, nil
-}
-
 // GetSuperSchema returns the SuperSchema for the table name specified if that table exists.
 func (root *RootValue) GetSuperSchema(ctx context.Context, tName string) (*schema.SuperSchema, bool, error) {
 	// SuperSchema is only persisted on Commit()
@@ -259,7 +253,7 @@ func (root *RootValue) GetSuperSchema(ctx context.Context, tName string) (*schem
 	return ss, true, err
 }
 
-// GetUniqueTag returns the union of all SuperSchemas for all current and historical tables.
+// GetUniqueTag returns a tag that has not yet been used in the history of this root.
 func (root *RootValue) GetUniqueTag(ctx context.Context) (uint64, error) {
 	ssMap, err := root.getOrCreateSuperSchemaMap(ctx)
 
@@ -1119,6 +1113,18 @@ func appendDocDiffs(added, modified, removed []string, olderVal types.Value, new
 		}
 	}
 	return added, modified, removed
+}
+
+// RootNeedsUniqueTagsMigration determines if this root needs to be migrated to uniquify its tags.
+func RootNeedsUniqueTagsMigration(root *RootValue) (bool, error) {
+	// SuperSchemas were added in the same update that required unique tags. If a root does not have a
+	// SuperSchema map then it was created before the unique tags constraint was enforced.
+	_, found, err := root.valueSt.MaybeGet(superSchemasKey)
+	if err != nil {
+		return false, err
+	}
+	needToMigrate := !found
+	return needToMigrate, nil
 }
 
 // UnionTableNames returns an array of all table names in all roots passed as params.

@@ -42,10 +42,12 @@ type Merger struct {
 	vrw       types.ValueReadWriter
 }
 
+// NewMerger creates a new merger utility object.
 func NewMerger(ctx context.Context, root, mergeRoot, ancRoot *doltdb.RootValue, vrw types.ValueReadWriter) *Merger {
 	return &Merger{root, mergeRoot, ancRoot, vrw}
 }
 
+// MergeTable merges schema and table data for the table tblName.
 func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.Table, *MergeStats, error) {
 	tbl, ok, err := merger.root.GetTable(ctx, tblName)
 

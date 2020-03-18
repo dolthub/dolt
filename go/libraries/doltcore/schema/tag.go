@@ -60,7 +60,7 @@ const (
 
 var randGen = rand.New(rand.NewSource(time.Now().UnixNano()))
 
-// TODO: what's the best, most predictable way to deterministically gen tags?
+// AutoGenerateTag generates a random tag that doesn't exist in the provided SuperSchema
 func AutoGenerateTag(ss *SuperSchema) uint64 {
 	var maxTagVal uint64 = 128 * 128
 
@@ -84,25 +84,4 @@ func AutoGenerateTag(ss *SuperSchema) uint64 {
 	}
 
 	return randTag
-}
-
-// TODO: how do we want to use this function, what behavior do we want?
-func ResolveTagConflicts(ss *SuperSchema, sch Schema) (Schema, error) {
-	cc, _ := NewColCollection()
-	err := sch.GetAllCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
-		_, found := ss.GetColumn(tag)
-		if found {
-			col.Tag = AutoGenerateTag(ss)
-		}
-		cc, err = cc.Append(col)
-
-		stop = err != nil
-		return stop, err
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return SchemaFromCols(cc), nil
 }

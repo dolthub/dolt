@@ -145,7 +145,7 @@ func createColumn(nullable Nullable, newColName string, tag uint64, typeInfo typ
 	}
 }
 
-// validateNewColumn returns an error if the column as specified cannot be added to the schema given.
+// ValidateNewColumn returns an error if the column as specified cannot be added to the schema given.
 func ValidateNewColumn(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.Table, tblName string, tag uint64, newColName string, typeInfo typeinfo.TypeInfo, nullable Nullable, defaultVal types.Value) error {
 	if typeInfo == nil {
 		return fmt.Errorf(`typeinfo may not be nil`)

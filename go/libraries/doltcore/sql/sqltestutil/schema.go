@@ -111,6 +111,7 @@ func NewRowWithPks(pkColVals []types.Value, nonPkVals ...types.Value) row.Row {
 	return r
 }
 
+// NewRowWithSchema creates a new row with the using the provided schema.
 func NewRowWithSchema(vals row.TaggedValues, sch schema.Schema) row.Row {
 	r, _ := row.New(types.Format_7_18, sch, vals)
 	return r

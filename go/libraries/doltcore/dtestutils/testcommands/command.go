@@ -41,8 +41,10 @@ type Command interface {
 
 type StageAll struct{}
 
+// CommandString describes the StageAll command for debugging purposes.
 func (a StageAll) CommandString() string { return "stage_all" }
 
+// Exec executes a StageAll command on a test dolt environment.
 func (a StageAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	return actions.StageAllTables(context.Background(), dEnv, false)
 }
@@ -52,8 +54,10 @@ type CommitStaged struct {
 	Message string
 }
 
+// CommandString describes the CommitStaged command for debugging purposes.
 func (c CommitStaged) CommandString() string { return fmt.Sprintf("commit_staged: %s", c.Message) }
 
+// Exec executes a CommitStaged command on a test dolt environment.
 func (c CommitStaged) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	return actions.CommitStaged(context.Background(), dEnv, c.Message, time.Now(), false)
 }
@@ -62,7 +66,8 @@ type CommitAll struct {
 	Message string
 }
 
-// CommandString returns "commit".
+
+// CommandString describes the CommitAll command for debugging purposes.
 func (c CommitAll) CommandString() string { return fmt.Sprintf("commit: %s", c.Message) }
 
 // Exec executes a CommitAll command on a test dolt environment.
@@ -76,6 +81,7 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 // TODO: comments on exported functions
 type ResetHard struct{}
 
+// CommandString describes the ResetHard command for debugging purposes.
 func (r ResetHard) CommandString() string { return "reset_hard" }
 
 // NOTE: does not handle untracked tables
@@ -103,7 +109,7 @@ type Query struct {
 	Query string
 }
 
-// CommandString returns "query".
+// CommandString describes the Query command for debugging purposes.
 func (q Query) CommandString() string { return fmt.Sprintf("query %s", q.Query) }
 
 // Exec executes a Query command on a test dolt environment.
@@ -130,7 +136,7 @@ type Branch struct {
 	BranchName string
 }
 
-// CommandString returns "branch".
+// CommandString describes the Branch command for debugging purposes.
 func (b Branch) CommandString() string { return fmt.Sprintf("branch: %s", b.BranchName) }
 
 // Exec executes a Branch command on a test dolt environment.
@@ -143,7 +149,7 @@ type Checkout struct {
 	BranchName string
 }
 
-// CommandString returns "checkout".
+// CommandString describes the Checkout command for debugging purposes.
 func (c Checkout) CommandString() string { return fmt.Sprintf("checkout: %s", c.BranchName) }
 
 // Exec executes a Checkout command on a test dolt environment.
@@ -155,7 +161,7 @@ type Merge struct {
 	BranchName string
 }
 
-// CommandString returns "merge".
+// CommandString describes the Merge command for debugging purposes.
 func (m Merge) CommandString() string { return fmt.Sprintf("merge: %s", m.BranchName) }
 
 // Exec executes a Merge command on a test dolt environment.
@@ -250,8 +256,10 @@ type ConflictsCat struct {
 	TableName string
 }
 
+// CommandString describes the ConflictsCat command for debugging purposes.
 func (c ConflictsCat) CommandString() string { return fmt.Sprintf("conflicts_cat: %s", c.TableName) }
 
+// Exec executes a ConflictsCat command on a test dolt environment.
 func (c ConflictsCat) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	out := cnfcmds.CatCmd{}.Exec(context.Background(), "dolt conflicts cat", []string{c.TableName}, dEnv)
 	require.Equal(t, 0, out)
