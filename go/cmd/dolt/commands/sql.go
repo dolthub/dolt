@@ -23,7 +23,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/abiosoft/readline"
 	"github.com/fatih/color"
@@ -32,6 +31,7 @@ import (
 	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
@@ -244,7 +244,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 func formatQueryError(query string, err error) errhand.VerboseError {
 	const (
-		maxStatementLen = 128
+		maxStatementLen     = 128
 		maxPosWhenTruncated = 64
 	)
 
@@ -639,7 +639,7 @@ func processQuery(ctx context.Context, query string, se *sqlEngine) (sql.Schema,
 		_, err := sqlparser.ParseStrictDDL(query)
 		if err != nil {
 			if se, ok := vterrors.AsSyntaxError(err); ok {
-				return nil, nil, vterrors.SyntaxError{Message:"While Parsing DDL: " + se.Message, Position:se.Position, Statement:se.Statement}
+				return nil, nil, vterrors.SyntaxError{Message: "While Parsing DDL: " + se.Message, Position: se.Position, Statement: se.Statement}
 			} else {
 				return nil, nil, fmt.Errorf("Error parsing DDL: %v.", err.Error())
 			}
