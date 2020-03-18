@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"io"
 	"strings"
 	"time"
@@ -134,13 +135,16 @@ func (db *Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, 
 	root, err := db.rootAsOf(ctx, asOf)
 	if err != nil {
 		return nil, false, err
+	} else if root == nil {
+		return nil, false, nil
 	}
 
 	return db.getTable(ctx, root, tableName)
 }
 
+// rootAsOf returns the root of the DB as of the expression given, which may be nil in the case that it refers to an
+// expression before the first commit.
 func (db *Database) rootAsOf(ctx *sql.Context, asOf interface{}) (*doltdb.RootValue, error) {
-
 	switch x := asOf.(type) {
 	case string:
 		return db.getRootForCommitRef(ctx, x)
@@ -162,31 +166,35 @@ func (db *Database) getRootForTime(ctx *sql.Context, asOf time.Time) (*doltdb.Ro
 		return nil, err
 	}
 
-	cmItr := doltdb.CommitItrForRoots(db.ddb, cm)
-	var curr *doltdb.Commit
-	var prev *doltdb.Commit
-	for {
-		if curr != nil {
-			meta, err := curr.GetCommitMeta()
-			if err != nil {
-				return nil, err
-			}
-			if meta.Time().Before(asOf) {
-				return prev.GetRootValue()
-			}
-		}
+	hash, err := cm.HashOf()
+	if err != nil {
+		return nil, err
+	}
 
-		_, curr, err = cmItr.Next(ctx)
+	cmItr, err := commitwalk.GetTopologicalOrderIterator(ctx, db.ddb, hash)
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+		_, curr, err := cmItr.Next(ctx)
 		if err == io.EOF {
 			break
 		} else if err != nil {
 			return nil, err
 		}
 
-		prev = curr
+		meta, err := curr.GetCommitMeta()
+		if err != nil {
+			return nil, err
+		}
+		
+		if meta.Time().Equal(asOf) || meta.Time().Before(asOf) {
+			return curr.GetRootValue()
+		}
 	}
 
-	return curr.GetRootValue()
+	return nil, nil
 }
 
 func (db *Database) getRootForCommitRef(ctx *sql.Context, commitRef string) (*doltdb.RootValue, error) {
