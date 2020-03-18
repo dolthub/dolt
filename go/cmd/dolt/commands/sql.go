@@ -277,7 +277,7 @@ func formatQueryError(query string, err error) errhand.VerboseError {
 
 		return verrBuilder.Build()
 	} else {
-		return errhand.BuildDError("Error Processing Query '%s'", query).AddCause(err).Build()
+		return errhand.VerboseErrorFromError(err)
 	}
 }
 
