@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/src-d/go-mysql-server/sql"
 	"github.com/src-d/go-mysql-server/sql/parse"
@@ -129,8 +130,8 @@ func (db *Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.T
 }
 
 // GetTableInsensitiveAsOf implements sql.VersionedDatabase
-func (db *Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, time interface{}) (sql.Table, bool, error) {
-	root, err := db.rootAsOf(ctx, time)
+func (db *Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, asOf interface{}) (sql.Table, bool, error) {
+	root, err := db.rootAsOf(ctx, asOf)
 	if err != nil {
 		return nil, false, err
 	}
@@ -139,11 +140,56 @@ func (db *Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, 
 }
 
 func (db *Database) rootAsOf(ctx *sql.Context, asOf interface{}) (*doltdb.RootValue, error) {
-	commitRef, ok := asOf.(string)
-	if !ok {
-		panic("expected commit ref string")
+
+	switch x := asOf.(type) {
+	case string:
+		return db.getRootForCommitRef(ctx, x)
+	case time.Time:
+		return db.getRootForTime(ctx, x)
+	default:
+		panic("unsupported AS OF type")
+	}
+}
+
+func (db *Database) getRootForTime(ctx *sql.Context, asOf time.Time) (*doltdb.RootValue, error) {
+	cs, err := doltdb.NewCommitSpec("HEAD", db.rsr.CWBHeadRef().String())
+	if err != nil {
+		return nil, err
 	}
 
+	cm, err := db.ddb.Resolve(ctx, cs)
+	if err != nil {
+		return nil, err
+	}
+
+	cmItr := doltdb.CommitItrForRoots(db.ddb, cm)
+	var curr *doltdb.Commit
+	var prev *doltdb.Commit
+	for {
+		if curr != nil {
+			meta, err := curr.GetCommitMeta()
+			if err != nil {
+				return nil, err
+			}
+			if meta.Time().Before(asOf) {
+				return prev.GetRootValue()
+			}
+		}
+
+		_, curr, err = cmItr.Next(ctx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		}
+
+		prev = curr
+	}
+
+	return curr.GetRootValue()
+}
+
+func (db *Database) getRootForCommitRef(ctx *sql.Context, commitRef string) (*doltdb.RootValue, error) {
 	cs, err := doltdb.NewCommitSpec(commitRef, db.rsr.CWBHeadRef().String())
 	if err != nil {
 		return nil, err

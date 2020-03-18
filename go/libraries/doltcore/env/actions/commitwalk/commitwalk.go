@@ -16,6 +16,7 @@ package commitwalk
 
 import (
 	"context"
+	"io"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/store/hash"
@@ -23,6 +24,7 @@ import (
 
 type c struct {
 	commit    *doltdb.Commit
+	hash 			hash.Hash
 	height    uint64
 	invisible bool
 	queued    bool
@@ -127,7 +129,8 @@ func (q *q) Get(ctx context.Context, id hash.Hash) (*c, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := &c{commit: l, height: h}
+
+	c := &c{commit: l, height: h, hash: id}
 	q.loaded[id] = c
 	return c, nil
 }
@@ -190,31 +193,82 @@ func GetTopologicalOrderCommits(ctx context.Context, ddb *doltdb.DoltDB, startCo
 	return GetTopNTopoOrderedCommits(ctx, ddb, startCommitHash, -1)
 }
 
+// GetTopologicalOrderCommitIterator returns an iterator for commits generated with the same semantics as
+// GetTopologicalOrderCommits
+func GetTopologicalOrderIterator(ctx context.Context, ddb *doltdb.DoltDB, startCommitHash hash.Hash) (doltdb.CommitItr, error) {
+	return newCommiterator(ctx, ddb, startCommitHash)
+}
+
+type commiterator struct {
+	ddb *doltdb.DoltDB
+	startCommitHash hash.Hash
+	q   *q
+}
+
+var _ doltdb.CommitItr = (*commiterator)(nil)
+
+func newCommiterator(ctx context.Context, ddb *doltdb.DoltDB, startCommitHash hash.Hash) (*commiterator, error) {
+	itr := &commiterator{
+		ddb: ddb,
+		startCommitHash: startCommitHash,
+	}
+
+	err := itr.Reset(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return itr, nil
+}
+
+// Next implements doltdb.CommitItr
+func (i *commiterator) Next(ctx context.Context) (hash.Hash, *doltdb.Commit, error) {
+	if i.q.NumVisiblePending() > 0 {
+		nextC := i.q.PopPending()
+		parents, err := nextC.commit.ParentHashes(ctx)
+		if err != nil {
+			return hash.Hash{}, nil, err
+		}
+
+		for _, parentID := range parents {
+			if err := i.q.AddPendingIfUnseen(ctx, parentID); err != nil {
+				return hash.Hash{}, nil, err
+			}
+		}
+
+		return nextC.hash, nextC.commit, nil
+	}
+
+	return hash.Hash{}, nil, io.EOF
+}
+
+// Reset implements doltdb.CommitItr
+func (i *commiterator) Reset(ctx context.Context) error {
+	i.q = newQueue(i.ddb)
+	if err := i.q.AddPendingIfUnseen(ctx, i.startCommitHash); err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetTopNTopoOrderedCommits returns the first N commits (If N <= 0 then all commits) reachable from the commit at hash
 // `startCommitHash` in reverse topological order, with tiebreaking done by the height of the commit graph -- higher
 // commits appear first. Remaining ties are broken by timestamp; newer commits appear first.
 func GetTopNTopoOrderedCommits(ctx context.Context, ddb *doltdb.DoltDB, startCommitHash hash.Hash, n int) ([]*doltdb.Commit, error) {
-	var commitList []*doltdb.Commit
-	q := newQueue(ddb)
-	if err := q.AddPendingIfUnseen(ctx, startCommitHash); err != nil {
+	itr, err := GetTopologicalOrderIterator(ctx, ddb, startCommitHash)
+	if err != nil {
 		return nil, err
 	}
-	for q.NumVisiblePending() > 0 {
-		nextC := q.PopPending()
-		parents, err := nextC.commit.ParentHashes(ctx)
-		if err != nil {
+
+	var commitList []*doltdb.Commit
+	for n < 0 || len(commitList) < n {
+		_, commit, err := itr.Next(ctx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
 			return nil, err
 		}
-		for _, parentID := range parents {
-			if err := q.AddPendingIfUnseen(ctx, parentID); err != nil {
-				return nil, err
-			}
-		}
-		commitList = append(commitList, nextC.commit)
-
-		if n > 0 && len(commitList) >= n {
-			break
-		}
+		commitList = append(commitList, commit)
 	}
 
 	return commitList, nil
