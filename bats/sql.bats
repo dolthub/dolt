@@ -132,7 +132,7 @@ teardown() {
 @test "sql ambiguous column name" {
     run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where c1=0"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "ambiguous column name \"c1\", it's present in all these tables: one_pk, two_pk" ]] || false
+    [ "$output" = "ambiguous column name \"c1\", it's present in all these tables: one_pk, two_pk" ]
 }
 
 @test "sql select with and and or clauses" {
@@ -405,7 +405,7 @@ teardown() {
     [[ ! "$output" =~ "one_pk" ]] || false
     run dolt sql -q "drop table poop"
     [ $status -eq 1 ]
-    [[ "$output" =~ "table not found: poop" ]] || false
+    [ "$output" = "table not found: poop" ]
 }
 
 @test "explain simple select query" {

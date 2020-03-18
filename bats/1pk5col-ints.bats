@@ -129,6 +129,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     run dolt sql -q "select * from test"
     [[ "$output" =~ "9" ]] || false
     run dolt sql -q "insert into test (c1,c3,c5) values (50,55,60)"
+    [ "$status" -eq 1 ]
     [ "$output" = "column name 'pk' is non-nullable but attempted to set default value of null" ]
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5,c6) values (10,1,1,1,1,1,1)"
     [ "$status" -eq 1 ]
@@ -141,7 +142,6 @@ if rows[2] != "9,8,7,6,5,4".split(","):
 @test "dolt sql insert same column twice" {
     run dolt sql -q "insert into test (pk,c1,c1) values (3,1,2)"
     [ "$status" -eq 1 ]
-    echo $output
     [ "$output" = "duplicate column name c1" ]
 }
 
@@ -152,7 +152,6 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     run dolt sql -q "select * from test"
     [[ "$output" =~ "0" ]] || false
     run dolt sql -q "insert into test values (4,1,2)"
-    echo $output
     [ "$status" -eq 1 ]
     [ "$output" = "number of values does not match number of columns provided" ]
 }
@@ -286,7 +285,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     [[ ! "$output" =~ "50" ]] || false
     run dolt sql -q "update test set c12=11 where pk=0"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "column \"c12\" could not be found in any table in scope" ]] || false
+    [ "$output" = "column \"c12\" could not be found in any table in scope" ]
     run dolt sql -q "update test set c1='foo' where pk=0"
     [ "$status" -eq 1 ]
     [ "$output" = "unable to cast \"foo\" of type string to int64" ]
@@ -318,7 +317,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
     run dolt sql -q "delete from test where c10=1"
     [ "$status" -eq 1 ]
-    [ "$output" =git  "column \"c10\" could not be found in any table in scope" ]
+    [ "$output" = "column \"c10\" could not be found in any table in scope" ]
     run dolt sql -q "delete from test where c1='foo'"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "| 0       |" ]] || false

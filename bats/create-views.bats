@@ -172,7 +172,7 @@ SQL
     [ "$status" -eq 0 ]
     run dolt sql -q 'select * from all_users'
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "table not found: users" ]] || false
+    [[ "${lines[0]}" =~ "table not found: users" ]] || false
     run dolt sql -q 'drop view all_users'
     [ "$status" -eq 0 ]
 }
@@ -202,5 +202,5 @@ SQL
     [[ ! "$output" =~ "five" ]] || false
     run dolt sql -q "select * from five"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "table not found: five" ]] || false
+    [[ "${lines[0]}" =~ "table not found: five" ]] || false
 }

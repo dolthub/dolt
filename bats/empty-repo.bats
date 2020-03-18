@@ -96,7 +96,7 @@ teardown() {
 @test "dolt sql in a new repository" {
    run dolt sql -q "select * from test"
    [ "$status" -eq 1 ]
-   [[ "$output" =~ "table not found: test" ]] || false
+   [[ "$output" = "table not found: test" ]] || false
 }
 
 @test "invalid sql in a new repository" {
