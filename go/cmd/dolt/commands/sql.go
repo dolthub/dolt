@@ -161,13 +161,13 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	_, forceBatchMode := apr.GetValue(batchFlag)
 
-	se, err := newSqlEngine(ctx, dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-
 	// run a single command and exit
 	if query, ok := apr.GetValue(queryFlag); !forceBatchMode && ok {
+
+		se, err := newSqlEngine(ctx, dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
 
 		sqlSch, rowIter, err := processQuery(ctx, query, se)
 		if err != nil {
@@ -193,6 +193,8 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return 0
 	}
 
+	var se *sqlEngine
+
 	// Run in either batch mode for piped input, or shell mode for interactive
 	fi, err := os.Stdin.Stat()
 	// Windows has a bug where STDIN can't be statted in some cases, see https://github.com/golang/go/issues/33570
@@ -206,6 +208,11 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			batchInput = strings.NewReader(query)
 		}
 
+		se, err = newSqlEngine(ctx, dEnv, dsqle.NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
+
 		err = runBatchMode(ctx, se, batchInput)
 		if err != nil {
 			_, _ = fmt.Fprintf(cli.CliErr, "Error processing batch: %s\n", err.Error())
@@ -214,6 +221,11 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	} else if err != nil {
 		HandleVErrAndExitCode(errhand.BuildDError("Couldn't stat STDIN. This is a bug.").Build(), usage)
 	} else {
+		se, err = newSqlEngine(ctx, dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
+
 		err = runShell(ctx, se, dEnv)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.BuildDError("unable to start shell").AddCause(err).Build(), usage)
