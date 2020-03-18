@@ -62,9 +62,6 @@ func MaybeMigrateUniqueTags(ctx context.Context, dEnv *env.DoltEnv) error {
 			return err
 		}
 
-		//rh, _ := r.HashOf()
-		//cli.Printf("%s %s\n", b.String(), rh.String())
-
 		found, err := r.RootHasSuperSchema(ctx)
 		if err != nil {
 			return err
@@ -513,15 +510,6 @@ func migrateUniqueTags(ctx context.Context, dEnv *env.DoltEnv, ddb *doltdb.DoltD
 		if err != nil {
 			return err
 		}
-
-		//r, err := newCommits[idx].GetRootValue()
-		//
-		//if err != nil {
-		//	return err
-		//}
-		//
-		//rh, _ := r.HashOf()
-		//cli.Printf("%s %s\n", dRef.String(), rh.String())
 	}
 
 	return nil
