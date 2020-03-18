@@ -132,7 +132,7 @@ teardown() {
 @test "sql ambiguous column name" {
     run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where c1=0"
     [ "$status" -eq 1 ]
-    [ "$output" = "ambiguous column name \"c1\", it's present in all these tables: one_pk, two_pk" ]
+    [[ "$output" =~ "ambiguous column name \"c1\", it's present in all these tables: one_pk, two_pk" ]] || false
 }
 
 @test "sql select with and and or clauses" {
@@ -405,7 +405,7 @@ teardown() {
     [[ ! "$output" =~ "one_pk" ]] || false
     run dolt sql -q "drop table poop"
     [ $status -eq 1 ]
-    [ "$output" = "table not found: poop" ]
+    [[ "$output" =~ "table not found: poop" ]] || false
 }
 
 @test "explain simple select query" {
@@ -538,6 +538,15 @@ teardown() {
     [ $status -ne 0 ]
     skip "Divide by zero panics dolt right now"
     [[ ! "$output" =~ "panic: " ]] || false
+}
+
+@test "sql delete all rows in table" {
+    run dolt sql <<SQL
+DELETE FROM one_pk;
+SELECT count(*) FROM one_pk;
+SQL
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0" ]] || false
 }
 
 @test "sql shell works after failing query" {

@@ -29,9 +29,15 @@ var ErrDuplicatePrimaryKeyFmt = "duplicate primary key given: (%v)"
 
 // tableEditor supports making multiple row edits (inserts, updates, deletes) to a table. It does error checking for key
 // collision etc. in the Close() method, as well as during Insert / Update.
-// Right now a table editor allows you to combine inserts, updates, and deletes in any order, and makes reasonable
-// attempts to produce correct results when doing so. But this probably (definitely) doesn't work in every case, and
-// higher-level clients should carefully flush the editor when necessary (i.e. before an update after many inserts).
+//
+// The tableEditor has two levels of batching: one supported at the SQL engine layer where a single UPDATE, DELETE or
+// INSERT statement will touch many rows, and we want to avoid unnecessary intermediate writes; and one at the dolt
+// layer as a "batch mode" in DoltDatabase. In the latter mode, it's possible to mix inserts, updates and deletes in any
+// order. In general, this is unsafe and will produce incorrect results in many cases. The editor makes reasonable
+// attempts to produce correct results when interleaving insert and delete statements, but this is almost entirely to
+// support REPLACE statements, which are implemented as a DELETE followed by an INSERT. In general, not flushing the
+// editor after every SQL statement is incorrect and will return incorrect results. The single reliable exception is an
+// unbroken chain of INSERT statements, where we have taken pains to batch writes to speed things up.
 type tableEditor struct {
 	t            *WritableDoltTable
 	ed           *types.MapEditor

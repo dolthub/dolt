@@ -53,6 +53,32 @@ func TestSqlConsole(t *testing.T) {
 
 }
 
+func TestSqlBatchMode(t *testing.T) {
+	tests := []struct {
+		query       string
+		expectedRes int
+	}{
+		{
+			"create table test (a int primary key);" +
+				"insert into test values (1),(2),(3);" +
+				"select * from test;",
+			0,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.query, func(t *testing.T) {
+			dEnv := createEnvWithSeedData(t)
+
+			args := []string{"-b", "-q", test.query}
+
+			commandStr := "dolt sql"
+			result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv)
+			assert.Equal(t, test.expectedRes, result)
+		})
+	}
+}
+
 // Smoke tests, values are printed to console
 func TestSqlSelect(t *testing.T) {
 	tests := []struct {
