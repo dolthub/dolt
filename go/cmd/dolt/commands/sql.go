@@ -31,6 +31,7 @@ import (
 	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
@@ -171,7 +172,8 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 		sqlSch, rowIter, err := processQuery(ctx, query, se)
 		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+			verr := formatQueryError(query, err)
+			return HandleVErrAndExitCode(verr, usage)
 		}
 
 		if rowIter != nil {
@@ -215,7 +217,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 		err = runBatchMode(ctx, se, batchInput)
 		if err != nil {
-			_, _ = fmt.Fprintf(cli.CliErr, "Error processing batch: %s\n", err.Error())
+			cli.PrintErrln(color.RedString("Error processing batch"))
 			return 1
 		}
 	} else if err != nil {
@@ -238,6 +240,62 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	}
 
 	return 0
+}
+
+func formatQueryError(query string, err error) errhand.VerboseError {
+	const (
+		maxStatementLen     = 128
+		maxPosWhenTruncated = 64
+	)
+
+	if se, ok := vterrors.AsSyntaxError(err); ok {
+		verrBuilder := errhand.BuildDError("Error parsing SQL")
+		verrBuilder.AddDetails(se.Message)
+
+		statement := se.Statement
+		position := se.Position
+
+		prevLines := ""
+		for {
+			idxNewline := strings.IndexRune(statement, '\n')
+
+			if idxNewline == -1 {
+				break
+			} else if idxNewline < position {
+				position -= idxNewline + 1
+				prevLines += statement[:idxNewline+1]
+				statement = statement[idxNewline+1:]
+			} else {
+				statement = statement[:idxNewline]
+				break
+			}
+		}
+
+		if len(statement) > maxStatementLen {
+			if position > maxPosWhenTruncated {
+				statement = statement[position-maxPosWhenTruncated:]
+				position = maxPosWhenTruncated
+			}
+
+			if len(statement) > maxStatementLen {
+				statement = statement[:maxStatementLen]
+			}
+		}
+
+		verrBuilder.AddDetails(prevLines + statement)
+
+		marker := make([]rune, position+1)
+		for i := 0; i < position; i++ {
+			marker[i] = ' '
+		}
+
+		marker[position] = '^'
+		verrBuilder.AddDetails(string(marker))
+
+		return verrBuilder.Build()
+	} else {
+		return errhand.VerboseErrorFromError(err)
+	}
 }
 
 func getFormat(format string) (resultFormat, errhand.VerboseError) {
@@ -334,7 +392,8 @@ func runBatchMode(ctx context.Context, se *sqlEngine, input io.Reader) error {
 			continue
 		}
 		if err := processBatchQuery(ctx, query, se); err != nil {
-			_, _ = fmt.Fprintf(cli.CliErr, "Error processing query '%s': %s\n", query, err.Error())
+			verr := formatQueryError(query, err)
+			cli.PrintErrln(verr.Verbose())
 			return err
 		}
 		query = ""
@@ -436,7 +495,8 @@ func runShell(ctx context.Context, se *sqlEngine, dEnv *env.DoltEnv) error {
 		}
 
 		if sqlSch, rowIter, err := processQuery(ctx, query, se); err != nil {
-			shell.Println(color.RedString(err.Error()))
+			verr := formatQueryError(query, err)
+			shell.Println(verr.Verbose())
 		} else if rowIter != nil {
 			defer rowIter.Close()
 			err = se.prettyPrintResults(ctx, se.ddb.ValueReadWriter().Format(), sqlSch, rowIter)
@@ -580,7 +640,7 @@ func processQuery(ctx context.Context, query string, se *sqlEngine) (sql.Schema,
 		// silently skip empty statements
 		return nil, nil, nil
 	} else if err != nil {
-		return nil, nil, fmt.Errorf("Error parsing SQL: %v", err.Error())
+		return nil, nil, err
 	}
 
 	switch s := sqlStatement.(type) {
@@ -595,7 +655,11 @@ func processQuery(ctx context.Context, query string, se *sqlEngine) (sql.Schema,
 	case *sqlparser.DDL:
 		_, err := sqlparser.ParseStrictDDL(query)
 		if err != nil {
-			return nil, nil, fmt.Errorf("Error parsing DDL: %v.", err.Error())
+			if se, ok := vterrors.AsSyntaxError(err); ok {
+				return nil, nil, vterrors.SyntaxError{Message: "While Parsing DDL: " + se.Message, Position: se.Position, Statement: se.Statement}
+			} else {
+				return nil, nil, fmt.Errorf("Error parsing DDL: %v.", err.Error())
+			}
 		}
 		return se.ddl(ctx, s, query)
 	default:
