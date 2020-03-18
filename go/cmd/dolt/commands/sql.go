@@ -254,7 +254,24 @@ func formatQueryError(query string, err error) errhand.VerboseError {
 
 		statement := se.Statement
 		position := se.Position
-		if len(se.Statement) > maxStatementLen {
+
+		prevLines := ""
+		for {
+			idxNewline := strings.IndexRune(statement, '\n')
+
+			if idxNewline == -1 {
+				break;
+			} else if idxNewline < position {
+				position -= idxNewline + 1
+				prevLines += statement[:idxNewline+1]
+				statement = statement[idxNewline+1:]
+			} else {
+				statement = statement[:idxNewline]
+				break
+			}
+		}
+
+		if len(statement) > maxStatementLen {
 			if position > maxPosWhenTruncated {
 				statement = statement[position-maxPosWhenTruncated:]
 				position = maxPosWhenTruncated
@@ -265,7 +282,7 @@ func formatQueryError(query string, err error) errhand.VerboseError {
 			}
 		}
 
-		verrBuilder.AddDetails(statement)
+		verrBuilder.AddDetails(prevLines+statement)
 
 		marker := make([]rune, position+1)
 		for i := 0; i < position; i++ {
