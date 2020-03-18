@@ -260,7 +260,7 @@ func formatQueryError(query string, err error) errhand.VerboseError {
 			idxNewline := strings.IndexRune(statement, '\n')
 
 			if idxNewline == -1 {
-				break;
+				break
 			} else if idxNewline < position {
 				position -= idxNewline + 1
 				prevLines += statement[:idxNewline+1]
@@ -282,7 +282,7 @@ func formatQueryError(query string, err error) errhand.VerboseError {
 			}
 		}
 
-		verrBuilder.AddDetails(prevLines+statement)
+		verrBuilder.AddDetails(prevLines + statement)
 
 		marker := make([]rune, position+1)
 		for i := 0; i < position; i++ {
