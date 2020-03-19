@@ -17,7 +17,6 @@ package sqle
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"io"
 	"strings"
 	"time"
@@ -29,6 +28,7 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
 	dsql "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
 )
@@ -221,6 +221,8 @@ func (db *Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]str
 	root, err := db.rootAsOf(ctx, time)
 	if err != nil {
 		return nil, err
+	} else if root == nil {
+		return nil, nil
 	}
 
 	tblNames, err := root.GetTableNames(ctx)

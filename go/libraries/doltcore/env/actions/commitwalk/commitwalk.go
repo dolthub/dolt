@@ -24,7 +24,7 @@ import (
 
 type c struct {
 	commit    *doltdb.Commit
-	hash 			hash.Hash
+	hash      hash.Hash
 	height    uint64
 	invisible bool
 	queued    bool
@@ -200,16 +200,16 @@ func GetTopologicalOrderIterator(ctx context.Context, ddb *doltdb.DoltDB, startC
 }
 
 type commiterator struct {
-	ddb *doltdb.DoltDB
+	ddb             *doltdb.DoltDB
 	startCommitHash hash.Hash
-	q   *q
+	q               *q
 }
 
 var _ doltdb.CommitItr = (*commiterator)(nil)
 
 func newCommiterator(ctx context.Context, ddb *doltdb.DoltDB, startCommitHash hash.Hash) (*commiterator, error) {
 	itr := &commiterator{
-		ddb: ddb,
+		ddb:             ddb,
 		startCommitHash: startCommitHash,
 	}
 

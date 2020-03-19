@@ -888,8 +888,8 @@ var AsOfTests = []SelectTest{
 		ExpectedSchema: ReaddAgeAt4HistSch,
 	},
 	{
-		Name:  "select * from timestamp, before table creation",
-		Query: "select * from test_table as of CONVERT('1970-01-01 02:00:00', DATETIME)",
+		Name:        "select * from timestamp, before table creation",
+		Query:       "select * from test_table as of CONVERT('1970-01-01 02:00:00', DATETIME)",
 		ExpectedErr: "not found",
 	},
 }
