@@ -18,12 +18,11 @@ function setup_dir() {
 
 function run_bats_tests() {
   pushd "$1" > /dev/null || exit
-  cwd=$(pwd)
-  hash=$(git rev-parse HEAD)
-  echo "testing dolt @ $hash against repo in $cwd"
-  bats .
-  echo
+  bats_out=$(bats .)
+  status=$?
+  echo "$bats_out" | tr -cd "[:print:]\n" | sed 's/\[3J\[H\[2J//'
   popd > /dev/null || exit
+  return $status
 }
 
 # ensure that we have a clean working change set before we begin
@@ -50,18 +49,20 @@ dolt_dir="../../../go/cmd/dolt/"
 build_dolt "$starting_branch"
 setup_dir "head"
 
+status=0
+
 while IFS= read -r ver
 do
-
   build_dolt "$ver"
   setup_dir "$ver"
 
   # run compatibility.bats to ensure dolt @ $ver can
   # read a repo created with dolt @ HEAD
-  ver_hash=$(git rev-parse HEAD)
-  echo "hash for dolt @ $ver: $ver_hash"
+  echo
+  echo "testing dolt @ $(git describe --tags) against repo in head/"
   run_bats_tests head
-
+  #status=$((status+$?))
+  echo
 done < <(grep -v '^ *#' < dolt_versions.txt)
 
 # now build dolt @ HEAD and make sure we can read
@@ -70,11 +71,13 @@ build_dolt "$starting_branch"
 
 while IFS= read -r ver
 do
-  head_hash=$(git rev-parse HEAD)
-  echo "hash for dolt @ head: $head_hash"
+  echo
+  echo "testing dolt @ $(git rev-parse --abbrev-ref HEAD) against repo in $ver/"
   run_bats_tests "$ver"
-
+  status=$((status+$?))
+  echo
 done < <(grep -v '^ *#' < dolt_versions.txt)
 
-
 popd > /dev/null || exit
+
+exit $status
