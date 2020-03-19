@@ -151,7 +151,7 @@ func (db *Database) rootAsOf(ctx *sql.Context, asOf interface{}) (*doltdb.RootVa
 	case time.Time:
 		return db.getRootForTime(ctx, x)
 	default:
-		panic("unsupported AS OF type")
+		panic(fmt.Sprintf("unsupported AS OF type %T", asOf))
 	}
 }
 
@@ -188,7 +188,7 @@ func (db *Database) getRootForTime(ctx *sql.Context, asOf time.Time) (*doltdb.Ro
 		if err != nil {
 			return nil, err
 		}
-		
+
 		if meta.Time().Equal(asOf) || meta.Time().Before(asOf) {
 			return curr.GetRootValue()
 		}
