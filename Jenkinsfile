@@ -85,6 +85,33 @@ pipeline {
                         }
                     }
                 }
+                stage ("compatibility/") {
+                    agent {
+                        kubernetes {
+                            label "liquidata-inc-ld-build"
+                        }
+                    }
+                    environment {
+                        PATH = "${pwd()}/.ci_bin/pyenv/bin:${pwd()}/.ci_bin:${pwd()}/.ci_bin/node_modules/.bin:${env.PATH}"
+                    }
+                    steps {
+                        dir (".ci_bin") {
+                            sh "npm i bats"
+                        }
+                        dir ("go") {
+                            sh "go get -mod=readonly ./..."
+                            sh "go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/."
+                        }
+                        sh "dolt config --global --add user.name 'Liquidata Jenkins'"
+                        sh "dolt config --global --add user.email 'jenkins@liquidata.co'"
+                        sh "git fetch"
+                        sh "git tag -l"
+                        sh "git checkout -b $BUILD_ID"
+                        dir ("bats/compatibility") {
+                            sh "./runner.sh"
+                        }
+                    }
+                }
             }
         }
     }
