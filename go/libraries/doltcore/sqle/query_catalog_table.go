@@ -126,8 +126,10 @@ func NewQueryCatalogEntryWithRandID(ctx context.Context, root *doltdb.RootValue,
 		return SavedQuery{}, nil, err
 	}
 
-	// Use the last 24 hex digits of the uuid for the ID.
-	id := uid.String()[24:]
+	// Use the last 12 hex digits of the uuid for the ID.
+	uidStr := uid.String()
+	id := uidStr[len(uidStr)-12:]
+
 	return newQueryCatalogEntry(ctx, root, id, name, query, description)
 }
 

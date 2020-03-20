@@ -66,7 +66,7 @@ var sqlDocs = cli.CommandDocumentationContent{
 		"statements separated by semicolons, use {{.EmphasisLeft}}-b{{.EmphasisRight}} to enable batch mode. Queries can" +
 		"be saved with {{.EmphasisLeft}}-s{{.EmphasisRight}}.\n" +
 		"\n" +
-		"Alternatively {{.EmpahasisLeft}}-x{{.EmphasisRight}} can be useod to executed a saved query by name\n" +
+		"Alternatively {{.EmpahasisLeft}}-x{{.EmphasisRight}} can be used to execute a saved query by name.\n" +
 		"\n" +
 		"Pipe SQL statements to dolt sql (no {{.EmphasisLeft}}-q{{.EmphasisRight}}) to execute a SQL import or update " +
 		"script.\n" +
@@ -86,7 +86,7 @@ var sqlDocs = cli.CommandDocumentationContent{
 		"-q {{.LessThan}}query{{.GreaterThan}} -r {{.LessThan}}result format{{.GreaterThan}}",
 		"-q {{.LessThan}}query{{.GreaterThan}} -s {{.LessThan}}name{{.GreaterThan}} -m {{.LessThan}}message{{.GreaterThan}}",
 		"-x {{.LessThan}}name{{.GreaterThan}}",
-		"-list-saved",
+		"--list-saved",
 	},
 }
 
@@ -127,7 +127,7 @@ func (cmd SqlCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsString(formatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv. Defaults to tabular. ")
 	ap.SupportsString(saveFlag, "s", "saved query name", "Used with --query, save the query to the query catalog with the name provided. Saved queries can be examined in the dolt_query_catalog system table.")
 	ap.SupportsString(executeFlag, "x", "saved query name", "Executes a saved query with the given name")
-	ap.SupportsFlag(listSavedFlag, "", "Lists all saved queries")
+	ap.SupportsFlag(listSavedFlag, "l", "Lists all saved queries")
 	ap.SupportsString(messageFlag, "m", "saved query description", "Used with --query and --save, saves the query with the descriptive message given. See also --name")
 	ap.SupportsFlag(batchFlag, "b", "batch mode, to run more than one query with --query, separated by ';'. Piping input to sql with no arguments also uses batch mode")
 	return ap
@@ -164,52 +164,52 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
-	origRoot := root
-
-	saveMessage := apr.GetValueOrDefault(messageFlag, "")
-	saveName := apr.GetValueOrDefault(saveFlag, "")
-
 	_, forceBatchMode := apr.GetValue(batchFlag)
 
-	query, queryOK := apr.GetValue(queryFlag)
-	if !queryOK {
-		savedQueryName, exOk := apr.GetValue(executeFlag)
+	if query, queryOK := apr.GetValue(queryFlag); queryOK {
+		saveMessage := apr.GetValueOrDefault(messageFlag, "")
+		saveName := apr.GetValueOrDefault(saveFlag, "")
 
-		if exOk {
-			sq, err := dsqle.RetrieveFromQueryCatalog(ctx, root, savedQueryName)
-
-			if err != nil {
-				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-			}
-
-			query = sq.Query
-			queryOK = true
-
-			cli.PrintErrf("Executing saved query '%s':\n%s\n", savedQueryName, query)
-		}
+		return execQuery(ctx, dEnv, root, query, saveName, saveMessage, forceBatchMode, format, usage)
 	}
 
-	if !queryOK {
-		if apr.Contains(listSavedFlag) {
-			hasQC, err := root.HasTable(ctx, doltdb.DoltQueryCatalogTableName)
+	if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
+		sq, err := dsqle.RetrieveFromQueryCatalog(ctx, root, savedQueryName)
 
-			if err != nil {
-				verr := errhand.BuildDError("error: Failed to read from repository.").AddCause(err).Build()
-				return HandleVErrAndExitCode(verr, usage)
-			}
-
-			if !hasQC {
-				return 0
-			}
-
-			query = "SELECT * FROM " + doltdb.DoltQueryCatalogTableName
-			queryOK = true
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
+
+		cli.PrintErrf("Executing saved query '%s':\n%s\n", savedQueryName, sq.Query)
+		return execQuery(ctx, dEnv, root, sq.Query, "", "", forceBatchMode, format, usage)
 	}
+
+	if apr.Contains(listSavedFlag) {
+		hasQC, err := root.HasTable(ctx, doltdb.DoltQueryCatalogTableName)
+
+		if err != nil {
+			verr := errhand.BuildDError("error: Failed to read from repository.").AddCause(err).Build()
+			return HandleVErrAndExitCode(verr, usage)
+		}
+
+		if !hasQC {
+			return 0
+		}
+
+		query := "SELECT * FROM " + doltdb.DoltQueryCatalogTableName
+		return execQuery(ctx, dEnv, root, query, "", "", forceBatchMode, format, usage)
+	}
+
+	return execQuery(ctx, dEnv, root, "", "", "", forceBatchMode, format, usage)
+}
+
+func execQuery(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query, saveName, saveMessage string, forceBatchMode bool, format resultFormat, usage cli.UsagePrinter) int {
+	var se *sqlEngine
+	origRoot := root
+	queryOK := query != ""
 
 	// run a single command and exit
 	if !forceBatchMode && queryOK {
-
 		se, err := newSqlEngine(ctx, dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -234,13 +234,11 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 
 		if saveName != "" {
-			return HandleVErrAndExitCode(cmd.saveQuery(context.Background(), se.sdb.Root(), dEnv, query, saveName, saveMessage), usage)
+			return HandleVErrAndExitCode(saveQuery(ctx, origRoot, dEnv, query, saveName, saveMessage), usage)
 		}
 
 		return 0
 	}
-
-	var se *sqlEngine
 
 	// Run in either batch mode for piped input, or shell mode for interactive
 	fi, err := os.Stdin.Stat()
@@ -248,10 +246,6 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	if (err != nil && osutil.IsWindows) || (fi.Mode()&os.ModeCharDevice) == 0 || forceBatchMode {
 		var batchInput io.Reader = os.Stdin
 		if forceBatchMode {
-			query, ok := apr.GetValue(queryFlag)
-			if !ok {
-				panic("No query found for --batch. This should already have been verified.")
-			}
 			batchInput = strings.NewReader(query)
 		}
 
@@ -416,7 +410,7 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 }
 
 // Saves the query given to the catalog with the name and message given.
-func (cmd SqlCmd) saveQuery(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, query string, name string, message string) errhand.VerboseError {
+func saveQuery(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, query string, name string, message string) errhand.VerboseError {
 	_, newRoot, err := dsqle.NewQueryCatalogEntryWithNameAsID(ctx, root, name, query, message)
 	if err != nil {
 		return errhand.BuildDError("Couldn't save query").AddCause(err).Build()
