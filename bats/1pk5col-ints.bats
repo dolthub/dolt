@@ -14,6 +14,18 @@ CREATE TABLE test (
   PRIMARY KEY (pk)
 );
 SQL
+
+cat >test_alt.sql <<SQL
+CREATE TABLE test_alt (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
 }
 
 teardown() {
@@ -679,4 +691,32 @@ DELIM
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
     [[ "$output" =~ "<NULL>" ]] || false
+}
+
+@test "display correct merge stats" {
+    dolt checkout -b test-branch
+    dolt add test
+    dolt commit -m "added test table"
+    dolt checkout master
+    dolt branch test-branch-m
+    dolt branch test-branch-alt
+    dolt checkout test-branch-m
+    dolt merge test-branch
+    dolt checkout test-branch-alt
+    dolt sql < test_alt.sql
+    dolt add test_alt
+    dolt commit -m 'add test_alt'
+    dolt checkout test-branch-m
+    dolt merge test-branch-alt
+    dolt add test_alt
+    dolt commit -m 'merge test_alt'
+    dolt checkout test-branch
+    dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
+    dolt add test
+    dolt commit -m "added row to test"
+    dolt checkout test-branch-m
+    run dolt merge test-branch
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "test | 0 " ]
+    skip "Row addition not totalled correctly" [ "${lines[2]}" = "1 tables changed, 1 rows added(+), 0 rows modified(*), 0 rows deleted(-)" ]
 }
