@@ -300,15 +300,6 @@ func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commi
 		}
 	}
 
-	workingRoot := mergedRoot
-	if len(workingDiffs) > 0 {
-		workingRoot, err = applyChanges(ctx, mergedRoot, workingDiffs)
-
-		if err != nil {
-			return errhand.BuildDError("").AddCause(err).Build()
-		}
-	}
-
 	h2, err := cm2.HashOf()
 
 	if err != nil {
@@ -321,7 +312,7 @@ func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commi
 		return errhand.BuildDError("Unable to update the repo state").AddCause(err).Build()
 	}
 
-	verr := UpdateWorkingWithVErr(dEnv, workingRoot)
+	verr := UpdateWorkingWithVErr(dEnv, mergedRoot)
 
 	if verr == nil {
 		hasConflicts := printSuccessStats(tblToStats)
