@@ -85,6 +85,7 @@ teardown() {
 
 
 @test "dolt sql 'select * from abc' on branch master" {
+    exit 1
     run dolt sql -q 'select * from abc;'
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "| pk | a    | b   | x | y      |" ]] || false
