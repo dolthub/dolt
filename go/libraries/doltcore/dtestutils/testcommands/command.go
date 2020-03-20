@@ -148,7 +148,7 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) {
 	assert.NoError(t, err)
 	assert.NotEqual(t, h1, h2)
 
-	tblNames, err := dEnv.MergeWouldStompChanges(context.Background(), cm2)
+	tblNames, _, err := dEnv.MergeWouldStompChanges(context.Background(), cm2)
 	assert.NoError(t, err)
 	assert.True(t, len(tblNames) == 0)
 
