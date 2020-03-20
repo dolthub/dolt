@@ -97,16 +97,14 @@ pipeline {
                     steps {
                         dir (".ci_bin") {
                             sh "npm i bats"
+                            sh "export CI_BIN=$(pwd)"
                         }
                         dir ("go") {
                             sh "go get -mod=readonly ./..."
-                            sh "go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/."
+                            sh "go build -mod=readonly -o $CI_BIN/dolt ./cmd/dolt/."
                         }
                         sh "dolt config --global --add user.name 'Liquidata Jenkins'"
                         sh "dolt config --global --add user.email 'jenkins@liquidata.co'"
-                        sh "git fetch"
-                        sh "git tag -l"
-                        sh "git branch"
                         sh "git checkout -b build$BUILD_ID"
                         dir ("bats/compatibility") {
                             sh "./runner.sh"
