@@ -164,16 +164,28 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
-	_, forceBatchMode := apr.GetValue(batchFlag)
-
+	origRoot := root
 	if query, queryOK := apr.GetValue(queryFlag); queryOK {
-		saveMessage := apr.GetValueOrDefault(messageFlag, "")
-		saveName := apr.GetValueOrDefault(saveFlag, "")
+		batchMode := apr.Contains(batchFlag)
 
-		return execQuery(ctx, dEnv, root, query, saveName, saveMessage, forceBatchMode, format, usage)
-	}
+		if batchMode {
+			batchInput := strings.NewReader(query)
+			root, verr = execBatch(ctx, dEnv, root, batchInput, format)
+		} else {
+			root, verr = execQuery(ctx, dEnv, root, query, format)
 
-	if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
+			if verr != nil {
+				return HandleVErrAndExitCode(verr, usage)
+			}
+
+			saveName := apr.GetValueOrDefault(saveFlag, "")
+
+			if saveName != "" {
+				saveMessage := apr.GetValueOrDefault(messageFlag, "")
+				root, verr = saveQuery(ctx, root, dEnv, query, saveName, saveMessage)
+			}
+		}
+	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
 		sq, err := dsqle.RetrieveFromQueryCatalog(ctx, root, savedQueryName)
 
 		if err != nil {
@@ -181,10 +193,8 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 
 		cli.PrintErrf("Executing saved query '%s':\n%s\n", savedQueryName, sq.Query)
-		return execQuery(ctx, dEnv, root, sq.Query, "", "", forceBatchMode, format, usage)
-	}
-
-	if apr.Contains(listSavedFlag) {
+		root, verr = execQuery(ctx, dEnv, root, sq.Query, format)
+	} else if apr.Contains(listSavedFlag) {
 		hasQC, err := root.HasTable(ctx, doltdb.DoltQueryCatalogTableName)
 
 		if err != nil {
@@ -197,88 +207,88 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 
 		query := "SELECT * FROM " + doltdb.DoltQueryCatalogTableName
-		return execQuery(ctx, dEnv, root, query, "", "", forceBatchMode, format, usage)
-	}
-
-	return execQuery(ctx, dEnv, root, "", "", "", forceBatchMode, format, usage)
-}
-
-func execQuery(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query, saveName, saveMessage string, forceBatchMode bool, format resultFormat, usage cli.UsagePrinter) int {
-	var se *sqlEngine
-	origRoot := root
-	queryOK := query != ""
-
-	// run a single command and exit
-	if !forceBatchMode && queryOK {
-		se, err := newSqlEngine(ctx, dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
-
-		sqlSch, rowIter, err := processQuery(ctx, query, se)
-		if err != nil {
-			verr := formatQueryError(query, err)
-			return HandleVErrAndExitCode(verr, usage)
-		}
-
-		if rowIter != nil {
-			defer rowIter.Close()
-			err = se.prettyPrintResults(ctx, se.ddb.ValueReadWriter().Format(), sqlSch, rowIter)
-			if err != nil {
-				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-			}
-		}
-
-		if se.sdb.Root() != origRoot {
-			return HandleVErrAndExitCode(UpdateWorkingWithVErr(dEnv, se.sdb.Root()), usage)
-		}
-
-		if saveName != "" {
-			return HandleVErrAndExitCode(saveQuery(ctx, origRoot, dEnv, query, saveName, saveMessage), usage)
-		}
-
-		return 0
-	}
-
-	// Run in either batch mode for piped input, or shell mode for interactive
-	fi, err := os.Stdin.Stat()
-	// Windows has a bug where STDIN can't be statted in some cases, see https://github.com/golang/go/issues/33570
-	if (err != nil && osutil.IsWindows) || (fi.Mode()&os.ModeCharDevice) == 0 || forceBatchMode {
-		var batchInput io.Reader = os.Stdin
-		if forceBatchMode {
-			batchInput = strings.NewReader(query)
-		}
-
-		se, err = newSqlEngine(ctx, dEnv, dsqle.NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
-
-		err = runBatchMode(ctx, se, batchInput)
-		if err != nil {
-			cli.PrintErrln(color.RedString("Error processing batch"))
-			return 1
-		}
-	} else if err != nil {
-		HandleVErrAndExitCode(errhand.BuildDError("Couldn't stat STDIN. This is a bug.").Build(), usage)
+		_, verr = execQuery(ctx, dEnv, root, query, format)
 	} else {
-		se, err = newSqlEngine(ctx, dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
+		// Run in either batch mode for piped input, or shell mode for interactive
+		runInBatchMode := true
+		fi, err := os.Stdin.Stat()
+
 		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+			if !osutil.IsWindows {
+				return HandleVErrAndExitCode(errhand.BuildDError("Couldn't stat STDIN. This is a bug.").Build(), usage)
+			}
+		} else {
+			runInBatchMode = fi.Mode()&os.ModeCharDevice == 0
 		}
 
-		err = runShell(ctx, se, dEnv)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.BuildDError("unable to start shell").AddCause(err).Build(), usage)
+		if runInBatchMode {
+			root, verr = execBatch(ctx, dEnv, root, os.Stdin, format)
+		} else {
+			root, verr = execShell(ctx, dEnv, root, format)
 		}
+	}
+
+	if verr != nil {
+		return HandleVErrAndExitCode(verr, usage)
 	}
 
 	// If the SQL session wrote a new root value, update the working set with it
-	if se.sdb.Root() != origRoot {
-		return HandleVErrAndExitCode(UpdateWorkingWithVErr(dEnv, se.sdb.Root()), usage)
+	if origRoot != root {
+		verr = UpdateWorkingWithVErr(dEnv, root)
 	}
 
-	return 0
+	return HandleVErrAndExitCode(verr, usage)
+}
+
+func execShell(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, format resultFormat) (*doltdb.RootValue, errhand.VerboseError) {
+	se, err := newSqlEngine(ctx, dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
+	if err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
+	}
+
+	err = runShell(ctx, se, dEnv)
+	if err != nil {
+		return nil, errhand.BuildDError("unable to start shell").AddCause(err).Build()
+	}
+
+	return se.sdb.Root(), nil
+}
+
+func execBatch(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, batchInput io.Reader, format resultFormat) (*doltdb.RootValue, errhand.VerboseError) {
+	se, err := newSqlEngine(ctx, dEnv, dsqle.NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
+	if err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
+	}
+
+	err = runBatchMode(ctx, se, batchInput)
+	if err != nil {
+		return nil, errhand.BuildDError("Error processing batch").Build()
+	}
+
+	return se.sdb.Root(), nil
+}
+
+func execQuery(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string, format resultFormat) (*doltdb.RootValue, errhand.VerboseError) {
+	se, err := newSqlEngine(ctx, dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
+	if err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
+	}
+
+	sqlSch, rowIter, err := processQuery(ctx, query, se)
+	if err != nil {
+		verr := formatQueryError(query, err)
+		return nil, verr
+	}
+
+	if rowIter != nil {
+		defer rowIter.Close()
+		err = se.prettyPrintResults(ctx, se.ddb.ValueReadWriter().Format(), sqlSch, rowIter)
+		if err != nil {
+			return nil, errhand.VerboseErrorFromError(err)
+		}
+	}
+
+	return se.sdb.Root(), nil
 }
 
 func formatQueryError(query string, err error) errhand.VerboseError {
@@ -410,13 +420,13 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 }
 
 // Saves the query given to the catalog with the name and message given.
-func saveQuery(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, query string, name string, message string) errhand.VerboseError {
+func saveQuery(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, query string, name string, message string) (*doltdb.RootValue, errhand.VerboseError) {
 	_, newRoot, err := dsqle.NewQueryCatalogEntryWithNameAsID(ctx, root, name, query, message)
 	if err != nil {
-		return errhand.BuildDError("Couldn't save query").AddCause(err).Build()
+		return nil, errhand.BuildDError("Couldn't save query").AddCause(err).Build()
 	}
 
-	return UpdateWorkingWithVErr(dEnv, newRoot)
+	return newRoot, nil
 }
 
 // ScanStatements is a split function for a Scanner that returns each SQL statement in the input as a token. It doesn't
