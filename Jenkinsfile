@@ -97,7 +97,7 @@ pipeline {
                     steps {
                         dir (".ci_bin") {
                             sh "npm i bats"
-                            sh "export CI_BIN=$(pwd)"
+                            sh "export CI_BIN=`pwd`"
                         }
                         dir ("go") {
                             sh "go get -mod=readonly ./..."
