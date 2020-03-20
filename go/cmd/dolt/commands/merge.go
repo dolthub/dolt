@@ -124,13 +124,13 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				verr = errhand.BuildDError("error: failed to get conflicts").AddCause(err).Build()
 			} else if has {
 				cli.Println("error: Merging is not possible because you have unmerged files.")
-				cli.Println("hint: Fix them up in the work tree, and then use {{.EmphasisLeft}}dolt add <table>{{.EmphasisRight}}")
+				cli.Println("hint: Fix them up in the work tree, and then use 'dolt add <table>'")
 				cli.Println("hint: as appropriate to mark resolution and make a commit.")
 				cli.Println("fatal: Exiting because of an unresolved conflict.")
 				return 1
 			} else if dEnv.IsMergeActive() {
 				cli.Println("error: Merging is not possible because you have not committed an active merge.")
-				cli.Println("hint: add affected tables using {{.EmphasisLeft}}dolt add <table>{{.EmphasisRight}} and commit using {{.EmphasisLeft}}dolt commit -m <msg>{{.EmphasisRight}}")
+				cli.Println("hint: add affected tables using 'dolt add <table>' and commit using {{.EmphasisLeft}}dolt commit -m <msg>{{.EmphasisRight}}")
 				cli.Println("fatal: Exiting because of active merge")
 				return 1
 			}
@@ -211,7 +211,7 @@ func mergeBranch(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRef) errha
 		cli.Println("Already up to date.")
 		return nil
 	} else {
-		return executeMerge(ctx, dEnv, cm1, cm2, dref, workingDiffs)
+		return executeMerge(ctx, dEnv, cm1, cm2, dref)
 	}
 }
 
@@ -286,7 +286,7 @@ and take the hash for your current branch and use it for the value for "staged" 
 	return nil
 }
 
-func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, dref ref.DoltRef, workingDiffs map[string]hash.Hash) errhand.VerboseError {
+func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, dref ref.DoltRef) errhand.VerboseError {
 	mergedRoot, tblToStats, err := actions.MergeCommits(ctx, dEnv.DoltDB, cm1, cm2)
 
 	if err != nil {
