@@ -97,7 +97,7 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 
 	printStatus(ctx, dEnv, stagedTblDiffs, notStagedTblDiffs, workingTblsInConflict, workingDocsInConflict, stagedDocDiffs, notStagedDocDiffs)
-	return 1
+	return 0
 }
 
 var tblDiffTypeToLabel = map[diff.TableDiffType]string{
