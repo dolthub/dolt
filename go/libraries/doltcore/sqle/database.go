@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/src-d/go-mysql-server/sql"
 	"github.com/src-d/go-mysql-server/sql/parse"
@@ -27,6 +28,7 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
 	dsql "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
 )
@@ -129,21 +131,73 @@ func (db *Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.T
 }
 
 // GetTableInsensitiveAsOf implements sql.VersionedDatabase
-func (db *Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, time interface{}) (sql.Table, bool, error) {
-	root, err := db.rootAsOf(ctx, time)
+func (db *Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, asOf interface{}) (sql.Table, bool, error) {
+	root, err := db.rootAsOf(ctx, asOf)
 	if err != nil {
 		return nil, false, err
+	} else if root == nil {
+		return nil, false, nil
 	}
 
 	return db.getTable(ctx, root, tableName)
 }
 
+// rootAsOf returns the root of the DB as of the expression given, which may be nil in the case that it refers to an
+// expression before the first commit.
 func (db *Database) rootAsOf(ctx *sql.Context, asOf interface{}) (*doltdb.RootValue, error) {
-	commitRef, ok := asOf.(string)
-	if !ok {
-		panic("expected commit ref string")
+	switch x := asOf.(type) {
+	case string:
+		return db.getRootForCommitRef(ctx, x)
+	case time.Time:
+		return db.getRootForTime(ctx, x)
+	default:
+		panic(fmt.Sprintf("unsupported AS OF type %T", asOf))
+	}
+}
+
+func (db *Database) getRootForTime(ctx *sql.Context, asOf time.Time) (*doltdb.RootValue, error) {
+	cs, err := doltdb.NewCommitSpec("HEAD", db.rsr.CWBHeadRef().String())
+	if err != nil {
+		return nil, err
 	}
 
+	cm, err := db.ddb.Resolve(ctx, cs)
+	if err != nil {
+		return nil, err
+	}
+
+	hash, err := cm.HashOf()
+	if err != nil {
+		return nil, err
+	}
+
+	cmItr, err := commitwalk.GetTopologicalOrderIterator(ctx, db.ddb, hash)
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+		_, curr, err := cmItr.Next(ctx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		}
+
+		meta, err := curr.GetCommitMeta()
+		if err != nil {
+			return nil, err
+		}
+
+		if meta.Time().Equal(asOf) || meta.Time().Before(asOf) {
+			return curr.GetRootValue()
+		}
+	}
+
+	return nil, nil
+}
+
+func (db *Database) getRootForCommitRef(ctx *sql.Context, commitRef string) (*doltdb.RootValue, error) {
 	cs, err := doltdb.NewCommitSpec(commitRef, db.rsr.CWBHeadRef().String())
 	if err != nil {
 		return nil, err
@@ -167,6 +221,8 @@ func (db *Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]str
 	root, err := db.rootAsOf(ctx, time)
 	if err != nil {
 		return nil, err
+	} else if root == nil {
+		return nil, nil
 	}
 
 	tblNames, err := root.GetTableNames(ctx)

@@ -129,7 +129,7 @@ type testCommitClock struct {
 
 func (tcc *testCommitClock) Now() time.Time {
 	now := time.Unix(0, tcc.unixNano)
-	tcc.unixNano += int64(time.Millisecond)
+	tcc.unixNano += int64(time.Hour)
 	return now
 }
 

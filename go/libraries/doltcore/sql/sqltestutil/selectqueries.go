@@ -181,7 +181,6 @@ var BasicSelectTests = []SelectTest{
 		ExpectedRows:   CompressRows(PeopleTestSchema, Barney, Moe, Lisa, Bart, Marge, Homer),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
-	// TODO: float logic seems broken in sql engine
 	{
 		Name:           "select *, order by float",
 		Query:          "select * from people order by rating",
@@ -718,7 +717,7 @@ var BasicSelectTests = []SelectTest{
 		Name:  "select * from log system table",
 		Query: "select * from dolt_log",
 		ExpectedRows: []row.Row{mustRow(row.New(types.Format_7_18, LogSchema, row.TaggedValues{
-			0: types.String("73aupasq0va8lic1t5703nacn6n6kb8g"),
+			0: types.String("mtv77a8ta2lqgin4vl38ktpojtktic1f"),
 			1: types.String("billy bob"),
 			2: types.String("bigbillieb@fake.horse"),
 			3: types.Timestamp(time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)),
@@ -836,6 +835,62 @@ var AsOfTests = []SelectTest{
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele")})),
 		},
 		ExpectedSchema: ReaddAgeAt4HistSch,
+	},
+	// Because of an implementation detail in the way we process history for test setup, each commit is 2 hours apart.
+	{
+		Name:  "select * from timestamp after HEAD",
+		Query: "select * from test_table as of CONVERT('1970-01-01 10:00:00', DATETIME)",
+		ExpectedRows: []row.Row{
+			mustRow(row.New(types.Format_7_18, ReaddAgeAt4HistSch, row.TaggedValues{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St"), 4: types.Uint(35)})),
+			mustRow(row.New(types.Format_7_18, ReaddAgeAt4HistSch, row.TaggedValues{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln"), 4: types.Uint(38)})),
+			mustRow(row.New(types.Format_7_18, ReaddAgeAt4HistSch, row.TaggedValues{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct"), 4: types.Uint(37)})),
+			mustRow(row.New(types.Format_7_18, ReaddAgeAt4HistSch, row.TaggedValues{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave"), 3: types.String("-1 Imaginary Wy"), 4: types.Uint(37)})),
+			mustRow(row.New(types.Format_7_18, ReaddAgeAt4HistSch, row.TaggedValues{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele")})),
+			mustRow(row.New(types.Format_7_18, ReaddAgeAt4HistSch, row.TaggedValues{0: types.Int(5), 1: types.String("Daylon"), 2: types.String("Wilkins")})),
+		},
+		ExpectedSchema: ReaddAgeAt4HistSch,
+	},
+	{
+		Name:  "select * from timestamp, HEAD exact",
+		Query: "select * from test_table as of CONVERT('1970-01-01 08:00:00', DATETIME)",
+		ExpectedRows: []row.Row{
+			mustRow(row.New(types.Format_7_18, ReaddAgeAt4HistSch, row.TaggedValues{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St"), 4: types.Uint(35)})),
+			mustRow(row.New(types.Format_7_18, ReaddAgeAt4HistSch, row.TaggedValues{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln"), 4: types.Uint(38)})),
+			mustRow(row.New(types.Format_7_18, ReaddAgeAt4HistSch, row.TaggedValues{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct"), 4: types.Uint(37)})),
+			mustRow(row.New(types.Format_7_18, ReaddAgeAt4HistSch, row.TaggedValues{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave"), 3: types.String("-1 Imaginary Wy"), 4: types.Uint(37)})),
+			mustRow(row.New(types.Format_7_18, ReaddAgeAt4HistSch, row.TaggedValues{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele")})),
+			mustRow(row.New(types.Format_7_18, ReaddAgeAt4HistSch, row.TaggedValues{0: types.Int(5), 1: types.String("Daylon"), 2: types.String("Wilkins")})),
+		},
+		ExpectedSchema: ReaddAgeAt4HistSch,
+	},
+	{
+		Name:  "select * from timestamp, HEAD~ + 1",
+		Query: "select * from test_table as of CONVERT('1970-01-01 07:00:00', DATETIME)",
+		ExpectedRows: []row.Row{
+			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St")})),
+			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln")})),
+			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct")})),
+			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave")})),
+			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele")})),
+		},
+		ExpectedSchema: ReaddAgeAt4HistSch,
+	},
+	{
+		Name:  "select * from timestamp, HEAD~",
+		Query: "select * from test_table as of CONVERT('1970-01-01 06:00:00', DATETIME)",
+		ExpectedRows: []row.Row{
+			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St")})),
+			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln")})),
+			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct")})),
+			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave")})),
+			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele")})),
+		},
+		ExpectedSchema: ReaddAgeAt4HistSch,
+	},
+	{
+		Name:        "select * from timestamp, before table creation",
+		Query:       "select * from test_table as of CONVERT('1970-01-01 02:00:00', DATETIME)",
+		ExpectedErr: "not found",
 	},
 }
 

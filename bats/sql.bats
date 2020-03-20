@@ -58,14 +58,14 @@ teardown() {
 
 @test "sql AS OF queries" {
     dolt add .
-    dolt commit -m "Initial master commit"
+    dolt commit -m "Initial master commit" --date "2020-03-01T12:00:00Z"
 
     master_commit=`dolt log | head -n1 | cut -d' ' -f2`
     dolt sql -q "update one_pk set c1 = c1 + 1"
     dolt sql -q "drop table two_pk"
     dolt checkout -b new_branch
     dolt add .
-    dolt commit -m "Updated a table, dropped a table"
+    dolt commit -m "Updated a table, dropped a table" --date "2020-03-01T13:00:00Z"
     new_commit=`dolt log | head -n1 | cut -d' ' -f2`
     
     run dolt sql -r csv -q "select pk,c1 from one_pk order by c1"
@@ -125,8 +125,39 @@ teardown() {
     [[ "$output" =~ "1,11" ]] || false
     [[ "$output" =~ "2,21" ]] || false
     [[ "$output" =~ "3,31" ]] || false
-    
-    # TODO: tests of date queries, when supported
+
+    dolt checkout new_branch
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of CONVERT('2020-03-01 12:00:00', DATETIME) order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "1,10" ]] || false
+    [[ "$output" =~ "2,20" ]] || false
+    [[ "$output" =~ "3,30" ]] || false
+
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of CONVERT('2020-03-01 12:15:00', DATETIME) order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "1,10" ]] || false
+    [[ "$output" =~ "2,20" ]] || false
+    [[ "$output" =~ "3,30" ]] || false
+
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of CONVERT('2020-03-01 13:00:00', DATETIME) order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,1" ]] || false
+    [[ "$output" =~ "1,11" ]] || false
+    [[ "$output" =~ "2,21" ]] || false
+    [[ "$output" =~ "3,31" ]] || false
+
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of CONVERT('2020-03-01 13:15:00', DATETIME) order by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0,1" ]] || false
+    [[ "$output" =~ "1,11" ]] || false
+    [[ "$output" =~ "2,21" ]] || false
+    [[ "$output" =~ "3,31" ]] || false
+
+    run dolt sql -r csv -q "select pk,c1 from one_pk as of CONVERT('2020-03-01 11:59:59', DATETIME) order by c1"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "not found" ]] || false
 }
 
 @test "sql ambiguous column name" {
