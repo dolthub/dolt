@@ -46,7 +46,7 @@ require (
 	github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20200207221941-8e60e239e1fb
 	github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0
 	github.com/liquidata-inc/mmap-go v1.0.3
-	github.com/liquidata-inc/sqllogictest/go v0.0.0-20200313010318-99cb4d559676
+	github.com/liquidata-inc/sqllogictest/go v0.0.0-20200320151923-b11801f10e15
 	github.com/mattn/go-isatty v0.0.12
 	github.com/mattn/go-runewidth v0.0.8
 	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b
