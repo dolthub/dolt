@@ -14,18 +14,6 @@ CREATE TABLE test (
   PRIMARY KEY (pk)
 );
 SQL
-
-cat >test_alt.sql <<SQL
-CREATE TABLE test_alt (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
-  PRIMARY KEY (pk)
-);
-SQL
 }
 
 teardown() {
@@ -703,7 +691,7 @@ DELIM
     dolt checkout test-branch-m
     dolt merge test-branch
     dolt checkout test-branch-alt
-    dolt sql < test_alt.sql
+    dolt sql -q "CREATE TABLE test_alt (pk BIGINT NOT NULL COMMENT 'tag:0', c1 BIGINT COMMENT 'tag:1', PRIMARY KEY (pk));"
     dolt add test_alt
     dolt commit -m 'add test_alt'
     dolt checkout test-branch-m
@@ -719,4 +707,17 @@ DELIM
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "test | 0 " ]
     skip "Row addition not totalled correctly" [ "${lines[2]}" = "1 tables changed, 1 rows added(+), 0 rows modified(*), 0 rows deleted(-)" ]
+}
+
+@test "checkout table with branch of same name" {
+    dolt checkout -b test
+    dolt add .
+    dolt commit -m "added test table"
+    dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
+    run dolt checkout test
+    skip "Should distinguish between branch name and table name" [ "$status" -eq 0 ]
+    [ "${lines[0]}" != "Already on branch 'test'" ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [ "${lines[4]}" != "	modified:       test" ]
 }
