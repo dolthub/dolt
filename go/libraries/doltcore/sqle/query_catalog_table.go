@@ -18,6 +18,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -51,6 +52,48 @@ const (
 	queryCatalogDescriptionTag
 )
 
+var ErrQueryNotFound = errors.NewKind("Query '%s' not found")
+
+type SavedQuery struct {
+	ID          string
+	Name        string
+	Query       string
+	Description string
+	Order       uint64
+}
+
+func savedQueryFromKV(id string, valTuple types.Tuple) (SavedQuery, error) {
+	tv, err := row.ParseTaggedValues(valTuple)
+
+	if err != nil {
+		return SavedQuery{}, err
+	}
+
+	nameVal := tv.GetWithDefault(queryCatalogNameTag, types.String(""))
+	queryVal := tv.GetWithDefault(queryCatalogQueryTag, types.String(""))
+	descVal := tv.GetWithDefault(queryCatalogDescriptionTag, types.String(""))
+	orderVal := tv.GetWithDefault(queryCatalogOrderTag, types.Uint(0))
+
+	return SavedQuery{
+		ID:          id,
+		Name:        string(nameVal.(types.String)),
+		Query:       string(queryVal.(types.String)),
+		Description: string(descVal.(types.String)),
+		Order:       uint64(orderVal.(types.Uint)),
+	}, nil
+}
+
+func (sq SavedQuery) asRow() (row.Row, error) {
+	taggedVals := make(row.TaggedValues)
+	taggedVals[queryCatalogIdTag] = types.String(sq.ID)
+	taggedVals[queryCatalogOrderTag] = types.Uint(sq.Order)
+	taggedVals[queryCatalogNameTag] = types.String(sq.Name)
+	taggedVals[queryCatalogQueryTag] = types.String(sq.Query)
+	taggedVals[queryCatalogDescriptionTag] = types.String(sq.Description)
+
+	return row.New(types.Format_Default, DoltQueryCatalogSchema, taggedVals)
+}
+
 var queryCatalogCols, _ = schema.NewColCollection(
 	schema.NewColumn(QueryCatalogIdCol, queryCatalogIdTag, types.StringKind, true, schema.NotNullConstraint{}),
 	schema.NewColumn(QueryCatalogOrderCol, queryCatalogOrderTag, types.UintKind, false, schema.NotNullConstraint{}),
@@ -75,36 +118,63 @@ func createQueryCatalogIfNotExists(ctx context.Context, root *doltdb.RootValue) 
 	return root, nil
 }
 
-// NewQueryCatalogEntry saves a new entry in the query catalog table and returns the new root value. An ID will be
+// NewQueryCatalogEntryWithRandID saves a new entry in the query catalog table and returns the new root value. An ID will be
 // chosen automatically.
-func NewQueryCatalogEntry(ctx context.Context, root *doltdb.RootValue, name, query, description string) (*doltdb.RootValue, error) {
+func NewQueryCatalogEntryWithRandID(ctx context.Context, root *doltdb.RootValue, name, query, description string) (SavedQuery, *doltdb.RootValue, error) {
+	uid, err := uuid.NewRandom()
+	if err != nil {
+		return SavedQuery{}, nil, err
+	}
+
+	// Use the last 24 hex digits of the uuid for the ID.
+	id := uid.String()[24:]
+	return newQueryCatalogEntry(ctx, root, id, name, query, description)
+}
+
+// NewQueryCatalogEntryWithNameAsID saves an entry in the query catalog table and returns the new root value. If an
+// entry with the given name is already present, it will be overwritten.
+func NewQueryCatalogEntryWithNameAsID(ctx context.Context, root *doltdb.RootValue, name, query, description string) (SavedQuery, *doltdb.RootValue, error) {
+	return newQueryCatalogEntry(ctx, root, name, name, query, description)
+}
+
+func newQueryCatalogEntry(ctx context.Context, root *doltdb.RootValue, id, name, query, description string) (SavedQuery, *doltdb.RootValue, error) {
 	root, err := createQueryCatalogIfNotExists(ctx, root)
 	if err != nil {
-		return nil, err
+		return SavedQuery{}, nil, err
 	}
 
 	tbl, _, err := root.GetTable(ctx, doltdb.DoltQueryCatalogTableName)
 	if err != nil {
-		return nil, err
-	}
-
-	uid, err := uuid.NewRandom()
-	if err != nil {
-		return nil, err
+		return SavedQuery{}, nil, err
 	}
 
 	data, err := tbl.GetRowData(ctx)
 	if err != nil {
-		return nil, err
+		return SavedQuery{}, nil, err
 	}
 
 	order := getMaxQueryOrder(data, ctx) + 1
+	existingSQ, err := RetrieveFromQueryCatalog(ctx, root, id)
 
-	// Use the last 12 hex digits of the uuid for the ID.
-	id := uid.String()[24:]
-	r, err := newQueryCatalogRow(id, order, name, query, description)
 	if err != nil {
-		return nil, err
+		if !ErrQueryNotFound.Is(err) {
+			return SavedQuery{}, nil, err
+		}
+	} else {
+		order = existingSQ.Order
+	}
+
+	sq := SavedQuery{
+		ID:          id,
+		Name:        name,
+		Query:       query,
+		Description: description,
+		Order:       order,
+	}
+
+	r, err := sq.asRow()
+	if err != nil {
+		return SavedQuery{}, nil, err
 	}
 
 	me := data.Edit()
@@ -112,25 +182,63 @@ func NewQueryCatalogEntry(ctx context.Context, root *doltdb.RootValue, name, que
 
 	updatedTable, err := me.Map(ctx)
 	if err != nil {
-		return nil, err
+		return SavedQuery{}, nil, err
 	}
 
 	newTable, err := tbl.UpdateRows(ctx, updatedTable)
 	if err != nil {
-		return nil, err
+		return SavedQuery{}, nil, err
 	}
 
-	return doltdb.PutTable(ctx, root, root.VRW(), doltdb.DoltQueryCatalogTableName, newTable)
+	root, err = doltdb.PutTable(ctx, root, root.VRW(), doltdb.DoltQueryCatalogTableName, newTable)
+
+	if err != nil {
+		return SavedQuery{}, nil, err
+	}
+
+	return sq, root, err
+}
+
+func RetrieveFromQueryCatalog(ctx context.Context, root *doltdb.RootValue, id string) (SavedQuery, error) {
+	tbl, ok, err := root.GetTable(ctx, doltdb.DoltQueryCatalogTableName)
+
+	if err != nil {
+		return SavedQuery{}, err
+	} else if !ok {
+		return SavedQuery{}, doltdb.ErrTableNotFound
+	}
+
+	m, err := tbl.GetRowData(ctx)
+
+	if err != nil {
+		return SavedQuery{}, err
+	}
+
+	k, err := types.NewTuple(root.VRW().Format(), types.Uint(queryCatalogIdTag), types.String(id))
+
+	if err != nil {
+		return SavedQuery{}, err
+	}
+
+	val, ok, err := m.MaybeGet(ctx, k)
+
+	if err != nil {
+		return SavedQuery{}, err
+	} else if !ok {
+		return SavedQuery{}, ErrQueryNotFound.New(id)
+	}
+
+	return savedQueryFromKV(id, val.(types.Tuple))
 }
 
 // Returns the largest order entry in the catalog
-func getMaxQueryOrder(data types.Map, ctx context.Context) uint {
-	maxOrder := uint(0)
+func getMaxQueryOrder(data types.Map, ctx context.Context) uint64 {
+	maxOrder := uint64(0)
 	data.IterAll(ctx, func(key, value types.Value) error {
 		r, _ := row.FromNoms(DoltQueryCatalogSchema, key.(types.Tuple), value.(types.Tuple))
 		orderVal, ok := r.GetColVal(1)
 		if ok {
-			order := uint(orderVal.(types.Uint))
+			order := uint64(orderVal.(types.Uint))
 			if order > maxOrder {
 				maxOrder = order
 			}
@@ -138,14 +246,4 @@ func getMaxQueryOrder(data types.Map, ctx context.Context) uint {
 		return nil
 	})
 	return maxOrder
-}
-
-func newQueryCatalogRow(id string, order uint, name, query, description string) (row.Row, error) {
-	taggedVals := make(row.TaggedValues)
-	taggedVals[queryCatalogIdTag] = types.String(id)
-	taggedVals[queryCatalogOrderTag] = types.Uint(order)
-	taggedVals[queryCatalogNameTag] = types.String(name)
-	taggedVals[queryCatalogQueryTag] = types.String(query)
-	taggedVals[queryCatalogDescriptionTag] = types.String(description)
-	return row.New(types.Format_Default, DoltQueryCatalogSchema, taggedVals)
 }

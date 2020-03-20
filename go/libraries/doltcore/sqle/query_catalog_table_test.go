@@ -38,8 +38,17 @@ func TestInsertIntoQueryCatalogTable(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, ok)
 
-	root, err = NewQueryCatalogEntry(ctx, root, "name", "select 1 from dual", "description")
+	queryStr := "select 1 from dual"
+	sq, root, err := NewQueryCatalogEntryWithRandID(ctx, root, "name", queryStr, "description")
 	require.NoError(t, err)
+	require.True(t, sq.ID != "")
+	assert.Equal(t, queryStr, sq.Query)
+	assert.Equal(t, "name", sq.Name)
+	assert.Equal(t, "description", sq.Description)
+
+	retrieved, err := RetrieveFromQueryCatalog(ctx, root, sq.ID)
+	require.NoError(t, err)
+	assert.Equal(t, sq, retrieved)
 
 	_, ok, err = root.GetTable(ctx, doltdb.DoltQueryCatalogTableName)
 	require.NoError(t, err)
@@ -53,8 +62,17 @@ func TestInsertIntoQueryCatalogTable(t *testing.T) {
 
 	assert.Equal(t, expectedRows, rows)
 
-	root, err = NewQueryCatalogEntry(ctx, root, "name2", "select 2 from dual", "description2")
+	queryStr2 := "select 2 from dual"
+	sq2, root, err := NewQueryCatalogEntryWithNameAsID(ctx, root, "name2", queryStr2, "description2")
 	require.NoError(t, err)
+	assert.Equal(t, "name2", sq2.ID)
+	assert.Equal(t, "name2", sq2.Name)
+	assert.Equal(t, queryStr2, sq2.Query)
+	assert.Equal(t, "description2", sq2.Description)
+
+	retrieved2, err := RetrieveFromQueryCatalog(ctx, root, sq2.ID)
+	require.NoError(t, err)
+	assert.Equal(t, sq2, retrieved2)
 
 	rows, err = ExecuteSelect(root, "select display_order, query, name, description from "+doltdb.DoltQueryCatalogTableName+" order by display_order")
 	require.NoError(t, err)
@@ -71,4 +89,13 @@ func TestInsertIntoQueryCatalogTable(t *testing.T) {
 		assert.NotEmpty(t, r)
 		assert.NotEmpty(t, r[0])
 	}
+
+	queryStr3 := "select 3 from dual"
+	sq3, root, err := NewQueryCatalogEntryWithNameAsID(ctx, root, "name2", queryStr3, "description3")
+	require.NoError(t, err)
+	assert.Equal(t, "name2", sq3.ID)
+	assert.Equal(t, "name2", sq3.Name)
+	assert.Equal(t, queryStr3, sq3.Query)
+	assert.Equal(t, "description3", sq3.Description)
+	assert.Equal(t, sq2.Order, sq3.Order)
 }

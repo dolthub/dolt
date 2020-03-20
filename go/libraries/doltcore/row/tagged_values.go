@@ -110,6 +110,16 @@ func (tt TaggedValues) Get(tag uint64) (types.Value, bool) {
 	return val, ok
 }
 
+func (tt TaggedValues) GetWithDefault(tag uint64, def types.Value) types.Value {
+	val, ok := tt[tag]
+
+	if !ok {
+		return def
+	}
+
+	return val
+}
+
 func (tt TaggedValues) Set(tag uint64, val types.Value) TaggedValues {
 	updated := tt.copy()
 	// Setting a nil value removes the mapping for that tag entirely, rather than setting a nil value. The methods to

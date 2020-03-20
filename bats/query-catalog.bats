@@ -96,3 +96,44 @@ teardown() {
     [[ "$output" =~ "name_a" ]] || false
     [[ "$output" =~ "name_b" ]] || false
 }
+
+@test "executed saved" {
+    Q1="select pk, pk1, pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1"
+    Q1_UPDATED="select pk, pk1, pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1 and pk < 3"
+    Q2="select pk from one_pk"
+    dolt sql -q "$Q1" -s name1
+    dolt sql -q "$Q2" -s name2
+
+    # executed Q1 and verify output
+    EXPECTED=$(echo -e "pk,pk1,pk2\n0,0,0\n1,0,1\n2,1,0\n3,1,1")
+    run dolt sql -r csv -x name1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    # executed Q2 and verify output
+    EXPECTED=$(echo -e "pk\n0\n1\n2\n3")
+    run dolt sql -r csv -x name2
+    echo $output
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    # execute list-saved and verify output
+    EXPECTED=$(echo -e "id,display_order,name,query,description\nname1,1,name1,\"$Q1\",\nname2,2,name2,$Q2,")
+    run dolt sql --list-saved -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    # update an existing verify output, and verify query catalog is updated
+    dolt sql -q "$Q1_UPDATED" -s name1
+
+    EXPECTED=$(echo -e "pk,pk1,pk2\n0,0,0\n1,0,1\n2,1,0")
+    run dolt sql -r csv -x name1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+    EXPECTED=$(echo -e "id,display_order,name,query,description\nname1,1,name1,\"$Q1_UPDATED\",\nname2,2,name2,$Q2,")
+    run dolt sql --list-saved -r csv
+    [ "$status" -eq 0 ]
+    echo $output
+    echo $EXPECTED
+    [[ "$output" =~ "$EXPECTED" ]] || false
+}
