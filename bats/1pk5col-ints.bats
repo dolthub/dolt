@@ -83,32 +83,13 @@ teardown() {
 }
 
 @test "dolt table import from stdin export to stdout" {
-    skiponwindows "Need to install python before this test will work."
-    echo 'pk,c1,c2,c3,c4,c5
-0,1,2,3,4,5
-9,8,7,6,5,4
-'|dolt table import -u test
-    dolt table export --file-type=csv test|python -c '
-import sys
-rows = []
-for line in sys.stdin:
-    line = line.strip()
-
-    if line != "":
-        rows.append(line.strip().split(","))
-
-if len(rows) != 3:
-    sys.exit(1)
-
-if rows[0] != "pk,c1,c2,c3,c4,c5".split(","):
-    sys.exit(1)
-
-if rows[1] != "0,1,2,3,4,5".split(","):
-    sys.exit(1)
-
-if rows[2] != "9,8,7,6,5,4".split(","):
-    sys.exit(1)
-'
+    EXPECTED=$(echo -e 'pk,c1,c2,c3,c4,c5\n0,1,2,3,4,5\n9,8,7,6,5,4')
+    echo "$EXPECTED"|dolt table import -u test
+    run dolt table export --file-type=csv test
+    [ "$status" -eq 0 ]
+    echo "outut:    " $output
+    echo "expected: " $EXPECTED
+    [[ "$output" =~ "$EXPECTED" ]] || false
 }
 
 @test "dolt sql all manner of inserts" {
