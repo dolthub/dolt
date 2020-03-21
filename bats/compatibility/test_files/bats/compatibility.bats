@@ -3,12 +3,14 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    cd "test$BATS_TEST_NUMBER"
-    pwd
+    cp -Rpf $REPO_DIR bats_repo
+    cd bats_repo
 }
 
 teardown() {
     teardown_common
+    cd ..
+    rm -rf bats_repo
 }
 
 @test "dolt version" {

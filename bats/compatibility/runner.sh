@@ -1,133 +1,76 @@
 #!/bin/bash
 
-function build_dolt() {
-  pushd "$DOLT_DIR" > /dev/null || exit
-  git checkout "$1" > /dev/null
-  go install .
-  popd > /dev/null || exit
+set -eo pipefail
+
+function download_release() {
+  ver=$1
+  dirname=binaries/"$ver"
+  mkdir "$dirname"
+  basename=dolt-"$PLATFORM_TUPLE"
+  filename="$basename".tar.gz
+  filepath=binaries/"$ver"/"$filename"
+  url="https://github.com/liquidata-inc/dolt/releases/download/$ver/$filename"
+  curl -L -o "$filepath" "$url"
+  cd "$dirname" && tar zxf "$filename"
+  echo "$dirname"/"$basename"/bin
 }
 
-function setup_dir() {
-  if [ -d "$1" ]; then rm -r "$1"; fi
-  mkdir "$1"
-  pushd "$1" > /dev/null || exit
-
-  cp -r "$TOP_DIR"/bats/* .
-
-  mkdir "repo"
-  pushd "repo" > /dev/null || exit
-  "$TOP_DIR/setup_repo.sh" > setup_repo.log
-  popd > /dev/null || exit
-
-  num_tests=$(($(grep -c '@test' *.bats)))
-  for ((i=1;i<=$num_tests;i++))
-  do
-    cp -r repo/ "test$i"
-  done
-
-  popd > /dev/null || exit
-}
-
-function run_bats_tests() {
-  pushd "$1" > /dev/null || exit
-  bats_out=$(bats .)
-  STATUS=$?
-  echo "$bats_out" | tr -cd "[:print:]\n" | sed 's/\[3J\[H\[2J//'
-  popd > /dev/null || exit
-  return $STATUS
-}
-
-assert_linux_or_macos() {
+get_platform_tuple() {
   OS=$(uname)
   ARCH=$(uname -m)
   if [ "$OS" != Linux -a "$OS" != Darwin ]; then
-    fail "E_UNSUPPORTED_OS" "dolt install.sh only supports macOS and Linux."
+    echo "tests only support linux or macOS." 1>&2
+    exit 1
   fi
   if [ "$ARCH" != x86_64 -a "$ARCH" != i386 -a "$ARCH" != i686 ]; then
-    fail "E_UNSUPPOSED_ARCH" "dolt install.sh only supports installing dolt on x86_64 or x86."
+    echo "tests only support x86_64 or x86." 1>&2
+    exit 1
   fi
-
   if [ "$OS" == Linux ]; then
     PLATFORM_TUPLE=linux
   else
     PLATFORM_TUPLE=darwin
   fi
   if [ "$ARCH" == x86_64 ]; then
-    PLATFORM_TUPLE=$PLATFORM_TUPLE-amd64
+    PLATFORM_TUPLE="$PLATFORM_TUPLE"-amd64
   else
-    PLATFORM_TUPLE=$PLATFORM_TUPLE-386
+    PLATFORM_TUPLE="$PLATFORM_TUPLE"-386
   fi
-  echo "platform: $PLATFORM_TUPLE"
+  echo "$PLATFORM_TUPLE"
 }
 
-function download_and_install_release() {
-  curl -L $1 > f
-  tar zxf f
-  if [[ -z "${CI_BIN}" ]]; then
-    install "dolt-$PLATFORM_TUPLE/bin/dolt" "$CI_BIN"
-  else
-    [ -d /usr/local/bin ] || install -o 0 -g 0 -d /usr/local/bin
-    sudo install -o 0 -g 0 "dolt-$PLATFORM_TUPLE/bin/dolt /usr/local/bin"
-  fi
+PLATFORM_TUPLE=`get_platform_tuple`
+
+function list_dolt_versions() {
+  grep -v '^ *#' < test_files/dolt_versions.txt
 }
 
-# ensure that we have a clean working change set before we begin
-if [[ $(git diff --stat) != '' ]]; then
-  echo "cannot run compatibility tests with git working changes"
-  exit 1
-fi
+function cleanup() {
+  rm -rf repos binaries
+}
+mkdir repos binaries
+trap cleanup "EXIT"
 
-# copy all the test files to create test_env
-TEST_ENV="env_test"
-rm -r $TEST_ENV
-mkdir $TEST_ENV
-cp -r test_files/* $TEST_ENV
-pushd $TEST_ENV > /dev/null || exit
+function setup_repo() {
+  dir=repos/"$1"
+  ./test_files/setup_repo.sh "$dir"
+}
 
-TOP_DIR=$(pwd)
-STARTING_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-DOLT_DIR="../../../go/cmd/dolt/"
-STATUS=0
+setup_repo HEAD
 
-# Set the PLATFORM_TUPLE var
-assert_linux_or_macos
+function test_dolt_version() {
+  ver=$1
+  bin=`download_release "$ver"`
+  echo testing "$ver" at "$bin"
+  PATH="`pwd`"/"$bin":"$PATH" setup_repo "$ver"
 
-# for each legacy version, setup a repository
-# using dolt built from the current branch
-build_dolt "$STARTING_BRANCH"
-while IFS= read -r VER
-do
-  setup_dir "$VER-forward_compat"
-done < <(grep -v '^ *#' < dolt_versions.txt)
+  # Run the bats tests with old dolt version hitting repositories from new dolt version
+  PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/HEAD bats ./test_files/bats
 
+  # Run the bats tests with new dolt version hitting repositories from old dolt version
+  REPO_DIR="`pwd`"/repos/"$ver" bats ./test_files/bats
+}
 
-while IFS= read -r VER
-do
-  download_and_install_release "https://github.com/liquidata-inc/dolt/releases/download/$VER/dolt-$PLATFORM_TUPLE.tar.gz"
-  setup_dir "$VER-backward_compat"
-
-  # run compatibility.bats to ensure dolt @ $VER can
-  # read a repo created with dolt @ HEAD
-  echo
-  echo "testing dolt @ $(dolt version) against repo in $VER-forward_compat/"
-  run_bats_tests "$VER-forward_compat"
-  STATUS=$((STATUS+$?))
-  echo
-done < <(grep -v '^ *#' < dolt_versions.txt)
-
-# now build dolt @ HEAD and make sure we can read
-# all of the legacy repositories we created
-build_dolt "$STARTING_BRANCH"
-
-while IFS= read -r VER
-do
-  echo
-  echo "testing dolt @ $(git rev-parse --abbrev-ref HEAD) against repo in $VER-backward_compat/"
-  run_bats_tests "$VER-backward_compat"
-  STATUS=$((STATUS+$?))
-  echo
-done < <(grep -v '^ *#' < dolt_versions.txt)
-
-popd > /dev/null || exit
-
-exit $STATUS
+list_dolt_versions | while IFS= read -r ver; do
+  test_dolt_version "$ver"
+done
