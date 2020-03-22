@@ -1,5 +1,10 @@
 #!/bin/bash
 
+set -eo pipefail
+
+mkdir "$1"
+cd "$1"
+
 dolt init
 
 dolt sql <<SQL
