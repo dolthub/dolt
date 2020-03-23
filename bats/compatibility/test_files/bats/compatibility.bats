@@ -3,12 +3,16 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
+    cp -Rpf $REPO_DIR bats_repo
+    cd bats_repo
 }
 
 teardown() {
     teardown_common
+    cd ..
+    rm -rf bats_repo
 }
-clear
+
 @test "dolt version" {
     run dolt version
     [ "$status" -eq 0 ]
@@ -40,10 +44,7 @@ clear
 }
 
 @test "dolt schema show on branch init" {
-    run dolt checkout init
-    [ "$status" -eq 0 ]
-
-    dolt schema show
+    dolt checkout init
     run dolt schema show abc
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "abc @ working" ]] || false
@@ -58,13 +59,7 @@ clear
 }
 
 @test "dolt sql 'select * from abc' on branch init" {
-    # checkout we're on the right branch
-    run dolt status
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch init" ]] || false
-    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
-
-    dolt sql -q 'select * from abc;'
+    dolt checkout init
     run dolt sql -q 'select * from abc;'
     [ "$status" -eq 0 ]
 
@@ -77,10 +72,6 @@ clear
 }
 
 @test "dolt schema show on branch master" {
-    run dolt checkout master
-    [ "$status" -eq 0 ]
-
-    dolt schema show
     run dolt schema show abc
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "abc @ working" ]] || false
@@ -96,13 +87,6 @@ clear
 
 
 @test "dolt sql 'select * from abc' on branch master" {
-    # checkout we're on the right branch
-    run dolt status
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
-    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
-
-    dolt sql -q 'select * from abc;'
     run dolt sql -q 'select * from abc;'
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "| pk | a    | b   | x | y      |" ]] || false
@@ -113,10 +97,7 @@ clear
 }
 
 @test "dolt schema show on branch other" {
-    run dolt checkout other
-    [ "$status" -eq 0 ]
-
-    dolt schema show
+    dolt checkout other
     run dolt schema show abc
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "abc @ working" ]] || false
@@ -131,13 +112,7 @@ clear
 }
 
 @test "dolt sql 'select * from abc' on branch other" {
-    # checkout we're on the right branch
-    run dolt status
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch other" ]] || false
-    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
-
-    dolt sql -q 'select * from abc;'
+    dolt checkout other
     run dolt sql -q 'select * from abc;'
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "| pk | a    | b   | w | z      |" ]] || false

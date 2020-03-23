@@ -1,80 +1,76 @@
 #!/bin/bash
 
-function build_dolt() {
-  pushd "$dolt_dir" > /dev/null || exit
-  git checkout "$1" > /dev/null
-  go install .
-  popd > /dev/null || exit
+set -eo pipefail
+
+function download_release() {
+  ver=$1
+  dirname=binaries/"$ver"
+  mkdir "$dirname"
+  basename=dolt-"$PLATFORM_TUPLE"
+  filename="$basename".tar.gz
+  filepath=binaries/"$ver"/"$filename"
+  url="https://github.com/liquidata-inc/dolt/releases/download/$ver/$filename"
+  curl -L -o "$filepath" "$url"
+  cd "$dirname" && tar zxf "$filename"
+  echo "$dirname"/"$basename"/bin
 }
 
-function setup_dir() {
-  if [ -d "$1" ]; then rm -r "$1"; fi
-  mkdir "$1"
-  pushd "$1" > /dev/null || exit
-  "$top_dir/setup_repo.sh" > setup_repo.log
-  cp -r "$top_dir"/bats/* .
-  popd > /dev/null || exit
+get_platform_tuple() {
+  OS=$(uname)
+  ARCH=$(uname -m)
+  if [ "$OS" != Linux -a "$OS" != Darwin ]; then
+    echo "tests only support linux or macOS." 1>&2
+    exit 1
+  fi
+  if [ "$ARCH" != x86_64 -a "$ARCH" != i386 -a "$ARCH" != i686 ]; then
+    echo "tests only support x86_64 or x86." 1>&2
+    exit 1
+  fi
+  if [ "$OS" == Linux ]; then
+    PLATFORM_TUPLE=linux
+  else
+    PLATFORM_TUPLE=darwin
+  fi
+  if [ "$ARCH" == x86_64 ]; then
+    PLATFORM_TUPLE="$PLATFORM_TUPLE"-amd64
+  else
+    PLATFORM_TUPLE="$PLATFORM_TUPLE"-386
+  fi
+  echo "$PLATFORM_TUPLE"
 }
 
-function run_bats_tests() {
-  pushd "$1" > /dev/null || exit
-  cwd=$(pwd)
-  hash=$(git rev-parse HEAD)
-  echo "testing dolt @ $hash against repo in $cwd"
-  bats .
-  echo
-  popd > /dev/null || exit
+PLATFORM_TUPLE=`get_platform_tuple`
+
+function list_dolt_versions() {
+  grep -v '^ *#' < test_files/dolt_versions.txt
 }
 
-# ensure that we have a clean working change set before we begin
-if [[ $(git diff --stat) != '' ]]; then
-  echo "cannot run compatibility tests with git working changes"
-  exit
-fi
+function cleanup() {
+  rm -rf repos binaries
+}
+mkdir repos binaries
+trap cleanup "EXIT"
 
-# copy all the test files to take them out of source control
-# when we checkout different Dolt releases we don't want to
-# delete our environment
-test_env="env_test"
-rm -r $test_env
-mkdir $test_env
-cp -r test_files/* $test_env
-pushd $test_env > /dev/null || exit
+function setup_repo() {
+  dir=repos/"$1"
+  ./test_files/setup_repo.sh "$dir"
+}
 
-top_dir=$(pwd)
-starting_branch=$(git rev-parse --abbrev-ref HEAD)
-dolt_dir="../../../go/cmd/dolt/"
+setup_repo HEAD
 
-# setup a repository with dolt built
-# from the current branch
-build_dolt "$starting_branch"
-setup_dir "head"
+function test_dolt_version() {
+  ver=$1
+  bin=`download_release "$ver"`
+  echo testing "$ver" at "$bin"
+  PATH="`pwd`"/"$bin":"$PATH" setup_repo "$ver"
 
-while IFS= read -r ver
-do
+  # Run the bats tests with old dolt version hitting repositories from new dolt version
+  PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/HEAD bats ./test_files/bats
 
-  build_dolt "$ver"
-  setup_dir "$ver"
+  # Run the bats tests with new dolt version hitting repositories from old dolt version
+  REPO_DIR="`pwd`"/repos/"$ver" bats ./test_files/bats
+}
 
-  # run compatibility.bats to ensure dolt @ $ver can
-  # read a repo created with dolt @ HEAD
-  ver_hash=$(git rev-parse HEAD)
-  echo "hash for dolt @ $ver: $ver_hash"
-  run_bats_tests head
-
-done < <(grep -v '^ *#' < dolt_versions.txt)
-
-# now build dolt @ HEAD and make sure we can read
-# all of the legacy repositories we created
-build_dolt "$starting_branch"
-
-while IFS= read -r ver
-do
-  head_hash=$(git rev-parse HEAD)
-  echo "hash for dolt @ head: $head_hash"
-  run_bats_tests "$ver"
-
-done < <(grep -v '^ *#' < dolt_versions.txt)
-
-
-popd > /dev/null || exit
+list_dolt_versions | while IFS= read -r ver; do
+  test_dolt_version "$ver"
+done
