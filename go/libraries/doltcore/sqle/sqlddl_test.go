@@ -266,7 +266,7 @@ func TestCreateTable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
-			CreateTestDatabase(dEnv, t)
+			//CreateTestDatabase(dEnv, t)
 			ctx := context.Background()
 			root, _ := dEnv.WorkingRoot(ctx)
 

@@ -253,8 +253,8 @@ func (root *RootValue) GetSuperSchema(ctx context.Context, tName string) (*schem
 	return ss, true, err
 }
 
-// GetUniqueTag returns a tag that has not yet been used in the history of this root.
-func (root *RootValue) GetUniqueTag(ctx context.Context) (uint64, error) {
+// GetUniqueTagFromNomsKinds returns a tag that has not yet been used in the history of this root.
+func (root *RootValue) GetUniqueTagFromNomsKinds(ctx context.Context, schKinds []types.NomsKind) (uint64, error) {
 	ssMap, err := root.getOrCreateSuperSchemaMap(ctx)
 
 	if err != nil {
@@ -290,7 +290,30 @@ func (root *RootValue) GetUniqueTag(ctx context.Context) (uint64, error) {
 		return schema.InvalidTag, err
 	}
 
-	return schema.AutoGenerateTag(rootSuperSchema), nil
+	// super schemas are only persisted on commit, so add in working schemas
+	tblMap, err := root.getTableMap()
+
+	if err != nil {
+		return schema.InvalidTag, err
+	}
+
+	err = tblMap.Iter(ctx, func(key, _ types.Value) (stop bool, err error) {
+		tbl, _, err := root.GetTable(ctx, string(key.(types.String)))
+		if err != nil {
+			return true, err
+		}
+		sch, err := tbl.GetSchema(ctx)
+		if err != nil {
+			return true, err
+		}
+		err = rootSuperSchema.AddSchemas(sch)
+		if err != nil {
+			return true, err
+		}
+		return false, nil
+	})
+
+	return schema.AutoGenerateTag(rootSuperSchema, schKinds), nil
 }
 
 // GerSuperSchemaMap returns the Noms map that tracks SuperSchemas, used to create new RootValues on checkout branch.

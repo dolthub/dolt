@@ -15,8 +15,10 @@
 package schema
 
 import (
+	"crypto/sha512"
+	"encoding/binary"
+	"github.com/liquidata-inc/dolt/go/store/types"
 	"math/rand"
-	"time"
 )
 
 const (
@@ -25,14 +27,19 @@ const (
 	ReservedTagMin uint64 = 1 << 50
 )
 
-
-var randGen = rand.New(rand.NewSource(time.Now().UnixNano()))
-
 // AutoGenerateTag generates a random tag that doesn't exist in the provided SuperSchema
-func AutoGenerateTag(ss *SuperSchema) uint64 {
+func AutoGenerateTag(rootSS *SuperSchema, schemaKinds []types.NomsKind) uint64 {
+	// use the schema to deterministically seed tag generation
+	var bb []byte
+	for _, k := range schemaKinds {
+		bb = append(bb, uint8(k))
+	}
+	h := sha512.Sum512(bb)
+	randGen := rand.New(rand.NewSource(int64(binary.LittleEndian.Uint64(h[:]))))
+
 	var maxTagVal uint64 = 128 * 128
 
-	for maxTagVal/2 < uint64(ss.Size()) {
+	for maxTagVal/2 < uint64(rootSS.Size()) {
 		if maxTagVal == ReservedTagMin-1 {
 			panic("There is no way anyone should ever have this many columns.  You are a bad person if you hit this panic.")
 		} else if maxTagVal*128 < maxTagVal {
@@ -46,7 +53,7 @@ func AutoGenerateTag(ss *SuperSchema) uint64 {
 	for {
 		randTag = uint64(randGen.Int63n(int64(maxTagVal)))
 
-		if _, found := ss.GetColumn(randTag); !found {
+		if _, found := rootSS.GetColumn(randTag); !found {
 			break
 		}
 	}
