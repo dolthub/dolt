@@ -48,6 +48,44 @@ const (
 
 	// SchemasTableName is the name of the dolt schema fragment table
 	SchemasTableName = "dolt_schemas"
+
+	// SystemTableReservedMin defines the lower bound of the tag space reserved for system tables
+	SystemTableReservedMin uint64 = schema.ReservedTagMin << 1
+)
+
+
+const (
+	// Tags for dolt_docs table
+	DocNameTag = iota + SystemTableReservedMin
+	DocTextTag
+)
+
+const (
+	// Tags for dolt_history_ table
+	HistoryCommitterTag = iota + SystemTableReservedMin + uint64(1000)
+	HistoryCommitHashTag
+	HistoryCommitDateTag
+)
+
+const (
+	// Tags for dolt_diff_ table
+	DiffCommitTag = iota + SystemTableReservedMin + uint64(2000)
+)
+
+const (
+	// Tags for dolt_query_catalog table
+	QueryCatalogIdTag = iota + SystemTableReservedMin + uint64(3000)
+	QueryCatalogOrderTag
+	QueryCatalogNameTag
+	QueryCatalogQueryTag
+	QueryCatalogDescriptionTag
+)
+
+const (
+	// Tags for dolt_schemas table
+	DoltSchemasTypeTag = iota + SystemTableReservedMin + uint64(4000)
+	DoltSchemasNameTag
+	DoltSchemasFragmentTag
 )
 
 // The set of reserved dolt_ tables that should be considered part of user space, like any other user-created table,

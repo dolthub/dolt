@@ -151,8 +151,8 @@ func (p putDoc) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 
 	me := m.Edit()
 	me.Set(
-		row.TaggedValues{schema.DocNameTag: types.String(p.DocName)}.NomsTupleForTags(root.VRW().Format(), []uint64{schema.DocNameTag}, true),
-		row.TaggedValues{schema.DocTextTag: types.String(p.DocText)}.NomsTupleForTags(root.VRW().Format(), []uint64{schema.DocTextTag}, false))
+		row.TaggedValues{doltdb.DocNameTag: types.String(p.DocName)}.NomsTupleForTags(root.VRW().Format(), []uint64{doltdb.DocNameTag}, true),
+		row.TaggedValues{doltdb.DocTextTag: types.String(p.DocText)}.NomsTupleForTags(root.VRW().Format(), []uint64{doltdb.DocTextTag}, false))
 	newMap, err := me.Map(context.Background())
 	require.NoError(t, err)
 

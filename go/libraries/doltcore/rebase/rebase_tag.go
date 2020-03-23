@@ -124,7 +124,7 @@ func MaybeMigrateUniqueTags(ctx context.Context, dEnv *env.DoltEnv) error {
 	return err
 }
 
-// TagRebaseForReg rebases the provided DoltRef, swapping all tags in the tagMapping.
+// TagRebaseForRef rebases the provided DoltRef, swapping all tags in the tagMapping.
 func TagRebaseForRef(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, tagMapping tagMapping) (*doltdb.Commit, error) {
 	cs, err := doltdb.NewCommitSpec("head", dRef.String())
 
@@ -582,22 +582,22 @@ func handleSystemTableMappings(ctx context.Context, tblName string, root *doltdb
 	switch tblName {
 	case doltdb.DocTableName:
 		newTagsByColName = map[string]uint64{
-			doltdb.DocPkColumnName:   schema.DocNameTag,
-			doltdb.DocTextColumnName: schema.DocTextTag,
+			doltdb.DocPkColumnName:   doltdb.DocNameTag,
+			doltdb.DocTextColumnName: doltdb.DocTextTag,
 		}
 	case doltdb.DoltQueryCatalogTableName:
 		newTagsByColName = map[string]uint64{
-			sqle.QueryCatalogIdCol:          schema.QueryCatalogIdTag,
-			sqle.QueryCatalogOrderCol:       schema.QueryCatalogOrderTag,
-			sqle.QueryCatalogNameCol:        schema.QueryCatalogNameTag,
-			sqle.QueryCatalogQueryCol:       schema.QueryCatalogQueryTag,
-			sqle.QueryCatalogDescriptionCol: schema.QueryCatalogDescriptionTag,
+			sqle.QueryCatalogIdCol:          doltdb.QueryCatalogIdTag,
+			sqle.QueryCatalogOrderCol:       doltdb.QueryCatalogOrderTag,
+			sqle.QueryCatalogNameCol:        doltdb.QueryCatalogNameTag,
+			sqle.QueryCatalogQueryCol:       doltdb.QueryCatalogQueryTag,
+			sqle.QueryCatalogDescriptionCol: doltdb.QueryCatalogDescriptionTag,
 		}
 	case doltdb.SchemasTableName:
 		newTagsByColName = map[string]uint64{
-			sqle.SchemasTablesTypeCol:     schema.DoltSchemasTypeTag,
-			sqle.SchemasTablesNameCol:     schema.DoltSchemasNameTag,
-			sqle.SchemasTablesFragmentCol: schema.DoltSchemasFragmentTag,
+			sqle.SchemasTablesTypeCol:     doltdb.DoltSchemasTypeTag,
+			sqle.SchemasTablesNameCol:     doltdb.DoltSchemasNameTag,
+			sqle.SchemasTablesFragmentCol: doltdb.DoltSchemasFragmentTag,
 		}
 	}
 

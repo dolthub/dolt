@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	sql2 "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
 	"strconv"
 	"strings"
 
@@ -132,17 +133,15 @@ func SqlColToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 	return schema.NewColumnWithTypeInfo(col.Name, tag, typeInfo, col.PrimaryKey, constraints...)
 }
 
-const tagCommentPrefix = "tag:"
-
 // Extracts the optional comment tag from a column type defn, or InvalidTag if it can't be extracted
 func extractTag(col *sql.Column) uint64 {
 	if len(col.Comment) == 0 {
 		return schema.InvalidTag
 	}
 
-	i := strings.Index(col.Comment, tagCommentPrefix)
+	i := strings.Index(col.Comment, sql2.TagCommentPrefix)
 	if i >= 0 {
-		startIdx := i + len(tagCommentPrefix)
+		startIdx := i + len(sql2.TagCommentPrefix)
 		tag, err := strconv.ParseUint(col.Comment[startIdx:], 10, 64)
 		if err != nil {
 			return schema.InvalidTag

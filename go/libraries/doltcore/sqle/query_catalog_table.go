@@ -44,11 +44,11 @@ const (
 )
 
 var queryCatalogCols, _ = schema.NewColCollection(
-	schema.NewColumn(QueryCatalogIdCol, schema.QueryCatalogIdTag, types.StringKind, true, schema.NotNullConstraint{}),
-	schema.NewColumn(QueryCatalogOrderCol, schema.QueryCatalogOrderTag, types.UintKind, false, schema.NotNullConstraint{}),
-	schema.NewColumn(QueryCatalogNameCol, schema.QueryCatalogNameTag, types.StringKind, false),
-	schema.NewColumn(QueryCatalogQueryCol, schema.QueryCatalogQueryTag, types.StringKind, false),
-	schema.NewColumn(QueryCatalogDescriptionCol, schema.QueryCatalogDescriptionTag, types.StringKind, false),
+	schema.NewColumn(QueryCatalogIdCol, doltdb.QueryCatalogIdTag, types.StringKind, true, schema.NotNullConstraint{}),
+	schema.NewColumn(QueryCatalogOrderCol, doltdb.QueryCatalogOrderTag, types.UintKind, false, schema.NotNullConstraint{}),
+	schema.NewColumn(QueryCatalogNameCol, doltdb.QueryCatalogNameTag, types.StringKind, false),
+	schema.NewColumn(QueryCatalogQueryCol, doltdb.QueryCatalogQueryTag, types.StringKind, false),
+	schema.NewColumn(QueryCatalogDescriptionCol, doltdb.QueryCatalogDescriptionTag, types.StringKind, false),
 )
 
 var DoltQueryCatalogSchema = schema.SchemaFromCols(queryCatalogCols)
@@ -120,7 +120,7 @@ func getMaxQueryOrder(data types.Map, ctx context.Context) uint {
 	maxOrder := uint(0)
 	data.IterAll(ctx, func(key, value types.Value) error {
 		r, _ := row.FromNoms(DoltQueryCatalogSchema, key.(types.Tuple), value.(types.Tuple))
-		orderVal, ok := r.GetColVal(schema.QueryCatalogOrderTag)
+		orderVal, ok := r.GetColVal(doltdb.QueryCatalogOrderTag)
 		if ok {
 			order := uint(orderVal.(types.Uint))
 			if order > maxOrder {
@@ -134,10 +134,10 @@ func getMaxQueryOrder(data types.Map, ctx context.Context) uint {
 
 func newQueryCatalogRow(id string, order uint, name, query, description string) (row.Row, error) {
 	taggedVals := make(row.TaggedValues)
-	taggedVals[schema.QueryCatalogIdTag] = types.String(id)
-	taggedVals[schema.QueryCatalogOrderTag] = types.Uint(order)
-	taggedVals[schema.QueryCatalogNameTag] = types.String(name)
-	taggedVals[schema.QueryCatalogQueryTag] = types.String(query)
-	taggedVals[schema.QueryCatalogDescriptionTag] = types.String(description)
+	taggedVals[doltdb.QueryCatalogIdTag] = types.String(id)
+	taggedVals[doltdb.QueryCatalogOrderTag] = types.Uint(order)
+	taggedVals[doltdb.QueryCatalogNameTag] = types.String(name)
+	taggedVals[doltdb.QueryCatalogQueryTag] = types.String(query)
+	taggedVals[doltdb.QueryCatalogDescriptionTag] = types.String(description)
 	return row.New(types.Format_Default, DoltQueryCatalogSchema, taggedVals)
 }

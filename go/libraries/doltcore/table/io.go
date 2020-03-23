@@ -15,12 +15,12 @@
 package table
 
 import (
-	"context"
-	"errors"
-	"io"
+"context"
+"errors"
+"io"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 )
 
 // TableReader is an interface for reading rows from a table

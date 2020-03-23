@@ -78,9 +78,9 @@ func NewHistoryTable(ctx context.Context, name string, ddb *doltdb.DoltDB, rsr e
 		return nil, err
 	}
 
-	_ = ss.AddColumn(schema.NewColumn(CommitHashCol, schema.HistoryCommitHashTag, types.StringKind, false))
-	_ = ss.AddColumn(schema.NewColumn(CommitterCol, schema.HistoryCommitterTag, types.StringKind, false))
-	_ = ss.AddColumn(schema.NewColumn(CommitDateCol, schema.HistoryCommitDateTag, types.TimestampKind, false))
+	_ = ss.AddColumn(schema.NewColumn(CommitHashCol, doltdb.HistoryCommitHashTag, types.StringKind, false))
+	_ = ss.AddColumn(schema.NewColumn(CommitterCol, doltdb.HistoryCommitterTag, types.StringKind, false))
+	_ = ss.AddColumn(schema.NewColumn(CommitDateCol, doltdb.HistoryCommitDateTag, types.TimestampKind, false))
 
 	sch, err := ss.GenerateSchema()
 
@@ -188,9 +188,9 @@ func splitFilters(filters []sql.Expression) (commitFilters, rowFilters []sql.Exp
 
 func commitSchema() schema.Schema {
 	cols := []schema.Column{
-		schema.NewColumn(CommitterCol, schema.HistoryCommitterTag, types.StringKind, false),
-		schema.NewColumn(CommitHashCol, schema.HistoryCommitHashTag, types.StringKind, false),
-		schema.NewColumn(CommitDateCol, schema.HistoryCommitDateTag, types.TimestampKind, false),
+		schema.NewColumn(CommitterCol, doltdb.HistoryCommitterTag, types.StringKind, false),
+		schema.NewColumn(CommitHashCol, doltdb.HistoryCommitHashTag, types.StringKind, false),
+		schema.NewColumn(CommitDateCol, doltdb.HistoryCommitDateTag, types.TimestampKind, false),
 	}
 
 	colColl, _ := schema.NewColCollection(cols...)
@@ -209,9 +209,9 @@ func getCommitFilterFunc(nbf *types.NomsBinFormat, filters []sql.Expression) (do
 
 	return func(ctx context.Context, h hash.Hash, committer string, time time.Time) (bool, error) {
 		commitFields := map[uint64]types.Value{
-			schema.HistoryCommitterTag:  types.String(committer),
-			schema.HistoryCommitHashTag: types.String(h.String()),
-			schema.HistoryCommitDateTag: types.Timestamp(time),
+			doltdb.HistoryCommitterTag:  types.String(committer),
+			doltdb.HistoryCommitHashTag: types.String(h.String()),
+			doltdb.HistoryCommitDateTag: types.Timestamp(time),
 		}
 		return expFunc(ctx, commitFields)
 	}, nil

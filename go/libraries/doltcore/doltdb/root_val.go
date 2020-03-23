@@ -1030,7 +1030,7 @@ func addValuesToDocs(ctx context.Context, tbl *Table, sch *schema.Schema, docDet
 func AddValueToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, docDetail DocDetails) (DocDetails, error) {
 	if tbl != nil && sch != nil {
 		pkTaggedVal := row.TaggedValues{
-			schema.DocNameTag: types.String(docDetail.DocPk),
+			DocNameTag: types.String(docDetail.DocPk),
 		}
 
 		docRow, ok, err := tbl.GetRowByPKVals(ctx, pkTaggedVal, *sch)
@@ -1039,7 +1039,7 @@ func AddValueToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, d
 		}
 
 		if ok {
-			docValue, _ := docRow.GetColVal(schema.DocTextTag)
+			docValue, _ := docRow.GetColVal(DocTextTag)
 			docDetail.Value = docValue
 		} else {
 			docDetail.Value = nil
@@ -1054,7 +1054,7 @@ func AddValueToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, d
 func AddNewerTextToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, doc DocDetails) (DocDetails, error) {
 	if tbl != nil && sch != nil {
 		pkTaggedVal := row.TaggedValues{
-			schema.DocNameTag: types.String(doc.DocPk),
+			DocNameTag: types.String(doc.DocPk),
 		}
 
 		docRow, ok, err := tbl.GetRowByPKVals(ctx, pkTaggedVal, *sch)
@@ -1062,7 +1062,7 @@ func AddNewerTextToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schem
 			return DocDetails{}, err
 		}
 		if ok {
-			docValue, _ := docRow.GetColVal(schema.DocTextTag)
+			docValue, _ := docRow.GetColVal(DocTextTag)
 			doc.NewerText = []byte(docValue.(types.String))
 		} else {
 			doc.NewerText = nil
@@ -1074,7 +1074,7 @@ func AddNewerTextToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schem
 }
 
 func addNewerTextToDocFromRow(ctx context.Context, r row.Row, doc *DocDetails) (DocDetails, error) {
-	docValue, ok := r.GetColVal(schema.DocTextTag)
+	docValue, ok := r.GetColVal(DocTextTag)
 	if !ok {
 		doc.NewerText = nil
 	} else {
@@ -1088,7 +1088,7 @@ func addNewerTextToDocFromRow(ctx context.Context, r row.Row, doc *DocDetails) (
 }
 
 func addDocPKToDocFromRow(r row.Row, doc *DocDetails) (DocDetails, error) {
-	colVal, _ := r.GetColVal(schema.DocNameTag)
+	colVal, _ := r.GetColVal(DocNameTag)
 	if colVal == nil {
 		doc.DocPk = ""
 	} else {

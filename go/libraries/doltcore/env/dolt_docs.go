@@ -27,8 +27,8 @@ var initialLicense = "This is a repository level LICENSE. Either edit it, add it
 type Docs []doltdb.DocDetails
 
 var doltDocsColumns, _ = schema.NewColCollection(
-	schema.NewColumn(doltdb.DocPkColumnName, schema.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
-	schema.NewColumn(doltdb.DocTextColumnName, schema.DocTextTag, types.StringKind, false),
+	schema.NewColumn(doltdb.DocPkColumnName, doltdb.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
+	schema.NewColumn(doltdb.DocTextColumnName, doltdb.DocTextTag, types.StringKind, false),
 )
 var DoltDocsSchema = schema.SchemaFromCols(doltDocsColumns)
 

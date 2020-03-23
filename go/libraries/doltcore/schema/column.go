@@ -16,11 +16,15 @@ package schema
 
 import (
 	"errors"
+	"math"
 	"strings"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
+
+// InvalidTag is used as an invalid tag
+const InvalidTag uint64 = math.MaxUint64
 
 var (
 	// KindToLwrStr maps a noms kind to the kinds lowercased name
