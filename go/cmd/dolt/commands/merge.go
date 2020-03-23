@@ -247,7 +247,7 @@ func executeFFMerge(ctx context.Context, dEnv *env.DoltEnv, cm2 *doltdb.Commit, 
 		rv, err = applyChanges(ctx, rv, workingDiffs)
 
 		if err != nil {
-			return errhand.BuildDError("").AddCause(err).Build()
+			return errhand.BuildDError("Failed to re-apply working changes.").AddCause(err).Build()
 		}
 
 		workingHash, err = dEnv.DoltDB.WriteRootValue(ctx, rv)
