@@ -66,7 +66,6 @@ type CommitAll struct {
 	Message string
 }
 
-
 // CommandString describes the CommitAll command for debugging purposes.
 func (c CommitAll) CommandString() string { return fmt.Sprintf("commit: %s", c.Message) }
 

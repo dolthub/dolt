@@ -371,13 +371,16 @@ func modifyDifferenceTag(d *ndiff.Difference, nbf *types.NomsBinFormat, rSch sch
 		return nil, nil, err
 	}
 
-	for oldTag, newTag := range tagMapping {
-		if v, ok := ktv[oldTag]; ok {
-			ktv[newTag] = v
-			delete(ktv, oldTag)
+	newKtv := make(row.TaggedValues)
+	for tag, val := range ktv {
+		newTag, found := tagMapping[tag]
+		if !found {
+			newTag = tag
 		}
+		newKtv[newTag] = val
 	}
-	key = ktv.NomsTupleForTags(nbf, rSch.GetPKCols().Tags, true)
+
+	key = newKtv.NomsTupleForTags(nbf, rSch.GetPKCols().Tags, true)
 
 	val = d.NewValue
 	if d.NewValue != nil {
@@ -387,14 +390,16 @@ func modifyDifferenceTag(d *ndiff.Difference, nbf *types.NomsBinFormat, rSch sch
 			return nil, nil, err
 		}
 
-		for oldTag, newTag := range tagMapping {
-			if v, ok := tv[oldTag]; ok {
-				tv[newTag] = v
-				delete(tv, oldTag)
+		newTv := make(row.TaggedValues)
+		for tag, val := range tv {
+			newTag, found := tagMapping[tag]
+			if !found {
+				newTag = tag
 			}
+			newTv[newTag] = val
 		}
 
-		val = tv.NomsTupleForTags(nbf, rSch.GetNonPKCols().Tags, false)
+		val = newTv.NomsTupleForTags(nbf, rSch.GetNonPKCols().Tags, false)
 	}
 
 	return key, val, nil
