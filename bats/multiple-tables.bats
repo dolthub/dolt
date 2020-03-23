@@ -5,23 +5,23 @@ setup() {
     setup_common
     dolt sql <<SQL
 CREATE TABLE test1 (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
+  pk BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
+  c3 BIGINT,
+  c4 BIGINT,
+  c5 BIGINT,
   PRIMARY KEY (pk)
 );
 SQL
     dolt sql <<SQL
 CREATE TABLE test2 (
-  pk BIGINT NOT NULL COMMENT 'tag:10',
-  c1 BIGINT COMMENT 'tag:11',
-  c2 BIGINT COMMENT 'tag:12',
-  c3 BIGINT COMMENT 'tag:13',
-  c4 BIGINT COMMENT 'tag:14',
-  c5 BIGINT COMMENT 'tag:15',
+  pk BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
+  c3 BIGINT,
+  c4 BIGINT,
+  c5 BIGINT,
   PRIMARY KEY (pk)
 );
 SQL
@@ -135,23 +135,23 @@ teardown() {
 
     dolt sql <<SQL
 CREATE TABLE test3 (
-  pk BIGINT NOT NULL COMMENT 'tag:20',
-  c1 BIGINT COMMENT 'tag:21',
-  c2 BIGINT COMMENT 'tag:22',
-  c3 BIGINT COMMENT 'tag:23',
-  c4 BIGINT COMMENT 'tag:24',
-  c5 BIGINT COMMENT 'tag:25',
+  pk BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
+  c3 BIGINT,
+  c4 BIGINT,
+  c5 BIGINT,
   PRIMARY KEY (pk)
 );
 SQL
     dolt sql <<SQL
 CREATE TABLE test4 (
-  pk BIGINT NOT NULL COMMENT 'tag:30',
-  c1 BIGINT COMMENT 'tag:31',
-  c2 BIGINT COMMENT 'tag:32',
-  c3 BIGINT COMMENT 'tag:33',
-  c4 BIGINT COMMENT 'tag:34',
-  c5 BIGINT COMMENT 'tag:35',
+  pk BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
+  c3 BIGINT,
+  c4 BIGINT,
+  c5 BIGINT,
   PRIMARY KEY (pk)
 );
 SQL

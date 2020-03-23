@@ -158,12 +158,12 @@ SQL
 @test "diff summary gets summaries for all tables with changes" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
+  pk BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
+  c3 BIGINT,
+  c4 BIGINT,
+  c5 BIGINT,
   PRIMARY KEY (pk)
 );
 SQL
@@ -171,12 +171,12 @@ SQL
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt sql <<SQL
 CREATE TABLE employees (
-  \`id\` LONGTEXT NOT NULL COMMENT 'tag:10',
-  \`first name\` LONGTEXT COMMENT 'tag:11',
-  \`last name\` LONGTEXT COMMENT 'tag:12',
-  \`title\` LONGTEXT COMMENT 'tag:13',
-  \`start date\` LONGTEXT COMMENT 'tag:14',
-  \`end date\` LONGTEXT COMMENT 'tag:15',
+  \`id\` LONGTEXT NOT NULL,
+  \`first name\` LONGTEXT,
+  \`last name\` LONGTEXT,
+  \`title\` LONGTEXT,
+  \`start date\` LONGTEXT,
+  \`end date\` LONGTEXT,
   PRIMARY KEY (id)
 );
 SQL

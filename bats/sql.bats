@@ -5,24 +5,24 @@ setup() {
     setup_common
     dolt sql <<SQL
 CREATE TABLE one_pk (
-  pk BIGINT NOT NULL COMMENT 'tag:10',
-  c1 BIGINT COMMENT 'tag:11',
-  c2 BIGINT COMMENT 'tag:12',
-  c3 BIGINT COMMENT 'tag:13',
-  c4 BIGINT COMMENT 'tag:14',
-  c5 BIGINT COMMENT 'tag:15',
+  pk BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
+  c3 BIGINT,
+  c4 BIGINT,
+  c5 BIGINT,
   PRIMARY KEY (pk)
 );
 SQL
     dolt sql <<SQL
 CREATE TABLE two_pk (
-  pk1 BIGINT NOT NULL COMMENT 'tag:20',
-  pk2 BIGINT NOT NULL COMMENT 'tag:21',
-  c1 BIGINT COMMENT 'tag:22',
-  c2 BIGINT COMMENT 'tag:23',
-  c3 BIGINT COMMENT 'tag:24',
-  c4 BIGINT COMMENT 'tag:25',
-  c5 BIGINT COMMENT 'tag:26',
+  pk1 BIGINT NOT NULL,
+  pk2 BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
+  c3 BIGINT,
+  c4 BIGINT,
+  c5 BIGINT,
   PRIMARY KEY (pk1,pk2)
 );
 SQL
