@@ -32,6 +32,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 const (
@@ -123,13 +124,13 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				verr = errhand.BuildDError("error: failed to get conflicts").AddCause(err).Build()
 			} else if has {
 				cli.Println("error: Merging is not possible because you have unmerged files.")
-				cli.Println("hint: Fix them up in the work tree, and then use {{.EmphasisLeft}}dolt add <table>{{.EmphasisRight}}")
+				cli.Println("hint: Fix them up in the work tree, and then use 'dolt add <table>'")
 				cli.Println("hint: as appropriate to mark resolution and make a commit.")
 				cli.Println("fatal: Exiting because of an unresolved conflict.")
 				return 1
 			} else if dEnv.IsMergeActive() {
 				cli.Println("error: Merging is not possible because you have not committed an active merge.")
-				cli.Println("hint: add affected tables using {{.EmphasisLeft}}dolt add <table>{{.EmphasisRight}} and commit using {{.EmphasisLeft}}dolt commit -m <msg>{{.EmphasisRight}}")
+				cli.Println("hint: add affected tables using 'dolt add <table>' and commit using {{.EmphasisLeft}}dolt commit -m <msg>{{.EmphasisRight}}")
 				cli.Println("fatal: Exiting because of active merge")
 				return 1
 			}
@@ -189,7 +190,7 @@ func mergeBranch(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRef) errha
 
 	cli.Println("Updating", h1.String()+".."+h2.String())
 
-	tblNames, err := dEnv.MergeWouldStompChanges(ctx, cm2)
+	tblNames, workingDiffs, err := dEnv.MergeWouldStompChanges(ctx, cm2)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to determine mergability.").AddCause(err).Build()
@@ -205,16 +206,29 @@ func mergeBranch(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRef) errha
 	}
 
 	if ok, err := cm1.CanFastForwardTo(ctx, cm2); ok {
-		return executeFFMerge(ctx, dEnv, cm2)
+		return executeFFMerge(ctx, dEnv, cm2, workingDiffs)
 	} else if err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
 		cli.Println("Already up to date.")
 		return nil
 	} else {
-		return executeMerge(ctx, dEnv, cm1, cm2, dref)
+		return executeMerge(ctx, dEnv, cm1, cm2, dref, workingDiffs)
 	}
 }
 
-func executeFFMerge(ctx context.Context, dEnv *env.DoltEnv, cm2 *doltdb.Commit) errhand.VerboseError {
+func applyChanges(ctx context.Context, root *doltdb.RootValue, workingDiffs map[string]hash.Hash) (*doltdb.RootValue, errhand.VerboseError) {
+	var err error
+	for tblName, h := range workingDiffs {
+		root, err = root.SetTableHash(ctx, tblName, h)
+
+		if err != nil {
+			return nil, errhand.BuildDError("error: Failed to update table '%s'.", tblName).AddCause(err).Build()
+		}
+	}
+
+	return root, nil
+}
+
+func executeFFMerge(ctx context.Context, dEnv *env.DoltEnv, cm2 *doltdb.Commit, workingDiffs map[string]hash.Hash) errhand.VerboseError {
 	cli.Println("Fast-forward")
 
 	rv, err := cm2.GetRootValue()
@@ -223,10 +237,24 @@ func executeFFMerge(ctx context.Context, dEnv *env.DoltEnv, cm2 *doltdb.Commit) 
 		return errhand.BuildDError("error: failed to get root value").AddCause(err).Build()
 	}
 
-	h, err := dEnv.DoltDB.WriteRootValue(ctx, rv)
-
+	stagedHash, err := dEnv.DoltDB.WriteRootValue(ctx, rv)
 	if err != nil {
 		return errhand.BuildDError("Failed to write database").AddCause(err).Build()
+	}
+
+	workingHash := stagedHash
+	if len(workingDiffs) > 0 {
+		rv, err = applyChanges(ctx, rv, workingDiffs)
+
+		if err != nil {
+			return errhand.BuildDError("Failed to re-apply working changes.").AddCause(err).Build()
+		}
+
+		workingHash, err = dEnv.DoltDB.WriteRootValue(ctx, rv)
+
+		if err != nil {
+			return errhand.BuildDError("Failed to write database").AddCause(err).Build()
+		}
 	}
 
 	err = dEnv.DoltDB.FastForward(ctx, dEnv.RepoState.CWBHeadRef(), cm2)
@@ -235,10 +263,10 @@ func executeFFMerge(ctx context.Context, dEnv *env.DoltEnv, cm2 *doltdb.Commit) 
 		return errhand.BuildDError("Failed to write database").AddCause(err).Build()
 	}
 
-	dEnv.RepoState.Working = h.String()
-	dEnv.RepoState.Staged = h.String()
-	err = dEnv.RepoState.Save(dEnv.FS)
+	dEnv.RepoState.Working = workingHash.String()
+	dEnv.RepoState.Staged = stagedHash.String()
 
+	err = dEnv.RepoState.Save(dEnv.FS)
 	if err != nil {
 		return errhand.BuildDError("unable to execute repo state update.").
 			AddDetails(`As a result your .dolt/repo_state.json file may have invalid values for "staged" and "working".
@@ -258,7 +286,7 @@ and take the hash for your current branch and use it for the value for "staged" 
 	return nil
 }
 
-func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, dref ref.DoltRef) errhand.VerboseError {
+func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, dref ref.DoltRef, workingDiffs map[string]hash.Hash) errhand.VerboseError {
 	mergedRoot, tblToStats, err := actions.MergeCommits(ctx, dEnv.DoltDB, cm1, cm2)
 
 	if err != nil {
@@ -269,6 +297,15 @@ func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commi
 			panic("fast forward merge")
 		default:
 			return errhand.BuildDError("Bad merge").AddCause(err).Build()
+		}
+	}
+
+	workingRoot := mergedRoot
+	if len(workingDiffs) > 0 {
+		workingRoot, err = applyChanges(ctx, mergedRoot, workingDiffs)
+
+		if err != nil {
+			return errhand.BuildDError("").AddCause(err).Build()
 		}
 	}
 
@@ -284,7 +321,7 @@ func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commi
 		return errhand.BuildDError("Unable to update the repo state").AddCause(err).Build()
 	}
 
-	verr := UpdateWorkingWithVErr(dEnv, mergedRoot)
+	verr := UpdateWorkingWithVErr(dEnv, workingRoot)
 
 	if verr == nil {
 		hasConflicts := printSuccessStats(tblToStats)
