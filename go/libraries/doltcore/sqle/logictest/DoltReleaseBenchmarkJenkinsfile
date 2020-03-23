@@ -1,9 +1,9 @@
 pipeline {
     agent none
     stages {
-        stage('Test Dolt Release') {
+        stage('Test Dolt release') {
             parallel {
-                stage ("Benchmark Dolt at specified release and update Liquidata/dolt-sql-performance") {
+                stage ("Update Liquidata/dolt-sql-performance:releases") {
                     agent {
                         kubernetes {
                             label "liquidata-inc-ld-build"

@@ -1,9 +1,9 @@
 pipeline {
     agent none
     stages {
-        stage('TestSQL') {
+        stage('Test Dolt nightly') {
             parallel {
-                stage ("update Liquidata/dolt-sql-performance") {
+                stage ("Update Liquidata/dolt-sql-performance:nightly") {
                     agent {
                         kubernetes {
                             label "liquidata-inc-ld-build"
@@ -56,8 +56,8 @@ pipeline {
                                     sh "dolt commit -m \"update dolt sql performance results\""
                                 }
                             }
-                            sh "dolt sql -r csv -q \'select version, test_file, line_num, avg(duration) as mean_duration, result from dolt_history_nightly_dolt_results where version=\"${DOLT_VERSION}\" group by line_num;\' > mean.csv"
-                            sh "dolt table import -u nightly_dolt_mean_results mean.csv"
+                            sh "dolt sql -r csv -q \'select version, test_file, line_num, avg(duration) as mean_duration, result from dolt_history_nightly_dolt_results where version=\"${DOLT_VERSION}\" group by line_num;\' > nightly_mean.csv"
+                            sh "dolt table import -u nightly_dolt_mean_results nightly_mean.csv"
                             sh "dolt add nightly_dolt_mean_results"
                             sh "dolt commit -m \"update dolt sql performance mean results\""
                             sh "dolt push origin nightly"
@@ -66,14 +66,18 @@ pipeline {
                             sh "dolt add ."
                             sh "dolt commit -m \"merge nightly\""
                             sh "dolt push origin regressions"
+                            sh "dolt checkout releases"
+                            sh "dolt sql -r csv -q \'select * from releases_dolt_mean_results;\' > releases_mean.csv"
+                            sh "rm -f regressions_db && touch regressions_db"
+                            sh "sqlite3 regressions_db < ../go/libraries/doltcore/sqle/logictest/regressions.sql"
+                            sh "cp ../go/libraries/doltcore/sqle/logictest/import.sql ."
+                            sh "sqlite3 regressions_db < import.sql"
                             script {
-                                env.DURATION_REGRESSIONS = sh(returnStdout: true, script: "dolt sql -q 'select * from releases_nightly_duration_change' -r csv | wc -l | tr -d '[:space:]'")
-                                env.RESULT_REGRESSIONS = sh(returnStdout: true, script: "dolt sql -q 'select * from releases_nightly_result_change' -r csv | wc -l | tr -d '[:space:]'")
+                                env.DURATION_REGRESSIONS = sh(returnStdout: true, script: "sqlite3 regressions_db \'select * from releases_nightly_duration_change\' | wc -l | tr -d '[:space:]'")
+                                env.RESULT_REGRESSIONS = sh(returnStdout: true, script: "sqlite3 regressions_db \'select * from releases_nightly_result_change\' | wc -l | tr -d '[:space:]'")
                             }
-                            sh "if [ $DURATION_REGRESSIONS != 1 ]; then echo 'PLEASE FAIL ME!!'; fi"
-                            sh "if [ $RESULT_REGRESSIONS != 1 ]; then echo 'PLEASE FAIL ME!!'; fi"
-                            sh "if [ $DURATION_REGRESSIONS = 1 ]; then echo 'PLEASE PASS ME!!'; fi"
-                            sh "if [ $RESULT_REGRESSIONS = 1 ]; then echo 'PLEASE PASS ME!!'; fi"
+                            sh "if [ $DURATION_REGRESSIONS != 0 ]; then exit 1; fi"
+                            sh "if [ $RESULT_REGRESSIONS != 0 ]; then exit 1; fi"
                         }
                     }
                 }
@@ -85,6 +89,14 @@ pipeline {
             node ("liquidata-inc-ld-build") {
                 cleanWs() // cleanup
             }
+        }
+        failure {
+            emailext body: "${currentBuild.currentResult}: Job ${env.JOB_NAME} build ${env.BUILD_NUMBER}\n More info at: ${env.BUILD_URL}",
+                to: "$SQL_WATCHER_1",
+                subject: "Jenkins Build ${currentBuild.currentResult}: Job ${env.JOB_NAME}"
+            emailext body: "${currentBuild.currentResult}: Job ${env.JOB_NAME} build ${env.BUILD_NUMBER}\n More info at: ${env.BUILD_URL}",
+                to: "$SQL_WATCHER_2",
+                subject: "Jenkins Build ${currentBuild.currentResult}: Job ${env.JOB_NAME}"
         }
     }
 }
