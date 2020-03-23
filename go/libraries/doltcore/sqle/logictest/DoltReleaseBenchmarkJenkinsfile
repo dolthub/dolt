@@ -33,18 +33,19 @@ pipeline {
                         dir ("go/libraries/doltcore/sqle/logictest/main") {
                             sh "rm -rf $DOLT_CONFIG_PATH && mkdir -p $DOLT_CONFIG_PATH"
                             sh "echo '$DOLT_GLOBAL_CONFIG' > $DOLT_CONFIG_PATH/config_global.json"
-                            sh "rm -rf .dolt && dolt init"
                             sh "rm -rf $CREDSDIR && mkdir $CREDSDIR"
-                            sh "cat $DOLT_CREDS > /home/jenkins/.dolt/creds/$CREDS_HASH.jwk"
+                            sh "cat $DOLT_CREDS > /home/jenkins/.dolt/creds/${CREDS_HASH}.jwk"
                             sh "dolt config --global --add user.creds $CREDS_HASH"
                             sh "dolt config --global --add metrics.disabled true"
                             sh "rm -rf temp && mkdir temp"
                             script {
                                 def j = env.TEST_N_TIMES.toInteger()
                                 for (int i = 1; i <= j; ++i) {
+                                    sh "rm -rf .dolt && dolt init"
                                     sh "go run . run ../../../../../../sqllogictest/test/select1.test > temp/results${i}.log"
                                     sh "go run . parse \"$DOLT_RELEASE\" temp/results${i}.log > temp/parsed${i}.json"
                                 }
+                                sh "rm -rf .dolt"
                             }
                         }
                         dir ("go") {
