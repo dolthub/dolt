@@ -85,7 +85,6 @@ func SqlSchemaToDoltSchema(ctx context.Context, root *doltdb.RootValue, sqlSchem
 	var tag uint64
 	for i, col := range sqlSchema {
 		commentTag := extractTag(col)
-		// TODO: are we sure we want to silently autogen new tags here?
 		if commentTag != schema.InvalidTag {
 			tag = commentTag
 		} else {
