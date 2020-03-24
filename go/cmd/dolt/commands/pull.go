@@ -17,24 +17,24 @@ package commands
 import (
 	"context"
 
-	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
-var pullShortDesc = "Fetch from and integrate with another repository or a local branch"
-var pullLongDesc = "Incorporates changes from a remote repository into the current branch. In its default mode, " +
-	"<b>dolt pull</b> is shorthand for <b>dolt fetch</b> followed by <b>dolt merge <remote>/<branch></b>." +
-	"\n" +
-	"\nMore precisely, dolt pull runs dolt fetch with the given parameters and calls dolt merge to merge the retrieved " +
-	"branch heads into the current branch."
-var pullSynopsis = []string{
-	"<remote>",
+var pullDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Fetch from and integrate with another repository or a local branch",
+	LongDesc: `Incorporates changes from a remote repository into the current branch. In its default mode, {{.EmphasisLeft}}dolt pull{{.EmphasisRight}} is shorthand for {{.EmphasisLeft}}dolt fetch{{.EmphasisRight}} followed by {{.EmphasisLeft}}dolt merge <remote>/<branch>{{.EmphasisRight}}.
+
+More precisely, dolt pull runs {{.EmphasisLeft}}dolt fetch{{.EmphasisRight}} with the given parameters and calls {{.EmphasisLeft}}dolt merge{{.EmphasisRight}} to merge the retrieved branch {{.EmphasisLeft}}HEAD{{.EmphasisRight}} into the current branch.
+`,
+	Synopsis: []string{
+		"{{.LessThan}}remote{{.GreaterThan}}",
+	},
 }
 
 type PullCmd struct{}
@@ -52,7 +52,7 @@ func (cmd PullCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd PullCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, pullShortDesc, pullLongDesc, pullSynopsis, ap)
+	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, pullDocs, ap))
 }
 
 func (cmd PullCmd) createArgParser() *argparser.ArgParser {
@@ -68,7 +68,7 @@ func (cmd PullCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, pullShortDesc, pullLongDesc, pullSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pullDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 	branch := dEnv.RepoState.CWBHeadRef()
 

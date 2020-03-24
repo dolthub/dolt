@@ -16,8 +16,10 @@ package sqltestutil
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -27,6 +29,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/envtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -100,7 +103,7 @@ func createEpisodesTestSchema() schema.Schema {
 	colColl, _ := schema.NewColCollection(
 		schema.NewColumn("id", EpisodeIdTag, types.IntKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("name", EpNameTag, types.StringKind, false, schema.NotNullConstraint{}),
-		schema.NewColumn("air_date", EpAirDateTag, types.IntKind, false),
+		newColumnWithTypeInfo("air_date", EpAirDateTag, typeinfo.DatetimeType, false),
 		schema.NewColumn("rating", EpRatingTag, types.FloatKind, false),
 	)
 	return schema.SchemaFromCols(colColl)
@@ -113,6 +116,14 @@ func createAppearancesTestSchema() schema.Schema {
 		schema.NewColumn("comments", AppCommentsTag, types.StringKind, false),
 	)
 	return schema.SchemaFromCols(colColl)
+}
+
+func newColumnWithTypeInfo(name string, tag uint64, info typeinfo.TypeInfo, partOfPk bool, constraints ...schema.ColConstraint) schema.Column {
+	col, err := schema.NewColumnWithTypeInfo(name, tag, info, partOfPk, constraints...)
+	if err != nil {
+		panic(fmt.Sprintf("unexpected error creating column: %s", err.Error()))
+	}
+	return col
 }
 
 func NewPeopleRow(id int, first, last string, isMarried bool, age int, rating float64) row.Row {
@@ -134,11 +145,11 @@ func NewPeopleRow(id int, first, last string, isMarried bool, age int, rating fl
 	return r
 }
 
-func newEpsRow(id int, name string, airdate int, rating float64) row.Row {
+func newEpsRow(id int, name string, airdate string, rating float64) row.Row {
 	vals := row.TaggedValues{
 		EpisodeIdTag: types.Int(id),
 		EpNameTag:    types.String(name),
-		EpAirDateTag: types.Int(airdate),
+		EpAirDateTag: types.Timestamp(datetimeStrToTimestamp(airdate)),
 		EpRatingTag:  types.Float(rating),
 	}
 
@@ -149,6 +160,14 @@ func newEpsRow(id int, name string, airdate int, rating float64) row.Row {
 	}
 
 	return r
+}
+
+func datetimeStrToTimestamp(datetime string) time.Time {
+	time, err := time.Parse("2006-01-02 15:04:05", datetime)
+	if err != nil {
+		panic(fmt.Sprintf("unable to parse datetime %s", datetime))
+	}
+	return time
 }
 
 func newAppsRow(charId, epId int, comment string) row.Row {
@@ -199,10 +218,10 @@ var Barney = NewPeopleRowWithOptionalFields(barneyId, "Barney", "Gumble", false,
 var AllPeopleRows = Rs(Homer, Marge, Bart, Lisa, Moe, Barney)
 
 // Actually the first 4 episodes of the show
-var Ep1 = newEpsRow(1, "Simpsons Roasting On an Open Fire", 629953200, 8.0)
-var Ep2 = newEpsRow(2, "Bart the Genius", 632372400, 9.0)
-var Ep3 = newEpsRow(3, "Homer's Odyssey", 632977200, 7.0)
-var Ep4 = newEpsRow(4, "There's No Disgrace Like Home", 633582000, 8.5)
+var Ep1 = newEpsRow(1, "Simpsons Roasting On an Open Fire", "1989-12-18 03:00:00", 8.0)
+var Ep2 = newEpsRow(2, "Bart the Genius", "1990-01-15 03:00:00", 9.0)
+var Ep3 = newEpsRow(3, "Homer's Odyssey", "1990-01-22 03:00:00", 7.0)
+var Ep4 = newEpsRow(4, "There's No Disgrace Like Home", "1990-01-29 03:00:00", 8.5)
 var AllEpsRows = Rs(Ep1, Ep2, Ep3, Ep4)
 
 // These are made up, not the actual show data
@@ -276,6 +295,8 @@ func MutateRow(r row.Row, tagsAndVals ...interface{}) row.Row {
 				nomsVal = types.UUID(v)
 			case bool:
 				nomsVal = types.Bool(v)
+			case time.Time:
+				nomsVal = types.Timestamp(v)
 			default:
 				panic("Unhandled type " + reflect.TypeOf(val).String())
 			}
@@ -372,10 +393,10 @@ var diffSchema = dtestutils.MustSchema(
 
 const tblName = "test_table"
 
-var initialSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr)
-var addAddrAt3Sch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr)
-var addAgeAt4Sch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, ageColTag4TypeInt)
-var readdAgeAt5Sch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr, ageColTag5TypeUint)
+var InitialHistSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr)
+var AddAddrAt3HistSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr)
+var AddAgeAt4HistSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, ageColTag4TypeInt)
+var ReaddAgeAt5HistSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr, ageColTag5TypeUint)
 
 func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envtestutils.HistoryNode {
 	vrw := dEnv.DoltDB.ValueReadWriter()
@@ -386,8 +407,8 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 			CommitMsg: "Seeding with initial user data",
 			Updates: map[string]envtestutils.TableUpdate{
 				tblName: {
-					NewSch: initialSch,
-					NewRowData: dtestutils.MustRowData(t, ctx, vrw, initialSch, []row.TaggedValues{
+					NewSch: InitialHistSch,
+					NewRowData: dtestutils.MustRowData(t, ctx, vrw, InitialHistSch, []row.TaggedValues{
 						{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son")},
 						{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks")},
 						{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn")},
@@ -400,8 +421,8 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 					CommitMsg: "Adding int age to users with tag 3",
 					Updates: map[string]envtestutils.TableUpdate{
 						tblName: {
-							NewSch: addAgeAt4Sch,
-							NewRowData: dtestutils.MustRowData(t, ctx, vrw, addAgeAt4Sch, []row.TaggedValues{
+							NewSch: AddAgeAt4HistSch,
+							NewRowData: dtestutils.MustRowData(t, ctx, vrw, AddAgeAt4HistSch, []row.TaggedValues{
 								{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 4: types.Int(35)},
 								{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 4: types.Int(38)},
 								{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 4: types.Int(37)},
@@ -416,8 +437,8 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 					CommitMsg: "Adding string address to users with tag 3",
 					Updates: map[string]envtestutils.TableUpdate{
 						tblName: {
-							NewSch: addAddrAt3Sch,
-							NewRowData: dtestutils.MustRowData(t, ctx, vrw, addAddrAt3Sch, []row.TaggedValues{
+							NewSch: AddAddrAt3HistSch,
+							NewRowData: dtestutils.MustRowData(t, ctx, vrw, AddAddrAt3HistSch, []row.TaggedValues{
 								{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St")},
 								{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln")},
 								{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct")},
@@ -432,8 +453,8 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 							CommitMsg: "Re-add age as a uint with tag 4",
 							Updates: map[string]envtestutils.TableUpdate{
 								tblName: {
-									NewSch: readdAgeAt5Sch,
-									NewRowData: dtestutils.MustRowData(t, ctx, vrw, readdAgeAt5Sch, []row.TaggedValues{
+									NewSch: ReaddAgeAt5HistSch,
+									NewRowData: dtestutils.MustRowData(t, ctx, vrw, ReaddAgeAt5HistSch, []row.TaggedValues{
 										{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St"), 5: types.Uint(35)},
 										{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln"), 5: types.Uint(38)},
 										{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct"), 5: types.Uint(37)},
@@ -456,7 +477,7 @@ func CreateWorkingRootUpdate() map[string]envtestutils.TableUpdate {
 	return map[string]envtestutils.TableUpdate{
 		tblName: {
 			RowUpdates: []row.Row{
-				mustRow(row.New(types.Format_Default, readdAgeAt5Sch, row.TaggedValues{
+				mustRow(row.New(types.Format_Default, ReaddAgeAt5HistSch, row.TaggedValues{
 					0: types.Int(6), 1: types.String("Katie"), 2: types.String("McCulloch"),
 				})),
 			},

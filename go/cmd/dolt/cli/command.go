@@ -58,6 +58,16 @@ type Command interface {
 	CreateMarkdown(fs filesys.Filesys, path, commandStr string) error
 }
 
+// This type is to store the content of a documented command, elsewhere we can transform this struct into
+// other structs that are used to generate documentation at the command line and in markdown files.
+type CommandDocumentationContent struct {
+	ShortDesc string
+	LongDesc  string
+	Synopsis  []string
+}
+
+//type CommandDocumentation
+
 // RepoNotRequiredCommand is an optional interface that commands can implement if the command can be run without
 // the current directory being a valid Dolt data repository.  Any commands not implementing this interface are
 // assumed to require that they be run from a directory containing a Dolt data repository.

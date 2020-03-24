@@ -29,10 +29,12 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 )
 
-var schExportShortDesc = "Exports a table's schema."
-var schExportLongDesc = ""
-var schExportSynopsis = []string{
-	"<table> <file>",
+var schExportDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Exports a table's schema.",
+	LongDesc:  "",
+	Synopsis: []string{
+		"{{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
+	},
 }
 
 const (
@@ -56,7 +58,7 @@ func (cmd ExportCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ExportCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, schExportShortDesc, schExportLongDesc, schExportSynopsis, ap)
+	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, schExportDocs, ap))
 }
 
 func (cmd ExportCmd) createArgParser() *argparser.ArgParser {
@@ -77,7 +79,7 @@ func (cmd ExportCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, schExportShortDesc, schExportLongDesc, schExportSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, schExportDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	root, verr := commands.GetWorkingWithVErr(dEnv)

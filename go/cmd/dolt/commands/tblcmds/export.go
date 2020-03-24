@@ -21,6 +21,7 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
@@ -30,12 +31,15 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 )
 
-var exportShortDesc = `Export the contents of a table to a file.`
-var exportLongDesc = `dolt table export will export the contents of <table> to <file>
+var exportDocs = cli.CommandDocumentationContent{
+	ShortDesc: `Export the contents of a table to a file.`,
+	LongDesc: `{{.EmphasisLeft}}dolt table export{{.EmphasisRight}} will export the contents of {{.LessThan}}table{{.GreaterThan}} to {{.LessThan}}|file{{.GreaterThan}}
 
-See the help for <b>dolt table import</b> as the options are the same.`
-var exportSynopsis = []string{
-	"[-f] [-pk <field>] [-schema <file>] [-map <file>] [-continue] [-file-type <type>] <table> <file>",
+See the help for {{.EmphasisLeft}}dolt table import{{.EmphasisRight}} as the options are the same.
+`,
+	Synopsis: []string{
+		"[-f] [-pk {{.LessThan}}field{{.GreaterThan}}] [-schema {{.LessThan}}file{{.GreaterThan}}] [-map {{.LessThan}}file{{.GreaterThan}}] [-continue] [-file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
+	},
 }
 
 // validateExportArgs validates the input from the arg parser, and returns the tuple:
@@ -87,7 +91,7 @@ func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 }
 
 func parseExportArgs(ap *argparser.ArgParser, commandStr string, args []string) (bool, *mvdata.MoveOptions) {
-	help, usage := cli.HelpAndUsagePrinters(commandStr, exportShortDesc, exportLongDesc, exportSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, exportDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 	tableName, tableLoc, fileLoc := validateExportArgs(apr, usage)
 
@@ -126,7 +130,7 @@ func (cmd ExportCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ExportCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, exportShortDesc, exportLongDesc, exportSynopsis, ap)
+	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, exportDocs, ap))
 }
 
 func (cmd ExportCmd) createArgParser() *argparser.ArgParser {

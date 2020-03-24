@@ -439,41 +439,41 @@ func (dEnv *DoltEnv) GetTablesWithConflicts(ctx context.Context) ([]string, erro
 	return root.TablesInConflict(ctx)
 }
 
-func (dEnv *DoltEnv) MergeWouldStompChanges(ctx context.Context, mergeCommit *doltdb.Commit) ([]string, error) {
+func (dEnv *DoltEnv) MergeWouldStompChanges(ctx context.Context, mergeCommit *doltdb.Commit) ([]string, map[string]hash.Hash, error) {
 	headRoot, err := dEnv.HeadRoot(ctx)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	workingRoot, err := dEnv.WorkingRoot(ctx)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	mergeRoot, err := mergeCommit.GetRootValue()
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	headTableHashes, err := mapTableHashes(ctx, headRoot)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	workingTableHashes, err := mapTableHashes(ctx, workingRoot)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	mergeTableHashes, err := mapTableHashes(ctx, mergeRoot)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	headWorkingDiffs := diffTableHashes(headTableHashes, workingTableHashes)
@@ -487,7 +487,7 @@ func (dEnv *DoltEnv) MergeWouldStompChanges(ctx context.Context, mergeCommit *do
 		}
 	}
 
-	return stompedTables, nil
+	return stompedTables, headWorkingDiffs, nil
 }
 
 func mapTableHashes(ctx context.Context, root *doltdb.RootValue) (map[string]hash.Hash, error) {

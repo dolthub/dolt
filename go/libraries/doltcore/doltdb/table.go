@@ -101,7 +101,6 @@ const (
 	QueryCatalogDescriptionTag
 )
 
-
 const (
 	// Currently: `view`.
 	SchemasTablesTypeCol = "type"

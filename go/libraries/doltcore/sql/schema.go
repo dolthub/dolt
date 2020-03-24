@@ -16,6 +16,7 @@ package sql
 
 import (
 	"fmt"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 )
 

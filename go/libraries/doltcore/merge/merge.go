@@ -18,11 +18,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rebase"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/hash"
-	"strings"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -732,7 +733,7 @@ func resolveTagConflicts(ctx context.Context, ddb *doltdb.DoltDB, commit, mergeC
 				return nil, err
 			}
 
-			sch, err :=  tbl.GetSchema(ctx)
+			sch, err := tbl.GetSchema(ctx)
 
 			if err != nil {
 				return nil, err

@@ -41,23 +41,20 @@ const (
 	SetUpstreamFlag = "set-upstream"
 )
 
-var pushShortDesc = "Update remote refs along with associated objects"
+var pushDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Update remote refs along with associated objects",
+	LongDesc: `Updates remote refs using local refs, while sending objects necessary to complete the given refs.
 
-var pushLongDesc = "Updates remote refs using local refs, while sending objects necessary to complete the given refs." +
-	"\n" +
-	"\nWhen the command line does not specify where to push with the <remote> argument, an attempt is made to infer the " +
-	"remote.  If only one remote exists it will be used, if multiple remotes exists, a remote named 'origin' will be " +
-	"attempted.  If there is more than one remote, and none of them are named 'origin' then the command will fail and " +
-	"you will need to specify the correct remote explicitly." +
-	"\n" +
-	"\nWhen the command line does not specify what to push with <refspec>... then the current branch will be used." +
-	"\n" +
-	"\nWhen neither the command-line does not specify what to push, the default behavior is used, which corresponds to the " +
-	"current branch being pushed to the corresponding upstream branch, but as a safety measure, the push is aborted if " +
-	"the upstream branch does not have the same name as the local one."
+When the command line does not specify where to push with the {{.LessThan}}remote{{.GreaterThan}} argument, an attempt is made to infer the remote.  If only one remote exists it will be used, if multiple remotes exists, a remote named 'origin' will be attempted.  If there is more than one remote, and none of them are named 'origin' then the command will fail and you will need to specify the correct remote explicitly.
 
-var pushSynopsis = []string{
-	"[-u | --set-upstream] [<remote>] [<refspec>]",
+When the command line does not specify what to push with {{.LessThan}}refspec{{.GreaterThan}}... then the current branch will be used.
+
+When neither the command-line does not specify what to push, the default behavior is used, which corresponds to the current branch being pushed to the corresponding upstream branch, but as a safety measure, the push is aborted if the upstream branch does not have the same name as the local one.
+`,
+
+	Synopsis: []string{
+		"[-u | --set-upstream] [{{.LessThan}}remote{{.GreaterThan}}] [{{.LessThan}}refspec{{.GreaterThan}}]",
+	},
 }
 
 type PushCmd struct{}
@@ -75,12 +72,12 @@ func (cmd PushCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd PushCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, pushShortDesc, pushLongDesc, pushSynopsis, ap)
+	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, pushDocs, ap))
 }
 
 func (cmd PushCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsFlag(SetUpstreamFlag, "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less dolt pull and other commands.")
+	ap.SupportsFlag(SetUpstreamFlag, "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less {{.EmphasisLeft}}dolt pull{{.EmphasisRight}} and other commands.")
 	return ap
 }
 
@@ -92,7 +89,7 @@ func (cmd PushCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, pushShortDesc, pushLongDesc, pushSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pushDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	remotes, err := dEnv.GetRemotes()

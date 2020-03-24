@@ -406,6 +406,22 @@ func (root *RootValue) GetTableHash(ctx context.Context, tName string) (hash.Has
 	return tValRef.TargetHash(), true, nil
 }
 
+func (root *RootValue) SetTableHash(ctx context.Context, tName string, h hash.Hash) (*RootValue, error) {
+	val, err := root.vrw.ReadValue(ctx, h)
+
+	if err != nil {
+		return nil, err
+	}
+
+	ref, err := types.NewRef(val, root.vrw.Format())
+
+	if err != nil {
+		return nil, err
+	}
+
+	return putTable(ctx, root, tName, ref)
+}
+
 // GetTable will retrieve a table by name
 func (root *RootValue) GetTable(ctx context.Context, tName string) (*Table, bool, error) {
 	if st, ok, err := root.getTableSt(ctx, tName); err != nil {
@@ -586,15 +602,18 @@ func (root *RootValue) PutTable(ctx context.Context, tName string, table *Table)
 
 // PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
 func PutTable(ctx context.Context, root *RootValue, vrw types.ValueReadWriter, tName string, table *Table) (*RootValue, error) {
-	if !IsValidTableName(tName) {
-		panic("Don't attempt to put a table with a name that fails the IsValidTableName check")
-	}
-
-	rootValSt := root.valueSt
 	tableRef, err := writeValAndGetRef(ctx, vrw, table.tableStruct)
 
 	if err != nil {
 		return nil, err
+	}
+
+	return putTable(ctx, root, tName, tableRef)
+}
+
+func putTable(ctx context.Context, root *RootValue, tName string, tableRef types.Ref) (*RootValue, error) {
+	if !IsValidTableName(tName) {
+		panic("Don't attempt to put a table with a name that fails the IsValidTableName check")
 	}
 
 	tableMap, err := root.getTableMap()
@@ -612,6 +631,7 @@ func PutTable(ctx context.Context, root *RootValue, vrw types.ValueReadWriter, t
 		return nil, err
 	}
 
+	rootValSt := root.valueSt
 	rootValSt, err = rootValSt.Set(tablesKey, m)
 
 	if err != nil {

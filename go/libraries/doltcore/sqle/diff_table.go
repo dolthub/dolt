@@ -392,7 +392,7 @@ func SuperSchemaForAllBranches(ctx context.Context, cmItr doltdb.CommitItr, ddb 
 		return nil, err
 	}
 
-	t, ok, err := wr.GetTable(ctx, tblName)
+	t, _, ok, err := wr.GetTableInsensitive(ctx, tblName)
 
 	if err != nil {
 		return nil, err

@@ -121,7 +121,7 @@ func TestServerGoodParams(t *testing.T) {
 		t.Run(test.String(), func(t *testing.T) {
 			sc := CreateServerController()
 			go func(config *ServerConfig, sc *ServerController) {
-				_, _ = Serve(context.Background(), config, root, sc)
+				_, _ = Serve(context.Background(), config, root, sc, env)
 			}(test, sc)
 			err := sc.WaitForStart()
 			require.NoError(t, err)
@@ -145,7 +145,7 @@ func TestServerSelect(t *testing.T) {
 	sc := CreateServerController()
 	defer sc.StopServer()
 	go func() {
-		_, _ = Serve(context.Background(), serverConfig, root, sc)
+		_, _ = Serve(context.Background(), serverConfig, root, sc, env)
 	}()
 	err := sc.WaitForStart()
 	require.NoError(t, err)

@@ -28,15 +28,17 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
-var useShortDesc = "Select an existing dolt credential for authenticating with doltremoteapi."
-var useLongDesc = `Selects an existing dolt credential for authenticating with doltremoteapi.
+var useDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Select an existing dolt credential for authenticating with doltremoteapi.",
+	LongDesc: `Selects an existing dolt credential for authenticating with doltremoteapi.
 
 Can be given a credential's public key or key id and will update global dolt
 config to use the credential when interacting with doltremoteapi.
 
-You can see your available credentials with 'dolt creds ls'.`
+You can see your available credentials with 'dolt creds ls'.`,
 
-var useSynopsis = []string{"<public_key_as_appears_in_ls | public_key_id_as_appears_in_ls"}
+	Synopsis: []string{"{{.LessThan}}public_key_as_appears_in_ls | public_key_id_as_appears_in_ls{{.GreaterThan}}"},
+}
 
 type UseCmd struct{}
 
@@ -47,13 +49,13 @@ func (cmd UseCmd) Name() string {
 
 // Description returns a description of the command
 func (cmd UseCmd) Description() string {
-	return useShortDesc
+	return useDocs.ShortDesc
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd UseCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, useShortDesc, useLongDesc, useSynopsis, ap)
+	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, useDocs, ap))
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -75,7 +77,7 @@ func (cmd UseCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd UseCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, useShortDesc, useLongDesc, useSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, useDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 	args = apr.Args()
 	if len(args) != 1 {

@@ -30,19 +30,19 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 )
 
-var resShortDesc = "Removes rows from list of conflicts"
-var resLongDesc = "When a merge operation finds conflicting changes, the rows with the conflicts are added to list " +
-	"of conflicts that must be resolved.  Once the value for the row is resolved in the working set of tables, then " +
-	"the conflict should be resolved.\n" +
-	"\n" +
-	"In it's first form <b>dolt conflicts resolve <table> <key>...</b>, resolve runs in manual merge mode resolving " +
-	"the conflicts whose keys are provided.\n" +
-	"\n" +
-	"In it's second form <b>dolt conflicts resolve --ours|--theirs <table>...</b>, resolve runs in auto resolve mode. " +
-	"where conflicts are resolved using a rule to determine which version of a row should be used."
-var resSynopsis = []string{
-	"<table> [<key_definition>] <key>...",
-	"--ours|--theirs <table>...",
+var resDocumentation = cli.CommandDocumentationContent{
+	ShortDesc: "Removes rows from list of conflicts",
+	LongDesc: `
+When a merge operation finds conflicting changes, the rows with the conflicts are added to list of conflicts that must be resolved.  Once the value for the row is resolved in the working set of tables, then the conflict should be resolved.
+		
+In it's first form {{.EmphasisLeft}}dolt conflicts resolve <table> <key>...{{.EmphasisRight}}, resolve runs in manual merge mode resolving the conflicts whose keys are provided.
+
+In it's second form {{.EmphasisLeft}}dolt conflicts resolve --ours|--theirs <table>...{{.EmphasisRight}}, resolve runs in auto resolve mode. Where conflicts are resolved using a rule to determine which version of a row should be used.
+`,
+	Synopsis: []string{
+		`{{.LessThan}}table{{.GreaterThan}} [{{.LessThan}}key_definition{{.GreaterThan}}] {{.LessThan}}key{{.GreaterThan}}...`,
+		`--ours|--theirs {{.LessThan}}table{{.GreaterThan}}...`,
+	},
 }
 
 const (
@@ -79,7 +79,7 @@ func (cmd ResolveCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ResolveCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, resShortDesc, resLongDesc, resSynopsis, ap)
+	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, resDocumentation, ap))
 }
 
 // EventType returns the type of the event to log
@@ -100,7 +100,7 @@ func (cmd ResolveCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd ResolveCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, resShortDesc, resLongDesc, resSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, resDocumentation, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	var verr errhand.VerboseError

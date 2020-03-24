@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/fatih/color"
@@ -33,12 +34,16 @@ const (
 	usernameParamName = "name"
 )
 
-var initShortDesc = "Create an empty Dolt data repository"
-var initLongDesc = `This command creates an empty Dolt data repository in the current directory.
+var initDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Create an empty Dolt data repository",
+	LongDesc: `This command creates an empty Dolt data repository in the current directory.
 
-Running dolt init in an already initialized directory will fail.`
-var initSynopsis = []string{
-	"[<options>] [<path>]",
+Running dolt init in an already initialized directory will fail.
+`,
+
+	Synopsis: []string{
+		//`[{{.LessThan}}options{{.GreaterThan}}] [{{.LessThan}}path{{.GreaterThan}}]`,
+	},
 }
 
 type InitCmd struct{}
@@ -62,14 +67,13 @@ func (cmd InitCmd) RequiresRepo() bool {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd InitCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-
-	return cli.CreateMarkdown(fs, path, commandStr, initShortDesc, initLongDesc, initSynopsis, ap)
+	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, initDocs, ap))
 }
 
 func (cmd InitCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsString(usernameParamName, "", "name", "The name used in commits to this repo. If not provided will be taken from \""+env.UserNameKey+"\" in the global config.")
-	ap.SupportsString(emailParamName, "", "email", "The email address used. If not provided will be taken from \""+env.UserEmailKey+"\" in the global config.")
+	ap.SupportsString(usernameParamName, "", "name", fmt.Sprintf("The name used in commits to this repo. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config.", env.UserNameKey))
+	ap.SupportsString(emailParamName, "", "email", fmt.Sprintf("The email address used. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config.", env.UserEmailKey))
 	ap.SupportsString(dateParam, "", "date", "Specify the date used in the initial commit. If not specified the current system time is used.")
 
 	return ap
@@ -78,7 +82,7 @@ func (cmd InitCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, initShortDesc, initLongDesc, initSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, initDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	if dEnv.HasDoltDir() {

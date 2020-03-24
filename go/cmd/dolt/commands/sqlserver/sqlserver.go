@@ -37,14 +37,15 @@ const (
 	logLevelFlag = "loglevel"
 )
 
-var sqlServerShortDesc = "Start a MySQL-compatible server."
-var sqlServerLongDesc = `Start a MySQL-compatible server which can be connected to by MySQL clients.
+var sqlServerDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Start a MySQL-compatible server.",
+	LongDesc: `Start a MySQL-compatible server which can be connected to by MySQL clients.
 
-Currently, only SELECT statements are operational, as support for other statements is
-still being developed.
-`
-var sqlServerSynopsis = []string{
-	"[-H <host>] [-P <port>] [-u <user>] [-p <password>] [-t <timeout>] [-l <loglevel>] [-r]",
+Currently, only {{.EmphasisLeft}}SELECT{{.EmphasisRight}} statements are operational, as support for other statements is still being developed.
+`,
+	Synopsis: []string{
+		"[-H {{.LessThan}}host{{.GreaterThan}}] [-P {{.LessThan}}port{{.GreaterThan}}] [-u {{.LessThan}}user{{.GreaterThan}}] [-p {{.LessThan}}password{{.GreaterThan}}] [-t {{.LessThan}}timeout{{.GreaterThan}}] [-l {{.LessThan}}loglevel{{.GreaterThan}}] [-r]",
+	},
 }
 
 type SqlServerCmd struct{}
@@ -62,7 +63,7 @@ func (cmd SqlServerCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd SqlServerCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := createArgParser(DefaultServerConfig())
-	return cli.CreateMarkdown(fs, path, commandStr, sqlServerShortDesc, sqlServerLongDesc, sqlServerSynopsis, ap)
+	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, sqlServerDocs, ap))
 }
 
 func createArgParser(serverConfig *ServerConfig) *argparser.ArgParser {
@@ -92,7 +93,7 @@ func SqlServerImpl(ctx context.Context, commandStr string, args []string, dEnv *
 	serverConfig := DefaultServerConfig()
 
 	ap := createArgParser(serverConfig)
-	help, usage := cli.HelpAndUsagePrinters(commandStr, sqlServerShortDesc, sqlServerLongDesc, sqlServerSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlServerDocs, ap))
 
 	apr := cli.ParseArgs(ap, args, help)
 	args = apr.Args()
@@ -123,7 +124,10 @@ func SqlServerImpl(ctx context.Context, commandStr string, args []string, dEnv *
 	if logLevel, ok := apr.GetValue(logLevelFlag); ok {
 		serverConfig.LogLevel = LogLevel(logLevel)
 	}
-	if startError, closeError := Serve(ctx, serverConfig, root, serverController); startError != nil || closeError != nil {
+
+	cli.PrintErrf("Starting server on port %d.", serverConfig.Port)
+
+	if startError, closeError := Serve(ctx, serverConfig, root, serverController, dEnv); startError != nil || closeError != nil {
 		if startError != nil {
 			cli.PrintErrln(startError)
 		}

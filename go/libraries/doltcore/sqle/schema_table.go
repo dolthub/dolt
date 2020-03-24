@@ -21,8 +21,6 @@ import (
 	dsql "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
 )
 
-
-
 // The fixed schema for the `dolt_schemas` table.
 func SchemasTableSchema() sql.Schema {
 	return []*sql.Column{

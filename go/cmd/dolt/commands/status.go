@@ -35,13 +35,11 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 )
 
-var statusShortDesc = "Show the working status"
-var statusLongDesc = `Displays working tables that differ from the current HEAD commit, tables that differ from the 
-staged tables, and tables that are in the working tree that are not tracked by dolt. The first are what you would 
-commit by running <b>dolt commit</b>; the second and third are what you could commit by running <b>dolt add .</b> 
-before running <b>dolt commit</b>.`
-
-var statusSynopsis = []string{""}
+var statusDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Show the working status",
+	LongDesc:  `Displays working tables that differ from the current HEAD commit, tables that differ from the staged tables, and tables that are in the working tree that are not tracked by dolt. The first are what you would commit by running {{.EmphasisLeft}}dolt commit{{.GreaterThan}}; the second and third are what you could commit by running {{.EmphasisLeft}}dolt add .{{.GreaterThan}} before running {{.EmphasisLeft}}dolt commit{{.GreaterThan}}.`,
+	Synopsis:  []string{""},
+}
 
 type StatusCmd struct{}
 
@@ -58,7 +56,7 @@ func (cmd StatusCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd StatusCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, statusShortDesc, statusLongDesc, statusSynopsis, ap)
+	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, statusDocs, ap))
 }
 
 func (cmd StatusCmd) createArgParser() *argparser.ArgParser {
@@ -69,7 +67,7 @@ func (cmd StatusCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, _ := cli.HelpAndUsagePrinters(commandStr, statusShortDesc, statusLongDesc, statusSynopsis, ap)
+	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, statusDocs, ap))
 	cli.ParseArgs(ap, args, help)
 
 	stagedTblDiffs, notStagedTblDiffs, err := diff.GetTableDiffs(ctx, dEnv)

@@ -365,8 +365,9 @@ func SuperSchemaSubtract(left, right *SuperSchema) *SuperSchema {
 	})
 	return &SuperSchema{cc, tn}
 }
- // SuperSchemaIntersection returns the logical set intersection of the columns of ss1 and ss2, along with
- // the union of each column's name history.
+
+// SuperSchemaIntersection returns the logical set intersection of the columns of ss1 and ss2, along with
+// the union of each column's name history.
 func SuperSchemaIntersection(ss1, ss2 *SuperSchema) *SuperSchema {
 	cc, _ := NewColCollection()
 	tn := make(map[uint64][]string)

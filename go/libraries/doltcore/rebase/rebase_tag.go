@@ -594,7 +594,7 @@ func handleSystemTableMappings(ctx context.Context, tblName string, root *doltdb
 		}
 	case doltdb.SchemasTableName:
 		newTagsByColName = map[string]uint64{
-			doltdb.SchemasTablesTypeCol:   doltdb.DoltSchemasTypeTag,
+			doltdb.SchemasTablesTypeCol:     doltdb.DoltSchemasTypeTag,
 			doltdb.SchemasTablesNameCol:     doltdb.DoltSchemasNameTag,
 			doltdb.SchemasTablesFragmentCol: doltdb.DoltSchemasFragmentTag,
 		}

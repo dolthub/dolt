@@ -179,7 +179,6 @@ var UniqueTagsTests = []UniqueTagsTest{
 			tc.CommitAll{Message: "added columns to both tables on myBranch"},
 			tc.Checkout{BranchName: "master"},
 			tc.Merge{BranchName: "myBranch"},
-
 		},
 		TableName: "two",
 		ExpectedSchema: schema.SchemaFromCols(columnCollection(

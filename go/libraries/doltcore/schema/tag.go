@@ -17,8 +17,9 @@ package schema
 import (
 	"crypto/sha512"
 	"encoding/binary"
-	"github.com/liquidata-inc/dolt/go/store/types"
 	"math/rand"
+
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 const (

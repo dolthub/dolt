@@ -220,8 +220,8 @@ func TestCreateTable(t *testing.T) {
 				schemaNewColumn(t, "age", 10, sql.Int32, false)),
 		},
 		{
-			name:          "Test faulty tag comments",
-			query:         `create table testTable (
+			name: "Test faulty tag comments",
+			query: `create table testTable (
 								id int primary key comment 'tag:a', age int comment 'this is my personal area')`,
 			expectedTable: "testTable",
 			expectedSchema: dtestutils.CreateSchema(

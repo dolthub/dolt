@@ -37,42 +37,34 @@ import (
 
 var ErrInvalidPort = errors.New("invalid port")
 
-var remoteShortDesc = "Manage set of tracked repositories"
-var remoteLongDesc = "With no arguments, shows a list of existing remotes. Several subcommands are available to perform " +
-	"operations on the remotes." +
-	"\n" +
-	"\n<b>add</b>\n" +
-	"Adds a remote named <name> for the repository at <url>. The command dolt fetch <name> can " +
-	"then be used to create and update remote-tracking branches <name>/<branch>." +
-	"\n" +
-	"\nThe <url> parameter supports url schemes of http, https, aws, gs, and file.  If a url scheme does not prefix the " +
-	"url then https is assumed.  If the <url> paramenter is in the format <organization>/<repository> then dolt will use " +
-	"the remotes.default_host from your configuration file (Which will be dolthub.com unless changed).\n" +
-	"\n" +
-	"AWS cloud remote urls should be of the form aws://[dynamo-table:s3-bucket]/database.  You may configure your aws " +
-	"cloud remote using the optional parameters aws-region, aws-creds-type, aws-creds-file.\n" +
-	"\n" +
-	"aws-creds-type specifies the means by which credentials should be retrieved in order to access the specified " +
-	"cloud resources (specifically the dynamo table, and the s3 bucket). Valid values are 'role', 'env', or 'file'.\n" +
-	"\n" +
-	"\trole: Use the credentials installed for the current user\n" +
-	"\tenv: Looks for environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY\n" +
-	"\tfile: Uses the credentials file specified by the parameter aws-creds-file\n" +
-	"\n" +
-	"GCP remote urls should be of the form gs://gcs-bucket/database and will use the credentials setup using the gcloud " +
-	"command line available from Google" +
-	"\n" +
-	"The local filesystem can be used as a remote by providing a repository url in the format file://absolute path. See" +
-	"https://en.wikipedia.org/wiki/File_URI_scheme for details." +
-	"\n" +
-	"\n<b>remove, rm</b>\n" +
-	"Remove the remote named <name>. All remote-tracking branches and configuration settings" +
-	"for the remote are removed."
+var remoteDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Manage set of tracked repositories",
+	LongDesc: `With no arguments, shows a list of existing remotes. Several subcommands are available to perform operations on the remotes.
 
-var remoteSynopsis = []string{
-	"[-v | --verbose]",
-	"add [--aws-region <region>] [--aws-creds-type <creds-type>] [--aws-creds-file <file>] [--aws-creds-profile <profile>] <name> <url>",
-	"remove <name>",
+{{.EmphasisLeft}}add{{.EmphasisRight}}
+Adds a remote named {{.LessThan}}name{{.GreaterThan}} for the repository at {{.LessThan}}url{{.GreaterThan}}. The command dolt fetch {{.LessThan}}name{{.GreaterThan}} can then be used to create and update remote-tracking branches {{.EmphasisLeft}}<name>/<branch>{{.EmphasisRight}}.
+
+The {{.LessThan}}url{{.GreaterThan}} parameter supports url schemes of http, https, aws, gs, and file.  If a url scheme does not prefix the url then https is assumed.  If the {{.LessThan}}url{{.GreaterThan}} paramenter is in the format {{.EmphasisLeft}}<organization>/<repository>{{.EmphasisRight}} then dolt will use the {{.EmphasisLeft}}remotes.default_host{{.EmphasisRight}} from your configuration file (Which will be dolthub.com unless changed).
+
+AWS cloud remote urls should be of the form {{.EmphasisLeft}}aws://[dynamo-table:s3-bucket]/database{{.EmphasisRight}}.  You may configure your aws cloud remote using the optional parameters {{.EmphasisLeft}}aws-region{{.EmphasisRight}}, {{.EmphasisLeft}}aws-creds-type{{.EmphasisRight}}, {{.EmphasisLeft}}aws-creds-file{{.EmphasisRight}}.
+
+aws-creds-type specifies the means by which credentials should be retrieved in order to access the specified cloud resources (specifically the dynamo table, and the s3 bucket). Valid values are 'role', 'env', or 'file'.
+
+	\trole: Use the credentials installed for the current user
+	\tenv: Looks for environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+	\tfile: Uses the credentials file specified by the parameter aws-creds-file
+	
+GCP remote urls should be of the form gs://gcs-bucket/database and will use the credentials setup using the gcloud command line available from Google +
+
+The local filesystem can be used as a remote by providing a repository url in the format file://absolute path. See https://en.wikipedia.org/wiki/File_URI_schemethi
+{{.EmphasisLeft}}remove{{.EmphasisRight}}, {{.EmphasisLeft}}rm{{.EmphasisRight}}, 
+Remove the remote named {{.LessThan}}name{{.GreaterThan}}. All remote-tracking branches and configuration settings for the remote are removed.`,
+
+	Synopsis: []string{
+		"[-v | --verbose]",
+		"add [--aws-region {{.LessThan}}region{{.GreaterThan}}] [--aws-creds-type {{.LessThan}}creds-type{{.GreaterThan}}] [--aws-creds-file {{.LessThan}}file{{.GreaterThan}}] [--aws-creds-profile {{.LessThan}}profile{{.GreaterThan}}] {{.LessThan}}name{{.GreaterThan}} {{.LessThan}}url{{.GreaterThan}}",
+		"remove {{.LessThan}}name{{.GreaterThan}}",
+	},
 }
 
 const (
@@ -98,7 +90,7 @@ func (cmd RemoteCmd) Description() string {
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd RemoteCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return cli.CreateMarkdown(fs, path, commandStr, remoteShortDesc, remoteLongDesc, remoteSynopsis, ap)
+	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, remoteDocs, ap))
 }
 
 func (cmd RemoteCmd) createArgParser() *argparser.ArgParser {
@@ -122,7 +114,7 @@ func (cmd RemoteCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd RemoteCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(commandStr, remoteShortDesc, remoteLongDesc, remoteSynopsis, ap)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, remoteDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	var verr errhand.VerboseError
