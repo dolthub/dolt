@@ -219,15 +219,15 @@ func TestCreateTable(t *testing.T) {
 				schemaNewColumn(t, "id", 5, sql.Int32, true, schema.NotNullConstraint{}),
 				schemaNewColumn(t, "age", 10, sql.Int32, false)),
 		},
-		//{
-		//	name:          "Test faulty tag comments",
-		//	query:         `create table testTable (
-		//						id int primary key comment 'tag:a', age int comment 'this is my personal area')`,
-		//	expectedTable: "testTable",
-		//	expectedSchema: dtestutils.CreateSchema(
-		//		schemaNewColumn(t, "id", 0, sql.Int32, true, schema.NotNullConstraint{}),
-		//		schemaNewColumn(t, "age", 1, sql.Int32, false)),
-		//},
+		{
+			name:          "Test faulty tag comments",
+			query:         `create table testTable (
+								id int primary key comment 'tag:a', age int comment 'this is my personal area')`,
+			expectedTable: "testTable",
+			expectedSchema: dtestutils.CreateSchema(
+				schemaNewColumn(t, "id", 8126, sql.Int32, true, schema.NotNullConstraint{}),
+				schemaNewColumn(t, "age", 14122, sql.Int32, false)),
+		},
 		// Real world examples for regression testing
 		{
 			name: "Test ip2nation",
@@ -266,7 +266,7 @@ func TestCreateTable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
-			CreateTestDatabase(dEnv, t)
+			dtestutils.CreateTestTable(t, dEnv, PeopleTableName, PeopleTestSchema, AllPeopleRows...)
 			ctx := context.Background()
 			root, _ := dEnv.WorkingRoot(ctx)
 

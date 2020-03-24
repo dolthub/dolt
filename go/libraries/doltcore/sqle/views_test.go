@@ -30,7 +30,6 @@ import (
 // Not an exhaustive test of views -- we rely on bats tests for end-to-end verification.
 func TestViews(t *testing.T) {
 	dEnv := dtestutils.CreateTestEnv()
-	CreateTestDatabase(dEnv, t)
 
 	ctx := context.Background()
 	root, _ := dEnv.WorkingRoot(ctx)

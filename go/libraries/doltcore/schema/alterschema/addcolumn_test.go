@@ -280,7 +280,6 @@ func TestAddColumnToTable(t *testing.T) {
 			tbl, _, err := root.GetTable(ctx, tableName)
 			assert.NoError(t, err)
 
-			// t.db.root, table, t.name, col.Tag, col.Name, col.TypeInfo, nullable, defaultVal); err != nil {
 			valErr := ValidateNewColumn(ctx, root, tbl, tableName, tt.tag, tt.newColName, typeinfo.FromKind(tt.colKind), tt.nullable, tt.defaultVal)
 			updatedTable, err := AddColumnToTable(ctx, tbl, tt.tag, tt.newColName, typeinfo.FromKind(tt.colKind), tt.nullable, tt.defaultVal, tt.order)
 			if len(tt.expectedErr) > 0 {

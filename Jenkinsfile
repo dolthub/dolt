@@ -32,7 +32,7 @@ pipeline {
                         }
                     }
                     environment {
-                        PATH = "${pwd()}/.ci_bin:${pwd()}/.ci_bin/node_modules/.bin:${env.PATH}"
+                        PATH = "${pwd()}/.ci_bin/pyenv/bin:${pwd()}/.ci_bin:${pwd()}/.ci_bin/node_modules/.bin:${env.PATH}"
                     }
                     steps {
                         dir (".ci_bin") {
@@ -45,6 +45,8 @@ pipeline {
                             sh "go build -mod=readonly -o ../.ci_bin/git-dolt-smudge ./cmd/git-dolt-smudge/."
                             sh "go build -mod=readonly -o ../.ci_bin/remotesrv ./utils/remotesrv/."
                         }
+                        sh "python3 -m venv .ci_bin/pyenv"
+                        sh "./.ci_bin/pyenv/bin/pip install doltpy"
                         sh "dolt config --global --add user.name 'Liquidata Jenkins'"
                         sh "dolt config --global --add user.email 'jenkins@liquidata.co'"
                         dir ("bats") {
@@ -80,6 +82,30 @@ pipeline {
                         dir ("./") {
                             bat(returnStatus: true, script: "setLocal EnableDelayedExpansion && pushd %LOCALAPPDATA%\\Temp && del /q/f/s .\\* >nul 2>&1 && rmdir /s/q . >nul 2>&1 && popd")
                             bat(returnStatus: true, script: "setLocal EnableDelayedExpansion && pushd C:\\batstmp && del /q/f/s .\\* >nul 2>&1 && rmdir /s/q . >nul 2>&1 && popd")
+                        }
+                    }
+                }
+                stage ("compatibility/") {
+                    agent {
+                        kubernetes {
+                            label "liquidata-inc-ld-build"
+                        }
+                    }
+                    environment {
+                        PATH = "${pwd()}/.ci_bin:${pwd()}/.ci_bin/node_modules/.bin:${env.PATH}"
+                    }
+                    steps {
+                        dir (".ci_bin") {
+                            sh "npm i bats"
+                        }
+                        dir ("go") {
+                            sh "go get -mod=readonly ./..."
+                            sh "go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/."
+                        }
+                        sh "dolt config --global --add user.name 'Liquidata Jenkins'"
+                        sh "dolt config --global --add user.email 'jenkins@liquidata.co'"
+                        dir ("bats/compatibility") {
+                            sh "./runner.sh"
                         }
                     }
                 }

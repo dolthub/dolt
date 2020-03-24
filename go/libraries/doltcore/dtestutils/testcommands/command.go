@@ -213,12 +213,13 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 
 	} else {
 		mergedRoot, tblToStats, err := merge.MergeCommits(context.Background(), dEnv.DoltDB, cm1, cm2)
+		require.NoError(t, err)
 		for _, stats := range tblToStats {
-			assert.True(t, stats.Conflicts == 0)
+			require.True(t, stats.Conflicts == 0)
 		}
 
 		h2, err := cm2.HashOf()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		err = dEnv.RepoState.StartMerge(dref, h2.String(), dEnv.FS)
 		if err != nil {

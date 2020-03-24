@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"io"
 
 	"github.com/src-d/go-mysql-server/sql"
@@ -224,10 +225,19 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		return err
 	}
 
+	nks, err := extracNomsKinds(t.sqlSch)
+	if err != nil {
+		return err
+	}
+	ti, err := typeinfo.FromSqlType(column.Type)
+	if err != nil {
+		return err
+	}
+	nks = append(nks, ti.NomsKind())
+
 	tag := extractTag(column)
 	if tag == schema.InvalidTag {
-		// TODO: are we sure we want to silently autogen if we fail to parse?
-		tag, err = t.db.Root().GetUniqueTag(ctx)
+		tag, err = t.db.Root().GetUniqueTagFromNomsKinds(ctx, nks)
 		if err != nil {
 			return err
 		}

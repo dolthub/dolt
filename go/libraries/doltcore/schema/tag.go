@@ -15,56 +15,31 @@
 package schema
 
 import (
-	"math"
+	"crypto/sha512"
+	"encoding/binary"
+	"github.com/liquidata-inc/dolt/go/store/types"
 	"math/rand"
-	"time"
 )
 
 const (
 	// TODO: increase ReservedTagMin to 1 << 63 once numeric marshalling is fixed
 	// ReservedTagMin is the start of a range of tags which the user should not be able to use in their schemas.
 	ReservedTagMin uint64 = 1 << 50
-
-	//
-	SystemTableReservedMin uint64 = 1 << 51
-
-	// InvalidTag is used as an invalid tag
-	InvalidTag uint64 = math.MaxUint64
 )
-
-const (
-	// Tags for dolt_docs table
-	DocNameTag = iota + SystemTableReservedMin
-	DocTextTag
-
-	// Tags for dolt_history_ table
-	HistoryCommitterTag
-	HistoryCommitHashTag
-	HistoryCommitDateTag
-
-	// Tags for dolt_diff_ table
-	DiffCommitTag
-
-	// Tags for dolt_query_catalog table
-	QueryCatalogIdTag
-	QueryCatalogOrderTag
-	QueryCatalogNameTag
-	QueryCatalogQueryTag
-	QueryCatalogDescriptionTag
-
-	// Tags for dolt_schemas table
-	DoltSchemasTypeTag
-	DoltSchemasNameTag
-	DoltSchemasFragmentTag
-)
-
-var randGen = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 // AutoGenerateTag generates a random tag that doesn't exist in the provided SuperSchema
-func AutoGenerateTag(ss *SuperSchema) uint64 {
+func AutoGenerateTag(rootSS *SuperSchema, schemaKinds []types.NomsKind) uint64 {
+	// use the schema to deterministically seed tag generation
+	var bb []byte
+	for _, k := range schemaKinds {
+		bb = append(bb, uint8(k))
+	}
+	h := sha512.Sum512(bb)
+	randGen := rand.New(rand.NewSource(int64(binary.LittleEndian.Uint64(h[:]))))
+
 	var maxTagVal uint64 = 128 * 128
 
-	for maxTagVal/2 < uint64(ss.Size()) {
+	for maxTagVal/2 < uint64(rootSS.Size()) {
 		if maxTagVal == ReservedTagMin-1 {
 			panic("There is no way anyone should ever have this many columns.  You are a bad person if you hit this panic.")
 		} else if maxTagVal*128 < maxTagVal {
@@ -78,10 +53,19 @@ func AutoGenerateTag(ss *SuperSchema) uint64 {
 	for {
 		randTag = uint64(randGen.Int63n(int64(maxTagVal)))
 
-		if _, found := ss.GetColumn(randTag); !found {
+		if _, found := rootSS.GetColumn(randTag); !found {
 			break
 		}
 	}
 
 	return randTag
+}
+
+func NomsKindsFromSchema(sch Schema) []types.NomsKind {
+	var nks []types.NomsKind
+	_ = sch.GetAllCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
+		nks = append(nks, col.Kind)
+		return false, nil
+	})
+	return nks
 }

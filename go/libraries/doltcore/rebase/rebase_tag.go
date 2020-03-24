@@ -20,11 +20,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
-
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -34,7 +32,7 @@ import (
 )
 
 // { tableName -> { oldTag -> newTag }}
-type tagMapping map[string]map[uint64]uint64
+type TagMapping map[string]map[uint64]uint64
 
 // MaybeMigrateUniqueTags checks if a repo was created before the unique tags constraint and migrates it if necessary.
 func MaybeMigrateUniqueTags(ctx context.Context, dEnv *env.DoltEnv) error {
@@ -84,7 +82,7 @@ func MaybeMigrateUniqueTags(ctx context.Context, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	err = migrateUniqueTags(ctx, dEnv.DoltDB, bb)
+	err = MigrateUniqueTags(ctx, dEnv.DoltDB, bb)
 
 	if err != nil {
 		return err
@@ -124,8 +122,8 @@ func MaybeMigrateUniqueTags(ctx context.Context, dEnv *env.DoltEnv) error {
 	return err
 }
 
-// TagRebaseForReg rebases the provided DoltRef, swapping all tags in the tagMapping.
-func TagRebaseForRef(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, tagMapping tagMapping) (*doltdb.Commit, error) {
+// TagRebaseForRef rebases the provided DoltRef, swapping all tags in the TagMapping.
+func TagRebaseForRef(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, tagMapping TagMapping) (*doltdb.Commit, error) {
 	cs, err := doltdb.NewCommitSpec("head", dRef.String())
 
 	if err != nil {
@@ -159,8 +157,8 @@ func TagRebaseForRef(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, 
 	return rebasedCommits[0], nil
 }
 
-// TagRebaseForReg rebases the provided Commits, swapping all tags in the tagMapping.
-func TagRebaseForCommits(ctx context.Context, ddb *doltdb.DoltDB, tm tagMapping, startingCommits ...*doltdb.Commit) ([]*doltdb.Commit, error) {
+// TagRebaseForReg rebases the provided Commits, swapping all tags in the TagMapping.
+func TagRebaseForCommits(ctx context.Context, ddb *doltdb.DoltDB, tm TagMapping, startingCommits ...*doltdb.Commit) ([]*doltdb.Commit, error) {
 	err := validateTagMapping(tm)
 
 	if err != nil {
@@ -184,7 +182,7 @@ func TagRebaseForCommits(ctx context.Context, ddb *doltdb.DoltDB, tm tagMapping,
 	return rcs, nil
 }
 
-func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue, tm tagMapping) (*doltdb.RootValue, error) {
+func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue, tm TagMapping) (*doltdb.RootValue, error) {
 
 	newRoot := root
 	for tblName, tableMapping := range tm {
@@ -405,7 +403,7 @@ func modifyDifferenceTag(d *ndiff.Difference, nbf *types.NomsBinFormat, rSch sch
 	return key, val, nil
 }
 
-func tagExistsInHistory(ctx context.Context, c *doltdb.Commit, tagMapping tagMapping) (bool, error) {
+func tagExistsInHistory(ctx context.Context, c *doltdb.Commit, tagMapping TagMapping) (bool, error) {
 
 	crt, err := c.GetRootValue()
 
@@ -441,7 +439,7 @@ func tagExistsInHistory(ctx context.Context, c *doltdb.Commit, tagMapping tagMap
 	return false, nil
 }
 
-func validateTagMapping(tagMapping tagMapping) error {
+func validateTagMapping(tagMapping TagMapping) error {
 	for tblName, tblMapping := range tagMapping {
 		newTags := make(map[uint64]struct{})
 		for _, nt := range tblMapping {
@@ -454,7 +452,7 @@ func validateTagMapping(tagMapping tagMapping) error {
 	return nil
 }
 
-func migrateUniqueTags(ctx context.Context, ddb *doltdb.DoltDB, branches []ref.DoltRef) error {
+func MigrateUniqueTags(ctx context.Context, ddb *doltdb.DoltDB, branches []ref.DoltRef) error {
 	var headCommits []*doltdb.Commit
 	for _, dRef := range branches {
 
@@ -476,6 +474,7 @@ func migrateUniqueTags(ctx context.Context, ddb *doltdb.DoltDB, branches []ref.D
 	// DFS the commit graph find a unique new tag for all existing tags in every table in history
 	globalMapping := make(map[string]map[uint64]uint64)
 	globalCtr := new(uint64)
+	atomic.AddUint64(globalCtr, 2)
 
 	replay := func(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
 		err := buildGlobalTagMapping(ctx, root, globalMapping, globalCtr)
@@ -582,22 +581,22 @@ func handleSystemTableMappings(ctx context.Context, tblName string, root *doltdb
 	switch tblName {
 	case doltdb.DocTableName:
 		newTagsByColName = map[string]uint64{
-			doltdb.DocPkColumnName:   schema.DocNameTag,
-			doltdb.DocTextColumnName: schema.DocTextTag,
+			doltdb.DocPkColumnName:   doltdb.DocNameTag,
+			doltdb.DocTextColumnName: doltdb.DocTextTag,
 		}
 	case doltdb.DoltQueryCatalogTableName:
 		newTagsByColName = map[string]uint64{
-			sqle.QueryCatalogIdCol:          schema.QueryCatalogIdTag,
-			sqle.QueryCatalogOrderCol:       schema.QueryCatalogOrderTag,
-			sqle.QueryCatalogNameCol:        schema.QueryCatalogNameTag,
-			sqle.QueryCatalogQueryCol:       schema.QueryCatalogQueryTag,
-			sqle.QueryCatalogDescriptionCol: schema.QueryCatalogDescriptionTag,
+			doltdb.QueryCatalogIdCol:          doltdb.QueryCatalogIdTag,
+			doltdb.QueryCatalogOrderCol:       doltdb.QueryCatalogOrderTag,
+			doltdb.QueryCatalogNameCol:        doltdb.QueryCatalogNameTag,
+			doltdb.QueryCatalogQueryCol:       doltdb.QueryCatalogQueryTag,
+			doltdb.QueryCatalogDescriptionCol: doltdb.QueryCatalogDescriptionTag,
 		}
 	case doltdb.SchemasTableName:
 		newTagsByColName = map[string]uint64{
-			sqle.SchemasTablesTypeCol:     schema.DoltSchemasTypeTag,
-			sqle.SchemasTablesNameCol:     schema.DoltSchemasNameTag,
-			sqle.SchemasTablesFragmentCol: schema.DoltSchemasFragmentTag,
+			doltdb.SchemasTablesTypeCol:   doltdb.DoltSchemasTypeTag,
+			doltdb.SchemasTablesNameCol:     doltdb.DoltSchemasNameTag,
+			doltdb.SchemasTablesFragmentCol: doltdb.DoltSchemasFragmentTag,
 		}
 	}
 

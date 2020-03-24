@@ -185,6 +185,6 @@ SQL
     dolt checkout master
     dolt merge branch1
     run dolt merge branch2
-    [ $status -ne 0 ]
+    [ $status -eq 0 ]
 }
 

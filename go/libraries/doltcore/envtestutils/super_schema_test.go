@@ -361,6 +361,7 @@ func testSuperSchema(t *testing.T, test SuperSchemaTest) {
 
 	var ee error
 	for idx, cmd := range test.Commands {
+		require.NoError(t, ee)
 		fmt.Println(fmt.Sprintf("%d: %s: %s", idx, cmd.CommandString(), cmd))
 		ee = cmd.Exec(t, dEnv)
 	}
@@ -393,17 +394,4 @@ func superSchemaFromCols(cols *schema.ColCollection) *schema.SuperSchema {
 	sch := schema.SchemaFromCols(cols)
 	ss, _ := schema.NewSuperSchema(sch)
 	return ss
-}
-
-func columnCollection(cols ...schema.Column) *schema.ColCollection {
-	pcc, _ := schema.NewColCollection(cols...)
-	return pcc
-}
-
-func newColTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, partOfPK bool, constraints ...schema.ColConstraint) schema.Column {
-	c, err := schema.NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, constraints...)
-	if err != nil {
-		panic("could not create column")
-	}
-	return c
 }

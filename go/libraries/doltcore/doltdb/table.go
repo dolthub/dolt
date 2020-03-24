@@ -48,6 +48,74 @@ const (
 
 	// SchemasTableName is the name of the dolt schema fragment table
 	SchemasTableName = "dolt_schemas"
+
+	// SystemTableReservedMin defines the lower bound of the tag space reserved for system tables
+	SystemTableReservedMin uint64 = schema.ReservedTagMin << 1
+)
+
+const (
+	DocTableName      = "dolt_docs"
+	LicensePk         = "LICENSE.md"
+	ReadmePk          = "README.md"
+	DocPkColumnName   = "doc_name"
+	DocTextColumnName = "doc_text"
+
+	// Tags for dolt_docs table
+	DocNameTag = iota + SystemTableReservedMin
+	DocTextTag
+)
+
+const (
+	// Tags for dolt_history_ table
+	HistoryCommitterTag = iota + SystemTableReservedMin + uint64(1000)
+	HistoryCommitHashTag
+	HistoryCommitDateTag
+)
+
+const (
+	// Tags for dolt_diff_ table
+	DiffCommitTag = iota + SystemTableReservedMin + uint64(2000)
+)
+
+const (
+	// QueryCatalogIdCol is the name of the primary key column of the query catalog table
+	QueryCatalogIdCol = "id"
+
+	// QueryCatalogOrderCol is the column containing the order of the queries in the catalog
+	QueryCatalogOrderCol = "display_order"
+
+	// QueryCatalogNameCol is the name of the column containing the name of a query in the catalog
+	QueryCatalogNameCol = "name"
+
+	// QueryCatalogQueryCol is the name of the column containing the query of a catalog entry
+	QueryCatalogQueryCol = "query"
+
+	// QueryCatalogDescriptionCol is the name of the column containing the description of a query in the catalog
+	QueryCatalogDescriptionCol = "description"
+
+	// Tags for dolt_query_catalog table
+	QueryCatalogIdTag = iota + SystemTableReservedMin + uint64(3000)
+	QueryCatalogOrderTag
+	QueryCatalogNameTag
+	QueryCatalogQueryTag
+	QueryCatalogDescriptionTag
+)
+
+
+const (
+	// Currently: `view`.
+	SchemasTablesTypeCol = "type"
+
+	// // The name of the database entity.
+	SchemasTablesNameCol = "name"
+	// The schema fragment associated with the database entity.
+	// For example, the SELECT statement for a CREATE VIEW.
+	SchemasTablesFragmentCol = "fragment"
+
+	// Tags for dolt_schemas table
+	DoltSchemasTypeTag = iota + SystemTableReservedMin + uint64(4000)
+	DoltSchemasNameTag
+	DoltSchemasFragmentTag
 )
 
 // The set of reserved dolt_ tables that should be considered part of user space, like any other user-created table,

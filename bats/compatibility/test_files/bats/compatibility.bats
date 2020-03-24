@@ -20,12 +20,12 @@ teardown() {
     [[ "$output" =~ $regex ]] || false
 }
 
-@test "dolt status" {
-    run dolt status
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]] || false
-    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
-}
+# @test "dolt status" {
+#     run dolt status
+#     [ "$status" -eq 0 ]
+#     [[ "$output" =~ "On branch master" ]] || false
+#     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+# }
 
 @test "dolt ls" {
     run dolt ls
@@ -38,10 +38,10 @@ teardown() {
     [ "$status" -eq 0 ]
 }
 
-@test "dolt diff" {
-    run dolt diff
-    [ "$status" -eq 0 ]
-}
+# @test "dolt diff" {
+#     run dolt diff
+#     [ "$status" -eq 0 ]
+# }
 
 @test "dolt schema show on branch init" {
     dolt checkout init

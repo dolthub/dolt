@@ -15,16 +15,18 @@
 package sqle
 
 import (
-	"context"
-	"fmt"
+"context"
+"fmt"
+dsql "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
+	"github.com/liquidata-inc/dolt/go/store/types"
 	"strconv"
-	"strings"
+"strings"
 
-	"github.com/src-d/go-mysql-server/sql"
+"github.com/src-d/go-mysql-server/sql"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
+"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 )
 
 // doltSchemaToSqlSchema returns the sql.Schema corresponding to the dolt schema given.
@@ -71,14 +73,24 @@ func SqlSchemaToDoltSchema(ctx context.Context, root *doltdb.RootValue, sqlSchem
 	var cols []schema.Column
 	var err error
 
+	nks, err := extracNomsKinds(sqlSchema)
+	if err != nil {
+		return nil, err
+	}
+	if len(sqlSchema) != len(nks) {
+		panic("slices must have equal len")
+	}
+	var existing []types.NomsKind
+
 	var tag uint64
-	for _, col := range sqlSchema {
+	for i, col := range sqlSchema {
 		commentTag := extractTag(col)
 		// TODO: are we sure we want to silently autogen new tags here?
 		if commentTag != schema.InvalidTag {
 			tag = commentTag
 		} else {
-			tag, err = root.GetUniqueTag(ctx)
+			existing = append(existing, nks[i])
+			tag, err = root.GetUniqueTagFromNomsKinds(ctx, existing)
 			if err != nil {
 				return nil, err
 			}
@@ -132,7 +144,17 @@ func SqlColToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 	return schema.NewColumnWithTypeInfo(col.Name, tag, typeInfo, col.PrimaryKey, constraints...)
 }
 
-const tagCommentPrefix = "tag:"
+func extracNomsKinds(sch sql.Schema) ([]types.NomsKind, error) {
+	nks := make([]types.NomsKind, len(sch))
+	for i, col := range sch {
+		ti, err := typeinfo.FromSqlType(col.Type)
+		if err != nil {
+			return nil, err
+		}
+		nks[i] = ti.NomsKind()
+	}
+	return nks, nil
+}
 
 // Extracts the optional comment tag from a column type defn, or InvalidTag if it can't be extracted
 func extractTag(col *sql.Column) uint64 {
@@ -140,9 +162,9 @@ func extractTag(col *sql.Column) uint64 {
 		return schema.InvalidTag
 	}
 
-	i := strings.Index(col.Comment, tagCommentPrefix)
+	i := strings.Index(col.Comment, dsql.TagCommentPrefix)
 	if i >= 0 {
-		startIdx := i + len(tagCommentPrefix)
+		startIdx := i + len(dsql.TagCommentPrefix)
 		tag, err := strconv.ParseUint(col.Comment[startIdx:], 10, 64)
 		if err != nil {
 			return schema.InvalidTag

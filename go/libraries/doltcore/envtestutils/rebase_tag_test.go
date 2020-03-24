@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package rebase
+package envtestutils
 
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rebase"
 	"io"
 	"strconv"
 	"testing"
@@ -72,12 +73,18 @@ var createPeopleTable = fmt.Sprintf(`
 	);`, IdTag, NameTag, AgeTag)
 
 func columnCollection(cols ...schema.Column) *schema.ColCollection {
-	pcc, _ := schema.NewColCollection(cols...)
+	pcc, err := schema.NewColCollection(cols...)
+	if err != nil {
+		panic(err)
+	}
 	return pcc
 }
 
 func newRow(vals row.TaggedValues, cc *schema.ColCollection) row.Row {
-	r, _ := row.New(types.Format_7_18, schema.SchemaFromCols(cc), vals)
+	r, err := row.New(types.Format_7_18, schema.SchemaFromCols(cc), vals)
+	if err != nil {
+		panic(err)
+	}
 	return r
 }
 
@@ -425,7 +432,7 @@ func testRebaseTag(t *testing.T, test RebaseTagTest) {
 	}
 
 	bs, _ := dEnv.DoltDB.GetBranches(context.Background()) // master
-	rebasedCommit, err := TagRebaseForRef(context.Background(), bs[0], dEnv.DoltDB, tagMapping{"people": map[uint64]uint64{test.OldTag: test.NewTag}})
+	rebasedCommit, err := rebase.TagRebaseForRef(context.Background(), bs[0], dEnv.DoltDB, rebase.TagMapping{"people": map[uint64]uint64{test.OldTag: test.NewTag}})
 
 	if test.ExpectedErrStr != "" {
 		require.NotNil(t, err)
@@ -473,7 +480,7 @@ func testRebaseTagHistory(t *testing.T) {
 	otherCm, _ := dEnv.DoltDB.Resolve(context.Background(), ocs)
 
 	bs, _ := dEnv.DoltDB.GetBranches(context.Background()) // master
-	newMasterCm, err := TagRebaseForRef(context.Background(), bs[0], dEnv.DoltDB, tagMapping{"people": map[uint64]uint64{DripTag: DripTagRebased}})
+	newMasterCm, err := rebase.TagRebaseForRef(context.Background(), bs[0], dEnv.DoltDB, rebase.TagMapping{"people": map[uint64]uint64{DripTag: DripTagRebased}})
 	require.NoError(t, err)
 
 	expectedSch := schema.SchemaFromCols(peopleWithDrip)

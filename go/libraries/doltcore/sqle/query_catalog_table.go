@@ -25,30 +25,18 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-const (
-	// QueryCatalogIdCol is the name of the primary key column of the query catalog table
-	QueryCatalogIdCol = "id"
-
-	// QueryCatalogOrderCol is the column containing the order of the queries in the catalog
-	QueryCatalogOrderCol = "display_order"
-
-	// QueryCatalogNameCol is the name of the column containing the name of a query in the catalog
-	QueryCatalogNameCol = "name"
-
-	// QueryCatalogQueryCol is the name of the column containing the query of a catalog entry
-	// TODO: parser won't handle a reserved word here, but it should. Only an issue for create table statements.
-	QueryCatalogQueryCol = "query"
-
-	// QueryCatalogDescriptionCol is the name of the column containing the description of a query in the catalog
-	QueryCatalogDescriptionCol = "description"
-)
-
 var queryCatalogCols, _ = schema.NewColCollection(
-	schema.NewColumn(QueryCatalogIdCol, schema.QueryCatalogIdTag, types.StringKind, true, schema.NotNullConstraint{}),
-	schema.NewColumn(QueryCatalogOrderCol, schema.QueryCatalogOrderTag, types.UintKind, false, schema.NotNullConstraint{}),
-	schema.NewColumn(QueryCatalogNameCol, schema.QueryCatalogNameTag, types.StringKind, false),
-	schema.NewColumn(QueryCatalogQueryCol, schema.QueryCatalogQueryTag, types.StringKind, false),
-	schema.NewColumn(QueryCatalogDescriptionCol, schema.QueryCatalogDescriptionTag, types.StringKind, false),
+	// QueryCatalogIdCol is the name of the primary key column of the query catalog table
+	schema.NewColumn(doltdb.QueryCatalogIdCol, doltdb.QueryCatalogIdTag, types.StringKind, true, schema.NotNullConstraint{}),
+	// QueryCatalogOrderCol is the column containing the order of the queries in the catalog
+	schema.NewColumn(doltdb.QueryCatalogOrderCol, doltdb.QueryCatalogOrderTag, types.UintKind, false, schema.NotNullConstraint{}),
+	// QueryCatalogNameCol is the name of the column containing the name of a query in the catalog
+	// TODO: parser won't handle a reserved word here, but it should. Only an issue for create table statements.
+	schema.NewColumn(doltdb.QueryCatalogNameCol, doltdb.QueryCatalogNameTag, types.StringKind, false),
+	// QueryCatalogQueryCol is the name of the column containing the query of a catalog entry
+	schema.NewColumn(doltdb.QueryCatalogQueryCol, doltdb.QueryCatalogQueryTag, types.StringKind, false),
+	// QueryCatalogDescriptionCol is the name of the column containing the description of a query in the catalog
+	schema.NewColumn(doltdb.QueryCatalogDescriptionCol, doltdb.QueryCatalogDescriptionTag, types.StringKind, false),
 )
 
 var DoltQueryCatalogSchema = schema.SchemaFromCols(queryCatalogCols)
@@ -120,7 +108,7 @@ func getMaxQueryOrder(data types.Map, ctx context.Context) uint {
 	maxOrder := uint(0)
 	data.IterAll(ctx, func(key, value types.Value) error {
 		r, _ := row.FromNoms(DoltQueryCatalogSchema, key.(types.Tuple), value.(types.Tuple))
-		orderVal, ok := r.GetColVal(schema.QueryCatalogOrderTag)
+		orderVal, ok := r.GetColVal(doltdb.QueryCatalogOrderTag)
 		if ok {
 			order := uint(orderVal.(types.Uint))
 			if order > maxOrder {
@@ -134,10 +122,10 @@ func getMaxQueryOrder(data types.Map, ctx context.Context) uint {
 
 func newQueryCatalogRow(id string, order uint, name, query, description string) (row.Row, error) {
 	taggedVals := make(row.TaggedValues)
-	taggedVals[schema.QueryCatalogIdTag] = types.String(id)
-	taggedVals[schema.QueryCatalogOrderTag] = types.Uint(order)
-	taggedVals[schema.QueryCatalogNameTag] = types.String(name)
-	taggedVals[schema.QueryCatalogQueryTag] = types.String(query)
-	taggedVals[schema.QueryCatalogDescriptionTag] = types.String(description)
+	taggedVals[doltdb.QueryCatalogIdTag] = types.String(id)
+	taggedVals[doltdb.QueryCatalogOrderTag] = types.Uint(order)
+	taggedVals[doltdb.QueryCatalogNameTag] = types.String(name)
+	taggedVals[doltdb.QueryCatalogQueryTag] = types.String(query)
+	taggedVals[doltdb.QueryCatalogDescriptionTag] = types.String(description)
 	return row.New(types.Format_Default, DoltQueryCatalogSchema, taggedVals)
 }

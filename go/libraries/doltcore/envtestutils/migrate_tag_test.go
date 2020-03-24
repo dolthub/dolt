@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package rebase
+package envtestutils
 
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rebase"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -151,8 +152,8 @@ func (p putDoc) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 
 	me := m.Edit()
 	me.Set(
-		row.TaggedValues{schema.DocNameTag: types.String(p.DocName)}.NomsTupleForTags(root.VRW().Format(), []uint64{schema.DocNameTag}, true),
-		row.TaggedValues{schema.DocTextTag: types.String(p.DocText)}.NomsTupleForTags(root.VRW().Format(), []uint64{schema.DocTextTag}, false))
+		row.TaggedValues{doltdb.DocNameTag: types.String(p.DocName)}.NomsTupleForTags(root.VRW().Format(), []uint64{doltdb.DocNameTag}, true),
+		row.TaggedValues{doltdb.DocTextTag: types.String(p.DocText)}.NomsTupleForTags(root.VRW().Format(), []uint64{doltdb.DocTextTag}, false))
 	newMap, err := me.Map(context.Background())
 	require.NoError(t, err)
 
@@ -196,7 +197,7 @@ func testMigrateUniqueTags(t *testing.T, test MigrateTagsTest) {
 	require.NoError(t, err)
 
 	// rebase the history to uniquify tags
-	err = migrateUniqueTags(context.Background(), dEnv.DoltDB, bb)
+	err = rebase.MigrateUniqueTags(context.Background(), dEnv.DoltDB, bb)
 	require.NoError(t, err)
 
 	// confirm that the repo state is the same

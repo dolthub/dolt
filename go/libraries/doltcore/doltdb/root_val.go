@@ -34,12 +34,6 @@ const (
 
 	tablesKey       = "tables"
 	superSchemasKey = "super_schemas"
-
-	DocTableName      = "dolt_docs"
-	LicensePk         = "LICENSE.md"
-	ReadmePk          = "README.md"
-	DocPkColumnName   = "doc_name"
-	DocTextColumnName = "doc_text"
 )
 
 // RootValue defines the structure used inside all Liquidata noms dbs
@@ -253,8 +247,8 @@ func (root *RootValue) GetSuperSchema(ctx context.Context, tName string) (*schem
 	return ss, true, err
 }
 
-// GetUniqueTag returns a tag that has not yet been used in the history of this root.
-func (root *RootValue) GetUniqueTag(ctx context.Context) (uint64, error) {
+// GetUniqueTagFromNomsKinds returns a tag that has not yet been used in the history of this root.
+func (root *RootValue) GetUniqueTagFromNomsKinds(ctx context.Context, schKinds []types.NomsKind) (uint64, error) {
 	ssMap, err := root.getOrCreateSuperSchemaMap(ctx)
 
 	if err != nil {
@@ -290,7 +284,30 @@ func (root *RootValue) GetUniqueTag(ctx context.Context) (uint64, error) {
 		return schema.InvalidTag, err
 	}
 
-	return schema.AutoGenerateTag(rootSuperSchema), nil
+	// super schemas are only persisted on commit, so add in working schemas
+	tblMap, err := root.getTableMap()
+
+	if err != nil {
+		return schema.InvalidTag, err
+	}
+
+	err = tblMap.Iter(ctx, func(key, _ types.Value) (stop bool, err error) {
+		tbl, _, err := root.GetTable(ctx, string(key.(types.String)))
+		if err != nil {
+			return true, err
+		}
+		sch, err := tbl.GetSchema(ctx)
+		if err != nil {
+			return true, err
+		}
+		err = rootSuperSchema.AddSchemas(sch)
+		if err != nil {
+			return true, err
+		}
+		return false, nil
+	})
+
+	return schema.AutoGenerateTag(rootSuperSchema, schKinds), nil
 }
 
 // GerSuperSchemaMap returns the Noms map that tracks SuperSchemas, used to create new RootValues on checkout branch.
@@ -1030,7 +1047,7 @@ func addValuesToDocs(ctx context.Context, tbl *Table, sch *schema.Schema, docDet
 func AddValueToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, docDetail DocDetails) (DocDetails, error) {
 	if tbl != nil && sch != nil {
 		pkTaggedVal := row.TaggedValues{
-			schema.DocNameTag: types.String(docDetail.DocPk),
+			DocNameTag: types.String(docDetail.DocPk),
 		}
 
 		docRow, ok, err := tbl.GetRowByPKVals(ctx, pkTaggedVal, *sch)
@@ -1039,7 +1056,7 @@ func AddValueToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, d
 		}
 
 		if ok {
-			docValue, _ := docRow.GetColVal(schema.DocTextTag)
+			docValue, _ := docRow.GetColVal(DocTextTag)
 			docDetail.Value = docValue
 		} else {
 			docDetail.Value = nil
@@ -1054,7 +1071,7 @@ func AddValueToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, d
 func AddNewerTextToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, doc DocDetails) (DocDetails, error) {
 	if tbl != nil && sch != nil {
 		pkTaggedVal := row.TaggedValues{
-			schema.DocNameTag: types.String(doc.DocPk),
+			DocNameTag: types.String(doc.DocPk),
 		}
 
 		docRow, ok, err := tbl.GetRowByPKVals(ctx, pkTaggedVal, *sch)
@@ -1062,7 +1079,7 @@ func AddNewerTextToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schem
 			return DocDetails{}, err
 		}
 		if ok {
-			docValue, _ := docRow.GetColVal(schema.DocTextTag)
+			docValue, _ := docRow.GetColVal(DocTextTag)
 			doc.NewerText = []byte(docValue.(types.String))
 		} else {
 			doc.NewerText = nil
@@ -1074,7 +1091,7 @@ func AddNewerTextToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schem
 }
 
 func addNewerTextToDocFromRow(ctx context.Context, r row.Row, doc *DocDetails) (DocDetails, error) {
-	docValue, ok := r.GetColVal(schema.DocTextTag)
+	docValue, ok := r.GetColVal(DocTextTag)
 	if !ok {
 		doc.NewerText = nil
 	} else {
@@ -1088,7 +1105,7 @@ func addNewerTextToDocFromRow(ctx context.Context, r row.Row, doc *DocDetails) (
 }
 
 func addDocPKToDocFromRow(r row.Row, doc *DocDetails) (DocDetails, error) {
-	colVal, _ := r.GetColVal(schema.DocNameTag)
+	colVal, _ := r.GetColVal(DocNameTag)
 	if colVal == nil {
 		doc.DocPk = ""
 	} else {
