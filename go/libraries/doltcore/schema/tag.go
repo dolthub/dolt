@@ -60,3 +60,12 @@ func AutoGenerateTag(rootSS *SuperSchema, schemaKinds []types.NomsKind) uint64 {
 
 	return randTag
 }
+
+func NomsKindsFromSchema(sch Schema) []types.NomsKind {
+	var nks []types.NomsKind
+	_ = sch.GetAllCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
+		nks = append(nks, col.Kind)
+		return false, nil
+	})
+	return nks
+}

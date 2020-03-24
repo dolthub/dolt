@@ -17,7 +17,9 @@ package merge
 import (
 	"context"
 	"errors"
-
+	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rebase"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 
@@ -482,26 +484,32 @@ func rowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, 
 	return v, false, nil
 }
 
-func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Commit) (*doltdb.RootValue, map[string]*MergeStats, error) {
-	ancCm, err := doltdb.GetCommitAncestor(ctx, cm1, cm2)
+func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, commit, mergeCommit *doltdb.Commit) (*doltdb.RootValue, map[string]*MergeStats, error) {
+	ancCommit, err := doltdb.GetCommitAncestor(ctx, commit, mergeCommit)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	root, err := cm1.GetRootValue()
+	mergeCommit, err = resolveTagConflicts(ctx, ddb, commit, mergeCommit, ancCommit)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	mergeRoot, err := cm2.GetRootValue()
+	root, err := commit.GetRootValue()
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	ancRoot, err := ancCm.GetRootValue()
+	mergeRoot, err := mergeCommit.GetRootValue()
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ancRoot, err := ancCommit.GetRootValue()
 
 	if err != nil {
 		return nil, nil, err
@@ -617,4 +625,114 @@ func GetDocsInConflict(ctx context.Context, dEnv *env.DoltEnv) (*diff.DocDiffs, 
 	}
 
 	return diff.NewDocDiffs(ctx, dEnv, workingRoot, nil, docDetails)
+}
+
+// looks for tag conflicts in the mergeCommit, and rebases mergeCommit to create a new merge commit if necessary
+func resolveTagConflicts(ctx context.Context, ddb *doltdb.DoltDB, commit, mergeCommit, ancCommit *doltdb.Commit) (*doltdb.Commit, error) {
+	root, err := commit.GetRootValue()
+
+	if err != nil {
+		return nil, err
+	}
+
+	mergeRoot, err := mergeCommit.GetRootValue()
+
+	if err != nil {
+		return nil, err
+	}
+
+	ancRoot, err := ancCommit.GetRootValue()
+
+	if err != nil {
+		return nil, err
+	}
+
+	rts, err := root.GetTableNames(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	mts, err := mergeRoot.GetTableNames(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	tableNameIntersection, _ := set.NewStrSet(rts).IntersectAndMissing(mts)
+
+	tm := make(rebase.TagMapping)
+	for _, tableName := range tableNameIntersection {
+		ss, found, err := root.GetSuperSchema(ctx, tableName)
+		if err != nil {
+			return nil, err
+		}
+		if !found {
+			panic("ss not found!")
+		}
+
+		mergeSS, found, err := mergeRoot.GetSuperSchema(ctx, tableName)
+		if err != nil {
+			return nil, err
+		}
+		if !found {
+			panic("mergeSS not found!")
+		}
+
+		ancSS, found, err := ancRoot.GetSuperSchema(ctx, tableName)
+		if err != nil {
+			return nil, err
+		}
+		if !found {
+			return nil, fmt.Errorf("table name collision for %s, table name used by both branches", tableName)
+		}
+
+		// (ss - ancSS) ∩ (mergeSS - ancSS)
+		sub := schema.SuperSchemaSubtract(ss, ancSS)
+		mergeSub := schema.SuperSchemaSubtract(mergeSS, ancSS)
+		columnIntersection := schema.SuperSchemaIntersection(sub, mergeSub)
+
+		// the intersection represents tags added by both branches since the ancestor
+		// we must rebase each of these tags in the merge commit
+		if columnIntersection.Size() > 0 {
+			tm[tableName] = make(map[uint64]uint64)
+			mergeTbl, _, err := mergeRoot.GetTable(ctx, tableName)
+
+			if err != nil {
+				return nil, err
+			}
+
+			ms, err := mergeTbl.GetSchema(ctx)
+
+			if err != nil {
+				return nil, err
+			}
+
+			mnks := schema.NomsKindsFromSchema(ms)
+			err = columnIntersection.Iter(func(oldTag uint64, _ schema.Column) (stop bool, err error) {
+				newTag, err := root.GetUniqueTagFromNomsKinds(ctx, mnks)
+				if err != nil {
+					return true, err
+				}
+				tm[tableName][oldTag] = newTag
+				return false, nil
+			})
+
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	if len(tm) > 0 {
+		rebased, err := rebase.TagRebaseForCommits(ctx, ddb, tm, mergeCommit)
+
+		if err != nil {
+			return nil, err
+		}
+
+		mergeCommit = rebased[0]
+	}
+
+	return mergeCommit, nil
 }

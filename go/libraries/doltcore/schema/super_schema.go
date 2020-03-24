@@ -342,6 +342,38 @@ func SuperSchemaUnion(superSchemas ...*SuperSchema) (*SuperSchema, error) {
 	return &SuperSchema{cc, tn}, nil
 }
 
+// SuperSchemaSubtract returns the logical set difference of left and right.
+func SuperSchemaSubtract(left, right *SuperSchema) *SuperSchema {
+	cc, _ := NewColCollection()
+	tn := make(map[uint64][]string)
+	_ = left.Iter(func(tag uint64, col Column) (stop bool, err error) {
+		_, found := right.GetColumn(tag)
+		if !found {
+			cc, _ = cc.Append(col)
+			tn[tag] = left.AllColumnNames(tag)
+		}
+		return false, nil
+	})
+	return &SuperSchema{cc, tn}
+}
+ // SuperSchemaIntersection returns the logical set intersection of the columns of ss1 and ss2, along with
+ // the union of each column's name history.
+func SuperSchemaIntersection(ss1, ss2 *SuperSchema) *SuperSchema {
+	cc, _ := NewColCollection()
+	tn := make(map[uint64][]string)
+	_ = ss1.Iter(func(tag uint64, col Column) (stop bool, err error) {
+		_, found := ss2.GetColumn(tag)
+		if found {
+			cc, _ = cc.Append(col)
+			ss := set.NewStrSet(ss1.AllColumnNames(tag))
+			ss.Add(ss2.AllColumnNames(tag)...)
+			tn[tag] = ss.AsSlice()
+		}
+		return false, nil
+	})
+	return &SuperSchema{cc, tn}
+}
+
 func stripColNameAndConstraints(col Column) Column {
 	// track column names in SuperSchema.tagNames
 	col.Name = ""

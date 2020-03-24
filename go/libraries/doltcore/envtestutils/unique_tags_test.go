@@ -140,6 +140,55 @@ var UniqueTagsTests = []UniqueTagsTest{
 		ExpectedBranch: "master",
 		ExpectedErrStr: "two different columns with the same tag",
 	},
+	{
+		Name: "tag conflicts will be rebased on merge",
+		Commands: []tc.Command{
+			tc.Query{Query: `create table test (pk int not null primary key comment 'tag:0');`},
+			tc.CommitAll{Message: "created table test"},
+			tc.Branch{BranchName: "other"},
+			tc.Checkout{BranchName: "other"},
+			tc.Query{Query: `alter table test add column c1 int comment 'tag:42';`},
+			tc.CommitAll{Message: "added column c1 with tag 42 to test on branch other"},
+			tc.Checkout{BranchName: "master"},
+			tc.Query{Query: `alter table test add column c0 int comment 'tag:42';`},
+			tc.CommitAll{Message: "added column c0 with tag 42 to test on branch master"},
+			tc.Merge{BranchName: "other"},
+			//tc.Query{Query: `alter table test add column c1 int comment 'tag:42';`},
+		},
+		TableName: "test",
+		ExpectedSchema: schema.SchemaFromCols(columnCollection(
+			newColTypeInfo("pk", 0, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
+			newColTypeInfo("c0", 42, typeinfo.Int32Type, false),
+			newColTypeInfo("c1", 14122, typeinfo.Int32Type, false),
+		)),
+		ExpectedBranch: "master",
+	},
+	{
+		Name: "tag conflicts in multiple tables will be rebased on merge",
+		Commands: []tc.Command{
+			tc.Query{Query: `create table one (pk1 int not null primary key comment 'tag:1');`},
+			tc.Query{Query: `create table two (pk2 int not null primary key comment 'tag:2');`},
+			tc.CommitAll{Message: "created two tables on master"},
+			tc.Branch{BranchName: "myBranch"},
+			tc.Query{Query: `alter table one add column c1 float comment 'tag:142';`},
+			tc.Query{Query: `alter table two add column c2 float comment 'tag:242';`},
+			tc.CommitAll{Message: "added columns to both tables on master"},
+			tc.Checkout{BranchName: "myBranch"},
+			tc.Query{Query: `alter table one add column c11 float comment 'tag:142';`},
+			tc.Query{Query: `alter table two add column c22 float comment 'tag:242';`},
+			tc.CommitAll{Message: "added columns to both tables on myBranch"},
+			tc.Checkout{BranchName: "master"},
+			tc.Merge{BranchName: "myBranch"},
+
+		},
+		TableName: "two",
+		ExpectedSchema: schema.SchemaFromCols(columnCollection(
+			newColTypeInfo("pk2", 2, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
+			newColTypeInfo("c2", 242, typeinfo.Float32Type, false),
+			newColTypeInfo("c22", 12281, typeinfo.Float32Type, false),
+		)),
+		ExpectedBranch: "master",
+	},
 }
 
 func TestUniqueTags(t *testing.T) {
@@ -155,6 +204,7 @@ func testUniqueTags(t *testing.T, test UniqueTagsTest) {
 
 	var ee error
 	for idx, cmd := range test.Commands {
+		require.NoError(t, ee)
 		fmt.Println(fmt.Sprintf("%d: %s: %s", idx, cmd.CommandString(), cmd))
 		ee = cmd.Exec(t, dEnv)
 	}

@@ -394,16 +394,19 @@ func superSchemaFromCols(cols *schema.ColCollection) *schema.SuperSchema {
 	ss, _ := schema.NewSuperSchema(sch)
 	return ss
 }
-
-func columnCollection(cols ...schema.Column) *schema.ColCollection {
-	pcc, _ := schema.NewColCollection(cols...)
-	return pcc
-}
-
-func newColTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, partOfPK bool, constraints ...schema.ColConstraint) schema.Column {
-	c, err := schema.NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, constraints...)
-	if err != nil {
-		panic("could not create column")
-	}
-	return c
-}
+//
+//func columnCollection(cols ...schema.Column) *schema.ColCollection {
+//	pcc, err := schema.NewColCollection(cols...)
+//	if err != nil {
+//		panic(err)
+//	}
+//	return pcc
+//}
+//
+//func newColTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, partOfPK bool, constraints ...schema.ColConstraint) schema.Column {
+//	c, err := schema.NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, constraints...)
+//	if err != nil {
+//		panic("could not create column")
+//	}
+//	return c
+//}

@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package rebase
+package envtestutils
 
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rebase"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -196,7 +197,7 @@ func testMigrateUniqueTags(t *testing.T, test MigrateTagsTest) {
 	require.NoError(t, err)
 
 	// rebase the history to uniquify tags
-	err = migrateUniqueTags(context.Background(), dEnv.DoltDB, bb)
+	err = rebase.MigrateUniqueTags(context.Background(), dEnv.DoltDB, bb)
 	require.NoError(t, err)
 
 	// confirm that the repo state is the same
