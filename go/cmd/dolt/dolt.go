@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 
 	"github.com/fatih/color"
 	"github.com/pkg/profile"
@@ -147,7 +148,7 @@ func runMain() int {
 
 	dEnv := env.Load(context.TODO(), env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
 
-	if dEnv.DBLoadError == nil {
+	if dEnv.DBLoadError == nil && commandWillMigrate(args){
 		dEnv.DBLoadError = rebase.MaybeMigrateUniqueTags(context.Background(), dEnv)
 	}
 
@@ -197,6 +198,27 @@ func runMain() int {
 	}
 
 	return res
+}
+
+func commandWillMigrate(args []string) bool {
+	subCommandStr := strings.ToLower(strings.TrimSpace(args[0]))
+	for _, cmd := range []cli.Command{
+		commands.CommitCmd{},
+		commands.SqlCmd{},
+		sqlserver.SqlServerCmd{},
+		commands.DiffCmd{},
+		commands.MergeCmd{},
+		commands.PushCmd{},
+		commands.PullCmd{},
+		commands.CloneCmd{},
+		schcmds.Commands,
+		tblcmds.Commands,
+	} {
+		if subCommandStr == strings.ToLower(cmd.Name()) {
+			return true
+		}
+	}
+	return false
 }
 
 // processEventsDir runs the dolt send-metrics command in a new process
