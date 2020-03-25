@@ -90,10 +90,18 @@ select * from releases_dolt_mean_results;\
     cp ../"$logictest"/import.sql .
     sqlite3 regressions_db < import.sql
     echo "Checking for test regressions:"
-    duration_regressions=`sqlite3 regressions_db 'select * from releases_nightly_duration_change' | wc -l | tr -d '[:space:]'`
-    result_regressions=`sqlite3 regressions_db 'select * from releases_nightly_result_change' | wc -l | tr -d '[:space:]'`
-    if [ "$duration_regressions" != 0 ]; then echo "Duration regression found" && exit 1; else echo "No duration regressions found"; fi
-    if [ "$result_regressions" != 0 ]; then echo "Result regression found" && exit 1; else echo "No result regressions found"; fi
+
+    sqlite3 regressions_db 'select * from releases_nightly_duration_change'
+    sqlite3 regressions_db 'select * from releases_nightly_result_change'
+
+    duration_query_output=`sqlite3 regressions_db 'select * from releases_nightly_duration_change'`
+    result_query_output=`sqlite3 regressions_db 'select * from releases_nightly_result_change'`
+
+    duration_regressions=`echo $duration_query_output | wc -l | tr -d '[:space:]'`
+    result_regressions=`echo $result_query_output | wc -l | tr -d '[:space:]'`
+
+    if [ "$duration_regressions" != 0 ]; then echo "Duration regression found, $duration_regressions != 0" && echo $duration_query_output && exit 1; else echo "No duration regressions found"; fi
+    if [ "$result_regressions" != 0 ]; then echo "Result regression found, $result_regressions != 0" && echo $result_query_output && exit 1; else echo "No result regressions found"; fi
 }
 
 (cd "$logictest_main" && setup && run)
