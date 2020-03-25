@@ -286,6 +286,7 @@ func pushToRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, srcRef, destRef,
 				cli.Println("hint: Updates were rejected because the tip of your current branch is behind")
 				cli.Println("hint: its remote counterpart. Integrate the remote changes (e.g.")
 				cli.Println("hint: 'dolt pull ...') before pushing again.")
+				return errhand.BuildDError("").Build()
 			} else {
 				return errhand.BuildDError("error: push failed").AddCause(err).Build()
 			}
