@@ -21,12 +21,19 @@ if [ -z "$CREDSDIR" ]; then fail Must supply CREDSDIR; fi
 if [ -z "$DOLT_CREDS" ]; then fail Must supply DOLT_CREDS; fi
 if [ -z "$CREDS_HASH" ]; then fail Must supply CREDS_HASH; fi
 if [ -z "$DOLT_VERSION" ]; then fail Must supply DOLT_VERSION; fi
+if [ -z "$JOB_TYPE" ]; then fail Must supply DOLT_VERSION; fi
+if [ -z "$TEST_N_TIMES" ]; then fail Must supply DOLT_VERSION; fi
+
+re='^[0-9]+$'
+if ! [[ $TEST_N_TIMES =~ $re ]] ; then
+   fail TEST_N_TIMES must be a number
+fi
 
 function setup() {
-    echo "$DOLT_GLOBAL_CONFIG" > "$DOLT_CONFIG_PATH"/config_global.json
     rm -rf "$CREDSDIR"
     mkdir -p "$CREDSDIR"
     cat "$DOLT_CREDS" > "$CREDSDIR"/"$CREDS_HASH".jwk
+    echo "$DOLT_GLOBAL_CONFIG" > "$DOLT_CONFIG_PATH"/config_global.json
     dolt config --global --add user.creds "$CREDS_HASH"
     dolt config --global --add metrics.disabled true
     rm -rf temp
@@ -48,23 +55,23 @@ function run_once() {
 }
 
 function run() {
-    seq 1 | while read test_num; do
+    seq 1 $TEST_N_TIMES | while read test_num; do
         run_once "$test_num"
     done
     rm -rf .dolt
 }
 
-function import_one() {
+function import_one_nightly() {
     test_num="$1"
     dolt table import -u nightly_dolt_results ../"$logictest_main"/temp/parsed"$test_num".json
     dolt add nightly_dolt_results
     dolt commit -m "update dolt sql performance results ($DOLT_VERSION) ($test_num)"
 }
 
-function import() {
+function import_nightly() {
     dolt checkout nightly
-    seq 1 | while read test_num; do
-        import_one "$test_num"
+    seq 1 $TEST_N_TIMES | while read test_num; do
+        import_one_nightly "$test_num"
     done
     dolt sql -r csv -q "\
 select version, test_file, line_num, avg(duration) as mean_duration, result from dolt_history_nightly_dolt_results where version=\"${DOLT_VERSION}\" group by line_num;\
@@ -89,16 +96,13 @@ select * from releases_dolt_mean_results;\
     sqlite3 regressions_db < ../"$logictest"/regressions.sql
     cp ../"$logictest"/import.sql .
     sqlite3 regressions_db < import.sql
-    echo "Checking for test regressions:"
-
-    sqlite3 regressions_db 'select * from releases_nightly_duration_change'
-    sqlite3 regressions_db 'select * from releases_nightly_result_change'
+    echo "Checking for test regressions..."
 
     duration_query_output=`sqlite3 regressions_db 'select * from releases_nightly_duration_change'`
     result_query_output=`sqlite3 regressions_db 'select * from releases_nightly_result_change'`
 
-    duration_regressions=`echo $duration_query_output | wc -l | tr -d '[:space:]'`
-    result_regressions=`echo $result_query_output | wc -l | tr -d '[:space:]'`
+    duration_regressions=`echo $duration_query_output | sed '/^\s*$/d' | wc -l | tr -d '[:space:]'`
+    result_regressions=`echo $result_query_output | sed '/^\s*$/d' | wc -l | tr -d '[:space:]'`
 
     if [ "$duration_regressions" != 0 ]; then echo "Duration regression found, $duration_regressions != 0" && echo $duration_query_output && exit 1; else echo "No duration regressions found"; fi
     if [ "$result_regressions" != 0 ]; then echo "Result regression found, $result_regressions != 0" && echo $result_query_output && exit 1; else echo "No result regressions found"; fi
@@ -108,4 +112,9 @@ select * from releases_dolt_mean_results;\
 
 rm -rf dolt-sql-performance
 dolt clone Liquidata/dolt-sql-performance
-(cd dolt-sql-performance && import)
+
+if [[ "$JOB_TYPE" == "nightly" ]]; then
+  (cd dolt-sql-performance && import_nightly);
+  elif [ "$JOB_TYPE" == "release" ]; then
+      echo "Running release...."
+fi
