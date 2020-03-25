@@ -27,8 +27,8 @@ pipeline {
                             sh "go get -mod=readonly ./..."
                             sh "go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/."
                         }
-                        dir ("regressions") {
-                            sh ".run_regressions.sh ./nightly.vars"
+                        dir ("benchmark/sql_regressions") {
+                            sh "nice ./run_regressions.sh ./nightly.vars"
                         }
                     }
                 }

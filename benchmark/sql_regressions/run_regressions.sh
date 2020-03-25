@@ -7,7 +7,7 @@ function fail() {
     exit 1
 }
 
-logictest="go/libraries/doltcore/sqle/logictest"
+logictest="../../go/libraries/doltcore/sqle/logictest"
 logictest_main="$logictest"/main
 
 if [[ "$#" -ne 1 ]]; then
@@ -25,20 +25,26 @@ if [ -z "$DOLT_VERSION" ]; then fail Must supply DOLT_VERSION; fi
 function setup() {
     echo "$DOLT_GLOBAL_CONFIG" > "$DOLT_CONFIG_PATH"/config_global.json
     rm -rf "$CREDSDIR"
-    mkdir "$CREDSDIR"
+    mkdir -p "$CREDSDIR"
     cat "$DOLT_CREDS" > "$CREDSDIR"/"$CREDS_HASH".jwk
-    dolt config global --add user.creds "$CREDS_HASH"
-    dolt config global --add metrics.disabled true
+    dolt config --global --add user.creds "$CREDS_HASH"
+    dolt config --global --add metrics.disabled true
     rm -rf temp
     mkdir temp
 }
 
 function run_once() {
     test_num="$1"
+
+    local results=temp/results"$test_num".log
+    local parsed=temp/parsed"$test_num".json
+
     rm -rf .dolt
     dolt init
-    go run . run ../../../../../../sqllogictest/test/select1.test > temp/results"$test_num".log
-    go run . parse "$DOLT_VERSION" temp/results"$test_num".log > tmp/results"$test_num".json
+    echo "Running tests and generating $results"
+    go run . run ../../../../../../sqllogictest/test/select1.test > "$results"
+    echo "Parsing $results and generating $parsed"
+    go run . parse "$DOLT_VERSION" temp/results"$test_num".log > "$parsed"
 }
 
 function run() {
@@ -49,7 +55,7 @@ function run() {
 }
 
 function import_one() {
-    test_name="$1"
+    test_num="$1"
     dolt table import -u nightly_dolt_results ../"$logictest_main"/temp/parsed"$test_num".json
     dolt add nightly_dolt_results
     dolt commit -m "update dolt sql performance results ($DOLT_VERSION) ($test_num)"
@@ -83,10 +89,11 @@ select * from releases_dolt_mean_results;\
     sqlite3 regressions_db < ../"$logictest"/regressions.sql
     cp ../"$logictest"/import.sql .
     sqlite3 regressions_db < import.sql
+    echo "Checking for test regressions:"
     duration_regressions=`sqlite3 regressions_db 'select * from releases_nightly_duration_change' | wc -l | tr -d '[:space:]'`
     result_regressions=`sqlite3 regressions_db 'select * from releases_nightly_result_change' | wc -l | tr -d '[:space:]'`
-    if [ "$duration_regressions" != 0 ]; then exit 1; fi
-    if [ "$result_regressions" != 0 ]; then exit 1; fi
+    if [ "$duration_regressions" != 0 ]; then echo "Duration regression found" && exit 1; else echo "No duration regressions found"; fi
+    if [ "$result_regressions" != 0 ]; then echo "Result regression found" && exit 1; else echo "No result regressions found"; fi
 }
 
 (cd "$logictest_main" && setup && run)
