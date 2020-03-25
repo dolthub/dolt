@@ -20,9 +20,14 @@ if [ -z "$DOLT_GLOBAL_CONFIG" ]; then fail Must supply DOLT_GLOBAL_CONFIG; fi
 if [ -z "$CREDSDIR" ]; then fail Must supply CREDSDIR; fi
 if [ -z "$DOLT_CREDS" ]; then fail Must supply DOLT_CREDS; fi
 if [ -z "$CREDS_HASH" ]; then fail Must supply CREDS_HASH; fi
-if [ -z "$DOLT_VERSION" ]; then fail Must supply DOLT_VERSION; fi
 if [ -z "$JOB_TYPE" ]; then fail Must supply DOLT_VERSION; fi
 if [ -z "$TEST_N_TIMES" ]; then fail Must supply DOLT_VERSION; fi
+
+if [[ -z "$DOLT_VERSION" ]] && [[ -z "$DOLT_RELEASE" ]]; then
+  fail Must supply DOLT_VERSION;
+  elif [[ -z "$DOLT_VERSION" && -n "$DOLT_RELEASE" ]]; then
+    DOLT_VERSION="$DOLT_RELEASE" && echo "Just set dolt version from release";
+fi
 
 re='^[0-9]+$'
 if ! [[ $TEST_N_TIMES =~ $re ]] ; then
@@ -108,6 +113,40 @@ select * from releases_dolt_mean_results;\
     if [ "$result_regressions" != 0 ]; then echo "Result regression found, $result_regressions != 0" && echo $result_query_output && exit 1; else echo "No result regressions found"; fi
 }
 
+function rebuild_dolt() {
+    pushd ../../go && \
+    go get -mod=readonly ./... && \
+    go build -mod=readonly -o ../../.ci_bin/dolt ./cmd/dolt/. && \
+    popd
+}
+
+function import_one_releases() {
+    test_num="$1"
+    dolt table import -u releases_dolt_results ../"$logictest_main"/temp/parsed"$test_num".json
+    dolt add releases_dolt_results
+    dolt commit -m "update dolt sql performance results ($DOLT_VERSION) ($test_num)"
+}
+
+function import_releases() {
+    dolt checkout releases
+    seq 1 $TEST_N_TIMES | while read test_num; do
+        import_one_releases "$test_num"
+    done
+    dolt sql -r csv -q "\
+select version, test_file, line_num, avg(duration) as mean_duration, result from dolt_history_releases_dolt_results where version=\"${DOLT_VERSION}\" group by line_num;\
+" > releases_mean.csv
+    dolt table import -u releases_dolt_mean_results releases_mean.csv
+    dolt add releases_dolt_mean_results
+    dolt commit -m "update dolt sql performance mean results ($DOLT_VERSION)"
+    dolt push origin releases
+
+    dolt checkout regressions
+    dolt merge releases
+    dolt add .
+    dolt commit -m "merge releases"
+    dolt push origin regressions
+}
+
 (cd "$logictest_main" && setup && run)
 
 rm -rf dolt-sql-performance
@@ -116,5 +155,7 @@ dolt clone Liquidata/dolt-sql-performance
 if [[ "$JOB_TYPE" == "nightly" ]]; then
   (cd dolt-sql-performance && import_nightly);
   elif [ "$JOB_TYPE" == "release" ]; then
-      echo "Running release...."
+      echo "Running releases for release $DOLT_VERSION....";
+      (rebuild_dolt && cd dolt-sql-performance && import_releases)
+  else fail Unknown JOB_TYPE specified;
 fi

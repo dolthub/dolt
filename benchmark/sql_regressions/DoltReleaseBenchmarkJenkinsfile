@@ -1,0 +1,50 @@
+pipeline {
+    agent none
+    stages {
+        stage('Test Dolt release') {
+            parallel {
+                stage ("Update Liquidata/dolt-sql-performance:releases") {
+                    agent {
+                        kubernetes {
+                            label "liquidata-inc-ld-build"
+                        }
+                    }
+                    environment {
+                        PATH = "${pwd()}/.ci_bin:${pwd()}/.ci_bin/node_modules/.bin:${env.PATH}"
+                        TMPDIR = "${pwd()}/tempDir"
+                        DOLT_ROOT_PATH="${pwd()}/tempRoot"
+                        DOLT_CREDS = credentials("system-account-dolthub-creds")
+                        DOLT_GLOBAL_CONFIG = credentials("system-account-dolthub-config")
+                    }
+                    steps {
+                        sh "rm -rf $TMPDIR && mkdir $TMPDIR"
+                        sh "rm -rf $DOLT_ROOT_PATH && mkdir $DOLT_ROOT_PATH"
+                        dir ("sqllogictest") {
+                            git url: "https://github.com/liquidata-inc/sqllogictest.git"
+                        }
+
+                        dir ("dolt-release") {
+                            checkout([$class: 'GitSCM', branches: [[name: "${DOLT_RELEASE}"]],
+                                 userRemoteConfigs: [[url: 'https://github.com/liquidata-inc/dolt.git']]])
+                        }
+                        dir ("dolt-release/go") {
+                            sh "go get -mod=readonly ./..."
+                            sh "go build -mod=readonly -o ../../.ci_bin/dolt ./cmd/dolt/."
+                        }
+
+                        dir ("benchmark/sql_regressions") {
+                            sh "nice ./run_regressions.sh ./releases.vars"
+                        }
+                    }
+                }
+            }
+        }
+    }
+    post {
+        always {
+            node ("liquidata-inc-ld-build") {
+                cleanWs() // cleanup
+            }
+        }
+    }
+}
