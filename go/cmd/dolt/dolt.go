@@ -208,8 +208,6 @@ func commandWillMigrate(args []string) bool {
 		sqlserver.SqlServerCmd{},
 		commands.DiffCmd{},
 		commands.MergeCmd{},
-		commands.PushCmd{},
-		commands.PullCmd{},
 		commands.CloneCmd{},
 		schcmds.Commands,
 		tblcmds.Commands,

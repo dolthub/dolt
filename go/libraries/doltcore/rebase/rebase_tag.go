@@ -170,7 +170,15 @@ func TagRebaseForCommits(ctx context.Context, ddb *doltdb.DoltDB, tm TagMapping,
 	}
 
 	nerf := func(ctx context.Context, cm *doltdb.Commit) (b bool, err error) {
-		return tagExistsInHistory(ctx, cm, tm)
+		n, err := cm.NumParents()
+		if err != nil {
+			return false, err
+		}
+		exists, err := tagExistsInHistory(ctx, cm, tm)
+		if err != nil {
+			return false, err
+		}
+		return (n > 0) && exists, nil
 	}
 
 	rcs, err := rebase(ctx, ddb, replay, nerf, startingCommits...)
