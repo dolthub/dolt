@@ -26,7 +26,7 @@ if [ -z "$TEST_N_TIMES" ]; then fail Must supply DOLT_VERSION; fi
 if [[ -z "$DOLT_VERSION" ]] && [[ -z "$DOLT_RELEASE" ]]; then
   fail Must supply DOLT_VERSION;
   elif [[ -z "$DOLT_VERSION" && -n "$DOLT_RELEASE" ]]; then
-    DOLT_VERSION="$DOLT_RELEASE" && echo "Just set dolt version from release";
+    DOLT_VERSION="$DOLT_RELEASE";
 fi
 
 re='^[0-9]+$'
@@ -41,6 +41,7 @@ function setup() {
     echo "$DOLT_GLOBAL_CONFIG" > "$DOLT_CONFIG_PATH"/config_global.json
     dolt config --global --add user.creds "$CREDS_HASH"
     dolt config --global --add metrics.disabled true
+    dolt version
     rm -rf temp
     mkdir temp
 }
@@ -155,7 +156,6 @@ dolt clone Liquidata/dolt-sql-performance
 if [[ "$JOB_TYPE" == "nightly" ]]; then
   (cd dolt-sql-performance && import_nightly);
   elif [ "$JOB_TYPE" == "release" ]; then
-      echo "Running releases for release $DOLT_VERSION....";
       (rebuild_dolt && cd dolt-sql-performance && import_releases)
   else fail Unknown JOB_TYPE specified;
 fi
