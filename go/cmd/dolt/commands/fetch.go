@@ -17,6 +17,8 @@ package commands
 import (
 	"context"
 
+	"github.com/liquidata-inc/dolt/go/store/datas"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -211,6 +213,11 @@ func fetchRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, s
 		wg, progChan, pullerEventCh := runProgFuncs()
 		err = actions.Fetch(ctx, dEnv, destRef, srcDB, destDB, cm, progChan, pullerEventCh)
 		stopProgFuncs(wg, progChan, pullerEventCh)
+
+		if err == datas.ErrMergeNeeded {
+			return errhand.BuildDError("Upstream remote is incompatible with local history.\n" +
+				"Please export a backup copy of local changes and reclone this dataset").AddCause(err).Build()
+		}
 
 		if err != nil {
 			return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
