@@ -115,10 +115,15 @@ select * from releases_dolt_mean_results;\
 }
 
 function rebuild_dolt() {
+    echo "Removing dolt version $DOLT_VERSION..."
+    rm ../../.ci_bin/dolt
+    echo "Rebuilding dolt from current checkout..."
     pushd ../../go && \
+    pwd
     go get -mod=readonly ./... && \
-    go build -mod=readonly -o ../../.ci_bin/dolt ./cmd/dolt/. && \
+    go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/. && \
     popd
+    dolt version
 }
 
 function import_one_releases() {
