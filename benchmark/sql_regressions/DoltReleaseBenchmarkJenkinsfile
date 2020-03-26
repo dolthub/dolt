@@ -10,7 +10,7 @@ pipeline {
                         }
                     }
                     environment {
-                        PATH = "${pwd()}/.ci_bin:${pwd()}/.ci_bin/node_modules/.bin:${env.PATH}"
+                        PATH = "${pwd()}/.ci_bin/node_modules/.bin:${env.PATH}"
                         TMPDIR = "${pwd()}/tempDir"
                         DOLT_ROOT_PATH="${pwd()}/tempRoot"
                         DOLT_CREDS = credentials("system-account-dolthub-creds")

@@ -10,8 +10,8 @@ pipeline {
                         }
                     }
                     environment {
-                        PATH = "${pwd()}/.ci_bin:${pwd()}/.ci_bin/node_modules/.bin:${env.PATH}"
-                        DOLT_VERSION = sh(returnStdout: true, script: "(git rev-parse HEAD | tr -d '\n')")
+                        PATH = "${pwd()}/.ci_bin/node_modules/.bin:${env.PATH}"
+                        DOLT_VERSION = "${env.GIT_COMMIT}"
                         TMPDIR = "${pwd()}/tempDir"
                         DOLT_ROOT_PATH="${pwd()}/tempRoot"
                         DOLT_CREDS = credentials("system-account-dolthub-creds")
@@ -22,10 +22,6 @@ pipeline {
                         sh "rm -rf $DOLT_ROOT_PATH && mkdir $DOLT_ROOT_PATH"
                         dir ("sqllogictest") {
                             git url: "https://github.com/liquidata-inc/sqllogictest.git"
-                        }
-                        dir ("go") {
-                            sh "go get -mod=readonly ./..."
-                            sh "go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/."
                         }
                         dir ("benchmark/sql_regressions") {
                             sh "nice ./run_regressions.sh ./nightly.vars"
