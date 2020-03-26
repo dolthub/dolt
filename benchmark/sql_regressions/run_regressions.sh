@@ -57,7 +57,7 @@ function run_once() {
     rm -rf .dolt
     dolt init
     echo "Running tests and generating $results"
-    go run . run ../../../../../../sqllogictest/test > "$results"
+    go run . run ../../../../../../sqllogictest/test/select1.test > "$results"
     echo "Parsing $results and generating $parsed"
     go run . parse "$DOLT_VERSION" temp/results"$test_num".log > "$parsed"
 }
@@ -141,7 +141,7 @@ select * from releases_dolt_mean_results;\
 function build_dolt_release() {
     pushd ../../ && \
     rm ./.ci_bin/dolt && \
-    curl -A CURL_USER_AGENT:-dolt-installer -fL "$DOLT_RELEASE_URL" > dolt.tar.gz && \
+    curl -A ld-jenkins-dolt-installer -fL "$DOLT_RELEASE_URL" > dolt.tar.gz && \
     tar zxf dolt.tar.gz && \
     install dolt-linux-amd64/bin/dolt ./.ci_bin/ && \
     popd && \
