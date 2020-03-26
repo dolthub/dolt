@@ -15,18 +15,11 @@ pipeline {
                         DOLT_ROOT_PATH="${pwd()}/tempRoot"
                         DOLT_CREDS = credentials("system-account-dolthub-creds")
                         DOLT_GLOBAL_CONFIG = credentials("system-account-dolthub-config")
-                        DOLT_RELEASE_URL = "https://github.com/liquidata-inc/dolt/releases/download/v\"$DOLT_RELEASE\"/dolt-linux-amd64.tar.gz"
+                        DOLT_RELEASE_URL = "https://github.com/liquidata-inc/dolt/releases/download/v${DOLT_RELEASE}/dolt-linux-amd64.tar.gz"
                     }
                     steps {
                         sh "rm -rf $TMPDIR && mkdir $TMPDIR"
                         sh "rm -rf $DOLT_ROOT_PATH && mkdir $DOLT_ROOT_PATH"
-                        sh """
-                        curl -A CURL_USER_AGENT:-dolt-installer -fsL "$DOLT_RELEASE_URL" > dolt.tar.gz
-                        tar zxf dolt.tar.gz
-                        rm -rf ./.ci_bin && mkdir ./.ci_bin
-                        install dolt-linux-amd64/bin/dolt ./.ci_bin/
-                        dolt version
-                        """
                         dir ("sqllogictest") {
                             git url: "https://github.com/liquidata-inc/sqllogictest.git"
                         }

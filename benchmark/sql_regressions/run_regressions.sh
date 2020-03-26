@@ -15,6 +15,7 @@ if [[ "$#" -ne 1 ]]; then
 fi
 
 source "$1"
+if [ -z "$DOLT_ROOT_PATH" ]; then fail Must supply DOLT_ROOT_PATH; fi
 if [ -z "$DOLT_CONFIG_PATH" ]; then fail Must supply DOLT_CONFIG_PATH; fi
 if [ -z "$DOLT_GLOBAL_CONFIG" ]; then fail Must supply DOLT_GLOBAL_CONFIG; fi
 if [ -z "$CREDSDIR" ]; then fail Must supply CREDSDIR; fi
@@ -22,6 +23,7 @@ if [ -z "$DOLT_CREDS" ]; then fail Must supply DOLT_CREDS; fi
 if [ -z "$CREDS_HASH" ]; then fail Must supply CREDS_HASH; fi
 if [ -z "$JOB_TYPE" ]; then fail Must supply DOLT_VERSION; fi
 if [ -z "$TEST_N_TIMES" ]; then fail Must supply DOLT_VERSION; fi
+if [ -z "$FAIL_ON_EXISTING_VERSION" ]; then fail Must supply FAIL_ON_EXISTING_VERSION; fi
 
 if [[ -z "$DOLT_VERSION" ]] && [[ -z "$DOLT_RELEASE" ]]; then
   fail Must supply DOLT_VERSION;
@@ -55,7 +57,7 @@ function run_once() {
     rm -rf .dolt
     dolt init
     echo "Running tests and generating $results"
-    go run . run ../../../../../../sqllogictest/test/select1.test > "$results"
+    go run . run ../../../../../../sqllogictest/test > "$results"
     echo "Parsing $results and generating $parsed"
     go run . parse "$DOLT_VERSION" temp/results"$test_num".log > "$parsed"
 }
@@ -65,6 +67,28 @@ function run() {
         run_once "$test_num"
     done
     rm -rf .dolt
+}
+
+function check_version_exists() {
+    if [[ "$JOB_TYPE" == "nightly" ]]; then
+      dolt checkout nightly
+      table_prefix="nightly"
+      elif [ "$JOB_TYPE" == "release" ]; then
+        dolt checkout releases
+        table_prefix="releases"
+      else fail Unknown JOB_TYPE specified;
+    fi
+
+    previously_tested_version=$(dolt sql -r csv -q "select * from ${table_prefix}_dolt_results where version = '$DOLT_VERSION' limit 1;"| wc -l | tr -d '[:space:]')
+
+    if [ "$previously_tested_version" != 1 ]; then
+      echo "Results for dolt version $DOLT_VERSION already exist in Liquidata/dolt-sql-performance, $previously_tested_version != 1" && \
+      echo $result_query_output && \
+      exit 1;
+    fi
+
+    echo $previously_tested_version
+    dolt checkout master
 }
 
 function import_one_nightly() {
@@ -114,15 +138,24 @@ select * from releases_dolt_mean_results;\
     if [ "$result_regressions" != 0 ]; then echo "Result regression found, $result_regressions != 0" && echo $result_query_output && exit 1; else echo "No result regressions found"; fi
 }
 
-function rebuild_dolt() {
-    echo "Removing dolt version $DOLT_VERSION..."
-    rm ../../.ci_bin/dolt
-    echo "Rebuilding dolt from current checkout..."
+function build_dolt_release() {
+    pushd ../../ && \
+    rm ./.ci_bin/dolt && \
+    curl -A CURL_USER_AGENT:-dolt-installer -fL "$DOLT_RELEASE_URL" > dolt.tar.gz && \
+    tar zxf dolt.tar.gz && \
+    install dolt-linux-amd64/bin/dolt ./.ci_bin/ && \
+    popd && \
+    echo "Finished installing dolt from release:" && \
+    dolt version
+}
+
+function build_dolt_checkout() {
     pushd ../../go && \
-    pwd
+    rm -rf ../.ci_bin/ && mkdir ../.ci_bin/ && \
     go get -mod=readonly ./... && \
     go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/. && \
-    popd
+    popd && \
+    echo "Finished installing dolt from checkout:" && \
     dolt version
 }
 
@@ -153,14 +186,26 @@ select version, test_file, line_num, avg(duration) as mean_duration, result from
     dolt push origin regressions
 }
 
-(cd "$logictest_main" && setup && run)
+build_dolt_checkout
 
 rm -rf dolt-sql-performance
 dolt clone Liquidata/dolt-sql-performance
 
+(cd "$logictest_main" && setup)
+
+if [[ "$FAIL_ON_EXISTING_VERSION" == true ]]; then
+  (cd dolt-sql-performance && check_version_exists)
+fi
+
+if [[ "$JOB_TYPE" == "release" ]]; then
+  build_dolt_release
+fi
+
+(cd "$logictest_main" && run)
+
 if [[ "$JOB_TYPE" == "nightly" ]]; then
   (cd dolt-sql-performance && import_nightly);
   elif [ "$JOB_TYPE" == "release" ]; then
-      (rebuild_dolt && cd dolt-sql-performance && import_releases)
+      (build_dolt_checkout && cd dolt-sql-performance && import_releases)
   else fail Unknown JOB_TYPE specified;
 fi
