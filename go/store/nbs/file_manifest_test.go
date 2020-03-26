@@ -96,7 +96,10 @@ func TestFileManifestLoadIfExistsHoldsLock(t *testing.T) {
 		return err
 	})
 
-	assert.NoError(err)
+	if err != nil {
+		assert.NoError(err)
+	}
+
 	assert.True(exists)
 	assert.Equal(constants.NomsVersion, upstream.vers)
 	assert.Equal(newRoot, upstream.root)

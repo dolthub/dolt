@@ -15,7 +15,6 @@
 package sqle
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -35,7 +34,7 @@ type DoltTable struct {
 	table  *doltdb.Table
 	sch    schema.Schema
 	sqlSch sql.Schema
-	db     *Database
+	db     Database
 }
 
 var _ sql.Table = (*DoltTable)(nil)
@@ -131,7 +130,7 @@ func (t *WritableDoltTable) getTableEditor() *tableEditor {
 	return newTableEditor(t)
 }
 
-func (t *WritableDoltTable) flushBatchedEdits(ctx context.Context) error {
+func (t *WritableDoltTable) flushBatchedEdits(ctx *sql.Context) error {
 	if t.ed != nil {
 		err := t.ed.flush(ctx)
 		t.ed = nil
@@ -189,7 +188,13 @@ func (p doltTablePartition) Key() []byte {
 	return []byte(partitionName)
 }
 
-func (t *DoltTable) updateTable(ctx context.Context, mapEditor *types.MapEditor) error {
+func (t *DoltTable) updateTable(ctx *sql.Context, mapEditor *types.MapEditor) error {
+	root, err := t.db.GetRoot(ctx)
+
+	if err != nil {
+		return err
+	}
+
 	updated, err := mapEditor.Map(ctx)
 	if err != nil {
 		return errhand.BuildDError("failed to modify table").AddCause(err).Build()
@@ -200,14 +205,13 @@ func (t *DoltTable) updateTable(ctx context.Context, mapEditor *types.MapEditor)
 		return errhand.BuildDError("failed to update rows").AddCause(err).Build()
 	}
 
-	newRoot, err := doltdb.PutTable(ctx, t.db.root, t.db.root.VRW(), t.name, newTable)
+	newRoot, err := doltdb.PutTable(ctx, root, root.VRW(), t.name, newTable)
 	if err != nil {
 		return errhand.BuildDError("failed to write table back to database").AddCause(err).Build()
 	}
 
 	t.table = newTable
-	t.db.root = newRoot
-	return nil
+	return t.db.SetRoot(ctx, newRoot)
 }
 
 // AlterableDoltTable allows altering the schema of the table. It implements sql.AlterableTable.
@@ -219,7 +223,13 @@ var _ sql.AlterableTable = (*AlterableDoltTable)(nil)
 
 // AddColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, order *sql.ColumnOrder) error {
-	table, _, err := t.db.Root().GetTable(ctx, t.name)
+	root, err := t.db.GetRoot(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	table, _, err := root.GetTable(ctx, t.name)
 	if err != nil {
 		return err
 	}
@@ -261,13 +271,12 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		return err
 	}
 
-	newRoot, err := t.db.Root().PutTable(ctx, t.name, updatedTable)
+	newRoot, err := root.PutTable(ctx, t.name, updatedTable)
 	if err != nil {
 		return err
 	}
 
-	t.db.SetRoot(newRoot)
-	return nil
+	return t.db.SetRoot(ctx, newRoot)
 }
 
 func orderToOrder(order *sql.ColumnOrder) *alterschema.ColumnOrder {
@@ -282,7 +291,12 @@ func orderToOrder(order *sql.ColumnOrder) *alterschema.ColumnOrder {
 
 // DropColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) DropColumn(ctx *sql.Context, columnName string) error {
-	table, _, err := t.db.Root().GetTable(ctx, t.name)
+	root, err := t.db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	table, _, err := root.GetTable(ctx, t.name)
 	if err != nil {
 		return err
 	}
@@ -292,18 +306,23 @@ func (t *AlterableDoltTable) DropColumn(ctx *sql.Context, columnName string) err
 		return err
 	}
 
-	newRoot, err := t.db.Root().PutTable(ctx, t.name, updatedTable)
+	newRoot, err := root.PutTable(ctx, t.name, updatedTable)
 	if err != nil {
 		return err
 	}
 
-	t.db.SetRoot(newRoot)
-	return nil
+	return t.db.SetRoot(ctx, newRoot)
 }
 
 // ModifyColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sql.Column, order *sql.ColumnOrder) error {
-	table, _, err := t.db.Root().GetTable(ctx, t.name)
+	root, err := t.db.GetRoot(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	table, _, err := root.GetTable(ctx, t.name)
 	if err != nil {
 		return err
 	}
@@ -341,11 +360,10 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		return err
 	}
 
-	newRoot, err := t.db.Root().PutTable(ctx, t.name, updatedTable)
+	newRoot, err := root.PutTable(ctx, t.name, updatedTable)
 	if err != nil {
 		return err
 	}
 
-	t.db.SetRoot(newRoot)
-	return nil
+	return t.db.SetRoot(ctx, newRoot)
 }

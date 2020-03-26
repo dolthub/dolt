@@ -17,9 +17,12 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 	"io"
 	"strings"
+	"sync"
 	"time"
+	"vitess.io/vitess/go/vt/proto/query"
 
 	"github.com/src-d/go-mysql-server/sql"
 	"github.com/src-d/go-mysql-server/sql/parse"
@@ -44,62 +47,129 @@ const (
 	single  batchMode = false
 )
 
+type tableCache struct {
+	mu *sync.Mutex
+	tables map[string]map[*doltdb.RootValue]map[string]sql.Table
+}
+
+func (tc *tableCache) Get(dbName string, tableName string, root *doltdb.RootValue) (sql.Table, bool) {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+
+	dbTables, ok := tc.tables[dbName]
+
+	if !ok {
+		return nil, false
+	}
+
+	tablesForRoot, ok := dbTables[root]
+
+	if !ok {
+		return nil, false
+	}
+
+	tbl, ok := tablesForRoot[tableName]
+
+	return tbl, ok
+}
+
+func (tc *tableCache) Put(dbName string, tableName string, root *doltdb.RootValue, tbl sql.Table) {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+
+	dbTables, ok := tc.tables[dbName]
+
+	if !ok {
+		dbTables = make(map[*doltdb.RootValue]map[string]sql.Table)
+		tc.tables[dbName] = dbTables
+	}
+
+	tablesForRoot, ok := dbTables[root]
+
+	if !ok {
+		tablesForRoot = make(map[string]sql.Table)
+		dbTables[root] = tablesForRoot
+	}
+
+	tablesForRoot[tableName] = tbl
+}
+
+func (tc *tableCache) AllForRoot(dbName string, root *doltdb.RootValue) (map[string]sql.Table, bool) {
+	tc.mu.Lock()
+	defer tc.mu.Unlock()
+
+	dbTables, ok := tc.tables[dbName]
+
+	if !ok {
+		return nil, false
+	}
+
+	tablesForRoot, ok := dbTables[root]
+	return tablesForRoot, ok
+}
+
+var tblCache = &tableCache{&sync.Mutex{}, make(map[string]map[*doltdb.RootValue]map[string]sql.Table)}
+
 // Database implements sql.Database for a dolt DB.
 type Database struct {
 	name      string
-	root      *doltdb.RootValue
+	defRoot   *doltdb.RootValue
 	ddb       *doltdb.DoltDB
 	rsr       env.RepoStateReader
 	batchMode batchMode
-	tables    map[*doltdb.RootValue]map[string]sql.Table
 }
 
-var _ sql.Database = (*Database)(nil)
-var _ sql.VersionedDatabase = (*Database)(nil)
-var _ sql.TableDropper = (*Database)(nil)
-var _ sql.TableCreator = (*Database)(nil)
-var _ sql.TableRenamer = (*Database)(nil)
+var _ sql.Database = Database{}
+var _ sql.VersionedDatabase = Database{}
+var _ sql.TableDropper = Database{}
+var _ sql.TableCreator = Database{}
+var _ sql.TableRenamer = Database{}
 
 // NewDatabase returns a new dolt database to use in queries.
-func NewDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB, rsr env.RepoStateReader) *Database {
-	return &Database{
+func NewDatabase(name string, defRoot *doltdb.RootValue, ddb *doltdb.DoltDB, rsr env.RepoStateReader) Database {
+	return Database{
 		name:      name,
-		root:      root,
+		defRoot:   defRoot,
 		ddb:       ddb,
 		rsr:       rsr,
 		batchMode: single,
-		tables:    initTableMap(root),
 	}
-}
-
-func initTableMap(root *doltdb.RootValue) map[*doltdb.RootValue]map[string]sql.Table {
-	tablesForRoot := make(map[string]sql.Table)
-	tables := make(map[*doltdb.RootValue]map[string]sql.Table)
-	tables[root] = tablesForRoot
-	return tables
 }
 
 // NewBatchedDatabase returns a new dolt database executing in batch insert mode. Integrators must call Flush() to
 // commit any outstanding edits.
-func NewBatchedDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB, rsr env.RepoStateReader) *Database {
-	return &Database{
+func NewBatchedDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB, rsr env.RepoStateReader) Database {
+	return Database{
 		name:      name,
-		root:      root,
+		defRoot:   root,
 		ddb:       ddb,
 		rsr:       rsr,
 		batchMode: batched,
-		tables:    initTableMap(root),
 	}
 }
 
 // Name returns the name of this database, set at creation time.
-func (db *Database) Name() string {
+func (db Database) Name() string {
 	return db.name
+}
+
+func (db Database) GetDefaultRoot() *doltdb.RootValue {
+	return db.defRoot
 }
 
 // GetTableInsensitive is used when resolving tables in queries. It returns a best-effort case-insensitive match for
 // the table name given.
-func (db *Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Table, bool, error) {
+func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Table, bool, error) {
+	root, err := db.GetRoot(ctx)
+
+	if err != nil {
+		return nil, false, err
+	}
+
+	return db.GetTableInsensitiveWithRoot(ctx, root, tblName)
+}
+
+func (db Database) GetTableInsensitiveWithRoot(ctx context.Context, root *doltdb.RootValue, tblName string) (sql.Table, bool, error) {
 	lwrName := strings.ToLower(tblName)
 	if strings.HasPrefix(lwrName, DoltDiffTablePrefix) {
 		tblName = tblName[len(DoltDiffTablePrefix):]
@@ -127,11 +197,11 @@ func (db *Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.T
 		return NewLogTable(db.ddb, db.rsr), true, nil
 	}
 
-	return db.getTable(ctx, db.root, tblName)
+	return db.getTable(ctx, root, tblName)
 }
 
 // GetTableInsensitiveAsOf implements sql.VersionedDatabase
-func (db *Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, asOf interface{}) (sql.Table, bool, error) {
+func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, asOf interface{}) (sql.Table, bool, error) {
 	root, err := db.rootAsOf(ctx, asOf)
 	if err != nil {
 		return nil, false, err
@@ -144,7 +214,7 @@ func (db *Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, 
 
 // rootAsOf returns the root of the DB as of the expression given, which may be nil in the case that it refers to an
 // expression before the first commit.
-func (db *Database) rootAsOf(ctx *sql.Context, asOf interface{}) (*doltdb.RootValue, error) {
+func (db Database) rootAsOf(ctx *sql.Context, asOf interface{}) (*doltdb.RootValue, error) {
 	switch x := asOf.(type) {
 	case string:
 		return db.getRootForCommitRef(ctx, x)
@@ -155,7 +225,7 @@ func (db *Database) rootAsOf(ctx *sql.Context, asOf interface{}) (*doltdb.RootVa
 	}
 }
 
-func (db *Database) getRootForTime(ctx *sql.Context, asOf time.Time) (*doltdb.RootValue, error) {
+func (db Database) getRootForTime(ctx *sql.Context, asOf time.Time) (*doltdb.RootValue, error) {
 	cs, err := doltdb.NewCommitSpec("HEAD", db.rsr.CWBHeadRef().String())
 	if err != nil {
 		return nil, err
@@ -197,7 +267,7 @@ func (db *Database) getRootForTime(ctx *sql.Context, asOf time.Time) (*doltdb.Ro
 	return nil, nil
 }
 
-func (db *Database) getRootForCommitRef(ctx *sql.Context, commitRef string) (*doltdb.RootValue, error) {
+func (db Database) getRootForCommitRef(ctx *sql.Context, commitRef string) (*doltdb.RootValue, error) {
 	cs, err := doltdb.NewCommitSpec(commitRef, db.rsr.CWBHeadRef().String())
 	if err != nil {
 		return nil, err
@@ -217,7 +287,7 @@ func (db *Database) getRootForCommitRef(ctx *sql.Context, commitRef string) (*do
 }
 
 // GetTableNamesAsOf implements sql.VersionedDatabase
-func (db *Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]string, error) {
+func (db Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]string, error) {
 	root, err := db.rootAsOf(ctx, time)
 	if err != nil {
 		return nil, err
@@ -234,11 +304,9 @@ func (db *Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]str
 
 // getTable gets the table with the exact name given at the root value given. The database caches tables for all root
 // values to avoid doing schema lookups on every table lookup, which are expensive.
-func (db *Database) getTable(ctx context.Context, root *doltdb.RootValue, tableName string) (sql.Table, bool, error) {
-	if tablesForRoot, ok := db.tables[root]; ok {
-		if table, ok := tablesForRoot[tableName]; ok {
-			return table, true, nil
-		}
+func (db Database) getTable(ctx context.Context, root *doltdb.RootValue, tableName string) (sql.Table, bool, error) {
+	if table, ok := tblCache.Get(db.name, tableName, root); ok {
+		return table, true, nil
 	}
 
 	tableNames, err := getAllTableNames(ctx, root)
@@ -275,11 +343,7 @@ func (db *Database) getTable(ctx context.Context, root *doltdb.RootValue, tableN
 		table = &AlterableDoltTable{WritableDoltTable{DoltTable: readonlyTable}}
 	}
 
-	if db.tables[root] == nil {
-		db.tables[root] = make(map[string]sql.Table)
-	}
-
-	db.tables[root][tableName] = table
+	tblCache.Put(db.name, tableName, root, table)
 
 	return table, true, nil
 }
@@ -288,7 +352,7 @@ func (db *Database) getTable(ctx context.Context, root *doltdb.RootValue, tableN
 // are filtered out. This method is used for queries that examine the schema of the database, e.g. show tables. Table
 // name resolution in queries is handled by GetTableInsensitive. Use GetAllTableNames for an unfiltered list of all
 // tables in user space.
-func (db *Database) GetTableNames(ctx *sql.Context) ([]string, error) {
+func (db Database) GetTableNames(ctx *sql.Context) ([]string, error) {
 	tblNames, err := db.GetAllTableNames(ctx)
 	if err != nil {
 		return nil, err
@@ -298,8 +362,14 @@ func (db *Database) GetTableNames(ctx *sql.Context) ([]string, error) {
 
 // GetAllTableNames returns all user-space tables, including system tables in user space
 // (e.g. dolt_docs, dolt_query_catalog).
-func (db *Database) GetAllTableNames(ctx *sql.Context) ([]string, error) {
-	return getAllTableNames(ctx, db.root)
+func (db Database) GetAllTableNames(ctx *sql.Context) ([]string, error) {
+	root, err := db.GetRoot(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return getAllTableNames(ctx, root)
 }
 
 func getAllTableNames(ctx context.Context, root *doltdb.RootValue) ([]string, error) {
@@ -316,25 +386,92 @@ func filterDoltInternalTables(tblNames []string) []string {
 	return result
 }
 
-// Root returns the root value for the database.
-func (db *Database) Root() *doltdb.RootValue {
-	return db.root
+func (db Database) headKeyForDB() string {
+	return fmt.Sprintf("%s_head", db.name)
+}
+
+var hashType = sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
+
+func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error){
+	dsess := DSessFromSess(ctx.Session)
+	currRoot, dbRootOk := dsess.dbRoots[db.name]
+
+	key := db.headKeyForDB()
+	typ, val := ctx.Session.Get(key)
+
+	if val == nil {
+		if !dbRootOk {
+			return nil, fmt.Errorf("value for '%s' not found", key)
+		} else {
+			err := db.SetRoot(ctx, currRoot.root)
+
+			if err != nil {
+				return nil, err
+			}
+
+			return currRoot.root, nil
+		}
+	} else {
+		if typ.Type() != query.Type_TEXT {
+			return nil, fmt.Errorf("invalid value for '%s'", key)
+		}
+
+		hashStr := val.(string)
+		h, ok := hash.MaybeParse(hashStr)
+
+		if !ok {
+			return nil, fmt.Errorf("invalid hash '%s' stored in '%s'", hashStr, key)
+		}
+
+		if dbRootOk {
+			if hashStr == currRoot.hashStr {
+				return currRoot.root, nil
+			}
+		}
+
+		newRoot, err := db.ddb.ReadRootValue(ctx, h)
+
+		if err != nil {
+			return nil, err
+		}
+
+		dsess.dbRoots[db.name] = dbRoot{hashStr, newRoot}
+		return newRoot, nil
+	}
 }
 
 // Set a new root value for the database. Can be used if the dolt working
 // set value changes outside of the basic SQL execution engine.
-func (db *Database) SetRoot(newRoot *doltdb.RootValue) {
-	// TODO: races
-	db.root = newRoot
+func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
+	h, err := newRoot.HashOf()
+
+	if err != nil {
+		return err
+	}
+
+	hashStr := h.String()
+	key := db.headKeyForDB()
+	ctx.Session.Set(key, hashType, hashStr)
+
+	dsess := DSessFromSess(ctx.Session)
+	dsess.dbRoots[db.name] = dbRoot{hashStr, newRoot}
+
+	return nil
 }
 
 // DropTable drops the table with the name given
-func (db *Database) DropTable(ctx *sql.Context, tableName string) error {
+func (db Database) DropTable(ctx *sql.Context, tableName string) error {
+	root, err := db.GetRoot(ctx)
+
+	if err != nil {
+		return err
+	}
+
 	if doltdb.IsSystemTable(tableName) {
 		return ErrSystemTableAlter.New(tableName)
 	}
 
-	tableExists, err := db.root.HasTable(ctx, tableName)
+	tableExists, err := root.HasTable(ctx, tableName)
 	if err != nil {
 		return err
 	}
@@ -343,20 +480,16 @@ func (db *Database) DropTable(ctx *sql.Context, tableName string) error {
 		return sql.ErrTableNotFound.New(tableName)
 	}
 
-	newRoot, err := db.root.RemoveTables(ctx, tableName)
+	newRoot, err := root.RemoveTables(ctx, tableName)
 	if err != nil {
 		return err
 	}
 
-	delete(db.tables[db.root], tableName)
-
-	db.SetRoot(newRoot)
-
-	return nil
+	return db.SetRoot(ctx, newRoot)
 }
 
 // CreateTable creates a table with the name and schema given.
-func (db *Database) CreateTable(ctx *sql.Context, tableName string, schema sql.Schema) error {
+func (db Database) CreateTable(ctx *sql.Context, tableName string, schema sql.Schema) error {
 	if doltdb.HasDoltPrefix(tableName) {
 		return ErrReservedTableName.New(tableName)
 	}
@@ -369,8 +502,14 @@ func (db *Database) CreateTable(ctx *sql.Context, tableName string, schema sql.S
 }
 
 // Unlike the exported version, createTable doesn't enforce any table name checks.
-func (db *Database) createTable(ctx *sql.Context, tableName string, schema sql.Schema) error {
-	if exists, err := db.root.HasTable(ctx, tableName); err != nil {
+func (db Database) createTable(ctx *sql.Context, tableName string, schema sql.Schema) error {
+	root, err := db.GetRoot(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	if exists, err := root.HasTable(ctx, tableName); err != nil {
 		return err
 	} else if exists {
 		return sql.ErrTableAlreadyExists.New(tableName)
@@ -381,18 +520,22 @@ func (db *Database) createTable(ctx *sql.Context, tableName string, schema sql.S
 		return err
 	}
 
-	newRoot, err := db.root.CreateEmptyTable(ctx, tableName, doltSch)
+	newRoot, err := root.CreateEmptyTable(ctx, tableName, doltSch)
 	if err != nil {
 		return err
 	}
 
-	db.SetRoot(newRoot)
-
-	return nil
+	return db.SetRoot(ctx, newRoot)
 }
 
 // RenameTable implements sql.TableRenamer
-func (db *Database) RenameTable(ctx *sql.Context, oldName, newName string) error {
+func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error {
+	root, err := db.GetRoot(ctx)
+
+	if err != nil {
+		return err
+	}
+
 	if doltdb.IsSystemTable(oldName) {
 		return ErrSystemTableAlter.New(oldName)
 	}
@@ -405,38 +548,46 @@ func (db *Database) RenameTable(ctx *sql.Context, oldName, newName string) error
 		return ErrInvalidTableName.New(newName)
 	}
 
-	root, err := alterschema.RenameTable(ctx, db.Root(), oldName, newName)
+	newRoot, err := alterschema.RenameTable(ctx, root, oldName, newName)
+
 	if err != nil {
 		return err
 	}
 
-	delete(db.tables[db.root], oldName)
-	db.SetRoot(root)
-
-	return nil
+	return db.SetRoot(ctx, newRoot)
 }
 
 // Flush flushes the current batch of outstanding changes and returns any errors.
-func (db *Database) Flush(ctx context.Context) error {
-	for name, table := range db.tables[db.root] {
-		if writable, ok := table.(*WritableDoltTable); ok {
-			if err := writable.flushBatchedEdits(ctx); err != nil {
-				return err
-			}
-		} else if alterable, ok := table.(*AlterableDoltTable); ok {
-			if err := alterable.flushBatchedEdits(ctx); err != nil {
-				return err
+func (db Database) Flush(ctx *sql.Context) error {
+	root, err := db.GetRoot(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	tables, ok := tblCache.AllForRoot(db.name, root)
+
+	if ok {
+		for _, table := range tables {
+			if writable, ok := table.(*WritableDoltTable); ok {
+				if err := writable.flushBatchedEdits(ctx); err != nil {
+					return err
+				}
+			} else if alterable, ok := table.(*AlterableDoltTable); ok {
+				if err := alterable.flushBatchedEdits(ctx); err != nil {
+					return err
+				}
 			}
 		}
-		delete(db.tables[db.root], name)
 	}
+
 	return nil
 }
 
 // CreateView implements sql.ViewCreator. Persists the view in the dolt database, so
 // it can exist in a sql session later. Returns sql.ErrExistingView if a view
 // with that name already exists.
-func (db *Database) CreateView(ctx *sql.Context, name string, definition string) error {
+func (db Database) CreateView(ctx *sql.Context, name string, definition string) error {
 	tbl, err := GetOrCreateDoltSchemasTable(ctx, db)
 	if err != nil {
 		return err
@@ -463,7 +614,7 @@ func (db *Database) CreateView(ctx *sql.Context, name string, definition string)
 // DropView implements sql.ViewDropper. Removes a view from persistence in the
 // dolt database. Returns sql.ErrNonExistingView if the view did not
 // exist.
-func (db *Database) DropView(ctx *sql.Context, name string) error {
+func (db Database) DropView(ctx *sql.Context, name string) error {
 	stbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return err
@@ -493,12 +644,12 @@ func (db *Database) DropView(ctx *sql.Context, name string) error {
 }
 
 // RegisterSchemaFragments register SQL schema fragments that are persisted in the given
-// `Database` with the provided `sql.Catalog`. Returns an error if
+// `Database` with the provided `sql.ViewRegistry`. Returns an error if
 // there are I/O issues, but currently silently fails to register some
 // schema fragments if they don't parse, or if registries within the
 // `catalog` return errors.
-func RegisterSchemaFragments(ctx *sql.Context, catalog *sql.Catalog, db *Database) error {
-	stbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+func RegisterSchemaFragments(ctx *sql.Context, db Database, root *doltdb.RootValue) error {
+	stbl, found, err := db.GetTableInsensitiveWithRoot(ctx, root, doltdb.SchemasTableName)
 	if err != nil {
 		return err
 	}
@@ -518,7 +669,6 @@ func RegisterSchemaFragments(ctx *sql.Context, catalog *sql.Catalog, db *Databas
 
 	var parseErrors []error
 
-	vr := catalog.ViewRegistry
 	r, err := iter.Next()
 	for err == nil {
 		if err != nil {
@@ -531,7 +681,7 @@ func RegisterSchemaFragments(ctx *sql.Context, catalog *sql.Catalog, db *Databas
 			if err != nil {
 				parseErrors = append(parseErrors, err)
 			} else {
-				vr.Register(db.Name(), sql.NewView(name, cv.(*plan.CreateView).Definition))
+				ctx.Register(db.Name(), sql.NewView(name, cv.(*plan.CreateView).Definition))
 			}
 		}
 		r, err = iter.Next()

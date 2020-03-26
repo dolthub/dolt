@@ -38,15 +38,27 @@ func executeSelect(ctx context.Context, dEnv *env.DoltEnv, targetSch schema.Sche
 	db := NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState)
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
-	engine.Catalog.RegisterIndexDriver(&DoltIndexDriver{db})
+
+	sqlCtx := newSQLCtx(ctx)
+	err = db.SetRoot(sqlCtx, root)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	sqlCtx.RegisterIndexDriver(NewDoltIndexDriver(db))
+	err = sqlCtx.LoadIndexes(sqlCtx, engine.Catalog.AllDatabases())
+
+	if err != nil {
+		return nil, nil, err
+	}
+
 	err = engine.Init()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	sqlCtx := sql.NewContext(ctx)
-
-	err = RegisterSchemaFragments(sql.NewContext(ctx), engine.Catalog, db)
+	err = RegisterSchemaFragments(sqlCtx, db, root)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -84,10 +96,35 @@ func executeModify(ctx context.Context, root *doltdb.RootValue, query string) (*
 	db := NewDatabase("dolt", root, nil, nil)
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
-	engine.Init()
-	sqlCtx := sql.NewContext(ctx)
-	_, _, err := engine.Query(sqlCtx, query)
-	return db.Root(), err
+	err := engine.Init()
+
+	if err != nil {
+		return nil, err
+	}
+
+	idxReg := sql.NewIndexRegistry()
+	sqlCtx := sql.NewContext(ctx, sql.WithSession(DefaultDoltSession()), sql.WithIndexRegistry(idxReg), sql.WithViewRegistry(sql.NewViewRegistry()))
+	err = db.SetRoot(sqlCtx, root)
+
+	if err != nil {
+		return nil, err
+	}
+
+	idxReg.RegisterIndexDriver(NewDoltIndexDriver(db))
+	err = idxReg.LoadIndexes(sqlCtx, engine.Catalog.AllDatabases())
+
+	if err != nil {
+		return nil, err
+	}
+
+
+	_, _, err = engine.Query(sqlCtx, query)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return db.GetRoot(sqlCtx)
 }
 
 func schemaNewColumn(t *testing.T, name string, tag uint64, sqlType sql.Type, partOfPK bool, constraints ...schema.ColConstraint) schema.Column {

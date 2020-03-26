@@ -33,6 +33,13 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+func newSQLCtx(ctx context.Context) *sql.Context {
+	return sql.NewContext(ctx,
+		sql.WithSession(DefaultDoltSession()),
+		sql.WithIndexRegistry(sql.NewIndexRegistry()),
+		sql.WithViewRegistry(sql.NewViewRegistry()))
+}
+
 func TestSqlBatchInserts(t *testing.T) {
 	insertStatements := []string{
 		`insert into people (id, first_name, last_name, is_married, age, rating, uuid, num_episodes) values
@@ -69,8 +76,12 @@ func TestSqlBatchInserts(t *testing.T) {
 	db := NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState)
 	engine.AddDatabase(db)
 
+	sqlCtx := newSQLCtx(ctx)
+	err := db.SetRoot(sqlCtx, root)
+	require.NoError(t, err)
+
 	for _, stmt := range insertStatements {
-		_, rowIter, err := engine.Query(sql.NewEmptyContext(), stmt)
+		_, rowIter, err := engine.Query(sqlCtx, stmt)
 		require.NoError(t, err)
 		require.NoError(t, drainIter(rowIter))
 	}
@@ -88,7 +99,7 @@ func TestSqlBatchInserts(t *testing.T) {
 	assert.ElementsMatch(t, AllAppsRows, allAppearanceRows)
 
 	// Now commit the batch and check for new rows
-	err = db.Flush(ctx)
+	err = db.Flush(sqlCtx)
 	require.NoError(t, err)
 
 	var expectedPeople, expectedEpisodes, expectedAppearances []row.Row
@@ -123,7 +134,8 @@ func TestSqlBatchInserts(t *testing.T) {
 		newAppsRow(11, 9),
 	)
 
-	root = db.Root()
+	root, err = db.GetRoot(sqlCtx)
+	require.NoError(t, err)
 	allPeopleRows, err = GetAllRows(root, PeopleTableName)
 	require.NoError(t, err)
 	allEpsRows, err = GetAllRows(root, EpisodesTableName)
@@ -156,8 +168,12 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 	db := NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState)
 	engine.AddDatabase(db)
 
+	sqlCtx := newSQLCtx(ctx)
+	err := db.SetRoot(sqlCtx, root)
+	require.NoError(t, err)
+
 	for _, stmt := range insertStatements {
-		_, rowIter, err := engine.Query(sql.NewEmptyContext(), stmt)
+		_, rowIter, err := engine.Query(sqlCtx, stmt)
 		require.NoError(t, err)
 		drainIter(rowIter)
 	}
@@ -168,7 +184,7 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 	assert.ElementsMatch(t, AllPeopleRows, allPeopleRows)
 
 	// Now commit the batch and check for new rows
-	err = db.Flush(ctx)
+	err = db.Flush(sqlCtx)
 	require.NoError(t, err)
 
 	var expectedPeople []row.Row
@@ -194,19 +210,23 @@ func TestSqlBatchInsertErrors(t *testing.T) {
 	db := NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState)
 	engine.AddDatabase(db)
 
-	_, rowIter, err := engine.Query(sql.NewEmptyContext(), `insert into people (id, first_name, last_name, is_married, age, rating, uuid, num_episodes) values
+	sqlCtx := newSQLCtx(ctx)
+	err := db.SetRoot(sqlCtx, root)
+	require.NoError(t, err)
+
+	_, rowIter, err := engine.Query(sqlCtx, `insert into people (id, first_name, last_name, is_married, age, rating, uuid, num_episodes) values
 					(0, "Maggie", "Simpson", false, 1, 5.1, '00000000-0000-0000-0000-000000000007', 677)`)
 	// This won't generate an error until we commit the batch (duplicate key)
 	assert.NoError(t, err)
 	assert.NoError(t, drainIter(rowIter))
 
 	// This generates an error at insert time because of the bad type for the uuid column
-	_, _, err = engine.Query(sql.NewEmptyContext(), `insert into people values
+	_, _, err = engine.Query(sqlCtx, `insert into people values
 					(2, "Milhouse", "VanHouten", false, 1, 5.1, true, 677)`)
 	assert.Error(t, err)
 
 	// Error from the first statement appears here
-	assert.Error(t, db.Flush(ctx))
+	assert.Error(t, db.Flush(sqlCtx))
 }
 
 func assertRowSetsEqual(t *testing.T, expected, actual []row.Row) {

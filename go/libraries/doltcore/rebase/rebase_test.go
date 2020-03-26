@@ -526,7 +526,18 @@ func checkRows(t *testing.T, root *doltdb.RootValue, sch schema.Schema, selectQu
 	engine := sqle.NewDefault()
 	engine.AddDatabase(sqlDb)
 	_ = engine.Init()
-	sqlCtx := sql.NewContext(context.Background())
+
+	sqlCtx := sql.NewContext(
+		context.Background(),
+		sql.WithSession(dsqle.DefaultDoltSession()),
+		sql.WithIndexRegistry(sql.NewIndexRegistry()),
+		sql.WithViewRegistry(sql.NewViewRegistry()))
+	err := sqlDb.SetRoot(sqlCtx, root)
+	require.NoError(t, err)
+
+	sqlCtx.RegisterIndexDriver(dsqle.NewDoltIndexDriver(sqlDb)	)
+	err = sqlCtx.LoadIndexes(sqlCtx, engine.Catalog.AllDatabases())
+	require.NoError(t, err)
 
 	s, rowIter, err := engine.Query(sqlCtx, selectQuery)
 	require.NoError(t, err)

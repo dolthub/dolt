@@ -91,10 +91,23 @@ func (q Query) Exec(t *testing.T, dEnv *env.DoltEnv) {
 	engine.AddDatabase(sqlDb)
 	err = engine.Init()
 	require.NoError(t, err)
-	sqlCtx := sql.NewContext(context.Background())
+
+	sqlCtx := sql.NewContext(
+		context.Background(),
+		sql.WithSession(dsqle.DefaultDoltSession()),
+		sql.WithIndexRegistry(sql.NewIndexRegistry()),
+		sql.WithViewRegistry(sql.NewViewRegistry()))
+	err = sqlDb.SetRoot(sqlCtx, root)
+	require.NoError(t, err)
+
+	err = sqlCtx.LoadIndexes(sqlCtx, engine.Catalog.AllDatabases())
+	require.NoError(t, err)
+
 	_, _, err = engine.Query(sqlCtx, q.Query)
 	require.NoError(t, err)
-	err = dEnv.UpdateWorkingRoot(context.Background(), sqlDb.Root())
+	newRoot, err := sqlDb.GetRoot(sqlCtx)
+	require.NoError(t, err)
+	err = dEnv.UpdateWorkingRoot(context.Background(), newRoot)
 	require.NoError(t, err)
 }
 

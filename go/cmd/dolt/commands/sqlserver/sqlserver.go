@@ -85,7 +85,6 @@ func (cmd SqlServerCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-
 	return SqlServerImpl(ctx, commandStr, args, dEnv, nil)
 }
 

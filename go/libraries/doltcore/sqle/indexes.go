@@ -15,7 +15,6 @@
 package sqle
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -30,10 +29,10 @@ import (
 // IndexDriver implementation. Not ready for prime time.
 
 type DoltIndexDriver struct {
-	db *Database
+	db Database
 }
 
-func NewDoltIndexDriver(database *Database) *DoltIndexDriver {
+func NewDoltIndexDriver(database Database) *DoltIndexDriver {
 	return &DoltIndexDriver{database}
 }
 
@@ -53,12 +52,18 @@ func (i *DoltIndexDriver) Delete(sql.Index, sql.PartitionIter) error {
 	panic("deleting indexes not supported")
 }
 
-func (i *DoltIndexDriver) LoadAll(db, table string) ([]sql.Index, error) {
+func (i *DoltIndexDriver) LoadAll(ctx *sql.Context, db, table string) ([]sql.Index, error) {
 	if db != i.db.name {
 		panic("Unexpected db: " + db)
 	}
 
-	tbl, ok, err := i.db.root.GetTable(context.TODO(), table)
+	root, err := i.db.GetRoot(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	tbl, ok, err := root.GetTable(ctx, table)
 
 	if err != nil {
 		return nil, err
@@ -68,7 +73,7 @@ func (i *DoltIndexDriver) LoadAll(db, table string) ([]sql.Index, error) {
 		return nil, nil
 	}
 
-	sch, err := tbl.GetSchema(context.TODO())
+	sch, err := tbl.GetSchema(ctx)
 
 	if err != nil {
 		return nil, err
@@ -80,7 +85,7 @@ func (i *DoltIndexDriver) LoadAll(db, table string) ([]sql.Index, error) {
 type doltIndex struct {
 	sch       schema.Schema
 	tableName string
-	db        *Database
+	db        Database
 	driver    *DoltIndexDriver
 }
 
@@ -292,7 +297,14 @@ func (i *indexLookupRowIterAdapter) Next() (sql.Row, error) {
 	}
 
 	i.i++
-	table, _, err := i.indexLookup.idx.db.root.GetTable(i.ctx.Context, i.indexLookup.idx.tableName)
+
+	root, err := i.indexLookup.idx.db.GetRoot(i.ctx)
+
+	if err != nil {
+		 return nil, err
+	}
+
+	table, _, err := root.GetTable(i.ctx.Context, i.indexLookup.idx.tableName)
 
 	if err != nil {
 		return nil, err
