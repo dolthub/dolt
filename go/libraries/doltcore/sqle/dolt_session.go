@@ -40,7 +40,3 @@ func NewSessionWithDefaultRoots(sqlSess sql.Session, dbs ...Database) (*DoltSess
 func DSessFromSess(sess sql.Session) *DoltSession {
 	return sess.(*DoltSession)
 }
-
-func (ds DoltSession) Set(key string, typ sql.Type, value interface{}) {
-	ds.Session.Set(key, typ, value)
-}

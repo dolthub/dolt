@@ -36,7 +36,7 @@ import (
 
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
-func Serve(ctx context.Context, serverConfig *ServerConfig, root *doltdb.RootValue, serverController *ServerController, dEnv *env.DoltEnv) (startError error, closeError error) {
+func Serve(ctx context.Context, serverConfig *ServerConfig, rootValue *doltdb.RootValue, serverController *ServerController, dEnv *env.DoltEnv) (startError error, closeError error) {
 	if serverConfig == nil {
 		cli.Println("No configuration given, using defaults")
 		serverConfig = DefaultServerConfig()
@@ -79,7 +79,7 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, root *doltdb.RootVal
 
 	userAuth := auth.NewAudit(auth.NewNativeSingle(serverConfig.User, serverConfig.Password, permissions), auth.NewAuditLog(logrus.StandardLogger()))
 	sqlEngine := sqle.NewDefault()
-	db := dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState)
+	db := dsqle.NewDatabase("dolt", rootValue, dEnv.DoltDB, dEnv.RepoState)
 	sqlEngine.AddDatabase(db)
 	sqlEngine.AddDatabase(sql.NewInformationSchemaDatabase(sqlEngine.Catalog))
 
