@@ -301,7 +301,7 @@ func (i *indexLookupRowIterAdapter) Next() (sql.Row, error) {
 	root, err := i.indexLookup.idx.db.GetRoot(i.ctx)
 
 	if err != nil {
-		 return nil, err
+		return nil, err
 	}
 
 	table, _, err := root.GetTable(i.ctx.Context, i.indexLookup.idx.tableName)

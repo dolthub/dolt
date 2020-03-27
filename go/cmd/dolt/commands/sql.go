@@ -985,7 +985,6 @@ func newSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue
 	return &sqlEngine{db, dEnv.DoltDB, engine, format}, sqlCtx, nil
 }
 
-
 // Execute a SQL statement and return values for printing.
 func (se *sqlEngine) query(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, error) {
 	return se.engine.Query(ctx, query)

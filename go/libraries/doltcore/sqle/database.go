@@ -17,23 +17,23 @@ package sqle
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/store/hash"
 	"io"
 	"strings"
 	"sync"
 	"time"
-	"vitess.io/vitess/go/vt/proto/query"
 
 	"github.com/src-d/go-mysql-server/sql"
 	"github.com/src-d/go-mysql-server/sql/parse"
 	"github.com/src-d/go-mysql-server/sql/plan"
 	"gopkg.in/src-d/go-errors.v1"
+	"vitess.io/vitess/go/vt/proto/query"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
 	dsql "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 type batchMode bool
@@ -48,7 +48,7 @@ const (
 )
 
 type tableCache struct {
-	mu *sync.Mutex
+	mu     *sync.Mutex
 	tables map[string]map[*doltdb.RootValue]map[string]sql.Table
 }
 
@@ -392,7 +392,7 @@ func (db Database) headKeyForDB() string {
 
 var hashType = sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
 
-func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error){
+func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	dsess := DSessFromSess(ctx.Session)
 	currRoot, dbRootOk := dsess.dbRoots[db.name]
 

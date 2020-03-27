@@ -31,8 +31,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-
-
 func TestSqlBatchInserts(t *testing.T) {
 	insertStatements := []string{
 		`insert into people (id, first_name, last_name, is_married, age, rating, uuid, num_episodes) values

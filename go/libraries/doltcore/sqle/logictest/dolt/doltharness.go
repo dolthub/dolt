@@ -40,7 +40,7 @@ var _ logictest.Harness = &DoltHarness{}
 
 type DoltHarness struct {
 	Version string
-	engine *sqle.Engine
+	engine  *sqle.Engine
 }
 
 func (h *DoltHarness) EngineStr() string {
@@ -98,7 +98,6 @@ func (h *DoltHarness) ExecuteStatement(statement string) error {
 	if err != nil {
 		return err
 	}
-
 
 	statement = normalizeStatement(statement)
 
