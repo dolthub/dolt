@@ -21,7 +21,6 @@ import (
 	"strconv"
 	"testing"
 
-	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
@@ -440,7 +439,7 @@ func testRebaseTag(t *testing.T, test RebaseTagTest) {
 
 		rebasedRoot, _ := rebasedCommit.GetRootValue()
 		checkSchema(t, rebasedRoot, "people", test.ExpectedSchema)
-		checkRows(t, rebasedRoot, test.ExpectedSchema, test.SelectResultQuery, test.ExpectedRows)
+		checkRows(t, dEnv.DoltDB, rebasedRoot, test.ExpectedSchema, test.SelectResultQuery, test.ExpectedRows)
 	}
 }
 
@@ -476,7 +475,7 @@ func testRebaseTagHistory(t *testing.T) {
 	expectedSch := schema.SchemaFromCols(peopleWithDrip)
 	rebasedRoot, _ := newMasterCm.GetRootValue()
 	checkSchema(t, rebasedRoot, "people", expectedSch)
-	checkRows(t, rebasedRoot, expectedSch, "select * from people;", []row.Row{
+	checkRows(t, dEnv.DoltDB, rebasedRoot, expectedSch, "select * from people;", []row.Row{
 		newRow(row.TaggedValues{IdTag: types.Int(7), NameTag: types.String("Maggie Simpson"), AgeTag: types.Int(1)}, people),
 		newRow(row.TaggedValues{IdTag: types.Int(10), NameTag: types.String("Patty Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(8.5)}, peopleWithDrip),
 	})
@@ -521,22 +520,9 @@ func checkSchema(t *testing.T, r *doltdb.RootValue, tableName string, expectedSc
 	require.True(t, eq)
 }
 
-func checkRows(t *testing.T, root *doltdb.RootValue, sch schema.Schema, selectQuery string, expectedRows []row.Row) {
-	sqlDb := dsqle.NewDatabase("dolt", root, nil, nil)
-	engine := sqle.NewDefault()
-	engine.AddDatabase(sqlDb)
-	_ = engine.Init()
-
-	sqlCtx := sql.NewContext(
-		context.Background(),
-		sql.WithSession(dsqle.DefaultDoltSession()),
-		sql.WithIndexRegistry(sql.NewIndexRegistry()),
-		sql.WithViewRegistry(sql.NewViewRegistry()))
-	err := sqlDb.SetRoot(sqlCtx, root)
-	require.NoError(t, err)
-
-	sqlCtx.RegisterIndexDriver(dsqle.NewDoltIndexDriver(sqlDb)	)
-	err = sqlCtx.LoadIndexes(sqlCtx, engine.Catalog.AllDatabases())
+func checkRows(t *testing.T, ddb *doltdb.DoltDB, root *doltdb.RootValue, sch schema.Schema, selectQuery string, expectedRows []row.Row) {
+	sqlDb := dsqle.NewDatabase("dolt", root, ddb, nil)
+	engine, sqlCtx, err := dsqle.NewTestEngine(context.Background(), sqlDb, root)
 	require.NoError(t, err)
 
 	s, rowIter, err := engine.Query(sqlCtx, selectQuery)

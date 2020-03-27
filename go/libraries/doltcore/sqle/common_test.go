@@ -19,7 +19,6 @@ import (
 	"io"
 	"testing"
 
-	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 
@@ -36,29 +35,7 @@ import (
 func executeSelect(ctx context.Context, dEnv *env.DoltEnv, targetSch schema.Schema, root *doltdb.RootValue, query string) ([]row.Row, schema.Schema, error) {
 	var err error
 	db := NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState)
-	engine := sqle.NewDefault()
-	engine.AddDatabase(db)
-
-	sqlCtx := newSQLCtx(ctx)
-	err = db.SetRoot(sqlCtx, root)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	sqlCtx.RegisterIndexDriver(NewDoltIndexDriver(db))
-	err = sqlCtx.LoadIndexes(sqlCtx, engine.Catalog.AllDatabases())
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	err = engine.Init()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	err = RegisterSchemaFragments(sqlCtx, db, root)
+	engine, sqlCtx, err := NewTestEngine(ctx, db, root)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -92,31 +69,13 @@ func executeSelect(ctx context.Context, dEnv *env.DoltEnv, targetSch schema.Sche
 }
 
 // Runs the query given and returns the error (if any).
-func executeModify(ctx context.Context, root *doltdb.RootValue, query string) (*doltdb.RootValue, error) {
-	db := NewDatabase("dolt", root, nil, nil)
-	engine := sqle.NewDefault()
-	engine.AddDatabase(db)
-	err := engine.Init()
+func executeModify(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue, query string) (*doltdb.RootValue, error) {
+	db := NewDatabase("dolt", root, ddb, nil)
+	engine, sqlCtx, err := NewTestEngine(ctx, db, root)
 
 	if err != nil {
 		return nil, err
 	}
-
-	idxReg := sql.NewIndexRegistry()
-	sqlCtx := sql.NewContext(ctx, sql.WithSession(DefaultDoltSession()), sql.WithIndexRegistry(idxReg), sql.WithViewRegistry(sql.NewViewRegistry()))
-	err = db.SetRoot(sqlCtx, root)
-
-	if err != nil {
-		return nil, err
-	}
-
-	idxReg.RegisterIndexDriver(NewDoltIndexDriver(db))
-	err = idxReg.LoadIndexes(sqlCtx, engine.Catalog.AllDatabases())
-
-	if err != nil {
-		return nil, err
-	}
-
 
 	_, _, err = engine.Query(sqlCtx, query)
 

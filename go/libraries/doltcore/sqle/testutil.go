@@ -33,7 +33,7 @@ import (
 // root, or an error. Statements in the input string are split by `;\n`
 func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*doltdb.RootValue, error) {
 	db := NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState)
-	engine, ctx, err := newTestEngine(db, root)
+	engine, ctx, err := NewTestEngine(context.Background(), db, root)
 
 	if err != nil {
 		return nil, err
@@ -86,44 +86,47 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 	}
 }
 
-func newTestEngine(db Database, root *doltdb.RootValue) (*sqle.Engine, *sql.Context, error) {
+func NewTestSQLCtx(ctx context.Context) *sql.Context {
+	return sql.NewContext(
+		ctx,
+		sql.WithSession(DefaultDoltSession()),
+		sql.WithIndexRegistry(sql.NewIndexRegistry()),
+		sql.WithViewRegistry(sql.NewViewRegistry()),
+	)
+}
+
+func NewTestEngine(ctx context.Context, db Database, root *doltdb.RootValue) (*sqle.Engine, *sql.Context, error) {
 	engine := sqle.NewDefault()
-	idxReg := sql.NewIndexRegistry()
-	viewReg := sql.NewViewRegistry()
 	engine.AddDatabase(db)
 
-	ctx := sql.NewContext(
-		context.Background(),
-		sql.WithSession(DefaultDoltSession()),
-		sql.WithIndexRegistry(idxReg),
-		sql.WithViewRegistry(viewReg))
-	err := db.SetRoot(ctx, root)
+	sqlCtx := NewTestSQLCtx(ctx)
+	err := db.SetRoot(sqlCtx, root)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	idxReg.RegisterIndexDriver(NewDoltIndexDriver(db))
-	err = idxReg.LoadIndexes(ctx, engine.Catalog.AllDatabases())
+	sqlCtx.RegisterIndexDriver(NewDoltIndexDriver(db))
+	err = sqlCtx.LoadIndexes(sqlCtx, engine.Catalog.AllDatabases())
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	err = RegisterSchemaFragments(ctx, db, root)
+	err = RegisterSchemaFragments(sqlCtx, db, root)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return engine, ctx, nil
+	return engine, sqlCtx, nil
 }
 
 // Executes the select statement given and returns the resulting rows, or an error if one is encountered.
 // This uses the index functionality, which is not ready for prime time. Use with caution.
-func ExecuteSelect(root *doltdb.RootValue, query string) ([]sql.Row, error) {
-	db := NewDatabase("dolt", root, nil, nil)
-	engine, ctx, err := newTestEngine(db, root)
+func ExecuteSelect(ddb *doltdb.DoltDB, root *doltdb.RootValue, query string) ([]sql.Row, error) {
+	db := NewDatabase("dolt", root, ddb, nil)
+	engine, ctx, err := NewTestEngine(context.Background(), db, root)
 	if err != nil {
 		return nil, err
 	}

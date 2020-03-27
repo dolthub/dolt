@@ -443,6 +443,15 @@ func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error){
 // Set a new root value for the database. Can be used if the dolt working
 // set value changes outside of the basic SQL execution engine.
 func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
+	// Need to decide on what behavior we want here.  Currently all sql-server processing is done
+	// in memory and is never written to disk.  Can leave it like this and commit as part of a
+	// transaction, or something similar.
+	/*h, err := db.ddb.WriteRootValue(ctx, newRoot)
+
+	if err != nil {
+		return err
+	}*/
+
 	h, err := newRoot.HashOf()
 
 	if err != nil {
@@ -677,7 +686,7 @@ func RegisterSchemaFragments(ctx *sql.Context, db Database, root *doltdb.RootVal
 		if r[0] == "view" {
 			name := r[1].(string)
 			definition := r[2].(string)
-			cv, err := parse.Parse(sql.NewContext(ctx), fmt.Sprintf("create view %s as %s", dsql.QuoteIdentifier(name), definition))
+			cv, err := parse.Parse(ctx, fmt.Sprintf("create view %s as %s", dsql.QuoteIdentifier(name), definition))
 			if err != nil {
 				parseErrors = append(parseErrors, err)
 			} else {

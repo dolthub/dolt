@@ -20173,13 +20173,13 @@ func TestJoin(t *testing.T) {
 	root, err = sqle.ExecuteSql(dEnv, root, insertRows)
 	require.NoError(t, err)
 
-	rows, err := sqle.ExecuteSelect(root,
+	rows, err := sqle.ExecuteSelect(dEnv.DoltDB, root,
 		`select Type, d.Symbol, Country, TradingDate, Open, High, Low, Close, Volume, OpenInt, Name, Sector, IPOYear
 						from daily_summary d join symbols t on d.Symbol = t.Symbol order by d.Symbol, Country, TradingDate`)
 	require.NoError(t, err)
 	assert.Equal(t, 5210, len(rows))
 
-	expectedJoinRows, err := sqle.ExecuteSelect(root,
+	expectedJoinRows, err := sqle.ExecuteSelect(dEnv.DoltDB, root,
 		`select * from join_result order by symbol, country, TradingDate`)
 	require.NoError(t, err)
 	assertResultRowsEqual(t, expectedJoinRows, rows)
@@ -20219,7 +20219,7 @@ func TestExplain(t *testing.T) {
 	root, err = sqle.ExecuteSql(dEnv, root, createTables)
 	require.NoError(t, err)
 
-	rows, err := sqle.ExecuteSelect(root, "explain format = tree select * from daily_summary d join symbols t on d.Symbol = t.Symbol")
+	rows, err := sqle.ExecuteSelect(dEnv.DoltDB, root, "explain format = tree select * from daily_summary d join symbols t on d.Symbol = t.Symbol")
 	require.NoError(t, err)
 	rowStrings := make([]string, len(rows))
 	for i, row := range rows {

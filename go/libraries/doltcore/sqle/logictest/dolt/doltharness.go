@@ -61,7 +61,7 @@ func (h *DoltHarness) Init() error {
 	root = resetEnv(root)
 
 	var err error
-	h.engine, err = sqlNewEngine(root)
+	h.engine, err = sqlNewEngine(dEnv.DoltDB, root)
 
 	return err
 }
@@ -318,8 +318,8 @@ func resetEnv(root *doltdb.RootValue) *doltdb.RootValue {
 	return newRoot
 }
 
-func sqlNewEngine(root *doltdb.RootValue) (*sqle.Engine, error) {
-	db := dsql.NewDatabase("dolt", root, nil, nil)
+func sqlNewEngine(ddb *doltdb.DoltDB, root *doltdb.RootValue) (*sqle.Engine, error) {
+	db := dsql.NewDatabase("dolt", root, ddb, nil)
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
 	err := engine.Init()

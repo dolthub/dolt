@@ -144,10 +144,14 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, root *doltdb.RootVal
 }
 
 func dbsAsDSQLDBs(dbs []sql.Database) []dsqle.Database {
-	dsqlDBs := make([]dsqle.Database, len(dbs))
+	dsqlDBs := make([]dsqle.Database, 0, len(dbs))
 
-	for i, db := range dbs {
-		dsqlDBs[i] = db.(dsqle.Database)
+	for _, db := range dbs {
+		dsqlDB, ok := db.(dsqle.Database)
+
+		if ok {
+			dsqlDBs = append(dsqlDBs, dsqlDB)
+		}
 	}
 
 	return dsqlDBs

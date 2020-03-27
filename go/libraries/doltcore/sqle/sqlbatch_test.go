@@ -22,8 +22,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
-	sqle "github.com/src-d/go-mysql-server"
-	"github.com/src-d/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -33,12 +31,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-func newSQLCtx(ctx context.Context) *sql.Context {
-	return sql.NewContext(ctx,
-		sql.WithSession(DefaultDoltSession()),
-		sql.WithIndexRegistry(sql.NewIndexRegistry()),
-		sql.WithViewRegistry(sql.NewViewRegistry()))
-}
+
 
 func TestSqlBatchInserts(t *testing.T) {
 	insertStatements := []string{
@@ -72,12 +65,8 @@ func TestSqlBatchInserts(t *testing.T) {
 	CreateTestDatabase(dEnv, t)
 	root, _ := dEnv.WorkingRoot(ctx)
 
-	engine := sqle.NewDefault()
 	db := NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState)
-	engine.AddDatabase(db)
-
-	sqlCtx := newSQLCtx(ctx)
-	err := db.SetRoot(sqlCtx, root)
+	engine, sqlCtx, err := NewTestEngine(ctx, db, root)
 	require.NoError(t, err)
 
 	for _, stmt := range insertStatements {
@@ -164,12 +153,8 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 	CreateTestDatabase(dEnv, t)
 	root, _ := dEnv.WorkingRoot(ctx)
 
-	engine := sqle.NewDefault()
 	db := NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState)
-	engine.AddDatabase(db)
-
-	sqlCtx := newSQLCtx(ctx)
-	err := db.SetRoot(sqlCtx, root)
+	engine, sqlCtx, err := NewTestEngine(ctx, db, root)
 	require.NoError(t, err)
 
 	for _, stmt := range insertStatements {
@@ -206,12 +191,8 @@ func TestSqlBatchInsertErrors(t *testing.T) {
 	CreateTestDatabase(dEnv, t)
 	root, _ := dEnv.WorkingRoot(ctx)
 
-	engine := sqle.NewDefault()
 	db := NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState)
-	engine.AddDatabase(db)
-
-	sqlCtx := newSQLCtx(ctx)
-	err := db.SetRoot(sqlCtx, root)
+	engine, sqlCtx, err := NewTestEngine(ctx, db, root)
 	require.NoError(t, err)
 
 	_, rowIter, err := engine.Query(sqlCtx, `insert into people (id, first_name, last_name, is_married, age, rating, uuid, num_episodes) values

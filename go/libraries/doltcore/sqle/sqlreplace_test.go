@@ -109,7 +109,7 @@ func testReplaceQuery(t *testing.T, test ReplaceTest) {
 
 	var err error
 	root, _ := dEnv.WorkingRoot(context.Background())
-	root, err = executeModify(context.Background(), root, test.ReplaceQuery)
+	root, err = executeModify(context.Background(), dEnv.DoltDB, root, test.ReplaceQuery)
 	if len(test.ExpectedErr) > 0 {
 		require.Error(t, err)
 		return
