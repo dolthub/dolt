@@ -321,10 +321,6 @@ func sqlNewEngine(ddb *doltdb.DoltDB, root *doltdb.RootValue) (*sqle.Engine, err
 	db := dsql.NewDatabase("dolt", root, ddb, nil)
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
-	err := engine.Init()
-	if err != nil {
-		return nil, err
-	}
 
 	return engine, nil
 }

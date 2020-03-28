@@ -956,16 +956,12 @@ func newSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
 	engine.AddDatabase(sql.NewInformationSchemaDatabase(engine.Catalog))
-	err := engine.Init()
-	if err != nil {
-		return nil, nil, err
-	}
 
 	sqlCtx := sql.NewContext(ctx,
 		sql.WithSession(dsqle.DefaultDoltSession()),
 		sql.WithIndexRegistry(sql.NewIndexRegistry()),
 		sql.WithViewRegistry(sql.NewViewRegistry()))
-	err = db.SetRoot(sqlCtx, root)
+	err := db.SetRoot(sqlCtx, root)
 	if err != nil {
 		return nil, nil, err
 	}
