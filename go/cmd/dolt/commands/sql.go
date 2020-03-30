@@ -165,14 +165,19 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	}
 
 	origRoot := root
+	sqlCtx := sql.NewContext(ctx,
+		sql.WithSession(dsqle.DefaultDoltSession()),
+		sql.WithIndexRegistry(sql.NewIndexRegistry()),
+		sql.WithViewRegistry(sql.NewViewRegistry()))
+
 	if query, queryOK := apr.GetValue(queryFlag); queryOK {
 		batchMode := apr.Contains(batchFlag)
 
 		if batchMode {
 			batchInput := strings.NewReader(query)
-			root, verr = execBatch(ctx, dEnv, root, batchInput, format)
+			root, verr = execBatch(sqlCtx, dEnv, root, batchInput, format)
 		} else {
-			root, verr = execQuery(ctx, dEnv, root, query, format)
+			root, verr = execQuery(sqlCtx, dEnv, root, query, format)
 
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
@@ -193,7 +198,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 
 		cli.PrintErrf("Executing saved query '%s':\n%s\n", savedQueryName, sq.Query)
-		root, verr = execQuery(ctx, dEnv, root, sq.Query, format)
+		root, verr = execQuery(sqlCtx, dEnv, root, sq.Query, format)
 	} else if apr.Contains(listSavedFlag) {
 		hasQC, err := root.HasTable(ctx, doltdb.DoltQueryCatalogTableName)
 
@@ -207,7 +212,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 
 		query := "SELECT * FROM " + doltdb.DoltQueryCatalogTableName
-		_, verr = execQuery(ctx, dEnv, root, query, format)
+		_, verr = execQuery(sqlCtx, dEnv, root, query, format)
 	} else {
 		// Run in either batch mode for piped input, or shell mode for interactive
 		runInBatchMode := true
@@ -222,9 +227,9 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 
 		if runInBatchMode {
-			root, verr = execBatch(ctx, dEnv, root, os.Stdin, format)
+			root, verr = execBatch(sqlCtx, dEnv, root, os.Stdin, format)
 		} else {
-			root, verr = execShell(ctx, dEnv, root, format)
+			root, verr = execShell(sqlCtx, dEnv, root, format)
 		}
 	}
 
@@ -240,8 +245,8 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func execShell(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, format resultFormat) (*doltdb.RootValue, errhand.VerboseError) {
-	se, sqlCtx, err := newSqlEngine(ctx, dEnv, root, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
+func execShell(sqlCtx *sql.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, format resultFormat) (*doltdb.RootValue, errhand.VerboseError) {
+	se, err := newSqlEngine(sqlCtx, dEnv, root, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
 	}
@@ -260,8 +265,8 @@ func execShell(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, f
 	return newRoot, nil
 }
 
-func execBatch(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, batchInput io.Reader, format resultFormat) (*doltdb.RootValue, errhand.VerboseError) {
-	se, sqlCtx, err := newSqlEngine(ctx, dEnv, root, dsqle.NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
+func execBatch(sqlCtx *sql.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, batchInput io.Reader, format resultFormat) (*doltdb.RootValue, errhand.VerboseError) {
+	se, err := newSqlEngine(sqlCtx, dEnv, root, dsqle.NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
 	}
@@ -280,8 +285,8 @@ func execBatch(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, b
 	return newRoot, nil
 }
 
-func execQuery(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string, format resultFormat) (*doltdb.RootValue, errhand.VerboseError) {
-	se, sqlCtx, err := newSqlEngine(ctx, dEnv, root, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
+func execQuery(sqlCtx *sql.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string, format resultFormat) (*doltdb.RootValue, errhand.VerboseError) {
+	se, err := newSqlEngine(sqlCtx, dEnv, root, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
 	}
@@ -294,7 +299,7 @@ func execQuery(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, q
 
 	if rowIter != nil {
 		defer rowIter.Close()
-		err = se.prettyPrintResults(ctx, se.ddb.ValueReadWriter().Format(), sqlSch, rowIter)
+		err = se.prettyPrintResults(sqlCtx, se.ddb.ValueReadWriter().Format(), sqlSch, rowIter)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
@@ -952,33 +957,29 @@ type sqlEngine struct {
 }
 
 // sqlEngine packages up the context necessary to run sql queries against sqle.
-func newSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, db dsqle.Database, format resultFormat) (*sqlEngine, *sql.Context, error) {
+func newSqlEngine(sqlCtx *sql.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, db dsqle.Database, format resultFormat) (*sqlEngine, error) {
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
 	engine.AddDatabase(sql.NewInformationSchemaDatabase(engine.Catalog))
 
-	sqlCtx := sql.NewContext(ctx,
-		sql.WithSession(dsqle.DefaultDoltSession()),
-		sql.WithIndexRegistry(sql.NewIndexRegistry()),
-		sql.WithViewRegistry(sql.NewViewRegistry()))
 	err := db.SetRoot(sqlCtx, root)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	sqlCtx.RegisterIndexDriver(dsqle.NewDoltIndexDriver(db))
 	err = sqlCtx.LoadIndexes(sqlCtx, engine.Catalog.AllDatabases())
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	err = dsqle.RegisterSchemaFragments(sqlCtx, db, root)
 
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	return &sqlEngine{db, dEnv.DoltDB, engine, format}, sqlCtx, nil
+	return &sqlEngine{db, dEnv.DoltDB, engine, format}, nil
 }
 
 // Execute a SQL statement and return values for printing.

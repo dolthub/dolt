@@ -15,7 +15,6 @@
 package sqle
 
 import (
-	"context"
 	"fmt"
 	"io"
 
@@ -31,12 +30,12 @@ type doltTableRowIter struct {
 	sql.RowIter
 	table    *DoltTable
 	rowData  types.Map
-	ctx      context.Context
+	ctx      *sql.Context
 	nomsIter types.MapIterator
 }
 
 // Returns a new row iterator for the table given
-func newRowIterator(tbl *DoltTable, ctx context.Context) (*doltTableRowIter, error) {
+func newRowIterator(tbl *DoltTable, ctx *sql.Context) (*doltTableRowIter, error) {
 	rowData, err := tbl.table.GetRowData(ctx)
 
 	if err != nil {
