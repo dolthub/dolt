@@ -26,7 +26,7 @@ import (
 const arbitraryIdx = 0
 
 // SuperSchema is the union of all Schemas over the history of a table
-// the nameTag map tracks all names corresponding to a column tag
+// the tagNames map tracks all names corresponding to a column tag
 type SuperSchema struct {
 	// All columns that have existed in the history of the corresponding schema.
 	// Names of the columns are not stored in this collection as they can change

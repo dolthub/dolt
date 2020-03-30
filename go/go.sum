@@ -361,6 +361,7 @@ github.com/krishicks/yaml-patch v0.0.10/go.mod h1:Sm5TchwZS6sm7RJoyg87tzxm2ZcKzd
 github.com/lib/pq v1.0.0/go.mod h1:5WUZQaWbwv1U+lTReE5YruASi9Al49XbQIvNi/34Woo=
 github.com/lib/pq v1.3.0 h1:/qkRGz8zljWiDcFvgpwUpwIAPu3r07TDvs3Rws+o/pU=
 github.com/lib/pq v1.3.0/go.mod h1:5WUZQaWbwv1U+lTReE5YruASi9Al49XbQIvNi/34Woo=
+github.com/liquidata-inc/dolt v0.15.2 h1:/8C4azzZDTaedBpKjlnOVrblTrRYWZijBbGlxd9PXIk=
 github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200318155626-711be775a19d h1:lC5yfAkZlVoTjSq8OCydWbH8NvjIYtReh3ros1mvNC0=
 github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200318155626-711be775a19d/go.mod h1:TCTrDbzIA05e8zV3SW+nsjc1LCR58GRSOIcF32lJ+Qc=
 github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0 h1:phMgajKClMUiIr+hF2LGt8KRuUa2Vd2GI1sNgHgSXoU=

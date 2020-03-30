@@ -73,7 +73,7 @@ func SqlSchemaToDoltSchema(ctx context.Context, root *doltdb.RootValue, sqlSchem
 	var cols []schema.Column
 	var err error
 
-	nks, err := extracNomsKinds(sqlSchema)
+	nks, err := extractNomsKinds(sqlSchema)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +143,7 @@ func SqlColToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 	return schema.NewColumnWithTypeInfo(col.Name, tag, typeInfo, col.PrimaryKey, constraints...)
 }
 
-func extracNomsKinds(sch sql.Schema) ([]types.NomsKind, error) {
+func extractNomsKinds(sch sql.Schema) ([]types.NomsKind, error) {
 	nks := make([]types.NomsKind, len(sch))
 	for i, col := range sch {
 		ti, err := typeinfo.FromSqlType(col.Type)

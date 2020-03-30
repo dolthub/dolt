@@ -280,14 +280,13 @@ func TestAddColumnToTable(t *testing.T) {
 			tbl, _, err := root.GetTable(ctx, tableName)
 			assert.NoError(t, err)
 
-			valErr := ValidateNewColumn(ctx, root, tbl, tableName, tt.tag, tt.newColName, typeinfo.FromKind(tt.colKind), tt.nullable, tt.defaultVal)
-			updatedTable, err := AddColumnToTable(ctx, tbl, tt.tag, tt.newColName, typeinfo.FromKind(tt.colKind), tt.nullable, tt.defaultVal, tt.order)
+			updatedTable, err := AddColumnToTable(ctx, root, tbl, tableName, tt.tag, tt.newColName, typeinfo.FromKind(tt.colKind), tt.nullable, tt.defaultVal, tt.order)
 			if len(tt.expectedErr) > 0 {
-				require.Error(t, valErr)
-				assert.Contains(t, valErr.Error(), tt.expectedErr)
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedErr)
 				return
 			} else {
-				require.NoError(t, valErr)
+				require.NoError(t, err)
 				require.NoError(t, err)
 			}
 

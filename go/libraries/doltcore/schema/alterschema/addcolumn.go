@@ -44,9 +44,13 @@ type ColumnOrder struct {
 // table, since we must write a value for each row. If the column is not nullable, a default value must be provided.
 //
 // Returns an error if the column added conflicts with the existing schema in tag or name.
-func AddColumnToTable(ctx context.Context, tbl *doltdb.Table, tag uint64, newColName string, typeInfo typeinfo.TypeInfo, nullable Nullable, defaultVal types.Value, order *ColumnOrder) (*doltdb.Table, error) {
+func AddColumnToTable(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.Table, tblName string, tag uint64, newColName string, typeInfo typeinfo.TypeInfo, nullable Nullable, defaultVal types.Value, order *ColumnOrder) (*doltdb.Table, error) {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := validateNewColumn(ctx, root, tbl, tblName, tag, newColName, typeInfo, nullable, defaultVal); err != nil {
 		return nil, err
 	}
 
@@ -146,7 +150,7 @@ func createColumn(nullable Nullable, newColName string, tag uint64, typeInfo typ
 }
 
 // ValidateNewColumn returns an error if the column as specified cannot be added to the schema given.
-func ValidateNewColumn(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.Table, tblName string, tag uint64, newColName string, typeInfo typeinfo.TypeInfo, nullable Nullable, defaultVal types.Value) error {
+func validateNewColumn(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.Table, tblName string, tag uint64, newColName string, typeInfo typeinfo.TypeInfo, nullable Nullable, defaultVal types.Value) error {
 	if typeInfo == nil {
 		return fmt.Errorf(`typeinfo may not be nil`)
 	}

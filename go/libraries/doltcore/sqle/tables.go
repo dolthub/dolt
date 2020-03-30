@@ -225,7 +225,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		return err
 	}
 
-	nks, err := extracNomsKinds(t.sqlSch)
+	nks, err := extractNomsKinds(t.sqlSch)
 	if err != nil {
 		return err
 	}
@@ -264,11 +264,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		}
 	}
 
-	if err := alterschema.ValidateNewColumn(ctx, t.db.root, table, t.name, col.Tag, col.Name, col.TypeInfo, nullable, defaultVal); err != nil {
-		return err
-	}
-
-	updatedTable, err := alterschema.AddColumnToTable(ctx, table, col.Tag, col.Name, col.TypeInfo, nullable, defaultVal, orderToOrder(order))
+	updatedTable, err := alterschema.AddColumnToTable(ctx, t.db.root, table, t.name, col.Tag, col.Name, col.TypeInfo, nullable, defaultVal, orderToOrder(order))
 	if err != nil {
 		return err
 	}
