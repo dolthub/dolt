@@ -49,20 +49,14 @@ const (
 
 type tableCache struct {
 	mu     *sync.Mutex
-	tables map[string]map[*doltdb.RootValue]map[string]sql.Table
+	tables map[*doltdb.RootValue]map[string]sql.Table
 }
 
-func (tc *tableCache) Get(dbName string, tableName string, root *doltdb.RootValue) (sql.Table, bool) {
+func (tc *tableCache) Get(tableName string, root *doltdb.RootValue) (sql.Table, bool) {
 	tc.mu.Lock()
 	defer tc.mu.Unlock()
 
-	dbTables, ok := tc.tables[dbName]
-
-	if !ok {
-		return nil, false
-	}
-
-	tablesForRoot, ok := dbTables[root]
+	tablesForRoot, ok := tc.tables[root]
 
 	if !ok {
 		return nil, false
@@ -73,42 +67,37 @@ func (tc *tableCache) Get(dbName string, tableName string, root *doltdb.RootValu
 	return tbl, ok
 }
 
-func (tc *tableCache) Put(dbName string, tableName string, root *doltdb.RootValue, tbl sql.Table) {
+func (tc *tableCache) Put(tableName string, root *doltdb.RootValue, tbl sql.Table) {
 	tc.mu.Lock()
 	defer tc.mu.Unlock()
 
-	dbTables, ok := tc.tables[dbName]
-
-	if !ok {
-		dbTables = make(map[*doltdb.RootValue]map[string]sql.Table)
-		tc.tables[dbName] = dbTables
-	}
-
-	tablesForRoot, ok := dbTables[root]
+	tablesForRoot, ok := tc.tables[root]
 
 	if !ok {
 		tablesForRoot = make(map[string]sql.Table)
-		dbTables[root] = tablesForRoot
+		tc.tables[root] = tablesForRoot
 	}
 
 	tablesForRoot[tableName] = tbl
 }
 
-func (tc *tableCache) AllForRoot(dbName string, root *doltdb.RootValue) (map[string]sql.Table, bool) {
+func (tc *tableCache) AllForRoot(root *doltdb.RootValue) (map[string]sql.Table, bool) {
 	tc.mu.Lock()
 	defer tc.mu.Unlock()
 
-	dbTables, ok := tc.tables[dbName]
+	tablesForRoot, ok := tc.tables[root]
 
-	if !ok {
-		return nil, false
+	if ok {
+		copyOf := make(map[string]sql.Table, len(tablesForRoot))
+		for name, tbl := range tablesForRoot {
+			copyOf[name] = tbl
+		}
+
+		return copyOf, true
 	}
 
-	tablesForRoot, ok := dbTables[root]
-	return tablesForRoot, ok
+	return nil, false
 }
-
-var tblCache = &tableCache{&sync.Mutex{}, make(map[string]map[*doltdb.RootValue]map[string]sql.Table)}
 
 // Database implements sql.Database for a dolt DB.
 type Database struct {
@@ -117,6 +106,7 @@ type Database struct {
 	ddb       *doltdb.DoltDB
 	rsr       env.RepoStateReader
 	batchMode batchMode
+	tc        *tableCache
 }
 
 var _ sql.Database = Database{}
@@ -133,6 +123,7 @@ func NewDatabase(name string, defRoot *doltdb.RootValue, ddb *doltdb.DoltDB, rsr
 		ddb:       ddb,
 		rsr:       rsr,
 		batchMode: single,
+		tc:        &tableCache{&sync.Mutex{}, make(map[*doltdb.RootValue]map[string]sql.Table)},
 	}
 }
 
@@ -145,6 +136,7 @@ func NewBatchedDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB,
 		ddb:       ddb,
 		rsr:       rsr,
 		batchMode: batched,
+		tc:        &tableCache{&sync.Mutex{}, make(map[*doltdb.RootValue]map[string]sql.Table)},
 	}
 }
 
@@ -305,7 +297,7 @@ func (db Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]stri
 // getTable gets the table with the exact name given at the root value given. The database caches tables for all root
 // values to avoid doing schema lookups on every table lookup, which are expensive.
 func (db Database) getTable(ctx context.Context, root *doltdb.RootValue, tableName string) (sql.Table, bool, error) {
-	if table, ok := tblCache.Get(db.name, tableName, root); ok {
+	if table, ok := db.tc.Get(tableName, root); ok {
 		return table, true, nil
 	}
 
@@ -343,7 +335,7 @@ func (db Database) getTable(ctx context.Context, root *doltdb.RootValue, tableNa
 		table = &AlterableDoltTable{WritableDoltTable{DoltTable: readonlyTable}}
 	}
 
-	tblCache.Put(db.name, tableName, root, table)
+	db.tc.Put(tableName, root, table)
 
 	return table, true, nil
 }
@@ -574,7 +566,7 @@ func (db Database) Flush(ctx *sql.Context) error {
 		return err
 	}
 
-	tables, ok := tblCache.AllForRoot(db.name, root)
+	tables, ok := db.tc.AllForRoot(root)
 
 	if ok {
 		for _, table := range tables {
