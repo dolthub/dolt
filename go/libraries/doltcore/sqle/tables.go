@@ -225,19 +225,17 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		return err
 	}
 
-	nks, err := extractNomsKinds(t.sqlSch)
-	if err != nil {
-		return err
-	}
-	ti, err := typeinfo.FromSqlType(column.Type)
-	if err != nil {
-		return err
-	}
-	nks = append(nks, ti.NomsKind())
-
 	tag := extractTag(column)
 	if tag == schema.InvalidTag {
-		tag, err = t.db.Root().GetUniqueTagFromNomsKinds(ctx, nks)
+		nks, err := extractNomsKinds(t.sqlSch)
+		if err != nil {
+			return err
+		}
+		ti, err := typeinfo.FromSqlType(column.Type)
+		if err != nil {
+			return err
+		}
+		tag, err = t.db.Root().GetUniqueTagFromNomsKinds(ctx, t.name, column.Name, nks, ti.NomsKind())
 		if err != nil {
 			return err
 		}

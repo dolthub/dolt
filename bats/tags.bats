@@ -79,6 +79,14 @@ SQL
     dolt add test
     dolt commit	-m "Committed test table with c1 dropped"
 
+    # Adding the tag back with the same name and type should not be allowed
+    run dolt sql -q "alter table test add column c1 bigint comment 'tag:5678'"
+    [ $status -eq 1 ]
+
+    # Adding the tag back with a different name but same type should not be allowed
+    run dolt sql -q "alter table test add column c2 bigint comment 'tag:5678'"
+    [ $status -eq 1 ]
+
     # Adding the tag back with a different type should error
     skip "No checks for tag reuse across commits right now"
     run dolt sql -q "alter table test add column c1 text comment 'tag:5678'"
@@ -181,10 +189,95 @@ SQL
     dolt checkout branch2
     dolt sql -q "alter table test add column c0 bigint comment 'tag:8910'"
     dolt add test
-    dolt commit -m "Added column c2 bigint tag:8910"
+    dolt commit -m "Added column c0 bigint tag:8910"
+    dolt checkout master
+    dolt merge branch1
+    run dolt merge branch2
+    [ $status -eq 1 ]
+}
+
+@test "Merging branches that both created the same column succeeds" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  PRIMARY KEY (pk));
+SQL
+    dolt add test
+    dolt commit -m "Committed test table"
+    dolt branch branch1
+    dolt branch branch2
+    dolt checkout branch1
+    dolt sql -q "alter table test add column c2 bigint comment 'tag:2'"
+    dolt sql -q "alter table test add column c3 double"
+    dolt add test
+    dolt commit -m "Added columns c2 bigint tag:8910 and c3 double to branch1"
+    dolt checkout branch2
+    dolt sql -q "alter table test add column c2 bigint comment 'tag:2'"
+    # column c3 will have the same tag on both branches due to deterministic tag generation
+    dolt sql -q "alter table test add column c3 double"
+    dolt add test
+    dolt commit -m "Added columns c2 bigint tag:8910 and c3 double to branch2"
     dolt checkout master
     dolt merge branch1
     run dolt merge branch2
     [ $status -eq 0 ]
+    run dolt schema show
+    [[ "${lines[2]}" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'" ]] || false
+    [[ "${lines[3]}" =~ "\`c1\` BIGINT COMMENT 'tag:1'" ]] || false
+    [[ "${lines[4]}" =~ "\`c2\` BIGINT COMMENT 'tag:2'" ]] || false
+    [[ "${lines[5]}" =~ "\`c3\` DOUBLE COMMENT " ]] || false
 }
 
+@test "Merging branches that both created the same table succeeds" {
+    dolt branch branch1
+    dolt branch branch2
+    dolt checkout branch1
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  c1 BIGINT,
+  PRIMARY KEY (pk));
+SQL
+    dolt add test
+    dolt commit -m "Committed test table"
+
+    dolt checkout branch2
+dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  c1 BIGINT,
+  PRIMARY KEY (pk));
+SQL
+    dolt add test
+    # pk and c1 will have the same tags on both branches due to deterministic tag generation
+    dolt commit -m "Committed test table"
+    dolt checkout master
+    dolt merge branch1
+    run dolt merge branch2
+    [ $status -eq 0 ]
+    run dolt schema show
+    [[ "${lines[2]}" =~ "\`pk\` BIGINT NOT NULL COMMENT " ]] || false
+    [[ "${lines[3]}" =~ "\`c1\` BIGINT COMMENT " ]] || false
+}
+
+@test "Deterministic tag generation produces consistent results" {
+    dolt branch other
+    dolt sql <<SQL
+CREATE TABLE test1 (
+  pk1 BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 DOUBLE,
+  c3 LONGTEXT,
+  PRIMARY KEY (pk1));
+SQL
+    dolt add test1
+    dolt commit -m "Committed test table"
+
+    # If anything changes to deterministic tag generation, this will break
+    run dolt schema show
+    [[ "${lines[2]}" =~ "COMMENT 'tag:10458'" ]] || false
+    [[ "${lines[3]}" =~ "COMMENT 'tag:5951'" ]] || false
+    [[ "${lines[4]}" =~ "COMMENT 'tag:10358'" ]] || false
+    [[ "${lines[5]}" =~ "COMMENT 'tag:11314'" ]] || false
+}

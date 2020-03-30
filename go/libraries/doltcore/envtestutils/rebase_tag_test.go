@@ -449,7 +449,7 @@ func testRebaseTag(t *testing.T, test RebaseTagTest) {
 
 		rebasedRoot, _ := rebasedCommit.GetRootValue()
 		checkSchema(t, rebasedRoot, "people", test.ExpectedSchema)
-		checkRows(t, rebasedRoot, test.ExpectedSchema, test.SelectResultQuery, test.ExpectedRows)
+		checkRows(t, rebasedRoot, "people", test.ExpectedSchema, test.SelectResultQuery, test.ExpectedRows)
 	}
 }
 
@@ -486,7 +486,7 @@ func testRebaseTagHistory(t *testing.T) {
 	expectedSch := schema.SchemaFromCols(peopleWithDrip)
 	rebasedRoot, _ := newMasterCm.GetRootValue()
 	checkSchema(t, rebasedRoot, "people", expectedSch)
-	checkRows(t, rebasedRoot, expectedSch, "select * from people;", []row.Row{
+	checkRows(t, rebasedRoot, "people", expectedSch, "select * from people;", []row.Row{
 		newRow(row.TaggedValues{IdTag: types.Int(7), NameTag: types.String("Maggie Simpson"), AgeTag: types.Int(1)}, people),
 		newRow(row.TaggedValues{IdTag: types.Int(10), NameTag: types.String("Patty Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(8.5)}, peopleWithDrip),
 	})
@@ -531,7 +531,7 @@ func checkSchema(t *testing.T, r *doltdb.RootValue, tableName string, expectedSc
 	require.True(t, eq)
 }
 
-func checkRows(t *testing.T, root *doltdb.RootValue, sch schema.Schema, selectQuery string, expectedRows []row.Row) {
+func checkRows(t *testing.T, root *doltdb.RootValue, tableName string, sch schema.Schema, selectQuery string, expectedRows []row.Row) {
 	sqlDb := dsqle.NewDatabase("dolt", root, nil, nil)
 	engine := sqle.NewDefault()
 	engine.AddDatabase(sqlDb)
@@ -540,7 +540,7 @@ func checkRows(t *testing.T, root *doltdb.RootValue, sch schema.Schema, selectQu
 
 	s, rowIter, err := engine.Query(sqlCtx, selectQuery)
 	require.NoError(t, err)
-	_, err = dsqle.SqlSchemaToDoltSchema(context.Background(), root, s)
+	_, err = dsqle.SqlSchemaToDoltSchema(context.Background(), root, tableName, s)
 	require.NoError(t, err)
 
 	actualRows := []row.Row{}

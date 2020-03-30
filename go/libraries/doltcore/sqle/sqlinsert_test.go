@@ -99,13 +99,13 @@ var systemTableInsertTests = []InsertTest{
 	},
 }
 
-func mustGetDoltSchema(sch sql.Schema, testEnv *env.DoltEnv) schema.Schema {
+func mustGetDoltSchema(sch sql.Schema, tableName string, testEnv *env.DoltEnv) schema.Schema {
 	wrt, err := testEnv.WorkingRoot(context.Background())
 	if err != nil {
 		panic(err)
 	}
 
-	doltSchema, err := SqlSchemaToDoltSchema(context.Background(), wrt, sch)
+	doltSchema, err := SqlSchemaToDoltSchema(context.Background(), wrt, tableName, sch)
 	if err != nil {
 		panic(err)
 	}

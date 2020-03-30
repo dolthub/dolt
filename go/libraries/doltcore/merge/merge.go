@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rebase"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 
@@ -508,11 +506,11 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, commit, mergeCommit *
 		return nil, nil, err
 	}
 
-	mergeCommit, err = resolveTagConflicts(ctx, ddb, commit, mergeCommit, ancCommit)
-
-	if err != nil {
-		return nil, nil, err
-	}
+	//mergeCommit, err = resolveTagConflicts(ctx, ddb, commit, mergeCommit, ancCommit)
+	//
+	//if err != nil {
+	//	return nil, nil, err
+	//}
 
 	root, err := commit.GetRootValue()
 
@@ -642,124 +640,4 @@ func GetDocsInConflict(ctx context.Context, dEnv *env.DoltEnv) (*diff.DocDiffs, 
 	}
 
 	return diff.NewDocDiffs(ctx, dEnv, workingRoot, nil, docDetails)
-}
-
-// looks for tag conflicts in the mergeCommit, and rebases mergeCommit to create a new merge commit if necessary
-func resolveTagConflicts(ctx context.Context, ddb *doltdb.DoltDB, commit, mergeCommit, ancCommit *doltdb.Commit) (*doltdb.Commit, error) {
-	root, err := commit.GetRootValue()
-
-	if err != nil {
-		return nil, err
-	}
-
-	mergeRoot, err := mergeCommit.GetRootValue()
-
-	if err != nil {
-		return nil, err
-	}
-
-	ancRoot, err := ancCommit.GetRootValue()
-
-	if err != nil {
-		return nil, err
-	}
-
-	rts, err := root.GetTableNames(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	mts, err := mergeRoot.GetTableNames(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	tableNameIntersection, _ := set.NewStrSet(rts).IntersectAndMissing(mts)
-
-	tm := make(rebase.TagMapping)
-	for _, tableName := range tableNameIntersection {
-		ss, found, err := root.GetSuperSchema(ctx, tableName)
-		if err != nil {
-			return nil, err
-		}
-		if !found {
-			panic("ss not found!")
-		}
-
-		mergeSS, found, err := mergeRoot.GetSuperSchema(ctx, tableName)
-		if err != nil {
-			return nil, err
-		}
-		if !found {
-			panic("mergeSS not found!")
-		}
-
-		ancSS, found, err := ancRoot.GetSuperSchema(ctx, tableName)
-		if err != nil {
-			return nil, err
-		}
-		if !found {
-			return nil, fmt.Errorf("table name collision for %s, table name used by both branches", tableName)
-		}
-
-		sub, err := schema.SuperSchemaSubtract(ss, ancSS).GenerateColCollection()
-		if err != nil {
-			return nil, err
-		}
-
-		mergeSub, err := schema.SuperSchemaSubtract(mergeSS, ancSS).GenerateColCollection()
-		if err != nil {
-			return nil, err
-		}
-
-		// sub & mergeSub are the columns added by their respective branches since the ancestor
-		// if these columns are in conflict, we must rebase the merge column
-		var conflictCols []schema.Column
-		_ = sub.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			mergeCol, found := mergeSub.GetByTag(tag)
-			if found && !col.Equals(mergeCol) {
-				conflictCols = append(conflictCols, mergeCol)
-			}
-			return false, nil
-		})
-
-		if len(conflictCols) > 0 {
-			tm[tableName] = make(map[uint64]uint64)
-			tbl, _, err := root.GetTable(ctx, tableName)
-
-			if err != nil {
-				return nil, err
-			}
-
-			sch, err := tbl.GetSchema(ctx)
-
-			if err != nil {
-				return nil, err
-			}
-
-			mnks := schema.NomsKindsFromSchema(sch)
-			for _, col := range conflictCols {
-				mnks = append(mnks, col.Kind)
-				newTag, err := root.GetUniqueTagFromNomsKinds(ctx, mnks)
-				if err != nil {
-					return nil, err
-				}
-				tm[tableName][col.Tag] = newTag
-			}
-		}
-	}
-
-	if len(tm) > 0 {
-		rebased, err := rebase.TagRebaseForCommits(ctx, ddb, tm, mergeCommit)
-
-		if err != nil {
-			return nil, err
-		}
-
-		mergeCommit = rebased[0]
-	}
-
-	return mergeCommit, nil
 }

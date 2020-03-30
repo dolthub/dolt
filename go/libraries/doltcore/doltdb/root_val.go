@@ -160,7 +160,7 @@ func (root *RootValue) HasTag(ctx context.Context, tag uint64) (found bool, tblN
 			return true, err
 		}
 
-		_, found = ss.GetColumn(tag)
+		_, found = ss.GetByTag(tag)
 
 		if found {
 			tblName = key.(types.String).HumanReadableString()
@@ -248,66 +248,14 @@ func (root *RootValue) GetSuperSchema(ctx context.Context, tName string) (*schem
 }
 
 // GetUniqueTagFromNomsKinds returns a tag that has not yet been used in the history of this root.
-func (root *RootValue) GetUniqueTagFromNomsKinds(ctx context.Context, schKinds []types.NomsKind) (uint64, error) {
-	ssMap, err := root.getOrCreateSuperSchemaMap(ctx)
+func (root *RootValue) GetUniqueTagFromNomsKinds(ctx context.Context, tableName string, newColName string, existingColKinds []types.NomsKind, newColKind types.NomsKind) (uint64, error) {
+	rootSuperSchema, err := GetRootValueSuperSchema(ctx, root)
 
 	if err != nil {
 		return schema.InvalidTag, err
 	}
 
-	var sss []*schema.SuperSchema
-	err = ssMap.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-		ssValRef := value.(types.Ref)
-		ssVal, err := ssValRef.TargetValue(ctx, root.vrw)
-
-		if err != nil {
-			return true, err
-		}
-
-		ss, err := encoding.UnmarshalSuperSchemaNomsValue(ctx, root.vrw.Format(), ssVal)
-
-		if err != nil {
-			return true, err
-		}
-
-		sss = append(sss, ss) // go get -f parseltongue
-		return false, nil
-	})
-
-	if err != nil {
-		return schema.InvalidTag, err
-	}
-
-	rootSuperSchema, err := schema.SuperSchemaUnion(sss...)
-
-	if err != nil {
-		return schema.InvalidTag, err
-	}
-
-	// super schemas are only persisted on commit, so add in working schemas
-	tblMap, err := root.getTableMap()
-
-	if err != nil {
-		return schema.InvalidTag, err
-	}
-
-	err = tblMap.Iter(ctx, func(key, _ types.Value) (stop bool, err error) {
-		tbl, _, err := root.GetTable(ctx, string(key.(types.String)))
-		if err != nil {
-			return true, err
-		}
-		sch, err := tbl.GetSchema(ctx)
-		if err != nil {
-			return true, err
-		}
-		err = rootSuperSchema.AddSchemas(sch)
-		if err != nil {
-			return true, err
-		}
-		return false, nil
-	})
-
-	return schema.AutoGenerateTag(rootSuperSchema, schKinds), nil
+	return schema.AutoGenerateTag(rootSuperSchema, tableName, newColName, existingColKinds, newColKind), nil
 }
 
 // GerSuperSchemaMap returns the Noms map that tracks SuperSchemas, used to create new RootValues on checkout branch.
@@ -1162,6 +1110,69 @@ func RootNeedsUniqueTagsMigration(root *RootValue) (bool, error) {
 	}
 	needToMigrate := !found
 	return needToMigrate, nil
+}
+
+// GetRootValueSuperSchema creates a SuperSchema with every column in history of root.
+func GetRootValueSuperSchema(ctx context.Context, root *RootValue) (*schema.SuperSchema, error) {
+	ssMap, err := root.getOrCreateSuperSchemaMap(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var sss []*schema.SuperSchema
+	err = ssMap.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+		ssValRef := value.(types.Ref)
+		ssVal, err := ssValRef.TargetValue(ctx, root.vrw)
+
+		if err != nil {
+			return true, err
+		}
+
+		ss, err := encoding.UnmarshalSuperSchemaNomsValue(ctx, root.vrw.Format(), ssVal)
+
+		if err != nil {
+			return true, err
+		}
+
+		sss = append(sss, ss) // go get -f parseltongue
+		return false, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	rootSuperSchema, err := schema.SuperSchemaUnion(sss...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// super schemas are only persisted on commit, so add in working schemas
+	tblMap, err := root.getTableMap()
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = tblMap.Iter(ctx, func(key, _ types.Value) (stop bool, err error) {
+		tbl, _, err := root.GetTable(ctx, string(key.(types.String)))
+		if err != nil {
+			return true, err
+		}
+		sch, err := tbl.GetSchema(ctx)
+		if err != nil {
+			return true, err
+		}
+		err = rootSuperSchema.AddSchemas(sch)
+		if err != nil {
+			return true, err
+		}
+		return false, nil
+	})
+
+	return rootSuperSchema, nil
 }
 
 // UnionTableNames returns an array of all table names in all roots passed as params.

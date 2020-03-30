@@ -200,6 +200,7 @@ func runMain() int {
 	return res
 }
 
+// These subcommands will trigger a unique tags migration
 func commandWillMigrate(args []string) bool {
 	subCommandStr := strings.ToLower(strings.TrimSpace(args[0]))
 	for _, cmd := range []cli.Command{

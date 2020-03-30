@@ -69,7 +69,7 @@ func SqlSchemaToDoltResultSchema(sqlSchema sql.Schema) (schema.Schema, error) {
 
 // SqlSchemaToDoltResultSchema returns a dolt Schema from the sql schema given, suitable for use in creating a table.
 // For result set schemas, see SqlSchemaToDoltResultSchema.
-func SqlSchemaToDoltSchema(ctx context.Context, root *doltdb.RootValue, sqlSchema sql.Schema) (schema.Schema, error) {
+func SqlSchemaToDoltSchema(ctx context.Context, root *doltdb.RootValue, tableName string, sqlSchema sql.Schema) (schema.Schema, error) {
 	var cols []schema.Column
 	var err error
 
@@ -88,12 +88,12 @@ func SqlSchemaToDoltSchema(ctx context.Context, root *doltdb.RootValue, sqlSchem
 		if commentTag != schema.InvalidTag {
 			tag = commentTag
 		} else {
-			existing = append(existing, nks[i])
-			tag, err = root.GetUniqueTagFromNomsKinds(ctx, existing)
+			tag, err = root.GetUniqueTagFromNomsKinds(ctx, tableName, col.Name, existing, nks[i])
 			if err != nil {
 				return nil, err
 			}
 		}
+		existing = append(existing, nks[i])
 
 		convertedCol, err := SqlColToDoltCol(tag, col)
 		if err != nil {

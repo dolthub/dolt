@@ -438,7 +438,7 @@ func tagExistsInHistory(ctx context.Context, c *doltdb.Commit, tagMapping TagMap
 		}
 
 		for oldTag, _ := range tblMapping {
-			if _, found := ss.GetColumn(oldTag); found {
+			if _, found := ss.GetByTag(oldTag); found {
 				return true, nil
 			}
 		}

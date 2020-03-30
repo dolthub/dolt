@@ -112,7 +112,7 @@ func (ss *SuperSchema) AddSchemas(schemas ...Schema) error {
 }
 
 // GetByTag returns the corresponding column and true if found, returns InvalidCol and false otherwise
-func (ss *SuperSchema) GetColumn(tag uint64) (Column, bool) {
+func (ss *SuperSchema) GetByTag(tag uint64) (Column, bool) {
 	return ss.allCols.GetByTag(tag)
 }
 
@@ -188,7 +188,7 @@ func (ss *SuperSchema) Equals(oss *SuperSchema) bool {
 func (ss *SuperSchema) IsSuperSetOfSchema(sch Schema) bool {
 	isSuperSet := true
 	_ = sch.GetAllCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
-		ssCol, found := ss.GetColumn(tag)
+		ssCol, found := ss.GetByTag(tag)
 		if !found {
 			isSuperSet = false
 		}
@@ -356,7 +356,7 @@ func SuperSchemaSubtract(left, right *SuperSchema) *SuperSchema {
 	cc, _ := NewColCollection()
 	tn := make(map[uint64][]string)
 	_ = left.Iter(func(tag uint64, col Column) (stop bool, err error) {
-		_, found := right.GetColumn(tag)
+		_, found := right.GetByTag(tag)
 		if !found {
 			cc, _ = cc.Append(col)
 			tn[tag] = left.AllColumnNames(tag)
@@ -372,7 +372,7 @@ func SuperSchemaIntersection(ss1, ss2 *SuperSchema) *SuperSchema {
 	cc, _ := NewColCollection()
 	tn := make(map[uint64][]string)
 	_ = ss1.Iter(func(tag uint64, col Column) (stop bool, err error) {
-		_, found := ss2.GetColumn(tag)
+		_, found := ss2.GetByTag(tag)
 		if found {
 			cc, _ = cc.Append(col)
 			ss := set.NewStrSet(ss1.AllColumnNames(tag))

@@ -18,26 +18,25 @@ import (
 	"crypto/sha512"
 	"encoding/binary"
 	"math/rand"
+	"regexp"
+	"strings"
 
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 const (
-	// TODO: increase ReservedTagMin to 1 << 63 once numeric marshalling is fixed
 	// ReservedTagMin is the start of a range of tags which the user should not be able to use in their schemas.
 	ReservedTagMin uint64 = 1 << 50
 )
 
-// AutoGenerateTag generates a random tag that doesn't exist in the provided SuperSchema
-func AutoGenerateTag(rootSS *SuperSchema, schemaKinds []types.NomsKind) uint64 {
-	// use the schema to deterministically seed tag generation
-	var bb []byte
-	for _, k := range schemaKinds {
-		bb = append(bb, uint8(k))
-	}
-	h := sha512.Sum512(bb)
-	randGen := rand.New(rand.NewSource(int64(binary.LittleEndian.Uint64(h[:]))))
-
+// AutoGenerateTag generates a random tag that doesn't exist in the provided SuperSchema.
+// It uses a deterministic random number generator that is seeded with the NomsKinds of any existing columns in the
+// schema and the NomsKind of the column being added to the schema. Deterministic tag generation means that branches
+// and repositories that perform the same sequence of mutations to a database will get equivalent databased as a result.
+// DETERMINISTIC MUTATION IS A CRITICAL INVARIANT TO MAINTAINING COMPATIBILITY BETWEEN REPOSITORIES.
+// DO NOT ALTER THIS METHOD.
+func AutoGenerateTag(rootSS *SuperSchema, tableName string, newColName string, existingColKinds []types.NomsKind, newColKind types.NomsKind) uint64 {
+	// DO NOT ALTER THIS METHOD (see above)
 	var maxTagVal uint64 = 128 * 128
 
 	for maxTagVal/2 < uint64(rootSS.Size()) {
@@ -50,16 +49,54 @@ func AutoGenerateTag(rootSS *SuperSchema, schemaKinds []types.NomsKind) uint64 {
 		}
 	}
 
+	randGen := deterministicRandomTagGenerator(tableName, newColName, existingColKinds, newColKind)
 	var randTag uint64
 	for {
 		randTag = uint64(randGen.Int63n(int64(maxTagVal)))
 
-		if _, found := rootSS.GetColumn(randTag); !found {
+		if _, found := rootSS.GetByTag(randTag); !found {
 			break
 		}
 	}
 
 	return randTag
+}
+
+// randomTagGeneratorFromKinds creates a deterministic random number generator that is seeded with the NomsKinds of any
+// existing columns in the schema and the NomsKind of the column being added to the schema. Deterministic tag generation
+// means that branches and repositories that perform the same sequence of mutations to a database will get equivalent
+// databased as a result.
+// DETERMINISTIC MUTATION IS A CRITICAL INVARIANT TO MAINTAINING COMPATIBILITY BETWEEN REPOSITORIES.
+// DO NOT ALTER THIS METHOD.
+func deterministicRandomTagGenerator(tableName string, newColName string, existingColKinds []types.NomsKind, newColKind types.NomsKind) *rand.Rand {
+	// DO NOT ALTER THIS METHOD (see Above)
+
+	var bb []byte
+	for _, k := range existingColKinds {
+		bb = append(bb, uint8(k))
+	}
+
+	bb = append(bb, uint8(newColKind))
+
+	// transform these strings to increase the likelihood of tag collisions for similarly specified tables. eg:
+	// Alice: "CREATE TABLE `My Table` (c0 INT NOT NULL PRIMARY KEY);"
+	// Bob:   "CREATE TABLE my_table (C0 INT NOT NULL PRIMARY KEY);"
+	tableName = simpleString(tableName)
+	newColName = simpleString(newColName)
+	bb = append(bb, []byte(tableName)...)
+	bb = append(bb, []byte(newColName)...)
+
+	h := sha512.Sum512(bb)
+	return rand.New(rand.NewSource(int64(binary.LittleEndian.Uint64(h[:]))))
+}
+
+// simpleString converts s to lower case and removes non-alphanumeric characters
+func simpleString(s string) string {
+	reg, err := regexp.Compile("[^a-zA-Z0-9]+")
+	if err != nil {
+		panic(err)
+	}
+	return strings.ToLower(reg.ReplaceAllString(s, ""))
 }
 
 func NomsKindsFromSchema(sch Schema) []types.NomsKind {

@@ -225,8 +225,8 @@ func TestCreateTable(t *testing.T) {
 								id int primary key comment 'tag:a', age int comment 'this is my personal area')`,
 			expectedTable: "testTable",
 			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumn(t, "id", 8126, sql.Int32, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "age", 14122, sql.Int32, false)),
+				schemaNewColumn(t, "id", 4817, sql.Int32, true, schema.NotNullConstraint{}),
+				schemaNewColumn(t, "age", 7208, sql.Int32, false)),
 		},
 		// Real world examples for regression testing
 		{
@@ -1053,7 +1053,7 @@ func schemasTableDoltSchema() schema.Schema {
 	// this is a dummy test environment and will not be used,
 	// dolt_schema table tags will be parsed from the comments in SchemaTableSchema()
 	testEnv := dtestutils.CreateTestEnv()
-	return mustGetDoltSchema(SchemasTableSchema(), testEnv)
+	return mustGetDoltSchema(SchemasTableSchema(), doltdb.SchemasTableName, testEnv)
 }
 
 func assertFails(t *testing.T, dEnv *env.DoltEnv, query, expectedErr string) {
