@@ -393,6 +393,10 @@ func (p *Puller) getCmp(ctx context.Context, twDetails *TreeWalkEventDetails, le
 
 		err = p.wr.AddCmpChunk(cmpAndRef.cmpChnk)
 
+		if ae.SetIfError(err) {
+			continue
+		}
+
 		if p.wr.Size() >= p.chunksPerTF {
 			completedTables <- FilledWriters{p.wr}
 			p.wr, err = nbs.NewCmpChunkTableWriter()
