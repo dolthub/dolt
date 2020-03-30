@@ -1064,6 +1064,8 @@ var ErrDBNotFoundKind = errors.NewKind("database '%s' not found")
 
 // sqlEngine packages up the context necessary to run sql queries against sqle.
 func newSqlEngine(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, format resultFormat, dbs ...dsqle.Database) (*sqlEngine, error) {
+	dsqle.RegisterFunctions(dEnv.DoltDB)
+
 	engine := sqle.NewDefault()
 	engine.AddDatabase(sql.NewInformationSchemaDatabase(engine.Catalog))
 

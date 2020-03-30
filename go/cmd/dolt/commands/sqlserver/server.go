@@ -78,6 +78,8 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, serverController *Se
 		permissions = auth.ReadPerm
 	}
 
+	dsqle.RegisterFunctions(dEnv.DoltDB)
+
 	userAuth := auth.NewAudit(auth.NewNativeSingle(serverConfig.User, serverConfig.Password, permissions), auth.NewAuditLog(logrus.StandardLogger()))
 	sqlEngine := sqle.NewDefault()
 
