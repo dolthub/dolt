@@ -87,7 +87,9 @@ require (
 
 replace github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
 
-replace github.com/src-d/go-mysql-server => github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200323172345-f4d8498ef438
+replace github.com/src-d/go-mysql-server => github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200330231002-2ac5a85cf8d6
+
+//replace github.com/src-d/go-mysql-server => ../../go-mysql-server
 
 replace vitess.io/vitess => github.com/liquidata-inc/vitess v0.0.0-20200318153456-e0b079da3f54
 

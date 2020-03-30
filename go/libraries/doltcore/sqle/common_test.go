@@ -19,7 +19,6 @@ import (
 	"io"
 	"testing"
 
-	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 
@@ -36,17 +35,7 @@ import (
 func executeSelect(ctx context.Context, dEnv *env.DoltEnv, targetSch schema.Schema, root *doltdb.RootValue, query string) ([]row.Row, schema.Schema, error) {
 	var err error
 	db := NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState)
-	engine := sqle.NewDefault()
-	engine.AddDatabase(db)
-	engine.Catalog.RegisterIndexDriver(&DoltIndexDriver{db})
-	err = engine.Init()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	sqlCtx := sql.NewContext(ctx)
-
-	err = RegisterSchemaFragments(sql.NewContext(ctx), engine.Catalog, db)
+	engine, sqlCtx, err := NewTestEngine(ctx, db, root)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -80,14 +69,21 @@ func executeSelect(ctx context.Context, dEnv *env.DoltEnv, targetSch schema.Sche
 }
 
 // Runs the query given and returns the error (if any).
-func executeModify(ctx context.Context, root *doltdb.RootValue, query string) (*doltdb.RootValue, error) {
-	db := NewDatabase("dolt", root, nil, nil)
-	engine := sqle.NewDefault()
-	engine.AddDatabase(db)
-	engine.Init()
-	sqlCtx := sql.NewContext(ctx)
-	_, _, err := engine.Query(sqlCtx, query)
-	return db.Root(), err
+func executeModify(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue, query string) (*doltdb.RootValue, error) {
+	db := NewDatabase("dolt", root, ddb, nil)
+	engine, sqlCtx, err := NewTestEngine(ctx, db, root)
+
+	if err != nil {
+		return nil, err
+	}
+
+	_, _, err = engine.Query(sqlCtx, query)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return db.GetRoot(sqlCtx)
 }
 
 func schemaNewColumn(t *testing.T, name string, tag uint64, sqlType sql.Type, partOfPK bool, constraints ...schema.ColConstraint) schema.Column {

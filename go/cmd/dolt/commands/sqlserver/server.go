@@ -81,11 +81,7 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, rootValue *doltdb.Ro
 	sqlEngine.AddDatabase(db)
 	sqlEngine.AddDatabase(sql.NewInformationSchemaDatabase(sqlEngine.Catalog))
 
-	startError = dsqle.RegisterSchemaFragments(sql.NewContext(ctx), sqlEngine.Catalog, db)
-	if startError != nil {
-		cli.PrintErr(startError)
-		return
-	}
+	idxDriver := dsqle.NewDoltIndexDriver(db)
 
 	hostPort := net.JoinHostPort(serverConfig.Host, strconv.Itoa(serverConfig.Port))
 	timeout := time.Second * time.Duration(serverConfig.Timeout)
@@ -98,14 +94,44 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, rootValue *doltdb.Ro
 			ConnWriteTimeout: timeout,
 		},
 		sqlEngine,
-		func(conn *mysql.Conn, host string) sql.Session {
-			return sql.NewSession(host, conn.RemoteAddr().String(), conn.User, conn.ConnectionID)
+		func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, *sql.IndexRegistry, *sql.ViewRegistry, error) {
+			mysqlSess := sql.NewSession(host, conn.RemoteAddr().String(), conn.User, conn.ConnectionID)
+			doltSess, err := dsqle.NewSessionWithDefaultRoots(mysqlSess, dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())...)
+
+			if err != nil {
+				return nil, nil, nil, err
+			}
+
+			ir := sql.NewIndexRegistry()
+			vr := sql.NewViewRegistry()
+			sqlCtx := sql.NewContext(
+				ctx,
+				sql.WithIndexRegistry(ir),
+				sql.WithViewRegistry(vr),
+				sql.WithSession(doltSess))
+
+			ir.RegisterIndexDriver(idxDriver)
+			err = ir.LoadIndexes(sqlCtx, sqlEngine.Catalog.AllDatabases())
+
+			if err != nil {
+				return nil, nil, nil, err
+			}
+
+			err = dsqle.RegisterSchemaFragments(sqlCtx, db, db.GetDefaultRoot())
+			if startError != nil {
+				cli.PrintErr(startError)
+				return nil, nil, nil, err
+			}
+
+			return doltSess, ir, vr, nil
 		},
 	)
+
 	if startError != nil {
 		cli.PrintErr(startError)
 		return
 	}
+
 	serverController.registerCloseFunction(startError, mySQLServer.Close)
 	closeError = mySQLServer.Start()
 	if closeError != nil {
@@ -113,4 +139,18 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, rootValue *doltdb.Ro
 		return
 	}
 	return
+}
+
+func dbsAsDSQLDBs(dbs []sql.Database) []dsqle.Database {
+	dsqlDBs := make([]dsqle.Database, 0, len(dbs))
+
+	for _, db := range dbs {
+		dsqlDB, ok := db.(dsqle.Database)
+
+		if ok {
+			dsqlDBs = append(dsqlDBs, dsqlDB)
+		}
+	}
+
+	return dsqlDBs
 }

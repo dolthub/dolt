@@ -282,7 +282,11 @@ func (db *database) CommitValue(ctx context.Context, ds Dataset, v types.Value) 
 	return db.Commit(ctx, ds, v, CommitOptions{})
 }
 
-// doCommit manages concurrent access the single logical piece of mutable state: the current Root. doCommit is optimistic in that it is attempting to update head making the assumption that currentRootHash is the hash of the current head. The call to Commit below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again. This method will also fail and return an 'ErrMergeNeeded' error if the |commit| is not a descendent of the current dataset head
+// doCommit manages concurrent access the single logical piece of mutable state: the current Root. doCommit is
+// optimistic in that it is attempting to update head making the assumption that currentRootHash is the hash of the
+// current head. The call to Commit below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g.
+// because of a race with another writer) and the entire algorithm must be tried again. This method will also fail and
+// return an 'ErrMergeNeeded' error if the |commit| is not a descendent of the current dataset head
 func (db *database) doCommit(ctx context.Context, datasetID string, commit types.Struct, mergePolicy merge.Policy) error {
 	if is, err := IsCommit(commit); err != nil {
 		return err
