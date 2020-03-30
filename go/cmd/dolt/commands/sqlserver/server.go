@@ -75,6 +75,8 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, rootValue *doltdb.Ro
 		permissions = auth.ReadPerm
 	}
 
+	dsqle.RegisterFunctions(dEnv.DoltDB)
+
 	userAuth := auth.NewAudit(auth.NewNativeSingle(serverConfig.User, serverConfig.Password, permissions), auth.NewAuditLog(logrus.StandardLogger()))
 	sqlEngine := sqle.NewDefault()
 	db := dsqle.NewDatabase("dolt", rootValue, dEnv.DoltDB, dEnv.RepoState)

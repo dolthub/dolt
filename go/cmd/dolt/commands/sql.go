@@ -935,6 +935,8 @@ type sqlEngine struct {
 
 // sqlEngine packages up the context necessary to run sql queries against sqle.
 func newSqlEngine(ctx context.Context, dEnv *env.DoltEnv, db *dsqle.Database, format resultFormat) (*sqlEngine, error) {
+	dsqle.RegisterFunctions(dEnv.DoltDB)
+
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
 	engine.AddDatabase(sql.NewInformationSchemaDatabase(engine.Catalog))

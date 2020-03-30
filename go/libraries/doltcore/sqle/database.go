@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/src-d/go-mysql-server/sql"
+	"github.com/src-d/go-mysql-server/sql/expression/function"
 	"github.com/src-d/go-mysql-server/sql/parse"
 	"github.com/src-d/go-mysql-server/sql/plan"
 	"gopkg.in/src-d/go-errors.v1"
@@ -31,6 +32,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
 	dsql "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/dfunctions"
 )
 
 type batchMode bool
@@ -545,4 +547,8 @@ func RegisterSchemaFragments(ctx *sql.Context, catalog *sql.Catalog, db *Databas
 	}
 
 	return nil
+}
+
+func RegisterFunctions(ddb *doltdb.DoltDB) {
+	function.Defaults = append(function.Defaults, sql.Function1{Name: "hashof", Fn: dfunctions.NewHashOfForDDB(ddb)})
 }
