@@ -20,12 +20,13 @@ teardown() {
     [[ "$output" =~ $regex ]] || false
 }
 
-# @test "dolt status" {
-#     run dolt status
-#     [ "$status" -eq 0 ]
-#     [[ "$output" =~ "On branch master" ]] || false
-#     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
-# }
+@test "dolt status" {
+    skip "These compatibility tests fail now due to a backwards incompatibility with the dolt_docs table. Before v0.16.0 dolt_docs used tags 0 and 1, and these values were hard coded in the logic that syncs the docs table with the file system."
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
 
 @test "dolt ls" {
     run dolt ls
@@ -38,10 +39,11 @@ teardown() {
     [ "$status" -eq 0 ]
 }
 
-# @test "dolt diff" {
-#     run dolt diff
-#     [ "$status" -eq 0 ]
-# }
+@test "dolt diff" {
+    skip "These compatibility tests fail now due to a backwards incompatibility with the dolt_docs table. Before v0.16.0 dolt_docs used tags 0 and 1, and these values were hard coded in the logic that syncs the docs table with the file system."
+    run dolt diff
+    [ "$status" -eq 0 ]
+}
 
 @test "dolt schema show on branch init" {
     dolt checkout init
