@@ -290,14 +290,18 @@ func (p *Puller) Pull(ctx context.Context) error {
 		var err error
 		absent, err = p.sinkDB.chunkStore().HasMany(ctx, absent)
 
+		if ae.SetIfError(err) {
+			break
+		}
+
 		twDetails.ChunksAlreadyHad = chunksInLevel - len(absent)
 		p.eventCh <- NewTWPullerEvent(DestDBHasTWEvent, twDetails)
 
 		if len(absent) > 0 {
 			leaves, absent, err = p.getCmp(ctx, twDetails, leaves, absent, completedTables)
 
-			if err != nil {
-				return err
+			if ae.SetIfError(err) {
+				break
 			}
 		}
 	}
