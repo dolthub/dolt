@@ -23,6 +23,7 @@ import (
 	"sort"
 
 	"github.com/golang/snappy"
+
 	nomshash "github.com/liquidata-inc/dolt/go/store/hash"
 )
 
