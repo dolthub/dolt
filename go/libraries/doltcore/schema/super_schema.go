@@ -17,6 +17,7 @@ package schema
 import (
 	"errors"
 	"fmt"
+
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 )
 

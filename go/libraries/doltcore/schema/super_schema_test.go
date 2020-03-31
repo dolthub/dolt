@@ -15,9 +15,10 @@
 package schema
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -71,20 +72,20 @@ type SuperSchemaTest struct {
 
 var SuperSchemaTests = []SuperSchemaTest{
 	{
-		Name: "SuperSchema of one Schema",
-		Schemas: []Schema{ sch1 },
+		Name:    "SuperSchema of one Schema",
+		Schemas: []Schema{sch1},
 		ExpectedSuperSchema: SuperSchema{
 			allCols: mustColColl([]Column{
 				strCol("", 1, true),
 				strCol("", 2, false),
 				strCol("", 3, false),
 			}),
-			tagNames: map[uint64][]string{ 1: {"a"}, 2: {"b"}, 3: {"c"}}},
+			tagNames: map[uint64][]string{1: {"a"}, 2: {"b"}, 3: {"c"}}},
 		ExpectedGeneratedSchema: sch1,
 	},
 	{
-		Name: "SuperSchema of multiple Schemas",
-		Schemas: []Schema{ sch1, sch2, sch3 },
+		Name:    "SuperSchema of multiple Schemas",
+		Schemas: []Schema{sch1, sch2, sch3},
 		ExpectedSuperSchema: SuperSchema{
 			allCols: mustColColl([]Column{
 				strCol("", 1, true),
@@ -93,7 +94,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 				strCol("", 4, false),
 				strCol("", 5, false),
 			}),
-			tagNames: map[uint64][]string{ 1: {"aaa", "aa", "a"}, 2: {"bbb", "b"}, 3: {"c"}, 4: {"dd"}, 5: {"eee"}},
+			tagNames: map[uint64][]string{1: {"aaa", "aa", "a"}, 2: {"bbb", "b"}, 3: {"c"}, 4: {"dd"}, 5: {"eee"}},
 		},
 		ExpectedGeneratedSchema: mustSchema([]Column{
 			strCol("aaa", 1, true),
@@ -104,8 +105,8 @@ var SuperSchemaTests = []SuperSchemaTest{
 		}),
 	},
 	{
-		Name: "SuperSchema respects order of added Schemas",
-		Schemas: []Schema{  sch3, sch2, sch1 },
+		Name:    "SuperSchema respects order of added Schemas",
+		Schemas: []Schema{sch3, sch2, sch1},
 		ExpectedSuperSchema: SuperSchema{
 			allCols: mustColColl([]Column{
 				strCol("", 1, true),
@@ -114,7 +115,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 				strCol("", 4, false),
 				strCol("", 3, false),
 			}),
-			tagNames: map[uint64][]string{ 1: {"a", "aa", "aaa"}, 2: {"b", "bbb"}, 3: {"c"}, 4: {"dd"}, 5: {"eee"}},
+			tagNames: map[uint64][]string{1: {"a", "aa", "aaa"}, 2: {"b", "bbb"}, 3: {"c"}, 4: {"dd"}, 5: {"eee"}},
 		},
 		ExpectedGeneratedSchema: mustSchema([]Column{
 			strCol("a", 1, true),
@@ -125,8 +126,8 @@ var SuperSchemaTests = []SuperSchemaTest{
 		}),
 	},
 	{
-		Name: "SuperSchema appends tag to disambiguate name collisions",
-		Schemas: []Schema{ sch1, nameCollisionWithSch1 },
+		Name:    "SuperSchema appends tag to disambiguate name collisions",
+		Schemas: []Schema{sch1, nameCollisionWithSch1},
 		ExpectedSuperSchema: SuperSchema{
 			allCols: mustColColl([]Column{
 				strCol("", 1, true),
@@ -134,8 +135,8 @@ var SuperSchemaTests = []SuperSchemaTest{
 				strCol("", 3, false),
 				strCol("", 22, false),
 			}),
-			tagNames: map[uint64][]string{ 1: {"a"}, 2: {"b"}, 3: {"c"}, 22: {"b"}},
-	},
+			tagNames: map[uint64][]string{1: {"a"}, 2: {"b"}, 3: {"c"}, 22: {"b"}},
+		},
 		ExpectedGeneratedSchema: mustSchema([]Column{
 			strCol("a", 1, true),
 			strCol("b_2", 2, false),
@@ -144,8 +145,8 @@ var SuperSchemaTests = []SuperSchemaTest{
 		}),
 	},
 	{
-		Name: "SuperSchema errors on tag collision",
-		Schemas: []Schema{ sch1, tagCollisionWithSch1 },
+		Name:              "SuperSchema errors on tag collision",
+		Schemas:           []Schema{sch1, tagCollisionWithSch1},
 		ExpectedErrString: "tag collision for columns b and collision, different definitions (tag: 2)",
 	},
 }

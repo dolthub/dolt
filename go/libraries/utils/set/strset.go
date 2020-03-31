@@ -46,7 +46,6 @@ func (s *StrSet) Add(items ...string) {
 	}
 }
 
-
 // Remove removes existing items from the set
 func (s *StrSet) Remove(items ...string) {
 	for _, item := range items {
