@@ -195,7 +195,7 @@ func (ss *SuperSchema) nameColumns() map[uint64]string {
 	return uniqNames
 }
 
-// Creates a ColCollection from all the columns in the SuperSchema.
+// GenerateColCollection creates a ColCollection from all the columns in the SuperSchema.
 // Each column is assigned its latest name from its name history.
 func (ss *SuperSchema) GenerateColCollection() (*ColCollection, error) {
 	uniqNames := ss.nameColumns()
@@ -214,7 +214,7 @@ func (ss *SuperSchema) GenerateColCollection() (*ColCollection, error) {
 	return cc, nil
 }
 
-// Creates a Schema from all the columns in the SuperSchema.
+// GenerateSchema creates a Schema from all the columns in the SuperSchema.
 // Each column is assigned its latest name from its name history.
 func (ss *SuperSchema) GenerateSchema() (Schema, error) {
 	cc, err := ss.GenerateColCollection()

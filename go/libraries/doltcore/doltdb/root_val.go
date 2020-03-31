@@ -210,7 +210,7 @@ func (root *RootValue) HasTag(ctx context.Context, tag uint64) (found bool, tblN
 // GetSuperSchema returns the SuperSchema for the table name specified if that table exists.
 func (root *RootValue) GetSuperSchema(ctx context.Context, tName string) (*schema.SuperSchema, bool, error) {
 	// SuperSchema is only persisted on Commit()
-	ss, found, err := root.getStaleSuperSchema(ctx, tName)
+	ss, found, err := root.getSuperSchemaAtLastCommit(ctx, tName)
 
 	if err != nil {
 		return nil, false, err
@@ -263,7 +263,8 @@ func (root *RootValue) GetSuperSchemaMap(ctx context.Context) (types.Map, error)
 	return root.getOrCreateSuperSchemaMap(ctx)
 }
 
-func (root *RootValue) getStaleSuperSchema(ctx context.Context, tName string) (*schema.SuperSchema, bool, error) {
+// SuperSchemas are only persisted on commit.
+func (root *RootValue) getSuperSchemaAtLastCommit(ctx context.Context, tName string) (*schema.SuperSchema, bool, error) {
 	ssm, err := root.getOrCreateSuperSchemaMap(ctx)
 
 	if err != nil {
@@ -696,10 +697,6 @@ func (root *RootValue) TableDiff(ctx context.Context, other *RootValue) (added, 
 				}
 			}
 		} else {
-			//tblSt1 := val1.(types.Ref).TargetValue(root.vrw)
-			//tblSt2 := val2.(types.Ref).TargetValue(root.vrw)
-			//tbl1 := Table{root.vrw, tblSt1.(types.Struct)}
-			//tbl2 := Table{root.vrw, tblSt2.(types.Struct)}
 
 			if !val1.Equals(val2) {
 				modified = append(modified, string(pk1.(types.String)))

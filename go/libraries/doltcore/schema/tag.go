@@ -92,10 +92,7 @@ func deterministicRandomTagGenerator(tableName string, newColName string, existi
 
 // simpleString converts s to lower case and removes non-alphanumeric characters
 func simpleString(s string) string {
-	reg, err := regexp.Compile("[^a-zA-Z0-9]+")
-	if err != nil {
-		panic(err)
-	}
+	reg := regexp.MustCompile("[^a-zA-Z0-9]+")
 	return strings.ToLower(reg.ReplaceAllString(s, ""))
 }
 
