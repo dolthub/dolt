@@ -39,6 +39,7 @@ import (
 
 const (
 	SetUpstreamFlag = "set-upstream"
+	ForceFlag = "force"
 )
 
 var pushDocs = cli.CommandDocumentationContent{
@@ -78,6 +79,7 @@ func (cmd PushCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) e
 func (cmd PushCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(SetUpstreamFlag, "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less {{.EmphasisLeft}}dolt pull{{.EmphasisRight}} and other commands.")
+	ap.SupportsFlag(ForceFlag, "f", "Update the remote with local history, overwriting any conflicting history in the remote.")
 	return ap
 }
 
@@ -204,6 +206,12 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 					verr = bdr.Build()
 				} else if src == ref.EmptyBranchRef {
 					verr = deleteRemoteBranch(ctx, dest, remoteRef, dEnv.DoltDB, destDB, remote)
+				} else if apr.Contains(ForceFlag) {
+					verr = deleteRemoteBranch(ctx, dest, remoteRef, dEnv.DoltDB, destDB, remote)
+					if verr != nil {
+						return HandleVErrAndExitCode(verr, usage)
+					}
+					verr = pushToRemoteBranch(ctx, dEnv, src, dest, remoteRef, dEnv.DoltDB, destDB, remote)
 				} else {
 					verr = pushToRemoteBranch(ctx, dEnv, src, dest, remoteRef, dEnv.DoltDB, destDB, remote)
 				}
