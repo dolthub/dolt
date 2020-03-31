@@ -199,7 +199,7 @@ func (te *tableEditor) Close(ctx *sql.Context) error {
 	return te.flush(ctx)
 }
 
-func (te *tableEditor) flush(ctx context.Context) error {
+func (te *tableEditor) flush(ctx *sql.Context) error {
 	// For all added keys, check for and report a collision
 	for hash, addedKey := range te.addedKeys {
 		if _, ok := te.removedKeys[hash]; !ok {

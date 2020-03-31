@@ -155,9 +155,11 @@ func TestTableEditor(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
 			CreateTestDatabase(dEnv, t)
 
-			ctx := sql.NewEmptyContext()
+			ctx := NewTestSQLCtx(context.Background())
 			root, _ := dEnv.WorkingRoot(context.Background())
 			db := NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState)
+			err := db.SetRoot(ctx, root)
+			require.NoError(t, err)
 			peopleTable, _, err := db.GetTableInsensitive(ctx, "people")
 			require.NoError(t, err)
 
@@ -173,7 +175,9 @@ func TestTableEditor(t *testing.T) {
 				require.NoError(t, ed.Close(ctx))
 			}
 
-			root = db.Root()
+			root, err = db.GetRoot(ctx)
+			require.NoError(t, err)
+
 			actualRows, _, err := executeSelect(context.Background(), dEnv, CompressSchema(PeopleTestSchema), root, test.selectQuery)
 			require.NoError(t, err)
 			assert.Equal(t, test.expectedRows, actualRows)

@@ -653,6 +653,7 @@ func (tr tableReader) findOffsets(reqs []getRecord) (ors offsetRecSlice, remaini
 			if tr.ordinalSuffixMatches(tr.prefixIdxToOrdinal(j), *req.a) {
 				reqs[i].found = true
 				ors = append(ors, offsetRec{req.a, tr.ordinals[j], tr.offsets[tr.ordinals[j]]})
+				break
 			}
 		}
 	}

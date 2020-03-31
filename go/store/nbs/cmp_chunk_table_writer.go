@@ -23,6 +23,8 @@ import (
 	"sort"
 
 	"github.com/golang/snappy"
+
+	nomshash "github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 const defaultTableSinkBlockSize = 2 * 1024 * 1024
@@ -34,6 +36,8 @@ var ErrNotFinished = errors.New("not finished")
 // ErrAlreadyFinished is an error returned if Finish is called more than once on a CmpChunkTableWriter
 var ErrAlreadyFinished = errors.New("already Finished")
 
+var ErrChunkAlreadyWritten = errors.New("chunk already written")
+
 // CmpChunkTableWriter writes CompressedChunks to a table file
 type CmpChunkTableWriter struct {
 	sink                  *HashingByteSink
@@ -41,6 +45,7 @@ type CmpChunkTableWriter struct {
 	totalUncompressedData uint64
 	prefixes              prefixIndexSlice // TODO: This is in danger of exploding memory
 	blockAddr             *addr
+	chunkHashes           nomshash.HashSet
 }
 
 // NewCmpChunkTableWriter creates a new CmpChunkTableWriter instance with a default ByteSink
@@ -51,7 +56,7 @@ func NewCmpChunkTableWriter() (*CmpChunkTableWriter, error) {
 		return nil, err
 	}
 
-	return &CmpChunkTableWriter{NewHashingByteSink(s), 0, 0, nil, nil}, nil
+	return &CmpChunkTableWriter{NewHashingByteSink(s), 0, 0, nil, nil, nomshash.NewHashSet()}, nil
 }
 
 // Size returns the number of compressed chunks that have been added
@@ -75,6 +80,11 @@ func (tw *CmpChunkTableWriter) AddCmpChunk(c CompressedChunk) error {
 		panic("NBS blocks cannot be zero length")
 	}
 
+	if tw.chunkHashes.Has(c.H) {
+		return ErrChunkAlreadyWritten
+	}
+
+	tw.chunkHashes.Insert(c.H)
 	uncmpLen, err := snappy.DecodedLen(c.CompressedData)
 
 	if err != nil {

@@ -450,7 +450,6 @@ SQL
     [[ "$output" =~ "Everything up-to-date" ]] || false
     dolt fetch
     run dolt push origin master
-    skip "dolt push when behind returns a 0 exit code now. should be 1"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "tip of your current branch is behind" ]] || false
 }

@@ -583,6 +583,10 @@ func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch sc
 		map[string]rowconv.ColNamingFunc{diff.To: toNamer, diff.From: fromNamer},
 	)
 
+	if err != nil {
+		return errhand.BuildDError("").AddCause(err).Build()
+	}
+
 	unionSch, ds, verr := createSplitter(newSch, oldSch, joiner, dArgs)
 	if verr != nil {
 		return verr

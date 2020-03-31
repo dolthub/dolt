@@ -1,0 +1,49 @@
+pipeline {
+    agent none
+    stages {
+        stage('Test Dolt nightly') {
+            parallel {
+                stage ("Update Liquidata/dolt-sql-performance:nightly") {
+                    agent {
+                        kubernetes {
+                            label "liquidata-inc-ld-build"
+                        }
+                    }
+                    environment {
+                        PATH = "${pwd()}/.ci_bin/node_modules/.bin:${env.PATH}"
+                        DOLT_VERSION = "${env.GIT_COMMIT}"
+                        TMPDIR = "${pwd()}/tempDir"
+                        DOLT_ROOT_PATH="${pwd()}/tempRoot"
+                        DOLT_CREDS = credentials("system-account-dolthub-creds")
+                        DOLT_GLOBAL_CONFIG = credentials("system-account-dolthub-config")
+                    }
+                    steps {
+                        sh "rm -rf $TMPDIR && mkdir $TMPDIR"
+                        sh "rm -rf $DOLT_ROOT_PATH && mkdir $DOLT_ROOT_PATH"
+                        dir ("sqllogictest") {
+                            git url: "https://github.com/liquidata-inc/sqllogictest.git"
+                        }
+                        dir ("benchmark/sql_regressions") {
+                            sh "nice ./run_regressions.sh ./nightly.vars"
+                        }
+                    }
+                }
+            }
+        }
+    }
+    post {
+        always {
+            node ("liquidata-inc-ld-build") {
+                cleanWs() // cleanup
+            }
+        }
+        failure {
+            emailext body: "${currentBuild.currentResult}: Job ${env.JOB_NAME} build ${env.BUILD_NUMBER}\n More info at: ${env.BUILD_URL}",
+                to: "$SQL_WATCHER_1",
+                subject: "Jenkins Build ${currentBuild.currentResult}: Job ${env.JOB_NAME}"
+            emailext body: "${currentBuild.currentResult}: Job ${env.JOB_NAME} build ${env.BUILD_NUMBER}\n More info at: ${env.BUILD_URL}",
+                to: "$SQL_WATCHER_2",
+                subject: "Jenkins Build ${currentBuild.currentResult}: Job ${env.JOB_NAME}"
+        }
+    }
+}
