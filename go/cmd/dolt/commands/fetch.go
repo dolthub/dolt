@@ -30,6 +30,10 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
+const (
+	ForceFetchFlag = "force"
+)
+
 var fetchDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Download objects and refs from another repository",
 	LongDesc: `Fetch refs, along with the objects necessary to complete their histories and update remote-tracking branches.
@@ -69,17 +73,22 @@ func (cmd FetchCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) 
 
 func (cmd FetchCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
+	ap.SupportsFlag(ForceFetchFlag, "f", "Update refs to remote branches with the current state of the remote, overwriting any conflicting history.")
 	return ap
 }
 
 // Exec executes the command
 func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := argparser.NewArgParser()
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, fetchDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	remotes, _ := dEnv.GetRemotes()
 	r, refSpecs, verr := getRefSpecs(apr.Args(), dEnv, remotes)
+
+	if verr == nil && apr.Contains(ForceFetchFlag) {
+		verr = deleteBranchesForRemote(ctx, dEnv, r)
+	}
 
 	if verr == nil {
 		verr = fetchRefSpecs(ctx, dEnv, r, refSpecs)
@@ -217,5 +226,26 @@ func fetchRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, s
 		}
 	}
 
+	return nil
+}
+
+func deleteBranchesForRemote(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote) errhand.VerboseError {
+	refs, err := dEnv.DoltDB.GetRefsOfType(ctx, map[ref.RefType]struct{}{ref.RemoteRefType: {}})
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to read from db").AddCause(err).Build()
+	}
+
+	for _, r := range refs {
+		rr := r.(ref.RemoteRef)
+
+		if rr.GetRemote() == rem.Name {
+			err = dEnv.DoltDB.DeleteBranch(ctx, rr)
+
+			if err != nil {
+				return errhand.BuildDError("error: failed to delete remote tracking ref '%s'", rr.String()).Build()
+			}
+		}
+	}
 	return nil
 }

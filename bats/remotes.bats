@@ -652,37 +652,3 @@ SQL
     run dolt push -f origin master
     [ "$status" -eq 0 ]
 }
-
-@test "force pull from master" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
-  PRIMARY KEY (pk)
-);
-SQL
-    dolt add test
-    dolt commit -m "created table"
-    dolt push test-remote master
-    cd "dolt-repo-clones"
-    dolt clone http://localhost:50051/test-org/test-repo
-    cd ..
-    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
-    dolt add test
-    dolt commit -m "row to generate conflict"
-    dolt push test-remote master
-    cd "dolt-repo-clones/test-repo"
-    dolt sql -q "insert into test values (0, 1, 1, 1, 1, 1)"
-    run dolt pull origin
-    [ "$status" -ne 0 ]
-    [[ "$output" =~ "error: Your local changes to the following tables would be overwritten by merge:" ]] || false
-    [[ "$output" =~ "test" ]] || false
-    [[ "$output" =~ "Please commit your changes before you merge." ]] || false
-    run dolt pull -f origin
-    [ "$status" -eq 0 ]
-}
