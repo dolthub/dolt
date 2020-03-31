@@ -15,6 +15,7 @@
 package set
 
 import (
+	"github.com/stretchr/testify/assert"
 	"reflect"
 	"sort"
 	"testing"
@@ -38,6 +39,18 @@ func TestStrSet(t *testing.T) {
 
 	if joinedStr != "a,b,c,d,e" {
 		t.Error("JoinStrings failed to yield correct result:", joinedStr)
+	}
+
+	strSet.Remove("b", "d")
+
+	if !isAsExpected(strSet, []string{"a", "c", "e"}) {
+		t.Error("Set doesn't match expectation after removes", strSet.AsSlice())
+	}
+
+	strSet.Remove("non-existant string")
+
+	if !isAsExpected(strSet, []string{"a", "c", "e"}) {
+		t.Error("Set doesn't match expectation after noop remove", strSet.AsSlice())
 	}
 }
 
@@ -88,4 +101,21 @@ func TestIterateDifferent(t *testing.T) {
 	if strSet1.ContainsAll(strSet2.AsSlice()) {
 		t.Error("strSet1 does not contain all or any of strSet2")
 	}
+}
+
+func TestEquality(t *testing.T) {
+	strSet1 := NewStrSet([]string{"a", "b", "c"})
+	strSet2 := NewStrSet([]string{"a", "b", "c", "b", "c", "c"})
+	assert.True(t, strSet1.Equals(strSet2))
+
+	strSet3 := NewStrSet([]string{"c", "b", "a"})
+	assert.True(t, strSet3.Equals(strSet1))
+	assert.True(t, strSet3.Equals(strSet2))
+
+	strSet3.Add("z")
+	assert.False(t, strSet3.Equals(strSet1))
+	assert.False(t, strSet3.Equals(strSet2))
+
+	strSet1.Remove("a")
+	assert.False(t, strSet1.Equals(strSet2))
 }

@@ -39,10 +39,18 @@ func NewStrSet(items []string) *StrSet {
 	return s
 }
 
-// Add adds a new item to the set
+// Add adds new items to the set
 func (s *StrSet) Add(items ...string) {
 	for _, item := range items {
 		s.items[item] = emptyInstance
+	}
+}
+
+
+// Remove removes existing items from the set
+func (s *StrSet) Remove(items ...string) {
+	for _, item := range items {
+		delete(s.items, item)
 	}
 }
 
@@ -60,6 +68,24 @@ func (s *StrSet) ContainsAll(items []string) bool {
 		}
 	}
 
+	return true
+}
+
+func (s *StrSet) Equals(other *StrSet) bool {
+	ss := s.AsSlice()
+	os := other.AsSlice()
+	sort.Strings(ss)
+	sort.Strings(os)
+
+	if len(ss) != len(os) {
+		return false
+	}
+
+	for i := range ss {
+		if ss[i] != os[i] {
+			return false
+		}
+	}
 	return true
 }
 

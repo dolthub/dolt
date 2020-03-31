@@ -17,13 +17,8 @@ package schema
 import (
 	"errors"
 	"fmt"
-	"sort"
-
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 )
-
-// TODO: track latest name for each column
-const arbitraryIdx = 0
 
 // SuperSchema is the union of all Schemas over the history of a table
 // the tagNames map tracks all names corresponding to a column tag
@@ -34,7 +29,8 @@ type SuperSchema struct {
 	// Constraints are not tracked in this collection or anywhere in SuperSchema
 	allCols *ColCollection
 
-	// All names in each column's history, keyed by tag. No order is guaranteed
+	// All names in each column's history, keyed by tag.
+	// The columns latest name is index 0
 	tagNames map[uint64][]string
 }
 
@@ -59,7 +55,6 @@ func UnmarshalSuperSchema(allCols *ColCollection, tagNames map[uint64][]string) 
 	return &SuperSchema{allCols, tagNames}
 }
 
-// TODO: take a variadic param
 // AddColumn adds a column and its name to the SuperSchema
 func (ss *SuperSchema) AddColumn(col Column) (err error) {
 	ct := col.Tag
@@ -69,10 +64,9 @@ func (ss *SuperSchema) AddColumn(col Column) (err error) {
 		if col.IsPartOfPK != existingCol.IsPartOfPK ||
 			col.Kind != existingCol.Kind ||
 			!col.TypeInfo.Equals(existingCol.TypeInfo) {
-			ecName := ss.tagNames[col.Tag][arbitraryIdx]
-			panic(fmt.Sprintf(
-				"tag collision for columns %s and %s, different definitions (tag: %d)",
-				ecName, col.Name, col.Tag))
+			ecName := ss.tagNames[col.Tag][0]
+			return fmt.Errorf("tag collision for columns %s and %s, different definitions (tag: %d)",
+				ecName, col.Name, col.Tag)
 		}
 	}
 
@@ -84,7 +78,7 @@ func (ss *SuperSchema) AddColumn(col Column) (err error) {
 			}
 		}
 		// we haven't seen this name for this column before
-		ss.tagNames[col.Tag] = append(names, col.Name)
+		ss.tagNames[col.Tag] = append([]string{col.Name}, names...)
 		return nil
 	}
 
@@ -95,7 +89,6 @@ func (ss *SuperSchema) AddColumn(col Column) (err error) {
 	return err
 }
 
-// TODO: make this functional
 // AddSchemas adds all names and columns of each schema to the SuperSchema
 func (ss *SuperSchema) AddSchemas(schemas ...Schema) error {
 	for _, sch := range schemas {
@@ -124,6 +117,11 @@ func (ss *SuperSchema) Iter(cb func(tag uint64, col Column) (stop bool, err erro
 // AllColumnNames returns all names of the column corresponding to tag
 func (ss *SuperSchema) AllColumnNames(tag uint64) []string {
 	return ss.tagNames[tag]
+}
+
+// LatestColumnName returns the latest name of the column corresponding to tag
+func (ss *SuperSchema) LatestColumnName(tag uint64) string {
+	return ss.tagNames[tag][0]
 }
 
 // Size returns the number of columns in the SuperSchema
@@ -169,56 +167,11 @@ func (ss *SuperSchema) Equals(oss *SuperSchema) bool {
 			return false
 		}
 
-		if len(colNames) != len(otherColNames) {
+		if !set.NewStrSet(colNames).Equals(set.NewStrSet(otherColNames)) {
 			return false
-		}
-
-		sort.Strings(colNames)
-		sort.Strings(otherColNames)
-		for i := range colNames {
-			if colNames[i] != otherColNames[i] {
-				return false
-			}
 		}
 	}
 	return true
-}
-
-// IsSuperSetOfSchema returns true iff all cols in sch are in the SuperSchema
-func (ss *SuperSchema) IsSuperSetOfSchema(sch Schema) bool {
-	isSuperSet := true
-	_ = sch.GetAllCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
-		ssCol, found := ss.GetByTag(tag)
-		if !found {
-			isSuperSet = false
-		}
-
-		if !ssCol.TypeInfo.Equals(col.TypeInfo) {
-			isSuperSet = false
-		}
-
-		if ssCol.IsPartOfPK != col.IsPartOfPK {
-			isSuperSet = false
-		}
-
-		if ssCol.Kind != col.Kind {
-			isSuperSet = false
-		}
-
-		hasName := false
-		for _, nm := range ss.tagNames[tag] {
-			if col.Name == nm {
-				hasName = true
-			}
-		}
-
-		if !hasName {
-			isSuperSet = false
-		}
-
-		return !isSuperSet, nil
-	})
-	return isSuperSet
 }
 
 func (ss *SuperSchema) nameColumns() map[uint64]string {
@@ -226,7 +179,7 @@ func (ss *SuperSchema) nameColumns() map[uint64]string {
 	collisions := make(map[string][]uint64)
 	uniqNames := make(map[uint64]string)
 	for tag, names := range ss.tagNames {
-		n := names[arbitraryIdx]
+		n := names[0]
 		uniqNames[tag] = n
 		collisions[n] = append(collisions[n], tag)
 	}
@@ -241,9 +194,9 @@ func (ss *SuperSchema) nameColumns() map[uint64]string {
 	return uniqNames
 }
 
-// Creates a Schema by choosing an arbitrary name for each column in the SuperSchema
+// Creates a ColCollection from all the columns in the SuperSchema.
+// Each column is assigned its latest name from its name history.
 func (ss *SuperSchema) GenerateColCollection() (*ColCollection, error) {
-	// TODO: track latest name for each column
 	uniqNames := ss.nameColumns()
 	cc, _ := NewColCollection()
 	err := ss.Iter(func(tag uint64, col Column) (stop bool, err error) {
@@ -260,7 +213,8 @@ func (ss *SuperSchema) GenerateColCollection() (*ColCollection, error) {
 	return cc, nil
 }
 
-// Creates a Schema by choosing an arbitrary name for each column in the SuperSchema
+// Creates a Schema from all the columns in the SuperSchema.
+// Each column is assigned its latest name from its name history.
 func (ss *SuperSchema) GenerateSchema() (Schema, error) {
 	cc, err := ss.GenerateColCollection()
 	if err != nil {
@@ -323,6 +277,7 @@ func (ss *SuperSchema) RebaseTag(tagMapping map[uint64]uint64) (*SuperSchema, er
 func SuperSchemaUnion(superSchemas ...*SuperSchema) (*SuperSchema, error) {
 	cc, _ := NewColCollection()
 	tagNameSets := make(map[uint64]*set.StrSet)
+	latestNames := make(map[uint64]string)
 	for _, ss := range superSchemas {
 		err := ss.Iter(func(tag uint64, col Column) (stop bool, err error) {
 			_, found := cc.GetByTag(tag)
@@ -333,6 +288,7 @@ func SuperSchemaUnion(superSchemas ...*SuperSchema) (*SuperSchema, error) {
 			} else {
 				tagNameSets[tag].Add(ss.AllColumnNames(tag)...)
 			}
+			latestNames[tag] = ss.AllColumnNames(tag)[0]
 
 			stop = err != nil
 			return stop, err
@@ -345,43 +301,12 @@ func SuperSchemaUnion(superSchemas ...*SuperSchema) (*SuperSchema, error) {
 
 	tn := make(map[uint64][]string)
 	for tag, nameSet := range tagNameSets {
-		tn[tag] = nameSet.AsSlice()
+		nn := []string{latestNames[tag]}
+		nameSet.Remove(latestNames[tag])
+		tn[tag] = append(nn, nameSet.AsSlice()...)
 	}
 
 	return &SuperSchema{cc, tn}, nil
-}
-
-// SuperSchemaSubtract returns the logical set difference of left and right.
-func SuperSchemaSubtract(left, right *SuperSchema) *SuperSchema {
-	cc, _ := NewColCollection()
-	tn := make(map[uint64][]string)
-	_ = left.Iter(func(tag uint64, col Column) (stop bool, err error) {
-		_, found := right.GetByTag(tag)
-		if !found {
-			cc, _ = cc.Append(col)
-			tn[tag] = left.AllColumnNames(tag)
-		}
-		return false, nil
-	})
-	return &SuperSchema{cc, tn}
-}
-
-// SuperSchemaIntersection returns the logical set intersection of the columns of ss1 and ss2, along with
-// the union of each column's name history.
-func SuperSchemaIntersection(ss1, ss2 *SuperSchema) *SuperSchema {
-	cc, _ := NewColCollection()
-	tn := make(map[uint64][]string)
-	_ = ss1.Iter(func(tag uint64, col Column) (stop bool, err error) {
-		_, found := ss2.GetByTag(tag)
-		if found {
-			cc, _ = cc.Append(col)
-			ss := set.NewStrSet(ss1.AllColumnNames(tag))
-			ss.Add(ss2.AllColumnNames(tag)...)
-			tn[tag] = ss.AsSlice()
-		}
-		return false, nil
-	})
-	return &SuperSchema{cc, tn}
 }
 
 func stripColNameAndConstraints(col Column) Column {
