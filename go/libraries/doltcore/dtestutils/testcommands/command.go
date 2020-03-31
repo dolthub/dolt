@@ -18,8 +18,6 @@ import (
 	"context"
 	"testing"
 
-	sqle "github.com/src-d/go-mysql-server"
-	"github.com/src-d/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -86,15 +84,15 @@ func (q Query) CommandName() string { return "query" }
 func (q Query) Exec(t *testing.T, dEnv *env.DoltEnv) {
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
-	sqlDb := dsqle.NewDatabase("dolt", root, nil, nil)
-	engine := sqle.NewDefault()
-	engine.AddDatabase(sqlDb)
-	err = engine.Init()
+	sqlDb := dsqle.NewDatabase("dolt", root, dEnv.DoltDB, nil)
+	engine, sqlCtx, err := dsqle.NewTestEngine(context.Background(), sqlDb, root)
 	require.NoError(t, err)
-	sqlCtx := sql.NewContext(context.Background())
+
 	_, _, err = engine.Query(sqlCtx, q.Query)
 	require.NoError(t, err)
-	err = dEnv.UpdateWorkingRoot(context.Background(), sqlDb.Root())
+	newRoot, err := sqlDb.GetRoot(sqlCtx)
+	require.NoError(t, err)
+	err = dEnv.UpdateWorkingRoot(sqlCtx, newRoot)
 	require.NoError(t, err)
 }
 

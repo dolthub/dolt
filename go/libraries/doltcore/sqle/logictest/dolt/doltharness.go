@@ -61,13 +61,44 @@ func (h *DoltHarness) Init() error {
 	root = resetEnv(root)
 
 	var err error
-	h.engine, err = sqlNewEngine(root)
+	h.engine, err = sqlNewEngine(dEnv.DoltDB, root)
 
 	return err
 }
 
 func (h *DoltHarness) ExecuteStatement(statement string) error {
-	ctx := sql.NewContext(context.Background(), sql.WithPid(rand.Uint64()))
+	idxReg := sql.NewIndexRegistry()
+	viewReg := sql.NewViewRegistry()
+	ctx := sql.NewContext(
+		context.Background(),
+		sql.WithPid(rand.Uint64()),
+		sql.WithIndexRegistry(idxReg),
+		sql.WithViewRegistry(viewReg))
+
+	for _, db := range h.engine.Catalog.AllDatabases() {
+		dsqlDB := db.(dsql.Database)
+		defRoot := dsqlDB.GetDefaultRoot()
+
+		err := dsqlDB.SetRoot(ctx, defRoot)
+
+		if err != nil {
+			return err
+		}
+
+		idxReg.RegisterIndexDriver(dsql.NewDoltIndexDriver(dsqlDB))
+		err = dsql.RegisterSchemaFragments(ctx, dsqlDB, defRoot)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	err := idxReg.LoadIndexes(ctx, h.engine.Catalog.AllDatabases())
+
+	if err != nil {
+		return err
+	}
+
 	statement = normalizeStatement(statement)
 
 	_, rowIter, err := h.engine.Query(ctx, statement)
@@ -110,8 +141,24 @@ func normalizeStatement(statement string) string {
 }
 
 func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []string, err error) {
+	idxReg := sql.NewIndexRegistry()
+	viewReg := sql.NewViewRegistry()
 	pid := rand.Uint32()
-	ctx := sql.NewContext(context.Background(), sql.WithPid(uint64(pid)))
+	ctx := sql.NewContext(
+		context.Background(),
+		sql.WithPid(uint64(pid)),
+		sql.WithIndexRegistry(idxReg),
+		sql.WithViewRegistry(viewReg))
+
+	for _, db := range h.engine.Catalog.AllDatabases() {
+		dsqlDB := db.(dsql.Database)
+
+		err := dsqlDB.SetRoot(ctx, dsqlDB.GetDefaultRoot())
+
+		if err != nil {
+			return "", nil, err
+		}
+	}
 
 	var sch sql.Schema
 	var rowIter sql.RowIter
@@ -270,16 +317,10 @@ func resetEnv(root *doltdb.RootValue) *doltdb.RootValue {
 	return newRoot
 }
 
-func sqlNewEngine(root *doltdb.RootValue) (*sqle.Engine, error) {
-	db := dsql.NewDatabase("dolt", root, nil, nil)
+func sqlNewEngine(ddb *doltdb.DoltDB, root *doltdb.RootValue) (*sqle.Engine, error) {
+	db := dsql.NewDatabase("dolt", root, ddb, nil)
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
-	engine.Catalog.RegisterIndexDriver(dsql.NewDoltIndexDriver(db))
-
-	err := engine.Init()
-	if err != nil {
-		return nil, err
-	}
 
 	return engine, nil
 }

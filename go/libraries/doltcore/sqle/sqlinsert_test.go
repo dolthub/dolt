@@ -119,7 +119,7 @@ func testInsertQuery(t *testing.T, test InsertTest) {
 
 	var err error
 	root, _ := dEnv.WorkingRoot(context.Background())
-	root, err = executeModify(context.Background(), root, test.InsertQuery)
+	root, err = executeModify(context.Background(), dEnv.DoltDB, root, test.InsertQuery)
 	if len(test.ExpectedErr) > 0 {
 		require.Error(t, err)
 		return

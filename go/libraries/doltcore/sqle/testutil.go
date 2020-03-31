@@ -32,11 +32,9 @@ import (
 // Executes all the SQL non-select statements given in the string against the root value given and returns the updated
 // root, or an error. Statements in the input string are split by `;\n`
 func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*doltdb.RootValue, error) {
-	engine := sqle.NewDefault()
 	db := NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState)
-	engine.AddDatabase(db)
+	engine, ctx, err := NewTestEngine(context.Background(), db, root)
 
-	err := RegisterSchemaFragments(sql.NewContext(context.Background()), engine.Catalog, db)
 	if err != nil {
 		return nil, err
 	}
@@ -59,17 +57,17 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 			return nil, errors.New("Select statements aren't handled")
 		case *sqlparser.Insert:
 			var rowIter sql.RowIter
-			_, rowIter, execErr = engine.Query(sql.NewEmptyContext(), query)
+			_, rowIter, execErr = engine.Query(ctx, query)
 			if execErr == nil {
 				execErr = drainIter(rowIter)
 			}
 		case *sqlparser.DDL:
 			var rowIter sql.RowIter
-			_, rowIter, execErr = engine.Query(sql.NewEmptyContext(), query)
+			_, rowIter, execErr = engine.Query(ctx, query)
 			if execErr == nil {
 				execErr = drainIter(rowIter)
 			}
-			if err = db.Flush(context.Background()); err != nil {
+			if err = db.Flush(ctx); err != nil {
 				return nil, err
 			}
 		default:
@@ -81,23 +79,60 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 		}
 	}
 
-	if err := db.Flush(context.Background()); err == nil {
-		return db.Root(), nil
+	if err := db.Flush(ctx); err == nil {
+		return db.GetRoot(ctx)
 	} else {
 		return nil, err
 	}
 }
 
-// Executes the select statement given and returns the resulting rows, or an error if one is encountered.
-// This uses the index functionality, which is not ready for prime time. Use with caution.
-func ExecuteSelect(root *doltdb.RootValue, query string) ([]sql.Row, error) {
-	db := NewDatabase("dolt", root, nil, nil)
+// NewTestSQLCtx returns a new *sql.Context with a default DoltSession, a new IndexRegistry, and a new ViewRegistry
+func NewTestSQLCtx(ctx context.Context) *sql.Context {
+	return sql.NewContext(
+		ctx,
+		sql.WithSession(DefaultDoltSession()),
+		sql.WithIndexRegistry(sql.NewIndexRegistry()),
+		sql.WithViewRegistry(sql.NewViewRegistry()),
+	)
+}
+
+// NewTestEngine creates a new default engine, and a *sql.Context and initializes indexes and schema fragments.
+func NewTestEngine(ctx context.Context, db Database, root *doltdb.RootValue) (*sqle.Engine, *sql.Context, error) {
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
-	engine.Catalog.RegisterIndexDriver(NewDoltIndexDriver(db))
-	_ = engine.Init()
 
-	ctx := sql.NewEmptyContext()
+	sqlCtx := NewTestSQLCtx(ctx)
+	err := db.SetRoot(sqlCtx, root)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	sqlCtx.RegisterIndexDriver(NewDoltIndexDriver(db))
+	err = sqlCtx.LoadIndexes(sqlCtx, engine.Catalog.AllDatabases())
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = RegisterSchemaFragments(sqlCtx, db, root)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return engine, sqlCtx, nil
+}
+
+// Executes the select statement given and returns the resulting rows, or an error if one is encountered.
+// This uses the index functionality, which is not ready for prime time. Use with caution.
+func ExecuteSelect(ddb *doltdb.DoltDB, root *doltdb.RootValue, query string) ([]sql.Row, error) {
+	db := NewDatabase("dolt", root, ddb, nil)
+	engine, ctx, err := NewTestEngine(context.Background(), db, root)
+	if err != nil {
+		return nil, err
+	}
+
 	_, rowIter, err := engine.Query(ctx, query)
 	if err != nil {
 		return nil, err

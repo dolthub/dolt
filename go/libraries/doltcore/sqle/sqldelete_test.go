@@ -105,7 +105,7 @@ func testDeleteQuery(t *testing.T, test DeleteTest) {
 
 	var err error
 	root, _ := dEnv.WorkingRoot(context.Background())
-	root, err = executeModify(context.Background(), root, test.DeleteQuery)
+	root, err = executeModify(context.Background(), dEnv.DoltDB, root, test.DeleteQuery)
 	if len(test.ExpectedErr) > 0 {
 		require.Error(t, err)
 		return

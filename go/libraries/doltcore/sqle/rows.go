@@ -36,13 +36,13 @@ type doltTableRowIter struct {
 
 // Returns a new row iterator for the table given
 func newRowIterator(tbl *DoltTable, ctx *sql.Context) (*doltTableRowIter, error) {
-	rowData, err := tbl.table.GetRowData(ctx.Context)
+	rowData, err := tbl.table.GetRowData(ctx)
 
 	if err != nil {
 		return nil, err
 	}
 
-	mapIter, err := rowData.BufferedIterator(ctx.Context)
+	mapIter, err := rowData.BufferedIterator(ctx)
 
 	if err != nil {
 		return nil, err
@@ -53,7 +53,7 @@ func newRowIterator(tbl *DoltTable, ctx *sql.Context) (*doltTableRowIter, error)
 
 // Next returns the next row in this row iterator, or an io.EOF error if there aren't any more.
 func (itr *doltTableRowIter) Next() (sql.Row, error) {
-	key, val, err := itr.nomsIter.Next(itr.ctx.Context)
+	key, val, err := itr.nomsIter.Next(itr.ctx)
 
 	if err != nil {
 		return nil, err
