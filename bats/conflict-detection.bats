@@ -746,7 +746,7 @@ SQL
     dolt commit -m "table created"
     dolt branch add-pk
     dolt table rm test
-    skip "cannot cahnge primary keys"
+    skip "cannot change primary keys"
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
