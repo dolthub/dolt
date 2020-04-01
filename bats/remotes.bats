@@ -652,3 +652,53 @@ SQL
     run dolt push -f origin master
     [ "$status" -eq 0 ]
 }
+
+
+@test "force fetch from master" {
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt push test-remote master
+
+    cd "dolt-repo-clones"
+    dolt clone http://localhost:50051/test-org/test-repo
+    cd ..
+
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt add test
+    dolt commit -m "test commit"
+    dolt push test-remote master
+    cd "dolt-repo-clones/test-repo"
+    dolt sql <<SQL
+CREATE TABLE other (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt add other
+    dolt commit -m "added other table"
+    dolt fetch
+    dolt push -f origin master
+    cd ../../
+    run dolt fetch test-remote
+    [ "$status" -ne 0 ]
+    run dolt pull
+    [ "$status" -ne 0 ]
+    run dolt fetch -f test-remote
+    [ "$status" -eq 0 ]
+    run dolt pull
+    [ "$status" -eq 0 ]
+}
