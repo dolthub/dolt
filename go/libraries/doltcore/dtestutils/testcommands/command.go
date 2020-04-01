@@ -47,7 +47,6 @@ func (a StageAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	return actions.StageAllTables(context.Background(), dEnv, false)
 }
 
-// TODO: comments on exported functions
 type CommitStaged struct {
 	Message string
 }
@@ -75,7 +74,6 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	return actions.CommitStaged(context.Background(), dEnv, c.Message, time.Now(), false)
 }
 
-// TODO: comments on exported functions
 type ResetHard struct{}
 
 // CommandString describes the ResetHard command for debugging purposes.

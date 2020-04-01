@@ -506,12 +506,6 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, commit, mergeCommit *
 		return nil, nil, err
 	}
 
-	//mergeCommit, err = resolveTagConflicts(ctx, ddb, commit, mergeCommit, ancCommit)
-	//
-	//if err != nil {
-	//	return nil, nil, err
-	//}
-
 	root, err := commit.GetRootValue()
 
 	if err != nil {
