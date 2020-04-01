@@ -101,7 +101,7 @@ function import_nightly() {
         import_one_nightly "$test_num"
     done
     dolt sql -r csv -q "\
-select version, test_file, line_num, avg(duration) as mean_duration, result from dolt_history_nightly_dolt_results where version=\"${DOLT_VERSION}\" group by line_num;\
+select version, test_file, line_num, avg(duration) as mean_duration, result from dolt_history_nightly_dolt_results where version=\"${DOLT_VERSION}\" group by test_file, line_num;\
 " > nightly_mean.csv
     dolt table import -u nightly_dolt_mean_results nightly_mean.csv
     dolt add nightly_dolt_mean_results
@@ -181,7 +181,7 @@ function import_releases() {
         import_one_releases "$test_num"
     done
     dolt sql -r csv -q "\
-select version, test_file, line_num, avg(duration) as mean_duration, result from dolt_history_releases_dolt_results where version=\"${DOLT_VERSION}\" group by line_num;\
+select version, test_file, line_num, avg(duration) as mean_duration, result from dolt_history_releases_dolt_results where version=\"${DOLT_VERSION}\" group by test_file, line_num;\
 " > releases_mean.csv
     dolt table import -u releases_dolt_mean_results releases_mean.csv
     dolt add releases_dolt_mean_results
