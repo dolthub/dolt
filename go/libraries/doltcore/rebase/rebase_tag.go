@@ -460,6 +460,7 @@ func validateTagMapping(tagMapping TagMapping) error {
 	return nil
 }
 
+// MigrateUniqueTags rebases the history of the repo to uniquify tags within branch histories.
 func MigrateUniqueTags(ctx context.Context, ddb *doltdb.DoltDB, branches []ref.DoltRef) error {
 	var headCommits []*doltdb.Commit
 	for _, dRef := range branches {
