@@ -16,7 +16,9 @@ package commands
 
 import (
 	"context"
+
 	"github.com/fatih/color"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rebase"
@@ -26,7 +28,7 @@ import (
 const migrationPrompt = "Run dolt migrate to update this repository to the latest format"
 const migrationMsg = "Migrating repository to the latest format"
 
-type MigrateCmd struct {}
+type MigrateCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd MigrateCmd) Name() string {

@@ -148,7 +148,7 @@ func runMain() int {
 
 	dEnv := env.Load(context.TODO(), env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
 
-	if dEnv.DBLoadError == nil && commandNeedsMigrationCheck(args){
+	if dEnv.DBLoadError == nil && commandNeedsMigrationCheck(args) {
 		if commands.MigrationNeeded(context.Background(), dEnv, args) {
 			return 1
 		}
