@@ -237,18 +237,16 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 
 	tag := extractTag(column)
 	if tag == schema.InvalidTag {
-		nks, err := extractNomsKinds(t.sqlSch)
-		if err != nil {
-			return err
-		}
+		// generate a tag if we don't have a user-defined tag
 		ti, err := typeinfo.FromSqlType(column.Type)
 		if err != nil {
 			return err
 		}
-		tag, err = t.db.defRoot.GetUniqueTagFromNomsKinds(ctx, t.name, column.Name, nks, ti.NomsKind())
+		tt, err := t.db.defRoot.GenerateTagsForNewColumns(ctx, t.name, []string{column.Name}, []types.NomsKind{ti.NomsKind()})
 		if err != nil {
 			return err
 		}
+		tag = tt[0]
 	}
 	col, err := SqlColToDoltCol(tag, column)
 	if err != nil {

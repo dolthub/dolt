@@ -35,7 +35,7 @@ const (
 // and repositories that perform the same sequence of mutations to a database will get equivalent databased as a result.
 // DETERMINISTIC MUTATION IS A CRITICAL INVARIANT TO MAINTAINING COMPATIBILITY BETWEEN REPOSITORIES.
 // DO NOT ALTER THIS METHOD.
-func AutoGenerateTag(rootSS *SuperSchema, tableName string, newColName string, existingColKinds []types.NomsKind, newColKind types.NomsKind) uint64 {
+func AutoGenerateTag(rootSS *SuperSchema, tableName string, existingColKinds []types.NomsKind, newColName string, newColKind types.NomsKind) uint64 {
 	// DO NOT ALTER THIS METHOD (see above)
 	var maxTagVal uint64 = 128 * 128
 

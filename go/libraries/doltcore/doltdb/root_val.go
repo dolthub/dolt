@@ -247,15 +247,43 @@ func (root *RootValue) GetSuperSchema(ctx context.Context, tName string) (*schem
 	return ss, true, err
 }
 
-// GetUniqueTagFromNomsKinds returns a tag that has not yet been used in the history of this root.
-func (root *RootValue) GetUniqueTagFromNomsKinds(ctx context.Context, tableName string, newColName string, existingColKinds []types.NomsKind, newColKind types.NomsKind) (uint64, error) {
+// GenerateTagsForNewColumns deterministically generates a slice of new tags that are unique within the history of this root. The names and NomsKinds of
+// the new columns are used to see the tag generator.
+func (root *RootValue) GenerateTagsForNewColumns(ctx context.Context, tableName string, newColNames []string, newColKinds []types.NomsKind) ([]uint64, error) {
+	if len(newColNames) != len(newColKinds) {
+		return nil, fmt.Errorf("error generating tags, newColNames and newColKinds must be of equal length")
+	}
+
 	rootSuperSchema, err := GetRootValueSuperSchema(ctx, root)
 
 	if err != nil {
-		return schema.InvalidTag, err
+		return nil, err
 	}
 
-	return schema.AutoGenerateTag(rootSuperSchema, tableName, newColName, existingColKinds, newColKind), nil
+	var existingColKinds []types.NomsKind
+	tbl, found, err := root.GetTable(ctx, tableName)
+	if err != nil {
+		return nil, err
+	}
+	if found {
+		sch, err := tbl.GetSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
+		_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			existingColKinds = append(existingColKinds, col.Kind)
+			return false, nil
+		})
+	}
+
+
+	newTags := make([]uint64, len(newColNames))
+	for i := range newTags {
+		newTags[i] = schema.AutoGenerateTag(rootSuperSchema, tableName, existingColKinds, newColNames[i], newColKinds[i])
+		existingColKinds = append(existingColKinds, newColKinds[i])
+	}
+
+	return newTags, nil
 }
 
 // GerSuperSchemaMap returns the Noms map that tracks SuperSchemas, used to create new RootValues on checkout branch.

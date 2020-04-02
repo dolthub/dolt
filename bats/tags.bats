@@ -23,6 +23,18 @@ SQL
     [[ "$output" =~ "tag:5678" ]] || false
 }
 
+@test "Users cannot partially specify tag numbers" {
+    run dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:1234',
+  c1 BIGINT,
+  PRIMARY KEY (pk)
+);
+SQL
+    [ $status -ne 0 ]
+    [[ "$output" =~ "must define tags for all or none of the schema columns" ]] || false
+}
+
 @test "Renaming a column should preserve the tag number" {
     dolt sql <<SQL
 CREATE TABLE test (
