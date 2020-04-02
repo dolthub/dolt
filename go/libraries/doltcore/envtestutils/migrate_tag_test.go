@@ -197,7 +197,7 @@ func testMigrateUniqueTags(t *testing.T, test MigrateTagsTest) {
 	require.NoError(t, err)
 
 	// rebase the history to uniquify tags
-	err = rebase.MigrateUniqueTags(context.Background(), dEnv.DoltDB, bb)
+	err = rebase.MigrateUniqueTags(context.Background(), dEnv)
 	require.NoError(t, err)
 
 	// confirm that the repo state is the same

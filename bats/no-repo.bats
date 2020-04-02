@@ -47,7 +47,8 @@ teardown() {
     [[ "${lines[24]}" =~ "schema - Commands for showing and importing table schemas." ]] || false
     [[ "${lines[25]}" =~ "table - Commands for copying, renaming, deleting, and exporting tables." ]] || false
     [[ "${lines[26]}" =~ "conflicts - Commands for viewing and resolving merge conflicts." ]] || false
-    [ "${lines[27]}" = "" ]
+    [[ "${lines[27]}" =~ "migrate - Executes a repository migration to update to the latest format." ]] || false
+    [ "${lines[28]}" = "" ]
 }
 
 @test "testing dolt version output" {
@@ -199,6 +200,12 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     # Check help output for supported commands
     [[ "$output" =~ "cat -" ]] || false
     [[ "$output" =~ "resolve -" ]] || false
+}
+
+@test "dolt migrate outside of a dolt repository" {
+    run dolt migrate
+    [ "$status" -ne 0 ]
+    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
 @test "initializing a dolt repository" {

@@ -34,92 +34,43 @@ import (
 // { tableName -> { oldTag -> newTag }}
 type TagMapping map[string]map[uint64]uint64
 
-// MaybeMigrateUniqueTags checks if a repo was created before the unique tags constraint and migrates it if necessary.
-func MaybeMigrateUniqueTags(ctx context.Context, dEnv *env.DoltEnv) error {
+// NeedsUniqueTagMigration checks if a repo was created before the unique tags constraint and migrates it if necessary.
+func NeedsUniqueTagMigration(ctx context.Context, dEnv *env.DoltEnv) (bool, error) {
 	bb, err := dEnv.DoltDB.GetBranches(ctx)
 
 	if err != nil {
-		return err
+		return false, err
 	}
 
-	migrate := false
 	for _, b := range bb {
 		cs, err := doltdb.NewCommitSpec("head", b.String())
 
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		c, err := dEnv.DoltDB.Resolve(ctx, cs)
 
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		r, err := c.GetRootValue()
 
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		needToMigrate, err := doltdb.RootNeedsUniqueTagsMigration(r)
 		if err != nil {
-			return err
+			return false, err
 		}
 		if needToMigrate {
-			migrate = true
+			return true, nil
 		}
 	}
 
-	if !migrate {
-		return nil
-	}
-
-	cwbSpec := dEnv.RepoState.CWBHeadSpec()
-	dd, err := dEnv.GetAllValidDocDetails()
-
-	if err != nil {
-		return err
-	}
-
-	err = MigrateUniqueTags(ctx, dEnv.DoltDB, bb)
-
-	if err != nil {
-		return err
-	}
-
-	cm, err := dEnv.DoltDB.Resolve(ctx, cwbSpec)
-
-	if err != nil {
-		return err
-	}
-
-	r, err := cm.GetRootValue()
-
-	if err != nil {
-		return err
-	}
-
-	_, err = dEnv.UpdateStagedRoot(ctx, r)
-
-	if err != nil {
-		return err
-	}
-
-	err = dEnv.UpdateWorkingRoot(ctx, r)
-
-	if err != nil {
-		return err
-	}
-
-	err = dEnv.PutDocsToWorking(ctx, dd)
-
-	if err != nil {
-		return err
-	}
-
-	_, err = dEnv.PutDocsToStaged(ctx, dd)
-	return err
+	return false, nil
 }
 
 // TagRebaseForRef rebases the provided DoltRef, swapping all tags in the TagMapping.
@@ -461,7 +412,21 @@ func validateTagMapping(tagMapping TagMapping) error {
 }
 
 // MigrateUniqueTags rebases the history of the repo to uniquify tags within branch histories.
-func MigrateUniqueTags(ctx context.Context, ddb *doltdb.DoltDB, branches []ref.DoltRef) error {
+func MigrateUniqueTags(ctx context.Context, dEnv *env.DoltEnv) error {
+	ddb := dEnv.DoltDB
+	cwbSpec := dEnv.RepoState.CWBHeadSpec()
+	dd, err := dEnv.GetAllValidDocDetails()
+
+	if err != nil {
+		return err
+	}
+
+	branches, err := dEnv.DoltDB.GetBranches(ctx)
+
+	if err != nil {
+		return err
+	}
+
 	var headCommits []*doltdb.Commit
 	for _, dRef := range branches {
 
@@ -495,7 +460,7 @@ func MigrateUniqueTags(ctx context.Context, ddb *doltdb.DoltDB, branches []ref.D
 		return root, nil
 	}
 
-	_, err := rebase(ctx, ddb, replay, entireHistory, headCommits...)
+	_, err = rebase(ctx, ddb, replay, entireHistory, headCommits...)
 
 	if err != nil {
 		return err
@@ -526,7 +491,38 @@ func MigrateUniqueTags(ctx context.Context, ddb *doltdb.DoltDB, branches []ref.D
 		}
 	}
 
-	return nil
+	cm, err := dEnv.DoltDB.Resolve(ctx, cwbSpec)
+
+	if err != nil {
+		return err
+	}
+
+	r, err := cm.GetRootValue()
+
+	if err != nil {
+		return err
+	}
+
+	_, err = dEnv.UpdateStagedRoot(ctx, r)
+
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.UpdateWorkingRoot(ctx, r)
+
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.PutDocsToWorking(ctx, dd)
+
+	if err != nil {
+		return err
+	}
+
+	_, err = dEnv.PutDocsToStaged(ctx, dd)
+	return err
 }
 
 func buildGlobalTagMapping(ctx context.Context, root *doltdb.RootValue, globalMapping map[string]map[uint64]uint64, globalCtr *uint64) error {

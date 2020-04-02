@@ -14,6 +14,7 @@ teardown() {
     for testdir in */; do
         cd "$testdir"
         dolt status
+        skip "Backwards compatibility broken with unique tags (v0.16.0)"
         run dolt branch
         [ "$status" -eq "0" ]
         [[ "$output" =~ "master" ]] || false
@@ -80,6 +81,7 @@ teardown() {
 @test "back-compat: adding commits" {
     for testdir in */; do
         cd "$testdir"
+        skip "Backwards compatibility broken with unique tags (v0.16.0)"
         dolt sql -q "insert into abc values (2, 'text', '2020-01-15 20:49:22.28427')"
         dolt add .
         dolt commit -m "Add value during test"
@@ -106,6 +108,7 @@ teardown() {
 @test "back-compat: merging" {
     for testdir in */; do
         cd "$testdir"
+        skip "Backwards compatibility broken with unique tags (v0.16.0)"
         run dolt merge newcolumn
         [ "$status" -eq "0" ]
         [[ "$output" =~ "Fast-forward" ]] || false
@@ -116,6 +119,7 @@ teardown() {
 @test "back-compat: resolving conflicts" {
     for testdir in */; do
         cd "$testdir"
+        skip "Backwards compatibility broken with unique tags (v0.16.0)"
         dolt checkout conflict
         run dolt merge newcolumn
         [ "$status" -eq "0" ]

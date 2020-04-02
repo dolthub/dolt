@@ -35,7 +35,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rebase"
 	"github.com/liquidata-inc/dolt/go/libraries/events"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
@@ -74,6 +73,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	cnfcmds.Commands,
 	commands.SendMetricsCmd{},
 	dumpDocsCommand,
+	commands.MigrateCmd{},
 })
 
 func init() {
@@ -148,8 +148,10 @@ func runMain() int {
 
 	dEnv := env.Load(context.TODO(), env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
 
-	if dEnv.DBLoadError == nil && commandWillMigrate(args) {
-		dEnv.DBLoadError = rebase.MaybeMigrateUniqueTags(context.Background(), dEnv)
+	if dEnv.DBLoadError == nil && commandNeedsMigrationCheck(args){
+		if commands.MigrationNeeded(context.Background(), dEnv, args) {
+			return 1
+		}
 	}
 
 	root, err := env.GetCurrentUserHomeDir()
@@ -200,18 +202,31 @@ func runMain() int {
 	return res
 }
 
-// These subcommands will trigger a unique tags migration
-func commandWillMigrate(args []string) bool {
+// These subcommands will cannot be performed if a migration is needed
+func commandNeedsMigrationCheck(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
 	subCommandStr := strings.ToLower(strings.TrimSpace(args[0]))
 	for _, cmd := range []cli.Command{
+		commands.ResetCmd{},
 		commands.CommitCmd{},
 		commands.SqlCmd{},
 		sqlserver.SqlServerCmd{},
 		commands.DiffCmd{},
 		commands.MergeCmd{},
+		commands.BranchCmd{},
+		commands.CheckoutCmd{},
+		commands.RemoteCmd{},
+		commands.PushCmd{},
+		commands.PullCmd{},
+		commands.FetchCmd{},
 		commands.CloneCmd{},
-		schcmds.Commands,
-		tblcmds.Commands,
+		schcmds.ImportCmd{},
+		tblcmds.ImportCmd{},
+		tblcmds.RmCmd{},
+		tblcmds.MvCmd{},
+		tblcmds.CpCmd{},
 	} {
 		if subCommandStr == strings.ToLower(cmd.Name()) {
 			return true
