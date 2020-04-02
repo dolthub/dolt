@@ -25,7 +25,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
-const migrationPrompt = "Run dolt migrate to update this repository to the latest format"
+const migrationPrompt = `Run "dolt migrate" to update this repository to the latest format`
 const migrationMsg = "Migrating repository to the latest format"
 
 type MigrateCmd struct{}
