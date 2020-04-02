@@ -21,6 +21,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
@@ -356,7 +357,7 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 		panic(err)
 	}
 
-	schVal, _ := encoding.MarshalAsNomsValue(context.Background(), vrw, sch)
+	schVal, _ := encoding.MarshalSchemaAsNomsValue(context.Background(), vrw, sch)
 	tbl, err := doltdb.NewTable(context.Background(), vrw, schVal, initialRows)
 
 	if err != nil {
@@ -415,11 +416,24 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 
 func TestMergeCommits(t *testing.T) {
 	vrw, commit, mergeCommit, expectedRows, expectedConflicts := setupMergeTest()
-	merger, err := NewMerger(context.Background(), commit, mergeCommit, vrw)
 
-	if err != nil {
-		t.Fatal(err)
-	}
+	root, err := commit.GetRootValue()
+	require.NoError(t, err)
+
+	mergeRoot, err := mergeCommit.GetRootValue()
+	require.NoError(t, err)
+
+	ancCm, err := doltdb.GetCommitAncestor(context.Background(), commit, mergeCommit)
+	require.NoError(t, err)
+
+	ancRoot, err := ancCm.GetRootValue()
+	require.NoError(t, err)
+
+	ff, err := commit.CanFastForwardTo(context.Background(), mergeCommit)
+	require.NoError(t, err)
+	require.False(t, ff)
+
+	merger := NewMerger(context.Background(), root, mergeRoot, ancRoot, vrw)
 
 	merged, stats, err := merger.MergeTable(context.Background(), tableName)
 
@@ -431,8 +445,6 @@ func TestMergeCommits(t *testing.T) {
 		t.Error("Actual stats differ from expected")
 	}
 
-	root, err := commit.GetRootValue()
-	assert.NoError(t, err)
 	tbl, _, err := root.GetTable(context.Background(), tableName)
 	assert.NoError(t, err)
 	schRef, err := tbl.GetSchemaRef()

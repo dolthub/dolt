@@ -28,6 +28,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/merge"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
@@ -75,7 +76,7 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 		cli.PrintErrln(toStatusVErr((err)))
 		return 1
 	}
-	workingTblsInConflict, _, _, err := actions.GetTablesInConflict(ctx, dEnv)
+	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, dEnv)
 
 	if err != nil {
 		cli.PrintErrln(toStatusVErr((err)))
@@ -89,7 +90,7 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 1
 	}
 
-	workingDocsInConflict, err := actions.GetDocsInConflict(ctx, dEnv)
+	workingDocsInConflict, err := merge.GetDocsInConflict(ctx, dEnv)
 
 	if err != nil {
 		cli.PrintErrln(toStatusVErr((err)))

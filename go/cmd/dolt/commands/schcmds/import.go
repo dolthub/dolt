@@ -281,7 +281,7 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	cli.Println(sql.SchemaAsCreateStmt(tblName, sch))
 
 	if !apr.Contains(dryRunFlag) {
-		schVal, err := encoding.MarshalAsNomsValue(context.Background(), root.VRW(), sch)
+		schVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), root.VRW(), sch)
 
 		if err != nil {
 			return errhand.BuildDError("error: failed to encode schema.").AddCause(err).Build()

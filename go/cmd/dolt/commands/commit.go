@@ -29,6 +29,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/merge"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/editor"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
@@ -201,7 +202,7 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
 	currBranch := dEnv.RepoState.CWBHeadRef()
 	stagedTblDiffs, notStagedTblDiffs, _ := diff.GetTableDiffs(ctx, dEnv)
 
-	workingTblsInConflict, _, _, err := actions.GetTablesInConflict(ctx, dEnv)
+	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, dEnv)
 	if err != nil {
 		workingTblsInConflict = []string{}
 	}

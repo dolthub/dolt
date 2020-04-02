@@ -96,7 +96,7 @@ func validateModifyColumn(ctx context.Context, tbl *doltdb.Table, existingCol sc
 // TODO: type changes
 func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, newSchema schema.Schema, modifiedCol schema.Column) (*doltdb.Table, error) {
 	vrw := tbl.ValueReadWriter()
-	newSchemaVal, err := encoding.MarshalAsNomsValue(ctx, vrw, newSchema)
+	newSchemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, newSchema)
 	if err != nil {
 		return nil, err
 	}

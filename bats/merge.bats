@@ -5,17 +5,17 @@ setup() {
     setup_common
     dolt sql <<SQL
 CREATE TABLE test1 (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
+  pk BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
   PRIMARY KEY (pk)
 );
 SQL
     dolt sql <<SQL
 CREATE TABLE test2 (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
+  pk BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
   PRIMARY KEY (pk)
 );
 SQL

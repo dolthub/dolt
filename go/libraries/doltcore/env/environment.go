@@ -392,7 +392,7 @@ func (dEnv *DoltEnv) PutTableToWorking(ctx context.Context, rows types.Map, sch 
 	}
 
 	vrw := dEnv.DoltDB.ValueReadWriter()
-	schVal, err := encoding.MarshalAsNomsValue(ctx, vrw, sch)
+	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
 
 	if err != nil {
 		return ErrMarshallingSchema
@@ -979,7 +979,7 @@ func createDocsTableOnRoot(ctx context.Context, dEnv *DoltEnv, root *doltdb.Root
 		wr.Close(context.Background())
 
 		vrw := root.VRW()
-		schVal, err := encoding.MarshalAsNomsValue(ctx, vrw, wr.GetSchema())
+		schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, wr.GetSchema())
 
 		if err != nil {
 			return nil, ErrMarshallingSchema

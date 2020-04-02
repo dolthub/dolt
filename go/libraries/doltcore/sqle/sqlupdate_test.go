@@ -24,6 +24,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -63,24 +64,34 @@ var systemTableUpdateTests = []UpdateTest{
 		Name: "update dolt_query_catalog",
 		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
 			DoltQueryCatalogSchema,
-			NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 2+2 from dual"), types.String("description"))),
+			NewRowWithSchema(row.TaggedValues{
+				doltdb.QueryCatalogIdTag:          types.String("abc123"),
+				doltdb.QueryCatalogOrderTag:       types.Uint(1),
+				doltdb.QueryCatalogNameTag:        types.String("example"),
+				doltdb.QueryCatalogQueryTag:       types.String("select 2+2 from dual"),
+				doltdb.QueryCatalogDescriptionTag: types.String("description")},
+				DoltQueryCatalogSchema)),
 		UpdateQuery: "update dolt_query_catalog set display_order = display_order + 1",
 		SelectQuery: "select * from dolt_query_catalog",
-		ExpectedRows: CompressRows(DoltQueryCatalogSchema,
+		ExpectedRows: CompressRows(CompressSchema(DoltQueryCatalogSchema),
 			NewRow(types.String("abc123"), types.Uint(2), types.String("example"), types.String("select 2+2 from dual"), types.String("description"))),
 		ExpectedSchema: CompressSchema(DoltQueryCatalogSchema),
 	},
 	{
 		Name: "update dolt_schemas",
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
-			mustGetDoltSchema(SchemasTableSchema()),
-			NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual"))),
+			schemasTableDoltSchema(),
+			NewRowWithSchema(row.TaggedValues{
+				doltdb.DoltSchemasTypeTag:     types.String("view"),
+				doltdb.DoltSchemasNameTag:     types.String("name"),
+				doltdb.DoltSchemasFragmentTag: types.String("select 2+2 from dual"),
+			}, schemasTableDoltSchema())),
 		UpdateQuery: "update dolt_schemas set type = 'not a view'",
 		SelectQuery: "select * from dolt_schemas",
-		ExpectedRows: CompressRows(mustGetDoltSchema(SchemasTableSchema()),
+		ExpectedRows: CompressRows(CompressSchema(schemasTableDoltSchema()),
 			NewRow(types.String("not a view"), types.String("name"), types.String("select 2+2 from dual")),
 		),
-		ExpectedSchema: CompressSchema(mustGetDoltSchema(SchemasTableSchema())),
+		ExpectedSchema: CompressSchema(schemasTableDoltSchema()),
 	},
 }
 
@@ -119,6 +130,6 @@ func testUpdateQuery(t *testing.T, test UpdateTest) {
 	actualRows, sch, err := executeSelect(context.Background(), dEnv, test.ExpectedSchema, root, test.SelectQuery)
 	require.NoError(t, err)
 
-	assert.Equal(t, test.ExpectedRows, actualRows)
 	assert.Equal(t, test.ExpectedSchema, sch)
+	assert.Equal(t, test.ExpectedRows, actualRows)
 }

@@ -291,6 +291,8 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec) (*Commit, error)
 	return &Commit{ddb.db, commitSt}, nil
 }
 
+// TODO: convenience method to resolve the head commit of a branch.
+
 // WriteRootValue will write a doltdb.RootValue instance to the database.  This value will not be associated with a commit
 // and can be committed by hash at a later time.  Returns the hash of the value written.
 func (ddb *DoltDB) WriteRootValue(ctx context.Context, rv *RootValue) (hash.Hash, error) {

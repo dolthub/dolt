@@ -25,6 +25,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -57,30 +58,40 @@ var systemTableInsertTests = []InsertTest{
 		Name: "insert into dolt_query_catalog",
 		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
 			DoltQueryCatalogSchema,
-			NewRow(types.String("existingEntry"), types.Uint(2), types.String("example"), types.String("select 2+2 from dual"), types.String("description"))),
+			NewRowWithSchema(row.TaggedValues{
+				doltdb.QueryCatalogIdTag:          types.String("existingEntry"),
+				doltdb.QueryCatalogOrderTag:       types.Uint(2),
+				doltdb.QueryCatalogNameTag:        types.String("example"),
+				doltdb.QueryCatalogQueryTag:       types.String("select 2+2 from dual"),
+				doltdb.QueryCatalogDescriptionTag: types.String("description")},
+				DoltQueryCatalogSchema)),
 		InsertQuery: "insert into dolt_query_catalog (id, display_order, name, query, description) values ('abc123', 1, 'example', 'select 1+1 from dual', 'description')",
 		SelectQuery: "select * from dolt_query_catalog",
-		ExpectedRows: CompressRows(DoltQueryCatalogSchema,
+		ExpectedRows: CompressRows(CompressSchema(DoltQueryCatalogSchema),
 			NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 1+1 from dual"), types.String("description")),
 			NewRow(types.String("existingEntry"), types.Uint(2), types.String("example"), types.String("select 2+2 from dual"), types.String("description")),
 		),
 		ExpectedSchema: CompressSchema(DoltQueryCatalogSchema),
 	},
 	{
-		Name: "insert into dolt_schemas",
-		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
-			mustGetDoltSchema(SchemasTableSchema())),
-		InsertQuery: "insert into dolt_schemas (type, name, fragment) values ('view', 'name', 'select 2+2 from dual')",
-		SelectQuery: "select * from dolt_schemas",
-		ExpectedRows: CompressRows(mustGetDoltSchema(SchemasTableSchema()),
+		Name:            "insert into dolt_schemas",
+		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, schemasTableDoltSchema()),
+		InsertQuery:     "insert into dolt_schemas (type, name, fragment) values ('view', 'name', 'select 2+2 from dual')",
+		SelectQuery:     "select * from dolt_schemas",
+		ExpectedRows: CompressRows(CompressSchema(schemasTableDoltSchema()),
 			NewRow(types.String("view"), types.String("name"), types.String("select 2+2 from dual")),
 		),
-		ExpectedSchema: CompressSchema(mustGetDoltSchema(SchemasTableSchema())),
+		ExpectedSchema: CompressSchema(schemasTableDoltSchema()),
 	},
 }
 
-func mustGetDoltSchema(sch sql.Schema) schema.Schema {
-	doltSchema, err := SqlSchemaToDoltSchema(sch)
+func mustGetDoltSchema(sch sql.Schema, tableName string, testEnv *env.DoltEnv) schema.Schema {
+	wrt, err := testEnv.WorkingRoot(context.Background())
+	if err != nil {
+		panic(err)
+	}
+
+	doltSchema, err := SqlSchemaToDoltSchema(context.Background(), wrt, tableName, sch)
 	if err != nil {
 		panic(err)
 	}

@@ -52,7 +52,7 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tbl *doltdb.Ta
 		return nil, err
 	}
 
-	tblSch, err := encoding.UnmarshalNomsValue(ctx, vrw.Format(), tblSchVal)
+	tblSch, err := encoding.UnmarshalSchemaNomsValue(ctx, vrw.Format(), tblSchVal)
 
 	if err != nil {
 		return nil, err

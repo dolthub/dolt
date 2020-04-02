@@ -12,12 +12,12 @@ teardown() {
 @test "create a single primary key table" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
+  pk BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
+  c3 BIGINT,
+  c4 BIGINT,
+  c5 BIGINT,
   PRIMARY KEY (pk)
 );
 SQL
@@ -29,13 +29,13 @@ SQL
 @test "create a two primary key table" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk1 BIGINT NOT NULL COMMENT 'tag:0',
-  pk2 BIGINT NOT NULL COMMENT 'tag:1',
-  c1 BIGINT COMMENT 'tag:2',
-  c2 BIGINT COMMENT 'tag:3',
-  c3 BIGINT COMMENT 'tag:4',
-  c4 BIGINT COMMENT 'tag:5',
-  c5 BIGINT COMMENT 'tag:6',
+  pk1 BIGINT NOT NULL,
+  pk2 BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
+  c3 BIGINT,
+  c4 BIGINT,
+  c5 BIGINT,
   PRIMARY KEY (pk1,pk2)
 );
 SQL
@@ -47,13 +47,13 @@ SQL
 @test "create a table that uses all supported types" {
     dolt sql <<SQL
 CREATE TABLE test (
-  \`pk\` BIGINT NOT NULL COMMENT 'tag:0',
-  \`int\` BIGINT COMMENT 'tag:1',
-  \`string\` LONGTEXT COMMENT 'tag:2',
-  \`boolean\` BOOLEAN COMMENT 'tag:3',
-  \`float\` DOUBLE COMMENT 'tag:4',
-  \`uint\` BIGINT UNSIGNED COMMENT 'tag:5',
-  \`uuid\` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin COMMENT 'tag:6',
+  \`pk\` BIGINT NOT NULL,
+  \`int\` BIGINT,
+  \`string\` LONGTEXT,
+  \`boolean\` BOOLEAN,
+  \`float\` DOUBLE,
+  \`uint\` BIGINT UNSIGNED,
+  \`uuid\` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin,
   PRIMARY KEY (pk)
 );
 SQL
@@ -65,15 +65,15 @@ SQL
 @test "create a table that uses unsupported poop type" {
     run dolt sql <<SQL
 CREATE TABLE test (
-  \`pk\` BIGINT NOT NULL COMMENT 'tag:0',
-  \`int\` BIGINT COMMENT 'tag:1',
-  \`string\` LONGTEXT COMMENT 'tag:2',
-  \`boolean\` BOOLEAN COMMENT 'tag:3',
-  \`float\` DOUBLE COMMENT 'tag:4',
-  \`uint\` BIGINT UNSIGNED COMMENT 'tag:5',
-  \`uuid\` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin COMMENT 'tag:6',
-  \`blob\` LONGBLOB COMMENT 'tag:7',
-  \`poop\` POOP COMMENT 'tag:8',
+  \`pk\` BIGINT NOT NULL,
+  \`int\` BIGINT,
+  \`string\` LONGTEXT,
+  \`boolean\` BOOLEAN,
+  \`float\` DOUBLE,
+  \`uint\` BIGINT UNSIGNED,
+  \`uuid\` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin,
+  \`blob\` LONGBLOB,
+  \`poop\` POOP,
   PRIMARY KEY (pk)
 );
 SQL
@@ -83,24 +83,24 @@ SQL
 @test "create a repo with two tables" {
     dolt sql <<SQL
 CREATE TABLE test1 (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
+  pk BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
+  c3 BIGINT,
+  c4 BIGINT,
+  c5 BIGINT,
   PRIMARY KEY (pk)
 );
 SQL
     dolt sql <<SQL
 CREATE TABLE test2 (
-  pk1 BIGINT NOT NULL COMMENT 'tag:0',
-  pk2 BIGINT NOT NULL COMMENT 'tag:1',
-  c1 BIGINT COMMENT 'tag:2',
-  c2 BIGINT COMMENT 'tag:3',
-  c3 BIGINT COMMENT 'tag:4',
-  c4 BIGINT COMMENT 'tag:5',
-  c5 BIGINT COMMENT 'tag:6',
+  pk1 BIGINT NOT NULL,
+  pk2 BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
+  c3 BIGINT,
+  c4 BIGINT,
+  c5 BIGINT,
   PRIMARY KEY (pk1,pk2)
 );
 SQL
@@ -237,23 +237,23 @@ SQL
 @test "create two table with the same name" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
+  pk BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
+  c3 BIGINT,
+  c4 BIGINT,
+  c5 BIGINT,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
+  pk BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
+  c3 BIGINT,
+  c4 BIGINT,
+  c5 BIGINT,
   PRIMARY KEY (pk)
 );
 SQL
@@ -314,79 +314,118 @@ SQL
 }
 
 @test "create a basic table (int types) using sql" {
-    run dolt sql -q "CREATE TABLE test (pk BIGINT, c1 BIGINT, c2 BIGINT, c3 BIGINT, c4 BIGINT, c5 BIGINT, PRIMARY KEY (pk))"
+    run dolt sql <<SQL
+CREATE TABLE test (
+    pk BIGINT,
+    c1 BIGINT,
+    c2 BIGINT,
+    c3 BIGINT,
+    c4 BIGINT,
+    c5 BIGINT,
+    PRIMARY KEY (pk)
+);
+SQL
     [ "$status" -eq 0 ]
-    [ -z "$output" ]
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
     run dolt schema show
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
-    [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'" ]] || false
-    [[ "$output" =~ "\`c1\` BIGINT COMMENT 'tag:1'" ]] || false
-    [[ "$output" =~ "\`c2\` BIGINT COMMENT 'tag:2'" ]] || false
-    [[ "$output" =~ "\`c3\` BIGINT COMMENT 'tag:3'" ]] || false
-    [[ "$output" =~ "\`c4\` BIGINT COMMENT 'tag:4'" ]] || false
-    [[ "$output" =~ "\`c5\` BIGINT COMMENT 'tag:5'" ]] || false
+    [[ "$output" =~ "\`pk\` BIGINT NOT NULL" ]] || false
+    [[ "$output" =~ "\`c1\` BIGINT" ]] || false
+    [[ "$output" =~ "\`c2\` BIGINT" ]] || false
+    [[ "$output" =~ "\`c3\` BIGINT" ]] || false
+    [[ "$output" =~ "\`c4\` BIGINT" ]] || false
+    [[ "$output" =~ "\`c5\` BIGINT" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
 @test "create a table with sql with multiple primary keys" {
-    run dolt sql -q "CREATE TABLE test (pk1 BIGINT, pk2 BIGINT, c1 BIGINT, c2 BIGINT, c3 BIGINT, c4 BIGINT, c5 BIGINT, PRIMARY KEY (pk1), PRIMARY KEY (pk2))"
+    run dolt sql <<SQL
+CREATE TABLE test (
+    pk1 BIGINT,
+    pk2 BIGINT,
+    c1 BIGINT,
+    c2 BIGINT,
+    c3 BIGINT,
+    c4 BIGINT,
+    c5 BIGINT,
+    PRIMARY KEY (pk1),
+    PRIMARY KEY (pk2)
+);
+SQL
     [ "$status" -eq 0 ]
-    [ -z "$output" ]
     run dolt schema show
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
-    [[ "$output" =~ "\`pk1\` BIGINT NOT NULL COMMENT 'tag:0'" ]] || false
-    [[ "$output" =~ "\`pk2\` BIGINT NOT NULL COMMENT 'tag:1'" ]] || false
-    [[ "$output" =~ "\`c1\` BIGINT COMMENT 'tag:2'" ]] || false
-    [[ "$output" =~ "\`c2\` BIGINT COMMENT 'tag:3'" ]] || false
-    [[ "$output" =~ "\`c3\` BIGINT COMMENT 'tag:4'" ]] || false
-    [[ "$output" =~ "\`c4\` BIGINT COMMENT 'tag:5'" ]] || false
-    [[ "$output" =~ "\`c5\` BIGINT COMMENT 'tag:6'" ]] || false
+    [[ "$output" =~ "\`pk1\` BIGINT NOT NULL" ]] || false
+    [[ "$output" =~ "\`pk2\` BIGINT NOT NULL" ]] || false
+    [[ "$output" =~ "\`c1\` BIGINT" ]] || false
+    [[ "$output" =~ "\`c2\` BIGINT" ]] || false
+    [[ "$output" =~ "\`c3\` BIGINT" ]] || false
+    [[ "$output" =~ "\`c4\` BIGINT" ]] || false
+    [[ "$output" =~ "\`c5\` BIGINT" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk1\`,\`pk2\`)" ]] || false
 }
 
 @test "create a table using sql with not null constraint" {
-    run dolt sql -q "CREATE TABLE test (pk BIGINT NOT NULL, c1 BIGINT, c2 BIGINT, c3 BIGINT, c4 BIGINT, c5 BIGINT, PRIMARY KEY (pk))"
+    run dolt sql <<SQL
+CREATE TABLE test (
+    pk BIGINT NOT NULL,
+    c1 BIGINT,
+    c2 BIGINT,
+    c3 BIGINT,
+    c4 BIGINT,
+    c5 BIGINT,
+    PRIMARY KEY (pk)
+);
+SQL
     [ "$status" -eq 0 ]
-    [ -z "$output" ]
     run dolt schema show test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
-    [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'" ]] || false
-    [[ "$output" =~ "\`c1\` BIGINT COMMENT 'tag:1'" ]] || false
-    [[ "$output" =~ "\`c2\` BIGINT COMMENT 'tag:2'" ]] || false
-    [[ "$output" =~ "\`c3\` BIGINT COMMENT 'tag:3'" ]] || false
-    [[ "$output" =~ "\`c4\` BIGINT COMMENT 'tag:4'" ]] || false
-    [[ "$output" =~ "\`c5\` BIGINT COMMENT 'tag:5'" ]] || false
+    [[ "$output" =~ "\`pk\` BIGINT NOT NULL" ]] || false
+    [[ "$output" =~ "\`c1\` BIGINT" ]] || false
+    [[ "$output" =~ "\`c2\` BIGINT" ]] || false
+    [[ "$output" =~ "\`c3\` BIGINT" ]] || false
+    [[ "$output" =~ "\`c4\` BIGINT" ]] || false
+    [[ "$output" =~ "\`c5\` BIGINT" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
 @test "create a table using sql with a float" {
-    run dolt sql -q "CREATE TABLE test (pk BIGINT NOT NULL, c1 DOUBLE, PRIMARY KEY (pk))"
+    run dolt sql <<SQL
+CREATE TABLE test (
+    pk BIGINT NOT NULL,
+    c1 DOUBLE,
+    PRIMARY KEY (pk)
+);
+SQL
     [ "$status" -eq 0 ]
-    [ -z "$output" ]
     run dolt schema show test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\` " ]] || false
-    [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'" ]] || false
-    [[ "$output" =~ "\`c1\` DOUBLE COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`pk\` BIGINT NOT NULL" ]] || false
+    [[ "$output" =~ "\`c1\` DOUBLE" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
 
 @test "create a table using sql with a string" {
-    run dolt sql -q "CREATE TABLE test (pk BIGINT NOT NULL, c1 LONGTEXT, PRIMARY KEY (pk))"
+    run dolt sql <<SQL
+CREATE TABLE test (
+    pk BIGINT NOT NULL,
+    c1 LONGTEXT,
+    PRIMARY KEY (pk)
+);
+SQL
     [ "$status" -eq 0 ]
-    [ -z "$output" ]
     run dolt schema show test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
-    [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'" ]] || false
-    [[ "$output" =~ "\`c1\` LONGTEXT COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`pk\` BIGINT NOT NULL" ]] || false
+    [[ "$output" =~ "\`c1\` LONGTEXT" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
@@ -422,12 +461,12 @@ SQL
 @test "dolt diff on a newly created table" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
+  pk BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
+  c3 BIGINT,
+  c4 BIGINT,
+  c5 BIGINT,
   PRIMARY KEY (pk)
 );
 SQL

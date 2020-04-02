@@ -141,7 +141,7 @@ func UpdateTables(t *testing.T, ctx context.Context, root *doltdb.RootValue, tbl
 			require.NoError(t, err)
 		}
 
-		schVal, err := encoding.MarshalAsNomsValue(ctx, root.VRW(), sch)
+		schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, root.VRW(), sch)
 		tbl, err = doltdb.NewTable(ctx, root.VRW(), schVal, rowData)
 		require.NoError(t, err)
 

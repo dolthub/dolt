@@ -113,3 +113,26 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	err = dEnv.PutTableToWorking(context.Background(), *wr.GetMap(), wr.GetSchema(), tableName)
 	require.Nil(t, err, "Unable to put initial value of table in in-mem noms db")
 }
+
+// MustSchema takes a variable number of columns and returns a schema.
+func MustSchema(cols ...schema.Column) schema.Schema {
+	hasPKCols := false
+	for _, col := range cols {
+		if col.IsPartOfPK {
+			hasPKCols = true
+			break
+		}
+	}
+
+	colColl, err := schema.NewColCollection(cols...)
+
+	if err != nil {
+		panic(err)
+	}
+
+	if !hasPKCols {
+		return schema.UnkeyedSchemaFromCols(colColl)
+	} else {
+		return schema.SchemaFromCols(colColl)
+	}
+}

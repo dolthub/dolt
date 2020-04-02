@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -440,28 +439,14 @@ func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string,
 }
 
 func diffSchemas(tableName string, sch1 schema.Schema, sch2 schema.Schema, dArgs *diffArgs) errhand.VerboseError {
-	diffs, err := diff.DiffSchemas(sch1, sch2)
-
-	if err != nil {
-		return errhand.BuildDError("error: failed to diff schemas").AddCause(err).Build()
-	}
-
-	tags := make([]uint64, 0, len(diffs))
-
-	for tag := range diffs {
-		tags = append(tags, tag)
-	}
-
-	sort.Slice(tags, func(i, j int) bool {
-		return tags[i] < tags[j]
-	})
+	diffs, unionTags := diff.DiffSchemas(sch1, sch2)
 
 	if dArgs.diffOutput == TabularDiffOutput {
-		if verr := tabularSchemaDiff(tableName, tags, diffs); verr != nil {
+		if verr := tabularSchemaDiff(tableName, unionTags, diffs); verr != nil {
 			return verr
 		}
 	} else {
-		sqlSchemaDiff(tableName, tags, diffs)
+		sqlSchemaDiff(tableName, unionTags, diffs)
 	}
 
 	return nil

@@ -44,13 +44,13 @@ type ColumnOrder struct {
 // table, since we must write a value for each row. If the column is not nullable, a default value must be provided.
 //
 // Returns an error if the column added conflicts with the existing schema in tag or name.
-func AddColumnToTable(ctx context.Context, tbl *doltdb.Table, tag uint64, newColName string, typeInfo typeinfo.TypeInfo, nullable Nullable, defaultVal types.Value, order *ColumnOrder) (*doltdb.Table, error) {
+func AddColumnToTable(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.Table, tblName string, tag uint64, newColName string, typeInfo typeinfo.TypeInfo, nullable Nullable, defaultVal types.Value, order *ColumnOrder) (*doltdb.Table, error) {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := validateNewColumn(ctx, tbl, tag, newColName, typeInfo, nullable, defaultVal); err != nil {
+	if err := validateNewColumn(ctx, root, tbl, tblName, tag, newColName, typeInfo, nullable, defaultVal); err != nil {
 		return nil, err
 	}
 
@@ -66,7 +66,7 @@ func AddColumnToTable(ctx context.Context, tbl *doltdb.Table, tag uint64, newCol
 // and returns the new table.
 func updateTableWithNewSchema(ctx context.Context, tbl *doltdb.Table, tag uint64, newSchema schema.Schema, defaultVal types.Value) (*doltdb.Table, error) {
 	vrw := tbl.ValueReadWriter()
-	newSchemaVal, err := encoding.MarshalAsNomsValue(ctx, vrw, newSchema)
+	newSchemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, newSchema)
 	if err != nil {
 		return nil, err
 	}
@@ -149,8 +149,8 @@ func createColumn(nullable Nullable, newColName string, tag uint64, typeInfo typ
 	}
 }
 
-// validateNewColumn returns an error if the column as specified cannot be added to the schema given.
-func validateNewColumn(ctx context.Context, tbl *doltdb.Table, tag uint64, newColName string, typeInfo typeinfo.TypeInfo, nullable Nullable, defaultVal types.Value) error {
+// ValidateNewColumn returns an error if the column as specified cannot be added to the schema given.
+func validateNewColumn(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.Table, tblName string, tag uint64, newColName string, typeInfo typeinfo.TypeInfo, nullable Nullable, defaultVal types.Value) error {
 	if typeInfo == nil {
 		return fmt.Errorf(`typeinfo may not be nil`)
 	}
@@ -164,14 +164,23 @@ func validateNewColumn(ctx context.Context, tbl *doltdb.Table, tag uint64, newCo
 	cols := sch.GetAllCols()
 	err = cols.Iter(func(currColTag uint64, currCol schema.Column) (stop bool, err error) {
 		if currColTag == tag {
-			return false, fmt.Errorf("A column with the tag %d already exists.", tag)
+			return false, fmt.Errorf("A column with the tag %d already exists in table %s.", tag, tblName)
 		} else if currCol.Name == newColName {
 
-			return true, fmt.Errorf("A column with the name %s already exists.", newColName)
+			return true, fmt.Errorf("A column with the name %s already exists in table %s.", newColName, tblName)
 		}
 
 		return false, nil
 	})
+
+	if err != nil {
+		return err
+	}
+
+	found, tn, err := root.HasTag(ctx, tag)
+	if found {
+		return fmt.Errorf("A column with the tag %d already exists in table %s.", tag, tn)
+	}
 
 	if err != nil {
 		return err
