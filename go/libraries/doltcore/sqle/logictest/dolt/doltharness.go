@@ -71,6 +71,7 @@ func (h *DoltHarness) ExecuteStatement(statement string) error {
 	viewReg := sql.NewViewRegistry()
 	ctx := sql.NewContext(
 		context.Background(),
+		sql.WithSession(dsql.DefaultDoltSession()),
 		sql.WithPid(rand.Uint64()),
 		sql.WithIndexRegistry(idxReg),
 		sql.WithViewRegistry(viewReg))
