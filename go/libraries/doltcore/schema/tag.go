@@ -32,7 +32,7 @@ const (
 // AutoGenerateTag generates a random tag that doesn't exist in the provided SuperSchema.
 // It uses a deterministic random number generator that is seeded with the NomsKinds of any existing columns in the
 // schema and the NomsKind of the column being added to the schema. Deterministic tag generation means that branches
-// and repositories that perform the same sequence of mutations to a database will get equivalent databased as a result.
+// and repositories that perform the same sequence of mutations to a database will get equivalent databases as a result.
 // DETERMINISTIC MUTATION IS A CRITICAL INVARIANT TO MAINTAINING COMPATIBILITY BETWEEN REPOSITORIES.
 // DO NOT ALTER THIS METHOD.
 func AutoGenerateTag(rootSS *SuperSchema, tableName string, existingColKinds []types.NomsKind, newColName string, newColKind types.NomsKind) uint64 {
@@ -40,10 +40,11 @@ func AutoGenerateTag(rootSS *SuperSchema, tableName string, existingColKinds []t
 	var maxTagVal uint64 = 128 * 128
 
 	for maxTagVal/2 < uint64(rootSS.Size()) {
-		if maxTagVal == ReservedTagMin-1 {
+		if maxTagVal >= ReservedTagMin-1 {
 			panic("There is no way anyone should ever have this many columns.  You are a bad person if you hit this panic.")
 		} else if maxTagVal*128 < maxTagVal {
 			maxTagVal = ReservedTagMin - 1
+			break
 		} else {
 			maxTagVal = maxTagVal * 128
 		}
@@ -65,7 +66,7 @@ func AutoGenerateTag(rootSS *SuperSchema, tableName string, existingColKinds []t
 // randomTagGeneratorFromKinds creates a deterministic random number generator that is seeded with the NomsKinds of any
 // existing columns in the schema and the NomsKind of the column being added to the schema. Deterministic tag generation
 // means that branches and repositories that perform the same sequence of mutations to a database will get equivalent
-// databased as a result.
+// databases as a result.
 // DETERMINISTIC MUTATION IS A CRITICAL INVARIANT TO MAINTAINING COMPATIBILITY BETWEEN REPOSITORIES.
 // DO NOT ALTER THIS METHOD.
 func deterministicRandomTagGenerator(tableName string, newColName string, existingColKinds []types.NomsKind, newColKind types.NomsKind) *rand.Rand {

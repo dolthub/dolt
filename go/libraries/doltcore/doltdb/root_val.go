@@ -276,7 +276,6 @@ func (root *RootValue) GenerateTagsForNewColumns(ctx context.Context, tableName 
 		})
 	}
 
-
 	newTags := make([]uint64, len(newColNames))
 	for i := range newTags {
 		newTags[i] = schema.AutoGenerateTag(rootSuperSchema, tableName, existingColKinds, newColNames[i], newColKinds[i])
