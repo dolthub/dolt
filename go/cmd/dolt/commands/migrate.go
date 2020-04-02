@@ -48,8 +48,18 @@ func (cmd MigrateCmd) CreateMarkdown(_ filesys.Filesys, _, _ string) error {
 // Version displays the version of the running dolt client
 // Exec executes the command
 func (cmd MigrateCmd) Exec(ctx context.Context, _ string, _ []string, dEnv *env.DoltEnv) int {
+	needed, err := rebase.NeedsUniqueTagMigration(ctx, dEnv)
+	if err != nil {
+		cli.PrintErrf(color.RedString("error checking for repository migration: %s", err.Error()))
+		return 1
+	}
+	if !needed {
+		cli.Println("Repository format is up to date")
+		return 0
+	}
+
 	cli.Println(color.YellowString(migrationMsg))
-	err := rebase.MigrateUniqueTags(ctx, dEnv)
+	err = rebase.MigrateUniqueTags(ctx, dEnv)
 	if err != nil {
 		cli.PrintErrf("error migrating repository: %s", err.Error())
 		return 1
@@ -61,7 +71,7 @@ func (cmd MigrateCmd) Exec(ctx context.Context, _ string, _ []string, dEnv *env.
 func MigrationNeeded(ctx context.Context, dEnv *env.DoltEnv, args []string) bool {
 	needed, err := rebase.NeedsUniqueTagMigration(ctx, dEnv)
 	if err != nil {
-		cli.PrintErrf("error checking for repository migration: %s", err.Error())
+		cli.PrintErrf(color.RedString("error checking for repository migration: %s", err.Error()))
 		// ambiguous whether we need to migrate, but we should exit
 		return true
 	}

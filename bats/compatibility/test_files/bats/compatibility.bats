@@ -14,6 +14,9 @@ teardown() {
 }
 
 @test "dolt version" {
+    # this will fail for older dolt versions but BATS will swallow the error
+    run dolt migrate
+
     run dolt version
     [ "$status" -eq 0 ]
     regex='dolt version [0-9]+.[0-9]+.[0-9]+'
@@ -29,12 +32,18 @@ teardown() {
 }
 
 @test "dolt ls" {
+    # this will fail for older dolt versions but BATS will swallow the error
+    run dolt migrate
+
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "Tables in working set:" ]] || false
 }
 
 @test "dolt branch" {
+    # this will fail for older dolt versions but BATS will swallow the error
+    run dolt migrate
+
     run dolt branch
     [ "$status" -eq 0 ]
 }
@@ -46,6 +55,9 @@ teardown() {
 }
 
 @test "dolt schema show on branch init" {
+    # this will fail for older dolt versions but BATS will swallow the error
+    run dolt migrate
+
     dolt checkout init
     run dolt schema show abc
     [ "$status" -eq 0 ]
@@ -61,6 +73,9 @@ teardown() {
 }
 
 @test "dolt sql 'select * from abc' on branch init" {
+    # this will fail for older dolt versions but BATS will swallow the error
+    run dolt migrate
+
     dolt checkout init
     run dolt sql -q 'select * from abc;'
     [ "$status" -eq 0 ]
@@ -74,6 +89,9 @@ teardown() {
 }
 
 @test "dolt schema show on branch master" {
+    # this will fail for older dolt versions but BATS will swallow the error
+    run dolt migrate
+
     run dolt schema show abc
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "abc @ working" ]] || false
@@ -89,6 +107,9 @@ teardown() {
 
 
 @test "dolt sql 'select * from abc' on branch master" {
+    # this will fail for older dolt versions but BATS will swallow the error
+    run dolt migrate
+
     run dolt sql -q 'select * from abc;'
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "| pk | a    | b   | x | y      |" ]] || false
@@ -99,6 +120,9 @@ teardown() {
 }
 
 @test "dolt schema show on branch other" {
+    # this will fail for older dolt versions but BATS will swallow the error
+    run dolt migrate
+
     dolt checkout other
     run dolt schema show abc
     [ "$status" -eq 0 ]
@@ -114,6 +138,9 @@ teardown() {
 }
 
 @test "dolt sql 'select * from abc' on branch other" {
+    # this will fail for older dolt versions but BATS will swallow the error
+    run dolt migrate
+
     dolt checkout other
     run dolt sql -q 'select * from abc;'
     [ "$status" -eq 0 ]
@@ -127,6 +154,9 @@ teardown() {
 }
 
 @test "dolt table import" {
+    # this will fail for older dolt versions but BATS will swallow the error
+    run dolt migrate
+
     run dolt table import -c -s abc_schema.json abc2 abc.csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
