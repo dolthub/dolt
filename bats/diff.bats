@@ -295,3 +295,34 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "failed to parse where clause" ]] || false
 }
+
+@test "diff --cached" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    skip "diff --cached not supported"
+    run dolt diff --cached
+    [ $status -wq 0 ]
+    [ $output -eq "" ]
+    dolt add test
+    run dolt diff --cached
+    [ $status -wq 0 ]
+    [[ $output =~ "added table" ]] || false  
+    dolt commit -m "First commit"
+    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
+    run dolt diff
+    [ $status -eq 0 ]
+    CORRECT_DIFF=$status
+    dolt add test
+    run dolt diff --cached
+    [ $status -eq 0 ]
+    [ $output -eq $CORRECT_DIFF ]
+}
