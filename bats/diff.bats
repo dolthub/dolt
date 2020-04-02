@@ -320,7 +320,7 @@ SQL
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     run dolt diff
     [ $status -eq 0 ]
-    CORRECT_DIFF=$status
+    CORRECT_DIFF=$output
     dolt add test
     run dolt diff --cached
     [ $status -eq 0 ]
