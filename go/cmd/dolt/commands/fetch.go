@@ -186,10 +186,23 @@ func fetchRefSpecs(ctx context.Context, forceFetch bool, dEnv *env.DoltEnv, rem 
 			remoteTrackRef := rs.DestRef(branchRef)
 
 			if remoteTrackRef != nil {
-				verr := fetchRemoteBranch(ctx, forceFetch, dEnv, rem, srcDB, dEnv.DoltDB, branchRef, remoteTrackRef)
+				srcDBCommit, verr := fetchRemoteBranch(ctx, dEnv, rem, srcDB, dEnv.DoltDB, branchRef, remoteTrackRef)
 
 				if verr != nil {
 					return verr
+				}
+
+				if forceFetch {
+					err = dEnv.DoltDB.DeleteBranch(ctx, remoteTrackRef)
+					if err != nil {
+						return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
+					}
+				}
+
+				err =  dEnv.DoltDB.FastForward(ctx, remoteTrackRef, srcDBCommit)
+
+				if err != nil {
+					return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
 				}
 			}
 		}
@@ -198,7 +211,7 @@ func fetchRefSpecs(ctx context.Context, forceFetch bool, dEnv *env.DoltEnv, rem 
 	return nil
 }
 
-func fetchRemoteBranch(ctx context.Context, forceFetch bool, dEnv *env.DoltEnv, rem env.Remote, srcDB, destDB *doltdb.DoltDB, srcRef, destRef ref.DoltRef) errhand.VerboseError {
+func fetchRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, srcDB, destDB *doltdb.DoltDB, srcRef, destRef ref.DoltRef) (*doltdb.Commit, errhand.VerboseError) {
 	evt := events.GetEventFromContext(ctx)
 
 	u, err := earl.Parse(rem.Url)
@@ -213,29 +226,16 @@ func fetchRemoteBranch(ctx context.Context, forceFetch bool, dEnv *env.DoltEnv, 
 	srcDBCommit, err := srcDB.Resolve(ctx, cs)
 
 	if err != nil {
-		return errhand.BuildDError("error: unable to find '%s' on '%s'", srcRef.GetPath(), rem.Name).Build()
+		return nil, errhand.BuildDError("error: unable to find '%s' on '%s'", srcRef.GetPath(), rem.Name).Build()
 	} else {
 		wg, progChan, pullerEventCh := runProgFuncs()
 		err = actions.Fetch(ctx, dEnv, destRef, srcDB, destDB, srcDBCommit, progChan, pullerEventCh)
 		stopProgFuncs(wg, progChan, pullerEventCh)
 
 		if err != nil {
-			return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
-		}
-
-		if forceFetch {
-			err = dEnv.DoltDB.DeleteBranch(ctx, destRef)
-			if err != nil {
-				return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
-			}
-		}
-
-		err =  destDB.FastForward(ctx, destRef, srcDBCommit)
-
-		if err != nil {
-			return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
+			return nil, errhand.BuildDError("error: fetch failed").AddCause(err).Build()
 		}
 	}
 
-	return nil
+	return srcDBCommit, nil
 }
