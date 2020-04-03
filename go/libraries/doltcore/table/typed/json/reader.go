@@ -151,5 +151,16 @@ func (r *JSONReader) convToRow(rowMap map[string]interface{}) (row.Row, error) {
 		}
 
 	}
+
+	err := r.sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if val, ok := taggedVals.Get(tag); !col.IsNullable() && (!ok || types.IsNull(val)) {
+			return true, fmt.Errorf("column `%s` does not allow null values", col.Name)
+		}
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	return row.New(r.nbf, r.sch, taggedVals)
 }
