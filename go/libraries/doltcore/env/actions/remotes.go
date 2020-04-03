@@ -83,14 +83,8 @@ func DeleteRemoteBranch(ctx context.Context, targetRef ref.BranchRef, remoteRef 
 	return nil
 }
 
-func Fetch(ctx context.Context, dEnv *env.DoltEnv, destRef ref.DoltRef, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
-	err := destDB.PullChunks(ctx, dEnv.TempTableFilesDir(), srcDB, commit, progChan, pullerEventCh)
-
-	if err != nil {
-		return err
-	}
-
-	return destDB.FastForward(ctx, destRef, commit)
+func Fetch(ctx context.Context, dEnv *env.DoltEnv, destRef ref.DoltRef, srcDB, destDB *doltdb.DoltDB, srcDBCommit *doltdb.Commit, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
+	return destDB.PullChunks(ctx, dEnv.TempTableFilesDir(), srcDB, srcDBCommit, progChan, pullerEventCh)
 }
 
 func Clone(ctx context.Context, srcDB, destDB *doltdb.DoltDB, eventCh chan<- datas.TableFileEvent) error {

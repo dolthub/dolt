@@ -86,12 +86,10 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	remotes, _ := dEnv.GetRemotes()
 	r, refSpecs, verr := getRefSpecs(apr.Args(), dEnv, remotes)
 
-	if verr == nil && apr.Contains(ForceFetchFlag) {
-		verr = deleteBranchesForRemote(ctx, dEnv, r)
-	}
+	forceFetch := apr.Contains(ForceFetchFlag)
 
 	if verr == nil {
-		verr = fetchRefSpecs(ctx, dEnv, r, refSpecs)
+		verr = fetchRefSpecs(ctx, forceFetch, dEnv, r, refSpecs)
 	}
 
 	return HandleVErrAndExitCode(verr, usage)
@@ -170,7 +168,7 @@ func mapRefspecsToRemotes(refSpecs []ref.RemoteRefSpec, dEnv *env.DoltEnv) (map[
 	return rsToRem, nil
 }
 
-func fetchRefSpecs(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, refSpecs []ref.RemoteRefSpec) errhand.VerboseError {
+func fetchRefSpecs(ctx context.Context, forceFetch bool, dEnv *env.DoltEnv, rem env.Remote, refSpecs []ref.RemoteRefSpec) errhand.VerboseError {
 	for _, rs := range refSpecs {
 		srcDB, err := rem.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
 
@@ -188,7 +186,7 @@ func fetchRefSpecs(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, refSp
 			remoteTrackRef := rs.DestRef(branchRef)
 
 			if remoteTrackRef != nil {
-				verr := fetchRemoteBranch(ctx, dEnv, rem, srcDB, dEnv.DoltDB, branchRef, remoteTrackRef)
+				verr := fetchRemoteBranch(ctx, forceFetch, dEnv, rem, srcDB, dEnv.DoltDB, branchRef, remoteTrackRef)
 
 				if verr != nil {
 					return verr
@@ -200,7 +198,7 @@ func fetchRefSpecs(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, refSp
 	return nil
 }
 
-func fetchRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, srcDB, destDB *doltdb.DoltDB, srcRef, destRef ref.DoltRef) errhand.VerboseError {
+func fetchRemoteBranch(ctx context.Context, forceFetch bool, dEnv *env.DoltEnv, rem env.Remote, srcDB, destDB *doltdb.DoltDB, srcRef, destRef ref.DoltRef) errhand.VerboseError {
 	evt := events.GetEventFromContext(ctx)
 
 	u, err := earl.Parse(rem.Url)
@@ -212,40 +210,32 @@ func fetchRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, s
 	}
 
 	cs, _ := doltdb.NewCommitSpec("HEAD", srcRef.String())
-	cm, err := srcDB.Resolve(ctx, cs)
+	srcDBCommit, err := srcDB.Resolve(ctx, cs)
 
 	if err != nil {
 		return errhand.BuildDError("error: unable to find '%s' on '%s'", srcRef.GetPath(), rem.Name).Build()
 	} else {
 		wg, progChan, pullerEventCh := runProgFuncs()
-		err = actions.Fetch(ctx, dEnv, destRef, srcDB, destDB, cm, progChan, pullerEventCh)
+		err = actions.Fetch(ctx, dEnv, destRef, srcDB, destDB, srcDBCommit, progChan, pullerEventCh)
 		stopProgFuncs(wg, progChan, pullerEventCh)
+
+		if err != nil {
+			return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
+		}
+
+		if forceFetch {
+			err = dEnv.DoltDB.DeleteBranch(ctx, destRef)
+			if err != nil {
+				return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
+			}
+		}
+
+		err =  destDB.FastForward(ctx, destRef, srcDBCommit)
 
 		if err != nil {
 			return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
 		}
 	}
 
-	return nil
-}
-
-func deleteBranchesForRemote(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote) errhand.VerboseError {
-	refs, err := dEnv.DoltDB.GetRefsOfType(ctx, map[ref.RefType]struct{}{ref.RemoteRefType: {}})
-
-	if err != nil {
-		return errhand.BuildDError("error: failed to read from db").AddCause(err).Build()
-	}
-
-	for _, r := range refs {
-		rr := r.(ref.RemoteRef)
-
-		if rr.GetRemote() == rem.Name {
-			err = dEnv.DoltDB.DeleteBranch(ctx, rr)
-
-			if err != nil {
-				return errhand.BuildDError("error: failed to delete remote tracking ref '%s'", rr.String()).Build()
-			}
-		}
-	}
 	return nil
 }
