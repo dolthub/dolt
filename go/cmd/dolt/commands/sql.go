@@ -328,6 +328,8 @@ func execQuery(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*do
 	return newRoots, nil
 }
 
+// CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
+// objects.
 func CollectDBs(mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, batchMode bool) []dsqle.Database {
 	dbs := make([]dsqle.Database, 0, len(mrEnv))
 	_ = mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
@@ -823,7 +825,7 @@ func (s *stats) shouldFlush() bool {
 }
 
 func flushBatchedEdits(ctx *sql.Context, se *sqlEngine) error {
-	err := se.IterDBs(func(_ string, db dsqle.Database) (bool, error) {
+	err := se.iterDBs(func(_ string, db dsqle.Database) (bool, error) {
 		err := db.Flush(ctx)
 
 		if err != nil {
@@ -1027,7 +1029,7 @@ func newSqlEngine(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]
 	return &sqlEngine{nameToDB, mrEnv, engine, format}, nil
 }
 
-func (se *sqlEngine) GetDB(name string) (dsqle.Database, error) {
+func (se *sqlEngine) getDB(name string) (dsqle.Database, error) {
 	db, ok := se.dbs[name]
 
 	if !ok {
@@ -1037,7 +1039,7 @@ func (se *sqlEngine) GetDB(name string) (dsqle.Database, error) {
 	return db, nil
 }
 
-func (se *sqlEngine) IterDBs(cb func(name string, db dsqle.Database) (stop bool, err error)) error {
+func (se *sqlEngine) iterDBs(cb func(name string, db dsqle.Database) (stop bool, err error)) error {
 	for name, db := range se.dbs {
 		stop, err := cb(name, db)
 
@@ -1056,7 +1058,7 @@ func (se *sqlEngine) IterDBs(cb func(name string, db dsqle.Database) (stop bool,
 func (se *sqlEngine) getRoots(sqlCtx *sql.Context) (map[string]*doltdb.RootValue, error) {
 	newRoots := make(map[string]*doltdb.RootValue)
 	for name := range se.mrEnv {
-		db, err := se.GetDB(name)
+		db, err := se.getDB(name)
 
 		if err != nil {
 			return nil, err
@@ -1233,7 +1235,7 @@ func (se *sqlEngine) checkThenDeleteAllRows(ctx *sql.Context, s *sqlparser.Delet
 
 					_ = se.prettyPrintResults(ctx, sql.Schema{{Name: "updated", Type: sql.Uint64}}, printRowIter)
 
-					db, err := se.GetDB(dbName)
+					db, err := se.getDB(dbName)
 					if err != nil {
 						return err
 					}

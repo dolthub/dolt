@@ -494,7 +494,7 @@ func TestDelete(t *testing.T) {
 		expectedRes int
 		deletedIds  []uuid.UUID
 	}{
-		/*{
+		{
 			name:  "bad syntax",
 			query: "delete table", expectedRes: 1,
 		},
@@ -505,7 +505,7 @@ func TestDelete(t *testing.T) {
 		{
 			name:  "table doesn't exist",
 			query: "delete from dne", expectedRes: 1,
-		},*/
+		},
 		{
 			name:       "delete one row",
 			query:      `delete from people where id = '00000000-0000-0000-0000-000000000002'`,

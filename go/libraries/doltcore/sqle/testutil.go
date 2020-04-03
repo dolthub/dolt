@@ -93,9 +93,7 @@ func NewTestSQLCtx(ctx context.Context) *sql.Context {
 		sql.WithSession(DefaultDoltSession()),
 		sql.WithIndexRegistry(sql.NewIndexRegistry()),
 		sql.WithViewRegistry(sql.NewViewRegistry()),
-	)
-
-	sqlCtx.SetCurrentDatabase("dolt")
+	).WithCurrentDB("dolt")
 
 	return sqlCtx
 }
