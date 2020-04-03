@@ -16,7 +16,6 @@ package sqlserver
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"net"
 	"strconv"
 	"time"
@@ -29,6 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
@@ -93,7 +93,6 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, rootValue *doltdb.Ro
 	}
 
 	sqlEngine.AddDatabase(sql.NewInformationSchemaDatabase(sqlEngine.Catalog))
-
 
 	hostPort := net.JoinHostPort(serverConfig.Host, strconv.Itoa(serverConfig.Port))
 	timeout := time.Second * time.Duration(serverConfig.Timeout)

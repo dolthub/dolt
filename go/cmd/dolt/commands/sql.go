@@ -19,7 +19,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"gopkg.in/src-d/go-errors.v1"
 	"io"
 	"os"
 	"path/filepath"
@@ -31,6 +30,7 @@ import (
 	"github.com/liquidata-inc/ishell"
 	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
+	"gopkg.in/src-d/go-errors.v1"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -1003,7 +1003,7 @@ func newSqlEngine(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]
 	nameToDB := make(map[string]dsqle.Database)
 	for _, db := range dbs {
 		nameToDB[db.Name()] = db
-		root :=  roots[db.Name()]
+		root := roots[db.Name()]
 		engine.AddDatabase(db)
 		err := db.SetRoot(sqlCtx, root)
 		if err != nil {
