@@ -73,6 +73,120 @@ func NeedsUniqueTagMigration(ctx context.Context, dEnv *env.DoltEnv) (bool, erro
 	return false, nil
 }
 
+// MigrateUniqueTags rebases the history of the repo to uniquify tags within branch histories.
+func MigrateUniqueTags(ctx context.Context, dEnv *env.DoltEnv) error {
+	ddb := dEnv.DoltDB
+	cwbSpec := dEnv.RepoState.CWBHeadSpec()
+	dd, err := dEnv.GetAllValidDocDetails()
+
+	if err != nil {
+		return err
+	}
+
+	branches, err := dEnv.DoltDB.GetBranches(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	var headCommits []*doltdb.Commit
+	for _, dRef := range branches {
+
+		cs, err := doltdb.NewCommitSpec("head", dRef.String())
+
+		if err != nil {
+			return err
+		}
+
+		cm, err := ddb.Resolve(ctx, cs)
+
+		if err != nil {
+			return err
+		}
+
+		headCommits = append(headCommits, cm)
+	}
+
+	// DFS the commit graph find a unique new tag for all existing tags in every table in history
+	globalMapping := make(map[string]map[uint64]uint64)
+	globalCtr := new(uint64)
+	atomic.AddUint64(globalCtr, 2)
+
+	replay := func(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
+		err := buildGlobalTagMapping(ctx, root, globalMapping, globalCtr)
+
+		if err != nil {
+			return nil, err
+		}
+
+		return root, nil
+	}
+
+	_, err = rebase(ctx, ddb, replay, entireHistory, headCommits...)
+
+	if err != nil {
+		return err
+	}
+
+	if len(branches) != len(headCommits) {
+		panic("error in uniquifying tags")
+	}
+
+	newCommits, err := TagRebaseForCommits(ctx, ddb, globalMapping, headCommits...)
+
+	if err != nil {
+		return err
+	}
+
+	for idx, dRef := range branches {
+
+		err = ddb.DeleteBranch(ctx, dRef)
+
+		if err != nil {
+			return err
+		}
+
+		err = ddb.NewBranchAtCommit(ctx, dRef, newCommits[idx])
+
+		if err != nil {
+			return err
+		}
+	}
+
+	cm, err := dEnv.DoltDB.Resolve(ctx, cwbSpec)
+
+	if err != nil {
+		return err
+	}
+
+	r, err := cm.GetRootValue()
+
+	if err != nil {
+		return err
+	}
+
+	_, err = dEnv.UpdateStagedRoot(ctx, r)
+
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.UpdateWorkingRoot(ctx, r)
+
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.PutDocsToWorking(ctx, dd)
+
+	if err != nil {
+		return err
+	}
+
+	_, err = dEnv.PutDocsToStaged(ctx, dd)
+	return err
+}
+
 // TagRebaseForRef rebases the provided DoltRef, swapping all tags in the TagMapping.
 func TagRebaseForRef(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, tagMapping TagMapping) (*doltdb.Commit, error) {
 	cs, err := doltdb.NewCommitSpec("head", dRef.String())
@@ -409,120 +523,6 @@ func validateTagMapping(tagMapping TagMapping) error {
 		}
 	}
 	return nil
-}
-
-// MigrateUniqueTags rebases the history of the repo to uniquify tags within branch histories.
-func MigrateUniqueTags(ctx context.Context, dEnv *env.DoltEnv) error {
-	ddb := dEnv.DoltDB
-	cwbSpec := dEnv.RepoState.CWBHeadSpec()
-	dd, err := dEnv.GetAllValidDocDetails()
-
-	if err != nil {
-		return err
-	}
-
-	branches, err := dEnv.DoltDB.GetBranches(ctx)
-
-	if err != nil {
-		return err
-	}
-
-	var headCommits []*doltdb.Commit
-	for _, dRef := range branches {
-
-		cs, err := doltdb.NewCommitSpec("head", dRef.String())
-
-		if err != nil {
-			return err
-		}
-
-		cm, err := ddb.Resolve(ctx, cs)
-
-		if err != nil {
-			return err
-		}
-
-		headCommits = append(headCommits, cm)
-	}
-
-	// DFS the commit graph find a unique new tag for all existing tags in every table in history
-	globalMapping := make(map[string]map[uint64]uint64)
-	globalCtr := new(uint64)
-	atomic.AddUint64(globalCtr, 2)
-
-	replay := func(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
-		err := buildGlobalTagMapping(ctx, root, globalMapping, globalCtr)
-
-		if err != nil {
-			return nil, err
-		}
-
-		return root, nil
-	}
-
-	_, err = rebase(ctx, ddb, replay, entireHistory, headCommits...)
-
-	if err != nil {
-		return err
-	}
-
-	if len(branches) != len(headCommits) {
-		panic("error in uniquifying tags")
-	}
-
-	newCommits, err := TagRebaseForCommits(ctx, ddb, globalMapping, headCommits...)
-
-	if err != nil {
-		return err
-	}
-
-	for idx, dRef := range branches {
-
-		err = ddb.DeleteBranch(ctx, dRef)
-
-		if err != nil {
-			return err
-		}
-
-		err = ddb.NewBranchAtCommit(ctx, dRef, newCommits[idx])
-
-		if err != nil {
-			return err
-		}
-	}
-
-	cm, err := dEnv.DoltDB.Resolve(ctx, cwbSpec)
-
-	if err != nil {
-		return err
-	}
-
-	r, err := cm.GetRootValue()
-
-	if err != nil {
-		return err
-	}
-
-	_, err = dEnv.UpdateStagedRoot(ctx, r)
-
-	if err != nil {
-		return err
-	}
-
-	err = dEnv.UpdateWorkingRoot(ctx, r)
-
-	if err != nil {
-		return err
-	}
-
-	err = dEnv.PutDocsToWorking(ctx, dd)
-
-	if err != nil {
-		return err
-	}
-
-	_, err = dEnv.PutDocsToStaged(ctx, dd)
-	return err
 }
 
 func buildGlobalTagMapping(ctx context.Context, root *doltdb.RootValue, globalMapping map[string]map[uint64]uint64, globalCtr *uint64) error {
