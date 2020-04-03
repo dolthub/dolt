@@ -15,10 +15,10 @@
 package filesys
 
 import (
+	"errors"
 	"sync/atomic"
 
 	"github.com/juju/fslock"
-	"github.com/pkg/errors"
 )
 
 const unlockedStateValue int32 = 0

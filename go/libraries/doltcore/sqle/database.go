@@ -149,6 +149,10 @@ func (db Database) GetDefaultRoot() *doltdb.RootValue {
 	return db.defRoot
 }
 
+func (db Database) GetDoltDB() *doltdb.DoltDB {
+	return db.ddb
+}
+
 // GetTableInsensitive is used when resolving tables in queries. It returns a best-effort case-insensitive match for
 // the table name given.
 func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Table, bool, error) {

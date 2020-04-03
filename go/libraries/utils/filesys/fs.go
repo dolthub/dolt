@@ -16,10 +16,9 @@ package filesys
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"time"
-
-	"github.com/pkg/errors"
 )
 
 var ErrIsDir = errors.New("operation not valid on a directory")

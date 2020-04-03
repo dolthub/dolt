@@ -15,9 +15,8 @@
 package argparser
 
 import (
+	"errors"
 	"strconv"
-
-	"github.com/pkg/errors"
 )
 
 type OptionType int

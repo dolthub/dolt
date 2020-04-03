@@ -15,9 +15,8 @@
 package argparser
 
 import (
+	"errors"
 	"strings"
-
-	"github.com/pkg/errors"
 )
 
 const (
