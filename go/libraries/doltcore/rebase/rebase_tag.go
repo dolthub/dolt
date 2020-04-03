@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync/atomic"
 	"time"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
@@ -110,8 +109,6 @@ func MigrateUniqueTags(ctx context.Context, dEnv *env.DoltEnv) error {
 
 	// DFS the commit graph find a unique new tag for all existing tags in every table in history
 	globalMapping := make(map[string]map[uint64]uint64)
-	globalCtr := new(uint64)
-	atomic.AddUint64(globalCtr, 2)
 
 	replay := func(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
 		err := buildGlobalTagMapping(ctx, root, parentRoot, rebasedParentRoot, globalMapping)
