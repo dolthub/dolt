@@ -24,6 +24,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -72,12 +73,12 @@ var systemTableDeleteTests = []DeleteTest{
 	{
 		Name: "delete dolt_schemas",
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
-			mustGetDoltSchema(SchemasTableSchema()),
+			schemasTableDoltSchema(),
 			NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual"))),
 		DeleteQuery:    "delete from dolt_schemas",
 		SelectQuery:    "select * from dolt_schemas",
-		ExpectedRows:   CompressRows(mustGetDoltSchema(SchemasTableSchema())),
-		ExpectedSchema: CompressSchema(mustGetDoltSchema(SchemasTableSchema())),
+		ExpectedRows:   []row.Row{},
+		ExpectedSchema: schemasTableDoltSchema(),
 	},
 }
 

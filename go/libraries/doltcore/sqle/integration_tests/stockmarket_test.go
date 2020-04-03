@@ -32,16 +32,16 @@ import (
 
 const createTables = `
 CREATE TABLE daily_summary (
-  Type varchar(80) COMMENT 'tag:0',
-  Symbol varchar(80) NOT NULL COMMENT 'tag:1',
-  Country varchar(80) NOT NULL COMMENT 'tag:2',
-  TradingDate varchar(80) NOT NULL COMMENT 'tag:3',
-  Open float  COMMENT 'tag:4',
-  High float  COMMENT 'tag:5',
-  Low float  COMMENT 'tag:6',
-  Close float  COMMENT 'tag:7',
-  Volume float  COMMENT 'tag:8',
-  OpenInt varchar(80) COMMENT 'tag:9',
+  Type varchar(80),
+  Symbol varchar(80) NOT NULL,
+  Country varchar(80) NOT NULL,
+  TradingDate varchar(80) NOT NULL,
+  Open float ,
+  High float ,
+  Low float ,
+  Close float ,
+  Volume float ,
+  OpenInt varchar(80),
   PRIMARY KEY (Symbol,Country,TradingDate)
 );
 
@@ -54,19 +54,19 @@ CREATE TABLE symbols (
 );
 
 CREATE TABLE join_result (
-  Type varchar(80)  COMMENT 'tag:0',
-  Symbol varchar(80) NOT NULL COMMENT 'tag:1',
-  Country varchar(80) NOT NULL COMMENT 'tag:2',
-  TradingDate varchar(80)  NOT NULL COMMENT 'tag:3',
-  Open float  COMMENT 'tag:4',
-  High float  COMMENT 'tag:5',
-  Low float  COMMENT 'tag:6',
-  Close float  COMMENT 'tag:7',
-  Volume float  COMMENT 'tag:8',
-  OpenInt varchar(80)  COMMENT 'tag:9',
-  Name varchar(1024) COMMENT 'tag:10',
-  Sector varchar(1024) COMMENT 'tag:11',
-  IPOYear int(11) COMMENT 'tag:12',
+  Type varchar(80) ,
+  Symbol varchar(80) NOT NULL,
+  Country varchar(80) NOT NULL,
+  TradingDate varchar(80)  NOT NULL,
+  Open float ,
+  High float ,
+  Low float ,
+  Close float ,
+  Volume float ,
+  OpenInt varchar(80) ,
+  Name varchar(1024),
+  Sector varchar(1024),
+  IPOYear int(11),
   PRIMARY KEY (Symbol,Country,TradingDate)
 );
 `

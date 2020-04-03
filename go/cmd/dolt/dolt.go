@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 
 	"github.com/fatih/color"
 	"github.com/pkg/profile"
@@ -72,6 +73,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	cnfcmds.Commands,
 	commands.SendMetricsCmd{},
 	dumpDocsCommand,
+	commands.MigrateCmd{},
 })
 
 func init() {
@@ -146,6 +148,12 @@ func runMain() int {
 
 	dEnv := env.Load(context.TODO(), env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
 
+	if dEnv.DBLoadError == nil && commandNeedsMigrationCheck(args) {
+		if commands.MigrationNeeded(context.Background(), dEnv, args) {
+			return 1
+		}
+	}
+
 	root, err := env.GetCurrentUserHomeDir()
 
 	if err != nil {
@@ -192,6 +200,39 @@ func runMain() int {
 	}
 
 	return res
+}
+
+// These subcommands will cannot be performed if a migration is needed
+func commandNeedsMigrationCheck(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	subCommandStr := strings.ToLower(strings.TrimSpace(args[0]))
+	for _, cmd := range []cli.Command{
+		commands.ResetCmd{},
+		commands.CommitCmd{},
+		commands.SqlCmd{},
+		sqlserver.SqlServerCmd{},
+		commands.DiffCmd{},
+		commands.MergeCmd{},
+		commands.BranchCmd{},
+		commands.CheckoutCmd{},
+		commands.RemoteCmd{},
+		commands.PushCmd{},
+		commands.PullCmd{},
+		commands.FetchCmd{},
+		commands.CloneCmd{},
+		schcmds.ImportCmd{},
+		tblcmds.ImportCmd{},
+		tblcmds.RmCmd{},
+		tblcmds.MvCmd{},
+		tblcmds.CpCmd{},
+	} {
+		if subCommandStr == strings.ToLower(cmd.Name()) {
+			return true
+		}
+	}
+	return false
 }
 
 // processEventsDir runs the dolt send-metrics command in a new process

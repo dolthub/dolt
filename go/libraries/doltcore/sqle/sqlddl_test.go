@@ -44,18 +44,18 @@ func TestCreateTable(t *testing.T) {
 	}{
 		{
 			name:          "Test create single column schema",
-			query:         "create table testTable (id int primary key)",
+			query:         "create table testTable (id int primary key comment 'tag:100')",
 			expectedTable: "testTable",
 			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumn(t, "id", 0, sql.Int32, true, schema.NotNullConstraint{})),
+				schemaNewColumn(t, "id", 100, sql.Int32, true, schema.NotNullConstraint{})),
 		},
 		{
 			name:          "Test create two column schema",
-			query:         "create table testTable (id int primary key, age int)",
+			query:         "create table testTable (id int primary key comment 'tag:100', age int comment 'tag:101')",
 			expectedTable: "testTable",
 			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumn(t, "id", 0, sql.Int32, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "age", 1, sql.Int32, false)),
+				schemaNewColumn(t, "id", 100, sql.Int32, true, schema.NotNullConstraint{}),
+				schemaNewColumn(t, "age", 101, sql.Int32, false)),
 		},
 		{
 			name:          "Test syntax error",
@@ -95,157 +95,178 @@ func TestCreateTable(t *testing.T) {
 			expectedSchema: PeopleTestSchema,
 		},
 		{
-			name:          "Test types",
-			query:         "create table testTable (id int primary key, age int, first_name varchar(255), is_married boolean)",
+			name: "Test types",
+			query: `create table testTable (
+								id int primary key comment 'tag:100', 
+								age int comment 'tag:101', 
+								first_name varchar(255) comment 'tag:102', 
+								is_married boolean comment 'tag:103') `,
 			expectedTable: "testTable",
 			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumn(t, "id", 0, sql.Int32, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "age", 1, sql.Int32, false),
-				schemaNewColumn(t, "first_name", 2, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false),
-				schemaNewColumn(t, "is_married", 3, sql.Boolean, false)),
+				schemaNewColumn(t, "id", 100, sql.Int32, true, schema.NotNullConstraint{}),
+				schemaNewColumn(t, "age", 101, sql.Int32, false),
+				schemaNewColumn(t, "first_name", 102, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false),
+				schemaNewColumn(t, "is_married", 103, sql.Boolean, false)),
 		},
 		{
 			name:          "Test all supported types",
 			expectedTable: "testTable",
 			query: `create table testTable (
-							c0 int primary key comment 'tag:0', 
-							c1 tinyint comment 'tag:1',
-							c2 smallint comment 'tag:2',
-							c3 mediumint comment 'tag:3',
-							c4 integer comment 'tag:4',
-							c5 bigint comment 'tag:5',
-							c6 bool comment 'tag:6',
-							c7 boolean comment 'tag:7',
-							c8 bit(10) comment 'tag:8',
-							c9 text comment 'tag:9',
-							c10 tinytext comment 'tag:10',
-							c11 mediumtext comment 'tag:11',
-							c12 longtext comment 'tag:12',
-							c16 char(5) comment 'tag:16',
-							c17 varchar(255) comment 'tag:17',
-							c18 varchar(80) comment 'tag:18',
-							c19 float comment 'tag:19',
-							c20 double comment 'tag:20',
-							c22 int unsigned comment 'tag:22',
-							c23 tinyint unsigned comment 'tag:23',
-							c24 smallint unsigned comment 'tag:24',
-							c25 mediumint unsigned comment 'tag:25',
-							c26 bigint unsigned comment 'tag:26')`,
+							c0 int primary key comment 'tag:100',
+							c1 tinyint comment 'tag:101',
+							c2 smallint comment 'tag:102',
+							c3 mediumint comment 'tag:103',
+							c4 integer comment 'tag:104',
+							c5 bigint comment 'tag:105',
+							c6 bool comment 'tag:106',
+							c7 boolean comment 'tag:107',
+							c8 bit(10) comment 'tag:108',
+							c9 text comment 'tag:109',
+							c10 tinytext comment 'tag:110',
+							c11 mediumtext comment 'tag:111',
+							c12 longtext comment 'tag:112',
+							c16 char(5) comment 'tag:116',
+							c17 varchar(255) comment 'tag:117',
+							c18 varchar(80) comment 'tag:118',
+							c19 float comment 'tag:119',
+							c20 double comment 'tag:120',
+							c22 int unsigned comment 'tag:122',
+							c23 tinyint unsigned comment 'tag:123',
+							c24 smallint unsigned comment 'tag:124',
+							c25 mediumint unsigned comment 'tag:125',
+							c26 bigint unsigned comment 'tag:126')`,
 			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumn(t, "c0", 0, sql.Int32, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "c1", 1, sql.Int8, false),
-				schemaNewColumn(t, "c2", 2, sql.Int16, false),
-				schemaNewColumn(t, "c3", 3, sql.Int24, false),
-				schemaNewColumn(t, "c4", 4, sql.Int32, false),
-				schemaNewColumn(t, "c5", 5, sql.Int64, false),
-				schemaNewColumn(t, "c6", 6, sql.Boolean, false),
-				schemaNewColumn(t, "c7", 7, sql.Boolean, false),
-				schemaNewColumn(t, "c8", 8, sql.MustCreateBitType(10), false),
-				schemaNewColumn(t, "c9", 9, sql.Text, false),
-				schemaNewColumn(t, "c10", 10, sql.TinyText, false),
-				schemaNewColumn(t, "c11", 11, sql.MediumText, false),
-				schemaNewColumn(t, "c12", 12, sql.LongText, false),
-				//schemaNewColumn(t, "c13", 13, sql.TinyBlob, false),
-				//schemaNewColumn(t, "c14", 14, sql.Blob, false),
-				//schemaNewColumn(t, "c15", 15, sql.LongBlob, false),
-				schemaNewColumn(t, "c16", 16, sql.MustCreateStringWithDefaults(sqltypes.Char, 5), false),
-				schemaNewColumn(t, "c17", 17, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false),
-				schemaNewColumn(t, "c18", 18, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false),
-				schemaNewColumn(t, "c19", 19, sql.Float32, false),
-				schemaNewColumn(t, "c20", 20, sql.Float64, false),
-				//schemaNewColumn(t, "c21", 21, sql.MustCreateDecimalType(10, 5), false),
-				schemaNewColumn(t, "c22", 22, sql.Uint32, false),
-				schemaNewColumn(t, "c23", 23, sql.Uint8, false),
-				schemaNewColumn(t, "c24", 24, sql.Uint16, false),
-				schemaNewColumn(t, "c25", 25, sql.Uint24, false),
-				schemaNewColumn(t, "c26", 26, sql.Uint64, false),
+				schemaNewColumn(t, "c0", 100, sql.Int32, true, schema.NotNullConstraint{}),
+				schemaNewColumn(t, "c1", 101, sql.Int8, false),
+				schemaNewColumn(t, "c2", 102, sql.Int16, false),
+				schemaNewColumn(t, "c3", 103, sql.Int24, false),
+				schemaNewColumn(t, "c4", 104, sql.Int32, false),
+				schemaNewColumn(t, "c5", 105, sql.Int64, false),
+				schemaNewColumn(t, "c6", 106, sql.Boolean, false),
+				schemaNewColumn(t, "c7", 107, sql.Boolean, false),
+				schemaNewColumn(t, "c8", 108, sql.MustCreateBitType(10), false),
+				schemaNewColumn(t, "c9", 109, sql.Text, false),
+				schemaNewColumn(t, "c10", 110, sql.TinyText, false),
+				schemaNewColumn(t, "c11", 111, sql.MediumText, false),
+				schemaNewColumn(t, "c12", 112, sql.LongText, false),
+				//schemaNewColumn(t, "c13", 113, sql.TinyBlob, false),
+				//schemaNewColumn(t, "c14", 114, sql.Blob, false),
+				//schemaNewColumn(t, "c15", 115, sql.LongBlob, false),
+				schemaNewColumn(t, "c16", 116, sql.MustCreateStringWithDefaults(sqltypes.Char, 5), false),
+				schemaNewColumn(t, "c17", 117, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false),
+				schemaNewColumn(t, "c18", 118, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false),
+				schemaNewColumn(t, "c19", 119, sql.Float32, false),
+				schemaNewColumn(t, "c20", 120, sql.Float64, false),
+				//schemaNewColumn(t, "c21", 121, sql.MustCreateDecimalType(10, 5), false),
+				schemaNewColumn(t, "c22", 122, sql.Uint32, false),
+				schemaNewColumn(t, "c23", 123, sql.Uint8, false),
+				schemaNewColumn(t, "c24", 124, sql.Uint16, false),
+				schemaNewColumn(t, "c25", 125, sql.Uint24, false),
+				schemaNewColumn(t, "c26", 126, sql.Uint64, false),
 			),
 		},
 		{
-			name:          "Test primary keys",
-			query:         "create table testTable (id int, age int, first_name varchar(80), is_married bool, primary key (id, age))",
+			name: "Test primary keys",
+			query: `create table testTable (
+								id int comment 'tag:100', 
+								age int comment 'tag:101', 
+								first_name varchar(80) comment 'tag:102', 
+								is_married bool comment 'tag:103', 
+								primary key (id, age))`,
 			expectedTable: "testTable",
 			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumn(t, "id", 0, sql.Int32, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "age", 1, sql.Int32, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "first_name", 2, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false),
-				schemaNewColumn(t, "is_married", 3, sql.Boolean, false)),
+				schemaNewColumn(t, "id", 100, sql.Int32, true, schema.NotNullConstraint{}),
+				schemaNewColumn(t, "age", 101, sql.Int32, true, schema.NotNullConstraint{}),
+				schemaNewColumn(t, "first_name", 102, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false),
+				schemaNewColumn(t, "is_married", 103, sql.Boolean, false)),
 		},
 		{
-			name:          "Test not null constraints",
-			query:         "create table testTable (id int, age int, first_name varchar(80) not null, is_married bool, primary key (id, age))",
+			name: "Test not null constraints",
+			query: `create table testTable (
+								id int comment 'tag:100', 
+								age int comment 'tag:101', 
+								first_name varchar(80) not null comment 'tag:102', 
+								is_married bool comment 'tag:103', 
+								primary key (id, age))`,
 			expectedTable: "testTable",
 			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumn(t, "id", 0, sql.Int32, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "age", 1, sql.Int32, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "first_name", 2, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "is_married", 3, sql.Boolean, false)),
+				schemaNewColumn(t, "id", 100, sql.Int32, true, schema.NotNullConstraint{}),
+				schemaNewColumn(t, "age", 101, sql.Int32, true, schema.NotNullConstraint{}),
+				schemaNewColumn(t, "first_name", 102, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false, schema.NotNullConstraint{}),
+				schemaNewColumn(t, "is_married", 103, sql.Boolean, false)),
 		},
 		{
-			name:          "Test quoted columns",
-			query:         "create table testTable (`id` int, `age` int, `timestamp` varchar(80), `is married` bool, primary key (`id`, `age`))",
+			name: "Test quoted columns",
+			query: "create table testTable (" +
+				"`id` int comment 'tag:100', " +
+				"`age` int comment 'tag:101', " +
+				"`timestamp` varchar(80) comment 'tag:102', " +
+				"`is married` bool comment 'tag:103', " +
+				"primary key (`id`, `age`))",
 			expectedTable: "testTable",
 			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumn(t, "id", 0, sql.Int32, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "age", 1, sql.Int32, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "timestamp", 2, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false),
-				schemaNewColumn(t, "is married", 3, sql.Boolean, false)),
+				schemaNewColumn(t, "id", 100, sql.Int32, true, schema.NotNullConstraint{}),
+				schemaNewColumn(t, "age", 101, sql.Int32, true, schema.NotNullConstraint{}),
+				schemaNewColumn(t, "timestamp", 102, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false),
+				schemaNewColumn(t, "is married", 103, sql.Boolean, false)),
 		},
 		{
-			name:          "Test tag comments",
-			query:         "create table testTable (id int primary key comment 'tag:5', age int comment 'tag:10')",
+			name: "Test tag comments",
+			query: `create table testTable (
+								id int primary key comment 'tag:5', age int comment 'tag:10')`,
 			expectedTable: "testTable",
 			expectedSchema: dtestutils.CreateSchema(
 				schemaNewColumn(t, "id", 5, sql.Int32, true, schema.NotNullConstraint{}),
 				schemaNewColumn(t, "age", 10, sql.Int32, false)),
 		},
 		{
-			name:          "Test faulty tag comments",
-			query:         "create table testTable (id int primary key comment 'tag:a', age int comment 'this is my personal area')",
+			name: "Test faulty tag comments",
+			query: `create table testTable (
+								id int primary key comment 'tag:a', age int comment 'this is my personal area')`,
 			expectedTable: "testTable",
 			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumn(t, "id", 0, sql.Int32, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "age", 1, sql.Int32, false)),
+				schemaNewColumn(t, "id", 4817, sql.Int32, true, schema.NotNullConstraint{}),
+				schemaNewColumn(t, "age", 7208, sql.Int32, false)),
 		},
 		// Real world examples for regression testing
 		{
 			name: "Test ip2nation",
 			query: `CREATE TABLE ip2nation (
-							ip int(11) unsigned NOT NULL default 0,
-							country char(2) NOT NULL default '',
+							ip int(11) unsigned NOT NULL default 0 comment 'tag:100',
+							country char(2) NOT NULL default '' comment 'tag:101',
 							PRIMARY KEY (ip));`,
 			expectedTable: "ip2nation",
 			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumn(t, "ip", 0, sql.Uint32, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "country", 1, sql.MustCreateStringWithDefaults(sqltypes.Char, 2), false, schema.NotNullConstraint{})),
+				schemaNewColumn(t, "ip", 100, sql.Uint32, true, schema.NotNullConstraint{}),
+				schemaNewColumn(t, "country", 101, sql.MustCreateStringWithDefaults(sqltypes.Char, 2), false, schema.NotNullConstraint{})),
 		},
 		{
 			name:          "Test ip2nationCountries",
 			expectedTable: "ip2nationCountries",
 			query: `CREATE TABLE ip2nationCountries (
-							code varchar(4) NOT NULL default '',
-							iso_code_2 varchar(2) NOT NULL default '',
-							iso_code_3 varchar(3) default '',
-							iso_country varchar(255) NOT NULL default '',
-							country varchar(255) NOT NULL default '',
-							lat float NOT NULL default 0.0,
-							lon float NOT NULL default 0.0,
+							code varchar(4) NOT NULL default '' COMMENT 'tag:100',
+							iso_code_2 varchar(2) NOT NULL default '' COMMENT 'tag:101',
+							iso_code_3 varchar(3) default '' COMMENT 'tag:102',
+							iso_country varchar(255) NOT NULL default '' COMMENT 'tag:103',
+							country varchar(255) NOT NULL default '' COMMENT 'tag:104',
+							lat float NOT NULL default 0.0 COMMENT 'tag:105',
+							lon float NOT NULL default 0.0 COMMENT 'tag:106',
 							PRIMARY KEY (code));`,
 			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumn(t, "code", 0, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 4), true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "iso_code_2", 1, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 2), false, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "iso_code_3", 2, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 3), false),
-				schemaNewColumn(t, "iso_country", 3, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "country", 4, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "lat", 5, sql.Float32, false, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "lon", 6, sql.Float32, false, schema.NotNullConstraint{})),
+				schemaNewColumn(t, "code", 100, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 4), true, schema.NotNullConstraint{}),
+				schemaNewColumn(t, "iso_code_2", 101, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 2), false, schema.NotNullConstraint{}),
+				schemaNewColumn(t, "iso_code_3", 102, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 3), false),
+				schemaNewColumn(t, "iso_country", 103, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, schema.NotNullConstraint{}),
+				schemaNewColumn(t, "country", 104, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, schema.NotNullConstraint{}),
+				schemaNewColumn(t, "lat", 105, sql.Float32, false, schema.NotNullConstraint{}),
+				schemaNewColumn(t, "lon", 106, sql.Float32, false, schema.NotNullConstraint{})),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
-			CreateTestDatabase(dEnv, t)
+			dtestutils.CreateTestTable(t, dEnv, PeopleTableName, PeopleTestSchema, AllPeopleRows...)
 			ctx := context.Background()
 			root, _ := dEnv.WorkingRoot(ctx)
 
@@ -986,7 +1007,7 @@ func TestAlterSystemTables(t *testing.T) {
 		DoltQueryCatalogSchema,
 		NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 2+2 from dual"), types.String("description")))
 	dtestutils.CreateTestTable(t, dEnv, doltdb.SchemasTableName,
-		mustGetDoltSchema(SchemasTableSchema()),
+		schemasTableDoltSchema(),
 		NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual")))
 
 	// The _history and _diff tables give not found errors right now because of https://github.com/liquidata-inc/dolt/issues/373.
@@ -995,7 +1016,7 @@ func TestAlterSystemTables(t *testing.T) {
 		for _, tableName := range systemTableNames {
 			expectedErr := "system table"
 			if strings.HasPrefix(tableName, "dolt_diff") || strings.HasPrefix(tableName, "dolt_history") {
-				expectedErr = "not found"
+				expectedErr = "system tables cannot be dropped or altered"
 			}
 			assertFails(t, dEnv, fmt.Sprintf("drop table %s", tableName), expectedErr)
 		}
@@ -1008,7 +1029,7 @@ func TestAlterSystemTables(t *testing.T) {
 		for _, tableName := range systemTableNames {
 			expectedErr := "system table"
 			if strings.HasPrefix(tableName, "dolt_diff") || strings.HasPrefix(tableName, "dolt_history") {
-				expectedErr = "not found"
+				expectedErr = "system tables cannot be dropped or altered"
 			}
 			assertFails(t, dEnv, fmt.Sprintf("rename table %s to newname", tableName), expectedErr)
 		}
@@ -1021,11 +1042,18 @@ func TestAlterSystemTables(t *testing.T) {
 		for _, tableName := range append(systemTableNames, reservedTableNames...) {
 			expectedErr := "cannot be altered"
 			if strings.HasPrefix(tableName, "dolt_diff") || strings.HasPrefix(tableName, "dolt_history") {
-				expectedErr = "not found"
+				expectedErr = " cannot be altered"
 			}
 			assertFails(t, dEnv, fmt.Sprintf("alter table %s add column a int", tableName), expectedErr)
 		}
 	})
+}
+
+func schemasTableDoltSchema() schema.Schema {
+	// this is a dummy test environment and will not be used,
+	// dolt_schema table tags will be parsed from the comments in SchemaTableSchema()
+	testEnv := dtestutils.CreateTestEnv()
+	return mustGetDoltSchema(SchemasTableSchema(), doltdb.SchemasTableName, testEnv)
 }
 
 func assertFails(t *testing.T, dEnv *env.DoltEnv, query, expectedErr string) {

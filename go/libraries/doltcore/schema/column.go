@@ -23,8 +23,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-// ReservedTagMin is the start of a range of tags which the user should not be able to use in their schemas.
-const ReservedTagMin uint64 = 1 << 63
+// InvalidTag is used as an invalid tag
+const InvalidTag uint64 = math.MaxUint64
 
 var (
 	// KindToLwrStr maps a noms kind to the kinds lowercased name
@@ -35,9 +35,6 @@ var (
 )
 
 var (
-	// InvalidTag is used as an invalid tag
-	InvalidTag uint64 = math.MaxUint64
-
 	// InvalidCol is a Column instance that is returned when there is nothing to return and can be tested against.
 	InvalidCol = Column{
 		"invalid",

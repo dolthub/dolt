@@ -15,15 +15,21 @@
 package sqle
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/src-d/go-mysql-server/sql"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
+	dsql "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
+
+var ErrPartiallyDefinedTags = fmt.Errorf("must define tags for all or none of the schema columns")
 
 // doltSchemaToSqlSchema returns the sql.Schema corresponding to the dolt schema given.
 func doltSchemaToSqlSchema(tableName string, sch schema.Schema) (sql.Schema, error) {
@@ -65,19 +71,51 @@ func SqlSchemaToDoltResultSchema(sqlSchema sql.Schema) (schema.Schema, error) {
 
 // SqlSchemaToDoltResultSchema returns a dolt Schema from the sql schema given, suitable for use in creating a table.
 // For result set schemas, see SqlSchemaToDoltResultSchema.
-func SqlSchemaToDoltSchema(sqlSchema sql.Schema) (schema.Schema, error) {
+func SqlSchemaToDoltSchema(ctx context.Context, root *doltdb.RootValue, tableName string, sqlSchema sql.Schema) (schema.Schema, error) {
 	var cols []schema.Column
+	var err error
 
-	var tag uint64
-	for i, col := range sqlSchema {
-		commentTag := extractTag(col)
-		if commentTag != schema.InvalidTag {
-			tag = commentTag
-		} else {
-			tag = uint64(i)
+	// Users must define all or none of the column tags
+	userDefinedTags := extractTag(sqlSchema[0]) != schema.InvalidTag
+	var tags []uint64
+
+	if userDefinedTags {
+		for _, col := range sqlSchema {
+			commentTag := extractTag(col)
+			tags = append(tags, commentTag)
+			if commentTag == schema.InvalidTag {
+				return nil, ErrPartiallyDefinedTags
+			}
 		}
+	} else {
+		// generate tags for all columns
+		var names []string
+		var kinds []types.NomsKind
+		for _, col := range sqlSchema {
+			names = append(names, col.Name)
+			ti, err := typeinfo.FromSqlType(col.Type)
+			if err != nil {
+				return nil, err
+			}
+			kinds = append(kinds, ti.NomsKind())
 
-		convertedCol, err := SqlColToDoltCol(tag, col)
+			// check for user defined tags
+			if extractTag(col) != schema.InvalidTag {
+				return nil, ErrPartiallyDefinedTags
+			}
+		}
+		tags, err = root.GenerateTagsForNewColumns(ctx, tableName, names, kinds)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if len(tags) != len(sqlSchema) {
+		return nil, fmt.Errorf("number of tags should equal number of columns")
+	}
+
+	for i, col := range sqlSchema {
+		convertedCol, err := SqlColToDoltCol(tags[i], col)
 		if err != nil {
 			return nil, err
 		}
@@ -125,17 +163,15 @@ func SqlColToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 	return schema.NewColumnWithTypeInfo(col.Name, tag, typeInfo, col.PrimaryKey, constraints...)
 }
 
-const tagCommentPrefix = "tag:"
-
 // Extracts the optional comment tag from a column type defn, or InvalidTag if it can't be extracted
 func extractTag(col *sql.Column) uint64 {
 	if len(col.Comment) == 0 {
 		return schema.InvalidTag
 	}
 
-	i := strings.Index(col.Comment, tagCommentPrefix)
+	i := strings.Index(col.Comment, dsql.TagCommentPrefix)
 	if i >= 0 {
-		startIdx := i + len(tagCommentPrefix)
+		startIdx := i + len(dsql.TagCommentPrefix)
 		tag, err := strconv.ParseUint(col.Comment[startIdx:], 10, 64)
 		if err != nil {
 			return schema.InvalidTag

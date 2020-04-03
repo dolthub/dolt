@@ -158,12 +158,12 @@ SQL
 @test "diff summary gets summaries for all tables with changes" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
+  pk BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
+  c3 BIGINT,
+  c4 BIGINT,
+  c5 BIGINT,
   PRIMARY KEY (pk)
 );
 SQL
@@ -171,12 +171,12 @@ SQL
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt sql <<SQL
 CREATE TABLE employees (
-  \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
-  \`first name\` LONGTEXT COMMENT 'tag:1',
-  \`last name\` LONGTEXT COMMENT 'tag:2',
-  \`title\` LONGTEXT COMMENT 'tag:3',
-  \`start date\` LONGTEXT COMMENT 'tag:4',
-  \`end date\` LONGTEXT COMMENT 'tag:5',
+  \`id\` LONGTEXT NOT NULL,
+  \`first name\` LONGTEXT,
+  \`last name\` LONGTEXT,
+  \`title\` LONGTEXT,
+  \`start date\` LONGTEXT,
+  \`end date\` LONGTEXT,
   PRIMARY KEY (id)
 );
 SQL
@@ -294,4 +294,35 @@ SQL
     skip "Bad where clause not found because the argument parsing logic is only triggered on existance of a diff"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "failed to parse where clause" ]] || false
+}
+
+@test "diff --cached" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    skip "diff --cached not supported"
+    run dolt diff --cached
+    [ $status -wq 0 ]
+    [ $output -eq "" ]
+    dolt add test
+    run dolt diff --cached
+    [ $status -wq 0 ]
+    [[ $output =~ "added table" ]] || false  
+    dolt commit -m "First commit"
+    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
+    run dolt diff
+    [ $status -eq 0 ]
+    CORRECT_DIFF=$output
+    dolt add test
+    run dolt diff --cached
+    [ $status -eq 0 ]
+    [ $output -eq $CORRECT_DIFF ]
 }

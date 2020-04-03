@@ -174,8 +174,8 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 	return schema.SchemaFromCols(colColl), nil
 }
 
-// MarshalAsNomsValue takes a Schema and converts it to a types.Value
-func MarshalAsNomsValue(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) (types.Value, error) {
+// MarshalSchemaAsNomsValue takes a Schema and converts it to a types.Value
+func MarshalSchemaAsNomsValue(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) (types.Value, error) {
 	sd, err := toSchemaData(sch)
 
 	if err != nil {
@@ -195,8 +195,8 @@ func MarshalAsNomsValue(ctx context.Context, vrw types.ValueReadWriter, sch sche
 	return types.EmptyStruct(vrw.Format()), errors.New("Table Schema could not be converted to types.Struct")
 }
 
-// UnmarshalNomsValue takes a types.Value instance and Unmarshalls it into a Schema.
-func UnmarshalNomsValue(ctx context.Context, nbf *types.NomsBinFormat, schemaVal types.Value) (schema.Schema, error) {
+// UnmarshalSchemaNomsValue takes a types.Value instance and Unmarshalls it into a Schema.
+func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, schemaVal types.Value) (schema.Schema, error) {
 	var sd schemaData
 	err := marshal.Unmarshal(ctx, nbf, schemaVal, &sd)
 
@@ -205,6 +205,89 @@ func UnmarshalNomsValue(ctx context.Context, nbf *types.NomsBinFormat, schemaVal
 	}
 
 	return sd.decodeSchema()
+}
+
+type superSchemaData struct {
+	Columns  []encodedColumn     `noms:"columns" json:"columns"`
+	TagNames map[uint64][]string `noms:"col_constraints" json:"col_constraints"`
+}
+
+func toSuperSchemaData(ss *schema.SuperSchema) (superSchemaData, error) {
+	encCols := make([]encodedColumn, ss.Size())
+	tn := make(map[uint64][]string)
+
+	i := 0
+	err := ss.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		encCols[i] = encodeColumn(col)
+		tn[tag] = ss.AllColumnNames(tag)
+		i++
+
+		return false, nil
+	})
+
+	if err != nil {
+		return superSchemaData{}, err
+	}
+
+	return superSchemaData{encCols, tn}, nil
+}
+
+func (ssd superSchemaData) decodeSuperSchema() (*schema.SuperSchema, error) {
+	numCols := len(ssd.Columns)
+	cols := make([]schema.Column, numCols)
+
+	for i, col := range ssd.Columns {
+		c, err := col.decodeColumn()
+		if err != nil {
+			return nil, err
+		}
+		cols[i] = c
+	}
+
+	colColl, err := schema.NewColCollection(cols...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if ssd.TagNames == nil {
+		ssd.TagNames = make(map[uint64][]string)
+	}
+
+	return schema.UnmarshalSuperSchema(colColl, ssd.TagNames), nil
+}
+
+// MarshalSuperSchemaAsNomsValue creates a Noms value from a SuperSchema to be written to a RootValue.
+func MarshalSuperSchemaAsNomsValue(ctx context.Context, vrw types.ValueReadWriter, ss *schema.SuperSchema) (types.Value, error) {
+	ssd, err := toSuperSchemaData(ss)
+
+	if err != nil {
+		return types.EmptyStruct(vrw.Format()), err
+	}
+
+	val, err := marshal.Marshal(ctx, vrw, ssd)
+
+	if err != nil {
+		return types.EmptyStruct(vrw.Format()), err
+	}
+
+	if _, ok := val.(types.Struct); ok {
+		return val, nil
+	}
+
+	return types.EmptyStruct(vrw.Format()), errors.New("Table Super Schema could not be converted to types.Struct")
+}
+
+// UnmarshalSuperSchemaNomsValue takes a Noms value read from a RootValue and constructs a SuperSchema from it.
+func UnmarshalSuperSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, ssVal types.Value) (*schema.SuperSchema, error) {
+	var ssd superSchemaData
+	err := marshal.Unmarshal(ctx, nbf, ssVal, &ssd)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return ssd.decodeSuperSchema()
 }
 
 // MarshalAsJson takes a Schema and returns a string containing it's json encoding

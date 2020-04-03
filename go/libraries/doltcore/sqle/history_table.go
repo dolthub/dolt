@@ -24,6 +24,7 @@ import (
 	"github.com/src-d/go-mysql-server/sql/expression"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/expreval"
@@ -53,7 +54,7 @@ var _ sql.Table = &HistoryTable{}
 type HistoryTable struct {
 	name                  string
 	ddb                   *doltdb.DoltDB
-	ss                    rowconv.SuperSchema
+	ss                    *schema.SuperSchema
 	sqlSch                sql.Schema
 	commitFilters         []sql.Expression
 	rowFilters            []sql.Expression
@@ -62,9 +63,7 @@ type HistoryTable struct {
 }
 
 // NewHistoryTable creates a history table
-func NewHistoryTable(ctx context.Context, name string, ddb *doltdb.DoltDB) (*HistoryTable, error) {
-	ssg := rowconv.NewSuperSchemaGen()
-
+func NewHistoryTable(ctx context.Context, name string, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (*HistoryTable, error) {
 	cmItr, err := doltdb.CommitItrForAllBranches(ctx, ddb)
 
 	if err != nil {
@@ -73,22 +72,21 @@ func NewHistoryTable(ctx context.Context, name string, ddb *doltdb.DoltDB) (*His
 
 	indCmItr := doltdb.NewCommitIndexingCommitItr(ddb, cmItr)
 
-	err = ssg.AddHistoryOfCommits(ctx, name, ddb, indCmItr)
+	ss, err := SuperSchemaForAllBranches(ctx, indCmItr, ddb, rsr, name)
 
 	if err != nil {
 		return nil, err
 	}
 
-	ss, err := ssg.GenerateSuperSchema(
-		rowconv.NameKindPair{Name: CommitHashCol, Kind: types.StringKind},
-		rowconv.NameKindPair{Name: CommitterCol, Kind: types.StringKind},
-		rowconv.NameKindPair{Name: CommitDateCol, Kind: types.TimestampKind})
+	_ = ss.AddColumn(schema.NewColumn(CommitHashCol, doltdb.HistoryCommitHashTag, types.StringKind, false))
+	_ = ss.AddColumn(schema.NewColumn(CommitterCol, doltdb.HistoryCommitterTag, types.StringKind, false))
+	_ = ss.AddColumn(schema.NewColumn(CommitDateCol, doltdb.HistoryCommitDateTag, types.TimestampKind, false))
+
+	sch, err := ss.GenerateSchema()
 
 	if err != nil {
 		return nil, err
 	}
-
-	sch := ss.GetSchema()
 
 	if sch.GetAllCols().Size() <= 3 {
 		return nil, sql.ErrTableNotFound.New(DoltHistoryTablePrefix + name)
@@ -188,17 +186,11 @@ func splitFilters(filters []sql.Expression) (commitFilters, rowFilters []sql.Exp
 	return commitFilters, rowFilters
 }
 
-const (
-	committerColTag uint64 = iota
-	commitHashColTag
-	commitDateColTag
-)
-
 func commitSchema() schema.Schema {
 	cols := []schema.Column{
-		schema.NewColumn(CommitterCol, committerColTag, types.StringKind, false),
-		schema.NewColumn(CommitHashCol, commitHashColTag, types.StringKind, false),
-		schema.NewColumn(CommitDateCol, commitDateColTag, types.TimestampKind, false),
+		schema.NewColumn(CommitterCol, doltdb.HistoryCommitterTag, types.StringKind, false),
+		schema.NewColumn(CommitHashCol, doltdb.HistoryCommitHashTag, types.StringKind, false),
+		schema.NewColumn(CommitDateCol, doltdb.HistoryCommitDateTag, types.TimestampKind, false),
 	}
 
 	colColl, _ := schema.NewColCollection(cols...)
@@ -217,9 +209,9 @@ func getCommitFilterFunc(nbf *types.NomsBinFormat, filters []sql.Expression) (do
 
 	return func(ctx context.Context, h hash.Hash, committer string, time time.Time) (bool, error) {
 		commitFields := map[uint64]types.Value{
-			committerColTag:  types.String(committer),
-			commitHashColTag: types.String(h.String()),
-			commitDateColTag: types.Timestamp(time),
+			doltdb.HistoryCommitterTag:  types.String(committer),
+			doltdb.HistoryCommitHashTag: types.String(h.String()),
+			doltdb.HistoryCommitDateTag: types.Timestamp(time),
 		}
 		return expFunc(ctx, commitFields)
 	}, nil
@@ -305,7 +297,7 @@ func newRowItrForTableAtCommit(
 	h hash.Hash,
 	cm *doltdb.Commit,
 	tblName string,
-	ss rowconv.SuperSchema,
+	ss *schema.SuperSchema,
 	filters []sql.Expression,
 	readerCreateFuncCache map[hash.Hash]CreateReaderFunc) (*rowItrForTableAtCommit, error) {
 	root, err := cm.GetRootValue()
@@ -343,7 +335,7 @@ func newRowItrForTableAtCommit(
 		return nil, err
 	}
 
-	toSuperSchConv, err := ss.RowConvForSchema(tblSch)
+	toSuperSchConv, err := rowConvForSchema(ss, tblSch)
 
 	if err != nil {
 		return nil, err
@@ -366,9 +358,15 @@ func newRowItrForTableAtCommit(
 		return nil, err
 	}
 
-	hashCol, hashOK := ss.GetSchema().GetAllCols().GetByName(CommitHashCol)
-	dateCol, dateOK := ss.GetSchema().GetAllCols().GetByName(CommitDateCol)
-	committerCol, commiterOK := ss.GetSchema().GetAllCols().GetByName(CommitterCol)
+	sch, err := ss.GenerateSchema()
+
+	if err != nil {
+		return nil, err
+	}
+
+	hashCol, hashOK := sch.GetAllCols().GetByName(CommitHashCol)
+	dateCol, dateOK := sch.GetAllCols().GetByName(CommitDateCol)
+	committerCol, commiterOK := sch.GetAllCols().GetByName(CommitterCol)
 
 	if !hashOK || !dateOK || !commiterOK {
 		panic("Bug: History table super schema should always have commit_hash")
@@ -382,7 +380,7 @@ func newRowItrForTableAtCommit(
 
 	return &rowItrForTableAtCommit{
 		rd:             rd,
-		sch:            ss.GetSchema(),
+		sch:            sch,
 		toSuperSchConv: toSuperSchConv,
 		extraVals: map[uint64]types.Value{
 			hashCol.Tag:      types.String(h.String()),

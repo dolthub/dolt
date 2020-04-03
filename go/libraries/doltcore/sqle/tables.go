@@ -25,6 +25,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -234,16 +235,19 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		return err
 	}
 
-	sch, err := table.GetSchema(ctx)
-	if err != nil {
-		return err
-	}
-
 	tag := extractTag(column)
 	if tag == schema.InvalidTag {
-		tag = schema.AutoGenerateTag(sch)
+		// generate a tag if we don't have a user-defined tag
+		ti, err := typeinfo.FromSqlType(column.Type)
+		if err != nil {
+			return err
+		}
+		tt, err := t.db.defRoot.GenerateTagsForNewColumns(ctx, t.name, []string{column.Name}, []types.NomsKind{ti.NomsKind()})
+		if err != nil {
+			return err
+		}
+		tag = tt[0]
 	}
-
 	col, err := SqlColToDoltCol(tag, column)
 	if err != nil {
 		return err
@@ -258,15 +262,15 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		nullable = alterschema.Null
 	}
 
-	var defVal types.Value
+	var defaultVal types.Value
 	if column.Default != nil {
-		defVal, err = col.TypeInfo.ConvertValueToNomsValue(column.Default)
+		defaultVal, err = col.TypeInfo.ConvertValueToNomsValue(column.Default)
 		if err != nil {
 			return err
 		}
 	}
 
-	updatedTable, err := alterschema.AddColumnToTable(ctx, table, col.Tag, col.Name, col.TypeInfo, nullable, defVal, orderToOrder(order))
+	updatedTable, err := alterschema.AddColumnToTable(ctx, t.db.defRoot, table, t.name, col.Tag, col.Name, col.TypeInfo, nullable, defaultVal, orderToOrder(order))
 	if err != nil {
 		return err
 	}

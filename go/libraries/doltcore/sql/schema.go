@@ -20,6 +20,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 )
 
+const TagCommentPrefix = "tag:"
+
 // FmtCol converts a column to a string with a given indent space count, name width, and type width.  If nameWidth or
 // typeWidth are 0 or less than the length of the name or type, then the length of the name or type will be used
 func FmtCol(indent, nameWidth, typeWidth int, col schema.Column) string {
@@ -52,4 +54,8 @@ func FmtColWithNameAndType(indent, nameWidth, typeWidth int, colName, typeStr st
 func FmtColPrimaryKey(indent int, colStr string) string {
 	fmtStr := fmt.Sprintf("%%%ds PRIMARY KEY (%s)\n", indent, colStr)
 	return fmt.Sprintf(fmtStr, "")
+}
+
+func FmtColTagComment(tag uint64) string {
+	return fmt.Sprintf("%s%d", TagCommentPrefix, tag)
 }

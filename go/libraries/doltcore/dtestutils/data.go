@@ -230,3 +230,22 @@ func ConvertToSchema(sch schema.Schema, rs ...row.Row) []row.Row {
 	}
 	return newRows
 }
+
+// MustRowData converts a slice of row.TaggedValues into a noms types.Map containing that data.
+func MustRowData(t *testing.T, ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, colVals []row.TaggedValues) *types.Map {
+	m, err := types.NewMap(ctx, vrw)
+	require.NoError(t, err)
+
+	me := m.Edit()
+	for _, taggedVals := range colVals {
+		r, err := row.New(types.Format_Default, sch, taggedVals)
+		require.NoError(t, err)
+
+		me = me.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
+	}
+
+	m, err = me.Map(ctx)
+	require.NoError(t, err)
+
+	return &m
+}

@@ -39,16 +39,15 @@ type SchemaDifference struct {
 	New      *schema.Column
 }
 
-// DiffSchemas compares two schemas by looking at columns with the same tag.
-func DiffSchemas(sch1, sch2 schema.Schema) (map[uint64]SchemaDifference, error) {
-	colPairMap, err := pairColumns(sch1, sch2)
+type columnPair [2]*schema.Column
 
-	if err != nil {
-		return nil, err
-	}
+// DiffSchemas compares two schemas by looking at columns with the same tag.
+func DiffSchemas(sch1, sch2 schema.Schema) (map[uint64]SchemaDifference, []uint64) {
+	colPairMap, unionTags := pairColumns(sch1, sch2)
 
 	diffs := make(map[uint64]SchemaDifference)
-	for tag, colPair := range colPairMap {
+	for _, tag := range unionTags {
+		colPair := colPairMap[tag]
 		if colPair[0] == nil {
 			diffs[tag] = SchemaDifference{SchDiffColAdded, tag, nil, colPair[1]}
 		} else if colPair[1] == nil {
@@ -60,31 +59,33 @@ func DiffSchemas(sch1, sch2 schema.Schema) (map[uint64]SchemaDifference, error) 
 		}
 	}
 
-	return diffs, nil
+	return diffs, unionTags
 }
 
 // pairColumns loops over both sets of columns pairing columns with the same tag.
-func pairColumns(sch1, sch2 schema.Schema) (map[uint64][2]*schema.Column, error) {
-	colPairMap := make(map[uint64][2]*schema.Column)
-	err := sch1.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		colPairMap[tag] = [2]*schema.Column{&col, nil}
+func pairColumns(sch1, sch2 schema.Schema) (map[uint64]columnPair, []uint64) {
+	// collect the tag union of the two schemas, ordering sch1 before sch2
+	var unionTags []uint64
+	colPairMap := make(map[uint64]columnPair)
+
+	_ = sch1.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		colPairMap[tag] = columnPair{&col, nil}
+		unionTags = append(unionTags, tag)
+
 		return false, nil
 	})
 
-	if err != nil {
-		return nil, err
-	}
-
-	err = sch2.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+	_ = sch2.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if pair, ok := colPairMap[tag]; ok {
 			pair[1] = &col
 			colPairMap[tag] = pair
 		} else {
-			colPairMap[tag] = [2]*schema.Column{nil, &col}
+			colPairMap[tag] = columnPair{nil, &col}
+			unionTags = append(unionTags, tag)
 		}
 
 		return false, nil
 	})
 
-	return colPairMap, nil
+	return colPairMap, unionTags
 }

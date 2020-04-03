@@ -31,6 +31,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions/commitwalk"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
 	dsql "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
 	"github.com/liquidata-inc/dolt/go/store/hash"
@@ -180,7 +181,7 @@ func (db Database) GetTableInsensitiveWithRoot(ctx context.Context, root *doltdb
 
 	if strings.HasPrefix(lwrName, DoltHistoryTablePrefix) {
 		tblName = tblName[len(DoltHistoryTablePrefix):]
-		dh, err := NewHistoryTable(ctx, tblName, db.ddb)
+		dh, err := NewHistoryTable(ctx, tblName, db.ddb, db.rsr)
 
 		if err != nil {
 			return nil, false, err
@@ -494,7 +495,7 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 }
 
 // CreateTable creates a table with the name and schema given.
-func (db Database) CreateTable(ctx *sql.Context, tableName string, schema sql.Schema) error {
+func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Schema) error {
 	if doltdb.HasDoltPrefix(tableName) {
 		return ErrReservedTableName.New(tableName)
 	}
@@ -503,11 +504,22 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, schema sql.Sc
 		return ErrInvalidTableName.New(tableName)
 	}
 
-	return db.createTable(ctx, tableName, schema)
+	for _, col := range sch {
+		commentTag := extractTag(col)
+		if commentTag == schema.InvalidTag {
+			// we'll replace this invalid tag
+			continue
+		}
+		if commentTag >= schema.ReservedTagMin {
+			return fmt.Errorf("tag %d is within the reserved tag space", commentTag)
+		}
+	}
+
+	return db.createTable(ctx, tableName, sch)
 }
 
 // Unlike the exported version, createTable doesn't enforce any table name checks.
-func (db Database) createTable(ctx *sql.Context, tableName string, schema sql.Schema) error {
+func (db Database) createTable(ctx *sql.Context, tableName string, sch sql.Schema) error {
 	root, err := db.GetRoot(ctx)
 
 	if err != nil {
@@ -520,7 +532,23 @@ func (db Database) createTable(ctx *sql.Context, tableName string, schema sql.Sc
 		return sql.ErrTableAlreadyExists.New(tableName)
 	}
 
-	doltSch, err := SqlSchemaToDoltSchema(schema)
+	doltSch, err := SqlSchemaToDoltSchema(ctx, db.defRoot, tableName, sch)
+	if err != nil {
+		return err
+	}
+
+	err = doltSch.GetAllCols().Iter(func(tag uint64, _ schema.Column) (stop bool, err error) {
+		found, tblName, err := db.defRoot.HasTag(ctx, tag)
+		if err != nil {
+			return true, err
+		}
+		if found {
+			err = fmt.Errorf("A column with the tag %d already exists in table %s.", tag, tblName)
+		}
+		stop = err != nil
+		return stop, err
+	})
+
 	if err != nil {
 		return err
 	}

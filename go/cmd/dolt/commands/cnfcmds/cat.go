@@ -144,7 +144,7 @@ func printConflicts(ctx context.Context, root *doltdb.RootValue, tblNames []stri
 			tbl, _, err := root.GetTable(ctx, tblName)
 
 			if err != nil {
-
+				return errhand.BuildDError("error: unable to read database").AddCause(err).Build()
 			}
 
 			cnfRd, err := merge.NewConflictReader(ctx, tbl)
@@ -159,6 +159,10 @@ func printConflicts(ctx context.Context, root *doltdb.RootValue, tblNames []stri
 
 			cnfWr, err := merge.NewConflictSink(iohelp.NopWrCloser(cli.CliOut), cnfRd.GetSchema(), " | ")
 			defer cnfWr.Close()
+
+			if err != nil {
+				return errhand.BuildDError("error: unable to read database").AddCause(err).Build()
+			}
 
 			nullPrinter := nullprinter.NewNullPrinter(cnfRd.GetSchema())
 			fwtTr := fwt.NewAutoSizingFWTTransformer(cnfRd.GetSchema(), fwt.HashFillWhenTooLong, 1000)

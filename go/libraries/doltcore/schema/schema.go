@@ -14,11 +14,6 @@
 
 package schema
 
-import (
-	"math/rand"
-	"time"
-)
-
 // Schema is an interface for retrieving the columns that make up a schema
 type Schema interface {
 	// GetPKCols gets the collection of columns which make the primary key.
@@ -111,32 +106,4 @@ func VerifyInSchema(inSch, outSch Schema) (bool, error) {
 	}
 
 	return match, nil
-}
-
-var randGen = rand.New(rand.NewSource(time.Now().UnixNano()))
-
-func AutoGenerateTag(sch Schema) uint64 {
-	var maxTagVal uint64 = 128 * 128
-
-	allCols := sch.GetAllCols()
-	for maxTagVal/2 < uint64(allCols.Size()) {
-		if maxTagVal == ReservedTagMin-1 {
-			panic("There is no way anyone should ever have this many columns.  You are a bad person if you hit this panic.")
-		} else if maxTagVal*128 < maxTagVal {
-			maxTagVal = ReservedTagMin - 1
-		} else {
-			maxTagVal = maxTagVal * 128
-		}
-	}
-
-	var randTag uint64
-	for {
-		randTag = uint64(randGen.Int63n(int64(maxTagVal)))
-
-		if _, ok := allCols.GetByTag(randTag); !ok {
-			break
-		}
-	}
-
-	return randTag
 }

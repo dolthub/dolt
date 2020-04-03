@@ -40,7 +40,7 @@ func SchemaAsCreateStmt(tableName string, sch schema.Schema) string {
 	fmt.Fprintf(sb, "CREATE TABLE %s (\n", QuoteIdentifier(tableName))
 
 	firstLine := true
-	sch.GetAllCols().IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
+	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if firstLine {
 			firstLine = false
 		} else {
@@ -50,7 +50,7 @@ func SchemaAsCreateStmt(tableName string, sch schema.Schema) string {
 		s := FmtCol(2, 0, 0, col)
 		sb.WriteString(s)
 
-		return false
+		return false, nil
 	})
 
 	firstPK := true
