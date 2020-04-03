@@ -16,6 +16,7 @@ package rebase
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -113,7 +114,7 @@ func MigrateUniqueTags(ctx context.Context, dEnv *env.DoltEnv) error {
 	atomic.AddUint64(globalCtr, 2)
 
 	replay := func(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
-		err := buildGlobalTagMapping(ctx, root, globalMapping, globalCtr)
+		err := buildGlobalTagMapping(ctx, root, parentRoot, rebasedParentRoot, globalMapping)
 
 		if err != nil {
 			return nil, err
@@ -525,7 +526,7 @@ func validateTagMapping(tagMapping TagMapping) error {
 	return nil
 }
 
-func buildGlobalTagMapping(ctx context.Context, root *doltdb.RootValue, globalMapping map[string]map[uint64]uint64, globalCtr *uint64) error {
+func buildGlobalTagMapping(ctx context.Context, root *doltdb.RootValue, parentRoot *doltdb.RootValue, rebasedParentRoot *doltdb.RootValue, globalMapping map[string]map[uint64]uint64) error {
 	tblNames, err := root.GetTableNames(ctx)
 
 	if err != nil {
@@ -546,22 +547,63 @@ func buildGlobalTagMapping(ctx context.Context, root *doltdb.RootValue, globalMa
 		}
 
 		t, _, err := root.GetTable(ctx, tn)
-
 		if err != nil {
 			return err
 		}
 
 		sch, err := t.GetSchema(ctx)
-
 		if err != nil {
 			return err
 		}
 
-		for _, t := range sch.GetAllCols().Tags {
-			if _, found := globalMapping[tn][t]; !found {
-				globalMapping[tn][t] = *globalCtr
-				atomic.AddUint64(globalCtr, 1)
+		pt, foundParent, err := parentRoot.GetTable(ctx, tn)
+		if err != nil {
+			return err
+		}
+
+		// for this table, get the new columns in root since parentRoot
+		var cc *schema.ColCollection
+		if foundParent {
+			parentSch, err := pt.GetSchema(ctx)
+			if err != nil {
+				return err
 			}
+
+			cc, _ = schema.NewColCollection()
+			err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+				if _, found := parentSch.GetAllCols().GetByTag(tag); !found {
+					cc, err = cc.Append(col)
+				}
+				stop = err != nil
+				return stop, err
+			})
+		} else {
+			cc = sch.GetAllCols()
+		}
+
+		var colNames []string
+		var colKinds []types.NomsKind
+		var existingTags []uint64
+		_ = cc.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			colNames = append(colNames, col.Name)
+			colKinds = append(colKinds, col.Kind)
+			existingTags = append(existingTags, tag)
+			return false, nil
+		})
+
+		migrationTags, err := rebasedParentRoot.GenerateTagsForNewColumns(ctx, tn, colNames, colKinds)
+		if err != nil {
+			return err
+		}
+		if len(existingTags) != len(migrationTags) {
+			return errors.New("error generating unique tags for migration")
+		}
+
+		for i, et := range existingTags {
+			if _, found := globalMapping[tn][et]; found {
+				return errors.New("error mapping unique tags for migration")
+			}
+			globalMapping[tn][et] = migrationTags[i]
 		}
 	}
 	return nil
