@@ -149,7 +149,8 @@ func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []s
 		context.Background(),
 		sql.WithPid(uint64(pid)),
 		sql.WithIndexRegistry(idxReg),
-		sql.WithViewRegistry(viewReg))
+		sql.WithViewRegistry(viewReg),
+		sql.WithSession(dsql.DefaultDoltSession()))
 
 	for _, db := range h.engine.Catalog.AllDatabases() {
 		dsqlDB := db.(dsql.Database)
