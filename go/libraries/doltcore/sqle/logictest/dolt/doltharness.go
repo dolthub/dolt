@@ -41,6 +41,10 @@ var _ logictest.Harness = &DoltHarness{}
 type DoltHarness struct {
 	Version string
 	engine  *sqle.Engine
+
+	sess    *dsql.DoltSession
+	idxReg  *sql.IndexRegistry
+	viewReg *sql.ViewRegistry
 }
 
 func (h *DoltHarness) EngineStr() string {
@@ -63,18 +67,19 @@ func (h *DoltHarness) Init() error {
 	var err error
 	h.engine, err = sqlNewEngine(dEnv.DoltDB, root)
 
-	return err
-}
+	if err != nil {
+		return err
+	}
 
-func (h *DoltHarness) ExecuteStatement(statement string) error {
-	idxReg := sql.NewIndexRegistry()
-	viewReg := sql.NewViewRegistry()
+	h.sess = dsql.DefaultDoltSession()
+	h.idxReg = sql.NewIndexRegistry()
+	h.viewReg = sql.NewViewRegistry()
+
 	ctx := sql.NewContext(
 		context.Background(),
-		sql.WithSession(dsql.DefaultDoltSession()),
-		sql.WithPid(rand.Uint64()),
-		sql.WithIndexRegistry(idxReg),
-		sql.WithViewRegistry(viewReg))
+		sql.WithIndexRegistry(h.idxReg),
+		sql.WithViewRegistry(h.viewReg),
+		sql.WithSession(h.sess))
 
 	for _, db := range h.engine.Catalog.AllDatabases() {
 		dsqlDB := db.(dsql.Database)
@@ -86,7 +91,7 @@ func (h *DoltHarness) ExecuteStatement(statement string) error {
 			return err
 		}
 
-		idxReg.RegisterIndexDriver(dsql.NewDoltIndexDriver(dsqlDB))
+		ctx.RegisterIndexDriver(dsql.NewDoltIndexDriver(dsqlDB))
 		err = dsql.RegisterSchemaFragments(ctx, dsqlDB, defRoot)
 
 		if err != nil {
@@ -94,11 +99,22 @@ func (h *DoltHarness) ExecuteStatement(statement string) error {
 		}
 	}
 
-	err := idxReg.LoadIndexes(ctx, h.engine.Catalog.AllDatabases())
+	err = ctx.LoadIndexes(ctx, h.engine.Catalog.AllDatabases())
 
 	if err != nil {
 		return err
 	}
+
+	return nil
+}
+
+func (h *DoltHarness) ExecuteStatement(statement string) error {
+	ctx := sql.NewContext(
+		context.Background(),
+		sql.WithPid(rand.Uint64()),
+		sql.WithIndexRegistry(h.idxReg),
+		sql.WithViewRegistry(h.viewReg),
+		sql.WithSession(h.sess))
 
 	statement = normalizeStatement(statement)
 
@@ -142,25 +158,13 @@ func normalizeStatement(statement string) string {
 }
 
 func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []string, err error) {
-	idxReg := sql.NewIndexRegistry()
-	viewReg := sql.NewViewRegistry()
 	pid := rand.Uint32()
 	ctx := sql.NewContext(
 		context.Background(),
 		sql.WithPid(uint64(pid)),
-		sql.WithIndexRegistry(idxReg),
-		sql.WithViewRegistry(viewReg),
-		sql.WithSession(dsql.DefaultDoltSession()))
-
-	for _, db := range h.engine.Catalog.AllDatabases() {
-		dsqlDB := db.(dsql.Database)
-
-		err := dsqlDB.SetRoot(ctx, dsqlDB.GetDefaultRoot())
-
-		if err != nil {
-			return "", nil, err
-		}
-	}
+		sql.WithIndexRegistry(h.idxReg),
+		sql.WithViewRegistry(h.viewReg),
+		sql.WithSession(h.sess))
 
 	var sch sql.Schema
 	var rowIter sql.RowIter
