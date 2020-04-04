@@ -31,6 +31,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/funcitr"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 type MoveOperation string
@@ -64,6 +65,11 @@ type MoveOptions struct {
 	Src         DataLocation
 	Dest        DataLocation
 	SrcOptions  interface{}
+}
+
+func (m *MoveOptions) isImport() bool {
+	_, ok := m.Dest.(TableDataLocation)
+	return ok
 }
 
 type DataMover struct {
@@ -236,22 +242,28 @@ func getOutSchema(ctx context.Context, inSch schema.Schema, root *doltdb.RootVal
 		defer rd.Close(ctx)
 
 		return rd.GetSchema(), nil
-	} else {
-		sch, err := schFromFileOrDefault(mvOpts.SchFile, fs, inSch)
-
-		if err != nil {
-			return nil, err
-		}
-
-		sch, err = addPrimaryKey(sch, mvOpts.PrimaryKey)
-
-		if err != nil {
-			return nil, err
-		}
-
-		return sch, nil
 	}
 
+	sch, err := schFromFileOrDefault(mvOpts.SchFile, fs, inSch)
+
+	if err != nil {
+		return nil, err
+	}
+
+	sch, err = addPrimaryKey(sch, mvOpts.PrimaryKey)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if mvOpts.isImport() {
+		sch, err = makeTagsUnique(ctx, root, mvOpts.TableName, sch)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return sch, nil
 }
 
 func schFromFileOrDefault(path string, fs filesys.ReadableFS, defSch schema.Schema) (schema.Schema, error) {
@@ -309,4 +321,31 @@ func addPrimaryKey(sch schema.Schema, explicitKey string) (schema.Schema, error)
 	}
 
 	return sch, nil
+}
+
+func makeTagsUnique(ctx context.Context, root *doltdb.RootValue, tblName string, sch schema.Schema) (schema.Schema, error) {
+	var colNames []string
+	var colKinds []types.NomsKind
+	_ = sch.GetAllCols().Iter(func(_ uint64, col schema.Column) (stop bool, err error) {
+		colNames = append(colNames, col.Name)
+		colKinds = append(colKinds, col.Kind)
+		return false, nil
+	})
+
+	tt, err := root.GenerateTagsForNewColumns(ctx, tblName, colNames, colKinds)
+
+	if err != nil {
+		return nil, err
+	}
+
+	cc, _ := schema.NewColCollection()
+	for i, tag := range sch.GetAllCols().Tags {
+		col, _ := sch.GetAllCols().GetByTag(tag)
+		col.Tag = tt[i]
+		cc, err = cc.Append(col)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return schema.SchemaFromCols(cc), nil
 }
