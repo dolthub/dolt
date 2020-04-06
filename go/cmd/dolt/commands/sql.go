@@ -905,7 +905,7 @@ func canProcessAsBatchInsert(sqlStatement sqlparser.Statement) bool {
 }
 
 func updateBatchInsertOutput() {
-	displayStr := fmt.Sprintf("Rows inserted: %d Rows updated: %d Rows deleted: %d",
+	displayStr := fmt.Sprintf("Rows inserted: %d Rows updated: %d Rows deleted: %d\n",
 		batchEditStats.rowsInserted, batchEditStats.rowsUpdated, batchEditStats.rowsDeleted)
 	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
 	batchEditStats.unprintedEdits = 0
