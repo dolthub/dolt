@@ -154,7 +154,7 @@ SQL
     # confirm a difference exists
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "" ]] || false
+    [ ! "$output" = "" ]
 
     dolt diff --sql newbranch firstbranch > query
     dolt checkout firstbranch
@@ -355,7 +355,7 @@ SQL
     # confirm a difference exists
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "" ]] || false
+    [ ! "$output" = "" ] || false
 
     dolt diff --sql newbranch firstbranch > query
     dolt checkout firstbranch
