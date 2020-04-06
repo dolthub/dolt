@@ -100,7 +100,6 @@ SQL
     [ $status -eq 1 ]
 
     # Adding the tag back with a different type should error
-    skip "No checks for tag reuse across commits right now"
     run dolt sql -q "alter table test add column c1 text comment 'tag:5678'"
     [ $status -ne 0 ]
     run dolt sql -q "alter table test add column c2 text comment 'tag:5678'"
@@ -116,14 +115,6 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit	-m "Committed test table"
-    dolt sql -q "drop table test"
-    skip "Dropping and recreating tables does not enforce tag reuse rules"
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:1234',
-  c1 BIGINT COMMENT 'tag:5678',
-  PRIMARY KEY (pk));
-SQL
     dolt sql -q "drop table test"
     run dolt sql <<SQL
 CREATE TABLE test (
@@ -292,4 +283,18 @@ SQL
     [[ "${lines[3]}" =~ "COMMENT 'tag:5951'" ]] || false
     [[ "${lines[4]}" =~ "COMMENT 'tag:10358'" ]] || false
     [[ "${lines[5]}" =~ "COMMENT 'tag:11314'" ]] || false
+}
+
+@test "dolt table import -c uses deterministic tag generation" {
+    run dolt table import -c ints_table `batshelper 1pk5col-ints.csv`
+    [ $status -eq 0 ]
+    dolt schema show
+    run dolt schema show
+    [ $status -eq 0 ]
+    [[ "${lines[2]}" =~ "COMMENT 'tag:6881'" ]] || false
+    [[ "${lines[3]}" =~ "COMMENT 'tag:1940'" ]] || false
+    [[ "${lines[4]}" =~ "COMMENT 'tag:13393'" ]] || false
+    [[ "${lines[5]}" =~ "COMMENT 'tag:15124'" ]] || false
+    [[ "${lines[6]}" =~ "COMMENT 'tag:5135'" ]] || false
+    [[ "${lines[7]}" =~ "COMMENT 'tag:2248'" ]] || false
 }
