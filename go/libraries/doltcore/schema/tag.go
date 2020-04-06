@@ -17,6 +17,7 @@ package schema
 import (
 	"crypto/sha512"
 	"encoding/binary"
+	"fmt"
 	"math/rand"
 	"regexp"
 	"strings"
@@ -28,6 +29,10 @@ const (
 	// ReservedTagMin is the start of a range of tags which the user should not be able to use in their schemas.
 	ReservedTagMin uint64 = 1 << 50
 )
+
+func ErrTagCollisionAcrossTables(tag uint64, newColName, existingTableName string) error {
+	return fmt.Errorf("Cannot create column %s, the tag %d already exists in table %s", newColName, tag, existingTableName)
+}
 
 // AutoGenerateTag generates a random tag that doesn't exist in the provided SuperSchema.
 // It uses a deterministic random number generator that is seeded with the NomsKinds of any existing columns in the

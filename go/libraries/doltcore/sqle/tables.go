@@ -206,7 +206,7 @@ func (t *DoltTable) updateTable(ctx *sql.Context, mapEditor *types.MapEditor) er
 		return errhand.BuildDError("failed to update rows").AddCause(err).Build()
 	}
 
-	newRoot, err := doltdb.PutTable(ctx, root, root.VRW(), t.name, newTable)
+	newRoot, err := root.PutTable(ctx, t.name, newTable)
 	if err != nil {
 		return errhand.BuildDError("failed to write table back to database").AddCause(err).Build()
 	}

@@ -172,7 +172,7 @@ func newQueryCatalogEntry(ctx context.Context, root *doltdb.RootValue, id, name,
 		return SavedQuery{}, nil, err
 	}
 
-	root, err = doltdb.PutTable(ctx, root, root.VRW(), doltdb.DoltQueryCatalogTableName, newTable)
+	root, err = root.PutTable(ctx, doltdb.DoltQueryCatalogTableName, newTable)
 
 	if err != nil {
 		return SavedQuery{}, nil, err

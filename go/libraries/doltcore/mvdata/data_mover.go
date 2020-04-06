@@ -67,9 +67,16 @@ type MoveOptions struct {
 	SrcOptions  interface{}
 }
 
-func (m *MoveOptions) isImport() bool {
-	_, ok := m.Dest.(TableDataLocation)
-	return ok
+func (m MoveOptions) isImport() bool {
+	_, fromFile := m.Src.(FileDataLocation)
+	_, toTable := m.Dest.(TableDataLocation)
+	return fromFile && toTable
+}
+
+func (m MoveOptions) isCopy() bool {
+	_, fromTable := m.Src.(TableDataLocation)
+	_, toTable := m.Dest.(TableDataLocation)
+	return fromTable && toTable
 }
 
 type DataMover struct {
@@ -104,7 +111,6 @@ func (dmce *DataMoverCreationError) String() string {
 func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, mvOpts *MoveOptions, statsCB noms.StatsCB) (*DataMover, *DataMoverCreationError) {
 	var rd table.TableReadCloser
 	var err error
-	transforms := pipeline.NewTransformCollection()
 
 	rd, srcIsSorted, err := mvOpts.Src.NewReader(ctx, root, fs, mvOpts.SchFile, mvOpts.SrcOptions)
 
@@ -138,11 +144,10 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 		}
 	}
 
+	transforms := pipeline.NewTransformCollection()
 	var mapping *rowconv.FieldMapping
 	if mvOpts.MappingFile != "" {
 		mapping, err = rowconv.MappingFromFile(mvOpts.MappingFile, fs, rd.GetSchema(), outSch)
-	} else if mapByTag(mvOpts.Src, mvOpts.Dest) {
-		mapping, err = rowconv.TagMapping(rd.GetSchema(), outSch)
 	} else {
 		mapping, err = rowconv.NameMapping(rd.GetSchema(), outSch)
 	}
@@ -158,12 +163,15 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 	}
 
 	var wr table.TableWriteCloser
-	if mvOpts.Operation == OverwriteOp {
+	switch mvOpts.Operation {
+	case OverwriteOp:
 		wr, err = mvOpts.Dest.NewCreatingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
-	} else if mvOpts.Operation == ReplaceOp {
+	case ReplaceOp:
 		wr, err = mvOpts.Dest.NewReplacingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
-	} else {
+	case UpdateOp:
 		wr, err = mvOpts.Dest.NewUpdatingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
+	default:
+		return nil, &DataMoverCreationError{CreateWriterErr, errors.New("")}
 	}
 
 	if err != nil {
@@ -256,8 +264,9 @@ func getOutSchema(ctx context.Context, inSch schema.Schema, root *doltdb.RootVal
 		return nil, err
 	}
 
-	if mvOpts.isImport() {
+	if mvOpts.isImport() || mvOpts.isCopy() {
 		sch, err = makeTagsUnique(ctx, root, mvOpts.TableName, sch)
+
 		if err != nil {
 			return nil, err
 		}

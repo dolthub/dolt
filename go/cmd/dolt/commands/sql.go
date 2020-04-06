@@ -1120,7 +1120,7 @@ func (se *sqlEngine) checkThenDeleteAllRows(ctx *sql.Context, s *sqlparser.Delet
 					if err != nil {
 						return false
 					}
-					newRoot, err := doltdb.PutTable(ctx, root, root.VRW(), tName, newTable)
+					newRoot, err := root.PutTable(ctx, tName, newTable)
 					if err != nil {
 						return false
 					}

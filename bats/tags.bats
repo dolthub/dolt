@@ -264,6 +264,32 @@ SQL
     [[ "${lines[3]}" =~ "\`c1\` BIGINT COMMENT " ]] || false
 }
 
+@test "Tags must be unique across tables" {
+    dolt sql <<SQL
+CREATE TABLE aaa (
+  pk INT NOT NULL COMMENT 'tag:1234',
+  PRIMARY KEY (pk));
+SQL
+    dolt sql <<SQL
+CREATE TABLE bbb (
+  pk INT NOT NULL COMMENT 'tag:5678',
+  PRIMARY KEY (pk));
+SQL
+    run dolt sql <<SQL
+CREATE TABLE test (
+  pk INT NOT NULL COMMENT 'tag:1234',
+  c1 INT COMMENT 'tag:5678',
+  PRIMARY KEY (pk));
+SQL
+    [ $status -ne 0 ]
+    [[ "${lines[0]}" =~ "Cannot create column pk, the tag 1234 already exists in table aaa" ]] || false
+    [[ "${lines[1]}" =~ "Cannot create column c1, the tag 5678 already exists in table bbb" ]] || false
+
+    run dolt sql -q "ALTER TABLE aaa ADD COLUMN c1 INT COMMENT 'tag:5678';"
+    [ $status -ne 0 ]
+    [[ "${lines[0]}" =~ "Cannot create column c1, the tag 5678 already exists in table bbb" ]] || false
+}
+
 @test "Deterministic tag generation produces consistent results" {
     dolt branch other
     dolt sql <<SQL

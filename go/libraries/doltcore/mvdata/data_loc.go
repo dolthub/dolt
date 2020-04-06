@@ -136,10 +136,3 @@ func NewDataLocation(path, fileFmtStr string) DataLocation {
 
 	return FileDataLocation{path, dataFmt}
 }
-
-func mapByTag(src, dest DataLocation) bool {
-	_, srcIsTable := src.(TableDataLocation)
-	_, destIsTable := dest.(TableDataLocation)
-
-	return srcIsTable && destIsTable
-}

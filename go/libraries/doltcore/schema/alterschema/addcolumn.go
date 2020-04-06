@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
@@ -177,13 +176,12 @@ func validateNewColumn(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.
 		return err
 	}
 
-	found, tn, err := root.HasTag(ctx, tag)
-	if found {
-		return fmt.Errorf("A column with the tag %d already exists in table %s.", tag, tn)
-	}
-
+	tt, err := root.TablesNamesForTags(ctx, tag)
 	if err != nil {
 		return err
+	}
+	if len(tt) > 0 {
+		return schema.ErrTagCollisionAcrossTables(tag, newColName, tt[tag])
 	}
 
 	if !nullable && defaultVal == nil {
