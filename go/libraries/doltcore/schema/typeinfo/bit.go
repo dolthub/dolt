@@ -35,6 +35,8 @@ type bitType struct {
 
 var _ TypeInfo = (*bitType)(nil)
 
+var PseudoBoolType TypeInfo = &bitType{sql.MustCreateBitType(1)}
+
 func CreateBitTypeFromParams(params map[string]string) (TypeInfo, error) {
 	if bitStr, ok := params[bitTypeParam_Bits]; ok {
 		bitUint, err := strconv.ParseUint(bitStr, 10, 8)
