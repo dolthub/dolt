@@ -34,7 +34,7 @@ SQL
     # confirm a difference exists
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "" ]] || false
+    [ ! "$output" = "" ]
 
     dolt diff --sql newbranch firstbranch > query
     dolt checkout firstbranch
@@ -46,7 +46,7 @@ SQL
     # confirm that both branches have the same content
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "" ]] || false
+    [ "$output" = "" ]
 }
 
 @test "diff sql output reconciles UPDATE query" {
@@ -74,7 +74,7 @@ SQL
     # confirm a difference exists
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "" ]] || false
+    [ ! "$output" = "" ]
 
     dolt diff --sql newbranch firstbranch > query
     dolt checkout firstbranch
@@ -86,7 +86,7 @@ SQL
     # confirm that both branches have the same content
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "" ]] || false
+    [ "$output" = "" ]
 }
 
 @test "diff sql output reconciles DELETE query" {
@@ -114,7 +114,7 @@ SQL
     # confirm a difference exists
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "" ]] || false
+    [ ! "$output" = "" ]
 
     dolt diff --sql newbranch firstbranch > query
     dolt checkout firstbranch
@@ -126,7 +126,7 @@ SQL
     # confirm that both branches have the same content
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "" ]] || false
+    [ "$output" = "" ]
 }
 
 @test "diff sql output reconciles change to PRIMARY KEY field in row " {
@@ -166,7 +166,7 @@ SQL
     # confirm that both branches have the same content
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "" ]] || false
+    [ "$output" = "" ]
 }
 
 @test "diff sql output reconciles column rename" {
@@ -195,7 +195,7 @@ SQL
     # confirm a difference exists
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "" ]] || false
+    [ ! "$output" = "" ]
 
     dolt diff --sql newbranch firstbranch > query
     dolt checkout firstbranch
@@ -207,7 +207,7 @@ SQL
     # confirm that both branches have the same content
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "" ]] || false
+    [ "$output" = "" ]
 }
 
 @test "diff sql output reconciles DROP column query" {
@@ -235,7 +235,7 @@ SQL
     # confirm a difference exists
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "" ]] || false
+    [ ! "$output" = "" ]
 
     dolt diff --sql newbranch firstbranch > query
     dolt checkout firstbranch
@@ -247,7 +247,7 @@ SQL
     # confirm that both branches have the same content
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "" ]] || false
+    [ "$output" = "" ]
 }
 
 @test "diff sql output reconciles ADD column query" {
@@ -275,7 +275,7 @@ SQL
     # confirm a difference exists
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "" ]] || false
+    [ ! "$output" = "" ]
 
     dolt diff --sql newbranch firstbranch > query
     dolt checkout firstbranch
@@ -287,7 +287,7 @@ SQL
     # confirm that both branches have the same content
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "" ]] || false
+    [ "$output" = "" ]
 }
 
 @test "diff sql reconciles CREATE TABLE" {
@@ -313,7 +313,7 @@ SQL
     # confirm a difference exists
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "" ]] || false
+    [ ! "$output" = "" ]
 
     dolt diff --sql newbranch firstbranch > query
     dolt checkout firstbranch
@@ -326,7 +326,7 @@ SQL
     dolt diff --sql newbranch firstbranch
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "" ]] || false
+    [ "$output" = "" ]
 }
 
 @test "diff sql includes row INSERTSs to new tables after CREATE TABLE" {
@@ -368,7 +368,7 @@ SQL
     dolt diff --sql newbranch firstbranch
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "" ]] || false
+    [ "$output" = "" ]
 }
 
 @test "diff sql reconciles DROP TABLE" {
@@ -396,7 +396,7 @@ SQL
     # confirm a difference exists
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "" ]] || false
+    [ ! "$output" = "" ]
 
     dolt diff --sql newbranch firstbranch > query
     dolt checkout firstbranch
@@ -408,7 +408,7 @@ SQL
     # confirm that both branches have the same content
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "" ]] || false
+    [ "$output" = "" ]
 }
 
 @test "diff sql outputs RENAME TABLE if underlying data is unchanged" {
@@ -449,7 +449,7 @@ SQL
     # confirm that both branches have the same content
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "" ]] || false
+    [ "$output" = "" ]
 }
 
 @test "diff sql reconciles RENAME TABLE with DROP+ADD if data is changed" {
@@ -478,7 +478,7 @@ SQL
     # confirm a difference exists
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ !"$output" =~ "" ]] || false
+    [ ! "$output" = "" ]
 
     dolt diff --sql newbranch firstbranch > query
     dolt checkout firstbranch
@@ -491,11 +491,11 @@ SQL
     # confirm that both branches have the same content
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "" ]] || false
+    [ "$output" = "" ]
 }
 
 @test "diff sql recreates tables with all types" {
-
+    
     skip "This test fails due to type incompatibility between SQL and Noms"
 
     dolt checkout -b firstbranch
@@ -519,7 +519,7 @@ SQL
     # confirm a difference exists
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "" ]] || false
+    [ ! "$output" = "" ]
 
     dolt diff --sql newbranch firstbranch > query
     dolt checkout firstbranch
@@ -532,7 +532,7 @@ SQL
     dolt diff --sql newbranch firstbranch
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "" ]] || false
+    ["$output" = "" ]
 }
 
 @test "sql diff supports all types" {
@@ -566,7 +566,7 @@ SQL
         # confirm a difference exists
         run dolt diff --sql newbranch firstbranch
         [ "$status" -eq 0 ]
-        [[ ! "$output" =~ "" ]] || false
+        [ ! "$output" = "" ]
 
         dolt diff --sql newbranch firstbranch > patch.sql
         dolt checkout firstbranch
@@ -578,7 +578,7 @@ SQL
         # confirm that both branches have the same content
         run dolt diff --sql newbranch firstbranch
         [ "$status" -eq 0 ]
-        [[ "$output" =~ "" ]] || false
+        [ "$output" = "" ]
     done
 }
 
@@ -615,7 +615,7 @@ SQL
 
         run dolt diff --sql newbranch firstbranch
         [ "$status" -eq 0 ]
-        [[ ! "$output" =~ "" ]] || false
+        [ ! "$output" = "" ]
 
         dolt diff --sql newbranch firstbranch > patch.sql
         dolt checkout firstbranch
@@ -627,6 +627,6 @@ SQL
         # confirm that both branches have the same content
         run dolt diff --sql newbranch firstbranch
         [ "$status" -eq 0 ]
-        [[ "$output" =~ "" ]] || false
+        [ "$output" = "" ]
     done
 }
