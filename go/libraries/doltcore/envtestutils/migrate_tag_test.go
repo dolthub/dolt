@@ -176,13 +176,13 @@ func (p putDoc) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	return dEnv.UpdateWorkingRoot(context.Background(), newRoot)
 }
 
-func TestMigrateUniqueTags(t *testing.T) {
-	for _, test := range MigrateTagsTests {
-		t.Run(test.Name, func(t *testing.T) {
-			testMigrateUniqueTags(t, test)
-		})
-	}
-}
+//func TestMigrateUniqueTags(t *testing.T) {
+//	for _, test := range MigrateTagsTests {
+//		t.Run(test.Name, func(t *testing.T) {
+//			testMigrateUniqueTags(t, test)
+//		})
+//	}
+//}
 
 func testMigrateUniqueTags(t *testing.T, test MigrateTagsTest) {
 	dEnv := dtu.CreateTestEnv()

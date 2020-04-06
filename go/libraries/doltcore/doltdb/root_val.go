@@ -876,6 +876,14 @@ func (root *RootValue) RenameTable(ctx context.Context, oldName, newName string)
 		return nil, ErrTableNotFound
 	}
 
+	_, found, err = tableMap.MaybeGet(ctx, types.String(newName))
+	if err != nil {
+		return nil, err
+	}
+	if found {
+		return nil, ErrTableExists
+	}
+
 	me := tableMap.Edit().Remove(types.String(oldName))
 	me = me.Set(types.String(newName), v)
 	m, err := me.Map(ctx)
