@@ -580,27 +580,28 @@ func buildGlobalTagMapping(ctx context.Context, root *doltdb.RootValue, parentRo
 
 		var colNames []string
 		var colKinds []types.NomsKind
-		var existingTags []uint64
+		var oldTags []uint64
 		_ = cc.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 			colNames = append(colNames, col.Name)
 			colKinds = append(colKinds, col.Kind)
-			existingTags = append(existingTags, tag)
+			oldTags = append(oldTags, tag)
 			return false, nil
 		})
 
-		migrationTags, err := rebasedParentRoot.GenerateTagsForNewColumns(ctx, tn, colNames, colKinds)
+		newTags, err := rebasedParentRoot.GenerateTagsForNewColumns(ctx, tn, colNames, colKinds)
 		if err != nil {
 			return err
 		}
-		if len(existingTags) != len(migrationTags) {
+		if len(oldTags) != len(newTags) {
 			return errors.New("error generating unique tags for migration")
 		}
 
-		for i, et := range existingTags {
-			if _, found := globalMapping[tn][et]; found {
+		for i, ot := range oldTags {
+			nt, found := globalMapping[tn][ot]
+			if found && nt != newTags[i] {
 				return errors.New("error mapping unique tags for migration")
 			}
-			globalMapping[tn][et] = migrationTags[i]
+			globalMapping[tn][ot] = newTags[i]
 		}
 	}
 	return nil
