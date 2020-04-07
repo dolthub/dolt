@@ -89,38 +89,46 @@ func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	}
 
 	root, verr := commands.GetWorkingWithVErr(dEnv)
-
-	if verr == nil {
-		var cm *doltdb.Commit
-		cm, verr = commands.MaybeGetCommitWithVErr(dEnv, args[0])
-
-		if verr == nil {
-			if cm != nil {
-				args = args[1:]
-
-				var err error
-				root, err = cm.GetRootValue()
-
-				if err != nil {
-					verr = errhand.BuildDError("unable to get the root value").AddCause(err).Build()
-				}
-			}
-
-			if len(args) == 0 {
-				usage()
-				return 1
-			}
-
-			verr = printConflicts(ctx, root, args)
-		}
+	if verr != nil {
+		return exitWithVerr(verr)
 	}
 
+	cm, verr := commands.MaybeGetCommitWithVErr(dEnv, args[0])
 	if verr != nil {
-		cli.PrintErrln(verr.Verbose())
+		return exitWithVerr(verr)
+	}
+
+	// If no commit was resolved from the first argument, assume the args are all table names and print the conflicts
+	if cm == nil {
+		if verr := printConflicts(ctx, root, args); verr != nil {
+			return exitWithVerr(verr)
+		}
+
+		return 0
+	}
+
+	tblNames := args[1:]
+	if len(tblNames) == 0 {
+		cli.Println("No tables specified")
+		usage()
 		return 1
 	}
 
+	root, err := cm.GetRootValue()
+	if err != nil {
+		return exitWithVerr(errhand.BuildDError("unable to get the root value").AddCause(err).Build())
+	}
+
+	if verr = printConflicts(ctx, root, tblNames); verr != nil {
+		return exitWithVerr(verr)
+	}
+
 	return 0
+}
+
+func exitWithVerr(verr errhand.VerboseError) int {
+	cli.PrintErrln(verr.Verbose())
+	return 1
 }
 
 func printConflicts(ctx context.Context, root *doltdb.RootValue, tblNames []string) errhand.VerboseError {
