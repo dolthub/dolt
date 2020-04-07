@@ -328,9 +328,14 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		}
 
 		var rebasedParentRows types.Map
+		var rebasedParentSch schema.Schema
 		rebasedParentTbl, found, err := rebasedParentRoot.GetTable(ctx, parentTblName)
 		if found && rebasedParentTbl != nil {
 			rebasedParentRows, err = rebasedParentTbl.GetRowData(ctx)
+			if err != nil {
+				return nil, err
+			}
+			rebasedParentSch, err = rebasedParentTbl.GetSchema(ctx)
 		} else {
 			// TODO: this could also be a renamed table
 			rebasedParentRows, err = types.NewMap(ctx, rebasedParentRoot.VRW())
@@ -341,6 +346,12 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		}
 
 		rows, err := tbl.GetRowData(ctx)
+
+		if err != nil {
+			return nil, err
+		}
+
+		rebasedParentRows, err = dropValsForDeletedColumns(ctx, root.VRW().Format(), rebasedParentRows, rebasedSch, rebasedParentSch)
 
 		if err != nil {
 			return nil, err
@@ -431,6 +442,80 @@ func replayRowDiffs(ctx context.Context, rSch schema.Schema, rows, parentRows, r
 	}
 
 	return rebasedRowEditor.Map(ctx)
+}
+
+func dropValsForDeletedColumns(ctx context.Context, nbf *types.NomsBinFormat, rows types.Map, sch, parentSch schema.Schema) (types.Map, error) {
+	if parentSch == nil {
+		return rows, nil
+	}
+
+	eq, err := schema.SchemasAreEqual(sch, parentSch)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+	if eq {
+		return rows, nil
+	}
+
+	re := rows.Edit()
+
+	mi, err := rows.BufferedIterator(ctx)
+
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	for {
+		k, v, err := mi.Next(ctx)
+
+		if k == nil || v == nil {
+			break
+		}
+		if err != nil {
+			return types.EmptyMap, err
+		}
+
+		ktv, err := row.ParseTaggedValues(k.(types.Tuple))
+
+		if err != nil {
+			return types.EmptyMap, err
+		}
+
+		remove := false
+		for keytag := range ktv {
+			// if we've changed the PK, remove this row
+			if _, found := sch.GetPKCols().GetByTag(keytag); !found {
+				remove = true
+				break
+			}
+		}
+		if remove {
+			re.Remove(k)
+			continue
+		}
+
+		vtv, err := row.ParseTaggedValues(v.(types.Tuple))
+
+		if err != nil {
+			return types.EmptyMap, err
+		}
+
+		for valtag := range vtv {
+			if _, found := sch.GetNonPKCols().GetByTag(valtag); !found {
+				delete(vtv, valtag)
+			}
+		}
+
+		re.Set(k, vtv.NomsTupleForTags(nbf, sch.GetNonPKCols().Tags, false))
+	}
+
+	prunedRowData, err := re.Map(ctx)
+
+	if err != nil {
+		return types.EmptyMap, nil
+	}
+
+	return prunedRowData, nil
 }
 
 func modifyDifferenceTag(d *ndiff.Difference, nbf *types.NomsBinFormat, rSch schema.Schema, tagMapping map[uint64]uint64) (key types.LesserValuable, val types.Valuable, err error) {
