@@ -638,22 +638,27 @@ func buildGlobalTagMapping(ctx context.Context, root *doltdb.RootValue, parentRo
 			return err
 		}
 
-		pt, foundParent, err := parentRoot.GetTable(ctx, tn)
+		foundParent, err := parentRoot.HasTable(ctx, tn)
 		if err != nil {
 			return err
 		}
 
 		// for this table, get the new columns in root since parentRoot
 		var cc *schema.ColCollection
+		var parentSS *schema.SuperSchema
 		if foundParent {
-			parentSch, err := pt.GetSchema(ctx)
+			var found bool
+			parentSS, found, err = parentRoot.GetSuperSchema(ctx, tn)
 			if err != nil {
 				return err
+			}
+			if !found {
+				return fmt.Errorf("error generating unique tags for migration, cannot find super schema for table %s", tn)
 			}
 
 			cc, _ = schema.NewColCollection()
 			err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-				if _, found := parentSch.GetAllCols().GetByTag(tag); !found {
+				if _, found := parentSS.GetByTag(tag); !found {
 					cc, err = cc.Append(col)
 				}
 				stop = err != nil
@@ -682,11 +687,9 @@ func buildGlobalTagMapping(ctx context.Context, root *doltdb.RootValue, parentRo
 		}
 
 		for i, ot := range oldTags {
-			nt, found := globalMapping[tn][ot]
-			if found && nt != newTags[i] {
-				return errors.New("error mapping unique tags for migration")
+			if _, found := globalMapping[tn][ot]; !found {
+				globalMapping[tn][ot] = newTags[i]
 			}
-			globalMapping[tn][ot] = newTags[i]
 		}
 	}
 	return nil
