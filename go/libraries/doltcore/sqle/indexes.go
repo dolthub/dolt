@@ -29,11 +29,16 @@ import (
 // IndexDriver implementation. Not ready for prime time.
 
 type DoltIndexDriver struct {
-	db Database
+	dbs map[string]Database
 }
 
-func NewDoltIndexDriver(database Database) *DoltIndexDriver {
-	return &DoltIndexDriver{database}
+func NewDoltIndexDriver(dbs ...Database) *DoltIndexDriver {
+	nameToDB := make(map[string]Database)
+	for _, db := range dbs {
+		nameToDB[db.Name()] = db
+	}
+
+	return &DoltIndexDriver{nameToDB}
 }
 
 func (*DoltIndexDriver) ID() string {
@@ -53,11 +58,12 @@ func (i *DoltIndexDriver) Delete(sql.Index, sql.PartitionIter) error {
 }
 
 func (i *DoltIndexDriver) LoadAll(ctx *sql.Context, db, table string) ([]sql.Index, error) {
-	if db != i.db.name {
+	database, ok := i.dbs[db]
+	if !ok {
 		panic("Unexpected db: " + db)
 	}
 
-	root, err := i.db.GetRoot(ctx)
+	root, err := database.GetRoot(ctx)
 
 	if err != nil {
 		return nil, err
@@ -79,7 +85,7 @@ func (i *DoltIndexDriver) LoadAll(ctx *sql.Context, db, table string) ([]sql.Ind
 		return nil, err
 	}
 
-	return []sql.Index{&doltIndex{sch, table, i.db, i}}, nil
+	return []sql.Index{&doltIndex{sch, table, database, i}}, nil
 }
 
 type doltIndex struct {

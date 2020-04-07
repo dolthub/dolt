@@ -59,7 +59,7 @@ func (mrEnv MultiRepoEnv) Iter(cb func(name string, dEnv *DoltEnv) (stop bool, e
 	return nil
 }
 
-// GetWorkingRoots gets returns a map with entries for each environment name with a value equal to the working root
+// GetWorkingRoots returns a map with entries for each environment name with a value equal to the working root
 // for that environment
 func (mrEnv MultiRepoEnv) GetWorkingRoots(ctx context.Context) (map[string]*doltdb.RootValue, error) {
 	roots := make(map[string]*doltdb.RootValue)
@@ -136,7 +136,13 @@ func LoadMultiEnv(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, 
 			return nil, err
 		}
 
-		dEnv := Load(ctx, hdp, fs, "file://"+absPath, version)
+		fsForEnv, err := filesys.LocalFilesysWithWorkingDir(absPath)
+
+		if err != nil {
+			return nil, err
+		}
+
+		dEnv := Load(ctx, hdp, fsForEnv, "file://"+filepath.Join(absPath, dbfactory.DoltDataDir), version)
 
 		if dEnv.RSLoadErr != nil {
 			return nil, fmt.Errorf("error loading environment '%s' at path '%s': %s", name, absPath, dEnv.RSLoadErr.Error())

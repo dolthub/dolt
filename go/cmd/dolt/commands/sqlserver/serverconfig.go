@@ -22,6 +22,8 @@ import (
 // LogLevel defines the available levels of logging for the server.
 type LogLevel string
 
+var CliVersion = "test"
+
 const (
 	LogLevel_Debug   LogLevel = "debug"
 	LogLevel_Info    LogLevel = "info"
@@ -32,25 +34,29 @@ const (
 
 // ServerConfig contains all of the configurable options for the MySQL-compatible server.
 type ServerConfig struct {
-	Host     string   // The domain that the server will run on. Accepts an IPv4 or IPv6 address, in addition to localhost.
-	Port     int      // The port that the server will run on. The valid range is [1024, 65535].
-	User     string   // The username that connecting clients must use.
-	Password string   // The password that connecting clients must use.
-	Timeout  int      // The read and write timeouts.
-	ReadOnly bool     // Whether the server will only accept read statements or all statements.
-	LogLevel LogLevel // Specifies the level of logging that the server will use.
+	Host       string   // The domain that the server will run on. Accepts an IPv4 or IPv6 address, in addition to localhost.
+	Port       int      // The port that the server will run on. The valid range is [1024, 65535].
+	User       string   // The username that connecting clients must use.
+	Password   string   // The password that connecting clients must use.
+	Timeout    int      // The read and write timeouts.
+	ReadOnly   bool     // Whether the server will only accept read statements or all statements.
+	LogLevel   LogLevel // Specifies the level of logging that the server will use.
+	MultiDBDir string   // Directory whose children are dolt data repositories
+	Version    string   // Dolt cli version
 }
 
 // DefaultServerConfig creates a `*ServerConfig` that has all of the options set to their default values.
 func DefaultServerConfig() *ServerConfig {
 	return &ServerConfig{
-		Host:     "localhost",
-		Port:     3306,
-		User:     "root",
-		Password: "",
-		Timeout:  30,
-		ReadOnly: false,
-		LogLevel: LogLevel_Info,
+		Host:       "localhost",
+		Port:       3306,
+		User:       "root",
+		Password:   "",
+		Timeout:    30,
+		ReadOnly:   false,
+		LogLevel:   LogLevel_Info,
+		MultiDBDir: "",
+		Version:    CliVersion,
 	}
 }
 
@@ -116,6 +122,11 @@ func (config *ServerConfig) WithReadOnly(readonly bool) *ServerConfig {
 // WithLogLevel updates the log level and returns the called `*ServerConfig`, which is useful for chaining calls.
 func (config *ServerConfig) WithLogLevel(loglevel LogLevel) *ServerConfig {
 	config.LogLevel = loglevel
+	return config
+}
+
+func (config *ServerConfig) WithMultiDBDir(multiDBDir string) *ServerConfig {
+	config.MultiDBDir = multiDBDir
 	return config
 }
 

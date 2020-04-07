@@ -136,7 +136,8 @@ func (dEnv *DoltEnv) HasDoltDir() bool {
 }
 
 func (dEnv *DoltEnv) HasDoltDataDir() bool {
-	return dEnv.hasDoltDataDir("./")
+	exists, isDir := dEnv.FS.Exists(dbfactory.DoltDataDir)
+	return exists && isDir
 }
 
 func (dEnv *DoltEnv) HasDoltTempTableDir() bool {
@@ -145,21 +146,27 @@ func (dEnv *DoltEnv) HasDoltTempTableDir() bool {
 	return ex
 }
 
+func mustAbs(dEnv *DoltEnv, path ...string) string {
+	absPath, err := dEnv.FS.Abs(filepath.Join(path...))
+
+	if err != nil {
+		panic(err)
+	}
+
+	return absPath
+}
+
 // GetDoltDir returns the path to the .dolt directory
 func (dEnv *DoltEnv) GetDoltDir() string {
 	if !dEnv.HasDoltDataDir() {
 		panic("No dolt dir")
 	}
-	return filepath.Join("./", dbfactory.DoltDir)
+
+	return mustAbs(dEnv, dbfactory.DoltDir)
 }
 
 func (dEnv *DoltEnv) hasDoltDir(path string) bool {
-	exists, isDir := dEnv.FS.Exists(filepath.Join(path, dbfactory.DoltDir))
-	return exists && isDir
-}
-
-func (dEnv *DoltEnv) hasDoltDataDir(path string) bool {
-	exists, isDir := dEnv.FS.Exists(filepath.Join(path, dbfactory.DoltDataDir))
+	exists, isDir := dEnv.FS.Exists(mustAbs(dEnv, dbfactory.DoltDir))
 	return exists && isDir
 }
 
@@ -657,7 +664,7 @@ func (dEnv *DoltEnv) FindCreds(credsDir, pubKeyOrId string) (string, error) {
 		return "", ErrNotACred
 	}
 
-	path := filepath.Join(credsDir, pubKeyOrId+creds.JWKFileExtension)
+	path := mustAbs(dEnv, credsDir, pubKeyOrId+creds.JWKFileExtension)
 	exists, isDir := dEnv.FS.Exists(path)
 
 	if isDir {
@@ -766,7 +773,7 @@ func (dEnv *DoltEnv) GetUserHomeDir() (string, error) {
 }
 
 func (dEnv *DoltEnv) TempTableFilesDir() string {
-	return filepath.Join(dEnv.GetDoltDir(), tempTablesDir)
+	return mustAbs(dEnv, dEnv.GetDoltDir(), tempTablesDir)
 }
 
 func (dEnv *DoltEnv) GetAllValidDocDetails() (docs []doltdb.DocDetails, err error) {

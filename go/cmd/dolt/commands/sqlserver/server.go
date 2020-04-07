@@ -35,7 +35,7 @@ import (
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
-func Serve(ctx context.Context, serverConfig *ServerConfig, rootValue *doltdb.RootValue, serverController *ServerController, dEnv *env.DoltEnv) (startError error, closeError error) {
+func Serve(ctx context.Context, serverConfig *ServerConfig, serverController *ServerController, dEnv *env.DoltEnv) (startError error, closeError error) {
 	if serverConfig == nil {
 		cli.Println("No configuration given, using defaults")
 		serverConfig = DefaultServerConfig()
@@ -62,6 +62,7 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, rootValue *doltdb.Ro
 		cli.PrintErr(startError)
 		return
 	}
+
 	if serverConfig.LogLevel != LogLevel_Info {
 		var level logrus.Level
 		level, startError = logrus.ParseLevel(serverConfig.LogLevel.String())
@@ -80,11 +81,29 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, rootValue *doltdb.Ro
 	userAuth := auth.NewAudit(auth.NewNativeSingle(serverConfig.User, serverConfig.Password, permissions), auth.NewAuditLog(logrus.StandardLogger()))
 	sqlEngine := sqle.NewDefault()
 
-	mrEnv := env.DoltEnvAsMultiEnv(dEnv)
-	roots, err := mrEnv.GetWorkingRoots(ctx)
+	var mrEnv env.MultiRepoEnv
+	var roots map[string]*doltdb.RootValue
+	if serverConfig.MultiDBDir == "" {
+		var err error
+		mrEnv = env.DoltEnvAsMultiEnv(dEnv)
+		roots, err = mrEnv.GetWorkingRoots(ctx)
 
-	if err != nil {
+		if err != nil {
+			return err, nil
+		}
+	} else {
+		var err error
+		mrEnv, err = env.LoadMultiEnvFromDir(ctx, env.GetCurrentUserHomeDir, dEnv.FS, serverConfig.MultiDBDir, serverConfig.Version)
 
+		if err != nil {
+			return err, nil
+		}
+
+		roots, err = mrEnv.GetWorkingRoots(ctx)
+
+		if err != nil {
+			return err, nil
+		}
 	}
 
 	dbs := commands.CollectDBs(mrEnv, roots, false)
@@ -121,12 +140,6 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, rootValue *doltdb.Ro
 				sql.WithViewRegistry(vr),
 				sql.WithSession(doltSess))
 
-			err = ir.LoadIndexes(sqlCtx, sqlEngine.Catalog.AllDatabases())
-
-			if err != nil {
-				return nil, nil, nil, err
-			}
-
 			dbs := commands.CollectDBs(mrEnv, roots, false)
 			for _, db := range dbs {
 				err := db.SetRoot(sqlCtx, db.GetDefaultRoot())
@@ -134,13 +147,18 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, rootValue *doltdb.Ro
 					return nil, nil, nil, err
 				}
 
-				sqlCtx.RegisterIndexDriver(dsqle.NewDoltIndexDriver(db))
-
 				err = dsqle.RegisterSchemaFragments(sqlCtx, db, db.GetDefaultRoot())
 				if err != nil {
 					cli.PrintErr(err)
 					return nil, nil, nil, err
 				}
+			}
+
+			sqlCtx.RegisterIndexDriver(dsqle.NewDoltIndexDriver(dbs...))
+			err = ir.LoadIndexes(sqlCtx, sqlEngine.Catalog.AllDatabases())
+
+			if err != nil {
+				return nil, nil, nil, err
 			}
 
 			return doltSess, ir, vr, nil

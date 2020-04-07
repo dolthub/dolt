@@ -135,17 +135,8 @@ func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []
 			}
 
 			if cmdRequiresRepo && !hasHelpFlag(args) {
-				if !dEnv.HasDoltDir() {
-					PrintErrln(color.RedString("The current directory is not a valid dolt repository."))
-					PrintErrln("run: dolt init before trying to run this command")
-					return 2
-				} else if dEnv.RSLoadErr != nil {
-					PrintErrln(color.RedString("The current directories repository state is invalid"))
-					PrintErrln(dEnv.RSLoadErr.Error())
-					return 2
-				} else if dEnv.DBLoadError != nil {
-					PrintErrln(color.RedString("Failed to load database."))
-					PrintErrln(dEnv.DBLoadError.Error())
+				isValid := CheckEnvIsValid(dEnv)
+				if !isValid {
 					return 2
 				}
 			}
@@ -172,6 +163,24 @@ func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []
 
 	hc.printUsage(commandStr)
 	return 1
+}
+
+func CheckEnvIsValid(dEnv *env.DoltEnv) bool {
+	if !dEnv.HasDoltDir() {
+		PrintErrln(color.RedString("The current directory is not a valid dolt repository."))
+		PrintErrln("run: dolt init before trying to run this command")
+		return false
+	} else if dEnv.RSLoadErr != nil {
+		PrintErrln(color.RedString("The current directories repository state is invalid"))
+		PrintErrln(dEnv.RSLoadErr.Error())
+		return false
+	} else if dEnv.DBLoadError != nil {
+		PrintErrln(color.RedString("Failed to load database."))
+		PrintErrln(dEnv.DBLoadError.Error())
+		return false
+	}
+
+	return true
 }
 
 func (hc SubCommandHandler) printUsage(commandStr string) {
