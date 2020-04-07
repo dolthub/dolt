@@ -36,6 +36,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/events"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
@@ -207,6 +208,13 @@ func commandNeedsMigrationCheck(args []string) bool {
 	if len(args) == 0 {
 		return false
 	}
+
+	// special case for -h, --help
+	_, err := argparser.NewArgParser().Parse(args)
+	if err == argparser.ErrHelp {
+		return false
+	}
+
 	subCommandStr := strings.ToLower(strings.TrimSpace(args[0]))
 	for _, cmd := range []cli.Command{
 		commands.ResetCmd{},
