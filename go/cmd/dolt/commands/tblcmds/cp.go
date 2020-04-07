@@ -16,6 +16,7 @@ package tblcmds
 
 import (
 	"context"
+
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/mvdata"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
@@ -138,10 +139,10 @@ func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	}
 
 	mvOpts := &mvdata.MoveOptions{
-		Operation:   mvdata.OverwriteOp,
-		ContOnErr:   true,
-		Src:         mvdata.TableDataLocation{Name: old},
-		Dest:        mvdata.TableDataLocation{Name: new},
+		Operation: mvdata.OverwriteOp,
+		ContOnErr: true,
+		Src:       mvdata.TableDataLocation{Name: old},
+		Dest:      mvdata.TableDataLocation{Name: new},
 	}
 
 	res := executeMove(ctx, dEnv, force, mvOpts)

@@ -1284,4 +1284,3 @@ func validateTagUniqueness(ctx context.Context, root *RootValue, tableName strin
 
 	return nil
 }
-
