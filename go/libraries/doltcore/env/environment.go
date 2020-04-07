@@ -336,6 +336,7 @@ func (dEnv *DoltEnv) initializeRepoState(ctx context.Context) error {
 		return ErrStateUpdate
 	}
 
+	dEnv.RSLoadErr = nil
 	return nil
 }
 

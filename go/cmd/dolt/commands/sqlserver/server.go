@@ -106,7 +106,7 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, serverController *Se
 		}
 	}
 
-	dbs := commands.CollectDBs(mrEnv, roots, false)
+	dbs := commands.CollectDBs(mrEnv, roots, dsqle.NewDatabase)
 	for _, db := range dbs {
 		sqlEngine.AddDatabase(db)
 	}
@@ -140,7 +140,7 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, serverController *Se
 				sql.WithViewRegistry(vr),
 				sql.WithSession(doltSess))
 
-			dbs := commands.CollectDBs(mrEnv, roots, false)
+			dbs := commands.CollectDBs(mrEnv, roots, dsqle.NewDatabase)
 			for _, db := range dbs {
 				err := db.SetRoot(sqlCtx, db.GetDefaultRoot())
 				if err != nil {
