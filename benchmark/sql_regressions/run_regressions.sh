@@ -22,8 +22,8 @@ if [ -z "$DOLT_GLOBAL_CONFIG" ]; then fail Must supply DOLT_GLOBAL_CONFIG; fi
 if [ -z "$CREDSDIR" ]; then fail Must supply CREDSDIR; fi
 if [ -z "$DOLT_CREDS" ]; then fail Must supply DOLT_CREDS; fi
 if [ -z "$CREDS_HASH" ]; then fail Must supply CREDS_HASH; fi
-if [ -z "$JOB_TYPE" ]; then fail Must supply DOLT_VERSION; fi
-if [ -z "$TEST_N_TIMES" ]; then fail Must supply DOLT_VERSION; fi
+if [ -z "$JOB_TYPE" ]; then fail Must supply JOB_TYPE; fi
+if [ -z "$TEST_N_TIMES" ]; then fail Must supply TEST_N_TIMES; fi
 if [ -z "$FAIL_ON_EXISTING_VERSION" ]; then fail Must supply FAIL_ON_EXISTING_VERSION; fi
 
 if [[ -z "$DOLT_VERSION" && -z "$DOLT_RELEASE" ]]; then
