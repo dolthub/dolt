@@ -280,6 +280,14 @@ type TableFile interface {
 	Open() (io.ReadCloser, error)
 }
 
+// Describes what is possible to do with TableFiles in a TableFileStore.
+type TableFileStoreOps struct {
+	// True is the TableFileStore supports reading table files.
+	CanRead  bool
+	// True is the TableFileStore supports writing table files.
+	CanWrite bool
+}
+
 // TableFileStore is an interface for interacting with table files directly
 type TableFileStore interface {
 	// Sources retrieves the current root hash, and a list of all the table files
@@ -290,4 +298,7 @@ type TableFileStore interface {
 
 	// SetRootChunk changes the root chunk hash from the previous value to the new root.
 	SetRootChunk(ctx context.Context, root, previous hash.Hash) error
+
+	// Returns a description of the support TableFile operations. Some stores only support reading table files, not writing.
+	SupportedOperations() TableFileStoreOps
 }
