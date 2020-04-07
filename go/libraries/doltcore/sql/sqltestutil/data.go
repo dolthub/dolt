@@ -39,7 +39,7 @@ import (
 // transforming row results, and so on.
 
 const (
-	IdTag = iota + 100
+	IdTag = iota + 200
 	FirstNameTag
 	LastNameTag
 	IsMarriedTag
@@ -52,20 +52,20 @@ const (
 )
 
 const (
-	EpisodeIdTag = iota + 200
+	EpisodeIdTag = iota + 300
 	EpNameTag
 	EpAirDateTag
 	EpRatingTag
 )
 
 const (
-	AppCharacterTag = iota + 300
+	AppCharacterTag = iota + 400
 	AppEpTag
 	AppCommentsTag
 )
 
 const (
-	homerId = iota + 400
+	homerId = iota
 	margeId
 	bartId
 	lisaId
@@ -263,7 +263,7 @@ func FindRowIndex(find row.Row, rows []row.Row) int {
 }
 
 // Mutates the row given with pairs of {tag,value} given in the varargs param. Converts built-in types to noms types.
-func MutateRow(r row.Row, tagsAndVals ...interface{}) row.Row {
+func MutateRow(sch schema.Schema, r row.Row, tagsAndVals ...interface{}) row.Row {
 	if len(tagsAndVals)%2 != 0 {
 		panic("expected pairs of tags and values")
 	}
@@ -304,7 +304,7 @@ func MutateRow(r row.Row, tagsAndVals ...interface{}) row.Row {
 			nomsVal = nil
 		}
 
-		mutated, err = mutated.SetColVal(uint64(tag), nomsVal, PeopleTestSchema)
+		mutated, err = mutated.SetColVal(uint64(tag), nomsVal, sch)
 		if err != nil {
 			panic(err.Error())
 		}

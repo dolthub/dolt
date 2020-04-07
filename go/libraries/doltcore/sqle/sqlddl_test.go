@@ -449,8 +449,8 @@ func TestAddColumn(t *testing.T) {
 		},
 		{
 			name:        "alter add column with tag conflict",
-			query:       "alter table people add (newColumn float default 1.0 comment 'tag:1')",
-			expectedErr: "A column with the tag 1 already exists",
+			query:       fmt.Sprintf("alter table people add (newColumn float default 1.0 comment 'tag:%d')", IdTag),
+			expectedErr: fmt.Sprintf("A column with the tag %d already exists in table people", IdTag),
 		},
 		{
 			name:        "alter add column not null without default",

@@ -1256,6 +1256,34 @@ func UnionTableNames(ctx context.Context, roots ...*RootValue) ([]string, error)
 	return set.Unique(allTblNames), nil
 }
 
+// TODO: delete this method after releasing v0.16.0
+// UnsafeCreateEmptyTable creates an empty table in this root without checking for tag uniqueness.
+// This method is only used for testing in envtestutils/migrate_tag_test.go
+func UnsafeCreateEmptyTable(ctx context.Context, root *RootValue, tName string, sch schema.Schema) (*RootValue, error) {
+	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, root.VRW(), sch)
+	if err != nil {
+		return nil, err
+	}
+
+	m, err := types.NewMap(ctx, root.VRW())
+	if err != nil {
+		return nil, err
+	}
+
+	tbl, err := NewTable(ctx, root.VRW(), schVal, m)
+	if err != nil {
+		return nil, err
+	}
+
+	tableRef, err := writeValAndGetRef(ctx, root.VRW(), tbl.tableStruct)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return putTable(ctx, root, tName, tableRef)
+}
+
 func validateTagUniqueness(ctx context.Context, root *RootValue, tableName string, table *Table) error {
 	sch, err := table.GetSchema(ctx)
 
