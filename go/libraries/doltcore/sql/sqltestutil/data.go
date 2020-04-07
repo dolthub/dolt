@@ -39,7 +39,7 @@ import (
 // transforming row results, and so on.
 
 const (
-	IdTag = iota
+	IdTag = iota + 100
 	FirstNameTag
 	LastNameTag
 	IsMarriedTag
@@ -52,20 +52,20 @@ const (
 )
 
 const (
-	EpisodeIdTag = iota
+	EpisodeIdTag = iota + 200
 	EpNameTag
 	EpAirDateTag
 	EpRatingTag
 )
 
 const (
-	AppCharacterTag = iota
+	AppCharacterTag = iota + 300
 	AppEpTag
 	AppCommentsTag
 )
 
 const (
-	homerId = iota
+	homerId = iota + 400
 	margeId
 	bartId
 	lisaId
