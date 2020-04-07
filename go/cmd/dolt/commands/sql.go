@@ -294,7 +294,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 }
 
 func execShell(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, format resultFormat) (map[string]*doltdb.RootValue, errhand.VerboseError) {
-	dbs := CollectDBs(mrEnv, roots, false)
+	dbs := CollectDBs(mrEnv, roots, dsqle.NewDatabase)
 	se, err := newSqlEngine(sqlCtx, mrEnv, roots, format, dbs...)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
@@ -314,7 +314,7 @@ func execShell(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*do
 }
 
 func execBatch(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, batchInput io.Reader, format resultFormat) (map[string]*doltdb.RootValue, errhand.VerboseError) {
-	dbs := CollectDBs(mrEnv, roots, true)
+	dbs := CollectDBs(mrEnv, roots, dsqle.NewBatchedDatabase)
 	se, err := newSqlEngine(sqlCtx, mrEnv, roots, format, dbs...)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
@@ -334,7 +334,7 @@ func execBatch(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*do
 }
 
 func execQuery(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, query string, format resultFormat) (map[string]*doltdb.RootValue, errhand.VerboseError) {
-	dbs := CollectDBs(mrEnv, roots, false)
+	dbs := CollectDBs(mrEnv, roots, dsqle.NewDatabase)
 	se, err := newSqlEngine(sqlCtx, mrEnv, roots, format, dbs...)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
@@ -362,20 +362,15 @@ func execQuery(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*do
 	return newRoots, nil
 }
 
+type createDBFunc func(name string, defRoot *doltdb.RootValue, ddb *doltdb.DoltDB, rsr env.RepoStateReader) dsqle.Database
+
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
 // objects.
-func CollectDBs(mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, batchMode bool) []dsqle.Database {
+func CollectDBs(mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, createDB createDBFunc) []dsqle.Database {
 	dbs := make([]dsqle.Database, 0, len(mrEnv))
 	_ = mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
 		root := roots[name]
-
-		var db dsqle.Database
-		if batchMode {
-			db = dsqle.NewBatchedDatabase(name, root, dEnv.DoltDB, dEnv.RepoState)
-		} else {
-			db = dsqle.NewDatabase(name, root, dEnv.DoltDB, dEnv.RepoState)
-		}
-
+		db := createDB(name, root, dEnv.DoltDB, dEnv.RepoState)
 		dbs = append(dbs, db)
 		return false, nil
 	})
@@ -836,8 +831,8 @@ func processQuery(ctx *sql.Context, query string, se *sqlEngine) (sql.Schema, sq
 		cli.Println("Database changed")
 		return sch, nil, err
 	case *sqlparser.Delete:
-		err := se.checkThenDeleteAllRows(ctx, s)
-		if err != nil {
+		ok := se.checkThenDeleteAllRows(ctx, s)
+		if ok {
 			return nil, nil, err
 		}
 		return se.query(ctx, query)
@@ -1238,8 +1233,10 @@ func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, 
 	return nil
 }
 
+var ErrNotNaked = fmt.Errorf("not a naked query.")
+
 // Checks if the query is a naked delete and then deletes all rows if so. Returns true if it did so, false otherwise.
-func (se *sqlEngine) checkThenDeleteAllRows(ctx *sql.Context, s *sqlparser.Delete) error {
+func (se *sqlEngine) checkThenDeleteAllRows(ctx *sql.Context, s *sqlparser.Delete) bool {
 	if s.Where == nil && s.Limit == nil && s.Partitions == nil && len(s.TableExprs) == 1 {
 		if ate, ok := s.TableExprs[0].(*sqlparser.AliasedTableExpr); ok {
 			if ste, ok := ate.Expr.(sqlparser.TableName); ok {
@@ -1250,13 +1247,13 @@ func (se *sqlEngine) checkThenDeleteAllRows(ctx *sql.Context, s *sqlparser.Delet
 
 				roots, err := se.getRoots(ctx)
 				if err != nil {
-					return err
+					return false
 				}
 
 				root, ok := roots[dbName]
 
-				if err != nil {
-					return err
+				if !ok {
+					return false
 				}
 
 				tName := ste.Name.String()
@@ -1265,45 +1262,51 @@ func (se *sqlEngine) checkThenDeleteAllRows(ctx *sql.Context, s *sqlparser.Delet
 
 					// Let the SQL engine handle system table deletes to avoid duplicating business logic here
 					if doltdb.HasDoltPrefix(tName) {
-						return err
+						return false
 					}
 
 					rowData, err := table.GetRowData(ctx)
 					if err != nil {
-						return err
+						return false
 					}
 
 					printRowIter := sql.RowsToRowIter(sql.NewRow(rowData.Len()))
 
 					emptyMap, err := types.NewMap(ctx, root.VRW())
 					if err != nil {
-						return err
+						return false
 					}
 
 					newTable, err := table.UpdateRows(ctx, emptyMap)
 					if err != nil {
-						return err
+						return false
 					}
 
 					newRoot, err := root.PutTable(ctx, tName, newTable)
 					if err != nil {
-						return err
+						return false
 					}
 
 					_ = se.prettyPrintResults(ctx, sql.Schema{{Name: "updated", Type: sql.Uint64}}, printRowIter)
 
 					db, err := se.getDB(dbName)
 					if err != nil {
-						return err
+						return false
 					}
 
-					return db.SetRoot(ctx, newRoot)
+					err = db.SetRoot(ctx, newRoot)
+
+					if err != nil {
+						return false
+					}
+
+					return true
 				}
 			}
 		}
 	}
 
-	return nil
+	return false
 }
 
 // Executes a SQL DDL statement (create, update, etc.). Updates the new root value in
