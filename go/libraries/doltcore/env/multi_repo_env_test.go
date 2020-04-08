@@ -100,7 +100,7 @@ func TestDoltEnvAsMultiEnv(t *testing.T) {
 	require.NoError(t, err)
 
 	hdp := func() (string, error) { return rootPath, nil }
-	envPath := filepath.Join(rootPath, " test---name _ 123git ")
+	envPath := filepath.Join(rootPath, " test---name _ 123")
 	dEnv := initRepoWithRelativePath(t, envPath, hdp)
 
 	mrEnv := DoltEnvAsMultiEnv(dEnv)
