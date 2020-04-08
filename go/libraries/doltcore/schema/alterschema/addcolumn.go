@@ -164,7 +164,7 @@ func validateNewColumn(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.
 	cols := sch.GetAllCols()
 	err = cols.Iter(func(currColTag uint64, currCol schema.Column) (stop bool, err error) {
 		if currColTag == tag {
-			return false, fmt.Errorf("A column with the tag %d already exists in table %s.", tag, tblName)
+			return false, schema.ErrTagPrevUsed(tag, newColName, tblName)
 		} else if currCol.Name == newColName {
 
 			return true, fmt.Errorf("A column with the name %s already exists in table %s.", newColName, tblName)
@@ -182,7 +182,7 @@ func validateNewColumn(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.
 		return err
 	}
 	if len(tt) > 0 {
-		return schema.ErrTagCollisionAcrossTables(tag, newColName, tt[tag])
+		return schema.ErrTagPrevUsed(tag, newColName, tt[tag])
 	}
 
 	if !nullable && defaultVal == nil {

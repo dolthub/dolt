@@ -1296,7 +1296,7 @@ func validateTagUniqueness(ctx context.Context, root *RootValue, tableName strin
 	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		tn, tagExists := tt[tag]
 		if tagExists && tn != tableName {
-			ee = append(ee, schema.ErrTagCollisionAcrossTables(tag, col.Name, tn).Error())
+			ee = append(ee, schema.ErrTagPrevUsed(tag, col.Name, tn).Error())
 		}
 		return false, nil
 	})

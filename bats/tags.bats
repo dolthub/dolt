@@ -90,7 +90,7 @@ SQL
     [[ "$output" =~ "tag:8910" ]] || false
     run dolt sql -q "alter table test add column c2 bigint comment 'tag:8910'"
     [ $status -ne 0 ]
-    [[ "$output" =~ "A column with the tag 8910 already exists in table test." ]] || false
+    [[ "$output" =~ "Cannot create column c2, the tag 8910 was already used in table test" ]] || false
 }
 
 @test "Cannot reuse tag number of deleted column" {
@@ -107,7 +107,7 @@ SQL
     dolt commit -m 'dropped column c1'
     run dolt sql -q "alter table test add column c2 int comment 'tag:5678'"
     [ $status -ne 0 ]
-    [[ "$output" =~ "Cannot create column c2, the tag 5678 already exists in table test" ]] || false
+    [[ "$output" =~ "Cannot create column c2, the tag 5678 was already used in table test" ]] || false
 }
 
 @test "Cannot reuse tag number of deleted column after table rename" {
@@ -125,7 +125,7 @@ SQL
     dolt sql -q 'alter table test rename to new_name'
     run dolt sql -q "alter table new_name add column c2 int comment 'tag:5678'"
     [ $status -ne 0 ]
-    [[ "$output" =~ "Cannot create column c2, the tag 5678 already exists in table new_name" ]] || false
+    [[ "$output" =~ "Cannot create column c2, the tag 5678 was already used in table new_name" ]] || false
 }
 
 @test "Cannot reuse tag number of deleted table" {
@@ -150,10 +150,10 @@ CREATE TABLE new_table (
   PRIMARY KEY (pk));
 SQL
     [ $status -ne 0 ]
-    [[ "$output" =~ "Cannot create column pk, the tag 1234 already exists in table aaa" ]] || false
+    [[ "$output" =~ "Cannot create column pk, the tag 1234 was already used in table aaa" ]] || false
     run dolt sql -q "alter table bbb add column c1 int comment 'tag:1234'"
     [ $status -ne 0 ]
-    [[ "$output" =~ "Cannot create column c1, the tag 1234 already exists in table aaa" ]] || false
+    [[ "$output" =~ "Cannot create column c1, the tag 1234 was already used in table aaa" ]] || false
 }
 
 @test "Should not be able to reuse a committed tag number on a column with a different type" {
@@ -383,12 +383,12 @@ CREATE TABLE test (
   PRIMARY KEY (pk));
 SQL
     [ $status -ne 0 ]
-    [[ "${lines[0]}" =~ "Cannot create column pk, the tag 1234 already exists in table aaa" ]] || false
-    [[ "${lines[1]}" =~ "Cannot create column c1, the tag 5678 already exists in table bbb" ]] || false
+    [[ "${lines[0]}" =~ "Cannot create column pk, the tag 1234 was already used in table aaa" ]] || false
+    [[ "${lines[1]}" =~ "Cannot create column c1, the tag 5678 was already used in table bbb" ]] || false
 
     run dolt sql -q "ALTER TABLE aaa ADD COLUMN c1 INT COMMENT 'tag:5678';"
     [ $status -ne 0 ]
-    [[ "${lines[0]}" =~ "Cannot create column c1, the tag 5678 already exists in table bbb" ]] || false
+    [[ "${lines[0]}" =~ "Cannot create column c1, the tag 5678 was already used in table bbb" ]] || false
 }
 
 @test "Deterministic tag generation produces consistent results" {

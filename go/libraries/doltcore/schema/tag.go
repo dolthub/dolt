@@ -30,8 +30,8 @@ const (
 	ReservedTagMin uint64 = 1 << 50
 )
 
-func ErrTagCollisionAcrossTables(tag uint64, newColName, existingTableName string) error {
-	return fmt.Errorf("Cannot create column %s, the tag %d already exists in table %s", newColName, tag, existingTableName)
+func ErrTagPrevUsed(tag uint64, newColName, tableName string) error {
+	return fmt.Errorf("Cannot create column %s, the tag %d was already used in table %s", newColName, tag, tableName)
 }
 
 // AutoGenerateTag generates a random tag that doesn't exist in the provided SuperSchema.

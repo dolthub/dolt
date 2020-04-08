@@ -541,7 +541,7 @@ func (db Database) createTable(ctx *sql.Context, tableName string, sch sql.Schem
 		var ee []string
 		_ = doltSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 			if collisionTable, tagExists := tt[tag]; tagExists {
-				ee = append(ee, schema.ErrTagCollisionAcrossTables(tag, col.Name, collisionTable).Error())
+				ee = append(ee, schema.ErrTagPrevUsed(tag, col.Name, collisionTable).Error())
 			}
 			return false, nil
 		})
