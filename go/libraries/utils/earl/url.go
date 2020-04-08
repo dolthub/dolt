@@ -93,7 +93,17 @@ func parse(urlStr string) (*url.URL, error) {
 	return url.Parse(urlStr)
 }
 
-func UrlStrFromSchemeAndPath(scheme, path string) string {
-	u := &url.URL{Scheme: scheme, Path: path}
-	return u.String()
+// FileUrlFromPath returns a url for the given path with the "file" scheme i.e. file://...
+func FileUrlFromPath(path string, separator rune) string {
+	if osutil.StartsWithWindowsVolume(path) {
+		path = "/" + path
+	}
+
+	if separator != '/' {
+		path = strings.ReplaceAll(path, string(separator), "/")
+	}
+
+	u := &url.URL{Scheme: "file", Path: path}
+	urlStr := u.String()
+	return urlStr
 }

@@ -25,11 +25,12 @@ os.chdir(working_dir)
 
 from pytest import wait_for_connection
 wait_for_connection(port=int(port_str), timeout_ms=int(timeout_ms), database=db)
-" -- $PYTEST_DIR $1 $2 dolt_repo_$$
+" -- $PYTEST_DIR $1 $2 dolt
 }
 
 start_sql_server() {
     let PORT="$$ % (65536-1024) + 1024"
+    echo $PWD
     dolt sql-server --port=$PORT &
     SERVER_PID=$!
     wait_for_connection $PORT 5000

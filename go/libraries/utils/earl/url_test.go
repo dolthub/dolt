@@ -224,6 +224,14 @@ func TestParse(t *testing.T) {
 			},
 			false,
 		},
+		{
+			FileUrlFromPath(`C:\Users\name\datasets`, '\\'),
+			url.URL{
+				Scheme: "file",
+				Path:   "C:/Users/name/datasets",
+			},
+			false,
+		},
 	}
 
 	for _, test := range tests {
@@ -232,7 +240,7 @@ func TestParse(t *testing.T) {
 		if (err != nil) != test.expectErr {
 			t.Error("input:", test.urlStr, "got error:", err != nil, "expected error:", test.expectErr, "result:", actualUrl, "err:", err)
 		} else if err == nil && !reflect.DeepEqual(actualUrl, &test.expectedUrl) {
-			t.Error(actualUrl, "!=", &test.expectedUrl)
+			t.Errorf("'%s' != '%s'", actualUrl, &test.expectedUrl)
 		}
 	}
 }

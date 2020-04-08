@@ -173,7 +173,7 @@ func LoadMultiEnv(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, 
 			return nil, err
 		}
 
-		urlStr := earl.UrlStrFromSchemeAndPath(dbfactory.FileScheme, filepath.Join(absPath, dbfactory.DoltDataDir))
+		urlStr := earl.FileUrlFromPath(filepath.Join(absPath, dbfactory.DoltDataDir), os.PathSeparator)
 		dEnv := Load(ctx, hdp, fsForEnv, urlStr, version)
 
 		if dEnv.RSLoadErr != nil {

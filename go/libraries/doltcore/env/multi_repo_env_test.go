@@ -16,13 +16,13 @@ package env
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/earl"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/test"
@@ -58,6 +58,8 @@ func TestGetRepoRootDir(t *testing.T) {
 		{`name\.dolt\noms`, `\`, `name`},
 		{`name/.dolt/noms/`, `/`, `name`},
 		{`name\.dolt\noms\`, `\`, `name`},
+		{`/var/folders/w6/mhtq880n6y55xxm3_2kn0bs80000gn/T/dolt-repo-76581`, `/`, `dolt-repo-76581`},
+		{`/var/folders/w6/mhtq880n6y55xxm3_2kn0bs80000gn/T/dolt-repo-76581/.dolt/noms`, `/`, `dolt-repo-76581`},
 		{`/Users/u/name/.dolt/noms`, `/`, `name`},
 		{`C:\files\name\.dolt\noms`, `\`, `name`},
 		{`/Users/u/name/.dolt/noms/`, `/`, `name`},
@@ -79,7 +81,7 @@ func initRepoWithRelativePath(t *testing.T, envPath string, hdp HomeDirProvider)
 	fs, err := filesys.LocalFilesysWithWorkingDir(envPath)
 	require.NoError(t, err)
 
-	urlStr := earl.UrlStrFromSchemeAndPath(dbfactory.FileScheme, filepath.Join(envPath, ".dolt", "noms"))
+	urlStr := earl.FileUrlFromPath(filepath.Join(envPath, ".dolt", "noms"), os.PathSeparator)
 	dEnv := Load(context.Background(), hdp, fs, urlStr, "test")
 	cfg, _ := dEnv.Config.GetConfig(GlobalConfig)
 	cfg.SetStrings(map[string]string{
