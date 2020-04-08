@@ -41,6 +41,7 @@ func LocalFilesysWithWorkingDir(cwd string) (Filesys, error) {
 		return nil, err
 	}
 
+	log.Printf("LocalFilesysWithWorkingDir abs of '%s' is '%s'", cwd, absCWD)
 	stat, err := os.Stat(absCWD)
 
 	if err != nil {
