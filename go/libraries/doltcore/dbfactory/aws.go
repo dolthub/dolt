@@ -46,8 +46,6 @@ const (
 
 	//AWSCredsProfile is a creation parameter that can be used to specify which AWS profile to use.
 	AWSCredsProfile = "aws-creds-profile"
-
-	defaultAWSCredsProfile = "default"
 )
 
 // AWSCredentialSource is an enum type representing the different credential sources (auto, role, env, file, or invalid)
@@ -165,25 +163,25 @@ func validatePath(path string) (string, error) {
 func awsConfigFromParams(params map[string]string) (session.Options, error) {
 	awsConfig := aws.NewConfig()
 	if val, ok := params[AWSRegionParam]; ok {
-		awsConfig.WithRegion(val)
+		awsConfig = awsConfig.WithRegion(val)
 	}
 
 	awsCredsSource := RoleCS
 	if val, ok := params[AWSCredsTypeParam]; ok {
 		awsCredsSource = AWSCredentialSourceFromStr(val)
-
 		if awsCredsSource == InvalidCS {
 			return session.Options{}, errors.New("invalid value for aws-creds-source")
 		}
 	}
 
-	awsCredsProfile := defaultAWSCredsProfile
+	opts := session.Options{}
+
+	profile := ""
 	if val, ok := params[AWSCredsProfile]; ok {
-		awsCredsProfile = val
+		profile = val
+		opts.Profile = val
 	}
 
-	opts := session.Options{}
-	opts.Profile = awsCredsProfile
 
 	switch awsCredsSource {
 	case EnvCS:
@@ -192,7 +190,7 @@ func awsConfigFromParams(params map[string]string) (session.Options, error) {
 		if filePath, ok := params[AWSCredsFileParam]; !ok {
 			return opts, os.ErrNotExist
 		} else {
-			creds := credentials.NewSharedCredentials(filePath, awsCredsProfile)
+			creds := credentials.NewSharedCredentials(filePath, profile)
 			awsConfig = awsConfig.WithCredentials(creds)
 		}
 	case AutoCS:
@@ -204,7 +202,7 @@ func awsConfigFromParams(params map[string]string) (session.Options, error) {
 			// if env credentials don't exist try looking for a credentials file
 			if filePath, ok := params[AWSCredsFileParam]; ok {
 				if _, err := os.Stat(filePath); err == nil {
-					creds := credentials.NewSharedCredentials(filePath, awsCredsProfile)
+					creds := credentials.NewSharedCredentials(filePath, profile)
 					awsConfig = awsConfig.WithCredentials(creds)
 				}
 			}
