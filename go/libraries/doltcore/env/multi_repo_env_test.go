@@ -22,6 +22,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/earl"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/test"
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -34,9 +36,39 @@ func TestDirToDBName(t *testing.T) {
 		"  fake - name     ": "fake_name",
 	}
 
-	for path, expected := range tests {
-		actual := dirToDBName(path)
-		assert.Equal(t, actual, expected)
+	for dirName, expected := range tests {
+		actual := dirToDBName(dirName)
+		assert.Equal(t, expected, actual)
+	}
+}
+
+func TestGetRepoRootDir(t *testing.T) {
+	tests := []struct {
+		path     string
+		sep      string
+		expected string
+	}{
+		{``, `/`, ``},
+		{``, `\`, ``},
+		{`/`, `/`, ``},
+		{`C:\`, `\`, ``},
+		{`.dolt/noms`, `/`, ``},
+		{`.dolt\noms`, `\`, ``},
+		{`name/.dolt/noms`, `/`, `name`},
+		{`name\.dolt\noms`, `\`, `name`},
+		{`name/.dolt/noms/`, `/`, `name`},
+		{`name\.dolt\noms\`, `\`, `name`},
+		{`/Users/u/name/.dolt/noms`, `/`, `name`},
+		{`C:\files\name\.dolt\noms`, `\`, `name`},
+		{`/Users/u/name/.dolt/noms/`, `/`, `name`},
+		{`C:\files\name\.dolt\noms\`, `\`, `name`},
+		{`//Users////u//name//.dolt/noms/////`, `/`, `name`},
+		{`C:\\files\\\\name\\.dolt\noms\\\\\\`, `\`, `name`},
+	}
+
+	for _, test := range tests {
+		actual := getRepoRootDir(test.path, test.sep)
+		assert.Equal(t, test.expected, actual, "For '%s' expected '%s' got '%s'", test.path, test.expected, actual)
 	}
 }
 
@@ -47,7 +79,8 @@ func initRepoWithRelativePath(t *testing.T, envPath string, hdp HomeDirProvider)
 	fs, err := filesys.LocalFilesysWithWorkingDir(envPath)
 	require.NoError(t, err)
 
-	dEnv := Load(context.Background(), hdp, fs, "file://"+filepath.Join(envPath, ".dolt", "noms"), "test")
+	urlStr := earl.UrlStrFromSchemeAndPath(dbfactory.FileScheme, filepath.Join(envPath, ".dolt", "noms"))
+	dEnv := Load(context.Background(), hdp, fs, urlStr, "test")
 	cfg, _ := dEnv.Config.GetConfig(GlobalConfig)
 	cfg.SetStrings(map[string]string{
 		UserNameKey:  name,

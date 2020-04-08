@@ -92,3 +92,8 @@ func parse(urlStr string) (*url.URL, error) {
 
 	return url.Parse(urlStr)
 }
+
+func UrlStrFromSchemeAndPath(scheme, path string) string {
+	u := &url.URL{Scheme: scheme, Path: path}
+	return u.String()
+}

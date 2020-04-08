@@ -17,9 +17,12 @@ package env
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"unicode"
+
+	"github.com/liquidata-inc/dolt/go/libraries/utils/earl"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -81,26 +84,54 @@ func (mrEnv MultiRepoEnv) GetWorkingRoots(ctx context.Context) (map[string]*dolt
 	return roots, err
 }
 
+func getRepoRootDir(path, pathSeparator string) string {
+	// filepath.Clean does not work with cross platform paths.  So can't test a windows path on a mac
+	tokens := strings.Split(path, pathSeparator)
+
+	for i := len(tokens) - 1; i >= 0; i-- {
+		if tokens[i] == "" {
+			tokens = append(tokens[:i], tokens[i+1:]...)
+		}
+	}
+
+	if len(tokens) == 0 {
+		return ""
+	}
+
+	if tokens[len(tokens)-1] == dbfactory.DataDir && tokens[len(tokens)-2] == dbfactory.DoltDir {
+		tokens = tokens[:len(tokens)-2]
+	}
+
+	if len(tokens) == 0 {
+		return ""
+	}
+
+	name := tokens[len(tokens)-1]
+
+	// handles drive letters. fine with a folder containing a colon having the default name
+	if strings.IndexRune(name, ':') != -1 {
+		return ""
+	}
+
+	return name
+}
+
 // DoltEnvAsMultiEnv returns a MultiRepoEnv which wraps the DoltEnv and names it based on the directory DoltEnv refers to
 func DoltEnvAsMultiEnv(dEnv *DoltEnv) MultiRepoEnv {
 	dbName := "dolt"
-	filePrefix := dbfactory.FileScheme + "://"
+	url, err := earl.Parse(dEnv.urlStr)
 
-	if strings.HasPrefix(dEnv.urlStr, filePrefix) {
-		path, err := dEnv.FS.Abs(dEnv.urlStr[len(filePrefix):])
+	if err == nil {
+		if url.Scheme == dbfactory.FileScheme {
+			path, err := dEnv.FS.Abs(url.Path)
 
-		if err == nil {
-			if strings.HasSuffix(path, dbfactory.DoltDataDir) {
-				path = path[:len(path)-len(dbfactory.DoltDataDir)]
+			if err == nil {
+				dirName := getRepoRootDir(path, string(os.PathSeparator))
+
+				if dirName != "" {
+					dbName = dirToDBName(dirName)
+				}
 			}
-
-			if path[len(path)-1] == '/' {
-				path = path[:len(path)-1]
-			}
-
-			idx := strings.LastIndex(path, "/")
-			dirName := path[idx+1:]
-			dbName = dirToDBName(dirName)
 		}
 	}
 
@@ -142,7 +173,8 @@ func LoadMultiEnv(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, 
 			return nil, err
 		}
 
-		dEnv := Load(ctx, hdp, fsForEnv, "file://"+filepath.Join(absPath, dbfactory.DoltDataDir), version)
+		urlStr := earl.UrlStrFromSchemeAndPath(dbfactory.FileScheme, filepath.Join(absPath, dbfactory.DoltDataDir))
+		dEnv := Load(ctx, hdp, fsForEnv, urlStr, version)
 
 		if dEnv.RSLoadErr != nil {
 			return nil, fmt.Errorf("error loading environment '%s' at path '%s': %s", name, absPath, dEnv.RSLoadErr.Error())
