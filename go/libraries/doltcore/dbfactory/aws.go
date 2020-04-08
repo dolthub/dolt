@@ -182,7 +182,6 @@ func awsConfigFromParams(params map[string]string) (session.Options, error) {
 		opts.Profile = val
 	}
 
-
 	switch awsCredsSource {
 	case EnvCS:
 		awsConfig = awsConfig.WithCredentials(credentials.NewEnvCredentials())
