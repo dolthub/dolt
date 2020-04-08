@@ -19,6 +19,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -217,19 +218,23 @@ func (dEnv *DoltEnv) InitRepo(ctx context.Context, nbf *types.NomsBinFormat, nam
 }
 
 func (dEnv *DoltEnv) InitRepoWithTime(ctx context.Context, nbf *types.NomsBinFormat, name, email string, t time.Time) error { // should remove name and email args
+	log.Println("create directories")
 	doltDir, err := dEnv.createDirectories(".")
 
 	if err != nil {
 		return err
 	}
 
+	log.Println("configured repo")
 	err = dEnv.configureRepo(doltDir)
 
 	if err == nil {
+		log.Println("initDBAndRepoState")
 		err = dEnv.InitDBAndRepoState(ctx, nbf, name, email, t)
 	}
 
 	if err != nil {
+		log.Println("best effort delete")
 		dEnv.bestEffortDeleteAll(dbfactory.DoltDir)
 	}
 
@@ -256,19 +261,33 @@ func (dEnv *DoltEnv) InitRepoWithNoData(ctx context.Context, nbf *types.NomsBinF
 }
 
 func (dEnv *DoltEnv) createDirectories(dir string) (string, error) {
-	doltDir := filepath.Join(dir, dbfactory.DoltDir)
-	if dEnv.hasDoltDir(doltDir) {
+	absPath, err := dEnv.FS.Abs(dir)
+
+	if err != nil {
+		return "", err
+	}
+
+	exists, isDir := dEnv.FS.Exists(absPath)
+
+	if !exists {
+		return "", fmt.Errorf("'%s' does not exist so could not create '%s", absPath, dbfactory.DoltDataDir)
+	} else if isDir {
+		fmt.Errorf("'%s' exists but it's a file not a directory", absPath)
+	}
+
+	if dEnv.hasDoltDir(dir) {
 		return "", ErrPreexistingDoltDir
 	}
 
-	doltDataDir := filepath.Join(doltDir, dbfactory.DataDir)
-	err := dEnv.FS.MkDirs(doltDataDir)
+	err = dEnv.FS.MkDirs(dbfactory.DoltDataDir)
 
 	if err != nil {
-		return "", fmt.Errorf("unable to make directory %s within the working directory", dbfactory.DoltDataDir)
+		return "", fmt.Errorf("unable to make directory '%s', cause: %s", filepath.Join(absPath, dbfactory.DoltDataDir), err.Error())
 	}
 
-	return doltDir, nil
+	log.Println("made directory:", filepath.Join(absPath, dbfactory.DoltDataDir))
+
+	return filepath.Join(absPath, dbfactory.DoltDir), nil
 }
 
 func (dEnv *DoltEnv) configureRepo(doltDir string) error {

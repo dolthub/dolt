@@ -16,6 +16,7 @@ package dbfactory
 
 import (
 	"context"
+	"log"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -55,6 +56,7 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	info, err := os.Stat(path)
 
 	if err != nil {
+		log.Println("file not found in createDB")
 		return nil, err
 	} else if !info.IsDir() {
 		return nil, filesys.ErrIsFile
