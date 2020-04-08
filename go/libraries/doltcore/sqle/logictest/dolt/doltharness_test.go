@@ -2,13 +2,15 @@ package dolt
 
 import (
 	"context"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/store/types"
-	"github.com/stretchr/testify/assert"
-	"path/filepath"
-	"testing"
 )
 
 func createTestEnvWithFS(fs filesys.Filesys, workingDir string) *env.DoltEnv {
@@ -25,13 +27,13 @@ func createTestEnvWithFS(fs filesys.Filesys, workingDir string) *env.DoltEnv {
 
 type statementTest struct {
 	statement string
-	expErr error
+	expErr    error
 }
 
 type queryTest struct {
-	query string
-	expErr error
-	expSchema string
+	query      string
+	expErr     error
+	expSchema  string
 	expResults []string
 }
 
@@ -42,41 +44,41 @@ func TestDoltHarness(t *testing.T) {
 	statementTests := []statementTest{
 		{
 			statement: "CREATE TABLE t1(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER);",
-			expErr: nil,
+			expErr:    nil,
 		},
 		{
 			statement: "INSERT INTO t1(e,c,b,d,a) VALUES(103,102,100,101,104);",
-			expErr: nil,
+			expErr:    nil,
 		},
 		{
 			statement: "INSERT INTO t1(a,c,d,e,b) VALUES(107,106,108,109,105);",
-			expErr: nil,
+			expErr:    nil,
 		},
 	}
 
 	queryTests := []queryTest{
 		{
-			query: "SELECT a,c,e FROM t1;",
-			expErr: nil,
-			expSchema: "III",
+			query:      "SELECT a,c,e FROM t1;",
+			expErr:     nil,
+			expSchema:  "III",
 			expResults: []string{"104", "102", "103", "107", "106", "109"},
 		},
 		{
-			query: "SELECT b,d FROM t1;",
-			expErr: nil,
-			expSchema: "II",
+			query:      "SELECT b,d FROM t1;",
+			expErr:     nil,
+			expSchema:  "II",
 			expResults: []string{"100", "101", "105", "108"},
 		},
 		{
-			query: "SELECT * FROM t1 WHERE d < 107;",
-			expErr: nil,
-			expSchema: "IIIII",
+			query:      "SELECT * FROM t1 WHERE d < 107;",
+			expErr:     nil,
+			expSchema:  "IIIII",
 			expResults: []string{"104", "100", "102", "101", "103"},
 		},
 		{
-			query: "SELECT * FROM t1 WHERE d > 102;",
-			expErr: nil,
-			expSchema: "IIIII",
+			query:      "SELECT * FROM t1 WHERE d > 102;",
+			expErr:     nil,
+			expSchema:  "IIIII",
 			expResults: []string{"107", "105", "106", "108", "109"},
 		},
 	}
