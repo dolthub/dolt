@@ -17,6 +17,7 @@ package env
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -119,17 +120,21 @@ func getRepoRootDir(path, pathSeparator string) string {
 // DoltEnvAsMultiEnv returns a MultiRepoEnv which wraps the DoltEnv and names it based on the directory DoltEnv refers to
 func DoltEnvAsMultiEnv(dEnv *DoltEnv) MultiRepoEnv {
 	dbName := "dolt"
-	url, err := earl.Parse(dEnv.urlStr)
+	u, err := earl.Parse(dEnv.urlStr)
 
 	if err == nil {
-		if url.Scheme == dbfactory.FileScheme {
-			path, err := dEnv.FS.Abs(url.Path)
+		if u.Scheme == dbfactory.FileScheme {
+			path, err := url.PathUnescape(u.Path)
 
 			if err == nil {
-				dirName := getRepoRootDir(path, string(os.PathSeparator))
+				path, err = dEnv.FS.Abs(path)
 
-				if dirName != "" {
-					dbName = dirToDBName(dirName)
+				if err == nil {
+					dirName := getRepoRootDir(path, string(os.PathSeparator))
+
+					if dirName != "" {
+						dbName = dirToDBName(dirName)
+					}
 				}
 			}
 		}
