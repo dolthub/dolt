@@ -125,6 +125,8 @@ func (config *ServerConfig) WithLogLevel(loglevel LogLevel) *ServerConfig {
 	return config
 }
 
+// WithMultiDBDir returns an updated server config with the root directory for a multi-db environment where each of
+// the subdirectories is a dolt data repository that should be accessible via sql as a database.
 func (config *ServerConfig) WithMultiDBDir(multiDBDir string) *ServerConfig {
 	config.MultiDBDir = multiDBDir
 	return config

@@ -77,8 +77,8 @@ func TestDoltEnvAsMultiEnv(t *testing.T) {
 	}
 }
 
-func initMultiEnv(t *testing.T, names []string) (string, HomeDirProvider, map[string]*DoltEnv) {
-	rootPath, err := test.ChangeToTestDir("TestDoltEnvAsMultiEnv")
+func initMultiEnv(t *testing.T, testName string, names []string) (string, HomeDirProvider, map[string]*DoltEnv) {
+	rootPath, err := test.ChangeToTestDir(testName)
 	require.NoError(t, err)
 
 	hdp := func() (string, error) { return rootPath, nil }
@@ -94,7 +94,7 @@ func initMultiEnv(t *testing.T, names []string) (string, HomeDirProvider, map[st
 
 func TestLoadMultiEnv(t *testing.T) {
 	names := []string{"env 1", " env 2 ", "env-3"}
-	rootPath, hdp, _ := initMultiEnv(t, names)
+	rootPath, hdp, _ := initMultiEnv(t, "TestLoadMultiEnv", names)
 
 	envNamesAndPaths := make([]EnvNameAndPath, len(names))
 	for i, name := range names {
@@ -122,7 +122,7 @@ func TestLoadMultiEnvFromDir(t *testing.T) {
 		names = append(names, k)
 	}
 
-	rootPath, hdp, envs := initMultiEnv(t, names)
+	rootPath, hdp, envs := initMultiEnv(t, "TestLoadMultiEnvFromDir", names)
 	mrEnv, err := LoadMultiEnvFromDir(context.Background(), hdp, filesys.LocalFS, rootPath, "test")
 	require.NoError(t, err)
 

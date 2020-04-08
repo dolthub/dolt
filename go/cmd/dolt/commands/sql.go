@@ -72,6 +72,10 @@ var sqlDocs = cli.CommandDocumentationContent{
 		"Pipe SQL statements to dolt sql (no {{.EmphasisLeft}}-q{{.EmphasisRight}}) to execute a SQL import or update " +
 		"script.\n" +
 		"\n" +
+		"By default this command uses the dolt data repository in the current working directory as the one and only " +
+		"database.  Running with {{.EmphasisLeft}}--multi-db-dir {{.LessThan}}directory{{.GreaterThan}}{{.EmphasisRight}} " +
+		"uses each of the subdirectories of the supplied directory (each subdirectory must be a valid dolt data repository) " +
+		"as databases. Subdirectories starting with '.' are ignored." +
 		"Known limitations:\n" +
 		"* No support for creating indexes\n" +
 		"* No support for foreign keys\n" +
@@ -81,11 +85,9 @@ var sqlDocs = cli.CommandDocumentationContent{
 		"join, which is very slow.",
 
 	Synopsis: []string{
-		"",
-		"-q {{.LessThan}}query{{.GreaterThan}}",
-		"-q {{.LessThan}}query;query{{.GreaterThan}} -b",
-		"-q {{.LessThan}}query{{.GreaterThan}} -r {{.LessThan}}result format{{.GreaterThan}}",
-		"-q {{.LessThan}}query{{.GreaterThan}} -s {{.LessThan}}name{{.GreaterThan}} -m {{.LessThan}}message{{.GreaterThan}}",
+		"[--multi-db-dir {{.LessThan}}directory{{.GreaterThan}}] [-r {{.LessThan}}result format{{.GreaterThan}}]",
+		"-q {{.LessThan}}query;query{{.GreaterThan}} [-r {{.LessThan}}result format{{.GreaterThan}}] -s {{.LessThan}}name{{.GreaterThan}} -m {{.LessThan}}message{{.GreaterThan}} [-b]",
+		"-q {{.LessThan}}query;query{{.GreaterThan}} --multi-db-dir {{.LessThan}}directory{{.GreaterThan}} [-r {{.LessThan}}result format{{.GreaterThan}}] [-b]",
 		"-x {{.LessThan}}name{{.GreaterThan}}",
 		"--list-saved",
 	},
@@ -134,7 +136,7 @@ func (cmd SqlCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(listSavedFlag, "l", "Lists all saved queries")
 	ap.SupportsString(messageFlag, "m", "saved query description", "Used with --query and --save, saves the query with the descriptive message given. See also --name")
 	ap.SupportsFlag(batchFlag, "b", "batch mode, to run more than one query with --query, separated by ';'. Piping input to sql with no arguments also uses batch mode")
-	ap.SupportsString(multiDBDirFlag, "", "directory", "")
+	ap.SupportsString(multiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within ")
 	return ap
 }
 
@@ -143,6 +145,10 @@ func (cmd SqlCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_SQL
 }
 
+// RequiresRepo indicates that this command does not have to be run from within a dolt data repository directory.
+// In this case it is because this command supports the multiDBDirFlag which can pass in a directory.  In the event that
+// that parameter is not provided there is additional error handling within this command to make sure that this was in
+// fact run from within a dolt data repository directory.
 func (cmd SqlCmd) RequiresRepo() bool {
 	return false
 }

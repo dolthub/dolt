@@ -31,7 +31,9 @@ type localFS struct {
 	cwd string
 }
 
-func LocalFilesysWithWorkingDir(cwd string) (*localFS, error) {
+// LocalFilesysWithWorkingDir returns a new Filesys implementation backed by the local filesystem with the supplied
+// working directory.  Path relative operations occur relative to this directory.
+func LocalFilesysWithWorkingDir(cwd string) (Filesys, error) {
 	absCWD, err := filepath.Abs(cwd)
 
 	if err != nil {
@@ -43,7 +45,7 @@ func LocalFilesysWithWorkingDir(cwd string) (*localFS, error) {
 	if err != nil {
 		return nil, err
 	} else if !stat.IsDir() {
-		return nil, fmt.Errorf("'%s' is not a valid directory.", absCWD)
+		return nil, fmt.Errorf("'%s' is not a valid directory", absCWD)
 	}
 
 	return &localFS{absCWD}, nil

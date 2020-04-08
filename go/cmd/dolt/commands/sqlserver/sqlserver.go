@@ -45,7 +45,7 @@ var sqlServerDocs = cli.CommandDocumentationContent{
 Currently, only {{.EmphasisLeft}}SELECT{{.EmphasisRight}} statements are operational, as support for other statements is still being developed.
 `,
 	Synopsis: []string{
-		"[-H {{.LessThan}}host{{.GreaterThan}}] [-P {{.LessThan}}port{{.GreaterThan}}] [-u {{.LessThan}}user{{.GreaterThan}}] [-p {{.LessThan}}password{{.GreaterThan}}] [-t {{.LessThan}}timeout{{.GreaterThan}}] [-l {{.LessThan}}loglevel{{.GreaterThan}}] [-r]",
+		"[-H {{.LessThan}}host{{.GreaterThan}}] [-P {{.LessThan}}port{{.GreaterThan}}] [-u {{.LessThan}}user{{.GreaterThan}}] [-p {{.LessThan}}password{{.GreaterThan}}] [-t {{.LessThan}}timeout{{.GreaterThan}}] [-l {{.LessThan}}loglevel{{.GreaterThan}}] [--multi-db-dir {{.LessThan}}directory{{.GreaterThan}}] [-r]",
 	},
 }
 
@@ -76,7 +76,7 @@ func createArgParser(serverConfig *ServerConfig) *argparser.ArgParser {
 	ap.SupportsInt(timeoutFlag, "t", "Connection timeout", fmt.Sprintf("Defines the timeout, in seconds, used for connections\nA value of `0` represents an infinite timeout (default `%v`)", serverConfig.Timeout))
 	ap.SupportsFlag(readonlyFlag, "r", "Disables modification of the database")
 	ap.SupportsString(logLevelFlag, "l", "Log level", fmt.Sprintf("Defines the level of logging provided\nOptions are: `debug`, `info`, `warning`, `error`, `fatal` (default `%v`)", serverConfig.LogLevel))
-	ap.SupportsString(multiDBDirFlag, "", "directory", "")
+	ap.SupportsString(multiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within ")
 	return ap
 }
 
@@ -85,6 +85,10 @@ func (cmd SqlServerCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_SQL_SERVER
 }
 
+// RequiresRepo indicates that this command does not have to be run from within a dolt data repository directory.
+// In this case it is because this command supports the multiDBDirFlag which can pass in a directory.  In the event that
+// that parameter is not provided there is additional error handling within this command to make sure that this was in
+// fact run from within a dolt data repository directory.
 func (cmd SqlServerCmd) RequiresRepo() bool {
 	return false
 }
