@@ -191,6 +191,12 @@ func (fs *localFS) WriteFile(fp string, data []byte) error {
 
 // MkDirs creates a folder and all the parent folders that are necessary to create it.
 func (fs *localFS) MkDirs(path string) error {
+	if path[len(path)-1] != os.PathSeparator {
+		path = path + string(os.PathSeparator)
+	}
+	
+	log.Printf("making dir: '%s'", path)
+
 	var err error
 	path, err = fs.Abs(path)
 
@@ -201,6 +207,7 @@ func (fs *localFS) MkDirs(path string) error {
 	_, err = os.Stat(path)
 
 	if err != nil {
+		log.Printf("made dir: '%s'", path)
 		return os.MkdirAll(path, os.ModePerm)
 	}
 
