@@ -16,7 +16,6 @@ package env
 
 import (
 	"context"
-	"log"
 	"os"
 	"path/filepath"
 	"testing"
@@ -79,12 +78,10 @@ func initRepoWithRelativePath(t *testing.T, envPath string, hdp HomeDirProvider)
 	err := filesys.LocalFS.MkDirs(envPath)
 	require.NoError(t, err)
 
-	log.Printf("envPath: '%s'", envPath)
 	fs, err := filesys.LocalFilesysWithWorkingDir(envPath)
 	require.NoError(t, err)
 
 	urlStr := earl.FileUrlFromPath(filepath.Join(envPath, ".dolt", "noms"), os.PathSeparator)
-	log.Println(urlStr)
 	dEnv := Load(context.Background(), hdp, fs, urlStr, "test")
 	cfg, _ := dEnv.Config.GetConfig(GlobalConfig)
 	cfg.SetStrings(map[string]string{
@@ -103,7 +100,7 @@ func TestDoltEnvAsMultiEnv(t *testing.T) {
 	require.NoError(t, err)
 
 	hdp := func() (string, error) { return rootPath, nil }
-	envPath := filepath.Join(rootPath, " test---name _ 123 ")
+	envPath := filepath.Join(rootPath, " test---name _ 123git ")
 	dEnv := initRepoWithRelativePath(t, envPath, hdp)
 
 	mrEnv := DoltEnvAsMultiEnv(dEnv)
@@ -131,7 +128,7 @@ func initMultiEnv(t *testing.T, testName string, names []string) (string, HomeDi
 }
 
 func TestLoadMultiEnv(t *testing.T) {
-	names := []string{"env 1", " env 2 ", "env-3"}
+	names := []string{"env 1", " env  2", "env-3"}
 	rootPath, hdp, _ := initMultiEnv(t, "TestLoadMultiEnv", names)
 
 	envNamesAndPaths := make([]EnvNameAndPath, len(names))
@@ -151,7 +148,7 @@ func TestLoadMultiEnv(t *testing.T) {
 func TestLoadMultiEnvFromDir(t *testing.T) {
 	dirNameToDBName := map[string]string{
 		"env 1":   "env_1",
-		" env 2 ": "env_2",
+		" env  2": "env_2",
 		"env-3":   "env_3",
 	}
 

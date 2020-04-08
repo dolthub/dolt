@@ -16,7 +16,6 @@ package dbfactory
 
 import (
 	"context"
-	"log"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -44,13 +43,11 @@ type FileFactory struct {
 
 // CreateDB creates an local filesys backed database
 func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]string) (datas.Database, error) {
-	path, err := url.QueryUnescape(urlObj.Path)
+	path, err := url.PathUnescape(urlObj.Path)
 
 	if err != nil {
 		return nil, err
 	}
-
-	log.Printf("query unescaped '%s'", path)
 
 	path = filepath.FromSlash(path)
 	path = urlObj.Host + path
@@ -58,7 +55,6 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	info, err := os.Stat(path)
 
 	if err != nil {
-		log.Println("directory not found in createDB. err:", err.Error())
 		return nil, err
 	} else if !info.IsDir() {
 		return nil, filesys.ErrIsFile

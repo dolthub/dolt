@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -35,10 +34,6 @@ type localFS struct {
 // LocalFilesysWithWorkingDir returns a new Filesys implementation backed by the local filesystem with the supplied
 // working directory.  Path relative operations occur relative to this directory.
 func LocalFilesysWithWorkingDir(cwd string) (Filesys, error) {
-	if cwd[len(cwd)-1] != os.PathSeparator {
-		cwd = cwd + string(os.PathSeparator)
-	}
-
 	absCWD, err := filepath.Abs(cwd)
 
 	if err != nil {
@@ -53,7 +48,6 @@ func LocalFilesysWithWorkingDir(cwd string) (Filesys, error) {
 		return nil, fmt.Errorf("'%s' is not a valid directory", absCWD)
 	}
 
-	log.Printf("LocalFilesysWithWorkingDir abs('%s') = '%s'", cwd, absCWD)
 	return &localFS{absCWD}, nil
 }
 
@@ -191,12 +185,6 @@ func (fs *localFS) WriteFile(fp string, data []byte) error {
 
 // MkDirs creates a folder and all the parent folders that are necessary to create it.
 func (fs *localFS) MkDirs(path string) error {
-	if path[len(path)-1] != os.PathSeparator {
-		path = path + string(os.PathSeparator)
-	}
-	
-	log.Printf("making dir: '%s'", path)
-
 	var err error
 	path, err = fs.Abs(path)
 
@@ -207,7 +195,6 @@ func (fs *localFS) MkDirs(path string) error {
 	_, err = os.Stat(path)
 
 	if err != nil {
-		log.Printf("made dir: '%s'", path)
 		return os.MkdirAll(path, os.ModePerm)
 	}
 

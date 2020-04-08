@@ -19,7 +19,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -218,23 +217,19 @@ func (dEnv *DoltEnv) InitRepo(ctx context.Context, nbf *types.NomsBinFormat, nam
 }
 
 func (dEnv *DoltEnv) InitRepoWithTime(ctx context.Context, nbf *types.NomsBinFormat, name, email string, t time.Time) error { // should remove name and email args
-	log.Println("create directories")
 	doltDir, err := dEnv.createDirectories(".")
 
 	if err != nil {
 		return err
 	}
 
-	log.Println("configured repo")
 	err = dEnv.configureRepo(doltDir)
 
 	if err == nil {
-		log.Println("initDBAndRepoState")
 		err = dEnv.InitDBAndRepoState(ctx, nbf, name, email, t)
 	}
 
 	if err != nil {
-		log.Println("best effort delete")
 		dEnv.bestEffortDeleteAll(dbfactory.DoltDir)
 	}
 
@@ -285,8 +280,6 @@ func (dEnv *DoltEnv) createDirectories(dir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("unable to make directory '%s', cause: %s", absDataDir, err.Error())
 	}
-
-	log.Printf("made directory: '%s'", absDataDir)
 
 	return filepath.Join(absPath, dbfactory.DoltDir), nil
 }

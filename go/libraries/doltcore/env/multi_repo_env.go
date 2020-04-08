@@ -17,7 +17,6 @@ package env
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -128,10 +127,7 @@ func DoltEnvAsMultiEnv(dEnv *DoltEnv) MultiRepoEnv {
 			path, err := url.PathUnescape(u.Path)
 
 			if err == nil {
-				log.Printf("path unescaped '%s'", path)
-
 				path, err = dEnv.FS.Abs(path)
-				log.Printf("absPath '%s'", path)
 
 				if err == nil {
 					dirName := getRepoRootDir(path, string(os.PathSeparator))
