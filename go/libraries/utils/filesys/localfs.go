@@ -35,13 +35,16 @@ type localFS struct {
 // LocalFilesysWithWorkingDir returns a new Filesys implementation backed by the local filesystem with the supplied
 // working directory.  Path relative operations occur relative to this directory.
 func LocalFilesysWithWorkingDir(cwd string) (Filesys, error) {
+	if cwd[len(cwd)-1] != os.PathSeparator {
+		cwd = cwd + string(os.PathSeparator)
+	}
+
 	absCWD, err := filepath.Abs(cwd)
 
 	if err != nil {
 		return nil, err
 	}
 
-	log.Printf("LocalFilesysWithWorkingDir abs of '%s' is '%s'", cwd, absCWD)
 	stat, err := os.Stat(absCWD)
 
 	if err != nil {
@@ -50,6 +53,7 @@ func LocalFilesysWithWorkingDir(cwd string) (Filesys, error) {
 		return nil, fmt.Errorf("'%s' is not a valid directory", absCWD)
 	}
 
+	log.Printf("LocalFilesysWithWorkingDir abs('%s') = '%s'", cwd, absCWD)
 	return &localFS{absCWD}, nil
 }
 
@@ -260,25 +264,15 @@ func (fs *localFS) MoveFile(srcPath, destPath string) error {
 
 // converts a path to an absolute path.  If it's already an absolute path the input path will be returned unaltered
 func (fs *localFS) Abs(path string) (string, error) {
-	f := func() (string, error) {
-		if filepath.IsAbs(path) {
-			return path, nil
-		}
-
-		if fs.cwd == "" {
-			return filepath.Abs(path)
-		} else {
-			return filepath.Join(fs.cwd, path), nil
-		}
+	if filepath.IsAbs(path) {
+		return path, nil
 	}
 
-	absPath, err := f()
-
-	if err == nil {
-		log.Printf("absPath of '%s' with cwd '%s' is '%s'", path, fs.cwd, absPath)
+	if fs.cwd == "" {
+		return filepath.Abs(path)
+	} else {
+		return filepath.Join(fs.cwd, path), nil
 	}
-
-	return absPath, err
 }
 
 // LastModified gets the last modified timestamp for a file or directory at a given path
