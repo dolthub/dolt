@@ -39,6 +39,7 @@ import (
 
 const (
 	SetUpstreamFlag = "set-upstream"
+	ForcePushFlag   = "force"
 )
 
 var pushDocs = cli.CommandDocumentationContent{
@@ -78,6 +79,7 @@ func (cmd PushCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) e
 func (cmd PushCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(SetUpstreamFlag, "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less {{.EmphasisLeft}}dolt pull{{.EmphasisRight}} and other commands.")
+	ap.SupportsFlag(ForcePushFlag, "f", "Update the remote with local history, overwriting any conflicting history in the remote.")
 	return ap
 }
 
@@ -205,7 +207,8 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 				} else if src == ref.EmptyBranchRef {
 					verr = deleteRemoteBranch(ctx, dest, remoteRef, dEnv.DoltDB, destDB, remote)
 				} else {
-					verr = pushToRemoteBranch(ctx, dEnv, src, dest, remoteRef, dEnv.DoltDB, destDB, remote)
+					updateMode := ref.RefUpdateMode{Force: apr.Contains(ForcePushFlag)}
+					verr = pushToRemoteBranch(ctx, dEnv, updateMode, src, dest, remoteRef, dEnv.DoltDB, destDB, remote)
 				}
 			}
 
@@ -255,7 +258,7 @@ func deleteRemoteBranch(ctx context.Context, toDelete, remoteRef ref.DoltRef, lo
 	return nil
 }
 
-func pushToRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, srcRef, destRef, remoteRef ref.DoltRef, localDB, remoteDB *doltdb.DoltDB, remote env.Remote) errhand.VerboseError {
+func pushToRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, mode ref.RefUpdateMode, srcRef, destRef, remoteRef ref.DoltRef, localDB, remoteDB *doltdb.DoltDB, remote env.Remote) errhand.VerboseError {
 	evt := events.GetEventFromContext(ctx)
 
 	u, err := earl.Parse(remote.Url)
@@ -273,7 +276,7 @@ func pushToRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, srcRef, destRef,
 		return errhand.BuildDError("error: unable to find %v", srcRef.GetPath()).Build()
 	} else {
 		wg, progChan, pullerEventCh := runProgFuncs()
-		err = actions.Push(ctx, dEnv, destRef.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB, cm, progChan, pullerEventCh)
+		err = actions.Push(ctx, dEnv, mode, destRef.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB, cm, progChan, pullerEventCh)
 		stopProgFuncs(wg, progChan, pullerEventCh)
 
 		if err != nil {

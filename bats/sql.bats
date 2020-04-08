@@ -584,3 +584,13 @@ SQL
     skiponwindows "Need to install expect and make this script work on windows."
     $BATS_TEST_DIRNAME/sql-works-after-failing-query.expect
 }
+
+@test "sql insert on duplicate key inserts data by column" {
+    run dolt sql -q "CREATE TABLE test (col_a varchar(2) not null, col_b varchar(2), col_c varchar(2), primary key(col_a));"
+    [ $status -eq 0 ]
+    run dolt sql -q "INSERT INTO test (col_a,col_b) VALUES('a', 'b');"
+    [ $status -eq 0 ]
+    skip run dolt sql -q "INSERT INTO test (col_a,col_b,col_c) VALUES ('a','','b') ON DUPLICATE KEY UPDATE col_a = col_a, col_b = col_b, col_c = VALUES(col_c);"
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ 'unsupported feature' ]] || false
+}

@@ -376,6 +376,24 @@ func (ddb *DoltDB) CanFastForward(ctx context.Context, branch ref.DoltRef, new *
 	return current.CanFastForwardTo(ctx, new)
 }
 
+// SetHead sets the given ref to point at the given commit. It is used in the course of 'force' updates.
+func (ddb *DoltDB) SetHead(ctx context.Context, ref ref.DoltRef, cm *Commit) error {
+	ds, err := ddb.db.GetDataset(ctx, ref.String())
+
+	if err != nil {
+		return err
+	}
+
+	r, err := types.NewRef(cm.commitSt, ddb.db.Format())
+
+	if err != nil {
+		return err
+	}
+
+	_, err = ddb.db.SetHead(ctx, ds, r)
+	return err
+}
+
 // CommitWithParentSpecs commits the value hash given to the branch given, using the list of parent hashes given. Returns an
 // error if the value or any parents can't be resolved, or if anything goes wrong accessing the underlying storage.
 func (ddb *DoltDB) CommitWithParentSpecs(ctx context.Context, valHash hash.Hash, dref ref.DoltRef, parentCmSpecs []*CommitSpec, cm *CommitMeta) (*Commit, error) {

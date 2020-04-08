@@ -223,7 +223,7 @@ func (imp *DataMover) Move(ctx context.Context) (badRowCount int64, err error) {
 }
 
 func maybeMapFields(transforms *pipeline.TransformCollection, mapping *rowconv.FieldMapping) error {
-	rconv, err := rowconv.NewRowConverter(mapping)
+	rconv, err := rowconv.NewImportRowConverter(mapping)
 
 	if err != nil {
 		return err

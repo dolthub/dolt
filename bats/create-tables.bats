@@ -496,7 +496,7 @@ SQL
 }
 
 @test "create a table with null values from csv import with json file" {
-    run dolt table import -c -s `batshelper empty-strings-null-values.json` test `batshelper empty-strings-null-values.csv`
+    run dolt table import -c -s `batshelper empty-strings-null-values-sch.json` test `batshelper empty-strings-null-values.csv`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
@@ -512,4 +512,44 @@ SQL
     [ "${lines[7]}" = "| e  | row five  | <NULL>    |" ]
     [ "${lines[8]}" = "| f  | row six   | 6         |" ]
     [ "${lines[9]}" = "| g  | <NULL>    | <NULL>    |" ]
+}
+
+@test "create a table with null values from json import with json file" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk LONGTEXT NOT NULL,
+  headerOne LONGTEXT,
+  headerTwo BIGINT,
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt table import -u test `batshelper empty-strings-null-values.json`
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
+    run dolt sql -q "select * from test"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 11 ]
+    [ "${lines[3]}" = '| a  | ""        | 1         |' ]
+    [ "${lines[4]}" = '| b  |           | 2         |' ]
+    [ "${lines[5]}" = "| c  | <NULL>    | 3         |" ]
+    [ "${lines[6]}" = "| d  | row four  | <NULL>    |" ]
+    [ "${lines[7]}" = "| e  | row five  | <NULL>    |" ]
+    [ "${lines[8]}" = "| f  | row six   | 6         |" ]
+    [ "${lines[9]}" = "| g  | <NULL>    | <NULL>    |" ]
+}
+
+@test "fail to create a table with null values from json import with json file" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk LONGTEXT NOT NULL,
+  headerOne LONGTEXT NOT NULL,
+  headerTwo BIGINT NOT NULL,
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt table import -u test `batshelper empty-strings-null-values.json`
+    [ "$status" -eq 1 ]
 }
