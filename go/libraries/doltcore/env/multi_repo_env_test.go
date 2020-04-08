@@ -79,6 +79,7 @@ func initRepoWithRelativePath(t *testing.T, envPath string, hdp HomeDirProvider)
 	err := filesys.LocalFS.MkDirs(envPath)
 	require.NoError(t, err)
 
+	log.Printf("envPath: '%s'", envPath)
 	fs, err := filesys.LocalFilesysWithWorkingDir(envPath)
 	require.NoError(t, err)
 

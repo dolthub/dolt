@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -258,15 +259,25 @@ func (fs *localFS) MoveFile(srcPath, destPath string) error {
 
 // converts a path to an absolute path.  If it's already an absolute path the input path will be returned unaltered
 func (fs *localFS) Abs(path string) (string, error) {
-	if filepath.IsAbs(path) {
-		return path, nil
+	f := func() (string, error) {
+		if filepath.IsAbs(path) {
+			return path, nil
+		}
+
+		if fs.cwd == "" {
+			return filepath.Abs(path)
+		} else {
+			return filepath.Join(fs.cwd, path), nil
+		}
 	}
 
-	if fs.cwd == "" {
-		return filepath.Abs(path)
-	} else {
-		return filepath.Join(fs.cwd, path), nil
+	absPath, err := f()
+
+	if err == nil {
+		log.Printf("absPath of '%s' with cwd '%s' is '%s'", path, fs.cwd, absPath)
 	}
+
+	return absPath, err
 }
 
 // LastModified gets the last modified timestamp for a file or directory at a given path
