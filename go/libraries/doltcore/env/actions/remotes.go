@@ -31,13 +31,16 @@ var ErrCantFF = errors.New("can't fast forward merge")
 // the given commit via a fast forward merge.  If this is the case, an attempt will be made to update the branch in the
 // destination db to the given commit via fast forward move.  If that succeeds the tracking branch is updated in the
 // source db.
-func Push(ctx context.Context, dEnv *env.DoltEnv, destRef ref.BranchRef, remoteRef ref.RemoteRef, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
-	canFF, err := srcDB.CanFastForward(ctx, remoteRef, commit)
+func Push(ctx context.Context, dEnv *env.DoltEnv, mode ref.RefUpdateMode, destRef ref.BranchRef, remoteRef ref.RemoteRef, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
+	var err error
+	if mode == ref.FastForwardOnly {
+		canFF, err := srcDB.CanFastForward(ctx, remoteRef, commit)
 
-	if err != nil {
-		return err
-	} else if !canFF {
-		return ErrCantFF
+		if err != nil {
+			return err
+		} else if !canFF {
+			return ErrCantFF
+		}
 	}
 
 	err = destDB.PushChunks(ctx, dEnv.TempTableFilesDir(), srcDB, commit, progChan, pullerEventCh)
@@ -46,13 +49,20 @@ func Push(ctx context.Context, dEnv *env.DoltEnv, destRef ref.BranchRef, remoteR
 		return err
 	}
 
-	err = destDB.FastForward(ctx, destRef, commit)
-
-	if err != nil {
-		return err
+	switch mode {
+	case ref.ForceUpdate:
+		err = destDB.SetHead(ctx, destRef, commit)
+		if err != nil {
+			return err
+		}
+		err = srcDB.SetHead(ctx, remoteRef, commit)
+	case ref.FastForwardOnly:
+		err = destDB.FastForward(ctx, destRef, commit)
+		if err != nil {
+			return err
+		}
+		err = srcDB.FastForward(ctx, remoteRef, commit)
 	}
-
-	err = srcDB.FastForward(ctx, remoteRef, commit)
 
 	return err
 }
@@ -83,14 +93,8 @@ func DeleteRemoteBranch(ctx context.Context, targetRef ref.BranchRef, remoteRef 
 	return nil
 }
 
-func Fetch(ctx context.Context, dEnv *env.DoltEnv, destRef ref.DoltRef, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
-	err := destDB.PullChunks(ctx, dEnv.TempTableFilesDir(), srcDB, commit, progChan, pullerEventCh)
-
-	if err != nil {
-		return err
-	}
-
-	return destDB.FastForward(ctx, destRef, commit)
+func Fetch(ctx context.Context, dEnv *env.DoltEnv, destRef ref.DoltRef, srcDB, destDB *doltdb.DoltDB, srcDBCommit *doltdb.Commit, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
+	return destDB.PullChunks(ctx, dEnv.TempTableFilesDir(), srcDB, srcDBCommit, progChan, pullerEventCh)
 }
 
 func Clone(ctx context.Context, srcDB, destDB *doltdb.DoltDB, eventCh chan<- datas.TableFileEvent) error {

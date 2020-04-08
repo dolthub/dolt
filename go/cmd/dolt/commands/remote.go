@@ -68,8 +68,9 @@ Remove the remote named {{.LessThan}}name{{.GreaterThan}}. All remote-tracking b
 }
 
 const (
-	addRemoteId    = "add"
-	removeRemoteId = "remove"
+	addRemoteId         = "add"
+	removeRemoteId      = "remove"
+	removeRemoteShortId = "rm"
 )
 
 var awsParams = []string{dbfactory.AWSRegionParam, dbfactory.AWSCredsTypeParam, dbfactory.AWSCredsFileParam, dbfactory.AWSCredsProfile}
@@ -125,6 +126,8 @@ func (cmd RemoteCmd) Exec(ctx context.Context, commandStr string, args []string,
 	case apr.Arg(0) == addRemoteId:
 		verr = addRemote(dEnv, apr)
 	case apr.Arg(0) == removeRemoteId:
+		verr = removeRemote(ctx, dEnv, apr)
+	case apr.Arg(0) == removeRemoteShortId:
 		verr = removeRemote(ctx, dEnv, apr)
 	default:
 		verr = errhand.BuildDError("").SetPrintUsage().Build()

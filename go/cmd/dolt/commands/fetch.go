@@ -30,6 +30,10 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
+const (
+	ForceFetchFlag = "force"
+)
+
 var fetchDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Download objects and refs from another repository",
 	LongDesc: `Fetch refs, along with the objects necessary to complete their histories and update remote-tracking branches.
@@ -69,20 +73,23 @@ func (cmd FetchCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) 
 
 func (cmd FetchCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
+	ap.SupportsFlag(ForceFetchFlag, "f", "Update refs to remote branches with the current state of the remote, overwriting any conflicting history.")
 	return ap
 }
 
 // Exec executes the command
 func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := argparser.NewArgParser()
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, fetchDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	remotes, _ := dEnv.GetRemotes()
 	r, refSpecs, verr := getRefSpecs(apr.Args(), dEnv, remotes)
 
+	updateMode := ref.RefUpdateMode{Force: apr.Contains(ForceFetchFlag)}
+
 	if verr == nil {
-		verr = fetchRefSpecs(ctx, dEnv, r, refSpecs)
+		verr = fetchRefSpecs(ctx, updateMode, dEnv, r, refSpecs)
 	}
 
 	return HandleVErrAndExitCode(verr, usage)
@@ -161,7 +168,7 @@ func mapRefspecsToRemotes(refSpecs []ref.RemoteRefSpec, dEnv *env.DoltEnv) (map[
 	return rsToRem, nil
 }
 
-func fetchRefSpecs(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, refSpecs []ref.RemoteRefSpec) errhand.VerboseError {
+func fetchRefSpecs(ctx context.Context, mode ref.RefUpdateMode, dEnv *env.DoltEnv, rem env.Remote, refSpecs []ref.RemoteRefSpec) errhand.VerboseError {
 	for _, rs := range refSpecs {
 		srcDB, err := rem.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
 
@@ -179,10 +186,27 @@ func fetchRefSpecs(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, refSp
 			remoteTrackRef := rs.DestRef(branchRef)
 
 			if remoteTrackRef != nil {
-				verr := fetchRemoteBranch(ctx, dEnv, rem, srcDB, dEnv.DoltDB, branchRef, remoteTrackRef)
+				srcDBCommit, verr := fetchRemoteBranch(ctx, dEnv, rem, srcDB, dEnv.DoltDB, branchRef, remoteTrackRef)
 
 				if verr != nil {
 					return verr
+				}
+
+				switch mode {
+				case ref.ForceUpdate:
+					err = dEnv.DoltDB.SetHead(ctx, remoteTrackRef, srcDBCommit)
+				case ref.FastForwardOnly:
+					ok, err := dEnv.DoltDB.CanFastForward(ctx, remoteTrackRef, srcDBCommit)
+					if !ok {
+						return errhand.BuildDError("error: fetch failed, can't fast forward remote tracking ref").Build()
+					}
+					if err == nil {
+						err = dEnv.DoltDB.FastForward(ctx, remoteTrackRef, srcDBCommit)
+					}
+				}
+
+				if err != nil {
+					return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
 				}
 			}
 		}
@@ -191,7 +215,7 @@ func fetchRefSpecs(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, refSp
 	return nil
 }
 
-func fetchRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, srcDB, destDB *doltdb.DoltDB, srcRef, destRef ref.DoltRef) errhand.VerboseError {
+func fetchRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, srcDB, destDB *doltdb.DoltDB, srcRef, destRef ref.DoltRef) (*doltdb.Commit, errhand.VerboseError) {
 	evt := events.GetEventFromContext(ctx)
 
 	u, err := earl.Parse(rem.Url)
@@ -203,19 +227,19 @@ func fetchRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, s
 	}
 
 	cs, _ := doltdb.NewCommitSpec("HEAD", srcRef.String())
-	cm, err := srcDB.Resolve(ctx, cs)
+	srcDBCommit, err := srcDB.Resolve(ctx, cs)
 
 	if err != nil {
-		return errhand.BuildDError("error: unable to find '%s' on '%s'", srcRef.GetPath(), rem.Name).Build()
+		return nil, errhand.BuildDError("error: unable to find '%s' on '%s'", srcRef.GetPath(), rem.Name).Build()
 	} else {
 		wg, progChan, pullerEventCh := runProgFuncs()
-		err = actions.Fetch(ctx, dEnv, destRef, srcDB, destDB, cm, progChan, pullerEventCh)
+		err = actions.Fetch(ctx, dEnv, destRef, srcDB, destDB, srcDBCommit, progChan, pullerEventCh)
 		stopProgFuncs(wg, progChan, pullerEventCh)
 
 		if err != nil {
-			return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
+			return nil, errhand.BuildDError("error: fetch failed").AddCause(err).Build()
 		}
 	}
 
-	return nil
+	return srcDBCommit, nil
 }
