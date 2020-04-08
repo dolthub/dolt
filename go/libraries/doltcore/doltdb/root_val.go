@@ -861,14 +861,15 @@ func (root *RootValue) UpdateSuperSchemasFromOther(ctx context.Context, tblNames
 	return newRootValue(root.vrw, newRootSt), nil
 }
 
+// RenameTable renames a table by changing its string key in the RootValue's table map. In order to preserve
+// column tag information, use this method instead of a table drop + add.
 func (root *RootValue) RenameTable(ctx context.Context, oldName, newName string) (*RootValue, error) {
 	tableMap, err := root.getTableMap()
-
 	if err != nil {
 		return nil, err
 	}
 
-	v, found, err := tableMap.MaybeGet(ctx, types.String(oldName))
+	tv, found, err := tableMap.MaybeGet(ctx, types.String(oldName))
 	if err != nil {
 		return nil, err
 	}
@@ -884,18 +885,40 @@ func (root *RootValue) RenameTable(ctx context.Context, oldName, newName string)
 		return nil, ErrTableExists
 	}
 
-	me := tableMap.Edit().Remove(types.String(oldName))
-	me = me.Set(types.String(newName), v)
-	m, err := me.Map(ctx)
-
+	tme := tableMap.Edit().Remove(types.String(oldName))
+	tme = tme.Set(types.String(newName), tv)
+	tableMap, err = tme.Map(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rootValSt := root.valueSt
+	rootValSt, err = rootValSt.Set(tablesKey, tableMap)
 	if err != nil {
 		return nil, err
 	}
 
-	rootValSt, err := root.valueSt.Set(tablesKey, m)
-
+	ssMap, err := root.getOrCreateSuperSchemaMap(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	ssv, found, err := ssMap.MaybeGet(ctx, types.String(oldName))
+	if err != nil {
+		return nil, err
+	}
+	if found {
+		ssme := ssMap.Edit().Remove(types.String(oldName))
+		ssme = ssme.Set(types.String(newName), ssv)
+		ssMap, err = ssme.Map(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		rootValSt, err = rootValSt.Set(superSchemasKey, ssMap)
+		if err != nil {
+			return nil, err
+		}
+		return newRootValue(root.vrw, rootValSt), nil
 	}
 
 	return newRootValue(root.vrw, rootValSt), nil
