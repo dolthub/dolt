@@ -17,6 +17,7 @@ package env
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -88,6 +89,7 @@ func (mrEnv MultiRepoEnv) GetWorkingRoots(ctx context.Context) (map[string]*dolt
 func getRepoRootDir(path, pathSeparator string) string {
 	// filepath.Clean does not work with cross platform paths.  So can't test a windows path on a mac
 	tokens := strings.Split(path, pathSeparator)
+	log.Println(tokens)
 
 	for i := len(tokens) - 1; i >= 0; i-- {
 		if tokens[i] == "" {
@@ -95,6 +97,7 @@ func getRepoRootDir(path, pathSeparator string) string {
 		}
 	}
 
+	log.Println("removed empties", tokens)
 	if len(tokens) == 0 {
 		return ""
 	}
@@ -103,11 +106,13 @@ func getRepoRootDir(path, pathSeparator string) string {
 		tokens = tokens[:len(tokens)-2]
 	}
 
+	log.Println("removed removed .dolt/noms if present", tokens)
 	if len(tokens) == 0 {
 		return ""
 	}
 
 	name := tokens[len(tokens)-1]
+	log.Println("final name", name)
 
 	// handles drive letters. fine with a folder containing a colon having the default name
 	if strings.IndexRune(name, ':') != -1 {
