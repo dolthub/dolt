@@ -271,21 +271,22 @@ func (dEnv *DoltEnv) createDirectories(dir string) (string, error) {
 
 	if !exists {
 		return "", fmt.Errorf("'%s' does not exist so could not create '%s", absPath, dbfactory.DoltDataDir)
-	} else if isDir {
-		fmt.Errorf("'%s' exists but it's a file not a directory", absPath)
+	} else if !isDir {
+		return "", fmt.Errorf("'%s' exists but it's a file not a directory", absPath)
 	}
 
 	if dEnv.hasDoltDir(dir) {
 		return "", ErrPreexistingDoltDir
 	}
 
-	err = dEnv.FS.MkDirs(dbfactory.DoltDataDir)
+	absDataDir := filepath.Join(absPath, dbfactory.DoltDataDir)
+	err = dEnv.FS.MkDirs(absDataDir)
 
 	if err != nil {
-		return "", fmt.Errorf("unable to make directory '%s', cause: %s", filepath.Join(absPath, dbfactory.DoltDataDir), err.Error())
+		return "", fmt.Errorf("unable to make directory '%s', cause: %s", absDataDir, err.Error())
 	}
 
-	log.Println("made directory:", filepath.Join(absPath, dbfactory.DoltDataDir))
+	log.Printf("made directory: '%s'", absDataDir)
 
 	return filepath.Join(absPath, dbfactory.DoltDir), nil
 }
