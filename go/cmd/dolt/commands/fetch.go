@@ -86,10 +86,10 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	remotes, _ := dEnv.GetRemotes()
 	r, refSpecs, verr := getRefSpecs(apr.Args(), dEnv, remotes)
 
-	forceFetch := apr.Contains(ForceFetchFlag)
+	updateMode := ref.RefUpdateMode{Force: apr.Contains(ForceFetchFlag)}
 
 	if verr == nil {
-		verr = fetchRefSpecs(ctx, forceFetch, dEnv, r, refSpecs)
+		verr = fetchRefSpecs(ctx, updateMode, dEnv, r, refSpecs)
 	}
 
 	return HandleVErrAndExitCode(verr, usage)
@@ -168,7 +168,7 @@ func mapRefspecsToRemotes(refSpecs []ref.RemoteRefSpec, dEnv *env.DoltEnv) (map[
 	return rsToRem, nil
 }
 
-func fetchRefSpecs(ctx context.Context, forceFetch bool, dEnv *env.DoltEnv, rem env.Remote, refSpecs []ref.RemoteRefSpec) errhand.VerboseError {
+func fetchRefSpecs(ctx context.Context, mode ref.RefUpdateMode, dEnv *env.DoltEnv, rem env.Remote, refSpecs []ref.RemoteRefSpec) errhand.VerboseError {
 	for _, rs := range refSpecs {
 		srcDB, err := rem.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
 
@@ -192,14 +192,18 @@ func fetchRefSpecs(ctx context.Context, forceFetch bool, dEnv *env.DoltEnv, rem 
 					return verr
 				}
 
-				if forceFetch {
-					err = dEnv.DoltDB.DeleteBranch(ctx, remoteTrackRef)
-					if err != nil {
-						return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
+				switch mode {
+				case ref.ForceUpdate:
+					err = dEnv.DoltDB.SetHead(ctx, remoteTrackRef, srcDBCommit)
+				case ref.FastForwardOnly:
+					ok, err := dEnv.DoltDB.CanFastForward(ctx, remoteTrackRef, srcDBCommit)
+					if !ok {
+						return errhand.BuildDError("error: fetch failed, can't fast forward remote tracking ref").Build()
+					}
+					if err == nil {
+						err = dEnv.DoltDB.FastForward(ctx, remoteTrackRef, srcDBCommit)
 					}
 				}
-
-				err =  dEnv.DoltDB.FastForward(ctx, remoteTrackRef, srcDBCommit)
 
 				if err != nil {
 					return errhand.BuildDError("error: fetch failed").AddCause(err).Build()

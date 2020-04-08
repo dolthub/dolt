@@ -119,7 +119,7 @@ func pullRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, r env.Remote, srcR
 		return verr
 	}
 
-	err =  dEnv.DoltDB.FastForward(ctx, destRef, srcDBCommit)
+	err = dEnv.DoltDB.FastForward(ctx, destRef, srcDBCommit)
 
 	if err != nil {
 		return errhand.BuildDError("error: fetch failed").AddCause(err).Build()

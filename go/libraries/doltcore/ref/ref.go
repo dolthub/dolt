@@ -56,6 +56,13 @@ func PrefixForType(refType RefType) string {
 	return refPrefix + string(refType) + "/"
 }
 
+type RefUpdateMode struct {
+	Force bool
+}
+
+var ForceUpdate = RefUpdateMode{true}
+var FastForwardOnly = RefUpdateMode{false}
+
 // DoltRef is a reference to a commit.
 type DoltRef interface {
 	fmt.Stringer
