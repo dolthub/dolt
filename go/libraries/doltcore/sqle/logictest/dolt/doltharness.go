@@ -57,6 +57,18 @@ func (h *DoltHarness) Init() error {
 		panic("Current directory must be a valid dolt repository")
 	}
 
+	return innerInit(h, dEnv)
+}
+
+func (h *DoltHarness) ExecuteStatement(statement string) error {
+	return executeStatement(h, statement)
+}
+
+func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []string, err error) {
+	return executeQuery(h, statement)
+}
+
+func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 	root, verr := commands.GetWorkingWithVErr(dEnv)
 	if verr != nil {
 		return verr
@@ -108,24 +120,6 @@ func (h *DoltHarness) Init() error {
 	return nil
 }
 
-func (h *DoltHarness) ExecuteStatement(statement string) error {
-	ctx := sql.NewContext(
-		context.Background(),
-		sql.WithPid(rand.Uint64()),
-		sql.WithIndexRegistry(h.idxReg),
-		sql.WithViewRegistry(h.viewReg),
-		sql.WithSession(h.sess))
-
-	statement = normalizeStatement(statement)
-
-	_, rowIter, err := h.engine.Query(ctx, statement)
-	if err != nil {
-		return err
-	}
-
-	return drainIterator(rowIter)
-}
-
 // We cheat a little at these tests. A great many of them use tables without primary keys, which we don't currently
 // support. Until we do, we just make every column in such tables part of the primary key.
 func normalizeStatement(statement string) string {
@@ -157,7 +151,25 @@ func normalizeStatement(statement string) string {
 	return normalized
 }
 
-func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []string, err error) {
+func executeStatement(h *DoltHarness, statement string) error {
+	ctx := sql.NewContext(
+		context.Background(),
+		sql.WithPid(rand.Uint64()),
+		sql.WithIndexRegistry(h.idxReg),
+		sql.WithViewRegistry(h.viewReg),
+		sql.WithSession(h.sess))
+
+	statement = normalizeStatement(statement)
+
+	_, rowIter, err := h.engine.Query(ctx, statement)
+	if err != nil {
+		return err
+	}
+
+	return drainIterator(rowIter)
+}
+
+func executeQuery(h *DoltHarness, statement string) (schema string, results []string, err error) {
 	pid := rand.Uint32()
 	ctx := sql.NewContext(
 		context.Background(),
