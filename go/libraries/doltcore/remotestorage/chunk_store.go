@@ -909,12 +909,11 @@ func (dcs *DoltChunkStore) getDownloadWorkForLoc(ctx context.Context, getRange *
 }
 
 func (dcs *DoltChunkStore) SupportedOperations() nbs.TableFileStoreOps {
-        return nbs.TableFileStoreOps{
-                CanRead:  true,
-                CanWrite: true,
-        }
+	return nbs.TableFileStoreOps{
+		CanRead:  true,
+		CanWrite: true,
+	}
 }
-
 
 // WriteTableFile reads a table file from the provided reader and writes it to the chunk store.
 func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader, contentLength uint64, contentHash []byte) error {

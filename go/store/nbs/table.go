@@ -283,7 +283,7 @@ type TableFile interface {
 // Describes what is possible to do with TableFiles in a TableFileStore.
 type TableFileStoreOps struct {
 	// True is the TableFileStore supports reading table files.
-	CanRead  bool
+	CanRead bool
 	// True is the TableFileStore supports writing table files.
 	CanWrite bool
 }
