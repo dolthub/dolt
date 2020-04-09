@@ -61,11 +61,58 @@ func (h *DoltHarness) Init() error {
 }
 
 func (h *DoltHarness) ExecuteStatement(statement string) error {
-	return executeStatement(h, statement)
+	ctx := sql.NewContext(
+		context.Background(),
+		sql.WithPid(rand.Uint64()),
+		sql.WithIndexRegistry(h.idxReg),
+		sql.WithViewRegistry(h.viewReg),
+		sql.WithSession(h.sess))
+
+	statement = normalizeStatement(statement)
+
+	_, rowIter, err := h.engine.Query(ctx, statement)
+	if err != nil {
+		return err
+	}
+
+	return drainIterator(rowIter)
 }
 
 func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []string, err error) {
-	return executeQuery(h, statement)
+	pid := rand.Uint32()
+	ctx := sql.NewContext(
+		context.Background(),
+		sql.WithPid(uint64(pid)),
+		sql.WithIndexRegistry(h.idxReg),
+		sql.WithViewRegistry(h.viewReg),
+		sql.WithSession(h.sess))
+
+	var sch sql.Schema
+	var rowIter sql.RowIter
+	defer func() {
+		if r := recover(); r != nil {
+			// Panics leave the engine in a bad state that we have to clean up
+			h.engine.Catalog.ProcessList.Kill(pid)
+			panic(r)
+		}
+	}()
+
+	sch, rowIter, err = h.engine.Query(ctx, statement)
+	if err != nil {
+		return "", nil, err
+	}
+
+	schemaString, err := schemaToSchemaString(sch)
+	if err != nil {
+		return "", nil, err
+	}
+
+	results, err = rowsToResultStrings(rowIter)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return schemaString, results, nil
 }
 
 func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
@@ -149,61 +196,6 @@ func normalizeStatement(statement string) string {
 	}
 	normalized += "))"
 	return normalized
-}
-
-func executeStatement(h *DoltHarness, statement string) error {
-	ctx := sql.NewContext(
-		context.Background(),
-		sql.WithPid(rand.Uint64()),
-		sql.WithIndexRegistry(h.idxReg),
-		sql.WithViewRegistry(h.viewReg),
-		sql.WithSession(h.sess))
-
-	statement = normalizeStatement(statement)
-
-	_, rowIter, err := h.engine.Query(ctx, statement)
-	if err != nil {
-		return err
-	}
-
-	return drainIterator(rowIter)
-}
-
-func executeQuery(h *DoltHarness, statement string) (schema string, results []string, err error) {
-	pid := rand.Uint32()
-	ctx := sql.NewContext(
-		context.Background(),
-		sql.WithPid(uint64(pid)),
-		sql.WithIndexRegistry(h.idxReg),
-		sql.WithViewRegistry(h.viewReg),
-		sql.WithSession(h.sess))
-
-	var sch sql.Schema
-	var rowIter sql.RowIter
-	defer func() {
-		if r := recover(); r != nil {
-			// Panics leave the engine in a bad state that we have to clean up
-			h.engine.Catalog.ProcessList.Kill(pid)
-			panic(r)
-		}
-	}()
-
-	sch, rowIter, err = h.engine.Query(ctx, statement)
-	if err != nil {
-		return "", nil, err
-	}
-
-	schemaString, err := schemaToSchemaString(sch)
-	if err != nil {
-		return "", nil, err
-	}
-
-	results, err = rowsToResultStrings(rowIter)
-	if err != nil {
-		return "", nil, err
-	}
-
-	return schemaString, results, nil
 }
 
 func drainIterator(iter sql.RowIter) error {

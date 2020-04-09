@@ -52,8 +52,8 @@ type queryTest struct {
 }
 
 func TestDoltHarness(t *testing.T) {
-	home := "/home"
-	wd := filepath.Join(home, "/harnesstester")
+	tmp := "/doesnotexist/tmp"
+	wd := filepath.Join(tmp, "/harnesstester")
 
 	statementTests := []statementTest{
 		{
@@ -97,23 +97,9 @@ func TestDoltHarness(t *testing.T) {
 		},
 	}
 
-	t.Run("should execute simple sql statements against Dolt", func(t *testing.T) {
-		h := &DoltHarness{}
-		fs := filesys.NewInMemFS([]string{}, nil, home)
-		dEnv := createTestEnvWithFS(fs, wd)
-
-		err := innerInit(h, dEnv)
-		assert.Equal(t, nil, err)
-
-		for _, test := range statementTests {
-			err = executeStatement(h, test.statement)
-			assert.Equal(t, test.expErr, err)
-		}
-	})
-
 	t.Run("should execute simple sql queries against Dolt", func(t *testing.T) {
 		h := &DoltHarness{}
-		fs := filesys.NewInMemFS([]string{}, nil, home)
+		fs := filesys.NewInMemFS([]string{}, nil, tmp)
 		dEnv := createTestEnvWithFS(fs, wd)
 
 		err := innerInit(h, dEnv)
@@ -121,13 +107,13 @@ func TestDoltHarness(t *testing.T) {
 
 		// setup repo with statements
 		for _, test := range statementTests {
-			err = executeStatement(h, test.statement)
+			err = h.ExecuteStatement(test.statement)
 			assert.Equal(t, test.expErr, err)
 		}
 
 		// test queries
 		for _, test := range queryTests {
-			schema, results, err := executeQuery(h, test.query)
+			schema, results, err := h.ExecuteQuery(test.query)
 			assert.Equal(t, test.expErr, err)
 			assert.Equal(t, test.expSchema, schema)
 			assert.Equal(t, test.expResults, results)
