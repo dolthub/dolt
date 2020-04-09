@@ -13,9 +13,11 @@ teardown() {
     run dolt ls --system
     [ $status -eq 0 ]
     [[ "$output" =~ "dolt_log" ]] || false
+    [[ "$output" =~ "dolt_branches" ]] || false
     run dolt ls --all
     [ $status -eq 0 ]
     [[ "$output" =~ "dolt_log" ]] || false
+    [[ "$output" =~ "dolt_branches" ]] || false
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test
     dolt commit -m "Added test table"
@@ -39,11 +41,13 @@ teardown() {
     run dolt ls --system
     [ $status -eq 0 ]
     [[ "$output" =~ "dolt_log" ]] || false
+    [[ "$output" =~ "dolt_branches" ]] || false
     [[ ! "$output" =~ "dolt_history_test" ]] || false
     [[ ! "$output" =~ "dolt_diff_test" ]] || false
     run dolt ls --system -v
     [ $status -eq 0 ]
     [[ "$output" =~ "dolt_log" ]] || false
+    [[ "$output" =~ "dolt_branches" ]] || false
     [[ "$output" =~ "dolt_history_test" ]] || false
     [[ "$output" =~ "dolt_diff_test" ]] || false
 }
@@ -57,11 +61,13 @@ teardown() {
     run dolt ls --system
     [ $status -eq 0 ]
     [[ "$output" =~ "dolt_log" ]] || false
+    [[ "$output" =~ "dolt_branches" ]] || false
     [[ ! "$output" =~ "dolt_history_test" ]] || false
     [[ ! "$output" =~ "dolt_diff_test" ]] || false
     run dolt ls --system -v
     [ $status -eq 0 ]
     [[ "$output" =~ "dolt_log" ]] || false
+    [[ "$output" =~ "dolt_branches" ]] || false
     [[ "$output" =~ "dolt_history_test" ]] || false
     [[ "$output" =~ "dolt_diff_test" ]] || false
 }
@@ -76,6 +82,25 @@ teardown() {
     run dolt sql -q "select * from dolt_log where message !='Added test table'"
     [ $status -eq 0 ]
     [[ ! "$output" =~ "Added test table" ]] || false
+}
+
+@test "query dolt_branches system table" {
+    dolt checkout -b create-table-branch
+    dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
+    dolt add test
+    dolt commit -m "Added test table"
+    run dolt sql -q "select * from dolt_branches"
+    [ $status -eq 0 ]
+    [[ "$output" =~ master.*Initialize\ data\ repository ]] || false
+    [[ "$output" =~ create-table-branch.*Added\ test\ table ]] || false
+    run dolt sql -q "select * from dolt_branches where latest_commit_message ='Initialize data repository'"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "master" ]] || false
+    [[ ! "$output" =~ "create-table-branch" ]] || false
+    run dolt sql -q "select * from dolt_branches where latest_commit_message ='Added test table'"
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "master" ]] || false
+    [[ "$output" =~ "create-table-branch" ]] || false
 }
 
 @test "query dolt_diff_ system table" {

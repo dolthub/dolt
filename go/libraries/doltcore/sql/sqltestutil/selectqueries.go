@@ -69,6 +69,16 @@ var logSchColColl, _ = schema.NewColCollection(
 )
 var LogSchema schema.Schema = schema.SchemaFromCols(logSchColColl)
 
+var branchesSchColColl, _ = schema.NewColCollection(
+	schema.NewColumn("name", 0, types.StringKind, true),
+	schema.NewColumn("hash", 1, types.StringKind, true),
+	schema.NewColumn("latest_committer", 2, types.StringKind, false),
+	schema.NewColumn("latest_committer_email", 3, types.StringKind, false),
+	schema.NewColumn("latest_commit_date", 4, types.TimestampKind, false),
+	schema.NewColumn("latest_commit_message", 5, types.StringKind, false),
+)
+var BranchesSchema schema.Schema = schema.SchemaFromCols(branchesSchColColl)
+
 //
 // Collection of query tests for conformance and performance testing, grouped by categories.
 //
@@ -724,6 +734,19 @@ var BasicSelectTests = []SelectTest{
 			4: types.String("Initialize data repository"),
 		}))},
 		ExpectedSchema: LogSchema,
+	},
+	{
+		Name:  "select * from branches system table",
+		Query: "select * from dolt_branches",
+		ExpectedRows: []row.Row{mustRow(row.New(types.Format_7_18, BranchesSchema, row.TaggedValues{
+			0: types.String("master"),
+			1: types.String("0e2b6g3oemme1je6g3l2bm3hr5mhgpa2"),
+			2: types.String("billy bob"),
+			3: types.String("bigbillieb@fake.horse"),
+			4: types.Timestamp(time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)),
+			5: types.String("Initialize data repository"),
+		}))},
+		ExpectedSchema: BranchesSchema,
 	},
 }
 
