@@ -59,11 +59,17 @@ func Parse(urlStr string) (*url.URL, error) {
 		return nil, err
 	}
 
+	// url.parse doesn't handle file paths that begin with . correctly
+	if u.Scheme == "file" && strings.HasPrefix(u.Host, ".") {
+		u.Path = u.Host + u.Path
+		u.Host = ""
+	}
+
 	// if Path is e.g. "/C$/" for a network location, it should instead be "C:/"
 	if len(u.Path) >= 3 && u.Path[0] == '/' && u.Path[1] >= 'A' && u.Path[1] <= 'Z' && u.Path[2] == '$' {
 		u.Path = u.Path[1:2] + ":" + u.Path[3:]
 	} else if !osutil.StartsWithWindowsVolume(u.Path) { // normalize some
-		if len(u.Path) == 0 || u.Path[0] != '/' {
+		if len(u.Path) == 0 || (u.Path[0] != '/' && u.Path[0] != '.') {
 			u.Path = "/" + u.Path
 		}
 	}

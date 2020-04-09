@@ -16,8 +16,9 @@ package earl
 
 import (
 	"net/url"
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestParse(t *testing.T) {
@@ -232,6 +233,54 @@ func TestParse(t *testing.T) {
 			},
 			false,
 		},
+		{
+			FileUrlFromPath(`./.dolt/noms`, '/'),
+			url.URL{
+				Scheme: "file",
+				Path:   "./.dolt/noms",
+			},
+			false,
+		},
+		{
+			FileUrlFromPath(`./.dolt\noms`, '\\'),
+			url.URL{
+				Scheme: "file",
+				Path:   "./.dolt/noms",
+			},
+			false,
+		},
+		{
+			FileUrlFromPath(`.dolt/noms`, '/'),
+			url.URL{
+				Scheme: "file",
+				Path:   ".dolt/noms",
+			},
+			false,
+		},
+		{
+			FileUrlFromPath(`.dolt\noms`, '\\'),
+			url.URL{
+				Scheme: "file",
+				Path:   ".dolt/noms",
+			},
+			false,
+		},
+		{
+			FileUrlFromPath(`./test/.dolt/noms`, '/'),
+			url.URL{
+				Scheme: "file",
+				Path:   "./test/.dolt/noms",
+			},
+			false,
+		},
+		{
+			FileUrlFromPath(`./test\.dolt\noms`, '\\'),
+			url.URL{
+				Scheme: "file",
+				Path:   "./test/.dolt/noms",
+			},
+			false,
+		},
 	}
 
 	for _, test := range tests {
@@ -239,8 +288,8 @@ func TestParse(t *testing.T) {
 
 		if (err != nil) != test.expectErr {
 			t.Error("input:", test.urlStr, "got error:", err != nil, "expected error:", test.expectErr, "result:", actualUrl, "err:", err)
-		} else if err == nil && !reflect.DeepEqual(actualUrl, &test.expectedUrl) {
-			t.Errorf("'%s' != '%s'", actualUrl, &test.expectedUrl)
+		} else if err == nil {
+			assert.Equal(t, &test.expectedUrl, actualUrl)
 		}
 	}
 }
