@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
@@ -99,8 +98,6 @@ func TestServerBadArgs(t *testing.T) {
 
 func TestServerGoodParams(t *testing.T) {
 	env := createEnvWithSeedData(t)
-	root, verr := commands.GetWorkingWithVErr(env)
-	require.NoError(t, verr)
 
 	tests := []*ServerConfig{
 		DefaultServerConfig(),
@@ -121,7 +118,7 @@ func TestServerGoodParams(t *testing.T) {
 		t.Run(test.String(), func(t *testing.T) {
 			sc := CreateServerController()
 			go func(config *ServerConfig, sc *ServerController) {
-				_, _ = Serve(context.Background(), config, root, sc, env)
+				_, _ = Serve(context.Background(), config, sc, env)
 			}(test, sc)
 			err := sc.WaitForStart()
 			require.NoError(t, err)
@@ -138,14 +135,12 @@ func TestServerGoodParams(t *testing.T) {
 
 func TestServerSelect(t *testing.T) {
 	env := createEnvWithSeedData(t)
-	root, verr := commands.GetWorkingWithVErr(env)
-	require.NoError(t, verr)
 	serverConfig := DefaultServerConfig().WithLogLevel(LogLevel_Fatal).WithPort(15300)
 
 	sc := CreateServerController()
 	defer sc.StopServer()
 	go func() {
-		_, _ = Serve(context.Background(), serverConfig, root, sc, env)
+		_, _ = Serve(context.Background(), serverConfig, sc, env)
 	}()
 	err := sc.WaitForStart()
 	require.NoError(t, err)

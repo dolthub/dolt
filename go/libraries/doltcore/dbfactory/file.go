@@ -43,7 +43,14 @@ type FileFactory struct {
 
 // CreateDB creates an local filesys backed database
 func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]string) (datas.Database, error) {
-	path := urlObj.Host + urlObj.Path
+	path, err := url.PathUnescape(urlObj.Path)
+
+	if err != nil {
+		return nil, err
+	}
+
+	path = filepath.FromSlash(path)
+	path = urlObj.Host + path
 
 	info, err := os.Stat(path)
 

@@ -136,7 +136,8 @@ func (dEnv *DoltEnv) HasDoltDir() bool {
 }
 
 func (dEnv *DoltEnv) HasDoltDataDir() bool {
-	return dEnv.hasDoltDataDir("./")
+	exists, isDir := dEnv.FS.Exists(dbfactory.DoltDataDir)
+	return exists && isDir
 }
 
 func (dEnv *DoltEnv) HasDoltTempTableDir() bool {
@@ -145,21 +146,27 @@ func (dEnv *DoltEnv) HasDoltTempTableDir() bool {
 	return ex
 }
 
+func mustAbs(dEnv *DoltEnv, path ...string) string {
+	absPath, err := dEnv.FS.Abs(filepath.Join(path...))
+
+	if err != nil {
+		panic(err)
+	}
+
+	return absPath
+}
+
 // GetDoltDir returns the path to the .dolt directory
 func (dEnv *DoltEnv) GetDoltDir() string {
 	if !dEnv.HasDoltDataDir() {
 		panic("No dolt dir")
 	}
-	return filepath.Join("./", dbfactory.DoltDir)
+
+	return mustAbs(dEnv, dbfactory.DoltDir)
 }
 
 func (dEnv *DoltEnv) hasDoltDir(path string) bool {
-	exists, isDir := dEnv.FS.Exists(filepath.Join(path, dbfactory.DoltDir))
-	return exists && isDir
-}
-
-func (dEnv *DoltEnv) hasDoltDataDir(path string) bool {
-	exists, isDir := dEnv.FS.Exists(filepath.Join(path, dbfactory.DoltDataDir))
+	exists, isDir := dEnv.FS.Exists(mustAbs(dEnv, dbfactory.DoltDir))
 	return exists && isDir
 }
 
@@ -249,19 +256,32 @@ func (dEnv *DoltEnv) InitRepoWithNoData(ctx context.Context, nbf *types.NomsBinF
 }
 
 func (dEnv *DoltEnv) createDirectories(dir string) (string, error) {
-	doltDir := filepath.Join(dir, dbfactory.DoltDir)
-	if dEnv.hasDoltDir(doltDir) {
+	absPath, err := dEnv.FS.Abs(dir)
+
+	if err != nil {
+		return "", err
+	}
+
+	exists, isDir := dEnv.FS.Exists(absPath)
+
+	if !exists {
+		return "", fmt.Errorf("'%s' does not exist so could not create '%s", absPath, dbfactory.DoltDataDir)
+	} else if !isDir {
+		return "", fmt.Errorf("'%s' exists but it's a file not a directory", absPath)
+	}
+
+	if dEnv.hasDoltDir(dir) {
 		return "", ErrPreexistingDoltDir
 	}
 
-	doltDataDir := filepath.Join(doltDir, dbfactory.DataDir)
-	err := dEnv.FS.MkDirs(doltDataDir)
+	absDataDir := filepath.Join(absPath, dbfactory.DoltDataDir)
+	err = dEnv.FS.MkDirs(absDataDir)
 
 	if err != nil {
-		return "", fmt.Errorf("unable to make directory %s within the working directory", dbfactory.DoltDataDir)
+		return "", fmt.Errorf("unable to make directory '%s', cause: %s", absDataDir, err.Error())
 	}
 
-	return doltDir, nil
+	return filepath.Join(absPath, dbfactory.DoltDir), nil
 }
 
 func (dEnv *DoltEnv) configureRepo(doltDir string) error {
@@ -329,6 +349,7 @@ func (dEnv *DoltEnv) initializeRepoState(ctx context.Context) error {
 		return ErrStateUpdate
 	}
 
+	dEnv.RSLoadErr = nil
 	return nil
 }
 
@@ -657,7 +678,7 @@ func (dEnv *DoltEnv) FindCreds(credsDir, pubKeyOrId string) (string, error) {
 		return "", ErrNotACred
 	}
 
-	path := filepath.Join(credsDir, pubKeyOrId+creds.JWKFileExtension)
+	path := mustAbs(dEnv, credsDir, pubKeyOrId+creds.JWKFileExtension)
 	exists, isDir := dEnv.FS.Exists(path)
 
 	if isDir {
@@ -766,7 +787,7 @@ func (dEnv *DoltEnv) GetUserHomeDir() (string, error) {
 }
 
 func (dEnv *DoltEnv) TempTableFilesDir() string {
-	return filepath.Join(dEnv.GetDoltDir(), tempTablesDir)
+	return mustAbs(dEnv, dEnv.GetDoltDir(), tempTablesDir)
 }
 
 func (dEnv *DoltEnv) GetAllValidDocDetails() (docs []doltdb.DocDetails, err error) {

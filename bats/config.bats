@@ -82,7 +82,7 @@ teardown() {
     dolt config --global --add user.email "bats-tester@liquidata.co"
     run dolt init
     [ "$status" -eq 0 ]
-    [ "$output" = "Successfully initialized dolt data repository." ]
+    [[ "$output" =~ "Successfully initialized dolt data repository." ]] || false
 }
 
 @test "set a local config variable" {

@@ -17,9 +17,13 @@ package env
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"unicode"
+
+	"github.com/liquidata-inc/dolt/go/libraries/utils/earl"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -59,7 +63,7 @@ func (mrEnv MultiRepoEnv) Iter(cb func(name string, dEnv *DoltEnv) (stop bool, e
 	return nil
 }
 
-// GetWorkingRoots gets returns a map with entries for each environment name with a value equal to the working root
+// GetWorkingRoots returns a map with entries for each environment name with a value equal to the working root
 // for that environment
 func (mrEnv MultiRepoEnv) GetWorkingRoots(ctx context.Context) (map[string]*doltdb.RootValue, error) {
 	roots := make(map[string]*doltdb.RootValue)
@@ -81,26 +85,62 @@ func (mrEnv MultiRepoEnv) GetWorkingRoots(ctx context.Context) (map[string]*dolt
 	return roots, err
 }
 
+func getRepoRootDir(path, pathSeparator string) string {
+	if pathSeparator != "/" {
+		path = strings.ReplaceAll(path, pathSeparator, "/")
+	}
+
+	// filepath.Clean does not work with cross platform paths.  So can't test a windows path on a mac
+	tokens := strings.Split(path, "/")
+
+	for i := len(tokens) - 1; i >= 0; i-- {
+		if tokens[i] == "" {
+			tokens = append(tokens[:i], tokens[i+1:]...)
+		}
+	}
+
+	if len(tokens) == 0 {
+		return ""
+	}
+
+	if tokens[len(tokens)-1] == dbfactory.DataDir && tokens[len(tokens)-2] == dbfactory.DoltDir {
+		tokens = tokens[:len(tokens)-2]
+	}
+
+	if len(tokens) == 0 {
+		return ""
+	}
+
+	name := tokens[len(tokens)-1]
+
+	// handles drive letters. fine with a folder containing a colon having the default name
+	if strings.IndexRune(name, ':') != -1 {
+		return ""
+	}
+
+	return name
+}
+
 // DoltEnvAsMultiEnv returns a MultiRepoEnv which wraps the DoltEnv and names it based on the directory DoltEnv refers to
 func DoltEnvAsMultiEnv(dEnv *DoltEnv) MultiRepoEnv {
 	dbName := "dolt"
-	filePrefix := dbfactory.FileScheme + "://"
+	u, err := earl.Parse(dEnv.urlStr)
 
-	if strings.HasPrefix(dEnv.urlStr, filePrefix) {
-		path, err := dEnv.FS.Abs(dEnv.urlStr[len(filePrefix):])
+	if err == nil {
+		if u.Scheme == dbfactory.FileScheme {
+			path, err := url.PathUnescape(u.Path)
 
-		if err == nil {
-			if strings.HasSuffix(path, dbfactory.DoltDataDir) {
-				path = path[:len(path)-len(dbfactory.DoltDataDir)]
+			if err == nil {
+				path, err = dEnv.FS.Abs(path)
+
+				if err == nil {
+					dirName := getRepoRootDir(path, string(os.PathSeparator))
+
+					if dirName != "" {
+						dbName = dirToDBName(dirName)
+					}
+				}
 			}
-
-			if path[len(path)-1] == '/' {
-				path = path[:len(path)-1]
-			}
-
-			idx := strings.LastIndex(path, "/")
-			dirName := path[idx+1:]
-			dbName = dirToDBName(dirName)
 		}
 	}
 
@@ -136,7 +176,14 @@ func LoadMultiEnv(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, 
 			return nil, err
 		}
 
-		dEnv := Load(ctx, hdp, fs, "file://"+absPath, version)
+		fsForEnv, err := filesys.LocalFilesysWithWorkingDir(absPath)
+
+		if err != nil {
+			return nil, err
+		}
+
+		urlStr := earl.FileUrlFromPath(filepath.Join(absPath, dbfactory.DoltDataDir), os.PathSeparator)
+		dEnv := Load(ctx, hdp, fsForEnv, urlStr, version)
 
 		if dEnv.RSLoadErr != nil {
 			return nil, fmt.Errorf("error loading environment '%s' at path '%s': %s", name, absPath, dEnv.RSLoadErr.Error())
@@ -153,12 +200,17 @@ func LoadMultiEnv(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, 
 }
 
 // LoadMultiEnvFromDir looks at each subfolder of the given path as a Dolt repository and attempts to return a MultiRepoEnv
-// with initialized environments for each of those subfolder data repositories.
+// with initialized environments for each of those subfolder data repositories. subfolders whose name starts with '.' are
+// skipped.
 func LoadMultiEnvFromDir(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, path, version string) (MultiRepoEnv, error) {
 	var envNamesAndPaths []EnvNameAndPath
 	err := fs.Iter(path, false, func(path string, size int64, isDir bool) (stop bool) {
 		if isDir {
 			dirName := filepath.Base(path)
+			if dirName[0] == '.' {
+				return false
+			}
+
 			name := dirToDBName(dirName)
 			envNamesAndPaths = append(envNamesAndPaths, EnvNameAndPath{Name: name, Path: path})
 		}
