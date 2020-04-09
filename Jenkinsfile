@@ -33,6 +33,11 @@ pipeline {
                     }
                     environment {
                         PATH = "${pwd()}/.ci_bin/pyenv/bin:${pwd()}/.ci_bin:${pwd()}/.ci_bin/node_modules/.bin:${env.PATH}"
+                        AWS_SDK_LOAD_CONFIG = "1"
+                        AWS_REGION = "us-west-2"
+                        DOLT_BATS_AWS_TABLE = "dolt-ci-bats-manifests-us-west-2"
+                        DOLT_BATS_AWS_BUCKET = "dolt-ci-bats-chunks-us-west-2"
+                        DOLT_BATS_AWS_EXISTING_REPO = "aws_remote_bats_tests"
                     }
                     steps {
                         dir (".ci_bin") {

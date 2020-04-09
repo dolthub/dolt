@@ -57,6 +57,65 @@ func (h *DoltHarness) Init() error {
 		panic("Current directory must be a valid dolt repository")
 	}
 
+	return innerInit(h, dEnv)
+}
+
+func (h *DoltHarness) ExecuteStatement(statement string) error {
+	ctx := sql.NewContext(
+		context.Background(),
+		sql.WithPid(rand.Uint64()),
+		sql.WithIndexRegistry(h.idxReg),
+		sql.WithViewRegistry(h.viewReg),
+		sql.WithSession(h.sess))
+
+	statement = normalizeStatement(statement)
+
+	_, rowIter, err := h.engine.Query(ctx, statement)
+	if err != nil {
+		return err
+	}
+
+	return drainIterator(rowIter)
+}
+
+func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []string, err error) {
+	pid := rand.Uint32()
+	ctx := sql.NewContext(
+		context.Background(),
+		sql.WithPid(uint64(pid)),
+		sql.WithIndexRegistry(h.idxReg),
+		sql.WithViewRegistry(h.viewReg),
+		sql.WithSession(h.sess))
+
+	var sch sql.Schema
+	var rowIter sql.RowIter
+	defer func() {
+		if r := recover(); r != nil {
+			// Panics leave the engine in a bad state that we have to clean up
+			h.engine.Catalog.ProcessList.Kill(pid)
+			panic(r)
+		}
+	}()
+
+	sch, rowIter, err = h.engine.Query(ctx, statement)
+	if err != nil {
+		return "", nil, err
+	}
+
+	schemaString, err := schemaToSchemaString(sch)
+	if err != nil {
+		return "", nil, err
+	}
+
+	results, err = rowsToResultStrings(rowIter)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return schemaString, results, nil
+}
+
+func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 	root, verr := commands.GetWorkingWithVErr(dEnv)
 	if verr != nil {
 		return verr
@@ -108,24 +167,6 @@ func (h *DoltHarness) Init() error {
 	return nil
 }
 
-func (h *DoltHarness) ExecuteStatement(statement string) error {
-	ctx := sql.NewContext(
-		context.Background(),
-		sql.WithPid(rand.Uint64()),
-		sql.WithIndexRegistry(h.idxReg),
-		sql.WithViewRegistry(h.viewReg),
-		sql.WithSession(h.sess))
-
-	statement = normalizeStatement(statement)
-
-	_, rowIter, err := h.engine.Query(ctx, statement)
-	if err != nil {
-		return err
-	}
-
-	return drainIterator(rowIter)
-}
-
 // We cheat a little at these tests. A great many of them use tables without primary keys, which we don't currently
 // support. Until we do, we just make every column in such tables part of the primary key.
 func normalizeStatement(statement string) string {
@@ -155,43 +196,6 @@ func normalizeStatement(statement string) string {
 	}
 	normalized += "))"
 	return normalized
-}
-
-func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []string, err error) {
-	pid := rand.Uint32()
-	ctx := sql.NewContext(
-		context.Background(),
-		sql.WithPid(uint64(pid)),
-		sql.WithIndexRegistry(h.idxReg),
-		sql.WithViewRegistry(h.viewReg),
-		sql.WithSession(h.sess))
-
-	var sch sql.Schema
-	var rowIter sql.RowIter
-	defer func() {
-		if r := recover(); r != nil {
-			// Panics leave the engine in a bad state that we have to clean up
-			h.engine.Catalog.ProcessList.Kill(pid)
-			panic(r)
-		}
-	}()
-
-	sch, rowIter, err = h.engine.Query(ctx, statement)
-	if err != nil {
-		return "", nil, err
-	}
-
-	schemaString, err := schemaToSchemaString(sch)
-	if err != nil {
-		return "", nil, err
-	}
-
-	results, err = rowsToResultStrings(rowIter)
-	if err != nil {
-		return "", nil, err
-	}
-
-	return schemaString, results, nil
 }
 
 func drainIterator(iter sql.RowIter) error {
