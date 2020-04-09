@@ -208,10 +208,16 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		sql.WithIndexRegistry(sql.NewIndexRegistry()),
 		sql.WithViewRegistry(sql.NewViewRegistry()))
 
-	var currentDB string
 	roots := make(map[string]*doltdb.RootValue)
-	for name, root := range initialRoots {
+
+	var name string
+	var root *doltdb.RootValue
+	for name, root = range initialRoots {
 		roots[name] = root
+	}
+
+	var currentDB string
+	if len(initialRoots) == 1 {
 		sqlCtx.SetCurrentDatabase(name)
 		currentDB = name
 	}

@@ -140,17 +140,19 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 		sql.WithViewRegistry(h.viewReg),
 		sql.WithSession(h.sess))
 
-	for _, db := range h.engine.Catalog.AllDatabases() {
+	dbs := h.engine.Catalog.AllDatabases()
+	dsqlDBs := make([]dsql.Database, len(dbs))
+	for i, db := range dbs {
 		dsqlDB := db.(dsql.Database)
-		defRoot := dsqlDB.GetDefaultRoot()
+		dsqlDBs[i] = dsqlDB
 
+		defRoot := dsqlDB.GetDefaultRoot()
 		err := dsqlDB.SetRoot(ctx, defRoot)
 
 		if err != nil {
 			return err
 		}
 
-		ctx.RegisterIndexDriver(dsql.NewDoltIndexDriver(dsqlDB))
 		err = dsql.RegisterSchemaFragments(ctx, dsqlDB, defRoot)
 
 		if err != nil {
@@ -158,7 +160,12 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 		}
 	}
 
+	ctx.RegisterIndexDriver(dsql.NewDoltIndexDriver(dsqlDBs...))
 	err = ctx.LoadIndexes(ctx, h.engine.Catalog.AllDatabases())
+
+	if len(dbs) == 1 {
+		h.sess.SetCurrentDatabase(dbs[0].Name())
+	}
 
 	if err != nil {
 		return err
