@@ -479,7 +479,7 @@ SQL
      [[ "$output" =~ "This is a repository level README" ]] || false
  }
 
- @test "dolt checkout <branch> should save docs to the file system, leaving any untacked files" {
+ @test "dolt checkout <branch> should save docs to the file system, leaving any untracked files" {
      dolt add LICENSE.md
      dolt commit -m "license commit"
      dolt checkout -b test-branch
@@ -505,6 +505,28 @@ SQL
      [[ ! "$output" =~ "README.md" ]] || false
      run cat LICENSE.md
      [[ "$output" =~ "new-license" ]] || false
+ }
+
+ @test "dolt checkout <branch>, assuming no conflicts, should preserve changes in the working set (on the filesystem)" {
+     dolt add LICENSE.md README.md
+     dolt commit -m "initial license and readme commit"
+     echo updated-readme > README.md
+     skip dolt checkout -b test-branch
+     run dolt status
+     [[ "$output" =~ "README.md" ]] || false
+     run cat README.md
+     [[ "$output" =~ "updated-readme" ]] || false
+     run cat LICENSE.md
+     [[ "$output" =~ "This is a repository level LICENSE" ]] || false
+
+     dolt add README.md
+     dolt commit -m "commit of updated-readme"
+     echo "another new README!" > README.md
+     dolt checkout master
+     run dolt status
+     [[ "$output" =~ "README.md" ]] || false
+     run cat README.md
+     [[ "$output" =~ "another new README!" ]] || false
  }
 
 @test "dolt diff shows diffs between working root and file system docs" {
