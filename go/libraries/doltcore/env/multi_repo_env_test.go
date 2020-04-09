@@ -110,18 +110,6 @@ func TestDoltEnvAsMultiEnv(t *testing.T) {
 		assert.Equal(t, "test_name_123", k)
 		assert.Equal(t, dEnv, v)
 	}
-
-	// Should work with paths relative to CWD as well
-	envPath = filepath.Join(".", " test---name _ 123")
-	dEnv = initRepoWithRelativePath(t, envPath, hdp)
-
-	mrEnv = DoltEnvAsMultiEnv(dEnv)
-	assert.Len(t, mrEnv, 1)
-
-	for k, v := range mrEnv {
-		assert.Equal(t, "test_name_123", k)
-		assert.Equal(t, dEnv, v)
-	}
 }
 
 func initMultiEnv(t *testing.T, testName string, names []string) (string, HomeDirProvider, map[string]*DoltEnv) {

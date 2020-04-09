@@ -60,7 +60,7 @@ func Parse(urlStr string) (*url.URL, error) {
 	}
 
 	// url.parse doesn't handle file paths that begin with . correctly
-	if strings.HasPrefix(u.Host, "."){
+	if strings.HasPrefix(u.Host, ".") {
 		u.Path = u.Host + u.Path
 		u.Host = ""
 	}
