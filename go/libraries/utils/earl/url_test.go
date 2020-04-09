@@ -264,6 +264,22 @@ func TestParse(t *testing.T) {
 			},
 			false,
 		},
+		{
+			FileUrlFromPath(`./test/.dolt/noms`, '/'),
+			url.URL{
+				Scheme: "file",
+				Path:   "./test/.dolt/noms",
+			},
+			false,
+		},
+		{
+			FileUrlFromPath(`./test\.dolt\noms`, '\\'),
+			url.URL{
+				Scheme: "file",
+				Path:   "./test/.dolt/noms",
+			},
+			false,
+		},
 	}
 
 	for _, test := range tests {
