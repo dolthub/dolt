@@ -533,20 +533,19 @@ func (db Database) createTable(ctx *sql.Context, tableName string, sch sql.Schem
 		return err
 	}
 
-	err = doltSch.GetAllCols().Iter(func(tag uint64, _ schema.Column) (stop bool, err error) {
-		found, tblName, err := db.defRoot.HasTag(ctx, tag)
-		if err != nil {
-			return true, err
-		}
-		if found {
-			err = fmt.Errorf("A column with the tag %d already exists in table %s.", tag, tblName)
-		}
-		stop = err != nil
-		return stop, err
-	})
-
+	tt, err := root.TablesNamesForTags(ctx, doltSch.GetAllCols().Tags...)
 	if err != nil {
 		return err
+	}
+	if len(tt) > 0 {
+		var ee []string
+		_ = doltSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			if collisionTable, tagExists := tt[tag]; tagExists {
+				ee = append(ee, schema.ErrTagPrevUsed(tag, col.Name, collisionTable).Error())
+			}
+			return false, nil
+		})
+		return fmt.Errorf(strings.Join(ee, "\n"))
 	}
 
 	newRoot, err := root.CreateEmptyTable(ctx, tableName, doltSch)

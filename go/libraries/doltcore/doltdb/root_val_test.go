@@ -86,7 +86,13 @@ func TestTableDiff(t *testing.T) {
 		t.Error("Bad table diff after adding a single table")
 	}
 
-	root4, err := root3.PutTable(ctx, "tbl2", tbl1)
+	cc, _ := schema.NewColCollection(
+		schema.NewColumn("id", uint64(100), types.UUIDKind, true, schema.NotNullConstraint{}),
+	)
+	tbl2, err := createTestTable(ddb.ValueReadWriter(), schema.SchemaFromCols(cc), m)
+	assert.NoError(t, err)
+
+	root4, err := root3.PutTable(ctx, "tbl2", tbl2)
 	assert.NoError(t, err)
 
 	added, modified, removed, err = root2.TableDiff(ctx, root4)

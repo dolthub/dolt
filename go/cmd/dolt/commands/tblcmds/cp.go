@@ -18,6 +18,7 @@ import (
 	"context"
 
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/mvdata"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
@@ -116,13 +117,12 @@ func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 		return commands.HandleVErrAndExitCode(err, usage)
 	}
 
-	tbl, ok, err := root.GetTable(ctx, old)
+	_, ok, err := root.GetTable(ctx, old)
 
 	if err != nil {
 		verr = errhand.BuildDError("error: failed to get table").AddCause(err).Build()
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
-
 	if !ok {
 		verr = errhand.BuildDError("Table '%s' not found in root", old).Build()
 		return commands.HandleVErrAndExitCode(verr, usage)
@@ -138,11 +138,19 @@ func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	working, err = working.PutTable(ctx, new, tbl)
-	if err != nil {
-		verr = errhand.BuildDError("error; failed to write tables back to database").Build()
+	mvOpts := &mvdata.MoveOptions{
+		Operation: mvdata.OverwriteOp,
+		ContOnErr: true,
+		Src:       mvdata.TableDataLocation{Name: old},
+		Dest:      mvdata.TableDataLocation{Name: new},
+	}
+
+	res := executeMove(ctx, dEnv, force, mvOpts)
+
+	if res != 0 {
+		verr = errhand.BuildDError("could not copy table %s to table %s", old, new).Build()
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	return commands.HandleVErrAndExitCode(commands.UpdateWorkingWithVErr(dEnv, working), usage)
+	return 0
 }
