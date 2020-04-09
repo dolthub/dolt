@@ -213,7 +213,7 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     cd dolt-repo-$$-new
     run dolt init
     [ "$status" -eq 0 ]
-    [ "$output" = "Successfully initialized dolt data repository." ]
+    [[ "$output" =~ "Successfully initialized dolt data repository." ]] || false
     [ -d .dolt ]
     [ -d .dolt/noms ]
     [ -f .dolt/config.json ]

@@ -16,10 +16,9 @@ package actions
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"time"
-
-	"github.com/pkg/errors"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"

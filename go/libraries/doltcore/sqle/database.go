@@ -146,8 +146,14 @@ func (db Database) Name() string {
 	return db.name
 }
 
+// GetDefaultRoot returns the default root of the database that is used by new sessions.
 func (db Database) GetDefaultRoot() *doltdb.RootValue {
 	return db.defRoot
+}
+
+// GetDoltDB gets the underlying DoltDB of the Database
+func (db Database) GetDoltDB() *doltdb.DoltDB {
+	return db.ddb
 }
 
 // GetTableInsensitive is used when resolving tables in queries. It returns a best-effort case-insensitive match for

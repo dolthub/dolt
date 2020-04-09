@@ -20,12 +20,12 @@ import os
 import sys
 
 args = sys.argv[sys.argv.index('--') + 1:]
-working_dir, port_str, timeout_ms = args
+working_dir, port_str, timeout_ms, db = args
 os.chdir(working_dir)
 
 from pytest import wait_for_connection
-wait_for_connection(port=int(port_str), timeout_ms=int(timeout_ms))
-" -- $PYTEST_DIR $1 $2
+wait_for_connection(port=int(port_str), timeout_ms=int(timeout_ms), database=db)
+" -- $PYTEST_DIR $1 $2 dolt
 }
 
 start_sql_server() {

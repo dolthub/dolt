@@ -16,6 +16,7 @@ package filesys
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -26,10 +27,39 @@ import (
 // LocalFS is the machines local filesystem
 var LocalFS = &localFS{}
 
-type localFS struct{}
+type localFS struct {
+	cwd string
+}
+
+// LocalFilesysWithWorkingDir returns a new Filesys implementation backed by the local filesystem with the supplied
+// working directory.  Path relative operations occur relative to this directory.
+func LocalFilesysWithWorkingDir(cwd string) (Filesys, error) {
+	absCWD, err := filepath.Abs(cwd)
+
+	if err != nil {
+		return nil, err
+	}
+
+	stat, err := os.Stat(absCWD)
+
+	if err != nil {
+		return nil, err
+	} else if !stat.IsDir() {
+		return nil, fmt.Errorf("'%s' is not a valid directory", absCWD)
+	}
+
+	return &localFS{absCWD}, nil
+}
 
 // Exists will tell you if a file or directory with a given path already exists, and if it does is it a directory
 func (fs *localFS) Exists(path string) (exists bool, isDir bool) {
+	var err error
+	path, err = fs.Abs(path)
+
+	if err != nil {
+		return false, false
+	}
+
 	stat, err := os.Stat(path)
 
 	if err != nil {
@@ -43,6 +73,13 @@ var errStopMarker = errors.New("stop")
 
 // Iter iterates over the files and subdirectories within a given directory (Optionally recursively.
 func (fs *localFS) Iter(path string, recursive bool, cb FSIterCB) error {
+	var err error
+	path, err = fs.Abs(path)
+
+	if err != nil {
+		return err
+	}
+
 	if !recursive {
 		info, err := ioutil.ReadDir(path)
 
@@ -65,7 +102,14 @@ func (fs *localFS) Iter(path string, recursive bool, cb FSIterCB) error {
 }
 
 func (fs *localFS) iter(dir string, cb FSIterCB) error {
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+	var err error
+	dir, err = fs.Abs(dir)
+
+	if err != nil {
+		return err
+	}
+
+	err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if dir != path {
 			stop := cb(path, info.Size(), info.IsDir())
 
@@ -85,6 +129,13 @@ func (fs *localFS) iter(dir string, cb FSIterCB) error {
 
 // OpenForRead opens a file for reading
 func (fs *localFS) OpenForRead(fp string) (io.ReadCloser, error) {
+	var err error
+	fp, err = fs.Abs(fp)
+
+	if err != nil {
+		return nil, err
+	}
+
 	if exists, isDir := fs.Exists(fp); !exists {
 		return nil, os.ErrNotExist
 	} else if isDir {
@@ -96,24 +147,52 @@ func (fs *localFS) OpenForRead(fp string) (io.ReadCloser, error) {
 
 // ReadFile reads the entire contents of a file
 func (fs *localFS) ReadFile(fp string) ([]byte, error) {
+	var err error
+	fp, err = fs.Abs(fp)
+
+	if err != nil {
+		return nil, err
+	}
+
 	return ioutil.ReadFile(fp)
 }
 
 // OpenForWrite opens a file for writing.  The file will be created if it does not exist, and if it does exist
 // it will be overwritten.
 func (fs *localFS) OpenForWrite(fp string) (io.WriteCloser, error) {
+	var err error
+	fp, err = fs.Abs(fp)
+
+	if err != nil {
+		return nil, err
+	}
+
 	return os.OpenFile(fp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
 }
 
 // WriteFile writes the entire data buffer to a given file.  The file will be created if it does not exist,
 // and if it does exist it will be overwritten.
 func (fs *localFS) WriteFile(fp string, data []byte) error {
+	var err error
+	fp, err = fs.Abs(fp)
+
+	if err != nil {
+		return err
+	}
+
 	return ioutil.WriteFile(fp, data, os.ModePerm)
 }
 
 // MkDirs creates a folder and all the parent folders that are necessary to create it.
 func (fs *localFS) MkDirs(path string) error {
-	_, err := os.Stat(path)
+	var err error
+	path, err = fs.Abs(path)
+
+	if err != nil {
+		return err
+	}
+
+	_, err = os.Stat(path)
 
 	if err != nil {
 		return os.MkdirAll(path, os.ModePerm)
@@ -124,6 +203,13 @@ func (fs *localFS) MkDirs(path string) error {
 
 // DeleteFile will delete a file at the given path
 func (fs *localFS) DeleteFile(path string) error {
+	var err error
+	path, err = fs.Abs(path)
+
+	if err != nil {
+		return err
+	}
+
 	if exists, isDir := fs.Exists(path); exists && !isDir {
 		if isDir {
 			return ErrIsDir
@@ -138,6 +224,13 @@ func (fs *localFS) DeleteFile(path string) error {
 // Delete will delete an empty directory, or a file.  If trying delete a directory that is not empty you can set force to
 // true in order to delete the dir and all of it's contents
 func (fs *localFS) Delete(path string, force bool) error {
+	var err error
+	path, err = fs.Abs(path)
+
+	if err != nil {
+		return err
+	}
+
 	if !force {
 		return os.Remove(path)
 	} else {
@@ -165,11 +258,26 @@ func (fs *localFS) MoveFile(srcPath, destPath string) error {
 
 // converts a path to an absolute path.  If it's already an absolute path the input path will be returned unaltered
 func (fs *localFS) Abs(path string) (string, error) {
-	return filepath.Abs(path)
+	if filepath.IsAbs(path) {
+		return path, nil
+	}
+
+	if fs.cwd == "" {
+		return filepath.Abs(path)
+	} else {
+		return filepath.Join(fs.cwd, path), nil
+	}
 }
 
 // LastModified gets the last modified timestamp for a file or directory at a given path
 func (fs *localFS) LastModified(path string) (t time.Time, exists bool) {
+	var err error
+	path, err = fs.Abs(path)
+
+	if err != nil {
+		return time.Time{}, false
+	}
+
 	stat, err := os.Stat(path)
 
 	if err != nil {

@@ -51,7 +51,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.AddCmd{},
 	commands.ResetCmd{},
 	commands.CommitCmd{},
-	commands.SqlCmd{},
+	commands.SqlCmd{VersionStr: Version},
 	sqlserver.SqlServerCmd{},
 	commands.LogCmd{},
 	commands.DiffCmd{},
@@ -79,6 +79,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 
 func init() {
 	dumpDocsCommand.DoltCommand = doltCommand
+	sqlserver.CliVersion = Version
 }
 
 const chdirFlag = "--chdir"
