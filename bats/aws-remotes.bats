@@ -64,7 +64,6 @@ skip_if_no_aws_tests() {
 
 @test "can push to new remote" {
     skip_if_no_aws_tests
-    skip "Unskip when #531 lands."
     random_repo=`openssl rand -hex 32`
     dolt remote add origin 'aws://['"$DOLT_BATS_AWS_TABLE"':'"$DOLT_BATS_AWS_BUCKET"']/'"$random_repo"
     dolt sql -q 'create table a_test_table (id int primary key)'
