@@ -511,7 +511,7 @@ SQL
      dolt add LICENSE.md README.md
      dolt commit -m "initial license and readme commit"
      echo updated-readme > README.md
-     skip dolt checkout -b test-branch
+     dolt checkout -b test-branch
      run dolt status
      [[ "$output" =~ "README.md" ]] || false
      run cat README.md
