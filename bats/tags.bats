@@ -49,6 +49,21 @@ SQL
     [[ "$output" =~ "tag:5678" ]] || false
 }
 
+@test "Renaming a table should preserve the tag number" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:1234',
+  c1 BIGINT COMMENT 'tag:5678',
+  PRIMARY KEY (pk));
+SQL
+    dolt sql -q "alter table test rename to new_name"
+    run dolt schema show
+    [ $status -eq 0 ]
+    [[ "$output" =~ "new_name" ]] || false
+    [[ "$output" =~ "tag:1234" ]] || false
+    [[ "$output" =~ "tag:5678" ]] || false
+}
+
 @test "Reusing a tag number should fail in create table" {
     run dolt sql <<SQL
 CREATE TABLE test (
@@ -75,7 +90,70 @@ SQL
     [[ "$output" =~ "tag:8910" ]] || false
     run dolt sql -q "alter table test add column c2 bigint comment 'tag:8910'"
     [ $status -ne 0 ]
-    [[ "$output" =~ "A column with the tag 8910 already exists in table test." ]] || false
+    [[ "$output" =~ "Cannot create column c2, the tag 8910 was already used in table test" ]] || false
+}
+
+@test "Cannot reuse tag number of deleted column" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:1234',
+  c1 BIGINT COMMENT 'tag:5678',
+  PRIMARY KEY (pk));
+SQL
+    dolt add .
+    dolt commit -m 'create table test'
+    dolt sql -q 'alter table test drop column c1'
+    dolt add .
+    dolt commit -m 'dropped column c1'
+    run dolt sql -q "alter table test add column c2 int comment 'tag:5678'"
+    [ $status -ne 0 ]
+    [[ "$output" =~ "Cannot create column c2, the tag 5678 was already used in table test" ]] || false
+}
+
+@test "Cannot reuse tag number of deleted column after table rename" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:1234',
+  c1 BIGINT COMMENT 'tag:5678',
+  PRIMARY KEY (pk));
+SQL
+    dolt add .
+    dolt commit -m 'create table test'
+    dolt sql -q 'alter table test drop column c1'
+    dolt add .
+    dolt commit -m 'dropped column c1'
+    dolt sql -q 'alter table test rename to new_name'
+    run dolt sql -q "alter table new_name add column c2 int comment 'tag:5678'"
+    [ $status -ne 0 ]
+    [[ "$output" =~ "Cannot create column c2, the tag 5678 was already used in table new_name" ]] || false
+}
+
+@test "Cannot reuse tag number of deleted table" {
+    dolt sql <<SQL
+CREATE TABLE aaa (
+  pk INT NOT NULL COMMENT 'tag:1234',
+  PRIMARY KEY (pk));
+SQL
+    dolt sql <<SQL
+CREATE TABLE bbb (
+  pk INT NOT NULL COMMENT 'tag:5678',
+  PRIMARY KEY (pk));
+SQL
+    dolt add .
+    dolt commit -m 'created tables aaa and bbb'
+    dolt sql -q 'drop table aaa'
+    dolt add .
+    dolt commit -m 'dropped table aaa'
+    run dolt sql <<SQL
+CREATE TABLE new_table (
+  pk BIGINT NOT NULL COMMENT 'tag:1234',
+  PRIMARY KEY (pk));
+SQL
+    [ $status -ne 0 ]
+    [[ "$output" =~ "Cannot create column pk, the tag 1234 was already used in table aaa" ]] || false
+    run dolt sql -q "alter table bbb add column c1 int comment 'tag:1234'"
+    [ $status -ne 0 ]
+    [[ "$output" =~ "Cannot create column c1, the tag 1234 was already used in table aaa" ]] || false
 }
 
 @test "Should not be able to reuse a committed tag number on a column with a different type" {
@@ -100,11 +178,33 @@ SQL
     [ $status -eq 1 ]
 
     # Adding the tag back with a different type should error
-    skip "No checks for tag reuse across commits right now"
     run dolt sql -q "alter table test add column c1 text comment 'tag:5678'"
     [ $status -ne 0 ]
     run dolt sql -q "alter table test add column c2 text comment 'tag:5678'"
     [ $status -ne 0 ]
+}
+
+@test "Can drop and readd table before committing" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:1234',
+  c1 BIGINT COMMENT 'tag:5678',
+  PRIMARY KEY (pk));
+SQL
+    run dolt sql -q 'drop table test'
+    [ $status -eq 0 ]
+    run dolt sql <<SQL
+CREATE TABLE new_name (
+  pk INT NOT NULL COMMENT 'tag:1234',
+  c1 INT COMMENT 'tag:5678',
+  PRIMARY KEY (pk));
+SQL
+    [ $status -eq 0 ]
+    run dolt schema show
+    [ $status -eq 0 ]
+    [[ "$output" =~ "new_name" ]] || false
+    [[ "$output" =~ "tag:1234" ]] || false
+    [[ "$output" =~ "tag:5678" ]] || false
 }
 
 @test "Drop and create table should enforce tag reuse rules across versions" {
@@ -116,14 +216,6 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit	-m "Committed test table"
-    dolt sql -q "drop table test"
-    skip "Dropping and recreating tables does not enforce tag reuse rules"
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:1234',
-  c1 BIGINT COMMENT 'tag:5678',
-  PRIMARY KEY (pk));
-SQL
     dolt sql -q "drop table test"
     run dolt sql <<SQL
 CREATE TABLE test (
@@ -273,6 +365,32 @@ SQL
     [[ "${lines[3]}" =~ "\`c1\` BIGINT COMMENT " ]] || false
 }
 
+@test "Tags must be unique across tables" {
+    dolt sql <<SQL
+CREATE TABLE aaa (
+  pk INT NOT NULL COMMENT 'tag:1234',
+  PRIMARY KEY (pk));
+SQL
+    dolt sql <<SQL
+CREATE TABLE bbb (
+  pk INT NOT NULL COMMENT 'tag:5678',
+  PRIMARY KEY (pk));
+SQL
+    run dolt sql <<SQL
+CREATE TABLE test (
+  pk INT NOT NULL COMMENT 'tag:1234',
+  c1 INT COMMENT 'tag:5678',
+  PRIMARY KEY (pk));
+SQL
+    [ $status -ne 0 ]
+    [[ "${lines[0]}" =~ "Cannot create column pk, the tag 1234 was already used in table aaa" ]] || false
+    [[ "${lines[1]}" =~ "Cannot create column c1, the tag 5678 was already used in table bbb" ]] || false
+
+    run dolt sql -q "ALTER TABLE aaa ADD COLUMN c1 INT COMMENT 'tag:5678';"
+    [ $status -ne 0 ]
+    [[ "${lines[0]}" =~ "Cannot create column c1, the tag 5678 was already used in table bbb" ]] || false
+}
+
 @test "Deterministic tag generation produces consistent results" {
     dolt branch other
     dolt sql <<SQL
@@ -292,4 +410,18 @@ SQL
     [[ "${lines[3]}" =~ "COMMENT 'tag:5951'" ]] || false
     [[ "${lines[4]}" =~ "COMMENT 'tag:10358'" ]] || false
     [[ "${lines[5]}" =~ "COMMENT 'tag:11314'" ]] || false
+}
+
+@test "dolt table import -c uses deterministic tag generation" {
+    run dolt table import -c ints_table `batshelper 1pk5col-ints.csv`
+    [ $status -eq 0 ]
+    dolt schema show
+    run dolt schema show
+    [ $status -eq 0 ]
+    [[ "${lines[2]}" =~ "COMMENT 'tag:6881'" ]] || false
+    [[ "${lines[3]}" =~ "COMMENT 'tag:1940'" ]] || false
+    [[ "${lines[4]}" =~ "COMMENT 'tag:13393'" ]] || false
+    [[ "${lines[5]}" =~ "COMMENT 'tag:15124'" ]] || false
+    [[ "${lines[6]}" =~ "COMMENT 'tag:5135'" ]] || false
+    [[ "${lines[7]}" =~ "COMMENT 'tag:2248'" ]] || false
 }

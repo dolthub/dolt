@@ -106,10 +106,6 @@ func mapTableFiles(tblFiles []nbs.TableFile) ([]string, map[string]nbs.TableFile
 }
 
 func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<- TableFileEvent) error {
-	if eventCh != nil {
-		defer close(eventCh)
-	}
-
 	root, tblFiles, err := srcTS.Sources(ctx)
 
 	if err != nil {

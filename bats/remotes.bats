@@ -477,12 +477,12 @@ SQL
     cd "dolt-repo-clones/test-repo"
     dolt sql <<SQL
 CREATE TABLE test2 (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
+  pk BIGINT NOT NULL COMMENT 'tag:10',
+  c1 BIGINT COMMENT 'tag:11',
+  c2 BIGINT COMMENT 'tag:12',
+  c3 BIGINT COMMENT 'tag:13',
+  c4 BIGINT COMMENT 'tag:14',
+  c5 BIGINT COMMENT 'tag:15',
   PRIMARY KEY (pk)
 );
 SQL
@@ -679,12 +679,12 @@ SQL
     cd "dolt-repo-clones/test-repo"
     dolt sql <<SQL
 CREATE TABLE other (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
+  pk BIGINT NOT NULL COMMENT 'tag:10',
+  c1 BIGINT COMMENT 'tag:11',
+  c2 BIGINT COMMENT 'tag:12',
+  c3 BIGINT COMMENT 'tag:13',
+  c4 BIGINT COMMENT 'tag:14',
+  c5 BIGINT COMMENT 'tag:15',
   PRIMARY KEY (pk)
 );
 SQL
@@ -699,6 +699,6 @@ SQL
     [ "$status" -ne 0 ]
     run dolt fetch -f test-remote
     [ "$status" -eq 0 ]
-    run dolt pull
+    dolt pull
     [ "$status" -eq 0 ]
 }

@@ -28,14 +28,14 @@ import (
 )
 
 const expectedCreateSQL = "CREATE TABLE `table_name` (\n" +
-	"  `id` BIGINT NOT NULL COMMENT 'tag:0',\n" +
-	"  `first_name` LONGTEXT NOT NULL COMMENT 'tag:1',\n" +
-	"  `last_name` LONGTEXT NOT NULL COMMENT 'tag:2',\n" +
-	"  `is_married` BIT(1) COMMENT 'tag:3',\n" +
-	"  `age` BIGINT COMMENT 'tag:4',\n" +
-	"  `rating` DOUBLE COMMENT 'tag:6',\n" +
-	"  `uuid` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin COMMENT 'tag:7',\n" +
-	"  `num_episodes` BIGINT UNSIGNED COMMENT 'tag:8',\n" +
+	"  `id` BIGINT NOT NULL COMMENT 'tag:200',\n" +
+	"  `first_name` LONGTEXT NOT NULL COMMENT 'tag:201',\n" +
+	"  `last_name` LONGTEXT NOT NULL COMMENT 'tag:202',\n" +
+	"  `is_married` BIT(1) COMMENT 'tag:203',\n" +
+	"  `age` BIGINT COMMENT 'tag:204',\n" +
+	"  `rating` DOUBLE COMMENT 'tag:206',\n" +
+	"  `uuid` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin COMMENT 'tag:207',\n" +
+	"  `num_episodes` BIGINT UNSIGNED COMMENT 'tag:208',\n" +
 	"  PRIMARY KEY (`id`)\n" +
 	");"
 const expectedDropSql = "DROP TABLE `table_name`;"

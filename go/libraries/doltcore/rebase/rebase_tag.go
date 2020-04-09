@@ -263,7 +263,7 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		}
 
 		// create new RootValue by overwriting table with rebased rows and schema
-		newRoot, err = doltdb.PutTable(ctx, rebasedRoot, rebasedRoot.VRW(), tblName, rebasedTable)
+		newRoot, err = rebasedRoot.PutTable(ctx, tblName, rebasedTable)
 
 		if err != nil {
 			return nil, err

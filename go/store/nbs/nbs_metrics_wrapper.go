@@ -39,6 +39,8 @@ func NewNBSMetricWrapper(nbs *NomsBlockStore) *NBSMetricWrapper {
 	}
 }
 
+var _ TableFileStore = &NBSMetricWrapper{}
+
 // Sources retrieves the current root hash, and a list of all the table files
 func (nbsMW *NBSMetricWrapper) Sources(ctx context.Context) (hash.Hash, []TableFile, error) {
 	return nbsMW.nbs.Sources(ctx)
@@ -52,6 +54,11 @@ func (nbsMW *NBSMetricWrapper) WriteTableFile(ctx context.Context, fileId string
 // SetRootChunk changes the root chunk hash from the previous value to the new root.
 func (nbsMW *NBSMetricWrapper) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
 	return nbsMW.nbs.SetRootChunk(ctx, root, previous)
+}
+
+// Forwards SupportedOperations to wrapped block store.
+func (nbsMW *NBSMetricWrapper) SupportedOperations() TableFileStoreOps {
+	return nbsMW.nbs.SupportedOperations()
 }
 
 // GetManyCompressed gets the compressed Chunks with |hashes| from the store. On return,
