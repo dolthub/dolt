@@ -949,6 +949,14 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []TableFile,
 	return contents.GetRoot(), tableFiles, nil
 }
 
+func (nbs *NomsBlockStore) SupportedOperations() TableFileStoreOps {
+	_, canwrite := nbs.p.(*fsTablePersister)
+	return TableFileStoreOps{
+		CanRead:  true,
+		CanWrite: canwrite,
+	}
+}
+
 // WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
 func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader, contentLength uint64, contentHash []byte) error {
 	fsPersister, ok := nbs.p.(*fsTablePersister)

@@ -153,9 +153,11 @@ func NewDatabase(cs chunks.ChunkStore) Database {
 // Databases support this yet.
 func CanUsePuller(db Database) bool {
 	cs := db.chunkStore()
-	_, ok := cs.(nbs.TableFileStore)
-
-	return ok
+	if tfs, ok := cs.(nbs.TableFileStore); ok {
+		ops := tfs.SupportedOperations()
+		return ops.CanRead && ops.CanWrite
+	}
+	return false
 }
 
 func GetCSStatSummaryForDB(db Database) string {
