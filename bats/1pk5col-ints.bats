@@ -691,7 +691,7 @@ DELIM
     dolt checkout test-branch-m
     dolt merge test-branch
     dolt checkout test-branch-alt
-    dolt sql -q "CREATE TABLE test_alt (pk BIGINT NOT NULL COMMENT 'tag:0', c1 BIGINT COMMENT 'tag:1', PRIMARY KEY (pk));"
+    dolt sql -q "CREATE TABLE test_alt (pk BIGINT NOT NULL, c1 BIGINT, PRIMARY KEY (pk));"
     dolt add test_alt
     dolt commit -m 'add test_alt'
     dolt checkout test-branch-m

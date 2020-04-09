@@ -16,6 +16,7 @@ package alterschema
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
@@ -239,7 +240,7 @@ func TestAddColumnToTable(t *testing.T) {
 			colKind:     types.IntKind,
 			nullable:    NotNull,
 			defaultVal:  nil,
-			expectedErr: "A column with the tag 2 already exists",
+			expectedErr: fmt.Sprintf("Cannot create column newCol, the tag %d was already used in table people", dtestutils.AgeTag),
 		},
 		{
 			name:        "name collision",

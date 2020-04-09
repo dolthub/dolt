@@ -28,25 +28,5 @@ func RenameTable(ctx context.Context, root *doltdb.RootValue, oldName, newName s
 		panic("invalid parameters")
 	}
 
-	tbl, ok, err := root.GetTable(ctx, oldName)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if !ok {
-		return nil, doltdb.ErrTableNotFound
-	}
-
-	if has, err := root.HasTable(ctx, newName); err != nil {
-		return nil, err
-	} else if has {
-		return nil, doltdb.ErrTableExists
-	}
-
-	if root, err = root.RemoveTables(ctx, oldName); err != nil {
-		return nil, err
-	}
-
-	return root.PutTable(ctx, newName, tbl)
+	return root.RenameTable(ctx, oldName, newName)
 }

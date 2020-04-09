@@ -286,7 +286,7 @@ func createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{tableParam, "The new or existing table being imported to."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{fileParam, "The file being imported. Supported file types are csv, psv, and nbf."})
-	ap.SupportsFlag(createParam, "c", "Create a new table, or overwrite an existing table (with the {{.EmphasisLeft}}-f{{.EmphasisRight}} flag) from the imported data.")
+	ap.SupportsFlag(createParam, "c", "Create a new table, or overwrite an existing table (with the -f flag) from the imported data.")
 	ap.SupportsFlag(updateParam, "u", "Update an existing table with the imported data.")
 	ap.SupportsFlag(forceParam, "f", "If a create operation is being executed, data already exists in the destination, the Force flag will allow the target to be overwritten.")
 	ap.SupportsFlag(replaceParam, "r", "Replace existing table with imported data while preserving the original schema.")

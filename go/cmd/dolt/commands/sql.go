@@ -944,7 +944,7 @@ func canProcessAsBatchInsert(sqlStatement sqlparser.Statement) bool {
 }
 
 func updateBatchInsertOutput() {
-	displayStr := fmt.Sprintf("Rows inserted: %d Rows updated: %d Rows deleted: %d",
+	displayStr := fmt.Sprintf("Rows inserted: %d Rows updated: %d Rows deleted: %d\n",
 		batchEditStats.rowsInserted, batchEditStats.rowsUpdated, batchEditStats.rowsDeleted)
 	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
 	batchEditStats.unprintedEdits = 0
@@ -1228,7 +1228,7 @@ func (se *sqlEngine) checkThenDeleteAllRows(ctx *sql.Context, s *sqlparser.Delet
 						return err
 					}
 
-					newRoot, err := doltdb.PutTable(ctx, root, root.VRW(), tName, newTable)
+					newRoot, err := root.PutTable(ctx, tName, newTable)
 					if err != nil {
 						return err
 					}

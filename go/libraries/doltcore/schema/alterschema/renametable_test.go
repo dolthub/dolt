@@ -30,6 +30,10 @@ import (
 
 func TestRenameTable(t *testing.T) {
 	otherTable := "other"
+	cc, _ := schema.NewColCollection(
+		schema.NewColumn("id", uint64(100), types.UUIDKind, true, schema.NotNullConstraint{}),
+	)
+	otherSch := schema.SchemaFromCols(cc)
 
 	tests := []struct {
 		name           string
@@ -65,7 +69,7 @@ func TestRenameTable(t *testing.T) {
 			dEnv := createEnvWithSeedData(t)
 			ctx := context.Background()
 
-			dtestutils.CreateTestTable(t, dEnv, otherTable, dtestutils.UntypedSchema)
+			dtestutils.CreateTestTable(t, dEnv, otherTable, otherSch)
 
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)

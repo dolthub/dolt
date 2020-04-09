@@ -103,11 +103,11 @@ func TestTableEditor(t *testing.T) {
 			setup: func(ctx *sql.Context, t *testing.T, ed *tableEditor) {
 				require.NoError(t, ed.Insert(ctx, r(edna, PeopleTestSchema)))
 				require.NoError(t, ed.Insert(ctx, r(krusty, PeopleTestSchema)))
-				require.NoError(t, ed.Update(ctx, r(edna, PeopleTestSchema), r(MutateRow(edna, AgeTag, 1), PeopleTestSchema)))
+				require.NoError(t, ed.Update(ctx, r(edna, PeopleTestSchema), r(MutateRow(PeopleTestSchema, edna, AgeTag, 1), PeopleTestSchema)))
 			},
 			selectQuery: "select * from people where id >= 10",
 			expectedRows: CompressRows(PeopleTestSchema,
-				MutateRow(edna, AgeTag, 1),
+				MutateRow(PeopleTestSchema, edna, AgeTag, 1),
 				krusty,
 			),
 		},
@@ -116,10 +116,10 @@ func TestTableEditor(t *testing.T) {
 			setup: func(ctx *sql.Context, t *testing.T, ed *tableEditor) {
 				require.NoError(t, ed.Insert(ctx, r(edna, PeopleTestSchema)))
 				require.NoError(t, ed.Insert(ctx, r(krusty, PeopleTestSchema)))
-				require.NoError(t, ed.Update(ctx, r(edna, PeopleTestSchema), r(MutateRow(edna, AgeTag, 1), PeopleTestSchema)))
+				require.NoError(t, ed.Update(ctx, r(edna, PeopleTestSchema), r(MutateRow(PeopleTestSchema, edna, AgeTag, 1), PeopleTestSchema)))
 				require.NoError(t, ed.Insert(ctx, r(smithers, PeopleTestSchema)))
 				require.NoError(t, ed.Insert(ctx, r(ralph, PeopleTestSchema)))
-				require.NoError(t, ed.Update(ctx, r(smithers, PeopleTestSchema), r(MutateRow(smithers, AgeTag, 1), PeopleTestSchema)))
+				require.NoError(t, ed.Update(ctx, r(smithers, PeopleTestSchema), r(MutateRow(PeopleTestSchema, smithers, AgeTag, 1), PeopleTestSchema)))
 				require.NoError(t, ed.Delete(ctx, r(smithers, PeopleTestSchema)))
 				require.NoError(t, ed.Insert(ctx, r(skinner, PeopleTestSchema)))
 				require.NoError(t, ed.Delete(ctx, r(ralph, PeopleTestSchema)))
@@ -127,7 +127,7 @@ func TestTableEditor(t *testing.T) {
 			},
 			selectQuery: "select * from people where id >= 10",
 			expectedRows: CompressRows(PeopleTestSchema,
-				MutateRow(edna, AgeTag, 1),
+				MutateRow(PeopleTestSchema, edna, AgeTag, 1),
 				krusty,
 				ralph,
 				skinner,
@@ -138,12 +138,12 @@ func TestTableEditor(t *testing.T) {
 			setup: func(ctx *sql.Context, t *testing.T, ed *tableEditor) {
 				require.NoError(t, ed.Insert(ctx, r(edna, PeopleTestSchema)))
 				require.NoError(t, ed.Insert(ctx, r(krusty, PeopleTestSchema)))
-				require.NoError(t, ed.Update(ctx, r(edna, PeopleTestSchema), r(MutateRow(edna, IdTag, 30), PeopleTestSchema)))
+				require.NoError(t, ed.Update(ctx, r(edna, PeopleTestSchema), r(MutateRow(PeopleTestSchema, edna, IdTag, 30), PeopleTestSchema)))
 			},
 			selectQuery: "select * from people where id >= 10",
 			expectedRows: CompressRows(PeopleTestSchema,
 				krusty,
-				MutateRow(edna, IdTag, 30),
+				MutateRow(PeopleTestSchema, edna, IdTag, 30),
 			),
 		},
 	}
