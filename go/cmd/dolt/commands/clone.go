@@ -273,9 +273,9 @@ func cloneProg(eventCh <-chan datas.TableFileEvent) {
 }
 
 func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch string, dEnv *env.DoltEnv) errhand.VerboseError {
-	wg := &sync.WaitGroup{}
 	eventCh := make(chan datas.TableFileEvent, 128)
 
+	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -283,6 +283,7 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	}()
 
 	err := actions.Clone(ctx, srcDB, dEnv.DoltDB, eventCh)
+	close(eventCh)
 
 	wg.Wait()
 
