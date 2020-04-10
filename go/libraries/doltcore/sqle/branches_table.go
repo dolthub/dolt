@@ -57,7 +57,7 @@ func (dt *BranchesTable) String() string {
 func (dt *BranchesTable) Schema() sql.Schema {
 	return []*sql.Column{
 		{Name: "name", Type: sql.Text, Source: BranchesTableName, PrimaryKey: true},
-		{Name: "hash", Type: sql.Text, Source: BranchesTableName, PrimaryKey: true},
+		{Name: "hash", Type: sql.Text, Source: BranchesTableName, PrimaryKey: false},
 		{Name: "latest_committer", Type: sql.Text, Source: BranchesTableName, PrimaryKey: false},
 		{Name: "latest_committer_email", Type: sql.Text, Source: BranchesTableName, PrimaryKey: false},
 		{Name: "latest_commit_date", Type: sql.Datetime, Source: BranchesTableName, PrimaryKey: false},
