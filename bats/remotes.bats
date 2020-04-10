@@ -124,7 +124,7 @@ teardown() {
     run cat LICENSE.md
     [ "$status" -eq 0 ]
     [[ "$output" =~ "updated-license" ]] || false
-    skip run cat README.md
+    run cat README.md
     [ "$status" -eq 0 ]
     [[ "$output" =~ "this text should remain after pull :p" ]] || false
 }
