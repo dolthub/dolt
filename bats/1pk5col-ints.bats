@@ -263,17 +263,17 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
     run dolt sql -q "select c1 as column1, c2 as column2 from test" -r json
     [ "$status" -eq 0 ]
-    [ "$output" == '{"rows": [{"column1":"1","column2":"2"},{"column1":"11","column2":"12"},{"column1":"21","column2":"22"}]}' ]
+    [ "$output" == '{"rows": [{"column1":1,"column2":2},{"column1":11,"column2":12},{"column1":21,"column2":22}]}' ]
 
     run dolt sql -q "select c1 as column1 from test where c1=1" -r json
     [ "$status" -eq 0 ]
-    [ "$output" == '{"rows": [{"column1":"1"}]}' ]
+    [ "$output" == '{"rows": [{"column1":1}]}' ]
  
     # Test that null values are properly handled
     dolt sql -q "insert into test (pk,c1) values (40,1)"
     run dolt sql -q "select c1 as column1, c2 as column2, c3 as column3 from test where pk = 40" -r json
     [ "$status" -eq 0 ]
-    [ "$output" == '{"rows": [{"column1":"1"}]}' ]
+    [ "$output" == '{"rows": [{"column1":1}]}' ]
 }
 
 @test "dolt sql select with inverted where clause" {
