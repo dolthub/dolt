@@ -140,3 +140,44 @@ func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, dEnv *env.DoltEnv, 
 
 	return currRoot, stgRoot, nil
 }
+
+// GetUnstagedDocs retrieves the unstaged docs (docs from the filesystem).
+func GetUnstagedDocs(ctx context.Context, dEnv *env.DoltEnv) (env.Docs, error) {
+	_, unstagedDocDiffs, err := diff.GetDocDiffs(ctx, dEnv)
+	if err != nil {
+		return nil, err
+	}
+	unstagedDocs := env.Docs{}
+	for _, docName := range unstagedDocDiffs.Docs {
+		docDetail, err := dEnv.GetOneDocDetail(docName)
+		if err != nil {
+			return nil, err
+		}
+		unstagedDocs = append(unstagedDocs, docDetail) 
+	}
+	return unstagedDocs, nil
+}
+
+// SaveDocsFromWorkingExcludingFSChanges saves docs from the working root to the filesystem, and does not overwrite changes to docs on the FS.
+// Intended to be called after checking that no conflicts exist (during a checkout or merge, i.e.).
+func SaveDocsFromWorkingExcludingFSChanges(ctx context.Context, dEnv *env.DoltEnv, docsToExclude env.Docs) error {
+	workingRoot, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	var docsToSave env.Docs
+	if len(docsToExclude) > 0 {
+		for _, doc := range dEnv.Docs {
+			for _, excludedDoc := range docsToExclude {
+				if doc.DocPk != excludedDoc.DocPk {
+					docsToSave = append(docsToSave, doc)
+				}
+			}
+		}
+	} else {
+		docsToSave = dEnv.Docs
+	}
+	
+    return SaveTrackedDocs(ctx, dEnv, workingRoot, workingRoot, docsToSave)
+ }

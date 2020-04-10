@@ -19,7 +19,6 @@ import (
 	"errors"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
@@ -246,7 +245,10 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return err
 	}
 
-	unstagedDocs, err := getUnstagedDocs(ctx, dEnv)
+	unstagedDocs, err := GetUnstagedDocs(ctx, dEnv)
+	if err != nil {
+		return err
+	}
 
 	dEnv.RepoState.Head = ref.MarshalableRef{Ref: dref}
 	dEnv.RepoState.Working = wrkHash.String()
@@ -258,46 +260,8 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return err
 	}
 
-	return saveDocsOnCheckout(ctx, dEnv, unstagedDocs)
+	return SaveDocsFromWorkingExcludingFSChanges(ctx, dEnv, unstagedDocs)
 }
-
-func getUnstagedDocs(ctx context.Context, dEnv *env.DoltEnv) (env.Docs, error) {
-	_, unstagedDocDiffs, err := diff.GetDocDiffs(ctx, dEnv)
-	if err != nil {
-		return nil, err
-	}
-	unstagedDocs := env.Docs{}
-	for _, docName := range unstagedDocDiffs.Docs {
-		docDetail, err := dEnv.GetOneDocDetail(docName)
-		if err != nil {
-			return nil, err
-		}
-		unstagedDocs = append(unstagedDocs, docDetail) 
-	}
-	return unstagedDocs, nil
-}
-
- func saveDocsOnCheckout(ctx context.Context, dEnv *env.DoltEnv, docsToExclude env.Docs) error {
-	workingRoot, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return err
-	}
-
-	var docsToSave env.Docs
-	if len(docsToExclude) > 0 {
-		for _, doc := range dEnv.Docs {
-			for _, excludedDoc := range docsToExclude {
-				if doc.DocPk != excludedDoc.DocPk {
-					docsToSave = append(docsToSave, doc)
-				}
-			}
-		}
-	} else {
-		docsToSave = dEnv.Docs
-	}
-	
-    return SaveTrackedDocs(ctx, dEnv, workingRoot, workingRoot, docsToSave)
- }
 
 var emptyHash = hash.Hash{}
 
