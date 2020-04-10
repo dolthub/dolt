@@ -1149,7 +1149,8 @@ func (se *sqlEngine) query(ctx *sql.Context, query string) (sql.Schema, sql.RowI
 
 // Pretty prints the output of the new SQL engine
 func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, rowIter sql.RowIter) error {
-	var chanErr error
+	nbf := types.Format_Default
+
 	doltSch, err := dsqle.SqlSchemaToDoltResultSchema(sqlSch)
 	if err != nil {
 		return err
@@ -1162,27 +1163,6 @@ func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, 
 
 	rowChannel := make(chan row.Row)
 	p := pipeline.NewPartialPipeline(pipeline.InFuncForChannel(rowChannel))
-
-	nbf := types.Format_Default
-	go func() {
-		defer close(rowChannel)
-		var sqlRow sql.Row
-		for sqlRow, chanErr = rowIter.Next(); chanErr == nil; sqlRow, chanErr = rowIter.Next() {
-			taggedVals := make(row.TaggedValues)
-			for i, col := range sqlRow {
-				if col != nil {
-					taggedVals[uint64(i)] = types.String(fmt.Sprintf("%v", col))
-				}
-			}
-
-			var r row.Row
-			r, chanErr = row.New(nbf, untypedSch, taggedVals)
-
-			if chanErr == nil {
-				rowChannel <- r
-			}
-		}
-	}()
 
 	// Parts of the pipeline depend on the output format, such as how we print null values and whether we pad strings.
 	switch se.resultFormat {
@@ -1244,13 +1224,50 @@ func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, 
 		p.InjectRow(fwtStageName, r)
 	}
 
+
+	// For some output formats, we want to convert everything to strings to be processed by the pipeline. For others,
+	// we want to leave types alone and let the writer figure out how to format it for output.
+	var rowFn func(r sql.Row) (row.Row, error)
+	switch se.resultFormat {
+	case formatJson:
+		rowFn = func(r sql.Row) (r2 row.Row, err error) {
+			return dsqle.SqlRowToDoltRow(nbf, r, doltSch)
+		}
+	default:
+		rowFn = func(r sql.Row) (r2 row.Row, err error) {
+			taggedVals := make(row.TaggedValues)
+			for i, col := range r {
+				if col != nil {
+					taggedVals[uint64(i)] = types.String(fmt.Sprintf("%v", col))
+				}
+			}
+			return row.New(nbf, untypedSch, taggedVals)
+		}
+	}
+
+	var iterErr error
+
+	// Read rows off the row iter and pass them to the pipeline channel
+	go func() {
+		defer close(rowChannel)
+		var sqlRow sql.Row
+		for sqlRow, iterErr = rowIter.Next(); iterErr == nil; sqlRow, iterErr = rowIter.Next() {
+			var r row.Row
+			r, iterErr = rowFn(sqlRow)
+
+			if iterErr == nil {
+				rowChannel <- r
+			}
+		}
+	}()
+
 	p.Start()
 	if err := p.Wait(); err != nil {
 		return fmt.Errorf("error processing results: %v", err)
 	}
 
-	if chanErr != io.EOF {
-		return fmt.Errorf("error processing results: %v", chanErr)
+	if iterErr != io.EOF {
+		return fmt.Errorf("error processing results: %v", iterErr)
 	}
 
 	return nil
