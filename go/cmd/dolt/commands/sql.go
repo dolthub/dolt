@@ -1234,7 +1234,7 @@ func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, 
 			return dsqle.SqlRowToDoltRow(nbf, r, doltSch)
 		}
 	default:
-		rowFn = func(r sql.Row) (r2 row.Row, err error) {
+		rowFn = func(r sql.Row) (row.Row, error) {
 			taggedVals := make(row.TaggedValues)
 			for i, col := range r {
 				if col != nil {
