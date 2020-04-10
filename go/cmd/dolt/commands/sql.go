@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -452,6 +453,8 @@ func getFormat(format string) (resultFormat, errhand.VerboseError) {
 		return formatTabular, nil
 	case "csv":
 		return formatCsv, nil
+	case "json":
+		return formatJson, nil
 	default:
 		return formatTabular, errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular,csv").Build()
 	}
@@ -1051,6 +1054,7 @@ type resultFormat byte
 const (
 	formatTabular resultFormat = iota
 	formatCsv
+	formatJson
 )
 
 type sqlEngine struct {
@@ -1180,10 +1184,15 @@ func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, 
 		}
 	}()
 
-	nullPrinter := nullprinter.NewNullPrinter(untypedSch)
-	p.AddStage(pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow))
+	// Parts of the pipeline depend on the output format, such as how we print null values and whether we pad strings.
+	switch se.resultFormat {
+	case formatCsv:
+		nullPrinter := nullprinter.NewNullPrinterWithNullString(untypedSch, "")
+		p.AddStage(pipeline.NewNamedTransform(nullprinter.NullPrintingStage, nullPrinter.ProcessRow))
 
-	if se.resultFormat == formatTabular {
+	case formatTabular:
+		nullPrinter := nullprinter.NewNullPrinter(untypedSch)
+		p.AddStage(pipeline.NewNamedTransform(nullprinter.NullPrintingStage, nullPrinter.ProcessRow))
 		autoSizeTransform := fwt.NewAutoSizingFWTTransformer(untypedSch, fwt.PrintAllWhenTooLong, 10000)
 		p.AddStage(pipeline.NamedTransform{Name: fwtStageName, Func: autoSizeTransform.TransformToFWT})
 	}
@@ -1198,6 +1207,8 @@ func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, 
 		wr, err = tabular.NewTextTableWriter(cliWr, untypedSch)
 	case formatCsv:
 		wr, err = csv.NewCSVWriter(cliWr, untypedSch, csv.NewCSVInfo())
+	case formatJson:
+		wr, err = json.NewJSONWriter(cliWr, untypedSch)
 	default:
 		panic("unimplemented output format type")
 	}
