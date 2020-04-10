@@ -16,8 +16,8 @@ package rebase
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
@@ -109,9 +109,10 @@ func MigrateUniqueTags(ctx context.Context, dEnv *env.DoltEnv) error {
 
 	// DFS the commit graph find a unique new tag for all existing tags in every table in history
 	globalMapping := make(map[string]map[uint64]uint64)
+	globalCtr := new(uint64)
 
 	replay := func(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
-		err := buildGlobalTagMapping(ctx, root, parentRoot, rebasedParentRoot, globalMapping)
+		err := buildGlobalTagMapping(ctx, root, parentRoot, rebasedParentRoot, globalCtr, globalMapping)
 
 		if err != nil {
 			return nil, err
@@ -255,14 +256,26 @@ func TagRebaseForCommits(ctx context.Context, ddb *doltdb.DoltDB, tm TagMapping,
 
 func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue, tm TagMapping) (*doltdb.RootValue, error) {
 
-	newRoot := root
+	newRoot := rebasedParentRoot
 	for tblName, tableMapping := range tm {
 
-		tbl, found, err := newRoot.GetTable(ctx, tblName)
+		tbl, found, err := root.GetTable(ctx, tblName)
 		if err != nil {
 			return nil, err
 		}
 		if !found {
+			ok, err := newRoot.HasTable(ctx, tblName)
+			if err != nil {
+				return nil, err
+			}
+
+			if ok {
+				newRoot, err = newRoot.RemoveTables(ctx, tblName)
+			}
+			if err != nil {
+				return nil, err
+			}
+
 			continue
 		}
 
@@ -305,7 +318,7 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		rebasedSch := schema.SchemaFromCols(schCC)
 
 		// super schema rebase
-		ss, _, err := newRoot.GetSuperSchema(ctx, tblName)
+		ss, _, err := root.GetSuperSchema(ctx, tblName)
 
 		if err != nil {
 			return nil, err
@@ -608,7 +621,7 @@ func validateTagMapping(tagMapping TagMapping) error {
 	return nil
 }
 
-func buildGlobalTagMapping(ctx context.Context, root *doltdb.RootValue, parentRoot *doltdb.RootValue, rebasedParentRoot *doltdb.RootValue, globalMapping map[string]map[uint64]uint64) error {
+func  buildGlobalTagMapping(ctx context.Context, root, _, _ *doltdb.RootValue, globalCtr *uint64, globalMapping map[string]map[uint64]uint64) error {
 	tblNames, err := root.GetTableNames(ctx)
 
 	if err != nil {
@@ -629,66 +642,21 @@ func buildGlobalTagMapping(ctx context.Context, root *doltdb.RootValue, parentRo
 		}
 
 		t, _, err := root.GetTable(ctx, tn)
+
 		if err != nil {
 			return err
 		}
 
 		sch, err := t.GetSchema(ctx)
+
 		if err != nil {
 			return err
 		}
 
-		foundParent, err := parentRoot.HasTable(ctx, tn)
-		if err != nil {
-			return err
-		}
-
-		// for this table, get the new columns in root since parentRoot
-		var cc *schema.ColCollection
-		var parentSS *schema.SuperSchema
-		if foundParent {
-			var found bool
-			parentSS, found, err = parentRoot.GetSuperSchema(ctx, tn)
-			if err != nil {
-				return err
-			}
-			if !found {
-				return fmt.Errorf("error generating unique tags for migration, cannot find super schema for table %s", tn)
-			}
-
-			cc, _ = schema.NewColCollection()
-			err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-				if _, found := parentSS.GetByTag(tag); !found {
-					cc, err = cc.Append(col)
-				}
-				stop = err != nil
-				return stop, err
-			})
-		} else {
-			cc = sch.GetAllCols()
-		}
-
-		var colNames []string
-		var colKinds []types.NomsKind
-		var oldTags []uint64
-		_ = cc.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			colNames = append(colNames, col.Name)
-			colKinds = append(colKinds, col.Kind)
-			oldTags = append(oldTags, tag)
-			return false, nil
-		})
-
-		newTags, err := rebasedParentRoot.GenerateTagsForNewColumns(ctx, tn, colNames, colKinds)
-		if err != nil {
-			return err
-		}
-		if len(oldTags) != len(newTags) {
-			return errors.New("error generating unique tags for migration")
-		}
-
-		for i, ot := range oldTags {
-			if _, found := globalMapping[tn][ot]; !found {
-				globalMapping[tn][ot] = newTags[i]
+		for _, t := range sch.GetAllCols().Tags {
+			if _, found := globalMapping[tn][t]; !found {
+				globalMapping[tn][t] = *globalCtr
+				atomic.AddUint64(globalCtr, 1)
 			}
 		}
 	}
