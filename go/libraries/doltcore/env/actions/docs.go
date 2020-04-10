@@ -153,7 +153,7 @@ func GetUnstagedDocs(ctx context.Context, dEnv *env.DoltEnv) (env.Docs, error) {
 		if err != nil {
 			return nil, err
 		}
-		unstagedDocs = append(unstagedDocs, docDetail) 
+		unstagedDocs = append(unstagedDocs, docDetail)
 	}
 	return unstagedDocs, nil
 }
@@ -178,6 +178,6 @@ func SaveDocsFromWorkingExcludingFSChanges(ctx context.Context, dEnv *env.DoltEn
 	} else {
 		docsToSave = dEnv.Docs
 	}
-	
-    return SaveTrackedDocs(ctx, dEnv, workingRoot, workingRoot, docsToSave)
- }
+
+	return SaveTrackedDocs(ctx, dEnv, workingRoot, workingRoot, docsToSave)
+}

@@ -257,7 +257,7 @@ func executeFFMerge(ctx context.Context, dEnv *env.DoltEnv, cm2 *doltdb.Commit, 
 		}
 	}
 
-	unstagedDocs, err :=actions.GetUnstagedDocs(ctx, dEnv)
+	unstagedDocs, err := actions.GetUnstagedDocs(ctx, dEnv)
 	if err != nil {
 		return errhand.BuildDError("error: unable to determine unstaged docs").AddCause(err).Build()
 	}
