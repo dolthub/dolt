@@ -20,36 +20,6 @@ teardown() {
     teardown_common
 }
 
-@test "export a table with a string with commas to csv" {
-    run dolt sql -q "insert into test values ('tim', 'is', 'super', 'duper', 'rad', 'a,b,c,d,e')"
-    [ "$status" -eq 0 ]
-    run dolt table export test export.csv
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Successfully exported data." ]] ||  false
-    grep -E \"a,b,c,d,e\" export.csv
-}
-
-@test "export a table with a string with double quotes to csv" {
-    run dolt sql -q 'insert into test (pk,c1,c5) values ("this", "is", "a ""quotation""");'
-    [ "$status" -eq 0 ]
-    run dolt table export test export.csv
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Successfully exported data." ]] ||  false
-    grep '"a ""quotation"""' export.csv
-}
-
-@test "export a table with a string with new lines to csv" {
-    run dolt sql -q 'insert into test (pk,c1,c5) values ("this", "is", "a new \n line");'
-    [ "$status" -eq 0 ]
-    run dolt table export test export.csv
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Successfully exported data." ]] ||  false
-
-    # output will be slit over two lines
-    grep 'this,is,,,,"a new ' export.csv
-    grep ' line"' export.csv
-}
-
 @test "dolt sql with string comparison operators" {
     dolt sql -q "insert into test values ('tim', 'is', 'super', 'duper', 'rad', 'fo sho')"
     dolt sql -q "insert into test values ('zach', 'is', 'super', 'duper', 'not', 'rad')"
