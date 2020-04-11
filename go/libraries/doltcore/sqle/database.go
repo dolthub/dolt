@@ -196,6 +196,10 @@ func (db Database) GetTableInsensitiveWithRoot(ctx context.Context, root *doltdb
 		return NewLogTable(db.ddb, db.rsr), true, nil
 	}
 
+	if lwrName == BranchesTableName {
+		return NewBranchesTable(db.ddb, db.rsr), true, nil
+	}
+
 	return db.getTable(ctx, root, tblName)
 }
 

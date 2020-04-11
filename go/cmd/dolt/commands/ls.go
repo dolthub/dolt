@@ -198,7 +198,7 @@ func printWorkingSetSysTables(tblNames []string) {
 	diffTables := funcitr.MapStrings(tblNames, func(s string) string { return sqle.DoltDiffTablePrefix + s })
 	histTables := funcitr.MapStrings(tblNames, func(s string) string { return sqle.DoltHistoryTablePrefix + s })
 
-	systemTables := []string{sqle.LogTableName, doltdb.DocTableName}
+	systemTables := []string{sqle.LogTableName, sqle.BranchesTableName, doltdb.DocTableName}
 	systemTables = append(systemTables, diffTables...)
 	systemTables = append(systemTables, histTables...)
 
