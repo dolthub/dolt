@@ -18,6 +18,7 @@ import (
 	"crypto/sha512"
 	"encoding/binary"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"math/rand"
 	"regexp"
 	"strings"
@@ -40,11 +41,11 @@ func ErrTagPrevUsed(tag uint64, newColName, tableName string) error {
 // and repositories that perform the same sequence of mutations to a database will get equivalent databases as a result.
 // DETERMINISTIC MUTATION IS A CRITICAL INVARIANT TO MAINTAINING COMPATIBILITY BETWEEN REPOSITORIES.
 // DO NOT ALTER THIS METHOD.
-func AutoGenerateTag(rootSS *SuperSchema, tableName string, existingColKinds []types.NomsKind, newColName string, newColKind types.NomsKind) uint64 {
+func AutoGenerateTag(existingTags *set.Uint64Set, tableName string, existingColKinds []types.NomsKind, newColName string, newColKind types.NomsKind) uint64 {
 	// DO NOT ALTER THIS METHOD (see above)
 	var maxTagVal uint64 = 128 * 128
 
-	for maxTagVal/2 < uint64(rootSS.Size()) {
+	for maxTagVal/2 < uint64(existingTags.Size()) {
 		if maxTagVal >= ReservedTagMin-1 {
 			panic("There is no way anyone should ever have this many columns.  You are a bad person if you hit this panic.")
 		} else if maxTagVal*128 < maxTagVal {
@@ -60,7 +61,7 @@ func AutoGenerateTag(rootSS *SuperSchema, tableName string, existingColKinds []t
 	for {
 		randTag = uint64(randGen.Int63n(int64(maxTagVal)))
 
-		if _, found := rootSS.GetByTag(randTag); !found {
+		if !existingTags.Contains(randTag) {
 			break
 		}
 	}
