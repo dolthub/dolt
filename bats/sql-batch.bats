@@ -32,7 +32,6 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ " 0 " ]] || false
     [[ "$output" =~ " 1 " ]] || false
-    skip "Should batch mode alsways show Rows inserted: ... Not sure"
     [[ "$output" =~ " Rows inserted " ]] || false
 }
 
