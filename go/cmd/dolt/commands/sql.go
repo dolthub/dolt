@@ -307,7 +307,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 }
 
 func execShell(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, format resultFormat) (map[string]*doltdb.RootValue, errhand.VerboseError) {
-	dbs := CollectDBs(mrEnv, roots, dsqle.NewDatabase)
+	dbs := CollectDBs(mrEnv, roots, newDatabase)
 	se, err := newSqlEngine(sqlCtx, mrEnv, roots, format, dbs...)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
@@ -327,7 +327,7 @@ func execShell(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*do
 }
 
 func execBatch(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, batchInput io.Reader, format resultFormat) (map[string]*doltdb.RootValue, errhand.VerboseError) {
-	dbs := CollectDBs(mrEnv, roots, dsqle.NewBatchedDatabase)
+	dbs := CollectDBs(mrEnv, roots, newBatchedDatabase)
 	se, err := newSqlEngine(sqlCtx, mrEnv, roots, format, dbs...)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
@@ -346,8 +346,16 @@ func execBatch(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*do
 	return newRoots, nil
 }
 
+func newDatabase(name string, defRoot *doltdb.RootValue, dEnv *env.DoltEnv) dsqle.Database {
+	return dsqle.NewDatabase(name, defRoot, dEnv.DoltDB, dEnv.RepoState)
+}
+
+func newBatchedDatabase(name string, defRoot *doltdb.RootValue, dEnv *env.DoltEnv) dsqle.Database {
+	return dsqle.NewBatchedDatabase(name, defRoot, dEnv.DoltDB, dEnv.RepoState)
+}
+
 func execQuery(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, query string, format resultFormat) (map[string]*doltdb.RootValue, errhand.VerboseError) {
-	dbs := CollectDBs(mrEnv, roots, dsqle.NewDatabase)
+	dbs := CollectDBs(mrEnv, roots, newBatchedDatabase)
 	se, err := newSqlEngine(sqlCtx, mrEnv, roots, format, dbs...)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
@@ -375,7 +383,7 @@ func execQuery(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*do
 	return newRoots, nil
 }
 
-type createDBFunc func(name string, defRoot *doltdb.RootValue, ddb *doltdb.DoltDB, rsr env.RepoStateReader) dsqle.Database
+type createDBFunc func(name string, defRoot *doltdb.RootValue, dEnv *env.DoltEnv) dsqle.Database
 
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
 // objects.
@@ -383,7 +391,7 @@ func CollectDBs(mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, crea
 	dbs := make([]dsqle.Database, 0, len(mrEnv))
 	_ = mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
 		root := roots[name]
-		db := createDB(name, root, dEnv.DoltDB, dEnv.RepoState)
+		db := createDB(name, root, dEnv)
 		dbs = append(dbs, db)
 		return false, nil
 	})
@@ -1229,7 +1237,6 @@ func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, 
 		p.InjectRow(fwtStageName, r)
 	}
 
-
 	// For some output formats, we want to convert everything to strings to be processed by the pipeline. For others,
 	// we want to leave types alone and let the writer figure out how to format it for output.
 	var rowFn func(r sql.Row) (row.Row, error)
@@ -1277,8 +1284,6 @@ func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, 
 
 	return nil
 }
-
-var ErrNotNaked = fmt.Errorf("not a naked query.")
 
 // Checks if the query is a naked delete and then deletes all rows if so. Returns true if it did so, false otherwise.
 func (se *sqlEngine) checkThenDeleteAllRows(ctx *sql.Context, s *sqlparser.Delete) bool {

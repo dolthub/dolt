@@ -106,7 +106,7 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, serverController *Se
 		}
 	}
 
-	dbs := commands.CollectDBs(mrEnv, roots, dsqle.NewDatabase)
+	dbs := commands.CollectDBs(mrEnv, roots, newAutoCommmitDatabase)
 	for _, db := range dbs {
 		sqlEngine.AddDatabase(db)
 	}
@@ -124,45 +124,7 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, serverController *Se
 			ConnWriteTimeout: timeout,
 		},
 		sqlEngine,
-		func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, *sql.IndexRegistry, *sql.ViewRegistry, error) {
-			mysqlSess := sql.NewSession(host, conn.RemoteAddr().String(), conn.User, conn.ConnectionID)
-			doltSess, err := dsqle.NewSessionWithDefaultRoots(mysqlSess, dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())...)
-
-			if err != nil {
-				return nil, nil, nil, err
-			}
-
-			ir := sql.NewIndexRegistry()
-			vr := sql.NewViewRegistry()
-			sqlCtx := sql.NewContext(
-				ctx,
-				sql.WithIndexRegistry(ir),
-				sql.WithViewRegistry(vr),
-				sql.WithSession(doltSess))
-
-			dbs := commands.CollectDBs(mrEnv, roots, dsqle.NewDatabase)
-			for _, db := range dbs {
-				err := db.SetRoot(sqlCtx, db.GetDefaultRoot())
-				if err != nil {
-					return nil, nil, nil, err
-				}
-
-				err = dsqle.RegisterSchemaFragments(sqlCtx, db, db.GetDefaultRoot())
-				if err != nil {
-					cli.PrintErr(err)
-					return nil, nil, nil, err
-				}
-			}
-
-			sqlCtx.RegisterIndexDriver(dsqle.NewDoltIndexDriver(dbs...))
-			err = ir.LoadIndexes(sqlCtx, sqlEngine.Catalog.AllDatabases())
-
-			if err != nil {
-				return nil, nil, nil, err
-			}
-
-			return doltSess, ir, vr, nil
-		},
+		newSessionBuilder(sqlEngine),
 	)
 
 	if startError != nil {
@@ -177,6 +139,53 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, serverController *Se
 		return
 	}
 	return
+}
+
+func newSessionBuilder(sqlEngine *sqle.Engine) server.SessionBuilder {
+	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, *sql.IndexRegistry, *sql.ViewRegistry, error) {
+		mysqlSess := sql.NewSession(host, conn.RemoteAddr().String(), conn.User, conn.ConnectionID)
+		doltSess, err := dsqle.NewSessionWithDefaultRoots(mysqlSess, dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())...)
+
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		ir := sql.NewIndexRegistry()
+		vr := sql.NewViewRegistry()
+		sqlCtx := sql.NewContext(
+			ctx,
+			sql.WithIndexRegistry(ir),
+			sql.WithViewRegistry(vr),
+			sql.WithSession(doltSess))
+
+		dbs := dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())
+		for _, db := range dbs {
+			err := db.SetRoot(sqlCtx, db.GetDefaultRoot())
+			if err != nil {
+				return nil, nil, nil, err
+			}
+
+			err = dsqle.RegisterSchemaFragments(sqlCtx, db, db.GetDefaultRoot())
+			if err != nil {
+				cli.PrintErr(err)
+				return nil, nil, nil, err
+			}
+		}
+
+		// TODO: this shouldn't need to happen every session
+		sqlCtx.RegisterIndexDriver(dsqle.NewDoltIndexDriver(dbs...))
+		err = ir.LoadIndexes(sqlCtx, sqlEngine.Catalog.AllDatabases())
+
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		return doltSess, ir, vr, nil
+	}
+}
+
+func newAutoCommmitDatabase(name string, defRoot *doltdb.RootValue, dEnv *env.DoltEnv) dsqle.Database {
+	return dsqle.NewAutoCommitDatabase(name, defRoot, dEnv.DoltDB, dEnv.RepoState, dEnv.RepoStateWriter())
 }
 
 func dbsAsDSQLDBs(dbs []sql.Database) []dsqle.Database {

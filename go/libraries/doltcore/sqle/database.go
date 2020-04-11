@@ -37,15 +37,16 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
-type batchMode bool
+type commitBehavior int8
 
 var ErrInvalidTableName = errors.NewKind("Invalid table name %s. Table names must match the regular expression " + doltdb.TableNameRegexStr)
 var ErrReservedTableName = errors.NewKind("Invalid table name %s. Table names beginning with `dolt_` are reserved for internal use")
 var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables cannot be dropped or altered")
 
 const (
-	batched batchMode = true
-	single  batchMode = false
+	batched commitBehavior = iota
+	single
+	autoCommit
 )
 
 type tableCache struct {
@@ -106,7 +107,8 @@ type Database struct {
 	defRoot   *doltdb.RootValue
 	ddb       *doltdb.DoltDB
 	rsr       env.RepoStateReader
-	batchMode batchMode
+	rsw       env.RepoStateWriter
+	batchMode commitBehavior
 	tc        *tableCache
 }
 
@@ -140,6 +142,21 @@ func NewBatchedDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB,
 		tc:        &tableCache{&sync.Mutex{}, make(map[*doltdb.RootValue]map[string]sql.Table)},
 	}
 }
+
+// NewAutoCommitDatabase returns a new dolt database executing in autocommit mode. Every write operation will update
+// the working set with the new root value.
+func NewAutoCommitDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB, rsr env.RepoStateReader, rsw env.RepoStateWriter) Database {
+	return Database{
+		name:      name,
+		defRoot:   root,
+		ddb:       ddb,
+		rsr:       rsr,
+		rsw:       rsw,
+		batchMode: autoCommit,
+		tc:        &tableCache{&sync.Mutex{}, make(map[*doltdb.RootValue]map[string]sql.Table)},
+	}
+}
+
 
 // Name returns the name of this database, set at creation time.
 func (db Database) Name() string {
@@ -463,6 +480,15 @@ func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 
 	dsess := DSessFromSess(ctx.Session)
 	dsess.dbRoots[db.name] = dbRoot{hashStr, newRoot}
+
+	if db.batchMode == autoCommit {
+		h, err := db.ddb.WriteRootValue(ctx, newRoot)
+		if err != nil {
+			return err
+		}
+
+		return db.rsw.SetWorkingHash(ctx, h)
+	}
 
 	return nil
 }
