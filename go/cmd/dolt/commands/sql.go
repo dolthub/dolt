@@ -19,7 +19,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -46,6 +45,7 @@ import (
 	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/json"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/fwt"
@@ -1223,7 +1223,6 @@ func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, 
 	if se.resultFormat == formatTabular {
 		p.InjectRow(fwtStageName, r)
 	}
-
 
 	// For some output formats, we want to convert everything to strings to be processed by the pipeline. For others,
 	// we want to leave types alone and let the writer figure out how to format it for output.
