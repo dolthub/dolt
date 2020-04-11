@@ -633,8 +633,11 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv) error {
 
 	// start the doltsql shell
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir
+	initialPrompt := fmt.Sprintf("%s> ", ctx.GetCurrentDatabase())
+	initialMultilinePrompt := fmt.Sprintf(fmt.Sprintf("%%%ds", len(initialPrompt)), "-> ")
+
 	rlConf := readline.Config{
-		Prompt:                 fmt.Sprintf("%s>", ctx.GetCurrentDatabase()),
+		Prompt:                 initialPrompt,
 		Stdout:                 cli.CliOut,
 		Stderr:                 cli.CliOut,
 		HistoryFile:            historyFile,
@@ -651,7 +654,7 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv) error {
 	}
 
 	shell := ishell.NewUninterpreted(&shellConf)
-	shell.SetMultiPrompt("      -> ")
+	shell.SetMultiPrompt(initialMultilinePrompt)
 	// TODO: update completer on create / drop / alter statements
 	completer, err := newCompleter(ctx, currEnv)
 	if err != nil {
@@ -699,7 +702,9 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv) error {
 			shell.Println(color.RedString(err.Error()))
 		}
 
-		shell.SetPrompt(fmt.Sprintf("%s>", ctx.GetCurrentDatabase()))
+		currPrompt := fmt.Sprintf("%s> ", ctx.GetCurrentDatabase())
+		shell.SetPrompt(currPrompt)
+		shell.SetMultiPrompt(fmt.Sprintf(fmt.Sprintf("%%%ds", len(currPrompt)), "-> "))
 	})
 
 	shell.Run()

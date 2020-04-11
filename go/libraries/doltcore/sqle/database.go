@@ -715,7 +715,7 @@ func RegisterSchemaFragments(ctx *sql.Context, db Database, root *doltdb.RootVal
 			if err != nil {
 				parseErrors = append(parseErrors, err)
 			} else {
-				ctx.Register(db.Name(), sql.NewView(name, cv.(*plan.CreateView).Definition))
+				ctx.Register(db.Name(), cv.(*plan.CreateView).Definition.AsView())
 			}
 		}
 		r, err = iter.Next()
