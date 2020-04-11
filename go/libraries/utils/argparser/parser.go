@@ -142,15 +142,15 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 	for ; i < len(args); i++ {
 		arg := args[i]
 
-		if len(arg) == 0 || arg[0] != '-' || arg == "--" { // empty strings should get passed through like other naked words
-			list = append(list, arg)
-			continue
-		}
-
 		optName, value := splitOption(arg)
 
 		if optName == "help" || optName == "h" {
 			return nil, ErrHelp
+		}
+
+		if len(arg) == 0 || arg[0] != '-' || arg == "--" { // empty strings should get passed through like other naked words
+			list = append(list, arg)
+			continue
 		}
 
 		supOpt, ok := ap.NameOrAbbrevToOpt[optName]
