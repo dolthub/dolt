@@ -538,7 +538,7 @@ func (db Database) createTable(ctx *sql.Context, tableName string, sch sql.Schem
 		return sql.ErrTableAlreadyExists.New(tableName)
 	}
 
-	doltSch, err := SqlSchemaToDoltSchema(ctx, db.defRoot, tableName, sch)
+	doltSch, err := SqlSchemaToDoltSchema(ctx, root, tableName, sch)
 	if err != nil {
 		return err
 	}
