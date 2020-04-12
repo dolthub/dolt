@@ -346,11 +346,11 @@ func execBatch(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*do
 	return newRoots, nil
 }
 
-func newDatabase(name string, defRoot *doltdb.RootValue, dEnv *env.DoltEnv) dsqle.Database {
+func newDatabase(name string, defRoot *doltdb.RootValue, dEnv *env.DoltEnv) *dsqle.Database {
 	return dsqle.NewDatabase(name, defRoot, dEnv.DoltDB, dEnv.RepoState)
 }
 
-func newBatchedDatabase(name string, defRoot *doltdb.RootValue, dEnv *env.DoltEnv) dsqle.Database {
+func newBatchedDatabase(name string, defRoot *doltdb.RootValue, dEnv *env.DoltEnv) *dsqle.Database {
 	return dsqle.NewBatchedDatabase(name, defRoot, dEnv.DoltDB, dEnv.RepoState)
 }
 
@@ -383,12 +383,12 @@ func execQuery(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*do
 	return newRoots, nil
 }
 
-type createDBFunc func(name string, defRoot *doltdb.RootValue, dEnv *env.DoltEnv) dsqle.Database
+type createDBFunc func(name string, defRoot *doltdb.RootValue, dEnv *env.DoltEnv) *dsqle.Database
 
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
 // objects.
-func CollectDBs(mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, createDB createDBFunc) []dsqle.Database {
-	dbs := make([]dsqle.Database, 0, len(mrEnv))
+func CollectDBs(mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, createDB createDBFunc) []*dsqle.Database {
+	dbs := make([]*dsqle.Database, 0, len(mrEnv))
 	_ = mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
 		root := roots[name]
 		db := createDB(name, root, dEnv)
@@ -906,7 +906,7 @@ func (s *stats) shouldFlush() bool {
 }
 
 func flushBatchedEdits(ctx *sql.Context, se *sqlEngine) error {
-	err := se.iterDBs(func(_ string, db dsqle.Database) (bool, error) {
+	err := se.iterDBs(func(_ string, db *dsqle.Database) (bool, error) {
 		err := db.Flush(ctx)
 
 		if err != nil {
@@ -1071,7 +1071,7 @@ const (
 )
 
 type sqlEngine struct {
-	dbs          map[string]dsqle.Database
+	dbs          map[string]*dsqle.Database
 	mrEnv        env.MultiRepoEnv
 	engine       *sqle.Engine
 	resultFormat resultFormat
@@ -1080,11 +1080,11 @@ type sqlEngine struct {
 var ErrDBNotFoundKind = errors.NewKind("database '%s' not found")
 
 // sqlEngine packages up the context necessary to run sql queries against sqle.
-func newSqlEngine(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, format resultFormat, dbs ...dsqle.Database) (*sqlEngine, error) {
+func newSqlEngine(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, format resultFormat, dbs ...*dsqle.Database) (*sqlEngine, error) {
 	engine := sqle.NewDefault()
 	engine.AddDatabase(sql.NewInformationSchemaDatabase(engine.Catalog))
 
-	nameToDB := make(map[string]dsqle.Database)
+	nameToDB := make(map[string]*dsqle.Database)
 	for _, db := range dbs {
 		nameToDB[db.Name()] = db
 		root := roots[db.Name()]
@@ -1110,17 +1110,17 @@ func newSqlEngine(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]
 	return &sqlEngine{nameToDB, mrEnv, engine, format}, nil
 }
 
-func (se *sqlEngine) getDB(name string) (dsqle.Database, error) {
+func (se *sqlEngine) getDB(name string) (*dsqle.Database, error) {
 	db, ok := se.dbs[name]
 
 	if !ok {
-		return dsqle.Database{}, ErrDBNotFoundKind.New(name)
+		return nil, ErrDBNotFoundKind.New(name)
 	}
 
 	return db, nil
 }
 
-func (se *sqlEngine) iterDBs(cb func(name string, db dsqle.Database) (stop bool, err error)) error {
+func (se *sqlEngine) iterDBs(cb func(name string, db *dsqle.Database) (stop bool, err error)) error {
 	for name, db := range se.dbs {
 		stop, err := cb(name, db)
 

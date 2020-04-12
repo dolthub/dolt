@@ -99,7 +99,7 @@ func NewTestSQLCtx(ctx context.Context) *sql.Context {
 }
 
 // NewTestEngine creates a new default engine, and a *sql.Context and initializes indexes and schema fragments.
-func NewTestEngine(ctx context.Context, db Database, root *doltdb.RootValue) (*sqle.Engine, *sql.Context, error) {
+func NewTestEngine(ctx context.Context, db *Database, root *doltdb.RootValue) (*sqle.Engine, *sql.Context, error) {
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
 

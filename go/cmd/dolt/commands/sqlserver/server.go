@@ -184,15 +184,15 @@ func newSessionBuilder(sqlEngine *sqle.Engine) server.SessionBuilder {
 	}
 }
 
-func newAutoCommmitDatabase(name string, defRoot *doltdb.RootValue, dEnv *env.DoltEnv) dsqle.Database {
+func newAutoCommmitDatabase(name string, defRoot *doltdb.RootValue, dEnv *env.DoltEnv) *dsqle.Database {
 	return dsqle.NewAutoCommitDatabase(name, defRoot, dEnv.DoltDB, dEnv.RepoState, dEnv.RepoStateWriter())
 }
 
-func dbsAsDSQLDBs(dbs []sql.Database) []dsqle.Database {
-	dsqlDBs := make([]dsqle.Database, 0, len(dbs))
+func dbsAsDSQLDBs(dbs []sql.Database) []*dsqle.Database {
+	dsqlDBs := make([]*dsqle.Database, 0, len(dbs))
 
 	for _, db := range dbs {
-		dsqlDB, ok := db.(dsqle.Database)
+		dsqlDB, ok := db.(*dsqle.Database)
 
 		if ok {
 			dsqlDBs = append(dsqlDBs, dsqlDB)

@@ -37,7 +37,7 @@ func DefaultDoltSession() *DoltSession {
 }
 
 // NewSessionWithDefaultRoot creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
-func NewSessionWithDefaultRoots(sqlSess sql.Session, dbs ...Database) (*DoltSession, error) {
+func NewSessionWithDefaultRoots(sqlSess sql.Session, dbs ...*Database) (*DoltSession, error) {
 	dbRoots := make(map[string]dbRoot)
 	for _, db := range dbs {
 		defRoot := db.GetDefaultRoot()
