@@ -104,7 +104,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		var err error
 		input, err = dEnv.FS.OpenForRead(apr.Arg(0))
 		if err != nil {
-			verr = errhand.BuildDError("error: cannot open ", apr.Arg(0)).AddCause(err).Build()
+			verr = errhand.BuildDError("error: cannot open %s", apr.Arg(0)).AddCause(err).Build()
 			return commands.HandleVErrAndExitCode(verr, usage)
 		}
 		defer input.Close()
