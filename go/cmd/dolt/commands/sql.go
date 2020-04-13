@@ -1162,6 +1162,10 @@ func (se *sqlEngine) query(ctx *sql.Context, query string) (sql.Schema, sql.RowI
 
 // Pretty prints the output of the new SQL engine
 func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, rowIter sql.RowIter) error {
+	if isOkResult(sqlSch) {
+		return printOKResult(ctx, rowIter)
+	}
+
 	nbf := types.Format_Default
 
 	doltSch, err := dsqle.SqlSchemaToDoltResultSchema(sqlSch)
@@ -1285,6 +1289,33 @@ func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, 
 	return nil
 }
 
+func printOKResult(ctx context.Context, iter sql.RowIter) error {
+	row, err := iter.Next()
+	defer iter.Close()
+
+	if err != nil {
+		return err
+	}
+
+	if okResult, ok := row[0].(sql.OkResult); ok {
+		rowNoun := "row"
+		if okResult.RowsAffected > 1 {
+			rowNoun = "rows"
+		}
+		cli.Printf("Query OK, %d %s affected\n", okResult.RowsAffected, rowNoun)
+
+		if okResult.Info != "" {
+			cli.Printf("%s\n", okResult.Info)
+		}
+	}
+
+	return nil
+}
+
+func isOkResult(sch sql.Schema) bool {
+	return sch.Equals(sql.OkResultSchema)
+}
+
 // Checks if the query is a naked delete and then deletes all rows if so. Returns true if it did so, false otherwise.
 func (se *sqlEngine) checkThenDeleteAllRows(ctx *sql.Context, s *sqlparser.Delete) bool {
 	if s.Where == nil && s.Limit == nil && s.Partitions == nil && len(s.TableExprs) == 1 {
@@ -1320,7 +1351,8 @@ func (se *sqlEngine) checkThenDeleteAllRows(ctx *sql.Context, s *sqlparser.Delet
 						return false
 					}
 
-					printRowIter := sql.RowsToRowIter(sql.NewRow(rowData.Len()))
+					result := sql.OkResult{RowsAffected: rowData.Len()}
+					printRowIter := sql.RowsToRowIter(sql.NewRow(result))
 
 					emptyMap, err := types.NewMap(ctx, root.VRW())
 					if err != nil {
@@ -1337,7 +1369,7 @@ func (se *sqlEngine) checkThenDeleteAllRows(ctx *sql.Context, s *sqlparser.Delet
 						return false
 					}
 
-					_ = se.prettyPrintResults(ctx, sql.Schema{{Name: "updated", Type: sql.Uint64}}, printRowIter)
+					_ = se.prettyPrintResults(ctx, sql.OkResultSchema, printRowIter)
 
 					db, err := se.getDB(dbName)
 					if err != nil {
