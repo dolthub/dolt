@@ -209,7 +209,7 @@ func fetchMigratedRemoteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *ar
 		return err
 	}
 	if localMigrationNeeded {
-		return fmt.Errorf("Local repo must be migrated before pushing, run 'dolt migrate'")
+		return fmt.Errorf("Local repo must be migrated before pulling, run 'dolt migrate'")
 	}
 
 	remoteName := "origin"
