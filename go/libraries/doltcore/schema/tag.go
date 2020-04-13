@@ -18,11 +18,11 @@ import (
 	"crypto/sha512"
 	"encoding/binary"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"math/rand"
 	"regexp"
 	"strings"
 
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 

@@ -99,7 +99,7 @@ local_bin="`pwd`"/"$bin"
 PATH="$local_bin":"$PATH" dolt clone Liquidata/corona-virus
 pushd "corona-virus"
 PATH="$local_bin":"$PATH" export_tables "-pre"
-dolt migrate
+time dolt migrate
 export_tables "-post"
 diff_tables
 echo "success!"

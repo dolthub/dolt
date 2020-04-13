@@ -31,12 +31,12 @@ func TestNewUint64Set(t *testing.T) {
 	for _, id := range initData {
 		assert.True(t, us.Contains(id))
 	}
-	assert.False(t, us.Contains(5))
+	assert.False(t, us.Contains(19))
 
 
 	// test .ContainsAll()
 	assert.True(t, us.ContainsAll([]uint64{0, 1}))
-	assert.False(t, us.ContainsAll([]uint64{0, 1, 2, 5}))
+	assert.False(t, us.ContainsAll([]uint64{0, 1, 2, 19}))
 
 	// test .Add()
 	us.Add(6)
@@ -47,4 +47,19 @@ func TestNewUint64Set(t *testing.T) {
 	}
 	assert.True(t, us.ContainsAll(append(initData, 6)))
 
+	// test .Remove()
+	us.Remove(0)
+	assert.False(t, us.Contains(0))
+	assert.Equal(t, 4, us.Size())
+
+	us.Remove(19)
+	assert.Equal(t, 4, us.Size())
+
+	// test .AsSlice()
+	s := us.AsSlice()
+	assert.Equal(t, []uint64{1, 2, 3, 6}, s)
+
+	us.Add(4)
+	s = us.AsSlice()
+	assert.Equal(t, []uint64{1, 2, 3, 4, 6}, s)
 }

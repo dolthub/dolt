@@ -14,6 +14,8 @@
 
 package set
 
+import "sort"
+
 type Uint64Set struct {
 	uints map[uint64]interface{}
 }
@@ -45,6 +47,19 @@ func (us *Uint64Set) ContainsAll(uints []uint64) bool {
 
 func (us *Uint64Set) Add(i uint64) {
 	us.uints[i] = emptyInstance
+}
+
+func (us *Uint64Set) Remove(i uint64) {
+	delete(us.uints, i)
+}
+
+func (us *Uint64Set) AsSlice() []uint64 {
+	sl := make([]uint64, 0, us.Size())
+	for k := range us.uints {
+		sl = append(sl, k)
+	}
+	sort.Slice(sl, func(i, j int) bool { return sl[i] < sl[j] })
+	return sl
 }
 
 func (us *Uint64Set) Size() int {
