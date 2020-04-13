@@ -16,12 +16,13 @@ package sqle
 
 import (
 	"errors"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
-	"github.com/src-d/go-mysql-server/sql"
 	"io"
+
+	"github.com/src-d/go-mysql-server/sql"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 )
 
 const (
