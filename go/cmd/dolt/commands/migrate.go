@@ -18,7 +18,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/fatih/color"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
@@ -30,7 +32,7 @@ import (
 
 const (
 	migrationPrompt = `Run "dolt migrate" to update this repository to the latest format`
-	migrationMsg = "Migrating repository to the latest format"
+	migrationMsg    = "Migrating repository to the latest format"
 
 	migratePushFlag = "push"
 	migratePullFlag = "pull"
@@ -53,7 +55,6 @@ func (cmd MigrateCmd) CreateMarkdown(_ filesys.Filesys, _, _ string) error {
 	return nil
 }
 
-
 func (cmd MigrateCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(migratePushFlag, "", "")
@@ -65,7 +66,6 @@ func (cmd MigrateCmd) createArgParser() *argparser.ArgParser {
 func (cmd MigrateCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_TYPE_UNSPECIFIED
 }
-
 
 // Exec executes the command
 func (cmd MigrateCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
@@ -89,7 +89,7 @@ func (cmd MigrateCmd) Exec(ctx context.Context, commandStr string, args []string
 	}
 
 	if err != nil {
-		cli.PrintErrf(color.RedString("error migrating: %s", err.Error()))
+		cli.PrintErrln(color.RedString(err.Error()))
 		return 1
 	}
 
@@ -136,8 +136,7 @@ func pushMigratedRepo(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Arg
 		return err
 	}
 	if localMigrationNeeded {
-		cli.Println("Local repo must be migrated before pushing, run 'dolt migrate'")
-		return nil
+		return fmt.Errorf("Local repo must be migrated before pushing, run 'dolt migrate'")
 	}
 
 	remoteName := "origin"
@@ -160,9 +159,7 @@ func pushMigratedRepo(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Arg
 		return err
 	}
 	if remoteMigrated {
-		cli.Println("Remote %s has been migrated", remoteName)
-		cli.Println("Run 'dolt migrate --pull' to update refs")
-		return fmt.Errorf("")
+		return fmt.Errorf("Remote %s has been migrated\nRun 'dolt migrate --pull' to update refs", remoteName)
 	} else {
 		// force push all branches
 		bb, err := dEnv.DoltDB.GetBranches(ctx)
@@ -192,10 +189,14 @@ func pushMigratedRepo(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Arg
 				return err
 			}
 
+			cli.Println(color.YellowString(fmt.Sprintf("Pushing migrated branch %s to %s", branch.String(), remoteName)))
 			mode := ref.RefUpdateMode{Force: true}
 			err = pushToRemoteBranch(ctx, dEnv, mode, src, dest, remoteRef, dEnv.DoltDB, destDB, remote)
 
-			return err
+			if err != nil {
+				return err
+			}
+			cli.Println()
 		}
 	}
 
@@ -208,7 +209,7 @@ func fetchMigratedRemoteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *ar
 		return err
 	}
 	if localMigrationNeeded {
-		return fmt.Errorf("local repo must be migrated before pulling, run 'dolt migrate'\n")
+		return fmt.Errorf("Local repo must be migrated before pushing, run 'dolt migrate'")
 	}
 
 	remoteName := "origin"
@@ -221,18 +222,18 @@ func fetchMigratedRemoteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *ar
 		return err
 	}
 	if !remoteMigrated {
-		return fmt.Errorf("remote %s has not been migrate, run 'dolt migrate --push %s' to push migration", remoteName, remoteName)
+		return fmt.Errorf("Remote %s has not been migrated\nRun 'dolt migrate --push %s' to push migration", remoteName, remoteName)
 	}
 
 	// force fetch all branches
 	remotes, _ := dEnv.GetRemotes()
-	r, refSpecs, verr := getRefSpecs(apr.Args(), dEnv, remotes)
+	r, refSpecs, err := getRefSpecs(apr.Args(), dEnv, remotes)
 
-	if verr == nil {
-		verr = fetchRefSpecs(ctx, ref.RefUpdateMode{Force: true}, dEnv, r, refSpecs)
+	if err == nil {
+		err = fetchRefSpecs(ctx, ref.RefUpdateMode{Force: true}, dEnv, r, refSpecs)
 	}
 
-	return verr
+	return err
 }
 
 func remoteHasBeenMigrated(ctx context.Context, dEnv *env.DoltEnv, remoteName string) (bool, error) {
