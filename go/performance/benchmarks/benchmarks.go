@@ -199,7 +199,7 @@ func getBenchmarkingTools(fs filesys.Filesys, rows int, cols []*SeedColumn, work
 }
 
 func setupDEnvImport(fs filesys.Filesys, sch *SeedSchema, workingDir, tableName, pathToSchemaFile, pathToImportFile string) *env.DoltEnv {
-	wc, err := fs.OpenForWrite(pathToImportFile)
+	wc, err := fs.OpenForWrite(pathToImportFile, os.ModePerm)
 	if err != nil {
 		log.Fatal(err)
 	}
