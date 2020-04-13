@@ -57,8 +57,8 @@ func (cmd MigrateCmd) CreateMarkdown(_ filesys.Filesys, _, _ string) error {
 
 func (cmd MigrateCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsFlag(migratePushFlag, "", "")
-	ap.SupportsFlag(migratePullFlag, "", "")
+	ap.SupportsFlag(migratePushFlag, "", "Push all migrated branches to the remote")
+	ap.SupportsFlag(migratePullFlag, "", "Update all remote refs for a migrated remote")
 	return ap
 }
 
@@ -112,21 +112,23 @@ func migrateLocalRepo(ctx context.Context, dEnv *env.DoltEnv) error {
 		}
 	} else {
 		cli.Println("Repository format is up to date")
-
-		remoteName := "origin"
-		remoteMigrated, err := remoteHasBeenMigrated(ctx, dEnv, remoteName)
-		if err != nil {
-			return err
-		}
-
-		if !remoteMigrated {
-			cli.Println(fmt.Sprintf("Remote %s has not been migrated", remoteName))
-			cli.Println("Run 'dolt mgirate --push' to update remote")
-		} else {
-			cli.Println(fmt.Sprintf("Remote %s has been migrated", remoteName))
-			cli.Println("Run 'dolt migrate --pull' to update refs")
-		}
 	}
+
+	remoteName := "origin"
+	remoteMigrated, err := remoteHasBeenMigrated(ctx, dEnv, remoteName)
+	if err != nil {
+		// if we can't check the remote, exit silently
+		return nil
+	}
+
+	if !remoteMigrated {
+		cli.Println(fmt.Sprintf("Remote %s has not been migrated", remoteName))
+		cli.Println(fmt.Sprintf("Run 'dolt migrate --push' %s to update remote", remoteName))
+	} else {
+		cli.Println(fmt.Sprintf("Remote %s has been migrated", remoteName))
+		cli.Println(fmt.Sprintf("Run 'dolt migrate --pull %s' to update refs", remoteName))
+	}
+
 	return nil
 }
 
