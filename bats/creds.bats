@@ -87,3 +87,35 @@ teardown() {
     run dolt creds use
     [ "$status" -eq 1 ]
 }
+
+@test "can import cred from good jwk file" {
+    dolt creds import `batshelper creds/known-good.jwk`
+}
+
+@test "can import cred from good jwk stdin" {
+    cat `batshelper creds/known-good.jwk` | dolt creds import
+}
+
+@test "import cred of corrupted jwk from file fails" {
+    run dolt creds import `batshelper creds/known-truncated.jwk`
+    [ "$status" -eq 1 ]
+    run dolt creds import `batshelper creds/known-decapitated.jwk`
+    [ "$status" -eq 1 ]
+    run dolt creds import does-not-exist
+    [ "$status" -eq 1 ]
+}
+
+@test "import cred of corrupted jwk from stdin fails" {
+    run bash -c "cat `batshelper creds/known-truncated.jwk` | dolt creds import"
+    [ "$status" -eq 1 ]
+    run bash -c "cat `batshelper creds/known-decapitated.jwk` | dolt creds import"
+    [ "$status" -eq 1 ]
+    run bash -c "echo -n | dolt creds import"
+    [ "$status" -eq 1 ]
+}
+
+@test "import cred with already used cred does not replace used cred" {
+    pubkey=`dolt creds new | grep 'pub key:' | awk '{print $3}'`
+    dolt creds import `batshelper creds/known-good.jwk`
+    dolt creds ls -v | grep '*' | grep "$pubkey"
+}
