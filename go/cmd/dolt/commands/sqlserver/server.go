@@ -16,6 +16,7 @@ package sqlserver
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strconv"
 	"time"
@@ -122,6 +123,7 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, serverController *Se
 			Auth:             userAuth,
 			ConnReadTimeout:  timeout,
 			ConnWriteTimeout: timeout,
+			Version:          fmt.Sprintf("Dolt version %s", serverConfig.Version),
 		},
 		sqlEngine,
 		newSessionBuilder(sqlEngine),
