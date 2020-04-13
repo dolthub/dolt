@@ -773,7 +773,7 @@ func buildTagMapping(ctx context.Context, root, rebasedParentRoot *doltdb.RootVa
 			return false, nil
 		})
 
-		// generate tags with the same mether as root.GenerateTagsForNewColumns()
+		// generate tags with the same method as root.GenerateTagsForNewColumns()
 		newTags := make([]uint64, len(newColNames))
 		for i := range newTags {
 			newTags[i] = schema.AutoGenerateTag(existingRebasedTags, tn, existingColKinds, newColNames[i], newColKinds[i])
