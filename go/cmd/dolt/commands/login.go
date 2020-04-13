@@ -98,9 +98,11 @@ func (cmd LoginCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 // Specifies behavior of the login.
 type loginBehavior int
+
 // When logging in with newly minted credentials, they cannot be on the server
 // yet. So open the browser immediately before checking the server.
 var openBrowserFirst loginBehavior = 1
+
 // When logging in with supplied credentials, they may already be associated
 // with an account on the server. Check first before opening a browser.
 var checkCredentialsThenOpenBrowser loginBehavior = 2
@@ -156,7 +158,7 @@ func loginWithCreds(ctx context.Context, dEnv *env.DoltEnv, dc creds.DoltCreds, 
 		cli.Println("Checking remote server looking for key association.")
 	}
 
-	linePrinter := func () func(line string) {
+	linePrinter := func() func(line string) {
 		prevMsgLen := 0
 		return func(line string) {
 			prevMsgLen = cli.DeleteAndPrint(prevMsgLen, line)
