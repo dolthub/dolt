@@ -257,6 +257,11 @@ func executeFFMerge(ctx context.Context, dEnv *env.DoltEnv, cm2 *doltdb.Commit, 
 		}
 	}
 
+	unstagedDocs, err := actions.GetUnstagedDocs(ctx, dEnv)
+	if err != nil {
+		return errhand.BuildDError("error: unable to determine unstaged docs").AddCause(err).Build()
+	}
+
 	err = dEnv.DoltDB.FastForward(ctx, dEnv.RepoState.CWBHeadRef(), cm2)
 
 	if err != nil {
@@ -278,7 +283,7 @@ and take the hash for your current branch and use it for the value for "staged" 
 			AddCause(err).Build()
 	}
 
-	err = actions.SaveTrackedDocsFromWorking(ctx, dEnv)
+	err = actions.SaveDocsFromWorkingExcludingFSChanges(ctx, dEnv, unstagedDocs)
 	if err != nil {
 		return errhand.BuildDError("error: failed to update docs to the new working root").AddCause(err).Build()
 	}
@@ -321,6 +326,11 @@ func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commi
 		return errhand.BuildDError("Unable to update the repo state").AddCause(err).Build()
 	}
 
+	unstagedDocs, err := actions.GetUnstagedDocs(ctx, dEnv)
+	if err != nil {
+		return errhand.BuildDError("error: failed to determine unstaged docs").AddCause(err).Build()
+	}
+
 	verr := UpdateWorkingWithVErr(dEnv, workingRoot)
 
 	if verr == nil {
@@ -329,7 +339,7 @@ func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commi
 		if hasConflicts {
 			cli.Println("Automatic merge failed; fix conflicts and then commit the result.")
 		} else {
-			err = actions.SaveTrackedDocsFromWorking(ctx, dEnv)
+			err = actions.SaveDocsFromWorkingExcludingFSChanges(ctx, dEnv, unstagedDocs)
 			if err != nil {
 				return errhand.BuildDError("error: failed to update docs to the new working root").AddCause(err).Build()
 			}
