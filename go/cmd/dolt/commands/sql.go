@@ -45,6 +45,7 @@ import (
 	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/json"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/fwt"
@@ -452,6 +453,8 @@ func getFormat(format string) (resultFormat, errhand.VerboseError) {
 		return formatTabular, nil
 	case "csv":
 		return formatCsv, nil
+	case "json":
+		return formatJson, nil
 	default:
 		return formatTabular, errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular,csv").Build()
 	}
@@ -1051,6 +1054,7 @@ type resultFormat byte
 const (
 	formatTabular resultFormat = iota
 	formatCsv
+	formatJson
 )
 
 type sqlEngine struct {
@@ -1145,7 +1149,8 @@ func (se *sqlEngine) query(ctx *sql.Context, query string) (sql.Schema, sql.RowI
 
 // Pretty prints the output of the new SQL engine
 func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, rowIter sql.RowIter) error {
-	var chanErr error
+	nbf := types.Format_Default
+
 	doltSch, err := dsqle.SqlSchemaToDoltResultSchema(sqlSch)
 	if err != nil {
 		return err
@@ -1159,31 +1164,15 @@ func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, 
 	rowChannel := make(chan row.Row)
 	p := pipeline.NewPartialPipeline(pipeline.InFuncForChannel(rowChannel))
 
-	nbf := types.Format_Default
-	go func() {
-		defer close(rowChannel)
-		var sqlRow sql.Row
-		for sqlRow, chanErr = rowIter.Next(); chanErr == nil; sqlRow, chanErr = rowIter.Next() {
-			taggedVals := make(row.TaggedValues)
-			for i, col := range sqlRow {
-				if col != nil {
-					taggedVals[uint64(i)] = types.String(fmt.Sprintf("%v", col))
-				}
-			}
+	// Parts of the pipeline depend on the output format, such as how we print null values and whether we pad strings.
+	switch se.resultFormat {
+	case formatCsv:
+		nullPrinter := nullprinter.NewNullPrinterWithNullString(untypedSch, "")
+		p.AddStage(pipeline.NewNamedTransform(nullprinter.NullPrintingStage, nullPrinter.ProcessRow))
 
-			var r row.Row
-			r, chanErr = row.New(nbf, untypedSch, taggedVals)
-
-			if chanErr == nil {
-				rowChannel <- r
-			}
-		}
-	}()
-
-	nullPrinter := nullprinter.NewNullPrinter(untypedSch)
-	p.AddStage(pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow))
-
-	if se.resultFormat == formatTabular {
+	case formatTabular:
+		nullPrinter := nullprinter.NewNullPrinter(untypedSch)
+		p.AddStage(pipeline.NewNamedTransform(nullprinter.NullPrintingStage, nullPrinter.ProcessRow))
 		autoSizeTransform := fwt.NewAutoSizingFWTTransformer(untypedSch, fwt.PrintAllWhenTooLong, 10000)
 		p.AddStage(pipeline.NamedTransform{Name: fwtStageName, Func: autoSizeTransform.TransformToFWT})
 	}
@@ -1198,6 +1187,8 @@ func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, 
 		wr, err = tabular.NewTextTableWriter(cliWr, untypedSch)
 	case formatCsv:
 		wr, err = csv.NewCSVWriter(cliWr, untypedSch, csv.NewCSVInfo())
+	case formatJson:
+		wr, err = json.NewJSONWriter(cliWr, untypedSch)
 	default:
 		panic("unimplemented output format type")
 	}
@@ -1233,13 +1224,49 @@ func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, 
 		p.InjectRow(fwtStageName, r)
 	}
 
+	// For some output formats, we want to convert everything to strings to be processed by the pipeline. For others,
+	// we want to leave types alone and let the writer figure out how to format it for output.
+	var rowFn func(r sql.Row) (row.Row, error)
+	switch se.resultFormat {
+	case formatJson:
+		rowFn = func(r sql.Row) (r2 row.Row, err error) {
+			return dsqle.SqlRowToDoltRow(nbf, r, doltSch)
+		}
+	default:
+		rowFn = func(r sql.Row) (row.Row, error) {
+			taggedVals := make(row.TaggedValues)
+			for i, col := range r {
+				if col != nil {
+					taggedVals[uint64(i)] = types.String(fmt.Sprintf("%v", col))
+				}
+			}
+			return row.New(nbf, untypedSch, taggedVals)
+		}
+	}
+
+	var iterErr error
+
+	// Read rows off the row iter and pass them to the pipeline channel
+	go func() {
+		defer close(rowChannel)
+		var sqlRow sql.Row
+		for sqlRow, iterErr = rowIter.Next(); iterErr == nil; sqlRow, iterErr = rowIter.Next() {
+			var r row.Row
+			r, iterErr = rowFn(sqlRow)
+
+			if iterErr == nil {
+				rowChannel <- r
+			}
+		}
+	}()
+
 	p.Start()
 	if err := p.Wait(); err != nil {
 		return fmt.Errorf("error processing results: %v", err)
 	}
 
-	if chanErr != io.EOF {
-		return fmt.Errorf("error processing results: %v", chanErr)
+	if iterErr != io.EOF {
+		return fmt.Errorf("error processing results: %v", iterErr)
 	}
 
 	return nil

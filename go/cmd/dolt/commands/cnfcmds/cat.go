@@ -167,7 +167,7 @@ func printConflicts(ctx context.Context, root *doltdb.RootValue, tblNames []stri
 			nullPrinter := nullprinter.NewNullPrinter(cnfRd.GetSchema())
 			fwtTr := fwt.NewAutoSizingFWTTransformer(cnfRd.GetSchema(), fwt.HashFillWhenTooLong, 1000)
 			transforms := pipeline.NewTransformCollection(
-				pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow),
+				pipeline.NewNamedTransform(nullprinter.NullPrintingStage, nullPrinter.ProcessRow),
 				pipeline.NamedTransform{Name: "fwt", Func: fwtTr.TransformToFWT},
 			)
 
