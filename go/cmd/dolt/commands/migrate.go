@@ -19,10 +19,11 @@ import (
 	"errors"
 	"fmt"
 	"github.com/fatih/color"
-
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rebase"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
@@ -59,6 +60,12 @@ func (cmd MigrateCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(migratePullFlag, "", "")
 	return ap
 }
+
+// EventType returns the type of the event to log
+func (cmd MigrateCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_TYPE_UNSPECIFIED
+}
+
 
 // Exec executes the command
 func (cmd MigrateCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
@@ -138,6 +145,16 @@ func pushMigratedRepo(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Arg
 		remoteName = apr.Arg(0)
 	}
 
+	remotes, err := dEnv.GetRemotes()
+	if err != nil {
+		return err
+	}
+
+	remote, remoteOK := remotes[remoteName]
+	if !remoteOK {
+		return fmt.Errorf("unknown remote %s", remoteName)
+	}
+
 	remoteMigrated, err := remoteHasBeenMigrated(ctx, dEnv, remoteName)
 	if err != nil {
 		return err
@@ -145,6 +162,41 @@ func pushMigratedRepo(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Arg
 	if remoteMigrated {
 		cli.Println("Remote %s has been migrated", remoteName)
 		cli.Println("Run 'dolt migrate --pull' to update refs")
+		return fmt.Errorf("")
+	} else {
+		// force push all branches
+		bb, err := dEnv.DoltDB.GetBranches(ctx)
+
+		if err != nil {
+			return err
+		}
+
+		for _, branch := range bb {
+			refSpec, err := ref.ParseRefSpec(branch.String())
+			if err != nil {
+				return err
+			}
+
+			src := refSpec.SrcRef(branch)
+			dest := refSpec.DestRef(src)
+
+			remoteRef, err := getTrackingRef(dest, remote)
+
+			if err != nil {
+				return err
+			}
+
+			destDB, err := remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
+
+			if err != nil {
+				return err
+			}
+
+			mode := ref.RefUpdateMode{Force: true}
+			err = pushToRemoteBranch(ctx, dEnv, mode, src, dest, remoteRef, dEnv.DoltDB, destDB, remote)
+
+			return err
+		}
 	}
 
 	return nil
@@ -172,8 +224,15 @@ func fetchMigratedRemoteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *ar
 		return fmt.Errorf("remote %s has not been migrate, run 'dolt migrate --push %s' to push migration", remoteName, remoteName)
 	}
 
+	// force fetch all branches
+	remotes, _ := dEnv.GetRemotes()
+	r, refSpecs, verr := getRefSpecs(apr.Args(), dEnv, remotes)
 
-	return nil
+	if verr == nil {
+		verr = fetchRefSpecs(ctx, ref.RefUpdateMode{Force: true}, dEnv, r, refSpecs)
+	}
+
+	return verr
 }
 
 func remoteHasBeenMigrated(ctx context.Context, dEnv *env.DoltEnv, remoteName string) (bool, error) {
