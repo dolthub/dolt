@@ -15,10 +15,10 @@
 package events
 
 import (
-	"os"
 	"crypto/md5"
 	"encoding/base64"
 	"errors"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
