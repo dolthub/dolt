@@ -16,17 +16,24 @@ package commands
 
 import (
 	"context"
-
+	"errors"
+	"fmt"
 	"github.com/fatih/color"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rebase"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
-const migrationPrompt = `Run "dolt migrate" to update this repository to the latest format`
-const migrationMsg = "Migrating repository to the latest format"
+const (
+	migrationPrompt = `Run "dolt migrate" to update this repository to the latest format`
+	migrationMsg = "Migrating repository to the latest format"
+
+	migratePushFlag = "push"
+	migratePullFlag = "pull"
+)
 
 type MigrateCmd struct{}
 
@@ -45,31 +52,159 @@ func (cmd MigrateCmd) CreateMarkdown(_ filesys.Filesys, _, _ string) error {
 	return nil
 }
 
-// Version displays the version of the running dolt client
+
+func (cmd MigrateCmd) createArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(migratePushFlag, "", "")
+	ap.SupportsFlag(migratePullFlag, "", "")
+	return ap
+}
+
 // Exec executes the command
-func (cmd MigrateCmd) Exec(ctx context.Context, _ string, _ []string, dEnv *env.DoltEnv) int {
-	needed, err := rebase.NeedsUniqueTagMigration(ctx, dEnv)
-	if err != nil {
-		cli.PrintErrf(color.RedString("error checking for repository migration: %s", err.Error()))
+func (cmd MigrateCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
+	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pushDocs, ap))
+	apr := cli.ParseArgs(ap, args, help)
+
+	if apr.Contains(migratePushFlag) && apr.Contains(migratePullFlag) {
+		cli.PrintErrf(color.RedString("options --%s and --%s are mutually exclusive", migratePushFlag, migratePullFlag))
 		return 1
-	}
-	if !needed {
-		cli.Println("Repository format is up to date")
-		return 0
 	}
 
-	cli.Println(color.YellowString(migrationMsg))
-	err = rebase.MigrateUniqueTags(ctx, dEnv)
+	var err error
+	switch {
+	case apr.Contains(migratePushFlag):
+		err = pushMigratedRepo(ctx, dEnv, apr)
+	case apr.Contains(migratePullFlag):
+		err = fetchMigratedRemoteBranches(ctx, dEnv, apr)
+	default:
+		err = migrateLocalRepo(ctx, dEnv)
+	}
+
 	if err != nil {
-		cli.PrintErrf("error migrating repository: %s", err.Error())
+		cli.PrintErrf(color.RedString("error migrating: %s", err.Error()))
 		return 1
 	}
+
 	return 0
+}
+
+func migrateLocalRepo(ctx context.Context, dEnv *env.DoltEnv) error {
+	localMigrationNeeded, err := rebase.NeedsUniqueTagMigration(ctx, dEnv.DoltDB)
+
+	if err != nil {
+		return err
+	}
+
+	if localMigrationNeeded {
+		cli.Println(color.YellowString(migrationMsg))
+		err = rebase.MigrateUniqueTags(ctx, dEnv)
+
+		if err != nil {
+			return err
+		}
+	} else {
+		cli.Println("Repository format is up to date")
+
+		remoteName := "origin"
+		remoteMigrated, err := remoteHasBeenMigrated(ctx, dEnv, remoteName)
+		if err != nil {
+			return err
+		}
+
+		if !remoteMigrated {
+			cli.Println(fmt.Sprintf("Remote %s has not been migrated", remoteName))
+			cli.Println("Run 'dolt mgirate --push' to update remote")
+		} else {
+			cli.Println(fmt.Sprintf("Remote %s has been migrated", remoteName))
+			cli.Println("Run 'dolt migrate --pull' to update refs")
+		}
+	}
+	return nil
+}
+
+func pushMigratedRepo(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) error {
+	localMigrationNeeded, err := rebase.NeedsUniqueTagMigration(ctx, dEnv.DoltDB)
+	if err != nil {
+		return err
+	}
+	if localMigrationNeeded {
+		cli.Println("Local repo must be migrated before pushing, run 'dolt migrate'")
+		return nil
+	}
+
+	remoteName := "origin"
+	if apr.NArg() > 0 {
+		remoteName = apr.Arg(0)
+	}
+
+	remoteMigrated, err := remoteHasBeenMigrated(ctx, dEnv, remoteName)
+	if err != nil {
+		return err
+	}
+	if remoteMigrated {
+		cli.Println("Remote %s has been migrated", remoteName)
+		cli.Println("Run 'dolt migrate --pull' to update refs")
+	}
+
+	return nil
+}
+
+func fetchMigratedRemoteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) error {
+	localMigrationNeeded, err := rebase.NeedsUniqueTagMigration(ctx, dEnv.DoltDB)
+	if err != nil {
+		return err
+	}
+	if localMigrationNeeded {
+		return fmt.Errorf("local repo must be migrated before pulling, run 'dolt migrate'\n")
+	}
+
+	remoteName := "origin"
+	if apr.NArg() > 0 {
+		remoteName = apr.Arg(0)
+	}
+
+	remoteMigrated, err := remoteHasBeenMigrated(ctx, dEnv, remoteName)
+	if err != nil {
+		return err
+	}
+	if !remoteMigrated {
+		return fmt.Errorf("remote %s has not been migrate, run 'dolt migrate --push %s' to push migration", remoteName, remoteName)
+	}
+
+
+	return nil
+}
+
+func remoteHasBeenMigrated(ctx context.Context, dEnv *env.DoltEnv, remoteName string) (bool, error) {
+	remotes, err := dEnv.GetRemotes()
+
+	if err != nil {
+		return false, errors.New("error: failed to read remotes from config.")
+	}
+
+	remote, remoteOK := remotes[remoteName]
+	if !remoteOK {
+		return false, fmt.Errorf("cannot find remote %s", remoteName)
+	}
+
+	destDB, err := remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
+
+	if err != nil {
+		return false, err
+	}
+
+	needed, err := rebase.NeedsUniqueTagMigration(ctx, destDB)
+	if err != nil {
+		return false, err
+	}
+
+	return !needed, nil
 }
 
 // These subcommands will trigger a unique tags migration
 func MigrationNeeded(ctx context.Context, dEnv *env.DoltEnv, args []string) bool {
-	needed, err := rebase.NeedsUniqueTagMigration(ctx, dEnv)
+	needed, err := rebase.NeedsUniqueTagMigration(ctx, dEnv.DoltDB)
 	if err != nil {
 		cli.PrintErrf(color.RedString("error checking for repository migration: %s", err.Error()))
 		// ambiguous whether we need to migrate, but we should exit
@@ -83,7 +218,7 @@ func MigrationNeeded(ctx context.Context, dEnv *env.DoltEnv, args []string) bool
 	if len(args) > 0 {
 		subCmd = args[0]
 	}
-	cli.PrintErrln(color.RedString("Cannot execute dolt %s, repository format is out of date.", subCmd))
+	cli.PrintErrln(color.RedString("Cannot execute 'dolt %s', repository format is out of date.", subCmd))
 	cli.Println(migrationPrompt)
 	return true
 }
