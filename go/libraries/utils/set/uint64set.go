@@ -65,4 +65,3 @@ func (us *Uint64Set) AsSlice() []uint64 {
 func (us *Uint64Set) Size() int {
 	return len(us.uints)
 }
-

@@ -33,7 +33,6 @@ func TestNewUint64Set(t *testing.T) {
 	}
 	assert.False(t, us.Contains(19))
 
-
 	// test .ContainsAll()
 	assert.True(t, us.ContainsAll([]uint64{0, 1}))
 	assert.False(t, us.ContainsAll([]uint64{0, 1, 2, 19}))

@@ -276,7 +276,6 @@ func TagRebaseForCommits(ctx context.Context, ddb *doltdb.DoltDB, tm TagMapping,
 
 func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue, tm TagMapping) (*doltdb.RootValue, error) {
 
-
 	tableNames, err := doltdb.UnionTableNames(ctx, root, rebasedParentRoot)
 
 	if err != nil {
