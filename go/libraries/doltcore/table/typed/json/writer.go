@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"path/filepath"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -48,7 +49,7 @@ func OpenJSONWriter(path string, fs filesys.WritableFS, outSch schema.Schema) (*
 		return nil, err
 	}
 
-	wr, err := fs.OpenForWrite(path)
+	wr, err := fs.OpenForWrite(path, os.ModePerm)
 
 	if err != nil {
 		return nil, err

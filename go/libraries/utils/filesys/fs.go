@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"time"
 )
 
@@ -47,7 +48,7 @@ type ReadableFS interface {
 type WritableFS interface {
 	// OpenForWrite opens a file for writing.  The file will be created if it does not exist, and if it does exist
 	// it will be overwritten.
-	OpenForWrite(fp string) (io.WriteCloser, error)
+	OpenForWrite(fp string, perm os.FileMode) (io.WriteCloser, error)
 
 	// WriteFile writes the entire data buffer to a given file.  The file will be created if it does not exist,
 	// and if it does exist it will be overwritten.

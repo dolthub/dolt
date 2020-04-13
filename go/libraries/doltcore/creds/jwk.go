@@ -109,7 +109,7 @@ func JWKCredsRead(rd io.Reader) (DoltCreds, error) {
 
 func JWKCredsWriteToDir(fs filesys.Filesys, dir string, dc DoltCreds) (string, error) {
 	outFile := filepath.Join(dir, dc.KeyIDBase32Str()+JWKFileExtension)
-	wr, err := fs.OpenForWrite(outFile)
+	wr, err := fs.OpenForWrite(outFile, 0600)
 
 	if err != nil {
 		return "", err

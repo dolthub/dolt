@@ -87,3 +87,10 @@ teardown() {
     run dolt creds use
     [ "$status" -eq 1 ]
 }
+
+@test "creds file created with right permissions" {
+    dolt creds new
+    file=$(echo ${DOLT_ROOT_PATH}/.dolt/creds/`dolt creds ls -v | grep '*' | awk '{print $3}'`.jwk)
+    perms=$(ls -l "$file" | awk '{print $1}')
+    [ "$perms" == "-rw-------" ]
+}

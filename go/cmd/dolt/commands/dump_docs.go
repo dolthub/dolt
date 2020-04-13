@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -132,7 +133,7 @@ func CreateMarkdown(fs filesys.Filesys, path string, cmdDoc cli.CommandDocumenta
 	if err != nil {
 		return err
 	}
-	wr, err := fs.OpenForWrite(path)
+	wr, err := fs.OpenForWrite(path, os.ModePerm)
 	if err != nil {
 		return err
 	}

@@ -159,7 +159,7 @@ func (fs *localFS) ReadFile(fp string) ([]byte, error) {
 
 // OpenForWrite opens a file for writing.  The file will be created if it does not exist, and if it does exist
 // it will be overwritten.
-func (fs *localFS) OpenForWrite(fp string) (io.WriteCloser, error) {
+func (fs *localFS) OpenForWrite(fp string, perm os.FileMode) (io.WriteCloser, error) {
 	var err error
 	fp, err = fs.Abs(fp)
 
@@ -167,7 +167,7 @@ func (fs *localFS) OpenForWrite(fp string) (io.WriteCloser, error) {
 		return nil, err
 	}
 
-	return os.OpenFile(fp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
+	return os.OpenFile(fp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, perm)
 }
 
 // WriteFile writes the entire data buffer to a given file.  The file will be created if it does not exist,

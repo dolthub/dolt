@@ -19,6 +19,7 @@ import (
 	"encoding/csv"
 	"errors"
 	"io"
+	"os"
 	"path/filepath"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -48,7 +49,7 @@ func OpenCSVWriter(path string, fs filesys.WritableFS, outSch schema.Schema, inf
 		return nil, err
 	}
 
-	wr, err := fs.OpenForWrite(path)
+	wr, err := fs.OpenForWrite(path, os.ModePerm)
 
 	if err != nil {
 		return nil, err
