@@ -27,7 +27,7 @@ const NullPrintingStage = "null printing"
 
 // NullPrinter is a utility to convert nil values in rows to a string representation.
 type NullPrinter struct {
-	Sch schema.Schema
+	Sch     schema.Schema
 	nullStr string
 }
 

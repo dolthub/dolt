@@ -35,7 +35,7 @@ type RepoStateWriter interface {
 	// SetCWBHeadRef(context.Context, ref.DoltRef) error
 	// SetCWBHeadSpec(context.Context, *doltdb.CommitSpec) error
 	SetWorkingHash(context.Context, hash.Hash) error
-//	SetStagedHash(context.Context, hash.Hash) error
+	//	SetStagedHash(context.Context, hash.Hash) error
 }
 
 type BranchConfig struct {
