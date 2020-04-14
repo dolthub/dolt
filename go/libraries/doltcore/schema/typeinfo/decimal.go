@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/shopspring/decimal"
 	"github.com/src-d/go-mysql-server/sql"
 
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -66,12 +67,8 @@ func CreateDecimalTypeFromParams(params map[string]string) (TypeInfo, error) {
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *decimalType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
-	if val, ok := v.(types.String); ok {
-		res, err := ti.sqlDecimalType.Convert(string(val))
-		if err != nil {
-			return nil, fmt.Errorf(`"%v" cannot convert "%v" to value`, ti.String(), val)
-		}
-		return res, nil
+	if val, ok := v.(types.Decimal); ok {
+		return ti.sqlDecimalType.Convert(decimal.Decimal(val))
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -84,15 +81,14 @@ func (ti *decimalType) ConvertValueToNomsValue(v interface{}) (types.Value, erro
 	if v == nil {
 		return types.NullValue, nil
 	}
-	strVal, err := ti.sqlDecimalType.Convert(v)
+	decVal, err := ti.sqlDecimalType.ConvertToDecimal(v)
 	if err != nil {
 		return nil, err
 	}
-	val, ok := strVal.(string)
-	if ok {
-		return types.String(val), nil
+	if !decVal.Valid {
+		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a null value from embedded type`, ti.String())
 	}
-	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
+	return types.Decimal(decVal.Decimal), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -144,7 +140,7 @@ func (ti *decimalType) IsValid(v types.Value) bool {
 
 // NomsKind implements TypeInfo interface.
 func (ti *decimalType) NomsKind() types.NomsKind {
-	return types.StringKind
+	return types.DecimalKind
 }
 
 // ParseValue implements TypeInfo interface.
@@ -152,14 +148,7 @@ func (ti *decimalType) ParseValue(str *string) (types.Value, error) {
 	if str == nil || *str == "" {
 		return types.NullValue, nil
 	}
-	strVal, err := ti.sqlDecimalType.Convert(*str)
-	if err != nil {
-		return nil, err
-	}
-	if val, ok := strVal.(string); ok {
-		return types.String(val), nil
-	}
-	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
+	return ti.ConvertValueToNomsValue(*str)
 }
 
 // String implements TypeInfo interface.

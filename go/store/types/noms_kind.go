@@ -54,6 +54,7 @@ const (
 	TupleKind
 	InlineBlobKind
 	TimestampKind
+	DecimalKind
 
 	UnknownKind NomsKind = 255
 )
@@ -79,6 +80,7 @@ var KindToType = map[NomsKind]Value{
 	TupleKind:      EmptyTuple(Format_7_18),
 	InlineBlobKind: InlineBlob{},
 	TimestampKind:  Timestamp{},
+	DecimalKind:    Decimal{},
 }
 
 var KindToTypeSlice []Value
@@ -105,6 +107,7 @@ var KindToString = map[NomsKind]string{
 	TupleKind:      "Tuple",
 	InlineBlobKind: "InlineBlob",
 	TimestampKind:  "Timestamp",
+	DecimalKind:    "Decimal",
 }
 
 // String returns the name of the kind.
