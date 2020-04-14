@@ -222,3 +222,10 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [ -f LICENSE.md ]
     rm -rf $BATS_TMPDIR/dolt-repo-$$-new
 }
+
+@test "all versions of help work outside a repository" {
+    dolt checkout --help
+    dolt checkout -help
+    run dolt checkout help
+    [ "$status" -ne 0 ]
+}

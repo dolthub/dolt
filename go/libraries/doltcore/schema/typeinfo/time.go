@@ -34,9 +34,8 @@ var TimeType = &timeType{sql.Time}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *timeType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
-	//TODO: expose the MySQL type's microsecond implementation and persist that to disk? Enables sorting
-	if val, ok := v.(types.String); ok {
-		return string(val), nil
+	if val, ok := v.(types.Int); ok {
+		return ti.sqlTimeType.Unmarshal(int64(val)), nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -49,15 +48,11 @@ func (ti *timeType) ConvertValueToNomsValue(v interface{}) (types.Value, error) 
 	if v == nil {
 		return types.NullValue, nil
 	}
-	strVal, err := ti.sqlTimeType.Convert(v)
+	val, err := ti.sqlTimeType.Marshal(v)
 	if err != nil {
 		return nil, err
 	}
-	val, ok := strVal.(string)
-	if ok {
-		return types.String(val), nil
-	}
-	return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
+	return types.Int(val), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -71,14 +66,18 @@ func (ti *timeType) Equals(other TypeInfo) bool {
 
 // FormatValue implements TypeInfo interface.
 func (ti *timeType) FormatValue(v types.Value) (*string, error) {
-	if val, ok := v.(types.String); ok {
-		res := string(val)
-		return &res, nil
-	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti.String(), v.Kind())
+	strVal, err := ti.ConvertNomsValueToValue(v)
+	if err != nil {
+		return nil, err
+	}
+	val, ok := strVal.(string)
+	if !ok {
+		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
+	}
+	return &val, nil
 }
 
 // GetTypeIdentifier implements TypeInfo interface.
@@ -99,7 +98,7 @@ func (ti *timeType) IsValid(v types.Value) bool {
 
 // NomsKind implements TypeInfo interface.
 func (ti *timeType) NomsKind() types.NomsKind {
-	return types.StringKind
+	return types.IntKind
 }
 
 // ParseValue implements TypeInfo interface.
@@ -107,14 +106,11 @@ func (ti *timeType) ParseValue(str *string) (types.Value, error) {
 	if str == nil || *str == "" {
 		return types.NullValue, nil
 	}
-	strVal, err := ti.sqlTimeType.Convert(*str)
+	val, err := ti.sqlTimeType.Marshal(*str)
 	if err != nil {
 		return nil, err
 	}
-	if val, ok := strVal.(string); ok {
-		return types.String(val), nil
-	}
-	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
+	return types.Int(val), nil
 }
 
 // String implements TypeInfo interface.

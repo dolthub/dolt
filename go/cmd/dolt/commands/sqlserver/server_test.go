@@ -46,7 +46,7 @@ var (
 func TestServerArgs(t *testing.T) {
 	serverController := CreateServerController()
 	go func() {
-		SqlServerImpl(context.Background(), "dolt sql-server", []string{
+		startServer(context.Background(), "test", "dolt sql-server", []string{
 			"-H", "localhost",
 			"-P", "15200",
 			"-u", "username",
@@ -84,7 +84,7 @@ func TestServerBadArgs(t *testing.T) {
 		t.Run(strings.Join(test, " "), func(t *testing.T) {
 			serverController := CreateServerController()
 			go func(serverController *ServerController) {
-				SqlServerImpl(context.Background(), "dolt sql-server", test, env, serverController)
+				startServer(context.Background(), "test", "dolt sql-server", test, env, serverController)
 			}(serverController)
 			// In the event that a test fails, we need to prevent a test from hanging due to a running server
 			err := serverController.WaitForStart()

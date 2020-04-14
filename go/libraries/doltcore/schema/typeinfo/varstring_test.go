@@ -22,7 +22,6 @@ import (
 	"github.com/src-d/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"vitess.io/vitess/go/sqltypes"
 
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -263,27 +262,4 @@ func TestVarStringParseValue(t *testing.T) {
 			}
 		})
 	}
-}
-
-func generateVarStringTypes(t *testing.T, numOfTypes uint16) []TypeInfo {
-	var res []TypeInfo
-	loop(t, 1, 500, numOfTypes, func(i int64) {
-		rts := false
-		if i%2 == 0 {
-			rts = true
-		}
-		res = append(res, generateVarStringType(t, i, rts))
-	})
-	return res
-}
-
-func generateVarStringType(t *testing.T, length int64, rts bool) *varStringType {
-	require.True(t, length > 0)
-	if rts {
-		t, err := sql.CreateStringWithDefaults(sqltypes.Char, length)
-		if err == nil {
-			return &varStringType{t}
-		}
-	}
-	return &varStringType{sql.MustCreateStringWithDefaults(sqltypes.VarChar, length)}
 }

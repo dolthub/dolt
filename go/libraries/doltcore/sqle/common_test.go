@@ -34,7 +34,7 @@ import (
 // the targetSchema given is used to prepare all rows.
 func executeSelect(ctx context.Context, dEnv *env.DoltEnv, targetSch schema.Schema, root *doltdb.RootValue, query string) ([]row.Row, schema.Schema, error) {
 	var err error
-	db := NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState)
+	db := NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState, dEnv.RepoStateWriter())
 	engine, sqlCtx, err := NewTestEngine(ctx, db, root)
 	if err != nil {
 		return nil, nil, err
@@ -70,7 +70,7 @@ func executeSelect(ctx context.Context, dEnv *env.DoltEnv, targetSch schema.Sche
 
 // Runs the query given and returns the error (if any).
 func executeModify(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue, query string) (*doltdb.RootValue, error) {
-	db := NewDatabase("dolt", root, ddb, nil)
+	db := NewDatabase("dolt", root, ddb, nil, nil)
 	engine, sqlCtx, err := NewTestEngine(ctx, db, root)
 
 	if err != nil {

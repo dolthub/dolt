@@ -21,18 +21,25 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-const PRINTED_NULL = "<NULL>"
+const PrintedNull = "<NULL>"
 
-const NULL_PRINTING_STAGE = "null printing"
+const NullPrintingStage = "null printing"
 
 // NullPrinter is a utility to convert nil values in rows to a string representation.
 type NullPrinter struct {
-	Sch schema.Schema
+	Sch     schema.Schema
+	nullStr string
 }
 
 // NewNullPrinter returns a new null printer for the schema given, which must be string-typed (untyped).
 func NewNullPrinter(sch schema.Schema) *NullPrinter {
-	return &NullPrinter{Sch: sch}
+	return &NullPrinter{Sch: sch, nullStr: PrintedNull}
+}
+
+// NewNullPrinterWithNullString returns a new null printer for the schema given, which must be string-typed, using the
+// string given as the value to print for nulls.
+func NewNullPrinterWithNullString(sch schema.Schema, nullStr string) *NullPrinter {
+	return &NullPrinter{Sch: sch, nullStr: nullStr}
 }
 
 // Function to convert any nil values for a row with the schema given to a string representation. Used as the transform
@@ -44,7 +51,7 @@ func (np *NullPrinter) ProcessRow(inRow row.Row, props pipeline.ReadableMap) (ro
 		if !types.IsNull(val) {
 			taggedVals[tag] = val
 		} else {
-			taggedVals[tag] = types.String(PRINTED_NULL)
+			taggedVals[tag] = types.String(np.nullStr)
 		}
 
 		return false, nil

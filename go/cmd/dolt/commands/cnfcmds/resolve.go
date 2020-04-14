@@ -187,40 +187,38 @@ func manualResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 	invalid, notFound, updatedTbl, err := tbl.ResolveConflicts(ctx, keysToResolve)
 
 	if err != nil {
-		verr = errhand.BuildDError("fatal: Failed to resolve conflicts").AddCause(err).Build()
-	} else {
-		for _, key := range invalid {
-			cli.Println(key, "is not a valid key")
-		}
+		return errhand.BuildDError("fatal: Failed to resolve conflicts").AddCause(err).Build()
+	}
 
-		for _, key := range notFound {
-			cli.Println(key, "is not the primary key of a conflicting row")
-		}
+	for _, key := range invalid {
+		cli.Println(key, "is not a valid key")
+	}
 
-		updatedHash, err := updatedTbl.HashOf()
+	for _, key := range notFound {
+		cli.Println(key, "is not the primary key of a conflicting row")
+	}
+
+	updatedHash, err := updatedTbl.HashOf()
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to get table hash").AddCause(err).Build()
+	}
+
+	hash, err := tbl.HashOf()
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to get table hash").AddCause(err).Build()
+	}
+
+	if hash == updatedHash {
+		root, err := root.PutTable(ctx, tblName, updatedTbl)
 
 		if err != nil {
-			return errhand.BuildDError("error: failed to get table hash").AddCause(err).Build()
+			return errhand.BuildDError("").AddCause(err).Build()
 		}
 
-		hash, err := tbl.HashOf()
-
-		if err != nil {
-			return errhand.BuildDError("error: failed to get table hash").AddCause(err).Build()
-		}
-
-		if hash == updatedHash {
-			root, err := root.PutTable(ctx, tblName, updatedTbl)
-
-			if err != nil {
-				return errhand.BuildDError("").AddCause(err).Build()
-			}
-
-			verr = commands.UpdateWorkingWithVErr(dEnv, root)
-
-			if verr != nil {
-				return verr
-			}
+		if verr := commands.UpdateWorkingWithVErr(dEnv, root); verr != nil {
+			return verr
 		}
 	}
 

@@ -115,6 +115,7 @@ teardown() {
     dolt push test-remote master
 
     cd dolt-repo-clones/test-repo
+    echo "this text should remain after pull :p" > README.md
     run dolt pull
     [[ "$output" =~ "Updating" ]] || false
     run dolt log
@@ -125,7 +126,7 @@ teardown() {
     [[ "$output" =~ "updated-license" ]] || false
     run cat README.md
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "readme-text" ]] || false
+    [[ "$output" =~ "this text should remain after pull :p" ]] || false
 }
 
 @test "clone a remote" {

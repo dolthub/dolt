@@ -96,6 +96,11 @@ func (nmu *NomsMapUpdater) GetSchema() schema.Schema {
 
 // WriteRow will write a row to a table
 func (nmu *NomsMapUpdater) WriteRow(ctx context.Context, r row.Row) error {
+	return nmu.WriteEdit(ctx, r.NomsMapKey(nmu.sch), r.NomsMapValue(nmu.sch))
+}
+
+// WriteEdit will write an edit to a table's edit accumulator
+func (nmu *NomsMapUpdater) WriteEdit(ctx context.Context, pk types.LesserValuable, fieldVals types.Valuable) error {
 	if nmu.acc == nil {
 		return errors.New("Attempting to write after closing.")
 	}
@@ -105,9 +110,6 @@ func (nmu *NomsMapUpdater) WriteRow(ctx context.Context, r row.Row) error {
 	}
 
 	err := func() error {
-		pk := r.NomsMapKey(nmu.sch)
-		fieldVals := r.NomsMapValue(nmu.sch)
-
 		nmu.acc.AddEdit(pk, fieldVals)
 		nmu.count++
 

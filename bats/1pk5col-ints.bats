@@ -85,18 +85,18 @@ teardown() {
 @test "dolt sql all manner of inserts" {
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| 1       |" ]] || false
+    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
     run dolt sql -q "select * from test"
     [[ "$output" =~ "6" ]] || false
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (1,7,7,7,7,7),(2,8,8,8,8,8)"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| 2       |" ]] || false
+    [[ "$output" =~ "Query OK, 2 rows affected" ]] || false
     run dolt sql -q "select * from test"
     [[ "$output" =~ "7" ]] || false
     [[ "$output" =~ "8" ]] || false
     run dolt sql -q "insert into test (pk,c1,c3,c5) values (3,9,9,9)"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| 1       |" ]] || false
+    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
     run dolt sql -q "select * from test"
     [[ "$output" =~ "9" ]] || false
     run dolt sql -q "insert into test (c1,c3,c5) values (50,55,60)"
@@ -119,7 +119,7 @@ teardown() {
 @test "dolt sql insert no columns specified" {
     run dolt sql -q "insert into test values (0,0,0,0,0,0)"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| 1       |" ]] || false
+    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
     run dolt sql -q "select * from test"
     [[ "$output" =~ "0" ]] || false
     run dolt sql -q "insert into test values (4,1,2)"
@@ -142,21 +142,23 @@ teardown() {
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     run dolt sql -q "replace into test (pk,c1,c2,c3,c4,c5) values (0,7,7,7,7,7),(1,8,8,8,8,8)"
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "updated" ]] || false
+    # No skip, but this is a bug in the output. Query produces the right result, but counts it incorrectly
+    [[ "$output" =~ "Query OK, 4 rows affected" ]] || false
     ## No skip, but this should report 3 but is reporting 4 [[ "${lines[3]}" =~ "3" ]] || false
     run dolt sql -q "select * from test"
     [[ "$output" =~ "7" ]] || false
     [[ "$output" =~ "8" ]] || false
     [[ ! "$output" =~ "6" ]] || false
+    skip "replace into output is incorrect" 
 }
 
 @test "dolt sql insert and dolt sql select" {
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5)"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| 1       |" ]] || false
+    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (101,102,103,104,105,106),(1,6,7,8,9,10)"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| 2       |" ]] || false
+    [[ "$output" =~ "Query OK, 2 rows affected" ]] || false
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ \|[[:space:]]+c5 ]] || false
@@ -221,8 +223,31 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ 'column1' ]] || false
     [ "${#lines[@]}" -eq 2 ]
+
+    # Test that null values are properly output
+    dolt sql -q "insert into test (pk,c1) values (40,1)"
+    run dolt sql -q "select c1 as column1, c2 as column2, c3 as column3 from test where pk = 40" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "column1,column2,column3" ]] || false
+    [[ "$output" =~ "1,," ]] || false
 }
 
+@test "dolt sql select json output" {
+    dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
+    run dolt sql -q "select c1 as column1, c2 as column2 from test" -r json
+    [ "$status" -eq 0 ]
+    [ "$output" == '{"rows": [{"column1":1,"column2":2},{"column1":11,"column2":12},{"column1":21,"column2":22}]}' ]
+
+    run dolt sql -q "select c1 as column1 from test where c1=1" -r json
+    [ "$status" -eq 0 ]
+    [ "$output" == '{"rows": [{"column1":1}]}' ]
+ 
+    # Test that null values are properly handled
+    dolt sql -q "insert into test (pk,c1) values (40,1)"
+    run dolt sql -q "select c1 as column1, c2 as column2, c3 as column3 from test where pk = 40" -r json
+    [ "$status" -eq 0 ]
+    [ "$output" == '{"rows": [{"column1":1}]}' ]
+}
 
 @test "dolt sql select with inverted where clause" {
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
@@ -235,7 +260,8 @@ teardown() {
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
     run dolt sql -q "update test set c1=6,c2=7,c3=8,c4=9,c5=10 where pk=0"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| 1       | 1       |" ]] || false
+    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
+    [[ "$output" =~ "Rows matched: 1  Changed: 1  Warnings: 0" ]] || false
     run dolt sql -q "select * from test where pk=0"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "10" ]] || false
@@ -243,14 +269,16 @@ teardown() {
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (4,11,12,13,14,15)"
     run dolt sql -q "update test set c2=11,c3=11,c4=11,c5=11 where c1=11"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| 2       | 2       |" ]] || false
+    [[ "$output" =~ "Query OK, 2 rows affected" ]] || false
+    [[ "$output" =~ "Rows matched: 2  Changed: 2  Warnings: 0" ]] || false
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "11" ]] || false
     [[ ! "$output" =~ "12" ]] || false
     run dolt sql -q "update test set c2=50,c3=50,c4=50,c5=50 where c1=50"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| 0       | 0       |" ]] || false
+    [[ "$output" =~ "Query OK, 0 rows affected" ]] || false
+    [[ "$output" =~ "Rows matched: 0  Changed: 0  Warnings: 0" ]] || false
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "50" ]] || false
@@ -262,7 +290,8 @@ teardown() {
     [ "$output" = "unable to cast \"foo\" of type string to int64" ]
     run dolt sql -q "update test set c1=100,c2=100,c3=100,c4=100,c5=100 where pk>0"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| 3       | 3       |" ]] || false
+    [[ "$output" =~ "Query OK, 3 rows affected" ]] || false
+    [[ "$output" =~ "Rows matched: 3  Changed: 3  Warnings: 0" ]] || false
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "100" ]] || false
@@ -274,24 +303,24 @@ teardown() {
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
     run dolt sql -q "delete from test where pk=2"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| 1       |" ]] || false
+    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
     run dolt sql -q "delete from test"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| 2       |" ]] || false
+    [[ "$output" =~ "Query OK, 2 rows affected" ]] || false
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
     run dolt sql -q "delete from test where pk>0"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| 2       |" ]] || false
+    [[ "$output" =~ "Query OK, 2 rows affected" ]] || false    
     run dolt sql -q "delete from test where c1=1"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| 1       |" ]] || false
+    [[ "$output" =~ "Query OK, 1 row affected" ]] || false    
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
     run dolt sql -q "delete from test where c10=1"
     [ "$status" -eq 1 ]
     [ "$output" = "column \"c10\" could not be found in any table in scope" ]
     run dolt sql -q "delete from test where c1='foo'"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| 0       |" ]] || false
+    [[ "$output" =~ "Query OK, 0 rows affected" ]] || false    
 }
 
 @test "dolt checkout to put a table back to its checked in state" {

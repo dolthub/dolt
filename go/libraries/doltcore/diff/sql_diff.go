@@ -188,7 +188,7 @@ func PrintSqlTableDiffs(ctx context.Context, r1, r2 *doltdb.RootValue, wr io.Wri
 				transforms := pipeline.NewTransformCollection()
 				nullPrinter := nullprinter.NewNullPrinter(sch)
 				transforms.AppendTransforms(
-					pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow),
+					pipeline.NewNamedTransform(nullprinter.NullPrintingStage, nullPrinter.ProcessRow),
 				)
 				sink, err := NewSQLDiffSink(wr, sch, tblName)
 				if err != nil {

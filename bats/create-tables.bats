@@ -451,6 +451,59 @@ SQL
     [ "$status" -eq 1 ]
 }
 
+@test "create a table with a SQL reserved word" {
+    dolt sql <<SQL
+CREATE TABLE test (
+    pk INT NOT NULL,
+    \`all\` INT,
+    \`select\` INT,
+    PRIMARY KEY (pk)
+);
+SQL
+    run dolt schema show
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "all" ]] || false
+    [[ "$output" =~ "select" ]] || false
+    run dolt sql <<SQL
+CREATE TABLE test (
+    pk INT NOT NULL,
+    all INT,
+    select INT,
+    PRIMARY KEY (pk)
+);
+SQL
+    [ "$status" -ne 0 ]
+}
+
+@test "create a table with a SQL keyword that is not reserved" {
+    dolt sql <<SQL
+CREATE TABLE test (
+    pk INT NOT NULL,
+    \`comment\` INT,
+    \`date\` INT,
+    PRIMARY KEY (pk)
+);
+SQL
+    run dolt schema show
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "comment" ]] || false
+    [[ "$output" =~ "date" ]] || false
+    run dolt sql <<SQL
+CREATE TABLE test (
+    pk INT NOT NULL,
+    comment INT,
+    date INT,
+    PRIMARY KEY (pk)
+);
+SQL
+    skip "Current SQL parser requires backticks around keywords, not just reserved words"
+    [ "$status" -eq 0 ]
+    run dolt schema show
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "comment" ]] || false
+    [[ "$output" =~ "date" ]] || false 
+}
+
 @test "import a table with non UTF-8 characters in it" {
     run dolt table import -c --pk=pk test `batshelper bad-characters.csv`
     skip "Dolt allows you to create tables with non-UTF-8 characters right now"

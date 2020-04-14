@@ -21,8 +21,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-var initialReadme = "This is a repository level README. Either edit it, add it, and commit it, or remove the file."
-var initialLicense = "This is a repository level LICENSE. Either edit it, add it, and commit it, or remove the file."
+var initialReadme = "This is a repository level README. Either edit it, add it, and commit it, or remove the file.\n"
+var initialLicense = "This is a repository level LICENSE. Either edit it, add it, and commit it, or remove the file.\n"
 
 type Docs []doltdb.DocDetails
 
