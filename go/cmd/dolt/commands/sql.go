@@ -355,7 +355,7 @@ func newBatchedDatabase(name string, defRoot *doltdb.RootValue, dEnv *env.DoltEn
 }
 
 func execQuery(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, query string, format resultFormat) (map[string]*doltdb.RootValue, errhand.VerboseError) {
-	dbs := CollectDBs(mrEnv, roots, newBatchedDatabase)
+	dbs := CollectDBs(mrEnv, roots, newDatabase)
 	se, err := newSqlEngine(sqlCtx, mrEnv, roots, format, dbs...)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
@@ -1047,16 +1047,16 @@ func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s 
 		} else if err != nil {
 			return err
 		} else {
-			numRowsUpdated := row[0].(int64)
-			s.unflushedEdits += int(numRowsUpdated)
-			s.unprintedEdits += int(numRowsUpdated)
+			okResult := row[0].(sql.OkResult)
+			s.unflushedEdits += int(okResult.RowsAffected)
+			s.unprintedEdits += int(okResult.RowsAffected)
 			switch statement.(type) {
 			case *sqlparser.Insert:
-				s.rowsInserted += int(numRowsUpdated)
+				s.rowsInserted += int(okResult.RowsAffected)
 			case *sqlparser.Delete:
-				s.rowsDeleted += int(numRowsUpdated)
+				s.rowsDeleted += int(okResult.RowsAffected)
 			case *sqlparser.Update:
-				s.rowsUpdated += int(numRowsUpdated)
+				s.rowsUpdated += int(okResult.RowsAffected)
 			}
 		}
 	}
