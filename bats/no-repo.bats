@@ -226,6 +226,6 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
 @test "all versions of help work outside a repository" {
     dolt checkout --help
     dolt checkout -help
-    skip "No dashes in front of help segfaults right now"
-    dolt checkout help
+    run dolt checkout help
+    [ "$status" -ne 0 ]
 }
