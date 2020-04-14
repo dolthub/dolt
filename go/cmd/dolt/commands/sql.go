@@ -346,6 +346,8 @@ func execBatch(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*do
 	return newRoots, nil
 }
 
+type createDBFunc func(name string, defRoot *doltdb.RootValue, dEnv *env.DoltEnv) dsqle.Database
+
 func newDatabase(name string, defRoot *doltdb.RootValue, dEnv *env.DoltEnv) dsqle.Database {
 	return dsqle.NewDatabase(name, defRoot, dEnv.DoltDB, dEnv.RepoState, dEnv.RepoStateWriter())
 }
@@ -382,8 +384,6 @@ func execQuery(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*do
 
 	return newRoots, nil
 }
-
-type createDBFunc func(name string, defRoot *doltdb.RootValue, dEnv *env.DoltEnv) dsqle.Database
 
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
 // objects.
