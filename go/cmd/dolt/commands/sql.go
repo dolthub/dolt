@@ -1304,7 +1304,7 @@ func printOKResult(ctx context.Context, iter sql.RowIter) error {
 		}
 		cli.Printf("Query OK, %d %s affected\n", okResult.RowsAffected, rowNoun)
 
-		if okResult.Info != "" {
+		if okResult.Info != nil {
 			cli.Printf("%s\n", okResult.Info)
 		}
 	}

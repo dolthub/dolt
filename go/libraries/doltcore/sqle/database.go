@@ -451,7 +451,7 @@ func (db *Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 			return nil, err
 		}
 
-		dsess.dbRoots[db.name] = dbRoot{hashStr, newRoot}
+		dsess.dbRoots[db.name] = dbRoot{hashStr, newRoot, db.ddb, db.rsw}
 		return newRoot, nil
 	}
 }
@@ -470,17 +470,17 @@ func (db *Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 	ctx.Session.Set(key, hashType, hashStr)
 
 	dsess := DSessFromSess(ctx.Session)
-	dsess.dbRoots[db.name] = dbRoot{hashStr, newRoot}
+	dsess.dbRoots[db.name] = dbRoot{hashStr, newRoot, db.ddb, db.rsw}
 
-	if db.batchMode == autoCommit {
-		h, err := db.ddb.WriteRootValue(ctx, newRoot)
-		if err != nil {
-			return err
-		}
-
-		db.defRoot = newRoot
-		return db.rsw.SetWorkingHash(ctx, h)
-	}
+	// if db.batchMode == autoCommit {
+	// 	h, err := db.ddb.WriteRootValue(ctx, newRoot)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	//
+	// 	db.defRoot = newRoot
+	// 	return db.rsw.SetWorkingHash(ctx, h)
+	// }
 
 	return nil
 }
