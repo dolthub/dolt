@@ -93,7 +93,7 @@ teardown() {
 }
 
 @test "can import cred from good jwk stdin" {
-    cat `batshelper creds/known-good.jwk` | dolt creds import
+    dolt creds import <`batshelper creds/known-good.jwk`
 }
 
 @test "import cred of corrupted jwk from file fails" {
@@ -106,11 +106,11 @@ teardown() {
 }
 
 @test "import cred of corrupted jwk from stdin fails" {
-    run bash -c "cat `batshelper creds/known-truncated.jwk` | dolt creds import"
+    run dolt creds import <`batshelper creds/known-truncated.jwk` 
     [ "$status" -eq 1 ]
-    run bash -c "cat `batshelper creds/known-decapitated.jwk` | dolt creds import"
+    run dolt creds import <`batshelper creds/known-decapitated.jwk`
     [ "$status" -eq 1 ]
-    run bash -c "echo -n | dolt creds import"
+    run dolt creds import </dev/null
     [ "$status" -eq 1 ]
 }
 
