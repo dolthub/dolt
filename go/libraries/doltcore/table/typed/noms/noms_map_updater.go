@@ -132,7 +132,6 @@ func (nmu *NomsMapUpdater) WriteRow(ctx context.Context, r row.Row) error {
 	return nil
 }
 
-
 // WriteRow will write a row to a table
 func (nmu *NomsMapUpdater) WriteEdit(ctx context.Context, pk types.LesserValuable, fieldVals types.Valuable) error {
 	if nmu.acc == nil {

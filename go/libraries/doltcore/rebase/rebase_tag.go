@@ -17,7 +17,6 @@ package rebase
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"time"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
@@ -28,6 +27,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	ndiff "github.com/liquidata-inc/dolt/go/store/diff"
 	"github.com/liquidata-inc/dolt/go/store/hash"
