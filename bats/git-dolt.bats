@@ -24,6 +24,7 @@ teardown() {
 
 @test "git dolt install sets up a smudge filter in the current git repository" {
     init_git_repo
+
     run git dolt install
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "Installed git-dolt smudge filter" ]] || false

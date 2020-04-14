@@ -1299,7 +1299,7 @@ func printOKResult(ctx context.Context, iter sql.RowIter) error {
 
 	if okResult, ok := row[0].(sql.OkResult); ok {
 		rowNoun := "row"
-		if okResult.RowsAffected > 1 {
+		if okResult.RowsAffected != 1 {
 			rowNoun = "rows"
 		}
 		cli.Printf("Query OK, %d %s affected\n", okResult.RowsAffected, rowNoun)
