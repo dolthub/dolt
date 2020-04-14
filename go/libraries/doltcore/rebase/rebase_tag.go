@@ -27,6 +27,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	ndiff "github.com/liquidata-inc/dolt/go/store/diff"
 	"github.com/liquidata-inc/dolt/go/store/hash"
@@ -404,7 +405,7 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 			return nil, err
 		}
 
-		rebasedRows, err := replayRowDiffs(ctx, rebasedSch, rows, parentRows, rebasedParentRows, tableMapping)
+		rebasedRows, err := replayRowDiffs(ctx, rebasedParentRoot.VRW(), rebasedSch, rows, parentRows, rebasedParentRows, tableMapping)
 
 		if err != nil {
 			return nil, err
@@ -442,7 +443,7 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 	return newRoot, nil
 }
 
-func replayRowDiffs(ctx context.Context, rSch schema.Schema, rows, parentRows, rebasedParentRows types.Map, tagMapping map[uint64]uint64) (types.Map, error) {
+func replayRowDiffs(ctx context.Context, vrw types.ValueReadWriter, rSch schema.Schema, rows, parentRows, rebasedParentRows types.Map, tagMapping map[uint64]uint64) (types.Map, error) {
 
 	unmappedTags := set.NewUint64Set(rSch.GetAllCols().Tags)
 	tm := make(map[uint64]uint64)
@@ -454,8 +455,7 @@ func replayRowDiffs(ctx context.Context, rSch schema.Schema, rows, parentRows, r
 		tm[t] = t
 	}
 
-	// we will apply modified differences to the rebasedParent
-	rebasedRowEditor := rebasedParentRows.Edit()
+	nmu := noms.NewNomsMapUpdater(ctx, vrw, rebasedParentRows, rSch, func(stats types.AppliedEditStats) {})
 
 	ad := diff.NewAsyncDiffer(diffBufSize)
 	// get all differences (including merges) between original commit and its parent
@@ -486,16 +486,25 @@ func replayRowDiffs(ctx context.Context, rSch schema.Schema, rows, parentRows, r
 
 			switch d.ChangeType {
 			case types.DiffChangeAdded:
-				rebasedRowEditor.Set(key, newVal)
+				err = nmu.WriteEdit(ctx, key, newVal)
 			case types.DiffChangeRemoved:
-				rebasedRowEditor.Remove(key)
+				err = nmu.WriteEdit(ctx, key, nil)
 			case types.DiffChangeModified:
-				rebasedRowEditor.Set(key, newVal)
+				err = nmu.WriteEdit(ctx, key, newVal)
+			}
+
+			if err != nil {
+				return types.EmptyMap, err
 			}
 		}
 	}
 
-	return rebasedRowEditor.Map(ctx)
+	err := nmu.Close(ctx)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	return *nmu.GetMap(), nil
 }
 
 func dropValsForDeletedColumns(ctx context.Context, nbf *types.NomsBinFormat, rows types.Map, sch, parentSch schema.Schema) (types.Map, error) {

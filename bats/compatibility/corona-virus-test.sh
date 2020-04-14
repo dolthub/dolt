@@ -60,7 +60,7 @@ function export_tables() {
     places
   do
     dolt table export "$table" "$table$1.csv"
-    dolt sql -r csv -q "select * from $table" > "$table$1.sql.csv"
+    dolt sql -r csv -q "select * from $table" | sed 's/<NULL>//g' > "$table$1.sql.csv"
   done
 }
 
@@ -99,7 +99,7 @@ local_bin="`pwd`"/"$bin"
 PATH="$local_bin":"$PATH" dolt clone Liquidata/corona-virus
 pushd "corona-virus"
 PATH="$local_bin":"$PATH" export_tables "-pre"
-dolt migrate
+time dolt migrate
 export_tables "-post"
 diff_tables
 echo "success!"
