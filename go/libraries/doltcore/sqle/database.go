@@ -472,17 +472,19 @@ func (db *Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 	dsess := DSessFromSess(ctx.Session)
 	dsess.dbRoots[db.name] = dbRoot{hashStr, newRoot, db.ddb, db.rsw}
 
-	// if db.batchMode == autoCommit {
-	// 	h, err := db.ddb.WriteRootValue(ctx, newRoot)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	//
-	// 	db.defRoot = newRoot
-	// 	return db.rsw.SetWorkingHash(ctx, h)
-	// }
-
 	return nil
+}
+
+// LoadRootFromRepoState loads the root value from the repo state's working hash, then calls SetRoot with the loaded
+// root value.
+func (db *Database) LoadRootFromRepoState(ctx *sql.Context) error {
+	workingHash := db.rsr.WorkingHash()
+	root, err := db.ddb.ReadRootValue(ctx, workingHash)
+	if err != nil {
+		return err
+	}
+
+	return db.SetRoot(ctx, root)
 }
 
 // DropTable drops the table with the name given

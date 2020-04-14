@@ -162,7 +162,7 @@ func newSessionBuilder(sqlEngine *sqle.Engine) server.SessionBuilder {
 
 		dbs := dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())
 		for _, db := range dbs {
-			err := db.SetRoot(sqlCtx, db.GetDefaultRoot())
+			err := db.LoadRootFromRepoState(sqlCtx)
 			if err != nil {
 				return nil, nil, nil, err
 			}
