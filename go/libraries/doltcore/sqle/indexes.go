@@ -29,11 +29,11 @@ import (
 // IndexDriver implementation. Not ready for prime time.
 
 type DoltIndexDriver struct {
-	dbs map[string]*Database
+	dbs map[string]Database
 }
 
-func NewDoltIndexDriver(dbs ...*Database) *DoltIndexDriver {
-	nameToDB := make(map[string]*Database)
+func NewDoltIndexDriver(dbs ...Database) *DoltIndexDriver {
+	nameToDB := make(map[string]Database)
 	for _, db := range dbs {
 		nameToDB[db.Name()] = db
 	}
@@ -91,7 +91,7 @@ func (i *DoltIndexDriver) LoadAll(ctx *sql.Context, db, table string) ([]sql.Ind
 type doltIndex struct {
 	sch       schema.Schema
 	tableName string
-	db        *Database
+	db        Database
 	driver    *DoltIndexDriver
 }
 

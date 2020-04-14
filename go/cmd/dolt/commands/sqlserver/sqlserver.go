@@ -97,12 +97,12 @@ func (cmd SqlServerCmd) RequiresRepo() bool {
 
 // Exec executes the command
 func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	return cmd.startServer(ctx, commandStr, args, dEnv, nil)
+	return startServer(ctx, commandStr, cmd.VersionStr, args, dEnv, nil)
 }
 
-func (cmd SqlServerCmd) startServer(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
+func startServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
 	serverConfig := DefaultServerConfig()
-	serverConfig.Version = cmd.VersionStr
+	serverConfig.Version = versionStr
 
 	ap := createArgParser(serverConfig)
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlServerDocs, ap))

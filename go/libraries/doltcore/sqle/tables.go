@@ -35,7 +35,7 @@ type DoltTable struct {
 	table  *doltdb.Table
 	sch    schema.Schema
 	sqlSch sql.Schema
-	db     *Database
+	db     Database
 }
 
 var _ sql.Table = (*DoltTable)(nil)

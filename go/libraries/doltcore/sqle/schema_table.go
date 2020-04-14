@@ -35,7 +35,7 @@ func SchemasTableSchema() sql.Schema {
 }
 
 // GetOrCreateDoltSchemasTable returns the `dolt_schemas` table in `db`, creating it if it does not already exist.
-func GetOrCreateDoltSchemasTable(ctx *sql.Context, db *Database) (*WritableDoltTable, error) {
+func GetOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (*WritableDoltTable, error) {
 	tbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return nil, err
