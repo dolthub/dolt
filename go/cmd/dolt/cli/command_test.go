@@ -16,14 +16,14 @@ package cli
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
 	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 const (
@@ -135,7 +135,7 @@ func TestHasHelpFlag(t *testing.T) {
 	assert.False(t, hasHelpFlag([]string{"help"}))
 	assert.True(t, hasHelpFlag([]string{"--help"}))
 	assert.True(t, hasHelpFlag([]string{"-h"}))
-	assert.False(t, hasHelpFlag([]string{"--param","value","--flag","help","arg2","arg3"}))
-	assert.True(t, hasHelpFlag([]string{"--param","value","-f","--help","arg1","arg2"}))
-	assert.True(t, hasHelpFlag([]string{"--param","value","--flag","-h","arg1","arg2"}))
+	assert.False(t, hasHelpFlag([]string{"--param", "value", "--flag", "help", "arg2", "arg3"}))
+	assert.True(t, hasHelpFlag([]string{"--param", "value", "-f", "--help", "arg1", "arg2"}))
+	assert.True(t, hasHelpFlag([]string{"--param", "value", "--flag", "-h", "arg1", "arg2"}))
 }
