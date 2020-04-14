@@ -25,6 +25,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -863,53 +864,25 @@ func (nbs *NomsBlockStore) StatsSummary() string {
 	return fmt.Sprintf("Root: %s; Chunk Count %d; Physical Bytes %s", nbs.upstream.root, cnt, humanize.Bytes(physLen))
 }
 
-// NomsBlockStoreTibleFileInfo is an implementation of a TableFile that cannot be read.  It only stores the information
-// such as the file ID and the number of chunks.  Calling read will always return an error.
-type NomsBlockStoreTableFileInfo struct {
+// tableFile is our implementation of TableFile.
+type tableFile struct {
 	info TableSpecInfo
+	open func()(io.ReadCloser, error)
 }
 
 // FileID gets the id of the file
-func (tfi NomsBlockStoreTableFileInfo) FileID() string {
-	return tfi.info.GetName()
-}
-
-// NumChunks returns the number of chunks in a table file
-func (tfi NomsBlockStoreTableFileInfo) NumChunks() int {
-	return int(tfi.info.GetChunkCount())
-}
-
-// Open returns an io.ReadCloser which can be used to read the bytes of a table file.
-func (tfi NomsBlockStoreTableFileInfo) Open() (io.ReadCloser, error) {
-	return nil, errors.New("open only implemented for for fsTablePersister")
-}
-
-// NomsBlockStoreTableFile is an implementation of TableFile that is in a NomsBlockStore on the machine.
-type NomsBlockStoreTableFile struct {
-	NomsBlockStoreTableFileInfo
-	dir string
-}
-
-// FileID gets the id of the file
-func (tf NomsBlockStoreTableFile) FileID() string {
+func (tf tableFile) FileID() string {
 	return tf.info.GetName()
 }
 
 // NumChunks returns the number of chunks in a table file
-func (tf NomsBlockStoreTableFile) NumChunks() int {
+func (tf tableFile) NumChunks() int {
 	return int(tf.info.GetChunkCount())
 }
 
 // Open returns an io.ReadCloser which can be used to read the bytes of a table file.
-func (tf NomsBlockStoreTableFile) Open() (io.ReadCloser, error) {
-	path := filepath.Join(tf.dir, tf.FileID())
-	f, err := os.Open(path)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return f, nil
+func (tf tableFile) Open() (io.ReadCloser, error) {
+	return tf.open()
 }
 
 // Sources retrieves the current root hash, and a list of all the table files
@@ -928,25 +901,55 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []TableFile,
 		return hash.Hash{}, nil, nil
 	}
 
-	fsPersister, ok := nbs.p.(*fsTablePersister)
+	css, err := nbs.chunkSourcesByAddr()
+	if err != nil {
+		return hash.Hash{}, nil, err
+	}
+
 	numSpecs := contents.NumTableSpecs()
 
 	var tableFiles []TableFile
 	for i := 0; i < numSpecs; i++ {
-		info := contents.GetTableSpecInfo(i)
-
-		if ok {
-			tf := NomsBlockStoreTableFile{
-				NomsBlockStoreTableFileInfo: NomsBlockStoreTableFileInfo{info: info},
-				dir:                         fsPersister.dir,
-			}
-			tableFiles = append(tableFiles, tf)
-		} else {
-			tableFiles = append(tableFiles, NomsBlockStoreTableFileInfo{info: info})
+		info := contents.getSpec(i)
+		cs, ok := css[info.name]
+		if !ok {
+			return hash.Hash{}, nil, errors.New("manifest referenced table file for which there is no chunkSource.")
 		}
+		tf := tableFile{
+			info: info,
+			open: func() (io.ReadCloser, error) {
+				r, err := cs.reader(context.TODO())
+				if r != nil {
+					return ioutil.NopCloser(r), err
+				} else {
+					return nil, err
+				}
+			},
+		}
+		tableFiles = append(tableFiles, tf)
 	}
 
 	return contents.GetRoot(), tableFiles, nil
+}
+
+func (nbs *NomsBlockStore) chunkSourcesByAddr() (map[addr]chunkSource, error) {
+	css := make(map[addr]chunkSource, len(nbs.tables.upstream) + len(nbs.tables.novel))
+	for _, cs := range nbs.tables.upstream {
+		a, err := cs.hash()
+		if err != nil {
+			return nil, err
+		}
+		css[a] = cs
+	}
+	for _, cs := range nbs.tables.novel {
+		a, err := cs.hash()
+		if err != nil {
+			return nil, err
+		}
+		css[a] = cs
+	}
+	return css, nil
+
 }
 
 func (nbs *NomsBlockStore) SupportedOperations() TableFileStoreOps {

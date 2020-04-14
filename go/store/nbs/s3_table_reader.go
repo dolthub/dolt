@@ -151,7 +151,7 @@ func (s3or *s3ObjectReader) readRange(ctx context.Context, name addr, p []byte, 
 		defer result.Body.Close()
 
 		if *result.ContentLength != int64(len(p)) {
-			return 0, fmt.Errorf("failed to read get entire range")
+			return 0, fmt.Errorf("failed to read entire range, key: %v, len(p): %d, rangeHeader: %s, ContentLength: %d", s3or.key(name.String()), len(p), rangeHeader, *result.ContentLength)
 		}
 
 		n, err = io.ReadFull(result.Body, p)

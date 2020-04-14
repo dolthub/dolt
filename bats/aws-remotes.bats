@@ -42,7 +42,6 @@ skip_if_no_aws_tests() {
 
 @test "can clone an existing aws remote" {
     skip_if_no_aws_tests
-    skip "clone does not currently work against aws remotes; use init, remote add, fetch..."
     rm -rf .dolt
     dolt clone 'aws://['"$DOLT_BATS_AWS_TABLE"':'"$DOLT_BATS_AWS_BUCKET"']/'"$DOLT_BATS_AWS_EXISTING_REPO"
     cd "$DOLT_BATS_AWS_EXISTING_REPO"
