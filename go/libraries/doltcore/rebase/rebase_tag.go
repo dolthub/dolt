@@ -39,8 +39,8 @@ const diffBufSize = 4096
 type TagMapping map[string]map[uint64]uint64
 
 // NeedsUniqueTagMigration checks if a repo was created before the unique tags constraint and migrates it if necessary.
-func NeedsUniqueTagMigration(ctx context.Context, dEnv *env.DoltEnv) (bool, error) {
-	bb, err := dEnv.DoltDB.GetBranches(ctx)
+func NeedsUniqueTagMigration(ctx context.Context, ddb *doltdb.DoltDB) (bool, error) {
+	bb, err := ddb.GetBranches(ctx)
 
 	if err != nil {
 		return false, err
@@ -53,7 +53,7 @@ func NeedsUniqueTagMigration(ctx context.Context, dEnv *env.DoltEnv) (bool, erro
 			return false, err
 		}
 
-		c, err := dEnv.DoltDB.Resolve(ctx, cs)
+		c, err := ddb.Resolve(ctx, cs)
 
 		if err != nil {
 			return false, err
