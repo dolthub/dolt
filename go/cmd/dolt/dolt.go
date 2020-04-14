@@ -52,7 +52,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.ResetCmd{},
 	commands.CommitCmd{},
 	commands.SqlCmd{VersionStr: Version},
-	sqlserver.SqlServerCmd{},
+	sqlserver.SqlServerCmd{VersionStr: Version},
 	commands.LogCmd{},
 	commands.DiffCmd{},
 	commands.BlameCmd{},
