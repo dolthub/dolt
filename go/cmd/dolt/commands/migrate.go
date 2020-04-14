@@ -123,7 +123,7 @@ func migrateLocalRepo(ctx context.Context, dEnv *env.DoltEnv) error {
 
 	if !remoteMigrated {
 		cli.Println(fmt.Sprintf("Remote %s has not been migrated", remoteName))
-		cli.Println(fmt.Sprintf("Run 'dolt migrate --push' %s to update remote", remoteName))
+		cli.Println(fmt.Sprintf("Run 'dolt migrate --push %s' to update remote", remoteName))
 	} else {
 		cli.Println(fmt.Sprintf("Remote %s has been migrated", remoteName))
 		cli.Println(fmt.Sprintf("Run 'dolt migrate --pull %s' to update refs", remoteName))
@@ -191,7 +191,7 @@ func pushMigratedRepo(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Arg
 				return err
 			}
 
-			cli.Println(color.YellowString(fmt.Sprintf("Pushing migrated branch %s to %s", branch.String(), remoteName)))
+			cli.Println(color.BlueString(fmt.Sprintf("Pushing migrated branch %s to %s", branch.String(), remoteName)))
 			mode := ref.RefUpdateMode{Force: true}
 			err = pushToRemoteBranch(ctx, dEnv, mode, src, dest, remoteRef, dEnv.DoltDB, destDB, remote)
 
