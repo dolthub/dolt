@@ -297,10 +297,9 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     [[ ! "$output" =~ "|5" ]] || false
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (4,11,12,13,14,15)"
     run dolt sql -q "update test set c2=11,c3=11,c4=11,c5=11 where c1=11"
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "Query OK, 2 rows affected" ]] || false
     [[ "$output" =~ "Rows matched: 2  Changed: 2  Warnings: 0" ]] || false
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "" ]] || false
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "11" ]] || false
