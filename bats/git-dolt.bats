@@ -13,6 +13,7 @@ setup() {
     dolt remote add test-remote $REMOTE
     dolt push test-remote master
     export DOLT_HEAD_COMMIT=`get_head_commit`
+    skiponwindows "git-dolt tests are flaky on Windows"
 }
 
 teardown() {
