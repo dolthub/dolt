@@ -19,53 +19,52 @@ import (
 	"testing"
 	"time"
 
-	"github.com/src-d/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-func TestVarStringConvertNomsValueToValue(t *testing.T) {
+func TestEnumConvertNomsValueToValue(t *testing.T) {
 	tests := []struct {
-		typ         *varStringType
-		input       types.String
+		typ         *enumType
+		input       types.Uint
 		output      string
 		expectedErr bool
 	}{
 		{
-			generateVarStringType(t, 10, false),
-			"0  ",
-			"0  ",
+			generateEnumType(t, 3),
+			1,
+			"aaaa",
 			false,
 		},
 		{
-			generateVarStringType(t, 10, true),
-			"0  ",
-			"0",
+			generateEnumType(t, 5),
+			2,
+			"aaab",
 			false,
 		},
 		{
-			generateVarStringType(t, 80, false),
-			"this is some text that will be returned",
-			"this is some text that will be returned",
+			generateEnumType(t, 8),
+			3,
+			"aaac",
 			false,
 		},
 		{
-			&varStringType{sql.CreateLongText(sql.Collation_Default)},
-			"  This is a sentence.  ",
-			"  This is a sentence.  ",
+			generateEnumType(t, 7),
+			7,
+			"aaag",
 			false,
 		},
 		{
-			generateVarStringType(t, 2, false),
-			"yay",
+			generateEnumType(t, 2),
+			0,
 			"",
 			true,
 		},
 		{
-			generateVarStringType(t, 2, true),
-			"yey",
+			generateEnumType(t, 3),
+			4,
 			"",
 			true,
 		},
@@ -84,53 +83,47 @@ func TestVarStringConvertNomsValueToValue(t *testing.T) {
 	}
 }
 
-func TestVarStringConvertValueToNomsValue(t *testing.T) {
+func TestEnumConvertValueToNomsValue(t *testing.T) {
 	tests := []struct {
-		typ         *varStringType
+		typ         *enumType
 		input       interface{}
-		output      types.String
+		output      types.Uint
 		expectedErr bool
 	}{
 		{
-			generateVarStringType(t, 10, false),
-			"0  ",
-			"0  ",
+			generateEnumType(t, 4),
+			"aaac",
+			3,
 			false,
 		},
 		{
-			generateVarStringType(t, 10, true),
-			[]byte("0  "),
-			"0  ", // converting to NomsValue counts as storage, thus we don't trim then
+			generateEnumType(t, 7),
+			uint64(3),
+			3,
 			false,
 		},
 		{
-			generateVarStringType(t, 80, false),
-			int64(28354),
-			"28354",
-			false,
-		},
-		{
-			&varStringType{sql.CreateLongText(sql.Collation_Default)},
-			float32(3724.75),
-			"3724.75",
-			false,
-		},
-		{
-			generateVarStringType(t, 80, false),
-			time.Date(2030, 1, 2, 4, 6, 3, 472382485, time.UTC),
-			"2030-01-02 04:06:03.472382",
-			false,
-		},
-		{
-			generateVarStringType(t, 2, true),
-			"yey",
-			"",
+			generateEnumType(t, 4),
+			"dog",
+			0,
 			true,
 		},
 		{
-			generateVarStringType(t, 2, true),
-			int32(382),
-			"",
+			generateEnumType(t, 3),
+			true,
+			0,
+			true,
+		},
+		{
+			generateEnumType(t, 10),
+			time.Unix(137849, 0),
+			0,
+			true,
+		},
+		{
+			generateEnumType(t, 5),
+			complex128(14i),
+			0,
 			true,
 		},
 	}
@@ -148,46 +141,46 @@ func TestVarStringConvertValueToNomsValue(t *testing.T) {
 	}
 }
 
-func TestVarStringFormatValue(t *testing.T) {
+func TestEnumFormatValue(t *testing.T) {
 	tests := []struct {
-		typ         *varStringType
-		input       types.String
+		typ         *enumType
+		input       types.Uint
 		output      string
 		expectedErr bool
 	}{
 		{
-			generateVarStringType(t, 10, false),
-			"0  ",
-			"0  ",
+			generateEnumType(t, 3),
+			1,
+			"aaaa",
 			false,
 		},
 		{
-			generateVarStringType(t, 10, true),
-			"0  ",
-			"0",
+			generateEnumType(t, 5),
+			2,
+			"aaab",
 			false,
 		},
 		{
-			generateVarStringType(t, 80, false),
-			"this is some text that will be returned",
-			"this is some text that will be returned",
+			generateEnumType(t, 8),
+			3,
+			"aaac",
 			false,
 		},
 		{
-			&varStringType{sql.CreateLongText(sql.Collation_Default)},
-			"  This is a sentence.  ",
-			"  This is a sentence.  ",
+			generateEnumType(t, 7),
+			7,
+			"aaag",
 			false,
 		},
 		{
-			generateVarStringType(t, 2, false),
-			"yay",
+			generateEnumType(t, 2),
+			0,
 			"",
 			true,
 		},
 		{
-			generateVarStringType(t, 2, true),
-			"yey",
+			generateEnumType(t, 3),
+			4,
 			"",
 			true,
 		},
@@ -206,47 +199,47 @@ func TestVarStringFormatValue(t *testing.T) {
 	}
 }
 
-func TestVarStringParseValue(t *testing.T) {
+func TestEnumParseValue(t *testing.T) {
 	tests := []struct {
-		typ         *varStringType
+		typ         *enumType
 		input       string
-		output      types.String
+		output      types.Uint
 		expectedErr bool
 	}{
 		{
-			generateVarStringType(t, 10, false),
-			"0  ",
-			"0  ",
+			generateEnumType(t, 3),
+			"aaaa",
+			1,
 			false,
 		},
 		{
-			generateVarStringType(t, 10, true),
-			"0  ",
-			"0  ", // converting to NomsValue counts as storage, thus we don't trim then
+			generateEnumType(t, 5),
+			"aaab",
+			2,
 			false,
 		},
 		{
-			generateVarStringType(t, 80, false),
-			"this is some text that will be returned",
-			"this is some text that will be returned",
+			generateEnumType(t, 8),
+			"aaac",
+			3,
 			false,
 		},
 		{
-			&varStringType{sql.CreateLongText(sql.Collation_Default)},
-			"  This is a sentence.  ",
-			"  This is a sentence.  ",
+			generateEnumType(t, 7),
+			"aaag",
+			7,
 			false,
 		},
 		{
-			generateVarStringType(t, 2, false),
-			"yay",
-			"",
+			generateEnumType(t, 2),
+			"dog",
+			0,
 			true,
 		},
 		{
-			generateVarStringType(t, 2, true),
-			"yey",
-			"",
+			generateEnumType(t, 3),
+			"aaad",
+			4,
 			true,
 		},
 	}

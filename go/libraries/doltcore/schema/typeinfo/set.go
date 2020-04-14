@@ -67,8 +67,8 @@ func CreateSetTypeFromParams(params map[string]string) (TypeInfo, error) {
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *setType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
-	if val, ok := v.(types.String); ok {
-		res, err := ti.sqlSetType.Convert(string(val))
+	if val, ok := v.(types.Uint); ok {
+		res, err := ti.sqlSetType.Unmarshal(uint64(val))
 		if err != nil {
 			return nil, fmt.Errorf(`"%v" cannot convert "%v" to value`, ti.String(), val)
 		}
@@ -85,15 +85,11 @@ func (ti *setType) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
 	if v == nil {
 		return types.NullValue, nil
 	}
-	strVal, err := ti.sqlSetType.Convert(v)
+	val, err := ti.sqlSetType.Marshal(v)
 	if err != nil {
 		return nil, err
 	}
-	val, ok := strVal.(string)
-	if ok {
-		return types.String(val), nil
-	}
-	return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
+	return types.Uint(val), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -158,22 +154,19 @@ func (ti *setType) IsValid(v types.Value) bool {
 
 // NomsKind implements TypeInfo interface.
 func (ti *setType) NomsKind() types.NomsKind {
-	return types.StringKind
+	return types.UintKind
 }
 
 // ParseValue implements TypeInfo interface.
 func (ti *setType) ParseValue(str *string) (types.Value, error) {
-	if str == nil || *str == "" {
+	if str == nil {
 		return types.NullValue, nil
 	}
-	strVal, err := ti.sqlSetType.Convert(*str)
+	val, err := ti.sqlSetType.Marshal(*str)
 	if err != nil {
 		return nil, err
 	}
-	if val, ok := strVal.(string); ok {
-		return types.String(val), nil
-	}
-	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
+	return types.Uint(val), nil
 }
 
 // String implements TypeInfo interface.

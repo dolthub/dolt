@@ -135,6 +135,29 @@ func generateVarBinaryType(t *testing.T, length int64, pad bool) *varBinaryType 
 	return &varBinaryType{sql.MustCreateBinary(sqltypes.VarBinary, length)}
 }
 
+func generateVarStringTypes(t *testing.T, numOfTypes uint16) []TypeInfo {
+	var res []TypeInfo
+	loop(t, 1, 500, numOfTypes, func(i int64) {
+		rts := false
+		if i%2 == 0 {
+			rts = true
+		}
+		res = append(res, generateVarStringType(t, i, rts))
+	})
+	return res
+}
+
+func generateVarStringType(t *testing.T, length int64, rts bool) *varStringType {
+	require.True(t, length > 0)
+	if rts {
+		t, err := sql.CreateStringWithDefaults(sqltypes.Char, length)
+		if err == nil {
+			return &varStringType{t}
+		}
+	}
+	return &varStringType{sql.MustCreateStringWithDefaults(sqltypes.VarChar, length)}
+}
+
 func loop(t *testing.T, start int64, endInclusive int64, numOfSteps uint16, loopedFunc func(int64)) {
 	require.True(t, endInclusive > start)
 	maxNumOfSteps := endInclusive - start + 1

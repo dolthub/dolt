@@ -17,7 +17,9 @@ package typeinfo
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
+	"github.com/shopspring/decimal"
 	"github.com/src-d/go-mysql-server/sql"
 
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -67,7 +69,7 @@ func CreateDecimalTypeFromParams(params map[string]string) (TypeInfo, error) {
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *decimalType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.String); ok {
-		res, err := ti.sqlDecimalType.Convert(string(val))
+		res, err := ti.unmarshal(string(val))
 		if err != nil {
 			return nil, fmt.Errorf(`"%v" cannot convert "%v" to value`, ti.String(), val)
 		}
@@ -84,15 +86,11 @@ func (ti *decimalType) ConvertValueToNomsValue(v interface{}) (types.Value, erro
 	if v == nil {
 		return types.NullValue, nil
 	}
-	strVal, err := ti.sqlDecimalType.Convert(v)
+	val, err := ti.marshal(v)
 	if err != nil {
 		return nil, err
 	}
-	val, ok := strVal.(string)
-	if ok {
-		return types.String(val), nil
-	}
-	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
+	return types.String(val), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -152,14 +150,11 @@ func (ti *decimalType) ParseValue(str *string) (types.Value, error) {
 	if str == nil || *str == "" {
 		return types.NullValue, nil
 	}
-	strVal, err := ti.sqlDecimalType.Convert(*str)
+	val, err := ti.marshal(*str)
 	if err != nil {
 		return nil, err
 	}
-	if val, ok := strVal.(string); ok {
-		return types.String(val), nil
-	}
-	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
+	return types.String(val), nil
 }
 
 // String implements TypeInfo interface.
@@ -170,4 +165,61 @@ func (ti *decimalType) String() string {
 // ToSqlType implements TypeInfo interface.
 func (ti *decimalType) ToSqlType() sql.Type {
 	return ti.sqlDecimalType
+}
+
+func (ti *decimalType) marshal(v interface{}) (string, error) {
+	precision := ti.sqlDecimalType.Precision()
+	scale := ti.sqlDecimalType.Scale()
+	// The goal here is to return a string that can be sorted regardless of value.
+	// For example, for DEC(4,2) let's say w == "-5.33", x == "-1.00", y == "2.20", z == "10.05".
+	// Attempting to sort these ascending as-is would give the order x,w,z,y (in go, - < 0).
+	// To fix this, we can shift up by the upperbound.
+	// This would then give us w == "4.67", x == "9.00", y == "102.20", z == "110.05"
+	// To make the strings of equal length, we can prepend zeros onto the originally-negative numbers.
+	// Our final values would w == "004.67", x == "009.00", y == "102.20", z == "110.05", which are sorted.
+	nullDecimal, err := ti.sqlDecimalType.ConvertToDecimal(v)
+	if err != nil {
+		return "", err
+	}
+	if !nullDecimal.Valid {
+		return "", sql.ErrMarshalNullDecimal.New()
+	}
+	dec := nullDecimal.Decimal
+	decStr := ti.sqlDecimalType.ExclusiveUpperBound().Add(dec).StringFixed(int32(scale))
+	if dec.Sign() < 0 && precision != scale {
+		if strings.Index(decStr, ".") != -1 {
+			decStr = strings.Repeat("0", int(precision)-len(decStr)+2) + decStr
+		} else {
+			decStr = strings.Repeat("0", int(precision)-len(decStr)+1) + decStr
+		}
+	}
+	return decStr, nil
+}
+
+func (ti *decimalType) unmarshal(v string) (string, error) {
+	if len(v) == 0 {
+		return "", sql.ErrMarshalNullDecimal.New()
+	}
+	var subtractor decimal.Decimal
+	var err error
+	if decIndex := strings.Index(v, "."); decIndex > 0 {
+		subtractor, err = decimal.NewFromString("1" + strings.Repeat("0", len(v[:decIndex])-1))
+		if err != nil {
+			return "", err
+		}
+	} else {
+		subtractor, err = decimal.NewFromString("1" + strings.Repeat("0", len(v)-1))
+		if err != nil {
+			return "", err
+		}
+	}
+	dec, err := decimal.NewFromString(v)
+	if err != nil {
+		return "", err
+	}
+	res, err := ti.sqlDecimalType.ConvertToDecimal(dec.Sub(subtractor))
+	if err != nil {
+		return "", err
+	}
+	return res.Decimal.StringFixed(int32(ti.sqlDecimalType.Scale())), nil
 }
