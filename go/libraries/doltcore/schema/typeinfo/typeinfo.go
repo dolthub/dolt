@@ -139,20 +139,12 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 	case sqltypes.Date:
 		return DateType, nil
 	case sqltypes.Time:
-		//TODO: determine the storage format
-		if fmt.Sprintf("a") != "" { // always evaluates to true, compiler won't complain about unreachable code
-			return nil, fmt.Errorf(`"%v" has not yet been implemented`, sqlType.String())
-		}
 		return TimeType, nil
 	case sqltypes.Datetime:
 		return DatetimeType, nil
 	case sqltypes.Year:
 		return YearType, nil
 	case sqltypes.Decimal:
-		//TODO: determine the storage format
-		if fmt.Sprintf("a") != "" { // always evaluates to true, compiler won't complain about unreachable code
-			return nil, fmt.Errorf(`"%v" has not yet been implemented`, sqlType.String())
-		}
 		decimalSQLType, ok := sqlType.(sql.DecimalType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "DecimalTypeIdentifier" from SQL basetype "Decimal"`)
@@ -213,20 +205,12 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		}
 		return &bitType{bitSQLType}, nil
 	case sqltypes.Enum:
-		//TODO: determine the storage format
-		if fmt.Sprintf("a") != "" { // always evaluates to true, compiler won't complain about unreachable code
-			return nil, fmt.Errorf(`"%v" has not yet been implemented`, sqlType.String())
-		}
 		enumSQLType, ok := sqlType.(sql.EnumType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "EnumTypeIdentifier" from SQL basetype "Enum"`)
 		}
 		return &enumType{enumSQLType}, nil
 	case sqltypes.Set:
-		//TODO: determine the storage format
-		if fmt.Sprintf("a") != "" { // always evaluates to true, compiler won't complain about unreachable code
-			return nil, fmt.Errorf(`"%v" has not yet been implemented`, sqlType.String())
-		}
 		setSQLType, ok := sqlType.(sql.SetType)
 		if !ok {
 			return nil, fmt.Errorf(`expected "SetTypeIdentifier" from SQL basetype "Set"`)

@@ -19,53 +19,58 @@ import (
 	"testing"
 	"time"
 
-	"github.com/src-d/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-func TestVarStringConvertNomsValueToValue(t *testing.T) {
+func TestSetConvertNomsValueToValue(t *testing.T) {
 	tests := []struct {
-		typ         *varStringType
-		input       types.String
+		typ         *setType
+		input       types.Uint
 		output      string
 		expectedErr bool
 	}{
 		{
-			generateVarStringType(t, 10, false),
-			"0  ",
-			"0  ",
-			false,
-		},
-		{
-			generateVarStringType(t, 10, true),
-			"0  ",
-			"0",
-			false,
-		},
-		{
-			generateVarStringType(t, 80, false),
-			"this is some text that will be returned",
-			"this is some text that will be returned",
-			false,
-		},
-		{
-			&varStringType{sql.CreateLongText(sql.Collation_Default)},
-			"  This is a sentence.  ",
-			"  This is a sentence.  ",
-			false,
-		},
-		{
-			generateVarStringType(t, 2, false),
-			"yay",
+			generateSetType(t, 2),
+			0,
 			"",
-			true,
+			false,
 		},
 		{
-			generateVarStringType(t, 2, true),
-			"yey",
+			generateSetType(t, 3),
+			1,
+			"aa",
+			false,
+		},
+		{
+			generateSetType(t, 5),
+			2,
+			"ab",
+			false,
+		},
+		{
+			generateSetType(t, 8),
+			3,
+			"aa,ab",
+			false,
+		},
+		{
+			generateSetType(t, 7),
+			4,
+			"ac",
+			false,
+		},
+		{
+			generateSetType(t, 4),
+			7,
+			"aa,ab,ac",
+			false,
+		},
+		{
+			generateSetType(t, 3),
+			8,
 			"",
 			true,
 		},
@@ -84,53 +89,41 @@ func TestVarStringConvertNomsValueToValue(t *testing.T) {
 	}
 }
 
-func TestVarStringConvertValueToNomsValue(t *testing.T) {
+func TestSetConvertValueToNomsValue(t *testing.T) {
 	tests := []struct {
-		typ         *varStringType
+		typ         *setType
 		input       interface{}
-		output      types.String
+		output      types.Uint
 		expectedErr bool
 	}{
 		{
-			generateVarStringType(t, 10, false),
-			"0  ",
-			"0  ",
+			generateSetType(t, 4),
+			"aa,ab",
+			3,
 			false,
 		},
 		{
-			generateVarStringType(t, 10, true),
-			[]byte("0  "),
-			"0  ", // converting to NomsValue counts as storage, thus we don't trim then
+			generateSetType(t, 7),
+			uint64(3),
+			3,
 			false,
 		},
 		{
-			generateVarStringType(t, 80, false),
-			int64(28354),
-			"28354",
-			false,
-		},
-		{
-			&varStringType{sql.CreateLongText(sql.Collation_Default)},
-			float32(3724.75),
-			"3724.75",
-			false,
-		},
-		{
-			generateVarStringType(t, 80, false),
-			time.Date(2030, 1, 2, 4, 6, 3, 472382485, time.UTC),
-			"2030-01-02 04:06:03.472382",
-			false,
-		},
-		{
-			generateVarStringType(t, 2, true),
-			"yey",
-			"",
+			generateSetType(t, 3),
+			true,
+			0,
 			true,
 		},
 		{
-			generateVarStringType(t, 2, true),
-			int32(382),
-			"",
+			generateSetType(t, 10),
+			time.Unix(137849, 0),
+			0,
+			true,
+		},
+		{
+			generateSetType(t, 5),
+			complex128(14i),
+			0,
 			true,
 		},
 	}
@@ -148,46 +141,52 @@ func TestVarStringConvertValueToNomsValue(t *testing.T) {
 	}
 }
 
-func TestVarStringFormatValue(t *testing.T) {
+func TestSetFormatValue(t *testing.T) {
 	tests := []struct {
-		typ         *varStringType
-		input       types.String
+		typ         *setType
+		input       types.Uint
 		output      string
 		expectedErr bool
 	}{
 		{
-			generateVarStringType(t, 10, false),
-			"0  ",
-			"0  ",
-			false,
-		},
-		{
-			generateVarStringType(t, 10, true),
-			"0  ",
-			"0",
-			false,
-		},
-		{
-			generateVarStringType(t, 80, false),
-			"this is some text that will be returned",
-			"this is some text that will be returned",
-			false,
-		},
-		{
-			&varStringType{sql.CreateLongText(sql.Collation_Default)},
-			"  This is a sentence.  ",
-			"  This is a sentence.  ",
-			false,
-		},
-		{
-			generateVarStringType(t, 2, false),
-			"yay",
+			generateSetType(t, 2),
+			0,
 			"",
-			true,
+			false,
 		},
 		{
-			generateVarStringType(t, 2, true),
-			"yey",
+			generateSetType(t, 3),
+			1,
+			"aa",
+			false,
+		},
+		{
+			generateSetType(t, 5),
+			2,
+			"ab",
+			false,
+		},
+		{
+			generateSetType(t, 8),
+			3,
+			"aa,ab",
+			false,
+		},
+		{
+			generateSetType(t, 7),
+			4,
+			"ac",
+			false,
+		},
+		{
+			generateSetType(t, 4),
+			7,
+			"aa,ab,ac",
+			false,
+		},
+		{
+			generateSetType(t, 3),
+			8,
 			"",
 			true,
 		},
@@ -206,47 +205,53 @@ func TestVarStringFormatValue(t *testing.T) {
 	}
 }
 
-func TestVarStringParseValue(t *testing.T) {
+func TestSetParseValue(t *testing.T) {
 	tests := []struct {
-		typ         *varStringType
+		typ         *setType
 		input       string
-		output      types.String
+		output      types.Uint
 		expectedErr bool
 	}{
 		{
-			generateVarStringType(t, 10, false),
-			"0  ",
-			"0  ",
-			false,
-		},
-		{
-			generateVarStringType(t, 10, true),
-			"0  ",
-			"0  ", // converting to NomsValue counts as storage, thus we don't trim then
-			false,
-		},
-		{
-			generateVarStringType(t, 80, false),
-			"this is some text that will be returned",
-			"this is some text that will be returned",
-			false,
-		},
-		{
-			&varStringType{sql.CreateLongText(sql.Collation_Default)},
-			"  This is a sentence.  ",
-			"  This is a sentence.  ",
-			false,
-		},
-		{
-			generateVarStringType(t, 2, false),
-			"yay",
+			generateSetType(t, 2),
 			"",
-			true,
+			0,
+			false,
 		},
 		{
-			generateVarStringType(t, 2, true),
-			"yey",
-			"",
+			generateSetType(t, 3),
+			"aa",
+			1,
+			false,
+		},
+		{
+			generateSetType(t, 5),
+			"ab",
+			2,
+			false,
+		},
+		{
+			generateSetType(t, 8),
+			"aa,ab",
+			3,
+			false,
+		},
+		{
+			generateSetType(t, 7),
+			"ac",
+			4,
+			false,
+		},
+		{
+			generateSetType(t, 4),
+			"aa,ab,ac",
+			7,
+			false,
+		},
+		{
+			generateSetType(t, 3),
+			"ad",
+			0,
 			true,
 		},
 	}
