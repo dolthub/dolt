@@ -23,6 +23,7 @@ import (
 )
 
 const (
+	homeEnvVar         = "HOME"
 	doltRootPathEnvVar = "DOLT_ROOT_PATH"
 	credsDir           = "creds"
 
@@ -46,7 +47,9 @@ func GetCurrentUserHomeDir() (string, error) {
 	if doltRootPath, ok := os.LookupEnv(doltRootPathEnvVar); ok && doltRootPath != "" {
 		return doltRootPath, nil
 	}
-
+	if homeEnvPath, ok := os.LookupEnv(homeEnvVar); ok && homeEnvPath != "" {
+		return homeEnvPath, nil
+	}
 	if usr, err := user.Current(); err != nil {
 		return "", err
 	} else {

@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 
@@ -1666,6 +1667,30 @@ func TestMapOrdering(t *testing.T) {
 			Timestamp(time.Unix(7000, 0).UTC()),
 			Timestamp(time.Unix(8000, 0).UTC()),
 			Timestamp(time.Unix(9000, 0).UTC()),
+		},
+	)
+
+	testMapOrder(assert, vrw,
+		PrimitiveTypeMap[DecimalKind], PrimitiveTypeMap[StringKind],
+		[]Value{
+			Decimal(decimal.RequireFromString("-99.125434")), String("unused"),
+			Decimal(decimal.RequireFromString("482.124")), String("unused"),
+			Decimal(decimal.RequireFromString("858093.12654")), String("unused"),
+			Decimal(decimal.RequireFromString("1")), String("unused"),
+			Decimal(decimal.RequireFromString("-99.125432")), String("unused"),
+			Decimal(decimal.RequireFromString("0")), String("unused"),
+			Decimal(decimal.RequireFromString("-123845")), String("unused"),
+			Decimal(decimal.RequireFromString("-99.125433")), String("unused"),
+		},
+		[]Value{
+			Decimal(decimal.RequireFromString("-123845")),
+			Decimal(decimal.RequireFromString("-99.125434")),
+			Decimal(decimal.RequireFromString("-99.125433")),
+			Decimal(decimal.RequireFromString("-99.125432")),
+			Decimal(decimal.RequireFromString("0")),
+			Decimal(decimal.RequireFromString("1")),
+			Decimal(decimal.RequireFromString("482.124")),
+			Decimal(decimal.RequireFromString("858093.12654")),
 		},
 	)
 }

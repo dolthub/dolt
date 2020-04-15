@@ -531,7 +531,7 @@ func checkSchema(t *testing.T, r *doltdb.RootValue, tableName string, expectedSc
 }
 
 func checkRows(t *testing.T, ddb *doltdb.DoltDB, root *doltdb.RootValue, tableName string, sch schema.Schema, selectQuery string, expectedRows []row.Row) {
-	sqlDb := dsqle.NewDatabase("dolt", root, ddb, nil)
+	sqlDb := dsqle.NewDatabase("dolt", root, ddb, nil, nil)
 	engine, sqlCtx, err := dsqle.NewTestEngine(context.Background(), sqlDb, root)
 	require.NoError(t, err)
 

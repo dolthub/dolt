@@ -190,7 +190,7 @@ func isNecessary(srcSch, destSch schema.Schema, destToSrc map[uint64]uint64) (bo
 			return true, nil
 		}
 
-		if srcCol.Kind != destCol.Kind {
+		if !srcCol.TypeInfo.Equals(destCol.TypeInfo) {
 			return true, nil
 		}
 	}

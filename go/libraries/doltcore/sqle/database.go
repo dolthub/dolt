@@ -37,15 +37,15 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
-type batchMode bool
+type commitBehavior int8
 
 var ErrInvalidTableName = errors.NewKind("Invalid table name %s. Table names must match the regular expression " + doltdb.TableNameRegexStr)
 var ErrReservedTableName = errors.NewKind("Invalid table name %s. Table names beginning with `dolt_` are reserved for internal use")
 var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables cannot be dropped or altered")
 
 const (
-	batched batchMode = true
-	single  batchMode = false
+	batched commitBehavior = iota
+	single
 )
 
 type tableCache struct {
@@ -106,7 +106,8 @@ type Database struct {
 	defRoot   *doltdb.RootValue
 	ddb       *doltdb.DoltDB
 	rsr       env.RepoStateReader
-	batchMode batchMode
+	rsw       env.RepoStateWriter
+	batchMode commitBehavior
 	tc        *tableCache
 }
 
@@ -117,12 +118,13 @@ var _ sql.TableCreator = Database{}
 var _ sql.TableRenamer = Database{}
 
 // NewDatabase returns a new dolt database to use in queries.
-func NewDatabase(name string, defRoot *doltdb.RootValue, ddb *doltdb.DoltDB, rsr env.RepoStateReader) Database {
+func NewDatabase(name string, defRoot *doltdb.RootValue, ddb *doltdb.DoltDB, rsr env.RepoStateReader, rsw env.RepoStateWriter) Database {
 	return Database{
 		name:      name,
 		defRoot:   defRoot,
 		ddb:       ddb,
 		rsr:       rsr,
+		rsw:       rsw,
 		batchMode: single,
 		tc:        &tableCache{&sync.Mutex{}, make(map[*doltdb.RootValue]map[string]sql.Table)},
 	}
@@ -130,12 +132,13 @@ func NewDatabase(name string, defRoot *doltdb.RootValue, ddb *doltdb.DoltDB, rsr
 
 // NewBatchedDatabase returns a new dolt database executing in batch insert mode. Integrators must call Flush() to
 // commit any outstanding edits.
-func NewBatchedDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB, rsr env.RepoStateReader) Database {
+func NewBatchedDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB, rsr env.RepoStateReader, rsw env.RepoStateWriter) Database {
 	return Database{
 		name:      name,
 		defRoot:   root,
 		ddb:       ddb,
 		rsr:       rsr,
+		rsw:       rsw,
 		batchMode: batched,
 		tc:        &tableCache{&sync.Mutex{}, make(map[*doltdb.RootValue]map[string]sql.Table)},
 	}
@@ -438,7 +441,7 @@ func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 			return nil, err
 		}
 
-		dsess.dbRoots[db.name] = dbRoot{hashStr, newRoot}
+		dsess.dbRoots[db.name] = dbRoot{hashStr, newRoot, db.ddb, db.rsw}
 		return newRoot, nil
 	}
 }
@@ -446,15 +449,6 @@ func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 // Set a new root value for the database. Can be used if the dolt working
 // set value changes outside of the basic SQL execution engine.
 func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
-	// Need to decide on what behavior we want here.  Currently all sql-server processing is done
-	// in memory and is never written to disk.  Can leave it like this and commit as part of a
-	// transaction, or something similar.
-	/*h, err := db.ddb.WriteRootValue(ctx, newRoot)
-
-	if err != nil {
-		return err
-	}*/
-
 	h, err := newRoot.HashOf()
 
 	if err != nil {
@@ -466,9 +460,21 @@ func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 	ctx.Session.Set(key, hashType, hashStr)
 
 	dsess := DSessFromSess(ctx.Session)
-	dsess.dbRoots[db.name] = dbRoot{hashStr, newRoot}
+	dsess.dbRoots[db.name] = dbRoot{hashStr, newRoot, db.ddb, db.rsw}
 
 	return nil
+}
+
+// LoadRootFromRepoState loads the root value from the repo state's working hash, then calls SetRoot with the loaded
+// root value.
+func (db Database) LoadRootFromRepoState(ctx *sql.Context) error {
+	workingHash := db.rsr.WorkingHash()
+	root, err := db.ddb.ReadRootValue(ctx, workingHash)
+	if err != nil {
+		return err
+	}
+
+	return db.SetRoot(ctx, root)
 }
 
 // DropTable drops the table with the name given
@@ -719,7 +725,7 @@ func RegisterSchemaFragments(ctx *sql.Context, db Database, root *doltdb.RootVal
 			if err != nil {
 				parseErrors = append(parseErrors, err)
 			} else {
-				ctx.Register(db.Name(), sql.NewView(name, cv.(*plan.CreateView).Definition))
+				ctx.Register(db.Name(), cv.(*plan.CreateView).Definition.AsView())
 			}
 		}
 		r, err = iter.Next()

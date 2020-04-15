@@ -49,7 +49,9 @@ Currently, only {{.EmphasisLeft}}SELECT{{.EmphasisRight}} statements are operati
 	},
 }
 
-type SqlServerCmd struct{}
+type SqlServerCmd struct {
+	VersionStr string
+}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd SqlServerCmd) Name() string {
@@ -95,11 +97,12 @@ func (cmd SqlServerCmd) RequiresRepo() bool {
 
 // Exec executes the command
 func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	return SqlServerImpl(ctx, commandStr, args, dEnv, nil)
+	return startServer(ctx, commandStr, cmd.VersionStr, args, dEnv, nil)
 }
 
-func SqlServerImpl(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
+func startServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
 	serverConfig := DefaultServerConfig()
+	serverConfig.Version = versionStr
 
 	ap := createArgParser(serverConfig)
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlServerDocs, ap))

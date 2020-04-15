@@ -160,6 +160,38 @@ teardown() {
     [[ "$output" =~ "not found" ]] || false
 }
 
+@test "sql output formats" {
+    dolt sql <<SQL
+    CREATE TABLE test (
+    a int primary key,
+    b float,
+    c varchar(80),
+    d datetime
+);
+SQL
+    dolt sql <<SQL
+    insert into test values (1, 1.5, "1", "2020-01-01");
+    insert into test values (2, 2.5, "2", "2020-02-02");
+    insert into test values (3, NULL, "3", "2020-03-03");
+    insert into test values (4, 4.5, NULL, "2020-04-04");
+    insert into test values (5, 5.5, "5", NULL);
+SQL
+
+    run dolt sql -r csv -q "select * from test order by a"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "a,b,c,d" ]] || false
+    [[ "$output" =~ '1,1.5,1,2020-01-01 00:00:00 +0000 UTC' ]] || false
+    [[ "$output" =~ '2,2.5,2,2020-02-02 00:00:00 +0000 UTC' ]] || false
+    [[ "$output" =~ '3,,3,2020-03-03 00:00:00 +0000 UTC' ]] || false
+    [[ "$output" =~ '4,4.5,,2020-04-04 00:00:00 +0000 UTC' ]] || false
+    [[ "$output" =~ '5,5.5,5,' ]] || false
+    [ "${#lines[@]}" -eq 6 ]
+
+    run dolt sql -r json -q "select * from test order by a"
+    [ $status -eq 0 ]
+    [ "$output" == '{"rows": [{"a":1,"b":1.5,"c":"1","d":{}},{"a":2,"b":2.5,"c":"2","d":{}},{"a":3,"c":"3","d":{}},{"a":4,"b":4.5,"d":{}},{"a":5,"b":5.5,"c":"5"}]}' ]
+}
+
 @test "sql ambiguous column name" {
     run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where c1=0"
     [ "$status" -eq 1 ]

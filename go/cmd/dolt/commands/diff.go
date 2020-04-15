@@ -710,7 +710,7 @@ func buildPipeline(dArgs *diffArgs, joiner *rowconv.Joiner, ds *diff.DiffSplitte
 		nullPrinter := nullprinter.NewNullPrinter(untypedUnionSch)
 		fwtTr := fwt.NewAutoSizingFWTTransformer(untypedUnionSch, fwt.HashFillWhenTooLong, 1000)
 		transforms.AppendTransforms(
-			pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow),
+			pipeline.NewNamedTransform(nullprinter.NullPrintingStage, nullPrinter.ProcessRow),
 			pipeline.NamedTransform{Name: fwtStageName, Func: fwtTr.TransformToFWT},
 		)
 	}

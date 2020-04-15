@@ -12,14 +12,14 @@ teardown() {
 @test "types: BIGINT" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v BIGINT COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v BIGINT,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` BIGINT COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` BIGINT" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 4611686018427387903);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -37,14 +37,14 @@ SQL
 @test "types: BIGINT UNSIGNED" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v BIGINT UNSIGNED COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v BIGINT UNSIGNED,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` BIGINT UNSIGNED COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` BIGINT UNSIGNED" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 9223372036854775807);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -64,14 +64,14 @@ SQL
     skip "This is not yet persisted in dolt"
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v BINARY(10) COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v BINARY(10),
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` BINARY(10) COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` BINARY(10)" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -87,14 +87,14 @@ SQL
 @test "types: BIT(10)" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v BIT(10) COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v BIT(10),
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` BIT(10) COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` BIT(10)" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 511);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -113,14 +113,14 @@ SQL
     skip "This is not yet persisted in dolt"
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v BLOB COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v BLOB,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` BLOB COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` BLOB" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -131,17 +131,30 @@ SQL
     [[ "${lines[3]}" =~ " 1234567890 " ]] || false
 }
 
-@test "types: BOOLEAN" {
+@test "types: BOOL" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v BOOLEAN COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v BOOL,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` TINYINT COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` TINYINT" ]] || false
+}
+
+@test "types: BOOLEAN" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  v BOOLEAN,
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "\`v\` TINYINT" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, true);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -155,14 +168,14 @@ SQL
 @test "types: CHAR(10)" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v CHAR(10) COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v CHAR(10),
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` CHAR(10) COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` CHAR(10)" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -175,17 +188,43 @@ SQL
     [ "$status" -eq "1" ]
 }
 
-@test "types: DATE" {
+@test "types: CHARACTER(10)" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v DATE COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v CHARACTER(10),
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` DATE COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` CHAR(10)" ]] || false
+}
+
+@test "types: CHARACTER VARYING(10)" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  v CHARACTER VARYING(10),
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "\`v\` VARCHAR(10)" ]] || false
+}
+
+@test "types: DATE" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  v DATE,
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "\`v\` DATE" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, '2020-02-10 11:12:13.456789');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -207,14 +246,14 @@ SQL
 @test "types: DATETIME" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v DATETIME COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v DATETIME,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` DATETIME COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` DATETIME" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, '2020-02-10 11:12:13.456789');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -233,46 +272,82 @@ SQL
     [ "$status" -eq "1" ]
 }
 
-@test "types: DECIMAL" {
-    skip "This is not yet persisted in dolt"
+@test "types: DEC" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v DECIMAL COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v DEC,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` DECIMAL(10, 0) COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` DECIMAL(10,0)" ]] || false
+}
+
+@test "types: DEC(9)" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  v DEC(9),
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "\`v\` DECIMAL(9,0)" ]] || false
+}
+
+@test "types: DEC(9,5)" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  v DEC(9,5),
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "\`v\` DECIMAL(9,5)" ]] || false
+}
+
+@test "types: DECIMAL" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  v DECIMAL,
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "\`v\` DECIMAL(10,0)" ]] || false
 }
 
 @test "types: DECIMAL(9)" {
-    skip "This is not yet persisted in dolt"
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v DECIMAL(9) COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v DECIMAL(9),
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` DECIMAL(9, 0) COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` DECIMAL(9,0)" ]] || false
 }
 
-@test "types: DECIMAL(9, 5)" {
-    skip "This is not yet persisted in dolt"
+@test "types: DECIMAL(9,5)" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v DECIMAL(10, 5) COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v DECIMAL(9,5),
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` DECIMAL(10, 5) COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` DECIMAL(9,5)" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 1234.56789);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -288,14 +363,14 @@ SQL
 @test "types: DOUBLE" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v DOUBLE COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v DOUBLE,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` DOUBLE COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` DOUBLE" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 1.25);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -315,18 +390,30 @@ SQL
     [ "$status" -eq "1" ]
 }
 
-@test "types: ENUM('a','b','c')" {
-    skip "This is not yet persisted in dolt"
+@test "types: DOUBLE PRECISION" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v ENUM('a','b','c') COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v DOUBLE PRECISION,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` ENUM('a','b','c') COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` DOUBLE" ]] || false
+}
+
+@test "types: ENUM('a','b','c')" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  v ENUM('a','b','c'),
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "\`v\` ENUM('a','b','c')" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 'a');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -341,17 +428,56 @@ SQL
     [ "$status" -eq "1" ]
 }
 
-@test "types: FLOAT" {
+@test "types: FIXED" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v FLOAT COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v FIXED,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` FLOAT COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` DECIMAL(10,0)" ]] || false
+}
+
+@test "types: FIXED(9)" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  v FIXED(9),
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "\`v\` DECIMAL(9,0)" ]] || false
+}
+
+@test "types: FIXED(9,5)" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  v FIXED(9,5),
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "\`v\` DECIMAL(9,5)" ]] || false
+}
+
+@test "types: FLOAT" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  v FLOAT,
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "\`v\` FLOAT" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 1.25);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -374,14 +500,14 @@ SQL
 @test "types: INT" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v INT COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v INT,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` INT COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` INT" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 1073741823);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -399,14 +525,14 @@ SQL
 @test "types: INT UNSIGNED" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v INT UNSIGNED COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v INT UNSIGNED,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` INT UNSIGNED COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` INT UNSIGNED" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 2147483647);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -424,41 +550,67 @@ SQL
 @test "types: INTEGER" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v INTEGER COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v INTEGER,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` INT COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` INT" ]] || false
 }
 
 @test "types: INTEGER UNSIGNED" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v INTEGER UNSIGNED COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v INTEGER UNSIGNED,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` INT UNSIGNED COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` INT UNSIGNED" ]] || false
+}
+
+@test "types: LONG" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  v LONG,
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "\`v\` MEDIUMTEXT" ]] || false
+}
+
+@test "types: LONG VARCHAR" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  v LONG VARCHAR,
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "\`v\` MEDIUMTEXT" ]] || false
 }
 
 @test "types: LONGBLOB" {
     skip "This is not yet persisted in dolt"
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v LONGBLOB COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v LONGBLOB,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` LONGBLOB COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` LONGBLOB" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -472,14 +624,14 @@ SQL
 @test "types: LONGTEXT" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v LONGTEXT COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v LONGTEXT,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` LONGTEXT COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` LONGTEXT" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -494,14 +646,14 @@ SQL
     skip "This is not yet persisted in dolt"
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v MEDIUMBLOB COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v MEDIUMBLOB,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` MEDIUMBLOB COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` MEDIUMBLOB" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -515,14 +667,14 @@ SQL
 @test "types: MEDIUMINT" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v MEDIUMINT COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v MEDIUMINT,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` MEDIUMINT COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` MEDIUMINT" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 4194303);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -540,14 +692,14 @@ SQL
 @test "types: MEDIUMINT UNSIGNED" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v MEDIUMINT UNSIGNED COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v MEDIUMINT UNSIGNED,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` MEDIUMINT UNSIGNED COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` MEDIUMINT UNSIGNED" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 8388607);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -565,14 +717,14 @@ SQL
 @test "types: MEDIUMTEXT" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v MEDIUMTEXT COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v MEDIUMTEXT,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` MEDIUMTEXT COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` MEDIUMTEXT" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -583,31 +735,147 @@ SQL
     [[ "${lines[3]}" =~ " 1234567890 " ]] || false
 }
 
+@test "types: NATIONAL CHAR(10)" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  v NATIONAL CHAR(10),
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "\`v\` CHAR(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci" ]] || false
+}
+
+@test "types: NATIONAL CHARACTER(10)" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  v NATIONAL CHARACTER(10),
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "\`v\` CHAR(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci" ]] || false
+}
+
+@test "types: NATIONAL CHARACTER VARYING(10)" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  v NATIONAL CHARACTER VARYING(10),
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "\`v\` VARCHAR(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci" ]] || false
+}
+
+@test "types: NATIONAL VARCHAR(10)" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  v NATIONAL VARCHAR(10),
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "\`v\` VARCHAR(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci" ]] || false
+}
+
+@test "types: NCHAR(10)" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  v NCHAR(10),
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "\`v\` CHAR(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci" ]] || false
+}
+
+@test "types: NVARCHAR(10)" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  v NVARCHAR(10),
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "\`v\` VARCHAR(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_general_ci" ]] || false
+}
+
+@test "types: NUMERIC" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  v NUMERIC,
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "\`v\` DECIMAL(10,0)" ]] || false
+}
+
+@test "types: NUMERIC(9)" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  v NUMERIC(9),
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "\`v\` DECIMAL(9,0)" ]] || false
+}
+
+@test "types: NUMERIC(9,5)" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  v NUMERIC(9,5),
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "\`v\` DECIMAL(9,5)" ]] || false
+}
+
 @test "types: REAL" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v REAL COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v REAL,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` DOUBLE COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` DOUBLE" ]] || false
 }
 
 @test "types: SET('a','b','c')" {
-    skip "This is not yet persisted in dolt"
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v SET('a','b','c') COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v SET('a','b','c'),
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` SET('a','b','c') COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` SET('a','b','c')" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 'b,a');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -626,14 +894,14 @@ SQL
 @test "types: SMALLINT" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v SMALLINT COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v SMALLINT,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` SMALLINT COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` SMALLINT" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 16383);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -651,14 +919,14 @@ SQL
 @test "types: SMALLINT UNSIGNED" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v SMALLINT UNSIGNED COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v SMALLINT UNSIGNED,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` SMALLINT UNSIGNED COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` SMALLINT UNSIGNED" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 32767);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -676,14 +944,14 @@ SQL
 @test "types: TEXT" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v TEXT COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v TEXT,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` TEXT COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` TEXT" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -695,17 +963,16 @@ SQL
 }
 
 @test "types: TIME" {
-    skip "This is not yet persisted in dolt"
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v TIME COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v TIME,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` TIME COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` TIME" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, '11:22:33.444444');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -727,14 +994,14 @@ SQL
 @test "types: TIMESTAMP" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v TIMESTAMP COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v TIMESTAMP,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` TIMESTAMP COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` TIMESTAMP" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, '2020-02-10 11:12:13.456789');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -757,14 +1024,14 @@ SQL
     skip "This is not yet persisted in dolt"
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v TINYBLOB COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v TINYBLOB,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` TINYBLOB COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` TINYBLOB" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -778,14 +1045,14 @@ SQL
 @test "types: TINYINT" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v TINYINT COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v TINYINT,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` TINYINT COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` TINYINT" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 63);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -803,14 +1070,14 @@ SQL
 @test "types: TINYINT UNSIGNED" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v TINYINT UNSIGNED COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v TINYINT UNSIGNED,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` TINYINT UNSIGNED COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` TINYINT UNSIGNED" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 127);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -828,14 +1095,14 @@ SQL
 @test "types: TINYTEXT" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v TINYTEXT COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v TINYTEXT,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` TINYTEXT COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` TINYTEXT" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -850,14 +1117,14 @@ SQL
     skip "This is not yet persisted in dolt"
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v VARBINARY(10) COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v VARBINARY(10),
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` VARBINARY(10) COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` VARBINARY(10)" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -873,14 +1140,14 @@ SQL
 @test "types: VARCHAR(10)" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v VARCHAR(10) COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v VARCHAR(10),
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` VARCHAR(10) COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` VARCHAR(10)" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -893,17 +1160,17 @@ SQL
     [ "$status" -eq "1" ]
 }
 
-@test "types: VARCHAR(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin" {
+@test "types: VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v VARCHAR(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v VARCHAR(10) CHARACTER SET utf32 COLLATE utf32_general_ci,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` VARCHAR(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` VARCHAR(10) CHARACTER SET utf32 COLLATE utf32_general_ci" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 'abcdefg');"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
@@ -919,14 +1186,14 @@ SQL
 @test "types: YEAR" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  v YEAR COMMENT 'tag:1',
+  pk BIGINT NOT NULL,
+  v YEAR,
   PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v\` YEAR COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`v\` YEAR" ]] || false
     dolt sql -q "INSERT INTO test VALUES (1, 1901);"
     run dolt sql -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
