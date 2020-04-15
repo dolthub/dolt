@@ -39,7 +39,7 @@ const diffBufSize = 4096
 // { tableName -> { oldTag -> newTag }}
 type TagMapping map[string]map[uint64]uint64
 
-// NeedsUniqueTagMigration checks if a repo was created before the unique tags constraint and migrates it if necessary.
+// NeedsUniqueTagMigration checks if a repo needs a unique tags migration
 func NeedsUniqueTagMigration(ctx context.Context, ddb *doltdb.DoltDB) (bool, error) {
 	bb, err := ddb.GetBranches(ctx)
 
@@ -58,6 +58,16 @@ func NeedsUniqueTagMigration(ctx context.Context, ddb *doltdb.DoltDB) (bool, err
 
 		if err != nil {
 			return false, err
+		}
+
+		// check if this head commit is an init commit
+		n, err := c.NumParents()
+		if err != nil {
+			return false, err
+		}
+		if n == 0 {
+			// init commits don't need migration
+			continue
 		}
 
 		r, err := c.GetRootValue()
