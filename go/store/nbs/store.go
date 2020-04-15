@@ -867,7 +867,7 @@ func (nbs *NomsBlockStore) StatsSummary() string {
 // tableFile is our implementation of TableFile.
 type tableFile struct {
 	info TableSpecInfo
-	open func()(io.ReadCloser, error)
+	open func() (io.ReadCloser, error)
 }
 
 // FileID gets the id of the file
@@ -933,7 +933,7 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []TableFile,
 }
 
 func (nbs *NomsBlockStore) chunkSourcesByAddr() (map[addr]chunkSource, error) {
-	css := make(map[addr]chunkSource, len(nbs.tables.upstream) + len(nbs.tables.novel))
+	css := make(map[addr]chunkSource, len(nbs.tables.upstream)+len(nbs.tables.novel))
 	for _, cs := range nbs.tables.upstream {
 		a, err := cs.hash()
 		if err != nil {
