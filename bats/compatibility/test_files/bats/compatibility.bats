@@ -163,3 +163,17 @@ teardown() {
 
     dolt sql -q 'drop table abc2'
 }
+
+
+@test "dolt migrate no-data" {
+    # this will fail for older dolt versions but BATS will swallow the error
+    run dolt migrate
+
+    dolt checkout no-data
+    run dolt sql -q 'show tables;'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+-------+" ]] || false
+    [[ "$output" =~ "| Table |" ]] || false
+    [[ "$output" =~ "+-------+" ]] || false
+    [[ "$output" =~ "+-------+" ]] || false
+}

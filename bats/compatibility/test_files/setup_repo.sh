@@ -7,6 +7,8 @@ cd "$1"
 
 dolt init
 
+dolt branch no-data
+
 dolt sql <<SQL
 CREATE TABLE abc (
   pk BIGINT NOT NULL COMMENT 'tag:0',
