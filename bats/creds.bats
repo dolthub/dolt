@@ -89,26 +89,26 @@ teardown() {
 }
 
 @test "can import cred from good jwk file" {
-    dolt creds import `batshelper creds/known-good.jwk`
+    dolt creds import `batshelper known-good.jwk`
 }
 
 @test "can import cred from good jwk stdin" {
-    dolt creds import <`batshelper creds/known-good.jwk`
+    dolt creds import <"$BATS_TEST_DIRNAME/helper/known-good.jwk"
 }
 
 @test "import cred of corrupted jwk from file fails" {
-    run dolt creds import `batshelper creds/known-truncated.jwk`
+    run dolt creds import `batshelper known-truncated.jwk`
     [ "$status" -eq 1 ]
-    run dolt creds import `batshelper creds/known-decapitated.jwk`
+    run dolt creds import `batshelper known-decapitated.jwk`
     [ "$status" -eq 1 ]
     run dolt creds import does-not-exist
     [ "$status" -eq 1 ]
 }
 
 @test "import cred of corrupted jwk from stdin fails" {
-    run dolt creds import <`batshelper creds/known-truncated.jwk` 
+    run dolt creds import <"$BATS_TEST_DIRNAME/helper/known-truncated.jwk"
     [ "$status" -eq 1 ]
-    run dolt creds import <`batshelper creds/known-decapitated.jwk`
+    run dolt creds import <"$BATS_TEST_DIRNAME/helper/known-decapitated.jwk"
     [ "$status" -eq 1 ]
     run dolt creds import </dev/null
     [ "$status" -eq 1 ]
@@ -116,6 +116,6 @@ teardown() {
 
 @test "import cred with already used cred does not replace used cred" {
     pubkey=`dolt creds new | grep 'pub key:' | awk '{print $3}'`
-    dolt creds import `batshelper creds/known-good.jwk`
+    dolt creds import `batshelper known-good.jwk`
     dolt creds ls -v | grep '*' | grep "$pubkey"
 }
