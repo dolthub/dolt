@@ -38,15 +38,14 @@ pipeline {
             }
         }
         failure {
-            emailext body: "${currentBuild.currentResult}: Job ${env.JOB_NAME} build ${env.BUILD_NUMBER}\n More info at: ${env.BUILD_URL}",
-                to: "$SQL_WATCHER_1",
-                subject: "Jenkins Build ${currentBuild.currentResult}: Job ${env.JOB_NAME}"
-            emailext body: "${currentBuild.currentResult}: Job ${env.JOB_NAME} build ${env.BUILD_NUMBER}\n More info at: ${env.BUILD_URL}",
-                to: "$SQL_WATCHER_2",
-                subject: "Jenkins Build ${currentBuild.currentResult}: Job ${env.JOB_NAME}"
-             emailext body: "${currentBuild.currentResult}: Job ${env.JOB_NAME} build ${env.BUILD_NUMBER}\n More info at: ${env.BUILD_URL}",
-                to: "$SQL_WATCHER_3",
-                subject: "Jenkins Build ${currentBuild.currentResult}: Job ${env.JOB_NAME}"
+             script {
+                  def watchers = "$SQL_WATCHERS".split()
+                  for (int i = 0; i < watchers.size(); ++i) {
+                      emailext body: "${currentBuild.currentResult}: Job ${env.JOB_NAME} build ${env.BUILD_NUMBER}\n More info at: ${env.BUILD_URL}",
+                          to: watchers[i],
+                          subject: "Jenkins Build ${currentBuild.currentResult}: Job ${env.JOB_NAME}"
+                  }
+             }
         }
     }
 }
