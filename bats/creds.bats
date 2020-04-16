@@ -88,6 +88,14 @@ teardown() {
     [ "$status" -eq 1 ]
 }
 
+@test "creds file created with right permissions" {
+    skiponwindows "Need to investigate the permissions results on windows."
+    dolt creds new
+    file=$(echo ${DOLT_ROOT_PATH}/.dolt/creds/`dolt creds ls -v | grep '*' | awk '{print $3}'`.jwk)
+    perms=$(ls -l "$file" | awk '{print $1}')
+    [ "$perms" == "-rw-------" ]
+}
+
 @test "can import cred from good jwk file" {
     dolt creds import `batshelper known-good.jwk`
 }

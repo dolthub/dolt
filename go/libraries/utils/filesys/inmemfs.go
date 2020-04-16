@@ -300,7 +300,7 @@ func (fsw *inMemFSWriteCloser) Close() error {
 
 // OpenForWrite opens a file for writing.  The file will be created if it does not exist, and if it does exist
 // it will be overwritten.
-func (fs *InMemFS) OpenForWrite(fp string) (io.WriteCloser, error) {
+func (fs *InMemFS) OpenForWrite(fp string, perm os.FileMode) (io.WriteCloser, error) {
 	fs.rwLock.Lock()
 	defer fs.rwLock.Unlock()
 
@@ -323,7 +323,7 @@ func (fs *InMemFS) OpenForWrite(fp string) (io.WriteCloser, error) {
 // WriteFile writes the entire data buffer to a given file.  The file will be created if it does not exist,
 // and if it does exist it will be overwritten.
 func (fs *InMemFS) WriteFile(fp string, data []byte) error {
-	w, err := fs.OpenForWrite(fp)
+	w, err := fs.OpenForWrite(fp, os.ModePerm)
 
 	if err != nil {
 		return err

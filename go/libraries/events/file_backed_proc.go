@@ -18,6 +18,7 @@ import (
 	"crypto/md5"
 	"encoding/base64"
 	"errors"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -198,7 +199,7 @@ func (fbp *FileBackedProc) WriteEvents(version string, evts []*eventsapi.ClientE
 		eventsPath := fbp.ed.getPath()
 		tempFilename := filepath.Join(eventsPath, localPath)
 
-		f, err := fbp.ed.fs.OpenForWrite(tempFilename)
+		f, err := fbp.ed.fs.OpenForWrite(tempFilename, os.ModePerm)
 
 		if err != nil {
 			return err

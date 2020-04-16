@@ -15,6 +15,7 @@
 package filesys
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -63,7 +64,7 @@ func TestFilesystems(t *testing.T) {
 			require.Error(t, err)
 
 			// Test failure to open a directory for write
-			_, err = fs.OpenForWrite(dir)
+			_, err = fs.OpenForWrite(dir, os.ModePerm)
 			require.Error(t, err)
 
 			// Test file doesn't exist before creation

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -156,7 +157,7 @@ func serializeResults(results []result, path, tableName, format string) {
 	now := time.Now()
 	fs := filesys.LocalFS
 	resultsFile := filepath.Join(path, fmt.Sprintf("benchmark_results-%04d-%02d-%02d%s", now.Year(), now.Month(), now.Day(), format))
-	wc, err := fs.OpenForWrite(resultsFile)
+	wc, err := fs.OpenForWrite(resultsFile, os.ModePerm)
 	if err != nil {
 		log.Fatal(err)
 	}

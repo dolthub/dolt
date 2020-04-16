@@ -17,6 +17,7 @@ package sqlexport
 import (
 	"context"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -43,7 +44,7 @@ func OpenSQLExportWriter(path string, tableName string, fs filesys.WritableFS, s
 		return nil, err
 	}
 
-	wr, err := fs.OpenForWrite(path)
+	wr, err := fs.OpenForWrite(path, os.ModePerm)
 	if err != nil {
 		return nil, err
 	}
