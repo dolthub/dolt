@@ -111,7 +111,7 @@ func (q Query) CommandString() string { return fmt.Sprintf("query %s", q.Query) 
 func (q Query) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
-	sqlDb := dsqle.NewDatabase("dolt", root, dEnv.DoltDB, nil)
+	sqlDb := dsqle.NewDatabase("dolt", root, dEnv.DoltDB, nil, nil)
 	engine, sqlCtx, err := dsqle.NewTestEngine(context.Background(), sqlDb, root)
 	require.NoError(t, err)
 

@@ -73,6 +73,7 @@ func TestTypeRefDescribe(t *testing.T) {
 	assert.Equal("Int", mustString(PrimitiveTypeMap[IntKind].Describe(context.Background())))
 	assert.Equal("Uint", mustString(PrimitiveTypeMap[UintKind].Describe(context.Background())))
 	assert.Equal("InlineBlob", mustString(PrimitiveTypeMap[InlineBlobKind].Describe(context.Background())))
+	assert.Equal("Decimal", mustString(PrimitiveTypeMap[DecimalKind].Describe(context.Background())))
 	assert.Equal("Map<String, Float>", mustString(mapType.Describe(context.Background())))
 	assert.Equal("Set<String>", mustString(setType.Describe(context.Background())))
 
@@ -93,6 +94,7 @@ func TestTypeOrdered(t *testing.T) {
 	assert.True(isKindOrderedByValue(PrimitiveTypeMap[IntKind].TargetKind()))
 	assert.True(isKindOrderedByValue(PrimitiveTypeMap[UintKind].TargetKind()))
 	assert.True(isKindOrderedByValue(PrimitiveTypeMap[InlineBlobKind].TargetKind()))
+	assert.True(isKindOrderedByValue(PrimitiveTypeMap[DecimalKind].TargetKind()))
 	assert.True(isKindOrderedByValue(TupleKind))
 
 	assert.False(isKindOrderedByValue(PrimitiveTypeMap[BlobKind].TargetKind()))

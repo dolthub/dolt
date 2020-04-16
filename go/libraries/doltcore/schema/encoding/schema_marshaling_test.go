@@ -118,12 +118,8 @@ func TestJSONMarshalling(t *testing.T) {
 func TestTypeInfoMarshalling(t *testing.T) {
 	//TODO: determine the storage format for BINARY
 	//TODO: determine the storage format for BLOB
-	//TODO: determine the storage format for DECIMAL
-	//TODO: determine the storage format for ENUM
 	//TODO: determine the storage format for LONGBLOB
 	//TODO: determine the storage format for MEDIUMBLOB
-	//TODO: determine the storage format for SET
-	//TODO: determine the storage format for TIME
 	//TODO: determine the storage format for TINYBLOB
 	//TODO: determine the storage format for VARBINARY
 	sqlTypes := []sql.Type{
@@ -134,11 +130,11 @@ func TestTypeInfoMarshalling(t *testing.T) {
 		//sql.Blob, //BLOB
 		sql.Boolean, //BOOLEAN
 		sql.MustCreateStringWithDefaults(sqltypes.Char, 10), //CHAR(10)
-		sql.Date,     //DATE
-		sql.Datetime, //DATETIME
-		//sql.MustCreateDecimalType(9, 5), //DECIMAL(9, 5)
-		sql.Float64, //DOUBLE
-		//sql.MustCreateEnumType([]string{"a", "b", "c"}, sql.Collation_Default), //ENUM('a','b','c')
+		sql.Date,                        //DATE
+		sql.Datetime,                    //DATETIME
+		sql.MustCreateDecimalType(9, 5), //DECIMAL(9, 5)
+		sql.Float64,                     //DOUBLE
+		sql.MustCreateEnumType([]string{"a", "b", "c"}, sql.Collation_Default), //ENUM('a','b','c')
 		sql.Float32, //FLOAT
 		sql.Int32,   //INT
 		sql.Uint32,  //INT UNSIGNED
@@ -148,11 +144,11 @@ func TestTypeInfoMarshalling(t *testing.T) {
 		sql.Int24,      //MEDIUMINT
 		sql.Uint24,     //MEDIUMINT UNSIGNED
 		sql.MediumText, //MEDIUMTEXT
-		//sql.MustCreateSetType([]string{"a", "b", "c"}, sql.Collation_Default), //SET('a','b','c')
-		sql.Int16,  //SMALLINT
-		sql.Uint16, //SMALLINT UNSIGNED
-		sql.Text,   //TEXT
-		//sql.Time, //TIME
+		sql.MustCreateSetType([]string{"a", "b", "c"}, sql.Collation_Default), //SET('a','b','c')
+		sql.Int16,     //SMALLINT
+		sql.Uint16,    //SMALLINT UNSIGNED
+		sql.Text,      //TEXT
+		sql.Time,      //TIME
 		sql.Timestamp, //TIMESTAMP
 		//sql.TinyBlob, //TINYBLOB
 		sql.Int8,     //TINYINT

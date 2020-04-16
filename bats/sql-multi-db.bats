@@ -29,7 +29,7 @@ seed_repos_with_tables_with_use_statements() {
 }
 
 @test "sql multi-db test show databases" {
-    EXPECTED=$(echo -e "Database\nrepo1\nrepo2")
+    EXPECTED=$(echo -e "Database\ninformation_schema\nrepo1\nrepo2")
     run dolt sql -r csv --multi-db-dir ./ -q "SHOW DATABASES"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED" ]] || false

@@ -6,6 +6,11 @@ set -o pipefail
 script_dir=$(dirname "$0")
 cd $script_dir/../..
 
+docker run --rm -v `pwd`:/src golang:1.14.2-buster /bin/bash -c '
+set -e
+set -o pipefail
+apt-get update && apt-get install -y zip
+cd /src
 BINS="dolt git-dolt git-dolt-smudge"
 OSES="windows linux darwin"
 ARCHS="386 amd64"
@@ -34,8 +39,9 @@ done
 render_install_sh() {
   local parsed=(`grep "Version = " ./cmd/dolt/dolt.go`)
   local DOLT_VERSION=`eval echo ${parsed[2]}`
-  sed 's|__DOLT_VERSION__|'"$DOLT_VERSION"'|' utils/publishrelease/install.sh
+  sed '\''s|__DOLT_VERSION__|'\''"$DOLT_VERSION"'\''|'\'' utils/publishrelease/install.sh
 }
 
 render_install_sh > out/install.sh
 chmod 755 out/install.sh
+'

@@ -27,14 +27,15 @@ import (
 )
 
 func isHelp(str string) bool {
-	switch {
-	case str == "-h":
-		return true
-	case strings.TrimLeft(str, "- ") == "help":
-		return true
+	str = strings.TrimSpace(str)
+
+	if str[0] != '-' {
+		return false
 	}
 
-	return false
+	str = strings.ToLower(strings.TrimLeft(str, "- "))
+
+	return str == "h" || str == "help"
 }
 
 func hasHelpFlag(args []string) bool {

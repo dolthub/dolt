@@ -76,6 +76,7 @@ enum ClientEventType {
     BLAME = 45;
     CREDS_CHECK = 46;
     CREDS_USE = 47;
+    CREDS_IMPORT = 48;
 }
 
 enum MetricID {

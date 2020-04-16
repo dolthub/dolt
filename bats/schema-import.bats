@@ -148,7 +148,7 @@ teardown() {
 }
 
 @test "schema import with strings in csv" {
-    # This CSV has queoted integers for the primary key ie "0","foo",... and
+    # This CSV has quoted integers for the primary key ie "0","foo",... and
     # "1","bar",...
     run dolt schema import -r --keep-types --pks=pk test `batshelper 1pk5col-strings.csv`
     [ "$status" -eq 0 ]
@@ -162,4 +162,12 @@ teardown() {
     [[ "$output" =~ "\`c5\` LONGTEXT" ]] || false
     [[ "$output" =~ "\`c6\` LONGTEXT" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
+}
+
+@test "schema import supports dates andf times" {
+    run dolt schema import -c --pks=pk test `batshelper 1pk-datetime.csv`
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
+    skip "schema import does not support datetime"
+    [[ "$output" =~ "DATETIME" ]] || false;
 }

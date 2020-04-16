@@ -364,14 +364,26 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.Root
 		return doltdb.ErrNomsIO
 	}
 
-	dEnv.RepoState.Working = h.String()
-	err = dEnv.RepoState.Save(dEnv.FS)
+	return dEnv.RepoStateWriter().SetWorkingHash(ctx, h)
+}
+
+type repoStateWriter struct {
+	dEnv *DoltEnv
+}
+
+func (r *repoStateWriter) SetWorkingHash(ctx context.Context, h hash.Hash) error {
+	r.dEnv.RepoState.Working = h.String()
+	err := r.dEnv.RepoState.Save(r.dEnv.FS)
 
 	if err != nil {
 		return ErrStateUpdate
 	}
 
 	return nil
+}
+
+func (dEnv *DoltEnv) RepoStateWriter() RepoStateWriter {
+	return &repoStateWriter{dEnv}
 }
 
 func (dEnv *DoltEnv) HeadRoot(ctx context.Context) (*doltdb.RootValue, error) {

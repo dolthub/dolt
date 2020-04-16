@@ -16,7 +16,6 @@ package rebase
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -27,16 +26,22 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	ndiff "github.com/liquidata-inc/dolt/go/store/diff"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
+
+const diffBufSize = 4096
 
 // { tableName -> { oldTag -> newTag }}
 type TagMapping map[string]map[uint64]uint64
 
-// NeedsUniqueTagMigration checks if a repo was created before the unique tags constraint and migrates it if necessary.
-func NeedsUniqueTagMigration(ctx context.Context, dEnv *env.DoltEnv) (bool, error) {
-	bb, err := dEnv.DoltDB.GetBranches(ctx)
+// NeedsUniqueTagMigration checks if a repo needs a unique tags migration
+func NeedsUniqueTagMigration(ctx context.Context, ddb *doltdb.DoltDB) (bool, error) {
+	bb, err := ddb.GetBranches(ctx)
 
 	if err != nil {
 		return false, err
@@ -49,10 +54,20 @@ func NeedsUniqueTagMigration(ctx context.Context, dEnv *env.DoltEnv) (bool, erro
 			return false, err
 		}
 
-		c, err := dEnv.DoltDB.Resolve(ctx, cs)
+		c, err := ddb.Resolve(ctx, cs)
 
 		if err != nil {
 			return false, err
+		}
+
+		// check if this head commit is an init commit
+		n, err := c.NumParents()
+		if err != nil {
+			return false, err
+		}
+		if n == 0 {
+			// init commits don't need migration
+			continue
 		}
 
 		r, err := c.GetRootValue()
@@ -107,30 +122,47 @@ func MigrateUniqueTags(ctx context.Context, dEnv *env.DoltEnv) error {
 		headCommits = append(headCommits, cm)
 	}
 
-	// DFS the commit graph find a unique new tag for all existing tags in every table in history
-	globalMapping := make(map[string]map[uint64]uint64)
-
-	replay := func(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
-		err := buildGlobalTagMapping(ctx, root, parentRoot, rebasedParentRoot, globalMapping)
-
-		if err != nil {
-			return nil, err
-		}
-
-		return root, nil
-	}
-
-	_, err = rebase(ctx, ddb, replay, entireHistory, headCommits...)
-
-	if err != nil {
-		return err
-	}
-
 	if len(branches) != len(headCommits) {
 		panic("error in uniquifying tags")
 	}
 
-	newCommits, err := TagRebaseForCommits(ctx, ddb, globalMapping, headCommits...)
+	builtTagMappings := make(map[hash.Hash]TagMapping)
+
+	// DFS the commit graph find a unique new tag for all existing tags in every table in history
+	replay := func(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue) (rebaseRoot *doltdb.RootValue, err error) {
+		h, err := rebasedParentRoot.HashOf()
+		if err != nil {
+			return nil, err
+		}
+
+		parentTagMapping, found := builtTagMappings[h]
+		if !found {
+			parentTagMapping = make(TagMapping)
+			if !rootsMustBeEqual(parentRoot, rebasedParentRoot) {
+				return nil, fmt.Errorf("error rebasing, roots not equal")
+			}
+		}
+
+		tagMapping, err := buildTagMapping(ctx, root, rebasedParentRoot, parentTagMapping)
+		if err != nil {
+			return nil, err
+		}
+
+		rebasedRoot, err := replayCommitWithNewTag(ctx, root, parentRoot, rebasedParentRoot, tagMapping)
+		if err != nil {
+			return nil, err
+		}
+
+		rh, err := rebasedRoot.HashOf()
+		if err != nil {
+			return nil, err
+		}
+		builtTagMappings[rh] = tagMapping
+
+		return rebasedRoot, nil
+	}
+
+	newCommits, err := rebase(ctx, ddb, replay, entireHistory, headCommits...)
 
 	if err != nil {
 		return err
@@ -255,14 +287,35 @@ func TagRebaseForCommits(ctx context.Context, ddb *doltdb.DoltDB, tm TagMapping,
 
 func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue, tm TagMapping) (*doltdb.RootValue, error) {
 
-	newRoot := root
-	for tblName, tableMapping := range tm {
+	tableNames, err := doltdb.UnionTableNames(ctx, root, rebasedParentRoot)
 
-		tbl, found, err := newRoot.GetTable(ctx, tblName)
+	if err != nil {
+		return nil, err
+	}
+
+	newRoot := rebasedParentRoot
+	for _, tblName := range tableNames {
+
+		tbl, found, err := root.GetTable(ctx, tblName)
 		if err != nil {
 			return nil, err
 		}
 		if !found {
+			// table was deleted since parent commit
+			ok, err := newRoot.HasTable(ctx, tblName)
+			if err != nil {
+				return nil, err
+			}
+			if !ok {
+				return nil, fmt.Errorf("error rebasing, table %s not found in rebasedParentRoot", tblName)
+			}
+
+			newRoot, err = newRoot.RemoveTables(ctx, tblName)
+
+			if err != nil {
+				return nil, err
+			}
+
 			continue
 		}
 
@@ -271,16 +324,21 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 			return nil, err
 		}
 
-		// tags may not exist in this commit
-		tagExists := false
-		for oldTag, _ := range tableMapping {
-			if _, found := sch.GetAllCols().GetByTag(oldTag); found {
-				tagExists = true
-				break
-			}
+		// only rebase this table if we have a mapping for it, and at least one of the
+		// tags in the mapping is present in its schema at this commit
+		tableNeedsRebasing := false
+		tableMapping, found := tm[tblName]
+		if found {
+			_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+				if _, found = tableMapping[tag]; found {
+					tableNeedsRebasing = true
+				}
+				return tableNeedsRebasing, nil
+			})
 		}
-		if !tagExists {
-			continue
+
+		if !tableNeedsRebasing {
+			newRoot, err = newRoot.PutTable(ctx, tblName, tbl)
 		}
 
 		parentTblName := tblName
@@ -305,7 +363,7 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		rebasedSch := schema.SchemaFromCols(schCC)
 
 		// super schema rebase
-		ss, _, err := newRoot.GetSuperSchema(ctx, tblName)
+		ss, _, err := root.GetSuperSchema(ctx, tblName)
 
 		if err != nil {
 			return nil, err
@@ -357,7 +415,7 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 			return nil, err
 		}
 
-		rebasedRows, err := replayRowDiffs(ctx, rebasedSch, rows, parentRows, rebasedParentRows, tableMapping)
+		rebasedRows, err := replayRowDiffs(ctx, rebasedParentRoot.VRW(), rebasedSch, rows, parentRows, rebasedParentRows, tableMapping)
 
 		if err != nil {
 			return nil, err
@@ -379,14 +437,14 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 			return nil, err
 		}
 
-		rebasedRoot, err := newRoot.PutSuperSchema(ctx, tblName, rebasedSS)
+		newRoot, err = newRoot.PutSuperSchema(ctx, tblName, rebasedSS)
 
 		if err != nil {
 			return nil, err
 		}
 
 		// create new RootValue by overwriting table with rebased rows and schema
-		newRoot, err = rebasedRoot.PutTable(ctx, tblName, rebasedTable)
+		newRoot, err = newRoot.PutTable(ctx, tblName, rebasedTable)
 
 		if err != nil {
 			return nil, err
@@ -395,53 +453,68 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 	return newRoot, nil
 }
 
-func replayRowDiffs(ctx context.Context, rSch schema.Schema, rows, parentRows, rebasedParentRows types.Map, tagMapping map[uint64]uint64) (types.Map, error) {
+func replayRowDiffs(ctx context.Context, vrw types.ValueReadWriter, rSch schema.Schema, rows, parentRows, rebasedParentRows types.Map, tagMapping map[uint64]uint64) (types.Map, error) {
 
-	// we will apply modified differences to the rebasedParent
-	rebasedRowEditor := rebasedParentRows.Edit()
+	unmappedTags := set.NewUint64Set(rSch.GetAllCols().Tags)
+	tm := make(map[uint64]uint64)
+	for ot, nt := range tagMapping {
+		tm[ot] = nt
+		unmappedTags.Remove(nt)
+	}
+	for _, t := range unmappedTags.AsSlice() {
+		tm[t] = t
+	}
 
-	ad := diff.NewAsyncDiffer(1024)
+	nmu := noms.NewNomsMapUpdater(ctx, vrw, rebasedParentRows, rSch, func(stats types.AppliedEditStats) {})
+
+	ad := diff.NewAsyncDiffer(diffBufSize)
 	// get all differences (including merges) between original commit and its parent
 	ad.Start(ctx, rows, parentRows)
 	defer ad.Close()
 
 	for {
-		diffs, err := ad.GetDiffs(1, time.Second)
-
 		if ad.IsDone() {
 			break
 		}
+
+		diffs, err := ad.GetDiffs(diffBufSize/2, time.Second)
 
 		if err != nil {
 			return types.EmptyMap, err
 		}
 
-		if len(diffs) != 1 {
-			panic("only a single diff requested, multiple returned.  bug in AsyncDiffer")
-		}
+		for _, d := range diffs {
+			if d.KeyValue == nil {
+				panic("Unexpected commit diff result: with nil key value encountered")
+			}
 
-		d := diffs[0]
-		if d.KeyValue == nil {
-			panic("Unexpected commit diff result: with nil key value encountered")
-		}
+			key, newVal, err := modifyDifferenceTag(d, rows.Format(), rSch, tm)
 
-		key, newVal, err := modifyDifferenceTag(d, rows.Format(), rSch, tagMapping)
+			if err != nil {
+				return types.EmptyMap, nil
+			}
 
-		if err != nil {
-			return types.EmptyMap, nil
-		}
+			switch d.ChangeType {
+			case types.DiffChangeAdded:
+				err = nmu.WriteEdit(ctx, key, newVal)
+			case types.DiffChangeRemoved:
+				err = nmu.WriteEdit(ctx, key, nil)
+			case types.DiffChangeModified:
+				err = nmu.WriteEdit(ctx, key, newVal)
+			}
 
-		switch d.ChangeType {
-		case types.DiffChangeAdded:
-			rebasedRowEditor.Set(key, newVal)
-		case types.DiffChangeRemoved:
-			rebasedRowEditor.Remove(key)
-		case types.DiffChangeModified:
-			rebasedRowEditor.Set(key, newVal)
+			if err != nil {
+				return types.EmptyMap, err
+			}
 		}
 	}
 
-	return rebasedRowEditor.Map(ctx)
+	err := nmu.Close(ctx)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	return *nmu.GetMap(), nil
 }
 
 func dropValsForDeletedColumns(ctx context.Context, nbf *types.NomsBinFormat, rows types.Map, sch, parentSch schema.Schema) (types.Map, error) {
@@ -449,11 +522,11 @@ func dropValsForDeletedColumns(ctx context.Context, nbf *types.NomsBinFormat, ro
 		return rows, nil
 	}
 
-	eq, err := schema.SchemasAreEqual(sch, parentSch)
+	deletedCols, err := typed.TypedColCollectionSubtraction(parentSch, sch)
 	if err != nil {
 		return types.EmptyMap, err
 	}
-	if eq {
+	if deletedCols.Size() == 0 {
 		return rows, nil
 	}
 
@@ -518,45 +591,99 @@ func dropValsForDeletedColumns(ctx context.Context, nbf *types.NomsBinFormat, ro
 	return prunedRowData, nil
 }
 
-func modifyDifferenceTag(d *ndiff.Difference, nbf *types.NomsBinFormat, rSch schema.Schema, tagMapping map[uint64]uint64) (key types.LesserValuable, val types.Valuable, err error) {
-	ktv, err := row.ParseTaggedValues(d.KeyValue.(types.Tuple))
+func modifyDifferenceTag(d *ndiff.Difference, nbf *types.NomsBinFormat, rSch schema.Schema, tagMapping map[uint64]uint64) (keyTup types.LesserValuable, valTup types.Valuable, err error) {
+
+	k := d.KeyValue.(types.Tuple)
+	if k.Len()%2 != 0 {
+		panic("A tagged tuple must have an even column count.")
+	}
+
+	kItr, err := k.Iterator()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	idx := 0
+	kk := make([]types.Value, k.Len())
+	for kItr.HasMore() {
+		_, tag, err := kItr.Next()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// i.HasMore() is true here because of assertion above.
+		_, val, err := kItr.Next()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if tag.Kind() != types.UintKind {
+			panic("Invalid tagged tuple must have uint tags.")
+		}
+
+		if val != types.NullValue {
+			newTag := tagMapping[uint64(tag.(types.Uint))]
+			kk[idx] = types.Uint(newTag)
+			kk[idx+1] = val
+		}
+		idx += 2
+	}
+
+	keyTup, err = types.NewTuple(nbf, kk...)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	newKtv := make(row.TaggedValues)
-	for tag, val := range ktv {
-		newTag, found := tagMapping[tag]
-		if !found {
-			newTag = tag
-		}
-		newKtv[newTag] = val
+	if d.NewValue == nil {
+		return keyTup, nil, nil
 	}
 
-	key = newKtv.NomsTupleForTags(nbf, rSch.GetPKCols().Tags, true)
+	v := d.NewValue.(types.Tuple)
+	if v.Len()%2 != 0 {
+		panic("A tagged tuple must have an even column count.")
+	}
 
-	val = d.NewValue
-	if d.NewValue != nil {
-		tv, err := row.ParseTaggedValues(d.NewValue.(types.Tuple))
+	vItr, err := v.Iterator()
+	if err != nil {
+		return nil, nil, err
+	}
 
+	idx = 0
+	vv := make([]types.Value, v.Len())
+	for vItr.HasMore() {
+		_, tag, err := vItr.Next()
 		if err != nil {
 			return nil, nil, err
 		}
 
-		newTv := make(row.TaggedValues)
-		for tag, val := range tv {
-			newTag, found := tagMapping[tag]
-			if !found {
-				newTag = tag
-			}
-			newTv[newTag] = val
+		// i.HasMore() is true here because of assertion above.
+		_, val, err := vItr.Next()
+		if err != nil {
+			return nil, nil, err
 		}
 
-		val = newTv.NomsTupleForTags(nbf, rSch.GetNonPKCols().Tags, false)
+		if tag.Kind() != types.UintKind {
+			panic("Invalid tagged tuple must have uint tags.")
+		}
+
+		if val != types.NullValue {
+			newTag, ok := tagMapping[uint64(tag.(types.Uint))]
+			if ok {
+				vv[idx] = types.Uint(newTag)
+				vv[idx+1] = val
+				idx += 2
+			}
+		}
 	}
 
-	return key, val, nil
+	valTup, err = types.NewTuple(nbf, vv[:idx]...)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return keyTup, valTup, nil
 }
 
 func tagExistsInHistory(ctx context.Context, c *doltdb.Commit, tagMapping TagMapping) (bool, error) {
@@ -608,91 +735,83 @@ func validateTagMapping(tagMapping TagMapping) error {
 	return nil
 }
 
-func buildGlobalTagMapping(ctx context.Context, root *doltdb.RootValue, parentRoot *doltdb.RootValue, rebasedParentRoot *doltdb.RootValue, globalMapping map[string]map[uint64]uint64) error {
+func buildTagMapping(ctx context.Context, root, rebasedParentRoot *doltdb.RootValue, parentTagMapping TagMapping) (TagMapping, error) {
+	tagMapping := parentTagMapping
+
+	// create mappings for new columns
 	tblNames, err := root.GetTableNames(ctx)
 
 	if err != nil {
-		return err
+		return nil, err
 	}
+
+	rss, err := doltdb.GetRootValueSuperSchema(ctx, rebasedParentRoot)
+
+	if err != nil {
+		return nil, err
+	}
+
+	existingRebasedTags := set.NewUint64Set(rss.AllTags())
 
 	for _, tn := range tblNames {
 		if doltdb.HasDoltPrefix(tn) {
-			err = handleSystemTableMappings(ctx, tn, root, globalMapping)
+			err = handleSystemTableMappings(ctx, tn, root, tagMapping)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			continue
 		}
 
-		if _, found := globalMapping[tn]; !found {
-			globalMapping[tn] = make(map[uint64]uint64)
+		if _, found := tagMapping[tn]; !found {
+			tagMapping[tn] = make(map[uint64]uint64)
 		}
 
 		t, _, err := root.GetTable(ctx, tn)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		sch, err := t.GetSchema(ctx)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
-		foundParent, err := parentRoot.HasTable(ctx, tn)
-		if err != nil {
-			return err
-		}
-
-		// for this table, get the new columns in root since parentRoot
-		var cc *schema.ColCollection
-		var parentSS *schema.SuperSchema
-		if foundParent {
-			var found bool
-			parentSS, found, err = parentRoot.GetSuperSchema(ctx, tn)
-			if err != nil {
-				return err
-			}
-			if !found {
-				return fmt.Errorf("error generating unique tags for migration, cannot find super schema for table %s", tn)
-			}
-
-			cc, _ = schema.NewColCollection()
-			err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-				if _, found := parentSS.GetByTag(tag); !found {
-					cc, err = cc.Append(col)
-				}
-				stop = err != nil
-				return stop, err
-			})
-		} else {
-			cc = sch.GetAllCols()
-		}
-
-		var colNames []string
-		var colKinds []types.NomsKind
+		var newColNames []string
+		var newColKinds []types.NomsKind
 		var oldTags []uint64
-		_ = cc.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			colNames = append(colNames, col.Name)
-			colKinds = append(colKinds, col.Kind)
-			oldTags = append(oldTags, tag)
+		var existingColKinds []types.NomsKind
+		_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			_, found := tagMapping[tn][tag]
+			if !found {
+				newColNames = append(newColNames, col.Name)
+				newColKinds = append(newColKinds, col.Kind)
+				oldTags = append(oldTags, tag)
+			} else {
+				existingColKinds = append(existingColKinds, col.Kind)
+			}
 			return false, nil
 		})
 
-		newTags, err := rebasedParentRoot.GenerateTagsForNewColumns(ctx, tn, colNames, colKinds)
-		if err != nil {
-			return err
-		}
-		if len(oldTags) != len(newTags) {
-			return errors.New("error generating unique tags for migration")
+		// generate tags with the same method as root.GenerateTagsForNewColumns()
+		newTags := make([]uint64, len(newColNames))
+		for i := range newTags {
+			newTags[i] = schema.AutoGenerateTag(existingRebasedTags, tn, existingColKinds, newColNames[i], newColKinds[i])
+			existingColKinds = append(existingColKinds, newColKinds[i])
+			existingRebasedTags.Add(newTags[i])
 		}
 
 		for i, ot := range oldTags {
-			if _, found := globalMapping[tn][ot]; !found {
-				globalMapping[tn][ot] = newTags[i]
-			}
+			tagMapping[tn][ot] = newTags[i]
 		}
 	}
-	return nil
+
+	err = validateTagMapping(tagMapping)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return tagMapping, nil
 }
 
 func handleSystemTableMappings(ctx context.Context, tblName string, root *doltdb.RootValue, globalMapping map[string]map[uint64]uint64) error {
@@ -739,4 +858,16 @@ func handleSystemTableMappings(ctx context.Context, tblName string, root *doltdb
 	})
 
 	return nil
+}
+
+func rootsMustBeEqual(r1, r2 *doltdb.RootValue) bool {
+	h1, err := r1.HashOf()
+	if err != nil {
+		panic(err)
+	}
+	h2, err := r2.HashOf()
+	if err != nil {
+		panic(err)
+	}
+	return h1.Equal(h2)
 }

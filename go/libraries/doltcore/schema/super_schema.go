@@ -120,6 +120,11 @@ func (ss *SuperSchema) AllColumnNames(tag uint64) []string {
 	return ss.tagNames[tag]
 }
 
+// AllTags returns a slice of all tags contained in the SuperSchema
+func (ss *SuperSchema) AllTags() []uint64 {
+	return ss.allCols.Tags
+}
+
 // LatestColumnName returns the latest name of the column corresponding to tag
 func (ss *SuperSchema) LatestColumnName(tag uint64) string {
 	return ss.tagNames[tag][0]
