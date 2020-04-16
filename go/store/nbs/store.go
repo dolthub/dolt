@@ -919,11 +919,11 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []TableFile,
 			info: info,
 			open: func() (io.ReadCloser, error) {
 				r, err := cs.reader(context.TODO())
-				if r != nil {
-					return ioutil.NopCloser(r), err
-				} else {
+				if err != nil {
 					return nil, err
 				}
+				
+				return ioutil.NopCloser(r), nil
 			},
 		}
 		tableFiles = append(tableFiles, tf)
