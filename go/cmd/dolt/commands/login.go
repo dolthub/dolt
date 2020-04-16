@@ -96,6 +96,17 @@ func (cmd LoginCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	return HandleVErrAndExitCode(verr, usage)
 }
 
+// Specifies behavior of the login.
+type loginBehavior int
+
+// When logging in with newly minted credentials, they cannot be on the server
+// yet. So open the browser immediately before checking the server.
+var openBrowserFirst loginBehavior = 1
+
+// When logging in with supplied credentials, they may already be associated
+// with an account on the server. Check first before opening a browser.
+var checkCredentialsThenOpenBrowser loginBehavior = 2
+
 func loginWithNewCreds(ctx context.Context, dEnv *env.DoltEnv) errhand.VerboseError {
 	path, dc, err := actions.NewCredsFile(dEnv)
 
@@ -105,7 +116,7 @@ func loginWithNewCreds(ctx context.Context, dEnv *env.DoltEnv) errhand.VerboseEr
 
 	cli.Println(path)
 
-	return loginWithCreds(ctx, dEnv, dc)
+	return loginWithCreds(ctx, dEnv, dc, openBrowserFirst)
 }
 
 func loginWithExistingCreds(ctx context.Context, dEnv *env.DoltEnv, idOrPubKey string) errhand.VerboseError {
@@ -127,47 +138,68 @@ func loginWithExistingCreds(ctx context.Context, dEnv *env.DoltEnv, idOrPubKey s
 		return errhand.BuildDError("error: failed to load creds from file").AddCause(err).Build()
 	}
 
-	return loginWithCreds(ctx, dEnv, dc)
+	return loginWithCreds(ctx, dEnv, dc, checkCredentialsThenOpenBrowser)
 }
 
-func loginWithCreds(ctx context.Context, dEnv *env.DoltEnv, dc creds.DoltCreds) errhand.VerboseError {
-	loginUrl := dEnv.Config.GetStringOrDefault(env.AddCredsUrlKey, env.DefaultLoginUrl)
-	url := fmt.Sprintf("%s#%s", *loginUrl, dc.PubKeyBase32Str())
-
-	cli.Printf("Opening a browser to:\n\t%s\nPlease associate your key with your account.\n", url)
-	open.Start(url)
-
-	host := dEnv.Config.GetStringOrDefault(env.RemotesApiHostKey, env.DefaultRemotesApiHost)
-	port := dEnv.Config.GetStringOrDefault(env.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
-	conn, err := dEnv.GrpcConnWithCreds(fmt.Sprintf("%s:%s", *host, *port), false, dc)
-
-	if err != nil {
-		return errhand.BuildDError("error: unable to connect to server with credentials.").AddCause(err).Build()
+func loginWithCreds(ctx context.Context, dEnv *env.DoltEnv, dc creds.DoltCreds, behavior loginBehavior) errhand.VerboseError {
+	grpcClient, verr := getCredentialsClient(dEnv, dc)
+	if verr != nil {
+		return verr
 	}
 
-	grpcClient := remotesapi.NewCredentialsServiceClient(conn)
-
-	cli.Println("Checking remote server looking for key association.")
-
-	var prevMsgLen int
 	var whoAmI *remotesapi.WhoAmIResponse
-	for whoAmI == nil {
-		prevMsgLen = cli.DeleteAndPrint(prevMsgLen, "requesting update")
+	var err error
+	if behavior == checkCredentialsThenOpenBrowser {
 		whoAmI, err = grpcClient.WhoAmI(ctx, &remotesapi.WhoAmIRequest{})
+	}
 
+	if whoAmI == nil {
+		openBrowserForCredsAdd(dEnv, dc)
+		cli.Println("Checking remote server looking for key association.")
+	}
+
+	linePrinter := func() func(line string) {
+		prevMsgLen := 0
+		return func(line string) {
+			prevMsgLen = cli.DeleteAndPrint(prevMsgLen, line)
+		}
+	}()
+
+	for whoAmI == nil {
+		linePrinter("requesting update")
+		whoAmI, err = grpcClient.WhoAmI(ctx, &remotesapi.WhoAmIRequest{})
 		if err != nil {
 			for i := 0; i < loginRetryInterval; i++ {
-				prevMsgLen = cli.DeleteAndPrint(prevMsgLen, fmt.Sprintf("Retrying in %d", loginRetryInterval-i))
+				linePrinter(fmt.Sprintf("Retrying in %d", loginRetryInterval-i))
 				time.Sleep(time.Second)
 			}
+		} else {
+			cli.Printf("\n\n")
 		}
 	}
 
-	cli.Printf("\n\nKey successfully associated with user: %s email %s\n", whoAmI.Username, whoAmI.EmailAddress)
+	cli.Printf("Key successfully associated with user: %s email %s\n", whoAmI.Username, whoAmI.EmailAddress)
 
 	updateConfig(dEnv, whoAmI, dc)
 
 	return nil
+}
+
+func openBrowserForCredsAdd(dEnv *env.DoltEnv, dc creds.DoltCreds) {
+	loginUrl := dEnv.Config.GetStringOrDefault(env.AddCredsUrlKey, env.DefaultLoginUrl)
+	url := fmt.Sprintf("%s#%s", *loginUrl, dc.PubKeyBase32Str())
+	cli.Printf("Opening a browser to:\n\t%s\nPlease associate your key with your account.\n", url)
+	open.Start(url)
+}
+
+func getCredentialsClient(dEnv *env.DoltEnv, dc creds.DoltCreds) (remotesapi.CredentialsServiceClient, errhand.VerboseError) {
+	host := dEnv.Config.GetStringOrDefault(env.RemotesApiHostKey, env.DefaultRemotesApiHost)
+	port := dEnv.Config.GetStringOrDefault(env.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
+	conn, err := dEnv.GrpcConnWithCreds(fmt.Sprintf("%s:%s", *host, *port), false, dc)
+	if err != nil {
+		return nil, errhand.BuildDError("error: unable to connect to server with credentials.").AddCause(err).Build()
+	}
+	return remotesapi.NewCredentialsServiceClient(conn), nil
 }
 
 func updateConfig(dEnv *env.DoltEnv, whoAmI *remotesapi.WhoAmIResponse, dCreds creds.DoltCreds) {
