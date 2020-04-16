@@ -220,6 +220,21 @@ func (ti tableIndex) prefixIdxToOrdinal(idx uint32) uint32 {
 	return ti.ordinals[idx]
 }
 
+// Returns the size of the table file that this index references.
+// This assumes that the index follows immediately after the last
+// chunk in the file and that the last chunk in the file is in the
+// index.
+func (ti tableIndex) tableFileSize() uint64 {
+	len, offset := uint64(0), uint64(0)
+	for i := range ti.offsets {
+		if ti.offsets[i] >= offset {
+			offset = ti.offsets[i]
+			len = uint64(ti.lengths[i])
+		}
+	}
+	return offset + len + indexSize(ti.chunkCount) + footerSize
+}
+
 // returns the first position in |tr.prefixes| whose value == |prefix|. Returns |tr.chunkCount|
 // if absent
 func (ti tableIndex) prefixIdx(prefix uint64) (idx uint32) {
@@ -770,7 +785,7 @@ func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) 
 }
 
 func (tr tableReader) reader(ctx context.Context) (io.Reader, error) {
-	return &readerAdapter{tr.r, 0, ctx}, nil
+	return io.LimitReader(&readerAdapter{tr.r, 0, ctx}, int64(tr.tableIndex.tableFileSize())), nil
 }
 
 type readerAdapter struct {

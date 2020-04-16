@@ -112,6 +112,10 @@ func (mc manifestContents) GetTableSpecInfo(i int) TableSpecInfo {
 	return mc.specs[i]
 }
 
+func (mc manifestContents) getSpec(i int) tableSpec {
+	return mc.specs[i]
+}
+
 func (mc manifestContents) size() (size uint64) {
 	size += uint64(len(mc.vers)) + addrSize + hash.ByteLen
 	for _, sp := range mc.specs {
