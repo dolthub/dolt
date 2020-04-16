@@ -1,0 +1,55 @@
+pipeline {
+    agent none
+    stages {
+        stage('Run sqllogictests against Dolt commits') {
+            parallel {
+                stage ("test commits") {
+                    agent {
+                        kubernetes {
+                            label "liquidata-inc-ld-build"
+                        }
+                    }
+                    environment {
+                        PATH = "${pwd()}/.ci_bin/node_modules/.bin:${env.PATH}"
+                        TMPDIR = "${pwd()}/tempDir"
+                        DOLT_ROOT_PATH="${pwd()}/tempRoot"
+                        DOLT_CREDS = credentials("system-account-dolthub-creds")
+                        DOLT_GLOBAL_CONFIG = credentials("system-account-dolthub-config")
+                    }
+                    steps {
+                        sh "rm -rf $TMPDIR && mkdir $TMPDIR"
+                        sh "rm -rf $DOLT_ROOT_PATH && mkdir $DOLT_ROOT_PATH"
+                        dir ("sqllogictest") {
+                            git url: "https://github.com/liquidata-inc/sqllogictest.git"
+                        }
+                        dir ("_dolt") {
+                            git url: "https://github.com/liquidata-inc/dolt.git"
+                            sh "echo Going to update submodules..."
+                            sh "git submodule update --recursive"
+                        }
+                        dir ("benchmark/sqllogictest_tester") {
+                            sh "nice ./run_tester.sh ./tester.vars"
+                        }
+                    }
+                }
+            }
+        }
+    }
+    post {
+        always {
+            node ("liquidata-inc-ld-build") {
+                cleanWs() // cleanup
+            }
+        }
+        failure {
+             script {
+                  def watchers = "$TEST_WATCHERS".split()
+                  for (int i = 0; i < watchers.size(); ++i) {
+                      emailext body: "${currentBuild.currentResult}: Job ${env.JOB_NAME} build ${env.BUILD_NUMBER}\n More info at: ${env.BUILD_URL}",
+                          to: watchers[i],
+                          subject: "Jenkins Build ${currentBuild.currentResult}: Job ${env.JOB_NAME}"
+                  }
+             }
+        }
+    }
+}
