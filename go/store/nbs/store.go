@@ -922,7 +922,7 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []TableFile,
 				if err != nil {
 					return nil, err
 				}
-				
+
 				return ioutil.NopCloser(r), nil
 			},
 		}
