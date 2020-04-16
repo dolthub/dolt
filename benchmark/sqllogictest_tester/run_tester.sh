@@ -7,7 +7,9 @@ function fail() {
     exit 1
 }
 
-logictest="../../go/libraries/doltcore/sqle/logictest"
+base_dir=$(cd ../../ && pwd)
+sqllogictest_checkout="$base_dir/sqllogictest"
+logictest="$base_dir/go/libraries/doltcore/sqle/logictest"
 logictest_main="$logictest"/main
 old_path=$PATH
 
@@ -22,6 +24,10 @@ if [ -z "$DOLT_GLOBAL_CONFIG" ]; then fail Must supply DOLT_GLOBAL_CONFIG; fi
 if [ -z "$CREDSDIR" ]; then fail Must supply CREDSDIR; fi
 if [ -z "$DOLT_CREDS" ]; then fail Must supply DOLT_CREDS; fi
 if [ -z "$CREDS_HASH" ]; then fail Must supply CREDS_HASH; fi
+if [ -z "$TMP_TESTING_DIR" ]; then fail Must supply TMP_TESTING_DIR; fi
+if [ -z "$TMP_CSV_DIR" ]; then fail Must supply TMP_CSV_DIR; fi
+if [ -z "$TEST_FILE_DIR_LIST" ]; then fail Must supply TEST_FILE_DIR_LIST; fi
+if [ -z "$COMMITS_TO_TEST" ]; then fail Must supply COMMITS_TO_TEST; fi
 
 function setup() {
     rm -rf "$CREDSDIR"
@@ -35,32 +41,142 @@ function setup() {
     mkdir temp
 }
 
-function run_once() {
-    test_num="$1"
+function append_to_file_list() {
+  if [ -z "$file_list" ]; then
+    file_list="$1";
+  else
+    file_list="$file_list, $1"
+  fi
 
-    local results=temp/results"$test_num".log
-    local parsed=temp/parsed"$test_num".json
+  echo "Updated file_list:"
+  echo "$file_list"
+}
+
+function setup_testing_dir() {
+    rm -rf "$TMP_TESTING_DIR"
+    mkdir -p "$TMP_TESTING_DIR"
+
+    echo "Copying test files from sqllogictests to a temporary testing directory..."
+
+    IFS=', ' read -r -a test_list <<< "$TEST_FILE_DIR_LIST"
+    for fd in "${test_list[@]}"
+    do
+         cp -r "$sqllogictest_checkout"/test/"$fd" "$TMP_TESTING_DIR"/"$fd"
+         append_to_file_list "$fd"
+    done
+
+    echo "Files/Directories that will be tested:"
+    find "$TMP_TESTING_DIR"
+}
+
+function setup_query_db() {
+    rm -f query_db
+    touch query_db
+    sqlite3 query_db < "$logictest"/regressions.sql
+}
+
+function with_dolt_commit() {
+  local commit_hash="$1"
+    (
+      cd "$base_dir"/tempDolt/go
+      git checkout master
+      git checkout -b "temp-$commit_hash" "$commit_hash"
+      git log -n 1
+      if ! [ -x "$base_dir"/.ci_bin/"$commit_hash"/dolt ]; then
+          if ! [ -d "$base_dir"/.ci_bin ]; then
+            mkdir -p "$base_dir"/.ci_bin/"$commit_hash"
+          fi
+          echo Installing to .cibin, current wd:
+          go get -mod=readonly ./...
+          go build -mod=readonly -o "$base_dir"/.ci_bin/"$commit_hash"/dolt ./cmd/dolt/.
+      fi
+    )
+
+    echo "Finished installing dolt from $commit_hash:"
+    export PATH="$base_dir/.ci_bin/$commit_hash":$old_path
+    dolt version
+}
+
+function with_dolt_checkout() {
+    (
+      cd ../../go
+      if ! [ -x ../.ci_bin/dolt ]; then
+          if ! [ -d ../.ci_bin ]; then
+            mkdir -p ../.ci_bin
+          fi
+          go get -mod=readonly ./...
+          go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
+      fi
+    )
+    echo "Finished installing dolt from checkout:"
+    export PATH=`pwd`"/../../.ci_bin":$old_path
+    dolt version
+}
+
+function import_parsed() {
+    local parsed="$1"
+    local commit_hash="$2"
+    dolt checkout regressions
+    dolt checkout -b "temp-$commit_hash"
+    dolt table import -u nightly_dolt_results "$parsed"
+
+    dolt sql -r csv -q "\
+    select * from nightly_dolt_results;"\
+    > "$TMP_CSV_DIR"/"$commit_hash"_results.csv
+    ls "$TMP_CSV_DIR"
+    cat "$TMP_CSV_DIR"/"$commit_hash"_results.csv
+    dolt checkout master
+}
+
+function import_and_query_db() {
+    local commit_hash="$1"
+    local db_copy="query_db_$commit_hash"
+    cp query_db "$db_copy"
+
+    sqlite3 "$db_copy" <<SQL
+.mode csv
+.import "$TMP_CSV_DIR"/"$commit_hash"_results.csv nightly_dolt_results
+.import "$TMP_CSV_DIR"/release_results.csv releases_dolt_results
+SQL
+
+  result_query_output=`sqlite3 $db_copy 'select * from release_committer_result_change'`
+
+  result_regressions=`echo $result_query_output | sed '/^\s*$/d' | wc -l | tr -d '[:space:]'`
+
+  if [ "$result_regressions" != 0 ]; then echo "Result regression found, $result_regressions != 0" && echo $result_query_output && exit 1; else echo "No result regressions found"; fi
+
+}
+
+function run_once() {
+    local commit_hash="$1"
+    local results=temp/"results-$commit_hash".log
+    local parsed=temp/"parsed-$commit_hash".json
+
+    with_dolt_commit "$commit_hash"
 
     rm -rf .dolt
     dolt init
-    echo "Running tests and generating $results"
-    go run . run ../../../../../../sqllogictest/test > "$results"
+
+    echo "Running tests and logging raw results"
+    go run . run "$TMP_TESTING_DIR" > "$results"
+
     echo "Parsing $results and generating $parsed"
-    go run . parse "$DOLT_VERSION" temp/results"$test_num".log > "$parsed"
+    go run . parse "$commit_hash" "$results" > "$parsed"
+
+    ls -ltra .
+
+    (with_dolt_checkout; cd dolt-sql-performance; import_parsed "$parsed" "$commit_hash")
+
+    import_and_query_db "$commit_hash"
 }
 
 function run() {
-    seq 1 $TEST_N_TIMES | while read test_num; do
-        run_once "$test_num"
+    IFS=', ' read -r -a commit_list <<< "$COMMITS_TO_TEST"
+    for c in "${commit_list[@]}"
+    do
+        run_once "$c"
     done
     rm -rf .dolt
-}
-
-function import_one_nightly() {
-    test_num="$1"
-    dolt table import -u nightly_dolt_results ../"$logictest_main"/temp/parsed"$test_num".json
-    dolt add nightly_dolt_results
-    dolt commit -m "update dolt sql performance results ($DOLT_VERSION) ($test_num)"
 }
 
 function import_nightly() {
@@ -103,81 +219,26 @@ select * from releases_dolt_mean_results;\
     if [ "$result_regressions" != 0 ]; then echo "Result regression found, $result_regressions != 0" && echo $result_query_output && exit 1; else echo "No result regressions found"; fi
 }
 
-function with_dolt_commit() {
-  if [[ -z "$1" ]]; then
-    fail Usage: with_dolt_commit COMMIT_HASH
-  fi
-  echo "$1"
-  commit_hash="$1"
-    (
-      cd ../../_dolt/go
-      git status
-      echo Installing _dolt, current wd:
-      pwd
-      if ! [ -x ../../.ci_bin/"$commit_hash"/dolt ]; then
-          if ! [ -d ../../.ci_bin ]; then
-            mkdir -p ../../.ci_bin/"$commit_hash"
-          fi
-          echo Installing to .cibin, current wd:
-          pwd
-          go get -mod=readonly ./...
-          go build -mod=readonly -o ../../.ci_bin/"$commit_hash"/dolt ./cmd/dolt/.
-      fi
-    )
-
-    echo "Finished installing dolt from $commit_hash:"
-    export PATH=`pwd`"/../../.ci_bin/$commit_hash":$old_path
-}
-
-function with_dolt_checkout() {
-    (
-      cd ../../go
-      if ! [ -x ../.ci_bin/dolt ]; then
-          if ! [ -d ../.ci_bin ]; then
-            mkdir -p ../.ci_bin
-          fi
-          go get -mod=readonly ./...
-          go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
-      fi
-    )
-    echo "Finished installing dolt from checkout:"
-    export PATH=`pwd`"/../../.ci_bin":$old_path
-}
-
-function import_one_releases() {
-    test_num="$1"
-    dolt table import -u releases_dolt_results ../"$logictest_main"/temp/parsed"$test_num".json
-    dolt add releases_dolt_results
-    dolt commit -m "update dolt sql performance results ($DOLT_VERSION) ($test_num)"
-}
-
-function import_releases() {
-    dolt checkout releases
-    seq 1 $TEST_N_TIMES | while read test_num; do
-        import_one_releases "$test_num"
-    done
-    dolt sql -r csv -q "\
-select version, test_file, line_num, avg(duration) as mean_duration, result from dolt_history_releases_dolt_results where version=\"${DOLT_VERSION}\" group by test_file, line_num;\
-" > releases_mean.csv
-    dolt table import -u releases_dolt_mean_results releases_mean.csv
-    dolt add releases_dolt_mean_results
-    dolt commit -m "update dolt sql performance mean results ($DOLT_VERSION)"
-    dolt push origin releases
-
+function create_releases_csv() {
+    ls "$TMP_CSV_DIR"
     dolt checkout regressions
-    dolt merge releases
-    dolt add .
-    dolt commit -m "merge releases"
-    dolt push origin regressions
+    dolt sql -r csv -q "select * from releases_dolt_results where test_file in ($file_list);"
+    dolt sql -r csv -q "\
+    select * from releases_dolt_results where test_file in ($file_list);"\
+    > "$TMP_CSV_DIR"/release_results.csv
+    ls "$TMP_CSV_DIR"
+    cat "$TMP_CSV_DIR"/release_results.csv
+    dolt checkout master
 }
-
-# if LOG_RESULTS_ONLY is false
-# remove dolt-sql-performance then reclone it with_dolt_checkout -- which should always use dolt from master
 
 rm -rf dolt-sql-performance
 (with_dolt_checkout; dolt clone Liquidata/dolt-sql-performance)
 
-with_dolt_commit e0bdbea435f128ee1497a5817026681df60ecacf
+(with_dolt_checkout; setup; setup_testing_dir; setup_query_db)
+
+(with_dolt_checkout; cd dolt-sql-performance; create_releases_csv)
+
+(cd "$logictest_main"; run)
 
 # then I want to cd into that dsp
 # checkout regresssions
