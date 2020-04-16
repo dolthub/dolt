@@ -173,7 +173,7 @@ teardown() {
 }
 
 @test "schema import of two tables" {
-    dolt schema imporT -c --pks=pk test1 `batshelper 1pksupportedt\
+    dolt schema import -c --pks=pk test1 `batshelper 1pksupportedt\
 ypes.csv`
     skip "Guaranteed tag collision right now"
     dolt schema import -c --pks=pk test2 `batshelper 1pk-datetime.csv`
