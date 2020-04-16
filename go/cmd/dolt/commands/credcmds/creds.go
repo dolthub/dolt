@@ -24,4 +24,5 @@ var Commands = cli.NewSubCommandHandler("creds", "Commands for managing credenti
 	LsCmd{},
 	CheckCmd{},
 	UseCmd{},
+	ImportCmd{},
 })
