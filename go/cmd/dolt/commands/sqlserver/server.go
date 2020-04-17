@@ -16,7 +16,6 @@ package sqlserver
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"strconv"
 	"time"
@@ -121,7 +120,11 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, serverController *Se
 			Auth:             userAuth,
 			ConnReadTimeout:  timeout,
 			ConnWriteTimeout: timeout,
-			Version:          fmt.Sprintf("Dolt version %s", serverConfig.Version),
+			// Overriding the version with "Dolt version %s" causes errors with the official python connector.  This
+			// is not a valid mysql version number which is of the format ^(\d{1,2})\.(\d{1,2})\.(\d{1,3})(.*)
+			// though serverConfig.Version is a valid version on it's own the mysql python connector still chokes on
+			// it as it requires a version > 4.1
+			// Version:          fmt.Sprintf("Dolt version %s", serverConfig.Version),
 		},
 		sqlEngine,
 		newSessionBuilder(sqlEngine, username, email, serverConfig.AutoCommit),

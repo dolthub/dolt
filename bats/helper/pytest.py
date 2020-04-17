@@ -27,16 +27,18 @@ def csv_to_row_maps(csv_str):
 
 
 class DoltConnection(object):
-    def __init__(self, user='root', host='127.0.0.1', port=3306, database='dolt'):
+    def __init__(self, user='root', host='127.0.0.1', port=3306, database='dolt', auto_commit=False):
         self.user = user
         self.host = host
         self.port = port
         self.database = database
+        self.auto_commit = auto_commit
         self.cnx = None
 
     def connect(self):
         try:
             self.cnx = _connect(self.user, self.host, self.port, self.database)
+            self.cnx.autocommit=self.auto_commit
         except BaseException as e:
             _print_err_and_exit(e)
 

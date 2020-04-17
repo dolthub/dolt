@@ -99,7 +99,7 @@ func (cmd SqlServerCmd) RequiresRepo() bool {
 
 // Exec executes the command
 func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	return startServer(ctx, commandStr, cmd.VersionStr, args, dEnv, nil)
+	return startServer(ctx, cmd.VersionStr, commandStr, args, dEnv, nil)
 }
 
 func startServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
@@ -143,7 +143,7 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 
 	serverConfig.AutoCommit = !apr.Contains(noAutoCommitFlag)
 
-	cli.PrintErrf("Starting server on port %d.", serverConfig.Port)
+	cli.PrintErrf("Starting server with Config %v", serverConfig.String())
 
 	if startError, closeError := Serve(ctx, serverConfig, serverController, dEnv); startError != nil || closeError != nil {
 		if startError != nil {

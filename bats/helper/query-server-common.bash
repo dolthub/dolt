@@ -20,23 +20,22 @@ import os
 import sys
 
 args = sys.argv[sys.argv.index('--') + 1:]
-working_dir, port_str, timeout_ms, db = args
+working_dir, database, port_str, timeout_ms = args
 os.chdir(working_dir)
 
 from pytest import wait_for_connection
-wait_for_connection(port=int(port_str), timeout_ms=int(timeout_ms), database=db)
-" -- $PYTEST_DIR $1 $2 dolt
+wait_for_connection(port=int(port_str), timeout_ms=int(timeout_ms), database=database, user='dolt')
+" -- "$PYTEST_DIR" "dolt_repo_$$" "$1" "$2"
 }
 
 start_sql_server() {
     let PORT="$$ % (65536-1024) + 1024"
-    dolt sql-server --port=$PORT &
+    dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt &
     SERVER_PID=$!
     wait_for_connection $PORT 5000
 }
 
 stop_sql_server() {
-    let PORT="$$ % (65536-1024) + 1024"
     kill $SERVER_PID
 }
 
@@ -47,6 +46,7 @@ stop_sql_server() {
 #      be passed.
 server_query() {
     let PORT="$$ % (65536-1024) + 1024"
+    DATABASE="dolt_repo_$$"
     PYTEST_DIR="$BATS_TEST_DIRNAME/helper"
     python3 -c "
 import os
@@ -54,14 +54,19 @@ import sys
 
 args = sys.argv[sys.argv.index('--') + 1:]
 print(args)
-working_dir, port_str, query_str, query_results = args
+working_dir, database, port_str, auto_commit, query_str, query_results = args
 os.chdir(working_dir)
+
+if auto_commit == '1':
+    auto_commit = True
+else:
+    auto_commit = False
 
 from pytest import DoltConnection, csv_to_row_maps
 
 expected_rows = csv_to_row_maps(query_results)
 
-dc = DoltConnection(port=int(port_str))
+dc = DoltConnection(port=int(port_str), database=database, user='dolt', auto_commit=auto_commit)
 dc.connect()
 
 print('executing:', query_str)
@@ -72,19 +77,19 @@ print('expected:', expected_rows, '\n  actual:', actual_rows)
 if expected_rows != actual_rows:
     print('expected:', expected_rows, '\n  actual:', actual_rows)
     sys.exit(1)
-" -- $PYTEST_DIR $PORT "$1" "$2"
+" -- "$PYTEST_DIR" "$DATABASE" "$PORT" "$1" "$2" "$3"
 }
 
 # update_query runs an update query and should be called with 2 parameters
-#   * param1 is the query string
-#   * param2 is the expected number of rows affected
+#   * param1 is 1 for autocommit = true, 0 for autocommit = false
+#   * param2 is the query string
 update_query() {
-    server_query "$1" "matched,updated\n$2,$2"
+    server_query $1 "$2" ""
 }
 
 # insert_query runs an insert query and should be called with 2 parameters
-#   * param1 is the query string
-#   * param2 is the expected number of rows inserted
+#   * param1 is 1 for autocommit = true, 0 for autocommit = false
+#   * param2 is the query string
 insert_query() {
-    server_query "$1" "updated\n$2"
+    server_query $1 "$2" ""
 }
