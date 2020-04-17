@@ -265,7 +265,7 @@ func getOutSchema(ctx context.Context, inSch schema.Schema, root *doltdb.RootVal
 	}
 
 	if mvOpts.isImport() || mvOpts.isCopy() {
-		sch, err = makeTagsUnique(ctx, root, mvOpts.TableName, sch)
+		sch, err = MakeTagsUnique(ctx, root, mvOpts.TableName, sch)
 
 		if err != nil {
 			return nil, err
@@ -332,7 +332,7 @@ func addPrimaryKey(sch schema.Schema, explicitKey string) (schema.Schema, error)
 	return sch, nil
 }
 
-func makeTagsUnique(ctx context.Context, root *doltdb.RootValue, tblName string, sch schema.Schema) (schema.Schema, error) {
+func MakeTagsUnique(ctx context.Context, root *doltdb.RootValue, tblName string, sch schema.Schema) (schema.Schema, error) {
 	var colNames []string
 	var colKinds []types.NomsKind
 	_ = sch.GetAllCols().Iter(func(_ uint64, col schema.Column) (stop bool, err error) {
