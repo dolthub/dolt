@@ -62,14 +62,13 @@ func NewDoltSession(ctx context.Context, sqlSess sql.Session, username, email st
 
 	sess := &DoltSession{sqlSess, dbRoots, dbDatas, username, email}
 	for _, db := range dbs {
-		err := sess.AddDB(ctx, db.Name(), db.GetStateReader(), db.GetStateWriter(), db.GetDoltDB())
+		err := sess.AddDB(ctx, db)
 
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	//
 	return sess, nil
 }
 
@@ -100,6 +99,7 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context) error {
 	return dbData.rsw.SetWorkingHash(ctx, h)
 }
 
+// GetDoltDB returns the *DoltDB for a given database by name
 func (sess *DoltSession) GetDoltDB(dbName string) (*doltdb.DoltDB, bool) {
 	d, ok := sess.dbDatas[dbName]
 
@@ -121,7 +121,8 @@ func (sess *DoltSession) GetRoot(dbName string) (*doltdb.RootValue, bool) {
 	return dbRoot.root, true
 }
 
-func (sess *DoltSession) GetParent(ctx context.Context, dbName string) (*doltdb.Commit, error) {
+// GetParentCommit returns the parent commit of the current session.
+func (sess *DoltSession) GetParentCommit(ctx context.Context, dbName string) (*doltdb.Commit, error) {
 	dbd, dbFound := sess.dbDatas[dbName]
 
 	if !dbFound {
@@ -208,8 +209,13 @@ func (sess *DoltSession) Set(ctx context.Context, key string, typ sql.Type, valu
 	return sess.Session.Set(ctx, key, typ, value)
 }
 
-func (sess *DoltSession) AddDB(ctx context.Context, name string, rsr env.RepoStateReader, rsw env.RepoStateWriter, ddb *doltdb.DoltDB) error {
-	sess.dbDatas[name] = dbData{rsw: rsw, ddb: ddb}
+func (sess *DoltSession) AddDB(ctx context.Context, db Database) error {
+	name := db.Name()
+	rsr := db.GetStateReader()
+	rsw := db.GetStateWriter()
+	ddb := db.GetDoltDB()
+
+	sess.dbDatas[db.Name()] = dbData{rsw: rsw, ddb: ddb}
 
 	cs := rsr.CWBHeadSpec()
 

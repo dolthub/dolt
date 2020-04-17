@@ -248,7 +248,18 @@ func (bWr branchWriter) Delete(ctx *sql.Context, r sql.Row) error {
 		return err
 	}
 
-	return bWr.bt.ddb.DeleteBranch(ctx, ref.NewBranchRef(branchName))
+	brRef := ref.NewBranchRef(branchName)
+	exists, err := bWr.bt.ddb.HasRef(ctx, brRef)
+
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		return sql.ErrDeleteRowNotFound
+	}
+
+	return bWr.bt.ddb.DeleteBranch(ctx, brRef)
 }
 
 // Close finalizes the delete operation, persisting the result.

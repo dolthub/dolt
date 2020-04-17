@@ -109,7 +109,7 @@ func NewDiffTable(ctx *sql.Context, dbName, tblName string) (*DiffTable, error) 
 		return nil, err
 	}
 
-	cm, err := sess.GetParent(ctx, dbName)
+	cm, err := sess.GetParentCommit(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}

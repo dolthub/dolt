@@ -62,7 +62,7 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	branchName, err = getBranchIncensitive(ctx, branchName, ddb)
+	branchName, err = getBranchInsensitive(ctx, branchName, ddb)
 
 	if err != nil {
 		return nil, err
@@ -89,7 +89,7 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	return h.String(), nil
 }
 
-func getBranchIncensitive(ctx context.Context, branchName string, ddb *doltdb.DoltDB) (string, error) {
+func getBranchInsensitive(ctx context.Context, branchName string, ddb *doltdb.DoltDB) (string, error) {
 	branchRefs, err := ddb.GetBranches(ctx)
 
 	if err != nil {
@@ -117,7 +117,7 @@ func getBranchIncensitive(ctx context.Context, branchName string, ddb *doltdb.Do
 
 // String implements the Stringer interface.
 func (t *HashOf) String() string {
-	return fmt.Sprintf("ABS(%s)", t.Child.String())
+	return fmt.Sprintf("HASHOF(%s)", t.Child.String())
 }
 
 // IsNullable implements the Expression interface.
@@ -135,5 +135,5 @@ func (t *HashOf) WithChildren(children ...sql.Expression) (sql.Expression, error
 
 // Type implements the Expression interface.
 func (t *HashOf) Type() sql.Type {
-	return t.Child.Type()
+	return sql.Text
 }

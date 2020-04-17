@@ -142,7 +142,7 @@ func (config *ServerConfig) ConnectionString() string {
 // String implements `fmt.Stringer`.
 func (config *ServerConfig) String() string {
 	return fmt.Sprintf(`HP="%v:%v"|U="%v"|P="%v"|T="%v"|R="%v"|L="%v"|V="%v"`, config.Host, config.Port, config.User,
-		config.Password, config.Timeout, config.ReadOnly, config.LogLevel, config.Version, )
+		config.Password, config.Timeout, config.ReadOnly, config.LogLevel, config.Version)
 }
 
 // String returns the string representation of the log level.

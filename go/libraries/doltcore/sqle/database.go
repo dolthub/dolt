@@ -172,10 +172,12 @@ func (db Database) GetDoltDB() *doltdb.DoltDB {
 	return db.ddb
 }
 
+// GetStateReader gets the RepoStateReader for a Database
 func (db Database) GetStateReader() env.RepoStateReader {
 	return db.rsr
 }
 
+// GetStateWriter gets the RepoStateWriter for a Database
 func (db Database) GetStateWriter() env.RepoStateWriter {
 	return db.rsw
 }

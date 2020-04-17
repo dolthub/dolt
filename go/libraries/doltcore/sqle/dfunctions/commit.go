@@ -56,7 +56,7 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 
 	dbName := ctx.GetCurrentDatabase()
 	dSess := sqle.DSessFromSess(ctx.Session)
-	parent, err := dSess.GetParent(ctx, dbName)
+	parent, err := dSess.GetParentCommit(ctx, dbName)
 
 	if err != nil {
 		return nil, err
@@ -107,7 +107,7 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 
 // String implements the Stringer interface.
 func (cf *CommitFunc) String() string {
-	return fmt.Sprintf("ABS(%s)", cf.Child.String())
+	return fmt.Sprintf("COMMIT(%s)", cf.Child.String())
 }
 
 // IsNullable implements the Expression interface.
@@ -126,5 +126,5 @@ func (cf *CommitFunc) WithChildren(children ...sql.Expression) (sql.Expression, 
 
 // Type implements the Expression interface.
 func (cf *CommitFunc) Type() sql.Type {
-	return cf.Child.Type()
+	return sql.Text
 }

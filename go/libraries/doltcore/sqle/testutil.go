@@ -104,7 +104,7 @@ func NewTestEngine(ctx context.Context, db Database, root *doltdb.RootValue) (*s
 	engine.AddDatabase(db)
 
 	sqlCtx := NewTestSQLCtx(ctx)
-	DSessFromSess(sqlCtx.Session).AddDB(ctx, db.Name(), db.GetStateReader(), db.GetStateWriter(), db.GetDoltDB())
+	DSessFromSess(sqlCtx.Session).AddDB(ctx, db)
 	sqlCtx.SetCurrentDatabase(db.Name())
 	err := db.SetRoot(sqlCtx, root)
 
