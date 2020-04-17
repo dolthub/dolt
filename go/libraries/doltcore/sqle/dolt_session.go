@@ -16,12 +16,12 @@ package sqle
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/store/hash"
+
 	"github.com/src-d/go-mysql-server/sql"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 type dbRoot struct {
@@ -30,8 +30,8 @@ type dbRoot struct {
 }
 
 type dbData struct {
-	ddb     *doltdb.DoltDB
-	rsw     env.RepoStateWriter
+	ddb *doltdb.DoltDB
+	rsw env.RepoStateWriter
 }
 
 var _ sql.Session = &DoltSession{}
@@ -43,12 +43,12 @@ type DoltSession struct {
 	dbDatas map[string]dbData
 
 	Username string
-	Email string
+	Email    string
 }
 
 // DefaultDoltSession creates a DoltSession object with default values
 func DefaultDoltSession() *DoltSession {
-sess := &DoltSession{sql.NewBaseSession(), make(map[string]dbRoot), make(map[string]dbData), "", ""}
+	sess := &DoltSession{sql.NewBaseSession(), make(map[string]dbRoot), make(map[string]dbData), "", ""}
 	return sess
 }
 
@@ -121,7 +121,6 @@ func (sess *DoltSession) GetRoot(dbName string) (*doltdb.RootValue, bool) {
 	return dbRoot.root, true
 }
 
-
 func (sess *DoltSession) GetParent(ctx context.Context, dbName string) (*doltdb.Commit, error) {
 	dbd, dbFound := sess.dbDatas[dbName]
 
@@ -132,7 +131,7 @@ func (sess *DoltSession) GetParent(ctx context.Context, dbName string) (*doltdb.
 	_, value := sess.Session.Get(dbName + HeadKeySuffix)
 	valStr, isStr := value.(string)
 
-	if !isStr || !hash.IsValid(valStr){
+	if !isStr || !hash.IsValid(valStr) {
 		return nil, doltdb.ErrInvalidHash
 	}
 
@@ -152,7 +151,7 @@ func (sess *DoltSession) GetParent(ctx context.Context, dbName string) (*doltdb.
 }
 
 func (sess *DoltSession) Set(ctx context.Context, key string, typ sql.Type, value interface{}) error {
-	if isHead, dbName := IsHeadKey(key); isHead  {
+	if isHead, dbName := IsHeadKey(key); isHead {
 		dbd, dbFound := sess.dbDatas[dbName]
 
 		if !dbFound {
@@ -161,7 +160,7 @@ func (sess *DoltSession) Set(ctx context.Context, key string, typ sql.Type, valu
 
 		valStr, isStr := value.(string)
 
-		if !isStr || !hash.IsValid(valStr){
+		if !isStr || !hash.IsValid(valStr) {
 			return doltdb.ErrInvalidHash
 		}
 
@@ -196,7 +195,7 @@ func (sess *DoltSession) Set(ctx context.Context, key string, typ sql.Type, valu
 		}
 
 		hashStr := h.String()
-		err = sess.Session.Set(ctx, dbName + WorkingKeySuffix, sql.Text, hashStr)
+		err = sess.Session.Set(ctx, dbName+WorkingKeySuffix, sql.Text, hashStr)
 
 		if err != nil {
 			return err
@@ -210,7 +209,7 @@ func (sess *DoltSession) Set(ctx context.Context, key string, typ sql.Type, valu
 }
 
 func (sess *DoltSession) AddDB(ctx context.Context, name string, rsr env.RepoStateReader, rsw env.RepoStateWriter, ddb *doltdb.DoltDB) error {
-	sess.dbDatas[name] = dbData{rsw:rsw, ddb:ddb}
+	sess.dbDatas[name] = dbData{rsw: rsw, ddb: ddb}
 
 	cs := rsr.CWBHeadSpec()
 
@@ -226,6 +225,5 @@ func (sess *DoltSession) AddDB(ctx context.Context, name string, rsr env.RepoSta
 		return err
 	}
 
-	return sess.Set(ctx, name + HeadKeySuffix, sql.Text, h.String())
+	return sess.Set(ctx, name+HeadKeySuffix, sql.Text, h.String())
 }
-

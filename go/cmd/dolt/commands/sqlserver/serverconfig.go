@@ -43,7 +43,7 @@ type ServerConfig struct {
 	LogLevel   LogLevel // Specifies the level of logging that the server will use.
 	MultiDBDir string   // Directory whose children are dolt data repositories
 	Version    string   // Dolt cli version
-	AutoCommit bool		// Autocommit defines the value of the @@autocommit session variable used on every connection
+	AutoCommit bool     // Autocommit defines the value of the @@autocommit session variable used on every connection
 }
 
 // DefaultServerConfig creates a `*ServerConfig` that has all of the options set to their default values.

@@ -17,6 +17,7 @@ package dfunctions
 import (
 	"errors"
 	"fmt"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 
@@ -63,7 +64,7 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 
 	root, ok := dSess.GetRoot(dbName)
 
-	if ! ok {
+	if !ok {
 		return nil, fmt.Errorf("unknown database '%s'", dbName)
 	}
 

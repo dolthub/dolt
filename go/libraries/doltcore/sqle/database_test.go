@@ -15,11 +15,12 @@
 package sqle
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-func testKeyFunc(t *testing.T, keyFunc func(string)(bool, string), testVal string, expectedIsKey bool, expectedDBName string) {
+func testKeyFunc(t *testing.T, keyFunc func(string) (bool, string), testVal string, expectedIsKey bool, expectedDBName string) {
 	isKey, dbName := keyFunc(testVal)
 	assert.Equal(t, expectedIsKey, isKey)
 	assert.Equal(t, expectedDBName, dbName)

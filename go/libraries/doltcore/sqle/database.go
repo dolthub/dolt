@@ -49,7 +49,7 @@ const (
 )
 
 const (
-	HeadKeySuffix = "_head"
+	HeadKeySuffix    = "_head"
 	WorkingKeySuffix = "_working"
 )
 
