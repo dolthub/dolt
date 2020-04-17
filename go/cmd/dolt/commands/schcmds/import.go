@@ -31,7 +31,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/mvdata"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
@@ -277,12 +276,6 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 
 	if verr != nil {
 		return verr
-	}
-
-	sch, err = mvdata.MakeTagsUnique(ctx, root, tblName, sch)
-
-	if err != nil {
-		return errhand.BuildDError("error: could not create unique tags for schema").AddCause(err).Build()
 	}
 
 	cli.Println(sql.SchemaAsCreateStmt(tblName, sch))
