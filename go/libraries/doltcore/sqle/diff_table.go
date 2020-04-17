@@ -26,7 +26,6 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/store/hash"
@@ -49,7 +48,6 @@ var _ sql.FilteredTable = (*DiffTable)(nil)
 type DiffTable struct {
 	name          string
 	ddb           *doltdb.DoltDB
-	rsr           env.RepoStateReader
 	ss            *schema.SuperSchema
 	joiner        *rowconv.Joiner
 	sqlSch        sql.Schema
@@ -60,8 +58,15 @@ type DiffTable struct {
 	filters       []sql.Expression
 }
 
-func NewDiffTable(ctx context.Context, name string, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (*DiffTable, error) {
-	diffTblName := DoltDiffTablePrefix + name
+func NewDiffTable(ctx *sql.Context, dbName, tblName string) (*DiffTable, error) {
+	sess := DSessFromSess(ctx.Session)
+	ddb, ok := sess.GetDoltDB(dbName)
+
+	if !ok {
+		return nil, sql.ErrDatabaseNotFound.New(dbName)
+	}
+
+	diffTblName := DoltDiffTablePrefix + tblName
 
 	cmItr, err := doltdb.CommitItrForAllBranches(ctx, ddb)
 
@@ -69,7 +74,13 @@ func NewDiffTable(ctx context.Context, name string, ddb *doltdb.DoltDB, rsr env.
 		return nil, err
 	}
 
-	ss, err := SuperSchemaForAllBranches(ctx, cmItr, ddb, rsr, name)
+	root1, ok := sess.GetRoot(dbName)
+
+	if !ok {
+		return nil, sql.ErrDatabaseNotFound.New(dbName)
+	}
+
+	ss, err := SuperSchemaForAllBranches(ctx, cmItr, root1, tblName)
 
 	if err != nil {
 		return nil, err
@@ -98,13 +109,12 @@ func NewDiffTable(ctx context.Context, name string, ddb *doltdb.DoltDB, rsr env.
 		return nil, err
 	}
 
-	root1, err := ddb.ReadRootValue(ctx, rsr.WorkingHash())
-
+	cm, err := sess.GetParent(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
 
-	root2, err := ddb.ReadRootValue(ctx, rsr.StagedHash())
+	root2, err := cm.GetRootValue()
 
 	if err != nil {
 		return nil, err
@@ -125,7 +135,7 @@ func NewDiffTable(ctx context.Context, name string, ddb *doltdb.DoltDB, rsr env.
 		Source:   diffTblName,
 	})
 
-	return &DiffTable{name, ddb, rsr, ss, j, sqlSch, root2, root1, "current", "HEAD", nil}, nil
+	return &DiffTable{tblName, ddb, ss, j, sqlSch, root2, root1, "current", "HEAD", nil}, nil
 }
 
 func (dt *DiffTable) Name() string {
@@ -347,8 +357,7 @@ func (dt *DiffTable) WithFilters(filters []sql.Expression) sql.Table {
 		})
 
 		value = strings.Trim(value, " \t\n\r\"")
-
-		cs, err := doltdb.NewCommitSpec(value, dt.rsr.CWBHeadRef().String())
+		cs, err := doltdb.NewCommitSpec(value, "")
 
 		if err != nil {
 			panic(err)
@@ -385,13 +394,7 @@ func (dt *DiffTable) Filters() []sql.Expression {
 	return dt.filters
 }
 
-func SuperSchemaForAllBranches(ctx context.Context, cmItr doltdb.CommitItr, ddb *doltdb.DoltDB, rsr env.RepoStateReader, tblName string) (*schema.SuperSchema, error) {
-	wr, err := ddb.ReadRootValue(ctx, rsr.WorkingHash())
-
-	if err != nil {
-		return nil, err
-	}
-
+func SuperSchemaForAllBranches(ctx context.Context, cmItr doltdb.CommitItr, wr *doltdb.RootValue, tblName string) (*schema.SuperSchema, error) {
 	t, _, ok, err := wr.GetTableInsensitive(ctx, tblName)
 
 	if err != nil {

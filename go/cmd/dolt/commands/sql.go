@@ -43,6 +43,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	dsql "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
 	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
+	_ "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/json"
@@ -176,9 +177,10 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
+	dsess := dsqle.DefaultDoltSession()
+
 	var mrEnv env.MultiRepoEnv
 	var initialRoots map[string]*doltdb.RootValue
-
 	if multiDir, ok := apr.GetValue(multiDBDirFlag); !ok {
 		if !cli.CheckEnvIsValid(dEnv) {
 			return 2
@@ -190,6 +192,9 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
+
+		dsess.Username = *dEnv.Config.GetStringOrDefault(env.UserNameKey, "")
+		dsess.Email = *dEnv.Config.GetStringOrDefault(env.UserEmailKey, "")
 	} else {
 		mrEnv, err = env.LoadMultiEnvFromDir(ctx, env.GetCurrentUserHomeDir, dEnv.FS, multiDir, cmd.VersionStr)
 
@@ -205,9 +210,10 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	}
 
 	sqlCtx := sql.NewContext(ctx,
-		sql.WithSession(dsqle.DefaultDoltSession()),
+		sql.WithSession(dsess),
 		sql.WithIndexRegistry(sql.NewIndexRegistry()),
 		sql.WithViewRegistry(sql.NewViewRegistry()))
+	sqlCtx.Set(sqlCtx, sql.AutoCommitSessionVar, sql.Boolean, true)
 
 	roots := make(map[string]*doltdb.RootValue)
 
@@ -307,7 +313,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 }
 
 func execShell(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, format resultFormat) (map[string]*doltdb.RootValue, errhand.VerboseError) {
-	dbs := CollectDBs(mrEnv, roots, newDatabase)
+	dbs := CollectDBs(mrEnv, newDatabase)
 	se, err := newSqlEngine(sqlCtx, mrEnv, roots, format, dbs...)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
@@ -327,7 +333,7 @@ func execShell(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*do
 }
 
 func execBatch(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, batchInput io.Reader, format resultFormat) (map[string]*doltdb.RootValue, errhand.VerboseError) {
-	dbs := CollectDBs(mrEnv, roots, newBatchedDatabase)
+	dbs := CollectDBs(mrEnv, newBatchedDatabase)
 	se, err := newSqlEngine(sqlCtx, mrEnv, roots, format, dbs...)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
@@ -346,18 +352,18 @@ func execBatch(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*do
 	return newRoots, nil
 }
 
-type createDBFunc func(name string, defRoot *doltdb.RootValue, dEnv *env.DoltEnv) dsqle.Database
+type createDBFunc func(name string, dEnv *env.DoltEnv) dsqle.Database
 
-func newDatabase(name string, defRoot *doltdb.RootValue, dEnv *env.DoltEnv) dsqle.Database {
-	return dsqle.NewDatabase(name, defRoot, dEnv.DoltDB, dEnv.RepoState, dEnv.RepoStateWriter())
+func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
+	return dsqle.NewDatabase(name, dEnv.DoltDB, dEnv.RepoState, dEnv.RepoStateWriter())
 }
 
-func newBatchedDatabase(name string, defRoot *doltdb.RootValue, dEnv *env.DoltEnv) dsqle.Database {
-	return dsqle.NewBatchedDatabase(name, defRoot, dEnv.DoltDB, dEnv.RepoState, dEnv.RepoStateWriter())
+func newBatchedDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
+	return dsqle.NewBatchedDatabase(name, dEnv.DoltDB, dEnv.RepoState, dEnv.RepoStateWriter())
 }
 
 func execQuery(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, query string, format resultFormat) (map[string]*doltdb.RootValue, errhand.VerboseError) {
-	dbs := CollectDBs(mrEnv, roots, newDatabase)
+	dbs := CollectDBs(mrEnv, newDatabase)
 	se, err := newSqlEngine(sqlCtx, mrEnv, roots, format, dbs...)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
@@ -387,11 +393,10 @@ func execQuery(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*do
 
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
 // objects.
-func CollectDBs(mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, createDB createDBFunc) []dsqle.Database {
+func CollectDBs(mrEnv env.MultiRepoEnv, createDB createDBFunc) []dsqle.Database {
 	dbs := make([]dsqle.Database, 0, len(mrEnv))
 	_ = mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
-		root := roots[name]
-		db := createDB(name, root, dEnv)
+		db := createDB(name, dEnv)
 		dbs = append(dbs, db)
 		return false, nil
 	})
@@ -845,7 +850,7 @@ func processQuery(ctx *sql.Context, query string, se *sqlEngine) (sql.Schema, sq
 	switch s := sqlStatement.(type) {
 	case *sqlparser.Select, *sqlparser.Insert, *sqlparser.Update, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union:
 		return se.query(ctx, query)
-	case *sqlparser.Use:
+	case *sqlparser.Use, *sqlparser.Set:
 		sch, rowIter, err := se.query(ctx, query)
 
 		if rowIter != nil {
@@ -856,7 +861,11 @@ func processQuery(ctx *sql.Context, query string, se *sqlEngine) (sql.Schema, sq
 			return nil, nil, err
 		}
 
-		cli.Println("Database changed")
+		switch sqlStatement.(type) {
+		case *sqlparser.Use:
+			cli.Println("Database changed")
+		}
+
 		return sch, nil, err
 	case *sqlparser.Delete:
 		ok := se.checkThenDeleteAllRows(ctx, s)
@@ -1081,17 +1090,23 @@ var ErrDBNotFoundKind = errors.NewKind("database '%s' not found")
 
 // sqlEngine packages up the context necessary to run sql queries against sqle.
 func newSqlEngine(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, format resultFormat, dbs ...dsqle.Database) (*sqlEngine, error) {
-	dsqle.RegisterFunctions(dEnv.DoltDB)
-
 	engine := sqle.NewDefault()
 	engine.AddDatabase(sql.NewInformationSchemaDatabase(engine.Catalog))
+
+	dsess := dsqle.DSessFromSess(sqlCtx.Session)
 
 	nameToDB := make(map[string]dsqle.Database)
 	for _, db := range dbs {
 		nameToDB[db.Name()] = db
 		root := roots[db.Name()]
 		engine.AddDatabase(db)
-		err := db.SetRoot(sqlCtx, root)
+		err := dsess.AddDB(sqlCtx, db.Name(), db.GetStateReader(), db.GetStateWriter(), db.GetDoltDB())
+
+		if err != nil {
+			return nil, err
+		}
+
+		err = db.SetRoot(sqlCtx, root)
 		if err != nil {
 			return nil, err
 		}

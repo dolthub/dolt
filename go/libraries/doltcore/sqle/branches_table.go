@@ -21,7 +21,6 @@ import (
 	"github.com/src-d/go-mysql-server/sql"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 )
 
@@ -39,12 +38,17 @@ var _ sql.ReplaceableTable = (*BranchesTable)(nil)
 // BranchesTable is a sql.Table implementation that implements a system table which shows the dolt branches
 type BranchesTable struct {
 	ddb *doltdb.DoltDB
-	rsr env.RepoStateReader
 }
 
 // NewBranchesTable creates a BranchesTable
-func NewBranchesTable(ddb *doltdb.DoltDB, rs env.RepoStateReader) *BranchesTable {
-	return &BranchesTable{ddb: ddb, rsr: rs}
+func NewBranchesTable(sqlCtx *sql.Context, dbName string) (*BranchesTable, error) {
+	ddb, ok := DSessFromSess(sqlCtx.Session).GetDoltDB(dbName)
+
+	if !ok {
+		return nil, sql.ErrDatabaseNotFound.New(dbName)
+	}
+
+	return &BranchesTable{ddb}, nil
 }
 
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant
@@ -78,8 +82,9 @@ func (bt *BranchesTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
 func (bt *BranchesTable) PartitionRows(sqlCtx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	return NewBranchItr(sqlCtx, bt.ddb, bt.rsr)
+	return NewBranchItr(sqlCtx, bt.ddb)
 }
+
 
 // BranchItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
 type BranchItr struct {
@@ -89,7 +94,7 @@ type BranchItr struct {
 }
 
 // NewBranchItr creates a BranchItr from the current environment.
-func NewBranchItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (*BranchItr, error) {
+func NewBranchItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB) (*BranchItr, error) {
 	branches, err := ddb.GetBranches(sqlCtx)
 
 	if err != nil {

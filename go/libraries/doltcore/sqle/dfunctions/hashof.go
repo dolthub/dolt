@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"strings"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -26,20 +27,15 @@ import (
 	"github.com/src-d/go-mysql-server/sql/expression"
 )
 
+const HashOfFuncName = "hashof"
+
 type HashOf struct {
 	expression.UnaryExpression
-	ddbs map[string]*doltdb.DoltDB
-}
-
-func NewHashOfForDDB(ddbs map[string]*doltdb.DoltDB) func(e sql.Expression) sql.Expression {
-	return func(e sql.Expression) sql.Expression {
-		return NewHashOf(e, ddbs)
-	}
 }
 
 // NewHashOf creates a new HashOf expression.
-func NewHashOf(e sql.Expression, ddbs map[string]*doltdb.DoltDB) sql.Expression {
-	return &HashOf{expression.UnaryExpression{Child: e}, ddbs}
+func NewHashOf(e sql.Expression) sql.Expression {
+	return &HashOf{expression.UnaryExpression{Child: e}}
 }
 
 // Eval implements the Expression interface.
@@ -61,9 +57,9 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	dbName := ctx.GetCurrentDatabase()
-	ddb, ok := t.ddbs[dbName]
+	ddb, ok := sqle.DSessFromSess(ctx.Session).GetDoltDB(dbName)
 	if !ok {
-		return nil, fmt.Errorf("unknown database '%s'", dbName)
+		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
 	branchName, err = getBranchIncensitive(ctx, branchName, ddb)
@@ -134,7 +130,7 @@ func (t *HashOf) WithChildren(children ...sql.Expression) (sql.Expression, error
 	if len(children) != 1 {
 		return nil, sql.ErrInvalidChildrenNumber.New(t, len(children), 1)
 	}
-	return NewHashOf(children[0], t.ddbs), nil
+	return NewHashOf(children[0]), nil
 }
 
 // Type implements the Expression interface.

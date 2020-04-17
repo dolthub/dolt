@@ -111,9 +111,7 @@ teardown() {
     dolt add test
     dolt commit -m "Added (0,0) row"
     dolt sql -q "insert into test values (1,1)"
-    dolt add test
-    dolt commit -m "Added (1,1) row"
-    run dolt sql -q 'select * from dolt_diff_test where from_commit="HEAD^"'
+    run dolt sql -q 'select * from dolt_diff_test'
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
 }

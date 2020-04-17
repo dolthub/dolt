@@ -31,7 +31,8 @@ var ErrNameNotConfigured = errors.New("name not configured")
 var ErrEmailNotConfigured = errors.New("email not configured")
 var ErrEmptyCommitMessage = errors.New("commit message empty")
 
-func getNameAndEmail(cfg *env.DoltCliConfig) (string, string, error) {
+// GetNameAndEmail returns the name and email from the supplied config
+func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 	name, err := cfg.GetString(env.UserNameKey)
 
 	if err == config.ErrConfigParamNotFound {
@@ -72,7 +73,7 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, date time.
 		return NothingStaged{notStagedTbls, notStagedDocs}
 	}
 
-	name, email, err := getNameAndEmail(dEnv.Config)
+	name, email, err := GetNameAndEmail(dEnv.Config)
 
 	if err != nil {
 		return err

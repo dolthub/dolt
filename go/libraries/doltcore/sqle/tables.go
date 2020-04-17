@@ -242,12 +242,14 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		if err != nil {
 			return err
 		}
-		tt, err := t.db.defRoot.GenerateTagsForNewColumns(ctx, t.name, []string{column.Name}, []types.NomsKind{ti.NomsKind()})
+
+		tt, err := root.GenerateTagsForNewColumns(ctx, t.name, []string{column.Name}, []types.NomsKind{ti.NomsKind()})
 		if err != nil {
 			return err
 		}
 		tag = tt[0]
 	}
+
 	col, err := SqlColToDoltCol(tag, column)
 	if err != nil {
 		return err
@@ -270,7 +272,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		}
 	}
 
-	updatedTable, err := alterschema.AddColumnToTable(ctx, t.db.defRoot, table, t.name, col.Tag, col.Name, col.TypeInfo, nullable, defaultVal, orderToOrder(order))
+	updatedTable, err := alterschema.AddColumnToTable(ctx, root, table, t.name, col.Tag, col.Name, col.TypeInfo, nullable, defaultVal, orderToOrder(order))
 	if err != nil {
 		return err
 	}

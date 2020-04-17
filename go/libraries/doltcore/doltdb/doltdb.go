@@ -324,7 +324,9 @@ func (ddb *DoltDB) ReadRootValue(ctx context.Context, h hash.Hash) (*RootValue, 
 
 	if val != nil {
 		if rootSt, ok := val.(types.Struct); ok {
-			return &RootValue{ddb.db, rootSt}, nil
+			if rootSt.Name() == ddbRootStructName {
+				return &RootValue{ddb.db, rootSt}, nil
+			}
 		}
 	}
 
@@ -407,6 +409,70 @@ func (ddb *DoltDB) CommitWithParentSpecs(ctx context.Context, valHash hash.Hash,
 		parentCommits = append(parentCommits, cm)
 	}
 	return ddb.CommitWithParentCommits(ctx, valHash, dref, parentCommits, cm)
+}
+
+func (ddb *DoltDB) WriteCommitDanglingCommit(ctx context.Context, valHash hash.Hash, parentCommits []*Commit, cm *CommitMeta) (*Commit, error) {
+	var commitSt types.Struct
+	err := pantoerr.PanicToError("error committing value "+valHash.String(), func() error {
+		val, err := ddb.db.ReadValue(ctx, valHash)
+
+		if err != nil {
+			return err
+		}
+
+		if st, ok := val.(types.Struct); !ok || st.Name() != ddbRootStructName {
+			return errors.New("can't commit a value that is not a valid root value")
+		}
+
+		s, err := types.NewSet(ctx, ddb.db)
+
+		if err != nil {
+			return err
+		}
+
+		parentEditor := s.Edit()
+
+		for _, cm := range parentCommits {
+			rf, err := types.NewRef(cm.commitSt, ddb.db.Format())
+
+			if err != nil {
+				return err
+			}
+
+			_, err = parentEditor.Insert(rf)
+
+			if err != nil {
+				return err
+			}
+		}
+
+		parents, err := parentEditor.Set(ctx)
+
+		if err != nil {
+			return err
+		}
+
+		st, err := cm.toNomsStruct(ddb.db.Format())
+
+		if err != nil {
+			return err
+		}
+
+		commitOpts := datas.CommitOptions{Parents: parents, Meta: st, Policy: nil}
+		commitSt, err = ddb.db.CommitDangling(ctx, val, commitOpts)
+
+		if err != nil {
+			return err
+		}
+
+		return err
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &Commit{ddb.db, commitSt}, nil
 }
 
 func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Hash, dref ref.DoltRef, parentCommits []*Commit, cm *CommitMeta) (*Commit, error) {

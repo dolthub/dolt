@@ -17,6 +17,7 @@ package envtestutils
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"io"
 	"strconv"
 	"testing"
@@ -448,7 +449,7 @@ func testRebaseTag(t *testing.T, test RebaseTagTest) {
 
 		rebasedRoot, _ := rebasedCommit.GetRootValue()
 		checkSchema(t, rebasedRoot, "people", test.ExpectedSchema)
-		checkRows(t, dEnv.DoltDB, rebasedRoot, "people", test.ExpectedSchema, test.SelectResultQuery, test.ExpectedRows)
+		checkRows(t, dEnv, rebasedRoot, "people", test.ExpectedSchema, test.SelectResultQuery, test.ExpectedRows)
 	}
 }
 
@@ -485,7 +486,7 @@ func testRebaseTagHistory(t *testing.T) {
 	expectedSch := schema.SchemaFromCols(peopleWithDrip)
 	rebasedRoot, _ := newMasterCm.GetRootValue()
 	checkSchema(t, rebasedRoot, "people", expectedSch)
-	checkRows(t, dEnv.DoltDB, rebasedRoot, "people", expectedSch, "select * from people;", []row.Row{
+	checkRows(t, dEnv, rebasedRoot, "people", expectedSch, "select * from people;", []row.Row{
 		newRow(row.TaggedValues{IdTag: types.Int(7), NameTag: types.String("Maggie Simpson"), AgeTag: types.Int(1)}, people),
 		newRow(row.TaggedValues{IdTag: types.Int(10), NameTag: types.String("Patty Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(8.5)}, peopleWithDrip),
 	})
@@ -530,8 +531,8 @@ func checkSchema(t *testing.T, r *doltdb.RootValue, tableName string, expectedSc
 	require.True(t, eq)
 }
 
-func checkRows(t *testing.T, ddb *doltdb.DoltDB, root *doltdb.RootValue, tableName string, sch schema.Schema, selectQuery string, expectedRows []row.Row) {
-	sqlDb := dsqle.NewDatabase("dolt", root, ddb, nil, nil)
+func checkRows(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, tableName string, sch schema.Schema, selectQuery string, expectedRows []row.Row) {
+	sqlDb := dsqle.NewDatabase("dolt", dEnv.DoltDB, dEnv.RepoState, dEnv.RepoStateWriter())
 	engine, sqlCtx, err := dsqle.NewTestEngine(context.Background(), sqlDb, root)
 	require.NoError(t, err)
 

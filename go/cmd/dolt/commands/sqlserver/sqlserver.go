@@ -28,14 +28,15 @@ import (
 )
 
 const (
-	hostFlag       = "host"
-	portFlag       = "port"
-	userFlag       = "user"
-	passwordFlag   = "password"
-	timeoutFlag    = "timeout"
-	readonlyFlag   = "readonly"
-	logLevelFlag   = "loglevel"
-	multiDBDirFlag = "multi-db-dir"
+	hostFlag         = "host"
+	portFlag         = "port"
+	userFlag         = "user"
+	passwordFlag     = "password"
+	timeoutFlag      = "timeout"
+	readonlyFlag     = "readonly"
+	logLevelFlag     = "loglevel"
+	multiDBDirFlag   = "multi-db-dir"
+	noAutoCommitFlag = "no-auto-commit"
 )
 
 var sqlServerDocs = cli.CommandDocumentationContent{
@@ -79,6 +80,7 @@ func createArgParser(serverConfig *ServerConfig) *argparser.ArgParser {
 	ap.SupportsFlag(readonlyFlag, "r", "Disables modification of the database")
 	ap.SupportsString(logLevelFlag, "l", "Log level", fmt.Sprintf("Defines the level of logging provided\nOptions are: `debug`, `info`, `warning`, `error`, `fatal` (default `%v`)", serverConfig.LogLevel))
 	ap.SupportsString(multiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases.")
+	ap.SupportsFlag(noAutoCommitFlag, "", "When provided sessions will not automatically commit their changes to the working set. Anything not manually committed will be lost.")
 	return ap
 }
 
@@ -138,6 +140,8 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 			return 2
 		}
 	}
+
+	serverConfig.AutoCommit = !apr.Contains(noAutoCommitFlag)
 
 	cli.PrintErrf("Starting server on port %d.", serverConfig.Port)
 

@@ -20,7 +20,6 @@ import (
 	"github.com/src-d/go-mysql-server/sql"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 )
 
@@ -33,13 +32,19 @@ var _ sql.Table = (*LogTable)(nil)
 
 // LogTable is a sql.Table implementation that implements a system table which shows the dolt commit log
 type LogTable struct {
+	dbName string
 	ddb *doltdb.DoltDB
-	rsr env.RepoStateReader
 }
 
 // NewLogTable creates a LogTable
-func NewLogTable(ddb *doltdb.DoltDB, rs env.RepoStateReader) *LogTable {
-	return &LogTable{ddb: ddb, rsr: rs}
+func NewLogTable(ctx *sql.Context, dbName string) (*LogTable, error) {
+	ddb, ok := DSessFromSess(ctx.Session).GetDoltDB(dbName)
+
+	if !ok {
+		return nil, sql.ErrDatabaseNotFound.New(dbName)
+	}
+
+	return &LogTable{dbName: dbName, ddb: ddb}, nil
 }
 
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant
@@ -72,7 +77,7 @@ func (dt *LogTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
 func (dt *LogTable) PartitionRows(sqlCtx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	return NewLogItr(sqlCtx, dt.ddb, dt.rsr)
+	return NewLogItr(sqlCtx, dt.dbName, dt.ddb)
 }
 
 // LogItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
@@ -82,8 +87,9 @@ type LogItr struct {
 }
 
 // NewLogItr creates a LogItr from the current environment.
-func NewLogItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (*LogItr, error) {
-	commit, err := ddb.Resolve(sqlCtx, rsr.CWBHeadSpec())
+func NewLogItr(sqlCtx *sql.Context, dbName string, ddb *doltdb.DoltDB) (*LogItr, error) {
+	sess := DSessFromSess(sqlCtx.Session)
+	commit, err := sess.GetParent(sqlCtx, dbName)
 
 	if err != nil {
 		return nil, err

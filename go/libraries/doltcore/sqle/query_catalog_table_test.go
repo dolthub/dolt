@@ -54,7 +54,7 @@ func TestInsertIntoQueryCatalogTable(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	rows, err := ExecuteSelect(dEnv.DoltDB, root, "select display_order, query, name, description from "+doltdb.DoltQueryCatalogTableName)
+	rows, err := ExecuteSelect(dEnv,dEnv.DoltDB, root, "select display_order, query, name, description from "+doltdb.DoltQueryCatalogTableName)
 	require.NoError(t, err)
 	expectedRows := []sql.Row{
 		{uint64(1), "select 1 from dual", "name", "description"},
@@ -74,7 +74,7 @@ func TestInsertIntoQueryCatalogTable(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, sq2, retrieved2)
 
-	rows, err = ExecuteSelect(dEnv.DoltDB, root, "select display_order, query, name, description from "+doltdb.DoltQueryCatalogTableName+" order by display_order")
+	rows, err = ExecuteSelect(dEnv,dEnv.DoltDB, root, "select display_order, query, name, description from "+doltdb.DoltQueryCatalogTableName+" order by display_order")
 	require.NoError(t, err)
 	expectedRows = []sql.Row{
 		{uint64(1), "select 1 from dual", "name", "description"},
@@ -83,7 +83,7 @@ func TestInsertIntoQueryCatalogTable(t *testing.T) {
 
 	assert.Equal(t, expectedRows, rows)
 
-	rows, err = ExecuteSelect(dEnv.DoltDB, root, "select id from "+doltdb.DoltQueryCatalogTableName)
+	rows, err = ExecuteSelect(dEnv, dEnv.DoltDB, root, "select id from "+doltdb.DoltQueryCatalogTableName)
 	require.NoError(t, err)
 	for _, r := range rows {
 		assert.NotEmpty(t, r)

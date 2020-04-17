@@ -30,9 +30,9 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
+	_ "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/dfunctions"
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -79,21 +79,22 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, serverController *Se
 		permissions = auth.ReadPerm
 	}
 
-	dsqle.RegisterFunctions(dEnv.DoltDB)
-
 	userAuth := auth.NewAudit(auth.NewNativeSingle(serverConfig.User, serverConfig.Password, permissions), auth.NewAuditLog(logrus.StandardLogger()))
 	sqlEngine := sqle.NewDefault()
 
+	var username string
+	var email string
 	var mrEnv env.MultiRepoEnv
-	var roots map[string]*doltdb.RootValue
 	if serverConfig.MultiDBDir == "" {
 		var err error
 		mrEnv = env.DoltEnvAsMultiEnv(dEnv)
-		roots, err = mrEnv.GetWorkingRoots(ctx)
 
 		if err != nil {
 			return err, nil
 		}
+
+		username = *dEnv.Config.GetStringOrDefault(env.UserNameKey, "")
+		email = *dEnv.Config.GetStringOrDefault(env.UserEmailKey, "")
 	} else {
 		var err error
 		mrEnv, err = env.LoadMultiEnvFromDir(ctx, env.GetCurrentUserHomeDir, dEnv.FS, serverConfig.MultiDBDir, serverConfig.Version)
@@ -101,15 +102,10 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, serverController *Se
 		if err != nil {
 			return err, nil
 		}
-
-		roots, err = mrEnv.GetWorkingRoots(ctx)
-
-		if err != nil {
-			return err, nil
-		}
 	}
 
-	dbs := commands.CollectDBs(mrEnv, roots, newAutoCommmitDatabase)
+	dbs := commands.CollectDBs(mrEnv, newDatabase)
+
 	for _, db := range dbs {
 		sqlEngine.AddDatabase(db)
 	}
@@ -128,7 +124,7 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, serverController *Se
 			Version:          fmt.Sprintf("Dolt version %s", serverConfig.Version),
 		},
 		sqlEngine,
-		newSessionBuilder(sqlEngine),
+		newSessionBuilder(sqlEngine, username, email, serverConfig.AutoCommit),
 	)
 
 	if startError != nil {
@@ -145,10 +141,16 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, serverController *Se
 	return
 }
 
-func newSessionBuilder(sqlEngine *sqle.Engine) server.SessionBuilder {
+func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommit bool) server.SessionBuilder {
 	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, *sql.IndexRegistry, *sql.ViewRegistry, error) {
 		mysqlSess := sql.NewSession(host, conn.RemoteAddr().String(), conn.User, conn.ConnectionID)
-		doltSess, err := dsqle.NewSessionWithDefaultRoots(mysqlSess, dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())...)
+		doltSess, err := dsqle.NewDoltSession(ctx, mysqlSess, username, email, dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())...)
+
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		err = doltSess.Set(ctx, sql.AutoCommitSessionVar, sql.Boolean, autocommit)
 
 		if err != nil {
 			return nil, nil, nil, err
@@ -169,7 +171,13 @@ func newSessionBuilder(sqlEngine *sqle.Engine) server.SessionBuilder {
 				return nil, nil, nil, err
 			}
 
-			err = dsqle.RegisterSchemaFragments(sqlCtx, db, db.GetDefaultRoot())
+			root, err := db.GetRoot(sqlCtx)
+			if err != err {
+				cli.PrintErrln(err)
+				return nil, nil, nil, err
+			}
+
+			err = dsqle.RegisterSchemaFragments(sqlCtx, db, root)
 			if err != nil {
 				cli.PrintErr(err)
 				return nil, nil, nil, err
@@ -188,8 +196,8 @@ func newSessionBuilder(sqlEngine *sqle.Engine) server.SessionBuilder {
 	}
 }
 
-func newAutoCommmitDatabase(name string, defRoot *doltdb.RootValue, dEnv *env.DoltEnv) dsqle.Database {
-	return dsqle.NewDatabase(name, defRoot, dEnv.DoltDB, dEnv.RepoState, dEnv.RepoStateWriter())
+func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
+	return dsqle.NewDatabase(name, dEnv.DoltDB, dEnv.RepoState, dEnv.RepoStateWriter())
 }
 
 func dbsAsDSQLDBs(dbs []sql.Database) []dsqle.Database {
