@@ -202,10 +202,13 @@ func TestUnreadableConfig(t *testing.T) {
 	if osutil.IsWindows {
 		t.Skip("Skipping test as it is not applicable on Windows due to FS differences")
 	}
+	if os.Geteuid() == 0 {
+		t.Skip("Skipping test as euid == 0 and root can always read a file")
+	}
 	assert := assert.New(t)
 	path := getPaths(assert, "home.unreadable")
 	writeConfig(assert, ldbConfig, path.home)
-	assert.NoError(os.Chmod(path.config, 0333)) // write-only
+	assert.NoError(os.Chmod(path.config, 0222)) // write-only
 	assert.NoError(os.Chdir(path.home))
 	_, err := FindNomsConfig()
 	assert.Error(err, path.config)
