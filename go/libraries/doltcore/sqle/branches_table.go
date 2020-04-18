@@ -15,12 +15,13 @@
 package sqle
 
 import (
+	"errors"
 	"io"
 
 	"github.com/src-d/go-mysql-server/sql"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 )
 
 const (
@@ -29,50 +30,59 @@ const (
 )
 
 var _ sql.Table = (*BranchesTable)(nil)
+var _ sql.UpdatableTable = (*BranchesTable)(nil)
+var _ sql.DeletableTable = (*BranchesTable)(nil)
+var _ sql.InsertableTable = (*BranchesTable)(nil)
+var _ sql.ReplaceableTable = (*BranchesTable)(nil)
 
 // BranchesTable is a sql.Table implementation that implements a system table which shows the dolt branches
 type BranchesTable struct {
 	ddb *doltdb.DoltDB
-	rsr env.RepoStateReader
 }
 
 // NewBranchesTable creates a BranchesTable
-func NewBranchesTable(ddb *doltdb.DoltDB, rs env.RepoStateReader) *BranchesTable {
-	return &BranchesTable{ddb: ddb, rsr: rs}
+func NewBranchesTable(sqlCtx *sql.Context, dbName string) (*BranchesTable, error) {
+	ddb, ok := DSessFromSess(sqlCtx.Session).GetDoltDB(dbName)
+
+	if !ok {
+		return nil, sql.ErrDatabaseNotFound.New(dbName)
+	}
+
+	return &BranchesTable{ddb}, nil
 }
 
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant
 // BranchesTableName
-func (dt *BranchesTable) Name() string {
+func (bt *BranchesTable) Name() string {
 	return BranchesTableName
 }
 
 // String is a sql.Table interface function which returns the name of the table which is defined by the constant
 // BranchesTableName
-func (dt *BranchesTable) String() string {
+func (bt *BranchesTable) String() string {
 	return BranchesTableName
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the branches system table
-func (dt *BranchesTable) Schema() sql.Schema {
+func (bt *BranchesTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "name", Type: sql.Text, Source: BranchesTableName, PrimaryKey: true},
-		{Name: "hash", Type: sql.Text, Source: BranchesTableName, PrimaryKey: false},
-		{Name: "latest_committer", Type: sql.Text, Source: BranchesTableName, PrimaryKey: false},
-		{Name: "latest_committer_email", Type: sql.Text, Source: BranchesTableName, PrimaryKey: false},
-		{Name: "latest_commit_date", Type: sql.Datetime, Source: BranchesTableName, PrimaryKey: false},
-		{Name: "latest_commit_message", Type: sql.Text, Source: BranchesTableName, PrimaryKey: false},
+		{Name: "name", Type: sql.Text, Source: BranchesTableName, PrimaryKey: true, Nullable: false},
+		{Name: "hash", Type: sql.Text, Source: BranchesTableName, PrimaryKey: false, Nullable: false},
+		{Name: "latest_committer", Type: sql.Text, Source: BranchesTableName, PrimaryKey: false, Nullable: true},
+		{Name: "latest_committer_email", Type: sql.Text, Source: BranchesTableName, PrimaryKey: false, Nullable: true},
+		{Name: "latest_commit_date", Type: sql.Datetime, Source: BranchesTableName, PrimaryKey: false, Nullable: true},
+		{Name: "latest_commit_message", Type: sql.Text, Source: BranchesTableName, PrimaryKey: false, Nullable: true},
 	}
 }
 
 // Partitions is a sql.Table interface function that returns a partition of the data.  Currently the data is unpartitioned.
-func (dt *BranchesTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
+func (bt *BranchesTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 	return &doltTablePartitionIter{}, nil
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
-func (dt *BranchesTable) PartitionRows(sqlCtx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	return NewBranchItr(sqlCtx, dt.ddb, dt.rsr)
+func (bt *BranchesTable) PartitionRows(sqlCtx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	return NewBranchItr(sqlCtx, bt.ddb)
 }
 
 // BranchItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
@@ -83,7 +93,7 @@ type BranchItr struct {
 }
 
 // NewBranchItr creates a BranchItr from the current environment.
-func NewBranchItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (*BranchItr, error) {
+func NewBranchItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB) (*BranchItr, error) {
 	branches, err := ddb.GetBranches(sqlCtx)
 
 	if err != nil {
@@ -142,5 +152,117 @@ func (itr *BranchItr) Next() (sql.Row, error) {
 
 // Close closes the iterator.
 func (itr *BranchItr) Close() error {
+	return nil
+}
+
+// Replacer returns a RowReplacer for this table. The RowReplacer will have Insert and optionally Delete called once
+// for each row, followed by a call to Close() when all rows have been processed.
+func (bt *BranchesTable) Replacer(ctx *sql.Context) sql.RowReplacer {
+	return branchWriter{bt}
+}
+
+// Updater returns a RowUpdater for this table. The RowUpdater will have Update called once for each row to be
+// updated, followed by a call to Close() when all rows have been processed.
+func (bt *BranchesTable) Updater(ctx *sql.Context) sql.RowUpdater {
+	return branchWriter{bt}
+}
+
+// Inserter returns an Inserter for this table. The Inserter will get one call to Insert() for each row to be
+// inserted, and will end with a call to Close() to finalize the insert operation.
+func (bt *BranchesTable) Inserter(*sql.Context) sql.RowInserter {
+	return branchWriter{bt}
+}
+
+// Deleter returns a RowDeleter for this table. The RowDeleter will get one call to Delete for each row to be deleted,
+// and will end with a call to Close() to finalize the delete operation.
+func (bt *BranchesTable) Deleter(*sql.Context) sql.RowDeleter {
+	return branchWriter{bt}
+}
+
+var _ sql.RowReplacer = branchWriter{nil}
+var _ sql.RowUpdater = branchWriter{nil}
+var _ sql.RowInserter = branchWriter{nil}
+var _ sql.RowDeleter = branchWriter{nil}
+
+type branchWriter struct {
+	bt *BranchesTable
+}
+
+func branchAndHashFromRow(r sql.Row) (string, string, error) {
+	branchName, ok := r[0].(string)
+
+	if !ok {
+		return "", "", errors.New("invalid value type for branch")
+	} else if !doltdb.IsValidUserBranchName(branchName) {
+		return "", "", doltdb.ErrInvBranchName
+	}
+
+	commitHash, ok := r[1].(string)
+
+	if !ok {
+		return "", "", errors.New("invalid value type for hash")
+	}
+
+	return branchName, commitHash, nil
+}
+
+// Insert inserts the row given, returning an error if it cannot. Insert will be called once for each row to process
+// for the insert operation, which may involve many rows. After all rows in an operation have been processed, Close
+// is called.
+func (bWr branchWriter) Insert(ctx *sql.Context, r sql.Row) error {
+	branchName, commitHash, err := branchAndHashFromRow(r)
+
+	if err != nil {
+		return err
+	}
+
+	cs, err := doltdb.NewCommitSpec(commitHash, "")
+
+	if err != nil {
+		return err
+	}
+
+	ddb := bWr.bt.ddb
+	cm, err := ddb.Resolve(ctx, cs)
+
+	if err != nil {
+		return err
+	}
+
+	branchRef := ref.NewBranchRef(branchName)
+	return ddb.NewBranchAtCommit(ctx, branchRef, cm)
+}
+
+// Update the given row. Provides both the old and new rows.
+func (bWr branchWriter) Update(ctx *sql.Context, old sql.Row, new sql.Row) error {
+	return bWr.Insert(ctx, new)
+}
+
+// Delete deletes the given row. Returns ErrDeleteRowNotFound if the row was not found. Delete will be called once for
+// each row to process for the delete operation, which may involve many rows. After all rows have been processed,
+// Close is called.
+func (bWr branchWriter) Delete(ctx *sql.Context, r sql.Row) error {
+	branchName, _, err := branchAndHashFromRow(r)
+
+	if err != nil {
+		return err
+	}
+
+	brRef := ref.NewBranchRef(branchName)
+	exists, err := bWr.bt.ddb.HasRef(ctx, brRef)
+
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		return sql.ErrDeleteRowNotFound
+	}
+
+	return bWr.bt.ddb.DeleteBranch(ctx, brRef)
+}
+
+// Close finalizes the delete operation, persisting the result.
+func (bWr branchWriter) Close(*sql.Context) error {
 	return nil
 }

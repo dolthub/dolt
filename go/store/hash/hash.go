@@ -107,6 +107,11 @@ func MaybeParse(s string) (Hash, bool) {
 	return New(decode(s)), true
 }
 
+// IsValid returns true if the provided string is a valid base32 encoded hash and false if it is not.
+func IsValid(s string) bool {
+	return pattern.MatchString(s)
+}
+
 // Parse parses a string representing a hash as a Base32 encoded byte array.
 // If the string is not well formed then this panics.
 func Parse(s string) Hash {

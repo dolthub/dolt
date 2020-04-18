@@ -323,7 +323,7 @@ func (ddb *DoltDB) ReadRootValue(ctx context.Context, h hash.Hash) (*RootValue, 
 	}
 
 	if val != nil {
-		if rootSt, ok := val.(types.Struct); ok {
+		if rootSt, ok := val.(types.Struct); ok && rootSt.Name() == ddbRootStructName {
 			return &RootValue{ddb.db, rootSt}, nil
 		}
 	}
@@ -409,97 +409,145 @@ func (ddb *DoltDB) CommitWithParentSpecs(ctx context.Context, valHash hash.Hash,
 	return ddb.CommitWithParentCommits(ctx, valHash, dref, parentCommits, cm)
 }
 
-func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Hash, dref ref.DoltRef, parentCommits []*Commit, cm *CommitMeta) (*Commit, error) {
+func (ddb *DoltDB) WriteCommitDanglingCommit(ctx context.Context, valHash hash.Hash, parentCommits []*Commit, cm *CommitMeta) (*Commit, error) {
 	var commitSt types.Struct
-	err := pantoerr.PanicToError("error committing value "+valHash.String(), func() error {
-		val, err := ddb.db.ReadValue(ctx, valHash)
-
-		if err != nil {
-			return err
-		}
-
-		if st, ok := val.(types.Struct); !ok || st.Name() != ddbRootStructName {
-			return errors.New("can't commit a value that is not a valid root value")
-		}
-
-		ds, err := ddb.db.GetDataset(ctx, dref.String())
-
-		if err != nil {
-			return err
-		}
-
-		s, err := types.NewSet(ctx, ddb.db)
-
-		if err != nil {
-			return err
-		}
-
-		parentEditor := s.Edit()
-
-		headRef, hasHead, err := ds.MaybeHeadRef()
-
-		if err != nil {
-			return err
-		}
-
-		if hasHead {
-			_, err := parentEditor.Insert(headRef)
-
-			if err != nil {
-				return err
-			}
-		}
-
-		for _, cm := range parentCommits {
-			rf, err := types.NewRef(cm.commitSt, ddb.db.Format())
-
-			if err != nil {
-				return err
-			}
-
-			_, err = parentEditor.Insert(rf)
-
-			if err != nil {
-				return err
-			}
-		}
-
-		parents, err := parentEditor.Set(ctx)
-
-		if err != nil {
-			return err
-		}
-
-		st, err := cm.toNomsStruct(ddb.db.Format())
-
-		if err != nil {
-			return err
-		}
-
-		commitOpts := datas.CommitOptions{Parents: parents, Meta: st, Policy: nil}
-		ds, err = ddb.db.GetDataset(ctx, dref.String())
-
-		if err != nil {
-			return err
-		}
-
-		ds, err = ddb.db.Commit(ctx, ds, val, commitOpts)
-
-		if err != nil {
-			return err
-		}
-
-		var ok bool
-		commitSt, ok = ds.MaybeHead()
-		if !ok {
-			return errors.New("commit has no head but commit succeeded (How?!?!?)")
-		}
-
-		return err
-	})
+	val, err := ddb.db.ReadValue(ctx, valHash)
 
 	if err != nil {
 		return nil, err
+	}
+
+	if st, ok := val.(types.Struct); !ok || st.Name() != ddbRootStructName {
+		return nil, errors.New("can't commit a value that is not a valid root value")
+	}
+
+	s, err := types.NewSet(ctx, ddb.db)
+
+	if err != nil {
+		return nil, err
+	}
+
+	parentEditor := s.Edit()
+
+	for _, cm := range parentCommits {
+		rf, err := types.NewRef(cm.commitSt, ddb.db.Format())
+
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = parentEditor.Insert(rf)
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	parents, err := parentEditor.Set(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	st, err := cm.toNomsStruct(ddb.db.Format())
+
+	if err != nil {
+		return nil, err
+	}
+
+	commitOpts := datas.CommitOptions{Parents: parents, Meta: st, Policy: nil}
+	commitSt, err = ddb.db.CommitDangling(ctx, val, commitOpts)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &Commit{ddb.db, commitSt}, nil
+}
+
+func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Hash, dref ref.DoltRef, parentCommits []*Commit, cm *CommitMeta) (*Commit, error) {
+	var commitSt types.Struct
+	val, err := ddb.db.ReadValue(ctx, valHash)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if st, ok := val.(types.Struct); !ok || st.Name() != ddbRootStructName {
+		return nil, errors.New("can't commit a value that is not a valid root value")
+	}
+
+	ds, err := ddb.db.GetDataset(ctx, dref.String())
+
+	if err != nil {
+		return nil, err
+	}
+
+	s, err := types.NewSet(ctx, ddb.db)
+
+	if err != nil {
+		return nil, err
+	}
+
+	parentEditor := s.Edit()
+
+	headRef, hasHead, err := ds.MaybeHeadRef()
+
+	if err != nil {
+		return nil, err
+	}
+
+	if hasHead {
+		_, err := parentEditor.Insert(headRef)
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	for _, cm := range parentCommits {
+		rf, err := types.NewRef(cm.commitSt, ddb.db.Format())
+
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = parentEditor.Insert(rf)
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	parents, err := parentEditor.Set(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	st, err := cm.toNomsStruct(ddb.db.Format())
+
+	if err != nil {
+		return nil, err
+	}
+
+	commitOpts := datas.CommitOptions{Parents: parents, Meta: st, Policy: nil}
+	ds, err = ddb.db.GetDataset(ctx, dref.String())
+
+	if err != nil {
+		return nil, err
+	}
+
+	ds, err = ddb.db.Commit(ctx, ds, val, commitOpts)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var ok bool
+	commitSt, ok = ds.MaybeHead()
+	if !ok {
+		return nil, errors.New("commit has no head but commit succeeded (How?!?!?)")
 	}
 
 	return &Commit{ddb.db, commitSt}, nil

@@ -21,6 +21,7 @@ var ErrInvTableName = errors.New("not a valid table name")
 var ErrInvHash = errors.New("not a valid hash")
 var ErrInvalidAncestorSpec = errors.New("invalid ancestor spec")
 var ErrInvalidBranchOrHash = errors.New("string is not a valid branch or hash")
+var ErrInvalidHash = errors.New("string is not a valid hash")
 
 var ErrFoundHashNotACommit = errors.New("the value retrieved for this hash is not a commit")
 

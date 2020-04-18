@@ -43,6 +43,7 @@ type ServerConfig struct {
 	LogLevel   LogLevel // Specifies the level of logging that the server will use.
 	MultiDBDir string   // Directory whose children are dolt data repositories
 	Version    string   // Dolt cli version
+	AutoCommit bool     // Autocommit defines the value of the @@autocommit session variable used on every connection
 }
 
 // DefaultServerConfig creates a `*ServerConfig` that has all of the options set to their default values.
@@ -57,6 +58,7 @@ func DefaultServerConfig() *ServerConfig {
 		LogLevel:   LogLevel_Info,
 		MultiDBDir: "",
 		Version:    CliVersion,
+		AutoCommit: true,
 	}
 }
 
@@ -139,8 +141,8 @@ func (config *ServerConfig) ConnectionString() string {
 
 // String implements `fmt.Stringer`.
 func (config *ServerConfig) String() string {
-	return fmt.Sprintf(`HP="%v:%v"|U="%v"|P="%v"|T="%v"|R="%v"|L="%v"`, config.Host, config.Port, config.User,
-		config.Password, config.Timeout, config.ReadOnly, config.LogLevel)
+	return fmt.Sprintf(`HP="%v:%v"|U="%v"|P="%v"|T="%v"|R="%v"|L="%v"|V="%v"`, config.Host, config.Port, config.User,
+		config.Password, config.Timeout, config.ReadOnly, config.LogLevel, config.Version)
 }
 
 // String returns the string representation of the log level.

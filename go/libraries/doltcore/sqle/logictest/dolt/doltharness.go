@@ -116,15 +116,8 @@ func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []s
 }
 
 func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
-	root, verr := commands.GetWorkingWithVErr(dEnv)
-	if verr != nil {
-		return verr
-	}
-
-	root = resetEnv(root)
-
 	var err error
-	h.engine, err = sqlNewEngine(dEnv.DoltDB, root)
+	h.engine, err = sqlNewEngine(dEnv)
 
 	if err != nil {
 		return err
@@ -146,14 +139,25 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 		dsqlDB := db.(dsql.Database)
 		dsqlDBs[i] = dsqlDB
 
-		defRoot := dsqlDB.GetDefaultRoot()
-		err := dsqlDB.SetRoot(ctx, defRoot)
+		sess := dsql.DSessFromSess(ctx.Session)
+		err := sess.AddDB(ctx, dsqlDB)
 
 		if err != nil {
 			return err
 		}
 
-		err = dsql.RegisterSchemaFragments(ctx, dsqlDB, defRoot)
+		root, verr := commands.GetWorkingWithVErr(dEnv)
+		if verr != nil {
+			return verr
+		}
+
+		err = dsqlDB.SetRoot(ctx, root)
+
+		if err != nil {
+			return err
+		}
+
+		err = dsql.RegisterSchemaFragments(ctx, dsqlDB, root)
 
 		if err != nil {
 			return err
@@ -334,8 +338,8 @@ func resetEnv(root *doltdb.RootValue) *doltdb.RootValue {
 	return newRoot
 }
 
-func sqlNewEngine(ddb *doltdb.DoltDB, root *doltdb.RootValue) (*sqle.Engine, error) {
-	db := dsql.NewDatabase("dolt", root, ddb, nil, nil)
+func sqlNewEngine(dEnv *env.DoltEnv) (*sqle.Engine, error) {
+	db := dsql.NewDatabase("dolt", dEnv.DoltDB, dEnv.RepoState, dEnv.RepoStateWriter())
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
 
