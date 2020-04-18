@@ -154,7 +154,7 @@ func primaryKeytoIndexStrings(tableName string, sch schema.Schema) ([]string, er
 	err := sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		colNames[i] = tableName + "." + col.Name
 		i++
-		return true, nil
+		return false, nil
 	})
 
 	if err != nil {
