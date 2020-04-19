@@ -57,6 +57,15 @@ teardown() {
     [[ "$output" =~ "unknown remote" ]] || false
 }
 
+@test "push with only one argument" {
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    run dolt push test-remote
+    [ "$status" -eq 1 ]
+    skip "Bad error message for only one command to push"
+    [[ !"$output" =~ "unable to find" ]] || false
+    [[ "$output" =~ "must specify remote and branch" ]] || false
+}
+
 @test "push and pull master branch from a remote" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     run dolt push test-remote master
