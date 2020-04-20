@@ -56,9 +56,12 @@ func LoadDocs(fs filesys.ReadWriteFS) (Docs, error) {
 	return docsWithCurrentText, nil
 }
 
-func CreateDocs(fs filesys.ReadWriteFS) (Docs, error) {
+func SaveDocsOnInit(fs filesys.ReadWriteFS) (Docs, error) {
 	docs := *AllValidDocDetails
 	for i, doc := range docs {
+		if hasDocFile(fs, doc.File) {
+			return nil, nil
+		}
 		doc.NewerText = getInitialDocText(doc.DocPk)
 		docs[i] = doc
 	}

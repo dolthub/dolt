@@ -227,7 +227,6 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     echo "greatest README ever" > README.md
     echo "greatest LICENSE ever" > LICENSE.md
     dolt init
-    skip "Initializing a repo stomps existing REAME.md and LICENSE.md"
     grep "greatest README ever" README.md
     grep "greatest LICENSE ever" LICENSE.md
 }

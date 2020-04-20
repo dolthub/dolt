@@ -320,7 +320,7 @@ func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinForma
 		return doltdb.ErrNomsIO
 	}
 
-	docs, err := CreateDocs(dEnv.FS)
+	docs, err := SaveDocsOnInit(dEnv.FS)
 	if err != nil {
 		return ErrDocsUpdate
 	}
