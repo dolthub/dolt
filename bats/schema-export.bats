@@ -33,13 +33,12 @@ teardown() {
     teardown_common
 }
 
+# This test can be deleted when the new specification test is working
 @test "dolt schema export" {
     run dolt schema export test1 export.schema
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     [ -f export.schema ]
-    # Change this to export SQL with no tags, test1 @working headers,
-    # and no dolt_ tables
     run diff --strip-trailing-cr $BATS_TEST_DIRNAME/helper/1pk5col-ints-schema.json export.schema
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
