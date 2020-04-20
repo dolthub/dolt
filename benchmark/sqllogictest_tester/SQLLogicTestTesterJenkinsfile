@@ -16,7 +16,7 @@ pipeline {
                         DOLT_CREDS = credentials("system-account-dolthub-creds")
                         DOLT_GLOBAL_CONFIG = credentials("system-account-dolthub-config")
                         TMP_TESTING_DIR = "${pwd()}/tempTesting"
-                        TMP_CSV_DIR = "${pwd()}/tempCVS"
+                        TMP_CSV_DIR = "${pwd()}/tempCSV"
                     }
                     steps {
                         sh "rm -rf tempDolt"
