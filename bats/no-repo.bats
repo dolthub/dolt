@@ -223,6 +223,15 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     rm -rf $BATS_TMPDIR/dolt-repo-$$-new
 }
 
+@test "dolt init should not stomp existing LICENSE.md and README.md" {
+    echo "greatest README ever" > README.md
+    echo "greatest LICENSE ever" > LICENSE.md
+    dolt init
+    skip "Initializing a repo stomps existing REAME.md and LICENSE.md"
+    grep "greatest README ever" README.md
+    grep "greatest LICENSE ever" LICENSE.md
+}
+
 @test "all versions of help work outside a repository" {
     dolt checkout --help
     dolt checkout -help
