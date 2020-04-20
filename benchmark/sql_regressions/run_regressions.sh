@@ -82,7 +82,7 @@ function check_version_exists() {
     if [ "$previously_tested_version" != 1 ]; then
       echo "Results for dolt version $DOLT_VERSION already exist in Liquidata/dolt-sql-performance, $previously_tested_version != 1" && \
       echo $result_query_output && \
-      exit 0;
+      exit 155;
     fi
 
     dolt checkout master
