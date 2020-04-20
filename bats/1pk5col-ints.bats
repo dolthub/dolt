@@ -599,16 +599,6 @@ DELIM
     [ "$output" = "foo not found" ]
 }
 
-@test "dolt schema export" {
-    run dolt schema export test export.schema
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
-    [ -f export.schema ]
-    run diff --strip-trailing-cr $BATS_TEST_DIRNAME/helper/1pk5col-ints-schema.json export.schema
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
-}
-
 @test "rm a staged but uncommitted table" {
     # L&R must be removed (or added and committed) for `nothing to commit` message
     rm "LICENSE.md"
