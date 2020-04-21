@@ -955,6 +955,7 @@ var CaseSensitivityTests = []SelectTest{
 		Query:          "select mixedcAse.TeSt from MIXEDCASE",
 		ExpectedSchema: NewResultSetSchema("TeSt", types.StringKind),
 		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
+		SkipOnSqlEngine: true,
 	},
 	{
 		Name: "table alias select *",
@@ -974,6 +975,7 @@ var CaseSensitivityTests = []SelectTest{
 		Query:          "select mC.TeSt from MIXEDCASE as MC",
 		ExpectedSchema: NewResultSetSchema("TeSt", types.StringKind),
 		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
+		SkipOnSqlEngine: true,
 	},
 	{
 		Name: "multiple tables with the same case-insensitive name, exact match",
