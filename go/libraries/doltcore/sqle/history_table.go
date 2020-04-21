@@ -140,7 +140,6 @@ func (ht *HistoryTable) WithFilters(filters []sql.Expression) sql.Table {
 		ht.commitFilters, ht.rowFilters = splitFilters(filters)
 	}
 
-
 	if len(ht.commitFilters) > 0 {
 		ctx := context.TODO()
 		commitCheck, err := getCommitFilterFunc(ht.ddb.Format(), ht.commitFilters)
