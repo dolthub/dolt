@@ -111,6 +111,10 @@ func NewHistoryTable(ctx *sql.Context, dbName, tblName string) (*HistoryTable, e
 		return nil, err
 	}
 
+	if err = cmItr.Reset(ctx); err != nil {
+		return nil, err
+	}
+
 	return &HistoryTable{
 		name:                  tblName,
 		ddb:                   ddb,
