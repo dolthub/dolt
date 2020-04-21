@@ -218,8 +218,8 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [ -d .dolt/noms ]
     [ -f .dolt/config.json ]
     [ -f .dolt/repo_state.json ]
-    [ -f README.md ]
-    [ -f LICENSE.md ]
+    [ ! -f README.md ]
+    [ ! -f LICENSE.md ]
     rm -rf $BATS_TMPDIR/dolt-repo-$$-new
 }
 
