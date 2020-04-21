@@ -20226,7 +20226,7 @@ func TestExplain(t *testing.T) {
 		rowStrings[i] = row[0].(string)
 	}
 
-	expectedExplain := "IndexedJoin(daily_summary.Symbol = symbols.Symbol)\n" +
+	expectedExplain := "IndexedJoin(d.Symbol = t.Symbol)\n" +
 		" ├─ TableAlias(d)\n" +
 		" │   └─ daily_summary\n" +
 		" └─ TableAlias(t)\n" +
