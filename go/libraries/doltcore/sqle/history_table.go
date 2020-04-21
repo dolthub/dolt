@@ -58,6 +58,7 @@ type HistoryTable struct {
 	commitFilters         []sql.Expression
 	rowFilters            []sql.Expression
 	cmItr                 doltdb.CommitItr
+	indCmItr              *doltdb.CommitIndexingCommitItr
 	readerCreateFuncCache map[hash.Hash]CreateReaderFunc
 }
 
@@ -111,16 +112,13 @@ func NewHistoryTable(ctx *sql.Context, dbName, tblName string) (*HistoryTable, e
 		return nil, err
 	}
 
-	if err = cmItr.Reset(ctx); err != nil {
-		return nil, err
-	}
-
 	return &HistoryTable{
 		name:                  tblName,
 		ddb:                   ddb,
 		ss:                    ss,
 		sqlSch:                sqlSch,
-		cmItr:                 indCmItr,
+		cmItr:                 indCmItr.Unfiltered(),
+		indCmItr:              indCmItr,
 		readerCreateFuncCache: make(map[hash.Hash]CreateReaderFunc),
 	}, nil
 }
@@ -142,8 +140,6 @@ func (ht *HistoryTable) WithFilters(filters []sql.Expression) sql.Table {
 		ht.commitFilters, ht.rowFilters = splitFilters(filters)
 	}
 
-	indCmItr := ht.cmItr.(*doltdb.CommitIndexingCommitItr)
-
 	if len(ht.commitFilters) > 0 {
 		ctx := context.TODO()
 		commitCheck, err := getCommitFilterFunc(ht.ddb.Format(), ht.commitFilters)
@@ -153,14 +149,12 @@ func (ht *HistoryTable) WithFilters(filters []sql.Expression) sql.Table {
 			panic(err)
 		}
 
-		ht.cmItr, err = indCmItr.Filter(ctx, commitCheck)
+		ht.cmItr, err = ht.indCmItr.Filter(ctx, commitCheck)
 
 		// TODO: fix panic
 		if err != nil {
 			panic(err)
 		}
-	} else {
-		ht.cmItr = indCmItr.Unfiltered()
 	}
 
 	return ht
