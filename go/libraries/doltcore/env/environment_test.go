@@ -61,9 +61,6 @@ func createTestEnv(isInitialized bool, hasLocalConfig bool) *DoltEnv {
 
 		initialFiles[getRepoStateFile()] = []byte(repoStateData)
 
-		initialFiles[getDocFile(ReadmeFile)] = []byte(initialReadme)
-		initialFiles[getDocFile(LicenseFile)] = []byte(initialLicense)
-
 		if hasLocalConfig {
 			initialFiles[getLocalConfigPath()] = []byte(`{"user.name":"bheni"}`)
 		}
