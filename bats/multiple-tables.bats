@@ -25,10 +25,6 @@ CREATE TABLE test2 (
   PRIMARY KEY (pk)
 );
 SQL
-    # L&R must be removed (or added and committed) for
-    # cleanliness of the working directory used in these tests
-    rm "LICENSE.md"
-    rm "README.md"
 }
 
 teardown() {

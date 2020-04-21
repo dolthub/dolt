@@ -291,9 +291,6 @@ SQL
 }
 
 @test "diff sql reconciles CREATE TABLE" {
-    # The docs break this test on `dolt add test` below. It is fixed by removing docs, or changing that line below to `dolt add .`
-    rm LICENSE.md
-    rm README.md
     dolt checkout -b firstbranch
     dolt checkout -b newbranch
     dolt sql <<SQL
@@ -330,9 +327,6 @@ SQL
 }
 
 @test "diff sql includes row INSERTSs to new tables after CREATE TABLE" {
-    # The docs break this test on `dolt add test` below. It is fixed by removing docs, or changing that line below to `dolt add .`
-    rm LICENSE.md
-    rm README.md
     dolt checkout -b firstbranch
     dolt checkout -b newbranch
     dolt sql <<SQL

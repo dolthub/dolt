@@ -124,9 +124,6 @@ SQL
 }
 
 @test "creating view creates creates dolt_schemas table" {
-    # Remove docs to preserve line assertions
-    rm LICENSE.md
-    rm README.md
     run dolt sql -q 'create view testing as select 2+2 from dual'
     [ "$status" -eq 0 ]
     run dolt status

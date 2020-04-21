@@ -21,9 +21,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-var initialReadme = "This is a repository level README. Either edit it, add it, and commit it, or remove the file.\n"
-var initialLicense = "This is a repository level LICENSE. Either edit it, add it, and commit it, or remove the file.\n"
-
 type Docs []doltdb.DocDetails
 
 var doltDocsColumns, _ = schema.NewColCollection(
@@ -54,19 +51,6 @@ func LoadDocs(fs filesys.ReadWriteFS) (Docs, error) {
 		}
 	}
 	return docsWithCurrentText, nil
-}
-
-func CreateDocs(fs filesys.ReadWriteFS) (Docs, error) {
-	docs := *AllValidDocDetails
-	for i, doc := range docs {
-		doc.NewerText = getInitialDocText(doc.DocPk)
-		docs[i] = doc
-	}
-	err := docs.Save(fs)
-	if err != nil {
-		return nil, err
-	}
-	return docs, nil
 }
 
 func (docs Docs) Save(fs filesys.ReadWriteFS) error {
@@ -101,17 +85,6 @@ func DeleteDoc(fs filesys.ReadWriteFS, docName string) error {
 		}
 	}
 	return nil
-}
-
-func getInitialDocText(docName string) []byte {
-	switch docName {
-	case doltdb.ReadmePk:
-		return []byte(initialReadme)
-	case doltdb.LicensePk:
-		return []byte(initialLicense)
-	default:
-		return nil
-	}
 }
 
 func IsValidDoc(docName string) bool {

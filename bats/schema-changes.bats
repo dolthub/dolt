@@ -188,9 +188,6 @@ SQL
 }
 
 @test "adding and dropping column should produce no diff" {
-    # Remove the docs, otherwise they will show up in the diff below.
-    rm LICENSE.md
-    rm README.md
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
