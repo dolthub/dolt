@@ -140,7 +140,6 @@ func (ht *HistoryTable) WithFilters(filters []sql.Expression) sql.Table {
 		ht.commitFilters, ht.rowFilters = splitFilters(filters)
 	}
 
-	indCmItr := ht.cmItr.(*doltdb.CommitIndexingCommitItr)
 
 	if len(ht.commitFilters) > 0 {
 		ctx := context.TODO()
@@ -151,7 +150,7 @@ func (ht *HistoryTable) WithFilters(filters []sql.Expression) sql.Table {
 			panic(err)
 		}
 
-		ht.cmItr, err = indCmItr.Filter(ctx, commitCheck)
+		ht.cmItr, err = ht.indCmItr.Filter(ctx, commitCheck)
 
 		// TODO: fix panic
 		if err != nil {
