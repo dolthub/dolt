@@ -145,7 +145,13 @@ function import_parsed() {
 function create_once() {
     local commit_hash="$1"
 
-    dolt checkout "temp-$commit_hash";
+    exists=$(dolt branch --list "temp-$commit_hash"| sed '/^\s*$/d' | wc -l | tr -d '[:space:]')
+
+    if [ "$exists" -eq 0 ]; then
+      dolt checkout -b "temp-$commit_hash";
+    else
+      dolt checkout "temp-$commit_hash";
+    fi
 
     dolt sql -r csv -q "\
     select version, test_file, line_num, avg(duration) as mean_duration, result from dolt_history_nightly_dolt_results where version=\"${commit_hash}\" group by test_file, line_num;"\
@@ -216,6 +222,8 @@ function run_once() {
       echo "Parsing $results and generating $parsed"
       go run . parse "$commit_hash" "$results" > "$parsed"
     )
+
+    (with_dolt_checkout; cd "$dsp_dir"/dolt-sql-performance; import_once "$c" "$test_num")
 }
 
 function run() {
@@ -225,10 +233,13 @@ function run() {
     IFS=', ' read -r -a commit_list <<< "$COMMITS_TO_TEST"
     for c in "${commit_list[@]}"
     do
-        # run_once "$c"
         seq 1 $TEST_N_TIMES | while read test_num; do
           run_once "$c" "$test_num"
         done
+
+        (with_dolt_checkout; cd "$dsp_dir"/dolt-sql-performance; create_once "$c")
+
+        (import_and_query_once "$c")
     done
 
     rm -rf .dolt
@@ -294,6 +305,8 @@ rm -rf dolt-sql-performance && mkdir dolt-sql-performance
 
 (cd "$logictest_main"; run)
 
-(with_dolt_checkout; cd "$dsp_dir"/dolt-sql-performance; import_parsed; create_committers_mean_csv; echo "here are all csvs:"; ls "$TMP_CSV_DIR")
+#(with_dolt_checkout; cd "$dsp_dir"/dolt-sql-performance; import_parsed; create_committers_mean_csv; echo "here are all csvs:"; ls "$TMP_CSV_DIR")
 
-(import_and_query)
+(echo "here are all csvs:"; ls "$TMP_CSV_DIR")
+
+#(import_and_query)
