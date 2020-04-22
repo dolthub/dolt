@@ -11,8 +11,8 @@ type statementScanner struct {
 	lineNum int
 	quoteChar byte
 	lastChar byte
-	numConsecutiveQuoteChars int
 	numConsecutiveBackslashes int
+	ignoreNextChar bool;
 }
 
 func NewSqlStatementScanner(input io.Reader) *statementScanner {
@@ -48,50 +48,62 @@ func (s *statementScanner) scanStatements(data []byte, atEOF bool) (advance int,
 	}
 
 	for i := range data {
-		switch data[i] {
-		case '\n':
-			s.lineNum++
-		case ';':
-			if s.quoteChar == 0 {
-				return i + 1, data[0:i], nil
-			}
-		case backslash:
-			s.numConsecutiveBackslashes++
-			s.numConsecutiveQuoteChars = 0
-		case sQuote, dQuote:
-			numConsecutiveBackslashes := s.numConsecutiveBackslashes
-			s.numConsecutiveBackslashes = 0
 
-			// escaped quote character
-			if s.lastChar == backslash && numConsecutiveBackslashes % 2 == 1 {
-				break
-			}
-
-			// two quotes in a row
-			if s.lastChar == data[i] {
-				s.numConsecutiveQuoteChars++
-				if s.numConsecutiveQuoteChars % 2 == 1 {
-					// escaped quote character
+		if !s.ignoreNextChar {
+			switch data[i] {
+			case '\n':
+				s.lineNum++
+			case ';':
+				if s.quoteChar == 0 {
+					_, _, _ = s.resetState()
+					return i + 1, data[0:i], nil
 				}
-				break
-			}
+			case backslash:
+				s.numConsecutiveBackslashes++
+			case sQuote, dQuote:
+				numConsecutiveBackslashes := s.numConsecutiveBackslashes
+				s.numConsecutiveBackslashes = 0
 
-			// end quote
-			if s.quoteChar == data[i] {
-				s.quoteChar = 0
-				s.numConsecutiveQuoteChars = 0
-				break
-			}
+				// escaped quote character
+				if s.lastChar == backslash && numConsecutiveBackslashes%2 == 1 {
+					break
+				}
 
-			// embedded quote
-			if s.quoteChar != 0 && s.quoteChar != data[i] {
-				break
-			}
+				// currently in a quoted string
+				if s.quoteChar != 0 {
 
-			// open quote
-			s.quoteChar = data[i]
-		default:
-			s.numConsecutiveQuoteChars = 0
+					// end quote or two consecutive quote characters (a form of escaping quote chars)
+					if s.quoteChar == data[i] {
+						var nextChar byte = 0
+						if i+1 < len(data) {
+							nextChar = data[i+1]
+						}
+
+						if nextChar == s.quoteChar {
+							// escaped quote. skip the next character
+							s.ignoreNextChar = true
+							break
+						} else if atEOF || i+1 < len(data) {
+							// end quote
+							s.quoteChar = 0
+							break
+						} else {
+							// need more data to make a decision
+							return s.resetState()
+						}
+					}
+
+					// embedded quote ('"' or "'")
+					break
+				}
+
+				// open quote
+				s.quoteChar = data[i]
+			default:
+				s.numConsecutiveBackslashes = 0
+			}
+		} else {
+			s.ignoreNextChar = false
 		}
 
 		s.lastChar = data[i]
@@ -103,5 +115,14 @@ func (s *statementScanner) scanStatements(data []byte, atEOF bool) (advance int,
 	}
 
 	// Request more data.
+	return s.resetState()
+}
+
+// resetState resets the internal state of the scanner and returns the "more data" response for a split function
+func (s *statementScanner) resetState() (advance int, token []byte, err error) {
+	s.quoteChar = 0
+	s.numConsecutiveBackslashes = 0
+	s.ignoreNextChar = false
+	s.lastChar = 0
 	return 0, nil, nil
 }
