@@ -138,7 +138,7 @@ SQL
 
   result_regressions=`echo $result_query_output | sed '/^\s*$/d' | wc -l | tr -d '[:space:]'`
 
-  if [ "$result_regressions" != 0 ]; then echo "Result regression found, $result_regressions != 0" && echo $result_query_output && exit 1; else echo "No result regressions found"; fi
+  if [ "$result_regressions" != 0 ]; then echo -e "\033[31mResult regression found, $result_regressions != 0\033[0m" && echo $result_query_output && exit 1; else echo -e "\033[32mNo result regression found\033[0m"; fi
 
 }
 
@@ -183,8 +183,6 @@ append() {
 
 function create_releases_csv() {
     test_files=$(find "$TMP_TESTING_DIR" | sed -n "s|^$TMP_TESTING_DIR/||p")
-
-    echo "$test_files"
 
     SAVEIFS=$IFS
     IFS=$'\n'
