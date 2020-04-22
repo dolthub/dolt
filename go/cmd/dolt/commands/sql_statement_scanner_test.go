@@ -26,6 +26,12 @@ a from b; select 1`,
 			},
 		},
 		{
+			input: `insert into foo values (";;';'");`,
+			statements: []string{
+				`insert into foo values (";;';'")`,
+			},
+		},
+		{
 			input: `insert into foo values ('a', "b;", 'c;;""
 '); update foo set baz = bar,
 qux = '"hello"""' where xyzzy = ";;';'";
@@ -35,7 +41,7 @@ primary key (a));`,
 				`insert into foo values ('a', "b;", 'c;;""
 ')`,
 				`update foo set baz = bar,
-qux = '"hello"""' where xyzzy = ";;';'`,
+qux = '"hello"""' where xyzzy = ";;';'"`,
 				`create table foo (a int not null default ';',
 primary key (a))`,
 			},

@@ -82,7 +82,7 @@ func (s *statementScanner) scanStatements(data []byte, atEOF bool) (advance int,
 			}
 
 			// embedded quote
-			if s.quoteChar != data[i] {
+			if s.quoteChar != 0 && s.quoteChar != data[i] {
 				break
 			}
 
