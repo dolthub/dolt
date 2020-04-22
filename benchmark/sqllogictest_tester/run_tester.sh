@@ -52,7 +52,20 @@ function setup_testing_dir() {
     IFS=', ' read -r -a test_list <<< "$TEST_FILE_DIR_LIST"
     for fd in "${test_list[@]}"
     do
+         dir=$(dirname "$fd")
+
+         echo "This is the dirname:"
+         echo "$dir"
+
+         mkdir -p "$TMP_TESTING_DIR"/"$dir"
+
+         echo "created dir:"
+         echo "$TMP_TESTING_DIR"/"$dir"
+
          cp -r "$sqllogictest_checkout"/test/"$fd" "$TMP_TESTING_DIR"/"$fd"
+
+         echo "copied file:"
+         ls "$TMP_TESTING_DIR"/"$dir"
     done
 
     echo "Files/Directories that will be tested:"
@@ -84,6 +97,7 @@ function with_dolt_commit() {
     echo "Finished installing dolt from $commit_hash:"
     export PATH="$base_dir/.ci_bin/$commit_hash":$old_path
     dolt version
+    echo Using current path: "$PATH"
 }
 
 function with_dolt_checkout() {
@@ -100,6 +114,7 @@ function with_dolt_checkout() {
     echo "Finished installing dolt from checkout:"
     export PATH="$base_dir/.ci_bin":$old_path
     dolt version
+    echo Using current path: "$PATH"
 }
 
 function import_parsed() {
@@ -119,20 +134,33 @@ function import_parsed() {
 }
 
 function import_and_query_db() {
+    rm -f query_db
+    touch query_db
+    sqlite3 query_db < "$logictest"/regressions.sql
+
     local commit_hash="$1"
-    local db_copy="$dsp_dir/query_db_$commit_hash"
+#    local db_copy="$dsp_dir/query_db_$commit_hash"
     local release_csv="$TMP_CSV_DIR/release_results.csv"
     local commiter_csv="$TMP_CSV_DIR/${commit_hash}_results.csv"
 
-    echo "$commiter_csv"
-    cp "$dsp_dir"/query_db "$db_copy"
-    sqlite3 "$db_copy" <<SQL
+#    echo "$commiter_csv"
+#    cp "$dsp_dir"/query_db "$db_copy"
+    sqlite3 query_db <<SQL
 .mode csv
 .import $commiter_csv nightly_dolt_results
 .import $release_csv releases_dolt_results
 SQL
 
-  result_query_output=`sqlite3 $db_copy 'select * from release_committer_result_change'`
+  echo "sqlite tables:"
+  sqlite3 query_db '.tables'
+
+  echo "sqlite all test_files:"
+  sqlite3 query_db 'select test_file from releases_dolt_results group by test_file'
+
+  result_query_output=`sqlite3 query_db 'select * from release_committer_result_change'`
+
+  echo "This is the output of the sqlite query:"
+  echo "$result_query_output"
 
   result_regressions=`echo $result_query_output | sed '/^\s*$/d' | wc -l | tr -d '[:space:]'`
 
@@ -225,23 +253,20 @@ function create_releases_csv() {
 
     SAVEIFS=$IFS
     IFS=$'\n'
-    file_arr=("$test_files")
+    file_arr=($test_files)
     IFS=$SAVEIFS
 
     file_list=
     for (( i=0; i<${#file_arr[@]}; i++ ))
     do
-      file_list=`append "$file_list" "${file_arr[$i]}"`
+#       echo "$i: ${file_arr[$i]}"
+       if [ "${file_arr[$i]: -5}" == ".test" ]; then
+        echo "Adding this file: ${file_arr[$i]}"
+        file_list=`append "$file_list" "${file_arr[$i]}"`
+       fi
     done
 
-    echo "$file_list"
-
-#    IFS=", " read -r -a list <<< "$test_files"
-#    file_list=
-#    for f in "${list[@]}"; do
-#      file_list=`append "$file_list" "$f"`
-#      echo $file_list
-#    done
+    echo This is the final list: "$file_list"
 
     dolt checkout "$DOLT_BRANCH"
     echo "Executing query: sql -r csv -q \"select * from releases_dolt_results where test_file in ($file_list);\""
