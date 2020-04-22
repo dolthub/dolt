@@ -32,6 +32,9 @@ if [ -z "$TMP_CSV_DIR" ]; then fail Must supply TMP_CSV_DIR; fi
 if [ -z "$TEST_FILE_DIR_LIST" ]; then fail Must supply TEST_FILE_DIR_LIST; fi
 if [ -z "$COMMITS_TO_TEST" ]; then fail Must supply COMMITS_TO_TEST; fi
 if [ -z "$DOLT_BRANCH" ]; then fail Must supply DOLT_BRANCH; fi
+if [ -z "$TEST_N_TIMES" ]; then fail Must supply TEST_N_TIMES; fi
+
+[[ "$TEST_N_TIMES" =~ ^[0-9]+$ ]] || fail TEST_N_TIMES must be a number
 
 function setup() {
     rm -rf "$CREDSDIR"
@@ -103,11 +106,22 @@ function with_dolt_checkout() {
     dolt version
 }
 
-function import_parsed() {
-    local parsed="$1"
-    local commit_hash="$2"
+function import_once() {
+    local commit_hash="$1"
+    local test_num="$2"
+    local parsed="$log_dir/parsed-$commit_hash-$test_num".json
+
     dolt checkout "$DOLT_BRANCH"
-    dolt checkout -b "temp-$commit_hash"
+
+    exists=$(dolt branch --list "temp-$commit_hash"| sed '/^\s*$/d' | wc -l | tr -d '[:space:]')
+
+    if [ "$exists" -eq 0 ]; then
+      dolt checkout -b "temp-$commit_hash";
+    else
+      dolt checkout "temp-$commit_hash";
+    fi
+
+#    dolt checkout -b "temp-$commit_hash"
     dolt table import -u nightly_dolt_results "$parsed"
 
     dolt sql -r csv -q "\
@@ -115,37 +129,84 @@ function import_parsed() {
     > "$TMP_CSV_DIR"/"$commit_hash"_results.csv
 
     dolt add nightly_dolt_results
-    dolt commit -m "add results for dolt at commit $commit_hash"
+    dolt commit -m "add results for dolt at git commit $commit_hash ($test_num)"
     dolt checkout master
 }
 
-function import_and_query_db() {
+function import_parsed() {
+    IFS=', ' read -r -a commit_list <<< "$COMMITS_TO_TEST"
+    for c in "${commit_list[@]}"
+    do
+        seq 1 $TEST_N_TIMES | while read test_num; do
+          import_once "$c" "$test_num"
+        done
+    done
+}
+
+function create_once() {
+    local commit_hash="$1"
+
+    dolt checkout "temp-$commit_hash";
+
+    dolt sql -r csv -q "\
+    select version, test_file, line_num, avg(duration) as mean_duration, result from dolt_history_nightly_dolt_results where version=\"${commit_hash}\" group by test_file, line_num;"\
+    > "$TMP_CSV_DIR"/"$commit_hash"_mean_results.csv
+
+    dolt checkout master
+}
+
+function create_committers_mean_csv() {
+   IFS=', ' read -r -a commit_list <<< "$COMMITS_TO_TEST"
+    for c in "${commit_list[@]}"
+    do
+        create_once "$c"
+    done
+}
+
+function import_and_query_once() {
     rm -f query_db
     touch query_db
     sqlite3 query_db < "$schema_dir"/regressions.sql
 
     local commit_hash="$1"
     local release_csv="$TMP_CSV_DIR/release_results.csv"
+    local release_mean_csv="$TMP_CSV_DIR/release_mean_results.csv"
     local commiter_csv="$TMP_CSV_DIR/${commit_hash}_results.csv"
+    local commiter_mean_csv="$TMP_CSV_DIR/${commit_hash}_mean_results.csv"
 
     sqlite3 query_db <<SQL
 .mode csv
 .import $commiter_csv nightly_dolt_results
 .import $release_csv releases_dolt_results
+.import $commiter_mean_csv nigtly_dolt_mean_results
+.import $release_mean_csv releases_dolt_mean_results
 SQL
-
+  
   result_query_output=`sqlite3 query_db 'select * from release_committer_result_change'`
+  duration_query_output=`sqlite3 query_db 'select * from releases_nightly_duration_change'`
 
   result_regressions=`echo $result_query_output | sed '/^\s*$/d' | wc -l | tr -d '[:space:]'`
 
-  if [ "$result_regressions" != 0 ]; then echo -e "\033[31mResult regression found, $result_regressions != 0\033[0m" && echo $result_query_output && exit 1; else echo -e "\033[32mNo result regression found\033[0m"; fi
+  echo This is duration query output:
+  echo "$duration_query_output"
 
+  if [ "$result_regressions" != 0 ]; then echo "Result regression found, $result_regressions != 0" && echo $result_query_output && exit 1; else echo "No result regression found"; fi
+
+}
+
+function import_and_query() {
+  IFS=', ' read -r -a commit_list <<< "$COMMITS_TO_TEST"
+    for c in "${commit_list[@]}"
+    do
+        import_and_query_once "$c"
+    done
 }
 
 function run_once() {
     local commit_hash="$1"
-    local results="$log_dir/results-$commit_hash".log
-    local parsed="$log_dir/parsed-$commit_hash".json
+    local test_num="$2"
+    local results="$log_dir/results-$commit_hash-$test_num".log
+    local parsed="$log_dir/parsed-$commit_hash-$test_num".json
 
     (
       with_dolt_commit "$commit_hash"
@@ -159,9 +220,9 @@ function run_once() {
       go run . parse "$commit_hash" "$results" > "$parsed"
     )
 
-    (with_dolt_checkout; cd "$dsp_dir"/dolt-sql-performance; import_parsed "$parsed" "$commit_hash")
-
-    (import_and_query_db "$commit_hash")
+#    (with_dolt_checkout; cd "$dsp_dir"/dolt-sql-performance; import_parsed "$parsed" "$commit_hash")
+#
+#    (import_and_query_db "$commit_hash")
 }
 
 function run() {
@@ -171,7 +232,10 @@ function run() {
     IFS=', ' read -r -a commit_list <<< "$COMMITS_TO_TEST"
     for c in "${commit_list[@]}"
     do
-        run_once "$c"
+        # run_once "$c"
+        seq 1 $TEST_N_TIMES | while read test_num; do
+          run_once "$c" "$test_num"
+        done
     done
 
     rm -rf .dolt
@@ -204,6 +268,11 @@ function create_releases_csv() {
     dolt sql -r csv -q "\
     select * from releases_dolt_results where test_file in ($file_list);"\
     > "$TMP_CSV_DIR"/release_results.csv
+
+    dolt sql -r csv -q "\
+    select * from releases_dolt_mean_results where test_file in ($file_list);"\
+    > "$TMP_CSV_DIR"/release_mean_results.csv
+
     dolt checkout master
 }
 
@@ -231,3 +300,7 @@ rm -rf dolt-sql-performance && mkdir dolt-sql-performance
 (with_dolt_checkout; cd dolt-sql-performance; create_releases_csv)
 
 (cd "$logictest_main"; run)
+
+(with_dolt_checkout; cd "$dsp_dir"/dolt-sql-performance; import_parsed; create_committers_mean_csv; echo "here are all csvs:"; ls "$TMP_CSV_DIR")
+
+(import_and_query)
