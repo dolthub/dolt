@@ -12,6 +12,7 @@ type statementScanner struct {
 	quoteChar byte
 	lastChar byte
 	numConsecutiveQuoteChars int
+	numConsecutiveBackslashes int
 }
 
 func NewSqlStatementScanner(input io.Reader) *statementScanner {
@@ -55,13 +56,14 @@ func (s *statementScanner) scanStatements(data []byte, atEOF bool) (advance int,
 				return i + 1, data[0:i], nil
 			}
 		case backslash:
-			// escaped quote character
-			if s.lastChar == backslash {
-				break
-			}
+			s.numConsecutiveBackslashes++
+			s.numConsecutiveQuoteChars = 0
 		case sQuote, dQuote:
+			numConsecutiveBackslashes := s.numConsecutiveBackslashes
+			s.numConsecutiveBackslashes = 0
+
 			// escaped quote character
-			if s.lastChar == backslash {
+			if s.lastChar == backslash && numConsecutiveBackslashes % 2 == 1 {
 				break
 			}
 

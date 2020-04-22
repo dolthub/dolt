@@ -15,20 +15,82 @@ func TestScanStatements(t *testing.T) {
 
 	testcases := []testcase {
 		{
+			input: `insert into foo values (";;';'");`,
+			statements: []string{
+				`insert into foo values (";;';'")`,
+			},
+		},
+		{
+			input: `select ''';;'; select ";\;"`,
+			statements: []string{
+				`select ''';;'`,
+				`select ";\;"`,
+			},
+		},
+		{
+			input: `select '\\'''; select '";";'; select 1`,
+			statements: []string{
+				`select '\\'''`,
+				`select '";";'`,
+				`select 1`,
+			},
+		},
+		{
+			input: `insert into foo values(''); select 1`,
+			statements: []string{
+				`insert into foo values('')`,
+				`select 1`,
+			},
+		},
+		{
+			input: `insert into foo values('''); select 1`,
+			statements: []string{
+				`insert into foo values('''); select 1`,
+			},
+		},
+		{
+			input: `insert into foo values(''''); select 1`,
+			statements: []string{
+				`insert into foo values('''')`,
+				`select 1`,
+			},
+		},
+		{
+			input: `insert into foo values(""); select 1`,
+			statements: []string{
+				`insert into foo values("")`,
+				`select 1`,
+			},
+		},
+		{
+			input: `insert into foo values("""); select 1`,
+			statements: []string{
+				`insert into foo values("""); select 1`,
+			},
+		},
+		{
+			input: `insert into foo values(""""); select 1`,
+			statements: []string{
+				`insert into foo values("""")`,
+				`select 1`,
+			},
+		},
+		{
+			input: `select '\''; select "hell\"o"`,
+			statements: []string{
+				`select '\''`,
+				`select "hell\"o"`,
+			},
+		},
+		{
 			input: `select * from foo; select baz from foo;
-select 
+select
 a from b; select 1`,
 			statements: []string{
 				"select * from foo",
 				"select baz from foo",
-				"select \na from b",
+				"select\na from b",
 				"select 1",
-			},
-		},
-		{
-			input: `insert into foo values (";;';'");`,
-			statements: []string{
-				`insert into foo values (";;';'")`,
 			},
 		},
 		{
