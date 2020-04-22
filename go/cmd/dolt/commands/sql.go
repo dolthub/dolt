@@ -15,8 +15,6 @@
 package commands
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -553,31 +551,9 @@ func saveQuery(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, q
 	return newRoot, nil
 }
 
-// ScanStatements is a split function for a Scanner that returns each SQL statement in the input as a token. It doesn't
-// work for strings that contain semi-colons. Supporting that requires implementing a state machine.
-func scanStatements(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	if atEOF && len(data) == 0 {
-		return 0, nil, nil
-	}
-	if i := bytes.IndexByte(data, ';'); i >= 0 {
-		// We have a full ;-terminated line.
-		return i + 1, data[0:i], nil
-	}
-	// If we're at EOF, we have a final, non-terminated line. Return it.
-	if atEOF {
-		return len(data), data, nil
-	}
-	// Request more data.
-	return 0, nil, nil
-}
-
 // runBatchMode processes queries until EOF. The Root of the sqlEngine may be updated.
 func runBatchMode(ctx *sql.Context, se *sqlEngine, input io.Reader) error {
-	scanner := bufio.NewScanner(input)
-	const maxCapacity = 512 * 1024
-	buf := make([]byte, maxCapacity)
-	scanner.Buffer(buf, maxCapacity)
-	scanner.Split(scanStatements)
+	scanner := NewSqlStatementScanner(input)
 
 	var query string
 	for scanner.Scan() {
