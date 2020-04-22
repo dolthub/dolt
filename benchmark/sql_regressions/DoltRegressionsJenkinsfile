@@ -24,7 +24,13 @@ pipeline {
                             git url: "https://github.com/liquidata-inc/sqllogictest.git"
                         }
                         dir ("benchmark/sql_regressions") {
-                            sh "nice ./run_regressions.sh ./nightly.vars"
+                            script {
+                                try {
+                                    sh "nice ./run_regressions.sh ./nightly.vars"
+                                } catch(err) {
+                                    sh "if [ \"${err.getMessage()}\" = 'script returned exit code 155' ]; then echo 'Result data found in dolt-sql-performance, silently exiting...'; else echo \"${err.getMessage()}\" && exit 1; fi"
+                                }
+                            }
                         }
                     }
                 }
@@ -38,14 +44,9 @@ pipeline {
             }
         }
         failure {
-             script {
-                  def watchers = "$SQL_WATCHERS".split()
-                  for (int i = 0; i < watchers.size(); ++i) {
-                      emailext body: "${currentBuild.currentResult}: Job ${env.JOB_NAME} build ${env.BUILD_NUMBER}\n More info at: ${env.BUILD_URL}",
-                          to: watchers[i],
-                          subject: "Jenkins Build ${currentBuild.currentResult}: Job ${env.JOB_NAME}"
-                  }
-             }
+             emailext body: "${currentBuild.currentResult}: Job ${env.JOB_NAME} build ${env.BUILD_NUMBER}\n More info at: ${env.BUILD_URL}",
+                 to: "$SQL_WATCHERS",
+                 subject: "Jenkins Build ${currentBuild.currentResult}: Job ${env.JOB_NAME}"
         }
     }
 }
