@@ -16,7 +16,6 @@ logictest_main="$logictest"/main
 schema_dir="$base_dir/go/libraries/doltcore/sqle/logictest"
 old_path=$PATH
 
-
 if [[ "$#" -ne 1 ]]; then
     fail Usage: ./run_regressions.sh ENV_VARIABLES_FILE
 fi
@@ -48,8 +47,6 @@ function setup_testing_dir() {
     rm -rf "$TMP_TESTING_DIR"
     mkdir -p "$TMP_TESTING_DIR"
 
-    echo "Copying test files from sqllogictests to a temporary testing directory..."
-
     IFS=', ' read -r -a test_list <<< "$TEST_FILE_DIR_LIST"
     for fd in "${test_list[@]}"
     do
@@ -80,20 +77,14 @@ function with_dolt_commit() {
             mkdir -p "$base_dir"/.ci_bin/"$commit_hash"
           fi
 
-          echo "This is where i am building dolt from the commit hash from:"
-          pwd
-
-          git status
           go get -mod=readonly ./...
           go build -mod=readonly -o "$base_dir"/.ci_bin/"$commit_hash"/dolt ./cmd/dolt/.
-          find "$base_dir"/.ci_bin/
       fi
     )
 
     echo "Finished installing dolt from $commit_hash:"
     export PATH="$base_dir/.ci_bin/$commit_hash":$old_path
     dolt version
-    echo Using current path: "$PATH"
 }
 
 function with_dolt_checkout() {
@@ -110,7 +101,6 @@ function with_dolt_checkout() {
     echo "Finished installing dolt from checkout:"
     export PATH="$base_dir/.ci_bin/checkout":$old_path
     dolt version
-    echo Using current path: "$PATH"
 }
 
 function import_parsed() {
@@ -124,11 +114,8 @@ function import_parsed() {
     select * from nightly_dolt_results;"\
     > "$TMP_CSV_DIR"/"$commit_hash"_results.csv
 
-    cat "$TMP_CSV_DIR"/"$commit_hash"_results.csv
-
     dolt add nightly_dolt_results
     dolt commit -m "add results for dolt at commit $commit_hash"
-    ls "$TMP_CSV_DIR"
     dolt checkout master
 }
 
@@ -147,19 +134,7 @@ function import_and_query_db() {
 .import $release_csv releases_dolt_results
 SQL
 
-  echo "sqlite tables:"
-  sqlite3 query_db '.tables'
-
-  echo "sqlite all test files in release table:"
-  sqlite3 query_db 'select test_file from releases_dolt_results group by test_file'
-
-  echo "sqlite all test files in committer (nightly) table:"
-  sqlite3 query_db 'select test_file from nightly_dolt_results group by test_file'
-
   result_query_output=`sqlite3 query_db 'select * from release_committer_result_change'`
-
-  echo "This is the output of the sqlite query:"
-  echo "$result_query_output"
 
   result_regressions=`echo $result_query_output | sed '/^\s*$/d' | wc -l | tr -d '[:space:]'`
 
@@ -172,28 +147,19 @@ function run_once() {
     local results="$log_dir/results-$commit_hash".log
     local parsed="$log_dir/parsed-$commit_hash".json
 
-    (with_dolt_commit "$commit_hash"; dolt version; rm -rf .dolt; dolt init)
+    (
+      with_dolt_commit "$commit_hash"
 
-    (with_dolt_commit "$commit_hash"; pwd; echo "Running tests and creating $results"; go run . run "$TMP_TESTING_DIR" > "$results"; cat "$results")
+      rm -rf .dolt; dolt init
 
-    (with_dolt_commit "$commit_hash"; echo "Parsing $results and generating $parsed"; go run . parse "$commit_hash" "$results" > "$parsed"; cat "$parsed")
+      echo "Running tests and creating $results"
+      go run . run "$TMP_TESTING_DIR" > "$results"
 
-#    with_dolt_commit "$commit_hash"
-#    rm -rf .dolt
-#    dolt init
-#
-#    pwd
-#    echo "Running tests and creating $results"
-#    go run . run "$TMP_TESTING_DIR" > "$results"
-#
-#    cat "$results"
-#
-#    echo "Parsing $results and generating $parsed"
-#    go run . parse "$commit_hash" "$results" > "$parsed"
-#
-#    cat "$parsed"
+      echo "Parsing $results and generating $parsed"
+      go run . parse "$commit_hash" "$results" > "$parsed"
+    )
 
-    (with_dolt_checkout; dolt version; cd "$dsp_dir"/dolt-sql-performance; import_parsed "$parsed" "$commit_hash")
+    (with_dolt_checkout; cd "$dsp_dir"/dolt-sql-performance; import_parsed "$parsed" "$commit_hash")
 
     (import_and_query_db "$commit_hash")
 }
@@ -222,27 +188,24 @@ function create_releases_csv() {
 
     SAVEIFS=$IFS
     IFS=$'\n'
+
+    # do not wrap env var in quotes, so it gets split into array
     file_arr=($test_files)
+
     IFS=$SAVEIFS
 
     file_list=
     for (( i=0; i<${#file_arr[@]}; i++ ))
     do
-#       echo "$i: ${file_arr[$i]}"
        if [ "${file_arr[$i]: -5}" == ".test" ]; then
-        echo "Adding this file: ${file_arr[$i]}"
         file_list=`append "$file_list" "${file_arr[$i]}"`
        fi
     done
 
-    echo This is the final list: "$file_list"
-
     dolt checkout "$DOLT_BRANCH"
-    echo "Executing query: sql -r csv -q \"select * from releases_dolt_results where test_file in ($file_list);\""
     dolt sql -r csv -q "\
     select * from releases_dolt_results where test_file in ($file_list);"\
     > "$TMP_CSV_DIR"/release_results.csv
-    ls "$TMP_CSV_DIR"
     dolt checkout master
 }
 
@@ -251,7 +214,6 @@ function update_fetch_specs() {
   local branch="$2"
   repo_state=$(cat .dolt/repo_state.json)
   jq ".remotes.$remote.fetch_specs = [\"refs/heads/$branch:refs/remotes/origin/$branch\"]" <<< "$repo_state" > .dolt/repo_state.json
-  cat .dolt/repo_state.json
 }
 
 function fetch_repo() {
