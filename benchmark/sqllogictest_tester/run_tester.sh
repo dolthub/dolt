@@ -121,7 +121,6 @@ function import_once() {
       dolt checkout "temp-$commit_hash";
     fi
 
-#    dolt checkout -b "temp-$commit_hash"
     dolt table import -u nightly_dolt_results "$parsed"
 
     dolt sql -r csv -q "\
@@ -181,17 +180,15 @@ function import_and_query_once() {
 .import $commiter_mean_csv nigtly_dolt_mean_results
 .import $release_mean_csv releases_dolt_mean_results
 SQL
-  
+
   result_query_output=`sqlite3 query_db 'select * from release_committer_result_change'`
   duration_query_output=`sqlite3 query_db 'select * from releases_nightly_duration_change'`
 
   result_regressions=`echo $result_query_output | sed '/^\s*$/d' | wc -l | tr -d '[:space:]'`
-
-  echo This is duration query output:
-  echo "$duration_query_output"
+  duration_regressions=`echo $duration_query_output | sed '/^\s*$/d' | wc -l | tr -d '[:space:]'`
 
   if [ "$result_regressions" != 0 ]; then echo "Result regression found, $result_regressions != 0" && echo $result_query_output && exit 1; else echo "No result regression found"; fi
-
+  if [ "$duration_regressions" != 0 ]; then echo "Duration regression found, $duration_regressions != 0" && echo $duration_query_output && exit 1; else echo "No duration regressions found"; fi
 }
 
 function import_and_query() {
@@ -219,10 +216,6 @@ function run_once() {
       echo "Parsing $results and generating $parsed"
       go run . parse "$commit_hash" "$results" > "$parsed"
     )
-
-#    (with_dolt_checkout; cd "$dsp_dir"/dolt-sql-performance; import_parsed "$parsed" "$commit_hash")
-#
-#    (import_and_query_db "$commit_hash")
 }
 
 function run() {
