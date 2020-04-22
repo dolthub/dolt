@@ -13,6 +13,7 @@ func TestScanStatements(t *testing.T) {
 		statements []string
 	}
 
+	// Some of these include malformed input (e.g. strings that aren't properly terminated)
 	testcases := []testcase {
 		{
 			input: `insert into foo values (";;';'");`,
@@ -28,11 +29,25 @@ func TestScanStatements(t *testing.T) {
 			},
 		},
 		{
+			input: `select ''';;'; select ";\;`,
+			statements: []string{
+				`select ''';;'`,
+				`select ";\;`,
+			},
+		},
+		{
 			input: `select '\\'''; select '";";'; select 1`,
 			statements: []string{
 				`select '\\'''`,
 				`select '";";'`,
 				`select 1`,
+			},
+		},
+		{
+			input: `select '\\''; select '";";'; select 1`,
+			statements: []string{
+				`select '\\''; select '";"`,
+				`'; select 1`,
 			},
 		},
 		{
