@@ -132,17 +132,17 @@ function import_once() {
     dolt checkout master
 }
 
-function import_parsed() {
-    IFS=', ' read -r -a commit_list <<< "$COMMITS_TO_TEST"
-    for c in "${commit_list[@]}"
-    do
-        seq 1 $TEST_N_TIMES | while read test_num; do
-          import_once "$c" "$test_num"
-        done
-    done
-}
+#function import_parsed() {
+#    IFS=', ' read -r -a commit_list <<< "$COMMITS_TO_TEST"
+#    for c in "${commit_list[@]}"
+#    do
+#        seq 1 $TEST_N_TIMES | while read test_num; do
+#          import_once "$c" "$test_num"
+#        done
+#    done
+#}
 
-function create_once() {
+function create_mean_csv_once() {
     local commit_hash="$1"
 
     exists=$(dolt branch --list "temp-$commit_hash"| sed '/^\s*$/d' | wc -l | tr -d '[:space:]')
@@ -160,13 +160,13 @@ function create_once() {
     dolt checkout master
 }
 
-function create_committers_mean_csv() {
-   IFS=', ' read -r -a commit_list <<< "$COMMITS_TO_TEST"
-    for c in "${commit_list[@]}"
-    do
-        create_once "$c"
-    done
-}
+#function create_committers_mean_csv() {
+#   IFS=', ' read -r -a commit_list <<< "$COMMITS_TO_TEST"
+#    for c in "${commit_list[@]}"
+#    do
+#        create_mean_csv_once "$c"
+#    done
+#}
 
 function import_and_query_once() {
     rm -f query_db
@@ -197,13 +197,13 @@ SQL
   if [ "$duration_regressions" != 0 ]; then echo "Duration regression found, $duration_regressions != 0" && echo $duration_query_output && exit 1; else echo "No duration regressions found"; fi
 }
 
-function import_and_query() {
-  IFS=', ' read -r -a commit_list <<< "$COMMITS_TO_TEST"
-    for c in "${commit_list[@]}"
-    do
-        import_and_query_once "$c"
-    done
-}
+#function import_and_query() {
+#  IFS=', ' read -r -a commit_list <<< "$COMMITS_TO_TEST"
+#    for c in "${commit_list[@]}"
+#    do
+#        import_and_query_once "$c"
+#    done
+#}
 
 function run_once() {
     local commit_hash="$1"
@@ -237,12 +237,10 @@ function run() {
           run_once "$c" "$test_num"
         done
 
-        (with_dolt_checkout; cd "$dsp_dir"/dolt-sql-performance; create_once "$c")
+        (with_dolt_checkout; cd "$dsp_dir"/dolt-sql-performance; create_mean_csv_once "$c")
 
         (import_and_query_once "$c")
     done
-
-    rm -rf .dolt
 }
 
 append() {
@@ -304,9 +302,3 @@ rm -rf dolt-sql-performance && mkdir dolt-sql-performance
 (with_dolt_checkout; cd dolt-sql-performance; create_releases_csv)
 
 (cd "$logictest_main"; run)
-
-#(with_dolt_checkout; cd "$dsp_dir"/dolt-sql-performance; import_parsed; create_committers_mean_csv; echo "here are all csvs:"; ls "$TMP_CSV_DIR")
-
-(echo "here are all csvs:"; ls "$TMP_CSV_DIR")
-
-#(import_and_query)

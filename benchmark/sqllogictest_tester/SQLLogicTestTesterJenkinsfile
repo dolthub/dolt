@@ -44,14 +44,9 @@ pipeline {
             }
         }
         failure {
-             script {
-                  def watchers = "$TEST_WATCHERS".split()
-                  for (int i = 0; i < watchers.size(); ++i) {
-                      emailext body: "${currentBuild.currentResult}: Job ${env.JOB_NAME} build ${env.BUILD_NUMBER}\n More info at: ${env.BUILD_URL}",
-                          to: watchers[i],
-                          subject: "Jenkins Build ${currentBuild.currentResult}: Job ${env.JOB_NAME}"
-                  }
-             }
+             emailext body: "${currentBuild.currentResult}: Job ${env.JOB_NAME} build ${env.BUILD_NUMBER}\n More info at: ${env.BUILD_URL}",
+                to: "$TEST_WATCHERS",
+                subject: "Jenkins Build ${currentBuild.currentResult}: Job ${env.JOB_NAME}"
         }
     }
 }
