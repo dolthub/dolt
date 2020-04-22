@@ -561,11 +561,6 @@ func runBatchMode(ctx *sql.Context, se *sqlEngine, input io.Reader) error {
 		if len(query) == 0 || query == "\n" {
 			continue
 		}
-		if !batchInsertEarlySemicolon(query) {
-			query += ";"
-			// TODO: We should fix this problem by properly implementing a state machine for scanStatements
-			continue
-		}
 		if err := processBatchQuery(ctx, query, se); err != nil {
 			verr := formatQueryError(query, err)
 			cli.PrintErrln(verr.Verbose())
@@ -581,36 +576,6 @@ func runBatchMode(ctx *sql.Context, se *sqlEngine, input io.Reader) error {
 	}
 
 	return flushBatchedEdits(ctx, se)
-}
-
-// batchInsertEarlySemicolon loops through a string to check if Scan stopped too early on a semicolon
-func batchInsertEarlySemicolon(query string) bool {
-	quotes := []uint8{'\'', '"'}
-	midQuote := false
-	queryLength := len(query)
-	for i := 0; i < queryLength; i++ {
-		for _, quote := range quotes {
-			if query[i] == quote {
-				i++
-				midQuote = true
-				inEscapeMode := false
-				for ; i < queryLength; i++ {
-					if inEscapeMode {
-						inEscapeMode = false
-					} else {
-						if query[i] == quote {
-							midQuote = false
-							break
-						} else if query[i] == '\\' {
-							inEscapeMode = true
-						}
-					}
-				}
-				break
-			}
-		}
-	}
-	return !midQuote
 }
 
 // runShell starts a SQL shell. Returns when the user exits the shell. The Root of the sqlEngine may
