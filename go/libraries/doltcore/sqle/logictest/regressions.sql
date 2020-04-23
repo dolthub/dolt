@@ -72,3 +72,20 @@ join nightly_dolt_mean_results as n
 on r.line_num = n.line_num 
 and r.test_file = n.test_file 
 and (r.result = "ok" and n.result != "ok");
+
+create view `release_committer_result_change`
+as
+select
+r.test_file,
+r.line_num,
+r.query_string,
+r.version as release_version,
+r.result as release_result,
+n.version as committer_version,
+n.result as commiter_result,
+n.error_message as commiter_error_message
+from releases_dolt_results as r
+join nightly_dolt_results as n
+on r.line_num = n.line_num
+and r.test_file = n.test_file
+and (r.result = "ok" and n.result != "ok");
