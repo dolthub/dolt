@@ -369,7 +369,7 @@ func execQuery(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*do
 
 	sqlSch, rowIter, err := processQuery(sqlCtx, query, se)
 	if err != nil {
-		verr := formatQueryError(query, err)
+		verr := formatQueryError("", err)
 		return nil, verr
 	}
 
@@ -641,7 +641,7 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv) error {
 		}
 
 		if sqlSch, rowIter, err := processQuery(ctx, query, se); err != nil {
-			verr := formatQueryError(query, err)
+			verr := formatQueryError("", err)
 			shell.Println(verr.Verbose())
 		} else if rowIter != nil {
 			defer rowIter.Close()
