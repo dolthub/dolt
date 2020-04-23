@@ -23,7 +23,6 @@ fi
 source "$1"
 if [ -z "$DOLT_ROOT_PATH" ]; then fail Must supply DOLT_ROOT_PATH; fi
 if [ -z "$DOLT_CONFIG_PATH" ]; then fail Must supply DOLT_CONFIG_PATH; fi
-if [ -z "$DOLT_GLOBAL_CONFIG" ]; then fail Must supply DOLT_GLOBAL_CONFIG; fi
 if [ -z "$CREDSDIR" ]; then fail Must supply CREDSDIR; fi
 if [ -z "$DOLT_CREDS" ]; then fail Must supply DOLT_CREDS; fi
 if [ -z "$CREDS_HASH" ]; then fail Must supply CREDS_HASH; fi
@@ -62,17 +61,12 @@ function checkout_branch_if_exists() {
   local branch_name="$2"
   local hash="$3"
 
-  echo "running inside of checkout_branch_if_exists..."
   if [ `"$cmd" branch --list "$branch_name" | wc -l` -eq 1 ]; then
-    echo "branch $branch_name exists, checking it out..."
     "$cmd" checkout "$branch_name"
   else
-    echo "branch $branch_name doesnt exist, checking out new branch..."
     if [ -z "$hash" ]; then
-      echo "hash is empty, checking out new branch $branch_name..."
       "$cmd" checkout -b "$branch_name";
     else
-      echo "hash is not empty, checking out new branch $branch_name at hash $hash..."
       "$cmd" checkout -b "$branch_name" "$hash";
     fi
   fi
@@ -84,15 +78,7 @@ function with_dolt_commit() {
       cd "$base_dir"/tempDolt/go
       git checkout "$commit_hash"
 
-#      exists=$(git branch --list "temp-$commit_hash"| sed '/^\s*$/d' | wc -l)
-
       checkout_branch_if_exists "git" "temp-$commit_hash" "$commit_hash"
-
-#      if [ "$exists" -eq 0 ]; then
-#        git checkout -b "temp-$commit_hash";
-#      else
-#        git checkout "temp-$commit_hash";
-#      fi
 
       git log -n 1
 
@@ -101,7 +87,6 @@ function with_dolt_commit() {
             mkdir -p "$base_dir"/.ci_bin/"$commit_hash"
           fi
 
-          go get -mod=readonly ./...
           go build -mod=readonly -o "$base_dir"/.ci_bin/"$commit_hash"/dolt ./cmd/dolt/.
       fi
     )
@@ -134,15 +119,7 @@ function import_once() {
 
     dolt checkout "$DOLT_BRANCH"
 
-#    exists=$(dolt branch --list "temp-$commit_hash"| sed '/^\s*$/d' | wc -l | tr -d '[:space:]')
-
     checkout_branch_if_exists "dolt" "temp-$commit_hash" ""
-
-#    if [ "$exists" -eq 0 ]; then
-#      dolt checkout -b "temp-$commit_hash";
-#    else
-#      dolt checkout "temp-$commit_hash";
-#    fi
 
     dolt table import -u nightly_dolt_results "$parsed"
 
@@ -159,14 +136,6 @@ function create_mean_csv_once() {
     local commit_hash="$1"
 
     checkout_branch_if_exists "dolt" "temp-$commit_hash" ""
-
-#    exists=$(dolt branch --list "temp-$commit_hash"| sed '/^\s*$/d' | wc -l | tr -d '[:space:]')
-
-#    if [ "$exists" -eq 0 ]; then
-#      dolt checkout -b "temp-$commit_hash";
-#    else
-#      dolt checkout "temp-$commit_hash";
-#    fi
 
     dolt sql -r csv -q "\
     select version, test_file, line_num, avg(duration) as mean_duration, result from dolt_history_nightly_dolt_results where version=\"${commit_hash}\" group by test_file, line_num;"\
