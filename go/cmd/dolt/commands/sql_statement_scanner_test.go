@@ -1,21 +1,22 @@
 package commands
 
 import (
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestScanStatements(t *testing.T) {
 	type testcase struct {
-		input string
+		input      string
 		statements []string
-		lineNums []int
+		lineNums   []int
 	}
 
 	// Some of these include malformed input (e.g. strings that aren't properly terminated)
-	testcases := []testcase {
+	testcases := []testcase{
 		{
 			input: `insert into foo values (";;';'");`,
 			statements: []string{
@@ -117,7 +118,7 @@ a from b; select 1`,
 				"select\na from b",
 				"select 1",
 			},
-			lineNums: []int {
+			lineNums: []int{
 				1, 1, 2, 3,
 			},
 		},
@@ -129,17 +130,17 @@ a from b; select 1`,
 		},
 		{
 			input: "create table dumb (`hell``o;` int primary key); select \n" +
-					"baz from foo;\n" +
-					"\n" +
-					"select\n" +
-					"a from b; select 1\n\n",
+				"baz from foo;\n" +
+				"\n" +
+				"select\n" +
+				"a from b; select 1\n\n",
 			statements: []string{
 				"create table dumb (`hell``o;` int primary key)",
 				"select \nbaz from foo",
 				"select\na from b",
 				"select 1",
 			},
-			lineNums: []int {
+			lineNums: []int{
 				1, 1, 4, 5,
 			},
 		},
@@ -159,7 +160,7 @@ qux = '"hello"""' where xyzzy = ";;';'"`,
 				`create table foo (a int not null default ';',
 primary key (a))`,
 			},
-			lineNums: []int {
+			lineNums: []int{
 				1, 2, 6,
 			},
 		},

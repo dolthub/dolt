@@ -8,9 +8,9 @@ import (
 
 type statementScanner struct {
 	*bufio.Scanner
-	statementStartLine        int  // the line number of the first line of the last parsed statement
-	startLineNum              int  // the line number we began parsing the most recent token at
-	lineNum                   int  // the current line number being parsed
+	statementStartLine int // the line number of the first line of the last parsed statement
+	startLineNum       int // the line number we began parsing the most recent token at
+	lineNum            int // the current line number being parsed
 }
 
 func NewSqlStatementScanner(input io.Reader) *statementScanner {
@@ -29,10 +29,10 @@ func NewSqlStatementScanner(input io.Reader) *statementScanner {
 }
 
 const (
-	sQuote byte = '\''
-	dQuote = '"'
-	backslash = '\\'
-	backtick = '`'
+	sQuote    byte = '\''
+	dQuote         = '"'
+	backslash      = '\\'
+	backtick       = '`'
 )
 
 // ScanStatements is a split function for a Scanner that returns each SQL statement in the input as a token.
