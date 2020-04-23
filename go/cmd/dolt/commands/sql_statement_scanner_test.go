@@ -11,6 +11,7 @@ func TestScanStatements(t *testing.T) {
 	type testcase struct {
 		input string
 		statements []string
+		lineNums []int
 	}
 
 	// Some of these include malformed input (e.g. strings that aren't properly terminated)
@@ -33,6 +34,15 @@ func TestScanStatements(t *testing.T) {
 			statements: []string{
 				`select ''';;'`,
 				`select ";\;`,
+			},
+		},
+		{
+			input: `select ''';;'; select ";\;
+;`,
+			statements: []string{
+				`select ''';;'`,
+				`select ";\;
+;`,
 			},
 		},
 		{
@@ -107,11 +117,38 @@ a from b; select 1`,
 				"select\na from b",
 				"select 1",
 			},
+			lineNums: []int {
+				1, 1, 2, 3,
+			},
+		},
+		{
+			input: "create table dumb (`hell\\`o;` int primary key);",
+			statements: []string{
+				"create table dumb (`hell\\`o;` int primary key)",
+			},
+		},
+		{
+			input: "create table dumb (`hell``o;` int primary key); select \n" +
+					"baz from foo;\n" +
+					"\n" +
+					"select\n" +
+					"a from b; select 1\n\n",
+			statements: []string{
+				"create table dumb (`hell``o;` int primary key)",
+				"select \nbaz from foo",
+				"select\na from b",
+				"select 1",
+			},
+			lineNums: []int {
+				1, 1, 4, 5,
+			},
 		},
 		{
 			input: `insert into foo values ('a', "b;", 'c;;""
 '); update foo set baz = bar,
 qux = '"hello"""' where xyzzy = ";;';'";
+
+  
 create table foo (a int not null default ';',
 primary key (a));`,
 			statements: []string{
@@ -121,6 +158,9 @@ primary key (a));`,
 qux = '"hello"""' where xyzzy = ";;';'"`,
 				`create table foo (a int not null default ';',
 primary key (a))`,
+			},
+			lineNums: []int {
+				1, 2, 6,
 			},
 		},
 	}
@@ -133,6 +173,11 @@ primary key (a))`,
 			for scanner.Scan() {
 				require.True(t, i < len(tt.statements))
 				assert.Equal(t, tt.statements[i], strings.TrimSpace(scanner.Text()))
+				if tt.lineNums != nil {
+					assert.Equal(t, tt.lineNums[i], scanner.statementStartLine)
+				} else {
+					assert.Equal(t, 1, scanner.statementStartLine)
+				}
 				i++
 			}
 

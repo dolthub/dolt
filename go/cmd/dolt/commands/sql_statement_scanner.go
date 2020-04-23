@@ -3,16 +3,19 @@ package commands
 import (
 	"bufio"
 	"io"
+	"unicode"
 )
 
 type statementScanner struct {
 	*bufio.Scanner
-	lastStatementLineNum int
-	lineNum int
-	quoteChar byte
-	lastChar byte
-	numConsecutiveBackslashes int
-	ignoreNextChar bool;
+	statementStartLine        int  // the line number of the first line of the last parsed statement
+	startLineNum              int  // the line number we began parsing the most recent token at
+	lineNum                   int  // the current line being parsed in the input
+	quoteChar                 byte // the opening quote character of the current quote being parsed, or 0 if the current parse location isn't inside a quoted string
+	lastChar                  byte // the last character parsed
+	ignoreNextChar            bool // whether to ignore the next character
+	numConsecutiveBackslashes int  // the number of consecutive backslashes encountered
+	seenNonWhitespaceChar     bool // whether we have encountered a non-whitespace character since we returned the last token
 }
 
 func NewSqlStatementScanner(input io.Reader) *statementScanner {
@@ -23,22 +26,19 @@ func NewSqlStatementScanner(input io.Reader) *statementScanner {
 
 	s := &statementScanner{
 		Scanner: scanner,
+		lineNum: 1,
+		// nextStatementLineNum: 1,
 	}
 	scanner.Split(s.scanStatements)
 
 	return s
 }
 
-func (s *statementScanner) Scan() bool {
-	s.lineNum++
-	scanned := s.Scanner.Scan()
-	return scanned
-}
-
 const (
 	sQuote byte = '\''
 	dQuote = '"'
 	backslash = '\\'
+	backtick = '`'
 )
 
 // ScanStatements is a split function for a Scanner that returns each SQL statement in the input as a token.
@@ -47,20 +47,29 @@ func (s *statementScanner) scanStatements(data []byte, atEOF bool) (advance int,
 		return 0, nil, nil
 	}
 
-	for i := range data {
+	s.startLineNum = s.lineNum
 
+	for i := range data {
 		if !s.ignoreNextChar {
+			// this doesn't handle unicode characters correctly and will break on some things, but it's only used for line
+			// number reporting.
+			if !s.seenNonWhitespaceChar && !unicode.IsSpace(rune(data[i])) {
+				s.seenNonWhitespaceChar = true
+				s.statementStartLine = s.lineNum
+			}
+
 			switch data[i] {
 			case '\n':
 				s.lineNum++
 			case ';':
 				if s.quoteChar == 0 {
+					s.startLineNum = s.lineNum
 					_, _, _ = s.resetState()
 					return i + 1, data[0:i], nil
 				}
 			case backslash:
 				s.numConsecutiveBackslashes++
-			case sQuote, dQuote:
+			case sQuote, dQuote, backtick:
 				numConsecutiveBackslashes := s.numConsecutiveBackslashes
 				s.numConsecutiveBackslashes = 0
 
@@ -124,5 +133,8 @@ func (s *statementScanner) resetState() (advance int, token []byte, err error) {
 	s.numConsecutiveBackslashes = 0
 	s.ignoreNextChar = false
 	s.lastChar = 0
+	// rewind the line number to where we started parsing this token
+	s.lineNum = s.startLineNum
+	s.seenNonWhitespaceChar = false
 	return 0, nil, nil
 }
