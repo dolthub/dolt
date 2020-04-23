@@ -22,7 +22,6 @@ func NewSqlStatementScanner(input io.Reader) *statementScanner {
 	s := &statementScanner{
 		Scanner: scanner,
 		lineNum: 1,
-		// nextStatementLineNum: 1,
 	}
 	scanner.Split(s.scanStatements)
 
