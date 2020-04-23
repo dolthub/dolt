@@ -419,7 +419,6 @@ func getCreateFuncForMultiPK(nbf *types.NomsBinFormat, keySet setalgebra.Set, sc
 			return noms.NewNomsRangeReader(sch, m, []*noms.ReadRange{r}), nil
 		}, nil
 
-
 	case setalgebra.CompositeSet:
 		var ranges []*noms.ReadRange
 		for _, interval := range typedSet.Intervals {
