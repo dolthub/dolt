@@ -39,11 +39,8 @@ if [ -z "$TEST_N_TIMES" ]; then fail Must supply TEST_N_TIMES; fi
 function setup() {
     rm -rf "$CREDSDIR"
     mkdir -p "$CREDSDIR"
-#    cat "$DOLT_CREDS" > "$CREDSDIR"/"$CREDS_HASH".jwk
     dolt config --global --add metrics.disabled true
     dolt creds import "$DOLT_CREDS"
-#    echo "$DOLT_GLOBAL_CONFIG" > "$DOLT_CONFIG_PATH"/config_global.json
-#    dolt config --global --add user.creds "$CREDS_HASH"
     dolt version
 }
 
@@ -60,19 +57,32 @@ function setup_testing_dir() {
     done
 }
 
+function checkout_temp_commit() {
+  local cmd="$1"
+  local hash="$2"
+
+  if [ `"$cmd" branch --list "temp-$hash" | wc -l` -eq 1 ]; then
+    "$cmd" checkout "temp-$hash"
+  else
+    "$cmd" checkout -b "temp-$hash" "$hash"
+  fi
+}
+
 function with_dolt_commit() {
   local commit_hash="$1"
     (
       cd "$base_dir"/tempDolt/go
-      git checkout master
+      git checkout "$commit_hash"
 
       exists=$(git branch --list "temp-$commit_hash"| sed '/^\s*$/d' | wc -l)
 
-      if [ "$exists" -eq 0 ]; then
-        git checkout -b "temp-$commit_hash" "$commit_hash";
-      else
-        git checkout "temp-$commit_hash";
-      fi
+      checkout_temp_commit "git" "$commit_hash"
+
+#      if [ "$exists" -eq 0 ]; then
+#        git checkout -b "temp-$commit_hash";
+#      else
+#        git checkout "temp-$commit_hash";
+#      fi
 
       git log -n 1
 
@@ -116,11 +126,13 @@ function import_once() {
 
     exists=$(dolt branch --list "temp-$commit_hash"| sed '/^\s*$/d' | wc -l | tr -d '[:space:]')
 
-    if [ "$exists" -eq 0 ]; then
-      dolt checkout -b "temp-$commit_hash";
-    else
-      dolt checkout "temp-$commit_hash";
-    fi
+    checkout_temp_commit "dolt" "$commit_hash"
+
+#    if [ "$exists" -eq 0 ]; then
+#      dolt checkout -b "temp-$commit_hash";
+#    else
+#      dolt checkout "temp-$commit_hash";
+#    fi
 
     dolt table import -u nightly_dolt_results "$parsed"
 
@@ -132,16 +144,6 @@ function import_once() {
     dolt commit -m "add results for dolt at git commit $commit_hash ($test_num)"
     dolt checkout master
 }
-
-#function import_parsed() {
-#    IFS=', ' read -r -a commit_list <<< "$COMMITS_TO_TEST"
-#    for c in "${commit_list[@]}"
-#    do
-#        seq 1 $TEST_N_TIMES | while read test_num; do
-#          import_once "$c" "$test_num"
-#        done
-#    done
-#}
 
 function create_mean_csv_once() {
     local commit_hash="$1"
@@ -160,14 +162,6 @@ function create_mean_csv_once() {
 
     dolt checkout master
 }
-
-#function create_committers_mean_csv() {
-#   IFS=', ' read -r -a commit_list <<< "$COMMITS_TO_TEST"
-#    for c in "${commit_list[@]}"
-#    do
-#        create_mean_csv_once "$c"
-#    done
-#}
 
 function import_and_query_once() {
     rm -f query_db
@@ -197,14 +191,6 @@ SQL
   if [ "$result_regressions" != 0 ]; then echo "Result regression found, $result_regressions != 0" && echo $result_query_output && exit 1; else echo "No result regression found"; fi
   if [ "$duration_regressions" != 0 ]; then echo "Duration regression found, $duration_regressions != 0" && echo $duration_query_output && exit 1; else echo "No duration regressions found"; fi
 }
-
-#function import_and_query() {
-#  IFS=', ' read -r -a commit_list <<< "$COMMITS_TO_TEST"
-#    for c in "${commit_list[@]}"
-#    do
-#        import_and_query_once "$c"
-#    done
-#}
 
 function run_once() {
     local commit_hash="$1"
