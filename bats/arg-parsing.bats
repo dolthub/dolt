@@ -45,3 +45,14 @@ teardown() {
     skip "Can't chain modal arguments"
     dolt table import -fc test `batshelper 1pk5col-ints.csv`
 }
+
+@test "dolt checkout with empty string returns error" {
+    run dolt checkout ""
+    skip "Panics when attempting to checkout empty string"
+    [[ "$output" =~ "error: cannot checkout empty string" ]] || false
+    [ $status -ne 0 ]
+
+    run dolt checkout -b ""
+    [[ "$output" =~ "error: cannot checkout empty string" ]] || false
+    [ $status -ne 0 ]
+}
