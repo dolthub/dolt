@@ -105,7 +105,6 @@ teardown() {
 
 @test "query dolt_diff_ system table" {
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
-    dolt sql -q 'select * from dolt_diff_test;'
     dolt add test
     dolt commit -m "Added test table"
     dolt sql -q "insert into test values (0,0)"
@@ -115,6 +114,16 @@ teardown() {
     run dolt sql -q 'select * from dolt_diff_test'
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
+}
+
+@test "query dolt_diff_ system table without committing table" {
+    dolt sql -q "create table test (pk int not null primary key);"
+    dolt sql -q "insert into test values (0), (1);"
+    run dolt sql -q 'select * from dolt_diff_test;'
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" =~ "| to_pk | to_commit | from_pk | from_commit | diff_type |" ]] || false
+    [[ "${lines[3]}" =~ "| 0     | HEAD      | <NULL>  | current     | added     |" ]] || false
+    [[ "${lines[4]}" =~ "| 1     | HEAD      | <NULL>  | current     | added     |" ]] || false
 }
 
 @test "query dolt_history_ system table" {
