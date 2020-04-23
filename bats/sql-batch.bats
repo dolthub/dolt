@@ -68,6 +68,8 @@ test values (2,0,0,0,0,0)
 insert into 
 test values 
 poop;
+
+insert into test values (3,0,0,0,0,0);
 SQL
     [ "$status" -ne 0 ]
     [[ "$output" =~ "Error processing batch" ]] || false
