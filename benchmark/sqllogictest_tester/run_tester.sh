@@ -39,10 +39,11 @@ if [ -z "$TEST_N_TIMES" ]; then fail Must supply TEST_N_TIMES; fi
 function setup() {
     rm -rf "$CREDSDIR"
     mkdir -p "$CREDSDIR"
-    cat "$DOLT_CREDS" > "$CREDSDIR"/"$CREDS_HASH".jwk
-    echo "$DOLT_GLOBAL_CONFIG" > "$DOLT_CONFIG_PATH"/config_global.json
-    dolt config --global --add user.creds "$CREDS_HASH"
+#    cat "$DOLT_CREDS" > "$CREDSDIR"/"$CREDS_HASH".jwk
     dolt config --global --add metrics.disabled true
+    dolt creds import "$DOLT_CREDS"
+#    echo "$DOLT_GLOBAL_CONFIG" > "$DOLT_CONFIG_PATH"/config_global.json
+#    dolt config --global --add user.creds "$CREDS_HASH"
     dolt version
 }
 
