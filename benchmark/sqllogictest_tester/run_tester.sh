@@ -62,13 +62,18 @@ function checkout_branch_if_exists() {
   local branch_name="$2"
   local hash="$3"
 
+  echo "running inside of checkout_branch_if_exists..."
   if [ `"$cmd" branch --list "$branch_name" | wc -l` -eq 1 ]; then
+    echo "branch $branch_name exists, checking it out..."
     "$cmd" checkout "$branch_name"
   else
+    echo "branch $branch_name doesnt exist, checking out new branch..."
     if [ -z "$hash" ]; then
-      "$cmd" checkout -b "$branch_name" "$hash";
-    else
+      echo "hash is empty, checking out new branch $branch_name..."
       "$cmd" checkout -b "$branch_name";
+    else
+      echo "hash is not empty, checking out new branch $branch_name at hash $hash..."
+      "$cmd" checkout -b "$branch_name" "$hash";
     fi
   fi
 }
