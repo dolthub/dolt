@@ -18,10 +18,8 @@ fi
 source "$1"
 if [ -z "$DOLT_ROOT_PATH" ]; then fail Must supply DOLT_ROOT_PATH; fi
 if [ -z "$DOLT_CONFIG_PATH" ]; then fail Must supply DOLT_CONFIG_PATH; fi
-if [ -z "$DOLT_GLOBAL_CONFIG" ]; then fail Must supply DOLT_GLOBAL_CONFIG; fi
 if [ -z "$CREDSDIR" ]; then fail Must supply CREDSDIR; fi
 if [ -z "$DOLT_CREDS" ]; then fail Must supply DOLT_CREDS; fi
-if [ -z "$CREDS_HASH" ]; then fail Must supply CREDS_HASH; fi
 if [ -z "$JOB_TYPE" ]; then fail Must supply JOB_TYPE; fi
 if [ -z "$TEST_N_TIMES" ]; then fail Must supply TEST_N_TIMES; fi
 if [ -z "$FAIL_ON_EXISTING_VERSION" ]; then fail Must supply FAIL_ON_EXISTING_VERSION; fi
@@ -39,10 +37,8 @@ fi
 function setup() {
     rm -rf "$CREDSDIR"
     mkdir -p "$CREDSDIR"
-    cat "$DOLT_CREDS" > "$CREDSDIR"/"$CREDS_HASH".jwk
-    echo "$DOLT_GLOBAL_CONFIG" > "$DOLT_CONFIG_PATH"/config_global.json
-    dolt config --global --add user.creds "$CREDS_HASH"
     dolt config --global --add metrics.disabled true
+    dolt creds import "$DOLT_CREDS"
     dolt version
     rm -rf temp
     mkdir temp

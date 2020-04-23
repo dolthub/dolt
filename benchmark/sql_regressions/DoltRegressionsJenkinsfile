@@ -1,36 +1,30 @@
 pipeline {
-    agent none
+    agent {
+        kubernetes {
+            label "liquidata-inc-ld-build"
+        }
+    }
     stages {
-        stage('Test Dolt nightly') {
-            parallel {
-                stage ("Update Liquidata/dolt-sql-performance:nightly") {
-                    agent {
-                        kubernetes {
-                            label "liquidata-inc-ld-build"
-                        }
-                    }
-                    environment {
-                        PATH = "${pwd()}/.ci_bin/node_modules/.bin:${env.PATH}"
-                        DOLT_VERSION = "${env.GIT_COMMIT}"
-                        TMPDIR = "${pwd()}/tempDir"
-                        DOLT_ROOT_PATH="${pwd()}/tempRoot"
-                        DOLT_CREDS = credentials("system-account-dolthub-creds")
-                        DOLT_GLOBAL_CONFIG = credentials("system-account-dolthub-config")
-                    }
-                    steps {
-                        sh "rm -rf $TMPDIR && mkdir $TMPDIR"
-                        sh "rm -rf $DOLT_ROOT_PATH && mkdir $DOLT_ROOT_PATH"
-                        dir ("sqllogictest") {
-                            git url: "https://github.com/liquidata-inc/sqllogictest.git"
-                        }
-                        dir ("benchmark/sql_regressions") {
-                            script {
-                                try {
-                                    sh "nice ./run_regressions.sh ./nightly.vars"
-                                } catch(err) {
-                                    sh "if [ \"${err.getMessage()}\" = 'script returned exit code 155' ]; then echo 'Result data found in dolt-sql-performance, silently exiting...'; else echo \"${err.getMessage()}\" && exit 1; fi"
-                                }
-                            }
+        stage ("Update Liquidata/dolt-sql-performance:nightly") {
+            environment {
+                PATH = "${pwd()}/.ci_bin/node_modules/.bin:${env.PATH}"
+                DOLT_VERSION = "${env.GIT_COMMIT}"
+                TMPDIR = "${pwd()}/tempDir"
+                DOLT_ROOT_PATH="${pwd()}/tempRoot"
+                DOLT_CREDS = credentials("system-account-dolthub-creds")
+            }
+            steps {
+                sh "rm -rf $TMPDIR && mkdir $TMPDIR"
+                sh "rm -rf $DOLT_ROOT_PATH && mkdir $DOLT_ROOT_PATH"
+                dir ("sqllogictest") {
+                    git url: "https://github.com/liquidata-inc/sqllogictest.git"
+                }
+                dir ("benchmark/sql_regressions") {
+                    script {
+                        try {
+                            sh "nice ./run_regressions.sh ./nightly.vars"
+                        } catch(err) {
+                            sh "if [ \"${err.getMessage()}\" = 'script returned exit code 155' ]; then echo 'Result data found in dolt-sql-performance, silently exiting...'; else echo \"${err.getMessage()}\" && exit 1; fi"
                         }
                     }
                 }
