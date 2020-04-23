@@ -25,6 +25,8 @@ if [ -z "$CREDS_HASH" ]; then fail Must supply CREDS_HASH; fi
 if [ -z "$JOB_TYPE" ]; then fail Must supply JOB_TYPE; fi
 if [ -z "$TEST_N_TIMES" ]; then fail Must supply TEST_N_TIMES; fi
 if [ -z "$FAIL_ON_EXISTING_VERSION" ]; then fail Must supply FAIL_ON_EXISTING_VERSION; fi
+if [ -z "$USE_PROD_REPO" ]; then fail Must supply USE_PROD_REPO; fi
+if [ -z "$DEV_REMOTE_HOST" ]; then fail Must supply DEV_REMOTE_HOST; fi
 
 if [[ -z "$DOLT_VERSION" && -z "$DOLT_RELEASE" ]]; then
   fail Must supply DOLT_VERSION;
@@ -88,6 +90,60 @@ function check_version_exists() {
     dolt checkout master
 }
 
+function branch_from_base() {
+    local branch_name="$1"
+    dolt checkout regressions
+
+    dolt sql -r csv -q "select * from releases_dolt_results" > "$branch_name"_releases_results.csv
+    dolt sql -r csv -q "select * from releases_dolt_mean_results" > "$branch_name"_releases_mean_results.csv
+
+    dolt checkout regressions-tip-base
+    dolt checkout -b "$branch_name"
+
+    dolt table import -u releases_dolt_results "$branch_name"_releases_results.csv
+    dolt add releases_dolt_results
+    dolt commit -m "add release data from tip of regressions"
+
+    dolt table import -u releases_dolt_mean_results "$branch_name"_releases_mean_results.csv
+    dolt add releases_dolt_mean_results
+    dolt commit -m "add release mean data from tip of regressions"
+
+    dolt checkout master
+}
+
+function update_regressions_latest() {
+  dolt checkout master
+  exists=$(dolt branch --list regressions-tip-previous | sed '/^\s*$/d' | wc -l | tr -d '[:space:]')
+
+  if [ "$exists" -eq 1 ]; then
+    dolt branch -d -f regressions-tip-previous;
+  fi
+
+  exists=$(dolt branch --list regressions-tip-latest | sed '/^\s*$/d' | wc -l | tr -d '[:space:]')
+
+  if [ "$exists" -eq 1 ]; then
+    dolt checkout regressions-tip-latest
+
+    dolt branch -m regressions-tip-latest regressions-tip-previous
+    dolt push -f origin regressions-tip-previous
+
+    branch_from_base "regressions-tip-latest"
+
+    dolt checkout regressions-tip-latest
+    dolt push -f origin regressions-tip-latest;
+  else
+    branch_from_base "regressions-tip-previous"
+    branch_from_base "regressions-tip-latest"
+
+    dolt checkout regressions-tip-previous
+    dolt push -f origin regressions-tip-previous
+
+    dolt checkout regressions-tip-latest
+    dolt push regressions-tip-latest;
+  fi
+  dolt checkout master
+}
+
 function import_one_nightly() {
     test_num="$1"
     dolt table import -u nightly_dolt_results ../"$logictest_main"/temp/parsed"$test_num".json
@@ -113,6 +169,8 @@ select version, test_file, line_num, avg(duration) as mean_duration, result from
     dolt add .
     dolt commit -m "merge nightly"
     dolt push origin regressions
+
+    update_regressions_latest
 
     dolt checkout releases
     dolt sql -r csv -q "\
@@ -196,7 +254,16 @@ select version, test_file, line_num, avg(duration) as mean_duration, result from
 }
 
 rm -rf dolt-sql-performance
-(with_dolt_checkout; dolt clone Liquidata/dolt-sql-performance)
+
+(
+  with_dolt_checkout
+  if [[ "$USE_PROD_REPO" == true ]]; then
+    dolt clone Liquidata/dolt-sql-performance;
+  else
+    dolt clone "$DEV_REMOTE_HOST"/Liquidata/dolt-sql-performance
+  fi
+
+)
 
 (with_dolt_checkout; cd "$logictest_main"; setup)
 
