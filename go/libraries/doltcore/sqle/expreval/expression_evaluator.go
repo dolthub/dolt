@@ -173,9 +173,7 @@ func GetComparisonType(be expression.BinaryExpression) ([]*expression.GetField, 
 	}
 
 	var compType ComparisonType
-	if len(consts) == 2 {
-		compType = ConstConstCompare
-	} else if len(variables) == 2 {
+	if len(variables) == 2 {
 		compType = VariableVariableCompare
 	} else if len(variables) == 1 {
 		if len(consts) == 1 {
@@ -183,6 +181,8 @@ func GetComparisonType(be expression.BinaryExpression) ([]*expression.GetField, 
 		} else if len(consts) > 1 {
 			compType = VariableInLiteralList
 		}
+	} else if len(consts) == 2 {
+		compType = ConstConstCompare
 	}
 
 	return variables, consts, compType, nil
