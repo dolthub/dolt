@@ -1,37 +1,34 @@
 pipeline {
-    agent none
+    agent {
+        kubernetes {
+            label "liquidata-inc-ld-build"
+        }
+    }
     stages {
         stage('Run sqllogictests against Dolt commits') {
-            parallel {
-                stage ("test commits") {
-                    agent {
-                        kubernetes {
-                            label "liquidata-inc-ld-build"
-                        }
+            stage ("test commits") {
+                environment {
+                    PATH = "${pwd()}/.ci_bin/node_modules/.bin:${env.PATH}"
+                    TMPDIR = "${pwd()}/tempDir"
+                    DOLT_ROOT_PATH="${pwd()}/tempRoot"
+                    DOLT_CREDS = credentials("system-account-dolthub-creds")
+                    DOLT_GLOBAL_CONFIG = credentials("system-account-dolthub-config")
+                    TMP_TESTING_DIR = "${pwd()}/tempTesting"
+                    TMP_CSV_DIR = "${pwd()}/tempCSV"
+                }
+                steps {
+                    sh "rm -rf tempDolt"
+                    sh "rm -rf $TMPDIR && mkdir $TMPDIR"
+                    sh "rm -rf $TMP_CSV_DIR && mkdir $TMP_CSV_DIR"
+                    sh "rm -rf $DOLT_ROOT_PATH && mkdir $DOLT_ROOT_PATH"
+                    dir ("sqllogictest") {
+                        git url: "https://github.com/liquidata-inc/sqllogictest.git"
                     }
-                    environment {
-                        PATH = "${pwd()}/.ci_bin/node_modules/.bin:${env.PATH}"
-                        TMPDIR = "${pwd()}/tempDir"
-                        DOLT_ROOT_PATH="${pwd()}/tempRoot"
-                        DOLT_CREDS = credentials("system-account-dolthub-creds")
-                        DOLT_GLOBAL_CONFIG = credentials("system-account-dolthub-config")
-                        TMP_TESTING_DIR = "${pwd()}/tempTesting"
-                        TMP_CSV_DIR = "${pwd()}/tempCSV"
+                    dir ("tempDolt") {
+                        git url: "https://github.com/liquidata-inc/dolt.git"
                     }
-                    steps {
-                        sh "rm -rf tempDolt"
-                        sh "rm -rf $TMPDIR && mkdir $TMPDIR"
-                        sh "rm -rf $TMP_CSV_DIR && mkdir $TMP_CSV_DIR"
-                        sh "rm -rf $DOLT_ROOT_PATH && mkdir $DOLT_ROOT_PATH"
-                        dir ("sqllogictest") {
-                            git url: "https://github.com/liquidata-inc/sqllogictest.git"
-                        }
-                        dir ("tempDolt") {
-                            git url: "https://github.com/liquidata-inc/dolt.git"
-                        }
-                        dir ("benchmark/sqllogictest_tester") {
-                            sh "nice ./run_tester.sh ./tester.vars"
-                        }
+                    dir ("benchmark/sqllogictest_tester") {
+                        sh "nice ./run_tester.sh ./tester.vars"
                     }
                 }
             }
