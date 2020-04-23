@@ -402,7 +402,7 @@ func CollectDBs(mrEnv env.MultiRepoEnv, createDB createDBFunc) []dsqle.Database 
 	return dbs
 }
 
-func formatQueryError(query string, err error) errhand.VerboseError {
+func formatQueryError(message string, err error) errhand.VerboseError {
 	const (
 		maxStatementLen     = 128
 		maxPosWhenTruncated = 64
@@ -454,6 +454,9 @@ func formatQueryError(query string, err error) errhand.VerboseError {
 
 		return verrBuilder.Build()
 	} else {
+		if len(message) > 0 {
+			err = fmt.Errorf("%s: %s", message, err.Error())
+		}
 		return errhand.VerboseErrorFromError(err)
 	}
 }
@@ -562,7 +565,9 @@ func runBatchMode(ctx *sql.Context, se *sqlEngine, input io.Reader) error {
 			continue
 		}
 		if err := processBatchQuery(ctx, query, se); err != nil {
-			verr := formatQueryError(query, err)
+			// TODO: this line number will not be accurate for errors that occur when flushing a batch of inserts (as opposed
+			//  to processing the query)
+			verr := formatQueryError(fmt.Sprintf("error on line %d for query %s", scanner.statementStartLine, query), err)
 			cli.PrintErrln(verr.Verbose())
 			return err
 		}
