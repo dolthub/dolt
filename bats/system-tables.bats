@@ -105,6 +105,7 @@ teardown() {
 
 @test "query dolt_diff_ system table" {
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
+    dolt sql -q 'select * from dolt_diff_test;'
     dolt add test
     dolt commit -m "Added test table"
     dolt sql -q "insert into test values (0,0)"

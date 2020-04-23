@@ -180,7 +180,12 @@ func tableData(ctx *sql.Context, root *doltdb.RootValue, tblName string, ddb *do
 		return types.EmptyMap, nil, err
 	}
 
-	sch, err := tbl.GetSchema(ctx)
+	var sch schema.Schema
+	if !ok {
+		sch = schema.EmptySchema
+	} else {
+		sch, err = tbl.GetSchema(ctx)
+	}
 
 	if err != nil {
 		return types.EmptyMap, nil, err
