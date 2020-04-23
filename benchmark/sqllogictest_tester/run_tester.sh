@@ -57,14 +57,19 @@ function setup_testing_dir() {
     done
 }
 
-function checkout_temp_commit() {
+function checkout_branch_if_exists() {
   local cmd="$1"
-  local hash="$2"
+  local branch_name="$2"
+  local hash="$3"
 
-  if [ `"$cmd" branch --list "temp-$hash" | wc -l` -eq 1 ]; then
-    "$cmd" checkout "temp-$hash"
+  if [ `"$cmd" branch --list "$branch_name" | wc -l` -eq 1 ]; then
+    "$cmd" checkout "$branch_name"
   else
-    "$cmd" checkout -b "temp-$hash" "$hash"
+    if [ -z "$hash" ]; then
+      "$cmd" checkout -b "$branch_name" "$hash";
+    else
+      "$cmd" checkout -b "$branch_name";
+    fi
   fi
 }
 
@@ -74,9 +79,9 @@ function with_dolt_commit() {
       cd "$base_dir"/tempDolt/go
       git checkout "$commit_hash"
 
-      exists=$(git branch --list "temp-$commit_hash"| sed '/^\s*$/d' | wc -l)
+#      exists=$(git branch --list "temp-$commit_hash"| sed '/^\s*$/d' | wc -l)
 
-      checkout_temp_commit "git" "$commit_hash"
+      checkout_branch_if_exists "git" "temp-$commit_hash" "$commit_hash"
 
 #      if [ "$exists" -eq 0 ]; then
 #        git checkout -b "temp-$commit_hash";
@@ -124,9 +129,9 @@ function import_once() {
 
     dolt checkout "$DOLT_BRANCH"
 
-    exists=$(dolt branch --list "temp-$commit_hash"| sed '/^\s*$/d' | wc -l | tr -d '[:space:]')
+#    exists=$(dolt branch --list "temp-$commit_hash"| sed '/^\s*$/d' | wc -l | tr -d '[:space:]')
 
-    checkout_temp_commit "dolt" "$commit_hash"
+    checkout_branch_if_exists "dolt" "temp-$commit_hash" ""
 
 #    if [ "$exists" -eq 0 ]; then
 #      dolt checkout -b "temp-$commit_hash";
@@ -148,13 +153,15 @@ function import_once() {
 function create_mean_csv_once() {
     local commit_hash="$1"
 
-    exists=$(dolt branch --list "temp-$commit_hash"| sed '/^\s*$/d' | wc -l | tr -d '[:space:]')
+    checkout_branch_if_exists "dolt" "temp-$commit_hash" ""
 
-    if [ "$exists" -eq 0 ]; then
-      dolt checkout -b "temp-$commit_hash";
-    else
-      dolt checkout "temp-$commit_hash";
-    fi
+#    exists=$(dolt branch --list "temp-$commit_hash"| sed '/^\s*$/d' | wc -l | tr -d '[:space:]')
+
+#    if [ "$exists" -eq 0 ]; then
+#      dolt checkout -b "temp-$commit_hash";
+#    else
+#      dolt checkout "temp-$commit_hash";
+#    fi
 
     dolt sql -r csv -q "\
     select version, test_file, line_num, avg(duration) as mean_duration, result from dolt_history_nightly_dolt_results where version=\"${commit_hash}\" group by test_file, line_num;"\
