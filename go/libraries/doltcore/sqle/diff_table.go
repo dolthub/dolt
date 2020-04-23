@@ -476,6 +476,14 @@ func SuperSchemaForAllBranches(ctx context.Context, cmItr doltdb.CommitItr, wr *
 
 // creates a RowConverter for transforming rows with the the given schema to this super schema.
 func rowConvForSchema(ss *schema.SuperSchema, sch schema.Schema) (*rowconv.RowConverter, error) {
+	eq, err := schema.SchemasAreEqual(sch, schema.EmptySchema)
+	if err != nil {
+		return nil, err
+	}
+	if eq {
+		return rowconv.IdentityConverter, nil
+	}
+
 	inNameToOutName, err := ss.NameMapForSchema(sch)
 
 	if err != nil {
