@@ -31,13 +31,22 @@ import (
 )
 
 const (
-	pkTag = 0
-	c1Tag = 1
+	pk0Name = "pk0"
+	pk0Tag  = 0
+	pk1Name = "pk1"
+	pk1Tag  = 1
+	c1Name  = "c1"
+	c1Tag   = 2
 )
 
-var oneIntPKCol = schema.SchemaFromCols(mustColColl(schema.NewColCollection(
-	schema.NewColumn("pk", pkTag, types.IntKind, true),
-	schema.NewColumn("c1", c1Tag, types.IntKind, false))))
+var oneIntPKSch = schema.SchemaFromCols(mustColColl(schema.NewColCollection(
+	schema.NewColumn(pk0Name, pk0Tag, types.IntKind, true),
+	schema.NewColumn(c1Name, c1Tag, types.IntKind, false))))
+
+var twoIntPKSch = schema.SchemaFromCols(mustColColl(schema.NewColCollection(
+	schema.NewColumn(pk0Name, pk0Tag, types.IntKind, true),
+	schema.NewColumn(pk1Name, pk1Tag, types.IntKind, true),
+	schema.NewColumn(c1Name, c1Tag, types.IntKind, false))))
 
 func int64Range(start, end, stride int64) []int64 {
 	vals := make([]int64, 0, end-start)
@@ -48,13 +57,40 @@ func int64Range(start, end, stride int64) []int64 {
 	return vals
 }
 
-func genOnePKRows(pks ...int64) []row.Row {
+func genOneIntPKRows(pks ...int64) []row.Row {
 	rows := make([]row.Row, len(pks))
 
 	var err error
 	for i, pk := range pks {
-		taggedVals := row.TaggedValues{pkTag: types.Int(pk), c1Tag: types.Int(pk)}
-		rows[i], err = row.New(types.Format_Default, oneIntPKCol, taggedVals)
+		taggedVals := row.TaggedValues{pk0Tag: types.Int(pk), c1Tag: types.Int(pk)}
+		rows[i], err = row.New(types.Format_Default, oneIntPKSch, taggedVals)
+
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	return rows
+}
+
+func int64TupleGen(pk0ToPK1s map[int64][]int64) [][2]int64 {
+	var tuples [][2]int64
+	for pk0, pk1s := range pk0ToPK1s {
+		for _, pk1 := range pk1s {
+			tuples = append(tuples, [2]int64{pk0, pk1})
+		}
+	}
+
+	return tuples
+}
+
+func genTwoIntPKRows(pks ...[2]int64) []row.Row {
+	rows := make([]row.Row, len(pks))
+
+	var err error
+	for i, pk := range pks {
+		taggedVals := row.TaggedValues{pk0Tag: types.Int(pk[0]), pk1Tag: types.Int(pk[1]), c1Tag: types.Int(pk[0])}
+		rows[i], err = row.New(types.Format_Default, twoIntPKSch, taggedVals)
 
 		if err != nil {
 			panic(err)
@@ -97,146 +133,271 @@ func TestFilteredReader(t *testing.T) {
 	}{
 		{
 			"unfiltered test one pk",
-			oneIntPKCol,
+			oneIntPKSch,
 			nil,
-			genOnePKRows(int64Range(0, 20, 1)...),
-			genOnePKRows(int64Range(0, 20, 1)...),
+			genOneIntPKRows(int64Range(0, 20, 1)...),
+			genOneIntPKRows(int64Range(0, 20, 1)...),
 		},
 		{
 			"one pk equality",
-			oneIntPKCol,
+			oneIntPKSch,
 			[]sql.Expression{expression.NewEquals(
-				expression.NewGetField(0, sql.Int64, "pk", false),
+				expression.NewGetField(0, sql.Int64, pk0Name, false),
 				expression.NewLiteral(int64(10), sql.Int64))},
-			genOnePKRows(int64Range(0, 20, 1)...),
-			genOnePKRows(10),
+			genOneIntPKRows(int64Range(0, 20, 1)...),
+			genOneIntPKRows(10),
+		},
+		{
+			"one pk with explicitly false filter",
+			oneIntPKSch,
+			[]sql.Expression{expression.NewEquals(
+				expression.NewLiteral(int64(0), sql.Int64),
+				expression.NewLiteral(int64(1), sql.Int64))},
+			genOneIntPKRows(int64Range(0, 20, 1)...),
+			genOneIntPKRows(),
 		},
 		{
 			"one pk equal to value which doesnt exist",
-			oneIntPKCol,
+			oneIntPKSch,
 			[]sql.Expression{expression.NewEquals(
-				expression.NewGetField(0, sql.Int64, "pk", false),
+				expression.NewGetField(0, sql.Int64, pk0Name, false),
 				expression.NewLiteral(int64(100), sql.Int64))},
-			genOnePKRows(int64Range(0, 20, 1)...),
-			genOnePKRows(),
+			genOneIntPKRows(int64Range(0, 20, 1)...),
+			genOneIntPKRows(),
 		},
 		{
 			"one pk inequality",
-			oneIntPKCol,
+			oneIntPKSch,
 			[]sql.Expression{expression.NewGreaterThanOrEqual(
-				expression.NewGetField(0, sql.Int64, "pk", false),
+				expression.NewGetField(0, sql.Int64, pk0Name, false),
 				expression.NewLiteral(int64(10), sql.Int64))},
-			genOnePKRows(int64Range(0, 20, 1)...),
-			genOnePKRows(int64Range(10, 20, 1)...),
+			genOneIntPKRows(int64Range(0, 20, 1)...),
+			genOneIntPKRows(int64Range(10, 20, 1)...),
 		},
 		{
 			"one pk in filter",
-			oneIntPKCol,
+			oneIntPKSch,
 			[]sql.Expression{expression.NewIn(
-				expression.NewGetField(0, sql.Int64, "pk", false),
+				expression.NewGetField(0, sql.Int64, pk0Name, false),
 				expression.NewTuple(
 					expression.NewLiteral(int64(0), sql.Int64),
 					expression.NewLiteral(int64(5), sql.Int64),
 					expression.NewLiteral(int64(10), sql.Int64),
 					expression.NewLiteral(int64(15), sql.Int64),
 				))},
-			genOnePKRows(int64Range(0, 20, 1)...),
-			genOnePKRows(0, 5, 10, 15),
+			genOneIntPKRows(int64Range(0, 20, 1)...),
+			genOneIntPKRows(0, 5, 10, 15),
 		},
 		{
 			// iteration is only based on the primary key. Even though there are no rows with c1 == 10, the row with
 			// pk == 5 will be returned and the column filtering will happen later.
 			"one pk equals 5 and c1 equals 10",
-			oneIntPKCol,
+			oneIntPKSch,
 			[]sql.Expression{
 				expression.NewAnd(
 					expression.NewEquals(
-						expression.NewGetField(0, sql.Int64, "pk", false),
+						expression.NewGetField(0, sql.Int64, pk0Name, false),
 						expression.NewLiteral(int64(5), sql.Int64),
 					),
 					expression.NewEquals(
-						expression.NewGetField(1, sql.Int64, "c1", false),
+						expression.NewGetField(1, sql.Int64, c1Name, false),
 						expression.NewLiteral(int64(10), sql.Int64),
 					),
 				),
 			},
-			genOnePKRows(int64Range(0, 20, 1)...),
-			genOnePKRows(5),
+			genOneIntPKRows(int64Range(0, 20, 1)...),
+			genOneIntPKRows(5),
 		},
 		{
 			// same as above
 			"two filters same as f1 && f2",
-			oneIntPKCol,
+			oneIntPKSch,
 			[]sql.Expression{
 				expression.NewEquals(
-					expression.NewGetField(0, sql.Int64, "pk", false),
+					expression.NewGetField(0, sql.Int64, pk0Name, false),
 					expression.NewLiteral(int64(5), sql.Int64),
 				),
 				expression.NewEquals(
-					expression.NewGetField(1, sql.Int64, "c1", false),
+					expression.NewGetField(1, sql.Int64, c1Name, false),
 					expression.NewLiteral(int64(10), sql.Int64),
 				),
 			},
-			genOnePKRows(int64Range(0, 20, 1)...),
-			genOnePKRows(5),
+			genOneIntPKRows(int64Range(0, 20, 1)...),
+			genOneIntPKRows(5),
 		},
 		{
 			// iteration is only based on the primary key. Even though there are no rows with c1 == 10, all rows will be
 			// returned as none of the rows can be eliminated based on their primary key alone due to the || c1 == 10
 			// clause
 			"one pk equals 5 and c1 equals 10",
-			oneIntPKCol,
+			oneIntPKSch,
 			[]sql.Expression{
 				expression.NewOr(
 					expression.NewEquals(
-						expression.NewGetField(0, sql.Int64, "pk", false),
+						expression.NewGetField(0, sql.Int64, pk0Name, false),
 						expression.NewLiteral(int64(5), sql.Int64),
 					),
 					expression.NewEquals(
-						expression.NewGetField(1, sql.Int64, "c1", false),
+						expression.NewGetField(1, sql.Int64, c1Name, false),
 						expression.NewLiteral(int64(10), sql.Int64),
 					),
 				),
 			},
-			genOnePKRows(int64Range(0, 20, 1)...),
-			genOnePKRows(int64Range(0, 20, 1)...),
+			genOneIntPKRows(int64Range(0, 20, 1)...),
+			genOneIntPKRows(int64Range(0, 20, 1)...),
 		},
-
 		{
 			"one pk multiple ranges and a discreet value",
-			oneIntPKCol,
+			oneIntPKSch,
 			[]sql.Expression{
 				expression.NewOr(
 					expression.NewOr(
 						expression.NewAnd(
 							expression.NewGreaterThan(
-								expression.NewGetField(0, sql.Int64, "pk", false),
+								expression.NewGetField(0, sql.Int64, pk0Name, false),
 								expression.NewLiteral(int64(0), sql.Int64),
 							),
 							expression.NewLessThanOrEqual(
-								expression.NewGetField(0, sql.Int64, "pk", false),
+								expression.NewGetField(0, sql.Int64, pk0Name, false),
 								expression.NewLiteral(int64(4), sql.Int64),
 							),
 						),
 						expression.NewAnd(
 							expression.NewGreaterThanOrEqual(
-								expression.NewGetField(0, sql.Int64, "pk", false),
+								expression.NewGetField(0, sql.Int64, pk0Name, false),
 								expression.NewLiteral(int64(10), sql.Int64),
 							),
 							expression.NewLessThan(
-								expression.NewGetField(0, sql.Int64, "pk", false),
+								expression.NewGetField(0, sql.Int64, pk0Name, false),
 								expression.NewLiteral(int64(14), sql.Int64),
 							),
 						),
 					),
 					expression.NewEquals(
-						expression.NewGetField(0, sql.Int64, "pk", false),
+						expression.NewGetField(0, sql.Int64, pk0Name, false),
 						expression.NewLiteral(int64(19), sql.Int64),
 					),
 				),
 			},
-			genOnePKRows(int64Range(0, 20, 1)...),
-			genOnePKRows(1, 2, 3, 4, 10, 11, 12, 13, 19),
+			genOneIntPKRows(int64Range(0, 20, 1)...),
+			genOneIntPKRows(1, 2, 3, 4, 10, 11, 12, 13, 19),
+		},
+		{
+			"two pk no filters",
+			twoIntPKSch,
+			nil,
+			genTwoIntPKRows(int64TupleGen(map[int64][]int64{0: {0, 1, 2, 3}, 1: {0}, 2: {4, 5}})...),
+			genTwoIntPKRows(int64TupleGen(map[int64][]int64{0: {0, 1, 2, 3}, 1: {0}, 2: {4, 5}})...),
+		},
+		{
+			"two pk with explicitly false filter",
+			twoIntPKSch,
+			[]sql.Expression{expression.NewEquals(
+				expression.NewLiteral(int64(0), sql.Int64),
+				expression.NewLiteral(int64(1), sql.Int64))},
+			genTwoIntPKRows(int64TupleGen(map[int64][]int64{0: {0, 1, 2, 3}, 1: {0}, 2: {4, 5}})...),
+			genTwoIntPKRows(),
+		},
+		{
+			"two pk, pk0 equal to existing value",
+			twoIntPKSch,
+			[]sql.Expression{expression.NewEquals(
+				expression.NewGetField(0, sql.Int64, pk0Name, false),
+				expression.NewLiteral(int64(2), sql.Int64))},
+			genTwoIntPKRows(int64TupleGen(map[int64][]int64{0: {0, 1, 2, 3}, 1: {0}, 2: {4, 5}})...),
+			genTwoIntPKRows(int64TupleGen(map[int64][]int64{2: {4, 5}})...),
+		},
+		{
+			"two pk, pk0 equal to missing value",
+			twoIntPKSch,
+			[]sql.Expression{expression.NewEquals(
+				expression.NewGetField(0, sql.Int64, pk0Name, false),
+				expression.NewLiteral(int64(-25), sql.Int64))},
+			genTwoIntPKRows(int64TupleGen(map[int64][]int64{0: {0, 1, 2, 3}, 1: {0}, 2: {4, 5}})...),
+			genTwoIntPKRows(),
+		},
+		{
+			"two pk in filter on first pk",
+			twoIntPKSch,
+			[]sql.Expression{expression.NewIn(
+				expression.NewGetField(0, sql.Int64, pk0Name, false),
+				expression.NewTuple(
+					expression.NewLiteral(int64(0), sql.Int64),
+					expression.NewLiteral(int64(2), sql.Int64),
+				))},
+			genTwoIntPKRows(int64TupleGen(map[int64][]int64{0: {0, 1, 2, 3}, 1: {0}, 2: {4, 5}})...),
+			genTwoIntPKRows(int64TupleGen(map[int64][]int64{0: {0, 1, 2, 3}, 2: {4, 5}})...),
+		},
+		{
+			"two pk, pk0 equal to existing value anded with pk1 equality",
+			twoIntPKSch,
+			[]sql.Expression{
+				expression.NewAnd(
+					expression.NewEquals(
+						expression.NewGetField(0, sql.Int64, pk0Name, false),
+						expression.NewLiteral(int64(2), sql.Int64)),
+					expression.NewEquals(
+						expression.NewGetField(1, sql.Int64, pk1Name, false),
+						expression.NewLiteral(int64(2), sql.Int64)),
+				),
+			},
+			genTwoIntPKRows(int64TupleGen(map[int64][]int64{0: {0, 1, 2, 3}, 1: {0}, 2: {4, 5}})...),
+			genTwoIntPKRows(int64TupleGen(map[int64][]int64{2: {4, 5}})...),
+		},
+		{
+			"two pk, pk0 equal to existing value ored with pk1 equality",
+			twoIntPKSch,
+			[]sql.Expression{
+				expression.NewOr(
+					expression.NewEquals(
+						expression.NewGetField(0, sql.Int64, pk0Name, false),
+						expression.NewLiteral(int64(2), sql.Int64)),
+					expression.NewEquals(
+						expression.NewGetField(1, sql.Int64, pk1Name, false),
+						expression.NewLiteral(int64(2), sql.Int64)),
+				),
+			},
+			genTwoIntPKRows(int64TupleGen(map[int64][]int64{0: {0, 1, 2, 3}, 1: {0}, 2: {4, 5}})...),
+			genTwoIntPKRows(int64TupleGen(map[int64][]int64{0: {0, 1, 2, 3}, 1: {0}, 2: {4, 5}})...),
+		},
+		{
+			"two pk inequality",
+			twoIntPKSch,
+			[]sql.Expression{
+				expression.NewGreaterThan(
+					expression.NewGetField(0, sql.Int64, pk0Name, false),
+					expression.NewLiteral(int64(0), sql.Int64)),
+			},
+			genTwoIntPKRows(int64TupleGen(map[int64][]int64{0: {0, 1, 2, 3}, 1: {0}, 2: {4, 5}})...),
+			genTwoIntPKRows(int64TupleGen(map[int64][]int64{1: {0}, 2: {4, 5}})...),
+		},
+		{
+			"two pks in exclusive range",
+			twoIntPKSch,
+			[]sql.Expression{
+				expression.NewGreaterThan(
+					expression.NewGetField(0, sql.Int64, pk0Name, false),
+					expression.NewLiteral(int64(1), sql.Int64)),
+				expression.NewLessThan(
+					expression.NewGetField(0, sql.Int64, pk0Name, false),
+					expression.NewLiteral(int64(3), sql.Int64)),
+			},
+			genTwoIntPKRows(int64TupleGen(map[int64][]int64{0: {0, 1, 2, 3}, 1: {0}, 2: {4, 5}, 3: {0, 1}, 4: {7, 8, 9}})...),
+			genTwoIntPKRows(int64TupleGen(map[int64][]int64{2: {4, 5}})...),
+		},
+		{
+			"two pks in inclusive range",
+			twoIntPKSch,
+			[]sql.Expression{
+				expression.NewGreaterThanOrEqual(
+					expression.NewGetField(0, sql.Int64, pk0Name, false),
+					expression.NewLiteral(int64(1), sql.Int64)),
+				expression.NewLessThanOrEqual(
+					expression.NewGetField(0, sql.Int64, pk0Name, false),
+					expression.NewLiteral(int64(3), sql.Int64)),
+			},
+			genTwoIntPKRows(int64TupleGen(map[int64][]int64{0: {0, 1, 2, 3}, 1: {0}, 2: {4, 5}, 3: {0, 1}, 4: {7, 8, 9}})...),
+			genTwoIntPKRows(int64TupleGen(map[int64][]int64{1: {0}, 2: {4, 5}, 3: {0, 1}})...),
 		},
 	}
 
