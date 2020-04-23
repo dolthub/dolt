@@ -383,12 +383,12 @@ CREATE TABLE test (
   PRIMARY KEY (pk));
 SQL
     [ $status -ne 0 ]
-    [[ "${lines[0]}" =~ "Cannot create column pk, the tag 1234 was already used in table aaa" ]] || false
-    [[ "${lines[1]}" =~ "Cannot create column c1, the tag 5678 was already used in table bbb" ]] || false
+    [[ "$output" =~ "Cannot create column pk, the tag 1234 was already used in table aaa" ]] || false
+    [[ "$output" =~ "Cannot create column c1, the tag 5678 was already used in table bbb" ]] || false
 
     run dolt sql -q "ALTER TABLE aaa ADD COLUMN c1 INT COMMENT 'tag:5678';"
     [ $status -ne 0 ]
-    [[ "${lines[0]}" =~ "Cannot create column c1, the tag 5678 was already used in table bbb" ]] || false
+    [[ "$output" =~ "Cannot create column c1, the tag 5678 was already used in table bbb" ]] || false
 }
 
 @test "Deterministic tag generation produces consistent results" {

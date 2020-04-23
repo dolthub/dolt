@@ -52,7 +52,27 @@ insert into test values poop;
 SQL
     [ "$status" -ne 0 ]
     [[ "$output" =~ "Error processing batch" ]] || false
-    skip "No line number and query on error"
-    [[ "$output" =~ " 3 " ]] || false
-    [[ "$output" =~ "insert into test values poop;" ]] || false
+    [[ "$output" =~ "error on line 3 for query" ]] || false
+    [[ "$output" =~ "insert into test values poop" ]] || false
+
+    run dolt sql <<SQL
+insert into test values (0,0,0,0,0,0);
+
+insert into test values (1,0,
+0,0,0,0);
+
+insert into 
+test values (2,0,0,0,0,0)
+;
+
+insert into 
+test values 
+poop;
+
+insert into test values (3,0,0,0,0,0);
+SQL
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "Error processing batch" ]] || false
+    [[ "$output" =~ "error on line 10 for query" ]] || false
+    [[ "$output" =~ "poop" ]] || false
 }

@@ -15,8 +15,6 @@
 package commands
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -371,7 +369,7 @@ func execQuery(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]*do
 
 	sqlSch, rowIter, err := processQuery(sqlCtx, query, se)
 	if err != nil {
-		verr := formatQueryError(query, err)
+		verr := formatQueryError("", err)
 		return nil, verr
 	}
 
@@ -404,7 +402,7 @@ func CollectDBs(mrEnv env.MultiRepoEnv, createDB createDBFunc) []dsqle.Database 
 	return dbs
 }
 
-func formatQueryError(query string, err error) errhand.VerboseError {
+func formatQueryError(message string, err error) errhand.VerboseError {
 	const (
 		maxStatementLen     = 128
 		maxPosWhenTruncated = 64
@@ -456,6 +454,9 @@ func formatQueryError(query string, err error) errhand.VerboseError {
 
 		return verrBuilder.Build()
 	} else {
+		if len(message) > 0 {
+			err = fmt.Errorf("%s: %s", message, err.Error())
+		}
 		return errhand.VerboseErrorFromError(err)
 	}
 }
@@ -553,31 +554,9 @@ func saveQuery(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, q
 	return newRoot, nil
 }
 
-// ScanStatements is a split function for a Scanner that returns each SQL statement in the input as a token. It doesn't
-// work for strings that contain semi-colons. Supporting that requires implementing a state machine.
-func scanStatements(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	if atEOF && len(data) == 0 {
-		return 0, nil, nil
-	}
-	if i := bytes.IndexByte(data, ';'); i >= 0 {
-		// We have a full ;-terminated line.
-		return i + 1, data[0:i], nil
-	}
-	// If we're at EOF, we have a final, non-terminated line. Return it.
-	if atEOF {
-		return len(data), data, nil
-	}
-	// Request more data.
-	return 0, nil, nil
-}
-
 // runBatchMode processes queries until EOF. The Root of the sqlEngine may be updated.
 func runBatchMode(ctx *sql.Context, se *sqlEngine, input io.Reader) error {
-	scanner := bufio.NewScanner(input)
-	const maxCapacity = 512 * 1024
-	buf := make([]byte, maxCapacity)
-	scanner.Buffer(buf, maxCapacity)
-	scanner.Split(scanStatements)
+	scanner := NewSqlStatementScanner(input)
 
 	var query string
 	for scanner.Scan() {
@@ -585,13 +564,10 @@ func runBatchMode(ctx *sql.Context, se *sqlEngine, input io.Reader) error {
 		if len(query) == 0 || query == "\n" {
 			continue
 		}
-		if !batchInsertEarlySemicolon(query) {
-			query += ";"
-			// TODO: We should fix this problem by properly implementing a state machine for scanStatements
-			continue
-		}
 		if err := processBatchQuery(ctx, query, se); err != nil {
-			verr := formatQueryError(query, err)
+			// TODO: this line number will not be accurate for errors that occur when flushing a batch of inserts (as opposed
+			//  to processing the query)
+			verr := formatQueryError(fmt.Sprintf("error on line %d for query %s", scanner.statementStartLine, query), err)
 			cli.PrintErrln(verr.Verbose())
 			return err
 		}
@@ -605,36 +581,6 @@ func runBatchMode(ctx *sql.Context, se *sqlEngine, input io.Reader) error {
 	}
 
 	return flushBatchedEdits(ctx, se)
-}
-
-// batchInsertEarlySemicolon loops through a string to check if Scan stopped too early on a semicolon
-func batchInsertEarlySemicolon(query string) bool {
-	quotes := []uint8{'\'', '"'}
-	midQuote := false
-	queryLength := len(query)
-	for i := 0; i < queryLength; i++ {
-		for _, quote := range quotes {
-			if query[i] == quote {
-				i++
-				midQuote = true
-				inEscapeMode := false
-				for ; i < queryLength; i++ {
-					if inEscapeMode {
-						inEscapeMode = false
-					} else {
-						if query[i] == quote {
-							midQuote = false
-							break
-						} else if query[i] == '\\' {
-							inEscapeMode = true
-						}
-					}
-				}
-				break
-			}
-		}
-	}
-	return !midQuote
 }
 
 // runShell starts a SQL shell. Returns when the user exits the shell. The Root of the sqlEngine may
@@ -695,7 +641,7 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv) error {
 		}
 
 		if sqlSch, rowIter, err := processQuery(ctx, query, se); err != nil {
-			verr := formatQueryError(query, err)
+			verr := formatQueryError("", err)
 			shell.Println(verr.Verbose())
 		} else if rowIter != nil {
 			defer rowIter.Close()
