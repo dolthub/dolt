@@ -24,7 +24,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -64,13 +63,13 @@ var systemTableUpdateTests = []UpdateTest{
 		Name: "update dolt_query_catalog",
 		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
 			DoltQueryCatalogSchema,
-			NewRowWithSchema(row.TaggedValues{
-				doltdb.QueryCatalogIdTag:          types.String("abc123"),
-				doltdb.QueryCatalogOrderTag:       types.Uint(1),
-				doltdb.QueryCatalogNameTag:        types.String("example"),
-				doltdb.QueryCatalogQueryTag:       types.String("select 2+2 from dual"),
-				doltdb.QueryCatalogDescriptionTag: types.String("description")},
-				DoltQueryCatalogSchema)),
+			NewRowWithSchema(DoltQueryCatalogSchema,
+				types.String("abc123"),
+				types.Uint(1),
+				types.String("example"),
+				types.String("select 2+2 from dual"),
+				types.String("description"),
+			)),
 		UpdateQuery: "update dolt_query_catalog set display_order = display_order + 1",
 		SelectQuery: "select * from dolt_query_catalog",
 		ExpectedRows: CompressRows(CompressSchema(DoltQueryCatalogSchema),
@@ -81,11 +80,11 @@ var systemTableUpdateTests = []UpdateTest{
 		Name: "update dolt_schemas",
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
 			schemasTableDoltSchema(),
-			NewRowWithSchema(row.TaggedValues{
-				doltdb.DoltSchemasTypeTag:     types.String("view"),
-				doltdb.DoltSchemasNameTag:     types.String("name"),
-				doltdb.DoltSchemasFragmentTag: types.String("select 2+2 from dual"),
-			}, schemasTableDoltSchema())),
+			NewRowWithSchema(schemasTableDoltSchema(),
+				types.String("view"),
+				types.String("name"),
+				types.String("select 2+2 from dual"),
+			)),
 		UpdateQuery: "update dolt_schemas set type = 'not a view'",
 		SelectQuery: "select * from dolt_schemas",
 		ExpectedRows: CompressRows(CompressSchema(schemasTableDoltSchema()),

@@ -113,11 +113,20 @@ func NewRowWithPks(pkColVals []types.Value, nonPkVals ...types.Value) row.Row {
 }
 
 // NewRowWithSchema creates a new row with the using the provided schema.
-func NewRowWithSchema(vals row.TaggedValues, sch schema.Schema) row.Row {
-	r, err := row.New(types.Format_7_18, sch, vals)
+func NewRowWithSchema(sch schema.Schema, vals ...types.Value) row.Row {
+	tv := make(row.TaggedValues)
+	var i int
+	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		tv[tag] = vals[i]
+		i++
+		return false, nil
+	})
+
+	r, err := row.New(types.Format_7_18, sch, tv)
 	if err != nil {
 		panic(err)
 	}
+
 	return r
 }
 

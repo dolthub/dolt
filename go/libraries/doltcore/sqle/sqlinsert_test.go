@@ -16,16 +16,14 @@ package sqle
 
 import (
 	"context"
-	"testing"
-
 	"github.com/src-d/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"testing"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -58,13 +56,12 @@ var systemTableInsertTests = []InsertTest{
 		Name: "insert into dolt_query_catalog",
 		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
 			DoltQueryCatalogSchema,
-			NewRowWithSchema(row.TaggedValues{
-				doltdb.QueryCatalogIdTag:          types.String("existingEntry"),
-				doltdb.QueryCatalogOrderTag:       types.Uint(2),
-				doltdb.QueryCatalogNameTag:        types.String("example"),
-				doltdb.QueryCatalogQueryTag:       types.String("select 2+2 from dual"),
-				doltdb.QueryCatalogDescriptionTag: types.String("description")},
-				DoltQueryCatalogSchema)),
+			NewRowWithSchema(DoltQueryCatalogSchema,
+				types.String("existingEntry"),
+				types.Uint(2),
+				types.String("example"),
+				types.String("select 2+2 from dual"),
+				types.String("description"))),
 		InsertQuery: "insert into dolt_query_catalog (id, display_order, name, query, description) values ('abc123', 1, 'example', 'select 1+1 from dual', 'description')",
 		SelectQuery: "select * from dolt_query_catalog",
 		ExpectedRows: CompressRows(CompressSchema(DoltQueryCatalogSchema),

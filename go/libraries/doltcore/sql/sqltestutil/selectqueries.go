@@ -1398,6 +1398,18 @@ func CreateTableFn(tableName string, tableSchema schema.Schema, initialRows ...r
 	}
 }
 
+// CreateTableWithRowsFn returns a SetupFunc that creates a table with the rows given, creating the rows on the fly
+// from Value types conforming to the schema given.
+func CreateTableWithRowsFn(tableName string, tableSchema schema.Schema, initialRows ...[]types.Value) SetupFn {
+	return func(t *testing.T, dEnv *env.DoltEnv) {
+		rows := make([]row.Row, len(initialRows))
+		for i, r := range initialRows {
+			rows[i] = NewRowWithSchema(tableSchema, r...)
+		}
+		dtestutils.CreateTestTable(t, dEnv, tableName, tableSchema, rows...)
+	}
+}
+
 // Compose takes an arbitrary number of SetupFns and composes them into a single func which executes all funcs given.
 func Compose(fns ...SetupFn) SetupFn {
 	return func(t *testing.T, dEnv *env.DoltEnv) {

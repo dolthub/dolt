@@ -212,9 +212,9 @@ var BasicInsertTests = []InsertTest{
 	},
 	{
 		Name: "insert partial columns existing pk",
-		AdditionalSetup: CreateTableFn("temppeople",
+		AdditionalSetup: CreateTableWithRowsFn("temppeople",
 			NewSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind),
-			NewRow(types.Int(2), types.String("Bart"), types.String("Simpson"))),
+			[]types.Value {types.Int(2), types.String("Bart"), types.String("Simpson")}),
 		InsertQuery: "insert into temppeople (id, first_name, last_name) values (2, 'Bart', 'Simpson')",
 		ExpectedErr: "duplicate primary key",
 	},
