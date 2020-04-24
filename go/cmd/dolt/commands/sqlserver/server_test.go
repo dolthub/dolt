@@ -76,7 +76,6 @@ func TestServerBadArgs(t *testing.T) {
 		{"-P", "300"},
 		{"-P", "90000"},
 		{"-u", ""},
-		{"-t", "-1"},
 		{"-l", "everything"},
 	}
 
@@ -86,6 +85,7 @@ func TestServerBadArgs(t *testing.T) {
 			go func(serverController *ServerController) {
 				startServer(context.Background(), "test", "dolt sql-server", test, env, serverController)
 			}(serverController)
+
 			// In the event that a test fails, we need to prevent a test from hanging due to a running server
 			err := serverController.WaitForStart()
 			require.Error(t, err)
@@ -99,30 +99,30 @@ func TestServerBadArgs(t *testing.T) {
 func TestServerGoodParams(t *testing.T) {
 	env := createEnvWithSeedData(t)
 
-	tests := []*ServerConfig{
+	tests := []ServerConfig{
 		DefaultServerConfig(),
-		DefaultServerConfig().WithHost("127.0.0.1").WithPort(15400),
-		DefaultServerConfig().WithHost("localhost").WithPort(15401),
-		//DefaultServerConfig().WithHost("::1").WithPort(15402), // Fails on Jenkins, assuming no IPv6 support
-		DefaultServerConfig().WithUser("testusername").WithPort(15403),
-		DefaultServerConfig().WithPassword("hunter2").WithPort(15404),
-		DefaultServerConfig().WithTimeout(0).WithPort(15405),
-		DefaultServerConfig().WithTimeout(5).WithPort(15406),
-		DefaultServerConfig().WithLogLevel(LogLevel_Debug).WithPort(15407),
-		DefaultServerConfig().WithLogLevel(LogLevel_Info).WithPort(15408),
-		DefaultServerConfig().WithReadOnly(true).WithPort(15409),
-		DefaultServerConfig().WithUser("testusernamE").WithPassword("hunter2").WithTimeout(4).WithPort(15410),
+		DefaultServerConfig().withHost("127.0.0.1").withPort(15400),
+		DefaultServerConfig().withHost("localhost").withPort(15401),
+		//DefaultServerConfig().withHost("::1").withPort(15402), // Fails on Jenkins, assuming no IPv6 support
+		DefaultServerConfig().withUser("testusername").withPort(15403),
+		DefaultServerConfig().withPassword("hunter2").withPort(15404),
+		DefaultServerConfig().withTimeout(0).withPort(15405),
+		DefaultServerConfig().withTimeout(5).withPort(15406),
+		DefaultServerConfig().withLogLevel(LogLevel_Debug).withPort(15407),
+		DefaultServerConfig().withLogLevel(LogLevel_Info).withPort(15408),
+		DefaultServerConfig().withReadOnly(true).withPort(15409),
+		DefaultServerConfig().withUser("testusernamE").withPassword("hunter2").withTimeout(4).withPort(15410),
 	}
 
 	for _, test := range tests {
-		t.Run(test.String(), func(t *testing.T) {
+		t.Run(ConfigInfo(test), func(t *testing.T) {
 			sc := CreateServerController()
-			go func(config *ServerConfig, sc *ServerController) {
-				_, _ = Serve(context.Background(), config, sc, env)
+			go func(config ServerConfig, sc *ServerController) {
+				_, _ = Serve(context.Background(), "", config, sc, env)
 			}(test, sc)
 			err := sc.WaitForStart()
 			require.NoError(t, err)
-			conn, err := dbr.Open("mysql", test.ConnectionString(), nil)
+			conn, err := dbr.Open("mysql", ConnectionString(test), nil)
 			require.NoError(t, err)
 			err = conn.Close()
 			require.NoError(t, err)
@@ -135,17 +135,17 @@ func TestServerGoodParams(t *testing.T) {
 
 func TestServerSelect(t *testing.T) {
 	env := createEnvWithSeedData(t)
-	serverConfig := DefaultServerConfig().WithLogLevel(LogLevel_Fatal).WithPort(15300)
+	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15300)
 
 	sc := CreateServerController()
 	defer sc.StopServer()
 	go func() {
-		_, _ = Serve(context.Background(), serverConfig, sc, env)
+		_, _ = Serve(context.Background(), "", serverConfig, sc, env)
 	}()
 	err := sc.WaitForStart()
 	require.NoError(t, err)
 
-	conn, err := dbr.Open("mysql", serverConfig.ConnectionString(), nil)
+	conn, err := dbr.Open("mysql", ConnectionString(serverConfig), nil)
 	require.NoError(t, err)
 	defer conn.Close()
 	sess := conn.NewSession(nil)

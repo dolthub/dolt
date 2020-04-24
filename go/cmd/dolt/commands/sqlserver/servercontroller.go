@@ -19,8 +19,10 @@ import (
 )
 
 type ServerController struct {
-	serverClosed    *sync.WaitGroup
-	serverStarted   *sync.WaitGroup
+	//serverClosed    *sync.WaitGroup
+	//serverStarted   *sync.WaitGroup
+	startCh         chan struct{}
+	closeCh         chan struct{}
 	closeCalled     *sync.Once
 	closeRegistered *sync.Once
 	stopRegistered  *sync.Once
@@ -32,14 +34,12 @@ type ServerController struct {
 // CreateServerController creates a `ServerController` for use with synchronizing on `Serve`.
 func CreateServerController() *ServerController {
 	sc := &ServerController{
-		serverClosed:    &sync.WaitGroup{},
-		serverStarted:   &sync.WaitGroup{},
+		startCh:         make(chan struct{}),
+		closeCh:         make(chan struct{}),
 		closeCalled:     &sync.Once{},
 		closeRegistered: &sync.Once{},
 		stopRegistered:  &sync.Once{},
 	}
-	sc.serverClosed.Add(1)
-	sc.serverStarted.Add(1)
 	return sc
 }
 
@@ -51,7 +51,7 @@ func (controller *ServerController) registerCloseFunction(startError error, clos
 			controller.startError = startError
 		}
 		controller.closeFunction = closeFunc
-		controller.serverStarted.Done()
+		close(controller.startCh)
 	})
 }
 
@@ -62,7 +62,7 @@ func (controller *ServerController) serverStopped(closeError error) {
 		if closeError != nil {
 			controller.closeError = closeError
 		}
-		controller.serverClosed.Done()
+		close(controller.closeCh)
 	})
 }
 
@@ -80,12 +80,22 @@ func (controller *ServerController) StopServer() {
 
 // WaitForClose blocks the caller until the server has closed. The return is the last error encountered, if any.
 func (controller *ServerController) WaitForClose() error {
-	controller.serverClosed.Wait()
+	select {
+	case <-controller.closeCh:
+		break
+	}
+
 	return controller.closeError
 }
 
 // WaitForStart blocks the caller until the server has started. An error is returned if one was encountered.
 func (controller *ServerController) WaitForStart() error {
-	controller.serverStarted.Wait()
+	select {
+	case <-controller.startCh:
+		break
+	case <-controller.closeCh:
+		break
+	}
+
 	return controller.startError
 }
