@@ -108,7 +108,6 @@ function branch_from_base() {
 }
 
 function update_regressions_latest() {
-  dolt checkout master
   exists=$(dolt branch --list regressions-tip-previous | sed '/^\s*$/d' | wc -l | tr -d '[:space:]')
 
   if [ "$exists" -eq 1 ]; then
@@ -137,7 +136,6 @@ function update_regressions_latest() {
     dolt checkout regressions-tip-latest
     dolt push regressions-tip-latest;
   fi
-  dolt checkout master
 }
 
 function import_one_nightly() {
@@ -165,8 +163,6 @@ select version, test_file, line_num, avg(duration) as mean_duration, result from
     dolt add .
     dolt commit -m "merge nightly"
     dolt push origin regressions
-
-    update_regressions_latest
 
     dolt checkout releases
     dolt sql -r csv -q "\
@@ -247,6 +243,8 @@ select version, test_file, line_num, avg(duration) as mean_duration, result from
     dolt add .
     dolt commit -m "merge releases"
     dolt push origin regressions
+
+    update_regressions_latest
 }
 
 rm -rf dolt-sql-performance
