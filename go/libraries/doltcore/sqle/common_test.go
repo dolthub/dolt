@@ -40,19 +40,23 @@ func executeSelect(ctx context.Context, dEnv *env.DoltEnv, targetSch schema.Sche
 		return nil, nil, err
 	}
 
-	_, iter, err := engine.Query(sqlCtx, query)
+	sch, iter, err := engine.Query(sqlCtx, query)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if targetSch == nil {
-		return nil, nil, nil
+	var resultSch schema.Schema
+	if sch != nil {
+		resultSch, err = SqlSchemaToDoltResultSchema(sch)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	doltRows := make([]row.Row, 0)
 	var r sql.Row
 	for r, err = iter.Next(); err == nil; r, err = iter.Next() {
-		sqlR, err := SqlRowToDoltRow(types.Format_7_18, r, targetSch)
+		sqlR, err := SqlRowToDoltRow(types.Format_7_18, r, resultSch)
 
 		if err != nil {
 			return nil, nil, err
@@ -65,7 +69,7 @@ func executeSelect(ctx context.Context, dEnv *env.DoltEnv, targetSch schema.Sche
 		return nil, nil, err
 	}
 
-	return doltRows, targetSch, nil
+	return doltRows, resultSch, nil
 }
 
 // Runs the query given and returns the error (if any).
