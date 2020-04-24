@@ -945,7 +945,6 @@ var CaseSensitivityTests = []SelectTest{
 		Query:           "select mixedcAse.* from MIXEDCASE",
 		ExpectedSchema:  NewResultSetSchema("test", types.StringKind),
 		ExpectedRows:    Rs(NewResultSetRow(types.String("1"))),
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name: "qualified select column",
@@ -955,7 +954,6 @@ var CaseSensitivityTests = []SelectTest{
 		Query:           "select mixedcAse.TeSt from MIXEDCASE",
 		ExpectedSchema:  NewResultSetSchema("TeSt", types.StringKind),
 		ExpectedRows:    Rs(NewResultSetRow(types.String("1"))),
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name: "table alias select *",
@@ -965,7 +963,6 @@ var CaseSensitivityTests = []SelectTest{
 		Query:           "select Mc.* from MIXEDCASE as mc",
 		ExpectedSchema:  NewResultSetSchema("test", types.StringKind),
 		ExpectedRows:    Rs(NewResultSetRow(types.String("1"))),
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name: "table alias select column",
@@ -975,7 +972,6 @@ var CaseSensitivityTests = []SelectTest{
 		Query:           "select mC.TeSt from MIXEDCASE as MC",
 		ExpectedSchema:  NewResultSetSchema("TeSt", types.StringKind),
 		ExpectedRows:    Rs(NewResultSetRow(types.String("1"))),
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name: "multiple tables with the same case-insensitive name, exact match",
@@ -987,7 +983,6 @@ var CaseSensitivityTests = []SelectTest{
 		Query:           "select test from tableName",
 		ExpectedSchema:  NewResultSetSchema("test", types.StringKind),
 		ExpectedRows:    Rs(NewResultSetRow(types.String("1"))),
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name: "multiple tables with the same case-insensitive name, no exact match",
@@ -997,7 +992,6 @@ var CaseSensitivityTests = []SelectTest{
 		),
 		Query:           "select test from tablename",
 		ExpectedErr:     "Ambiguous table: 'tablename'",
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name: "alias with same name as table",
@@ -1007,7 +1001,6 @@ var CaseSensitivityTests = []SelectTest{
 		),
 		Query:           "select other.test from tablename as other, other",
 		ExpectedErr:     "Non-unique table name / alias: 'other'",
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name: "two table aliases with same name",
@@ -1017,7 +1010,6 @@ var CaseSensitivityTests = []SelectTest{
 		),
 		Query:           "select bad.test from tablename as bad, other as bad",
 		ExpectedErr:     "Non-unique table name / alias: 'bad'",
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name: "column name has mixed case, select lower case",
@@ -1054,7 +1046,6 @@ var CaseSensitivityTests = []SelectTest{
 		Query:           "select MiXeDcAsE from test",
 		ExpectedSchema:  NewResultSetSchema("MiXeDcAsE", types.StringKind),
 		ExpectedRows:    Rs(NewResultSetRow(types.String("1"))),
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name: "select with multiple matching columns, no exact match",
@@ -1063,7 +1054,6 @@ var CaseSensitivityTests = []SelectTest{
 			NewRow(types.String("1"), types.String("2"))),
 		Query:           "select MIXEDCASE from test",
 		ExpectedErr:     "Ambiguous column: 'MIXEDCASE'",
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name: "select with multiple matching columns, no exact match, table alias",
@@ -1072,10 +1062,7 @@ var CaseSensitivityTests = []SelectTest{
 			NewRow(types.String("1"), types.String("2"))),
 		Query:           "select t.MIXEDCASE from test t",
 		ExpectedErr:     "Ambiguous column: 'MIXEDCASE'",
-		SkipOnSqlEngine: true,
 	},
-	// TODO: this could be handled better (not change the case of the result set schema), but the parser will silently
-	//  lower-case any column name expression that is a reserved word. Changing that is harder.
 	{
 		Name: "column is reserved word, select not backticked",
 		AdditionalSetup: CreateTableFn("test",
@@ -1087,7 +1074,7 @@ var CaseSensitivityTests = []SelectTest{
 			NewRow(types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create"))),
 		Query:          "select Timestamp from test",
 		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
-		ExpectedSchema: NewResultSetSchema("timestamp", types.StringKind),
+		ExpectedSchema: NewResultSetSchema("Timestamp", types.StringKind),
 	},
 	{
 		Name: "column is reserved word, qualified with table alias",
@@ -1100,7 +1087,7 @@ var CaseSensitivityTests = []SelectTest{
 			NewRow(types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create"))),
 		Query:          "select t.Timestamp from test as t",
 		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
-		ExpectedSchema: NewResultSetSchema("timestamp", types.StringKind),
+		ExpectedSchema: NewResultSetSchema("Timestamp", types.StringKind),
 	},
 	{
 		Name: "column is reserved word, select not backticked #2",
@@ -1108,7 +1095,7 @@ var CaseSensitivityTests = []SelectTest{
 			NewSchema("YeAr", types.StringKind),
 			NewRow(types.String("1"))),
 		Query:          "select Year from test",
-		ExpectedSchema: NewResultSetSchema("year", types.StringKind),
+		ExpectedSchema: NewResultSetSchema("Year", types.StringKind),
 		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
 	},
 	{
@@ -1134,6 +1121,23 @@ var CaseSensitivityTests = []SelectTest{
 				"select", types.StringKind),
 			NewRow(types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create"))),
 		Query: "select `Year`, `OR`, `SELect`, `anD` from test",
+		ExpectedSchema: NewResultSetSchema(
+			"Year", types.StringKind,
+			"OR", types.StringKind,
+			"SELect", types.StringKind,
+			"anD", types.StringKind),
+		ExpectedRows: Rs(NewResultSetRow(types.String("1"), types.String("aaa"), types.String("create"), types.String("1.1"))),
+	},
+	{
+		Name: "column is reserved word, table qualified",
+		AdditionalSetup: CreateTableFn("test",
+			NewSchema(
+				"Year", types.StringKind,
+				"and", types.StringKind,
+				"or", types.StringKind,
+				"select", types.StringKind),
+			NewRow(types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create"))),
+		Query: "select Year, test.OR, t.SELect, t.anD from test t",
 		ExpectedSchema: NewResultSetSchema(
 			"Year", types.StringKind,
 			"OR", types.StringKind,
