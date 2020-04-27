@@ -399,6 +399,67 @@ func TestFilteredReader(t *testing.T) {
 			genTwoIntPKRows(int64TupleGen(map[int64][]int64{0: {0, 1, 2, 3}, 1: {0}, 2: {4, 5}, 3: {0, 1}, 4: {7, 8, 9}})...),
 			genTwoIntPKRows(int64TupleGen(map[int64][]int64{1: {0}, 2: {4, 5}, 3: {0, 1}})...),
 		},
+		{
+			"two pk multiple ranges and a discreet value",
+			twoIntPKSch,
+			[]sql.Expression{
+				expression.NewOr(
+					expression.NewOr(
+						expression.NewAnd(
+							expression.NewGreaterThanOrEqual(
+								expression.NewGetField(0, sql.Int64, pk0Name, false),
+								expression.NewLiteral(int64(-5), sql.Int64),
+							),
+							expression.NewLessThan(
+								expression.NewGetField(0, sql.Int64, pk0Name, false),
+								expression.NewLiteral(int64(5), sql.Int64),
+							),
+						),
+						expression.NewAnd(
+							expression.NewGreaterThan(
+								expression.NewGetField(0, sql.Int64, pk0Name, false),
+								expression.NewLiteral(int64(10), sql.Int64),
+							),
+							expression.NewLessThanOrEqual(
+								expression.NewGetField(0, sql.Int64, pk0Name, false),
+								expression.NewLiteral(int64(20), sql.Int64),
+							),
+						),
+					),
+					expression.NewEquals(
+						expression.NewGetField(0, sql.Int64, pk0Name, false),
+						expression.NewLiteral(int64(7), sql.Int64),
+					),
+				),
+			},
+			genTwoIntPKRows(int64TupleGen(map[int64][]int64{
+				0:  {0, 1, 2, 3},
+				1:  {0},
+				2:  {4, 5},
+				3:  {0, 1},
+				4:  {7, 8, 9},
+				5:  {0, 1, 2, 3},
+				6:  {0},
+				7:  {4, 5},
+				8:  {0, 1},
+				9:  {7, 8, 9},
+				10: {0, 1, 2, 3},
+				11: {0},
+				12: {4, 5},
+				13: {0, 1},
+				14: {7, 8, 9}})...),
+			genTwoIntPKRows(int64TupleGen(map[int64][]int64{
+				0:  {0, 1, 2, 3},
+				1:  {0},
+				2:  {4, 5},
+				3:  {0, 1},
+				4:  {7, 8, 9},
+				7:  {4, 5},
+				11: {0},
+				12: {4, 5},
+				13: {0, 1},
+				14: {7, 8, 9}})...),
+		},
 	}
 
 	for _, test := range tests {
