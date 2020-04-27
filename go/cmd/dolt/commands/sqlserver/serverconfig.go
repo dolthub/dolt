@@ -35,6 +35,18 @@ const (
 	LogLevel_Fatal   LogLevel = "fatal"
 )
 
+const (
+	defaultHost           = "localhost"
+	defaultPort           = 3306
+	defaultUser           = "root"
+	defaultPass           = ""
+	defaultTimeout        = 30 * 1000
+	defaultReadOnly       = false
+	defaultLogLevel       = LogLevel_Info
+	defaultAutoCommit     = true
+	defaultMaxConnections = 0
+)
+
 // String returns the string representation of the log level.
 func (level LogLevel) String() string {
 	switch level {
@@ -203,15 +215,15 @@ func (cfg *commandLineServerConfig) withDBNamesAndPaths(dbNamesAndPaths []env.En
 // DefaultServerConfig creates a `*ServerConfig` that has all of the options set to their default values.
 func DefaultServerConfig() *commandLineServerConfig {
 	return &commandLineServerConfig{
-		host:           "localhost",
-		port:           3306,
-		user:           "root",
-		password:       "",
-		timeout:        30 * 1000,
-		readOnly:       false,
-		logLevel:       LogLevel_Info,
-		autoCommit:     true,
-		maxConnections: 0,
+		host:           defaultHost,
+		port:           defaultPort,
+		user:           defaultUser,
+		password:       defaultPass,
+		timeout:        defaultTimeout,
+		readOnly:       defaultReadOnly,
+		logLevel:       defaultLogLevel,
+		autoCommit:     defaultAutoCommit,
+		maxConnections: defaultMaxConnections,
 	}
 }
 
@@ -237,7 +249,7 @@ func ValidateConfig(config ServerConfig) error {
 
 // ConnectionString returns a Data Source Name (DSN) to be used by go clients for connecting to a running server.
 func ConnectionString(config ServerConfig) string {
-	return fmt.Sprintf("%v:%v@tcp(%v:%v)/dolt", config.User(), config.Password(), config.Host(), config.Port())
+	return fmt.Sprintf("%v:%v@tcp(%v:%v)/", config.User(), config.Password(), config.Host(), config.Port())
 }
 
 // ConfigInfo returns a summary of some of the config which contains some of the more important information

@@ -20,37 +20,43 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 )
 
+// BehaviorYAMLConfig contains server configuration regarding how the server should behave
 type BehaviorYAMLConfig struct {
-	ReadOnly   bool `yaml:"read_only"`
-	AutoCommit bool
+	ReadOnly   *bool `yaml:"read_only"`
+	AutoCommit *bool
 }
 
+// UserYAMLConfig contains server configuration regarding the user account clients must use to connect
 type UserYAMLConfig struct {
-	Name     string
-	Password string
+	Name     *string
+	Password *string
 }
 
+// DatabaseYAMLConfig contains information on a database that this server will provide access to
 type DatabaseYAMLConfig struct {
 	Name string
 	Path string
 }
 
+// ListenerYAMLConfig contains information on the network connection that the server will open
 type ListenerYAMLConfig struct {
-	HostStr            string `yaml:"host"`
-	PortNumber         int    `yaml:"port"`
-	MaxConnectoins     uint64 `yaml:"max_connections"`
-	ReadTimeoutMillis  uint64 `yaml:"read_timeout_millis"`
-	WriteTimeoutMillis uint64 `yaml:"write_timeout_millis"`
+	HostStr            *string `yaml:"host"`
+	PortNumber         *int    `yaml:"port"`
+	MaxConnections     *uint64 `yaml:"max_connections"`
+	ReadTimeoutMillis  *uint64 `yaml:"read_timeout_millis"`
+	WriteTimeoutMillis *uint64 `yaml:"write_timeout_millis"`
 }
 
+// YAMLConfig is a ServerConfig implementation which is read from a yaml file
 type YAMLConfig struct {
-	LogLevelStr    string               `yaml:"log_level"`
+	LogLevelStr    *string              `yaml:"log_level"`
 	BehaviorConfig BehaviorYAMLConfig   `yaml:"behavior"`
 	UserConfig     UserYAMLConfig       `yaml:"user"`
 	ListenerConfig ListenerYAMLConfig   `yaml:"listener"`
 	DatabaseConfig []DatabaseYAMLConfig `yaml:"databases"`
 }
 
+// String returns the YAML representation of the config
 func (cfg YAMLConfig) String() string {
 	data, err := yaml.Marshal(cfg)
 
@@ -63,47 +69,83 @@ func (cfg YAMLConfig) String() string {
 
 // Host returns the domain that the server will run on. Accepts an IPv4 or IPv6 address, in addition to localhost.
 func (cfg YAMLConfig) Host() string {
-	return cfg.ListenerConfig.HostStr
+	if cfg.ListenerConfig.HostStr == nil {
+		return defaultHost
+	}
+
+	return *cfg.ListenerConfig.HostStr
 }
 
 // Port returns the port that the server will run on. The valid range is [1024, 65535].
 func (cfg YAMLConfig) Port() int {
-	return cfg.ListenerConfig.PortNumber
+	if cfg.ListenerConfig.PortNumber == nil {
+		return defaultPort
+	}
+
+	return *cfg.ListenerConfig.PortNumber
 }
 
 // ReadTimeout returns the read timeout in milliseconds.
 func (cfg YAMLConfig) ReadTimeout() uint64 {
-	return cfg.ListenerConfig.ReadTimeoutMillis
+	if cfg.ListenerConfig.ReadTimeoutMillis == nil {
+		return defaultTimeout
+	}
+
+	return *cfg.ListenerConfig.ReadTimeoutMillis
 }
 
 // WriteTimeout returns the write timeout in milliseconds.
 func (cfg YAMLConfig) WriteTimeout() uint64 {
-	return cfg.ListenerConfig.WriteTimeoutMillis
+	if cfg.ListenerConfig.WriteTimeoutMillis == nil {
+		return defaultTimeout
+	}
+
+	return *cfg.ListenerConfig.WriteTimeoutMillis
 }
 
 // User returns the username that connecting clients must use.
 func (cfg YAMLConfig) User() string {
-	return cfg.UserConfig.Name
+	if cfg.UserConfig.Name == nil {
+		return defaultUser
+	}
+
+	return *cfg.UserConfig.Name
 }
 
 // Password returns the password that connecting clients must use.
 func (cfg YAMLConfig) Password() string {
-	return cfg.UserConfig.Password
+	if cfg.UserConfig.Password == nil {
+		return defaultPass
+	}
+
+	return *cfg.UserConfig.Password
 }
 
 // ReadOnly returns whether the server will only accept read statements or all statements.
 func (cfg YAMLConfig) ReadOnly() bool {
-	return cfg.BehaviorConfig.ReadOnly
+	if cfg.BehaviorConfig.ReadOnly == nil {
+		return defaultReadOnly
+	}
+
+	return *cfg.BehaviorConfig.ReadOnly
 }
 
 // Autocommit defines the value of the @@autocommit session variable used on every connection
 func (cfg YAMLConfig) AutoCommit() bool {
-	return cfg.BehaviorConfig.AutoCommit
+	if cfg.BehaviorConfig.AutoCommit == nil {
+		return defaultAutoCommit
+	}
+
+	return *cfg.BehaviorConfig.AutoCommit
 }
 
 // LogLevel returns the level of logging that the server will use.
 func (cfg YAMLConfig) LogLevel() LogLevel {
-	return LogLevel(cfg.LogLevelStr)
+	if cfg.LogLevelStr == nil {
+		return defaultLogLevel
+	}
+
+	return LogLevel(*cfg.LogLevelStr)
 }
 
 // DatabaseNamesAndPaths returns an array of env.EnvNameAndPathObjects corresponding to the databases to be loaded in
@@ -120,5 +162,9 @@ func (cfg YAMLConfig) DatabaseNamesAndPaths() []env.EnvNameAndPath {
 
 // MaxConnections returns the maximum number of simultaneous connections the server will allow.  The default is 1
 func (cfg YAMLConfig) MaxConnections() uint64 {
-	return cfg.ListenerConfig.MaxConnectoins
+	if cfg.ListenerConfig.MaxConnections == nil {
+		return defaultMaxConnections
+	}
+
+	return *cfg.ListenerConfig.MaxConnections
 }

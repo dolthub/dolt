@@ -58,7 +58,43 @@ func TestServerArgs(t *testing.T) {
 	}()
 	err := serverController.WaitForStart()
 	require.NoError(t, err)
-	conn, err := dbr.Open("mysql", "username:password@tcp(localhost:15200)/dolt", nil)
+	conn, err := dbr.Open("mysql", "username:password@tcp(localhost:15200)/", nil)
+	require.NoError(t, err)
+	err = conn.Close()
+	require.NoError(t, err)
+	serverController.StopServer()
+	err = serverController.WaitForClose()
+	assert.NoError(t, err)
+}
+
+func TestYAMLServerArgs(t *testing.T) {
+	const yamlConfig = `
+log_level: info
+
+behavior:
+    read_only: true
+
+user:
+    name: username
+    password: password
+
+listener:
+    host: localhost
+    port: 15200
+    read_timeout_millis: 5000
+    write_timeout_millis: 5000
+`
+	serverController := CreateServerController()
+	go func() {
+		dEnv := createEnvWithSeedData(t)
+		dEnv.FS.WriteFile("config.yaml", []byte(yamlConfig))
+		startServer(context.Background(), "test", "dolt sql-server", []string{
+			"--config", "config.yaml",
+		}, dEnv, serverController)
+	}()
+	err := serverController.WaitForStart()
+	require.NoError(t, err)
+	conn, err := dbr.Open("mysql", "username:password@tcp(localhost:15200)/", nil)
 	require.NoError(t, err)
 	err = conn.Close()
 	require.NoError(t, err)
@@ -145,7 +181,8 @@ func TestServerSelect(t *testing.T) {
 	err := sc.WaitForStart()
 	require.NoError(t, err)
 
-	conn, err := dbr.Open("mysql", ConnectionString(serverConfig), nil)
+	const dbName = "dolt"
+	conn, err := dbr.Open("mysql", ConnectionString(serverConfig)+dbName, nil)
 	require.NoError(t, err)
 	defer conn.Close()
 	sess := conn.NewSession(nil)

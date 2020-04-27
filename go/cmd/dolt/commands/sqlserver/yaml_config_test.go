@@ -18,9 +18,26 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
 )
+
+func strPtr(s string) *string {
+	return &s
+}
+
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+func uint64Ptr(n uint64) *uint64 {
+	return &n
+}
+
+func intPtr(n int) *int {
+	return &n
+}
 
 func TestUnmarshall(t *testing.T) {
 	testStr := `
@@ -49,21 +66,21 @@ databases:
 `
 
 	expected := YAMLConfig{
-		LogLevelStr: "debug",
+		LogLevelStr: strPtr("debug"),
 		BehaviorConfig: BehaviorYAMLConfig{
-			ReadOnly:   false,
-			AutoCommit: true,
+			ReadOnly:   boolPtr(false),
+			AutoCommit: boolPtr(true),
 		},
 		UserConfig: UserYAMLConfig{
-			Name:     "root",
-			Password: "1234",
+			Name:     strPtr("root"),
+			Password: strPtr("1234"),
 		},
 		ListenerConfig: ListenerYAMLConfig{
-			HostStr:            "0.0.0.0",
-			PortNumber:         3306,
-			MaxConnectoins:     100,
-			ReadTimeoutMillis:  0,
-			WriteTimeoutMillis: 0,
+			HostStr:            strPtr("0.0.0.0"),
+			PortNumber:         intPtr(3306),
+			MaxConnections:     uint64Ptr(100),
+			ReadTimeoutMillis:  uint64Ptr(0),
+			WriteTimeoutMillis: uint64Ptr(0),
 		},
 		DatabaseConfig: []DatabaseYAMLConfig{
 			{
@@ -81,4 +98,21 @@ databases:
 	err := yaml.Unmarshal([]byte(testStr), &config)
 	require.NoError(t, err)
 	assert.Equal(t, expected, config)
+}
+
+func TestYAMLConfigDefaults(t *testing.T) {
+	var cfg YAMLConfig
+	err := yaml.Unmarshal([]byte{}, &cfg)
+	require.NoError(t, err)
+
+	assert.Equal(t, defaultHost, cfg.Host())
+	assert.Equal(t, defaultPort, cfg.Port())
+	assert.Equal(t, defaultUser, cfg.User())
+	assert.Equal(t, defaultPass, cfg.Password())
+	assert.Equal(t, uint64(defaultTimeout), cfg.WriteTimeout())
+	assert.Equal(t, uint64(defaultTimeout), cfg.ReadTimeout())
+	assert.Equal(t, defaultReadOnly, cfg.ReadOnly())
+	assert.Equal(t, defaultLogLevel, cfg.LogLevel())
+	assert.Equal(t, defaultAutoCommit, cfg.AutoCommit())
+	assert.Equal(t, uint64(defaultMaxConnections), cfg.MaxConnections())
 }
