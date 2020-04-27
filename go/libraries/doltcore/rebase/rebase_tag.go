@@ -362,6 +362,13 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 
 		rebasedSch := schema.SchemaFromCols(schCC)
 
+		for _, index := range sch.Indexes().AllIndexes() {
+			_, err = rebasedSch.Indexes().AddIndexByColNames(index.Name(), index.Columns(), index.IsUnique(), index.Comment())
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		// super schema rebase
 		ss, _, err := root.GetSuperSchema(ctx, tblName)
 
@@ -431,7 +438,15 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		rshs := rsh.String()
 		fmt.Println(rshs)
 
-		rebasedTable, err := doltdb.NewTable(ctx, rebasedParentRoot.VRW(), rebasedSchVal, rebasedRows)
+		indexData, _ := types.NewMap(ctx, rebasedParentRoot.VRW())
+
+		rebasedTable, err := doltdb.NewTable(ctx, rebasedParentRoot.VRW(), rebasedSchVal, rebasedRows, indexData)
+
+		if err != nil {
+			return nil, err
+		}
+
+		rebasedTable, err = rebasedTable.RebuildIndexData(ctx)
 
 		if err != nil {
 			return nil, err

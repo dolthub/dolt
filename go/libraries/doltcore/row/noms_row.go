@@ -180,6 +180,27 @@ func FromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) (Row, error) {
 	return fromTaggedVals(nomsKey.Format(), sch, key, val)
 }
 
+func (nr nomsRow) ReduceToIndex(idx schema.Index) (Row, error) {
+	newRow := nomsRow{
+		key:   make(TaggedValues),
+		value: make(TaggedValues),
+		nbf:   nr.nbf,
+	}
+
+	for _, tag := range idx.AllTags() {
+		val, ok := nr.key[tag]
+		if !ok {
+			val, ok = nr.value[tag]
+			if !ok {
+				continue
+			}
+		}
+		newRow.key[tag] = val
+	}
+
+	return newRow, nil
+}
+
 func (nr nomsRow) NomsMapKey(sch schema.Schema) types.LesserValuable {
 	return nr.key.NomsTupleForTags(nr.nbf, sch.GetPKCols().Tags, true)
 }

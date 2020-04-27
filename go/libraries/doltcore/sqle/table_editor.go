@@ -21,6 +21,8 @@ import (
 	"github.com/src-d/go-mysql-server/sql"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -39,8 +41,16 @@ var ErrDuplicatePrimaryKeyFmt = "duplicate primary key given: (%v)"
 // editor after every SQL statement is incorrect and will return incorrect results. The single reliable exception is an
 // unbroken chain of INSERT statements, where we have taken pains to batch writes to speed things up.
 type tableEditor struct {
-	t            *WritableDoltTable
+	t        *WritableDoltTable
+	tableEd  *subTableEditor
+	indexEds []*subTableEditor
+}
+
+type subTableEditor struct {
+	parent       *tableEditor
+	sch          schema.Schema
 	ed           *types.MapEditor
+	idx          schema.Index
 	insertedKeys map[hash.Hash]types.Value
 	addedKeys    map[hash.Hash]types.Value
 	removedKeys  map[hash.Hash]types.Value
@@ -51,13 +61,29 @@ var _ sql.RowUpdater = (*tableEditor)(nil)
 var _ sql.RowInserter = (*tableEditor)(nil)
 var _ sql.RowDeleter = (*tableEditor)(nil)
 
-func newTableEditor(t *WritableDoltTable) *tableEditor {
-	return &tableEditor{
-		t:            t,
+func newTableEditor(ctx *sql.Context, t *WritableDoltTable) *tableEditor {
+	te := &tableEditor{
+		t:        t,
+		indexEds: make([]*subTableEditor, t.sch.Indexes().Count()),
+	}
+	te.tableEd = &subTableEditor{
+		parent:       te,
+		sch:          t.sch,
 		insertedKeys: make(map[hash.Hash]types.Value),
 		addedKeys:    make(map[hash.Hash]types.Value),
 		removedKeys:  make(map[hash.Hash]types.Value),
 	}
+	for i, index := range t.sch.Indexes().AllIndexes() {
+		te.indexEds[i] = &subTableEditor{
+			parent:       te,
+			sch:          index.Schema(),
+			idx:          index,
+			insertedKeys: make(map[hash.Hash]types.Value),
+			addedKeys:    make(map[hash.Hash]types.Value),
+			removedKeys:  make(map[hash.Hash]types.Value),
+		}
+	}
+	return te
 }
 
 func (te *tableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
@@ -66,7 +92,27 @@ func (te *tableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 		return err
 	}
 
-	key, err := dRow.NomsMapKey(te.t.sch).Value(ctx)
+	err = te.tableEd.Insert(ctx, dRow)
+	if err != nil {
+		return err
+	}
+
+	for _, indexEd := range te.indexEds {
+		dIndexRow, err := dRow.ReduceToIndex(indexEd.idx)
+		if err != nil {
+			return err
+		}
+		err = indexEd.Insert(ctx, dIndexRow)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (te *subTableEditor) Insert(ctx *sql.Context, dRow row.Row) error {
+	key, err := dRow.NomsMapKey(te.sch).Value(ctx)
 	if err != nil {
 		return errhand.BuildDError("failed to get row key").AddCause(err).Build()
 	}
@@ -89,13 +135,13 @@ func (te *tableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	te.addedKeys[hash] = key
 
 	if te.ed == nil {
-		te.ed, err = te.t.newMapEditor(ctx)
+		te.ed, err = te.newMapEditor(ctx)
 		if err != nil {
 			return err
 		}
 	}
 
-	te.ed = te.ed.Set(key, dRow.NomsMapValue(te.t.sch))
+	te.ed = te.ed.Set(key, dRow.NomsMapValue(te.sch))
 	return nil
 }
 
@@ -105,7 +151,27 @@ func (te *tableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 		return err
 	}
 
-	key, err := dRow.NomsMapKey(te.t.sch).Value(ctx)
+	err = te.tableEd.Delete(ctx, dRow)
+	if err != nil {
+		return err
+	}
+
+	for _, indexEd := range te.indexEds {
+		dIndexRow, err := dRow.ReduceToIndex(indexEd.idx)
+		if err != nil {
+			return err
+		}
+		err = indexEd.Delete(ctx, dIndexRow)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (te *subTableEditor) Delete(ctx *sql.Context, dRow row.Row) error {
+	key, err := dRow.NomsMapKey(te.sch).Value(ctx)
 	if err != nil {
 		return errhand.BuildDError("failed to get row key").AddCause(err).Build()
 	}
@@ -118,7 +184,7 @@ func (te *tableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 	te.removedKeys[hash] = key
 
 	if te.ed == nil {
-		te.ed, err = te.t.newMapEditor(ctx)
+		te.ed, err = te.newMapEditor(ctx)
 		if err != nil {
 			return err
 		}
@@ -128,13 +194,20 @@ func (te *tableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 	return nil
 }
 
-func (t *DoltTable) newMapEditor(ctx context.Context) (*types.MapEditor, error) {
-	typesMap, err := t.table.GetRowData(ctx)
-	if err != nil {
-		return nil, errhand.BuildDError("failed to get row data.").AddCause(err).Build()
+func (te *subTableEditor) newMapEditor(ctx context.Context) (*types.MapEditor, error) {
+	if te.idx == nil {
+		typesMap, err := te.parent.t.table.GetRowData(ctx)
+		if err != nil {
+			return nil, errhand.BuildDError("failed to get row data.").AddCause(err).Build()
+		}
+		return typesMap.Edit(), nil
+	} else {
+		typesMap, err := te.parent.t.table.GetIndexRowData(ctx, te.idx.Name())
+		if err != nil {
+			return nil, errhand.BuildDError("failed to get row data.").AddCause(err).Build()
+		}
+		return typesMap.Edit(), nil
 	}
-
-	return typesMap.Edit(), nil
 }
 
 func (te *tableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
@@ -147,13 +220,37 @@ func (te *tableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) 
 		return err
 	}
 
+	err = te.tableEd.Update(ctx, dOldRow, dNewRow)
+	if err != nil {
+		return err
+	}
+
+	for _, indexEd := range te.indexEds {
+		dOldIndexRow, err := dOldRow.ReduceToIndex(indexEd.idx)
+		if err != nil {
+			return err
+		}
+		dNewIndexRow, err := dNewRow.ReduceToIndex(indexEd.idx)
+		if err != nil {
+			return err
+		}
+		err = indexEd.Update(ctx, dOldIndexRow, dNewIndexRow)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (te *subTableEditor) Update(ctx *sql.Context, dOldRow row.Row, dNewRow row.Row) error {
 	// If the PK is changed then we need to delete the old value and insert the new one
-	dOldKey := dOldRow.NomsMapKey(te.t.sch)
+	dOldKey := dOldRow.NomsMapKey(te.sch)
 	dOldKeyVal, err := dOldKey.Value(ctx)
 	if err != nil {
 		return err
 	}
-	dNewKey := dNewRow.NomsMapKey(te.t.sch)
+	dNewKey := dNewRow.NomsMapKey(te.sch)
 	dNewKeyVal, err := dNewKey.Value(ctx)
 	if err != nil {
 		return err
@@ -180,13 +277,13 @@ func (te *tableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) 
 	}
 
 	if te.ed == nil {
-		te.ed, err = te.t.newMapEditor(ctx)
+		te.ed, err = te.newMapEditor(ctx)
 		if err != nil {
 			return err
 		}
 	}
 
-	te.ed.Set(dNewKeyVal, dNewRow.NomsMapValue(te.t.sch))
+	te.ed.Set(dNewKeyVal, dNewRow.NomsMapValue(te.sch))
 	return nil
 }
 
@@ -201,8 +298,8 @@ func (te *tableEditor) Close(ctx *sql.Context) error {
 
 func (te *tableEditor) flush(ctx *sql.Context) error {
 	// For all added keys, check for and report a collision
-	for hash, addedKey := range te.addedKeys {
-		if _, ok := te.removedKeys[hash]; !ok {
+	for keyHash, addedKey := range te.tableEd.addedKeys {
+		if _, ok := te.tableEd.removedKeys[keyHash]; !ok {
 			_, rowExists, err := te.t.table.GetRow(ctx, addedKey.(types.Tuple), te.t.sch)
 			if err != nil {
 				return errhand.BuildDError("failed to read table").AddCause(err).Build()
@@ -217,14 +314,69 @@ func (te *tableEditor) flush(ctx *sql.Context) error {
 		}
 	}
 	// For all removed keys, remove the map entries that weren't added elsewhere by other updates
-	for hash, removedKey := range te.removedKeys {
-		if _, ok := te.addedKeys[hash]; !ok {
-			te.ed.Remove(removedKey)
+	for keyHash, removedKey := range te.tableEd.removedKeys {
+		if _, ok := te.tableEd.addedKeys[keyHash]; !ok {
+			te.tableEd.ed.Remove(removedKey)
+		} else {
+			// Due to how REPLACE works, what equates to an UPDATE on the parent may actually be a DELETE on one PK and INSERT on another
+			dRow, rowExists, err := te.t.table.GetRow(ctx, removedKey.(types.Tuple), te.t.sch)
+			if err != nil {
+				return errhand.BuildDError("failed to read table").AddCause(err).Build()
+			}
+			if rowExists {
+				for _, indexEd := range te.indexEds {
+					dIndexRow, err := dRow.ReduceToIndex(indexEd.idx)
+					if err != nil {
+						return errhand.BuildDError("failed to reduce row to index").AddCause(err).Build()
+					}
+					err = indexEd.Delete(ctx, dIndexRow)
+					if err != nil {
+						return errhand.BuildDError("failed to remove old row from index").AddCause(err).Build()
+					}
+				}
+			}
 		}
 	}
 
-	if te.ed != nil {
-		return te.t.updateTable(ctx, te.ed)
+	if te.tableEd.ed == nil {
+		return nil
 	}
-	return nil
+
+	updated, err := te.tableEd.ed.Map(ctx)
+	if err != nil {
+		return errhand.BuildDError("failed to modify table").AddCause(err).Build()
+	}
+	newTable, err := te.t.table.UpdateRows(ctx, updated)
+	if err != nil {
+		return errhand.BuildDError("failed to update rows").AddCause(err).Build()
+	}
+
+	for _, indexEd := range te.indexEds {
+		for keyHash, removedKey := range indexEd.removedKeys {
+			if _, ok := indexEd.addedKeys[keyHash]; !ok {
+				indexEd.ed.Remove(removedKey)
+			}
+		}
+
+		indexMap, err := indexEd.ed.Map(ctx)
+		if err != nil {
+			return errhand.BuildDError("failed to modify index `%v`", indexEd.idx.Name()).AddCause(err).Build()
+		}
+		newTable, err = newTable.SetIndexRowData(ctx, indexEd.idx.Name(), indexMap)
+		if err != nil {
+			return errhand.BuildDError("failed to update index `%v`", indexEd.idx.Name()).AddCause(err).Build()
+		}
+	}
+
+	root, err := te.t.db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+	newRoot, err := root.PutTable(ctx, te.t.name, newTable)
+	if err != nil {
+		return errhand.BuildDError("failed to write table back to database").AddCause(err).Build()
+	}
+
+	te.t.table = newTable
+	return te.t.db.SetRoot(ctx, newRoot)
 }

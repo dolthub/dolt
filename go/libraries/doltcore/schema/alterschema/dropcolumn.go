@@ -48,6 +48,17 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string) (*doltdb
 		dropTag = col.Tag
 	}
 
+	for _, index := range tblSch.Indexes().ReferencesColumn(colName) {
+		_, err = tblSch.Indexes().RemoveIndex(index.Name())
+		if err != nil {
+			return nil, err
+		}
+		tbl, err = tbl.DeleteIndexRowData(ctx, index.Name())
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	cols := make([]schema.Column, 0)
 	err = allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.Name != colName {
@@ -66,6 +77,7 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string) (*doltdb
 	}
 
 	newSch := schema.SchemaFromCols(colColl)
+	newSch.Indexes().AddIndex(tblSch.Indexes().AllIndexes()...)
 
 	vrw := tbl.ValueReadWriter()
 	schemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, newSch)
@@ -82,7 +94,11 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string) (*doltdb
 		return nil, err
 	}
 
-	newTable, err := doltdb.NewTable(ctx, vrw, schemaVal, prunedRowData)
+	indexData, err := tbl.GetIndexData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	newTable, err := doltdb.NewTable(ctx, vrw, schemaVal, prunedRowData, indexData)
 
 	if err != nil {
 		return nil, err

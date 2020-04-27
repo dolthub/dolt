@@ -140,6 +140,8 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.T
 		return nil, nil, err
 	}
 
+	postMergeSchema.Indexes().AddIndex(tblSchema.Indexes().AllIndexes()...)
+
 	rows, err := tbl.GetRowData(ctx)
 
 	if err != nil {
@@ -170,7 +172,19 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.T
 		return nil, nil, err
 	}
 
-	mergedTable, err := doltdb.NewTable(ctx, merger.vrw, schUnionVal, mergedRowData)
+	emptyIndexData, err := types.NewMap(ctx, merger.vrw)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	mergedTable, err := doltdb.NewTable(ctx, merger.vrw, schUnionVal, mergedRowData, emptyIndexData)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	mergedTable, err = mergedTable.RebuildIndexData(ctx)
 
 	if err != nil {
 		return nil, nil, err
