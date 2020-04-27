@@ -16,15 +16,19 @@ package sqlserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strconv"
 
-	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/fatih/color"
+	"gopkg.in/yaml.v2"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 const (
@@ -37,14 +41,12 @@ const (
 	logLevelFlag     = "loglevel"
 	multiDBDirFlag   = "multi-db-dir"
 	noAutoCommitFlag = "no-auto-commit"
+	configFileFlag   = "config"
 )
 
 var sqlServerDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Start a MySQL-compatible server.",
-	LongDesc: `Start a MySQL-compatible server which can be connected to by MySQL clients.
-
-Currently, only {{.EmphasisLeft}}SELECT{{.EmphasisRight}} statements are operational, as support for other statements is still being developed.
-`,
+	LongDesc:  `Start a MySQL-compatible server which can be connected to by MySQL clients.`,
 	Synopsis: []string{
 		"[-H {{.LessThan}}host{{.GreaterThan}}] [-P {{.LessThan}}port{{.GreaterThan}}] [-u {{.LessThan}}user{{.GreaterThan}}] [-p {{.LessThan}}password{{.GreaterThan}}] [-t {{.LessThan}}timeout{{.GreaterThan}}] [-l {{.LessThan}}loglevel{{.GreaterThan}}] [--multi-db-dir {{.LessThan}}directory{{.GreaterThan}}] [-r]",
 	},
@@ -66,21 +68,24 @@ func (cmd SqlServerCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd SqlServerCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := createArgParser(DefaultServerConfig())
+	ap := createArgParser()
 	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, sqlServerDocs, ap))
 }
 
-func createArgParser(serverConfig *ServerConfig) *argparser.ArgParser {
+func createArgParser() *argparser.ArgParser {
+	serverConfig := DefaultServerConfig()
+
 	ap := argparser.NewArgParser()
-	ap.SupportsString(hostFlag, "H", "Host address", fmt.Sprintf("Defines the host address that the server will run on (default `%v`)", serverConfig.Host))
-	ap.SupportsUint(portFlag, "P", "Port", fmt.Sprintf("Defines the port that the server will run on (default `%v`)", serverConfig.Port))
-	ap.SupportsString(userFlag, "u", "User", fmt.Sprintf("Defines the server user (default `%v`)", serverConfig.User))
-	ap.SupportsString(passwordFlag, "p", "Password", fmt.Sprintf("Defines the server password (default `%v`)", serverConfig.Password))
-	ap.SupportsInt(timeoutFlag, "t", "Connection timeout", fmt.Sprintf("Defines the timeout, in seconds, used for connections\nA value of `0` represents an infinite timeout (default `%v`)", serverConfig.Timeout))
+	ap.SupportsString(hostFlag, "H", "Host address", fmt.Sprintf("Defines the host address that the server will run on (default `%v`)", serverConfig.Host()))
+	ap.SupportsUint(portFlag, "P", "Port", fmt.Sprintf("Defines the port that the server will run on (default `%v`)", serverConfig.Port()))
+	ap.SupportsString(userFlag, "u", "User", fmt.Sprintf("Defines the server user (default `%v`)", serverConfig.User()))
+	ap.SupportsString(passwordFlag, "p", "Password", fmt.Sprintf("Defines the server password (default `%v`)", serverConfig.Password()))
+	ap.SupportsInt(timeoutFlag, "t", "Connection timeout", fmt.Sprintf("Defines the timeout, in seconds, used for connections\nA value of `0` represents an infinite timeout (default `%v`)", serverConfig.ReadTimeout()))
 	ap.SupportsFlag(readonlyFlag, "r", "Disables modification of the database")
-	ap.SupportsString(logLevelFlag, "l", "Log level", fmt.Sprintf("Defines the level of logging provided\nOptions are: `debug`, `info`, `warning`, `error`, `fatal` (default `%v`)", serverConfig.LogLevel))
+	ap.SupportsString(logLevelFlag, "l", "Log level", fmt.Sprintf("Defines the level of logging provided\nOptions are: `debug`, `info`, `warning`, `error`, `fatal` (default `%v`)", serverConfig.LogLevel()))
 	ap.SupportsString(multiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases.")
 	ap.SupportsFlag(noAutoCommitFlag, "", "When provided sessions will not automatically commit their changes to the working set. Anything not manually committed will be lost.")
+	ap.SupportsString(configFileFlag, "", "file", "When provided configuration is taken from the yaml config file and all command line parameters are ignored.")
 	return ap
 }
 
@@ -103,49 +108,24 @@ func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []stri
 }
 
 func startServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
-	serverConfig := DefaultServerConfig()
-	serverConfig.Version = versionStr
-
-	ap := createArgParser(serverConfig)
+	ap := createArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlServerDocs, ap))
 
 	apr := cli.ParseArgs(ap, args, help)
-	args = apr.Args()
+	serverConfig, err := getServerConfig(dEnv, apr)
 
-	if host, ok := apr.GetValue(hostFlag); ok {
-		serverConfig.Host = host
-	}
-	if port, ok := apr.GetInt(portFlag); ok {
-		serverConfig.Port = port
-	}
-	if user, ok := apr.GetValue(userFlag); ok {
-		serverConfig.User = user
-	}
-	if password, ok := apr.GetValue(passwordFlag); ok {
-		serverConfig.Password = password
-	}
-	if timeout, ok := apr.GetInt(timeoutFlag); ok {
-		serverConfig.Timeout = timeout
-	}
-	if _, ok := apr.GetValue(readonlyFlag); ok {
-		serverConfig.ReadOnly = true
-	}
-	if logLevel, ok := apr.GetValue(logLevelFlag); ok {
-		serverConfig.LogLevel = LogLevel(logLevel)
-	}
-	if multiDBDir, ok := apr.GetValue(multiDBDirFlag); ok {
-		serverConfig.MultiDBDir = multiDBDir
-	} else {
-		if !cli.CheckEnvIsValid(dEnv) {
-			return 2
-		}
+	if err != nil {
+		serverController.StopServer()
+		serverController.serverStopped(err)
+
+		cli.PrintErrln(color.RedString("Failed to start server. Bad Configuration"))
+		cli.PrintErrln(err.Error())
+		return 1
 	}
 
-	serverConfig.AutoCommit = !apr.Contains(noAutoCommitFlag)
+	cli.PrintErrf("Starting server with Config %v\n", ConfigInfo(serverConfig))
 
-	cli.PrintErrf("Starting server with Config %v", serverConfig.String())
-
-	if startError, closeError := Serve(ctx, serverConfig, serverController, dEnv); startError != nil || closeError != nil {
+	if startError, closeError := Serve(ctx, versionStr, serverConfig, serverController, dEnv); startError != nil || closeError != nil {
 		if startError != nil {
 			cli.PrintErrln(startError)
 		}
@@ -156,4 +136,79 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 	}
 
 	return 0
+}
+
+func getServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerConfig, error) {
+	cfgFile, ok := apr.GetValue(configFileFlag)
+
+	if ok {
+		return getYAMLServerConfig(dEnv.FS, cfgFile)
+	}
+
+	return getCommandLineServerConfig(dEnv, apr)
+}
+
+func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerConfig, error) {
+	serverConfig := DefaultServerConfig()
+
+	if host, ok := apr.GetValue(hostFlag); ok {
+		serverConfig.withHost(host)
+	}
+	if port, ok := apr.GetInt(portFlag); ok {
+		serverConfig.withPort(port)
+	}
+	if user, ok := apr.GetValue(userFlag); ok {
+		serverConfig.withUser(user)
+	}
+	if password, ok := apr.GetValue(passwordFlag); ok {
+		serverConfig.withPassword(password)
+	}
+	if timeoutStr, ok := apr.GetValue(timeoutFlag); ok {
+		timeout, err := strconv.ParseUint(timeoutStr, 10, 64)
+
+		if err != nil {
+			return nil, fmt.Errorf("invalid value for --timeout '%s'", timeoutStr)
+		}
+
+		serverConfig.withTimeout(timeout * 1000)
+	}
+	if _, ok := apr.GetValue(readonlyFlag); ok {
+		serverConfig.withReadOnly(true)
+	}
+	if logLevel, ok := apr.GetValue(logLevelFlag); ok {
+		serverConfig.withLogLevel(LogLevel(logLevel))
+	}
+	if multiDBDir, ok := apr.GetValue(multiDBDirFlag); ok {
+		dbNamesAndPaths, err := env.DBNamesAndPathsFromDir(dEnv.FS, multiDBDir)
+
+		if err != nil {
+			return nil, errors.New("failed to read databases in path specified by --multi-db-dir. error: " + err.Error())
+		}
+
+		serverConfig.withDBNamesAndPaths(dbNamesAndPaths)
+	} else {
+		if !cli.CheckEnvIsValid(dEnv) {
+			return nil, errors.New("not a valid dolt directory")
+		}
+	}
+
+	serverConfig.autoCommit = !apr.Contains(noAutoCommitFlag)
+	return serverConfig, nil
+}
+
+func getYAMLServerConfig(fs filesys.Filesys, path string) (ServerConfig, error) {
+	data, err := fs.ReadFile(path)
+
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read file '%s'. Error: %s", path, err.Error())
+	}
+
+	var cfg YAMLConfig
+	err = yaml.Unmarshal(data, &cfg)
+
+	if err != nil {
+		return nil, fmt.Errorf("Failed to parse yaml file '%s'. Error: %s", path, err.Error())
+	}
+
+	return cfg, nil
 }
