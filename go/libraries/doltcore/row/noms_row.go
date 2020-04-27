@@ -181,9 +181,9 @@ func FromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) (Row, error) {
 }
 
 func (nr nomsRow) NomsMapKey(sch schema.Schema) types.LesserValuable {
-	return nr.key.NomsTupleForTags(nr.nbf, sch.GetPKCols().Tags, true)
+	return nr.key.NomsTupleForPKCols(nr.nbf, sch.GetPKCols())
 }
 
 func (nr nomsRow) NomsMapValue(sch schema.Schema) types.Valuable {
-	return nr.value.NomsTupleForTags(nr.nbf, sch.GetNonPKCols().SortedTags, false)
+	return nr.value.NomsTupleForNonPKCols(nr.nbf, sch.GetNonPKCols())
 }

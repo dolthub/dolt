@@ -95,8 +95,8 @@ func TestTupleValsLess(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 
-			lesserTplVals := test.lesserTVs.NomsTupleForTags(types.Format_7_18, test.tags, true)
-			greaterTplVals := test.greaterTVs.NomsTupleForTags(types.Format_7_18, test.tags, true)
+			lesserTplVals := test.lesserTVs.nomsTupleForTags(types.Format_7_18, test.tags, true)
+			greaterTplVals := test.greaterTVs.nomsTupleForTags(types.Format_7_18, test.tags, true)
 
 			lessLTGreater, err := lesserTplVals.Less(types.Format_7_18, greaterTplVals)
 			assert.NoError(t, err)
@@ -155,7 +155,7 @@ func TestTaggedTuple_NomsTupleForTags(t *testing.T) {
 		//{map[uint64]types.Value{}, []uint64{}, types.NewTuple()},
 	}
 	for _, test := range tests {
-		if got, err := tt.NomsTupleForTags(types.Format_7_18, test.tags, test.encodeNulls).Value(ctx); err != nil {
+		if got, err := tt.nomsTupleForTags(types.Format_7_18, test.tags, test.encodeNulls).Value(ctx); err != nil {
 			t.Error(err)
 		} else if !reflect.DeepEqual(got, test.want) {
 			gotStr, err := types.EncodedValue(ctx, got)
@@ -170,7 +170,7 @@ func TestTaggedTuple_NomsTupleForTags(t *testing.T) {
 				t.Error(err)
 			}
 
-			t.Errorf("TaggedValues.NomsTupleForTags() = %v, want %v", gotStr, wantStr)
+			t.Errorf("TaggedValues.nomsTupleForTags() = %v, want %v", gotStr, wantStr)
 		}
 	}
 }

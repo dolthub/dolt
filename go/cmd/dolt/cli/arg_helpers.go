@@ -176,7 +176,7 @@ func ParseKeyValues(nbf *types.NomsBinFormat, sch schema.Schema, args []string) 
 			taggedVals[k] = val
 		}
 
-		tpl, err := taggedVals.NomsTupleForTags(nbf, pkCols.Tags, true).Value(context.TODO())
+		tpl, err := taggedVals.NomsTupleForPKCols(nbf, pkCols).Value(context.TODO())
 
 		if err != nil {
 			return nil, err

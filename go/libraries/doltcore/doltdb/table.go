@@ -411,7 +411,7 @@ func (t *Table) HashOf() (hash.Hash, error) {
 }
 
 func (t *Table) GetRowByPKVals(ctx context.Context, pkVals row.TaggedValues, sch schema.Schema) (row.Row, bool, error) {
-	pkTuple := pkVals.NomsTupleForTags(t.vrw.Format(), sch.GetPKCols().Tags, true)
+	pkTuple := pkVals.NomsTupleForPKCols(t.vrw.Format(), sch.GetPKCols())
 	pkTupleVal, err := pkTuple.Value(ctx)
 
 	if err != nil {

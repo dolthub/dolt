@@ -17,6 +17,7 @@ package row
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -61,7 +62,15 @@ func (tvs TupleVals) Less(nbf *types.NomsBinFormat, other types.LesserValuable) 
 	return types.TupleKind < other.Kind(), nil
 }
 
-func (tt TaggedValues) NomsTupleForTags(nbf *types.NomsBinFormat, tags []uint64, encodeNulls bool) TupleVals {
+func (tt TaggedValues) NomsTupleForPKCols(nbf *types.NomsBinFormat, pkCols *schema.ColCollection) TupleVals {
+	return tt.nomsTupleForTags(nbf, pkCols.Tags, true)
+}
+
+func (tt TaggedValues) NomsTupleForNonPKCols(nbf *types.NomsBinFormat, nonPKCols *schema.ColCollection) TupleVals {
+	return tt.nomsTupleForTags(nbf, nonPKCols.SortedTags, false)
+}
+
+func (tt TaggedValues) nomsTupleForTags(nbf *types.NomsBinFormat, tags []uint64, encodeNulls bool) TupleVals {
 	numVals := 0
 	for _, tag := range tags {
 		val := tt[tag]
