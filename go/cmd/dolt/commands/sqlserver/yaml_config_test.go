@@ -23,25 +23,9 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-func strPtr(s string) *string {
-	return &s
-}
-
-func boolPtr(b bool) *bool {
-	return &b
-}
-
-func uint64Ptr(n uint64) *uint64 {
-	return &n
-}
-
-func intPtr(n int) *int {
-	return &n
-}
-
 func TestUnmarshall(t *testing.T) {
 	testStr := `
-log_level: debug
+log_level: info
 
 behavior:
     read_only: false
@@ -49,14 +33,14 @@ behavior:
 
 user:
     name: root
-    password: 1234
+    password: ""
 
 listener:
-    host: 0.0.0.0
+    host: localhost
     port: 3306
-    max_connections: 100
-    read_timeout_millis: 0
-    write_timeout_millis: 0
+    max_connections: 1
+    read_timeout_millis: 30000
+    write_timeout_millis: 30000
     
 databases:
     - name: irs_soi
@@ -65,32 +49,15 @@ databases:
       path: /Users/brian/datasets/noaa
 `
 
-	expected := YAMLConfig{
-		LogLevelStr: strPtr("debug"),
-		BehaviorConfig: BehaviorYAMLConfig{
-			ReadOnly:   boolPtr(false),
-			AutoCommit: boolPtr(true),
+	expected := serverConfigAsYAMLConfig(DefaultServerConfig())
+	expected.DatabaseConfig = []DatabaseYAMLConfig{
+		{
+			Name: "irs_soi",
+			Path: "./datasets/irs-soi",
 		},
-		UserConfig: UserYAMLConfig{
-			Name:     strPtr("root"),
-			Password: strPtr("1234"),
-		},
-		ListenerConfig: ListenerYAMLConfig{
-			HostStr:            strPtr("0.0.0.0"),
-			PortNumber:         intPtr(3306),
-			MaxConnections:     uint64Ptr(100),
-			ReadTimeoutMillis:  uint64Ptr(0),
-			WriteTimeoutMillis: uint64Ptr(0),
-		},
-		DatabaseConfig: []DatabaseYAMLConfig{
-			{
-				Name: "irs_soi",
-				Path: "./datasets/irs-soi",
-			},
-			{
-				Name: "noaa",
-				Path: "/Users/brian/datasets/noaa",
-			},
+		{
+			Name: "noaa",
+			Path: "/Users/brian/datasets/noaa",
 		},
 	}
 
