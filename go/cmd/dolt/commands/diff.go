@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -35,7 +36,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/fwt"
@@ -463,21 +463,21 @@ func tabularSchemaDiff(tableName string, tags []uint64, diffs map[uint64]diff.Sc
 		switch dff.DiffType {
 		case diff.SchDiffNone:
 			if dff.New.IsPartOfPK {
-				newPks = append(newPks, sql.QuoteIdentifier(dff.New.Name))
-				oldPks = append(oldPks, sql.QuoteIdentifier(dff.Old.Name))
+				newPks = append(newPks, sqlfmt.QuoteIdentifier(dff.New.Name))
+				oldPks = append(oldPks, sqlfmt.QuoteIdentifier(dff.Old.Name))
 			}
-			cli.Println(sql.FmtCol(4, 0, 0, *dff.New))
+			cli.Println(sqlfmt.FmtCol(4, 0, 0, *dff.New))
 		case diff.SchDiffColAdded:
 			if dff.New.IsPartOfPK {
-				newPks = append(newPks, sql.QuoteIdentifier(dff.New.Name))
+				newPks = append(newPks, sqlfmt.QuoteIdentifier(dff.New.Name))
 			}
-			cli.Println(color.GreenString("+ " + sql.FmtCol(2, 0, 0, *dff.New)))
+			cli.Println(color.GreenString("+ " + sqlfmt.FmtCol(2, 0, 0, *dff.New)))
 		case diff.SchDiffColRemoved:
 			// removed from sch2
 			if dff.Old.IsPartOfPK {
-				oldPks = append(oldPks, sql.QuoteIdentifier(dff.Old.Name))
+				oldPks = append(oldPks, sqlfmt.QuoteIdentifier(dff.Old.Name))
 			}
-			cli.Println(color.RedString("- " + sql.FmtCol(2, 0, 0, *dff.Old)))
+			cli.Println(color.RedString("- " + sqlfmt.FmtCol(2, 0, 0, *dff.Old)))
 		case diff.SchDiffColModified:
 			// changed in sch2
 			oldSqlType := dff.Old.TypeInfo.ToSqlType()
@@ -503,14 +503,14 @@ func tabularSchemaDiff(tableName string, tags []uint64, diffs map[uint64]diff.Sc
 
 			if pk0 != pk1 {
 				if pk0 && !pk1 {
-					oldPks = append(oldPks, sql.QuoteIdentifier(n0))
+					oldPks = append(oldPks, sqlfmt.QuoteIdentifier(n0))
 				} else {
-					newPks = append(newPks, sql.QuoteIdentifier(n1))
+					newPks = append(newPks, sqlfmt.QuoteIdentifier(n1))
 				}
-				cli.Println(sql.FmtCol(4, 0, 0, *dff.New))
+				cli.Println(sqlfmt.FmtCol(4, 0, 0, *dff.New))
 			} else {
-				cli.Println("< " + sql.FmtColWithNameAndType(2, nameLen, typeLen, n0, t0, *dff.Old))
-				cli.Println("> " + sql.FmtColWithNameAndType(2, nameLen, typeLen, n1, t1, *dff.New))
+				cli.Println("< " + sqlfmt.FmtColWithNameAndType(2, nameLen, typeLen, n0, t0, *dff.Old))
+				cli.Println("> " + sqlfmt.FmtColWithNameAndType(2, nameLen, typeLen, n1, t1, *dff.New))
 			}
 		}
 	}
@@ -519,10 +519,10 @@ func tabularSchemaDiff(tableName string, tags []uint64, diffs map[uint64]diff.Sc
 	newPKStr := strings.Join(newPks, ", ")
 
 	if oldPKStr != newPKStr {
-		cli.Print("< " + color.YellowString(sql.FmtColPrimaryKey(2, oldPKStr)))
-		cli.Print("> " + color.YellowString(sql.FmtColPrimaryKey(2, newPKStr)))
+		cli.Print("< " + color.YellowString(sqlfmt.FmtColPrimaryKey(2, oldPKStr)))
+		cli.Print("> " + color.YellowString(sqlfmt.FmtColPrimaryKey(2, newPKStr)))
 	} else {
-		cli.Print(sql.FmtColPrimaryKey(4, oldPKStr))
+		cli.Print(sqlfmt.FmtColPrimaryKey(4, oldPKStr))
 	}
 
 	cli.Println("  );")
@@ -536,11 +536,11 @@ func sqlSchemaDiff(tableName string, tags []uint64, diffs map[uint64]diff.Schema
 		switch dff.DiffType {
 		case diff.SchDiffNone:
 		case diff.SchDiffColAdded:
-			cli.Println(sql.AlterTableAddColStmt(tableName, sql.FmtCol(0, 0, 0, *dff.New)))
+			cli.Println(sqlfmt.AlterTableAddColStmt(tableName, sqlfmt.FmtCol(0, 0, 0, *dff.New)))
 		case diff.SchDiffColRemoved:
-			cli.Print(sql.AlterTableDropColStmt(tableName, dff.Old.Name))
+			cli.Print(sqlfmt.AlterTableDropColStmt(tableName, dff.Old.Name))
 		case diff.SchDiffColModified:
-			cli.Print(sql.AlterTableRenameColStmt(tableName, dff.Old.Name, dff.New.Name))
+			cli.Print(sqlfmt.AlterTableRenameColStmt(tableName, dff.Old.Name, dff.New.Name))
 		}
 	}
 }

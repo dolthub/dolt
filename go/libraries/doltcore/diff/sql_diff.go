@@ -24,7 +24,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/nullprinter"
@@ -83,7 +83,7 @@ func (sds *SQLDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) 
 		if dt, convertedOK := prop.(DiffChType); convertedOK {
 			switch dt {
 			case DiffAdded:
-				stmt, err := sql.RowAsInsertStmt(r, sds.tableName, sds.sch)
+				stmt, err := sqlfmt.RowAsInsertStmt(r, sds.tableName, sds.sch)
 
 				if err != nil {
 					return err
@@ -91,7 +91,7 @@ func (sds *SQLDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) 
 
 				return iohelp.WriteLine(sds.wr, stmt)
 			case DiffRemoved:
-				stmt, err := sql.RowAsDeleteStmt(r, sds.tableName, sds.sch)
+				stmt, err := sqlfmt.RowAsDeleteStmt(r, sds.tableName, sds.sch)
 
 				if err != nil {
 					return err
@@ -102,7 +102,7 @@ func (sds *SQLDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) 
 				return nil
 			case DiffModifiedNew:
 				// TODO: minimize update statement to modified rows
-				stmt, err := sql.RowAsUpdateStmt(r, sds.tableName, sds.sch)
+				stmt, err := sqlfmt.RowAsUpdateStmt(r, sds.tableName, sds.sch)
 
 				if err != nil {
 					return err
@@ -120,7 +120,7 @@ func (sds *SQLDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) 
 
 // ProcRowWithProps satisfies pipeline.SinkFunc; it writes rows as SQL statements.
 func (sds *SQLDiffSink) ProcRowForExport(r row.Row, _ pipeline.ReadableMap) error {
-	stmt, err := sql.RowAsInsertStmt(r, sds.tableName, sds.sch)
+	stmt, err := sqlfmt.RowAsInsertStmt(r, sds.tableName, sds.sch)
 
 	if err != nil {
 		return err
@@ -158,13 +158,13 @@ func PrintSqlTableDiffs(ctx context.Context, r1, r2 *doltdb.RootValue, wr io.Wri
 	}
 
 	for k, v := range renames {
-		if err = iohelp.WriteLine(wr, sql.RenameTableStmt(k, v)); err != nil {
+		if err = iohelp.WriteLine(wr, sqlfmt.RenameTableStmt(k, v)); err != nil {
 			return err
 		}
 	}
 
 	for _, tblName := range drops {
-		if err = iohelp.WriteLine(wr, sql.DropTableStmt(tblName)); err != nil {
+		if err = iohelp.WriteLine(wr, sqlfmt.DropTableStmt(tblName)); err != nil {
 			return err
 		}
 	}
@@ -179,7 +179,7 @@ func PrintSqlTableDiffs(ctx context.Context, r1, r2 *doltdb.RootValue, wr io.Wri
 			if sch, err := tbl.GetSchema(ctx); err != nil {
 				return errors.New("error unable to get schema for table " + tblName)
 			} else {
-				stmt := sql.SchemaAsCreateStmt(tblName, sch)
+				stmt := sqlfmt.SchemaAsCreateStmt(tblName, sch)
 				if err = iohelp.WriteLine(wr, stmt); err != nil {
 					return err
 				}

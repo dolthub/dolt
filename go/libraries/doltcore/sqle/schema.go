@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"strconv"
 	"strings"
 
@@ -25,7 +26,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
-	dsql "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -169,9 +169,9 @@ func extractTag(col *sql.Column) uint64 {
 		return schema.InvalidTag
 	}
 
-	i := strings.Index(col.Comment, dsql.TagCommentPrefix)
+	i := strings.Index(col.Comment, sqlfmt.TagCommentPrefix)
 	if i >= 0 {
-		startIdx := i + len(dsql.TagCommentPrefix)
+		startIdx := i + len(sqlfmt.TagCommentPrefix)
 		tag, err := strconv.ParseUint(col.Comment[startIdx:], 10, 64)
 		if err != nil {
 			return schema.InvalidTag

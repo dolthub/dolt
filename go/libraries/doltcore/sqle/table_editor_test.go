@@ -178,7 +178,7 @@ func TestTableEditor(t *testing.T) {
 			root, err = db.GetRoot(ctx)
 			require.NoError(t, err)
 
-			actualRows, _, err := executeSelect(context.Background(), dEnv, CompressSchema(PeopleTestSchema), root, test.selectQuery)
+			actualRows, _, err := executeSelect(context.Background(), dEnv, root, test.selectQuery)
 			require.NoError(t, err)
 			assert.Equal(t, test.expectedRows, actualRows)
 		})
@@ -186,7 +186,7 @@ func TestTableEditor(t *testing.T) {
 }
 
 func r(row row.Row, sch schema.Schema) sql.Row {
-	sqlRow, err := doltRowToSqlRow(row, sch)
+	sqlRow, err := DoltRowToSqlRow(row, sch)
 	if err != nil {
 		panic(err)
 	}

@@ -1,22 +1,26 @@
-// Copyright 2019 Liquidata, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * // Copyright 2020 Liquidata, Inc.
+ * //
+ * // Licensed under the Apache License, Version 2.0 (the "License");
+ * // you may not use this file except in compliance with the License.
+ * // You may obtain a copy of the License at
+ * //
+ * //     http://www.apache.org/licenses/LICENSE-2.0
+ * //
+ * // Unless required by applicable law or agreed to in writing, software
+ * // distributed under the License is distributed on an "AS IS" BASIS,
+ * // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * // See the License for the specific language governing permissions and
+ * // limitations under the License.
+ */
 
-package sqltestutil
+package sqle
 
 import (
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/src-d/go-mysql-server/sql"
+
+	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 )
 
 // Structure for a test of a insert query
@@ -30,7 +34,7 @@ type DeleteTest struct {
 	// The schema of the result of the query, nil if an error is expected
 	ExpectedSchema schema.Schema
 	// The rows this query should return, nil if an error is expected
-	ExpectedRows []row.Row
+	ExpectedRows []sql.Row
 	// An expected error string
 	ExpectedErr string
 	// Setup logic to run before executing this test, after initial tables have been created and populated
@@ -46,98 +50,98 @@ var BasicDeleteTests = []DeleteTest{
 		Name:           "delete everything",
 		DeleteQuery:    "delete from people",
 		SelectQuery:    "select * from people",
-		ExpectedRows:   Rs(),
+		ExpectedRows:   nil,
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "delete where id equals",
 		DeleteQuery:    "delete from people where id = 2",
 		SelectQuery:    "select * from people",
-		ExpectedRows:   CompressRows(PeopleTestSchema, Homer, Marge, Lisa, Moe, Barney),
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Homer, Marge, Lisa, Moe, Barney),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "delete where id less than",
 		DeleteQuery:    "delete from people where id < 3",
 		SelectQuery:    "select * from people",
-		ExpectedRows:   CompressRows(PeopleTestSchema, Lisa, Moe, Barney),
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Lisa, Moe, Barney),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "delete where id greater than",
 		DeleteQuery:    "delete from people where id > 3",
 		SelectQuery:    "select * from people",
-		ExpectedRows:   CompressRows(PeopleTestSchema, Homer, Marge, Bart, Lisa),
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Homer, Marge, Bart, Lisa),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "delete where id less than or equal",
 		DeleteQuery:    "delete from people where id <= 3",
 		SelectQuery:    "select * from people",
-		ExpectedRows:   CompressRows(PeopleTestSchema, Moe, Barney),
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Moe, Barney),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "delete where id greater than or equal",
 		DeleteQuery:    "delete from people where id >= 3",
 		SelectQuery:    "select * from people",
-		ExpectedRows:   CompressRows(PeopleTestSchema, Homer, Marge, Bart),
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Homer, Marge, Bart),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "delete where id equals nothing",
 		DeleteQuery:    "delete from people where id = 9999",
 		SelectQuery:    "select * from people",
-		ExpectedRows:   CompressRows(PeopleTestSchema, Homer, Marge, Bart, Lisa, Moe, Barney),
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Homer, Marge, Bart, Lisa, Moe, Barney),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "delete where last_name matches some =",
 		DeleteQuery:    "delete from people where last_name = 'Simpson'",
 		SelectQuery:    "select * from people",
-		ExpectedRows:   CompressRows(PeopleTestSchema, Moe, Barney),
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Moe, Barney),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "delete where last_name matches some <>",
 		DeleteQuery:    "delete from people where last_name <> 'Simpson'",
 		SelectQuery:    "select * from people",
-		ExpectedRows:   CompressRows(PeopleTestSchema, Homer, Marge, Bart, Lisa),
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Homer, Marge, Bart, Lisa),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "delete where last_name matches some like",
 		DeleteQuery:    "delete from people where last_name like '%pson'",
 		SelectQuery:    "select * from people",
-		ExpectedRows:   CompressRows(PeopleTestSchema, Moe, Barney),
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Moe, Barney),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "delete order by",
 		DeleteQuery:    "delete from people order by id",
 		SelectQuery:    "select * from people",
-		ExpectedRows:   Rs(),
+		ExpectedRows:   nil,
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "delete order by asc limit",
 		DeleteQuery:    "delete from people order by id asc limit 3",
 		SelectQuery:    "select * from people",
-		ExpectedRows:   CompressRows(PeopleTestSchema, Lisa, Moe, Barney),
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Lisa, Moe, Barney),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "delete order by desc limit",
 		DeleteQuery:    "delete from people order by id desc limit 3",
 		SelectQuery:    "select * from people",
-		ExpectedRows:   CompressRows(PeopleTestSchema, Homer, Marge, Bart),
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Homer, Marge, Bart),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "delete order by desc limit",
 		DeleteQuery:    "delete from people order by id desc limit 3 offset 1",
 		SelectQuery:    "select * from people",
-		ExpectedRows:   CompressRows(PeopleTestSchema, Homer, Marge, Barney),
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Homer, Marge, Barney),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{

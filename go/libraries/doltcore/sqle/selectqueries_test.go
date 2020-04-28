@@ -1,18 +1,20 @@
-// Copyright 2019 Liquidata, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * // Copyright 2020 Liquidata, Inc.
+ * //
+ * // Licensed under the Apache License, Version 2.0 (the "License");
+ * // you may not use this file except in compliance with the License.
+ * // You may obtain a copy of the License at
+ * //
+ * //     http://www.apache.org/licenses/LICENSE-2.0
+ * //
+ * // Unless required by applicable law or agreed to in writing, software
+ * // distributed under the License is distributed on an "AS IS" BASIS,
+ * // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * // See the License for the specific language governing permissions and
+ * // limitations under the License.
+ */
 
-package sqltestutil
+package sqle
 
 import (
 	"testing"
@@ -25,6 +27,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/store/types"
+
+	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 )
 
 func mustRow(r row.Row, err error) row.Row {
@@ -755,36 +759,36 @@ var SelectDiffTests = []SelectTest{
 		Name:  "select * from diff system table",
 		Query: "select * from dolt_diff_test_table",
 		ExpectedRows: []row.Row{
-			mustRow(row.New(types.Format_7_18, diffSchema, row.TaggedValues{0: types.Int(6), 1: types.String("Katie"), 2: types.String("McCulloch"), 13: types.String("current"), 6: types.String("HEAD"), 14: types.String("added")})),
+			mustRow(row.New(types.Format_7_18, DiffSchema, row.TaggedValues{0: types.Int(6), 1: types.String("Katie"), 2: types.String("McCulloch"), 13: types.String("current"), 6: types.String("HEAD"), 14: types.String("added")})),
 		},
-		ExpectedSchema: diffSchema,
+		ExpectedSchema: DiffSchema,
 	},
 	{
 		Name:  "select * from diff system table with from commit",
 		Query: "select * from dolt_diff_test_table where from_commit = 'add-age'",
 		ExpectedRows: []row.Row{
-			mustRow(row.New(types.Format_7_18, diffSchema, row.TaggedValues{7: types.Int(0), 8: types.String("Aaron"), 9: types.String("Son"), 11: types.Int(35), 0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St"), 5: types.Uint(35), 13: types.String("add-age"), 6: types.String("HEAD"), 14: types.String("modified")})),
-			mustRow(row.New(types.Format_7_18, diffSchema, row.TaggedValues{7: types.Int(1), 8: types.String("Brian"), 9: types.String("Hendriks"), 11: types.Int(38), 0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln"), 5: types.Uint(38), 13: types.String("add-age"), 6: types.String("HEAD"), 14: types.String("modified")})),
-			mustRow(row.New(types.Format_7_18, diffSchema, row.TaggedValues{7: types.Int(2), 8: types.String("Tim"), 9: types.String("Sehn"), 11: types.Int(37), 0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct"), 5: types.Uint(37), 13: types.String("add-age"), 6: types.String("HEAD"), 14: types.String("modified")})),
-			mustRow(row.New(types.Format_7_18, diffSchema, row.TaggedValues{7: types.Int(3), 8: types.String("Zach"), 9: types.String("Musgrave"), 11: types.Int(37), 0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave"), 3: types.String("-1 Imaginary Wy"), 5: types.Uint(37), 13: types.String("add-age"), 6: types.String("HEAD"), 14: types.String("modified")})),
-			mustRow(row.New(types.Format_7_18, diffSchema, row.TaggedValues{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele"), 3: types.NullValue, 13: types.String("add-age"), 6: types.String("HEAD"), 14: types.String("added")})),
-			mustRow(row.New(types.Format_7_18, diffSchema, row.TaggedValues{0: types.Int(5), 1: types.String("Daylon"), 2: types.String("Wilkins"), 3: types.NullValue, 13: types.String("add-age"), 6: types.String("HEAD"), 14: types.String("added")})),
-			mustRow(row.New(types.Format_7_18, diffSchema, row.TaggedValues{0: types.Int(6), 1: types.String("Katie"), 2: types.String("McCulloch"), 13: types.String("add-age"), 6: types.String("HEAD"), 14: types.String("added")})),
+			mustRow(row.New(types.Format_7_18, DiffSchema, row.TaggedValues{7: types.Int(0), 8: types.String("Aaron"), 9: types.String("Son"), 11: types.Int(35), 0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St"), 5: types.Uint(35), 13: types.String("add-age"), 6: types.String("HEAD"), 14: types.String("modified")})),
+			mustRow(row.New(types.Format_7_18, DiffSchema, row.TaggedValues{7: types.Int(1), 8: types.String("Brian"), 9: types.String("Hendriks"), 11: types.Int(38), 0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln"), 5: types.Uint(38), 13: types.String("add-age"), 6: types.String("HEAD"), 14: types.String("modified")})),
+			mustRow(row.New(types.Format_7_18, DiffSchema, row.TaggedValues{7: types.Int(2), 8: types.String("Tim"), 9: types.String("Sehn"), 11: types.Int(37), 0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct"), 5: types.Uint(37), 13: types.String("add-age"), 6: types.String("HEAD"), 14: types.String("modified")})),
+			mustRow(row.New(types.Format_7_18, DiffSchema, row.TaggedValues{7: types.Int(3), 8: types.String("Zach"), 9: types.String("Musgrave"), 11: types.Int(37), 0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave"), 3: types.String("-1 Imaginary Wy"), 5: types.Uint(37), 13: types.String("add-age"), 6: types.String("HEAD"), 14: types.String("modified")})),
+			mustRow(row.New(types.Format_7_18, DiffSchema, row.TaggedValues{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele"), 3: types.NullValue, 13: types.String("add-age"), 6: types.String("HEAD"), 14: types.String("added")})),
+			mustRow(row.New(types.Format_7_18, DiffSchema, row.TaggedValues{0: types.Int(5), 1: types.String("Daylon"), 2: types.String("Wilkins"), 3: types.NullValue, 13: types.String("add-age"), 6: types.String("HEAD"), 14: types.String("added")})),
+			mustRow(row.New(types.Format_7_18, DiffSchema, row.TaggedValues{0: types.Int(6), 1: types.String("Katie"), 2: types.String("McCulloch"), 13: types.String("add-age"), 6: types.String("HEAD"), 14: types.String("added")})),
 		},
-		ExpectedSchema: diffSchema,
+		ExpectedSchema: DiffSchema,
 	},
 	{
 		Name:  "select * from diff system table with from and to commit and test insensitive name",
 		Query: "select * from dolt_diff_TeSt_TaBlE where from_commit = 'add-age' and to_commit = 'master'",
 		ExpectedRows: []row.Row{
-			mustRow(row.New(types.Format_7_18, diffSchema, row.TaggedValues{7: types.Int(0), 8: types.String("Aaron"), 9: types.String("Son"), 11: types.Int(35), 0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St"), 5: types.Uint(35), 13: types.String("add-age"), 6: types.String("master"), 14: types.String("modified")})),
-			mustRow(row.New(types.Format_7_18, diffSchema, row.TaggedValues{7: types.Int(1), 8: types.String("Brian"), 9: types.String("Hendriks"), 11: types.Int(38), 0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln"), 5: types.Uint(38), 13: types.String("add-age"), 6: types.String("master"), 14: types.String("modified")})),
-			mustRow(row.New(types.Format_7_18, diffSchema, row.TaggedValues{7: types.Int(2), 8: types.String("Tim"), 9: types.String("Sehn"), 11: types.Int(37), 0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct"), 5: types.Uint(37), 13: types.String("add-age"), 6: types.String("master"), 14: types.String("modified")})),
-			mustRow(row.New(types.Format_7_18, diffSchema, row.TaggedValues{7: types.Int(3), 8: types.String("Zach"), 9: types.String("Musgrave"), 11: types.Int(37), 0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave"), 3: types.String("-1 Imaginary Wy"), 5: types.Uint(37), 13: types.String("add-age"), 6: types.String("master"), 14: types.String("modified")})),
-			mustRow(row.New(types.Format_7_18, diffSchema, row.TaggedValues{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele"), 3: types.NullValue, 13: types.String("add-age"), 6: types.String("master"), 14: types.String("added")})),
-			mustRow(row.New(types.Format_7_18, diffSchema, row.TaggedValues{0: types.Int(5), 1: types.String("Daylon"), 2: types.String("Wilkins"), 3: types.NullValue, 13: types.String("add-age"), 6: types.String("master"), 14: types.String("added")})),
+			mustRow(row.New(types.Format_7_18, DiffSchema, row.TaggedValues{7: types.Int(0), 8: types.String("Aaron"), 9: types.String("Son"), 11: types.Int(35), 0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St"), 5: types.Uint(35), 13: types.String("add-age"), 6: types.String("master"), 14: types.String("modified")})),
+			mustRow(row.New(types.Format_7_18, DiffSchema, row.TaggedValues{7: types.Int(1), 8: types.String("Brian"), 9: types.String("Hendriks"), 11: types.Int(38), 0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln"), 5: types.Uint(38), 13: types.String("add-age"), 6: types.String("master"), 14: types.String("modified")})),
+			mustRow(row.New(types.Format_7_18, DiffSchema, row.TaggedValues{7: types.Int(2), 8: types.String("Tim"), 9: types.String("Sehn"), 11: types.Int(37), 0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct"), 5: types.Uint(37), 13: types.String("add-age"), 6: types.String("master"), 14: types.String("modified")})),
+			mustRow(row.New(types.Format_7_18, DiffSchema, row.TaggedValues{7: types.Int(3), 8: types.String("Zach"), 9: types.String("Musgrave"), 11: types.Int(37), 0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave"), 3: types.String("-1 Imaginary Wy"), 5: types.Uint(37), 13: types.String("add-age"), 6: types.String("master"), 14: types.String("modified")})),
+			mustRow(row.New(types.Format_7_18, DiffSchema, row.TaggedValues{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele"), 3: types.NullValue, 13: types.String("add-age"), 6: types.String("master"), 14: types.String("added")})),
+			mustRow(row.New(types.Format_7_18, DiffSchema, row.TaggedValues{0: types.Int(5), 1: types.String("Daylon"), 2: types.String("Wilkins"), 3: types.NullValue, 13: types.String("add-age"), 6: types.String("master"), 14: types.String("added")})),
 		},
-		ExpectedSchema: diffSchema,
+		ExpectedSchema: DiffSchema,
 	},
 }
 

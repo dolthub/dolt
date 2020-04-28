@@ -23,7 +23,6 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -44,13 +43,12 @@ func TestViews(t *testing.T) {
 	root, err = ExecuteSql(dEnv, root, "create view plus1 as select a + 1 from test")
 	require.NoError(t, err)
 
-	expectedSchema := NewResultSetSchema("a", types.IntKind)
 	expectedRows := []row.Row{
 		NewResultSetRow(types.Int(2)),
 		NewResultSetRow(types.Int(3)),
 		NewResultSetRow(types.Int(4)),
 	}
-	rows, _, err := executeSelect(context.Background(), dEnv, expectedSchema, root, "select * from plus1")
+	rows, _, err := executeSelect(context.Background(), dEnv, root, "select * from plus1")
 	require.NoError(t, err)
 	assert.Equal(t, expectedRows, rows)
 

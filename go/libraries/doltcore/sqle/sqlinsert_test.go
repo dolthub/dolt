@@ -25,8 +25,9 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
+
+	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 )
 
 // Set to the name of a single test to run just that test, useful for debugging
@@ -135,7 +136,7 @@ func testInsertQuery(t *testing.T, test InsertTest) {
 		require.NoError(t, err)
 	}
 
-	actualRows, sch, err := executeSelect(context.Background(), dEnv, test.ExpectedSchema, root, test.SelectQuery)
+	actualRows, sch, err := executeSelect(context.Background(), dEnv, root, test.SelectQuery)
 	require.NoError(t, err)
 
 	assert.Equal(t, test.ExpectedRows, actualRows)

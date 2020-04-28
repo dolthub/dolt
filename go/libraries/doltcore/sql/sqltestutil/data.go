@@ -1,16 +1,18 @@
-// Copyright 2019 Liquidata, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/*
+ * // Copyright 2020 Liquidata, Inc.
+ * //
+ * // Licensed under the Apache License, Version 2.0 (the "License");
+ * // you may not use this file except in compliance with the License.
+ * // You may obtain a copy of the License at
+ * //
+ * //     http://www.apache.org/licenses/LICENSE-2.0
+ * //
+ * // Unless required by applicable law or agreed to in writing, software
+ * // distributed under the License is distributed on an "AS IS" BASIS,
+ * // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * // See the License for the specific language governing permissions and
+ * // limitations under the License.
+ */
 
 package sqltestutil
 
@@ -65,12 +67,12 @@ const (
 )
 
 const (
-	homerId = iota
-	margeId
-	bartId
-	lisaId
-	moeId
-	barneyId
+	HomerId = iota
+	MargeId
+	BartId
+	LisaId
+	MoeId
+	BarneyId
 )
 
 var PeopleTestSchema = createPeopleTestSchema()
@@ -149,7 +151,7 @@ func newEpsRow(id int, name string, airdate string, rating float64) row.Row {
 	vals := row.TaggedValues{
 		EpisodeIdTag: types.Int(id),
 		EpNameTag:    types.String(name),
-		EpAirDateTag: types.Timestamp(datetimeStrToTimestamp(airdate)),
+		EpAirDateTag: types.Timestamp(DatetimeStrToTimestamp(airdate)),
 		EpRatingTag:  types.Float(rating),
 	}
 
@@ -162,7 +164,7 @@ func newEpsRow(id int, name string, airdate string, rating float64) row.Row {
 	return r
 }
 
-func datetimeStrToTimestamp(datetime string) time.Time {
+func DatetimeStrToTimestamp(datetime string) time.Time {
 	time, err := time.Parse("2006-01-02 15:04:05", datetime)
 	if err != nil {
 		panic(fmt.Sprintf("unable to parse datetime %s", datetime))
@@ -209,12 +211,12 @@ func NewPeopleRowWithOptionalFields(id int, first, last string, isMarried bool, 
 }
 
 // 6 characters
-var Homer = NewPeopleRow(homerId, "Homer", "Simpson", true, 40, 8.5)
-var Marge = NewPeopleRowWithOptionalFields(margeId, "Marge", "Simpson", true, 38, 8, uuid.MustParse("00000000-0000-0000-0000-000000000001"), 111)
-var Bart = NewPeopleRowWithOptionalFields(bartId, "Bart", "Simpson", false, 10, 9, uuid.MustParse("00000000-0000-0000-0000-000000000002"), 222)
-var Lisa = NewPeopleRowWithOptionalFields(lisaId, "Lisa", "Simpson", false, 8, 10, uuid.MustParse("00000000-0000-0000-0000-000000000003"), 333)
-var Moe = NewPeopleRowWithOptionalFields(moeId, "Moe", "Szyslak", false, 48, 6.5, uuid.MustParse("00000000-0000-0000-0000-000000000004"), 444)
-var Barney = NewPeopleRowWithOptionalFields(barneyId, "Barney", "Gumble", false, 40, 4, uuid.MustParse("00000000-0000-0000-0000-000000000005"), 555)
+var Homer = NewPeopleRow(HomerId, "Homer", "Simpson", true, 40, 8.5)
+var Marge = NewPeopleRowWithOptionalFields(MargeId, "Marge", "Simpson", true, 38, 8, uuid.MustParse("00000000-0000-0000-0000-000000000001"), 111)
+var Bart = NewPeopleRowWithOptionalFields(BartId, "Bart", "Simpson", false, 10, 9, uuid.MustParse("00000000-0000-0000-0000-000000000002"), 222)
+var Lisa = NewPeopleRowWithOptionalFields(LisaId, "Lisa", "Simpson", false, 8, 10, uuid.MustParse("00000000-0000-0000-0000-000000000003"), 333)
+var Moe = NewPeopleRowWithOptionalFields(MoeId, "Moe", "Szyslak", false, 48, 6.5, uuid.MustParse("00000000-0000-0000-0000-000000000004"), 444)
+var Barney = NewPeopleRowWithOptionalFields(BarneyId, "Barney", "Gumble", false, 40, 4, uuid.MustParse("00000000-0000-0000-0000-000000000005"), 555)
 var AllPeopleRows = Rs(Homer, Marge, Bart, Lisa, Moe, Barney)
 
 // Actually the first 4 episodes of the show
@@ -225,16 +227,16 @@ var Ep4 = newEpsRow(4, "There's No Disgrace Like Home", "1990-01-29 03:00:00", 8
 var AllEpsRows = Rs(Ep1, Ep2, Ep3, Ep4)
 
 // These are made up, not the actual show data
-var app1 = newAppsRow(homerId, 1, "Homer is great in this one")
-var app2 = newAppsRow(margeId, 1, "Marge is here too")
-var app3 = newAppsRow(homerId, 2, "Homer is great in this one too")
-var app4 = newAppsRow(bartId, 2, "This episode is named after Bart")
-var app5 = newAppsRow(lisaId, 2, "Lisa is here too")
-var app6 = newAppsRow(moeId, 2, "I think there's a prank call scene")
-var app7 = newAppsRow(homerId, 3, "Homer is in every episode")
-var app8 = newAppsRow(margeId, 3, "Marge shows up a lot too")
-var app9 = newAppsRow(lisaId, 3, "Lisa is the best Simpson")
-var app10 = newAppsRow(barneyId, 3, "I'm making this all up")
+var app1 = newAppsRow(HomerId, 1, "Homer is great in this one")
+var app2 = newAppsRow(MargeId, 1, "Marge is here too")
+var app3 = newAppsRow(HomerId, 2, "Homer is great in this one too")
+var app4 = newAppsRow(BartId, 2, "This episode is named after Bart")
+var app5 = newAppsRow(LisaId, 2, "Lisa is here too")
+var app6 = newAppsRow(MoeId, 2, "I think there's a prank call scene")
+var app7 = newAppsRow(HomerId, 3, "Homer is in every episode")
+var app8 = newAppsRow(MargeId, 3, "Marge shows up a lot too")
+var app9 = newAppsRow(LisaId, 3, "Lisa is the best Simpson")
+var app10 = newAppsRow(BarneyId, 3, "I'm making this all up")
 
 // nobody in episode 4, that one was terrible
 // Unlike the other tables, you can't count on the order of these rows matching the insertion order.
@@ -373,7 +375,7 @@ var addrColTag3TypeStr = schema.NewColumn("addr", 3, types.StringKind, false)
 var ageColTag4TypeInt = schema.NewColumn("age", 4, types.IntKind, false)
 var ageColTag5TypeUint = schema.NewColumn("age", 5, types.UintKind, false)
 
-var diffSchema = dtestutils.MustSchema(
+var DiffSchema = dtestutils.MustSchema(
 	schema.NewColumn("to_id", 0, types.IntKind, false),
 	schema.NewColumn("to_first_name", 1, types.StringKind, false),
 	schema.NewColumn("to_last_name", 2, types.StringKind, false),
@@ -391,7 +393,7 @@ var diffSchema = dtestutils.MustSchema(
 	schema.NewColumn("diff_type", 14, types.StringKind, false),
 )
 
-const tblName = "test_table"
+const TableWithHistoryName = "test_table"
 
 var InitialHistSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr)
 var AddAddrAt3HistSch = dtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr)
@@ -406,7 +408,7 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 			Branch:    "seed",
 			CommitMsg: "Seeding with initial user data",
 			Updates: map[string]envtestutils.TableUpdate{
-				tblName: {
+				TableWithHistoryName: {
 					NewSch: InitialHistSch,
 					NewRowData: dtestutils.MustRowData(t, ctx, vrw, InitialHistSch, []row.TaggedValues{
 						{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son")},
@@ -420,7 +422,7 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 					Branch:    "add-age",
 					CommitMsg: "Adding int age to users with tag 3",
 					Updates: map[string]envtestutils.TableUpdate{
-						tblName: {
+						TableWithHistoryName: {
 							NewSch: AddAgeAt4HistSch,
 							NewRowData: dtestutils.MustRowData(t, ctx, vrw, AddAgeAt4HistSch, []row.TaggedValues{
 								{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 4: types.Int(35)},
@@ -436,7 +438,7 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 					Branch:    "master",
 					CommitMsg: "Adding string address to users with tag 3",
 					Updates: map[string]envtestutils.TableUpdate{
-						tblName: {
+						TableWithHistoryName: {
 							NewSch: AddAddrAt3HistSch,
 							NewRowData: dtestutils.MustRowData(t, ctx, vrw, AddAddrAt3HistSch, []row.TaggedValues{
 								{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St")},
@@ -452,7 +454,7 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 							Branch:    "master",
 							CommitMsg: "Re-add age as a uint with tag 4",
 							Updates: map[string]envtestutils.TableUpdate{
-								tblName: {
+								TableWithHistoryName: {
 									NewSch: ReaddAgeAt5HistSch,
 									NewRowData: dtestutils.MustRowData(t, ctx, vrw, ReaddAgeAt5HistSch, []row.TaggedValues{
 										{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St"), 5: types.Uint(35)},
@@ -468,18 +470,6 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 						},
 					},
 				},
-			},
-		},
-	}
-}
-
-func CreateWorkingRootUpdate() map[string]envtestutils.TableUpdate {
-	return map[string]envtestutils.TableUpdate{
-		tblName: {
-			RowUpdates: []row.Row{
-				mustRow(row.New(types.Format_Default, ReaddAgeAt5HistSch, row.TaggedValues{
-					0: types.Int(6), 1: types.String("Katie"), 2: types.String("McCulloch"),
-				})),
 			},
 		},
 	}

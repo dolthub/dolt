@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"io"
 	"strings"
 	"sync"
@@ -33,7 +34,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
-	dsql "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
@@ -765,7 +765,7 @@ func RegisterSchemaFragments(ctx *sql.Context, db Database, root *doltdb.RootVal
 		if r[0] == "view" {
 			name := r[1].(string)
 			definition := r[2].(string)
-			cv, err := parse.Parse(ctx, fmt.Sprintf("create view %s as %s", dsql.QuoteIdentifier(name), definition))
+			cv, err := parse.Parse(ctx, fmt.Sprintf("create view %s as %s", sqlfmt.QuoteIdentifier(name), definition))
 			if err != nil {
 				parseErrors = append(parseErrors, err)
 			} else {
