@@ -387,7 +387,7 @@ func TestInsert(t *testing.T) {
 					table, _, err := root.GetTable(context.Background(), tableName)
 					assert.NoError(t, err)
 					taggedVals := row.TaggedValues{dtestutils.IdTag: types.UUID(expectedid)}
-					key := taggedVals.NomsTupleForTags(types.Format_7_18, []uint64{dtestutils.IdTag}, true)
+					key := taggedVals.NomsTupleForPKCols(types.Format_7_18, dtestutils.TypedSchema.GetPKCols())
 					kv, err := key.Value(context.Background())
 					assert.NoError(t, err)
 					_, ok, err := table.GetRow(context.Background(), kv.(types.Tuple), dtestutils.TypedSchema)
@@ -471,7 +471,7 @@ func TestUpdate(t *testing.T) {
 					table, _, err := root.GetTable(context.Background(), tableName)
 					assert.NoError(t, err)
 					taggedVals := row.TaggedValues{dtestutils.IdTag: types.UUID(expectedid)}
-					key := taggedVals.NomsTupleForTags(types.Format_7_18, []uint64{dtestutils.IdTag}, true)
+					key := taggedVals.NomsTupleForPKCols(types.Format_7_18, dtestutils.TypedSchema.GetPKCols())
 					kv, err := key.Value(ctx)
 					assert.NoError(t, err)
 					row, ok, err := table.GetRow(ctx, kv.(types.Tuple), dtestutils.TypedSchema)
@@ -550,7 +550,7 @@ func TestDelete(t *testing.T) {
 					table, _, err := root.GetTable(context.Background(), tableName)
 					assert.NoError(t, err)
 					taggedVals := row.TaggedValues{dtestutils.IdTag: types.UUID(expectedid)}
-					key := taggedVals.NomsTupleForTags(types.Format_7_18, []uint64{dtestutils.IdTag}, true)
+					key := taggedVals.NomsTupleForPKCols(types.Format_7_18, dtestutils.TypedSchema.GetPKCols())
 					kv, err := key.Value(ctx)
 					assert.NoError(t, err)
 					_, ok, err := table.GetRow(ctx, kv.(types.Tuple), dtestutils.TypedSchema)

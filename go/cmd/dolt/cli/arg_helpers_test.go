@@ -75,7 +75,7 @@ func TestParseKeyValues(t *testing.T) {
 			singleKeySch,
 			[]string{"robertson"},
 			[]types.Value{
-				mustValue(row.TaggedValues{lnColTag: types.String("robertson")}.NomsTupleForTags(types.Format_7_18, singleKeyColColl.Tags, true).Value(ctx)),
+				mustValue(row.TaggedValues{lnColTag: types.String("robertson")}.NomsTupleForPKCols(types.Format_7_18, singleKeyColColl).Value(ctx)),
 			},
 			false,
 		},
@@ -84,7 +84,7 @@ func TestParseKeyValues(t *testing.T) {
 			singleKeySch,
 			[]string{"last", "robertson"},
 			[]types.Value{
-				mustValue(row.TaggedValues{lnColTag: types.String("robertson")}.NomsTupleForTags(types.Format_7_18, singleKeyColColl.Tags, true).Value(ctx)),
+				mustValue(row.TaggedValues{lnColTag: types.String("robertson")}.NomsTupleForPKCols(types.Format_7_18, singleKeyColColl).Value(ctx)),
 			},
 			false,
 		},
@@ -98,7 +98,7 @@ func TestParseKeyValues(t *testing.T) {
 			singleKeySch,
 			[]string{"last", "last"},
 			[]types.Value{
-				mustValue(row.TaggedValues{lnColTag: types.String("last")}.NomsTupleForTags(types.Format_7_18, singleKeyColColl.Tags, true).Value(ctx)),
+				mustValue(row.TaggedValues{lnColTag: types.String("last")}.NomsTupleForPKCols(types.Format_7_18, singleKeyColColl).Value(ctx)),
 			},
 			false,
 		},
@@ -106,8 +106,8 @@ func TestParseKeyValues(t *testing.T) {
 			singleKeySch,
 			[]string{"last", "robertson", "johnson"},
 			[]types.Value{
-				mustValue(row.TaggedValues{lnColTag: types.String("robertson")}.NomsTupleForTags(types.Format_7_18, singleKeyColColl.Tags, true).Value(ctx)),
-				mustValue(row.TaggedValues{lnColTag: types.String("johnson")}.NomsTupleForTags(types.Format_7_18, singleKeyColColl.Tags, true).Value(ctx)),
+				mustValue(row.TaggedValues{lnColTag: types.String("robertson")}.NomsTupleForPKCols(types.Format_7_18, singleKeyColColl).Value(ctx)),
+				mustValue(row.TaggedValues{lnColTag: types.String("johnson")}.NomsTupleForPKCols(types.Format_7_18, singleKeyColColl).Value(ctx)),
 			},
 			false,
 		},
@@ -122,8 +122,8 @@ func TestParseKeyValues(t *testing.T) {
 			sch,
 			[]string{"last", "robertson", "johnson"},
 			[]types.Value{
-				mustValue(row.TaggedValues{lnColTag: types.String("robertson")}.NomsTupleForTags(types.Format_7_18, testKeyColColl.Tags, true).Value(ctx)),
-				mustValue(row.TaggedValues{lnColTag: types.String("johnson")}.NomsTupleForTags(types.Format_7_18, testKeyColColl.Tags, true).Value(ctx)),
+				mustValue(row.TaggedValues{lnColTag: types.String("robertson")}.NomsTupleForPKCols(types.Format_7_18, testKeyColColl).Value(ctx)),
+				mustValue(row.TaggedValues{lnColTag: types.String("johnson")}.NomsTupleForPKCols(types.Format_7_18, testKeyColColl).Value(ctx)),
 			},
 			false,
 		},
@@ -131,8 +131,8 @@ func TestParseKeyValues(t *testing.T) {
 			sch,
 			[]string{"first,last", "robert,robertson", "john,johnson"},
 			[]types.Value{
-				mustValue(row.TaggedValues{lnColTag: types.String("robertson"), fnColTag: types.String("robert")}.NomsTupleForTags(types.Format_7_18, testKeyColColl.Tags, true).Value(ctx)),
-				mustValue(row.TaggedValues{lnColTag: types.String("johnson"), fnColTag: types.String("john")}.NomsTupleForTags(types.Format_7_18, testKeyColColl.Tags, true).Value(ctx)),
+				mustValue(row.TaggedValues{lnColTag: types.String("robertson"), fnColTag: types.String("robert")}.NomsTupleForPKCols(types.Format_7_18, testKeyColColl).Value(ctx)),
+				mustValue(row.TaggedValues{lnColTag: types.String("johnson"), fnColTag: types.String("john")}.NomsTupleForPKCols(types.Format_7_18, testKeyColColl).Value(ctx)),
 			},
 			false,
 		},

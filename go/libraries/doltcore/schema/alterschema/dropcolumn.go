@@ -121,7 +121,7 @@ func dropColumnValuesForTag(ctx context.Context, nbf *types.NomsBinFormat, newSc
 		_, found := tv[dropTag]
 		if found {
 			delete(tv, dropTag)
-			re.Set(k, tv.NomsTupleForTags(nbf, newSch.GetNonPKCols().Tags, false))
+			re.Set(k, tv.NomsTupleForNonPKCols(nbf, newSch.GetNonPKCols()))
 		}
 	}
 

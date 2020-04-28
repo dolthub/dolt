@@ -48,7 +48,6 @@ func SingleColPKItr(nbf *types.NomsBinFormat, pkTag uint64, vals []types.Value) 
 }
 
 func TaggedValueSliceItr(nbf *types.NomsBinFormat, sch schema.Schema, vals []row.TaggedValues) func() (types.Tuple, bool, error) {
-	pkTags := sch.GetPKCols().Tags
 	next := 0
 	size := len(vals)
 	return func() (types.Tuple, bool, error) {
@@ -56,7 +55,7 @@ func TaggedValueSliceItr(nbf *types.NomsBinFormat, sch schema.Schema, vals []row
 		next++
 
 		if current < size {
-			tpl := vals[current].NomsTupleForTags(nbf, pkTags, true)
+			tpl := vals[current].NomsTupleForPKCols(nbf, sch.GetPKCols())
 			v, err := tpl.Value(context.TODO())
 
 			if err != nil {
