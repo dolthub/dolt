@@ -20,6 +20,35 @@ teardown() {
     run dolt
     [ "$status" -eq 1 ]
     [ "${lines[0]}" = "Valid commands for dolt are" ]
+
+    # Check help output for supported commands
+    [[ "$output" =~ "init - Create an empty Dolt data repository." ]] || false
+    [[ "$output" =~ "status - Show the working tree status." ]] || false
+    [[ "$output" =~ "add - Add table changes to the list of staged table changes." ]] || false
+    [[ "$output" =~ "reset - Remove table changes from the list of staged table changes." ]] || false
+    [[ "$output" =~ "commit - Record changes to the repository." ]] || false
+    [[ "$output" =~ "sql - Run a SQL query against tables in repository." ]] || false
+    [[ "$output" =~ "sql-server - Start a MySQL-compatible server." ]] || false
+    [[ "$output" =~ "log - Show commit logs." ]] || false
+    [[ "$output" =~ "diff - Diff a table." ]] || false
+    [[ "$output" =~ "blame - Show what revision and author last modified each row of a table." ]] || false
+    [[ "$output" =~ "merge - Merge a branch." ]] || false
+    [[ "$output" =~ "branch - Create, list, edit, delete branches." ]] || false
+    [[ "$output" =~ "checkout - Checkout a branch or overwrite a table from HEAD." ]] || false
+    [[ "$output" =~ "remote - Manage set of tracked repositories." ]] || false
+    [[ "$output" =~ "push - Push to a dolt remote." ]] || false
+    [[ "$output" =~ "pull - Fetch from a dolt remote data repository and merge." ]] || false
+    [[ "$output" =~ "fetch - Update the database from a remote data repository." ]] || false
+    [[ "$output" =~ "clone - Clone from a remote data repository." ]] || false
+    [[ "$output" =~ "creds - Commands for managing credentials." ]] || false
+    [[ "$output" =~ "login - Login to a dolt remote host." ]] || false
+    [[ "$output" =~ "version - Displays the current Dolt cli version." ]] || false
+    [[ "$output" =~ "config - Dolt configuration." ]] || false
+    [[ "$output" =~ "ls - List tables in the working set." ]] || false
+    [[ "$output" =~ "schema - Commands for showing and importing table schemas." ]] || false
+    [[ "$output" =~ "table - Commands for copying, renaming, deleting, and exporting tables." ]] || false
+    [[ "$output" =~ "conflicts - Commands for viewing and resolving merge conflicts." ]] || false
+    [[ "$output" =~ "migrate - Executes a repository migration to update to the latest format." ]] || false
 }
 
 @test "testing dolt version output" {
