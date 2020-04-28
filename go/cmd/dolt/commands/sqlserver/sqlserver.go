@@ -46,7 +46,7 @@ const (
 
 var sqlServerDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Start a MySQL-compatible server.",
-	LongDesc:  "In it's default configuration, starts a MySQL-compatible server which allows only one user connection at" +
+	LongDesc: "In it's default configuration, starts a MySQL-compatible server which allows only one user connection at" +
 		"a time to the dolt repository in the current directory. Any edits made through this server will be automatically " +
 		"reflected in the working set.  This behavior can be modified using a yaml configuration file passed to the server " +
 		"via --config <file>, or by using the supported switches and flags to configure the server directly on the " +

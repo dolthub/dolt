@@ -15,10 +15,11 @@
 package sqlserver
 
 import (
-	"gopkg.in/yaml.v2"
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"gopkg.in/yaml.v2"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 )
@@ -77,15 +78,15 @@ type YAMLConfig struct {
 
 func serverConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
 	return YAMLConfig{
-		LogLevelStr: strPtr(string(cfg.LogLevel())),
+		LogLevelStr:    strPtr(string(cfg.LogLevel())),
 		BehaviorConfig: BehaviorYAMLConfig{boolPtr(cfg.ReadOnly()), boolPtr(cfg.AutoCommit())},
-		UserConfig: UserYAMLConfig{strPtr(cfg.User()), strPtr(cfg.Password())},
+		UserConfig:     UserYAMLConfig{strPtr(cfg.User()), strPtr(cfg.Password())},
 		ListenerConfig: ListenerYAMLConfig{
-				strPtr(cfg.Host()),
-				intPtr(cfg.Port()),
-				uint64Ptr(cfg.MaxConnections()),
-				uint64Ptr(cfg.ReadTimeout()),
-				uint64Ptr(cfg.WriteTimeout()),
+			strPtr(cfg.Host()),
+			intPtr(cfg.Port()),
+			uint64Ptr(cfg.MaxConnections()),
+			uint64Ptr(cfg.ReadTimeout()),
+			uint64Ptr(cfg.WriteTimeout()),
 		},
 		DatabaseConfig: nil,
 	}
@@ -224,4 +225,3 @@ func (cfg YAMLConfig) MaxConnections() uint64 {
 
 	return *cfg.ListenerConfig.MaxConnections
 }
-

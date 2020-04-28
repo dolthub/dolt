@@ -23,8 +23,6 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-
-
 func TestUnmarshall(t *testing.T) {
 	testStr := `
 log_level: info
