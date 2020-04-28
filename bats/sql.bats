@@ -219,6 +219,13 @@ SQL
     [[ "$output" =~ "c1" ]] || false
 }
 
+@test "sql select make a new column as a function of aliases" {
+    run dolt sql -q "select count(*) as a, count(*) as b, a/b as percent from dual"
+    skip "This fails right now with a column a not in any table error"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " percent " ]]
+}
+
 @test "sql basic inner join" {
     run dolt sql -q "select pk,pk1,pk2 from one_pk join two_pk on one_pk.c1=two_pk.c1"
     [ "$status" -eq 0 ]
