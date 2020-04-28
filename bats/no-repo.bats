@@ -20,35 +20,6 @@ teardown() {
     run dolt
     [ "$status" -eq 1 ]
     [ "${lines[0]}" = "Valid commands for dolt are" ]
-    # Check help output for supported commands
-    [[ "${lines[1]}" =~ "init - Create an empty Dolt data repository." ]] || false
-    [[ "${lines[2]}" =~ "status - Show the working tree status." ]] || false
-    [[ "${lines[3]}" =~ "add - Add table changes to the list of staged table changes." ]] || false
-    [[ "${lines[4]}" =~ "reset - Remove table changes from the list of staged table changes." ]] || false
-    [[ "${lines[5]}" =~ "commit - Record changes to the repository." ]] || false
-    [[ "${lines[6]}" =~ "sql - Run a SQL query against tables in repository." ]] || false
-    [[ "${lines[7]}" =~ "sql-server - Starts a MySQL-compatible server." ]] || false
-    [[ "${lines[8]}" =~ "log - Show commit logs." ]] || false
-    [[ "${lines[9]}" =~ "diff - Diff a table." ]] || false
-    [[ "${lines[10]}" =~ "blame - Show what revision and author last modified each row of a table." ]] || false
-    [[ "${lines[11]}" =~ "merge - Merge a branch." ]] || false
-    [[ "${lines[12]}" =~ "branch - Create, list, edit, delete branches." ]] || false
-    [[ "${lines[13]}" =~ "checkout - Checkout a branch or overwrite a table from HEAD." ]] || false
-    [[ "${lines[14]}" =~ "remote - Manage set of tracked repositories." ]] || false
-    [[ "${lines[15]}" =~ "push - Push to a dolt remote." ]] || false
-    [[ "${lines[16]}" =~ "pull - Fetch from a dolt remote data repository and merge." ]] || false
-    [[ "${lines[17]}" =~ "fetch - Update the database from a remote data repository." ]] || false
-    [[ "${lines[18]}" =~ "clone - Clone from a remote data repository." ]] || false
-    [[ "${lines[19]}" =~ "creds - Commands for managing credentials." ]] || false
-    [[ "${lines[20]}" =~ "login - Login to a dolt remote host." ]] || false
-    [[ "${lines[21]}" =~ "version - Displays the current Dolt cli version." ]] || false
-    [[ "${lines[22]}" =~ "config - Dolt configuration." ]] || false
-    [[ "${lines[23]}" =~ "ls - List tables in the working set." ]] || false
-    [[ "${lines[24]}" =~ "schema - Commands for showing and importing table schemas." ]] || false
-    [[ "${lines[25]}" =~ "table - Commands for copying, renaming, deleting, and exporting tables." ]] || false
-    [[ "${lines[26]}" =~ "conflicts - Commands for viewing and resolving merge conflicts." ]] || false
-    [[ "${lines[27]}" =~ "migrate - Executes a repository migration to update to the latest format." ]] || false
-    [ "${lines[28]}" = "" ]
 }
 
 @test "testing dolt version output" {

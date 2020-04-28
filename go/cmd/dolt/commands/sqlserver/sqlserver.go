@@ -46,7 +46,7 @@ const (
 
 var sqlServerDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Start a MySQL-compatible server.",
-	LongDesc: "In it's default configuration, starts a MySQL-compatible server which allows only one user connection at" +
+	LongDesc: "By default, starts a MySQL-compatible server which allows only one user connection at" +
 		"a time to the dolt repository in the current directory. Any edits made through this server will be automatically " +
 		"reflected in the working set.  This behavior can be modified using a yaml configuration file passed to the server " +
 		"via --config <file>, or by using the supported switches and flags to configure the server directly on the " +
@@ -69,9 +69,9 @@ var sqlServerDocs = cli.CommandDocumentationContent{
 		"\n" +
 		"user.name - The username that connections should use for authentication.\n" +
 		"\n" +
-		"user.password - The password that connections should use for authentication.\n" +
+		"user.password - The password that connections should use for authentication.\n " +
 		"\n" +
-		"listener.host - The host address that the server will run on.  This may be an `localhost` or an IPv4 or IPv6 address.\n" +
+		"listener.host - The host address that the server will run on.  This may be `localhost` or an IPv4 or IPv6 address.\n" +
 		"\n" +
 		"listener.port - The port that the server should listen on.\n" +
 		"\n" +
@@ -81,6 +81,12 @@ var sqlServerDocs = cli.CommandDocumentationContent{
 		"\n" +
 		"listener.write_timeout_millis - The number of milliseconds that the server will wait for a write operation.\n" +
 		"\n" +
+		"databases - a list of dolt data repositories to make available as SQL databases. If databases is missing or " +
+		"empty then the working directory must be a valid dolt data repository which will be made available as a SQL database\n" +
+		"\n" +
+		"databases[i].path - A path to a dolt data repository.\n" +
+		"\n" +
+		"databases[i].name - The name that the database corresponding to the given path should be referenced via SQL.\n" +
 		"\n" +
 		"\n" +
 		"If a config file is not provided many of these settings may be configured on the command line.",
