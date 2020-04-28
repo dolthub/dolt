@@ -58,7 +58,7 @@ var sqlServerDocs = cli.CommandDocumentationContent{
 		"{{.EmphasisLeft}}" + serverConfigAsYAMLConfig(DefaultServerConfig()).String() + "{{.EmphasisRight}}\n" +
 		"\n" +
 		"\n" +
-		"SUPPORTED FIELDS CONFIG FILE FIELDS:\n" +
+		"SUPPORTED CONFIG FILE FIELDS:\n" +
 		"\n" +
 		"log_level - Level of logging provided. Options are: `trace', `debug`, `info`, `warning`, `error`, and `fatal`.\n" +
 		"\n" +
