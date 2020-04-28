@@ -63,17 +63,24 @@ var sqlServerDocs = cli.CommandDocumentationContent{
 		"log_level - Level of logging provided. Options are: `trace', `debug`, `info`, `warning`, `error`, and `fatal`.\n" +
 		"\n" +
 		"behavior.read_only - If true database modification is disabled.\n" +
+		"\n" +
 		"behavior.autocommit - If true write queries will automatically alter the working set.  When working with autocommit " +
 		"enabled it is highly recommended that listener.max_connections be set to 1 as concurrency issues will arise otherwise.\n" +
 		"\n" +
 		"user.name - The username that connections should use for authentication.\n" +
+		"\n" +
 		"user.password - The password that connections should use for authentication.\n" +
 		"\n" +
 		"listener.host - The host address that the server will run on.  This may be an `localhost` or an IPv4 or IPv6 address.\n" +
+		"\n" +
 		"listener.port - The port that the server should listen on.\n" +
+		"\n" +
 		"listener.max_connections - The number of simultaneous connections that the server will accept.\n" +
+		"\n" +
 		"listener.read_timeout_millis - The number of milliseconds that the server will wait for a read operation.\n" +
+		"\n" +
 		"listener.write_timeout_millis - The number of milliseconds that the server will wait for a write operation.\n" +
+		"\n" +
 		"\n" +
 		"\n" +
 		"If a config file is not provided many of these settings may be configured on the command line.",

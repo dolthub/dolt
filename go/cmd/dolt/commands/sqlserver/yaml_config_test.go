@@ -27,7 +27,7 @@ import (
 
 func TestUnmarshall(t *testing.T) {
 	testStr := `
-log_level: debug
+log_level: info
 
 behavior:
     read_only: false
@@ -35,14 +35,14 @@ behavior:
 
 user:
     name: root
-    password: 3306
+    password: ""
 
 listener:
     host: localhost
     port: 3306
     max_connections: 1
-    read_timeout_millis: 0
-    write_timeout_millis: 0
+    read_timeout_millis: 30000
+    write_timeout_millis: 30000
     
 databases:
     - name: irs_soi
@@ -51,32 +51,15 @@ databases:
       path: /Users/brian/datasets/noaa
 `
 
-	expected := YAMLConfig{
-		LogLevelStr: strPtr("debug"),
-		BehaviorConfig: BehaviorYAMLConfig{
-			ReadOnly:   boolPtr(false),
-			AutoCommit: boolPtr(true),
+	expected := serverConfigAsYAMLConfig(DefaultServerConfig())
+	expected.DatabaseConfig = []DatabaseYAMLConfig{
+		{
+			Name: "irs_soi",
+			Path: "./datasets/irs-soi",
 		},
-		UserConfig: UserYAMLConfig{
-			Name:     strPtr("root"),
-			Password: strPtr("1234"),
-		},
-		ListenerConfig: ListenerYAMLConfig{
-			HostStr:            strPtr("0.0.0.0"),
-			PortNumber:         intPtr(3306),
-			MaxConnections:     uint64Ptr(100),
-			ReadTimeoutMillis:  uint64Ptr(0),
-			WriteTimeoutMillis: uint64Ptr(0),
-		},
-		DatabaseConfig: []DatabaseYAMLConfig{
-			{
-				Name: "irs_soi",
-				Path: "./datasets/irs-soi",
-			},
-			{
-				Name: "noaa",
-				Path: "/Users/brian/datasets/noaa",
-			},
+		{
+			Name: "noaa",
+			Path: "/Users/brian/datasets/noaa",
 		},
 	}
 
