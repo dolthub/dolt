@@ -46,8 +46,39 @@ const (
 
 var sqlServerDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Start a MySQL-compatible server.",
-	LongDesc:  `Start a MySQL-compatible server which can be connected to by MySQL clients.`,
+	LongDesc:  "In it's default configuration, starts a MySQL-compatible server which allows only one user connection at" +
+		"a time to the dolt repository in the current directory. Any edits made through this server will be automatically " +
+		"reflected in the working set.  This behavior can be modified using a yaml configuration file passed to the server " +
+		"via --config <file>, or by using the supported switches and flags to configure the server directly on the " +
+		"command line (If --config <file> is provided all other command line arguments are ignored).\n" +
+		"\n" +
+		"This is an example yaml configuration file showing all supported items and their default values:\n" +
+		"\n" +
+		"\n" +
+		"{{.EmphasisLeft}}" + serverConfigAsYAMLConfig(DefaultServerConfig()).String() + "{{.EmphasisRight}}\n" +
+		"\n" +
+		"\n" +
+		"SUPPORTED FIELDS CONFIG FILE FIELDS:\n" +
+		"\n" +
+		"log_level - Level of logging provided. Options are: `trace', `debug`, `info`, `warning`, `error`, and `fatal`.\n" +
+		"\n" +
+		"behavior.read_only - If true database modification is disabled.\n" +
+		"behavior.autocommit - If true write queries will automatically alter the working set.  When working with autocommit " +
+		"enabled it is highly recommended that listener.max_connections be set to 1 as concurrency issues will arise otherwise.\n" +
+		"\n" +
+		"user.name - The username that connections should use for authentication.\n" +
+		"user.password - The password that connections should use for authentication.\n" +
+		"\n" +
+		"listener.host - The host address that the server will run on.  This may be an `localhost` or an IPv4 or IPv6 address.\n" +
+		"listener.port - The port that the server should listen on.\n" +
+		"listener.max_connections - The number of simultaneous connections that the server will accept.\n" +
+		"listener.read_timeout_millis - The number of milliseconds that the server will wait for a read operation.\n" +
+		"listener.write_timeout_millis - The number of milliseconds that the server will wait for a write operation.\n" +
+		"\n" +
+		"\n" +
+		"If a config file is not provided many of these settings may be configured on the command line.",
 	Synopsis: []string{
+		"--config {{.LessThan}}file{{.GreaterThan}}",
 		"[-H {{.LessThan}}host{{.GreaterThan}}] [-P {{.LessThan}}port{{.GreaterThan}}] [-u {{.LessThan}}user{{.GreaterThan}}] [-p {{.LessThan}}password{{.GreaterThan}}] [-t {{.LessThan}}timeout{{.GreaterThan}}] [-l {{.LessThan}}loglevel{{.GreaterThan}}] [--multi-db-dir {{.LessThan}}directory{{.GreaterThan}}] [-r]",
 	},
 }
@@ -63,7 +94,7 @@ func (cmd SqlServerCmd) Name() string {
 
 // Description returns a description of the command
 func (cmd SqlServerCmd) Description() string {
-	return "Starts a MySQL-compatible server."
+	return sqlServerDocs.ShortDesc
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
@@ -76,16 +107,16 @@ func createArgParser() *argparser.ArgParser {
 	serverConfig := DefaultServerConfig()
 
 	ap := argparser.NewArgParser()
+	ap.SupportsString(configFileFlag, "", "file", "When provided configuration is taken from the yaml config file and all command line parameters are ignored.")
 	ap.SupportsString(hostFlag, "H", "Host address", fmt.Sprintf("Defines the host address that the server will run on (default `%v`)", serverConfig.Host()))
 	ap.SupportsUint(portFlag, "P", "Port", fmt.Sprintf("Defines the port that the server will run on (default `%v`)", serverConfig.Port()))
 	ap.SupportsString(userFlag, "u", "User", fmt.Sprintf("Defines the server user (default `%v`)", serverConfig.User()))
 	ap.SupportsString(passwordFlag, "p", "Password", fmt.Sprintf("Defines the server password (default `%v`)", serverConfig.Password()))
 	ap.SupportsInt(timeoutFlag, "t", "Connection timeout", fmt.Sprintf("Defines the timeout, in seconds, used for connections\nA value of `0` represents an infinite timeout (default `%v`)", serverConfig.ReadTimeout()))
 	ap.SupportsFlag(readonlyFlag, "r", "Disables modification of the database")
-	ap.SupportsString(logLevelFlag, "l", "Log level", fmt.Sprintf("Defines the level of logging provided\nOptions are: `debug`, `info`, `warning`, `error`, `fatal` (default `%v`)", serverConfig.LogLevel()))
+	ap.SupportsString(logLevelFlag, "l", "Log level", fmt.Sprintf("Defines the level of logging provided\nOptions are: `trace', `debug`, `info`, `warning`, `error`, `fatal` (default `%v`)", serverConfig.LogLevel()))
 	ap.SupportsString(multiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases.")
 	ap.SupportsFlag(noAutoCommitFlag, "", "When provided sessions will not automatically commit their changes to the working set. Anything not manually committed will be lost.")
-	ap.SupportsString(configFileFlag, "", "file", "When provided configuration is taken from the yaml config file and all command line parameters are ignored.")
 	return ap
 }
 

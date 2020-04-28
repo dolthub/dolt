@@ -23,21 +23,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-func strPtr(s string) *string {
-	return &s
-}
 
-func boolPtr(b bool) *bool {
-	return &b
-}
-
-func uint64Ptr(n uint64) *uint64 {
-	return &n
-}
-
-func intPtr(n int) *int {
-	return &n
-}
 
 func TestUnmarshall(t *testing.T) {
 	testStr := `
@@ -49,12 +35,12 @@ behavior:
 
 user:
     name: root
-    password: 1234
+    password: 3306
 
 listener:
-    host: 0.0.0.0
+    host: localhost
     port: 3306
-    max_connections: 100
+    max_connections: 1
     read_timeout_millis: 0
     write_timeout_millis: 0
     

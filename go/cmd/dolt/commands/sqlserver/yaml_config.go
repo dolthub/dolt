@@ -16,9 +16,28 @@ package sqlserver
 
 import (
 	"gopkg.in/yaml.v2"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 )
+
+func strPtr(s string) *string {
+	return &s
+}
+
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+func uint64Ptr(n uint64) *uint64 {
+	return &n
+}
+
+func intPtr(n int) *int {
+	return &n
+}
 
 // BehaviorYAMLConfig contains server configuration regarding how the server should behave
 type BehaviorYAMLConfig struct {
@@ -56,6 +75,22 @@ type YAMLConfig struct {
 	DatabaseConfig []DatabaseYAMLConfig `yaml:"databases"`
 }
 
+func serverConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
+	return YAMLConfig{
+		LogLevelStr: strPtr(string(cfg.LogLevel())),
+		BehaviorConfig: BehaviorYAMLConfig{boolPtr(cfg.ReadOnly()), boolPtr(cfg.AutoCommit())},
+		UserConfig: UserYAMLConfig{strPtr(cfg.User()), strPtr(cfg.Password())},
+		ListenerConfig: ListenerYAMLConfig{
+				strPtr(cfg.Host()),
+				intPtr(cfg.Port()),
+				uint64Ptr(cfg.MaxConnections()),
+				uint64Ptr(cfg.ReadTimeout()),
+				uint64Ptr(cfg.WriteTimeout()),
+		},
+		DatabaseConfig: nil,
+	}
+}
+
 // String returns the YAML representation of the config
 func (cfg YAMLConfig) String() string {
 	data, err := yaml.Marshal(cfg)
@@ -64,7 +99,28 @@ func (cfg YAMLConfig) String() string {
 		return "Failed to marshal as yaml: " + err.Error()
 	}
 
-	return string(data)
+	unformatted := string(data)
+
+	// format the yaml to be easier to read.
+	lines := strings.Split(unformatted, "\n")
+
+	var formatted []string
+	formatted = append(formatted, lines[0])
+	for i := 1; i < len(lines); i++ {
+		if len(lines[i]) == 0 {
+			continue
+		}
+
+		r, _ := utf8.DecodeRuneInString(lines[i])
+		if !unicode.IsSpace(r) {
+			formatted = append(formatted, "")
+		}
+
+		formatted = append(formatted, lines[i])
+	}
+
+	result := strings.Join(formatted, "\n")
+	return result
 }
 
 // Host returns the domain that the server will run on. Accepts an IPv4 or IPv6 address, in addition to localhost.
@@ -168,3 +224,4 @@ func (cfg YAMLConfig) MaxConnections() uint64 {
 
 	return *cfg.ListenerConfig.MaxConnections
 }
+

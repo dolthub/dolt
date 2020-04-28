@@ -44,7 +44,7 @@ const (
 	defaultReadOnly       = false
 	defaultLogLevel       = LogLevel_Info
 	defaultAutoCommit     = true
-	defaultMaxConnections = 0
+	defaultMaxConnections = 1
 )
 
 // String returns the string representation of the log level.
