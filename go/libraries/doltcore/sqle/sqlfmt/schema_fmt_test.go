@@ -14,11 +14,10 @@
  * // limitations under the License.
  */
 
-package sqle
+package sqlfmt
 
 import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/liquidata-inc/dolt/go/store/types"
 
 	"testing"
@@ -66,7 +65,7 @@ func TestFmtCol(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.Expected, func(t *testing.T) {
-			actual := sqlfmt.FmtCol(test.Indent, test.NameWidth, test.TypeWidth, test.Col)
+			actual := FmtCol(test.Indent, test.NameWidth, test.TypeWidth, test.Col)
 			assert.Equal(t, test.Expected, actual)
 		})
 	}
