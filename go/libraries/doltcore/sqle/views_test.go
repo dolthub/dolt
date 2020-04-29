@@ -16,14 +16,13 @@ package sqle
 
 import (
 	"context"
+	"github.com/src-d/go-mysql-server/sql"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 // Not an exhaustive test of views -- we rely on bats tests for end-to-end verification.
@@ -43,10 +42,10 @@ func TestViews(t *testing.T) {
 	root, err = ExecuteSql(dEnv, root, "create view plus1 as select a + 1 from test")
 	require.NoError(t, err)
 
-	expectedRows := []row.Row{
-		NewResultSetRow(types.Int(2)),
-		NewResultSetRow(types.Int(3)),
-		NewResultSetRow(types.Int(4)),
+	expectedRows := []sql.Row{
+		{int64(2)},
+		{int64(3)},
+		{int64(4)},
 	}
 	rows, _, err := executeSelect(context.Background(), dEnv, root, "select * from plus1")
 	require.NoError(t, err)
