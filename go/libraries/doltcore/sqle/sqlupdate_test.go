@@ -444,7 +444,6 @@ func testUpdateQuery(t *testing.T, test UpdateTest) {
 	require.NoError(t, err)
 
 	assert.Equal(t, test.ExpectedRows, actualRows)
-
 	sqlSchema := mustSqlSchema(test.ExpectedSchema)
 	assertSchemasEqual(t, sqlSchema, sch)
 }
