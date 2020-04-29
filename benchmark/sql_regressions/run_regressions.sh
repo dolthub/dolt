@@ -88,7 +88,7 @@ function check_version_exists() {
 
 function branch_from_base() {
     local branch_name="$1"
-    dolt checkout regressions
+    dolt checkout master
 
     dolt sql -r csv -q "select * from releases_dolt_results" > "$branch_name"_releases_results.csv
     dolt sql -r csv -q "select * from releases_dolt_mean_results" > "$branch_name"_releases_mean_results.csv
@@ -158,11 +158,11 @@ select version, test_file, line_num, avg(duration) as mean_duration, result from
     dolt commit -m "update dolt sql performance mean results ($DOLT_VERSION)"
     dolt push origin nightly
 
-    dolt checkout regressions
+    dolt checkout master
     dolt merge nightly
     dolt add .
     dolt commit -m "merge nightly"
-    dolt push origin regressions
+    dolt push origin master
 
     dolt checkout releases
     dolt sql -r csv -q "\
@@ -238,11 +238,11 @@ select version, test_file, line_num, avg(duration) as mean_duration, result from
     dolt commit -m "update dolt sql performance mean results ($DOLT_VERSION)"
     dolt push origin releases
 
-    dolt checkout regressions
+    dolt checkout master
     dolt merge releases
     dolt add .
     dolt commit -m "merge releases"
-    dolt push origin regressions
+    dolt push origin master
 
     update_regressions_latest
 }
