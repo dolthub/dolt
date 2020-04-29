@@ -48,6 +48,9 @@ type SelectTest struct {
 	Query string
 	// The schema of the result of the query, nil if an error is expected
 	ExpectedSchema schema.Schema
+	// The schema of the result of the query, nil if an error is expected. Mutually exclusive with ExpectedSchema. Use if
+	// the schema is difficult to specify with dolt schemas.
+	ExpectedSqlSchema sql.Schema
 	// The rows this query should return, nil if an error is expected
 	ExpectedRows []sql.Row
 	// An expected error string
@@ -428,23 +431,24 @@ var BasicSelectTests = []SelectTest{
 	{
 		Name:           "and expression in select",
 		Query:          "select is_married and age >= 40 from people where last_name = 'Simpson' order by id limit 2",
-		ExpectedRows:   ToSqlRows(
-			NewResultSetSchema("is_married and age >= 40", types.BoolKind),
-			NewResultSetRow(types.Bool(true)), NewResultSetRow(types.Bool(false)),
-		),
-		ExpectedSchema: NewResultSetSchema("is_married and age >= 40", types.BoolKind),
+		ExpectedRows:   []sql.Row{{true}, {false}},
+		ExpectedSqlSchema: sql.Schema{
+			&sql.Column{Name: "people.is_married AND people.age >= 40", Type: sql.Int8},
+		},
 	},
 	{
 		Name:  "or expression in select",
 		Query: "select first_name, age <= 10 or age >= 40 as not_marge from people where last_name = 'Simpson' order by id desc",
-		ExpectedRows: ToSqlRows(
-			NewResultSetSchema("first_name", types.StringKind, "not_marge", types.BoolKind),
-			NewResultSetRow(types.String("Lisa"), types.Bool(true)),
-			NewResultSetRow(types.String("Bart"), types.Bool(true)),
-			NewResultSetRow(types.String("Marge"), types.Bool(false)),
-			NewResultSetRow(types.String("Homer"), types.Bool(true)),
-		),
-		ExpectedSchema: NewResultSetSchema("first_name", types.StringKind, "not_marge", types.BoolKind),
+		ExpectedRows: []sql.Row{
+			{"Lisa", true},
+			{"Bart", true},
+			{"Marge", false},
+			{"Homer", true},
+		},
+		ExpectedSqlSchema: sql.Schema{
+			&sql.Column{Name: "first_name", Type: sql.LongText},
+			&sql.Column{Name: "not_marge", Type: sql.Int8},
+		},
 	},
 	{
 		Name:           "unary expression in select",
@@ -565,11 +569,11 @@ var BasicSelectTests = []SelectTest{
 	{
 		Name:  "column selected more than once",
 		Query: "select first_name, first_name from people where age >= 40 order by id",
-		ExpectedRows: ToSqlRows(SubsetSchema(PeopleTestSchema, "first_name", "first_name"),
-			NewResultSetRow(types.String("Homer"), types.String("Homer")),
-			NewResultSetRow(types.String("Moe"), types.String("Moe")),
-			NewResultSetRow(types.String("Barney"), types.String("Barney")),
-		),
+		ExpectedRows: []sql.Row{
+			{"Homer", "Homer"},
+			{"Moe", "Moe"},
+			{"Barney", "Barney"},
+		},
 		ExpectedSchema: NewResultSetSchema("first_name", types.StringKind, "first_name", types.StringKind),
 	},
 
@@ -706,50 +710,45 @@ var BasicSelectTests = []SelectTest{
 	{
 		Name:  "select * from log system table",
 		Query: "select * from dolt_log",
-		ExpectedRows: ToSqlRows(LogSchema,
-			mustRow(row.New(types.Format_7_18, LogSchema, row.TaggedValues{
-			0: types.String("0e2b6g3oemme1je6g3l2bm3hr5mhgpa2"),
-			1: types.String("billy bob"),
-			2: types.String("bigbillieb@fake.horse"),
-			3: types.Timestamp(time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)),
-			4: types.String("Initialize data repository"),
-		}))),
-		ExpectedSchema: LogSchema,
+		ExpectedRows: []sql.Row{
+			{
+				"0e2b6g3oemme1je6g3l2bm3hr5mhgpa2",
+				"billy bob",
+				"bigbillieb@fake.horse",
+				time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC),
+				"Initialize data repository",
+			},
+		},
+		ExpectedSqlSchema: sql.Schema{
+			&sql.Column{ Name: "commit_hash", Type: sql.Text },
+			&sql.Column{ Name: "committer", Type: sql.Text },
+			&sql.Column{ Name: "email", Type: sql.Text },
+			&sql.Column{ Name: "date", Type: sql.Datetime },
+			&sql.Column{ Name: "message", Type: sql.Text },
+		},
 	},
 	{
 		Name:  "select * from branches system table",
 		Query: "select * from dolt_branches",
-		ExpectedRows: ToSqlRows(BranchesSchema,
-			mustRow(row.New(types.Format_7_18, BranchesSchema, row.TaggedValues{
-			0: types.String("master"),
-			1: types.String("0e2b6g3oemme1je6g3l2bm3hr5mhgpa2"),
-			2: types.String("billy bob"),
-			3: types.String("bigbillieb@fake.horse"),
-			4: types.Timestamp(time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)),
-			5: types.String("Initialize data repository"),
-		}))),
-		ExpectedSchema: BranchesSchema,
+		ExpectedRows: []sql.Row{
+			{
+				"master",
+				"0e2b6g3oemme1je6g3l2bm3hr5mhgpa2",
+				"billy bob", "bigbillieb@fake.horse",
+				time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC),
+				"Initialize data repository",
+			},
+		},
+		ExpectedSqlSchema: sql.Schema{
+			&sql.Column{ Name: "name", Type: sql.Text },
+			&sql.Column{ Name: "hash", Type: sql.Text },
+			&sql.Column{ Name: "latest_committer", Type: sql.Text },
+			&sql.Column{ Name: "latest_committer_email", Type: sql.Text },
+			&sql.Column{ Name: "latest_commit_date", Type: sql.Datetime },
+			&sql.Column{ Name: "latest_commit_message", Type: sql.Text },
+		},
 	},
 }
-
-var logSchColColl, _ = schema.NewColCollection(
-	schema.NewColumn("commit_hash", 0, types.StringKind, true),
-	schema.NewColumn("committer", 1, types.StringKind, false),
-	schema.NewColumn("email", 2, types.StringKind, false),
-	schema.NewColumn("date", 3, types.TimestampKind, false),
-	schema.NewColumn("message", 4, types.StringKind, false),
-)
-var LogSchema = schema.SchemaFromCols(logSchColColl)
-
-var branchesSchColColl, _ = schema.NewColCollection(
-	schema.NewColumn("name", 0, types.StringKind, true),
-	schema.NewColumn("hash", 1, types.StringKind, true),
-	schema.NewColumn("latest_committer", 2, types.StringKind, false),
-	schema.NewColumn("latest_committer_email", 3, types.StringKind, false),
-	schema.NewColumn("latest_commit_date", 4, types.TimestampKind, false),
-	schema.NewColumn("latest_commit_message", 5, types.StringKind, false),
-)
-var BranchesSchema = schema.SchemaFromCols(branchesSchColColl)
 
 var SelectDiffTests = []SelectTest{
 	{
@@ -1523,8 +1522,12 @@ func (tcc *testCommitClock) Now() time.Time {
 // Tests the given query on a freshly created dataset, asserting that the result has the given schema and rows. If
 // expectedErr is set, asserts instead that the execution returns an error that matches.
 func testSelectQuery(t *testing.T, test SelectTest) {
-	if (test.ExpectedRows == nil) != (test.ExpectedSchema == nil) {
+	if (test.ExpectedRows == nil) != (test.ExpectedSchema == nil && test.ExpectedSqlSchema == nil) {
 		require.Fail(t, "Incorrect test setup: schema and rows must both be provided if one is")
+	}
+
+	if len(test.ExpectedErr) == 0 && (test.ExpectedSchema == nil) == (test.ExpectedSqlSchema == nil) {
+		require.Fail(t, "Incorrect test setup: must set at most one of ExpectedSchema, ExpectedSqlSchema")
 	}
 
 	if len(singleSelectQueryTest) > 0 && test.Name != singleSelectQueryTest {
@@ -1558,9 +1561,14 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 	}
 
 	assert.Equal(t, test.ExpectedRows, actualRows)
+	var sqlSchema sql.Schema
+	if test.ExpectedSqlSchema != nil {
+		sqlSchema = test.ExpectedSqlSchema
+	} else {
+		sqlSchema = mustSqlSchema(test.ExpectedSchema)
+	}
 
-	// this is meaningless as executeSelect just returns the schema that is passed in.
-	assert.Equal(t, test.ExpectedSchema, sch)
+	assertSchemasEqual(t, sqlSchema, sch)
 }
 
 func testSelectDiffQuery(t *testing.T, test SelectTest) {

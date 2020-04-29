@@ -143,6 +143,7 @@ func mustSqlSchema(sch schema.Schema) sql.Schema {
 	return sqlSchema
 }
 
+// Convenience function to return a row or panic on an error
 func mustRow(r row.Row, err error) row.Row {
 	if err != nil {
 		panic(err)
