@@ -750,6 +750,24 @@ var BasicSelectTests = []SelectTest{
 	},
 }
 
+var sqlDiffSchema = sql.Schema{
+	&sql.Column{Name: "to_id", Type: sql.Int64},
+	&sql.Column{Name: "to_first_name", Type: sql.LongText},
+	&sql.Column{Name: "to_last_name", Type: sql.LongText},
+	&sql.Column{Name: "to_addr", Type: sql.LongText},
+	&sql.Column{Name: "to_age_4", Type: sql.Int64},
+	&sql.Column{Name: "to_age_5", Type: sql.Uint64},
+	&sql.Column{Name: "to_commit", Type: sql.LongText},
+	&sql.Column{Name: "from_id", Type: sql.Int64},
+	&sql.Column{Name: "from_first_name", Type: sql.LongText},
+	&sql.Column{Name: "from_last_name", Type: sql.LongText},
+	&sql.Column{Name: "from_addr", Type: sql.LongText},
+	&sql.Column{Name: "from_age_4", Type: sql.Int64},
+	&sql.Column{Name: "from_age_5", Type: sql.Uint64},
+	&sql.Column{Name: "from_commit", Type: sql.LongText},
+	&sql.Column{Name: "diff_type", Type: sql.Text},
+}
+
 var SelectDiffTests = []SelectTest{
 	{
 		Name:  "select * from diff system table",
@@ -757,7 +775,7 @@ var SelectDiffTests = []SelectTest{
 		ExpectedRows: ToSqlRows(DiffSchema,
 			mustRow(row.New(types.Format_7_18, DiffSchema, row.TaggedValues{0: types.Int(6), 1: types.String("Katie"), 2: types.String("McCulloch"), 13: types.String("current"), 6: types.String("HEAD"), 14: types.String("added")})),
 		),
-		ExpectedSchema: DiffSchema,
+		ExpectedSqlSchema: sqlDiffSchema,
 	},
 	{
 		Name:  "select * from diff system table with from commit",
@@ -771,7 +789,7 @@ var SelectDiffTests = []SelectTest{
 			mustRow(row.New(types.Format_7_18, DiffSchema, row.TaggedValues{0: types.Int(5), 1: types.String("Daylon"), 2: types.String("Wilkins"), 3: types.NullValue, 13: types.String("add-age"), 6: types.String("HEAD"), 14: types.String("added")})),
 			mustRow(row.New(types.Format_7_18, DiffSchema, row.TaggedValues{0: types.Int(6), 1: types.String("Katie"), 2: types.String("McCulloch"), 13: types.String("add-age"), 6: types.String("HEAD"), 14: types.String("added")})),
 		),
-		ExpectedSchema: DiffSchema,
+		ExpectedSqlSchema: sqlDiffSchema,
 	},
 	{
 		Name:  "select * from diff system table with from and to commit and test insensitive name",
@@ -784,7 +802,7 @@ var SelectDiffTests = []SelectTest{
 			mustRow(row.New(types.Format_7_18, DiffSchema, row.TaggedValues{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele"), 3: types.NullValue, 13: types.String("add-age"), 6: types.String("master"), 14: types.String("added")})),
 			mustRow(row.New(types.Format_7_18, DiffSchema, row.TaggedValues{0: types.Int(5), 1: types.String("Daylon"), 2: types.String("Wilkins"), 3: types.NullValue, 13: types.String("add-age"), 6: types.String("master"), 14: types.String("added")})),
 		),
-		ExpectedSchema: DiffSchema,
+		ExpectedSqlSchema: sqlDiffSchema,
 	},
 }
 
@@ -826,38 +844,38 @@ var AsOfTests = []SelectTest{
 	{
 		Name:  "select * from HEAD~",
 		Query: "select * from test_table as of 'HEAD~'",
-		ExpectedRows: ToSqlRows(ReaddAgeAt5HistSch,
+		ExpectedRows: ToSqlRows(AddAddrAt3HistSch,
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St")})),
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln")})),
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct")})),
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave")})),
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele")})),
 		),
-		ExpectedSchema: ReaddAgeAt5HistSch,
+		ExpectedSchema: AddAddrAt3HistSch,
 	},
 	{
 		Name:  "select * from HEAD^",
 		Query: "select * from test_table as of 'HEAD^'",
-		ExpectedRows: ToSqlRows(ReaddAgeAt5HistSch,
+		ExpectedRows: ToSqlRows(AddAddrAt3HistSch,
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St")})),
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln")})),
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct")})),
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave")})),
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele")})),
 		),
-		ExpectedSchema: ReaddAgeAt5HistSch,
+		ExpectedSchema: AddAddrAt3HistSch,
 	},
 	{
 		Name:  "select * from master^",
 		Query: "select * from test_table as of 'master^'",
-		ExpectedRows: ToSqlRows(ReaddAgeAt5HistSch,
+		ExpectedRows: ToSqlRows(AddAddrAt3HistSch,
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St")})),
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln")})),
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct")})),
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave")})),
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele")})),
 		),
-		ExpectedSchema: ReaddAgeAt5HistSch,
+		ExpectedSchema: AddAddrAt3HistSch,
 	},
 	// Because of an implementation detail in the way we process history for test setup, each commit is 2 hours apart.
 	{
@@ -889,26 +907,26 @@ var AsOfTests = []SelectTest{
 	{
 		Name:  "select * from timestamp, HEAD~ + 1",
 		Query: "select * from test_table as of CONVERT('1970-01-01 07:00:00', DATETIME)",
-		ExpectedRows: ToSqlRows(ReaddAgeAt5HistSch,
+		ExpectedRows: ToSqlRows(AddAddrAt3HistSch,
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St")})),
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln")})),
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct")})),
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave")})),
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele")})),
 		),
-		ExpectedSchema: ReaddAgeAt5HistSch,
+		ExpectedSchema: AddAddrAt3HistSch,
 	},
 	{
 		Name:  "select * from timestamp, HEAD~",
 		Query: "select * from test_table as of CONVERT('1970-01-01 06:00:00', DATETIME)",
-		ExpectedRows: ToSqlRows(ReaddAgeAt5HistSch,
+		ExpectedRows: ToSqlRows(AddAddrAt3HistSch,
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St")})),
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln")})),
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct")})),
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave")})),
 			mustRow(row.New(types.Format_7_18, AddAddrAt3HistSch, row.TaggedValues{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele")})),
 		),
-		ExpectedSchema: ReaddAgeAt5HistSch,
+		ExpectedSchema: AddAddrAt3HistSch,
 	},
 	{
 		Name:        "select * from timestamp, before table creation",
@@ -1522,21 +1540,7 @@ func (tcc *testCommitClock) Now() time.Time {
 // Tests the given query on a freshly created dataset, asserting that the result has the given schema and rows. If
 // expectedErr is set, asserts instead that the execution returns an error that matches.
 func testSelectQuery(t *testing.T, test SelectTest) {
-	if (test.ExpectedRows == nil) != (test.ExpectedSchema == nil && test.ExpectedSqlSchema == nil) {
-		require.Fail(t, "Incorrect test setup: schema and rows must both be provided if one is")
-	}
-
-	if len(test.ExpectedErr) == 0 && (test.ExpectedSchema == nil) == (test.ExpectedSqlSchema == nil) {
-		require.Fail(t, "Incorrect test setup: must set at most one of ExpectedSchema, ExpectedSqlSchema")
-	}
-
-	if len(singleSelectQueryTest) > 0 && test.Name != singleSelectQueryTest {
-		t.Skip("Skipping tests until " + singleSelectQueryTest)
-	}
-
-	if len(singleSelectQueryTest) == 0 && test.SkipOnSqlEngine && skipBrokenSelect {
-		t.Skip("Skipping test broken on SQL engine")
-	}
+	validateTest(t, test)
 
 	tcc := &testCommitClock{}
 	doltdb.CommitNowFunc = tcc.Now
@@ -1572,17 +1576,7 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 }
 
 func testSelectDiffQuery(t *testing.T, test SelectTest) {
-	if (test.ExpectedRows == nil) != (test.ExpectedSchema == nil) {
-		require.Fail(t, "Incorrect test setup: schema and rows must both be provided if one is")
-	}
-
-	if len(singleSelectQueryTest) > 0 && test.Name != singleSelectQueryTest {
-		t.Skip("Skipping tests until " + singleSelectQueryTest)
-	}
-
-	if len(singleSelectQueryTest) == 0 && test.SkipOnSqlEngine && skipBrokenSelect {
-		t.Skip("Skipping test broken on SQL engine")
-	}
+	validateTest(t, test)
 
 	ctx := context.Background()
 	tcc := &testCommitClock{}
@@ -1626,6 +1620,32 @@ func testSelectDiffQuery(t *testing.T, test SelectTest) {
 		require.NoError(t, err)
 	}
 
-	assert.Equal(t, test.ExpectedSchema, sch)
 	assert.Equal(t, test.ExpectedRows, actualRows)
+
+	var sqlSchema sql.Schema
+	if test.ExpectedSqlSchema != nil {
+		sqlSchema = test.ExpectedSqlSchema
+	} else {
+		sqlSchema = mustSqlSchema(test.ExpectedSchema)
+	}
+
+	assertSchemasEqual(t, sqlSchema, sch)
+}
+
+func validateTest(t *testing.T, test SelectTest) {
+	if (test.ExpectedRows == nil) != (test.ExpectedSchema == nil && test.ExpectedSqlSchema == nil) {
+		require.Fail(t, "Incorrect test setup: schema and rows must both be provided if one is")
+	}
+
+	if len(test.ExpectedErr) == 0 && (test.ExpectedSchema == nil) == (test.ExpectedSqlSchema == nil) {
+		require.Fail(t, "Incorrect test setup: must set at most one of ExpectedSchema, ExpectedSqlSchema")
+	}
+
+	if len(singleSelectQueryTest) > 0 && test.Name != singleSelectQueryTest {
+		t.Skip("Skipping tests until " + singleSelectQueryTest)
+	}
+
+	if len(singleSelectQueryTest) == 0 && test.SkipOnSqlEngine && skipBrokenSelect {
+		t.Skip("Skipping test broken on SQL engine")
+	}
 }
