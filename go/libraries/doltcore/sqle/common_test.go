@@ -63,13 +63,33 @@ func executeSelect(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValu
 	return sqlRows, sch, nil
 }
 
-// Compresses each of the rows given ala compressRow
+// Returns the dolt rows given transformed to sql rows. Exactly the columns in the schema provided are present in the
+// final output rows, even if the input rows contain different columns. The tag numbers for columns in the row and
+// schema given must match.
 func ToSqlRows(sch schema.Schema, rs ...row.Row) []sql.Row {
 	sqlRows := make([]sql.Row, len(rs))
+	compressedSch := CompressSchema(sch)
 	for i := range rs {
-		sqlRows[i], _ = DoltRowToSqlRow(rs[i], sch)
+		sqlRows[i], _ = DoltRowToSqlRow(CompressRow(sch, rs[i]), compressedSch)
 	}
 	return sqlRows
+}
+
+// SubsetSchema returns a schema that is a subset of the schema given, with keys and constraints removed. Column names
+// must be verified before subsetting. Unrecognized column names will cause a panic.
+func SubsetSchema(sch schema.Schema, colNames ...string) schema.Schema {
+	srcColls := sch.GetAllCols()
+
+	var cols []schema.Column
+	for _, name := range colNames {
+		if col, ok := srcColls.GetByName(name); !ok {
+			panic("Unrecognized name " + name)
+		} else {
+			cols = append(cols, col)
+		}
+	}
+	colColl, _ := schema.NewColCollection(cols...)
+	return schema.UnkeyedSchemaFromCols(colColl)
 }
 
 // Runs the query given and returns the error (if any).
