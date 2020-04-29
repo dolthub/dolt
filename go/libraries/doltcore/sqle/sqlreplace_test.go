@@ -34,9 +34,6 @@ import (
 // Set to the name of a single test to run just that test, useful for debugging
 const singleReplaceQueryTest = "" //"Natural join with join clause"
 
-// Set to false to run tests known to be broken
-const skipBrokenReplace = true
-
 // Structure for a test of a replace query
 type ReplaceTest struct {
 	// The name of this test. Names should be unique and descriptive.
@@ -53,9 +50,6 @@ type ReplaceTest struct {
 	ExpectedErr string
 	// Setup logic to run before executing this test, after initial tables have been created and populated
 	AdditionalSetup SetupFn
-	// Whether to skip this test on SqlEngine (go-mysql-server) execution.
-	// Over time, this should become false for every query.
-	SkipOnSqlEngine bool
 }
 
 // BasicReplaceTests cover basic replace statement features and error handling
@@ -247,101 +241,6 @@ var BasicReplaceTests = []ReplaceTest{
 					(7, "Maggie", null, false, 1, 5.1)`,
 		ExpectedErr: "Constraint failed for column 'last_name': Not null",
 	},
-	{
-		Name: "type mismatch int -> string",
-		ReplaceQuery: `replace into people (id, first_name, last_name, is_married, age, rating) values
-					(7, "Maggie", 100, false, 1, 5.1)`,
-		ExpectedErr:     "Type mismatch",
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "type mismatch int -> bool",
-		ReplaceQuery: `replace into people (id, first_name, last_name, is_married, age, rating) values
-					(7, "Maggie", "Simpson", 10, 1, 5.1)`,
-		ExpectedErr:     "Type mismatch",
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "type mismatch int -> uuid",
-		ReplaceQuery: `replace into people (id, first_name, last_name, is_married, age, uuid) values
-					(7, "Maggie", "Simpson", false, 1, 100)`,
-		ExpectedErr: "Type mismatch",
-	},
-	{
-		Name: "type mismatch string -> int",
-		ReplaceQuery: `replace into people (id, first_name, last_name, is_married, age, rating) values
-					("7", "Maggie", "Simpson", false, 1, 5.1)`,
-		ExpectedErr:     "Type mismatch",
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "type mismatch string -> float",
-		ReplaceQuery: `replace into people (id, first_name, last_name, is_married, age, rating) values
-					(7, "Maggie", "Simpson", false, 1, "5.1")`,
-		ExpectedErr:     "Type mismatch",
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "type mismatch string -> uint",
-		ReplaceQuery: `replace into people (id, first_name, last_name, is_married, age, num_episodes) values
-					(7, "Maggie", "Simpson", false, 1, "100")`,
-		ExpectedErr:     "Type mismatch",
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "type mismatch string -> uuid",
-		ReplaceQuery: `replace into people (id, first_name, last_name, is_married, age, uuid) values
-					(7, "Maggie", "Simpson", false, 1, "a uuid but idk what im doing")`,
-		ExpectedErr: "Type mismatch",
-	},
-	{
-		Name: "type mismatch float -> string",
-		ReplaceQuery: `replace into people (id, first_name, last_name, is_married, age, rating) values
-					(7, 8.1, "Simpson", false, 1, 5.1)`,
-		ExpectedErr:     "Type mismatch",
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "type mismatch float -> bool",
-		ReplaceQuery: `replace into people (id, first_name, last_name, is_married, age, rating) values
-					(7, "Maggie", "Simpson", 0.5, 1, 5.1)`,
-		ExpectedErr:     "Type mismatch",
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "type mismatch float -> int",
-		ReplaceQuery: `replace into people (id, first_name, last_name, is_married, age, rating) values
-					(7, "Maggie", "Simpson", false, 1.0, 5.1)`,
-		ExpectedErr:     "Type mismatch",
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "type mismatch bool -> int",
-		ReplaceQuery: `replace into people (id, first_name, last_name, is_married, age, rating) values
-					(true, "Maggie", "Simpson", false, 1, 5.1)`,
-		ExpectedErr:     "Type mismatch",
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "type mismatch bool -> float",
-		ReplaceQuery: `replace into people (id, first_name, last_name, is_married, age, rating) values
-					(7, "Maggie", "Simpson", false, 1, true)`,
-		ExpectedErr:     "Type mismatch",
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "type mismatch bool -> string",
-		ReplaceQuery: `replace into people (id, first_name, last_name, is_married, age, rating) values
-					(7, true, "Simpson", false, 1, 5.1)`,
-		ExpectedErr:     "Type mismatch",
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "type mismatch bool -> uuid",
-		ReplaceQuery: `replace into people (id, first_name, last_name, is_married, age, uuid) values
-					(7, "Maggie", "Simpson", false, 1, true)`,
-		ExpectedErr: "Type mismatch",
-	},
 }
 
 func TestExecuteReplace(t *testing.T) {
@@ -404,10 +303,6 @@ func testReplaceQuery(t *testing.T, test ReplaceTest) {
 
 	if len(singleReplaceQueryTest) > 0 && test.Name != singleReplaceQueryTest {
 		t.Skip("Skipping tests until " + singleReplaceQueryTest)
-	}
-
-	if len(singleReplaceQueryTest) == 0 && test.SkipOnSqlEngine && skipBrokenReplace {
-		t.Skip("Skipping test broken on SQL engine")
 	}
 
 	dEnv := dtestutils.CreateTestEnv()
