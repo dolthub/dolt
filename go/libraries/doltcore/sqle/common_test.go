@@ -1,23 +1,22 @@
-/*
- * // Copyright 2020 Liquidata, Inc.
- * //
- * // Licensed under the Apache License, Version 2.0 (the "License");
- * // you may not use this file except in compliance with the License.
- * // You may obtain a copy of the License at
- * //
- * //     http://www.apache.org/licenses/LICENSE-2.0
- * //
- * // Unless required by applicable law or agreed to in writing, software
- * // distributed under the License is distributed on an "AS IS" BASIS,
- * // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * // See the License for the specific language governing permissions and
- * // limitations under the License.
- */
+// Copyright 2020 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 package sqle
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/envtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
@@ -34,6 +33,9 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 )
+
+// SetupFunc can be run to perform additional setup work before a test case
+type SetupFn func(t *testing.T, dEnv *env.DoltEnv)
 
 // Runs the query given and returns the result. The schema result of the query's execution is currently ignored, and
 // the targetSchema given is used to prepare all rows.
@@ -63,6 +65,24 @@ func executeSelect(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValu
 	return sqlRows, sch, nil
 }
 
+// Runs the query given and returns the error (if any).
+func executeModify(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string) (*doltdb.RootValue, error) {
+	db := NewDatabase("dolt", dEnv.DoltDB, dEnv.RepoState, dEnv.RepoStateWriter())
+	engine, sqlCtx, err := NewTestEngine(ctx, db, root)
+
+	if err != nil {
+		return nil, err
+	}
+
+	_, _, err = engine.Query(sqlCtx, query)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return db.GetRoot(sqlCtx)
+}
+
 // Returns the dolt rows given transformed to sql rows. Exactly the columns in the schema provided are present in the
 // final output rows, even if the input rows contain different columns. The tag numbers for columns in the row and
 // schema given must match.
@@ -90,24 +110,6 @@ func SubsetSchema(sch schema.Schema, colNames ...string) schema.Schema {
 	}
 	colColl, _ := schema.NewColCollection(cols...)
 	return schema.UnkeyedSchemaFromCols(colColl)
-}
-
-// Runs the query given and returns the error (if any).
-func executeModify(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string) (*doltdb.RootValue, error) {
-	db := NewDatabase("dolt", dEnv.DoltDB, dEnv.RepoState, dEnv.RepoStateWriter())
-	engine, sqlCtx, err := NewTestEngine(ctx, db, root)
-
-	if err != nil {
-		return nil, err
-	}
-
-	_, _, err = engine.Query(sqlCtx, query)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return db.GetRoot(sqlCtx)
 }
 
 func schemaNewColumn(t *testing.T, name string, tag uint64, sqlType sql.Type, partOfPK bool, constraints ...schema.ColConstraint) schema.Column {
@@ -141,6 +143,14 @@ func mustSqlSchema(sch schema.Schema) sql.Schema {
 	return sqlSchema
 }
 
+func mustRow(r row.Row, err error) row.Row {
+	if err != nil {
+		panic(err)
+	}
+
+	return r
+}
+
 // Returns the schema given reduced to just its column names and types.
 func reduceSchema(sch sql.Schema) sql.Schema {
 	newSch := make(sql.Schema, len(sch))
@@ -156,4 +166,32 @@ func reduceSchema(sch sql.Schema) sql.Schema {
 // Asserts that the two schemas are equal, comparing only names and types of columns.
 func assertSchemasEqual(t *testing.T, expected, actual sql.Schema) {
 	assert.Equal(t, reduceSchema(expected), reduceSchema(actual))
+}
+
+// CreateTableFn returns a SetupFunc that creates a table with the rows given
+func CreateTableFn(tableName string, tableSchema schema.Schema, initialRows ...row.Row) SetupFn {
+	return func(t *testing.T, dEnv *env.DoltEnv) {
+		dtestutils.CreateTestTable(t, dEnv, tableName, tableSchema, initialRows...)
+	}
+}
+
+// CreateTableWithRowsFn returns a SetupFunc that creates a table with the rows given, creating the rows on the fly
+// from Value types conforming to the schema given.
+func CreateTableWithRowsFn(tableName string, tableSchema schema.Schema, initialRows ...[]types.Value) SetupFn {
+	return func(t *testing.T, dEnv *env.DoltEnv) {
+		rows := make([]row.Row, len(initialRows))
+		for i, r := range initialRows {
+			rows[i] = NewRowWithSchema(tableSchema, r...)
+		}
+		dtestutils.CreateTestTable(t, dEnv, tableName, tableSchema, rows...)
+	}
+}
+
+// Compose takes an arbitrary number of SetupFns and composes them into a single func which executes all funcs given.
+func Compose(fns ...SetupFn) SetupFn {
+	return func(t *testing.T, dEnv *env.DoltEnv) {
+		for _, f := range fns {
+			f(t, dEnv)
+		}
+	}
 }
