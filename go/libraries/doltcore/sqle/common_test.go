@@ -22,6 +22,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/stretchr/testify/assert"
 	"io"
 	"testing"
 
@@ -108,4 +109,31 @@ func CreateWorkingRootUpdate() map[string]envtestutils.TableUpdate {
 			},
 		},
 	}
+}
+
+// Returns the dolt schema given as a sql.Schema, or panics.
+func mustSqlSchema(sch schema.Schema) sql.Schema {
+	sqlSchema, err := doltSchemaToSqlSchema("", sch)
+	if err != nil {
+		panic(err)
+	}
+
+	return sqlSchema
+}
+
+// Returns the schema given reduced to just its column names and types.
+func reduceSchema(sch sql.Schema) sql.Schema {
+	newSch := make(sql.Schema, len(sch))
+	for i, column := range sch {
+		newSch[i] = &sql.Column{
+			Name:       column.Name,
+			Type:       column.Type,
+		}
+	}
+	return newSch
+}
+
+// Asserts that the two schemas are equal, comparing only names and types of columns.
+func assertSchemasEqual(t *testing.T, expected, actual sql.Schema) {
+	assert.Equal(t, reduceSchema(expected), reduceSchema(actual))
 }
