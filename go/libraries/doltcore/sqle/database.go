@@ -22,9 +22,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/src-d/go-mysql-server/sql"
-	"github.com/src-d/go-mysql-server/sql/parse"
-	"github.com/src-d/go-mysql-server/sql/plan"
+	"github.com/liquidata-inc/go-mysql-server/sql"
+	"github.com/liquidata-inc/go-mysql-server/sql/parse"
+	"github.com/liquidata-inc/go-mysql-server/sql/plan"
 	"gopkg.in/src-d/go-errors.v1"
 	"vitess.io/vitess/go/vt/proto/query"
 

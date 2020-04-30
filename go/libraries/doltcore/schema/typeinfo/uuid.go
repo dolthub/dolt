@@ -18,7 +18,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/src-d/go-mysql-server/sql"
+	"github.com/liquidata-inc/go-mysql-server/sql"
 	"vitess.io/vitess/go/sqltypes"
 
 	"github.com/liquidata-inc/dolt/go/store/types"

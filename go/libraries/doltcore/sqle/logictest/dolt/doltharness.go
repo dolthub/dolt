@@ -22,10 +22,10 @@ import (
 	"strconv"
 	"strings"
 
+	sqle "github.com/liquidata-inc/go-mysql-server"
+	"github.com/liquidata-inc/go-mysql-server/sql"
 	"github.com/liquidata-inc/sqllogictest/go/logictest"
 	"github.com/shopspring/decimal"
-	sqle "github.com/src-d/go-mysql-server"
-	"github.com/src-d/go-mysql-server/sql"
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 

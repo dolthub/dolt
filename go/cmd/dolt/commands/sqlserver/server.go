@@ -20,11 +20,11 @@ import (
 	"strconv"
 	"time"
 
+	sqle "github.com/liquidata-inc/go-mysql-server"
+	"github.com/liquidata-inc/go-mysql-server/auth"
+	"github.com/liquidata-inc/go-mysql-server/server"
+	"github.com/liquidata-inc/go-mysql-server/sql"
 	"github.com/sirupsen/logrus"
-	sqle "github.com/src-d/go-mysql-server"
-	"github.com/src-d/go-mysql-server/auth"
-	"github.com/src-d/go-mysql-server/server"
-	"github.com/src-d/go-mysql-server/sql"
 	"vitess.io/vitess/go/mysql"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
