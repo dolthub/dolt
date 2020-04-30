@@ -15,7 +15,7 @@
 package expreval
 
 import (
-	"github.com/src-d/go-mysql-server/sql/expression"
+	"github.com/liquidata-inc/go-mysql-server/sql/expression"
 
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
