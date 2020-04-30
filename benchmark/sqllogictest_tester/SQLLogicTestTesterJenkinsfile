@@ -5,28 +5,28 @@ pipeline {
         }
     }
     stages {
-        stage ("Update Liquidata/dolt-sql-performance:nightly") {
+        stage('Run sqllogictests against Dolt commits') {
             environment {
                 PATH = "${pwd()}/.ci_bin/node_modules/.bin:${env.PATH}"
-                DOLT_VERSION = "${env.GIT_COMMIT}"
                 TMPDIR = "${pwd()}/tempDir"
                 DOLT_ROOT_PATH="${pwd()}/tempRoot"
                 DOLT_CREDS = credentials("system-account-dolthub-creds")
+                TMP_TESTING_DIR = "${pwd()}/tempTesting"
+                TMP_CSV_DIR = "${pwd()}/tempCSV"
             }
             steps {
+                sh "rm -rf tempDolt"
                 sh "rm -rf $TMPDIR && mkdir $TMPDIR"
+                sh "rm -rf $TMP_CSV_DIR && mkdir $TMP_CSV_DIR"
                 sh "rm -rf $DOLT_ROOT_PATH && mkdir $DOLT_ROOT_PATH"
                 dir ("sqllogictest") {
                     git url: "https://github.com/liquidata-inc/sqllogictest.git"
                 }
-                dir ("benchmark/sql_regressions") {
-                    script {
-                        try {
-                            sh "nice ./run_regressions.sh ./nightly.vars"
-                        } catch(err) {
-                            sh "if [ \"${err.getMessage()}\" = 'script returned exit code 155' ]; then echo 'Result data found in dolt-sql-performance, silently exiting...'; else echo \"${err.getMessage()}\" && exit 1; fi"
-                        }
-                    }
+                dir ("tempDolt") {
+                    git url: "https://github.com/liquidata-inc/dolt.git"
+                }
+                dir ("benchmark/sqllogictest_tester") {
+                    sh "nice ./run_tester.sh ./tester.vars"
                 }
             }
         }
@@ -39,8 +39,8 @@ pipeline {
         }
         failure {
              emailext body: "${currentBuild.currentResult}: Job ${env.JOB_NAME} build ${env.BUILD_NUMBER}\n More info at: ${env.BUILD_URL}",
-                 to: "$SQL_WATCHERS",
-                 subject: "Jenkins Build ${currentBuild.currentResult}: Job ${env.JOB_NAME}"
+                to: "$TEST_WATCHERS",
+                subject: "Jenkins Build ${currentBuild.currentResult}: Job ${env.JOB_NAME}"
         }
     }
 }

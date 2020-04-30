@@ -271,3 +271,16 @@ SQL
     [ "$status" -eq 1 ]
     [[ "${lines[0]}" =~ "error: could not find tester" ]] || false
 }
+
+@test "clone from a directory that is not a dolt repo" {
+    mkdir remotedir
+    touch remotedir/some-junk
+
+    cd dolt-repo-clones
+    dolt clone file://../remotedir test-repo
+    cd test-repo
+    skip "Cloning any directory partially initializes a dolt repo"
+    [ ! -d .dolt ]
+    [ ! -f LICENSE.md ]
+    [ ! -f README.md ]
+}

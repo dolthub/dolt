@@ -35,11 +35,12 @@ import (
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
-func Serve(ctx context.Context, serverConfig *ServerConfig, serverController *ServerController, dEnv *env.DoltEnv) (startError error, closeError error) {
+func Serve(ctx context.Context, version string, serverConfig ServerConfig, serverController *ServerController, dEnv *env.DoltEnv) (startError error, closeError error) {
 	if serverConfig == nil {
 		cli.Println("No configuration given, using defaults")
 		serverConfig = DefaultServerConfig()
 	}
+
 	// Code is easier to work through if we assume that serverController is never nil
 	if serverController == nil {
 		serverController = CreateServerController()
@@ -57,15 +58,13 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, serverController *Se
 		serverController.serverStopped(closeError)
 	}()
 
-	if startError = serverConfig.Validate(); startError != nil {
-
-		cli.PrintErr(startError)
-		return
+	if startError = ValidateConfig(serverConfig); startError != nil {
+		return startError, nil
 	}
 
-	if serverConfig.LogLevel != LogLevel_Info {
+	if serverConfig.LogLevel() != LogLevel_Info {
 		var level logrus.Level
-		level, startError = logrus.ParseLevel(serverConfig.LogLevel.String())
+		level, startError = logrus.ParseLevel(serverConfig.LogLevel().String())
 		if startError != nil {
 			cli.PrintErr(startError)
 			return
@@ -74,17 +73,18 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, serverController *Se
 	}
 
 	permissions := auth.AllPermissions
-	if serverConfig.ReadOnly {
+	if serverConfig.ReadOnly() {
 		permissions = auth.ReadPerm
 	}
 
-	userAuth := auth.NewAudit(auth.NewNativeSingle(serverConfig.User, serverConfig.Password, permissions), auth.NewAuditLog(logrus.StandardLogger()))
+	userAuth := auth.NewAudit(auth.NewNativeSingle(serverConfig.User(), serverConfig.Password(), permissions), auth.NewAuditLog(logrus.StandardLogger()))
 	sqlEngine := sqle.NewDefault()
 
 	var username string
 	var email string
 	var mrEnv env.MultiRepoEnv
-	if serverConfig.MultiDBDir == "" {
+	dbNamesAndPaths := serverConfig.DatabaseNamesAndPaths()
+	if len(dbNamesAndPaths) == 0 {
 		var err error
 		mrEnv = env.DoltEnvAsMultiEnv(dEnv)
 
@@ -96,7 +96,7 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, serverController *Se
 		email = *dEnv.Config.GetStringOrDefault(env.UserEmailKey, "")
 	} else {
 		var err error
-		mrEnv, err = env.LoadMultiEnvFromDir(ctx, env.GetCurrentUserHomeDir, dEnv.FS, serverConfig.MultiDBDir, serverConfig.Version)
+		mrEnv, err = env.LoadMultiEnv(ctx, env.GetCurrentUserHomeDir, dEnv.FS, version, dbNamesAndPaths...)
 
 		if err != nil {
 			return err, nil
@@ -111,23 +111,22 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, serverController *Se
 
 	sqlEngine.AddDatabase(sql.NewInformationSchemaDatabase(sqlEngine.Catalog))
 
-	hostPort := net.JoinHostPort(serverConfig.Host, strconv.Itoa(serverConfig.Port))
-	timeout := time.Second * time.Duration(serverConfig.Timeout)
+	hostPort := net.JoinHostPort(serverConfig.Host(), strconv.Itoa(serverConfig.Port()))
+	readTimeout := time.Duration(serverConfig.ReadTimeout()) * time.Millisecond
+	writeTimeout := time.Duration(serverConfig.WriteTimeout()) * time.Millisecond
 	mySQLServer, startError = server.NewServer(
 		server.Config{
 			Protocol:         "tcp",
 			Address:          hostPort,
 			Auth:             userAuth,
-			ConnReadTimeout:  timeout,
-			ConnWriteTimeout: timeout,
-			// Overriding the version with "Dolt version %s" causes errors with the official python connector.  This
-			// is not a valid mysql version number which is of the format ^(\d{1,2})\.(\d{1,2})\.(\d{1,3})(.*)
-			// though serverConfig.Version is a valid version on it's own the mysql python connector still chokes on
-			// it as it requires a version > 4.1
-			// Version:          fmt.Sprintf("Dolt version %s", serverConfig.Version),
+			ConnReadTimeout:  readTimeout,
+			ConnWriteTimeout: writeTimeout,
+			MaxConnections:   serverConfig.MaxConnections(),
+			// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
+			// to the value of mysql that we support.
 		},
 		sqlEngine,
-		newSessionBuilder(sqlEngine, username, email, serverConfig.AutoCommit),
+		newSessionBuilder(sqlEngine, username, email, serverConfig.AutoCommit()),
 	)
 
 	if startError != nil {

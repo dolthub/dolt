@@ -51,6 +51,7 @@ func ExtractAllColNames(sch Schema) (map[uint64]string, error) {
 	return colNames, nil
 }
 
+// TODO: this function never returns an error
 // SchemasAreEqual tests equality of two schemas.
 func SchemasAreEqual(sch1, sch2 Schema) (bool, error) {
 	all1 := sch1.GetAllCols()
@@ -79,6 +80,7 @@ func SchemasAreEqual(sch1, sch2 Schema) (bool, error) {
 	return areEqual, nil
 }
 
+// TODO: this function never returns an error
 // VerifyInSchema tests that the incoming schema matches the schema from the original table
 // based on the presence of the column name in the original schema.
 func VerifyInSchema(inSch, outSch Schema) (bool, error) {

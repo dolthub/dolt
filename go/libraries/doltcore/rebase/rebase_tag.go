@@ -579,7 +579,7 @@ func dropValsForDeletedColumns(ctx context.Context, nbf *types.NomsBinFormat, ro
 			}
 		}
 
-		re.Set(k, vtv.NomsTupleForTags(nbf, sch.GetNonPKCols().Tags, false))
+		re.Set(k, vtv.NomsTupleForNonPKCols(nbf, sch.GetNonPKCols()))
 	}
 
 	prunedRowData, err := re.Map(ctx)

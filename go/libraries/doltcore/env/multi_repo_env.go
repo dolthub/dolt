@@ -199,10 +199,7 @@ func LoadMultiEnv(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, 
 	return mrEnv, nil
 }
 
-// LoadMultiEnvFromDir looks at each subfolder of the given path as a Dolt repository and attempts to return a MultiRepoEnv
-// with initialized environments for each of those subfolder data repositories. subfolders whose name starts with '.' are
-// skipped.
-func LoadMultiEnvFromDir(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, path, version string) (MultiRepoEnv, error) {
+func DBNamesAndPathsFromDir(fs filesys.Filesys, path string) ([]EnvNameAndPath, error) {
 	var envNamesAndPaths []EnvNameAndPath
 	err := fs.Iter(path, false, func(path string, size int64, isDir bool) (stop bool) {
 		if isDir {
@@ -217,6 +214,19 @@ func LoadMultiEnvFromDir(ctx context.Context, hdp HomeDirProvider, fs filesys.Fi
 
 		return false
 	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return envNamesAndPaths, nil
+}
+
+// LoadMultiEnvFromDir looks at each subfolder of the given path as a Dolt repository and attempts to return a MultiRepoEnv
+// with initialized environments for each of those subfolder data repositories. subfolders whose name starts with '.' are
+// skipped.
+func LoadMultiEnvFromDir(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, path, version string) (MultiRepoEnv, error) {
+	envNamesAndPaths, err := DBNamesAndPathsFromDir(fs, path)
 
 	if err != nil {
 		return nil, err

@@ -79,7 +79,7 @@ require (
 	google.golang.org/grpc v1.28.0
 	gopkg.in/square/go-jose.v2 v2.4.1
 	gopkg.in/src-d/go-errors.v1 v1.0.0
-	gopkg.in/yaml.v2 v2.2.8 // indirect
+	gopkg.in/yaml.v2 v2.2.8
 	modernc.org/mathutil v1.1.0 // indirect
 	modernc.org/strutil v1.1.0 // indirect
 	vitess.io/vitess v3.0.0-rc.3.0.20190602171040-12bfde34629c+incompatible
@@ -88,11 +88,9 @@ require (
 replace github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
 
 replace github.com/src-d/go-mysql-server => github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200430042048-2220da1e5b20
-
 // replace github.com/src-d/go-mysql-server => ../../go-mysql-server
 
 replace vitess.io/vitess => github.com/liquidata-inc/vitess v0.0.0-20200430040751-192bb76ecd8b
-
 // replace vitess.io/vitess => ../../vitess
 
 go 1.13

@@ -489,7 +489,7 @@ func rowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, 
 		return nil, true, nil
 	}
 
-	tpl := resultVals.NomsTupleForTags(nbf, sch.GetNonPKCols().SortedTags, false)
+	tpl := resultVals.NomsTupleForNonPKCols(nbf, sch.GetNonPKCols())
 	v, err := tpl.Value(ctx)
 
 	if err != nil {

@@ -210,8 +210,8 @@ SQL
     run dolt status
     [ "$status" -eq 0 ]
     run ls
-    [[ "$output" =~ "LICENSE.md" ]] || false
-    [[ "$output" =~ "README.md" ]] || false
+    [[ ! "$output" =~ "LICENSE.md" ]] || false
+    [[ ! "$output" =~ "README.md" ]] || false
     run dolt remote -v
     [ "$status" -eq 0 ]
     [[ "$output" =~ "origin" ]] || false

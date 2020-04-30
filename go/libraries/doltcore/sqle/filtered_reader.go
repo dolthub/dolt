@@ -212,30 +212,28 @@ type CreateReaderFunc func(ctx context.Context, m types.Map) (table.TableReadClo
 // which limits the rows read based on the filters supplied.
 func CreateReaderFuncLimitedByExpressions(nbf *types.NomsBinFormat, tblSch schema.Schema, filters []sql.Expression) (CreateReaderFunc, error) {
 	pkCols := tblSch.GetPKCols()
-	if pkCols.Size() == 1 {
-		var keySet setalgebra.Set = setalgebra.UniversalSet{}
-		var err error
-		for _, filter := range filters {
-			var setForFilter setalgebra.Set
-			setForFilter, err = getSetForKeyColumn(nbf, pkCols.GetByIndex(0), filter)
-
-			if err != nil {
-				break
-			}
-
-			keySet, err = keySet.Intersect(setForFilter)
-
-			if err != nil {
-				break
-			}
-		}
+	var keySet setalgebra.Set = setalgebra.UniversalSet{}
+	var err error
+	for _, filter := range filters {
+		var setForFilter setalgebra.Set
+		setForFilter, err = getSetForKeyColumn(nbf, pkCols.GetByIndex(0), filter)
 
 		if err != nil {
-			// should probably log this to some debug logger. don't fail, just fall back on a full table
-			// scan.
-		} else {
-			return getCreateFuncForKeySet(nbf, keySet, tblSch)
+			break
 		}
+
+		keySet, err = keySet.Intersect(setForFilter)
+
+		if err != nil {
+			break
+		}
+	}
+
+	if err != nil {
+		// should probably log this to some debug logger. don't fail, just fall back on a full table
+		// scan.
+	} else {
+		return getCreateFuncForKeySet(nbf, keySet, tblSch)
 	}
 
 	return func(ctx context.Context, m types.Map) (table.TableReadCloser, error) {
@@ -262,18 +260,57 @@ func finiteSetToKeySlice(nbf *types.NomsBinFormat, tag types.Uint, fs setalgebra
 	return keys, nil
 }
 
+func rangesForFiniteSetOfPartialKeys(nbf *types.NomsBinFormat, tag types.Uint, fs setalgebra.FiniteSet) ([]*noms.ReadRange, error) {
+	keys, err := finiteSetToKeySlice(nbf, tag, fs)
+
+	if err != nil {
+		return nil, err
+	}
+
+	ranges := make([]*noms.ReadRange, len(keys))
+	for i, key := range keys {
+		firstPKElemVal, err := key.Get(1)
+
+		if err != nil {
+			return nil, err
+		}
+
+		ranges[i] = &noms.ReadRange{Start: key, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
+			rowsFirstPKElemVal, err := tuple.Get(1)
+
+			if err != nil {
+				return false, err
+			}
+
+			return firstPKElemVal.Equals(rowsFirstPKElemVal), nil
+		}}
+	}
+
+	return ranges, nil
+}
+
 // rangeForInterval converts a setalgebra.Interval into a noms.ReadRange for reading the values within the interval
 // from a types.Map
 func rangeForInterval(nbf *types.NomsBinFormat, tag types.Uint, in setalgebra.Interval) (*noms.ReadRange, error) {
 	var inclusive bool
-	var startVal types.Value
+	var startKey types.Tuple
 	var reverse bool
 	var check noms.InRangeCheck
 
 	// Has a start point so will iterate forward
 	if in.Start != nil {
-		startVal = in.Start.Val
-		inclusive = in.Start.Inclusive
+		var err error
+		if !in.Start.Inclusive {
+			startKey, err = types.NewTuple(nbf, tag, in.Start.Val, types.Uint(uint64(0xffffffffffffffff)))
+		} else {
+			startKey, err = types.NewTuple(nbf, tag, in.Start.Val)
+		}
+
+		inclusive = true
+
+		if err != nil {
+			return nil, err
+		}
 
 		// no upper bound so the check will always return true
 		if in.End == nil {
@@ -313,20 +350,20 @@ func rangeForInterval(nbf *types.NomsBinFormat, tag types.Uint, in setalgebra.In
 		}
 	} else {
 		// No starting point so start at the end point and iterate backwards
-		startVal = in.End.Val
 		inclusive = in.End.Inclusive
 		reverse = true
+
+		var err error
+		startKey, err = types.NewTuple(nbf, tag, in.Start.Val)
+
+		if err != nil {
+			return nil, err
+		}
 
 		// there is no lower bound so always return true
 		check = func(tuple types.Tuple) (b bool, err error) {
 			return true, nil
 		}
-	}
-
-	startKey, err := types.NewTuple(nbf, tag, startVal)
-
-	if err != nil {
-		return nil, err
 	}
 
 	return &noms.ReadRange{Start: startKey, Inclusive: inclusive, Reverse: reverse, Check: check}, nil
@@ -335,39 +372,50 @@ func rangeForInterval(nbf *types.NomsBinFormat, tag types.Uint, in setalgebra.In
 // getCreateFuncForKeySet returns the CreateReaderFunc for a given setalgebra.Set which specifies which keys should
 // be returned.
 func getCreateFuncForKeySet(nbf *types.NomsBinFormat, keySet setalgebra.Set, sch schema.Schema) (CreateReaderFunc, error) {
-	pkCols := sch.GetPKCols()
-
-	if pkCols.Size() != 1 {
-		panic("not implemented yet")
-	}
-
-	col := pkCols.GetByIndex(0)
-
-	switch typedSet := keySet.(type) {
+	switch keySet.(type) {
 	case setalgebra.EmptySet:
 		return func(ctx context.Context, m types.Map) (reader table.TableReadCloser, err error) {
 			return noms.NewNomsMapReaderForKeys(m, sch, []types.Tuple{}), nil
 		}, nil
 
-	case setalgebra.FiniteSet:
+	case setalgebra.UniversalSet:
 		return func(ctx context.Context, m types.Map) (reader table.TableReadCloser, err error) {
-			keys, err := finiteSetToKeySlice(m.Format(), types.Uint(col.Tag), typedSet)
+			return noms.NewNomsMapReader(ctx, m, sch)
+		}, nil
+	}
 
-			if err != nil {
-				return nil, err
-			}
+	pkCols := sch.GetPKCols()
+	if pkCols.Size() == 1 {
+		return getCreateFuncForSinglePK(nbf, keySet, sch)
+	} else {
+		return getCreateFuncForMultiPK(nbf, keySet, sch)
+	}
+}
+func getCreateFuncForMultiPK(nbf *types.NomsBinFormat, keySet setalgebra.Set, sch schema.Schema) (CreateReaderFunc, error) {
+	pkCols := sch.GetPKCols()
+	col := pkCols.GetByIndex(0)
+	switch typedSet := keySet.(type) {
+	case setalgebra.FiniteSet:
+		ranges, err := rangesForFiniteSetOfPartialKeys(nbf, types.Uint(col.Tag), typedSet)
 
-			return noms.NewNomsMapReaderForKeys(m, sch, keys), nil
+		if err != nil {
+			return nil, err
+		}
+
+		return func(ctx context.Context, m types.Map) (reader table.TableReadCloser, err error) {
+
+			var readers = []table.TableReadCloser{noms.NewNomsRangeReader(sch, m, ranges)}
+			return table.NewCompositeTableReader(readers)
 		}, nil
 
 	case setalgebra.Interval:
+		r, err := rangeForInterval(nbf, types.Uint(col.Tag), typedSet)
+
+		if err != nil {
+			return nil, err
+		}
+
 		return func(ctx context.Context, m types.Map) (reader table.TableReadCloser, err error) {
-			r, err := rangeForInterval(m.Format(), types.Uint(col.Tag), typedSet)
-
-			if err != nil {
-				return nil, err
-			}
-
 			return noms.NewNomsRangeReader(sch, m, []*noms.ReadRange{r}), nil
 		}, nil
 
@@ -383,26 +431,86 @@ func getCreateFuncForKeySet(nbf *types.NomsBinFormat, keySet setalgebra.Set, sch
 			ranges = append(ranges, r)
 		}
 
+		if len(typedSet.Set.HashToVal) > 0 {
+			rangesForFS, err := rangesForFiniteSetOfPartialKeys(nbf, types.Uint(col.Tag), typedSet.Set)
+
+			if err != nil {
+				return nil, err
+			}
+
+			ranges = append(ranges, rangesForFS...)
+		}
+
+		return func(ctx context.Context, m types.Map) (reader table.TableReadCloser, err error) {
+			var readers = []table.TableReadCloser{noms.NewNomsRangeReader(sch, m, ranges)}
+			return table.NewCompositeTableReader(readers)
+		}, nil
+	}
+
+	return func(ctx context.Context, m types.Map) (reader table.TableReadCloser, err error) {
+		return noms.NewNomsMapReader(ctx, m, sch)
+	}, nil
+}
+
+func getCreateFuncForSinglePK(nbf *types.NomsBinFormat, keySet setalgebra.Set, sch schema.Schema) (CreateReaderFunc, error) {
+	pkCols := sch.GetPKCols()
+	col := pkCols.GetByIndex(0)
+	switch typedSet := keySet.(type) {
+	case setalgebra.FiniteSet:
+		keys, err := finiteSetToKeySlice(nbf, types.Uint(col.Tag), typedSet)
+
+		if err != nil {
+			return nil, err
+		}
+
+		return func(ctx context.Context, m types.Map) (reader table.TableReadCloser, err error) {
+			return noms.NewNomsMapReaderForKeys(m, sch, keys), nil
+		}, nil
+
+	case setalgebra.Interval:
+		r, err := rangeForInterval(nbf, types.Uint(col.Tag), typedSet)
+
+		if err != nil {
+			return nil, err
+		}
+
+		return func(ctx context.Context, m types.Map) (reader table.TableReadCloser, err error) {
+			return noms.NewNomsRangeReader(sch, m, []*noms.ReadRange{r}), nil
+		}, nil
+
+	case setalgebra.CompositeSet:
+		var ranges []*noms.ReadRange
+		for _, interval := range typedSet.Intervals {
+			r, err := rangeForInterval(nbf, types.Uint(col.Tag), interval)
+
+			if err != nil {
+				return nil, err
+			}
+
+			ranges = append(ranges, r)
+		}
+
+		var keys []types.Tuple
+		if len(typedSet.Set.HashToVal) > 0 {
+			var err error
+			keys, err = finiteSetToKeySlice(nbf, types.Uint(col.Tag), typedSet.Set)
+
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		return func(ctx context.Context, m types.Map) (reader table.TableReadCloser, err error) {
 			var readers = []table.TableReadCloser{noms.NewNomsRangeReader(sch, m, ranges)}
 
-			if len(typedSet.Set.HashToVal) > 0 {
-				keys, err := finiteSetToKeySlice(nbf, types.Uint(col.Tag), typedSet.Set)
-
-				if err != nil {
-					return nil, err
-				}
-
+			if len(keys) > 0 {
 				rd := noms.NewNomsMapReaderForKeys(m, sch, keys)
 				readers = append(readers, rd)
 			}
 
 			return table.NewCompositeTableReader(readers)
 		}, nil
-
-	default:
-		return func(ctx context.Context, m types.Map) (reader table.TableReadCloser, err error) {
-			return noms.NewNomsMapReader(ctx, m, sch)
-		}, nil
 	}
+
+	panic("unhandled case")
 }
