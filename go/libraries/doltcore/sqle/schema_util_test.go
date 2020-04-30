@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2020 Liquidata, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqltestutil
+package sqle
 
 import (
 	"fmt"
 	"strconv"
+
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -112,32 +114,55 @@ func NewRowWithPks(pkColVals []types.Value, nonPkVals ...types.Value) row.Row {
 }
 
 // NewRowWithSchema creates a new row with the using the provided schema.
-func NewRowWithSchema(vals row.TaggedValues, sch schema.Schema) row.Row {
-	r, err := row.New(types.Format_7_18, sch, vals)
+func NewRowWithSchema(sch schema.Schema, vals ...types.Value) row.Row {
+	tv := make(row.TaggedValues)
+	var i int
+	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		tv[tag] = vals[i]
+		i++
+		return false, nil
+	})
+
+	r, err := row.New(types.Format_7_18, sch, tv)
 	if err != nil {
 		panic(err)
 	}
+
 	return r
 }
 
-// Creates a new schema with the pairs of column names and types given, using ascending tag numbers starting at 0.
+// NewSchema creates a new schema with the pairs of column names and types given.
 // Uses the first column as the primary key.
 func NewSchema(colNamesAndTypes ...interface{}) schema.Schema {
+	return NewSchemaForTable("", colNamesAndTypes...)
+}
+
+// NewSchemaForTable creates a new schema for the table with the name given with the pairs of column names and types
+// given. Uses the first column as the primary key.
+func NewSchemaForTable(tableName string, colNamesAndTypes ...interface{}) schema.Schema {
 	if len(colNamesAndTypes)%2 != 0 {
 		panic("Non-even number of inputs passed to NewSchema")
 	}
+
+	// existingTags *set.Uint64Set, tableName string, existingColKinds []types.NomsKind, newColName string, newColKind types.NomsKind
+	nomsKinds := make([]types.NomsKind, 0)
+	tags := set.NewUint64Set(nil)
 
 	cols := make([]schema.Column, len(colNamesAndTypes)/2)
 	for i := 0; i < len(colNamesAndTypes); i += 2 {
 		name := colNamesAndTypes[i].(string)
 		nomsKind := colNamesAndTypes[i+1].(types.NomsKind)
 
+		tag := schema.AutoGenerateTag(tags, tableName, nomsKinds, name, nomsKind)
+		tags.Add(tag)
+		nomsKinds = append(nomsKinds, nomsKind)
+
 		isPk := i/2 == 0
 		var constraints []schema.ColConstraint
 		if isPk {
 			constraints = append(constraints, schema.NotNullConstraint{})
 		}
-		cols[i/2] = schema.NewColumn(name, uint64(i/2), nomsKind, isPk, constraints...)
+		cols[i/2] = schema.NewColumn(name, tag, nomsKind, isPk, constraints...)
 	}
 
 	colColl, err := schema.NewColCollection(cols...)
@@ -196,6 +221,7 @@ func CompressRow(sch schema.Schema, r row.Row) row.Row {
 	var itag uint64
 	compressedRow := make(row.TaggedValues)
 
+	// TODO: this is probably incorrect and will break for schemas where the tag numbering doesn't match the declared order
 	sch.GetAllCols().IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
 		if val, ok := r.GetColVal(tag); ok {
 			compressedRow[itag] = val

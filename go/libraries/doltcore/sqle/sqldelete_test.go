@@ -18,13 +18,14 @@ import (
 	"context"
 	"testing"
 
+	sql "github.com/src-d/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -32,8 +33,145 @@ import (
 // Set to the name of a single test to run just that test, useful for debugging
 const singleDeleteQueryTest = "" //"Natural join with join clause"
 
-// Set to false to run tests known to be broken
-const skipBrokenDelete = true
+// Structure for a test of a delete query
+type DeleteTest struct {
+	// The name of this test. Names should be unique and descriptive.
+	Name string
+	// The delete query to run
+	DeleteQuery string
+	// The select query to run to verify the results
+	SelectQuery string
+	// The schema of the result of the query, nil if an error is expected
+	ExpectedSchema schema.Schema
+	// The rows this query should return, nil if an error is expected
+	ExpectedRows []sql.Row
+	// An expected error string
+	ExpectedErr string
+	// Setup logic to run before executing this test, after initial tables have been created and populated
+	AdditionalSetup SetupFn
+}
+
+// BasicDeleteTests cover basic delete statement features and error handling
+var BasicDeleteTests = []DeleteTest{
+	{
+		Name:           "delete everything",
+		DeleteQuery:    "delete from people",
+		SelectQuery:    "select * from people",
+		ExpectedRows:   ToSqlRows(PeopleTestSchema),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:           "delete where id equals",
+		DeleteQuery:    "delete from people where id = 2",
+		SelectQuery:    "select * from people",
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Homer, Marge, Lisa, Moe, Barney),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:           "delete where id less than",
+		DeleteQuery:    "delete from people where id < 3",
+		SelectQuery:    "select * from people",
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Lisa, Moe, Barney),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:           "delete where id greater than",
+		DeleteQuery:    "delete from people where id > 3",
+		SelectQuery:    "select * from people",
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Homer, Marge, Bart, Lisa),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:           "delete where id less than or equal",
+		DeleteQuery:    "delete from people where id <= 3",
+		SelectQuery:    "select * from people",
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Moe, Barney),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:           "delete where id greater than or equal",
+		DeleteQuery:    "delete from people where id >= 3",
+		SelectQuery:    "select * from people",
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Homer, Marge, Bart),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:           "delete where id equals nothing",
+		DeleteQuery:    "delete from people where id = 9999",
+		SelectQuery:    "select * from people",
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Homer, Marge, Bart, Lisa, Moe, Barney),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:           "delete where last_name matches some =",
+		DeleteQuery:    "delete from people where last_name = 'Simpson'",
+		SelectQuery:    "select * from people",
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Moe, Barney),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:           "delete where last_name matches some <>",
+		DeleteQuery:    "delete from people where last_name <> 'Simpson'",
+		SelectQuery:    "select * from people",
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Homer, Marge, Bart, Lisa),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:           "delete where last_name matches some like",
+		DeleteQuery:    "delete from people where last_name like '%pson'",
+		SelectQuery:    "select * from people",
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Moe, Barney),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:           "delete order by",
+		DeleteQuery:    "delete from people order by id",
+		SelectQuery:    "select * from people",
+		ExpectedRows:   ToSqlRows(PeopleTestSchema),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:           "delete order by asc limit",
+		DeleteQuery:    "delete from people order by id asc limit 3",
+		SelectQuery:    "select * from people",
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Lisa, Moe, Barney),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:           "delete order by desc limit",
+		DeleteQuery:    "delete from people order by id desc limit 3",
+		SelectQuery:    "select * from people",
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Homer, Marge, Bart),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:           "delete order by desc limit",
+		DeleteQuery:    "delete from people order by id desc limit 3 offset 1",
+		SelectQuery:    "select * from people",
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Homer, Marge, Barney),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:        "delete invalid table",
+		DeleteQuery: "delete from nobody",
+		ExpectedErr: "invalid table",
+	},
+	{
+		Name:        "delete invalid column",
+		DeleteQuery: "delete from people where z = 'dne'",
+		ExpectedErr: "invalid column",
+	},
+	{
+		Name:        "delete negative limit",
+		DeleteQuery: "delete from people limit -1",
+		ExpectedErr: "invalid limit number",
+	},
+	{
+		Name:        "delete negative offset",
+		DeleteQuery: "delete from people limit 1 offset -1",
+		ExpectedErr: "invalid limit number",
+	},
+}
 
 func TestExecuteDelete(t *testing.T) {
 	for _, test := range BasicDeleteTests {
@@ -67,7 +205,7 @@ var systemTableDeleteTests = []DeleteTest{
 			NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 2+2 from dual"), types.String("description"))),
 		DeleteQuery:    "delete from dolt_query_catalog",
 		SelectQuery:    "select * from dolt_query_catalog",
-		ExpectedRows:   CompressRows(DoltQueryCatalogSchema),
+		ExpectedRows:   ToSqlRows(DoltQueryCatalogSchema),
 		ExpectedSchema: CompressSchema(DoltQueryCatalogSchema),
 	},
 	{
@@ -77,7 +215,7 @@ var systemTableDeleteTests = []DeleteTest{
 			NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual"))),
 		DeleteQuery:    "delete from dolt_schemas",
 		SelectQuery:    "select * from dolt_schemas",
-		ExpectedRows:   []row.Row{},
+		ExpectedRows:   ToSqlRows(DoltQueryCatalogSchema),
 		ExpectedSchema: schemasTableDoltSchema(),
 	},
 }
@@ -91,10 +229,6 @@ func testDeleteQuery(t *testing.T, test DeleteTest) {
 
 	if len(singleDeleteQueryTest) > 0 && test.Name != singleDeleteQueryTest {
 		t.Skip("Skipping tests until " + singleDeleteQueryTest)
-	}
-
-	if len(singleDeleteQueryTest) == 0 && test.SkipOnSqlEngine && skipBrokenDelete {
-		t.Skip("Skipping test broken on SQL engine")
 	}
 
 	dEnv := dtestutils.CreateTestEnv()
@@ -114,9 +248,9 @@ func testDeleteQuery(t *testing.T, test DeleteTest) {
 		require.NoError(t, err)
 	}
 
-	actualRows, sch, err := executeSelect(context.Background(), dEnv, test.ExpectedSchema, root, test.SelectQuery)
+	actualRows, sch, err := executeSelect(context.Background(), dEnv, root, test.SelectQuery)
 	require.NoError(t, err)
 
 	assert.Equal(t, test.ExpectedRows, actualRows)
-	assert.Equal(t, test.ExpectedSchema, sch)
+	assertSchemasEqual(t, mustSqlSchema(test.ExpectedSchema), sch)
 }

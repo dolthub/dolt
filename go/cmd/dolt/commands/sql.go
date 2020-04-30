@@ -39,7 +39,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	dsql "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
 	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	_ "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
@@ -713,7 +712,7 @@ func newCompleter(ctx context.Context, dEnv *env.DoltEnv) (*sqlCompleter, error)
 		}
 	}
 
-	completionWords = append(completionWords, dsql.CommonKeywords...)
+	completionWords = append(completionWords, dsqle.CommonKeywords...)
 
 	return &sqlCompleter{
 		allWords:    completionWords,

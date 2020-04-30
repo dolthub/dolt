@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2020 Liquidata, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sql
+package sqlfmt
 
 import (
 	"testing"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
-
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
 )
 
 const expectedCreateSQL = "CREATE TABLE `table_name` (\n" +

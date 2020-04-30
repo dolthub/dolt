@@ -21,9 +21,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 )
@@ -68,7 +69,7 @@ func (w *SqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
 		return err
 	}
 
-	stmt, err := sql.RowAsInsertStmt(r, w.tableName, w.sch)
+	stmt, err := sqlfmt.RowAsInsertStmt(r, w.tableName, w.sch)
 
 	if err != nil {
 		return err
@@ -80,9 +81,9 @@ func (w *SqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
 func (w *SqlExportWriter) maybeWriteDropCreate() error {
 	if !w.writtenFirstRow {
 		var b strings.Builder
-		b.WriteString(sql.DropTableIfExistsStmt(w.tableName))
+		b.WriteString(sqlfmt.DropTableIfExistsStmt(w.tableName))
 		b.WriteRune('\n')
-		b.WriteString(sql.SchemaAsCreateStmt(w.tableName, w.sch))
+		b.WriteString(sqlfmt.SchemaAsCreateStmt(w.tableName, w.sch))
 		if err := iohelp.WriteLine(w.wr, b.String()); err != nil {
 			return err
 		}

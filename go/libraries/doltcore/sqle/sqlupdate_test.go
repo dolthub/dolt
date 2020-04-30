@@ -18,13 +18,15 @@ import (
 	"context"
 	"testing"
 
+	"github.com/google/uuid"
+	"github.com/src-d/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -34,6 +36,321 @@ const singleUpdateQueryTest = "" //"Natural join with join clause"
 
 // Set to false to run tests known to be broken
 const skipBrokenUpdate = true
+
+// Structure for a test of an update query
+type UpdateTest struct {
+	// The name of this test. Names should be unique and descriptive.
+	Name string
+	// The update query to run
+	UpdateQuery string
+	// The select query to run to verify the results
+	SelectQuery string
+	// The schema of the result of the query, nil if an error is expected
+	ExpectedSchema schema.Schema
+	// The rows this query should return, nil if an error is expected
+	ExpectedRows []sql.Row
+	// An expected error string
+	ExpectedErr string
+	// Setup logic to run before executing this test, after initial tables have been created and populated
+	AdditionalSetup SetupFn
+}
+
+// BasicUpdateTests cover basic update statement features and error handling
+var BasicUpdateTests = []UpdateTest{
+	{
+		Name:           "update one row, one col, primary key where clause",
+		UpdateQuery:    `update people set first_name = "Domer" where id = 0`,
+		SelectQuery:    `select * from people where id = 0`,
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, MutateRow(PeopleTestSchema, Homer, FirstNameTag, "Domer")),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:           "update one row, one col, non-primary key where clause",
+		UpdateQuery:    `update people set first_name = "Domer" where first_name = "Homer"`,
+		SelectQuery:    `select * from people where first_name = "Domer"`,
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, MutateRow(PeopleTestSchema, Homer, FirstNameTag, "Domer")),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:           "update one row, two cols, primary key where clause",
+		UpdateQuery:    `update people set first_name = "Ned", last_name = "Flanders" where id = 0`,
+		SelectQuery:    `select * from people where id = 0`,
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, MutateRow(PeopleTestSchema, Homer, FirstNameTag, "Ned", LastNameTag, "Flanders")),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name: "update one row, all cols, non-primary key where clause",
+		UpdateQuery: `update people set first_name = "Ned", last_name = "Flanders", is_married = false, rating = 10,
+				age = 45, num_episodes = 150, uuid = '00000000-0000-0000-0000-000000000050'
+				where age = 38`,
+		SelectQuery: `select * from people where uuid = '00000000-0000-0000-0000-000000000050'`,
+		ExpectedRows: ToSqlRows(PeopleTestSchema,
+			MutateRow(PeopleTestSchema, Marge, FirstNameTag, "Ned", LastNameTag, "Flanders", IsMarriedTag, false,
+				RatingTag, 10.0, AgeTag, 45, NumEpisodesTag, uint64(150),
+				UuidTag, uuid.MustParse("00000000-0000-0000-0000-000000000050"))),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name: "update one row, set columns to existing values",
+		UpdateQuery: `update people set first_name = "Homer", last_name = "Simpson", is_married = true, rating = 8.5, age = 40,
+				num_episodes = null, uuid = null
+				where id = 0`,
+		SelectQuery:    `select * from people where id = 0`,
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Homer),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name: "update one row, null out existing values",
+		UpdateQuery: `update people set first_name = "Homer", last_name = "Simpson", is_married = null, rating = null, age = null,
+				num_episodes = null, uuid = null
+				where first_name = "Homer"`,
+		SelectQuery:    `select * from people where first_name = "Homer"`,
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, MutateRow(PeopleTestSchema, Homer, IsMarriedTag, nil, RatingTag, nil, AgeTag, nil)),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name: "update multiple rows, set two columns",
+		UpdateQuery: `update people set first_name = "Changed", rating = 0.0
+				where last_name = "Simpson"`,
+		SelectQuery: `select * from people where last_name = "Simpson"`,
+		ExpectedRows: ToSqlRows(PeopleTestSchema,
+			MutateRow(PeopleTestSchema, Homer, FirstNameTag, "Changed", RatingTag, 0.0),
+			MutateRow(PeopleTestSchema, Marge, FirstNameTag, "Changed", RatingTag, 0.0),
+			MutateRow(PeopleTestSchema, Bart, FirstNameTag, "Changed", RatingTag, 0.0),
+			MutateRow(PeopleTestSchema, Lisa, FirstNameTag, "Changed", RatingTag, 0.0),
+		),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:           "update no matching rows",
+		UpdateQuery:    `update people set first_name = "Changed", rating = 0.0 where last_name = "Flanders"`,
+		SelectQuery:    `select * from people`,
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Homer, Marge, Bart, Lisa, Moe, Barney),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:        "update without where clause",
+		UpdateQuery: `update people set first_name = "Changed", rating = 0.0`,
+		SelectQuery: `select * from people`,
+		ExpectedRows: ToSqlRows(PeopleTestSchema,
+			MutateRow(PeopleTestSchema, Homer, FirstNameTag, "Changed", RatingTag, 0.0),
+			MutateRow(PeopleTestSchema, Marge, FirstNameTag, "Changed", RatingTag, 0.0),
+			MutateRow(PeopleTestSchema, Bart, FirstNameTag, "Changed", RatingTag, 0.0),
+			MutateRow(PeopleTestSchema, Lisa, FirstNameTag, "Changed", RatingTag, 0.0),
+			MutateRow(PeopleTestSchema, Moe, FirstNameTag, "Changed", RatingTag, 0.0),
+			MutateRow(PeopleTestSchema, Barney, FirstNameTag, "Changed", RatingTag, 0.0),
+		),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:        "update set first_name = last_name",
+		UpdateQuery: `update people set first_name = last_name`,
+		SelectQuery: `select * from people`,
+		ExpectedRows: ToSqlRows(PeopleTestSchema,
+			MutateRow(PeopleTestSchema, Homer, FirstNameTag, "Simpson"),
+			MutateRow(PeopleTestSchema, Marge, FirstNameTag, "Simpson"),
+			MutateRow(PeopleTestSchema, Bart, FirstNameTag, "Simpson"),
+			MutateRow(PeopleTestSchema, Lisa, FirstNameTag, "Simpson"),
+			MutateRow(PeopleTestSchema, Moe, FirstNameTag, "Szyslak"),
+			MutateRow(PeopleTestSchema, Barney, FirstNameTag, "Gumble"),
+		),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:        "update increment age",
+		UpdateQuery: `update people set age = age + 1`,
+		SelectQuery: `select * from people`,
+		ExpectedRows: ToSqlRows(PeopleTestSchema,
+			MutateRow(PeopleTestSchema, Homer, AgeTag, 41),
+			MutateRow(PeopleTestSchema, Marge, AgeTag, 39),
+			MutateRow(PeopleTestSchema, Bart, AgeTag, 11),
+			MutateRow(PeopleTestSchema, Lisa, AgeTag, 9),
+			MutateRow(PeopleTestSchema, Moe, AgeTag, 49),
+			MutateRow(PeopleTestSchema, Barney, AgeTag, 41),
+		),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:        "update reverse rating",
+		UpdateQuery: `update people set rating = -rating`,
+		SelectQuery: `select * from people`,
+		ExpectedRows: ToSqlRows(PeopleTestSchema,
+			MutateRow(PeopleTestSchema, Homer, RatingTag, -8.5),
+			MutateRow(PeopleTestSchema, Marge, RatingTag, -8.0),
+			MutateRow(PeopleTestSchema, Bart, RatingTag, -9.0),
+			MutateRow(PeopleTestSchema, Lisa, RatingTag, -10.0),
+			MutateRow(PeopleTestSchema, Moe, RatingTag, -6.5),
+			MutateRow(PeopleTestSchema, Barney, RatingTag, -4.0),
+		),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:        "update datetime field",
+		UpdateQuery: `update episodes set air_date = "1993-03-24 20:00:00" where id = 1`,
+		SelectQuery: `select * from episodes where id = 1`,
+		ExpectedRows: ToSqlRows(EpisodesTestSchema,
+			MutateRow(EpisodesTestSchema, Ep1, EpAirDateTag, DatetimeStrToTimestamp("1993-03-24 20:00:00")),
+		),
+		ExpectedSchema: CompressSchema(EpisodesTestSchema),
+	},
+	{
+		Name:        "update datetime field",
+		UpdateQuery: `update episodes set name = "fake_name" where id = 1;`,
+		SelectQuery: `select * from episodes where id = 1;`,
+		ExpectedRows: ToSqlRows(EpisodesTestSchema,
+			MutateRow(EpisodesTestSchema, Ep1, EpNameTag, "fake_name"),
+		),
+		ExpectedSchema: CompressSchema(EpisodesTestSchema),
+	},
+	{
+		Name:        "update multiple rows, =",
+		UpdateQuery: `update people set first_name = "Homer" where last_name = "Simpson"`,
+		SelectQuery: `select * from people where last_name = "Simpson"`,
+		ExpectedRows: ToSqlRows(PeopleTestSchema,
+			Homer,
+			MutateRow(PeopleTestSchema, Marge, FirstNameTag, "Homer"),
+			MutateRow(PeopleTestSchema, Bart, FirstNameTag, "Homer"),
+			MutateRow(PeopleTestSchema, Lisa, FirstNameTag, "Homer"),
+		),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:        "update multiple rows, <>",
+		UpdateQuery: `update people set last_name = "Simpson" where last_name <> "Simpson"`,
+		SelectQuery: `select * from people`,
+		ExpectedRows: ToSqlRows(PeopleTestSchema,
+			Homer,
+			Marge,
+			Bart,
+			Lisa,
+			MutateRow(PeopleTestSchema, Moe, LastNameTag, "Simpson"),
+			MutateRow(PeopleTestSchema, Barney, LastNameTag, "Simpson"),
+		),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:        "update multiple rows, >",
+		UpdateQuery: `update people set first_name = "Homer" where age > 10`,
+		SelectQuery: `select * from people where age > 10`,
+		ExpectedRows: ToSqlRows(PeopleTestSchema,
+			Homer,
+			MutateRow(PeopleTestSchema, Marge, FirstNameTag, "Homer"),
+			MutateRow(PeopleTestSchema, Moe, FirstNameTag, "Homer"),
+			MutateRow(PeopleTestSchema, Barney, FirstNameTag, "Homer"),
+		),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:        "update multiple rows, >=",
+		UpdateQuery: `update people set first_name = "Homer" where age >= 10`,
+		SelectQuery: `select * from people where age >= 10`,
+		ExpectedRows: ToSqlRows(PeopleTestSchema,
+			Homer,
+			MutateRow(PeopleTestSchema, Marge, FirstNameTag, "Homer"),
+			MutateRow(PeopleTestSchema, Bart, FirstNameTag, "Homer"),
+			MutateRow(PeopleTestSchema, Moe, FirstNameTag, "Homer"),
+			MutateRow(PeopleTestSchema, Barney, FirstNameTag, "Homer"),
+		),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:        "update multiple rows, <",
+		UpdateQuery: `update people set first_name = "Bart" where age < 40`,
+		SelectQuery: `select * from people where age < 40`,
+		ExpectedRows: ToSqlRows(PeopleTestSchema,
+			MutateRow(PeopleTestSchema, Marge, FirstNameTag, "Bart"),
+			Bart,
+			MutateRow(PeopleTestSchema, Lisa, FirstNameTag, "Bart"),
+		),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:        "update multiple rows, <=",
+		UpdateQuery: `update people set first_name = "Homer" where age <= 40`,
+		SelectQuery: `select * from people where age <= 40`,
+		ExpectedRows: ToSqlRows(PeopleTestSchema,
+			Homer,
+			MutateRow(PeopleTestSchema, Marge, FirstNameTag, "Homer"),
+			MutateRow(PeopleTestSchema, Bart, FirstNameTag, "Homer"),
+			MutateRow(PeopleTestSchema, Lisa, FirstNameTag, "Homer"),
+			MutateRow(PeopleTestSchema, Barney, FirstNameTag, "Homer"),
+		),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:        "update multiple rows pk increment order by desc",
+		UpdateQuery: `update people set id = id + 1 order by id desc`,
+		SelectQuery: `select * from people`,
+		ExpectedRows: ToSqlRows(PeopleTestSchema,
+			MutateRow(PeopleTestSchema, Homer, IdTag, HomerId+1),
+			MutateRow(PeopleTestSchema, Marge, IdTag, MargeId+1),
+			MutateRow(PeopleTestSchema, Bart, IdTag, BartId+1),
+			MutateRow(PeopleTestSchema, Lisa, IdTag, LisaId+1),
+			MutateRow(PeopleTestSchema, Moe, IdTag, MoeId+1),
+			MutateRow(PeopleTestSchema, Barney, IdTag, BarneyId+1),
+		),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:        "update multiple rows pk increment order by asc",
+		UpdateQuery: `update people set id = id + 1 order by id asc`,
+		SelectQuery: `select * from people order by id`,
+		ExpectedRows: ToSqlRows(PeopleTestSchema,
+			MutateRow(PeopleTestSchema, Homer, IdTag, HomerId+1),
+			MutateRow(PeopleTestSchema, Marge, IdTag, MargeId+1),
+			MutateRow(PeopleTestSchema, Bart, IdTag, BartId+1),
+			MutateRow(PeopleTestSchema, Lisa, IdTag, LisaId+1),
+			MutateRow(PeopleTestSchema, Moe, IdTag, MoeId+1),
+			MutateRow(PeopleTestSchema, Barney, IdTag, BarneyId+1),
+		),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:        "update primary key col",
+		UpdateQuery: `update people set id = 0 where first_name = "Marge"`,
+		ExpectedErr: "duplicate primary key",
+	},
+	{
+		Name:        "null constraint failure",
+		UpdateQuery: `update people set first_name = null where id = 0`,
+		ExpectedErr: "Constraint failed for column 'first_name': Not null",
+	},
+	{
+		Name:        "type mismatch list -> string",
+		UpdateQuery: `update people set first_name = ("one", "two") where id = 0`,
+		ExpectedErr: "Type mismatch",
+	},
+	{
+		Name:        "type mismatch int -> uuid",
+		UpdateQuery: `update people set uuid = 0 where id = 0`,
+		ExpectedErr: "Type mismatch",
+	},
+	{
+		Name:        "type mismatch string -> int",
+		UpdateQuery: `update people set age = "pretty old" where id = 0`,
+		ExpectedErr: "Type mismatch",
+	},
+	{
+		Name:        "type mismatch string -> float",
+		UpdateQuery: `update people set rating = "great" where id = 0`,
+		ExpectedErr: "Type mismatch",
+	},
+	{
+		Name:        "type mismatch string -> uint",
+		UpdateQuery: `update people set num_episodes = "all of them" where id = 0`,
+		ExpectedErr: "Type mismatch",
+	},
+	{
+		Name:        "type mismatch string -> uuid",
+		UpdateQuery: `update people set uuid = "not a uuid string" where id = 0`,
+		ExpectedErr: "Type mismatch",
+	},
+	{
+		Name:        "type mismatch bool -> uuid",
+		UpdateQuery: `update people set uuid = false where id = 0`,
+		ExpectedErr: "Type mismatch",
+	},
+}
 
 func TestExecuteUpdate(t *testing.T) {
 	for _, test := range BasicUpdateTests {
@@ -64,16 +381,16 @@ var systemTableUpdateTests = []UpdateTest{
 		Name: "update dolt_query_catalog",
 		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
 			DoltQueryCatalogSchema,
-			NewRowWithSchema(row.TaggedValues{
-				doltdb.QueryCatalogIdTag:          types.String("abc123"),
-				doltdb.QueryCatalogOrderTag:       types.Uint(1),
-				doltdb.QueryCatalogNameTag:        types.String("example"),
-				doltdb.QueryCatalogQueryTag:       types.String("select 2+2 from dual"),
-				doltdb.QueryCatalogDescriptionTag: types.String("description")},
-				DoltQueryCatalogSchema)),
+			NewRowWithSchema(DoltQueryCatalogSchema,
+				types.String("abc123"),
+				types.Uint(1),
+				types.String("example"),
+				types.String("select 2+2 from dual"),
+				types.String("description"),
+			)),
 		UpdateQuery: "update dolt_query_catalog set display_order = display_order + 1",
 		SelectQuery: "select * from dolt_query_catalog",
-		ExpectedRows: CompressRows(CompressSchema(DoltQueryCatalogSchema),
+		ExpectedRows: ToSqlRows(CompressSchema(DoltQueryCatalogSchema),
 			NewRow(types.String("abc123"), types.Uint(2), types.String("example"), types.String("select 2+2 from dual"), types.String("description"))),
 		ExpectedSchema: CompressSchema(DoltQueryCatalogSchema),
 	},
@@ -81,14 +398,14 @@ var systemTableUpdateTests = []UpdateTest{
 		Name: "update dolt_schemas",
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
 			schemasTableDoltSchema(),
-			NewRowWithSchema(row.TaggedValues{
-				doltdb.DoltSchemasTypeTag:     types.String("view"),
-				doltdb.DoltSchemasNameTag:     types.String("name"),
-				doltdb.DoltSchemasFragmentTag: types.String("select 2+2 from dual"),
-			}, schemasTableDoltSchema())),
+			NewRowWithSchema(schemasTableDoltSchema(),
+				types.String("view"),
+				types.String("name"),
+				types.String("select 2+2 from dual"),
+			)),
 		UpdateQuery: "update dolt_schemas set type = 'not a view'",
 		SelectQuery: "select * from dolt_schemas",
-		ExpectedRows: CompressRows(CompressSchema(schemasTableDoltSchema()),
+		ExpectedRows: ToSqlRows(CompressSchema(schemasTableDoltSchema()),
 			NewRow(types.String("not a view"), types.String("name"), types.String("select 2+2 from dual")),
 		),
 		ExpectedSchema: CompressSchema(schemasTableDoltSchema()),
@@ -104,10 +421,6 @@ func testUpdateQuery(t *testing.T, test UpdateTest) {
 
 	if len(singleUpdateQueryTest) > 0 && test.Name != singleUpdateQueryTest {
 		t.Skip("Skipping tests until " + singleUpdateQueryTest)
-	}
-
-	if len(singleUpdateQueryTest) == 0 && test.SkipOnSqlEngine && skipBrokenUpdate {
-		t.Skip("Skipping test broken on SQL engine")
 	}
 
 	dEnv := dtestutils.CreateTestEnv()
@@ -127,9 +440,10 @@ func testUpdateQuery(t *testing.T, test UpdateTest) {
 		require.NoError(t, err)
 	}
 
-	actualRows, sch, err := executeSelect(context.Background(), dEnv, test.ExpectedSchema, root, test.SelectQuery)
+	actualRows, sch, err := executeSelect(context.Background(), dEnv, root, test.SelectQuery)
 	require.NoError(t, err)
 
-	assert.Equal(t, test.ExpectedSchema, sch)
 	assert.Equal(t, test.ExpectedRows, actualRows)
+	sqlSchema := mustSqlSchema(test.ExpectedSchema)
+	assertSchemasEqual(t, sqlSchema, sch)
 }

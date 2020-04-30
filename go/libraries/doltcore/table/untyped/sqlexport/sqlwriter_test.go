@@ -25,7 +25,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
 )
 
 type StringBuilderCloser struct {
@@ -47,7 +47,7 @@ func TestEndToEnd(t *testing.T) {
 	id := uuid.MustParse("00000000-0000-0000-0000-000000000000")
 	tableName := "people"
 
-	dropCreateStatement := sql.DropTableIfExistsStmt(tableName) + "\n" + sql.SchemaAsCreateStmt(tableName, dtestutils.TypedSchema)
+	dropCreateStatement := sqlfmt.DropTableIfExistsStmt(tableName) + "\n" + sqlfmt.SchemaAsCreateStmt(tableName, dtestutils.TypedSchema)
 
 	type test struct {
 		name           string

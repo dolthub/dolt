@@ -17,20 +17,21 @@ package sqle
 import (
 	"github.com/src-d/go-mysql-server/sql"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	dsql "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
 )
 
 // The fixed schema for the `dolt_schemas` table.
 func SchemasTableSchema() sql.Schema {
 	return []*sql.Column{
 		// Currently: `view`.
-		{Name: doltdb.SchemasTablesTypeCol, Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: true, Comment: dsql.FmtColTagComment(doltdb.DoltSchemasTypeTag)},
+		{Name: doltdb.SchemasTablesTypeCol, Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: true, Comment: sqlfmt.FmtColTagComment(doltdb.DoltSchemasTypeTag)},
 		// The name of the database entity.
-		{Name: doltdb.SchemasTablesNameCol, Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: true, Comment: dsql.FmtColTagComment(doltdb.DoltSchemasNameTag)},
+		{Name: doltdb.SchemasTablesNameCol, Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: true, Comment: sqlfmt.FmtColTagComment(doltdb.DoltSchemasNameTag)},
 		// The schema fragment associated with the database entity.
 		// For example, the SELECT statement for a CREATE VIEW.
-		{Name: doltdb.SchemasTablesFragmentCol, Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: false, Comment: dsql.FmtColTagComment(doltdb.DoltSchemasFragmentTag)},
+		{Name: doltdb.SchemasTablesFragmentCol, Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: false, Comment: sqlfmt.FmtColTagComment(doltdb.DoltSchemasFragmentTag)},
 	}
 }
 

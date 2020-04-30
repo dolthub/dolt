@@ -33,7 +33,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
@@ -278,7 +278,7 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		return verr
 	}
 
-	cli.Println(sql.SchemaAsCreateStmt(tblName, sch))
+	cli.Println(sqlfmt.SchemaAsCreateStmt(tblName, sch))
 
 	if !apr.Contains(dryRunFlag) {
 		schVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), root.VRW(), sch)

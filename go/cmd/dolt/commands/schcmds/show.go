@@ -25,7 +25,7 @@ import (
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
@@ -165,6 +165,6 @@ func printTblSchema(ctx context.Context, cmStr string, tblName string, tbl *dolt
 		return errhand.BuildDError("unable to get schema").AddCause(err).Build()
 	}
 
-	cli.Println(sql.SchemaAsCreateStmt(tblName, sch))
+	cli.Println(sqlfmt.SchemaAsCreateStmt(tblName, sch))
 	return nil
 }

@@ -27,7 +27,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
 )
 
 const name = "Jeffery Williams"
@@ -67,7 +67,7 @@ func TestSqlTableDiffAdd(t *testing.T) {
 
 	var stringWr StringBuilderCloser
 	_ = PrintSqlTableDiffs(ctx, newRoot, oldRoot, &stringWr)
-	expectedOutput := sql.SchemaAsCreateStmt("addTable", sch) + "\n"
+	expectedOutput := sqlfmt.SchemaAsCreateStmt("addTable", sch) + "\n"
 	assert.Equal(t, expectedOutput, stringWr.String())
 }
 
@@ -88,7 +88,7 @@ func TestSqlTableDiffAddThenInsert(t *testing.T) {
 
 	var stringWr StringBuilderCloser
 	_ = PrintSqlTableDiffs(ctx, newRoot, oldRoot, &stringWr)
-	expectedOutput := sql.SchemaAsCreateStmt("addTable", sch) + "\n"
+	expectedOutput := sqlfmt.SchemaAsCreateStmt("addTable", sch) + "\n"
 	expectedOutput = expectedOutput +
 		"INSERT INTO `addTable` (`id`,`name`,`age`,`is_married`,`title`) " +
 		"VALUES (\"00000000-0000-0000-0000-000000000000\",\"Big Billy\",77,FALSE,\"Doctor\");\n"
@@ -149,7 +149,7 @@ func TestSqlTableDiffRenameChangedTable(t *testing.T) {
 	_ = PrintSqlTableDiffs(ctx, newRoot, oldRoot, &stringWr)
 	expectedOutput := "DROP TABLE `renameTable`;\n"
 	expectedOutput = expectedOutput +
-		sql.SchemaAsCreateStmt("newTableName", sch) + "\n" +
+		sqlfmt.SchemaAsCreateStmt("newTableName", sch) + "\n" +
 		"INSERT INTO `newTableName` (`id`,`name`,`age`,`is_married`,`title`) " +
 		"VALUES (\"00000000-0000-0000-0000-000000000000\",\"Big Billy\",77,FALSE,\"Doctor\");\n"
 	assert.Equal(t, expectedOutput, stringWr.String())
