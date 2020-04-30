@@ -16,11 +16,12 @@ package sqlexport
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"

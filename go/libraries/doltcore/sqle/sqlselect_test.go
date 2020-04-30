@@ -16,13 +16,10 @@ package sqle
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/resultset"
-	"github.com/src-d/go-mysql-server/sql"
 	"testing"
 	"time"
 
+	"github.com/src-d/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -30,7 +27,10 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/envtestutils"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -429,9 +429,9 @@ var BasicSelectTests = []SelectTest{
 		ExpectedSchema: NewResultSetSchema("a", types.IntKind),
 	},
 	{
-		Name:           "and expression in select",
-		Query:          "select is_married and age >= 40 from people where last_name = 'Simpson' order by id limit 2",
-		ExpectedRows:   []sql.Row{{true}, {false}},
+		Name:         "and expression in select",
+		Query:        "select is_married and age >= 40 from people where last_name = 'Simpson' order by id limit 2",
+		ExpectedRows: []sql.Row{{true}, {false}},
 		ExpectedSqlSchema: sql.Schema{
 			&sql.Column{Name: "people.is_married AND people.age >= 40", Type: sql.Int8},
 		},
@@ -720,11 +720,11 @@ var BasicSelectTests = []SelectTest{
 			},
 		},
 		ExpectedSqlSchema: sql.Schema{
-			&sql.Column{ Name: "commit_hash", Type: sql.Text },
-			&sql.Column{ Name: "committer", Type: sql.Text },
-			&sql.Column{ Name: "email", Type: sql.Text },
-			&sql.Column{ Name: "date", Type: sql.Datetime },
-			&sql.Column{ Name: "message", Type: sql.Text },
+			&sql.Column{Name: "commit_hash", Type: sql.Text},
+			&sql.Column{Name: "committer", Type: sql.Text},
+			&sql.Column{Name: "email", Type: sql.Text},
+			&sql.Column{Name: "date", Type: sql.Datetime},
+			&sql.Column{Name: "message", Type: sql.Text},
 		},
 	},
 	{
@@ -740,12 +740,12 @@ var BasicSelectTests = []SelectTest{
 			},
 		},
 		ExpectedSqlSchema: sql.Schema{
-			&sql.Column{ Name: "name", Type: sql.Text },
-			&sql.Column{ Name: "hash", Type: sql.Text },
-			&sql.Column{ Name: "latest_committer", Type: sql.Text },
-			&sql.Column{ Name: "latest_committer_email", Type: sql.Text },
-			&sql.Column{ Name: "latest_commit_date", Type: sql.Datetime },
-			&sql.Column{ Name: "latest_commit_message", Type: sql.Text },
+			&sql.Column{Name: "name", Type: sql.Text},
+			&sql.Column{Name: "hash", Type: sql.Text},
+			&sql.Column{Name: "latest_committer", Type: sql.Text},
+			&sql.Column{Name: "latest_committer_email", Type: sql.Text},
+			&sql.Column{Name: "latest_commit_date", Type: sql.Datetime},
+			&sql.Column{Name: "latest_commit_message", Type: sql.Text},
 		},
 	},
 }
@@ -944,7 +944,7 @@ var CaseSensitivityTests = []SelectTest{
 			[]types.Value{types.String("1")}),
 		Query:          "select test from mixedcase",
 		ExpectedSchema: NewResultSetSchema("test", types.StringKind),
-		ExpectedRows: []sql.Row{{"1"}},
+		ExpectedRows:   []sql.Row{{"1"}},
 	},
 	{
 		Name: "table name has mixed case, select upper case",
@@ -953,64 +953,64 @@ var CaseSensitivityTests = []SelectTest{
 			[]types.Value{types.String("1")}),
 		Query:          "select test from MIXEDCASE",
 		ExpectedSchema: NewResultSetSchema("test", types.StringKind),
-		ExpectedRows: []sql.Row{{"1"}},
+		ExpectedRows:   []sql.Row{{"1"}},
 	},
 	{
 		Name: "qualified select *",
 		AdditionalSetup: CreateTableWithRowsFn("MiXeDcAsE",
 			NewSchema("test", types.StringKind),
 			[]types.Value{types.String("1")}),
-		Query:           "select mixedcAse.* from MIXEDCASE",
-		ExpectedSchema:  NewResultSetSchema("test", types.StringKind),
-		ExpectedRows: []sql.Row{{"1"}},
+		Query:          "select mixedcAse.* from MIXEDCASE",
+		ExpectedSchema: NewResultSetSchema("test", types.StringKind),
+		ExpectedRows:   []sql.Row{{"1"}},
 	},
 	{
 		Name: "qualified select column",
 		AdditionalSetup: CreateTableWithRowsFn("MiXeDcAsE",
 			NewSchema("test", types.StringKind),
 			[]types.Value{types.String("1")}),
-		Query:           "select mixedcAse.TeSt from MIXEDCASE",
-		ExpectedSchema:  NewResultSetSchema("TeSt", types.StringKind),
-		ExpectedRows: []sql.Row{{"1"}},
+		Query:          "select mixedcAse.TeSt from MIXEDCASE",
+		ExpectedSchema: NewResultSetSchema("TeSt", types.StringKind),
+		ExpectedRows:   []sql.Row{{"1"}},
 	},
 	{
 		Name: "table alias select *",
 		AdditionalSetup: CreateTableWithRowsFn("MiXeDcAsE",
 			NewSchema("test", types.StringKind),
 			[]types.Value{types.String("1")}),
-		Query:           "select Mc.* from MIXEDCASE as mc",
-		ExpectedSchema:  NewResultSetSchema("test", types.StringKind),
-		ExpectedRows: []sql.Row{{"1"}},
+		Query:          "select Mc.* from MIXEDCASE as mc",
+		ExpectedSchema: NewResultSetSchema("test", types.StringKind),
+		ExpectedRows:   []sql.Row{{"1"}},
 	},
 	{
 		Name: "table alias select column",
 		AdditionalSetup: CreateTableWithRowsFn("MiXeDcAsE",
 			NewSchema("test", types.StringKind),
 			[]types.Value{types.String("1")}),
-		Query:           "select mC.TeSt from MIXEDCASE as MC",
-		ExpectedSchema:  NewResultSetSchema("TeSt", types.StringKind),
-		ExpectedRows: []sql.Row{{"1"}},
+		Query:          "select mC.TeSt from MIXEDCASE as MC",
+		ExpectedSchema: NewResultSetSchema("TeSt", types.StringKind),
+		ExpectedRows:   []sql.Row{{"1"}},
 	},
 	{
 		Name: "multiple tables with the same case-insensitive name, exact match",
 		AdditionalSetup: Compose(
 			// the table name passed to NewSchemaForTable isn't important, except to get unique tags
 			CreateTableWithRowsFn("tableName", NewSchemaForTable("tableName1", "test", types.StringKind), []types.Value{types.String("1")}),
-			CreateTableWithRowsFn("TABLENAME", NewSchemaForTable("TABLENAME2","test", types.StringKind)),
-			CreateTableWithRowsFn("tablename", NewSchemaForTable("tablename3","test", types.StringKind)),
+			CreateTableWithRowsFn("TABLENAME", NewSchemaForTable("TABLENAME2", "test", types.StringKind)),
+			CreateTableWithRowsFn("tablename", NewSchemaForTable("tablename3", "test", types.StringKind)),
 		),
-		Query:           "select test from tableName",
-		ExpectedSchema:  NewResultSetSchema("test", types.StringKind),
-		ExpectedRows: []sql.Row{{"1"}},
+		Query:          "select test from tableName",
+		ExpectedSchema: NewResultSetSchema("test", types.StringKind),
+		ExpectedRows:   []sql.Row{{"1"}},
 	},
 	{
 		Name: "multiple tables with the same case-insensitive name, no exact match",
 		AdditionalSetup: Compose(
-			CreateTableWithRowsFn("tableName", NewSchemaForTable("tableName1","test", types.StringKind)),
-			CreateTableWithRowsFn("TABLENAME", NewSchemaForTable("tableName2","test", types.StringKind)),
+			CreateTableWithRowsFn("tableName", NewSchemaForTable("tableName1", "test", types.StringKind)),
+			CreateTableWithRowsFn("TABLENAME", NewSchemaForTable("tableName2", "test", types.StringKind)),
 		),
-		Query:           "select test from tablename",
-		ExpectedErr:     "Ambiguous table: 'tablename'",
+		Query:       "select test from tablename",
+		ExpectedErr: "Ambiguous table: 'tablename'",
 	},
 	{
 		Name: "alias with same name as table",
@@ -1018,8 +1018,8 @@ var CaseSensitivityTests = []SelectTest{
 			CreateTableWithRowsFn("tableName", NewSchema("test", types.StringKind)),
 			CreateTableWithRowsFn("other", NewSchema("othercol", types.StringKind)),
 		),
-		Query:           "select other.test from tablename as other, other",
-		ExpectedErr:     "Non-unique table name / alias: 'other'",
+		Query:       "select other.test from tablename as other, other",
+		ExpectedErr: "Non-unique table name / alias: 'other'",
 	},
 	{
 		Name: "two table aliases with same name",
@@ -1027,8 +1027,8 @@ var CaseSensitivityTests = []SelectTest{
 			CreateTableWithRowsFn("tableName", NewSchema("test", types.StringKind)),
 			CreateTableWithRowsFn("other", NewSchema("othercol", types.StringKind)),
 		),
-		Query:           "select bad.test from tablename as bad, other as bad",
-		ExpectedErr:     "Non-unique table name / alias: 'bad'",
+		Query:       "select bad.test from tablename as bad, other as bad",
+		ExpectedErr: "Non-unique table name / alias: 'bad'",
 	},
 	{
 		Name: "column name has mixed case, select lower case",
@@ -1037,7 +1037,7 @@ var CaseSensitivityTests = []SelectTest{
 			[]types.Value{types.String("1")}),
 		Query:          "select mixedcase from test",
 		ExpectedSchema: NewResultSetSchema("mixedcase", types.StringKind),
-		ExpectedRows: []sql.Row{{"1"}},
+		ExpectedRows:   []sql.Row{{"1"}},
 	},
 	{
 		Name: "column name has mixed case, select upper case",
@@ -1046,7 +1046,7 @@ var CaseSensitivityTests = []SelectTest{
 			[]types.Value{types.String("1")}),
 		Query:          "select MIXEDCASE from test",
 		ExpectedSchema: NewResultSetSchema("MIXEDCASE", types.StringKind),
-		ExpectedRows: []sql.Row{{"1"}},
+		ExpectedRows:   []sql.Row{{"1"}},
 	},
 	{
 		Name: "select with multiple matching columns, exact match",
@@ -1055,32 +1055,32 @@ var CaseSensitivityTests = []SelectTest{
 			[]types.Value{types.String("1"), types.String("2")}),
 		Query:          "select mixedcase from test",
 		ExpectedSchema: NewResultSetSchema("mixedcase", types.StringKind),
-		ExpectedRows: []sql.Row{{"1"}},
+		ExpectedRows:   []sql.Row{{"1"}},
 	},
 	{
 		Name: "select with multiple matching columns, exact match #2",
 		AdditionalSetup: CreateTableWithRowsFn("test",
 			NewSchema("MiXeDcAsE", types.StringKind, "mixedcase", types.StringKind),
 			[]types.Value{types.String("1"), types.String("2")}),
-		Query:           "select MiXeDcAsE from test",
-		ExpectedSchema:  NewResultSetSchema("MiXeDcAsE", types.StringKind),
-		ExpectedRows: []sql.Row{{"1"}},
+		Query:          "select MiXeDcAsE from test",
+		ExpectedSchema: NewResultSetSchema("MiXeDcAsE", types.StringKind),
+		ExpectedRows:   []sql.Row{{"1"}},
 	},
 	{
 		Name: "select with multiple matching columns, no exact match",
 		AdditionalSetup: CreateTableWithRowsFn("test",
 			NewSchema("MiXeDcAsE", types.StringKind, "mixedcase", types.StringKind),
 			[]types.Value{types.String("1"), types.String("2")}),
-		Query:           "select MIXEDCASE from test",
-		ExpectedErr:     "Ambiguous column: 'MIXEDCASE'",
+		Query:       "select MIXEDCASE from test",
+		ExpectedErr: "Ambiguous column: 'MIXEDCASE'",
 	},
 	{
 		Name: "select with multiple matching columns, no exact match, table alias",
 		AdditionalSetup: CreateTableWithRowsFn("test",
 			NewSchema("MiXeDcAsE", types.StringKind, "mixedcase", types.StringKind),
 			[]types.Value{types.String("1"), types.String("2")}),
-		Query:           "select t.MIXEDCASE from test t",
-		ExpectedErr:     "Ambiguous column: 'MIXEDCASE'",
+		Query:       "select t.MIXEDCASE from test t",
+		ExpectedErr: "Ambiguous column: 'MIXEDCASE'",
 	},
 	{
 		Name: "column is reserved word, select not backticked",
@@ -1092,7 +1092,7 @@ var CaseSensitivityTests = []SelectTest{
 				"select", types.StringKind),
 			[]types.Value{types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create")}),
 		Query:          "select Timestamp from test",
-		ExpectedRows: []sql.Row{{"1"}},
+		ExpectedRows:   []sql.Row{{"1"}},
 		ExpectedSchema: NewResultSetSchema("Timestamp", types.StringKind),
 	},
 	{
@@ -1105,7 +1105,7 @@ var CaseSensitivityTests = []SelectTest{
 				"select", types.StringKind),
 			[]types.Value{types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create")}),
 		Query:          "select t.Timestamp from test as t",
-		ExpectedRows: []sql.Row{{"1"}},
+		ExpectedRows:   []sql.Row{{"1"}},
 		ExpectedSchema: NewResultSetSchema("Timestamp", types.StringKind),
 	},
 	{
@@ -1115,7 +1115,7 @@ var CaseSensitivityTests = []SelectTest{
 			[]types.Value{types.String("1")}),
 		Query:          "select Year from test",
 		ExpectedSchema: NewResultSetSchema("Year", types.StringKind),
-		ExpectedRows: []sql.Row{{"1"}},
+		ExpectedRows:   []sql.Row{{"1"}},
 	},
 	{
 		Name: "column is reserved word, select backticked",
@@ -1127,7 +1127,7 @@ var CaseSensitivityTests = []SelectTest{
 				"select", types.StringKind),
 			[]types.Value{types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create")}),
 		Query:          "select `Timestamp` from test",
-		ExpectedRows: []sql.Row{{"1"}},
+		ExpectedRows:   []sql.Row{{"1"}},
 		ExpectedSchema: NewResultSetSchema("Timestamp", types.StringKind),
 	},
 	{
@@ -1313,7 +1313,7 @@ var JoinTests = []SelectTest{
 		Query: `select e.id, p.id, e.name, p.first_name, p.last_name from people p join episodes e on e.id = p.id`,
 		ExpectedRows: ToSqlRows(
 			NewResultSetSchema("id", types.IntKind, "id", types.IntKind,
-					"name", types.StringKind, "first_name", types.StringKind, "last_name", types.StringKind),
+				"name", types.StringKind, "first_name", types.StringKind, "last_name", types.StringKind),
 			NewResultSetRow(types.Int(1), types.Int(1), types.String("Simpsons Roasting On an Open Fire"), types.String("Marge"), types.String("Simpson")),
 			NewResultSetRow(types.Int(2), types.Int(2), types.String("Bart the Genius"), types.String("Bart"), types.String("Simpson")),
 			NewResultSetRow(types.Int(3), types.Int(3), types.String("Homer's Odyssey"), types.String("Lisa"), types.String("Simpson")),

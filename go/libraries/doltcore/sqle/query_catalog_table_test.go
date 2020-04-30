@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"testing"
 
 	"github.com/src-d/go-mysql-server/sql"
@@ -25,6 +24,7 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 )
 
 func TestInsertIntoQueryCatalogTable(t *testing.T) {

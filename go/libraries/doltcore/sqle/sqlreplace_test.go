@@ -16,17 +16,17 @@ package sqle
 
 import (
 	"context"
-	"github.com/google/uuid"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/src-d/go-mysql-server/sql"
 	"testing"
 
+	"github.com/google/uuid"
+	"github.com/src-d/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -64,7 +64,7 @@ var BasicReplaceTests = []ReplaceTest{
 	{
 		Name: "replace set",
 		ReplaceQuery: "replace into people set id = 2, first_name = 'Bart', last_name = 'Simpson'," +
-				"is_married = false, age = 10, rating = 9, uuid = '00000000-0000-0000-0000-000000000002', num_episodes = 222",
+			"is_married = false, age = 10, rating = 9, uuid = '00000000-0000-0000-0000-000000000002', num_episodes = 222",
 		SelectQuery:    "select * from people where id = 2",
 		ExpectedRows:   ToSqlRows(PeopleTestSchema, Bart),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
@@ -109,23 +109,23 @@ var BasicReplaceTests = []ReplaceTest{
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
-		Name:           "replace partial columns",
-		ReplaceQuery:   "replace into people (id, first_name, last_name) values (2, 'Bart', 'Simpson')",
-		SelectQuery:    "select id, first_name, last_name from people where id = 2",
-		ExpectedRows:   ToSqlRows(
+		Name:         "replace partial columns",
+		ReplaceQuery: "replace into people (id, first_name, last_name) values (2, 'Bart', 'Simpson')",
+		SelectQuery:  "select id, first_name, last_name from people where id = 2",
+		ExpectedRows: ToSqlRows(
 			NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind),
 			NewResultSetRow(types.Int(2), types.String("Bart"), types.String("Simpson")),
-			),
+		),
 		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind),
 	},
 	{
-		Name:           "replace partial columns mixed order",
-		ReplaceQuery:   "replace into people (last_name, first_name, id) values ('Simpson', 'Bart', 2)",
-		SelectQuery:    "select id, first_name, last_name from people where id = 2",
-		ExpectedRows:   ToSqlRows(
+		Name:         "replace partial columns mixed order",
+		ReplaceQuery: "replace into people (last_name, first_name, id) values ('Simpson', 'Bart', 2)",
+		SelectQuery:  "select id, first_name, last_name from people where id = 2",
+		ExpectedRows: ToSqlRows(
 			NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind),
 			NewResultSetRow(types.Int(2), types.String("Bart"), types.String("Simpson")),
-			),
+		),
 		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind),
 	},
 	{
@@ -154,13 +154,13 @@ var BasicReplaceTests = []ReplaceTest{
 		ExpectedErr:  "too few values",
 	},
 	{
-		Name:           "replace partial columns functions",
-		ReplaceQuery:   "replace into people (id, first_name, last_name) values (2, UPPER('Bart'), 'Simpson')",
-		SelectQuery:    "select id, first_name, last_name from people where id = 2",
-		ExpectedRows:   ToSqlRows(
+		Name:         "replace partial columns functions",
+		ReplaceQuery: "replace into people (id, first_name, last_name) values (2, UPPER('Bart'), 'Simpson')",
+		SelectQuery:  "select id, first_name, last_name from people where id = 2",
+		ExpectedRows: ToSqlRows(
 			NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind),
 			NewResultSetRow(types.Int(2), types.String("BART"), types.String("Simpson")),
-			),
+		),
 		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind),
 	},
 	{
@@ -171,7 +171,7 @@ var BasicReplaceTests = []ReplaceTest{
 			NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind),
 			NewResultSetRow(types.Int(0), types.String("Bart"), types.String("Simpson")),
 			NewResultSetRow(types.Int(1), types.String("Homer"), types.String("Simpson")),
-			),
+		),
 		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind),
 	},
 	{
@@ -199,13 +199,13 @@ var BasicReplaceTests = []ReplaceTest{
 		ExpectedErr:  "column <last_name> received nil but is non-nullable",
 	},
 	{
-		Name:           "replace partial columns multiple rows duplicate",
-		ReplaceQuery:   "replace into people (id, first_name, last_name) values (2, 'Bart', 'Simpson'), (2, 'Bart', 'Simpson')",
-		SelectQuery:    "select id, first_name, last_name from people where id = 2",
-		ExpectedRows:   ToSqlRows(
+		Name:         "replace partial columns multiple rows duplicate",
+		ReplaceQuery: "replace into people (id, first_name, last_name) values (2, 'Bart', 'Simpson'), (2, 'Bart', 'Simpson')",
+		SelectQuery:  "select id, first_name, last_name from people where id = 2",
+		ExpectedRows: ToSqlRows(
 			NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind),
 			NewResultSetRow(types.Int(2), types.String("Bart"), types.String("Simpson")),
-			),
+		),
 		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind),
 	},
 	{
@@ -213,9 +213,9 @@ var BasicReplaceTests = []ReplaceTest{
 		AdditionalSetup: CreateTableFn("temppeople",
 			NewSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind, "num", types.IntKind),
 			NewRow(types.Int(2), types.String("Bart"), types.String("Simpson"), types.Int(44))),
-		ReplaceQuery:   "replace into temppeople (id, first_name, last_name, num) values (2, 'Bart', 'Simpson', 88)",
-		SelectQuery:    "select id, first_name, last_name, num from temppeople where id = 2",
-		ExpectedRows:   ToSqlRows(
+		ReplaceQuery: "replace into temppeople (id, first_name, last_name, num) values (2, 'Bart', 'Simpson', 88)",
+		SelectQuery:  "select id, first_name, last_name, num from temppeople where id = 2",
+		ExpectedRows: ToSqlRows(
 			NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind, "num", types.IntKind),
 			NewResultSetRow(types.Int(2), types.String("Bart"), types.String("Simpson"), types.Int(88))),
 		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind, "num", types.IntKind),
@@ -326,4 +326,5 @@ func testReplaceQuery(t *testing.T, test ReplaceTest) {
 	require.NoError(t, err)
 
 	assert.Equal(t, test.ExpectedRows, actualRows)
-	assertSchemasEqual(t, mustSqlSchema(test.ExpectedSchema), sch)}
+	assertSchemasEqual(t, mustSqlSchema(test.ExpectedSchema), sch)
+}

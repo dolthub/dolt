@@ -16,8 +16,9 @@ package sqle
 
 import (
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"strconv"
+
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"

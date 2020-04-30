@@ -16,22 +16,22 @@ package sqle
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/envtestutils"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
-	"github.com/liquidata-inc/dolt/go/store/types"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"testing"
 
 	"github.com/src-d/go-mysql-server/sql"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/envtestutils"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 // SetupFunc can be run to perform additional setup work before a test case
@@ -157,8 +157,8 @@ func reduceSchema(sch sql.Schema) sql.Schema {
 	newSch := make(sql.Schema, len(sch))
 	for i, column := range sch {
 		newSch[i] = &sql.Column{
-			Name:       column.Name,
-			Type:       column.Type,
+			Name: column.Name,
+			Type: column.Type,
 		}
 	}
 	return newSch

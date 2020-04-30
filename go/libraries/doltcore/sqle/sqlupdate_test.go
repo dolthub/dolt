@@ -16,17 +16,17 @@ package sqle
 
 import (
 	"context"
-	"github.com/google/uuid"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/src-d/go-mysql-server/sql"
 	"testing"
 
+	"github.com/google/uuid"
+	"github.com/src-d/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
