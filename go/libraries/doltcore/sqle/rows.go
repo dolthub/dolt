@@ -69,7 +69,7 @@ func (itr *doltTableRowIter) Next() (sql.Row, error) {
 		return nil, err
 	}
 
-	return DoltRowToSqlRow(doltRow, itr.table.sch)
+	return doltRowToSqlRow(doltRow, itr.table.sch)
 }
 
 // Close required by sql.RowIter interface
@@ -78,7 +78,7 @@ func (itr *doltTableRowIter) Close() error {
 }
 
 // Returns a SQL row representation for the dolt row given.
-func DoltRowToSqlRow(doltRow row.Row, sch schema.Schema) (sql.Row, error) {
+func doltRowToSqlRow(doltRow row.Row, sch schema.Schema) (sql.Row, error) {
 	colVals := make(sql.Row, sch.GetAllCols().Size())
 
 	i := 0

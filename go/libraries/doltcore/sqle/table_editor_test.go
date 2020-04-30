@@ -186,7 +186,7 @@ func TestTableEditor(t *testing.T) {
 }
 
 func r(row row.Row, sch schema.Schema) sql.Row {
-	sqlRow, err := DoltRowToSqlRow(row, sch)
+	sqlRow, err := doltRowToSqlRow(row, sch)
 	if err != nil {
 		panic(err)
 	}

@@ -264,7 +264,7 @@ func (i *indexLookupRowIterAdapter) Next() (sql.Row, error) {
 		return nil, io.EOF
 	}
 
-	return DoltRowToSqlRow(r, i.indexLookup.idx.sch)
+	return doltRowToSqlRow(r, i.indexLookup.idx.sch)
 }
 
 func (*indexLookupRowIterAdapter) Close() error {

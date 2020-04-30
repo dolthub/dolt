@@ -428,7 +428,7 @@ func (tblItr *rowItrForTableAtCommit) Next() (sql.Row, error) {
 		}
 	}
 
-	return DoltRowToSqlRow(r, tblItr.sch)
+	return doltRowToSqlRow(r, tblItr.sch)
 }
 
 // Close the iterator.

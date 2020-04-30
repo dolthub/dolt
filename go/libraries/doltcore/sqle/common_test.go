@@ -90,7 +90,7 @@ func ToSqlRows(sch schema.Schema, rs ...row.Row) []sql.Row {
 	sqlRows := make([]sql.Row, len(rs))
 	compressedSch := CompressSchema(sch)
 	for i := range rs {
-		sqlRows[i], _ = DoltRowToSqlRow(CompressRow(sch, rs[i]), compressedSch)
+		sqlRows[i], _ = doltRowToSqlRow(CompressRow(sch, rs[i]), compressedSch)
 	}
 	return sqlRows
 }

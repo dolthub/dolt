@@ -33,7 +33,7 @@ import (
 // Set to the name of a single test to run just that test, useful for debugging
 const singleDeleteQueryTest = "" //"Natural join with join clause"
 
-// Structure for a test of a insert query
+// Structure for a test of a delete query
 type DeleteTest struct {
 	// The name of this test. Names should be unique and descriptive.
 	Name string
