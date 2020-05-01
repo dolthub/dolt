@@ -61,7 +61,7 @@ SQL
     [[ "$output" =~ "(4 Entries vs 3 Entries)" ]] || false
 }
 
-@test "diff summary comparing row with a deleted column and an added column" {
+@test "diff summary comparing row with a deleted cell and an added cell" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',

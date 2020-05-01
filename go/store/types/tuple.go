@@ -462,7 +462,7 @@ func (t Tuple) CountDifferencesBetweenTupleFields(other Tuple) (uint64, error) {
 	for i, v := range tMap {
 		ov, ok := otherMap[i]
 		if !ok || !v.Equals(ov) {
-			changed ++
+			changed++
 		}
 	}
 
