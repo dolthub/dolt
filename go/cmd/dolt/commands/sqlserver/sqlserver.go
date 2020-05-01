@@ -159,8 +159,10 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 	serverConfig, err := getServerConfig(dEnv, apr)
 
 	if err != nil {
-		serverController.StopServer()
-		serverController.serverStopped(err)
+		if serverController != nil {
+			serverController.StopServer()
+			serverController.serverStopped(err)
+		}
 
 		cli.PrintErrln(color.RedString("Failed to start server. Bad Configuration"))
 		cli.PrintErrln(err.Error())
