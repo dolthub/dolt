@@ -618,7 +618,7 @@ func TestModifyAndChangeColumn(t *testing.T) {
 		{
 			name:        "alter modify column change tag",
 			query:       "alter table people modify column first_name longtext not null comment 'tag:100'",
-			expectedErr: "A column with the name first_name already exists",
+			expectedErr: "cannot change the tag of an existing column",
 		},
 		{
 			name:        "alter modify column not null with type mismatch in default",
@@ -628,7 +628,7 @@ func TestModifyAndChangeColumn(t *testing.T) {
 		{
 			name:        "alter modify column with tag conflict",
 			query:       "alter table people modify rating double default 1.0 comment 'tag:1'",
-			expectedErr: "A column with the name rating already exists",
+			expectedErr: "cannot change the tag of an existing column",
 		},
 		{
 			name:        "alter modify column with type change",

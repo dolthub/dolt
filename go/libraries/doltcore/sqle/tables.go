@@ -344,11 +344,11 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 	}
 
 	tag := extractTag(column)
-	if tag == schema.InvalidTag {
-		tag = existingCol.Tag
+	if tag != existingCol.Tag && tag != schema.InvalidTag {
+		return errors.New("cannot change the tag of an existing column")
 	}
 
-	col, err := SqlColToDoltCol(tag, column)
+	col, err := SqlColToDoltCol(existingCol.Tag, column)
 	if err != nil {
 		return err
 	}

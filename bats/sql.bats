@@ -13,8 +13,6 @@ CREATE TABLE one_pk (
   c5 BIGINT,
   PRIMARY KEY (pk)
 );
-SQL
-    dolt sql <<SQL
 CREATE TABLE two_pk (
   pk1 BIGINT NOT NULL,
   pk2 BIGINT NOT NULL,
@@ -25,17 +23,15 @@ CREATE TABLE two_pk (
   c5 BIGINT,
   PRIMARY KEY (pk1,pk2)
 );
-SQL
-    dolt sql <<SQL
 CREATE TABLE has_datetimes (
   pk BIGINT NOT NULL COMMENT 'tag:0',
   date_created DATETIME COMMENT 'tag:1',
   PRIMARY KEY (pk)
 );
+INSERT INTO one_pk (pk,c1,c2,c3,c4,c5) VALUES (0,0,0,0,0,0),(1,10,10,10,10,10),(2,20,20,20,20,20),(3,30,30,30,30,30);
+INSERT INTO two_pk (pk1,pk2,c1,c2,c3,c4,c5) VALUES (0,0,0,0,0,0,0),(0,1,10,10,10,10,10),(1,0,20,20,20,20,20),(1,1,30,30,30,30,30);
+INSERT INTO has_datetimes (pk, date_created) VALUES (0, '2020-02-17 00:00:00');
 SQL
-    dolt sql -q "insert into one_pk (pk,c1,c2,c3,c4,c5) values (0,0,0,0,0,0),(1,10,10,10,10,10),(2,20,20,20,20,20),(3,30,30,30,30,30)"
-    dolt sql -q "insert into two_pk (pk1,pk2,c1,c2,c3,c4,c5) values (0,0,0,0,0,0,0),(0,1,10,10,10,10,10),(1,0,20,20,20,20,20),(1,1,30,30,30,30,30)"
-    dolt sql -q "insert into has_datetimes (pk, date_created) values (0, '2020-02-17 00:00:00')"
 }
 
 teardown() {
@@ -448,6 +444,15 @@ SQL
     [[ ! "$output" =~ "c6" ]] || false
 }
 
+@test "sql alter table change column to rename a column" {
+    dolt sql -q "alter table one_pk add (c6 int)"
+    dolt sql -q "alter table one_pk change column c6 c7 int"
+    run dolt sql -q "describe one_pk"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "c7" ]] || false
+    [[ ! "$output" =~ "c6" ]] || false
+}
+
 @test "sql alter table without parentheses" {
     run dolt sql -q "alter table one_pk add c6 int"
     [ $status -eq 0 ]
@@ -460,6 +465,46 @@ SQL
     run dolt sql -q "alter table one_pk modify column c5 varchar(80)"
     [ $status -eq 1 ]
     [[ "$output" =~ "unsupported feature: column types cannot be changed" ]] || false
+}
+
+@test "sql alter table modify column with no actual change" {
+    # this specifically tests a previous bug where we would get a name collision and fail
+    dolt sql -q "alter table one_pk modify column c5 bigint"
+    run dolt schema show one_pk
+    [ $status -eq 0 ]
+    [[ "$output" =~ '`pk` BIGINT NOT NULL COMMENT' ]] || false
+    [[ "$output" =~ '`c1` BIGINT COMMENT' ]] || false
+    [[ "$output" =~ '`c2` BIGINT COMMENT' ]] || false
+    [[ "$output" =~ '`c3` BIGINT COMMENT' ]] || false
+    [[ "$output" =~ '`c4` BIGINT COMMENT' ]] || false
+    [[ "$output" =~ '`c5` BIGINT COMMENT' ]] || false
+    [[ "$output" =~ 'PRIMARY KEY (`pk`)' ]] || false
+}
+
+@test "sql alter table change column with no actual change" {
+    # this specifically tests a previous bug where we would get a name collision and fail
+    dolt sql -q "alter table one_pk change column c5 c5 bigint"
+    run dolt schema show one_pk
+    [ $status -eq 0 ]
+    [[ "$output" =~ '`pk` BIGINT NOT NULL COMMENT' ]] || false
+    [[ "$output" =~ '`c1` BIGINT COMMENT' ]] || false
+    [[ "$output" =~ '`c2` BIGINT COMMENT' ]] || false
+    [[ "$output" =~ '`c3` BIGINT COMMENT' ]] || false
+    [[ "$output" =~ '`c4` BIGINT COMMENT' ]] || false
+    [[ "$output" =~ '`c5` BIGINT COMMENT' ]] || false
+    [[ "$output" =~ 'PRIMARY KEY (`pk`)' ]] || false
+}
+
+@test "sql alter table modify column with tag change" {
+    run dolt sql -q "alter table one_pk modify column c5 bigint comment 'tag:9999'"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "cannot change the tag of an existing column" ]] || false
+}
+
+@test "sql alter table change column with tag change" {
+    run dolt sql -q "alter table one_pk change column c5 c5 bigint comment 'tag:9999'"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "cannot change the tag of an existing column" ]] || false
 }
 
 @test "sql drop table" {
