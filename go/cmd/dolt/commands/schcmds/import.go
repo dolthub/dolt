@@ -293,17 +293,13 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 			return errhand.BuildDError("error: failed to create table.").AddCause(err).Build()
 		}
 
-		var indexData types.Map
+		var indexData *types.Map
 		if tblExists {
-			indexData, err = tbl.GetIndexData(ctx)
+			indexDataPtr, err := tbl.GetIndexData(ctx)
 			if err != nil {
 				return errhand.BuildDError("error: failed to create table.").AddCause(err).Build()
 			}
-		} else {
-			indexData, err = types.NewMap(ctx, root.VRW())
-			if err != nil {
-				return errhand.BuildDError("error: failed to create table.").AddCause(err).Build()
-			}
+			indexData = &indexDataPtr
 		}
 
 		tbl, err = doltdb.NewTable(ctx, root.VRW(), schVal, m, indexData)

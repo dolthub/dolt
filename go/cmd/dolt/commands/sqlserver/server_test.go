@@ -235,7 +235,7 @@ func createEnvWithSeedData(t *testing.T) *env.DoltEnv {
 		t.Error("Failed to seed initial data", err)
 	}
 
-	err = dEnv.PutTableToWorking(context.Background(), *wr.GetMap(), wr.GetSchema(), "people")
+	err = dEnv.PutTableToWorking(context.Background(), *wr.GetMap(), wr.GetSchema(), "people", nil)
 
 	if err != nil {
 		t.Error("Unable to put initial value of table in in mem noms db", err)

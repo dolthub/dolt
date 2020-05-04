@@ -363,7 +363,7 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		rebasedSch := schema.SchemaFromCols(schCC)
 
 		for _, index := range sch.Indexes().AllIndexes() {
-			_, err = rebasedSch.Indexes().AddIndexByColNames(index.Name(), index.Columns(), index.IsUnique(), index.Comment())
+			_, err = rebasedSch.Indexes().AddIndexByColNames(index.Name(), index.ColumnNames(), index.IsUnique(), index.Comment())
 			if err != nil {
 				return nil, err
 			}
@@ -438,9 +438,7 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		rshs := rsh.String()
 		fmt.Println(rshs)
 
-		indexData, _ := types.NewMap(ctx, rebasedParentRoot.VRW())
-
-		rebasedTable, err := doltdb.NewTable(ctx, rebasedParentRoot.VRW(), rebasedSchVal, rebasedRows, indexData)
+		rebasedTable, err := doltdb.NewTable(ctx, rebasedParentRoot.VRW(), rebasedSchVal, rebasedRows, nil)
 
 		if err != nil {
 			return nil, err

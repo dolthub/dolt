@@ -162,7 +162,7 @@ func toSchemaData(sch schema.Schema) (schemaData, error) {
 	for i, index := range sch.Indexes().AllIndexes() {
 		encodedIndexes[i] = encodedIndex{
 			Name:    index.Name(),
-			Tags:    index.Tags(),
+			Tags:    index.IndexedColumnTags(),
 			Comment: index.Comment(),
 			Unique:  index.IsUnique(),
 		}

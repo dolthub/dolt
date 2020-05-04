@@ -172,13 +172,7 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.T
 		return nil, nil, err
 	}
 
-	emptyIndexData, err := types.NewMap(ctx, merger.vrw)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	mergedTable, err := doltdb.NewTable(ctx, merger.vrw, schUnionVal, mergedRowData, emptyIndexData)
+	mergedTable, err := doltdb.NewTable(ctx, merger.vrw, schUnionVal, mergedRowData, nil)
 
 	if err != nil {
 		return nil, nil, err

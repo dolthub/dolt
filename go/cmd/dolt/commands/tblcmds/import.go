@@ -28,6 +28,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/mvdata"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
@@ -378,9 +379,24 @@ func executeMove(ctx context.Context, dEnv *env.DoltEnv, force bool, mvOpts *mvd
 	}
 
 	if nomsWr, ok := mover.Wr.(noms.NomsMapWriteCloser); ok {
-		tableDest := mvOpts.Dest.(mvdata.TableDataLocation)
-		err = dEnv.PutTableToWorking(ctx, *nomsWr.GetMap(), nomsWr.GetSchema(), tableDest.Name)
+		var indexes []schema.Index
 
+		if tableLoc, ok := mvOpts.Src.(mvdata.TableDataLocation); ok {
+			originalTable, ok, err := root.GetTable(ctx, tableLoc.Name)
+			if err != nil || !ok {
+				cli.PrintErrln(color.RedString("Source table does not exist."))
+				return 1
+			}
+			originalSchema, err := originalTable.GetSchema(ctx)
+			if err != nil || !ok {
+				cli.PrintErrln(color.RedString("Failed to read source table's schema."))
+				return 1
+			}
+			indexes = originalSchema.Indexes().AllIndexes()
+		}
+
+		tableDest := mvOpts.Dest.(mvdata.TableDataLocation)
+		err = dEnv.PutTableToWorking(ctx, *nomsWr.GetMap(), nomsWr.GetSchema(), tableDest.Name, indexes)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Failed to update the working value."))
 			return 1
