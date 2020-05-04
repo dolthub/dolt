@@ -140,6 +140,9 @@ func TestModifyColumn(t *testing.T) {
 
 			sch, err := updatedTable.GetSchema(ctx)
 			require.NoError(t, err)
+			index := sch.Indexes().Get(dtestutils.IndexName)
+			assert.NotNil(t, index)
+			tt.expectedSchema.Indexes().AddIndex(index)
 			require.Equal(t, tt.expectedSchema, sch)
 
 			rowData, err := updatedTable.GetRowData(ctx)
@@ -159,6 +162,14 @@ func TestModifyColumn(t *testing.T) {
 
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedRows, foundRows)
+
+			updatedIndexRows, err := updatedTable.GetIndexRowData(context.Background(), index.Name())
+			assert.NoError(t, err)
+			expectedIndexRows, err := updatedTable.RebuildIndexRowData(context.Background(), index.Name())
+			assert.NoError(t, err)
+			if uint64(len(foundRows)) != updatedIndexRows.Len() || !updatedIndexRows.Equals(expectedIndexRows) {
+				t.Error("index contents are incorrect")
+			}
 		})
 	}
 }
