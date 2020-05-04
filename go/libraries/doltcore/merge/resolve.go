@@ -166,7 +166,7 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tbl *doltdb.Ta
 		return nil, err
 	}
 
-	newTbl, err := doltdb.NewTable(ctx, vrw, tblSchVal, m, indexData)
+	newTbl, err := doltdb.NewTable(ctx, vrw, tblSchVal, m, &indexData)
 	if err != nil {
 		return nil, err
 	}

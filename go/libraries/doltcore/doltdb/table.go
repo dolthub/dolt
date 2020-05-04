@@ -156,7 +156,15 @@ type Table struct {
 }
 
 // NewTable creates a noms Struct which stores the schema and the row data
-func NewTable(ctx context.Context, vrw types.ValueReadWriter, schema types.Value, rowData types.Map, indexData types.Map) (*Table, error) {
+func NewTable(ctx context.Context, vrw types.ValueReadWriter, schema types.Value, rowData types.Map, indexData *types.Map) (*Table, error) {
+	if indexData == nil {
+		indexDataPtr, err := types.NewMap(ctx, vrw)
+		if err != nil {
+			return nil, err
+		}
+		indexData = &indexDataPtr
+	}
+
 	schemaRef, err := writeValAndGetRef(ctx, vrw, schema)
 	if err != nil {
 		return nil, err
@@ -167,22 +175,18 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, schema types.Value
 		return nil, err
 	}
 
-	sd := types.StructData{
-		schemaRefKey: schemaRef,
-		tableRowsKey: rowDataRef,
-	}
-
-	tableStruct, err := types.NewStruct(vrw.Format(), tableStructName, sd)
-	if err != nil {
-		return nil, err
-	}
-
 	indexesRef, err := writeValAndGetRef(ctx, vrw, indexData)
 	if err != nil {
 		return nil, err
 	}
 
-	tableStruct, err = tableStruct.Set(indexesKey, indexesRef)
+	sd := types.StructData{
+		schemaRefKey: schemaRef,
+		tableRowsKey: rowDataRef,
+		indexesKey:   indexesRef,
+	}
+
+	tableStruct, err := types.NewStruct(vrw.Format(), tableStructName, sd)
 	if err != nil {
 		return nil, err
 	}
@@ -393,6 +397,7 @@ func (t *Table) GetSchemaRef() (types.Ref, error) {
 	return v.(types.Ref), nil
 }
 
+// UpdateSchema updates the table with the schema given and returns the updated table. The original table is unchanged.
 func (t *Table) UpdateSchema(ctx context.Context, sch schema.Schema) (*Table, error) {
 	newSchemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, t.vrw, sch)
 	if err != nil {
@@ -406,7 +411,7 @@ func (t *Table) UpdateSchema(ctx context.Context, sch schema.Schema) (*Table, er
 	if err != nil {
 		return nil, err
 	}
-	newTable, err := NewTable(ctx, t.vrw, newSchemaVal, rowData, indexData)
+	newTable, err := NewTable(ctx, t.vrw, newSchemaVal, rowData, &indexData)
 	if err != nil {
 		return nil, err
 	}

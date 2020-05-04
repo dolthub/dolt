@@ -411,11 +411,20 @@ func (dEnv *DoltEnv) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootV
 	return h, nil
 }
 
-func (dEnv *DoltEnv) PutTableToWorking(ctx context.Context, rows types.Map, sch schema.Schema, tableName string) error {
+func (dEnv *DoltEnv) PutTableToWorking(ctx context.Context, rows types.Map, sch schema.Schema, tableName string, indexes []schema.Index) error {
 	root, err := dEnv.WorkingRoot(ctx)
 
 	if err != nil {
 		return doltdb.ErrNomsIO
+	}
+
+	for _, index := range indexes {
+		if !sch.Indexes().Contains(index.Name()) && !sch.Indexes().HasIndexOnColumns(index.ColumnNames()...) {
+			_, err = sch.Indexes().AddIndexByColNames(index.Name(), index.ColumnNames(), index.IsUnique(), index.Comment())
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	vrw := dEnv.DoltDB.ValueReadWriter()
@@ -425,12 +434,13 @@ func (dEnv *DoltEnv) PutTableToWorking(ctx context.Context, rows types.Map, sch 
 		return ErrMarshallingSchema
 	}
 
-	emptyIndexData, err := types.NewMap(ctx, vrw)
+	tbl, err := doltdb.NewTable(ctx, vrw, schVal, rows, nil)
+
 	if err != nil {
 		return err
 	}
 
-	tbl, err := doltdb.NewTable(ctx, vrw, schVal, rows, emptyIndexData)
+	tbl, err = tbl.RebuildIndexData(ctx)
 
 	if err != nil {
 		return err
@@ -1017,12 +1027,7 @@ func createDocsTableOnRoot(ctx context.Context, dEnv *DoltEnv, root *doltdb.Root
 			return nil, ErrMarshallingSchema
 		}
 
-		indexData, err := types.NewMap(context.Background(), vrw)
-		if err != nil {
-			return nil, err
-		}
-
-		newDocsTbl, err := doltdb.NewTable(ctx, root.VRW(), schVal, *wr.GetMap(), indexData)
+		newDocsTbl, err := doltdb.NewTable(ctx, root.VRW(), schVal, *wr.GetMap(), nil)
 		if err != nil {
 			return nil, err
 		}

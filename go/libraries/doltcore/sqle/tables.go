@@ -21,9 +21,7 @@ import (
 
 	"github.com/liquidata-inc/go-mysql-server/sql"
 
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
@@ -128,7 +126,7 @@ func (t *DoltTable) CreateIndex(ctx *sql.Context, indexName string, using sql.In
 	}
 
 	// create the index metadata, will error if index names are taken or an index with the same columns in the same order exists
-	index, err := t.sch.Indexes().AddIndexByColNames(indexName, realColNames, constraint == sql.IndexConstraint_Unique, comment)
+	_, err := t.sch.Indexes().AddIndexByColNames(indexName, realColNames, constraint == sql.IndexConstraint_Unique, comment)
 	if err != nil {
 		return err
 	}
@@ -146,43 +144,16 @@ func (t *DoltTable) CreateIndex(ctx *sql.Context, indexName string, using sql.In
 	if err != nil {
 		return err
 	}
-	newTable, err := doltdb.NewTable(ctx, t.table.ValueReadWriter(), newSchemaVal, tableRowData, indexData)
-	if err != nil {
-		return err
-	}
-
-	// populate the index row data
-	indexRowData, err := types.NewMap(ctx, newTable.ValueReadWriter())
-	if err != nil {
-		return err
-	}
-	indexSch := index.Schema()
-	indexDataEditor := indexRowData.Edit()
-	err = tableRowData.IterAll(ctx, func(key, value types.Value) error {
-		dRow, err := row.FromNoms(t.sch, key.(types.Tuple), value.(types.Tuple))
-		if err != nil {
-			return err
-		}
-		indexRow, err := dRow.ReduceToIndex(index)
-		if err != nil {
-			return err
-		}
-		indexKey, err := indexRow.NomsMapKey(indexSch).Value(ctx)
-		if err != nil {
-			return err
-		}
-		indexDataEditor = indexDataEditor.Set(indexKey, dRow.NomsMapValue(indexSch))
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	indexRowData, err = indexDataEditor.Map(ctx)
+	newTable, err := doltdb.NewTable(ctx, t.table.ValueReadWriter(), newSchemaVal, tableRowData, &indexData)
 	if err != nil {
 		return err
 	}
 
 	// set the index row data and get a new root with the updated table
+	indexRowData, err := newTable.RebuildIndexRowData(ctx, indexName)
+	if err != nil {
+		return err
+	}
 	newTable, err = newTable.SetIndexRowData(ctx, indexName, indexRowData)
 	if err != nil {
 		return err
@@ -334,32 +305,6 @@ func (p doltTablePartition) Key() []byte {
 	return []byte(partitionName)
 }
 
-func (t *DoltTable) updateTable(ctx *sql.Context, mapEditor *types.MapEditor) error {
-	root, err := t.db.GetRoot(ctx)
-
-	if err != nil {
-		return err
-	}
-
-	updated, err := mapEditor.Map(ctx)
-	if err != nil {
-		return errhand.BuildDError("failed to modify table").AddCause(err).Build()
-	}
-
-	newTable, err := t.table.UpdateRows(ctx, updated)
-	if err != nil {
-		return errhand.BuildDError("failed to update rows").AddCause(err).Build()
-	}
-
-	newRoot, err := root.PutTable(ctx, t.name, newTable)
-	if err != nil {
-		return errhand.BuildDError("failed to write table back to database").AddCause(err).Build()
-	}
-
-	t.table = newTable
-	return t.db.SetRoot(ctx, newRoot)
-}
-
 // AlterableDoltTable allows altering the schema of the table. It implements sql.AlterableTable.
 type AlterableDoltTable struct {
 	WritableDoltTable
@@ -457,7 +402,7 @@ func (t *AlterableDoltTable) DropColumn(ctx *sql.Context, columnName string) err
 		return err
 	}
 
-	for _, index := range sch.Indexes().ReferencesColumn(columnName) {
+	for _, index := range sch.Indexes().IndexesWithColumn(columnName) {
 		_, err = sch.Indexes().RemoveIndex(index.Name())
 		if err != nil {
 			return err

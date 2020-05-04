@@ -61,15 +61,9 @@ func ModifyColumn(
 		return nil, err
 	}
 
-	if newCol.IsPartOfPK != existingCol.IsPartOfPK {
-		updatedTable, err = updatedTable.RebuildIndexData(ctx)
-		if err != nil {
-			return nil, err
-		}
-	} else if !newCol.TypeInfo.Equals(existingCol.TypeInfo) ||
-		newCol.IsNullable() != existingCol.IsNullable() ||
-		newCol.Tag != existingCol.Tag {
-		for _, index := range sch.Indexes().ReferencesTag(existingCol.Tag) {
+	if !newCol.TypeInfo.Equals(existingCol.TypeInfo) ||
+		newCol.IsNullable() != existingCol.IsNullable() {
+		for _, index := range sch.Indexes().IndexesWithTag(existingCol.Tag) {
 			rebuiltIndexData, err := updatedTable.RebuildIndexRowData(ctx, index.Name())
 			if err != nil {
 				return nil, err
@@ -156,7 +150,7 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, newSc
 		return nil, err
 	}
 
-	return doltdb.NewTable(ctx, vrw, newSchemaVal, rowData, indexData)
+	return doltdb.NewTable(ctx, vrw, newSchemaVal, rowData, &indexData)
 }
 
 // replaceColumnInSchema replaces the column with the name given with its new definition, optionally reordering it.
@@ -207,16 +201,6 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 	}
 
 	newSch := schema.SchemaFromCols(collection)
-
-	if oldCol.Tag != newCol.Tag {
-		newIndexes, err := sch.Indexes().ChangeTags(schema.NewIndexTagChange(oldCol.Tag, newCol.Tag))
-		if err != nil {
-			return nil, err
-		}
-		newSch.Indexes().AddIndex(newIndexes...)
-	} else {
-		newSch.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
-	}
-
+	newSch.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
 	return newSch, nil
 }

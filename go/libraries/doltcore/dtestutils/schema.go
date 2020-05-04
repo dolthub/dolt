@@ -110,7 +110,7 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 
 	require.Nil(t, err, "Failed to seed initial data")
 
-	err = dEnv.PutTableToWorking(context.Background(), *wr.GetMap(), wr.GetSchema(), tableName)
+	err = dEnv.PutTableToWorking(context.Background(), *wr.GetMap(), wr.GetSchema(), tableName, nil)
 	require.Nil(t, err, "Unable to put initial value of table in in-mem noms db")
 }
 

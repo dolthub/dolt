@@ -39,9 +39,6 @@ func (il *doltIndexLookup) Indexes() []string {
 	return []string{il.idx.ID()}
 }
 
-// No idea what this is used for, examples aren't useful. From stepping through the code I know that we get index values
-// by wrapping tables via the WithIndexLookup method. The iterator that this method returns yields []byte instead of
-// sql.Row and its purpose is yet unclear.
 func (il *doltIndexLookup) Values(p sql.Partition) (sql.IndexValueIter, error) {
 	panic("implement me")
 }
@@ -101,7 +98,7 @@ IterateOverMap:
 }
 
 type doltIndexKeyIter struct {
-	index        schema.InnerIndex
+	index        schema.Index
 	indexMapIter types.MapIterator
 	val          row.TaggedValues
 }
@@ -127,7 +124,7 @@ IterateOverMap:
 			}
 		}
 		primaryKeys := make(row.TaggedValues)
-		for _, tag := range iter.index.PrimaryKeys() {
+		for _, tag := range iter.index.PrimaryKeyTags() {
 			primaryKeys[tag] = indexKeyTaggedValues[tag]
 		}
 		return primaryKeys, nil
