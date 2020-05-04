@@ -20,6 +20,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -70,13 +71,17 @@ func createTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData t
 		return nil, err
 	}
 
-	indexData, err := types.NewMap(context.Background(), vrw)
+	tbl, err := NewTable(context.Background(), vrw, schemaVal, rowData, nil)
 
 	if err != nil {
 		return nil, err
 	}
 
-	tbl, err := NewTable(context.Background(), vrw, schemaVal, rowData, indexData)
+	tbl, err = tbl.RebuildIndexData(context.Background())
+
+	if err != nil {
+		return nil, err
+	}
 
 	return tbl, nil
 }
@@ -99,7 +104,7 @@ func TestIsValidTableName(t *testing.T) {
 func TestTables(t *testing.T) {
 	db, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_7_18, nil, nil)
 
-	tSchema := createTestSchema()
+	tSchema := createTestSchema(t)
 	rowData, rows := createTestRowData(t, db, tSchema)
 	tbl, err := createTestTable(db, tSchema, rowData)
 	assert.NoError(t, err)
@@ -107,12 +112,6 @@ func TestTables(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to create table.")
 	}
-
-	//unmarshalledSchema := tbl.GetSchema()
-
-	//if !tSchema.Equals(unmarshalledSchema) {
-	//	t.Error("Schema has changed between writing and reading it back")
-	//}
 
 	badUUID, _ := uuid.NewRandom()
 	ids := []types.Value{types.UUID(id0), types.UUID(id1), types.UUID(id2), types.UUID(id3), types.UUID(badUUID)}
@@ -148,4 +147,48 @@ func TestTables(t *testing.T) {
 			t.Error(row.Fmt(context.Background(), readRows[i], tSchema), "!=", row.Fmt(context.Background(), r, tSchema))
 		}
 	}
+}
+
+func TestIndexRebuilding(t *testing.T) {
+	db, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_7_18, nil, nil)
+	tSchema := createTestSchema(t)
+	index := tSchema.Indexes().Get(testSchemaIndexName)
+	require.NotNil(t, index)
+	indexSch := index.Schema()
+	rowData, rows := createTestRowData(t, db, tSchema)
+	schemaVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tSchema)
+	require.NoError(t, err)
+
+	indexExpectedRows := make([]row.Row, len(rows))
+	for i, r := range rows {
+		indexExpectedRows[i], err = r.ReduceToIndex(index)
+	}
+
+	originalTable, err := NewTable(context.Background(), db, schemaVal, rowData, nil)
+	require.NoError(t, err)
+
+	var indexRows []row.Row
+
+	rebuildAllTable, err := originalTable.RebuildIndexData(context.Background())
+	require.NoError(t, err)
+	indexRowData, err := rebuildAllTable.GetIndexRowData(context.Background(), testSchemaIndexName)
+	require.NoError(t, err)
+	_ = indexRowData.IterAll(context.Background(), func(key, value types.Value) error {
+		indexRow, err := row.FromNoms(indexSch, key.(types.Tuple), value.(types.Tuple))
+		require.NoError(t, err)
+		indexRows = append(indexRows, indexRow)
+		return nil
+	})
+	assert.ElementsMatch(t, indexExpectedRows, indexRows)
+
+	indexRows = nil
+	indexRowData, err = originalTable.RebuildIndexRowData(context.Background(), testSchemaIndexName)
+	require.NoError(t, err)
+	_ = indexRowData.IterAll(context.Background(), func(key, value types.Value) error {
+		indexRow, err := row.FromNoms(indexSch, key.(types.Tuple), value.(types.Tuple))
+		require.NoError(t, err)
+		indexRows = append(indexRows, indexRow)
+		return nil
+	})
+	assert.ElementsMatch(t, indexExpectedRows, indexRows)
 }
