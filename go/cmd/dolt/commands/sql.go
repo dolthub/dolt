@@ -58,30 +58,16 @@ import (
 
 var sqlDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Runs a SQL query",
-	LongDesc: "Runs a SQL query you specify. With no arguments, begins an interactive shell to run queries and view " +
-		"the results. With the {{.EmphasisLeft}}-q{{.EmphasisRight}} option, runs the given query and prints any " +
-		"results, then exits.\n" +
-		"\n" +
-		"By default, {{.EmphasisLeft}}-q{{.EmphasisRight}} executes a single statement. To execute multiple SQL " +
-		"statements separated by semicolons, use {{.EmphasisLeft}}-b{{.EmphasisRight}} to enable batch mode. Queries can" +
-		"be saved with {{.EmphasisLeft}}-s{{.EmphasisRight}}.\n" +
-		"\n" +
-		"Alternatively {{.EmpahasisLeft}}-x{{.EmphasisRight}} can be used to execute a saved query by name.\n" +
-		"\n" +
-		"Pipe SQL statements to dolt sql (no {{.EmphasisLeft}}-q{{.EmphasisRight}}) to execute a SQL import or update " +
-		"script.\n" +
-		"\n" +
-		"By default this command uses the dolt data repository in the current working directory as the one and only " +
-		"database.  Running with {{.EmphasisLeft}}--multi-db-dir {{.LessThan}}directory{{.GreaterThan}}{{.EmphasisRight}} " +
-		"uses each of the subdirectories of the supplied directory (each subdirectory must be a valid dolt data repository) " +
-		"as databases. Subdirectories starting with '.' are ignored." +
-		"Known limitations:\n" +
-		"* No support for creating indexes\n" +
-		"* No support for foreign keys\n" +
-		"* No support for column constraints besides NOT NULL\n" +
-		"* No support for default values\n" +
-		"* Joins can only use indexes for two table joins. Three or more tables in a join query will use a non-indexed " +
-		"join, which is very slow.",
+	LongDesc: `Runs a SQL query you specify. With no arguments, begins an interactive shell to run queries and view the results. With the {{.EmphasisLeft}}-q{{.EmphasisRight}} option, runs the given query and prints any results, then exits.
+
+By default, {{.EmphasisLeft}}-q{{.EmphasisRight}} executes a single statement. To execute multiple SQL statements separated by semicolons, use {{.EmphasisLeft}}-b{{.EmphasisRight}} to enable batch mode. Queries can be saved with {{.EmphasisLeft}}-s{{.EmphasisRight}}. Alternatively {{.EmphasisLeft}}-x{{.EmphasisRight}} can be used to execute a saved query by name. Pipe SQL statements to dolt sql (no {{.EmphasisLeft}}-q{{.EmphasisRight}}) to execute a SQL import or update script. 
+
+By default this command uses the dolt data repository in the current working directory as the one and only database. Running with {{.EmphasisLeft}}--multi-db-dir {{.LessThan}}directory{{.GreaterThan}}{{.EmphasisRight}} uses each of the subdirectories of the supplied directory (each subdirectory must be a valid dolt data repository) as databases. Subdirectories starting with '.' are ignored. Known limitations: 
+	- No support for creating indexes 
+	- No support for foreign keys 
+	- No support for column constraints besides NOT NULL 
+	- No support for default values 
+	- Joins can only use indexes for two table joins. Three or more tables in a join query will use a non-indexed join, which is very slow.`,
 
 	Synopsis: []string{
 		"[--multi-db-dir {{.LessThan}}directory{{.GreaterThan}}] [-r {{.LessThan}}result format{{.GreaterThan}}]",

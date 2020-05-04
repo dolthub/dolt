@@ -88,14 +88,16 @@ func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {
 
 	cmdMdDoc, cmdMdDocErr := cmdDoc.cmdDocToCmdDocMd(options)
 	if cmdMdDocErr != nil {
-		return "", nil
+		return "", cmdMdDocErr
 	}
 	templ, templErr := template.New("shortDesc").Parse(cmdMdDocTempl)
 	if templErr != nil {
+
 		return "", templErr
 	}
 	var templBuffer bytes.Buffer
 	if err := templ.Execute(&templBuffer, cmdMdDoc); err != nil {
+
 		return "", err
 	}
 	return templBuffer.String(), nil
