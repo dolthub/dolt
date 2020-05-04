@@ -358,19 +358,26 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 	}
 
 	schVal, _ := encoding.MarshalSchemaAsNomsValue(context.Background(), vrw, sch)
-	tbl, err := doltdb.NewTable(context.Background(), vrw, schVal, initialRows)
+
+	emptyIndexData, err := types.NewMap(context.Background(), vrw)
 
 	if err != nil {
 		panic(err)
 	}
 
-	updatedTbl, err := doltdb.NewTable(context.Background(), vrw, schVal, updatedRows)
+	tbl, err := doltdb.NewTable(context.Background(), vrw, schVal, initialRows, emptyIndexData)
 
 	if err != nil {
 		panic(err)
 	}
 
-	mergeTbl, err := doltdb.NewTable(context.Background(), vrw, schVal, mergeRows)
+	updatedTbl, err := doltdb.NewTable(context.Background(), vrw, schVal, updatedRows, emptyIndexData)
+
+	if err != nil {
+		panic(err)
+	}
+
+	mergeTbl, err := doltdb.NewTable(context.Background(), vrw, schVal, mergeRows, emptyIndexData)
 
 	if err != nil {
 		panic(err)
@@ -451,7 +458,9 @@ func TestMergeCommits(t *testing.T) {
 	assert.NoError(t, err)
 	targVal, err := schRef.TargetValue(context.Background(), vrw)
 	assert.NoError(t, err)
-	expected, err := doltdb.NewTable(context.Background(), vrw, targVal, expectedRows)
+	emptyIndexData, err := types.NewMap(context.Background(), vrw)
+	assert.NoError(t, err)
+	expected, err := doltdb.NewTable(context.Background(), vrw, targVal, expectedRows, emptyIndexData)
 	assert.NoError(t, err)
 	expected, err = expected.SetConflicts(context.Background(), doltdb.NewConflict(schRef, schRef, schRef), expectedConflicts)
 	assert.NoError(t, err)

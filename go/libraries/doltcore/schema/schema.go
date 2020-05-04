@@ -24,6 +24,9 @@ type Schema interface {
 
 	// GetAllCols gets the collection of all columns (pk and non-pk)
 	GetAllCols() *ColCollection
+
+	// Indexes returns a collection of all indexes on the table that this schema belongs to.
+	Indexes() IndexCollection
 }
 
 // ColFromTag returns a schema.Column from a schema and a tag

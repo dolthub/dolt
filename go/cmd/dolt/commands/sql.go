@@ -1326,6 +1326,21 @@ func (se *sqlEngine) checkThenDeleteAllRows(ctx *sql.Context, s *sqlparser.Delet
 						return false
 					}
 
+					sch, err := table.GetSchema(ctx)
+					if err != nil {
+						return false
+					}
+					for _, index := range sch.Indexes().AllIndexes() {
+						emptyMap, err = types.NewMap(ctx, root.VRW())
+						if err != nil {
+							return false
+						}
+						newTable, err = newTable.SetIndexRowData(ctx, index.Name(), emptyMap)
+						if err != nil {
+							return false
+						}
+					}
+
 					newRoot, err := root.PutTable(ctx, tName, newTable)
 					if err != nil {
 						return false

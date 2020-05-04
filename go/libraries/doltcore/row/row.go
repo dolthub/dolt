@@ -46,6 +46,10 @@ type Row interface {
 	// Sets a value for the column with the tag given, returning a new row with the update.
 	SetColVal(tag uint64, val types.Value, sch schema.Schema) (Row, error)
 
+	// ReduceToIndex reduces a row to only the columns contained in an index. The column tags for this row must match
+	// the tags of the table that the index refers to.
+	ReduceToIndex(idx schema.Index) (Row, error)
+
 	Format() *types.NomsBinFormat
 }
 
