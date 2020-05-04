@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -159,7 +160,9 @@ func TestExists(t *testing.T) {
 				schVal, _ := encoding.MarshalSchemaAsNomsValue(context.Background(), ddb.ValueReadWriter(), fakeSchema)
 				m, err := types.NewMap(context.Background(), ddb.ValueReadWriter())
 				assert.NoError(t, err)
-				tbl, err := doltdb.NewTable(context.Background(), ddb.ValueReadWriter(), schVal, m)
+				indexData, err := types.NewMap(context.Background(), ddb.ValueReadWriter())
+				assert.NoError(t, err)
+				tbl, err := doltdb.NewTable(context.Background(), ddb.ValueReadWriter(), schVal, m, indexData)
 				assert.NoError(t, err)
 				root, err = root.PutTable(context.Background(), tableVal.Name, tbl)
 				assert.NoError(t, err)
@@ -231,7 +234,10 @@ func TestCreateRdWr(t *testing.T) {
 				t.Fatal("Unable ta update table")
 			}
 
-			tbl, err := doltdb.NewTable(context.Background(), vrw, schVal, *nomsWr.GetMap())
+			indexData, err := types.NewMap(context.Background(), vrw)
+			require.NoError(t, err)
+
+			tbl, err := doltdb.NewTable(context.Background(), vrw, schVal, *nomsWr.GetMap(), indexData)
 			assert.NoError(t, err)
 
 			root, err = root.PutTable(context.Background(), tableLoc.Name, tbl)

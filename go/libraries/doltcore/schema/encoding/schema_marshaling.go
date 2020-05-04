@@ -130,8 +130,16 @@ func (enc encodedTypeInfo) decodeTypeInfo() (typeinfo.TypeInfo, error) {
 	return typeinfo.FromTypeParams(id, enc.Params)
 }
 
+type encodedIndex struct {
+	Name    string   `noms:"name" json:"name"`
+	Tags    []uint64 `noms:"tags" json:"tags"`
+	Comment string   `noms:"comment" json:"comment"`
+	Unique  bool     `noms:"unique" json:"unique"`
+}
+
 type schemaData struct {
-	Columns []encodedColumn `noms:"columns" json:"columns"`
+	Columns         []encodedColumn `noms:"columns" json:"columns"`
+	IndexCollection []encodedIndex  `noms:"idxColl,omitempty" json:"idxColl,omitempty"`
 }
 
 func toSchemaData(sch schema.Schema) (schemaData, error) {
@@ -150,7 +158,17 @@ func toSchemaData(sch schema.Schema) (schemaData, error) {
 		return schemaData{}, err
 	}
 
-	return schemaData{encCols}, nil
+	encodedIndexes := make([]encodedIndex, sch.Indexes().Count())
+	for i, index := range sch.Indexes().AllIndexes() {
+		encodedIndexes[i] = encodedIndex{
+			Name:    index.Name(),
+			Tags:    index.Tags(),
+			Comment: index.Comment(),
+			Unique:  index.IsUnique(),
+		}
+	}
+
+	return schemaData{encCols, encodedIndexes}, nil
 }
 
 func (sd schemaData) decodeSchema() (schema.Schema, error) {
@@ -171,7 +189,15 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 		return nil, err
 	}
 
-	return schema.SchemaFromCols(colColl), nil
+	sch := schema.SchemaFromCols(colColl)
+	for _, encodedIndex := range sd.IndexCollection {
+		_, err = sch.Indexes().AddIndexByColTags(encodedIndex.Name, encodedIndex.Tags, encodedIndex.Unique, encodedIndex.Comment)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return sch, nil
 }
 
 // MarshalSchemaAsNomsValue takes a Schema and converts it to a types.Value
