@@ -16,26 +16,24 @@ package schema
 
 type Index interface {
 	// AllTags returns the tags of the columns in the entire index, including the primary keys.
-	// The result is equivalent to a schema check on the associated dolt index table.
+	// If we imagined a dolt index as being a standard dolt table, then the tags would represent the schema columns.
 	AllTags() []uint64
-	// Columns returns the names of the columns in the index.
-	Columns() []string
+	// ColumnNames returns the names of the columns in the index.
+	ColumnNames() []string
 	// Comment returns the comment that was provided upon index creation.
 	Comment() string
 	// GetColumn returns the column for the given tag and whether the column was found or not.
 	GetColumn(tag uint64) (Column, bool)
-	// InnerIndexes returns all inner indexes
-	InnerIndexes() []InnerIndex
+	// IndexedColumnTags returns the tags of the columns in the index.
+	IndexedColumnTags() []uint64
 	// IsUnique returns whether the index enforces the UNIQUE constraint.
 	IsUnique() bool
 	// Name returns the name of the index.
 	Name() string
-	// PrimaryKeys returns the primary keys of the indexed table, in the order that they're stored for that table.
-	PrimaryKeys() []uint64
+	// PrimaryKeyTags returns the primary keys of the indexed table, in the order that they're stored for that table.
+	PrimaryKeyTags() []uint64
 	// Schema returns the schema for the internal index map. Can be used for table operations.
 	Schema() Schema
-	// Tags returns the tags of the columns in the index.
-	Tags() []uint64
 }
 
 var _ Index = (*indexImpl)(nil)
@@ -53,7 +51,7 @@ func (ix *indexImpl) AllTags() []uint64 {
 	return ix.allTags
 }
 
-func (ix *indexImpl) Columns() []string {
+func (ix *indexImpl) ColumnNames() []string {
 	colNames := make([]string, len(ix.tags))
 	for i, tag := range ix.tags {
 		colNames[i] = ix.indexColl.colColl.TagToCol[tag].Name
@@ -69,16 +67,8 @@ func (ix *indexImpl) GetColumn(tag uint64) (Column, bool) {
 	return ix.indexColl.colColl.GetByTag(tag)
 }
 
-func (ix *indexImpl) InnerIndexes() []InnerIndex {
-	tagLength := len(ix.tags)
-	innerIndexes := make([]InnerIndex, tagLength)
-	for i := 1; i <= tagLength; i++ {
-		innerIndexes[i-1] = &innerIndexImpl{
-			index:     ix,
-			tagLength: i,
-		}
-	}
-	return innerIndexes
+func (ix *indexImpl) IndexedColumnTags() []uint64 {
+	return ix.tags
 }
 
 func (ix *indexImpl) IsUnique() bool {
@@ -89,7 +79,7 @@ func (ix *indexImpl) Name() string {
 	return ix.name
 }
 
-func (ix *indexImpl) PrimaryKeys() []uint64 {
+func (ix *indexImpl) PrimaryKeyTags() []uint64 {
 	return ix.indexColl.pks
 }
 
@@ -114,10 +104,6 @@ func (ix *indexImpl) Schema() Schema {
 		allCols:         allCols,
 		indexCollection: NewIndexCollection(nil),
 	}
-}
-
-func (ix *indexImpl) Tags() []uint64 {
-	return ix.tags
 }
 
 func (ix *indexImpl) copy() *indexImpl {

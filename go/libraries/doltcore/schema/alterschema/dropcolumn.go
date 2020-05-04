@@ -48,7 +48,7 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string) (*doltdb
 		dropTag = col.Tag
 	}
 
-	for _, index := range tblSch.Indexes().ReferencesColumn(colName) {
+	for _, index := range tblSch.Indexes().IndexesWithColumn(colName) {
 		_, err = tblSch.Indexes().RemoveIndex(index.Name())
 		if err != nil {
 			return nil, err
@@ -98,7 +98,7 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string) (*doltdb
 	if err != nil {
 		return nil, err
 	}
-	newTable, err := doltdb.NewTable(ctx, vrw, schemaVal, prunedRowData, indexData)
+	newTable, err := doltdb.NewTable(ctx, vrw, schemaVal, prunedRowData, &indexData)
 
 	if err != nil {
 		return nil, err

@@ -80,7 +80,7 @@ func SchemaAsCreateStmt(tableName string, sch schema.Schema) string {
 		sb.WriteString("INDEX ")
 		sb.WriteString(QuoteIdentifier(index.Name()))
 		sb.WriteString(" (")
-		for i, indexColName := range index.Columns() {
+		for i, indexColName := range index.ColumnNames() {
 			if i != 0 {
 				sb.WriteRune(',')
 			}
@@ -89,7 +89,7 @@ func SchemaAsCreateStmt(tableName string, sch schema.Schema) string {
 		sb.WriteRune(')')
 		if len(index.Comment()) > 0 {
 			sb.WriteString(" COMMENT '")
-			sb.WriteString(index.Comment())
+			sb.WriteString(strings.ReplaceAll(index.Comment(), `"`, `\"`))
 			sb.WriteRune('\'')
 		}
 	}

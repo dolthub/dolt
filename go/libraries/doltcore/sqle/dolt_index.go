@@ -145,7 +145,7 @@ type doltIndex struct {
 	tableSch  schema.Schema
 	tableName string
 	table     *doltdb.Table
-	index     schema.InnerIndex
+	index     schema.Index
 	ctx       *sql.Context
 }
 
@@ -164,7 +164,7 @@ func (di *doltIndex) Driver() string {
 }
 
 func (di *doltIndex) Expressions() []string {
-	tags := di.index.Tags()
+	tags := di.index.IndexedColumnTags()
 	strs := make([]string, len(tags))
 	for i, tag := range tags {
 		col, _ := di.index.GetColumn(tag)
@@ -174,12 +174,12 @@ func (di *doltIndex) Expressions() []string {
 }
 
 func (di *doltIndex) Get(key ...interface{}) (sql.IndexLookup, error) {
-	if len(di.index.Tags()) != len(key) {
+	if len(di.index.IndexedColumnTags()) != len(key) {
 		return nil, errors.New("key must specify all columns for inner index")
 	}
 
 	taggedVals := make(row.TaggedValues)
-	for i, tag := range di.index.Tags() {
+	for i, tag := range di.index.IndexedColumnTags() {
 		if i >= len(key) {
 			break
 		}
@@ -191,7 +191,7 @@ func (di *doltIndex) Get(key ...interface{}) (sql.IndexLookup, error) {
 		taggedVals[tag] = val
 	}
 
-	rowData, err := di.table.GetIndexRowData(di.ctx, di.index.OuterIndex().Name())
+	rowData, err := di.table.GetIndexRowData(di.ctx, di.index.Name())
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +215,7 @@ func (*doltIndex) Has(partition sql.Partition, key ...interface{}) (bool, error)
 }
 
 func (di *doltIndex) ID() string {
-	return fmt.Sprintf("%s:%s%v", di.tableName, di.index.Name(), len(di.index.Tags()))
+	return fmt.Sprintf("%s:%s%v", di.tableName, di.index.Name(), len(di.index.IndexedColumnTags()))
 }
 
 func (di *doltIndex) Schema() schema.Schema {
