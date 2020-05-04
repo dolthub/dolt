@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
@@ -33,6 +34,7 @@ const (
 	ageColName      = "age"
 	titleColName    = "title"
 	reservedColName = "reserved"
+	indexName       = "idx_age"
 	lnColTag        = 1
 	fnColTag        = 0
 	addrColTag      = 6
@@ -61,6 +63,11 @@ var testCols = []schema.Column{
 var testKeyColColl, _ = schema.NewColCollection(testKeyCols...)
 var testNonKeyColColl, _ = schema.NewColCollection(testCols...)
 var sch, _ = schema.SchemaFromPKAndNonPKCols(testKeyColColl, testNonKeyColColl)
+var index schema.Index
+
+func init() {
+	index, _ = sch.Indexes().AddIndexByColTags(indexName, []uint64{ageColTag}, false, "")
+}
 
 func newTestRow() (Row, error) {
 	vals := TaggedValues{
@@ -331,5 +338,69 @@ func TestConvToAndFromTuple(t *testing.T) {
 
 	if !AreEqual(r, r2, sch) {
 		t.Error("Failed to convert to a noms tuple, and then convert back to the same row")
+	}
+}
+
+func TestReduceToIndex(t *testing.T) {
+	taggedValues := []struct {
+		row           TaggedValues
+		expectedIndex TaggedValues
+	}{
+		{
+			TaggedValues{
+				lnColTag:       types.String("yes"),
+				fnColTag:       types.String("no"),
+				addrColTag:     types.String("nonsense"),
+				ageColTag:      types.Uint(55),
+				titleColTag:    types.String("lol"),
+				reservedColTag: types.String("what"),
+			},
+			TaggedValues{
+				lnColTag:  types.String("yes"),
+				fnColTag:  types.String("no"),
+				ageColTag: types.Uint(55),
+			},
+		},
+		{
+			TaggedValues{
+				lnColTag:       types.String("yes"),
+				addrColTag:     types.String("nonsense"),
+				ageColTag:      types.Uint(55),
+				titleColTag:    types.String("lol"),
+				reservedColTag: types.String("what"),
+			},
+			TaggedValues{
+				lnColTag:  types.String("yes"),
+				ageColTag: types.Uint(55),
+			},
+		},
+		{
+			TaggedValues{
+				lnColTag: types.String("yes"),
+				fnColTag: types.String("no"),
+			},
+			TaggedValues{
+				lnColTag: types.String("yes"),
+				fnColTag: types.String("no"),
+			},
+		},
+		{
+			TaggedValues{
+				addrColTag:     types.String("nonsense"),
+				titleColTag:    types.String("lol"),
+				reservedColTag: types.String("what"),
+			},
+			TaggedValues{},
+		},
+	}
+
+	for _, tvCombo := range taggedValues {
+		row, err := New(types.Format_7_18, sch, tvCombo.row)
+		require.NoError(t, err)
+		expectedIndex, err := New(types.Format_7_18, index.Schema(), tvCombo.expectedIndex)
+		require.NoError(t, err)
+		indexRow, err := row.ReduceToIndex(index)
+		assert.NoError(t, err)
+		assert.True(t, AreEqual(expectedIndex, indexRow, index.Schema()))
 	}
 }

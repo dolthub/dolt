@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
@@ -39,8 +40,9 @@ const (
 	ageTag       = 4
 	emptyTag     = 5
 )
+const testSchemaIndexName = "idx_name"
 
-func createTestSchema() schema.Schema {
+func createTestSchema(t *testing.T) schema.Schema {
 	colColl, _ := schema.NewColCollection(
 		schema.NewColumn("id", idTag, types.UUIDKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("first", firstTag, types.StringKind, false, schema.NotNullConstraint{}),
@@ -50,7 +52,8 @@ func createTestSchema() schema.Schema {
 		schema.NewColumn("empty", emptyTag, types.IntKind, false),
 	)
 	sch := schema.SchemaFromCols(colColl)
-
+	_, err := sch.Indexes().AddIndexByColTags(testSchemaIndexName, []uint64{firstTag, lastTag}, false, "")
+	require.NoError(t, err)
 	return sch
 }
 
@@ -166,7 +169,7 @@ func TestLDNoms(t *testing.T) {
 			t.Fatal("There should be no tables in empty db")
 		}
 
-		tSchema := createTestSchema()
+		tSchema := createTestSchema(t)
 		rowData, _ := createTestRowData(t, ddb.db, tSchema)
 		tbl, err = createTestTable(ddb.db, tSchema, rowData)
 

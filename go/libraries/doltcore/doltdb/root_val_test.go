@@ -42,7 +42,7 @@ func TestTableDiff(t *testing.T) {
 		t.Error("Bad table diff when comparing two repos")
 	}
 
-	sch := createTestSchema()
+	sch := createTestSchema(t)
 	m, err := types.NewMap(ctx, ddb.ValueReadWriter())
 	assert.NoError(t, err)
 
