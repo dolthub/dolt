@@ -70,7 +70,13 @@ func createTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData t
 		return nil, err
 	}
 
-	tbl, err := NewTable(context.Background(), vrw, schemaVal, rowData)
+	indexData, err := types.NewMap(context.Background(), vrw)
+
+	if err != nil {
+		return nil, err
+	}
+
+	tbl, err := NewTable(context.Background(), vrw, schemaVal, rowData, indexData)
 
 	return tbl, nil
 }

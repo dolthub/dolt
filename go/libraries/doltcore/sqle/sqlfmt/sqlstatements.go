@@ -70,7 +70,32 @@ func SchemaAsCreateStmt(tableName string, sch schema.Schema) string {
 		panic(err)
 	}
 
-	sb.WriteString(")\n);")
+	sb.WriteRune(')')
+
+	for _, index := range sch.Indexes().AllIndexes() {
+		sb.WriteString(",\n  ")
+		if index.IsUnique() {
+			sb.WriteString("UNIQUE ")
+		}
+		sb.WriteString("INDEX ")
+		sb.WriteString(QuoteIdentifier(index.Name()))
+		sb.WriteString(" (")
+		for i, indexColName := range index.Columns() {
+			if i != 0 {
+				sb.WriteRune(',')
+			}
+			sb.WriteString(QuoteIdentifier(indexColName))
+		}
+		sb.WriteRune(')')
+		if len(index.Comment()) > 0 {
+			sb.WriteString(" COMMENT '")
+			sb.WriteString(index.Comment())
+			sb.WriteRune('\'')
+		}
+	}
+
+	sb.WriteString("\n);")
+
 	return sb.String()
 }
 

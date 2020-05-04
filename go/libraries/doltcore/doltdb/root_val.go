@@ -632,7 +632,12 @@ func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch s
 		return nil, err
 	}
 
-	tbl, err := NewTable(ctx, root.VRW(), schVal, m)
+	indexData, err := types.NewMap(ctx, root.VRW())
+	if err != nil {
+		return nil, err
+	}
+
+	tbl, err := NewTable(ctx, root.VRW(), schVal, m, indexData)
 	if err != nil {
 		return nil, err
 	}

@@ -77,8 +77,14 @@ func updateTableWithNewSchema(ctx context.Context, tbl *doltdb.Table, tag uint64
 		return nil, err
 	}
 
+	indexData, err := tbl.GetIndexData(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
 	if defaultVal == nil {
-		return doltdb.NewTable(ctx, vrw, newSchemaVal, rowData)
+		return doltdb.NewTable(ctx, vrw, newSchemaVal, rowData, indexData)
 	}
 
 	me := rowData.Edit()
@@ -108,7 +114,7 @@ func updateTableWithNewSchema(ctx context.Context, tbl *doltdb.Table, tag uint64
 		return nil, err
 	}
 
-	return doltdb.NewTable(ctx, vrw, newSchemaVal, m)
+	return doltdb.NewTable(ctx, vrw, newSchemaVal, m, indexData)
 }
 
 // addColumnToSchema creates a new schema with a column as specified by the params.
