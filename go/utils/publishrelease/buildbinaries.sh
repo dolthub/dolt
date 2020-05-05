@@ -9,7 +9,7 @@ cd $script_dir/../..
 docker run --rm -v `pwd`:/src golang:1.14.2-buster /bin/bash -c '
 set -e
 set -o pipefail
-apt-get update && apt-get install -y zip curl
+apt-get update && apt-get install -y zip
 cd /src
 BINS="dolt git-dolt git-dolt-smudge"
 OSES="windows linux darwin"
