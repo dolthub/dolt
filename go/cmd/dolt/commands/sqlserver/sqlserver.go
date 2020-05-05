@@ -46,50 +46,44 @@ const (
 
 var sqlServerDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Start a MySQL-compatible server.",
-	LongDesc: "By default, starts a MySQL-compatible server which allows only one user connection at" +
-		"a time to the dolt repository in the current directory. Any edits made through this server will be automatically " +
-		"reflected in the working set.  This behavior can be modified using a yaml configuration file passed to the server " +
-		"via --config <file>, or by using the supported switches and flags to configure the server directly on the " +
-		"command line (If --config <file> is provided all other command line arguments are ignored).\n" +
-		"\n" +
-		"This is an example yaml configuration file showing all supported items and their default values:\n" +
-		"\n" +
-		"\n" +
-		"{{.EmphasisLeft}}" + serverConfigAsYAMLConfig(DefaultServerConfig()).String() + "{{.EmphasisRight}}\n" +
-		"\n" +
-		"\n" +
-		"SUPPORTED CONFIG FILE FIELDS:\n" +
-		"\n" +
-		"log_level - Level of logging provided. Options are: `trace', `debug`, `info`, `warning`, `error`, and `fatal`.\n" +
-		"\n" +
-		"behavior.read_only - If true database modification is disabled.\n" +
-		"\n" +
-		"behavior.autocommit - If true write queries will automatically alter the working set.  When working with autocommit " +
-		"enabled it is highly recommended that listener.max_connections be set to 1 as concurrency issues will arise otherwise.\n" +
-		"\n" +
-		"user.name - The username that connections should use for authentication.\n" +
-		"\n" +
-		"user.password - The password that connections should use for authentication.\n " +
-		"\n" +
-		"listener.host - The host address that the server will run on.  This may be `localhost` or an IPv4 or IPv6 address.\n" +
-		"\n" +
-		"listener.port - The port that the server should listen on.\n" +
-		"\n" +
-		"listener.max_connections - The number of simultaneous connections that the server will accept.\n" +
-		"\n" +
-		"listener.read_timeout_millis - The number of milliseconds that the server will wait for a read operation.\n" +
-		"\n" +
-		"listener.write_timeout_millis - The number of milliseconds that the server will wait for a write operation.\n" +
-		"\n" +
-		"databases - a list of dolt data repositories to make available as SQL databases. If databases is missing or " +
-		"empty then the working directory must be a valid dolt data repository which will be made available as a SQL database\n" +
-		"\n" +
-		"databases[i].path - A path to a dolt data repository.\n" +
-		"\n" +
-		"databases[i].name - The name that the database corresponding to the given path should be referenced via SQL.\n" +
-		"\n" +
-		"\n" +
-		"If a config file is not provided many of these settings may be configured on the command line.",
+	LongDesc: `By default, starts a MySQL-compatible server which allows only one user connection at a time to the dolt repository in the current directory. Any edits made through this server will be automatically reflected in the working set.  This behavior can be modified using a yaml configuration file passed to the server via {{.EmphasisLeft}}--config <file>{{.EmphasisRight}}, or by using the supported switches and flags to configure the server directly on the command line (If {{.EmphasisLeft}}--config <file>{{.EmphasisRight}} is provided all other command line arguments are ignored). This is an example yaml configuration file showing all supported items and their default values:
+<div class="gatsby-highlight" data-language="text">
+	<pre class="By default, starts a MySQL-compatible server whilanguage-text">
+		<code class="language-text">
+			` + serverConfigAsYAMLConfig(DefaultServerConfig()).String() + `
+  		</code>
+	</pre>
+</div>
+		
+SUPPORTED CONFIG FILE FIELDS:
+
+		{{.EmphasisLeft}}vlog_level{{.EmphasisRight}} - Level of logging provided. Options are: {{.EmphasisLeft}}trace{{.EmphasisRight}}, {{.EmphasisLeft}}debug{{.EmphasisRight}}, {{.EmphasisLeft}}info{{.EmphasisRight}}, {{.EmphasisLeft}}warning{{.EmphasisRight}}, {{.EmphasisLeft}}error{{.EmphasisRight}}, and {{.EmphasisLeft}}fatal{{.EmphasisRight}}.
+
+		{{.EmphasisLeft}}behavior.read_only{{.EmphasisRight}} - If true database modification is disabled
+
+		{{.EmphasisLeft}}behavior.autocommit{{.EmphasisRight}} - If true write queries will automatically alter the working set. When working with autocommit enabled it is highly recommended that listener.max_connections be set to 1 as concurrency issues will arise otherwise
+
+		{{.EmphasisLeft}}user.name{{.EmphasisRight}} - The username that connections should use for authentication
+
+		{{.EmphasisLeft}}user.password{{.EmphasisRight}} - The password that connections should use for authentication.
+
+		{{.EmphasisLeft}}listener.host{{.EmphasisRight}} - The host address that the server will run on.  This may be {{.EmphasisLeft}}localhost{{.EmphasisRight}} or an IPv4 or IPv6 address
+
+		{{.EmphasisLeft}}listener.port{{.EmphasisRight}} - The port that the server should listen on
+
+		{{.EmphasisLeft}}listener.max_connections{{.EmphasisRight}} - The number of simultaneous connections that the server will accept
+
+		{{.EmphasisLeft}}listener.read_timeout_millis{{.EmphasisRight}} - The number of milliseconds that the server will wait for a read operation
+
+		{{.EmphasisLeft}}listener.write_timeout_millis{{.EmphasisRight}} - The number of milliseconds that the server will wait for a write operation
+
+		{{.EmphasisLeft}}databases{{.EmphasisRight}} - a list of dolt data repositories to make available as SQL databases. If databases is missing or empty then the working directory must be a valid dolt data repository which will be made available as a SQL database
+		
+		{{.EmphasisLeft}}databases[i].path{{.EmphasisRight}} - A path to a dolt data repository
+		
+		{{.EmphasisLeft}}databases[i].name{{.EmphasisRight}} - The name that the database corresponding to the given path should be referenced via SQL
+
+If a config file is not provided many of these settings may be configured on the command line.`,
 	Synopsis: []string{
 		"--config {{.LessThan}}file{{.GreaterThan}}",
 		"[-H {{.LessThan}}host{{.GreaterThan}}] [-P {{.LessThan}}port{{.GreaterThan}}] [-u {{.LessThan}}user{{.GreaterThan}}] [-p {{.LessThan}}password{{.GreaterThan}}] [-t {{.LessThan}}timeout{{.GreaterThan}}] [-l {{.LessThan}}loglevel{{.GreaterThan}}] [--multi-db-dir {{.LessThan}}directory{{.GreaterThan}}] [-r]",
