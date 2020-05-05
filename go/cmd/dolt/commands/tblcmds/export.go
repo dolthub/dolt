@@ -90,22 +90,23 @@ func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 	return tableName, tableLoc, destLoc
 }
 
-func parseExportArgs(ap *argparser.ArgParser, commandStr string, args []string) (bool, *mvdata.MoveOptions) {
+func parseExportArgs(ap *argparser.ArgParser, commandStr string, args []string) *mvdata.MoveOptions {
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, exportDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 	tableName, tableLoc, fileLoc := validateExportArgs(apr, usage)
 
 	if fileLoc == nil || len(tableLoc.Name) == 0 {
-		return false, nil
+		return nil
 	}
 
-	schemaFile, _ := apr.GetValue(outSchemaParam)
+	schemaFile, _ := apr.GetValue(schemaParam)
 	mappingFile, _ := apr.GetValue(mappingFileParam)
 	primaryKey, _ := apr.GetValue(primaryKeyParam)
 
-	return apr.Contains(forceParam), &mvdata.MoveOptions{
+	return &mvdata.MoveOptions{
 		Operation:   mvdata.OverwriteOp,
 		ContOnErr:   apr.Contains(contOnErrParam),
+		Force:		 apr.Contains(forceParam),
 		TableName:   tableName,
 		SchFile:     schemaFile,
 		MappingFile: mappingFile,
@@ -139,7 +140,7 @@ func (cmd ExportCmd) createArgParser() *argparser.ArgParser {
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "The file being output to."})
 	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the Force flag will allow the target to be overwritten.")
 	ap.SupportsFlag(contOnErrParam, "", "Continue exporting when row export errors are encountered.")
-	ap.SupportsString(outSchemaParam, "s", "schema_file", "The schema for the output data.")
+	ap.SupportsString(schemaParam, "s", "schema_file", "The schema for the output data.")
 	ap.SupportsString(mappingFileParam, "m", "mapping_file", "A file that lays out how fields should be mapped from input data to output data.")
 	ap.SupportsString(primaryKeyParam, "pk", "primary_key", "Explicitly define the name of the field in the schema which should be used as the primary key.")
 	ap.SupportsString(fileTypeParam, "", "file_type", "Explicitly define the type of the file if it can't be inferred from the file extension.")
@@ -154,17 +155,19 @@ func (cmd ExportCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	force, mvOpts := parseExportArgs(ap, commandStr, args)
+	mvOpts := parseExportArgs(ap, commandStr, args)
 
 	if mvOpts == nil {
 		return 1
 	}
 
-	result := executeMove(ctx, dEnv, force, mvOpts)
+	verr := executeMove(ctx, dEnv, mvOpts)
 
-	if result == 0 {
-		cli.PrintErrln(color.CyanString("Successfully exported data."))
+	if verr != nil {
+		_, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, exportDocs, ap))
+		commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	return result
+	cli.PrintErrln(color.CyanString("Successfully exported data."))
+	return 0
 }

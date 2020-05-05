@@ -93,7 +93,7 @@ func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 
 	root := working
 
-	var old, new string
+	var oldTbl, newTbl string
 	if apr.NArg() == 3 {
 		var cm *doltdb.Commit
 		cm, verr = commands.ResolveCommitWithVErr(dEnv, apr.Arg(0), dEnv.RepoState.CWBHeadRef().String())
@@ -108,49 +108,44 @@ func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 			return commands.HandleVErrAndExitCode(verr, usage)
 		}
 
-		old, new = apr.Arg(1), apr.Arg(2)
+		oldTbl, newTbl = apr.Arg(1), apr.Arg(2)
 	} else {
-		old, new = apr.Arg(0), apr.Arg(1)
+		oldTbl, newTbl = apr.Arg(0), apr.Arg(1)
 	}
 
-	if err := ValidateTableNameForCreate(new); err != nil {
+	if err := ValidateTableNameForCreate(newTbl); err != nil {
 		return commands.HandleVErrAndExitCode(err, usage)
 	}
 
-	_, ok, err := root.GetTable(ctx, old)
+	_, ok, err := root.GetTable(ctx, oldTbl)
 
 	if err != nil {
 		verr = errhand.BuildDError("error: failed to get table").AddCause(err).Build()
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 	if !ok {
-		verr = errhand.BuildDError("Table '%s' not found in root", old).Build()
+		verr = errhand.BuildDError("Table '%s' not found in root", oldTbl).Build()
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	has, err := working.HasTable(ctx, new)
+	has, err := working.HasTable(ctx, newTbl)
 
 	if err != nil {
 		verr = errhand.BuildDError("error: failed to get tables").AddCause(err).Build()
 		return commands.HandleVErrAndExitCode(verr, usage)
 	} else if !force && has {
-		verr = errhand.BuildDError("Data already exists in '%s'.  Use -f to overwrite.", new).Build()
+		verr = errhand.BuildDError("Data already exists in '%s'.  Use -f to overwrite.", newTbl).Build()
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
 	mvOpts := &mvdata.MoveOptions{
 		Operation: mvdata.OverwriteOp,
 		ContOnErr: true,
-		Src:       mvdata.TableDataLocation{Name: old},
-		Dest:      mvdata.TableDataLocation{Name: new},
+		Force:     force,
+		Src:       mvdata.TableDataLocation{Name: oldTbl},
+		Dest:      mvdata.TableDataLocation{Name: newTbl},
 	}
 
-	res := executeMove(ctx, dEnv, force, mvOpts)
-
-	if res != 0 {
-		verr = errhand.BuildDError("could not copy table %s to table %s", old, new).Build()
-		return commands.HandleVErrAndExitCode(verr, usage)
-	}
-
-	return 0
+	verr = executeMove(ctx, dEnv, mvOpts)
+	return commands.HandleVErrAndExitCode(verr, usage)
 }

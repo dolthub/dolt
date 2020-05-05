@@ -24,7 +24,6 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -40,32 +39,19 @@ type JSONReader struct {
 	sampleRow  row.Row
 }
 
-func OpenJSONReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS, sch schema.Schema, schPath string) (*JSONReader, error) {
+func OpenJSONReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS, sch schema.Schema) (*JSONReader, error) {
 	r, err := fs.OpenForRead(path)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return newJsonReader(nbf, r, fs, sch, schPath, path)
+	return newJsonReader(nbf, r, fs, sch, path)
 }
 
-func newJsonReader(nbf *types.NomsBinFormat, r io.ReadCloser, fs filesys.ReadableFS, sch schema.Schema, schPath string, tblPath string) (*JSONReader, error) {
+func newJsonReader(nbf *types.NomsBinFormat, r io.ReadCloser, fs filesys.ReadableFS, sch schema.Schema, tblPath string) (*JSONReader, error) {
 	if sch == nil {
-		if schPath == "" {
-			return nil, errors.New("schema must be provided")
-		}
-
-		schData, err := fs.ReadFile(schPath)
-		if err != nil {
-			return nil, err
-		}
-
-		jsonSchStr := string(schData)
-		sch, err = encoding.UnmarshalJson(jsonSchStr)
-		if err != nil {
-			return nil, err
-		}
+		return nil, errors.New("schema must be provided to JsonReader")
 	}
 
 	tblData, err := fs.OpenForRead(tblPath)
@@ -137,7 +123,7 @@ func (r *JSONReader) ReadRow(ctx context.Context) (row.Row, error) {
 func (r *JSONReader) convToRow(rowMap map[string]interface{}) (row.Row, error) {
 	allCols := r.sch.GetAllCols()
 
-	taggedVals := make(row.TaggedValues, 1)
+	taggedVals := make(row.TaggedValues, allCols.Size())
 
 	for k, v := range rowMap {
 		col, ok := allCols.GetByName(k)
@@ -152,6 +138,7 @@ func (r *JSONReader) convToRow(rowMap map[string]interface{}) (row.Row, error) {
 
 	}
 
+	// todo: move null value checks to pipeline
 	err := r.sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if val, ok := taggedVals.Get(tag); !col.IsNullable() && (!ok || types.IsNull(val)) {
 			return true, fmt.Errorf("column `%s` does not allow null values", col.Name)

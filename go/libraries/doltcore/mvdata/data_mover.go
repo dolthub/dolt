@@ -17,6 +17,8 @@ package mvdata
 import (
 	"context"
 	"errors"
+	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"strings"
 	"sync/atomic"
 
@@ -25,7 +27,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
@@ -53,13 +54,15 @@ type XlsxOptions struct {
 
 type JSONOptions struct {
 	TableName string
+	SchFile   string
 }
 
 type MoveOptions struct {
 	Operation   MoveOperation
-	ContOnErr   bool
-	SchFile     string
 	TableName   string
+	ContOnErr   bool
+	Force       bool
+	SchFile     string
 	MappingFile string
 	PrimaryKey  string
 	Src         DataLocation
@@ -77,6 +80,19 @@ func (m MoveOptions) isCopy() bool {
 	_, fromTable := m.Src.(TableDataLocation)
 	_, toTable := m.Dest.(TableDataLocation)
 	return fromTable && toTable
+}
+
+func (m MoveOptions) isExport() bool {
+	_, fromTable := m.Src.(TableDataLocation)
+	_, toFile := m.Dest.(FileDataLocation)
+	return fromTable && toFile
+}
+
+func (m MoveOptions) WillOverwrite() bool {
+	if _, isStdOut := m.Dest.(StreamDataLocation); isStdOut {
+		return false  // can't overwrite StdOut
+	}
+	return m.Operation == OverwriteOp && !m.Force
 }
 
 type DataMover struct {
@@ -112,7 +128,7 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 	var rd table.TableReadCloser
 	var err error
 
-	rd, srcIsSorted, err := mvOpts.Src.NewReader(ctx, root, fs, mvOpts.SchFile, mvOpts.SrcOptions)
+	rd, srcIsSorted, err := mvOpts.Src.NewReader(ctx, root, fs, mvOpts.SrcOptions)
 
 	if err != nil {
 		return nil, &DataMoverCreationError{CreateReaderErr, err}
@@ -124,42 +140,17 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 		}
 	}()
 
-	outSch, err := getOutSchema(ctx, rd.GetSchema(), root, fs, mvOpts)
+	inSch := rd.GetSchema()
+	outSch, err := outSchemaFromInSchema(ctx, inSch, root, fs, mvOpts)
 
 	if err != nil {
-		if strings.Contains(err.Error(), "invalid noms kind") {
-			return nil, &DataMoverCreationError{NomsKindSchemaErr, err}
-		}
-		return nil, &DataMoverCreationError{SchemaErr, err}
+		return nil, &DataMoverCreationError{ SchemaErr, err}
 	}
 
-	if mvOpts.Operation == ReplaceOp && mvOpts.MappingFile == "" {
-		fileMatchesSchema, err := rd.VerifySchema(outSch)
-		if err != nil {
-			return nil, &DataMoverCreationError{ReplacingErr, err}
-		}
-		if !fileMatchesSchema {
-			err := errors.New("Schema from file does not match schema from existing table.")
-			return nil, &DataMoverCreationError{ReplacingErr, err}
-		}
-	}
-
-	transforms := pipeline.NewTransformCollection()
-	var mapping *rowconv.FieldMapping
-	if mvOpts.MappingFile != "" {
-		mapping, err = rowconv.MappingFromFile(mvOpts.MappingFile, fs, rd.GetSchema(), outSch)
-	} else {
-		mapping, err = rowconv.NameMapping(rd.GetSchema(), outSch)
-	}
+	transforms, err := maybeMapFields(inSch, outSch, fs, mvOpts.MappingFile)
 
 	if err != nil {
 		return nil, &DataMoverCreationError{MappingErr, err}
-	}
-
-	err = maybeMapFields(transforms, mapping)
-
-	if err != nil {
-		return nil, &DataMoverCreationError{CreateMapperErr, err}
 	}
 
 	var wr table.TableWriteCloser
@@ -171,7 +162,7 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 	case UpdateOp:
 		wr, err = mvOpts.Dest.NewUpdatingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
 	default:
-		return nil, &DataMoverCreationError{CreateWriterErr, errors.New("")}
+		err = errors.New("invalid move operation")
 	}
 
 	if err != nil {
@@ -222,70 +213,84 @@ func (imp *DataMover) Move(ctx context.Context) (badRowCount int64, err error) {
 	return badCount, nil
 }
 
-func maybeMapFields(transforms *pipeline.TransformCollection, mapping *rowconv.FieldMapping) error {
-	rconv, err := rowconv.NewImportRowConverter(mapping)
-
-	if err != nil {
-		return err
+func maybeMapFields(inSch schema.Schema, outSch schema.Schema, fs filesys.Filesys, mappingFile string) (*pipeline.TransformCollection, error) {
+	var mapping *rowconv.FieldMapping
+	var err error
+	if mappingFile != "" {
+		mapping, err = rowconv.MappingFromFile(mappingFile, fs, inSch, outSch)
+	} else {
+		mapping, err = rowconv.NameMapping(inSch, outSch)
 	}
 
+	rconv, err := rowconv.NewImportRowConverter(mapping)
+	if err != nil {
+		return nil, err
+	}
+
+	transforms := pipeline.NewTransformCollection()
 	if !rconv.IdentityConverter {
 		nt := pipeline.NewNamedTransform("Mapping transform", rowconv.GetRowConvTransformFunc(rconv))
 		transforms.AppendTransforms(nt)
 	}
 
-	return nil
+	return transforms, nil
 }
 
-func getOutSchema(ctx context.Context, inSch schema.Schema, root *doltdb.RootValue, fs filesys.ReadableFS, mvOpts *MoveOptions) (schema.Schema, error) {
-	if mvOpts.Operation == UpdateOp || mvOpts.Operation == ReplaceOp {
-		// Get schema from target
+func outSchemaFromInSchema(ctx context.Context, inSch schema.Schema, root *doltdb.RootValue, fs filesys.ReadableFS, mvOpts *MoveOptions) (schema.Schema, error) {
+	if mvOpts.isExport() || mvOpts.Operation == UpdateOp || mvOpts.Operation == ReplaceOp {
+		// outSch == inSch
+		return inSch, nil
+	}
 
-		rd, _, err := mvOpts.Dest.NewReader(ctx, root, fs, mvOpts.SchFile, mvOpts.SrcOptions)
+	var outSch schema.Schema
+	var err error
 
+	if mvOpts.SchFile != "" {
+		var tn string
+		tn, outSch, err = schAndTableNameFromFile(ctx, mvOpts.SchFile, fs, root)
 		if err != nil {
 			return nil, err
 		}
-
-		defer rd.Close(ctx)
-
-		return rd.GetSchema(), nil
-	}
-
-	sch, err := schFromFileOrDefault(mvOpts.SchFile, fs, inSch)
-
-	if err != nil {
-		return nil, err
-	}
-
-	sch, err = addPrimaryKey(sch, mvOpts.PrimaryKey)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if mvOpts.isImport() || mvOpts.isCopy() {
-		sch, err = MakeTagsUnique(ctx, root, mvOpts.TableName, sch)
-
+		if tn != mvOpts.TableName {
+			return nil, fmt.Errorf("table name '%s' from schema file %s does not match table arg '%s'", tn, mvOpts.SchFile, mvOpts.TableName)
+		}
+	} else {
+		// todo: combine these methods
+		outSch, err = addPrimaryKey(inSch, mvOpts.PrimaryKey)
+		if err != nil {
+			return nil, err
+		}
+		outSch, err = MakeTagsUnique(ctx, root, mvOpts.TableName, outSch)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return sch, nil
+	//if mvOpts.Operation == ReplaceOp && mvOpts.MappingFile == "" {
+	//	fileMatchesSchema, err := rd.VerifySchema(outSch)
+	//	if err != nil {
+	//		return nil, &DataMoverCreationError{ReplacingErr, err}
+	//	}
+	//	if !fileMatchesSchema {
+	//		err := errors.New("Schema from file does not match schema from existing table.")
+	//		return nil, &DataMoverCreationError{ReplacingErr, err}
+	//	}
+	//}
+
+	return outSch, nil
 }
 
-func schFromFileOrDefault(path string, fs filesys.ReadableFS, defSch schema.Schema) (schema.Schema, error) {
+func schAndTableNameFromFile(ctx context.Context, path string, fs filesys.ReadableFS, root *doltdb.RootValue) (string, schema.Schema, error) {
 	if path != "" {
 		data, err := fs.ReadFile(path)
 
 		if err != nil {
-			return nil, err
+			return "", nil, err
 		}
 
-		return encoding.UnmarshalJson(string(data))
+		return sqle.ParseCreateTableStatement(ctx, root, string(data))
 	} else {
-		return defSch, nil
+		return "", nil, errors.New("no schema file to parse")
 	}
 }
 

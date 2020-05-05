@@ -42,7 +42,7 @@ const (
 	replaceParam     = "replace-table"
 	tableParam       = "table"
 	fileParam        = "file"
-	outSchemaParam   = "schema"
+	schemaParam      = "schema"
 	mappingFileParam = "map"
 	forceParam       = "force"
 	contOnErrParam   = "continue"
@@ -50,6 +50,8 @@ const (
 	fileTypeParam    = "file-type"
 	delimParam       = "delim"
 )
+
+type importArgs map[string]string
 
 var SchemaFileHelp = "Schema definition files are json files in the format:" + `
 
@@ -106,18 +108,7 @@ In create, update, and replace scenarios the file's extension is used to infer t
 	},
 }
 
-func getMoveParameters(apr *argparser.ArgParseResults) (mvdata.MoveOperation, mvdata.TableDataLocation, mvdata.DataLocation, interface{}) {
-	var mvOp mvdata.MoveOperation
-	if apr.Contains(createParam) {
-		mvOp = mvdata.OverwriteOp
-	} else {
-		if apr.Contains(replaceParam) {
-			mvOp = mvdata.ReplaceOp
-		} else {
-			mvOp = mvdata.UpdateOp
-		}
-	}
-
+func getImportMoveOptions(apr *argparser.ArgParseResults) (*mvdata.MoveOptions, errhand.VerboseError) {
 	tableName := apr.Arg(0)
 
 	path := ""
@@ -127,6 +118,11 @@ func getMoveParameters(apr *argparser.ArgParseResults) (mvdata.MoveOperation, mv
 
 	delim, hasDelim := apr.GetValue(delimParam)
 	fType, _ := apr.GetValue(fileTypeParam)
+
+	schemaFile, _ := apr.GetValue(schemaParam)
+	mappingFile, _ := apr.GetValue(mappingFileParam)
+	primaryKey, _ := apr.GetValue(primaryKeyParam)
+	force := apr.Contains(forceParam)
 
 	srcLoc := mvdata.NewDataLocation(path, fType)
 
@@ -146,7 +142,7 @@ func getMoveParameters(apr *argparser.ArgParseResults) (mvdata.MoveOperation, mv
 			// table name must match sheet name currently
 			srcOpts = mvdata.XlsxOptions{SheetName: tableName}
 		} else if val.Format == mvdata.JsonFile {
-			srcOpts = mvdata.JSONOptions{TableName: tableName}
+			srcOpts = mvdata.JSONOptions{TableName: tableName, SchFile: schemaFile}
 		}
 
 	case mvdata.StreamDataLocation:
@@ -160,8 +156,31 @@ func getMoveParameters(apr *argparser.ArgParseResults) (mvdata.MoveOperation, mv
 		}
 	}
 
+	var moveOp mvdata.MoveOperation
+	switch {
+	case apr.Contains(createParam):
+		moveOp = mvdata.OverwriteOp
+	case apr.Contains(replaceParam):
+		moveOp = mvdata.ReplaceOp
+	default:
+		moveOp = mvdata.UpdateOp
+	}
+
 	tableLoc := mvdata.TableDataLocation{Name: tableName}
-	return mvOp, tableLoc, srcLoc, srcOpts
+
+	return &mvdata.MoveOptions{
+		Operation:   moveOp,
+		TableName:   tableName,
+		ContOnErr:   apr.Contains(contOnErrParam),
+		Force:       force,
+		SchFile:     schemaFile,
+		MappingFile: mappingFile,
+		PrimaryKey:  primaryKey,
+		Src:         srcLoc,
+		Dest:        tableLoc,
+		SrcOptions:  srcOpts,
+	}, nil
+
 }
 
 func validateImportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
@@ -174,15 +193,22 @@ func validateImportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
 	} else if apr.Contains(createParam) {
 		// nothing to validate
 	} else {
-		if apr.Contains(outSchemaParam) {
-			return errhand.BuildDError("fatal: " + outSchemaParam + " is not supported for update or replace operations").Build()
+		if apr.Contains(schemaParam) {
+			// TODO: do we want to support schema changes via `table import --schema`?
+			return errhand.BuildDError("fatal: " + schemaParam + " is not supported for update or replace operations").Build()
 		}
+	}
+
+	if apr.Contains(schemaParam) && apr.Contains(primaryKeyParam) {
+		return errhand.BuildDError("parameters %s and %s are mutually exclusive", schemaParam, primaryKeyParam).Build()
 	}
 
 	tableName := apr.Arg(0)
 	if err := ValidateTableNameForCreate(tableName); err != nil {
 		return err
 	}
+
+	// TODO: validate table existence?
 
 	path := ""
 	if apr.NArg() > 1 {
@@ -209,6 +235,17 @@ func validateImportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
 	case mvdata.TableDataLocation:
 		if hasDelim {
 			return errhand.BuildDError("delim is not a valid parameter for this type of file").Build()
+		}
+	}
+
+	if srcFileLoc, isFileType := srcLoc.(mvdata.FileDataLocation); isFileType {
+		if srcFileLoc.Format == mvdata.SqlFile {
+			return errhand.BuildDError("For SQL import, please pipe SQL input files to `dolt sql`").Build()
+		}
+
+		_, hasSchema := apr.GetValue(schemaParam)
+		if srcFileLoc.Format == mvdata.JsonFile && apr.Contains(createParam) && !hasSchema {
+			return errhand.BuildDError("Please specify schema file for .json tables.").Build()
 		}
 	}
 
@@ -250,36 +287,25 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, importDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
-	err := validateImportArgs(apr)
-	if err != nil {
-		return commands.HandleVErrAndExitCode(err, usage)
+	verr := validateImportArgs(apr)
+	if verr != nil {
+		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	moveOp, tableLoc, fileLoc, srcOpts := getMoveParameters(apr)
+	mvOpts, verr := getImportMoveOptions(apr)
 
-	schemaFile, _ := apr.GetValue(outSchemaParam)
-	mappingFile, _ := apr.GetValue(mappingFileParam)
-	primaryKey, _ := apr.GetValue(primaryKeyParam)
-	force := apr.Contains(forceParam)
-
-	mvOpts := &mvdata.MoveOptions{
-		Operation:   moveOp,
-		ContOnErr:   apr.Contains(contOnErrParam),
-		SchFile:     schemaFile,
-		MappingFile: mappingFile,
-		PrimaryKey:  primaryKey,
-		Src:         fileLoc,
-		Dest:        tableLoc,
-		SrcOptions:  srcOpts,
+	if verr != nil {
+		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	res := executeMove(ctx, dEnv, force, mvOpts)
+	verr = executeMove(ctx, dEnv, mvOpts)
 
-	if res == 0 {
-		cli.PrintErrln(color.CyanString("Import completed successfully."))
+	if verr != nil {
+		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	return res
+	cli.PrintErrln(color.CyanString("Import completed successfully."))
+	return 0
 }
 
 func createArgParser() *argparser.ArgParser {
@@ -291,7 +317,7 @@ func createArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(forceParam, "f", "If a create operation is being executed, data already exists in the destination, the Force flag will allow the target to be overwritten.")
 	ap.SupportsFlag(replaceParam, "r", "Replace existing table with imported data while preserving the original schema.")
 	ap.SupportsFlag(contOnErrParam, "", "Continue importing when row import errors are encountered.")
-	ap.SupportsString(outSchemaParam, "s", "schema_file", "The schema for the output data.")
+	ap.SupportsString(schemaParam, "s", "schema_file", "The schema for the output data.")
 	ap.SupportsString(mappingFileParam, "m", "mapping_file", "A file that lays out how fields should be mapped from input data to output data.")
 	ap.SupportsString(primaryKeyParam, "pk", "primary_key", "Explicitly define the name of the field in the schema which should be used as the primary key.")
 	ap.SupportsString(fileTypeParam, "", "file_type", "Explicitly define the type of the file if it can't be inferred from the file extension.")
@@ -308,43 +334,27 @@ func importStatsCB(stats types.AppliedEditStats) {
 	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
 }
 
-func executeMove(ctx context.Context, dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int {
+func executeMove(ctx context.Context, dEnv *env.DoltEnv, mvOpts *mvdata.MoveOptions) errhand.VerboseError {
 	root, err := dEnv.WorkingRoot(ctx)
 
 	if err != nil {
-		cli.PrintErrln(color.RedString("Unable to get the working root value for this data repository."))
-		return 1
+		return errhand.BuildDError("Unable to get the working root value for this data repository.").AddCause(err).Build()
 	}
 
-	_, isStdOut := mvOpts.Dest.(mvdata.StreamDataLocation)
-	if !isStdOut && mvOpts.Operation == mvdata.OverwriteOp && !force {
-		if exists, err := mvOpts.Dest.Exists(ctx, root, dEnv.FS); err != nil {
-			cli.Println(color.RedString(err.Error()))
-			return 1
-		} else if exists {
-			cli.PrintErrln(color.RedString(fmt.Sprintf("%s already exists. Use -f to overwrite.", mvOpts.Dest.String())))
-			return 1
-		}
-	}
 
-	if srcFileLoc, isFileType := mvOpts.Src.(mvdata.FileDataLocation); isFileType {
-		if srcFileLoc.Format == mvdata.SqlFile {
-			cli.Println(color.RedString("For SQL import, please pipe SQL input files to `dolt sql`"))
-			return 1
-		}
-
-		if srcFileLoc.Format == mvdata.JsonFile && mvOpts.Operation == mvdata.OverwriteOp && mvOpts.SchFile == "" {
-			cli.Println(color.RedString("Please specify schema file for .json tables."))
-			return 1
+	if mvOpts.WillOverwrite() {
+		destExists, err := mvOpts.Dest.Exists(ctx, root, dEnv.FS)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		} else if destExists {
+			return errhand.BuildDError("%s already exists. Use -f to overwrite.", mvOpts.Dest.String()).Build()
 		}
 	}
 
 	mover, nDMErr := mvdata.NewDataMover(ctx, root, dEnv.FS, mvOpts, importStatsCB)
 
 	if nDMErr != nil {
-		verr := newDataMoverErrToVerr(mvOpts, nDMErr)
-		cli.PrintErrln(verr.Verbose())
-		return 1
+		return newDataMoverErrToVerr(mvOpts, nDMErr)
 	}
 
 	var badCount int64
@@ -369,12 +379,9 @@ func executeMove(ctx context.Context, dEnv *env.DoltEnv, force bool, mvOpts *mvd
 			bdr.AddDetails(details)
 			bdr.AddDetails("These can be ignored using the '--continue'")
 
-			cli.PrintErrln(bdr.Build().Verbose())
-		} else {
-			cli.PrintErrln("An error occurred moving data:\n", err.Error())
+			return bdr.Build()
 		}
-
-		return 1
+		return errhand.BuildDError("An error occurred moving data:\n").AddCause(err).Build()
 	}
 
 	if nomsWr, ok := mover.Wr.(noms.NomsMapWriteCloser); ok {
@@ -382,8 +389,7 @@ func executeMove(ctx context.Context, dEnv *env.DoltEnv, force bool, mvOpts *mvd
 		err = dEnv.PutTableToWorking(ctx, *nomsWr.GetMap(), nomsWr.GetSchema(), tableDest.Name)
 
 		if err != nil {
-			cli.PrintErrln(color.RedString("Failed to update the working value."))
-			return 1
+			return errhand.BuildDError("Failed to update the working value.").AddCause(err).Build()
 		}
 	}
 
@@ -391,7 +397,7 @@ func executeMove(ctx context.Context, dEnv *env.DoltEnv, force bool, mvOpts *mvd
 		cli.PrintErrln(color.YellowString("Lines skipped: %d", badCount))
 	}
 
-	return 0
+	return nil
 }
 
 func newDataMoverErrToVerr(mvOpts *mvdata.MoveOptions, err *mvdata.DataMoverCreationError) errhand.VerboseError {
@@ -401,6 +407,7 @@ func newDataMoverErrToVerr(mvOpts *mvdata.MoveOptions, err *mvdata.DataMoverCrea
 		bdr.AddDetails("When attempting to move data from %s to %s, could not open a reader.", mvOpts.Src.String(), mvOpts.Dest.String())
 		return bdr.AddCause(err.Cause).Build()
 
+	// todo: this error may be obselete[
 	case mvdata.NomsKindSchemaErr:
 		bdr := errhand.BuildDError("Error creating schema.")
 		bdr.AddDetails("Column given invalid kind. Valid kinds include : string, int, bool, float, null.")

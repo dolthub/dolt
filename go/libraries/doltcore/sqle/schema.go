@@ -21,6 +21,8 @@ import (
 	"strings"
 
 	"github.com/liquidata-inc/go-mysql-server/sql"
+	"github.com/liquidata-inc/go-mysql-server/sql/parse"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -67,6 +69,36 @@ func SqlSchemaToDoltResultSchema(sqlSchema sql.Schema) (schema.Schema, error) {
 	}
 
 	return schema.UnkeyedSchemaFromCols(colColl), nil
+}
+
+// ParseCreateTableStatement will parse a CREATE TABLE ddl statement and use it to create a Dolt Schema. A RootValue
+// is used to generate unique tags for the Schema
+func ParseCreateTableStatement(ctx context.Context, root *doltdb.RootValue, query string) (string, schema.Schema, error) {
+	// todo: verify create table statement
+	ddl, err := sqlparser.ParseStrictDDL(query)
+
+	if err != nil {
+		return "", nil, err
+	}
+
+	ts := ddl.(*sqlparser.DDL).TableSpec
+	s, err := parse.TableSpecToSchema(sql.NewContext(ctx), ts)
+
+	if err != nil {
+		return "", nil, err
+	}
+
+	tn := ddl.(*sqlparser.DDL).Table
+	buf := sqlparser.NewTrackedBuffer(nil)
+	tn.Format(buf)
+	tableName := buf.String()
+	sch, err := SqlSchemaToDoltSchema(ctx, root, tableName, s)
+
+	if err != nil {
+		return "", nil, err
+	}
+
+	return tableName, sch, err
 }
 
 // SqlSchemaToDoltResultSchema returns a dolt Schema from the sql schema given, suitable for use in creating a table.

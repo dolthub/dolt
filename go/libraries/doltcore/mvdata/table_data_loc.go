@@ -46,7 +46,7 @@ func (dl TableDataLocation) Exists(ctx context.Context, root *doltdb.RootValue, 
 }
 
 // NewReader creates a TableReadCloser for the DataLocation
-func (dl TableDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, schPath string, opts interface{}) (rdCl table.TableReadCloser, sorted bool, err error) {
+func (dl TableDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, opts interface{}) (rdCl table.TableReadCloser, sorted bool, err error) {
 	tbl, ok, err := root.GetTable(ctx, dl.Name)
 
 	if err != nil {

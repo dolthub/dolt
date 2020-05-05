@@ -16,6 +16,7 @@ package mvdata
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -33,29 +34,16 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-var testSchema = `
-	{
-		"columns": [
-		  {
-			"name": "a",
-			"kind": "string",
-			"tag": 0,
-			"is_part_of_pk": true,
-			"col_constraints":[
-			  {
-				"constraint_type": "not_null"
-			  }
-			]
-		  },
-		  {
-			"name": "b",
-			"kind": "string",
-			"tag": 1,
-			"is_part_of_pk": false,
-			"col_constraints": [
-		  ]}
-		]
-	}`
+const (
+	testTableName = "test_table"
+	testSchemaFileName = "schema.sql"
+	testSchema = `
+CREATE TABLE test_table (
+	a VARCHAR(120) COMMENT 'tag:0',
+	b VARCHAR(120) COMMENT 'tag:1',
+	PRIMARY KEY(a)
+);`
+)
 
 var rowMap = []map[string]interface{}{
 	{"a": []string{"a", "b", "c"}},
@@ -68,7 +56,7 @@ func createRootAndFS() (*doltdb.DoltDB, *doltdb.RootValue, filesys.Filesys) {
 	workingDir := "/user/bheni/datasets/states"
 	initialDirs := []string{testHomeDir, workingDir}
 	fs := filesys.NewInMemFS(initialDirs, nil, workingDir)
-	fs.WriteFile("schema.json", []byte(testSchema))
+	fs.WriteFile(testSchemaFileName, []byte(testSchema))
 	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_7_18, doltdb.InMemDoltDB)
 	ddb.WriteEmptyRepo(context.Background(), "billy bob", "bigbillieb@fake.horse")
 
@@ -90,7 +78,7 @@ func TestBasics(t *testing.T) {
 		expectedIsFileType bool
 	}{
 		{NewDataLocation("", ".csv"), "stream", false},
-		{NewDataLocation("table-name", ""), DoltDB.ReadableStr() + ":table-name", false},
+		{NewDataLocation(testTableName, ""), DoltDB.ReadableStr() + ":" + testTableName, false},
 		{NewDataLocation("file.csv", ""), CsvFile.ReadableStr() + ":file.csv", true},
 		{NewDataLocation("file.psv", ""), PsvFile.ReadableStr() + ":file.psv", true},
 		{NewDataLocation("file.json", ""), JsonFile.ReadableStr() + ":file.json", true},
@@ -138,7 +126,7 @@ func init() {
 
 func TestExists(t *testing.T) {
 	testLocations := []DataLocation{
-		NewDataLocation("table-name", ""),
+		NewDataLocation(testTableName, ""),
 		NewDataLocation("file.csv", ""),
 		NewDataLocation("file.psv", ""),
 		NewDataLocation("file.json", ""),
@@ -183,10 +171,9 @@ func TestCreateRdWr(t *testing.T) {
 		expectedRdT reflect.Type
 		expectedWrT reflect.Type
 	}{
-		{NewDataLocation("table-name", ""), reflect.TypeOf((*noms.NomsMapReader)(nil)).Elem(), reflect.TypeOf((*noms.NomsMapCreator)(nil)).Elem()},
+		{NewDataLocation(testTableName, ""), reflect.TypeOf((*noms.NomsMapReader)(nil)).Elem(), reflect.TypeOf((*noms.NomsMapCreator)(nil)).Elem()},
 		{NewDataLocation("file.csv", ""), reflect.TypeOf((*csv.CSVReader)(nil)).Elem(), reflect.TypeOf((*csv.CSVWriter)(nil)).Elem()},
 		{NewDataLocation("file.psv", ""), reflect.TypeOf((*csv.CSVReader)(nil)).Elem(), reflect.TypeOf((*csv.CSVWriter)(nil)).Elem()},
-		// TODO (oo): uncomment and fix this for json path test
 		{NewDataLocation("file.json", ""), reflect.TypeOf((*json.JSONReader)(nil)).Elem(), reflect.TypeOf((*json.JSONWriter)(nil)).Elem()},
 		//{NewDataLocation("file.nbf", ""), reflect.TypeOf((*nbf.NBFReader)(nil)).Elem(), reflect.TypeOf((*nbf.NBFWriter)(nil)).Elem()},
 	}
@@ -195,12 +182,15 @@ func TestCreateRdWr(t *testing.T) {
 
 	mvOpts := &MoveOptions{
 		Operation:   OverwriteOp,
+		TableName:   testTableName,
 		ContOnErr:   false,
 		SchFile:     schemaFile,
 		MappingFile: mappingFile,
 	}
 
-	for _, test := range tests {
+	for idx, test := range tests {
+		fmt.Println(idx)
+
 		loc := test.dl
 
 		wr, err := loc.NewCreatingWriter(context.Background(), mvOpts, root, fs, true, fakeSchema, nil)
@@ -238,8 +228,7 @@ func TestCreateRdWr(t *testing.T) {
 			assert.NoError(t, err)
 		}
 
-		// TODO (oo): fix this for json path test
-		rd, _, err := loc.NewReader(context.Background(), root, fs, "schema.json", nil)
+		rd, _, err := loc.NewReader(context.Background(), root, fs, JSONOptions{TableName: testTableName, SchFile: testSchemaFileName})
 
 		if err != nil {
 			t.Fatal("Unexpected error creating writer", err)

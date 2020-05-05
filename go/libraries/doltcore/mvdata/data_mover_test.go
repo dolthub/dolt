@@ -16,6 +16,7 @@ package mvdata
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -30,8 +31,9 @@ const (
 )
 
 func TestDataMover(t *testing.T) {
+	// todo: add expected schema
 	tests := []struct {
-		schemaJSON  string
+		sqlSchema   string
 		mappingJSON string
 		mvOpts      *MoveOptions
 	}{
@@ -84,41 +86,33 @@ func TestDataMover(t *testing.T) {
 				Dest:        NewDataLocation("table-name", "")},
 		},
 		{
-			`{
-	"columns": [
-		{
-			"name": "key", 
-			"kind": "string", 
-			"tag": 0, 
-			"is_part_of_pk": true, 
-			"col_constraints":[
-				{
-					"constraint_type": "not_null"
-				}
-			]
-		},
-		{"name": "value", "kind": "int", "tag": 1}
-	]
-}`,
-			`{"a":"key","b":"value"}`,
+`CREATE TABLE table_name (
+pk   VARCHAR(120) COMMENT 'tag:0',
+value INT          COMMENT 'tag:1',
+PRIMARY KEY (pk)
+);`,
+			`{"a":"pk","b":"value"}`,
 			&MoveOptions{
 				Operation:   OverwriteOp,
+				TableName:   "table_name",
 				ContOnErr:   false,
 				SchFile:     "",
 				MappingFile: "",
 				PrimaryKey:  "",
 				Src:         NewDataLocation("data.csv", ""),
-				Dest:        NewDataLocation("table-name", "")},
+				Dest:        NewDataLocation("table_name", "")},
 		},
 	}
 
-	for _, test := range tests {
+	for idx, test := range tests {
+		fmt.Println(idx)
+
 		var err error
 		_, root, fs := createRootAndFS()
 
-		if test.schemaJSON != "" {
+		if test.sqlSchema != "" {
 			test.mvOpts.SchFile = schemaFile
-			err = fs.WriteFile(schemaFile, []byte(test.schemaJSON))
+			err = fs.WriteFile(schemaFile, []byte(test.sqlSchema))
 		}
 
 		if test.mappingJSON != "" {
@@ -144,7 +138,7 @@ func TestDataMover(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		encoding.UnmarshalJson(test.schemaJSON)
+		encoding.UnmarshalJson(test.sqlSchema)
 
 		dm, crDMErr := NewDataMover(context.Background(), root, fs, test.mvOpts, nil)
 

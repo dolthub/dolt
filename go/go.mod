@@ -20,12 +20,13 @@ require (
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.9.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
+	github.com/go-kit/kit v0.10.0 // indirect
 	github.com/go-openapi/errors v0.19.3 // indirect
 	github.com/go-openapi/strfmt v0.19.4 // indirect
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/gocraft/dbr/v2 v2.7.0
 	github.com/gogo/protobuf v1.3.1 // indirect
-	github.com/golang/protobuf v1.3.5
+	github.com/golang/protobuf v1.4.0
 	github.com/golang/snappy v0.0.1
 	github.com/google/go-cmp v0.4.0
 	github.com/google/uuid v1.1.1
@@ -43,7 +44,7 @@ require (
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20200320155049-a8e482faeffd
-	github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200430182534-22ee3768a0d0
+	github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200504002339-5c8b519f0163
 	github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0
 	github.com/liquidata-inc/mmap-go v1.0.3
 	github.com/liquidata-inc/sqllogictest/go v0.0.0-20200320151923-b11801f10e15
@@ -58,8 +59,8 @@ require (
 	github.com/rivo/uniseg v0.1.0
 	github.com/sergi/go-diff v1.1.0 // indirect
 	github.com/shirou/gopsutil v2.20.2+incompatible
-	github.com/shopspring/decimal v0.0.0-20200227202807-02e2044944cc
-	github.com/sirupsen/logrus v1.4.2
+	github.com/shopspring/decimal v1.2.0
+	github.com/sirupsen/logrus v1.6.0
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/cast v1.3.1 // indirect
@@ -73,10 +74,11 @@ require (
 	go.mongodb.org/mongo-driver v1.3.0 // indirect
 	go.uber.org/zap v1.14.1
 	golang.org/x/crypto v0.0.0-20200320145329-97fc981609be
-	golang.org/x/net v0.0.0-20200319234117-63522dbf7eec
-	golang.org/x/sys v0.0.0-20200317113312-5766fd39f98d
+	golang.org/x/net v0.0.0-20200501053045-e0ff5e5a1de5
+	golang.org/x/sys v0.0.0-20200501145240-bc7a7d42d5c3
 	google.golang.org/api v0.20.0
-	google.golang.org/grpc v1.28.0
+	google.golang.org/genproto v0.0.0-20200430143042-b979b6f78d84 // indirect
+	google.golang.org/grpc v1.29.1
 	gopkg.in/square/go-jose.v2 v2.4.1
 	gopkg.in/src-d/go-errors.v1 v1.0.0
 	gopkg.in/yaml.v2 v2.2.8
