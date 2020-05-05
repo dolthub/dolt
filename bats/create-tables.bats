@@ -3,116 +3,27 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
+
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk LONGTEXT NOT NULL COMMENT 'tag:0',
+  c1 LONGTEXT COMMENT 'tag:1',
+  c2 LONGTEXT COMMENT 'tag:2',
+  c3 LONGTEXT COMMENT 'tag:3',
+  c4 LONGTEXT COMMENT 'tag:4',
+  c5 LONGTEXT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    cat <<DELIM > 1pk5col-ints.csv
+pk,c1,c2,c3,c4,c5
+0,1,2,3,4,5
+1,1,2,3,4,5
+DELIM
 }
 
 teardown() {
     teardown_common
-}
-
-@test "create a single primary key table" {
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL,
-  c1 BIGINT,
-  c2 BIGINT,
-  c3 BIGINT,
-  c4 BIGINT,
-  c5 BIGINT,
-  PRIMARY KEY (pk)
-);
-SQL
-    run dolt ls
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "test" ]] || false
-}
-
-@test "create a two primary key table" {
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk1 BIGINT NOT NULL,
-  pk2 BIGINT NOT NULL,
-  c1 BIGINT,
-  c2 BIGINT,
-  c3 BIGINT,
-  c4 BIGINT,
-  c5 BIGINT,
-  PRIMARY KEY (pk1,pk2)
-);
-SQL
-    run dolt ls
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "test" ]] || false
-}
-
-@test "create a table that uses all supported types" {
-    dolt sql <<SQL
-CREATE TABLE test (
-  \`pk\` BIGINT NOT NULL,
-  \`int\` BIGINT,
-  \`string\` LONGTEXT,
-  \`boolean\` BOOLEAN,
-  \`float\` DOUBLE,
-  \`uint\` BIGINT UNSIGNED,
-  \`uuid\` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin,
-  PRIMARY KEY (pk)
-);
-SQL
-    run dolt ls
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "test" ]] || false
-}
-
-@test "create a table that uses unsupported poop type" {
-    run dolt sql <<SQL
-CREATE TABLE test (
-  \`pk\` BIGINT NOT NULL,
-  \`int\` BIGINT,
-  \`string\` LONGTEXT,
-  \`boolean\` BOOLEAN,
-  \`float\` DOUBLE,
-  \`uint\` BIGINT UNSIGNED,
-  \`uuid\` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin,
-  \`blob\` LONGBLOB,
-  \`poop\` POOP,
-  PRIMARY KEY (pk)
-);
-SQL
-    [ "$status" -eq 1 ]
-}
-
-@test "create a repo with two tables" {
-    dolt sql <<SQL
-CREATE TABLE test1 (
-  pk BIGINT NOT NULL,
-  c1 BIGINT,
-  c2 BIGINT,
-  c3 BIGINT,
-  c4 BIGINT,
-  c5 BIGINT,
-  PRIMARY KEY (pk)
-);
-SQL
-    dolt sql <<SQL
-CREATE TABLE test2 (
-  pk1 BIGINT NOT NULL,
-  pk2 BIGINT NOT NULL,
-  c1 BIGINT,
-  c2 BIGINT,
-  c3 BIGINT,
-  c4 BIGINT,
-  c5 BIGINT,
-  PRIMARY KEY (pk1,pk2)
-);
-SQL
-    run dolt ls
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "test1" ]] || false
-    [[ "$output" =~ "test2" ]] || false
-    [ "${#lines[@]}" -eq 3 ]
-    run dolt ls
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "test1" ]] || false
-    [[ "$output" =~ "test2" ]] || false
 }
 
 @test "create a table with json import" {
@@ -163,6 +74,117 @@ SQL
     [[ "$output" =~ "test" ]] || false
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
+}
+
+
+@test "import data from a csv file after table created" {
+    run dolt table import test -u 1pk5col-ints.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
+    run dolt sql -q "select * from test"
+    [ "$status" -eq 0 ]
+    # Number of lines offset by 3 for table printing style
+    [ "${#lines[@]}" -eq 6 ]
+}
+
+@test "import data from a psv file after table created" {
+    cat <<DELIM > 1pk5col-ints.psv
+pk|c1|c2|c3|c4|c5
+0|1|2|3|4|5
+1|1|2|3|4|5
+DELIM
+
+    run dolt table import test -u 1pk5col-ints.psv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
+    run dolt sql -q "select * from test"
+    [ "$status" -eq 0 ]
+    # Number of lines offset by 3 for table printing style
+    [ "${#lines[@]}" -eq 6 ]
+}
+
+@test "table import with schema different from data file" {
+    cat <<SQL > schema.sql
+CREATE TABLE ints_table (
+    pk INT NOT NULL,
+    c1 INT,
+    c3 INT,
+    noData INT,
+    PRIMARY KEY (pk)
+);
+SQL
+    run dolt table import -s schema.sql -c ints_table 1pk5col-ints.csv
+    [ "$status" -eq 0 ]
+
+    # schema argument subsets the data and adds empty column
+    run dolt sql -r csv -q "select * from ints_table"
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "pk,c1,c3,noData" ]
+    [ "${lines[1]}" = "0,1,3," ]
+    [ "${lines[2]}" = "1,1,3," ]
+}
+
+@test "import data from a csv file with a bad line" {
+    cat <<DELIM > badline.csv
+pk,c1,c2,c3,c4,c5
+0,1,2,3,4,5
+1,1,2,3,4,5
+2
+DELIM
+    run dolt table import test -u badline.csv
+    [ "$status" -eq 1 ]
+    [[ "${lines[0]}" =~ "Additions" ]] || false
+    [[ "${lines[1]}" =~ "A bad row was encountered" ]] || false
+    [[ "${lines[2]}" =~ "expects 6 fields" ]] || false
+    [[ "${lines[2]}" =~ "line only has 1 value" ]] || false
+}
+
+@test "import data from a csv file with a bad header" {
+cat <<DELIM > bad.csv
+,c1,c2,c3,c4,c5
+0,1,2,3,4,5
+DELIM
+    run dolt table import test -u bad.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "bad header line: column cannot be NULL or empty string" ]] || false
+    [[ ! "$output" =~ "panic" ]] || false
+
+cat <<DELIM > bad.csv
+pk,c1, ,c3,c4,c5
+0,1,2,3,4,5
+DELIM
+    run dolt table import test -u bad.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "bad header line: column cannot be NULL or empty string" ]] || false
+    [[ ! "$output" =~ "panic" ]] || false
+
+cat <<DELIM > bad.csv
+pk,c1,"",c3,c4,c5
+0,1,2,3,4,5
+DELIM
+    run dolt table import test -u bad.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "bad header line: column cannot be NULL or empty string" ]] || false
+    [[ ! "$output" =~ "panic" ]] || false
+
+cat <<DELIM > bad.csv
+pk,c1," ",c3,c4,c5
+0,1,2,3,4,5
+DELIM
+    run dolt table import test -u bad.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "bad header line: column cannot be NULL or empty string" ]] || false
+    [[ ! "$output" =~ "panic" ]] || false
+}
+
+@test "overwrite a row. make sure it updates not inserts" {
+    dolt table import test -u 1pk5col-ints.csv
+    run dolt sql -q "replace into test values (1, 2, 4, 6, 8, 10)"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "select * from test"
+    [ "$status" -eq 0 ]
+    # Number of lines offset by 3 for table printing style
     [ "${#lines[@]}" -eq 6 ]
 }
 
@@ -234,33 +256,6 @@ SQL
     [ "${#lines[@]}" -eq 6 ]
 }
 
-@test "create two table with the same name" {
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL,
-  c1 BIGINT,
-  c2 BIGINT,
-  c3 BIGINT,
-  c4 BIGINT,
-  c5 BIGINT,
-  PRIMARY KEY (pk)
-);
-SQL
-    run dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL,
-  c1 BIGINT,
-  c2 BIGINT,
-  c3 BIGINT,
-  c4 BIGINT,
-  c5 BIGINT,
-  PRIMARY KEY (pk)
-);
-SQL
-    [ "$status" -ne 0 ]
-    [[ "$output" =~ "already exists" ]] || false
-}
-
 @test "create a table from CSV with common column name patterns" {
     run dolt table import -c --pk=UPPERCASE test `batshelper caps-column-names.csv`
     [ "$status" -eq 0 ]
@@ -311,197 +306,6 @@ SQL
     run dolt ls
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "test" ]] || false
-}
-
-@test "create a basic table (int types) using sql" {
-    run dolt sql <<SQL
-CREATE TABLE test (
-    pk BIGINT,
-    c1 BIGINT,
-    c2 BIGINT,
-    c3 BIGINT,
-    c4 BIGINT,
-    c5 BIGINT,
-    PRIMARY KEY (pk)
-);
-SQL
-    [ "$status" -eq 0 ]
-    run dolt ls
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "test" ]] || false
-    run dolt schema show
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
-    [[ "$output" =~ "\`pk\` BIGINT NOT NULL" ]] || false
-    [[ "$output" =~ "\`c1\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c2\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c3\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c4\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c5\` BIGINT" ]] || false
-    [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
-}
-
-@test "create a table with sql with multiple primary keys" {
-    run dolt sql <<SQL
-CREATE TABLE test (
-    pk1 BIGINT,
-    pk2 BIGINT,
-    c1 BIGINT,
-    c2 BIGINT,
-    c3 BIGINT,
-    c4 BIGINT,
-    c5 BIGINT,
-    PRIMARY KEY (pk1),
-    PRIMARY KEY (pk2)
-);
-SQL
-    [ "$status" -eq 0 ]
-    run dolt schema show
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
-    [[ "$output" =~ "\`pk1\` BIGINT NOT NULL" ]] || false
-    [[ "$output" =~ "\`pk2\` BIGINT NOT NULL" ]] || false
-    [[ "$output" =~ "\`c1\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c2\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c3\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c4\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c5\` BIGINT" ]] || false
-    [[ "$output" =~ "PRIMARY KEY (\`pk1\`,\`pk2\`)" ]] || false
-}
-
-@test "create a table using sql with not null constraint" {
-    run dolt sql <<SQL
-CREATE TABLE test (
-    pk BIGINT NOT NULL,
-    c1 BIGINT,
-    c2 BIGINT,
-    c3 BIGINT,
-    c4 BIGINT,
-    c5 BIGINT,
-    PRIMARY KEY (pk)
-);
-SQL
-    [ "$status" -eq 0 ]
-    run dolt schema show test
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
-    [[ "$output" =~ "\`pk\` BIGINT NOT NULL" ]] || false
-    [[ "$output" =~ "\`c1\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c2\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c3\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c4\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c5\` BIGINT" ]] || false
-    [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
-}
-
-@test "create a table using sql with a float" {
-    run dolt sql <<SQL
-CREATE TABLE test (
-    pk BIGINT NOT NULL,
-    c1 DOUBLE,
-    PRIMARY KEY (pk)
-);
-SQL
-    [ "$status" -eq 0 ]
-    run dolt schema show test
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "CREATE TABLE \`test\` " ]] || false
-    [[ "$output" =~ "\`pk\` BIGINT NOT NULL" ]] || false
-    [[ "$output" =~ "\`c1\` DOUBLE" ]] || false
-    [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
-}
-
-
-@test "create a table using sql with a string" {
-    run dolt sql <<SQL
-CREATE TABLE test (
-    pk BIGINT NOT NULL,
-    c1 LONGTEXT,
-    PRIMARY KEY (pk)
-);
-SQL
-    [ "$status" -eq 0 ]
-    run dolt schema show test
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
-    [[ "$output" =~ "\`pk\` BIGINT NOT NULL" ]] || false
-    [[ "$output" =~ "\`c1\` LONGTEXT" ]] || false
-    [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
-}
-
-
-@test "create a table using sql with an unsigned int" {
-    run dolt sql -q "CREATE TABLE test (pk BIGINT NOT NULL, c1 BIGINT UNSIGNED, PRIMARY KEY (pk))"
-    [ "$status" -eq 0 ]
-    [ -z "$output" ]
-    run dolt schema show test
-    [[ "$output" =~ "BIGINT UNSIGNED" ]] || false
-}
-
-@test "create a table using sql with a boolean" {
-    run dolt sql -q "CREATE TABLE test (pk BIGINT NOT NULL, c1 BOOLEAN, PRIMARY KEY (pk))"
-    [ "$status" -eq 0 ]
-    [ -z "$output" ]
-}
-
-@test "create a table with a mispelled primary key" {
-    run dolt sql -q "CREATE TABLE test (pk BIGINT, c1 BIGINT, c2 BIGINT, PRIMARY KEY
-(pk,noexist))"
-    skip "This succeeds right now and creates a table with just one primary key pk"
-    [ "$status" -eq 1 ]
-}
-
-@test "create a table with a SQL reserved word" {
-    dolt sql <<SQL
-CREATE TABLE test (
-    pk INT NOT NULL,
-    \`all\` INT,
-    \`select\` INT,
-    PRIMARY KEY (pk)
-);
-SQL
-    run dolt schema show
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "all" ]] || false
-    [[ "$output" =~ "select" ]] || false
-    run dolt sql <<SQL
-CREATE TABLE test (
-    pk INT NOT NULL,
-    all INT,
-    select INT,
-    PRIMARY KEY (pk)
-);
-SQL
-    [ "$status" -ne 0 ]
-}
-
-@test "create a table with a SQL keyword that is not reserved" {
-    dolt sql <<SQL
-CREATE TABLE test (
-    pk INT NOT NULL,
-    \`comment\` INT,
-    \`date\` INT,
-    PRIMARY KEY (pk)
-);
-SQL
-    run dolt schema show
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "comment" ]] || false
-    [[ "$output" =~ "date" ]] || false
-    run dolt sql <<SQL
-CREATE TABLE test (
-    pk INT NOT NULL,
-    comment INT,
-    date INT,
-    PRIMARY KEY (pk)
-);
-SQL
-    skip "Current SQL parser requires backticks around keywords, not just reserved words"
-    [ "$status" -eq 0 ]
-    run dolt schema show
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "comment" ]] || false
-    [[ "$output" =~ "date" ]] || false 
 }
 
 @test "import a table with non UTF-8 characters in it" {

@@ -94,7 +94,7 @@ CREATE TABLE test (
   PRIMARY KEY (pk)
 );
 SQL
-    run dolt table import -r -s `batshelper 1pk5col-ints-schema.json` test `batshelper 1pk5col-ints.csv`
+    run dolt table import -r -s `batshelper employees-sch.json` test `batshelper 1pk5col-ints.csv`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "schema is not supported for update or replace operations" ]] || false
 }
@@ -147,7 +147,7 @@ CREATE TABLE employees (
   PRIMARY KEY (idz)
 );
 SQL
-    run dolt table import -r -s `batshelper employees-sch.json` employees `batshelper employees-tbl.json`
+    run dolt table import -r -s `batshelper 1pk5col-ints.json` employees `batshelper employees-tbl.json`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "fatal: schema is not supported for update or replace operations" ]] || false
 }
