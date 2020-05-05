@@ -227,9 +227,9 @@ func maybeMapFields(inSch schema.Schema, outSch schema.Schema, fs filesys.Filesy
 	}
 
 	if mvOpts.Operation == ReplaceOp || mvOpts.Operation == UpdateOp {
-		if !mapping.MapsAllPKs() {
+		if !mapping.MapsAllDestPKs() {
 			err = fmt.Errorf("input primary keys do not match primary keys of existing table")
-			return nil, &DataMoverCreationError{MappingErr, err}
+			return nil, &DataMoverCreationError{ReplacingErr, err}
 		}
 	}
 

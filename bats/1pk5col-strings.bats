@@ -95,20 +95,3 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Rows inserted: 1" ]]
 }
-
-@test "table import with schema flag" {
-    cat <<SQL > schema.sql
-CREATE TABLE other (
-    pk LONGTEXT NOT NULL,
-    c1 LONGTEXT,
-    c4 LONGTEXT,
-    c5 LONGTEXT,
-    noData LONGTEXT,
-    PRIMARY KEY (pk)
-);
-SQL
-    dolt table import -s schema.sql -c other `batshelper 1pk5col-strings.csv`
-    [ "$status" -eq 0 ]
-    [ "$status" -ne 0 ]
-    # verify rows
-}

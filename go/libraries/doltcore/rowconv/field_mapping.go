@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"strconv"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -63,13 +64,14 @@ type FieldMapping struct {
 	SrcToDest map[uint64]uint64
 }
 
-// MapsAllPKs checks for a one-to-one mapping between primary keys in the SrcSch and DestSch
-func (fm *FieldMapping) MapsAllPKs() bool {
-	if fm.SrcSch.GetPKCols().Size() != fm.DestSch.GetPKCols().Size() {
-		return false
+// MapsAllDestPKs checks that each PK column in DestSch has a corresponding column in SrcSch
+func (fm *FieldMapping) MapsAllDestPKs() bool {
+	ds := set.NewUint64Set(nil)
+	for _, v := range fm.SrcToDest {
+		ds.Add(v)
 	}
-	for _, tag := range fm.SrcSch.GetPKCols().Tags {
-		if _, found := fm.SrcToDest[tag]; !found {
+	for _, tag := range fm.DestSch.GetPKCols().Tags {
+		if !ds.Contains(tag) {
 			return false
 		}
 	}

@@ -113,7 +113,7 @@ SQL
 }
 
 @test "update table with existing imported data with different schema" {
-  run dolt table import -c -s `batshelper employees-sch.json` employees `batshelper employees-tbl.json`
+  run dolt table import -c -s `batshelper employees-sch.sql` employees `batshelper employees-tbl.json`
   [ "$status" -eq 0 ]
   [[ "$output" =~ "Import completed successfully." ]] || false
   run dolt table import -u employees `batshelper employees-tbl-schema-wrong.json`

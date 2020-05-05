@@ -418,10 +418,10 @@ SQL
     dolt schema show
     run dolt schema show
     [ $status -eq 0 ]
-    [[ "${lines[2]}" =~ "COMMENT 'tag:6881'" ]] || false
-    [[ "${lines[3]}" =~ "COMMENT 'tag:1940'" ]] || false
-    [[ "${lines[4]}" =~ "COMMENT 'tag:13393'" ]] || false
-    [[ "${lines[5]}" =~ "COMMENT 'tag:15124'" ]] || false
-    [[ "${lines[6]}" =~ "COMMENT 'tag:5135'" ]] || false
-    [[ "${lines[7]}" =~ "COMMENT 'tag:2248'" ]] || false
+    [[ "${lines[2]}" =~ "COMMENT 'tag:6302'" ]] || false
+    [[ "${lines[3]}" =~ "COMMENT 'tag:12880'" ]] || false
+    [[ "${lines[4]}" =~ "COMMENT 'tag:15463'" ]] || false
+    [[ "${lines[5]}" =~ "COMMENT 'tag:14526'" ]] || false
+    [[ "${lines[6]}" =~ "COMMENT 'tag:5634'" ]] || false
+    [[ "${lines[7]}" =~ "COMMENT 'tag:12796'" ]] || false
 }

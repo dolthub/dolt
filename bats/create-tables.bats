@@ -3,15 +3,14 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-
     dolt sql <<SQL
-CREATE TABLE test (
-  pk LONGTEXT NOT NULL COMMENT 'tag:0',
-  c1 LONGTEXT COMMENT 'tag:1',
-  c2 LONGTEXT COMMENT 'tag:2',
-  c3 LONGTEXT COMMENT 'tag:3',
-  c4 LONGTEXT COMMENT 'tag:4',
-  c5 LONGTEXT COMMENT 'tag:5',
+CREATE TABLE int_table (
+  pk LONGTEXT NOT NULL,
+  c1 LONGTEXT,
+  c2 LONGTEXT,
+  c3 LONGTEXT,
+  c4 LONGTEXT,
+  c5 LONGTEXT,
   PRIMARY KEY (pk)
 );
 SQL
@@ -20,6 +19,16 @@ pk,c1,c2,c3,c4,c5
 0,1,2,3,4,5
 1,1,2,3,4,5
 DELIM
+    cat <<DELIM > empty-strings-null-values.csv
+pk,headerOne,headerTwo
+a,"""""",1
+b,"",2
+c,,3
+d,row four,""
+e,row five,
+f,row six,6
+g, ,
+DELIM
 }
 
 teardown() {
@@ -27,7 +36,7 @@ teardown() {
 }
 
 @test "create a table with json import" {
-    run dolt table import -c -s `batshelper employees-sch.json` employees `batshelper employees-tbl.json`
+    run dolt table import -c -s `batshelper employees-sch.sql` employees `batshelper employees-tbl.json`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
@@ -79,10 +88,10 @@ teardown() {
 
 
 @test "import data from a csv file after table created" {
-    run dolt table import test -u 1pk5col-ints.csv
+    run dolt table import int_table -u 1pk5col-ints.csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
-    run dolt sql -q "select * from test"
+    run dolt sql -q "select * from int_table"
     [ "$status" -eq 0 ]
     # Number of lines offset by 3 for table printing style
     [ "${#lines[@]}" -eq 6 ]
@@ -95,10 +104,10 @@ pk|c1|c2|c3|c4|c5
 1|1|2|3|4|5
 DELIM
 
-    run dolt table import test -u 1pk5col-ints.psv
+    run dolt table import int_table -u 1pk5col-ints.psv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
-    run dolt sql -q "select * from test"
+    run dolt sql -q "select * from int_table"
     [ "$status" -eq 0 ]
     # Number of lines offset by 3 for table printing style
     [ "${#lines[@]}" -eq 6 ]
@@ -106,7 +115,7 @@ DELIM
 
 @test "table import with schema different from data file" {
     cat <<SQL > schema.sql
-CREATE TABLE ints_table (
+CREATE TABLE subset (
     pk INT NOT NULL,
     c1 INT,
     c3 INT,
@@ -114,11 +123,11 @@ CREATE TABLE ints_table (
     PRIMARY KEY (pk)
 );
 SQL
-    run dolt table import -s schema.sql -c ints_table 1pk5col-ints.csv
+    run dolt table import -s schema.sql -c subset 1pk5col-ints.csv
     [ "$status" -eq 0 ]
 
     # schema argument subsets the data and adds empty column
-    run dolt sql -r csv -q "select * from ints_table"
+    run dolt sql -r csv -q "select * from subset"
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "pk,c1,c3,noData" ]
     [ "${lines[1]}" = "0,1,3," ]
@@ -132,7 +141,7 @@ pk,c1,c2,c3,c4,c5
 1,1,2,3,4,5
 2
 DELIM
-    run dolt table import test -u badline.csv
+    run dolt table import int_table -u badline.csv
     [ "$status" -eq 1 ]
     [[ "${lines[0]}" =~ "Additions" ]] || false
     [[ "${lines[1]}" =~ "A bad row was encountered" ]] || false
@@ -179,10 +188,10 @@ DELIM
 }
 
 @test "overwrite a row. make sure it updates not inserts" {
-    dolt table import test -u 1pk5col-ints.csv
-    run dolt sql -q "replace into test values (1, 2, 4, 6, 8, 10)"
+    dolt table import int_table -u 1pk5col-ints.csv
+    run dolt sql -q "replace into int_table values (1, 2, 4, 6, 8, 10)"
     [ "$status" -eq 0 ]
-    run dolt sql -q "select * from test"
+    run dolt sql -q "select * from int_table"
     [ "$status" -eq 0 ]
     # Number of lines offset by 3 for table printing style
     [ "${#lines[@]}" -eq 6 ]
@@ -239,6 +248,10 @@ DELIM
     run dolt table import -c --pk=pk1,pk2 test `batshelper 2pk5col-ints.csv`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
+    dolt sql -q 'select count(*) from test'
+    run dolt sql -q 'select count(*) from test'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "4" ]] || false
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
@@ -334,7 +347,7 @@ SQL
 }
 
 @test "create a table with null values from csv import" {
-    run dolt table import -c test `batshelper empty-strings-null-values.csv`
+    run dolt table import -c test empty-strings-null-values.csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
@@ -353,19 +366,28 @@ SQL
 }
 
 @test "create a table with null values from csv import with json file" {
-    run dolt table import -c -s `batshelper empty-strings-null-values-sch.json` test `batshelper empty-strings-null-values.csv`
+    cat <<SQL > schema.sql
+CREATE TABLE empty_strings_null_values (
+    pk VARCHAR(120) NOT NULL COMMENT 'tag:0',
+    headerOne VARCHAR(120) COMMENT 'tag:1',
+    headerTwo VARCHAR(120) COMMENT 'tag:2',
+    PRIMARY KEY (pk)
+);
+SQL
+    run dolt table import -c -s schema.sql empty_strings_null_values empty-strings-null-values.csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "test" ]] || false
-    run dolt sql -q "select * from test"
+    [[ "$output" =~ "empty_strings_null_values" ]] || false
+    dolt sql -q "select * from empty_strings_null_values"
+    run dolt sql -q "select * from empty_strings_null_values"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 11 ]
     [ "${lines[3]}" = '| a  | ""        | 1         |' ]
     [ "${lines[4]}" = '| b  |           | 2         |' ]
     [ "${lines[5]}" = "| c  | <NULL>    | 3         |" ]
-    [ "${lines[6]}" = "| d  | row four  | <NULL>    |" ]
+    [ "${lines[6]}" = "| d  | row four  |           |" ]
     [ "${lines[7]}" = "| e  | row five  | <NULL>    |" ]
     [ "${lines[8]}" = "| f  | row six   | 6         |" ]
     [ "${lines[9]}" = "| g  | <NULL>    | <NULL>    |" ]

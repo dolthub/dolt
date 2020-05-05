@@ -33,29 +33,15 @@ teardown() {
     teardown_common
 }
 
-# This test can be deleted when the new specification test is working
-@test "dolt schema export" {
-    run dolt schema export test1 export.schema
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
-    [ -f export.schema ]
-    run diff --strip-trailing-cr $BATS_TEST_DIRNAME/helper/1pk5col-ints-schema.json export.schema
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
-
-    run dolt schema export poop poop.schema
-    [ "$status" -ne 0 ]
-    [ "$output" = "poop not found" ]
-}
-
 @test "dolt schema export, new specification" {
+    dolt schema export test1 export.schema
     run dolt schema export test1 export.schema
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     [ -f export.schema ]
-    skip "New spec not implemented"
+    cat export.schema
     run cat export.schema
-    [ "$status" -eq 0 ] 
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE" ]] || false
     [[ "$output" =~ "test1" ]] || false
     [[ ! "$output" =~ "working" ]] || false
@@ -63,14 +49,12 @@ teardown() {
 
 @test "dolt schema export, no file" {
     run dolt schema export test1
-    skip "This fails right now, should export to STDOUT"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test1" ]] || false 
 }
 
 @test "dolt schema export --all" {
     run dolt schema export --all export.schema
-    skip "--all not supported yet"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     [ -f export.schema ]
