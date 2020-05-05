@@ -673,6 +673,10 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv) error {
 
 // Returns a new auto completer with table names, column names, and SQL keywords.
 func newCompleter(ctx context.Context, dEnv *env.DoltEnv) (*sqlCompleter, error) {
+	if dEnv == nil {
+		return &sqlCompleter{}, nil
+	}
+
 	var completionWords []string
 
 	root, err := dEnv.WorkingRoot(ctx)
