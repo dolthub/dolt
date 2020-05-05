@@ -213,7 +213,7 @@ func (imp *DataMover) Move(ctx context.Context) (badRowCount int64, err error) {
 	return badCount, nil
 }
 
-func maybeMapFields(inSch schema.Schema, outSch schema.Schema, fs filesys.Filesys, mvOpts *MoveOptions) (trans *pipeline.TransformCollection, dmce *DataMoverCreationError) {
+func maybeMapFields(inSch schema.Schema, outSch schema.Schema, fs filesys.Filesys, mvOpts *MoveOptions)  (*pipeline.TransformCollection, *DataMoverCreationError) {
 	var mapping *rowconv.FieldMapping
 	var err error
 	if mvOpts.MappingFile != "" {
@@ -245,7 +245,7 @@ func maybeMapFields(inSch schema.Schema, outSch schema.Schema, fs filesys.Filesy
 		transforms.AppendTransforms(nt)
 	}
 
-	return trans, nil
+	return transforms, nil
 }
 
 func outSchemaFromInSchema(ctx context.Context, inSch schema.Schema, root *doltdb.RootValue, fs filesys.ReadableFS, mvOpts *MoveOptions) (schema.Schema, error) {
