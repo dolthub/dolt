@@ -188,19 +188,16 @@ func validateImportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
 		return errhand.BuildDError("expected 1 or 2 arguments").SetPrintUsage().Build()
 	}
 
-	if !apr.Contains(createParam) && !apr.Contains(updateParam) && !apr.Contains(replaceParam) {
-		return errhand.BuildDError("Must include '-c' for initial table import or -u to update existing table or -r to replace existing table.").Build()
-	} else if apr.Contains(createParam) {
-		// nothing to validate
-	} else {
-		if apr.Contains(schemaParam) {
-			// TODO: do we want to support schema changes via `table import --schema`?
-			return errhand.BuildDError("fatal: " + schemaParam + " is not supported for update or replace operations").Build()
-		}
-	}
-
 	if apr.Contains(schemaParam) && apr.Contains(primaryKeyParam) {
 		return errhand.BuildDError("parameters %s and %s are mutually exclusive", schemaParam, primaryKeyParam).Build()
+	}
+
+	if !apr.Contains(createParam) && !apr.Contains(updateParam) && !apr.Contains(replaceParam) {
+		return errhand.BuildDError("Must include '-c' for initial table import or -u to update existing table or -r to replace existing table.").Build()
+	}
+
+	if apr.Contains(schemaParam) && !apr.Contains(createParam) {
+		return errhand.BuildDError("fatal: " + schemaParam + " is not supported for update or replace operations").Build()
 	}
 
 	tableName := apr.Arg(0)
@@ -208,22 +205,17 @@ func validateImportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
 		return err
 	}
 
-	// TODO: validate table existence?
-
 	path := ""
 	if apr.NArg() > 1 {
 		path = apr.Arg(1)
 	}
 
-	_, hasDelim := apr.GetValue(delimParam)
 	fType, hasFileType := apr.GetValue(fileTypeParam)
-
-	if hasFileType {
-		if mvdata.DFFromString(fType) == mvdata.InvalidDataFormat {
-			return errhand.BuildDError("'%s' is not a valid file type.", fType).Build()
-		}
+	if hasFileType && mvdata.DFFromString(fType) == mvdata.InvalidDataFormat {
+		return errhand.BuildDError("'%s' is not a valid file type.", fType).Build()
 	}
 
+	_, hasDelim := apr.GetValue(delimParam)
 	srcLoc := mvdata.NewDataLocation(path, fType)
 
 	switch val := srcLoc.(type) {

@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"strings"
 	"sync/atomic"
@@ -25,7 +26,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
@@ -147,10 +147,10 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 		return nil, &DataMoverCreationError{ SchemaErr, err}
 	}
 
-	transforms, err := maybeMapFields(inSch, outSch, fs, mvOpts.MappingFile)
+	transforms, dmce := maybeMapFields(inSch, outSch, fs, mvOpts)
 
-	if err != nil {
-		return nil, &DataMoverCreationError{MappingErr, err}
+	if dmce != nil {
+		return nil, dmce
 	}
 
 	var wr table.TableWriteCloser
@@ -213,18 +213,30 @@ func (imp *DataMover) Move(ctx context.Context) (badRowCount int64, err error) {
 	return badCount, nil
 }
 
-func maybeMapFields(inSch schema.Schema, outSch schema.Schema, fs filesys.Filesys, mappingFile string) (*pipeline.TransformCollection, error) {
+func maybeMapFields(inSch schema.Schema, outSch schema.Schema, fs filesys.Filesys, mvOpts *MoveOptions) (trans *pipeline.TransformCollection, dmce *DataMoverCreationError) {
 	var mapping *rowconv.FieldMapping
 	var err error
-	if mappingFile != "" {
-		mapping, err = rowconv.MappingFromFile(mappingFile, fs, inSch, outSch)
+	if mvOpts.MappingFile != "" {
+		mapping, err = rowconv.MappingFromFile(mvOpts.MappingFile, fs, inSch, outSch)
 	} else {
 		mapping, err = rowconv.NameMapping(inSch, outSch)
 	}
 
-	rconv, err := rowconv.NewImportRowConverter(mapping)
 	if err != nil {
-		return nil, err
+		return nil, &DataMoverCreationError{MappingErr, err}
+	}
+
+	if mvOpts.Operation == ReplaceOp || mvOpts.Operation == UpdateOp {
+		if !mapping.MapsAllPKs() {
+			err = fmt.Errorf("input primary keys do not match primary keys of existing table")
+			return nil, &DataMoverCreationError{MappingErr, err}
+		}
+	}
+
+	rconv, err := rowconv.NewImportRowConverter(mapping)
+
+	if err != nil {
+		return nil, &DataMoverCreationError{MappingErr, err}
 	}
 
 	transforms := pipeline.NewTransformCollection()
@@ -233,17 +245,30 @@ func maybeMapFields(inSch schema.Schema, outSch schema.Schema, fs filesys.Filesy
 		transforms.AppendTransforms(nt)
 	}
 
-	return transforms, nil
+	return trans, nil
 }
 
 func outSchemaFromInSchema(ctx context.Context, inSch schema.Schema, root *doltdb.RootValue, fs filesys.ReadableFS, mvOpts *MoveOptions) (schema.Schema, error) {
-	if mvOpts.isExport() || mvOpts.Operation == UpdateOp || mvOpts.Operation == ReplaceOp {
-		// outSch == inSch
-		return inSch, nil
-	}
-
 	var outSch schema.Schema
 	var err error
+
+	if mvOpts.isExport()  {
+		outSch = inSch
+		return outSch, nil
+	}
+
+	if mvOpts.Operation == UpdateOp || mvOpts.Operation == ReplaceOp {
+		t, ok := mvOpts.Dest.(TableDataLocation)
+		if !ok {
+			return nil, fmt.Errorf("%s and %s operations must be performed on a table", UpdateOp, ReplaceOp)
+		}
+		rd, _, err := t.NewReader(ctx, root, fs, nil)
+		if err != nil {
+			return nil, err
+		}
+		defer rd.Close(ctx)
+		return rd.GetSchema(), nil
+	}
 
 	if mvOpts.SchFile != "" {
 		var tn string
@@ -255,7 +280,6 @@ func outSchemaFromInSchema(ctx context.Context, inSch schema.Schema, root *doltd
 			return nil, fmt.Errorf("table name '%s' from schema file %s does not match table arg '%s'", tn, mvOpts.SchFile, mvOpts.TableName)
 		}
 	} else {
-		// todo: combine these methods
 		outSch, err = addPrimaryKey(inSch, mvOpts.PrimaryKey)
 		if err != nil {
 			return nil, err
@@ -265,17 +289,6 @@ func outSchemaFromInSchema(ctx context.Context, inSch schema.Schema, root *doltd
 			return nil, err
 		}
 	}
-
-	//if mvOpts.Operation == ReplaceOp && mvOpts.MappingFile == "" {
-	//	fileMatchesSchema, err := rd.VerifySchema(outSch)
-	//	if err != nil {
-	//		return nil, &DataMoverCreationError{ReplacingErr, err}
-	//	}
-	//	if !fileMatchesSchema {
-	//		err := errors.New("Schema from file does not match schema from existing table.")
-	//		return nil, &DataMoverCreationError{ReplacingErr, err}
-	//	}
-	//}
 
 	return outSch, nil
 }

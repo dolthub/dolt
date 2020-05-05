@@ -16,6 +16,10 @@ package schcmds
 
 import (
 	"context"
+	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
+	"io"
+	"os"
 
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
@@ -25,7 +29,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 )
 
@@ -33,14 +36,12 @@ var schExportDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Exports a table's schema.",
 	LongDesc:  "",
 	Synopsis: []string{
-		"{{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
+		"[--all] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 	},
 }
 
 const (
-	defaultParam = "default"
-	tagParam     = "tag"
-	notNullFlag  = "not-null"
+	exportAllSchFlag  = "all"
 )
 
 type ExportCmd struct{}
@@ -65,9 +66,7 @@ func (cmd ExportCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "table whose schema is being exported."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"commit", "commit at which point the schema will be displayed."})
-	ap.SupportsString(defaultParam, "", "default-value", "If provided all existing rows will be given this value as their default.")
-	ap.SupportsUint(tagParam, "", "tag-number", "The numeric tag for the new column.")
-	ap.SupportsFlag(notNullFlag, "", "If provided rows without a value in this column will be considered invalid.  If rows already exist and not-null is specified then a default value must be provided.")
+	ap.SupportsFlag(exportAllSchFlag, "a", "If provided, and <table> arg is not provided, system tables will be exported")
 	return ap
 }
 
@@ -92,17 +91,65 @@ func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string,
 }
 
 func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.VerboseError {
-	if apr.NArg() != 2 {
-		return errhand.BuildDError("Must specify table and file to which table will be exported.").SetPrintUsage().Build()
+	var tblName string
+	var fileName string
+	switch apr.NArg() {
+	case 0:  // write all tables to stdout
+	case 1:
+		if doltdb.IsValidTableName(apr.Arg(0)) {
+			tblName = apr.Arg(0)
+		} else {
+			fileName = apr.Arg(0)
+		}
+	case 2:
+		tblName = apr.Arg(0)
+		fileName = apr.Arg(1)
+	default:
+		return errhand.BuildDError("schema export takes at most two parameters.").SetPrintUsage().Build()
 	}
 
-	tblName := apr.Arg(0)
-	fileName := apr.Arg(1)
-	root, _ = commands.GetWorkingWithVErr(dEnv)
+	if tblName != "" && apr.Contains(exportAllSchFlag) {
+		return errhand.BuildDError("<table> and %s parameters are mutually exclusive", exportAllSchFlag).SetPrintUsage().Build()
+	}
+
+	var wr io.Writer
+	if fileName != "" {
+		wc, err := dEnv.FS.OpenForWrite(fileName, os.ModePerm)
+		if err != nil {
+			return errhand.BuildDError("unable to open file %s for export", fileName).AddCause(err).Build()
+		}
+		defer wc.Close()
+		wr = wc
+	} else {
+		wr = cli.CliOut
+	}
+
+	var tablesToExport []string
+	var err error
+	if tblName != "" {
+		tablesToExport = []string{tblName}
+	} else {
+		tablesToExport, err = root.GetTableNames(ctx)
+		if err != nil {
+			return errhand.BuildDError("error retrieving table names").AddCause(err).Build()
+		}
+	}
+
+	for _, tn := range tablesToExport {
+		verr := exportTblSchema(ctx, tn, root, wr)
+		if verr != nil {
+			return verr
+		}
+	}
+
+	return nil
+}
+
+func exportTblSchema(ctx context.Context, tblName string, root *doltdb.RootValue, wr io.Writer) errhand.VerboseError {
 	if has, err := root.HasTable(ctx, tblName); err != nil {
 		return errhand.BuildDError("unable to read from database").AddCause(err).Build()
 	} else if !has {
-		return errhand.BuildDError(tblName + " not found").Build()
+		return errhand.BuildDError( "table %s not found", tblName).Build()
 	}
 
 	tbl, _, err := root.GetTable(ctx, tblName)
@@ -111,26 +158,12 @@ func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root *do
 		return errhand.BuildDError("unable to get table").AddCause(err).Build()
 	}
 
-	err = exportTblSchema(ctx, tbl, fileName, dEnv)
-	if err != nil {
-		return errhand.BuildDError("file path not valid.").Build()
-	}
-
-	return nil
-}
-
-func exportTblSchema(ctx context.Context, tbl *doltdb.Table, filename string, dEnv *env.DoltEnv) errhand.VerboseError {
 	sch, err := tbl.GetSchema(ctx)
 
 	if err != nil {
-		return errhand.BuildDError("error: failed to get schema").AddCause(err).Build()
+		return errhand.BuildDError("error: failed to get schema for table %s", tblName).AddCause(err).Build()
 	}
 
-	jsonSchStr, err := encoding.MarshalAsJson(sch)
-	if err != nil {
-		return errhand.BuildDError("Failed to encode as json").AddCause(err).Build()
-	}
-
-	err = dEnv.FS.WriteFile(filename, []byte(jsonSchStr))
-	return errhand.BuildIf(err, "Unable to write "+filename).AddCause(err).Build()
+	_, err = fmt.Fprintln(wr, sqlfmt.SchemaAsCreateStmt(tblName, sch))
+	return errhand.BuildIf(err, "error writing schema for table %s", tblName).AddCause(err).Build()
 }

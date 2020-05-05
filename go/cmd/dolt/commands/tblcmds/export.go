@@ -165,7 +165,7 @@ func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	if verr != nil {
 		_, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, exportDocs, ap))
-		commands.HandleVErrAndExitCode(verr, usage)
+		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
 	cli.PrintErrln(color.CyanString("Successfully exported data."))

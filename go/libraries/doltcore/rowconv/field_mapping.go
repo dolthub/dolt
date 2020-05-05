@@ -63,6 +63,19 @@ type FieldMapping struct {
 	SrcToDest map[uint64]uint64
 }
 
+// MapsAllPKs checks for a one-to-one mapping between primary keys in the SrcSch and DestSch
+func (fm *FieldMapping) MapsAllPKs() bool {
+	if fm.SrcSch.GetPKCols().Size() != fm.DestSch.GetPKCols().Size() {
+		return false
+	}
+	for _, tag := range fm.SrcSch.GetPKCols().Tags {
+		if _, found := fm.SrcToDest[tag]; !found {
+			return false
+		}
+	}
+	return true
+}
+
 func InvertMapping(fm *FieldMapping) *FieldMapping {
 	invertedMap := make(map[uint64]uint64)
 
