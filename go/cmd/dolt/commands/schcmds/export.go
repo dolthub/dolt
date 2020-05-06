@@ -17,19 +17,18 @@ package schcmds
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"io"
 	"os"
-
-	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 var schExportDocs = cli.CommandDocumentationContent{
@@ -41,7 +40,7 @@ var schExportDocs = cli.CommandDocumentationContent{
 }
 
 const (
-	//exportAllSchFlag  = "all"
+//exportAllSchFlag  = "all"
 )
 
 type ExportCmd struct{}
@@ -94,7 +93,7 @@ func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root *do
 	var tblName string
 	var fileName string
 	switch apr.NArg() {
-	case 0:  // write all tables to stdout
+	case 0: // write all tables to stdout
 	case 1:
 		if doltdb.IsValidTableName(apr.Arg(0)) {
 			tblName = apr.Arg(0)
@@ -145,7 +144,7 @@ func exportTblSchema(ctx context.Context, tblName string, root *doltdb.RootValue
 	if has, err := root.HasTable(ctx, tblName); err != nil {
 		return errhand.BuildDError("unable to read from database").AddCause(err).Build()
 	} else if !has {
-		return errhand.BuildDError( "table %s not found", tblName).Build()
+		return errhand.BuildDError("table %s not found", tblName).Build()
 	}
 
 	tbl, _, err := root.GetTable(ctx, tblName)

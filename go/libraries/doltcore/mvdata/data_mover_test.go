@@ -42,6 +42,7 @@ func TestDataMover(t *testing.T) {
 			"",
 			&MoveOptions{
 				Operation:   OverwriteOp,
+				TableName:   "testable",
 				ContOnErr:   false,
 				SchFile:     "",
 				MappingFile: "",
@@ -78,6 +79,7 @@ func TestDataMover(t *testing.T) {
 			"",
 			&MoveOptions{
 				Operation:   OverwriteOp,
+				TableName:   "table-name",
 				ContOnErr:   false,
 				SchFile:     "",
 				MappingFile: "",
@@ -86,7 +88,7 @@ func TestDataMover(t *testing.T) {
 				Dest:        NewDataLocation("table-name", "")},
 		},
 		{
-`CREATE TABLE table_name (
+			`CREATE TABLE table_name (
 pk   VARCHAR(120) COMMENT 'tag:0',
 value INT          COMMENT 'tag:1',
 PRIMARY KEY (pk)

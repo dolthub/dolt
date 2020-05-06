@@ -18,17 +18,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"strings"
 	"sync/atomic"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
-
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/funcitr"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
@@ -90,7 +89,7 @@ func (m MoveOptions) isExport() bool {
 
 func (m MoveOptions) WillOverwrite() bool {
 	if _, isStdOut := m.Dest.(StreamDataLocation); isStdOut {
-		return false  // can't overwrite StdOut
+		return false // can't overwrite StdOut
 	}
 	return m.Operation == OverwriteOp && !m.Force
 }
@@ -144,7 +143,7 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 	outSch, err := outSchemaFromInSchema(ctx, inSch, root, fs, mvOpts)
 
 	if err != nil {
-		return nil, &DataMoverCreationError{ SchemaErr, err}
+		return nil, &DataMoverCreationError{SchemaErr, err}
 	}
 
 	transforms, dmce := maybeMapFields(inSch, outSch, fs, mvOpts)
@@ -213,7 +212,7 @@ func (imp *DataMover) Move(ctx context.Context) (badRowCount int64, err error) {
 	return badCount, nil
 }
 
-func maybeMapFields(inSch schema.Schema, outSch schema.Schema, fs filesys.Filesys, mvOpts *MoveOptions)  (*pipeline.TransformCollection, *DataMoverCreationError) {
+func maybeMapFields(inSch schema.Schema, outSch schema.Schema, fs filesys.Filesys, mvOpts *MoveOptions) (*pipeline.TransformCollection, *DataMoverCreationError) {
 	var mapping *rowconv.FieldMapping
 	var err error
 	if mvOpts.MappingFile != "" {
@@ -252,7 +251,7 @@ func outSchemaFromInSchema(ctx context.Context, inSch schema.Schema, root *doltd
 	var outSch schema.Schema
 	var err error
 
-	if mvOpts.isExport()  {
+	if mvOpts.isExport() {
 		outSch = inSch
 		return outSch, nil
 	}
@@ -351,6 +350,10 @@ func addPrimaryKey(sch schema.Schema, explicitKey string) (schema.Schema, error)
 }
 
 func MakeTagsUnique(ctx context.Context, root *doltdb.RootValue, tblName string, sch schema.Schema) (schema.Schema, error) {
+	if !doltdb.IsValidTableName(tblName) {
+		return nil, fmt.Errorf("invalid table name '%s'", tblName)
+	}
+
 	var colNames []string
 	var colKinds []types.NomsKind
 	_ = sch.GetAllCols().Iter(func(_ uint64, col schema.Column) (stop bool, err error) {

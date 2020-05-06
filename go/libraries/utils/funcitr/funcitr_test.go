@@ -46,7 +46,7 @@ func TestFilterStrings(t *testing.T) {
 	inputs := []string{"this", "THAT", "The", "oThEr"}
 	outputs := FilterStrings(inputs, func(s string) bool { return !strings.Contains(s, "T") })
 
-	if !reflect.DeepEqual(outputs, []string{ "this" }) {
+	if !reflect.DeepEqual(outputs, []string{"this"}) {
 		t.Error("Failed to filter strings")
 	}
 }

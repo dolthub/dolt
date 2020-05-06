@@ -1049,7 +1049,6 @@ func TestAlterSystemTables(t *testing.T) {
 	})
 }
 
-
 func TestParseCreateTableStatement(t *testing.T) {
 	tests := []struct {
 		name           string

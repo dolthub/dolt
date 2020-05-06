@@ -17,9 +17,10 @@ package doltdb
 import (
 	"context"
 	"errors"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/funcitr"
 	"sort"
 	"strings"
+
+	"github.com/liquidata-inc/dolt/go/libraries/utils/funcitr"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"

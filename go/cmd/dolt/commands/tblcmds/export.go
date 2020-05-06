@@ -106,7 +106,7 @@ func parseExportArgs(ap *argparser.ArgParser, commandStr string, args []string) 
 	return &mvdata.MoveOptions{
 		Operation:   mvdata.OverwriteOp,
 		ContOnErr:   apr.Contains(contOnErrParam),
-		Force:		 apr.Contains(forceParam),
+		Force:       apr.Contains(forceParam),
 		TableName:   tableName,
 		SchFile:     schemaFile,
 		MappingFile: mappingFile,

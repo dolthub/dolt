@@ -18,8 +18,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"strconv"
+
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"

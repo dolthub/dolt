@@ -137,7 +137,6 @@ teardown() {
     run dolt table import -c --pk=pk1,pk2 test `batshelper 2pk5col-ints.csv`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
-    dolt sql -q 'select count(*) from test'
     run dolt sql -q 'select count(*) from test'
     [ "$status" -eq 0 ]
     [[ "$output" =~ "4" ]] || false
@@ -290,7 +289,6 @@ SQL
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "empty_strings_null_values" ]] || false
-    dolt sql -q "select * from empty_strings_null_values"
     run dolt sql -q "select * from empty_strings_null_values"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 11 ]

@@ -33,8 +33,8 @@ import (
 )
 
 const (
-	toCommit            = "to_commit"
-	fromCommit          = "from_commit"
+	toCommit   = "to_commit"
+	fromCommit = "from_commit"
 
 	diffTypeColName  = "diff_type"
 	diffTypeAdded    = "added"

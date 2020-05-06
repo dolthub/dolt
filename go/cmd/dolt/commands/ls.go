@@ -174,7 +174,7 @@ func printSystemTables(ctx context.Context, root *doltdb.RootValue, ddb *doltdb.
 	}
 
 	cli.Println("System tables:")
-	for _, tbl := range perSysTbls{
+	for _, tbl := range perSysTbls {
 		if verbose {
 			ls, verr := listTableVerbose(ctx, tbl, root)
 			if verr != nil {

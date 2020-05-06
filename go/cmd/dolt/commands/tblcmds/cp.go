@@ -140,6 +140,7 @@ func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 
 	mvOpts := &mvdata.MoveOptions{
 		Operation: mvdata.OverwriteOp,
+		TableName: newTbl,
 		ContOnErr: true,
 		Force:     force,
 		Src:       mvdata.TableDataLocation{Name: oldTbl},

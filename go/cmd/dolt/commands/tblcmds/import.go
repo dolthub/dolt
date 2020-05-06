@@ -333,7 +333,6 @@ func executeMove(ctx context.Context, dEnv *env.DoltEnv, mvOpts *mvdata.MoveOpti
 		return errhand.BuildDError("Unable to get the working root value for this data repository.").AddCause(err).Build()
 	}
 
-
 	if mvOpts.WillOverwrite() {
 		destExists, err := mvOpts.Dest.Exists(ctx, root, dEnv.FS)
 		if err != nil {

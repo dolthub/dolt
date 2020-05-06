@@ -17,12 +17,13 @@ package doltdb
 import (
 	"context"
 	"errors"
+	"regexp"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
-	"regexp"
 )
 
 const (
@@ -36,7 +37,6 @@ const (
 	// TableNameRegexStr is the regular expression that valid tables must match.
 	TableNameRegexStr = `^[a-zA-Z]{1}$|^[a-zA-Z]+[-_0-9a-zA-Z]*[0-9a-zA-Z]+$`
 )
-
 
 var tableNameRegex, _ = regexp.Compile(TableNameRegexStr)
 

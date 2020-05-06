@@ -35,9 +35,9 @@ import (
 )
 
 const (
-	testTableName = "test_table"
+	testTableName      = "test_table"
 	testSchemaFileName = "schema.sql"
-	testSchema = `
+	testSchema         = `
 CREATE TABLE test_table (
 	a VARCHAR(120) COMMENT 'tag:0',
 	b VARCHAR(120) COMMENT 'tag:1',

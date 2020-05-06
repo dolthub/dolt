@@ -18,6 +18,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
@@ -27,8 +30,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/sqlexport"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/xlsx"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-	"os"
-	"strings"
 )
 
 // DFFromString returns a data object from a string.
