@@ -407,3 +407,42 @@ func rowsToIndexRows(t *testing.T, rows []row.Row, indexName schema.Index, index
 	}
 	return
 }
+
+// DO NOT CHANGE THIS TEST
+// It is necessary to ensure consistent system table definitions
+func TestSystemTableTags(t *testing.T) {
+	var sysTableMin uint64 = 1 << 51
+
+	t.Run("asdf", func(t *testing.T) {
+		assert.Equal(t, sysTableMin, SystemTableReservedMin)
+	})
+	t.Run("dolt_doc tags", func(t *testing.T) {
+		docTableMin := sysTableMin + uint64(5)
+		assert.Equal(t, docTableMin+0, DocNameTag)
+		assert.Equal(t, docTableMin+1, DocTextTag)
+	})
+	t.Run("dolt_history_ tags", func(t *testing.T) {
+		doltHistoryMin := sysTableMin + uint64(1000)
+		assert.Equal(t, doltHistoryMin+0, HistoryCommitterTag)
+		assert.Equal(t, doltHistoryMin+1, HistoryCommitHashTag)
+		assert.Equal(t, doltHistoryMin+2, HistoryCommitDateTag)
+	})
+	t.Run("dolt_diff_ tags", func(t *testing.T) {
+		diffTableMin := sysTableMin + uint64(2000)
+		assert.Equal(t, diffTableMin+0, DiffCommitTag)
+	})
+	t.Run("dolt_query_catalog tags", func(t *testing.T) {
+		queryCatalogMin := sysTableMin + uint64(3005)
+		assert.Equal(t, queryCatalogMin+0, QueryCatalogIdTag)
+		assert.Equal(t, queryCatalogMin+1, QueryCatalogOrderTag)
+		assert.Equal(t, queryCatalogMin+2, QueryCatalogNameTag)
+		assert.Equal(t, queryCatalogMin+3, QueryCatalogQueryTag)
+		assert.Equal(t, queryCatalogMin+4, QueryCatalogDescriptionTag)
+	})
+	t.Run("dolt_schemas tags", func(t *testing.T) {
+		doltSchemasMin := sysTableMin + uint64(4003)
+		assert.Equal(t, doltSchemasMin+0, DoltSchemasTypeTag)
+		assert.Equal(t, doltSchemasMin+1, DoltSchemasNameTag)
+		assert.Equal(t, doltSchemasMin+2, DoltSchemasFragmentTag)
+	})
+}
