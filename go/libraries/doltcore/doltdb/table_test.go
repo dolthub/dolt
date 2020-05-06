@@ -408,6 +408,8 @@ func rowsToIndexRows(t *testing.T, rows []row.Row, indexName schema.Index, index
 	return
 }
 
+// DO NOT CHANGE THIS TEST
+// It is necessary to ensure consistent system table definitions
 func TestSystemTableTags(t *testing.T) {
 	var sysTableMin uint64 = 1 << 51
 
