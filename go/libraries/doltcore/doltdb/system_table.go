@@ -146,9 +146,10 @@ const (
 	ReadmePk          = "README.md"
 	DocPkColumnName   = "doc_name"
 	DocTextColumnName = "doc_text"
-
+)
+const (
 	// Tags for dolt_docs table
-	DocNameTag = iota + SystemTableReservedMin
+	DocNameTag = iota + SystemTableReservedMin + uint64(5)
 	DocTextTag
 )
 
@@ -170,9 +171,10 @@ const (
 
 	// QueryCatalogDescriptionCol is the name of the column containing the description of a query in the catalog
 	QueryCatalogDescriptionCol = "description"
-
+)
+const (
 	// Tags for dolt_query_catalog table
-	QueryCatalogIdTag = iota + SystemTableReservedMin + uint64(3000)
+	QueryCatalogIdTag = iota + SystemTableReservedMin + uint64(3005)
 	QueryCatalogOrderTag
 	QueryCatalogNameTag
 	QueryCatalogQueryTag
@@ -191,16 +193,18 @@ const (
 	// The schema fragment associated with the database entity.
 	// For example, the SELECT statement for a CREATE VIEW.
 	SchemasTablesFragmentCol = "fragment"
-
+)
+const (
 	// Tags for dolt_schemas table
-	DoltSchemasTypeTag = iota + SystemTableReservedMin + uint64(4000)
+	DoltSchemasTypeTag = iota + SystemTableReservedMin + uint64(4003)
 	DoltSchemasNameTag
 	DoltSchemasFragmentTag
 )
 
 const (
 	DoltHistoryTablePrefix = "dolt_history_"
-
+)
+const (
 	// Tags for dolt_history_ table
 	HistoryCommitterTag = iota + SystemTableReservedMin + uint64(1000)
 	HistoryCommitHashTag
@@ -209,7 +213,8 @@ const (
 
 const (
 	DoltDiffTablePrefix = "dolt_diff_"
-
+)
+const (
 	// Tags for dolt_diff_ table
 	DiffCommitTag = iota + SystemTableReservedMin + uint64(2000)
 )
