@@ -145,9 +145,9 @@ func UpdateTables(t *testing.T, ctx context.Context, root *doltdb.RootValue, tbl
 
 		var indexData *types.Map
 		if tbl != nil {
-			indexDataPtr, err := tbl.GetIndexData(ctx)
+			existingIndexData, err := tbl.GetIndexData(ctx)
 			require.NoError(t, err)
-			indexData = &indexDataPtr
+			indexData = &existingIndexData
 		}
 		tbl, err = doltdb.NewTable(ctx, root.VRW(), schVal, rowData, indexData)
 		require.NoError(t, err)

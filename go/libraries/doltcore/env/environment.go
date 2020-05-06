@@ -411,20 +411,11 @@ func (dEnv *DoltEnv) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootV
 	return h, nil
 }
 
-func (dEnv *DoltEnv) PutTableToWorking(ctx context.Context, rows types.Map, sch schema.Schema, tableName string, indexes []schema.Index) error {
+func (dEnv *DoltEnv) PutTableToWorking(ctx context.Context, rows types.Map, sch schema.Schema, tableName string) error {
 	root, err := dEnv.WorkingRoot(ctx)
 
 	if err != nil {
 		return doltdb.ErrNomsIO
-	}
-
-	for _, index := range indexes {
-		if !sch.Indexes().Contains(index.Name()) && !sch.Indexes().HasIndexOnColumns(index.ColumnNames()...) {
-			_, err = sch.Indexes().AddIndexByColNames(index.Name(), index.ColumnNames(), index.IsUnique(), index.Comment())
-			if err != nil {
-				return err
-			}
-		}
 	}
 
 	vrw := dEnv.DoltDB.ValueReadWriter()

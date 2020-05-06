@@ -95,12 +95,6 @@ func TestDropColumn(t *testing.T) {
 			expectedRows:   TypedRowsWithoutTitle,
 		},
 		{
-			name:           "remove name",
-			colName:        "name",
-			expectedSchema: dtestutils.RemoveColumnFromSchema(dtestutils.TypedSchema, dtestutils.NameTag),
-			expectedRows:   TypedRowsWithoutName,
-		},
-		{
 			name:        "column not found",
 			colName:     "not found",
 			expectedErr: "column not found",
@@ -137,8 +131,77 @@ func TestDropColumn(t *testing.T) {
 			originalSch, err := tbl.GetSchema(ctx)
 			require.NoError(t, err)
 			index := originalSch.Indexes().Get(dtestutils.IndexName)
+			tt.expectedSchema.Indexes().AddIndex(index)
+			require.Equal(t, tt.expectedSchema, sch)
+
+			rowData, err := updatedTable.GetRowData(ctx)
+			require.NoError(t, err)
+
+			var foundRows []row.Row
+			err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+				tpl, err := row.FromNoms(dtestutils.TypedSchema, key.(types.Tuple), value.(types.Tuple))
+				foundRows = append(foundRows, tpl)
+				return false, nil
+			})
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expectedRows, foundRows)
+		})
+	}
+}
+
+func TestDropColumnUsedByIndex(t *testing.T) {
+	tests := []struct {
+		name           string
+		colName        string
+		expectedIndex  bool
+		expectedSchema schema.Schema
+		expectedRows   []row.Row
+	}{
+		{
+			name:           "remove int",
+			colName:        "age",
+			expectedIndex:  true,
+			expectedSchema: dtestutils.RemoveColumnFromSchema(dtestutils.TypedSchema, dtestutils.AgeTag),
+			expectedRows:   TypedRowsWithoutAge,
+		},
+		{
+			name:           "remove string",
+			colName:        "title",
+			expectedIndex:  true,
+			expectedSchema: dtestutils.RemoveColumnFromSchema(dtestutils.TypedSchema, dtestutils.TitleTag),
+			expectedRows:   TypedRowsWithoutTitle,
+		},
+		{
+			name:           "remove name",
+			colName:        "name",
+			expectedIndex:  false,
+			expectedSchema: dtestutils.RemoveColumnFromSchema(dtestutils.TypedSchema, dtestutils.NameTag),
+			expectedRows:   TypedRowsWithoutName,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dEnv := createEnvWithSeedData(t)
+			ctx := context.Background()
+
+			root, err := dEnv.WorkingRoot(ctx)
+			assert.NoError(t, err)
+			tbl, _, err := root.GetTable(ctx, tableName)
+
+			require.NoError(t, err)
+
+			updatedTable, err := DropColumn(ctx, tbl, tt.colName)
+			require.NoError(t, err)
+
+			sch, err := updatedTable.GetSchema(ctx)
+			require.NoError(t, err)
+			originalSch, err := tbl.GetSchema(ctx)
+			require.NoError(t, err)
+			index := originalSch.Indexes().Get(dtestutils.IndexName)
 			assert.NotNil(t, index)
-			if tt.colName != "name" {
+			if tt.expectedIndex {
 				tt.expectedSchema.Indexes().AddIndex(index)
 				indexRowData, err := updatedTable.GetIndexRowData(ctx, dtestutils.IndexName)
 				assert.NoError(t, err)

@@ -107,6 +107,11 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIte
 }
 
 func (t *DoltTable) CreateIndex(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, columns []sql.IndexColumn, comment string) error {
+	//TODO: remove this once Unique indexes are in
+	if constraint != sql.IndexConstraint_None {
+		return fmt.Errorf("not yet supported")
+	}
+
 	if !doltdb.IsValidTableName(indexName) {
 		return fmt.Errorf("invalid index name `%s` as they must match the regular expression %s", indexName, doltdb.TableNameRegexStr)
 	}
