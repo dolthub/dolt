@@ -42,6 +42,15 @@ func TestMapSlice(t *testing.T) {
 	}
 }
 
+func TestFilterStrings(t *testing.T) {
+	inputs := []string{"this", "THAT", "The", "oThEr"}
+	outputs := FilterStrings(inputs, func(s string) bool { return !strings.Contains(s, "T") })
+
+	if !reflect.DeepEqual(outputs, []string{ "this" }) {
+		t.Error("Failed to filter strings")
+	}
+}
+
 func TestMapInts(t *testing.T) {
 	inputs32 := []int{2, 4, 6, 8}
 	inputs64 := []int64{2, 4, 6, 8}

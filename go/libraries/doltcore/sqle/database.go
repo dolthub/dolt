@@ -196,8 +196,8 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 
 func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.RootValue, tblName string) (sql.Table, bool, error) {
 	lwrName := strings.ToLower(tblName)
-	if strings.HasPrefix(lwrName, DoltDiffTablePrefix) {
-		tblName = tblName[len(DoltDiffTablePrefix):]
+	if strings.HasPrefix(lwrName, doltdb.DoltDiffTablePrefix) {
+		tblName = tblName[len(doltdb.DoltDiffTablePrefix):]
 		dt, err := NewDiffTable(ctx, db.Name(), tblName)
 
 		if err != nil {
@@ -207,8 +207,8 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 		return dt, true, nil
 	}
 
-	if strings.HasPrefix(lwrName, DoltHistoryTablePrefix) {
-		tblName = tblName[len(DoltHistoryTablePrefix):]
+	if strings.HasPrefix(lwrName, doltdb.DoltHistoryTablePrefix) {
+		tblName = tblName[len(doltdb.DoltHistoryTablePrefix):]
 		dh, err := NewHistoryTable(ctx, db.Name(), tblName)
 
 		if err != nil {
@@ -218,7 +218,7 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 		return dh, true, nil
 	}
 
-	if lwrName == LogTableName {
+	if lwrName == doltdb.LogTableName {
 		lt, err := NewLogTable(ctx, db.Name())
 
 		if err != nil {
@@ -228,7 +228,7 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 		return lt, true, nil
 	}
 
-	if lwrName == BranchesTableName {
+	if lwrName == doltdb.BranchesTableName {
 		bt, err := NewBranchesTable(ctx, db.Name())
 
 		if err != nil {
@@ -376,7 +376,7 @@ func (db Database) getTable(ctx context.Context, root *doltdb.RootValue, tableNa
 	var table sql.Table
 
 	readonlyTable := DoltTable{name: tableName, table: tbl, sch: sch, db: db}
-	if doltdb.IsSystemTable(tableName) {
+	if doltdb.IsReadOnlySystemTable(tableName) {
 		table = &readonlyTable
 	} else if doltdb.HasDoltPrefix(tableName) {
 		table = &WritableDoltTable{DoltTable: readonlyTable}
@@ -529,7 +529,7 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 		return err
 	}
 
-	if doltdb.IsSystemTable(tableName) {
+	if doltdb.IsReadOnlySystemTable(tableName) {
 		return ErrSystemTableAlter.New(tableName)
 	}
 
@@ -624,7 +624,7 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 		return err
 	}
 
-	if doltdb.IsSystemTable(oldName) {
+	if doltdb.IsReadOnlySystemTable(oldName) {
 		return ErrSystemTableAlter.New(oldName)
 	}
 

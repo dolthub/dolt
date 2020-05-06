@@ -66,7 +66,7 @@ func (tt TaggedValues) NomsTupleForPKCols(nbf *types.NomsBinFormat, pkCols *sche
 	return tt.nomsTupleForTags(nbf, pkCols.Tags, true)
 }
 
-func (tt TaggedValues) NomsTupleForNonPKCols(nbf *types.NomsBinFormat, nonPKCols *schema.ColCollection) TupleVals {
+func (tt TaggedValues)  NomsTupleForNonPKCols(nbf *types.NomsBinFormat, nonPKCols *schema.ColCollection) TupleVals {
 	return tt.nomsTupleForTags(nbf, nonPKCols.SortedTags, false)
 }
 

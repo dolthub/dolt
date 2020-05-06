@@ -163,7 +163,7 @@ func printStagedDiffs(wr io.Writer, stagedTbls *diff.TableDiffs, stagedDocs *dif
 
 		lines := make([]string, 0, stagedTbls.Len()+stagedDocs.Len())
 		for _, tblName := range stagedTbls.Tables {
-			if !doltdb.IsSystemTable(tblName) {
+			if !doltdb.IsReadOnlySystemTable(tblName) {
 				tdt := stagedTbls.TableToType[tblName]
 				lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
 			}

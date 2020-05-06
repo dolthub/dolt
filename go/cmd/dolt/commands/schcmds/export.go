@@ -36,12 +36,12 @@ var schExportDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Exports a table's schema.",
 	LongDesc:  "",
 	Synopsis: []string{
-		"[--all] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
+		"{{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 	},
 }
 
 const (
-	exportAllSchFlag  = "all"
+	//exportAllSchFlag  = "all"
 )
 
 type ExportCmd struct{}
@@ -66,7 +66,7 @@ func (cmd ExportCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "table whose schema is being exported."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"commit", "commit at which point the schema will be displayed."})
-	ap.SupportsFlag(exportAllSchFlag, "a", "If provided, and <table> arg is not provided, system tables will be exported")
+	//ap.SupportsFlag(exportAllSchFlag, "a", "If provided, and <table> arg is not provided, system tables will be exported")
 	return ap
 }
 
@@ -108,10 +108,6 @@ func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root *do
 		return errhand.BuildDError("schema export takes at most two parameters.").SetPrintUsage().Build()
 	}
 
-	if tblName != "" && apr.Contains(exportAllSchFlag) {
-		return errhand.BuildDError("<table> and %s parameters are mutually exclusive", exportAllSchFlag).SetPrintUsage().Build()
-	}
-
 	var wr io.Writer
 	if fileName != "" {
 		wc, err := dEnv.FS.OpenForWrite(fileName, os.ModePerm)
@@ -129,7 +125,7 @@ func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root *do
 	if tblName != "" {
 		tablesToExport = []string{tblName}
 	} else {
-		tablesToExport, err = root.GetTableNames(ctx)
+		tablesToExport, err = doltdb.GetNonSystemTableNames(ctx, root)
 		if err != nil {
 			return errhand.BuildDError("error retrieving table names").AddCause(err).Build()
 		}

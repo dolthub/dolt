@@ -35,7 +35,6 @@ import (
 
 const (
 	// DoltHistoryTablePrefix is the name prefix for each history table
-	DoltHistoryTablePrefix = "dolt_history_"
 
 	// CommitHashCol is the name of the column containing the commit hash in the result set
 	CommitHashCol = "commit_hash"
@@ -102,10 +101,10 @@ func NewHistoryTable(ctx *sql.Context, dbName, tblName string) (*HistoryTable, e
 	}
 
 	if sch.GetAllCols().Size() <= 3 {
-		return nil, sql.ErrTableNotFound.New(DoltHistoryTablePrefix + tblName)
+		return nil, sql.ErrTableNotFound.New(doltdb.DoltHistoryTablePrefix + tblName)
 	}
 
-	tableName := DoltHistoryTablePrefix + tblName
+	tableName := doltdb.DoltHistoryTablePrefix + tblName
 	sqlSch, err := doltSchemaToSqlSchema(tableName, sch)
 
 	if err != nil {
@@ -237,12 +236,12 @@ func (ht *HistoryTable) Projection() []string {
 
 // Name returns the name of the history table
 func (ht *HistoryTable) Name() string {
-	return DoltHistoryTablePrefix + ht.name
+	return doltdb.DoltHistoryTablePrefix + ht.name
 }
 
 // String returns the name of the history table
 func (ht *HistoryTable) String() string {
-	return DoltHistoryTablePrefix + ht.name
+	return doltdb.DoltHistoryTablePrefix + ht.name
 }
 
 // Schema returns the schema for the history table, which will be the super set of the schemas from the history

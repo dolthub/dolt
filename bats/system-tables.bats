@@ -10,15 +10,21 @@ teardown() {
 }
 
 @test "Show list of system tables using dolt ls --system or --all" {
+    dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
+    dolt sql -q "show tables" --save "BATS query"
+    dolt ls --system
     run dolt ls --system
     [ $status -eq 0 ]
     [[ "$output" =~ "dolt_log" ]] || false
     [[ "$output" =~ "dolt_branches" ]] || false
+    [[ "$output" =~ "dolt_query_catalog" ]] || false
+    [[ ! "$output" =~ " test" ]] || false  # spaces are impt!
     run dolt ls --all
     [ $status -eq 0 ]
     [[ "$output" =~ "dolt_log" ]] || false
     [[ "$output" =~ "dolt_branches" ]] || false
-    dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
+    [[ "$output" =~ "dolt_query_catalog" ]] || false
+    [[ "$output" =~ "test" ]] || false
     dolt add test
     dolt commit -m "Added test table"
     run dolt ls --system
