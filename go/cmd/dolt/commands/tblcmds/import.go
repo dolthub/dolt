@@ -251,9 +251,9 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, importDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
-	err := validateImportArgs(apr)
-	if err != nil {
-		return commands.HandleVErrAndExitCode(err, usage)
+	verr := validateImportArgs(apr)
+	if verr != nil {
+		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
 	moveOp, tableLoc, fileLoc, srcOpts := getMoveParameters(apr)
@@ -276,8 +276,33 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	res := executeMove(ctx, dEnv, force, mvOpts)
 
-	if res == 0 {
-		cli.PrintErrln(color.CyanString("Import completed successfully."))
+	if res != 0 {
+		return res
+	}
+	cli.PrintErrln(color.CyanString("Import completed successfully."))
+
+	//TODO: change this to not use the executeMove function, and instead the SQL code path, so that we don't rebuild indexes on every import
+	newWorking, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to load the working set to build the indexes.").AddCause(err).Build(), nil)
+	}
+	updatedTable, ok, err := newWorking.GetTable(ctx, tableLoc.Name)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to load the table to build the indexes.").AddCause(err).Build(), nil)
+	} else if !ok {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to find the table to build the indexes.").Build(), nil)
+	}
+	updatedTable, err = updatedTable.RebuildIndexData(ctx)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to build the indexes.").AddCause(err).Build(), nil)
+	}
+	newWorking, err = newWorking.PutTable(ctx, tableLoc.Name, updatedTable)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to write the indexes to the working set.").AddCause(err).Build(), nil)
+	}
+	err = dEnv.UpdateWorkingRoot(ctx, newWorking)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to update the working set containing the indexes.").AddCause(err).Build(), nil)
 	}
 
 	return res
@@ -396,7 +421,9 @@ func executeMove(ctx context.Context, dEnv *env.DoltEnv, force bool, mvOpts *mvd
 		}
 
 		tableDest := mvOpts.Dest.(mvdata.TableDataLocation)
-		err = dEnv.PutTableToWorking(ctx, *nomsWr.GetMap(), nomsWr.GetSchema(), tableDest.Name, indexes)
+		sch := nomsWr.GetSchema()
+		sch.Indexes().Merge(indexes...)
+		err = dEnv.PutTableToWorking(ctx, *nomsWr.GetMap(), sch, tableDest.Name)
 		if err != nil {
 			cli.PrintErrln(color.RedString("Failed to update the working value."))
 			return 1

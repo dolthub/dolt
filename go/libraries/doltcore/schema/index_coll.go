@@ -45,6 +45,11 @@ type IndexCollection interface {
 	IndexesWithColumn(columnName string) []Index
 	// IndexesWithTag returns all indexes that index the given tag.
 	IndexesWithTag(tag uint64) []Index
+	// Merge adds the given index if it does not already exist. Indexed columns are referenced by column name,
+	// rather than by tag number, which allows an index from a different table to be added as long as they have matching
+	// column names. If an index with the same name or column structure already exists, or the index contains different
+	// columns, then it is skipped.
+	Merge(indexes ...Index)
 	// RemoveIndex removes an index from the table metadata.
 	RemoveIndex(indexName string) (Index, error)
 	// RenameIndex renames an index in the table metadata.
@@ -100,13 +105,9 @@ func (ixc *indexCollectionImpl) AddIndex(indexes ...Index) {
 }
 
 func (ixc *indexCollectionImpl) AddIndexByColNames(indexName string, cols []string, isUnique bool, comment string) (Index, error) {
-	tags := make([]uint64, len(cols))
-	for i, colName := range cols {
-		col, ok := ixc.colColl.NameToCol[colName]
-		if !ok {
-			return nil, fmt.Errorf("the table does not contain a column named `%s`", colName)
-		}
-		tags[i] = col.Tag
+	tags, ok := ixc.columnNamesToTags(cols)
+	if !ok {
+		return nil, fmt.Errorf("the table does not contain at least one of the following columns: `%v`", cols)
 	}
 	return ixc.AddIndexByColTags(indexName, tags, isUnique, comment)
 }
@@ -210,6 +211,21 @@ func (ixc *indexCollectionImpl) IndexesWithTag(tag uint64) []Index {
 	return indexes
 }
 
+func (ixc *indexCollectionImpl) Merge(indexes ...Index) {
+	for _, index := range indexes {
+		if tags, ok := ixc.columnNamesToTags(index.ColumnNames()); ok && !ixc.Contains(index.Name()) {
+			newIndex := &indexImpl{
+				name:      index.Name(),
+				tags:      tags,
+				indexColl: ixc,
+				isUnique:  index.IsUnique(),
+				comment:   index.Comment(),
+			}
+			ixc.AddIndex(newIndex)
+		}
+	}
+}
+
 func (ixc *indexCollectionImpl) RemoveIndex(indexName string) (Index, error) {
 	if !ixc.Contains(indexName) {
 		return nil, fmt.Errorf("`%s` does not exist as an index for this table", indexName)
@@ -240,6 +256,18 @@ func (ixc *indexCollectionImpl) RenameIndex(oldName, newName string) (Index, err
 	index.name = newName
 	ixc.indexes[newName] = index
 	return index, nil
+}
+
+func (ixc *indexCollectionImpl) columnNamesToTags(cols []string) ([]uint64, bool) {
+	tags := make([]uint64, len(cols))
+	for i, colName := range cols {
+		col, ok := ixc.colColl.NameToCol[colName]
+		if !ok {
+			return nil, false
+		}
+		tags[i] = col.Tag
+	}
+	return tags, true
 }
 
 func (ixc *indexCollectionImpl) containsColumnTagCollection(tags ...uint64) *indexImpl {

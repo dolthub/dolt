@@ -41,6 +41,7 @@ const (
 	emptyTag     = 5
 )
 const testSchemaIndexName = "idx_name"
+const testSchemaIndexAge = "idx_age"
 
 func createTestSchema(t *testing.T) schema.Schema {
 	colColl, _ := schema.NewColCollection(
@@ -53,6 +54,8 @@ func createTestSchema(t *testing.T) schema.Schema {
 	)
 	sch := schema.SchemaFromCols(colColl)
 	_, err := sch.Indexes().AddIndexByColTags(testSchemaIndexName, []uint64{firstTag, lastTag}, false, "")
+	require.NoError(t, err)
+	_, err = sch.Indexes().AddIndexByColTags(testSchemaIndexAge, []uint64{ageTag}, false, "")
 	require.NoError(t, err)
 	return sch
 }

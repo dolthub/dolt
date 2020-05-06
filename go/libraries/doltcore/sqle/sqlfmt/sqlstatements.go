@@ -33,6 +33,11 @@ func QuoteIdentifier(s string) string {
 	return "`" + s + "`"
 }
 
+// QuoteString quotes the given string with apostrophes, and escapes any contained within the string.
+func QuoteString(s string) string {
+	return `'` + strings.ReplaceAll(s, `'`, `\'`) + `'`
+}
+
 // SchemaAsCreateStmt takes a Schema and returns a string representing a SQL create table command that could be used to
 // create this table
 func SchemaAsCreateStmt(tableName string, sch schema.Schema) string {
@@ -88,9 +93,8 @@ func SchemaAsCreateStmt(tableName string, sch schema.Schema) string {
 		}
 		sb.WriteRune(')')
 		if len(index.Comment()) > 0 {
-			sb.WriteString(" COMMENT '")
-			sb.WriteString(strings.ReplaceAll(index.Comment(), `"`, `\"`))
-			sb.WriteRune('\'')
+			sb.WriteString(" COMMENT ")
+			sb.WriteString(QuoteString(index.Comment()))
 		}
 	}
 

@@ -20183,21 +20183,21 @@ func TestInsertsWithIndexes(t *testing.T) {
 	require.NoError(t, err)
 
 	table, _, err := root.GetTable(ctx, "daily_summary")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	rowData, err := table.GetIndexRowData(ctx, "idx_country")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, uint64(7953), rowData.Len())
 
 	table, _, err = root.GetTable(ctx, "symbols")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	rowData, err = table.GetIndexRowData(ctx, "idx_ipoyear")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, uint64(6879), rowData.Len())
 
 	table, _, err = root.GetTable(ctx, "join_result")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	rowData, err = table.GetIndexRowData(ctx, "idx_country")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, uint64(5210), rowData.Len())
 }
 

@@ -151,6 +151,29 @@ func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 		verr = errhand.BuildDError("could not copy table %s to table %s", old, new).Build()
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
+	//TODO: change this to not use the executeMove function, and instead the SQL code path
+	newWorking, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to load the working set to build the indexes.").AddCause(err).Build(), nil)
+	}
+	updatedTable, ok, err := newWorking.GetTable(ctx, new)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to load the table to build the indexes.").AddCause(err).Build(), nil)
+	} else if !ok {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to find the table to build the indexes.").Build(), nil)
+	}
+	updatedTable, err = updatedTable.RebuildIndexData(ctx)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to build the indexes.").AddCause(err).Build(), nil)
+	}
+	newWorking, err = newWorking.PutTable(ctx, new, updatedTable)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to write the indexes to the working set.").AddCause(err).Build(), nil)
+	}
+	err = dEnv.UpdateWorkingRoot(ctx, newWorking)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to update the working set containing the indexes.").AddCause(err).Build(), nil)
+	}
 
 	return 0
 }

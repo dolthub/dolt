@@ -158,11 +158,11 @@ type Table struct {
 // NewTable creates a noms Struct which stores the schema and the row data
 func NewTable(ctx context.Context, vrw types.ValueReadWriter, schema types.Value, rowData types.Map, indexData *types.Map) (*Table, error) {
 	if indexData == nil {
-		indexDataPtr, err := types.NewMap(ctx, vrw)
+		emptyIndexData, err := types.NewMap(ctx, vrw)
 		if err != nil {
 			return nil, err
 		}
-		indexData = &indexDataPtr
+		indexData = &emptyIndexData
 	}
 
 	schemaRef, err := writeValAndGetRef(ctx, vrw, schema)
@@ -639,6 +639,10 @@ func (t *Table) RebuildIndexData(ctx context.Context) (*Table, error) {
 	sch, err := t.GetSchema(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	if sch.Indexes().Count() == 0 {
+		return t, nil
 	}
 
 	tableRowData, err := t.GetRowData(ctx)

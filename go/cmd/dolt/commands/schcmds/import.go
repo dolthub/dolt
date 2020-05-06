@@ -295,11 +295,11 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 
 		var indexData *types.Map
 		if tblExists {
-			indexDataPtr, err := tbl.GetIndexData(ctx)
+			existingIndexData, err := tbl.GetIndexData(ctx)
 			if err != nil {
 				return errhand.BuildDError("error: failed to create table.").AddCause(err).Build()
 			}
-			indexData = &indexDataPtr
+			indexData = &existingIndexData
 		}
 
 		tbl, err = doltdb.NewTable(ctx, root.VRW(), schVal, m, indexData)
