@@ -86,117 +86,6 @@ teardown() {
     [ "${#lines[@]}" -eq 6 ]
 }
 
-
-@test "import data from a csv file after table created" {
-    run dolt table import int_table -u 1pk5col-ints.csv
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Import completed successfully." ]] || false
-    run dolt sql -q "select * from int_table"
-    [ "$status" -eq 0 ]
-    # Number of lines offset by 3 for table printing style
-    [ "${#lines[@]}" -eq 6 ]
-}
-
-@test "import data from a psv file after table created" {
-    cat <<DELIM > 1pk5col-ints.psv
-pk|c1|c2|c3|c4|c5
-0|1|2|3|4|5
-1|1|2|3|4|5
-DELIM
-
-    run dolt table import int_table -u 1pk5col-ints.psv
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Import completed successfully." ]] || false
-    run dolt sql -q "select * from int_table"
-    [ "$status" -eq 0 ]
-    # Number of lines offset by 3 for table printing style
-    [ "${#lines[@]}" -eq 6 ]
-}
-
-@test "table import with schema different from data file" {
-    cat <<SQL > schema.sql
-CREATE TABLE subset (
-    pk INT NOT NULL,
-    c1 INT,
-    c3 INT,
-    noData INT,
-    PRIMARY KEY (pk)
-);
-SQL
-    run dolt table import -s schema.sql -c subset 1pk5col-ints.csv
-    [ "$status" -eq 0 ]
-
-    # schema argument subsets the data and adds empty column
-    run dolt sql -r csv -q "select * from subset"
-    [ "$status" -eq 0 ]
-    [ "${lines[0]}" = "pk,c1,c3,noData" ]
-    [ "${lines[1]}" = "0,1,3," ]
-    [ "${lines[2]}" = "1,1,3," ]
-}
-
-@test "import data from a csv file with a bad line" {
-    cat <<DELIM > badline.csv
-pk,c1,c2,c3,c4,c5
-0,1,2,3,4,5
-1,1,2,3,4,5
-2
-DELIM
-    run dolt table import int_table -u badline.csv
-    [ "$status" -eq 1 ]
-    [[ "${lines[0]}" =~ "Additions" ]] || false
-    [[ "${lines[1]}" =~ "A bad row was encountered" ]] || false
-    [[ "${lines[2]}" =~ "expects 6 fields" ]] || false
-    [[ "${lines[2]}" =~ "line only has 1 value" ]] || false
-}
-
-@test "import data from a csv file with a bad header" {
-cat <<DELIM > bad.csv
-,c1,c2,c3,c4,c5
-0,1,2,3,4,5
-DELIM
-    run dolt table import test -u bad.csv
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "bad header line: column cannot be NULL or empty string" ]] || false
-    [[ ! "$output" =~ "panic" ]] || false
-
-cat <<DELIM > bad.csv
-pk,c1, ,c3,c4,c5
-0,1,2,3,4,5
-DELIM
-    run dolt table import test -u bad.csv
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "bad header line: column cannot be NULL or empty string" ]] || false
-    [[ ! "$output" =~ "panic" ]] || false
-
-cat <<DELIM > bad.csv
-pk,c1,"",c3,c4,c5
-0,1,2,3,4,5
-DELIM
-    run dolt table import test -u bad.csv
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "bad header line: column cannot be NULL or empty string" ]] || false
-    [[ ! "$output" =~ "panic" ]] || false
-
-cat <<DELIM > bad.csv
-pk,c1," ",c3,c4,c5
-0,1,2,3,4,5
-DELIM
-    run dolt table import test -u bad.csv
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "bad header line: column cannot be NULL or empty string" ]] || false
-    [[ ! "$output" =~ "panic" ]] || false
-}
-
-@test "overwrite a row. make sure it updates not inserts" {
-    dolt table import int_table -u 1pk5col-ints.csv
-    run dolt sql -q "replace into int_table values (1, 2, 4, 6, 8, 10)"
-    [ "$status" -eq 0 ]
-    run dolt sql -q "select * from int_table"
-    [ "$status" -eq 0 ]
-    # Number of lines offset by 3 for table printing style
-    [ "${#lines[@]}" -eq 6 ]
-}
-
 @test "use -f to overwrite data in existing table" {
     dolt table import -c --pk=pk test `batshelper 1pk5col-ints.csv`
 
@@ -363,6 +252,27 @@ SQL
     [ "${lines[7]}" = "| e  | row five  | <NULL>    |" ]
     [ "${lines[8]}" = "| f  | row six   | 6         |" ]
     [ "${lines[9]}" = "| g  | <NULL>    | <NULL>    |" ]
+}
+
+@test "table import with schema different from data file" {
+    cat <<SQL > schema.sql
+CREATE TABLE subset (
+    pk INT NOT NULL,
+    c1 INT,
+    c3 INT,
+    noData INT,
+    PRIMARY KEY (pk)
+);
+SQL
+    run dolt table import -s schema.sql -c subset 1pk5col-ints.csv
+    [ "$status" -eq 0 ]
+
+    # schema argument subsets the data and adds empty column
+    run dolt sql -r csv -q "select * from subset"
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "pk,c1,c3,noData" ]
+    [ "${lines[1]}" = "0,1,3," ]
+    [ "${lines[2]}" = "1,1,3," ]
 }
 
 @test "create a table with null values from csv import with json file" {
