@@ -51,8 +51,6 @@ const (
 	delimParam       = "delim"
 )
 
-type importArgs map[string]string
-
 var SchemaFileHelp = "Schema definition files are json files in the format:" + `
 
 	{
@@ -396,12 +394,6 @@ func newDataMoverErrToVerr(mvOpts *mvdata.MoveOptions, err *mvdata.DataMoverCrea
 	case mvdata.CreateReaderErr:
 		bdr := errhand.BuildDError("Error creating reader for %s.", mvOpts.Src.String())
 		bdr.AddDetails("When attempting to move data from %s to %s, could not open a reader.", mvOpts.Src.String(), mvOpts.Dest.String())
-		return bdr.AddCause(err.Cause).Build()
-
-	// todo: this error may be obselete[
-	case mvdata.NomsKindSchemaErr:
-		bdr := errhand.BuildDError("Error creating schema.")
-		bdr.AddDetails("Column given invalid kind. Valid kinds include : string, int, bool, float, null.")
 		return bdr.AddCause(err.Cause).Build()
 
 	case mvdata.SchemaErr:

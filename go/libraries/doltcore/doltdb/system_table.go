@@ -79,6 +79,7 @@ func GetSystemTableNames(ctx context.Context, root *RootValue) ([]string, error)
 	return s, nil
 }
 
+// GetPersistedSystemTables returns table names of all persisted system tables.
 func GetPersistedSystemTables(ctx context.Context, root *RootValue) ([]string, error) {
 	tn, err := root.GetTableNames(ctx)
 	if err != nil {
@@ -88,20 +89,21 @@ func GetPersistedSystemTables(ctx context.Context, root *RootValue) ([]string, e
 	return funcitr.FilterStrings(tn, HasDoltPrefix), nil
 }
 
+// GetGeneratedSystemTables returns table names of all generated system tables.
 func GetGeneratedSystemTables(ctx context.Context, root *RootValue) ([]string, error) {
-	s := set.NewStrSet(systemReservedTables)
+	s := set.NewStrSet(generatedSystemTables)
 
 	tn, err := root.GetTableNames(ctx)
 	if err != nil {
 		return nil, err
 	}
-	for _, pre := range systemReservedPrefixes {
+	for _, pre := range generatedSystemTablePrefixes {
 		s.Add(funcitr.MapStrings(tn, func(s string) string { return pre + s })...)
 	}
 	return s.AsSlice(), nil
 }
 
-// GetAllTableNames gets all table names
+// GetAllTableNames returns table names for all persisted and generated tables.
 func GetAllTableNames(ctx context.Context, root *RootValue) ([]string, error) {
 	n, err := GetNonSystemTableNames(ctx, root)
 	if err != nil {
@@ -128,12 +130,12 @@ var persistedSystemTables = []string{
 	SchemasTableName,
 }
 
-var systemReservedTables = []string{
+var generatedSystemTables = []string{
 	BranchesTableName,
 	LogTableName,
 }
 
-var systemReservedPrefixes = []string{
+var generatedSystemTablePrefixes = []string{
 	DoltDiffTablePrefix,
 	DoltHistoryTablePrefix,
 }

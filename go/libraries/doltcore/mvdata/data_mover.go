@@ -248,13 +248,8 @@ func maybeMapFields(inSch schema.Schema, outSch schema.Schema, fs filesys.Filesy
 }
 
 func outSchemaFromInSchema(ctx context.Context, inSch schema.Schema, root *doltdb.RootValue, fs filesys.ReadableFS, mvOpts *MoveOptions) (schema.Schema, error) {
-	var outSch schema.Schema
 	var err error
-
-	if mvOpts.isExport() {
-		outSch = inSch
-		return outSch, nil
-	}
+	outSch := inSch
 
 	if mvOpts.Operation == UpdateOp || mvOpts.Operation == ReplaceOp {
 		t, ok := mvOpts.Dest.(TableDataLocation)
@@ -278,7 +273,7 @@ func outSchemaFromInSchema(ctx context.Context, inSch schema.Schema, root *doltd
 		if tn != mvOpts.TableName {
 			return nil, fmt.Errorf("table name '%s' from schema file %s does not match table arg '%s'", tn, mvOpts.SchFile, mvOpts.TableName)
 		}
-	} else {
+	} else if mvOpts.isImport() || mvOpts.isCopy() {
 		outSch, err = addPrimaryKey(inSch, mvOpts.PrimaryKey)
 		if err != nil {
 			return nil, err
