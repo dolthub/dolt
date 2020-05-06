@@ -131,7 +131,7 @@ SQL
 }
 
 @test "diff summary shows correct changes after schema change" {
-    dolt table import -c -s=`batshelper employees-sch.json` employees `batshelper employees-tbl.json`
+    dolt table import -c -s=`batshelper employees-sch.sql` employees `batshelper employees-tbl.json`
     dolt add employees
     dolt commit -m "Added employees table with data"
     dolt sql -q "alter table employees add city longtext"

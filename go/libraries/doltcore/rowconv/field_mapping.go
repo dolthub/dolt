@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
@@ -61,6 +63,20 @@ type FieldMapping struct {
 
 	// SrcToDest is a map from a tag in the source schema to a tag in the dest schema.
 	SrcToDest map[uint64]uint64
+}
+
+// MapsAllDestPKs checks that each PK column in DestSch has a corresponding column in SrcSch
+func (fm *FieldMapping) MapsAllDestPKs() bool {
+	ds := set.NewUint64Set(nil)
+	for _, v := range fm.SrcToDest {
+		ds.Add(v)
+	}
+	for _, tag := range fm.DestSch.GetPKCols().Tags {
+		if !ds.Contains(tag) {
+			return false
+		}
+	}
+	return true
 }
 
 func InvertMapping(fm *FieldMapping) *FieldMapping {

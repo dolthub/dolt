@@ -10,12 +10,23 @@ teardown() {
 }
 
 @test "changing column types should not produce a data diff error" {
+    cat <<SQL > 1pk5col-ints-schema.sql
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
+  c3 BIGINT,
+  c4 BIGINT,
+  c5 BIGINT,
+  PRIMARY KEY (pk)
+);
+SQL
     dolt table import -c --pk=pk test `batshelper 1pk5col-ints.csv`
     run dolt schema show
     [[ "$output" =~ "TEXT" ]] || false
     dolt add test
     dolt commit -m "Added test table"
-    dolt table import -c -f -pk=pk -s=`batshelper 1pk5col-ints-schema.json` test `batshelper 1pk5col-ints.csv`
+    dolt table import -c -f -s=1pk5col-ints-schema.sql test `batshelper 1pk5col-ints.csv`
     run dolt diff
     skip "This produces a failed to merge schemas error message right now"
     [ "$status" -eq 0 ]

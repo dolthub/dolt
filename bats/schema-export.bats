@@ -27,58 +27,58 @@ CREATE TABLE test2 (
   PRIMARY KEY (pk)
 );
 SQL
+
+    # save a query to ensure we have a system table to ignore
+    dolt sql -q "show tables" --save "BATS query"
 }
 
 teardown() {
     teardown_common
 }
 
-# This test can be deleted when the new specification test is working
-@test "dolt schema export" {
+@test "dolt schema export one table to file" {
     run dolt schema export test1 export.schema
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     [ -f export.schema ]
-    run diff --strip-trailing-cr $BATS_TEST_DIRNAME/helper/1pk5col-ints-schema.json export.schema
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
-
-    run dolt schema export poop poop.schema
-    [ "$status" -ne 0 ]
-    [ "$output" = "poop not found" ]
-}
-
-@test "dolt schema export, new specification" {
-    run dolt schema export test1 export.schema
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
-    [ -f export.schema ]
-    skip "New spec not implemented"
     run cat export.schema
-    [ "$status" -eq 0 ] 
-    [[ "$output" =~ "CREATE" ]] || false
-    [[ "$output" =~ "test1" ]] || false
-    [[ ! "$output" =~ "working" ]] || false
-}
-
-@test "dolt schema export, no file" {
-    run dolt schema export test1
-    skip "This fails right now, should export to STDOUT"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "test1" ]] || false 
+    [[ "$output" =~ "CREATE TABLE \`test1\`" ]] || false
+    [[ ! "$output" =~ "working" ]] || false
+    [[ ! "$output" =~ "dolt_" ]] || false
+
+    # ensure system tables are present
+    run dolt sql -q 'select name from dolt_query_catalog'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "BATS query" ]] || false
 }
 
-@test "dolt schema export --all" {
-    run dolt schema export --all export.schema
-    skip "--all not supported yet"
+@test "dolt schema export all tables to file" {
+    run dolt schema export export.schema
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     [ -f export.schema ]
-    dolt sql -q "show tables" --save "test query"
-    run dolt schema export --all
-    [ "$status" -eq 0 ] 
-    [[ "$output" =~ "CREATE" ]] || false
-    [[ "$output" =~ "test1" ]] || false
+    run cat export.schema
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CREATE TABLE \`test1\`" ]] || false
+    [[ "$output" =~ "CREATE TABLE \`test2\`" ]] || false
+    [[ ! "$output" =~ "working" ]] || false
+    [[ ! "$output" =~ "dolt_" ]] || false
+}
+
+@test "dolt schema export one table to std out" {
+    run dolt schema export test1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CREATE TABLE \`test1\`" ]] || false
+    [[ ! "$output" =~ "working" ]] || false
+    [[ ! "$output" =~ "dolt_" ]] || false
+}
+
+@test "dolt schema export all tables to std out" {
+    run dolt schema export
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CREATE TABLE \`test1\`" ]] || false
+    [[ "$output" =~ "CREATE TABLE \`test2\`" ]] || false
     [[ ! "$output" =~ "working" ]] || false
     [[ ! "$output" =~ "dolt_" ]] || false
 }

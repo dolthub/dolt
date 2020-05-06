@@ -261,7 +261,7 @@ func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootV
 		for _, tblName := range notStagedTbls.Tables {
 			tdt := notStagedTbls.TableToType[tblName]
 
-			if tdt != diff.AddedTable && !doltdb.IsSystemTable(tblName) {
+			if tdt != diff.AddedTable && !doltdb.IsReadOnlySystemTable(tblName) {
 				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[tdt], tblName))
 			}
 		}

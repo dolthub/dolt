@@ -33,9 +33,8 @@ import (
 )
 
 const (
-	DoltDiffTablePrefix = "dolt_diff_"
-	toCommit            = "to_commit"
-	fromCommit          = "from_commit"
+	toCommit   = "to_commit"
+	fromCommit = "from_commit"
 
 	diffTypeColName  = "diff_type"
 	diffTypeAdded    = "added"
@@ -66,7 +65,7 @@ func NewDiffTable(ctx *sql.Context, dbName, tblName string) (*DiffTable, error) 
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	diffTblName := DoltDiffTablePrefix + tblName
+	diffTblName := doltdb.DoltDiffTablePrefix + tblName
 
 	cmItr, err := doltdb.CommitItrForAllBranches(ctx, ddb)
 
@@ -139,11 +138,11 @@ func NewDiffTable(ctx *sql.Context, dbName, tblName string) (*DiffTable, error) 
 }
 
 func (dt *DiffTable) Name() string {
-	return DoltDiffTablePrefix + dt.name
+	return doltdb.DoltDiffTablePrefix + dt.name
 }
 
 func (dt *DiffTable) String() string {
-	return DoltDiffTablePrefix + dt.name
+	return doltdb.DoltDiffTablePrefix + dt.name
 }
 
 func (dt *DiffTable) Schema() sql.Schema {

@@ -95,9 +95,9 @@ func (cmd MvCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	oldName := apr.Arg(0)
 	newName := apr.Arg(1)
 
-	if doltdb.IsSystemTable(oldName) {
+	if doltdb.HasDoltPrefix(oldName) {
 		return commands.HandleVErrAndExitCode(
-			errhand.BuildDError("error renaming  table %s", oldName).AddCause(doltdb.ErrSystemTableCannotBeModified).Build(), usage)
+			errhand.BuildDError("error renaming table %s", oldName).AddCause(doltdb.ErrSystemTableCannotBeModified).Build(), usage)
 	}
 
 	if verr = ValidateTableNameForCreate(newName); verr != nil {

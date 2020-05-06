@@ -119,7 +119,17 @@ teardown() {
 }
 
 @test "schema import missing values in CSV rows" {
-    run dolt schema import -c --pks=pk test `batshelper empty-strings-null-values.csv`
+    cat <<DELIM > empty-strings-null-values.csv
+pk,headerOne,headerTwo
+a,"""""",1
+b,"",2
+c,,3
+d,row four,""
+e,row five,
+f,row six,6
+g, ,
+DELIM
+    run dolt schema import -c --pks=pk test empty-strings-null-values.csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 7 ]
     [[ "${lines[0]}" =~ "test" ]] || false
@@ -174,7 +184,6 @@ teardown() {
 
 @test "schema import of two tables" {
     dolt schema import -c --pks=pk test1 `batshelper 1pksupportedtypes.csv`
-    skip "Guaranteed tag collision right now"
     dolt schema import -c --pks=pk test2 `batshelper 1pk-datetime.csv`
     
 }

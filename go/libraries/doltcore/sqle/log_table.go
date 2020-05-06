@@ -23,11 +23,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 )
 
-const (
-	// LogTableName is the system table name
-	LogTableName = "dolt_log"
-)
-
 var _ sql.Table = (*LogTable)(nil)
 
 // LogTable is a sql.Table implementation that implements a system table which shows the dolt commit log
@@ -50,23 +45,23 @@ func NewLogTable(ctx *sql.Context, dbName string) (*LogTable, error) {
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant
 // LogTableName
 func (dt *LogTable) Name() string {
-	return LogTableName
+	return doltdb.LogTableName
 }
 
 // String is a sql.Table interface function which returns the name of the table which is defined by the constant
 // LogTableName
 func (dt *LogTable) String() string {
-	return LogTableName
+	return doltdb.LogTableName
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
 func (dt *LogTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "commit_hash", Type: sql.Text, Source: LogTableName, PrimaryKey: true},
-		{Name: "committer", Type: sql.Text, Source: LogTableName, PrimaryKey: false},
-		{Name: "email", Type: sql.Text, Source: LogTableName, PrimaryKey: false},
-		{Name: "date", Type: sql.Datetime, Source: LogTableName, PrimaryKey: false},
-		{Name: "message", Type: sql.Text, Source: LogTableName, PrimaryKey: false},
+		{Name: "commit_hash", Type: sql.Text, Source: doltdb.LogTableName, PrimaryKey: true},
+		{Name: "committer", Type: sql.Text, Source: doltdb.LogTableName, PrimaryKey: false},
+		{Name: "email", Type: sql.Text, Source: doltdb.LogTableName, PrimaryKey: false},
+		{Name: "date", Type: sql.Datetime, Source: doltdb.LogTableName, PrimaryKey: false},
+		{Name: "message", Type: sql.Text, Source: doltdb.LogTableName, PrimaryKey: false},
 	}
 }
 

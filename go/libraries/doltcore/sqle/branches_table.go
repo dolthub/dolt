@@ -24,11 +24,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 )
 
-const (
-	// BranchesTableName is the system table name
-	BranchesTableName = "dolt_branches"
-)
-
 var _ sql.Table = (*BranchesTable)(nil)
 var _ sql.UpdatableTable = (*BranchesTable)(nil)
 var _ sql.DeletableTable = (*BranchesTable)(nil)
@@ -54,24 +49,24 @@ func NewBranchesTable(sqlCtx *sql.Context, dbName string) (*BranchesTable, error
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant
 // BranchesTableName
 func (bt *BranchesTable) Name() string {
-	return BranchesTableName
+	return doltdb.BranchesTableName
 }
 
 // String is a sql.Table interface function which returns the name of the table which is defined by the constant
 // BranchesTableName
 func (bt *BranchesTable) String() string {
-	return BranchesTableName
+	return doltdb.BranchesTableName
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the branches system table
 func (bt *BranchesTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "name", Type: sql.Text, Source: BranchesTableName, PrimaryKey: true, Nullable: false},
-		{Name: "hash", Type: sql.Text, Source: BranchesTableName, PrimaryKey: false, Nullable: false},
-		{Name: "latest_committer", Type: sql.Text, Source: BranchesTableName, PrimaryKey: false, Nullable: true},
-		{Name: "latest_committer_email", Type: sql.Text, Source: BranchesTableName, PrimaryKey: false, Nullable: true},
-		{Name: "latest_commit_date", Type: sql.Datetime, Source: BranchesTableName, PrimaryKey: false, Nullable: true},
-		{Name: "latest_commit_message", Type: sql.Text, Source: BranchesTableName, PrimaryKey: false, Nullable: true},
+		{Name: "name", Type: sql.Text, Source: doltdb.BranchesTableName, PrimaryKey: true, Nullable: false},
+		{Name: "hash", Type: sql.Text, Source: doltdb.BranchesTableName, PrimaryKey: false, Nullable: false},
+		{Name: "latest_committer", Type: sql.Text, Source: doltdb.BranchesTableName, PrimaryKey: false, Nullable: true},
+		{Name: "latest_committer_email", Type: sql.Text, Source: doltdb.BranchesTableName, PrimaryKey: false, Nullable: true},
+		{Name: "latest_commit_date", Type: sql.Datetime, Source: doltdb.BranchesTableName, PrimaryKey: false, Nullable: true},
+		{Name: "latest_commit_message", Type: sql.Text, Source: doltdb.BranchesTableName, PrimaryKey: false, Nullable: true},
 	}
 }
 

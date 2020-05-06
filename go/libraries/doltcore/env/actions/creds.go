@@ -15,7 +15,6 @@
 package actions
 
 import (
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/creds"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
@@ -38,9 +37,6 @@ func NewCredsFile(dEnv *env.DoltEnv) (string, creds.DoltCreds, errhand.VerboseEr
 	if err != nil {
 		return "", creds.EmptyCreds, errhand.BuildDError("failed to create new key.").AddCause(err).Build()
 	}
-
-	cli.Println("Credentials created successfully.")
-	cli.Println("pub key:", dCreds.PubKeyBase32Str())
 
 	return credsPath, dCreds, verr
 }

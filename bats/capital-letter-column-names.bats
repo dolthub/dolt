@@ -3,7 +3,22 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    dolt table import -c -s `batshelper capital-letter-column-names.json` test `batshelper capital-letter-column-names.csv`
+
+    cat <<SQL > capital-letter-column-names-schema.sql
+CREATE TABLE test (
+    Aaa INT NOT NULL,
+    Bbb VARCHAR(20),
+    Ccc VARCHAR(20),
+    PRIMARY KEY (Aaa)
+);
+SQL
+    cat <<DELIM > capital-letter-column-names.csv
+Aaa,Bbb,Ccc
+1,aaa,AAA
+2,bbb,BBB
+DELIM
+
+    dolt table import -c -s capital-letter-column-names-schema.sql test capital-letter-column-names.csv
 }
 
 teardown() {

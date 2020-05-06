@@ -83,6 +83,9 @@ func (cmd NewCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
+	cli.Println("Credentials created successfully.")
+	cli.Println("pub key:", newCreds.PubKeyBase32Str())
+
 	err := updateConfigToUseNewCredIfNoExistingCred(dEnv, newCreds)
 	if err != nil {
 		verr = errhand.BuildDError("error: updating user.creds in dolt config to use new credentials").Build()

@@ -114,6 +114,9 @@ func loginWithNewCreds(ctx context.Context, dEnv *env.DoltEnv) errhand.VerboseEr
 		return errhand.BuildDError("error: Unable to create credentials.").AddCause(err).Build()
 	}
 
+	cli.Println("Credentials created successfully.")
+	cli.Println("pub key:", dc.PubKeyBase32Str())
+
 	cli.Println(path)
 
 	return loginWithCreds(ctx, dEnv, dc, openBrowserFirst)

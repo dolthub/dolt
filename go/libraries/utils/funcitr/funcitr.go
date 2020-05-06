@@ -32,6 +32,25 @@ func MapStrings(strings []string, mapFunc func(string) string) []string {
 	return results
 }
 
+// FilterStrings iterates over a slice of strings calling the filter function for each value
+// in the slice. The output slice contains contains all input strings for which the filter
+// function returned true. Order is maintained from input to output.
+func FilterStrings(strings []string, filter func(string) bool) []string {
+	if strings == nil {
+		return nil
+	}
+
+	results := make([]string, 0, len(strings))
+
+	for _, str := range strings {
+		if filter(str) {
+			results = append(results, str)
+		}
+	}
+
+	return results
+}
+
 // MapSlice iterates over a slice of calling the mapping function for each value in the
 // slice.  The mapped values are returned in a new slice, and their order corresponds with
 // the input slice (The Nth item in the output slice is the result returned by the mapping

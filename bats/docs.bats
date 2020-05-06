@@ -688,7 +688,7 @@ SQL
     run dolt schema show
     [ "$status" -eq 0 ]
     [[ "$output" =~ "No tables in working set" ]] || false
-    dolt table import -c -s `batshelper employees-sch.json` employees `batshelper employees-tbl.json`
+    dolt table import -c -s `batshelper employees-sch.sql` employees `batshelper employees-tbl.json`
     run dolt schema show
     [ "$status" -eq 0 ]
     [[ "$output" =~ "employees @ working" ]] || false

@@ -16,19 +16,17 @@ package commands
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"sort"
-	"strings"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/funcitr"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 )
 
@@ -87,9 +85,9 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, lsDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
-	if apr.NArg() > 1 {
-		usage()
-		return 1
+	if apr.Contains(systemFlag) && apr.Contains(allFlag) {
+		verr := errhand.BuildDError("--%s and --%s are mutually exclusive", systemFlag, allFlag).SetPrintUsage().Build()
+		HandleVErrAndExitCode(verr, usage)
 	}
 
 	var root *doltdb.RootValue
@@ -117,27 +115,8 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func getUserTableNames(root *doltdb.RootValue, ctx context.Context) ([]string, error) {
-	tblNms, err := root.GetTableNames(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	tblNames := []string{}
-	for _, name := range tblNms {
-		if name != doltdb.DocTableName {
-			tblNames = append(tblNames, name)
-		}
-	}
-
-	sort.Strings(tblNames)
-
-	return tblNames, nil
-}
-
 func printUserTables(ctx context.Context, root *doltdb.RootValue, label string, verbose bool) errhand.VerboseError {
-	tblNames, err := getUserTableNames(root, ctx)
+	tblNames, err := doltdb.GetNonSystemTableNames(ctx, root)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to get tables").AddCause(err).Build()
@@ -151,25 +130,11 @@ func printUserTables(ctx context.Context, root *doltdb.RootValue, label string, 
 	cli.Printf("Tables in %s:\n", label)
 	for _, tbl := range tblNames {
 		if verbose {
-			h, _, err := root.GetTableHash(ctx, tbl)
-
-			if err != nil {
-				return errhand.BuildDError("error: failed to get table hash").AddCause(err).Build()
+			ls, verr := listTableVerbose(ctx, tbl, root)
+			if verr != nil {
+				return verr
 			}
-
-			tblVal, _, err := root.GetTable(ctx, tbl)
-
-			if err != nil {
-				return errhand.BuildDError("error: failed to get table").AddCause(err).Build()
-			}
-
-			rows, err := tblVal.GetRowData(ctx)
-
-			if err != nil {
-				return errhand.BuildDError("error: failed to get row data").AddCause(err).Build()
-			}
-
-			cli.Printf("\t%-32s %s    %d rows\n", tbl, h.String(), rows.Len())
+			cli.Println(ls)
 		} else {
 			cli.Println("\t", tbl)
 		}
@@ -178,42 +143,71 @@ func printUserTables(ctx context.Context, root *doltdb.RootValue, label string, 
 	return nil
 }
 
-func printSystemTables(ctx context.Context, root *doltdb.RootValue, ddb *doltdb.DoltDB, verbose bool) errhand.VerboseError {
-	tblNames, err := getUserTableNames(root, ctx)
+func listTableVerbose(ctx context.Context, tbl string, root *doltdb.RootValue) (string, errhand.VerboseError) {
+	h, _, err := root.GetTableHash(ctx, tbl)
 
 	if err != nil {
-		return errhand.BuildDError("error: failed to get tables").AddCause(err).Build()
+		return "", errhand.BuildDError("error: failed to get table hash").AddCause(err).Build()
 	}
 
-	printWorkingSetSysTables(tblNames)
+	tblVal, _, err := root.GetTable(ctx, tbl)
+
+	if err != nil {
+		return "", errhand.BuildDError("error: failed to get table").AddCause(err).Build()
+	}
+
+	rows, err := tblVal.GetRowData(ctx)
+
+	if err != nil {
+		return "", errhand.BuildDError("error: failed to get row data").AddCause(err).Build()
+	}
+
+	return fmt.Sprintf("\t%-32s %s    %d rows\n", tbl, h.String(), rows.Len()), nil
+}
+
+func printSystemTables(ctx context.Context, root *doltdb.RootValue, ddb *doltdb.DoltDB, verbose bool) errhand.VerboseError {
+	perSysTbls, err := doltdb.GetPersistedSystemTables(ctx, root)
+	genSysTbls, err := doltdb.GetGeneratedSystemTables(ctx, root)
+
+	if err != nil {
+		return errhand.BuildDError("error retrieving table names").AddCause(err).Build()
+	}
+
+	cli.Println("System tables:")
+	for _, tbl := range perSysTbls {
+		if verbose {
+			ls, verr := listTableVerbose(ctx, tbl, root)
+			if verr != nil {
+				return verr
+			}
+			cli.Println(ls)
+		} else {
+			cli.Println("\t", tbl)
+		}
+	}
+	for _, tbl := range genSysTbls {
+		cli.Println("\t", tbl)
+	}
 
 	if verbose {
-		return printSysTablesNotInWorkingSet(err, ctx, ddb, tblNames)
+		return printSysTablesNotInWorkingSet(ctx, ddb, root)
 	}
 
 	return nil
 }
 
-func printWorkingSetSysTables(tblNames []string) {
-	diffTables := funcitr.MapStrings(tblNames, func(s string) string { return sqle.DoltDiffTablePrefix + s })
-	histTables := funcitr.MapStrings(tblNames, func(s string) string { return sqle.DoltHistoryTablePrefix + s })
+func printSysTablesNotInWorkingSet(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue) errhand.VerboseError {
+	workingSetTblNames, err := doltdb.GetAllTableNames(ctx, root)
+	if err != nil {
+		return errhand.BuildDError("failed to get table names").AddCause(err).Build()
+	}
+	activeTableSet := set.NewStrSet(workingSetTblNames)
 
-	systemTables := []string{sqle.LogTableName, sqle.BranchesTableName, doltdb.DocTableName}
-	systemTables = append(systemTables, diffTables...)
-	systemTables = append(systemTables, histTables...)
-
-	cli.Println("System tables:")
-	cli.Println("\t" + strings.Join(systemTables, "\n\t"))
-}
-
-func printSysTablesNotInWorkingSet(err error, ctx context.Context, ddb *doltdb.DoltDB, tblNames []string) errhand.VerboseError {
 	cmItr, err := doltdb.CommitItrForAllBranches(ctx, ddb)
-
 	if err != nil {
 		return errhand.BuildDError("error: failed to read history").AddCause(err).Build()
 	}
 
-	activeTableSet := set.NewStrSet(tblNames)
 	deletedTableSet := set.NewStrSet([]string{})
 	for {
 		_, cm, err := cmItr.Next(ctx)
@@ -230,7 +224,7 @@ func printSysTablesNotInWorkingSet(err error, ctx context.Context, ddb *doltdb.D
 			return errhand.BuildDError("error: failed to read root from db.").AddCause(err).Build()
 		}
 
-		currTblNames, err := currRoot.GetTableNames(ctx)
+		currTblNames, err := doltdb.GetSystemTableNames(ctx, currRoot)
 
 		if err != nil {
 			return errhand.BuildDError("error: failed to read tables").AddCause(err).Build()
@@ -240,17 +234,11 @@ func printSysTablesNotInWorkingSet(err error, ctx context.Context, ddb *doltdb.D
 		deletedTableSet.Add(missing...)
 	}
 
-	if deletedTableSet.Size() > 0 {
-		deletedSlice := deletedTableSet.AsSlice()
-		sort.Strings(deletedSlice)
-
+	deletedSlice := deletedTableSet.AsSlice()
+	sort.Strings(deletedSlice)
+	for _, dt := range deletedSlice {
 		const ncbPrefix = "(not on current branch) "
-		diffTables := funcitr.MapStrings(deletedSlice, func(s string) string { return ncbPrefix + sqle.DoltDiffTablePrefix + s })
-		histTables := funcitr.MapStrings(deletedSlice, func(s string) string { return ncbPrefix + sqle.DoltHistoryTablePrefix + s })
-
-		systemTables := append(histTables, diffTables...)
-
-		cli.Println("\t" + strings.Join(systemTables, "\n\t"))
+		cli.Printf("\t%s %s\n", ncbPrefix, dt)
 	}
 
 	return nil
