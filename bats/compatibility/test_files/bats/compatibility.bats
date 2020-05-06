@@ -157,7 +157,7 @@ teardown() {
     # this will fail for older dolt versions but BATS will swallow the error
     run dolt migrate
 
-    run dolt table import -c -s abc_schema.json abc2 abc.csv
+    run dolt table import -c abc2 abc.csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
 
