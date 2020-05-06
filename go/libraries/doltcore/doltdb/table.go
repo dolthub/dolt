@@ -17,6 +17,7 @@ package doltdb
 import (
 	"context"
 	"errors"
+	"fmt"
 	"regexp"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -33,6 +34,7 @@ const (
 	tableRowsKey       = "rows"
 	conflictsKey       = "conflicts"
 	conflictSchemasKey = "conflict_schemas"
+	indexesKey         = "indexes"
 
 	// TableNameRegexStr is the regular expression that valid tables must match.
 	TableNameRegexStr = `^[a-zA-Z]{1}$|^[a-zA-Z]+[-_0-9a-zA-Z]*[0-9a-zA-Z]+$`
@@ -53,15 +55,26 @@ type Table struct {
 }
 
 // NewTable creates a noms Struct which stores the schema and the row data
-func NewTable(ctx context.Context, vrw types.ValueReadWriter, schema types.Value, rowData types.Map) (*Table, error) {
-	schemaRef, err := writeValAndGetRef(ctx, vrw, schema)
+func NewTable(ctx context.Context, vrw types.ValueReadWriter, schema types.Value, rowData types.Map, indexData *types.Map) (*Table, error) {
+	if indexData == nil {
+		emptyIndexData, err := types.NewMap(ctx, vrw)
+		if err != nil {
+			return nil, err
+		}
+		indexData = &emptyIndexData
+	}
 
+	schemaRef, err := writeValAndGetRef(ctx, vrw, schema)
 	if err != nil {
 		return nil, err
 	}
 
 	rowDataRef, err := writeValAndGetRef(ctx, vrw, rowData)
+	if err != nil {
+		return nil, err
+	}
 
+	indexesRef, err := writeValAndGetRef(ctx, vrw, indexData)
 	if err != nil {
 		return nil, err
 	}
@@ -69,10 +82,10 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, schema types.Value
 	sd := types.StructData{
 		schemaRefKey: schemaRef,
 		tableRowsKey: rowDataRef,
+		indexesKey:   indexesRef,
 	}
 
 	tableStruct, err := types.NewStruct(vrw.Format(), tableStructName, sd)
-
 	if err != nil {
 		return nil, err
 	}
@@ -283,6 +296,27 @@ func (t *Table) GetSchemaRef() (types.Ref, error) {
 	return v.(types.Ref), nil
 }
 
+// UpdateSchema updates the table with the schema given and returns the updated table. The original table is unchanged.
+func (t *Table) UpdateSchema(ctx context.Context, sch schema.Schema) (*Table, error) {
+	newSchemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, t.vrw, sch)
+	if err != nil {
+		return nil, err
+	}
+	rowData, err := t.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	indexData, err := t.GetIndexData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	newTable, err := NewTable(ctx, t.vrw, newSchemaVal, rowData, &indexData)
+	if err != nil {
+		return nil, err
+	}
+	return newTable, nil
+}
+
 // HasTheSameSchema tests the schema within 2 tables for equality
 func (t *Table) HasTheSameSchema(t2 *Table) (bool, error) {
 	schemaVal, _, err := t.tableStruct.MaybeGet(schemaRefKey)
@@ -432,44 +466,6 @@ func (t *Table) GetRowData(ctx context.Context) (types.Map, error) {
 	return rowMap, nil
 }
 
-/*func (t *Table) ResolveConflicts(keys []map[uint64]string) (invalid, notFound []types.Value, tbl *Table, err error) {
-	sch := t.GetSchema()
-	pkCols := sch.GetPKCols()
-	convFuncs := make(map[uint64]doltcore.ConvFunc)
-
-	pkCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
-		convFuncs[tag] = doltcore.GetConvFunc(types.StringKind, col.Kind)
-		return false
-	})
-
-	var pkTuples []types.Tuple
-	for _, keyStrs := range keys {
-		i := 0
-		pk := make([]types.Value, pkCols.Size()*2)
-		pkCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
-			strForTag, ok := keyStrs[tag]
-			pk[i] = types.Uint(tag)
-
-			if ok {
-				convFunc, _ := convFuncs[tag]
-				pk[i+1], err = convFunc(types.String(strForTag))
-
-				if err != nil {
-					invalid = append(invalid, keyStrs)
-				}
-			} else {
-				pk[i+1] = types.NullValue
-			}
-
-			i += 2
-			return false
-		})
-
-		pkTupleVal := types.NewTuple(pk...)
-		pkTuples = append(pkTuples, pkTupleVal)
-	}
-}*/
-
 func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (invalid, notFound []types.Value, tbl *Table, err error) {
 	removed := 0
 	_, confData, err := t.GetConflicts(ctx)
@@ -513,4 +509,204 @@ func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (i
 	}
 
 	return invalid, notFound, &Table{t.vrw, updatedSt}, nil
+}
+
+// GetIndexData returns the internal index map which goes from index name to a ref of the row data map.
+func (t *Table) GetIndexData(ctx context.Context) (types.Map, error) {
+	indexesVal, ok, err := t.tableStruct.MaybeGet(indexesKey)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+	if !ok {
+		newEmptyMap, err := types.NewMap(ctx, t.vrw)
+		if err != nil {
+			return types.EmptyMap, err
+		}
+		return newEmptyMap, nil
+	}
+
+	indexesMap, err := indexesVal.(types.Ref).TargetValue(ctx, t.vrw)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	return indexesMap.(types.Map), nil
+}
+
+// RebuildIndexData rebuilds all of the data for each index, and returns an updated Table.
+func (t *Table) RebuildIndexData(ctx context.Context) (*Table, error) {
+	sch, err := t.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if sch.Indexes().Count() == 0 {
+		return t, nil
+	}
+
+	tableRowData, err := t.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	indexesMap, err := t.GetIndexData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, index := range sch.Indexes().AllIndexes() {
+		rebuiltIndexRowData, err := t.rebuildIndexRowData(ctx, sch, tableRowData, index)
+		if err != nil {
+			return nil, err
+		}
+		rebuiltIndexRowDataRef, err := writeValAndGetRef(ctx, t.vrw, rebuiltIndexRowData)
+		if err != nil {
+			return nil, err
+		}
+		indexesMap, err = indexesMap.Edit().Set(types.String(index.Name()), rebuiltIndexRowDataRef).Map(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return t.SetIndexData(ctx, indexesMap)
+}
+
+// SetIndexData replaces the current internal index map, and returns an updated Table.
+func (t *Table) SetIndexData(ctx context.Context, indexesMap types.Map) (*Table, error) {
+	indexesRef, err := writeValAndGetRef(ctx, t.vrw, indexesMap)
+	if err != nil {
+		return nil, err
+	}
+
+	newTableStruct, err := t.tableStruct.Set(indexesKey, indexesRef)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Table{t.vrw, newTableStruct}, nil
+}
+
+// GetIndexRowData retrieves the underlying map of an index, in which the primary key consists of all indexed columns.
+func (t *Table) GetIndexRowData(ctx context.Context, indexName string) (types.Map, error) {
+	indexesMap, err := t.GetIndexData(ctx)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	indexMapRef, ok, err := indexesMap.MaybeGet(ctx, types.String(indexName))
+	if err != nil {
+		return types.EmptyMap, err
+	}
+	if !ok {
+		return types.EmptyMap, fmt.Errorf("index `%s` is missing its data", indexName)
+	}
+
+	indexMap, err := indexMapRef.(types.Ref).TargetValue(ctx, t.vrw)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	return indexMap.(types.Map), nil
+}
+
+func (t *Table) RebuildIndexRowData(ctx context.Context, indexName string) (types.Map, error) {
+	sch, err := t.GetSchema(ctx)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	tableRowData, err := t.GetRowData(ctx)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	index := sch.Indexes().Get(indexName)
+	if index == nil {
+		return types.EmptyMap, fmt.Errorf("index `%s` does not exist", indexName)
+	}
+
+	rebuiltIndexData, err := t.rebuildIndexRowData(ctx, sch, tableRowData, index)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+	return rebuiltIndexData, nil
+}
+
+// SetIndexRowData replaces the current row data for the given index and returns an updated Table.
+func (t *Table) SetIndexRowData(ctx context.Context, indexName string, indexRowData types.Map) (*Table, error) {
+	indexesMap, err := t.GetIndexData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	indexRowDataRef, err := writeValAndGetRef(ctx, t.vrw, indexRowData)
+	if err != nil {
+		return nil, err
+	}
+	indexesMap, err = indexesMap.Edit().Set(types.String(indexName), indexRowDataRef).Map(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return t.SetIndexData(ctx, indexesMap)
+}
+
+// DeleteIndexRowData removes the underlying map of an index, along with its key entry. This should only be used
+// when removing an index altogether. If the intent is to clear an index's data, then use SetIndexRowData with
+// an empty map.
+func (t *Table) DeleteIndexRowData(ctx context.Context, indexName string) (*Table, error) {
+	indexesMap, err := t.GetIndexData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	key := types.String(indexName)
+	if has, err := indexesMap.Has(ctx, key); err != nil {
+		return nil, err
+	} else if has {
+		indexesMap, err = indexesMap.Edit().Remove(key).Map(ctx)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		return t, nil
+	}
+
+	return t.SetIndexData(ctx, indexesMap)
+}
+
+func (t *Table) rebuildIndexRowData(ctx context.Context, sch schema.Schema, tblRowData types.Map, index schema.Index) (types.Map, error) {
+	emptyIndexMap, err := types.NewMap(ctx, t.vrw)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+	indexDataEditor := emptyIndexMap.Edit()
+
+	indexSch := index.Schema()
+	err = tblRowData.IterAll(ctx, func(key, value types.Value) error {
+		dRow, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
+		if err != nil {
+			return err
+		}
+		indexRow, err := dRow.ReduceToIndex(index)
+		if err != nil {
+			return err
+		}
+		indexKey, err := indexRow.NomsMapKey(indexSch).Value(ctx)
+		if err != nil {
+			return err
+		}
+		indexDataEditor = indexDataEditor.Set(indexKey, dRow.NomsMapValue(indexSch))
+		return nil
+	})
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	rebuiltIndexMap, err := indexDataEditor.Map(ctx)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+	return rebuiltIndexMap, nil
 }

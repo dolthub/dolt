@@ -293,6 +293,9 @@ func TestAddColumnToTable(t *testing.T) {
 
 			sch, err := updatedTable.GetSchema(ctx)
 			require.NoError(t, err)
+			index := sch.Indexes().Get(dtestutils.IndexName)
+			assert.NotNil(t, index)
+			tt.expectedSchema.Indexes().AddIndex(index)
 			require.Equal(t, tt.expectedSchema, sch)
 
 			rowData, err := updatedTable.GetRowData(ctx)
@@ -312,6 +315,10 @@ func TestAddColumnToTable(t *testing.T) {
 
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedRows, foundRows)
+
+			indexRowData, err := updatedTable.GetIndexRowData(ctx, dtestutils.IndexName)
+			assert.NoError(t, err)
+			assert.Greater(t, indexRowData.Len(), uint64(0))
 		})
 	}
 }

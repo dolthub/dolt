@@ -147,7 +147,7 @@ func TestExists(t *testing.T) {
 				schVal, _ := encoding.MarshalSchemaAsNomsValue(context.Background(), ddb.ValueReadWriter(), fakeSchema)
 				m, err := types.NewMap(context.Background(), ddb.ValueReadWriter())
 				assert.NoError(t, err)
-				tbl, err := doltdb.NewTable(context.Background(), ddb.ValueReadWriter(), schVal, m)
+				tbl, err := doltdb.NewTable(context.Background(), ddb.ValueReadWriter(), schVal, m, nil)
 				assert.NoError(t, err)
 				root, err = root.PutTable(context.Background(), tableVal.Name, tbl)
 				assert.NoError(t, err)
@@ -221,7 +221,7 @@ func TestCreateRdWr(t *testing.T) {
 				t.Fatal("Unable ta update table")
 			}
 
-			tbl, err := doltdb.NewTable(context.Background(), vrw, schVal, *nomsWr.GetMap())
+			tbl, err := doltdb.NewTable(context.Background(), vrw, schVal, *nomsWr.GetMap(), nil)
 			assert.NoError(t, err)
 
 			root, err = root.PutTable(context.Background(), tableLoc.Name, tbl)

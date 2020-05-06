@@ -21,10 +21,10 @@ import (
 
 	"github.com/liquidata-inc/go-mysql-server/sql"
 
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -39,6 +39,8 @@ type DoltTable struct {
 }
 
 var _ sql.Table = (*DoltTable)(nil)
+var _ sql.IndexableTable = (*DoltTable)(nil)
+var _ sql.IndexAlterableTable = (*DoltTable)(nil)
 
 // Implements sql.IndexableTable
 func (t *DoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
@@ -104,6 +106,125 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIte
 	return newRowIterator(t, ctx)
 }
 
+func (t *DoltTable) CreateIndex(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, columns []sql.IndexColumn, comment string) error {
+	//TODO: remove this once Unique indexes are in
+	if constraint != sql.IndexConstraint_None {
+		return fmt.Errorf("not yet supported")
+	}
+
+	if !doltdb.IsValidTableName(indexName) {
+		return fmt.Errorf("invalid index name `%s` as they must match the regular expression %s", indexName, doltdb.TableNameRegexStr)
+	}
+
+	// get the real column names as CREATE INDEX columns are case-insensitive
+	var realColNames []string
+	allTableCols := t.sch.GetAllCols()
+	for _, indexCol := range columns {
+		tableCol, ok := allTableCols.GetByName(indexCol.Name)
+		if !ok {
+			tableCol, ok = allTableCols.GetByNameCaseInsensitive(indexCol.Name)
+			if !ok {
+				return fmt.Errorf("column `%s` does not exist for the table", indexCol.Name)
+			}
+		}
+		realColNames = append(realColNames, tableCol.Name)
+	}
+
+	// create the index metadata, will error if index names are taken or an index with the same columns in the same order exists
+	_, err := t.sch.Indexes().AddIndexByColNames(indexName, realColNames, constraint == sql.IndexConstraint_Unique, comment)
+	if err != nil {
+		return err
+	}
+
+	// update the table schema with the new index
+	newSchemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, t.table.ValueReadWriter(), t.sch)
+	if err != nil {
+		return err
+	}
+	tableRowData, err := t.table.GetRowData(ctx)
+	if err != nil {
+		return err
+	}
+	indexData, err := t.table.GetIndexData(ctx)
+	if err != nil {
+		return err
+	}
+	newTable, err := doltdb.NewTable(ctx, t.table.ValueReadWriter(), newSchemaVal, tableRowData, &indexData)
+	if err != nil {
+		return err
+	}
+
+	// set the index row data and get a new root with the updated table
+	indexRowData, err := newTable.RebuildIndexRowData(ctx, indexName)
+	if err != nil {
+		return err
+	}
+	newTable, err = newTable.SetIndexRowData(ctx, indexName, indexRowData)
+	if err != nil {
+		return err
+	}
+	root, err := t.db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+	newRoot, err := root.PutTable(ctx, t.name, newTable)
+	if err != nil {
+		return err
+	}
+
+	return t.db.SetRoot(ctx, newRoot)
+}
+
+func (t *DoltTable) DropIndex(ctx *sql.Context, indexName string) error {
+	// RemoveIndex returns an error if the index does not exist, no need to do twice
+	_, err := t.sch.Indexes().RemoveIndex(indexName)
+	if err != nil {
+		return err
+	}
+	newTable, err := t.table.UpdateSchema(ctx, t.sch)
+	if err != nil {
+		return err
+	}
+
+	newTable, err = newTable.DeleteIndexRowData(ctx, indexName)
+	if err != nil {
+		return err
+	}
+
+	root, err := t.db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+	newRoot, err := root.PutTable(ctx, t.name, newTable)
+	if err != nil {
+		return err
+	}
+	return t.db.SetRoot(ctx, newRoot)
+}
+
+func (t *DoltTable) RenameIndex(ctx *sql.Context, fromIndexName string, toIndexName string) error {
+	// RenameIndex will error if there is a name collision or an index does not exist
+	_, err := t.sch.Indexes().RenameIndex(fromIndexName, toIndexName)
+	if err != nil {
+		return err
+	}
+	newTable, err := t.table.UpdateSchema(ctx, t.sch)
+	if err != nil {
+		return err
+	}
+
+	root, err := t.db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+	newRoot, err := root.PutTable(ctx, t.name, newTable)
+	if err != nil {
+		return err
+	}
+
+	return t.db.SetRoot(ctx, newRoot)
+}
+
 // WritableDoltTable allows updating, deleting, and inserting new rows. It implements sql.UpdatableTable and friends.
 type WritableDoltTable struct {
 	DoltTable
@@ -117,18 +238,18 @@ var _ sql.ReplaceableTable = (*WritableDoltTable)(nil)
 
 // Inserter implements sql.InsertableTable
 func (t *WritableDoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
-	return t.getTableEditor()
+	return t.getTableEditor(ctx)
 }
 
-func (t *WritableDoltTable) getTableEditor() *tableEditor {
+func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) *tableEditor {
 	if t.db.batchMode == batched {
 		if t.ed != nil {
 			return t.ed
 		}
-		t.ed = newTableEditor(t)
+		t.ed = newTableEditor(ctx, t)
 		return t.ed
 	}
-	return newTableEditor(t)
+	return newTableEditor(ctx, t)
 }
 
 func (t *WritableDoltTable) flushBatchedEdits(ctx *sql.Context) error {
@@ -141,18 +262,18 @@ func (t *WritableDoltTable) flushBatchedEdits(ctx *sql.Context) error {
 }
 
 // Deleter implements sql.DeletableTable
-func (t *WritableDoltTable) Deleter(*sql.Context) sql.RowDeleter {
-	return t.getTableEditor()
+func (t *WritableDoltTable) Deleter(ctx *sql.Context) sql.RowDeleter {
+	return t.getTableEditor(ctx)
 }
 
 // Replacer implements sql.ReplaceableTable
 func (t *WritableDoltTable) Replacer(ctx *sql.Context) sql.RowReplacer {
-	return t.getTableEditor()
+	return t.getTableEditor(ctx)
 }
 
 // Updater implements sql.UpdatableTable
 func (t *WritableDoltTable) Updater(ctx *sql.Context) sql.RowUpdater {
-	return t.getTableEditor()
+	return t.getTableEditor(ctx)
 }
 
 // doltTablePartitionIter, an object that knows how to return the single partition exactly once.
@@ -187,32 +308,6 @@ const partitionName = "single"
 // per table, so we use a constant.
 func (p doltTablePartition) Key() []byte {
 	return []byte(partitionName)
-}
-
-func (t *DoltTable) updateTable(ctx *sql.Context, mapEditor *types.MapEditor) error {
-	root, err := t.db.GetRoot(ctx)
-
-	if err != nil {
-		return err
-	}
-
-	updated, err := mapEditor.Map(ctx)
-	if err != nil {
-		return errhand.BuildDError("failed to modify table").AddCause(err).Build()
-	}
-
-	newTable, err := t.table.UpdateRows(ctx, updated)
-	if err != nil {
-		return errhand.BuildDError("failed to update rows").AddCause(err).Build()
-	}
-
-	newRoot, err := root.PutTable(ctx, t.name, newTable)
-	if err != nil {
-		return errhand.BuildDError("failed to write table back to database").AddCause(err).Build()
-	}
-
-	t.table = newTable
-	return t.db.SetRoot(ctx, newRoot)
 }
 
 // AlterableDoltTable allows altering the schema of the table. It implements sql.AlterableTable.
@@ -302,12 +397,33 @@ func (t *AlterableDoltTable) DropColumn(ctx *sql.Context, columnName string) err
 		return err
 	}
 
-	table, _, err := root.GetTable(ctx, t.name)
+	updatedTable, _, err := root.GetTable(ctx, t.name)
 	if err != nil {
 		return err
 	}
 
-	updatedTable, err := alterschema.DropColumn(ctx, table, columnName)
+	sch, err := updatedTable.GetSchema(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, index := range sch.Indexes().IndexesWithColumn(columnName) {
+		_, err = sch.Indexes().RemoveIndex(index.Name())
+		if err != nil {
+			return err
+		}
+		updatedTable, err = updatedTable.DeleteIndexRowData(ctx, index.Name())
+		if err != nil {
+			return err
+		}
+	}
+
+	updatedTable, err = updatedTable.UpdateSchema(ctx, sch)
+	if err != nil {
+		return err
+	}
+
+	updatedTable, err = alterschema.DropColumn(ctx, updatedTable, columnName)
 	if err != nil {
 		return err
 	}

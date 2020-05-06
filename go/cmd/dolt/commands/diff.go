@@ -967,10 +967,18 @@ func formatSummary(acc diff.DiffSummaryProgress, colLen int) {
 
 	percentCellsChanged := float64(100*acc.CellChanges) / (float64(acc.OldSize) * float64(colLen))
 
-	cli.Printf("%s (%.2f%%)\n", unmodified, (float64(100*rowsUnmodified) / float64(acc.OldSize)))
-	cli.Printf("%s (%.2f%%)\n", insertions, (float64(100*acc.Adds) / float64(acc.OldSize)))
-	cli.Printf("%s (%.2f%%)\n", deletions, (float64(100*acc.Removes) / float64(acc.OldSize)))
-	cli.Printf("%s (%.2f%%)\n", changes, (float64(100*acc.Changes) / float64(acc.OldSize)))
+	safePercent := func(num, dom uint64) float64 {
+		// returns +Inf for x/0 where x > 0
+		if num == 0 {
+			return float64(0)
+		}
+		return float64(100*num) / (float64(dom))
+	}
+
+	cli.Printf("%s (%.2f%%)\n", unmodified, safePercent(rowsUnmodified, acc.OldSize))
+	cli.Printf("%s (%.2f%%)\n", insertions, safePercent(acc.Adds, acc.OldSize))
+	cli.Printf("%s (%.2f%%)\n", deletions, safePercent(acc.Removes, acc.OldSize))
+	cli.Printf("%s (%.2f%%)\n", changes, safePercent(acc.Changes, acc.OldSize))
 	cli.Printf("%s (%.2f%%)\n", cellChanges, percentCellsChanged)
 	cli.Printf("(%s vs %s)\n\n", oldValues, newValues)
 }

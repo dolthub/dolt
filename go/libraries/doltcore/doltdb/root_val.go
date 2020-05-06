@@ -632,7 +632,7 @@ func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch s
 		return nil, err
 	}
 
-	tbl, err := NewTable(ctx, root.VRW(), schVal, m)
+	tbl, err := NewTable(ctx, root.VRW(), schVal, m, nil)
 	if err != nil {
 		return nil, err
 	}

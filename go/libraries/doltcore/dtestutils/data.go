@@ -47,6 +47,7 @@ const (
 	TitleTag
 	NextTag // leave last
 )
+const IndexName = "idx_name"
 
 var typedColColl, _ = schema.NewColCollection(
 	schema.NewColumn("id", IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
@@ -95,6 +96,15 @@ func init() {
 		}
 
 		UntypedRows = append(UntypedRows, r)
+	}
+
+	_, err := TypedSchema.Indexes().AddIndexByColTags(IndexName, []uint64{NameTag}, false, "")
+	if err != nil {
+		panic(err)
+	}
+	_, err = UntypedSchema.Indexes().AddIndexByColTags(IndexName, []uint64{NameTag}, false, "")
+	if err != nil {
+		panic(err)
 	}
 }
 

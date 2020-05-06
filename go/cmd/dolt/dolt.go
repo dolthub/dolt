@@ -29,6 +29,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/cnfcmds"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/credcmds"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/indexcmds"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/schcmds"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/sqlserver"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/tblcmds"
@@ -75,6 +76,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.SendMetricsCmd{},
 	dumpDocsCommand,
 	commands.MigrateCmd{},
+	indexcmds.Commands,
 })
 
 func init() {

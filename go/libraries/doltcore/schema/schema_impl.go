@@ -21,13 +21,15 @@ import (
 
 // EmptySchema is an instance of a schema with no columns.
 var EmptySchema = &schemaImpl{
-	EmptyColColl,
-	EmptyColColl,
-	EmptyColColl,
+	pkCols:          EmptyColColl,
+	nonPKCols:       EmptyColColl,
+	allCols:         EmptyColColl,
+	indexCollection: NewIndexCollection(nil),
 }
 
 type schemaImpl struct {
 	pkCols, nonPKCols, allCols *ColCollection
+	indexCollection            IndexCollection
 }
 
 // SchemaFromCols creates a Schema from a collection of columns
@@ -51,7 +53,10 @@ func SchemaFromCols(allCols *ColCollection) Schema {
 	nonPKColColl, _ := NewColCollection(nonPKCols...)
 
 	return &schemaImpl{
-		pkColColl, nonPKColColl, allCols,
+		pkCols:          pkColColl,
+		nonPKCols:       nonPKColColl,
+		allCols:         allCols,
+		indexCollection: NewIndexCollection(allCols),
 	}
 }
 
@@ -104,7 +109,10 @@ func UnkeyedSchemaFromCols(allCols *ColCollection) Schema {
 	nonPKColColl, _ := NewColCollection(nonPKCols...)
 
 	return &schemaImpl{
-		pkColColl, nonPKColColl, nonPKColColl,
+		pkCols:          pkColColl,
+		nonPKCols:       nonPKColColl,
+		allCols:         nonPKColColl,
+		indexCollection: NewIndexCollection(nil),
 	}
 }
 
@@ -138,7 +146,10 @@ func SchemaFromPKAndNonPKCols(pkCols, nonPKCols *ColCollection) (Schema, error) 
 	}
 
 	return &schemaImpl{
-		pkCols, nonPKCols, allColColl,
+		pkCols:          pkCols,
+		nonPKCols:       nonPKCols,
+		allCols:         allColColl,
+		indexCollection: NewIndexCollection(allColColl),
 	}, nil
 }
 
@@ -185,4 +196,8 @@ func (si *schemaImpl) String() string {
 
 	b.WriteString("]")
 	return b.String()
+}
+
+func (si *schemaImpl) Indexes() IndexCollection {
+	return si.indexCollection
 }

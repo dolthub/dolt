@@ -51,12 +51,31 @@ func ModifyColumn(
 		newCol.IsPartOfPK = true
 	}
 
-	newSchema, err := replaceColumnInSchema(sch, existingCol.Name, newCol, order)
+	newSchema, err := replaceColumnInSchema(sch, existingCol, newCol, order)
 	if err != nil {
 		return nil, err
 	}
 
-	return updateTableWithModifiedColumn(ctx, tbl, newSchema, newCol)
+	updatedTable, err := updateTableWithModifiedColumn(ctx, tbl, newSchema, newCol)
+	if err != nil {
+		return nil, err
+	}
+
+	if !newCol.TypeInfo.Equals(existingCol.TypeInfo) ||
+		newCol.IsNullable() != existingCol.IsNullable() {
+		for _, index := range sch.Indexes().IndexesWithTag(existingCol.Tag) {
+			rebuiltIndexData, err := updatedTable.RebuildIndexRowData(ctx, index.Name())
+			if err != nil {
+				return nil, err
+			}
+			updatedTable, err = updatedTable.SetIndexRowData(ctx, index.Name(), rebuiltIndexData)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return updatedTable, nil
 }
 
 // validateModifyColumn returns an error if the column as specified cannot be added to the schema given.
@@ -126,16 +145,21 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, newSc
 		}
 	}
 
-	return doltdb.NewTable(ctx, vrw, newSchemaVal, rowData)
+	indexData, err := tbl.GetIndexData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return doltdb.NewTable(ctx, vrw, newSchemaVal, rowData, &indexData)
 }
 
 // replaceColumnInSchema replaces the column with the name given with its new definition, optionally reordering it.
-func replaceColumnInSchema(sch schema.Schema, oldColName string, newCol schema.Column, order *ColumnOrder) (schema.Schema, error) {
+func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schema.Column, order *ColumnOrder) (schema.Schema, error) {
 	// If no order is specified, insert in the same place as the existing column
 	if order == nil {
 		prevColumn := ""
 		sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			if col.Name == oldColName {
+			if col.Name == oldCol.Name {
 				if prevColumn == "" {
 					order = &ColumnOrder{First: true}
 				}
@@ -150,7 +174,7 @@ func replaceColumnInSchema(sch schema.Schema, oldColName string, newCol schema.C
 			if prevColumn != "" {
 				order = &ColumnOrder{After: prevColumn}
 			} else {
-				return nil, fmt.Errorf("Couldn't find column %s", oldColName)
+				return nil, fmt.Errorf("Couldn't find column %s", oldCol.Name)
 			}
 		}
 	}
@@ -160,7 +184,7 @@ func replaceColumnInSchema(sch schema.Schema, oldColName string, newCol schema.C
 		newCols = append(newCols, newCol)
 	}
 	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if col.Name != oldColName {
+		if col.Name != oldCol.Name {
 			newCols = append(newCols, col)
 		}
 
@@ -176,5 +200,7 @@ func replaceColumnInSchema(sch schema.Schema, oldColName string, newCol schema.C
 		return nil, err
 	}
 
-	return schema.SchemaFromCols(collection), nil
+	newSch := schema.SchemaFromCols(collection)
+	newSch.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
+	return newSch, nil
 }

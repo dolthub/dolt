@@ -425,7 +425,13 @@ func (dEnv *DoltEnv) PutTableToWorking(ctx context.Context, rows types.Map, sch 
 		return ErrMarshallingSchema
 	}
 
-	tbl, err := doltdb.NewTable(ctx, vrw, schVal, rows)
+	tbl, err := doltdb.NewTable(ctx, vrw, schVal, rows, nil)
+
+	if err != nil {
+		return err
+	}
+
+	tbl, err = tbl.RebuildIndexData(ctx)
 
 	if err != nil {
 		return err
@@ -1012,7 +1018,7 @@ func createDocsTableOnRoot(ctx context.Context, dEnv *DoltEnv, root *doltdb.Root
 			return nil, ErrMarshallingSchema
 		}
 
-		newDocsTbl, err := doltdb.NewTable(ctx, root.VRW(), schVal, *wr.GetMap())
+		newDocsTbl, err := doltdb.NewTable(ctx, root.VRW(), schVal, *wr.GetMap(), nil)
 		if err != nil {
 			return nil, err
 		}

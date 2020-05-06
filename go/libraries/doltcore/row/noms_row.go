@@ -180,6 +180,29 @@ func FromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) (Row, error) {
 	return fromTaggedVals(nomsKey.Format(), sch, key, val)
 }
 
+// ReduceToIndex reduces a row to only the columns contained in an index. Only the column tags that are in the index
+// will be included in the reduced row. The full index does not have to be matched.
+func (nr nomsRow) ReduceToIndex(idx schema.Index) (Row, error) {
+	newRow := nomsRow{
+		key:   make(TaggedValues),
+		value: make(TaggedValues),
+		nbf:   nr.nbf,
+	}
+
+	for _, tag := range idx.AllTags() {
+		val, ok := nr.key[tag]
+		if !ok {
+			val, ok = nr.value[tag]
+			if !ok {
+				continue
+			}
+		}
+		newRow.key[tag] = val
+	}
+
+	return newRow, nil
+}
+
 func (nr nomsRow) NomsMapKey(sch schema.Schema) types.LesserValuable {
 	return nr.key.NomsTupleForPKCols(nr.nbf, sch.GetPKCols())
 }

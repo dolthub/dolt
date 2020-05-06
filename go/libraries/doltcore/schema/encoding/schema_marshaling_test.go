@@ -43,7 +43,7 @@ func createTestSchema() schema.Schema {
 
 	colColl, _ := schema.NewColCollection(columns...)
 	sch := schema.SchemaFromCols(colColl)
-
+	_, _ = sch.Indexes().AddIndexByColTags("idx_age", []uint64{3}, false, "")
 	return sch
 }
 
@@ -226,8 +226,16 @@ type testEncodedColumn struct {
 	Constraints []encodedConstraint `noms:"col_constraints" json:"col_constraints"`
 }
 
+type testEncodedIndex struct {
+	Name    string   `noms:"name" json:"name"`
+	Tags    []uint64 `noms:"tags" json:"tags"`
+	Comment string   `noms:"comment" json:"comment"`
+	Unique  bool     `noms:"unique" json:"unique"`
+}
+
 type testSchemaData struct {
-	Columns []testEncodedColumn `noms:"columns" json:"columns"`
+	Columns         []testEncodedColumn `noms:"columns" json:"columns"`
+	IndexCollection []testEncodedIndex  `noms:"idxColl,omitempty" json:"idxColl,omitempty"`
 }
 
 func (tec testEncodedColumn) decodeColumn() (schema.Column, error) {
@@ -265,5 +273,14 @@ func (tsd testSchemaData) decodeSchema() (schema.Schema, error) {
 		return nil, err
 	}
 
-	return schema.SchemaFromCols(colColl), nil
+	sch := schema.SchemaFromCols(colColl)
+
+	for _, encodedIndex := range tsd.IndexCollection {
+		_, err = sch.Indexes().AddIndexByColTags(encodedIndex.Name, encodedIndex.Tags, encodedIndex.Unique, encodedIndex.Comment)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return sch, nil
 }

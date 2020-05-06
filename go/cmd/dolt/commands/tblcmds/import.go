@@ -28,6 +28,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/mvdata"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
@@ -295,6 +296,32 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 
 	cli.PrintErrln(color.CyanString("Import completed successfully."))
+
+	//TODO: change this to not use the executeMove function, and instead the SQL code path, so that we don't rebuild indexes on every import
+	newWorking, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to load the working set to build the indexes.").AddCause(err).Build(), nil)
+	}
+	updatedTable, ok, err := newWorking.GetTable(ctx, mvOpts.TableName)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to load the table to build the indexes.").AddCause(err).Build(), nil)
+	} else if !ok {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to find the table to build the indexes.").Build(), nil)
+	}
+	updatedTable, err = updatedTable.RebuildIndexData(ctx)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to build the indexes.").AddCause(err).Build(), nil)
+	}
+	newWorking, err = newWorking.PutTable(ctx, mvOpts.TableName, updatedTable)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to write the indexes to the working set.").AddCause(err).Build(), nil)
+	}
+	err = dEnv.UpdateWorkingRoot(ctx, newWorking)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to update the working set containing the indexes.").AddCause(err).Build(), nil)
+	}
+
+	cli.PrintErrln(color.CyanString("Import completed successfully."))
 	return 0
 }
 
@@ -374,9 +401,24 @@ func executeMove(ctx context.Context, dEnv *env.DoltEnv, mvOpts *mvdata.MoveOpti
 	}
 
 	if nomsWr, ok := mover.Wr.(noms.NomsMapWriteCloser); ok {
-		tableDest := mvOpts.Dest.(mvdata.TableDataLocation)
-		err = dEnv.PutTableToWorking(ctx, *nomsWr.GetMap(), nomsWr.GetSchema(), tableDest.Name)
+		var indexes []schema.Index
 
+		if tableLoc, ok := mvOpts.Src.(mvdata.TableDataLocation); ok {
+			originalTable, ok, err := root.GetTable(ctx, tableLoc.Name)
+			if err != nil || !ok {
+				return errhand.BuildDError(color.RedString("Source table does not exist.")).Build()
+			}
+			originalSchema, err := originalTable.GetSchema(ctx)
+			if err != nil || !ok {
+				return errhand.BuildDError(color.RedString("Failed to read source table's schema.")).Build()
+			}
+			indexes = originalSchema.Indexes().AllIndexes()
+		}
+
+		tableDest := mvOpts.Dest.(mvdata.TableDataLocation)
+		sch := nomsWr.GetSchema()
+		sch.Indexes().Merge(indexes...)
+		err = dEnv.PutTableToWorking(ctx, *nomsWr.GetMap(), sch, tableDest.Name)
 		if err != nil {
 			return errhand.BuildDError("Failed to update the working value.").AddCause(err).Build()
 		}

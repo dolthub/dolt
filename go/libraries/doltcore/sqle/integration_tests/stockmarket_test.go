@@ -71,6 +71,12 @@ CREATE TABLE join_result (
 );
 `
 
+const createIndexes = `
+CREATE INDEX idx_country ON daily_summary (Country);
+CREATE INDEX idx_ipoyear ON symbols (IPOYear);
+CREATE INDEX idx_country ON join_result (Country);
+`
+
 const insertRows = `
 INSERT INTO daily_summary VALUES ('stock','A','us','2017-11-01',76.2,76.65,74.85,75.3,70140,'0');
 INSERT INTO daily_summary VALUES ('stock','AA','us','2017-11-01',48.91,49.27,47.45,47.7,3174960,'0');
@@ -20159,6 +20165,40 @@ func TestInserts(t *testing.T) {
 	rowData, err = table.GetRowData(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(6879), rowData.Len())
+}
+
+func TestInsertsWithIndexes(t *testing.T) {
+	dEnv := dtestutils.CreateTestEnv()
+	ctx := context.Background()
+
+	root, _ := dEnv.WorkingRoot(ctx)
+	var err error
+	root, err = sqle.ExecuteSql(dEnv, root, createTables)
+	require.NoError(t, err)
+
+	root, err = sqle.ExecuteSql(dEnv, root, createIndexes)
+	require.NoError(t, err)
+
+	root, err = sqle.ExecuteSql(dEnv, root, insertRows)
+	require.NoError(t, err)
+
+	table, _, err := root.GetTable(ctx, "daily_summary")
+	require.NoError(t, err)
+	rowData, err := table.GetIndexRowData(ctx, "idx_country")
+	require.NoError(t, err)
+	assert.Equal(t, uint64(7953), rowData.Len())
+
+	table, _, err = root.GetTable(ctx, "symbols")
+	require.NoError(t, err)
+	rowData, err = table.GetIndexRowData(ctx, "idx_ipoyear")
+	require.NoError(t, err)
+	assert.Equal(t, uint64(6879), rowData.Len())
+
+	table, _, err = root.GetTable(ctx, "join_result")
+	require.NoError(t, err)
+	rowData, err = table.GetIndexRowData(ctx, "idx_country")
+	require.NoError(t, err)
+	assert.Equal(t, uint64(5210), rowData.Len())
 }
 
 func TestJoin(t *testing.T) {
