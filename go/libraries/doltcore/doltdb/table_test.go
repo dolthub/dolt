@@ -144,6 +144,9 @@ func TestTables(t *testing.T) {
 	}
 }
 
+// DO NOT CHANGE THIS TEST
+// It is necessary to ensure consistent system table definitions
+// for more info: https://github.com/liquidata-inc/dolt/pull/663
 func TestSystemTableTags(t *testing.T) {
 	var sysTableMin uint64 = 1 << 51
 

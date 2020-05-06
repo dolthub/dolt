@@ -149,6 +149,7 @@ const (
 )
 const (
 	// Tags for dolt_docs table
+	// for info on unaligned constant: https://github.com/liquidata-inc/dolt/pull/663
 	DocNameTag = iota + SystemTableReservedMin + uint64(5)
 	DocTextTag
 )
@@ -174,6 +175,7 @@ const (
 )
 const (
 	// Tags for dolt_query_catalog table
+	// for info on unaligned constant: https://github.com/liquidata-inc/dolt/pull/663
 	QueryCatalogIdTag = iota + SystemTableReservedMin + uint64(3005)
 	QueryCatalogOrderTag
 	QueryCatalogNameTag
@@ -196,6 +198,7 @@ const (
 )
 const (
 	// Tags for dolt_schemas table
+	// for info on unaligned constant: https://github.com/liquidata-inc/dolt/pull/663
 	DoltSchemasTypeTag = iota + SystemTableReservedMin + uint64(4003)
 	DoltSchemasNameTag
 	DoltSchemasFragmentTag
