@@ -174,16 +174,52 @@ DELIM
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
-@test "schema import supports dates andf times" {
-    run dolt schema import -c --pks=pk test `batshelper 1pk-datetime.csv`
+@test "schema import supports dates and times" {
+    cat <<DELIM > 1pk-datetime.csv
+pk, test_date
+0, 2013-09-24 00:01:35
+1, "2011-10-24 13:17:42"
+2, 2018-04-13
+DELIM
+    run dolt schema import -c --pks=pk test 1pk-datetime.csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
     skip "schema import does not support datetime"
     [[ "$output" =~ "DATETIME" ]] || false;
 }
 
+@test "schema import supports SQL datetime output" {
+    dolt sql -q 'create table chrono (pk datetime not null primary key);'
+    dolt sql -q 'insert into chrono values (now());'
+    dolt sql -r csv -q 'select * from chrono;' > chrono.csv
+    run dolt schema import -c --pks=pk other chrono.csv
+    [ "$status" -eq 0 ]
+    skip "schema import does not support datetime"
+    [[ "$output" =~ "DATETIME" ]] || false;
+}
+
+@test "schema import uses specific date/time types" {
+    cat <<DELIM > chrono.csv
+pk, c_date, c_time, c_datetime, c_timestamp, c_year
+DELIM
+    skip "uncertain"
+}
+
 @test "schema import of two tables" {
     dolt schema import -c --pks=pk test1 `batshelper 1pksupportedtypes.csv`
-    dolt schema import -c --pks=pk test2 `batshelper 1pk-datetime.csv`
-    
+    dolt schema import -c --pks=pk test2 `batshelper 1pk5col-ints.csv`
+}
+
+@test "schema import applies NOT NULL where applicable" {
+    cat <<DELIM > some-nulls.csv
+pk,c1,c2
+0,0,0
+1, ,1
+DELIM
+    run dolt schema import -c --pks=pk test some-nulls.csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "\`pk\` BIGINT NOT NULL" ]] || false;
+    [[ "${lines[2]}" =~ "\`c1\` BIGINT" ]] || false;
+    [[ ! "${lines[2]}" =~ "NOT NULL" ]] || false;
+    [[ "${lines[3]}" =~ "\`c2\` BIGINT NOT NULL" ]] || false;
 }
