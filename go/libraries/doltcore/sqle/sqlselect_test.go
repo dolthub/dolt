@@ -351,14 +351,16 @@ var BasicSelectTests = []SelectTest{
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
-		Name:            "select *, in clause, mixed types",
-		Query:           "select * from people where first_name in ('Homer', 40)",
-		ExpectedErr:     "Type mismatch: mixed types in list literal '('Homer', 40)'",
+		Name:           "select *, in clause, mixed types",
+		Query:          "select * from people where first_name in ('Homer', 40)",
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Homer),
 	},
 	{
-		Name:            "select *, in clause, mixed numeric types",
-		Query:           "select * from people where age in (-10.0, 40)",
-		ExpectedErr:     "Type mismatch: mixed types in list literal '(-10.0, 40)'",
+		Name:           "select *, in clause, mixed numeric types",
+		Query:          "select * from people where age in (-10.0, 40)",
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Homer, Barney),
 	},
 	{
 		Name:           "select *, not in clause",
@@ -373,9 +375,10 @@ var BasicSelectTests = []SelectTest{
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
-		Name:            "select *, in clause single type mismatch",
-		Query:           "select * from people where first_name in (1.0)",
-		ExpectedErr:     "Type mismatch:",
+		Name:           "select *, in clause single type mismatch",
+		Query:          "select * from people where first_name in (1.0)",
+		ExpectedRows:   ToSqlRows(PeopleTestSchema),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "select *, is null clause ",
@@ -414,9 +417,10 @@ var BasicSelectTests = []SelectTest{
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
-		Name:            "select *, is true clause on non-bool column",
-		Query:           "select * from people where age is true",
-		ExpectedErr:     "Type mismatch:",
+		Name:           "select *, is true clause on non-bool column",
+		Query:          "select * from people where age is true",
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, AllPeopleRows...),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "binary expression in select",
@@ -466,9 +470,10 @@ var BasicSelectTests = []SelectTest{
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
-		Name:            "select *, -column, string type",
-		Query:           "select * from people where -first_name = 'Homer'",
-		ExpectedErr:     "Unsupported type for unary - operation: varchar",
+		Name:           "select *, -column, string type",
+		Query:          "select * from people where -first_name = 'Homer'",
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, AllPeopleRows...), // A little weird, but correct due to mysql type conversion rules (both expression evaluate to 0 after conversion)
 	},
 	{
 		Name:           "select *, binary + in where",
@@ -568,7 +573,8 @@ var BasicSelectTests = []SelectTest{
 	{
 		Name:        "duplicate table selection",
 		Query:       "select first_name as f, last_name as f from people, people where age >= 40",
-		ExpectedErr: "Non-unique table name / alias: 'people'",
+		ExpectedErr: "Non-unique table name / alias: people",
+		SkipOnSqlEngine: true, // this should be an error (table name selected twice without an alias)
 	},
 	{
 		Name:            "duplicate table alias",
@@ -579,6 +585,7 @@ var BasicSelectTests = []SelectTest{
 		Name:            "column aliases in where clause",
 		Query:           `select first_name as f, last_name as l from people where f = "Homer"`,
 		ExpectedErr:     "Unknown column: 'f'",
+		SkipOnSqlEngine: true, // this is actually a bug (aliases aren't usable in filters)
 	},
 	{
 		Name:           "select subset of columns with order by",
@@ -596,6 +603,7 @@ var BasicSelectTests = []SelectTest{
 		Name:            "ambiguous column in order by",
 		Query:           "select first_name as f, last_name as f from people order by f",
 		ExpectedErr:     "Ambiguous column: 'f'",
+		SkipOnSqlEngine: true, // this is a bug in go-mysql-server
 	},
 	{
 		Name:           "table aliases",
@@ -663,9 +671,15 @@ var BasicSelectTests = []SelectTest{
 		ExpectedErr: `Unknown table: 'dne'`,
 	},
 	{
-		Name:            "no table",
-		Query:           "select 1",
-		ExpectedErr:     `Selects without a table are not supported:`,
+		Name:  "no table",
+		Query: "select 1",
+		ExpectedSqlSchema: sql.Schema{
+			&sql.Column{
+				Name: "1",
+				Type: sql.Int8,
+			},
+		},
+		ExpectedRows: []sql.Row{{int8(1)}},
 	},
 	{
 		Name:        "unknown column in where",
@@ -683,9 +697,10 @@ var BasicSelectTests = []SelectTest{
 		ExpectedErr: "not supported",
 	},
 	{
-		Name:            "type mismatch in where clause",
-		Query:           `select * from people where id = "0"`,
-		ExpectedErr:     "Type mismatch:",
+		Name:           "type mismatch in where clause",
+		Query:          `select * from people where id = "0"`,
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+		ExpectedRows:   ToSqlRows(PeopleTestSchema, Homer),
 	},
 	{
 		Name:  "select * from log system table",
