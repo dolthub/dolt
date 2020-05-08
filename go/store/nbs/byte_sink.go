@@ -20,10 +20,9 @@ import (
 	"hash"
 	"io"
 	"os"
-	"path/filepath"
 	"sync"
 
-	"github.com/google/uuid"
+	"github.com/liquidata-inc/dolt/go/store/util/tempfiles"
 
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
@@ -171,8 +170,7 @@ type BufferedFileByteSink struct {
 
 // NewBufferedFileByteSink creates a BufferedFileByteSink
 func NewBufferedFileByteSink(blockSize, chBufferSize int) (*BufferedFileByteSink, error) {
-	path := filepath.Join(os.TempDir(), uuid.New().String()+".tf")
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
+	f, err := tempfiles.MovableTempFileProvider.NewFile("", "buffered_file_byte_sink_")
 
 	if err != nil {
 		return nil, err
@@ -185,7 +183,7 @@ func NewBufferedFileByteSink(blockSize, chBufferSize int) (*BufferedFileByteSink
 		ae:           atomicerr.New(),
 		wg:           &sync.WaitGroup{},
 		wr:           f,
-		path:         path,
+		path:         f.Name(),
 	}
 
 	sink.wg.Add(1)

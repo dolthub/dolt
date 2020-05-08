@@ -15,16 +15,11 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/fatih/color"
 	"golang.org/x/sys/unix"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 )
-
-var red = color.New(color.FgRed).SprintFunc()
-var yellow = color.New(color.FgYellow).SprintFunc()
 
 const warningThreshold = 4096
 
@@ -49,9 +44,9 @@ func warnIfMaxFilesTooLow() {
 		return
 	}
 	if lim.Cur < warningThreshold {
-		cli.Printf("%s\n", yellow("WARNING"))
-		cli.Printf("%s\n", yellow(fmt.Sprintf("Only %d file descriptors are available for this process, which is less than the recommended amount, %d.", lim.Cur, warningThreshold)))
-		cli.Printf("%s\n", yellow("You may experience I/O errors by continuing to run dolt in this configuration."))
-		cli.Printf("\n")
+		cli.PrintErrln(color.YellowString("WARNING"))
+		cli.PrintErrln(color.YellowString("Only %d file descriptors are available for this process, which is less than the recommended amount, %d.", lim.Cur, warningThreshold))
+		cli.PrintErrln(color.YellowString("You may experience I/O errors by continuing to run dolt in this configuration."))
+		cli.PrintErrln()
 	}
 }

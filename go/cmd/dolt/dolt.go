@@ -39,6 +39,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/events"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/store/util/tempfiles"
 )
 
 const (
@@ -150,10 +151,11 @@ func runMain() int {
 
 	warnIfMaxFilesTooLow()
 
-	dEnv := env.Load(context.TODO(), env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
+	ctx := context.Background()
+	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
 
 	if dEnv.DBLoadError == nil && commandNeedsMigrationCheck(args) {
-		if commands.MigrationNeeded(context.Background(), dEnv, args) {
+		if commands.MigrationNeeded(ctx, dEnv, args) {
 			return 1
 		}
 	}
@@ -192,11 +194,20 @@ func runMain() int {
 	}()
 
 	if dEnv.CfgLoadErr != nil {
-		cli.PrintErrln(color.RedString("Failed to load the global config.", dEnv.CfgLoadErr))
+		cli.PrintErrln(color.RedString("Failed to load the global config. %v", dEnv.CfgLoadErr))
 		return 1
 	}
 
-	res := doltCommand.Exec(context.Background(), "dolt", args, dEnv)
+	err = reconfigIfTempFileMoveFails(dEnv)
+
+	if err != nil {
+		cli.PrintErrln(color.RedString("Failed to setup the temporary directory. %v`", err))
+		return 1
+	}
+
+	defer tempfiles.MovableTempFileProvider.Clean()
+
+	res := doltCommand.Exec(ctx, "dolt", args, dEnv)
 
 	if csMetrics && dEnv.DoltDB != nil {
 		metricsSummary := dEnv.DoltDB.CSMetricsSummary()

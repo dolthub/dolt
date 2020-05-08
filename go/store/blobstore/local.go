@@ -19,13 +19,13 @@ import (
 	"context"
 	"errors"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
-	"github.com/juju/fslock"
+	"github.com/liquidata-inc/dolt/go/store/util/tempfiles"
 
 	"github.com/google/uuid"
+	"github.com/juju/fslock"
 )
 
 const (
@@ -151,7 +151,7 @@ func (bs *LocalBlobstore) Put(ctx context.Context, key string, reader io.Reader)
 	// written as temp file and renamed so the file corresponding to this key
 	// never exists in a partially written state
 	tempFile, err := func() (string, error) {
-		temp, err := ioutil.TempFile("", ver.String())
+		temp, err := tempfiles.MovableTempFileProvider.NewFile("", ver.String())
 
 		if err != nil {
 			return "", err

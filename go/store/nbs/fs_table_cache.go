@@ -24,15 +24,14 @@ package nbs
 import (
 	"errors"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
-
 	"github.com/liquidata-inc/dolt/go/store/util/sizecache"
+	"github.com/liquidata-inc/dolt/go/store/util/tempfiles"
 )
 
 type tableCache interface {
@@ -172,7 +171,7 @@ func (ftc *fsTableCache) store(h addr, data io.Reader, size uint64) error {
 	path := filepath.Join(ftc.dir, h.String())
 	tempName, err := func() (name string, ferr error) {
 		var temp *os.File
-		temp, ferr = ioutil.TempFile(ftc.dir, tempTablePrefix)
+		temp, ferr = tempfiles.MovableTempFileProvider.NewFile(ftc.dir, tempTablePrefix)
 
 		if ferr != nil {
 			return "", ferr
