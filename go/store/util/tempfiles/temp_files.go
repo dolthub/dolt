@@ -1,4 +1,4 @@
-package nbs
+package tempfiles
 
 import (
 	"io/ioutil"

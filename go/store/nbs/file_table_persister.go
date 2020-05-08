@@ -29,6 +29,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/liquidata-inc/dolt/go/store/util/tempfiles"
+
 	"github.com/liquidata-inc/dolt/go/store/d"
 )
 
@@ -66,7 +68,7 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data [
 
 	tempName, err := func() (tempName string, ferr error) {
 		var temp *os.File
-		temp, ferr = MovableTempFile.NewFile(ftp.dir, tempTablePrefix)
+		temp, ferr = tempfiles.MovableTempFile.NewFile(ftp.dir, tempTablePrefix)
 
 		if ferr != nil {
 			return "", ferr
@@ -141,7 +143,7 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 	name := nameFromSuffixes(plan.suffixes())
 	tempName, err := func() (tempName string, ferr error) {
 		var temp *os.File
-		temp, ferr = MovableTempFile.NewFile(ftp.dir, tempTablePrefix)
+		temp, ferr = tempfiles.MovableTempFile.NewFile(ftp.dir, tempTablePrefix)
 
 		if ferr != nil {
 			return "", ferr

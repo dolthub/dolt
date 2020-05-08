@@ -39,7 +39,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/events"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/dolt/go/store/nbs"
+	"github.com/liquidata-inc/dolt/go/store/util/tempfiles"
 )
 
 const (
@@ -205,7 +205,7 @@ func runMain() int {
 		return 1
 	}
 
-	defer nbs.MovableTempFile.Clean()
+	defer tempfiles.MovableTempFile.Clean()
 
 	res := doltCommand.Exec(ctx, "dolt", args, dEnv)
 

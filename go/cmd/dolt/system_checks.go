@@ -5,8 +5,9 @@ import (
 	"io/ioutil"
 	"os"
 
+	"github.com/liquidata-inc/dolt/go/store/util/tempfiles"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/store/nbs"
 )
 
 // returns false if it fails to verify that it can move files from the default temp directory to the local directory.
@@ -58,7 +59,7 @@ func reconfigIfTempFileMoveFails(dEnv *env.DoltEnv) error {
 			return fmt.Errorf("attempting to use '%s' as a temp directory, but there exists a file with that name", tmpDir)
 		}
 
-		nbs.MovableTempFile = nbs.NewTempFileProviderAt(tmpDir)
+		tempfiles.MovableTempFile = tempfiles.NewTempFileProviderAt(tmpDir)
 	}
 
 	return nil
