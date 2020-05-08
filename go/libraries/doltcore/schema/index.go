@@ -22,6 +22,8 @@ type Index interface {
 	ColumnNames() []string
 	// Comment returns the comment that was provided upon index creation.
 	Comment() string
+	// Count returns the number of indexed columns in this index.
+	Count() int
 	// GetColumn returns the column for the given tag and whether the column was found or not.
 	GetColumn(tag uint64) (Column, bool)
 	// IndexedColumnTags returns the tags of the columns in the index.
@@ -61,6 +63,10 @@ func (ix *indexImpl) ColumnNames() []string {
 
 func (ix *indexImpl) Comment() string {
 	return ix.comment
+}
+
+func (ix *indexImpl) Count() int {
+	return len(ix.tags)
 }
 
 func (ix *indexImpl) GetColumn(tag uint64) (Column, bool) {

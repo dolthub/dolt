@@ -15,14 +15,10 @@
 package sqle
 
 import (
-	"fmt"
-	"io"
-
 	"github.com/liquidata-inc/go-mysql-server/sql"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 )
 
 type IndexLookupKeyIterator interface {
@@ -48,89 +44,16 @@ func (il *doltIndexLookup) RowIter(ctx *sql.Context) (sql.RowIter, error) {
 	return &indexLookupRowIterAdapter{indexLookup: il, ctx: ctx}, nil
 }
 
-type doltIndexSinglePkKeyIter struct {
-	hasReturned bool
-	val         row.TaggedValues
-}
-
-var _ IndexLookupKeyIterator = (*doltIndexSinglePkKeyIter)(nil)
-
-func (iter *doltIndexSinglePkKeyIter) NextKey(*sql.Context) (row.TaggedValues, error) {
-	if iter.hasReturned {
-		return nil, io.EOF
-	}
-	iter.hasReturned = true
-	return iter.val, nil
-}
-
-type doltIndexMultiPkKeyIter struct {
-	tableName    string
-	tableMapIter types.MapIterator
-	val          row.TaggedValues
-}
-
-var _ IndexLookupKeyIterator = (*doltIndexMultiPkKeyIter)(nil)
-
-func (iter *doltIndexMultiPkKeyIter) NextKey(ctx *sql.Context) (row.TaggedValues, error) {
-	var k types.Value
-	var err error
-IterateOverMap:
-	for k, _, err = iter.tableMapIter.Next(ctx); k != nil && err == nil; k, _, err = iter.tableMapIter.Next(ctx) {
-		key, err := row.ParseTaggedValues(k.(types.Tuple))
-		if err != nil {
-			return nil, err
-		}
-		for tag, val := range iter.val {
-			indexVal, ok := key[tag]
-			if !ok {
-				return nil, fmt.Errorf("on table `%s`, attempted to gather value for tag `%v`", iter.tableName, tag)
-			}
-			if !val.Equals(indexVal) {
-				continue IterateOverMap
-			}
-		}
-		return key, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return nil, io.EOF
-}
-
 type doltIndexKeyIter struct {
-	index        schema.Index
-	indexMapIter types.MapIterator
-	val          row.TaggedValues
+	indexMapIter table.TableReadCloser
 }
 
 var _ IndexLookupKeyIterator = (*doltIndexKeyIter)(nil)
 
 func (iter *doltIndexKeyIter) NextKey(ctx *sql.Context) (row.TaggedValues, error) {
-	var k types.Value
-	var err error
-IterateOverMap:
-	for k, _, err = iter.indexMapIter.Next(ctx); k != nil && err == nil; k, _, err = iter.indexMapIter.Next(ctx) {
-		indexKeyTaggedValues, err := row.ParseTaggedValues(k.(types.Tuple))
-		if err != nil {
-			return nil, err
-		}
-		for tag, val := range iter.val {
-			indexVal, ok := indexKeyTaggedValues[tag]
-			if !ok {
-				return nil, fmt.Errorf("on index `%s`, attempted to gather value for tag `%v`", iter.index.Name(), tag)
-			}
-			if !val.Equals(indexVal) {
-				continue IterateOverMap
-			}
-		}
-		primaryKeys := make(row.TaggedValues)
-		for _, tag := range iter.index.PrimaryKeyTags() {
-			primaryKeys[tag] = indexKeyTaggedValues[tag]
-		}
-		return primaryKeys, nil
-	}
+	indexRow, err := iter.indexMapIter.ReadRow(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return nil, io.EOF
+	return row.GetTaggedVals(indexRow)
 }

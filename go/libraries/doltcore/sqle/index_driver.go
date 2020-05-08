@@ -15,7 +15,11 @@
 package sqle
 
 import (
+	"fmt"
+
 	"github.com/liquidata-inc/go-mysql-server/sql"
+
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 )
 
 type DoltIndexDriver struct {
@@ -69,26 +73,46 @@ func (driver *DoltIndexDriver) LoadAll(ctx *sql.Context, db, table string) ([]sq
 		return nil, err
 	}
 
+	rowData, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	cols := sch.GetPKCols().GetColumns()
 	sqlIndexes := []sql.Index{
-		&doltIndexPk{
-			db:        database,
-			sch:       sch,
-			tableName: table,
-			table:     tbl,
-			driver:    driver,
-			cols:      sch.GetPKCols().GetColumns(),
+		&doltIndex{
+			cols:      cols,
 			ctx:       ctx,
+			db:        database,
+			driver:    driver,
+			id:        fmt.Sprintf("%s:primaryKey%v", table, len(cols)),
+			mapSch:    sch,
+			rowData:   rowData,
+			table:     tbl,
+			tableName: table,
+			tableSch:  sch,
 		},
 	}
 	for _, index := range sch.Indexes().AllIndexes() {
+		rowData, err := tbl.GetIndexRowData(ctx, index.Name())
+		if err != nil {
+			return nil, err
+		}
+		cols := make([]schema.Column, index.Count())
+		for i, tag := range index.IndexedColumnTags() {
+			cols[i], _ = index.GetColumn(tag)
+		}
 		sqlIndexes = append(sqlIndexes, &doltIndex{
+			cols:      cols,
+			ctx:       ctx,
 			db:        database,
 			driver:    driver,
-			tableSch:  sch,
-			tableName: table,
+			id:        table + index.Name(),
+			mapSch:    index.Schema(),
+			rowData:   rowData,
 			table:     tbl,
-			index:     index,
-			ctx:       ctx,
+			tableName: table,
+			tableSch:  sch,
 		})
 	}
 
