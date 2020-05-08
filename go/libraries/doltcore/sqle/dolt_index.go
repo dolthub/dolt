@@ -16,13 +16,13 @@ package sqle
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/liquidata-inc/go-mysql-server/sql"
+	"github.com/liquidata-inc/go-mysql-server/sql/expression"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 /*
@@ -47,106 +47,17 @@ type DoltIndex interface {
 	Schema() schema.Schema
 }
 
-type doltIndexPk struct {
-	db        Database
-	sch       schema.Schema
-	tableName string
-	table     *doltdb.Table
-	driver    *DoltIndexDriver
+type doltIndex struct {
 	cols      []schema.Column
 	ctx       *sql.Context
-}
-
-var _ DoltIndex = (*doltIndexPk)(nil)
-
-func (pdi *doltIndexPk) Database() string {
-	return pdi.db.name
-}
-
-func (pdi *doltIndexPk) DoltDatabase() Database {
-	return pdi.db
-}
-
-func (pdi *doltIndexPk) Driver() string {
-	return pdi.driver.ID()
-}
-
-func (pdi *doltIndexPk) Expressions() []string {
-	strs := make([]string, len(pdi.cols))
-	for i, col := range pdi.cols {
-		strs[i] = pdi.tableName + "." + col.Name
-	}
-	return strs
-}
-
-func (pdi *doltIndexPk) Get(key ...interface{}) (sql.IndexLookup, error) {
-	//TODO: replace all of this when partial keys land
-	if len(pdi.cols) != len(key) {
-		return nil, errors.New("index does not match the given key length")
-	}
-
-	taggedVals := make(row.TaggedValues)
-	for i, col := range pdi.cols {
-		val, err := col.TypeInfo.ConvertValueToNomsValue(key[i])
-		if err != nil {
-			return nil, err
-		}
-		taggedVals[col.Tag] = val
-	}
-
-	if pdi.sch.GetPKCols().Size() == 1 {
-		return &doltIndexLookup{
-			idx: pdi,
-			keyIter: &doltIndexSinglePkKeyIter{
-				hasReturned: false,
-				val:         taggedVals,
-			},
-		}, nil
-	} else {
-		rowData, err := pdi.table.GetRowData(pdi.ctx)
-		if err != nil {
-			return nil, err
-		}
-		rowDataIter, err := rowData.Iterator(pdi.ctx)
-		if err != nil {
-			return nil, err
-		}
-		return &doltIndexLookup{
-			idx: pdi,
-			keyIter: &doltIndexMultiPkKeyIter{
-				tableName:    pdi.tableName,
-				tableMapIter: rowDataIter,
-				val:          taggedVals,
-			},
-		}, nil
-	}
-}
-
-func (*doltIndexPk) Has(partition sql.Partition, key ...interface{}) (bool, error) {
-	// appears to be unused for the moment
-	panic("not used")
-}
-
-func (pdi *doltIndexPk) ID() string {
-	return fmt.Sprintf("%s:primaryKey%v", pdi.tableName, len(pdi.cols))
-}
-
-func (pdi *doltIndexPk) Schema() schema.Schema {
-	return pdi.sch
-}
-
-func (pdi *doltIndexPk) Table() string {
-	return pdi.tableName
-}
-
-type doltIndex struct {
 	db        Database
 	driver    *DoltIndexDriver
-	tableSch  schema.Schema
-	tableName string
+	id        string
+	mapSch    schema.Schema
+	rowData   types.Map
 	table     *doltdb.Table
-	index     schema.Index
-	ctx       *sql.Context
+	tableName string
+	tableSch  schema.Schema
 }
 
 var _ DoltIndex = (*doltIndex)(nil)
@@ -164,47 +75,43 @@ func (di *doltIndex) Driver() string {
 }
 
 func (di *doltIndex) Expressions() []string {
-	tags := di.index.IndexedColumnTags()
-	strs := make([]string, len(tags))
-	for i, tag := range tags {
-		col, _ := di.index.GetColumn(tag)
+	strs := make([]string, len(di.cols))
+	for i, col := range di.cols {
 		strs[i] = di.tableName + "." + col.Name
 	}
 	return strs
 }
 
 func (di *doltIndex) Get(key ...interface{}) (sql.IndexLookup, error) {
-	if len(di.index.IndexedColumnTags()) != len(key) {
-		return nil, errors.New("key must specify all columns for inner index")
+	if len(di.cols) != len(key) {
+		return nil, errors.New("key must specify all columns for index")
 	}
 
-	taggedVals := make(row.TaggedValues)
-	for i, tag := range di.index.IndexedColumnTags() {
-		if i >= len(key) {
-			break
-		}
-		col, _ := di.index.GetColumn(tag)
-		val, err := col.TypeInfo.ConvertValueToNomsValue(key[i])
-		if err != nil {
-			return nil, err
-		}
-		taggedVals[tag] = val
+	equals := make([]*expression.Equals, len(key))
+	for i := 0; i < len(key); i++ {
+		equals[i] = expression.NewEquals(
+			expression.NewGetField(i, di.cols[i].TypeInfo.ToSqlType(), di.cols[i].Name, di.cols[i].IsNullable()),
+			expression.NewLiteral(key[i], di.cols[i].TypeInfo.ToSqlType()),
+		)
+	}
+	var lastExpr sql.Expression = equals[len(equals)-1]
+	for i := len(equals) - 2; i >= 0; i-- {
+		lastExpr = expression.NewAnd(equals[i], lastExpr)
 	}
 
-	rowData, err := di.table.GetIndexRowData(di.ctx, di.index.Name())
+	crf, err := CreateReaderFuncLimitedByExpressions(di.rowData.Format(), di.mapSch, []sql.Expression{lastExpr})
 	if err != nil {
 		return nil, err
 	}
-	rowDataIter, err := rowData.Iterator(di.ctx)
+	mapIter, err := crf(di.ctx, di.rowData)
 	if err != nil {
 		return nil, err
 	}
+
 	return &doltIndexLookup{
 		di,
 		&doltIndexKeyIter{
-			index:        di.index,
-			indexMapIter: rowDataIter,
-			val:          taggedVals,
+			indexMapIter: mapIter,
 		},
 	}, nil
 }
@@ -215,7 +122,7 @@ func (*doltIndex) Has(partition sql.Partition, key ...interface{}) (bool, error)
 }
 
 func (di *doltIndex) ID() string {
-	return fmt.Sprintf("%s:%s%v", di.tableName, di.index.Name(), len(di.index.IndexedColumnTags()))
+	return di.id
 }
 
 func (di *doltIndex) Schema() schema.Schema {

@@ -713,7 +713,57 @@ SQL
     [[ "${#lines[@]}" = "1" ]] || false
 }
 
-@test "index: SELECT = Full Match" {
+@test "index: SELECT = Primary Key" {
+    dolt sql <<SQL
+INSERT INTO onepk VALUES (1, 99, 51), (2, 11, 55), (3, 88, 52), (4, 22, 54), (5, 77, 53);
+INSERT INTO twopk VALUES (1, 99, 51, 63), (2, 11, 55, 64), (3, 88, 52, 61), (4, 22, 54, 65), (5, 77, 53, 61);
+SQL
+    # found
+    run dolt sql -q "SELECT * FROM onepk WHERE pk1 = 5" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,v1,v2" ]] || false
+    [[ "$output" =~ "5,77,53" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+    # not found
+    run dolt sql -q "SELECT * FROM onepk WHERE pk1 = 999" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # found partial pk
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 = 2" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "$output" =~ "2,11,55,64" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+    # not found partial pk
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 = 999" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # found
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 = 5 AND pk2 = 77" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "$output" =~ "5,77,53,61" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+    # not found key 1
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 = 999 AND pk2 = 22" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # not found key 2
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 = 1 AND pk2 = 999" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # not found key mismatch
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 = 88 AND pk2 = 3" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+}
+
+@test "index: SELECT = Secondary Index" {
     dolt sql <<SQL
 CREATE INDEX idx_v1 ON onepk(v1);
 CREATE INDEX idx_v ON twopk(v2, v1);
@@ -741,6 +791,17 @@ SQL
     run dolt sql -q "SELECT * FROM onepk WHERE v2 = 111" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # found partial index
+    run dolt sql -q "SELECT * FROM twopk WHERE v2 = 64" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "$output" =~ "2,11,55,64" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+    # not found partial index
+    run dolt sql -q "SELECT * FROM twopk WHERE v2 = 111" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
     [[ "${#lines[@]}" = "1" ]] || false
     # found
     run dolt sql -q "SELECT * FROM twopk WHERE v2 = 61 AND v1 = 53" -r=csv
@@ -776,7 +837,61 @@ SQL
     [[ "${#lines[@]}" = "1" ]] || false
 }
 
-@test "index: SELECT > Full Match" {
+@test "index: SELECT > Primary Key" {
+    dolt sql <<SQL
+INSERT INTO onepk VALUES (1, 99, 51), (2, 11, 55), (3, 88, 52), (4, 22, 54), (5, 77, 53);
+INSERT INTO twopk VALUES (1, 99, 51, 63), (2, 11, 55, 64), (3, 88, 52, 61), (4, 22, 54, 65), (5, 77, 53, 61);
+SQL
+    # found
+    run dolt sql -q "SELECT * FROM onepk WHERE pk1 > 2" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,v1,v2" ]] || false
+    [[ "$output" =~ "3,88,52" ]] || false
+    [[ "$output" =~ "4,22,54" ]] || false
+    [[ "$output" =~ "5,77,53" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+    # not found
+    run dolt sql -q "SELECT * FROM onepk WHERE pk1 > 999" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # found partial pk
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 > 2" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "$output" =~ "3,88,52,61" ]] || false
+    [[ "$output" =~ "4,22,54,65" ]] || false
+    [[ "$output" =~ "5,77,53,61" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+    # not found partial pk
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 > 999" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # found
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 > 4 AND pk2 > 22" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "$output" =~ "5,77,53,61" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+    # not found key 1
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 > 999 AND pk2 > 11" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # not found key 2
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 > 2 AND pk2 > 999" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # not found key mismatch
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 > 3 AND pk2 > 99" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+}
+
+@test "index: SELECT > Secondary Index" {
     dolt sql <<SQL
 CREATE INDEX idx_v1 ON onepk(v1);
 CREATE INDEX idx_v ON twopk(v2, v1);
@@ -807,6 +922,18 @@ SQL
     run dolt sql -q "SELECT * FROM onepk WHERE v2 > 111" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # found partial index
+    run dolt sql -q "SELECT * FROM twopk WHERE v2 > 63" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "$output" =~ "2,11,55,64" ]] || false
+    [[ "$output" =~ "4,22,54,65" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+    # not found partial index
+    run dolt sql -q "SELECT * FROM twopk WHERE v2 > 111" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
     [[ "${#lines[@]}" = "1" ]] || false
     # found
     run dolt sql -q "SELECT * FROM twopk WHERE v2 > 61 AND v1 > 53" -r=csv
@@ -844,7 +971,60 @@ SQL
     [[ "${#lines[@]}" = "1" ]] || false
 }
 
-@test "index: SELECT < Full Match" {
+@test "index: SELECT < Primary Key" {
+    dolt sql <<SQL
+INSERT INTO onepk VALUES (1, 99, 51), (2, 11, 55), (3, 88, 52), (4, 22, 54), (5, 77, 53);
+INSERT INTO twopk VALUES (1, 99, 51, 63), (2, 11, 55, 64), (3, 88, 52, 61), (4, 22, 54, 65), (5, 77, 53, 61);
+SQL
+    # found
+    run dolt sql -q "SELECT * FROM onepk WHERE pk1 < 3" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,v1,v2" ]] || false
+    [[ "$output" =~ "1,99,51" ]] || false
+    [[ "$output" =~ "2,11,55" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+    # not found
+    run dolt sql -q "SELECT * FROM onepk WHERE pk1 < 0" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # found partial key
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 < 4" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "$output" =~ "1,99,51,63" ]] || false
+    [[ "$output" =~ "2,11,55,64" ]] || false
+    [[ "$output" =~ "3,88,52,61" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+    # not found partial key
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 < 0" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # found
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 < 3 AND pk2 < 99" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "$output" =~ "2,11,55,64" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+    # not found key 1
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 < 0 AND pk2 < 77" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # not found key 2
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 < 3 AND pk2 < 0" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # not found key mismatch
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 < 2 AND pk2 < 22" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+}
+
+@test "index: SELECT < Secondary Index" {
     dolt sql <<SQL
 CREATE INDEX idx_v1 ON onepk(v1);
 CREATE INDEX idx_v ON twopk(v2, v1);
@@ -876,6 +1056,19 @@ SQL
     run dolt sql -q "SELECT * FROM onepk WHERE v2 < 0" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # found partial index
+    run dolt sql -q "SELECT * FROM twopk WHERE v2 < 64" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "$output" =~ "5,77,53,61" ]] || false
+    [[ "$output" =~ "3,88,52,61" ]] || false
+    [[ "$output" =~ "1,99,51,63" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+    # not found partial index
+    run dolt sql -q "SELECT * FROM twopk WHERE v2 < 0" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
     [[ "${#lines[@]}" = "1" ]] || false
     # found
     run dolt sql -q "SELECT * FROM twopk WHERE v2 < 64 AND v1 < 53" -r=csv
@@ -913,7 +1106,64 @@ SQL
     [[ "${#lines[@]}" = "1" ]] || false
 }
 
-@test "index: SELECT >= Full Match" {
+@test "index: SELECT >= Primary Key" {
+    dolt sql <<SQL
+INSERT INTO onepk VALUES (1, 99, 51), (2, 11, 55), (3, 88, 52), (4, 22, 54), (5, 77, 53);
+INSERT INTO twopk VALUES (1, 99, 51, 63), (2, 11, 55, 64), (3, 88, 52, 61), (4, 22, 54, 65), (5, 77, 53, 61);
+SQL
+    # found
+    run dolt sql -q "SELECT * FROM onepk WHERE pk1 >= 2" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,v1,v2" ]] || false
+    [[ "$output" =~ "2,11,55" ]] || false
+    [[ "$output" =~ "3,88,52" ]] || false
+    [[ "$output" =~ "4,22,54" ]] || false
+    [[ "$output" =~ "5,77,53" ]] || false
+    [[ "${#lines[@]}" = "5" ]] || false
+    # not found
+    run dolt sql -q "SELECT * FROM onepk WHERE pk1 >= 999" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # found partial pk
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 >= 2" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "$output" =~ "2,11,55,64" ]] || false
+    [[ "$output" =~ "3,88,52,61" ]] || false
+    [[ "$output" =~ "4,22,54,65" ]] || false
+    [[ "$output" =~ "5,77,53,61" ]] || false
+    [[ "${#lines[@]}" = "5" ]] || false
+    # not found partial pk
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 >= 999" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # found
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 >= 4 AND pk2 >= 22" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "$output" =~ "4,22,54,65" ]] || false
+    [[ "$output" =~ "5,77,53,61" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+    # not found key 1
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 >= 999 AND pk2 >= 11" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # not found key 2
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 >= 2 AND pk2 >= 999" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # not found key mismatch
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 >= 4 AND pk2 >= 88" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+}
+
+@test "index: SELECT >= Secondary Index" {
     dolt sql <<SQL
 CREATE INDEX idx_v1 ON onepk(v1);
 CREATE INDEX idx_v ON twopk(v2, v1);
@@ -945,6 +1195,19 @@ SQL
     run dolt sql -q "SELECT * FROM onepk WHERE v2 >= 111" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # found partial index
+    run dolt sql -q "SELECT * FROM twopk WHERE v2 >= 63" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "$output" =~ "1,99,51,63" ]] || false
+    [[ "$output" =~ "2,11,55,64" ]] || false
+    [[ "$output" =~ "4,22,54,65" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+    # not found partial index
+    run dolt sql -q "SELECT * FROM twopk WHERE v2 >= 111" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
     [[ "${#lines[@]}" = "1" ]] || false
     # found
     run dolt sql -q "SELECT * FROM twopk WHERE v2 >= 61 AND v1 >= 53" -r=csv
@@ -984,7 +1247,64 @@ SQL
     [[ "${#lines[@]}" = "1" ]] || false
 }
 
-@test "index: SELECT <= Full Match" {
+@test "index: SELECT <= Primary Key" {
+    dolt sql <<SQL
+INSERT INTO onepk VALUES (1, 99, 51), (2, 11, 55), (3, 88, 52), (4, 22, 54), (5, 77, 53);
+INSERT INTO twopk VALUES (1, 99, 51, 63), (2, 11, 55, 64), (3, 88, 52, 61), (4, 22, 54, 65), (5, 77, 53, 61);
+SQL
+    # found
+    run dolt sql -q "SELECT * FROM onepk WHERE pk1 <= 3" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,v1,v2" ]] || false
+    [[ "$output" =~ "1,99,51" ]] || false
+    [[ "$output" =~ "2,11,55" ]] || false
+    [[ "$output" =~ "3,88,52" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+    # not found
+    run dolt sql -q "SELECT * FROM onepk WHERE pk1 <= 0" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # found partial key
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 <= 4" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "$output" =~ "1,99,51,63" ]] || false
+    [[ "$output" =~ "2,11,55,64" ]] || false
+    [[ "$output" =~ "3,88,52,61" ]] || false
+    [[ "$output" =~ "4,22,54,65" ]] || false
+    [[ "${#lines[@]}" = "5" ]] || false
+    # not found partial key
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 <= 0" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # found
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 <= 3 AND pk2 <= 99" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "$output" =~ "1,99,51,63" ]] || false
+    [[ "$output" =~ "2,11,55,64" ]] || false
+    [[ "$output" =~ "3,88,52,61" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+    # not found key 1
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 <= 0 AND pk2 <= 77" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # not found key 2
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 <= 3 AND pk2 <= 0" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # not found key mismatch
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 <= 1 AND pk2 <= 88" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+}
+
+@test "index: SELECT <= Secondary Index" {
     dolt sql <<SQL
 CREATE INDEX idx_v1 ON onepk(v1);
 CREATE INDEX idx_v ON twopk(v2, v1);
@@ -1018,6 +1338,20 @@ SQL
     run dolt sql -q "SELECT * FROM onepk WHERE v2 <= 0" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # found partial index
+    run dolt sql -q "SELECT * FROM twopk WHERE v2 <= 64" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "$output" =~ "5,77,53,61" ]] || false
+    [[ "$output" =~ "3,88,52,61" ]] || false
+    [[ "$output" =~ "1,99,51,63" ]] || false
+    [[ "$output" =~ "2,11,55,64" ]] || false
+    [[ "${#lines[@]}" = "5" ]] || false
+    # not found partial index
+    run dolt sql -q "SELECT * FROM twopk WHERE v2 <= 0" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
     [[ "${#lines[@]}" = "1" ]] || false
     # found
     run dolt sql -q "SELECT * FROM twopk WHERE v2 <= 64 AND v1 <= 53" -r=csv
@@ -1055,6 +1389,38 @@ SQL
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
     [[ "${#lines[@]}" = "1" ]] || false
+}
+
+@test "index: EXPLAIN SELECT = IndexedJoin" {
+    dolt sql <<SQL
+CREATE INDEX idx_v1 ON onepk(v1);
+CREATE INDEX idx_v ON twopk(v2, v1);
+INSERT INTO onepk VALUES (1, 11, 111), (2, 22, 222), (3, 33, 333), (4, 44, 444), (5, 55, 555);
+INSERT INTO twopk VALUES (5, 95, 222, 11), (4, 4, 333, 55), (3, 93, 444, 33), (2, 92, 111, 22), (1, 91, 555, 44);
+SQL
+    run dolt sql -q "SELECT * FROM onepk JOIN twopk ON onepk.v1 = twopk.v2;" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,v1,v2,pk1,pk2,v1,v2" ]] || false
+    [[ "$output" =~ "1,11,111,5,95,222,11" ]] || false
+    [[ "$output" =~ "2,22,222,2,92,111,22" ]] || false
+    [[ "$output" =~ "3,33,333,3,93,444,33" ]] || false
+    [[ "$output" =~ "4,44,444,1,91,555,44" ]] || false
+    [[ "$output" =~ "5,55,555,4,4,333,55" ]] || false
+    [[ "${#lines[@]}" = "6" ]] || false
+    run dolt sql -q "EXPLAIN SELECT * FROM onepk JOIN twopk ON onepk.v1 = twopk.v2;"
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "IndexedJoin(onepk.v1 = twopk.v2)" ]] || false
+    run dolt sql -q "SELECT * FROM onepk JOIN twopk ON onepk.pk1 = twopk.pk1;" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "1,11,111,1,91,555,44" ]] || false
+    [[ "$output" =~ "2,22,222,2,92,111,22" ]] || false
+    [[ "$output" =~ "3,33,333,3,93,444,33" ]] || false
+    [[ "$output" =~ "4,44,444,4,4,333,55" ]] || false
+    [[ "$output" =~ "5,55,555,5,95,222,11" ]] || false
+    [[ "${#lines[@]}" = "6" ]] || false
+    run dolt sql -q "EXPLAIN SELECT * FROM onepk JOIN twopk ON onepk.pk1 = twopk.pk1;"
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "IndexedJoin(onepk.pk1 = twopk.pk1)" ]] || false
 }
 
 @test "index: ALTER TABLE ADD COLUMN" {
