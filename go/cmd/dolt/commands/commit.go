@@ -32,7 +32,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/merge"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/editor"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 const (
@@ -70,9 +69,9 @@ func (cmd CommitCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd CommitCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd CommitCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, commitDocs, ap))
+	return cli.GetCommandDocumentation(commandStr, commitDocs, ap)
 }
 
 func (cmd CommitCmd) createArgParser() *argparser.ArgParser {

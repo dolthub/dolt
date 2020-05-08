@@ -21,7 +21,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 var rebuildDocs = cli.CommandDocumentationContent{
@@ -45,8 +44,8 @@ func (cmd RebuildCmd) Description() string {
 	return "Internal debugging command to rebuild the contents of an index."
 }
 
-func (cmd RebuildCmd) CreateMarkdown(filesys.Filesys, string, string) error {
-	return nil
+func (cmd RebuildCmd) CreateMarkdown(string) cli.CommandDocumentation {
+	return cli.CommandDocumentation{}
 }
 
 func (cmd RebuildCmd) createArgParser() *argparser.ArgParser {

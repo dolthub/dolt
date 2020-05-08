@@ -24,7 +24,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/config"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 )
 
@@ -74,9 +73,9 @@ func (cmd ConfigCmd) RequiresRepo() bool {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ConfigCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd ConfigCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, cfgDocs, ap))
+	return cli.GetCommandDocumentation(commandStr, cfgDocs, ap)
 }
 
 func (cmd ConfigCmd) createArgParser() *argparser.ArgParser {

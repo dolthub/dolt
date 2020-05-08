@@ -25,7 +25,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 var useDocs = cli.CommandDocumentationContent{
@@ -53,9 +52,9 @@ func (cmd UseCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd UseCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd UseCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, useDocs, ap))
+	return cli.GetCommandDocumentation(commandStr, useDocs, ap)
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement

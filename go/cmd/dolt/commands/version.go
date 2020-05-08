@@ -17,8 +17,6 @@ package commands
 import (
 	"context"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 )
@@ -44,8 +42,8 @@ func (cmd VersionCmd) RequiresRepo() bool {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd VersionCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	return nil
+func (cmd VersionCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+	return cli.CommandDocumentation{}
 }
 
 // Version displays the version of the running dolt client

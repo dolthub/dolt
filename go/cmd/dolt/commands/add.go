@@ -17,8 +17,6 @@ package commands
 import (
 	"context"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -57,9 +55,9 @@ func (cmd AddCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd AddCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd AddCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, addDocs, ap))
+	return cli.GetCommandDocumentation(commandStr, addDocs, ap)
 }
 
 func (cmd AddCmd) createArgParser() *argparser.ArgParser {

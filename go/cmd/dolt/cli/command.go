@@ -23,7 +23,6 @@ import (
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/events"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 func isHelp(str string) bool {
@@ -56,7 +55,7 @@ type Command interface {
 	// Exec executes the command
 	Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int
 	// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-	CreateMarkdown(fs filesys.Filesys, path, commandStr string) error
+	CreateMarkdown(commandStr string) CommandDocumentation
 }
 
 // This type is to store the content of a documented command, elsewhere we can transform this struct into
@@ -120,8 +119,8 @@ func (hc SubCommandHandler) RequiresRepo() bool {
 	return false
 }
 
-func (hc SubCommandHandler) CreateMarkdown(_ filesys.Filesys, _, _ string) error {
-	return nil
+func (hc SubCommandHandler) CreateMarkdown(_ string) CommandDocumentation {
+	return CommandDocumentation{}
 }
 
 func (hc SubCommandHandler) Hidden() bool {

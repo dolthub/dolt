@@ -31,9 +31,8 @@ type commandDocumentForMarkdown struct {
 	Options             string
 }
 
-var cmdMdDocTempl = `---
-title: {{.Command}}
----
+var cmdMdDocTempl = `
+# {{.Command}}
 
 ## Command
 {{.CommandAndShortDesc}}
@@ -46,7 +45,6 @@ title: {{.Command}}
 
 ## Options
 {{.Options}}
-
 `
 
 func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {

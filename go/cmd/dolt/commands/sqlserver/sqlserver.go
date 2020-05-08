@@ -24,7 +24,6 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
@@ -105,9 +104,9 @@ func (cmd SqlServerCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd SqlServerCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd SqlServerCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
 	ap := createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, sqlServerDocs, ap))
+	return cli.GetCommandDocumentation(commandStr, sqlServerDocs, ap)
 }
 
 func createArgParser() *argparser.ArgParser {

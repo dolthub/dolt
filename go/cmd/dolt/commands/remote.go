@@ -89,9 +89,9 @@ func (cmd RemoteCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd RemoteCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd RemoteCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, remoteDocs, ap))
+	return cli.GetCommandDocumentation(commandStr, remoteDocs, ap)
 }
 
 func (cmd RemoteCmd) createArgParser() *argparser.ArgParser {

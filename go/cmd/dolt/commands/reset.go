@@ -19,8 +19,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
@@ -70,9 +68,9 @@ func (cmd ResetCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ResetCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd ResetCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, resetDocContent, ap))
+	return cli.GetCommandDocumentation(commandStr, resetDocContent, ap)
 }
 
 func (cmd ResetCmd) createArgParser() *argparser.ArgParser {

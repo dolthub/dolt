@@ -25,7 +25,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -65,9 +64,9 @@ func (cmd InitCmd) RequiresRepo() bool {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd InitCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd InitCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, initDocs, ap))
+	return cli.GetCommandDocumentation(commandStr, initDocs, ap)
 }
 
 func (cmd InitCmd) createArgParser() *argparser.ArgParser {

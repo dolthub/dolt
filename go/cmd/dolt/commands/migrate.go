@@ -27,7 +27,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rebase"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 const (
@@ -51,8 +50,8 @@ func (cmd MigrateCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd MigrateCmd) CreateMarkdown(_ filesys.Filesys, _, _ string) error {
-	return nil
+func (cmd MigrateCmd) CreateMarkdown(string) cli.CommandDocumentation {
+	return cli.CommandDocumentation{}
 }
 
 func (cmd MigrateCmd) createArgParser() *argparser.ArgParser {

@@ -24,7 +24,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 var lsDocs = cli.CommandDocumentationContent{
@@ -46,8 +45,8 @@ func (cmd LsCmd) Description() string {
 	return "Internal debugging command to display the list of indexes."
 }
 
-func (cmd LsCmd) CreateMarkdown(filesys.Filesys, string, string) error {
-	return nil
+func (cmd LsCmd) CreateMarkdown(string) cli.CommandDocumentation {
+	return cli.CommandDocumentation{}
 }
 
 func (cmd LsCmd) createArgParser() *argparser.ArgParser {

@@ -27,7 +27,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
@@ -99,9 +98,9 @@ func (cmd LogCmd) EventType() eventsapi.ClientEventType {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd LogCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd LogCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
 	ap := createLogArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, logDocs, ap))
+	return cli.GetCommandDocumentation(commandStr, logDocs, ap)
 }
 
 func createLogArgParser() *argparser.ArgParser {

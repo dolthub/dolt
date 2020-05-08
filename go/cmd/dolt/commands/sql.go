@@ -50,7 +50,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/nullprinter"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/osutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -107,9 +106,9 @@ func (cmd SqlCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd SqlCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd SqlCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, sqlDocs, ap))
+	return cli.GetCommandDocumentation(commandStr, sqlDocs, ap)
 }
 
 func (cmd SqlCmd) createArgParser() *argparser.ArgParser {

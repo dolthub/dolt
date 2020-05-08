@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,8 +26,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 )
 
 const (
@@ -59,8 +58,8 @@ func (cmd *DumpDocsCmd) RequiresRepo() bool {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd *DumpDocsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	return nil
+func (cmd *DumpDocsCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+	return cli.CommandDocumentation{}
 }
 
 // Exec executes the command
@@ -97,6 +96,8 @@ func (cmd *DumpDocsCmd) Exec(_ context.Context, commandStr string, args []string
 }
 
 func (cmd *DumpDocsCmd) dumpDocs(dEnv *env.DoltEnv, dirStr, cmdStr string, subCommands []cli.Command) error {
+	var result []string
+
 	for _, curr := range subCommands {
 		var hidden bool
 		if hidCmd, ok := curr.(cli.HiddenCommand); ok {
@@ -112,28 +113,22 @@ func (cmd *DumpDocsCmd) dumpDocs(dEnv *env.DoltEnv, dirStr, cmdStr string, subCo
 				}
 			} else {
 				currCmdStr := fmt.Sprintf("%s %s", cmdStr, curr.Name())
-				filename := strings.ReplaceAll(currCmdStr, " ", "-")
-
-				absPath := filepath.Join(dirStr, filename+".md")
-
-				err := curr.CreateMarkdown(dEnv.FS, absPath, currCmdStr)
-
-				if err != nil {
-					return err
+				cmdDoc := curr.CreateMarkdown(currCmdStr)
+				if cmdDoc.CommandStr != "" {
+					currCmdMkd, err := cmdDoc.CmdDocToMd()
+					if err != nil {
+						return err
+					}
+					result = append(result, currCmdMkd)
 				}
+
 			}
 		}
 	}
 
-	return nil
-}
-
-func CreateMarkdown(fs filesys.Filesys, path string, cmdDoc cli.CommandDocumentation) error {
-	markdownDoc, err := cmdDoc.CmdDocToMd()
-	if err != nil {
-		return err
-	}
-	wr, err := fs.OpenForWrite(path, os.ModePerm)
+	markdownDoc := strings.Join(result, "")
+	absPath := filepath.Join(dirStr, "cli.md")
+	wr, err := dEnv.FS.OpenForWrite(absPath, os.ModePerm)
 	if err != nil {
 		return err
 	}

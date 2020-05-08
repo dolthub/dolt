@@ -27,7 +27,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/events"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/earl"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 const (
@@ -66,9 +65,9 @@ func (cmd FetchCmd) EventType() eventsapi.ClientEventType {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd FetchCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd FetchCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, fetchDocs, ap))
+	return cli.GetCommandDocumentation(commandStr, fetchDocs, ap)
 }
 
 func (cmd FetchCmd) createArgParser() *argparser.ArgParser {

@@ -28,7 +28,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/events"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 // SendMetricsCommand is the command used for sending metrics
@@ -62,8 +61,8 @@ func (cmd SendMetricsCmd) Hidden() bool {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd SendMetricsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	return nil
+func (cmd SendMetricsCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+	return cli.CommandDocumentation{}
 }
 
 // Exec is the implementation of the command that flushes the events to the grpc service

@@ -24,7 +24,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 var tblMvDocs = cli.CommandDocumentationContent{
@@ -56,9 +55,9 @@ func (cmd MvCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd MvCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd MvCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, tblMvDocs, ap))
+	return cli.GetCommandDocumentation(commandStr, tblMvDocs, ap)
 }
 
 func (cmd MvCmd) createArgParser() *argparser.ArgParser {

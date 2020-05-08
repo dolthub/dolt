@@ -35,7 +35,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/nullprinter"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -71,8 +70,8 @@ func (cmd CatCmd) Description() string {
 	return "Internal debugging command to display the contents of an index."
 }
 
-func (cmd CatCmd) CreateMarkdown(filesys.Filesys, string, string) error {
-	return nil
+func (cmd CatCmd) CreateMarkdown(string) cli.CommandDocumentation {
+	return cli.CommandDocumentation{}
 }
 
 func (cmd CatCmd) createArgParser() *argparser.ArgParser {

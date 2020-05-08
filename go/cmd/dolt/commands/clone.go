@@ -77,9 +77,9 @@ func (cmd CloneCmd) RequiresRepo() bool {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd CloneCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd CloneCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, cloneDocs, ap))
+	return cli.GetCommandDocumentation(commandStr, cloneDocs, ap)
 }
 
 func (cmd CloneCmd) createArgParser() *argparser.ArgParser {

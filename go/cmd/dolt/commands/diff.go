@@ -41,7 +41,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/nullprinter"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/mathutil"
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
@@ -125,9 +124,9 @@ func (cmd DiffCmd) EventType() eventsapi.ClientEventType {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd DiffCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd DiffCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, diffDocs, ap))
+	return cli.GetCommandDocumentation(commandStr, diffDocs, ap)
 }
 
 func (cmd DiffCmd) createArgParser() *argparser.ArgParser {

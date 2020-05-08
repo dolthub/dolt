@@ -113,9 +113,9 @@ func (cmd ImportCmd) EventType() eventsapi.ClientEventType {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ImportCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd ImportCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, schImportDocs, ap))
+	return cli.GetCommandDocumentation(commandStr, schImportDocs, ap)
 }
 
 func (cmd ImportCmd) createArgParser() *argparser.ArgParser {
