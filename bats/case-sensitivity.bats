@@ -75,6 +75,39 @@ teardown() {
 @test "capital letter column names. select with an as" {
     run dolt sql -q "select Aaa as AAA from test"
     [ "$status" -eq 0 ]
-    skip "select as lowercases everything right now"
     [[ "$output" =~ "AAA" ]] || false
+}
+
+@test "select table case insensitive, table and column" {
+    run dolt sql -r csv -q "select aaa as AAA from TEST order by 1 limit 1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "AAA" ]] || false
+}
+
+@test "select table case insensitive, table and column" {
+    run dolt sql -r csv -q "select Test.aaa as AAA from TEST order by 1 limit 1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "AAA" ]] || false
+    [[ "$output" =~ "1" ]] || false
+}
+
+@test "select table alias case insensitive" {
+    run dolt sql -r csv -q "select t.aaA as AaA from TEST T order by 1 limit 1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "AaA" ]] || false
+    [[ "$output" =~ "1" ]] || false
+}
+
+@test "select reserved word, preserve case" {
+    run dolt sql -q "select 1 as DaTe"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "DaTe" ]] || false
+}
+
+@test "select column with different case" {
+    run dolt sql -q "select AaA from Test order by 1 limit 1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+    skip "Column names come back as the table declares them, not as written in the query"
+    [[ "$output" =~ "AaA" ]] || false
 }

@@ -113,6 +113,25 @@ SQL
     [[ "${lines[8]}" =~ ' 6 ' ]] || false
 }
 
+@test "select view with alias" {
+    run dolt sql <<SQL
+create table my_users (id int primary key);
+insert into my_users values (1), (2), (3);
+create view my_users_view as select id from my_users order by id asc;
+insert into my_users values (4), (5), (6);
+select v.* from my_users_view as V;
+SQL
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 11 ]
+    [[ "${lines[1]}" =~ ' id ' ]] || false
+    [[ "${lines[3]}" =~ ' 1 ' ]] || false
+    [[ "${lines[4]}" =~ ' 2 ' ]] || false
+    [[ "${lines[5]}" =~ ' 3 ' ]] || false
+    [[ "${lines[6]}" =~ ' 4 ' ]] || false
+    [[ "${lines[7]}" =~ ' 5 ' ]] || false
+    [[ "${lines[8]}" =~ ' 6 ' ]] || false
+}
+
 @test "selecting from broken view fails" {
     run dolt sql <<SQL
 create table my_users (id int primary key);
