@@ -70,7 +70,7 @@ func (cmd CatCmd) Description() string {
 	return "Internal debugging command to display the contents of an index."
 }
 
-func (cmd CatCmd) CreateMarkdown(string) cli.CommandDocumentation {
+func (cmd CatCmd) GetCommandDocumentation(string) cli.CommandDocumentation {
 	return cli.CommandDocumentation{}
 }
 
@@ -84,7 +84,7 @@ func (cmd CatCmd) createArgParser() *argparser.ArgParser {
 
 func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, catDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, catDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() == 0 {

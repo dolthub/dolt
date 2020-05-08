@@ -97,10 +97,10 @@ func (cmd LogCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_LOG
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd LogCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd LogCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := createLogArgParser()
-	return cli.GetCommandDocumentation(commandStr, logDocs, ap)
+	return cli.BuildCommandDocumentation(commandStr, logDocs, ap)
 }
 
 func createLogArgParser() *argparser.ArgParser {
@@ -116,7 +116,7 @@ func (cmd LogCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 func logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, loggerFunc commitLoggerFunc) int {
 	ap := createLogArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, logDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, logDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() > 1 {

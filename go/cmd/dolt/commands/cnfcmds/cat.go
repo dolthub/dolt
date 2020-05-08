@@ -54,10 +54,10 @@ func (cmd CatCmd) Description() string {
 	return "Writes out the table conflicts."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd CatCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd CatCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return cli.GetCommandDocumentation(commandStr, catDocs, ap)
+	return cli.BuildCommandDocumentation(commandStr, catDocs, ap)
 }
 
 // EventType returns the type of the event to log
@@ -75,7 +75,7 @@ func (cmd CatCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, catDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, catDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 	args = apr.Args()
 

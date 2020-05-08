@@ -45,10 +45,10 @@ func (cmd RmCmd) Description() string {
 	return rmDocs.ShortDesc
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd RmCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd RmCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return cli.GetCommandDocumentation(commandStr, rmDocs, ap)
+	return cli.BuildCommandDocumentation(commandStr, rmDocs, ap)
 }
 
 func (cmd RmCmd) createArgParser() *argparser.ArgParser {
@@ -70,7 +70,7 @@ func (cmd RmCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, rmDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, rmDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 	args = apr.Args()
 

@@ -69,10 +69,10 @@ func (cmd PushCmd) Description() string {
 	return "Push to a dolt remote."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd PushCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd PushCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return cli.GetCommandDocumentation(commandStr, pushDocs, ap)
+	return cli.BuildCommandDocumentation(commandStr, pushDocs, ap)
 }
 
 func (cmd PushCmd) createArgParser() *argparser.ArgParser {
@@ -90,7 +90,7 @@ func (cmd PushCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pushDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, pushDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	remotes, err := dEnv.GetRemotes()

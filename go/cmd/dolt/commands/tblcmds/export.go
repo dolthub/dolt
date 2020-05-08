@@ -90,7 +90,7 @@ func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 }
 
 func parseExportArgs(ap *argparser.ArgParser, commandStr string, args []string) *mvdata.MoveOptions {
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, exportDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, exportDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 	tableName, tableLoc, fileLoc := validateExportArgs(apr, usage)
 
@@ -127,10 +127,10 @@ func (cmd ExportCmd) Description() string {
 	return "Export a table to a file."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ExportCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd ExportCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return cli.GetCommandDocumentation(commandStr, exportDocs, ap)
+	return cli.BuildCommandDocumentation(commandStr, exportDocs, ap)
 }
 
 func (cmd ExportCmd) createArgParser() *argparser.ArgParser {
@@ -163,7 +163,7 @@ func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	verr := executeMove(ctx, dEnv, mvOpts)
 
 	if verr != nil {
-		_, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, exportDocs, ap))
+		_, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, exportDocs, ap))
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 

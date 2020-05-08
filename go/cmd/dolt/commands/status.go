@@ -52,10 +52,10 @@ func (cmd StatusCmd) Description() string {
 	return "Show the working tree status."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd StatusCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd StatusCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return cli.GetCommandDocumentation(commandStr, statusDocs, ap)
+	return cli.BuildCommandDocumentation(commandStr, statusDocs, ap)
 }
 
 func (cmd StatusCmd) createArgParser() *argparser.ArgParser {
@@ -66,7 +66,7 @@ func (cmd StatusCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, statusDocs, ap))
+	help, _ := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, statusDocs, ap))
 	cli.ParseArgs(ap, args, help)
 
 	stagedTblDiffs, notStagedTblDiffs, err := diff.GetTableDiffs(ctx, dEnv)

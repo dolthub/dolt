@@ -53,10 +53,10 @@ func (cmd ShowCmd) Description() string {
 	return "Shows the schema of one or more tables."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ShowCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd ShowCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return cli.GetCommandDocumentation(commandStr, tblSchemaDocs, ap)
+	return cli.BuildCommandDocumentation(commandStr, tblSchemaDocs, ap)
 }
 
 func (cmd ShowCmd) createArgParser() *argparser.ArgParser {
@@ -74,7 +74,7 @@ func (cmd ShowCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tblSchemaDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, tblSchemaDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	verr := printSchemas(ctx, apr, dEnv)

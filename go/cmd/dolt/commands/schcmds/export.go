@@ -54,10 +54,10 @@ func (cmd ExportCmd) Description() string {
 	return "Exports a table's schema."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ExportCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd ExportCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return cli.GetCommandDocumentation(commandStr, schExportDocs, ap)
+	return cli.BuildCommandDocumentation(commandStr, schExportDocs, ap)
 }
 
 func (cmd ExportCmd) createArgParser() *argparser.ArgParser {
@@ -76,7 +76,7 @@ func (cmd ExportCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, schExportDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, schExportDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	root, verr := commands.GetWorkingWithVErr(dEnv)

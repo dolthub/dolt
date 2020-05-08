@@ -76,10 +76,10 @@ func (cmd CloneCmd) RequiresRepo() bool {
 	return false
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd CloneCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd CloneCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return cli.GetCommandDocumentation(commandStr, cloneDocs, ap)
+	return cli.BuildCommandDocumentation(commandStr, cloneDocs, ap)
 }
 
 func (cmd CloneCmd) createArgParser() *argparser.ArgParser {
@@ -101,7 +101,7 @@ func (cmd CloneCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cloneDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, cloneDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	remoteName := apr.GetValueOrDefault(remoteParam, "origin")

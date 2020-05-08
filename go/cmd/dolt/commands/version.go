@@ -41,8 +41,8 @@ func (cmd VersionCmd) RequiresRepo() bool {
 	return false
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd VersionCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd VersionCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	return cli.CommandDocumentation{}
 }
 

@@ -45,7 +45,7 @@ func (cmd LsCmd) Description() string {
 	return "Internal debugging command to display the list of indexes."
 }
 
-func (cmd LsCmd) CreateMarkdown(string) cli.CommandDocumentation {
+func (cmd LsCmd) GetCommandDocumentation(string) cli.CommandDocumentation {
 	return cli.CommandDocumentation{}
 }
 
@@ -57,7 +57,7 @@ func (cmd LsCmd) createArgParser() *argparser.ArgParser {
 
 func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, lsDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, lsDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() > 1 {

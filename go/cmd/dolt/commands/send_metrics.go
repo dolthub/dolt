@@ -60,8 +60,8 @@ func (cmd SendMetricsCmd) Hidden() bool {
 	return true
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd SendMetricsCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd SendMetricsCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	return cli.CommandDocumentation{}
 }
 
@@ -71,7 +71,7 @@ func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []st
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(outputFlag, "o", "Flush events to stdout.")
 
-	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{ShortDesc: sendMetricsShortDesc}, ap))
+	help, _ := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, cli.CommandDocumentationContent{ShortDesc: sendMetricsShortDesc}, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")

@@ -48,10 +48,10 @@ func (cmd NewCmd) Description() string {
 	return newDocs.ShortDesc
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd NewCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd NewCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return cli.GetCommandDocumentation(commandStr, newDocs, ap)
+	return cli.BuildCommandDocumentation(commandStr, newDocs, ap)
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -73,7 +73,7 @@ func (cmd NewCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd NewCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, newDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, newDocs, ap))
 	cli.ParseArgs(ap, args, help)
 
 	_, newCreds, verr := actions.NewCredsFile(dEnv)

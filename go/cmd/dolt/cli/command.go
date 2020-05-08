@@ -54,8 +54,8 @@ type Command interface {
 	Description() string
 	// Exec executes the command
 	Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int
-	// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-	CreateMarkdown(commandStr string) CommandDocumentation
+	// Returns an instance of CommandDocumentation for this command using passed command string
+	GetCommandDocumentation(commandStr string) CommandDocumentation
 }
 
 // This type is to store the content of a documented command, elsewhere we can transform this struct into
@@ -119,7 +119,7 @@ func (hc SubCommandHandler) RequiresRepo() bool {
 	return false
 }
 
-func (hc SubCommandHandler) CreateMarkdown(_ string) CommandDocumentation {
+func (hc SubCommandHandler) GetCommandDocumentation(_ string) CommandDocumentation {
 	return CommandDocumentation{}
 }
 

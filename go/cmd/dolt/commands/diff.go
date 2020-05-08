@@ -123,10 +123,10 @@ func (cmd DiffCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_DIFF
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd DiffCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd DiffCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return cli.GetCommandDocumentation(commandStr, diffDocs, ap)
+	return cli.BuildCommandDocumentation(commandStr, diffDocs, ap)
 }
 
 func (cmd DiffCmd) createArgParser() *argparser.ArgParser {
@@ -143,7 +143,7 @@ func (cmd DiffCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, diffDocs, ap))
+	help, _ := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, diffDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	diffParts := SchemaAndDataDiff

@@ -54,10 +54,10 @@ func (cmd MvCmd) Description() string {
 	return "Moves a table"
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd MvCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd MvCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return cli.GetCommandDocumentation(commandStr, tblMvDocs, ap)
+	return cli.BuildCommandDocumentation(commandStr, tblMvDocs, ap)
 }
 
 func (cmd MvCmd) createArgParser() *argparser.ArgParser {
@@ -76,7 +76,7 @@ func (cmd MvCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd MvCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tblMvDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, tblMvDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() != 2 {

@@ -48,10 +48,10 @@ func (cmd PullCmd) Description() string {
 	return "Fetch from a dolt remote data repository and merge."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd PullCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd PullCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return cli.GetCommandDocumentation(commandStr, pullDocs, ap)
+	return cli.BuildCommandDocumentation(commandStr, pullDocs, ap)
 }
 
 func (cmd PullCmd) createArgParser() *argparser.ArgParser {
@@ -67,7 +67,7 @@ func (cmd PullCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pullDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, pullDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 	branch := dEnv.RepoState.CWBHeadRef()
 

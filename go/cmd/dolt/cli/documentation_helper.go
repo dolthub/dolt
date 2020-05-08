@@ -135,7 +135,7 @@ func (cmdDoc CommandDocumentation) cmdDocToCmdDocMd(options string) (commandDocu
 }
 
 // Creates a CommandDocumentation given command string, arg parser, and a CommandDocumentationContent
-func GetCommandDocumentation(commandStr string, cmdDoc CommandDocumentationContent, argParser *argparser.ArgParser) CommandDocumentation {
+func BuildCommandDocumentation(commandStr string, cmdDoc CommandDocumentationContent, argParser *argparser.ArgParser) CommandDocumentation {
 	return CommandDocumentation{
 		CommandStr: commandStr,
 		ShortDesc:  cmdDoc.ShortDesc,

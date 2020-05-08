@@ -112,10 +112,10 @@ func (cmd ImportCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_SCHEMA
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ImportCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd ImportCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return cli.GetCommandDocumentation(commandStr, schImportDocs, ap)
+	return cli.BuildCommandDocumentation(commandStr, schImportDocs, ap)
 }
 
 func (cmd ImportCmd) createArgParser() *argparser.ArgParser {
@@ -139,7 +139,7 @@ func (cmd ImportCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, schImportDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, schImportDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() != 2 {

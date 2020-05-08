@@ -72,10 +72,10 @@ func (cmd ConfigCmd) RequiresRepo() bool {
 	return false
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ConfigCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd ConfigCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return cli.GetCommandDocumentation(commandStr, cfgDocs, ap)
+	return cli.BuildCommandDocumentation(commandStr, cfgDocs, ap)
 }
 
 func (cmd ConfigCmd) createArgParser() *argparser.ArgParser {
@@ -93,7 +93,7 @@ func (cmd ConfigCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd ConfigCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cfgDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, cfgDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	cfgTypes := apr.FlagsEqualTo([]string{globalParamName, localParamName}, true)

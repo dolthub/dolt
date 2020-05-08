@@ -74,10 +74,10 @@ func (cmd ResolveCmd) Description() string {
 	return "Removes rows from list of conflicts"
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ResolveCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd ResolveCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return cli.GetCommandDocumentation(commandStr, resDocumentation, ap)
+	return cli.BuildCommandDocumentation(commandStr, resDocumentation, ap)
 }
 
 // EventType returns the type of the event to log
@@ -98,7 +98,7 @@ func (cmd ResolveCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd ResolveCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, resDocumentation, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, resDocumentation, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	var verr errhand.VerboseError

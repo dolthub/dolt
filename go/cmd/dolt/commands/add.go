@@ -54,10 +54,10 @@ func (cmd AddCmd) Description() string {
 	return "Add table changes to the list of staged table changes."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd AddCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd AddCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return cli.GetCommandDocumentation(commandStr, addDocs, ap)
+	return cli.BuildCommandDocumentation(commandStr, addDocs, ap)
 }
 
 func (cmd AddCmd) createArgParser() *argparser.ArgParser {
@@ -70,7 +70,7 @@ func (cmd AddCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	helpPr, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, addDocs, ap))
+	helpPr, _ := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, addDocs, ap))
 	apr := cli.ParseArgs(ap, args, helpPr)
 
 	if apr.ContainsArg(doltdb.DocTableName) {

@@ -57,8 +57,8 @@ func (cmd *DumpDocsCmd) RequiresRepo() bool {
 	return false
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd *DumpDocsCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd *DumpDocsCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	return cli.CommandDocumentation{}
 }
 
@@ -66,7 +66,7 @@ func (cmd *DumpDocsCmd) CreateMarkdown(commandStr string) cli.CommandDocumentati
 func (cmd *DumpDocsCmd) Exec(_ context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(dirParamName, "", "dir", "The directory where the md files should be dumped")
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{}, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, cli.CommandDocumentationContent{}, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	dirStr := apr.GetValueOrDefault(dirParamName, ".")
@@ -113,7 +113,7 @@ func (cmd *DumpDocsCmd) dumpDocs(dEnv *env.DoltEnv, dirStr, cmdStr string, subCo
 				}
 			} else {
 				currCmdStr := fmt.Sprintf("%s %s", cmdStr, curr.Name())
-				cmdDoc := curr.CreateMarkdown(currCmdStr)
+				cmdDoc := curr.GetCommandDocumentation(currCmdStr)
 				if cmdDoc.CommandStr != "" {
 					currCmdMkd, err := cmdDoc.CmdDocToMd()
 					if err != nil {

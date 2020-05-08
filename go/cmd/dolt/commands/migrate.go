@@ -49,8 +49,8 @@ func (cmd MigrateCmd) Description() string {
 	return "Executes a repository migration to update to the latest format."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd MigrateCmd) CreateMarkdown(string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd MigrateCmd) GetCommandDocumentation(string) cli.CommandDocumentation {
 	return cli.CommandDocumentation{}
 }
 
@@ -69,7 +69,7 @@ func (cmd MigrateCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd MigrateCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pushDocs, ap))
+	help, _ := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, pushDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.Contains(migratePushFlag) && apr.Contains(migratePullFlag) {

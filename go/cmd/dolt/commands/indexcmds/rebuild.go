@@ -44,7 +44,7 @@ func (cmd RebuildCmd) Description() string {
 	return "Internal debugging command to rebuild the contents of an index."
 }
 
-func (cmd RebuildCmd) CreateMarkdown(string) cli.CommandDocumentation {
+func (cmd RebuildCmd) GetCommandDocumentation(string) cli.CommandDocumentation {
 	return cli.CommandDocumentation{}
 }
 
@@ -57,7 +57,7 @@ func (cmd RebuildCmd) createArgParser() *argparser.ArgParser {
 
 func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, rebuildDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, rebuildDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() == 0 {

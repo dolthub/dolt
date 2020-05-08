@@ -103,10 +103,10 @@ func (cmd SqlServerCmd) Description() string {
 	return sqlServerDocs.ShortDesc
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd SqlServerCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd SqlServerCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := createArgParser()
-	return cli.GetCommandDocumentation(commandStr, sqlServerDocs, ap)
+	return cli.BuildCommandDocumentation(commandStr, sqlServerDocs, ap)
 }
 
 func createArgParser() *argparser.ArgParser {
@@ -146,7 +146,7 @@ func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []stri
 
 func startServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
 	ap := createArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlServerDocs, ap))
+	help, _ := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, sqlServerDocs, ap))
 
 	apr := cli.ParseArgs(ap, args, help)
 	serverConfig, err := getServerConfig(dEnv, apr)

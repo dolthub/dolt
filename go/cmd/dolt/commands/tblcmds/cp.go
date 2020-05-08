@@ -52,10 +52,10 @@ func (cmd CpCmd) Description() string {
 	return "Copies a table"
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd CpCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd CpCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return cli.GetCommandDocumentation(commandStr, tblCpDocs, ap)
+	return cli.BuildCommandDocumentation(commandStr, tblCpDocs, ap)
 }
 
 func (cmd CpCmd) createArgParser() *argparser.ArgParser {
@@ -75,7 +75,7 @@ func (cmd CpCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tblCpDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, tblCpDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() < 2 || apr.NArg() > 3 {

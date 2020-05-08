@@ -68,10 +68,10 @@ func (cmd CommitCmd) Description() string {
 	return "Record changes to the repository."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd CommitCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd CommitCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return cli.GetCommandDocumentation(commandStr, commitDocs, ap)
+	return cli.BuildCommandDocumentation(commandStr, commitDocs, ap)
 }
 
 func (cmd CommitCmd) createArgParser() *argparser.ArgParser {
@@ -85,7 +85,7 @@ func (cmd CommitCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, commitDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, commitDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	msg, msgOk := apr.GetValue(commitMessageArg)

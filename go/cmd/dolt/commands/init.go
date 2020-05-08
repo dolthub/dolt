@@ -63,10 +63,10 @@ func (cmd InitCmd) RequiresRepo() bool {
 	return false
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd InitCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd InitCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return cli.GetCommandDocumentation(commandStr, initDocs, ap)
+	return cli.BuildCommandDocumentation(commandStr, initDocs, ap)
 }
 
 func (cmd InitCmd) createArgParser() *argparser.ArgParser {
@@ -81,7 +81,7 @@ func (cmd InitCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, initDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, initDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	if dEnv.HasDoltDir() {

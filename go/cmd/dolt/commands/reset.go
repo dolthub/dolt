@@ -67,10 +67,10 @@ func (cmd ResetCmd) Description() string {
 	return "Remove table changes from the list of staged table changes."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ResetCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd ResetCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return cli.GetCommandDocumentation(commandStr, resetDocContent, ap)
+	return cli.BuildCommandDocumentation(commandStr, resetDocContent, ap)
 }
 
 func (cmd ResetCmd) createArgParser() *argparser.ArgParser {
@@ -83,7 +83,7 @@ func (cmd ResetCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, resetDocContent, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, resetDocContent, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.ContainsArg(doltdb.DocTableName) {

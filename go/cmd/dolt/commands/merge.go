@@ -70,10 +70,10 @@ func (cmd MergeCmd) Description() string {
 	return "Merge a branch."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd MergeCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd MergeCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return cli.GetCommandDocumentation(commandStr, mergeDocs, ap)
+	return cli.BuildCommandDocumentation(commandStr, mergeDocs, ap)
 }
 
 func (cmd MergeCmd) createArgParser() *argparser.ArgParser {
@@ -90,7 +90,7 @@ func (cmd MergeCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, mergeDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, mergeDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	var verr errhand.VerboseError

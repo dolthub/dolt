@@ -51,10 +51,10 @@ func (cmd UseCmd) Description() string {
 	return useDocs.ShortDesc
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd UseCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd UseCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return cli.GetCommandDocumentation(commandStr, useDocs, ap)
+	return cli.BuildCommandDocumentation(commandStr, useDocs, ap)
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -76,7 +76,7 @@ func (cmd UseCmd) createArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd UseCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, useDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, useDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 	args = apr.Args()
 	if len(args) != 1 {

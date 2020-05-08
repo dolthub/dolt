@@ -59,10 +59,10 @@ func (cmd LsCmd) Description() string {
 	return "List tables in the working set."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd LsCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd LsCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return cli.GetCommandDocumentation(commandStr, lsDocs, ap)
+	return cli.BuildCommandDocumentation(commandStr, lsDocs, ap)
 }
 
 func (cmd LsCmd) createArgParser() *argparser.ArgParser {
@@ -81,7 +81,7 @@ func (cmd LsCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, lsDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, lsDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.Contains(systemFlag) && apr.Contains(allFlag) {

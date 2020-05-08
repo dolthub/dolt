@@ -62,10 +62,10 @@ func (cmd CheckoutCmd) Description() string {
 	return "Checkout a branch or overwrite a table from HEAD."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd CheckoutCmd) CreateMarkdown(commandStr string) cli.CommandDocumentation {
+// BuildCommandDocumentation creates a markdown file containing the helptext for the command at the given path
+func (cmd CheckoutCmd) GetCommandDocumentation(commandStr string) cli.CommandDocumentation {
 	ap := cmd.createArgParser()
-	return cli.GetCommandDocumentation(commandStr, checkoutDocs, ap)
+	return cli.BuildCommandDocumentation(commandStr, checkoutDocs, ap)
 }
 
 func (cmd CheckoutCmd) createArgParser() *argparser.ArgParser {
@@ -82,7 +82,7 @@ func (cmd CheckoutCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	helpPrt, usagePrt := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, checkoutDocs, ap))
+	helpPrt, usagePrt := cli.HelpAndUsagePrinters(cli.BuildCommandDocumentation(commandStr, checkoutDocs, ap))
 	apr := cli.ParseArgs(ap, args, helpPrt)
 
 	if (apr.Contains(coBranchArg) && apr.NArg() > 1) || (!apr.Contains(coBranchArg) && apr.NArg() == 0) {
