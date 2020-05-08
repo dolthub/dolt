@@ -67,6 +67,7 @@ func warnIfTmpDirMoveFails() {
 		cli.PrintErrln(color.YellowString("This is likely due to your temp directory not being located on the same volume as the current directory."))
 		cli.PrintErrln(color.YellowString("While we tackle this issue you can change your TMPDIR to be a directory on the current volume using the env var TMPDIR"))
 		cli.PrintErrln(color.YellowString("Visit https://github.com/liquidata-inc/dolt/issues/253 to find the state of this issue."))
+		cli.PrintErrln()
 		return
 	}
 
