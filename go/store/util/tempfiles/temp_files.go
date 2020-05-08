@@ -3,7 +3,6 @@ package tempfiles
 import (
 	"io/ioutil"
 	"os"
-	"path/filepath"
 )
 
 // TempFileProvider is an interface which provides methods for creating temporary files.
@@ -39,8 +38,8 @@ func (tfp *TempFileProviderAt) GetTempDir() string {
 // NewFile creates a new temporary file in the directory dir, opens the file for reading and writing, and returns
 // the resulting *os.File. If dir is "" then the default temp dir is used.
 func (tfp *TempFileProviderAt) NewFile(dir, pattern string) (*os.File, error) {
-	if !filepath.IsAbs(dir) {
-		dir = filepath.Join(tfp.tempDir, dir)
+	if dir == "" {
+		dir = tfp.tempDir
 	}
 
 	f, err := ioutil.TempFile(dir, pattern)
