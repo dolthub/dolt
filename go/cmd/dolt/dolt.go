@@ -149,6 +149,7 @@ func runMain() int {
 	defer restoreIO()
 
 	warnIfMaxFilesTooLow()
+	warnIfTmpDirMoveFails()
 
 	dEnv := env.Load(context.TODO(), env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
 
