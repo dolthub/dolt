@@ -60,7 +60,7 @@ func (tfp *TempFileProviderAt) Clean() {
 }
 
 // MovableTemFile is an object that implements TempFileProvider that is used by the nbs to create temp files that
-// ultimately will be renamed.  It is important not to use this instance rather than using os.TempDir, or ioutil.TempFile
+// ultimately will be renamed.  It is important to use this instance rather than using os.TempDir, or ioutil.TempFile
 // directly as those may have errors executing a rename against if the volume the default temporary directory lives on
 // is different than the volume of the destination of the rename.
-var MovableTempFile TempFileProvider = NewTempFileProviderAt(os.TempDir())
+var MovableTempFileProvider TempFileProvider = NewTempFileProviderAt(os.TempDir())

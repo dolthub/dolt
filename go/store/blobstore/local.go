@@ -151,7 +151,7 @@ func (bs *LocalBlobstore) Put(ctx context.Context, key string, reader io.Reader)
 	// written as temp file and renamed so the file corresponding to this key
 	// never exists in a partially written state
 	tempFile, err := func() (string, error) {
-		temp, err := tempfiles.MovableTempFile.NewFile("", ver.String())
+		temp, err := tempfiles.MovableTempFileProvider.NewFile("", ver.String())
 
 		if err != nil {
 			return "", err

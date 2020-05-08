@@ -205,7 +205,7 @@ func runMain() int {
 		return 1
 	}
 
-	defer tempfiles.MovableTempFile.Clean()
+	defer tempfiles.MovableTempFileProvider.Clean()
 
 	res := doltCommand.Exec(ctx, "dolt", args, dEnv)
 

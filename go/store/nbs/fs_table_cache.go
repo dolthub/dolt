@@ -171,7 +171,7 @@ func (ftc *fsTableCache) store(h addr, data io.Reader, size uint64) error {
 	path := filepath.Join(ftc.dir, h.String())
 	tempName, err := func() (name string, ferr error) {
 		var temp *os.File
-		temp, ferr = tempfiles.MovableTempFile.NewFile(ftc.dir, tempTablePrefix)
+		temp, ferr = tempfiles.MovableTempFileProvider.NewFile(ftc.dir, tempTablePrefix)
 
 		if ferr != nil {
 			return "", ferr
