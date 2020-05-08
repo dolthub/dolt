@@ -49,7 +49,7 @@ func reconfigIfTempFileMoveFails(dEnv *env.DoltEnv) error {
 
 		stat, err := os.Stat(tmpDir)
 
-		if err == nil {
+		if err != nil {
 			err := os.MkdirAll(tmpDir, os.ModePerm)
 
 			if err != nil {
