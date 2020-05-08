@@ -26,7 +26,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -67,7 +66,7 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data [
 
 	tempName, err := func() (tempName string, ferr error) {
 		var temp *os.File
-		temp, ferr = ioutil.TempFile(ftp.dir, tempTablePrefix)
+		temp, ferr = MovableTempFile.NewFile(ftp.dir, tempTablePrefix)
 
 		if ferr != nil {
 			return "", ferr
@@ -142,7 +141,7 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 	name := nameFromSuffixes(plan.suffixes())
 	tempName, err := func() (tempName string, ferr error) {
 		var temp *os.File
-		temp, ferr = ioutil.TempFile(ftp.dir, tempTablePrefix)
+		temp, ferr = MovableTempFile.NewFile(ftp.dir, tempTablePrefix)
 
 		if ferr != nil {
 			return "", ferr

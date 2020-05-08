@@ -220,7 +220,7 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 	// The closure here ensures this file is closed before moving on.
 	tempManifestPath, err = func() (name string, ferr error) {
 		var temp *os.File
-		temp, ferr = ioutil.TempFile(fm.dir, "nbs_manifest_")
+		temp, ferr = MovableTempFile.NewFile(fm.dir, "nbs_manifest_")
 
 		if ferr != nil {
 			return "", ferr
