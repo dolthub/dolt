@@ -209,10 +209,16 @@ SQL
 }
 
 @test "sql select same column twice using table aliases" {
-    run dolt sql -q "select pk,foo.c1,bar.c1 from one_pk as foo, one_pk as bar"
+    run dolt sql -q "select foo.pk,foo.c1,bar.c1 from one_pk as foo, one_pk as bar"
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "<NULL>" ]] || false
     [[ "$output" =~ "c1" ]] || false
+}
+
+@test "sql select ambiguous column using table aliases" {
+    run dolt sql -q "select pk,foo.c1,bar.c1 from one_pk as foo, one_pk as bar"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "ambiguous" ]] || false
 }
 
 @test "sql basic inner join" {
