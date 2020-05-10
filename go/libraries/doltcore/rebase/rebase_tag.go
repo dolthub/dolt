@@ -645,7 +645,6 @@ func modifyDifferenceTag(d *ndiff.Difference, nbf *types.NomsBinFormat, rSch sch
 		valTup = newTv.NomsTupleForNonPKCols(nbf, rSch.GetNonPKCols())
 	}
 
-
 	return keyTup, valTup, nil
 }
 
