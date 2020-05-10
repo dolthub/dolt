@@ -606,95 +606,45 @@ func dropValsForDeletedColumns(ctx context.Context, nbf *types.NomsBinFormat, ro
 
 func modifyDifferenceTag(d *ndiff.Difference, nbf *types.NomsBinFormat, rSch schema.Schema, tagMapping map[uint64]uint64) (keyTup types.LesserValuable, valTup types.Valuable, err error) {
 
-	k := d.KeyValue.(types.Tuple)
-	if k.Len()%2 != 0 {
-		panic("A tagged tuple must have an even column count.")
-	}
-
-	kItr, err := k.Iterator()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	idx := 0
-	kk := make([]types.Value, k.Len())
-	for kItr.HasMore() {
-		_, tag, err := kItr.Next()
-		if err != nil {
-			return nil, nil, err
-		}
-
-		// i.HasMore() is true here because of assertion above.
-		_, val, err := kItr.Next()
-		if err != nil {
-			return nil, nil, err
-		}
-
-		if tag.Kind() != types.UintKind {
-			panic("Invalid tagged tuple must have uint tags.")
-		}
-
-		if val != types.NullValue {
-			newTag := tagMapping[uint64(tag.(types.Uint))]
-			kk[idx] = types.Uint(newTag)
-			kk[idx+1] = val
-		}
-		idx += 2
-	}
-
-	keyTup, err = types.NewTuple(nbf, kk...)
+	ktv, err := row.ParseTaggedValues(d.KeyValue.(types.Tuple))
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if d.NewValue == nil {
-		return keyTup, nil, nil
+	newKtv := make(row.TaggedValues)
+	for tag, val := range ktv {
+		newTag, found := tagMapping[tag]
+		if !found {
+			newTag = tag
+
+		}
+		newKtv[newTag] = val
+
 	}
 
-	v := d.NewValue.(types.Tuple)
-	if v.Len()%2 != 0 {
-		panic("A tagged tuple must have an even column count.")
-	}
+	keyTup = newKtv.NomsTupleForPKCols(nbf, rSch.GetPKCols())
 
-	vItr, err := v.Iterator()
-	if err != nil {
-		return nil, nil, err
-	}
+	valTup = d.NewValue
+	if d.NewValue != nil {
+		tv, err := row.ParseTaggedValues(d.NewValue.(types.Tuple))
 
-	idx = 0
-	vv := make([]types.Value, v.Len())
-	for vItr.HasMore() {
-		_, tag, err := vItr.Next()
 		if err != nil {
 			return nil, nil, err
 		}
 
-		// i.HasMore() is true here because of assertion above.
-		_, val, err := vItr.Next()
-		if err != nil {
-			return nil, nil, err
-		}
-
-		if tag.Kind() != types.UintKind {
-			panic("Invalid tagged tuple must have uint tags.")
-		}
-
-		if val != types.NullValue {
-			newTag, ok := tagMapping[uint64(tag.(types.Uint))]
-			if ok {
-				vv[idx] = types.Uint(newTag)
-				vv[idx+1] = val
-				idx += 2
+		newTv := make(row.TaggedValues)
+		for tag, val := range tv {
+			newTag, found := tagMapping[tag]
+			if !found {
+				newTag = tag
 			}
+
+			newTv[newTag] = val
 		}
+		valTup = newTv.NomsTupleForNonPKCols(nbf, rSch.GetNonPKCols())
 	}
 
-	valTup, err = types.NewTuple(nbf, vv[:idx]...)
-
-	if err != nil {
-		return nil, nil, err
-	}
 
 	return keyTup, valTup, nil
 }
