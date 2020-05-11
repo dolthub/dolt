@@ -197,10 +197,7 @@ function run_once() {
       rm -rf .dolt; dolt init
 
       echo "Running tests and creating $results"
-      echo "Using the following files/dirs:"
-      find ../../../../../../../tempTesting
       go run . run "$sqllogictest_checkout"/test > "$results"
-#      go run . run "$TMP_TESTING_DIR" > "$results"
 
       echo "Parsing $results and generating $parsed"
       go run . parse "$commit_hash" "$results" > "$parsed"
