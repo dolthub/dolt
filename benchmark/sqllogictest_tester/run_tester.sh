@@ -162,6 +162,12 @@ function import_and_query_once() {
 .import $release_mean_csv releases_dolt_mean_results
 SQL
 
+  echo "Results from the commiter:"
+  sqlite3 query_db 'select * from nightly_dolt_results'
+
+  echo "Results from the release:"
+  sqlite3 query_db 'select * from releases_dolt_results'
+
   result_query_output=`sqlite3 query_db 'select * from release_committer_result_change'`
   duration_query_output=`sqlite3 query_db 'select * from releases_nightly_duration_change'`
 
