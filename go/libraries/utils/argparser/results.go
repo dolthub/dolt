@@ -81,6 +81,16 @@ func (res *ArgParseResults) ContainsAny(names ...string) bool {
 	return false
 }
 
+func (res *ArgParseResults) ContainsMany(names ...string) []string {
+	var contains []string
+	for _, name := range names {
+		if _, ok := res.options[name]; ok {
+			contains = append(contains, name)
+		}
+	}
+	return contains
+}
+
 func (res *ArgParseResults) GetValue(name string) (string, bool) {
 	val, ok := res.options[name]
 	return val, ok

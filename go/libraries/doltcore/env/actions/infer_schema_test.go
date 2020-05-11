@@ -60,7 +60,7 @@ func TestLeastPermissiveKind(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actualKind, hasNegativeNums := leastPermissiveKind(test.valStr, test.floatThreshold)
+			actualKind, hasNegativeNums := leastPermissiveType(test.valStr, test.floatThreshold)
 			assert.Equal(t, test.expKind, actualKind, "val: %s, expected: %v, actual: %v", test.valStr, test.expKind, actualKind)
 			assert.Equal(t, test.expHasNegs, hasNegativeNums)
 		})
@@ -92,7 +92,7 @@ func TestLeastPermissiveNumericKind(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			isNegative, actualKind := leastPermissiveNumericKind(test.valStr, test.floatThreshold)
+			isNegative, actualKind := leastPermissiveNumericType(test.valStr, test.floatThreshold)
 			assert.Equal(t, test.expKind, actualKind, "val: %s, expected: %v, actual: %v", test.valStr, test.expKind, actualKind)
 			assert.Equal(t, test.expNegative, isNegative)
 		})
@@ -322,7 +322,7 @@ func TestTypeCountsToKind(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			kind, nullable := typeCountsToKind("test", test.typeToCount, test.hasNegatives)
+			kind, nullable := findCommonType(nil)
 			assert.Equal(t, test.expKind, kind)
 			assert.Equal(t, test.expNullable, nullable)
 		})
@@ -605,7 +605,7 @@ func TestInferSchema(t *testing.T) {
 			csvRd, err := csv.NewCSVReader(types.Format_Default, rdCl, csv.NewCSVInfo())
 			require.NoError(t, err)
 
-			sch, err := InferSchemaFromTableReader(context.Background(), csvRd, test.pkCols, test.infArgs)
+			sch, err := InferSchemaFromTableReader(context.Background(), csvRd, test.pkCols, nil)
 			require.NoError(t, err)
 
 			allCols := sch.GetAllCols()

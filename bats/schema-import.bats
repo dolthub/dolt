@@ -20,12 +20,12 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 10 ]
     [[ "${lines[0]}" =~ "test" ]] || false
-    [[ "$output" =~ "\`pk\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c1\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c2\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c3\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c4\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c5\` BIGINT" ]] || false
+    [[ "$output" =~ "\`pk\` TINYINT" ]] || false
+    [[ "$output" =~ "\`c1\` TINYINT" ]] || false
+    [[ "$output" =~ "\`c2\` TINYINT" ]] || false
+    [[ "$output" =~ "\`c3\` TINYINT" ]] || false
+    [[ "$output" =~ "\`c4\` TINYINT" ]] || false
+    [[ "$output" =~ "\`c5\` TINYINT" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
@@ -34,12 +34,12 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 9 ]
     [[ "${lines[0]}" =~ "test" ]] || false
-    [[ "$output" =~ "\`pk\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c1\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c2\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c3\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c4\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c5\` BIGINT" ]] || false
+    [[ "$output" =~ "\`pk\` TINYINT" ]] || false
+    [[ "$output" =~ "\`c1\` TINYINT" ]] || false
+    [[ "$output" =~ "\`c2\` TINYINT" ]] || false
+    [[ "$output" =~ "\`c3\` TINYINT" ]] || false
+    [[ "$output" =~ "\`c4\` TINYINT" ]] || false
+    [[ "$output" =~ "\`c5\` TINYINT" ]] || false
 
     run dolt ls
     [ "$status" -eq 0 ]
@@ -51,12 +51,12 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 10 ]
     [[ "${lines[0]}" =~ "test" ]] || false
-    [[ "$output" =~ "\`pk\` BIGINT" ]] || false
-    [[ "$output" =~ "\`int\` BIGINT" ]] || false
+    [[ "$output" =~ "\`pk\` TINYINT" ]] || false
+    [[ "$output" =~ "\`int\` TINYINT" ]] || false
     [[ "$output" =~ "\`string\` LONGTEXT" ]] || false
     [[ "$output" =~ "\`boolean\` BIT(1)" ]] || false
-    [[ "$output" =~ "\`float\` DOUBLE" ]] || false
-    [[ "$output" =~ "\`uint\` BIGINT" ]] || false
+    [[ "$output" =~ "\`float\` FLOAT" ]] || false
+    [[ "$output" =~ "\`uint\` TINYINT UNSIGNED" ]] || false
     [[ "$output" =~ "\`uuid\` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin" ]] || false
 }
 
@@ -74,12 +74,12 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 11 ]
     [[ "${lines[0]}" =~ "test" ]] || false
-    [[ "$output" =~ "\`pk\` BIGINT" ]] || false
-    [[ "$output" =~ "\`int\` BIGINT" ]] || false
+    [[ "$output" =~ "\`pk\` TINYINT" ]] || false
+    [[ "$output" =~ "\`int\` TINYINT" ]] || false
     [[ "$output" =~ "\`string\` LONGTEXT" ]] || false
     [[ "$output" =~ "\`boolean\` BIT(1)" ]] || false
-    [[ "$output" =~ "\`float\` DOUBLE" ]] || false
-    [[ "$output" =~ "\`uint\` BIGINT" ]] || false
+    [[ "$output" =~ "\`float\` FLOAT" ]] || false
+    [[ "$output" =~ "\`uint\` TINYINT" ]] || false
     [[ "$output" =~ "\`uuid\` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin" ]] || false
 }
 
@@ -105,16 +105,17 @@ teardown() {
     run dolt schema import -c --pks=pk1,pk2 test `batshelper 2pk5col-ints.csv`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Created table successfully." ]] || false
+    dolt schema show
     run dolt schema show
     [ "${#lines[@]}" -eq 11 ]
     [[ "${lines[0]}" =~ "test" ]] || false
-    [[ "$output" =~ "\`pk1\` BIGINT" ]] || false
-    [[ "$output" =~ "\`pk2\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c1\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c2\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c3\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c4\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c5\` BIGINT" ]] || false
+    [[ "$output" =~ "\`pk1\` TINYINT" ]] || false
+    [[ "$output" =~ "\`pk2\` TINYINT" ]] || false
+    [[ "$output" =~ "\`c1\` TINYINT" ]] || false
+    [[ "$output" =~ "\`c2\` TINYINT" ]] || false
+    [[ "$output" =~ "\`c3\` TINYINT" ]] || false
+    [[ "$output" =~ "\`c4\` TINYINT" ]] || false
+    [[ "$output" =~ "\`c5\` TINYINT" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk1\`,\`pk2\`)" ]] || false
 }
 
@@ -135,7 +136,7 @@ DELIM
     [[ "${lines[0]}" =~ "test" ]] || false
     [[ "$output" =~ "\`pk\` LONGTEXT" ]] || false
     [[ "$output" =~ "\`headerOne\` LONGTEXT" ]] || false
-    [[ "$output" =~ "\`headerTwo\` BIGINT" ]] || false
+    [[ "$output" =~ "\`headerTwo\` TINYINT" ]] || false
 }
 
 @test "schema import --keep-types" {
@@ -147,24 +148,28 @@ DELIM
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 11 ]
     [[ "${lines[0]}" =~ "test" ]] || false
-    [[ "$output" =~ "\`pk\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c1\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c2\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c3\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c4\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c5\` BIGINT" ]] || false
+    [[ "$output" =~ "\`pk\` TINYINT" ]] || false
+    [[ "$output" =~ "\`c1\` TINYINT" ]] || false
+    [[ "$output" =~ "\`c2\` TINYINT" ]] || false
+    [[ "$output" =~ "\`c3\` TINYINT" ]] || false
+    [[ "$output" =~ "\`c4\` TINYINT" ]] || false
+    [[ "$output" =~ "\`c5\` TINYINT" ]] || false
     [[ "$output" =~ "\`c6\` LONGTEXT" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
 @test "schema import with strings in csv" {
-    # This CSV has quoted integers for the primary key ie "0","foo",... and
-    # "1","bar",...
-    run dolt schema import -r --keep-types --pks=pk test `batshelper 1pk5col-strings.csv`
+    cat <<DELIM > 1pk5col-strings.csv
+pk,c1,c2,c3,c4,c5,c6
+"0","foo","bar","baz","car","dog","tim"
+"1","1","2","3","4","5","6"
+DELIM
+    dolt schema import -r --keep-types --pks=pk test 1pk5col-strings.csv
+    run dolt schema import -r --keep-types --pks=pk test 1pk5col-strings.csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 11 ]
     [[ "${lines[0]}" =~ "test" ]] || false
-    [[ "$output" =~ "\`pk\` BIGINT" ]] || false
+    [[ "$output" =~ "\`pk\` TINYINT" ]] || false
     [[ "$output" =~ "\`c1\` LONGTEXT" ]] || false
     [[ "$output" =~ "\`c2\` LONGTEXT" ]] || false
     [[ "$output" =~ "\`c3\` LONGTEXT" ]] || false
@@ -181,10 +186,10 @@ pk, test_date
 1, "2011-10-24 13:17:42"
 2, 2018-04-13
 DELIM
+    dolt schema import --dry-run -c --pks=pk test 1pk-datetime.csv
     run dolt schema import -c --pks=pk test 1pk-datetime.csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
-    skip "schema import does not support datetime"
     [[ "$output" =~ "DATETIME" ]] || false;
 }
 
@@ -208,18 +213,4 @@ DELIM
 @test "schema import of two tables" {
     dolt schema import -c --pks=pk test1 `batshelper 1pksupportedtypes.csv`
     dolt schema import -c --pks=pk test2 `batshelper 1pk5col-ints.csv`
-}
-
-@test "schema import applies NOT NULL where applicable" {
-    cat <<DELIM > some-nulls.csv
-pk,c1,c2
-0,0,0
-1, ,1
-DELIM
-    run dolt schema import -c --pks=pk test some-nulls.csv
-    [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "\`pk\` BIGINT NOT NULL" ]] || false;
-    [[ "${lines[2]}" =~ "\`c1\` BIGINT" ]] || false;
-    [[ ! "${lines[2]}" =~ "NOT NULL" ]] || false;
-    [[ "${lines[3]}" =~ "\`c2\` BIGINT NOT NULL" ]] || false;
 }

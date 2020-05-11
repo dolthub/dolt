@@ -16,16 +16,18 @@ package actions
 
 import (
 	"context"
-	"errors"
 	"math"
 	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/funcitr"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -33,30 +35,53 @@ import (
 // StrMapper is a simple interface for mapping a string to another string
 type StrMapper interface {
 	// Map maps a string to another string.  If a string is not in the mapping ok will be false, otherwise it is true.
-	Map(str string) (mappedStr string, ok bool)
+	MaybeMap(str string) string
 }
 
 // IdentityMapper maps any string to itself
 type IdentityMapper struct{}
 
 // Map maps a string to another string.  For the identity mapper the input string always maps to the output string
-func (m IdentityMapper) Map(str string) (string, bool) {
-	return str, true
+func (m IdentityMapper) MaybeMap(str string) string {
+	return str
 }
 
 // MapMapper is a StrMapper implementation that is backed by a map[string]string
 type MapMapper map[string]string
 
 // Map maps a string to another string.  If a string is not in the mapping ok will be false, otherwise it is true.
-func (m MapMapper) Map(str string) (string, bool) {
+func (m MapMapper) MaybeMap(str string) string {
 	v, ok := m[str]
-	return v, ok
+	if ok {
+		return v
+	}
+	return str
 }
+
+type typeInfoSet map[typeinfo.TypeInfo]struct{}
+
+type SchImportOp int
+
+const (
+	CreateOp SchImportOp = iota
+	UpdateOp
+	ReplaceOp
+)
+
+const (
+	maxUint24 = 1<<24 - 1
+	minInt24  = -1 << 23
+)
+
 
 // InferenceArgs are arguments that can be passed to the schema inferrer to modify it's inference behavior.
 type InferenceArgs struct {
+	TableName   string
+	SchImportOp SchImportOp
 	// ExistingSch is the schema for the existing schema.  If no schema exists schema.EmptySchema is expected.
 	ExistingSch schema.Schema
+	// PKCols are the columns from the input file that should be used as primary keys in the output schema
+	PkCols []string
 	// ColMapper allows columns named X in the schema to be named Y in the inferred schema.
 	ColMapper StrMapper
 	// FloatThreshold is the threshold at which a string representing a floating point number should be interpreted as
@@ -70,20 +95,20 @@ type InferenceArgs struct {
 	// without modification.
 	KeepTypes bool
 	// Update is a flag which tells the inferrer, not to change existing columns
-	Update bool
 }
 
 // InferSchemaFromTableReader will infer a tables schema.
-func InferSchemaFromTableReader(ctx context.Context, rd table.TableReadCloser, pkCols []string, args *InferenceArgs) (schema.Schema, error) {
-	pkColToIdx := make(map[string]int, len(pkCols))
-	for i, colName := range pkCols {
-		pkColToIdx[colName] = i
+func InferSchemaFromTableReader(ctx context.Context, rd table.TableReadCloser, args *InferenceArgs, root *doltdb.RootValue) (schema.Schema, error) {
+	inferrer := newInferrer(rd.GetSchema(), args)
+
+	var rowFailure *pipeline.TransformRowFailure
+	badRow := func(trf *pipeline.TransformRowFailure) (quit bool) {
+		rowFailure = trf
+		return false
 	}
 
-	inferrer := newInferrer(pkColToIdx, rd.GetSchema(), args)
-
 	rdProcFunc := pipeline.ProcFuncForReader(ctx, rd)
-	p := pipeline.NewAsyncPipeline(rdProcFunc, inferrer.sinkRow, nil, inferrer.badRow)
+	p := pipeline.NewAsyncPipeline(rdProcFunc, inferrer.sinkRow, nil, badRow)
 	p.Start()
 
 	err := p.Wait()
@@ -92,107 +117,135 @@ func InferSchemaFromTableReader(ctx context.Context, rd table.TableReadCloser, p
 		return nil, err
 	}
 
-	if inferrer.rowFailure != nil {
-		return nil, inferrer.rowFailure
+	if rowFailure != nil {
+		return nil, rowFailure
 	}
 
-	return inferrer.inferSchema()
+	return inferrer.inferSchema(ctx, root)
 }
 
 type inferrer struct {
-	sch        schema.Schema
-	pkColToIdx map[string]int
-	impArgs    *InferenceArgs
+	readerSch schema.Schema
+	inferSets map[uint64]typeInfoSet
+	nullable  *set.Uint64Set
 
-	colNames  []string
-	colCount  int
-	colType   []map[types.NomsKind]int
-	negatives []bool
-
-	rowFailure *pipeline.TransformRowFailure
+	inferArgs *InferenceArgs
 }
 
-func newInferrer(pkColToIdx map[string]int, sch schema.Schema, args *InferenceArgs) *inferrer {
-	colColl := sch.GetAllCols()
-	colNames := make([]string, 0, colColl.Size())
-
-	_ = colColl.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		colNames = append(colNames, col.Name)
+func newInferrer(readerSch schema.Schema, args *InferenceArgs) *inferrer {
+	inferSets := make(map[uint64]typeInfoSet, readerSch.GetAllCols().Size())
+	_ = readerSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		inferSets[tag] = make(typeInfoSet)
 		return false, nil
 	})
 
-	colCount := len(colNames)
-	colType := make([]map[types.NomsKind]int, colCount)
-	negatives := make([]bool, colCount)
-	for i := 0; i < colCount; i++ {
-		colType[i] = make(map[types.NomsKind]int)
+	return &inferrer{
+		readerSch: readerSch,
+		inferSets: inferSets,
+		nullable:  set.NewUint64Set(nil),
+		inferArgs: args,
 	}
-
-	return &inferrer{sch, pkColToIdx, args, colNames, colCount, colType, negatives, nil}
 }
 
-func (inf *inferrer) inferSchema() (schema.Schema, error) {
-	nonPkCols, _ := schema.NewColCollection()
-	pkCols, _ := schema.NewColCollection()
-
-	if inf.impArgs.Update {
-		nonPkCols = inf.impArgs.ExistingSch.GetNonPKCols()
-		pkCols = inf.impArgs.ExistingSch.GetPKCols()
+func (inf *inferrer) inferSchema(ctx context.Context, root *doltdb.RootValue) (schema.Schema, error) {
+	existingSch := inf.inferArgs.ExistingSch
+	if existingSch == nil {
+		existingSch = schema.EmptySchema
 	}
 
-	existingCols := inf.impArgs.ExistingSch.GetAllCols()
+	op := inf.inferArgs.SchImportOp
 
-	tag := uint64(0)
-	colNamesSet := set.NewStrSet(inf.colNames)
-	for i, name := range inf.colNames {
-		if mappedName, ok := inf.impArgs.ColMapper.Map(name); ok {
-			name = mappedName
-		}
+	// use post-mapping column names for all column name matching
+	mapper := inf.inferArgs.ColMapper
+	readerColsMapped := funcitr.MapStrings(inf.readerSch.GetAllCols().GetColumnNames(), mapper.MaybeMap)
+	existingCols := set.NewStrSet(existingSch.GetAllCols().GetColumnNames())
 
-		colNamesSet.Add(name)
-		_, partOfPK := inf.pkColToIdx[name]
-		typeToCount := inf.colType[i]
-		hasNegatives := inf.negatives[i]
-		kind, nullable := typeCountsToKind(name, typeToCount, hasNegatives)
+	inter, missing := existingCols.IntersectAndMissing(readerColsMapped)
 
-		tag = nextTag(tag, existingCols)
-		thisTag := tag
-		var col *schema.Column
-		if existingCol, ok := existingCols.GetByName(name); ok {
-			if inf.impArgs.Update {
-				if nullable {
-					if partOfPK {
-						pkCols = removeNullConstraint(pkCols, existingCol)
-					} else {
-						nonPkCols = removeNullConstraint(nonPkCols, existingCol)
-					}
-				}
+	pkCols, _ := schema.NewColCollection()
+	nonPKCols, _ := schema.NewColCollection()
 
-				continue
-			} else if inf.impArgs.KeepTypes {
-				col = &existingCol
+	interCols := set.NewStrSet(inter)
+	_ = inf.inferArgs.ExistingSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		keep := op == UpdateOp && !interCols.Contains(col.Name) || inf.inferArgs.KeepTypes && interCols.Contains(col.Name)
+		if keep {
+			if col.IsPartOfPK {
+				pkCols, err = pkCols.Append(col)
 			} else {
-				thisTag = existingCol.Tag
+				nonPKCols, err = nonPKCols.Append(col)
 			}
+		}
+		stop = err != nil
+		return stop, err
+	})
+
+	newCols := set.NewStrSet(nil)
+	if op == CreateOp {
+		// inter == nil
+		newCols.Add(missing...)
+	} else {
+		// UpdateOp || ReplaceOp
+		if inf.inferArgs.KeepTypes {
+			newCols.Add(missing...)
+
 		} else {
-			tag++
+			newCols.Add(inter...)
+			newCols.Add(missing...)
+		}
+	}
+
+	inferredTypes := make(map[uint64]typeinfo.TypeInfo)
+	for tag, ts := range inf.inferSets {
+		inferredTypes[tag] = findCommonType(ts)
+	}
+
+	pkSet := set.NewStrSet(inf.inferArgs.PkCols)
+
+	var newColNames []string
+	var newColKinds []types.NomsKind
+	var newColTypes []typeinfo.TypeInfo
+	var newColIsPk []bool
+	var newColNullable []bool
+	_ = inf.readerSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		name := mapper.MaybeMap(col.Name)
+		if newCols.Contains(name) {
+			ti := inferredTypes[tag]
+			newColKinds = append(newColKinds, ti.NomsKind())
+			newColTypes = append(newColTypes, ti)
+			newColNames = append(newColNames, name)
+			newColIsPk = append(newColIsPk, pkSet.Contains(name))
+			newColNullable = append(newColNullable, inf.nullable.Contains(tag))
+		}
+		return false, nil
+	})
+
+	newColTags, err := root.GenerateTagsForNewColumns(ctx, inf.inferArgs.TableName, newColNames, newColKinds)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range newColNames {
+		constraint := []schema.ColConstraint(nil)
+		if !newColNullable[i] && newColIsPk[i] {
+			constraint = []schema.ColConstraint{schema.NotNullConstraint{}}
 		}
 
-		if col == nil {
-			constraints := make([]schema.ColConstraint, 0, 1)
-			if !nullable {
-				constraints = append(constraints, schema.NotNullConstraint{})
-			}
+		c, err := schema.NewColumnWithTypeInfo(
+			newColNames[i],
+			newColTags[i],
+			newColTypes[i],
+			newColIsPk[i],
+			constraint...,
+		)
 
-			tmp := schema.NewColumn(name, thisTag, kind, partOfPK, constraints...)
-			col = &tmp
+		if err != nil {
+			return nil, err
 		}
 
-		var err error
-		if col.IsPartOfPK {
-			pkCols, err = pkCols.Append(*col)
+		if c.IsPartOfPK {
+			pkCols, err = pkCols.Append(c)
 		} else {
-			nonPkCols, err = nonPkCols.Append(*col)
+			nonPKCols, err = nonPKCols.Append(c)
 		}
 
 		if err != nil {
@@ -200,205 +253,66 @@ func (inf *inferrer) inferSchema() (schema.Schema, error) {
 		}
 	}
 
-	if pkCols.Size() != len(inf.pkColToIdx) {
-		return nil, errors.New("some pk columns were not found")
-	}
-
-	pkCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if !colNamesSet.Contains(col.Name) {
-			pkCols = removeNullConstraint(pkCols, col)
-		}
-		return false, nil
-	})
-
-	nonPkCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if !colNamesSet.Contains(col.Name) {
-			nonPkCols = removeNullConstraint(nonPkCols, col)
-		}
-		return false, nil
-	})
-
-	orderedPKCols := make([]schema.Column, pkCols.Size())
-	err := pkCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		idx, ok := inf.pkColToIdx[col.Name]
-
-		if !ok {
-			return false, errors.New("could not find key column")
-		}
-
-		orderedPKCols[idx] = col
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	pkColColl, err := schema.NewColCollection(orderedPKCols...)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return schema.SchemaFromPKAndNonPKCols(pkColColl, nonPkCols)
-}
-
-func removeNullConstraint(colColl *schema.ColCollection, col schema.Column) *schema.ColCollection {
-	_, ok := colColl.GetByTag(col.Tag)
-	if !ok {
-		return colColl
-	}
-
-	constraints := col.Constraints
-	numConstraints := len(constraints)
-	if numConstraints > 0 {
-		notNullConstraintIdx := schema.IndexOfConstraint(constraints, schema.NotNullConstraintType)
-
-		if notNullConstraintIdx != -1 {
-			constraints = append(constraints[:notNullConstraintIdx], constraints[notNullConstraintIdx+1:]...)
-			newCol := schema.NewColumn(col.Name, col.Tag, col.Kind, col.IsPartOfPK, constraints...)
-			colColl, _ = colColl.Replace(col, newCol)
-		}
-	}
-
-	return colColl
-}
-
-func nextTag(tag uint64, cols *schema.ColCollection) uint64 {
-	for {
-		_, ok := cols.GetByTag(tag)
-
-		if !ok {
-			return tag
-		}
-
-		tag++
-	}
-}
-
-func typeCountsToKind(name string, typeToCount map[types.NomsKind]int, hasNegatives bool) (types.NomsKind, bool) {
-	var nullable bool
-	kind := types.NullKind
-
-	for t := range typeToCount {
-		if t == types.NullKind {
-			nullable = true
-			continue
-		} else if kind == types.NullKind {
-			kind = t
-		}
-
-		if kind == t {
-			continue
-		}
-
-		switch kind {
-		case types.StringKind:
-			if nullable {
-				return types.StringKind, true
-			}
-
-		case types.UUIDKind:
-			//cli.PrintErrln(color.YellowString("warning: column %s has a mix of uuids and non uuid strings.", name))
-			kind = types.StringKind
-
-		case types.BoolKind:
-			kind = types.StringKind
-
-		case types.IntKind:
-			if t == types.FloatKind {
-				kind = types.FloatKind
-			} else if t == types.UintKind {
-				if !hasNegatives {
-					kind = types.UintKind
-				} else {
-					//cli.PrintErrln(color.YellowString("warning: %s has values larger than a 64 bit signed integer can hold, and negative numbers.  This will be interpreted as a string.", name))
-					kind = types.StringKind
-				}
-			} else {
-				kind = types.StringKind
-			}
-
-		case types.UintKind:
-			if t == types.IntKind {
-				if hasNegatives {
-					//cli.PrintErrln(color.YellowString("warning: %s has values larger than a 64 bit signed integer can hold, and negative numbers.  This will be interpreted as a string.", name))
-					kind = types.StringKind
-				}
-			} else {
-				kind = types.StringKind
-			}
-
-		case types.FloatKind:
-			if t != types.IntKind {
-				kind = types.StringKind
-			}
-		}
-	}
-
-	if kind == types.NullKind {
-		kind = types.StringKind
-	}
-
-	return kind, nullable
+	return schema.SchemaFromPKAndNonPKCols(pkCols, nonPKCols)
 }
 
 func (inf *inferrer) sinkRow(p *pipeline.Pipeline, ch <-chan pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure) {
 	for r := range ch {
-		i := 0
-		_, _ = r.Row.IterSchema(inf.sch, func(tag uint64, val types.Value) (stop bool, err error) {
-			defer func() {
-				i++
-			}()
-
+		_, _ = r.Row.IterSchema(inf.readerSch, func(tag uint64, val types.Value) (stop bool, err error) {
 			if val == nil {
-				inf.colType[i][types.NullKind]++
+				inf.nullable.Add(tag)
 				return false, nil
 			}
-
 			strVal := string(val.(types.String))
-			kind, hasNegs := leastPermissiveKind(strVal, inf.impArgs.FloatThreshold)
-
-			if hasNegs {
-				inf.negatives[i] = true
-			}
-
-			inf.colType[i][kind]++
-
+			typeInfo := leastPermissiveType(strVal, inf.inferArgs.FloatThreshold)
+			inf.inferSets[tag][typeInfo] = struct{}{}
 			return false, nil
 		})
 	}
 }
 
-func leastPermissiveKind(strVal string, floatThreshold float64) (types.NomsKind, bool) {
+func leastPermissiveType(strVal string, floatThreshold float64) typeinfo.TypeInfo {
 	if len(strVal) == 0 {
-		return types.NullKind, false
+		return typeinfo.UnknownType
 	}
-
 	strVal = strings.TrimSpace(strVal)
-	kind := types.StringKind
-	hasNegativeNums := false
 
-	if _, err := uuid.Parse(strVal); err == nil {
-		kind = types.UUIDKind
-	} else if negs, numKind := leastPermissiveNumericKind(strVal, floatThreshold); numKind != types.NullKind {
-		kind = numKind
-		hasNegativeNums = negs
-	} else if _, err := strconv.ParseBool(strVal); err == nil {
-		kind = types.BoolKind
+	numType := leastPermissiveNumericType(strVal, floatThreshold)
+	if numType != typeinfo.UnknownType {
+		return numType
 	}
 
-	return kind, hasNegativeNums
+	chronoType := leastPermissiveChronoType(strVal)
+	if chronoType != typeinfo.UnknownType {
+		return chronoType
+	}
+
+	_, err := uuid.Parse(strVal)
+	if err == nil {
+		return typeinfo.UuidType
+	}
+
+	strVal = strings.ToLower(strVal)
+	if strVal == "true" || strVal == "false" {
+		return typeinfo.BoolType
+	}
+
+	return typeinfo.StringDefaultType
 }
 
-var lenDecEncodedMaxInt = len(strconv.FormatInt(math.MaxInt64, 10))
+func leastPermissiveNumericType(strVal string, floatThreshold float64) (ti typeinfo.TypeInfo) {
+	if strings.Contains(strVal, ".") {
+		f, err := strconv.ParseFloat(strVal, 64)
+		if err != nil {
+			return typeinfo.UnknownType
+		}
 
-func leastPermissiveNumericKind(strVal string, floatThreshold float64) (isNegative bool, kind types.NomsKind) {
-	isNum, isFloat, isNegative := stringNumericProperties(strVal)
+		if math.Abs(f) < math.MaxFloat32 {
+			ti = typeinfo.Float32Type
+		} else {
+			ti = typeinfo.Float64Type
+		}
 
-	if !isNum {
-		return false, types.NullKind
-	} else if isFloat {
 		if floatThreshold != 0.0 {
 			floatParts := strings.Split(strVal, ".")
 			decimalPart, err := strconv.ParseFloat("0."+floatParts[1], 64)
@@ -407,69 +321,232 @@ func leastPermissiveNumericKind(strVal string, floatThreshold float64) (isNegati
 				panic(err)
 			}
 
-			if decimalPart >= floatThreshold {
-				return isNegative, types.FloatKind
+			if decimalPart < floatThreshold {
+				// we could be more specific with these casts if necessary
+				if ti == typeinfo.Float32Type {
+					ti = typeinfo.Int32Type
+				} else {
+					ti = typeinfo.Int64Type
+				}
 			}
-
-			return isNegative, types.IntKind
 		}
-		return isNegative, types.FloatKind
-	} else if len(strVal) < lenDecEncodedMaxInt {
-		// Prefer Ints if everything fits
-		return isNegative, types.IntKind
-	} else if isNegative {
-		_, sErr := strconv.ParseInt(strVal, 10, 64)
+		return ti
+	}
 
-		if sErr == nil {
-			return isNegative, types.IntKind
+	i, err := strconv.ParseInt(strVal, 10,64)
+	if err != nil {
+		return typeinfo.UnknownType
+	}
+	if i >= int64(0) {
+		ui := uint64(i)
+		switch {
+		case ui <= math.MaxUint8:
+			return typeinfo.Uint8Type
+		case ui <= math.MaxUint16:
+			return typeinfo.Uint16Type
+		case ui <= maxUint24:
+			return typeinfo.Uint24Type
+		case ui <= math.MaxUint32:
+			return typeinfo.Uint32Type
+		case ui <= math.MaxUint64:
+			return typeinfo.Uint64Type
 		}
 	} else {
-		_, uErr := strconv.ParseUint(strVal, 10, 64)
-		_, sErr := strconv.ParseInt(strVal, 10, 64)
-
-		if sErr == nil {
-			return false, types.IntKind
-		} else if uErr == nil {
-			return false, types.UintKind
+		switch {
+		case i >= math.MinInt8:
+			return typeinfo.Int8Type
+		case i >= math.MinInt16:
+			return typeinfo.Int16Type
+		case i >= minInt24:
+			return typeinfo.Int24Type
+		case i >= math.MinInt32:
+			return typeinfo.Int32Type
+		case i >= math.MinInt64:
+			return typeinfo.Int64Type
 		}
 	}
 
-	return false, types.NullKind
+	return typeinfo.UnknownType
 }
 
-func stringNumericProperties(strVal string) (isNum, isFloat, isNegative bool) {
-	if len(strVal) == 0 {
-		return false, false, false
+func leastPermissiveChronoType(strVal string) typeinfo.TypeInfo {
+	// todo: be more specific with chrono types
+	_, err := typeinfo.DatetimeType.ParseValue(&strVal)
+	if err != nil {
+		return typeinfo.UnknownType
 	}
-
-	isNum = true
-	for i, c := range strVal {
-		if i == 0 && c == '-' {
-			isNegative = true
-			continue
-		} else if i == 0 && c == '0' && len(strVal) > 1 && strVal[i+1] != '.' {
-			// by default treat leading zeroes as invalid
-			return false, false, false
-		}
-
-		if c != '.' && (c < '0' || c > '9') {
-			return false, false, false
-		}
-
-		if c == '.' {
-			if isFloat {
-				// found 2 decimal points
-				return false, false, false
-			} else {
-				isFloat = true
-			}
-		}
-	}
-
-	return isNum, isFloat, isNegative
+	return typeinfo.DatetimeType
 }
 
-func (inf *inferrer) badRow(trf *pipeline.TransformRowFailure) (quit bool) {
-	inf.rowFailure = trf
-	return false
+func chronoTypes() []typeinfo.TypeInfo {
+	return []typeinfo.TypeInfo{
+		// chrono types YEAR, DATE, and TIME can also be parsed as DATETIME
+		// we prefer less permissive types if possible
+		typeinfo.YearType,
+		typeinfo.DateType,
+		typeinfo.TimeType,
+		typeinfo.TimestampType,
+		typeinfo.DatetimeType,
+	}
+}
+
+// ordered from least to most permissive
+func numericTypes() []typeinfo.TypeInfo {
+	// prefer:
+	//   ints over floats
+	//   unsigned over signed
+	//   smaller over larger
+	return []typeinfo.TypeInfo{
+		typeinfo.Uint8Type,
+		typeinfo.Uint16Type,
+		typeinfo.Uint24Type,
+		typeinfo.Uint32Type,
+		typeinfo.Uint64Type,
+
+		typeinfo.Int8Type,
+		typeinfo.Int16Type,
+		typeinfo.Int24Type,
+		typeinfo.Int32Type,
+		typeinfo.Int64Type,
+
+		typeinfo.Float32Type,
+		typeinfo.Float64Type,
+	}
+}
+
+func setHasType(ts typeInfoSet, t typeinfo.TypeInfo) bool {
+	_, found := ts[t]
+	return found
+}
+
+// findCommonType takes a set of types and finds the least permissive
+// (ie most specific) common type between all types in the set
+func findCommonType(ts typeInfoSet) typeinfo.TypeInfo {
+
+	// empty values were inferred as UnknownType
+	delete(ts, typeinfo.UnknownType)
+
+	if len(ts) == 0 {
+		// use strings if all values were empty
+		return typeinfo.StringDefaultType
+	}
+
+	if len(ts) == 1 {
+		for ti := range ts {
+			return ti
+		}
+	}
+
+	// len(ts) > 1
+
+	if setHasType(ts, typeinfo.StringDefaultType) {
+		return typeinfo.StringDefaultType
+	}
+
+	hasNumeric := false
+	for _, nt := range numericTypes() {
+		if setHasType(ts, nt) {
+			hasNumeric = true
+			break
+		}
+	}
+
+	hasNonNumeric := false
+	for _, nnt := range chronoTypes() {
+		if setHasType(ts, nnt) {
+			hasNonNumeric = true
+			break
+		}
+	}
+	if setHasType(ts, typeinfo.BoolType) || setHasType(ts, typeinfo.UuidType) {
+		hasNonNumeric = true
+	}
+
+	if hasNumeric && hasNonNumeric {
+		return typeinfo.StringDefaultType
+	}
+
+	if hasNumeric {
+		return findCommonNumericType(ts)
+	}
+
+	// find a common nonNumeric type
+
+	nonChronoTypes := []typeinfo.TypeInfo{
+		// todo: BIT implementation parses all uint8
+		//typeinfo.PseudoBoolType,
+		typeinfo.BoolType,
+		typeinfo.UuidType,
+	}
+	for _, nct := range nonChronoTypes {
+		if setHasType(ts, nct) {
+			// types in nonChronoTypes have only string
+			// as a common type with any other type
+			return typeinfo.StringDefaultType
+		}
+	}
+
+	return findCommonChronoType(ts)
+}
+
+func findCommonNumericType(nums typeInfoSet) typeinfo.TypeInfo {
+	// find a common numeric type
+	// iterate through types from most to least permissive
+	// return the most permissive type found
+	//   ints are a subset of floats
+	//   uints are a subset of ints
+	//   smaller widths are a subset of larger widths
+	mostToLeast := []typeinfo.TypeInfo{
+		typeinfo.Float64Type,
+		typeinfo.Float32Type,
+
+		// todo: can all Int64 fit in Float64?
+		typeinfo.Int64Type,
+		typeinfo.Int32Type,
+		typeinfo.Int24Type,
+		typeinfo.Int16Type,
+		typeinfo.Int8Type,
+
+		typeinfo.Uint64Type,
+		typeinfo.Uint32Type,
+		typeinfo.Uint24Type,
+		typeinfo.Uint16Type,
+		typeinfo.Uint8Type,
+	}
+	for _, numType := range mostToLeast {
+		if setHasType(nums, numType) {
+			return numType
+		}
+	}
+
+	panic("unreachable")
+}
+
+func findCommonChronoType(chronos typeInfoSet) typeinfo.TypeInfo {
+	if len(chronos) == 1 {
+		for ct := range chronos {
+			return ct
+		}
+	}
+
+	if setHasType(chronos, typeinfo.DatetimeType) {
+		return typeinfo.DatetimeType
+	}
+
+	hasTime := setHasType(chronos, typeinfo.TimeType) || setHasType(chronos, typeinfo.TimestampType)
+	hasDate := setHasType(chronos, typeinfo.DateType) || setHasType(chronos, typeinfo.YearType)
+
+	if hasTime && !hasDate {
+		return typeinfo.TimeType
+	}
+
+	if !hasTime && hasDate {
+		return typeinfo.DateType
+	}
+
+	if hasDate && hasTime {
+		return typeinfo.DatetimeType
+	}
+
+	panic("unreachable")
 }
