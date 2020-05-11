@@ -53,6 +53,13 @@ function setup_testing_dir() {
          mkdir -p "$TMP_TESTING_DIR"/"$dir"
          cp -r "$sqllogictest_checkout"/test/"$fd" "$TMP_TESTING_DIR"/"$fd"
     done
+
+    # Keep only the tests relevant to this run
+    # tests must be kept in the `test` dir of sqllogictest
+    # so all test_file paths match
+    rm -rf "$sqllogictest_checkout"/test/
+    mkdir "$sqllogictest_checkout"/test/
+    cp -r "$TMP_TESTING_DIR"/* "$sqllogictest_checkout"/test/
 }
 
 function checkout_branch_if_exists() {
@@ -192,7 +199,7 @@ function run_once() {
       echo "Running tests and creating $results"
       echo "Using the following files/dirs:"
       find ../../../../../../../tempTesting
-      go run . run ../../../../../../../tempTesting > "$results"
+      go run . run "$sqllogictest_checkout"/test > "$results"
 #      go run . run "$TMP_TESTING_DIR" > "$results"
 
       echo "Parsing $results and generating $parsed"
