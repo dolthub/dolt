@@ -126,7 +126,7 @@ teardown() {
     # update an existing verify output, and verify query catalog is updated
     dolt sql -q "$Q1_UPDATED" -s name1
 
-    EXPECTED=$(echo -e "pk,pk1,pk2\n0,0,0\n1,0,1\n2,1,0")
+    EXPECTED=$(echo -e "pk,pk1,pk2\n2,1,0\n1,0,1\n0,0,0")
     run dolt sql -r csv -x name1
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED" ]] || false

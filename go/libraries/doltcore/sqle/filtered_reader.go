@@ -354,7 +354,11 @@ func rangeForInterval(nbf *types.NomsBinFormat, tag types.Uint, in setalgebra.In
 		reverse = true
 
 		var err error
-		startKey, err = types.NewTuple(nbf, tag, in.Start.Val)
+		if inclusive {
+			startKey, err = types.NewTuple(nbf, tag, in.End.Val, types.Uint(uint64(0xffffffffffffffff)))
+		} else {
+			startKey, err = types.NewTuple(nbf, tag, in.End.Val)
+		}
 
 		if err != nil {
 			return nil, err

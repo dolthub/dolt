@@ -1391,6 +1391,149 @@ SQL
     [[ "${#lines[@]}" = "1" ]] || false
 }
 
+@test "index: SELECT BETWEEN Primary Key" {
+    dolt sql <<SQL
+INSERT INTO onepk VALUES (1, 99, 51), (2, 11, 55), (3, 88, 52), (4, 22, 54), (5, 77, 53);
+INSERT INTO twopk VALUES (1, 99, 51, 63), (2, 11, 55, 64), (3, 88, 52, 61), (4, 22, 54, 65), (5, 77, 53, 61);
+SQL
+    # found
+    run dolt sql -q "SELECT * FROM onepk WHERE pk1 BETWEEN 2 AND 4" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,v1,v2" ]] || false
+    [[ "$output" =~ "2,11,55" ]] || false
+    [[ "$output" =~ "3,88,52" ]] || false
+    [[ "$output" =~ "4,22,54" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+    # not found
+    run dolt sql -q "SELECT * FROM onepk WHERE pk1 BETWEEN 6 AND 9" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # found partial key
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 BETWEEN 1 AND 4" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "$output" =~ "1,99,51,63" ]] || false
+    [[ "$output" =~ "2,11,55,64" ]] || false
+    [[ "$output" =~ "3,88,52,61" ]] || false
+    [[ "$output" =~ "4,22,54,65" ]] || false
+    [[ "${#lines[@]}" = "5" ]] || false
+    # not found partial key
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 BETWEEN 6 AND 7" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # found
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 BETWEEN 1 AND 3 AND pk2 BETWEEN 10 AND 90" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "$output" =~ "2,11,55,64" ]] || false
+    [[ "$output" =~ "3,88,52,61" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+    # not found key 1
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 BETWEEN 6 AND 8 AND pk2 BETWEEN 20 AND 80" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # not found key 2
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 BETWEEN 1 AND 3 AND pk2 BETWEEN 100 AND 111" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # not found key mismatch
+    run dolt sql -q "SELECT * FROM twopk WHERE pk1 BETWEEN 3 AND 5 AND pk2 BETWEEN 10 AND 20" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+}
+
+@test "index: SELECT BETWEEN Secondary Index" {
+    dolt sql <<SQL
+CREATE INDEX idx_v1 ON onepk(v1);
+CREATE INDEX idx_v ON twopk(v2, v1);
+INSERT INTO onepk VALUES (1, 99, 51), (2, 11, 55), (3, 88, 52), (4, 22, 54), (5, 77, 53);
+INSERT INTO twopk VALUES (1, 99, 51, 63), (2, 11, 55, 64), (3, 88, 52, 61), (4, 22, 54, 65), (5, 77, 53, 61);
+SQL
+    # found
+    run dolt sql -q "SELECT * FROM onepk WHERE v1 BETWEEN 11 AND 99" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,v1,v2" ]] || false
+    [[ "$output" =~ "2,11,55" ]] || false
+    [[ "$output" =~ "4,22,54" ]] || false
+    [[ "$output" =~ "5,77,53" ]] || false
+    [[ "$output" =~ "3,88,52" ]] || false
+    [[ "$output" =~ "1,99,51" ]] || false
+    [[ "${#lines[@]}" = "6" ]] || false
+    # not found
+    run dolt sql -q "SELECT * FROM onepk WHERE v1 BETWEEN 30 AND 70" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # not indexed & found
+    run dolt sql -q "SELECT * FROM onepk WHERE v2 BETWEEN 50 AND 53" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,v1,v2" ]] || false
+    [[ "$output" =~ "1,99,51" ]] || false
+    [[ "$output" =~ "3,88,52" ]] || false
+    [[ "$output" =~ "5,77,53" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+    # not indexed & not found
+    run dolt sql -q "SELECT * FROM onepk WHERE v2 BETWEEN 20 AND 50" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # found partial index
+    run dolt sql -q "SELECT * FROM twopk WHERE v2 BETWEEN 0 AND 64" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "$output" =~ "5,77,53,61" ]] || false
+    [[ "$output" =~ "3,88,52,61" ]] || false
+    [[ "$output" =~ "1,99,51,63" ]] || false
+    [[ "$output" =~ "2,11,55,64" ]] || false
+    [[ "${#lines[@]}" = "5" ]] || false
+    # not found partial index
+    run dolt sql -q "SELECT * FROM twopk WHERE v2 BETWEEN 70 AND 90" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # found
+    run dolt sql -q "SELECT * FROM twopk WHERE v2 BETWEEN 60 AND 64 AND v1 BETWEEN 50 AND 53" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "$output" =~ "3,88,52,61" ]] || false
+    [[ "$output" =~ "5,77,53,61" ]] || false
+    [[ "$output" =~ "1,99,51,63" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+    # not found key 1
+    run dolt sql -q "SELECT * FROM twopk WHERE v2 BETWEEN 50 AND 53 AND v1 BETWEEN 50 AND 53" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # not found key 2
+    run dolt sql -q "SELECT * FROM twopk WHERE v2 BETWEEN 60 AND 64 AND v1 BETWEEN 60 AND 64" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # not found key mismatch
+    run dolt sql -q "SELECT * FROM twopk WHERE v2 BETWEEN 60 AND 62 AND v1 BETWEEN 54 AND 55" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+    # not indexed & found
+    run dolt sql -q "SELECT * FROM twopk WHERE v1 BETWEEN 51 AND 53" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "$output" =~ "3,88,52,61" ]] || false
+    [[ "$output" =~ "5,77,53,61" ]] || false
+    [[ "$output" =~ "1,99,51,63" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+    # not indexed & not found
+    run dolt sql -q "SELECT * FROM twopk WHERE v1 BETWEEN 90 AND 100" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1,pk2,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+}
+
 @test "index: EXPLAIN SELECT = IndexedJoin" {
     dolt sql <<SQL
 CREATE INDEX idx_v1 ON onepk(v1);
