@@ -233,6 +233,8 @@ function create_releases_csv() {
        fi
     done
 
+    echo "Using file list: $file_list"
+
     dolt checkout "$DOLT_BRANCH"
     dolt sql -r csv -q "\
     select * from releases_dolt_results where test_file in ($file_list);"\
