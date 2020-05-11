@@ -73,7 +73,6 @@ const (
 	minInt24  = -1 << 23
 )
 
-
 // InferenceArgs are arguments that can be passed to the schema inferrer to modify it's inference behavior.
 type InferenceArgs struct {
 	TableName   string
@@ -333,7 +332,7 @@ func leastPermissiveNumericType(strVal string, floatThreshold float64) (ti typei
 		return ti
 	}
 
-	i, err := strconv.ParseInt(strVal, 10,64)
+	i, err := strconv.ParseInt(strVal, 10, 64)
 	if err != nil {
 		return typeinfo.UnknownType
 	}
