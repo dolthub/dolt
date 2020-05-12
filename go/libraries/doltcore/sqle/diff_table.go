@@ -19,10 +19,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/liquidata-inc/go-mysql-server/sql"
-	"github.com/liquidata-inc/go-mysql-server/sql/expression"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -35,6 +33,8 @@ import (
 const (
 	toCommit   = "to_commit"
 	fromCommit = "from_commit"
+	toCommitDate   = "to_commit_date"
+	fromCommitDate = "from_commit_date"
 
 	diffTypeColName  = "diff_type"
 	diffTypeAdded    = "added"
@@ -42,7 +42,7 @@ const (
 	diffTypeRemoved  = "removed"
 )
 
-var _ sql.FilteredTable = (*DiffTable)(nil)
+var _ sql.Table = (*DiffTable)(nil)
 
 type DiffTable struct {
 	name          string
@@ -50,11 +50,7 @@ type DiffTable struct {
 	ss            *schema.SuperSchema
 	joiner        *rowconv.Joiner
 	sqlSch        sql.Schema
-	fromRoot      *doltdb.RootValue
-	toRoot        *doltdb.RootValue
-	fromCommitVal string
-	toCommitVal   string
-	filters       []sql.Expression
+	partitions    []diffPartition
 }
 
 func NewDiffTable(ctx *sql.Context, dbName, tblName string) (*DiffTable, error) {
@@ -67,25 +63,27 @@ func NewDiffTable(ctx *sql.Context, dbName, tblName string) (*DiffTable, error) 
 
 	diffTblName := doltdb.DoltDiffTablePrefix + tblName
 
-	cmItr, err := doltdb.CommitItrForAllBranches(ctx, ddb)
+	rootCmt, err := sess.GetParentCommit(ctx, dbName)
 
 	if err != nil {
 		return nil, err
 	}
 
-	root1, ok := sess.GetRoot(dbName)
+	workingRoot, ok := sess.GetRoot(dbName)
 
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	ss, err := SuperSchemaForAllBranches(ctx, cmItr, root1, tblName)
+	cmItr := doltdb.CommitItrForRoots(ddb, rootCmt)
+	ss, partitions, err := calcSuperSchemaAndPartitions(ctx, cmItr, workingRoot, tblName)
 
 	if err != nil {
 		return nil, err
 	}
 
 	_ = ss.AddColumn(schema.NewColumn("commit", doltdb.DiffCommitTag, types.StringKind, false))
+	_ = ss.AddColumn(schema.NewColumn("commit_date", doltdb.DiffCommitDateTag, types.TimestampKind, false))
 
 	sch, err := ss.GenerateSchema()
 
@@ -108,17 +106,6 @@ func NewDiffTable(ctx *sql.Context, dbName, tblName string) (*DiffTable, error) 
 		return nil, err
 	}
 
-	cm, err := sess.GetParentCommit(ctx, dbName)
-	if err != nil {
-		return nil, err
-	}
-
-	root2, err := cm.GetRootValue()
-
-	if err != nil {
-		return nil, err
-	}
-
 	sqlSch, err := doltSchemaToSqlSchema(diffTblName, j.GetSchema())
 
 	// TODO: fix panics
@@ -134,7 +121,7 @@ func NewDiffTable(ctx *sql.Context, dbName, tblName string) (*DiffTable, error) 
 		Source:   diffTblName,
 	})
 
-	return &DiffTable{tblName, ddb, ss, j, sqlSch, root2, root1, "current", "HEAD", nil}, nil
+	return &DiffTable{tblName, ddb, ss, j, sqlSch, partitions}, nil
 }
 
 func (dt *DiffTable) Name() string {
@@ -157,50 +144,79 @@ func fromNamer(name string) string {
 	return diff.From + "_" + name
 }
 
-func (dt *DiffTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
-	return &doltTablePartitionIter{}, nil
+type diffPartition struct {
+	to *doltdb.Table
+	from *doltdb.Table
+	toName string
+	fromName string
+	toDate *types.Timestamp
+	fromDate *types.Timestamp
 }
 
-func tableData(ctx *sql.Context, root *doltdb.RootValue, tblName string, ddb *doltdb.DoltDB) (types.Map, schema.Schema, error) {
-	tbl, _, ok, err := root.GetTableInsensitive(ctx, tblName)
+func (dp diffPartition) Key() []byte {
+	return []byte(dp.toName+dp.fromName)
+}
 
-	if err != nil {
-		return types.EmptyMap, nil, err
+type diffPartitionItr struct {
+	partitions []diffPartition
+	pos int
+}
+
+func (dpi *diffPartitionItr) Next() (sql.Partition, error) {
+	if dpi.pos < len(dpi.partitions) {
+		dp := dpi.partitions[dpi.pos]
+		dpi.pos++
+
+		return dp, nil
 	}
 
+	return nil, io.EOF
+}
+
+func (dpi *diffPartitionItr) Close() error {
+	return nil
+}
+
+func (dt *DiffTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
+	return &diffPartitionItr{dt.partitions, 0}, nil
+}
+
+func tableData(ctx *sql.Context, tbl *doltdb.Table, ddb *doltdb.DoltDB) (types.Map, schema.Schema, error) {
 	var data types.Map
-	if !ok {
+	var err error
+	if tbl == nil {
 		data, err = types.NewMap(ctx, ddb.ValueReadWriter())
 	} else {
 		data, err = tbl.GetRowData(ctx)
-	}
 
-	if err != nil {
-		return types.EmptyMap, nil, err
+		if err != nil {
+			return types.EmptyMap, nil, err
+		}
 	}
 
 	var sch schema.Schema
-	if !ok {
+	if tbl == nil {
 		sch = schema.EmptySchema
 	} else {
 		sch, err = tbl.GetSchema(ctx)
-	}
 
-	if err != nil {
-		return types.EmptyMap, nil, err
+		if err != nil {
+			return types.EmptyMap, nil, err
+		}
 	}
 
 	return data, sch, nil
 }
 
 func (dt *DiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	fromData, fromSch, err := tableData(ctx, dt.fromRoot, dt.name, dt.ddb)
+	dp := part.(diffPartition)
+	fromData, fromSch, err := tableData(ctx, dp.from, dt.ddb)
 
 	if err != nil {
 		return nil, err
 	}
 
-	toData, toSch, err := tableData(ctx, dt.toRoot, dt.name, dt.ddb)
+	toData, toSch, err := tableData(ctx, dp.to, dt.ddb)
 
 	if err != nil {
 		return nil, err
@@ -219,42 +235,52 @@ func (dt *DiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.Ro
 	}
 
 	sch := dt.joiner.GetSchema()
-	toCol, ok := sch.GetAllCols().GetByName(toCommit)
+	toCol, _ := sch.GetAllCols().GetByName(toCommit)
+	fromCol, _ := sch.GetAllCols().GetByName(fromCommit)
+	toDateCol, _ := sch.GetAllCols().GetByName(toCommitDate)
+	fromDateCol, _ := sch.GetAllCols().GetByName(fromCommitDate)
 
-	if !ok {
-		panic("missing required column")
-	}
+	fromCmInfo := commitInfo{dp.fromName, dp.fromDate, fromCol.Tag, fromDateCol.Tag}
+	toCmInfo := commitInfo{dp.toName, dp.toDate, toCol.Tag, toDateCol.Tag}
 
-	fromCol, ok := sch.GetAllCols().GetByName(fromCommit)
-
-	if !ok {
-		panic("missing required column")
-	}
-
-	return newDiffRowItr(ctx, dt.joiner, fromData, toData, fromConv, toConv, dt.fromCommitVal, dt.toCommitVal, fromCol.Tag, toCol.Tag), nil
+	return newDiffRowItr(
+		ctx,
+		dt.joiner,
+		fromData,
+		toData,
+		fromConv,
+		toConv,
+		fromCmInfo,
+		toCmInfo,
+	), nil
 }
 
 var _ sql.RowIter = (*diffRowItr)(nil)
 
 type diffRowItr struct {
-	ad      *diff.AsyncDiffer
-	diffSrc *diff.RowDiffSource
-	joiner  *rowconv.Joiner
-	sch     schema.Schema
-	to      string
-	from    string
-	fromTag uint64
-	toTag   uint64
+	ad             *diff.AsyncDiffer
+	diffSrc        *diff.RowDiffSource
+	joiner         *rowconv.Joiner
+	sch            schema.Schema
+	fromCommitInfo commitInfo
+	toCommitInfo   commitInfo
 }
 
-func newDiffRowItr(ctx context.Context, joiner *rowconv.Joiner, rowDataFrom, rowDataTo types.Map, convFrom, convTo *rowconv.RowConverter, from, to string, fromTag, toTag uint64) *diffRowItr {
+type commitInfo struct {
+	name string
+	date *types.Timestamp
+	nameTag uint64
+	dateTag uint64
+}
+
+func newDiffRowItr(ctx context.Context, joiner *rowconv.Joiner, rowDataFrom, rowDataTo types.Map, convFrom, convTo *rowconv.RowConverter, from, to commitInfo) *diffRowItr {
 	ad := diff.NewAsyncDiffer(1024)
 	ad.Start(ctx, rowDataTo, rowDataFrom)
 
 	src := diff.NewRowDiffSource(ad, joiner)
 	src.AddInputRowConversion(convFrom, convTo)
 
-	return &diffRowItr{ad, src, joiner, joiner.GetSchema(), to, from, fromTag, toTag}
+	return &diffRowItr{ad, src, joiner, joiner.GetSchema(), from, to}
 }
 
 // Next returns the next row
@@ -269,16 +295,32 @@ func (itr *diffRowItr) Next() (sql.Row, error) {
 	_, hasTo := toAndFromRows[diff.To]
 	_, hasFrom := toAndFromRows[diff.From]
 
-	r, err = r.SetColVal(itr.toTag, types.String(itr.to), itr.sch)
+	r, err = r.SetColVal(itr.toCommitInfo.nameTag, types.String(itr.toCommitInfo.name), itr.sch)
 
 	if err != nil {
 		return nil, err
 	}
 
-	r, err = r.SetColVal(itr.fromTag, types.String(itr.from), itr.sch)
+	r, err = r.SetColVal(itr.fromCommitInfo.nameTag, types.String(itr.fromCommitInfo.name), itr.sch)
 
 	if err != nil {
 		return nil, err
+	}
+
+	if itr.toCommitInfo.date != nil {
+		r, err = r.SetColVal(itr.toCommitInfo.dateTag, *itr.toCommitInfo.date, itr.sch)
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if itr.fromCommitInfo.date != nil {
+		r, err = r.SetColVal(itr.fromCommitInfo.dateTag, *itr.fromCommitInfo.date, itr.sch)
+
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	sqlRow, err := doltRowToSqlRow(r, itr.sch)
@@ -312,145 +354,126 @@ func (itr *diffRowItr) Close() (err error) {
 	return nil
 }
 
-// HandledFilters returns the list of filters that will be handled by the table itself
-func (dt *DiffTable) HandledFilters(filters []sql.Expression) []sql.Expression {
-	handled := make([]sql.Expression, 0, len(filters))
-	for _, f := range filters {
-		if _, ok := f.(*expression.Equals); !ok {
-			continue
-		}
-
-		sql.Inspect(f, func(e sql.Expression) bool {
-			if e, ok := e.(*expression.GetField); ok {
-				if e.Table() == dt.Name() && e.Name() == toCommit || e.Name() == fromCommit {
-					handled = append(handled, f)
-					return false
-				}
-			}
-			return true
-		})
-	}
-
-	return handled
-}
-
-// WithFilters returns a new sql.Table instance with the filters applied
-func (dt *DiffTable) WithFilters(filters []sql.Expression) sql.Table {
-	ctx := context.TODO()
-
-	for _, f := range filters {
-		if _, ok := f.(*expression.Equals); !ok {
-			continue
-		}
-
-		var fieldName string
-		var value string
-		sql.Inspect(f, func(e sql.Expression) bool {
-			if e == nil {
-				return true
-			}
-
-			switch val := e.(type) {
-			case *expression.GetField:
-				fieldName = val.Name()
-			case *expression.Literal:
-				value = val.String()
-			}
-
-			return true
-		})
-
-		value = strings.Trim(value, " \t\n\r\"")
-		cs, err := doltdb.NewCommitSpec(value, "")
-
-		if err != nil {
-			panic(err)
-		}
-
-		cm, err := dt.ddb.Resolve(ctx, cs)
-
-		if err != nil {
-			panic(err)
-		}
-
-		root, err := cm.GetRootValue()
-
-		if err != nil {
-			panic(err)
-		}
-
-		switch fieldName {
-		case toCommit:
-			dt.toRoot = root
-			dt.toCommitVal = value
-		case fromCommit:
-			dt.fromRoot = root
-			dt.fromCommitVal = value
-		}
-	}
-
-	dt.filters = filters
-	return dt
-}
-
-// Filters returns the list of filters that are applied to this table.
-func (dt *DiffTable) Filters() []sql.Expression {
-	return dt.filters
-}
-
-func SuperSchemaForAllBranches(ctx context.Context, cmItr doltdb.CommitItr, wr *doltdb.RootValue, tblName string) (*schema.SuperSchema, error) {
-	t, _, ok, err := wr.GetTableInsensitive(ctx, tblName)
+func calcSuperSchemaAndPartitions(ctx context.Context, cmItr doltdb.CommitItr, wr *doltdb.RootValue, tblName string) (*schema.SuperSchema, []diffPartition, error) {
+	t, exactName, ok, err := wr.GetTableInsensitive(ctx, tblName)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if !ok {
-		return nil, errors.New(fmt.Sprintf("table: %s does not exist", tblName))
+		return nil, nil, errors.New(fmt.Sprintf("table: %s does not exist", tblName))
 	}
 
 	sch, err := t.GetSchema(ctx)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	ss, err := schema.NewSuperSchema(sch)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	addedSchemas := make(map[hash.Hash]bool)
+	schRef, err := t.GetSchemaRef()
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	h := schRef.TargetHash()
+	addedSchemas := map[hash.Hash]bool {h:true}
+
+	var diffPartitions []diffPartition
+
+	type toInfo struct {
+		name string
+		date *types.Timestamp
+		tbl *doltdb.Table
+		tblHash hash.Hash
+	}
+
+	commitHashToToInfo := make(map[hash.Hash]toInfo)
+	wrTblHash, _, err := wr.GetTableHash(ctx, exactName)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cmHash, _, err := cmItr.Next(ctx)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	commitHashToToInfo[cmHash] = toInfo{"WORKING", nil, t, wrTblHash}
+	err = cmItr.Reset(ctx)
+
+	if err != nil {
+		return nil, nil, err
+	}
 
 	for {
-		_, cm, err := cmItr.Next(ctx)
+		cmHash, cm, err := cmItr.Next(ctx)
 
 		if err != nil {
 			if err == io.EOF {
-				return ss, nil
+				return ss, diffPartitions, nil
 			}
 
-			return nil, err
+			return nil, nil, err
 		}
 
 		root, err := cm.GetRootValue()
 
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
-		tbl, _, ok, err := root.GetTableInsensitive(ctx, tblName)
+		tbl, ok, err := root.GetTable(ctx, exactName)
 
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+
+		tblHash, _, err := root.GetTableHash(ctx, exactName)
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		toInfoForCommit := commitHashToToInfo[cmHash]
+		cmHashStr := cmHash.String()
+		meta, err := cm.GetCommitMeta()
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		ts := types.Timestamp(meta.Time())
+
+		if tblHash != toInfoForCommit.tblHash {
+			diffPartitions = append(diffPartitions, diffPartition{toInfoForCommit.tbl, tbl, toInfoForCommit.name, cmHashStr, toInfoForCommit.date, &ts})
+		}
+
+		newInfo := toInfo{cmHashStr, &ts, tbl, tblHash}
+		parentHashes, err := cm.ParentHashes(ctx)
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		for _, h := range parentHashes {
+			commitHashToToInfo[h] = newInfo
 		}
 
 		if ok {
 			schRef, err := tbl.GetSchemaRef()
 
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 
 			h := schRef.TargetHash()
@@ -460,13 +483,13 @@ func SuperSchemaForAllBranches(ctx context.Context, cmItr doltdb.CommitItr, wr *
 				sch, err := tbl.GetSchema(ctx)
 
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 
 				err = ss.AddSchemas(sch)
 
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 			}
 		}

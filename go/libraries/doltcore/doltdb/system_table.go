@@ -220,6 +220,7 @@ const (
 const (
 	// Tags for dolt_diff_ table
 	DiffCommitTag = iota + SystemTableReservedMin + uint64(2000)
+	DiffCommitDateTag
 )
 
 const (
