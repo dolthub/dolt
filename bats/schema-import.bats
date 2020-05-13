@@ -20,12 +20,12 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 10 ]
     [[ "${lines[0]}" =~ "test" ]] || false
-    [[ "$output" =~ "\`pk\` TINYINT" ]] || false
-    [[ "$output" =~ "\`c1\` TINYINT" ]] || false
-    [[ "$output" =~ "\`c2\` TINYINT" ]] || false
-    [[ "$output" =~ "\`c3\` TINYINT" ]] || false
-    [[ "$output" =~ "\`c4\` TINYINT" ]] || false
-    [[ "$output" =~ "\`c5\` TINYINT" ]] || false
+    [[ "$output" =~ "\`pk\` INT" ]] || false
+    [[ "$output" =~ "\`c1\` INT" ]] || false
+    [[ "$output" =~ "\`c2\` INT" ]] || false
+    [[ "$output" =~ "\`c3\` INT" ]] || false
+    [[ "$output" =~ "\`c4\` INT" ]] || false
+    [[ "$output" =~ "\`c5\` INT" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
@@ -34,12 +34,12 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 9 ]
     [[ "${lines[0]}" =~ "test" ]] || false
-    [[ "$output" =~ "\`pk\` TINYINT" ]] || false
-    [[ "$output" =~ "\`c1\` TINYINT" ]] || false
-    [[ "$output" =~ "\`c2\` TINYINT" ]] || false
-    [[ "$output" =~ "\`c3\` TINYINT" ]] || false
-    [[ "$output" =~ "\`c4\` TINYINT" ]] || false
-    [[ "$output" =~ "\`c5\` TINYINT" ]] || false
+    [[ "$output" =~ "\`pk\` INT" ]] || false
+    [[ "$output" =~ "\`c1\` INT" ]] || false
+    [[ "$output" =~ "\`c2\` INT" ]] || false
+    [[ "$output" =~ "\`c3\` INT" ]] || false
+    [[ "$output" =~ "\`c4\` INT" ]] || false
+    [[ "$output" =~ "\`c5\` INT" ]] || false
 
     run dolt ls
     [ "$status" -eq 0 ]
@@ -51,12 +51,12 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 10 ]
     [[ "${lines[0]}" =~ "test" ]] || false
-    [[ "$output" =~ "\`pk\` TINYINT" ]] || false
-    [[ "$output" =~ "\`int\` TINYINT" ]] || false
+    [[ "$output" =~ "\`pk\` INT" ]] || false
+    [[ "$output" =~ "\`int\` INT" ]] || false
     [[ "$output" =~ "\`string\` LONGTEXT" ]] || false
     [[ "$output" =~ "\`boolean\` BIT(1)" ]] || false
     [[ "$output" =~ "\`float\` FLOAT" ]] || false
-    [[ "$output" =~ "\`uint\` TINYINT UNSIGNED" ]] || false
+    [[ "$output" =~ "\`uint\` INT UNSIGNED" ]] || false
     [[ "$output" =~ "\`uuid\` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin" ]] || false
 }
 
@@ -74,12 +74,12 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 11 ]
     [[ "${lines[0]}" =~ "test" ]] || false
-    [[ "$output" =~ "\`pk\` TINYINT" ]] || false
-    [[ "$output" =~ "\`int\` TINYINT" ]] || false
+    [[ "$output" =~ "\`pk\` INT" ]] || false
+    [[ "$output" =~ "\`int\` INT" ]] || false
     [[ "$output" =~ "\`string\` LONGTEXT" ]] || false
     [[ "$output" =~ "\`boolean\` BIT(1)" ]] || false
     [[ "$output" =~ "\`float\` FLOAT" ]] || false
-    [[ "$output" =~ "\`uint\` TINYINT" ]] || false
+    [[ "$output" =~ "\`uint\` INT" ]] || false
     [[ "$output" =~ "\`uuid\` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin" ]] || false
 }
 
@@ -109,13 +109,13 @@ teardown() {
     run dolt schema show
     [ "${#lines[@]}" -eq 11 ]
     [[ "${lines[0]}" =~ "test" ]] || false
-    [[ "$output" =~ "\`pk1\` TINYINT" ]] || false
-    [[ "$output" =~ "\`pk2\` TINYINT" ]] || false
-    [[ "$output" =~ "\`c1\` TINYINT" ]] || false
-    [[ "$output" =~ "\`c2\` TINYINT" ]] || false
-    [[ "$output" =~ "\`c3\` TINYINT" ]] || false
-    [[ "$output" =~ "\`c4\` TINYINT" ]] || false
-    [[ "$output" =~ "\`c5\` TINYINT" ]] || false
+    [[ "$output" =~ "\`pk1\` INT" ]] || false
+    [[ "$output" =~ "\`pk2\` INT" ]] || false
+    [[ "$output" =~ "\`c1\` INT" ]] || false
+    [[ "$output" =~ "\`c2\` INT" ]] || false
+    [[ "$output" =~ "\`c3\` INT" ]] || false
+    [[ "$output" =~ "\`c4\` INT" ]] || false
+    [[ "$output" =~ "\`c5\` INT" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk1\`,\`pk2\`)" ]] || false
 }
 
@@ -136,7 +136,7 @@ DELIM
     [[ "${lines[0]}" =~ "test" ]] || false
     [[ "$output" =~ "\`pk\` LONGTEXT" ]] || false
     [[ "$output" =~ "\`headerOne\` LONGTEXT" ]] || false
-    [[ "$output" =~ "\`headerTwo\` TINYINT" ]] || false
+    [[ "$output" =~ "\`headerTwo\` INT" ]] || false
 }
 
 @test "schema import --keep-types" {
@@ -148,12 +148,12 @@ DELIM
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 11 ]
     [[ "${lines[0]}" =~ "test" ]] || false
-    [[ "$output" =~ "\`pk\` TINYINT" ]] || false
-    [[ "$output" =~ "\`c1\` TINYINT" ]] || false
-    [[ "$output" =~ "\`c2\` TINYINT" ]] || false
-    [[ "$output" =~ "\`c3\` TINYINT" ]] || false
-    [[ "$output" =~ "\`c4\` TINYINT" ]] || false
-    [[ "$output" =~ "\`c5\` TINYINT" ]] || false
+    [[ "$output" =~ "\`pk\` INT" ]] || false
+    [[ "$output" =~ "\`c1\` INT" ]] || false
+    [[ "$output" =~ "\`c2\` INT" ]] || false
+    [[ "$output" =~ "\`c3\` INT" ]] || false
+    [[ "$output" =~ "\`c4\` INT" ]] || false
+    [[ "$output" =~ "\`c5\` INT" ]] || false
     [[ "$output" =~ "\`c6\` LONGTEXT" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
@@ -169,7 +169,7 @@ DELIM
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 11 ]
     [[ "${lines[0]}" =~ "test" ]] || false
-    [[ "$output" =~ "\`pk\` TINYINT" ]] || false
+    [[ "$output" =~ "\`pk\` INT" ]] || false
     [[ "$output" =~ "\`c1\` LONGTEXT" ]] || false
     [[ "$output" =~ "\`c2\` LONGTEXT" ]] || false
     [[ "$output" =~ "\`c3\` LONGTEXT" ]] || false
