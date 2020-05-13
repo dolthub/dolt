@@ -15,16 +15,16 @@
 package sqlfmt
 
 import (
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/stretchr/testify/require"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -104,21 +104,21 @@ func TestRowAsInsertStmt(t *testing.T) {
 
 	tests := []test{
 		{
-			name: "simple row",
-			row:  dtestutils.NewTypedRow(id, "some guy", 100, false, strPointer("normie")),
-			sch:  dtestutils.TypedSchema,
+			name:           "simple row",
+			row:            dtestutils.NewTypedRow(id, "some guy", 100, false, strPointer("normie")),
+			sch:            dtestutils.TypedSchema,
 			expectedOutput: "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) VALUES ('00000000-0000-0000-0000-000000000000','some guy',100,FALSE,'normie');",
 		},
 		{
-			name: "embedded quotes",
-			row:  dtestutils.NewTypedRow(id, `It's "Mister Perfect" to you`, 100, false, strPointer("normie")),
-			sch:  dtestutils.TypedSchema,
+			name:           "embedded quotes",
+			row:            dtestutils.NewTypedRow(id, `It's "Mister Perfect" to you`, 100, false, strPointer("normie")),
+			sch:            dtestutils.TypedSchema,
 			expectedOutput: "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) VALUES ('00000000-0000-0000-0000-000000000000','It\\'s \\\"Mister Perfect\\\" to you',100,FALSE,'normie');",
 		},
 		{
-			name: "null values",
-			row:  dtestutils.NewTypedRow(id, "some guy", 100, false, nil),
-			sch:  dtestutils.TypedSchema,
+			name:           "null values",
+			row:            dtestutils.NewTypedRow(id, "some guy", 100, false, nil),
+			sch:            dtestutils.TypedSchema,
 			expectedOutput: "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) VALUES ('00000000-0000-0000-0000-000000000000','some guy',100,FALSE,NULL);",
 		},
 	}
@@ -218,8 +218,7 @@ func TestRowAsUpdateStmt(t *testing.T) {
 func TestValueAsSqlString(t *testing.T) {
 	tu, _ := uuid.Parse("00000000-0000-0000-0000-000000000000")
 
-
-	tests := []struct{
+	tests := []struct {
 		name string
 		val  types.Value
 		ti   typeinfo.TypeInfo
@@ -266,7 +265,6 @@ func TestValueAsSqlString(t *testing.T) {
 		})
 	}
 }
-
 
 func strPointer(s string) *string {
 	return &s

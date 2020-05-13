@@ -61,7 +61,6 @@ func FmtColTagComment(tag uint64) string {
 	return fmt.Sprintf("%s%d", TagCommentPrefix, tag)
 }
 
-
 // SchemaAsCreateStmt takes a Schema and returns a string representing a SQL create table command that could be used to
 // create this table
 func SchemaAsCreateStmt(tableName string, sch schema.Schema) string {

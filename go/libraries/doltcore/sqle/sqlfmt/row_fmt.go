@@ -17,9 +17,9 @@ package sqlfmt
 import (
 	"bytes"
 	"fmt"
-	"github.com/google/uuid"
 	"strings"
 
+	"github.com/google/uuid"
 	"vitess.io/vitess/go/sqltypes"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -154,7 +154,7 @@ func RowAsUpdateStmt(r row.Row, tableName string, tableSch schema.Schema) (strin
 	b.WriteString(" WHERE (")
 	seenOne = false
 	_, err = r.IterSchema(tableSch, func(tag uint64, val types.Value) (stop bool, err error) {
-		col, _:= tableSch.GetAllCols().GetByTag(tag)
+		col, _ := tableSch.GetAllCols().GetByTag(tag)
 		if col.IsPartOfPK {
 			if seenOne {
 				b.WriteString(" AND ")
@@ -220,4 +220,3 @@ func quoteAndEscapeString(s string) string {
 	v.EncodeSQL(buf)
 	return buf.String()
 }
-
