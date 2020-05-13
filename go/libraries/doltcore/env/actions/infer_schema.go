@@ -354,8 +354,6 @@ func leastPermissiveNumericType(strVal string, floatThreshold float64) (ti typei
 			return typeinfo.Uint64Type
 		}
 	}
-
-	return typeinfo.UnknownType
 }
 
 func leastPermissiveChronoType(strVal string) typeinfo.TypeInfo {
