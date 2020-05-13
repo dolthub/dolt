@@ -110,27 +110,49 @@ teardown() {
 }
 
 @test "query dolt_diff_ system table" {
-    dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
+    dolt sql -q "CREATE TABLE test (pk INT, c1 INT, PRIMARY KEY(pk))"
     dolt add test
     dolt commit -m "Added test table"
-    dolt sql -q "insert into test values (0,0)"
+    dolt branch create_checkpoint master
+    dolt sql -q "INSERT INTO test VALUES (0,0),(1,1),(2,2)"
     dolt add test
-    dolt commit -m "Added (0,0) row"
-    dolt sql -q "insert into test values (1,1)"
-    run dolt sql -q 'select * from dolt_diff_test'
-    [ $status -eq 0 ]
-    [ "${#lines[@]}" -eq 5 ]
+    dolt commit -m "Added rows"
+    dolt branch inserted_rows master
+    dolt sql -q "INSERT INTO test VALUES (3,3)"
+    dolt sql -q "UPDATE test SET c1=5 WHERE pk=1"
+    dolt sql -q "DELETE FROM test WHERE pk=2"
+
+    EXPECTED=$(echo -e "to_pk,to_c1,from_pk,from_c1,diff_type\n0,0,,,added\n1,1,,,added\n2,2,,,added\n1,5,1,1,modified\n,,2,2,removed\n3,3,,,added")
+    run dolt sql -r csv -q 'SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM dolt_diff_test ORDER BY from_commit_date'
+    echo $output
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    EXPECTED=$(echo -e "to_pk,to_c1,from_pk,from_c1,diff_type\n1,5,1,1,modified\n,,2,2,removed\n3,3,,,added")
+    run dolt sql -r csv -q 'SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM dolt_diff_test WHERE to_commit = "WORKING" ORDER BY from_commit_date'
+    echo $output
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+
+    EXPECTED=$(echo -e "to_pk,to_c1,from_pk,from_c1,diff_type\n0,0,,,added\n1,1,,,added\n2,2,,,added")
+    run dolt sql -r csv -q 'SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM dolt_diff_test WHERE from_commit = HASHOF("create_checkpoint") AND to_commit = HASHOF("inserted_rows") ORDER BY from_commit_date'
+    echo $output
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
 }
 
 @test "query dolt_diff_ system table without committing table" {
     dolt sql -q "create table test (pk int not null primary key);"
     dolt sql -q "insert into test values (0), (1);"
-    run dolt sql -q 'select * from dolt_diff_test;'
-    [ $status -eq 0 ]
-    [[ "${lines[1]}" =~ "| to_pk | to_commit | from_pk | from_commit | diff_type |" ]] || false
-    [[ "${lines[3]}" =~ "| 0     | HEAD      | <NULL>  | current     | added     |" ]] || false
-    [[ "${lines[4]}" =~ "| 1     | HEAD      | <NULL>  | current     | added     |" ]] || false
+
+    EXPECTED=$(echo -e "to_pk,to_commit,from_pk,diff_type\n0,WORKING,,added\n1,WORKING,,added")
+    run dolt sql -r csv -q 'select to_pk, to_commit, from_pk, diff_type from dolt_diff_test;'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
 }
+
+
 
 @test "query dolt_history_ system table" {
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"

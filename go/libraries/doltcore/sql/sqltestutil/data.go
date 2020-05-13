@@ -378,16 +378,10 @@ var DiffSchema = dtestutils.MustSchema(
 	schema.NewColumn("to_first_name", 1, types.StringKind, false),
 	schema.NewColumn("to_last_name", 2, types.StringKind, false),
 	schema.NewColumn("to_addr", 3, types.StringKind, false),
-	schema.NewColumn("to_age_4", 4, types.IntKind, false),
-	schema.NewColumn("to_age_5", 5, types.UintKind, false),
-	schema.NewColumn("to_commit", 6, types.StringKind, false),
 	schema.NewColumn("from_id", 7, types.IntKind, false),
 	schema.NewColumn("from_first_name", 8, types.StringKind, false),
 	schema.NewColumn("from_last_name", 9, types.StringKind, false),
 	schema.NewColumn("from_addr", 10, types.StringKind, false),
-	schema.NewColumn("from_age_4", 11, types.IntKind, false),
-	schema.NewColumn("from_age_5", 12, types.UintKind, false),
-	schema.NewColumn("from_commit", 13, types.StringKind, false),
 	schema.NewColumn("diff_type", 14, types.StringKind, false),
 )
 
