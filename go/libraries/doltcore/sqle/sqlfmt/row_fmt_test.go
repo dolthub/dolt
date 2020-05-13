@@ -15,6 +15,8 @@
 package sqlfmt
 
 import (
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/stretchr/testify/require"
 	"testing"
 
 	"github.com/google/uuid"
@@ -105,22 +107,19 @@ func TestRowAsInsertStmt(t *testing.T) {
 			name: "simple row",
 			row:  dtestutils.NewTypedRow(id, "some guy", 100, false, strPointer("normie")),
 			sch:  dtestutils.TypedSchema,
-			expectedOutput: "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
-				`VALUES ("00000000-0000-0000-0000-000000000000","some guy",100,FALSE,"normie");`,
+			expectedOutput: "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) VALUES ('00000000-0000-0000-0000-000000000000','some guy',100,FALSE,'normie');",
 		},
 		{
 			name: "embedded quotes",
 			row:  dtestutils.NewTypedRow(id, `It's "Mister Perfect" to you`, 100, false, strPointer("normie")),
 			sch:  dtestutils.TypedSchema,
-			expectedOutput: "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
-				`VALUES ("00000000-0000-0000-0000-000000000000","It's \"Mister Perfect\" to you",100,FALSE,"normie");`,
+			expectedOutput: "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) VALUES ('00000000-0000-0000-0000-000000000000','It\\'s \\\"Mister Perfect\\\" to you',100,FALSE,'normie');",
 		},
 		{
 			name: "null values",
 			row:  dtestutils.NewTypedRow(id, "some guy", 100, false, nil),
 			sch:  dtestutils.TypedSchema,
-			expectedOutput: "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
-				`VALUES ("00000000-0000-0000-0000-000000000000","some guy",100,FALSE,NULL);`,
+			expectedOutput: "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) VALUES ('00000000-0000-0000-0000-000000000000','some guy',100,FALSE,NULL);",
 		},
 	}
 
@@ -179,19 +178,19 @@ func TestRowAsUpdateStmt(t *testing.T) {
 			name:           "simple row",
 			row:            dtestutils.NewTypedRow(id, "some guy", 100, false, strPointer("normie")),
 			sch:            dtestutils.TypedSchema,
-			expectedOutput: "UPDATE `people` SET `name`=\"some guy\",`age`=100,`is_married`=FALSE,`title`=\"normie\" WHERE (`id`=\"00000000-0000-0000-0000-000000000000\");",
+			expectedOutput: "UPDATE `people` SET `name`='some guy',`age`=100,`is_married`=FALSE,`title`='normie' WHERE (`id`='00000000-0000-0000-0000-000000000000');",
 		},
 		{
 			name:           "embedded quotes",
 			row:            dtestutils.NewTypedRow(id, `It's "Mister Perfect" to you`, 100, false, strPointer("normie")),
 			sch:            dtestutils.TypedSchema,
-			expectedOutput: "UPDATE `people` SET `name`=\"It's \\\"Mister Perfect\\\" to you\",`age`=100,`is_married`=FALSE,`title`=\"normie\" WHERE (`id`=\"00000000-0000-0000-0000-000000000000\");",
+			expectedOutput: "UPDATE `people` SET `name`='It\\'s \\\"Mister Perfect\\\" to you',`age`=100,`is_married`=FALSE,`title`='normie' WHERE (`id`='00000000-0000-0000-0000-000000000000');",
 		},
 		{
 			name:           "null values",
 			row:            dtestutils.NewTypedRow(id, "some guy", 100, false, nil),
 			sch:            dtestutils.TypedSchema,
-			expectedOutput: "UPDATE `people` SET `name`=\"some guy\",`age`=100,`is_married`=FALSE,`title`=NULL WHERE (`id`=\"00000000-0000-0000-0000-000000000000\");",
+			expectedOutput: "UPDATE `people` SET `name`='some guy',`age`=100,`is_married`=FALSE,`title`=NULL WHERE (`id`='00000000-0000-0000-0000-000000000000');",
 		},
 	}
 
@@ -215,6 +214,59 @@ func TestRowAsUpdateStmt(t *testing.T) {
 		})
 	}
 }
+
+func TestValueAsSqlString(t *testing.T) {
+	tu, _ := uuid.Parse("00000000-0000-0000-0000-000000000000")
+
+
+	tests := []struct{
+		name string
+		val  types.Value
+		ti   typeinfo.TypeInfo
+		exp  string
+	}{
+		{
+			name: "bool(true)",
+			val:  types.Bool(true),
+			ti:   typeinfo.BoolType,
+			exp:  "TRUE",
+		},
+		{
+			name: "bool(false)",
+			val:  types.Bool(false),
+			ti:   typeinfo.BoolType,
+			exp:  "FALSE",
+		},
+		{
+			name: "uuid",
+			val:  types.UUID(tu),
+			ti:   typeinfo.UuidType,
+			exp:  "'00000000-0000-0000-0000-000000000000'",
+		},
+		{
+			name: "string",
+			val:  types.String("leviosa"),
+			ti:   typeinfo.StringDefaultType,
+			exp:  "'leviosa'",
+		},
+		{
+			// borrowed from vitess
+			name: "escape string",
+			val:  types.String("\x00'\"\b\n\r\t\x1A\\"),
+			ti:   typeinfo.StringDefaultType,
+			exp:  "'\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\'",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			act, err := valueAsSqlString(test.ti, test.val)
+			require.NoError(t, err)
+			assert.Equal(t, test.exp, act)
+		})
+	}
+}
+
 
 func strPointer(s string) *string {
 	return &s

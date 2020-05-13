@@ -489,9 +489,6 @@ SQL
 }
 
 @test "diff sql recreates tables with all types" {
-    
-    skip "This test fails due to type incompatibility between SQL and Noms"
-
     dolt checkout -b firstbranch
     dolt checkout -b newbranch
     dolt sql <<SQL
@@ -526,7 +523,7 @@ SQL
     dolt diff --sql newbranch firstbranch
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    ["$output" = "" ]
+    [ "$output" = "" ]
 }
 
 @test "sql diff supports all types" {
@@ -633,12 +630,22 @@ CREATE TABLE test (
   PRIMARY KEY(pk)
 );
 SQL
+    dolt add .
+    dolt commit -m "created table"
+    dolt branch other
     dolt sql -q "insert into test (pk, c1) values (0, '\\\\')";
     dolt sql -q	"insert into test (pk, c1) values (1, 'this string ends in backslash\\\\')";
-    dolt diff --sql > $BATS_TMPDIR/input-$$.sql
-    run dolt sql < $BATS_TMPDIR/input-$$.sql
-    skip "backslashes at the end of strings not supported correctly by sql diff"
+    dolt sql -q	"insert into test (pk, c1) values (2, 'this string has \\\"double quotes\\\" in it')";
+    dolt sql -q	"insert into test (pk, c1) values (3, 'it\\'s a contraction y\\'all')";
+    dolt add .
+    dolt commit -m "added tricky rows"
+    dolt checkout other
+    dolt diff --sql master other > patch.sql
+    run dolt sql < patch.sql
     [ "$status" -eq 0 ]
+    run dolt diff --sql master
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
 }
 
 @test "sql diff ignores dolt docs" {

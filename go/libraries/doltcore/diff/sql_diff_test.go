@@ -91,7 +91,7 @@ func TestSqlTableDiffAddThenInsert(t *testing.T) {
 	expectedOutput := sqlfmt.SchemaAsCreateStmt("addTable", sch) + "\n"
 	expectedOutput = expectedOutput +
 		"INSERT INTO `addTable` (`id`,`name`,`age`,`is_married`,`title`) " +
-		"VALUES (\"00000000-0000-0000-0000-000000000000\",\"Big Billy\",77,FALSE,\"Doctor\");\n"
+		"VALUES ('00000000-0000-0000-0000-000000000000','Big Billy',77,FALSE,'Doctor');\n"
 	assert.Equal(t, expectedOutput, stringWr.String())
 }
 
@@ -151,6 +151,6 @@ func TestSqlTableDiffRenameChangedTable(t *testing.T) {
 	expectedOutput = expectedOutput +
 		sqlfmt.SchemaAsCreateStmt("newTableName", sch) + "\n" +
 		"INSERT INTO `newTableName` (`id`,`name`,`age`,`is_married`,`title`) " +
-		"VALUES (\"00000000-0000-0000-0000-000000000000\",\"Big Billy\",77,FALSE,\"Doctor\");\n"
+		"VALUES ('00000000-0000-0000-0000-000000000000','Big Billy',77,FALSE,'Doctor');\n"
 	assert.Equal(t, expectedOutput, stringWr.String())
 }
