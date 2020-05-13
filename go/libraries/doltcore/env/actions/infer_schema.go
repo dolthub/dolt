@@ -76,7 +76,7 @@ const (
 
 // InferenceArgs are arguments that can be passed to the schema inferrer to modify it's inference behavior.
 type InferenceArgs struct {
-	TableName   string
+	TableName string
 	// ExistingSch is the schema for the existing schema.  If no schema exists schema.EmptySchema is expected.
 	ExistingSch schema.Schema
 	// PKCols are the columns from the input file that should be used as primary keys in the output schema
@@ -332,7 +332,6 @@ func leastPermissiveNumericType(strVal string, floatThreshold float64) (ti typei
 		}
 		return ti
 	}
-
 
 	if strings.Contains(strVal, "-") {
 		i, err := strconv.ParseInt(strVal, 10, 64)
