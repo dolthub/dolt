@@ -36,7 +36,7 @@ import (
 
 var maxIntPlusTwo uint64 = 1<<63 + 1
 
-func TestLeastPermissiveKind(t *testing.T) {
+func TestLeastPermissiveType(t *testing.T) {
 	tests := []struct {
 		name           string
 		valStr         string
@@ -68,7 +68,7 @@ func TestLeastPermissiveKind(t *testing.T) {
 	}
 }
 
-func TestLeastPermissiveNumericKind(t *testing.T) {
+func TestLeastPermissiveNumericType(t *testing.T) {
 	tests := []struct {
 		name           string
 		valStr         string
@@ -92,6 +92,28 @@ func TestLeastPermissiveNumericKind(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			actualType := leastPermissiveNumericType(test.valStr, test.floatThreshold)
+			assert.Equal(t, test.expType, actualType, "val: %s, expected: %v, actual: %v", test.valStr, test.expType, actualType)
+		})
+	}
+}
+
+func TestLeasPermissiveChronoType(t *testing.T) {
+	tests := []struct {
+		name    string
+		valStr  string
+		expType typeinfo.TypeInfo
+	}{
+		{"empty string", "", typeinfo.UnknownType},
+		{"random string", "asdf", typeinfo.UnknownType},
+		{"time", "9:27:10.485214", typeinfo.TimeType},
+		{"date", "2020-02-02", typeinfo.DateType},
+		{"also date", "2020-02-02 00:00:00.0", typeinfo.DateType},
+		{"datetime", "2030-01-02 04:06:03.472382", typeinfo.DatetimeType},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actualType := leastPermissiveChronoType(test.valStr)
 			assert.Equal(t, test.expType, actualType, "val: %s, expected: %v, actual: %v", test.valStr, test.expType, actualType)
 		})
 	}
@@ -258,22 +280,6 @@ func testFindCommonChronologicalType(t *testing.T) {
 
 	tests := []commonTypeTest{
 		{
-			name: "year and date",
-			inferSet: typeInfoSet{
-				typeinfo.YearType: {},
-				typeinfo.DateType: {},
-			},
-			expType: typeinfo.DateType,
-		},
-		{
-			name: "year and time",
-			inferSet: typeInfoSet{
-				typeinfo.YearType: {},
-				typeinfo.TimeType: {},
-			},
-			expType: typeinfo.DatetimeType,
-		},
-		{
 			name: "date and time",
 			inferSet: typeInfoSet{
 				typeinfo.DateType: {},
@@ -281,22 +287,22 @@ func testFindCommonChronologicalType(t *testing.T) {
 			},
 			expType: typeinfo.DatetimeType,
 		},
-	}
-
-	for _, ti := range []typeinfo.TypeInfo{
-		typeinfo.YearType,
-		typeinfo.DateType,
-		typeinfo.TimeType,
-		typeinfo.TimestampType,
-	}{
-		tests = append(tests, commonTypeTest{
-			name: fmt.Sprintf(" datetime and %s", ti.String()),
+		{
+			name: "date and datetime",
 			inferSet: typeInfoSet{
+				typeinfo.DateType: {},
 				typeinfo.DatetimeType: {},
-				ti: {},
 			},
 			expType: typeinfo.DatetimeType,
-		})
+		},
+		{
+			name: "time and datetime",
+			inferSet: typeInfoSet{
+				typeinfo.TimeType: {},
+				typeinfo.DatetimeType: {},
+			},
+			expType: typeinfo.DatetimeType,
+		},
 	}
 
 	for _, test := range tests {
@@ -351,13 +357,6 @@ var floatsWithTinyFractionalPortion = `uuid,float
 
 func TestInferSchema(t *testing.T) {
 	_, uuidSch := untyped.NewUntypedSchema("uuid")
-
-	updateTestColColl, err := schema.NewColCollection(
-		schema.NewColumn("uuid", 0, types.StringKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn("int", 1, types.StringKind, false, schema.NotNullConstraint{}),
-		schema.NewColumn("only_in_prev", 2, types.StringKind, false, schema.NotNullConstraint{}),
-	)
-	require.NoError(t, err)
 
 	tests := []struct {
 		name        string
@@ -507,7 +506,37 @@ func TestInferSchema(t *testing.T) {
 			"update schema",
 			oneOfEachKindWithSomeNilsCSVStr,
 			&InferenceArgs{
-				ExistingSch:    schema.SchemaFromCols(updateTestColColl),
+				ExistingSch:    mustSchema(t,
+					schema.NewColumn("uuid", 0, types.StringKind, true, schema.NotNullConstraint{}),
+					schema.NewColumn("int", 1, types.StringKind, false, schema.NotNullConstraint{}),
+					schema.NewColumn("only_in_prev", 2, types.StringKind, false, schema.NotNullConstraint{}),
+				),
+				PkCols: 		[]string{"uuid"},
+				ColMapper:      IdentityMapper{},
+				FloatThreshold: 0,
+				SchImportOp:    UpdateOp,
+				KeepTypes:      false,
+			},
+			map[string]typeinfo.TypeInfo{
+				"uuid":         typeinfo.UuidType,
+				"int":          typeinfo.Int32Type,
+				"only_in_prev": typeinfo.StringDefaultType,
+				"uint":         typeinfo.Uint64Type,
+				"float":        typeinfo.Float32Type,
+				"bool":         typeinfo.BoolType,
+				"string":       typeinfo.StringDefaultType,
+			},
+			nil,
+		},
+		{
+			"update schema keep types",
+			oneOfEachKindWithSomeNilsCSVStr,
+			&InferenceArgs{
+				ExistingSch:    mustSchema(t,
+					schema.NewColumn("uuid", 0, types.StringKind, true, schema.NotNullConstraint{}),
+					schema.NewColumn("int", 1, types.StringKind, false, schema.NotNullConstraint{}),
+					schema.NewColumn("only_in_prev", 2, types.StringKind, false, schema.NotNullConstraint{}),
+				),
 				PkCols: 		[]string{"uuid"},
 				ColMapper:      IdentityMapper{},
 				FloatThreshold: 0,
@@ -518,6 +547,56 @@ func TestInferSchema(t *testing.T) {
 				"uuid":         typeinfo.StringDefaultType,
 				"int":          typeinfo.StringDefaultType,
 				"only_in_prev": typeinfo.StringDefaultType,
+				"uint":         typeinfo.Uint64Type,
+				"float":        typeinfo.Float32Type,
+				"bool":         typeinfo.BoolType,
+				"string":       typeinfo.StringDefaultType,
+			},
+			nil,
+		},
+		{
+			"replace schema",
+			oneOfEachKindWithSomeNilsCSVStr,
+			&InferenceArgs{
+				ExistingSch:    mustSchema(t,
+					schema.NewColumn("uuid", 0, types.StringKind, true, schema.NotNullConstraint{}),
+					schema.NewColumn("int", 1, types.StringKind, false, schema.NotNullConstraint{}),
+					schema.NewColumn("only_in_prev", 2, types.StringKind, false, schema.NotNullConstraint{}),
+				),
+				PkCols: 		[]string{"uuid"},
+				ColMapper:      IdentityMapper{},
+				FloatThreshold: 0,
+				SchImportOp:    ReplaceOp,
+				KeepTypes:      false,
+			},
+			map[string]typeinfo.TypeInfo{
+				"uuid":         typeinfo.UuidType,
+				"int":          typeinfo.Int32Type,
+				"uint":         typeinfo.Uint64Type,
+				"float":        typeinfo.Float32Type,
+				"bool":         typeinfo.BoolType,
+				"string":       typeinfo.StringDefaultType,
+			},
+			nil,
+		},
+		{
+			"replace schema keep types",
+			oneOfEachKindWithSomeNilsCSVStr,
+			&InferenceArgs{
+				ExistingSch:    mustSchema(t,
+					schema.NewColumn("uuid", 0, types.StringKind, true, schema.NotNullConstraint{}),
+					schema.NewColumn("int", 1, types.StringKind, false, schema.NotNullConstraint{}),
+					schema.NewColumn("only_in_prev", 2, types.StringKind, false, schema.NotNullConstraint{}),
+				),
+				PkCols: 		[]string{"uuid"},
+				ColMapper:      IdentityMapper{},
+				FloatThreshold: 0,
+				SchImportOp:    ReplaceOp,
+				KeepTypes:      true,
+			},
+			map[string]typeinfo.TypeInfo{
+				"uuid":         typeinfo.StringDefaultType,
+				"int":          typeinfo.StringDefaultType,
 				"uint":         typeinfo.Uint64Type,
 				"float":        typeinfo.Float32Type,
 				"bool":         typeinfo.BoolType,
@@ -553,9 +632,10 @@ func TestInferSchema(t *testing.T) {
 			require.NoError(t, err)
 
 			allCols := sch.GetAllCols()
+			assert.Equal(t, len(test.expTypes), allCols.Size())
 			err = allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 				expectedType, ok := test.expTypes[col.Name]
-				assert.True(t, ok, "column not found: %s", col.Name)
+				require.True(t, ok, "column not found: %s", col.Name)
 				assert.Equal(t, expectedType, col.TypeInfo, "column: %s - expected: %s got: %s", col.Name, expectedType.String(), col.TypeInfo.String())
 				return false, nil
 			})
@@ -579,4 +659,10 @@ func TestInferSchema(t *testing.T) {
 			}
 		})
 	}
+}
+
+func mustSchema(t *testing.T, cols ...schema.Column) schema.Schema {
+	cc, err := schema.NewColCollection(cols...)
+	require.NoError(t, err)
+	return schema.SchemaFromCols(cc)
 }

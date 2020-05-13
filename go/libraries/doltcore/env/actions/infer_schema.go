@@ -19,6 +19,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -359,11 +360,24 @@ func leastPermissiveNumericType(strVal string, floatThreshold float64) (ti typei
 }
 
 func leastPermissiveChronoType(strVal string) typeinfo.TypeInfo {
-	// todo: be more specific with chrono types
-	_, err := typeinfo.DatetimeType.ParseValue(&strVal)
+	if strVal == "" {
+		return typeinfo.UnknownType
+	}
+	_, err := typeinfo.TimeType.ParseValue(&strVal)
+	if err == nil {
+		return typeinfo.TimeType
+	}
+
+	dt, err := typeinfo.DatetimeType.ParseValue(&strVal)
 	if err != nil {
 		return typeinfo.UnknownType
 	}
+
+	t := time.Time(dt.(types.Timestamp))
+	if t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 {
+		return typeinfo.DateType
+	}
+
 	return typeinfo.DatetimeType
 }
 
