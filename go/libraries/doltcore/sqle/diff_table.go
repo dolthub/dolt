@@ -31,8 +31,8 @@ import (
 )
 
 const (
-	toCommit   = "to_commit"
-	fromCommit = "from_commit"
+	toCommit       = "to_commit"
+	fromCommit     = "from_commit"
 	toCommitDate   = "to_commit_date"
 	fromCommitDate = "from_commit_date"
 
@@ -53,12 +53,12 @@ func fromNamer(name string) string {
 var _ sql.Table = (*DiffTable)(nil)
 
 type DiffTable struct {
-	name          string
-	ddb           *doltdb.DoltDB
-	ss            *schema.SuperSchema
-	joiner        *rowconv.Joiner
-	sqlSch        sql.Schema
-	partitions    *diffPartitions
+	name       string
+	ddb        *doltdb.DoltDB
+	ss         *schema.SuperSchema
+	joiner     *rowconv.Joiner
+	sqlSch     sql.Schema
+	partitions *diffPartitions
 }
 
 func NewDiffTable(ctx *sql.Context, dbName, tblName string) (*DiffTable, error) {
@@ -233,8 +233,8 @@ type diffRowItr struct {
 }
 
 type commitInfo struct {
-	name types.String
-	date *types.Timestamp
+	name    types.String
+	date    *types.Timestamp
 	nameTag uint64
 	dateTag uint64
 }
@@ -321,24 +321,24 @@ func (itr *diffRowItr) Close() (err error) {
 }
 
 type tblInfoAtCommit struct {
-	name string
-	date *types.Timestamp
-	tbl *doltdb.Table
+	name    string
+	date    *types.Timestamp
+	tbl     *doltdb.Table
 	tblHash hash.Hash
 }
 
 // data partitioned into pairs of table states which get compared
 type diffPartition struct {
-	to *doltdb.Table
-	from *doltdb.Table
-	toName string
+	to       *doltdb.Table
+	from     *doltdb.Table
+	toName   string
 	fromName string
-	toDate *types.Timestamp
+	toDate   *types.Timestamp
 	fromDate *types.Timestamp
 }
 
 func (dp diffPartition) Key() []byte {
-	return []byte(dp.toName+dp.fromName)
+	return []byte(dp.toName + dp.fromName)
 }
 
 var _ sql.PartitionIter = &diffPartitions{}
@@ -346,13 +346,13 @@ var _ sql.PartitionIter = &diffPartitions{}
 // collection of paratitions. Implements PartitionItr
 type diffPartitions struct {
 	partitions []diffPartition
-	pos int
+	pos        int
 
-	tblName string
+	tblName         string
 	cmHashToTblInfo map[hash.Hash]tblInfoAtCommit
 }
 
-func newDiffPartitions(tblName string) *diffPartitions{
+func newDiffPartitions(tblName string) *diffPartitions {
 	return &diffPartitions{nil, 0, tblName, make(map[hash.Hash]tblInfoAtCommit)}
 }
 
@@ -439,7 +439,7 @@ func calcSuperSchemaAndPartitions(ctx context.Context, cmItr doltdb.CommitItr, w
 	}
 
 	h := schRef.TargetHash()
-	addedSchemas := map[hash.Hash]bool {h:true}
+	addedSchemas := map[hash.Hash]bool{h: true}
 
 	diffPartitions := newDiffPartitions(exactName)
 	wrTblHash, _, err := wr.GetTableHash(ctx, exactName)
