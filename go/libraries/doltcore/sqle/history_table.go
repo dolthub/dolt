@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"strings"
 	"time"
@@ -70,12 +71,13 @@ func NewHistoryTable(ctx *sql.Context, dbName, tblName string) (*HistoryTable, e
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	cmItr, err := doltdb.CommitItrForAllBranches(ctx, ddb)
+	head, err := sess.GetParentCommit(ctx, dbName)
 
 	if err != nil {
 		return nil, err
 	}
 
+	cmItr := doltdb.CommitItrForRoots(ddb, head)
 	indCmItr := doltdb.NewCommitIndexingCommitItr(ddb, cmItr)
 
 	root, ok := sess.GetRoot(dbName)
@@ -84,7 +86,7 @@ func NewHistoryTable(ctx *sql.Context, dbName, tblName string) (*HistoryTable, e
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	ss, err := SuperSchemaForAllBranches(ctx, indCmItr, root, tblName)
+	ss, err := calcSuperSchema(ctx, indCmItr, root, tblName)
 
 	if err != nil {
 		return nil, err
@@ -437,4 +439,79 @@ func (tblItr *rowItrForTableAtCommit) Close() error {
 	}
 
 	return nil
+}
+
+func calcSuperSchema(ctx context.Context, cmItr doltdb.CommitItr, wr *doltdb.RootValue, tblName string) (*schema.SuperSchema, error) {
+	t, _, ok, err := wr.GetTableInsensitive(ctx, tblName)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !ok {
+		return nil, fmt.Errorf("table: %s does not exist", tblName)
+	}
+
+	sch, err := t.GetSchema(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	ss, err := schema.NewSuperSchema(sch)
+
+	if err != nil {
+		return nil, err
+	}
+
+	addedSchemas := make(map[hash.Hash]bool)
+
+	for {
+		_, cm, err := cmItr.Next(ctx)
+
+		if err != nil {
+			if err == io.EOF {
+				return ss, nil
+			}
+
+			return nil, err
+		}
+
+		root, err := cm.GetRootValue()
+
+		if err != nil {
+			return nil, err
+		}
+
+		tbl, _, ok, err := root.GetTableInsensitive(ctx, tblName)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if ok {
+			schRef, err := tbl.GetSchemaRef()
+
+			if err != nil {
+				return nil, err
+			}
+
+			h := schRef.TargetHash()
+
+			if !addedSchemas[h] {
+				addedSchemas[h] = true
+				sch, err := tbl.GetSchema(ctx)
+
+				if err != nil {
+					return nil, err
+				}
+
+				err = ss.AddSchemas(sch)
+
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
 }
