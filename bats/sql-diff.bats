@@ -622,7 +622,8 @@ SQL
     done
 }
 
-@test "sql diff escapes values that end in backslash correctly" {
+@test "sql diff escapes values for MySQL string literals" {
+    # https://dev.mysql.com/doc/refman/8.0/en/string-literals.html
     dolt sql <<SQL
 CREATE TABLE test (
   pk INT NOT NULL COMMENT 'tag:0',
@@ -633,10 +634,19 @@ SQL
     dolt add .
     dolt commit -m "created table"
     dolt branch other
+
     dolt sql -q "insert into test (pk, c1) values (0, '\\\\')";
     dolt sql -q	"insert into test (pk, c1) values (1, 'this string ends in backslash\\\\')";
     dolt sql -q	"insert into test (pk, c1) values (2, 'this string has \\\"double quotes\\\" in it')";
     dolt sql -q	"insert into test (pk, c1) values (3, 'it\\'s a contraction y\\'all')";
+    dolt sql -q	"insert into test (pk, c1) values (4, 'backspace \\\b')";
+    dolt sql -q	"insert into test (pk, c1) values (5, 'newline \\\n')";
+    dolt sql -q	"insert into test (pk, c1) values (6, 'carriage return \\\r')";
+    dolt sql -q	"insert into test (pk, c1) values (7, 'tab \\\t')";
+    dolt sql -q	"insert into test (pk, c1) values (8, 'ASCII 26 (Control+Z) \\Z')";
+    dolt sql -q	"insert into test (pk, c1) values (9, 'percent \\%')";
+    dolt sql -q	"insert into test (pk, c1) values (10,'underscore \\_')";
+
     dolt add .
     dolt commit -m "added tricky rows"
     dolt checkout other
