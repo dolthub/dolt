@@ -76,7 +76,6 @@ const (
 // InferenceArgs are arguments that can be passed to the schema inferrer to modify it's inference behavior.
 type InferenceArgs struct {
 	TableName   string
-	SchImportOp SchImportOp
 	// ExistingSch is the schema for the existing schema.  If no schema exists schema.EmptySchema is expected.
 	ExistingSch schema.Schema
 	// PKCols are the columns from the input file that should be used as primary keys in the output schema
@@ -90,6 +89,8 @@ type InferenceArgs struct {
 	// a fractional component greater than or equal to 0.001 will be treated as a float (1.0 would be an int, 1.0009 would
 	// be an int, 1.001 would be a float, 1.1 would be a float, etc)
 	FloatThreshold float64
+
+	SchImportOp SchImportOp
 	// KeepTypes is a flag which tells the inferrer, that if a column already exists in the ExistinchSch then use it's type
 	// without modification.
 	KeepTypes bool
@@ -321,7 +322,6 @@ func leastPermissiveNumericType(strVal string, floatThreshold float64) (ti typei
 			}
 
 			if decimalPart < floatThreshold {
-				// we could be more specific with these casts if necessary
 				if ti == typeinfo.Float32Type {
 					ti = typeinfo.Int32Type
 				} else {
@@ -332,36 +332,26 @@ func leastPermissiveNumericType(strVal string, floatThreshold float64) (ti typei
 		return ti
 	}
 
-	i, err := strconv.ParseInt(strVal, 10, 64)
-	if err != nil {
-		return typeinfo.UnknownType
-	}
-	if i >= int64(0) {
-		ui := uint64(i)
-		switch {
-		case ui <= math.MaxUint8:
-			return typeinfo.Uint8Type
-		case ui <= math.MaxUint16:
-			return typeinfo.Uint16Type
-		case ui <= maxUint24:
-			return typeinfo.Uint24Type
-		case ui <= math.MaxUint32:
-			return typeinfo.Uint32Type
-		case ui <= math.MaxUint64:
-			return typeinfo.Uint64Type
+
+	if strings.Contains(strVal, "-") {
+		i, err := strconv.ParseInt(strVal, 10, 64)
+		if err != nil {
+			return typeinfo.UnknownType
+		}
+		if i >= math.MinInt32 && i <= math.MaxInt32 {
+			return typeinfo.Int32Type
+		} else {
+			return typeinfo.Int64Type
 		}
 	} else {
-		switch {
-		case i >= math.MinInt8:
-			return typeinfo.Int8Type
-		case i >= math.MinInt16:
-			return typeinfo.Int16Type
-		case i >= minInt24:
-			return typeinfo.Int24Type
-		case i >= math.MinInt32:
-			return typeinfo.Int32Type
-		case i >= math.MinInt64:
-			return typeinfo.Int64Type
+		ui, err := strconv.ParseUint(strVal, 10, 64)
+		if err != nil {
+			return typeinfo.UnknownType
+		}
+		if ui <= math.MaxUint32 {
+			return typeinfo.Uint32Type
+		} else {
+			return typeinfo.Uint64Type
 		}
 	}
 
@@ -396,15 +386,15 @@ func numericTypes() []typeinfo.TypeInfo {
 	//   unsigned over signed
 	//   smaller over larger
 	return []typeinfo.TypeInfo{
-		typeinfo.Uint8Type,
-		typeinfo.Uint16Type,
-		typeinfo.Uint24Type,
+		//typeinfo.Uint8Type,
+		//typeinfo.Uint16Type,
+		//typeinfo.Uint24Type,
 		typeinfo.Uint32Type,
 		typeinfo.Uint64Type,
 
-		typeinfo.Int8Type,
-		typeinfo.Int16Type,
-		typeinfo.Int24Type,
+		//typeinfo.Int8Type,
+		//typeinfo.Int16Type,
+		//typeinfo.Int24Type,
 		typeinfo.Int32Type,
 		typeinfo.Int64Type,
 
