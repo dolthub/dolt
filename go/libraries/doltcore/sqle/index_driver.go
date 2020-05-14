@@ -81,20 +81,21 @@ func (driver *DoltIndexDriver) LoadAll(ctx *sql.Context, db, table string) ([]sq
 	cols := sch.GetPKCols().GetColumns()
 	sqlIndexes := []sql.Index{
 		&doltIndex{
-			cols:      cols,
-			ctx:       ctx,
-			db:        database,
-			driver:    driver,
-			id:        fmt.Sprintf("%s:primaryKey%v", table, len(cols)),
-			mapSch:    sch,
-			rowData:   rowData,
-			table:     tbl,
-			tableName: table,
-			tableSch:  sch,
+			cols:         cols,
+			ctx:          ctx,
+			db:           database,
+			driver:       driver,
+			id:           fmt.Sprintf("%s:primaryKey%v", table, len(cols)),
+			indexRowData: rowData,
+			indexSch:     sch,
+			table:        tbl,
+			tableData:    rowData,
+			tableName:    table,
+			tableSch:     sch,
 		},
 	}
 	for _, index := range sch.Indexes().AllIndexes() {
-		rowData, err := tbl.GetIndexRowData(ctx, index.Name())
+		indexRowData, err := tbl.GetIndexRowData(ctx, index.Name())
 		if err != nil {
 			return nil, err
 		}
@@ -103,16 +104,17 @@ func (driver *DoltIndexDriver) LoadAll(ctx *sql.Context, db, table string) ([]sq
 			cols[i], _ = index.GetColumn(tag)
 		}
 		sqlIndexes = append(sqlIndexes, &doltIndex{
-			cols:      cols,
-			ctx:       ctx,
-			db:        database,
-			driver:    driver,
-			id:        table + index.Name(),
-			mapSch:    index.Schema(),
-			rowData:   rowData,
-			table:     tbl,
-			tableName: table,
-			tableSch:  sch,
+			cols:         cols,
+			ctx:          ctx,
+			db:           database,
+			driver:       driver,
+			id:           table + ":" + index.Name(),
+			indexRowData: indexRowData,
+			indexSch:     index.Schema(),
+			table:        tbl,
+			tableData:    rowData,
+			tableName:    table,
+			tableSch:     sch,
 		})
 	}
 

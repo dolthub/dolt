@@ -17,6 +17,9 @@ package sqle
 import (
 	"io"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/store/types"
+
 	"github.com/liquidata-inc/go-mysql-server/sql"
 )
 
@@ -31,24 +34,24 @@ func (i *indexLookupRowIterAdapter) Next() (sql.Row, error) {
 		return nil, err
 	}
 
-	root, err := i.indexLookup.idx.DoltDatabase().GetRoot(i.ctx)
+	tableData := i.indexLookup.idx.TableData()
+	pkTuple := key.NomsTupleForPKCols(tableData.Format(), i.indexLookup.idx.Schema().GetPKCols())
+	pkTupleVal, err := pkTuple.Value(i.ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	table, _, err := root.GetTable(i.ctx.Context, i.indexLookup.idx.Table())
+	fieldsVal, _, err := tableData.MaybeGet(i.ctx, pkTupleVal)
 	if err != nil {
 		return nil, err
 	}
-
-	r, ok, err := table.GetRowByPKVals(i.ctx.Context, key, i.indexLookup.idx.Schema())
-
-	if err != nil {
-		return nil, err
-	}
-
-	if !ok {
+	if fieldsVal == nil {
 		return nil, io.EOF
+	}
+
+	r, err := row.FromNoms(i.indexLookup.idx.Schema(), pkTupleVal.(types.Tuple), fieldsVal.(types.Tuple))
+	if err != nil {
+		return nil, err
 	}
 
 	return doltRowToSqlRow(r, i.indexLookup.idx.Schema())
