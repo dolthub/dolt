@@ -247,6 +247,28 @@ func (root *RootValue) GetSuperSchema(ctx context.Context, tName string) (*schem
 	return ss, true, err
 }
 
+func (root *RootValue) GenerateTagsForNewColColl(ctx context.Context, tableName string, cc *schema.ColCollection) (*schema.ColCollection, error) {
+	newColNames := make([]string, 0, cc.Size())
+	newColKinds := make([]types.NomsKind, 0, cc.Size())
+	_ = cc.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		newColNames = append(newColNames, col.Name)
+		newColKinds = append(newColKinds, col.Kind)
+		return false, nil
+	})
+
+	newTags, err := root.GenerateTagsForNewColumns(ctx, tableName, newColNames, newColKinds)
+	if err != nil {
+		return nil, err
+	}
+
+	idx := 0
+	return schema.MapColCollection(cc, func(col schema.Column) (column schema.Column, err error) {
+		col.Tag = newTags[idx]
+		idx++
+		return col, nil
+	})
+}
+
 // GenerateTagsForNewColumns deterministically generates a slice of new tags that are unique within the history of this root. The names and NomsKinds of
 // the new columns are used to see the tag generator.
 func (root *RootValue) GenerateTagsForNewColumns(ctx context.Context, tableName string, newColNames []string, newColKinds []types.NomsKind) ([]uint64, error) {

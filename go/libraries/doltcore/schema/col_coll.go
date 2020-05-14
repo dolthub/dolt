@@ -217,3 +217,49 @@ func (cc *ColCollection) GetByIndex(idx int) Column {
 func (cc *ColCollection) Size() int {
 	return len(cc.cols)
 }
+
+func ColCollsAreEqual(cc1, cc2 *ColCollection) bool {
+	if cc1.Size() != cc2.Size() {
+		return false
+	}
+
+	areEqual := true
+	_ = cc1.Iter(func(tag uint64, col1 Column) (stop bool, err error) {
+		col2, ok := cc2.GetByTag(tag)
+
+		if !ok || !col1.Equals(col2) {
+			areEqual = false
+			return true, nil
+		}
+
+		return false, nil
+	})
+
+	return areEqual
+}
+
+func MapColCollection(cc *ColCollection, cb func(col Column) (Column, error)) (*ColCollection, error) {
+	mapped := make([]Column, cc.Size())
+	for i, c := range cc.cols {
+		mc, err := cb(c)
+		if err != nil {
+			return nil, err
+		}
+		mapped[i] = mc
+	}
+	return NewColCollection(mapped...)
+}
+
+func FilterColCollection(cc *ColCollection, cb func(col Column) (bool, error)) (*ColCollection, error) {
+	filtered := make([]Column, 0, cc.Size())
+	for _, c := range cc.cols {
+		keep, err := cb(c)
+		if err != nil {
+			return nil, err
+		}
+		if keep {
+			filtered = append(filtered, c)
+		}
+	}
+	return NewColCollection(filtered...)
+}

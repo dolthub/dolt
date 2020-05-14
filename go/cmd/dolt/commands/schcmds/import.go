@@ -38,6 +38,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/funcitr"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -79,12 +81,24 @@ If the parameter {{.EmphasisLeft}}--dry-run{{.EmphasisRight}} is supplied a sql 
 }
 
 type importArgs struct {
-	op        actions.SchImportOp
-	fileType  string
-	fileName  string
-	delim     string
-	inferArgs *actions.InferenceArgs
+	op          SchImportOp
+	fileName    string
+	fileType    string
+	delim       string
+	tableName   string
+	existingSch schema.Schema
+	pkCols      []string
+	keepTypes   bool
+	inferArgs   *actions.InferenceArgs
 }
+
+type SchImportOp int
+
+const (
+	CreateOp SchImportOp = iota
+	UpdateOp
+	ReplaceOp
+)
 
 type ImportCmd struct{}
 
@@ -162,17 +176,17 @@ func getSchemaImportArgs(ctx context.Context, apr *argparser.ArgParseResults, dE
 		return nil, errhand.BuildDError("error: multiple operations supplied").AddDetails("Only one of the flags '--create', '--update', or '--replace' may be provided").SetPrintUsage().Build()
 	}
 
-	var op actions.SchImportOp
+	var op SchImportOp
 	switch flags[0] {
 	case createFlag:
-		op = actions.CreateOp
+		op = CreateOp
 	case updateFlag:
-		op = actions.UpdateOp
+		op = UpdateOp
 	case replaceFlag:
-		op = actions.ReplaceOp
+		op = ReplaceOp
 	}
 
-	if apr.Contains(keepTypesParam) && op == actions.CreateOp {
+	if apr.Contains(keepTypesParam) && op == CreateOp {
 		return nil, errhand.BuildDError("error: parameter keep-types not supported for create operations").AddDetails("keep-types parameter is used to keep the existing column types as is without modification.").Build()
 	}
 
@@ -180,7 +194,7 @@ func getSchemaImportArgs(ctx context.Context, apr *argparser.ArgParseResults, dE
 
 	if err != nil {
 		return nil, errhand.BuildDError("error: failed to read from database.").AddCause(err).Build()
-	} else if tblExists && op == actions.CreateOp {
+	} else if tblExists && op == CreateOp {
 		return nil, errhand.BuildDError("error: failed to create table.").AddDetails("A table named '%s' already exists.", tblName).AddDetails("Use --replace or --update instead of --create.").Build()
 	}
 
@@ -194,27 +208,14 @@ func getSchemaImportArgs(ctx context.Context, apr *argparser.ArgParseResults, dE
 	}
 
 	val, pksOK := apr.GetValue(pksParam)
+	pks := funcitr.MapStrings(strings.Split(val, ","), strings.TrimSpace)
+	pks = funcitr.FilterStrings(pks, func(s string) bool { return s != "" })
 
-	var pks []string
-	if pksOK {
-		pks = strings.Split(val, ",")
-		goodPKS := make([]string, 0, len(pks))
-
-		for _, pk := range pks {
-			pk = strings.TrimSpace(pk)
-
-			if pk != "" {
-				goodPKS = append(goodPKS, pk)
-			}
-		}
-
-		pks = goodPKS
-
-		if len(pks) == 0 {
-			return nil, errhand.BuildDError("error: no valid columns provided in --pks argument").Build()
-		}
-	} else {
+	if !pksOK {
 		return nil, errhand.BuildDError("error: missing required parameter pks").SetPrintUsage().Build()
+	}
+	if len(pks) == 0 {
+		return nil, errhand.BuildDError("error: no valid columns provided in --pks argument").Build()
 	}
 
 	mappingFile := apr.GetValueOrDefault(mappingParam, "")
@@ -245,18 +246,17 @@ func getSchemaImportArgs(ctx context.Context, apr *argparser.ArgParseResults, dE
 	}
 
 	return &importArgs{
-		op:       op,
-		fileName: fileName,
-		delim:    apr.GetValueOrDefault(delimParam, ","),
-		fileType: apr.GetValueOrDefault(fileTypeParam, filepath.Ext(fileName)),
+		op:          op,
+		fileName:    fileName,
+		fileType:    apr.GetValueOrDefault(fileTypeParam, filepath.Ext(fileName)),
+		delim:       apr.GetValueOrDefault(delimParam, ","),
+		tableName:   tblName,
+		existingSch: existingSch,
+		pkCols:      pks,
+		keepTypes:   apr.Contains(keepTypesParam),
 		inferArgs: &actions.InferenceArgs{
-			TableName:      tblName,
-			SchImportOp:    op,
-			ExistingSch:    existingSch,
-			PkCols:         pks,
 			ColMapper:      colMapper,
 			FloatThreshold: floatThreshold,
-			KeepTypes:      apr.Contains(keepTypesParam),
 		},
 	}, nil
 }
@@ -280,7 +280,7 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		return verr
 	}
 
-	tblName := impArgs.inferArgs.TableName
+	tblName := impArgs.tableName
 	cli.Println(sqlfmt.SchemaAsCreateStmt(tblName, sch))
 
 	if !apr.Contains(dryRunFlag) {
@@ -366,11 +366,101 @@ func inferSchemaFromFile(ctx context.Context, nbf *types.NomsBinFormat, args *im
 
 	defer rd.Close(ctx)
 
-	sch, err := actions.InferSchemaFromTableReader(ctx, rd, args.inferArgs, root)
+	infCols, err := actions.InferColumnTypesFromTableReader(ctx, rd, args.inferArgs, root)
 
 	if err != nil {
 		return nil, errhand.BuildDError("error: failed to infer schema").AddCause(err).Build()
 	}
 
-	return sch, nil
+	return combineColCollections(ctx, root, infCols, args)
+}
+
+func combineColCollections(ctx context.Context, root *doltdb.RootValue, inferrerCols *schema.ColCollection, args *importArgs) (schema.Schema, errhand.VerboseError) {
+	existingCols := args.existingSch.GetAllCols()
+
+	existingColNames := set.NewStrSet(existingCols.GetColumnNames())
+	inferredColNames := set.NewStrSet(inferrerCols.GetColumnNames())
+
+	// (L - R), (L ∩ R), (R - L)
+	left, inter, right := existingColNames.LeftIntersectionRight(inferredColNames)
+
+	// sameType is the (name) subset of the intersection
+	// where the inferred type equals the existing type
+	// we will use the existing columns for this subset
+	sameType := set.NewStrSet(nil)
+	inter.Iterate(func(colName string) (cont bool) {
+		ec, _ := existingCols.GetByName(colName)
+		ic, _ := inferrerCols.GetByName(colName)
+		if ec.TypeInfo.Equals(ic.TypeInfo) {
+			sameType.Add(colName)
+		}
+		return true
+	})
+
+	// oldCols is the subset of existingCols that will be kept in the new schema
+	var oldCols *schema.ColCollection
+	// newCols is the subset of inferrerCols that will be added to the new schema
+	var newCols *schema.ColCollection
+
+	switch {
+	case args.op == CreateOp:
+		oldCols = schema.EmptyColColl
+		pks := set.NewStrSet(args.pkCols)
+		newCols, _ = schema.MapColCollection(inferrerCols, func(col schema.Column) (schema.Column, error) {
+			col.IsPartOfPK = pks.Contains(col.Name)
+			return col, nil
+		})
+
+	case args.op == UpdateOp && args.keepTypes:
+		oldCols = existingCols
+		newCols, _ = schema.FilterColCollection(inferrerCols, func(col schema.Column) (bool, error) {
+			return right.Contains(col.Name), nil
+		})
+
+	case args.op == UpdateOp:
+		oldCols, _ = schema.FilterColCollection(existingCols, func(col schema.Column) (bool, error) {
+			return left.Contains(col.Name) || sameType.Contains(col.Name), nil
+		})
+		newCols, _ = schema.FilterColCollection(inferrerCols, func(col schema.Column) (bool, error) {
+			return !sameType.Contains(col.Name), nil
+		})
+
+	case args.op == ReplaceOp && args.keepTypes:
+		oldCols, _ = schema.FilterColCollection(existingCols, func(col schema.Column) (bool, error) {
+			return inter.Contains(col.Name), nil
+		})
+		newCols, _ = schema.FilterColCollection(inferrerCols, func(col schema.Column) (bool, error) {
+			return right.Contains(col.Name), nil
+		})
+
+	case args.op == ReplaceOp:
+		oldCols, _ = schema.FilterColCollection(existingCols, func(col schema.Column) (bool, error) {
+			return sameType.Contains(col.Name), nil
+		})
+		newCols, _ = schema.FilterColCollection(inferrerCols, func(col schema.Column) (bool, error) {
+			return !sameType.Contains(col.Name), nil
+		})
+	}
+
+	newCols, err := root.GenerateTagsForNewColColl(ctx, args.tableName, newCols)
+	if err != nil {
+		return nil, errhand.BuildDError("failed to generate new schema").AddCause(err).Build()
+	}
+
+	combined, err := oldCols.AppendColl(newCols)
+	if err != nil {
+		return nil, errhand.BuildDError("failed to generate new schema").AddCause(err).Build()
+	}
+
+	if args.op != CreateOp {
+		combinedPKs, _ := schema.FilterColCollection(combined, func(col schema.Column) (b bool, err error) {
+			return col.IsPartOfPK, nil
+		})
+
+		if !schema.ColCollsAreEqual(args.existingSch.GetPKCols(), combinedPKs) {
+			return nil, errhand.BuildDError("input primary keys do not match primary keys of existing table").Build()
+		}
+	}
+
+	return schema.SchemaFromCols(combined), nil
 }
