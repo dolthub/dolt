@@ -18,10 +18,11 @@ import (
 	"errors"
 
 	"github.com/liquidata-inc/go-mysql-server/sql"
-	"github.com/liquidata-inc/go-mysql-server/sql/expression"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -31,73 +32,84 @@ type DoltIndex interface {
 	sql.DescendIndex
 	DoltDatabase() Database
 	Schema() schema.Schema
+	TableData() types.Map
 }
 
 type doltIndex struct {
-	cols      []schema.Column
-	ctx       *sql.Context
-	db        Database
-	driver    *DoltIndexDriver
-	id        string
-	mapSch    schema.Schema
-	rowData   types.Map
-	table     *doltdb.Table
-	tableName string
-	tableSch  schema.Schema
+	cols         []schema.Column
+	ctx          *sql.Context
+	db           Database
+	driver       *DoltIndexDriver
+	id           string
+	indexRowData types.Map
+	indexSch     schema.Schema
+	table        *doltdb.Table
+	tableData    types.Map
+	tableName    string
+	tableSch     schema.Schema
 }
-
-type compExpr func(left sql.Expression, right sql.Expression) sql.Expression
 
 var _ DoltIndex = (*doltIndex)(nil)
 
 func (di *doltIndex) AscendGreaterOrEqual(keys ...interface{}) (sql.IndexLookup, error) {
-	if len(di.cols) != len(keys) {
-		return nil, errors.New("keys must specify all columns for index")
+	tpl, err := di.keysToTuple(keys, false)
+	if err != nil {
+		return nil, err
 	}
-	return di.keysToIter(di.keysToExpr(keys, func(left sql.Expression, right sql.Expression) sql.Expression {
-		return expression.NewGreaterThanOrEqual(left, right)
-	}))
+	readRange := &noms.ReadRange{Start: tpl, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
+		return true, nil
+	}}
+	return di.rangeToIter(readRange)
 }
 
 func (di *doltIndex) AscendLessThan(keys ...interface{}) (sql.IndexLookup, error) {
-	if len(di.cols) != len(keys) {
-		return nil, errors.New("keys must specify all columns for index")
+	tpl, err := di.keysToTuple(keys, false)
+	if err != nil {
+		return nil, err
 	}
-	return di.keysToIter(di.keysToExpr(keys, func(left sql.Expression, right sql.Expression) sql.Expression {
-		return expression.NewLessThan(left, right)
-	}))
+	readRange := &noms.ReadRange{Start: tpl, Inclusive: false, Reverse: true, Check: func(tuple types.Tuple) (bool, error) {
+		return true, nil
+	}}
+	return di.rangeToIter(readRange)
 }
 
 // TODO: rename this from AscendRange to BetweenRange or something
 func (di *doltIndex) AscendRange(greaterOrEqual, lessThanOrEqual []interface{}) (sql.IndexLookup, error) {
-	if len(di.cols) != len(greaterOrEqual) || len(di.cols) != len(lessThanOrEqual) {
-		return nil, errors.New("keys must specify all columns for index")
+	greaterTpl, err := di.keysToTuple(greaterOrEqual, false)
+	if err != nil {
+		return nil, err
 	}
-	greaterEqualExprs := di.keysToExpr(greaterOrEqual, func(left sql.Expression, right sql.Expression) sql.Expression {
-		return expression.NewGreaterThanOrEqual(left, right)
-	})
-	lessEqualExprs := di.keysToExpr(lessThanOrEqual, func(left sql.Expression, right sql.Expression) sql.Expression {
-		return expression.NewLessThanOrEqual(left, right)
-	})
-	return di.keysToIter(expression.NewAnd(greaterEqualExprs, lessEqualExprs))
+	lessTpl, err := di.keysToTuple(lessThanOrEqual, true)
+	if err != nil {
+		return nil, err
+	}
+	nbf := di.indexRowData.Format()
+	readRange := &noms.ReadRange{Start: greaterTpl, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
+		return tuple.Less(nbf, lessTpl)
+	}}
+	return di.rangeToIter(readRange)
 }
 
 func (di *doltIndex) DescendGreater(keys ...interface{}) (sql.IndexLookup, error) {
-	if len(di.cols) != len(keys) {
-		return nil, errors.New("keys must specify all columns for index")
+	tpl, err := di.keysToTuple(keys, true)
+	if err != nil {
+		return nil, err
 	}
-	return di.keysToIter(di.keysToExpr(keys, func(left sql.Expression, right sql.Expression) sql.Expression {
-		return expression.NewGreaterThan(left, right)
-	}))
+	readRange := &noms.ReadRange{Start: tpl, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
+		return true, nil
+	}}
+	return di.rangeToIter(readRange)
 }
 
 func (di *doltIndex) DescendLessOrEqual(keys ...interface{}) (sql.IndexLookup, error) {
-	if len(di.cols) != len(keys) {
-		return nil, errors.New("keys must specify all columns for index")
+	tpl, err := di.keysToTuple(keys, true)
+	if err != nil {
+		return nil, err
 	}
-	return di.keysToIter(di.keysToExpr(keys, func(left sql.Expression, right sql.Expression) sql.Expression {
-		return expression.NewLessThanOrEqual(left, right)
-	}))
+	readRange := &noms.ReadRange{Start: tpl, Inclusive: true, Reverse: true, Check: func(tuple types.Tuple) (bool, error) {
+		return true, nil
+	}}
+	return di.rangeToIter(readRange)
 }
 
 // TODO: fix go-mysql-server to remove this duplicate function
@@ -126,12 +138,15 @@ func (di *doltIndex) Expressions() []string {
 }
 
 func (di *doltIndex) Get(keys ...interface{}) (sql.IndexLookup, error) {
-	if len(di.cols) != len(keys) {
-		return nil, errors.New("keys must specify all columns for index")
+	tpl, err := di.keysToTuple(keys, false)
+	if err != nil {
+		return nil, err
 	}
-	return di.keysToIter(di.keysToExpr(keys, func(left sql.Expression, right sql.Expression) sql.Expression {
-		return expression.NewEquals(left, right)
-	}))
+	nbf := di.indexRowData.Format()
+	readRange := &noms.ReadRange{Start: tpl, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
+		return tuple.StartsWith(nbf, tpl)
+	}}
+	return di.rangeToIter(readRange)
 }
 
 func (*doltIndex) Has(partition sql.Partition, key ...interface{}) (bool, error) {
@@ -151,31 +166,33 @@ func (di *doltIndex) Table() string {
 	return di.tableName
 }
 
-func (di *doltIndex) keysToExpr(keys []interface{}, compFunc compExpr) sql.Expression {
-	exprs := make([]sql.Expression, len(keys))
-	for i := 0; i < len(keys); i++ {
-		exprs[i] = compFunc(
-			expression.NewGetField(i, di.cols[i].TypeInfo.ToSqlType(), di.cols[i].Name, di.cols[i].IsNullable()),
-			expression.NewLiteral(keys[i], di.cols[i].TypeInfo.ToSqlType()),
-		)
-	}
-	lastExpr := exprs[len(exprs)-1]
-	for i := len(exprs) - 2; i >= 0; i-- {
-		lastExpr = expression.NewAnd(exprs[i], lastExpr)
-	}
-	return lastExpr
+func (di *doltIndex) TableData() types.Map {
+	return di.tableData
 }
 
-func (di *doltIndex) keysToIter(expr sql.Expression) (sql.IndexLookup, error) {
-	crf, err := CreateReaderFuncLimitedByExpressions(di.rowData.Format(), di.mapSch, []sql.Expression{expr})
-	if err != nil {
-		return nil, err
+func (di *doltIndex) keysToTuple(keys []interface{}, appendMaxValue bool) (types.Tuple, error) {
+	nbf := di.indexRowData.Format()
+	if len(di.cols) != len(keys) {
+		return types.EmptyTuple(nbf), errors.New("keys must specify all columns for an index")
 	}
-	mapIter, err := crf(di.ctx, di.rowData)
-	if err != nil {
-		return nil, err
+	var vals []types.Value
+	for i, col := range di.cols {
+		val, err := col.TypeInfo.ConvertValueToNomsValue(keys[i])
+		if err != nil {
+			return types.EmptyTuple(nbf), err
+		}
+		vals = append(vals, types.Uint(col.Tag), val)
 	}
+	// In the case of possible partial keys, we may need to match at the beginning or end for matched values, so we
+	// append a tag that is beyond the allowed maximum. This will be ignored if it's a full key and not a partial key.
+	if appendMaxValue {
+		vals = append(vals, types.Uint(uint64(0xffffffffffffffff)))
+	}
+	return types.NewTuple(nbf, vals...)
+}
 
+func (di *doltIndex) rangeToIter(readRange *noms.ReadRange) (sql.IndexLookup, error) {
+	var mapIter table.TableReadCloser = noms.NewNomsRangeReader(di.indexSch, di.indexRowData, []*noms.ReadRange{readRange})
 	return &doltIndexLookup{
 		di,
 		&doltIndexKeyIter{
