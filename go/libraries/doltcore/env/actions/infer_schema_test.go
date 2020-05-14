@@ -16,354 +16,299 @@ package actions
 
 import (
 	"context"
+	"fmt"
 	"math"
+	"os"
 	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/csv"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 var maxIntPlusTwo uint64 = 1<<63 + 1
 
-func TestLeastPermissiveKind(t *testing.T) {
+func TestLeastPermissiveType(t *testing.T) {
 	tests := []struct {
 		name           string
 		valStr         string
 		floatThreshold float64
-		expKind        types.NomsKind
-		expHasNegs     bool
+		expType        typeinfo.TypeInfo
 	}{
-		{"empty string", "", 0.0, types.NullKind, false},
-		{"valid uuid", "00000000-0000-0000-0000-000000000000", 0.0, types.UUIDKind, false},
-		{"invalid uuid", "00000000-0000-0000-0000-00000000000z", 0.0, types.StringKind, false},
-		{"lower bool", "true", 0.0, types.BoolKind, false},
-		{"upper bool", "FALSE", 0.0, types.BoolKind, false},
-		{"yes", "yes", 0.0, types.StringKind, false},
-		{"one", "1", 0.0, types.IntKind, false},
-		{"negative one", "-1", 0.0, types.IntKind, true},
-		{"negative one point 0", "-1.0", 0.0, types.FloatKind, true},
-		{"negative one point 0 with FT of 0.1", "-1.0", 0.1, types.IntKind, true},
-		{"negative one point one with FT of 0.1", "-1.1", 0.1, types.FloatKind, true},
-		{"negative one point 999 with FT of 1.0", "-1.999", 1.0, types.IntKind, true},
-		{"zero point zero zero zero zero", "0.0000", 0.0, types.FloatKind, false},
-		{"max int", strconv.FormatUint(math.MaxInt64, 10), 0.0, types.IntKind, false},
-		{"bigger than max int", strconv.FormatUint(maxIntPlusTwo, 10), 0.0, types.UintKind, false},
+		{"empty string", "", 0.0, typeinfo.UnknownType},
+		{"valid uuid", "00000000-0000-0000-0000-000000000000", 0.0, typeinfo.UuidType},
+		{"invalid uuid", "00000000-0000-0000-0000-00000000000z", 0.0, typeinfo.StringDefaultType},
+		{"lower bool", "true", 0.0, typeinfo.BoolType},
+		{"upper bool", "FALSE", 0.0, typeinfo.BoolType},
+		{"yes", "yes", 0.0, typeinfo.StringDefaultType},
+		{"one", "1", 0.0, typeinfo.Uint32Type},
+		{"negative one", "-1", 0.0, typeinfo.Int32Type},
+		{"negative one point 0", "-1.0", 0.0, typeinfo.Float32Type},
+		{"negative one point 0 with FT of 0.1", "-1.0", 0.1, typeinfo.Int32Type},
+		{"negative one point one with FT of 0.1", "-1.1", 0.1, typeinfo.Float32Type},
+		{"negative one point 999 with FT of 1.0", "-1.999", 1.0, typeinfo.Int32Type},
+		{"zero point zero zero zero zero", "0.0000", 0.0, typeinfo.Float32Type},
+		{"max int", strconv.FormatUint(math.MaxInt64, 10), 0.0, typeinfo.Uint64Type},
+		{"bigger than max int", strconv.FormatUint(math.MaxUint64, 10) + "0", 0.0, typeinfo.StringDefaultType},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actualKind, hasNegativeNums := leastPermissiveKind(test.valStr, test.floatThreshold)
-			assert.Equal(t, test.expKind, actualKind, "val: %s, expected: %v, actual: %v", test.valStr, test.expKind, actualKind)
-			assert.Equal(t, test.expHasNegs, hasNegativeNums)
+			actualType := leastPermissiveType(test.valStr, test.floatThreshold)
+			assert.Equal(t, test.expType, actualType, "val: %s, expected: %v, actual: %v", test.valStr, test.expType, actualType)
 		})
 	}
 }
 
-func TestLeastPermissiveNumericKind(t *testing.T) {
+func TestLeastPermissiveNumericType(t *testing.T) {
 	tests := []struct {
 		name           string
 		valStr         string
 		floatThreshold float64
-		expKind        types.NomsKind
-		expNegative    bool
+		expType        typeinfo.TypeInfo
 	}{
-		{"empty string", "", 0.0, types.NullKind, false},
-		{"zero", "0", 0.0, types.IntKind, false},
-		{"zero float", "0.0", 0.0, types.FloatKind, false},
-		{"zero float with floatThreshold of 0.1", "0.0", 0.1, types.IntKind, false},
-		{"negative float", "-1.3451234", 0.0, types.FloatKind, true},
-		{"double decimal point", "0.00.0", 0.0, types.NullKind, false},
-		{"zero float with high precision", "0.0000", 0.0, types.FloatKind, false},
-		{"all zeroes", "0000", 0.0, types.NullKind, false},
-		{"leading zeroes", "01", 0.0, types.NullKind, false},
-		{"negative int", "-1234", 0.0, types.IntKind, true},
-		{"fits in uint64 but not int64", strconv.FormatUint(maxIntPlusTwo, 10), 0.0, types.UintKind, false},
-		{"negative less than math.MinInt64", "-" + strconv.FormatUint(maxIntPlusTwo, 10), 0.0, types.NullKind, false},
-		{"math.MinInt64", strconv.FormatInt(math.MinInt64, 10), 0.0, types.IntKind, true},
+		{"zero", "0", 0.0, typeinfo.Uint32Type},
+		{"zero float", "0.0", 0.0, typeinfo.Float32Type},
+		{"zero float with floatThreshold of 0.1", "0.0", 0.1, typeinfo.Int32Type},
+		{"negative float", "-1.3451234", 0.0, typeinfo.Float32Type},
+		{"double decimal point", "0.00.0", 0.0, typeinfo.UnknownType},
+		{"zero float with high precision", "0.0000", 0.0, typeinfo.Float32Type},
+		{"all zeroes", "0000", 0.0, typeinfo.Uint32Type},
+		{"leading zeroes", "01", 0.0, typeinfo.Uint32Type},
+		{"negative int", "-1234", 0.0, typeinfo.Int32Type},
+		{"fits in uint64 but not int64", strconv.FormatUint(math.MaxUint64, 10), 0.0, typeinfo.Uint64Type},
+		{"negative less than math.MinInt64", "-" + strconv.FormatUint(math.MaxUint64, 10), 0.0, typeinfo.UnknownType},
+		{"math.MinInt64", strconv.FormatInt(math.MinInt64, 10), 0.0, typeinfo.Int64Type},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			isNegative, actualKind := leastPermissiveNumericKind(test.valStr, test.floatThreshold)
-			assert.Equal(t, test.expKind, actualKind, "val: %s, expected: %v, actual: %v", test.valStr, test.expKind, actualKind)
-			assert.Equal(t, test.expNegative, isNegative)
+			actualType := leastPermissiveNumericType(test.valStr, test.floatThreshold)
+			assert.Equal(t, test.expType, actualType, "val: %s, expected: %v, actual: %v", test.valStr, test.expType, actualType)
 		})
 	}
 }
 
-func TestStringNumericProperties(t *testing.T) {
+func TestLeasPermissiveChronoType(t *testing.T) {
 	tests := []struct {
-		name       string
-		valStr     string
-		expIsNum   bool
-		expIsFloat bool
-		expIsNeg   bool
+		name    string
+		valStr  string
+		expType typeinfo.TypeInfo
 	}{
-		{"empty string", "", false, false, false},
-		{"zero", "0", true, false, false},
-		{"zero point zero", "0.0", true, true, false},
-		{"negative one", "-1", true, false, true},
-		{"negative one point 0", "-1.0", true, true, true},
-		{"version", "1.0.1.45556", false, false, false},
-		{"words", "this is a test", false, false, false},
+		{"empty string", "", typeinfo.UnknownType},
+		{"random string", "asdf", typeinfo.UnknownType},
+		{"time", "9:27:10.485214", typeinfo.TimeType},
+		{"date", "2020-02-02", typeinfo.DateType},
+		{"also date", "2020-02-02 00:00:00.0", typeinfo.DateType},
+		{"datetime", "2030-01-02 04:06:03.472382", typeinfo.DatetimeType},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			isNum, isFloat, isNeg := stringNumericProperties(test.valStr)
-			assert.Equal(t, test.expIsNum, isNum)
-			assert.Equal(t, test.expIsFloat, isFloat)
-			assert.Equal(t, test.expIsNeg, isNeg)
+			actualType := leastPermissiveChronoType(test.valStr)
+			assert.Equal(t, test.expType, actualType, "val: %s, expected: %v, actual: %v", test.valStr, test.expType, actualType)
 		})
 	}
 }
 
-func TestTypeCountsToKind(t *testing.T) {
-	tests := []struct {
-		name         string
-		typeToCount  map[types.NomsKind]int
-		hasNegatives bool
-		expKind      types.NomsKind
-		expNullable  bool
-	}{
+type commonTypeTest struct {
+	name     string
+	inferSet typeInfoSet
+	expType  typeinfo.TypeInfo
+}
+
+func TestFindCommonType(t *testing.T) {
+	testFindCommonType(t)
+	testFindCommonTypeFromSingleType(t)
+	testFindCommonChronologicalType(t)
+}
+
+func testFindCommonType(t *testing.T) {
+	tests := []commonTypeTest{
 		{
-			name: "all ints",
-			typeToCount: map[types.NomsKind]int{
-				types.IntKind: 70,
+			name: "all signed ints",
+			inferSet: typeInfoSet{
+				typeinfo.Int32Type: {},
+				typeinfo.Int64Type: {},
 			},
-			hasNegatives: true,
-			expKind:      types.IntKind,
-			expNullable:  false,
+			expType: typeinfo.Int64Type,
 		},
 		{
-			name: "ints or null",
-			typeToCount: map[types.NomsKind]int{
-				types.IntKind:  35,
-				types.NullKind: 35,
+			name: "all unsigned ints",
+			inferSet: typeInfoSet{
+				typeinfo.Uint32Type: {},
+				typeinfo.Uint64Type: {},
 			},
-			hasNegatives: true,
-			expKind:      types.IntKind,
-			expNullable:  true,
-		},
-		{
-			name: "all uints",
-			typeToCount: map[types.NomsKind]int{
-				types.UintKind: 70,
-			},
-			hasNegatives: false,
-			expKind:      types.UintKind,
-			expNullable:  false,
-		},
-		{
-			name: "floats or null",
-			typeToCount: map[types.NomsKind]int{
-				types.FloatKind: 35,
-				types.NullKind:  35,
-			},
-			hasNegatives: false,
-			expKind:      types.FloatKind,
-			expNullable:  true,
+			expType: typeinfo.Uint64Type,
 		},
 		{
 			name: "all floats",
-			typeToCount: map[types.NomsKind]int{
-				types.FloatKind: 70,
+			inferSet: typeInfoSet{
+				typeinfo.Float32Type: {},
+				typeinfo.Float64Type: {},
 			},
-			hasNegatives: false,
-			expKind:      types.FloatKind,
-			expNullable:  false,
+			expType: typeinfo.Float64Type,
 		},
 		{
-			name: "uints or null",
-			typeToCount: map[types.NomsKind]int{
-				types.UintKind: 35,
-				types.NullKind: 35,
+			name: "32 bit ints and uints",
+			inferSet: typeInfoSet{
+				typeinfo.Int32Type:  {},
+				typeinfo.Uint32Type: {},
 			},
-			hasNegatives: false,
-			expKind:      types.UintKind,
-			expNullable:  true,
+			expType: typeinfo.Int32Type,
 		},
 		{
-			name: "all bools",
-			typeToCount: map[types.NomsKind]int{
-				types.BoolKind: 70,
+			name: "64 bit ints and uints",
+			inferSet: typeInfoSet{
+				typeinfo.Int64Type:  {},
+				typeinfo.Uint64Type: {},
 			},
-			hasNegatives: false,
-			expKind:      types.BoolKind,
-			expNullable:  false,
+			expType: typeinfo.Int64Type,
 		},
 		{
-			name: "bools or null",
-			typeToCount: map[types.NomsKind]int{
-				types.BoolKind: 35,
-				types.NullKind: 35,
+			name: "32 bit ints, uints, and floats",
+			inferSet: typeInfoSet{
+				typeinfo.Int32Type:   {},
+				typeinfo.Uint32Type:  {},
+				typeinfo.Float32Type: {},
 			},
-			hasNegatives: false,
-			expKind:      types.BoolKind,
-			expNullable:  true,
+			expType: typeinfo.Float32Type,
 		},
 		{
-			name: "all uuids",
-			typeToCount: map[types.NomsKind]int{
-				types.UUIDKind: 70,
+			name: "64 bit ints, uints, and floats",
+			inferSet: typeInfoSet{
+				typeinfo.Int64Type:   {},
+				typeinfo.Uint64Type:  {},
+				typeinfo.Float64Type: {},
 			},
-			hasNegatives: false,
-			expKind:      types.UUIDKind,
-			expNullable:  false,
+			expType: typeinfo.Float64Type,
 		},
 		{
-			name: "uuids or null",
-			typeToCount: map[types.NomsKind]int{
-				types.UUIDKind: 35,
-				types.NullKind: 35,
+			name: "ints and bools",
+			inferSet: typeInfoSet{
+				typeinfo.Int32Type: {},
+				typeinfo.BoolType:  {},
 			},
-			hasNegatives: false,
-			expKind:      types.UUIDKind,
-			expNullable:  true,
-		},
-		{
-			name: "all strings",
-			typeToCount: map[types.NomsKind]int{
-				types.StringKind: 70,
-			},
-			hasNegatives: false,
-			expKind:      types.StringKind,
-			expNullable:  false,
-		},
-		{
-			name: "strings or null",
-			typeToCount: map[types.NomsKind]int{
-				types.StringKind: 35,
-				types.NullKind:   35,
-			},
-			hasNegatives: false,
-			expKind:      types.StringKind,
-			expNullable:  true,
-		},
-		{
-			name: "positive ints and uints",
-			typeToCount: map[types.NomsKind]int{
-				types.IntKind:  35,
-				types.UintKind: 35,
-			},
-			hasNegatives: false,
-			expKind:      types.UintKind,
-			expNullable:  false,
-		},
-		{
-			name: "positive and negative ints and uints",
-			typeToCount: map[types.NomsKind]int{
-				types.IntKind:  35,
-				types.UintKind: 35,
-			},
-			hasNegatives: true,
-			expKind:      types.StringKind,
-			expNullable:  false,
-		},
-		{
-			name: "positive and negative ints and floats",
-			typeToCount: map[types.NomsKind]int{
-				types.IntKind:   35,
-				types.FloatKind: 35,
-			},
-			hasNegatives: true,
-			expKind:      types.FloatKind,
-			expNullable:  false,
-		},
-		{
-			name: "positive and negative ints and bools",
-			typeToCount: map[types.NomsKind]int{
-				types.IntKind:  35,
-				types.BoolKind: 35,
-			},
-			hasNegatives: true,
-			expKind:      types.StringKind,
-			expNullable:  false,
+			expType: typeinfo.StringDefaultType,
 		},
 		{
 			name: "floats and bools",
-			typeToCount: map[types.NomsKind]int{
-				types.FloatKind: 35,
-				types.BoolKind:  35,
+			inferSet: typeInfoSet{
+				typeinfo.Float32Type: {},
+				typeinfo.BoolType:    {},
 			},
-			hasNegatives: false,
-			expKind:      types.StringKind,
-			expNullable:  false,
+			expType: typeinfo.StringDefaultType,
 		},
 		{
 			name: "floats and uuids",
-			typeToCount: map[types.NomsKind]int{
-				types.FloatKind: 35,
-				types.UUIDKind:  35,
+			inferSet: typeInfoSet{
+				typeinfo.Float32Type: {},
+				typeinfo.UuidType:    {},
 			},
-			hasNegatives: false,
-			expKind:      types.StringKind,
-			expNullable:  false,
-		},
-		{
-			name: "floats and uuids",
-			typeToCount: map[types.NomsKind]int{
-				types.FloatKind: 35,
-				types.UUIDKind:  35,
-			},
-			hasNegatives: false,
-			expKind:      types.StringKind,
-			expNullable:  false,
+			expType: typeinfo.StringDefaultType,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			kind, nullable := typeCountsToKind("test", test.typeToCount, test.hasNegatives)
-			assert.Equal(t, test.expKind, kind)
-			assert.Equal(t, test.expNullable, nullable)
+			actualType := findCommonType(test.inferSet)
+			assert.Equal(t, test.expType, actualType)
 		})
 	}
 }
 
-func TestNextKind(t *testing.T) {
-	cols := []schema.Column{
-		schema.NewColumn("0", 0, types.StringKind, false),
-		schema.NewColumn("1", 1, types.StringKind, false),
-		schema.NewColumn("2", 2, types.StringKind, false),
-		schema.NewColumn("3", 3, types.StringKind, false),
-		schema.NewColumn("100", 100, types.StringKind, false),
-		schema.NewColumn("101", 101, types.StringKind, false),
+func testFindCommonTypeFromSingleType(t *testing.T) {
+	allTypes := []typeinfo.TypeInfo{
+		typeinfo.Uint8Type,
+		typeinfo.Uint16Type,
+		typeinfo.Uint24Type,
+		typeinfo.Uint32Type,
+		typeinfo.Uint64Type,
+		typeinfo.Int8Type,
+		typeinfo.Int16Type,
+		typeinfo.Int24Type,
+		typeinfo.Int32Type,
+		typeinfo.Int64Type,
+		typeinfo.Float32Type,
+		typeinfo.Float64Type,
+		typeinfo.BoolType,
+		typeinfo.UuidType,
+		typeinfo.YearType,
+		typeinfo.DateType,
+		typeinfo.TimeType,
+		typeinfo.TimestampType,
+		typeinfo.DatetimeType,
+		typeinfo.StringDefaultType,
 	}
 
-	tests := []struct {
-		name       string
-		tag        uint64
-		expNextTag uint64
-	}{
-		{"zero", 0, 4},
-		{"one", 1, 4},
-		{"two", 2, 4},
-		{"three", 3, 4},
-		{"four", 4, 4},
-		{"five", 5, 5},
-		{"ninety nine", 99, 99},
-		{"one hundred", 100, 102},
-		{"one hundred one", 101, 102},
-		{"one hundred two", 102, 102},
-		{"one hundred three", 103, 103},
+	for _, ti := range allTypes {
+		tests := []commonTypeTest{
+			{
+				name: fmt.Sprintf("only %s", ti.String()),
+				inferSet: typeInfoSet{
+					ti: {},
+				},
+				expType: ti,
+			},
+			{
+				name: fmt.Sprintf("Unknown and %s", ti.String()),
+				inferSet: typeInfoSet{
+					ti:                   {},
+					typeinfo.UnknownType: {},
+				},
+				expType: ti,
+			},
+		}
+		for _, test := range tests {
+			t.Run(test.name, func(t *testing.T) {
+				actualType := findCommonType(test.inferSet)
+				assert.Equal(t, test.expType, actualType)
+			})
+		}
+	}
+}
+
+func testFindCommonChronologicalType(t *testing.T) {
+
+	tests := []commonTypeTest{
+		{
+			name: "date and time",
+			inferSet: typeInfoSet{
+				typeinfo.DateType: {},
+				typeinfo.TimeType: {},
+			},
+			expType: typeinfo.DatetimeType,
+		},
+		{
+			name: "date and datetime",
+			inferSet: typeInfoSet{
+				typeinfo.DateType:     {},
+				typeinfo.DatetimeType: {},
+			},
+			expType: typeinfo.DatetimeType,
+		},
+		{
+			name: "time and datetime",
+			inferSet: typeInfoSet{
+				typeinfo.TimeType:     {},
+				typeinfo.DatetimeType: {},
+			},
+			expType: typeinfo.DatetimeType,
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			colColl, err := schema.NewColCollection(cols...)
-			require.NoError(t, err)
-
-			tag := nextTag(test.tag, colColl)
-			assert.Equal(t, test.expNextTag, tag)
+			actualType := findCommonType(test.inferSet)
+			assert.Equal(t, test.expType, actualType)
 		})
 	}
 }
@@ -413,226 +358,311 @@ var floatsWithTinyFractionalPortion = `uuid,float
 func TestInferSchema(t *testing.T) {
 	_, uuidSch := untyped.NewUntypedSchema("uuid")
 
-	updateTestColColl, err := schema.NewColCollection(
-		schema.NewColumn("uuid", 0, types.StringKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn("int", 1, types.StringKind, false, schema.NotNullConstraint{}),
-		schema.NewColumn("only_in_prev", 2, types.StringKind, false, schema.NotNullConstraint{}),
-	)
-	require.NoError(t, err)
-
 	tests := []struct {
-		name         string
-		csvContents  string
-		pkCols       []string
-		infArgs      *InferenceArgs
-		expKinds     map[string]types.NomsKind
-		nullableCols *set.StrSet
+		name        string
+		csvContents string
+		infArgs     *InferenceArgs
+		expTypes    map[string]typeinfo.TypeInfo
+		nullablePKs *set.StrSet
 	}{
 		{
 			"one of each kind",
 			oneOfEachKindCSVStr,
-			[]string{"uuid"},
 			&InferenceArgs{
 				ExistingSch:    schema.EmptySchema,
+				PkCols:         []string{"uuid"},
 				ColMapper:      IdentityMapper{},
 				FloatThreshold: 0,
 				KeepTypes:      false,
 			},
-			map[string]types.NomsKind{
-				"int":    types.IntKind,
-				"uint":   types.UintKind,
-				"uuid":   types.UUIDKind,
-				"float":  types.FloatKind,
-				"bool":   types.BoolKind,
-				"string": types.StringKind,
+			map[string]typeinfo.TypeInfo{
+				"int":    typeinfo.Int32Type,
+				"uint":   typeinfo.Uint64Type,
+				"uuid":   typeinfo.UuidType,
+				"float":  typeinfo.Float32Type,
+				"bool":   typeinfo.BoolType,
+				"string": typeinfo.StringDefaultType,
 			},
 			nil,
 		},
 		{
 			"mix uints and positive ints",
 			mixUintsAndPositiveInts,
-			[]string{"uuid"},
 			&InferenceArgs{
 				ExistingSch:    schema.EmptySchema,
+				PkCols:         []string{"uuid"},
 				ColMapper:      IdentityMapper{},
 				FloatThreshold: 0,
 				KeepTypes:      false,
 			},
-			map[string]types.NomsKind{
-				"mix":  types.UintKind,
-				"uuid": types.UUIDKind,
+			map[string]typeinfo.TypeInfo{
+				"mix":  typeinfo.Uint64Type,
+				"uuid": typeinfo.UuidType,
 			},
 			nil,
 		},
 		{
 			"floats with zero fractional and float threshold of 0",
 			floatsWithZeroForFractionalPortion,
-			[]string{"uuid"},
 			&InferenceArgs{
 				ExistingSch:    schema.EmptySchema,
+				PkCols:         []string{"uuid"},
 				ColMapper:      IdentityMapper{},
 				FloatThreshold: 0,
 				KeepTypes:      false,
 			},
-			map[string]types.NomsKind{
-				"float": types.FloatKind,
-				"uuid":  types.UUIDKind,
+			map[string]typeinfo.TypeInfo{
+				"float": typeinfo.Float32Type,
+				"uuid":  typeinfo.UuidType,
 			},
 			nil,
 		},
 		{
 			"floats with zero fractional and float threshold of 0.1",
 			floatsWithZeroForFractionalPortion,
-			[]string{"uuid"},
 			&InferenceArgs{
 				ExistingSch:    schema.EmptySchema,
+				PkCols:         []string{"uuid"},
 				ColMapper:      IdentityMapper{},
 				FloatThreshold: 0.1,
 				KeepTypes:      false,
 			},
-			map[string]types.NomsKind{
-				"float": types.IntKind,
-				"uuid":  types.UUIDKind,
+			map[string]typeinfo.TypeInfo{
+				"float": typeinfo.Int32Type,
+				"uuid":  typeinfo.UuidType,
 			},
 			nil,
 		},
 		{
 			"floats with large fractional and float threshold of 1.0",
 			floatsWithLargeFractionalPortion,
-			[]string{"uuid"},
 			&InferenceArgs{
 				ExistingSch:    schema.EmptySchema,
+				PkCols:         []string{"uuid"},
 				ColMapper:      IdentityMapper{},
 				FloatThreshold: 1.0,
 				KeepTypes:      false,
 			},
-			map[string]types.NomsKind{
-				"float": types.IntKind,
-				"uuid":  types.UUIDKind,
+			map[string]typeinfo.TypeInfo{
+				"float": typeinfo.Int32Type,
+				"uuid":  typeinfo.UuidType,
 			},
 			nil,
 		},
 		{
-			"float threshold smaller than some of teh values",
+			"float threshold smaller than some of the values",
 			floatsWithTinyFractionalPortion,
-			[]string{"uuid"},
 			&InferenceArgs{
 				ExistingSch:    schema.EmptySchema,
+				PkCols:         []string{"uuid"},
 				ColMapper:      IdentityMapper{},
 				FloatThreshold: 0.0002,
 				KeepTypes:      false,
 			},
-			map[string]types.NomsKind{
-				"float": types.FloatKind,
-				"uuid":  types.UUIDKind,
+			map[string]typeinfo.TypeInfo{
+				"float": typeinfo.Float32Type,
+				"uuid":  typeinfo.UuidType,
 			},
 			nil,
 		},
 		{
 			"Keep Types",
 			floatsWithTinyFractionalPortion,
-			[]string{"uuid"},
 			&InferenceArgs{
 				ExistingSch:    uuidSch,
+				PkCols:         []string{"uuid"},
 				ColMapper:      IdentityMapper{},
 				FloatThreshold: 0.0002,
+				SchImportOp:    UpdateOp,
 				KeepTypes:      true,
 			},
-			map[string]types.NomsKind{
-				"float": types.FloatKind,
-				"uuid":  types.StringKind,
+			map[string]typeinfo.TypeInfo{
+				"float": typeinfo.Float32Type,
+				"uuid":  typeinfo.StringDefaultType,
 			},
 			nil,
 		},
-		{
-			"pk ordering",
-			oneOfEachKindCSVStr,
-			[]string{"float", "uuid", "string", "bool"},
-			&InferenceArgs{
-				ExistingSch:    schema.EmptySchema,
-				ColMapper:      IdentityMapper{},
-				FloatThreshold: 0,
-				KeepTypes:      false,
-			},
-			map[string]types.NomsKind{
-				"int":    types.IntKind,
-				"uint":   types.UintKind,
-				"uuid":   types.UUIDKind,
-				"float":  types.FloatKind,
-				"bool":   types.BoolKind,
-				"string": types.StringKind,
-			},
-			nil,
-		},
+		//{
+		//	"pk ordering",
+		//	oneOfEachKindCSVStr,
+		//	&InferenceArgs{
+		//		ExistingSch:    schema.EmptySchema,
+		//		PkCols: 		[]string{"float", "uuid", "string", "bool"},
+		//		ColMapper:      IdentityMapper{},
+		//		FloatThreshold: 0,
+		//		KeepTypes:      false,
+		//	},
+		//	map[string]typeinfo.TypeInfo{
+		//		"int":    typeinfo.Int32Type,
+		//		"uint":   typeinfo.Uint32Type,
+		//		"uuid":   typeinfo.UuidType,
+		//		"float":  typeinfo.Float32Type,
+		//		"bool":   typeinfo.BoolType,
+		//		"string": typeinfo.StringDefaultType,
+		//	},
+		//	nil,
+		//},
 		{
 			"update schema",
 			oneOfEachKindWithSomeNilsCSVStr,
-			[]string{"uuid"},
 			&InferenceArgs{
-				ExistingSch:    schema.SchemaFromCols(updateTestColColl),
+				ExistingSch: mustSchema(t,
+					schema.NewColumn("uuid", 0, types.StringKind, true, schema.NotNullConstraint{}),
+					schema.NewColumn("int", 1, types.StringKind, false, schema.NotNullConstraint{}),
+					schema.NewColumn("only_in_prev", 2, types.StringKind, false, schema.NotNullConstraint{}),
+				),
+				PkCols:         []string{"uuid"},
 				ColMapper:      IdentityMapper{},
 				FloatThreshold: 0,
+				SchImportOp:    UpdateOp,
+				KeepTypes:      false,
+			},
+			map[string]typeinfo.TypeInfo{
+				"uuid":         typeinfo.UuidType,
+				"int":          typeinfo.Int32Type,
+				"only_in_prev": typeinfo.StringDefaultType,
+				"uint":         typeinfo.Uint64Type,
+				"float":        typeinfo.Float32Type,
+				"bool":         typeinfo.BoolType,
+				"string":       typeinfo.StringDefaultType,
+			},
+			nil,
+		},
+		{
+			"update schema keep types",
+			oneOfEachKindWithSomeNilsCSVStr,
+			&InferenceArgs{
+				ExistingSch: mustSchema(t,
+					schema.NewColumn("uuid", 0, types.StringKind, true, schema.NotNullConstraint{}),
+					schema.NewColumn("int", 1, types.StringKind, false, schema.NotNullConstraint{}),
+					schema.NewColumn("only_in_prev", 2, types.StringKind, false, schema.NotNullConstraint{}),
+				),
+				PkCols:         []string{"uuid"},
+				ColMapper:      IdentityMapper{},
+				FloatThreshold: 0,
+				SchImportOp:    UpdateOp,
 				KeepTypes:      true,
-				Update:         true,
 			},
-			map[string]types.NomsKind{
-				"uuid":         types.StringKind,
-				"int":          types.StringKind,
-				"only_in_prev": types.StringKind,
-				"uint":         types.UintKind,
-				"float":        types.FloatKind,
-				"bool":         types.BoolKind,
-				"string":       types.StringKind,
+			map[string]typeinfo.TypeInfo{
+				"uuid":         typeinfo.StringDefaultType,
+				"int":          typeinfo.StringDefaultType,
+				"only_in_prev": typeinfo.StringDefaultType,
+				"uint":         typeinfo.Uint64Type,
+				"float":        typeinfo.Float32Type,
+				"bool":         typeinfo.BoolType,
+				"string":       typeinfo.StringDefaultType,
 			},
-			set.NewStrSet([]string{"int", "only_in_prev"}),
+			nil,
+		},
+		{
+			"replace schema",
+			oneOfEachKindWithSomeNilsCSVStr,
+			&InferenceArgs{
+				ExistingSch: mustSchema(t,
+					schema.NewColumn("uuid", 0, types.StringKind, true, schema.NotNullConstraint{}),
+					schema.NewColumn("int", 1, types.StringKind, false, schema.NotNullConstraint{}),
+					schema.NewColumn("only_in_prev", 2, types.StringKind, false, schema.NotNullConstraint{}),
+				),
+				PkCols:         []string{"uuid"},
+				ColMapper:      IdentityMapper{},
+				FloatThreshold: 0,
+				SchImportOp:    ReplaceOp,
+				KeepTypes:      false,
+			},
+			map[string]typeinfo.TypeInfo{
+				"uuid":   typeinfo.UuidType,
+				"int":    typeinfo.Int32Type,
+				"uint":   typeinfo.Uint64Type,
+				"float":  typeinfo.Float32Type,
+				"bool":   typeinfo.BoolType,
+				"string": typeinfo.StringDefaultType,
+			},
+			nil,
+		},
+		{
+			"replace schema keep types",
+			oneOfEachKindWithSomeNilsCSVStr,
+			&InferenceArgs{
+				ExistingSch: mustSchema(t,
+					schema.NewColumn("uuid", 0, types.StringKind, true, schema.NotNullConstraint{}),
+					schema.NewColumn("int", 1, types.StringKind, false, schema.NotNullConstraint{}),
+					schema.NewColumn("only_in_prev", 2, types.StringKind, false, schema.NotNullConstraint{}),
+				),
+				PkCols:         []string{"uuid"},
+				ColMapper:      IdentityMapper{},
+				FloatThreshold: 0,
+				SchImportOp:    ReplaceOp,
+				KeepTypes:      true,
+			},
+			map[string]typeinfo.TypeInfo{
+				"uuid":   typeinfo.StringDefaultType,
+				"int":    typeinfo.StringDefaultType,
+				"uint":   typeinfo.Uint64Type,
+				"float":  typeinfo.Float32Type,
+				"bool":   typeinfo.BoolType,
+				"string": typeinfo.StringDefaultType,
+			},
+			nil,
 		},
 	}
 
-	const (
-		cwd        = "/Users/home/datasets/test"
-		importFile = "import_file.csv"
-	)
+	const importFilePath = "/Users/home/datasets/test/import_file.csv"
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			fs := filesys.NewInMemFS(
-				[]string{cwd},
-				map[string][]byte{importFile: []byte(test.csvContents)},
-				cwd)
-			rdCl, err := fs.OpenForRead("import_file.csv")
+			ctx := context.Background()
+			dEnv := dtestutils.CreateTestEnv()
+
+			wrCl, err := dEnv.FS.OpenForWrite(importFilePath, os.ModePerm)
+			require.NoError(t, err)
+			_, err = wrCl.Write([]byte(test.csvContents))
+			require.NoError(t, err)
+			err = wrCl.Close()
+			require.NoError(t, err)
+
+			rdCl, err := dEnv.FS.OpenForRead(importFilePath)
 			require.NoError(t, err)
 
 			csvRd, err := csv.NewCSVReader(types.Format_Default, rdCl, csv.NewCSVInfo())
 			require.NoError(t, err)
 
-			sch, err := InferSchemaFromTableReader(context.Background(), csvRd, test.pkCols, test.infArgs)
+			root, err := dEnv.WorkingRoot(ctx)
+			require.NoError(t, err)
+			sch, err := InferSchemaFromTableReader(context.Background(), csvRd, test.infArgs, root)
 			require.NoError(t, err)
 
 			allCols := sch.GetAllCols()
+			assert.Equal(t, len(test.expTypes), allCols.Size())
 			err = allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-				expectedKind, ok := test.expKinds[col.Name]
-				assert.True(t, ok, "column not found: %s", col.Name)
-				assert.Equal(t, expectedKind, col.Kind, "column: %s - expected: %s got: %s", col.Name, expectedKind.String(), col.Kind.String())
+				expectedType, ok := test.expTypes[col.Name]
+				require.True(t, ok, "column not found: %s", col.Name)
+				assert.Equal(t, expectedType, col.TypeInfo, "column: %s - expected: %s got: %s", col.Name, expectedType.String(), col.TypeInfo.String())
 				return false, nil
 			})
 			assert.NoError(t, err)
 
 			pkCols := sch.GetPKCols()
-			require.Equal(t, pkCols.Size(), len(test.pkCols))
+			require.Equal(t, len(test.infArgs.PkCols), pkCols.Size())
 
-			for i := 0; i < len(test.pkCols); i++ {
+			for i := 0; i < len(test.infArgs.PkCols); i++ {
 				col := pkCols.GetByIndex(i)
-				assert.Equal(t, test.pkCols[i], col.Name)
+				assert.Equal(t, test.infArgs.PkCols[i], col.Name)
 			}
 
-			if test.nullableCols != nil {
+			if test.nullablePKs != nil {
 				err = allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 					idx := schema.IndexOfConstraint(col.Constraints, schema.NotNullConstraintType)
-					assert.True(t, idx == -1 == test.nullableCols.Contains(col.Name), "%s unexpected nullability", col.Name)
+					assert.True(t, idx == -1 == test.nullablePKs.Contains(col.Name), "%s unexpected nullability", col.Name)
 					return false, nil
 				})
 				assert.NoError(t, err)
 			}
 		})
 	}
+}
+
+func mustSchema(t *testing.T, cols ...schema.Column) schema.Schema {
+	cc, err := schema.NewColCollection(cols...)
+	require.NoError(t, err)
+	return schema.SchemaFromCols(cc)
 }

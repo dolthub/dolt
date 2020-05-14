@@ -248,6 +248,13 @@ func TestDatetimeParseValue(t *testing.T) {
 			types.Timestamp{},
 			true,
 		},
+		//{
+		//  todo: this doesn't error
+		//	DatetimeType,
+		//	"",
+		//	types.Timestamp{},
+		//	true,
+		//},
 	}
 
 	for _, test := range tests {

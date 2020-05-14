@@ -214,6 +214,11 @@ func TestTimeParseValue(t *testing.T) {
 			0,
 			true,
 		},
+		{
+			"2030-01-02 04:06:03.472382",
+			0,
+			true,
+		},
 	}
 
 	for _, test := range tests {

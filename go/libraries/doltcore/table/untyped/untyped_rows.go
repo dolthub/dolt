@@ -25,6 +25,7 @@ import (
 // NewUntypedSchema takes an array of field names and returns a schema where the fields use the provided names, are of
 // kind types.StringKind, and are not required.
 func NewUntypedSchema(colNames ...string) (map[string]uint64, schema.Schema) {
+	// TODO: pass PK arg here
 	return NewUntypedSchemaWithFirstTag(0, colNames...)
 }
 

@@ -31,7 +31,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/mvdata"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
@@ -65,7 +64,7 @@ If {{.EmphasisLeft}}--replace | -r{{.EmphasisRight}} is given the operation will
 
 A mapping file can be used to map fields between the file being imported and the table's schema being inferred.  This can be used when creating a new table, or updating or replacing an existing table.
 
-tblcmds.MappingFileHelp
+` + tblcmds.MappingFileHelp + `
 
 In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not have the expected extension then the {{.EmphasisLeft}}--file-type{{.EmphasisRight}} parameter should be used to explicitly define the format of the file in one of the supported formats (Currently only csv is supported).  For files separated by a delimiter other than a ',', the --delim parameter can be used to specify a delimeter.
 
@@ -75,20 +74,12 @@ If the parameter {{.EmphasisLeft}}--dry-run{{.EmphasisRight}} is supplied a sql 
 `,
 
 	Synopsis: []string{
-		`[--create|--replace] [--force] [--dry-run] [--lower|--upper] [--keep-types] [--file-type {{.LessThan}}type{{.GreaterThan}}] [--float-threshold] [--map {{.LessThan}}mapping-file{{.GreaterThan}}] [--delim {{.LessThan}}delimiter{{.GreaterThan}}]--pks {{.LessThan}}field{{.GreaterThan}},... {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}`,
+		`[--create|--replace] [--force] [--dry-run] [--lower|--upper] [--keep-types] [--file-type <type>] [--float-threshold] [--map {{.LessThan}}mapping-file{{.GreaterThan}}] [--delim {{.LessThan}}delimiter{{.GreaterThan}}]--pks {{.LessThan}}field{{.GreaterThan}},... {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}`,
 	},
 }
 
-type importOp int
-
-const (
-	createOp importOp = iota
-	updateOp
-	replaceOp
-)
-
 type importArgs struct {
-	op        importOp
+	op        actions.SchImportOp
 	fileType  string
 	fileName  string
 	delim     string
@@ -150,51 +141,47 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	return commands.HandleVErrAndExitCode(importSchema(ctx, dEnv, apr), usage)
 }
 
-func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
-	root, verr := commands.GetWorkingWithVErr(dEnv)
-
-	if verr != nil {
-		return verr
-	}
-
+func getSchemaImportArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, root *doltdb.RootValue) (*importArgs, errhand.VerboseError) {
 	tblName := apr.Arg(0)
 	fileName := apr.Arg(1)
 
 	fileExists, _ := dEnv.FS.Exists(fileName)
 
 	if !fileExists {
-		return errhand.BuildDError("error: file '%s' not found.", fileName).Build()
+		return nil, errhand.BuildDError("error: file '%s' not found.", fileName).Build()
 	}
 
 	if err := tblcmds.ValidateTableNameForCreate(tblName); err != nil {
-		return err
+		return nil, err
 	}
 
-	op := createOp
-	if !apr.ContainsAny(createFlag, updateFlag, replaceFlag) {
-		return errhand.BuildDError("error: missing required parameter.").AddDetails("Must provide exactly one of the operation flags '--create', or '--replace'").SetPrintUsage().Build()
-	} else if apr.Contains(updateFlag) {
-		if apr.ContainsAny(createFlag, replaceFlag) {
-			return errhand.BuildDError("error: multiple operations supplied").AddDetails("Only one of the flags '--create', '--update', or '--replace' may be provided").SetPrintUsage().Build()
-		}
-		op = updateOp
-	} else if apr.Contains(replaceFlag) {
-		if apr.Contains(createFlag) {
-			return errhand.BuildDError("error: multiple operations supplied").AddDetails("Only one of the flags '--create', '--update', or '--replace' may be provided").SetPrintUsage().Build()
-		}
-		op = replaceOp
-	} else {
-		if apr.Contains(keepTypesParam) {
-			return errhand.BuildDError("error: parameter keep-types not supported for create operations").AddDetails("keep-types parameter is used to keep the existing column types as is without modification.").Build()
-		}
+	flags := apr.ContainsMany(createFlag, updateFlag, replaceFlag)
+	if len(flags) == 0 {
+		return nil, errhand.BuildDError("error: missing required parameter.").AddDetails("Must provide exactly one of the operation flags '--create', or '--replace'").SetPrintUsage().Build()
+	} else if len(flags) > 1 {
+		return nil, errhand.BuildDError("error: multiple operations supplied").AddDetails("Only one of the flags '--create', '--update', or '--replace' may be provided").SetPrintUsage().Build()
+	}
+
+	var op actions.SchImportOp
+	switch flags[0] {
+	case createFlag:
+		op = actions.CreateOp
+	case updateFlag:
+		op = actions.UpdateOp
+	case replaceFlag:
+		op = actions.ReplaceOp
+	}
+
+	if apr.Contains(keepTypesParam) && op == actions.CreateOp {
+		return nil, errhand.BuildDError("error: parameter keep-types not supported for create operations").AddDetails("keep-types parameter is used to keep the existing column types as is without modification.").Build()
 	}
 
 	tbl, tblExists, err := root.GetTable(ctx, tblName)
 
 	if err != nil {
-		return errhand.BuildDError("error: failed to read from database.").AddCause(err).Build()
-	} else if tblExists && op == createOp {
-		return errhand.BuildDError("error: failed to create table.").AddDetails("A table named '%s' already exists.", tblName).AddDetails("Use --replace or --update instead of --create.").Build()
+		return nil, errhand.BuildDError("error: failed to read from database.").AddCause(err).Build()
+	} else if tblExists && op == actions.CreateOp {
+		return nil, errhand.BuildDError("error: failed to create table.").AddDetails("A table named '%s' already exists.", tblName).AddDetails("Use --replace or --update instead of --create.").Build()
 	}
 
 	var existingSch schema.Schema = schema.EmptySchema
@@ -202,7 +189,7 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		existingSch, err = tbl.GetSchema(ctx)
 
 		if err != nil {
-			return errhand.BuildDError("error: failed to read schema from '%s'", tblName).AddCause(err).Build()
+			return nil, errhand.BuildDError("error: failed to read schema from '%s'", tblName).AddCause(err).Build()
 		}
 	}
 
@@ -224,10 +211,10 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		pks = goodPKS
 
 		if len(pks) == 0 {
-			return errhand.BuildDError("error: no valid columns provided in --pks argument").Build()
+			return nil, errhand.BuildDError("error: no valid columns provided in --pks argument").Build()
 		}
 	} else {
-		return errhand.BuildDError("error: missing required parameter pks").SetPrintUsage().Build()
+		return nil, errhand.BuildDError("error: missing required parameter pks").SetPrintUsage().Build()
 	}
 
 	mappingFile := apr.GetValueOrDefault(mappingParam, "")
@@ -239,12 +226,12 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 			err := filesys.UnmarshalJSONFile(dEnv.FS, mappingFile, &m)
 
 			if err != nil {
-				return errhand.BuildDError("error: invalid mapper file.").AddCause(err).Build()
+				return nil, errhand.BuildDError("error: invalid mapper file.").AddCause(err).Build()
 			}
 
 			colMapper = actions.MapMapper(m)
 		} else {
-			return errhand.BuildDError("error: '%s' does not exist.", mappingFile).Build()
+			return nil, errhand.BuildDError("error: '%s' does not exist.", mappingFile).Build()
 		}
 	} else {
 		colMapper = actions.IdentityMapper{}
@@ -254,40 +241,51 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	floatThreshold, err := strconv.ParseFloat(floatThresholdStr, 64)
 
 	if err != nil {
-		return errhand.BuildDError("error: '%s' is not a valid float in the range 0.0 (all floats) to 1.0 (no floats)", floatThresholdStr).SetPrintUsage().Build()
+		return nil, errhand.BuildDError("error: '%s' is not a valid float in the range 0.0 (all floats) to 1.0 (no floats)", floatThresholdStr).SetPrintUsage().Build()
 	}
 
-	delim := apr.GetValueOrDefault(delimParam, ",")
-
-	impArgs := importArgs{
+	return &importArgs{
 		op:       op,
 		fileName: fileName,
-		delim:    delim,
+		delim:    apr.GetValueOrDefault(delimParam, ","),
 		fileType: apr.GetValueOrDefault(fileTypeParam, filepath.Ext(fileName)),
 		inferArgs: &actions.InferenceArgs{
+			TableName:      tblName,
+			SchImportOp:    op,
 			ExistingSch:    existingSch,
+			PkCols:         pks,
 			ColMapper:      colMapper,
 			FloatThreshold: floatThreshold,
 			KeepTypes:      apr.Contains(keepTypesParam),
-			Update:         op == updateOp,
 		},
-	}
+	}, nil
+}
 
-	sch, verr := inferSchemaFromFile(ctx, dEnv.DoltDB.ValueReadWriter().Format(), pks, &impArgs)
+func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
+	root, verr := commands.GetWorkingWithVErr(dEnv)
 
 	if verr != nil {
 		return verr
 	}
 
-	sch, err = mvdata.MakeTagsUnique(ctx, root, tblName, sch)
+	impArgs, verr := getSchemaImportArgs(ctx, apr, dEnv, root)
 
-	if err != nil {
-		return errhand.BuildDError("error: could not create unique tags for schema").AddCause(err).Build()
+	if verr != nil {
+		return verr
 	}
 
+	sch, verr := inferSchemaFromFile(ctx, dEnv.DoltDB.ValueReadWriter().Format(), impArgs, root)
+
+	if verr != nil {
+		return verr
+	}
+
+	tblName := impArgs.inferArgs.TableName
 	cli.Println(sqlfmt.SchemaAsCreateStmt(tblName, sch))
 
 	if !apr.Contains(dryRunFlag) {
+		tbl, tblExists, err := root.GetTable(ctx, tblName)
+
 		schVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), root.VRW(), sch)
 
 		if err != nil {
@@ -333,35 +331,42 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	return nil
 }
 
-func inferSchemaFromFile(ctx context.Context, nbf *types.NomsBinFormat, pkCols []string, args *importArgs) (schema.Schema, errhand.VerboseError) {
+func inferSchemaFromFile(ctx context.Context, nbf *types.NomsBinFormat, args *importArgs, root *doltdb.RootValue) (schema.Schema, errhand.VerboseError) {
 	if args.fileType[0] == '.' {
 		args.fileType = args.fileType[1:]
 	}
 
 	var rd table.TableReadCloser
+	csvInfo := csv.NewCSVInfo().SetDelim(",")
+
 	switch args.fileType {
 	case "csv":
-		f, err := os.Open(args.fileName)
-
-		if err != nil {
-			return nil, errhand.BuildDError("error: failed to open '%s'", args.fileName).Build()
+		if args.delim != "" {
+			csvInfo.SetDelim(args.delim)
 		}
-
-		defer f.Close()
-
-		rd, err = csv.NewCSVReader(nbf, f, csv.NewCSVInfo().SetDelim(args.delim))
-
-		if err != nil {
-			return nil, errhand.BuildDError("error: failed to create a CSVReader.").AddCause(err).Build()
-		}
-
-		defer rd.Close(ctx)
-
+	case "psv":
+		csvInfo.SetDelim("|")
 	default:
 		return nil, errhand.BuildDError("error: unsupported file type '%s'", args.fileType).Build()
 	}
 
-	sch, err := actions.InferSchemaFromTableReader(ctx, rd, pkCols, args.inferArgs)
+	f, err := os.Open(args.fileName)
+
+	if err != nil {
+		return nil, errhand.BuildDError("error: failed to open '%s'", args.fileName).Build()
+	}
+
+	defer f.Close()
+
+	rd, err = csv.NewCSVReader(nbf, f, csvInfo)
+
+	if err != nil {
+		return nil, errhand.BuildDError("error: failed to create a CSVReader.").AddCause(err).Build()
+	}
+
+	defer rd.Close(ctx)
+
+	sch, err := actions.InferSchemaFromTableReader(ctx, rd, args.inferArgs, root)
 
 	if err != nil {
 		return nil, errhand.BuildDError("error: failed to infer schema").AddCause(err).Build()
