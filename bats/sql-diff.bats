@@ -636,16 +636,18 @@ SQL
     dolt branch other
 
     dolt sql -q "insert into test (pk, c1) values (0, '\\\\')";
-    dolt sql -q	"insert into test (pk, c1) values (1, 'this string ends in backslash\\\\')";
-    dolt sql -q	"insert into test (pk, c1) values (2, 'this string has \\\"double quotes\\\" in it')";
-    dolt sql -q	"insert into test (pk, c1) values (3, 'it\\'s a contraction y\\'all')";
-    dolt sql -q	"insert into test (pk, c1) values (4, 'backspace \\\b')";
-    dolt sql -q	"insert into test (pk, c1) values (5, 'newline \\\n')";
-    dolt sql -q	"insert into test (pk, c1) values (6, 'carriage return \\\r')";
-    dolt sql -q	"insert into test (pk, c1) values (7, 'tab \\\t')";
-    dolt sql -q	"insert into test (pk, c1) values (8, 'ASCII 26 (Control+Z) \\Z')";
-    dolt sql -q	"insert into test (pk, c1) values (9, 'percent \\%')";
-    dolt sql -q	"insert into test (pk, c1) values (10,'underscore \\_')";
+    dolt sql -q "insert into test (pk, c1) values (1, 'this string ends in backslash\\\\')";
+    dolt sql -q "insert into test (pk, c1) values (2, 'this string has \\\"double quotes\\\" in it')";
+    dolt sql -q "insert into test (pk, c1) values (3, 'it\\'s a contraction y\\'all')";
+    dolt sql -q "insert into test (pk, c1) values (4, 'backspace \\\b')";
+    dolt sql -q "insert into test (pk, c1) values (5, 'newline \\\n')";
+    dolt sql -q "insert into test (pk, c1) values (6, 'carriage return \\\r')";
+    dolt sql -q "insert into test (pk, c1) values (7, 'tab \\\t')";
+    dolt sql -q "insert into test (pk, c1) values (8, 'ASCII 26 (Control+Z) \\Z')";
+    dolt sql -q "insert into test (pk, c1) values (9, 'percent \\%')";
+    dolt sql -q "insert into test (pk, c1) values (10,'underscore \\_')";
+    dolt sql -q "insert into test (pk, c1) values (11,'\\\"\\\"')";
+    dolt sql -q "insert into test (pk, c1) values (12,'\\\"')";
 
     dolt add .
     dolt commit -m "added tricky rows"
