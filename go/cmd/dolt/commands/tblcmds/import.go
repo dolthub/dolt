@@ -289,7 +289,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	verr = executeMove(ctx, dEnv, mvOpts)
+	verr = executeImport(ctx, dEnv, mvOpts)
 
 	if verr != nil {
 		return commands.HandleVErrAndExitCode(verr, usage)
@@ -297,7 +297,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	cli.PrintErrln(color.CyanString("Import completed successfully."))
 
-	//TODO: change this to not use the executeMove function, and instead the SQL code path, so that we don't rebuild indexes on every import
+	//TODO: change this to not use the executeImport function, and instead the SQL code path, so that we don't rebuild indexes on every import
 	newWorking, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to load the working set to build the indexes.").AddCause(err).Build(), nil)
@@ -351,7 +351,7 @@ func importStatsCB(stats types.AppliedEditStats) {
 	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
 }
 
-func executeMove(ctx context.Context, dEnv *env.DoltEnv, mvOpts *mvdata.MoveOptions) errhand.VerboseError {
+func executeImport(ctx context.Context, dEnv *env.DoltEnv, mvOpts *mvdata.MoveOptions) errhand.VerboseError {
 	root, err := dEnv.WorkingRoot(ctx)
 
 	if err != nil {

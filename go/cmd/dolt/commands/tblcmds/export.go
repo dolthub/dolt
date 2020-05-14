@@ -22,10 +22,15 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/mvdata"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
@@ -161,7 +166,7 @@ func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 1
 	}
 
-	verr := executeMove(ctx, dEnv, mvOpts)
+	verr := executeExport(ctx, dEnv, mvOpts)
 
 	if verr != nil {
 		_, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, exportDocs, ap))
@@ -170,4 +175,84 @@ func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	cli.PrintErrln(color.CyanString("Successfully exported data."))
 	return 0
+}
+
+func executeExport(ctx context.Context, dEnv *env.DoltEnv, mvOpts *mvdata.MoveOptions) errhand.VerboseError {
+	root, err := dEnv.WorkingRoot(ctx)
+
+	if err != nil {
+		return errhand.BuildDError("Unable to get the working root value for this data repository.").AddCause(err).Build()
+	}
+
+	if mvOpts.WillOverwrite() {
+		destExists, err := mvOpts.Dest.Exists(ctx, root, dEnv.FS)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		} else if destExists {
+			return errhand.BuildDError("%s already exists. Use -f to overwrite.", mvOpts.Dest.String()).Build()
+		}
+	}
+
+	mover, nDMErr := mvdata.NewExportDataMover(ctx, root, dEnv.FS, mvOpts, importStatsCB)
+
+	if nDMErr != nil {
+		return newDataMoverErrToVerr(mvOpts, nDMErr)
+	}
+
+	var badCount int64
+	badCount, err = mover.Move(ctx)
+
+	if displayStrLen > 0 {
+		displayStrLen = 0
+		cli.PrintErrln("")
+	}
+
+	if err != nil {
+		if pipeline.IsTransformFailure(err) {
+			bdr := errhand.BuildDError("A bad row was encountered while moving data.")
+
+			r := pipeline.GetTransFailureRow(err)
+			if r != nil {
+				bdr.AddDetails("Bad Row:" + row.Fmt(ctx, r, mover.Rd.GetSchema()))
+			}
+
+			details := pipeline.GetTransFailureDetails(err)
+
+			bdr.AddDetails(details)
+			bdr.AddDetails("These can be ignored using the '--continue'")
+
+			return bdr.Build()
+		}
+		return errhand.BuildDError("An error occurred moving data:\n").AddCause(err).Build()
+	}
+
+	if nomsWr, ok := mover.Wr.(noms.NomsMapWriteCloser); ok {
+		var indexes []schema.Index
+
+		if tableLoc, ok := mvOpts.Src.(mvdata.TableDataLocation); ok {
+			originalTable, ok, err := root.GetTable(ctx, tableLoc.Name)
+			if err != nil || !ok {
+				return errhand.BuildDError(color.RedString("Source table does not exist.")).Build()
+			}
+			originalSchema, err := originalTable.GetSchema(ctx)
+			if err != nil || !ok {
+				return errhand.BuildDError(color.RedString("Failed to read source table's schema.")).Build()
+			}
+			indexes = originalSchema.Indexes().AllIndexes()
+		}
+
+		tableDest := mvOpts.Dest.(mvdata.TableDataLocation)
+		sch := nomsWr.GetSchema()
+		sch.Indexes().Merge(indexes...)
+		err = dEnv.PutTableToWorking(ctx, *nomsWr.GetMap(), sch, tableDest.Name)
+		if err != nil {
+			return errhand.BuildDError("Failed to update the working value.").AddCause(err).Build()
+		}
+	}
+
+	if badCount > 0 {
+		cli.PrintErrln(color.YellowString("Lines skipped: %d", badCount))
+	}
+
+	return nil
 }

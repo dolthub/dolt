@@ -174,6 +174,108 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 	return imp, nil
 }
 
+func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, mvOpts *MoveOptions, statsCB noms.StatsCB) (*DataMover, *DataMoverCreationError) {
+	var rd table.TableReadCloser
+	var err error
+
+	rd, srcIsSorted, err := mvOpts.Src.NewReader(ctx, root, fs, mvOpts.SrcOptions)
+
+	if err != nil {
+		return nil, &DataMoverCreationError{CreateReaderErr, err}
+	}
+
+	defer func() {
+		if rd != nil {
+			rd.Close(ctx)
+		}
+	}()
+
+	inSch := rd.GetSchema()
+	outSch, err := outSchemaFromInSchema(ctx, inSch, root, fs, mvOpts)
+
+	if err != nil {
+		return nil, &DataMoverCreationError{SchemaErr, err}
+	}
+
+	transforms, dmce := maybeMapFields(inSch, outSch, fs, mvOpts)
+
+	if dmce != nil {
+		return nil, dmce
+	}
+
+	var wr table.TableWriteCloser
+	switch mvOpts.Operation {
+	case OverwriteOp:
+		wr, err = mvOpts.Dest.NewCreatingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
+	case ReplaceOp:
+		wr, err = mvOpts.Dest.NewReplacingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
+	case UpdateOp:
+		wr, err = mvOpts.Dest.NewUpdatingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
+	default:
+		err = errors.New("invalid move operation")
+	}
+
+	if err != nil {
+		return nil, &DataMoverCreationError{CreateWriterErr, err}
+	}
+
+	imp := &DataMover{rd, transforms, wr, mvOpts.ContOnErr}
+	rd = nil
+
+	return imp, nil
+}
+
+func NewTableCopyDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, mvOpts *MoveOptions, statsCB noms.StatsCB) (*DataMover, *DataMoverCreationError) {
+	var rd table.TableReadCloser
+	var err error
+
+	rd, srcIsSorted, err := mvOpts.Src.NewReader(ctx, root, fs, mvOpts.SrcOptions)
+
+	if err != nil {
+		return nil, &DataMoverCreationError{CreateReaderErr, err}
+	}
+
+	defer func() {
+		if rd != nil {
+			rd.Close(ctx)
+		}
+	}()
+
+	inSch := rd.GetSchema()
+	outSch, err := outSchemaFromInSchema(ctx, inSch, root, fs, mvOpts)
+
+	if err != nil {
+		return nil, &DataMoverCreationError{SchemaErr, err}
+	}
+
+	transforms, dmce := maybeMapFields(inSch, outSch, fs, mvOpts)
+
+	if dmce != nil {
+		return nil, dmce
+	}
+
+	var wr table.TableWriteCloser
+	switch mvOpts.Operation {
+	case OverwriteOp:
+		wr, err = mvOpts.Dest.NewCreatingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
+	case ReplaceOp:
+		wr, err = mvOpts.Dest.NewReplacingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
+	case UpdateOp:
+		wr, err = mvOpts.Dest.NewUpdatingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
+	default:
+		err = errors.New("invalid move operation")
+	}
+
+	if err != nil {
+		return nil, &DataMoverCreationError{CreateWriterErr, err}
+	}
+
+	imp := &DataMover{rd, transforms, wr, mvOpts.ContOnErr}
+	rd = nil
+
+	return imp, nil
+}
+
 // Move is the method that executes the pipeline which will move data from the pipeline's source DataLocation to it's
 // dest DataLocation.  It returns the number of bad rows encountered during import, and an error.
 func (imp *DataMover) Move(ctx context.Context) (badRowCount int64, err error) {
