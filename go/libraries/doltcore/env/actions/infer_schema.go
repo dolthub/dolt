@@ -36,14 +36,14 @@ import (
 // StrMapper is a simple interface for mapping a string to another string
 type StrMapper interface {
 	// Map maps a string to another string.  If a string is not in the mapping ok will be false, otherwise it is true.
-	MaybeMap(str string) string
+	Map(str string) string
 }
 
 // IdentityMapper maps any string to itself
 type IdentityMapper struct{}
 
 // Map maps a string to another string.  For the identity mapper the input string always maps to the output string
-func (m IdentityMapper) MaybeMap(str string) string {
+func (m IdentityMapper) Map(str string) string {
 	return str
 }
 
@@ -51,7 +51,7 @@ func (m IdentityMapper) MaybeMap(str string) string {
 type MapMapper map[string]string
 
 // Map maps a string to another string.  If a string is not in the mapping ok will be false, otherwise it is true.
-func (m MapMapper) MaybeMap(str string) string {
+func (m MapMapper) Map(str string) string {
 	v, ok := m[str]
 	if ok {
 		return v
@@ -158,7 +158,7 @@ func (inf *inferrer) inferSchema(ctx context.Context, root *doltdb.RootValue) (s
 
 	// use post-mapping column names for all column name matching
 	mapper := inf.inferArgs.ColMapper
-	readerColsMapped := funcitr.MapStrings(inf.readerSch.GetAllCols().GetColumnNames(), mapper.MaybeMap)
+	readerColsMapped := funcitr.MapStrings(inf.readerSch.GetAllCols().GetColumnNames(), mapper.Map)
 	existingCols := set.NewStrSet(existingSch.GetAllCols().GetColumnNames())
 
 	inter, missing := existingCols.IntersectAndMissing(readerColsMapped)
@@ -208,7 +208,7 @@ func (inf *inferrer) inferSchema(ctx context.Context, root *doltdb.RootValue) (s
 	var newColIsPk []bool
 	var newColNullable []bool
 	_ = inf.readerSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		name := mapper.MaybeMap(col.Name)
+		name := mapper.Map(col.Name)
 		if newCols.Contains(name) {
 			ti := inferredTypes[tag]
 			newColKinds = append(newColKinds, ti.NomsKind())

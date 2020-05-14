@@ -54,7 +54,6 @@ const (
 	delimParam          = "delim"
 )
 
-// TODO: update docs
 var schImportDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Creates a new table with an inferred schema.",
 	LongDesc: `If {{.EmphasisLeft}}--create | -c{{.EmphasisRight}} is given the operation will create {{.LessThan}}table{{.GreaterThan}} with a schema that it infers from the supplied file. One or more primary key columns must be specified using the {{.EmphasisLeft}}--pks{{.EmphasisRight}} parameter.
@@ -65,7 +64,7 @@ If {{.EmphasisLeft}}--replace | -r{{.EmphasisRight}} is given the operation will
 
 A mapping file can be used to map fields between the file being imported and the table's schema being inferred.  This can be used when creating a new table, or updating or replacing an existing table.
 
-tblcmds.MappingFileHelp
+` + tblcmds.MappingFileHelp + `
 
 In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not have the expected extension then the {{.EmphasisLeft}}--file-type{{.EmphasisRight}} parameter should be used to explicitly define the format of the file in one of the supported formats (Currently only csv is supported).  For files separated by a delimiter other than a ',', the --delim parameter can be used to specify a delimeter.
 
@@ -75,7 +74,7 @@ If the parameter {{.EmphasisLeft}}--dry-run{{.EmphasisRight}} is supplied a sql 
 `,
 
 	Synopsis: []string{
-		`[--create|--replace] [--force] [--dry-run] [--lower|--upper] [--keep-types] [--file-type {{.LessThan}}type{{.GreaterThan}}] [--float-threshold] [--map {{.LessThan}}mapping-file{{.GreaterThan}}] [--delim {{.LessThan}}delimiter{{.GreaterThan}}]--pks {{.LessThan}}field{{.GreaterThan}},... {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}`,
+		`[--create|--replace] [--force] [--dry-run] [--lower|--upper] [--keep-types] [--file-type <type>] [--float-threshold] [--map {{.LessThan}}mapping-file{{.GreaterThan}}] [--delim {{.LessThan}}delimiter{{.GreaterThan}}]--pks {{.LessThan}}field{{.GreaterThan}},... {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}`,
 	},
 }
 

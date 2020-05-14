@@ -186,28 +186,24 @@ pk, test_date
 1, "2011-10-24 13:17:42"
 2, 2018-04-13
 DELIM
-    dolt schema import --dry-run -c --pks=pk test 1pk-datetime.csv
     run dolt schema import -c --pks=pk test 1pk-datetime.csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
     [[ "$output" =~ "DATETIME" ]] || false;
 }
 
-@test "schema import supports SQL datetime output" {
-    dolt sql -q 'create table chrono (pk datetime not null primary key);'
-    dolt sql -q 'insert into chrono values (now());'
-    dolt sql -r csv -q 'select * from chrono;' > chrono.csv
-    run dolt schema import -c --pks=pk other chrono.csv
-    [ "$status" -eq 0 ]
-    skip "schema import does not support datetime"
-    [[ "$output" =~ "DATETIME" ]] || false;
-}
-
 @test "schema import uses specific date/time types" {
     cat <<DELIM > chrono.csv
-pk, c_date, c_time, c_datetime, c_timestamp, c_year
+pk, c_date, c_time, c_datetime, c_date+time
+0, "2018-04-13", "13:17:42",     "2011-10-24 13:17:42.123", "2018-04-13"
+1, "2018-04-13", "13:17:42.123", "2011-10-24 13:17:42",     "13:17:42"
 DELIM
-    skip "uncertain"
+    run dolt schema import -c --pks=pk test chrono.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "\`c_date\` DATE" ]] || false
+    [[ "$output" =~ "\`c_time\` TIME" ]] || false
+    [[ "$output" =~ "\`c_datetime\` DATETIME" ]] || false
+    [[ "$output" =~ "\`c_date+time\` DATETIME" ]] || false
 }
 
 @test "schema import of two tables" {
