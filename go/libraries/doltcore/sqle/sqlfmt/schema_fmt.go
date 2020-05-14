@@ -16,6 +16,7 @@ package sqlfmt
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 )
@@ -58,4 +59,128 @@ func FmtColPrimaryKey(indent int, colStr string) string {
 
 func FmtColTagComment(tag uint64) string {
 	return fmt.Sprintf("%s%d", TagCommentPrefix, tag)
+}
+
+// SchemaAsCreateStmt takes a Schema and returns a string representing a SQL create table command that could be used to
+// create this table
+func SchemaAsCreateStmt(tableName string, sch schema.Schema) string {
+	sb := &strings.Builder{}
+	fmt.Fprintf(sb, "CREATE TABLE %s (\n", QuoteIdentifier(tableName))
+
+	firstLine := true
+	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if firstLine {
+			firstLine = false
+		} else {
+			sb.WriteString(",\n")
+		}
+
+		s := FmtCol(2, 0, 0, col)
+		sb.WriteString(s)
+
+		return false, nil
+	})
+
+	firstPK := true
+	err := sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if firstPK {
+			sb.WriteString(",\n  PRIMARY KEY (")
+			firstPK = false
+		} else {
+			sb.WriteRune(',')
+		}
+		sb.WriteString(QuoteIdentifier(col.Name))
+		return false, nil
+	})
+
+	// TODO: fix panics
+	if err != nil {
+		panic(err)
+	}
+
+	sb.WriteRune(')')
+
+	for _, index := range sch.Indexes().AllIndexes() {
+		sb.WriteString(",\n  ")
+		if index.IsUnique() {
+			sb.WriteString("UNIQUE ")
+		}
+		sb.WriteString("INDEX ")
+		sb.WriteString(QuoteIdentifier(index.Name()))
+		sb.WriteString(" (")
+		for i, indexColName := range index.ColumnNames() {
+			if i != 0 {
+				sb.WriteRune(',')
+			}
+			sb.WriteString(QuoteIdentifier(indexColName))
+		}
+		sb.WriteRune(')')
+		if len(index.Comment()) > 0 {
+			sb.WriteString(" COMMENT ")
+			sb.WriteString(QuoteComment(index.Comment()))
+		}
+	}
+
+	sb.WriteString("\n);")
+
+	return sb.String()
+}
+
+func DropTableStmt(tableName string) string {
+	var b strings.Builder
+	b.WriteString("DROP TABLE ")
+	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(";")
+	return b.String()
+}
+
+func DropTableIfExistsStmt(tableName string) string {
+	var b strings.Builder
+	b.WriteString("DROP TABLE IF EXISTS ")
+	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(";")
+	return b.String()
+}
+
+func AlterTableAddColStmt(tableName string, newColDef string) string {
+	var b strings.Builder
+	b.WriteString("ALTER TABLE ")
+	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(" ADD ")
+	b.WriteString(newColDef)
+	b.WriteRune(';')
+	return b.String()
+}
+
+func AlterTableDropColStmt(tableName string, oldColName string) string {
+	var b strings.Builder
+	b.WriteString("ALTER TABLE ")
+	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(" DROP ")
+	b.WriteString(QuoteIdentifier(oldColName))
+	b.WriteRune(';')
+	return b.String()
+}
+
+func AlterTableRenameColStmt(tableName string, oldColName string, newColName string) string {
+	var b strings.Builder
+	b.WriteString("ALTER TABLE ")
+	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(" RENAME COLUMN ")
+	b.WriteString(QuoteIdentifier(oldColName))
+	b.WriteString(" TO ")
+	b.WriteString(QuoteIdentifier(newColName))
+	b.WriteRune(';')
+	return b.String()
+}
+
+func RenameTableStmt(fromName string, toName string) string {
+	var b strings.Builder
+	b.WriteString("RENAME TABLE ")
+	b.WriteString(QuoteIdentifier(fromName))
+	b.WriteString(" TO ")
+	b.WriteString(QuoteIdentifier(toName))
+	b.WriteString(";")
+
+	return b.String()
 }
