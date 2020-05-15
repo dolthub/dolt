@@ -51,14 +51,16 @@ type doltIndex struct {
 
 var _ DoltIndex = (*doltIndex)(nil)
 
+var alwaysContinueRangeCheck noms.InRangeCheck = func(tuple types.Tuple) (bool, error) {
+	return true, nil
+}
+
 func (di *doltIndex) AscendGreaterOrEqual(keys ...interface{}) (sql.IndexLookup, error) {
 	tpl, err := di.keysToTuple(keys, false)
 	if err != nil {
 		return nil, err
 	}
-	readRange := &noms.ReadRange{Start: tpl, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
-		return true, nil
-	}}
+	readRange := &noms.ReadRange{Start: tpl, Inclusive: true, Reverse: false, Check: alwaysContinueRangeCheck}
 	return di.rangeToIter(readRange)
 }
 
@@ -67,9 +69,7 @@ func (di *doltIndex) AscendLessThan(keys ...interface{}) (sql.IndexLookup, error
 	if err != nil {
 		return nil, err
 	}
-	readRange := &noms.ReadRange{Start: tpl, Inclusive: false, Reverse: true, Check: func(tuple types.Tuple) (bool, error) {
-		return true, nil
-	}}
+	readRange := &noms.ReadRange{Start: tpl, Inclusive: false, Reverse: true, Check: alwaysContinueRangeCheck}
 	return di.rangeToIter(readRange)
 }
 
@@ -95,9 +95,7 @@ func (di *doltIndex) DescendGreater(keys ...interface{}) (sql.IndexLookup, error
 	if err != nil {
 		return nil, err
 	}
-	readRange := &noms.ReadRange{Start: tpl, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
-		return true, nil
-	}}
+	readRange := &noms.ReadRange{Start: tpl, Inclusive: true, Reverse: false, Check: alwaysContinueRangeCheck}
 	return di.rangeToIter(readRange)
 }
 
@@ -106,9 +104,7 @@ func (di *doltIndex) DescendLessOrEqual(keys ...interface{}) (sql.IndexLookup, e
 	if err != nil {
 		return nil, err
 	}
-	readRange := &noms.ReadRange{Start: tpl, Inclusive: true, Reverse: true, Check: func(tuple types.Tuple) (bool, error) {
-		return true, nil
-	}}
+	readRange := &noms.ReadRange{Start: tpl, Inclusive: true, Reverse: true, Check: alwaysContinueRangeCheck}
 	return di.rangeToIter(readRange)
 }
 
@@ -142,9 +138,8 @@ func (di *doltIndex) Get(keys ...interface{}) (sql.IndexLookup, error) {
 	if err != nil {
 		return nil, err
 	}
-	nbf := di.indexRowData.Format()
 	readRange := &noms.ReadRange{Start: tpl, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
-		return tuple.StartsWith(nbf, tpl)
+		return tuple.StartsWith(tpl), nil
 	}}
 	return di.rangeToIter(readRange)
 }

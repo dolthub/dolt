@@ -16,11 +16,12 @@ package types
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -174,5 +175,113 @@ func TestTupleLess(t *testing.T) {
 		if actual != test.expected {
 			t.Error("tpl1:", mustString(EncodedValue(context.Background(), tpl1)), "tpl2:", mustString(EncodedValue(context.Background(), tpl2)), "expected", test.expected, "actual:", actual)
 		}
+	}
+}
+
+func TestTupleStartsWith(t *testing.T) {
+	tests := []struct {
+		full     []Value
+		prefix   []Value
+		expected bool
+	}{
+		{
+			[]Value{Uint(23), Int(1235)},
+			[]Value{Uint(23)},
+			true,
+		},
+		{
+			[]Value{Uint(23), Int(1235)},
+			[]Value{Uint(23), Int(1234)},
+			false,
+		},
+		{
+			[]Value{String("equal")},
+			[]Value{String("equal")},
+			true,
+		},
+		{
+			[]Value{String("abc"), Int(1234)},
+			[]Value{String("abc"), Int(1234)},
+			true,
+		},
+		{
+			[]Value{String("abc"), Int(1234)},
+			[]Value{String("abc"), Int(1235)},
+			false,
+		},
+		{
+			[]Value{String("abc"), Int(1234), String("hello")},
+			[]Value{String("abc"), Int(1234)},
+			true,
+		},
+		{
+			[]Value{String("abc"), Int(1235)},
+			[]Value{String("abc"), Int(1234)},
+			false,
+		},
+		{
+			[]Value{String("abc"), Int(1234)},
+			[]Value{String("abc")},
+			true,
+		},
+		{
+			[]Value{String("abc")},
+			[]Value{String("abc"), Int(1234)},
+			false,
+		},
+		{
+			[]Value{UUID(uuid.MustParse(ZeroUUID)), String("abc")},
+			[]Value{UUID(uuid.MustParse(OneUUID)), String("abc")},
+			false,
+		},
+		{
+			[]Value{UUID(uuid.MustParse(OneUUID)), String("abc")},
+			[]Value{UUID(uuid.MustParse(OneUUID))},
+			true,
+		},
+		{
+			[]Value{Uint(45), Int(1235), Uint(50), String("hey"), Uint(67), InlineBlob{33}},
+			[]Value{Uint(45)},
+			true,
+		},
+		{
+			[]Value{Uint(45), Int(1235), Uint(50), String("hey"), Uint(67), InlineBlob{33}},
+			[]Value{Uint(45), Int(1235)},
+			true,
+		},
+		{
+			[]Value{Uint(45), Int(1235), Uint(50), String("hey"), Uint(67), InlineBlob{33}},
+			[]Value{Uint(45), Int(1235), Uint(50)},
+			true,
+		},
+		{
+			[]Value{Uint(45), Int(1235), Uint(50), String("hey"), Uint(67), InlineBlob{33}},
+			[]Value{Uint(45), Int(1235), Uint(50), String("hey")},
+			true,
+		},
+		{
+			[]Value{Uint(45), Int(1235), Uint(50), String("hey"), Uint(67), InlineBlob{33}},
+			[]Value{Uint(45), Int(1235), Uint(50), String("hey"), Uint(67)},
+			true,
+		},
+		{ // The prefix's InlineBlob mirrors the buffer following full's InlineBlob
+			[]Value{Uint(45), InlineBlob{2}, Uint(50), String("hey"), Uint(67), InlineBlob{33}},
+			[]Value{Uint(45), InlineBlob{2, 16, 50, 2, 3, 104, 101, 121, 16, 67, 19, 0, 1, 33}},
+			false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%v|%v", test.full, test.prefix), func(t *testing.T) {
+			tpl1, err := NewTuple(Format_7_18, test.full...)
+			require.NoError(t, err)
+			tpl2, err := NewTuple(Format_7_18, test.prefix...)
+			require.NoError(t, err)
+			if test.expected {
+				assert.True(t, tpl1.StartsWith(tpl2))
+			} else {
+				assert.False(t, tpl1.StartsWith(tpl2))
+			}
+		})
 	}
 }
