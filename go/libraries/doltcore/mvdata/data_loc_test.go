@@ -22,7 +22,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/tblcmds"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -166,6 +165,20 @@ func TestExists(t *testing.T) {
 	}
 }
 
+type testDataMoverOptions struct {}
+
+func (t testDataMoverOptions) WritesToTable() bool {
+	return true
+}
+
+func (t testDataMoverOptions) SrcName() string {
+	return ""
+}
+
+func (t testDataMoverOptions) DestName() string {
+	return testTableName
+}
+
 func TestCreateRdWr(t *testing.T) {
 	tests := []struct {
 		dl          DataLocation
@@ -181,13 +194,7 @@ func TestCreateRdWr(t *testing.T) {
 
 	ddb, root, fs := createRootAndFS()
 
-	mvOpts := &tblcmds.importOptions{
-		Operation:   tblcmds.CreateOp,
-		TableName:   testTableName,
-		ContOnErr:   false,
-		SchFile:     schemaFile,
-		MappingFile: mappingFile,
-	}
+	mvOpts := &testDataMoverOptions{}
 
 	for idx, test := range tests {
 		fmt.Println(idx)
