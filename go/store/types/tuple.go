@@ -22,6 +22,7 @@
 package types
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
@@ -497,30 +498,10 @@ func (t Tuple) fieldsToMap() (map[Value]Value, error) {
 	return valMap, nil
 }
 
-func (t Tuple) StartsWith(nbf *NomsBinFormat, otherTuple Tuple) (bool, error) {
-	tplDec := t.decoder()
-	tplDec.skipKind()
-	tplCount := tplDec.readCount()
-	otherDec := otherTuple.decoder()
-	otherDec.skipKind()
-	otherCount := otherDec.readCount()
-	if otherCount > tplCount {
-		return false, nil
-	}
-	for i := uint64(0); i < otherCount; i++ {
-		tplVal, err := tplDec.readValue(nbf)
-		if err != nil {
-			return false, err
-		}
-		otherVal, err := otherDec.readValue(nbf)
-		if err != nil {
-			return false, err
-		}
-		if !tplVal.Equals(otherVal) {
-			return false, nil
-		}
-	}
-	return true, nil
+func (t Tuple) StartsWith(otherTuple Tuple) bool {
+	tplDec, _ := t.decoderSkipToFields()
+	otherDec, _ := otherTuple.decoderSkipToFields()
+	return bytes.HasPrefix(tplDec.buff[tplDec.offset:], otherDec.buff[otherDec.offset:])
 }
 
 func (t Tuple) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {

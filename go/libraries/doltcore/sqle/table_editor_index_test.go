@@ -165,6 +165,9 @@ UPDATE onepk SET pk1 = v1 + pk1;
 }
 
 func convertSqlRowToInt64(sqlRows []sql.Row) []sql.Row {
+	if sqlRows == nil {
+		return nil
+	}
 	newSqlRows := make([]sql.Row, len(sqlRows))
 	for i, sqlRow := range sqlRows {
 		newSqlRow := make(sql.Row, len(sqlRow))
@@ -180,6 +183,8 @@ func convertSqlRowToInt64(sqlRows []sql.Row) []sql.Row {
 				newSqlRow[j] = int64(v)
 			case int64:
 				newSqlRow[j] = v
+			default:
+				return sqlRows
 			}
 		}
 		newSqlRows[i] = newSqlRow
