@@ -16,7 +16,10 @@ package tblcmds
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"os"
 
 	"github.com/fatih/color"
@@ -295,34 +298,13 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	cli.PrintErrln(color.CyanString("Import completed successfully."))
+	verr = buildNewIndexes(ctx, dEnv, mvOpts.TableName)
 
-	//TODO: change this to not use the executeImport function, and instead the SQL code path, so that we don't rebuild indexes on every import
-	newWorking, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to load the working set to build the indexes.").AddCause(err).Build(), nil)
-	}
-	updatedTable, ok, err := newWorking.GetTable(ctx, mvOpts.TableName)
-	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to load the table to build the indexes.").AddCause(err).Build(), nil)
-	} else if !ok {
-		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to find the table to build the indexes.").Build(), nil)
-	}
-	updatedTable, err = updatedTable.RebuildIndexData(ctx)
-	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to build the indexes.").AddCause(err).Build(), nil)
-	}
-	newWorking, err = newWorking.PutTable(ctx, mvOpts.TableName, updatedTable)
-	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to write the indexes to the working set.").AddCause(err).Build(), nil)
-	}
-	err = dEnv.UpdateWorkingRoot(ctx, newWorking)
-	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to update the working set containing the indexes.").AddCause(err).Build(), nil)
+	if verr == nil {
+		cli.PrintErrln(color.CyanString("Import completed successfully."))
 	}
 
-	cli.PrintErrln(color.CyanString("Import completed successfully."))
-	return 0
+	return commands.HandleVErrAndExitCode(verr, usage)
 }
 
 func createArgParser() *argparser.ArgParser {
@@ -351,6 +333,58 @@ func importStatsCB(stats types.AppliedEditStats) {
 	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
 }
 
+
+func newImportDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, mvOpts *mvdata.MoveOptions, statsCB noms.StatsCB) (*mvdata.DataMover, *mvdata.DataMoverCreationError) {
+	var rd table.TableReadCloser
+	var err error
+
+	rd, srcIsSorted, err := mvOpts.Src.NewReader(ctx, root, fs, mvOpts.SrcOptions)
+
+	if err != nil {
+		return nil, &mvdata.DataMoverCreationError{mvdata.CreateReaderErr, err}
+	}
+
+	defer func() {
+		if rd != nil {
+			rd.Close(ctx)
+		}
+	}()
+
+	inSch := rd.GetSchema()
+	outSch, err := mvdata.OutSchemaFromInSchema(ctx, inSch, root, fs, mvOpts)
+
+	if err != nil {
+		return nil, &mvdata.DataMoverCreationError{mvdata.SchemaErr, err}
+	}
+
+	transforms, dmce := mvdata.MaybeMapFields(inSch, outSch, fs, mvOpts)
+
+	if dmce != nil {
+		return nil, dmce
+	}
+
+	var wr table.TableWriteCloser
+	switch mvOpts.Operation {
+	case mvdata.OverwriteOp:
+		wr, err = mvOpts.Dest.NewCreatingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
+	case mvdata.ReplaceOp:
+		wr, err = mvOpts.Dest.NewReplacingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
+	case mvdata.UpdateOp:
+		wr, err = mvOpts.Dest.NewUpdatingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
+	default:
+		err = errors.New("invalid move operation")
+	}
+
+	if err != nil {
+		return nil, &mvdata.DataMoverCreationError{mvdata.CreateWriterErr, err}
+	}
+
+	imp := &mvdata.DataMover{rd, transforms, wr, mvOpts.ContOnErr}
+	rd = nil
+
+	return imp, nil
+}
+
 func executeImport(ctx context.Context, dEnv *env.DoltEnv, mvOpts *mvdata.MoveOptions) errhand.VerboseError {
 	root, err := dEnv.WorkingRoot(ctx)
 
@@ -367,7 +401,7 @@ func executeImport(ctx context.Context, dEnv *env.DoltEnv, mvOpts *mvdata.MoveOp
 		}
 	}
 
-	mover, nDMErr := mvdata.NewDataMover(ctx, root, dEnv.FS, mvOpts, importStatsCB)
+	mover, nDMErr := newImportDataMover(ctx, root, dEnv.FS, mvOpts, importStatsCB)
 
 	if nDMErr != nil {
 		return newDataMoverErrToVerr(mvOpts, nDMErr)
@@ -428,6 +462,33 @@ func executeImport(ctx context.Context, dEnv *env.DoltEnv, mvOpts *mvdata.MoveOp
 		cli.PrintErrln(color.YellowString("Lines skipped: %d", badCount))
 	}
 
+	return nil
+}
+
+func buildIndexes(ctx context.Context, dEnv *env.DoltEnv, newTblName string) errhand.VerboseError {
+	//TODO: change this to not use the executeImport function, and instead the SQL code path, so that we don't rebuild indexes on every import
+	newWorking, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return errhand.BuildDError("Unable to load the working set to build the indexes.").AddCause(err).Build()
+	}
+	updatedTable, ok, err := newWorking.GetTable(ctx, newTblName)
+	if err != nil {
+		return errhand.BuildDError("Unable to load the table to build the indexes.").AddCause(err).Build()
+	} else if !ok {
+		return errhand.BuildDError("Unable to find the table to build the indexes.").Build()
+	}
+	updatedTable, err = updatedTable.RebuildIndexData(ctx)
+	if err != nil {
+		return errhand.BuildDError("Unable to build the indexes.").AddCause(err).Build()
+	}
+	newWorking, err = newWorking.PutTable(ctx, newTblName, updatedTable)
+	if err != nil {
+		return errhand.BuildDError("Unable to write the indexes to the working set.").AddCause(err).Build()
+	}
+	err = dEnv.UpdateWorkingRoot(ctx, newWorking)
+	if err != nil {
+		return errhand.BuildDError("Unable to update the working set containing the indexes.").AddCause(err).Build()
+	}
 	return nil
 }
 

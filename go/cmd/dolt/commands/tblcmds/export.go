@@ -16,6 +16,8 @@ package tblcmds
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"os"
 
 	"github.com/fatih/color"
@@ -28,9 +30,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/mvdata"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
@@ -177,6 +177,7 @@ func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	return 0
 }
 
+// todo: remerge these and pass data_mover
 func executeExport(ctx context.Context, dEnv *env.DoltEnv, mvOpts *mvdata.MoveOptions) errhand.VerboseError {
 	root, err := dEnv.WorkingRoot(ctx)
 
@@ -193,7 +194,7 @@ func executeExport(ctx context.Context, dEnv *env.DoltEnv, mvOpts *mvdata.MoveOp
 		}
 	}
 
-	mover, nDMErr := mvdata.NewExportDataMover(ctx, root, dEnv.FS, mvOpts, importStatsCB)
+	mover, nDMErr := NewExportDataMover(ctx, root, dEnv.FS, mvOpts, importStatsCB)
 
 	if nDMErr != nil {
 		return newDataMoverErrToVerr(mvOpts, nDMErr)
@@ -226,33 +227,44 @@ func executeExport(ctx context.Context, dEnv *env.DoltEnv, mvOpts *mvdata.MoveOp
 		return errhand.BuildDError("An error occurred moving data:\n").AddCause(err).Build()
 	}
 
-	if nomsWr, ok := mover.Wr.(noms.NomsMapWriteCloser); ok {
-		var indexes []schema.Index
-
-		if tableLoc, ok := mvOpts.Src.(mvdata.TableDataLocation); ok {
-			originalTable, ok, err := root.GetTable(ctx, tableLoc.Name)
-			if err != nil || !ok {
-				return errhand.BuildDError(color.RedString("Source table does not exist.")).Build()
-			}
-			originalSchema, err := originalTable.GetSchema(ctx)
-			if err != nil || !ok {
-				return errhand.BuildDError(color.RedString("Failed to read source table's schema.")).Build()
-			}
-			indexes = originalSchema.Indexes().AllIndexes()
-		}
-
-		tableDest := mvOpts.Dest.(mvdata.TableDataLocation)
-		sch := nomsWr.GetSchema()
-		sch.Indexes().Merge(indexes...)
-		err = dEnv.PutTableToWorking(ctx, *nomsWr.GetMap(), sch, tableDest.Name)
-		if err != nil {
-			return errhand.BuildDError("Failed to update the working value.").AddCause(err).Build()
-		}
-	}
-
 	if badCount > 0 {
 		cli.PrintErrln(color.YellowString("Lines skipped: %d", badCount))
 	}
 
 	return nil
 }
+
+func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, mvOpts *mvdata.MoveOptions, statsCB noms.StatsCB) (*mvdata.DataMover, *mvdata.DataMoverCreationError) {
+	var rd table.TableReadCloser
+	var err error
+
+	rd, srcIsSorted, err := mvOpts.Src.NewReader(ctx, root, fs, mvOpts.SrcOptions)
+
+	if err != nil {
+		return nil, &mvdata.DataMoverCreationError{mvdata.CreateReaderErr, err}
+	}
+
+	// close on err exit
+	defer func() {
+		if rd != nil {
+			rd.Close(ctx)
+		}
+	}()
+
+	inSch := rd.GetSchema()
+	outSch := inSch
+
+	wr, err := mvOpts.Dest.NewCreatingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
+
+	if err != nil {
+		return nil, &mvdata.DataMoverCreationError{mvdata.CreateWriterErr, err}
+	}
+
+	emptyTransColl := pipeline.NewTransformCollection()
+
+	imp := &mvdata.DataMover{rd, emptyTransColl, wr, mvOpts.ContOnErr}
+	rd = nil
+
+	return imp, nil
+}
+

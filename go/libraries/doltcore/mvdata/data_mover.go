@@ -27,7 +27,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/funcitr"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
@@ -37,7 +36,7 @@ import (
 type MoveOperation string
 
 const (
-	OverwriteOp MoveOperation = "overwrite"
+	OverwriteOp MoveOperation = "overwrite"  // todo: make CreateOp?
 	ReplaceOp   MoveOperation = "replace"
 	UpdateOp    MoveOperation = "update"
 	InvalidOp   MoveOperation = "invalid"
@@ -123,159 +122,6 @@ func (dmce *DataMoverCreationError) String() string {
 	return string(dmce.ErrType) + ": " + dmce.Cause.Error()
 }
 
-func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, mvOpts *MoveOptions, statsCB noms.StatsCB) (*DataMover, *DataMoverCreationError) {
-	var rd table.TableReadCloser
-	var err error
-
-	rd, srcIsSorted, err := mvOpts.Src.NewReader(ctx, root, fs, mvOpts.SrcOptions)
-
-	if err != nil {
-		return nil, &DataMoverCreationError{CreateReaderErr, err}
-	}
-
-	defer func() {
-		if rd != nil {
-			rd.Close(ctx)
-		}
-	}()
-
-	inSch := rd.GetSchema()
-	outSch, err := outSchemaFromInSchema(ctx, inSch, root, fs, mvOpts)
-
-	if err != nil {
-		return nil, &DataMoverCreationError{SchemaErr, err}
-	}
-
-	transforms, dmce := maybeMapFields(inSch, outSch, fs, mvOpts)
-
-	if dmce != nil {
-		return nil, dmce
-	}
-
-	var wr table.TableWriteCloser
-	switch mvOpts.Operation {
-	case OverwriteOp:
-		wr, err = mvOpts.Dest.NewCreatingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
-	case ReplaceOp:
-		wr, err = mvOpts.Dest.NewReplacingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
-	case UpdateOp:
-		wr, err = mvOpts.Dest.NewUpdatingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
-	default:
-		err = errors.New("invalid move operation")
-	}
-
-	if err != nil {
-		return nil, &DataMoverCreationError{CreateWriterErr, err}
-	}
-
-	imp := &DataMover{rd, transforms, wr, mvOpts.ContOnErr}
-	rd = nil
-
-	return imp, nil
-}
-
-func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, mvOpts *MoveOptions, statsCB noms.StatsCB) (*DataMover, *DataMoverCreationError) {
-	var rd table.TableReadCloser
-	var err error
-
-	rd, srcIsSorted, err := mvOpts.Src.NewReader(ctx, root, fs, mvOpts.SrcOptions)
-
-	if err != nil {
-		return nil, &DataMoverCreationError{CreateReaderErr, err}
-	}
-
-	defer func() {
-		if rd != nil {
-			rd.Close(ctx)
-		}
-	}()
-
-	inSch := rd.GetSchema()
-	outSch, err := outSchemaFromInSchema(ctx, inSch, root, fs, mvOpts)
-
-	if err != nil {
-		return nil, &DataMoverCreationError{SchemaErr, err}
-	}
-
-	transforms, dmce := maybeMapFields(inSch, outSch, fs, mvOpts)
-
-	if dmce != nil {
-		return nil, dmce
-	}
-
-	var wr table.TableWriteCloser
-	switch mvOpts.Operation {
-	case OverwriteOp:
-		wr, err = mvOpts.Dest.NewCreatingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
-	case ReplaceOp:
-		wr, err = mvOpts.Dest.NewReplacingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
-	case UpdateOp:
-		wr, err = mvOpts.Dest.NewUpdatingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
-	default:
-		err = errors.New("invalid move operation")
-	}
-
-	if err != nil {
-		return nil, &DataMoverCreationError{CreateWriterErr, err}
-	}
-
-	imp := &DataMover{rd, transforms, wr, mvOpts.ContOnErr}
-	rd = nil
-
-	return imp, nil
-}
-
-func NewTableCopyDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, mvOpts *MoveOptions, statsCB noms.StatsCB) (*DataMover, *DataMoverCreationError) {
-	var rd table.TableReadCloser
-	var err error
-
-	rd, srcIsSorted, err := mvOpts.Src.NewReader(ctx, root, fs, mvOpts.SrcOptions)
-
-	if err != nil {
-		return nil, &DataMoverCreationError{CreateReaderErr, err}
-	}
-
-	defer func() {
-		if rd != nil {
-			rd.Close(ctx)
-		}
-	}()
-
-	inSch := rd.GetSchema()
-	outSch, err := outSchemaFromInSchema(ctx, inSch, root, fs, mvOpts)
-
-	if err != nil {
-		return nil, &DataMoverCreationError{SchemaErr, err}
-	}
-
-	transforms, dmce := maybeMapFields(inSch, outSch, fs, mvOpts)
-
-	if dmce != nil {
-		return nil, dmce
-	}
-
-	var wr table.TableWriteCloser
-	switch mvOpts.Operation {
-	case OverwriteOp:
-		wr, err = mvOpts.Dest.NewCreatingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
-	case ReplaceOp:
-		wr, err = mvOpts.Dest.NewReplacingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
-	case UpdateOp:
-		wr, err = mvOpts.Dest.NewUpdatingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
-	default:
-		err = errors.New("invalid move operation")
-	}
-
-	if err != nil {
-		return nil, &DataMoverCreationError{CreateWriterErr, err}
-	}
-
-	imp := &DataMover{rd, transforms, wr, mvOpts.ContOnErr}
-	rd = nil
-
-	return imp, nil
-}
-
 // Move is the method that executes the pipeline which will move data from the pipeline's source DataLocation to it's
 // dest DataLocation.  It returns the number of bad rows encountered during import, and an error.
 func (imp *DataMover) Move(ctx context.Context) (badRowCount int64, err error) {
@@ -314,7 +160,8 @@ func (imp *DataMover) Move(ctx context.Context) (badRowCount int64, err error) {
 	return badCount, nil
 }
 
-func maybeMapFields(inSch schema.Schema, outSch schema.Schema, fs filesys.Filesys, mvOpts *MoveOptions) (*pipeline.TransformCollection, *DataMoverCreationError) {
+// todo: break this into seperate paths for import and copy
+func MaybeMapFields(inSch schema.Schema, outSch schema.Schema, fs filesys.Filesys, mvOpts *MoveOptions) (*pipeline.TransformCollection, *DataMoverCreationError) {
 	var mapping *rowconv.FieldMapping
 	var err error
 	if mvOpts.MappingFile != "" {
@@ -349,7 +196,7 @@ func maybeMapFields(inSch schema.Schema, outSch schema.Schema, fs filesys.Filesy
 	return transforms, nil
 }
 
-func outSchemaFromInSchema(ctx context.Context, inSch schema.Schema, root *doltdb.RootValue, fs filesys.ReadableFS, mvOpts *MoveOptions) (schema.Schema, error) {
+func OutSchemaFromInSchema(ctx context.Context, inSch schema.Schema, root *doltdb.RootValue, fs filesys.ReadableFS, mvOpts *MoveOptions) (schema.Schema, error) {
 	var err error
 	outSch := inSch
 
@@ -368,7 +215,7 @@ func outSchemaFromInSchema(ctx context.Context, inSch schema.Schema, root *doltd
 
 	if mvOpts.SchFile != "" {
 		var tn string
-		tn, outSch, err = schAndTableNameFromFile(ctx, mvOpts.SchFile, fs, root)
+		tn, outSch, err = SchAndTableNameFromFile(ctx, mvOpts.SchFile, fs, root)
 		if err != nil {
 			return nil, err
 		}
@@ -389,7 +236,7 @@ func outSchemaFromInSchema(ctx context.Context, inSch schema.Schema, root *doltd
 	return outSch, nil
 }
 
-func schAndTableNameFromFile(ctx context.Context, path string, fs filesys.ReadableFS, root *doltdb.RootValue) (string, schema.Schema, error) {
+func SchAndTableNameFromFile(ctx context.Context, path string, fs filesys.ReadableFS, root *doltdb.RootValue) (string, schema.Schema, error) {
 	if path != "" {
 		data, err := fs.ReadFile(path)
 

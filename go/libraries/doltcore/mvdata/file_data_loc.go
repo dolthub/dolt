@@ -109,7 +109,7 @@ func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue
 		var sch schema.Schema
 		jsonOpts, _ := opts.(JSONOptions)
 		if jsonOpts.SchFile != "" {
-			tn, s, err := schAndTableNameFromFile(ctx, jsonOpts.SchFile, fs, root)
+			tn, s, err := SchAndTableNameFromFile(ctx, jsonOpts.SchFile, fs, root)
 			if err != nil {
 				return nil, false, err
 			}
