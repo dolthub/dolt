@@ -23,7 +23,7 @@ CREATE TABLE test (
 SQL
     dolt table import -c --pk=pk test `batshelper 1pk5col-ints.csv`
     run dolt schema show
-    [[ "$output" =~ "TEXT" ]] || false
+    [[ "$output" =~ "INT" ]] || false
     dolt add test
     dolt commit -m "Added test table"
     dolt table import -c -f -s=1pk5col-ints-schema.sql test `batshelper 1pk5col-ints.csv`

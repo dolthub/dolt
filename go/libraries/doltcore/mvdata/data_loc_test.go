@@ -22,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/tblcmds"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -180,8 +181,8 @@ func TestCreateRdWr(t *testing.T) {
 
 	ddb, root, fs := createRootAndFS()
 
-	mvOpts := &MoveOptions{
-		Operation:   OverwriteOp,
+	mvOpts := &tblcmds.importOptions{
+		Operation:   tblcmds.CreateOp,
 		TableName:   testTableName,
 		ContOnErr:   false,
 		SchFile:     schemaFile,

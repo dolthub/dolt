@@ -18,6 +18,7 @@ const (
 	schemaFile  = "schema.json"
 	mappingFile = "mapping.json"
 )
+
 //
 //func TestDataMover(t *testing.T) {
 //	// todo: add expected schema
@@ -31,7 +32,7 @@ const (
 //			"",
 //			&MoveOptions{
 //				Operation:   OverwriteOp,
-//				TableName:   "testable",
+//				tableName:   "testable",
 //				ContOnErr:   false,
 //				SchFile:     "",
 //				MappingFile: "",
@@ -68,7 +69,7 @@ const (
 //			"",
 //			&MoveOptions{
 //				Operation:   OverwriteOp,
-//				TableName:   "table-name",
+//				tableName:   "table-name",
 //				ContOnErr:   false,
 //				SchFile:     "",
 //				MappingFile: "",
@@ -85,7 +86,7 @@ const (
 //			`{"a":"pk","b":"value"}`,
 //			&MoveOptions{
 //				Operation:   OverwriteOp,
-//				TableName:   "table_name",
+//				tableName:   "table_name",
 //				ContOnErr:   false,
 //				SchFile:     "",
 //				MappingFile: "",

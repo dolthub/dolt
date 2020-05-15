@@ -25,7 +25,6 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/tblcmds"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -56,6 +55,16 @@ const (
 	delimParam          = "delim"
 )
 
+var mappingFileHelp = "A mapping file is json in the format:" + `
+
+	{
+		"source_field_name":"dest_field_name"
+		...
+	}
+
+where source_field_name is the name of a field in the file being imported and dest_field_name is the name of a field in the table being imported to.
+`
+
 var schImportDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Creates a new table with an inferred schema.",
 	LongDesc: `If {{.EmphasisLeft}}--create | -c{{.EmphasisRight}} is given the operation will create {{.LessThan}}table{{.GreaterThan}} with a schema that it infers from the supplied file. One or more primary key columns must be specified using the {{.EmphasisLeft}}--pks{{.EmphasisRight}} parameter.
@@ -66,7 +75,7 @@ If {{.EmphasisLeft}}--replace | -r{{.EmphasisRight}} is given the operation will
 
 A mapping file can be used to map fields between the file being imported and the table's schema being inferred.  This can be used when creating a new table, or updating or replacing an existing table.
 
-` + tblcmds.MappingFileHelp + `
+` + mappingFileHelp + `
 
 In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not have the expected extension then the {{.EmphasisLeft}}--file-type{{.EmphasisRight}} parameter should be used to explicitly define the format of the file in one of the supported formats (Currently only csv is supported).  For files separated by a delimiter other than a ',', the --delim parameter can be used to specify a delimeter.
 
@@ -80,16 +89,16 @@ If the parameter {{.EmphasisLeft}}--dry-run{{.EmphasisRight}} is supplied a sql 
 	},
 }
 
-type importArgs struct {
-	op          SchImportOp
+type ImportArgs struct {
+	Op          SchImportOp
 	fileName    string
 	fileType    string
 	delim       string
-	tableName   string
-	existingSch schema.Schema
-	pkCols      []string
-	keepTypes   bool
-	inferArgs   *actions.InferenceArgs
+	TableName   string
+	ExistingSch schema.Schema
+	PkCols      []string
+	KeepTypes   bool
+	InferArgs   *actions.InferenceArgs
 }
 
 type SchImportOp int
@@ -155,7 +164,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	return commands.HandleVErrAndExitCode(importSchema(ctx, dEnv, apr), usage)
 }
 
-func getSchemaImportArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, root *doltdb.RootValue) (*importArgs, errhand.VerboseError) {
+func getSchemaImportArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, root *doltdb.RootValue) (*ImportArgs, errhand.VerboseError) {
 	tblName := apr.Arg(0)
 	fileName := apr.Arg(1)
 
@@ -165,7 +174,7 @@ func getSchemaImportArgs(ctx context.Context, apr *argparser.ArgParseResults, dE
 		return nil, errhand.BuildDError("error: file '%s' not found.", fileName).Build()
 	}
 
-	if err := tblcmds.ValidateTableNameForCreate(tblName); err != nil {
+	if err := validateTableNameForCreate(tblName); err != nil {
 		return nil, err
 	}
 
@@ -219,23 +228,10 @@ func getSchemaImportArgs(ctx context.Context, apr *argparser.ArgParseResults, dE
 	}
 
 	mappingFile := apr.GetValueOrDefault(mappingParam, "")
+	colMapper, verr := actions.StrMapperFromFile(mappingFile, dEnv.FS)
 
-	var colMapper actions.StrMapper
-	if mappingFile != "" {
-		if mappingExists, _ := dEnv.FS.Exists(mappingFile); mappingExists {
-			var m map[string]string
-			err := filesys.UnmarshalJSONFile(dEnv.FS, mappingFile, &m)
-
-			if err != nil {
-				return nil, errhand.BuildDError("error: invalid mapper file.").AddCause(err).Build()
-			}
-
-			colMapper = actions.MapMapper(m)
-		} else {
-			return nil, errhand.BuildDError("error: '%s' does not exist.", mappingFile).Build()
-		}
-	} else {
-		colMapper = actions.IdentityMapper{}
+	if verr != nil {
+		return nil, verr
 	}
 
 	floatThresholdStr := apr.GetValueOrDefault(floatThresholdParam, "0.0")
@@ -245,16 +241,16 @@ func getSchemaImportArgs(ctx context.Context, apr *argparser.ArgParseResults, dE
 		return nil, errhand.BuildDError("error: '%s' is not a valid float in the range 0.0 (all floats) to 1.0 (no floats)", floatThresholdStr).SetPrintUsage().Build()
 	}
 
-	return &importArgs{
-		op:          op,
+	return &ImportArgs{
+		Op:          op,
 		fileName:    fileName,
 		fileType:    apr.GetValueOrDefault(fileTypeParam, filepath.Ext(fileName)),
 		delim:       apr.GetValueOrDefault(delimParam, ","),
-		tableName:   tblName,
-		existingSch: existingSch,
-		pkCols:      pks,
-		keepTypes:   apr.Contains(keepTypesParam),
-		inferArgs: &actions.InferenceArgs{
+		TableName:   tblName,
+		ExistingSch: existingSch,
+		PkCols:      pks,
+		KeepTypes:   apr.Contains(keepTypesParam),
+		InferArgs: &actions.InferenceArgs{
 			ColMapper:      colMapper,
 			FloatThreshold: floatThreshold,
 		},
@@ -280,7 +276,7 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		return verr
 	}
 
-	tblName := impArgs.tableName
+	tblName := impArgs.TableName
 	cli.Println(sqlfmt.SchemaAsCreateStmt(tblName, sch))
 
 	if !apr.Contains(dryRunFlag) {
@@ -331,7 +327,7 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	return nil
 }
 
-func inferSchemaFromFile(ctx context.Context, nbf *types.NomsBinFormat, args *importArgs, root *doltdb.RootValue) (schema.Schema, errhand.VerboseError) {
+func inferSchemaFromFile(ctx context.Context, nbf *types.NomsBinFormat, args *ImportArgs, root *doltdb.RootValue) (schema.Schema, errhand.VerboseError) {
 	if args.fileType[0] == '.' {
 		args.fileType = args.fileType[1:]
 	}
@@ -366,17 +362,17 @@ func inferSchemaFromFile(ctx context.Context, nbf *types.NomsBinFormat, args *im
 
 	defer rd.Close(ctx)
 
-	infCols, err := actions.InferColumnTypesFromTableReader(ctx, rd, args.inferArgs, root)
+	infCols, err := actions.InferColumnTypesFromTableReader(ctx, root, rd, args.InferArgs)
 
 	if err != nil {
 		return nil, errhand.BuildDError("error: failed to infer schema").AddCause(err).Build()
 	}
 
-	return combineColCollections(ctx, root, infCols, args)
+	return CombineColCollections(ctx, root, infCols, args)
 }
 
-func combineColCollections(ctx context.Context, root *doltdb.RootValue, inferrerCols *schema.ColCollection, args *importArgs) (schema.Schema, errhand.VerboseError) {
-	existingCols := args.existingSch.GetAllCols()
+func CombineColCollections(ctx context.Context, root *doltdb.RootValue, inferrerCols *schema.ColCollection, args *ImportArgs) (schema.Schema, errhand.VerboseError) {
+	existingCols := args.ExistingSch.GetAllCols()
 
 	existingColNames := set.NewStrSet(existingCols.GetColumnNames())
 	inferredColNames := set.NewStrSet(inferrerCols.GetColumnNames())
@@ -403,21 +399,21 @@ func combineColCollections(ctx context.Context, root *doltdb.RootValue, inferrer
 	var newCols *schema.ColCollection
 
 	switch {
-	case args.op == CreateOp:
+	case args.Op == CreateOp:
 		oldCols = schema.EmptyColColl
-		pks := set.NewStrSet(args.pkCols)
+		pks := set.NewStrSet(args.PkCols)
 		newCols, _ = schema.MapColCollection(inferrerCols, func(col schema.Column) (schema.Column, error) {
 			col.IsPartOfPK = pks.Contains(col.Name)
 			return col, nil
 		})
 
-	case args.op == UpdateOp && args.keepTypes:
+	case args.Op == UpdateOp && args.KeepTypes:
 		oldCols = existingCols
 		newCols, _ = schema.FilterColCollection(inferrerCols, func(col schema.Column) (bool, error) {
 			return right.Contains(col.Name), nil
 		})
 
-	case args.op == UpdateOp:
+	case args.Op == UpdateOp:
 		oldCols, _ = schema.FilterColCollection(existingCols, func(col schema.Column) (bool, error) {
 			return left.Contains(col.Name) || sameType.Contains(col.Name), nil
 		})
@@ -425,7 +421,7 @@ func combineColCollections(ctx context.Context, root *doltdb.RootValue, inferrer
 			return !sameType.Contains(col.Name), nil
 		})
 
-	case args.op == ReplaceOp && args.keepTypes:
+	case args.Op == ReplaceOp && args.KeepTypes:
 		oldCols, _ = schema.FilterColCollection(existingCols, func(col schema.Column) (bool, error) {
 			return inter.Contains(col.Name), nil
 		})
@@ -433,7 +429,7 @@ func combineColCollections(ctx context.Context, root *doltdb.RootValue, inferrer
 			return right.Contains(col.Name), nil
 		})
 
-	case args.op == ReplaceOp:
+	case args.Op == ReplaceOp:
 		oldCols, _ = schema.FilterColCollection(existingCols, func(col schema.Column) (bool, error) {
 			return sameType.Contains(col.Name), nil
 		})
@@ -442,7 +438,7 @@ func combineColCollections(ctx context.Context, root *doltdb.RootValue, inferrer
 		})
 	}
 
-	newCols, err := root.GenerateTagsForNewColColl(ctx, args.tableName, newCols)
+	newCols, err := root.GenerateTagsForNewColColl(ctx, args.TableName, newCols)
 	if err != nil {
 		return nil, errhand.BuildDError("failed to generate new schema").AddCause(err).Build()
 	}
@@ -452,15 +448,29 @@ func combineColCollections(ctx context.Context, root *doltdb.RootValue, inferrer
 		return nil, errhand.BuildDError("failed to generate new schema").AddCause(err).Build()
 	}
 
-	if args.op != CreateOp {
+	if args.Op != CreateOp {
 		combinedPKs, _ := schema.FilterColCollection(combined, func(col schema.Column) (b bool, err error) {
 			return col.IsPartOfPK, nil
 		})
 
-		if !schema.ColCollsAreEqual(args.existingSch.GetPKCols(), combinedPKs) {
+		if !schema.ColCollsAreEqual(args.ExistingSch.GetPKCols(), combinedPKs) {
 			return nil, errhand.BuildDError("input primary keys do not match primary keys of existing table").Build()
 		}
 	}
 
 	return schema.SchemaFromCols(combined), nil
+}
+
+// todo: tmp
+
+// ValidateTableNameForCreate validates the given table name for creation as a user table, returning an error if the
+// table name is not valid.
+func validateTableNameForCreate(tableName string) errhand.VerboseError {
+	if !doltdb.IsValidTableName(tableName) {
+		return errhand.BuildDError("'%s' is not a valid table name\ntable names must match the regular expression: %s",
+			tableName, doltdb.TableNameRegexStr).Build()
+	} else if doltdb.HasDoltPrefix(tableName) {
+		return errhand.BuildDError("'%s' is not a valid table name\ntable names beginning with dolt_ are reserved for internal use", tableName).Build()
+	}
+	return nil
 }

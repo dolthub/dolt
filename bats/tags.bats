@@ -413,7 +413,12 @@ SQL
 }
 
 @test "dolt table import -c uses deterministic tag generation" {
-    run dolt table import -c ints_table `batshelper 1pk5col-ints.csv`
+    cat <<DELIM > data.csv
+pk,c1,c2,c3,c4,c5
+0,1,2,3,4,5
+a,b,c,d,e,f
+DELIM
+    run dolt table import -c ints_table data.csv
     [ $status -eq 0 ]
     dolt schema show
     run dolt schema show

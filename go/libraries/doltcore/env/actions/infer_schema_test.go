@@ -354,6 +354,8 @@ var floatsWithTinyFractionalPortion = `uuid,float
 00000000-0000-0000-0000-000000000001,-1.0005
 00000000-0000-0000-0000-000000000002,1.0001`
 
+var identityMapper = MapMapper(nil)
+
 func TestInferSchema(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -366,7 +368,7 @@ func TestInferSchema(t *testing.T) {
 			"one of each kind",
 			oneOfEachKindCSVStr,
 			&InferenceArgs{
-				ColMapper:      IdentityMapper{},
+				ColMapper:      identityMapper,
 				FloatThreshold: 0,
 			},
 			map[string]typeinfo.TypeInfo{
@@ -383,7 +385,7 @@ func TestInferSchema(t *testing.T) {
 			"mix uints and positive ints",
 			mixUintsAndPositiveInts,
 			&InferenceArgs{
-				ColMapper:      IdentityMapper{},
+				ColMapper:      identityMapper,
 				FloatThreshold: 0,
 			},
 			map[string]typeinfo.TypeInfo{
@@ -396,7 +398,7 @@ func TestInferSchema(t *testing.T) {
 			"floats with zero fractional and float threshold of 0",
 			floatsWithZeroForFractionalPortion,
 			&InferenceArgs{
-				ColMapper:      IdentityMapper{},
+				ColMapper:      identityMapper,
 				FloatThreshold: 0,
 			},
 			map[string]typeinfo.TypeInfo{
@@ -409,7 +411,7 @@ func TestInferSchema(t *testing.T) {
 			"floats with zero fractional and float threshold of 0.1",
 			floatsWithZeroForFractionalPortion,
 			&InferenceArgs{
-				ColMapper:      IdentityMapper{},
+				ColMapper:      identityMapper,
 				FloatThreshold: 0.1,
 			},
 			map[string]typeinfo.TypeInfo{
@@ -422,7 +424,7 @@ func TestInferSchema(t *testing.T) {
 			"floats with large fractional and float threshold of 1.0",
 			floatsWithLargeFractionalPortion,
 			&InferenceArgs{
-				ColMapper:      IdentityMapper{},
+				ColMapper:      identityMapper,
 				FloatThreshold: 1.0,
 			},
 			map[string]typeinfo.TypeInfo{
@@ -435,7 +437,7 @@ func TestInferSchema(t *testing.T) {
 			"float threshold smaller than some of the values",
 			floatsWithTinyFractionalPortion,
 			&InferenceArgs{
-				ColMapper:      IdentityMapper{},
+				ColMapper:      identityMapper,
 				FloatThreshold: 0.0002,
 			},
 			map[string]typeinfo.TypeInfo{
@@ -468,7 +470,7 @@ func TestInferSchema(t *testing.T) {
 
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
-			allCols, err := InferColumnTypesFromTableReader(context.Background(), csvRd, test.infArgs, root)
+			allCols, err := InferColumnTypesFromTableReader(context.Background(), root, csvRd, test.infArgs)
 			require.NoError(t, err)
 
 			assert.Equal(t, len(test.expTypes), allCols.Size())

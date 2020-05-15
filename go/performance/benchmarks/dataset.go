@@ -34,7 +34,7 @@ type DSImpl struct {
 	// Schema defines the structure of the Dataset
 	Schema *SeedSchema
 
-	// TableName is the name of the test dataset
+	// tableName is the name of the test dataset
 	TableName string
 
 	// w is the writer where the test dataset will be written

@@ -23,11 +23,13 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -36,14 +38,6 @@ import (
 type StrMapper interface {
 	// Map maps a string to another string.  If a string is not in the mapping ok will be false, otherwise it is true.
 	Map(str string) string
-}
-
-// IdentityMapper maps any string to itself
-type IdentityMapper struct{}
-
-// Map maps a string to another string.  For the identity mapper the input string always maps to the output string
-func (m IdentityMapper) Map(str string) string {
-	return str
 }
 
 // MapMapper is a StrMapper implementation that is backed by a map[string]string
@@ -56,6 +50,28 @@ func (m MapMapper) Map(str string) string {
 		return v
 	}
 	return str
+}
+
+func StrMapperFromFile(mappingFile string, FS filesys.ReadableFS) (StrMapper, errhand.VerboseError) {
+	var m map[string]string
+
+	if mappingFile == "" {
+		// identity mapper
+		m = make(map[string]string)
+		return MapMapper(m), nil
+	}
+
+	if fileExists, _ := FS.Exists(mappingFile); !fileExists {
+		return nil, errhand.BuildDError("error: '%s' does not exist.", mappingFile).Build()
+	}
+
+	err := filesys.UnmarshalJSONFile(FS, mappingFile, &m)
+
+	if err != nil {
+		return nil, errhand.BuildDError("error: invalid mapper file.").AddCause(err).Build()
+	}
+
+	return MapMapper(m), nil
 }
 
 type typeInfoSet map[typeinfo.TypeInfo]struct{}
@@ -79,7 +95,7 @@ type InferenceArgs struct {
 }
 
 // InferColumnTypesFromTableReader will infer a data types from a table reader.
-func InferColumnTypesFromTableReader(ctx context.Context, rd table.TableReadCloser, args *InferenceArgs, root *doltdb.RootValue) (*schema.ColCollection, error) {
+func InferColumnTypesFromTableReader(ctx context.Context, root *doltdb.RootValue, rd table.TableReadCloser, args *InferenceArgs) (*schema.ColCollection, error) {
 	inferrer := newInferrer(rd.GetSchema(), args)
 
 	var rowFailure *pipeline.TransformRowFailure
@@ -142,6 +158,7 @@ func (inf *inferrer) inferColumnTypes(ctx context.Context, root *doltdb.RootValu
 	var cols []schema.Column
 	_ = inf.readerSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		col.Name = inf.mapper.Map(col.Name)
+		col.Kind = inferredTypes[tag].NomsKind()
 		col.TypeInfo = inferredTypes[tag]
 		col.Tag = schema.ReservedTagMin + tag
 

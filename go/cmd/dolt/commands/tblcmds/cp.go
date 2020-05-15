@@ -16,7 +16,6 @@ package tblcmds
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 
 	"github.com/fatih/color"
 
@@ -27,9 +26,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/mvdata"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
@@ -46,6 +44,34 @@ All changes will be applied to the working tables and will need to be staged usi
 	Synopsis: []string{
 		"[-f] [{{.LessThan}}commit{{.GreaterThan}}] {{.LessThan}}oldtable{{.GreaterThan}} {{.LessThan}}newtable{{.GreaterThan}}",
 	},
+}
+
+type copyOptions struct {
+	oldTblName string
+	newTblName string
+	contOnErr  bool
+	force      bool
+	Src        mvdata.DataLocation
+	Dest       mvdata.DataLocation
+}
+
+func (co copyOptions) checkOverwrite(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) (bool, error) {
+	if co.force {
+		return false, nil
+	}
+	return co.Dest.Exists(ctx, root, fs)
+}
+
+func (co copyOptions) WritesToTable() bool {
+	return true
+}
+
+func (co copyOptions) SrcName() string {
+	return co.oldTblName
+}
+
+func (co copyOptions) DestName() string {
+	return co.newTblName
 }
 
 type CpCmd struct{}
@@ -68,7 +94,7 @@ func (cmd CpCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) err
 
 func (cmd CpCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"commit", "The state at which point the table whill be copied."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"commit", "The state at which point the table will be copied."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"oldtable", "The table being copied."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"newtable", "The destination where the table is being copied to."})
 	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the Force flag will allow the target to be overwritten.")
@@ -144,17 +170,26 @@ func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	mvOpts := &mvdata.MoveOptions{
-		Operation: mvdata.OverwriteOp,
-		TableName: newTbl,
-		ContOnErr: true,
-		Force:     force,
-		Src:       mvdata.TableDataLocation{Name: oldTbl},
-		Dest:      mvdata.TableDataLocation{Name: newTbl},
+	cpOpts := copyOptions{
+		oldTblName: oldTbl,
+		newTblName: newTbl,
+		contOnErr:  true,
+		force:      force,
+		Src:        mvdata.TableDataLocation{Name: oldTbl},
+		Dest:       mvdata.TableDataLocation{Name: newTbl},
 	}
 
-	verr = executeCopy(ctx, dEnv, mvOpts)
+	mover, verr := newTableCopyDataMover(ctx, root, dEnv.FS, cpOpts, importStatsCB)
 
+	if verr != nil {
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+
+	skipped, verr := mvdata.MoveData(ctx, dEnv, mover, cpOpts)
+
+	if skipped > 0 {
+		cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))
+	}
 	if verr != nil {
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
@@ -164,94 +199,22 @@ func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	return commands.HandleVErrAndExitCode(verr, usage)
 }
 
-func executeCopy(ctx context.Context, dEnv *env.DoltEnv, mvOpts *mvdata.MoveOptions) errhand.VerboseError {
-	root, err := dEnv.WorkingRoot(ctx)
-
-	if err != nil {
-		return errhand.BuildDError("Unable to get the working root value for this data repository.").AddCause(err).Build()
-	}
-
-	if mvOpts.WillOverwrite() {
-		destExists, err := mvOpts.Dest.Exists(ctx, root, dEnv.FS)
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		} else if destExists {
-			return errhand.BuildDError("%s already exists. Use -f to overwrite.", mvOpts.Dest.String()).Build()
-		}
-	}
-
-	mover, nDMErr := NewTableCopyDataMover(ctx, root, dEnv.FS, mvOpts, importStatsCB)
-
-	if nDMErr != nil {
-		return newDataMoverErrToVerr(mvOpts, nDMErr)
-	}
-
-	var badCount int64
-	badCount, err = mover.Move(ctx)
-
-	if displayStrLen > 0 {
-		displayStrLen = 0
-		cli.PrintErrln("")
-	}
-
-	if err != nil {
-		if pipeline.IsTransformFailure(err) {
-			bdr := errhand.BuildDError("A bad row was encountered while moving data.")
-
-			r := pipeline.GetTransFailureRow(err)
-			if r != nil {
-				bdr.AddDetails("Bad Row:" + row.Fmt(ctx, r, mover.Rd.GetSchema()))
-			}
-
-			details := pipeline.GetTransFailureDetails(err)
-
-			bdr.AddDetails(details)
-			bdr.AddDetails("These can be ignored using the '--continue'")
-
-			return bdr.Build()
-		}
-		return errhand.BuildDError("An error occurred moving data:\n").AddCause(err).Build()
-	}
-
-	if nomsWr, ok := mover.Wr.(noms.NomsMapWriteCloser); ok {
-		var indexes []schema.Index
-
-		if tableLoc, ok := mvOpts.Src.(mvdata.TableDataLocation); ok {
-			originalTable, ok, err := root.GetTable(ctx, tableLoc.Name)
-			if err != nil || !ok {
-				return errhand.BuildDError(color.RedString("Source table does not exist.")).Build()
-			}
-			originalSchema, err := originalTable.GetSchema(ctx)
-			if err != nil || !ok {
-				return errhand.BuildDError(color.RedString("Failed to read source table's schema.")).Build()
-			}
-			indexes = originalSchema.Indexes().AllIndexes()
-		}
-
-		tableDest := mvOpts.Dest.(mvdata.TableDataLocation)
-		sch := nomsWr.GetSchema()
-		sch.Indexes().Merge(indexes...)
-		err = dEnv.PutTableToWorking(ctx, *nomsWr.GetMap(), sch, tableDest.Name)
-		if err != nil {
-			return errhand.BuildDError("Failed to update the working value.").AddCause(err).Build()
-		}
-	}
-
-	if badCount > 0 {
-		cli.PrintErrln(color.YellowString("Lines skipped: %d", badCount))
-	}
-
-	return nil
-}
-
-func NewTableCopyDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, mvOpts *mvdata.MoveOptions, statsCB noms.StatsCB) (*mvdata.DataMover, *mvdata.DataMoverCreationError) {
+func newTableCopyDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, co copyOptions, statsCB noms.StatsCB) (*mvdata.DataMover, errhand.VerboseError) {
 	var rd table.TableReadCloser
 	var err error
 
-	rd, srcIsSorted, err := mvOpts.Src.NewReader(ctx, root, fs, mvOpts.SrcOptions)
+	ow, err := co.checkOverwrite(ctx, root, fs)
+	if err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
+	}
+	if ow {
+		return nil, errhand.BuildDError("%s already exists. Use -f to overwrite.", co.DestName()).Build()
+	}
+
+	rd, srcIsSorted, err := co.Src.NewReader(ctx, root, fs, nil)
 
 	if err != nil {
-		return nil, &mvdata.DataMoverCreationError{mvdata.CreateReaderErr, err}
+		return nil, errhand.BuildDError("Error creating reader for %s.", co.newTblName).AddCause(err).Build()
 	}
 
 	defer func() {
@@ -260,28 +223,30 @@ func NewTableCopyDataMover(ctx context.Context, root *doltdb.RootValue, fs files
 		}
 	}()
 
-	inSch := rd.GetSchema()
-	cc, err := root.GenerateTagsForNewColColl(ctx, mvOpts.TableName, inSch.GetAllCols())
+	oldTblSch := rd.GetSchema()
+	cc, err := root.GenerateTagsForNewColColl(ctx, co.newTblName, oldTblSch.GetAllCols())
 
 	if err != nil {
-		return nil, &mvdata.DataMoverCreationError{mvdata.SchemaErr, err}
+		return nil, errhand.BuildDError("Error create schema for new table %s", co.newTblName).AddCause(err).Build()
 	}
 
-	outSch := schema.SchemaFromCols(cc)
+	newTblSch := schema.SchemaFromCols(cc)
+	newTblSch.Indexes().Merge(oldTblSch.Indexes().AllIndexes()...)
 
-	transforms, dmce := mvdata.MaybeMapFields(inSch, outSch, fs, mvOpts)
-
-	if dmce != nil {
-		return nil, dmce
-	}
-
-	wr, err := mvOpts.Dest.NewCreatingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
+	transforms, err := mvdata.MaybeMapFields(oldTblSch, newTblSch, fs, "")
 
 	if err != nil {
-		return nil, &mvdata.DataMoverCreationError{mvdata.CreateWriterErr, err}
+		return nil, errhand.BuildDError("Error determining the mapping from input fields to output fields.").AddDetails(
+			"When attempting to move data from %s to %s, determine the mapping from input fields to output fields.", co.SrcName(), co.DestName()).AddCause(err).Build()
 	}
 
-	imp := &mvdata.DataMover{rd, transforms, wr, mvOpts.ContOnErr}
+	wr, err := co.Dest.NewCreatingWriter(ctx, co, root, fs, srcIsSorted, newTblSch, statsCB)
+
+	if err != nil {
+		return nil, errhand.BuildDError("Could not create table writer for %s", co.newTblName).AddCause(err).Build()
+	}
+
+	imp := &mvdata.DataMover{rd, transforms, wr, co.contOnErr}
 	rd = nil
 
 	return imp, nil
