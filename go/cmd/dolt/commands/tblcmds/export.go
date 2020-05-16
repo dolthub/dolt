@@ -186,7 +186,7 @@ func (cmd ExportCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table being exported."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "The file being output to."})
-	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the Force flag will allow the target to be overwritten.")
+	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the force flag will allow the target to be overwritten.")
 	ap.SupportsFlag(contOnErrParam, "", "Continue exporting when row export errors are encountered.")
 	ap.SupportsString(schemaParam, "s", "schema_file", "The schema for the output data.")
 	ap.SupportsString(mappingFileParam, "m", "mapping_file", "A file that lays out how fields should be mapped from input data to output data.")

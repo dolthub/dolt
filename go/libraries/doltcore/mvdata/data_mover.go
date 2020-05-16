@@ -162,14 +162,8 @@ func MoveData(ctx context.Context, dEnv *env.DoltEnv, mover *DataMover, mvOpts D
 	return badCount, nil
 }
 
-func MaybeMapFields(inSch schema.Schema, outSch schema.Schema, fs filesys.Filesys, mappingFile string) (*pipeline.TransformCollection, error) {
-	var mapping *rowconv.FieldMapping
-	var err error
-	if mappingFile != "" {
-		mapping, err = rowconv.MappingFromFile(mappingFile, fs, inSch, outSch)
-	} else {
-		mapping, err = rowconv.NameMapping(inSch, outSch)
-	}
+func NameMapTransform(inSch schema.Schema, outSch schema.Schema, mapper rowconv.NameMapper) (*pipeline.TransformCollection, error) {
+	mapping, err := rowconv.NameMapping(inSch, outSch, mapper)
 
 	if err != nil {
 		return nil, err

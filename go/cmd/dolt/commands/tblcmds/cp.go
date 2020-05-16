@@ -21,11 +21,13 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/schcmds"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/mvdata"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
@@ -97,7 +99,7 @@ func (cmd CpCmd) createArgParser() *argparser.ArgParser {
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"commit", "The state at which point the table will be copied."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"oldtable", "The table being copied."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"newtable", "The destination where the table is being copied to."})
-	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the Force flag will allow the target to be overwritten.")
+	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the force flag will allow the target to be overwritten.")
 	return ap
 }
 
@@ -145,7 +147,7 @@ func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 		oldTbl, newTbl = apr.Arg(0), apr.Arg(1)
 	}
 
-	if err := ValidateTableNameForCreate(newTbl); err != nil {
+	if err := schcmds.ValidateTableNameForCreate(newTbl); err != nil {
 		return commands.HandleVErrAndExitCode(err, usage)
 	}
 
@@ -233,7 +235,7 @@ func newTableCopyDataMover(ctx context.Context, root *doltdb.RootValue, fs files
 	newTblSch := schema.SchemaFromCols(cc)
 	newTblSch.Indexes().Merge(oldTblSch.Indexes().AllIndexes()...)
 
-	transforms, err := mvdata.MaybeMapFields(oldTblSch, newTblSch, fs, "")
+	transforms, err := mvdata.NameMapTransform(oldTblSch, newTblSch, make(rowconv.NameMapper))
 
 	if err != nil {
 		return nil, errhand.BuildDError("Error determining the mapping from input fields to output fields.").AddDetails(

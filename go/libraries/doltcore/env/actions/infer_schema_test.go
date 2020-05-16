@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/csv"
@@ -354,22 +355,35 @@ var floatsWithTinyFractionalPortion = `uuid,float
 00000000-0000-0000-0000-000000000001,-1.0005
 00000000-0000-0000-0000-000000000002,1.0001`
 
-var identityMapper = MapMapper(nil)
+var identityMapper = make(rowconv.NameMapper)
+
+type testInferenceArgs struct {
+	ColMapper      rowconv.NameMapper
+	floatThreshold float64
+}
+
+func (tia testInferenceArgs) ColNameMapper() rowconv.NameMapper {
+	return tia.ColMapper
+}
+
+func (tia testInferenceArgs) FloatThreshold() float64 {
+	return tia.floatThreshold
+}
 
 func TestInferSchema(t *testing.T) {
 	tests := []struct {
 		name         string
 		csvContents  string
-		infArgs      *InferenceArgs
+		infArgs      InferenceArgs
 		expTypes     map[string]typeinfo.TypeInfo
 		nullableCols *set.StrSet
 	}{
 		{
 			"one of each kind",
 			oneOfEachKindCSVStr,
-			&InferenceArgs{
+			testInferenceArgs{
 				ColMapper:      identityMapper,
-				FloatThreshold: 0,
+				floatThreshold: 0,
 			},
 			map[string]typeinfo.TypeInfo{
 				"int":    typeinfo.Int32Type,
@@ -384,9 +398,9 @@ func TestInferSchema(t *testing.T) {
 		{
 			"mix uints and positive ints",
 			mixUintsAndPositiveInts,
-			&InferenceArgs{
+			testInferenceArgs{
 				ColMapper:      identityMapper,
-				FloatThreshold: 0,
+				floatThreshold: 0,
 			},
 			map[string]typeinfo.TypeInfo{
 				"mix":  typeinfo.Uint64Type,
@@ -397,9 +411,9 @@ func TestInferSchema(t *testing.T) {
 		{
 			"floats with zero fractional and float threshold of 0",
 			floatsWithZeroForFractionalPortion,
-			&InferenceArgs{
+			testInferenceArgs{
 				ColMapper:      identityMapper,
-				FloatThreshold: 0,
+				floatThreshold: 0,
 			},
 			map[string]typeinfo.TypeInfo{
 				"float": typeinfo.Float32Type,
@@ -410,9 +424,9 @@ func TestInferSchema(t *testing.T) {
 		{
 			"floats with zero fractional and float threshold of 0.1",
 			floatsWithZeroForFractionalPortion,
-			&InferenceArgs{
+			testInferenceArgs{
 				ColMapper:      identityMapper,
-				FloatThreshold: 0.1,
+				floatThreshold: 0.1,
 			},
 			map[string]typeinfo.TypeInfo{
 				"float": typeinfo.Int32Type,
@@ -423,9 +437,9 @@ func TestInferSchema(t *testing.T) {
 		{
 			"floats with large fractional and float threshold of 1.0",
 			floatsWithLargeFractionalPortion,
-			&InferenceArgs{
+			testInferenceArgs{
 				ColMapper:      identityMapper,
-				FloatThreshold: 1.0,
+				floatThreshold: 1.0,
 			},
 			map[string]typeinfo.TypeInfo{
 				"float": typeinfo.Int32Type,
@@ -436,9 +450,9 @@ func TestInferSchema(t *testing.T) {
 		{
 			"float threshold smaller than some of the values",
 			floatsWithTinyFractionalPortion,
-			&InferenceArgs{
+			testInferenceArgs{
 				ColMapper:      identityMapper,
-				FloatThreshold: 0.0002,
+				floatThreshold: 0.0002,
 			},
 			map[string]typeinfo.TypeInfo{
 				"float": typeinfo.Float32Type,

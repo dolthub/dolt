@@ -31,51 +31,51 @@ const (
 //			"",
 //			"",
 //			&MoveOptions{
-//				Operation:   OverwriteOp,
+//				operation:   OverwriteOp,
 //				tableName:   "testable",
-//				ContOnErr:   false,
-//				SchFile:     "",
-//				MappingFile: "",
+//				contOnErr:   false,
+//				schFile:     "",
+//				nameMapper: "",
 //				PrimaryKey:  "",
-//				Src:         NewDataLocation("data.csv", ""),
-//				Dest:        NewDataLocation("data.psv", "psv")},
+//				src:         NewDataLocation("data.csv", ""),
+//				dest:        NewDataLocation("data.psv", "psv")},
 //		},
 //		/*{
 //			"",
 //			"",
 //			&MoveOptions{
-//				Operation:   OverwriteOp,
-//				ContOnErr:   false,
-//				SchFile:     "",
-//				MappingFile: "",
+//				operation:   OverwriteOp,
+//				contOnErr:   false,
+//				schFile:     "",
+//				nameMapper: "",
 //				PrimaryKey:  "a",
-//				Src:         NewDataLocation("data.csv", ""),
-//				Dest:        NewDataLocation("data.nbf", "")},
+//				src:         NewDataLocation("data.csv", ""),
+//				dest:        NewDataLocation("data.nbf", "")},
 //		},
 //		{
 //			"",
 //			"",
 //			&MoveOptions{
-//				Operation:   OverwriteOp,
-//				ContOnErr:   false,
-//				SchFile:     "",
-//				MappingFile: "",
+//				operation:   OverwriteOp,
+//				contOnErr:   false,
+//				schFile:     "",
+//				nameMapper: "",
 //				PrimaryKey:  "",
-//				Src:         NewDataLocation("data.nbf", "nbf"),
-//				Dest:        NewDataLocation("table-name", "")},
+//				src:         NewDataLocation("data.nbf", "nbf"),
+//				dest:        NewDataLocation("table-name", "")},
 //		},*/
 //		{
 //			"",
 //			"",
 //			&MoveOptions{
-//				Operation:   OverwriteOp,
+//				operation:   OverwriteOp,
 //				tableName:   "table-name",
-//				ContOnErr:   false,
-//				SchFile:     "",
-//				MappingFile: "",
+//				contOnErr:   false,
+//				schFile:     "",
+//				nameMapper: "",
 //				PrimaryKey:  "a",
-//				Src:         NewDataLocation("data.csv", ""),
-//				Dest:        NewDataLocation("table-name", "")},
+//				src:         NewDataLocation("data.csv", ""),
+//				dest:        NewDataLocation("table-name", "")},
 //		},
 //		{
 //			`CREATE TABLE table_name (
@@ -85,14 +85,14 @@ const (
 //);`,
 //			`{"a":"pk","b":"value"}`,
 //			&MoveOptions{
-//				Operation:   OverwriteOp,
+//				operation:   OverwriteOp,
 //				tableName:   "table_name",
-//				ContOnErr:   false,
-//				SchFile:     "",
-//				MappingFile: "",
+//				contOnErr:   false,
+//				schFile:     "",
+//				nameMapper: "",
 //				PrimaryKey:  "",
-//				Src:         NewDataLocation("data.csv", ""),
-//				Dest:        NewDataLocation("table_name", "")},
+//				src:         NewDataLocation("data.csv", ""),
+//				dest:        NewDataLocation("table_name", "")},
 //		},
 //	}
 //
@@ -103,16 +103,16 @@ const (
 //		_, root, fs := createRootAndFS()
 //
 //		if test.sqlSchema != "" {
-//			test.mvOpts.SchFile = schemaFile
+//			test.mvOpts.schFile = schemaFile
 //			err = fs.WriteFile(schemaFile, []byte(test.sqlSchema))
 //		}
 //
 //		if test.mappingJSON != "" {
-//			test.mvOpts.MappingFile = mappingFile
+//			test.mvOpts.nameMapper = mappingFile
 //			err = fs.WriteFile(mappingFile, []byte(test.mappingJSON))
 //		}
 //
-//		src := test.mvOpts.Src
+//		src := test.mvOpts.src
 //
 //		seedWr, err := src.NewCreatingWriter(context.Background(), test.mvOpts, root, fs, true, fakeSchema, nil)
 //

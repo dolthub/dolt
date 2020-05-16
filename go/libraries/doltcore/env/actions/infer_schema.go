@@ -23,56 +23,15 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
-
-// StrMapper is a simple interface for mapping a string to another string
-type StrMapper interface {
-	// Map maps a string to another string.  If a string is not in the mapping ok will be false, otherwise it is true.
-	Map(str string) string
-}
-
-// MapMapper is a StrMapper implementation that is backed by a map[string]string
-type MapMapper map[string]string
-
-// Map maps a string to another string.  If a string is not in the mapping ok will be false, otherwise it is true.
-func (m MapMapper) Map(str string) string {
-	v, ok := m[str]
-	if ok {
-		return v
-	}
-	return str
-}
-
-func StrMapperFromFile(mappingFile string, FS filesys.ReadableFS) (StrMapper, errhand.VerboseError) {
-	var m map[string]string
-
-	if mappingFile == "" {
-		// identity mapper
-		m = make(map[string]string)
-		return MapMapper(m), nil
-	}
-
-	if fileExists, _ := FS.Exists(mappingFile); !fileExists {
-		return nil, errhand.BuildDError("error: '%s' does not exist.", mappingFile).Build()
-	}
-
-	err := filesys.UnmarshalJSONFile(FS, mappingFile, &m)
-
-	if err != nil {
-		return nil, errhand.BuildDError("error: invalid mapper file.").AddCause(err).Build()
-	}
-
-	return MapMapper(m), nil
-}
 
 type typeInfoSet map[typeinfo.TypeInfo]struct{}
 
@@ -82,20 +41,20 @@ const (
 )
 
 // InferenceArgs are arguments that can be passed to the schema inferrer to modify it's inference behavior.
-type InferenceArgs struct {
-	// ColMapper allows columns named X in the schema to be named Y in the inferred schema.
-	ColMapper StrMapper
+type InferenceArgs interface {
+	// ColNameMapper allows columns named X in the schema to be named Y in the inferred schema.
+	ColNameMapper() rowconv.NameMapper
 	// FloatThreshold is the threshold at which a string representing a floating point number should be interpreted as
 	// a float versus an int.  If FloatThreshold is 0.0 then any number with a decimal point will be interpreted as a
 	// float (such as 0.0, 1.0, etc).  If FloatThreshold is 1.0 then any number with a decimal point will be converted
 	// to an int (0.5 will be the int 0, 1.99 will be the int 1, etc.  If the FloatThreshold is 0.001 then numbers with
 	// a fractional component greater than or equal to 0.001 will be treated as a float (1.0 would be an int, 1.0009 would
 	// be an int, 1.001 would be a float, 1.1 would be a float, etc)
-	FloatThreshold float64
+	FloatThreshold() float64
 }
 
 // InferColumnTypesFromTableReader will infer a data types from a table reader.
-func InferColumnTypesFromTableReader(ctx context.Context, root *doltdb.RootValue, rd table.TableReadCloser, args *InferenceArgs) (*schema.ColCollection, error) {
+func InferColumnTypesFromTableReader(ctx context.Context, root *doltdb.RootValue, rd table.TableReadCloser, args InferenceArgs) (*schema.ColCollection, error) {
 	inferrer := newInferrer(rd.GetSchema(), args)
 
 	var rowFailure *pipeline.TransformRowFailure
@@ -125,13 +84,13 @@ type inferrer struct {
 	readerSch      schema.Schema
 	inferSets      map[uint64]typeInfoSet
 	nullable       *set.Uint64Set
-	mapper         StrMapper
+	mapper         rowconv.NameMapper
 	floatThreshold float64
 
 	//inferArgs *InferenceArgs
 }
 
-func newInferrer(readerSch schema.Schema, args *InferenceArgs) *inferrer {
+func newInferrer(readerSch schema.Schema, args InferenceArgs) *inferrer {
 	inferSets := make(map[uint64]typeInfoSet, readerSch.GetAllCols().Size())
 	_ = readerSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		inferSets[tag] = make(typeInfoSet)
@@ -142,8 +101,8 @@ func newInferrer(readerSch schema.Schema, args *InferenceArgs) *inferrer {
 		readerSch:      readerSch,
 		inferSets:      inferSets,
 		nullable:       set.NewUint64Set(nil),
-		mapper:         args.ColMapper,
-		floatThreshold: args.FloatThreshold,
+		mapper:         args.ColNameMapper(),
+		floatThreshold: args.FloatThreshold(),
 	}
 }
 

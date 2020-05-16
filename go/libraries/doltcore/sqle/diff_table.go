@@ -535,7 +535,7 @@ func rowConvForSchema(ss *schema.SuperSchema, sch schema.Schema) (*rowconv.RowCo
 		return nil, err
 	}
 
-	fm, err := rowconv.NewFieldMappingFromNameMap(sch, ssch, inNameToOutName)
+	fm, err := rowconv.NameMapping(sch, ssch, inNameToOutName)
 
 	if err != nil {
 		return nil, err
