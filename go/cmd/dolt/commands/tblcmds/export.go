@@ -270,7 +270,7 @@ func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.
 
 	emptyTransColl := pipeline.NewTransformCollection()
 
-	imp := &mvdata.DataMover{rd, emptyTransColl, wr, exOpts.contOnErr}
+	imp := &mvdata.DataMover{Rd: rd, Transforms: emptyTransColl, Wr: wr, ContOnErr: exOpts.contOnErr}
 	rd = nil
 
 	return imp, nil

@@ -248,7 +248,7 @@ func newTableCopyDataMover(ctx context.Context, root *doltdb.RootValue, fs files
 		return nil, errhand.BuildDError("Could not create table writer for %s", co.newTblName).AddCause(err).Build()
 	}
 
-	imp := &mvdata.DataMover{rd, transforms, wr, co.contOnErr}
+	imp := &mvdata.DataMover{Rd: rd, Transforms: transforms, Wr: wr, ContOnErr: co.contOnErr}
 	rd = nil
 
 	return imp, nil

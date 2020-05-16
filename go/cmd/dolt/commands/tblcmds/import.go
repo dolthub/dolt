@@ -433,22 +433,22 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.
 
 	ow, err := impOpts.checkOverwrite(ctx, root, fs)
 	if err != nil {
-		return nil, &mvdata.DataMoverCreationError{mvdata.CreateReaderErr, err}
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
 	}
 	if ow {
-		return nil, &mvdata.DataMoverCreationError{mvdata.CreateReaderErr, fmt.Errorf("%s already exists. Use -f to overwrite.", impOpts.DestName())}
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: fmt.Errorf( "%s already exists. Use -f to overwrite.", impOpts.DestName())}
 	}
 
 	wrSch, err := getImportSchema(ctx, root, fs, impOpts)
 
 	if err != nil {
-		return nil, &mvdata.DataMoverCreationError{mvdata.SchemaErr, err}
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 	}
 
 	rd, srcIsSorted, err := impOpts.src.NewReader(ctx, root, fs, impOpts.srcOptions)
 
 	if err != nil {
-		return nil, &mvdata.DataMoverCreationError{mvdata.CreateReaderErr, err}
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
 	}
 
 	defer func() {
@@ -465,7 +465,7 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.
 	transforms, err := mvdata.NameMapTransform(rd.GetSchema(), wrSch, impOpts.nameMapper)
 
 	if err != nil {
-		return nil, &mvdata.DataMoverCreationError{mvdata.CreateMapperErr, err}
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateMapperErr, Cause: err}
 	}
 
 	var wr table.TableWriteCloser
@@ -481,10 +481,10 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.
 	}
 
 	if err != nil {
-		return nil, &mvdata.DataMoverCreationError{mvdata.CreateWriterErr, err}
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateWriterErr, Cause: err}
 	}
 
-	imp := &mvdata.DataMover{rd, transforms, wr, impOpts.contOnErr}
+	imp := &mvdata.DataMover{Rd: rd, Transforms: transforms, Wr: wr, ContOnErr: impOpts.contOnErr}
 	rd = nil
 
 	return imp, nil
