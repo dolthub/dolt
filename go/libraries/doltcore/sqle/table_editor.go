@@ -23,7 +23,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -48,13 +47,7 @@ type tableEditor struct {
 	addedKeys    map[hash.Hash]types.Value
 	removedKeys  map[hash.Hash]types.Value
 	affectedKeys map[hash.Hash]types.Value
-	indexEds     []*indexEditor
-}
-
-type indexEditor struct {
-	ed  *types.MapEditor
-	idx schema.Index
-	sch schema.Schema
+	indexEds     []*doltdb.IndexEditor
 }
 
 var _ sql.RowReplacer = (*tableEditor)(nil)
@@ -62,20 +55,21 @@ var _ sql.RowUpdater = (*tableEditor)(nil)
 var _ sql.RowInserter = (*tableEditor)(nil)
 var _ sql.RowDeleter = (*tableEditor)(nil)
 
-func newTableEditor(_ *sql.Context, t *WritableDoltTable) *tableEditor {
+func newTableEditor(ctx *sql.Context, t *WritableDoltTable) *tableEditor {
 	te := &tableEditor{
 		t:            t,
 		insertedKeys: make(map[hash.Hash]types.Value),
 		addedKeys:    make(map[hash.Hash]types.Value),
 		removedKeys:  make(map[hash.Hash]types.Value),
 		affectedKeys: make(map[hash.Hash]types.Value),
-		indexEds:     make([]*indexEditor, t.sch.Indexes().Count()),
+		indexEds:     make([]*doltdb.IndexEditor, t.sch.Indexes().Count()),
 	}
 	for i, index := range t.sch.Indexes().AllIndexes() {
-		te.indexEds[i] = &indexEditor{
-			idx: index,
-			sch: index.Schema(),
+		indexData, err := t.table.GetIndexRowData(ctx, index.Name())
+		if err != nil {
+			panic(err) // should never have an index that does not have data, even an empty index
 		}
+		te.indexEds[i] = doltdb.NewIndexEditor(index, indexData)
 	}
 	return te
 }
@@ -313,62 +307,34 @@ func (te *tableEditor) updateIndexes(ctx *sql.Context, tbl *doltdb.Table, origin
 			var originalIndexRow row.Row
 			var updatedIndexRow row.Row
 			if originalRow != nil {
-				originalIndexRow, err = originalRow.ReduceToIndex(indexEd.idx)
+				originalIndexRow, err = originalRow.ReduceToIndex(indexEd.Index())
 				if err != nil {
 					return nil, err
 				}
 			}
 			if updatedRow != nil {
-				updatedIndexRow, err = updatedRow.ReduceToIndex(indexEd.idx)
+				updatedIndexRow, err = updatedRow.ReduceToIndex(indexEd.Index())
 				if err != nil {
 					return nil, err
 				}
 			}
 
-			if row.AreEqual(originalIndexRow, updatedIndexRow, indexEd.sch) {
-				continue
-			}
-
-			if originalIndexRow != nil {
-				indexKey, err := originalIndexRow.NomsMapKey(indexEd.sch).Value(ctx)
-				if err != nil {
-					return nil, err
-				}
-				if indexEd.ed == nil {
-					typesMap, err := te.t.table.GetIndexRowData(ctx, indexEd.idx.Name())
-					if err != nil {
-						return nil, err
-					}
-					indexEd.ed = typesMap.Edit()
-				}
-				indexEd.ed.Remove(indexKey)
-			}
-			if updatedIndexRow != nil {
-				indexKey, err := updatedIndexRow.NomsMapKey(indexEd.sch).Value(ctx)
-				if err != nil {
-					return nil, err
-				}
-				if indexEd.ed == nil {
-					typesMap, err := te.t.table.GetIndexRowData(ctx, indexEd.idx.Name())
-					if err != nil {
-						return nil, err
-					}
-					indexEd.ed = typesMap.Edit()
-				}
-				indexEd.ed.Set(indexKey, updatedIndexRow.NomsMapValue(indexEd.sch))
+			err = indexEd.UpdateIndex(ctx, originalIndexRow, updatedIndexRow)
+			if err != nil {
+				return nil, err
 			}
 		}
 	}
 
 	for _, indexEd := range te.indexEds {
-		if indexEd.ed == nil {
+		if !indexEd.HasChanges() {
 			continue
 		}
-		indexMap, err := indexEd.ed.Map(ctx)
+		indexMap, err := indexEd.Map(ctx)
 		if err != nil {
 			return nil, err
 		}
-		tbl, err = tbl.SetIndexRowData(ctx, indexEd.idx.Name(), indexMap)
+		tbl, err = tbl.SetIndexRowData(ctx, indexEd.Index().Name(), indexMap)
 		if err != nil {
 			return nil, err
 		}

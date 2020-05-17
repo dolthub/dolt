@@ -107,8 +107,7 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIte
 }
 
 func (t *DoltTable) CreateIndex(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, columns []sql.IndexColumn, comment string) error {
-	//TODO: remove this once Unique indexes are in
-	if constraint != sql.IndexConstraint_None {
+	if constraint != sql.IndexConstraint_None && constraint != sql.IndexConstraint_Unique {
 		return fmt.Errorf("not yet supported")
 	}
 

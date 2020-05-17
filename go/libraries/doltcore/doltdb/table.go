@@ -610,6 +610,7 @@ func (t *Table) GetIndexRowData(ctx context.Context, indexName string) (types.Ma
 	return indexMap.(types.Map), nil
 }
 
+// RebuildIndexRowData rebuilds the data for the given index, and returns the updated Map.
 func (t *Table) RebuildIndexRowData(ctx context.Context, indexName string) (types.Map, error) {
 	sch, err := t.GetSchema(ctx)
 	if err != nil {
@@ -681,9 +682,8 @@ func (t *Table) rebuildIndexRowData(ctx context.Context, sch schema.Schema, tblR
 	if err != nil {
 		return types.EmptyMap, err
 	}
-	indexDataEditor := emptyIndexMap.Edit()
+	indexEditor := NewIndexEditor(index, emptyIndexMap)
 
-	indexSch := index.Schema()
 	err = tblRowData.IterAll(ctx, func(key, value types.Value) error {
 		dRow, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
 		if err != nil {
@@ -693,18 +693,17 @@ func (t *Table) rebuildIndexRowData(ctx context.Context, sch schema.Schema, tblR
 		if err != nil {
 			return err
 		}
-		indexKey, err := indexRow.NomsMapKey(indexSch).Value(ctx)
+		err = indexEditor.UpdateIndex(ctx, nil, indexRow)
 		if err != nil {
 			return err
 		}
-		indexDataEditor = indexDataEditor.Set(indexKey, dRow.NomsMapValue(indexSch))
 		return nil
 	})
 	if err != nil {
 		return types.EmptyMap, err
 	}
 
-	rebuiltIndexMap, err := indexDataEditor.Map(ctx)
+	rebuiltIndexMap, err := indexEditor.Map(ctx)
 	if err != nil {
 		return types.EmptyMap, err
 	}

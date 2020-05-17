@@ -17,8 +17,6 @@ package merge
 import (
 	"context"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
@@ -69,16 +67,13 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tbl *doltdb.Ta
 	}
 	rowEditor := rowData.Edit()
 
-	indexes := tblSch.Indexes().AllIndexes()
-	indexSchemas := make([]schema.Schema, tblSch.Indexes().Count())
-	indexRowDatas := make([]*types.MapEditor, tblSch.Indexes().Count())
-	for i, index := range indexes {
-		indexSchemas[i] = index.Schema()
-		indexRowData, err := tbl.GetIndexRowData(ctx, index.Name())
+	indexEditors := make([]*doltdb.IndexEditor, tblSch.Indexes().Count())
+	for i, index := range tblSch.Indexes().AllIndexes() {
+		indexData, err := tbl.GetIndexRowData(ctx, index.Name())
 		if err != nil {
 			return nil, err
 		}
-		indexRowDatas[i] = indexRowData.Edit()
+		indexEditors[i] = doltdb.NewIndexEditor(index, indexData)
 	}
 
 	err = conflicts.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
@@ -97,44 +92,43 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tbl *doltdb.Ta
 			return false, err
 		}
 
+		var updatedRow row.Row
+
 		if types.IsNull(updated) {
 			rowEditor.Remove(key)
-			for i, index := range indexes {
-				originalIndexRow, err := originalRow.ReduceToIndex(index)
-				if err != nil {
-					return false, err
-				}
-				indexRowDatas[i].Remove(originalIndexRow.NomsMapKey(indexSchemas[i]))
-			}
 		} else {
-			r, err := row.FromNoms(tblSch, key.(types.Tuple), updated.(types.Tuple))
+			updatedRow, err = row.FromNoms(tblSch, key.(types.Tuple), updated.(types.Tuple))
 			if err != nil {
 				return false, err
 			}
 
-			if has, err := row.IsValid(r, tblSch); err != nil {
+			if has, err := row.IsValid(updatedRow, tblSch); err != nil {
 				return false, err
 			} else if !has {
-				return false, table.NewBadRow(r)
+				return false, table.NewBadRow(updatedRow)
 			}
 
 			rowEditor.Set(key, updated)
+		}
 
-			for i, index := range indexes {
-				indexSch := indexSchemas[i]
-				originalIndexRow, err := originalRow.ReduceToIndex(index)
+		for _, indexEd := range indexEditors {
+			var originalIndexRow row.Row
+			var updatedIndexRow row.Row
+			if originalRow != nil {
+				originalIndexRow, err = originalRow.ReduceToIndex(indexEd.Index())
 				if err != nil {
 					return false, err
 				}
-				updatedIndexRow, err := r.ReduceToIndex(index)
+			}
+			if updatedRow != nil {
+				updatedIndexRow, err = updatedRow.ReduceToIndex(indexEd.Index())
 				if err != nil {
 					return false, err
 				}
-				if !row.AreEqual(originalIndexRow, updatedIndexRow, indexSch) {
-					indexRowData := indexRowDatas[i]
-					indexRowData.Remove(originalIndexRow.NomsMapKey(indexSch))
-					indexRowData.Set(updatedIndexRow.NomsMapKey(indexSch), updatedIndexRow.NomsMapValue(indexSch))
-				}
+			}
+			err = indexEd.UpdateIndex(ctx, originalIndexRow, updatedIndexRow)
+			if err != nil {
+				return false, err
 			}
 		}
 
@@ -150,14 +144,16 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tbl *doltdb.Ta
 	}
 
 	indexesUpdatedTable := tbl
-	for i, index := range indexes {
-		indexRowData, err := indexRowDatas[i].Map(ctx)
-		if err != nil {
-			return nil, err
-		}
-		indexesUpdatedTable, err = indexesUpdatedTable.SetIndexRowData(ctx, index.Name(), indexRowData)
-		if err != nil {
-			return nil, err
+	for _, indexEd := range indexEditors {
+		if indexEd.HasChanges() {
+			indexRowData, err := indexEd.Map(ctx)
+			if err != nil {
+				return nil, err
+			}
+			indexesUpdatedTable, err = indexesUpdatedTable.SetIndexRowData(ctx, indexEd.Index().Name(), indexRowData)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
