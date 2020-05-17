@@ -35,56 +35,43 @@ var id2, _ = uuid.NewRandom()
 var id3, _ = uuid.NewRandom()
 
 func createTestRowData(t *testing.T, vrw types.ValueReadWriter, sch schema.Schema) (types.Map, []row.Row) {
-	var err error
-	rows := make([]row.Row, 4)
-	rows[0], err = row.New(types.Format_7_18, sch, row.TaggedValues{
-		idTag: types.UUID(id0), firstTag: types.String("bill"), lastTag: types.String("billerson"), ageTag: types.Uint(53)})
-	assert.NoError(t, err)
-	rows[1], err = row.New(types.Format_7_18, sch, row.TaggedValues{
-		idTag: types.UUID(id1), firstTag: types.String("eric"), lastTag: types.String("ericson"), isMarriedTag: types.Bool(true), ageTag: types.Uint(21)})
-	assert.NoError(t, err)
-	rows[2], err = row.New(types.Format_7_18, sch, row.TaggedValues{
-		idTag: types.UUID(id2), firstTag: types.String("john"), lastTag: types.String("johnson"), isMarriedTag: types.Bool(false), ageTag: types.Uint(53)})
-	assert.NoError(t, err)
-	rows[3], err = row.New(types.Format_7_18, sch, row.TaggedValues{
-		idTag: types.UUID(id3), firstTag: types.String("robert"), lastTag: types.String("robertson"), ageTag: types.Uint(36)})
-	assert.NoError(t, err)
-
-	m, err := types.NewMap(context.Background(), vrw)
-	assert.NoError(t, err)
-	ed := m.Edit()
-
-	for _, r := range rows {
-		ed = ed.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
-	}
-
-	m, err = ed.Map(context.Background())
-	assert.NoError(t, err)
-
-	return m, rows
+	return createTestRowDataFromTaggedValues(t, vrw, sch,
+		row.TaggedValues{
+			idTag: types.UUID(id0), firstTag: types.String("bill"), lastTag: types.String("billerson"), ageTag: types.Uint(53)},
+		row.TaggedValues{
+			idTag: types.UUID(id1), firstTag: types.String("eric"), lastTag: types.String("ericson"), isMarriedTag: types.Bool(true), ageTag: types.Uint(21)},
+		row.TaggedValues{
+			idTag: types.UUID(id2), firstTag: types.String("john"), lastTag: types.String("johnson"), isMarriedTag: types.Bool(false), ageTag: types.Uint(53)},
+		row.TaggedValues{
+			idTag: types.UUID(id3), firstTag: types.String("robert"), lastTag: types.String("robertson"), ageTag: types.Uint(36)},
+	)
 }
 
 func createUpdatedTestRowData(t *testing.T, vrw types.ValueReadWriter, sch schema.Schema) (types.Map, []row.Row) {
+	return createTestRowDataFromTaggedValues(t, vrw, sch,
+		row.TaggedValues{
+			idTag: types.UUID(id0), firstTag: types.String("jack"), lastTag: types.String("space"), ageTag: types.Uint(20)},
+		row.TaggedValues{
+			idTag: types.UUID(id1), firstTag: types.String("rick"), lastTag: types.String("drive"), isMarriedTag: types.Bool(false), ageTag: types.Uint(21)},
+		row.TaggedValues{
+			idTag: types.UUID(id2), firstTag: types.String("tyler"), lastTag: types.String("eat"), isMarriedTag: types.Bool(true), ageTag: types.Uint(22)},
+		row.TaggedValues{
+			idTag: types.UUID(id3), firstTag: types.String("moore"), lastTag: types.String("walk"), ageTag: types.Uint(23)},
+	)
+}
+
+func createTestRowDataFromTaggedValues(t *testing.T, vrw types.ValueReadWriter, sch schema.Schema, vals ...row.TaggedValues) (types.Map, []row.Row) {
 	var err error
-	rows := make([]row.Row, 4)
-	rows[0], err = row.New(types.Format_7_18, sch, row.TaggedValues{
-		idTag: types.UUID(id0), firstTag: types.String("jack"), lastTag: types.String("space"), ageTag: types.Uint(20)})
-	assert.NoError(t, err)
-	rows[1], err = row.New(types.Format_7_18, sch, row.TaggedValues{
-		idTag: types.UUID(id1), firstTag: types.String("rick"), lastTag: types.String("drive"), isMarriedTag: types.Bool(false), ageTag: types.Uint(21)})
-	assert.NoError(t, err)
-	rows[2], err = row.New(types.Format_7_18, sch, row.TaggedValues{
-		idTag: types.UUID(id2), firstTag: types.String("tyler"), lastTag: types.String("eat"), isMarriedTag: types.Bool(true), ageTag: types.Uint(22)})
-	assert.NoError(t, err)
-	rows[3], err = row.New(types.Format_7_18, sch, row.TaggedValues{
-		idTag: types.UUID(id3), firstTag: types.String("moore"), lastTag: types.String("walk"), ageTag: types.Uint(23)})
-	assert.NoError(t, err)
+	rows := make([]row.Row, len(vals))
 
 	m, err := types.NewMap(context.Background(), vrw)
 	assert.NoError(t, err)
 	ed := m.Edit()
 
-	for _, r := range rows {
+	for i, val := range vals {
+		r, err := row.New(types.Format_7_18, sch, val)
+		require.NoError(t, err)
+		rows[i] = r
 		ed = ed.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
 	}
 
@@ -378,6 +365,127 @@ func TestIndexRebuildingWithTwoIndexes(t *testing.T) {
 		return nil
 	})
 	assert.ElementsMatch(t, indexAgeExpectedRows, indexRows)
+}
+
+func TestIndexRebuildingUniqueSuccessOneCol(t *testing.T) {
+	db, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_7_18, nil, nil)
+	colColl, _ := schema.NewColCollection(
+		schema.NewColumn("pk1", 1, types.IntKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("v1", 2, types.IntKind, false),
+		schema.NewColumn("v2", 3, types.IntKind, false),
+	)
+	sch := schema.SchemaFromCols(colColl)
+	rowData, _ := createTestRowDataFromTaggedValues(t, db, sch,
+		row.TaggedValues{1: types.Int(1), 2: types.Int(1), 3: types.Int(1)},
+		row.TaggedValues{1: types.Int(2), 2: types.Int(2), 3: types.Int(2)},
+		row.TaggedValues{1: types.Int(3), 2: types.Int(3), 3: types.Int(3)},
+	)
+	schVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, sch)
+	require.NoError(t, err)
+	originalTable, err := NewTable(context.Background(), db, schVal, rowData, nil)
+	require.NoError(t, err)
+
+	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2}, true, "")
+	require.NoError(t, err)
+	updatedTable, err := originalTable.UpdateSchema(context.Background(), sch)
+	require.NoError(t, err)
+
+	_, err = updatedTable.RebuildIndexData(context.Background())
+	require.NoError(t, err)
+
+	_, err = updatedTable.RebuildIndexRowData(context.Background(), index.Name())
+	require.NoError(t, err)
+}
+
+func TestIndexRebuildingUniqueSuccessTwoCol(t *testing.T) {
+	db, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_7_18, nil, nil)
+	colColl, _ := schema.NewColCollection(
+		schema.NewColumn("pk1", 1, types.IntKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("v1", 2, types.IntKind, false),
+		schema.NewColumn("v2", 3, types.IntKind, false),
+	)
+	sch := schema.SchemaFromCols(colColl)
+	rowData, _ := createTestRowDataFromTaggedValues(t, db, sch,
+		row.TaggedValues{1: types.Int(1), 2: types.Int(1), 3: types.Int(1)},
+		row.TaggedValues{1: types.Int(2), 2: types.Int(1), 3: types.Int(2)},
+		row.TaggedValues{1: types.Int(3), 2: types.Int(2), 3: types.Int(2)},
+	)
+	schVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, sch)
+	require.NoError(t, err)
+	originalTable, err := NewTable(context.Background(), db, schVal, rowData, nil)
+	require.NoError(t, err)
+
+	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2, 3}, true, "")
+	require.NoError(t, err)
+	updatedTable, err := originalTable.UpdateSchema(context.Background(), sch)
+	require.NoError(t, err)
+
+	_, err = updatedTable.RebuildIndexData(context.Background())
+	require.NoError(t, err)
+
+	_, err = updatedTable.RebuildIndexRowData(context.Background(), index.Name())
+	require.NoError(t, err)
+}
+
+func TestIndexRebuildingUniqueFailOneCol(t *testing.T) {
+	db, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_7_18, nil, nil)
+	colColl, _ := schema.NewColCollection(
+		schema.NewColumn("pk1", 1, types.IntKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("v1", 2, types.IntKind, false),
+		schema.NewColumn("v2", 3, types.IntKind, false),
+	)
+	sch := schema.SchemaFromCols(colColl)
+	rowData, _ := createTestRowDataFromTaggedValues(t, db, sch,
+		row.TaggedValues{1: types.Int(1), 2: types.Int(1), 3: types.Int(1)},
+		row.TaggedValues{1: types.Int(2), 2: types.Int(2), 3: types.Int(2)},
+		row.TaggedValues{1: types.Int(3), 2: types.Int(2), 3: types.Int(3)},
+	)
+	schVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, sch)
+	require.NoError(t, err)
+	originalTable, err := NewTable(context.Background(), db, schVal, rowData, nil)
+	require.NoError(t, err)
+
+	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2}, true, "")
+	require.NoError(t, err)
+	updatedTable, err := originalTable.UpdateSchema(context.Background(), sch)
+	require.NoError(t, err)
+
+	_, err = updatedTable.RebuildIndexData(context.Background())
+	require.Error(t, err)
+
+	_, err = updatedTable.RebuildIndexRowData(context.Background(), index.Name())
+	require.Error(t, err)
+}
+
+func TestIndexRebuildingUniqueFailTwoCol(t *testing.T) {
+	db, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_7_18, nil, nil)
+	colColl, _ := schema.NewColCollection(
+		schema.NewColumn("pk1", 1, types.IntKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("v1", 2, types.IntKind, false),
+		schema.NewColumn("v2", 3, types.IntKind, false),
+	)
+	sch := schema.SchemaFromCols(colColl)
+	rowData, _ := createTestRowDataFromTaggedValues(t, db, sch,
+		row.TaggedValues{1: types.Int(1), 2: types.Int(1), 3: types.Int(1)},
+		row.TaggedValues{1: types.Int(2), 2: types.Int(1), 3: types.Int(2)},
+		row.TaggedValues{1: types.Int(3), 2: types.Int(2), 3: types.Int(2)},
+		row.TaggedValues{1: types.Int(4), 2: types.Int(1), 3: types.Int(2)},
+	)
+	schVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, sch)
+	require.NoError(t, err)
+	originalTable, err := NewTable(context.Background(), db, schVal, rowData, nil)
+	require.NoError(t, err)
+
+	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2, 3}, true, "")
+	require.NoError(t, err)
+	updatedTable, err := originalTable.UpdateSchema(context.Background(), sch)
+	require.NoError(t, err)
+
+	_, err = updatedTable.RebuildIndexData(context.Background())
+	require.Error(t, err)
+
+	_, err = updatedTable.RebuildIndexRowData(context.Background(), index.Name())
+	require.Error(t, err)
 }
 
 func rowsToIndexRows(t *testing.T, rows []row.Row, indexName schema.Index, indexAge schema.Index) (indexNameExpectedRows []row.Row, indexAgeExpectedRows []row.Row) {

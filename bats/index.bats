@@ -1851,8 +1851,7 @@ SQL
     [[ "${#lines[@]}" = "1" ]] || false
 }
 
-@test "index: UNIQUE INDEX" {
-    skip "not yet implemented"
+@test "index: UNIQUE INSERT, UPDATE, REPLACE" {
     dolt sql <<SQL
 CREATE UNIQUE INDEX idx_v1 ON onepk(v1);
 INSERT INTO onepk VALUES (1, 99, 51), (2, 11, 55), (3, 88, 52), (4, 22, 54), (5, 77, 53);
@@ -1876,6 +1875,16 @@ SQL
     [[ "${#lines[@]}" = "2" ]] || false
     run dolt sql -q "INSERT INTO onepk VALUES (6, 77, 56)"
     [ "$status" -eq "1" ]
+    run dolt sql -q "INSERT INTO onepk VALUES (6, 78, 56)"
+    [ "$status" -eq "0" ]
+    run dolt sql -q "UPDATE onepk SET v1 = 22 WHERE pk1 = 1"
+    [ "$status" -eq "1" ]
+    run dolt sql -q "UPDATE onepk SET v1 = 23 WHERE pk1 = 1"
+    [ "$status" -eq "0" ]
+    run dolt sql -q "REPLACE INTO onepk VALUES (2, 88, 55)"
+    [ "$status" -eq "1" ]
+    run dolt sql -q "REPLACE INTO onepk VALUES (2, 89, 55)"
+    [ "$status" -eq "0" ]
 }
 
 @test "index: dolt table import -u" {
@@ -1929,6 +1938,68 @@ SQL
     [[ "$output" =~ "pk1" ]] || false
     [[ "$output" =~ "5" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
+}
+
+@test "index: UNIQUE dolt table import -u" {
+    dolt sql -q "CREATE UNIQUE INDEX idx_v1 ON onepk(v1)"
+    dolt table import -u onepk `batshelper index_onepk.csv`
+    run dolt index ls onepk
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "idx_v1(v1)" ]] || false
+    run dolt index cat onepk idx_v1 -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "v1,pk1" ]] || false
+    [[ "$output" =~ "11,2" ]] || false
+    [[ "$output" =~ "22,4" ]] || false
+    [[ "$output" =~ "77,5" ]] || false
+    [[ "$output" =~ "88,3" ]] || false
+    [[ "$output" =~ "99,1" ]] || false
+    [[ "${#lines[@]}" = "6" ]] || false
+    run dolt schema show onepk
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ 'INDEX `idx_v1` (`v1`)' ]] || false
+    run dolt sql -q "SELECT pk1 FROM onepk WHERE v1 = 77" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1" ]] || false
+    [[ "$output" =~ "5" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+    dolt sql <<SQL
+DELETE FROM onepk;
+INSERT INTO onepk VALUES (6, 11, 55);
+SQL
+    run dolt table import -u onepk `batshelper index_onepk.csv`
+    [ "$status" -eq "1" ]
+}
+
+@test "index: UNIQUE dolt table import -r" {
+    dolt sql <<SQL
+CREATE UNIQUE INDEX idx_v1 ON onepk(v1);
+INSERT INTO onepk VALUES (1, 98, 50), (2, 10, 54), (3, 87, 51), (4, 21, 53), (5, 76, 52);
+SQL
+    dolt table import -r onepk `batshelper index_onepk.csv`
+    run dolt index ls onepk
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "idx_v1(v1)" ]] || false
+    run dolt index cat onepk idx_v1 -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "v1,pk1" ]] || false
+    [[ "$output" =~ "11,2" ]] || false
+    [[ "$output" =~ "22,4" ]] || false
+    [[ "$output" =~ "77,5" ]] || false
+    [[ "$output" =~ "88,3" ]] || false
+    [[ "$output" =~ "99,1" ]] || false
+    [[ "${#lines[@]}" = "6" ]] || false
+    run dolt schema show onepk
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ 'INDEX `idx_v1` (`v1`)' ]] || false
+    run dolt sql -q "SELECT pk1 FROM onepk WHERE v1 = 77" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1" ]] || false
+    [[ "$output" =~ "5" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+    dolt sql -q "DELETE FROM onepk"
+    run dolt table import -r onepk `batshelper index_onepk_non_unique.csv`
+    [ "$status" -eq "1" ]
 }
 
 @test "index: Merge without conflicts" {
@@ -2090,4 +2161,47 @@ SQL
     [[ "$output" =~ "-11,1" ]] || false
     [[ "$output" =~ "44,4" ]] || false
     [[ "${#lines[@]}" = "6" ]] || false
+}
+
+@test "index: Merge violates UNIQUE" {
+    dolt sql -q "CREATE UNIQUE INDEX idx_v1 ON onepk(v1);"
+    dolt add -A
+    dolt commit -m "baseline commit"
+    dolt checkout -b other
+    dolt checkout master
+    dolt sql -q "INSERT INTO onepk VALUES (1, 11, 101), (2, 22, 202), (3, 33, 303), (4, 44, 404)"
+    dolt add -A
+    dolt commit -m "master changes"
+    dolt checkout other
+    dolt sql -q "INSERT INTO onepk VALUES (1, 11, 101), (2, 22, 202), (3, 33, 303), (5, 44, 505)"
+    dolt add -A
+    dolt commit -m "other changes"
+    dolt checkout master
+    run dolt merge other
+    [ "$status" -eq "1" ]
+}
+
+@test "index: Merge auto-resolve violates UNIQUE" {
+    dolt sql <<SQL
+CREATE UNIQUE INDEX idx_v1 ON onepk(v1);
+INSERT INTO onepk VALUES (1, 11, 101), (2, 22, 202), (3, 33, 303), (4, 44, 404);
+SQL
+    dolt add -A
+    dolt commit -m "baseline commit"
+    dolt checkout -b other
+    dolt checkout master
+    dolt sql -q "INSERT INTO onepk VALUES (5, 55, 505)"
+    dolt add -A
+    dolt commit -m "master changes"
+    dolt checkout other
+    dolt sql <<SQL
+DROP INDEX idx_v1 ON onepk;
+INSERT INTO onepk VALUES (5, 11, 505);
+SQL
+    dolt add -A
+    dolt commit -m "other changes"
+    dolt checkout master
+    dolt merge other
+    run dolt conflicts resolve --theirs onepk
+    [ "$status" -eq "1" ]
 }
