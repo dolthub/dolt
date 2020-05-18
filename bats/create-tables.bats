@@ -340,3 +340,23 @@ SQL
     run dolt table import -u test `batshelper empty-strings-null-values.json`
     [ "$status" -eq 1 ]
 }
+
+@test "table import -c infers types from data" {
+    cat <<DELIM > types.csv
+pk,str,int,bool,float, date, time, datetime
+0,abc,123,false,3.14,2020-02-02,12:12:12.12,2020-02-02 12:12:12
+DELIM
+    run dolt table import -c --pk=pk test types.csv
+    [ "$status" -eq 0 ]
+    run dolt schema show test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CREATE TABLE \`test\`" ]]
+    [[ "$output" =~ "\`pk\` INT" ]]
+    [[ "$output" =~ "\`str\` LONGTEXT" ]]
+    [[ "$output" =~ "\`int\` INT UNSIGNED" ]]
+    [[ "$output" =~ "\`bool\` BIT(1)" ]]
+    [[ "$output" =~ "\`float\` FLOAT" ]]
+    [[ "$output" =~ "\`date\` DATE" ]]
+    [[ "$output" =~ "\`time\` TIME" ]]
+    [[ "$output" =~ "\`datetime\` DATETIME" ]]
+}
