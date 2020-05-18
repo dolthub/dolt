@@ -218,6 +218,7 @@ func (cc *ColCollection) Size() int {
 	return len(cc.cols)
 }
 
+// ColCollsAreEqual determines whether two ColCollections are equal.
 func ColCollsAreEqual(cc1, cc2 *ColCollection) bool {
 	if cc1.Size() != cc2.Size() {
 		return false
@@ -238,6 +239,7 @@ func ColCollsAreEqual(cc1, cc2 *ColCollection) bool {
 	return areEqual
 }
 
+// MapColCollection applies a function to each column in a ColCollection and creates a new ColCollection from the results.
 func MapColCollection(cc *ColCollection, cb func(col Column) (Column, error)) (*ColCollection, error) {
 	mapped := make([]Column, cc.Size())
 	for i, c := range cc.cols {
@@ -250,6 +252,8 @@ func MapColCollection(cc *ColCollection, cb func(col Column) (Column, error)) (*
 	return NewColCollection(mapped...)
 }
 
+// FilterColCollection applies a boolean function to column in a ColCollection, it creates a new ColCollection from the
+// set of columns for which the function returned true.
 func FilterColCollection(cc *ColCollection, cb func(col Column) (bool, error)) (*ColCollection, error) {
 	filtered := make([]Column, 0, cc.Size())
 	for _, c := range cc.cols {

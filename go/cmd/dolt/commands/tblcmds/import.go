@@ -59,39 +59,12 @@ const (
 	delimParam       = "delim"
 )
 
-var SchemaFileHelp = "Schema definition files are json files in the format:" + `
-
-	{
-		"fields": [
-			{"name":"FIELD_NAME", "kind":"KIND", "Required":[true|false]},
-			...
-		],
-		"constraints": [
-			{"constraint_type":"primary_key", "field_indices":[INTEGER_FIELD_INDEX]}
-		]
-	}
-
-where "fields" is the array of columns in each row of the table "constraints" is a list of table constraints. Only primary_key constraint types are supported currently. FIELD_NAME is the name of a column in a row and can be any valid string KIND must be a supported noms kind (bool, string, uuid, uint, int, float) INTEGER_FIELD_INDEX must be the 0 based index of the primary key in the "fields" array
-`
-
-var MappingFileHelp = "A mapping file is json in the format:" + `
-
-	{
-		"source_field_name":"dest_field_name"
-		...
-	}
-
-where source_field_name is the name of a field in the file being imported and dest_field_name is the name of a field in the table being imported to.
-`
-
 var importDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Imports data into a dolt table`,
 	LongDesc: `If {{.EmphasisLeft}}--create-table | -c{{.EmphasisRight}} is given the operation will create {{.LessThan}}table{{.GreaterThan}} and import the contents of file into it.  If a table already exists at this location then the operation will fail, unless the {{.EmphasisLeft}}--force | -f{{.EmphasisRight}} flag is provided. The force flag forces the existing table to be overwritten.
 
-The schema for the new table can be specified explicitly by providing a schema definition file, or will be inferred from the imported file.  All schemas, inferred or explicitly defined must define a primary key.  If the file format being imported does not support defining a primary key, then the {{.EmphasisLeft}}--pk{{.EmphasisRight}} parameter must supply the name of the field that should be used as the primary key.
+The schema for the new table can be specified explicitly by providing a SQL schema definition file, or will be inferred from the imported file.  All schemas, inferred or explicitly defined must define a primary key.  If the file format being imported does not support defining a primary key, then the {{.EmphasisLeft}}--pk{{.EmphasisRight}} parameter must supply the name of the field that should be used as the primary key.
 
-` + SchemaFileHelp +
-		`
 If {{.EmphasisLeft}}--update-table | -u{{.EmphasisRight}} is given the operation will update {{.LessThan}}table{{.GreaterThan}} with the contents of file. The table's existing schema will be used, and field names will be used to match file fields with table fields unless a mapping file is specified.
 
 During import, if there is an error importing any row, the import will be aborted by default.  Use the {{.EmphasisLeft}}--continue{{.EmphasisRight}} flag to continue importing when an error is encountered.
@@ -102,7 +75,7 @@ If the schema for the existing table does not match the schema for the new file,
 
 A mapping file can be used to map fields between the file being imported and the table being written to. This can be used when creating a new table, or updating or replacing an existing table.
 
-` + MappingFileHelp +
+` + schcmds.MappingFileHelp +
 
 		`
 In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not have the expected extension then the {{.EmphasisLeft}}--file-type{{.EmphasisRight}} parameter should be used to explicitly define the format of the file in one of the supported formats (csv, psv, json, xlsx).  For files separated by a delimiter other than a ',' (type csv) or a '|' (type psv), the --delim parameter can be used to specify a delimeter`,
@@ -117,7 +90,7 @@ In create, update, and replace scenarios the file's extension is used to infer t
 type tableImportOp string
 
 const (
-	CreateOp  tableImportOp = "overwrite" // todo: make CreateOp?
+	CreateOp  tableImportOp = "overwrite"
 	ReplaceOp tableImportOp = "replace"
 	UpdateOp  tableImportOp = "update"
 	InvalidOp tableImportOp = "invalid"

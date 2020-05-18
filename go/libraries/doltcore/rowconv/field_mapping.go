@@ -204,6 +204,7 @@ func NameMapping(srcSch, destSch schema.Schema, nameMapper NameMapper) (*FieldMa
 	return NewFieldMapping(srcSch, destSch, srcToDest)
 }
 
+// NameMapperFromFile reads a JSON file containing a name mapping and returns a NameMapper.
 func NameMapperFromFile(mappingFile string, FS filesys.ReadableFS) (NameMapper, error) {
 	var nm NameMapper
 

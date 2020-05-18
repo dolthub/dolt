@@ -43,7 +43,7 @@ type RSImpl struct {
 	// Results are results of benchmarking
 	Results []result
 
-	// tableName is the name of the results table
+	// TableName is the name of the results table
 	TableName string
 
 	// w is the writer where the results will be written
