@@ -41,8 +41,8 @@ CREATE TABLE test (
 SQL
     run dolt table import -r test `batshelper 2pk5col-ints.csv`
     [ "$status" -eq 1 ]
-    # [[ "$output" =~ "Error replacing table" ]] || false
-    # [[ "$output" =~ "cause: input primary keys do not match primary keys of existing table" ]] || false
+    [[ "$output" =~ "Error determining the output schema." ]] || false
+    [[ "$output" =~ "cause: input primary keys do not match primary keys of existing table" ]] || false
 }
 
 @test "replace table using psv" {
@@ -78,8 +78,8 @@ CREATE TABLE test (
 SQL
     run dolt table import -r test `batshelper 1pk5col-ints.psv`
     [ "$status" -eq 1 ]
-    # [[ "$output" =~ "Error replacing table" ]] || false
-    # [[ "$output" =~ "cause: input primary keys do not match primary keys of existing table" ]] || false
+    [[ "$output" =~ "Error determining the output schema." ]] || false
+    [[ "$output" =~ "cause: input primary keys do not match primary keys of existing table" ]] || false
 }
 
 @test "replace table using schema with csv" {
@@ -156,7 +156,7 @@ SQL
 @test "replace table with json when table does not exist" {
     run dolt table import -r employees `batshelper employees-tbl.json`
     [ "$status" -eq 1 ]
-    # [[ "$output" =~ "The following table could not be found:" ]] || false
+    [[ "$output" =~ "The following table could not be found:" ]] || false
 }
 
 @test "replace table with existing data using json" {
@@ -235,8 +235,8 @@ SQL
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt table import -r test `batshelper 1pk5col-ints.csv`
     [ "$status" -eq 1 ]
-    # [[ "$output" =~ "Error replacing table" ]] || false
-    # [[ "$output" =~ "cause: input primary keys do not match primary keys of existing table" ]] || false
+    [[ "$output" =~ "Error determining the output schema." ]] || false
+    [[ "$output" =~ "cause: input primary keys do not match primary keys of existing table" ]] || false
 }
 
 @test "replace table with 2 primary keys with a csv with 2 primary keys" {

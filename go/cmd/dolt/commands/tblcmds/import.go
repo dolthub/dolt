@@ -245,6 +245,22 @@ func getImportMoveOptions(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) (*i
 		moveOp = UpdateOp
 	}
 
+	if moveOp != CreateOp {
+
+		ctx := context.Background()
+		root, err := dEnv.WorkingRoot(ctx)
+		if err != nil {
+			return nil, errhand.VerboseErrorFromError(err)
+		}
+		_, exists, err := root.GetTable(ctx, tableName)
+		if err != nil {
+			return nil, errhand.VerboseErrorFromError(err)
+		}
+		if !exists {
+			return nil, errhand.BuildDError("The following table could not be found: %s", tableName).Build()
+		}
+	}
+
 	tableLoc := mvdata.TableDataLocation{Name: tableName}
 
 	return &importOptions{
@@ -384,7 +400,6 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 
 	skipped, verr := mvdata.MoveData(ctx, dEnv, mover, mvOpts)
-	//verr = executeImport(ctx, dEnv, mvOpts)
 
 	if skipped > 0 {
 		cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))
@@ -436,13 +451,13 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
 	}
 	if ow {
-		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: fmt.Errorf( "%s already exists. Use -f to overwrite.", impOpts.DestName())}
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: fmt.Errorf("%s already exists. Use -f to overwrite.", impOpts.DestName())}
 	}
 
-	wrSch, err := getImportSchema(ctx, root, fs, impOpts)
+	wrSch, dmce := getImportSchema(ctx, root, fs, impOpts)
 
-	if err != nil {
-		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
+	if dmce != nil {
+		return nil, dmce
 	}
 
 	rd, srcIsSorted, err := impOpts.src.NewReader(ctx, root, fs, impOpts.srcOptions)
@@ -458,8 +473,21 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.
 	}()
 
 	if impOpts.srcIsStream() {
-		// todo: capture stream data to file so we can use schema inferrence
+		// todo: capture stream data to file so we can use schema inference
 		wrSch = rd.GetSchema()
+	}
+
+	err = wrSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		preImage := impOpts.nameMapper.PreImage(col.Name)
+		_, found := rd.GetSchema().GetAllCols().GetByName(preImage)
+		if !found {
+			err = fmt.Errorf("input primary keys do not match primary keys of existing table")
+		}
+		return err == nil, err
+	})
+
+	if err != nil {
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 	}
 
 	transforms, err := mvdata.NameMapTransform(rd.GetSchema(), wrSch, impOpts.nameMapper)
@@ -490,13 +518,17 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.
 	return imp, nil
 }
 
-func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, impOpts *importOptions) (schema.Schema, error) {
+func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, impOpts *importOptions) (schema.Schema, *mvdata.DataMoverCreationError) {
 
 	if impOpts.schFile != "" {
 		tn, out, err := mvdata.SchAndTableNameFromFile(ctx, impOpts.schFile, fs, root)
 
 		if err == nil && tn != impOpts.tableName {
 			err = fmt.Errorf("table name '%s' from schema file %s does not match table arg '%s'", tn, impOpts.schFile, impOpts.tableName)
+		}
+
+		if err != nil {
+			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 		}
 
 		return out, nil
@@ -510,7 +542,7 @@ func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Fil
 
 		rd, _, err := impOpts.src.NewReader(ctx, root, fs, impOpts.srcOptions)
 		if err != nil {
-			return nil, err
+			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
 		}
 		defer rd.Close(ctx)
 
@@ -518,13 +550,19 @@ func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Fil
 			return rd.GetSchema(), nil
 		}
 
-		return inferSchema(ctx, root, rd, impOpts)
+		outSch, err := inferSchema(ctx, root, rd, impOpts)
+
+		if err != nil {
+			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
+		}
+
+		return outSch, nil
 	}
 
 	// UpdateOp || ReplaceOp
 	tblRd, _, err := impOpts.dest.NewReader(ctx, root, fs, nil)
 	if err != nil {
-		return nil, err
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
 	}
 	defer tblRd.Close(ctx)
 

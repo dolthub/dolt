@@ -125,14 +125,9 @@ func MoveData(ctx context.Context, dEnv *env.DoltEnv, mover *DataMover, mvOpts D
 
 	badCount, err = mover.Move(ctx)
 
-	//if displayStrLen > 0 {
-	//	displayStrLen = 0
-	//	cli.PrintErrln("")
-	//}
-
 	if err != nil {
 		if pipeline.IsTransformFailure(err) {
-			bdr := errhand.BuildDError("A bad row was encountered while moving data.")
+			bdr := errhand.BuildDError("\nA bad row was encountered while moving data.")
 
 			r := pipeline.GetTransFailureRow(err)
 			if r != nil {

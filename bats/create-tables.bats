@@ -57,9 +57,8 @@ teardown() {
 @test "create a table with json import. bad json." {
     run dolt table import -c -s `nativebatsdir employees-sch.json` employees `batshelper employees-tbl-bad.json`
     [ "$status" -eq 1 ]
-    # todo: fix error
-    # [[ "$output" =~ "Error creating reader" ]] || false
-    # [[ "$output" =~ "employees-tbl-bad.json to" ]] || false
+    [[ "$output" =~ "Error determining the output schema" ]] || false
+    [[ "$output" =~ "employees-tbl-bad.json to" ]] || false
     run dolt ls
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "employees" ]] || false
@@ -68,8 +67,7 @@ teardown() {
 @test "create a table with json import. bad schema." {
     run dolt table import -c -s `nativebatsdir employees-sch-bad.json` employees `batshelper employees-tbl.json`
     [ "$status" -eq 1 ]
-    # todo: fix error
-    # [[ "$output" =~ "Error creating reader" ]] || false
+    [[ "$output" =~ "Error determining the output schema" ]] || false
     skip "Error message mentions valid table file but not invalid schema file"
     # Be careful here. "employees-sch-bad.json" matches. I think it is because
     # the command line is somehow in $output. Added " to" to make it fail.
@@ -83,8 +81,6 @@ teardown() {
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
-    dolt schema show
-    dolt sql -q "select * from test"
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
@@ -100,7 +96,6 @@ teardown() {
     run dolt table import -f -c --pk=pk test `batshelper 1pk5col-ints.csv`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
-    dolt schema show
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
@@ -112,7 +107,7 @@ teardown() {
 @test "try to create a table with a bad csv" {
     run dolt table import -c --pk=pk test `batshelper bad.csv`
     [ "$status" -eq 1 ]
-    # [[ "$output" =~ "Error creating reader" ]] || false
+    [[ "$output" =~ "Error creating reader" ]] || false
 }
 
 @test "try to create a table with dolt table import with a bad file name" {
@@ -246,8 +241,6 @@ SQL
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
-    dolt sql -q "select * from test"
-    dolt schema show
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 11 ]
@@ -317,7 +310,6 @@ CREATE TABLE test (
   PRIMARY KEY (pk)
 );
 SQL
-    dolt table import -u test `batshelper empty-strings-null-values.json`
     run dolt table import -u test `batshelper empty-strings-null-values.json`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false

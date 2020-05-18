@@ -64,6 +64,16 @@ func (nm NameMapper) Map(str string) string {
 	return str
 }
 
+// PreImage searches the NameMapper for the string that maps to str, returns str otherwise
+func (nm NameMapper) PreImage(str string) string {
+	for pre, post := range nm {
+		if post == str {
+			return pre
+		}
+	}
+	return str
+}
+
 // FieldMapping defines a mapping from columns in a source schema to columns in a dest schema.
 type FieldMapping struct {
 	// SrcSch is the source schema being mapped from.

@@ -124,7 +124,7 @@ SQL
 @test "update table with json when table does not exist" {
     run dolt table import -u employees `batshelper employees-tbl.json`
     [ "$status" -eq 1 ]
-    # [[ "$output" =~ "The following table could not be found:" ]] || false
+    [[ "$output" =~ "The following table could not be found:" ]] || false
 }
 
 @test "replace table with a json with columns in different order" {
