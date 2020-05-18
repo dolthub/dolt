@@ -7,7 +7,9 @@ cd $script_dir/../..
 
 go install golang.org/x/tools/cmd/goimports
 
-bad_files=$(goimports -l -local github.com/liquidata-inc/dolt .)
+paths=`find . -depth 1 \( -name gen -prune -o -type d -print -o -type f -name '*.go' -print \)`
+
+bad_files=$(goimports -l -local github.com/liquidata-inc/dolt $paths)
 if [ "$bad_files" != "" ]; then
     echo "ERROR: The following files do not match goimports output:"
     echo "$bad_files"
@@ -16,7 +18,7 @@ if [ "$bad_files" != "" ]; then
     exit 1
 fi
 
-bad_files=$(find . -name '*.go' | while read f; do
+bad_files=$(find $paths -name '*.go' | while read f; do
     if [[ $(awk '/import \(/{flag=1;next}/\)/{flag=0}flag' < $f | egrep -c '$^') -gt 2 ]]; then
         echo $f
     fi
