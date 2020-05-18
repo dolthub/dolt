@@ -384,7 +384,7 @@ func (ttf *TestTableFile) NumChunks() int {
 	return ttf.numChunks
 }
 
-func (ttf *TestTableFile) Open() (io.ReadCloser, error) {
+func (ttf *TestTableFile) Open(ctx context.Context) (io.ReadCloser, error) {
 	return ioutil.NopCloser(bytes.NewReader(ttf.data)), nil
 }
 

@@ -122,7 +122,7 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 	}
 
 	i := 0
-	download := func() error {
+	download := func(ctx context.Context) error {
 		var err error
 		for i < len(desiredFiles) {
 			fileID := desiredFiles[i]
@@ -135,7 +135,7 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 
 			err = func() (err error) {
 				var rd io.ReadCloser
-				rd, err = tblFile.Open()
+				rd, err = tblFile.Open(ctx)
 
 				if err != nil {
 					return err
@@ -200,7 +200,7 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 	// keep going as long as progress is being made.  If progress is not made retry up to maxAttempts times.
 	for failureCount < maxAttempts {
 		initialIdx := i
-		err = download()
+		err = download(ctx)
 
 		if err == nil {
 			break

@@ -1024,8 +1024,8 @@ func (drtf DoltRemoteTableFile) NumChunks() int {
 }
 
 // Open returns an io.ReadCloser which can be used to read the bytes of a table file.
-func (drtf DoltRemoteTableFile) Open() (io.ReadCloser, error) {
-	req, err := http.NewRequest(http.MethodGet, drtf.info.Url, nil)
+func (drtf DoltRemoteTableFile) Open(ctx context.Context) (io.ReadCloser, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, drtf.info.Url, nil)
 
 	if err != nil {
 		return nil, err
