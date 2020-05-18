@@ -46,6 +46,10 @@ func (nbsMW *NBSMetricWrapper) Sources(ctx context.Context) (hash.Hash, []TableF
 	return nbsMW.nbs.Sources(ctx)
 }
 
+func (nbsMW *NBSMetricWrapper) Size(ctx context.Context) (uint64, error) {
+	return nbsMW.nbs.Size(ctx)
+}
+
 // WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
 func (nbsMW *NBSMetricWrapper) WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader, contentLength uint64, contentHash []byte) error {
 	return nbsMW.nbs.WriteTableFile(ctx, fileId, numChunks, rd, contentLength, contentHash)

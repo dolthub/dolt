@@ -45,6 +45,8 @@ var ErrInvalidDoltSpecPath = errors.New("invalid dolt spec path")
 
 var globalHttpFetcher HTTPFetcher = &http.Client{}
 
+var _ nbs.TableFileStore = (*DoltChunkStore)(nil)
+
 // We may need this to be configurable for users with really bad internet
 var downThroughputCheck = iohelp.MinThroughputCheckParams{
 	MinBytesPerSec: 1024,
@@ -461,6 +463,22 @@ func (dcs *DoltChunkStore) Rebase(ctx context.Context) error {
 		return NewRpcError(err, "Rebase", dcs.host, req)
 	}
 
+	mdReq := &remotesapi.GetRepoMetadataRequest{
+		RepoId: &remotesapi.RepoId{
+			Org:      dcs.org,
+			RepoName: dcs.repoName,
+		},
+		ClientRepoFormat: &remotesapi.ClientRepoFormat{
+			NbfVersion: dcs.nbf.VersionString(),
+			NbsVersion: nbs.StorageVersion,
+		},
+	}
+	metadata, err := dcs.csClient.GetRepoMetadata(ctx, mdReq)
+	if err != nil {
+		return NewRpcError(err, "GetRepoMetadata", dcs.host, mdReq)
+	}
+	dcs.metadata = metadata
+
 	return nil
 }
 
@@ -506,8 +524,23 @@ func (dcs *DoltChunkStore) Commit(ctx context.Context, current, last hash.Hash) 
 
 	if err != nil {
 		return false, NewRpcError(err, "Commit", dcs.host, req)
-
 	}
+
+	mdReq := &remotesapi.GetRepoMetadataRequest{
+		RepoId: &remotesapi.RepoId{
+			Org:      dcs.org,
+			RepoName: dcs.repoName,
+		},
+		ClientRepoFormat: &remotesapi.ClientRepoFormat{
+			NbfVersion: dcs.nbf.VersionString(),
+			NbsVersion: nbs.StorageVersion,
+		},
+	}
+	metadata, err := dcs.csClient.GetRepoMetadata(ctx, mdReq)
+	if err != nil {
+		return false, NewRpcError(err, "GetRepoMetadata", dcs.host, mdReq)
+	}
+	dcs.metadata = metadata
 
 	return resp.Success, nil
 }
@@ -939,6 +972,10 @@ func (dcs *DoltChunkStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableF
 	}
 
 	return hash.New(resp.RootHash), tblFiles, nil
+}
+
+func (dcs *DoltChunkStore) Size(ctx context.Context) (uint64, error) {
+	return dcs.metadata.StorageSize, nil
 }
 
 // SetRootChunk changes the root chunk hash from the previous value to the new root.
