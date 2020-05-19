@@ -202,7 +202,6 @@ func getCredentialsClient(dEnv *env.DoltEnv, dc creds.DoltCreds) (remotesapi.Cre
 	port := dEnv.Config.GetStringOrDefault(env.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
 	endpoint, opts, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
 		Endpoint: fmt.Sprintf("%s:%s", *host, *port),
-		Insecure: false,
 		Creds:    dc,
 	})
 	if err != nil {
