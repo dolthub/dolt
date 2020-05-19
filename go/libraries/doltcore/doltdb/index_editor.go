@@ -28,20 +28,21 @@ import (
 )
 
 // IndexEditor takes in changes to an index map and returns the updated map if changes have been made.
+// This type is not thread-safe, and is intended for use in a single-threaded environment.
 type IndexEditor struct {
-	dupKeys map[hash.Hash]int64
-	ed      *types.MapEditor
-	data    types.Map
-	idx     schema.Index
-	sch     schema.Schema
+	keyCount map[hash.Hash]int64
+	ed       *types.MapEditor
+	data     types.Map
+	idx      schema.Index
+	idxSch   schema.Schema // idx.Schema() builds the schema every call, so we cache it here
 }
 
 func NewIndexEditor(index schema.Index, indexData types.Map) *IndexEditor {
 	return &IndexEditor{
-		dupKeys: make(map[hash.Hash]int64),
-		data:    indexData,
-		idx:     index,
-		sch:     index.Schema(),
+		keyCount: make(map[hash.Hash]int64),
+		data:     indexData,
+		idx:      index,
+		idxSch:   index.Schema(),
 	}
 }
 
@@ -61,7 +62,7 @@ func (indexEd *IndexEditor) Map(ctx context.Context) (types.Map, error) {
 		return indexEd.data, nil
 	}
 	if indexEd.Index().IsUnique() {
-		for _, numOfKeys := range indexEd.dupKeys {
+		for _, numOfKeys := range indexEd.keyCount {
 			if numOfKeys > 1 {
 				return types.EmptyMap, fmt.Errorf("UNIQUE constraint violation on index: %s", indexEd.idx.Name())
 			}
@@ -72,12 +73,12 @@ func (indexEd *IndexEditor) Map(ctx context.Context) (types.Map, error) {
 
 // UpdateIndex updates the index map according to the given reduced index rows.
 func (indexEd *IndexEditor) UpdateIndex(ctx context.Context, originalIndexRow row.Row, updatedIndexRow row.Row) error {
-	if row.AreEqual(originalIndexRow, updatedIndexRow, indexEd.sch) {
+	if row.AreEqual(originalIndexRow, updatedIndexRow, indexEd.idxSch) {
 		return nil
 	}
 
 	if originalIndexRow != nil {
-		indexKey, err := originalIndexRow.NomsMapKey(indexEd.sch).Value(ctx)
+		indexKey, err := originalIndexRow.NomsMapKey(indexEd.idxSch).Value(ctx)
 		if err != nil {
 			return err
 		}
@@ -93,12 +94,12 @@ func (indexEd *IndexEditor) UpdateIndex(ctx context.Context, originalIndexRow ro
 			if err != nil {
 				return err
 			}
-			indexEd.dupKeys[partialKeyHash]--
+			indexEd.keyCount[partialKeyHash]--
 		}
 		indexEd.ed.Remove(indexKey)
 	}
 	if updatedIndexRow != nil {
-		indexKey, err := updatedIndexRow.NomsMapKey(indexEd.sch).Value(ctx)
+		indexKey, err := updatedIndexRow.NomsMapKey(indexEd.idxSch).Value(ctx)
 		if err != nil {
 			return err
 		}
@@ -114,19 +115,19 @@ func (indexEd *IndexEditor) UpdateIndex(ctx context.Context, originalIndexRow ro
 			if err != nil {
 				return err
 			}
-			var mapIter table.TableReadCloser = noms.NewNomsRangeReader(indexEd.sch, indexEd.data,
+			var mapIter table.TableReadCloser = noms.NewNomsRangeReader(indexEd.idxSch, indexEd.data,
 				[]*noms.ReadRange{{Start: partialKey, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
 					return tuple.StartsWith(partialKey), nil
 				}}})
 			_, err = mapIter.ReadRow(ctx)
 			if err == nil { // row exists
-				indexEd.dupKeys[partialKeyHash]++
+				indexEd.keyCount[partialKeyHash]++
 			} else if err != io.EOF {
 				return err
 			}
-			indexEd.dupKeys[partialKeyHash]++
+			indexEd.keyCount[partialKeyHash]++
 		}
-		indexEd.ed.Set(indexKey, updatedIndexRow.NomsMapValue(indexEd.sch))
+		indexEd.ed.Set(indexKey, updatedIndexRow.NomsMapValue(indexEd.idxSch))
 	}
 
 	return nil

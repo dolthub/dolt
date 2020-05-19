@@ -1279,6 +1279,35 @@ func TestParseCreateTableStatement(t *testing.T) {
 	}
 }
 
+func TestCreateIndexUnique(t *testing.T) {
+	dEnv := dtestutils.CreateTestEnv()
+	root, err := dEnv.WorkingRoot(context.Background())
+	if err != nil {
+		panic(err)
+	}
+	root, err = ExecuteSql(dEnv, root, `
+CREATE TABLE pass_unique (
+  pk1 BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT
+);
+CREATE TABLE fail_unique (
+  pk1 BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT
+);
+INSERT INTO pass_unique VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
+INSERT INTO fail_unique VALUES (1, 1, 1), (2, 2, 2), (3, 2, 3);
+`)
+	require.NoError(t, err)
+	root, err = ExecuteSql(dEnv, root, "CREATE UNIQUE INDEX idx_v1 ON pass_unique(v1)")
+	assert.NoError(t, err)
+	root, err = ExecuteSql(dEnv, root, "CREATE UNIQUE INDEX idx_v1 ON fail_unique(v1)")
+	if assert.Error(t, err) {
+		assert.Contains(t, strings.ToLower(err.Error()), "unique")
+	}
+}
+
 func schemasTableDoltSchema() schema.Schema {
 	// this is a dummy test environment and will not be used,
 	// dolt_schema table tags will be parsed from the comments in SchemaTableSchema()
