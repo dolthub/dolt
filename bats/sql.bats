@@ -652,10 +652,14 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ " NULL " ]] || false
     [[ ! "$output" =~ "panic: " ]] || false
-
     run dolt sql -q "select 1.0/0.0 from dual"
     [ $status -eq 0 ]
-    [[ "$output" =~ " +Inf " ]] || false
+    [[ "$output" =~ " NULL " ]] || false
+    [[ ! "$output" =~ "panic: " ]] || false
+    run dolt sql -q "select 1 div 0 from dual"
+    [ $status -eq 0 ]
+    [[ "$output" =~ " NULL " ]] || false
+    [[ ! "$output" =~ "panic: " ]] || false
 }
 
 @test "sql delete all rows in table" {
