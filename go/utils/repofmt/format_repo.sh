@@ -5,9 +5,11 @@ set -eo pipefail
 script_dir=$(dirname "$0")
 cd $script_dir/../..
 
-goimports -w -local github.com/liquidata-inc/dolt .
+paths=`find . -maxdepth 1 -mindepth 1 \( -name gen -prune -o -type d -print -o -type f -name '*.go' -print \)`
 
-bad_files=$(find . -name '*.go' | while read f; do
+goimports -w -local github.com/liquidata-inc/dolt $paths
+
+bad_files=$(find $paths -name '*.go' | while read f; do
     if [[ $(awk '/import \(/{flag=1;next}/\)/{flag=0}flag' < $f | egrep -c '$^') -gt 2 ]]; then
         echo $f
     fi

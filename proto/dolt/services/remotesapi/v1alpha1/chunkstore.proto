@@ -158,6 +158,9 @@ message GetRepoMetadataResponse {
   // Version string of the nbs format of this repository.
   // See nbs.StorageVersion.
   string nbs_version = 2;
+  // Approximate number of bytes required for storage of all
+  // currently-referenced repository table files.
+  uint64 storage_size = 3;
 }
 
 message ClientRepoFormat {
