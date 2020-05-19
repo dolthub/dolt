@@ -22,10 +22,12 @@ import (
 	"time"
 
 	"github.com/fatih/color"
+	"google.golang.org/grpc"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/liquidata-inc/dolt/go/libraries/events"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
@@ -146,7 +148,16 @@ func getGRPCEmitter(dEnv *env.DoltEnv) *events.GrpcEmitter {
 	}
 
 	hostAndPort := fmt.Sprintf("%s:%d", *host, port)
-	conn, _ := dEnv.GrpcConnWithCreds(hostAndPort, insecure, nil)
-
+	endpoint, opts, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
+		Endpoint: hostAndPort,
+		Insecure: insecure,
+	})
+	if err != nil {
+		return nil
+	}
+	conn, err := grpc.Dial(endpoint, opts...)
+	if err != nil {
+		return nil
+	}
 	return events.NewGrpcEmitter(conn)
 }

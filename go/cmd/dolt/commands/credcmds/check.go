@@ -18,6 +18,8 @@ import (
 	"context"
 	"fmt"
 
+	"google.golang.org/grpc"
+
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 
@@ -27,6 +29,7 @@ import (
 	remotesapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/creds"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 )
 
@@ -136,8 +139,14 @@ func loadCred(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (creds.DoltCred
 }
 
 func checkCredAndPrintSuccess(ctx context.Context, dEnv *env.DoltEnv, dc creds.DoltCreds, endpoint string) errhand.VerboseError {
-	conn, err := dEnv.GrpcConnWithCreds(endpoint, false, dc)
-
+	endpoint, opts, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
+		Endpoint: endpoint,
+		Creds:    dc,
+	})
+	if err != nil {
+		return errhand.BuildDError("error: unable to build server endpoint options.").AddCause(err).Build()
+	}
+	conn, err := grpc.Dial(endpoint, opts...)
 	if err != nil {
 		return errhand.BuildDError("error: unable to connect to server with credentials.").AddCause(err).Build()
 	}

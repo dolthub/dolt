@@ -20,6 +20,8 @@ import (
 	"io"
 	"os"
 
+	"google.golang.org/grpc"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
@@ -28,6 +30,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/creds"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
@@ -159,7 +162,15 @@ func updateProfileWithCredentials(ctx context.Context, dEnv *env.DoltEnv, c cred
 
 	host := dEnv.Config.GetStringOrDefault(env.RemotesApiHostKey, env.DefaultRemotesApiHost)
 	port := dEnv.Config.GetStringOrDefault(env.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
-	conn, err := dEnv.GrpcConnWithCreds(fmt.Sprintf("%s:%s", *host, *port), false, c)
+	hostAndPort := fmt.Sprintf("%s:%s", *host, *port)
+	endpoint, opts, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
+		Endpoint: hostAndPort,
+		Creds:    c,
+	})
+	if err != nil {
+		return fmt.Errorf("error: unable to build dial options server with credentials: %w", err)
+	}
+	conn, err := grpc.Dial(endpoint, opts...)
 	if err != nil {
 		return fmt.Errorf("error: unable to connect to server with credentials: %w", err)
 	}

@@ -93,18 +93,10 @@ func NewDoltChunkStoreFromPath(ctx context.Context, nbf *types.NomsBinFormat, pa
 	org := tokens[0]
 	repoName := tokens[1]
 
-	if _, ok := csClient.(RetryingChunkStoreServiceClient); !ok {
-		csClient = RetryingChunkStoreServiceClient{csClient}
-	}
-
-	return NewDoltChunkStore(ctx, nbf, org, repoName, host, RetryingChunkStoreServiceClient{csClient})
+	return NewDoltChunkStore(ctx, nbf, org, repoName, host, csClient)
 }
 
 func NewDoltChunkStore(ctx context.Context, nbf *types.NomsBinFormat, org, repoName, host string, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
-	if _, ok := csClient.(RetryingChunkStoreServiceClient); !ok {
-		csClient = RetryingChunkStoreServiceClient{csClient}
-	}
-
 	evt := events.NewEvent(eventsapi.ClientEventType_REMOTEAPI_GET_REPO_METADATA)
 	defer events.GlobalCollector.CloseEventAndAdd(evt)
 

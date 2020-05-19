@@ -22,27 +22,28 @@ import (
 	"google.golang.org/grpc"
 
 	remotesapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"github.com/liquidata-inc/dolt/go/store/datas"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-// GRPCConnectionProvider is an interface for getting a *grpc.ClientConn.
-type GRPCConnectionProvider interface {
-	GrpcConn(hostAndPort string, insecure bool) (*grpc.ClientConn, error)
+// GRPCDialProvider is an interface for getting a *grpc.ClientConn.
+type GRPCDialProvider interface {
+	GetGRPCDialParams(grpcendpoint.Config) (string, []grpc.DialOption, error)
 }
 
 // DoldRemoteFactory is a DBFactory implementation for creating databases backed by a remote server that implements the
 // GRPC rpcs defined by remoteapis.ChunkStoreServiceClient
 type DoltRemoteFactory struct {
-	grpcCP   GRPCConnectionProvider
+	dp       GRPCDialProvider
 	insecure bool
 }
 
 // NewDoltRemoteFactory creates a DoltRemoteFactory instance using the given GRPCConnectionProvider, and insecure setting
-func NewDoltRemoteFactory(grpcCP GRPCConnectionProvider, insecure bool) DoltRemoteFactory {
-	return DoltRemoteFactory{grpcCP, insecure}
+func NewDoltRemoteFactory(dp GRPCDialProvider, insecure bool) DoltRemoteFactory {
+	return DoltRemoteFactory{dp, insecure}
 }
 
 // CreateDB creates a database backed by a remote server that implements the GRPC rpcs defined by
@@ -62,8 +63,18 @@ func (fact DoltRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFo
 }
 
 func (fact DoltRemoteFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]string) (chunks.ChunkStore, error) {
-	conn, err := fact.grpcCP.GrpcConn(urlObj.Host, fact.insecure)
+	endpoint, opts, err := fact.dp.GetGRPCDialParams(grpcendpoint.Config{
+		Endpoint:     urlObj.Host,
+		Insecure:     fact.insecure,
+		WithEnvCreds: true,
+	})
+	if err != nil {
+		return nil, err
+	}
 
+	opts = append(opts, grpc.WithChainUnaryInterceptor(remotestorage.RetryingUnaryClientInterceptor))
+
+	conn, err := grpc.Dial(endpoint, opts...)
 	if err != nil {
 		return nil, err
 	}
