@@ -48,7 +48,6 @@ teardown() {
 
 @test "dolt checkout with empty string returns error" {
     run dolt checkout ""
-    skip "Panics when attempting to checkout empty string"
     [[ "$output" =~ "error: cannot checkout empty string" ]] || false
     [ $status -ne 0 ]
 
