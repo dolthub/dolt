@@ -653,7 +653,9 @@ func (dEnv *DoltEnv) GetGRPCDialParams(config grpcendpoint.Config) (string, []gr
 		if err != nil {
 			return "", nil, err
 		}
-		opts = append(opts, grpc.WithPerRPCCredentials(rpcCreds))
+		if rpcCreds != nil {
+			opts = append(opts, grpc.WithPerRPCCredentials(rpcCreds))
+		}
 	}
 
 	return endpoint, opts, nil
