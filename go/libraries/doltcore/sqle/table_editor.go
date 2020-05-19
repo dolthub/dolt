@@ -40,6 +40,8 @@ var ErrDuplicatePrimaryKeyFmt = "duplicate primary key given: (%v)"
 // support REPLACE statements, which are implemented as a DELETE followed by an INSERT. In general, not flushing the
 // editor after every SQL statement is incorrect and will return incorrect results. The single reliable exception is an
 // unbroken chain of INSERT statements, where we have taken pains to batch writes to speed things up.
+//
+// This type is not thread-safe, and is intended for use in a single-threaded environment only.
 type tableEditor struct {
 	t            *WritableDoltTable
 	ed           *types.MapEditor

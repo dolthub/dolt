@@ -1875,14 +1875,17 @@ SQL
     [[ "${#lines[@]}" = "2" ]] || false
     run dolt sql -q "INSERT INTO onepk VALUES (6, 77, 56)"
     [ "$status" -eq "1" ]
+    [[ "$output" =~ "UNIQUE" ]] || false
     run dolt sql -q "INSERT INTO onepk VALUES (6, 78, 56)"
     [ "$status" -eq "0" ]
     run dolt sql -q "UPDATE onepk SET v1 = 22 WHERE pk1 = 1"
     [ "$status" -eq "1" ]
+    [[ "$output" =~ "UNIQUE" ]] || false
     run dolt sql -q "UPDATE onepk SET v1 = 23 WHERE pk1 = 1"
     [ "$status" -eq "0" ]
     run dolt sql -q "REPLACE INTO onepk VALUES (2, 88, 55)"
     [ "$status" -eq "1" ]
+    [[ "$output" =~ "UNIQUE" ]] || false
     run dolt sql -q "REPLACE INTO onepk VALUES (2, 89, 55)"
     [ "$status" -eq "0" ]
 }
@@ -1957,7 +1960,7 @@ SQL
     [[ "${#lines[@]}" = "6" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'UNIQUE INDEX `idx_v1` (`v1`)' ]] || false
     run dolt sql -q "SELECT pk1 FROM onepk WHERE v1 = 77" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1" ]] || false
@@ -1969,6 +1972,7 @@ INSERT INTO onepk VALUES (6, 11, 55);
 SQL
     run dolt table import -u onepk `batshelper index_onepk.csv`
     [ "$status" -eq "1" ]
+    [[ "$output" =~ "UNIQUE" ]] || false
 }
 
 @test "index: UNIQUE dolt table import -r" {
@@ -1991,7 +1995,7 @@ SQL
     [[ "${#lines[@]}" = "6" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'UNIQUE INDEX `idx_v1` (`v1`)' ]] || false
     run dolt sql -q "SELECT pk1 FROM onepk WHERE v1 = 77" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1" ]] || false
@@ -2000,6 +2004,7 @@ SQL
     dolt sql -q "DELETE FROM onepk"
     run dolt table import -r onepk `batshelper index_onepk_non_unique.csv`
     [ "$status" -eq "1" ]
+    [[ "$output" =~ "UNIQUE" ]] || false
 }
 
 @test "index: Merge without conflicts" {
@@ -2179,6 +2184,7 @@ SQL
     dolt checkout master
     run dolt merge other
     [ "$status" -eq "1" ]
+    [[ "$output" =~ "UNIQUE" ]] || false
 }
 
 @test "index: Merge auto-resolve violates UNIQUE" {
@@ -2204,4 +2210,5 @@ SQL
     dolt merge other
     run dolt conflicts resolve --theirs onepk
     [ "$status" -eq "1" ]
+    [[ "$output" =~ "UNIQUE" ]] || false
 }
