@@ -26,7 +26,7 @@ require (
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/gocraft/dbr/v2 v2.7.0
 	github.com/gogo/protobuf v1.3.1 // indirect
-	github.com/golang/protobuf v1.4.0
+	github.com/golang/protobuf v1.4.2
 	github.com/golang/snappy v0.0.1
 	github.com/google/go-cmp v0.4.0
 	github.com/google/uuid v1.1.1
@@ -44,7 +44,7 @@ require (
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20200320155049-a8e482faeffd
-	github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200508170854-b74c3414aebf
+	github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200519213537-130e749c2a7d
 	github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0
 	github.com/liquidata-inc/mmap-go v1.0.3
 	github.com/liquidata-inc/sqllogictest/go v0.0.0-20200320151923-b11801f10e15
@@ -74,10 +74,10 @@ require (
 	go.mongodb.org/mongo-driver v1.3.0 // indirect
 	go.uber.org/zap v1.14.1
 	golang.org/x/crypto v0.0.0-20200320145329-97fc981609be
-	golang.org/x/net v0.0.0-20200501053045-e0ff5e5a1de5
-	golang.org/x/sys v0.0.0-20200501145240-bc7a7d42d5c3
+	golang.org/x/net v0.0.0-20200519113804-d87ec0cfa476
+	golang.org/x/sys v0.0.0-20200519105757-fe76b779f299
 	google.golang.org/api v0.20.0
-	google.golang.org/genproto v0.0.0-20200430143042-b979b6f78d84 // indirect
+	google.golang.org/genproto v0.0.0-20200519141106-08726f379972 // indirect
 	google.golang.org/grpc v1.29.1
 	gopkg.in/square/go-jose.v2 v2.4.1
 	gopkg.in/src-d/go-errors.v1 v1.0.0

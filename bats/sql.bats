@@ -649,8 +649,16 @@ SQL
 
 @test "sql divide by zero does not panic" {
     run dolt sql -q "select 1/0 from dual"
-    [ $status -ne 0 ]
-    skip "Divide by zero panics dolt right now"
+    [ $status -eq 0 ]
+    [[ "$output" =~ " NULL " ]] || false
+    [[ ! "$output" =~ "panic: " ]] || false
+    run dolt sql -q "select 1.0/0.0 from dual"
+    [ $status -eq 0 ]
+    [[ "$output" =~ " NULL " ]] || false
+    [[ ! "$output" =~ "panic: " ]] || false
+    run dolt sql -q "select 1 div 0 from dual"
+    [ $status -eq 0 ]
+    [[ "$output" =~ " NULL " ]] || false
     [[ ! "$output" =~ "panic: " ]] || false
 }
 
