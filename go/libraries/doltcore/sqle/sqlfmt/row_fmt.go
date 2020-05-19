@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/google/uuid"
 	"vitess.io/vitess/go/sqltypes"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -184,6 +183,12 @@ func valueAsSqlString(ti typeinfo.TypeInfo, value types.Value) (string, error) {
 		return "NULL", nil
 	}
 
+	str, err := ti.FormatValue(value)
+
+	if err != nil {
+		return "", err
+	}
+
 	switch ti.GetTypeIdentifier() {
 	case typeinfo.BoolTypeIdentifier:
 		// todo: unclear if we want this to output with "TRUE/FALSE" or 1/0
@@ -192,9 +197,13 @@ func valueAsSqlString(ti typeinfo.TypeInfo, value types.Value) (string, error) {
 		}
 		return "FALSE", nil
 	case typeinfo.UuidTypeIdentifier:
-		// todo: typeinfo.UuidTypeIdentifier should handle this
-		u := uuid.UUID(value.(types.UUID))
-		return singleQuote + u.String() + singleQuote, nil
+		return singleQuote + *str + singleQuote, nil
+	case typeinfo.TimeTypeIdentifqier:
+		return singleQuote + *str + singleQuote, nil
+	case typeinfo.YearTypeIdentifier:
+		return singleQuote + *str + singleQuote, nil
+	case typeinfo.DatetimeTypeIdentifier:
+		return singleQuote + *str + singleQuote, nil
 	case typeinfo.VarStringTypeIdentifier:
 		s, ok := value.(types.String)
 		if !ok {
@@ -202,10 +211,6 @@ func valueAsSqlString(ti typeinfo.TypeInfo, value types.Value) (string, error) {
 		}
 		return quoteAndEscapeString(string(s)), nil
 	default:
-		str, err := ti.FormatValue(value)
-		if err != nil {
-			return "", err
-		}
 		return *str, nil
 	}
 }
