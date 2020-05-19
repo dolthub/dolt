@@ -24,50 +24,16 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/funcitr"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-// StrMapper is a simple interface for mapping a string to another string
-type StrMapper interface {
-	// Map maps a string to another string.  If a string is not in the mapping ok will be false, otherwise it is true.
-	Map(str string) string
-}
-
-// IdentityMapper maps any string to itself
-type IdentityMapper struct{}
-
-// Map maps a string to another string.  For the identity mapper the input string always maps to the output string
-func (m IdentityMapper) Map(str string) string {
-	return str
-}
-
-// MapMapper is a StrMapper implementation that is backed by a map[string]string
-type MapMapper map[string]string
-
-// Map maps a string to another string.  If a string is not in the mapping ok will be false, otherwise it is true.
-func (m MapMapper) Map(str string) string {
-	v, ok := m[str]
-	if ok {
-		return v
-	}
-	return str
-}
-
 type typeInfoSet map[typeinfo.TypeInfo]struct{}
-
-type SchImportOp int
-
-const (
-	CreateOp SchImportOp = iota
-	UpdateOp
-	ReplaceOp
-)
 
 const (
 	maxUint24 = 1<<24 - 1
@@ -75,31 +41,20 @@ const (
 )
 
 // InferenceArgs are arguments that can be passed to the schema inferrer to modify it's inference behavior.
-type InferenceArgs struct {
-	TableName string
-	// ExistingSch is the schema for the existing schema.  If no schema exists schema.EmptySchema is expected.
-	ExistingSch schema.Schema
-	// PKCols are the columns from the input file that should be used as primary keys in the output schema
-	PkCols []string
-	// ColMapper allows columns named X in the schema to be named Y in the inferred schema.
-	ColMapper StrMapper
+type InferenceArgs interface {
+	// ColNameMapper allows columns named X in the schema to be named Y in the inferred schema.
+	ColNameMapper() rowconv.NameMapper
 	// FloatThreshold is the threshold at which a string representing a floating point number should be interpreted as
 	// a float versus an int.  If FloatThreshold is 0.0 then any number with a decimal point will be interpreted as a
 	// float (such as 0.0, 1.0, etc).  If FloatThreshold is 1.0 then any number with a decimal point will be converted
 	// to an int (0.5 will be the int 0, 1.99 will be the int 1, etc.  If the FloatThreshold is 0.001 then numbers with
 	// a fractional component greater than or equal to 0.001 will be treated as a float (1.0 would be an int, 1.0009 would
 	// be an int, 1.001 would be a float, 1.1 would be a float, etc)
-	FloatThreshold float64
-
-	SchImportOp SchImportOp
-	// KeepTypes is a flag which tells the inferrer, that if a column already exists in the ExistinchSch then use it's type
-	// without modification.
-	KeepTypes bool
-	// Update is a flag which tells the inferrer, not to change existing columns
+	FloatThreshold() float64
 }
 
-// InferSchemaFromTableReader will infer a tables schema.
-func InferSchemaFromTableReader(ctx context.Context, rd table.TableReadCloser, args *InferenceArgs, root *doltdb.RootValue) (schema.Schema, error) {
+// InferColumnTypesFromTableReader will infer a data types from a table reader.
+func InferColumnTypesFromTableReader(ctx context.Context, root *doltdb.RootValue, rd table.TableReadCloser, args InferenceArgs) (*schema.ColCollection, error) {
 	inferrer := newInferrer(rd.GetSchema(), args)
 
 	var rowFailure *pipeline.TransformRowFailure
@@ -122,18 +77,20 @@ func InferSchemaFromTableReader(ctx context.Context, rd table.TableReadCloser, a
 		return nil, rowFailure
 	}
 
-	return inferrer.inferSchema(ctx, root)
+	return inferrer.inferColumnTypes(ctx, root)
 }
 
 type inferrer struct {
-	readerSch schema.Schema
-	inferSets map[uint64]typeInfoSet
-	nullable  *set.Uint64Set
+	readerSch      schema.Schema
+	inferSets      map[uint64]typeInfoSet
+	nullable       *set.Uint64Set
+	mapper         rowconv.NameMapper
+	floatThreshold float64
 
-	inferArgs *InferenceArgs
+	//inferArgs *InferenceArgs
 }
 
-func newInferrer(readerSch schema.Schema, args *InferenceArgs) *inferrer {
+func newInferrer(readerSch schema.Schema, args InferenceArgs) *inferrer {
 	inferSets := make(map[uint64]typeInfoSet, readerSch.GetAllCols().Size())
 	_ = readerSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		inferSets[tag] = make(typeInfoSet)
@@ -141,120 +98,39 @@ func newInferrer(readerSch schema.Schema, args *InferenceArgs) *inferrer {
 	})
 
 	return &inferrer{
-		readerSch: readerSch,
-		inferSets: inferSets,
-		nullable:  set.NewUint64Set(nil),
-		inferArgs: args,
+		readerSch:      readerSch,
+		inferSets:      inferSets,
+		nullable:       set.NewUint64Set(nil),
+		mapper:         args.ColNameMapper(),
+		floatThreshold: args.FloatThreshold(),
 	}
 }
 
-func (inf *inferrer) inferSchema(ctx context.Context, root *doltdb.RootValue) (schema.Schema, error) {
-	existingSch := inf.inferArgs.ExistingSch
-	if existingSch == nil {
-		existingSch = schema.EmptySchema
-	}
-
-	op := inf.inferArgs.SchImportOp
-
-	// use post-mapping column names for all column name matching
-	mapper := inf.inferArgs.ColMapper
-	readerColsMapped := funcitr.MapStrings(inf.readerSch.GetAllCols().GetColumnNames(), mapper.Map)
-	existingCols := set.NewStrSet(existingSch.GetAllCols().GetColumnNames())
-
-	inter, missing := existingCols.IntersectAndMissing(readerColsMapped)
-
-	pkCols, _ := schema.NewColCollection()
-	nonPKCols, _ := schema.NewColCollection()
-
-	interCols := set.NewStrSet(inter)
-	_ = inf.inferArgs.ExistingSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		keep := op == UpdateOp && !interCols.Contains(col.Name) || inf.inferArgs.KeepTypes && interCols.Contains(col.Name)
-		if keep {
-			if col.IsPartOfPK {
-				pkCols, err = pkCols.Append(col)
-			} else {
-				nonPKCols, err = nonPKCols.Append(col)
-			}
-		}
-		stop = err != nil
-		return stop, err
-	})
-
-	newCols := set.NewStrSet(nil)
-	if op == CreateOp {
-		// inter == nil
-		newCols.Add(missing...)
-	} else {
-		// UpdateOp || ReplaceOp
-		if inf.inferArgs.KeepTypes {
-			newCols.Add(missing...)
-
-		} else {
-			newCols.Add(inter...)
-			newCols.Add(missing...)
-		}
-	}
+// inferColumnTypes returns TableReader's columns with updated TypeInfo and columns names
+func (inf *inferrer) inferColumnTypes(ctx context.Context, root *doltdb.RootValue) (*schema.ColCollection, error) {
 
 	inferredTypes := make(map[uint64]typeinfo.TypeInfo)
 	for tag, ts := range inf.inferSets {
 		inferredTypes[tag] = findCommonType(ts)
 	}
 
-	pkSet := set.NewStrSet(inf.inferArgs.PkCols)
-
-	var newColNames []string
-	var newColKinds []types.NomsKind
-	var newColTypes []typeinfo.TypeInfo
-	var newColIsPk []bool
-	var newColNullable []bool
+	var cols []schema.Column
 	_ = inf.readerSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		name := mapper.Map(col.Name)
-		if newCols.Contains(name) {
-			ti := inferredTypes[tag]
-			newColKinds = append(newColKinds, ti.NomsKind())
-			newColTypes = append(newColTypes, ti)
-			newColNames = append(newColNames, name)
-			newColIsPk = append(newColIsPk, pkSet.Contains(name))
-			newColNullable = append(newColNullable, inf.nullable.Contains(tag))
+		col.Name = inf.mapper.Map(col.Name)
+		col.Kind = inferredTypes[tag].NomsKind()
+		col.TypeInfo = inferredTypes[tag]
+		col.Tag = schema.ReservedTagMin + tag
+
+		col.Constraints = []schema.ColConstraint{schema.NotNullConstraint{}}
+		if inf.nullable.Contains(tag) {
+			col.Constraints = []schema.ColConstraint(nil)
 		}
+
+		cols = append(cols, col)
 		return false, nil
 	})
 
-	newColTags, err := root.GenerateTagsForNewColumns(ctx, inf.inferArgs.TableName, newColNames, newColKinds)
-	if err != nil {
-		return nil, err
-	}
-
-	for i := range newColNames {
-		constraint := []schema.ColConstraint(nil)
-		if !newColNullable[i] && newColIsPk[i] {
-			constraint = []schema.ColConstraint{schema.NotNullConstraint{}}
-		}
-
-		c, err := schema.NewColumnWithTypeInfo(
-			newColNames[i],
-			newColTags[i],
-			newColTypes[i],
-			newColIsPk[i],
-			constraint...,
-		)
-
-		if err != nil {
-			return nil, err
-		}
-
-		if c.IsPartOfPK {
-			pkCols, err = pkCols.Append(c)
-		} else {
-			nonPKCols, err = nonPKCols.Append(c)
-		}
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return schema.SchemaFromPKAndNonPKCols(pkCols, nonPKCols)
+	return schema.NewColCollection(cols...)
 }
 
 func (inf *inferrer) sinkRow(p *pipeline.Pipeline, ch <-chan pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure) {
@@ -265,7 +141,7 @@ func (inf *inferrer) sinkRow(p *pipeline.Pipeline, ch <-chan pipeline.RowWithPro
 				return false, nil
 			}
 			strVal := string(val.(types.String))
-			typeInfo := leastPermissiveType(strVal, inf.inferArgs.FloatThreshold)
+			typeInfo := leastPermissiveType(strVal, inf.floatThreshold)
 			inf.inferSets[tag][typeInfo] = struct{}{}
 			return false, nil
 		})

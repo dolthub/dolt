@@ -41,7 +41,7 @@ CREATE TABLE test (
 SQL
     run dolt table import -r test `batshelper 2pk5col-ints.csv`
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Error replacing table" ]] || false
+    [[ "$output" =~ "Error determining the output schema." ]] || false
     [[ "$output" =~ "cause: input primary keys do not match primary keys of existing table" ]] || false
 }
 
@@ -78,7 +78,7 @@ CREATE TABLE test (
 SQL
     run dolt table import -r test `batshelper 1pk5col-ints.psv`
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Error replacing table" ]] || false
+    [[ "$output" =~ "Error determining the output schema." ]] || false
     [[ "$output" =~ "cause: input primary keys do not match primary keys of existing table" ]] || false
 }
 
@@ -235,7 +235,7 @@ SQL
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt table import -r test `batshelper 1pk5col-ints.csv`
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Error replacing table" ]] || false
+    [[ "$output" =~ "Error determining the output schema." ]] || false
     [[ "$output" =~ "cause: input primary keys do not match primary keys of existing table" ]] || false
 }
 

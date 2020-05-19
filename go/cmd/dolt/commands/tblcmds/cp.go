@@ -17,16 +17,22 @@ package tblcmds
 import (
 	"context"
 
-	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/mvdata"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/fatih/color"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/schcmds"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/mvdata"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 var tblCpDocs = cli.CommandDocumentationContent{
@@ -40,6 +46,34 @@ All changes will be applied to the working tables and will need to be staged usi
 	Synopsis: []string{
 		"[-f] [{{.LessThan}}commit{{.GreaterThan}}] {{.LessThan}}oldtable{{.GreaterThan}} {{.LessThan}}newtable{{.GreaterThan}}",
 	},
+}
+
+type copyOptions struct {
+	oldTblName string
+	newTblName string
+	contOnErr  bool
+	force      bool
+	Src        mvdata.DataLocation
+	Dest       mvdata.DataLocation
+}
+
+func (co copyOptions) checkOverwrite(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) (bool, error) {
+	if co.force {
+		return false, nil
+	}
+	return co.Dest.Exists(ctx, root, fs)
+}
+
+func (co copyOptions) WritesToTable() bool {
+	return true
+}
+
+func (co copyOptions) SrcName() string {
+	return co.oldTblName
+}
+
+func (co copyOptions) DestName() string {
+	return co.newTblName
 }
 
 type CpCmd struct{}
@@ -62,10 +96,10 @@ func (cmd CpCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) err
 
 func (cmd CpCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"commit", "The state at which point the table whill be copied."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"commit", "The state at which point the table will be copied."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"oldtable", "The table being copied."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"newtable", "The destination where the table is being copied to."})
-	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the Force flag will allow the target to be overwritten.")
+	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the force flag will allow the target to be overwritten.")
 	return ap
 }
 
@@ -113,7 +147,7 @@ func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 		oldTbl, newTbl = apr.Arg(0), apr.Arg(1)
 	}
 
-	if err := ValidateTableNameForCreate(newTbl); err != nil {
+	if err := schcmds.ValidateTableNameForCreate(newTbl); err != nil {
 		return commands.HandleVErrAndExitCode(err, usage)
 	}
 
@@ -138,44 +172,111 @@ func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	mvOpts := &mvdata.MoveOptions{
-		Operation: mvdata.OverwriteOp,
-		TableName: newTbl,
-		ContOnErr: true,
-		Force:     force,
-		Src:       mvdata.TableDataLocation{Name: oldTbl},
-		Dest:      mvdata.TableDataLocation{Name: newTbl},
+	cpOpts := copyOptions{
+		oldTblName: oldTbl,
+		newTblName: newTbl,
+		contOnErr:  true,
+		force:      force,
+		Src:        mvdata.TableDataLocation{Name: oldTbl},
+		Dest:       mvdata.TableDataLocation{Name: newTbl},
 	}
 
-	verr = executeMove(ctx, dEnv, mvOpts)
+	mover, verr := newTableCopyDataMover(ctx, root, dEnv.FS, cpOpts, importStatsCB)
 
 	if verr != nil {
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	//TODO: change this to not use the executeMove function, and instead the SQL code path
+	skipped, verr := mvdata.MoveData(ctx, dEnv, mover, cpOpts)
+
+	if skipped > 0 {
+		cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))
+	}
+	if verr != nil {
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+
+	verr = buildNewIndexes(ctx, dEnv, newTbl)
+
+	return commands.HandleVErrAndExitCode(verr, usage)
+}
+
+func newTableCopyDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, co copyOptions, statsCB noms.StatsCB) (*mvdata.DataMover, errhand.VerboseError) {
+	var rd table.TableReadCloser
+	var err error
+
+	ow, err := co.checkOverwrite(ctx, root, fs)
+	if err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
+	}
+	if ow {
+		return nil, errhand.BuildDError("%s already exists. Use -f to overwrite.", co.DestName()).Build()
+	}
+
+	rd, srcIsSorted, err := co.Src.NewReader(ctx, root, fs, nil)
+
+	if err != nil {
+		return nil, errhand.BuildDError("Error creating reader for %s.", co.newTblName).AddCause(err).Build()
+	}
+
+	defer func() {
+		if rd != nil {
+			rd.Close(ctx)
+		}
+	}()
+
+	oldTblSch := rd.GetSchema()
+	cc, err := root.GenerateTagsForNewColColl(ctx, co.newTblName, oldTblSch.GetAllCols())
+
+	if err != nil {
+		return nil, errhand.BuildDError("Error create schema for new table %s", co.newTblName).AddCause(err).Build()
+	}
+
+	newTblSch := schema.SchemaFromCols(cc)
+	newTblSch.Indexes().Merge(oldTblSch.Indexes().AllIndexes()...)
+
+	transforms, err := mvdata.NameMapTransform(oldTblSch, newTblSch, make(rowconv.NameMapper))
+
+	if err != nil {
+		return nil, errhand.BuildDError("Error determining the mapping from input fields to output fields.").AddDetails(
+			"When attempting to move data from %s to %s, determine the mapping from input fields to output fields.", co.SrcName(), co.DestName()).AddCause(err).Build()
+	}
+
+	wr, err := co.Dest.NewCreatingWriter(ctx, co, root, fs, srcIsSorted, newTblSch, statsCB)
+
+	if err != nil {
+		return nil, errhand.BuildDError("Could not create table writer for %s", co.newTblName).AddCause(err).Build()
+	}
+
+	imp := &mvdata.DataMover{Rd: rd, Transforms: transforms, Wr: wr, ContOnErr: co.contOnErr}
+	rd = nil
+
+	return imp, nil
+}
+
+func buildNewIndexes(ctx context.Context, dEnv *env.DoltEnv, newTblName string) errhand.VerboseError {
+	//TODO: change this to not use the executeImport function, and instead the SQL code path
 	newWorking, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to load the working set to build the indexes.").AddCause(err).Build(), nil)
+		return errhand.BuildDError("Unable to load the working set to build the indexes.").AddCause(err).Build()
 	}
-	updatedTable, ok, err := newWorking.GetTable(ctx, newTbl)
+	updatedTable, ok, err := newWorking.GetTable(ctx, newTblName)
 	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to load the table to build the indexes.").AddCause(err).Build(), nil)
+		return errhand.BuildDError("Unable to load the table to build the indexes.").AddCause(err).Build()
 	} else if !ok {
-		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to find the table to build the indexes.").Build(), nil)
+		return errhand.BuildDError("Unable to find the table to build the indexes.").Build()
 	}
 	updatedTable, err = updatedTable.RebuildIndexData(ctx)
 	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to build the indexes.").AddCause(err).Build(), nil)
+		return errhand.BuildDError("Unable to build the indexes.").AddCause(err).Build()
 	}
-	newWorking, err = newWorking.PutTable(ctx, newTbl, updatedTable)
+	newWorking, err = newWorking.PutTable(ctx, newTblName, updatedTable)
 	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to write the indexes to the working set.").AddCause(err).Build(), nil)
+		return errhand.BuildDError("Unable to write the indexes to the working set.").AddCause(err).Build()
 	}
 	err = dEnv.UpdateWorkingRoot(ctx, newWorking)
 	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to update the working set containing the indexes.").AddCause(err).Build(), nil)
+		return errhand.BuildDError("Unable to update the working set containing the indexes.").AddCause(err).Build()
 	}
-
-	return 0
+	return nil
 }

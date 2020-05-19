@@ -16,24 +16,31 @@ package tblcmds
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/fatih/color"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/schcmds"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/mvdata"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/funcitr"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -52,39 +59,12 @@ const (
 	delimParam       = "delim"
 )
 
-var SchemaFileHelp = "Schema definition files are json files in the format:" + `
-
-	{
-		"fields": [
-			{"name":"FIELD_NAME", "kind":"KIND", "Required":[true|false]},
-			...
-		],
-		"constraints": [
-			{"constraint_type":"primary_key", "field_indices":[INTEGER_FIELD_INDEX]}
-		]
-	}
-
-where "fields" is the array of columns in each row of the table "constraints" is a list of table constraints. Only primary_key constraint types are supported currently. FIELD_NAME is the name of a column in a row and can be any valid string KIND must be a supported noms kind (bool, string, uuid, uint, int, float) INTEGER_FIELD_INDEX must be the 0 based index of the primary key in the "fields" array
-`
-
-var MappingFileHelp = "A mapping file is json in the format:" + `
-
-	{
-		"source_field_name":"dest_field_name"
-		...
-	}
-
-where source_field_name is the name of a field in the file being imported and dest_field_name is the name of a field in the table being imported to.
-`
-
 var importDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Imports data into a dolt table`,
 	LongDesc: `If {{.EmphasisLeft}}--create-table | -c{{.EmphasisRight}} is given the operation will create {{.LessThan}}table{{.GreaterThan}} and import the contents of file into it.  If a table already exists at this location then the operation will fail, unless the {{.EmphasisLeft}}--force | -f{{.EmphasisRight}} flag is provided. The force flag forces the existing table to be overwritten.
 
-The schema for the new table can be specified explicitly by providing a schema definition file, or will be inferred from the imported file.  All schemas, inferred or explicitly defined must define a primary key.  If the file format being imported does not support defining a primary key, then the {{.EmphasisLeft}}--pk{{.EmphasisRight}} parameter must supply the name of the field that should be used as the primary key.
+The schema for the new table can be specified explicitly by providing a SQL schema definition file, or will be inferred from the imported file.  All schemas, inferred or explicitly defined must define a primary key.  If the file format being imported does not support defining a primary key, then the {{.EmphasisLeft}}--pk{{.EmphasisRight}} parameter must supply the name of the field that should be used as the primary key.
 
-` + SchemaFileHelp +
-		`
 If {{.EmphasisLeft}}--update-table | -u{{.EmphasisRight}} is given the operation will update {{.LessThan}}table{{.GreaterThan}} with the contents of file. The table's existing schema will be used, and field names will be used to match file fields with table fields unless a mapping file is specified.
 
 During import, if there is an error importing any row, the import will be aborted by default.  Use the {{.EmphasisLeft}}--continue{{.EmphasisRight}} flag to continue importing when an error is encountered.
@@ -95,7 +75,7 @@ If the schema for the existing table does not match the schema for the new file,
 
 A mapping file can be used to map fields between the file being imported and the table being written to. This can be used when creating a new table, or updating or replacing an existing table.
 
-` + MappingFileHelp +
+` + schcmds.MappingFileHelp +
 
 		`
 In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not have the expected extension then the {{.EmphasisLeft}}--file-type{{.EmphasisRight}} parameter should be used to explicitly define the format of the file in one of the supported formats (csv, psv, json, xlsx).  For files separated by a delimiter other than a ',' (type csv) or a '|' (type psv), the --delim parameter can be used to specify a delimeter`,
@@ -107,7 +87,72 @@ In create, update, and replace scenarios the file's extension is used to infer t
 	},
 }
 
-func getImportMoveOptions(apr *argparser.ArgParseResults) (*mvdata.MoveOptions, errhand.VerboseError) {
+type tableImportOp string
+
+const (
+	CreateOp  tableImportOp = "overwrite"
+	ReplaceOp tableImportOp = "replace"
+	UpdateOp  tableImportOp = "update"
+	InvalidOp tableImportOp = "invalid"
+)
+
+type importOptions struct {
+	operation   tableImportOp
+	tableName   string
+	contOnErr   bool
+	force       bool
+	schFile     string
+	primaryKeys []string
+	nameMapper  rowconv.NameMapper
+	src         mvdata.DataLocation
+	dest        mvdata.TableDataLocation
+	srcOptions  interface{}
+}
+
+func (m importOptions) WritesToTable() bool {
+	return true
+}
+
+func (m importOptions) SrcName() string {
+	if t, tblSrc := m.src.(mvdata.TableDataLocation); tblSrc {
+		return t.Name
+	}
+	if f, fileSrc := m.src.(mvdata.FileDataLocation); fileSrc {
+		return f.Path
+	}
+	return m.src.String()
+}
+
+func (m importOptions) DestName() string {
+	return m.dest.Name
+}
+
+func (m importOptions) ColNameMapper() rowconv.NameMapper {
+	return m.nameMapper
+}
+
+func (m importOptions) FloatThreshold() float64 {
+	return 0.0
+}
+
+func (m importOptions) checkOverwrite(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) (bool, error) {
+	if !m.force && m.operation == CreateOp {
+		return m.dest.Exists(ctx, root, fs)
+	}
+	return false, nil
+}
+
+func (m importOptions) srcIsJson() bool {
+	_, isJson := m.srcOptions.(mvdata.JSONOptions)
+	return isJson
+}
+
+func (m importOptions) srcIsStream() bool {
+	_, isStream := m.src.(mvdata.StreamDataLocation)
+	return isStream
+}
+
+func getImportMoveOptions(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) (*importOptions, errhand.VerboseError) {
 	tableName := apr.Arg(0)
 
 	path := ""
@@ -115,15 +160,23 @@ func getImportMoveOptions(apr *argparser.ArgParseResults) (*mvdata.MoveOptions, 
 		path = apr.Arg(1)
 	}
 
-	delim, hasDelim := apr.GetValue(delimParam)
 	fType, _ := apr.GetValue(fileTypeParam)
+	srcLoc := mvdata.NewDataLocation(path, fType)
+	delim, hasDelim := apr.GetValue(delimParam)
 
 	schemaFile, _ := apr.GetValue(schemaParam)
-	mappingFile, _ := apr.GetValue(mappingFileParam)
-	primaryKey, _ := apr.GetValue(primaryKeyParam)
 	force := apr.Contains(forceParam)
+	contOnErr := apr.Contains(contOnErrParam)
 
-	srcLoc := mvdata.NewDataLocation(path, fType)
+	val, _ := apr.GetValue(primaryKeyParam)
+	pks := funcitr.MapStrings(strings.Split(val, ","), strings.TrimSpace)
+	pks = funcitr.FilterStrings(pks, func(s string) bool { return s != "" })
+
+	mappingFile := apr.GetValueOrDefault(mappingFileParam, "")
+	colMapper, err := rowconv.NameMapperFromFile(mappingFile, dEnv.FS)
+	if err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
+	}
 
 	var srcOpts interface{}
 	switch val := srcLoc.(type) {
@@ -155,29 +208,45 @@ func getImportMoveOptions(apr *argparser.ArgParseResults) (*mvdata.MoveOptions, 
 		}
 	}
 
-	var moveOp mvdata.MoveOperation
+	var moveOp tableImportOp
 	switch {
 	case apr.Contains(createParam):
-		moveOp = mvdata.OverwriteOp
+		moveOp = CreateOp
 	case apr.Contains(replaceParam):
-		moveOp = mvdata.ReplaceOp
+		moveOp = ReplaceOp
 	default:
-		moveOp = mvdata.UpdateOp
+		moveOp = UpdateOp
+	}
+
+	if moveOp != CreateOp {
+
+		ctx := context.Background()
+		root, err := dEnv.WorkingRoot(ctx)
+		if err != nil {
+			return nil, errhand.VerboseErrorFromError(err)
+		}
+		_, exists, err := root.GetTable(ctx, tableName)
+		if err != nil {
+			return nil, errhand.VerboseErrorFromError(err)
+		}
+		if !exists {
+			return nil, errhand.BuildDError("The following table could not be found: %s", tableName).Build()
+		}
 	}
 
 	tableLoc := mvdata.TableDataLocation{Name: tableName}
 
-	return &mvdata.MoveOptions{
-		Operation:   moveOp,
-		TableName:   tableName,
-		ContOnErr:   apr.Contains(contOnErrParam),
-		Force:       force,
-		SchFile:     schemaFile,
-		MappingFile: mappingFile,
-		PrimaryKey:  primaryKey,
-		Src:         srcLoc,
-		Dest:        tableLoc,
-		SrcOptions:  srcOpts,
+	return &importOptions{
+		operation:   moveOp,
+		tableName:   tableName,
+		contOnErr:   contOnErr,
+		force:       force,
+		schFile:     schemaFile,
+		nameMapper:  colMapper,
+		primaryKeys: pks,
+		src:         srcLoc,
+		dest:        tableLoc,
+		srcOptions:  srcOpts,
 	}, nil
 
 }
@@ -200,7 +269,7 @@ func validateImportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
 	}
 
 	tableName := apr.Arg(0)
-	if err := ValidateTableNameForCreate(tableName); err != nil {
+	if err := schcmds.ValidateTableNameForCreate(tableName); err != nil {
 		return err
 	}
 
@@ -283,46 +352,42 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	mvOpts, verr := getImportMoveOptions(apr)
+	mvOpts, verr := getImportMoveOptions(apr, dEnv)
 
 	if verr != nil {
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	verr = executeMove(ctx, dEnv, mvOpts)
+	root, err := dEnv.WorkingRoot(ctx)
 
+	if err != nil {
+		verr = errhand.BuildDError("Unable to get the working root value for this data repository.").AddCause(err).Build()
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+
+	mover, nDMErr := newImportDataMover(ctx, root, dEnv.FS, mvOpts, importStatsCB)
+
+	if nDMErr != nil {
+		verr = newDataMoverErrToVerr(mvOpts, nDMErr)
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+
+	skipped, verr := mvdata.MoveData(ctx, dEnv, mover, mvOpts)
+
+	if skipped > 0 {
+		cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))
+	}
 	if verr != nil {
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	cli.PrintErrln(color.CyanString("Import completed successfully."))
+	verr = buildIndexes(ctx, dEnv, mvOpts.tableName)
 
-	//TODO: change this to not use the executeMove function, and instead the SQL code path, so that we don't rebuild indexes on every import
-	newWorking, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to load the working set to build the indexes.").AddCause(err).Build(), nil)
-	}
-	updatedTable, ok, err := newWorking.GetTable(ctx, mvOpts.TableName)
-	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to load the table to build the indexes.").AddCause(err).Build(), nil)
-	} else if !ok {
-		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to find the table to build the indexes.").Build(), nil)
-	}
-	updatedTable, err = updatedTable.RebuildIndexData(ctx)
-	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to build the indexes.").AddCause(err).Build(), nil)
-	}
-	newWorking, err = newWorking.PutTable(ctx, mvOpts.TableName, updatedTable)
-	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to write the indexes to the working set.").AddCause(err).Build(), nil)
-	}
-	err = dEnv.UpdateWorkingRoot(ctx, newWorking)
-	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to update the working set containing the indexes.").AddCause(err).Build(), nil)
+	if verr == nil {
+		cli.PrintErrln(color.CyanString("Import completed successfully."))
 	}
 
-	cli.PrintErrln(color.CyanString("Import completed successfully."))
-	return 0
+	return commands.HandleVErrAndExitCode(verr, usage)
 }
 
 func createArgParser() *argparser.ArgParser {
@@ -331,7 +396,7 @@ func createArgParser() *argparser.ArgParser {
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{fileParam, "The file being imported. Supported file types are csv, psv, and nbf."})
 	ap.SupportsFlag(createParam, "c", "Create a new table, or overwrite an existing table (with the -f flag) from the imported data.")
 	ap.SupportsFlag(updateParam, "u", "Update an existing table with the imported data.")
-	ap.SupportsFlag(forceParam, "f", "If a create operation is being executed, data already exists in the destination, the Force flag will allow the target to be overwritten.")
+	ap.SupportsFlag(forceParam, "f", "If a create operation is being executed, data already exists in the destination, the force flag will allow the target to be overwritten.")
 	ap.SupportsFlag(replaceParam, "r", "Replace existing table with imported data while preserving the original schema.")
 	ap.SupportsFlag(contOnErrParam, "", "Continue importing when row import errors are encountered.")
 	ap.SupportsString(schemaParam, "s", "schema_file", "The schema for the output data.")
@@ -351,114 +416,215 @@ func importStatsCB(stats types.AppliedEditStats) {
 	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
 }
 
-func executeMove(ctx context.Context, dEnv *env.DoltEnv, mvOpts *mvdata.MoveOptions) errhand.VerboseError {
-	root, err := dEnv.WorkingRoot(ctx)
+func newImportDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, impOpts *importOptions, statsCB noms.StatsCB) (*mvdata.DataMover, *mvdata.DataMoverCreationError) {
+	var err error
+
+	ow, err := impOpts.checkOverwrite(ctx, root, fs)
+	if err != nil {
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
+	}
+	if ow {
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: fmt.Errorf("%s already exists. Use -f to overwrite.", impOpts.DestName())}
+	}
+
+	wrSch, dmce := getImportSchema(ctx, root, fs, impOpts)
+
+	if dmce != nil {
+		return nil, dmce
+	}
+
+	rd, srcIsSorted, err := impOpts.src.NewReader(ctx, root, fs, impOpts.srcOptions)
 
 	if err != nil {
-		return errhand.BuildDError("Unable to get the working root value for this data repository.").AddCause(err).Build()
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
 	}
 
-	if mvOpts.WillOverwrite() {
-		destExists, err := mvOpts.Dest.Exists(ctx, root, dEnv.FS)
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		} else if destExists {
-			return errhand.BuildDError("%s already exists. Use -f to overwrite.", mvOpts.Dest.String()).Build()
+	defer func() {
+		if rd != nil {
+			rd.Close(ctx)
 		}
+	}()
+
+	if impOpts.srcIsStream() {
+		// todo: capture stream data to file so we can use schema inference
+		wrSch = rd.GetSchema()
 	}
 
-	mover, nDMErr := mvdata.NewDataMover(ctx, root, dEnv.FS, mvOpts, importStatsCB)
+	err = wrSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		preImage := impOpts.nameMapper.PreImage(col.Name)
+		_, found := rd.GetSchema().GetAllCols().GetByName(preImage)
+		if !found {
+			err = fmt.Errorf("input primary keys do not match primary keys of existing table")
+		}
+		return err == nil, err
+	})
 
-	if nDMErr != nil {
-		return newDataMoverErrToVerr(mvOpts, nDMErr)
+	if err != nil {
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 	}
 
-	var badCount int64
-	badCount, err = mover.Move(ctx)
+	transforms, err := mvdata.NameMapTransform(rd.GetSchema(), wrSch, impOpts.nameMapper)
 
-	if displayStrLen > 0 {
-		displayStrLen = 0
-		cli.PrintErrln("")
+	if err != nil {
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateMapperErr, Cause: err}
+	}
+
+	var wr table.TableWriteCloser
+	switch impOpts.operation {
+	case CreateOp:
+		wr, err = impOpts.dest.NewCreatingWriter(ctx, impOpts, root, fs, srcIsSorted, wrSch, statsCB)
+	case ReplaceOp:
+		wr, err = impOpts.dest.NewReplacingWriter(ctx, impOpts, root, fs, srcIsSorted, wrSch, statsCB)
+	case UpdateOp:
+		wr, err = impOpts.dest.NewUpdatingWriter(ctx, impOpts, root, fs, srcIsSorted, wrSch, statsCB)
+	default:
+		err = errors.New("invalid move operation")
 	}
 
 	if err != nil {
-		if pipeline.IsTransformFailure(err) {
-			bdr := errhand.BuildDError("A bad row was encountered while moving data.")
-
-			r := pipeline.GetTransFailureRow(err)
-			if r != nil {
-				bdr.AddDetails("Bad Row:" + row.Fmt(ctx, r, mover.Rd.GetSchema()))
-			}
-
-			details := pipeline.GetTransFailureDetails(err)
-
-			bdr.AddDetails(details)
-			bdr.AddDetails("These can be ignored using the '--continue'")
-
-			return bdr.Build()
-		}
-		return errhand.BuildDError("An error occurred moving data:\n").AddCause(err).Build()
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateWriterErr, Cause: err}
 	}
 
-	if nomsWr, ok := mover.Wr.(noms.NomsMapWriteCloser); ok {
-		var indexes []schema.Index
+	imp := &mvdata.DataMover{Rd: rd, Transforms: transforms, Wr: wr, ContOnErr: impOpts.contOnErr}
+	rd = nil
 
-		if tableLoc, ok := mvOpts.Src.(mvdata.TableDataLocation); ok {
-			originalTable, ok, err := root.GetTable(ctx, tableLoc.Name)
-			if err != nil || !ok {
-				return errhand.BuildDError(color.RedString("Source table does not exist.")).Build()
-			}
-			originalSchema, err := originalTable.GetSchema(ctx)
-			if err != nil || !ok {
-				return errhand.BuildDError(color.RedString("Failed to read source table's schema.")).Build()
-			}
-			indexes = originalSchema.Indexes().AllIndexes()
+	return imp, nil
+}
+
+func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, impOpts *importOptions) (schema.Schema, *mvdata.DataMoverCreationError) {
+
+	if impOpts.schFile != "" {
+		tn, out, err := mvdata.SchAndTableNameFromFile(ctx, impOpts.schFile, fs, root)
+
+		if err == nil && tn != impOpts.tableName {
+			err = fmt.Errorf("table name '%s' from schema file %s does not match table arg '%s'", tn, impOpts.schFile, impOpts.tableName)
 		}
 
-		tableDest := mvOpts.Dest.(mvdata.TableDataLocation)
-		sch := nomsWr.GetSchema()
-		sch.Indexes().Merge(indexes...)
-		err = dEnv.PutTableToWorking(ctx, *nomsWr.GetMap(), sch, tableDest.Name)
 		if err != nil {
-			return errhand.BuildDError("Failed to update the working value.").AddCause(err).Build()
+			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 		}
+
+		return out, nil
 	}
 
-	if badCount > 0 {
-		cli.PrintErrln(color.YellowString("Lines skipped: %d", badCount))
+	if impOpts.operation == CreateOp {
+		if impOpts.srcIsStream() {
+			// todo: capture stream data to file so we can use schema inferrence
+			return nil, nil
+		}
+
+		rd, _, err := impOpts.src.NewReader(ctx, root, fs, impOpts.srcOptions)
+		if err != nil {
+			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
+		}
+		defer rd.Close(ctx)
+
+		if impOpts.srcIsJson() {
+			return rd.GetSchema(), nil
+		}
+
+		outSch, err := inferSchema(ctx, root, rd, impOpts)
+
+		if err != nil {
+			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
+		}
+
+		return outSch, nil
 	}
 
+	// UpdateOp || ReplaceOp
+	tblRd, _, err := impOpts.dest.NewReader(ctx, root, fs, nil)
+	if err != nil {
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
+	}
+	defer tblRd.Close(ctx)
+
+	return tblRd.GetSchema(), nil
+}
+
+func inferSchema(ctx context.Context, root *doltdb.RootValue, rd table.TableReadCloser, impOpts *importOptions) (schema.Schema, error) {
+	var err error
+
+	pks := impOpts.primaryKeys
+	if len(pks) == 0 {
+		pks = rd.GetSchema().GetPKCols().GetColumnNames()
+	}
+
+	infCols, err := actions.InferColumnTypesFromTableReader(ctx, root, rd, impOpts)
+
+	if err != nil {
+		return nil, err
+	}
+
+	pkSet := set.NewStrSet(pks)
+	newCols, _ := schema.MapColCollection(infCols, func(col schema.Column) (schema.Column, error) {
+		col.IsPartOfPK = pkSet.Contains(col.Name)
+		return col, nil
+	})
+
+	newCols, err = root.GenerateTagsForNewColColl(ctx, impOpts.tableName, newCols)
+	if err != nil {
+		return nil, errhand.BuildDError("failed to generate new schema").AddCause(err).Build()
+	}
+
+	return schema.SchemaFromCols(newCols), nil
+}
+
+func buildIndexes(ctx context.Context, dEnv *env.DoltEnv, newTblName string) errhand.VerboseError {
+	//TODO: change this to not use the executeImport function, and instead the SQL code path, so that we don't rebuild indexes on every import
+	newWorking, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return errhand.BuildDError("Unable to load the working set to build the indexes.").AddCause(err).Build()
+	}
+	updatedTable, ok, err := newWorking.GetTable(ctx, newTblName)
+	if err != nil {
+		return errhand.BuildDError("Unable to load the table to build the indexes.").AddCause(err).Build()
+	} else if !ok {
+		return errhand.BuildDError("Unable to find the table to build the indexes.").Build()
+	}
+	updatedTable, err = updatedTable.RebuildIndexData(ctx)
+	if err != nil {
+		return errhand.BuildDError("Unable to build the indexes.").AddCause(err).Build()
+	}
+	newWorking, err = newWorking.PutTable(ctx, newTblName, updatedTable)
+	if err != nil {
+		return errhand.BuildDError("Unable to write the indexes to the working set.").AddCause(err).Build()
+	}
+	err = dEnv.UpdateWorkingRoot(ctx, newWorking)
+	if err != nil {
+		return errhand.BuildDError("Unable to update the working set containing the indexes.").AddCause(err).Build()
+	}
 	return nil
 }
 
-func newDataMoverErrToVerr(mvOpts *mvdata.MoveOptions, err *mvdata.DataMoverCreationError) errhand.VerboseError {
+func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationError) errhand.VerboseError {
 	switch err.ErrType {
 	case mvdata.CreateReaderErr:
-		bdr := errhand.BuildDError("Error creating reader for %s.", mvOpts.Src.String())
-		bdr.AddDetails("When attempting to move data from %s to %s, could not open a reader.", mvOpts.Src.String(), mvOpts.Dest.String())
+		bdr := errhand.BuildDError("Error creating reader for %s.", mvOpts.src.String())
+		bdr.AddDetails("When attempting to move data from %s to %s, could not open a reader.", mvOpts.src.String(), mvOpts.dest.String())
 		return bdr.AddCause(err.Cause).Build()
 
 	case mvdata.SchemaErr:
 		bdr := errhand.BuildDError("Error determining the output schema.")
-		bdr.AddDetails("When attempting to move data from %s to %s, could not determine the output schema.", mvOpts.Src.String(), mvOpts.Dest.String())
-		bdr.AddDetails(`Schema File: "%s"`, mvOpts.SchFile)
-		bdr.AddDetails(`explicit pk: "%s"`, mvOpts.PrimaryKey)
+		bdr.AddDetails("When attempting to move data from %s to %s, could not determine the output schema.", mvOpts.src.String(), mvOpts.dest.String())
+		bdr.AddDetails(`Schema File: "%s"`, mvOpts.schFile)
+		bdr.AddDetails(`explicit pks: "%s"`, strings.Join(mvOpts.primaryKeys, ","))
 		return bdr.AddCause(err.Cause).Build()
 
 	case mvdata.MappingErr:
 		bdr := errhand.BuildDError("Error determining the mapping from input fields to output fields.")
-		bdr.AddDetails("When attempting to move data from %s to %s, determine the mapping from input fields t, output fields.", mvOpts.Src.String(), mvOpts.Dest.String())
-		bdr.AddDetails(`Mapping File: "%s"`, mvOpts.MappingFile)
+		bdr.AddDetails("When attempting to move data from %s to %s, determine the mapping from input fields t, output fields.", mvOpts.src.String(), mvOpts.dest.String())
+		bdr.AddDetails(`Mapping File: "%s"`, mvOpts.nameMapper)
 		return bdr.AddCause(err.Cause).Build()
 
 	case mvdata.ReplacingErr:
 		bdr := errhand.BuildDError("Error replacing table")
-		bdr.AddDetails("When attempting to replace data with %s, could not validate schema.", mvOpts.Src.String())
+		bdr.AddDetails("When attempting to replace data with %s, could not validate schema.", mvOpts.src.String())
 		return bdr.AddCause(err.Cause).Build()
 
 	case mvdata.CreateMapperErr:
 		bdr := errhand.BuildDError("Error creating input to output mapper.")
-		details := fmt.Sprintf("When attempting to move data from %s to %s, could not create a mapper.", mvOpts.Src.String(), mvOpts.Dest.String())
+		details := fmt.Sprintf("When attempting to move data from %s to %s, could not create a mapper.", mvOpts.src.String(), mvOpts.dest.String())
 		bdr.AddDetails(details)
 		bdr.AddCause(err.Cause)
 
@@ -466,20 +632,20 @@ func newDataMoverErrToVerr(mvOpts *mvdata.MoveOptions, err *mvdata.DataMoverCrea
 
 	case mvdata.CreateWriterErr:
 		if err.Cause == mvdata.ErrNoPK {
-			builder := errhand.BuildDError("Attempting to write to %s with a schema that does not contain a primary key.", mvOpts.Dest.String())
+			builder := errhand.BuildDError("Attempting to write to %s with a schema that does not contain a primary key.", mvOpts.dest.String())
 			builder.AddDetails("A primary key is required and can be specified by:\n" +
 				"\tusing -pk option to designate a field as the primary key by name.\n" +
 				"\tusing -schema to provide a schema descriptor file.")
 			return builder.Build()
 		} else {
-			bdr := errhand.BuildDError("Error creating writer for %s.\n", mvOpts.Dest.String())
-			bdr.AddDetails("When attempting to move data from %s to %s, could not open a writer.", mvOpts.Src.String(), mvOpts.Dest.String())
+			bdr := errhand.BuildDError("Error creating writer for %s.\n", mvOpts.dest.String())
+			bdr.AddDetails("When attempting to move data from %s to %s, could not open a writer.", mvOpts.src.String(), mvOpts.dest.String())
 			return bdr.AddCause(err.Cause).Build()
 		}
 
 	case mvdata.CreateSorterErr:
 		bdr := errhand.BuildDError("Error creating sorting reader.")
-		bdr.AddDetails("When attempting to move data from %s to %s, could not open create sorting reader.", mvOpts.Src.String(), mvOpts.Dest.String())
+		bdr.AddDetails("When attempting to move data from %s to %s, could not open create sorting reader.", mvOpts.src.String(), mvOpts.dest.String())
 		return bdr.AddCause(err.Cause).Build()
 	}
 

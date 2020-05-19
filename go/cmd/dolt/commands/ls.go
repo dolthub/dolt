@@ -230,8 +230,8 @@ func printSysTablesNotInWorkingSet(ctx context.Context, ddb *doltdb.DoltDB, root
 			return errhand.BuildDError("error: failed to read tables").AddCause(err).Build()
 		}
 
-		_, missing := activeTableSet.IntersectAndMissing(currTblNames)
-		deletedTableSet.Add(missing...)
+		_, _, missing := activeTableSet.LeftIntersectionRight(set.NewStrSet(currTblNames))
+		deletedTableSet.Add(missing.AsSlice()...)
 	}
 
 	deletedSlice := deletedTableSet.AsSlice()

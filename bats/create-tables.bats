@@ -57,7 +57,7 @@ teardown() {
 @test "create a table with json import. bad json." {
     run dolt table import -c -s `nativebatsdir employees-sch.json` employees `batshelper employees-tbl-bad.json`
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Error creating reader" ]] || false
+    [[ "$output" =~ "Error determining the output schema" ]] || false
     [[ "$output" =~ "employees-tbl-bad.json to" ]] || false
     run dolt ls
     [ "$status" -eq 0 ]
@@ -67,7 +67,7 @@ teardown() {
 @test "create a table with json import. bad schema." {
     run dolt table import -c -s `nativebatsdir employees-sch-bad.json` employees `batshelper employees-tbl.json`
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Error creating reader" ]] || false
+    [[ "$output" =~ "Error determining the output schema" ]] || false
     skip "Error message mentions valid table file but not invalid schema file"
     # Be careful here. "employees-sch-bad.json" matches. I think it is because
     # the command line is somehow in $output. Added " to" to make it fail.
@@ -247,7 +247,7 @@ SQL
     [ "${lines[3]}" = '| a  | ""        | 1         |' ]
     [ "${lines[4]}" = '| b  |           | 2         |' ]
     [ "${lines[5]}" = "| c  | <NULL>    | 3         |" ]
-    [ "${lines[6]}" = '| d  | row four  |           |' ]
+    [ "${lines[6]}" = '| d  | row four  | <NULL>    |' ]
     [ "${lines[7]}" = "| e  | row five  | <NULL>    |" ]
     [ "${lines[8]}" = "| f  | row six   | 6         |" ]
     [ "${lines[9]}" = "| g  | <NULL>    | <NULL>    |" ]
@@ -339,4 +339,24 @@ CREATE TABLE test (
 SQL
     run dolt table import -u test `batshelper empty-strings-null-values.json`
     [ "$status" -eq 1 ]
+}
+
+@test "table import -c infers types from data" {
+    cat <<DELIM > types.csv
+pk,str,int,bool,float, date, time, datetime
+0,abc,123,false,3.14,2020-02-02,12:12:12.12,2020-02-02 12:12:12
+DELIM
+    run dolt table import -c --pk=pk test types.csv
+    [ "$status" -eq 0 ]
+    run dolt schema show test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CREATE TABLE \`test\`" ]]
+    [[ "$output" =~ "\`pk\` INT" ]]
+    [[ "$output" =~ "\`str\` LONGTEXT" ]]
+    [[ "$output" =~ "\`int\` INT UNSIGNED" ]]
+    [[ "$output" =~ "\`bool\` BIT(1)" ]]
+    [[ "$output" =~ "\`float\` FLOAT" ]]
+    [[ "$output" =~ "\`date\` DATE" ]]
+    [[ "$output" =~ "\`time\` TIME" ]]
+    [[ "$output" =~ "\`datetime\` DATETIME" ]]
 }

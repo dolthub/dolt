@@ -84,7 +84,11 @@ func TestFieldMapping(t *testing.T) {
 		var mapping *FieldMapping
 		var err error
 		if mappingFile != "" {
-			mapping, err = MappingFromFile(mappingFile, fs, test.inSch, test.outSch)
+			var nm NameMapper
+			nm, err = NameMapperFromFile(mappingFile, fs)
+			if err == nil {
+				mapping, err = NameMapping(test.inSch, test.outSch, nm)
+			}
 		} else {
 			mapping, err = TagMapping(test.inSch, test.outSch)
 		}

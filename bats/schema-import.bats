@@ -164,7 +164,7 @@ pk,c1,c2,c3,c4,c5,c6
 "0","foo","bar","baz","car","dog","tim"
 "1","1","2","3","4","5","6"
 DELIM
-    dolt schema import -r --keep-types --pks=pk test 1pk5col-strings.csv
+    dolt schema import -c --pks=pk test 1pk5col-strings.csv
     run dolt schema import -r --keep-types --pks=pk test 1pk5col-strings.csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 11 ]

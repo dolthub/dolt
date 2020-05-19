@@ -15,16 +15,15 @@
 package rowconv
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
-
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 )
 
 // ErrMappingFileRead is an error returned when a mapping file cannot be read
@@ -51,6 +50,28 @@ func (err *BadMappingErr) Error() string {
 func IsBadMappingErr(err error) bool {
 	_, ok := err.(*BadMappingErr)
 	return ok
+}
+
+// NameMapper is a simple interface for mapping a string to another string
+type NameMapper map[string]string
+
+// Map maps a string to another string.  If a string is not in the mapping ok will be false, otherwise it is true.
+func (nm NameMapper) Map(str string) string {
+	v, ok := nm[str]
+	if ok {
+		return v
+	}
+	return str
+}
+
+// PreImage searches the NameMapper for the string that maps to str, returns str otherwise
+func (nm NameMapper) PreImage(str string) string {
+	for pre, post := range nm {
+		if post == str {
+			return pre
+		}
+	}
+	return str
 }
 
 // FieldMapping defines a mapping from columns in a source schema to columns in a dest schema.
@@ -113,31 +134,6 @@ func NewFieldMapping(srcSch, destSch schema.Schema, srcTagToDestTag map[uint64]u
 	return &FieldMapping{srcSch, destSch, srcTagToDestTag}, nil
 }
 
-// NewFieldMappingFromNameMap creates a FieldMapping from a source schema, a destination schema, and a map from column
-// names in the source schema to column names in the dest schema.
-func NewFieldMappingFromNameMap(srcSch, destSch schema.Schema, inNameToOutName map[string]string) (*FieldMapping, error) {
-	srcCols := srcSch.GetAllCols()
-	destCols := destSch.GetAllCols()
-	srcToDest := make(map[uint64]uint64, len(inNameToOutName))
-
-	for k, v := range inNameToOutName {
-		inCol, inOk := srcCols.GetByName(k)
-		outCol, outOk := destCols.GetByName(v)
-
-		if !outOk {
-			return nil, &BadMappingErr{k, v}
-		}
-
-		if !inOk {
-			continue
-		}
-
-		srcToDest[inCol.Tag] = outCol.Tag
-	}
-
-	return NewFieldMapping(srcSch, destSch, srcToDest)
-}
-
 // Returns the identity mapping for the schema given.
 func IdentityMapping(sch schema.Schema) *FieldMapping {
 	fieldMapping, err := TagMapping(sch, sch)
@@ -179,17 +175,18 @@ func TagMapping(srcSch, destSch schema.Schema) (*FieldMapping, error) {
 
 // NameMapping takes a source schema and a destination schema and maps all columns which have a matching name in the
 // source and destination schemas.
-func NameMapping(srcSch, destSch schema.Schema) (*FieldMapping, error) {
+func NameMapping(srcSch, destSch schema.Schema, nameMapper NameMapper) (*FieldMapping, error) {
 	successes := 0
 	srcCols := srcSch.GetAllCols()
 	destCols := destSch.GetAllCols()
 
 	srcToDest := make(map[uint64]uint64, destCols.Size())
-	err := destCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		inCol, ok := srcCols.GetByName(col.Name)
+	err := srcCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		mn := nameMapper.Map(col.Name)
+		outCol, ok := destCols.GetByName(mn)
 
 		if ok {
-			srcToDest[inCol.Tag] = tag
+			srcToDest[tag] = outCol.Tag
 			successes++
 		}
 
@@ -207,22 +204,26 @@ func NameMapping(srcSch, destSch schema.Schema) (*FieldMapping, error) {
 	return NewFieldMapping(srcSch, destSch, srcToDest)
 }
 
-// MappingFromFile reads a FieldMapping from a json file
-func MappingFromFile(mappingFile string, fs filesys.ReadableFS, inSch, outSch schema.Schema) (*FieldMapping, error) {
-	data, err := fs.ReadFile(mappingFile)
+// NameMapperFromFile reads a JSON file containing a name mapping and returns a NameMapper.
+func NameMapperFromFile(mappingFile string, FS filesys.ReadableFS) (NameMapper, error) {
+	var nm NameMapper
+
+	if mappingFile == "" {
+		// identity mapper
+		return make(NameMapper), nil
+	}
+
+	if fileExists, _ := FS.Exists(mappingFile); !fileExists {
+		return nil, errhand.BuildDError("error: '%s' does not exist.", mappingFile).Build()
+	}
+
+	err := filesys.UnmarshalJSONFile(FS, mappingFile, &nm)
 
 	if err != nil {
 		return nil, ErrMappingFileRead
 	}
 
-	var inNameToOutName map[string]string
-	err = json.Unmarshal(data, &inNameToOutName)
-
-	if err != nil {
-		return nil, ErrUnmarshallingMapping
-	}
-
-	return NewFieldMappingFromNameMap(inSch, outSch, inNameToOutName)
+	return nm, nil
 }
 
 // TypedToUntypedMapping takes a schema and creates a mapping to an untyped schema with all the same columns.

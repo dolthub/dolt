@@ -119,16 +119,25 @@ func (s *StrSet) Iterate(callBack func(string) (cont bool)) {
 
 // IntersectionAndMissing takes a slice of strings and returns a slice of strings containing the intersection with the
 // set, and a slice of strings for the ones missing from the set.
-func (s *StrSet) IntersectAndMissing(other []string) (intersection []string, missing []string) {
-	for _, str := range other {
-		if s.Contains(str) {
-			intersection = append(intersection, str)
+func (s *StrSet) LeftIntersectionRight(other *StrSet) (left *StrSet, intersection *StrSet, right *StrSet) {
+	left = NewStrSet(nil)
+	intersection = NewStrSet(nil)
+	right = NewStrSet(nil)
+
+	for os := range other.items {
+		if s.Contains(os) {
+			intersection.Add(os)
 		} else {
-			missing = append(missing, str)
+			right.Add(os)
+		}
+	}
+	for ss := range s.items {
+		if !intersection.Contains(ss) {
+			left.Add(ss)
 		}
 	}
 
-	return intersection, missing
+	return left, intersection, right
 }
 
 // JoinStrings returns the sorted values from the set concatenated with a given sep

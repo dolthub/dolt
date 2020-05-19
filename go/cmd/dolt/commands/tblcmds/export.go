@@ -17,17 +17,23 @@ package tblcmds
 import (
 	"context"
 	"os"
+	"strings"
 
 	"github.com/fatih/color"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/mvdata"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/funcitr"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 )
 
@@ -40,6 +46,46 @@ See the help for {{.EmphasisLeft}}dolt table import{{.EmphasisRight}} as the opt
 	Synopsis: []string{
 		"[-f] [-pk {{.LessThan}}field{{.GreaterThan}}] [-schema {{.LessThan}}file{{.GreaterThan}}] [-map {{.LessThan}}file{{.GreaterThan}}] [-continue] [-file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 	},
+}
+
+type exportOptions struct {
+	tableName   string
+	contOnErr   bool
+	force       bool
+	schFile     string
+	mappingFile string
+	primaryKeys []string
+	src         mvdata.TableDataLocation
+	dest        mvdata.DataLocation
+	srcOptions  interface{}
+}
+
+func (m exportOptions) checkOverwrite(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) (bool, error) {
+	if _, isStream := m.dest.(mvdata.StreamDataLocation); isStream {
+		return false, nil
+	}
+	if !m.force {
+		return m.dest.Exists(ctx, root, fs)
+	}
+	return false, nil
+}
+
+func (m exportOptions) WritesToTable() bool {
+	return false
+}
+
+func (m exportOptions) SrcName() string {
+	return m.src.Name
+}
+
+func (m exportOptions) DestName() string {
+	if t, tblDest := m.dest.(mvdata.TableDataLocation); tblDest {
+		return t.Name
+	}
+	if f, fileDest := m.dest.(mvdata.FileDataLocation); fileDest {
+		return f.Path
+	}
+	return m.dest.String()
 }
 
 // validateExportArgs validates the input from the arg parser, and returns the tuple:
@@ -90,30 +136,32 @@ func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 	return tableName, tableLoc, destLoc
 }
 
-func parseExportArgs(ap *argparser.ArgParser, commandStr string, args []string) *mvdata.MoveOptions {
+func parseExportArgs(ap *argparser.ArgParser, commandStr string, args []string) (*exportOptions, errhand.VerboseError) {
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, exportDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 	tableName, tableLoc, fileLoc := validateExportArgs(apr, usage)
 
 	if fileLoc == nil || len(tableLoc.Name) == 0 {
-		return nil
+		return nil, errhand.BuildDError("could not validate table export args").Build()
 	}
 
 	schemaFile, _ := apr.GetValue(schemaParam)
 	mappingFile, _ := apr.GetValue(mappingFileParam)
-	primaryKey, _ := apr.GetValue(primaryKeyParam)
 
-	return &mvdata.MoveOptions{
-		Operation:   mvdata.OverwriteOp,
-		ContOnErr:   apr.Contains(contOnErrParam),
-		Force:       apr.Contains(forceParam),
-		TableName:   tableName,
-		SchFile:     schemaFile,
-		MappingFile: mappingFile,
-		PrimaryKey:  primaryKey,
-		Src:         tableLoc,
-		Dest:        fileLoc,
-	}
+	val, _ := apr.GetValue(primaryKeyParam)
+	pks := funcitr.MapStrings(strings.Split(val, ","), strings.TrimSpace)
+	pks = funcitr.FilterStrings(pks, func(s string) bool { return s != "" })
+
+	return &exportOptions{
+		tableName:   tableName,
+		contOnErr:   apr.Contains(contOnErrParam),
+		force:       apr.Contains(forceParam),
+		schFile:     schemaFile,
+		mappingFile: mappingFile,
+		primaryKeys: pks,
+		src:         tableLoc,
+		dest:        fileLoc,
+	}, nil
 }
 
 type ExportCmd struct{}
@@ -138,7 +186,7 @@ func (cmd ExportCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table being exported."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "The file being output to."})
-	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the Force flag will allow the target to be overwritten.")
+	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the force flag will allow the target to be overwritten.")
 	ap.SupportsFlag(contOnErrParam, "", "Continue exporting when row export errors are encountered.")
 	ap.SupportsString(schemaParam, "s", "schema_file", "The schema for the output data.")
 	ap.SupportsString(mappingFileParam, "m", "mapping_file", "A file that lays out how fields should be mapped from input data to output data.")
@@ -155,19 +203,75 @@ func (cmd ExportCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	mvOpts := parseExportArgs(ap, commandStr, args)
+	_, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, exportDocs, ap))
 
-	if mvOpts == nil {
-		return 1
+	exOpts, verr := parseExportArgs(ap, commandStr, args)
+	if verr != nil {
+		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	verr := executeMove(ctx, dEnv, mvOpts)
+	root, verr := commands.GetWorkingWithVErr(dEnv)
+	if verr != nil {
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+
+	mover, verr := NewExportDataMover(ctx, root, dEnv.FS, exOpts, importStatsCB)
 
 	if verr != nil {
-		_, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, exportDocs, ap))
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+
+	skipped, verr := mvdata.MoveData(ctx, dEnv, mover, exOpts)
+
+	if skipped > 0 {
+		cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))
+	}
+	if verr != nil {
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
 	cli.PrintErrln(color.CyanString("Successfully exported data."))
 	return 0
+}
+
+func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, exOpts *exportOptions, statsCB noms.StatsCB) (*mvdata.DataMover, errhand.VerboseError) {
+	var rd table.TableReadCloser
+	var err error
+
+	ow, err := exOpts.checkOverwrite(ctx, root, fs)
+	if err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
+	}
+	if ow {
+		return nil, errhand.BuildDError("%s already exists. Use -f to overwrite.", exOpts.DestName()).Build()
+	}
+
+	rd, srcIsSorted, err := exOpts.src.NewReader(ctx, root, fs, exOpts.srcOptions)
+
+	if err != nil {
+		return nil, errhand.BuildDError("Error creating reader for %s.", exOpts.SrcName()).AddCause(err).Build()
+	}
+
+	// close on err exit
+	defer func() {
+		if rd != nil {
+			rd.Close(ctx)
+		}
+	}()
+
+	inSch := rd.GetSchema()
+	outSch := inSch
+
+	wr, err := exOpts.dest.NewCreatingWriter(ctx, exOpts, root, fs, srcIsSorted, outSch, statsCB)
+
+	if err != nil {
+		return nil, errhand.BuildDError("Could not create table writer for %s", exOpts.tableName).AddCause(err).Build()
+	}
+
+	emptyTransColl := pipeline.NewTransformCollection()
+
+	imp := &mvdata.DataMover{Rd: rd, Transforms: emptyTransColl, Wr: wr, ContOnErr: exOpts.contOnErr}
+	rd = nil
+
+	return imp, nil
 }
