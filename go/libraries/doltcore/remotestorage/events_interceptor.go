@@ -54,5 +54,5 @@ var remoteAPIMethodsToEvents map[string]eventsapi.ClientEventType = map[string]e
 	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/Root":                 eventsapi.ClientEventType_REMOTEAPI_ROOT,
 	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/Commit":               eventsapi.ClientEventType_REMOTEAPI_COMMIT,
 	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/ListTableFiles":       eventsapi.ClientEventType_REMOTEAPI_LIST_TABLE_FILES,
-	//	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/AddTableFiles": eventsapi.ClientEventType_REMOTEAPI_ADD_TABLE_FILES,
+	"/dolt.services.remotesapi.v1alpha1.ChunkStoreService/AddTableFiles":        eventsapi.ClientEventType_REMOTEAPI_ADD_TABLE_FILES,
 }
