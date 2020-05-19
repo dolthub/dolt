@@ -650,8 +650,12 @@ SQL
 @test "sql divide by zero does not panic" {
     run dolt sql -q "select 1/0 from dual"
     [ $status -ne 0 ]
-    skip "Divide by zero panics dolt right now"
+    [[ "$output" =~ "error processing results: divide by zero" ]] || false
     [[ ! "$output" =~ "panic: " ]] || false
+
+    run dolt sql -q "select 1.0/0.0 from dual"
+    [ $status -eq 0 ]
+    [[ "$output" =~ " +Inf " ]] || false
 }
 
 @test "sql delete all rows in table" {
