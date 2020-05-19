@@ -29,6 +29,10 @@ import (
 func isHelp(str string) bool {
 	str = strings.TrimSpace(str)
 
+	if len(str) == 0 {
+		return false
+	}
+
 	if str[0] != '-' {
 		return false
 	}
