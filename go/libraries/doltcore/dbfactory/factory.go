@@ -63,9 +63,9 @@ var DBFactories = map[string]DBFactory{
 }
 
 // InitializeFactories initializes any factories that rely on a GRPCConnectionProvider (Namely http and https)
-func InitializeFactories(grpcCP GRPCConnectionProvider) {
-	DBFactories[HTTPScheme] = NewDoltRemoteFactory(grpcCP, true)
-	DBFactories[HTTPSScheme] = NewDoltRemoteFactory(grpcCP, false)
+func InitializeFactories(dp GRPCDialProvider) {
+	DBFactories[HTTPScheme] = NewDoltRemoteFactory(dp, true)
+	DBFactories[HTTPSScheme] = NewDoltRemoteFactory(dp, false)
 }
 
 // CreateDB creates a database based on the supplied urlStr, and creation params.  The DBFactory used for creation is

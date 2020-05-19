@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019-2020 Liquidata, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/creds"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -624,47 +625,40 @@ func (dEnv *DoltEnv) getUserAgentString() string {
 	return strings.Join(tokens, " ")
 }
 
-func (dEnv *DoltEnv) GrpcConnWithCreds(hostAndPort string, insecure bool, rpcCreds credentials.PerRPCCredentials) (*grpc.ClientConn, error) {
-	if strings.IndexRune(hostAndPort, ':') == -1 {
-		if insecure {
-			hostAndPort += ":80"
+func (dEnv *DoltEnv) GetGRPCDialParams(config grpcendpoint.Config) (string, []grpc.DialOption, error) {
+	endpoint := config.Endpoint
+	if strings.IndexRune(endpoint, ':') == -1 {
+		if config.Insecure {
+			endpoint += ":80"
 		} else {
-			hostAndPort += ":443"
+			endpoint += ":443"
 		}
 	}
 
-	var dialOpt grpc.DialOption
-	if insecure {
-		dialOpt = grpc.WithInsecure()
+	var opts []grpc.DialOption
+	if config.Insecure {
+		opts = append(opts, grpc.WithInsecure())
 	} else {
 		tc := credentials.NewTLS(&tls.Config{})
-		dialOpt = grpc.WithTransportCredentials(tc)
+		opts = append(opts, grpc.WithTransportCredentials(tc))
 	}
 
-	opts := []grpc.DialOption{
-		dialOpt,
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(128 * 1024 * 1024)),
-		grpc.WithUserAgent(dEnv.getUserAgentString()),
+	opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(128*1024*1024)))
+	opts = append(opts, grpc.WithUserAgent(dEnv.getUserAgentString()))
+
+	if config.Creds != nil {
+		opts = append(opts, grpc.WithPerRPCCredentials(config.Creds))
+	} else if config.WithEnvCreds {
+		rpcCreds, err := dEnv.getRPCCreds()
+		if err != nil {
+			return "", nil, err
+		}
+		if rpcCreds != nil {
+			opts = append(opts, grpc.WithPerRPCCredentials(rpcCreds))
+		}
 	}
 
-	if rpcCreds != nil {
-		opts = append(opts, grpc.WithPerRPCCredentials(rpcCreds))
-	}
-
-	conn, err := grpc.Dial(hostAndPort, opts...)
-
-	return conn, err
-}
-
-func (dEnv *DoltEnv) GrpcConn(hostAndPort string, insecure bool) (*grpc.ClientConn, error) {
-	rpcCreds, err := dEnv.getRPCCreds()
-
-	if err != nil {
-		return nil, err
-	}
-
-	return dEnv.GrpcConnWithCreds(hostAndPort, insecure, rpcCreds)
-
+	return endpoint, opts, nil
 }
 
 func (dEnv *DoltEnv) GetRemotes() (map[string]Remote, error) {

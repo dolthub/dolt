@@ -18,16 +18,18 @@ import (
 	"context"
 	"fmt"
 
-	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"google.golang.org/grpc"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	remotesapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/creds"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 var checkShortDesc = "Check authenticating with a credential keypair against a doltremoteapi."
@@ -136,8 +138,14 @@ func loadCred(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (creds.DoltCred
 }
 
 func checkCredAndPrintSuccess(ctx context.Context, dEnv *env.DoltEnv, dc creds.DoltCreds, endpoint string) errhand.VerboseError {
-	conn, err := dEnv.GrpcConnWithCreds(endpoint, false, dc)
-
+	endpoint, opts, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
+		Endpoint: endpoint,
+		Creds:    dc,
+	})
+	if err != nil {
+		return errhand.BuildDError("error: unable to build server endpoint options.").AddCause(err).Build()
+	}
+	conn, err := grpc.Dial(endpoint, opts...)
 	if err != nil {
 		return errhand.BuildDError("error: unable to connect to server with credentials.").AddCause(err).Build()
 	}
