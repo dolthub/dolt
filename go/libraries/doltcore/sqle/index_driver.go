@@ -37,11 +37,11 @@ func NewDoltIndexDriver(dbs ...Database) *DoltIndexDriver {
 	return &DoltIndexDriver{nameToDB}
 }
 
-func (*DoltIndexDriver) Create(string, string, string, []sql.Expression, map[string]string) (sql.Index, error) {
+func (*DoltIndexDriver) Create(string, string, string, []sql.Expression, map[string]string) (sql.DriverIndex, error) {
 	panic("index driver create path not supported")
 }
 
-func (i *DoltIndexDriver) Delete(sql.Index, sql.PartitionIter) error {
+func (i *DoltIndexDriver) Delete(sql.DriverIndex, sql.PartitionIter) error {
 	panic("index driver delete path not supported")
 }
 
@@ -49,7 +49,7 @@ func (*DoltIndexDriver) ID() string {
 	return "doltDbIndexDriver"
 }
 
-func (driver *DoltIndexDriver) LoadAll(ctx *sql.Context, db, table string) ([]sql.Index, error) {
+func (driver *DoltIndexDriver) LoadAll(ctx *sql.Context, db, table string) ([]sql.DriverIndex, error) {
 	database, ok := driver.dbs[db]
 	if !ok {
 		panic("Unexpected db: " + db)
@@ -79,7 +79,7 @@ func (driver *DoltIndexDriver) LoadAll(ctx *sql.Context, db, table string) ([]sq
 	}
 
 	cols := sch.GetPKCols().GetColumns()
-	sqlIndexes := []sql.Index{
+	sqlIndexes := []sql.DriverIndex{
 		&doltIndex{
 			cols:         cols,
 			ctx:          ctx,
@@ -121,6 +121,6 @@ func (driver *DoltIndexDriver) LoadAll(ctx *sql.Context, db, table string) ([]sq
 	return sqlIndexes, nil
 }
 
-func (i *DoltIndexDriver) Save(*sql.Context, sql.Index, sql.PartitionIndexKeyValueIter) error {
+func (i *DoltIndexDriver) Save(*sql.Context, sql.DriverIndex, sql.PartitionIndexKeyValueIter) error {
 	panic("index driver save path not supported")
 }

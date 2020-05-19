@@ -39,10 +39,10 @@ type DoltTable struct {
 }
 
 var _ sql.Table = (*DoltTable)(nil)
-var _ sql.IndexableTable = (*DoltTable)(nil)
+var _ sql.IndexedTable = (*DoltTable)(nil)
 var _ sql.IndexAlterableTable = (*DoltTable)(nil)
 
-// Implements sql.IndexableTable
+// Implements sql.IndexedTable
 func (t *DoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 	dil, ok := lookup.(*doltIndexLookup)
 	if !ok {
@@ -61,7 +61,7 @@ func (t *DoltTable) IndexKeyValues(*sql.Context, []string) (sql.PartitionIndexKe
 }
 
 // Implements sql.IndexableTable
-func (t *DoltTable) IndexLookup() sql.IndexLookup {
+func (t *DoltTable) IndexLookup() sql.DriverIndexLookup {
 	panic("IndexLookup called on DoltTable, should be on IndexedDoltTable")
 }
 
