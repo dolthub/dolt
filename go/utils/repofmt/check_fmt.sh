@@ -7,7 +7,7 @@ cd $script_dir/../..
 
 go install golang.org/x/tools/cmd/goimports
 
-paths=`find . -depth 1 \( -name gen -prune -o -type d -print -o -type f -name '*.go' -print \)`
+paths=`find . -maxdepth 1 -mindepth 1 \( -name gen -prune -o -type d -print -o -type f -name '*.go' -print \)`
 
 bad_files=$(goimports -l -local github.com/liquidata-inc/dolt $paths)
 if [ "$bad_files" != "" ]; then

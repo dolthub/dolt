@@ -5,7 +5,7 @@ set -eo pipefail
 script_dir=$(dirname "$0")
 cd $script_dir/../..
 
-paths=`find . -depth 1 \( -name gen -prune -o -type d -print -o -type f -name '*.go' -print \)`
+paths=`find . -maxdepth 1 -mindepth 1 \( -name gen -prune -o -type d -print -o -type f -name '*.go' -print \)`
 
 goimports -w -local github.com/liquidata-inc/dolt $paths
 
