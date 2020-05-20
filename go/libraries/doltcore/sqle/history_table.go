@@ -119,7 +119,7 @@ func NewHistoryTable(ctx *sql.Context, dbName, tblName string) (*HistoryTable, e
 
 // HandledFilters returns the list of filters that will be handled by the table itself
 func (ht *HistoryTable) HandledFilters(filters []sql.Expression) []sql.Expression {
-	ht.commitFilters, ht.rowFilters = splitFilters(filters)
+	ht.commitFilters, ht.rowFilters = splitCommitFilters(filters)
 	return ht.commitFilters
 }
 
@@ -131,7 +131,7 @@ func (ht *HistoryTable) Filters() []sql.Expression {
 // WithFilters returns a new sql.Table instance with the filters applied
 func (ht *HistoryTable) WithFilters(filters []sql.Expression) sql.Table {
 	if ht.commitFilters == nil {
-		ht.commitFilters, ht.rowFilters = splitFilters(filters)
+		ht.commitFilters, ht.rowFilters = splitCommitFilters(filters)
 	}
 
 	if len(ht.commitFilters) > 0 {
@@ -150,38 +150,44 @@ func (ht *HistoryTable) WithFilters(filters []sql.Expression) sql.Table {
 
 var commitFilterCols = set.NewStrSet([]string{CommitHashCol, CommitDateCol, CommitterCol})
 
-func isCommitFilter(filter sql.Expression) bool {
-	isCommitFilter := true
-	sql.Inspect(filter, func(e sql.Expression) (cont bool) {
-		if e == nil {
-			return true
-		}
-
-		switch val := e.(type) {
-		case *expression.GetField:
-			if !commitFilterCols.Contains(strings.ToLower(val.Name())) {
-				isCommitFilter = false
-				return false
+func getColumnFilterCheck(colNameSet *set.StrSet) func(sql.Expression) bool {
+	return func(filter sql.Expression) bool{
+		isCommitFilter := true
+		sql.Inspect(filter, func (e sql.Expression) (cont bool) {
+			if e == nil{
+				return true
 			}
-		}
 
-		return true
-	})
+			switch val := e.(type){
+			case *expression.GetField:
+				if !colNameSet.Contains(strings.ToLower(val.Name())){
+					isCommitFilter = false
+					return false
+				}
+			}
 
-	return isCommitFilter
+			return true
+		})
+
+		return isCommitFilter
+	}
 }
 
-func splitFilters(filters []sql.Expression) (commitFilters, rowFilters []sql.Expression) {
-	commitFilters = make([]sql.Expression, 0, len(filters))
-	rowFilters = make([]sql.Expression, 0, len(filters))
+func splitFilters(filters []sql.Expression, filterCheck func(filter sql.Expression) bool) (matching, notMatching []sql.Expression) {
+	matching = make([]sql.Expression, 0, len(filters))
+	notMatching = make([]sql.Expression, 0, len(filters))
 	for _, f := range filters {
-		if isCommitFilter(f) {
-			commitFilters = append(commitFilters, f)
+		if filterCheck(f) {
+			matching = append(matching , f)
 		} else {
-			rowFilters = append(rowFilters, f)
+			notMatching = append(notMatching, f)
 		}
 	}
-	return commitFilters, rowFilters
+	return matching , notMatching
+}
+
+func splitCommitFilters(filters []sql.Expression) (commitFilters, rowFilters []sql.Expression){
+	return splitFilters(filters, getColumnFilterCheck(commitFilterCols))
 }
 
 func commitSchema() schema.Schema {

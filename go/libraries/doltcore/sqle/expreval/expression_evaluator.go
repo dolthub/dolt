@@ -51,6 +51,12 @@ func ExpressionFuncFromSQLExpressions(nbf *types.NomsBinFormat, sch schema.Schem
 		}
 	}
 
+	if root == nil {
+		root = func(ctx context.Context, vals map[uint64]types.Value) (bool, error) {
+			return true, nil
+		}
+	}
+
 	return root, nil
 }
 
