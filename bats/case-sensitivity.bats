@@ -82,9 +82,6 @@ teardown() {
     run dolt sql -r csv -q "select aaa as AAA from TEST order by 1 limit 1"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "AAA" ]] || false
-}
-
-@test "select table case insensitive, table and column" {
     run dolt sql -r csv -q "select Test.aaa as AAA from TEST order by 1 limit 1"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "AAA" ]] || false
