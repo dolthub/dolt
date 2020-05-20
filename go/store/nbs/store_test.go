@@ -76,4 +76,8 @@ func TestNBSAsTableFileStore(t *testing.T) {
 
 		assert.Equal(t, expected, data)
 	}
+
+	size, err := st.Size(ctx)
+	require.NoError(t, err)
+	require.Greater(t, size, uint64(0))
 }

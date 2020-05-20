@@ -463,6 +463,10 @@ func (dcs *DoltChunkStore) Rebase(ctx context.Context) error {
 		return NewRpcError(err, "Rebase", dcs.host, req)
 	}
 
+	return dcs.refreshRepoMetadata(ctx)
+}
+
+func (dcs *DoltChunkStore) refreshRepoMetadata(ctx context.Context) error {
 	mdReq := &remotesapi.GetRepoMetadataRequest{
 		RepoId: &remotesapi.RepoId{
 			Org:      dcs.org,
@@ -478,7 +482,6 @@ func (dcs *DoltChunkStore) Rebase(ctx context.Context) error {
 		return NewRpcError(err, "GetRepoMetadata", dcs.host, mdReq)
 	}
 	dcs.metadata = metadata
-
 	return nil
 }
 
@@ -521,28 +524,11 @@ func (dcs *DoltChunkStore) Commit(ctx context.Context, current, last hash.Hash) 
 		},
 	}
 	resp, err := dcs.csClient.Commit(ctx, req)
-
 	if err != nil {
 		return false, NewRpcError(err, "Commit", dcs.host, req)
 	}
 
-	mdReq := &remotesapi.GetRepoMetadataRequest{
-		RepoId: &remotesapi.RepoId{
-			Org:      dcs.org,
-			RepoName: dcs.repoName,
-		},
-		ClientRepoFormat: &remotesapi.ClientRepoFormat{
-			NbfVersion: dcs.nbf.VersionString(),
-			NbsVersion: nbs.StorageVersion,
-		},
-	}
-	metadata, err := dcs.csClient.GetRepoMetadata(ctx, mdReq)
-	if err != nil {
-		return false, NewRpcError(err, "GetRepoMetadata", dcs.host, mdReq)
-	}
-	dcs.metadata = metadata
-
-	return resp.Success, nil
+	return resp.Success, dcs.refreshRepoMetadata(ctx)
 }
 
 // Stats may return some kind of struct that reports statistics about the
