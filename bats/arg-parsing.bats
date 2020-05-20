@@ -12,29 +12,29 @@ teardown() {
 @test "dolt supports Nix style argument parsing" {
     dolt checkout -b this-should-work
     run dolt branch
-    [ $status -eq 0 ]
+    [ $status -eq 0 ] || echo $output
     [[ "$output" =~ "this-should-work" ]] || false
     dolt checkout master
     dolt branch -d this-should-work
 
     dolt checkout -b "this-should-work"
     run dolt branch
-    [ $status -eq 0 ]
+    [ $status -eq 0 ] || echo $output
     [[ "$output" =~ "this-should-work" ]] || false
     dolt checkout master
     dolt branch -d "this-should-work"
 
     dolt checkout --b "this-should-work"
     run dolt branch
-    [ $status -eq 0 ]
+    [ $status -eq 0 ] || echo $output
     [[ "$output" =~ "this-should-work" ]] || false
     dolt checkout master
     dolt branch --d "this-should-work"
 
-    skip "Need spaces after single dash arguments"
-    dolt checkout -bthis-should-work
+    run dolt checkout -bthis-should-work
+    [ $status -eq 0 ] || echo $output
     run dolt branch
-    [ $status -eq 0 ]
+    [ $status -eq 0 ] || echo $output
     [[ "$output" =~ "this-should-work" ]] || false
     dolt checkout master
     dolt branch -dthis-should-work

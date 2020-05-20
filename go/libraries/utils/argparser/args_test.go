@@ -17,6 +17,9 @@ package argparser
 import (
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var forceOpt = &Option{"force", "f", "", OptionalFlag, "force desc", nil}
@@ -82,21 +85,19 @@ func TestParsing(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		parser := NewArgParser()
+		t.Run(test.name, func(t *testing.T) {
+			parser := NewArgParser()
 
-		for _, opt := range test.options {
-			parser.SupportOption(opt)
-		}
-
-		res, err := parser.Parse(test.args)
-
-		if err != nil {
-			t.Error("In test", test.name, err)
-		} else {
-			if !res.Equals(&ArgParseResults{test.expectedOpts, test.expectedArgs, parser}) {
-				t.Error("In test", test.name, "result did not match expected")
+			for _, opt := range test.options {
+				parser.SupportOption(opt)
 			}
-		}
+
+			exp := &ArgParseResults{test.expectedOpts, test.expectedArgs, parser}
+
+			res, err := parser.Parse(test.args)
+			require.NoError(t, err)
+			assert.Equal(t, exp, res)
+		})
 	}
 }
 
