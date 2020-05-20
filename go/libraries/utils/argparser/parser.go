@@ -122,23 +122,55 @@ func (ap *ArgParser) SupportsInt(name, abbrev, valDesc, desc string) *ArgParser 
 	return ap
 }
 
-func splitOption(optStr string) (string, *string) {
+func splitOption(optStr string, supported []*Option) (string, *string) {
 	optStr = strings.TrimLeft(optStr, "-")
 
 	idx := strings.IndexAny(optStr, optNameValDelimChars)
 
-	if idx == -1 {
-		return strings.TrimSpace(optStr), nil
+	if idx != -1 {
+		argName := strings.TrimSpace(optStr[:idx])
+		argValue := strings.TrimSpace(optStr[idx+1:])
+
+		if len(argValue) == 0 {
+			// todo: should --arg="" be an error?
+			return argName, nil
+		}
+		return argName, &argValue
 	}
 
-	argName := strings.TrimSpace(optStr[:idx])
-	argValue := strings.TrimSpace(optStr[idx+1:])
-
-	if len(argValue) == 0 {
-		return argName, nil
+	for _, opt := range supported {
+		ln := len(opt.Name)
+		if len(optStr) < ln {
+			continue
+		}
+		if optStr[:ln] == opt.Name {
+			argValue := optStr[ln:]
+			if argValue == "" {
+				return opt.Name, nil
+			}
+			return opt.Name, &argValue
+		}
 	}
 
-	return argName, &argValue
+	for _, opt := range supported {
+		if opt.Abbrev == "" {
+			continue
+		}
+
+		ln := len(opt.Abbrev)
+		if len(optStr) < ln {
+			continue
+		}
+		if optStr[:ln] == opt.Abbrev {
+			argValue := optStr[ln:]
+			if argValue == "" {
+				return opt.Abbrev, nil
+			}
+			return opt.Abbrev, &argValue
+		}
+	}
+
+	return optStr, nil
 }
 
 // Parses the string args given using the configuration previously specified with calls to the various Supports*
@@ -157,7 +189,7 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 			continue
 		}
 
-		optName, value := splitOption(arg)
+		optName, value := splitOption(arg, ap.Supported)
 
 		if optName == "help" || optName == "h" {
 			return nil, ErrHelp
@@ -171,12 +203,19 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 
 		if _, exists := results[optName]; exists {
 			//already provided
-			return nil, errors.New("error: flag `" + supOpt.Name + "' should not have a value")
+			return nil, errors.New("error: multiple values provided for `" + supOpt.Name + "'")
+
 		}
 
 		if supOpt.OptType == OptionalFlag {
 			if value != nil {
-				return nil, errors.New("error: multiple values provided for `" + supOpt.Name + "'")
+				// we're somewhat loose with the definitions of flag options vs value options
+				// some flags have values that intuitively are associated with them
+				// eg: dolt -dmy_branch
+				// -d is a flag, but we don't want to error for having the branch name
+				// attached to it as a value. Just pass this through as an arg.
+				// todo: this could be cleaned up by changing SupportsFlag calls to SupportsString
+				list = append(list, *value)
 			}
 
 			results[supOpt.Name] = ""
