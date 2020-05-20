@@ -16,12 +16,10 @@ package sqle
 
 import (
 	"context"
-	"io"
-	"strings"
-	"time"
-
 	"github.com/liquidata-inc/go-mysql-server/sql"
 	"github.com/liquidata-inc/go-mysql-server/sql/expression"
+	"io"
+	"strings"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
@@ -57,7 +55,6 @@ type HistoryTable struct {
 	commitFilters         []sql.Expression
 	rowFilters            []sql.Expression
 	cmItr                 doltdb.CommitItr
-	indCmItr              *doltdb.CommitIndexingCommitItr
 	readerCreateFuncCache map[hash.Hash]CreateReaderFunc
 }
 
@@ -76,16 +73,13 @@ func NewHistoryTable(ctx *sql.Context, dbName, tblName string) (*HistoryTable, e
 		return nil, err
 	}
 
-	cmItr := doltdb.CommitItrForRoots(ddb, head)
-	indCmItr := doltdb.NewCommitIndexingCommitItr(ddb, cmItr)
-
 	root, ok := sess.GetRoot(dbName)
 
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	ss, err := calcSuperSchema(ctx, indCmItr, root, tblName)
+	ss, err := calcSuperSchema(ctx, root, tblName)
 
 	if err != nil {
 		return nil, err
@@ -112,13 +106,13 @@ func NewHistoryTable(ctx *sql.Context, dbName, tblName string) (*HistoryTable, e
 		return nil, err
 	}
 
+	cmItr := doltdb.CommitItrForRoots(ddb, head)
 	return &HistoryTable{
 		name:                  tblName,
 		ddb:                   ddb,
 		ss:                    ss,
 		sqlSch:                sqlSch,
-		cmItr:                 indCmItr.Unfiltered(),
-		indCmItr:              indCmItr,
+		cmItr:                 cmItr,
 		readerCreateFuncCache: make(map[hash.Hash]CreateReaderFunc),
 	}, nil
 }
@@ -141,7 +135,6 @@ func (ht *HistoryTable) WithFilters(filters []sql.Expression) sql.Table {
 	}
 
 	if len(ht.commitFilters) > 0 {
-		ctx := context.TODO()
 		commitCheck, err := getCommitFilterFunc(ht.ddb.Format(), ht.commitFilters)
 
 		// TODO: fix panic
@@ -149,12 +142,7 @@ func (ht *HistoryTable) WithFilters(filters []sql.Expression) sql.Table {
 			panic(err)
 		}
 
-		ht.cmItr, err = ht.indCmItr.Filter(ctx, commitCheck)
-
-		// TODO: fix panic
-		if err != nil {
-			panic(err)
-		}
+		ht.cmItr = doltdb.NewFilteringCommitItr(ht.cmItr, commitCheck)
 	}
 
 	return ht
@@ -210,19 +198,26 @@ func commitSchema() schema.Schema {
 
 var commitSch = commitSchema()
 
-func getCommitFilterFunc(nbf *types.NomsBinFormat, filters []sql.Expression) (doltdb.CommitCheck, error) {
+func getCommitFilterFunc(nbf *types.NomsBinFormat, filters []sql.Expression) (doltdb.CommitFilter, error) {
 	expFunc, err := expreval.ExpressionFuncFromSQLExpressions(nbf, commitSch, filters)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return func(ctx context.Context, h hash.Hash, committer string, time time.Time) (bool, error) {
-		commitFields := map[uint64]types.Value{
-			doltdb.HistoryCommitterTag:  types.String(committer),
-			doltdb.HistoryCommitHashTag: types.String(h.String()),
-			doltdb.HistoryCommitDateTag: types.Timestamp(time),
+	return func(ctx context.Context, h hash.Hash, cm *doltdb.Commit) (filterOut bool, err error) {
+		meta, err := cm.GetCommitMeta()
+
+		if err != nil {
+			return false, err
 		}
+
+		commitFields := map[uint64]types.Value{
+			doltdb.HistoryCommitterTag:  types.String(meta.Name),
+			doltdb.HistoryCommitHashTag: types.String(h.String()),
+			doltdb.HistoryCommitDateTag: types.Timestamp(meta.Time()),
+		}
+
 		return expFunc(ctx, commitFields)
 	}, nil
 }
@@ -440,7 +435,7 @@ func (tblItr *rowItrForTableAtCommit) Close() error {
 	return nil
 }
 
-func calcSuperSchema(ctx context.Context, cmItr doltdb.CommitItr, wr *doltdb.RootValue, tblName string) (*schema.SuperSchema, error) {
+func calcSuperSchema(ctx context.Context, wr *doltdb.RootValue, tblName string) (*schema.SuperSchema, error) {
 	ss, found, err :=  wr.GetSuperSchema(ctx, tblName)
 
 	 if err != nil {
