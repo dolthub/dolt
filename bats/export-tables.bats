@@ -152,10 +152,9 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     dolt table export person_info export-csv.csv
     dolt checkout person_info
 
-    skip "Exported csv should handle not null contrained empty values so csv can be reimported"
+    skip "Exported csv should handle not null constrained empty values so csv can be reimported"
     run dolt table import -u person_info sql-csv.csv
-    [ "$status" -eq 0 ] || echo $output
-
+    [ "$status" -eq 0 ]
     run dolt table import -u person_info export-csv.csv
     [ "$status" -eq 0 ]
 }
