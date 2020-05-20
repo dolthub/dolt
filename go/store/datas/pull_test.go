@@ -409,7 +409,7 @@ func (ttfWr *TestTableFileWriter) Close(ctx context.Context) error {
 
 type TestTableFileStore struct {
 	root       hash.Hash
-	tableFiles map[string]nbs.TableFile
+	tableFiles map[string]*TestTableFile
 }
 
 func (ttfs *TestTableFileStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableFile, error) {
@@ -419,6 +419,14 @@ func (ttfs *TestTableFileStore) Sources(ctx context.Context) (hash.Hash, []nbs.T
 	}
 
 	return ttfs.root, tblFiles, nil
+}
+
+func (ttfs *TestTableFileStore) Size(ctx context.Context) (uint64, error) {
+	sz := uint64(0)
+	for _, tblFile := range ttfs.tableFiles {
+		sz += uint64(len(tblFile.data))
+	}
+	return sz, nil
 }
 
 func (ttfs *TestTableFileStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader, contentLength uint64, contentHash []byte) error {
@@ -448,7 +456,7 @@ func TestClone(t *testing.T) {
 	hashBytes := [hash.ByteLen]byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13}
 	src := &TestTableFileStore{
 		root: hash.Of(hashBytes[:]),
-		tableFiles: map[string]nbs.TableFile{
+		tableFiles: map[string]*TestTableFile{
 			"file1": &TestTableFile{
 				fileID:    "file1",
 				numChunks: 1,
@@ -479,7 +487,7 @@ func TestClone(t *testing.T) {
 
 	dest := &TestTableFileStore{
 		root:       hash.Hash{},
-		tableFiles: map[string]nbs.TableFile{},
+		tableFiles: map[string]*TestTableFile{},
 	}
 
 	ctx := context.Background()

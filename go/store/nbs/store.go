@@ -932,6 +932,44 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []TableFile,
 	return contents.GetRoot(), tableFiles, nil
 }
 
+func (nbs *NomsBlockStore) Size(ctx context.Context) (uint64, error) {
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+
+	stats := &Stats{}
+	exists, contents, err := nbs.mm.m.ParseIfExists(ctx, stats, nil)
+
+	if err != nil {
+		return uint64(0), err
+	}
+
+	if !exists {
+		return uint64(0), nil
+	}
+
+	css, err := nbs.chunkSourcesByAddr()
+	if err != nil {
+		return uint64(0), err
+	}
+
+	numSpecs := contents.NumTableSpecs()
+
+	size := uint64(0)
+	for i := 0; i < numSpecs; i++ {
+		info := contents.getSpec(i)
+		cs, ok := css[info.name]
+		if !ok {
+			return uint64(0), errors.New("manifest referenced table file for which there is no chunkSource.")
+		}
+		ti, err := cs.index()
+		if err != nil {
+			return uint64(0), fmt.Errorf("error getting table file index for chunkSource. %w", err)
+		}
+		size += ti.tableFileSize()
+	}
+	return size, nil
+}
+
 func (nbs *NomsBlockStore) chunkSourcesByAddr() (map[addr]chunkSource, error) {
 	css := make(map[addr]chunkSource, len(nbs.tables.upstream)+len(nbs.tables.novel))
 	for _, cs := range nbs.tables.upstream {
