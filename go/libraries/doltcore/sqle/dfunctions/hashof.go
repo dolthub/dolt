@@ -96,13 +96,13 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	cm, err = cm.WalkAncestorSpec(ctx, as)
 
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	h, err := cm.HashOf()
 
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	return h.String(), nil
