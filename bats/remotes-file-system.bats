@@ -22,10 +22,9 @@ teardown() {
 }
 
 @test "Add a file system remote with a bad path" {
-    skip "Bad error message"
     run dolt remote add origin file:///poop/
     [ $status -ne 0 ]
-    [[ ! "$output" =~ "'' is not valid" ]] || false
+    [[ "$output" =~ "'file:///poop/' is not valid" ]] || false
 }
 
 @test "push, pull, and clone file based remotes" {
