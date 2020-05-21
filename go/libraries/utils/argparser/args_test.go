@@ -32,76 +32,136 @@ func TestParsing(t *testing.T) {
 		args         []string
 		expectedOpts map[string]string
 		expectedArgs []string
+		expectedErr  string
 	}{
 		{
-			"empty",
-			[]*Option{},
-			[]string{},
-			map[string]string{},
-			[]string{},
+			name: "empty",
+			options: []*Option{},
+			args: []string{},
+			expectedOpts: map[string]string{},
+			expectedArgs: []string{},
 		},
 		{
-			"no options",
-			[]*Option{},
-			[]string{"a", "b", "c"},
-			map[string]string{},
-			[]string{"a", "b", "c"},
+			name: "no options",
+			options: []*Option{},
+			args: []string{"a", "b", "c"},
+			expectedOpts: map[string]string{},
+			expectedArgs: []string{"a", "b", "c"},
 		},
 		{
-			"force",
-			[]*Option{forceOpt},
-			[]string{"--force", "b", "c"},
-			map[string]string{"force": ""},
-			[]string{"b", "c"},
+			name: "-h",
+			options: []*Option{},
+			args: []string{"a", "-h", "c"},
+			expectedErr: "Help",
 		},
 		{
-			"force abbrev",
-			[]*Option{forceOpt},
-			[]string{"b", "-f", "c"},
-			map[string]string{"force": ""},
-			[]string{"b", "c"},
+			name: "--help",
+			options: []*Option{},
+			args: []string{"a", "--help", "c"},
+			expectedErr: "Help",
 		},
 		{
-			"force abbrev w/o space",
-			[]*Option{forceOpt},
-			[]string{"bbb", "-fccc"},
-			map[string]string{"force": ""},
-			[]string{"bbb", "ccc"},
+			name: "force",
+			options: []*Option{forceOpt},
+			args: []string{"--force", "b", "c"},
+			expectedOpts: map[string]string{"force": ""},
+			expectedArgs: []string{"b", "c"},
 		},
 		{
-			"message",
-			[]*Option{forceOpt, messageOpt},
-			[]string{"-m", "b", "c"},
-			map[string]string{"message": "b"},
-			[]string{"c"},
+			name: "force abbrev",
+			options: []*Option{forceOpt},
+			args: []string{"b", "-f", "c"},
+			expectedOpts: map[string]string{"force": ""},
+			expectedArgs: []string{"b", "c"},
 		},
 		{
-			"message equals value",
-			[]*Option{forceOpt, messageOpt},
-			[]string{"b", "--message=value", "c"},
-			map[string]string{"message": "value"},
-			[]string{"b", "c"},
+			name: "message",
+			options: []*Option{forceOpt, messageOpt},
+			args: []string{"-m", "b", "c"},
+			expectedOpts: map[string]string{"message": "b"},
+			expectedArgs: []string{"c"},
 		},
 		{
-			"-mvalue",
-			[]*Option{forceOpt, messageOpt},
-			[]string{"b", "-mvalue", "c"},
-			map[string]string{"message": "value"},
-			[]string{"b", "c"},
+			name: "message equals value",
+			options: []*Option{forceOpt, messageOpt},
+			args: []string{"b", "--message=value", "c"},
+			expectedOpts: map[string]string{"message": "value"},
+			expectedArgs: []string{"b", "c"},
 		},
 		{
-			"--messagevalue",
-			[]*Option{forceOpt, messageOpt},
-			[]string{"b", "-messagevalue", "c"},
-			map[string]string{"message": "value"},
-			[]string{"b", "c"},
+			name: "empty string",
+			options: []*Option{forceOpt, messageOpt},
+			args: []string{"b", "--message=value", ""},
+			expectedOpts: map[string]string{"message": "value"},
+			expectedArgs: []string{"b", ""},
 		},
 		{
-			"empty string",
-			[]*Option{forceOpt, messageOpt},
-			[]string{"b", "--message=value", ""},
-			map[string]string{"message": "value"},
-			[]string{"b", ""},
+			name: "force abbrev w/o space",
+			options: []*Option{forceOpt},
+			args: []string{"bbb", "-fccc"},
+			expectedOpts: map[string]string{"force": ""},
+			expectedArgs: []string{"bbb", "ccc"},
+		},
+		{
+			name: "-mvalue",
+			options: []*Option{forceOpt, messageOpt},
+			args: []string{"b", "-mvalue", "c"},
+			expectedOpts: map[string]string{"message": "value"},
+			expectedArgs: []string{"b", "c"},
+		},
+		{
+			name: "--messagevalue",
+			options: []*Option{forceOpt, messageOpt},
+			args: []string{"b", "-messagevalue", "c"},
+			expectedOpts: map[string]string{"message": "value"},
+			expectedArgs: []string{"b", "c"},
+		},
+		{
+			name: "-fmfootball",
+			options: []*Option{forceOpt, messageOpt},
+			args: []string{"-fmfootball"},
+			expectedOpts: map[string]string{"message": "football", "force": ""},
+			expectedArgs: []string{},
+		},
+		{
+			name: "-ffootball",
+			options: []*Option{forceOpt, messageOpt},
+			args: []string{"-ffootball"},
+			expectedOpts: map[string]string{"force": ""},
+			expectedArgs: []string{"football"},
+		},
+		{
+			name: "-mf",
+			options: []*Option{forceOpt, messageOpt},
+			args: []string{"-mf"},
+			expectedOpts: map[string]string{"message": "f"},
+			expectedArgs: []string{},
+		},
+		{
+			name: "-fm",
+			options: []*Option{forceOpt, messageOpt},
+			args: []string{"-fm"},
+			expectedErr: "error: no value for option `m'",
+		},
+		{
+			name: "-mf value",
+			options: []*Option{forceOpt, messageOpt},
+			args: []string{"-mf", "value"},
+			expectedOpts: map[string]string{"message": "f"},
+			expectedArgs: []string{"value"},
+		},
+		{
+			name: "-fm value",
+			options: []*Option{forceOpt, messageOpt},
+			args: []string{"-fm", "value"},
+			expectedOpts: map[string]string{"message": "value", "force": ""},
+			expectedArgs: []string{},
+		},
+		{
+			name: "unsupported arg",
+			options: []*Option{forceOpt, messageOpt},
+			args: []string{"-v"},
+			expectedErr: "error: unknown option `v'",
 		},
 	}
 
@@ -116,8 +176,12 @@ func TestParsing(t *testing.T) {
 			exp := &ArgParseResults{test.expectedOpts, test.expectedArgs, parser}
 
 			res, err := parser.Parse(test.args)
-			require.NoError(t, err)
-			assert.Equal(t, exp, res)
+			if test.expectedErr != "" {
+				require.Error(t, err, test.expectedErr)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, exp, res)
+			}
 		})
 	}
 }

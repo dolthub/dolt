@@ -12,27 +12,27 @@ teardown() {
 @test "dolt supports Nix style argument parsing" {
     dolt checkout -b this-should-work
     run dolt branch
-    [ $status -eq 0 ] || echo $output
+    [ $status -eq 0 ]
     [[ "$output" =~ "this-should-work" ]] || false
     dolt checkout master
     dolt branch -d this-should-work
 
     dolt checkout -b "this-should-work"
     run dolt branch
-    [ $status -eq 0 ] || echo $output
+    [ $status -eq 0 ]
     [[ "$output" =~ "this-should-work" ]] || false
     dolt checkout master
     dolt branch -d "this-should-work"
 
     dolt checkout --b "this-should-work"
     run dolt branch
-    [ $status -eq 0 ] || echo $output
+    [ $status -eq 0 ]
     [[ "$output" =~ "this-should-work" ]] || false
     dolt checkout master
     dolt branch --d "this-should-work"
 
     run dolt checkout -bthis-should-work
-    [ $status -eq 0 ] || echo $output
+    [ $status -eq 0 ]
     run dolt branch
     [ $status -eq 0 ] || echo $output
     [[ "$output" =~ "this-should-work" ]] || false
@@ -42,7 +42,6 @@ teardown() {
 
 @test "dolt supports chaining of modal arguments" {
     dolt sql -q "create table test(pk int, primary key (pk))"
-    skip "Can't chain modal arguments"
     dolt table import -fc test `batshelper 1pk5col-ints.csv`
 }
 
