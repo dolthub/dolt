@@ -28,8 +28,6 @@ const (
 	helpFlagAbbrev = "h"
 )
 
-var helpOption = &Option{Name: helpFlag, Abbrev: helpFlagAbbrev, OptType: OptionalFlag}
-
 func ValidatorFromStrList(paramName string, validStrList []string) ValidationFunc {
 	errSuffix := " is not a valid option for '" + paramName + "'. valid options are: " + strings.Join(validStrList, "|")
 	validStrSet := make(map[string]struct{})
@@ -189,12 +187,6 @@ func (ap *ArgParser) matchModalOptions(arg string) (matches []*Option, rest stri
 				break
 			}
 		}
-
-		isHelp := len(rest) >= len(helpFlag) && rest[:len(helpFlag)] == helpFlag ||
-			len(rest) >= len(helpFlagAbbrev) && rest[:len(helpFlagAbbrev)] == helpFlagAbbrev
-		if isHelp {
-			return []*Option{helpOption}, ""
-		}
 	}
 	return matches, rest
 }
@@ -245,13 +237,13 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 
 		arg = strings.TrimLeft(arg, "-")
 
+		if arg == helpFlag || arg == helpFlagAbbrev {
+			return nil, ErrHelp
+		}
+
 		modalOpts, rest := ap.matchModalOptions(arg)
 
 		for _, opt := range modalOpts {
-			if opt == helpOption {
-				return nil, ErrHelp
-			}
-
 			if _, exists := results[opt.Name]; exists {
 				return nil, errors.New("error: multiple values provided for `" + opt.Name + "'")
 			}

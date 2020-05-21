@@ -163,6 +163,12 @@ func TestParsing(t *testing.T) {
 			args:        []string{"-v"},
 			expectedErr: "error: unknown option `v'",
 		},
+		{
+			name:        "duplicate arg",
+			options:     []*Option{forceOpt, messageOpt},
+			args:        []string{"-f", "-f"},
+			expectedErr: "error: multiple values provided for `force'",
+		},
 	}
 
 	for _, test := range tests {
