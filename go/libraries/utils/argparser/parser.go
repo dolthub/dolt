@@ -24,11 +24,11 @@ const (
 	optNameValDelimChars = " =:"
 	whitespaceChars      = " \r\n\t"
 
-	helpFlag = "help"
+	helpFlag       = "help"
 	helpFlagAbbrev = "h"
 )
 
-var helpOption = &Option{ Name: helpFlag, Abbrev: helpFlagAbbrev, OptType: OptionalFlag}
+var helpOption = &Option{Name: helpFlag, Abbrev: helpFlagAbbrev, OptType: OptionalFlag}
 
 func ValidatorFromStrList(paramName string, validStrList []string) ValidationFunc {
 	errSuffix := " is not a valid option for '" + paramName + "'. valid options are: " + strings.Join(validStrList, "|")
@@ -190,7 +190,7 @@ func (ap *ArgParser) matchModalOptions(arg string) (matches []*Option, rest stri
 			}
 		}
 
-		isHelp :=  len(rest) >= len(helpFlag) && rest[:len(helpFlag)] == helpFlag ||
+		isHelp := len(rest) >= len(helpFlag) && rest[:len(helpFlag)] == helpFlag ||
 			len(rest) >= len(helpFlagAbbrev) && rest[:len(helpFlagAbbrev)] == helpFlagAbbrev
 		if isHelp {
 			return []*Option{helpOption}, ""
