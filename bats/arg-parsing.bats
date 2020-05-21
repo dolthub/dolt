@@ -38,6 +38,12 @@ teardown() {
     [[ "$output" =~ "this-should-work" ]] || false
     dolt checkout master
     dolt branch -dthis-should-work
+
+    cat <<DELIM > ints.csv
+pk,c1
+0,0
+DELIM
+    dolt table import -cpk=pk this-should-work ints.csv
 }
 
 @test "dolt supports chaining of modal arguments" {
