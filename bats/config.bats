@@ -41,7 +41,6 @@ teardown() {
     [ "$status" -eq 1 ]
     [[ "$output" =~ "wrong number of arguments" ]] || false
     run dolt config --global --add
-    skip "dolt config --global --add with no name value pair currently succeeds"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "wrong number of arguments" ]] || false
 }
@@ -111,9 +110,24 @@ teardown() {
     run dolt config --local --get test
     [ "$status" -eq 0 ]
     [ "$output" = "local" ]
+    # will list both global and local values in list output
     run dolt config --list
     [ "$status" -eq 0 ]
-    skip "list option in config does not respect local overrides"
     [[ "$output" =~ "test = local" ]] || false
-    [[ ! "$output" =~ "test = global" ]] || false
+    [[ "$output" =~ "test = global" ]] || false
+    # will get the local value explicitly
+    run dolt config --get --local test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "local" ]] || false
+    [[ ! "$output" =~ "global" ]] || false
+    # will get the global value explicitly
+    run dolt config --get --global test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "global" ]] || false
+    [[ ! "$output" =~ "local" ]] || false
+    # will get the local value implicitly
+    run dolt config --get test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "local" ]] || false
+    [[ ! "$output" =~ "global" ]] || false
 }

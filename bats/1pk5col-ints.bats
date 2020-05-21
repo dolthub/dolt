@@ -337,7 +337,13 @@ teardown() {
     dolt branch test
     run dolt checkout test
     [ "$status" -eq 0 ]
-    skip "behavior ambiguous right now. should reset test table and switch to branch per git"
+    # Checks out branch "test" table "test" unaltered.  Matches git behavior for:
+    #
+    # git init
+    # git commit --allow-empty -m "create"
+    # touch test
+    # git branch test
+    # git checkout test
 }
 
 @test "make a change on a different branch, commit, and merge to master" {
