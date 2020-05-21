@@ -68,7 +68,7 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
- 	var cm *doltdb.Commit
+	var cm *doltdb.Commit
 	if strings.ToUpper(name) == "HEAD" {
 		sess := sqle.DSessFromSess(ctx.Session)
 
