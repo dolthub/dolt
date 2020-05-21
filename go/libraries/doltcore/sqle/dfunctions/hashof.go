@@ -50,10 +50,16 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, nil
 	}
 
-	branchName, ok := val.(string)
+	paramStr, ok := val.(string)
 
 	if !ok {
 		return nil, errors.New("branch name is not a string")
+	}
+
+	name, as, err := doltdb.SplitAncestorSpec(paramStr)
+
+	if err != nil {
+		return nil, err
 	}
 
 	dbName := ctx.GetCurrentDatabase()
@@ -62,22 +68,35 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	branchName, err = getBranchInsensitive(ctx, branchName, ddb)
+ 	var cm *doltdb.Commit
+	if strings.ToUpper(name) == "HEAD" {
+		sess := sqle.DSessFromSess(ctx.Session)
+
+		cm, err = sess.GetParentCommit(ctx, dbName)
+	} else {
+		name, err = getBranchInsensitive(ctx, name, ddb)
+
+		if err != nil {
+			return nil, err
+		}
+
+		cs, err := doltdb.NewCommitSpec("HEAD", name)
+
+		if err != nil {
+			return nil, err
+		}
+
+		cm, err = ddb.Resolve(ctx, cs)
+	}
 
 	if err != nil {
 		return nil, err
 	}
 
-	cs, err := doltdb.NewCommitSpec("HEAD", branchName)
+	cm, err = cm.WalkAncestorSpec(ctx, as)
 
 	if err != nil {
-		return nil, err
-	}
-
-	cm, err := ddb.Resolve(ctx, cs)
-
-	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	h, err := cm.HashOf()
