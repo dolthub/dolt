@@ -16,13 +16,19 @@ package argparser
 
 import (
 	"errors"
+	"sort"
 	"strings"
 )
 
 const (
 	optNameValDelimChars = " =:"
 	whitespaceChars      = " \r\n\t"
+
+	helpFlag = "help"
+	helpFlagAbbrev = "h"
 )
+
+var helpOption = &Option{ Name: helpFlag, Abbrev: helpFlagAbbrev, OptType: OptionalFlag}
 
 func ValidatorFromStrList(paramName string, validStrList []string) ValidationFunc {
 	errSuffix := " is not a valid option for '" + paramName + "'. valid options are: " + strings.Join(validStrList, "|")
@@ -122,55 +128,103 @@ func (ap *ArgParser) SupportsInt(name, abbrev, valDesc, desc string) *ArgParser 
 	return ap
 }
 
-func splitOption(optStr string, supported []*Option) (string, *string) {
+func oldSplitOption(optStr string) (string, *string) {
 	optStr = strings.TrimLeft(optStr, "-")
 
 	idx := strings.IndexAny(optStr, optNameValDelimChars)
 
-	if idx != -1 {
-		argName := strings.TrimSpace(optStr[:idx])
-		argValue := strings.TrimSpace(optStr[idx+1:])
-
-		if len(argValue) == 0 {
-			// todo: should --arg="" be an error?
-			return argName, nil
-		}
-		return argName, &argValue
+	if idx == -1 {
+		return strings.TrimSpace(optStr), nil
 	}
 
-	for _, opt := range supported {
-		ln := len(opt.Name)
-		if len(optStr) < ln {
-			continue
+	argName := strings.TrimSpace(optStr[:idx])
+	argValue := strings.TrimSpace(optStr[idx+1:])
+
+	if len(argValue) == 0 {
+		return argName, nil
+	}
+
+	return argName, &argValue
+}
+
+// modal options in order of descending string length
+func (ap *ArgParser) sortedModalOptions() []string {
+	smo := make([]string, 0, len(ap.Supported))
+	for s, opt := range ap.NameOrAbbrevToOpt {
+		if opt.OptType == OptionalFlag {
+			smo = append(smo, s)
 		}
-		if optStr[:ln] == opt.Name {
-			argValue := optStr[ln:]
-			if argValue == "" {
-				return opt.Name, nil
+	}
+	sort.Slice(smo, func(i, j int) bool { return len(smo[i]) > len(smo[j]) })
+	return smo
+}
+
+func (ap *ArgParser) matchModalOptions(arg string) (matches []*Option, rest string) {
+	rest = arg
+
+	// try to match longest options first
+	candidateOptNames := ap.sortedModalOptions()
+
+	kontinue := true
+	for kontinue {
+		kontinue = false
+
+		for i, on := range candidateOptNames {
+			lo := len(on)
+			isMatch := len(rest) >= lo && rest[:lo] == on
+			if isMatch {
+				rest = rest[lo:]
+				m := ap.NameOrAbbrevToOpt[on]
+				matches = append(matches, m)
+
+				// only match options once
+				head := candidateOptNames[:i]
+				var tail []string
+				if i+1 < len(candidateOptNames) {
+					tail = candidateOptNames[i+1:]
+				}
+				candidateOptNames = append(head, tail...)
+
+				kontinue = true
+				break
 			}
-			return opt.Name, &argValue
+		}
+
+		isHelp :=  len(rest) >= len(helpFlag) && rest[:len(helpFlag)] == helpFlag ||
+			len(rest) >= len(helpFlagAbbrev) && rest[:len(helpFlagAbbrev)] == helpFlagAbbrev
+		if isHelp {
+			return []*Option{helpOption}, ""
 		}
 	}
+	return matches, rest
+}
 
-	for _, opt := range supported {
-		if opt.Abbrev == "" {
-			continue
+func (ap *ArgParser) sortedValueOptions() []string {
+	vos := make([]string, 0, len(ap.Supported))
+	for s, opt := range ap.NameOrAbbrevToOpt {
+		if opt.OptType == OptionalValue {
+			vos = append(vos, s)
 		}
+	}
+	sort.Slice(vos, func(i, j int) bool { return len(vos[i]) > len(vos[j]) })
+	return vos
+}
 
-		ln := len(opt.Abbrev)
-		if len(optStr) < ln {
-			continue
-		}
-		if optStr[:ln] == opt.Abbrev {
-			argValue := optStr[ln:]
-			if argValue == "" {
-				return opt.Abbrev, nil
+func (ap *ArgParser) matchValueOption(arg string) (match *Option, value *string) {
+	for _, on := range ap.sortedValueOptions() {
+		lo := len(on)
+		isMatch := len(arg) >= lo && arg[:lo] == on
+		if isMatch {
+			v := arg[lo:]
+			v = strings.TrimLeft(v, optNameValDelimChars)
+			if len(v) > 0 {
+				value = &v
 			}
-			return opt.Abbrev, &argValue
+			match = ap.NameOrAbbrevToOpt[on]
+			return match, value
 		}
 	}
-
-	return optStr, nil
+	return nil, nil
 }
 
 // Parses the string args given using the configuration previously specified with calls to the various Supports*
@@ -189,58 +243,63 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 			continue
 		}
 
-		optName, value := splitOption(arg, ap.Supported)
+		arg = strings.TrimLeft(arg, "-")
 
-		if optName == "help" || optName == "h" {
-			return nil, ErrHelp
-		}
+		modalOpts, rest := ap.matchModalOptions(arg)
 
-		supOpt, ok := ap.NameOrAbbrevToOpt[optName]
-
-		if !ok {
-			return nil, UnknownArgumentParam{optName}
-		}
-
-		if _, exists := results[optName]; exists {
-			//already provided
-			return nil, errors.New("error: multiple values provided for `" + supOpt.Name + "'")
-
-		}
-
-		if supOpt.OptType == OptionalFlag {
-			if value != nil {
-				// we're somewhat loose with the definitions of flag options vs value options
-				// some flags have values that intuitively are associated with them
-				// eg: dolt -dmy_branch
-				// -d is a flag, but we don't want to error for having the branch name
-				// attached to it as a value. Just pass this through as an arg.
-				// todo: this could be cleaned up by changing SupportsFlag calls to SupportsString
-				list = append(list, *value)
+		for _, opt := range modalOpts {
+			if opt == helpOption {
+				return nil, ErrHelp
 			}
 
-			results[supOpt.Name] = ""
-			continue
+			if _, exists := results[opt.Name]; exists {
+				return nil, errors.New("error: multiple values provided for `" + opt.Name + "'")
+			}
+
+			results[opt.Name] = ""
+		}
+
+		opt, value := ap.matchValueOption(rest)
+
+		if opt == nil {
+			if rest == "" {
+				continue
+			}
+
+			if len(modalOpts) > 0 {
+				// value was attached to modal flag
+				// eg: dolt branch -fdmy_branch
+				list = append(list, rest)
+				continue
+			}
+
+			return nil, UnknownArgumentParam{name: arg}
+		}
+
+		if _, exists := results[opt.Name]; exists {
+			//already provided
+			return nil, errors.New("error: multiple values provided for `" + opt.Name + "'")
 		}
 
 		if value == nil {
 			i++
 			if i >= len(args) {
-				return nil, errors.New("error: no value for option `" + arg + "'")
+				return nil, errors.New("error: no value for option `" + opt.Name + "'")
 			}
 
 			valueStr := args[i]
 			value = &valueStr
 		}
 
-		if supOpt.Validator != nil {
-			err := supOpt.Validator(*value)
+		if opt.Validator != nil {
+			err := opt.Validator(*value)
 
 			if err != nil {
 				return nil, err
 			}
 		}
 
-		results[supOpt.Name] = *value
+		results[opt.Name] = *value
 	}
 
 	if i < len(args) {
