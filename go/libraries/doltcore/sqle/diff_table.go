@@ -21,8 +21,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/expreval"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
-	"io"
-
 	"github.com/liquidata-inc/go-mysql-server/sql"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
@@ -166,7 +164,7 @@ func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 		return nil, err
 	}
 
-	return calcPartitions(ctx, cmItr, workingRoot, dt.name, ff)
+	return newDiffPartitions(ctx, cmItr, workingRoot, dt.name, ff)
 }
 
 var partitionFilterCols = set.NewStrSet([]string{toCommit, fromCommit, toCommitDate, fromCommitDate})
@@ -444,81 +442,15 @@ var _ sql.PartitionIter = &diffPartitions{}
 
 // collection of paratitions. Implements PartitionItr
 type diffPartitions struct {
-	partitions []diffPartition
-	pos        int
-	filterFunc partitionFilterFunc
-
+	// TODO change the sql.PartitionIterator interface so that Next receives the context rather than caching it.
+	ctx             *sql.Context
 	tblName         string
+	cmItr           doltdb.CommitItr
 	cmHashToTblInfo map[hash.Hash]tblInfoAtCommit
+	filterFunc      partitionFilterFunc
 }
 
-func newDiffPartitions(tblName string, filterFunc partitionFilterFunc) *diffPartitions {
-	return &diffPartitions{nil, 0, filterFunc, tblName, make(map[hash.Hash]tblInfoAtCommit)}
-}
-
-// called in a commit iteration loop. Adds partitions when it finds a commit and it's parent that have different values
-// for the hash of the table being looked at.
-func (dp *diffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm *doltdb.Commit, root *doltdb.RootValue, tbl *doltdb.Table) error {
-	tblHash, _, err := root.GetTableHash(ctx, dp.tblName)
-
-	if err != nil {
-		return err
-	}
-
-	toInfoForCommit := dp.cmHashToTblInfo[cmHash]
-	cmHashStr := cmHash.String()
-	meta, err := cm.GetCommitMeta()
-
-	if err != nil {
-		return err
-	}
-
-	ts := types.Timestamp(meta.Time())
-
-	if tblHash != toInfoForCommit.tblHash {
-		partition := diffPartition{toInfoForCommit.tbl, tbl, toInfoForCommit.name, cmHashStr, toInfoForCommit.date, &ts}
-		filterOut, err := dp.filterFunc(ctx, partition)
-
-		if err != nil {
-			return err
-		}
-
-		if !filterOut {
-			dp.partitions = append(dp.partitions, partition)
-		}
-	}
-
-	newInfo := tblInfoAtCommit{cmHashStr, &ts, tbl, tblHash}
-	parentHashes, err := cm.ParentHashes(ctx)
-
-	if err != nil {
-		return err
-	}
-
-	for _, h := range parentHashes {
-		dp.cmHashToTblInfo[h] = newInfo
-	}
-
-	return nil
-}
-
-func (dp *diffPartitions) Next() (sql.Partition, error) {
-	if dp.pos < len(dp.partitions) {
-		nextPart := dp.partitions[dp.pos]
-		dp.pos++
-
-		return nextPart, nil
-	}
-
-	return nil, io.EOF
-}
-
-func (dp *diffPartitions) Close() error {
-	return nil
-}
-
-// exhaustively iterates through commit graph calculating the super schema, and finding all the partitions.
-func calcPartitions(ctx *sql.Context, cmItr doltdb.CommitItr, wr *doltdb.RootValue, tblName string, filterFunc partitionFilterFunc) (*diffPartitions, error) {
+func newDiffPartitions(ctx *sql.Context, cmItr doltdb.CommitItr, wr *doltdb.RootValue, tblName string, filterFunc partitionFilterFunc) (*diffPartitions, error) {
 	t, exactName, ok, err := wr.GetTableInsensitive(ctx, tblName)
 
 	if err != nil {
@@ -529,7 +461,6 @@ func calcPartitions(ctx *sql.Context, cmItr doltdb.CommitItr, wr *doltdb.RootVal
 		return nil, errors.New(fmt.Sprintf("table: %s does not exist", tblName))
 	}
 
-	diffPartitions := newDiffPartitions(exactName, filterFunc)
 	wrTblHash, _, err := wr.GetTableHash(ctx, exactName)
 
 	if err != nil {
@@ -542,21 +473,76 @@ func calcPartitions(ctx *sql.Context, cmItr doltdb.CommitItr, wr *doltdb.RootVal
 		return nil, err
 	}
 
-	diffPartitions.cmHashToTblInfo[cmHash] = tblInfoAtCommit{"WORKING", nil, t, wrTblHash}
+	cmHashToTblInfo := make(map[hash.Hash]tblInfoAtCommit)
+	cmHashToTblInfo[cmHash] = tblInfoAtCommit{"WORKING", nil, t, wrTblHash}
+
 	err = cmItr.Reset(ctx)
 
 	if err != nil {
 		return nil, err
 	}
 
-	for {
-		cmHash, cm, err := cmItr.Next(ctx)
+	return &diffPartitions{
+		ctx: ctx,
+		tblName: tblName,
+		cmItr: cmItr,
+		cmHashToTblInfo: cmHashToTblInfo,
+		filterFunc: filterFunc,
+	}, nil
+}
+
+// called in a commit iteration loop. Adds partitions when it finds a commit and it's parent that have different values
+// for the hash of the table being looked at.
+func (dp *diffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm *doltdb.Commit, root *doltdb.RootValue, tbl *doltdb.Table) (*diffPartition, error) {
+	tblHash, _, err := root.GetTableHash(ctx, dp.tblName)
+
+	if err != nil {
+		return nil, err
+	}
+
+	toInfoForCommit := dp.cmHashToTblInfo[cmHash]
+	cmHashStr := cmHash.String()
+	meta, err := cm.GetCommitMeta()
+
+	if err != nil {
+		return nil, err
+	}
+
+	ts := types.Timestamp(meta.Time())
+
+	var nextPartition *diffPartition
+	if tblHash != toInfoForCommit.tblHash {
+		partition := diffPartition{toInfoForCommit.tbl, tbl, toInfoForCommit.name, cmHashStr, toInfoForCommit.date, &ts}
+		filterOut, err := dp.filterFunc(ctx, partition)
 
 		if err != nil {
-			if err == io.EOF {
-				return diffPartitions, nil
-			}
+			return nil, err
+		}
 
+		if !filterOut {
+			nextPartition = &partition
+		}
+	}
+
+	newInfo := tblInfoAtCommit{cmHashStr, &ts, tbl, tblHash}
+	parentHashes, err := cm.ParentHashes(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, h := range parentHashes {
+		dp.cmHashToTblInfo[h] = newInfo
+	}
+
+	return nextPartition, nil
+}
+
+func (dp *diffPartitions) Next() (sql.Partition, error) {
+	for {
+		cmHash, cm, err := dp.cmItr.Next(dp.ctx)
+
+		if err != nil {
 			return nil, err
 		}
 
@@ -566,14 +552,26 @@ func calcPartitions(ctx *sql.Context, cmItr doltdb.CommitItr, wr *doltdb.RootVal
 			return nil, err
 		}
 
-		tbl, _, err := root.GetTable(ctx, exactName)
+		tbl, _, _, err := root.GetTableInsensitive(dp.ctx, dp.tblName)
 
 		if err != nil {
 			return nil, err
 		}
 
-		err = diffPartitions.processCommit(ctx, cmHash, cm, root, tbl)
+		next, err := dp.processCommit(dp.ctx, cmHash, cm, root, tbl)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if next != nil {
+			return *next, nil
+		}
 	}
+}
+
+func (dp *diffPartitions) Close() error {
+	return nil
 }
 
 // creates a RowConverter for transforming rows with the the given schema to this super schema.
