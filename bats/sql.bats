@@ -601,7 +601,6 @@ SQL
 }
 
 @test "sql DATE_ADD and DATE_SUB in where clause" {
-    skip "DATE_ADD and DATE_SUB in the where clause causes panic"
     run dolt sql -q "select * from has_datetimes where date_created > DATE_SUB('2020-02-18 00:00:00', INTERVAL 2 DAY)"
     [ $status -eq 0 ]
     [[ "$output" =~ "17 " ]] || false
