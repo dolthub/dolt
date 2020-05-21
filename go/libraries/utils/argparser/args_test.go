@@ -24,6 +24,7 @@ import (
 
 var forceOpt = &Option{"force", "f", "", OptionalFlag, "force desc", nil}
 var messageOpt = &Option{"message", "m", "msg", OptionalValue, "msg desc", nil}
+var fileTypeOpt = &Option{"file-type", "", "", OptionalValue, "file type", nil}
 
 func TestParsing(t *testing.T) {
 	tests := []struct {
@@ -89,6 +90,13 @@ func TestParsing(t *testing.T) {
 			expectedArgs: []string{"b", "c"},
 		},
 		{
+			name:         "message colon value",
+			options:      []*Option{forceOpt, messageOpt},
+			args:         []string{"b", "--message:value", "c"},
+			expectedOpts: map[string]string{"message": "value"},
+			expectedArgs: []string{"b", "c"},
+		},
+		{
 			name:         "empty string",
 			options:      []*Option{forceOpt, messageOpt},
 			args:         []string{"b", "--message=value", ""},
@@ -96,11 +104,11 @@ func TestParsing(t *testing.T) {
 			expectedArgs: []string{"b", ""},
 		},
 		{
-			name:         "force abbrev w/o space",
+			name:         "value attached to flag",
 			options:      []*Option{forceOpt},
-			args:         []string{"bbb", "-fccc"},
+			args:         []string{"-fvalue"},
 			expectedOpts: map[string]string{"force": ""},
-			expectedArgs: []string{"bbb", "ccc"},
+			expectedArgs: []string{"value"},
 		},
 		{
 			name:         "-mvalue",
@@ -155,6 +163,13 @@ func TestParsing(t *testing.T) {
 			options:      []*Option{forceOpt, messageOpt},
 			args:         []string{"-fm", "value"},
 			expectedOpts: map[string]string{"message": "value", "force": ""},
+			expectedArgs: []string{},
+		},
+		{
+			name:         "file-type not force",
+			options:      []*Option{forceOpt, messageOpt, fileTypeOpt},
+			args:         []string{"--file-type=csv"},
+			expectedOpts: map[string]string{"file-type": "csv"},
 			expectedArgs: []string{},
 		},
 		{

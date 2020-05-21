@@ -126,30 +126,11 @@ func (ap *ArgParser) SupportsInt(name, abbrev, valDesc, desc string) *ArgParser 
 	return ap
 }
 
-func oldSplitOption(optStr string) (string, *string) {
-	optStr = strings.TrimLeft(optStr, "-")
-
-	idx := strings.IndexAny(optStr, optNameValDelimChars)
-
-	if idx == -1 {
-		return strings.TrimSpace(optStr), nil
-	}
-
-	argName := strings.TrimSpace(optStr[:idx])
-	argValue := strings.TrimSpace(optStr[idx+1:])
-
-	if len(argValue) == 0 {
-		return argName, nil
-	}
-
-	return argName, &argValue
-}
-
 // modal options in order of descending string length
 func (ap *ArgParser) sortedModalOptions() []string {
 	smo := make([]string, 0, len(ap.Supported))
 	for s, opt := range ap.NameOrAbbrevToOpt {
-		if opt.OptType == OptionalFlag {
+		if opt.OptType == OptionalFlag && s != "" {
 			smo = append(smo, s)
 		}
 	}
@@ -161,13 +142,22 @@ func (ap *ArgParser) matchModalOptions(arg string) (matches []*Option, rest stri
 	rest = arg
 
 	// try to match longest options first
-	candidateOptNames := ap.sortedModalOptions()
+	candidateFlagNames := ap.sortedModalOptions()
 
 	kontinue := true
 	for kontinue {
 		kontinue = false
 
-		for i, on := range candidateOptNames {
+		// stop if we see a value option
+		for _, vo := range ap.sortedValueOptions() {
+			lv := len(vo)
+			isValOpt := len(rest) >= lv && rest[:lv] == vo
+			if isValOpt {
+				return matches, rest
+			}
+		}
+
+		for i, on := range candidateFlagNames {
 			lo := len(on)
 			isMatch := len(rest) >= lo && rest[:lo] == on
 			if isMatch {
@@ -176,12 +166,12 @@ func (ap *ArgParser) matchModalOptions(arg string) (matches []*Option, rest stri
 				matches = append(matches, m)
 
 				// only match options once
-				head := candidateOptNames[:i]
+				head := candidateFlagNames[:i]
 				var tail []string
-				if i+1 < len(candidateOptNames) {
-					tail = candidateOptNames[i+1:]
+				if i+1 < len(candidateFlagNames) {
+					tail = candidateFlagNames[i+1:]
 				}
-				candidateOptNames = append(head, tail...)
+				candidateFlagNames = append(head, tail...)
 
 				kontinue = true
 				break
@@ -194,7 +184,7 @@ func (ap *ArgParser) matchModalOptions(arg string) (matches []*Option, rest stri
 func (ap *ArgParser) sortedValueOptions() []string {
 	vos := make([]string, 0, len(ap.Supported))
 	for s, opt := range ap.NameOrAbbrevToOpt {
-		if opt.OptType == OptionalValue {
+		if opt.OptType == OptionalValue && s != "" {
 			vos = append(vos, s)
 		}
 	}
