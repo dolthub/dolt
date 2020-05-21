@@ -16,10 +16,11 @@ package sqle
 
 import (
 	"context"
-	"github.com/liquidata-inc/go-mysql-server/sql"
-	"github.com/liquidata-inc/go-mysql-server/sql/expression"
 	"io"
 	"strings"
+
+	"github.com/liquidata-inc/go-mysql-server/sql"
+	"github.com/liquidata-inc/go-mysql-server/sql/expression"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
@@ -151,16 +152,16 @@ func (ht *HistoryTable) WithFilters(filters []sql.Expression) sql.Table {
 var commitFilterCols = set.NewStrSet([]string{CommitHashCol, CommitDateCol, CommitterCol})
 
 func getColumnFilterCheck(colNameSet *set.StrSet) func(sql.Expression) bool {
-	return func(filter sql.Expression) bool{
+	return func(filter sql.Expression) bool {
 		isCommitFilter := true
-		sql.Inspect(filter, func (e sql.Expression) (cont bool) {
-			if e == nil{
+		sql.Inspect(filter, func(e sql.Expression) (cont bool) {
+			if e == nil {
 				return true
 			}
 
-			switch val := e.(type){
+			switch val := e.(type) {
 			case *expression.GetField:
-				if !colNameSet.Contains(strings.ToLower(val.Name())){
+				if !colNameSet.Contains(strings.ToLower(val.Name())) {
 					isCommitFilter = false
 					return false
 				}
@@ -178,15 +179,15 @@ func splitFilters(filters []sql.Expression, filterCheck func(filter sql.Expressi
 	notMatching = make([]sql.Expression, 0, len(filters))
 	for _, f := range filters {
 		if filterCheck(f) {
-			matching = append(matching , f)
+			matching = append(matching, f)
 		} else {
 			notMatching = append(notMatching, f)
 		}
 	}
-	return matching , notMatching
+	return matching, notMatching
 }
 
-func splitCommitFilters(filters []sql.Expression) (commitFilters, rowFilters []sql.Expression){
+func splitCommitFilters(filters []sql.Expression) (commitFilters, rowFilters []sql.Expression) {
 	return splitFilters(filters, getColumnFilterCheck(commitFilterCols))
 }
 
@@ -442,13 +443,13 @@ func (tblItr *rowItrForTableAtCommit) Close() error {
 }
 
 func calcSuperSchema(ctx context.Context, wr *doltdb.RootValue, tblName string) (*schema.SuperSchema, error) {
-	ss, found, err :=  wr.GetSuperSchema(ctx, tblName)
+	ss, found, err := wr.GetSuperSchema(ctx, tblName)
 
-	 if err != nil {
-	 	return nil, err
-	 } else if !found {
-	 	return nil, doltdb.ErrTableNotFound
-	 }
+	if err != nil {
+		return nil, err
+	} else if !found {
+		return nil, doltdb.ErrTableNotFound
+	}
 
-	 return ss, nil
+	return ss, nil
 }

@@ -18,15 +18,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/expreval"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
+
 	"github.com/liquidata-inc/go-mysql-server/sql"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/expreval"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -169,7 +170,7 @@ func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 
 var partitionFilterCols = set.NewStrSet([]string{toCommit, fromCommit, toCommitDate, fromCommitDate})
 
-func splitPartitionFilters(filters []sql.Expression) (commitFilters, rowFilters []sql.Expression){
+func splitPartitionFilters(filters []sql.Expression) (commitFilters, rowFilters []sql.Expression) {
 	return splitFilters(filters, getColumnFilterCheck(partitionFilterCols))
 }
 
@@ -416,7 +417,7 @@ func filterFuncForFilters(nbf *types.NomsBinFormat, filters []sql.Expression) (p
 
 	return func(ctx *sql.Context, partition diffPartition) (filterOut bool, err error) {
 		vals := row.TaggedValues{
-			toCommitTag: types.String(partition.toName),
+			toCommitTag:   types.String(partition.toName),
 			fromCommitTag: types.String(partition.fromName),
 		}
 
@@ -483,11 +484,11 @@ func newDiffPartitions(ctx *sql.Context, cmItr doltdb.CommitItr, wr *doltdb.Root
 	}
 
 	return &diffPartitions{
-		ctx: ctx,
-		tblName: tblName,
-		cmItr: cmItr,
+		ctx:             ctx,
+		tblName:         tblName,
+		cmItr:           cmItr,
 		cmHashToTblInfo: cmHashToTblInfo,
-		filterFunc: filterFunc,
+		filterFunc:      filterFunc,
 	}, nil
 }
 

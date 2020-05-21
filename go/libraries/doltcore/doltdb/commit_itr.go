@@ -17,9 +17,10 @@ package doltdb
 import (
 	"context"
 	"errors"
+	"io"
+
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
-	"io"
 )
 
 // CommitItr is an interface for iterating over a set of unique commits
@@ -166,7 +167,7 @@ type CommitFilter func(context.Context, hash.Hash, *Commit) (filterOut bool, err
 
 // FilteringCommitItr is a CommitItr implementation that applies a filtering function to limit the commits returned
 type FilteringCommitItr struct {
-	itr CommitItr
+	itr    CommitItr
 	filter CommitFilter
 }
 
