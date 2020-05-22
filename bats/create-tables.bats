@@ -55,23 +55,20 @@ teardown() {
 }
 
 @test "create a table with json import. bad json." {
-    run dolt table import -c -s `nativebatsdir employees-sch.json` employees `batshelper employees-tbl-bad.json`
+    run dolt table import -c -s `batshelper employees-sch.sql` employees `batshelper employees-tbl-bad.json`
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Error determining the output schema" ]] || false
-    [[ "$output" =~ "employees-tbl-bad.json to" ]] || false
+    [[ "$output" =~ "cause: invalid character after object key:value pair: 'b'" ]] || false
     run dolt ls
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "employees" ]] || false
 }
 
 @test "create a table with json import. bad schema." {
-    run dolt table import -c -s `nativebatsdir employees-sch-bad.json` employees `batshelper employees-tbl.json`
+    run dolt table import -c -s `batshelper employees-sch-bad.sql` employees `batshelper employees-tbl.json`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error determining the output schema" ]] || false
-    skip "Error message mentions valid table file but not invalid schema file"
-    # Be careful here. "employees-sch-bad.json" matches. I think it is because
-    # the command line is somehow in $output. Added " to" to make it fail.
-    [[ "$output" =~ "employees-sch-bad.json to" ]] || false
+    [[ "$output" =~ "syntax error at position 32 near 'And'" ]] || false
+    [[ "$output" =~ "employees-sch-bad.sql" ]] || false
 }
 
 @test "import data from csv and create the table" {
