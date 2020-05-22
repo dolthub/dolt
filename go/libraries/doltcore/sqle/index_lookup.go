@@ -39,10 +39,6 @@ func (il *doltIndexLookup) String() string {
 
 var _ sql.IndexLookup = (*doltIndexLookup)(nil)
 
-func (il *doltIndexLookup) Indexes() []string {
-	return []string{il.idx.ID()}
-}
-
 // RowIter returns a row iterator for this index lookup. The iterator will return the single matching row for the index.
 func (il *doltIndexLookup) RowIter(ctx *sql.Context) (sql.RowIter, error) {
 	return &indexLookupRowIterAdapter{indexLookup: il, ctx: ctx}, nil

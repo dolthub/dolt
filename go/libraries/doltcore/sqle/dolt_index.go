@@ -37,9 +37,7 @@ type DoltIndex interface {
 
 type doltIndex struct {
 	cols         []schema.Column
-	ctx          *sql.Context
 	db           Database
-	driver       *DoltIndexDriver
 	id           string
 	indexRowData types.Map
 	indexSch     schema.Schema
@@ -119,10 +117,6 @@ func (di *doltIndex) Database() string {
 
 func (di *doltIndex) DoltDatabase() Database {
 	return di.db
-}
-
-func (di *doltIndex) Driver() string {
-	return di.driver.ID()
 }
 
 func (di *doltIndex) Expressions() []string {
