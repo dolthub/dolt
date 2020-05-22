@@ -37,7 +37,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/events"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/store/util/tempfiles"
 )
@@ -224,9 +223,10 @@ func commandNeedsMigrationCheck(args []string) bool {
 	}
 
 	// special case for -h, --help
-	_, err := argparser.NewArgParser().Parse(args)
-	if err == argparser.ErrHelp {
-		return false
+	for _, arg := range args {
+		if arg == "-h" || arg == "--help" {
+			return false
+		}
 	}
 
 	subCommandStr := strings.ToLower(strings.TrimSpace(args[0]))

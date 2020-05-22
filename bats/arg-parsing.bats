@@ -31,18 +31,23 @@ teardown() {
     dolt checkout master
     dolt branch --d "this-should-work"
 
-    skip "Need spaces after single dash arguments"
-    dolt checkout -bthis-should-work
+    run dolt checkout -bthis-should-work
+    [ $status -eq 0 ]
     run dolt branch
     [ $status -eq 0 ]
     [[ "$output" =~ "this-should-work" ]] || false
     dolt checkout master
     dolt branch -dthis-should-work
+
+    cat <<DELIM > ints.csv
+pk,c1
+0,0
+DELIM
+    dolt table import -cpk=pk this-should-work ints.csv
 }
 
 @test "dolt supports chaining of modal arguments" {
     dolt sql -q "create table test(pk int, primary key (pk))"
-    skip "Can't chain modal arguments"
     dolt table import -fc test `batshelper 1pk5col-ints.csv`
 }
 
