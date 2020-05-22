@@ -105,6 +105,5 @@ teardown() {
     run dolt sql -q "select AaA from Test order by 1 limit 1"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1" ]] || false
-    skip "Column names come back as the table declares them, not as written in the query"
-    [[ "$output" =~ "AaA" ]] || false
+    [[ "$output" =~ "Aaa" ]] || false
 }

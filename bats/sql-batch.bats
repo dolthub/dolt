@@ -24,15 +24,18 @@ teardown() {
     run dolt sql -b -q "insert into test values (0,0,0,0,0,0)"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Rows inserted: 1" ]] || false
-    skip "Batch does not properly insert a newline after output"
-    NEWLINE_REGEX = "Rows deleted: 0\n"
-    [[ "$output" =~ $NEWLINE_REGEX  ]] || false
     dolt sql -batch -q "insert into test values (1,0,0,0,0,0)"
     run dolt sql -b -q "select * from test" 
     [ "$status" -eq 0 ]
     [[ "$output" =~ " 0 " ]] || false
     [[ "$output" =~ " 1 " ]] || false
-    [[ "$output" =~ " Rows inserted " ]] || false
+
+    # check for trailing newline
+    # https://backreference.org/2010/05/23/sanitizing-files-with-no-trailing-newline/
+    dolt sql -batch -q "insert into test values (2,0,0,0,0,0)" > out.txt
+    lastline=$(tail -n 1 out.txt; echo x)
+    lastline=${lastline%x}
+    [[ $lastline =~ $'\n'$ ]] || false
 }
 
 @test "Piped SQL files interpreted in batch mode" {
