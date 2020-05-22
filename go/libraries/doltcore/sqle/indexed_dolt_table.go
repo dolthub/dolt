@@ -26,6 +26,11 @@ type IndexedDoltTable struct {
 
 var _ sql.IndexedTable = (*IndexedDoltTable)(nil)
 
+func (idt *IndexedDoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	// TODO: move index driver implementation here
+	panic("implement me")
+}
+
 func (idt *IndexedDoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 	// TODO: this should probably be an error (there should be at most one indexed lookup on a given table)
 	return idt.table.WithIndexLookup(lookup)

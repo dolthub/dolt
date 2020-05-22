@@ -55,14 +55,9 @@ func (t *DoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 	}
 }
 
-// Implements sql.IndexableTable
-func (t *DoltTable) IndexKeyValues(*sql.Context, []string) (sql.PartitionIndexKeyValueIter, error) {
-	return nil, errors.New("creating new indexes not supported")
-}
-
-// Implements sql.IndexableTable
-func (t *DoltTable) IndexLookup() sql.DriverIndexLookup {
-	panic("IndexLookup called on DoltTable, should be on IndexedDoltTable")
+func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	// TODO: move driver implementation here
+	panic("implement me")
 }
 
 // Name returns the name of the table.
