@@ -33,8 +33,8 @@ type doltIndexLookup struct {
 }
 
 func (il *doltIndexLookup) String() string {
-	// TODO: fix
-	return fmt.Sprintf("%s:%s", il.idx.ID(), "")
+	// TODO: this could be expanded with additional info (like the expression used to create the index lookup)
+	return fmt.Sprintf("doltIndexLookup:%s", il.idx.ID())
 }
 
 var _ sql.IndexLookup = (*doltIndexLookup)(nil)
