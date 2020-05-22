@@ -87,8 +87,6 @@ func NewDiffTable(ctx *sql.Context, dbName, tblName string) (*DiffTable, error) 
 		return nil, err
 	}
 
-	/**/
-
 	_ = ss.AddColumn(schema.NewColumn("commit", doltdb.DiffCommitTag, types.StringKind, false))
 	_ = ss.AddColumn(schema.NewColumn("commit_date", doltdb.DiffCommitDateTag, types.TimestampKind, false))
 
@@ -159,13 +157,13 @@ func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 
 	cmItr := doltdb.CommitItrForRoots(dt.ddb, rootCmt)
 
-	ff, err := filterFuncForFilters(dt.ddb.Format(), dt.partitionFilters)
+	sf, err := selectFuncForFilters(dt.ddb.Format(), dt.partitionFilters)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return newDiffPartitions(ctx, cmItr, workingRoot, dt.name, ff)
+	return newDiffPartitions(ctx, cmItr, workingRoot, dt.name, sf)
 }
 
 var partitionFilterCols = set.NewStrSet([]string{toCommit, fromCommit, toCommitDate, fromCommitDate})
@@ -388,9 +386,9 @@ func (dp diffPartition) Key() []byte {
 	return []byte(dp.toName + dp.fromName)
 }
 
-type partitionFilterFunc func(*sql.Context, diffPartition) (filterOut bool, err error)
+type partitionSelectFunc func(*sql.Context, diffPartition) (bool, error)
 
-func filterFuncForFilters(nbf *types.NomsBinFormat, filters []sql.Expression) (partitionFilterFunc, error) {
+func selectFuncForFilters(nbf *types.NomsBinFormat, filters []sql.Expression) (partitionSelectFunc, error) {
 	const (
 		toCommitTag uint64 = iota
 		fromCommitTag
@@ -415,7 +413,7 @@ func filterFuncForFilters(nbf *types.NomsBinFormat, filters []sql.Expression) (p
 		return nil, err
 	}
 
-	return func(ctx *sql.Context, partition diffPartition) (filterOut bool, err error) {
+	return func(ctx *sql.Context, partition diffPartition) (bool, error) {
 		vals := row.TaggedValues{
 			toCommitTag:   types.String(partition.toName),
 			fromCommitTag: types.String(partition.fromName),
@@ -429,13 +427,7 @@ func filterFuncForFilters(nbf *types.NomsBinFormat, filters []sql.Expression) (p
 			vals[fromCommitDateTag] = *partition.fromDate
 		}
 
-		expIsTrue, err := expFunc(ctx, vals)
-
-		if err != nil {
-			return false, err
-		}
-
-		return !expIsTrue, nil
+		return expFunc(ctx, vals)
 	}, nil
 }
 
@@ -448,10 +440,10 @@ type diffPartitions struct {
 	tblName         string
 	cmItr           doltdb.CommitItr
 	cmHashToTblInfo map[hash.Hash]tblInfoAtCommit
-	filterFunc      partitionFilterFunc
+	selectFunc      partitionSelectFunc
 }
 
-func newDiffPartitions(ctx *sql.Context, cmItr doltdb.CommitItr, wr *doltdb.RootValue, tblName string, filterFunc partitionFilterFunc) (*diffPartitions, error) {
+func newDiffPartitions(ctx *sql.Context, cmItr doltdb.CommitItr, wr *doltdb.RootValue, tblName string, selectFunc partitionSelectFunc) (*diffPartitions, error) {
 	t, exactName, ok, err := wr.GetTableInsensitive(ctx, tblName)
 
 	if err != nil {
@@ -488,7 +480,7 @@ func newDiffPartitions(ctx *sql.Context, cmItr doltdb.CommitItr, wr *doltdb.Root
 		tblName:         tblName,
 		cmItr:           cmItr,
 		cmHashToTblInfo: cmHashToTblInfo,
-		filterFunc:      filterFunc,
+		selectFunc:      selectFunc,
 	}, nil
 }
 
@@ -514,13 +506,13 @@ func (dp *diffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm *
 	var nextPartition *diffPartition
 	if tblHash != toInfoForCommit.tblHash {
 		partition := diffPartition{toInfoForCommit.tbl, tbl, toInfoForCommit.name, cmHashStr, toInfoForCommit.date, &ts}
-		filterOut, err := dp.filterFunc(ctx, partition)
+		selected, err := dp.selectFunc(ctx, partition)
 
 		if err != nil {
 			return nil, err
 		}
 
-		if !filterOut {
+		if selected {
 			nextPartition = &partition
 		}
 	}
