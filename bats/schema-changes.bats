@@ -28,7 +28,6 @@ SQL
     dolt commit -m "Added test table"
     dolt table import -c -f -s=1pk5col-ints-schema.sql test `batshelper 1pk5col-ints.csv`
     run dolt diff
-    skip "This produces a failed to merge schemas error message right now"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "BIGINT" ]] || false
     [[ ! "$output" =~ "TEXT" ]] || false
