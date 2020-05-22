@@ -169,29 +169,6 @@ SQL
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "master" ]] || false
     [[ "${lines[1]}" != "tester" ]] || false
-
-    # fetch branches from remote
-    dolt fetch
-
-    # should display both branches fetched from remote
-    run dolt branch
-    [ "$status" -eq 0 ]
-    [[ "${lines[0]}" =~ "master" ]] || false
-    skip "Fetched branch not displayed in branch list" [[ "${lines[1]}" =~ "tester" ]] || false
-
-    # should not be able to create branch with same
-    # name as remote branch
-    run dolt checkout -b tester
-    [ "$status" -eq 1 ]
-    [[ "${lines[0]}" =~ "fatal: A branch named 'tester' already exists." ]] || false
-
-    # delete tester branch
-    dolt branch -d -f tester
-    
-    # should not be able to checkout branch that is not displayed
-    run dolt checkout tester
-    [ "$status" -eq 1 ]
-    [[ "${lines[0]}" =~ "error: could not find tester" ]] || false
 }
 
 @test "branches can be deleted after fetch" {
@@ -254,21 +231,6 @@ SQL
     run dolt branch
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "master" ]] || false
-    skip "Fetched branch not displayed in branch list" [[ "${lines[1]}" =~ "tester" ]] || false
-
-    # delete fetched branch
-    run dolt branch -d -f tester
-    [ "$status" -eq 0 ]
-
-    # attempt to delete branch again
-    run dolt branch -d -f tester
-    [ "$status" -eq 1 ]
-    [[ "${lines[0]}" =~ "fatal: branch 'tester' not found" ]] || false
-
-    # should not be able to checkout branch that is deleted
-    run dolt checkout tester
-    [ "$status" -eq 1 ]
-    [[ "${lines[0]}" =~ "error: could not find tester" ]] || false
 }
 
 @test "clone from a directory that is not a dolt repo" {
@@ -276,10 +238,7 @@ SQL
     touch remotedir/some-junk
 
     cd dolt-repo-clones
-    dolt clone file://../remotedir test-repo
-    cd test-repo
-    skip "Cloning any directory partially initializes a dolt repo"
-    [ ! -d .dolt ]
-    [ ! -f LICENSE.md ]
-    [ ! -f README.md ]
+    run dolt clone file://../remotedir test-repo
+    [ "$status" -eq 1 ]
+    [ ! -d test-repo ]
 }

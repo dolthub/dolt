@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -288,6 +289,10 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	wg.Wait()
 
 	if err != nil {
+		if err == datas.ErrNoData {
+			err = errors.New("remote at that url contains no Dolt data")
+		}
+
 		return errhand.BuildDError("error: clone failed").AddCause(err).Build()
 	}
 
