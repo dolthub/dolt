@@ -202,7 +202,6 @@ teardown() {
 @test "import an .xlsx file that is not a valid excel spreadsheet" {
     run dolt table import -c --pk=id test `batshelper bad.xlsx`
     [ "$status" -eq 1 ]
-    skip "errors with 'cause: zip: not a valid zip file'. should say not a valid xlsx file"
     [[ "$output" =~ "not a valid xlsx file" ]] || false
     run dolt ls
     [ "$status" -eq 0 ]

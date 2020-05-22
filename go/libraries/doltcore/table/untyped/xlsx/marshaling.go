@@ -17,6 +17,7 @@ package xlsx
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/tealeg/xlsx"
 
@@ -26,7 +27,7 @@ import (
 )
 
 func UnmarshalFromXLSX(path string) ([][][]string, error) {
-	data, err := xlsx.OpenFile(path)
+	data, err := openFile(path)
 
 	if err != nil {
 		return nil, err
@@ -38,6 +39,17 @@ func UnmarshalFromXLSX(path string) ([][][]string, error) {
 	}
 
 	return dataSlice, nil
+}
+
+func openFile(path string) (*xlsx.File, error) {
+	data, err := xlsx.OpenFile(path)
+
+	if err != nil {
+		msg := strings.ReplaceAll(err.Error(), "zip", "xlsx")
+		return nil, fmt.Errorf(msg)
+	}
+
+	return data, nil
 }
 
 func decodeXLSXRows(nbf *types.NomsBinFormat, xlData [][][]string, sch schema.Schema) ([]row.Row, error) {
@@ -81,7 +93,7 @@ func decodeXLSXRows(nbf *types.NomsBinFormat, xlData [][][]string, sch schema.Sc
 }
 
 func getXlsxRows(path string, tblName string) ([][][]string, error) {
-	data, err := xlsx.OpenFile(path)
+	data, err := openFile(path)
 
 	if err != nil {
 		return nil, err
