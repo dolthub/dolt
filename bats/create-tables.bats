@@ -209,10 +209,16 @@ teardown() {
 }
 
 @test "import a table with non UTF-8 characters in it" {
+    # run dolt table import -c --pk=pk test `batshelper bad-characters.csv`
+    # skip "Dolt allows you to create tables with non-UTF-8 characters right now"
+    # [ "$status" -eq 1 ]
+    # [[ "$output" =~ "unsupported characters" ]] || false
+
     run dolt table import -c --pk=pk test `batshelper bad-characters.csv`
-    skip "Dolt allows you to create tables with non-UTF-8 characters right now"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "unsupported characters" ]] || false
+    [ "$status" -eq 0 ]
+    dolt sql -q 'select * from test'
+    dolt sql -r csv -q 'select * from test' > compare.csv
+    diff compare.csv `batshelper bad-characters.csv`
 }
 
 @test "dolt diff on a newly created table" {
