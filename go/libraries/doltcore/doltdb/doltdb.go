@@ -230,34 +230,34 @@ func getCommitStForHash(ctx context.Context, db datas.Database, c string) (types
 	return valSt, nil
 }
 
-func walkAncestorSpec(ctx context.Context, db datas.Database, commitSt types.Struct, aSpec *AncestorSpec) (types.Struct, error) {
+func getAncestor(ctx context.Context, vrw types.ValueReadWriter, commitSt types.Struct, aSpec *AncestorSpec) (types.Struct, error) {
 	if aSpec == nil || len(aSpec.Instructions) == 0 {
 		return commitSt, nil
 	}
 
 	instructions := aSpec.Instructions
 	for _, inst := range instructions {
-		cm := Commit{db, commitSt}
+		cm := Commit{vrw, commitSt}
 
 		numPars, err := cm.NumParents()
 
 		if err != nil {
-			return types.EmptyStruct(db.Format()), err
+			return types.EmptyStruct(vrw.Format()), err
 		}
 
 		if inst < numPars {
 			commitStPtr, err := cm.getParent(ctx, inst)
 
 			if err != nil {
-				return types.EmptyStruct(db.Format()), err
+				return types.EmptyStruct(vrw.Format()), err
 			}
 
 			if commitStPtr == nil {
-				return types.EmptyStruct(db.Format()), ErrInvalidAncestorSpec
+				return types.EmptyStruct(vrw.Format()), ErrInvalidAncestorSpec
 			}
 			commitSt = *commitStPtr
 		} else {
-			return types.EmptyStruct(db.Format()), ErrInvalidAncestorSpec
+			return types.EmptyStruct(vrw.Format()), ErrInvalidAncestorSpec
 		}
 	}
 
@@ -282,7 +282,7 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec) (*Commit, error)
 		return nil, err
 	}
 
-	commitSt, err = walkAncestorSpec(ctx, ddb.db, commitSt, cs.ASpec)
+	commitSt, err = getAncestor(ctx, ddb.db, commitSt, cs.ASpec)
 
 	if err != nil {
 		return nil, err

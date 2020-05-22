@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"time"
 
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -163,114 +162,39 @@ func hashToCommit(ctx context.Context, vrw types.ValueReadWriter, h hash.Hash) (
 	return NewCommit(vrw, cmSt), nil
 }
 
-type CommitIndexingCommitItr struct {
-	ddb         *DoltDB
-	itr         CommitItr
-	commits     []hash.Hash
-	authors     []string
-	commitTimes []time.Time
+// CommitFilter is a function that returns true if a commit should be filtered out, and false if it should be kept
+type CommitFilter func(context.Context, hash.Hash, *Commit) (filterOut bool, err error)
+
+// FilteringCommitItr is a CommitItr implementation that applies a filtering function to limit the commits returned
+type FilteringCommitItr struct {
+	itr    CommitItr
+	filter CommitFilter
 }
 
-func NewCommitIndexingCommitItr(ddb *DoltDB, itr CommitItr) *CommitIndexingCommitItr {
-	return &CommitIndexingCommitItr{
-		ddb:         ddb,
-		itr:         itr,
-		commits:     make([]hash.Hash, 0, 4096),
-		authors:     make([]string, 0, 4096),
-		commitTimes: make([]time.Time, 0, 4096),
-	}
+func NewFilteringCommitItr(itr CommitItr, filter CommitFilter) FilteringCommitItr {
+	return FilteringCommitItr{itr, filter}
 }
 
-func (cmItr *CommitIndexingCommitItr) Reset(ctx context.Context) error {
-	cmItr.commits = make([]hash.Hash, 0, 4096)
-	cmItr.authors = make([]string, 0, 4096)
-	cmItr.commitTimes = make([]time.Time, 0, 4096)
-
-	return cmItr.itr.Reset(ctx)
-}
-
-func (cmItr *CommitIndexingCommitItr) Next(ctx context.Context) (hash.Hash, *Commit, error) {
-	h, cm, err := cmItr.itr.Next(ctx)
-
-	if err != nil {
-		return hash.Hash{}, nil, err
-	}
-
-	meta, err := cm.GetCommitMeta()
-
-	if err != nil {
-		return hash.Hash{}, nil, err
-	}
-
-	commitTS := meta.Time()
-	author := meta.Name
-
-	cmItr.commits = append(cmItr.commits, h)
-	cmItr.commitTimes = append(cmItr.commitTimes, commitTS)
-	cmItr.authors = append(cmItr.authors, author)
-
-	return h, cm, nil
-}
-
-type TimeRange struct {
-	Min time.Time
-	Max time.Time
-}
-
-func (tr *TimeRange) Contains(t time.Time) bool {
-	return t.After(tr.Min) && t.Before(tr.Max)
-}
-
-func (cmItr *CommitIndexingCommitItr) Unfiltered() *CommitHashItr {
-	return &CommitHashItr{cmItr.ddb.ValueReadWriter(), cmItr.commits, 0}
-}
-
-type CommitCheck func(context.Context, hash.Hash, string, time.Time) (bool, error)
-
-func (cmItr *CommitIndexingCommitItr) Filter(ctx context.Context, check CommitCheck) (*CommitHashItr, error) {
-	hashes := make([]hash.Hash, 0, len(cmItr.commits))
-	for i, h := range cmItr.commits {
-		author := cmItr.authors[i]
-		ts := cmItr.commitTimes[i]
-
-		passed, err := check(ctx, h, author, ts)
+// Next returns the hash of the next commit, and a pointer to that commit.  Implementations of Next must handle
+// making sure the list of commits returned are unique.  When complete Next will return hash.Hash{}, nil, io.EOF
+func (itr FilteringCommitItr) Next(ctx context.Context) (hash.Hash, *Commit, error) {
+	// iteration will terminate on io.EOF or a commit that is !filteredOut
+	for {
+		h, cm, err := itr.itr.Next(ctx)
 
 		if err != nil {
-			return nil, err
+			return hash.Hash{}, nil, err
 		}
 
-		if passed {
-			hashes = append(hashes, h)
+		if filterOut, err := itr.filter(ctx, h, cm); err != nil {
+			return hash.Hash{}, nil, err
+		} else if !filterOut {
+			return h, cm, nil
 		}
 	}
-
-	return &CommitHashItr{cmItr.ddb.ValueReadWriter(), hashes, 0}, nil
 }
 
-type CommitHashItr struct {
-	vrw    types.ValueReadWriter
-	hashes []hash.Hash
-	n      int
-}
-
-func (chItr *CommitHashItr) Next(ctx context.Context) (hash.Hash, *Commit, error) {
-	if chItr.n >= len(chItr.hashes) {
-		return hash.Hash{}, nil, io.EOF
-	}
-
-	h := chItr.hashes[chItr.n]
-
-	cm, err := hashToCommit(ctx, chItr.vrw, h)
-
-	if err != nil {
-		return hash.Hash{}, nil, err
-	}
-
-	chItr.n++
-	return h, cm, nil
-}
-
-func (chItr *CommitHashItr) Reset(ctx context.Context) error {
-	chItr.n = 0
-	return nil
+// Reset the commit iterator back to the
+func (itr FilteringCommitItr) Reset(ctx context.Context) error {
+	return itr.itr.Reset(ctx)
 }

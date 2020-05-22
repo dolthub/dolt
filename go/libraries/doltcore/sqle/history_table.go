@@ -16,10 +16,8 @@ package sqle
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"strings"
-	"time"
 
 	"github.com/liquidata-inc/go-mysql-server/sql"
 	"github.com/liquidata-inc/go-mysql-server/sql/expression"
@@ -58,7 +56,6 @@ type HistoryTable struct {
 	commitFilters         []sql.Expression
 	rowFilters            []sql.Expression
 	cmItr                 doltdb.CommitItr
-	indCmItr              *doltdb.CommitIndexingCommitItr
 	readerCreateFuncCache map[hash.Hash]CreateReaderFunc
 }
 
@@ -77,16 +74,13 @@ func NewHistoryTable(ctx *sql.Context, dbName, tblName string) (*HistoryTable, e
 		return nil, err
 	}
 
-	cmItr := doltdb.CommitItrForRoots(ddb, head)
-	indCmItr := doltdb.NewCommitIndexingCommitItr(ddb, cmItr)
-
 	root, ok := sess.GetRoot(dbName)
 
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	ss, err := calcSuperSchema(ctx, indCmItr, root, tblName)
+	ss, err := calcSuperSchema(ctx, root, tblName)
 
 	if err != nil {
 		return nil, err
@@ -113,20 +107,20 @@ func NewHistoryTable(ctx *sql.Context, dbName, tblName string) (*HistoryTable, e
 		return nil, err
 	}
 
+	cmItr := doltdb.CommitItrForRoots(ddb, head)
 	return &HistoryTable{
 		name:                  tblName,
 		ddb:                   ddb,
 		ss:                    ss,
 		sqlSch:                sqlSch,
-		cmItr:                 indCmItr.Unfiltered(),
-		indCmItr:              indCmItr,
+		cmItr:                 cmItr,
 		readerCreateFuncCache: make(map[hash.Hash]CreateReaderFunc),
 	}, nil
 }
 
 // HandledFilters returns the list of filters that will be handled by the table itself
 func (ht *HistoryTable) HandledFilters(filters []sql.Expression) []sql.Expression {
-	ht.commitFilters, ht.rowFilters = splitFilters(filters)
+	ht.commitFilters, ht.rowFilters = splitCommitFilters(filters)
 	return ht.commitFilters
 }
 
@@ -138,11 +132,10 @@ func (ht *HistoryTable) Filters() []sql.Expression {
 // WithFilters returns a new sql.Table instance with the filters applied
 func (ht *HistoryTable) WithFilters(filters []sql.Expression) sql.Table {
 	if ht.commitFilters == nil {
-		ht.commitFilters, ht.rowFilters = splitFilters(filters)
+		ht.commitFilters, ht.rowFilters = splitCommitFilters(filters)
 	}
 
 	if len(ht.commitFilters) > 0 {
-		ctx := context.TODO()
 		commitCheck, err := getCommitFilterFunc(ht.ddb.Format(), ht.commitFilters)
 
 		// TODO: fix panic
@@ -150,12 +143,7 @@ func (ht *HistoryTable) WithFilters(filters []sql.Expression) sql.Table {
 			panic(err)
 		}
 
-		ht.cmItr, err = ht.indCmItr.Filter(ctx, commitCheck)
-
-		// TODO: fix panic
-		if err != nil {
-			panic(err)
-		}
+		ht.cmItr = doltdb.NewFilteringCommitItr(ht.cmItr, commitCheck)
 	}
 
 	return ht
@@ -163,38 +151,44 @@ func (ht *HistoryTable) WithFilters(filters []sql.Expression) sql.Table {
 
 var commitFilterCols = set.NewStrSet([]string{CommitHashCol, CommitDateCol, CommitterCol})
 
-func isCommitFilter(filter sql.Expression) bool {
-	isCommitFilter := true
-	sql.Inspect(filter, func(e sql.Expression) (cont bool) {
-		if e == nil {
-			return true
-		}
-
-		switch val := e.(type) {
-		case *expression.GetField:
-			if !commitFilterCols.Contains(strings.ToLower(val.Name())) {
-				isCommitFilter = false
-				return false
+func getColumnFilterCheck(colNameSet *set.StrSet) func(sql.Expression) bool {
+	return func(filter sql.Expression) bool {
+		isCommitFilter := true
+		sql.Inspect(filter, func(e sql.Expression) (cont bool) {
+			if e == nil {
+				return true
 			}
-		}
 
-		return true
-	})
+			switch val := e.(type) {
+			case *expression.GetField:
+				if !colNameSet.Contains(strings.ToLower(val.Name())) {
+					isCommitFilter = false
+					return false
+				}
+			}
 
-	return isCommitFilter
+			return true
+		})
+
+		return isCommitFilter
+	}
 }
 
-func splitFilters(filters []sql.Expression) (commitFilters, rowFilters []sql.Expression) {
-	commitFilters = make([]sql.Expression, 0, len(filters))
-	rowFilters = make([]sql.Expression, 0, len(filters))
+func splitFilters(filters []sql.Expression, filterCheck func(filter sql.Expression) bool) (matching, notMatching []sql.Expression) {
+	matching = make([]sql.Expression, 0, len(filters))
+	notMatching = make([]sql.Expression, 0, len(filters))
 	for _, f := range filters {
-		if isCommitFilter(f) {
-			commitFilters = append(commitFilters, f)
+		if filterCheck(f) {
+			matching = append(matching, f)
 		} else {
-			rowFilters = append(rowFilters, f)
+			notMatching = append(notMatching, f)
 		}
 	}
-	return commitFilters, rowFilters
+	return matching, notMatching
+}
+
+func splitCommitFilters(filters []sql.Expression) (commitFilters, rowFilters []sql.Expression) {
+	return splitFilters(filters, getColumnFilterCheck(commitFilterCols))
 }
 
 func commitSchema() schema.Schema {
@@ -211,19 +205,26 @@ func commitSchema() schema.Schema {
 
 var commitSch = commitSchema()
 
-func getCommitFilterFunc(nbf *types.NomsBinFormat, filters []sql.Expression) (doltdb.CommitCheck, error) {
+func getCommitFilterFunc(nbf *types.NomsBinFormat, filters []sql.Expression) (doltdb.CommitFilter, error) {
 	expFunc, err := expreval.ExpressionFuncFromSQLExpressions(nbf, commitSch, filters)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return func(ctx context.Context, h hash.Hash, committer string, time time.Time) (bool, error) {
-		commitFields := map[uint64]types.Value{
-			doltdb.HistoryCommitterTag:  types.String(committer),
-			doltdb.HistoryCommitHashTag: types.String(h.String()),
-			doltdb.HistoryCommitDateTag: types.Timestamp(time),
+	return func(ctx context.Context, h hash.Hash, cm *doltdb.Commit) (filterOut bool, err error) {
+		meta, err := cm.GetCommitMeta()
+
+		if err != nil {
+			return false, err
 		}
+
+		commitFields := map[uint64]types.Value{
+			doltdb.HistoryCommitterTag:  types.String(meta.Name),
+			doltdb.HistoryCommitHashTag: types.String(h.String()),
+			doltdb.HistoryCommitDateTag: types.Timestamp(meta.Time()),
+		}
+
 		return expFunc(ctx, commitFields)
 	}, nil
 }
@@ -441,77 +442,14 @@ func (tblItr *rowItrForTableAtCommit) Close() error {
 	return nil
 }
 
-func calcSuperSchema(ctx context.Context, cmItr doltdb.CommitItr, wr *doltdb.RootValue, tblName string) (*schema.SuperSchema, error) {
-	t, _, ok, err := wr.GetTableInsensitive(ctx, tblName)
+func calcSuperSchema(ctx context.Context, wr *doltdb.RootValue, tblName string) (*schema.SuperSchema, error) {
+	ss, found, err := wr.GetSuperSchema(ctx, tblName)
 
 	if err != nil {
 		return nil, err
+	} else if !found {
+		return nil, doltdb.ErrTableNotFound
 	}
 
-	if !ok {
-		return nil, fmt.Errorf("table: %s does not exist", tblName)
-	}
-
-	sch, err := t.GetSchema(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	ss, err := schema.NewSuperSchema(sch)
-
-	if err != nil {
-		return nil, err
-	}
-
-	addedSchemas := make(map[hash.Hash]bool)
-
-	for {
-		_, cm, err := cmItr.Next(ctx)
-
-		if err != nil {
-			if err == io.EOF {
-				return ss, nil
-			}
-
-			return nil, err
-		}
-
-		root, err := cm.GetRootValue()
-
-		if err != nil {
-			return nil, err
-		}
-
-		tbl, _, ok, err := root.GetTableInsensitive(ctx, tblName)
-
-		if err != nil {
-			return nil, err
-		}
-
-		if ok {
-			schRef, err := tbl.GetSchemaRef()
-
-			if err != nil {
-				return nil, err
-			}
-
-			h := schRef.TargetHash()
-
-			if !addedSchemas[h] {
-				addedSchemas[h] = true
-				sch, err := tbl.GetSchema(ctx)
-
-				if err != nil {
-					return nil, err
-				}
-
-				err = ss.AddSchemas(sch)
-
-				if err != nil {
-					return nil, err
-				}
-			}
-		}
-	}
+	return ss, nil
 }

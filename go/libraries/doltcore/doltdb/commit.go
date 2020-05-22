@@ -264,3 +264,13 @@ func (c *Commit) CanFastReverseTo(ctx context.Context, new *Commit) (bool, error
 
 	return false, nil
 }
+
+func (c *Commit) GetAncestor(ctx context.Context, as *AncestorSpec) (*Commit, error) {
+	ancestorSt, err := getAncestor(ctx, c.vrw, c.commitSt, as)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &Commit{c.vrw, ancestorSt}, nil
+}
