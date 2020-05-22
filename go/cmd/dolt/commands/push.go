@@ -102,23 +102,31 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	remoteName := "origin"
-	remote, remoteOK := remotes[remoteName]
 
+	args = apr.Args()
+	if len(args) == 1 {
+		if _, ok := remotes[args[0]]; ok {
+			remoteName = args[0]
+			args = []string{}
+		}
+	}
+
+	remote, remoteOK := remotes[remoteName]
 	currentBranch := dEnv.RepoState.CWBHeadRef()
 	upstream, hasUpstream := dEnv.RepoState.Branches[currentBranch.GetPath()]
 
 	var refSpec ref.RefSpec
 	var verr errhand.VerboseError
-	if remoteOK && apr.NArg() == 1 {
-		refSpecStr := apr.Arg(0)
+	if remoteOK && len(args) == 1 {
+		refSpecStr := args[0]
 		refSpec, err = ref.ParseRefSpec(refSpecStr)
 
 		if err != nil {
 			verr = errhand.BuildDError("error: invalid refspec '%s'", refSpecStr).AddCause(err).Build()
 		}
-	} else if apr.NArg() == 2 {
-		remoteName = apr.Arg(0)
-		refSpecStr := apr.Arg(1)
+	} else if len(args) == 2 {
+		remoteName = args[0]
+		refSpecStr := args[1]
 		refSpec, err = ref.ParseRefSpec(refSpecStr)
 
 		if err != nil {
@@ -127,7 +135,7 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	} else if apr.Contains(SetUpstreamFlag) {
 		verr = errhand.BuildDError("error: --set-upstream requires <remote> and <refspec> params.").SetPrintUsage().Build()
 	} else if hasUpstream {
-		if apr.NArg() > 0 {
+		if len(args) > 0 {
 			cli.PrintErrf("fatal: upstream branch set for '%s'.  Use 'dolt push' without arguments to push.\n", currentBranch)
 			return 1
 		}
@@ -148,7 +156,7 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		remoteName = upstream.Remote
 		refSpec, _ = ref.NewBranchToBranchRefSpec(currentBranch.(ref.BranchRef), upstream.Merge.Ref.(ref.BranchRef))
 	} else {
-		if apr.NArg() == 0 {
+		if len(args) == 0 {
 			remoteName = "<remote>"
 			if defRemote, verr := dEnv.GetDefaultRemote(); verr == nil {
 				remoteName = defRemote.Name
@@ -273,7 +281,7 @@ func pushToRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, mode ref.RefUpda
 	cm, err := localDB.Resolve(ctx, cs)
 
 	if err != nil {
-		return errhand.BuildDError("error: unable to find %v", srcRef.GetPath()).Build()
+		return errhand.BuildDError("error: refspec '%v' not found.", srcRef.GetPath()).Build()
 	} else {
 		wg, progChan, pullerEventCh := runProgFuncs()
 		err = actions.Push(ctx, dEnv, mode, destRef.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB, cm, progChan, pullerEventCh)

@@ -18,6 +18,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"sync/atomic"
 
 	"google.golang.org/grpc/codes"
@@ -278,9 +280,28 @@ func (rs *RemoteChunkStore) GetRepoMetadata(ctx context.Context, req *remotesapi
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
 	}
 
+	_, tfs, err := cs.Sources(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var size uint64
+	for _, tf := range tfs {
+		path := filepath.Join(req.RepoId.Org, req.RepoId.RepoName, tf.FileID())
+		info, err := os.Stat(path)
+
+		if err != nil {
+			return nil, err
+		}
+
+		size += uint64(info.Size())
+	}
+
 	return &remotesapi.GetRepoMetadataResponse{
 		NbfVersion: cs.Version(),
 		NbsVersion: nbs.StorageVersion,
+		StorageSize: size,
 	}, nil
 }
 

@@ -703,6 +703,10 @@ func (dEnv *DoltEnv) FindRef(ctx context.Context, refStr string) (ref.DoltRef, e
 	} else if hasRef {
 		return localRef, nil
 	} else {
+		if strings.HasPrefix(refStr, "remotes/") {
+			refStr = refStr[len("remotes/"):]
+		}
+
 		slashIdx := strings.IndexRune(refStr, '/')
 		if slashIdx > 0 {
 			remoteName := refStr[:slashIdx]
