@@ -93,7 +93,7 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, err
 	}
 
-	cm, err = cm.WalkAncestorSpec(ctx, as)
+	cm, err = cm.GetAncestor(ctx, as)
 
 	if err != nil {
 		return nil, err

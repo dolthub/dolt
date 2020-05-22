@@ -230,7 +230,7 @@ func getCommitStForHash(ctx context.Context, db datas.Database, c string) (types
 	return valSt, nil
 }
 
-func walkAncestorSpec(ctx context.Context, vrw types.ValueReadWriter, commitSt types.Struct, aSpec *AncestorSpec) (types.Struct, error) {
+func getAncestor(ctx context.Context, vrw types.ValueReadWriter, commitSt types.Struct, aSpec *AncestorSpec) (types.Struct, error) {
 	if aSpec == nil || len(aSpec.Instructions) == 0 {
 		return commitSt, nil
 	}
@@ -282,7 +282,7 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec) (*Commit, error)
 		return nil, err
 	}
 
-	commitSt, err = walkAncestorSpec(ctx, ddb.db, commitSt, cs.ASpec)
+	commitSt, err = getAncestor(ctx, ddb.db, commitSt, cs.ASpec)
 
 	if err != nil {
 		return nil, err
