@@ -48,17 +48,17 @@ skip_if_no_aws_tests() {
     dolt sql -q 'show tables'
 }
 
-# TODO: Is this what we want?
-@test "clone empty aws repository gets new initial repository with configured remote" {
+# Matches behavior of other remote types
+@test "clone empty aws remote fails"
     skip_if_no_aws_tests
     rm -rf .dolt
     random_repo=`openssl rand -hex 32`
     dolt clone 'aws://['"$DOLT_BATS_AWS_TABLE"':'"$DOLT_BATS_AWS_BUCKET"']/'"$random_repo"
     cd "$random_repo"
     run dolt remote -v
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 1 ]
-    [ "${lines[0]}" == 'origin aws://['"$DOLT_BATS_AWS_TABLE"':'"$DOLT_BATS_AWS_BUCKET"']/'"$random_repo"' ' ]
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "error: clone failed" ]] || false
+    [[ "$output" =~ "cause: remote at that url contains no Dolt data" ]] || false
 }
 
 @test "can push to new remote" {
