@@ -164,15 +164,8 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 		}
 	}
 
-	ctx.RegisterIndexDriver(dsql.NewDoltIndexDriver(dsqlDBs...))
-	err = ctx.LoadIndexes(ctx, h.engine.Catalog.AllDatabases())
-
 	if len(dbs) == 1 {
 		h.sess.SetCurrentDatabase(dbs[0].Name())
-	}
-
-	if err != nil {
-		return err
 	}
 
 	return nil

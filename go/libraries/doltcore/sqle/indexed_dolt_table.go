@@ -24,12 +24,15 @@ type IndexedDoltTable struct {
 	indexLookup *doltIndexLookup
 }
 
-func (idt *IndexedDoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
-	return idt.table.WithIndexLookup(lookup)
+var _ sql.IndexedTable = (*IndexedDoltTable)(nil)
+
+func (idt *IndexedDoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	return idt.table.GetIndexes(ctx)
 }
 
-func (idt *IndexedDoltTable) IndexKeyValues(*sql.Context, []string) (sql.PartitionIndexKeyValueIter, error) {
-	return idt.table.IndexKeyValues(nil, nil)
+func (idt *IndexedDoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
+	// TODO: this should probably be an error (there should be at most one indexed lookup on a given table)
+	return idt.table.WithIndexLookup(lookup)
 }
 
 func (idt *IndexedDoltTable) Name() string {
@@ -42,10 +45,6 @@ func (idt *IndexedDoltTable) String() string {
 
 func (idt *IndexedDoltTable) Schema() sql.Schema {
 	return idt.table.Schema()
-}
-
-func (idt *IndexedDoltTable) IndexLookup() sql.IndexLookup {
-	return idt.indexLookup
 }
 
 func (idt *IndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {

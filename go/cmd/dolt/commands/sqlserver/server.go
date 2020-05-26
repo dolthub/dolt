@@ -186,14 +186,6 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommi
 			}
 		}
 
-		// TODO: this shouldn't need to happen every session
-		sqlCtx.RegisterIndexDriver(dsqle.NewDoltIndexDriver(dbs...))
-		err = ir.LoadIndexes(sqlCtx, sqlEngine.Catalog.AllDatabases())
-
-		if err != nil {
-			return nil, nil, nil, err
-		}
-
 		return doltSess, ir, vr, nil
 	}
 }

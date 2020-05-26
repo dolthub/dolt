@@ -1054,12 +1054,6 @@ func newSqlEngine(sqlCtx *sql.Context, mrEnv env.MultiRepoEnv, roots map[string]
 		}
 	}
 
-	sqlCtx.RegisterIndexDriver(dsqle.NewDoltIndexDriver(dbs...))
-	err := sqlCtx.LoadIndexes(sqlCtx, engine.Catalog.AllDatabases())
-	if err != nil {
-		return nil, err
-	}
-
 	return &sqlEngine{nameToDB, mrEnv, engine, format}, nil
 }
 

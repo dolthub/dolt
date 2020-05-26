@@ -15,6 +15,8 @@
 package sqle
 
 import (
+	"fmt"
+
 	"github.com/liquidata-inc/go-mysql-server/sql"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -31,13 +33,12 @@ type doltIndexLookup struct {
 	keyIter IndexLookupKeyIterator
 }
 
-func (il *doltIndexLookup) Indexes() []string {
-	return []string{il.idx.ID()}
+func (il *doltIndexLookup) String() string {
+	// TODO: this could be expanded with additional info (like the expression used to create the index lookup)
+	return fmt.Sprintf("doltIndexLookup:%s", il.idx.ID())
 }
 
-func (il *doltIndexLookup) Values(p sql.Partition) (sql.IndexValueIter, error) {
-	panic("implement me")
-}
+var _ sql.IndexLookup = (*doltIndexLookup)(nil)
 
 // RowIter returns a row iterator for this index lookup. The iterator will return the single matching row for the index.
 func (il *doltIndexLookup) RowIter(ctx *sql.Context) (sql.RowIter, error) {
