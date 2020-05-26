@@ -38,10 +38,10 @@ const writeBufSize = 256 * 1024
 
 // CSVWriter implements TableWriter.  It writes rows as comma separated string values
 type CSVWriter struct {
-	wr     	*bufio.Writer
-	closer 	io.Closer
-	info   	*CSVFileInfo
-	sch    	schema.Schema
+	wr      *bufio.Writer
+	closer  io.Closer
+	info    *CSVFileInfo
+	sch     schema.Schema
 	useCRLF bool // True to use \r\n as the line terminator
 }
 
@@ -66,12 +66,11 @@ func OpenCSVWriter(path string, fs filesys.WritableFS, outSch schema.Schema, inf
 // NewCSVWriter writes rows to the given WriteCloser based on the Schema and CSVFileInfo provided
 func NewCSVWriter(wr io.WriteCloser, outSch schema.Schema, info *CSVFileInfo) (*CSVWriter, error) {
 
-
 	csvw := &CSVWriter{
-		wr: bufio.NewWriterSize(wr, writeBufSize),
+		wr:     bufio.NewWriterSize(wr, writeBufSize),
 		closer: wr,
-		info: info,
-		sch: outSch,
+		info:   info,
+		sch:    outSch,
 	}
 
 	if info.HasHeaderLine {
