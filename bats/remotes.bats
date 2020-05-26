@@ -61,9 +61,9 @@ teardown() {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     run dolt push test-remote
     [ "$status" -eq 1 ]
-    skip "Bad error message for only one command to push"
-    [[ !"$output" =~ "unable to find" ]] || false
-    [[ "$output" =~ "must specify remote and branch" ]] || false
+    [[ "$output" =~ "fatal: The current branch master has no upstream branch." ]] || false
+    [[ "$output" =~ "To push the current branch and set the remote as upstream, use" ]] || false
+    [[ "$output" =~ "dolt push --set-upstream test-remote master" ]] || false
 }
 
 @test "push and pull master branch from a remote" {
@@ -73,8 +73,7 @@ teardown() {
     [ -d "$BATS_TMPDIR/remotes-$$/test-org/test-repo" ]
     run dolt pull test-remote
     [ "$status" -eq 0 ]
-    skip "Should say Already up to date not fast forward"
-    [[ "$output" = "up to date" ]] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 
 @test "push and pull non-master branch from remote" {
@@ -84,8 +83,7 @@ teardown() {
     [ "$status" -eq 0 ]
     run dolt pull test-remote
     [ "$status" -eq 0 ]
-    skip "Should say up to date not fast forward"
-    [[ "$output" = "up to date" ]] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 
 @test "push and pull from non-master branch and use --set-upstream" {
@@ -205,27 +203,18 @@ SQL
 
 @test "clone an empty remote" {
     run dolt clone http://localhost:50051/test-org/empty
-    [ "$status" -eq 0 ]
-    cd empty
-    run dolt status
-    [ "$status" -eq 0 ]
-    run ls
-    [[ ! "$output" =~ "LICENSE.md" ]] || false
-    [[ ! "$output" =~ "README.md" ]] || false
-    run dolt remote -v
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "origin" ]] || false
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "error: clone failed" ]] || false
+    [[ "$output" =~ "cause: remote at that url contains no Dolt data" ]] || false
 }
 
 @test "clone a non-existent remote" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     cd "dolt-repo-clones"
-    run dolt clone foo/bar
+    run dolt clone http://localhost:50051/foo/bar
     [ "$status" -eq 1 ]
-    skip "Cloning a non-existant repository fails weirdly and leaves trash"
-    [ "$output" = "fatal: repository 'foo/bar' does not exist" ]
-    [[ ! "$output" =~ "permission denied" ]] || false
-    [ ! -d bar ]
+    [[ "$output" =~ "error: clone failed" ]] || false
+    [[ "$output" =~ "cause: remote at that url contains no Dolt data" ]] || false
 }
 
 @test "clone a different branch than master" {
@@ -300,7 +289,6 @@ SQL
     [ "$output" = "" ]
     run dolt fetch poop refs/heads/master:refs/remotes/poop/master
     [ "$status" -eq 1 ]
-    echo $output
     [[ "$output" =~ "unknown remote" ]] || false
     run dolt fetch test-remote refs/heads/master:refs/remotes/test-remote/poop
     [ "$status" -eq 0 ]
@@ -422,12 +410,11 @@ SQL
     dolt commit -m "test commit"
     dolt push test-remote master
     cd "dolt-repo-clones/test-repo"
-    skip "This remotes/origin/master syntax no longer works but works on git"
     run dolt merge remotes/origin/master
     [ "$status" -eq 0 ]
     # This needs to say up-to-date like the skipped test above
-    # [[ "$output" =~ "up to date" ]]
-    dolt fetch origin master
+    [[ "$output" =~ "Everything up-to-date" ]]
+    run dolt fetch origin master
     [ "$status" -eq 0 ]
     run dolt merge remotes/origin/master
     [ "$status" -eq 0 ]
