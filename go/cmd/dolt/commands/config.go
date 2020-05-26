@@ -174,7 +174,7 @@ func getOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, pri
 }
 
 func addOperation(dEnv *env.DoltEnv, setCfgTypes *set.StrSet, args []string, usage cli.UsagePrinter) int {
-	if len(args)%2 != 0 {
+	if len(args) == 0 || len(args)%2 != 0 {
 		cli.Println("error: wrong number of arguments")
 		usage()
 		return 1
