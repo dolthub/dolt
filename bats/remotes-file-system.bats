@@ -159,16 +159,16 @@ SQL
 
     run dolt branch
     [ "$status" -eq 0 ]
-    [[ "${lines[0]}" =~ "master" ]] || false
-    [[ "${lines[1]}" =~ "tester" ]] || false
+    [[ "$output" =~ "master" ]] || false
+    [[ "$output" =~ "tester" ]] || false
 
     # delete tester branch
     dolt branch -d -f tester
 
     run dolt branch
     [ "$status" -eq 0 ]
-    [[ "${lines[0]}" =~ "master" ]] || false
-    [[ "${lines[1]}" != "tester" ]] || false
+    [[ "$output" =~ "master" ]] || false
+    [[ ! "$output" != "tester" ]] || false
 }
 
 @test "branches can be deleted after fetch" {

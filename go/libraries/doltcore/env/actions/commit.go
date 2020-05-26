@@ -193,6 +193,10 @@ func AddCommits(ctx context.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, 
 		return err
 	}
 
+	if _, ok := hashToCommit[hash]; ok {
+		return nil
+	}
+
 	hashToCommit[hash] = commit
 
 	numParents, err := commit.NumParents()
