@@ -164,7 +164,7 @@ SQL
     run dolt status
     [[ ! "$output" =~ "test1" ]] || false
     [[ ! "$output" =~ "test2" ]] || false
-    [[ "$output" =~ file.*test3 ]] || false
+    [[ ! "$output" =~ file.*test3 ]] || false
     [[ "$output" =~ file.*test4 ]] || false
 }
 
@@ -180,7 +180,6 @@ SQL
     dolt add test1 test2
     dolt reset --hard
     run dolt status
-    skip "dolt reset --hard does not delete tracked new tables"
     [[ ! "$output" =~ table.*test1 ]] || false
     [[ ! "$output" =~ table.*test2 ]] || false
     [[ "$output" =~ "nothing to commit" ]] || false
