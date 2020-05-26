@@ -111,7 +111,12 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.T
 	}
 
 	if h == anch {
-		return mergeTbl, &MergeStats{Operation: TableModified}, nil
+		ms := MergeStats{Operation: TableModified}
+		if h != mh {
+			ms, err = calcTableMergeStats(ctx, tbl, mergeTbl)
+		}
+
+		return mergeTbl, &ms, nil
 	} else if mh == anch {
 		return tbl, &MergeStats{Operation: TableUnmodified}, nil
 	}
@@ -209,6 +214,46 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.T
 	}
 
 	return mergedTable, stats, nil
+}
+
+func calcTableMergeStats(ctx context.Context, tbl *doltdb.Table, mergeTbl *doltdb.Table) (MergeStats, error) {
+	rows, err := tbl.GetRowData(ctx)
+
+	if err != nil {
+		return MergeStats{}, err
+	}
+
+	mergeRows, err := mergeTbl.GetRowData(ctx)
+
+	if err != nil {
+		return MergeStats{}, err
+	}
+
+	ae := atomicerr.New()
+	ch := make(chan diff.DiffSummaryProgress)
+	go func() {
+		defer close(ch)
+		err := diff.Summary(ctx, ch, mergeRows, rows)
+
+		ae.SetIfError(err)
+	}()
+
+	ms := MergeStats{Operation: TableModified}
+	for p := range ch {
+		if ae.IsSet() {
+			break
+		}
+
+		ms.Adds += int(p.Adds)
+		ms.Deletes += int(p.Removes)
+		ms.Modifications += int(p.Changes)
+	}
+
+	if err := ae.Get(); err != nil {
+		return MergeStats{}, err
+	}
+
+	return ms, nil
 }
 
 func stopAndDrain(stop chan<- struct{}, drain <-chan types.ValueChanged) {
