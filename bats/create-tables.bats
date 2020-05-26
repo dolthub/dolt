@@ -54,7 +54,7 @@ teardown() {
     [ "$output" = "Please specify schema file for .json tables." ]
 }
 
-@test "create a table with json import. bad json." {
+@test "create a table with json data import. bad json data." {
     run dolt table import -c -s `batshelper employees-sch.sql` employees `batshelper employees-tbl-bad.json`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "cause: invalid character after object key:value pair: 'b'" ]] || false
@@ -67,7 +67,6 @@ teardown() {
     run dolt table import -c -s `batshelper employees-sch-bad.sql` employees `batshelper employees-tbl.json`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error determining the output schema" ]] || false
-    [[ "$output" =~ "syntax error at position 32 near 'And'" ]] || false
     [[ "$output" =~ "employees-sch-bad.sql" ]] || false
 }
 
@@ -206,16 +205,14 @@ teardown() {
 }
 
 @test "import a table with non UTF-8 characters in it" {
-    # run dolt table import -c --pk=pk test `batshelper bad-characters.csv`
-    # skip "Dolt allows you to create tables with non-UTF-8 characters right now"
-    # [ "$status" -eq 1 ]
-    # [[ "$output" =~ "unsupported characters" ]] || false
+    # windows diff can't find file
+    cat `batshelper bad-characters.csv` > bad-characters.csv
 
-    run dolt table import -c --pk=pk test `batshelper bad-characters.csv`
+    run dolt table import -c --pk=pk test bad-characters.csv
     [ "$status" -eq 0 ]
     dolt sql -q 'select * from test'
     dolt sql -r csv -q 'select * from test' > compare.csv
-    diff compare.csv `batshelper bad-characters.csv`
+    diff compare.csv bad-characters.csv
 }
 
 @test "dolt diff on a newly created table" {
