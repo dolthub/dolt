@@ -169,7 +169,7 @@ func (di *doltIndex) Table() string {
 	return di.tableName
 }
 
-// TableData returns the map of table data for this index (the map of the index table, not the target table)
+// TableData returns the map of table data for this index (the map of the target table, not the index storage table)
 func (di *doltIndex) TableData() types.Map {
 	return di.tableData
 }
