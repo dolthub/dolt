@@ -206,6 +206,24 @@ DELIM
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
+@test "use a name map with missing and extra entries" {
+    cat <<JSON > partial-map.json
+{
+    "one":"pk",
+    "ten":"c10"
+}
+JSON
+    run dolt table import -c -pk=pk -m=partial-map.json test name-map-data.csv
+    [ "$status" -eq 0 ]
+    run dolt schema export test
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "c10" ]] || false
+    [[ "${lines[1]}" =~ "pk" ]] || false
+    [[ "${lines[2]}" =~ "two" ]] || false
+    [[ "${lines[3]}" =~ "three" ]] || false
+    [[ "${lines[4]}" =~ "four" ]] || false
+}
+
 @test "create a table with a schema file" {
     cat <<DELIM > sch-data.csv
 pk,c1,c2,c3
