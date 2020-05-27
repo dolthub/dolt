@@ -205,14 +205,12 @@ teardown() {
 }
 
 @test "import a table with non UTF-8 characters in it" {
-    # windows diff can't find file
-    cat `batshelper bad-characters.csv` > bad-characters.csv
-
-    run dolt table import -c --pk=pk test bad-characters.csv
+    skiponwindows "windows can't find bad-characters.csv"
+    run dolt table import -c --pk=pk test `batshelper bad-characters.csv`
     [ "$status" -eq 0 ]
     dolt sql -q 'select * from test'
     dolt sql -r csv -q 'select * from test' > compare.csv
-    diff compare.csv bad-characters.csv
+    diff compare.csv `batshelper bad-characters.csv`
 }
 
 @test "dolt diff on a newly created table" {
