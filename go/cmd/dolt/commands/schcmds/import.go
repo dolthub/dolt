@@ -153,7 +153,7 @@ func (cmd ImportCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(keepTypesParam, "", "When a column already exists in the table, and it's also in the {{.LessThan}}file{{.GreaterThan}} provided, use the type from the table.")
 	ap.SupportsString(fileTypeParam, "", "type", "Explicitly define the type of the file if it can't be inferred from the file extension.")
 	ap.SupportsString(pksParam, "", "comma-separated-col-names", "List of columns used as the primary key cols.  Order of the columns will determine sort order.")
-	ap.SupportsString(mappingParam, "", "mapping-file", "A file that can map a column name in {{.LessThan}}file{{.GreaterThan}} to a new value.")
+	ap.SupportsString(mappingParam, "m", "mapping-file", "A file that can map a column name in {{.LessThan}}file{{.GreaterThan}} to a new value.")
 	ap.SupportsString(floatThresholdParam, "", "float", "Minimum value at which the fractional component of a value must exceed in order to be considered a float.")
 	ap.SupportsString(delimParam, "", "delimiter", "Specify a delimiter for a csv style file with a non-comma delimiter.")
 	return ap

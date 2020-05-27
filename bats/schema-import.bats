@@ -249,7 +249,7 @@ DELIM
     dolt schema import -c --pks=pk test2 1pk5col-ints.csv
 }
 
-@test "schema import --update adds columns" {
+@test "schema import --update adds new columns" {
     dolt table import -c -pk=pk test abc.csv
     dolt add test
     dolt commit -m "added table"
@@ -270,8 +270,7 @@ DELIM
     [[ "$output" =~ "1,blue,2.2,false,,," ]] || false
 }
 
-
-@test "schema import --replace adds columns" {
+@test "schema import --replace adds new columns" {
     dolt table import -c -pk=pk test abc.csv
     dolt add test
     dolt commit -m "added table"
@@ -288,4 +287,43 @@ DELIM
     [ "$status" -eq 0 ]
     [[ "$output" =~ "COUNT(*)" ]] || false
     [[ "$output" =~ "0" ]] || false
+}
+
+@test "schema import --replace drops missing columns" {
+    cat <<DELIM > xyz.csv
+pk,x,y,z
+0,green,3.14,-1
+1,yellow,2.71,-2
+DELIM
+    dolt table import -c -pk=pk test abc-xyz.csv
+    dolt add test
+    dolt commit -m "added test"
+    run dolt schema import -pks=pk -r test xyz.csv
+    [ "$status" -eq 0 ]
+    run dolt diff --schema
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "-   \`a\`" ]] || false
+    [[ "$output" =~ "-   \`b\`" ]] || false
+    [[ "$output" =~ "-   \`c\`" ]] || false
+    # assert no columns were added
+    [[ ! "$output" = "+    \`" ]] || false
+}
+
+@test "schema import with name map" {
+    cat <<JSON > name-map.json
+{
+    "a":"aa",
+    "b":"bb",
+    "c":"cc"
+}
+JSON
+    run dolt schema import -c -pks=pk -m=name-map.json test abc.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "\`pk\` INT" ]] || false
+    [[ "$output" =~ "\`aa\`" ]] || false
+    [[ "$output" =~ "\`bb\`" ]] || false
+    [[ "$output" =~ "\`cc\`" ]] || false
+    [[ ! "$output" =~ "\`a\`" ]] || false
+    [[ ! "$output" =~ "\`b\`" ]] || false
+    [[ ! "$output" =~ "\`c\`" ]] || false
 }
