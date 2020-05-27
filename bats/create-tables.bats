@@ -54,24 +54,20 @@ teardown() {
     [ "$output" = "Please specify schema file for .json tables." ]
 }
 
-@test "create a table with json import. bad json." {
-    run dolt table import -c -s `nativebatsdir employees-sch.json` employees `batshelper employees-tbl-bad.json`
+@test "create a table with json data import. bad json data." {
+    run dolt table import -c -s `batshelper employees-sch.sql` employees `batshelper employees-tbl-bad.json`
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Error determining the output schema" ]] || false
-    [[ "$output" =~ "employees-tbl-bad.json to" ]] || false
+    [[ "$output" =~ "cause: invalid character after object key:value pair: 'b'" ]] || false
     run dolt ls
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "employees" ]] || false
 }
 
 @test "create a table with json import. bad schema." {
-    run dolt table import -c -s `nativebatsdir employees-sch-bad.json` employees `batshelper employees-tbl.json`
+    run dolt table import -c -s `batshelper employees-sch-bad.sql` employees `batshelper employees-tbl.json`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error determining the output schema" ]] || false
-    skip "Error message mentions valid table file but not invalid schema file"
-    # Be careful here. "employees-sch-bad.json" matches. I think it is because
-    # the command line is somehow in $output. Added " to" to make it fail.
-    [[ "$output" =~ "employees-sch-bad.json to" ]] || false
+    [[ "$output" =~ "employees-sch-bad.sql" ]] || false
 }
 
 @test "import data from csv and create the table" {
@@ -202,7 +198,6 @@ teardown() {
 @test "import an .xlsx file that is not a valid excel spreadsheet" {
     run dolt table import -c --pk=id test `batshelper bad.xlsx`
     [ "$status" -eq 1 ]
-    skip "errors with 'cause: zip: not a valid zip file'. should say not a valid xlsx file"
     [[ "$output" =~ "not a valid xlsx file" ]] || false
     run dolt ls
     [ "$status" -eq 0 ]
@@ -210,10 +205,12 @@ teardown() {
 }
 
 @test "import a table with non UTF-8 characters in it" {
+    skiponwindows "windows can't find bad-characters.csv"
     run dolt table import -c --pk=pk test `batshelper bad-characters.csv`
-    skip "Dolt allows you to create tables with non-UTF-8 characters right now"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "unsupported characters" ]] || false
+    [ "$status" -eq 0 ]
+    dolt sql -q 'select * from test'
+    dolt sql -r csv -q 'select * from test' > compare.csv
+    diff compare.csv `batshelper bad-characters.csv`
 }
 
 @test "dolt diff on a newly created table" {
