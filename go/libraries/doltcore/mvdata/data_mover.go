@@ -17,6 +17,7 @@ package mvdata
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync/atomic"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
@@ -189,7 +190,13 @@ func SchAndTableNameFromFile(ctx context.Context, path string, fs filesys.Readab
 			return "", nil, err
 		}
 
-		return sqle.ParseCreateTableStatement(ctx, root, string(data))
+		tn, sch, err := sqle.ParseCreateTableStatement(ctx, root, string(data))
+
+		if err != nil {
+			return "", nil, fmt.Errorf("%s in schema file %s", err.Error(), path)
+		}
+
+		return tn, sch, nil
 	} else {
 		return "", nil, errors.New("no schema file to parse")
 	}

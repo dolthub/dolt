@@ -39,10 +39,9 @@ type DoltTable struct {
 }
 
 var _ sql.Table = (*DoltTable)(nil)
-var _ sql.IndexableTable = (*DoltTable)(nil)
-var _ sql.IndexAlterableTable = (*DoltTable)(nil)
+var _ sql.IndexedTable = (*DoltTable)(nil)
 
-// Implements sql.IndexableTable
+// WithIndexLookup implements sql.IndexedTable
 func (t *DoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 	dil, ok := lookup.(*doltIndexLookup)
 	if !ok {
@@ -55,14 +54,58 @@ func (t *DoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 	}
 }
 
-// Implements sql.IndexableTable
-func (t *DoltTable) IndexKeyValues(*sql.Context, []string) (sql.PartitionIndexKeyValueIter, error) {
-	return nil, errors.New("creating new indexes not supported")
-}
+// GetIndexes implements sql.IndexedTable
+func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	tbl := t.table
 
-// Implements sql.IndexableTable
-func (t *DoltTable) IndexLookup() sql.IndexLookup {
-	panic("IndexLookup called on DoltTable, should be on IndexedDoltTable")
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rowData, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	cols := sch.GetPKCols().GetColumns()
+	sqlIndexes := []sql.Index{
+		&doltIndex{
+			cols:         cols,
+			db:           t.db,
+			id:           fmt.Sprintf("%s:primaryKey%v", t.Name(), len(cols)),
+			indexRowData: rowData,
+			indexSch:     sch,
+			table:        tbl,
+			tableData:    rowData,
+			tableName:    t.Name(),
+			tableSch:     sch,
+		},
+	}
+
+	for _, index := range sch.Indexes().AllIndexes() {
+		indexRowData, err := tbl.GetIndexRowData(ctx, index.Name())
+		if err != nil {
+			return nil, err
+		}
+		cols := make([]schema.Column, index.Count())
+		for i, tag := range index.IndexedColumnTags() {
+			cols[i], _ = index.GetColumn(tag)
+		}
+		sqlIndexes = append(sqlIndexes, &doltIndex{
+			cols:         cols,
+			db:           t.db,
+			id:           index.Name(),
+			indexRowData: indexRowData,
+			indexSch:     index.Schema(),
+			table:        tbl,
+			tableData:    rowData,
+			tableName:    t.Name(),
+			tableSch:     sch,
+		})
+	}
+
+	return sqlIndexes, nil
 }
 
 // Name returns the name of the table.
@@ -70,7 +113,7 @@ func (t *DoltTable) Name() string {
 	return t.name
 }
 
-// Not sure what the purpose of this method is, so returning the name for now.
+// String returns a human-readable string to display the name of this SQL node.
 func (t *DoltTable) String() string {
 	return t.name
 }
@@ -104,124 +147,6 @@ func (t *DoltTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 // Returns the table rows for the partition given (all rows of the table).
 func (t *DoltTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
 	return newRowIterator(t, ctx)
-}
-
-func (t *DoltTable) CreateIndex(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, columns []sql.IndexColumn, comment string) error {
-	if constraint != sql.IndexConstraint_None && constraint != sql.IndexConstraint_Unique {
-		return fmt.Errorf("not yet supported")
-	}
-
-	if !doltdb.IsValidTableName(indexName) {
-		return fmt.Errorf("invalid index name `%s` as they must match the regular expression %s", indexName, doltdb.TableNameRegexStr)
-	}
-
-	// get the real column names as CREATE INDEX columns are case-insensitive
-	var realColNames []string
-	allTableCols := t.sch.GetAllCols()
-	for _, indexCol := range columns {
-		tableCol, ok := allTableCols.GetByName(indexCol.Name)
-		if !ok {
-			tableCol, ok = allTableCols.GetByNameCaseInsensitive(indexCol.Name)
-			if !ok {
-				return fmt.Errorf("column `%s` does not exist for the table", indexCol.Name)
-			}
-		}
-		realColNames = append(realColNames, tableCol.Name)
-	}
-
-	// create the index metadata, will error if index names are taken or an index with the same columns in the same order exists
-	_, err := t.sch.Indexes().AddIndexByColNames(indexName, realColNames, constraint == sql.IndexConstraint_Unique, comment)
-	if err != nil {
-		return err
-	}
-
-	// update the table schema with the new index
-	newSchemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, t.table.ValueReadWriter(), t.sch)
-	if err != nil {
-		return err
-	}
-	tableRowData, err := t.table.GetRowData(ctx)
-	if err != nil {
-		return err
-	}
-	indexData, err := t.table.GetIndexData(ctx)
-	if err != nil {
-		return err
-	}
-	newTable, err := doltdb.NewTable(ctx, t.table.ValueReadWriter(), newSchemaVal, tableRowData, &indexData)
-	if err != nil {
-		return err
-	}
-
-	// set the index row data and get a new root with the updated table
-	indexRowData, err := newTable.RebuildIndexRowData(ctx, indexName)
-	if err != nil {
-		return err
-	}
-	newTable, err = newTable.SetIndexRowData(ctx, indexName, indexRowData)
-	if err != nil {
-		return err
-	}
-	root, err := t.db.GetRoot(ctx)
-	if err != nil {
-		return err
-	}
-	newRoot, err := root.PutTable(ctx, t.name, newTable)
-	if err != nil {
-		return err
-	}
-
-	return t.db.SetRoot(ctx, newRoot)
-}
-
-func (t *DoltTable) DropIndex(ctx *sql.Context, indexName string) error {
-	// RemoveIndex returns an error if the index does not exist, no need to do twice
-	_, err := t.sch.Indexes().RemoveIndex(indexName)
-	if err != nil {
-		return err
-	}
-	newTable, err := t.table.UpdateSchema(ctx, t.sch)
-	if err != nil {
-		return err
-	}
-
-	newTable, err = newTable.DeleteIndexRowData(ctx, indexName)
-	if err != nil {
-		return err
-	}
-
-	root, err := t.db.GetRoot(ctx)
-	if err != nil {
-		return err
-	}
-	newRoot, err := root.PutTable(ctx, t.name, newTable)
-	if err != nil {
-		return err
-	}
-	return t.db.SetRoot(ctx, newRoot)
-}
-
-func (t *DoltTable) RenameIndex(ctx *sql.Context, fromIndexName string, toIndexName string) error {
-	// RenameIndex will error if there is a name collision or an index does not exist
-	_, err := t.sch.Indexes().RenameIndex(fromIndexName, toIndexName)
-	if err != nil {
-		return err
-	}
-	newTable, err := t.table.UpdateSchema(ctx, t.sch)
-	if err != nil {
-		return err
-	}
-
-	root, err := t.db.GetRoot(ctx)
-	if err != nil {
-		return err
-	}
-	newRoot, err := root.PutTable(ctx, t.name, newTable)
-	if err != nil {
-		return err
-	}
-
-	return t.db.SetRoot(ctx, newRoot)
 }
 
 // WritableDoltTable allows updating, deleting, and inserting new rows. It implements sql.UpdatableTable and friends.
@@ -315,6 +240,7 @@ type AlterableDoltTable struct {
 }
 
 var _ sql.AlterableTable = (*AlterableDoltTable)(nil)
+var _ sql.IndexAlterableTable = (*AlterableDoltTable)(nil)
 
 // AddColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, order *sql.ColumnOrder) error {
@@ -482,6 +408,127 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 	}
 
 	newRoot, err := root.PutTable(ctx, t.name, updatedTable)
+	if err != nil {
+		return err
+	}
+
+	return t.db.SetRoot(ctx, newRoot)
+}
+
+// CreateIndex implements sql.IndexAlterableTable
+func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, columns []sql.IndexColumn, comment string) error {
+	if constraint != sql.IndexConstraint_None && constraint != sql.IndexConstraint_Unique {
+		return fmt.Errorf("not yet supported")
+	}
+
+	if !doltdb.IsValidTableName(indexName) {
+		return fmt.Errorf("invalid index name `%s` as they must match the regular expression %s", indexName, doltdb.TableNameRegexStr)
+	}
+
+	// get the real column names as CREATE INDEX columns are case-insensitive
+	var realColNames []string
+	allTableCols := t.sch.GetAllCols()
+	for _, indexCol := range columns {
+		tableCol, ok := allTableCols.GetByName(indexCol.Name)
+		if !ok {
+			tableCol, ok = allTableCols.GetByNameCaseInsensitive(indexCol.Name)
+			if !ok {
+				return fmt.Errorf("column `%s` does not exist for the table", indexCol.Name)
+			}
+		}
+		realColNames = append(realColNames, tableCol.Name)
+	}
+
+	// create the index metadata, will error if index names are taken or an index with the same columns in the same order exists
+	_, err := t.sch.Indexes().AddIndexByColNames(indexName, realColNames, constraint == sql.IndexConstraint_Unique, comment)
+	if err != nil {
+		return err
+	}
+
+	// update the table schema with the new index
+	newSchemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, t.table.ValueReadWriter(), t.sch)
+	if err != nil {
+		return err
+	}
+	tableRowData, err := t.table.GetRowData(ctx)
+	if err != nil {
+		return err
+	}
+	indexData, err := t.table.GetIndexData(ctx)
+	if err != nil {
+		return err
+	}
+	newTable, err := doltdb.NewTable(ctx, t.table.ValueReadWriter(), newSchemaVal, tableRowData, &indexData)
+	if err != nil {
+		return err
+	}
+
+	// set the index row data and get a new root with the updated table
+	indexRowData, err := newTable.RebuildIndexRowData(ctx, indexName)
+	if err != nil {
+		return err
+	}
+	newTable, err = newTable.SetIndexRowData(ctx, indexName, indexRowData)
+	if err != nil {
+		return err
+	}
+	root, err := t.db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+	newRoot, err := root.PutTable(ctx, t.name, newTable)
+	if err != nil {
+		return err
+	}
+
+	return t.db.SetRoot(ctx, newRoot)
+}
+
+// DropIndex implements sql.IndexAlterableTable
+func (t *AlterableDoltTable) DropIndex(ctx *sql.Context, indexName string) error {
+	// RemoveIndex returns an error if the index does not exist, no need to do twice
+	_, err := t.sch.Indexes().RemoveIndex(indexName)
+	if err != nil {
+		return err
+	}
+	newTable, err := t.table.UpdateSchema(ctx, t.sch)
+	if err != nil {
+		return err
+	}
+
+	newTable, err = newTable.DeleteIndexRowData(ctx, indexName)
+	if err != nil {
+		return err
+	}
+
+	root, err := t.db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+	newRoot, err := root.PutTable(ctx, t.name, newTable)
+	if err != nil {
+		return err
+	}
+	return t.db.SetRoot(ctx, newRoot)
+}
+
+// RenameIndex implements sql.IndexAlterableTable
+func (t *AlterableDoltTable) RenameIndex(ctx *sql.Context, fromIndexName string, toIndexName string) error {
+	// RenameIndex will error if there is a name collision or an index does not exist
+	_, err := t.sch.Indexes().RenameIndex(fromIndexName, toIndexName)
+	if err != nil {
+		return err
+	}
+	newTable, err := t.table.UpdateSchema(ctx, t.sch)
+	if err != nil {
+		return err
+	}
+
+	root, err := t.db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+	newRoot, err := root.PutTable(ctx, t.name, newTable)
 	if err != nil {
 		return err
 	}

@@ -37,9 +37,7 @@ type DoltIndex interface {
 
 type doltIndex struct {
 	cols         []schema.Column
-	ctx          *sql.Context
 	db           Database
-	driver       *DoltIndexDriver
 	id           string
 	indexRowData types.Map
 	indexSch     schema.Schema
@@ -55,24 +53,27 @@ var alwaysContinueRangeCheck noms.InRangeCheck = func(tuple types.Tuple) (bool, 
 	return true, nil
 }
 
+// AscendGreaterOrEqual implements sql.AscendIndex
 func (di *doltIndex) AscendGreaterOrEqual(keys ...interface{}) (sql.IndexLookup, error) {
 	tpl, err := di.keysToTuple(keys, false)
 	if err != nil {
 		return nil, err
 	}
 	readRange := &noms.ReadRange{Start: tpl, Inclusive: true, Reverse: false, Check: alwaysContinueRangeCheck}
-	return di.rangeToIter(readRange)
+	return di.rangeToIndexLookup(readRange)
 }
 
+// AscendLessThan implements sql.AscendIndex
 func (di *doltIndex) AscendLessThan(keys ...interface{}) (sql.IndexLookup, error) {
 	tpl, err := di.keysToTuple(keys, false)
 	if err != nil {
 		return nil, err
 	}
 	readRange := &noms.ReadRange{Start: tpl, Inclusive: false, Reverse: true, Check: alwaysContinueRangeCheck}
-	return di.rangeToIter(readRange)
+	return di.rangeToIndexLookup(readRange)
 }
 
+// AscendRange implements sql.AscendIndex
 // TODO: rename this from AscendRange to BetweenRange or something
 func (di *doltIndex) AscendRange(greaterOrEqual, lessThanOrEqual []interface{}) (sql.IndexLookup, error) {
 	greaterTpl, err := di.keysToTuple(greaterOrEqual, false)
@@ -87,44 +88,46 @@ func (di *doltIndex) AscendRange(greaterOrEqual, lessThanOrEqual []interface{}) 
 	readRange := &noms.ReadRange{Start: greaterTpl, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
 		return tuple.Less(nbf, lessTpl)
 	}}
-	return di.rangeToIter(readRange)
+	return di.rangeToIndexLookup(readRange)
 }
 
+// DescendGreater implements sql.DescendIndex
 func (di *doltIndex) DescendGreater(keys ...interface{}) (sql.IndexLookup, error) {
 	tpl, err := di.keysToTuple(keys, true)
 	if err != nil {
 		return nil, err
 	}
 	readRange := &noms.ReadRange{Start: tpl, Inclusive: true, Reverse: false, Check: alwaysContinueRangeCheck}
-	return di.rangeToIter(readRange)
+	return di.rangeToIndexLookup(readRange)
 }
 
+// DescendLessOrEqual implements sql.DescendIndex
 func (di *doltIndex) DescendLessOrEqual(keys ...interface{}) (sql.IndexLookup, error) {
 	tpl, err := di.keysToTuple(keys, true)
 	if err != nil {
 		return nil, err
 	}
 	readRange := &noms.ReadRange{Start: tpl, Inclusive: true, Reverse: true, Check: alwaysContinueRangeCheck}
-	return di.rangeToIter(readRange)
+	return di.rangeToIndexLookup(readRange)
 }
 
+// DescendRange implements sql.DescendIndex
 // TODO: fix go-mysql-server to remove this duplicate function
 func (di *doltIndex) DescendRange(lessOrEqual, greaterOrEqual []interface{}) (sql.IndexLookup, error) {
 	return di.AscendRange(greaterOrEqual, lessOrEqual)
 }
 
+// Database implement sql.Index
 func (di *doltIndex) Database() string {
 	return di.db.name
 }
 
+// DoltDatabase returns the dolt database that created this index.
 func (di *doltIndex) DoltDatabase() Database {
 	return di.db
 }
 
-func (di *doltIndex) Driver() string {
-	return di.driver.ID()
-}
-
+// Expressions implements sql.Index
 func (di *doltIndex) Expressions() []string {
 	strs := make([]string, len(di.cols))
 	for i, col := range di.cols {
@@ -133,6 +136,7 @@ func (di *doltIndex) Expressions() []string {
 	return strs
 }
 
+// Get implements sql.Index
 func (di *doltIndex) Get(keys ...interface{}) (sql.IndexLookup, error) {
 	tpl, err := di.keysToTuple(keys, false)
 	if err != nil {
@@ -141,26 +145,31 @@ func (di *doltIndex) Get(keys ...interface{}) (sql.IndexLookup, error) {
 	readRange := &noms.ReadRange{Start: tpl, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
 		return tuple.StartsWith(tpl), nil
 	}}
-	return di.rangeToIter(readRange)
+	return di.rangeToIndexLookup(readRange)
 }
 
+// Has implements sql.Index
 func (*doltIndex) Has(partition sql.Partition, key ...interface{}) (bool, error) {
 	// appears to be unused for the moment
 	panic("implement me")
 }
 
+// ID implements sql.Index
 func (di *doltIndex) ID() string {
 	return di.id
 }
 
+// Schema returns the dolt schema of this index.
 func (di *doltIndex) Schema() schema.Schema {
 	return di.tableSch
 }
 
+// Table implements sql.Index
 func (di *doltIndex) Table() string {
 	return di.tableName
 }
 
+// TableData returns the map of table data for this index (the map of the target table, not the index storage table)
 func (di *doltIndex) TableData() types.Map {
 	return di.tableData
 }
@@ -186,7 +195,7 @@ func (di *doltIndex) keysToTuple(keys []interface{}, appendMaxValue bool) (types
 	return types.NewTuple(nbf, vals...)
 }
 
-func (di *doltIndex) rangeToIter(readRange *noms.ReadRange) (sql.IndexLookup, error) {
+func (di *doltIndex) rangeToIndexLookup(readRange *noms.ReadRange) (sql.IndexLookup, error) {
 	var mapIter table.TableReadCloser = noms.NewNomsRangeReader(di.indexSch, di.indexRowData, []*noms.ReadRange{readRange})
 	return &doltIndexLookup{
 		di,

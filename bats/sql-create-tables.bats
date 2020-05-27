@@ -249,7 +249,6 @@ SQL
 @test "create a table with a mispelled primary key" {
     run dolt sql -q "CREATE TABLE test (pk BIGINT, c1 BIGINT, c2 BIGINT, PRIMARY KEY
 (pk,noexist))"
-    skip "This succeeds right now and creates a table with just one primary key pk"
     [ "$status" -eq 1 ]
 }
 

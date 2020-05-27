@@ -112,13 +112,6 @@ func NewTestEngine(ctx context.Context, db Database, root *doltdb.RootValue) (*s
 		return nil, nil, err
 	}
 
-	sqlCtx.RegisterIndexDriver(NewDoltIndexDriver(db))
-	err = sqlCtx.LoadIndexes(sqlCtx, engine.Catalog.AllDatabases())
-
-	if err != nil {
-		return nil, nil, err
-	}
-
 	err = RegisterSchemaFragments(sqlCtx, db, root)
 
 	if err != nil {

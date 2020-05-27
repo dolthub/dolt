@@ -1056,9 +1056,7 @@ INSERT INTO types VALUES (1, 4, '2020-05-14 12:00:03', 1.1, 'd', 1.1, 'a,c', '00
 	indexMap := map[string]DoltIndex{
 		"onepk:primaryKey": &doltIndex{
 			cols:         tableSchemaMap["onepk"].GetPKCols().GetColumns(),
-			ctx:          ctx,
 			db:           db,
-			driver:       nil,
 			id:           "onepk:primaryKey",
 			indexRowData: tableDataMap["onepk"],
 			indexSch:     tableSchemaMap["onepk"],
@@ -1069,9 +1067,7 @@ INSERT INTO types VALUES (1, 4, '2020-05-14 12:00:03', 1.1, 'd', 1.1, 'a,c', '00
 		},
 		"twopk:primaryKey": &doltIndex{
 			cols:         tableSchemaMap["twopk"].GetPKCols().GetColumns(),
-			ctx:          ctx,
 			db:           db,
-			driver:       nil,
 			id:           "twopk:primaryKey",
 			indexRowData: tableDataMap["twopk"],
 			indexSch:     tableSchemaMap["twopk"],
@@ -1082,9 +1078,7 @@ INSERT INTO types VALUES (1, 4, '2020-05-14 12:00:03', 1.1, 'd', 1.1, 'a,c', '00
 		},
 		"types:primaryKey": &doltIndex{
 			cols:         tableSchemaMap["types"].GetPKCols().GetColumns(),
-			ctx:          ctx,
 			db:           db,
-			driver:       nil,
 			id:           "types:primaryKey",
 			indexRowData: tableDataMap["types"],
 			indexSch:     tableSchemaMap["types"],
@@ -1155,9 +1149,7 @@ INSERT INTO types VALUES (1, 4, '2020-05-14 12:00:03', 1.1, 'd', 1.1, 'a,c', '00
 		indexId := indexDetails.tableName + ":" + index.Name()
 		indexMap[indexId] = &doltIndex{
 			cols:         indexCols,
-			ctx:          ctx,
 			db:           db,
-			driver:       nil,
 			id:           indexId,
 			indexRowData: indexData,
 			indexSch:     index.Schema(),
