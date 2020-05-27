@@ -394,6 +394,8 @@ github.com/lightstep/lightstep-tracer-common/golang/gogo v0.0.0-20190605223551-b
 github.com/lightstep/lightstep-tracer-go v0.18.1/go.mod h1:jlF1pusYV4pidLvZ+XD0UBX0ZE6WURAspgAczcDHrL4=
 github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200522204835-54fb48963b57 h1:jtx0pubYH4r7G0mK7SioB/HYwpNqL587nPnbLur+fPE=
 github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200522204835-54fb48963b57/go.mod h1:Qo0l83LdX5Z77p0tTLyJTrttZywFm0S+RYo6Shi97tw=
+github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200527000206-1c2bbce60ff6 h1:Bd//sSg4AZlz+PO1dvtSNwsNB8aTxfLJcCnvjOSMrck=
+github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200527000206-1c2bbce60ff6/go.mod h1:Qo0l83LdX5Z77p0tTLyJTrttZywFm0S+RYo6Shi97tw=
 github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0 h1:phMgajKClMUiIr+hF2LGt8KRuUa2Vd2GI1sNgHgSXoU=
 github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0/go.mod h1:YC1rI9k5gx8D02ljlbxDfZe80s/iq8bGvaaQsvR+qxs=
 github.com/liquidata-inc/mmap-go v1.0.3 h1:2LndAeAtup9rpvUmu4wZSYCsjCQ0Zpc+NqE+6+PnT7g=
