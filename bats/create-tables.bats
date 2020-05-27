@@ -71,7 +71,7 @@ teardown() {
 }
 
 @test "import data from csv and create the table" {
-    run dolt table import -c --pk=pk test `batshelper 1pk5col-ints.csv`
+    run dolt table import -c --pk=pk test 1pk5col-ints.csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
@@ -83,21 +83,28 @@ teardown() {
 }
 
 @test "use -f to overwrite data in existing table" {
-    dolt table import -c --pk=pk test `batshelper 1pk5col-ints.csv`
-
-    run dolt table import -c --pk=pk test `batshelper 1pk5col-ints.csv`
+    cat <<DELIM > other.csv
+pk,c1,c2,c3,c4,c5
+8,1,2,3,4,5
+9,1,2,3,4,5
+DELIM
+    dolt table import -c --pk=pk test 1pk5col-ints.csv
+    run dolt table import -c --pk=pk test 1pk5col-ints.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "test already exists. Use -f to overwrite." ]] || false
-
-    run dolt table import -f -c --pk=pk test `batshelper 1pk5col-ints.csv`
+    run dolt table import -f -c --pk=pk test other.csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
-    run dolt sql -q "select * from test"
+    run dolt sql -r csv -q "select * from test"
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 6 ]
+    [ "${lines[0]}" = "pk,c1,c2,c3,c4,c5" ]
+    [ "${lines[1]}" = "8,1,2,3,4,5" ]
+    [ "${lines[2]}" = "9,1,2,3,4,5" ]
+    [ ! "${lines[1]}" = "0,1,2,3,4,5" ]
+    [ ! "${lines[2]}" = "1,1,2,3,4,5" ]
 }
 
 @test "try to create a table with a bad csv" {
@@ -112,18 +119,18 @@ teardown() {
 }
 
 @test "try to create a table with dolt table import with invalid name" {
-    run dolt table import -c --pk=pk 123 `batshelper 1pk5col-ints.csv`
+    run dolt table import -c --pk=pk 123 1pk5col-ints.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "not a valid table name" ]] || false
-    run dolt table import -c --pk=pk dolt_docs `batshelper 1pk5col-ints.csv`
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "not a valid table name" ]] || false
-    [[ "$output" =~ "reserved" ]] || false
-    run dolt table import -c --pk=pk dolt_query_catalog `batshelper 1pk5col-ints.csv`
+    run dolt table import -c --pk=pk dolt_docs 1pk5col-ints.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "not a valid table name" ]] || false
     [[ "$output" =~ "reserved" ]] || false
-    run dolt table import -c --pk=pk dolt_reserved `batshelper 1pk5col-ints.csv`
+    run dolt table import -c --pk=pk dolt_query_catalog 1pk5col-ints.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "not a valid table name" ]] || false
+    [[ "$output" =~ "reserved" ]] || false
+    run dolt table import -c --pk=pk dolt_reserved 1pk5col-ints.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "not a valid table name" ]] || false
     [[ "$output" =~ "reserved" ]] || false
@@ -142,7 +149,12 @@ teardown() {
 }
 
 @test "import data from psv and create the table" {
-    run dolt table import -c --pk=pk test `batshelper 1pk5col-ints.psv`
+    cat <<DELIM > 1pk5col-ints.psv
+pk|c1|c2|c3|c4|c5
+0|1|2|3|4|5
+1|1|2|3|4|5
+DELIM
+    run dolt table import -c --pk=pk test 1pk5col-ints.psv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
@@ -153,11 +165,77 @@ teardown() {
     [ "${#lines[@]}" -eq 6 ]
 }
 
+@test "import table using --delim" {
+    cat <<DELIM > 1pk5col-ints.csv
+pk||c1||c2||c3||c4||c5
+0||1||2||3||4||5
+1||1||2||3||4||5
+DELIM
+    run dolt table import -c --delim="||" test 1pk5col-ints.csv
+    [ "$status" -eq 0 ]
+    run dolt sql -r csv -q "select * from test"
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "pk,c1,c2,c3,c4,c5" ]
+    [ "${lines[1]}" = "0,1,2,3,4,5" ]
+    [ "${lines[2]}" = "1,1,2,3,4,5" ]
+}
+
+@test "create a table with a name map" {
+    cat <<JSON > map.json
+{
+    "one":"pk",
+    "two":"c1",
+    "three":"c2",
+    "four":"c3"
+}
+JSON
+    cat <<DELIM > data.csv
+one,two,three,four
+0,a,b,c
+DELIM
+    run dolt table import -c -pk=pk -m=map.json test data.csv
+    [ "$status" -eq 0 ]
+    run dolt sql -r csv -q 'select * from test'
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "pk,c1,c2,c3" ]
+    [ "${lines[1]}" = "0,a,b,c" ]
+    run dolt schema export test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
+
+    cat <<SQL > sch.sql
+CREATE TABLE test2 (
+    pk int not null,
+    c1 float,
+    c2 float,
+    c3 float,
+    primary key(pk)
+);
+SQL
+    cat <<DELIM > data2.csv
+one,two,three,four
+0,1,2,3
+DELIM
+    run dolt table import -c -s=sch.sql -m=map.json test2 data2.csv
+    [ "$status" -eq 0 ]
+    run dolt sql -r csv -q 'select * from test2'
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "pk,c1,c2,c3" ]
+    [ "${lines[1]}" = "0,1,2,3" ]
+    skip "schema is incorrect"
+    run dolt schema export test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "\`c1\` FLOAT" ]] || false
+    [[ "$output" =~ "\`c2\` FLOAT" ]] || false
+    [[ "$output" =~ "\`c3\` FLOAT" ]] || false
+    [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
+}
+
 @test "create a table from CSV with common column name patterns" {
     run dolt table import -c --pk=UPPERCASE test `batshelper caps-column-names.csv`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
-    run dolt sql -q "select * from test"
+    run dolt sql -r csv -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "UPPERCASE" ]] || false
 }
