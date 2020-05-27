@@ -52,6 +52,7 @@ DELIM
 }
 
 @test "dolt checkout with empty string returns error" {
+    skiponwindows "get command not found on windows"
     run dolt checkout ""
     [[ "$output" =~ "error: cannot checkout empty string" ]] || false
     [ $status -ne 0 ]
