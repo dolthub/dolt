@@ -49,7 +49,7 @@ skip_if_no_aws_tests() {
 }
 
 # Matches behavior of other remote types
-@test "clone empty aws remote fails"
+@test "clone empty aws remote fails" {
     skip_if_no_aws_tests
     rm -rf .dolt
     random_repo=`openssl rand -hex 32`
