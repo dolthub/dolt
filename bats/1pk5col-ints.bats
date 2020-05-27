@@ -676,9 +676,10 @@ DELIM
     dolt commit -m "added row to test"
     dolt checkout test-branch-m
     run dolt merge test-branch
+    echo $output
     [ "$status" -eq 0 ]
-    [ "${lines[1]}" = "test | 0 " ]
-    skip "Row addition not totalled correctly" [ "${lines[2]}" = "1 tables changed, 1 rows added(+), 0 rows modified(*), 0 rows deleted(-)" ]
+    [ "${lines[1]}" = "test | 1 +" ]
+    [ "${lines[2]}" = "1 tables changed, 1 rows added(+), 0 rows modified(*), 0 rows deleted(-)" ]
 }
 
 @test "checkout table with branch of same name" {
