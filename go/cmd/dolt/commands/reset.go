@@ -98,7 +98,7 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		if apr.ContainsAll(HardResetParam, SoftResetParam) {
 			verr = errhand.BuildDError("error: --%s and --%s are mutually exclusive options.", HardResetParam, SoftResetParam).Build()
 		} else if apr.Contains(HardResetParam) {
-			verr = resetHard(ctx, dEnv, apr, workingRoot, headRoot)
+			verr = resetHard(ctx, dEnv, apr, workingRoot, stagedRoot, headRoot)
 		} else {
 			verr = resetSoft(ctx, dEnv, apr, stagedRoot, headRoot)
 		}
@@ -107,7 +107,7 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func resetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, workingRoot, headRoot *doltdb.RootValue) errhand.VerboseError {
+func resetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, workingRoot, stagedRoot, headRoot *doltdb.RootValue) errhand.VerboseError {
 	if apr.NArg() != 0 {
 		return errhand.BuildDError("--%s does not support additional params", HardResetParam).SetPrintUsage().Build()
 	}
@@ -128,7 +128,7 @@ func resetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 		}
 	}
 
-	headTblNames, err := headRoot.GetTableNames(ctx)
+	headTblNames, err := stagedRoot.GetTableNames(ctx)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to read tables from head").AddCause(err).Build()
