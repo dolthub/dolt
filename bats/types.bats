@@ -9,6 +9,28 @@ teardown() {
     teardown_common
 }
 
+@test "sql engine can parse all numeric data literals" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL,
+  i BIGINT,
+  ui BIGINT UNSIGNED,
+  f DOUBLE,
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt sql -q 'insert into test (pk,i) values (0,9223372036854775807);'
+    [ "$status" -eq "0" ]
+    skip "We can't parse values above the INT64 max in go-mysql-server yet"
+    run dolt sql -q 'insert into test (pk,ui) values (1,18446744073709551615);'
+    [ "$status" -eq "0" ]
+    skip "We can't parse large float values in go-mysql-server yet"
+    run dolt sql -q 'insert into test (pk,f) values (2, 8.988465674311578540726371186585217839905e+307);'
+    [ "$status" -eq "0" ]
+    run dolt sql -q 'insert into test (pk,f) values (3, 170141173319264429905852091742258462720);'
+    [ "$status" -eq "0" ]
+}
+
 @test "types: BIGINT" {
     dolt sql <<SQL
 CREATE TABLE test (
@@ -45,16 +67,22 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` BIGINT UNSIGNED" ]] || false
-    dolt sql -q "INSERT INTO test VALUES (1, 9223372036854775807);"
-    run dolt sql -q "SELECT * FROM test"
+    cat <<DELIM > uint64-max.csv
+pk,v
+0, 18446744073709551615
+DELIM
+    run dolt table import -u test uint64-max.csv
     [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 9223372036854775807 " ]] || false
-    skip "We can't parse values above the INT64 max in go-mysql-server yet"
-    dolt sql -q "UPDATE test SET v=v*2+1 WHERE pk=1;"
-    run dolt sql -q "SELECT * FROM test"
+    dolt sql -r csv -q "SELECT * FROM test"
+    run dolt sql -r csv -q "SELECT * FROM test"
     [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 18446744073709551615 " ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (2, 40000000000000000000);"
+    [ "${lines[1]}" = "0,18446744073709551615" ]
+
+    cat <<DELIM > too-big.csv
+pk,v
+2,40000000000000000000
+DELIM
+    run dolt table import -u test too-big.csv
     [ "$status" -eq "1" ]
     run dolt sql -q "INSERT INTO test VALUES (2, -1);"
     [ "$status" -eq "1" ]
@@ -371,23 +399,27 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` DOUBLE" ]] || false
-    dolt sql -q "INSERT INTO test VALUES (1, 1.25);"
-    run dolt sql -q "SELECT * FROM test"
+    dolt sql -q "INSERT INTO test VALUES (0, 1.25);"
+    run dolt sql -r csv -q "SELECT * FROM test WHERE pk=0"
     [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1.25 " ]] || false
-    skip "We can't parse large float values in go-mysql-server yet"
-    dolt sql -q "REPLACE INTO test VALUES (1, 8.988465674311578540726371186585217839905e+307);"
-    run dolt sql -q "SELECT * FROM test"
+    [ "${lines[1]}" = "0,1.25" ]
+    cat <<DELIM > double.csv
+pk,v
+1,8.988465674311578540726371186585217839905e+307
+DELIM
+    run dolt table import -u test double.csv
     [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 8.988465674311578540726371186585217839905e+307 " ]] || false
-    dolt sql -q "UPDATE test SET v=v*2 WHERE pk=1;"
-    run dolt sql -q "SELECT * FROM test"
+    dolt sql -r csv -q "SELECT * FROM test WHERE pk=1"
+    run dolt sql -r csv -q "SELECT * FROM test WHERE pk=1"
     [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1.797693134862315708145274237317043567981e+308 " ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (2, 3.5953862697246314162905484746340871359614113505168999e+308);"
-    [ "$status" -eq "1" ]
-    run dolt sql -q "INSERT INTO test VALUES (2, -3.5953862697246314162905484746340871359614113505168999e+308);"
-    [ "$status" -eq "1" ]
+    [ "${lines[1]}" = "1,8.988465674311579e+307" ]
+    cat <<DELIM > double.csv
+pk,v
+3,3.5953862697246314162905484746340871359614113505168999e+308
+4,-3.5953862697246314162905484746340871359614113505168999e+308
+DELIM
+    run dolt table import -u test double.csv
+    [ "$status" -ne "0" ]
 }
 
 @test "types: DOUBLE PRECISION" {
@@ -478,23 +510,36 @@ SQL
     run dolt schema show
     [ "$status" -eq "0" ]
     [[ "$output" =~ "\`v\` FLOAT" ]] || false
-    dolt sql -q "INSERT INTO test VALUES (1, 1.25);"
-    run dolt sql -q "SELECT * FROM test"
+    dolt sql -q "INSERT INTO test VALUES (0, 1.25);"
+    run dolt sql -r csv -q "SELECT * FROM test WHERE pk=0"
     [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 1.25 " ]] || false
-    skip "We can't parse large float values in go-mysql-server yet"
-    dolt sql -q "REPLACE INTO test VALUES (1, 170141173319264429905852091742258462720);"
-    run dolt sql -q "SELECT * FROM test"
+    [ "${lines[1]}" = "0,1.25" ]
+    cat <<DELIM > float.csv
+pk,v
+1,170141173319264429905852091742258462720
+DELIM
+    run dolt table import -u test float.csv
     [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 170141173319264429905852091742258462720 " ]] || false
-    dolt sql -q "UPDATE test SET v=v*2 WHERE pk=1;"
-    run dolt sql -q "SELECT * FROM test"
+    run dolt sql -r csv -q "SELECT * FROM test WHERE pk=1"
     [ "$status" -eq "0" ]
-    [[ "${lines[3]}" =~ " 340282346638528859811704183484516925440 " ]] || false
-    run dolt sql -q "INSERT INTO test VALUES (2, 680564693277057719623408366969033850880);"
-    [ "$status" -eq "1" ]
-    run dolt sql -q "INSERT INTO test VALUES (2, -680564693277057719623408366969033850880);"
-    [ "$status" -eq "1" ]
+    [ "${lines[1]}" = "1,1.7014117e+38" ]
+    cat <<DELIM > float.csv
+pk,v
+2,340282346638528859811704183484516925440
+DELIM
+    run dolt table import -u test float.csv
+    [ "$status" -eq "0" ]
+     dolt sql -r csv -q "SELECT * FROM test WHERE pk=2"
+    run dolt sql -r csv -q "SELECT * FROM test WHERE pk=2"
+    [ "$status" -eq "0" ]
+    [ "${lines[1]}" = "2,3.4028235e+38" ]
+    cat <<DELIM > float.csv
+pk,v
+3,680564693277057719623408366969033850880
+4,-680564693277057719623408366969033850880
+DELIM
+    run dolt table import -u test float.csv
+    [ "$status" -ne "0" ]
 }
 
 @test "types: INT" {
