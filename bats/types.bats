@@ -29,6 +29,7 @@ SQL
     [ "$status" -eq "0" ]
     run dolt sql -q 'insert into test (pk,f) values (3, 170141173319264429905852091742258462720);'
     [ "$status" -eq "0" ]
+    TODO: DECIMAL literals
 }
 
 @test "types: BIGINT" {
