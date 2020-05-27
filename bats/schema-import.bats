@@ -3,6 +3,31 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
+
+    cat <<DELIM > 1pk5col-ints.csv
+pk,c1,c2,c3,c4,c5
+0,1,2,3,4,5
+1,1,2,3,4,5
+DELIM
+
+    cat <<DELIM > 1pksupportedtypes.csv
+pk, int, string, boolean, float, uint, uuid
+0, 0, "asdf", TRUE, 0.0, 0, "00000000-0000-0000-0000-000000000000"
+1, -1, "qwerty", FALSE, -1.0, 1, "00000000-0000-0000-0000-000000000001"
+2, 1, "", TRUE, 0.0, 0, "123e4567-e89b-12d3-a456-426655440000"
+DELIM
+
+    cat <<DELIM > abc.csv
+pk,a,b,c
+0, red,  1.1, true
+1, blue, 2.2, false
+DELIM
+
+    cat <<DELIM > abc-xyz.csv
+pk,a,b,c,x,y,z
+0, red,  1.1, true,  green,  3.14, -1
+1, blue, 2.2, false, yellow, 2.71, -2
+DELIM
 }
 
 teardown() {
@@ -10,7 +35,7 @@ teardown() {
 }
 
 @test "schema import create" {
-    run dolt schema import -c --pks=pk test `batshelper 1pk5col-ints.csv`
+    run dolt schema import -c --pks=pk test 1pk5col-ints.csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Created table successfully." ]] || false
     run dolt ls
@@ -30,7 +55,7 @@ teardown() {
 }
 
 @test "schema import dry run" {
-    run dolt schema import --dry-run -c --pks=pk test `batshelper 1pk5col-ints.csv`
+    run dolt schema import --dry-run -c --pks=pk test 1pk5col-ints.csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 9 ]
     [[ "${lines[0]}" =~ "test" ]] || false
@@ -47,7 +72,7 @@ teardown() {
 }
 
 @test "schema import with a bunch of types" {
-    run dolt schema import --dry-run -c --pks=pk test `batshelper 1pksupportedtypes.csv`
+    run dolt schema import --dry-run -c --pks=pk test 1pksupportedtypes.csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 10 ]
     [[ "${lines[0]}" =~ "test" ]] || false
@@ -61,14 +86,16 @@ teardown() {
 }
 
 @test "schema import with an empty csv" {
-    run dolt schema import --dry-run -c --pks=pk test `batshelper bad.csv`
+    cat <<DELIM > empty.csv
+DELIM
+    run dolt schema import --dry-run -c --pks=pk test empty.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Header line is empty" ]] || false
 }
 
 @test "schema import replace" {
-    dolt schema import -c --pks=pk test `batshelper 1pk5col-ints.csv`
-    run dolt schema import -r --pks=pk test `batshelper 1pksupportedtypes.csv`
+    dolt schema import -c --pks=pk test 1pk5col-ints.csv
+    run dolt schema import -r --pks=pk test 1pksupportedtypes.csv
     [ "$status" -eq 0 ]
     run dolt schema show
     [ "$status" -eq 0 ]
@@ -84,25 +111,30 @@ teardown() {
 }
 
 @test "schema import with invalid names" {
-    run dolt schema import -c --pks=pk 123 `batshelper 1pk5col-ints.csv`
+    run dolt schema import -c --pks=pk 123 1pk5col-ints.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "not a valid table name" ]] || false
-    run dolt schema import -c --pks=pk dolt_docs `batshelper 1pk5col-ints.csv`
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "not a valid table name" ]] || false
-    [[ "$output" =~ "reserved" ]] || false
-    run dolt schema import -c --pks=pk dolt_query_catalog `batshelper 1pk5col-ints.csv`
+    run dolt schema import -c --pks=pk dolt_docs 1pk5col-ints.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "not a valid table name" ]] || false
     [[ "$output" =~ "reserved" ]] || false
-    run dolt schema import -c --pks=pk dolt_reserved `batshelper 1pk5col-ints.csv`
+    run dolt schema import -c --pks=pk dolt_query_catalog 1pk5col-ints.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "not a valid table name" ]] || false
+    [[ "$output" =~ "reserved" ]] || false
+    run dolt schema import -c --pks=pk dolt_reserved 1pk5col-ints.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "not a valid table name" ]] || false
     [[ "$output" =~ "reserved" ]] || false
 }
 
 @test "schema import with multiple primary keys" {
-    run dolt schema import -c --pks=pk1,pk2 test `batshelper 2pk5col-ints.csv`
+    cat <<DELIM > 2pk5col-ints.csv
+pk1,pk2,c1,c2,c3,c4,c5
+0,0,1,2,3,4,5
+1,1,1,2,3,4,5
+DELIM
+    run dolt schema import -c --pks=pk1,pk2 test 2pk5col-ints.csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Created table successfully." ]] || false
     dolt schema show
@@ -140,11 +172,17 @@ DELIM
 }
 
 @test "schema import --keep-types" {
-    run dolt schema import -c --keep-types --pks=pk test `batshelper 1pk5col-ints.csv`
+    cat <<DELIM > 1pk5col-strings.csv
+pk,c1,c2,c3,c4,c5,c6
+"0","foo","bar","baz","car","dog","tim"
+"1","1","2","3","4","5","6"
+DELIM
+
+    run dolt schema import -c --keep-types --pks=pk test 1pk5col-ints.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "parameter keep-types not supported for create operations" ]] || false
-    dolt schema import -c --pks=pk test `batshelper 1pk5col-ints.csv`
-    run dolt schema import -r --keep-types --pks=pk test `batshelper 1pk5col-strings.csv`
+    dolt schema import -c --pks=pk test 1pk5col-ints.csv
+    run dolt schema import -r --keep-types --pks=pk test 1pk5col-strings.csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 11 ]
     [[ "${lines[0]}" =~ "test" ]] || false
@@ -207,6 +245,85 @@ DELIM
 }
 
 @test "schema import of two tables" {
-    dolt schema import -c --pks=pk test1 `batshelper 1pksupportedtypes.csv`
-    dolt schema import -c --pks=pk test2 `batshelper 1pk5col-ints.csv`
+    dolt schema import -c --pks=pk test1 1pksupportedtypes.csv
+    dolt schema import -c --pks=pk test2 1pk5col-ints.csv
+}
+
+@test "schema import --update adds new columns" {
+    dolt table import -c -pk=pk test abc.csv
+    dolt add test
+    dolt commit -m "added table"
+    run dolt schema import -pks=pk -u test abc-xyz.csv
+    [ "$status" -eq 0 ]
+    run dolt diff --schema
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+   \`x\` LONGTEXT" ]] || false
+    [[ "$output" =~ "+   \`y\` FLOAT" ]] || false
+    [[ "$output" =~ "+   \`z\` INT" ]] || false
+    # assert no columns were deleted/replaced
+    [[ ! "$output" = "-    \`" ]] || false
+    run dolt sql -r csv -q 'select * from test'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "pk,a,b,c,x,y,z" ]] || false
+    skip "schema import --update is currently deleting table data"
+    [[ "$output" =~ "0,red,1.1,true,,," ]] || false
+    [[ "$output" =~ "1,blue,2.2,false,,," ]] || false
+}
+
+@test "schema import --replace adds new columns" {
+    dolt table import -c -pk=pk test abc.csv
+    dolt add test
+    dolt commit -m "added table"
+    run dolt schema import -pks=pk -r test abc-xyz.csv
+    [ "$status" -eq 0 ]
+    run dolt diff --schema
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+   \`x\` LONGTEXT" ]] || false
+    [[ "$output" =~ "+   \`y\` FLOAT" ]] || false
+    [[ "$output" =~ "+   \`z\` INT" ]] || false
+    # assert no columns were deleted/replaced
+    [[ ! "$output" = "-    \`" ]] || false
+    run dolt sql -r csv -q 'select count(*) from test'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "COUNT(*)" ]] || false
+    [[ "$output" =~ "0" ]] || false
+}
+
+@test "schema import --replace drops missing columns" {
+    cat <<DELIM > xyz.csv
+pk,x,y,z
+0,green,3.14,-1
+1,yellow,2.71,-2
+DELIM
+    dolt table import -c -pk=pk test abc-xyz.csv
+    dolt add test
+    dolt commit -m "added test"
+    run dolt schema import -pks=pk -r test xyz.csv
+    [ "$status" -eq 0 ]
+    run dolt diff --schema
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "-   \`a\`" ]] || false
+    [[ "$output" =~ "-   \`b\`" ]] || false
+    [[ "$output" =~ "-   \`c\`" ]] || false
+    # assert no columns were added
+    [[ ! "$output" = "+    \`" ]] || false
+}
+
+@test "schema import with name map" {
+    cat <<JSON > name-map.json
+{
+    "a":"aa",
+    "b":"bb",
+    "c":"cc"
+}
+JSON
+    run dolt schema import -c -pks=pk -m=name-map.json test abc.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "\`pk\` INT" ]] || false
+    [[ "$output" =~ "\`aa\`" ]] || false
+    [[ "$output" =~ "\`bb\`" ]] || false
+    [[ "$output" =~ "\`cc\`" ]] || false
+    [[ ! "$output" =~ "\`a\`" ]] || false
+    [[ ! "$output" =~ "\`b\`" ]] || false
+    [[ ! "$output" =~ "\`c\`" ]] || false
 }

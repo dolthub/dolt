@@ -220,7 +220,7 @@ func NameMapperFromFile(mappingFile string, FS filesys.ReadableFS) (NameMapper, 
 	err := filesys.UnmarshalJSONFile(FS, mappingFile, &nm)
 
 	if err != nil {
-		return nil, ErrMappingFileRead
+		return nil, errhand.BuildDError(ErrMappingFileRead.Error()).AddCause(err).Build()
 	}
 
 	return nm, nil
