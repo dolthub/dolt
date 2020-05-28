@@ -30,7 +30,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -590,13 +589,13 @@ var BasicSelectTests = []SelectTest{
 	{
 		Name:           "select subset of columns with order by",
 		Query:          "select first_name from people order by age, first_name",
-		ExpectedRows:   ToSqlRows(resultset.SubsetSchema(PeopleTestSchema, "first_name"), Lisa, Bart, Marge, Barney, Homer, Moe),
+		ExpectedRows:   ToSqlRows(SubsetSchema(PeopleTestSchema, "first_name"), Lisa, Bart, Marge, Barney, Homer, Moe),
 		ExpectedSchema: CompressSchema(PeopleTestSchema, "first_name"),
 	},
 	{
 		Name:           "column aliases with order by",
 		Query:          "select first_name as f from people order by age, f",
-		ExpectedRows:   ToSqlRows(resultset.SubsetSchema(PeopleTestSchema, "first_name"), Lisa, Bart, Marge, Barney, Homer, Moe),
+		ExpectedRows:   ToSqlRows(SubsetSchema(PeopleTestSchema, "first_name"), Lisa, Bart, Marge, Barney, Homer, Moe),
 		ExpectedSchema: NewResultSetSchema("f", types.StringKind),
 	},
 	{
@@ -608,13 +607,13 @@ var BasicSelectTests = []SelectTest{
 	{
 		Name:           "table aliases",
 		Query:          "select p.first_name as f, p.last_name as l from people p where p.first_name = 'Homer'",
-		ExpectedRows:   ToSqlRows(resultset.SubsetSchema(PeopleTestSchema, "first_name", "last_name"), Homer),
+		ExpectedRows:   ToSqlRows(SubsetSchema(PeopleTestSchema, "first_name", "last_name"), Homer),
 		ExpectedSchema: NewResultSetSchema("f", types.StringKind, "l", types.StringKind),
 	},
 	{
 		Name:           "table aliases without column aliases",
 		Query:          "select p.first_name, p.last_name from people p where p.first_name = 'Homer'",
-		ExpectedRows:   ToSqlRows(resultset.SubsetSchema(PeopleTestSchema, "first_name", "last_name"), Homer),
+		ExpectedRows:   ToSqlRows(SubsetSchema(PeopleTestSchema, "first_name", "last_name"), Homer),
 		ExpectedSchema: NewResultSetSchema("first_name", types.StringKind, "last_name", types.StringKind),
 	},
 	{
