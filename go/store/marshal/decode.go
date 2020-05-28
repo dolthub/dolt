@@ -255,31 +255,43 @@ func floatDecoder(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, 
 }
 
 func intDecoder(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, rv reflect.Value) error {
+	if n, ok := v.(types.Int); ok {
+		rv.SetInt(int64(n))
+		return nil
+	}
+
+	// the block below is kept for backwards compatibility
+	// ints were previously encoded as types.Float
 	if n, ok := v.(types.Float); ok {
 		i := int64(n)
 		if rv.OverflowInt(i) {
 			return overflowError(nbf, n, rv.Type())
 		}
 		rv.SetInt(i)
-	} else {
-		return &UnmarshalTypeMismatchError{v, rv.Type(), "", nbf}
+		return nil
 	}
 
-	return nil
+	return &UnmarshalTypeMismatchError{v, rv.Type(), "", nbf}
 }
 
 func uintDecoder(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, rv reflect.Value) error {
+	if n, ok := v.(types.Uint); ok {
+		rv.SetUint(uint64(n))
+		return nil
+	}
+
+	// the block below is kept for backwards compatibility
+	// uints were previously encoded as types.Float
 	if n, ok := v.(types.Float); ok {
 		u := uint64(n)
 		if rv.OverflowUint(u) {
 			return overflowError(nbf, n, rv.Type())
 		}
 		rv.SetUint(u)
-	} else {
-		return &UnmarshalTypeMismatchError{v, rv.Type(), "", nbf}
+		return nil
 	}
 
-	return nil
+	return &UnmarshalTypeMismatchError{v, rv.Type(), "", nbf}
 }
 
 type decoderCacheT struct {
