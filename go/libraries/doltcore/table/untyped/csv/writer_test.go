@@ -46,7 +46,8 @@ func TestWriter(t *testing.T) {
 	const expected = `name,age,title
 Bill Billerson,32,Senior Dufus
 Rob Robertson,25,Dufus
-John Johnson,21,Intern Dufus
+John Johnson,21,""
+Andy Anderson,27,
 `
 	info := NewCSVInfo()
 	var inCols = []schema.Column{
@@ -68,7 +69,11 @@ John Johnson,21,Intern Dufus
 		mustRow(row.New(types.Format_7_18, rowSch, row.TaggedValues{
 			nameColTag:  types.String("John Johnson"),
 			ageColTag:   types.Uint(21),
-			titleColTag: types.String("Intern Dufus")})),
+			titleColTag: types.String("")})),
+		mustRow(row.New(types.Format_7_18, rowSch, row.TaggedValues{
+			nameColTag:  types.String("Andy Anderson"),
+			ageColTag:   types.Uint(27),
+			/* title = NULL */ })),
 	}
 
 	_, outSch := untyped.NewUntypedSchema(nameColName, ageColName, titleColName)

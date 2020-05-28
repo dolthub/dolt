@@ -377,7 +377,6 @@ SQL
     [ "$status" -eq 0 ]
 
     # schema argument subsets the data and adds empty column
-    dolt sql -r csv -q "select * from subset"
     run dolt sql -r csv -q "select * from subset"
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "pk,c1,c3,noData" ]

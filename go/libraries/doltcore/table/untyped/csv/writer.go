@@ -105,30 +105,28 @@ func (csvw *CSVWriter) GetSchema() schema.Schema {
 func (csvw *CSVWriter) WriteRow(ctx context.Context, r row.Row) error {
 	allCols := csvw.sch.GetAllCols()
 
-	i := 0
-	colValStrs := make([]string, allCols.Size())
-	colIsNull := make([]bool, allCols.Size())
-	err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+	colValStrs := make([]string, 0, allCols.Size())
+	colIsNull := make([]bool, 0, allCols.Size())
+	_, err := r.IterSchema(csvw.sch, func(tag uint64, val types.Value) (stop bool, err error) {
 		val, ok := r.GetColVal(tag)
 		if !ok || types.IsNull(val) {
-			colIsNull[i] = true
-			i++
+			colIsNull = append(colIsNull, true)
+			colValStrs = append(colValStrs, "")
 			return false, nil
 		}
 
+		colIsNull = append(colIsNull, false)
 		if val.Kind() == types.StringKind {
-			colValStrs[i] = string(val.(types.String))
+			colValStrs = append(colValStrs, string(val.(types.String)))
 		} else {
 			var err error
-			colValStrs[i], err = types.EncodedValue(ctx, val)
-
+			v, err := types.EncodedValue(ctx, val)
 			if err != nil {
 				return false, err
 			}
+			colValStrs = append(colValStrs, v)
 		}
-		colIsNull[i] = false
 
-		i++
 		return false, nil
 	})
 
