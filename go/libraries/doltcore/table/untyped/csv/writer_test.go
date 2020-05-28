@@ -71,9 +71,9 @@ Andy Anderson,27,
 			ageColTag:   types.Uint(21),
 			titleColTag: types.String("")})),
 		mustRow(row.New(types.Format_7_18, rowSch, row.TaggedValues{
-			nameColTag:  types.String("Andy Anderson"),
-			ageColTag:   types.Uint(27),
-			/* title = NULL */ })),
+			nameColTag: types.String("Andy Anderson"),
+			ageColTag:  types.Uint(27),
+			/* title = NULL */})),
 	}
 
 	_, outSch := untyped.NewUntypedSchema(nameColName, ageColName, titleColName)
