@@ -97,9 +97,11 @@ func GetGeneratedSystemTables(ctx context.Context, root *RootValue) ([]string, e
 	if err != nil {
 		return nil, err
 	}
+
 	for _, pre := range generatedSystemTablePrefixes {
 		s.Add(funcitr.MapStrings(tn, func(s string) string { return pre + s })...)
 	}
+
 	return s.AsSlice(), nil
 }
 
@@ -133,6 +135,7 @@ var persistedSystemTables = []string{
 var generatedSystemTables = []string{
 	BranchesTableName,
 	LogTableName,
+	ConflictsTableName,
 }
 
 var generatedSystemTablePrefixes = []string{
@@ -229,6 +232,9 @@ const (
 )
 
 const (
-	// LogTableName is the system table name
+	// LogTableName is the log system table name
 	LogTableName = "dolt_log"
+
+	// ConflictsTableName is the conflicts system table name
+	ConflictsTableName = "dolt_conflicts"
 )

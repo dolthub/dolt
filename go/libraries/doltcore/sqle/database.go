@@ -228,6 +228,16 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 		return lt, true, nil
 	}
 
+	if lwrName == doltdb.ConflictsTableName {
+		ct, err := NewConflictsTable(ctx, db.Name())
+
+		if err != nil {
+			return nil, false, err
+		}
+
+		return ct, true, nil
+	}
+
 	if lwrName == doltdb.BranchesTableName {
 		bt, err := NewBranchesTable(ctx, db.Name())
 
