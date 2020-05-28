@@ -170,6 +170,12 @@ select * from releases_dolt_mean_results;\
 " > releases_mean.csv
     rm -f regressions_db
     touch regressions_db
+
+    # sqlite3 requires the headers to be trimmed on import
+    # otherwise it will add them as data
+    sed 1d nightly_mean.csv > headerless_nightly_mean.csv
+    sed 1d releases_mean.csv > headerless_releases_mean.csv
+
     sqlite3 regressions_db < ../"$logictest"/regressions.sql
     cp ../"$logictest"/import.sql .
     sqlite3 regressions_db < import.sql
