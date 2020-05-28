@@ -118,7 +118,7 @@ teardown() {
     [[ "$output" =~ "$EXPECTED" ]] || false
 
     # execute list-saved and verify output
-    EXPECTED=$(echo -e "id,display_order,name,query,description\nname1,1,name1,\"$Q1\",\nname2,2,name2,$Q2,")
+    EXPECTED=$(echo -e "id,display_order,name,query,description\nname1,1,name1,\"$Q1\",\"\"\nname2,2,name2,$Q2,\"\"")
     run dolt sql --list-saved -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED" ]] || false
@@ -130,10 +130,8 @@ teardown() {
     run dolt sql -r csv -x name1
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED" ]] || false
-    EXPECTED=$(echo -e "id,display_order,name,query,description\nname1,1,name1,\"$Q1_UPDATED\",\nname2,2,name2,$Q2,")
+    EXPECTED=$(echo -e "id,display_order,name,query,description\nname1,1,name1,\"$Q1_UPDATED\",\"\"\nname2,2,name2,$Q2,\"\"")
     run dolt sql --list-saved -r csv
     [ "$status" -eq 0 ]
-    echo $output
-    echo $EXPECTED
     [[ "$output" =~ "$EXPECTED" ]] || false
 }
