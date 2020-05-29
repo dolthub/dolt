@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
-
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
@@ -51,6 +49,11 @@ type DataMoverOptions interface {
 	WritesToTable() bool
 	SrcName() string
 	DestName() string
+}
+
+type DataMoverCloser interface {
+	table.TableWriteCloser
+	GetTable(context.Context) (*doltdb.Table, error)
 }
 
 type DataMover struct {
@@ -86,7 +89,12 @@ func (dmce *DataMoverCreationError) String() string {
 // dest DataLocation.  It returns the number of bad rows encountered during import, and an error.
 func (imp *DataMover) Move(ctx context.Context) (badRowCount int64, err error) {
 	defer imp.Rd.Close(ctx)
-	defer imp.Wr.Close(ctx)
+	defer func() {
+		closeErr := imp.Wr.Close(ctx)
+		if closeErr != nil {
+			err = closeErr
+		}
+	}()
 
 	var badCount int64
 	var rowErr error
@@ -146,12 +154,33 @@ func MoveData(ctx context.Context, dEnv *env.DoltEnv, mover *DataMover, mvOpts D
 	}
 
 	if mvOpts.WritesToTable() {
-		nomsWr := mover.Wr.(noms.NomsMapWriteCloser)
-		sch := nomsWr.GetSchema()
-		err = dEnv.PutTableToWorking(ctx, *nomsWr.GetMap(), sch, mvOpts.DestName())
+		wr := mover.Wr.(DataMoverCloser)
+		tbl, err := wr.GetTable(ctx)
+		if err != nil {
+			return badCount, errhand.BuildDError("Failed to apply changes to the table.").AddCause(err).Build()
+		}
 
+		root, err := dEnv.WorkingRoot(ctx)
+		if err != nil {
+			return badCount, errhand.BuildDError("Failed to fetch the working value.").AddCause(err).Build()
+		}
+
+		newRoot, err := root.PutTable(ctx, mvOpts.DestName(), tbl)
 		if err != nil {
 			return badCount, errhand.BuildDError("Failed to update the working value.").AddCause(err).Build()
+		}
+
+		rootHash, err := root.HashOf()
+		if err != nil {
+			return badCount, errhand.BuildDError("Failed to hash the working value.").AddCause(err).Build()
+		}
+
+		newRootHash, err := newRoot.HashOf()
+		if rootHash != newRootHash {
+			err = dEnv.UpdateWorkingRoot(ctx, newRoot)
+			if err != nil {
+				return badCount, errhand.BuildDError("Failed to update the working value.").AddCause(err).Build()
+			}
 		}
 	}
 

@@ -377,12 +377,6 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	if skipped > 0 {
 		cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))
 	}
-	if verr != nil {
-		return commands.HandleVErrAndExitCode(verr, usage)
-	}
-
-	verr = buildIndexes(ctx, dEnv, mvOpts.tableName)
-
 	if verr == nil {
 		cli.PrintErrln(color.CyanString("Import completed successfully."))
 	}
@@ -444,11 +438,6 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.
 			rd.Close(ctx)
 		}
 	}()
-
-	if impOpts.srcIsStream() {
-		// todo: capture stream data to file so we can use schema inference
-		wrSch = rd.GetSchema()
-	}
 
 	err = wrSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		preImage := impOpts.nameMapper.PreImage(col.Name)
@@ -568,33 +557,6 @@ func inferSchema(ctx context.Context, root *doltdb.RootValue, rd table.TableRead
 	}
 
 	return schema.SchemaFromCols(newCols), nil
-}
-
-func buildIndexes(ctx context.Context, dEnv *env.DoltEnv, newTblName string) errhand.VerboseError {
-	//TODO: change this to not use the executeImport function, and instead the SQL code path, so that we don't rebuild indexes on every import
-	newWorking, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return errhand.BuildDError("Unable to load the working set to build the indexes.").AddCause(err).Build()
-	}
-	updatedTable, ok, err := newWorking.GetTable(ctx, newTblName)
-	if err != nil {
-		return errhand.BuildDError("Unable to load the table to build the indexes.").AddCause(err).Build()
-	} else if !ok {
-		return errhand.BuildDError("Unable to find the table to build the indexes.").Build()
-	}
-	updatedTable, err = updatedTable.RebuildIndexData(ctx)
-	if err != nil {
-		return errhand.BuildDError("Unable to build the indexes.").AddCause(err).Build()
-	}
-	newWorking, err = newWorking.PutTable(ctx, newTblName, updatedTable)
-	if err != nil {
-		return errhand.BuildDError("Unable to write the indexes to the working set.").AddCause(err).Build()
-	}
-	err = dEnv.UpdateWorkingRoot(ctx, newWorking)
-	if err != nil {
-		return errhand.BuildDError("Unable to update the working set containing the indexes.").AddCause(err).Build()
-	}
-	return nil
 }
 
 func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationError) errhand.VerboseError {

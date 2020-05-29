@@ -94,12 +94,6 @@ func createTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData t
 		return nil, err
 	}
 
-	tbl, err = tbl.RebuildIndexData(context.Background())
-
-	if err != nil {
-		return nil, err
-	}
-
 	return tbl, nil
 }
 
@@ -177,7 +171,7 @@ func TestIndexRebuildingWithZeroIndexes(t *testing.T) {
 	schemaVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tSchema)
 	require.NoError(t, err)
 
-	originalTable, err := NewTable(context.Background(), db, schemaVal, rowData, nil)
+	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, schemaVal, rowData)
 	require.NoError(t, err)
 
 	rebuildAllTable, err := originalTable.RebuildIndexData(context.Background())
@@ -213,7 +207,7 @@ func TestIndexRebuildingWithOneIndex(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	originalTable, err := NewTable(context.Background(), db, schemaVal, rowData, nil)
+	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, schemaVal, rowData)
 	require.NoError(t, err)
 
 	var indexRows []row.Row
@@ -259,7 +253,7 @@ func TestIndexRebuildingWithTwoIndexes(t *testing.T) {
 
 	schemaVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tSchema)
 	require.NoError(t, err)
-	originalTable, err := NewTable(context.Background(), db, schemaVal, rowData, nil)
+	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, schemaVal, rowData)
 	require.NoError(t, err)
 
 	rebuildAllTable := originalTable
@@ -382,7 +376,7 @@ func TestIndexRebuildingUniqueSuccessOneCol(t *testing.T) {
 	)
 	schVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, sch)
 	require.NoError(t, err)
-	originalTable, err := NewTable(context.Background(), db, schVal, rowData, nil)
+	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, schVal, rowData)
 	require.NoError(t, err)
 
 	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2}, true, "")
@@ -412,7 +406,7 @@ func TestIndexRebuildingUniqueSuccessTwoCol(t *testing.T) {
 	)
 	schVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, sch)
 	require.NoError(t, err)
-	originalTable, err := NewTable(context.Background(), db, schVal, rowData, nil)
+	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, schVal, rowData)
 	require.NoError(t, err)
 
 	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2, 3}, true, "")
@@ -442,7 +436,7 @@ func TestIndexRebuildingUniqueFailOneCol(t *testing.T) {
 	)
 	schVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, sch)
 	require.NoError(t, err)
-	originalTable, err := NewTable(context.Background(), db, schVal, rowData, nil)
+	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, schVal, rowData)
 	require.NoError(t, err)
 
 	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2}, true, "")
@@ -473,7 +467,7 @@ func TestIndexRebuildingUniqueFailTwoCol(t *testing.T) {
 	)
 	schVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, sch)
 	require.NoError(t, err)
-	originalTable, err := NewTable(context.Background(), db, schVal, rowData, nil)
+	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, schVal, rowData)
 	require.NoError(t, err)
 
 	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2, 3}, true, "")
@@ -486,6 +480,41 @@ func TestIndexRebuildingUniqueFailTwoCol(t *testing.T) {
 
 	_, err = updatedTable.RebuildIndexRowData(context.Background(), index.Name())
 	require.Error(t, err)
+}
+
+func createTableWithoutIndexRebuilding(ctx context.Context, vrw types.ValueReadWriter, schemaVal types.Value, rowData types.Map) (*Table, error) {
+	indexData, err := types.NewMap(ctx, vrw)
+	if err != nil {
+		return nil, err
+	}
+
+	schemaRef, err := writeValAndGetRef(ctx, vrw, schemaVal)
+	if err != nil {
+		return nil, err
+	}
+
+	rowDataRef, err := writeValAndGetRef(ctx, vrw, rowData)
+	if err != nil {
+		return nil, err
+	}
+
+	indexesRef, err := writeValAndGetRef(ctx, vrw, indexData)
+	if err != nil {
+		return nil, err
+	}
+
+	sd := types.StructData{
+		schemaRefKey: schemaRef,
+		tableRowsKey: rowDataRef,
+		indexesKey:   indexesRef,
+	}
+
+	tableStruct, err := types.NewStruct(vrw.Format(), tableStructName, sd)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Table{vrw, tableStruct}, nil
 }
 
 func rowsToIndexRows(t *testing.T, rows []row.Row, indexName schema.Index, indexAge schema.Index) (indexNameExpectedRows []row.Row, indexAgeExpectedRows []row.Row) {

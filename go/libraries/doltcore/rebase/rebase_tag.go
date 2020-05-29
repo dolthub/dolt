@@ -444,12 +444,6 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 			return nil, err
 		}
 
-		rebasedTable, err = rebasedTable.RebuildIndexData(ctx)
-
-		if err != nil {
-			return nil, err
-		}
-
 		newRoot, err = newRoot.PutSuperSchema(ctx, tblName, rebasedSS)
 
 		if err != nil {

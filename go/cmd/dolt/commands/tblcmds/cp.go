@@ -181,7 +181,7 @@ func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 		Dest:       mvdata.TableDataLocation{Name: newTbl},
 	}
 
-	mover, verr := newTableCopyDataMover(ctx, root, dEnv.FS, cpOpts, importStatsCB)
+	mover, verr := newTableCopyDataMover(ctx, root, dEnv.FS, cpOpts, nil)
 
 	if verr != nil {
 		return commands.HandleVErrAndExitCode(verr, usage)
@@ -195,8 +195,6 @@ func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	if verr != nil {
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
-
-	verr = buildNewIndexes(ctx, dEnv, newTbl)
 
 	return commands.HandleVErrAndExitCode(verr, usage)
 }
@@ -252,31 +250,4 @@ func newTableCopyDataMover(ctx context.Context, root *doltdb.RootValue, fs files
 	rd = nil
 
 	return imp, nil
-}
-
-func buildNewIndexes(ctx context.Context, dEnv *env.DoltEnv, newTblName string) errhand.VerboseError {
-	//TODO: change this to not use the executeImport function, and instead the SQL code path
-	newWorking, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return errhand.BuildDError("Unable to load the working set to build the indexes.").AddCause(err).Build()
-	}
-	updatedTable, ok, err := newWorking.GetTable(ctx, newTblName)
-	if err != nil {
-		return errhand.BuildDError("Unable to load the table to build the indexes.").AddCause(err).Build()
-	} else if !ok {
-		return errhand.BuildDError("Unable to find the table to build the indexes.").Build()
-	}
-	updatedTable, err = updatedTable.RebuildIndexData(ctx)
-	if err != nil {
-		return errhand.BuildDError("Unable to build the indexes.").AddCause(err).Build()
-	}
-	newWorking, err = newWorking.PutTable(ctx, newTblName, updatedTable)
-	if err != nil {
-		return errhand.BuildDError("Unable to write the indexes to the working set.").AddCause(err).Build()
-	}
-	err = dEnv.UpdateWorkingRoot(ctx, newWorking)
-	if err != nil {
-		return errhand.BuildDError("Unable to update the working set containing the indexes.").AddCause(err).Build()
-	}
-	return nil
 }

@@ -54,17 +54,37 @@ type Table struct {
 	tableStruct types.Struct
 }
 
-// NewTable creates a noms Struct which stores the schema and the row data
-func NewTable(ctx context.Context, vrw types.ValueReadWriter, schema types.Value, rowData types.Map, indexData *types.Map) (*Table, error) {
+// NewTable creates a noms Struct which stores the schema and the row data. If indexData is nil, then it is rebuilt.
+func NewTable(ctx context.Context, vrw types.ValueReadWriter, schemaVal types.Value, rowData types.Map, indexData *types.Map) (*Table, error) {
 	if indexData == nil {
-		emptyIndexData, err := types.NewMap(ctx, vrw)
+		sch, err := encoding.UnmarshalSchemaNomsValue(ctx, rowData.Format(), schemaVal)
 		if err != nil {
 			return nil, err
 		}
-		indexData = &emptyIndexData
+		indexesMap, err := types.NewMap(ctx, vrw)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, index := range sch.Indexes().AllIndexes() {
+			rebuiltIndexRowData, err := rebuildIndexRowData(ctx, vrw, sch, rowData, index)
+			if err != nil {
+				return nil, err
+			}
+			rebuiltIndexRowDataRef, err := writeValAndGetRef(ctx, vrw, rebuiltIndexRowData)
+			if err != nil {
+				return nil, err
+			}
+			indexesMap, err = indexesMap.Edit().Set(types.String(index.Name()), rebuiltIndexRowDataRef).Map(ctx)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		indexData = &indexesMap
 	}
 
-	schemaRef, err := writeValAndGetRef(ctx, vrw, schema)
+	schemaRef, err := writeValAndGetRef(ctx, vrw, schemaVal)
 	if err != nil {
 		return nil, err
 	}
@@ -555,7 +575,7 @@ func (t *Table) RebuildIndexData(ctx context.Context) (*Table, error) {
 	}
 
 	for _, index := range sch.Indexes().AllIndexes() {
-		rebuiltIndexRowData, err := t.rebuildIndexRowData(ctx, sch, tableRowData, index)
+		rebuiltIndexRowData, err := rebuildIndexRowData(ctx, t.vrw, sch, tableRowData, index)
 		if err != nil {
 			return nil, err
 		}
@@ -627,7 +647,7 @@ func (t *Table) RebuildIndexRowData(ctx context.Context, indexName string) (type
 		return types.EmptyMap, fmt.Errorf("index `%s` does not exist", indexName)
 	}
 
-	rebuiltIndexData, err := t.rebuildIndexRowData(ctx, sch, tableRowData, index)
+	rebuiltIndexData, err := rebuildIndexRowData(ctx, t.vrw, sch, tableRowData, index)
 	if err != nil {
 		return types.EmptyMap, err
 	}
@@ -677,8 +697,8 @@ func (t *Table) DeleteIndexRowData(ctx context.Context, indexName string) (*Tabl
 	return t.SetIndexData(ctx, indexesMap)
 }
 
-func (t *Table) rebuildIndexRowData(ctx context.Context, sch schema.Schema, tblRowData types.Map, index schema.Index) (types.Map, error) {
-	emptyIndexMap, err := types.NewMap(ctx, t.vrw)
+func rebuildIndexRowData(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, tblRowData types.Map, index schema.Index) (types.Map, error) {
+	emptyIndexMap, err := types.NewMap(ctx, vrw)
 	if err != nil {
 		return types.EmptyMap, err
 	}

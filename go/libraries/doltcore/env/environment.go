@@ -432,12 +432,6 @@ func (dEnv *DoltEnv) PutTableToWorking(ctx context.Context, rows types.Map, sch 
 		return err
 	}
 
-	tbl, err = tbl.RebuildIndexData(ctx)
-
-	if err != nil {
-		return err
-	}
-
 	newRoot, err := root.PutTable(ctx, tableName, tbl)
 
 	if err != nil {
