@@ -53,9 +53,7 @@ skip_if_no_aws_tests() {
     skip_if_no_aws_tests
     rm -rf .dolt
     random_repo=`openssl rand -hex 32`
-    dolt clone 'aws://['"$DOLT_BATS_AWS_TABLE"':'"$DOLT_BATS_AWS_BUCKET"']/'"$random_repo"
-    cd "$random_repo"
-    run dolt remote -v
+    run dolt clone 'aws://['"$DOLT_BATS_AWS_TABLE"':'"$DOLT_BATS_AWS_BUCKET"']/'"$random_repo"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "error: clone failed" ]] || false
     [[ "$output" =~ "cause: remote at that url contains no Dolt data" ]] || false
