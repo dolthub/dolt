@@ -723,10 +723,9 @@ var BasicSelectTests = []SelectTest{
 		},
 	},
 	{
-		Name:  "select * from conflicts system table",
-		Query: "select * from dolt_conflicts",
-		ExpectedRows: []sql.Row{
-		},
+		Name:         "select * from conflicts system table",
+		Query:        "select * from dolt_conflicts",
+		ExpectedRows: []sql.Row{},
 		ExpectedSqlSchema: sql.Schema{
 			&sql.Column{Name: "table", Type: sql.Text},
 			&sql.Column{Name: "num_conflicts", Type: sql.Uint64},

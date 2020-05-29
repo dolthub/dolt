@@ -62,9 +62,9 @@ func (dt *ConflictsTable) Schema() sql.Schema {
 }
 
 type conflictsPartition struct {
-	name string
-	size uint64
-	done bool
+	name    string
+	size    uint64
+	done    bool
 	schemas doltdb.Conflict
 	//cnfItr types.MapIterator
 }
@@ -92,7 +92,7 @@ func (p *conflictsPartition) Close() error {
 
 type conflictsPartitions struct {
 	partitions []*conflictsPartition
-	pos int
+	pos        int
 }
 
 // Next returns the next partition or io.EOF when done
@@ -140,7 +140,7 @@ func (dt *ConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error
 				return nil, err
 			}
 
-			partitions = append(partitions, &conflictsPartition{tblName, m.Len(),false, schemas})
+			partitions = append(partitions, &conflictsPartition{tblName, m.Len(), false, schemas})
 		}
 	}
 
