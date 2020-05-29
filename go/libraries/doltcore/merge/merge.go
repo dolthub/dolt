@@ -183,12 +183,6 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.T
 		return nil, nil, err
 	}
 
-	mergedTable, err = mergedTable.RebuildIndexData(ctx)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
 	if conflicts.Len() > 0 {
 
 		asr, err := ancTbl.GetSchemaRef()

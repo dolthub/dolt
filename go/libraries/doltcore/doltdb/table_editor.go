@@ -218,18 +218,22 @@ func (te *TableEditor) Flush(ctx context.Context) (*Table, error) {
 
 	updated, err := te.ed.Map(ctx)
 	if err != nil {
+		_ = te.reset(ctx, te.t, te.tSch)
 		return nil, errhand.BuildDError("failed to modify table").AddCause(err).Build()
 	}
 	originalRowData, err := te.t.GetRowData(ctx)
 	if err != nil {
+		_ = te.reset(ctx, te.t, te.tSch)
 		return nil, errhand.BuildDError("failed to read table").AddCause(err).Build()
 	}
 	newTable, err := te.t.UpdateRows(ctx, updated)
 	if err != nil {
+		_ = te.reset(ctx, te.t, te.tSch)
 		return nil, errhand.BuildDError("failed to update rows").AddCause(err).Build()
 	}
 	newTable, err = te.updateIndexes(ctx, newTable, originalRowData, updated)
 	if err != nil {
+		_ = te.reset(ctx, te.t, te.tSch)
 		return nil, errhand.BuildDError("failed to update indexes").AddCause(err).Build()
 	}
 
@@ -275,49 +279,69 @@ func (te *TableEditor) updateIndexes(ctx context.Context, tbl *Table, originalRo
 		return tbl, nil
 	}
 
+	wg := &sync.WaitGroup{}
+	var anyErr error // we only care to catch any error, doesn't matter if it's overwritten
+
 	for _, key := range te.affectedKeys {
-		var originalRow row.Row
-		var updatedRow row.Row
+		wg.Add(1)
+		go func(key types.Value) {
+			defer wg.Done()
 
-		if val, ok, err := originalRowData.MaybeGet(ctx, key); err == nil && ok {
-			originalRow, err = row.FromNoms(te.tSch, key.(types.Tuple), val.(types.Tuple))
-			if err != nil {
-				return nil, err
-			}
-		} else if err != nil {
-			return nil, err
-		}
-		if val, ok, err := updated.MaybeGet(ctx, key); err == nil && ok {
-			updatedRow, err = row.FromNoms(te.tSch, key.(types.Tuple), val.(types.Tuple))
-			if err != nil {
-				return nil, err
-			}
-		} else if err != nil {
-			return nil, err
-		}
+			var originalRow row.Row
+			var updatedRow row.Row
 
-		for _, indexEd := range te.indexEds {
-			var err error
-			var originalIndexRow row.Row
-			var updatedIndexRow row.Row
-			if originalRow != nil {
-				originalIndexRow, err = originalRow.ReduceToIndex(indexEd.Index())
+			if val, ok, err := originalRowData.MaybeGet(ctx, key); err == nil && ok {
+				originalRow, err = row.FromNoms(te.tSch, key.(types.Tuple), val.(types.Tuple))
 				if err != nil {
-					return nil, err
+					anyErr = err
+					return
+				}
+			} else if err != nil {
+				anyErr = err
+				return
+			}
+			if val, ok, err := updated.MaybeGet(ctx, key); err == nil && ok {
+				updatedRow, err = row.FromNoms(te.tSch, key.(types.Tuple), val.(types.Tuple))
+				if err != nil {
+					anyErr = err
+					return
+				}
+			} else if err != nil {
+				anyErr = err
+				return
+			}
+
+			for _, indexEd := range te.indexEds {
+				var err error
+				var originalIndexRow row.Row
+				var updatedIndexRow row.Row
+				if originalRow != nil {
+					originalIndexRow, err = originalRow.ReduceToIndex(indexEd.Index())
+					if err != nil {
+						anyErr = err
+						return
+					}
+				}
+				if updatedRow != nil {
+					updatedIndexRow, err = updatedRow.ReduceToIndex(indexEd.Index())
+					if err != nil {
+						anyErr = err
+						return
+					}
+				}
+
+				err = indexEd.UpdateIndex(ctx, originalIndexRow, updatedIndexRow)
+				if err != nil {
+					anyErr = err
+					return
 				}
 			}
-			if updatedRow != nil {
-				updatedIndexRow, err = updatedRow.ReduceToIndex(indexEd.Index())
-				if err != nil {
-					return nil, err
-				}
-			}
+		}(key)
+	}
 
-			err = indexEd.UpdateIndex(ctx, originalIndexRow, updatedIndexRow)
-			if err != nil {
-				return nil, err
-			}
-		}
+	wg.Wait()
+	if anyErr != nil {
+		return nil, anyErr
 	}
 
 	for _, indexEd := range te.indexEds {

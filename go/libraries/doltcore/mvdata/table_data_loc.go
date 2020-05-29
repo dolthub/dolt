@@ -17,6 +17,10 @@ package mvdata
 import (
 	"context"
 	"errors"
+	"sync/atomic"
+
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -85,59 +89,181 @@ func (dl TableDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMo
 		return nil, ErrNoPK
 	}
 
-	if sortedInput {
-		return noms.NewNomsMapCreator(ctx, root.VRW(), outSch), nil
-	} else {
-		m, err := types.NewMap(ctx, root.VRW())
-
-		if err != nil {
-			return nil, err
-		}
-
-		return noms.NewNomsMapUpdater(ctx, root.VRW(), m, outSch, statsCB), nil
+	m, err := types.NewMap(ctx, root.VRW())
+	if err != nil {
+		return nil, err
 	}
+	tblSchVal, err := encoding.MarshalSchemaAsNomsValue(ctx, root.VRW(), outSch)
+	if err != nil {
+		return nil, err
+	}
+
+	tbl, err := doltdb.NewTable(ctx, root.VRW(), tblSchVal, m, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	tableEditor, err := doltdb.NewTableEditor(ctx, tbl, outSch)
+	if err != nil {
+		return nil, err
+	}
+
+	return &tableEditorWriteCloser{
+		insertOnly:  true,
+		initialData: m,
+		statsCB:     statsCB,
+		tableEditor: tableEditor,
+		tableSch:    outSch,
+	}, nil
 }
 
 // NewUpdatingWriter will create a TableWriteCloser for a DataLocation that will update and append rows based on
 // their primary key.
 func (dl TableDataLocation) NewUpdatingWriter(ctx context.Context, mvOpts DataMoverOptions, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
 	tbl, ok, err := root.GetTable(ctx, dl.Name)
-
 	if err != nil {
 		return nil, err
 	}
-
 	if !ok {
 		return nil, errors.New("Could not find table " + dl.Name)
 	}
 
 	m, err := tbl.GetRowData(ctx)
-
+	if err != nil {
+		return nil, err
+	}
+	tblSch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return noms.NewNomsMapUpdater(ctx, root.VRW(), m, outSch, statsCB), nil
+	tableEditor, err := doltdb.NewTableEditor(ctx, tbl, tblSch)
+	if err != nil {
+		return nil, err
+	}
+
+	return &tableEditorWriteCloser{
+		insertOnly:  false,
+		initialData: m,
+		statsCB:     statsCB,
+		tableEditor: tableEditor,
+		tableSch:    tblSch,
+	}, nil
 }
 
 // NewReplacingWriter will create a TableWriteCloser for a DataLocation that will overwrite an existing table while
 // preserving schema
 func (dl TableDataLocation) NewReplacingWriter(ctx context.Context, mvOpts DataMoverOptions, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
-	_, ok, err := root.GetTable(ctx, dl.Name)
-
+	tbl, ok, err := root.GetTable(ctx, dl.Name)
 	if err != nil {
 		return nil, err
 	}
-
 	if !ok {
 		return nil, errors.New("Could not find table " + dl.Name)
 	}
 
 	m, err := types.NewMap(ctx, root.VRW())
-
+	if err != nil {
+		return nil, err
+	}
+	tblSch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tblSchVal, err := encoding.MarshalSchemaAsNomsValue(ctx, root.VRW(), tblSch)
 	if err != nil {
 		return nil, err
 	}
 
-	return noms.NewNomsMapUpdater(ctx, root.VRW(), m, outSch, statsCB), nil
+	tbl, err = doltdb.NewTable(ctx, root.VRW(), tblSchVal, m, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	tableEditor, err := doltdb.NewTableEditor(ctx, tbl, tblSch)
+	if err != nil {
+		return nil, err
+	}
+
+	return &tableEditorWriteCloser{
+		insertOnly:  true,
+		initialData: m,
+		statsCB:     statsCB,
+		tableEditor: tableEditor,
+		tableSch:    tblSch,
+	}, nil
+}
+
+type tableEditorWriteCloser struct {
+	stats       types.AppliedEditStats
+	insertOnly  bool
+	initialData types.Map
+	opsSoFar    int64
+	statsCB     noms.StatsCB
+	tableEditor *doltdb.TableEditor
+	tableSch    schema.Schema
+}
+
+var _ DataMoverCloser = (*tableEditorWriteCloser)(nil)
+
+func (te *tableEditorWriteCloser) GetTable(ctx context.Context) (*doltdb.Table, error) {
+	return te.tableEditor.Flush(ctx)
+}
+
+// GetSchema implements TableWriteCloser
+func (te *tableEditorWriteCloser) GetSchema() schema.Schema {
+	return te.tableSch
+}
+
+// WriteRow implements TableWriteCloser
+func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error {
+	if atomic.LoadInt64(&te.opsSoFar) >= 65536 {
+		atomic.StoreInt64(&te.opsSoFar, 0)
+		_, err := te.tableEditor.Flush(ctx)
+		if err != nil {
+			return err
+		}
+		if te.statsCB != nil {
+			te.statsCB(te.stats)
+		}
+	}
+	if te.insertOnly {
+		_ = atomic.AddInt64(&te.opsSoFar, 1)
+		te.stats.Additions++
+		return te.tableEditor.Insert(ctx, r)
+	} else {
+		pkTuple, err := r.NomsMapKey(te.tableSch).Value(ctx)
+		if err != nil {
+			return err
+		}
+		val, ok, err := te.initialData.MaybeGet(ctx, pkTuple)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			_ = atomic.AddInt64(&te.opsSoFar, 1)
+			te.stats.Additions++
+			return te.tableEditor.Insert(ctx, r)
+		}
+		oldRow, err := row.FromNoms(te.tableSch, pkTuple.(types.Tuple), val.(types.Tuple))
+		if err != nil {
+			return err
+		}
+		if row.AreEqual(r, oldRow, te.tableSch) {
+			te.stats.SameVal++
+			return nil
+		}
+		_ = atomic.AddInt64(&te.opsSoFar, 1)
+		te.stats.Modifications++
+		return te.tableEditor.Update(ctx, oldRow, r)
+	}
+}
+
+// Close implements TableWriteCloser
+func (te *tableEditorWriteCloser) Close(ctx context.Context) error {
+	_, err := te.tableEditor.Flush(ctx)
+	if te.statsCB != nil {
+		te.statsCB(te.stats)
+	}
+	return err
 }

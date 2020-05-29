@@ -78,6 +78,7 @@ func (indexEd *IndexEditor) Flush(ctx context.Context) error {
 	}
 	newIndexData, err := indexEd.ed.Map(ctx)
 	if err != nil {
+		indexEd.reset(indexEd.data)
 		return err
 	}
 	indexEd.reset(newIndexData)

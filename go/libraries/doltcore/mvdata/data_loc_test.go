@@ -185,14 +185,14 @@ func TestCreateRdWr(t *testing.T) {
 		expectedRdT reflect.Type
 		expectedWrT reflect.Type
 	}{
-		{NewDataLocation(testTableName, ""), reflect.TypeOf((*noms.NomsMapReader)(nil)).Elem(), reflect.TypeOf((*noms.NomsMapCreator)(nil)).Elem()},
+		{NewDataLocation(testTableName, ""), reflect.TypeOf((*noms.NomsMapReader)(nil)).Elem(), reflect.TypeOf((*tableEditorWriteCloser)(nil)).Elem()},
 		{NewDataLocation("file.csv", ""), reflect.TypeOf((*csv.CSVReader)(nil)).Elem(), reflect.TypeOf((*csv.CSVWriter)(nil)).Elem()},
 		{NewDataLocation("file.psv", ""), reflect.TypeOf((*csv.CSVReader)(nil)).Elem(), reflect.TypeOf((*csv.CSVWriter)(nil)).Elem()},
 		{NewDataLocation("file.json", ""), reflect.TypeOf((*json.JSONReader)(nil)).Elem(), reflect.TypeOf((*json.JSONWriter)(nil)).Elem()},
 		//{NewDataLocation("file.nbf", ""), reflect.TypeOf((*nbf.NBFReader)(nil)).Elem(), reflect.TypeOf((*nbf.NBFWriter)(nil)).Elem()},
 	}
 
-	ddb, root, fs := createRootAndFS()
+	_, root, fs := createRootAndFS()
 
 	mvOpts := &testDataMoverOptions{}
 
@@ -220,16 +220,10 @@ func TestCreateRdWr(t *testing.T) {
 			t.Fatal("Failed to write data. bad:", numBad, err)
 		}
 
-		if nomsWr, ok := wr.(noms.NomsMapWriteCloser); ok {
+		if wr, ok := wr.(DataMoverCloser); ok {
 			tableLoc := test.dl.(TableDataLocation)
-			vrw := ddb.ValueReadWriter()
-			schVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), vrw, nomsWr.GetSchema())
 
-			if err != nil {
-				t.Fatal("Unable ta update table")
-			}
-
-			tbl, err := doltdb.NewTable(context.Background(), vrw, schVal, *nomsWr.GetMap(), nil)
+			tbl, err := wr.GetTable(context.Background())
 			assert.NoError(t, err)
 
 			root, err = root.PutTable(context.Background(), tableLoc.Name, tbl)
