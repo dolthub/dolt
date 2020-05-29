@@ -32,7 +32,7 @@ type tableEditorTest struct {
 	// The name of this test. Names should be unique and descriptive.
 	name string
 	// Test setup to run
-	setup func(ctx *sql.Context, t *testing.T, ed *tableEditor)
+	setup func(ctx *sql.Context, t *testing.T, ed *sqlTableEditor)
 	// The select query to run to verify the results
 	selectQuery string
 	// The rows this query should return, nil if an error is expected
@@ -57,7 +57,7 @@ func TestTableEditor(t *testing.T) {
 	testCases := []tableEditorTest{
 		{
 			name: "all inserts",
-			setup: func(ctx *sql.Context, t *testing.T, ed *tableEditor) {
+			setup: func(ctx *sql.Context, t *testing.T, ed *sqlTableEditor) {
 				require.NoError(t, ed.Insert(ctx, r(edna, PeopleTestSchema)))
 				require.NoError(t, ed.Insert(ctx, r(krusty, PeopleTestSchema)))
 				require.NoError(t, ed.Insert(ctx, r(smithers, PeopleTestSchema)))
@@ -74,7 +74,7 @@ func TestTableEditor(t *testing.T) {
 		},
 		{
 			name: "inserts and deletes",
-			setup: func(ctx *sql.Context, t *testing.T, ed *tableEditor) {
+			setup: func(ctx *sql.Context, t *testing.T, ed *sqlTableEditor) {
 				require.NoError(t, ed.Insert(ctx, r(edna, PeopleTestSchema)))
 				require.NoError(t, ed.Insert(ctx, r(krusty, PeopleTestSchema)))
 				require.NoError(t, ed.Delete(ctx, r(edna, PeopleTestSchema)))
@@ -86,7 +86,7 @@ func TestTableEditor(t *testing.T) {
 		},
 		{
 			name: "inserts and deletes 2",
-			setup: func(ctx *sql.Context, t *testing.T, ed *tableEditor) {
+			setup: func(ctx *sql.Context, t *testing.T, ed *sqlTableEditor) {
 				require.NoError(t, ed.Insert(ctx, r(edna, PeopleTestSchema)))
 				require.NoError(t, ed.Insert(ctx, r(krusty, PeopleTestSchema)))
 				require.NoError(t, ed.Delete(ctx, r(edna, PeopleTestSchema)))
@@ -100,7 +100,7 @@ func TestTableEditor(t *testing.T) {
 		},
 		{
 			name: "inserts and updates",
-			setup: func(ctx *sql.Context, t *testing.T, ed *tableEditor) {
+			setup: func(ctx *sql.Context, t *testing.T, ed *sqlTableEditor) {
 				require.NoError(t, ed.Insert(ctx, r(edna, PeopleTestSchema)))
 				require.NoError(t, ed.Insert(ctx, r(krusty, PeopleTestSchema)))
 				require.NoError(t, ed.Update(ctx, r(edna, PeopleTestSchema), r(MutateRow(PeopleTestSchema, edna, AgeTag, 1), PeopleTestSchema)))
@@ -113,7 +113,7 @@ func TestTableEditor(t *testing.T) {
 		},
 		{
 			name: "inserts updates and deletes",
-			setup: func(ctx *sql.Context, t *testing.T, ed *tableEditor) {
+			setup: func(ctx *sql.Context, t *testing.T, ed *sqlTableEditor) {
 				require.NoError(t, ed.Insert(ctx, r(edna, PeopleTestSchema)))
 				require.NoError(t, ed.Insert(ctx, r(krusty, PeopleTestSchema)))
 				require.NoError(t, ed.Update(ctx, r(edna, PeopleTestSchema), r(MutateRow(PeopleTestSchema, edna, AgeTag, 1), PeopleTestSchema)))
@@ -135,7 +135,7 @@ func TestTableEditor(t *testing.T) {
 		},
 		{
 			name: "inserts and updates to primary key",
-			setup: func(ctx *sql.Context, t *testing.T, ed *tableEditor) {
+			setup: func(ctx *sql.Context, t *testing.T, ed *sqlTableEditor) {
 				require.NoError(t, ed.Insert(ctx, r(edna, PeopleTestSchema)))
 				require.NoError(t, ed.Insert(ctx, r(krusty, PeopleTestSchema)))
 				require.NoError(t, ed.Update(ctx, r(edna, PeopleTestSchema), r(MutateRow(PeopleTestSchema, edna, IdTag, 30), PeopleTestSchema)))
@@ -164,7 +164,7 @@ func TestTableEditor(t *testing.T) {
 			require.NoError(t, err)
 
 			dt := peopleTable.(sql.UpdatableTable)
-			ed := dt.Updater(ctx).(*tableEditor)
+			ed := dt.Updater(ctx).(*sqlTableEditor)
 
 			test.setup(ctx, t, ed)
 			if len(test.expectedErr) > 0 {

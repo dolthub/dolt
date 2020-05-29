@@ -152,7 +152,7 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIte
 // WritableDoltTable allows updating, deleting, and inserting new rows. It implements sql.UpdatableTable and friends.
 type WritableDoltTable struct {
 	DoltTable
-	ed *tableEditor
+	ed *sqlTableEditor
 }
 
 var _ sql.UpdatableTable = (*WritableDoltTable)(nil)
@@ -162,18 +162,23 @@ var _ sql.ReplaceableTable = (*WritableDoltTable)(nil)
 
 // Inserter implements sql.InsertableTable
 func (t *WritableDoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
-	return t.getTableEditor(ctx)
+	te, err := t.getTableEditor(ctx)
+	if err != nil {
+		panic(err) // TODO: change interface to support errors
+	}
+	return te
 }
 
-func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) *tableEditor {
+func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (*sqlTableEditor, error) {
 	if t.db.batchMode == batched {
 		if t.ed != nil {
-			return t.ed
+			return t.ed, nil
 		}
-		t.ed = newTableEditor(ctx, t)
-		return t.ed
+		var err error
+		t.ed, err = newSqlTableEditor(ctx, t)
+		return t.ed, err
 	}
-	return newTableEditor(ctx, t)
+	return newSqlTableEditor(ctx, t)
 }
 
 func (t *WritableDoltTable) flushBatchedEdits(ctx *sql.Context) error {
@@ -187,17 +192,29 @@ func (t *WritableDoltTable) flushBatchedEdits(ctx *sql.Context) error {
 
 // Deleter implements sql.DeletableTable
 func (t *WritableDoltTable) Deleter(ctx *sql.Context) sql.RowDeleter {
-	return t.getTableEditor(ctx)
+	te, err := t.getTableEditor(ctx)
+	if err != nil {
+		panic(err) // TODO: change interface to support errors
+	}
+	return te
 }
 
 // Replacer implements sql.ReplaceableTable
 func (t *WritableDoltTable) Replacer(ctx *sql.Context) sql.RowReplacer {
-	return t.getTableEditor(ctx)
+	te, err := t.getTableEditor(ctx)
+	if err != nil {
+		panic(err) // TODO: change interface to support errors
+	}
+	return te
 }
 
 // Updater implements sql.UpdatableTable
 func (t *WritableDoltTable) Updater(ctx *sql.Context) sql.RowUpdater {
-	return t.getTableEditor(ctx)
+	te, err := t.getTableEditor(ctx)
+	if err != nil {
+		panic(err) // TODO: change interface to support errors
+	}
+	return te
 }
 
 // doltTablePartitionIter, an object that knows how to return the single partition exactly once.
