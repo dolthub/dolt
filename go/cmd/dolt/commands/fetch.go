@@ -119,7 +119,7 @@ func getRefSpecs(args []string, dEnv *env.DoltEnv, remotes map[string]env.Remote
 	var rs []ref.RemoteRefSpec
 	var verr errhand.VerboseError
 	if len(args) != 0 {
-		rs, verr = parseRSFromArgs(args)
+		rs, verr = parseRSFromArgs(remName, args)
 	} else {
 		rs, verr = dEnv.GetRefSpecs(remName)
 	}
@@ -131,7 +131,7 @@ func getRefSpecs(args []string, dEnv *env.DoltEnv, remotes map[string]env.Remote
 	return remote, rs, verr
 }
 
-func parseRSFromArgs(args []string) ([]ref.RemoteRefSpec, errhand.VerboseError) {
+func parseRSFromArgs(remName string, args []string) ([]ref.RemoteRefSpec, errhand.VerboseError) {
 	var refSpecs []ref.RemoteRefSpec
 	for i := 0; i < len(args); i++ {
 		rsStr := args[i]
@@ -139,6 +139,16 @@ func parseRSFromArgs(args []string) ([]ref.RemoteRefSpec, errhand.VerboseError) 
 
 		if err != nil {
 			return nil, errhand.BuildDError("error: '%s' is not a valid refspec.", rsStr).SetPrintUsage().Build()
+		}
+
+		if _, ok := rs.(ref.BranchToBranchRefSpec); ok {
+			local := "refs/heads/" + rsStr
+			remTracking := "remotes/" + remName + "/" + rsStr
+			rs2, err := ref.ParseRefSpec(local + ":" + remTracking)
+
+			if err == nil {
+				rs = rs2
+			}
 		}
 
 		if rrs, ok := rs.(ref.RemoteRefSpec); !ok {

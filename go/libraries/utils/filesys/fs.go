@@ -24,6 +24,7 @@ import (
 
 var ErrIsDir = errors.New("operation not valid on a directory")
 var ErrIsFile = errors.New("operation not valid on a file")
+var ErrDirNotExist = errors.New("directory does not exist")
 
 // ReadableFS is an interface providing read access to objs in a filesystem
 type ReadableFS interface {

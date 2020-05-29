@@ -48,6 +48,8 @@ const (
 	defaultBatchSize       = 1 << 12 // 4096 chunks
 )
 
+var ErrNoData = errors.New("no data")
+
 func makeProgTrack(progressCh chan PullProgress) func(moreDone, moreKnown, moreApproxBytesWritten uint64) {
 	var doneCount, knownCount, approxBytesWritten uint64
 	return func(moreDone, moreKnown, moreApproxBytesWritten uint64) {
@@ -67,6 +69,16 @@ func Clone(ctx context.Context, srcDB, sinkDB Database, eventCh chan<- TableFile
 
 	if !srcOK {
 		return errors.New("src db is not a Table File Store")
+	}
+
+	size, err := srcTS.Size(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	if size == 0 {
+		return ErrNoData
 	}
 
 	sinkTS, sinkOK := sinkCS.(nbs.TableFileStore)

@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -231,7 +230,7 @@ func getAbsFileRemoteUrl(urlStr string, fs filesys.Filesys) (string, error) {
 	exists, isDir := fs.Exists(urlStr)
 
 	if !exists {
-		return "", os.ErrNotExist
+		return "", filesys.ErrDirNotExist
 	} else if !isDir {
 		return "", filesys.ErrIsFile
 	}
@@ -259,19 +258,19 @@ func addRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbos
 	}
 
 	remoteUrl := apr.Arg(2)
-	scheme, remoteUrl, err := getAbsRemoteUrl(dEnv.FS, dEnv.Config, remoteUrl)
+	scheme, absRemoteUrl, err := getAbsRemoteUrl(dEnv.FS, dEnv.Config, remoteUrl)
 
 	if err != nil {
-		return errhand.BuildDError("error: '%s' is not valid.", remoteUrl).Build()
+		return errhand.BuildDError("error: '%s' is not valid.", remoteUrl).AddCause(err).Build()
 	}
 
-	params, verr := parseRemoteArgs(apr, scheme, remoteUrl)
+	params, verr := parseRemoteArgs(apr, scheme, absRemoteUrl)
 
 	if verr != nil {
 		return verr
 	}
 
-	r := env.NewRemote(remoteName, remoteUrl, params)
+	r := env.NewRemote(remoteName, absRemoteUrl, params)
 	dEnv.RepoState.AddRemote(r)
 	err = dEnv.RepoState.Save(dEnv.FS)
 
