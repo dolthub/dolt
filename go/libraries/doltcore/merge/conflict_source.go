@@ -31,8 +31,8 @@ const (
 	mergeVersionProp  = "merge_version"
 	mergeRowOperation = "row_operation"
 
-	oursStr   = "ours"
-	theirsStr = "theirs"
+	oursStr   = "our"
+	theirsStr = "their"
 	baseStr   = "base"
 )
 
