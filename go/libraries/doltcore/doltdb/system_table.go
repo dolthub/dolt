@@ -135,7 +135,7 @@ var persistedSystemTables = []string{
 var generatedSystemTables = []string{
 	BranchesTableName,
 	LogTableName,
-	ConflictsTableName,
+	TableOfTablesInConflictName,
 }
 
 var generatedSystemTablePrefixes = []string{
@@ -235,6 +235,6 @@ const (
 	// LogTableName is the log system table name
 	LogTableName = "dolt_log"
 
-	// ConflictsTableName is the conflicts system table name
-	ConflictsTableName = "dolt_conflicts"
+	// TableOfTablesInConflictName is the conflicts system table name
+	TableOfTablesInConflictName = "dolt_conflicts"
 )

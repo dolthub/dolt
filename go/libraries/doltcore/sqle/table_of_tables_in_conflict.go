@@ -22,46 +22,46 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 )
 
-var _ sql.Table = (*ConflictsTable)(nil)
+var _ sql.Table = (*TableOfTablesInConflict)(nil)
 
-// ConflictsTable is a sql.Table implementation that implements a system table which shows the current conflicts
-type ConflictsTable struct {
+// TableOfTablesInConflict is a sql.Table implementation that implements a system table which shows the current conflicts
+type TableOfTablesInConflict struct {
 	dbName string
 	ddb    *doltdb.DoltDB
 }
 
-// NewConflictsTable creates a ConflictsTable
-func NewConflictsTable(ctx *sql.Context, dbName string) (*ConflictsTable, error) {
+// NewTableOfTablesInConflict creates a TableOfTablesInConflict
+func NewTableOfTablesInConflict(ctx *sql.Context, dbName string) (*TableOfTablesInConflict, error) {
 	ddb, ok := DSessFromSess(ctx.Session).GetDoltDB(dbName)
 
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	return &ConflictsTable{dbName: dbName, ddb: ddb}, nil
+	return &TableOfTablesInConflict{dbName: dbName, ddb: ddb}, nil
 }
 
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant
-// ConflictsTableName
-func (dt *ConflictsTable) Name() string {
-	return doltdb.ConflictsTableName
+// TableOfTablesInConflictName
+func (dt *TableOfTablesInConflict) Name() string {
+	return doltdb.TableOfTablesInConflictName
 }
 
 // String is a sql.Table interface function which returns the name of the table which is defined by the constant
-// ConflictsTableName
-func (dt *ConflictsTable) String() string {
-	return doltdb.ConflictsTableName
+// TableOfTablesInConflictName
+func (dt *TableOfTablesInConflict) String() string {
+	return doltdb.TableOfTablesInConflictName
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
-func (dt *ConflictsTable) Schema() sql.Schema {
+func (dt *TableOfTablesInConflict) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "table", Type: sql.Text, Source: doltdb.ConflictsTableName, PrimaryKey: true},
-		{Name: "num_conflicts", Type: sql.Uint64, Source: doltdb.ConflictsTableName, PrimaryKey: false},
+		{Name: "table", Type: sql.Text, Source: doltdb.TableOfTablesInConflictName, PrimaryKey: true},
+		{Name: "num_conflicts", Type: sql.Uint64, Source: doltdb.TableOfTablesInConflictName, PrimaryKey: false},
 	}
 }
 
-type conflictsPartition struct {
+type tableInConflict struct {
 	name    string
 	size    uint64
 	done    bool
@@ -70,13 +70,13 @@ type conflictsPartition struct {
 }
 
 // Key returns a unique key for the partition
-func (p *conflictsPartition) Key() []byte {
+func (p *tableInConflict) Key() []byte {
 	return []byte(p.name)
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
-func (p *conflictsPartition) Next() (sql.Row, error) {
+func (p *tableInConflict) Next() (sql.Row, error) {
 	if p.done {
 		return nil, io.EOF
 	}
@@ -86,17 +86,17 @@ func (p *conflictsPartition) Next() (sql.Row, error) {
 }
 
 // Close the iterator.
-func (p *conflictsPartition) Close() error {
+func (p *tableInConflict) Close() error {
 	return nil
 }
 
-type conflictsPartitions struct {
-	partitions []*conflictsPartition
+type tablesInConflict struct {
+	partitions []*tableInConflict
 	pos        int
 }
 
 // Next returns the next partition or io.EOF when done
-func (p *conflictsPartitions) Next() (sql.Partition, error) {
+func (p *tablesInConflict) Next() (sql.Partition, error) {
 	if p.pos >= len(p.partitions) {
 		return nil, io.EOF
 	}
@@ -108,12 +108,12 @@ func (p *conflictsPartitions) Next() (sql.Partition, error) {
 }
 
 // Close closes the PartitionIter
-func (p *conflictsPartitions) Close() error {
+func (p *tablesInConflict) Close() error {
 	return nil
 }
 
 // Partitions is a sql.Table interface function that returns a partition of the data.  Conflict data is partitioned by table.
-func (dt *ConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
+func (dt *TableOfTablesInConflict) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	sess := DSessFromSess(ctx.Session)
 	root, ok := sess.GetRoot(dt.dbName)
 
@@ -127,7 +127,7 @@ func (dt *ConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error
 		return nil, err
 	}
 
-	var partitions []*conflictsPartition
+	var partitions []*tableInConflict
 	for _, tblName := range tblNames {
 		tbl, ok, err := root.GetTable(ctx, tblName)
 
@@ -140,35 +140,16 @@ func (dt *ConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error
 				return nil, err
 			}
 
-			partitions = append(partitions, &conflictsPartition{tblName, m.Len(), false, schemas})
+			partitions = append(partitions, &tableInConflict{tblName, m.Len(), false, schemas})
 		}
 	}
 
-	return &conflictsPartitions{partitions: partitions}, nil
+	return &tablesInConflict{partitions: partitions}, nil
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
-func (dt *ConflictsTable) PartitionRows(_ *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	cp := part.(*conflictsPartition)
+func (dt *TableOfTablesInConflict) PartitionRows(_ *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	cp := part.(*tableInConflict)
 	return cp, nil
 }
 
-// ConflictsItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
-type ConflictsItr struct {
-}
-
-// NewLogItr creates a LogItr from the current environment.
-func NewConflictsItr(sqlCtx *sql.Context, dbName string, ddb *doltdb.DoltDB) (*ConflictsItr, error) {
-	return &ConflictsItr{}, nil
-}
-
-// Next retrieves the next row. It will return io.EOF if it's the last row.
-// After retrieving the last row, Close will be automatically closed.
-func (itr *ConflictsItr) Next() (sql.Row, error) {
-	return nil, io.EOF
-}
-
-// Close closes the iterator.
-func (itr *ConflictsItr) Close() error {
-	return nil
-}
