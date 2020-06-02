@@ -58,7 +58,7 @@ func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 		return err
 	}
 
-	return te.tableEditor.Insert(ctx, dRow)
+	return te.tableEditor.InsertRow(ctx, dRow)
 }
 
 func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
@@ -67,7 +67,7 @@ func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 		return err
 	}
 
-	return te.tableEditor.Delete(ctx, dRow)
+	return te.tableEditor.DeleteRow(ctx, dRow)
 }
 
 func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
@@ -80,7 +80,7 @@ func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Ro
 		return err
 	}
 
-	return te.tableEditor.Update(ctx, dOldRow, dNewRow)
+	return te.tableEditor.UpdateRow(ctx, dOldRow, dNewRow)
 }
 
 // Close implements Closer
@@ -93,7 +93,7 @@ func (te *sqlTableEditor) Close(ctx *sql.Context) error {
 }
 
 func (te *sqlTableEditor) flush(ctx *sql.Context) error {
-	newTable, err := te.tableEditor.Flush(ctx)
+	newTable, err := te.tableEditor.Table()
 	if err != nil {
 		return err
 	}

@@ -19,10 +19,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/async"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -34,15 +34,12 @@ var ErrDuplicatePrimaryKeyFmt = "duplicate primary key given: (%v)"
 //
 // This type is thread-safe, and may be used in a multi-threaded environment.
 type TableEditor struct {
-	t            *Table
-	tSch         schema.Schema
-	ed           *types.MapEditor
-	updated      bool // Whether the table has been updated
-	insertedKeys map[hash.Hash]types.Value
-	addedKeys    map[hash.Hash]types.Value
-	removedKeys  map[hash.Hash]types.Value
-	affectedKeys map[hash.Hash]types.Value
-	indexEds     []*IndexEditor
+	t        *Table
+	tSch     schema.Schema
+	tea      *tableEditAccumulator
+	aq       *async.ActionExecutor
+	nbf      *types.NomsBinFormat
+	indexEds []*IndexEditor
 
 	// This mutex blocks on each operation, so that map reads and updates are serialized
 	writeMutex *sync.Mutex
@@ -50,20 +47,52 @@ type TableEditor struct {
 	flushMutex *sync.RWMutex
 }
 
+type tableEditAccumulator struct {
+	ed           types.EditAccumulator
+	opCount      uint64
+	insertedKeys map[hash.Hash]types.Value
+	addedKeys    map[hash.Hash]types.Value
+	removedKeys  map[hash.Hash]types.Value
+	affectedKeys map[hash.Hash]types.Value
+}
+
+const tableEditorMaxOps = 16384
+
 func NewTableEditor(ctx context.Context, t *Table, tableSch schema.Schema) (*TableEditor, error) {
-	// initialize the mutexes here since they're not reset
 	te := &TableEditor{
+		t:          t,
+		tSch:       tableSch,
+		tea:        newTableEditAcc(t.Format()),
+		nbf:        t.Format(),
+		indexEds:   make([]*IndexEditor, tableSch.Indexes().Count()),
 		writeMutex: &sync.Mutex{},
 		flushMutex: &sync.RWMutex{},
 	}
-	err := te.reset(ctx, t, tableSch)
-	if err != nil {
-		return nil, err
+	te.aq = async.NewActionExecutor(ctx, te.flushEditAccumulator, 1, 1)
+
+	for i, index := range tableSch.Indexes().AllIndexes() {
+		indexData, err := t.GetIndexRowData(ctx, index.Name())
+		if err != nil {
+			return nil, err
+		}
+		te.indexEds[i] = NewIndexEditor(index, indexData)
 	}
 	return te, nil
 }
 
-func (te *TableEditor) Insert(ctx context.Context, dRow row.Row) error {
+func newTableEditAcc(nbf *types.NomsBinFormat) *tableEditAccumulator {
+	return &tableEditAccumulator{
+		ed:           types.CreateEditAccForMapEdits(nbf),
+		insertedKeys: make(map[hash.Hash]types.Value),
+		addedKeys:    make(map[hash.Hash]types.Value),
+		removedKeys:  make(map[hash.Hash]types.Value),
+		affectedKeys: make(map[hash.Hash]types.Value),
+	}
+}
+
+// InsertRow adds the given row to the table. If the row already exists, use UpdateRow.
+func (te *TableEditor) InsertRow(ctx context.Context, dRow row.Row) error {
+	defer te.autoFlush()
 	te.flushMutex.RLock()
 	defer te.flushMutex.RUnlock()
 
@@ -92,23 +121,35 @@ func (te *TableEditor) Insert(ctx context.Context, dRow row.Row) error {
 
 	// If we've already inserted this key as part of this insert operation, that's an error. Inserting a row that
 	// already exists in the table will be handled in Close().
-	if _, ok := te.addedKeys[keyHash]; ok {
+	if _, ok := te.tea.addedKeys[keyHash]; ok {
 		value, err := types.EncodedValue(ctx, key)
 		if err != nil {
 			return err
 		}
 		return fmt.Errorf(ErrDuplicatePrimaryKeyFmt, value)
 	}
-	te.insertedKeys[keyHash] = key
-	te.addedKeys[keyHash] = key
-	te.affectedKeys[keyHash] = key
+	te.tea.insertedKeys[keyHash] = key
+	te.tea.addedKeys[keyHash] = key
+	te.tea.affectedKeys[keyHash] = key
 
-	te.ed = te.ed.Set(key, dRow.NomsMapValue(te.tSch))
-	te.updated = true
+	te.tea.ed.AddEdit(key, dRow.NomsMapValue(te.tSch))
+	te.tea.opCount++
 	return nil
 }
 
-func (te *TableEditor) Delete(ctx context.Context, dRow row.Row) error {
+// DeleteKey removes the given key from the table.
+func (te *TableEditor) DeleteKey(ctx context.Context, key types.Tuple) error {
+	defer te.autoFlush()
+	te.flushMutex.RLock()
+	defer te.flushMutex.RUnlock()
+
+	return te.delete(key)
+}
+
+// DeleteRow removes the given row from the table. This essentially acts as a convenience function for DeleteKey, while
+// ensuring proper thread safety.
+func (te *TableEditor) DeleteRow(ctx context.Context, dRow row.Row) error {
+	defer te.autoFlush()
 	te.flushMutex.RLock()
 	defer te.flushMutex.RUnlock()
 
@@ -116,25 +157,13 @@ func (te *TableEditor) Delete(ctx context.Context, dRow row.Row) error {
 	if err != nil {
 		return errhand.BuildDError("failed to get row key").AddCause(err).Build()
 	}
-	keyHash, err := key.Hash(dRow.Format())
-	if err != nil {
-		return err
-	}
 
-	// Regarding the lock's position here, refer to the comment in Insert()
-	te.writeMutex.Lock()
-	defer te.writeMutex.Unlock()
-
-	delete(te.addedKeys, keyHash)
-	te.removedKeys[keyHash] = key
-	te.affectedKeys[keyHash] = key
-
-	te.ed = te.ed.Remove(key)
-	te.updated = true
-	return nil
+	return te.delete(key.(types.Tuple))
 }
 
-func (te *TableEditor) Update(ctx context.Context, dOldRow row.Row, dNewRow row.Row) error {
+// UpdateRow takes the current row and new rows, and updates it accordingly.
+func (te *TableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row) error {
+	defer te.autoFlush()
 	te.flushMutex.RLock()
 	defer te.flushMutex.RUnlock()
 
@@ -155,7 +184,7 @@ func (te *TableEditor) Update(ctx context.Context, dOldRow row.Row, dNewRow row.
 	}
 	oldKeyEqualsNewKey := dOldKeyVal.Equals(dNewKeyVal)
 
-	// Regarding the lock's position here, refer to the comment in Insert()
+	// Regarding the lock's position here, refer to the comment in InsertRow
 	te.writeMutex.Lock()
 	defer te.writeMutex.Unlock()
 
@@ -167,181 +196,186 @@ func (te *TableEditor) Update(ctx context.Context, dOldRow row.Row, dNewRow row.
 		}
 
 		// If the old value of the primary key we just updated was previously inserted, then we need to remove it now.
-		if _, ok := te.insertedKeys[oldHash]; ok {
-			delete(te.insertedKeys, oldHash)
-			te.ed.Remove(dOldKeyVal)
+		if _, ok := te.tea.insertedKeys[oldHash]; ok {
+			delete(te.tea.insertedKeys, oldHash)
+			te.tea.ed.AddEdit(dOldKeyVal, nil)
+			te.tea.opCount++
 		}
 
-		te.addedKeys[newHash] = dNewKeyVal
-		te.removedKeys[oldHash] = dOldKeyVal
-		te.affectedKeys[oldHash] = dOldKeyVal
+		te.tea.addedKeys[newHash] = dNewKeyVal
+		te.tea.removedKeys[oldHash] = dOldKeyVal
+		te.tea.affectedKeys[oldHash] = dOldKeyVal
 	}
 
-	te.affectedKeys[newHash] = dNewKeyVal
+	te.tea.affectedKeys[newHash] = dNewKeyVal
 
-	te.ed.Set(dNewKeyVal, dNewRow.NomsMapValue(te.tSch))
-	te.updated = true
+	te.tea.ed.AddEdit(dNewKeyVal, dNewRow.NomsMapValue(te.tSch))
+	te.tea.opCount++
 	return nil
 }
 
-// Flush finalizes all of the changes and returns the updated Table.
-func (te *TableEditor) Flush(ctx context.Context) (*Table, error) {
+// Flush finalizes all of the changes made so far.
+func (te *TableEditor) Flush() {
 	te.flushMutex.Lock()
 	defer te.flushMutex.Unlock()
 
-	if !te.updated {
-		return te.t, nil
+	if te.tea.opCount > 0 {
+		te.aq.Execute(te.tea)
+		te.tea = newTableEditAcc(te.nbf)
+	}
+}
+
+// Table returns a Table based on the edits given, if any. If Flush() was not called prior, it will be called here.
+func (te *TableEditor) Table() (*Table, error) {
+	te.Flush()
+	err := te.aq.WaitForEmpty()
+	return te.t, err
+}
+
+// autoFlush is called at the end of every write call (after all locks have been released) and checks if we need to
+// automatically flush the edits.
+func (te *TableEditor) autoFlush() {
+	te.flushMutex.RLock()
+	runFlush := te.tea.opCount >= tableEditorMaxOps
+	te.flushMutex.RUnlock()
+
+	if runFlush {
+		te.Flush()
+	}
+}
+
+func (te *TableEditor) delete(key types.Tuple) error {
+	keyHash, err := key.Hash(te.t.Format())
+	if err != nil {
+		return err
+	}
+
+	te.writeMutex.Lock()
+	defer te.writeMutex.Unlock()
+
+	delete(te.tea.addedKeys, keyHash)
+	te.tea.removedKeys[keyHash] = key
+	te.tea.affectedKeys[keyHash] = key
+
+	te.tea.ed.AddEdit(key, nil)
+	te.tea.opCount++
+	return nil
+}
+
+func (te *TableEditor) flushEditAccumulator(ctx context.Context, teaInterface interface{}) error {
+	// We don't call any locks here since this is called from an ActionExecutor with a concurrency of 1
+	tea := teaInterface.(*tableEditAccumulator)
+	originalRowData, err := te.t.GetRowData(ctx)
+	if err != nil {
+		return errhand.BuildDError("failed to read table").AddCause(err).Build()
 	}
 
 	// For all added keys, check for and report a collision
-	for keyHash, addedKey := range te.addedKeys {
-		if _, ok := te.removedKeys[keyHash]; !ok {
-			_, rowExists, err := te.t.GetRow(ctx, addedKey.(types.Tuple), te.tSch)
+	for keyHash, addedKey := range tea.addedKeys {
+		if _, ok := tea.removedKeys[keyHash]; !ok {
+			_, rowExists, err := originalRowData.MaybeGet(ctx, addedKey)
 			if err != nil {
-				return nil, errhand.BuildDError("failed to read table").AddCause(err).Build()
+				return errhand.BuildDError("failed to read table").AddCause(err).Build()
 			}
 			if rowExists {
 				value, err := types.EncodedValue(ctx, addedKey)
 				if err != nil {
-					return nil, err
+					return err
 				}
-				return nil, fmt.Errorf(ErrDuplicatePrimaryKeyFmt, value)
+				return fmt.Errorf(ErrDuplicatePrimaryKeyFmt, value)
 			}
 		}
 	}
 	// For all removed keys, remove the map entries that weren't added elsewhere by other updates
-	for keyHash, removedKey := range te.removedKeys {
-		if _, ok := te.addedKeys[keyHash]; !ok {
-			te.ed.Remove(removedKey)
+	for keyHash, removedKey := range tea.removedKeys {
+		if _, ok := tea.addedKeys[keyHash]; !ok {
+			tea.ed.AddEdit(removedKey, nil)
 		}
 	}
 
-	updated, err := te.ed.Map(ctx)
+	accEdits, err := tea.ed.FinishedEditing()
 	if err != nil {
-		_ = te.reset(ctx, te.t, te.tSch)
-		return nil, errhand.BuildDError("failed to modify table").AddCause(err).Build()
+		return errhand.BuildDError("failed to finalize table changes").AddCause(err).Build()
 	}
-	originalRowData, err := te.t.GetRowData(ctx)
+	updated, _, err := types.ApplyEdits(ctx, accEdits, originalRowData)
 	if err != nil {
-		_ = te.reset(ctx, te.t, te.tSch)
-		return nil, errhand.BuildDError("failed to read table").AddCause(err).Build()
+		return errhand.BuildDError("failed to modify table").AddCause(err).Build()
 	}
 	newTable, err := te.t.UpdateRows(ctx, updated)
 	if err != nil {
-		_ = te.reset(ctx, te.t, te.tSch)
-		return nil, errhand.BuildDError("failed to update rows").AddCause(err).Build()
+		return errhand.BuildDError("failed to update rows").AddCause(err).Build()
 	}
-	newTable, err = te.updateIndexes(ctx, newTable, originalRowData, updated)
+	newTable, err = te.updateIndexes(ctx, tea, newTable, originalRowData, updated)
 	if err != nil {
-		_ = te.reset(ctx, te.t, te.tSch)
-		return nil, errhand.BuildDError("failed to update indexes").AddCause(err).Build()
+		return errhand.BuildDError("failed to update indexes").AddCause(err).Build()
 	}
 
-	// Set the TableEditor to the new table state
-	err = te.reset(ctx, newTable, te.tSch)
-	if err != nil {
-		return nil, err
-	}
-
-	return newTable, nil
-}
-
-// reset sets the TableEditor to the given table
-func (te *TableEditor) reset(ctx context.Context, t *Table, tableSch schema.Schema) error {
-	tableData, err := t.GetRowData(ctx)
-	if err != nil {
-		return errhand.BuildDError("failed to get row data.").AddCause(err).Build()
-	}
-
-	te.t = t
-	te.tSch = tableSch
-	te.ed = tableData.Edit()
-	te.updated = false
-	te.insertedKeys = make(map[hash.Hash]types.Value)
-	te.addedKeys = make(map[hash.Hash]types.Value)
-	te.removedKeys = make(map[hash.Hash]types.Value)
-	te.affectedKeys = make(map[hash.Hash]types.Value)
-	te.indexEds = make([]*IndexEditor, tableSch.Indexes().Count())
-
-	for i, index := range tableSch.Indexes().AllIndexes() {
-		indexData, err := t.GetIndexRowData(ctx, index.Name())
-		if err != nil {
-			panic(err) // should never have an index that does not have data, even an empty index
-		}
-		te.indexEds[i] = NewIndexEditor(index, indexData)
-	}
+	te.t = newTable
 	return nil
 }
 
-func (te *TableEditor) updateIndexes(ctx context.Context, tbl *Table, originalRowData types.Map, updated types.Map) (*Table, error) {
-	// We don't call any locks here since this is only called from Flush, which acquires a lock
+func (te *TableEditor) updateIndexes(ctx context.Context, tea *tableEditAccumulator, tbl *Table, originalRowData types.Map, updated types.Map) (*Table, error) {
+	// We don't call any locks here since this is called from an ActionExecutor with a concurrency of 1
 	if len(te.indexEds) == 0 {
 		return tbl, nil
 	}
 
-	wg := &sync.WaitGroup{}
-	var anyErr error // we only care to catch any error, doesn't matter if it's overwritten
+	indexActionQueue := async.NewActionExecutor(ctx, func(_ context.Context, keyInt interface{}) error {
+		key := keyInt.(types.Value)
 
-	for _, key := range te.affectedKeys {
-		wg.Add(1)
-		go func(key types.Value) {
-			defer wg.Done()
+		var originalRow row.Row
+		var updatedRow row.Row
 
-			var originalRow row.Row
-			var updatedRow row.Row
-
-			if val, ok, err := originalRowData.MaybeGet(ctx, key); err == nil && ok {
-				originalRow, err = row.FromNoms(te.tSch, key.(types.Tuple), val.(types.Tuple))
-				if err != nil {
-					anyErr = err
-					return
-				}
-			} else if err != nil {
-				anyErr = err
-				return
+		if val, ok, err := originalRowData.MaybeGet(ctx, key); err == nil && ok {
+			originalRow, err = row.FromNoms(te.tSch, key.(types.Tuple), val.(types.Tuple))
+			if err != nil {
+				return err
 			}
-			if val, ok, err := updated.MaybeGet(ctx, key); err == nil && ok {
-				updatedRow, err = row.FromNoms(te.tSch, key.(types.Tuple), val.(types.Tuple))
-				if err != nil {
-					anyErr = err
-					return
-				}
-			} else if err != nil {
-				anyErr = err
-				return
+		} else if err != nil {
+			return err
+		}
+		if val, ok, err := updated.MaybeGet(ctx, key); err == nil && ok {
+			updatedRow, err = row.FromNoms(te.tSch, key.(types.Tuple), val.(types.Tuple))
+			if err != nil {
+				return err
 			}
+		} else if err != nil {
+			return err
+		}
 
-			for _, indexEd := range te.indexEds {
-				var err error
-				var originalIndexRow row.Row
-				var updatedIndexRow row.Row
-				if originalRow != nil {
-					originalIndexRow, err = originalRow.ReduceToIndex(indexEd.Index())
-					if err != nil {
-						anyErr = err
-						return
-					}
-				}
-				if updatedRow != nil {
-					updatedIndexRow, err = updatedRow.ReduceToIndex(indexEd.Index())
-					if err != nil {
-						anyErr = err
-						return
-					}
-				}
-
-				err = indexEd.UpdateIndex(ctx, originalIndexRow, updatedIndexRow)
+		for _, indexEd := range te.indexEds {
+			var err error
+			var originalIndexRow row.Row
+			var updatedIndexRow row.Row
+			if originalRow != nil {
+				originalIndexRow, err = originalRow.ReduceToIndex(indexEd.Index())
 				if err != nil {
-					anyErr = err
-					return
+					return err
 				}
 			}
-		}(key)
+			if updatedRow != nil {
+				updatedIndexRow, err = updatedRow.ReduceToIndex(indexEd.Index())
+				if err != nil {
+					return err
+				}
+			}
+
+			err = indexEd.UpdateIndex(ctx, originalIndexRow, updatedIndexRow)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}, 4, 0)
+
+	for _, key := range tea.affectedKeys {
+		indexActionQueue.Execute(key)
 	}
 
-	wg.Wait()
-	if anyErr != nil {
-		return nil, anyErr
+	err := indexActionQueue.WaitForEmpty()
+	if err != nil {
+		return nil, err
 	}
 
 	for _, indexEd := range te.indexEds {
