@@ -113,24 +113,12 @@ func (ds ConflictSplitter) SplitConflicts(inRow row.Row, props pipeline.Readable
 				return nil, err.Error()
 			}
 
-			switch rowType {
-			case oursStr:
-				if has[baseStr] {
-					props[mergeRowOperation] = types.DiffChangeAdded
-				} else if has[theirsStr] {
-					props[mergeRowOperation] = types.DiffChangeModified
-				} else {
-					props[mergeRowOperation] = types.DiffChangeModified
-				}
-			case theirsStr:
-				if has[baseStr] {
-					props[mergeRowOperation] = types.DiffChangeAdded
-				} else if has[oursStr] {
-					props[mergeRowOperation] = types.DiffChangeModified
-				} else {
-					props[mergeRowOperation] = types.DiffChangeModified
-				}
+			if !has[baseStr] {
+				props[mergeRowOperation] = types.DiffChangeAdded
+			} else {
+				props[mergeRowOperation] = types.DiffChangeModified
 			}
+
 			rowData = append(rowData, &pipeline.TransformedRowResult{RowData: converted, PropertyUpdates: props})
 		} else if rowType != baseStr {
 			props[mergeRowOperation] = types.DiffChangeRemoved
