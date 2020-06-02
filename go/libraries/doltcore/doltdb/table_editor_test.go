@@ -66,7 +66,7 @@ func TestTableEditorConcurrency(t *testing.T) {
 					2: types.Int(val),
 				})
 				require.NoError(t, err)
-				require.NoError(t, tableEditor.Insert(context.Background(), dRow))
+				require.NoError(t, tableEditor.InsertRow(context.Background(), dRow))
 				wg.Done()
 			}(j)
 		}
@@ -87,7 +87,7 @@ func TestTableEditorConcurrency(t *testing.T) {
 					2: types.Int(val + 1),
 				})
 				require.NoError(t, err)
-				require.NoError(t, tableEditor.Update(context.Background(), dOldRow, dNewRow))
+				require.NoError(t, tableEditor.UpdateRow(context.Background(), dOldRow, dNewRow))
 				wg.Done()
 			}(j)
 		}
@@ -102,13 +102,13 @@ func TestTableEditorConcurrency(t *testing.T) {
 					2: types.Int(val),
 				})
 				require.NoError(t, err)
-				require.NoError(t, tableEditor.Delete(context.Background(), dRow))
+				require.NoError(t, tableEditor.DeleteRow(context.Background(), dRow))
 				wg.Done()
 			}(j)
 		}
 		wg.Wait()
 
-		newTable, err := tableEditor.Flush(context.Background())
+		newTable, err := tableEditor.Table()
 		require.NoError(t, err)
 		newTableData, err := newTable.GetRowData(context.Background())
 		require.NoError(t, err)
@@ -157,9 +157,9 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 			2: types.Int(i),
 		})
 		require.NoError(t, err)
-		require.NoError(t, tableEditor.Insert(context.Background(), dRow))
+		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow))
 	}
-	table, err = tableEditor.Flush(context.Background())
+	table, err = tableEditor.Table()
 	require.NoError(t, err)
 
 	for i := 0; i < tableEditorConcurrencyIterations; i++ {
@@ -182,7 +182,7 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 					2: types.Int(val + 1),
 				})
 				require.NoError(t, err)
-				require.NoError(t, tableEditor.Update(context.Background(), dOldRow, dNewRow))
+				require.NoError(t, tableEditor.UpdateRow(context.Background(), dOldRow, dNewRow))
 				wg.Done()
 			}(j)
 		}
@@ -196,13 +196,13 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 					2: types.Int(val),
 				})
 				require.NoError(t, err)
-				require.NoError(t, tableEditor.Delete(context.Background(), dRow))
+				require.NoError(t, tableEditor.DeleteRow(context.Background(), dRow))
 				wg.Done()
 			}(j)
 		}
 		wg.Wait()
 
-		newTable, err := tableEditor.Flush(context.Background())
+		newTable, err := tableEditor.Table()
 		require.NoError(t, err)
 		newTableData, err := newTable.GetRowData(context.Background())
 		require.NoError(t, err)
@@ -252,10 +252,10 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 			2: types.Int(i),
 		})
 		require.NoError(t, err)
-		require.NoError(t, tableEditor.Insert(context.Background(), dRow))
+		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow))
 	}
 
-	_, err = tableEditor.Flush(context.Background())
+	_, err = tableEditor.Table()
 	require.NoError(t, err)
 
 	for i := 10; i < 20; i++ {
@@ -265,10 +265,10 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 			2: types.Int(i),
 		})
 		require.NoError(t, err)
-		require.NoError(t, tableEditor.Delete(context.Background(), dRow))
+		require.NoError(t, tableEditor.DeleteRow(context.Background(), dRow))
 	}
 
-	newTable, err := tableEditor.Flush(context.Background())
+	newTable, err := tableEditor.Table()
 	require.NoError(t, err)
 	newTableData, err := newTable.GetRowData(context.Background())
 	require.NoError(t, err)
@@ -289,7 +289,7 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 		})
 	}
 
-	sameTable, err := tableEditor.Flush(context.Background())
+	sameTable, err := tableEditor.Table()
 	require.NoError(t, err)
 	sameTableData, err := sameTable.GetRowData(context.Background())
 	require.NoError(t, err)

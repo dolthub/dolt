@@ -30,6 +30,9 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+// TableDataLocationUpdateRate is the number of writes that will process before the updated stats are displayed.
+const TableDataLocationUpdateRate = 32768
+
 // ErrNoPK is an error returned if a schema is missing a required primary key
 var ErrNoPK = errors.New("schema does not contain a primary key")
 
@@ -207,7 +210,7 @@ type tableEditorWriteCloser struct {
 var _ DataMoverCloser = (*tableEditorWriteCloser)(nil)
 
 func (te *tableEditorWriteCloser) GetTable(ctx context.Context) (*doltdb.Table, error) {
-	return te.tableEditor.Flush(ctx)
+	return te.tableEditor.Table()
 }
 
 // GetSchema implements TableWriteCloser
@@ -217,20 +220,14 @@ func (te *tableEditorWriteCloser) GetSchema() schema.Schema {
 
 // WriteRow implements TableWriteCloser
 func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error {
-	if atomic.LoadInt64(&te.opsSoFar) >= 65536 {
+	if te.statsCB != nil && atomic.LoadInt64(&te.opsSoFar) >= TableDataLocationUpdateRate {
 		atomic.StoreInt64(&te.opsSoFar, 0)
-		_, err := te.tableEditor.Flush(ctx)
-		if err != nil {
-			return err
-		}
-		if te.statsCB != nil {
-			te.statsCB(te.stats)
-		}
+		te.statsCB(te.stats)
 	}
 	if te.insertOnly {
 		_ = atomic.AddInt64(&te.opsSoFar, 1)
 		te.stats.Additions++
-		return te.tableEditor.Insert(ctx, r)
+		return te.tableEditor.InsertRow(ctx, r)
 	} else {
 		pkTuple, err := r.NomsMapKey(te.tableSch).Value(ctx)
 		if err != nil {
@@ -243,7 +240,7 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 		if !ok {
 			_ = atomic.AddInt64(&te.opsSoFar, 1)
 			te.stats.Additions++
-			return te.tableEditor.Insert(ctx, r)
+			return te.tableEditor.InsertRow(ctx, r)
 		}
 		oldRow, err := row.FromNoms(te.tableSch, pkTuple.(types.Tuple), val.(types.Tuple))
 		if err != nil {
@@ -255,13 +252,13 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 		}
 		_ = atomic.AddInt64(&te.opsSoFar, 1)
 		te.stats.Modifications++
-		return te.tableEditor.Update(ctx, oldRow, r)
+		return te.tableEditor.UpdateRow(ctx, oldRow, r)
 	}
 }
 
 // Close implements TableWriteCloser
-func (te *tableEditorWriteCloser) Close(ctx context.Context) error {
-	_, err := te.tableEditor.Flush(ctx)
+func (te *tableEditorWriteCloser) Close(_ context.Context) error {
+	_, err := te.tableEditor.Table()
 	if te.statsCB != nil {
 		te.statsCB(te.stats)
 	}
