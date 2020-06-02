@@ -16,6 +16,7 @@ package merge
 
 import (
 	"context"
+	"errors"
 	"io"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -23,32 +24,22 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 const (
 	mergeVersionProp  = "merge_version"
 	mergeRowOperation = "row_operation"
-)
 
-type MergeVersion int
-
-const (
-	BaseVersion MergeVersion = iota
-	OurVersion
-	TheirVersion
-	Blank // for display only
+	oursStr   = "ours"
+	theirsStr = "theirs"
+	baseStr   = "base"
 )
 
 type ConflictReader struct {
-	confItr      types.MapIterator
-	unionedSch   schema.Schema
-	baseConv     *rowconv.RowConverter
-	conv         *rowconv.RowConverter
-	mergeConv    *rowconv.RowConverter
-	bufferedRows [3]pipeline.RowWithProps
-	currIdx      int
+	confItr types.MapIterator
+	joiner  *rowconv.Joiner
+	nbf     *types.NomsBinFormat
 }
 
 func NewConflictReader(ctx context.Context, tbl *doltdb.Table) (*ConflictReader, error) {
@@ -58,26 +49,17 @@ func NewConflictReader(ctx context.Context, tbl *doltdb.Table) (*ConflictReader,
 		return nil, err
 	}
 
-	untypedUnSch, err := untyped.UntypedSchemaUnion(base, sch, mergeSch)
-
-	if err != nil {
-		return nil, err
-	}
-
-	var baseMapping, mapping, mergeMapping *rowconv.FieldMapping
-	baseMapping, err = rowconv.TagMapping(base, untypedUnSch)
-
-	if err != nil {
-		return nil, err
-	}
-
-	mapping, err = rowconv.TagMapping(sch, untypedUnSch)
-
-	if err != nil {
-		return nil, err
-	}
-
-	mergeMapping, err = rowconv.TagMapping(mergeSch, untypedUnSch)
+	joiner, err := rowconv.NewJoiner(
+		[]rowconv.NamedSchema{
+			{Name: baseStr, Sch: base},
+			{Name: oursStr, Sch: sch},
+			{Name: theirsStr, Sch: mergeSch},
+		}, map[string]rowconv.ColNamingFunc{
+			baseStr:   func(colName string) string { return baseStr + "_" + colName },
+			oursStr:   func(colName string) string { return oursStr + "_" + colName },
+			theirsStr: func(colName string) string { return theirsStr + "_" + colName },
+		},
+	)
 
 	if err != nil {
 		return nil, err
@@ -95,136 +77,100 @@ func NewConflictReader(ctx context.Context, tbl *doltdb.Table) (*ConflictReader,
 		return nil, err
 	}
 
-	baseConv, err := rowconv.NewRowConverter(baseMapping)
+	return &ConflictReader{confItr, joiner, tbl.Format()}, nil
+}
+
+func tagMappingConverter(src, dest schema.Schema) (*rowconv.RowConverter, error) {
+	mapping, err := rowconv.TagMapping(src, dest)
 
 	if err != nil {
 		return nil, err
 	}
 
-	conv, err := rowconv.NewRowConverter(mapping)
-
-	if err != nil {
-		return nil, err
-	}
-
-	mergeConv, err := rowconv.NewRowConverter(mergeMapping)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &ConflictReader{
-		confItr,
-		untypedUnSch,
-		baseConv,
-		conv,
-		mergeConv,
-		[3]pipeline.RowWithProps{},
-		0}, nil
+	return rowconv.NewRowConverter(mapping)
 }
 
 // GetSchema gets the schema of the rows that this reader will return
 func (cr *ConflictReader) GetSchema() schema.Schema {
-	return cr.unionedSch
+	return cr.joiner.GetSchema()
+}
+
+func (cr *ConflictReader) GetJoiner() *rowconv.Joiner {
+	return cr.joiner
 }
 
 // NextConflict reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
 // will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
 func (cr *ConflictReader) NextConflict(ctx context.Context) (row.Row, pipeline.ImmutableProperties, error) {
-	for {
-		if cr.currIdx == 0 {
-			key, value, err := cr.confItr.Next(ctx)
+	key, value, err := cr.confItr.Next(ctx)
 
-			if err != nil {
-				return nil, pipeline.ImmutableProperties{}, err
-			}
+	if err != nil {
+		return nil, pipeline.ImmutableProperties{}, err
+	}
 
-			if key == nil {
-				return nil, pipeline.NoProps, io.EOF
-			}
+	if key == nil {
+		return nil, pipeline.NoProps, io.EOF
+	}
 
-			keyTpl := key.(types.Tuple)
-			conflict, err := doltdb.ConflictFromTuple(value.(types.Tuple))
+	keyTpl := key.(types.Tuple)
+	conflict, err := doltdb.ConflictFromTuple(value.(types.Tuple))
 
-			if err != nil {
-				return nil, pipeline.ImmutableProperties{}, err
-			}
+	if err != nil {
+		return nil, pipeline.ImmutableProperties{}, err
+	}
 
-			baseRow, err := createRow(keyTpl, conflict.Base, cr.baseConv)
+	namedRows := make(map[string]row.Row)
+	if !types.IsNull(conflict.Base) {
+		namedRows[baseStr], err = row.FromNoms(cr.joiner.SchemaForName(baseStr), keyTpl, conflict.Base.(types.Tuple))
 
-			if err != nil {
-				return nil, pipeline.ImmutableProperties{}, err
-			}
-
-			r, err := createRow(keyTpl, conflict.Value, cr.conv)
-
-			if err != nil {
-				return nil, pipeline.ImmutableProperties{}, err
-			}
-
-			mergeRow, err := createRow(keyTpl, conflict.MergeValue.(types.Tuple), cr.mergeConv)
-
-			if err != nil {
-				return nil, pipeline.ImmutableProperties{}, err
-			}
-
-			if baseRow != nil {
-				if mergeRow != nil && r != nil {
-					cr.bufferedRows[2] = pipeline.NewRowWithProps(baseRow, map[string]interface{}{mergeVersionProp: BaseVersion})
-					cr.bufferedRows[1] = pipeline.NewRowWithProps(mergeRow, map[string]interface{}{mergeVersionProp: TheirVersion, mergeRowOperation: types.DiffChangeModified})
-					cr.bufferedRows[0] = pipeline.NewRowWithProps(r, map[string]interface{}{mergeVersionProp: OurVersion, mergeRowOperation: types.DiffChangeModified})
-					cr.currIdx = 3
-				} else if r != nil {
-					cr.bufferedRows[2] = pipeline.NewRowWithProps(baseRow, map[string]interface{}{mergeVersionProp: BaseVersion})
-					cr.bufferedRows[1] = pipeline.NewRowWithProps(baseRow, map[string]interface{}{mergeVersionProp: TheirVersion, mergeRowOperation: types.DiffChangeRemoved})
-					cr.bufferedRows[0] = pipeline.NewRowWithProps(r, map[string]interface{}{mergeVersionProp: OurVersion, mergeRowOperation: types.DiffChangeModified})
-					cr.currIdx = 3
-				} else {
-					cr.bufferedRows[2] = pipeline.NewRowWithProps(baseRow, map[string]interface{}{mergeVersionProp: BaseVersion})
-					cr.bufferedRows[1] = pipeline.NewRowWithProps(mergeRow, map[string]interface{}{mergeVersionProp: TheirVersion, mergeRowOperation: types.DiffChangeModified})
-					cr.bufferedRows[0] = pipeline.NewRowWithProps(baseRow, map[string]interface{}{mergeVersionProp: OurVersion, mergeRowOperation: types.DiffChangeRemoved})
-					cr.currIdx = 3
-				}
-			} else {
-				if mergeRow != nil {
-					cr.bufferedRows[0] = pipeline.NewRowWithProps(mergeRow, map[string]interface{}{mergeVersionProp: TheirVersion, mergeRowOperation: types.DiffChangeAdded})
-					cr.currIdx++
-				}
-
-				if r != nil {
-					cr.bufferedRows[1] = pipeline.NewRowWithProps(r, map[string]interface{}{mergeVersionProp: OurVersion, mergeRowOperation: types.DiffChangeAdded})
-					cr.currIdx++
-				}
-			}
-		}
-
-		cr.currIdx--
-		result := cr.bufferedRows[cr.currIdx]
-
-		if result.Row != nil {
-			return result.Row, result.Props, nil
+		if err != nil {
+			return nil, pipeline.ImmutableProperties{}, err
 		}
 	}
+
+	if !types.IsNull(conflict.Value) {
+		namedRows[oursStr], err = row.FromNoms(cr.joiner.SchemaForName(oursStr), keyTpl, conflict.Value.(types.Tuple))
+
+		if err != nil {
+			return nil, pipeline.ImmutableProperties{}, err
+		}
+	}
+
+	if !types.IsNull(conflict.MergeValue) {
+		namedRows[theirsStr], err = row.FromNoms(cr.joiner.SchemaForName(theirsStr), keyTpl, conflict.MergeValue.(types.Tuple))
+
+		if err != nil {
+			return nil, pipeline.ImmutableProperties{}, err
+		}
+	}
+
+	joinedRow, err := cr.joiner.Join(namedRows)
+
+	if err != nil {
+		return nil, pipeline.ImmutableProperties{}, err
+	}
+
+	return joinedRow, pipeline.NoProps, nil
 }
 
-func createRow(key types.Tuple, nonKey types.Value, rowConv *rowconv.RowConverter) (row.Row, error) {
-	if types.IsNull(nonKey) {
-		return nil, nil
-	}
-
-	srcData, err := row.FromNoms(rowConv.SrcSch, key, nonKey.(types.Tuple))
+func (cr *ConflictReader) GetKeyForConflict(ctx context.Context, r row.Row) (types.Value, error) {
+	rows, err := cr.joiner.Split(r)
 
 	if err != nil {
 		return nil, err
 	}
 
-	row, err := rowConv.Convert(srcData)
+	for rowType, r := range rows {
+		key, err := r.NomsMapKey(cr.joiner.SchemaForName(rowType)).Value(ctx)
 
-	if err != nil {
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
+
+		return key, nil
 	}
 
-	return row, nil
+	return nil, errors.New("could not determine key")
 }
 
 // Close should release resources being held

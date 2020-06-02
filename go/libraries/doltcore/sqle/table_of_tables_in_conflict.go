@@ -152,4 +152,3 @@ func (dt *TableOfTablesInConflict) PartitionRows(_ *sql.Context, part sql.Partit
 	cp := part.(*tableInConflict)
 	return cp, nil
 }
-

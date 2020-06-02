@@ -185,6 +185,7 @@ func printSystemTables(ctx context.Context, root *doltdb.RootValue, ddb *doltdb.
 			cli.Println("\t", tbl)
 		}
 	}
+
 	for _, tbl := range genSysTbls {
 		cli.Println("\t", tbl)
 	}

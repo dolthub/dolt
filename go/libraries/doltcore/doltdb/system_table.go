@@ -141,6 +141,7 @@ var generatedSystemTables = []string{
 var generatedSystemTablePrefixes = []string{
 	DoltDiffTablePrefix,
 	DoltHistoryTablePrefix,
+	DoltConfTablePrefix,
 }
 
 const (
@@ -150,6 +151,7 @@ const (
 	DocPkColumnName   = "doc_name"
 	DocTextColumnName = "doc_text"
 )
+
 const (
 	// Tags for dolt_docs table
 	// for info on unaligned constant: https://github.com/liquidata-inc/dolt/pull/663
@@ -209,7 +211,10 @@ const (
 
 const (
 	DoltHistoryTablePrefix = "dolt_history_"
+	DoltDiffTablePrefix    = "dolt_diff_"
+	DoltConfTablePrefix    = "dolt_conflicts_"
 )
+
 const (
 	// Tags for dolt_history_ table
 	HistoryCommitterTag = iota + SystemTableReservedMin + uint64(1000)
@@ -218,17 +223,9 @@ const (
 )
 
 const (
-	DoltDiffTablePrefix = "dolt_diff_"
-)
-const (
 	// Tags for dolt_diff_ table
 	DiffCommitTag = iota + SystemTableReservedMin + uint64(2000)
 	DiffCommitDateTag
-)
-
-const (
-	// BranchesTableName is the system table name
-	BranchesTableName = "dolt_branches"
 )
 
 const (
@@ -237,4 +234,7 @@ const (
 
 	// TableOfTablesInConflictName is the conflicts system table name
 	TableOfTablesInConflictName = "dolt_conflicts"
+
+	// BranchesTableName is the system table name
+	BranchesTableName = "dolt_branches"
 )
