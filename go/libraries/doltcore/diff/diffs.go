@@ -16,6 +16,8 @@ package diff
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 	"sort"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -28,6 +30,7 @@ const (
 	AddedTable TableDiffType = iota
 	ModifiedTable
 	RemovedTable
+	RenamedTable
 )
 
 type TableDiffs struct {
@@ -36,6 +39,9 @@ type TableDiffs struct {
 	NumRemoved  int
 	TableToType map[string]TableDiffType
 	Tables      []string
+
+	// renamed tables are included in TableToType by their new name
+	NewNameToOldName map[string]string
 }
 
 type DocDiffType int
@@ -89,32 +95,45 @@ func (rvu RootValueUnreadable) Error() string {
 }
 
 func NewTableDiffs(ctx context.Context, newer, older *doltdb.RootValue) (*TableDiffs, error) {
-	added, modified, removed, err := newer.TableDiff(ctx, older)
+	matches, err := matchTablesForRoots(ctx, newer, older)
 
 	if err != nil {
 		return nil, err
 	}
 
 	var tbls []string
-	tbls = append(tbls, added...)
-	tbls = append(tbls, modified...)
-	tbls = append(tbls, removed...)
-	sort.Strings(tbls)
+	tbls = append(tbls, matches.added..., )
+	tbls = append(tbls, matches.modified...)
+	tbls = append(tbls, matches.dropped...)
 
 	tblToType := make(map[string]TableDiffType)
-	for _, tbl := range added {
+	for _, tbl := range matches.added {
 		tblToType[tbl] = AddedTable
 	}
 
-	for _, tbl := range modified {
+	for _, tbl := range matches.modified {
 		tblToType[tbl] = ModifiedTable
 	}
 
-	for _, tbl := range removed {
+	for _, tbl := range matches.dropped {
 		tblToType[tbl] = RemovedTable
 	}
 
-	return &TableDiffs{len(added), len(modified), len(removed), tblToType, tbls}, err
+	for newName, _ := range matches.renamed {
+		tblToType[newName] = RenamedTable
+		tbls = append(tbls, newName)
+	}
+
+	sort.Strings(tbls)
+
+	return &TableDiffs{
+		NumAdded: len(matches.added),
+		NumModified: len(matches.modified),
+		NumRemoved: len(matches.dropped),
+		TableToType: tblToType,
+		Tables: tbls,
+		NewNameToOldName: matches.renamed,
+	}, err
 }
 
 func (td *TableDiffs) Len() int {
@@ -237,4 +256,193 @@ func GetDocDiffs(ctx context.Context, dEnv *env.DoltEnv) (*DocDiffs, *DocDiffs, 
 	}
 
 	return stagedDocDiffs, notStagedDocDiffs, nil
+}
+
+type tableMatches struct {
+	added     []string
+	dropped   []string
+	modified  []string
+	unchanged []string
+	renamed   map[string]string
+}
+
+// matchTablesForRoots matches all tables that exist in both roots and finds the tables that only exist in one root.
+// Tables are matched by the column tag of the first primary key column.
+func matchTablesForRoots(ctx context.Context, newer, older *doltdb.RootValue) (tableMatches, error) {
+	tm := tableMatches{}
+	tm.renamed = make(map[string]string)
+	oldTableNames := make(map[uint64]string)
+	oldTableHashes := make(map[uint64]hash.Hash)
+
+	err := older.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
+		sch, err := table.GetSchema(ctx)
+		if err != nil {
+			return true, err
+		}
+
+		th, err := table.HashOf()
+		if err != nil {
+			return true, err
+		}
+
+		pkTag := sch.GetPKCols().GetColumns()[0].Tag
+		oldTableNames[pkTag] = name
+		oldTableHashes[pkTag] = th
+		return false, nil
+	})
+
+	if err != nil {
+		return tm, err
+	}
+
+	err = newer.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
+		sch, err := table.GetSchema(ctx)
+		if err != nil {
+			return true, err
+		}
+
+		th, err := table.HashOf()
+		if err != nil {
+			return true, err
+		}
+
+		pkTag := sch.GetPKCols().GetColumns()[0].Tag
+		oldName, ok := oldTableNames[pkTag]
+
+		switch {
+		case !ok:
+			tm.added = append(tm.added, name)
+		case oldName != name:
+			tm.renamed[name] = oldName
+		case oldTableHashes[pkTag] != th:
+			tm.modified = append(tm.modified, name)
+		default:
+			tm.unchanged = append(tm.unchanged, name)
+		}
+
+		if ok {
+			delete(oldTableNames, pkTag) // consume table name
+		}
+
+		return false, nil
+	})
+
+	if err != nil {
+		return tm, err
+	}
+
+	// all unmatched tables from older must have been dropped
+	for _, oldName := range oldTableNames {
+		tm.dropped = append(tm.dropped, oldName)
+	}
+
+	return tm, nil
+}
+
+// todo: to vs from
+type TableDelta struct {
+	NewName string
+	OldName string
+	NewTable *doltdb.Table
+	OldTable *doltdb.Table
+}
+
+func GetTableDeltas(ctx context.Context, older, newer *doltdb.RootValue) ([]TableDelta, error) {
+	var deltas []TableDelta
+	oldTables := make(map[uint64]*doltdb.Table)
+	oldTableNames := make(map[uint64]string)
+	oldTableHashes := make(map[uint64]hash.Hash)
+
+	err := older.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
+		sch, err := table.GetSchema(ctx)
+		if err != nil {
+			return true, err
+		}
+
+		th, err := table.HashOf()
+		if err != nil {
+			return true, err
+		}
+
+		pkTag := sch.GetPKCols().GetColumns()[0].Tag
+		oldTables[pkTag] = table
+		oldTableNames[pkTag] = name
+		oldTableHashes[pkTag] = th
+		return false, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = newer.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
+		sch, err := table.GetSchema(ctx)
+		if err != nil {
+			return true, err
+		}
+
+		th, err := table.HashOf()
+		if err != nil {
+			return true, err
+		}
+
+		pkTag := sch.GetPKCols().GetColumns()[0].Tag
+		oldName, ok := oldTableNames[pkTag]
+
+		if !ok {
+			deltas = append(deltas, TableDelta{NewName: name, NewTable: table})
+		} else if oldName != name || oldTableHashes[pkTag] != th {
+			deltas = append(deltas, TableDelta{
+				NewName: name,
+				OldName: oldTableNames[pkTag],
+				NewTable: table,
+				OldTable: oldTables[pkTag],
+			})
+		}
+
+		if ok {
+			delete(oldTableNames, pkTag) // consume table name
+		}
+
+		return false, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// all unmatched tables from older must have been dropped
+	for pkTag, oldName := range oldTableNames {
+		deltas = append(deltas, TableDelta{OldName: oldName, OldTable: oldTables[pkTag]})
+	}
+
+	return deltas, nil
+}
+
+func (td TableDelta) IsAdd() bool {
+	return td.OldTable == nil && td.NewTable != nil
+}
+
+func (td TableDelta) IsDrop() bool {
+	return td.OldTable != nil && td.NewTable == nil
+}
+
+func (td TableDelta) GetSchemas(ctx context.Context) (new, old schema.Schema, err error) {
+	if td.OldTable != nil {
+		old, err = td.OldTable.GetSchema(ctx)
+
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	if td.NewTable != nil {
+		new, err = td.NewTable.GetSchema(ctx)
+
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return new, old, nil
 }

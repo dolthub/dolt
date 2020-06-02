@@ -200,7 +200,7 @@ SQL
     dolt diff --sql newbranch firstbranch > query
     dolt checkout firstbranch
     dolt sql < query
-    rm query
+    cat query
     dolt add test
     dolt commit -m "Reconciled with newbranch"
 
@@ -476,9 +476,7 @@ SQL
 
     dolt diff --sql newbranch firstbranch > query
     dolt checkout firstbranch
-    skip "add + drop doesn't work, we have to track renames"
     dolt sql < query
-    rm query
     dolt add .
     dolt commit -m "Reconciled with newbranch"
 
@@ -486,6 +484,7 @@ SQL
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
+    grep 'RENAME' query
 }
 
 @test "diff sql recreates tables with all types" {
