@@ -28,7 +28,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/valutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -165,19 +164,19 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.T
 		return nil, nil, err
 	}
 
-	mergedRowData, conflicts, stats, err := mergeTableData(ctx, postMergeSchema, rows, mergeRows, ancRows, merger.vrw)
+	updatedTbl, err := tbl.UpdateSchema(ctx, postMergeSchema)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	schUnionVal, err := encoding.MarshalSchemaAsNomsValue(ctx, merger.vrw, postMergeSchema)
+	updatedTblEditor, err := doltdb.NewTableEditor(ctx, updatedTbl, postMergeSchema)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	mergedTable, err := doltdb.NewTable(ctx, merger.vrw, schUnionVal, mergedRowData, nil)
+	mergedTable, conflicts, stats, err := mergeTableData(ctx, postMergeSchema, rows, mergeRows, ancRows, merger.vrw, updatedTblEditor)
 
 	if err != nil {
 		return nil, nil, err
@@ -307,7 +306,7 @@ func mergeTableSchema(sch, mergeSch, ancSch schema.Schema) (schema.Schema, error
 	return schema.SchemaFromCols(union), nil
 }
 
-func mergeTableData(ctx context.Context, sch schema.Schema, rows, mergeRows, ancRows types.Map, vrw types.ValueReadWriter) (types.Map, types.Map, *MergeStats, error) {
+func mergeTableData(ctx context.Context, sch schema.Schema, rows, mergeRows, ancRows types.Map, vrw types.ValueReadWriter, tblEdit *doltdb.TableEditor) (*doltdb.Table, types.Map, *MergeStats, error) {
 	//changeChan1, changeChan2 := make(chan diff.Difference, 32), make(chan diff.Difference, 32)
 	ae := atomicerr.New()
 	changeChan, mergeChangeChan := make(chan types.ValueChanged, 32), make(chan types.ValueChanged, 32)
@@ -330,7 +329,6 @@ func mergeTableData(ctx context.Context, sch schema.Schema, rows, mergeRows, anc
 
 	conflictValChan := make(chan types.Value)
 	conflictMapChan := types.NewStreamingMap(ctx, vrw, ae, conflictValChan)
-	mapEditor := rows.Edit()
 	stats := &MergeStats{Operation: TableModified}
 
 	f := func() error {
@@ -387,7 +385,10 @@ func mergeTableData(ctx context.Context, sch schema.Schema, rows, mergeRows, anc
 				}
 
 				if keyNilOrMKLess {
-					applyChange(mapEditor, stats, mergeChange)
+					err = applyChange(ctx, tblEdit, rows, sch, stats, mergeChange)
+					if err != nil {
+						return err
+					}
 					mergeChange = types.ValueChanged{}
 					processed = true
 				}
@@ -411,7 +412,10 @@ func mergeTableData(ctx context.Context, sch schema.Schema, rows, mergeRows, anc
 
 					addConflict(conflictValChan, key, conflictTuple)
 				} else {
-					applyChange(mapEditor, stats, types.ValueChanged{ChangeType: change.ChangeType, Key: key, OldValue: r, NewValue: mergedRow})
+					err = applyChange(ctx, tblEdit, rows, sch, stats, types.ValueChanged{ChangeType: change.ChangeType, Key: key, OldValue: r, NewValue: mergedRow})
+					if err != nil {
+						return err
+					}
 				}
 
 				change = types.ValueChanged{}
@@ -425,21 +429,21 @@ func mergeTableData(ctx context.Context, sch schema.Schema, rows, mergeRows, anc
 	err := f()
 
 	if err != nil {
-		return types.EmptyMap, types.EmptyMap, nil, err
+		return nil, types.EmptyMap, nil, err
 	}
 
 	if err := ae.Get(); err != nil {
-		return types.EmptyMap, types.EmptyMap, nil, err
+		return nil, types.EmptyMap, nil, err
 	}
 
 	conflicts := <-conflictMapChan
-	mergedData, err := mapEditor.Map(ctx)
+	mergedTable, err := tblEdit.Table()
 
 	if err != nil {
-		return types.EmptyMap, types.EmptyMap, nil, err
+		return nil, types.EmptyMap, nil, err
 	}
 
-	return mergedData, conflicts, stats, nil
+	return mergedTable, conflicts, stats, nil
 }
 
 func addConflict(conflictChan chan types.Value, key types.Value, value types.Tuple) {
@@ -447,18 +451,55 @@ func addConflict(conflictChan chan types.Value, key types.Value, value types.Tup
 	conflictChan <- value
 }
 
-func applyChange(me *types.MapEditor, stats *MergeStats, change types.ValueChanged) {
+func applyChange(ctx context.Context, tableEditor *doltdb.TableEditor, rowData types.Map, sch schema.Schema, stats *MergeStats, change types.ValueChanged) error {
 	switch change.ChangeType {
 	case types.DiffChangeAdded:
+		newRow, err := row.FromNoms(sch, change.Key.(types.Tuple), change.NewValue.(types.Tuple))
+		if err != nil {
+			return err
+		}
+		val, ok, err := rowData.MaybeGet(ctx, change.Key)
+		if err != nil {
+			return err
+		} else if ok {
+			oldRow, err := row.FromNoms(sch, change.Key.(types.Tuple), val.(types.Tuple))
+			if err != nil {
+				return err
+			}
+			err = tableEditor.UpdateRow(ctx, oldRow, newRow)
+			if err != nil {
+				return err
+			}
+		} else {
+			err = tableEditor.InsertRow(ctx, newRow)
+			if err != nil {
+				return err
+			}
+		}
 		stats.Adds++
-		me.Set(change.Key, change.NewValue)
 	case types.DiffChangeModified:
+		oldRow, err := row.FromNoms(sch, change.Key.(types.Tuple), change.OldValue.(types.Tuple))
+		if err != nil {
+			return err
+		}
+		newRow, err := row.FromNoms(sch, change.Key.(types.Tuple), change.NewValue.(types.Tuple))
+		if err != nil {
+			return err
+		}
+		err = tableEditor.UpdateRow(ctx, oldRow, newRow)
+		if err != nil {
+			return err
+		}
 		stats.Modifications++
-		me.Set(change.Key, change.NewValue)
 	case types.DiffChangeRemoved:
+		err := tableEditor.DeleteKey(ctx, change.Key.(types.Tuple))
+		if err != nil {
+			return err
+		}
 		stats.Deletes++
-		me.Remove(change.Key)
 	}
+
+	return nil
 }
 
 func rowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, r, mergeRow, baseRow types.Value) (types.Value, bool, error) {
