@@ -261,11 +261,18 @@ func intDecoder(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, rv
 			return overflowError(nbf, n, rv.Type())
 		}
 		rv.SetInt(i)
-	} else {
-		return &UnmarshalTypeMismatchError{v, rv.Type(), "", nbf}
+		return nil
 	}
 
-	return nil
+	// types.Int is currently encoded as types.Float during marshalling
+	// the block below exists to prepare for a compatibility breaking change
+	// todo: update comment after breaking change is made
+	if n, ok := v.(types.Int); ok {
+		rv.SetInt(int64(n))
+		return nil
+	}
+
+	return &UnmarshalTypeMismatchError{v, rv.Type(), "", nbf}
 }
 
 func uintDecoder(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, rv reflect.Value) error {
@@ -275,11 +282,18 @@ func uintDecoder(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, r
 			return overflowError(nbf, n, rv.Type())
 		}
 		rv.SetUint(u)
-	} else {
-		return &UnmarshalTypeMismatchError{v, rv.Type(), "", nbf}
+		return nil
 	}
 
-	return nil
+	// types.Uint is currently encoded as types.Float during marshalling
+	// the block below exists to prepare for a compatibility breaking change
+	// todo: update comment after breaking change is made
+	if n, ok := v.(types.Uint); ok {
+		rv.SetUint(uint64(n))
+		return nil
+	}
+
+	return &UnmarshalTypeMismatchError{v, rv.Type(), "", nbf}
 }
 
 type decoderCacheT struct {
