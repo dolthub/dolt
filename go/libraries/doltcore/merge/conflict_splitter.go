@@ -23,27 +23,33 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+// MergeVersion defines which version a value of a row corresponds to
 type MergeVersion int
 
 const (
+	// BaseVersion represents the state of a row at the most recent ancestor
 	BaseVersion MergeVersion = iota
+	// OurVersion represents the state of a row on our branch that is being merged into
 	OurVersion
+	// TheirVersion represents the state of a row on their branch which we are merging
 	TheirVersion
 	Blank // for display only
 )
 
-var TypeToMergeVersion = map[string]MergeVersion{
+var typeToMergeVersion = map[string]MergeVersion{
 	oursStr:   OurVersion,
 	theirsStr: TheirVersion,
 	baseStr:   BaseVersion,
 }
 
+// ConflictsSplitter splits a conflict into base, ours, and their version of a row
 type ConflictSplitter struct {
 	joiner     *rowconv.Joiner
 	sch        schema.Schema
 	converters map[string]*rowconv.RowConverter
 }
 
+// NewConflictSplitter creates a new ConflictSplitter
 func NewConflictSplitter(joiner *rowconv.Joiner) (ConflictSplitter, error) {
 	baseSch := joiner.SchemaForName(baseStr)
 	ourSch := joiner.SchemaForName(baseStr)
@@ -77,11 +83,14 @@ func NewConflictSplitter(joiner *rowconv.Joiner) (ConflictSplitter, error) {
 	return ConflictSplitter{joiner: joiner, sch: sch, converters: converters}, nil
 }
 
+// GetSchema returns the common schema which all rows will share
 func (ds ConflictSplitter) GetSchema() schema.Schema {
 	return ds.sch
 }
 
-func (ds ConflictSplitter) SplitConflicts(inRow row.Row, props pipeline.ReadableMap) (rowData []*pipeline.TransformedRowResult, badRowDetails string) {
+// SplitConflicts takes a conflict row and splits it into ours, theirs, and base versions and provides pipeline properties
+// which can be used to distinguished which is which and what type of conflict occurred.
+func (ds ConflictSplitter) SplitConflicts(inRow row.Row, _ pipeline.ReadableMap) (rowData []*pipeline.TransformedRowResult, badRowDetails string) {
 	rows, err := ds.joiner.Split(inRow)
 	if err != nil {
 		return nil, err.Error()
@@ -104,7 +113,7 @@ func (ds ConflictSplitter) SplitConflicts(inRow row.Row, props pipeline.Readable
 	rowData = make([]*pipeline.TransformedRowResult, 0, 3)
 	for _, rowType := range []string{baseStr, oursStr, theirsStr} {
 		row, ok := rows[rowType]
-		props := map[string]interface{}{mergeVersionProp: TypeToMergeVersion[rowType]}
+		props := map[string]interface{}{mergeVersionProp: typeToMergeVersion[rowType]}
 
 		if ok {
 			converted, err := ds.converters[rowType].Convert(row)

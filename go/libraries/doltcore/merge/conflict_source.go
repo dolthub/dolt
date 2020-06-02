@@ -36,12 +36,15 @@ const (
 	baseStr   = "base"
 )
 
+// ConflictReader is a class providing a NextConflict function which can be used in a pipeline as a pipeline.SourceFunc,
+// or it can be used to read each conflict
 type ConflictReader struct {
 	confItr types.MapIterator
 	joiner  *rowconv.Joiner
 	nbf     *types.NomsBinFormat
 }
 
+// NewConflictReader returns a new conflict reader for a given table
 func NewConflictReader(ctx context.Context, tbl *doltdb.Table) (*ConflictReader, error) {
 	base, sch, mergeSch, err := tbl.GetConflictSchemas(ctx)
 
@@ -95,12 +98,14 @@ func (cr *ConflictReader) GetSchema() schema.Schema {
 	return cr.joiner.GetSchema()
 }
 
+// GetJoiner returns the joiner used to join a row with its base, and merge versions
 func (cr *ConflictReader) GetJoiner() *rowconv.Joiner {
 	return cr.joiner
 }
 
-// NextConflict reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
-// will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
+// NextConflict can be called successively to retrieve the conflicts in a table.  Once all conflicts have been returned
+// io.EOF will be returned in the error field.  This can be used in a pipeline, or to iterate through all the conflicts
+// in a table.
 func (cr *ConflictReader) NextConflict(ctx context.Context) (row.Row, pipeline.ImmutableProperties, error) {
 	key, value, err := cr.confItr.Next(ctx)
 
@@ -153,6 +158,7 @@ func (cr *ConflictReader) NextConflict(ctx context.Context) (row.Row, pipeline.I
 	return joinedRow, pipeline.NoProps, nil
 }
 
+// GetKeyForConflicts returns the pk for a conflict row
 func (cr *ConflictReader) GetKeyForConflict(ctx context.Context, r row.Row) (types.Value, error) {
 	rows, err := cr.joiner.Split(r)
 

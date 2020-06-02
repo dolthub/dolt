@@ -145,17 +145,24 @@ var generatedSystemTablePrefixes = []string{
 }
 
 const (
-	DocTableName      = "dolt_docs"
-	LicensePk         = "LICENSE.md"
-	ReadmePk          = "README.md"
-	DocPkColumnName   = "doc_name"
+	// DocTableName is the name of the dolt table containing documents such as the license and readme
+	DocTableName = "dolt_docs"
+	// LicensePk is the key for accessing the license within the docs table
+	LicensePk = "LICENSE.md"
+	// ReadmePk is the key for accessing the readme within the docs table
+	ReadmePk = "README.md"
+	// DocPkColumnName is the name of the pk column in the docs table
+	DocPkColumnName = "doc_name"
+	//DocTextColumnName is the name of the column containing the documeent contents in the docs table
 	DocTextColumnName = "doc_text"
 )
 
+// Tags for dolt_docs table
+// for info on unaligned constant: https://github.com/liquidata-inc/dolt/pull/663
 const (
-	// Tags for dolt_docs table
-	// for info on unaligned constant: https://github.com/liquidata-inc/dolt/pull/663
+	// DocNameTag is the tag of the name column in the docs table
 	DocNameTag = iota + SystemTableReservedMin + uint64(5)
+	// DocTextTag is the tag of the text column in the docs table
 	DocTextTag
 )
 
@@ -178,13 +185,19 @@ const (
 	// QueryCatalogDescriptionCol is the name of the column containing the description of a query in the catalog
 	QueryCatalogDescriptionCol = "description"
 )
+
+// Tags for dolt_query_catalog table
+// for info on unaligned constant: https://github.com/liquidata-inc/dolt/pull/663
 const (
-	// Tags for dolt_query_catalog table
-	// for info on unaligned constant: https://github.com/liquidata-inc/dolt/pull/663
+	// QueryCatalogIdTag is the tag of the id column in the query catalog table
 	QueryCatalogIdTag = iota + SystemTableReservedMin + uint64(3005)
+	// QueryCatalogOrderTag is the tag of the column containing the sort order in the query catalog table
 	QueryCatalogOrderTag
+	// QueryCatalogNameTag is the tag of the column containing the name of the query in the query catalog table
 	QueryCatalogNameTag
+	// QueryCatalogQueryTag is the tag of the column containing the query in the query catalog table
 	QueryCatalogQueryTag
+	// QueryCatalogDescriptionTag is the tag of the column containing the query description in the query catalog table
 	QueryCatalogDescriptionTag
 )
 
@@ -201,29 +214,33 @@ const (
 	// For example, the SELECT statement for a CREATE VIEW.
 	SchemasTablesFragmentCol = "fragment"
 )
+
+// Tags for dolt_schemas table
+// for info on unaligned constant: https://github.com/liquidata-inc/dolt/pull/663
 const (
-	// Tags for dolt_schemas table
-	// for info on unaligned constant: https://github.com/liquidata-inc/dolt/pull/663
 	DoltSchemasTypeTag = iota + SystemTableReservedMin + uint64(4003)
 	DoltSchemasNameTag
 	DoltSchemasFragmentTag
 )
 
 const (
+	// DoltHistoryTablePrefix is the prefix assigned to all the generated history tables
 	DoltHistoryTablePrefix = "dolt_history_"
-	DoltDiffTablePrefix    = "dolt_diff_"
-	DoltConfTablePrefix    = "dolt_conflicts_"
+	// DoltdDiffTablePrefix is the prefix assigned to all the generated diff tables
+	DoltDiffTablePrefix = "dolt_diff_"
+	// DoltConfTablePrefix is the prefix assigned to all the generated conflict tables
+	DoltConfTablePrefix = "dolt_conflicts_"
 )
 
+// Tags for dolt_history_ table
 const (
-	// Tags for dolt_history_ table
 	HistoryCommitterTag = iota + SystemTableReservedMin + uint64(1000)
 	HistoryCommitHashTag
 	HistoryCommitDateTag
 )
 
+// Tags for dolt_diff_ table
 const (
-	// Tags for dolt_diff_ table
 	DiffCommitTag = iota + SystemTableReservedMin + uint64(2000)
 	DiffCommitDateTag
 )
