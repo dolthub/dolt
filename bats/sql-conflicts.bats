@@ -188,3 +188,32 @@ teardown() {
   [ "$status" -eq 0 ]
   [[ "$output" =~ "$EXPECTED" ]] || false
 }
+
+@test "multiple conflicts" {
+  dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0)"
+  dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (1,0,0)"
+  dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (2,0,0)"
+  dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (3,0,0)"
+  dolt add .
+  dolt commit -m "initial values"
+  dolt branch feature_branch master
+  dolt SQL -q "UPDATE one_pk SET c1=1,c2=1"
+  dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (4,1,1)"
+  dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (5,3,3)"
+  dolt add .
+  dolt commit -m "changed master"
+  dolt checkout feature_branch
+  dolt SQL -q "UPDATE one_pk SET c1=2,c2=2"
+  dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (4,2,2)"
+  dolt SQL -q "DELETE FROM one_pk WHERE pk1=3"
+  dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (5,3,3)"
+  dolt add .
+  dolt commit -m "changed feature_branch"
+  dolt checkout master
+  dolt merge feature_branch
+
+  EXPECTED=$( echo -e "table,num_conflicts\none_pk,5")
+  run dolt sql -r csv -q "SELECT * FROM dolt_conflicts"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "$EXPECTED" ]] || false
+}
