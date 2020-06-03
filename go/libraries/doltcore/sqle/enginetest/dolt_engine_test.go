@@ -26,6 +26,7 @@ func TestQueries(t *testing.T) {
 // Tests of choosing the correct execution plan independent of result correctness. Mostly useful for confirming that
 // the right indexes are being used for joining tables.
 func TestQueryPlans(t *testing.T) {
+	t.Skipf("Skipping query plan tests until we have unified printing for query plans")
 	enginetest.TestQueryPlans(t, newDoltHarness(t))
 }
 
@@ -82,6 +83,7 @@ func TestDeleteFromErrors(t *testing.T) {
 }
 
 func TestCreateTable(t *testing.T) {
+	t.Skipf("Skipping: no support for BLOB type")
 	enginetest.TestCreateTable(t, newDoltHarness(t))
 }
 

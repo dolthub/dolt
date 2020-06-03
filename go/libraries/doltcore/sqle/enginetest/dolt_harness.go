@@ -22,6 +22,7 @@ import (
 	"github.com/liquidata-inc/go-mysql-server/enginetest"
 	"github.com/liquidata-inc/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
+	"strings"
 	"testing"
 )
 
@@ -39,6 +40,15 @@ func newDoltHarness(t *testing.T) *doltHarness {
 		session: sqle.DefaultDoltSession(),
 		mrEnv:   make(env.MultiRepoEnv),
 	}
+}
+
+// Logic to skip unsupported queries
+func (d *doltHarness) SkipQueryTest(query string) bool {
+	lowerQuery := strings.ToLower(query)
+	return strings.Contains(lowerQuery, "typestable") || // we don't support all the required types
+			strings.Contains(lowerQuery, "show full columns") || // we set extra comment info
+			lowerQuery == "show variables" || // we set extra variables
+			strings.Contains(lowerQuery, "show create table") // we set extra comment info
 }
 
 func (d *doltHarness) Parallelism() int {
