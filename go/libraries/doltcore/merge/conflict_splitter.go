@@ -33,7 +33,8 @@ const (
 	OurVersion
 	// TheirVersion represents the state of a row on their branch which we are merging
 	TheirVersion
-	Blank // for display only
+	// Blank is used for displaying a row without a version label
+	Blank
 )
 
 var typeToMergeVersion = map[string]MergeVersion{

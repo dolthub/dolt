@@ -23,10 +23,9 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 )
 
-const ()
-
 var _ sql.Table = ConflictsTable{}
 
+// ConflictsTable is a sql.Table implementation that provides access to the conflicts that exist for a user table
 type ConflictsTable struct {
 	tblName string
 	dbName  string
@@ -37,6 +36,7 @@ type ConflictsTable struct {
 	db      Database
 }
 
+// NewConflictsTable returns a new ConflictsTableTable instance
 func NewConflictsTable(ctx *sql.Context, db Database, tblName string) (sql.Table, error) {
 	sess := DSessFromSess(ctx.Session)
 	dbName := db.Name()
@@ -70,22 +70,27 @@ func NewConflictsTable(ctx *sql.Context, db Database, tblName string) (sql.Table
 	return ConflictsTable{tblName, dbName, sqlSch, root, tbl, rd, db}, nil
 }
 
+// Name returns the name of the table
 func (ct ConflictsTable) Name() string {
 	return doltdb.DoltConfTablePrefix + ct.tblName
 }
 
+// String returns a string identifying the table
 func (ct ConflictsTable) String() string {
 	return doltdb.DoltConfTablePrefix + ct.tblName
 }
 
+// Schema returns the sql.Schema of the table
 func (ct ConflictsTable) Schema() sql.Schema {
 	return ct.sqlSch
 }
 
+// Partitions returns a PartitionIter which can be used to get all the data partitions
 func (ct ConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	return &doltTablePartitionIter{}, nil
 }
 
+// PartitionRows returns a RowIter for the given partition
 func (ct ConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	return conflictRowIter{ctx, ct.rd}, nil
 }

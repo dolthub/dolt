@@ -110,7 +110,7 @@ func (cr *ConflictReader) NextConflict(ctx context.Context) (row.Row, pipeline.I
 	key, value, err := cr.confItr.Next(ctx)
 
 	if err != nil {
-		return nil, pipeline.ImmutableProperties{}, err
+		return nil, pipeline.NoProps, err
 	}
 
 	if key == nil {
@@ -121,7 +121,7 @@ func (cr *ConflictReader) NextConflict(ctx context.Context) (row.Row, pipeline.I
 	conflict, err := doltdb.ConflictFromTuple(value.(types.Tuple))
 
 	if err != nil {
-		return nil, pipeline.ImmutableProperties{}, err
+		return nil, pipeline.NoProps, err
 	}
 
 	namedRows := make(map[string]row.Row)
@@ -129,7 +129,7 @@ func (cr *ConflictReader) NextConflict(ctx context.Context) (row.Row, pipeline.I
 		namedRows[baseStr], err = row.FromNoms(cr.joiner.SchemaForName(baseStr), keyTpl, conflict.Base.(types.Tuple))
 
 		if err != nil {
-			return nil, pipeline.ImmutableProperties{}, err
+			return nil, pipeline.NoProps, err
 		}
 	}
 
@@ -137,7 +137,7 @@ func (cr *ConflictReader) NextConflict(ctx context.Context) (row.Row, pipeline.I
 		namedRows[oursStr], err = row.FromNoms(cr.joiner.SchemaForName(oursStr), keyTpl, conflict.Value.(types.Tuple))
 
 		if err != nil {
-			return nil, pipeline.ImmutableProperties{}, err
+			return nil, pipeline.NoProps, err
 		}
 	}
 
@@ -145,14 +145,14 @@ func (cr *ConflictReader) NextConflict(ctx context.Context) (row.Row, pipeline.I
 		namedRows[theirsStr], err = row.FromNoms(cr.joiner.SchemaForName(theirsStr), keyTpl, conflict.MergeValue.(types.Tuple))
 
 		if err != nil {
-			return nil, pipeline.ImmutableProperties{}, err
+			return nil, pipeline.NoProps, err
 		}
 	}
 
 	joinedRow, err := cr.joiner.Join(namedRows)
 
 	if err != nil {
-		return nil, pipeline.ImmutableProperties{}, err
+		return nil, pipeline.NoProps, err
 	}
 
 	return joinedRow, pipeline.NoProps, nil
