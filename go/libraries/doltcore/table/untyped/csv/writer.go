@@ -18,7 +18,6 @@ import (
 	"bufio"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -32,7 +31,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-// WriteBufSize is the size of the buffer used when writing a csv file.  It is set at the package level and all
+// writeBufSize is the size of the buffer used when writing a csv file.  It is set at the package level and all
 // writers create their own buffer's using the value of this variable at the time they create their buffers.
 const writeBufSize = 256 * 1024
 
@@ -74,9 +73,10 @@ func NewCSVWriter(wr io.WriteCloser, outSch schema.Schema, info *CSVFileInfo) (*
 	}
 
 	if info.HasHeaderLine {
-		colNames := make([]string, 0, outSch.GetAllCols().Size())
+		colNames := make([]*string, 0, outSch.GetAllCols().Size())
 		err := outSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			colNames = append(colNames, col.Name)
+			nm := col.Name
+			colNames = append(colNames, &nm)
 			return false, nil
 		})
 
@@ -85,7 +85,7 @@ func NewCSVWriter(wr io.WriteCloser, outSch schema.Schema, info *CSVFileInfo) (*
 			return nil, err
 		}
 
-		err = csvw.write(colNames, make([]bool, len(colNames)))
+		err = csvw.write(colNames)
 
 		if err != nil {
 			wr.Close()
@@ -105,27 +105,24 @@ func (csvw *CSVWriter) GetSchema() schema.Schema {
 func (csvw *CSVWriter) WriteRow(ctx context.Context, r row.Row) error {
 	allCols := csvw.sch.GetAllCols()
 
-	colValStrs := make([]string, 0, allCols.Size())
-	colIsNull := make([]bool, 0, allCols.Size())
+	colValStrs := make([]*string, 0, allCols.Size())
 	_, err := r.IterSchema(csvw.sch, func(tag uint64, val types.Value) (stop bool, err error) {
 		val, ok := r.GetColVal(tag)
 		if !ok || types.IsNull(val) {
-			colIsNull = append(colIsNull, true)
-			colValStrs = append(colValStrs, "")
+			colValStrs = append(colValStrs, nil)
 			return false, nil
 		}
 
-		colIsNull = append(colIsNull, false)
+		var v string
 		if val.Kind() == types.StringKind {
-			colValStrs = append(colValStrs, string(val.(types.String)))
+			v = string(val.(types.String))
 		} else {
-			var err error
-			v, err := types.EncodedValue(ctx, val)
+			v, err = types.EncodedValue(ctx, val)
 			if err != nil {
 				return false, err
 			}
-			colValStrs = append(colValStrs, v)
 		}
+		colValStrs = append(colValStrs, &v)
 
 		return false, nil
 	})
@@ -134,7 +131,7 @@ func (csvw *CSVWriter) WriteRow(ctx context.Context, r row.Row) error {
 		return err
 	}
 
-	return csvw.write(colValStrs, colIsNull)
+	return csvw.write(colValStrs)
 }
 
 // Close should flush all writes, release resources being held
@@ -151,11 +148,7 @@ func (csvw *CSVWriter) Close(ctx context.Context) error {
 
 // write is directly copied from csv.Writer.Write() with the addition of the `isNull []bool` parameter
 // this method has been adapted for Dolt's special quoting logic, ie `10,,""` -> (10,NULL,"")
-func (csvw *CSVWriter) write(record []string, isNull []bool) error {
-	if len(record) != len(isNull) {
-		return fmt.Errorf("args record and isNull do now have the same length: %v %v", record, isNull)
-	}
-
+func (csvw *CSVWriter) write(record []*string) error {
 	for n, field := range record {
 		if n > 0 {
 			if _, err := csvw.wr.WriteString(csvw.info.Delim); err != nil {
@@ -163,10 +156,17 @@ func (csvw *CSVWriter) write(record []string, isNull []bool) error {
 			}
 		}
 
+		if field == nil {
+			if _, err := csvw.wr.WriteString(""); err != nil {
+				return err
+			}
+			continue
+		}
+
 		// If we don't have to have a quoted field then just
 		// write out the field and continue to the next field.
-		if !csvw.fieldNeedsQuotes(field, isNull[n]) {
-			if _, err := csvw.wr.WriteString(field); err != nil {
+		if !csvw.fieldNeedsQuotes(field) {
+			if _, err := csvw.wr.WriteString(*field); err != nil {
 				return err
 			}
 			continue
@@ -175,23 +175,23 @@ func (csvw *CSVWriter) write(record []string, isNull []bool) error {
 		if err := csvw.wr.WriteByte('"'); err != nil {
 			return err
 		}
-		for len(field) > 0 {
+		for len(*field) > 0 {
 			// Search for special characters.
-			i := strings.IndexAny(field, "\"\r\n")
+			i := strings.IndexAny(*field, "\"\r\n")
 			if i < 0 {
-				i = len(field)
+				i = len(*field)
 			}
 
 			// Copy verbatim everything before the special character.
-			if _, err := csvw.wr.WriteString(field[:i]); err != nil {
+			if _, err := csvw.wr.WriteString((*field)[:i]); err != nil {
 				return err
 			}
-			field = field[i:]
+			*field = (*field)[i:]
 
 			// Encode the special character.
-			if len(field) > 0 {
+			if len(*field) > 0 {
 				var err error
-				switch field[0] {
+				switch (*field)[0] {
 				case '"':
 					_, err = csvw.wr.WriteString(`""`)
 				case '\r':
@@ -205,7 +205,7 @@ func (csvw *CSVWriter) write(record []string, isNull []bool) error {
 						err = csvw.wr.WriteByte('\n')
 					}
 				}
-				field = field[1:]
+				*field = (*field)[1:]
 				if err != nil {
 					return err
 				}
@@ -240,15 +240,16 @@ func (csvw *CSVWriter) write(record []string, isNull []bool) error {
 // 		of Microsoft Excel and Google Drive.
 // 		For Postgres, quote the data terminating string `\.`.
 //
-func (csvw *CSVWriter) fieldNeedsQuotes(field string, isNull bool) bool {
-	if field == "" {
+func (csvw *CSVWriter) fieldNeedsQuotes(field *string) bool {
+	if field != nil && *field == "" {
 		// special Dolt logic
-		return !isNull
-	}
-	if field == `\.` || strings.Contains(field, csvw.info.Delim) || strings.ContainsAny(field, "\"\r\n") {
 		return true
 	}
 
-	r1, _ := utf8.DecodeRuneInString(field)
+	if *field == `\.` || strings.Contains(*field, csvw.info.Delim) || strings.ContainsAny(*field, "\"\r\n") {
+		return true
+	}
+
+	r1, _ := utf8.DecodeRuneInString(*field)
 	return unicode.IsSpace(r1)
 }
