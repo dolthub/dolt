@@ -60,8 +60,10 @@ type HistoryTable struct {
 }
 
 // NewHistoryTable creates a history table
-func NewHistoryTable(ctx *sql.Context, dbName, tblName string) (*HistoryTable, error) {
+func NewHistoryTable(ctx *sql.Context, db Database, tblName string) (sql.Table, error) {
 	sess := DSessFromSess(ctx.Session)
+	dbName := db.Name()
+
 	ddb, ok := sess.GetDoltDB(dbName)
 
 	if !ok {

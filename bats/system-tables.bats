@@ -16,12 +16,14 @@ teardown() {
     run dolt ls --system
     [ $status -eq 0 ]
     [[ "$output" =~ "dolt_log" ]] || false
+    [[ "$output" =~ "dolt_conflicts" ]] || false
     [[ "$output" =~ "dolt_branches" ]] || false
     [[ "$output" =~ "dolt_query_catalog" ]] || false
     [[ ! "$output" =~ " test" ]] || false  # spaces are impt!
     run dolt ls --all
     [ $status -eq 0 ]
     [[ "$output" =~ "dolt_log" ]] || false
+    [[ "$output" =~ "dolt_conflicts" ]] || false
     [[ "$output" =~ "dolt_branches" ]] || false
     [[ "$output" =~ "dolt_query_catalog" ]] || false
     [[ "$output" =~ "test" ]] || false
@@ -47,12 +49,14 @@ teardown() {
     run dolt ls --system
     [ $status -eq 0 ]
     [[ "$output" =~ "dolt_log" ]] || false
+    [[ "$output" =~ "dolt_conflicts" ]] || false
     [[ "$output" =~ "dolt_branches" ]] || false
     [[ ! "$output" =~ "dolt_history_test" ]] || false
     [[ ! "$output" =~ "dolt_diff_test" ]] || false
     run dolt ls --system -v
     [ $status -eq 0 ]
     [[ "$output" =~ "dolt_log" ]] || false
+    [[ "$output" =~ "dolt_conflicts" ]] || false
     [[ "$output" =~ "dolt_branches" ]] || false
     [[ "$output" =~ "dolt_history_test" ]] || false
     [[ "$output" =~ "dolt_diff_test" ]] || false
@@ -67,12 +71,14 @@ teardown() {
     run dolt ls --system
     [ $status -eq 0 ]
     [[ "$output" =~ "dolt_log" ]] || false
+    [[ "$output" =~ "dolt_conflicts" ]] || false
     [[ "$output" =~ "dolt_branches" ]] || false
     [[ ! "$output" =~ "dolt_history_test" ]] || false
     [[ ! "$output" =~ "dolt_diff_test" ]] || false
     run dolt ls --system -v
     [ $status -eq 0 ]
     [[ "$output" =~ "dolt_log" ]] || false
+    [[ "$output" =~ "dolt_conflicts" ]] || false
     [[ "$output" =~ "dolt_branches" ]] || false
     [[ "$output" =~ "dolt_history_test" ]] || false
     [[ "$output" =~ "dolt_diff_test" ]] || false

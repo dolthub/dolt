@@ -165,16 +165,23 @@ func printConflicts(ctx context.Context, root *doltdb.RootValue, tblNames []stri
 
 			defer cnfRd.Close()
 
-			cnfWr, err := merge.NewConflictSink(iohelp.NopWrCloser(cli.CliOut), cnfRd.GetSchema(), " | ")
+			splitter, err := merge.NewConflictSplitter(cnfRd.GetJoiner())
+
+			if err != nil {
+				return errhand.BuildDError("error: unable to handle schemas").AddCause(err).Build()
+			}
+
+			cnfWr, err := merge.NewConflictSink(iohelp.NopWrCloser(cli.CliOut), splitter.GetSchema(), " | ")
 			defer cnfWr.Close()
 
 			if err != nil {
 				return errhand.BuildDError("error: unable to read database").AddCause(err).Build()
 			}
 
-			nullPrinter := nullprinter.NewNullPrinter(cnfRd.GetSchema())
-			fwtTr := fwt.NewAutoSizingFWTTransformer(cnfRd.GetSchema(), fwt.HashFillWhenTooLong, 1000)
+			nullPrinter := nullprinter.NewNullPrinter(splitter.GetSchema())
+			fwtTr := fwt.NewAutoSizingFWTTransformer(splitter.GetSchema(), fwt.HashFillWhenTooLong, 1000)
 			transforms := pipeline.NewTransformCollection(
+				pipeline.NewNamedTransform("split", splitter.SplitConflicts),
 				pipeline.NewNamedTransform(nullprinter.NullPrintingStage, nullPrinter.ProcessRow),
 				pipeline.NamedTransform{Name: "fwt", Func: fwtTr.TransformToFWT},
 			)
@@ -186,12 +193,12 @@ func printConflicts(ctx context.Context, root *doltdb.RootValue, tblNames []stri
 				panic("")
 			})
 
-			colNames, err := schema.ExtractAllColNames(cnfRd.GetSchema())
+			colNames, err := schema.ExtractAllColNames(splitter.GetSchema())
 
 			if err != nil {
 				return errhand.BuildDError("error: failed to read columns from schema").AddCause(err).Build()
 			}
-			r, err := untyped.NewRowFromTaggedStrings(tbl.Format(), cnfRd.GetSchema(), colNames)
+			r, err := untyped.NewRowFromTaggedStrings(tbl.Format(), splitter.GetSchema(), colNames)
 
 			if err != nil {
 				return errhand.BuildDError("error: failed to create header row for printing").AddCause(err).Build()

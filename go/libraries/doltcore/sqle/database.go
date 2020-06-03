@@ -196,26 +196,24 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 
 func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.RootValue, tblName string) (sql.Table, bool, error) {
 	lwrName := strings.ToLower(tblName)
-	if strings.HasPrefix(lwrName, doltdb.DoltDiffTablePrefix) {
-		tblName = tblName[len(doltdb.DoltDiffTablePrefix):]
-		dt, err := NewDiffTable(ctx, db.Name(), tblName)
 
-		if err != nil {
-			return nil, false, err
-		}
-
-		return dt, true, nil
+	prefixToNew := map[string]func(*sql.Context, Database, string) (sql.Table, error){
+		doltdb.DoltDiffTablePrefix:    NewDiffTable,
+		doltdb.DoltHistoryTablePrefix: NewHistoryTable,
+		doltdb.DoltConfTablePrefix:    NewConflictsTable,
 	}
 
-	if strings.HasPrefix(lwrName, doltdb.DoltHistoryTablePrefix) {
-		tblName = tblName[len(doltdb.DoltHistoryTablePrefix):]
-		dh, err := NewHistoryTable(ctx, db.Name(), tblName)
+	for prefix, newFunc := range prefixToNew {
+		if strings.HasPrefix(lwrName, prefix) {
+			tblName = tblName[len(prefix):]
+			dt, err := newFunc(ctx, db, tblName)
 
-		if err != nil {
-			return nil, false, err
+			if err != nil {
+				return nil, false, err
+			}
+
+			return dt, true, nil
 		}
-
-		return dh, true, nil
 	}
 
 	if lwrName == doltdb.LogTableName {
@@ -226,6 +224,16 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 		}
 
 		return lt, true, nil
+	}
+
+	if lwrName == doltdb.TableOfTablesInConflictName {
+		ct, err := NewTableOfTablesInConflict(ctx, db.Name())
+
+		if err != nil {
+			return nil, false, err
+		}
+
+		return ct, true, nil
 	}
 
 	if lwrName == doltdb.BranchesTableName {
