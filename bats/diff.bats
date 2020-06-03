@@ -9,6 +9,44 @@ teardown() {
     teardown_common
 }
 
+@test "diff clean working set" {
+    dolt sql -q 'create table test (pk int not null primary key)'
+    dolt add .
+    dolt commit -m test
+    dolt sql -q 'insert into test values (0)'
+    dolt add .
+    dolt commit -m row
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt diff head
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    dolt diff head^
+    run dolt diff head^
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+  | 0" ]] || false
+    run dolt diff head^ head
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+  | 0" ]] || false
+    run dolt diff head head^
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "-  | 0" ]] || false
+}
+
+@test "diff dirty working set" {
+    dolt sql -q 'create table test (pk int not null primary key)'
+    dolt add .
+    dolt commit -m test
+    dolt sql -q 'insert into test values (0)'
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+  | 0" ]] || false
+    run dolt diff head
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+  | 0" ]] || false
+}
+
 @test "diff summary comparing working table to last commit" {
     dolt sql <<SQL
 CREATE TABLE test (
@@ -120,7 +158,7 @@ SQL
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt add test
     dolt commit -m "Added another row"
-    run dolt diff --summary newbranch firstbranch
+    run dolt diff --summary firstbranch newbranch
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1 Row Unmodified (100.00%)" ]] || false
     [[ "$output" =~ "1 Row Added (100.00%)" ]] || false
@@ -131,7 +169,13 @@ SQL
 }
 
 @test "diff summary shows correct changes after schema change" {
-    dolt table import -c -s=`batshelper employees-sch.sql` employees `batshelper employees-tbl.json`
+    cat <<DELIM > employees.csv
+"id","first name","last name","title","start date","end date"
+0,tim,sehn,ceo,"",""
+1,aaron,son,founder,"",""
+2,brian,hendricks,founder,"",""
+DELIM
+    dolt table import -c -pk=id employees employees.csv
     dolt add employees
     dolt commit -m "Added employees table with data"
     dolt sql -q "alter table employees add city longtext"
@@ -243,22 +287,22 @@ SQL
     [[ "$output" =~ "44" ]] || false
     ! [[ "$output" =~ "55" ]] || false
 
-    run dolt diff test1 test2 --where "to_pk=4"
+    run dolt diff test1 test2 --where "from_pk=4"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "44" ]] || false
     ! [[ "$output" =~ "55" ]] || false
 
-    run dolt diff test1 test2 --where "to_pk=5"
+    run dolt diff test1 test2 --where "from_pk=5"
     [ "$status" -eq 0 ]
     ! [[ "$output" =~ "44" ]] || false
     ! [[ "$output" =~ "55" ]] || false
 
-    run dolt diff test1 test2 --where "from_pk=5"
+    run dolt diff test1 test2 --where "to_pk=5"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "55" ]] || false
     ! [[ "$output" =~ "44" ]] || false
 
-    run dolt diff test1 test2 --where "from_pk=4"
+    run dolt diff test1 test2 --where "to_pk=4"
     [ "$status" -eq 0 ]
     ! [[ "$output" =~ "44" ]] || false
     ! [[ "$output" =~ "55" ]] || false
