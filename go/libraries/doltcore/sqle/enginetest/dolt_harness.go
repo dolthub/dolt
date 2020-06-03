@@ -35,9 +35,11 @@ type doltHarness struct {
 var _ enginetest.Harness = (*doltHarness)(nil)
 
 func newDoltHarness(t *testing.T) *doltHarness {
+	session, err := sqle.NewDoltSession(context.Background(), enginetest.NewBaseSession(), "test", "email@test.com")
+	require.NoError(t, err)
 	return &doltHarness{
 		t:       t,
-		session: sqle.DefaultDoltSession(),
+		session: session,
 		mrEnv:   make(env.MultiRepoEnv),
 	}
 }
