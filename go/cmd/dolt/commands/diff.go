@@ -360,16 +360,16 @@ func diffRoots(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, docDetai
 }
 
 func diffSchemas(ctx context.Context, td diff.TableDelta, dArgs *diffArgs) errhand.VerboseError {
-	fromSch, toSch, err := td.GetSchemas(ctx)
-	if err != nil {
-		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
-	}
-
-	if eq, _ := schema.SchemasAreEqual(fromSch, toSch); eq {
-		return nil
-	}
-
 	if dArgs.diffOutput == TabularDiffOutput {
+		fromSch, toSch, err := td.GetSchemas(ctx)
+		if err != nil {
+			return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
+		}
+
+		if eq, _ := schema.SchemasAreEqual(fromSch, toSch); eq {
+			return nil
+		}
+
 		if td.IsDrop() || td.IsAdd() {
 			panic("cannot perform tabular schema diff for added/dropped tables")
 		}
@@ -472,6 +472,10 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta) errhand.VerboseError
 	} else {
 		if td.FromName != td.ToName {
 			cli.Println(sqlfmt.RenameTableStmt(td.FromName, td.ToName))
+		}
+
+		if eq, _ := schema.SchemasAreEqual(fromSch, toSch); eq {
+			return nil
 		}
 
 		colDiffs, unionTags := diff.DiffSchemas(fromSch, toSch)

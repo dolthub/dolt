@@ -434,7 +434,52 @@ SQL
 
     dolt diff --sql firstbranch newbranch > query
     dolt checkout firstbranch
-    skip "need to flush batch after rename"
+    cat query
+    dolt sql < query
+    dolt add .
+    dolt commit -m "Reconciled with newbranch"
+
+    # confirm that both branches have the same content
+    run dolt diff --sql firstbranch newbranch
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    grep 'RENAME' query
+}
+
+@test "diff sql reconciles RENAME TABLE with schema changes" {
+    dolt checkout -b firstbranch
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt sql -q 'insert into test values (1,1,1,1,1,1)'
+    dolt add .
+    dolt commit -m "created table"
+
+    dolt checkout -b newbranch
+    dolt sql -q 'ALTER TABLE test RENAME COLUMN c2 to col2'
+    dolt sql -q 'ALTER TABLE test ADD COLUMN c6 int'
+    dolt sql -q='RENAME TABLE test TO newname'
+    dolt sql -q 'ALTER TABLE newname DROP COLUMN c3'
+    dolt sql -q 'insert into newname values (2,1,1,1,1,1)'
+    dolt add .
+    dolt commit -m "renamed table and added data"
+
+    # confirm a difference exists
+    run dolt diff --sql firstbranch newbranch
+    [ "$status" -eq 0 ]
+    [ ! "$output" = "" ]
+
+    dolt diff --sql firstbranch newbranch > query
+    dolt checkout firstbranch
+    cat query
     dolt sql < query
     dolt add .
     dolt commit -m "Reconciled with newbranch"
