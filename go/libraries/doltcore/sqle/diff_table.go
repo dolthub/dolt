@@ -65,8 +65,10 @@ type DiffTable struct {
 	rowFilters       []sql.Expression
 }
 
-func NewDiffTable(ctx *sql.Context, dbName, tblName string) (*DiffTable, error) {
+func NewDiffTable(ctx *sql.Context, db Database, tblName string) (sql.Table, error) {
 	sess := DSessFromSess(ctx.Session)
+	dbName := db.Name()
+
 	ddb, ok := sess.GetDoltDB(dbName)
 
 	if !ok {
