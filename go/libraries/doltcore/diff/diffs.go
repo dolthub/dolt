@@ -18,6 +18,7 @@ import (
 	"context"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/types"
 	"sort"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -271,8 +272,8 @@ type tableMatches struct {
 func matchTablesForRoots(ctx context.Context, newer, older *doltdb.RootValue) (tableMatches, error) {
 	tm := tableMatches{}
 	tm.renamed = make(map[string]string)
-	oldTableNames := make(map[uint64]string)
-	oldTableHashes := make(map[uint64]hash.Hash)
+	FromTableNames := make(map[uint64]string)
+	FromTableHashes := make(map[uint64]hash.Hash)
 
 	err := older.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
 		sch, err := table.GetSchema(ctx)
@@ -286,8 +287,8 @@ func matchTablesForRoots(ctx context.Context, newer, older *doltdb.RootValue) (t
 		}
 
 		pkTag := sch.GetPKCols().GetColumns()[0].Tag
-		oldTableNames[pkTag] = name
-		oldTableHashes[pkTag] = th
+		FromTableNames[pkTag] = name
+		FromTableHashes[pkTag] = th
 		return false, nil
 	})
 
@@ -307,21 +308,21 @@ func matchTablesForRoots(ctx context.Context, newer, older *doltdb.RootValue) (t
 		}
 
 		pkTag := sch.GetPKCols().GetColumns()[0].Tag
-		oldName, ok := oldTableNames[pkTag]
+		oldName, ok := FromTableNames[pkTag]
 
 		switch {
 		case !ok:
 			tm.added = append(tm.added, name)
 		case oldName != name:
 			tm.renamed[name] = oldName
-		case oldTableHashes[pkTag] != th:
+		case FromTableHashes[pkTag] != th:
 			tm.modified = append(tm.modified, name)
 		default:
 			tm.unchanged = append(tm.unchanged, name)
 		}
 
 		if ok {
-			delete(oldTableNames, pkTag) // consume table name
+			delete(FromTableNames, pkTag) // consume table name
 		}
 
 		return false, nil
@@ -332,28 +333,27 @@ func matchTablesForRoots(ctx context.Context, newer, older *doltdb.RootValue) (t
 	}
 
 	// all unmatched tables from older must have been dropped
-	for _, oldName := range oldTableNames {
+	for _, oldName := range FromTableNames {
 		tm.dropped = append(tm.dropped, oldName)
 	}
 
 	return tm, nil
 }
 
-// todo: to vs from
 type TableDelta struct {
-	NewName string
-	OldName string
-	NewTable *doltdb.Table
-	OldTable *doltdb.Table
+	FromName  string
+	ToName    string
+	FromTable *doltdb.Table
+	ToTable   *doltdb.Table
 }
 
-func GetTableDeltas(ctx context.Context, older, newer *doltdb.RootValue) ([]TableDelta, error) {
+func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) ([]TableDelta, error) {
 	var deltas []TableDelta
-	oldTables := make(map[uint64]*doltdb.Table)
-	oldTableNames := make(map[uint64]string)
-	oldTableHashes := make(map[uint64]hash.Hash)
+	fromTable := make(map[uint64]*doltdb.Table)
+	fromTableNames := make(map[uint64]string)
+	fromTableHashes := make(map[uint64]hash.Hash)
 
-	err := older.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
+	err := fromRoot.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
 		sch, err := table.GetSchema(ctx)
 		if err != nil {
 			return true, err
@@ -365,9 +365,9 @@ func GetTableDeltas(ctx context.Context, older, newer *doltdb.RootValue) ([]Tabl
 		}
 
 		pkTag := sch.GetPKCols().GetColumns()[0].Tag
-		oldTables[pkTag] = table
-		oldTableNames[pkTag] = name
-		oldTableHashes[pkTag] = th
+		fromTable[pkTag] = table
+		fromTableNames[pkTag] = name
+		fromTableHashes[pkTag] = th
 		return false, nil
 	})
 
@@ -375,7 +375,7 @@ func GetTableDeltas(ctx context.Context, older, newer *doltdb.RootValue) ([]Tabl
 		return nil, err
 	}
 
-	err = newer.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
+	err = toRoot.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
 		sch, err := table.GetSchema(ctx)
 		if err != nil {
 			return true, err
@@ -387,21 +387,21 @@ func GetTableDeltas(ctx context.Context, older, newer *doltdb.RootValue) ([]Tabl
 		}
 
 		pkTag := sch.GetPKCols().GetColumns()[0].Tag
-		oldName, ok := oldTableNames[pkTag]
+		oldName, ok := fromTableNames[pkTag]
 
 		if !ok {
-			deltas = append(deltas, TableDelta{NewName: name, NewTable: table})
-		} else if oldName != name || oldTableHashes[pkTag] != th {
+			deltas = append(deltas, TableDelta{ToName: name, ToTable: table})
+		} else if oldName != name || fromTableHashes[pkTag] != th {
 			deltas = append(deltas, TableDelta{
-				NewName: name,
-				OldName: oldTableNames[pkTag],
-				NewTable: table,
-				OldTable: oldTables[pkTag],
+				ToName:   name,
+				FromName: fromTableNames[pkTag],
+				ToTable: table,
+				FromTable: fromTable[pkTag],
 			})
 		}
 
 		if ok {
-			delete(oldTableNames, pkTag) // consume table name
+			delete(fromTableNames, pkTag) // consume table name
 		}
 
 		return false, nil
@@ -411,38 +411,64 @@ func GetTableDeltas(ctx context.Context, older, newer *doltdb.RootValue) ([]Tabl
 		return nil, err
 	}
 
-	// all unmatched tables from older must have been dropped
-	for pkTag, oldName := range oldTableNames {
-		deltas = append(deltas, TableDelta{OldName: oldName, OldTable: oldTables[pkTag]})
+	// all unmatched tables in fromRoot must have been dropped
+	for pkTag, oldName := range fromTableNames {
+		deltas = append(deltas, TableDelta{FromName: oldName, FromTable: fromTable[pkTag]})
 	}
 
 	return deltas, nil
 }
 
 func (td TableDelta) IsAdd() bool {
-	return td.OldTable == nil && td.NewTable != nil
+	return td.FromTable == nil && td.ToTable != nil
 }
 
 func (td TableDelta) IsDrop() bool {
-	return td.OldTable != nil && td.NewTable == nil
+	return td.FromTable != nil && td.ToTable == nil
 }
 
-func (td TableDelta) GetSchemas(ctx context.Context) (new, old schema.Schema, err error) {
-	if td.OldTable != nil {
-		old, err = td.OldTable.GetSchema(ctx)
+func (td TableDelta) GetSchemas(ctx context.Context) (from, to schema.Schema, err error) {
+	if td.FromTable != nil {
+		from, err = td.FromTable.GetSchema(ctx)
 
 		if err != nil {
 			return nil, nil, err
 		}
+	} else {
+		from = schema.EmptySchema
 	}
 
-	if td.NewTable != nil {
-		new, err = td.NewTable.GetSchema(ctx)
+	if td.ToTable != nil {
+		to, err = td.ToTable.GetSchema(ctx)
 
 		if err != nil {
 			return nil, nil, err
 		}
+	} else {
+		to = schema.EmptySchema
 	}
 
-	return new, old, nil
+	return from, to, nil
+}
+
+func (td TableDelta) GetMaps(ctx context.Context) (from, to types.Map, err error) {
+	if td.FromTable != nil {
+		from, err = td.FromTable.GetRowData(ctx)
+		if err != nil {
+			return from, to, err
+		}
+	} else {
+		from, _ = types.NewMap(ctx, td.ToTable.ValueReadWriter())
+	}
+
+	if td.ToTable != nil {
+		to, err = td.ToTable.GetRowData(ctx)
+		if err != nil {
+			return from, to, err
+		}
+	} else {
+		to, _ = types.NewMap(ctx, td.FromTable.ValueReadWriter())
+	}
+
+	return from, to, nil
 }
