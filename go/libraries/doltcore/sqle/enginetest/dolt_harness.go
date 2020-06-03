@@ -23,8 +23,6 @@ import (
 	"github.com/liquidata-inc/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 	"testing"
-
-	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 )
 
 type doltHarness struct {
@@ -57,7 +55,6 @@ func (d *doltHarness) NewContext() *sql.Context {
 
 func (d *doltHarness) NewDatabase(name string) sql.Database {
 	dEnv := dtestutils.CreateTestEnv()
-	CreateEmptyTestDatabase(dEnv, d.t)
 	root, err := dEnv.WorkingRoot(enginetest.NewContext(d))
 	require.NoError(d.t, err)
 
