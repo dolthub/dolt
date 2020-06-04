@@ -17,8 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"reflect"
 	"strconv"
 	"strings"
@@ -33,6 +31,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -45,6 +44,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/mathutil"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -363,7 +363,7 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 
 		if dArgs.diffParts&DataOnlyDiff != 0 {
 			if td.IsDrop() && dArgs.diffOutput == SQLDiffOutput {
-				continue  // don't output DROP TABLE statements after DROP TABLE
+				continue // don't output DROP TABLE statements after DROP TABLE
 			} else if td.IsAdd() {
 				fromSch = toSch
 			}
@@ -479,7 +479,7 @@ func tabularSchemaDiff(tableName string, tags []uint64, diffs map[uint64]diff.Sc
 	return nil
 }
 
-func sqlSchemaDiff(ctx context.Context, td diff.TableDelta) errhand.VerboseError{
+func sqlSchemaDiff(ctx context.Context, td diff.TableDelta) errhand.VerboseError {
 	fromSch, toSch, err := td.GetSchemas(ctx)
 	if err != nil {
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
@@ -767,7 +767,7 @@ func createSplitter(fromSch schema.Schema, toSch schema.Schema, joiner *rowconv.
 	return unionSch, ds, nil
 }
 
-func diffDoltDocs(ctx context.Context, dEnv *env.DoltEnv,  from, to *doltdb.RootValue, dArgs *diffArgs) error {
+func diffDoltDocs(ctx context.Context, dEnv *env.DoltEnv, from, to *doltdb.RootValue, dArgs *diffArgs) error {
 	_, docDetails, err := actions.GetTblsAndDocDetails(dEnv, dArgs.docSet.AsSlice())
 
 	if err != nil {

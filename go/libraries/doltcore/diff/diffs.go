@@ -16,10 +16,11 @@ package diff
 
 import (
 	"context"
+	"sort"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
-	"sort"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
@@ -103,7 +104,7 @@ func NewTableDiffs(ctx context.Context, newer, older *doltdb.RootValue) (*TableD
 	}
 
 	var tbls []string
-	tbls = append(tbls, matches.added..., )
+	tbls = append(tbls, matches.added...)
 	tbls = append(tbls, matches.modified...)
 	tbls = append(tbls, matches.dropped...)
 
@@ -128,11 +129,11 @@ func NewTableDiffs(ctx context.Context, newer, older *doltdb.RootValue) (*TableD
 	sort.Strings(tbls)
 
 	return &TableDiffs{
-		NumAdded: len(matches.added),
-		NumModified: len(matches.modified),
-		NumRemoved: len(matches.dropped),
-		TableToType: tblToType,
-		Tables: tbls,
+		NumAdded:         len(matches.added),
+		NumModified:      len(matches.modified),
+		NumRemoved:       len(matches.dropped),
+		TableToType:      tblToType,
+		Tables:           tbls,
 		NewNameToOldName: matches.renamed,
 	}, err
 }
@@ -393,9 +394,9 @@ func GetUserTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue)
 			deltas = append(deltas, TableDelta{ToName: name, ToTable: table})
 		} else if oldName != name || fromTableHashes[pkTag] != th {
 			deltas = append(deltas, TableDelta{
-				ToName:   name,
-				FromName: fromTableNames[pkTag],
-				ToTable: table,
+				ToName:    name,
+				FromName:  fromTableNames[pkTag],
+				ToTable:   table,
 				FromTable: fromTable[pkTag],
 			})
 		}
