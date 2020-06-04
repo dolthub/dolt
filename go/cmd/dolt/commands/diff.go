@@ -329,17 +329,13 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 		}
 
 		if dArgs.diffOutput == TabularDiffOutput {
-			printTableDiffSummary(tblName, fromTable, toTable)
+			printTableDiffSummary(td)
 
 			// if we're in standard output mode, follow Git convention
 			// and don't print data diffs for added/dropped tables
 			if td.IsDrop() || td.IsAdd() {
 				continue
 			}
-		}
-
-		if tblName == doltdb.DocTableName {
-			continue
 		}
 
 		fromSch, toSch, err := td.GetSchemas(ctx)
@@ -363,7 +359,7 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 
 		if dArgs.diffParts&DataOnlyDiff != 0 {
 			if td.IsDrop() && dArgs.diffOutput == SQLDiffOutput {
-				continue // don't output DROP TABLE statements after DROP TABLE
+				continue // don't output DELETE FROM statements after DROP TABLE
 			} else if td.IsAdd() {
 				fromSch = toSch
 			}
@@ -855,31 +851,30 @@ func printDeletedDoc(bold *color.Color, pk string, lines []string) {
 	printDiffLines(bold, lines)
 }
 
-// todo: handle renames
-func printTableDiffSummary(tblName string, fromTable, toTable *doltdb.Table) {
+func printTableDiffSummary(td diff.TableDelta) {
 	bold := color.New(color.Bold)
-	_, _ = bold.Printf("diff --dolt a/%[1]s b/%[1]s\n", tblName)
+	_, _ = bold.Printf("diff --dolt a/%s b/%s\n", td.FromName, td.ToName)
 
-	if toTable == nil {
+	if td.IsDrop() {
 		_, _ = bold.Println("deleted table")
-	} else if fromTable == nil {
+	} else if td.IsAdd() {
 		_, _ = bold.Println("added table")
 	} else {
-		h1, err := fromTable.HashOf()
+		h1, err := td.FromTable.HashOf()
 
 		if err != nil {
 			panic(err)
 		}
 
-		_, _ = bold.Printf("--- a/%s @ %s\n", tblName, h1.String())
+		_, _ = bold.Printf("--- a/%s @ %s\n", td.FromName, h1.String())
 
-		h2, err := toTable.HashOf()
+		h2, err := td.ToTable.HashOf()
 
 		if err != nil {
 			panic(err)
 		}
 
-		_, _ = bold.Printf("+++ b/%s @ %s\n", tblName, h2.String())
+		_, _ = bold.Printf("+++ b/%s @ %s\n", td.ToName, h2.String())
 	}
 }
 

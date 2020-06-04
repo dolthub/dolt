@@ -3,37 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-}
 
-teardown() {
-    teardown_common
-}
-
-@test "changing column types should not produce a data diff error" {
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk INT NOT NULL,
-  c1 INT,
-  c2 INT,
-  c3 INT,
-  c4 INT,
-  c5 INT,
-  PRIMARY KEY (pk)
-);
-SQL
-    dolt sql -q 'insert into test values (0,0,0,0,0,0)'
-    dolt add test
-    dolt commit -m 'made table'
-    dolt sql -q 'alter table test drop column c1'
-    dolt sql -q 'alter table test add column c1 longtext'
-    run dolt diff
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "INT" ]] || false
-    [[ "$output" =~ "LONGTEXTDOC" ]] || false
-    [[ ! "$ouput" =~ "Failed to merge schemas" ]] || false
-}
-
-@test "dolt schema rename column" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -45,6 +15,47 @@ CREATE TABLE test (
   PRIMARY KEY (pk)
 );
 SQL
+}
+
+teardown() {
+    teardown_common
+}
+
+@test "changing column types should not produce a data diff error" {
+    dolt sql -q 'insert into test values (0,0,0,0,0,0)'
+    dolt add test
+    dolt commit -m 'made table'
+    dolt sql -q 'alter table test drop column c1'
+    dolt sql -q 'alter table test add column c1 longtext'
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "BIGINT" ]] || false
+    [[ "$output" =~ "LONGTEXT" ]] || false
+    [[ ! "$ouput" =~ "Failed to merge schemas" ]] || false
+}
+
+@test "rename a table" {
+    dolt add test
+    dolt commit -m 'added table test'
+    run dolt sql -q 'alter table test rename to quiz'
+    [ "$status" -eq 0 ]
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "diff --dolt a/test b/quiz" ]] || false
+    [[ "${lines[1]}" =~ "--- a/test @" ]] || false
+    [[ "${lines[2]}" =~ "+++ b/quiz @" ]] || false
+    run dolt status
+    [ "$status" -eq 0 ]
+    skip "table renames currently ignored by status"
+    [[ "$output" =~ "deleted:        test" ]] || false
+    [[ "$output" =~ "new table:      quiz" ]] || false
+    dolt add .
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "renamed:    test -> quiz" ]] || false
+}
+
+@test "dolt schema rename column" {
     dolt sql -q 'insert into test values (1,1,1,1,1,1)'
     run dolt sql -q "alter table test rename column c1 to c0"
     [ "$status" -eq 0 ]
@@ -64,17 +75,6 @@ SQL
 }
 
 @test "dolt schema delete column" {
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
-  PRIMARY KEY (pk)
-);
-SQL
     dolt sql -q 'insert into test values (1,1,1,1,1,1)'
     run dolt sql -q "alter table test drop column c1"
     [ "$status" -eq 0 ]
@@ -93,17 +93,6 @@ SQL
 }
 
 @test "dolt diff on schema changes" {
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
-  PRIMARY KEY (pk)
-);
-SQL
     dolt add test
     dolt commit -m "committed table so we can see diffs"
     dolt sql -q "alter table test add c0 bigint"
@@ -133,17 +122,6 @@ SQL
 }
 
 @test "adding and dropping column should produce no diff" {
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
-  PRIMARY KEY (pk)
-);
-SQL
     dolt add test
     dolt commit -m "committed table so we can see diffs"
     dolt sql -q "alter table test add c0 bigint"
@@ -154,17 +132,6 @@ SQL
 }
 
 @test "schema diff should show primary keys in output" {
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
-  PRIMARY KEY (pk)
-);
-SQL
     dolt add test
     dolt commit -m "committed table so we can see diffs"
     dolt sql -q 'alter table test rename column c2 to column2'
