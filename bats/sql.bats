@@ -38,6 +38,7 @@ teardown() {
     teardown_common
 }
 
+
 @test "sql select from multiple tables" {
     run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk"
     [ "$status" -eq 0 ]
@@ -684,4 +685,49 @@ SQL
     run dolt sql -q "INSERT INTO test (col_a,col_b,col_c) VALUES ('a','','b') ON DUPLICATE KEY UPDATE col_a = col_a, col_b = col_b, col_c = VALUES(col_c);"
     [ $status -eq 0 ]
     [[ ! "$output" =~ 'unsupported feature' ]] || false
+}
+
+
+@test "sql at commit" {
+  dolt add .
+  dolt commit -m "seed initial values"
+  dolt checkout -b one
+  dolt sql -q "UPDATE one_pk SET c1 = 100 WHERE pk = 0"
+  dolt add .
+  dolt commit -m "100"
+  dolt checkout -b two
+  dolt sql -q "UPDATE one_pk SET c1 = 200 WHERE pk = 0"
+  dolt add .
+  dolt commit -m "200"
+
+  EXPECTED=$( echo -e "c1\n200" )
+  run dolt sql -r csv -q "SELECT c1 FROM one_pk WHERE pk=0"
+  [ $status -eq 0 ]
+  [[ "$output" = "$EXPECTED" ]]
+  run dolt sql -r csv -q "SELECT c1 FROM one_pk WHERE pk=0" HEAD
+  [ $status -eq 0 ]
+  [[ "$output" = "$EXPECTED" ]]
+  run dolt sql -r csv -q "SELECT c1 FROM one_pk WHERE pk=0" two
+  [ $status -eq 0 ]
+  [[ "$output" = "$EXPECTED" ]]
+
+  EXPECTED=$( echo -e "c1\n100" )
+  run dolt sql -r csv -q "SELECT c1 FROM one_pk WHERE pk=0" HEAD~
+  [ $status -eq 0 ]
+  [[ "$output" = "$EXPECTED" ]]
+  run dolt sql -r csv -q "SELECT c1 FROM one_pk WHERE pk=0" one
+  [ $status -eq 0 ]
+  [[ "$output" = "$EXPECTED" ]]
+
+  EXPECTED=$( echo -e "c1\n0" )
+  run dolt sql -r csv -q "SELECT c1 FROM one_pk WHERE pk=0" HEAD~2
+  [ $status -eq 0 ]
+  [[ "$output" = "$EXPECTED" ]]
+  run dolt sql -r csv -q "SELECT c1 FROM one_pk WHERE pk=0" master
+  [ $status -eq 0 ]
+  [[ "$output" = "$EXPECTED" ]]
+
+  #writes should fail if commit is specified
+  run dolt sql -q "UPDATE one_pk SET c1 = 200 WHERE pk = 0" HEAD~
+  [ $status -ne 0 ]
 }
