@@ -857,13 +857,14 @@ func printDeletedDoc(bold *color.Color, pk string, lines []string) {
 
 func printTableDiffSummary(td diff.TableDelta) {
 	bold := color.New(color.Bold)
-	_, _ = bold.Printf("diff --dolt a/%s b/%s\n", td.FromName, td.ToName)
-
 	if td.IsDrop() {
+		_, _ = bold.Printf("diff --dolt a/%s b/%s\n", td.FromName, td.FromName)
 		_, _ = bold.Println("deleted table")
 	} else if td.IsAdd() {
+		_, _ = bold.Printf("diff --dolt a/%s b/%s\n", td.ToName, td.ToName)
 		_, _ = bold.Println("added table")
 	} else {
+		_, _ = bold.Printf("diff --dolt a/%s b/%s\n", td.FromName, td.ToName)
 		h1, err := td.FromTable.HashOf()
 
 		if err != nil {
