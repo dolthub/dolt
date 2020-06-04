@@ -491,6 +491,15 @@ SQL
     grep 'RENAME' query
 }
 
+@test "diff sql reconciles CREATE/ALTER/DROP VIEW" {
+    dolt sql -q 'create table test (pk int not null primary key)'
+    dolt sql -q 'create view double as select pk*2 from test'
+    run dolt diff -q
+    [ "$status" -eq 0 ]
+    skip "create view statements not implemented"
+    [[ "$output" =~ "CREATE VIEW `double`" ]] || false
+}
+
 @test "diff sql recreates tables with all types" {
     dolt checkout -b firstbranch
     dolt checkout -b newbranch

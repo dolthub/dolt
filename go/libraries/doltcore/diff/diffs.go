@@ -18,12 +18,12 @@ import (
 	"context"
 	"sort"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/store/hash"
-	"github.com/liquidata-inc/dolt/go/store/types"
-
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
+	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 type TableDiffType int
@@ -276,7 +276,7 @@ func matchTablesForRoots(ctx context.Context, newer, older *doltdb.RootValue) (t
 	FromTableNames := make(map[uint64]string)
 	FromTableHashes := make(map[uint64]hash.Hash)
 
-	err := older.IterAllTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
+	err := older.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
 		sch, err := table.GetSchema(ctx)
 		if err != nil {
 			return true, err
@@ -297,7 +297,7 @@ func matchTablesForRoots(ctx context.Context, newer, older *doltdb.RootValue) (t
 		return tm, err
 	}
 
-	err = newer.IterAllTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
+	err = newer.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
 		sch, err := table.GetSchema(ctx)
 		if err != nil {
 			return true, err
@@ -354,7 +354,15 @@ func GetUserTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue)
 	fromTableNames := make(map[uint64]string)
 	fromTableHashes := make(map[uint64]hash.Hash)
 
-	err := fromRoot.IterUserTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
+	skipSet := set.NewStrSet([]string{
+		doltdb.DocTableName,
+	})
+
+	err := fromRoot.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
+		if skipSet.Contains(name) {
+			return false, nil
+		}
+
 		sch, err := table.GetSchema(ctx)
 		if err != nil {
 			return true, err
@@ -376,7 +384,11 @@ func GetUserTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue)
 		return nil, err
 	}
 
-	err = toRoot.IterUserTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
+	err = toRoot.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
+		if skipSet.Contains(name) {
+			return false, nil
+		}
+
 		sch, err := table.GetSchema(ctx)
 		if err != nil {
 			return true, err

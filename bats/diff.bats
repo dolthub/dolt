@@ -3,6 +3,18 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
+
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
 }
 
 teardown() {
@@ -10,10 +22,9 @@ teardown() {
 }
 
 @test "diff clean working set" {
-    dolt sql -q 'create table test (pk int not null primary key)'
     dolt add .
-    dolt commit -m test
-    dolt sql -q 'insert into test values (0)'
+    dolt commit -m table
+    dolt sql -q 'insert into test values (0,0,0,0,0,0)'
     dolt add .
     dolt commit -m row
     run dolt diff
@@ -35,30 +46,92 @@ teardown() {
 }
 
 @test "diff dirty working set" {
-    dolt sql -q 'create table test (pk int not null primary key)'
     dolt add .
-    dolt commit -m test
-    dolt sql -q 'insert into test values (0)'
+    dolt commit -m table
+    dolt sql -q 'insert into test values (0,0,0,0,0,0)'
     run dolt diff
     [ "$status" -eq 0 ]
     [[ "$output" =~ "+  | 0" ]] || false
     run dolt diff head
     [ "$status" -eq 0 ]
     [[ "$output" =~ "+  | 0" ]] || false
+    dolt add .
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt diff head
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+  | 0" ]] || false
+}
+
+@test "diff with table args" {
+    dolt sql -q 'create table other (pk int not null primary key)'
+    dolt add .
+    dolt commit -m tables
+    dolt sql -q 'insert into test values (0,0,0,0,0,0)'
+    dolt sql -q 'insert into other values (9)'
+    run dolt diff test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+  | 0" ]] || false
+    [[ ! "$output" =~ "+  | 9" ]] || false
+    run dolt diff other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+  | 9" ]] || false
+    [[ ! "$output" =~ "+  | 0" ]] || false
+    run dolt diff test other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+  | 0" ]] || false
+    [[ "$output" =~ "+  | 9" ]] || false
+    dolt add .
+    run dolt diff head test other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+  | 0" ]] || false
+    [[ "$output" =~ "+  | 9" ]] || false
+    dolt commit -m rows
+    run dolt diff head^ head test other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+  | 0" ]] || false
+    [[ "$output" =~ "+  | 9" ]] || false
+    run dolt diff head^ head fake
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "table fake does not exist in either diff root" ]] || false
+}
+
+@test "diff with table and branch of the same name" {
+    dolt sql -q 'create table dolomite (pk int not null primary key)'
+    dolt add .
+    dolt commit -m tables
+    dolt branch dolomite
+    dolt sql -q 'insert into dolomite values (9)'
+    dolt add .
+    dolt commit -m 'intermediate commit'
+    dolt sql -q 'insert into test values (0,0,0,0,0,0)'
+    # branch/commit args get preference over tables
+    run dolt diff dolomite
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+  | 9" ]] || false
+    [[ "$output" =~ "+  | 0" ]] || false
+    run dolt diff dolomite test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+  | 0" ]] || false
+    [[ ! "$output" =~ "+  | 9" ]] || false
+    run dolt diff dolomite head dolomite
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+  | 9" ]] || false
+    [[ ! "$output" =~ "+  | 0" ]] || false
+    run dolt diff head^ head dolomite
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+  | 9" ]] || false
+    [[ ! "$output" =~ "+  | 0" ]] || false
+    dolt branch -D dolomite
+    dolt sql -q 'insert into dolomite values (8)'
+    run dolt diff dolomite
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+  | 8" ]] || false
+    [[ ! "$output" =~ "+  | 0" ]] || false
 }
 
 @test "diff summary comparing working table to last commit" {
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
-  PRIMARY KEY (pk)
-);
-SQL
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt add test
@@ -100,17 +173,6 @@ SQL
 }
 
 @test "diff summary comparing row with a deleted cell and an added cell" {
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
-  PRIMARY KEY (pk)
-);
-SQL
     dolt add test
     dolt commit -m "create table"
     dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
@@ -140,17 +202,6 @@ SQL
 
 @test "diff summary comparing two branches" {
     dolt checkout -b firstbranch
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
-  PRIMARY KEY (pk)
-);
-SQL
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt add test
     dolt commit -m "Added one row"
@@ -200,17 +251,6 @@ DELIM
 }
 
 @test "diff summary gets summaries for all tables with changes" {
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL,
-  c1 BIGINT,
-  c2 BIGINT,
-  c3 BIGINT,
-  c4 BIGINT,
-  c5 BIGINT,
-  PRIMARY KEY (pk)
-);
-SQL
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt sql <<SQL
@@ -240,17 +280,6 @@ SQL
 }
 
 @test "diff with where clause" {
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
-  PRIMARY KEY (pk)
-);
-SQL
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt add test
@@ -309,17 +338,6 @@ SQL
 }
 
 @test "diff with where clause errors" {
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
-  PRIMARY KEY (pk)
-);
-SQL
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt add test
@@ -341,17 +359,6 @@ SQL
 }
 
 @test "diff --cached" {
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
-  PRIMARY KEY (pk)
-);
-SQL
     skip "diff --cached not supported"
     run dolt diff --cached
     [ $status -wq 0 ]
