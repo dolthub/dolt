@@ -821,6 +821,20 @@ func (dEnv *DoltEnv) GetOneDocDetail(docName string) (doc doltdb.DocDetails, err
 	return doltdb.DocDetails{}, err
 }
 
+func (dEnv *DoltEnv) WorkingRootWithDocs(ctx context.Context) (*doltdb.RootValue, error) {
+	dds, err := dEnv.GetAllValidDocDetails()
+	if err != nil {
+		return nil, err
+	}
+
+	wr, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return dEnv.GetUpdatedRootWithDocs(ctx, wr, dds)
+}
+
 // GetUpdatedRootWithDocs adds, updates or removes the `dolt_docs` table on the provided root. The table will be added or updated
 // When at least one doc.NewerText != nil. If the `dolt_docs` table exists and every doc.NewerText == nil, the table will be removed.
 // If no docDetails are provided, we put all valid docs to the working root.

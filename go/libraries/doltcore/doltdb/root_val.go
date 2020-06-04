@@ -557,7 +557,19 @@ func (root *RootValue) HasConflicts(ctx context.Context) (bool, error) {
 	return len(cnfTbls) > 0, nil
 }
 
-func (root *RootValue) IterTables(ctx context.Context, cb func(name string, table *Table) (stop bool, err error)) error {
+func (root *RootValue) IterUserTables(ctx context.Context, cb func(name string, table *Table) (stop bool, err error)) error {
+	return root.iterTables(ctx, cb, func(name string) bool {
+		return !HasDoltPrefix(name)
+	})
+}
+
+func (root *RootValue) IterAllTables(ctx context.Context, cb func(name string, table *Table) (stop bool, err error)) error {
+	return root.iterTables(ctx, cb, func(name string) bool {
+		return true
+	})
+}
+
+func (root *RootValue) iterTables(ctx context.Context, cb func(name string, table *Table) (stop bool, err error), filter func(name string) bool) error {
 	tm, err := root.getTableMap()
 
 	if err != nil {
@@ -577,13 +589,17 @@ func (root *RootValue) IterTables(ctx context.Context, cb func(name string, tabl
 			return err
 		}
 
+		name := string(nm.(types.String))
+		if !filter(name) {
+			continue
+		}
+
 		tableStruct, err := tableRef.(types.Ref).TargetValue(ctx, root.vrw)
 
 		if err != nil {
 			return err
 		}
 
-		name := string(nm.(types.String))
 		table := &Table{root.vrw, tableStruct.(types.Struct)}
 
 		stop, err := cb(name, table)

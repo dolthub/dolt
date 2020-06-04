@@ -10,27 +10,26 @@ teardown() {
 }
 
 @test "changing column types should not produce a data diff error" {
-    cat <<SQL > 1pk5col-ints-schema.sql
+    dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL,
-  c1 BIGINT,
-  c2 BIGINT,
-  c3 BIGINT,
-  c4 BIGINT,
-  c5 BIGINT,
+  pk INT NOT NULL,
+  c1 INT,
+  c2 INT,
+  c3 INT,
+  c4 INT,
+  c5 INT,
   PRIMARY KEY (pk)
 );
 SQL
-    dolt table import -c --pk=pk test `batshelper 1pk5col-ints.csv`
-    run dolt schema show
-    [[ "$output" =~ "INT" ]] || false
+    dolt sql -q 'insert into test values (0,0,0,0,0,0)'
     dolt add test
-    dolt commit -m "Added test table"
-    dolt table import -c -f -s=1pk5col-ints-schema.sql test `batshelper 1pk5col-ints.csv`
+    dolt commit -m 'made table'
+    dolt sql -q 'alter table test drop column c1'
+    dolt sql -q 'alter table test add column c1 longtext'
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "BIGINT" ]] || false
-    [[ ! "$output" =~ "TEXT" ]] || false
+    [[ "$output" =~ "INT" ]] || false
+    [[ "$output" =~ "LONGTEXTDOC" ]] || false
     [[ ! "$ouput" =~ "Failed to merge schemas" ]] || false
 }
 
@@ -133,70 +132,6 @@ SQL
     dolt diff
 }
 
-@test "change the primary key. view the schema diff" {
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL,
-  c1 BIGINT,
-  c2 BIGINT,
-  c3 BIGINT,
-  c4 BIGINT,
-  c5 BIGINT,
-  PRIMARY KEY (pk)
-);
-SQL
-    dolt add test
-    dolt commit -m "committed table so we can see diffs"
-    dolt table rm test
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL,
-  c1 BIGINT,
-  c2 BIGINT,
-  c3 BIGINT,
-  c4 BIGINT,
-  c5 BIGINT,
-  PRIMARY KEY (c1)
-);
-SQL
-    run dolt diff --schema
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "<    PRIMARY KEY (\`pk\`)" ]] || false
-    [[ "$output" =~ ">    PRIMARY KEY (\`c1\`)" ]] || false
-}
-
-@test "add another primary key. view the schema diff" {
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL,
-  c1 BIGINT,
-  c2 BIGINT,
-  c3 BIGINT,
-  c4 BIGINT,
-  c5 BIGINT,
-  PRIMARY KEY (pk)
-);
-SQL
-    dolt add test
-    dolt commit -m "committed table so we can see diffs"
-    dolt table rm test
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL,
-  c1 BIGINT,
-  c2 BIGINT,
-  c3 BIGINT,
-  c4 BIGINT,
-  c5 BIGINT NOT NULL,
-  PRIMARY KEY (c1,c5)
-);
-SQL
-    run dolt diff --schema
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "<    PRIMARY KEY (\`pk\`)" ]] || false
-    [[ "$output" =~ ">    PRIMARY KEY (\`c1\`, \`c5\`)" ]] || false
-}
-
 @test "adding and dropping column should produce no diff" {
     dolt sql <<SQL
 CREATE TABLE test (
@@ -236,68 +171,4 @@ SQL
     run dolt diff --schema
     [ "$status" -eq 0 ]
     [[ "$output" =~ "PRIMARY KEY" ]] || false
-}
-
-@test "add another new primary key column. view the schema diff" {
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL,
-  c1 BIGINT,
-  c2 BIGINT,
-  c3 BIGINT,
-  c4 BIGINT,
-  c5 BIGINT,
-  PRIMARY KEY (pk)
-);
-SQL
-    dolt add test
-    dolt commit -m "committed table so we can see diffs"
-    dolt table rm test
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL,
-  c1 BIGINT,
-  c2 BIGINT,
-  c3 BIGINT,
-  c4 BIGINT,
-  c5 BIGINT,
-  c6 BIGINT,
-  PRIMARY KEY (pk,c6)
-);
-SQL
-    run dolt diff --schema
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "<    PRIMARY KEY (\`pk\`)" ]] || false
-    [[ "$output" =~ ">    PRIMARY KEY (\`pk\`, \`c6\`)" ]] || false
-}
-
-@test "remove a primary key column. view the schema diff" {
-    dolt sql <<SQL
-CREATE TABLE test (
-  pk BIGINT NOT NULL,
-  c1 BIGINT,
-  c2 BIGINT,
-  c3 BIGINT,
-  c4 BIGINT,
-  c5 BIGINT,
-  PRIMARY KEY (pk)
-);
-SQL
-    dolt add test
-    dolt commit -m "committed table so we can see diffs"
-    dolt table rm test
-    dolt sql <<SQL
-CREATE TABLE test (
-  c1 BIGINT,
-  c2 BIGINT,
-  c3 BIGINT,
-  c4 BIGINT,
-  c5 BIGINT,
-  PRIMARY KEY (c3)
-);
-SQL
-    run dolt diff --schema
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "<    PRIMARY KEY (\`pk\`)" ]] || false
-    [[ "$output" =~ ">    PRIMARY KEY (\`c3\`)" ]] || false
 }

@@ -275,7 +275,7 @@ func matchTablesForRoots(ctx context.Context, newer, older *doltdb.RootValue) (t
 	FromTableNames := make(map[uint64]string)
 	FromTableHashes := make(map[uint64]hash.Hash)
 
-	err := older.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
+	err := older.IterAllTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
 		sch, err := table.GetSchema(ctx)
 		if err != nil {
 			return true, err
@@ -296,7 +296,7 @@ func matchTablesForRoots(ctx context.Context, newer, older *doltdb.RootValue) (t
 		return tm, err
 	}
 
-	err = newer.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
+	err = newer.IterAllTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
 		sch, err := table.GetSchema(ctx)
 		if err != nil {
 			return true, err
@@ -347,13 +347,13 @@ type TableDelta struct {
 	ToTable   *doltdb.Table
 }
 
-func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) ([]TableDelta, error) {
+func GetUserTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) ([]TableDelta, error) {
 	var deltas []TableDelta
 	fromTable := make(map[uint64]*doltdb.Table)
 	fromTableNames := make(map[uint64]string)
 	fromTableHashes := make(map[uint64]hash.Hash)
 
-	err := fromRoot.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
+	err := fromRoot.IterUserTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
 		sch, err := table.GetSchema(ctx)
 		if err != nil {
 			return true, err
@@ -375,7 +375,7 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) ([]
 		return nil, err
 	}
 
-	err = toRoot.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
+	err = toRoot.IterUserTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
 		sch, err := table.GetSchema(ctx)
 		if err != nil {
 			return true, err

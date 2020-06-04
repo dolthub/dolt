@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"reflect"
 	"strconv"
@@ -45,7 +46,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/mathutil"
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
-	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -104,6 +104,7 @@ type diffArgs struct {
 	diffParts  diffPart
 	diffOutput diffOutput
 	tableSet   *set.StrSet
+	docSet     *set.StrSet
 	limit      int
 	where      string
 }
@@ -154,7 +155,17 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	verr := diffRoots(ctx, fromRoot, toRoot, nil, dEnv, dArgs)
+	verr := diffUserTables(ctx, fromRoot, toRoot, dArgs)
+
+	if verr != nil {
+		return HandleVErrAndExitCode(verr, usage)
+	}
+
+	err = diffDoltDocs(ctx, dEnv, fromRoot, toRoot, dArgs)
+
+	if err != nil {
+		verr = errhand.BuildDError("error diffing dolt docs").AddCause(err).Build()
+	}
 
 	return HandleVErrAndExitCode(verr, usage)
 }
@@ -190,33 +201,50 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		return nil, nil, nil, err
 	}
 
-	dArgs.tableSet = set.NewStrSet(leftover)
+	dArgs.tableSet = set.NewStrSet(nil)
+	dArgs.docSet = set.NewStrSet(nil)
 
-	// verify table args exist in at least one root
-	for _, tbl := range leftover {
-		_, ok, err := from.GetTable(ctx, tbl)
+	for _, arg := range leftover {
+		if arg == doltdb.ReadmePk || arg == doltdb.LicensePk {
+			dArgs.docSet.Add(arg)
+			continue
+		}
+
+		// verify table args exist in at least one root
+		_, ok, err := from.GetTable(ctx, arg)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 		if ok {
+			dArgs.tableSet.Add(arg)
 			continue
 		}
 
-		_, ok, err = to.GetTable(ctx, tbl)
+		_, ok, err = to.GetTable(ctx, arg)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 		if !ok {
-			return nil, nil, nil, fmt.Errorf("table %s does not exist in either diff root", tbl)
+			return nil, nil, nil, fmt.Errorf("table %s does not exist in either diff root", arg)
 		}
+	}
+
+	// if no tables or docs were specified as args, diff all tables and docs
+	if len(leftover) == 0 {
+		utn, err := doltdb.UnionTableNames(ctx, from, to)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		dArgs.tableSet.Add(utn...)
+		dArgs.docSet.Add(doltdb.ReadmePk, doltdb.LicensePk)
 	}
 
 	return from, to, dArgs, nil
 }
 
 func getRoots(ctx context.Context, dEnv *env.DoltEnv, args []string) (from, to *doltdb.RootValue, leftover []string, err error) {
-	headRoot, err := dEnv.HeadRoot(ctx)
-	workingRoot, err := dEnv.WorkingRoot(ctx)
+	headRoot, err := dEnv.StagedRoot(ctx)
+	workingRoot, err := dEnv.WorkingRootWithDocs(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -278,21 +306,12 @@ func maybeResolve(ctx context.Context, dEnv *env.DoltEnv, spec string) (*doltdb.
 	return root, true
 }
 
-func diffRoots(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, docDetails []doltdb.DocDetails, dEnv *env.DoltEnv, dArgs *diffArgs) (verr errhand.VerboseError) {
+func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dArgs *diffArgs) (verr errhand.VerboseError) {
 	var err error
 
-	tableDeltas, err := diff.GetTableDeltas(ctx, fromRoot, toRoot)
+	tableDeltas, err := diff.GetUserTableDeltas(ctx, fromRoot, toRoot)
 	if err != nil {
 		return errhand.BuildDError("error: unable to diff tables").AddCause(err).Build()
-	}
-
-	if dArgs.tableSet.Size() == 0 {
-		// if no tables were specified as args, diff all tables
-		utn, err := doltdb.UnionTableNames(ctx, fromRoot, toRoot)
-		if err != nil {
-			return errhand.BuildDError("error: failed to get table names").AddCause(err).Build()
-		}
-		dArgs.tableSet.Add(utn...)
 	}
 
 	for _, td := range tableDeltas {
@@ -310,7 +329,7 @@ func diffRoots(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, docDetai
 		}
 
 		if dArgs.diffOutput == TabularDiffOutput {
-			printTableDiffSummary(ctx, dEnv, tblName, fromTable, toTable, docDetails)
+			printTableDiffSummary(tblName, fromTable, toTable)
 
 			// if we're in standard output mode, follow Git convention
 			// and don't print data diffs for added/dropped tables
@@ -748,7 +767,28 @@ func createSplitter(fromSch schema.Schema, toSch schema.Schema, joiner *rowconv.
 	return unionSch, ds, nil
 }
 
-var emptyHash = hash.Hash{}
+func diffDoltDocs(ctx context.Context, dEnv *env.DoltEnv,  from, to *doltdb.RootValue, dArgs *diffArgs) error {
+	_, docDetails, err := actions.GetTblsAndDocDetails(dEnv, dArgs.docSet.AsSlice())
+
+	if err != nil {
+		return err
+	}
+
+	fromDocTable, _, err := from.GetTable(ctx, doltdb.DocTableName)
+
+	if err != nil {
+		return err
+	}
+
+	toDocTable, _, err := to.GetTable(ctx, doltdb.DocTableName)
+
+	if err != nil {
+		return err
+	}
+
+	printDocDiffs(ctx, dEnv, fromDocTable, toDocTable, docDetails)
+	return nil
+}
 
 func printDocDiffs(ctx context.Context, dEnv *env.DoltEnv, fromTbl, toTbl *doltdb.Table, docDetails []doltdb.DocDetails) {
 	bold := color.New(color.Bold)
@@ -758,14 +798,14 @@ func printDocDiffs(ctx context.Context, dEnv *env.DoltEnv, fromTbl, toTbl *doltd
 	}
 
 	for _, doc := range docDetails {
-		if fromTbl != nil {
-			sch1, _ := fromTbl.GetSchema(ctx)
-			doc, _ = doltdb.AddNewerTextToDocFromTbl(ctx, fromTbl, &sch1, doc)
+		if toTbl != nil {
+			sch1, _ := toTbl.GetSchema(ctx)
+			doc, _ = doltdb.AddNewerTextToDocFromTbl(ctx, toTbl, &sch1, doc)
 
 		}
-		if toTbl != nil {
-			sch2, _ := toTbl.GetSchema(ctx)
-			doc, _ = doltdb.AddValueToDocFromTbl(ctx, toTbl, &sch2, doc)
+		if fromTbl != nil {
+			sch2, _ := fromTbl.GetSchema(ctx)
+			doc, _ = doltdb.AddValueToDocFromTbl(ctx, fromTbl, &sch2, doc)
 		}
 
 		if doc.Value != nil {
@@ -816,39 +856,33 @@ func printDeletedDoc(bold *color.Color, pk string, lines []string) {
 }
 
 // todo: handle renames
-func printTableDiffSummary(ctx context.Context, dEnv *env.DoltEnv, tblName string, fromTable, toTable *doltdb.Table, docDetails []doltdb.DocDetails) {
+func printTableDiffSummary(tblName string, fromTable, toTable *doltdb.Table) {
 	bold := color.New(color.Bold)
+	_, _ = bold.Printf("diff --dolt a/%[1]s b/%[1]s\n", tblName)
 
-	if tblName == doltdb.DocTableName {
-		printDocDiffs(ctx, dEnv, fromTable, toTable, docDetails)
+	if toTable == nil {
+		_, _ = bold.Println("deleted table")
+	} else if fromTable == nil {
+		_, _ = bold.Println("added table")
 	} else {
-		_, _ = bold.Printf("diff --dolt a/%[1]s b/%[1]s\n", tblName)
+		h1, err := fromTable.HashOf()
 
-		if toTable == nil {
-			_, _ = bold.Println("deleted table")
-		} else if fromTable == nil {
-			_, _ = bold.Println("added table")
-		} else {
-			h1, err := fromTable.HashOf()
-
-			if err != nil {
-				panic(err)
-			}
-
-			_, _ = bold.Printf("--- a/%s @ %s\n", tblName, h1.String())
-
-			h2, err := toTable.HashOf()
-
-			if err != nil {
-				panic(err)
-			}
-
-			_, _ = bold.Printf("+++ b/%s @ %s\n", tblName, h2.String())
+		if err != nil {
+			panic(err)
 		}
+
+		_, _ = bold.Printf("--- a/%s @ %s\n", tblName, h1.String())
+
+		h2, err := toTable.HashOf()
+
+		if err != nil {
+			panic(err)
+		}
+
+		_, _ = bold.Printf("+++ b/%s @ %s\n", tblName, h2.String())
 	}
 }
 
-// todo: change to to/from
 func diffSummary(ctx context.Context, from types.Map, to types.Map, colLen int) errhand.VerboseError {
 	ae := atomicerr.New()
 	ch := make(chan diff.DiffSummaryProgress)
