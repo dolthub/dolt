@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	// DiffTypeProp is the name of a property added to each split row which tells if its added, dropped, the modified
+	// DiffTypeProp is the name of a property added to each split row which tells if its added, removed, the modified
 	// old value, or the new value after modification
 	DiffTypeProp = "difftype"
 

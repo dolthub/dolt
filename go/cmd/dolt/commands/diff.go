@@ -309,7 +309,7 @@ func maybeResolve(ctx context.Context, dEnv *env.DoltEnv, spec string) (*doltdb.
 func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dArgs *diffArgs) (verr errhand.VerboseError) {
 	var err error
 
-	tableDeltas, err := diff.GetUserTableDeltas(ctx, fromRoot, toRoot)
+	tableDeltas, err := diff.GetTableDeltas(ctx, fromRoot, toRoot)
 	if err != nil {
 		return errhand.BuildDError("error: unable to diff tables").AddCause(err).Build()
 	}
@@ -336,6 +336,10 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 			if td.IsDrop() || td.IsAdd() {
 				continue
 			}
+		}
+
+		if tblName == doltdb.DocTableName {
+			continue
 		}
 
 		fromSch, toSch, err := td.GetSchemas(ctx)

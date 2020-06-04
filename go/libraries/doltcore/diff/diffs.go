@@ -21,7 +21,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -32,7 +31,6 @@ const (
 	AddedTable TableDiffType = iota
 	ModifiedTable
 	RemovedTable
-	RenamedTable
 )
 
 type TableDiffs struct {
@@ -41,9 +39,6 @@ type TableDiffs struct {
 	NumRemoved  int
 	TableToType map[string]TableDiffType
 	Tables      []string
-
-	// renamed tables are included in TableToType by their new name
-	NewNameToOldName map[string]string
 }
 
 type DocDiffType int
@@ -97,45 +92,48 @@ func (rvu RootValueUnreadable) Error() string {
 }
 
 func NewTableDiffs(ctx context.Context, newer, older *doltdb.RootValue) (*TableDiffs, error) {
-	matches, err := matchTablesForRoots(ctx, newer, older)
+	deltas, err := GetTableDeltas(ctx, older, newer)
 
 	if err != nil {
 		return nil, err
 	}
 
+	var added []string
+	var modified []string
+	var removed []string
+
+	for _, d := range deltas {
+		switch {
+		case d.IsAdd():
+			added = append(added, d.ToName)
+		case d.IsDrop():
+			removed = append(removed, d.FromName)
+		default:
+			modified = append(modified, d.ToName)
+		}
+	}
+
 	var tbls []string
-	tbls = append(tbls, matches.added...)
-	tbls = append(tbls, matches.modified...)
-	tbls = append(tbls, matches.dropped...)
+	tbls = append(tbls, added...)
+	tbls = append(tbls, modified...)
+	tbls = append(tbls, removed...)
 
 	tblToType := make(map[string]TableDiffType)
-	for _, tbl := range matches.added {
+	for _, tbl := range added {
 		tblToType[tbl] = AddedTable
 	}
 
-	for _, tbl := range matches.modified {
+	for _, tbl := range modified {
 		tblToType[tbl] = ModifiedTable
 	}
 
-	for _, tbl := range matches.dropped {
+	for _, tbl := range removed {
 		tblToType[tbl] = RemovedTable
-	}
-
-	for newName, _ := range matches.renamed {
-		tblToType[newName] = RenamedTable
-		tbls = append(tbls, newName)
 	}
 
 	sort.Strings(tbls)
 
-	return &TableDiffs{
-		NumAdded:         len(matches.added),
-		NumModified:      len(matches.modified),
-		NumRemoved:       len(matches.dropped),
-		TableToType:      tblToType,
-		Tables:           tbls,
-		NewNameToOldName: matches.renamed,
-	}, err
+	return &TableDiffs{len(added), len(modified), len(removed), tblToType, tbls}, err
 }
 
 func (td *TableDiffs) Len() int {
@@ -260,87 +258,6 @@ func GetDocDiffs(ctx context.Context, dEnv *env.DoltEnv) (*DocDiffs, *DocDiffs, 
 	return stagedDocDiffs, notStagedDocDiffs, nil
 }
 
-type tableMatches struct {
-	added     []string
-	dropped   []string
-	modified  []string
-	unchanged []string
-	renamed   map[string]string
-}
-
-// matchTablesForRoots matches all tables that exist in both roots and finds the tables that only exist in one root.
-// Tables are matched by the column tag of the first primary key column.
-func matchTablesForRoots(ctx context.Context, newer, older *doltdb.RootValue) (tableMatches, error) {
-	tm := tableMatches{}
-	tm.renamed = make(map[string]string)
-	FromTableNames := make(map[uint64]string)
-	FromTableHashes := make(map[uint64]hash.Hash)
-
-	err := older.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
-		sch, err := table.GetSchema(ctx)
-		if err != nil {
-			return true, err
-		}
-
-		th, err := table.HashOf()
-		if err != nil {
-			return true, err
-		}
-
-		pkTag := sch.GetPKCols().GetColumns()[0].Tag
-		FromTableNames[pkTag] = name
-		FromTableHashes[pkTag] = th
-		return false, nil
-	})
-
-	if err != nil {
-		return tm, err
-	}
-
-	err = newer.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
-		sch, err := table.GetSchema(ctx)
-		if err != nil {
-			return true, err
-		}
-
-		th, err := table.HashOf()
-		if err != nil {
-			return true, err
-		}
-
-		pkTag := sch.GetPKCols().GetColumns()[0].Tag
-		oldName, ok := FromTableNames[pkTag]
-
-		switch {
-		case !ok:
-			tm.added = append(tm.added, name)
-		case oldName != name:
-			tm.renamed[name] = oldName
-		case FromTableHashes[pkTag] != th:
-			tm.modified = append(tm.modified, name)
-		default:
-			tm.unchanged = append(tm.unchanged, name)
-		}
-
-		if ok {
-			delete(FromTableNames, pkTag) // consume table name
-		}
-
-		return false, nil
-	})
-
-	if err != nil {
-		return tm, err
-	}
-
-	// all unmatched tables from older must have been dropped
-	for _, oldName := range FromTableNames {
-		tm.dropped = append(tm.dropped, oldName)
-	}
-
-	return tm, nil
-}
-
 type TableDelta struct {
 	FromName  string
 	ToName    string
@@ -348,21 +265,13 @@ type TableDelta struct {
 	ToTable   *doltdb.Table
 }
 
-func GetUserTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) ([]TableDelta, error) {
+func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) ([]TableDelta, error) {
 	var deltas []TableDelta
 	fromTable := make(map[uint64]*doltdb.Table)
 	fromTableNames := make(map[uint64]string)
 	fromTableHashes := make(map[uint64]hash.Hash)
 
-	skipSet := set.NewStrSet([]string{
-		doltdb.DocTableName,
-	})
-
 	err := fromRoot.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
-		if skipSet.Contains(name) {
-			return false, nil
-		}
-
 		sch, err := table.GetSchema(ctx)
 		if err != nil {
 			return true, err
@@ -385,10 +294,6 @@ func GetUserTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue)
 	}
 
 	err = toRoot.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
-		if skipSet.Contains(name) {
-			return false, nil
-		}
-
 		sch, err := table.GetSchema(ctx)
 		if err != nil {
 			return true, err
