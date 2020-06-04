@@ -17,8 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/go-mysql-server/auth"
-	"github.com/liquidata-inc/go-mysql-server/sql/analyzer"
 	"io"
 	"os"
 	"path/filepath"
@@ -28,7 +26,9 @@ import (
 	"github.com/fatih/color"
 	"github.com/flynn-archive/go-shlex"
 	sqle "github.com/liquidata-inc/go-mysql-server"
+	"github.com/liquidata-inc/go-mysql-server/auth"
 	"github.com/liquidata-inc/go-mysql-server/sql"
+	"github.com/liquidata-inc/go-mysql-server/sql/analyzer"
 	"github.com/liquidata-inc/ishell"
 	"gopkg.in/src-d/go-errors.v1"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -195,7 +195,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			}
 
 			for dbname := range mrEnv {
-				initialRoots = map[string]*doltdb.RootValue {dbname: root}
+				initialRoots = map[string]*doltdb.RootValue{dbname: root}
 			}
 
 			readOnly = true
