@@ -33,6 +33,8 @@ type doltHarness struct {
 }
 
 var _ enginetest.Harness = (*doltHarness)(nil)
+var _ enginetest.SkippingHarness = (*doltHarness)(nil)
+var _ enginetest.IndexHarness = (*doltHarness)(nil)
 
 func newDoltHarness(t *testing.T) *doltHarness {
 	session, err := sqle.NewDoltSession(context.Background(), enginetest.NewBaseSession(), "test", "email@test.com")
@@ -65,6 +67,10 @@ func (d *doltHarness) NewContext() *sql.Context {
 	)
 }
 
+func (d *doltHarness) SupportsNativeIndexCreation() bool {
+	return true
+}
+
 func (d *doltHarness) NewDatabase(name string) sql.Database {
 	dEnv := dtestutils.CreateTestEnv()
 	root, err := dEnv.WorkingRoot(enginetest.NewContext(d))
@@ -90,4 +96,3 @@ func (d *doltHarness) NewTable(db sql.Database, name string, schema sql.Schema) 
 	require.True(d.t, ok, "table %s not found after creation", name)
 	return table, nil
 }
-
