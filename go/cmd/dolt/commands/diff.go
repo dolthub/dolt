@@ -466,18 +466,18 @@ func tabularSchemaDiff(tableName string, tags []uint64, diffs map[uint64]diff.Sc
 				newPks = append(newPks, sqlfmt.QuoteIdentifier(dff.New.Name))
 				oldPks = append(oldPks, sqlfmt.QuoteIdentifier(dff.Old.Name))
 			}
-			cli.Println(sqlfmt.FmtCol(4, 0, 0, *dff.New))
+			cli.Println(sqlfmt.FmtColWithTag(4, 0, 0, *dff.New))
 		case diff.SchDiffColAdded:
 			if dff.New.IsPartOfPK {
 				newPks = append(newPks, sqlfmt.QuoteIdentifier(dff.New.Name))
 			}
-			cli.Println(color.GreenString("+ " + sqlfmt.FmtCol(2, 0, 0, *dff.New)))
+			cli.Println(color.GreenString("+ " + sqlfmt.FmtColWithTag(2, 0, 0, *dff.New)))
 		case diff.SchDiffColRemoved:
 			// removed from sch2
 			if dff.Old.IsPartOfPK {
 				oldPks = append(oldPks, sqlfmt.QuoteIdentifier(dff.Old.Name))
 			}
-			cli.Println(color.RedString("- " + sqlfmt.FmtCol(2, 0, 0, *dff.Old)))
+			cli.Println(color.RedString("- " + sqlfmt.FmtColWithTag(2, 0, 0, *dff.Old)))
 		case diff.SchDiffColModified:
 			// changed in sch2
 			oldSqlType := dff.Old.TypeInfo.ToSqlType()
@@ -507,7 +507,7 @@ func tabularSchemaDiff(tableName string, tags []uint64, diffs map[uint64]diff.Sc
 				} else {
 					newPks = append(newPks, sqlfmt.QuoteIdentifier(n1))
 				}
-				cli.Println(sqlfmt.FmtCol(4, 0, 0, *dff.New))
+				cli.Println(sqlfmt.FmtColWithTag(4, 0, 0, *dff.New))
 			} else {
 				cli.Println("< " + sqlfmt.FmtColWithNameAndType(2, nameLen, typeLen, n0, t0, *dff.Old))
 				cli.Println("> " + sqlfmt.FmtColWithNameAndType(2, nameLen, typeLen, n1, t1, *dff.New))
@@ -536,7 +536,7 @@ func sqlSchemaDiff(tableName string, tags []uint64, diffs map[uint64]diff.Schema
 		switch dff.DiffType {
 		case diff.SchDiffNone:
 		case diff.SchDiffColAdded:
-			cli.Println(sqlfmt.AlterTableAddColStmt(tableName, sqlfmt.FmtCol(0, 0, 0, *dff.New)))
+			cli.Println(sqlfmt.AlterTableAddColStmt(tableName, sqlfmt.FmtColWithTag(0, 0, 0, *dff.New)))
 		case diff.SchDiffColRemoved:
 			cli.Print(sqlfmt.AlterTableDropColStmt(tableName, dff.Old.Name))
 		case diff.SchDiffColModified:
