@@ -59,6 +59,7 @@ func TestInsertIntoErrors(t *testing.T) {
 }
 
 func TestReplaceInto(t *testing.T) {
+	t.Skipf("Skipping replace tests, as they are incorrect for tables with primary keys")
 	enginetest.TestReplaceInto(t, newDoltHarness(t))
 }
 
