@@ -636,6 +636,10 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 		return ErrInvalidTableName.New(newName)
 	}
 
+	if _, ok, _ := db.GetTableInsensitive(ctx, newName); ok {
+		return sql.ErrTableAlreadyExists.New(newName)
+	}
+
 	newRoot, err := alterschema.RenameTable(ctx, root, oldName, newName)
 
 	if err != nil {
