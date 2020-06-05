@@ -15,8 +15,9 @@
 package enginetest
 
 import (
-	"github.com/liquidata-inc/go-mysql-server/enginetest"
 	"testing"
+
+	"github.com/liquidata-inc/go-mysql-server/enginetest"
 )
 
 func TestQueries(t *testing.T) {

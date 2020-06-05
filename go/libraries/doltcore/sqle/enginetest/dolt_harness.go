@@ -16,15 +16,17 @@ package enginetest
 
 import (
 	"context"
+	"strings"
+	"testing"
+
+	"github.com/liquidata-inc/go-mysql-server/enginetest"
+	"github.com/liquidata-inc/go-mysql-server/sql"
+	"github.com/stretchr/testify/require"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/dfunctions"
-	"github.com/liquidata-inc/go-mysql-server/enginetest"
-	"github.com/liquidata-inc/go-mysql-server/sql"
-	"github.com/stretchr/testify/require"
-	"strings"
-	"testing"
 )
 
 type doltHarness struct {
@@ -52,9 +54,9 @@ func newDoltHarness(t *testing.T) *doltHarness {
 func (d *doltHarness) SkipQueryTest(query string) bool {
 	lowerQuery := strings.ToLower(query)
 	return strings.Contains(lowerQuery, "typestable") || // we don't support all the required types
-			strings.Contains(lowerQuery, "show full columns") || // we set extra comment info
-			lowerQuery == "show variables" || // we set extra variables
-			strings.Contains(lowerQuery, "show create table") // we set extra comment info
+		strings.Contains(lowerQuery, "show full columns") || // we set extra comment info
+		lowerQuery == "show variables" || // we set extra variables
+		strings.Contains(lowerQuery, "show create table") // we set extra comment info
 }
 
 func (d *doltHarness) Parallelism() int {
