@@ -179,7 +179,7 @@ func PrintSqlTableDiffs(ctx context.Context, r1, r2 *doltdb.RootValue, wr io.Wri
 			if sch, err := tbl.GetSchema(ctx); err != nil {
 				return errors.New("error unable to get schema for table " + tblName)
 			} else {
-				stmt := sqlfmt.SchemaAsCreateStmt(tblName, sch)
+				stmt := sqlfmt.CreateTableStmtWithTags(tblName, sch)
 				if err = iohelp.WriteLine(wr, stmt); err != nil {
 					return err
 				}

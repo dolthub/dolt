@@ -40,7 +40,7 @@ var schExportDocs = cli.CommandDocumentationContent{
 }
 
 const (
-//exportAllSchFlag  = "all"
+	withTagsFlag = "with-tags"
 )
 
 type ExportCmd struct{}
@@ -65,7 +65,7 @@ func (cmd ExportCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "table whose schema is being exported."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"commit", "commit at which point the schema will be displayed."})
-	//ap.SupportsFlag(exportAllSchFlag, "a", "If provided, and <table> arg is not provided, system tables will be exported")
+	ap.SupportsFlag(withTagsFlag, "", "Include column tags in exported schema")
 	return ap
 }
 
@@ -131,7 +131,7 @@ func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root *do
 	}
 
 	for _, tn := range tablesToExport {
-		verr := exportTblSchema(ctx, tn, root, wr)
+		verr := exportTblSchema(ctx, tn, root, wr, apr.Contains(withTagsFlag))
 		if verr != nil {
 			return verr
 		}
@@ -140,7 +140,7 @@ func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root *do
 	return nil
 }
 
-func exportTblSchema(ctx context.Context, tblName string, root *doltdb.RootValue, wr io.Writer) errhand.VerboseError {
+func exportTblSchema(ctx context.Context, tblName string, root *doltdb.RootValue, wr io.Writer, withTags bool) errhand.VerboseError {
 	if has, err := root.HasTable(ctx, tblName); err != nil {
 		return errhand.BuildDError("unable to read from database").AddCause(err).Build()
 	} else if !has {
@@ -159,6 +159,13 @@ func exportTblSchema(ctx context.Context, tblName string, root *doltdb.RootValue
 		return errhand.BuildDError("error: failed to get schema for table %s", tblName).AddCause(err).Build()
 	}
 
-	_, err = fmt.Fprintln(wr, sqlfmt.SchemaAsCreateStmt(tblName, sch))
+	var stmt string
+	if withTags {
+		stmt = sqlfmt.CreateTableStmtWithTags(tblName, sch)
+	} else {
+		stmt = sqlfmt.CreateTableStmt(tblName, sch)
+	}
+
+	_, err = fmt.Fprintln(wr, stmt)
 	return errhand.BuildIf(err, "error writing schema for table %s", tblName).AddCause(err).Build()
 }

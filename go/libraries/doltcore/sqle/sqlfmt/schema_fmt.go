@@ -23,11 +23,17 @@ import (
 
 const TagCommentPrefix = "tag:"
 
-// FmtCol converts a column to a string with a given indent space count, name width, and type width.  If nameWidth or
+//  FmtCol converts a column to a string with a given indent space count, name width, and type width.  If nameWidth or
 // typeWidth are 0 or less than the length of the name or type, then the length of the name or type will be used
 func FmtCol(indent, nameWidth, typeWidth int, col schema.Column) string {
 	sqlType := col.TypeInfo.ToSqlType()
 	return FmtColWithNameAndType(indent, nameWidth, typeWidth, col.Name, sqlType.String(), col)
+}
+
+// FmtColWithTag follows the same logic as FmtCol, but includes the column's tag as a comment
+func FmtColWithTag(indent, nameWidth, typeWidth int, col schema.Column) string {
+	fc := FmtCol(indent, nameWidth, typeWidth, col)
+	return fmt.Sprintf("%s COMMENT '%s'", fc, FmtColTagComment(col.Tag))
 }
 
 // FmtColWithNameAndType creates a string representing a column within a sql create table statement with a given indent
@@ -47,7 +53,7 @@ func FmtColWithNameAndType(indent, nameWidth, typeWidth int, colName, typeStr st
 		}
 	}
 
-	return colStr + fmt.Sprintf(" COMMENT 'tag:%d'", col.Tag)
+	return colStr
 }
 
 // FmtColPrimaryKey creates a string representing a primary key constraint within a sql create table statement with a
@@ -61,11 +67,26 @@ func FmtColTagComment(tag uint64) string {
 	return fmt.Sprintf("%s%d", TagCommentPrefix, tag)
 }
 
-// SchemaAsCreateStmt takes a Schema and returns a string representing a SQL create table command that could be used to
-// create this table
-func SchemaAsCreateStmt(tableName string, sch schema.Schema) string {
+// CreateTableStmtWithTags generates a SQL CREATE TABLE command
+func CreateTableStmt(tableName string, sch schema.Schema) string {
+	return createTableStmt(tableName, sch, func(col schema.Column) string {
+		return FmtCol(2, 0, 0, col)
+	})
+}
+
+// CreateTableStmtWithTags generates a SQL CREATE TABLE command that includes the column tags as comments
+func CreateTableStmtWithTags(tableName string, sch schema.Schema) string {
+	return createTableStmt(tableName, sch, func(col schema.Column) string {
+		return FmtColWithTag(2, 0, 0, col)
+	})
+}
+
+type fmtColFunc func(col schema.Column) string
+
+func createTableStmt(tableName string, sch schema.Schema, fmtCol fmtColFunc) string {
+
 	sb := &strings.Builder{}
-	fmt.Fprintf(sb, "CREATE TABLE %s (\n", QuoteIdentifier(tableName))
+	sb.WriteString(fmt.Sprintf("CREATE TABLE %s (\n", QuoteIdentifier(tableName)))
 
 	firstLine := true
 	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
@@ -75,14 +96,14 @@ func SchemaAsCreateStmt(tableName string, sch schema.Schema) string {
 			sb.WriteString(",\n")
 		}
 
-		s := FmtCol(2, 0, 0, col)
+		s := fmtCol(col)
 		sb.WriteString(s)
 
 		return false, nil
 	})
 
 	firstPK := true
-	err := sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+	_ = sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if firstPK {
 			sb.WriteString(",\n  PRIMARY KEY (")
 			firstPK = false
@@ -92,11 +113,6 @@ func SchemaAsCreateStmt(tableName string, sch schema.Schema) string {
 		sb.WriteString(QuoteIdentifier(col.Name))
 		return false, nil
 	})
-
-	// TODO: fix panics
-	if err != nil {
-		panic(err)
-	}
 
 	sb.WriteRune(')')
 
