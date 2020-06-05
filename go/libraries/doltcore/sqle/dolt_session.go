@@ -32,7 +32,6 @@ type dbRoot struct {
 type dbData struct {
 	ddb *doltdb.DoltDB
 	rsw env.RepoStateWriter
-	mergeCommit *doltdb.Commit
 }
 
 var _ sql.Session = &DoltSession{}
