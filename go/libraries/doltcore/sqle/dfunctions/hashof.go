@@ -72,7 +72,7 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	if strings.ToUpper(name) == "HEAD" {
 		sess := sqle.DSessFromSess(ctx.Session)
 
-		cm, err = sess.GetParentCommit(ctx, dbName)
+		cm, _, err = sess.GetParentCommit(ctx, dbName)
 	} else {
 		name, err = getBranchInsensitive(ctx, name, ddb)
 

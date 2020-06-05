@@ -45,13 +45,13 @@ class DoltConnection(object):
     def close(self):
         self.cnx.close()
 
-    def query(self, query_str):
+    def query(self, query_str, exit_on_err=True):
         try:
             cursor = self.cnx.cursor()
             cursor.execute(query_str)
 
             if cursor.description is None:
-                return []
+                return [], cursor.rowcount
 
             raw = cursor.fetchall()
 
@@ -62,10 +62,12 @@ class DoltConnection(object):
                     r[k] = str(curr[i])
                 row_maps.append(r)
 
-            return row_maps
+            return row_maps, cursor.rowcount
 
         except BaseException as e:
-            _print_err_and_exit(e)
+            if exit_on_err:
+                _print_err_and_exit(e)
+            raise e
 
 
 class InfiniteRetryConnection(DoltConnection):
