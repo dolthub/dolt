@@ -251,7 +251,7 @@ func (bWr branchWriter) Delete(ctx *sql.Context, r sql.Row) error {
 	}
 
 	if !exists {
-		return sql.ErrDeleteRowNotFound
+		return sql.ErrDeleteRowNotFound.New()
 	}
 
 	return bWr.bt.ddb.DeleteBranch(ctx, brRef)
