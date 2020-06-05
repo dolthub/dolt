@@ -23,6 +23,10 @@ func TestQueries(t *testing.T) {
 	enginetest.TestQueries(t, newDoltHarness(t))
 }
 
+func TestVersionedQueries(t *testing.T) {
+	enginetest.TestVersionedQueries(t, newDoltHarness(t))
+}
+
 // Tests of choosing the correct execution plan independent of result correctness. Mostly useful for confirming that
 // the right indexes are being used for joining tables.
 func TestQueryPlans(t *testing.T) {

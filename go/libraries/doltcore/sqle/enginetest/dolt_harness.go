@@ -19,6 +19,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/liquidata-inc/go-mysql-server/enginetest"
 	"github.com/liquidata-inc/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
@@ -35,6 +36,7 @@ type doltHarness struct {
 var _ enginetest.Harness = (*doltHarness)(nil)
 var _ enginetest.SkippingHarness = (*doltHarness)(nil)
 var _ enginetest.IndexHarness = (*doltHarness)(nil)
+var _ enginetest.VersionedDBHarness = (*doltHarness)(nil)
 
 func newDoltHarness(t *testing.T) *doltHarness {
 	session, err := sqle.NewDoltSession(context.Background(), enginetest.NewBaseSession(), "test", "email@test.com")
@@ -78,8 +80,8 @@ func (d *doltHarness) NewDatabase(name string) sql.Database {
 
 	d.mrEnv.AddEnv(name, dEnv)
 	db := sqle.NewDatabase(name, dEnv.DoltDB, dEnv.RepoState, dEnv.RepoStateWriter())
-	err = db.SetRoot(enginetest.NewContext(d).WithCurrentDB(db.Name()), root)
-	require.NoError(d.t, err)
+	require.NoError(d.t, d.session.AddDB(enginetest.NewContext(d), db))
+	require.NoError(d.t, db.SetRoot(enginetest.NewContext(d).WithCurrentDB(db.Name()), root))
 	return db
 }
 
@@ -95,4 +97,48 @@ func (d *doltHarness) NewTable(db sql.Database, name string, schema sql.Schema) 
 	require.NoError(d.t, err)
 	require.True(d.t, ok, "table %s not found after creation", name)
 	return table, nil
+}
+
+// Dolt doesn't version tables per se, just the entire database. So ignore the name and schema and just create a new
+// branch with the given name.
+func (d *doltHarness) NewTableAsOf(db sql.VersionedDatabase, name string, schema sql.Schema, asOf interface{}) sql.Table {
+	table, err := d.NewTable(db, name, schema)
+	if err != nil {
+		require.True(d.t, sql.ErrTableAlreadyExists.Is(err))
+	}
+
+	table, ok, err := db.GetTableInsensitive(enginetest.NewContext(d), name)
+	require.NoError(d.t, err)
+	require.True(d.t, ok)
+
+	return table
+}
+
+// Dolt doesn't version tables per se, just the entire database. So ignore the name and schema and just create a new
+// branch with the given name.
+func (d *doltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf interface{}) error {
+	ddb := db.(sqle.Database)
+	e := enginetest.NewEngineWithDbs(d.t, d.Parallelism(), []sql.Database{db}, nil)
+
+	if _, err := e.Catalog.FunctionRegistry.Function(dfunctions.CommitFuncName); sql.ErrFunctionNotFound.Is(err) {
+		require.NoError(d.t,
+			e.Catalog.FunctionRegistry.Register(sql.Function1{Name: dfunctions.CommitFuncName, Fn: dfunctions.NewCommitFunc}))
+	}
+
+	asOfString, ok := asOf.(string)
+	require.True(d.t, ok)
+
+	_, iter, err := e.Query(enginetest.NewContext(d),
+		"set @@"+ddb.HeadKey()+" = COMMIT('test commit');")
+	require.NoError(d.t, err)
+	_, err = sql.RowIterToRows(iter)
+	require.NoError(d.t, err)
+
+	_, iter, err = e.Query(enginetest.NewContext(d),
+		"insert into dolt_branches (name, hash) values ('"+asOfString+"', @@"+ddb.HeadKey()+")")
+	require.NoError(d.t, err)
+	_, err = sql.RowIterToRows(iter)
+	require.NoError(d.t, err)
+
+	return nil
 }
