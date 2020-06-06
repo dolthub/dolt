@@ -91,4 +91,6 @@ replace github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi => ./
 
 replace vitess.io/vitess => github.com/liquidata-inc/vitess v0.0.0-20200430040751-192bb76ecd8b
 
+replace github.com/liquidata-inc/go-mysql-server => ../../go-mysql-server
+
 go 1.13
