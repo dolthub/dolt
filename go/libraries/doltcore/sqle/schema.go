@@ -53,6 +53,7 @@ func doltSchemaToSqlSchema(tableName string, sch schema.Schema) (sql.Schema, err
 
 // SqlSchemaToDoltResultSchema returns a dolt Schema from the sql schema given, suitable for use as a result set. For
 // creating tables, use SqlSchemaToDoltSchema.
+// todo: this function never returns an error
 func SqlSchemaToDoltResultSchema(sqlSchema sql.Schema) (schema.Schema, error) {
 	var cols []schema.Column
 	for i, col := range sqlSchema {
