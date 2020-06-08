@@ -150,8 +150,7 @@ func (di *doltIndex) Get(keys ...interface{}) (sql.IndexLookup, error) {
 
 // Has implements sql.Index
 func (*doltIndex) Has(partition sql.Partition, key ...interface{}) (bool, error) {
-	// appears to be unused for the moment
-	panic("implement me")
+	return false, errors.New("unimplemented")
 }
 
 // ID implements sql.Index

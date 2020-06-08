@@ -45,9 +45,8 @@ var _ sql.IndexedTable = (*DoltTable)(nil)
 func (t *DoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 	dil, ok := lookup.(*doltIndexLookup)
 	if !ok {
-		panic(fmt.Sprintf("Unrecognized indexLookup %T", lookup))
+		return newStaticErrorTable(t, fmt.Errorf("Unrecognized indexLookup %T", lookup))
 	}
-
 	return &IndexedDoltTable{
 		table:       t,
 		indexLookup: dil,
@@ -164,7 +163,7 @@ var _ sql.ReplaceableTable = (*WritableDoltTable)(nil)
 func (t *WritableDoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
 	te, err := t.getTableEditor(ctx)
 	if err != nil {
-		panic(err) // TODO: change interface to support errors
+		return newStaticErrorEditor(err)
 	}
 	return te
 }
@@ -194,7 +193,7 @@ func (t *WritableDoltTable) flushBatchedEdits(ctx *sql.Context) error {
 func (t *WritableDoltTable) Deleter(ctx *sql.Context) sql.RowDeleter {
 	te, err := t.getTableEditor(ctx)
 	if err != nil {
-		panic(err) // TODO: change interface to support errors
+		return newStaticErrorEditor(err)
 	}
 	return te
 }
@@ -203,7 +202,7 @@ func (t *WritableDoltTable) Deleter(ctx *sql.Context) sql.RowDeleter {
 func (t *WritableDoltTable) Replacer(ctx *sql.Context) sql.RowReplacer {
 	te, err := t.getTableEditor(ctx)
 	if err != nil {
-		panic(err) // TODO: change interface to support errors
+		return newStaticErrorEditor(err)
 	}
 	return te
 }
@@ -212,7 +211,7 @@ func (t *WritableDoltTable) Replacer(ctx *sql.Context) sql.RowReplacer {
 func (t *WritableDoltTable) Updater(ctx *sql.Context) sql.RowUpdater {
 	te, err := t.getTableEditor(ctx)
 	if err != nil {
-		panic(err) // TODO: change interface to support errors
+		return newStaticErrorEditor(err)
 	}
 	return te
 }

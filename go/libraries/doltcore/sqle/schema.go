@@ -65,7 +65,7 @@ func SqlSchemaToDoltResultSchema(sqlSchema sql.Schema) (schema.Schema, error) {
 
 	colColl, err := schema.NewColCollection(cols...)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	return schema.UnkeyedSchemaFromCols(colColl), nil

@@ -115,9 +115,8 @@ func NewDiffTable(ctx *sql.Context, db Database, tblName string) (sql.Table, err
 
 	sqlSch, err := doltSchemaToSqlSchema(diffTblName, j.GetSchema())
 
-	// TODO: fix panics
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	sqlSch = append(sqlSch, &sql.Column{
