@@ -44,7 +44,7 @@ require (
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20200320155049-a8e482faeffd
-	github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200605170723-cd4f84b39578
+	github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200608182739-104505874162
 	github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0
 	github.com/liquidata-inc/mmap-go v1.0.3
 	github.com/liquidata-inc/sqllogictest/go v0.0.0-20200320151923-b11801f10e15
@@ -74,10 +74,10 @@ require (
 	go.mongodb.org/mongo-driver v1.3.0 // indirect
 	go.uber.org/zap v1.14.1
 	golang.org/x/crypto v0.0.0-20200320145329-97fc981609be
-	golang.org/x/net v0.0.0-20200519113804-d87ec0cfa476
-	golang.org/x/sys v0.0.0-20200519105757-fe76b779f299
+	golang.org/x/net v0.0.0-20200602114024-627f9648deb9
+	golang.org/x/sys v0.0.0-20200602225109-6fdc65e7d980
 	google.golang.org/api v0.20.0
-	google.golang.org/genproto v0.0.0-20200519141106-08726f379972 // indirect
+	google.golang.org/genproto v0.0.0-20200608115520-7c474a2e3482 // indirect
 	google.golang.org/grpc v1.29.1
 	gopkg.in/square/go-jose.v2 v2.4.1
 	gopkg.in/src-d/go-errors.v1 v1.0.0
@@ -90,7 +90,5 @@ require (
 replace github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
 
 replace vitess.io/vitess => github.com/liquidata-inc/vitess v0.0.0-20200430040751-192bb76ecd8b
-
-replace github.com/liquidata-inc/go-mysql-server => ../../go-mysql-server
 
 go 1.13
