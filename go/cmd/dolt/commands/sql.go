@@ -1130,10 +1130,6 @@ func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, 
 
 	// Parts of the pipeline depend on the output format, such as how we print null values and whether we pad strings.
 	switch se.resultFormat {
-	case formatCsv:
-		nullPrinter := nullprinter.NewNullPrinterWithNullString(untypedSch, "")
-		p.AddStage(pipeline.NewNamedTransform(nullprinter.NullPrintingStage, nullPrinter.ProcessRow))
-
 	case formatTabular:
 		nullPrinter := nullprinter.NewNullPrinter(untypedSch)
 		p.AddStage(pipeline.NewNamedTransform(nullprinter.NullPrintingStage, nullPrinter.ProcessRow))

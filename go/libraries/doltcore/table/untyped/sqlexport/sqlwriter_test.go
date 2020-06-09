@@ -47,7 +47,7 @@ func TestEndToEnd(t *testing.T) {
 	id := uuid.MustParse("00000000-0000-0000-0000-000000000000")
 	tableName := "people"
 
-	dropCreateStatement := sqlfmt.DropTableIfExistsStmt(tableName) + "\n" + sqlfmt.SchemaAsCreateStmt(tableName, dtestutils.TypedSchema)
+	dropCreateStatement := sqlfmt.DropTableIfExistsStmt(tableName) + "\n" + sqlfmt.CreateTableStmtWithTags(tableName, dtestutils.TypedSchema)
 
 	type test struct {
 		name           string

@@ -83,7 +83,7 @@ func (w *SqlExportWriter) maybeWriteDropCreate() error {
 		var b strings.Builder
 		b.WriteString(sqlfmt.DropTableIfExistsStmt(w.tableName))
 		b.WriteRune('\n')
-		b.WriteString(sqlfmt.SchemaAsCreateStmt(w.tableName, w.sch))
+		b.WriteString(sqlfmt.CreateTableStmtWithTags(w.tableName, w.sch))
 		if err := iohelp.WriteLine(w.wr, b.String()); err != nil {
 			return err
 		}

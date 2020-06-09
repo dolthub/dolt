@@ -410,6 +410,12 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+ours[[:space:]] ]] || false
     [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+theirs[[:space:]] ]] || false
+
+    EXPECTED=$(echo -e "table,num_conflicts\ntest,1")
+    run dolt sql -r csv -q 'SELECT * FROM dolt_conflicts'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
     run dolt conflicts resolve --ours test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]

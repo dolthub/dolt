@@ -61,19 +61,9 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tbl *doltdb.Ta
 		return nil, err
 	}
 
-	rowData, err := tbl.GetRowData(ctx)
+	tableEditor, err := doltdb.NewTableEditor(ctx, tbl, tblSch)
 	if err != nil {
 		return nil, err
-	}
-	rowEditor := rowData.Edit()
-
-	indexEditors := make([]*doltdb.IndexEditor, tblSch.Indexes().Count())
-	for i, index := range tblSch.Indexes().AllIndexes() {
-		indexData, err := tbl.GetIndexRowData(ctx, index.Name())
-		if err != nil {
-			return nil, err
-		}
-		indexEditors[i] = doltdb.NewIndexEditor(index, indexData)
 	}
 
 	err = conflicts.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
@@ -95,7 +85,10 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tbl *doltdb.Ta
 		var updatedRow row.Row
 
 		if types.IsNull(updated) {
-			rowEditor.Remove(key)
+			err := tableEditor.DeleteKey(ctx, key.(types.Tuple))
+			if err != nil {
+				return false, err
+			}
 		} else {
 			updatedRow, err = row.FromNoms(tblSch, key.(types.Tuple), updated.(types.Tuple))
 			if err != nil {
@@ -108,25 +101,7 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tbl *doltdb.Ta
 				return false, table.NewBadRow(updatedRow)
 			}
 
-			rowEditor.Set(key, updated)
-		}
-
-		for _, indexEd := range indexEditors {
-			var originalIndexRow row.Row
-			var updatedIndexRow row.Row
-			if originalRow != nil {
-				originalIndexRow, err = originalRow.ReduceToIndex(indexEd.Index())
-				if err != nil {
-					return false, err
-				}
-			}
-			if updatedRow != nil {
-				updatedIndexRow, err = updatedRow.ReduceToIndex(indexEd.Index())
-				if err != nil {
-					return false, err
-				}
-			}
-			err = indexEd.UpdateIndex(ctx, originalIndexRow, updatedIndexRow)
+			err := tableEditor.UpdateRow(ctx, originalRow, updatedRow)
 			if err != nil {
 				return false, err
 			}
@@ -138,36 +113,12 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tbl *doltdb.Ta
 		return nil, err
 	}
 
-	m, err := rowEditor.Map(ctx)
+	newTbl, err := tableEditor.Table()
 	if err != nil {
 		return nil, err
 	}
 
-	indexesUpdatedTable := tbl
-	for _, indexEd := range indexEditors {
-		if indexEd.HasChanges() {
-			indexRowData, err := indexEd.Map(ctx)
-			if err != nil {
-				return nil, err
-			}
-			indexesUpdatedTable, err = indexesUpdatedTable.SetIndexRowData(ctx, indexEd.Index().Name(), indexRowData)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	indexData, err := indexesUpdatedTable.GetIndexData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	newTbl, err := doltdb.NewTable(ctx, vrw, tblSchVal, m, &indexData)
-	if err != nil {
-		return nil, err
-	}
-
-	m, err = types.NewMap(ctx, vrw)
+	m, err := types.NewMap(ctx, vrw)
 	if err != nil {
 		return nil, err
 	}

@@ -936,7 +936,7 @@ func TestRenameTable(t *testing.T) {
 		{
 			name:        "table name in use",
 			query:       "rename table people to appearances",
-			expectedErr: "table already exists",
+			expectedErr: "already exists",
 		},
 	}
 

@@ -63,7 +63,7 @@ func TestFmtCol(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.Expected, func(t *testing.T) {
-			actual := FmtCol(test.Indent, test.NameWidth, test.TypeWidth, test.Col)
+			actual := FmtColWithTag(test.Indent, test.NameWidth, test.TypeWidth, test.Col)
 			assert.Equal(t, test.Expected, actual)
 		})
 	}

@@ -60,8 +60,10 @@ type HistoryTable struct {
 }
 
 // NewHistoryTable creates a history table
-func NewHistoryTable(ctx *sql.Context, dbName, tblName string) (*HistoryTable, error) {
+func NewHistoryTable(ctx *sql.Context, db Database, tblName string) (sql.Table, error) {
 	sess := DSessFromSess(ctx.Session)
+	dbName := db.Name()
+
 	ddb, ok := sess.GetDoltDB(dbName)
 
 	if !ok {
@@ -254,7 +256,7 @@ func (ht *HistoryTable) Schema() sql.Schema {
 
 // Partitions returns a PartitionIter which will be used in getting partitions each of which is used to create RowIter.
 func (ht *HistoryTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	return &commitPartitioner{ht.cmItr}, nil
+	return &commitPartitioner{ctx, ht.cmItr}, nil
 }
 
 // PartitionRows takes a partition and returns a row iterator for that partition
@@ -277,12 +279,13 @@ func (cp *commitPartition) Key() []byte {
 
 // commitPartitioner creates partitions from a CommitItr
 type commitPartitioner struct {
+	ctx   *sql.Context
 	cmItr doltdb.CommitItr
 }
 
 // Next returns the next partition and nil, io.EOF when complete
 func (cp commitPartitioner) Next() (sql.Partition, error) {
-	h, cm, err := cp.cmItr.Next(context.TODO())
+	h, cm, err := cp.cmItr.Next(cp.ctx)
 
 	if err != nil {
 		return nil, err
@@ -297,6 +300,7 @@ func (cp commitPartitioner) Close() error {
 }
 
 type rowItrForTableAtCommit struct {
+	ctx            context.Context
 	rd             table.TableReadCloser
 	sch            schema.Schema
 	toSuperSchConv *rowconv.RowConverter
@@ -391,6 +395,7 @@ func newRowItrForTableAtCommit(
 	}
 
 	return &rowItrForTableAtCommit{
+		ctx:            ctx,
 		rd:             rd,
 		sch:            sch,
 		toSuperSchConv: toSuperSchConv,
@@ -410,7 +415,7 @@ func (tblItr *rowItrForTableAtCommit) Next() (sql.Row, error) {
 		return nil, io.EOF
 	}
 
-	r, err := tblItr.rd.ReadRow(context.TODO())
+	r, err := tblItr.rd.ReadRow(tblItr.ctx)
 
 	if err != nil {
 		return nil, err
@@ -436,7 +441,7 @@ func (tblItr *rowItrForTableAtCommit) Next() (sql.Row, error) {
 // Close the iterator.
 func (tblItr *rowItrForTableAtCommit) Close() error {
 	if tblItr.rd != nil {
-		return tblItr.rd.Close(context.TODO())
+		return tblItr.rd.Close(tblItr.ctx)
 	}
 
 	return nil
