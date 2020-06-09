@@ -98,16 +98,18 @@ func concurrentExec(work []func() error, concurrency int) error {
 	return nil
 }
 
-func batchItr(elemCount, batchSize int, cb func(start, end int) (stop bool)) {
+func batchItr(elemCount, batchSize int, cb func(start, end int) (stop bool, err error)) (err error) {
+	var stop bool
 	for st, end := 0, batchSize; st < elemCount; st, end = end, end+batchSize {
 		if end > elemCount {
 			end = elemCount
 		}
 
-		stop := cb(st, end)
+		stop, err = cb(st, end)
 
 		if stop {
 			break
 		}
 	}
+	return err
 }

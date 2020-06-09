@@ -266,7 +266,7 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (m
 
 	// batchItr creates work functions which request a batch of chunk download locations and write the results to the
 	// dlLocChan
-	batchItr(len(hashesBytes), getLocsBatchSize, func(st, end int) (stop bool) {
+	_ = batchItr(len(hashesBytes), getLocsBatchSize, func(st, end int) (stop bool, err error) {
 		batch := hashesBytes[st:end]
 		f := func() error {
 			req := remotesapi.GetDownloadLocsRequest{RepoId: dcs.getRepoId(), ChunkHashes: batch}
@@ -284,7 +284,7 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (m
 		}
 
 		work = append(work, f)
-		return false
+		return false, nil
 	})
 
 	var err error
@@ -380,20 +380,19 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 
 	absent := make(hash.HashSet)
 	var found []nbs.CompressedChunk
-	var err error
 
-	batchItr(len(hashSl), maxHasManyBatchSize, func(st, end int) (stop bool) {
+	err := batchItr(len(hashSl), maxHasManyBatchSize, func(st, end int) (stop bool, err error) {
 		// slice the slices into a batch of hashes
 		currHashSl := hashSl[st:end]
 		currByteSl := byteSl[st:end]
 
 		// send a request to the remote api to determine which chunks the remote api already has
 		req := remotesapi.HasChunksRequest{RepoId: dcs.getRepoId(), Hashes: currByteSl}
-		resp, err := dcs.csClient.HasChunks(ctx, &req)
+		var resp *remotesapi.HasChunksResponse
+		resp, err = dcs.csClient.HasChunks(ctx, &req)
 
 		if err != nil {
-			err = NewRpcError(err, "HasMany", dcs.host, req)
-			return true
+			return true, NewRpcError(err, "HasMany", dcs.host, req)
 		}
 
 		numAbsent := len(resp.Absent)
@@ -420,7 +419,7 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 			}
 		}
 
-		return false
+		return false, nil
 	})
 
 	if err != nil {

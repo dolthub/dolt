@@ -39,7 +39,7 @@ func TestBatchItr(t *testing.T) {
 		sl := ints[:size]
 
 		k := 0
-		batchItr(size, batchSize, func(start, end int) (stop bool) {
+		_ = batchItr(size, batchSize, func(start, end int) (stop bool, err error) {
 			currSl := sl[start:end]
 
 			for j := 0; j < len(currSl); j++ {
@@ -50,7 +50,7 @@ func TestBatchItr(t *testing.T) {
 				k++
 			}
 
-			return false
+			return false, nil
 		})
 	}
 }
