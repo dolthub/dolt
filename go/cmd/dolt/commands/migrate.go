@@ -193,10 +193,10 @@ func pushMigratedRepo(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.Arg
 
 			cli.Println(color.BlueString(fmt.Sprintf("Pushing migrated branch %s to %s", branch.String(), remoteName)))
 			mode := ref.RefUpdateMode{Force: true}
-			err = pushToRemoteBranch(ctx, dEnv, mode, src, dest, remoteRef, dEnv.DoltDB, destDB, remote)
+			verr := pushToRemoteBranch(ctx, dEnv, mode, src, dest, remoteRef, dEnv.DoltDB, destDB, remote)
 
-			if err != nil {
-				return err
+			if verr != nil {
+				return fmt.Errorf("%s", verr.Verbose())
 			}
 			cli.Println()
 		}

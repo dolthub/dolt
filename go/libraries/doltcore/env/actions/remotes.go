@@ -17,8 +17,6 @@ package actions
 import (
 	"context"
 	"errors"
-	"fmt"
-
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
@@ -54,12 +52,9 @@ func Push(ctx context.Context, dEnv *env.DoltEnv, mode ref.RefUpdateMode, destRe
 	case ref.ForceUpdate:
 		err = destDB.SetHead(ctx, destRef, commit)
 		if err != nil {
-			return fmt.Errorf("error setting head: %s", err.Error())
+			return err
 		}
 		err = srcDB.SetHead(ctx, remoteRef, commit)
-		if err != nil {
-			return fmt.Errorf("error setting head: %s", err.Error())
-		}
 	case ref.FastForwardOnly:
 		err = destDB.FastForward(ctx, destRef, commit)
 		if err != nil {
