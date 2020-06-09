@@ -17,9 +17,16 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
+	"strings"
+
+	"github.com/liquidata-inc/go-mysql-server/sql"
+
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -30,28 +37,16 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/nullprinter"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/store/types"
-	"github.com/liquidata-inc/go-mysql-server/sql"
-	"io"
-	"strings"
-
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-)
-
-const (
-	fromDB = "from"
-	toDB   = "to"
 )
 
 //var diffDocs = cli.CommandDocumentationContent{
 var queryDiffDocs = cli.CommandDocumentationContent{
 	ShortDesc: "",
-	LongDesc: "",
-	Synopsis: nil,
+	LongDesc:  "",
+	Synopsis:  nil,
 }
 
 type QueryDiffCmd struct {
@@ -230,14 +225,7 @@ func diffQuery(ctx context.Context, dEnv *env.DoltEnv, fromRoot, toRoot *doltdb.
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	qd := &queryDiffer{
-		sqlCtx:   fromCtx,
-		fromIter: ordFromIter,
-		toIter:   ordToIter,
-		rowCmp:   rowCmp,
-		sch:      sch,
-		joiner:   joiner,
-	}
+	qd := diff.NewQueryDiffer(fromCtx, ordFromIter, ordToIter, rowCmp, sch, joiner)
 
 	p, err := buildQueryDiffPipeline(qd, doltSch)
 
@@ -251,6 +239,7 @@ func diffQuery(ctx context.Context, dEnv *env.DoltEnv, fromRoot, toRoot *doltdb.
 }
 
 const db = "db"
+
 func makeSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue) (*sql.Context, *sqlEngine, error) {
 	mrEnv := env.DoltEnvAsMultiEnv(dEnv)
 	roots := map[string]*doltdb.RootValue{db: root}
@@ -302,101 +291,24 @@ func errorWithQueryPlan(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.Roo
 		if err == io.EOF {
 			break
 		} else if err != nil {
-				return errhand.BuildDError("Cannot diff query, query is not ordered. Error describing query plan").AddCause(err).Build()
+			return errhand.BuildDError("Cannot diff query, query is not ordered. Error describing query plan").AddCause(err).Build()
 		}
 		sv, _ := typeinfo.StringDefaultType.ConvertValueToNomsValue(r[0])
-		qp.WriteString(fmt.Sprintf("%s\n",string(sv.(types.String))))
+		qp.WriteString(fmt.Sprintf("%s\n", string(sv.(types.String))))
 	}
 
 	return errhand.BuildDError("Cannot diff query, query is not ordered. Add ORDER BY statement.\nquery plan:\n%s", qp.String()).Build()
 }
 
-type queryDiffer struct {
-	sqlCtx   *sql.Context
-	fromIter sql.RowIter
-	toIter   sql.RowIter
-	fromRow  sql.Row
-	toRow    sql.Row
-	rowCmp	 sql.RowCompareFunc
-	sch      sql.Schema
-	joiner   *rowconv.Joiner
-}
-
-func (qd *queryDiffer) nextDiff() (sql.Row, sql.Row, error) {
-	fromEOF := false
-	toEOF := false
-	var err error
-	for {
-		if qd.fromRow == nil {
-			qd.fromRow, err = qd.fromIter.Next()
-			if err == io.EOF {
-				fromEOF = true
-			} else if err != nil {
-				return nil, nil, err
-			}
-		}
-		if qd.toRow == nil {
-			qd.toRow, err = qd.toIter.Next()
-			if err == io.EOF {
-				toEOF = true
-			} else if err != nil {
-				return nil, nil, err
-			}
-		}
-		if fromEOF && toEOF {
-			return nil, nil, io.EOF
-		}
-		if fromEOF || toEOF {
-			fromRow := qd.fromRow
-			qd.fromRow = nil
-			toRow := qd.toRow
-			qd.toRow = nil
-			return fromRow, toRow, nil
-		}
-		cmp, err := qd.rowCmp(qd.sqlCtx, qd.fromRow, qd.toRow)
-		if err != nil {
-			return nil, nil, err
-		}
-		switch cmp {
-		case -1:
-			fromRow := qd.fromRow
-			qd.fromRow = nil
-			return fromRow, nil, nil
-		case 1:
-			toRow := qd.toRow
-			qd.toRow = nil
-			return nil, toRow, nil
-		case 0:
-			eq, err := qd.fromRow.Equals(qd.toRow, qd.sch)
-			if err != nil {
-				return nil, nil, err
-			}
-			if eq {
-				qd.fromRow = nil
-				qd.toRow = nil
-				continue
-			} else {
-				// todo: we don't have any way to detect updates at this point
-				// if rows are ordered equally, but not equal in value, consider it a drop/add
-				fromRow := qd.fromRow
-				qd.fromRow = nil
-				return fromRow, nil, nil
-			}
-		default:
-			panic(fmt.Sprintf("rowCmp() returned incorrect value in queryDiffer: %d", cmp))
-		}
-	}
-}
-
-func (qd *queryDiffer) NextDiff() (row.Row, pipeline.ImmutableProperties, error) {
-	fromRow, toRow, err := qd.nextDiff()
+func NextQueryDiff(qd *diff.QueryDiffer) (row.Row, pipeline.ImmutableProperties, error) {
+	fromRow, toRow, err := qd.NextDiff()
 	if err != nil {
 		return nil, pipeline.ImmutableProperties{}, err
 	}
 
 	rows := make(map[string]row.Row)
 	if fromRow != nil {
-		sch := qd.joiner.SchemaForName(diff.From)
+		sch := qd.Joiner.SchemaForName(diff.From)
 		oldRow, err := sqle.SqlRowToDoltRow(types.Format_Default, fromRow, sch)
 		if err != nil {
 			return nil, pipeline.ImmutableProperties{}, err
@@ -405,7 +317,7 @@ func (qd *queryDiffer) NextDiff() (row.Row, pipeline.ImmutableProperties, error)
 	}
 
 	if toRow != nil {
-		sch := qd.joiner.SchemaForName(diff.To)
+		sch := qd.Joiner.SchemaForName(diff.To)
 		newRow, err := sqle.SqlRowToDoltRow(types.Format_Default, toRow, sch)
 		if err != nil {
 			return nil, pipeline.ImmutableProperties{}, err
@@ -413,7 +325,7 @@ func (qd *queryDiffer) NextDiff() (row.Row, pipeline.ImmutableProperties, error)
 		rows[diff.To] = newRow
 	}
 
-	joinedRow, err := qd.joiner.Join(rows)
+	joinedRow, err := qd.Joiner.Join(rows)
 	if err != nil {
 		return nil, pipeline.ImmutableProperties{}, err
 	}
@@ -422,9 +334,9 @@ func (qd *queryDiffer) NextDiff() (row.Row, pipeline.ImmutableProperties, error)
 }
 
 // todo: this logic was adapted from commands/diff.go, it could be simplified
-func buildQueryDiffPipeline(qd *queryDiffer, doltSch schema.Schema) (*pipeline.Pipeline, error) {
+func buildQueryDiffPipeline(qd *diff.QueryDiffer, doltSch schema.Schema) (*pipeline.Pipeline, error) {
 
-	unionSch, ds, verr := createSplitter(doltSch, doltSch, qd.joiner, &diffArgs{diffOutput:TabularDiffOutput})
+	unionSch, ds, verr := createSplitter(doltSch, doltSch, qd.Joiner, &diffArgs{diffOutput: TabularDiffOutput})
 	if verr != nil {
 		return nil, verr
 	}
@@ -448,16 +360,13 @@ func buildQueryDiffPipeline(qd *queryDiffer, doltSch schema.Schema) (*pipeline.P
 	if err != nil {
 		return nil, err
 	}
-
 	sinkProcFunc := pipeline.ProcFuncForSinkFunc(sink.ProcRowWithProps)
-	p := pipeline.NewAsyncPipeline(pipeline.ProcFuncForSourceFunc(qd.NextDiff), sinkProcFunc, transforms, badRowCB)
 
-	p.RunAfter(func() {
-		err := sink.Close()
-		if err != nil {
-			cli.PrintErrln(err)
-		}
+	srcProcFunc := pipeline.ProcFuncForSourceFunc(func() (row.Row, pipeline.ImmutableProperties, error) {
+		return NextQueryDiff(qd)
 	})
+
+	p := pipeline.NewAsyncPipeline(srcProcFunc, sinkProcFunc, transforms, badRowCB)
 
 	names := make(map[uint64]string, doltSch.GetAllCols().Size())
 	_ = doltSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
@@ -469,6 +378,18 @@ func buildQueryDiffPipeline(qd *queryDiffer, doltSch schema.Schema) (*pipeline.P
 		return nil, err
 	}
 	p.InjectRow(fwtStageName, schRow)
+
+	p.RunAfter(func() {
+		err := sink.Close()
+		if err != nil {
+			cli.PrintErrln(err)
+		}
+		err = qd.Close()
+		if err != nil {
+			cli.PrintErrln(err)
+		}
+	})
+	qd.Start()
 
 	return p, nil
 }

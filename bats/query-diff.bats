@@ -9,7 +9,7 @@ CREATE TABLE test (
     pk int,
     c1 int,
     c2 varchar(20),
-    primary key (pk),
+    primary key (pk)
 );
 SQL
 }
