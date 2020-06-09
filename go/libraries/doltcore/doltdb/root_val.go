@@ -557,6 +557,7 @@ func (root *RootValue) HasConflicts(ctx context.Context) (bool, error) {
 	return len(cnfTbls) > 0, nil
 }
 
+// IterTables calls the callback function cb on each table in this RootValue.
 func (root *RootValue) IterTables(ctx context.Context, cb func(name string, table *Table) (stop bool, err error)) error {
 	tm, err := root.getTableMap()
 

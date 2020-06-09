@@ -821,6 +821,7 @@ func (dEnv *DoltEnv) GetOneDocDetail(docName string) (doc doltdb.DocDetails, err
 	return doltdb.DocDetails{}, err
 }
 
+// WorkingRootWithDocs returns a copy of the working root that has been updated with the Dolt docs from the file system.
 func (dEnv *DoltEnv) WorkingRootWithDocs(ctx context.Context) (*doltdb.RootValue, error) {
 	dds, err := dEnv.GetAllValidDocDetails()
 	if err != nil {

@@ -91,6 +91,7 @@ func (rvu RootValueUnreadable) Error() string {
 	return "error: Unable to read " + rvu.rootType.String()
 }
 
+// NewTableDiffs returns the TableDiffs between two roots.
 func NewTableDiffs(ctx context.Context, newer, older *doltdb.RootValue) (*TableDiffs, error) {
 	deltas, err := GetTableDeltas(ctx, older, newer)
 
@@ -140,6 +141,7 @@ func (td *TableDiffs) Len() int {
 	return len(td.Tables)
 }
 
+// GetTableDiffs returns the staged and unstaged TableDiffs for the repo.
 func GetTableDiffs(ctx context.Context, dEnv *env.DoltEnv) (*TableDiffs, *TableDiffs, error) {
 	headRoot, err := dEnv.HeadRoot(ctx)
 
@@ -174,6 +176,7 @@ func GetTableDiffs(ctx context.Context, dEnv *env.DoltEnv) (*TableDiffs, *TableD
 	return stagedDiffs, notStagedDiffs, nil
 }
 
+// NewDocDiffs returns DocDiffs for Dolt Docs between two roots.
 func NewDocDiffs(ctx context.Context, dEnv *env.DoltEnv, older *doltdb.RootValue, newer *doltdb.RootValue, docDetails []doltdb.DocDetails) (*DocDiffs, error) {
 	var added []string
 	var modified []string
@@ -219,6 +222,7 @@ func NewDocDiffs(ctx context.Context, dEnv *env.DoltEnv, older *doltdb.RootValue
 	return &DocDiffs{len(added), len(modified), len(removed), docsToType, docs}, nil
 }
 
+// Len returns the number of docs in a DocDiffs
 func (nd *DocDiffs) Len() int {
 	return len(nd.Docs)
 }
@@ -265,6 +269,7 @@ type TableDelta struct {
 	ToTable   *doltdb.Table
 }
 
+// GetTableDeltas returns a list of TableDelta objects for each table that changed between fromRoot and toRoot.
 func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) ([]TableDelta, error) {
 	var deltas []TableDelta
 	fromTable := make(map[uint64]*doltdb.Table)
@@ -337,14 +342,17 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) ([]
 	return deltas, nil
 }
 
+// IsAdd returns true if the table was added between the fromRoot and toRoot.
 func (td TableDelta) IsAdd() bool {
 	return td.FromTable == nil && td.ToTable != nil
 }
 
+// IsDrop returns true if the table was dropped between the fromRoot and toRoot.
 func (td TableDelta) IsDrop() bool {
 	return td.FromTable != nil && td.ToTable == nil
 }
 
+// GetSchemas returns the table's schema at the fromRoot and toRoot, or schema.Empty if the table did not exist.
 func (td TableDelta) GetSchemas(ctx context.Context) (from, to schema.Schema, err error) {
 	if td.FromTable != nil {
 		from, err = td.FromTable.GetSchema(ctx)
@@ -369,6 +377,7 @@ func (td TableDelta) GetSchemas(ctx context.Context) (from, to schema.Schema, er
 	return from, to, nil
 }
 
+// GetMaps returns the table's row map at the fromRoot and toRoot, or and empty map if the table did not exist.
 func (td TableDelta) GetMaps(ctx context.Context) (from, to types.Map, err error) {
 	if td.FromTable != nil {
 		from, err = td.FromTable.GetRowData(ctx)
