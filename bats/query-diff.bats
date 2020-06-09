@@ -12,6 +12,14 @@ CREATE TABLE test (
     primary key (pk)
 );
 SQL
+    dolt sql <<SQL
+CREATE TABLE quiz (
+    pk int,
+    c1 int,
+    c2 varchar(20),
+    primary key (pk)
+);
+SQL
 }
 
 teardown() {
@@ -19,15 +27,42 @@ teardown() {
 }
 
 @test "dolt query_diff" {
-    dolt sql -q 'insert into test values (0,0,"0")'
-    dolt sql -q 'insert into test values (1,1,"1")'
+    dolt sql -q 'insert into test values (0,0,"0"), (1,1,"1")'
     dolt add .
     dolt commit -m rows
     dolt sql -q 'delete from test where pk=1'
     dolt sql -q 'insert into test values (2,2,"2")'
     run dolt query_diff 'select * from test order by pk'
-    [ "$status" = 0 ]
-    [[ "$output" =~ "1" ]] || false
-    [[ "$output" =~ "2" ]] || false
-    [[ ! "$output" =~ "0" ]] || false
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "|     | pk | c1 | c2 |" ]]
+    [[ "$output" =~ "|  -  | 1  | 1  | 1  |" ]]
+    [[ "$output" =~ "|  +  | 2  | 2  | 2  |" ]]
+}
+
+@test "dolt query_diff join query" {
+    dolt sql -q 'insert into test values (0,0,"0"), (1,1,"1")'
+    dolt sql -q 'insert into quiz values (0,0,"0"), (1,1,"1")'
+    dolt add .
+    dolt commit -m rows
+    dolt sql -q 'update quiz set c2 = "1" where pk = 0'
+    dolt query_diff 'select test.pk, test.c1, test.c2, quiz.pk, quiz.c1 from test join quiz on test.c2 = quiz.c2 order by test.c2'
+    run dolt query_diff 'select test.pk, test.c1, test.c2, quiz.pk, quiz.c1 from test join quiz on test.c2 = quiz.c2 order by test.c2'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "|     | pk | c1 | c2 | pk | c1 |" ]]
+    [[ "$output" =~ "|  -  | 0  | 0  | 0  | 0  | 0  |" ]]
+    [[ "$output" =~ "|  +  | 1  | 1  | 1  | 0  | 0  |" ]]
+}
+
+@test "dolt query_diff a view" {
+    dolt sql -q 'insert into test values (0,0,"0"), (1,1,"1"), (3,3,"3")'
+    dolt sql -q 'create view positive as select * from test where pk > 0'
+    dolt add .
+    dolt commit -m rows
+    dolt sql -q 'delete from test where pk=1'
+    dolt sql -q 'insert into test values (2,2,"2")'
+    run dolt query_diff 'select * from positive order by pk'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "|     | pk | c1 | c2 |" ]]
+    [[ "$output" =~ "|  -  | 1  | 1  | 1  |" ]]
+    [[ "$output" =~ "|  +  | 2  | 2  | 2  |" ]]
 }

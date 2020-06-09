@@ -132,7 +132,7 @@ func (iq *rowIterQueue) start() {
 			}
 		}
 	}()
-	iq.advance()
+	iq.currRow = <-iq.rowChan
 }
 
 func (iq *rowIterQueue) peek() sql.Row {
@@ -141,17 +141,8 @@ func (iq *rowIterQueue) peek() sql.Row {
 
 func (iq *rowIterQueue) pop() sql.Row {
 	r := iq.currRow
-	iq.advance()
+	iq.currRow = <-iq.rowChan
 	return r
-}
-
-func (iq *rowIterQueue) advance() {
-	r, ok := <-iq.rowChan
-	if ok {
-		iq.currRow = r
-	} else {
-		iq.currRow = nil
-	}
 }
 
 func (iq *rowIterQueue) isDone() bool {

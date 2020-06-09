@@ -63,6 +63,10 @@ func (cmd QueryDiffCmd) Description() string {
 	return "Diffs the results of a query between two roots"
 }
 
+func (cmd QueryDiffCmd) Hidden() bool {
+	return true
+}
+
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
 // that it be run from within a data repository directory
 func (cmd QueryDiffCmd) RequiresRepo() bool {
