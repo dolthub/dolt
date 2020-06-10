@@ -18,4 +18,4 @@ jobs:
           download-url: https://github.com/liquidata-inc/dolt/archive/v${{steps.get_version.outputs.VERSION}}.tar.gz
           commit-message: ${{formulaName}} ${{version}}
         env:
-          COMMITTER_TOKEN: ${{secrets.HOMEBREW_COMMITTER_TOKEN}}
+          COMMITTER_TOKEN: ${{secrets.HOMEBREW_GITHUB_TOKEN}}
