@@ -1,0 +1,21 @@
+on:
+  push:
+    tags: 'v*'
+
+jobs:
+  homebrew:
+    name: Bump Dolt Homebrew formula
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the version
+        id: get_version
+        run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
+      - uses: mislav/bump-homebrew-formula-action@v1
+        with:
+          formula-name: dolt
+          homebrew-tap: Homebrew/homebrew-core
+          base-branch: release
+          download-url: https://github.com/liquidata-inc/dolt/archive/v${{steps.get_version.outputs.VERSION}}.tar.gz
+          commit-message: ${{formulaName}} ${{version}}
+        env:
+          COMMITTER_TOKEN: ${{secrets.HOMEBREW_COMMITTER_TOKEN}}
