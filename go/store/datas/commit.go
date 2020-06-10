@@ -108,7 +108,13 @@ func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr types.ValueRea
 }
 
 func parentsToQueue(ctx context.Context, refs types.RefSlice, q *types.RefByHeight, vr types.ValueReader) error {
+	seen := make(map[hash.Hash]bool)
 	for _, r := range refs {
+		if _, ok := seen[r.TargetHash()]; ok {
+			continue
+		}
+		seen[r.TargetHash()] = true
+
 		v, err := r.TargetValue(ctx, vr)
 
 		if err != nil {
