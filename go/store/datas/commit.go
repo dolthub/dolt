@@ -112,9 +112,8 @@ func parentsToQueue(ctx context.Context, refs types.RefSlice, q *types.RefByHeig
 	for _, r := range refs {
 		if _, ok := seen[r.TargetHash()]; ok {
 			continue
-		} else {
-			seen[r.TargetHash()] = true
 		}
+		seen[r.TargetHash()] = true
 
 		v, err := r.TargetValue(ctx, vr)
 
