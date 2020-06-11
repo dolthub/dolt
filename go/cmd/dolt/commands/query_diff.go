@@ -88,7 +88,7 @@ func (cmd QueryDiffCmd) Exec(ctx context.Context, commandStr string, args []stri
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, queryDiffDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
-	from, to, leftover, err := getDiffRoots(ctx, dEnv, apr.Args())
+	from, to, leftover, err := GetDiffRoots(ctx, dEnv, apr.Args())
 
 	var verr errhand.VerboseError
 	if err != nil {
@@ -109,7 +109,7 @@ func (cmd QueryDiffCmd) Exec(ctx context.Context, commandStr string, args []stri
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string) (from, to *doltdb.RootValue, leftover []string, err error) {
+func GetDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string) (from, to *doltdb.RootValue, leftover []string, err error) {
 	headRoot, err := dEnv.StagedRoot(ctx)
 	if err != nil {
 		return nil, nil, nil, err
