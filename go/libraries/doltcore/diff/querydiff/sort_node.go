@@ -211,7 +211,7 @@ func (nd *sortNodeDiffer) FromNode() sql.Node {
 	return sqlNodeWrapper{
 		Node: nd.fromNode,
 		iter: rowIterWrapper{
-			next:  func() (row sql.Row, err error) {
+			next: func() (row sql.Row, err error) {
 				return nd.nextFromRow()
 			},
 			close: func() error {
@@ -225,7 +225,7 @@ func (nd *sortNodeDiffer) ToNode() sql.Node {
 	return sqlNodeWrapper{
 		Node: nd.toNode,
 		iter: rowIterWrapper{
-			next:  func() (row sql.Row, err error) {
+			next: func() (row sql.Row, err error) {
 				return nd.nextToRow()
 			},
 			close: func() error {
@@ -242,11 +242,11 @@ func (nd *sortNodeDiffer) Close() error {
 }
 
 // RowIter implements the Node interface.
-func (nd *sortNodeDiffer) RowIter(ctx *sql.Context) (sql.RowIter, error) {
-	panic("RowIter() cannot be called on NodeDiffer, use fromNode() and ToIter()")
+func (nd *sortNodeDiffer) RowIter(_ *sql.Context) (sql.RowIter, error) {
+	panic("RowIter() cannot be called on NodeDiffer, use FromNode() and ToNode()")
 }
 
 // WithChildren implements the Node interface.
-func (nd *sortNodeDiffer) WithChildren(children ...sql.Node) (sql.Node, error) {
+func (nd *sortNodeDiffer) WithChildren(_ ...sql.Node) (sql.Node, error) {
 	panic("unimplemented")
 }

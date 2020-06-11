@@ -16,9 +16,6 @@ package commands
 
 import (
 	"context"
-	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
-	"io"
 	"strings"
 
 	"github.com/liquidata-inc/go-mysql-server/sql"
@@ -30,9 +27,9 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
+	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/fwt"
@@ -180,43 +177,35 @@ func maybeResolve(ctx context.Context, dEnv *env.DoltEnv, spec string) (*doltdb.
 }
 
 func validateQueryDiff(ctx context.Context, dEnv *env.DoltEnv, from *doltdb.RootValue, to *doltdb.RootValue, query string) errhand.VerboseError {
-	sqlCtx, eng, err := makeSqlEngine(ctx, dEnv, to)
-	if err != nil {
-		return errhand.BuildDError("Cannot diff query, query is not ordered. Error describing query plan").AddCause(err).Build()
-	}
-
-	query = fmt.Sprintf("describe %s", query)
-	_, iter, err := processQuery(sqlCtx, query, eng)
-	if err != nil {
-		return errhand.BuildDError("Cannot diff query, query is not ordered. Error describing query plan").AddCause(err).Build()
-	}
-
-	var qp strings.Builder
-	for {
-		r, err := iter.Next()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return errhand.BuildDError("Cannot diff query, query is not ordered. Error describing query plan").AddCause(err).Build()
-		}
-		sv, _ := typeinfo.StringDefaultType.ConvertValueToNomsValue(r[0])
-		qp.WriteString(fmt.Sprintf("%s\n", string(sv.(types.String))))
-	}
-
-	return errhand.BuildDError("Cannot diff query, query is not ordered. Add ORDER BY statement.\nquery plan:\n%s", qp.String()).Build()
+	//sqlCtx, eng, err := makeSqlEngine(ctx, dEnv, to)
+	//if err != nil {
+	//	return errhand.BuildDError("Cannot diff query, query is not ordered. Error describing query plan").AddCause(err).Build()
+	//}
+	//
+	//query = fmt.Sprintf("describe %s", query)
+	//_, iter, err := processQuery(sqlCtx, query, eng)
+	//if err != nil {
+	//	return errhand.BuildDError("Cannot diff query, query is not ordered. Error describing query plan").AddCause(err).Build()
+	//}
+	//
+	//var qp strings.Builder
+	//for {
+	//	r, err := iter.Next()
+	//	if err == io.EOF {
+	//		break
+	//	} else if err != nil {
+	//		return errhand.BuildDError("Cannot diff query, query is not ordered. Error describing query plan").AddCause(err).Build()
+	//	}
+	//	sv, _ := typeinfo.StringDefaultType.ConvertValueToNomsValue(r[0])
+	//	qp.WriteString(fmt.Sprintf("%s\n", string(sv.(types.String))))
+	//}
+	//
+	//return errhand.BuildDError("Cannot diff query, query is not ordered. Add ORDER BY statement.\nquery plan:\n%s", qp.String()).Build()
+	return nil
 }
 
 func diffQuery(ctx context.Context, dEnv *env.DoltEnv, fromRoot, toRoot *doltdb.RootValue, query string) errhand.VerboseError {
-	fromCtx, fromEng, err := makeSqlEngine(ctx, dEnv, fromRoot)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-	toCtx, toEng, err := makeSqlEngine(ctx, dEnv, toRoot)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	qd, err := querydiff.MakeQueryDiffer(fromCtx, toCtx, fromEng.engine, toEng.engine, query)
+	qd, err := querydiff.MakeQueryDiffer(ctx, dEnv, fromRoot, toRoot, query)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -245,30 +234,8 @@ func diffQuery(ctx context.Context, dEnv *env.DoltEnv, fromRoot, toRoot *doltdb.
 	return errhand.VerboseErrorFromError(p.Wait())
 }
 
-const db = "db"
-
-// todo: we only need the sql.Engine
-func makeSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue) (*sql.Context, *sqlEngine, error) {
-	mrEnv := env.DoltEnvAsMultiEnv(dEnv)
-	roots := map[string]*doltdb.RootValue{db: root}
-	dbs := []sqle.Database{newDatabase(db, dEnv)}
-
-	sqlCtx := sql.NewContext(ctx,
-		sql.WithSession(sqle.DefaultDoltSession()),
-		sql.WithIndexRegistry(sql.NewIndexRegistry()),
-		sql.WithViewRegistry(sql.NewViewRegistry()))
-	sqlCtx.SetCurrentDatabase(db)
-
-	eng, err := newSqlEngine(sqlCtx, mrEnv, roots, formatTabular, dbs...)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return sqlCtx, eng, nil
-}
-
 func doltSchWithPKFromSqlSchema(sch sql.Schema) schema.Schema {
-	dSch, _ := sqle.SqlSchemaToDoltResultSchema(sch)
+	dSch, _ := dsqle.SqlSchemaToDoltResultSchema(sch)
 	// make the first col the PK
 	pk := false
 	newCC, _ := schema.MapColCollection(dSch.GetAllCols(), func(col schema.Column) (column schema.Column, err error) {
@@ -290,7 +257,7 @@ func nextQueryDiff(qd *querydiff.QueryDiffer, joiner *rowconv.Joiner) (row.Row, 
 	rows := make(map[string]row.Row)
 	if fromRow != nil {
 		sch := joiner.SchemaForName(diff.From)
-		oldRow, err := sqle.SqlRowToDoltRow(types.Format_Default, fromRow, sch)
+		oldRow, err := dsqle.SqlRowToDoltRow(types.Format_Default, fromRow, sch)
 		if err != nil {
 			return nil, pipeline.ImmutableProperties{}, err
 		}
@@ -299,7 +266,7 @@ func nextQueryDiff(qd *querydiff.QueryDiffer, joiner *rowconv.Joiner) (row.Row, 
 
 	if toRow != nil {
 		sch := joiner.SchemaForName(diff.To)
-		newRow, err := sqle.SqlRowToDoltRow(types.Format_Default, toRow, sch)
+		newRow, err := dsqle.SqlRowToDoltRow(types.Format_Default, toRow, sch)
 		if err != nil {
 			return nil, pipeline.ImmutableProperties{}, err
 		}
@@ -314,7 +281,6 @@ func nextQueryDiff(qd *querydiff.QueryDiffer, joiner *rowconv.Joiner) (row.Row, 
 	return joinedRow, pipeline.ImmutableProperties{}, nil
 }
 
-// todo: this logic was adapted from commands/diff.go, it could be simplified
 func buildQueryDiffPipeline(qd *querydiff.QueryDiffer, doltSch schema.Schema, joiner *rowconv.Joiner) (*pipeline.Pipeline, error) {
 
 	unionSch, ds, verr := createSplitter(doltSch, doltSch, joiner, &diffArgs{diffOutput: TabularDiffOutput})

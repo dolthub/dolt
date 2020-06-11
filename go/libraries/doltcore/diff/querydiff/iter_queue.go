@@ -15,9 +15,11 @@
 package querydiff
 
 import (
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
-	"github.com/liquidata-inc/go-mysql-server/sql"
 	"io"
+
+	"github.com/liquidata-inc/go-mysql-server/sql"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 )
 
 const (
