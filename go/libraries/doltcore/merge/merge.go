@@ -226,7 +226,7 @@ func calcTableMergeStats(ctx context.Context, tbl *doltdb.Table, mergeTbl *doltd
 	ch := make(chan diff.DiffSummaryProgress)
 	go func() {
 		defer close(ch)
-		err := diff.Summary(ctx, ch, mergeRows, rows)
+		err := diff.Summary(ctx, ch, rows, mergeRows)
 
 		ae.SetIfError(err)
 	}()

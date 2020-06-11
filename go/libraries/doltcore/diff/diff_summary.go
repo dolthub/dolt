@@ -28,12 +28,12 @@ type DiffSummaryProgress struct {
 }
 
 // Summary reports a summary of diff changes between two values
-func Summary(ctx context.Context, ch chan DiffSummaryProgress, v1, v2 types.Map) error {
+func Summary(ctx context.Context, ch chan DiffSummaryProgress, from, to types.Map) error {
 	ad := NewAsyncDiffer(1024)
-	ad.Start(ctx, v1, v2)
+	ad.Start(ctx, from, to)
 	defer ad.Close()
 
-	ch <- DiffSummaryProgress{OldSize: v2.Len(), NewSize: v1.Len()}
+	ch <- DiffSummaryProgress{OldSize: from.Len(), NewSize: to.Len()}
 
 	for !ad.IsDone() {
 		diffs, err := ad.GetDiffs(100, time.Millisecond)

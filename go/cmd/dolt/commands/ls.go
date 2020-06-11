@@ -115,6 +115,35 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	return HandleVErrAndExitCode(verr, usage)
 }
 
+func getRootForCommitSpecStr(ctx context.Context, csStr string, dEnv *env.DoltEnv) (string, *doltdb.RootValue, errhand.VerboseError) {
+	cs, err := doltdb.NewCommitSpec(csStr, dEnv.RepoState.CWBHeadRef().String())
+
+	if err != nil {
+		bdr := errhand.BuildDError(`"%s" is not a validly formatted branch, or commit reference.`, csStr)
+		return "", nil, bdr.AddCause(err).Build()
+	}
+
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs)
+
+	if err != nil {
+		return "", nil, errhand.BuildDError(`Unable to resolve "%s"`, csStr).AddCause(err).Build()
+	}
+
+	r, err := cm.GetRootValue()
+
+	if err != nil {
+		return "", nil, errhand.BuildDError("error: failed to get root").AddCause(err).Build()
+	}
+
+	h, err := cm.HashOf()
+
+	if err != nil {
+		return "", nil, errhand.BuildDError("error: failed to get commit hash").AddCause(err).Build()
+	}
+
+	return h.String(), r, nil
+}
+
 func printUserTables(ctx context.Context, root *doltdb.RootValue, label string, verbose bool) errhand.VerboseError {
 	tblNames, err := doltdb.GetNonSystemTableNames(ctx, root)
 
