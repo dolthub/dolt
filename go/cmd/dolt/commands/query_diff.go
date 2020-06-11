@@ -88,7 +88,7 @@ func (cmd QueryDiffCmd) Exec(ctx context.Context, commandStr string, args []stri
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, queryDiffDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
-	from, to, leftover, err := GetDiffRoots(ctx, dEnv, apr.Args())
+	from, to, leftover, err := getDiffRoots(ctx, dEnv, apr.Args())
 
 	var verr errhand.VerboseError
 	if err != nil {
@@ -109,7 +109,7 @@ func (cmd QueryDiffCmd) Exec(ctx context.Context, commandStr string, args []stri
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func GetDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string) (from, to *doltdb.RootValue, leftover []string, err error) {
+func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string) (from, to *doltdb.RootValue, leftover []string, err error) {
 	headRoot, err := dEnv.StagedRoot(ctx)
 	if err != nil {
 		return nil, nil, nil, err
@@ -177,30 +177,7 @@ func maybeResolve(ctx context.Context, dEnv *env.DoltEnv, spec string) (*doltdb.
 }
 
 func validateQueryDiff(ctx context.Context, dEnv *env.DoltEnv, from *doltdb.RootValue, to *doltdb.RootValue, query string) errhand.VerboseError {
-	//sqlCtx, eng, err := makeSqlEngine(ctx, dEnv, to)
-	//if err != nil {
-	//	return errhand.BuildDError("Cannot diff query, query is not ordered. Error describing query plan").AddCause(err).Build()
-	//}
-	//
-	//query = fmt.Sprintf("describe %s", query)
-	//_, iter, err := processQuery(sqlCtx, query, eng)
-	//if err != nil {
-	//	return errhand.BuildDError("Cannot diff query, query is not ordered. Error describing query plan").AddCause(err).Build()
-	//}
-	//
-	//var qp strings.Builder
-	//for {
-	//	r, err := iter.Next()
-	//	if err == io.EOF {
-	//		break
-	//	} else if err != nil {
-	//		return errhand.BuildDError("Cannot diff query, query is not ordered. Error describing query plan").AddCause(err).Build()
-	//	}
-	//	sv, _ := typeinfo.StringDefaultType.ConvertValueToNomsValue(r[0])
-	//	qp.WriteString(fmt.Sprintf("%s\n", string(sv.(types.String))))
-	//}
-	//
-	//return errhand.BuildDError("Cannot diff query, query is not ordered. Add ORDER BY statement.\nquery plan:\n%s", qp.String()).Build()
+
 	return nil
 }
 

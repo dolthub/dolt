@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	sqle "github.com/liquidata-inc/go-mysql-server"
 	"github.com/liquidata-inc/go-mysql-server/sql"
@@ -49,7 +50,7 @@ func MakeQueryDiffer(ctx context.Context, dEnv *env.DoltEnv, fromRoot, toRoot *d
 		return nil, err
 	}
 
-	from, to, err := hackThatPlan(fromCtx, toCtx, fromEng, toEng, query)
+	from, to, err := modifyQueryPlans(fromCtx, toCtx, fromEng, toEng, query)
 	if err != nil {
 		return nil, err
 	}
@@ -125,8 +126,7 @@ type NodeDiffer interface {
 	ToNode() sql.Node
 }
 
-// todo: consult Engine.Query() for logic re: perms, catalog
-func hackThatPlan(fromCtx *sql.Context, toCtx *sql.Context, fromEng *sqle.Engine, toEng *sqle.Engine, query string) (fromPlan, toPlan sql.Node, err error) {
+func modifyQueryPlans(fromCtx *sql.Context, toCtx *sql.Context, fromEng *sqle.Engine, toEng *sqle.Engine, query string) (fromPlan, toPlan sql.Node, err error) {
 	parsed, err := parse.Parse(fromCtx, query)
 	if err != nil {
 		return nil, nil, err
@@ -134,14 +134,23 @@ func hackThatPlan(fromCtx *sql.Context, toCtx *sql.Context, fromEng *sqle.Engine
 
 	fromPlan, err = fromEng.Analyzer.Analyze(fromCtx, parsed)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("error executing query on from root: %s", err.Error())
 	}
-	toPlan, err = toEng.Analyzer.Analyze(toCtx, parsed)
+	err = recursiveValidateQueryPlan(fromPlan)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, errWithQueryPlan(fromCtx, fromEng, query, err)
 	}
 
-	fromPlan, toPlan, err = recurseModifyPlans(fromCtx, toCtx, fromPlan, toPlan)
+	toPlan, err = toEng.Analyzer.Analyze(toCtx, parsed)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error executing query on to root: %s", err.Error())
+	}
+	err = recursiveValidateQueryPlan(toPlan)
+	if err != nil {
+		return nil, nil, errWithQueryPlan(toCtx, toEng, query, err)
+	}
+
+	fromPlan, toPlan, err = recursiveModifyQueryPlans(fromCtx, toCtx, fromPlan, toPlan)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -149,7 +158,20 @@ func hackThatPlan(fromCtx *sql.Context, toCtx *sql.Context, fromEng *sqle.Engine
 	return fromPlan, toPlan, nil
 }
 
-func recurseModifyPlans(fromCtx, toCtx *sql.Context, from, to sql.Node) (modFrom, modTo sql.Node, err error) {
+func recursiveValidateQueryPlan(p sql.Node) error {
+	switch p.(type) {
+	case *plan.Sort:
+		return nil
+	default:
+		cc := p.Children()
+		if cc == nil {
+			return fmt.Errorf("query plan does not contain a sort node")
+		}
+		return recursiveValidateQueryPlan(cc[0])
+	}
+}
+
+func recursiveModifyQueryPlans(fromCtx, toCtx *sql.Context, from, to sql.Node) (modFrom, modTo sql.Node, err error) {
 	switch from.(type) {
 	case *plan.Sort:
 		nd, err := newSortNodeDiffer(fromCtx, toCtx, from.(*plan.Sort), to.(*plan.Sort))
@@ -161,9 +183,9 @@ func recurseModifyPlans(fromCtx, toCtx *sql.Context, from, to sql.Node) (modFrom
 		fc := from.Children()
 		tc := to.Children()
 		if fc == nil || tc == nil {
-			return nil, nil, fmt.Errorf("reached bottom of query plan")
+			panic("query plan does not contain a sort node")
 		}
-		fc[0], tc[0], err = recurseModifyPlans(fromCtx, toCtx, fc[0], tc[0])
+		fc[0], tc[0], err = recursiveModifyQueryPlans(fromCtx, toCtx, fc[0], tc[0])
 		if err != nil {
 			return nil, nil, err
 		}
@@ -211,4 +233,25 @@ func makeSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValu
 	}
 
 	return sqlCtx, engine, nil
+}
+
+func errWithQueryPlan(ctx *sql.Context, eng *sqle.Engine, query string, cause error) error {
+	_, iter, err := eng.Query(ctx, fmt.Sprintf("describe %s", query))
+	if err != nil {
+		return fmt.Errorf("cannot diff query. Error describing query plan: %s\n", err.Error())
+	}
+
+	var qp strings.Builder
+	qp.WriteString("query plan:\n")
+	for {
+		r, err := iter.Next()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return fmt.Errorf("cannot diff query. Error describing query plan: %s\n", err.Error())
+		}
+		qp.WriteString(fmt.Sprintf("\t%s\n", r[0].(string)))
+	}
+
+	return fmt.Errorf("cannot diff query: %s\n%s", cause.Error(), qp.String())
 }

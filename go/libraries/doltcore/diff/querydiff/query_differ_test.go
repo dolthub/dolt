@@ -52,6 +52,7 @@ var setupCommon = []testCommand{
 	{commands.SqlCmd{}, []string{"-q", "create table quiz (pk int not null primary key, c0 int)"}},
 	{commands.SqlCmd{}, []string{"-q", "insert into quiz values (0,10), (1,11), (2,22), (3,33)"}},
 	{commands.AddCmd{}, []string{"."}},
+	{commands.CommitCmd{}, []string{"-m", "setup common"}},
 }
 
 var queryDifferTests = []queryDifferTest{
@@ -133,7 +134,7 @@ func testQueryDiffer(t *testing.T, test queryDifferTest) {
 		assert.Equal(t, 0, exitCode)
 	}
 
-	fromRoot, err := dEnv.StagedRoot(ctx)
+	fromRoot, err := dEnv.HeadRoot(ctx)
 	require.NoError(t, err)
 	toRoot, err := dEnv.WorkingRoot(ctx)
 	require.NoError(t, err)

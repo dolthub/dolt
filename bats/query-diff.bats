@@ -45,8 +45,7 @@ teardown() {
     dolt add .
     dolt commit -m rows
     dolt sql -q 'update quiz set c2 = "1" where pk = 0'
-    dolt query_diff 'select test.pk, test.c1, test.c2, quiz.pk, quiz.c1 from test join quiz on test.c2 = quiz.c2 order by test.c2'
-    run dolt query_diff 'select test.pk, test.c1, test.c2, quiz.pk, quiz.c1 from test join quiz on test.c2 = quiz.c2 order by test.c2'
+    run dolt query_diff 'select test.pk, test.c1, test.c2, quiz.pk, quiz.c1 from test join quiz on test.c2 = quiz.c2 order by test.pk, quiz.pk'
     [ "$status" -eq 0 ]
     [[ "$output" =~ "|     | pk | c1 | c2 | pk | c1 |" ]]
     [[ "$output" =~ "|  -  | 0  | 0  | 0  | 0  | 0  |" ]]
@@ -65,4 +64,23 @@ teardown() {
     [[ "$output" =~ "|     | pk | c1 | c2 |" ]]
     [[ "$output" =~ "|  -  | 1  | 1  | 1  |" ]]
     [[ "$output" =~ "|  +  | 2  | 2  | 2  |" ]]
+}
+
+@test "dolt query_diff query error" {
+    dolt add .
+    dolt commit -m 'added tables'
+    run dolt query_diff head^ head 'select * from test order by pk'
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "error executing query on from root" ]]
+    run dolt query_diff head head^ 'select * from test order by pk'
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "error executing query on to root" ]]
+}
+
+@test "dolt query diff prints query plan if query is undiffable" {
+    dolt add .
+    dolt commit -m rows
+    run dolt query_diff 'select * from test'
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "query plan:" ]]
 }
