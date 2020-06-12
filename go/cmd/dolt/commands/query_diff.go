@@ -40,7 +40,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-//var diffDocs = cli.CommandDocumentationContent{
+// todo
 var queryDiffDocs = cli.CommandDocumentationContent{
 	ShortDesc: "",
 	LongDesc:  "",
@@ -73,6 +73,7 @@ func (cmd QueryDiffCmd) RequiresRepo() bool {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd QueryDiffCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	// todo
 	return nil
 }
 
@@ -107,78 +108,6 @@ func (cmd QueryDiffCmd) Exec(ctx context.Context, commandStr string, args []stri
 	verr = diffQuery(ctx, dEnv, from, to, leftover[0])
 
 	return HandleVErrAndExitCode(verr, usage)
-}
-
-func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string) (from, to *doltdb.RootValue, leftover []string, err error) {
-	headRoot, err := dEnv.StagedRoot(ctx)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	//workingRoot, err := dEnv.WorkingRootWithDocs(ctx) // todo: uncomment
-	workingRoot, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	if len(args) == 0 {
-		// `dolt diff`
-		from = headRoot
-		to = workingRoot
-		return from, to, nil, nil
-	}
-
-	from, ok := maybeResolve(ctx, dEnv, args[0])
-
-	if !ok {
-		// `dolt diff ...tables`
-		from = headRoot
-		to = workingRoot
-		leftover = args
-		return from, to, leftover, nil
-	}
-
-	if len(args) == 1 {
-		// `dolt diff from_commit`
-		to = workingRoot
-		return from, to, nil, nil
-	}
-
-	to, ok = maybeResolve(ctx, dEnv, args[1])
-
-	if !ok {
-		// `dolt diff from_commit ...tables`
-		to = workingRoot
-		leftover = args[1:]
-		return from, to, leftover, nil
-	}
-
-	// `dolt diff from_commit to_commit ...tables`
-	leftover = args[2:]
-	return from, to, leftover, nil
-}
-
-func maybeResolve(ctx context.Context, dEnv *env.DoltEnv, spec string) (*doltdb.RootValue, bool) {
-	cs, err := doltdb.NewCommitSpec(spec, dEnv.RepoState.CWBHeadRef().String())
-	if err != nil {
-		return nil, false
-	}
-
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs)
-	if err != nil {
-		return nil, false
-	}
-
-	root, err := cm.GetRootValue()
-	if err != nil {
-		return nil, false
-	}
-
-	return root, true
-}
-
-func validateQueryDiff(ctx context.Context, dEnv *env.DoltEnv, from *doltdb.RootValue, to *doltdb.RootValue, query string) errhand.VerboseError {
-
-	return nil
 }
 
 func diffQuery(ctx context.Context, dEnv *env.DoltEnv, fromRoot, toRoot *doltdb.RootValue, query string) errhand.VerboseError {
