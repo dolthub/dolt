@@ -121,11 +121,6 @@ func (qd *QueryDiffer) Close() error {
 	return toErr
 }
 
-type NodeDiffer interface {
-	FromNode() sql.Node
-	ToNode() sql.Node
-}
-
 func modifyQueryPlans(fromCtx *sql.Context, toCtx *sql.Context, fromEng *sqle.Engine, toEng *sqle.Engine, query string) (fromPlan, toPlan sql.Node, err error) {
 	parsed, err := parse.Parse(fromCtx, query)
 	if err != nil {
@@ -178,7 +173,7 @@ func recursiveModifyQueryPlans(fromCtx, toCtx *sql.Context, from, to sql.Node) (
 		if err != nil {
 			return nil, nil, err
 		}
-		modFrom, modTo = nd.FromNode(), nd.ToNode()
+		modFrom, modTo = nd.makeFromNode(), nd.makeToNode()
 	default:
 		fc := from.Children()
 		tc := to.Children()

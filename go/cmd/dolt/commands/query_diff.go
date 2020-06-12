@@ -82,7 +82,6 @@ func (cmd QueryDiffCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
-// Version displays the version of the running dolt client
 // Exec executes the command
 func (cmd QueryDiffCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()

@@ -33,7 +33,19 @@ const (
 	unknown rowCmp = math.MaxInt32
 )
 
-func newSortNodeDiffer(fromCtx, toCtx *sql.Context, from, to *plan.Sort) (NodeDiffer, error) {
+// nodeDiffer is used to create a modified query plan to be used by
+// QueryDiffer to diff a query.
+// Given two identical query plans ("from", "to") created from two
+// RootValues, a nodeDiffer is injected at the query plan Node where
+// the query results are "orderable". The nodeDiffer iterates over
+// the child query nodes, diffs their results and passes the diffed
+// rows to its parent nodes through synthetic "from" and "to" Nodes.
+type nodeDiffer interface {
+	makeFromNode() sql.Node
+	makeToNode() sql.Node
+}
+
+func newSortNodeDiffer(fromCtx, toCtx *sql.Context, from, to *plan.Sort) (nodeDiffer, error) {
 	fromIter, err := from.RowIter(fromCtx)
 	if err != nil {
 		return nil, err
@@ -47,27 +59,26 @@ func newSortNodeDiffer(fromCtx, toCtx *sql.Context, from, to *plan.Sort) (NodeDi
 	ae := atomicerr.New()
 
 	return &sortNodeDiffer{
-		fromNode: from,
-		toNode:   to,
-		fromIter: newIterQueue(fromIter, ae),
-		toIter:   newIterQueue(toIter, ae),
-		lastCmp:  unknown,
-		ae:       ae,
+		fromChild: from,
+		toChild:   to,
+		fromIter:  newIterQueue(fromIter, ae),
+		toIter:    newIterQueue(toIter, ae),
+		lastCmp:   unknown,
+		ae:        ae,
 	}, nil
 }
 
 type sortNodeDiffer struct {
-	// todo: do we need two contexts?
-	ctx      *sql.Context
-	fromNode *plan.Sort
-	toNode   *plan.Sort
-	fromIter *iterQueue
-	toIter   *iterQueue
-	lastCmp  rowCmp
-	ae       *atomicerr.AtomicError
+	ctx       *sql.Context
+	fromChild *plan.Sort
+	toChild   *plan.Sort
+	fromIter  *iterQueue
+	toIter    *iterQueue
+	lastCmp   rowCmp
+	ae        *atomicerr.AtomicError
 }
 
-var _ NodeDiffer = &sortNodeDiffer{}
+var _ nodeDiffer = &sortNodeDiffer{}
 
 func (nd *sortNodeDiffer) nextFromRow() (sql.Row, error) {
 	nd.fromIter.maybeStart()
@@ -138,7 +149,7 @@ func (nd *sortNodeDiffer) rowCompare(left, right sql.Row) (rowCmp, error) {
 		panic("nil rows cannot be compared")
 	}
 
-	for _, sf := range nd.fromNode.SortFields {
+	for _, sf := range nd.fromChild.SortFields {
 		typ := sf.Column.Type()
 		lv, err := sf.Column.Eval(nd.ctx, left)
 		if err != nil {
@@ -207,9 +218,9 @@ func (w rowIterWrapper) Close() error {
 	return w.close()
 }
 
-func (nd *sortNodeDiffer) FromNode() sql.Node {
+func (nd *sortNodeDiffer) makeFromNode() sql.Node {
 	return sqlNodeWrapper{
-		Node: nd.fromNode,
+		Node: nd.fromChild,
 		iter: rowIterWrapper{
 			next: func() (row sql.Row, err error) {
 				return nd.nextFromRow()
@@ -221,32 +232,22 @@ func (nd *sortNodeDiffer) FromNode() sql.Node {
 	}
 }
 
-func (nd *sortNodeDiffer) ToNode() sql.Node {
+func (nd *sortNodeDiffer) makeToNode() sql.Node {
 	return sqlNodeWrapper{
-		Node: nd.toNode,
+		Node: nd.toChild,
 		iter: rowIterWrapper{
 			next: func() (row sql.Row, err error) {
 				return nd.nextToRow()
 			},
 			close: func() error {
-				return nd.Close()
+				return nd.close()
 			},
 		},
 	}
 }
 
-func (nd *sortNodeDiffer) Close() error {
+func (nd *sortNodeDiffer) close() error {
 	nd.fromIter.close()
 	nd.toIter.close()
 	return nd.ae.Get()
-}
-
-// RowIter implements the Node interface.
-func (nd *sortNodeDiffer) RowIter(_ *sql.Context) (sql.RowIter, error) {
-	panic("RowIter() cannot be called on NodeDiffer, use FromNode() and ToNode()")
-}
-
-// WithChildren implements the Node interface.
-func (nd *sortNodeDiffer) WithChildren(_ ...sql.Node) (sql.Node, error) {
-	panic("unimplemented")
 }
