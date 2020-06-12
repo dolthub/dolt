@@ -195,7 +195,7 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	dArgs.limit, _ = apr.GetInt(limitParam)
 	dArgs.where = apr.GetValueOrDefault(whereParam, "")
 
-	from, to, leftover, err := getRoots(ctx, dEnv, apr.Args())
+	from, to, leftover, err := getDiffRoots(ctx, dEnv, apr.Args())
 
 	if err != nil {
 		return nil, nil, nil, err
@@ -242,7 +242,7 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	return from, to, dArgs, nil
 }
 
-func getRoots(ctx context.Context, dEnv *env.DoltEnv, args []string) (from, to *doltdb.RootValue, leftover []string, err error) {
+func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string) (from, to *doltdb.RootValue, leftover []string, err error) {
 	headRoot, err := dEnv.StagedRoot(ctx)
 	workingRoot, err := dEnv.WorkingRootWithDocs(ctx)
 	if err != nil {
