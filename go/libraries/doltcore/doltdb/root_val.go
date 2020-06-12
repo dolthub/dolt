@@ -348,7 +348,6 @@ func (root *RootValue) getSuperSchemaAtLastCommit(ctx context.Context, tName str
 	return ss, true, nil
 }
 
-// TODO: get or create from history of root
 func (root *RootValue) getOrCreateSuperSchemaMap(ctx context.Context) (types.Map, error) {
 	v, found, err := root.valueSt.MaybeGet(superSchemasKey)
 
@@ -556,6 +555,44 @@ func (root *RootValue) HasConflicts(ctx context.Context) (bool, error) {
 	}
 
 	return len(cnfTbls) > 0, nil
+}
+
+// IterTables calls the callback function cb on each table in this RootValue.
+func (root *RootValue) IterTables(ctx context.Context, cb func(name string, table *Table) (stop bool, err error)) error {
+	tm, err := root.getTableMap()
+
+	if err != nil {
+		return err
+	}
+
+	itr, err := tm.Iterator(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	for {
+		nm, tableRef, err := itr.Next(ctx)
+
+		if err != nil || nm == nil || tableRef == nil {
+			return err
+		}
+
+		tableStruct, err := tableRef.(types.Ref).TargetValue(ctx, root.vrw)
+
+		if err != nil {
+			return err
+		}
+
+		name := string(nm.(types.String))
+		table := &Table{root.vrw, tableStruct.(types.Struct)}
+
+		stop, err := cb(name, table)
+
+		if err != nil || stop {
+			return err
+		}
+	}
 }
 
 // PutSuperSchema writes a new map entry for the table name and super schema supplied, it will overwrite an existing entry.

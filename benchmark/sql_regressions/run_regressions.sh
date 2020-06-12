@@ -170,6 +170,12 @@ select * from releases_dolt_mean_results;\
 " > releases_mean.csv
     rm -f regressions_db
     touch regressions_db
+
+    # sqlite3 requires the headers to be trimmed on import
+    # otherwise it will add them as data
+    sed 1d nightly_mean.csv > headerless_nightly_mean.csv
+    sed 1d releases_mean.csv > headerless_releases_mean.csv
+
     sqlite3 regressions_db < ../"$logictest"/regressions.sql
     cp ../"$logictest"/import.sql .
     sqlite3 regressions_db < import.sql
@@ -181,8 +187,9 @@ select * from releases_dolt_mean_results;\
     duration_regressions=`echo $duration_query_output | sed '/^\s*$/d' | wc -l | tr -d '[:space:]'`
     result_regressions=`echo $result_query_output | sed '/^\s*$/d' | wc -l | tr -d '[:space:]'`
 
-    if [ "$duration_regressions" != 0 ]; then echo "Duration regression found, $duration_regressions != 0" && echo $duration_query_output && exit 1; else echo "No duration regressions found"; fi
-    if [ "$result_regressions" != 0 ]; then echo "Result regression found, $result_regressions != 0" && echo $result_query_output && exit 1; else echo "No result regressions found"; fi
+    if [ "$duration_regressions" != 0 ]; then echo "Duration regression found, $duration_regressions != 0" && echo $duration_query_output; else echo "No duration regressions found"; fi
+    if [ "$result_regressions" != 0 ]; then echo "Result regression found, $result_regressions != 0" && echo $result_query_output; else echo "No result regressions found"; fi
+    if [ "$duration_regressions" != 0 ] || [ "$result_regressions" != 0 ]; then exit 1; fi
 }
 
 function with_dolt_release() {

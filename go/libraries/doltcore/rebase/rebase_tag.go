@@ -476,7 +476,7 @@ func replayRowDiffs(ctx context.Context, vrw types.ValueReadWriter, rSch schema.
 
 	ad := diff.NewAsyncDiffer(diffBufSize)
 	// get all differences (including merges) between original commit and its parent
-	ad.Start(ctx, rows, parentRows)
+	ad.Start(ctx, parentRows, rows)
 	defer ad.Close()
 
 	for {

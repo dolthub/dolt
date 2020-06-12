@@ -48,14 +48,14 @@ func tableDontDescendLists(v1, v2 types.Value) bool {
 	return !types.IsPrimitiveKind(kind) && kind != types.TupleKind && kind == v2.Kind() && kind != types.RefKind
 }
 
-func (ad *AsyncDiffer) Start(ctx context.Context, v1, v2 types.Map) {
+func (ad *AsyncDiffer) Start(ctx context.Context, from, to types.Map) {
 	go func() {
 		defer close(ad.diffChan)
 		defer func() {
 			// Ignore a panic from Diff...
 			recover()
 		}()
-		diff.Diff(ctx, ad.ae, v2, v1, ad.diffChan, ad.stopChan, true, tableDontDescendLists)
+		diff.Diff(ctx, ad.ae, from, to, ad.diffChan, ad.stopChan, true, tableDontDescendLists)
 	}()
 }
 

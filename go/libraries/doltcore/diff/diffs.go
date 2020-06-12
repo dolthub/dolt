@@ -20,6 +20,9 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 type TableDiffType int
@@ -88,18 +91,33 @@ func (rvu RootValueUnreadable) Error() string {
 	return "error: Unable to read " + rvu.rootType.String()
 }
 
+// NewTableDiffs returns the TableDiffs between two roots.
 func NewTableDiffs(ctx context.Context, newer, older *doltdb.RootValue) (*TableDiffs, error) {
-	added, modified, removed, err := newer.TableDiff(ctx, older)
+	deltas, err := GetTableDeltas(ctx, older, newer)
 
 	if err != nil {
 		return nil, err
+	}
+
+	var added []string
+	var modified []string
+	var removed []string
+
+	for _, d := range deltas {
+		switch {
+		case d.IsAdd():
+			added = append(added, d.ToName)
+		case d.IsDrop():
+			removed = append(removed, d.FromName)
+		default:
+			modified = append(modified, d.ToName)
+		}
 	}
 
 	var tbls []string
 	tbls = append(tbls, added...)
 	tbls = append(tbls, modified...)
 	tbls = append(tbls, removed...)
-	sort.Strings(tbls)
 
 	tblToType := make(map[string]TableDiffType)
 	for _, tbl := range added {
@@ -114,6 +132,8 @@ func NewTableDiffs(ctx context.Context, newer, older *doltdb.RootValue) (*TableD
 		tblToType[tbl] = RemovedTable
 	}
 
+	sort.Strings(tbls)
+
 	return &TableDiffs{len(added), len(modified), len(removed), tblToType, tbls}, err
 }
 
@@ -121,6 +141,7 @@ func (td *TableDiffs) Len() int {
 	return len(td.Tables)
 }
 
+// GetTableDiffs returns the staged and unstaged TableDiffs for the repo.
 func GetTableDiffs(ctx context.Context, dEnv *env.DoltEnv) (*TableDiffs, *TableDiffs, error) {
 	headRoot, err := dEnv.HeadRoot(ctx)
 
@@ -155,6 +176,7 @@ func GetTableDiffs(ctx context.Context, dEnv *env.DoltEnv) (*TableDiffs, *TableD
 	return stagedDiffs, notStagedDiffs, nil
 }
 
+// NewDocDiffs returns DocDiffs for Dolt Docs between two roots.
 func NewDocDiffs(ctx context.Context, dEnv *env.DoltEnv, older *doltdb.RootValue, newer *doltdb.RootValue, docDetails []doltdb.DocDetails) (*DocDiffs, error) {
 	var added []string
 	var modified []string
@@ -200,6 +222,7 @@ func NewDocDiffs(ctx context.Context, dEnv *env.DoltEnv, older *doltdb.RootValue
 	return &DocDiffs{len(added), len(modified), len(removed), docsToType, docs}, nil
 }
 
+// Len returns the number of docs in a DocDiffs
 func (nd *DocDiffs) Len() int {
 	return len(nd.Docs)
 }
@@ -237,4 +260,142 @@ func GetDocDiffs(ctx context.Context, dEnv *env.DoltEnv) (*DocDiffs, *DocDiffs, 
 	}
 
 	return stagedDocDiffs, notStagedDocDiffs, nil
+}
+
+type TableDelta struct {
+	FromName  string
+	ToName    string
+	FromTable *doltdb.Table
+	ToTable   *doltdb.Table
+}
+
+// GetTableDeltas returns a list of TableDelta objects for each table that changed between fromRoot and toRoot.
+func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) ([]TableDelta, error) {
+	var deltas []TableDelta
+	fromTable := make(map[uint64]*doltdb.Table)
+	fromTableNames := make(map[uint64]string)
+	fromTableHashes := make(map[uint64]hash.Hash)
+
+	err := fromRoot.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
+		sch, err := table.GetSchema(ctx)
+		if err != nil {
+			return true, err
+		}
+
+		th, err := table.HashOf()
+		if err != nil {
+			return true, err
+		}
+
+		pkTag := sch.GetPKCols().GetColumns()[0].Tag
+		fromTable[pkTag] = table
+		fromTableNames[pkTag] = name
+		fromTableHashes[pkTag] = th
+		return false, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = toRoot.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
+		sch, err := table.GetSchema(ctx)
+		if err != nil {
+			return true, err
+		}
+
+		th, err := table.HashOf()
+		if err != nil {
+			return true, err
+		}
+
+		pkTag := sch.GetPKCols().GetColumns()[0].Tag
+		oldName, ok := fromTableNames[pkTag]
+
+		if !ok {
+			deltas = append(deltas, TableDelta{ToName: name, ToTable: table})
+		} else if oldName != name || fromTableHashes[pkTag] != th {
+			deltas = append(deltas, TableDelta{
+				ToName:    name,
+				FromName:  fromTableNames[pkTag],
+				ToTable:   table,
+				FromTable: fromTable[pkTag],
+			})
+		}
+
+		if ok {
+			delete(fromTableNames, pkTag) // consume table name
+		}
+
+		return false, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// all unmatched tables in fromRoot must have been dropped
+	for pkTag, oldName := range fromTableNames {
+		deltas = append(deltas, TableDelta{FromName: oldName, FromTable: fromTable[pkTag]})
+	}
+
+	return deltas, nil
+}
+
+// IsAdd returns true if the table was added between the fromRoot and toRoot.
+func (td TableDelta) IsAdd() bool {
+	return td.FromTable == nil && td.ToTable != nil
+}
+
+// IsDrop returns true if the table was dropped between the fromRoot and toRoot.
+func (td TableDelta) IsDrop() bool {
+	return td.FromTable != nil && td.ToTable == nil
+}
+
+// GetSchemas returns the table's schema at the fromRoot and toRoot, or schema.Empty if the table did not exist.
+func (td TableDelta) GetSchemas(ctx context.Context) (from, to schema.Schema, err error) {
+	if td.FromTable != nil {
+		from, err = td.FromTable.GetSchema(ctx)
+
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		from = schema.EmptySchema
+	}
+
+	if td.ToTable != nil {
+		to, err = td.ToTable.GetSchema(ctx)
+
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		to = schema.EmptySchema
+	}
+
+	return from, to, nil
+}
+
+// GetMaps returns the table's row map at the fromRoot and toRoot, or and empty map if the table did not exist.
+func (td TableDelta) GetMaps(ctx context.Context) (from, to types.Map, err error) {
+	if td.FromTable != nil {
+		from, err = td.FromTable.GetRowData(ctx)
+		if err != nil {
+			return from, to, err
+		}
+	} else {
+		from, _ = types.NewMap(ctx, td.ToTable.ValueReadWriter())
+	}
+
+	if td.ToTable != nil {
+		to, err = td.ToTable.GetRowData(ctx)
+		if err != nil {
+			return from, to, err
+		}
+	} else {
+		to, _ = types.NewMap(ctx, td.FromTable.ValueReadWriter())
+	}
+
+	return from, to, nil
 }

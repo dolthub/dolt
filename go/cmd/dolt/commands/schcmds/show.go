@@ -165,6 +165,6 @@ func printTblSchema(ctx context.Context, cmStr string, tblName string, tbl *dolt
 		return errhand.BuildDError("unable to get schema").AddCause(err).Build()
 	}
 
-	cli.Println(sqlfmt.SchemaAsCreateStmt(tblName, sch))
+	cli.Println(sqlfmt.CreateTableStmtWithTags(tblName, sch))
 	return nil
 }

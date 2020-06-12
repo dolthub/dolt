@@ -288,7 +288,7 @@ type commitInfo struct {
 
 func newDiffRowItr(ctx context.Context, joiner *rowconv.Joiner, rowDataFrom, rowDataTo types.Map, convFrom, convTo *rowconv.RowConverter, from, to commitInfo) *diffRowItr {
 	ad := diff.NewAsyncDiffer(1024)
-	ad.Start(ctx, rowDataTo, rowDataFrom)
+	ad.Start(ctx, rowDataFrom, rowDataTo)
 
 	src := diff.NewRowDiffSource(ad, joiner)
 	src.AddInputRowConversion(convFrom, convTo)

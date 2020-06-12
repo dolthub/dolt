@@ -25,7 +25,7 @@ import (
 func TestDiffSchemas(t *testing.T) {
 	oldCols := []schema.Column{
 		schema.NewColumn("unchanged", 0, types.StringKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn("removed", 1, types.StringKind, true),
+		schema.NewColumn("dropped", 1, types.StringKind, true),
 		schema.NewColumn("renamed", 2, types.StringKind, false),
 		schema.NewColumn("type_changed", 3, types.StringKind, false),
 		schema.NewColumn("moved_to_pk", 4, types.StringKind, false),

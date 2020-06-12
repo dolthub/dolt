@@ -285,7 +285,7 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	}
 
 	tblName := impArgs.tableName
-	cli.Println(sqlfmt.SchemaAsCreateStmt(tblName, sch))
+	cli.Println(sqlfmt.CreateTableStmtWithTags(tblName, sch))
 
 	if !apr.Contains(dryRunFlag) {
 		tbl, tblExists, err := root.GetTable(ctx, tblName)

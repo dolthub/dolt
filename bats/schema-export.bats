@@ -82,3 +82,12 @@ teardown() {
     [[ ! "$output" =~ "working" ]] || false
     [[ ! "$output" =~ "dolt_" ]] || false
 }
+
+@test "dolt schema export --with-tags" {
+    run dolt schema export
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "COMMENT 'tag:" ]] || false
+    run dolt schema export --with-tags
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "COMMENT 'tag:" ]] || false
+}
