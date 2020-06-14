@@ -43,7 +43,7 @@ func createTestSchema() schema.Schema {
 
 	colColl, _ := schema.NewColCollection(columns...)
 	sch := schema.SchemaFromCols(colColl)
-	_, _ = sch.Indexes().AddIndexByColTags("idx_age", []uint64{3}, false, "")
+	_, _ = sch.Indexes().AddIndexByColTags("idx_age", []uint64{3}, schema.IndexProperties{IsUnique: false, IsHidden: false, Comment: ""})
 	return sch
 }
 
@@ -231,6 +231,7 @@ type testEncodedIndex struct {
 	Tags    []uint64 `noms:"tags" json:"tags"`
 	Comment string   `noms:"comment" json:"comment"`
 	Unique  bool     `noms:"unique" json:"unique"`
+	Hidden  bool     `noms:"hidden,omitempty" json:"hidden,omitempty"`
 }
 
 type testSchemaData struct {
@@ -276,7 +277,7 @@ func (tsd testSchemaData) decodeSchema() (schema.Schema, error) {
 	sch := schema.SchemaFromCols(colColl)
 
 	for _, encodedIndex := range tsd.IndexCollection {
-		_, err = sch.Indexes().AddIndexByColTags(encodedIndex.Name, encodedIndex.Tags, encodedIndex.Unique, encodedIndex.Comment)
+		_, err = sch.Indexes().AddIndexByColTags(encodedIndex.Name, encodedIndex.Tags, schema.IndexProperties{IsUnique: encodedIndex.Unique, IsHidden: encodedIndex.Hidden, Comment: encodedIndex.Comment})
 		if err != nil {
 			return nil, err
 		}

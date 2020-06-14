@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 )
 
@@ -68,22 +70,22 @@ func FmtColTagComment(tag uint64) string {
 }
 
 // CreateTableStmtWithTags generates a SQL CREATE TABLE command
-func CreateTableStmt(tableName string, sch schema.Schema) string {
+func CreateTableStmt(tableName string, sch schema.Schema, foreignKeys []*doltdb.DisplayForeignKey) string {
 	return createTableStmt(tableName, sch, func(col schema.Column) string {
 		return FmtCol(2, 0, 0, col)
-	})
+	}, foreignKeys)
 }
 
 // CreateTableStmtWithTags generates a SQL CREATE TABLE command that includes the column tags as comments
-func CreateTableStmtWithTags(tableName string, sch schema.Schema) string {
+func CreateTableStmtWithTags(tableName string, sch schema.Schema, foreignKeys []*doltdb.DisplayForeignKey) string {
 	return createTableStmt(tableName, sch, func(col schema.Column) string {
 		return FmtColWithTag(2, 0, 0, col)
-	})
+	}, foreignKeys)
 }
 
 type fmtColFunc func(col schema.Column) string
 
-func createTableStmt(tableName string, sch schema.Schema, fmtCol fmtColFunc) string {
+func createTableStmt(tableName string, sch schema.Schema, fmtCol fmtColFunc, foreignKeys []*doltdb.DisplayForeignKey) string {
 
 	sb := &strings.Builder{}
 	sb.WriteString(fmt.Sprintf("CREATE TABLE %s (\n", QuoteIdentifier(tableName)))
@@ -117,6 +119,9 @@ func createTableStmt(tableName string, sch schema.Schema, fmtCol fmtColFunc) str
 	sb.WriteRune(')')
 
 	for _, index := range sch.Indexes().AllIndexes() {
+		if index.IsHidden() {
+			continue
+		}
 		sb.WriteString(",\n  ")
 		if index.IsUnique() {
 			sb.WriteString("UNIQUE ")
@@ -134,6 +139,36 @@ func createTableStmt(tableName string, sch schema.Schema, fmtCol fmtColFunc) str
 		if len(index.Comment()) > 0 {
 			sb.WriteString(" COMMENT ")
 			sb.WriteString(QuoteComment(index.Comment()))
+		}
+	}
+
+	for _, foreignKey := range foreignKeys {
+		sb.WriteString(",\n  CONSTRAINT ")
+		sb.WriteString(QuoteIdentifier(foreignKey.Name))
+		sb.WriteString(" FOREIGN KEY (")
+		for i, fkColName := range foreignKey.TableColumns {
+			if i != 0 {
+				sb.WriteRune(',')
+			}
+			sb.WriteString(QuoteIdentifier(fkColName))
+		}
+		sb.WriteString(")\n    REFERENCES ")
+		sb.WriteString(QuoteIdentifier(foreignKey.ReferencedTableName))
+		sb.WriteString(" (")
+		for i, fkColName := range foreignKey.ReferencedTableColumns {
+			if i != 0 {
+				sb.WriteRune(',')
+			}
+			sb.WriteString(QuoteIdentifier(fkColName))
+		}
+		sb.WriteRune(')')
+		if foreignKey.OnDelete != doltdb.ForeignKeyReferenceOption_DefaultAction {
+			sb.WriteString("\n    ON DELETE ")
+			sb.WriteString(foreignKey.OnDelete.String())
+		}
+		if foreignKey.OnUpdate != doltdb.ForeignKeyReferenceOption_DefaultAction {
+			sb.WriteString("\n    ON UPDATE ")
+			sb.WriteString(foreignKey.OnUpdate.String())
 		}
 	}
 

@@ -458,6 +458,37 @@ SQL
     ! [[ "$output" =~ 'INDEX `idx_bud` (`v2`,`v1`)' ]] || false
 }
 
+@test "index: Disallow 'dolt_' name prefix" {
+    run dolt sql -q "CREATE INDEX dolt_idx_v1 ON onepk(v1)"
+    [ "$status" -eq "1" ]
+    run dolt sql -q "ALTER TABLE onepk ADD INDEX dolt_idx_v1 (v1)"
+    [ "$status" -eq "1" ]
+}
+
+@test "index: Disallow dropping 'dolt_' indexes" {
+    dolt sql <<SQL
+CREATE TABLE parent (
+  id INT PRIMARY KEY
+);
+CREATE TABLE child (
+  id INT PRIMARY KEY,
+  parent_id INT,
+  FOREIGN KEY (parent_id)
+    REFERENCES parent(id)
+);
+SQL
+
+    run dolt index ls child
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "dolt_fk_1(parent_id) HIDDEN" ]] || false
+    run dolt sql -q "DROP INDEX dolt_fk_1 ON child"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ 'internal index' ]] || false
+    run dolt sql -q "ALTER TABLE child DROP INDEX dolt_fk_1"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ 'internal index' ]] || false
+}
+
 @test "index: DROP INDEX" {
     dolt sql <<SQL
 CREATE INDEX idx_v1 ON onepk(v1);

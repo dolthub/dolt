@@ -379,7 +379,7 @@ func TestIndexRebuildingUniqueSuccessOneCol(t *testing.T) {
 	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, schVal, rowData)
 	require.NoError(t, err)
 
-	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2}, true, "")
+	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2}, schema.IndexProperties{IsUnique: true, IsHidden: false, Comment: ""})
 	require.NoError(t, err)
 	updatedTable, err := originalTable.UpdateSchema(context.Background(), sch)
 	require.NoError(t, err)
@@ -409,7 +409,7 @@ func TestIndexRebuildingUniqueSuccessTwoCol(t *testing.T) {
 	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, schVal, rowData)
 	require.NoError(t, err)
 
-	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2, 3}, true, "")
+	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2, 3}, schema.IndexProperties{IsUnique: true, IsHidden: false, Comment: ""})
 	require.NoError(t, err)
 	updatedTable, err := originalTable.UpdateSchema(context.Background(), sch)
 	require.NoError(t, err)
@@ -439,7 +439,7 @@ func TestIndexRebuildingUniqueFailOneCol(t *testing.T) {
 	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, schVal, rowData)
 	require.NoError(t, err)
 
-	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2}, true, "")
+	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2}, schema.IndexProperties{IsUnique: true, IsHidden: false, Comment: ""})
 	require.NoError(t, err)
 	updatedTable, err := originalTable.UpdateSchema(context.Background(), sch)
 	require.NoError(t, err)
@@ -470,7 +470,7 @@ func TestIndexRebuildingUniqueFailTwoCol(t *testing.T) {
 	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, schVal, rowData)
 	require.NoError(t, err)
 
-	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2, 3}, true, "")
+	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2, 3}, schema.IndexProperties{IsUnique: true, IsHidden: false, Comment: ""})
 	require.NoError(t, err)
 	updatedTable, err := originalTable.UpdateSchema(context.Background(), sch)
 	require.NoError(t, err)

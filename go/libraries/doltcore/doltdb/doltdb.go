@@ -324,7 +324,7 @@ func (ddb *DoltDB) ReadRootValue(ctx context.Context, h hash.Hash) (*RootValue, 
 
 	if val != nil {
 		if rootSt, ok := val.(types.Struct); ok && rootSt.Name() == ddbRootStructName {
-			return &RootValue{ddb.db, rootSt}, nil
+			return &RootValue{ddb.db, rootSt, nil}, nil
 		}
 	}
 

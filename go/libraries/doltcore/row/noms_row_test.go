@@ -66,7 +66,7 @@ var sch, _ = schema.SchemaFromPKAndNonPKCols(testKeyColColl, testNonKeyColColl)
 var index schema.Index
 
 func init() {
-	index, _ = sch.Indexes().AddIndexByColTags(indexName, []uint64{ageColTag}, false, "")
+	index, _ = sch.Indexes().AddIndexByColTags(indexName, []uint64{ageColTag}, schema.IndexProperties{IsUnique: false, IsHidden: false, Comment: ""})
 }
 
 func newTestRow() (Row, error) {

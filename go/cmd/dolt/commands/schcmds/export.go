@@ -159,11 +159,23 @@ func exportTblSchema(ctx context.Context, tblName string, root *doltdb.RootValue
 		return errhand.BuildDError("error: failed to get schema for table %s", tblName).AddCause(err).Build()
 	}
 
+	fkc, err := root.GetForeignKeyCollection(ctx)
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to read foreign key struct").AddCause(err).Build()
+	}
+
+	declaresFk, err := fkc.KeysForDisplay(ctx, tblName, root)
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to assemble foreign key information").AddCause(err).Build()
+	}
+
 	var stmt string
 	if withTags {
-		stmt = sqlfmt.CreateTableStmtWithTags(tblName, sch)
+		stmt = sqlfmt.CreateTableStmtWithTags(tblName, sch, declaresFk)
 	} else {
-		stmt = sqlfmt.CreateTableStmt(tblName, sch)
+		stmt = sqlfmt.CreateTableStmt(tblName, sch, declaresFk)
 	}
 
 	_, err = fmt.Fprintln(wr, stmt)

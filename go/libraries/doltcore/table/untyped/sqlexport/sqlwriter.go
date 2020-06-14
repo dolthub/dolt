@@ -21,10 +21,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
-
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 )
@@ -33,13 +33,14 @@ import (
 // SQL database.
 type SqlExportWriter struct {
 	tableName       string
+	foreignKeys     []*doltdb.DisplayForeignKey
 	sch             schema.Schema
 	wr              io.WriteCloser
 	writtenFirstRow bool
 }
 
 // OpenSQLExportWriter returns a new SqlWriter for the table given writing to a file with the path given.
-func OpenSQLExportWriter(path string, tableName string, fs filesys.WritableFS, sch schema.Schema) (*SqlExportWriter, error) {
+func OpenSQLExportWriter(path string, tableName string, fs filesys.WritableFS, sch schema.Schema, foreignKeys []*doltdb.DisplayForeignKey) (*SqlExportWriter, error) {
 	err := fs.MkDirs(filepath.Dir(path))
 	if err != nil {
 		return nil, err
@@ -50,7 +51,7 @@ func OpenSQLExportWriter(path string, tableName string, fs filesys.WritableFS, s
 		return nil, err
 	}
 
-	return &SqlExportWriter{tableName: tableName, sch: sch, wr: wr}, nil
+	return &SqlExportWriter{tableName: tableName, foreignKeys: foreignKeys, sch: sch, wr: wr}, nil
 }
 
 func NewSQLDiffWriter(wr io.WriteCloser, tableName string, sch schema.Schema) (*SqlExportWriter, error) {
@@ -83,7 +84,7 @@ func (w *SqlExportWriter) maybeWriteDropCreate() error {
 		var b strings.Builder
 		b.WriteString(sqlfmt.DropTableIfExistsStmt(w.tableName))
 		b.WriteRune('\n')
-		b.WriteString(sqlfmt.CreateTableStmtWithTags(w.tableName, w.sch))
+		b.WriteString(sqlfmt.CreateTableStmtWithTags(w.tableName, w.sch, w.foreignKeys))
 		if err := iohelp.WriteLine(w.wr, b.String()); err != nil {
 			return err
 		}

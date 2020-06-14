@@ -263,10 +263,11 @@ func GetDocDiffs(ctx context.Context, dEnv *env.DoltEnv) (*DocDiffs, *DocDiffs, 
 }
 
 type TableDelta struct {
-	FromName  string
-	ToName    string
-	FromTable *doltdb.Table
-	ToTable   *doltdb.Table
+	FromName      string
+	ToName        string
+	FromTable     *doltdb.Table
+	ToTable       *doltdb.Table
+	ToForeignKeys []*doltdb.DisplayForeignKey // In the event that a table is an add, we'll display the FKs as well
 }
 
 // GetTableDeltas returns a list of TableDelta objects for each table that changed between fromRoot and toRoot.
@@ -312,14 +313,25 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) ([]
 		pkTag := sch.GetPKCols().GetColumns()[0].Tag
 		oldName, ok := fromTableNames[pkTag]
 
+		fkc, err := toRoot.GetForeignKeyCollection(ctx)
+		if err != nil {
+			return true, err
+		}
+
+		toDisplayFks, err := fkc.KeysForDisplay(ctx, name, toRoot)
+		if err != nil {
+			return true, err
+		}
+
 		if !ok {
-			deltas = append(deltas, TableDelta{ToName: name, ToTable: table})
+			deltas = append(deltas, TableDelta{ToName: name, ToTable: table, ToForeignKeys: toDisplayFks})
 		} else if oldName != name || fromTableHashes[pkTag] != th {
 			deltas = append(deltas, TableDelta{
-				ToName:    name,
-				FromName:  fromTableNames[pkTag],
-				ToTable:   table,
-				FromTable: fromTable[pkTag],
+				ToName:        name,
+				FromName:      fromTableNames[pkTag],
+				ToTable:       table,
+				FromTable:     fromTable[pkTag],
+				ToForeignKeys: toDisplayFks,
 			})
 		}
 

@@ -28,6 +28,9 @@ type Index interface {
 	GetColumn(tag uint64) (Column, bool)
 	// IndexedColumnTags returns the tags of the columns in the index.
 	IndexedColumnTags() []uint64
+	// IsHidden returns whether the index is hidden and managed internally, such as for a foreign key. Such indexes do
+	// not cause column nor tag collisions with other indexes.
+	IsHidden() bool
 	// IsUnique returns whether the index enforces the UNIQUE constraint.
 	IsUnique() bool
 	// Name returns the name of the index.
@@ -45,6 +48,7 @@ type indexImpl struct {
 	tags      []uint64
 	allTags   []uint64
 	indexColl *indexCollectionImpl
+	isHidden  bool
 	isUnique  bool
 	comment   string
 }
@@ -75,6 +79,10 @@ func (ix *indexImpl) GetColumn(tag uint64) (Column, bool) {
 
 func (ix *indexImpl) IndexedColumnTags() []uint64 {
 	return ix.tags
+}
+
+func (ix *indexImpl) IsHidden() bool {
+	return ix.isHidden
 }
 
 func (ix *indexImpl) IsUnique() bool {
@@ -122,6 +130,7 @@ func (ix *indexImpl) copy() *indexImpl {
 		tags:      tags,
 		allTags:   allTags,
 		indexColl: ix.indexColl,
+		isHidden:  ix.isHidden,
 		isUnique:  ix.isUnique,
 		comment:   ix.comment,
 	}
