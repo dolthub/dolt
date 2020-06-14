@@ -216,6 +216,12 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return err
 	}
 
+	fkMap, err := newRoot.GetForeignKeyCollectionMap(ctx)
+
+	if err != nil {
+		return err
+	}
+
 	conflicts := set.NewStrSet([]string{})
 	wrkTblHashes, err := tblHashesForCO(ctx, currRoots[HeadRoot], newRoot, currRoots[WorkingRoot], conflicts)
 
@@ -233,13 +239,13 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return CheckoutWouldOverwrite{conflicts.AsSlice()}
 	}
 
-	wrkHash, err := writeRoot(ctx, dEnv, wrkTblHashes, ssMap)
+	wrkHash, err := writeRoot(ctx, dEnv, wrkTblHashes, ssMap, fkMap)
 
 	if err != nil {
 		return err
 	}
 
-	stgHash, err := writeRoot(ctx, dEnv, stgTblHashes, ssMap)
+	stgHash, err := writeRoot(ctx, dEnv, stgTblHashes, ssMap, fkMap)
 
 	if err != nil {
 		return err
@@ -334,14 +340,14 @@ func tblHashesForCO(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.R
 	return resultMap, nil
 }
 
-func writeRoot(ctx context.Context, dEnv *env.DoltEnv, tblHashes map[string]hash.Hash, ssMap types.Map) (hash.Hash, error) {
+func writeRoot(ctx context.Context, dEnv *env.DoltEnv, tblHashes map[string]hash.Hash, ssMap types.Map, fkMap types.Map) (hash.Hash, error) {
 	for k, v := range tblHashes {
 		if v == emptyHash {
 			delete(tblHashes, k)
 		}
 	}
 
-	root, err := doltdb.NewRootValue(ctx, dEnv.DoltDB.ValueReadWriter(), tblHashes, ssMap)
+	root, err := doltdb.NewRootValue(ctx, dEnv.DoltDB.ValueReadWriter(), tblHashes, ssMap, fkMap)
 	if err != nil {
 		if err == doltdb.ErrHashNotFound {
 			return emptyHash, errors.New("corrupted database? Can't find hash of current table")

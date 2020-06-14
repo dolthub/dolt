@@ -144,7 +144,15 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 			if !ok {
 				notFound = append(notFound, tblName)
 			} else {
-				verr = printTblSchema(ctx, cmStr, tblName, tbl)
+				fkc, err := root.GetForeignKeyCollection(ctx)
+				if err != nil {
+					return errhand.BuildDError("error: failed to read foreign key struct").AddCause(err).Build()
+				}
+				declaresFk, err := fkc.KeysForDisplay(ctx, tblName, root)
+				if err != nil {
+					return errhand.BuildDError("error: failed to assemble foreign key information").AddCause(err).Build()
+				}
+				verr = printTblSchema(ctx, cmStr, tblName, tbl, declaresFk)
 				cli.Println()
 			}
 		}
@@ -157,7 +165,7 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 	return verr
 }
 
-func printTblSchema(ctx context.Context, cmStr string, tblName string, tbl *doltdb.Table) errhand.VerboseError {
+func printTblSchema(ctx context.Context, cmStr string, tblName string, tbl *doltdb.Table, foreignKeys []*doltdb.DisplayForeignKey) errhand.VerboseError {
 	cli.Println(bold.Sprint(tblName), "@", cmStr)
 	sch, err := tbl.GetSchema(ctx)
 
@@ -165,6 +173,6 @@ func printTblSchema(ctx context.Context, cmStr string, tblName string, tbl *dolt
 		return errhand.BuildDError("unable to get schema").AddCause(err).Build()
 	}
 
-	cli.Println(sqlfmt.CreateTableStmtWithTags(tblName, sch))
+	cli.Println(sqlfmt.CreateTableStmtWithTags(tblName, sch, foreignKeys))
 	return nil
 }

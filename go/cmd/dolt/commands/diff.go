@@ -487,7 +487,7 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta) errhand.VerboseError
 	if td.IsDrop() {
 		cli.Println(sqlfmt.DropTableStmt(td.FromName))
 	} else if td.IsAdd() {
-		cli.Println(sqlfmt.CreateTableStmtWithTags(td.ToName, toSch))
+		cli.Println(sqlfmt.CreateTableStmtWithTags(td.ToName, toSch, td.ToForeignKeys))
 	} else {
 		if td.FromName != td.ToName {
 			cli.Println(sqlfmt.RenameTableStmt(td.FromName, td.ToName))

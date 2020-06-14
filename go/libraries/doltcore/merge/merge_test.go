@@ -258,7 +258,7 @@ func init() {
 		keyTuples[i] = mustTuple(types.NewTuple(types.Format_7_18, keyTag, id))
 	}
 
-	index, _ = sch.Indexes().AddIndexByColTags("idx_name", []uint64{nameTag}, false, "")
+	index, _ = sch.Indexes().AddIndexByColTags("idx_name", []uint64{nameTag}, schema.IndexProperties{IsUnique: false, IsHidden: false, Comment: ""})
 }
 
 func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, types.Map, types.Map) {

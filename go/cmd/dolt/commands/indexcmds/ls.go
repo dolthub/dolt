@@ -109,7 +109,11 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 				output = append(output, fmt.Sprintf("%s:", tableName))
 			}
 			for _, index := range sch.Indexes().AllIndexes() {
-				output = append(output, fmt.Sprintf("    %s(%s)", index.Name(), strings.Join(index.ColumnNames(), ", ")))
+				if !index.IsHidden() {
+					output = append(output, fmt.Sprintf("    %s(%s)", index.Name(), strings.Join(index.ColumnNames(), ", ")))
+				} else {
+					output = append(output, fmt.Sprintf("    %s(%s) HIDDEN", index.Name(), strings.Join(index.ColumnNames(), ", ")))
+				}
 			}
 		}
 	}

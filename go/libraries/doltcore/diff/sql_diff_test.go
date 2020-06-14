@@ -67,7 +67,7 @@ func TestSqlTableDiffAdd(t *testing.T) {
 
 	var stringWr StringBuilderCloser
 	_ = PrintSqlTableDiffs(ctx, newRoot, oldRoot, &stringWr)
-	expectedOutput := sqlfmt.CreateTableStmtWithTags("addTable", sch) + "\n"
+	expectedOutput := sqlfmt.CreateTableStmtWithTags("addTable", sch, nil) + "\n"
 	assert.Equal(t, expectedOutput, stringWr.String())
 }
 
@@ -88,7 +88,7 @@ func TestSqlTableDiffAddThenInsert(t *testing.T) {
 
 	var stringWr StringBuilderCloser
 	_ = PrintSqlTableDiffs(ctx, newRoot, oldRoot, &stringWr)
-	expectedOutput := sqlfmt.CreateTableStmtWithTags("addTable", sch) + "\n"
+	expectedOutput := sqlfmt.CreateTableStmtWithTags("addTable", sch, nil) + "\n"
 	expectedOutput = expectedOutput +
 		"INSERT INTO `addTable` (`id`,`name`,`age`,`is_married`,`title`) " +
 		"VALUES ('00000000-0000-0000-0000-000000000000','Big Billy',77,FALSE,'Doctor');\n"
@@ -149,7 +149,7 @@ func TestSqlTableDiffRenameChangedTable(t *testing.T) {
 	_ = PrintSqlTableDiffs(ctx, newRoot, oldRoot, &stringWr)
 	expectedOutput := "DROP TABLE `renameTable`;\n"
 	expectedOutput = expectedOutput +
-		sqlfmt.CreateTableStmtWithTags("newTableName", sch) + "\n" +
+		sqlfmt.CreateTableStmtWithTags("newTableName", sch, nil) + "\n" +
 		"INSERT INTO `newTableName` (`id`,`name`,`age`,`is_married`,`title`) " +
 		"VALUES ('00000000-0000-0000-0000-000000000000','Big Billy',77,FALSE,'Doctor');\n"
 	assert.Equal(t, expectedOutput, stringWr.String())

@@ -135,6 +135,7 @@ type encodedIndex struct {
 	Tags    []uint64 `noms:"tags" json:"tags"`
 	Comment string   `noms:"comment" json:"comment"`
 	Unique  bool     `noms:"unique" json:"unique"`
+	Hidden  bool     `noms:"hidden,omitempty" json:"hidden,omitempty"`
 }
 
 type schemaData struct {
@@ -165,6 +166,7 @@ func toSchemaData(sch schema.Schema) (schemaData, error) {
 			Tags:    index.IndexedColumnTags(),
 			Comment: index.Comment(),
 			Unique:  index.IsUnique(),
+			Hidden:  index.IsHidden(),
 		}
 	}
 
@@ -191,7 +193,7 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 
 	sch := schema.SchemaFromCols(colColl)
 	for _, encodedIndex := range sd.IndexCollection {
-		_, err = sch.Indexes().AddIndexByColTags(encodedIndex.Name, encodedIndex.Tags, encodedIndex.Unique, encodedIndex.Comment)
+		_, err = sch.Indexes().AddIndexByColTags(encodedIndex.Name, encodedIndex.Tags, schema.IndexProperties{IsUnique: encodedIndex.Unique, IsHidden: encodedIndex.Hidden, Comment: encodedIndex.Comment})
 		if err != nil {
 			return nil, err
 		}

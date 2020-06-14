@@ -21,6 +21,7 @@ import (
 
 	"github.com/fatih/color"
 
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -179,7 +180,15 @@ func PrintSqlTableDiffs(ctx context.Context, r1, r2 *doltdb.RootValue, wr io.Wri
 			if sch, err := tbl.GetSchema(ctx); err != nil {
 				return errors.New("error unable to get schema for table " + tblName)
 			} else {
-				stmt := sqlfmt.CreateTableStmtWithTags(tblName, sch)
+				fkc, err := r1.GetForeignKeyCollection(ctx)
+				if err != nil {
+					return errhand.BuildDError("error: failed to read foreign key struct").AddCause(err).Build()
+				}
+				declaresFk, err := fkc.KeysForDisplay(ctx, tblName, r1)
+				if err != nil {
+					return errhand.BuildDError("error: failed to assemble foreign key information").AddCause(err).Build()
+				}
+				stmt := sqlfmt.CreateTableStmtWithTags(tblName, sch, declaresFk)
 				if err = iohelp.WriteLine(wr, stmt); err != nil {
 					return err
 				}
