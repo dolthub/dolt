@@ -53,9 +53,9 @@ function run_once() {
     rm -rf .dolt
     dolt init
     echo "Running tests and generating $results"
-    go run . run ../../../../../../sqllogictest/test > "$results"
+    time go run . run ../../../../../../sqllogictest/test > "$results"
     echo "Parsing $results and generating $parsed"
-    go run . parse "$DOLT_VERSION" temp/results"$test_num".log > "$parsed"
+    time go run . parse "$DOLT_VERSION" temp/results"$test_num".log > "$parsed"
 }
 
 function run() {
@@ -90,17 +90,21 @@ function branch_from_base() {
     local branch_name="$1"
     dolt checkout master
 
-    dolt sql -r csv -q "select * from releases_dolt_results" > "$branch_name"_releases_results.csv
-    dolt sql -r csv -q "select * from releases_dolt_mean_results" > "$branch_name"_releases_mean_results.csv
+    echo "Generating releases results csv using dolt sql -r csv"
+    time dolt sql -r csv -q "select * from releases_dolt_results" > "$branch_name"_releases_results.csv
+    echo "Generating releases mean results csv using dolt sql -r csv"
+    time dolt sql -r csv -q "select * from releases_dolt_mean_results" > "$branch_name"_releases_mean_results.csv
 
     dolt checkout regressions-tip-base
     dolt checkout -b "$branch_name"
 
-    dolt table import -u releases_dolt_results "$branch_name"_releases_results.csv
+    echo "Importing releases csv using dolt table import -u"
+    time dolt table import -u releases_dolt_results "$branch_name"_releases_results.csv
     dolt add releases_dolt_results
     dolt commit -m "add release data from tip of regressions"
 
-    dolt table import -u releases_dolt_mean_results "$branch_name"_releases_mean_results.csv
+    echo "Importing releases mean csv using dolt table import -u"
+    time dolt table import -u releases_dolt_mean_results "$branch_name"_releases_mean_results.csv
     dolt add releases_dolt_mean_results
     dolt commit -m "add release mean data from tip of regressions"
 
@@ -140,7 +144,8 @@ function update_regressions_latest() {
 
 function import_one_nightly() {
     test_num="$1"
-    dolt table import -u nightly_dolt_results ../"$logictest_main"/temp/parsed"$test_num".json
+    echo "Importing nightly dolt results from json using dolt table import -u"
+    time dolt table import -u nightly_dolt_results ../"$logictest_main"/temp/parsed"$test_num".json
     dolt add nightly_dolt_results
     dolt commit -m "update dolt sql performance results ($DOLT_VERSION) ($test_num)"
 }
@@ -150,22 +155,28 @@ function import_nightly() {
     seq 1 $TEST_N_TIMES | while read test_num; do
         import_one_nightly "$test_num"
     done
-    dolt sql -r csv -q "\
+    echo "Generating nightly mean results csv from dolt_history table query and dolt sql -r csv"
+    time dolt sql -r csv -q "\
 select version, test_file, line_num, avg(duration) as mean_duration, result from dolt_history_nightly_dolt_results where version=\"${DOLT_VERSION}\" group by test_file, line_num;\
 " > nightly_mean.csv
-    dolt table import -u nightly_dolt_mean_results nightly_mean.csv
+
+    echo "Importing nightly dolt mean results from csv using dolt table import -u"
+    time dolt table import -u nightly_dolt_mean_results nightly_mean.csv
     dolt add nightly_dolt_mean_results
     dolt commit -m "update dolt sql performance mean results ($DOLT_VERSION)"
-    dolt push origin nightly
+    echo "Pushing nightly to dolthub"
+    time dolt push origin nightly
 
     dolt checkout master
     dolt merge nightly
     dolt add .
     dolt commit -m "merge nightly"
-    dolt push origin master
+    echo "Pushing master to dolthub"
+    time dolt push origin master
 
     dolt checkout releases
-    dolt sql -r csv -q "\
+    echo "Generating releases mean results csv using dolt sql -r csv"
+    time dolt sql -r csv -q "\
 select * from releases_dolt_mean_results;\
 " > releases_mean.csv
     rm -f regressions_db
@@ -179,10 +190,10 @@ select * from releases_dolt_mean_results;\
     sqlite3 regressions_db < ../"$logictest"/regressions.sql
     cp ../"$logictest"/import.sql .
     sqlite3 regressions_db < import.sql
-    echo "Checking for test regressions..."
+    echo "Checking for test regressions using sqlite3..."
 
-    duration_query_output=`sqlite3 regressions_db 'select * from releases_nightly_duration_change'`
-    result_query_output=`sqlite3 regressions_db 'select * from releases_nightly_result_change'`
+    time duration_query_output=`sqlite3 regressions_db 'select * from releases_nightly_duration_change'`
+    time result_query_output=`sqlite3 regressions_db 'select * from releases_nightly_result_change'`
 
     duration_regressions=`echo $duration_query_output | sed '/^\s*$/d' | wc -l | tr -d '[:space:]'`
     result_regressions=`echo $result_query_output | sed '/^\s*$/d' | wc -l | tr -d '[:space:]'`
@@ -227,7 +238,8 @@ function with_dolt_checkout() {
 
 function import_one_releases() {
     test_num="$1"
-    dolt table import -u releases_dolt_results ../"$logictest_main"/temp/parsed"$test_num".json
+    echo "Importing releases results from json using dolt table import -u"
+    time dolt table import -u releases_dolt_results ../"$logictest_main"/temp/parsed"$test_num".json
     dolt add releases_dolt_results
     dolt commit -m "update dolt sql performance results ($DOLT_VERSION) ($test_num)"
 }
@@ -237,19 +249,23 @@ function import_releases() {
     seq 1 $TEST_N_TIMES | while read test_num; do
         import_one_releases "$test_num"
     done
-    dolt sql -r csv -q "\
+    echo "Generating releases mean results csv from dolt_history table query and dolt sql -r csv"
+    time dolt sql -r csv -q "\
 select version, test_file, line_num, avg(duration) as mean_duration, result from dolt_history_releases_dolt_results where version=\"${DOLT_VERSION}\" group by test_file, line_num;\
 " > releases_mean.csv
-    dolt table import -u releases_dolt_mean_results releases_mean.csv
+    echo "Importing releases mean results using dolt table import -u"
+    time dolt table import -u releases_dolt_mean_results releases_mean.csv
     dolt add releases_dolt_mean_results
     dolt commit -m "update dolt sql performance mean results ($DOLT_VERSION)"
-    dolt push origin releases
+    echo "Pushing releases to dolthub"
+    time dolt push origin releases
 
     dolt checkout master
     dolt merge releases
     dolt add .
     dolt commit -m "merge releases"
-    dolt push origin master
+    echo "Pushing master to dolthub"
+    time dolt push origin master
 
     update_regressions_latest
 }
@@ -259,9 +275,9 @@ rm -rf dolt-sql-performance
 (
   with_dolt_checkout
   if [[ "$USE_PROD_REPO" == true ]]; then
-    dolt clone Liquidata/dolt-sql-performance;
+    time dolt clone Liquidata/dolt-sql-performance;
   else
-    dolt clone "$DEV_REMOTE_HOST"/Liquidata/dolt-sql-performance
+    time dolt clone "$DEV_REMOTE_HOST"/Liquidata/dolt-sql-performance
   fi
 
 )
