@@ -5,6 +5,7 @@ require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/DataDog/datadog-go v3.4.0+incompatible // indirect
 	github.com/OneOfOne/xxhash v1.2.7 // indirect
+	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
 	github.com/abiosoft/readline v0.0.0-20180607040430-155bce2042db
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d // indirect
@@ -44,7 +45,7 @@ require (
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20200320155049-a8e482faeffd
-	github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200612104507-c618c3006b3a
+	github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200617164319-082e7b859cfe
 	github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0
 	github.com/liquidata-inc/mmap-go v1.0.3
 	github.com/liquidata-inc/sqllogictest/go v0.0.0-20200320151923-b11801f10e15
@@ -89,6 +90,6 @@ require (
 
 replace github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
 
-replace vitess.io/vitess => github.com/liquidata-inc/vitess v0.0.0-20200604002149-44dae2034412
+replace vitess.io/vitess => github.com/liquidata-inc/vitess v0.0.0-20200617162426-38f250caf447
 
 go 1.13
