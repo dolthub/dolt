@@ -5,6 +5,7 @@ require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/DataDog/datadog-go v3.4.0+incompatible // indirect
 	github.com/OneOfOne/xxhash v1.2.7 // indirect
+	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
 	github.com/abiosoft/readline v0.0.0-20180607040430-155bce2042db
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d // indirect
@@ -18,6 +19,7 @@ require (
 	github.com/codahale/blake2 v0.0.0-20150924215134-8d10d0420cbf
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dustin/go-humanize v1.0.0
+	github.com/fastly/go-utils v0.0.0-20180712184237-d95a45783239 // indirect
 	github.com/fatih/color v1.9.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
 	github.com/go-kit/kit v0.10.0 // indirect
@@ -38,13 +40,14 @@ require (
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/hashicorp/memberlist v0.1.6 // indirect
 	github.com/jedib0t/go-pretty v4.3.1-0.20191104025401-85fe5d6a7c4d+incompatible
+	github.com/jehiah/go-strftime v0.0.0-20171201141054-1d33003b3869 // indirect
 	github.com/jpillora/backoff v1.0.0
 	github.com/juju/fslock v0.0.0-20160525022230-4d5c94c67b4b
 	github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20200320155049-a8e482faeffd
-	github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200612104507-c618c3006b3a
+	github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200616235809-caf00b210c36
 	github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0
 	github.com/liquidata-inc/mmap-go v1.0.3
 	github.com/liquidata-inc/sqllogictest/go v0.0.0-20200320151923-b11801f10e15
@@ -68,6 +71,7 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stretchr/testify v1.5.1
 	github.com/tealeg/xlsx v1.0.5
+	github.com/tebeka/strftime v0.1.4 // indirect
 	github.com/tidwall/pretty v1.0.1 // indirect
 	github.com/uber/jaeger-client-go v2.22.1+incompatible // indirect
 	github.com/uber/jaeger-lib v2.2.0+incompatible // indirect
@@ -89,6 +93,6 @@ require (
 
 replace github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
 
-replace vitess.io/vitess => github.com/liquidata-inc/vitess v0.0.0-20200604002149-44dae2034412
+replace vitess.io/vitess => github.com/liquidata-inc/vitess v0.0.0-20200617010845-e40f55ea16e3
 
 go 1.13
