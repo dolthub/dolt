@@ -1,6 +1,7 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
 
+remotesrv_pid=
 setup() {
     setup_common
     cd $BATS_TMPDIR
@@ -8,18 +9,19 @@ setup() {
     mkdir remotes-$$/empty
     echo remotesrv log available here $BATS_TMPDIR/remotes-$$/remotesrv.log
     remotesrv --http-port 1234 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
+    remotesrv_pid=$!
     cd dolt-repo-$$
     mkdir "dolt-repo-clones"
 }
 
 teardown() {
     teardown_common
-    pgrep remotesrv | xargs kill
+    kill $remotesrv_pid
     rm -rf $BATS_TMPDIR/remotes-$$
 }
 
 @test "dolt remotes server is running" {
-    pgrep remotesrv
+    ps -p $remotesrv_pid | grep remotesrv
 }
 
 @test "add a remote using dolt remote" {

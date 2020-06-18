@@ -3,12 +3,14 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 REMOTE=http://localhost:50051/test-org/test-repo
 
+remotesrv_pid=
 setup() {
     setup_common
     cd $BATS_TMPDIR
     mkdir remotes-$$
     echo remotesrv log available here $BATS_TMPDIR/remotes-$$/remotesrv.log
     remotesrv --http-port 1234 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
+    remotesrv_pid=$!
     cd dolt-repo-$$
     dolt remote add test-remote $REMOTE
     dolt push test-remote master
@@ -19,7 +21,7 @@ setup() {
 teardown() {
     teardown_common
     rm -rf $BATS_TMPDIR/git-repo-$$
-    pgrep remotesrv | xargs kill
+    kill $remotesrv_pid
     rm -rf $BATS_TMPDIR/remotes-$$
 }
 
