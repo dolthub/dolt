@@ -18,6 +18,7 @@ import (
 	"io"
 
 	"github.com/liquidata-inc/go-mysql-server/sql"
+	"github.com/liquidata-inc/go-mysql-server/sql/plan"
 
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 )
@@ -27,26 +28,25 @@ const (
 )
 
 type iterQueue struct {
-	currRow sql.Row
-	iter    sql.RowIter
-	rowChan chan sql.Row
-	started bool
-	ae      *atomicerr.AtomicError
+	ctx         *sql.Context
+	currRow     sql.Row
+	iter        sql.RowIter
+	rowChan     chan sql.Row
+	projections []sql.Expression
+	ae          *atomicerr.AtomicError
 }
 
-func newIterQueue(iter sql.RowIter, ae *atomicerr.AtomicError) *iterQueue {
+func newIterQueue(ctx *sql.Context, iter sql.RowIter, projections []sql.Expression, ae *atomicerr.AtomicError) *iterQueue {
 	return &iterQueue{
-		iter:    iter,
-		rowChan: make(chan sql.Row, bufRowIterSize),
-		ae:      ae,
+		ctx:         ctx,
+		iter:        iter,
+		rowChan:     make(chan sql.Row, bufRowIterSize),
+		projections: projections,
+		ae:          ae,
 	}
 }
 
-func (iq *iterQueue) maybeStart() {
-	if iq.started {
-		return
-	}
-
+func (iq *iterQueue) start() {
 	go func() {
 		defer close(iq.rowChan)
 		for {
@@ -63,7 +63,6 @@ func (iq *iterQueue) maybeStart() {
 		}
 	}()
 	iq.currRow = <-iq.rowChan
-	iq.started = true
 }
 
 func (iq *iterQueue) peek() sql.Row {
@@ -74,6 +73,14 @@ func (iq *iterQueue) pop() sql.Row {
 	r := iq.currRow
 	iq.currRow = <-iq.rowChan
 	return r
+}
+
+func (iq *iterQueue) projectPop() (r sql.Row, err error) {
+	r = iq.pop()
+	if r != nil {
+		r, err = plan.ProjectRow(iq.ctx, iq.projections, r)
+	}
+	return r, err
 }
 
 func (iq *iterQueue) isDone() bool {

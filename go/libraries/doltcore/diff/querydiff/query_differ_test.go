@@ -51,6 +51,7 @@ var setupCommon = []testCommand{
 	{commands.SqlCmd{}, []string{"-q", "insert into test values (0,0), (1,1), (2,2), (3,3)"}},
 	{commands.SqlCmd{}, []string{"-q", "create table quiz (pk int not null primary key, c0 int)"}},
 	{commands.SqlCmd{}, []string{"-q", "insert into quiz values (0,10), (1,11), (2,22), (3,33)"}},
+	{commands.SqlCmd{}, []string{"-q", "create view tv as select c0*c0, pk from test"}},
 	{commands.AddCmd{}, []string{"."}},
 	{commands.CommitCmd{}, []string{"-m", "setup common"}},
 }
@@ -110,6 +111,18 @@ var queryDifferTests = []queryDifferTest{
 			{from: nil, to: sql.Row{int32(9)}},
 		},
 	},
+	{
+		name:  "select from view",
+		query: "select * from tv",
+		setup: []testCommand{
+			{commands.SqlCmd{}, []string{"-q", "delete from test where pk = 1"}},
+			{commands.SqlCmd{}, []string{"-q", "insert into test values (9,9)"}},
+		},
+		diffRows: []diffRow{
+			{from: sql.Row{int64(1), int32(1)}, to: nil},
+			{from: nil, to: sql.Row{int64(81), int32(9)}},
+		},
+	},
 }
 
 func TestQueryDiffer(t *testing.T) {
@@ -142,6 +155,7 @@ func testQueryDiffer(t *testing.T, test queryDifferTest) {
 	qd, err := querydiff.MakeQueryDiffer(ctx, dEnv, fromRoot, toRoot, test.query)
 	require.NoError(t, err)
 
+	qd.Start()
 	for _, expected := range test.diffRows {
 		from, to, err := qd.NextDiff()
 		assert.NoError(t, err)
