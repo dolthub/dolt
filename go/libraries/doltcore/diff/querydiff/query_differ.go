@@ -16,7 +16,6 @@ package querydiff
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -38,8 +37,6 @@ const (
 	Greater rowOrder = 1
 	Unknown rowOrder = math.MaxInt8
 )
-
-var errSkip = errors.New("errSkip") // u lyk hax?
 
 type rowOrder int8
 
@@ -108,6 +105,9 @@ func (qd *QueryDiffer) Start() {
 
 func (qd *QueryDiffer) NextDiff() (fromRow sql.Row, toRow sql.Row, err error) {
 	for {
+		if qd.ae.IsSet() {
+			return nil, nil, qd.ae.Get()
+		}
 		if qd.from.isDone() && qd.to.isDone() {
 			return nil, nil, io.EOF
 		}

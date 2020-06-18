@@ -51,28 +51,25 @@ func lazyQueryPlan(node sql.Node) (lazyNode sql.Node, projections []sql.Expressi
 	}
 
 	offset := 0
-	newChildren := make([]sql.Node, len(children))
+	lazyChildren := make([]sql.Node, len(children))
 	for i, c := range children {
 		c, pjs, err := lazyQueryPlan(c)
 		if err != nil {
 			return nil, nil, err
 		}
-		if len(c.Schema()) != len(pjs) {
-			return nil, nil, fmt.Errorf("node schema mismatched with node projections")
-		}
-		newChildren[i] = c
+		lazyChildren[i] = c
 
 		pjs = shiftFieldIndexes(pjs, offset)
 		projections = append(projections, pjs...)
 		offset += len(pjs)
 	}
 
-	lazyNode, err = node.WithChildren(newChildren...)
+	node, err = node.WithChildren(lazyChildren...)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	lazyNode, err = plan.TransformExpressions(lazyNode, func(e sql.Expression) (sql.Expression, error) {
+	lazyNode, err = plan.TransformExpressions(node, func(e sql.Expression) (sql.Expression, error) {
 		return makeExpressionLazy(e, projections)
 	})
 	if err != nil {
@@ -84,7 +81,12 @@ func lazyQueryPlan(node sql.Node) (lazyNode sql.Node, projections []sql.Expressi
 		projections = p.Expressions()
 	}
 
-	return lazyNode, projections, err
+	err = validateProjections(lazyNode.Schema(), projections)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return lazyNode, projections, nil
 }
 
 func extractRowOrder(node sql.Node) (composite []plan.SortField) {
@@ -148,6 +150,19 @@ func shiftFieldIndexes(composite []sql.Expression, offset int) []sql.Expression 
 		})
 	}
 	return shifted
+}
+
+func validateProjections(sch sql.Schema, projections []sql.Expression) error {
+	if len(sch) != len(projections) {
+		return fmt.Errorf("lazy node schema does not match lazy projections")
+	}
+	for i, col := range sch {
+		if col.Type != projections[i].Type() {
+			return fmt.Errorf("lazy node schema col type %s does not match lazy projection type %s",
+				col.Type.String(), projections[i].Type().String())
+		}
+	}
+	return nil
 }
 
 func errWithQueryPlan(ctx *sql.Context, eng *sqle.Engine, query string, cause error) error {
