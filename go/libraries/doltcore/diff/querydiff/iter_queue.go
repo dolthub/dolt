@@ -77,7 +77,7 @@ func (iq *iterQueue) pop() sql.Row {
 
 func (iq *iterQueue) projectPop() (r sql.Row, err error) {
 	r = iq.pop()
-	if r != nil {
+	if r != nil && iq.projections != nil {
 		r, err = plan.ProjectRow(iq.ctx, iq.projections, r)
 	}
 	return r, err

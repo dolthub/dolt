@@ -26,51 +26,65 @@ import (
 	"github.com/liquidata-inc/go-mysql-server/sql/plan"
 )
 
-// extractQueryProjections transforms a query plan by removing Project nodes and returning
+type LazyProject struct {
+	*plan.Project
+}
+
+func (lp LazyProject) RowIter(ctx *sql.Context) (sql.RowIter, error) {
+	// skip row projection during iteration
+	return lp.Project.Child.RowIter(ctx)
+}
+
+// lazyQueryPlan transforms a query plan by removing Project nodes and returning
 // the composite projections of the plan tree. As the plan is transformed, Expressions that
 // rely on these projections are transformed to lazily evaluate the projections.
-func extractQueryProjections(node sql.Node) (sql.Node, []sql.Expression, error) {
+func lazyQueryPlan(node sql.Node) (lazyNode sql.Node, projections []sql.Expression, err error) {
+	// ignore opaque nodes
+
 	if tbl, ok := node.(sql.Table); ok {
 		return node, getFieldsForTable(tbl), nil
 	}
 
-	// ignore opaque nodes
 	children := node.Children()
 	if len(children) == 0 {
 		return nil, nil, fmt.Errorf("reached bottom of query plan unexpectedly")
 	}
 
-	var composite []sql.Expression
+	offset := 0
 	newChildren := make([]sql.Node, len(children))
 	for i, c := range children {
-		c, pjs, err := extractQueryProjections(c)
+		c, pjs, err := lazyQueryPlan(c)
 		if err != nil {
 			return nil, nil, err
 		}
+		if len(c.Schema()) != len(pjs) {
+			return nil, nil, fmt.Errorf("node schema mismatched with node projections")
+		}
 		newChildren[i] = c
-		composite = append(composite, pjs...)
+
+		pjs = shiftFieldIndexes(pjs, offset)
+		projections = append(projections, pjs...)
+		offset += len(pjs)
 	}
 
-	node, err := plan.TransformExpressions(node, func(e sql.Expression) (sql.Expression, error) {
-		return makeExpressionLazy(e, composite)
+	lazyNode, err = node.WithChildren(newChildren...)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	lazyNode, err = plan.TransformExpressions(lazyNode, func(e sql.Expression) (sql.Expression, error) {
+		return makeExpressionLazy(e, projections)
 	})
 	if err != nil {
 		return nil, nil, err
 	}
 
-	p, ok := node.(*plan.Project)
-	if !ok {
-		node, err = node.WithChildren(newChildren...)
-	} else {
-		// remove Project node, but pass along its projections
-		composite = p.Expressions()
-		node = p.Child
-	}
-	if err != nil {
-		return nil, nil, err
+	if p, ok := lazyNode.(*plan.Project); ok {
+		lazyNode = &LazyProject{p}
+		projections = p.Expressions()
 	}
 
-	return node, composite, err
+	return lazyNode, projections, err
 }
 
 func extractRowOrder(node sql.Node) (composite []plan.SortField) {
@@ -89,35 +103,51 @@ func extractRowOrder(node sql.Node) (composite []plan.SortField) {
 		return composite
 	}
 
-	if s, ok := node.(*plan.Sort); ok {
-		composite = s.SortFields
-	}
-
 	for _, c := range node.Children() {
 		sf := extractRowOrder(c)
 		composite = append(composite, sf...)
 	}
 
+	if s, ok := node.(*plan.Sort); ok {
+		// todo: prune sort fields
+		// having columns duplicated here won't lead to incorrect
+		// results, but could lead to extra work during sorting
+		composite = append(s.SortFields, composite...)
+	}
+
 	return composite
 }
 
-func getFieldsForTable(t sql.Table) []sql.Expression {
-	sch := t.Schema()
-	getFields := make([]sql.Expression, len(sch))
-	for i, col := range sch {
-		getFields[i] = expression.NewGetField(i, col.Type, col.Name, col.PrimaryKey)
-	}
-	return getFields
-}
-
 func makeExpressionLazy(e sql.Expression, composite []sql.Expression) (sql.Expression, error) {
-	if gf, ok := e.(*expression.GetField); ok {
-		if gf.Index() > len(composite) {
+	gf, ok := e.(*expression.GetField)
+	if ok {
+		if gf.Index() >= len(composite) {
 			return nil, fmt.Errorf("index out of bounds in lazy expression substitution")
 		}
 		e = composite[gf.Index()]
 	}
 	return e, nil
+}
+
+func getFieldsForTable(tbl sql.Table) []sql.Expression {
+	fields := make([]sql.Expression, len(tbl.Schema()))
+	for i, col := range tbl.Schema() {
+		fields[i] = expression.NewGetField(i, col.Type, col.Name, col.PrimaryKey)
+	}
+	return fields
+}
+
+func shiftFieldIndexes(composite []sql.Expression, offset int) []sql.Expression {
+	shifted := make([]sql.Expression, len(composite))
+	for i, e := range composite {
+		shifted[i], _ = expression.TransformUp(e, func(e sql.Expression) (sql.Expression, error) {
+			if gf, ok := e.(*expression.GetField); ok {
+				return gf.WithIndex(gf.Index() + offset), nil
+			}
+			return e, nil
+		})
+	}
+	return shifted
 }
 
 func errWithQueryPlan(ctx *sql.Context, eng *sqle.Engine, query string, cause error) error {
