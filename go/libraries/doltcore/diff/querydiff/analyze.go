@@ -26,15 +26,6 @@ import (
 	"github.com/liquidata-inc/go-mysql-server/sql/plan"
 )
 
-type LazyProject struct {
-	*plan.Project
-}
-
-func (lp LazyProject) RowIter(ctx *sql.Context) (sql.RowIter, error) {
-	// skip row projection during iteration
-	return lp.Project.Child.RowIter(ctx)
-}
-
 // lazyQueryPlan transforms a query plan by removing Project nodes and returning
 // the composite projections of the plan tree. As the plan is transformed, Expressions that
 // rely on these projections are transformed to lazily evaluate the projections.
@@ -61,7 +52,7 @@ func lazyQueryPlan(node sql.Node) (lazyNode sql.Node, projections []sql.Expressi
 
 		pjs = shiftFieldIndexes(pjs, offset)
 		projections = append(projections, pjs...)
-		offset += len(pjs)
+		offset += len(c.Schema())
 	}
 
 	node, err = node.WithChildren(lazyChildren...)
@@ -77,13 +68,8 @@ func lazyQueryPlan(node sql.Node) (lazyNode sql.Node, projections []sql.Expressi
 	}
 
 	if p, ok := lazyNode.(*plan.Project); ok {
-		lazyNode = &LazyProject{p}
+		lazyNode = p.Child
 		projections = p.Expressions()
-	}
-
-	err = validateProjections(lazyNode.Schema(), projections)
-	if err != nil {
-		return nil, nil, err
 	}
 
 	return lazyNode, projections, nil
@@ -150,19 +136,6 @@ func shiftFieldIndexes(composite []sql.Expression, offset int) []sql.Expression 
 		})
 	}
 	return shifted
-}
-
-func validateProjections(sch sql.Schema, projections []sql.Expression) error {
-	if len(sch) != len(projections) {
-		return fmt.Errorf("lazy node schema does not match lazy projections")
-	}
-	for i, col := range sch {
-		if col.Type != projections[i].Type() {
-			return fmt.Errorf("lazy node schema col type %s does not match lazy projection type %s",
-				col.Type.String(), projections[i].Type().String())
-		}
-	}
-	return nil
 }
 
 func errWithQueryPlan(ctx *sql.Context, eng *sqle.Engine, query string, cause error) error {

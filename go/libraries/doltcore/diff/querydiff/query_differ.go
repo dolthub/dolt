@@ -64,7 +64,7 @@ func MakeQueryDiffer(ctx context.Context, dEnv *env.DoltEnv, fromRoot, toRoot *d
 		return nil, err
 	}
 
-	lazyFrom, projections, err := lazyQueryPlan(from)
+	lazyFrom, fromProjections, err := lazyQueryPlan(from)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +73,7 @@ func MakeQueryDiffer(ctx context.Context, dEnv *env.DoltEnv, fromRoot, toRoot *d
 		return nil, err
 	}
 
-	lazyTo, _, err := lazyQueryPlan(to)
+	lazyTo, toProjections, err := lazyQueryPlan(to)
 	if err != nil {
 		return nil, err
 	}
@@ -89,8 +89,8 @@ func MakeQueryDiffer(ctx context.Context, dEnv *env.DoltEnv, fromRoot, toRoot *d
 	qd := &QueryDiffer{
 		ctx:   fromCtx,
 		sch:   trueSch,
-		from:  newIterQueue(fromCtx, fromIter, projections, ae),
-		to:    newIterQueue(toCtx, toIter, projections, ae),
+		from:  newIterQueue(fromCtx, fromIter, fromProjections, ae),
+		to:    newIterQueue(toCtx, toIter, toProjections, ae),
 		order: rowOrder,
 		ae:    ae,
 	}
