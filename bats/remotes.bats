@@ -731,8 +731,7 @@ create_three_remote_branches() {
     dolt clone http://localhost:50051/test-org/test-repo
     cd test-repo
     run dolt branch -a
-    [ "$status" -eq 1 ]
-    [ "${#lines[@]}" -eq 4 ]
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "* master" ]] || false
     [[ "$output" =~ "remotes/origin/master" ]] || false
     [[ "$output" =~ "remotes/origin/branch-one" ]] || false
@@ -748,7 +747,6 @@ create_three_remote_branches() {
     dolt branch -a
     run dolt branch -a
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "* master" ]] || false
     [[ "$output" =~ "remotes/origin/master" ]] || false
 
@@ -759,8 +757,7 @@ create_three_remote_branches() {
     dolt fetch
     run dolt branch -a
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
-    [[ "$lines[1]" =~ "* master" ]] || false
+    [[ "$output" =~ "* master" ]] || false
     [[ "$output" =~ "remotes/origin/master" ]] || false
     [[ "$output" =~ "remotes/origin/branch-one" ]] || false
     [[ "$output" =~ "remotes/origin/branch-two" ]] || false
