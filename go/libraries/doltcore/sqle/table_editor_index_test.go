@@ -30,16 +30,16 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-var dEnv *env.DoltEnv
-var initialRoot *doltdb.RootValue
+var index_dEnv *env.DoltEnv
+var index_initialRoot *doltdb.RootValue
 
 func init() {
-	dEnv = dtestutils.CreateTestEnv()
-	root, err := dEnv.WorkingRoot(context.Background())
+	index_dEnv = dtestutils.CreateTestEnv()
+	root, err := index_dEnv.WorkingRoot(context.Background())
 	if err != nil {
 		panic(err)
 	}
-	initialRoot, err = ExecuteSql(dEnv, root, `
+	index_initialRoot, err = ExecuteSql(index_dEnv, root, `
 CREATE TABLE onepk (
   pk1 BIGINT PRIMARY KEY,
   v1 BIGINT,
@@ -121,10 +121,10 @@ UPDATE onepk SET pk1 = v1 + pk1;
 
 	for _, test := range tests {
 		t.Run(test.sqlStatement, func(t *testing.T) {
-			root := initialRoot
+			root := index_initialRoot
 			for _, sqlStatement := range strings.Split(test.sqlStatement, ";") {
 				var err error
-				root, err = executeModify(context.Background(), dEnv, root, sqlStatement)
+				root, err = executeModify(context.Background(), index_dEnv, root, sqlStatement)
 				require.NoError(t, err)
 			}
 
@@ -277,10 +277,10 @@ REPLACE INTO oneuni VALUES (4, 2, 2), (5, 2, 3), (3, 1, 1);
 
 	for _, test := range tests {
 		t.Run(test.sqlStatement, func(t *testing.T) {
-			root := initialRoot
+			root := index_initialRoot
 			var err error
 			for _, sqlStatement := range strings.Split(test.sqlStatement, ";") {
-				root, err = executeModify(context.Background(), dEnv, root, sqlStatement)
+				root, err = executeModify(context.Background(), index_dEnv, root, sqlStatement)
 				if err != nil {
 					break
 				}
@@ -360,6 +360,8 @@ func convertSqlRowToInt64(sqlRows []sql.Row) []sql.Row {
 				newSqlRow[j] = int64(v)
 			case int64:
 				newSqlRow[j] = v
+			case nil:
+				newSqlRow[j] = nil
 			default:
 				return sqlRows
 			}
