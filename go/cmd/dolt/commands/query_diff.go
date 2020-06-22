@@ -241,6 +241,7 @@ func buildQueryDiffPipeline(qd *querydiff.QueryDiffer, doltSch schema.Schema, jo
 			cli.PrintErrln(err)
 		}
 	})
+	qd.Start()
 
 	return p, nil
 }

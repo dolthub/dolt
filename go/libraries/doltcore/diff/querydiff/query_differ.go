@@ -16,28 +16,37 @@ package querydiff
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
-	"strings"
+	"math"
 
 	sqle "github.com/liquidata-inc/go-mysql-server"
 	"github.com/liquidata-inc/go-mysql-server/sql"
 	"github.com/liquidata-inc/go-mysql-server/sql/parse"
 	"github.com/liquidata-inc/go-mysql-server/sql/plan"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 )
 
-var errSkip = errors.New("errSkip") // u lyk hax?
+const (
+	Lesser  rowOrder = -1
+	Equal   rowOrder = 0
+	Greater rowOrder = 1
+	Unknown rowOrder = math.MaxInt8
+)
+
+type rowOrder int8
 
 type QueryDiffer struct {
-	sch      sql.Schema
-	fromIter sql.RowIter
-	toIter   sql.RowIter
+	ctx   *sql.Context
+	sch   sql.Schema
+	from  *iterQueue
+	to    *iterQueue
+	order []plan.SortField
+	ae    *atomicerr.AtomicError
 }
 
 func MakeQueryDiffer(ctx context.Context, dEnv *env.DoltEnv, fromRoot, toRoot *doltdb.RootValue, query string) (*QueryDiffer, error) {
@@ -50,62 +59,160 @@ func MakeQueryDiffer(ctx context.Context, dEnv *env.DoltEnv, fromRoot, toRoot *d
 		return nil, err
 	}
 
-	from, to, err := modifyQueryPlans(fromCtx, toCtx, fromEng, toEng, query)
+	from, to, err := getQueryPlans(fromCtx, toCtx, fromEng, toEng, query)
 	if err != nil {
 		return nil, err
 	}
 
-	fromIter, err := from.RowIter(fromCtx)
+	lazyFrom, fromProjections, err := lazyQueryPlan(from)
 	if err != nil {
 		return nil, err
 	}
-	toIter, err := to.RowIter(toCtx)
+	fromIter, err := lazyFrom.RowIter(fromCtx)
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Printf("%s\n", diff.To)
+	lazyTo, toProjections, err := lazyQueryPlan(to)
+	if err != nil {
+		return nil, err
+	}
+	toIter, err := lazyTo.RowIter(toCtx)
+	if err != nil {
+		return nil, err
+	}
 
-	_ = dsqle.Database{}
+	trueSch := from.Schema()
+	rowOrder := extractRowOrder(lazyFrom)
+	ae := atomicerr.New()
 
 	qd := &QueryDiffer{
-		sch:      from.Schema(),
-		fromIter: fromIter,
-		toIter:   toIter,
+		ctx:   fromCtx,
+		sch:   trueSch,
+		from:  newIterQueue(fromCtx, fromIter, fromProjections, ae),
+		to:    newIterQueue(toCtx, toIter, toProjections, ae),
+		order: rowOrder,
+		ae:    ae,
 	}
 
 	return qd, nil
 }
 
-func (qd *QueryDiffer) NextDiff() (from sql.Row, to sql.Row, err error) {
-	var fromEOF bool
+func (qd *QueryDiffer) Start() {
+	qd.from.start()
+	qd.to.start()
+}
+
+func (qd *QueryDiffer) NextDiff() (fromRow sql.Row, toRow sql.Row, err error) {
 	for {
-		from, err = qd.fromIter.Next()
-		if err == io.EOF {
-			fromEOF = true
-		} else if err != nil && err != errSkip {
-			return nil, nil, err
+		if qd.ae.IsSet() {
+			return nil, nil, qd.ae.Get()
 		}
-
-		to, err = qd.toIter.Next()
-		if err != nil && err != errSkip && err != io.EOF {
-			return nil, nil, err
-		}
-
-		if fromEOF && err == io.EOF {
+		if qd.from.isDone() && qd.to.isDone() {
 			return nil, nil, io.EOF
 		}
+		if qd.from.isDone() {
+			toRow, err = qd.to.projectPop()
+			if err != nil {
+				return nil, nil, err
+			}
+			return nil, toRow, nil
+		}
+		if qd.to.isDone() {
+			fromRow, err = qd.from.projectPop()
+			if err != nil {
+				return nil, nil, err
+			}
+			return fromRow, nil, nil
+		}
 
-		eq, err := from.Equals(to, qd.sch)
+		cmp, err := qd.rowCompare(qd.from.peek(), qd.to.peek())
 		if err != nil {
 			return nil, nil, err
 		}
-		if eq {
-			continue
+
+		switch cmp {
+		case Lesser:
+			fromRow, err = qd.from.projectPop()
+			if err != nil {
+				return nil, nil, err
+			}
+			return fromRow, nil, nil
+		case Greater:
+			toRow, err = qd.to.projectPop()
+			if err != nil {
+				return nil, nil, err
+			}
+			return nil, toRow, nil
+		case Equal:
+			fromRow, err = qd.from.projectPop()
+			if err != nil {
+				return nil, nil, err
+			}
+			toRow, err = qd.to.projectPop()
+			if err != nil {
+				return nil, nil, err
+			}
+			eq, err := fromRow.Equals(toRow, qd.sch)
+			if err != nil {
+				return nil, nil, err
+			}
+			if eq {
+				continue
+			}
+			return fromRow, toRow, nil
+		default:
+			panic("bad row cmp")
+		}
+	}
+}
+
+func (qd *QueryDiffer) rowCompare(left, right sql.Row) (rowOrder, error) {
+	for _, sf := range qd.order {
+		typ := sf.Column.Type()
+		av, err := sf.Column.Eval(qd.ctx, left)
+		if err != nil {
+			return Unknown, err
 		}
 
-		return from, to, nil
+		bv, err := sf.Column.Eval(qd.ctx, right)
+		if err != nil {
+			return Unknown, err
+		}
+
+		if sf.Order == plan.Descending {
+			av, bv = bv, av
+		}
+
+		if av == nil && bv == nil {
+			continue
+		} else if av == nil {
+			if sf.NullOrdering == plan.NullsFirst {
+				return Lesser, nil
+			} else {
+				return Greater, nil
+			}
+		} else if bv == nil {
+			if sf.NullOrdering == plan.NullsFirst {
+				return Greater, nil
+			} else {
+				return Lesser, nil
+			}
+		}
+
+		cmp, err := typ.Compare(av, bv)
+		if err != nil {
+			return Unknown, err
+		}
+
+		switch cmp {
+		case -1:
+			return Lesser, nil
+		case 1:
+			return Greater, nil
+		}
 	}
+	return Equal, nil
 }
 
 func (qd *QueryDiffer) Schema() sql.Schema {
@@ -113,87 +220,9 @@ func (qd *QueryDiffer) Schema() sql.Schema {
 }
 
 func (qd *QueryDiffer) Close() error {
-	fromErr := qd.fromIter.Close()
-	toErr := qd.toIter.Close()
-	if fromErr != nil {
-		return fromErr
-	}
-	return toErr
-}
-
-func modifyQueryPlans(fromCtx *sql.Context, toCtx *sql.Context, fromEng *sqle.Engine, toEng *sqle.Engine, query string) (fromPlan, toPlan sql.Node, err error) {
-	parsed, err := parse.Parse(fromCtx, query)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	fromPlan, err = fromEng.Analyzer.Analyze(fromCtx, parsed)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error executing query on from root: %s", err.Error())
-	}
-	err = recursiveValidateQueryPlan(fromPlan)
-	if err != nil {
-		return nil, nil, errWithQueryPlan(fromCtx, fromEng, query, err)
-	}
-
-	toPlan, err = toEng.Analyzer.Analyze(toCtx, parsed)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error executing query on to root: %s", err.Error())
-	}
-	err = recursiveValidateQueryPlan(toPlan)
-	if err != nil {
-		return nil, nil, errWithQueryPlan(toCtx, toEng, query, err)
-	}
-
-	fromPlan, toPlan, err = recursiveModifyQueryPlans(fromCtx, toCtx, fromPlan, toPlan)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return fromPlan, toPlan, nil
-}
-
-func recursiveValidateQueryPlan(p sql.Node) error {
-	switch p.(type) {
-	case *plan.Sort:
-		return nil
-	default:
-		cc := p.Children()
-		if cc == nil {
-			return fmt.Errorf("query plan does not contain a sort node")
-		}
-		return recursiveValidateQueryPlan(cc[0])
-	}
-}
-
-func recursiveModifyQueryPlans(fromCtx, toCtx *sql.Context, from, to sql.Node) (modFrom, modTo sql.Node, err error) {
-	switch from.(type) {
-	case *plan.Sort:
-		nd, err := newSortNodeDiffer(fromCtx, toCtx, from.(*plan.Sort), to.(*plan.Sort))
-		if err != nil {
-			return nil, nil, err
-		}
-		modFrom, modTo = nd.makeFromNode(), nd.makeToNode()
-	default:
-		fc := from.Children()
-		tc := to.Children()
-		if fc == nil || tc == nil {
-			panic("query plan does not contain a sort node")
-		}
-		fc[0], tc[0], err = recursiveModifyQueryPlans(fromCtx, toCtx, fc[0], tc[0])
-		if err != nil {
-			return nil, nil, err
-		}
-		modFrom, err = from.WithChildren(fc...)
-		if err != nil {
-			return nil, nil, err
-		}
-		modTo, err = to.WithChildren(tc...)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-	return modFrom, modTo, nil
+	qd.from.close()
+	qd.to.close()
+	return qd.ae.Get()
 }
 
 func makeSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue) (*sql.Context, *sqle.Engine, error) {
@@ -230,23 +259,21 @@ func makeSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValu
 	return sqlCtx, engine, nil
 }
 
-func errWithQueryPlan(ctx *sql.Context, eng *sqle.Engine, query string, cause error) error {
-	_, iter, err := eng.Query(ctx, fmt.Sprintf("describe %s", query))
+func getQueryPlans(fromCtx, toCtx *sql.Context, fromEng, toEng *sqle.Engine, query string) (fromPlan, toPlan sql.Node, err error) {
+	parsed, err := parse.Parse(fromCtx, query)
 	if err != nil {
-		return fmt.Errorf("cannot diff query. Error describing query plan: %s\n", err.Error())
+		return nil, nil, err
 	}
 
-	var qp strings.Builder
-	qp.WriteString("query plan:\n")
-	for {
-		r, err := iter.Next()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return fmt.Errorf("cannot diff query. Error describing query plan: %s\n", err.Error())
-		}
-		qp.WriteString(fmt.Sprintf("\t%s\n", r[0].(string)))
+	fromPlan, err = fromEng.Analyzer.Analyze(fromCtx, parsed)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error executing query on from root: %s", err.Error())
 	}
 
-	return fmt.Errorf("cannot diff query: %s\n%s", cause.Error(), qp.String())
+	toPlan, err = toEng.Analyzer.Analyze(toCtx, parsed)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error executing query on to root: %s", err.Error())
+	}
+
+	return fromPlan, toPlan, nil
 }
