@@ -30,11 +30,15 @@ teardown() {
     dolt sql -q 'insert into test values (0,0,"0"), (1,1,"1")'
     dolt add .
     dolt commit -m rows
+    dolt sql -q 'update test set c1 = 9 where pk = 0'
     dolt sql -q 'delete from test where pk=1'
     dolt sql -q 'insert into test values (2,2,"2")'
-    run dolt query_diff 'select * from test order by pk'
+    dolt query_diff 'select * from test'
+    run dolt query_diff 'select * from test'
     [ "$status" -eq 0 ]
     [[ "$output" =~ "|     | pk | c1 | c2 |" ]]
+    [[ "$output" =~ "|  <  | 0  | 0  | 0  |" ]]
+    [[ "$output" =~ "|  >  | 0  | 9  | 0  |" ]]
     [[ "$output" =~ "|  -  | 1  | 1  | 1  |" ]]
     [[ "$output" =~ "|  +  | 2  | 2  | 2  |" ]]
 }
@@ -75,12 +79,4 @@ teardown() {
     run dolt query_diff head head^ 'select * from test order by pk'
     [ "$status" -ne 0 ]
     [[ "$output" =~ "error executing query on to root" ]]
-}
-
-@test "dolt query diff prints query plan if query is undiffable" {
-    dolt add .
-    dolt commit -m rows
-    run dolt query_diff 'select * from test'
-    [ "$status" -ne 0 ]
-    [[ "$output" =~ "query plan:" ]]
 }
