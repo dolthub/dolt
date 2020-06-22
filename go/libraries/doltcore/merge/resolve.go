@@ -16,6 +16,7 @@ package merge
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -34,36 +35,36 @@ func Theirs(key types.Value, cnf doltdb.Conflict) (types.Value, error) {
 	return cnf.MergeValue, nil
 }
 
-func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tbl *doltdb.Table, autoResFunc AutoResolver) (*doltdb.Table, error) {
+func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tblName string, tbl *doltdb.Table, autoResFunc AutoResolver, tableEditSession *doltdb.TableEditSession) error {
 	if has, err := tbl.HasConflicts(); err != nil {
-		return nil, err
+		return err
 	} else if !has {
-		return nil, doltdb.ErrNoConflicts
+		return doltdb.ErrNoConflicts
+	}
+
+	tableEditor, err := tableEditSession.GetTableEditor(ctx, tblName, nil)
+	if err != nil {
+		return err
 	}
 
 	tblSchRef, err := tbl.GetSchemaRef()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	tblSchVal, err := tblSchRef.TargetValue(ctx, vrw)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	tblSch, err := encoding.UnmarshalSchemaNomsValue(ctx, vrw.Format(), tblSchVal)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	schemas, conflicts, err := tbl.GetConflicts(ctx)
 	if err != nil {
-		return nil, err
-	}
-
-	tableEditor, err := doltdb.NewTableEditor(ctx, tbl, tblSch)
-	if err != nil {
-		return nil, err
+		return err
 	}
 
 	err = conflicts.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
@@ -110,23 +111,36 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tbl *doltdb.Ta
 		return false, nil
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	newTbl, err := tableEditor.Table()
+	newRoot, err := tableEditSession.GetRoot(ctx)
 	if err != nil {
-		return nil, err
+		return err
+	}
+
+	newTbl, ok, err := newRoot.GetTable(ctx, tblName)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("resolved table `%s` cannot be found", tblName)
 	}
 
 	m, err := types.NewMap(ctx, vrw)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	newTbl, err = newTbl.SetConflicts(ctx, schemas, m)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return newTbl, nil
+	newRoot, err = newRoot.PutTable(ctx, tblName, newTbl)
+	if err != nil {
+		return err
+	}
+
+	return tableEditSession.SetRoot(ctx, newRoot)
 }

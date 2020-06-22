@@ -83,8 +83,8 @@ func LoadForeignKeyCollection(ctx context.Context, fkMap types.Map) (*ForeignKey
 	return fkc, nil
 }
 
-// AddKey adds the given foreign key to the collection. Checks that the given name is unique in the collection.
-// All other validation should occur before being added to the collection.
+// AddKey adds the given foreign key to the collection. Checks that the given name is unique in the collection, and that
+// both column counts are equal. All other validation should occur before being added to the collection.
 func (fkc *ForeignKeyCollection) AddKey(key *ForeignKey) error {
 	if key.Name == "" {
 		key.Name = fmt.Sprintf("fk_%s_%s_1", key.TableName, key.ReferencedTableName)
@@ -93,6 +93,14 @@ func (fkc *ForeignKeyCollection) AddKey(key *ForeignKey) error {
 		}
 	} else if fkc.Contains(key.Name) {
 		return fmt.Errorf("a foreign key with the name `%s` already exists", key.Name)
+	}
+
+	if len(key.TableColumns) != len(key.ReferencedTableColumns) {
+		return fmt.Errorf("foreign keys must have the same number of columns declared and referenced")
+	}
+
+	if key.TableName == key.ReferencedTableName {
+		return fmt.Errorf("inter-table foreign keys are not yet supported")
 	}
 
 	fkc.foreignKeys[key.Name] = key

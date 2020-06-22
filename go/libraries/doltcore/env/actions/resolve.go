@@ -52,6 +52,8 @@ func AutoResolveTables(ctx context.Context, dEnv *env.DoltEnv, autoResolver merg
 }
 
 func autoResolve(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, autoResolver merge.AutoResolver, tbls []string) error {
+	tableEditSession := doltdb.CreateTableEditSession(root, doltdb.TableEditSessionProps{})
+
 	for _, tblName := range tbls {
 		tbl, ok, err := root.GetTable(ctx, tblName)
 
@@ -63,18 +65,17 @@ func autoResolve(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue,
 			return doltdb.ErrTableNotFound
 		}
 
-		updatedTbl, err := merge.ResolveTable(ctx, root.VRW(), tbl, autoResolver)
-
-		if err != nil {
-			return err
-		}
-
-		root, err = root.PutTable(ctx, tblName, updatedTbl)
+		err = merge.ResolveTable(ctx, root.VRW(), tblName, tbl, autoResolver, tableEditSession)
 
 		if err != nil {
 			return err
 		}
 	}
 
-	return dEnv.UpdateWorkingRoot(ctx, root)
+	newRoot, err := tableEditSession.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	return dEnv.UpdateWorkingRoot(ctx, newRoot)
 }
