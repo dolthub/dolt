@@ -33,6 +33,7 @@ teardown() {
     dolt sql -q 'update test set c1 = 9 where pk = 0'
     dolt sql -q 'delete from test where pk=1'
     dolt sql -q 'insert into test values (2,2,"2")'
+    dolt query_diff 'select * from test'
     run dolt query_diff 'select * from test'
     [ "$status" -eq 0 ]
     [[ "$output" =~ "|     | pk | c1 | c2 |" ]]
