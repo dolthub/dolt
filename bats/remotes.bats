@@ -701,3 +701,134 @@ SQL
     dolt pull
     [ "$status" -eq 0 ]
 }
+
+create_master_remote_branch() {
+    dolt remote add origin http://localhost:50051/test-org/test-repo
+    dolt sql -q 'create table test (id int primary key);'
+    dolt add .
+    dolt commit -m 'create test table.'
+    dolt push origin master:master
+}
+
+create_two_more_remote_branches() {
+    dolt commit --allow-empty -m 'another commit.'
+    dolt push origin master:branch-one
+    dolt sql -q 'insert into test (id) values (1), (2), (3);'
+    dolt add .
+    dolt commit -m 'add some values.'
+    dolt push origin master:branch-two
+}
+
+create_three_remote_branches() {
+    create_master_remote_branch
+    create_two_more_remote_branches
+}
+
+@test "clone creates remotes refs for all remote branches" {
+    skip "dolt does not currently create the right remote refs..."
+    create_three_remote_branches
+    cd dolt-repo-clones
+    dolt clone http://localhost:50051/test-org/test-repo
+    cd test-repo
+    run dolt branch -a
+    [ "$status" -eq 1 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ "$output" =~ "* master" ]] || false
+    [[ "$output" =~ "remotes/origin/master" ]] || false
+    [[ "$output" =~ "remotes/origin/branch-one" ]] || false
+    [[ "$output" =~ "remotes/origin/branch-two" ]] || false
+}
+
+@test "fetch creates new remote refs for new remote branches" {
+    create_master_remote_branch
+
+    cd dolt-repo-clones
+    dolt clone http://localhost:50051/test-org/test-repo
+    cd test-repo
+    dolt branch -a
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "* master" ]] || false
+    [[ "$output" =~ "remotes/origin/master" ]] || false
+
+    cd ../../
+    create_two_more_remote_branches
+
+    cd dolt-repo-clones/test-repo
+    dolt fetch
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ "$lines[1]" =~ "* master" ]] || false
+    [[ "$output" =~ "remotes/origin/master" ]] || false
+    [[ "$output" =~ "remotes/origin/branch-one" ]] || false
+    [[ "$output" =~ "remotes/origin/branch-two" ]] || false
+}
+
+setup_ref_test() {
+    create_master_remote_branch
+
+    cd dolt-repo-clones
+    dolt clone http://localhost:50051/test-org/test-repo
+    cd test-repo
+}
+
+@test "can use refs/remotes/origin/... as commit reference for log" {
+    setup_ref_test
+    dolt log refs/remotes/origin/master
+}
+
+@test "can use refs/remotes/origin/... as commit reference for diff" {
+    setup_ref_test
+    dolt diff HEAD refs/remotes/origin/master
+    dolt diff refs/remotes/origin/master HEAD
+}
+
+@test "can use refs/remotes/origin/... as commit reference for merge" {
+    skip "this currently panics"
+    setup_ref_test
+    dolt merge refs/remotes/origin/master
+}
+
+@test "can use remotes/origin/... as commit reference for log" {
+    skip "this does not work"
+    setup_ref_test
+    dolt log remotes/origin/master
+}
+
+@test "can use remotes/origin/... as commit reference for diff" {
+    skip "this does not work"
+    setup_ref_test
+    dolt diff HEAD remotes/origin/master
+    dolt diff remotes/origin/master HEAD
+}
+
+@test "can use remotes/origin/... as commit reference for merge" {
+    setup_ref_test
+    dolt merge remotes/origin/master
+}
+
+@test "can use origin/... as commit reference for log" {
+    skip "this does not work"
+    setup_ref_test
+    dolt log origin/master
+}
+
+@test "can use origin/... as commit reference for diff" {
+    skip "this does not work"
+    setup_ref_test
+    dolt diff HEAD origin/master
+    dolt diff origin/master HEAD
+}
+
+@test "can use origin/... as commit reference for merge" {
+    setup_ref_test
+    dolt merge origin/master
+}
+
+@test "can delete remote reference branch as origin/..." {
+    skip "this does not work"
+    setup_ref_test
+    dolt branch -r -d origin/master
+}
