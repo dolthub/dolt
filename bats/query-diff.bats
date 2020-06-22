@@ -37,8 +37,8 @@ teardown() {
     run dolt query_diff 'select * from test'
     [ "$status" -eq 0 ]
     [[ "$output" =~ "|     | pk | c1 | c2 |" ]]
-    [[ "$output" =~ "|  <  | 1  | 1  | 1  |" ]]
-    [[ "$output" =~ "|  >  | 1  | 9  | 1  |" ]]
+    [[ "$output" =~ "|  <  | 0  | 0  | 0  |" ]]
+    [[ "$output" =~ "|  >  | 0  | 9  | 0  |" ]]
     [[ "$output" =~ "|  -  | 1  | 1  | 1  |" ]]
     [[ "$output" =~ "|  +  | 2  | 2  | 2  |" ]]
 }
