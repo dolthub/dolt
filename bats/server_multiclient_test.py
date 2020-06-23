@@ -27,8 +27,15 @@ def row(pk, c1, c2):
 
 UPDATE_BRANCH_FAIL_MSG = "Failed to update branch"
 
-def commit_and_update_branch(dc, commit_message, expected_hash, branch_name):
-    query_str = 'UPDATE dolt_branches SET hash = Commit("%s") WHERE name = "%s" AND hash = %s'% (commit_message, branch_name, expected_hash)
+def commit_and_update_branch(dc, commit_message, expected_hashes, branch_name):
+    expected_hash = "("
+    for i, eh in enumerate(expected_hashes):
+        if i != 0:
+            expected_hash += " or "
+        expected_hash += "hash = %s" % eh
+    expected_hash += ")"
+
+    query_str = 'UPDATE dolt_branches SET hash = Commit("%s") WHERE name = "%s" AND %s' % (commit_message, branch_name, expected_hash)
     _, row_count = query(dc, query_str)
 
     if row_count != 1:
@@ -74,7 +81,7 @@ pk INT NOT NULL,
 c1 INT,
 c2 INT,
 PRIMARY KEY(pk));""")
-    commit_and_update_branch(dc, "Created tables", "@@repo1_head", "master")
+    commit_and_update_branch(dc, "Created tables", ["@@repo1_head"], "master")
     query_and_test_results(dc, "SHOW TABLES;", [{"Table": "test"}])
 
 def duplicate_table_create(dc):
@@ -94,14 +101,14 @@ def seed_master(dc):
     if row_count != 3:
         raise Exception("Failed to update rows")
 
-    commit_and_update_branch(dc, "Seeded initial data", "@@repo1_head", "master")
+    commit_and_update_branch(dc, "Seeded initial data", ["@@repo1_head"], "master")
     expected = [row(0,0,0), row(1,1,1), row(2,2,2)]
     query_and_test_results(dc, "SELECT pk, c1, c2 FROM test ORDER BY pk", expected)
 
 def modify_pk0_on_master_and_commit(dc):
     query(dc, 'SET @@repo1_head=HASHOF("master");')
     query(dc, "UPDATE test SET c1=1 WHERE pk=0;")
-    commit_and_update_branch(dc, "set c1 to 1", "@@repo1_head", "master")
+    commit_and_update_branch(dc, "set c1 to 1", ["@@repo1_head"], "master")
 
 def modify_pk0_on_master_no_commit(dc):
     query(dc, 'SET @@repo1_head=HASHOF("master");')
@@ -109,7 +116,7 @@ def modify_pk0_on_master_no_commit(dc):
 
 def fail_to_commit(dc):
     try:
-        commit_and_update_branch(dc, "Created tables", "@@repo1_head", "master")
+        commit_and_update_branch(dc, "Created tables", ["@@repo1_head"], "master")
         raise Exception("Failed to fail commit")
     except Exception as e:
         if str(e) != UPDATE_BRANCH_FAIL_MSG:
@@ -117,7 +124,7 @@ def fail_to_commit(dc):
 
 def commit_to_feature(dc):
     create_branch(dc, "feature")
-    commit_and_update_branch(dc, "set c1 to 2", "@@repo1_head", "feature")
+    commit_and_update_branch(dc, "set c1 to 2", ["@@repo1_head"], "feature")
 
 def merge_resolve_commit(dc):
     query(dc, 'SET @@repo1_head=Merge("master");')
@@ -125,7 +132,7 @@ def merge_resolve_commit(dc):
     resolve_theirs(dc)
     expected = [row(0,1,0), row(1,1,1), row(2,2,2)]
     query_and_test_results(dc, "SELECT pk, c1, c2 FROM test ORDER BY pk", expected)
-    commit_and_update_branch(dc, "resolved conflicts", 'HASHOF("HEAD~1")', "master")
+    commit_and_update_branch(dc, "resolved conflicts", ['HASHOF("HEAD^1")', 'HASHOF("HEAD^2")'], "master")
 
 
 # test script
