@@ -269,8 +269,8 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (m
 	batchItr(len(hashesBytes), getLocsBatchSize, func(st, end int) (stop bool) {
 		batch := hashesBytes[st:end]
 		f := func() error {
-			req := remotesapi.GetDownloadLocsRequest{RepoId: dcs.getRepoId(), ChunkHashes: batch}
-			resp, err := dcs.csClient.GetDownloadLocations(ctx, &req)
+			req := &remotesapi.GetDownloadLocsRequest{RepoId: dcs.getRepoId(), ChunkHashes: batch}
+			resp, err := dcs.csClient.GetDownloadLocations(ctx, req)
 
 			if err != nil {
 				return NewRpcError(err, "GetDownloadLocations", dcs.host, req)
@@ -388,8 +388,8 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 		currByteSl := byteSl[st:end]
 
 		// send a request to the remote api to determine which chunks the remote api already has
-		req := remotesapi.HasChunksRequest{RepoId: dcs.getRepoId(), Hashes: currByteSl}
-		resp, err := dcs.csClient.HasChunks(ctx, &req)
+		req := &remotesapi.HasChunksRequest{RepoId: dcs.getRepoId(), Hashes: currByteSl}
+		resp, err := dcs.csClient.HasChunks(ctx, req)
 
 		if err != nil {
 			err = NewRpcError(err, "HasMany", dcs.host, req)
@@ -574,7 +574,7 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 
 	hashToCount := make(map[hash.Hash]int)
 	hashToData := make(map[hash.Hash][]byte)
-	hashToDetails := make(map[hash.Hash]remotesapi.TableFileDetails)
+	hashToDetails := make(map[hash.Hash]*remotesapi.TableFileDetails)
 
 	// structuring so this can be done as multiple files in the future.
 	{
@@ -589,7 +589,7 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 		hashToCount[h] = len(chnks)
 
 		md5Bytes := md5.Sum(data)
-		hashToDetails[h] = remotesapi.TableFileDetails{
+		hashToDetails[h] = &remotesapi.TableFileDetails{
 			Id:            h[:],
 			ContentLength: uint64(len(data)),
 			ContentHash:   md5Bytes[:],
@@ -598,7 +598,7 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 
 	tfds := make([]*remotesapi.TableFileDetails, 0, len(hashToDetails))
 	for _, v := range hashToDetails {
-		tfds = append(tfds, &v)
+		tfds = append(tfds, v)
 	}
 
 	req := &remotesapi.GetUploadLocsRequest{RepoId: dcs.getRepoId(), TableFileDetails: tfds}
