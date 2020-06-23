@@ -36,13 +36,14 @@ type RemoteChunkStore struct {
 	HttpHost string
 	csCache  *DBCache
 	bucket   string
+	remotesapi.UnimplementedChunkStoreServiceServer
 }
 
 func NewHttpFSBackedChunkStore(httpHost string, csCache *DBCache) *RemoteChunkStore {
 	return &RemoteChunkStore{
-		httpHost,
-		csCache,
-		"",
+		HttpHost: httpHost,
+		csCache:  csCache,
+		bucket:   "",
 	}
 }
 
