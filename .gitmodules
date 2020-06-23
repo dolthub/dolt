@@ -7,3 +7,9 @@
 [submodule "proto/third_party/golang-protobuf"]
 	path = proto/third_party/golang-protobuf
 	url = https://github.com/golang/protobuf.git
+[submodule "proto/third_party/protobuf-go"]
+	path = proto/third_party/protobuf-go
+	url = https://github.com/protocolbuffers/protobuf-go.git
+[submodule "proto/third_party/grpc-go"]
+	path = proto/third_party/grpc-go
+	url = https://github.com/grpc/grpc-go.git

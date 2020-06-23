@@ -33,7 +33,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
-var expectedFiles = make(map[string]remotesapi.TableFileDetails)
+var expectedFiles = make(map[string]*remotesapi.TableFileDetails)
 
 func ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 	logger := getReqLogger("HTTP_"+req.Method, req.RequestURI)
