@@ -1,0 +1,61 @@
+name: Dolt bats tests
+
+on:
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test:
+    name: Bats tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, macos-latest ]
+    steps:
+      - name: Setup Go 1.x
+        uses: actions/setup-go@v2
+        with:
+          go-version: ^1.13
+        id: go
+      - name: Setup Python 3.x
+        uses: actions/setup-python@v2
+        with:
+          python-version: ^3.6
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v1
+        with:
+          node-version: ^12
+      - name: Create CI Bin
+        run: |
+          mkdir -p ./.ci_bin
+          echo "::add-path::$(pwd)/.ci_bin"
+      - name: Install Bats
+        run: |
+          npm i bats
+          echo "::add-path::$(pwd)/node_modules/.bin"
+        working-directory: ./.ci_bin
+      - name: Install Doltpy
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install doltpy
+      - name: Install Dolt
+        working-directory: ./go
+        run: |
+          go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
+          go build -mod=readonly -o ../.ci_bin/git-dolt ./cmd/git-dolt/.
+          go build -mod=readonly -o ../.ci_bin/git-dolt-smudge ./cmd/git-dolt-smudge/.
+          go build -mod=readonly -o ../.ci_bin/remotesrv ./utils/remotesrv/.
+      - name: Setup Dolt Config
+        run: |
+          dolt config --global --add user.name 'Liquidata Actions'
+          dolt config --global --add user.email 'actions@liquidata.co'
+      - run: |
+          bats --tap .
+        working-directory: ./bats
+        env:
+          AWS_SDK_LOAD_CONFIG: "1"
+          AWS_REGION: "us-west-2"
+          DOLT_BATS_AWS_TABLE: "dolt-ci-bats-manifests-us-west-2"
+          DOLT_BATS_AWS_BUCKET: "dolt-ci-bats-chunks-us-west-2"
+          DOLT_BATS_AWS_EXISTING_REPO: "aws_remote_bats_tests"
