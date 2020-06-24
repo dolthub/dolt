@@ -269,31 +269,33 @@ func deleteForceBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.
 }
 
 func handleDeleteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter, force bool) int {
-	if apr.NArg() != 1 {
+	if apr.NArg() == 0 {
 		usage()
 		return 1
 	}
+	for i := 0; i < apr.NArg(); i++ {
+		brName := apr.Arg(i)
 
-	brName := apr.Arg(0)
+		err := actions.DeleteBranch(ctx, dEnv, brName, actions.DeleteOptions{
+			Force:  force,
+			Remote: apr.Contains(remoteFlag),
+		})
 
-	err := actions.DeleteBranch(ctx, dEnv, brName, actions.DeleteOptions{
-		Force: force,
-		Remote: apr.Contains(remoteFlag),
-	})
-
-	var verr errhand.VerboseError
-	if err != nil {
-		if err == doltdb.ErrBranchNotFound {
-			verr = errhand.BuildDError("fatal: branch '%s' not found", brName).Build()
-		} else if err == actions.ErrCOBranchDelete {
-			verr = errhand.BuildDError("error: Cannot delete checked out branch '%s'", brName).Build()
-		} else {
-			bdr := errhand.BuildDError("fatal: Unexpected error deleting '%s'", brName)
-			verr = bdr.AddCause(err).Build()
+		if err != nil {
+			var verr errhand.VerboseError
+			if err == doltdb.ErrBranchNotFound {
+				verr = errhand.BuildDError("fatal: branch '%s' not found", brName).Build()
+			} else if err == actions.ErrCOBranchDelete {
+				verr = errhand.BuildDError("error: Cannot delete checked out branch '%s'", brName).Build()
+			} else {
+				bdr := errhand.BuildDError("fatal: Unexpected error deleting '%s'", brName)
+				verr = bdr.AddCause(err).Build()
+			}
+			return HandleVErrAndExitCode(verr, usage)
 		}
 	}
 
-	return HandleVErrAndExitCode(verr, usage)
+	return HandleVErrAndExitCode(nil, usage)
 }
 
 func createBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {

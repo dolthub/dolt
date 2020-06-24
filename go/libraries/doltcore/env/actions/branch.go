@@ -122,32 +122,33 @@ func DeleteBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltRef,
 		return doltdb.ErrBranchNotFound
 	}
 
-	ms, err := doltdb.NewCommitSpec("head", "master")
+	if !opts.Force && !opts.Remote {
+		ms, err := doltdb.NewCommitSpec("head", "master")
+		if err != nil {
+			return err
+		}
 
-	if err != nil {
-		return err
-	}
+		master, err := ddb.Resolve(ctx, ms)
+		if err != nil {
+			return err
+		}
 
-	master, err := ddb.Resolve(ctx, ms)
+		cs, err := doltdb.NewCommitSpec("head", dref.String())
+		if err != nil {
+			return err
+		}
 
-	if err != nil {
-		return err
-	}
+		cm, err := ddb.Resolve(ctx, cs)
+		if err != nil {
+			return err
+		}
 
-	cs, err := doltdb.NewCommitSpec("head", dref.String())
+		isMerged, err := master.CanFastReverseTo(ctx, cm)
+		if err != nil {
+			return err
+		}
 
-	if err != nil {
-		return err
-	}
-
-	cm, err := ddb.Resolve(ctx, cs)
-
-	if err != nil {
-		return err
-	}
-
-	if !opts.Force {
-		if isMerged, _ := master.CanFastReverseTo(ctx, cm); !isMerged {
+		if !isMerged {
 			return ErrUnmergedBranchDelete
 		}
 	}
