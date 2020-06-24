@@ -829,3 +829,14 @@ setup_ref_test() {
     setup_ref_test
     dolt branch -r -d origin/master
 }
+
+@test "can list remote reference branches with -r" {
+    skip "this does not work"
+    setup_ref_test
+    run dolt branch -r
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "* master" ]] || false
+    [[ "$output" =~ "remotes/origin/master" ]] || false
+    [[ "$output" =~ "remotes/origin/branch-one" ]] || false
+    [[ "$output" =~ "remotes/origin/branch-two" ]] || false
+}
