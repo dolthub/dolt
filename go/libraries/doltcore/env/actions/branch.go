@@ -143,11 +143,10 @@ func DeleteBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltRef,
 			return err
 		}
 
-		isMerged, err := master.CanFastReverseTo(ctx, cm)
-		if err != nil {
+		isMerged, _ := master.CanFastReverseTo(ctx, cm)
+		if err != nil && err != doltdb.ErrUpToDate {
 			return err
 		}
-
 		if !isMerged {
 			return ErrUnmergedBranchDelete
 		}
