@@ -558,7 +558,6 @@ SQL
     # master hasn't been pushed so expect zzz to be the current branch and the string master should not be present
     run dolt branch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "aaa" ]] || false
     [[ "$output" =~ "* zzz" ]] || false
     [[ ! "$output" =~ "master" ]] || false
     cd ../..
@@ -570,8 +569,6 @@ SQL
     # master pushed so it should be the current branch.
     run dolt branch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "aaa" ]] || false
-    [[ "$output" =~ "zzz" ]] || false
     [[ "$output" =~ "* master" ]] || false
 }
 
@@ -725,7 +722,6 @@ create_three_remote_branches() {
 }
 
 @test "clone creates remotes refs for all remote branches" {
-    skip "dolt does not currently create the right remote refs..."
     create_three_remote_branches
     cd dolt-repo-clones
     dolt clone http://localhost:50051/test-org/test-repo
@@ -733,6 +729,8 @@ create_three_remote_branches() {
     run dolt branch -a
     [ "$status" -eq 0 ]
     [[ "$output" =~ "* master" ]] || false
+    [[ ! "$output" =~ " branch-one" ]] || false
+    [[ ! "$output" =~ " branch-two" ]] || false
     [[ "$output" =~ "remotes/origin/master" ]] || false
     [[ "$output" =~ "remotes/origin/branch-one" ]] || false
     [[ "$output" =~ "remotes/origin/branch-two" ]] || false

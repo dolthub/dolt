@@ -296,16 +296,14 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 		return errhand.BuildDError("error: clone failed").AddCause(err).Build()
 	}
 
+	branches, err := dEnv.DoltDB.GetBranches(ctx)
+	if err != nil {
+		return errhand.BuildDError("error: failed to list branches").AddCause(err).Build()
+	}
+
 	if branch == "" {
-		branches, err := dEnv.DoltDB.GetBranches(ctx)
-
-		if err != nil {
-			return errhand.BuildDError("error: failed to list branches").AddCause(err).Build()
-		}
-
 		for _, brnch := range branches {
 			branch = brnch.GetPath()
-
 			if branch == doltdb.MasterBranch {
 				break
 			}
@@ -337,14 +335,33 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 		return errhand.BuildDError("error: could not get the root value of " + branch).AddCause(err).Build()
 	}
 
-	if performPull {
-		remoteRef := ref.NewRemoteRef(remoteName, branch)
+	// After actions.Clone, we have repository with a local branch for
+	// every branch in the remote. What we want is a remote branch ref for
+	// every branch in the remote. We iterate through local branches and
+	// create remote refs corresponding to each of them. We delete all of
+	// the local branches except for the one corresponding to |branch|.
+	for _, brnch := range branches {
+		cs, _ := doltdb.NewCommitSpec("HEAD", brnch.GetPath())
+		cm, err := dEnv.DoltDB.Resolve(ctx, cs)
+		if err != nil {
+			return errhand.BuildDError("error: could not resolve branch ref at " + brnch.String()).AddCause(err).Build()
+		}
 
-		err = dEnv.DoltDB.FastForward(ctx, remoteRef, cm)
+		remoteRef := ref.NewRemoteRef(remoteName, brnch.GetPath())
+		err = dEnv.DoltDB.SetHead(ctx, remoteRef, cm)
 		if err != nil {
 			return errhand.BuildDError("error: could not create remote ref at " + remoteRef.String()).AddCause(err).Build()
 		}
 
+		if brnch.GetPath() != branch {
+			err := dEnv.DoltDB.DeleteBranch(ctx, brnch)
+			if err != nil {
+				return errhand.BuildDError("error: could not delete local branch " + brnch.String() + " after clone.").AddCause(err).Build()
+			}
+		}
+	}
+
+	if performPull {
 		err = actions.SaveDocsFromRoot(ctx, rootVal, dEnv)
 		if err != nil {
 			return errhand.BuildDError("error: failed to update docs on the filesystem").AddCause(err).Build()
