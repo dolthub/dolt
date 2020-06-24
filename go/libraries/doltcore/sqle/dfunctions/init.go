@@ -23,4 +23,5 @@ func init() {
 	// TODO: fix function registration
 	function.Defaults = append(function.Defaults, sql.Function1{Name: HashOfFuncName, Fn: NewHashOf})
 	function.Defaults = append(function.Defaults, sql.Function1{Name: CommitFuncName, Fn: NewCommitFunc})
+	function.Defaults = append(function.Defaults, sql.Function1{Name: MergeFuncName, Fn: NewMergeFunc})
 }

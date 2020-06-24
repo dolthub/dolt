@@ -20,6 +20,17 @@ teardown() {
     teardown_common
 }
 
+@test "multi-client" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+    start_sql_multi_user_server repo1
+
+    cd $BATS_TEST_DIRNAME
+    let PORT="$$ % (65536-1024) + 1024"
+    python3 server_multiclient_test.py $PORT
+}
+
 @test "test autocommit" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 

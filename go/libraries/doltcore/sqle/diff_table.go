@@ -145,7 +145,7 @@ func (dt *DiffTable) Schema() sql.Schema {
 
 func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	sess := DSessFromSess(ctx.Session)
-	rootCmt, err := sess.GetParentCommit(ctx, dt.dbName)
+	rootCmt, _, err := sess.GetParentCommit(ctx, dt.dbName)
 
 	if err != nil {
 		return nil, err

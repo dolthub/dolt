@@ -84,7 +84,7 @@ type LogItr struct {
 // NewLogItr creates a LogItr from the current environment.
 func NewLogItr(sqlCtx *sql.Context, dbName string, ddb *doltdb.DoltDB) (*LogItr, error) {
 	sess := DSessFromSess(sqlCtx.Session)
-	commit, err := sess.GetParentCommit(sqlCtx, dbName)
+	commit, _, err := sess.GetParentCommit(sqlCtx, dbName)
 
 	if err != nil {
 		return nil, err

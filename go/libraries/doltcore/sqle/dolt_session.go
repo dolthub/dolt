@@ -122,33 +122,34 @@ func (sess *DoltSession) GetRoot(dbName string) (*doltdb.RootValue, bool) {
 }
 
 // GetParentCommit returns the parent commit of the current session.
-func (sess *DoltSession) GetParentCommit(ctx context.Context, dbName string) (*doltdb.Commit, error) {
+func (sess *DoltSession) GetParentCommit(ctx context.Context, dbName string) (*doltdb.Commit, hash.Hash, error) {
 	dbd, dbFound := sess.dbDatas[dbName]
 
 	if !dbFound {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
+		return nil, hash.Hash{}, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
 	_, value := sess.Session.Get(dbName + HeadKeySuffix)
 	valStr, isStr := value.(string)
 
 	if !isStr || !hash.IsValid(valStr) {
-		return nil, doltdb.ErrInvalidHash
+		return nil, hash.Hash{}, doltdb.ErrInvalidHash
 	}
 
+	h := hash.Parse(valStr)
 	cs, err := doltdb.NewCommitSpec(valStr, "")
 
 	if err != nil {
-		return nil, err
+		return nil, hash.Hash{}, err
 	}
 
 	cm, err := dbd.ddb.Resolve(ctx, cs)
 
 	if err != nil {
-		return nil, err
+		return nil, hash.Hash{}, err
 	}
 
-	return cm, nil
+	return cm, h, nil
 }
 
 func (sess *DoltSession) Set(ctx context.Context, key string, typ sql.Type, value interface{}) error {

@@ -70,7 +70,7 @@ func NewHistoryTable(ctx *sql.Context, db Database, tblName string) (sql.Table, 
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	head, err := sess.GetParentCommit(ctx, dbName)
+	head, _, err := sess.GetParentCommit(ctx, dbName)
 
 	if err != nil {
 		return nil, err
