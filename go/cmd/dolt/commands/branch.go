@@ -50,11 +50,11 @@ The {{.EmphasisLeft}}-c{{.EmphasisRight}} options have the exact same semantics 
 
 With a {{.EmphasisLeft}}-d{{.EmphasisRight}}, {{.LessThan}}branchname{{.GreaterThan}} will be deleted. You may specify more than one branch for deletion.`,
 	Synopsis: []string{
-		`[--list] [-v] [-a]`,
+		`[--list] [-v] [-a] [-r]`,
 		`[-f] {{.LessThan}}branchname{{.GreaterThan}} [{{.LessThan}}start-point{{.GreaterThan}}]`,
 		`-m [-f] [{{.LessThan}}oldbranch{{.GreaterThan}}] {{.LessThan}}newbranch{{.GreaterThan}}`,
 		`-c [-f] [{{.LessThan}}oldbranch{{.GreaterThan}}] {{.LessThan}}newbranch{{.GreaterThan}}`,
-		`-d [-f] {{.LessThan}}branchname{{.GreaterThan}}...`,
+		`-d [-f] [-r] {{.LessThan}}branchname{{.GreaterThan}}...`,
 	},
 }
 
@@ -67,6 +67,7 @@ const (
 	deleteForceFlag = "D"
 	verboseFlag     = "verbose"
 	allFlag         = "all"
+	remoteFlag      = "remote"
 )
 
 type BranchCmd struct{}
@@ -98,6 +99,7 @@ func (cmd BranchCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(deleteForceFlag, "", "Shortcut for {{.EmphasisLeft}}--delete --force{{.EmphasisRight}}.")
 	ap.SupportsFlag(verboseFlag, "v", "When in list mode, show the hash and commit subject line for each head")
 	ap.SupportsFlag(allFlag, "a", "When in list mode, shows remote tracked branches")
+	ap.SupportsFlag(remoteFlag, "r", "When in list mode, show only remote tracked branches. When with -d, delete a remote tracking branch.")
 	return ap
 }
 
@@ -134,6 +136,7 @@ func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	branchSet := set.NewStrSet(apr.Args())
 
 	verbose := apr.Contains(verboseFlag)
+	printRemote := apr.Contains(remoteParam)
 	printAll := apr.Contains(allParam)
 
 	branches, err := dEnv.DoltDB.GetRefs(ctx)
@@ -154,7 +157,14 @@ func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 
 		cs, _ := doltdb.NewCommitSpec("HEAD", branch.String())
 
-		if branch.GetType() != ref.BranchRefType && !printAll {
+		shouldPrint := false
+		switch branch.GetType() {
+		case ref.BranchRefType:
+			shouldPrint = printAll || !printRemote
+		case ref.RemoteRefType:
+			shouldPrint = printAll || printRemote
+		}
+		if !shouldPrint {
 			continue
 		}
 

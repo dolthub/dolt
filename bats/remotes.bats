@@ -831,11 +831,26 @@ setup_ref_test() {
 }
 
 @test "can list remote reference branches with -r" {
-    skip "this does not work"
     setup_ref_test
+    cd ../../
+    create_two_more_remote_branches
+    cd dolt-repo-clones/test-repo
+    dolt fetch # TODO: Remove this fetch once clone works
     run dolt branch -r
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "* master" ]] || false
+    [[ "$output" =~ "remotes/origin/master" ]] || false
+    [[ "$output" =~ "remotes/origin/branch-one" ]] || false
+    [[ "$output" =~ "remotes/origin/branch-two" ]] || false
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "* master" ]] || false
+    [[ ! "$output" =~ "remotes/origin/master" ]] || false
+    [[ ! "$output" =~ "remotes/origin/branch-one" ]] || false
+    [[ ! "$output" =~ "remotes/origin/branch-two" ]] || false
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "* master" ]] || false
     [[ "$output" =~ "remotes/origin/master" ]] || false
     [[ "$output" =~ "remotes/origin/branch-one" ]] || false
     [[ "$output" =~ "remotes/origin/branch-two" ]] || false
