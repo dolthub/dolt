@@ -825,9 +825,12 @@ setup_ref_test() {
 }
 
 @test "can delete remote reference branch as origin/..." {
-    skip "this does not work"
     setup_ref_test
     dolt branch -r -d origin/master
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "* master" ]] || false
+    [[ ! "$output" =~ "remotes/origin/master" ]] || false
 }
 
 @test "can list remote reference branches with -r" {
@@ -836,6 +839,7 @@ setup_ref_test() {
     create_two_more_remote_branches
     cd dolt-repo-clones/test-repo
     dolt fetch # TODO: Remove this fetch once clone works
+
     run dolt branch -r
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "* master" ]] || false
