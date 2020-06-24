@@ -1,8 +1,6 @@
 name: Dolt go tests
 
 on:
-  push:
-    branches: [ db/ci-github-actions-go ]
   pull_request:
     branches: [ master ]
 
