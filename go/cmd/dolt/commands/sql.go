@@ -1333,6 +1333,16 @@ func (se *sqlEngine) checkThenDeleteAllRows(ctx *sql.Context, s *sqlparser.Delet
 						return false
 					}
 
+					// Let the SQL engine handle foreign key deletion as well
+					fkCollection, err := root.GetForeignKeyCollection(ctx)
+					if err != nil {
+						return false
+					}
+					_, referencedTables := fkCollection.KeysForTable(tName)
+					if len(referencedTables) > 0 {
+						return false
+					}
+
 					rowData, err := table.GetRowData(ctx)
 					if err != nil {
 						return false

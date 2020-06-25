@@ -78,54 +78,78 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 		expectedThree []sql.Row
 	}{
 		{
-			`
-INSERT INTO one   VALUES (1, 1, 4), (2, 2, 5), (3, 3, 6), (4, 4, 5);
-INSERT INTO two   VALUES (2, 1, 1), (3, 2, 2), (4, 3, 3), (5, 4, 4);
-INSERT INTO three VALUES (3, 1, 1), (4, 2, 2), (5, 3, 3), (6, 4, 4);
-UPDATE one SET v1 = v1 + v2;
-UPDATE two SET v2 = v1 - 2;
-`,
+			`INSERT INTO one VALUES (1, 1, 4), (2, 2, 5), (3, 3, 6), (4, 4, 5);
+			INSERT INTO two VALUES (2, 1, 1), (3, 2, 2), (4, 3, 3), (5, 4, 4);
+			INSERT INTO three VALUES (3, 1, 1), (4, 2, 2), (5, 3, 3), (6, 4, 4);
+			UPDATE one SET v1 = v1 + v2;
+			UPDATE two SET v2 = v1 - 2;`,
 			[]sql.Row{{1, 5, 4}, {2, 7, 5}, {3, 9, 6}, {4, 9, 5}},
 			[]sql.Row{{2, 5, 3}, {3, 7, 5}, {4, 9, 7}, {5, 9, 7}},
 			[]sql.Row{{3, 5, 3}, {4, 7, 5}, {5, 9, 7}, {6, 9, 7}},
 		},
 		{
-			`
-INSERT INTO one   VALUES (1, 1, 4), (2, 2, 5), (3, 3, 6), (4, 4, 5);
-INSERT INTO two   VALUES (2, 1, 1), (3, 2, 2), (4, 3, 3), (5, 4, 4);
-INSERT INTO three VALUES (3, 1, 1), (4, 2, 2), (5, 3, 3), (6, 4, 4);
-UPDATE one SET v1 = v1 + v2;
-DELETE FROM one WHERE pk = 3;
-UPDATE two SET v2 = v1 - 2;
-`,
+			`INSERT INTO one VALUES (1, 1, 4), (2, 2, 5), (3, 3, 6), (4, 4, 5);
+			INSERT INTO two VALUES (2, 1, 1), (3, 2, 2), (4, 3, 3), (5, 4, 4);
+			INSERT INTO three VALUES (3, 1, 1), (4, 2, 2), (5, 3, 3), (6, 4, 4);
+			UPDATE one SET v1 = v1 + v2;
+			DELETE FROM one WHERE pk = 3;
+			UPDATE two SET v2 = v1 - 2;`,
 			[]sql.Row{{1, 5, 4}, {2, 7, 5}, {4, 9, 5}},
 			[]sql.Row{{2, 5, 3}, {3, 7, 5}},
 			[]sql.Row{{3, 5, 3}, {4, 7, 5}},
 		},
 		{
-			`
-INSERT INTO three VALUES (1, NULL, NULL);
-INSERT INTO two VALUES (1, NULL, 1);
-`,
+			`INSERT INTO three VALUES (1, NULL, NULL), (2, NULL, 2), (3, 3, NULL);
+			INSERT INTO two VALUES (1, NULL, 1);`,
 			[]sql.Row{},
 			[]sql.Row{{1, nil, 1}},
-			[]sql.Row{{1, nil, nil}},
+			[]sql.Row{{1, nil, nil}, {2, nil, 2}, {3, 3, nil}},
 		},
 		{
-			`
-INSERT INTO one   VALUES (1, 1, 4), (2, 2, 5), (3, 3, 6), (4, 4, 5);
-INSERT INTO two   VALUES (2, 1, 1), (3, 2, 2), (4, 3, 3), (5, 4, 4);
-INSERT INTO three VALUES (3, 1, 1), (4, 2, 2), (5, 3, 3), (6, 4, 4);
-RENAME TABLE one TO new;
-ALTER  TABLE new RENAME COLUMN v1 TO vnew;
-UPDATE new SET vnew = vnew + v2;
-DELETE FROM new WHERE pk = 3;
-UPDATE two SET v2 = v1 - 2;
-RENAME TABLE new TO one;
-`,
+			`INSERT INTO one VALUES (1, 1, 4), (2, 2, 5), (3, 3, 6), (4, 4, 5);
+			INSERT INTO two VALUES (2, 1, 1), (3, 2, 2), (4, 3, 3), (5, 4, 4);
+			INSERT INTO three VALUES (3, 1, 1), (4, 2, 2), (5, 3, 3), (6, 4, 4);
+			RENAME TABLE one TO new;
+			ALTER  TABLE new RENAME COLUMN v1 TO vnew;
+			UPDATE new SET vnew = vnew + v2;
+			DELETE FROM new WHERE pk = 3;
+			UPDATE two SET v2 = v1 - 2;
+			RENAME TABLE new TO one;`,
 			[]sql.Row{{1, 5, 4}, {2, 7, 5}, {4, 9, 5}},
 			[]sql.Row{{2, 5, 3}, {3, 7, 5}},
 			[]sql.Row{{3, 5, 3}, {4, 7, 5}},
+		},
+		{
+			`INSERT INTO one VALUES (1, 1, 4), (2, 2, 5), (3, 3, 6), (4, 4, 5);
+			INSERT INTO two VALUES (2, 1, 1), (3, 2, 2), (4, 3, 3), (5, 4, 4);
+			INSERT INTO three VALUES (3, 1, 1), (4, 2, 2), (5, 3, 3), (6, 4, 4);
+			RENAME TABLE one TO new;
+			ALTER  TABLE new RENAME COLUMN v1 TO vnew;
+			UPDATE new SET vnew = vnew + v2;
+			DELETE FROM new WHERE pk = 3;
+			UPDATE two SET v2 = v1 - 2;
+			RENAME TABLE new TO one;`,
+			[]sql.Row{{1, 5, 4}, {2, 7, 5}, {4, 9, 5}},
+			[]sql.Row{{2, 5, 3}, {3, 7, 5}},
+			[]sql.Row{{3, 5, 3}, {4, 7, 5}},
+		},
+		{
+			`INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
+			INSERT INTO two VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
+			DELETE FROM one;`,
+			[]sql.Row{},
+			[]sql.Row{},
+			[]sql.Row{},
+		},
+		{
+			`INSERT INTO one VALUES (1, NULL, 1);
+			INSERT INTO two VALUES (1, NULL, 1), (2, NULL, 2);
+			INSERT INTO three VALUES (1, NULL, 1), (2, NULL, 2);
+			DELETE FROM one;
+			DELETE FROM two WHERE pk = 2`,
+			[]sql.Row{},
+			[]sql.Row{{1, nil, 1}},
+			[]sql.Row{{1, nil, 1}, {2, nil, 2}},
 		},
 	}
 
@@ -138,17 +162,16 @@ RENAME TABLE new TO one;
 				require.NoError(t, err)
 			}
 
-			testTableEditorRows(t, root, test.expectedOne, "one")
-			testTableEditorRows(t, root, test.expectedTwo, "two")
-			testTableEditorRows(t, root, test.expectedThree, "three")
+			assertTableEditorRows(t, root, test.expectedOne, "one")
+			assertTableEditorRows(t, root, test.expectedTwo, "two")
+			assertTableEditorRows(t, root, test.expectedThree, "three")
 		})
 	}
 }
 
 func TestTableEditorForeignKeySetNull(t *testing.T) {
 	testRoot, err := ExecuteSql(fk_dEnv, fk_initialRoot, `
-ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) ON DELETE SET NULL ON UPDATE SET NULL;
-`)
+ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) ON DELETE SET NULL ON UPDATE SET NULL;`)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -157,23 +180,19 @@ ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) ON DELETE SET NULL ON UP
 		expectedTwo  []sql.Row
 	}{
 		{
-			`
-INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
-INSERT INTO two VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
-UPDATE one SET v1 = v1 * v2;
-INSERT INTO one VALUES (4, 4, 4);
-INSERT INTO two VALUES (4, 4, 4);
-UPDATE one SET v2 = v1 * v2;
-`,
+			`INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
+			INSERT INTO two VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
+			UPDATE one SET v1 = v1 * v2;
+			INSERT INTO one VALUES (4, 4, 4);
+			INSERT INTO two VALUES (4, 4, 4);
+			UPDATE one SET v2 = v1 * v2;`,
 			[]sql.Row{{1, 1, 1}, {2, 4, 8}, {3, 9, 27}, {4, 4, 16}},
 			[]sql.Row{{1, 1, 1}, {2, nil, 2}, {3, nil, 3}, {4, 4, 4}},
 		},
 		{
-			`
-INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3), (4, 4, 4), (5, 5, 5);
-INSERT INTO two VALUES (1, 1, 1), (2, 2, 2), (4, 4, 4), (5, 5, 5);
-DELETE FROM one WHERE pk BETWEEN 3 AND 4;
-`,
+			`INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3), (4, 4, 4), (5, 5, 5);
+			INSERT INTO two VALUES (1, 1, 1), (2, 2, 2), (4, 4, 4), (5, 5, 5);
+			DELETE FROM one WHERE pk BETWEEN 3 AND 4;`,
 			[]sql.Row{{1, 1, 1}, {2, 2, 2}, {5, 5, 5}},
 			[]sql.Row{{1, 1, 1}, {2, 2, 2}, {4, nil, 4}, {5, 5, 5}},
 		},
@@ -189,10 +208,10 @@ DELETE FROM one WHERE pk BETWEEN 3 AND 4;
 			}
 
 			t.Run("one", func(t *testing.T) {
-				testTableEditorRows(t, root, test.expectedOne, "one")
+				assertTableEditorRows(t, root, test.expectedOne, "one")
 			})
 			t.Run("two", func(t *testing.T) {
-				testTableEditorRows(t, root, test.expectedTwo, "two")
+				assertTableEditorRows(t, root, test.expectedTwo, "two")
 			})
 		})
 	}
@@ -206,10 +225,9 @@ func TestTableEditorForeignKeyRestrict(t *testing.T) {
 	} {
 		t.Run(referenceOption, func(t *testing.T) {
 			testRoot, err := ExecuteSql(fk_dEnv, fk_initialRoot, fmt.Sprintf(`
-ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) %s;
-INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
-INSERT INTO two VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
-`, referenceOption))
+			ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) %s;
+			INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
+			INSERT INTO two VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);`, referenceOption))
 			require.NoError(t, err)
 
 			tests := []struct {
@@ -233,51 +251,31 @@ INSERT INTO two VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
 					true,
 				},
 				{
-					`
-INSERT INTO one VALUES (4, 4, 4);
-`,
-					`
-UPDATE one SET v1 = 1 WHERE pk = 4;
-`,
+					`INSERT INTO one VALUES (4, 4, 4);`,
+					`UPDATE one SET v1 = 1 WHERE pk = 4;`,
 					false,
 				},
 				{
-					`
-INSERT INTO one VALUES (4, 4, 4);
-`,
-					`
-DELETE FROM one WHERE pk > 3;
-`,
+					`INSERT INTO one VALUES (4, 4, 4);`,
+					`DELETE FROM one WHERE pk > 3;`,
 					false,
 				},
 				{
-					`
-INSERT INTO one VALUES (4, 3, 4);
-`,
-					`
-DELETE FROM one WHERE pk > 3;
-`,
+					`INSERT INTO one VALUES (4, 3, 4);`,
+					`DELETE FROM one WHERE pk > 3;`,
 					true,
 				},
 				{
-					`
-INSERT INTO one VALUES (4, 4, 4);
-UPDATE one SET v1 = 2 WHERE pk > 3;
-`,
-					`
-DELETE FROM one WHERE pk > 3;
-`,
+					`INSERT INTO one VALUES (4, 4, 4);
+					UPDATE one SET v1 = 2 WHERE pk > 3;`,
+					`DELETE FROM one WHERE pk > 3;`,
 					true,
 				},
 				{
-					`
-INSERT INTO one VALUES (4, 4, 4);
-DELETE FROM two WHERE pk = 2;
-UPDATE one SET v1 = 2 WHERE pk > 3;
-`,
-					`
-DELETE FROM one WHERE pk > 3;
-`,
+					`INSERT INTO one VALUES (4, 4, 4);
+					DELETE FROM two WHERE pk = 2;
+					UPDATE one SET v1 = 2 WHERE pk > 3;`,
+					`DELETE FROM one WHERE pk > 3;`,
 					false,
 				},
 			}
@@ -315,63 +313,39 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 		trigger string
 	}{
 		{
-			`
-INSERT INTO one VALUES (1, 1, 1);
-INSERT INTO two VALUES (1, 1, 1);
-`,
-			`
-INSERT INTO three VALUES (1, 1, 2);
-`,
+			`INSERT INTO one VALUES (1, 1, 1);
+			INSERT INTO two VALUES (1, 1, 1);`,
+			`INSERT INTO three VALUES (1, 1, 2);`,
 		},
 		{
-			`
-INSERT INTO one VALUES (1, 1, 1);
-INSERT INTO two VALUES (1, 1, 1);
-`,
-			`
-INSERT INTO three VALUES (1, 2, 1);
-`,
+			`INSERT INTO one VALUES (1, 1, 1);
+			INSERT INTO two VALUES (1, 1, 1);`,
+			`INSERT INTO three VALUES (1, 2, 1);`,
 		},
 		{
-			`
-INSERT INTO one VALUES (1, 1, 1);
-INSERT INTO two VALUES (1, 1, 1);
-`,
-			`
-INSERT INTO three VALUES (1, 2, 2);
-`,
+			`INSERT INTO one VALUES (1, 1, 1);
+			INSERT INTO two VALUES (1, 1, 1);`,
+			`INSERT INTO three VALUES (1, 2, 2);`,
 		},
 		{
-			`
-INSERT INTO one   VALUES (1, 1, 1);
-INSERT INTO two   VALUES (1, 1, 1);
-INSERT INTO three VALUES (1, 1, 1);
-`,
-			`
-UPDATE two SET v1 = 2;
-`,
+			`INSERT INTO one VALUES (1, 1, 1);
+			INSERT INTO two VALUES (1, 1, 1);
+			INSERT INTO three VALUES (1, 1, 1);`,
+			`UPDATE two SET v1 = 2;`,
 		},
 		{
-			`
-INSERT INTO one   VALUES (1, 1, 1), (2, 2, 2);
-INSERT INTO two   VALUES (2, 1, 1);
-INSERT INTO three VALUES (2, 1, 1);
-UPDATE one SET v1 = 2;
-`,
-			`
-INSERT INTO two VALUES (1, 1, 1);
-`,
+			`INSERT INTO one VALUES (1, 1, 1), (2, 2, 2);
+			INSERT INTO two VALUES (2, 1, 1);
+			INSERT INTO three VALUES (2, 1, 1);
+			UPDATE one SET v1 = 2;`,
+			`INSERT INTO two VALUES (1, 1, 1);`,
 		},
 		{
-			`
-INSERT INTO one   VALUES (1, 1, 1), (2, 2, 2);
-INSERT INTO two   VALUES (2, 1, 1);
-INSERT INTO three VALUES (2, 1, 1);
-DELETE FROM one   WHERE pk = 1;
-`,
-			`
-INSERT INTO two VALUES (1, 1, 1);
-`,
+			`INSERT INTO one VALUES (1, 1, 1), (2, 2, 2);
+			INSERT INTO two VALUES (2, 1, 1);
+			INSERT INTO three VALUES (2, 1, 1);
+			DELETE FROM one WHERE pk = 1;`,
+			`INSERT INTO two VALUES (1, 1, 1);`,
 		},
 	}
 
@@ -389,7 +363,7 @@ INSERT INTO two VALUES (1, 1, 1);
 	}
 }
 
-func testTableEditorRows(t *testing.T, root *doltdb.RootValue, expected []sql.Row, tableName string) {
+func assertTableEditorRows(t *testing.T, root *doltdb.RootValue, expected []sql.Row, tableName string) {
 	tbl, ok, err := root.GetTable(context.Background(), tableName)
 	require.NoError(t, err)
 	require.True(t, ok)

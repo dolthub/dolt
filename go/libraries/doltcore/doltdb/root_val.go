@@ -816,6 +816,8 @@ func (root *RootValue) TableDiff(ctx context.Context, other *RootValue) (added, 
 	return added, modified, removed, nil
 }
 
+// UpdateTablesFromOther takes the tables from the given root and applies them to the calling root, along with any
+// foreign keys and other table-related data.
 func (root *RootValue) UpdateTablesFromOther(ctx context.Context, tblNames []string, other *RootValue) (*RootValue, error) {
 	tableMap, err := root.getTableMap()
 	if err != nil {
@@ -1178,9 +1180,10 @@ func (root *RootValue) PutForeignKeyCollection(ctx context.Context, fkc *Foreign
 	return &RootValue{root.vrw, rootValSt, fkc.copy()}, nil
 }
 
-// VerifyForeignKeys ensures that all foreign keys' tables are present, removing any foreign keys where the declared
+// ValidateForeignKeys ensures that all foreign keys' tables are present, removing any foreign keys where the declared
 // table is missing, and returning an error if a key is in an invalid state or a referenced table is missing.
-func (root *RootValue) VerifyForeignKeys(ctx context.Context) (*RootValue, error) {
+//TODO: validate that rows that were not modified still adhere to the foreign key constraints
+func (root *RootValue) ValidateForeignKeys(ctx context.Context) (*RootValue, error) {
 	fkCollection, err := root.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, err
@@ -1210,16 +1213,15 @@ func (root *RootValue) VerifyForeignKeys(ctx context.Context) (*RootValue, error
 	for _, foreignKey := range allForeignKeys {
 		tblSch, existsInRoot := allTablesSet[foreignKey.TableName]
 		if existsInRoot {
-			if !foreignKey.VerifyTableSchema(tblSch) {
-				return nil, fmt.Errorf("foreign key `%s` has entered an invalid state, table `%s` does not match", foreignKey.Name, foreignKey.TableName)
+			if err := foreignKey.ValidateTableSchema(tblSch); err != nil {
+				return nil, err
 			}
 			parentSch, existsInRoot := allTablesSet[foreignKey.ReferencedTableName]
 			if !existsInRoot {
 				return nil, fmt.Errorf("foreign key `%s` requires the referenced table `%s`", foreignKey.Name, foreignKey.ReferencedTableName)
 			}
-			if !foreignKey.VerifyReferencedTableSchema(parentSch) {
-				return nil, fmt.Errorf("foreign key `%s` has entered an invalid state, referenced table `%s` does not match",
-					foreignKey.Name, foreignKey.ReferencedTableName)
+			if err := foreignKey.ValidateReferencedTableSchema(parentSch); err != nil {
+				return nil, err
 			}
 		} else {
 			_, err := fkCollection.RemoveKey(foreignKey.Name)

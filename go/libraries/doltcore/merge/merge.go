@@ -170,23 +170,9 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, tableEditS
 		return nil, nil, err
 	}
 
-	tempRoot, err := tableEditSession.GetRoot(ctx)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	newTempRoot, err := tempRoot.PutTable(ctx, tblName, updatedTbl)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	err = tableEditSession.SetRoot(ctx, newTempRoot)
-
-	if err != nil {
-		return nil, nil, err
-	}
+	err = tableEditSession.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+		return root.PutTable(ctx, tblName, updatedTbl)
+	})
 
 	updatedTblEditor, err := tableEditSession.GetTableEditor(ctx, tblName, nil)
 
@@ -455,7 +441,7 @@ func mergeTableData(ctx context.Context, tblName string, sch schema.Schema, rows
 	}
 
 	conflicts := <-conflictMapChan
-	newRoot, err := tblEdit.GetRoot(ctx)
+	newRoot, err := tblEdit.Flush(ctx)
 	if err != nil {
 		return nil, types.EmptyMap, nil, err
 	}
@@ -665,18 +651,13 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, commit, mergeCommit *
 				unconflicted = append(unconflicted, tblName)
 			}
 
-			var err error
-			newRoot, err = tableEditSession.GetRoot(ctx)
+			err = tableEditSession.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+				return root.PutTable(ctx, tblName, mergedTable)
+			})
 			if err != nil {
 				return nil, nil, err
 			}
-
-			newRoot, err = newRoot.PutTable(ctx, tblName, mergedTable)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			err = tableEditSession.SetRoot(ctx, newRoot)
+			newRoot, err = tableEditSession.Flush(ctx)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -684,12 +665,10 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, commit, mergeCommit *
 			return nil, nil, err
 		} else if has {
 			tblToStats[tblName] = &MergeStats{Operation: TableRemoved}
-			newRoot, err = newRoot.RemoveTables(ctx, tblName)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			err = tableEditSession.SetRoot(ctx, newRoot)
+			err = tableEditSession.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+				return root.RemoveTables(ctx, tblName)
+			})
+			newRoot, err = tableEditSession.Flush(ctx)
 			if err != nil {
 				return nil, nil, err
 			}

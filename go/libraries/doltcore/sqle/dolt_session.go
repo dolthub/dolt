@@ -39,8 +39,9 @@ var _ sql.Session = &DoltSession{}
 // DoltSession is the sql.Session implementation used by dolt.  It is accessible through a *sql.Context instance
 type DoltSession struct {
 	sql.Session
-	dbRoots map[string]dbRoot
-	dbDatas map[string]dbData
+	dbRoots   map[string]dbRoot
+	dbDatas   map[string]dbData
+	dbEditors map[string]*doltdb.TableEditSession
 
 	Username string
 	Email    string
@@ -48,7 +49,14 @@ type DoltSession struct {
 
 // DefaultDoltSession creates a DoltSession object with default values
 func DefaultDoltSession() *DoltSession {
-	sess := &DoltSession{sql.NewBaseSession(), make(map[string]dbRoot), make(map[string]dbData), "", ""}
+	sess := &DoltSession{
+		Session:   sql.NewBaseSession(),
+		dbRoots:   make(map[string]dbRoot),
+		dbDatas:   make(map[string]dbData),
+		dbEditors: make(map[string]*doltdb.TableEditSession),
+		Username:  "",
+		Email:     "",
+	}
 	return sess
 }
 
@@ -56,11 +64,13 @@ func DefaultDoltSession() *DoltSession {
 func NewDoltSession(ctx context.Context, sqlSess sql.Session, username, email string, dbs ...Database) (*DoltSession, error) {
 	dbRoots := make(map[string]dbRoot)
 	dbDatas := make(map[string]dbData)
+	dbEditors := make(map[string]*doltdb.TableEditSession)
 	for _, db := range dbs {
 		dbDatas[db.Name()] = dbData{rsw: db.rsw, ddb: db.ddb}
+		dbEditors[db.Name()] = doltdb.CreateTableEditSession(nil, doltdb.TableEditSessionProps{})
 	}
 
-	sess := &DoltSession{sqlSess, dbRoots, dbDatas, username, email}
+	sess := &DoltSession{sqlSess, dbRoots, dbDatas, dbEditors, username, email}
 	for _, db := range dbs {
 		err := sess.AddDB(ctx, db)
 
@@ -204,6 +214,12 @@ func (sess *DoltSession) Set(ctx context.Context, key string, typ sql.Type, valu
 		}
 
 		sess.dbRoots[dbName] = dbRoot{hashStr, root}
+
+		err = sess.dbEditors[dbName].SetRoot(ctx, root)
+		if err != nil {
+			return err
+		}
+
 		return nil
 	}
 
@@ -217,6 +233,8 @@ func (sess *DoltSession) AddDB(ctx context.Context, db Database) error {
 	ddb := db.GetDoltDB()
 
 	sess.dbDatas[db.Name()] = dbData{rsw: rsw, ddb: ddb}
+
+	sess.dbEditors[db.Name()] = doltdb.CreateTableEditSession(nil, doltdb.TableEditSessionProps{})
 
 	cs := rsr.CWBHeadSpec()
 

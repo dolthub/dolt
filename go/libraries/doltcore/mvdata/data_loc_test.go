@@ -221,7 +221,7 @@ func TestCreateRdWr(t *testing.T) {
 		}
 
 		if wr, ok := wr.(DataMoverCloser); ok {
-			root, err = wr.GetRoot(context.Background())
+			root, err = wr.Flush(context.Background())
 			assert.NoError(t, err)
 		}
 

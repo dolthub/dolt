@@ -34,7 +34,7 @@ type TableEditSession struct {
 
 // TableEditSessionProps are properties that define different functionality for the TableEditSession.
 type TableEditSessionProps struct {
-	ForeignKeyChecksDisabled bool // If disabled, then all foreign key checks and updates are ignored
+	ForeignKeyChecksDisabled bool // If true, then ALL foreign key checks AND updates (through CASCADE, etc.) are skipped
 }
 
 // CreateTableEditSession creates and returns a TableEditSession. Inserting a nil root is not an error, as there are
@@ -58,11 +58,46 @@ func (tes *TableEditSession) GetTableEditor(ctx context.Context, tableName strin
 	return tes.getTableEditor(ctx, tableName, tableSch)
 }
 
-// GetRoot returns an updated root with all of the changed tables.
-func (tes *TableEditSession) GetRoot(ctx context.Context) (*RootValue, error) {
+// Flush returns an updated root with all of the changed tables.
+func (tes *TableEditSession) Flush(ctx context.Context) (*RootValue, error) {
 	tes.writeMutex.Lock()
 	defer tes.writeMutex.Unlock()
 
+	return tes.flush(ctx)
+}
+
+// SetRoot uses the given root to set all open table editors to the state as represented in the root. If any
+// tables are removed in the root, but have open table editors, then the references to those are removed. If those
+// removed table's editors are used after this, then the behavior is undefined. This will lose any changes that have not
+// been flushed. If the purpose is to add a new table, foreign key, etc. (using Flush followed up with SetRoot), then
+// use UpdateRoot. Calling the two functions manually for the purposes of root modification may lead to race conditions.
+func (tes *TableEditSession) SetRoot(ctx context.Context, root *RootValue) error {
+	tes.writeMutex.Lock()
+	defer tes.writeMutex.Unlock()
+
+	return tes.setRoot(ctx, root)
+}
+
+// UpdateRoot takes in a function meant to update the root (whether that be updating a table's schema, adding a foreign
+// key, etc.) and passes in the flushed root. The function may then safely modify the root, and return the modified root
+// (assuming no errors). The TableEditSession will update itself in accordance with the newly returned root.
+func (tes *TableEditSession) UpdateRoot(ctx context.Context, updatingFunc func(ctx context.Context, root *RootValue) (*RootValue, error)) error {
+	tes.writeMutex.Lock()
+	defer tes.writeMutex.Unlock()
+
+	root, err := tes.flush(ctx)
+	if err != nil {
+		return err
+	}
+	newRoot, err := updatingFunc(ctx, root)
+	if err != nil {
+		return err
+	}
+	return tes.setRoot(ctx, newRoot)
+}
+
+// flush is the inner implementation for Flush that does not acquire any locks
+func (tes *TableEditSession) flush(ctx context.Context) (*RootValue, error) {
 	rootMutex := &sync.Mutex{}
 	wg := &sync.WaitGroup{}
 	wg.Add(len(tes.tables))
@@ -100,50 +135,6 @@ func (tes *TableEditSession) GetRoot(ctx context.Context) (*RootValue, error) {
 
 	tes.root = newRoot
 	return newRoot, nil
-}
-
-// SetRoot uses the given root to set all open table editors to the state as represented in the root. If any
-// tables are removed in the root, but have open table editors, then the references to those are removed. If those
-// removed table's editors are used after this, then the behavior is undefined.
-func (tes *TableEditSession) SetRoot(ctx context.Context, root *RootValue) error {
-	tes.writeMutex.Lock()
-	defer tes.writeMutex.Unlock()
-
-	if root == nil {
-		return fmt.Errorf("cannot set a TableEditSession's root to nil once it has been created")
-	}
-
-	fkCollection, err := root.GetForeignKeyCollection(ctx)
-	if err != nil {
-		return err
-	}
-	tes.root = root
-
-	for tableName, localTableEditor := range tes.tables {
-		t, ok, err := root.GetTable(ctx, tableName)
-		if err != nil {
-			return err
-		}
-		if !ok { // table was removed in newer root
-			delete(tes.tables, tableName)
-			continue
-		}
-		tSch, err := t.GetSchema(ctx)
-		if err != nil {
-			return err
-		}
-		newTableEditor, err := NewTableEditor(ctx, t, tSch)
-		if err != nil {
-			return err
-		}
-		localTableEditor.tableEditor = newTableEditor
-		localTableEditor.referencedTables, localTableEditor.referencingTables = fkCollection.KeysForTable(tableName)
-		err = tes.loadForeignKeys(ctx, localTableEditor)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // getTableEditor is the inner implementation for GetTableEditor, allowing recursive calls
@@ -210,15 +201,6 @@ func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName strin
 	return localTableEditor, nil
 }
 
-// getTableEditorOrFail returns the table editor for this table or fails
-func (tes *TableEditSession) getTableEditorOrFail(tableName string) (*SessionedTableEditor, error) {
-	localTableEditor, ok := tes.tables[tableName]
-	if !ok {
-		return nil, fmt.Errorf("unable to get table editor as `%s` is missing", tableName)
-	}
-	return localTableEditor, nil
-}
-
 // loadForeignKeys loads all tables mentioned in foreign keys for the given editor
 func (tes *TableEditSession) loadForeignKeys(ctx context.Context, localTableEditor *SessionedTableEditor) error {
 	// these are the tables that reference us, so we need to update them
@@ -231,6 +213,45 @@ func (tes *TableEditSession) loadForeignKeys(ctx context.Context, localTableEdit
 	// these are the tables that we reference, so we need to refer to them
 	for _, foreignKey := range localTableEditor.referencedTables {
 		_, err := tes.getTableEditor(ctx, foreignKey.ReferencedTableName, nil)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// setRoot is the inner implementation for SetRoot that does not acquire any locks
+func (tes *TableEditSession) setRoot(ctx context.Context, root *RootValue) error {
+	if root == nil {
+		return fmt.Errorf("cannot set a TableEditSession's root to nil once it has been created")
+	}
+
+	fkCollection, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return err
+	}
+	tes.root = root
+
+	for tableName, localTableEditor := range tes.tables {
+		t, ok, err := root.GetTable(ctx, tableName)
+		if err != nil {
+			return err
+		}
+		if !ok { // table was removed in newer root
+			delete(tes.tables, tableName)
+			continue
+		}
+		tSch, err := t.GetSchema(ctx)
+		if err != nil {
+			return err
+		}
+		newTableEditor, err := NewTableEditor(ctx, t, tSch)
+		if err != nil {
+			return err
+		}
+		localTableEditor.tableEditor = newTableEditor
+		localTableEditor.referencedTables, localTableEditor.referencingTables = fkCollection.KeysForTable(tableName)
+		err = tes.loadForeignKeys(ctx, localTableEditor)
 		if err != nil {
 			return err
 		}

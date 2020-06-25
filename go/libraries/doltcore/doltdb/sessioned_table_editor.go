@@ -49,9 +49,9 @@ func (ste *SessionedTableEditor) GetRow(ctx context.Context, key types.Tuple) (r
 	return ste.tableEditor.GetRow(ctx, key)
 }
 
-// GetRoot is a shortcut to calling SessionTableEditor.GetRoot.
-func (ste *SessionedTableEditor) GetRoot(ctx context.Context) (*RootValue, error) {
-	return ste.tableEditSession.GetRoot(ctx)
+// Flush is a shortcut to calling SessionTableEditor.Flush.
+func (ste *SessionedTableEditor) Flush(ctx context.Context) (*RootValue, error) {
+	return ste.tableEditSession.Flush(ctx)
 }
 
 // InsertRow adds the given row to the table. If the row already exists, use UpdateRow.
@@ -124,14 +124,16 @@ func (ste *SessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 	}
 
 	for _, foreignKey := range ste.referencingTables {
-		var err error
-		referencingSte, err := ste.tableEditSession.getTableEditorOrFail(foreignKey.TableName)
+		referencingSte, ok := ste.tableEditSession.tables[foreignKey.TableName]
+		if !ok {
+			return fmt.Errorf("unable to get table editor as `%s` is missing", foreignKey.TableName)
+		}
+		indexKey, hasNulls, err := ste.reduceRowAndConvert(ste.tableEditor.nbf, foreignKey.ReferencedTableColumns, foreignKey.TableColumns, dRow)
 		if err != nil {
 			return err
 		}
-		indexKey, err := ste.reduceRowAndConvert(ste.tableEditor.nbf, foreignKey.ReferencedTableColumns, foreignKey.TableColumns, dRow)
-		if err != nil {
-			return err
+		if hasNulls {
+			continue
 		}
 		referencingRows, err := referencingSte.tableEditor.GetIndexedRows(ctx, indexKey, foreignKey.TableIndex)
 		if err != nil {
@@ -181,16 +183,18 @@ func (ste *SessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 	}
 
 	for _, foreignKey := range ste.referencingTables {
-		var err error
-		referencedSte, err := ste.tableEditSession.getTableEditorOrFail(foreignKey.TableName)
+		referencingSte, ok := ste.tableEditSession.tables[foreignKey.TableName]
+		if !ok {
+			return fmt.Errorf("unable to get table editor as `%s` is missing", foreignKey.TableName)
+		}
+		indexKey, hasNulls, err := ste.reduceRowAndConvert(ste.tableEditor.nbf, foreignKey.ReferencedTableColumns, foreignKey.TableColumns, dOldRow)
 		if err != nil {
 			return err
 		}
-		indexKey, err := ste.reduceRowAndConvert(ste.tableEditor.nbf, foreignKey.ReferencedTableColumns, foreignKey.TableColumns, dOldRow)
-		if err != nil {
-			return err
+		if hasNulls {
+			continue
 		}
-		referencingRows, err := referencedSte.tableEditor.GetIndexedRows(ctx, indexKey, foreignKey.TableIndex)
+		referencingRows, err := referencingSte.tableEditor.GetIndexedRows(ctx, indexKey, foreignKey.TableIndex)
 		if err != nil {
 			return err
 		}
@@ -216,7 +220,7 @@ func (ste *SessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 			// NULL handling is usually done higher, so if a new value is NULL then we need to error
 			for i := range foreignKey.ReferencedTableColumns {
 				if incomingVal, _ := dNewRow.GetColVal(foreignKey.ReferencedTableColumns[i]); types.IsNull(incomingVal) {
-					col, ok := referencedSte.tableEditor.tSch.GetAllCols().GetByTag(foreignKey.TableColumns[i])
+					col, ok := referencingSte.tableEditor.tSch.GetAllCols().GetByTag(foreignKey.TableColumns[i])
 					if !ok {
 						return fmt.Errorf("column with tag `%d` not found on `%s` from foreign key `%s`",
 							foreignKey.TableColumns[i], foreignKey.TableName, foreignKey.Name)
@@ -231,12 +235,12 @@ func (ste *SessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 				newRow := rowToUpdate
 				for i := range foreignKey.ReferencedTableColumns {
 					incomingVal, _ := dNewRow.GetColVal(foreignKey.ReferencedTableColumns[i])
-					newRow, err = newRow.SetColVal(foreignKey.TableColumns[i], incomingVal, referencedSte.tableEditor.tSch)
+					newRow, err = newRow.SetColVal(foreignKey.TableColumns[i], incomingVal, referencingSte.tableEditor.tSch)
 					if err != nil {
 						return err
 					}
 				}
-				err = referencedSte.updateRow(ctx, rowToUpdate, newRow, false)
+				err = referencingSte.updateRow(ctx, rowToUpdate, newRow, false)
 				if err != nil {
 					return err
 				}
@@ -245,12 +249,12 @@ func (ste *SessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 			for _, oldRow := range referencingRows {
 				newRow := oldRow
 				for _, colTag := range foreignKey.TableColumns {
-					newRow, err = newRow.SetColVal(colTag, types.NullValue, referencedSte.tableEditor.tSch)
+					newRow, err = newRow.SetColVal(colTag, types.NullValue, referencingSte.tableEditor.tSch)
 					if err != nil {
 						return err
 					}
 				}
-				err = referencedSte.updateRow(ctx, oldRow, newRow, false)
+				err = referencingSte.updateRow(ctx, oldRow, newRow, false)
 				if err != nil {
 					return err
 				}
@@ -269,13 +273,14 @@ func (ste *SessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 
 // reduceRowAndConvert takes in a row and returns a Tuple containing only the values from the tags given. The returned
 // items have tags from newTags, while the tags from dRow are expected to match originalTags. Both parameter slices are
-// assumed to have equivalent ordering and length.
-func (ste *SessionedTableEditor) reduceRowAndConvert(nbf *types.NomsBinFormat, originalTags []uint64, newTags []uint64, dRow row.Row) (types.Tuple, error) {
+// assumed to have equivalent ordering and length. If the key contains any nulls, then we return true to indicate that
+// we do not propagate an ON DELETE/UPDATE.
+func (ste *SessionedTableEditor) reduceRowAndConvert(nbf *types.NomsBinFormat, originalTags []uint64, newTags []uint64, dRow row.Row) (types.Tuple, bool, error) {
 	keyVals := make([]types.Value, len(originalTags)*2)
 	for i, colTag := range originalTags {
 		val, ok := dRow.GetColVal(colTag)
 		if !ok {
-			val = types.NullValue
+			return types.EmptyTuple(nbf), true, nil
 		}
 		newTag := newTags[i]
 		keyVals[2*i] = types.Uint(newTag)
@@ -283,9 +288,9 @@ func (ste *SessionedTableEditor) reduceRowAndConvert(nbf *types.NomsBinFormat, o
 	}
 	tpl, err := types.NewTuple(nbf, keyVals...)
 	if err != nil {
-		return types.EmptyTuple(nbf), err
+		return types.EmptyTuple(nbf), false, err
 	}
-	return tpl, nil
+	return tpl, false, nil
 }
 
 func (ste *SessionedTableEditor) updateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row, checkReferences bool) error {
@@ -322,15 +327,18 @@ func (ste *SessionedTableEditor) validateForInsert(ctx context.Context, dRow row
 			return nil
 		}
 
-		indexKey, err := ste.reduceRowAndConvert(ste.tableEditor.nbf, foreignKey.TableColumns, foreignKey.ReferencedTableColumns, dRow)
+		indexKey, hasNulls, err := ste.reduceRowAndConvert(ste.tableEditor.nbf, foreignKey.TableColumns, foreignKey.ReferencedTableColumns, dRow)
 		if err != nil {
 			return err
 		}
-		referencedSte, err := ste.tableEditSession.getTableEditorOrFail(foreignKey.ReferencedTableName)
-		if err != nil {
-			return err
+		if hasNulls {
+			return nil
 		}
-		exists, err := referencedSte.tableEditor.ContainsIndexedKey(ctx, indexKey, foreignKey.ReferencedTableIndex)
+		referencingSte, ok := ste.tableEditSession.tables[foreignKey.ReferencedTableName]
+		if !ok {
+			return fmt.Errorf("unable to get table editor as `%s` is missing", foreignKey.ReferencedTableName)
+		}
+		exists, err := referencingSte.tableEditor.ContainsIndexedKey(ctx, indexKey, foreignKey.ReferencedTableIndex)
 		if err != nil {
 			return err
 		}

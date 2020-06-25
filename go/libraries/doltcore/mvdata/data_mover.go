@@ -53,7 +53,7 @@ type DataMoverOptions interface {
 
 type DataMoverCloser interface {
 	table.TableWriteCloser
-	GetRoot(context.Context) (*doltdb.RootValue, error)
+	Flush(context.Context) (*doltdb.RootValue, error)
 }
 
 type DataMover struct {
@@ -155,7 +155,7 @@ func MoveData(ctx context.Context, dEnv *env.DoltEnv, mover *DataMover, mvOpts D
 
 	if mvOpts.WritesToTable() {
 		wr := mover.Wr.(DataMoverCloser)
-		newRoot, err := wr.GetRoot(ctx)
+		newRoot, err := wr.Flush(ctx)
 		if err != nil {
 			return badCount, errhand.BuildDError("Failed to apply changes to the table.").AddCause(err).Build()
 		}

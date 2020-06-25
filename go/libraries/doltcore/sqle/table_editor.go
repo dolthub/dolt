@@ -42,7 +42,7 @@ var _ sql.RowInserter = (*sqlTableEditor)(nil)
 var _ sql.RowDeleter = (*sqlTableEditor)(nil)
 
 func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor, error) {
-	tableEditor, err := t.db.tes.GetTableEditor(ctx, t.name, t.sch)
+	tableEditor, err := t.db.TableEditSession(ctx).GetTableEditor(ctx, t.name, t.sch)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +93,7 @@ func (te *sqlTableEditor) Close(ctx *sql.Context) error {
 }
 
 func (te *sqlTableEditor) flush(ctx *sql.Context) error {
-	newRoot, err := te.tableEditor.GetRoot(ctx)
+	newRoot, err := te.tableEditor.Flush(ctx)
 	if err != nil {
 		return errhand.BuildDError("failed to write table back to database").AddCause(err).Build()
 	}
