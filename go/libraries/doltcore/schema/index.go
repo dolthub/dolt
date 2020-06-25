@@ -24,6 +24,9 @@ type Index interface {
 	Comment() string
 	// Count returns the number of indexed columns in this index.
 	Count() int
+	// Equals returns whether this Index is equivalent to another. This does not check for column names, thus those may
+	// be renamed and the index equivalence will be preserved. It also does not depend on the table's primary keys.
+	Equals(other Index) bool
 	// GetColumn returns the column for the given tag and whether the column was found or not.
 	GetColumn(tag uint64) (Column, bool)
 	// IndexedColumnTags returns the tags of the columns in the index.
@@ -71,6 +74,22 @@ func (ix *indexImpl) Comment() string {
 
 func (ix *indexImpl) Count() int {
 	return len(ix.tags)
+}
+
+func (ix *indexImpl) Equals(other Index) bool {
+	otherIx, ok := other.(*indexImpl)
+	if !ok || len(ix.tags) != len(otherIx.tags) {
+		// allTags includes primary keys, which are dependent on the table and not the index, thus they're excluded
+		return false
+	}
+	for i := range ix.tags {
+		if ix.tags[i] != otherIx.tags[i] {
+			return false
+		}
+	}
+	return ix.isHidden == otherIx.isHidden &&
+		ix.isUnique == otherIx.isUnique &&
+		ix.comment == otherIx.comment
 }
 
 func (ix *indexImpl) GetColumn(tag uint64) (Column, bool) {

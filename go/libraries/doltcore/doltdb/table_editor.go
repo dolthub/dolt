@@ -17,7 +17,11 @@ package doltdb
 import (
 	"context"
 	"fmt"
+	"io"
 	"sync"
+
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -40,6 +44,8 @@ type TableEditor struct {
 	aq       *async.ActionExecutor
 	nbf      *types.NomsBinFormat
 	indexEds []*IndexEditor
+
+	rowData types.Map // cached for GetRow and ContainsKey operations
 
 	// This mutex blocks on each operation, so that map reads and updates are serialized
 	writeMutex *sync.Mutex
@@ -68,6 +74,11 @@ func NewTableEditor(ctx context.Context, t *Table, tableSch schema.Schema) (*Tab
 		writeMutex: &sync.Mutex{},
 		flushMutex: &sync.RWMutex{},
 	}
+	var err error
+	te.rowData, err = t.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
 	te.aq = async.NewActionExecutor(ctx, te.flushEditAccumulator, 1, 1)
 
 	for i, index := range tableSch.Indexes().AllIndexes() {
@@ -88,6 +99,108 @@ func newTableEditAcc(nbf *types.NomsBinFormat) *tableEditAccumulator {
 		removedKeys:  make(map[hash.Hash]types.Value),
 		affectedKeys: make(map[hash.Hash]types.Value),
 	}
+}
+
+// ContainsIndexedKey returns whether the given key is contained within the index. The key is assumed to be in the
+// format expected of the index, similar to searching on the index map itself.
+func (te *TableEditor) ContainsIndexedKey(ctx context.Context, key types.Tuple, indexName string) (bool, error) {
+	te.Flush()
+	te.flushMutex.RLock()
+	defer te.flushMutex.RUnlock()
+
+	err := te.aq.WaitForEmpty()
+	if err != nil {
+		return false, err
+	}
+
+	indexIter, err := te.getIndexIterator(ctx, key, indexName)
+	if err != nil {
+		return false, err
+	}
+
+	_, err = indexIter.ReadRow(ctx)
+	if err == nil { // row exists
+		return true, nil
+	} else if err != io.EOF {
+		return false, err
+	} else {
+		return false, nil
+	}
+}
+
+// GetIndexedRows returns all matching rows for the given key on the index. The key is assumed to be in the format
+// expected of the index, similar to searching on the index map itself.
+func (te *TableEditor) GetIndexedRows(ctx context.Context, key types.Tuple, indexName string) ([]row.Row, error) {
+	te.Flush()
+	te.flushMutex.RLock()
+	defer te.flushMutex.RUnlock()
+
+	err := te.aq.WaitForEmpty()
+	if err != nil {
+		return nil, err
+	}
+
+	indexIter, err := te.getIndexIterator(ctx, key, indexName)
+	if err != nil {
+		return nil, err
+	}
+
+	var rows []row.Row
+	var r row.Row
+	for r, err = indexIter.ReadRow(ctx); err == nil; r, err = indexIter.ReadRow(ctx) {
+		indexRowTaggedValues, err := row.GetTaggedVals(r)
+		if err != nil {
+			return nil, err
+		}
+
+		pkTuple := indexRowTaggedValues.NomsTupleForPKCols(te.nbf, te.tSch.GetPKCols())
+		pkTupleVal, err := pkTuple.Value(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		fieldsVal, _, err := te.rowData.MaybeGet(ctx, pkTupleVal)
+		if err != nil {
+			return nil, err
+		}
+		if fieldsVal == nil {
+			keyStr, _ := types.EncodedValue(ctx, key)
+			return nil, fmt.Errorf("index key `%s` does not have a corresponding entry in table", keyStr)
+		}
+
+		tableRow, err := row.FromNoms(te.tSch, pkTupleVal.(types.Tuple), fieldsVal.(types.Tuple))
+		rows = append(rows, tableRow)
+	}
+	if err != io.EOF {
+		return nil, err
+	}
+	return rows, nil
+}
+
+// GetRow returns the row matching the key given from the TableEditor. This is equivalent to calling Table and then
+// GetRow on the returned table, but a tad faster.
+func (te *TableEditor) GetRow(ctx context.Context, key types.Tuple) (row.Row, bool, error) {
+	te.Flush()
+	te.flushMutex.RLock()
+	defer te.flushMutex.RUnlock()
+
+	err := te.aq.WaitForEmpty()
+	if err != nil {
+		return nil, false, err
+	}
+
+	fieldsVal, _, err := te.rowData.MaybeGet(ctx, key)
+	if err != nil {
+		return nil, false, err
+	}
+	if fieldsVal == nil {
+		return nil, false, nil
+	}
+	r, err := row.FromNoms(te.tSch, key, fieldsVal.(types.Tuple))
+	if err != nil {
+		return nil, false, err
+	}
+	return r, true, nil
 }
 
 // InsertRow adds the given row to the table. If the row already exists, use UpdateRow.
@@ -245,7 +358,7 @@ func (te *TableEditor) autoFlush() {
 }
 
 func (te *TableEditor) delete(key types.Tuple) error {
-	keyHash, err := key.Hash(te.t.Format())
+	keyHash, err := key.Hash(te.nbf)
 	if err != nil {
 		return err
 	}
@@ -265,15 +378,11 @@ func (te *TableEditor) delete(key types.Tuple) error {
 func (te *TableEditor) flushEditAccumulator(ctx context.Context, teaInterface interface{}) error {
 	// We don't call any locks here since this is called from an ActionExecutor with a concurrency of 1
 	tea := teaInterface.(*tableEditAccumulator)
-	originalRowData, err := te.t.GetRowData(ctx)
-	if err != nil {
-		return errhand.BuildDError("failed to read table").AddCause(err).Build()
-	}
 
 	// For all added keys, check for and report a collision
 	for keyHash, addedKey := range tea.addedKeys {
 		if _, ok := tea.removedKeys[keyHash]; !ok {
-			_, rowExists, err := originalRowData.MaybeGet(ctx, addedKey)
+			_, rowExists, err := te.rowData.MaybeGet(ctx, addedKey)
 			if err != nil {
 				return errhand.BuildDError("failed to read table").AddCause(err).Build()
 			}
@@ -297,21 +406,45 @@ func (te *TableEditor) flushEditAccumulator(ctx context.Context, teaInterface in
 	if err != nil {
 		return errhand.BuildDError("failed to finalize table changes").AddCause(err).Build()
 	}
-	updated, _, err := types.ApplyEdits(ctx, accEdits, originalRowData)
+	updatedMap, _, err := types.ApplyEdits(ctx, accEdits, te.rowData)
 	if err != nil {
 		return errhand.BuildDError("failed to modify table").AddCause(err).Build()
 	}
-	newTable, err := te.t.UpdateRows(ctx, updated)
+	newTable, err := te.t.UpdateRows(ctx, updatedMap)
 	if err != nil {
 		return errhand.BuildDError("failed to update rows").AddCause(err).Build()
 	}
-	newTable, err = te.updateIndexes(ctx, tea, newTable, originalRowData, updated)
+	newTable, err = te.updateIndexes(ctx, tea, newTable, te.rowData, updatedMap)
 	if err != nil {
 		return errhand.BuildDError("failed to update indexes").AddCause(err).Build()
 	}
 
 	te.t = newTable
+	te.rowData = updatedMap
 	return nil
+}
+
+func (te *TableEditor) getIndexIterator(ctx context.Context, key types.Tuple, indexName string) (table.TableReadCloser, error) {
+	var indexEd *IndexEditor
+	for _, ie := range te.indexEds {
+		if ie.Index().Name() == indexName {
+			indexEd = ie
+			break
+		}
+	}
+	if indexEd == nil {
+		return nil, fmt.Errorf("could not find referenced index `%s`", indexName)
+	}
+
+	indexMap, err := indexEd.Map(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return noms.NewNomsRangeReader(indexEd.idxSch, indexMap,
+		[]*noms.ReadRange{{Start: key, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
+			return tuple.StartsWith(key), nil
+		}}},
+	), nil
 }
 
 func (te *TableEditor) updateIndexes(ctx context.Context, tea *tableEditAccumulator, tbl *Table, originalRowData types.Map, updated types.Map) (*Table, error) {
