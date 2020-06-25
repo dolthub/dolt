@@ -19,10 +19,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -84,15 +85,15 @@ func (jsonw *JSONWriter) WriteRow(ctx context.Context, r row.Row) error {
 
 		switch col.TypeInfo.GetTypeIdentifier() {
 		case typeinfo.DatetimeTypeIdentifier,
-		typeinfo.DecimalTypeIdentifier,
-		typeinfo.EnumTypeIdentifier,
-		typeinfo.InlineBlobTypeIdentifier,
-		typeinfo.SetTypeIdentifier,
-		typeinfo.TimeTypeIdentifier,
-		typeinfo.TupleTypeIdentifier,
-		typeinfo.UuidTypeIdentifier,
-		typeinfo.VarBinaryTypeIdentifier,
-		typeinfo.YearTypeIdentifier:
+			typeinfo.DecimalTypeIdentifier,
+			typeinfo.EnumTypeIdentifier,
+			typeinfo.InlineBlobTypeIdentifier,
+			typeinfo.SetTypeIdentifier,
+			typeinfo.TimeTypeIdentifier,
+			typeinfo.TupleTypeIdentifier,
+			typeinfo.UuidTypeIdentifier,
+			typeinfo.VarBinaryTypeIdentifier,
+			typeinfo.YearTypeIdentifier:
 			v, err := col.TypeInfo.FormatValue(val)
 			if err != nil {
 				return true, err
@@ -100,11 +101,11 @@ func (jsonw *JSONWriter) WriteRow(ctx context.Context, r row.Row) error {
 			val = types.String(*v)
 
 		case typeinfo.BitTypeIdentifier,
-		typeinfo.BoolTypeIdentifier,
-		typeinfo.VarStringTypeIdentifier,
-		typeinfo.UintTypeIdentifier,
-		typeinfo.IntTypeIdentifier,
-		typeinfo.FloatTypeIdentifier:
+			typeinfo.BoolTypeIdentifier,
+			typeinfo.VarStringTypeIdentifier,
+			typeinfo.UintTypeIdentifier,
+			typeinfo.IntTypeIdentifier,
+			typeinfo.FloatTypeIdentifier:
 			// use primitive type
 		}
 
