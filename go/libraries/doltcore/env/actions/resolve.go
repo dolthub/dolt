@@ -72,7 +72,7 @@ func autoResolve(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue,
 		}
 	}
 
-	newRoot, err := tableEditSession.GetRoot(ctx)
+	newRoot, err := tableEditSession.Flush(ctx)
 	if err != nil {
 		return err
 	}

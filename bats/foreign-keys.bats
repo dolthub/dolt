@@ -1278,7 +1278,7 @@ SQL
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_child_parent_1` FOREIGN KEY (`parent_id_new`) REFERENCES `parent` (`id_new`)' ]] || false
 }
 
-@test "foreign-keys: dolt sql" {
+@test "foreign-keys: SQL CASCADE" {
     dolt sql <<SQL
 CREATE TABLE one (
   pk BIGINT PRIMARY KEY,
@@ -1289,7 +1289,7 @@ CREATE TABLE two (
   pk BIGINT PRIMARY KEY,
   v1 BIGINT,
   v2 BIGINT,
-  FOREIGN KEY (v1)
+  CONSTRAINT fk_name_1 FOREIGN KEY (v1)
     REFERENCES one(v1)
     ON DELETE CASCADE
     ON UPDATE CASCADE
@@ -1298,7 +1298,7 @@ CREATE TABLE three (
   pk BIGINT PRIMARY KEY,
   v1 BIGINT,
   v2 BIGINT,
-  FOREIGN KEY (v1, v2)
+  CONSTRAINT fk_name_2 FOREIGN KEY (v1, v2)
     REFERENCES two(v1, v2)
     ON DELETE CASCADE
     ON UPDATE CASCADE
@@ -1313,10 +1313,10 @@ SQL
 
     run dolt schema show two
     [ "$status" -eq "0" ]
-    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_two_one_1` FOREIGN KEY (`v1`) REFERENCES `one` (`v1`)' ]] || false
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name_1` FOREIGN KEY (`v1`) REFERENCES `one` (`v1`) ON DELETE CASCADE ON UPDATE CASCADE' ]] || false
     run dolt schema show three
     [ "$status" -eq "0" ]
-    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_three_two_1` FOREIGN KEY (`v1`,`v2`) REFERENCES `two` (`v1`,`v2`)' ]] || false
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name_2` FOREIGN KEY (`v1`,`v2`) REFERENCES `two` (`v1`,`v2`) ON DELETE CASCADE ON UPDATE CASCADE' ]] || false
 
     run dolt sql -q "SELECT * FROM one" -r=csv
     [ "$status" -eq "0" ]
@@ -1337,6 +1337,116 @@ SQL
     [[ "$output" =~ "3,5,3" ]] || false
     [[ "$output" =~ "4,7,5" ]] || false
     [[ "${#lines[@]}" = "3" ]] || false
+}
+
+@test "foreign-keys: SQL SET NULL" {
+    dolt sql <<SQL
+CREATE TABLE one (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT
+);
+CREATE TABLE two (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  CONSTRAINT fk_name_1 FOREIGN KEY (v1)
+    REFERENCES one(v1)
+    ON DELETE SET NULL
+    ON UPDATE SET NULL
+);
+INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
+INSERT INTO two VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
+UPDATE one SET v1 = v1 * v2;
+INSERT INTO one VALUES (4, 4, 4);
+INSERT INTO two VALUES (4, 4, 4);
+UPDATE one SET v2 = v1 * v2;
+SQL
+    
+    run dolt schema show two
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name_1` FOREIGN KEY (`v1`) REFERENCES `one` (`v1`) ON DELETE SET NULL ON UPDATE SET NULL' ]] || false
+    
+    run dolt sql -q "SELECT * FROM one" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1,v2" ]] || false
+    [[ "$output" =~ "1,1,1" ]] || false
+    [[ "$output" =~ "2,4,8" ]] || false
+    [[ "$output" =~ "3,9,27" ]] || false
+    [[ "$output" =~ "4,4,16" ]] || false
+    [[ "${#lines[@]}" = "5" ]] || false
+    run dolt sql -q "SELECT * FROM two" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1,v2" ]] || false
+    [[ "$output" =~ "1,1,1" ]] || false
+    [[ "$output" =~ "2,,2" ]] || false
+    [[ "$output" =~ "3,,3" ]] || false
+    [[ "$output" =~ "4,4,4" ]] || false
+    [[ "${#lines[@]}" = "5" ]] || false
+}
+
+@test "foreign-keys: SQL RESTRICT" {
+    dolt sql <<SQL
+CREATE TABLE one (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT
+);
+CREATE TABLE two (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  CONSTRAINT fk_name_1 FOREIGN KEY (v1)
+    REFERENCES one(v1)
+    ON DELETE RESTRICT
+    ON UPDATE RESTRICT
+);
+INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
+INSERT INTO two VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
+SQL
+    
+    run dolt schema show two
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name_1` FOREIGN KEY (`v1`) REFERENCES `one` (`v1`) ON DELETE RESTRICT ON UPDATE RESTRICT' ]] || false
+    
+    run dolt sql -q "UPDATE one SET v1 = v1 + v2;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+    dolt sql -q "UPDATE one SET v1 = v1;"
+    run dolt sql -q "DELETE FROM one;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+}
+
+@test "foreign-keys: SQL no reference options" {
+    dolt sql <<SQL
+CREATE TABLE one (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT
+);
+CREATE TABLE two (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  CONSTRAINT fk_name_1 FOREIGN KEY (v1)
+    REFERENCES one(v1)
+);
+INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
+INSERT INTO two VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
+SQL
+    
+    run dolt schema show two
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name_1` FOREIGN KEY (`v1`) REFERENCES `one` (`v1`)' ]] || false
+    
+    run dolt sql -q "UPDATE one SET v1 = v1 + v2;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+    dolt sql -q "UPDATE one SET v1 = v1;"
+    run dolt sql -q "DELETE FROM one;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
 }
 
 @test "foreign-keys: dolt table import" {

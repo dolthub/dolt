@@ -114,33 +114,25 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tblName string
 		return err
 	}
 
-	newRoot, err := tableEditSession.GetRoot(ctx)
-	if err != nil {
-		return err
-	}
+	return tableEditSession.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+		newTbl, ok, err := root.GetTable(ctx, tblName)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, fmt.Errorf("resolved table `%s` cannot be found", tblName)
+		}
 
-	newTbl, ok, err := newRoot.GetTable(ctx, tblName)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return fmt.Errorf("resolved table `%s` cannot be found", tblName)
-	}
+		m, err := types.NewMap(ctx, vrw)
+		if err != nil {
+			return nil, err
+		}
 
-	m, err := types.NewMap(ctx, vrw)
-	if err != nil {
-		return err
-	}
+		newTbl, err = newTbl.SetConflicts(ctx, schemas, m)
+		if err != nil {
+			return nil, err
+		}
 
-	newTbl, err = newTbl.SetConflicts(ctx, schemas, m)
-	if err != nil {
-		return err
-	}
-
-	newRoot, err = newRoot.PutTable(ctx, tblName, newTbl)
-	if err != nil {
-		return err
-	}
-
-	return tableEditSession.SetRoot(ctx, newRoot)
+		return root.PutTable(ctx, tblName, newTbl)
+	})
 }

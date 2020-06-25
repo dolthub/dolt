@@ -298,28 +298,37 @@ func (fkc *ForeignKeyCollection) Stage(ctx context.Context, fksToAdd []*ForeignK
 	}
 }
 
-// VerifyReferencedTableSchema verifies that the given schema matches the expectation of the referenced table.
-func (fk *ForeignKey) VerifyReferencedTableSchema(sch schema.Schema) bool {
+// ValidateReferencedTableSchema verifies that the given schema matches the expectation of the referenced table.
+func (fk *ForeignKey) ValidateReferencedTableSchema(sch schema.Schema) error {
 	allSchCols := sch.GetAllCols()
 	for _, colTag := range fk.ReferencedTableColumns {
 		_, ok := allSchCols.GetByTag(colTag)
 		if !ok {
-			return false
+			return fmt.Errorf("foreign key `%s` has entered an invalid state, referenced table `%s` has unexpected schema",
+				fk.Name, fk.ReferencedTableName)
 		}
 	}
-	return sch.Indexes().Contains(fk.ReferencedTableIndex)
+	if !sch.Indexes().Contains(fk.ReferencedTableIndex) {
+		return fmt.Errorf("foreign key `%s` has entered an invalid state, referenced table `%s` is missing the index `%s`",
+			fk.Name, fk.ReferencedTableName, fk.ReferencedTableIndex)
+	}
+	return nil
 }
 
-// VerifyTableSchema verifies that the given schema matches the expectation of the declaring table.
-func (fk *ForeignKey) VerifyTableSchema(sch schema.Schema) bool {
+// ValidateTableSchema verifies that the given schema matches the expectation of the declaring table.
+func (fk *ForeignKey) ValidateTableSchema(sch schema.Schema) error {
 	allSchCols := sch.GetAllCols()
 	for _, colTag := range fk.TableColumns {
 		_, ok := allSchCols.GetByTag(colTag)
 		if !ok {
-			return false
+			return fmt.Errorf("foreign key `%s` has entered an invalid state, table `%s` has unexpected schema", fk.Name, fk.TableName)
 		}
 	}
-	return sch.Indexes().Contains(fk.TableIndex)
+	if !sch.Indexes().Contains(fk.TableIndex) {
+		return fmt.Errorf("foreign key `%s` has entered an invalid state, table `%s` is missing the index `%s`",
+			fk.Name, fk.TableName, fk.TableIndex)
+	}
+	return nil
 }
 
 // String returns the SQL reference option in uppercase.

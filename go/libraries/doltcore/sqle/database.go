@@ -129,7 +129,6 @@ type Database struct {
 	rsw       env.RepoStateWriter
 	batchMode commitBehavior
 	tc        *tableCache
-	tes       *doltdb.TableEditSession
 }
 
 var _ sql.Database = Database{}
@@ -147,7 +146,6 @@ func NewDatabase(name string, ddb *doltdb.DoltDB, rsr env.RepoStateReader, rsw e
 		rsw:       rsw,
 		batchMode: single,
 		tc:        &tableCache{&sync.Mutex{}, make(map[*doltdb.RootValue]map[string]sql.Table)},
-		tes:       doltdb.CreateTableEditSession(nil, doltdb.TableEditSessionProps{}),
 	}
 }
 
@@ -161,7 +159,6 @@ func NewBatchedDatabase(name string, ddb *doltdb.DoltDB, rsr env.RepoStateReader
 		rsw:       rsw,
 		batchMode: batched,
 		tc:        &tableCache{&sync.Mutex{}, make(map[*doltdb.RootValue]map[string]sql.Table)},
-		tes:       doltdb.CreateTableEditSession(nil, doltdb.TableEditSessionProps{}),
 	}
 }
 
@@ -517,7 +514,7 @@ func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 	dsess := DSessFromSess(ctx.Session)
 	dsess.dbRoots[db.name] = dbRoot{hashStr, newRoot}
 
-	err = db.tes.SetRoot(ctx, newRoot)
+	err = dsess.dbEditors[db.name].SetRoot(ctx, newRoot)
 	if err != nil {
 		return err
 	}
@@ -749,6 +746,11 @@ func (db Database) DropView(ctx *sql.Context, name string) error {
 	}
 
 	return deleter.Close(ctx)
+}
+
+// TableEditSession returns the TableEditSession for this database from the given context.
+func (db Database) TableEditSession(ctx *sql.Context) *doltdb.TableEditSession {
+	return DSessFromSess(ctx.Session).dbEditors[db.name]
 }
 
 // RegisterSchemaFragments register SQL schema fragments that are persisted in the given

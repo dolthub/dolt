@@ -105,7 +105,12 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		}
 	}
 
-	err := actions.CommitStaged(ctx, dEnv, msg, t, apr.Contains(allowEmptyFlag), !apr.Contains(forceFlag))
+	err := actions.CommitStaged(ctx, dEnv, actions.CommitStagedProps{
+		Message:          msg,
+		Date:             t,
+		AllowEmpty:       apr.Contains(allowEmptyFlag),
+		CheckForeignKeys: !apr.Contains(forceFlag),
+	})
 	if err == nil {
 		// if the commit was successful, print it out using the log command
 		return LogCmd{}.Exec(ctx, "log", []string{"-n=1"}, dEnv)

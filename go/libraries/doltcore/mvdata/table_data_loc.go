@@ -218,8 +218,8 @@ type tableEditorWriteCloser struct {
 
 var _ DataMoverCloser = (*tableEditorWriteCloser)(nil)
 
-func (te *tableEditorWriteCloser) GetRoot(ctx context.Context) (*doltdb.RootValue, error) {
-	return te.tableEditor.GetRoot(ctx)
+func (te *tableEditorWriteCloser) Flush(ctx context.Context) (*doltdb.RootValue, error) {
+	return te.tableEditor.Flush(ctx)
 }
 
 // GetSchema implements TableWriteCloser
@@ -267,7 +267,7 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 
 // Close implements TableWriteCloser
 func (te *tableEditorWriteCloser) Close(ctx context.Context) error {
-	_, err := te.tableEditor.GetRoot(ctx)
+	_, err := te.tableEditor.Flush(ctx)
 	if te.statsCB != nil {
 		te.statsCB(te.stats)
 	}
