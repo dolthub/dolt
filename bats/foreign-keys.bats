@@ -1404,3 +1404,383 @@ SQL
     [[ "$output" =~ "4,4,4" ]] || false
     [[ "${#lines[@]}" = "3" ]] || false
 }
+
+@test "foreign-keys: Commit all" {
+    dolt sql <<SQL
+CREATE TABLE parent (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT
+);
+CREATE TABLE child (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  FOREIGN KEY (v1)
+    REFERENCES parent(v1)
+    ON DELETE CASCADE
+    ON UPDATE RESTRICT
+);
+SQL
+
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`) ON DELETE CASCADE ON UPDATE RESTRICT' ]] || false
+    dolt add -A
+    dolt commit -m "has fk"
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`) ON DELETE CASCADE ON UPDATE RESTRICT' ]] || false
+
+    dolt checkout -b still_has_fk
+    dolt checkout master
+    dolt table rm child
+    dolt add -A
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    ! [[ "$output" =~ "FOREIGN KEY" ]] || false
+    dolt commit -m "removed child"
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    ! [[ "$output" =~ "FOREIGN KEY" ]] || false
+
+    dolt checkout still_has_fk
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`) ON DELETE CASCADE ON UPDATE RESTRICT' ]] || false
+    dolt sql -q "rename table parent to super_parent"
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'FOREIGN KEY (`v1`) REFERENCES `super_parent` (`v1`) ON DELETE CASCADE ON UPDATE RESTRICT' ]] || false
+    dolt add super_parent
+    dolt commit -m "renamed parent"
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'FOREIGN KEY (`v1`) REFERENCES `super_parent` (`v1`) ON DELETE CASCADE ON UPDATE RESTRICT' ]] || false
+    
+    dolt checkout -b last_commit HEAD~1
+    dolt reset --hard # See issue https://github.com/liquidata-inc/dolt/issues/752
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`) ON DELETE CASCADE ON UPDATE RESTRICT' ]] || false
+    
+    dolt checkout master
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    ! [[ "$output" =~ "FOREIGN KEY" ]] || false
+}
+
+@test "foreign-keys: Commit then rename parent, child, and columns" {
+    dolt sql <<SQL
+CREATE TABLE parent (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT
+);
+CREATE TABLE child (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  CONSTRAINT fk_name FOREIGN KEY (v1)
+    REFERENCES parent(v1)
+);
+SQL
+
+    dolt add -A
+    dolt commit -m "has fk"
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
+    dolt checkout -b original
+    dolt checkout master
+    
+    dolt sql <<SQL
+RENAME TABLE parent TO new_parent;
+RENAME TABLE child TO new_child;
+ALTER TABLE new_parent RENAME COLUMN v1 TO vnew;
+ALTER TABLE new_child RENAME COLUMN v1 TO vnew;
+SQL
+    run dolt schema show new_child
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`vnew`) REFERENCES `new_parent` (`vnew`)' ]] || false
+    dolt add -A
+    dolt commit -m "renamed everything"
+    run dolt schema show new_child
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`vnew`) REFERENCES `new_parent` (`vnew`)' ]] || false
+    
+    dolt checkout original
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
+}
+
+@test "foreign-keys: Commit then recreate key with different columns" {
+    dolt sql <<SQL
+CREATE TABLE parent (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT
+);
+CREATE TABLE child (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  CONSTRAINT fk_name FOREIGN KEY (v1)
+    REFERENCES parent(v1)
+);
+SQL
+
+    dolt add -A
+    dolt commit -m "has fk"
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
+    dolt checkout -b original
+    dolt checkout master
+    
+    dolt sql <<SQL
+DROP TABLE child;
+CREATE TABLE child (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  CONSTRAINT fk_name FOREIGN KEY (v1,v2)
+    REFERENCES parent(v1,v2)
+);
+SQL
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`,`v2`) REFERENCES `parent` (`v1`,`v2`)' ]] || false
+    dolt add -A
+    dolt commit -m "different fk same name"
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`,`v2`) REFERENCES `parent` (`v1`,`v2`)' ]] || false
+    
+    dolt checkout original
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
+}
+
+@test "foreign-keys: Commit then recreate key with parent columns" {
+    dolt sql <<SQL
+CREATE TABLE parent (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT
+);
+CREATE TABLE child (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  CONSTRAINT fk_name FOREIGN KEY (v1)
+    REFERENCES parent(v1)
+);
+SQL
+
+    dolt add -A
+    dolt commit -m "has fk"
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
+    dolt checkout -b original
+    dolt checkout master
+    
+    dolt sql <<SQL
+ALTER TABLE child DROP FOREIGN KEY fk_name;
+DROP TABLE parent;
+CREATE TABLE parent (
+  pk BIGINT PRIMARY KEY,
+  vnew BIGINT
+);
+ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(vnew);
+SQL
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`vnew`)' ]] || false
+    dolt add -A
+    dolt commit -m "different fk new parent col name"
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`vnew`)' ]] || false
+    
+    dolt checkout original
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
+}
+
+@test "foreign-keys: Commit then recreate key with parent renamed" {
+    dolt sql <<SQL
+CREATE TABLE parent (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT
+);
+CREATE TABLE child (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  CONSTRAINT fk_name FOREIGN KEY (v1)
+    REFERENCES parent(v1)
+);
+SQL
+
+    dolt add -A
+    dolt commit -m "has fk"
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
+    dolt checkout -b original
+    dolt checkout master
+    
+    dolt sql <<SQL
+ALTER TABLE child DROP FOREIGN KEY fk_name;
+DROP TABLE parent;
+CREATE TABLE new_parent (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT
+);
+ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES new_parent(v1);
+SQL
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `new_parent` (`v1`)' ]] || false
+    dolt add -A
+    dolt commit -m "different fk new parent"
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `new_parent` (`v1`)' ]] || false
+    
+    dolt checkout original
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
+}
+
+@test "foreign-keys: Commit --force" {
+    dolt sql <<SQL
+CREATE TABLE parent (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT
+);
+CREATE TABLE child (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  CONSTRAINT fk_name FOREIGN KEY (v1)
+    REFERENCES parent(v1)
+);
+SQL
+
+    dolt add child
+    run dolt commit -m "will fail"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "parent" ]] || false
+    dolt commit --force -m "will succeed"
+    
+    dolt checkout -b last_commit HEAD~1
+    run dolt commit -m "nothing changed, will fail"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "no changes" ]] || false
+    dolt add parent
+    dolt commit -m "parent commits just fine without child, child not in working set anymore"
+}
+
+@test "foreign-keys: Commit then delete foreign key" {
+    dolt sql <<SQL
+CREATE TABLE parent (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT
+);
+CREATE TABLE child (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  CONSTRAINT fk_name FOREIGN KEY (v1)
+    REFERENCES parent(v1)
+);
+SQL
+
+    dolt add -A
+    dolt commit -m "has fk"
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
+    dolt checkout -b original
+    dolt checkout master
+    
+    dolt sql <<SQL
+ALTER TABLE child DROP FOREIGN KEY fk_name;
+SQL
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    ! [[ "$output" =~ "FOREIGN KEY" ]] || false
+    dolt add -A
+    dolt commit -m "no foreign key"
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    ! [[ "$output" =~ "FOREIGN KEY" ]] || false
+    
+    dolt checkout original
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
+}
+
+@test "foreign-keys: Reset staged table" {
+    dolt sql <<SQL
+CREATE TABLE parent (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT
+);
+CREATE TABLE child (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  CONSTRAINT fk_name FOREIGN KEY (v1)
+    REFERENCES parent(v1)
+);
+SQL
+
+    dolt add -A
+    dolt reset parent
+    run dolt commit -m "will fail since parent is missing"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "parent" ]] || false
+}
+
+@test "foreign-keys: Commit, rename parent, commit only child" {
+    dolt sql <<SQL
+CREATE TABLE parent (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT
+);
+CREATE TABLE child (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  CONSTRAINT fk_name FOREIGN KEY (v1)
+    REFERENCES parent(v1)
+);
+SQL
+
+    dolt add -A
+    dolt commit -m "has fk"
+    
+    dolt sql <<SQL
+RENAME TABLE parent TO super_parent;
+SQL
+    dolt add child
+    run dolt commit -m "will fail since super_parent is missing"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "super_parent" ]] || false
+    dolt add super_parent
+    dolt commit -m "passes now"
+}

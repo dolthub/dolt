@@ -818,16 +818,25 @@ func (root *RootValue) TableDiff(ctx context.Context, other *RootValue) (added, 
 
 func (root *RootValue) UpdateTablesFromOther(ctx context.Context, tblNames []string, other *RootValue) (*RootValue, error) {
 	tableMap, err := root.getTableMap()
-
+	if err != nil {
+		return nil, err
+	}
+	fkCollection, err := root.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	otherMap, err := other.getTableMap()
-
 	if err != nil {
 		return nil, err
 	}
+	otherFkCollection, err := other.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var fksToAdd []*ForeignKey
+	var fksToRemove []*ForeignKey
 
 	me := tableMap.Edit()
 	for _, tblName := range tblNames {
@@ -836,26 +845,46 @@ func (root *RootValue) UpdateTablesFromOther(ctx context.Context, tblNames []str
 			return nil, err
 		} else if ok {
 			me = me.Set(key, val)
+			newFks, _ := otherFkCollection.KeysForTable(tblName)
+			fksToAdd = append(fksToAdd, newFks...)
+			// must remove deleted fks too
+			currentFks, _ := fkCollection.KeysForTable(tblName)
+			newFksSet := make(map[string]struct{})
+			for _, newFk := range newFks {
+				newFksSet[newFk.Name] = struct{}{}
+			}
+			for _, currentFk := range currentFks {
+				_, ok := newFksSet[currentFk.Name]
+				if !ok {
+					fksToRemove = append(fksToRemove, currentFk)
+				}
+			}
 		} else if _, ok, err := tableMap.MaybeGet(ctx, key); err != nil {
 			return nil, err
 		} else if ok {
 			me = me.Remove(key)
+			fks, _ := fkCollection.KeysForTable(tblName)
+			fksToRemove = append(fksToRemove, fks...)
 		}
 	}
 
 	m, err := me.Map(ctx)
-
 	if err != nil {
 		return nil, err
 	}
-
 	rootValSt, err := root.valueSt.Set(tablesKey, m)
-
 	if err != nil {
 		return nil, err
 	}
 
-	return newRootValue(root.vrw, rootValSt), nil
+	newRoot := newRootValue(root.vrw, rootValSt)
+	fkCollection.Stage(ctx, fksToAdd, fksToRemove)
+	newRoot, err = newRoot.PutForeignKeyCollection(ctx, fkCollection)
+	if err != nil {
+		return nil, err
+	}
+
+	return newRoot, nil
 }
 
 // UpdateSuperSchemasFromOther updates SuperSchemas of tblNames using SuperSchemas from other.
@@ -967,6 +996,20 @@ func (root *RootValue) RenameTable(ctx context.Context, oldName, newName string)
 		return nil, err
 	}
 
+	foreignKeyCollection, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+	foreignKeyCollection.RenameTable(oldName, newName)
+	fkMap, err := foreignKeyCollection.Map(ctx, root.vrw)
+	if err != nil {
+		return nil, err
+	}
+	rootValSt, err = rootValSt.Set(foreignKeyKey, fkMap)
+	if err != nil {
+		return nil, err
+	}
+
 	ssMap, err := root.getOrCreateSuperSchemaMap(ctx)
 	if err != nil {
 		return nil, err
@@ -989,20 +1032,6 @@ func (root *RootValue) RenameTable(ctx context.Context, oldName, newName string)
 			return nil, err
 		}
 		return newRootValue(root.vrw, rootValSt), nil
-	}
-
-	foreignKeyCollection, err := root.GetForeignKeyCollection(ctx)
-	if err != nil {
-		return nil, err
-	}
-	foreignKeyCollection.RenameTable(oldName, newName)
-	fkMap, err := foreignKeyCollection.Map(ctx, root.vrw)
-	if err != nil {
-		return nil, err
-	}
-	rootValSt, err = rootValSt.Set(foreignKeyKey, fkMap)
-	if err != nil {
-		return nil, err
 	}
 
 	return newRootValue(root.vrw, rootValSt), nil
@@ -1147,6 +1176,60 @@ func (root *RootValue) PutForeignKeyCollection(ctx context.Context, fkc *Foreign
 		return nil, err
 	}
 	return &RootValue{root.vrw, rootValSt, fkc.copy()}, nil
+}
+
+// VerifyForeignKeys ensures that all foreign keys' tables are present, removing any foreign keys where the declared
+// table is missing, and returning an error if a key is in an invalid state or a referenced table is missing.
+func (root *RootValue) VerifyForeignKeys(ctx context.Context) (*RootValue, error) {
+	fkCollection, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+	allTablesSlice, err := root.GetTableNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	allTablesSet := make(map[string]schema.Schema)
+	for _, tableName := range allTablesSlice {
+		tbl, ok, err := root.GetTable(ctx, tableName)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, fmt.Errorf("found table `%s` in staging but could not load for foreign key check", tableName)
+		}
+		tblSch, err := tbl.GetSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
+		allTablesSet[tableName] = tblSch
+	}
+
+	// some of these checks are sanity checks and should never happen
+	allForeignKeys := fkCollection.AllKeys()
+	for _, foreignKey := range allForeignKeys {
+		tblSch, existsInRoot := allTablesSet[foreignKey.TableName]
+		if existsInRoot {
+			if !foreignKey.VerifyTableSchema(tblSch) {
+				return nil, fmt.Errorf("foreign key `%s` has entered an invalid state, table `%s` does not match", foreignKey.Name, foreignKey.TableName)
+			}
+			parentSch, existsInRoot := allTablesSet[foreignKey.ReferencedTableName]
+			if !existsInRoot {
+				return nil, fmt.Errorf("foreign key `%s` requires the referenced table `%s`", foreignKey.Name, foreignKey.ReferencedTableName)
+			}
+			if !foreignKey.VerifyReferencedTableSchema(parentSch) {
+				return nil, fmt.Errorf("foreign key `%s` has entered an invalid state, referenced table `%s` does not match",
+					foreignKey.Name, foreignKey.ReferencedTableName)
+			}
+		} else {
+			_, err := fkCollection.RemoveKey(foreignKey.Name)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return root.PutForeignKeyCollection(ctx, fkCollection)
 }
 
 func getDocDetailsBtwnRoots(ctx context.Context, newTbl *Table, newSch schema.Schema, newTblFound bool, oldTbl *Table, oldSch schema.Schema, oldTblFound bool) ([]DocDetails, error) {
