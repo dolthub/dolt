@@ -52,7 +52,7 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 	return name, email, nil
 }
 
-func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, date time.Time, allowEmpty bool) error {
+func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, date time.Time, allowEmpty bool, checkForeignKeys bool) error {
 	stagedTbls, notStagedTbls, err := diff.GetTableDiffs(ctx, dEnv)
 
 	if msg == "" {
@@ -100,6 +100,14 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, date time.
 
 	if err != nil {
 		return err
+	}
+
+	if checkForeignKeys {
+		srt, err = srt.VerifyForeignKeys(ctx)
+
+		if err != nil {
+			return err
+		}
 	}
 
 	h, err := dEnv.UpdateStagedRoot(ctx, srt)

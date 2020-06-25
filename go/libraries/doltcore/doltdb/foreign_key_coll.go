@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+
 	"github.com/liquidata-inc/dolt/go/store/marshal"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -132,19 +134,30 @@ func (fkc *ForeignKeyCollection) Count() int {
 	return len(fkc.foreignKeys)
 }
 
+// Get returns the foreign key with the given name, or nil if it does not exist.
+func (fkc *ForeignKeyCollection) Get(foreignKeyName string) *ForeignKey {
+	return fkc.foreignKeys[foreignKeyName]
+}
+
 // KeysForDisplay returns display-ready foreign keys that the given table declares. The results are intended only
 // for displaying key information to a user, and SHOULD NOT be used elsewhere. The results are sorted by name ascending.
 func (fkc *ForeignKeyCollection) KeysForDisplay(ctx context.Context, tableName string, root *RootValue) ([]*DisplayForeignKey, error) {
 	var declaresFk []*DisplayForeignKey
 	for _, foreignKey := range fkc.foreignKeys {
 		if foreignKey.TableName == tableName {
-			tableColumns, err := fkc.columnTagsToNames(ctx, foreignKey.TableName, foreignKey.Name, foreignKey.TableColumns, root)
+			tableColumns, ok, err := fkc.columnTagsToNames(ctx, foreignKey.TableName, foreignKey.Name, foreignKey.TableColumns, root)
 			if err != nil {
 				return nil, err
 			}
-			refTableColumns, err := fkc.columnTagsToNames(ctx, foreignKey.ReferencedTableName, foreignKey.Name, foreignKey.ReferencedTableColumns, root)
+			if !ok { // root may be in an incomplete state regarding the foreign key, so we skip displaying any invalid keys
+				continue
+			}
+			refTableColumns, ok, err := fkc.columnTagsToNames(ctx, foreignKey.ReferencedTableName, foreignKey.Name, foreignKey.ReferencedTableColumns, root)
 			if err != nil {
 				return nil, err
+			}
+			if !ok {
+				continue
 			}
 			declaresFk = append(declaresFk, &DisplayForeignKey{
 				Name:                   foreignKey.Name,
@@ -163,28 +176,6 @@ func (fkc *ForeignKeyCollection) KeysForDisplay(ctx context.Context, tableName s
 		return declaresFk[i].Name < declaresFk[j].Name
 	})
 	return declaresFk, nil
-}
-
-// Get returns the foreign key with the given name, or nil if it does not exist.
-func (fkc *ForeignKeyCollection) Get(foreignKeyName string) *ForeignKey {
-	return fkc.foreignKeys[foreignKeyName]
-}
-
-// Map returns the collection as a Noms Map for persistence.
-func (fkc *ForeignKeyCollection) Map(ctx context.Context, vrw types.ValueReadWriter) (types.Map, error) {
-	fkMap, err := types.NewMap(ctx, vrw)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-	fkMapEditor := fkMap.Edit()
-	for _, foreignKey := range fkc.foreignKeys {
-		val, err := marshal.Marshal(ctx, vrw, *foreignKey)
-		if err != nil {
-			return types.EmptyMap, err
-		}
-		fkMapEditor.Set(types.String(foreignKey.Name), val)
-	}
-	return fkMapEditor.Map(ctx)
 }
 
 // KeysForTable returns all foreign keys that reference the given table in some capacity. The returned array
@@ -207,6 +198,23 @@ func (fkc *ForeignKeyCollection) KeysForTable(tableName string) (declaredFk, ref
 		return referencedByFk[i].Name < referencedByFk[j].Name
 	})
 	return
+}
+
+// Map returns the collection as a Noms Map for persistence.
+func (fkc *ForeignKeyCollection) Map(ctx context.Context, vrw types.ValueReadWriter) (types.Map, error) {
+	fkMap, err := types.NewMap(ctx, vrw)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+	fkMapEditor := fkMap.Edit()
+	for _, foreignKey := range fkc.foreignKeys {
+		val, err := marshal.Marshal(ctx, vrw, *foreignKey)
+		if err != nil {
+			return types.EmptyMap, err
+		}
+		fkMapEditor.Set(types.String(foreignKey.Name), val)
+	}
+	return fkMapEditor.Map(ctx)
 }
 
 // RemoveKey removes a foreign key from the collection. It does not remove the associated indexes from their
@@ -278,6 +286,42 @@ func (fkc *ForeignKeyCollection) RenameTable(oldTableName, newTableName string) 
 	}
 }
 
+// Stage takes the keys to add and remove and updates the current collection. Does not perform any key validation nor
+// name uniqueness verification, as this is intended for use in commit staging. Adding a foreign key and updating (such
+// as a table rename) an existing one are functionally the same.
+func (fkc *ForeignKeyCollection) Stage(ctx context.Context, fksToAdd []*ForeignKey, fksToRemove []*ForeignKey) {
+	for _, foreignKeyToAdd := range fksToAdd {
+		fkc.foreignKeys[foreignKeyToAdd.Name] = foreignKeyToAdd
+	}
+	for _, foreignKeyToRemove := range fksToRemove {
+		delete(fkc.foreignKeys, foreignKeyToRemove.Name)
+	}
+}
+
+// VerifyReferencedTableSchema verifies that the given schema matches the expectation of the referenced table.
+func (fk *ForeignKey) VerifyReferencedTableSchema(sch schema.Schema) bool {
+	allSchCols := sch.GetAllCols()
+	for _, colTag := range fk.ReferencedTableColumns {
+		_, ok := allSchCols.GetByTag(colTag)
+		if !ok {
+			return false
+		}
+	}
+	return sch.Indexes().Contains(fk.ReferencedTableIndex)
+}
+
+// VerifyTableSchema verifies that the given schema matches the expectation of the declaring table.
+func (fk *ForeignKey) VerifyTableSchema(sch schema.Schema) bool {
+	allSchCols := sch.GetAllCols()
+	for _, colTag := range fk.TableColumns {
+		_, ok := allSchCols.GetByTag(colTag)
+		if !ok {
+			return false
+		}
+	}
+	return sch.Indexes().Contains(fk.TableIndex)
+}
+
 // String returns the SQL reference option in uppercase.
 func (refOp ForeignKeyReferenceOption) String() string {
 	switch refOp {
@@ -297,27 +341,27 @@ func (refOp ForeignKeyReferenceOption) String() string {
 }
 
 // columnTagsToNames loads all of the column names for the tags given from the root given.
-func (fkc *ForeignKeyCollection) columnTagsToNames(ctx context.Context, tableName string, fkName string, colTags []uint64, root *RootValue) ([]string, error) {
+func (fkc *ForeignKeyCollection) columnTagsToNames(ctx context.Context, tableName string, fkName string, colTags []uint64, root *RootValue) ([]string, bool, error) {
 	tbl, ok, err := root.GetTable(ctx, tableName)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if !ok {
-		return nil, fmt.Errorf("foreign key `%s` declares non-existent table `%s`", fkName, tableName)
+		return nil, false, nil
 	}
 	tableSch, err := tbl.GetSchema(ctx)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	tableColumns := make([]string, len(colTags))
 	for i := range colTags {
 		col, ok := tableSch.GetAllCols().GetByTag(colTags[i])
 		if !ok {
-			return nil, fmt.Errorf("foreign key `%s` declares non-existent column with tag `%d`", fkName, colTags[i])
+			return nil, false, nil
 		}
 		tableColumns[i] = col.Name
 	}
-	return tableColumns, nil
+	return tableColumns, true, nil
 }
 
 // copy returns an exact copy of the calling collection. As collections are meant to be modified in-place, this ensures

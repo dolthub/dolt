@@ -56,7 +56,7 @@ func (c CommitStaged) CommandString() string { return fmt.Sprintf("commit_staged
 
 // Exec executes a CommitStaged command on a test dolt environment.
 func (c CommitStaged) Exec(t *testing.T, dEnv *env.DoltEnv) error {
-	return actions.CommitStaged(context.Background(), dEnv, c.Message, time.Now(), false)
+	return actions.CommitStaged(context.Background(), dEnv, c.Message, time.Now(), false, true)
 }
 
 type CommitAll struct {
@@ -71,7 +71,7 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	err := actions.StageAllTables(context.Background(), dEnv, false)
 	require.NoError(t, err)
 
-	return actions.CommitStaged(context.Background(), dEnv, c.Message, time.Now(), false)
+	return actions.CommitStaged(context.Background(), dEnv, c.Message, time.Now(), false, true)
 }
 
 type ResetHard struct{}
