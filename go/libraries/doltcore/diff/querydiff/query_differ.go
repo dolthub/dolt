@@ -64,7 +64,7 @@ func MakeQueryDiffer(ctx context.Context, dEnv *env.DoltEnv, fromRoot, toRoot *d
 		return nil, err
 	}
 
-	lazyFrom, fromProjections, err := lazyQueryPlan(from)
+	lazyFrom, fromProjections, fromOrder, err := lazyQueryPlan(from)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +73,7 @@ func MakeQueryDiffer(ctx context.Context, dEnv *env.DoltEnv, fromRoot, toRoot *d
 		return nil, err
 	}
 
-	lazyTo, toProjections, err := lazyQueryPlan(to)
+	lazyTo, toProjections, _, err := lazyQueryPlan(to)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +83,7 @@ func MakeQueryDiffer(ctx context.Context, dEnv *env.DoltEnv, fromRoot, toRoot *d
 	}
 
 	trueSch := from.Schema()
-	rowOrder := extractRowOrder(lazyFrom)
+	rowOrder := fromOrder
 	ae := atomicerr.New()
 
 	qd := &QueryDiffer{

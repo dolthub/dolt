@@ -16,18 +16,25 @@ package querydiff_test
 
 import (
 	"context"
-	"io"
-	"testing"
-
 	"github.com/liquidata-inc/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"io"
+	"testing"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff/querydiff"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 )
+
+func TestQueryDiffer(t *testing.T) {
+	for _, test := range queryDifferTests {
+		t.Run(test.name, func(t *testing.T) {
+			testQueryDiffer(t, test)
+		})
+	}
+}
 
 type queryDifferTest struct {
 	name     string
@@ -46,20 +53,12 @@ type rowDiff struct {
 	to   sql.Row
 }
 
-func TestQueryDiffer(t *testing.T) {
-	for _, test := range queryDifferTests {
-		t.Run(test.name, func(t *testing.T) {
-			testQueryDiffer(t, test)
-		})
-	}
-}
-
 var setupCommon = []testCommand{
-	{commands.SqlCmd{}, []string{"-q", "create table test (pk int not null primary key, c0 int)"}},
-	{commands.SqlCmd{}, []string{"-q", "insert into test values (0,0), (1,1), (2,2), (3,3)"}},
-	{commands.SqlCmd{}, []string{"-q", "create table quiz (pk int not null primary key, c0 int)"}},
-	{commands.SqlCmd{}, []string{"-q", "insert into quiz values (0,10), (1,11), (2,22), (3,33)"}},
-	{commands.SqlCmd{}, []string{"-q", "create view squared as select c0*c0 as c0c0 from test order by pk"}},
+	{commands.SqlCmd{}, []string{"-q", "create table test (pk int not null primary key, c0 int);"}},
+	{commands.SqlCmd{}, []string{"-q", "insert into test values (0,0), (1,1), (2,2), (3,3);"}},
+	{commands.SqlCmd{}, []string{"-q", "create table quiz (pk int not null primary key, c0 int);"}},
+	{commands.SqlCmd{}, []string{"-q", "insert into quiz values (0,10), (1,11), (2,22), (3,33);"}},
+	{commands.SqlCmd{}, []string{"-q", "create view squared as select c0*c0 as c0c0 from test order by pk;"}},
 	{commands.AddCmd{}, []string{"."}},
 	{commands.CommitCmd{}, []string{"-m", "setup common"}},
 }
@@ -120,7 +119,7 @@ var queryDifferTests = []queryDifferTest{
 		},
 	},
 	{
-		name:  "select from join",
+		name:  "query: select from join",
 		query: "select * from test join quiz on test.pk = quiz.pk",
 		setup: []testCommand{
 			{commands.SqlCmd{}, []string{"-q", "delete from test where pk = 1"}},
@@ -146,7 +145,7 @@ var queryDifferTests = []queryDifferTest{
 		},
 	},
 	{
-		name:  "select from view",
+		name:  "query: select from view",
 		query: "select * from squared",
 		setup: []testCommand{
 			{commands.SqlCmd{}, []string{"-q", "delete from test where pk = 1"}},
@@ -210,20 +209,20 @@ var queryDifferTests = []queryDifferTest{
 			{from: sql.Row{int64(1), int32(1), int32(11)}, to: nil},
 		},
 	},
+
 	{
 		name:  "join two views with explosions",
-		query: "select * from v1 join v2 on v1.one = v2.one;",
+		query: "select v1.three, v1.one*test.c0, POW(test.c0,3) from v1 join test on v1.one = test.c0;",
 		setup: []testCommand{
-			{commands.SqlCmd{}, []string{"-q", "create view v1 as select c0 as one, c0*c0 as two, c0*c0*c0 as three from test"}},
-			{commands.SqlCmd{}, []string{"-q", "create view v2 as select c0 as one, c0*c0 as two, c0*c0*c0 as three from test"}},
+			{commands.SqlCmd{}, []string{"-q", "create view v1 as select c0 as one, c0*c0*c0 as three from test;"}},
 			{commands.AddCmd{}, []string{"."}},
-			{commands.CommitCmd{}, []string{"-m", "create two views v1 and v2"}},
-			{commands.SqlCmd{}, []string{"-q", "delete from test where pk = 1"}},
-			{commands.SqlCmd{}, []string{"-q", "insert into test values (9,9)"}},
+			{commands.CommitCmd{}, []string{"-m", "create two views v1 and v2;"}},
+			{commands.SqlCmd{}, []string{"-q", "delete from test where pk = 1;"}},
+			{commands.SqlCmd{}, []string{"-q", "insert into test values (9,9);"}},
 		},
 		diffRows: []rowDiff{
-			{from: sql.Row{int32(1), int64(1), int64(1), int32(1), int64(1), int64(1)}, to: nil},
-			{from: nil, to: sql.Row{int32(9), int64(81), int64(729), int32(9), int64(81), int64(729)}},
+			{from: sql.Row{int64(1), int64(1), float64(1)}, to: nil},
+			{from: nil, to: sql.Row{int64(729), int64(81), float64(729)}},
 		},
 	},
 }
