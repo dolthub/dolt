@@ -439,8 +439,8 @@ func TestMergeCommits(t *testing.T) {
 	require.False(t, ff)
 
 	merger := NewMerger(context.Background(), root, mergeRoot, ancRoot, vrw)
-
-	merged, stats, err := merger.MergeTable(context.Background(), tableName)
+	tableEditSession := doltdb.CreateTableEditSession(root, doltdb.TableEditSessionProps{})
+	merged, stats, err := merger.MergeTable(context.Background(), tableName, tableEditSession)
 
 	if err != nil {
 		t.Fatal(err)

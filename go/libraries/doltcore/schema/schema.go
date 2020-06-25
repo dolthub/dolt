@@ -57,7 +57,16 @@ func ExtractAllColNames(sch Schema) (map[uint64]string, error) {
 // TODO: this function never returns an error
 // SchemasAreEqual tests equality of two schemas.
 func SchemasAreEqual(sch1, sch2 Schema) (bool, error) {
-	return ColCollsAreEqual(sch1.GetAllCols(), sch2.GetAllCols()), nil
+	if sch1 == nil && sch2 == nil {
+		return true, nil
+	} else if sch1 == nil || sch2 == nil {
+		return false, nil
+	}
+	colCollIsEqual := ColCollsAreEqual(sch1.GetAllCols(), sch2.GetAllCols())
+	if !colCollIsEqual {
+		return false, nil
+	}
+	return sch1.Indexes().Equals(sch2.Indexes()), nil
 }
 
 // TODO: this function never returns an error
