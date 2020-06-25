@@ -9,7 +9,7 @@ jobs:
     name: Bats tests
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         os: [ ubuntu-latest, macos-latest ]
     steps:
@@ -58,6 +58,9 @@ jobs:
         run: |
           dolt config --global --add user.name 'Liquidata Actions'
           dolt config --global --add user.email 'actions@liquidata.co'
+      - name: Install expect
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get install -y expect
       - name: Check expect
         run: expect -v
       - run: |
