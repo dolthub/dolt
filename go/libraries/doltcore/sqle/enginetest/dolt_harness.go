@@ -120,7 +120,7 @@ func (d *doltHarness) NewTableAsOf(db sql.VersionedDatabase, name string, schema
 // branch with the given name.
 func (d *doltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf interface{}) error {
 	ddb := db.(sqle.Database)
-	e := enginetest.NewEngineWithDbs(d.t, d.Parallelism(), []sql.Database{db}, nil)
+	e := enginetest.NewEngineWithDbs(d.t, d, []sql.Database{db}, nil)
 
 	if _, err := e.Catalog.FunctionRegistry.Function(dfunctions.CommitFuncName); sql.ErrFunctionNotFound.Is(err) {
 		require.NoError(d.t,

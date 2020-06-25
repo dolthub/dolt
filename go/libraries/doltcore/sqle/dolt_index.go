@@ -45,6 +45,7 @@ type doltIndex struct {
 	tableData    types.Map
 	tableName    string
 	tableSch     schema.Schema
+	unique       bool
 }
 
 var _ DoltIndex = (*doltIndex)(nil)
@@ -157,6 +158,21 @@ func (*doltIndex) Has(partition sql.Partition, key ...interface{}) (bool, error)
 // ID implements sql.Index
 func (di *doltIndex) ID() string {
 	return di.id
+}
+
+// IsUnique implements sql.Index
+func (di *doltIndex) IsUnique() bool {
+	return di.unique
+}
+
+// Comment implements sql.Index
+func (di *doltIndex) Comment() string {
+	return "" // TODO: store comments
+}
+
+// IndexType implements sql.Index
+func (di *doltIndex) IndexType() string {
+	return "BTREE"
 }
 
 // Schema returns the dolt schema of this index.
