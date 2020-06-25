@@ -16,22 +16,35 @@ package querydiff_test
 
 import (
 	"context"
+	"io"
+	"testing"
+
 	"github.com/liquidata-inc/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"io"
-	"testing"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff/querydiff"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 )
 
 func TestQueryDiffer(t *testing.T) {
 	for _, test := range queryDifferTests {
 		t.Run(test.name, func(t *testing.T) {
 			testQueryDiffer(t, test)
+		})
+	}
+
+	dEnv := dtestutils.CreateTestEnv()
+	for _, c := range setupEngineTest {
+		exitCode := c.cmd.Exec(context.Background(), c.cmd.Name(), c.args, dEnv)
+		assert.Equal(t, 0, exitCode)
+	}
+	for _, test := range engineTestQueries {
+		t.Run(test.query, func(t *testing.T) {
+			engineTestQueryDiffer(t, test, dEnv)
 		})
 	}
 }
@@ -225,6 +238,27 @@ var queryDifferTests = []queryDifferTest{
 			{from: nil, to: sql.Row{int64(729), int64(81), float64(729)}},
 		},
 	},
+	//{
+	//	query: "SELECT i FROM niltable WHERE b IS NULL",
+	//},
+	//{
+	//	query: "SELECT i FROM niltable WHERE b IS NOT NULL",
+	//},
+	//{
+	//	query: "SELECT i FROM mytable ORDER BY i LIMIT 1 OFFSET 1;",
+	//},
+	//{
+	//	query: `SELECT SUBSTRING_INDEX(mytable.s, "d", 1) AS s FROM mytable INNER JOIN othertable ON (SUBSTRING_INDEX(mytable.s, "d", 1) = SUBSTRING_INDEX(othertable.s2, "d", 1)) GROUP BY 1 HAVING s = 'secon'`,
+	//},
+	//	{
+	//		query: "SELECT i FROM mytable WHERE i BETWEEN 1 AND 2",
+	//	},
+	//{
+	//	query: "SELECT i,v from stringandtable WHERE i",
+	//},
+	//{
+	//	query: `SELECT COUNT(DISTINCT t.i) FROM tabletest t, mytable t2`,
+	//},
 }
 
 func testQueryDiffer(t *testing.T, test queryDifferTest) {
@@ -260,4 +294,395 @@ func testQueryDiffer(t *testing.T, test queryDifferTest) {
 	assert.Nil(t, from)
 	assert.Nil(t, to)
 	assert.Equal(t, io.EOF, err)
+}
+
+// subset of test data from go-mysql-server/enginetest/testdata.go:CreateSubsetTestData()
+var setupEngineTest = []testCommand{
+	{commands.SqlCmd{}, []string{"-q", "create table mytable (" +
+		"i bigint primary key," +
+		"s text);"}},
+	{commands.SqlCmd{}, []string{"-q", "insert into mytable values " +
+		"(1, 'first row'), " +
+		"(2, 'second row'), " +
+		"(3, 'third row');"}},
+	{commands.SqlCmd{}, []string{"-q", "create table one_pk (" +
+		"pk tinyint primary key, " +
+		"c1 tinyint," +
+		"c2 tinyint," +
+		"c3 tinyint," +
+		"c4 tinyint," +
+		"c5 tinyint);"}},
+	{commands.SqlCmd{}, []string{"-q", "insert into one_pk values " +
+		"(0, 0, 0, 0, 0, 0)," +
+		"(1, 10, 10, 10, 10, 10)," +
+		"(2, 20, 20, 20, 20, 20)," +
+		"(3, 30, 30, 30, 30, 30);"}},
+	{commands.SqlCmd{}, []string{"-q", "create table two_pk (" +
+		"pk1 tinyint," +
+		"pk2 tinyint," +
+		"c1 tinyint," +
+		"c2 tinyint," +
+		"c3 tinyint," +
+		"c4 tinyint," +
+		"c5 tinyint," +
+		"primary key (pk1, pk2));"}},
+	{commands.SqlCmd{}, []string{"-q", "insert into two_pk values " +
+		"(0, 0, 0, 0, 0, 0, 0)," +
+		"(0, 1, 10, 10, 10, 10, 10)," +
+		"(1, 0, 20, 20, 20, 20, 20)," +
+		"(1, 1, 30, 30, 30, 30, 30);"}},
+	{commands.SqlCmd{}, []string{"-q", "create table othertable (" +
+		"s2 text primary key," +
+		"i2 bigint);"}},
+	{commands.SqlCmd{}, []string{"-q", "insert into othertable values " +
+		"('first', 3)," +
+		"('second', 2)," +
+		"('third', 1);"}},
+	{commands.SqlCmd{}, []string{"-q", "create table tabletest (" +
+		"i int primary key," +
+		"s text);"}},
+	{commands.SqlCmd{}, []string{"-q", "insert into tabletest values " +
+		"(1, 'first row')," +
+		"(2, 'second row')," +
+		"(3, 'third row');"}},
+	{commands.SqlCmd{}, []string{"-q", "create table emptytable (" +
+		"i int primary key," +
+		"s text);"}},
+	{commands.SqlCmd{}, []string{"-q", "create table other_table (" +
+		"`text` text primary key," +
+		"number int);"}},
+	{commands.SqlCmd{}, []string{"-q", "insert into other_table values " +
+		"('a', 4)," +
+		"('b', 2)," +
+		"('c', 0);"}},
+	{commands.SqlCmd{}, []string{"-q", "create table bigtable (" +
+		"t text primary key," +
+		"n bigint);"}},
+	{commands.SqlCmd{}, []string{"-q", "insert into bigtable values " +
+		"('a', 1)," +
+		"('s', 2)," +
+		"('f', 3)," +
+		"('g', 1)," +
+		"('h', 2)," +
+		"('j', 3)," +
+		"('k', 1)," +
+		"('l', 2)," +
+		"('ñ', 4)," +
+		"('z', 5)," +
+		"('x', 6)," +
+		"('c', 7)," +
+		"('v', 8)," +
+		"('b', 9);"}},
+	{commands.SqlCmd{}, []string{"-q", "create table floattable (" +
+		"i bigint primary key," +
+		"f32 float," +
+		"f64 double);"}},
+	{commands.SqlCmd{}, []string{"-q", "insert into floattable values " +
+		"(1, 1.0, 1.0)," +
+		"(2, 1.5, 1.5)," +
+		"(3, 2.0, 2.0)," +
+		"(4, 2.5, 2.5)," +
+		"(-1, -1.0, -1.0)," +
+		"(-2, -1.5, -1.5);"}},
+	{commands.SqlCmd{}, []string{"-q", "create table niltable (" +
+		"i bigint primary key," +
+		"i2 bigint," +
+		"b bool," +
+		"f float);"}},
+	{commands.SqlCmd{}, []string{"-q", "insert into niltable values " +
+		"(1, NULL, NULL, NULL)," +
+		"(2, 2, 1, NULL)," +
+		"(3, NULL, 0, NULL)," +
+		"(4, 4, NULL, 4)," +
+		"(5, NULL, 1, 5)," +
+		"(6, 6, 0, 6);"}},
+	{commands.SqlCmd{}, []string{"-q", "create table newlinetable (" +
+		"i bigint primary key," +
+		"s text);"}},
+	{commands.SqlCmd{}, []string{"-q", "insert into newlinetable values " +
+		"(1, '\nthere is some text in here')," +
+		"(2, 'there is some\ntext in here')," +
+		"(3, 'there is some text\nin here')," +
+		"(4, 'there is some text in here\n')," +
+		"(5, 'there is some text in here');"}},
+	{commands.SqlCmd{}, []string{"-q", "create table stringandtable (" +
+		"k bigint primary key," +
+		"i bigint," +
+		"v text);"}},
+	{commands.SqlCmd{}, []string{"-q", "insert into stringandtable values " +
+		"(0, 0, '0')," +
+		"(1, 1, '1')," +
+		"(2, 2, '')," +
+		"(3, 3, 'true')," +
+		"(4, 4, 'false')," +
+		"(5, 5, NULL)," +
+		"(6, NULL, '2');"}},
+	{commands.AddCmd{}, []string{"."}},
+	{commands.CommitCmd{}, []string{"-m", "setup enginetest test data"}},
+}
+
+type engineQueryTest struct {
+	query  string
+	errMsg string
+}
+
+var engineTestQueries = []engineQueryTest{
+	{query: "SELECT * FROM mytable INNER JOIN othertable ON i = i2 ORDER BY i"},
+	{query: "SELECT i, i2, s2 FROM mytable INNER JOIN othertable ON i = i2 ORDER BY i"},
+	{query: "SELECT s2, i2, i FROM mytable INNER JOIN othertable ON i = i2 ORDER BY i"},
+	{query: "SELECT * FROM mytable;"},
+	{query: "SELECT * FROM mytable ORDER BY i DESC;"},
+	{query: "SELECT i FROM mytable;"},
+	{query: "SELECT i FROM mytable AS mt;"},
+	{query: "SELECT s,i FROM mytable;"},
+	{query: "SELECT mytable.s,i FROM mytable;"},
+	{query: "SELECT t.s,i FROM mytable AS t;"},
+	{query: "SELECT s,i FROM (select i,s FROM mytable) mt;"},
+	{query: "SELECT s,i FROM MyTable ORDER BY 2"},
+	{query: "SELECT S,I FROM MyTable ORDER BY 2"},
+	{query: "SELECT mt.s,mt.i FROM MyTable MT ORDER BY 2;"},
+	{query: "SELECT mT.S,Mt.I FROM MyTable MT ORDER BY 2;"},
+	{query: "SELECT mt.* FROM MyTable MT ORDER BY mT.I;"},
+	{query: "SELECT MyTABLE.s,myTable.i FROM MyTable ORDER BY 2;"},
+	{query: "SELECT myTable.* FROM MYTABLE ORDER BY myTable.i;"},
+	{query: "SELECT MyTABLE.S,myTable.I FROM MyTable ORDER BY mytable.i;"},
+	{query: "SELECT i + 1 FROM mytable;"},
+	{query: "SELECT i div 2 FROM mytable order by 1;"},
+	{query: "SELECT i DIV 2 FROM mytable order by 1;"},
+	{query: "SELECT -i FROM mytable;"},
+	{query: "SELECT +i FROM mytable;"},
+	{query: "SELECT + - i FROM mytable;"},
+	{query: "SELECT i FROM mytable WHERE -i = -2;"},
+	{query: "SELECT i FROM mytable WHERE i = 2;"},
+	{query: "SELECT i FROM mytable WHERE 2 = i;"},
+	{query: "SELECT i FROM mytable WHERE i > 2;"},
+	{query: "SELECT i FROM mytable WHERE 2 < i;"},
+	{query: "SELECT i FROM mytable WHERE i < 2;"},
+	{query: "SELECT i FROM mytable WHERE 2 > i;"},
+	{query: "SELECT i FROM mytable WHERE i <> 2;"},
+	{query: "SELECT i FROM mytable WHERE i IN (1, 3)"},
+	{query: "SELECT i FROM mytable WHERE i = 1 OR i = 3"},
+	{query: "SELECT i FROM mytable WHERE i >= 2 ORDER BY 1"},
+	{query: "SELECT i FROM mytable WHERE 2 <= i ORDER BY 1"},
+	{query: "SELECT i FROM mytable WHERE i <= 2 ORDER BY 1"},
+	{query: "SELECT i FROM mytable WHERE 2 >= i ORDER BY 1"},
+	{query: "SELECT i FROM mytable WHERE i > 2"},
+	{query: "SELECT i FROM mytable WHERE i < 2"},
+	{query: "SELECT i FROM mytable WHERE i >= 2 OR i = 1 ORDER BY 1"},
+	{query: "SELECT f32 FROM floattable WHERE f64 = 2.0;"},
+	{query: "SELECT f32 FROM floattable WHERE f64 < 2.0;"},
+	{query: "SELECT f32 FROM floattable WHERE f64 > 2.0;"},
+	{query: "SELECT f32 FROM floattable WHERE f64 <> 2.0;"},
+	{query: "SELECT f64 FROM floattable WHERE f32 = 2.0;"},
+	{query: "SELECT f64 FROM floattable WHERE f32 = -1.5;"},
+	{query: "SELECT f64 FROM floattable WHERE -f32 = -2.0;"},
+	{query: "SELECT f64 FROM floattable WHERE f32 < 2.0;"},
+	{query: "SELECT f64 FROM floattable WHERE f32 > 2.0;"},
+	{query: "SELECT f64 FROM floattable WHERE f32 <> 2.0;"},
+	{query: "SELECT f32 FROM floattable ORDER BY f64;"},
+	{query: "SELECT i FROM mytable ORDER BY i DESC;"},
+	{query: "SELECT i FROM mytable WHERE 'hello';"},
+	{query: "SELECT i FROM mytable WHERE NOT 'hello';"},
+	{query: "SELECT i FROM mytable WHERE s = 'first row' ORDER BY i DESC;"},
+	{query: "SELECT i FROM mytable WHERE s = 'first row' ORDER BY i DESC LIMIT 1;"},
+	{query: "SELECT i FROM mytable ORDER BY i LIMIT 1 OFFSET 1;"},
+	{query: "SELECT i FROM mytable ORDER BY i LIMIT 1,1;"},
+	{query: "SELECT i FROM mytable ORDER BY i LIMIT 3,1;"},
+	{query: "SELECT i FROM mytable ORDER BY i LIMIT 2,100;"},
+	{query: "SELECT i FROM niltable WHERE b IS NULL"},
+	{query: "SELECT i FROM niltable WHERE b IS NOT NULL"},
+	{query: "SELECT i FROM niltable WHERE b"},
+	{query: "SELECT i FROM niltable WHERE NOT b"},
+	{query: "SELECT i FROM niltable WHERE b IS TRUE"},
+	{query: "SELECT i FROM niltable WHERE b IS NOT TRUE"},
+	{query: "SELECT f FROM niltable WHERE b IS FALSE"},
+	{query: "SELECT i FROM niltable WHERE f < 5"},
+	{query: "SELECT i FROM niltable WHERE f > 5"},
+	{query: "SELECT i FROM niltable WHERE b IS NOT FALSE"},
+	{query: "SELECT substring(s, 2, 3) FROM mytable"},
+	{query: `SELECT substring("foo", 2, 2)`},
+	{query: `SELECT SUBSTRING_INDEX('a.b.c.d.e.f', '.', 2)`},
+	{query: `SELECT SUBSTRING_INDEX('a.b.c.d.e.f', '.', -2)`},
+	{query: `SELECT SUBSTRING_INDEX(SUBSTRING_INDEX('source{d}', '{d}', 1), 'r', -1)`},
+	{query: "SELECT YEAR('2007-12-11') FROM mytable"},
+	{query: "SELECT MONTH('2007-12-11') FROM mytable"},
+	{query: "SELECT DAY('2007-12-11') FROM mytable"},
+	{query: "SELECT HOUR('2007-12-11 20:21:22') FROM mytable"},
+	{query: "SELECT MINUTE('2007-12-11 20:21:22') FROM mytable"},
+	{query: "SELECT SECOND('2007-12-11 20:21:22') FROM mytable"},
+	{query: "SELECT DAYOFYEAR('2007-12-11 20:21:22') FROM mytable"},
+	{query: "SELECT SECOND('2007-12-11T20:21:22Z') FROM mytable"},
+	{query: "SELECT DAYOFYEAR('2007-12-11') FROM mytable"},
+	{query: "SELECT DAYOFYEAR('20071211') FROM mytable"},
+	{query: "SELECT YEARWEEK('0000-01-01')"},
+	{query: "SELECT YEARWEEK('9999-12-31')"},
+	{query: "SELECT YEARWEEK('2008-02-20', 1)"},
+	{query: "SELECT YEARWEEK('1987-01-01')"},
+	{query: "SELECT YEARWEEK('1987-01-01', 20), YEARWEEK('1987-01-01', 1), YEARWEEK('1987-01-01', 2), YEARWEEK('1987-01-01', 3), YEARWEEK('1987-01-01', 4), YEARWEEK('1987-01-01', 5), YEARWEEK('1987-01-01', 6), YEARWEEK('1987-01-01', 7)"},
+	{query: "SELECT i FROM mytable WHERE i BETWEEN 1 AND 2"},
+	{query: "SELECT i FROM mytable WHERE i NOT BETWEEN 1 AND 2"},
+	{query: "SELECT i,v from stringandtable WHERE i"},
+	{query: "SELECT i,v from stringandtable WHERE i AND i"},
+	{query: "SELECT i,v from stringandtable WHERE i OR i"},
+	{query: "SELECT i,v from stringandtable WHERE NOT i"},
+	{query: "SELECT i,v from stringandtable WHERE NOT i AND NOT i"},
+	{query: "SELECT i,v from stringandtable WHERE NOT i OR NOT i"},
+	{query: "SELECT i,v from stringandtable WHERE i OR NOT i"},
+	{query: "SELECT i,v from stringandtable WHERE v"},
+	{query: "SELECT i,v from stringandtable WHERE v AND v"},
+	{query: "SELECT i,v from stringandtable WHERE v OR v"},
+	{query: "SELECT i,v from stringandtable WHERE NOT v"},
+	{query: "SELECT i,v from stringandtable WHERE NOT v AND NOT v"},
+	{query: "SELECT i,v from stringandtable WHERE NOT v OR NOT v"},
+	{query: "SELECT i,v from stringandtable WHERE v OR NOT v"},
+	{query: "SELECT i, i2, s2 FROM mytable INNER JOIN othertable ON i = i2 ORDER BY i"},
+	{query: "SELECT s2, i2, i FROM mytable INNER JOIN othertable ON i = i2 ORDER BY i"},
+	{query: "SELECT i, i2, s2 FROM othertable JOIN mytable  ON i = i2 ORDER BY i"},
+	{query: "SELECT s2, i2, i FROM othertable JOIN mytable ON i = i2 ORDER BY i"},
+	{query: "SELECT substring(s2, 1), substring(s2, 2), substring(s2, 3) FROM othertable ORDER BY i2"},
+	{query: `SELECT substring("first", 1), substring("second", 2), substring("third", 3)`},
+	{query: "SELECT substring(s2, -1), substring(s2, -2), substring(s2, -3) FROM othertable ORDER BY i2"},
+	{query: `SELECT substring("first", -1), substring("second", -2), substring("third", -3)`},
+	{query: "SELECT s FROM mytable INNER JOIN othertable ON substring(s2, 1, 2) != '' AND i = i2 ORDER BY 1"},
+	{query: `SELECT i FROM mytable NATURAL JOIN tabletest`},
+	{query: `SELECT i FROM mytable AS t NATURAL JOIN tabletest AS test`},
+	// TODO: (from enginetest) this should work: either table alias should be usable in the select clause
+	// {query: `SELECT t.i, test.s FROM mytable AS t NATURAL JOIN tabletest AS test`},
+	{query: "SELECT CAST(-3 AS UNSIGNED) FROM mytable"},
+	{query: "SELECT CONVERT(-3, UNSIGNED) FROM mytable"},
+	{query: "SELECT '3' > 2 FROM tabletest"},
+	{query: "SELECT s > 2 FROM tabletest"},
+	{query: "SELECT * FROM tabletest WHERE s > 0"},
+	{query: "SELECT * FROM tabletest WHERE s = 0"},
+	{query: "SELECT * FROM tabletest WHERE s = 'first row'"},
+	{query: "SELECT s FROM mytable WHERE i IN (1, 2, 5)"},
+	{query: "SELECT s FROM mytable WHERE i NOT IN (1, 2, 5)"},
+	{query: "SELECT 1 + 2"},
+	{query: `SELECT i AS foo FROM mytable WHERE foo NOT IN (1, 2, 5)`},
+	{query: `SELECT * FROM tabletest, mytable mt INNER JOIN othertable ot ON mt.i = ot.i2`},
+	{query: `SELECT split(s," ") FROM mytable`},
+	{query: `SELECT split(s,"s") FROM mytable`},
+	// todo: (from enginetest) data alignment issue?
+	//{query: `SELECT * FROM mytable mt INNER JOIN othertable ot ON mt.i = ot.i2 AND mt.i > 2`},
+	{query: `SELECT i AS foo FROM mytable ORDER BY i DESC`},
+	{query: `SELECT CONCAT("a", "b", "c")`},
+	{query: `SELECT COALESCE(NULL, NULL, NULL, 'example', NULL, 1234567890)`},
+	{query: `SELECT COALESCE(NULL, NULL, NULL, COALESCE(NULL, 1234567890))`},
+	{query: "SELECT concat(s, i) FROM mytable"},
+	{query: "SELECT version()"},
+	{query: `SELECT RAND(100)`},
+	{query: `SELECT RAND(100) = RAND(100)`},
+	{query: `SELECT RAND() = RAND()`},
+	{query: `SELECT s FROM mytable WHERE s LIKE '%d row'`},
+	{query: `SELECT s FROM mytable WHERE s NOT LIKE '%d row'`},
+	// todo: multi-db queries
+	//{query: `SELECT * FROM foo.other_table`},  // error: "database not found: foo"
+	{query: "SELECT i FROM mytable WHERE NULL > 10;"},
+	{query: "SELECT i FROM mytable WHERE NULL IN (10);"},
+	{query: "SELECT i FROM mytable WHERE NULL IN (NULL, NULL);"},
+	{query: "SELECT i FROM mytable WHERE NOT NULL NOT IN (NULL);"},
+	{query: "SELECT i FROM mytable WHERE NOT (NULL) <> 10;"},
+	{query: "SELECT i FROM mytable WHERE NOT NULL <> NULL;"},
+	{query: "SELECT substring(s, 1, 1) FROM mytable ORDER BY substring(s, 1, 1)"},
+	{query: "SELECT left(s, 1) as l FROM mytable ORDER BY l"},
+	{query: "SELECT left(s, 2) as l FROM mytable ORDER BY l"},
+	{query: "SELECT left(s, 0) as l FROM mytable ORDER BY l"},
+	{query: "SELECT left(s, NULL) as l FROM mytable ORDER BY l"},
+	{query: "SELECT left(s, 100) as l FROM mytable ORDER BY l"},
+	{query: "SELECT instr(s, 'row') as l FROM mytable ORDER BY i"},
+	{query: "SELECT instr(s, 'first') as l FROM mytable ORDER BY i"},
+	{query: "SELECT instr(s, 'o') as l FROM mytable ORDER BY i"},
+	{query: "SELECT instr(s, NULL) as l FROM mytable ORDER BY l"},
+	{query: `SELECT i AS i FROM mytable ORDER BY i`},
+	{query: `SELECT i AS foo FROM mytable ORDER BY mytable.i`},
+	{query: "SELECT i, i2, s2 FROM mytable LEFT JOIN othertable ON i = i2 - 1"},
+	{query: "SELECT i, i2, s2 FROM mytable RIGHT JOIN othertable ON i = i2 - 1"},
+	{query: "SELECT i, i2, s2 FROM mytable LEFT OUTER JOIN othertable ON i = i2 - 1"},
+	{query: "SELECT i, i2, s2 FROM mytable RIGHT OUTER JOIN othertable ON i = i2 - 1"},
+	{query: "SELECT i FROM mytable WHERE NOT s ORDER BY 1 DESC"},
+	{query: "SELECT i FROM mytable WHERE NOT(NOT i) ORDER BY 1 DESC"},
+	{query: `SELECT * FROM mytable WHERE NULL AND i = 3`},
+	{query: `SELECT FIRST(i) FROM (SELECT i FROM mytable ORDER BY i) t`},
+	{query: `SELECT LAST(i) FROM (SELECT i FROM mytable ORDER BY i) t`},
+	{query: "SELECT * FROM newlinetable WHERE s LIKE '%text%'"},
+	{query: `SELECT i FROM mytable WHERE i = (SELECT 1)`},
+	{query: `SELECT i FROM mytable WHERE i IN (SELECT i FROM mytable)`},
+	{query: `SELECT i FROM mytable WHERE i NOT IN (SELECT i FROM mytable ORDER BY i ASC LIMIT 2)`},
+	{query: `SELECT (SELECT i FROM mytable ORDER BY i ASC LIMIT 1) AS x`},
+	{query: `SELECT DISTINCT n FROM bigtable ORDER BY t`},
+	{query: "SELECT pk,pk1,pk2 FROM one_pk, two_pk ORDER BY 1,2,3"},
+	{query: "SELECT t1.c1,t2.c2 FROM one_pk t1, two_pk t2 WHERE pk1=1 AND pk2=1 ORDER BY 1,2"},
+	{query: "SELECT t1.c1,t2.c2 FROM one_pk t1, two_pk t2 WHERE t2.pk1=1 AND t2.pk2=1 ORDER BY 1,2"},
+	{query: "SELECT t1.c1,t2.c2 FROM one_pk t1, two_pk t2 WHERE pk1=1 OR pk2=1 ORDER BY 1,2"},
+	{query: "SELECT pk,pk2 FROM one_pk t1, two_pk t2 WHERE pk=1 AND pk2=1 ORDER BY 1,2"},
+	{query: "SELECT pk,pk1,pk2 FROM one_pk,two_pk WHERE pk=0 AND pk1=0 OR pk2=1 ORDER BY 1,2,3"},
+	{query: "SELECT pk,pk1,pk2 FROM one_pk,two_pk WHERE one_pk.c1=two_pk.c1 ORDER BY 1,2,3"},
+	{query: "SELECT one_pk.c5,pk1,pk2 FROM one_pk,two_pk WHERE pk=pk1 ORDER BY 1,2,3"},
+	{query: "SELECT opk.c5,pk1,pk2 FROM one_pk opk, two_pk tpk WHERE pk=pk1 ORDER BY 1,2,3"},
+	{query: "SELECT one_pk.c5,pk1,pk2 FROM one_pk JOIN two_pk ON pk=pk1 ORDER BY 1,2,3"},
+	{query: "SELECT opk.c5,pk1,pk2 FROM one_pk opk JOIN two_pk tpk ON pk=pk1 ORDER BY 1,2,3"},
+	{query: "SELECT opk.c5,pk1,pk2 FROM one_pk opk JOIN two_pk tpk ON opk.pk=tpk.pk1 ORDER BY 1,2,3"},
+	{query: "SELECT pk,pk1,pk2 FROM one_pk JOIN two_pk ON one_pk.c1=two_pk.c1 WHERE pk=1 ORDER BY 1,2,3"},
+	{query: "SELECT pk,pk1,pk2 FROM one_pk JOIN two_pk ON one_pk.pk=two_pk.pk1 AND one_pk.pk=two_pk.pk2 ORDER BY 1,2,3"},
+	{query: "SELECT pk,pk1,pk2 FROM one_pk opk JOIN two_pk tpk ON opk.pk=tpk.pk1 AND opk.pk=tpk.pk2 ORDER BY 1,2,3"},
+	{query: "SELECT pk,pk1,pk2 FROM one_pk opk JOIN two_pk tpk ON pk=tpk.pk1 AND pk=tpk.pk2 ORDER BY 1,2,3"},
+	{query: "SELECT pk,pk1,pk2 FROM one_pk LEFT JOIN two_pk ON one_pk.pk=two_pk.pk1 AND one_pk.pk=two_pk.pk2 ORDER BY 1,2,3"},
+	{query: "SELECT pk,pk1,pk2 FROM one_pk RIGHT JOIN two_pk ON one_pk.pk=two_pk.pk1 AND one_pk.pk=two_pk.pk2 ORDER BY 1,2,3"},
+	{query: "SELECT i,pk1,pk2 FROM mytable JOIN two_pk ON i-1=pk1 AND i-2=pk2 ORDER BY 1,2,3"},
+	{query: "SELECT a.pk1,a.pk2,b.pk1,b.pk2 FROM two_pk a JOIN two_pk b ON a.pk1=b.pk2 AND a.pk2=b.pk1 ORDER BY 1,2,3"},
+	{query: "SELECT a.pk1,a.pk2,b.pk1,b.pk2 FROM two_pk a JOIN two_pk b ON a.pk1=b.pk1 AND a.pk2=b.pk2 ORDER BY 1,2,3"},
+	{query: "SELECT a.pk1,a.pk2,b.pk1,b.pk2 FROM two_pk a, two_pk b WHERE a.pk1=b.pk1 AND a.pk2=b.pk2 ORDER BY 1,2,3"},
+	{query: "SELECT a.pk1,a.pk2,b.pk1,b.pk2 FROM two_pk a JOIN two_pk b ON b.pk1=a.pk1 AND a.pk2=b.pk2 ORDER BY 1,2,3"},
+	{query: "SELECT a.pk1,a.pk2,b.pk1,b.pk2 FROM two_pk a JOIN two_pk b ON a.pk1+1=b.pk1 AND a.pk2+1=b.pk2 ORDER BY 1,2,3"},
+	{query: "SELECT pk,pk1,pk2 FROM one_pk LEFT JOIN two_pk ON pk=pk1 ORDER BY 1,2,3"},
+	{query: "SELECT pk,i2,f FROM one_pk LEFT JOIN niltable ON pk=i2 ORDER BY 1"},
+	{query: "SELECT pk,i2,f FROM one_pk RIGHT JOIN niltable ON pk=i2 ORDER BY 2,3"},
+	{query: "SELECT pk,i2,f FROM one_pk LEFT JOIN niltable ON pk=i2 AND f IS NOT NULL ORDER BY 1"}, // AND clause causes right table join mis},
+	{query: "SELECT pk,i2,f FROM one_pk RIGHT JOIN niltable ON pk=i2 and pk > 0 ORDER BY 2,3"},     // > 0 clause in join condition is ignore},
+	{query: "SELECT pk,i2,f FROM one_pk LEFT JOIN niltable ON pk=i WHERE i2 IS NOT NULL ORDER BY 1"},
+	{query: "SELECT pk,i2,f FROM one_pk RIGHT JOIN niltable ON pk=i WHERE f IS NOT NULL ORDER BY 2,3"},
+	{query: "SELECT pk,i2,f FROM one_pk LEFT JOIN niltable ON pk=i2 WHERE pk > 1 ORDER BY 1"},
+	{query: "SELECT pk,i2,f FROM one_pk RIGHT JOIN niltable ON pk=i2 WHERE pk > 0 ORDER BY 2,3"},
+	{query: "SELECT GREATEST(CAST(i AS CHAR), CAST(b AS CHAR)) FROM niltable order by i"},
+	{query: "SELECT pk,pk1,pk2,one_pk.c1 AS foo, two_pk.c1 AS bar FROM one_pk JOIN two_pk ON one_pk.c1=two_pk.c1 ORDER BY 1,2,3"},
+	{query: "SELECT pk,pk1,pk2,one_pk.c1 AS foo,two_pk.c1 AS bar FROM one_pk JOIN two_pk ON one_pk.c1=two_pk.c1 WHERE one_pk.c1=10"},
+	{query: "SELECT pk,pk1,pk2 FROM one_pk JOIN two_pk ON pk1-pk>0 AND pk2<1"},
+	{query: "SELECT pk,pk1,pk2 FROM one_pk JOIN two_pk ORDER BY 1,2,3"},
+	{query: "SELECT a.pk,b.pk FROM one_pk a JOIN one_pk b ON a.pk = b.pk order by a.pk"},
+	{query: "SELECT a.pk,b.pk FROM one_pk a, one_pk b WHERE a.pk = b.pk order by a.pk"},
+	{query: "SELECT one_pk.pk,b.pk FROM one_pk JOIN one_pk b ON one_pk.pk = b.pk order by one_pk.pk"},
+	{query: "SELECT one_pk.pk,b.pk FROM one_pk, one_pk b WHERE one_pk.pk = b.pk order by one_pk.pk"},
+	{query: "SELECT (CASE WHEN i THEN i ELSE 0 END) as cases_i from mytable"},
+}
+
+var engineTestUnionQueries = []engineQueryTest{
+	{query: "SELECT i FROM mytable UNION SELECT i+10 FROM mytable;"},
+	{query: "SELECT i FROM mytable UNION DISTINCT SELECT i+10 FROM mytable;"},
+	{query: "SELECT i FROM mytable UNION SELECT i FROM mytable;"},
+	{query: "SELECT i FROM mytable UNION DISTINCT SELECT i FROM mytable;"},
+	{query: "SELECT i FROM mytable UNION SELECT s FROM mytable;"},
+}
+
+// runs a subset of SELECT queries from enginetest/queries.go as a sanity check
+func engineTestQueryDiffer(t *testing.T, test engineQueryTest, dEnv *env.DoltEnv) {
+	ctx := context.Background()
+	fromRoot, err := dEnv.HeadRoot(ctx)
+	require.NoError(t, err)
+	toRoot, err := dEnv.WorkingRoot(ctx)
+	require.NoError(t, err)
+
+	qd, err := querydiff.MakeQueryDiffer(ctx, dEnv, fromRoot, toRoot, test.query)
+	if err != nil {
+		t.Fatalf("unexpected error creating QueryDiffer: %s", err.Error())
+	}
+
+	qd.Start()
+	from, to, err := qd.NextDiff()
+	if test.errMsg == "" {
+		assert.Nil(t, from)
+		assert.Nil(t, to)
+		assert.Equal(t, io.EOF, err)
+	} else {
+		//assert.NotNil(t, err)
+	}
 }
