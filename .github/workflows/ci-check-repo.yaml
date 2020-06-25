@@ -15,12 +15,13 @@ jobs:
           go-version: 1.13
         id: go
       - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
       - name: Check Repo
         working-directory: ./go
         # Keep this in sync with //go/utils/prepr/prepr.sh.
         run: |
-          echo "The branch name is : $BRANCH_NAME"
-          echo "The target name is : $CHANGE_TARGET"
+          git log -n 2
           go get -mod=readonly ./...
           ./utils/repofmt/check_fmt.sh
           ./Godeps/verify.sh
