@@ -80,7 +80,30 @@ func lazyQueryPlan(node sql.Node) (lazyNode sql.Node, projections []sql.Expressi
 		order = append(s.SortFields, order...)
 	}
 
+	if g, ok := lazyNode.(*plan.GroupBy); ok {
+		lazyNode, projections, order = wrapGroupBy(g)
+	}
+
 	return lazyNode, projections, order, nil
+}
+
+// wrapGroupBy wraps a GroupBy node in a Sort node so its output can be ordered in query diffs.
+func wrapGroupBy(g *plan.GroupBy) (node sql.Node, projections []sql.Expression, order []plan.SortField) {
+	projections = make([]sql.Expression, len(g.Schema()))
+	for i, col := range g.Schema() {
+		projections[i] = expression.NewGetField(i, col.Type, col.Name, col.Nullable)
+	}
+	g.Aggregate = append(g.Aggregate, g.Grouping...)
+
+	order = make([]plan.SortField, len(g.Grouping))
+	for i, exp := range g.Grouping {
+		idx := i + len(projections)
+		order[i] = plan.SortField{
+			Column: expression.NewGetField(idx, exp.Type(), exp.String(), exp.IsNullable()),
+		}
+	}
+
+	return plan.NewSort(order, g), projections, order
 }
 
 func makeExpressionLazy(e sql.Expression, composite []sql.Expression) (sql.Expression, error) {

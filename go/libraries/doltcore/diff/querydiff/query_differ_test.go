@@ -31,21 +31,30 @@ import (
 )
 
 func TestQueryDiffer(t *testing.T) {
-	for _, test := range queryDifferTests {
-		t.Run(test.name, func(t *testing.T) {
-			testQueryDiffer(t, test)
-		})
+	queryDiffTests := [][]queryDifferTest{
+		selectTests,
+		joinTests,
+		groupByTests,
+	}
+	for _, testSet := range queryDiffTests {
+		for _, test := range testSet {
+			t.Run(test.name, func(t *testing.T) {
+				testQueryDiffer(t, test)
+			})
+		}
 	}
 
-	dEnv := dtestutils.CreateTestEnv()
-	for _, c := range setupEngineTest {
-		exitCode := c.cmd.Exec(context.Background(), c.cmd.Name(), c.args, dEnv)
-		assert.Equal(t, 0, exitCode)
+	dEnv := setupEngineTests(t)
+	engineTestQueries := [][]engineTestQuery{
+		engineTestSelectQueries,
+		engineTestAggregateQueries,
 	}
-	for _, test := range engineTestQueries {
-		t.Run(test.query, func(t *testing.T) {
-			engineTestQueryDiffer(t, test, dEnv)
-		})
+	for _, testSet := range engineTestQueries {
+		for _, test := range testSet {
+			t.Run(test.query, func(t *testing.T) {
+				engineTestQueryDiffer(t, test, dEnv)
+			})
+		}
 	}
 }
 
@@ -66,17 +75,29 @@ type rowDiff struct {
 	to   sql.Row
 }
 
-var setupCommon = []testCommand{
-	{commands.SqlCmd{}, []string{"-q", "create table test (pk int not null primary key, c0 int);"}},
-	{commands.SqlCmd{}, []string{"-q", "insert into test values (0,0), (1,1), (2,2), (3,3);"}},
-	{commands.SqlCmd{}, []string{"-q", "create table quiz (pk int not null primary key, c0 int);"}},
-	{commands.SqlCmd{}, []string{"-q", "insert into quiz values (0,10), (1,11), (2,22), (3,33);"}},
+var queryDifferTestSetup = []testCommand{
+	{commands.SqlCmd{}, []string{"-q", "create table test (" +
+		"pk int not null primary key," +
+		"c0 int);"}},
+	{commands.SqlCmd{}, []string{"-q", "insert into test values " +
+		"(0,0)," +
+		"(1,1)," +
+		"(2,2)," +
+		"(3,3);"}},
+	{commands.SqlCmd{}, []string{"-q", "create table quiz (" +
+		"pk int not null primary key," +
+		"c0 int);"}},
+	{commands.SqlCmd{}, []string{"-q", "insert into quiz values " +
+		"(0,10)," +
+		"(1,11)," +
+		"(2,22)," +
+		"(3,33);"}},
 	{commands.SqlCmd{}, []string{"-q", "create view squared as select c0*c0 as c0c0 from test order by pk;"}},
 	{commands.AddCmd{}, []string{"."}},
 	{commands.CommitCmd{}, []string{"-m", "setup common"}},
 }
 
-var queryDifferTests = []queryDifferTest{
+var selectTests = []queryDifferTest{
 	{
 		name:  "query diff",
 		query: "select * from test",
@@ -132,32 +153,6 @@ var queryDifferTests = []queryDifferTest{
 		},
 	},
 	{
-		name:  "query: select from join",
-		query: "select * from test join quiz on test.pk = quiz.pk",
-		setup: []testCommand{
-			{commands.SqlCmd{}, []string{"-q", "delete from test where pk = 1"}},
-			{commands.SqlCmd{}, []string{"-q", "insert into test values (9,9)"}},
-			{commands.SqlCmd{}, []string{"-q", "insert into quiz values (9,99)"}},
-		},
-		diffRows: []rowDiff{
-			{from: sql.Row{int32(1), int32(1), int32(1), int32(11)}, to: nil},
-			{from: nil, to: sql.Row{int32(9), int32(9), int32(9), int32(99)}},
-		},
-	},
-	{
-		name:  "project a join",
-		query: "select test.pk*quiz.pk, test.c0, quiz.c0 from test join quiz on test.pk = quiz.pk",
-		setup: []testCommand{
-			{commands.SqlCmd{}, []string{"-q", "delete from test where pk = 1"}},
-			{commands.SqlCmd{}, []string{"-q", "insert into test values (9,9)"}},
-			{commands.SqlCmd{}, []string{"-q", "insert into quiz values (9,99)"}},
-		},
-		diffRows: []rowDiff{
-			{from: sql.Row{int64(1), int32(1), int32(11)}, to: nil},
-			{from: nil, to: sql.Row{int64(81), int32(9), int32(99)}},
-		},
-	},
-	{
 		name:  "query: select from view",
 		query: "select * from squared",
 		setup: []testCommand{
@@ -209,6 +204,35 @@ var queryDifferTests = []queryDifferTest{
 			{from: nil, to: sql.Row{int64(81)}},
 		},
 	},
+}
+
+var joinTests = []queryDifferTest{
+	{
+		name:  "query: select from join",
+		query: "select * from test join quiz on test.pk = quiz.pk",
+		setup: []testCommand{
+			{commands.SqlCmd{}, []string{"-q", "delete from test where pk = 1"}},
+			{commands.SqlCmd{}, []string{"-q", "insert into test values (9,9)"}},
+			{commands.SqlCmd{}, []string{"-q", "insert into quiz values (9,99)"}},
+		},
+		diffRows: []rowDiff{
+			{from: sql.Row{int32(1), int32(1), int32(1), int32(11)}, to: nil},
+			{from: nil, to: sql.Row{int32(9), int32(9), int32(9), int32(99)}},
+		},
+	},
+	{
+		name:  "project a join",
+		query: "select test.pk*quiz.pk, test.c0, quiz.c0 from test join quiz on test.pk = quiz.pk",
+		setup: []testCommand{
+			{commands.SqlCmd{}, []string{"-q", "delete from test where pk = 1"}},
+			{commands.SqlCmd{}, []string{"-q", "insert into test values (9,9)"}},
+			{commands.SqlCmd{}, []string{"-q", "insert into quiz values (9,99)"}},
+		},
+		diffRows: []rowDiff{
+			{from: sql.Row{int64(1), int32(1), int32(11)}, to: nil},
+			{from: nil, to: sql.Row{int64(81), int32(9), int32(99)}},
+		},
+	},
 	{
 		name:  "join a view",
 		query: "select c0c0, pk, c0 from squared join quiz on sqrt(squared.c0c0) = quiz.pk",
@@ -222,7 +246,6 @@ var queryDifferTests = []queryDifferTest{
 			{from: sql.Row{int64(1), int32(1), int32(11)}, to: nil},
 		},
 	},
-
 	{
 		name:  "join two views with explosions",
 		query: "select v1.three, v1.one*test.c0, POW(test.c0,3) from v1 join test on v1.one = test.c0;",
@@ -238,34 +261,78 @@ var queryDifferTests = []queryDifferTest{
 			{from: nil, to: sql.Row{int64(729), int64(81), float64(729)}},
 		},
 	},
-	//{
-	//	query: "SELECT i FROM niltable WHERE b IS NULL",
-	//},
-	//{
-	//	query: "SELECT i FROM niltable WHERE b IS NOT NULL",
-	//},
-	//{
-	//	query: "SELECT i FROM mytable ORDER BY i LIMIT 1 OFFSET 1;",
-	//},
-	//{
-	//	query: `SELECT SUBSTRING_INDEX(mytable.s, "d", 1) AS s FROM mytable INNER JOIN othertable ON (SUBSTRING_INDEX(mytable.s, "d", 1) = SUBSTRING_INDEX(othertable.s2, "d", 1)) GROUP BY 1 HAVING s = 'secon'`,
-	//},
-	//	{
-	//		query: "SELECT i FROM mytable WHERE i BETWEEN 1 AND 2",
-	//	},
-	//{
-	//	query: "SELECT i,v from stringandtable WHERE i",
-	//},
-	//{
-	//	query: `SELECT COUNT(DISTINCT t.i) FROM tabletest t, mytable t2`,
-	//},
+}
+
+var groupByTests = []queryDifferTest{
+	{
+		name:  "sum groups",
+		query: "select sum(pk) from test",
+		setup: []testCommand{
+			{commands.SqlCmd{}, []string{"-q", "delete from test where pk = 1"}},
+			{commands.SqlCmd{}, []string{"-q", "insert into test values (100,0)"}},
+		},
+		diffRows: []rowDiff{
+			{from: sql.Row{float64(6)}, to: sql.Row{float64(105)}},
+		},
+	},
+	{
+		name:  "sum groups",
+		query: "select sum(pk),c0 from test group by c0",
+		setup: []testCommand{
+			// from queryDifferTestSetup: "insert into test values (0,0),(1,1),(2,2),(3,3);"
+			{commands.SqlCmd{}, []string{"-q", "insert into test values (10,0),(11,1),(12,2),(13,3)"}},
+			{commands.AddCmd{}, []string{"."}},
+			{commands.CommitCmd{}, []string{"-m", "added extra rows"}},
+			{commands.SqlCmd{}, []string{"-q", "delete from test where pk = 1"}},
+			{commands.SqlCmd{}, []string{"-q", "insert into test values (19,9)"}},
+		},
+		diffRows: []rowDiff{
+			{from: sql.Row{float64(12), int32(1)}, to: sql.Row{float64(11), int32(1)}},
+			{from: nil, to: sql.Row{float64(19), int32(9)}},
+		},
+	},
+	{
+		name:  "sum groups having",
+		query: "select sum(pk),c0 from test group by c0 having sum(pk) > 11",
+		setup: []testCommand{
+			// from queryDifferTestSetup: "insert into test values (0,0),(1,1),(2,2),(3,3);"
+			{commands.SqlCmd{}, []string{"-q", "insert into test values (10,0),(11,1),(12,2),(13,3)"}},
+			{commands.AddCmd{}, []string{"."}},
+			{commands.CommitCmd{}, []string{"-m", "added extra rows"}},
+			{commands.SqlCmd{}, []string{"-q", "delete from test where pk = 11"}},
+			{commands.SqlCmd{}, []string{"-q", "insert into test values (100,0)"}},
+			{commands.SqlCmd{}, []string{"-q", "insert into test values (22,2)"}},
+		},
+		diffRows: []rowDiff{
+			{from: nil, to: sql.Row{float64(110), int32(0)}},
+			{from: sql.Row{float64(12), int32(1)}, to: nil},
+			{from: sql.Row{float64(14), int32(2)}, to: sql.Row{float64(36), int32(2)}},
+		},
+	},
+	{
+		name:  "join on sum groups",
+		query: "select * from quiz join (select sum(pk), c0 from test group by c0) as subq on quiz.pk = subq.c0",
+		setup: []testCommand{
+			// from queryDifferTestSetup: "insert into test values (0,0),(1,1),(2,2),(3,3);"
+			// from queryDifferTestSetup: "insert into quiz values (0,10),(1,11),(2,22),(3,33);"
+			{commands.SqlCmd{}, []string{"-q", "insert into test values (10,0),(11,1),(12,2),(13,3)"}},
+			{commands.AddCmd{}, []string{"."}},
+			{commands.CommitCmd{}, []string{"-m", "added extra rows"}},
+			{commands.SqlCmd{}, []string{"-q", "delete from quiz where pk = 1"}},
+			{commands.SqlCmd{}, []string{"-q", "insert into test values (100,0)"}},
+		},
+		diffRows: []rowDiff{
+			{from: sql.Row{int32(0), int32(10), float64(10), int32(0)}, to: sql.Row{int32(0), int32(10), float64(110), int32(0)}},
+			{from: sql.Row{int32(1), int32(11), float64(12), int32(1)}, to: nil},
+		},
+	},
 }
 
 func testQueryDiffer(t *testing.T, test queryDifferTest) {
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
 
-	for _, c := range setupCommon {
+	for _, c := range queryDifferTestSetup {
 		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
 		assert.Equal(t, 0, exitCode)
 	}
@@ -297,7 +364,7 @@ func testQueryDiffer(t *testing.T, test queryDifferTest) {
 }
 
 // subset of test data from go-mysql-server/enginetest/testdata.go:CreateSubsetTestData()
-var setupEngineTest = []testCommand{
+var engineTestSetup = []testCommand{
 	{commands.SqlCmd{}, []string{"-q", "create table mytable (" +
 		"i bigint primary key," +
 		"s text);"}},
@@ -421,12 +488,21 @@ var setupEngineTest = []testCommand{
 	{commands.CommitCmd{}, []string{"-m", "setup enginetest test data"}},
 }
 
-type engineQueryTest struct {
-	query  string
-	errMsg string
+func setupEngineTests(t *testing.T) *env.DoltEnv {
+	// engineTestQueries are read-only, sharing a dEnv speeds up tests
+	dEnv := dtestutils.CreateTestEnv()
+	for _, c := range engineTestSetup {
+		exitCode := c.cmd.Exec(context.Background(), c.cmd.Name(), c.args, dEnv)
+		assert.Equal(t, 0, exitCode)
+	}
+	return dEnv
 }
 
-var engineTestQueries = []engineQueryTest{
+type engineTestQuery struct {
+	query string
+}
+
+var engineTestSelectQueries = []engineTestQuery{
 	{query: "SELECT * FROM mytable INNER JOIN othertable ON i = i2 ORDER BY i"},
 	{query: "SELECT i, i2, s2 FROM mytable INNER JOIN othertable ON i = i2 ORDER BY i"},
 	{query: "SELECT s2, i2, i FROM mytable INNER JOIN othertable ON i = i2 ORDER BY i"},
@@ -655,7 +731,7 @@ var engineTestQueries = []engineQueryTest{
 	{query: "SELECT (CASE WHEN i THEN i ELSE 0 END) as cases_i from mytable"},
 }
 
-var engineTestUnionQueries = []engineQueryTest{
+var engineTestUnionQueries = []engineTestQuery{
 	{query: "SELECT i FROM mytable UNION SELECT i+10 FROM mytable;"},
 	{query: "SELECT i FROM mytable UNION DISTINCT SELECT i+10 FROM mytable;"},
 	{query: "SELECT i FROM mytable UNION SELECT i FROM mytable;"},
@@ -663,8 +739,115 @@ var engineTestUnionQueries = []engineQueryTest{
 	{query: "SELECT i FROM mytable UNION SELECT s FROM mytable;"},
 }
 
+var engineTestAggregateQueries = []engineTestQuery{
+	{query: "SELECT * FROM mytable GROUP BY i,s;"},
+	{query: "SELECT COUNT(*) FROM mytable;"},
+	{query: "SELECT COUNT(*) FROM mytable LIMIT 1;"},
+	{query: "SELECT COUNT(*) AS c FROM mytable;"},
+	{query: `
+		SELECT COUNT(*) AS cnt, fi FROM (
+			SELECT tbl.s AS fi
+			FROM mytable tbl
+		) t
+		GROUP BY fi`,
+	},
+	{query: `
+		SELECT fi, COUNT(*) FROM (
+			SELECT tbl.s AS fi
+			FROM mytable tbl
+		) t
+		GROUP BY fi
+		ORDER BY COUNT(*) ASC`,
+	},
+	{query: `
+		SELECT COUNT(*), fi  FROM (
+			SELECT tbl.s AS fi
+			FROM mytable tbl
+		) t
+		GROUP BY fi
+		ORDER BY COUNT(*) ASC`,
+	},
+	{query: `
+		SELECT COUNT(*) AS cnt, fi FROM (
+			SELECT tbl.s AS fi
+			FROM mytable tbl
+		) t
+		GROUP BY 2`,
+	},
+	{query: `SELECT COUNT(*) AS cnt, s AS fi FROM mytable GROUP BY fi`},
+	{query: `SELECT COUNT(*) AS cnt, s AS fi FROM mytable GROUP BY 2`},
+	{query: `SELECT COUNT(*) c, i AS foo FROM mytable GROUP BY i ORDER BY i DESC`},
+	{query: `SELECT COUNT(*) c, i AS foo FROM mytable GROUP BY 2 ORDER BY 2 DESC`},
+	{query: `SELECT COUNT(*) c, i AS foo FROM mytable GROUP BY i ORDER BY foo DESC`},
+	{query: `SELECT COUNT(*) c, i AS foo FROM mytable GROUP BY 2 ORDER BY foo DESC`},
+	{query: `SELECT COUNT(*) c, i AS i FROM mytable GROUP BY 2`},
+	{query: `SELECT i AS i FROM mytable GROUP BY 1`},
+	{query: "SELECT SUM(i) + 1, i FROM mytable GROUP BY i ORDER BY i"},
+	{query: "SELECT SUM(i), i FROM mytable GROUP BY i ORDER BY 1+SUM(i) ASC"},
+	{query: "SELECT i, SUM(i) FROM mytable GROUP BY i ORDER BY SUM(i) DESC"},
+	{query: `SELECT AVG(23.222000)`},
+	{query: "SELECT substring(s, 1, 1), count(*) FROM mytable GROUP BY substring(s, 1, 1)"},
+	{query: `
+		SELECT
+			i,
+			foo
+		FROM (
+			SELECT
+				i,
+				COUNT(s) AS foo
+			FROM mytable
+			GROUP BY i
+		) AS q
+		ORDER BY foo DESC
+		`,
+	},
+	{query: "SELECT n, COUNT(n) FROM bigtable GROUP BY n HAVING COUNT(n) > 2"},
+	{query: "SELECT n, MAX(n) FROM bigtable GROUP BY n HAVING COUNT(n) > 2"},
+	{query: "SELECT substring(mytable.s, 1, 5) AS s FROM mytable INNER JOIN othertable ON (substring(mytable.s, 1, 5) = SUBSTRING(othertable.s2, 1, 5)) GROUP BY 1 HAVING s = \"secon\""},
+	{query: "SELECT s,  i FROM mytable GROUP BY i ORDER BY SUBSTRING(s, 1, 1) DESC"},
+	{query: "SELECT s, i FROM mytable GROUP BY i HAVING count(*) > 0 ORDER BY SUBSTRING(s, 1, 1) DESC"},
+	{query: `SELECT t.date_col FROM (SELECT CONVERT('2019-06-06 00:00:00', DATETIME) as date_col) t GROUP BY t.date_col`},
+	{query: "SELECT i, COUNT(i) AS `COUNT(i)` FROM (SELECT i FROM mytable) t GROUP BY i ORDER BY i, `COUNT(i)` DESC"},
+	{query: `SELECT 1 FROM mytable GROUP BY i HAVING i > 1`},
+	{query: `SELECT avg(i) FROM mytable GROUP BY i HAVING avg(i) > 1`},
+	{query: `
+		SELECT s AS s, COUNT(*) AS count,  AVG(i) AS ` + "`AVG(i)`" + `
+		FROM  (
+			SELECT * FROM mytable
+		) AS expr_qry
+		GROUP BY s
+		HAVING ((AVG(i) > 0))
+		ORDER BY count DESC
+		LIMIT 10000`,
+	},
+	{query: `
+		SELECT
+			table_schema,
+			table_name,
+			CASE
+				WHEN table_type = 'BASE TABLE' THEN
+					CASE
+						WHEN table_schema = 'mysql'
+							OR table_schema = 'performance_schema' THEN 'SYSTEM TABLE'
+						ELSE 'TABLE'
+					END
+				WHEN table_type = 'TEMPORARY' THEN 'LOCAL_TEMPORARY'
+				ELSE table_type
+			END AS TABLE_TYPE
+		FROM information_schema.tables
+		WHERE table_schema = 'mydb'
+			AND table_name = 'mytable'
+		HAVING table_type IN ('TABLE', 'VIEW')
+		ORDER BY table_type, table_schema, table_name`,
+	},
+	{query: "SELECT substring(mytable.s, 1, 5) AS s FROM mytable INNER JOIN othertable ON (substring(mytable.s, 1, 5) = SUBSTRING(othertable.s2, 1, 5)) GROUP BY 1"},
+	{query: `SELECT SUBSTRING_INDEX(mytable.s, "d", 1) AS s FROM mytable INNER JOIN othertable ON (SUBSTRING_INDEX(mytable.s, "d", 1) = SUBSTRING_INDEX(othertable.s2, "d", 1)) GROUP BY 1 HAVING s = 'secon'`},
+	{query: `SELECT SUBSTRING(s, -3, 3) AS s FROM mytable WHERE s LIKE '%d row' GROUP BY 1`},
+	{query: `SELECT SUM(i) FROM mytable`},
+}
+
 // runs a subset of SELECT queries from enginetest/queries.go as a sanity check
-func engineTestQueryDiffer(t *testing.T, test engineQueryTest, dEnv *env.DoltEnv) {
+func engineTestQueryDiffer(t *testing.T, test engineTestQuery, dEnv *env.DoltEnv) {
 	ctx := context.Background()
 	fromRoot, err := dEnv.HeadRoot(ctx)
 	require.NoError(t, err)
@@ -678,11 +861,7 @@ func engineTestQueryDiffer(t *testing.T, test engineQueryTest, dEnv *env.DoltEnv
 
 	qd.Start()
 	from, to, err := qd.NextDiff()
-	if test.errMsg == "" {
-		assert.Nil(t, from)
-		assert.Nil(t, to)
-		assert.Equal(t, io.EOF, err)
-	} else {
-		//assert.NotNil(t, err)
-	}
+	assert.Nil(t, from)
+	assert.Nil(t, to)
+	assert.Equal(t, io.EOF, err)
 }
