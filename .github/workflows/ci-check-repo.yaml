@@ -1,0 +1,33 @@
+name: Check Dolt Repo
+
+on:
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test:
+    name: Check Dolt Repo
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Go 1.13
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.13
+        id: go
+      - uses: actions/checkout@v2
+      - name: Check Repo
+        working-directory: ./go
+        # Keep this in sync with //go/utils/prepr/prepr.sh.
+        run: |
+          echo "The branch name is : $BRANCH_NAME"
+          echo "The target name is : $CHANGE_TARGET"
+          go get -mod=readonly ./...
+          ./utils/repofmt/check_fmt.sh
+          ./Godeps/verify.sh
+          ./utils/checkcommitters/check_pr.sh
+          go vet -mod=readonly ./...
+          go run -mod=readonly ./utils/copyrightshdrs/
+          go test -mod=readonly -test.v ./...
+        env:
+          BRANCH_NAME: ${{ format('{0}', github.head_ref) }}
+          CHANGE_TARGET: ${{ format('{0}', github.base_ref) }}
