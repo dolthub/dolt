@@ -1,4 +1,4 @@
-name: Dolt bats tests
+name: Test Bats
 
 on:
   pull_request:
@@ -63,7 +63,8 @@ jobs:
         run: sudo apt-get install -y expect
       - name: Check expect
         run: expect -v
-      - run: |
+      - name: Test all
+        run: |
           bats --tap .
         working-directory: ./bats
         env:
