@@ -1,4 +1,4 @@
-name: Dolt bats tests
+name: Check Compatibility
 
 on:
   pull_request:
@@ -6,30 +6,18 @@ on:
 
 jobs:
   test:
-    name: Bats tests
+    name: Compatibility Test
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: true
       matrix:
         os: [ ubuntu-latest ]
     steps:
-#      - name: Configure AWS Credentials
-#        uses: aws-actions/configure-aws-credentials@v1
-#        with:
-#          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-#          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-#          aws-region: us-west-2
-#          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-#          role-duration-seconds: 3600
       - name: Setup Go 1.x
         uses: actions/setup-go@v2
         with:
           go-version: ^1.13
         id: go
-#      - name: Setup Python 3.x
-#        uses: actions/setup-python@v2
-#        with:
-#          python-version: ^3.6
       - uses: actions/checkout@v2
       - uses: actions/setup-node@v1
         with:
@@ -43,10 +31,6 @@ jobs:
           npm i bats
           echo "::add-path::$(pwd)/node_modules/.bin"
         working-directory: ./.ci_bin
-#      - name: Install Doltpy
-#        run: |
-#          python3 -m pip install --upgrade pip
-#          pip install doltpy
       - name: Install Dolt
         working-directory: ./go
         run: |
@@ -55,16 +39,6 @@ jobs:
         run: |
           dolt config --global --add user.name 'Liquidata Actions'
           dolt config --global --add user.email 'actions@liquidata.co'
-#      - name: Install expect
-#        if: matrix.os == 'ubuntu-latest'
-#        run: sudo apt-get install -y expect
-#      - name: Check expect
-#        run: expect -v
-      - run: ./runner.sh
+      - name: Test all
+        run: ./runner.sh
         working-directory: ./bats/compatibility
-#        env:
-#          AWS_SDK_LOAD_CONFIG: "1"
-#          AWS_REGION: "us-west-2"
-#          DOLT_BATS_AWS_TABLE: "dolt-ci-bats-manifests-us-west-2"
-#          DOLT_BATS_AWS_BUCKET: "dolt-ci-bats-chunks-us-west-2"
-#          DOLT_BATS_AWS_EXISTING_REPO: "aws_remote_bats_tests"
