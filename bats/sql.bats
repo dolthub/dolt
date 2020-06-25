@@ -703,31 +703,38 @@ SQL
   EXPECTED=$( echo -e "c1\n200" )
   run dolt sql -r csv -q "SELECT c1 FROM one_pk WHERE pk=0"
   [ $status -eq 0 ]
-  [[ "$output" = "$EXPECTED" ]]
+  [[ "$output" = "$EXPECTED" ]] || false
   run dolt sql -r csv -q "SELECT c1 FROM one_pk WHERE pk=0" HEAD
   [ $status -eq 0 ]
-  [[ "$output" = "$EXPECTED" ]]
+  [[ "$output" = "$EXPECTED" ]] || false
   run dolt sql -r csv -q "SELECT c1 FROM one_pk WHERE pk=0" two
   [ $status -eq 0 ]
-  [[ "$output" = "$EXPECTED" ]]
+  [[ "$output" = "$EXPECTED" ]] || false
 
   EXPECTED=$( echo -e "c1\n100" )
   run dolt sql -r csv -q "SELECT c1 FROM one_pk WHERE pk=0" HEAD~
   [ $status -eq 0 ]
-  [[ "$output" = "$EXPECTED" ]]
+  [[ "$output" = "$EXPECTED" ]] || false
   run dolt sql -r csv -q "SELECT c1 FROM one_pk WHERE pk=0" one
   [ $status -eq 0 ]
-  [[ "$output" = "$EXPECTED" ]]
+  [[ "$output" = "$EXPECTED" ]] || false
 
   EXPECTED=$( echo -e "c1\n0" )
   run dolt sql -r csv -q "SELECT c1 FROM one_pk WHERE pk=0" HEAD~2
   [ $status -eq 0 ]
-  [[ "$output" = "$EXPECTED" ]]
+  [[ "$output" = "$EXPECTED" ]] || false
   run dolt sql -r csv -q "SELECT c1 FROM one_pk WHERE pk=0" master
   [ $status -eq 0 ]
-  [[ "$output" = "$EXPECTED" ]]
+  [[ "$output" = "$EXPECTED" ]] || false
 
   #writes should fail if commit is specified
   run dolt sql -q "UPDATE one_pk SET c1 = 200 WHERE pk = 0" HEAD~
   [ $status -ne 0 ]
+}
+
+@test "sql select with json output supports datetime" {
+    run dolt sql -r json -q "select * from has_datetimes"
+    [ $status -eq 0 ]
+    skip "DATETIME values are empty in json format right now"
+    [[ "$output" = "2020-02-17 00:00:00" ]] || false
 }
