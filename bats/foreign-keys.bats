@@ -1277,3 +1277,130 @@ SQL
     [ "$status" -eq "0" ]
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_child_parent_1` FOREIGN KEY (`parent_id_new`) REFERENCES `parent` (`id_new`)' ]] || false
 }
+
+@test "foreign-keys: dolt sql" {
+    dolt sql <<SQL
+CREATE TABLE one (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT
+);
+CREATE TABLE two (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  FOREIGN KEY (v1)
+    REFERENCES one(v1)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+);
+CREATE TABLE three (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  FOREIGN KEY (v1, v2)
+    REFERENCES two(v1, v2)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+);
+INSERT INTO one VALUES (1, 1, 4), (2, 2, 5), (3, 3, 6), (4, 4, 5);
+INSERT INTO two VALUES (2, 1, 1), (3, 2, 2), (4, 3, 3), (5, 4, 4);
+INSERT INTO three VALUES (3, 1, 1), (4, 2, 2), (5, 3, 3), (6, 4, 4);
+UPDATE one SET v1 = v1 + v2;
+DELETE FROM one WHERE pk = 3;
+UPDATE two SET v2 = v1 - 2;
+SQL
+
+    run dolt schema show two
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_two_one_1` FOREIGN KEY (`v1`) REFERENCES `one` (`v1`)' ]] || false
+    run dolt schema show three
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_three_two_1` FOREIGN KEY (`v1`,`v2`) REFERENCES `two` (`v1`,`v2`)' ]] || false
+
+    run dolt sql -q "SELECT * FROM one" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1,v2" ]] || false
+    [[ "$output" =~ "1,5,4" ]] || false
+    [[ "$output" =~ "2,7,5" ]] || false
+    [[ "$output" =~ "4,9,5" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+    run dolt sql -q "SELECT * FROM two" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1,v2" ]] || false
+    [[ "$output" =~ "2,5,3" ]] || false
+    [[ "$output" =~ "3,7,5" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+    run dolt sql -q "SELECT * FROM three" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1,v2" ]] || false
+    [[ "$output" =~ "3,5,3" ]] || false
+    [[ "$output" =~ "4,7,5" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+}
+
+@test "foreign-keys: dolt table import" {
+    dolt sql <<SQL
+CREATE TABLE parent (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT
+);
+CREATE TABLE child (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  FOREIGN KEY (v1)
+    REFERENCES parent(v1)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+);
+INSERT INTO parent VALUES (1, 1, 1), (2, 2, 2);
+INSERT INTO child  VALUES (1, 1, 1), (2, 2, 2);
+SQL
+
+    echo $'pk,v1,v2\n1,3,3\n2,4,4' > update_parent.csv
+    dolt table import -u parent update_parent.csv
+    run dolt sql -q "SELECT * FROM parent" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1,v2" ]] || false
+    [[ "$output" =~ "1,3,3" ]] || false
+    [[ "$output" =~ "2,4,4" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+    run dolt sql -q "SELECT * FROM child" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1,v2" ]] || false
+    [[ "$output" =~ "1,3,1" ]] || false
+    [[ "$output" =~ "2,4,2" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+
+    echo $'pk,v1,v2\n1,1,1\n2,2,2' > update_child.csv
+    run dolt table import -u child update_child.csv
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+
+    echo $'pk,v1,v2\n3,3,3\n4,4,4' > update_child.csv
+    dolt table import -u child update_child.csv
+    run dolt sql -q "SELECT * FROM child" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1,v2" ]] || false
+    [[ "$output" =~ "1,3,1" ]] || false
+    [[ "$output" =~ "2,4,2" ]] || false
+    [[ "$output" =~ "3,3,3" ]] || false
+    [[ "$output" =~ "4,4,4" ]] || false
+    [[ "${#lines[@]}" = "5" ]] || false
+
+    echo $'pk,v1,v2\n1,1,1\n2,2,2' > update_child.csv
+    run dolt table import -r child update_child.csv
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+
+    echo $'pk,v1,v2\n3,3,3\n4,4,4' > update_child.csv
+    dolt table import -r child update_child.csv
+    run dolt sql -q "SELECT * FROM child" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1,v2" ]] || false
+    [[ "$output" =~ "3,3,3" ]] || false
+    [[ "$output" =~ "4,4,4" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+}
