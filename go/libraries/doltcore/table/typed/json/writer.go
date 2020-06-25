@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"io"
 	"os"
 	"path/filepath"
@@ -77,9 +78,37 @@ func (jsonw *JSONWriter) WriteRow(ctx context.Context, r row.Row) error {
 	colValMap := make(map[string]interface{}, allCols.Size())
 	err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		val, ok := r.GetColVal(tag)
-		if ok && !types.IsNull(val) {
-			colValMap[col.Name] = val
+		if !ok || types.IsNull(val) {
+			return false, nil
 		}
+
+		switch col.TypeInfo.GetTypeIdentifier() {
+		case typeinfo.DatetimeTypeIdentifier,
+		typeinfo.DecimalTypeIdentifier,
+		typeinfo.EnumTypeIdentifier,
+		typeinfo.InlineBlobTypeIdentifier,
+		typeinfo.SetTypeIdentifier,
+		typeinfo.TimeTypeIdentifier,
+		typeinfo.TupleTypeIdentifier,
+		typeinfo.UuidTypeIdentifier,
+		typeinfo.VarBinaryTypeIdentifier,
+		typeinfo.YearTypeIdentifier:
+			v, err := col.TypeInfo.FormatValue(val)
+			if err != nil {
+				return true, err
+			}
+			val = types.String(*v)
+
+		case typeinfo.BitTypeIdentifier,
+		typeinfo.BoolTypeIdentifier,
+		typeinfo.VarStringTypeIdentifier,
+		typeinfo.UintTypeIdentifier,
+		typeinfo.IntTypeIdentifier,
+		typeinfo.FloatTypeIdentifier:
+			// use primitive type
+		}
+
+		colValMap[col.Name] = val
 
 		return false, nil
 	})

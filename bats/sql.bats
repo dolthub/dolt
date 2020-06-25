@@ -186,7 +186,7 @@ SQL
 
     run dolt sql -r json -q "select * from test order by a"
     [ $status -eq 0 ]
-    [ "$output" == '{"rows": [{"a":1,"b":1.5,"c":"1","d":{}},{"a":2,"b":2.5,"c":"2","d":{}},{"a":3,"c":"3","d":{}},{"a":4,"b":4.5,"d":{}},{"a":5,"b":5.5,"c":"5"}]}' ]
+    [ "$output" == '{"rows": [{"a":1,"b":1.5,"c":"1","d":"2020-01-01 00:00:00"},{"a":2,"b":2.5,"c":"2","d":"2020-02-02 00:00:00"},{"a":3,"c":"3","d":"2020-03-03 00:00:00"},{"a":4,"b":4.5,"d":"2020-04-04 00:00:00"},{"a":5,"b":5.5,"c":"5"}]}' ]
 }
 
 @test "sql ambiguous column name" {
@@ -735,6 +735,5 @@ SQL
 @test "sql select with json output supports datetime" {
     run dolt sql -r json -q "select * from has_datetimes"
     [ $status -eq 0 ]
-    skip "DATETIME values are empty in json format right now"
-    [[ "$output" = "2020-02-17 00:00:00" ]] || false
+    [[ "$output" =~ "2020-02-17 00:00:00" ]] || false
 }
