@@ -43,10 +43,12 @@ INSERT INTO test VALUES
     (2,'2020-04-08','12:12:12','2020','2020-04-08 12:12:12');
 SQL
     dolt table export test test.sql
-    cat test.sql
     run cat test.sql
     [[ "$output" =~ "INSERT INTO \`test\` (\`pk\`,\`v1\`,\`v2\`,\`v3\`,\`v4\`) VALUES (1,'2020-04-08','11:11:11','2020','2020-04-08 11:11:11');" ]] || false
     [[ "$output" =~ "INSERT INTO \`test\` (\`pk\`,\`v1\`,\`v2\`,\`v3\`,\`v4\`) VALUES (2,'2020-04-08','12:12:12','2020','2020-04-08 12:12:12');" ]] || false
+    dolt table export test test.json
+    run cat test.json
+    [ "$output" = '{"rows": [{"pk":1,"v1":"2020-04-08","v2":"11:11:11","v3":"2020","v4":"2020-04-08 11:11:11"},{"pk":2,"v1":"2020-04-08","v2":"12:12:12","v3":"2020","v4":"2020-04-08 12:12:12"}]}' ]
 }
 
 @test "dolt table import from stdin export to stdout" {

@@ -1192,7 +1192,7 @@ func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, 
 	case formatCsv:
 		wr, err = csv.NewCSVWriter(cliWr, untypedSch, csv.NewCSVInfo())
 	case formatJson:
-		wr, err = json.NewJSONWriter(cliWr, untypedSch)
+		wr, err = json.NewJSONWriter(cliWr, doltSch)
 	default:
 		panic("unimplemented output format type")
 	}
