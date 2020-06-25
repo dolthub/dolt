@@ -109,8 +109,6 @@ func PrintUsageAndExit() {
 }
 
 func Check(source, target string) bool {
-	fmt.Printf("source: %s \n", source)
-	fmt.Printf("terget: %s \n", target)
 	mbc := exec.Command("git", "merge-base", source, target)
 	mbco, err := mbc.CombinedOutput()
 	if err != nil {

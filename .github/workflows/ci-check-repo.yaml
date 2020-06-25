@@ -1,12 +1,12 @@
-name: Check Dolt Repo
+name: Check Formatting and Commiters
 
 on:
   pull_request:
     branches: [ master ]
 
 jobs:
-  test:
-    name: Check Dolt Repo
+  verify:
+    name: Verify format and commiters
     runs-on: ubuntu-latest
     steps:
       - name: Setup Go 1.13
@@ -17,11 +17,10 @@ jobs:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0
-      - name: Check Repo
+      - name: Check all
         working-directory: ./go
         # Keep this in sync with //go/utils/prepr/prepr.sh.
         run: |
-          git log -n 2
           go get -mod=readonly ./...
           ./utils/repofmt/check_fmt.sh
           ./Godeps/verify.sh
@@ -30,5 +29,5 @@ jobs:
           go run -mod=readonly ./utils/copyrightshdrs/
           go test -mod=readonly -test.v ./...
         env:
-          BRANCH_NAME: ${{ format('{0}', github.head_ref) }}
-          CHANGE_TARGET: ${{ format('{0}', github.base_ref) }}
+          BRANCH_NAME: ${{ github.head_ref }}
+          CHANGE_TARGET: ${{ github.base_ref }}
