@@ -75,13 +75,14 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 		&doltIndex{
 			cols:         cols,
 			db:           t.db,
-			id:           fmt.Sprintf("%s:primaryKey%v", t.Name(), len(cols)),
+			id:           "PRIMARY",
 			indexRowData: rowData,
 			indexSch:     sch,
 			table:        tbl,
 			tableData:    rowData,
 			tableName:    t.Name(),
 			tableSch:     sch,
+			unique:       true,
 		},
 	}
 
@@ -104,6 +105,8 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 			tableData:    rowData,
 			tableName:    t.Name(),
 			tableSch:     sch,
+			unique:       index.IsUnique(),
+			comment:      index.Comment(),
 		})
 	}
 
