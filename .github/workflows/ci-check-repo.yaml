@@ -9,10 +9,10 @@ jobs:
     name: Verify format and commiters
     runs-on: ubuntu-latest
     steps:
-      - name: Setup Go 1.13
+      - name: Setup Go 1.x
         uses: actions/setup-go@v2
         with:
-          go-version: 1.13
+          go-version: ^1.13
         id: go
       - uses: actions/checkout@v2
         with:
