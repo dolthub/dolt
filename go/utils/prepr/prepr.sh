@@ -13,7 +13,7 @@ fi
 # Keep this in sync with .github/workflows/ci-check-repo.yaml contents that
 # are easy to evaluate locally and might commonly fail.
 
-go get -mod=readonly ./...
+GOFLAGS="-mod=readonly" go build ./...
 ./utils/repofmt/check_fmt.sh
 ./Godeps/verify.sh
 go run ./utils/checkcommitters -dir "$target"

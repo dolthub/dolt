@@ -21,6 +21,7 @@ jobs:
         working-directory: ./go
         # Keep this in sync with //go/utils/prepr/prepr.sh.
         run: |
+          GOFLAGS="-mod=readonly" go build ./...
           ./utils/repofmt/check_fmt.sh
           ./Godeps/verify.sh
           ./utils/checkcommitters/check_pr.sh
