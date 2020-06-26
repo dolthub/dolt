@@ -17,13 +17,15 @@ package querydiff
 import (
 	"context"
 	"fmt"
-	"io"
-	"math"
-
 	sqle "github.com/liquidata-inc/go-mysql-server"
 	"github.com/liquidata-inc/go-mysql-server/sql"
+	"github.com/liquidata-inc/go-mysql-server/sql/expression/function"
 	"github.com/liquidata-inc/go-mysql-server/sql/parse"
 	"github.com/liquidata-inc/go-mysql-server/sql/plan"
+	"io"
+	"math"
+	"strings"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
@@ -153,7 +155,7 @@ func (qd *QueryDiffer) NextDiff() (fromRow sql.Row, toRow sql.Row, err error) {
 			if err != nil {
 				return nil, nil, err
 			}
-			eq, err := fromRow.Equals(toRow, qd.sch)
+			eq, err := nullSafeRowEquality(toRow, fromRow, qd.sch)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -219,10 +221,29 @@ func (qd *QueryDiffer) Schema() sql.Schema {
 	return qd.sch
 }
 
+func (qd *QueryDiffer) Order() []plan.SortField {
+	return qd.order
+}
+
 func (qd *QueryDiffer) Close() error {
 	qd.from.close()
 	qd.to.close()
 	return qd.ae.Get()
+}
+
+func nullSafeRowEquality(left, right sql.Row, sch sql.Schema) (bool, error) {
+	if len(left) != len(right) {
+		return false, nil
+	}
+	for i := range left {
+		if left[i] == sql.Null {
+			left[i] = nil // RIP Lisa Lopes
+		}
+		if right[i] == sql.Null {
+			right[i] = nil
+		}
+	}
+	return left.Equals(right, sch)
 }
 
 func makeSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue) (*sql.Context, *sqle.Engine, error) {
@@ -260,6 +281,11 @@ func makeSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValu
 }
 
 func getQueryPlans(fromCtx, toCtx *sql.Context, fromEng, toEng *sqle.Engine, query string) (fromPlan, toPlan sql.Node, err error) {
+	err = validateQueryType(fromCtx, fromEng, query)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	parsed, err := parse.Parse(fromCtx, query)
 	if err != nil {
 		return nil, nil, err
@@ -269,11 +295,139 @@ func getQueryPlans(fromCtx, toCtx *sql.Context, fromEng, toEng *sqle.Engine, que
 	if err != nil {
 		return nil, nil, fmt.Errorf("error executing query on from root: %s", err.Error())
 	}
+	err = validateQueryPlan(fromCtx, fromEng, fromPlan, query)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	toPlan, err = toEng.Analyzer.Analyze(toCtx, parsed)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error executing query on to root: %s", err.Error())
 	}
+	err = validateQueryPlan(toCtx, toEng, toPlan, query)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	return fromPlan, toPlan, nil
+}
+
+func validateQueryType(ctx *sql.Context, eng *sqle.Engine, query string) error {
+	sqlStatement, err := sqlparser.Parse(query)
+	if err == sqlparser.ErrEmpty {
+		return QueryDiffError{cause: "query is empty"}
+	} else if err != nil {
+		return QueryDiffError{cause: err.Error()}
+	}
+
+	if strings.Contains(strings.ToLower(query), "information_schema") {
+		return QueryDiffError{cause: "querying information_schema is not supported"}
+	}
+
+	switch sqlStatement.(type) {
+	case *sqlparser.Select:
+		return nil
+	case *sqlparser.Union:
+		return errPrintQueryPlan(ctx, eng, query, "UNION queries not supported")
+	case *sqlparser.Show:
+		return errPrintQueryPlan(ctx, eng, query, "SHOW queries not supported")
+	case *sqlparser.OtherRead, *sqlparser.Explain:
+		return errPrintQueryPlan(ctx, eng, query, "EXPLAIN queries not supported")
+	case *sqlparser.Use:
+		return errPrintQueryPlan(ctx, eng, query, "USE queries not supported")
+	case *sqlparser.Set:
+		return errPrintQueryPlan(ctx, eng, query, "SET queries not supported")
+	case *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete:
+		return errPrintQueryPlan(ctx, eng, query, "write queries not supported")
+	case *sqlparser.DDL:
+		return errPrintQueryPlan(ctx, eng, query, "DDL queries not supported")
+	default:
+		return QueryDiffError{cause: fmt.Sprintf("cannot diff query, unsupported SQL statement: '%s'", query)}
+	}
+}
+
+func validateQueryPlan(ctx *sql.Context, eng *sqle.Engine, node sql.Node, query string) (err error) {
+	if node == plan.Nothing || node == plan.EmptyTable{
+		return errPrintQueryPlan(ctx, eng, query, "queries returning no rows are not supported")
+	}
+
+	switch node.(type) {
+	case *plan.Distinct:
+		// todo: create DiffDistinct node that evaluates projections before hashing
+		return errPrintQueryPlan(ctx, eng, query, "DISTINCT queries not supported")
+	case *plan.Generate:
+		return errPrintQueryPlan(ctx, eng, query, "EXPLODE queries not supported")
+	case *plan.Commit:
+		return errPrintQueryPlan(ctx, eng, query, "COMMIT queries not supported")
+	case *plan.Rollback:
+		return errPrintQueryPlan(ctx, eng, query, "ROLLBACK queries not supported")
+	case *plan.UnresolvedTable:
+		return errPrintQueryPlan(ctx, eng, query, "query references unresolved table")
+	}
+
+	unsupportedTables := []string{
+		"dual",
+	}
+	if rt, ok := node.(*plan.ResolvedTable); ok {
+		for _, tn := range unsupportedTables {
+			if strings.ToLower(rt.Table.Name()) == tn {
+				return errPrintQueryPlan(ctx, eng, query, fmt.Sprintf("queries on table '%s' not supported", tn))
+			}
+		}
+	}
+
+	_, err = plan.TransformExpressions(node, func(e sql.Expression) (sql.Expression, error) {
+		switch e.(type) {
+		case *function.JSONExtract,
+			*function.JSONUnquote:
+			return nil, errPrintQueryPlan(ctx, eng, query, "JSON functions not supported")
+		case *function.Explode:
+			return nil, errPrintQueryPlan(ctx, eng, query, "EXPLODE function not supported")
+		}
+		return e, nil
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, c := range node.Children() {
+		err = validateQueryPlan(ctx, eng, c, query)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+type QueryDiffError struct {
+	plan  string
+	cause string
+}
+
+var _ error = QueryDiffError{}
+
+func (qde QueryDiffError) Error() string {
+	return fmt.Sprintf("cannot diff query: %s\n%s", qde.cause, qde.plan)
+}
+
+func errPrintQueryPlan(ctx *sql.Context, eng *sqle.Engine, query string, cause string) error {
+	_, iter, err := eng.Query(ctx, fmt.Sprintf("describe %s", query))
+	if err != nil {
+		return QueryDiffError{cause: fmt.Sprintf("cannot diff query: %s\n", err.Error())}
+	}
+
+	var qp strings.Builder
+	qp.WriteString("query plan:\n")
+	for {
+		r, err := iter.Next()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return QueryDiffError{cause: fmt.Sprintf("cannot diff query: %s\n", err.Error())}
+		}
+		qp.WriteString(fmt.Sprintf("\t%s\n", r[0].(string)))
+	}
+
+	return QueryDiffError{plan: qp.String(), cause: cause}
 }

@@ -16,13 +16,9 @@ package querydiff
 
 import (
 	"fmt"
-	"io"
-	"strings"
 
-	"github.com/liquidata-inc/go-mysql-server/sql/expression"
-
-	sqle "github.com/liquidata-inc/go-mysql-server"
 	"github.com/liquidata-inc/go-mysql-server/sql"
+	"github.com/liquidata-inc/go-mysql-server/sql/expression"
 	"github.com/liquidata-inc/go-mysql-server/sql/plan"
 )
 
@@ -160,25 +156,4 @@ func shiftIndicesForSortFields(offset int, order ...plan.SortField) []plan.SortF
 		shifted[i] = sf
 	}
 	return shifted
-}
-
-func errWithQueryPlan(ctx *sql.Context, eng *sqle.Engine, query string, cause error) error {
-	_, iter, err := eng.Query(ctx, fmt.Sprintf("describe %s", query))
-	if err != nil {
-		return fmt.Errorf("cannot diff query. Error describing query plan: %s\n", err.Error())
-	}
-
-	var qp strings.Builder
-	qp.WriteString("query plan:\n")
-	for {
-		r, err := iter.Next()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return fmt.Errorf("cannot diff query. Error describing query plan: %s\n", err.Error())
-		}
-		qp.WriteString(fmt.Sprintf("\t%s\n", r[0].(string)))
-	}
-
-	return fmt.Errorf("cannot diff query: %s\n%s", cause.Error(), qp.String())
 }
