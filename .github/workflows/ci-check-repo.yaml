@@ -27,7 +27,6 @@ jobs:
           ./utils/checkcommitters/check_pr.sh
           go vet -mod=readonly ./...
           go run -mod=readonly ./utils/copyrightshdrs/
-          go test -mod=readonly -test.v ./...
         env:
           BRANCH_NAME: ${{ github.head_ref }}
           CHANGE_TARGET: ${{ github.base_ref }}
