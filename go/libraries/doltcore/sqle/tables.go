@@ -106,6 +106,7 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 			tableName:    t.Name(),
 			tableSch:     sch,
 			unique:       index.IsUnique(),
+			comment:      index.Comment(),
 		})
 	}
 

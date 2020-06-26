@@ -46,6 +46,7 @@ type doltIndex struct {
 	tableName    string
 	tableSch     schema.Schema
 	unique       bool
+	comment      string
 }
 
 var _ DoltIndex = (*doltIndex)(nil)
@@ -167,7 +168,7 @@ func (di *doltIndex) IsUnique() bool {
 
 // Comment implements sql.Index
 func (di *doltIndex) Comment() string {
-	return "" // TODO: store comments
+	return di.comment
 }
 
 // IndexType implements sql.Index
