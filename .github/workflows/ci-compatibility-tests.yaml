@@ -1,0 +1,44 @@
+name: Check Compatibility
+
+on:
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test:
+    name: Compatibility Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ ubuntu-latest ]
+    steps:
+      - name: Setup Go 1.x
+        uses: actions/setup-go@v2
+        with:
+          go-version: ^1.13
+        id: go
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v1
+        with:
+          node-version: ^12
+      - name: Create CI Bin
+        run: |
+          mkdir -p ./.ci_bin
+          echo "::add-path::$(pwd)/.ci_bin"
+      - name: Install Bats
+        run: |
+          npm i bats
+          echo "::add-path::$(pwd)/node_modules/.bin"
+        working-directory: ./.ci_bin
+      - name: Install Dolt
+        working-directory: ./go
+        run: |
+          go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
+      - name: Setup Dolt Config
+        run: |
+          dolt config --global --add user.name 'Liquidata Actions'
+          dolt config --global --add user.email 'actions@liquidata.co'
+      - name: Test all
+        run: ./runner.sh
+        working-directory: ./bats/compatibility
