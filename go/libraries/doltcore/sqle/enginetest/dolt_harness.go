@@ -29,21 +29,21 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/dfunctions"
 )
 
-type doltHarness struct {
+type DoltHarness struct {
 	t       *testing.T
 	session *sqle.DoltSession
 	mrEnv   env.MultiRepoEnv
 }
 
-var _ enginetest.Harness = (*doltHarness)(nil)
-var _ enginetest.SkippingHarness = (*doltHarness)(nil)
-var _ enginetest.IndexHarness = (*doltHarness)(nil)
-var _ enginetest.VersionedDBHarness = (*doltHarness)(nil)
+var _ enginetest.Harness = (*DoltHarness)(nil)
+var _ enginetest.SkippingHarness = (*DoltHarness)(nil)
+var _ enginetest.IndexHarness = (*DoltHarness)(nil)
+var _ enginetest.VersionedDBHarness = (*DoltHarness)(nil)
 
-func newDoltHarness(t *testing.T) *doltHarness {
+func newDoltHarness(t *testing.T) *DoltHarness {
 	session, err := sqle.NewDoltSession(context.Background(), enginetest.NewBaseSession(), "test", "email@test.com")
 	require.NoError(t, err)
-	return &doltHarness{
+	return &DoltHarness{
 		t:       t,
 		session: session,
 		mrEnv:   make(env.MultiRepoEnv),
@@ -51,7 +51,7 @@ func newDoltHarness(t *testing.T) *doltHarness {
 }
 
 // Logic to skip unsupported queries
-func (d *doltHarness) SkipQueryTest(query string) bool {
+func (d *DoltHarness) SkipQueryTest(query string) bool {
 	lowerQuery := strings.ToLower(query)
 	return strings.Contains(lowerQuery, "typestable") || // we don't support all the required types
 		strings.Contains(lowerQuery, "show full columns") || // we set extra comment info
@@ -59,11 +59,11 @@ func (d *doltHarness) SkipQueryTest(query string) bool {
 		strings.Contains(lowerQuery, "show create table") // we set extra comment info
 }
 
-func (d *doltHarness) Parallelism() int {
+func (d *DoltHarness) Parallelism() int {
 	return 1
 }
 
-func (d *doltHarness) NewContext() *sql.Context {
+func (d *DoltHarness) NewContext() *sql.Context {
 	return sql.NewContext(
 		context.Background(),
 		sql.WithSession(d.session),
@@ -71,11 +71,11 @@ func (d *doltHarness) NewContext() *sql.Context {
 	)
 }
 
-func (d *doltHarness) SupportsNativeIndexCreation() bool {
+func (d *DoltHarness) SupportsNativeIndexCreation() bool {
 	return true
 }
 
-func (d *doltHarness) NewDatabase(name string) sql.Database {
+func (d *DoltHarness) NewDatabase(name string) sql.Database {
 	dEnv := dtestutils.CreateTestEnv()
 	root, err := dEnv.WorkingRoot(enginetest.NewContext(d))
 	require.NoError(d.t, err)
@@ -87,7 +87,7 @@ func (d *doltHarness) NewDatabase(name string) sql.Database {
 	return db
 }
 
-func (d *doltHarness) NewTable(db sql.Database, name string, schema sql.Schema) (sql.Table, error) {
+func (d *DoltHarness) NewTable(db sql.Database, name string, schema sql.Schema) (sql.Table, error) {
 	doltDatabase := db.(sqle.Database)
 	err := doltDatabase.CreateTable(enginetest.NewContext(d).WithCurrentDB(db.Name()), name, schema)
 	if err != nil {
@@ -103,7 +103,7 @@ func (d *doltHarness) NewTable(db sql.Database, name string, schema sql.Schema) 
 
 // Dolt doesn't version tables per se, just the entire database. So ignore the name and schema and just create a new
 // branch with the given name.
-func (d *doltHarness) NewTableAsOf(db sql.VersionedDatabase, name string, schema sql.Schema, asOf interface{}) sql.Table {
+func (d *DoltHarness) NewTableAsOf(db sql.VersionedDatabase, name string, schema sql.Schema, asOf interface{}) sql.Table {
 	table, err := d.NewTable(db, name, schema)
 	if err != nil {
 		require.True(d.t, sql.ErrTableAlreadyExists.Is(err))
@@ -118,7 +118,7 @@ func (d *doltHarness) NewTableAsOf(db sql.VersionedDatabase, name string, schema
 
 // Dolt doesn't version tables per se, just the entire database. So ignore the name and schema and just create a new
 // branch with the given name.
-func (d *doltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf interface{}) error {
+func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf interface{}) error {
 	ddb := db.(sqle.Database)
 	e := enginetest.NewEngineWithDbs(d.t, d, []sql.Database{db}, nil)
 
