@@ -27,8 +27,8 @@ import (
 type SessionedTableEditor struct {
 	tableEditSession  *TableEditSession
 	tableEditor       *TableEditor
-	referencedTables  []*ForeignKey
-	referencingTables []*ForeignKey
+	referencedTables  []*ForeignKey // The tables that we reference to ensure an insert or update is valid
+	referencingTables []*ForeignKey // The tables that reference us to ensure their inserts and updates are valid
 }
 
 // ContainsIndexedKey returns whether the given key is contained within the index. The key is assumed to be in the

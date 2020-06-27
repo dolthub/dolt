@@ -19,6 +19,9 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/store/types"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 )
 
@@ -94,6 +97,54 @@ func (tes *TableEditSession) UpdateRoot(ctx context.Context, updatingFunc func(c
 		return err
 	}
 	return tes.setRoot(ctx, newRoot)
+}
+
+// ValidateForeignKeys ensures that all open table editors conform to their foreign key constraints. This does not
+// consider any tables that do not have open editors.
+func (tes *TableEditSession) ValidateForeignKeys(ctx context.Context) error {
+	tes.writeMutex.Lock()
+	defer tes.writeMutex.Unlock()
+
+	_, err := tes.flush(ctx)
+	if err != nil {
+		return err
+	}
+
+	if tes.Props.ForeignKeyChecksDisabled {
+		// When fk checks are disabled, we don't load any foreign key data. Although we could load them here now, we can
+		// take a bit of a performance hit and create an internal edit session that loads all of the foreign keys.
+		// Otherwise, to preserve this edit session would create a much larger (and more difficult to understand) block
+		// of code. The primary perf hit comes from foreign keys that reference tables that declare foreign keys of
+		// their own, which is not common, so the average perf hit is relatively minimal.
+		validationTes := CreateTableEditSession(tes.root, TableEditSessionProps{})
+		for tableName, _ := range tes.tables {
+			_, err = validationTes.getTableEditor(ctx, tableName, nil)
+			if err != nil {
+				return err
+			}
+		}
+		return validationTes.ValidateForeignKeys(ctx)
+	} else {
+		// if we loaded foreign keys then all referenced tables exist, so we can just use them
+		for _, ste := range tes.tables {
+			err = ste.tableEditor.rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+				r, err := row.FromNoms(ste.tableEditor.tSch, key.(types.Tuple), value.(types.Tuple))
+				if err != nil {
+					return true, err
+				}
+				err = ste.validateForInsert(ctx, r)
+				if err != nil {
+					return true, err
+				}
+				return false, nil
+			})
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 // flush is the inner implementation for Flush that does not acquire any locks

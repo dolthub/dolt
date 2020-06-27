@@ -1894,3 +1894,285 @@ SQL
     dolt add super_parent
     dolt commit -m "passes now"
 }
+
+@test "foreign-keys: Merge valid onto parent" {
+    dolt sql <<SQL
+CREATE TABLE parent (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT
+);
+CREATE TABLE child (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  CONSTRAINT fk_name FOREIGN KEY (v1)
+    REFERENCES parent(v1)
+);
+INSERT INTO parent VALUES (1, 1), (2, 2), (3, 3);
+INSERT INTO child VALUES (2, 1), (3, 2), (4, 3);
+SQL
+
+    dolt add -A
+    dolt commit -m "initial commit"
+    dolt checkout -b other
+    dolt checkout master
+    dolt sql <<SQL
+INSERT INTO parent VALUES (4, 3);
+SQL
+    dolt add -A
+    dolt commit -m "added row"
+    dolt checkout other
+
+    dolt sql <<SQL
+ALTER TABLE child DROP FOREIGN KEY fk_name;
+UPDATE parent SET v1 = v1 - 1;
+SQL
+    dolt add -A
+    dolt commit -m "updated parent"
+    dolt checkout master
+    dolt merge other
+    
+    run dolt sql -q "SELECT * FROM parent ORDER BY pk ASC" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,0" ]] || false
+    [[ "$output" =~ "2,1" ]] || false
+    [[ "$output" =~ "3,2" ]] || false
+    [[ "$output" =~ "4,3" ]] || false
+    [[ "${#lines[@]}" = "5" ]] || false
+    run dolt sql -q "SELECT * FROM child ORDER BY pk ASC" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "2,1" ]] || false
+    [[ "$output" =~ "3,2" ]] || false
+    [[ "$output" =~ "4,3" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+}
+
+@test "foreign-keys: Merge invalid onto parent" {
+    dolt sql <<SQL
+CREATE TABLE parent (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT
+);
+CREATE TABLE child (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  CONSTRAINT fk_name FOREIGN KEY (v1)
+    REFERENCES parent(v1)
+);
+INSERT INTO parent VALUES (1, 1), (2, 2), (3, 3);
+INSERT INTO child VALUES (2, 1), (3, 2), (4, 3);
+SQL
+
+    dolt add -A
+    dolt commit -m "initial commit"
+    dolt checkout -b other
+    dolt checkout master
+    dolt sql <<SQL
+INSERT INTO parent VALUES (4, 4);
+SQL
+    dolt add -A
+    dolt commit -m "added row"
+    dolt checkout other
+
+    dolt sql <<SQL
+ALTER TABLE child DROP FOREIGN KEY fk_name;
+UPDATE parent SET v1 = v1 - 1;
+SQL
+    dolt add -A
+    dolt commit -m "updated parent"
+    dolt checkout master
+    run dolt merge other
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+    [[ "$output" =~ "3" ]] || false
+}
+
+@test "foreign-keys: Merge valid onto child" {
+    dolt sql <<SQL
+CREATE TABLE parent (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT
+);
+CREATE TABLE child (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  CONSTRAINT fk_name FOREIGN KEY (v1)
+    REFERENCES parent(v1)
+);
+INSERT INTO parent VALUES (1, 1), (2, 2), (3, 3);
+INSERT INTO child VALUES (2, 1), (3, 2), (4, 3);
+SQL
+
+    dolt add -A
+    dolt commit -m "initial commit"
+    dolt checkout -b other
+    dolt checkout master
+    dolt sql <<SQL
+INSERT INTO parent VALUES (4, 4);
+SQL
+    dolt add -A
+    dolt commit -m "added row"
+    dolt checkout other
+
+    dolt sql <<SQL
+ALTER TABLE child DROP FOREIGN KEY fk_name;
+UPDATE child SET v1 = v1 + 1;
+SQL
+    dolt add -A
+    dolt commit -m "updated child"
+    dolt checkout master
+    dolt merge other
+    
+    run dolt sql -q "SELECT * FROM parent ORDER BY pk ASC" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+    [[ "$output" =~ "3,3" ]] || false
+    [[ "$output" =~ "4,4" ]] || false
+    [[ "${#lines[@]}" = "5" ]] || false
+    run dolt sql -q "SELECT * FROM child ORDER BY pk ASC" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+    [[ "$output" =~ "3,3" ]] || false
+    [[ "$output" =~ "4,4" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+}
+
+@test "foreign-keys: Merge invalid onto child" {
+    dolt sql <<SQL
+CREATE TABLE parent (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT
+);
+CREATE TABLE child (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  CONSTRAINT fk_name FOREIGN KEY (v1)
+    REFERENCES parent(v1)
+);
+INSERT INTO parent VALUES (1, 1), (2, 2), (3, 3);
+INSERT INTO child VALUES (2, 1), (3, 2), (4, 3);
+SQL
+
+    dolt add -A
+    dolt commit -m "initial commit"
+    dolt checkout -b other
+    dolt checkout master
+    dolt sql <<SQL
+INSERT INTO parent VALUES (4, 4);
+SQL
+    dolt add -A
+    dolt commit -m "added row"
+    dolt checkout other
+
+    dolt sql <<SQL
+ALTER TABLE child DROP FOREIGN KEY fk_name;
+UPDATE child SET v1 = v1 - 1;
+SQL
+    dolt add -A
+    dolt commit -m "updated child"
+    dolt checkout master
+    run dolt merge other
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+    [[ "$output" =~ "0" ]] || false
+}
+
+@test "foreign-keys: Merge valid onto parent and child" {
+    dolt sql <<SQL
+CREATE TABLE parent (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT
+);
+CREATE TABLE child (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  CONSTRAINT fk_name FOREIGN KEY (v1)
+    REFERENCES parent(v1)
+);
+INSERT INTO parent VALUES (1, 1), (2, 2), (3, 3);
+INSERT INTO child VALUES (2, 1), (3, 2), (4, 3);
+SQL
+
+    dolt add -A
+    dolt commit -m "initial commit"
+    dolt checkout -b other
+    dolt checkout master
+    dolt sql <<SQL
+INSERT INTO parent VALUES (4, 3), (5, 4);
+SQL
+    dolt add -A
+    dolt commit -m "added row"
+    dolt checkout other
+
+    dolt sql <<SQL
+ALTER TABLE child DROP FOREIGN KEY fk_name;
+UPDATE parent SET v1 = v1 - 1;
+UPDATE child SET v1 = v1 + 1;
+SQL
+    dolt add -A
+    dolt commit -m "updated both"
+    dolt checkout master
+    dolt merge other
+    
+    run dolt sql -q "SELECT * FROM parent ORDER BY pk ASC" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,0" ]] || false
+    [[ "$output" =~ "2,1" ]] || false
+    [[ "$output" =~ "3,2" ]] || false
+    [[ "$output" =~ "4,3" ]] || false
+    [[ "$output" =~ "5,4" ]] || false
+    [[ "${#lines[@]}" = "6" ]] || false
+    run dolt sql -q "SELECT * FROM child ORDER BY pk ASC" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+    [[ "$output" =~ "3,3" ]] || false
+    [[ "$output" =~ "4,4" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+}
+
+@test "foreign-keys: Merge invalid onto parent and child" {
+    dolt sql <<SQL
+CREATE TABLE parent (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT
+);
+CREATE TABLE child (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  CONSTRAINT fk_name FOREIGN KEY (v1)
+    REFERENCES parent(v1)
+);
+INSERT INTO parent VALUES (1, 1), (2, 2), (3, 3);
+INSERT INTO child VALUES (2, 1), (3, 2), (4, 3);
+SQL
+
+    dolt add -A
+    dolt commit -m "initial commit"
+    dolt checkout -b other
+    dolt checkout master
+    dolt sql <<SQL
+INSERT INTO parent VALUES (4, 3);
+SQL
+    dolt add -A
+    dolt commit -m "added row"
+    dolt checkout other
+
+    dolt sql <<SQL
+ALTER TABLE child DROP FOREIGN KEY fk_name;
+UPDATE parent SET v1 = v1 - 1;
+UPDATE child SET v1 = v1 + 1;
+SQL
+    dolt add -A
+    dolt commit -m "updated both"
+    dolt checkout master
+    run dolt merge other
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+    [[ "$output" =~ "4" ]] || false
+}

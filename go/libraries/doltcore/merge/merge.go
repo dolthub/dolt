@@ -634,7 +634,9 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, commit, mergeCommit *
 	tblToStats := make(map[string]*MergeStats)
 
 	newRoot := root
-	tableEditSession := doltdb.CreateTableEditSession(root, doltdb.TableEditSessionProps{})
+	tableEditSession := doltdb.CreateTableEditSession(root, doltdb.TableEditSessionProps{
+		ForeignKeyChecksDisabled: true,
+	})
 	var unconflicted []string
 	// need to validate merges can be done on all tables before starting the actual merges.
 	for _, tblName := range tblNames {
@@ -675,6 +677,11 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, commit, mergeCommit *
 		} else {
 			panic("?")
 		}
+	}
+
+	err = tableEditSession.ValidateForeignKeys(ctx)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	newRoot, err = newRoot.UpdateSuperSchemasFromOther(ctx, unconflicted, mergeRoot)
