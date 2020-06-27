@@ -17,14 +17,15 @@ package querydiff
 import (
 	"context"
 	"fmt"
+	"io"
+	"math"
+	"strings"
+
 	sqle "github.com/liquidata-inc/go-mysql-server"
 	"github.com/liquidata-inc/go-mysql-server/sql"
 	"github.com/liquidata-inc/go-mysql-server/sql/expression/function"
 	"github.com/liquidata-inc/go-mysql-server/sql/parse"
 	"github.com/liquidata-inc/go-mysql-server/sql/plan"
-	"io"
-	"math"
-	"strings"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -347,7 +348,7 @@ func validateQueryType(ctx *sql.Context, eng *sqle.Engine, query string) error {
 }
 
 func validateQueryPlan(ctx *sql.Context, eng *sqle.Engine, node sql.Node, query string) (err error) {
-	if node == plan.Nothing || node == plan.EmptyTable{
+	if node == plan.Nothing || node == plan.EmptyTable {
 		return errPrintQueryPlan(ctx, eng, query, "queries returning no rows are not supported")
 	}
 

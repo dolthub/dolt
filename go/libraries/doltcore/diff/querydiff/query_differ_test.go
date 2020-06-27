@@ -16,8 +16,6 @@ package querydiff_test
 
 import (
 	"context"
-	"github.com/liquidata-inc/go-mysql-server/sql/expression"
-	"github.com/liquidata-inc/go-mysql-server/sql/plan"
 	"io"
 	"sort"
 	"strings"
@@ -25,6 +23,8 @@ import (
 
 	"github.com/liquidata-inc/go-mysql-server/enginetest"
 	"github.com/liquidata-inc/go-mysql-server/sql"
+	"github.com/liquidata-inc/go-mysql-server/sql/expression"
+	"github.com/liquidata-inc/go-mysql-server/sql/plan"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -520,18 +520,11 @@ var engineTestSkipSet = []string{
 	// query diff doesn't handle mutlidb queries
 	`SELECT * FROM foo.other_table`,
 
-	"SELECT i FROM mytable WHERE i > 2;",
-	"SELECT i FROM mytable WHERE 2 < i;",
-	"SELECT i FROM mytable WHERE i < 2;",
-	"SELECT i FROM mytable WHERE 2 > i;",
-
-	"SELECT i FROM mytable WHERE i >= 2 ORDER BY 1",
-	"SELECT i FROM mytable WHERE 2 <= i ORDER BY 1",
+	// dolt panics on these queries for empty mytable
+	"SELECT i FROM mytable WHERE i < 2",
+	"SELECT i FROM mytable WHERE 2 > i",
 	"SELECT i FROM mytable WHERE i <= 2 ORDER BY 1",
 	"SELECT i FROM mytable WHERE 2 >= i ORDER BY 1",
-	"SELECT i FROM mytable WHERE i > 2",
-	"SELECT i FROM mytable WHERE i < 2",
-	"SELECT i FROM mytable WHERE i >= 2 OR i = 1 ORDER BY 1",
 }
 
 func skipEngineTest(test enginetest.QueryTest) bool {
@@ -548,7 +541,7 @@ func skipEngineTest(test enginetest.QueryTest) bool {
 	}
 
 	for _, q := range engineTestSkipSet {
-		if lowerQuery == strings.ToLower(q) {
+		if strings.Contains(lowerQuery, strings.ToLower(q)) {
 			return true
 		}
 	}
@@ -649,13 +642,13 @@ func sortExpectedResults(sch sql.Schema, rows []sql.Row) []sql.Row {
 	order := make([]plan.SortField, len(sch))
 	for i, col := range sch {
 		order[i] = plan.SortField{
-			Column:       expression.NewGetField(i, col.Type, col.Name, col.Nullable),
+			Column: expression.NewGetField(i, col.Type, col.Name, col.Nullable),
 		}
 	}
 	s := &plan.Sorter{
 		SortFields: order,
-		Rows: rows,
-		Ctx: sql.NewContext(context.Background()),
+		Rows:       rows,
+		Ctx:        sql.NewContext(context.Background()),
 	}
 	sort.Stable(s)
 	return s.Rows
