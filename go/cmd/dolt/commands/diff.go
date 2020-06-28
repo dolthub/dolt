@@ -107,6 +107,7 @@ type diffArgs struct {
 	docSet     *set.StrSet
 	limit      int
 	where      string
+	query      string
 }
 
 type DiffCmd struct{}
@@ -135,11 +136,12 @@ func (cmd DiffCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) e
 func (cmd DiffCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
-	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
+	ap.SupportsFlag(SchemaFlag, "", "Show only the schema changes, do not show the data changes (Both shown by default).")
 	ap.SupportsFlag(SummaryFlag, "", "Show summary of data changes")
-	ap.SupportsFlag(SQLFlag, "q", "Output diff as a SQL patch file of {{.EmphasisLeft}}INSERT{{.EmphasisRight}} / {{.EmphasisLeft}}UPDATE{{.EmphasisRight}} / {{.EmphasisLeft}}DELETE{{.EmphasisRight}} statements")
+	ap.SupportsFlag(SQLFlag, "s", "Output diff as a SQL patch file of {{.EmphasisLeft}}INSERT{{.EmphasisRight}} / {{.EmphasisLeft}}UPDATE{{.EmphasisRight}} / {{.EmphasisLeft}}DELETE{{.EmphasisRight}} statements")
 	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
 	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
+	ap.SupportsString(queryFlag, "q", "query", "diffs the results of a query at two commits")
 	return ap
 }
 
@@ -155,7 +157,13 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	verr := diffUserTables(ctx, fromRoot, toRoot, dArgs)
+	var verr errhand.VerboseError
+	if dArgs.query != "" {
+		verr = diffQuery(ctx, dEnv, fromRoot, toRoot, dArgs.query)
+		return HandleVErrAndExitCode(verr, usage)
+	}
+
+	verr = diffUserTables(ctx, fromRoot, toRoot, dArgs)
 
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
@@ -172,6 +180,26 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (from, to *doltdb.RootValue, dArgs *diffArgs, err error) {
 	dArgs = &diffArgs{}
+
+	if q, ok := apr.GetValue(queryFlag); ok {
+		_, okWhere := apr.GetValue(whereParam)
+		_, okLimit := apr.GetInt(limitParam)
+		switch {
+		case okWhere:
+			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", queryFlag, whereParam)
+		case okLimit:
+			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", queryFlag, limitParam)
+		case apr.Contains(DataFlag):
+			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", queryFlag, DataFlag)
+		case apr.Contains(SchemaFlag):
+			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", queryFlag, SchemaFlag)
+		case apr.Contains(SummaryFlag):
+			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", queryFlag, SummaryFlag)
+		case apr.Contains(SQLFlag):
+			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", queryFlag, SQLFlag)
+		}
+		dArgs.query = q
+	}
 
 	dArgs.diffParts = SchemaAndDataDiff
 	if apr.Contains(DataFlag) && !apr.Contains(SchemaFlag) {
@@ -199,6 +227,10 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 
 	if err != nil {
 		return nil, nil, nil, err
+	}
+
+	if dArgs.query != "" && len(leftover) != 0 {
+		return nil, nil, nil, fmt.Errorf("too many arguments, diff -q does not take table args")
 	}
 
 	dArgs.tableSet = set.NewStrSet(nil)
