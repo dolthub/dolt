@@ -2217,29 +2217,3 @@ SQL
     [ "$status" -eq "1" ]
     [[ "$output" =~ "UNIQUE" ]] || false
 }
-
-@test "index: Merge auto-resolve violates UNIQUE" {
-    dolt sql <<SQL
-CREATE UNIQUE INDEX idx_v1 ON onepk(v1);
-INSERT INTO onepk VALUES (1, 11, 101), (2, 22, 202), (3, 33, 303), (4, 44, 404);
-SQL
-    dolt add -A
-    dolt commit -m "baseline commit"
-    dolt checkout -b other
-    dolt checkout master
-    dolt sql -q "INSERT INTO onepk VALUES (5, 55, 505)"
-    dolt add -A
-    dolt commit -m "master changes"
-    dolt checkout other
-    dolt sql <<SQL
-DROP INDEX idx_v1 ON onepk;
-INSERT INTO onepk VALUES (5, 11, 505);
-SQL
-    dolt add -A
-    dolt commit -m "other changes"
-    dolt checkout master
-    dolt merge other
-    run dolt conflicts resolve --theirs onepk
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "UNIQUE" ]] || false
-}

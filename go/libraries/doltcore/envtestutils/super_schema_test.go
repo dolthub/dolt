@@ -232,7 +232,8 @@ var SuperSchemaTests = []SuperSchemaTest{
 			newColTypeInfo("c11", c11Tag, typeinfo.Int32Type, false),
 		)),
 	},
-	{
+	// https://github.com/liquidata-inc/dolt/issues/773
+	/*{
 		Name:      "super schema merge",
 		TableName: "testable",
 		Commands: []tc.Command{
@@ -296,7 +297,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 			newColTypeInfo("c11", c11Tag, typeinfo.Int32Type, false),
 			newColTypeInfo("c12", c12Tag, typeinfo.Int32Type, false),
 		)),
-	},
+	},*/
 	{
 		Name:      "super schema with table add/drops",
 		TableName: "testable",
