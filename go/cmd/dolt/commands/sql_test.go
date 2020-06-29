@@ -578,7 +578,7 @@ func createEnvWithSeedData(t *testing.T) *env.DoltEnv {
 	}
 
 	wrSch := wr.GetSchema()
-	wrSch.Indexes().Merge(sch.Indexes().AllIndexes()...)
+	wrSch.Indexes().Merge(true, sch.Indexes().AllIndexes()...)
 	err = dEnv.PutTableToWorking(context.Background(), *wr.GetMap(), wrSch, tableName)
 
 	if err != nil {

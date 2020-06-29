@@ -49,7 +49,7 @@ func NewMerger(ctx context.Context, root, mergeRoot, ancRoot *doltdb.RootValue, 
 }
 
 // MergeTable merges schema and table data for the table tblName.
-func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.Table, *MergeStats, error) {
+func (merger *Merger) MergeTable(ctx context.Context, tblName string, tableEditSession *doltdb.TableEditSession) (*doltdb.Table, *MergeStats, error) {
 	tbl, ok, err := merger.root.GetTable(ctx, tblName)
 
 	if err != nil {
@@ -114,7 +114,11 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.T
 		if h != mh {
 			ms, err = calcTableMergeStats(ctx, tbl, mergeTbl)
 		}
-
+		// force load the table editor since this counts as a change
+		_, err := tableEditSession.GetTableEditor(ctx, tblName, nil)
+		if err != nil {
+			return nil, nil, err
+		}
 		return mergeTbl, &ms, nil
 	} else if mh == anch {
 		return tbl, &MergeStats{Operation: TableUnmodified}, nil
@@ -136,6 +140,34 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.T
 
 	if err != nil {
 		return nil, nil, err
+	}
+
+	{ // TODO: https://github.com/liquidata-inc/dolt/issues/773
+		equalSchemas, err := schema.SchemasAreEqual(tblSchema, mergeTblSchema)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !equalSchemas {
+			return nil, nil, fmt.Errorf("cannot merge `%s` as schemas differ, please fix this before merging", tblName)
+		}
+		rootFkCollection, err := merger.root.GetForeignKeyCollection(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		mergeFkCollection, err := merger.mergeRoot.GetForeignKeyCollection(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		rootFks, _ := rootFkCollection.KeysForTable(tblName)
+		mergeFks, _ := mergeFkCollection.KeysForTable(tblName)
+		if len(rootFks) != len(mergeFks) {
+			return nil, nil, fmt.Errorf("cannot merge `%s` as foreign keys differ, please fix this before merging", tblName)
+		}
+		for i := range rootFks {
+			if !rootFks[i].Equals(mergeFks[i]) {
+				return nil, nil, fmt.Errorf("cannot merge `%s` as foreign key `%s` differs, please fix this before merging", tblName, rootFks[i].Name)
+			}
+		}
 	}
 
 	postMergeSchema, err := mergeTableSchema(tblSchema, mergeTblSchema, ancTblSchema)
@@ -170,13 +202,17 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.T
 		return nil, nil, err
 	}
 
-	updatedTblEditor, err := doltdb.NewTableEditor(ctx, updatedTbl, postMergeSchema)
+	err = tableEditSession.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+		return root.PutTable(ctx, tblName, updatedTbl)
+	})
+
+	updatedTblEditor, err := tableEditSession.GetTableEditor(ctx, tblName, nil)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	mergedTable, conflicts, stats, err := mergeTableData(ctx, postMergeSchema, rows, mergeRows, ancRows, merger.vrw, updatedTblEditor)
+	mergedTable, conflicts, stats, err := mergeTableData(ctx, tblName, postMergeSchema, rows, mergeRows, ancRows, merger.vrw, updatedTblEditor)
 
 	if err != nil {
 		return nil, nil, err
@@ -306,7 +342,7 @@ func mergeTableSchema(sch, mergeSch, ancSch schema.Schema) (schema.Schema, error
 	return schema.SchemaFromCols(union), nil
 }
 
-func mergeTableData(ctx context.Context, sch schema.Schema, rows, mergeRows, ancRows types.Map, vrw types.ValueReadWriter, tblEdit *doltdb.TableEditor) (*doltdb.Table, types.Map, *MergeStats, error) {
+func mergeTableData(ctx context.Context, tblName string, sch schema.Schema, rows, mergeRows, ancRows types.Map, vrw types.ValueReadWriter, tblEdit *doltdb.SessionedTableEditor) (*doltdb.Table, types.Map, *MergeStats, error) {
 	//changeChan1, changeChan2 := make(chan diff.Difference, 32), make(chan diff.Difference, 32)
 	ae := atomicerr.New()
 	changeChan, mergeChangeChan := make(chan types.ValueChanged, 32), make(chan types.ValueChanged, 32)
@@ -437,10 +473,17 @@ func mergeTableData(ctx context.Context, sch schema.Schema, rows, mergeRows, anc
 	}
 
 	conflicts := <-conflictMapChan
-	mergedTable, err := tblEdit.Table()
-
+	newRoot, err := tblEdit.Flush(ctx)
 	if err != nil {
 		return nil, types.EmptyMap, nil, err
+	}
+
+	mergedTable, ok, err := newRoot.GetTable(ctx, tblName)
+	if err != nil {
+		return nil, types.EmptyMap, nil, err
+	}
+	if !ok {
+		return nil, types.EmptyMap, nil, fmt.Errorf("updated mergedTable `%s` has disappeared", tblName)
 	}
 
 	return mergedTable, conflicts, stats, nil
@@ -451,7 +494,7 @@ func addConflict(conflictChan chan types.Value, key types.Value, value types.Tup
 	conflictChan <- value
 }
 
-func applyChange(ctx context.Context, tableEditor *doltdb.TableEditor, rowData types.Map, sch schema.Schema, stats *MergeStats, change types.ValueChanged) error {
+func applyChange(ctx context.Context, tableEditor *doltdb.SessionedTableEditor, rowData types.Map, sch schema.Schema, stats *MergeStats, change types.ValueChanged) error {
 	switch change.ChangeType {
 	case types.DiffChangeAdded:
 		newRow, err := row.FromNoms(sch, change.Key.(types.Tuple), change.NewValue.(types.Tuple))
@@ -623,10 +666,13 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, commit, mergeCommit *
 	tblToStats := make(map[string]*MergeStats)
 
 	newRoot := root
+	tableEditSession := doltdb.CreateTableEditSession(root, doltdb.TableEditSessionProps{
+		ForeignKeyChecksDisabled: true,
+	})
 	var unconflicted []string
 	// need to validate merges can be done on all tables before starting the actual merges.
 	for _, tblName := range tblNames {
-		mergedTable, stats, err := merger.MergeTable(ctx, tblName)
+		mergedTable, stats, err := merger.MergeTable(ctx, tblName, tableEditSession)
 
 		if err != nil {
 			return nil, nil, err
@@ -639,9 +685,13 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, commit, mergeCommit *
 				unconflicted = append(unconflicted, tblName)
 			}
 
-			var err error
-			newRoot, err = newRoot.PutTable(ctx, tblName, mergedTable)
-
+			err = tableEditSession.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+				return root.PutTable(ctx, tblName, mergedTable)
+			})
+			if err != nil {
+				return nil, nil, err
+			}
+			newRoot, err = tableEditSession.Flush(ctx)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -649,14 +699,21 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, commit, mergeCommit *
 			return nil, nil, err
 		} else if has {
 			tblToStats[tblName] = &MergeStats{Operation: TableRemoved}
-			newRoot, err = newRoot.RemoveTables(ctx, tblName)
-
+			err = tableEditSession.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+				return root.RemoveTables(ctx, tblName)
+			})
+			newRoot, err = tableEditSession.Flush(ctx)
 			if err != nil {
 				return nil, nil, err
 			}
 		} else {
 			panic("?")
 		}
+	}
+
+	err = tableEditSession.ValidateForeignKeys(ctx)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	newRoot, err = newRoot.UpdateSuperSchemasFromOther(ctx, unconflicted, mergeRoot)

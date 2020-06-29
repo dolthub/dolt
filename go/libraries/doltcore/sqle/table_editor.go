@@ -21,7 +21,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 )
 
-// sqlTableEditor is a wrapper for *doltdb.TableEditor that complies with the SQL interface.
+// sqlTableEditor is a wrapper for *doltdb.SessionedTableEditor that complies with the SQL interface.
 //
 // The sqlTableEditor has two levels of batching: one supported at the SQL engine layer where a single UPDATE, DELETE or
 // INSERT statement will touch many rows, and we want to avoid unnecessary intermediate writes; and one at the dolt
@@ -33,7 +33,7 @@ import (
 // unbroken chain of INSERT statements, where we have taken pains to batch writes to speed things up.
 type sqlTableEditor struct {
 	t           *WritableDoltTable
-	tableEditor *doltdb.TableEditor
+	tableEditor *doltdb.SessionedTableEditor
 }
 
 var _ sql.RowReplacer = (*sqlTableEditor)(nil)
@@ -42,7 +42,7 @@ var _ sql.RowInserter = (*sqlTableEditor)(nil)
 var _ sql.RowDeleter = (*sqlTableEditor)(nil)
 
 func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor, error) {
-	tableEditor, err := doltdb.NewTableEditor(ctx, t.table, t.sch)
+	tableEditor, err := t.db.TableEditSession(ctx).GetTableEditor(ctx, t.name, t.sch)
 	if err != nil {
 		return nil, err
 	}
@@ -93,20 +93,17 @@ func (te *sqlTableEditor) Close(ctx *sql.Context) error {
 }
 
 func (te *sqlTableEditor) flush(ctx *sql.Context) error {
-	newTable, err := te.tableEditor.Table()
-	if err != nil {
-		return err
-	}
-
-	root, err := te.t.db.GetRoot(ctx)
-	if err != nil {
-		return err
-	}
-	newRoot, err := root.PutTable(ctx, te.t.name, newTable)
+	newRoot, err := te.tableEditor.Flush(ctx)
 	if err != nil {
 		return errhand.BuildDError("failed to write table back to database").AddCause(err).Build()
 	}
-
+	newTable, ok, err := newRoot.GetTable(ctx, te.t.name)
+	if err != nil {
+		return errhand.BuildDError("failed to load updated table").AddCause(err).Build()
+	}
+	if !ok {
+		return errhand.BuildDError("failed to find updated table").Build()
+	}
 	te.t.table = newTable
 	return te.t.db.SetRoot(ctx, newRoot)
 }

@@ -56,7 +56,7 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 
 	dbName := ctx.GetCurrentDatabase()
 	dSess := sqle.DSessFromSess(ctx.Session)
-	parent, err := dSess.GetParentCommit(ctx, dbName)
+	parent, _, err := dSess.GetParentCommit(ctx, dbName)
 
 	if err != nil {
 		return nil, err
@@ -90,7 +90,7 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, err
 	}
 
-	cm, err := ddb.WriteCommitDanglingCommit(ctx, h, []*doltdb.Commit{parent}, meta)
+	cm, err := ddb.WriteDanglingCommit(ctx, h, []*doltdb.Commit{parent}, meta)
 
 	if err != nil {
 		return nil, err

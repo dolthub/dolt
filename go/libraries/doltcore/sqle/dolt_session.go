@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/liquidata-inc/go-mysql-server/sql"
 
@@ -39,8 +40,9 @@ var _ sql.Session = &DoltSession{}
 // DoltSession is the sql.Session implementation used by dolt.  It is accessible through a *sql.Context instance
 type DoltSession struct {
 	sql.Session
-	dbRoots map[string]dbRoot
-	dbDatas map[string]dbData
+	dbRoots   map[string]dbRoot
+	dbDatas   map[string]dbData
+	dbEditors map[string]*doltdb.TableEditSession
 
 	Username string
 	Email    string
@@ -48,7 +50,14 @@ type DoltSession struct {
 
 // DefaultDoltSession creates a DoltSession object with default values
 func DefaultDoltSession() *DoltSession {
-	sess := &DoltSession{sql.NewBaseSession(), make(map[string]dbRoot), make(map[string]dbData), "", ""}
+	sess := &DoltSession{
+		Session:   sql.NewBaseSession(),
+		dbRoots:   make(map[string]dbRoot),
+		dbDatas:   make(map[string]dbData),
+		dbEditors: make(map[string]*doltdb.TableEditSession),
+		Username:  "",
+		Email:     "",
+	}
 	return sess
 }
 
@@ -56,11 +65,13 @@ func DefaultDoltSession() *DoltSession {
 func NewDoltSession(ctx context.Context, sqlSess sql.Session, username, email string, dbs ...Database) (*DoltSession, error) {
 	dbRoots := make(map[string]dbRoot)
 	dbDatas := make(map[string]dbData)
+	dbEditors := make(map[string]*doltdb.TableEditSession)
 	for _, db := range dbs {
 		dbDatas[db.Name()] = dbData{rsw: db.rsw, ddb: db.ddb}
+		dbEditors[db.Name()] = doltdb.CreateTableEditSession(nil, doltdb.TableEditSessionProps{})
 	}
 
-	sess := &DoltSession{sqlSess, dbRoots, dbDatas, username, email}
+	sess := &DoltSession{sqlSess, dbRoots, dbDatas, dbEditors, username, email}
 	for _, db := range dbs {
 		err := sess.AddDB(ctx, db)
 
@@ -122,33 +133,34 @@ func (sess *DoltSession) GetRoot(dbName string) (*doltdb.RootValue, bool) {
 }
 
 // GetParentCommit returns the parent commit of the current session.
-func (sess *DoltSession) GetParentCommit(ctx context.Context, dbName string) (*doltdb.Commit, error) {
+func (sess *DoltSession) GetParentCommit(ctx context.Context, dbName string) (*doltdb.Commit, hash.Hash, error) {
 	dbd, dbFound := sess.dbDatas[dbName]
 
 	if !dbFound {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
+		return nil, hash.Hash{}, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
 	_, value := sess.Session.Get(dbName + HeadKeySuffix)
 	valStr, isStr := value.(string)
 
 	if !isStr || !hash.IsValid(valStr) {
-		return nil, doltdb.ErrInvalidHash
+		return nil, hash.Hash{}, doltdb.ErrInvalidHash
 	}
 
+	h := hash.Parse(valStr)
 	cs, err := doltdb.NewCommitSpec(valStr, "")
 
 	if err != nil {
-		return nil, err
+		return nil, hash.Hash{}, err
 	}
 
 	cm, err := dbd.ddb.Resolve(ctx, cs)
 
 	if err != nil {
-		return nil, err
+		return nil, hash.Hash{}, err
 	}
 
-	return cm, nil
+	return cm, h, nil
 }
 
 func (sess *DoltSession) Set(ctx context.Context, key string, typ sql.Type, value interface{}) error {
@@ -203,7 +215,32 @@ func (sess *DoltSession) Set(ctx context.Context, key string, typ sql.Type, valu
 		}
 
 		sess.dbRoots[dbName] = dbRoot{hashStr, root}
+
+		err = sess.dbEditors[dbName].SetRoot(ctx, root)
+		if err != nil {
+			return err
+		}
+
 		return nil
+	}
+
+	if key == "foreign_key_checks" {
+		convertedVal, err := sql.Int64.Convert(value)
+		if err != nil {
+			return err
+		}
+		intVal := convertedVal.(int64)
+		if intVal == 0 {
+			for _, tableEditSession := range sess.dbEditors {
+				tableEditSession.Props.ForeignKeyChecksDisabled = true
+			}
+		} else if intVal == 1 {
+			for _, tableEditSession := range sess.dbEditors {
+				tableEditSession.Props.ForeignKeyChecksDisabled = false
+			}
+		} else {
+			return fmt.Errorf("variable 'foreign_key_checks' can't be set to the value of '%d'", intVal)
+		}
 	}
 
 	return sess.Session.Set(ctx, key, typ, value)
@@ -216,6 +253,8 @@ func (sess *DoltSession) AddDB(ctx context.Context, db Database) error {
 	ddb := db.GetDoltDB()
 
 	sess.dbDatas[db.Name()] = dbData{rsw: rsw, ddb: ddb}
+
+	sess.dbEditors[db.Name()] = doltdb.CreateTableEditSession(nil, doltdb.TableEditSessionProps{})
 
 	cs := rsr.CWBHeadSpec()
 

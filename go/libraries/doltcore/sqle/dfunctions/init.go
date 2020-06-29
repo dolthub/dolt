@@ -14,13 +14,10 @@
 
 package dfunctions
 
-import (
-	"github.com/liquidata-inc/go-mysql-server/sql"
-	"github.com/liquidata-inc/go-mysql-server/sql/expression/function"
-)
+import "github.com/liquidata-inc/go-mysql-server/sql"
 
-func init() {
-	// TODO: fix function registration
-	function.Defaults = append(function.Defaults, sql.Function1{Name: HashOfFuncName, Fn: NewHashOf})
-	function.Defaults = append(function.Defaults, sql.Function1{Name: CommitFuncName, Fn: NewCommitFunc})
+var DoltFunctions = []sql.Function{
+	sql.Function1{Name: HashOfFuncName, Fn: NewHashOf},
+	sql.Function1{Name: CommitFuncName, Fn: NewCommitFunc},
+	sql.Function1{Name: MergeFuncName, Fn: NewMergeFunc},
 }

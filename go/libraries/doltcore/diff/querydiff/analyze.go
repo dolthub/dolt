@@ -16,55 +16,52 @@ package querydiff
 
 import (
 	"fmt"
-	"io"
-	"strings"
 
-	"github.com/liquidata-inc/go-mysql-server/sql/expression"
-
-	sqle "github.com/liquidata-inc/go-mysql-server"
 	"github.com/liquidata-inc/go-mysql-server/sql"
+	"github.com/liquidata-inc/go-mysql-server/sql/expression"
 	"github.com/liquidata-inc/go-mysql-server/sql/plan"
 )
 
 // lazyQueryPlan transforms a query plan by removing Project nodes and returning
 // the composite projections of the plan tree. As the plan is transformed, Expressions that
 // rely on these projections are transformed to lazily evaluate the projections.
-func lazyQueryPlan(node sql.Node) (lazyNode sql.Node, projections []sql.Expression, err error) {
-	// ignore opaque nodes
-
+func lazyQueryPlan(node sql.Node) (lazyNode sql.Node, projections []sql.Expression, order []plan.SortField, err error) {
 	if tbl, ok := node.(sql.Table); ok {
-		return node, getFieldsForTable(tbl), nil
+		return node, getFieldsForTable(tbl), getOrderForTable(tbl), nil
 	}
 
 	children := node.Children()
 	if len(children) == 0 {
-		return nil, nil, fmt.Errorf("reached bottom of query plan unexpectedly")
+		return nil, nil, nil, fmt.Errorf("reached bottom of query plan unexpectedly")
 	}
 
 	offset := 0
 	lazyChildren := make([]sql.Node, len(children))
 	for i, c := range children {
-		c, pjs, err := lazyQueryPlan(c)
+		c, pjs, ord, err := lazyQueryPlan(c)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		lazyChildren[i] = c
 
-		pjs = shiftFieldIndexes(pjs, offset)
+		ord = shiftIndicesForSortFields(offset, ord...)
+		order = append(order, ord...)
+		pjs = shiftFieldIndices(offset, pjs...)
 		projections = append(projections, pjs...)
+
 		offset += len(c.Schema())
 	}
 
 	node, err = node.WithChildren(lazyChildren...)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	lazyNode, err = plan.TransformExpressions(node, func(e sql.Expression) (sql.Expression, error) {
 		return makeExpressionLazy(e, projections)
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	if p, ok := lazyNode.(*plan.Project); ok {
@@ -72,38 +69,37 @@ func lazyQueryPlan(node sql.Node) (lazyNode sql.Node, projections []sql.Expressi
 		projections = p.Expressions()
 	}
 
-	return lazyNode, projections, nil
-}
-
-func extractRowOrder(node sql.Node) (composite []plan.SortField) {
-	if t, ok := node.(sql.Table); ok {
-		for i, col := range t.Schema() {
-			if !col.PrimaryKey {
-				continue
-			}
-			pkOrder := plan.SortField{
-				Column:       expression.NewGetField(i, col.Type, col.Name, col.PrimaryKey),
-				Order:        plan.Ascending,
-				NullOrdering: plan.NullsFirst,
-			}
-			composite = append(composite, pkOrder)
-		}
-		return composite
-	}
-
-	for _, c := range node.Children() {
-		sf := extractRowOrder(c)
-		composite = append(composite, sf...)
-	}
-
-	if s, ok := node.(*plan.Sort); ok {
+	if s, ok := lazyNode.(*plan.Sort); ok {
 		// todo: prune sort fields
 		// having columns duplicated here won't lead to incorrect
 		// results, but could lead to extra work during sorting
-		composite = append(s.SortFields, composite...)
+		order = append(s.SortFields, order...)
 	}
 
-	return composite
+	if g, ok := lazyNode.(*plan.GroupBy); ok {
+		lazyNode, projections, order = wrapGroupBy(g)
+	}
+
+	return lazyNode, projections, order, nil
+}
+
+// wrapGroupBy wraps a GroupBy node in a Sort node so its output can be ordered in query diffs.
+func wrapGroupBy(g *plan.GroupBy) (node sql.Node, projections []sql.Expression, order []plan.SortField) {
+	projections = make([]sql.Expression, len(g.Schema()))
+	for i, col := range g.Schema() {
+		projections[i] = expression.NewGetField(i, col.Type, col.Name, col.Nullable)
+	}
+	g.Aggregate = append(g.Aggregate, g.Grouping...)
+
+	order = make([]plan.SortField, len(g.Grouping))
+	for i, exp := range g.Grouping {
+		idx := i + len(projections)
+		order[i] = plan.SortField{
+			Column: expression.NewGetField(idx, exp.Type(), exp.String(), exp.IsNullable()),
+		}
+	}
+
+	return plan.NewSort(order, g), projections, order
 }
 
 func makeExpressionLazy(e sql.Expression, composite []sql.Expression) (sql.Expression, error) {
@@ -120,12 +116,27 @@ func makeExpressionLazy(e sql.Expression, composite []sql.Expression) (sql.Expre
 func getFieldsForTable(tbl sql.Table) []sql.Expression {
 	fields := make([]sql.Expression, len(tbl.Schema()))
 	for i, col := range tbl.Schema() {
-		fields[i] = expression.NewGetField(i, col.Type, col.Name, col.PrimaryKey)
+		fields[i] = expression.NewGetFieldWithTable(i, col.Type, tbl.Name(), col.Name, col.PrimaryKey)
 	}
 	return fields
 }
 
-func shiftFieldIndexes(composite []sql.Expression, offset int) []sql.Expression {
+func getOrderForTable(tbl sql.Table) (order []plan.SortField) {
+	for i, col := range tbl.Schema() {
+		if !col.PrimaryKey {
+			continue
+		}
+		pkOrder := plan.SortField{
+			Column:       expression.NewGetField(i, col.Type, col.Name, col.PrimaryKey),
+			Order:        plan.Ascending,
+			NullOrdering: plan.NullsFirst,
+		}
+		order = append(order, pkOrder)
+	}
+	return order
+}
+
+func shiftFieldIndices(offset int, composite ...sql.Expression) []sql.Expression {
 	shifted := make([]sql.Expression, len(composite))
 	for i, e := range composite {
 		shifted[i], _ = expression.TransformUp(e, func(e sql.Expression) (sql.Expression, error) {
@@ -138,23 +149,11 @@ func shiftFieldIndexes(composite []sql.Expression, offset int) []sql.Expression 
 	return shifted
 }
 
-func errWithQueryPlan(ctx *sql.Context, eng *sqle.Engine, query string, cause error) error {
-	_, iter, err := eng.Query(ctx, fmt.Sprintf("describe %s", query))
-	if err != nil {
-		return fmt.Errorf("cannot diff query. Error describing query plan: %s\n", err.Error())
+func shiftIndicesForSortFields(offset int, order ...plan.SortField) []plan.SortField {
+	shifted := make([]plan.SortField, len(order))
+	for i, sf := range order {
+		sf.Column = shiftFieldIndices(offset, sf.Column)[0]
+		shifted[i] = sf
 	}
-
-	var qp strings.Builder
-	qp.WriteString("query plan:\n")
-	for {
-		r, err := iter.Next()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return fmt.Errorf("cannot diff query. Error describing query plan: %s\n", err.Error())
-		}
-		qp.WriteString(fmt.Sprintf("\t%s\n", r[0].(string)))
-	}
-
-	return fmt.Errorf("cannot diff query: %s\n%s", cause.Error(), qp.String())
+	return shifted
 }

@@ -43,7 +43,7 @@ if query_results is not None:
 for i in range(len(queries)):
     query_str = queries[i].strip()
     print('executing:', query_str)
-    actual_rows = dc.query(query_str)
+    actual_rows, num_rows = dc.query(query_str)
 
     if expected[i] is not None:
         expected_rows = csv_to_row_maps(expected[i])
@@ -85,6 +85,28 @@ start_sql_server() {
     DEFAULT_DB="$1"
     let PORT="$$ % (65536-1024) + 1024"
     dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt &
+    SERVER_PID=$!
+    wait_for_connection $PORT 5000
+}
+
+start_sql_multi_user_server() {
+    DEFAULT_DB="$1"
+    let PORT="$$ % (65536-1024) + 1024"
+    echo "
+log_level: debug
+
+user:
+  name: dolt
+
+listener:
+  host: 0.0.0.0
+  port: $PORT
+  max_connections: 10
+
+behavior:
+  autocommit: false
+" > .cliconfig.yaml
+    dolt sql-server --config .cliconfig.yaml &
     SERVER_PID=$!
     wait_for_connection $PORT 5000
 }

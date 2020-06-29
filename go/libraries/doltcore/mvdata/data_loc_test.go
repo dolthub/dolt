@@ -221,12 +221,7 @@ func TestCreateRdWr(t *testing.T) {
 		}
 
 		if wr, ok := wr.(DataMoverCloser); ok {
-			tableLoc := test.dl.(TableDataLocation)
-
-			tbl, err := wr.GetTable(context.Background())
-			assert.NoError(t, err)
-
-			root, err = root.PutTable(context.Background(), tableLoc.Name, tbl)
+			root, err = wr.Flush(context.Background())
 			assert.NoError(t, err)
 		}
 

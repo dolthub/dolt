@@ -34,6 +34,9 @@ type IndexCollection interface {
 	Contains(indexName string) bool
 	// Count returns the number of indexes in this collection.
 	Count() int
+	// Equals returns whether this index collection is equivalent to another. Indexes are compared by everything except
+	// for their name, the names of all columns, and anything relating to the parent table's primary keys.
+	Equals(other IndexCollection) bool
 	// Get returns the index with the given name, or nil if it does not exist.
 	Get(indexName string) Index
 	// HasIndexOnColumns returns whether the collection contains an index that has this exact collection and ordering of columns.
@@ -50,7 +53,7 @@ type IndexCollection interface {
 	// rather than by tag number, which allows an index from a different table to be added as long as they have matching
 	// column names. If an index with the same name or column structure already exists, or the index contains different
 	// columns, then it is skipped.
-	Merge(indexes ...Index)
+	Merge(includeHidden bool, indexes ...Index)
 	// RemoveIndex removes an index from the table metadata.
 	RemoveIndex(indexName string) (Index, error)
 	// RenameIndex renames an index in the table metadata.
@@ -174,6 +177,21 @@ func (ixc *indexCollectionImpl) Count() int {
 	return len(ixc.indexes)
 }
 
+func (ixc *indexCollectionImpl) Equals(other IndexCollection) bool {
+	otherIxc, ok := other.(*indexCollectionImpl)
+	if !ok || len(ixc.indexes) != len(otherIxc.indexes) {
+		// if the lengths don't match then we can quickly return
+		return false
+	}
+	for _, index := range ixc.indexes {
+		otherIndex := otherIxc.containsColumnTagCollection(index.tags...)
+		if otherIndex == nil || !index.Equals(otherIndex) {
+			return false
+		}
+	}
+	return true
+}
+
 func (ixc *indexCollectionImpl) Get(indexName string) Index {
 	ix, ok := ixc.indexes[indexName]
 	if ok {
@@ -219,13 +237,17 @@ func (ixc *indexCollectionImpl) IndexesWithTag(tag uint64) []Index {
 	return indexes
 }
 
-func (ixc *indexCollectionImpl) Merge(indexes ...Index) {
+func (ixc *indexCollectionImpl) Merge(includeHidden bool, indexes ...Index) {
 	for _, index := range indexes {
+		if !includeHidden && index.IsHidden() {
+			continue
+		}
 		if tags, ok := ixc.columnNamesToTags(index.ColumnNames()); ok && !ixc.Contains(index.Name()) {
 			newIndex := &indexImpl{
 				name:      index.Name(),
 				tags:      tags,
 				indexColl: ixc,
+				isHidden:  index.IsHidden(),
 				isUnique:  index.IsUnique(),
 				comment:   index.Comment(),
 			}

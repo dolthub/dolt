@@ -291,6 +291,7 @@ SQL
 }
 
 @test "two branches add different column. merge. no conflict" {
+    skip https://github.com/liquidata-inc/dolt/issues/773
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -384,6 +385,7 @@ SQL
 }
 
 @test "two branches delete different column. merge. no conflict" {
+    skip https://github.com/liquidata-inc/dolt/issues/773
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',

@@ -32,21 +32,21 @@ teardown() {
 @test "boolean 1,0,true,false inserts and examine table" {
     run dolt sql -q "insert into test values (0, 1, 'foo', 1, 1.11111111111111, 346, '123e4567-e89b-12d3-a456-426655440000')"
     [ "$status" -eq 0 ]
-    run dolt sql -q "select * from test" boolean
+    run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "boolean" ]] || false
     [[ "${lines[3]}" =~ "1" ]] || false
     run dolt sql -q "replace into test values (0, 1, 'foo', 0, 1.11111111111111, 346, '123e4567-e89b-12d3-a456-426655440000')"
     [ "$status" -eq 0 ]
-    run dolt sql -q "select * from test" boolean
+    run dolt sql -q "select * from test"
     [[ "${lines[3]}" =~ "0" ]] || false
     run dolt sql -q "replace into test values (0, 1, 'foo', true, 1.11111111111111, 346, '123e4567-e89b-12d3-a456-426655440000')"
     [ "$status" -eq 0 ]
-    run dolt sql -q "select * from test" boolean
+    run dolt sql -q "select * from test"
     [[ "${lines[3]}" =~ "1" ]] || false
     run dolt sql -q "replace into test values (0, 1, 'foo', false, 1.11111111111111, 346, '123e4567-e89b-12d3-a456-426655440000')"
     [ "$status" -eq 0 ]
-    run dolt sql -q "select * from test" boolean
+    run dolt sql -q "select * from test"
     [[ "${lines[3]}" =~ "0" ]] || false
 }
 

@@ -75,13 +75,14 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 		&doltIndex{
 			cols:         cols,
 			db:           t.db,
-			id:           fmt.Sprintf("%s:primaryKey%v", t.Name(), len(cols)),
+			id:           "PRIMARY",
 			indexRowData: rowData,
 			indexSch:     sch,
 			table:        tbl,
 			tableData:    rowData,
 			tableName:    t.Name(),
 			tableSch:     sch,
+			unique:       true,
 		},
 	}
 
@@ -104,6 +105,8 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 			tableData:    rowData,
 			tableName:    t.Name(),
 			tableSch:     sch,
+			unique:       index.IsUnique(),
+			comment:      index.Comment(),
 		})
 	}
 
@@ -368,7 +371,13 @@ func (t *AlterableDoltTable) DropColumn(ctx *sql.Context, columnName string) err
 		return err
 	}
 
-	updatedTable, err = alterschema.DropColumn(ctx, updatedTable, columnName)
+	fkCollection, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return err
+	}
+	declaresFk, referencesFk := fkCollection.KeysForTable(t.name)
+
+	updatedTable, err = alterschema.DropColumn(ctx, updatedTable, columnName, append(declaresFk, referencesFk...))
 	if err != nil {
 		return err
 	}
@@ -419,6 +428,18 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		defVal, err = col.TypeInfo.ConvertValueToNomsValue(column.Default)
 		if err != nil {
 			return err
+		}
+	}
+
+	fkCollection, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return err
+	}
+	declaresFk, _ := fkCollection.KeysForTable(t.name)
+	for _, foreignKey := range declaresFk {
+		if (foreignKey.OnUpdate == doltdb.ForeignKeyReferenceOption_SetNull || foreignKey.OnDelete == doltdb.ForeignKeyReferenceOption_SetNull) &&
+			col.IsNullable() {
+			return fmt.Errorf("foreign key `%s` has SET NULL thus column `%s` cannot be altered to accept null values", foreignKey.Name, col.Name)
 		}
 	}
 
@@ -544,6 +565,10 @@ func (t *AlterableDoltTable) CreateForeignKey(ctx *sql.Context, fkName string, c
 			//TODO: fix go-mysql-server equivalent check, needs two vals
 			return fmt.Errorf("table `%s` does not have column `%s`", t.name, col)
 		}
+		if (onUpdate == sql.ForeignKeyReferenceOption_SetNull || onDelete == sql.ForeignKeyReferenceOption_SetNull) &&
+			!tableCol.IsNullable() {
+			return fmt.Errorf("cannot use SET NULL as column `%s` is non-nullable", tableCol.Name)
+		}
 		tblCols[i] = tableCol
 		colTags[i] = tableCol.Tag
 		sqlColNames[i] = sql.IndexColumn{
@@ -565,7 +590,6 @@ func (t *AlterableDoltTable) CreateForeignKey(ctx *sql.Context, fkName string, c
 			Length: 0,
 		}
 		if !tblCols[i].TypeInfo.Equals(tableCol.TypeInfo) {
-			//TODO: make this more descriptive about our lack of support of different types for fks, figure it out later
 			return fmt.Errorf("column type mismatch on `%s` and `%s`", columns[i], tableCol.Name)
 		}
 		sqlparserType := tableCol.TypeInfo.ToSqlType().Type()
@@ -612,7 +636,7 @@ func (t *AlterableDoltTable) CreateForeignKey(ctx *sql.Context, fkName string, c
 	if err != nil {
 		return err
 	}
-	err = foreignKeyCollection.AddKey(&doltdb.ForeignKey{
+	foreignKey := &doltdb.ForeignKey{
 		Name:                   fkName,
 		TableName:              t.name,
 		TableIndex:             tableIndex.Name(),
@@ -622,11 +646,25 @@ func (t *AlterableDoltTable) CreateForeignKey(ctx *sql.Context, fkName string, c
 		ReferencedTableColumns: refColTags,
 		OnUpdate:               onUpdateRefOp,
 		OnDelete:               onDeleteRefOp,
-	})
+	}
+	err = foreignKeyCollection.AddKey(foreignKey)
 	if err != nil {
 		return err
 	}
 	newRoot, err = newRoot.PutForeignKeyCollection(ctx, foreignKeyCollection)
+	if err != nil {
+		return err
+	}
+
+	tableIndexData, err := newTable.GetIndexRowData(ctx, tableIndex.Name())
+	if err != nil {
+		return err
+	}
+	refTableIndexData, err := newRefTable.GetIndexRowData(ctx, refTableIndex.Name())
+	if err != nil {
+		return err
+	}
+	err = foreignKey.ValidateData(ctx, tableIndexData, refTableIndex, refTableIndexData)
 	if err != nil {
 		return err
 	}

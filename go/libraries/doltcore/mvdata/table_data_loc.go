@@ -105,8 +105,12 @@ func (dl TableDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMo
 	if err != nil {
 		return nil, err
 	}
+	updatedRoot, err := root.PutTable(ctx, dl.Name, tbl)
+	if err != nil {
+		return nil, err
+	}
 
-	tableEditor, err := doltdb.NewTableEditor(ctx, tbl, outSch)
+	tableEditor, err := doltdb.CreateTableEditSession(updatedRoot, doltdb.TableEditSessionProps{}).GetTableEditor(ctx, dl.Name, outSch)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +144,7 @@ func (dl TableDataLocation) NewUpdatingWriter(ctx context.Context, mvOpts DataMo
 		return nil, err
 	}
 
-	tableEditor, err := doltdb.NewTableEditor(ctx, tbl, tblSch)
+	tableEditor, err := doltdb.CreateTableEditSession(root, doltdb.TableEditSessionProps{}).GetTableEditor(ctx, dl.Name, tblSch)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +187,12 @@ func (dl TableDataLocation) NewReplacingWriter(ctx context.Context, mvOpts DataM
 		return nil, err
 	}
 
-	tableEditor, err := doltdb.NewTableEditor(ctx, tbl, tblSch)
+	updatedRoot, err := root.PutTable(ctx, dl.Name, tbl)
+	if err != nil {
+		return nil, err
+	}
+
+	tableEditor, err := doltdb.CreateTableEditSession(updatedRoot, doltdb.TableEditSessionProps{}).GetTableEditor(ctx, dl.Name, tblSch)
 	if err != nil {
 		return nil, err
 	}
@@ -203,14 +212,14 @@ type tableEditorWriteCloser struct {
 	initialData types.Map
 	opsSoFar    int64
 	statsCB     noms.StatsCB
-	tableEditor *doltdb.TableEditor
+	tableEditor *doltdb.SessionedTableEditor
 	tableSch    schema.Schema
 }
 
 var _ DataMoverCloser = (*tableEditorWriteCloser)(nil)
 
-func (te *tableEditorWriteCloser) GetTable(ctx context.Context) (*doltdb.Table, error) {
-	return te.tableEditor.Table()
+func (te *tableEditorWriteCloser) Flush(ctx context.Context) (*doltdb.RootValue, error) {
+	return te.tableEditor.Flush(ctx)
 }
 
 // GetSchema implements TableWriteCloser
@@ -257,8 +266,8 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 }
 
 // Close implements TableWriteCloser
-func (te *tableEditorWriteCloser) Close(_ context.Context) error {
-	_, err := te.tableEditor.Table()
+func (te *tableEditorWriteCloser) Close(ctx context.Context) error {
+	_, err := te.tableEditor.Flush(ctx)
 	if te.statsCB != nil {
 		te.statsCB(te.stats)
 	}

@@ -9,13 +9,14 @@ jobs:
     steps:
       - name: Get the version
         id: get_version
-        run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
+        # GITHUB_REF is expected to be set in the format refs/tags/0.3.1
+        run: echo "::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}"
       - uses: mislav/bump-homebrew-formula-action@v1
         with:
           formula-name: dolt
           homebrew-tap: Homebrew/homebrew-core
           base-branch: release
-          download-url: https://github.com/liquidata-inc/dolt/archive/v${{steps.get_version.outputs.VERSION}}.tar.gz
-          commit-message: ${{formulaName}} ${{version}}
+          download-url: ${{format('https://github.com/liquidata-inc/dolt/archive/v{0}.tar.gz', steps.get_version.outputs.VERSION)}}
+          commit-message: ${{format('dolt {0}', steps.get_version.outputs.VERSION)}}
         env:
           COMMITTER_TOKEN: ${{secrets.HOMEBREW_GITHUB_TOKEN}}

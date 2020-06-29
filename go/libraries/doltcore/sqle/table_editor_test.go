@@ -158,6 +158,8 @@ func TestTableEditor(t *testing.T) {
 			ctx := NewTestSQLCtx(context.Background())
 			root, _ := dEnv.WorkingRoot(context.Background())
 			db := NewDatabase("dolt", dEnv.DoltDB, dEnv.RepoState, dEnv.RepoStateWriter())
+			_ = DSessFromSess(ctx.Session).AddDB(ctx, db)
+			ctx.SetCurrentDatabase(db.Name())
 			err := db.SetRoot(ctx, root)
 			require.NoError(t, err)
 			peopleTable, _, err := db.GetTableInsensitive(ctx, "people")

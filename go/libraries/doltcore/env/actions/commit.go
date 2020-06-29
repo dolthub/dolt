@@ -31,6 +31,13 @@ var ErrNameNotConfigured = errors.New("name not configured")
 var ErrEmailNotConfigured = errors.New("email not configured")
 var ErrEmptyCommitMessage = errors.New("commit message empty")
 
+type CommitStagedProps struct {
+	Message          string
+	Date             time.Time
+	AllowEmpty       bool
+	CheckForeignKeys bool
+}
+
 // GetNameAndEmail returns the name and email from the supplied config
 func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 	name, err := cfg.GetString(env.UserNameKey)
@@ -52,10 +59,10 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 	return name, email, nil
 }
 
-func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, date time.Time, allowEmpty bool) error {
+func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProps) error {
 	stagedTbls, notStagedTbls, err := diff.GetTableDiffs(ctx, dEnv)
 
-	if msg == "" {
+	if props.Message == "" {
 		return ErrEmptyCommitMessage
 	}
 
@@ -69,7 +76,7 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, date time.
 		return err
 	}
 
-	if len(stagedTbls.Tables) == 0 && dEnv.RepoState.Merge == nil && !allowEmpty {
+	if len(stagedTbls.Tables) == 0 && dEnv.RepoState.Merge == nil && !props.AllowEmpty {
 		return NothingStaged{notStagedTbls, notStagedDocs}
 	}
 
@@ -102,6 +109,14 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, date time.
 		return err
 	}
 
+	if props.CheckForeignKeys {
+		srt, err = srt.ValidateForeignKeys(ctx)
+
+		if err != nil {
+			return err
+		}
+	}
+
 	h, err := dEnv.UpdateStagedRoot(ctx, srt)
 
 	if err != nil {
@@ -126,7 +141,7 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, date time.
 		return err
 	}
 
-	meta, noCommitMsgErr := doltdb.NewCommitMetaWithUserTS(name, email, msg, date)
+	meta, noCommitMsgErr := doltdb.NewCommitMetaWithUserTS(name, email, props.Message, props.Date)
 	if noCommitMsgErr != nil {
 		return ErrEmptyCommitMessage
 	}

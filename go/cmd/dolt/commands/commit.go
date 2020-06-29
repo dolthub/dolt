@@ -80,6 +80,7 @@ func (cmd CommitCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsString(commitMessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
 	ap.SupportsFlag(allowEmptyFlag, "", "Allow recording a commit that has the exact same data as its sole parent. This is usually a mistake, so it is disabled by default. This option bypasses that safety.")
 	ap.SupportsString(dateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
+	ap.SupportsFlag(forceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
 	return ap
 }
 
@@ -104,7 +105,12 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		}
 	}
 
-	err := actions.CommitStaged(ctx, dEnv, msg, t, apr.Contains(allowEmptyFlag))
+	err := actions.CommitStaged(ctx, dEnv, actions.CommitStagedProps{
+		Message:          msg,
+		Date:             t,
+		AllowEmpty:       apr.Contains(allowEmptyFlag),
+		CheckForeignKeys: !apr.Contains(forceFlag),
+	})
 	if err == nil {
 		// if the commit was successful, print it out using the log command
 		return LogCmd{}.Exec(ctx, "log", []string{"-n=1"}, dEnv)
