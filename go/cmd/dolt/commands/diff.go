@@ -215,6 +215,8 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		dArgs.diffOutput = SQLDiffOutput
 	case "":
 		dArgs.diffOutput = TabularDiffOutput
+	default:
+		return nil, nil, nil, fmt.Errorf("invalid output format: %s", f)
 	}
 
 	if apr.Contains(SummaryFlag) {
