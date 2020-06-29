@@ -16,6 +16,7 @@ package sqlserver
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"net"
 	"strconv"
 	"time"
@@ -79,6 +80,12 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 
 	userAuth := auth.NewAudit(auth.NewNativeSingle(serverConfig.User(), serverConfig.Password(), permissions), auth.NewAuditLog(logrus.StandardLogger()))
 	sqlEngine := sqle.NewDefault()
+
+	err := sqlEngine.Catalog.Register(dfunctions.DoltFunctions...)
+
+	if err != nil {
+		return nil, err
+	}
 
 	var username string
 	var email string
