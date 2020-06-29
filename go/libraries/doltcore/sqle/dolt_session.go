@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/liquidata-inc/go-mysql-server/sql"
 
@@ -221,6 +222,25 @@ func (sess *DoltSession) Set(ctx context.Context, key string, typ sql.Type, valu
 		}
 
 		return nil
+	}
+
+	if key == "foreign_key_checks" {
+		convertedVal, err := sql.Int64.Convert(value)
+		if err != nil {
+			return err
+		}
+		intVal := convertedVal.(int64)
+		if intVal == 0 {
+			for _, tableEditSession := range sess.dbEditors {
+				tableEditSession.Props.ForeignKeyChecksDisabled = true
+			}
+		} else if intVal == 1 {
+			for _, tableEditSession := range sess.dbEditors {
+				tableEditSession.Props.ForeignKeyChecksDisabled = false
+			}
+		} else {
+			return fmt.Errorf("variable 'foreign_key_checks' can't be set to the value of '%d'", intVal)
+		}
 	}
 
 	return sess.Session.Set(ctx, key, typ, value)

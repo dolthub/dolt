@@ -112,12 +112,11 @@ func TestDropColumn(t *testing.T) {
 			ctx := context.Background()
 
 			root, err := dEnv.WorkingRoot(ctx)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			tbl, _, err := root.GetTable(ctx, tableName)
-
 			require.NoError(t, err)
 
-			updatedTable, err := DropColumn(ctx, tbl, tt.colName)
+			updatedTable, err := DropColumn(ctx, tbl, tt.colName, nil)
 			if len(tt.expectedErr) > 0 {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectedErr)
@@ -187,12 +186,11 @@ func TestDropColumnUsedByIndex(t *testing.T) {
 			ctx := context.Background()
 
 			root, err := dEnv.WorkingRoot(ctx)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			tbl, _, err := root.GetTable(ctx, tableName)
-
 			require.NoError(t, err)
 
-			updatedTable, err := DropColumn(ctx, tbl, tt.colName)
+			updatedTable, err := DropColumn(ctx, tbl, tt.colName, nil)
 			require.NoError(t, err)
 
 			sch, err := updatedTable.GetSchema(ctx)

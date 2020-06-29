@@ -634,6 +634,55 @@ SQL
     [[ "$output" =~ "does not have column" ]] || false
 }
 
+@test "foreign-keys: CREATE TABLE SET NULL on non-nullable column" {
+    dolt sql <<SQL
+CREATE TABLE parent (
+  id BIGINT PRIMARY KEY,
+  extra BIGINT
+);
+SQL
+
+    run dolt sql <<SQL
+CREATE TABLE child (
+  id BIGINT PRIMARY KEY,
+  parent_extra BIGINT NOT NULL,
+  CONSTRAINT fk_name FOREIGN KEY (parent_extra)
+    REFERENCES parent(extra)
+    ON DELETE SET NULL
+);
+SQL
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "SET NULL" ]] || false
+    [[ "$output" =~ "parent_extra" ]] || false
+    
+    run dolt sql <<SQL
+CREATE TABLE child (
+  id BIGINT PRIMARY KEY,
+  parent_extra BIGINT NOT NULL,
+  CONSTRAINT fk_name FOREIGN KEY (parent_extra)
+    REFERENCES parent(extra)
+    ON UPDATE SET NULL
+);
+SQL
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "SET NULL" ]] || false
+    [[ "$output" =~ "parent_extra" ]] || false
+    
+    run dolt sql <<SQL
+CREATE TABLE child (
+  id BIGINT PRIMARY KEY,
+  parent_extra BIGINT NOT NULL,
+  CONSTRAINT fk_name FOREIGN KEY (parent_extra)
+    REFERENCES parent(extra)
+    ON DELETE SET NULL
+    ON UPDATE SET NULL
+);
+SQL
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "SET NULL" ]] || false
+    [[ "$output" =~ "parent_extra" ]] || false
+}
+
 @test "foreign-keys: ALTER TABLE Single Unnamed FOREIGN KEY" {
     dolt sql <<SQL
 CREATE TABLE parent (
@@ -1149,6 +1198,54 @@ SQL
     [ "$status" -eq "1" ]
 }
 
+@test "foreign-keys: ALTER TABLE SET NULL on non-nullable column" {
+    dolt sql <<SQL
+CREATE TABLE parent (
+  id BIGINT PRIMARY KEY,
+  extra BIGINT
+);
+CREATE TABLE child (
+  id BIGINT PRIMARY KEY,
+  parent_extra BIGINT NOT NULL
+);
+SQL
+
+    run dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (parent_extra) REFERENCES parent(extra) ON DELETE SET NULL"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "SET NULL" ]] || false
+    [[ "$output" =~ "parent_extra" ]] || false
+    
+    run dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (parent_extra) REFERENCES parent(extra) ON UPDATE SET NULL"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "SET NULL" ]] || false
+    [[ "$output" =~ "parent_extra" ]] || false
+    
+    run dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (parent_extra) REFERENCES parent(extra) ON DELETE SET NULL ON UPDATE SET NULL"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "SET NULL" ]] || false
+    [[ "$output" =~ "parent_extra" ]] || false
+}
+
+@test "foreign-keys: ADD FOREIGN KEY fails on existing table when data would cause violation" {
+    dolt sql <<SQL
+CREATE TABLE parent (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT
+);
+CREATE TABLE child (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT
+);
+INSERT INTO parent VALUES (1, 1), (2, 2);
+INSERT INTO child  VALUES (1, 1), (2, 3);
+SQL
+
+    run dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1)"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+    [[ "$output" =~ "fk_name" ]] || false
+}
+
 @test "foreign-keys: RENAME TABLE" {
     dolt sql <<SQL
 CREATE TABLE parent (
@@ -1258,6 +1355,36 @@ SQL
     dolt table rm parent
 }
 
+@test "foreign-keys: dolt table cp" {
+    dolt sql <<SQL
+CREATE TABLE one (
+  id BIGINT PRIMARY KEY,
+  extra BIGINT
+);
+CREATE TABLE two (
+  id BIGINT PRIMARY KEY,
+  one_extra BIGINT,
+  FOREIGN KEY (one_extra)
+    REFERENCES one(extra)
+);
+SQL
+    
+    dolt table cp two two_new
+    run dolt index ls two_new
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "No indexes" ]] || false
+    run dolt schema show two_new
+    [ "$status" -eq "0" ]
+    ! [[ "$output" =~ "FOREIGN KEY" ]] || false
+    
+    run dolt index ls two
+    [ "$status" -eq "0" ]
+    ! [[ "$output" =~ "No indexes" ]] || false
+    run dolt schema show two
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "FOREIGN KEY" ]] || false
+}
+
 @test "foreign-keys: ALTER TABLE RENAME COLUMN" {
     dolt sql <<SQL
 CREATE TABLE parent (
@@ -1276,6 +1403,63 @@ SQL
     run dolt schema show child
     [ "$status" -eq "0" ]
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_child_parent_1` FOREIGN KEY (`parent_id_new`) REFERENCES `parent` (`id_new`)' ]] || false
+}
+
+@test "foreign-keys: DROP COLUMN" {
+    dolt sql <<SQL
+CREATE TABLE parent (
+  id BIGINT PRIMARY KEY,
+  extra BIGINT
+);
+CREATE TABLE child (
+  id BIGINT PRIMARY KEY,
+  parent_extra BIGINT,
+  CONSTRAINT fk_name FOREIGN KEY (parent_extra)
+    REFERENCES parent(extra)
+);
+SQL
+
+    dolt add -A
+    dolt commit -m "initial commit"
+    run dolt sql -q "ALTER TABLE parent DROP COLUMN extra"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "extra" ]] || false
+    dolt sql -q "ALTER TABLE child DROP FOREIGN KEY fk_name"
+    dolt sql -q "ALTER TABLE parent DROP COLUMN extra"
+    
+    dolt reset --hard
+    run dolt sql -q "ALTER TABLE child DROP COLUMN parent_extra"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "parent_extra" ]] || false
+    dolt sql -q "ALTER TABLE child DROP FOREIGN KEY fk_name"
+    dolt sql -q "ALTER TABLE child DROP COLUMN parent_extra"
+}
+
+@test "foreign-keys: Disallow change column type when SET NULL" {
+    dolt sql <<SQL
+CREATE TABLE parent (
+  id BIGINT PRIMARY KEY,
+  extra BIGINT
+);
+CREATE TABLE child (
+  id BIGINT PRIMARY KEY,
+  parent_extra BIGINT,
+  CONSTRAINT fk_name FOREIGN KEY (parent_extra)
+    REFERENCES parent(extra)
+    ON DELETE SET NULL
+    ON UPDATE SET NULL
+);
+SQL
+    
+    run dolt sql -q "ALTER TABLE child CHANGE COLUMN parent_extra parent_extra BIGINT"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "SET NULL" ]] || false
+    [[ "$output" =~ "parent_extra" ]] || false
+    
+    run dolt sql -q "ALTER TABLE child CHANGE COLUMN parent_extra parent_extra BIGINT NULL"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "SET NULL" ]] || false
+    [[ "$output" =~ "parent_extra" ]] || false
 }
 
 @test "foreign-keys: SQL CASCADE" {
@@ -1447,6 +1631,39 @@ SQL
     run dolt sql -q "DELETE FROM one;"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "violation" ]] || false
+}
+
+@test "foreign-keys: SQL INSERT multiple keys violates only one" {
+    dolt sql <<SQL
+CREATE TABLE one (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT
+);
+CREATE TABLE two (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  CONSTRAINT fk_name_1 FOREIGN KEY (v1)
+    REFERENCES one(v1),
+  CONSTRAINT fk_name_2 FOREIGN KEY (v2)
+    REFERENCES one(v2)
+);
+INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
+INSERT INTO two VALUES (1, NULL, 1);
+SQL
+    
+    run dolt sql -q "INSERT INTO two VALUES (2, NULL, 4)"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+    [[ "$output" =~ "fk_name_2" ]] || false
+    
+    run dolt sql -q "INSERT INTO two VALUES (3, 4, NULL)"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+    [[ "$output" =~ "fk_name_1" ]] || false
+    
+    dolt sql -q "INSERT INTO two VALUES (4, NULL, NULL)" # sanity check
 }
 
 @test "foreign-keys: dolt table import" {
@@ -1923,7 +2140,7 @@ SQL
     dolt checkout other
 
     dolt sql <<SQL
-ALTER TABLE child DROP FOREIGN KEY fk_name;
+SET FOREIGN_KEY_CHECKS=0;
 UPDATE parent SET v1 = v1 - 1;
 SQL
     dolt add -A
@@ -1976,7 +2193,7 @@ SQL
     dolt checkout other
 
     dolt sql <<SQL
-ALTER TABLE child DROP FOREIGN KEY fk_name;
+SET FOREIGN_KEY_CHECKS=0;
 UPDATE parent SET v1 = v1 - 1;
 SQL
     dolt add -A
@@ -2016,7 +2233,7 @@ SQL
     dolt checkout other
 
     dolt sql <<SQL
-ALTER TABLE child DROP FOREIGN KEY fk_name;
+SET FOREIGN_KEY_CHECKS=0;
 UPDATE child SET v1 = v1 + 1;
 SQL
     dolt add -A
@@ -2069,7 +2286,7 @@ SQL
     dolt checkout other
 
     dolt sql <<SQL
-ALTER TABLE child DROP FOREIGN KEY fk_name;
+SET FOREIGN_KEY_CHECKS=0;
 UPDATE child SET v1 = v1 - 1;
 SQL
     dolt add -A
@@ -2109,7 +2326,7 @@ SQL
     dolt checkout other
 
     dolt sql <<SQL
-ALTER TABLE child DROP FOREIGN KEY fk_name;
+SET FOREIGN_KEY_CHECKS=0;
 UPDATE parent SET v1 = v1 - 1;
 UPDATE child SET v1 = v1 + 1;
 SQL
@@ -2164,7 +2381,7 @@ SQL
     dolt checkout other
 
     dolt sql <<SQL
-ALTER TABLE child DROP FOREIGN KEY fk_name;
+SET FOREIGN_KEY_CHECKS=0;
 UPDATE parent SET v1 = v1 - 1;
 UPDATE child SET v1 = v1 + 1;
 SQL

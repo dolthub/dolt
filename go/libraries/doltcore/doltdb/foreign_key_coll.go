@@ -17,10 +17,12 @@ package doltdb
 import (
 	"context"
 	"fmt"
+	"io"
 	"sort"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/store/marshal"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -296,6 +298,73 @@ func (fkc *ForeignKeyCollection) Stage(ctx context.Context, fksToAdd []*ForeignK
 	for _, foreignKeyToRemove := range fksToRemove {
 		delete(fkc.foreignKeys, foreignKeyToRemove.Name)
 	}
+}
+
+// ValidateData ensures that the foreign key is valid by comparing the index data from the given table against the index
+// data from the referenced table.
+func (fk *ForeignKey) ValidateData(ctx context.Context, tableIndexData types.Map, refTableIndex schema.Index, refTableIndexData types.Map) error {
+	if fk.ReferencedTableIndex != refTableIndex.Name() {
+		return fmt.Errorf("cannot validate data as wrong referenced index was given: expected `%s` but received `%s`",
+			fk.ReferencedTableIndex, refTableIndex.Name())
+	}
+	refTableIndexSch := refTableIndex.Schema()
+	err := tableIndexData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+		indexTaggedValues, err := row.ParseTaggedValues(key.(types.Tuple))
+		if err != nil {
+			return true, err
+		}
+		refIndexKeyVals := make([]types.Value, len(fk.TableColumns)*2)
+		for i, colTag := range fk.TableColumns {
+			val, ok := indexTaggedValues[colTag]
+			if !ok {
+				return true, fmt.Errorf("cannot find value for tag `%d` on table `%s`", colTag, fk.TableName)
+			}
+			newTag := fk.ReferencedTableColumns[i]
+			refIndexKeyVals[2*i] = types.Uint(newTag)
+			refIndexKeyVals[2*i+1] = val
+		}
+		refIndexKey, err := types.NewTuple(refTableIndexData.Format(), refIndexKeyVals...)
+		if err != nil {
+			return true, err
+		}
+
+		indexIter := noms.NewNomsRangeReader(refTableIndexSch, refTableIndexData,
+			[]*noms.ReadRange{{Start: refIndexKey, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
+				return tuple.StartsWith(refIndexKey), nil
+			}}},
+		)
+		_, err = indexIter.ReadRow(ctx)
+		if err == nil { // row exists
+			return false, nil
+		} else if err != io.EOF {
+			return true, err
+		} else {
+			indexKeyStr, _ := types.EncodedValue(ctx, refIndexKey)
+			return true, fmt.Errorf("foreign key violation on `%s`.`%s`: `%s`", fk.Name, fk.TableName, indexKeyStr)
+		}
+	})
+	return err
+}
+
+// Equals returns whether the given foreign key is equivalent to another. As tags are unique, we can compare using those
+// and ignore the table names, ensuring equality even through table and column renames.
+func (fk *ForeignKey) Equals(other *ForeignKey) bool {
+	if len(fk.TableColumns) != len(other.TableColumns) || len(fk.ReferencedTableColumns) != len(other.ReferencedTableColumns) {
+		return false
+	}
+	for i := range fk.TableColumns {
+		if fk.TableColumns[i] != other.TableColumns[i] {
+			return false
+		}
+	}
+	for i := range fk.ReferencedTableColumns {
+		if fk.ReferencedTableColumns[i] != other.ReferencedTableColumns[i] {
+			return false
+		}
+	}
+	return fk.Name == other.Name &&
+		fk.OnUpdate == other.OnUpdate &&
+		fk.OnDelete == other.OnDelete
 }
 
 // ValidateReferencedTableSchema verifies that the given schema matches the expectation of the referenced table.

@@ -231,7 +231,7 @@ func newTableCopyDataMover(ctx context.Context, root *doltdb.RootValue, fs files
 	}
 
 	newTblSch := schema.SchemaFromCols(cc)
-	newTblSch.Indexes().Merge(oldTblSch.Indexes().AllIndexes()...)
+	newTblSch.Indexes().Merge(false, oldTblSch.Indexes().AllIndexes()...)
 
 	transforms, err := mvdata.NameMapTransform(oldTblSch, newTblSch, make(rowconv.NameMapper))
 
