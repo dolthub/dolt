@@ -315,24 +315,12 @@ func (ste *SessionedTableEditor) validateForInsert(ctx context.Context, dRow row
 		return nil
 	}
 	for _, foreignKey := range ste.referencedTables {
-		// first check if it's all nulls, as they are always valid to INSERT
-		allNulls := true
-		for _, colTag := range foreignKey.TableColumns {
-			val, ok := dRow.GetColVal(colTag)
-			if ok && !types.IsNull(val) {
-				allNulls = false
-			}
-		}
-		if allNulls {
-			return nil
-		}
-
 		indexKey, hasNulls, err := ste.reduceRowAndConvert(ste.tableEditor.nbf, foreignKey.TableColumns, foreignKey.ReferencedTableColumns, dRow)
 		if err != nil {
 			return err
 		}
 		if hasNulls {
-			return nil
+			continue
 		}
 		referencingSte, ok := ste.tableEditSession.tables[foreignKey.ReferencedTableName]
 		if !ok {

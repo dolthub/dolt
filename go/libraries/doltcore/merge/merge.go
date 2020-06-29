@@ -114,7 +114,11 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, tableEditS
 		if h != mh {
 			ms, err = calcTableMergeStats(ctx, tbl, mergeTbl)
 		}
-
+		// force load the table editor since this counts as a change
+		_, err := tableEditSession.GetTableEditor(ctx, tblName, nil)
+		if err != nil {
+			return nil, nil, err
+		}
 		return mergeTbl, &ms, nil
 	} else if mh == anch {
 		return tbl, &MergeStats{Operation: TableUnmodified}, nil

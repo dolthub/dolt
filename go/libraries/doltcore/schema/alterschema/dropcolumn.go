@@ -17,6 +17,7 @@ package alterschema
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -26,7 +27,7 @@ import (
 )
 
 // DropColumn drops a column from a table, and removes its associated cell values
-func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string) (*doltdb.Table, error) {
+func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignKeys []*doltdb.ForeignKey) (*doltdb.Table, error) {
 	if tbl == nil {
 		panic("invalid parameters")
 	}
@@ -46,6 +47,19 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string) (*doltdb
 		return nil, errors.New("Cannot drop column in primary key")
 	} else {
 		dropTag = col.Tag
+	}
+
+	for _, foreignKey := range foreignKeys {
+		for _, fkTag := range foreignKey.TableColumns {
+			if dropTag == fkTag {
+				return nil, fmt.Errorf("cannot drop column `%s` as it is used in foreign key `%d`", colName, dropTag)
+			}
+		}
+		for _, fkTag := range foreignKey.ReferencedTableColumns {
+			if dropTag == fkTag {
+				return nil, fmt.Errorf("cannot drop column `%s` as it is used in foreign key `%d`", colName, dropTag)
+			}
+		}
 	}
 
 	for _, index := range tblSch.Indexes().IndexesWithColumn(colName) {

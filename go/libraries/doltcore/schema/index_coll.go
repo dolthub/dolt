@@ -53,7 +53,7 @@ type IndexCollection interface {
 	// rather than by tag number, which allows an index from a different table to be added as long as they have matching
 	// column names. If an index with the same name or column structure already exists, or the index contains different
 	// columns, then it is skipped.
-	Merge(indexes ...Index)
+	Merge(includeHidden bool, indexes ...Index)
 	// RemoveIndex removes an index from the table metadata.
 	RemoveIndex(indexName string) (Index, error)
 	// RenameIndex renames an index in the table metadata.
@@ -237,13 +237,17 @@ func (ixc *indexCollectionImpl) IndexesWithTag(tag uint64) []Index {
 	return indexes
 }
 
-func (ixc *indexCollectionImpl) Merge(indexes ...Index) {
+func (ixc *indexCollectionImpl) Merge(includeHidden bool, indexes ...Index) {
 	for _, index := range indexes {
+		if !includeHidden && index.IsHidden() {
+			continue
+		}
 		if tags, ok := ixc.columnNamesToTags(index.ColumnNames()); ok && !ixc.Contains(index.Name()) {
 			newIndex := &indexImpl{
 				name:      index.Name(),
 				tags:      tags,
 				indexColl: ixc,
+				isHidden:  index.IsHidden(),
 				isUnique:  index.IsUnique(),
 				comment:   index.Comment(),
 			}
