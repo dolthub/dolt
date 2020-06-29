@@ -534,7 +534,6 @@ func skipEngineTest(test enginetest.QueryTest) bool {
 	}
 
 	lowerQuery := strings.ToLower(test.Query)
-
 	if strings.Contains(lowerQuery, "myview1") {
 		// todo: support for history table
 		return true
@@ -551,6 +550,9 @@ func skipEngineTest(test enginetest.QueryTest) bool {
 
 func TestEngineTestQueryDifferBefore(t *testing.T) {
 	inner := func(t *testing.T, test enginetest.QueryTest, dEnv *env.DoltEnv) {
+		if skipEngineTest(test) {
+			t.Skip()
+		}
 		ctx := context.Background()
 		fromRoot, err := dEnv.StagedRoot(ctx)
 		require.NoError(t, err)
@@ -559,8 +561,8 @@ func TestEngineTestQueryDifferBefore(t *testing.T) {
 
 		qd, err := querydiff.MakeQueryDiffer(ctx, dEnv, fromRoot, toRoot, test.Query)
 		if err != nil {
-			if _, ok := err.(querydiff.QueryDiffError); ok {
-				return
+			if qde, ok := err.(querydiff.QueryDiffError); ok {
+				t.Skipf(qde.Error())
 			}
 			t.Fatalf("unexpected error creating QueryDiffer: %s", err.Error())
 		}
@@ -590,9 +592,6 @@ func TestEngineTestQueryDifferBefore(t *testing.T) {
 	dEnv := setupEngineTests(t)
 	for _, testSet := range engineQueryTests {
 		for _, test := range testSet {
-			if skipEngineTest(test) {
-				continue
-			}
 			t.Run(test.Query, func(t *testing.T) {
 				inner(t, test, dEnv)
 			})
@@ -602,6 +601,10 @@ func TestEngineTestQueryDifferBefore(t *testing.T) {
 
 func EngineTestQueryDifferAfter(t *testing.T) {
 	inner := func(t *testing.T, test enginetest.QueryTest, dEnv *env.DoltEnv) {
+		if skipEngineTest(test) {
+			t.Skip()
+		}
+
 		ctx := context.Background()
 		fromRoot, err := dEnv.StagedRoot(ctx)
 		require.NoError(t, err)
@@ -610,8 +613,8 @@ func EngineTestQueryDifferAfter(t *testing.T) {
 
 		qd, err := querydiff.MakeQueryDiffer(ctx, dEnv, fromRoot, toRoot, test.Query)
 		if err != nil {
-			if _, ok := err.(querydiff.QueryDiffError); ok {
-				return
+			if qde, ok := err.(querydiff.QueryDiffError); ok {
+				t.Skip(qde.Error())
 			}
 			t.Fatalf("unexpected error creating QueryDiffer: %s", err.Error())
 		}
@@ -628,9 +631,6 @@ func EngineTestQueryDifferAfter(t *testing.T) {
 	commitData(t, dEnv)
 	for _, testSet := range engineQueryTests {
 		for _, test := range testSet {
-			if skipEngineTest(test) {
-				continue
-			}
 			t.Run(test.Query, func(t *testing.T) {
 				inner(t, test, dEnv)
 			})

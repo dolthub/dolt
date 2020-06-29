@@ -16,7 +16,6 @@ package commands
 
 import (
 	"context"
-	"strings"
 
 	"github.com/liquidata-inc/go-mysql-server/sql"
 
@@ -34,80 +33,9 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/nullprinter"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
-
-// todo
-var queryDiffDocs = cli.CommandDocumentationContent{
-	ShortDesc: "",
-	LongDesc:  "",
-	Synopsis:  nil,
-}
-
-type QueryDiffCmd struct {
-	VersionStr string
-}
-
-// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
-func (cmd QueryDiffCmd) Name() string {
-	return "query_diff"
-}
-
-// Description returns a description of the command
-func (cmd QueryDiffCmd) Description() string {
-	return "Diffs the results of a query between two roots"
-}
-
-func (cmd QueryDiffCmd) Hidden() bool {
-	return true
-}
-
-// RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
-// that it be run from within a data repository directory
-func (cmd QueryDiffCmd) RequiresRepo() bool {
-	return true
-}
-
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd QueryDiffCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	// todo
-	return nil
-}
-
-func (cmd QueryDiffCmd) createArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	return ap
-}
-
-// Exec executes the command
-func (cmd QueryDiffCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, queryDiffDocs, ap))
-	apr := cli.ParseArgs(ap, args, help)
-
-	from, to, leftover, err := getDiffRoots(ctx, dEnv, apr.Args())
-
-	var verr errhand.VerboseError
-	if err != nil {
-		verr = errhand.BuildDError("error determining diff commits for args: %s", strings.Join(apr.Args(), " ")).AddCause(err).Build()
-		return HandleVErrAndExitCode(verr, usage)
-	}
-	if len(leftover) < 1 {
-		verr = errhand.BuildDError("too many arguments: %s", strings.Join(apr.Args(), " ")).Build()
-	} else if len(leftover) > 1 {
-		verr = errhand.BuildDError("too many arguments: %s", strings.Join(apr.Args(), " ")).Build()
-	}
-	if verr != nil {
-		return HandleVErrAndExitCode(verr, usage)
-	}
-
-	verr = diffQuery(ctx, dEnv, from, to, leftover[0])
-
-	return HandleVErrAndExitCode(verr, usage)
-}
 
 func diffQuery(ctx context.Context, dEnv *env.DoltEnv, fromRoot, toRoot *doltdb.RootValue, query string) errhand.VerboseError {
 	qd, err := querydiff.MakeQueryDiffer(ctx, dEnv, fromRoot, toRoot, query)
