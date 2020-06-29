@@ -142,6 +142,34 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, tableEditS
 		return nil, nil, err
 	}
 
+	{ // TODO: https://github.com/liquidata-inc/dolt/issues/773
+		equalSchemas, err := schema.SchemasAreEqual(tblSchema, mergeTblSchema)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !equalSchemas {
+			return nil, nil, fmt.Errorf("cannot merge `%s` as schemas differ, please fix this before merging", tblName)
+		}
+		rootFkCollection, err := merger.root.GetForeignKeyCollection(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		mergeFkCollection, err := merger.mergeRoot.GetForeignKeyCollection(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		rootFks, _ := rootFkCollection.KeysForTable(tblName)
+		mergeFks, _ := mergeFkCollection.KeysForTable(tblName)
+		if len(rootFks) != len(mergeFks) {
+			return nil, nil, fmt.Errorf("cannot merge `%s` as foreign keys differ, please fix this before merging", tblName)
+		}
+		for i := range rootFks {
+			if !rootFks[i].Equals(mergeFks[i]) {
+				return nil, nil, fmt.Errorf("cannot merge `%s` as foreign key `%s` differs, please fix this before merging", tblName, rootFks[i].Name)
+			}
+		}
+	}
+
 	postMergeSchema, err := mergeTableSchema(tblSchema, mergeTblSchema, ancTblSchema)
 
 	if err != nil {

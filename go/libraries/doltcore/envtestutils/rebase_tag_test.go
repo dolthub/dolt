@@ -273,7 +273,8 @@ var RebaseTagTests = []RebaseTagTest{
 			newRow(row.TaggedValues{IdTag: types.Int(9), NameTag: types.String("Jacqueline Bouvier"), AgeTag: types.Int(80)}, people),
 		},
 	},
-	{
+	// https://github.com/liquidata-inc/dolt/issues/773
+	/*{
 		Name: "create new column on master, insert to table on other branch, merge",
 		Commands: []tc.Command{
 			tc.Query{Query: createPeopleTable},
@@ -358,7 +359,7 @@ var RebaseTagTests = []RebaseTagTest{
 			newRow(row.TaggedValues{IdTag: types.Int(9), NameTag: types.String("Jacqueline Bouvier"), AgeTag: types.Int(80)}, people),
 			newRow(row.TaggedValues{IdTag: types.Int(11), NameTag: types.String("Selma Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(8.5)}, peopleWithDrip),
 		},
-	},
+	},*/
 	{
 		Name: "create new column, use on multiple branches, merge",
 		Commands: []tc.Command{
