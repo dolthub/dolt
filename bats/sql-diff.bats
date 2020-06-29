@@ -32,11 +32,11 @@ SQL
     dolt commit -m "Added three rows"
 
     # confirm a difference exists
-    run dolt diff --sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ ! "$output" = "" ]
 
-    dolt diff --sql firstbranch newbranch > query
+    dolt diff -r sql firstbranch newbranch > query
     dolt checkout firstbranch
     dolt sql < query
     cat query
@@ -44,7 +44,7 @@ SQL
     dolt commit -m "Reconciled with newbranch"
 
     # confirm that both branches have the same content
-    run dolt diff --sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
@@ -72,11 +72,11 @@ SQL
     dolt commit -m "modified first row"
 
     # confirm a difference exists
-    run dolt diff --sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ ! "$output" = "" ]
 
-    dolt diff --sql firstbranch newbranch > query
+    dolt diff -r sql firstbranch newbranch > query
     dolt checkout firstbranch
     dolt sql < query
     rm query
@@ -84,7 +84,7 @@ SQL
     dolt commit -m "Reconciled with newbranch"
 
     # confirm that both branches have the same content
-    run dolt diff --sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
@@ -112,11 +112,11 @@ SQL
     dolt commit -m "deleted first row"
 
     # confirm a difference exists
-    run dolt diff --sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ ! "$output" = "" ]
 
-    dolt diff --sql firstbranch newbranch > query
+    dolt diff -r sql firstbranch newbranch > query
     dolt checkout firstbranch
     dolt sql < query
     rm query
@@ -124,7 +124,7 @@ SQL
     dolt commit -m "Reconciled with newbranch"
 
     # confirm that both branches have the same content
-    run dolt diff --sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
@@ -152,11 +152,11 @@ SQL
     dolt commit -m "modified first row"
 
     # confirm a difference exists
-    run dolt diff --sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ ! "$output" = "" ]
 
-    dolt diff --sql firstbranch newbranch > query
+    dolt diff -r sql firstbranch newbranch > query
     dolt checkout firstbranch
     dolt sql < query
     rm query
@@ -164,7 +164,7 @@ SQL
     dolt commit -m "Reconciled with newbranch"
 
     # confirm that both branches have the same content
-    run dolt diff --sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
@@ -193,11 +193,11 @@ SQL
     dolt commit -m "renamed column"
 
     # confirm a difference exists
-    run dolt diff --sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ ! "$output" = "" ]
 
-    dolt diff --sql firstbranch newbranch > query
+    dolt diff -r sql firstbranch newbranch > query
     dolt checkout firstbranch
     dolt sql < query
     cat query
@@ -205,7 +205,7 @@ SQL
     dolt commit -m "Reconciled with newbranch"
 
     # confirm that both branches have the same content
-    run dolt diff --sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
@@ -233,11 +233,11 @@ SQL
     dolt commit -m "dropped column"
 
     # confirm a difference exists
-    run dolt diff --sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ ! "$output" = "" ]
 
-    dolt diff --sql firstbranch newbranch > query
+    dolt diff -r sql firstbranch newbranch > query
     dolt checkout firstbranch
     cat query
     dolt sql < query
@@ -245,7 +245,7 @@ SQL
     dolt commit -m "Reconciled with newbranch"
 
     # confirm that both branches have the same content
-    run dolt diff --sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
@@ -273,11 +273,11 @@ SQL
     dolt commit -m "added column"
 
     # confirm a difference exists
-    run dolt diff --sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ ! "$output" = "" ]
 
-    dolt diff --sql firstbranch newbranch > query
+    dolt diff -r sql firstbranch newbranch > query
     dolt checkout firstbranch
     dolt sql < query
     rm query
@@ -285,7 +285,7 @@ SQL
     dolt commit -m "Reconciled with newbranch"
 
     # confirm that both branches have the same content
-    run dolt diff --sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
@@ -308,18 +308,18 @@ SQL
     dolt commit -m "created new table"
 
     # confirm a difference exists
-    run dolt diff --sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ ! "$output" = "" ]
 
-    dolt diff --sql firstbranch newbranch > query
+    dolt diff -r sql firstbranch newbranch > query
     dolt checkout firstbranch
     dolt sql < query
     dolt add test
     dolt commit -m "Reconciled with newbranch"
 
     # confirm that both branches have the same content
-    run dolt diff --sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
@@ -345,11 +345,11 @@ SQL
     dolt commit -m "created new table"
 
     # confirm a difference exists
-    run dolt diff --sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ ! "$output" = "" ] || false
 
-    dolt diff --sql firstbranch newbranch > query
+    dolt diff -r sql firstbranch newbranch > query
     dolt checkout firstbranch
     cat query
     dolt sql < query
@@ -357,8 +357,8 @@ SQL
     dolt commit -m "Reconciled with newbranch"
 
     # confirm that both branches have the same content
-    dolt diff --sql firstbranch newbranch
-    run dolt diff --sql firstbranch newbranch
+    dolt diff -r sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
@@ -386,12 +386,12 @@ SQL
     dolt commit -m "removed table"
 
     # confirm a difference exists
-    dolt diff --sql firstbranch newbranch
-    run dolt diff --sql firstbranch newbranch
+    dolt diff -r sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ ! "$output" = "" ]
 
-    dolt diff --sql firstbranch newbranch > query
+    dolt diff -r sql firstbranch newbranch > query
     dolt checkout firstbranch
     cat query
     dolt sql < query
@@ -399,7 +399,7 @@ SQL
     dolt commit -m "Reconciled with newbranch"
 
     # confirm that both branches have the same content
-    run dolt diff --sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
@@ -428,11 +428,11 @@ SQL
     dolt commit -m "renamed table and added data"
 
     # confirm a difference exists
-    run dolt diff --sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ ! "$output" = "" ]
 
-    dolt diff --sql firstbranch newbranch > query
+    dolt diff -r sql firstbranch newbranch > query
     dolt checkout firstbranch
     cat query
     dolt sql < query
@@ -440,7 +440,7 @@ SQL
     dolt commit -m "Reconciled with newbranch"
 
     # confirm that both branches have the same content
-    run dolt diff --sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     grep 'RENAME' query
@@ -473,11 +473,11 @@ SQL
     dolt commit -m "renamed table and added data"
 
     # confirm a difference exists
-    run dolt diff --sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ ! "$output" = "" ]
 
-    dolt diff --sql firstbranch newbranch > query
+    dolt diff -r sql firstbranch newbranch > query
     dolt checkout firstbranch
     cat query
     dolt sql < query
@@ -486,7 +486,7 @@ SQL
 
     # confirm that both branches have the same content
     skip "this test is generating extra sql"
-    run dolt diff --sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     grep 'RENAME' query
@@ -495,7 +495,7 @@ SQL
 @test "diff sql reconciles CREATE/ALTER/DROP VIEW" {
     dolt sql -q 'create table test (pk int not null primary key)'
     dolt sql -q 'create view double as select pk*2 from test'
-    run dolt diff --sql
+    run dolt diff -r sql
     [ "$status" -eq 0 ]
     skip "create view statements not implemented"
     [[ "$output" =~ "CREATE VIEW `double`" ]] || false
@@ -521,11 +521,11 @@ SQL
     dolt commit -m "created new table"
 
     # confirm a difference exists
-    run dolt diff --sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ ! "$output" = "" ]
 
-    dolt diff --sql firstbranch newbranch > query
+    dolt diff -r sql firstbranch newbranch > query
     dolt checkout firstbranch
     dolt sql < query
     rm query
@@ -533,8 +533,8 @@ SQL
     dolt commit -m "Reconciled with newbranch"
 
     # confirm that both branches have the same content
-    dolt diff --sql firstbranch newbranch
-    run dolt diff --sql firstbranch newbranch
+    dolt diff -r sql firstbranch newbranch
+    run dolt diff -r sql firstbranch newbranch
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
@@ -568,11 +568,11 @@ SQL
         dolt commit -m "applied $query query"
 
         # confirm a difference exists
-        run dolt diff --sql firstbranch newbranch
+        run dolt diff -r sql firstbranch newbranch
         [ "$status" -eq 0 ]
         [ ! "$output" = "" ]
 
-        dolt diff --sql firstbranch > patch.sql newbranch
+        dolt diff -r sql firstbranch > patch.sql newbranch
         dolt checkout firstbranch
         dolt sql < patch.sql
         rm patch.sql
@@ -580,7 +580,7 @@ SQL
         dolt commit -m "Reconciled with newbranch"
 
         # confirm that both branches have the same content
-        run dolt diff --sql firstbranch newbranch
+        run dolt diff -r sql firstbranch newbranch
         [ "$status" -eq 0 ]
         [ "$output" = "" ]
     done
@@ -612,16 +612,16 @@ SQL
         dolt checkout newbranch
         dolt sql < $BATS_TEST_DIRNAME/helper/queries/2pk5col-ints/$query.sql
         dolt add .
-        dolt diff --sql
+        dolt diff -r sql
         dolt commit -m "applied $query query "
 
         # confirm a difference exists
 
-        run dolt diff --sql firstbranch newbranch
+        run dolt diff -r sql firstbranch newbranch
         [ "$status" -eq 0 ]
         [ ! "$output" = "" ]
 
-        dolt diff --sql firstbranch > patch.sql newbranch
+        dolt diff -r sql firstbranch > patch.sql newbranch
         dolt checkout firstbranch
         dolt sql < patch.sql
         rm patch.sql
@@ -629,7 +629,7 @@ SQL
         dolt commit -m "Reconciled with newbranch"
 
         # confirm that both branches have the same content
-        run dolt diff --sql firstbranch newbranch
+        run dolt diff -r sql firstbranch newbranch
         [ "$status" -eq 0 ]
         [ "$output" = "" ]
     done
@@ -665,19 +665,19 @@ SQL
     dolt add .
     dolt commit -m "added tricky rows"
     dolt checkout other
-    dolt diff --sql other master > patch.sql
+    dolt diff -r sql other master > patch.sql
     run dolt sql < patch.sql
     [ "$status" -eq 0 ]
-    run dolt diff --sql master
+    run dolt diff -r sql master
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
 
 @test "sql diff ignores dolt docs" {
     echo "This is a README" > README.md 
-    run dolt diff --sql
+    run dolt diff -r sql
     [ "$status" -eq 0 ]
-    skip "Have to decide how to treat dolty_docs in diff --sql"
+    skip "Have to decide how to treat dolty_docs in diff -r sql"
     [[ ! "$output" =~ "dolt_docs" ]] || false;
 }
 
@@ -690,7 +690,7 @@ CREATE TABLE test (
 );
 SQL
     dolt sql -q "insert into test (pk, c1) values (0, NULL)";
-    run dolt diff --sql
+    run dolt diff -r sql
     [ "$status" -eq 0 ]
     skip "dolt diff -sql prints out NULL values right now"
     [[ ! "$output" =~ "NULL" ]] || false;
@@ -703,7 +703,7 @@ CREATE TABLE test (
 );
 SQL
     dolt sql -q "insert into test (pk, c1) values (0, NULL)";
-    run dolt diff --sql
+    run dolt diff -r sql
     skip "dolt diff -sql fails with filed to tranform row pk:0 |"
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "failed to transform" ]] || false 

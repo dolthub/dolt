@@ -136,9 +136,9 @@ func (cmd DiffCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) e
 func (cmd DiffCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
-	ap.SupportsFlag(SchemaFlag, "", "Show only the schema changes, do not show the data changes (Both shown by default).")
+	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
 	ap.SupportsFlag(SummaryFlag, "", "Show summary of data changes")
-	ap.SupportsFlag(SQLFlag, "s", "Output diff as a SQL patch file of {{.EmphasisLeft}}INSERT{{.EmphasisRight}} / {{.EmphasisLeft}}UPDATE{{.EmphasisRight}} / {{.EmphasisLeft}}DELETE{{.EmphasisRight}} statements")
+	ap.SupportsString(formatFlag, "r", "result output format", "How to format diff output. Valid values are tabular & sql. Defaults to tabular. ")
 	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
 	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
 	ap.SupportsString(queryFlag, "q", "query", "diffs the results of a query at two commits")
@@ -157,13 +157,12 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	var verr errhand.VerboseError
 	if dArgs.query != "" {
-		verr = diffQuery(ctx, dEnv, fromRoot, toRoot, dArgs.query)
+		verr := diffQuery(ctx, dEnv, fromRoot, toRoot, dArgs.query)
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	verr = diffUserTables(ctx, fromRoot, toRoot, dArgs)
+	verr := diffUserTables(ctx, fromRoot, toRoot, dArgs)
 
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
@@ -208,9 +207,14 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		dArgs.diffParts = SchemaOnlyDiff
 	}
 
-	dArgs.diffOutput = TabularDiffOutput
-	if apr.Contains(SQLFlag) {
+	f, _ := apr.GetValue(formatFlag)
+	switch strings.ToLower(f) {
+	case "tablular":
+		dArgs.diffOutput = TabularDiffOutput
+	case "sql":
 		dArgs.diffOutput = SQLDiffOutput
+	case "":
+		dArgs.diffOutput = TabularDiffOutput
 	}
 
 	if apr.Contains(SummaryFlag) {
