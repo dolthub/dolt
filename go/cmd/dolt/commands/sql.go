@@ -42,7 +42,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
-	_ "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/json"
@@ -1068,6 +1068,12 @@ func newSqlEngine(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, ro
 		au = auth.NewNativeSingle("", "", auth.ReadPerm)
 	} else {
 		au = new(auth.None)
+	}
+
+	err := c.Register(dfunctions.DoltFunctions...)
+
+	if err != nil {
+		return nil, err
 	}
 
 	engine := sqle.New(c, analyzer.NewDefault(c), &sqle.Config{Auth: au})

@@ -31,6 +31,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/dfunctions"
 	_ "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/dfunctions"
 )
 
@@ -79,6 +80,12 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 
 	userAuth := auth.NewAudit(auth.NewNativeSingle(serverConfig.User(), serverConfig.Password(), permissions), auth.NewAuditLog(logrus.StandardLogger()))
 	sqlEngine := sqle.NewDefault()
+
+	err := sqlEngine.Catalog.Register(dfunctions.DoltFunctions...)
+
+	if err != nil {
+		return nil, err
+	}
 
 	var username string
 	var email string
