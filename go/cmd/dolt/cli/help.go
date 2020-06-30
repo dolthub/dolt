@@ -169,7 +169,12 @@ func OptionsUsage(ap *argparser.ArgParser, indent string, lineLen int) string {
 	for _, kvTuple := range ap.ArgListHelp {
 		k, v := kvTuple[0], kvTuple[1]
 		lines = append(lines, "<"+k+">")
-		descLines := toParagraphLines(v, lineLen)
+		l, err := templateDocStringHelper(v, CliFormat)
+		if err != nil {
+			panic(err)
+		}
+		l = embolden(l)
+		descLines := toParagraphLines(l, lineLen)
 		descLines = indentLines(descLines, "  ")
 		descLines = append(descLines, "")
 
@@ -189,7 +194,12 @@ func OptionsUsage(ap *argparser.ArgParser, indent string, lineLen int) string {
 
 		lines = append(lines, fmt.Sprintf(argHelpFmt, supOpt.Abbrev, supOpt.Name, supOpt.ValDesc))
 
-		descLines := toParagraphLines(supOpt.Desc, lineLen)
+		l, err := templateDocStringHelper(supOpt.Desc, CliFormat)
+		if err != nil {
+			panic(err)
+		}
+		l = embolden(l)
+		descLines := toParagraphLines(l, lineLen)
 		descLines = indentLines(descLines, "  ")
 		descLines = append(descLines, "")
 
