@@ -49,7 +49,7 @@ func MoveBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch str
 		}
 	}
 
-	return DeleteBranch(ctx, dEnv, oldBranch, true)
+	return DeleteBranch(ctx, dEnv, oldBranch, DeleteOptions{Force: true})
 }
 
 func CopyBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
@@ -90,17 +90,30 @@ func CopyBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, oldBranch, newBranc
 	return ddb.NewBranchAtCommit(ctx, newRef, cm)
 }
 
-func DeleteBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force bool) error {
-	dref := ref.NewBranchRef(brName)
-
-	if ref.Equals(dEnv.RepoState.CWBHeadRef(), dref) {
-		return ErrCOBranchDelete
-	}
-
-	return DeleteBranchOnDB(ctx, dEnv.DoltDB, dref, force)
+type DeleteOptions struct {
+	Force  bool
+	Remote bool
 }
 
-func DeleteBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltRef, force bool) error {
+func DeleteBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, opts DeleteOptions) error {
+	var dref ref.DoltRef
+	if opts.Remote {
+		var err error
+		dref, err = ref.NewRemoteRefFromPathStr(brName)
+		if err != nil {
+			return err
+		}
+	} else {
+		dref = ref.NewBranchRef(brName)
+		if ref.Equals(dEnv.RepoState.CWBHeadRef(), dref) {
+			return ErrCOBranchDelete
+		}
+	}
+
+	return DeleteBranchOnDB(ctx, dEnv.DoltDB, dref, opts)
+}
+
+func DeleteBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltRef, opts DeleteOptions) error {
 	hasRef, err := ddb.HasRef(ctx, dref)
 
 	if err != nil {
@@ -109,32 +122,32 @@ func DeleteBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltRef,
 		return doltdb.ErrBranchNotFound
 	}
 
-	ms, err := doltdb.NewCommitSpec("head", "master")
+	if !opts.Force && !opts.Remote {
+		ms, err := doltdb.NewCommitSpec("head", "master")
+		if err != nil {
+			return err
+		}
 
-	if err != nil {
-		return err
-	}
+		master, err := ddb.Resolve(ctx, ms)
+		if err != nil {
+			return err
+		}
 
-	master, err := ddb.Resolve(ctx, ms)
+		cs, err := doltdb.NewCommitSpec("head", dref.String())
+		if err != nil {
+			return err
+		}
 
-	if err != nil {
-		return err
-	}
+		cm, err := ddb.Resolve(ctx, cs)
+		if err != nil {
+			return err
+		}
 
-	cs, err := doltdb.NewCommitSpec("head", dref.String())
-
-	if err != nil {
-		return err
-	}
-
-	cm, err := ddb.Resolve(ctx, cs)
-
-	if err != nil {
-		return err
-	}
-
-	if !force {
-		if isMerged, _ := master.CanFastReverseTo(ctx, cm); !isMerged {
+		isMerged, _ := master.CanFastReverseTo(ctx, cm)
+		if err != nil && err != doltdb.ErrUpToDate {
+			return err
+		}
+		if !isMerged {
 			return ErrUnmergedBranchDelete
 		}
 	}

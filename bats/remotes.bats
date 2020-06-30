@@ -825,7 +825,51 @@ setup_ref_test() {
 }
 
 @test "can delete remote reference branch as origin/..." {
-    skip "this does not work"
     setup_ref_test
+    cd ../../
+    create_two_more_remote_branches
+    cd dolt-repo-clones/test-repo
+    dolt fetch # TODO: Remove this fetch once clone works
+
     dolt branch -r -d origin/master
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "* master" ]] || false
+    [[ ! "$output" =~ "remotes/origin/master" ]] || false
+    [[ "$output" =~ "remotes/origin/branch-one" ]] || false
+    [[ "$output" =~ "remotes/origin/branch-two" ]] || false
+    dolt branch -r -d origin/branch-one origin/branch-two
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "* master" ]] || false
+    [[ ! "$output" =~ "remotes/origin/master" ]] || false
+    [[ ! "$output" =~ "remotes/origin/branch-one" ]] || false
+    [[ ! "$output" =~ "remotes/origin/branch-two" ]] || false
+}
+
+@test "can list remote reference branches with -r" {
+    setup_ref_test
+    cd ../../
+    create_two_more_remote_branches
+    cd dolt-repo-clones/test-repo
+    dolt fetch # TODO: Remove this fetch once clone works
+
+    run dolt branch -r
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "* master" ]] || false
+    [[ "$output" =~ "remotes/origin/master" ]] || false
+    [[ "$output" =~ "remotes/origin/branch-one" ]] || false
+    [[ "$output" =~ "remotes/origin/branch-two" ]] || false
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "* master" ]] || false
+    [[ ! "$output" =~ "remotes/origin/master" ]] || false
+    [[ ! "$output" =~ "remotes/origin/branch-one" ]] || false
+    [[ ! "$output" =~ "remotes/origin/branch-two" ]] || false
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "* master" ]] || false
+    [[ "$output" =~ "remotes/origin/master" ]] || false
+    [[ "$output" =~ "remotes/origin/branch-one" ]] || false
+    [[ "$output" =~ "remotes/origin/branch-two" ]] || false
 }
