@@ -140,9 +140,8 @@ func (ht *HistoryTable) WithFilters(filters []sql.Expression) sql.Table {
 	if len(ht.commitFilters) > 0 {
 		commitCheck, err := getCommitFilterFunc(ht.ddb.Format(), ht.commitFilters)
 
-		// TODO: fix panic
 		if err != nil {
-			panic(err)
+			return newStaticErrorTable(ht, err)
 		}
 
 		ht.cmItr = doltdb.NewFilteringCommitItr(ht.cmItr, commitCheck)
