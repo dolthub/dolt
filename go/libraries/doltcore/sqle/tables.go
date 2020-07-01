@@ -735,62 +735,34 @@ func (t *AlterableDoltTable) GetForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyC
 	if err != nil {
 		return nil, err
 	}
+
 	fkc, err := root.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	fks, _ := fkc.KeysForTable(t.name)
+	fks, err := fkc.KeysForDisplay(ctx, t.name, root)
+	if err != nil {
+		return nil, err
+	}
+
 	toReturn := make([]sql.ForeignKeyConstraint, len(fks))
 	for i, fk := range fks {
-		toReturn[i], err = t.toForeignKeyConstraint(ctx, fk, root)
-		if err != nil {
-			return nil, err
-		}
+		toReturn[i] = t.toForeignKeyConstraint(fk)
 	}
 
 	return toReturn, nil
 }
 
-func (t *AlterableDoltTable) toForeignKeyConstraint(ctx *sql.Context, key *doltdb.ForeignKey, root *doltdb.RootValue) (sql.ForeignKeyConstraint, error) {
-	cols := make([]string, len(key.TableColumns))
-	for i, tag := range key.TableColumns {
-		col, ok := t.sch.GetAllCols().GetByTag(tag)
-		if !ok {
-			panic(fmt.Sprintf("Couldn't find column with tag %d", tag))
-		}
-		cols[i] = col.Name
-	}
-
-	refCols := make([]string, len(key.ReferencedTableColumns))
-	table, ok, err := root.GetTable(ctx, key.ReferencedTableName)
-	if err != nil {
-		return sql.ForeignKeyConstraint{}, err
-	}
-	if !ok {
-		panic(fmt.Sprintf("Coudln't find referenced table %s", key.ReferencedTableName))
-	}
-	refSch, err := table.GetSchema(ctx)
-	if err != nil {
-		return sql.ForeignKeyConstraint{}, err
-	}
-
-	for i, tag := range key.ReferencedTableColumns {
-		col, ok := refSch.GetAllCols().GetByTag(tag)
-		if !ok {
-			panic(fmt.Sprintf("Coudln't find column with tag %d", tag))
-		}
-		refCols[i] = col.Name
-	}
-
+func (t *AlterableDoltTable) toForeignKeyConstraint(key *doltdb.DisplayForeignKey) sql.ForeignKeyConstraint {
 	return sql.ForeignKeyConstraint{
 		Name:              key.Name,
-		Columns:           cols,
+		Columns:           key.TableColumns,
 		ReferencedTable:   key.ReferencedTableName,
-		ReferencedColumns: refCols,
+		ReferencedColumns: key.ReferencedTableColumns,
 		OnUpdate:          toReferenceOption(key.OnUpdate),
 		OnDelete:          toReferenceOption(key.OnDelete),
-	}, nil
+	}
 }
 
 func toReferenceOption(opt doltdb.ForeignKeyReferenceOption) sql.ForeignKeyReferenceOption {
