@@ -73,17 +73,10 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tblName string
 			return false, err
 		}
 
-		originalRow, err := row.FromNoms(tblSch, key.(types.Tuple), cnf.Value.(types.Tuple))
-		if err != nil {
-			return false, err
-		}
-
 		updated, err := autoResFunc(key, cnf)
 		if err != nil {
 			return false, err
 		}
-
-		var updatedRow row.Row
 
 		if types.IsNull(updated) {
 			err := tableEditor.DeleteKey(ctx, key.(types.Tuple))
@@ -91,7 +84,7 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tblName string
 				return false, err
 			}
 		} else {
-			updatedRow, err = row.FromNoms(tblSch, key.(types.Tuple), updated.(types.Tuple))
+			updatedRow, err := row.FromNoms(tblSch, key.(types.Tuple), updated.(types.Tuple))
 			if err != nil {
 				return false, err
 			}
@@ -102,9 +95,20 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tblName string
 				return false, table.NewBadRow(updatedRow)
 			}
 
-			err := tableEditor.UpdateRow(ctx, originalRow, updatedRow)
-			if err != nil {
-				return false, err
+			if types.IsNull(cnf.Value) {
+				err = tableEditor.InsertRow(ctx, updatedRow)
+				if err != nil {
+					return false, err
+				}
+			} else {
+				originalRow, err := row.FromNoms(tblSch, key.(types.Tuple), cnf.Value.(types.Tuple))
+				if err != nil {
+					return false, err
+				}
+				err = tableEditor.UpdateRow(ctx, originalRow, updatedRow)
+				if err != nil {
+					return false, err
+				}
 			}
 		}
 

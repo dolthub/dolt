@@ -889,3 +889,85 @@ SQL
     [[ "$output" =~ "Updating" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
 }
+
+@test "two branches, one deletes rows, one modifies those same rows. merge. conflict" {
+    dolt sql <<SQL
+CREATE TABLE foo (
+  pk INT PRIMARY KEY,
+  val INT
+);
+INSERT INTO foo VALUES (1, 1), (2, 1), (3, 1), (4, 1), (5, 1);
+SQL
+    dolt add foo
+    dolt commit -m 'initial commit.'
+
+    dolt checkout -b deleter
+    dolt sql -q 'delete from foo'
+    dolt add foo
+    dolt commit -m 'delete commit.'
+
+    dolt checkout -b modifier master
+    dolt sql -q 'update foo set val = val + 1 where pk in (1, 3, 5);'
+    dolt add foo
+    dolt commit -m 'modify commit.'
+
+    dolt checkout -b merge-into-modified modifier
+    run dolt merge deleter
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CONFLICT" ]] || false
+    dolt merge --abort
+
+    # Accept theirs deletes all rows.
+    dolt checkout master
+    dolt branch -d -f merge-into-modified
+    dolt checkout -b merge-into-modified modifier
+    dolt merge deleter
+    dolt conflicts resolve --theirs foo
+    run dolt sql -q 'select count(*) from foo'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| 0        |" ]] || false
+    dolt merge --abort
+    dolt reset --hard
+
+    # Accept ours deletes two rows.
+    dolt checkout master
+    dolt branch -d -f merge-into-modified
+    dolt checkout -b merge-into-modified modifier
+    dolt merge deleter
+    dolt conflicts resolve --ours foo
+    run dolt sql -q 'select count(*) from foo'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| 3        |" ]] || false
+    dolt merge --abort
+    dolt reset --hard
+
+    dolt checkout -b merge-into-deleter deleter
+    run dolt merge modifier
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CONFLICT" ]] || false
+    dolt merge --abort
+
+    # Accept ours deletes all rows.
+    dolt checkout master
+    dolt branch -d -f merge-into-deleter
+    dolt checkout -b merge-into-deleter deleter
+    dolt merge modifier
+    dolt conflicts resolve --ours foo
+    run dolt sql -q 'select count(*) from foo'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| 0        |" ]] || false
+    dolt merge --abort
+    dolt reset --hard
+
+    # Accept theirs adds modified.
+    dolt checkout master
+    dolt branch -d -f merge-into-deleter
+    dolt checkout -b merge-into-deleter deleter
+    dolt merge modifier
+    dolt conflicts resolve --theirs foo
+    run dolt sql -q 'select count(*) from foo'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| 3        |" ]] || false
+    dolt merge --abort
+    dolt reset --hard
+}
