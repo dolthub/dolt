@@ -31,6 +31,10 @@ SQL
     run dolt schema show child
     [ "$status" -eq "0" ]
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_child_parent_1` FOREIGN KEY (`parent_id`) REFERENCES `parent` (`id`)' ]] || false
+
+    run dolt sql -q "show create table child"
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_child_parent_1` FOREIGN KEY (`parent_id`) REFERENCES `parent` (`id`)' ]] || false 
 }
 
 @test "foreign-keys: CREATE TABLE Single Unnamed FOREIGN KEY With Either UPDATE/DELETE" {
@@ -73,6 +77,10 @@ SQL
     [ "$status" -eq "0" ]
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_child1_parent1_1` FOREIGN KEY (`parent_id`) REFERENCES `parent1` (`id`) ON UPDATE CASCADE' ]] || false
     run dolt schema show child2
+    [ "$status" -eq "0" ]
+    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_child2_parent2_1` FOREIGN KEY (`parent_id`) REFERENCES `parent2` (`id`) ON DELETE CASCADE' ]] || false
+
+    run dolt sql -q "show create table child2"
     [ "$status" -eq "0" ]
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_child2_parent2_1` FOREIGN KEY (`parent_id`) REFERENCES `parent2` (`id`) ON DELETE CASCADE' ]] || false
 }
