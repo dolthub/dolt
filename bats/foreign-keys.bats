@@ -1139,7 +1139,7 @@ SQL
 
     run dolt sql -q "ALTER TABLE child ADD FOREIGN KEY (parent_id) REFERENCES father(id)"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "`father` does not exist" ]] || false
+    [[ "$output" =~ "table not found" ]] || false
 }
 
 @test "foreign-keys: ALTER TABLE Non-existent Columns" {
