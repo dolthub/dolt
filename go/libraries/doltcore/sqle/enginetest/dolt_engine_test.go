@@ -121,6 +121,14 @@ func TestDropColumn(t *testing.T) {
 	enginetest.TestDropColumn(t, newDoltHarness(t))
 }
 
+func TestCreateForeignKeys(t *testing.T) {
+	enginetest.TestCreateForeignKeys(t, newDoltHarness(t))
+}
+
+func TestDropForeignKeys(t *testing.T) {
+	enginetest.TestDropForeignKeys(t, newDoltHarness(t))
+}
+
 func TestExplode(t *testing.T) {
 	t.Skipf("Unsupported types")
 	enginetest.TestExplode(t, newDoltHarness(t))
