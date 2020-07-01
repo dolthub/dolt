@@ -39,6 +39,7 @@ var _ enginetest.Harness = (*DoltHarness)(nil)
 var _ enginetest.SkippingHarness = (*DoltHarness)(nil)
 var _ enginetest.IndexHarness = (*DoltHarness)(nil)
 var _ enginetest.VersionedDBHarness = (*DoltHarness)(nil)
+var _ enginetest.ForeignKeyHarness = (*DoltHarness)(nil)
 
 func newDoltHarness(t *testing.T) *DoltHarness {
 	session, err := sqle.NewDoltSession(context.Background(), enginetest.NewBaseSession(), "test", "email@test.com")
@@ -56,7 +57,8 @@ func (d *DoltHarness) SkipQueryTest(query string) bool {
 	return strings.Contains(lowerQuery, "typestable") || // we don't support all the required types
 		strings.Contains(lowerQuery, "show full columns") || // we set extra comment info
 		lowerQuery == "show variables" || // we set extra variables
-		strings.Contains(lowerQuery, "show create table") // we set extra comment info
+		strings.Contains(lowerQuery, "show create table") || // we set extra comment info
+		strings.Contains(lowerQuery, "show indexes from") // we create / expose extra indexes (for foreign keys)
 }
 
 func (d *DoltHarness) Parallelism() int {
@@ -72,6 +74,10 @@ func (d *DoltHarness) NewContext() *sql.Context {
 }
 
 func (d *DoltHarness) SupportsNativeIndexCreation() bool {
+	return true
+}
+
+func (d *DoltHarness) SupportsForeignKeys() bool {
 	return true
 }
 

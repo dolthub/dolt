@@ -740,15 +740,16 @@ func (t *AlterableDoltTable) GetForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyC
 		return nil, err
 	}
 
-	fks := make([]sql.ForeignKeyConstraint, fkc.Count())
-	for i, key := range fkc.AllKeys() {
-		fks[i], err = t.toForeignKeyConstraint(ctx, key, root)
+	fks, _ := fkc.KeysForTable(t.name)
+	toReturn := make([]sql.ForeignKeyConstraint, len(fks))
+	for i, fk := range fks {
+		toReturn[i], err = t.toForeignKeyConstraint(ctx, fk, root)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return fks, nil
+	return toReturn, nil
 }
 
 func (t *AlterableDoltTable) toForeignKeyConstraint(ctx *sql.Context, key *doltdb.ForeignKey, root *doltdb.RootValue) (sql.ForeignKeyConstraint, error) {
@@ -756,7 +757,7 @@ func (t *AlterableDoltTable) toForeignKeyConstraint(ctx *sql.Context, key *doltd
 	for i, tag := range key.TableColumns {
 		col, ok := t.sch.GetAllCols().GetByTag(tag)
 		if !ok {
-			panic(fmt.Sprintf("Coudln't find column with tag %d", tag))
+			panic(fmt.Sprintf("Couldn't find column with tag %d", tag))
 		}
 		cols[i] = col.Name
 	}
