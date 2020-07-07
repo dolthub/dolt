@@ -59,10 +59,10 @@ func TestNewCommitSpec(t *testing.T) {
 			if !test.expectErr {
 				t.Error(test.inputStr, "Error didn't match expected.  Errored: ", err != nil)
 			}
-		} else if cs.BaseRef != test.expectedRefStr {
-			t.Error(test.inputStr, "expected name:", test.expectedRefStr, "actual name:", cs.BaseRef)
-		} else if cs.ASpec.SpecStr != test.expecteASpecStr {
-			t.Error(test.inputStr, "expected ancestor spec:", test.expecteASpecStr, "actual ancestor spec:", cs.ASpec.SpecStr)
+		} else if cs.baseSpec != test.expectedRefStr {
+			t.Error(test.inputStr, "expected name:", test.expectedRefStr, "actual name:", cs.baseSpec)
+		} else if cs.aSpec.SpecStr != test.expecteASpecStr {
+			t.Error(test.inputStr, "expected ancestor spec:", test.expecteASpecStr, "actual ancestor spec:", cs.aSpec.SpecStr)
 		}
 	}
 }
