@@ -187,8 +187,8 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTime(ctx context.Context, name, email
 	return err
 }
 
-func getCommitStForRef(ctx context.Context, db datas.Database, dref ref.DoltRef) (types.Struct, error) {
-	ds, err := db.GetDataset(ctx, dref.String())
+func getCommitStForDatasetName(ctx context.Context, db datas.Database, datasetName string) (types.Struct, error) {
+	ds, err := db.GetDataset(ctx, datasetName)
 
 	if err != nil {
 		return types.EmptyStruct(db.Format()), err
@@ -273,13 +273,40 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 
 	var commitSt types.Struct
 	var err error
-	if cs.CSType == HashCommitSpec {
-		commitSt, err = getCommitStForHash(ctx, ddb.db, cs.CommitStringer.String())
-	} else if cs.CSType == RefCommitSpec {
-		commitSt, err = getCommitStForRef(ctx, ddb.db, cs.CommitStringer.(ref.DoltRef))
-	} else if cs.CSType == headCommitSpec {
-		commitSt, err = getCommitStForRef(ctx, ddb.db, cwb)
-	} else {
+	switch cs.CSType {
+	case HashCommitSpec:
+		commitSt, err = getCommitStForHash(ctx, ddb.db, cs.BaseRef)
+	case RefCommitSpec:
+		// For a ref in a CommitSpec, we have the following behavior.
+		// If it starts with `refs/`, we look for an exact match before
+		// we try any suffix matches. After that, we try a match on the
+		// user supplied input, with the following three prefixes, in
+		// order: `refs/`, `refs/heads/`, `refs/remotes/`.
+		candidates := []string{
+			"refs/" + cs.BaseRef,
+			"refs/heads/" + cs.BaseRef,
+			"refs/remotes/" + cs.BaseRef,
+		}
+		if strings.HasPrefix(cs.BaseRef, "refs/") {
+			candidates = []string {
+				cs.BaseRef,
+				"refs/" + cs.BaseRef,
+				"refs/heads/" + cs.BaseRef,
+				"refs/remotes/" + cs.BaseRef,
+			}
+		}
+		for _, candidate := range candidates {
+			commitSt, err = getCommitStForDatasetName(ctx, ddb.db, candidate)
+			if err == nil {
+				break
+			}
+			if err != ErrBranchNotFound {
+				return nil, err
+			}
+		}
+	case headCommitSpec:
+		commitSt, err = getCommitStForDatasetName(ctx, ddb.db, cwb.String())
+	default:
 		panic("unrecognized commit spec CSType: " + cs.CSType)
 	}
 

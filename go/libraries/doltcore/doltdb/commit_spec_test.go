@@ -43,7 +43,7 @@ func TestNewCommitSpec(t *testing.T) {
 		expecteASpecStr string
 		expectErr       bool
 	}{
-		{"master", "refs/heads/master", "", false},
+		{"master", "master", "", false},
 		{"refs/heads/master", "refs/heads/master", "", false},
 		{"head", "head", "", false},
 		{"head", "head", "", false},
@@ -59,8 +59,8 @@ func TestNewCommitSpec(t *testing.T) {
 			if !test.expectErr {
 				t.Error(test.inputStr, "Error didn't match expected.  Errored: ", err != nil)
 			}
-		} else if cs.CommitStringer.String() != test.expectedRefStr {
-			t.Error(test.inputStr, "expected name:", test.expectedRefStr, "actual name:", cs.CommitStringer.String())
+		} else if cs.BaseRef != test.expectedRefStr {
+			t.Error(test.inputStr, "expected name:", test.expectedRefStr, "actual name:", cs.BaseRef)
 		} else if cs.ASpec.SpecStr != test.expecteASpecStr {
 			t.Error(test.inputStr, "expected ancestor spec:", test.expecteASpecStr, "actual ancestor spec:", cs.ASpec.SpecStr)
 		}

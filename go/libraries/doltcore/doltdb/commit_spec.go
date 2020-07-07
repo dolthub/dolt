@@ -15,18 +15,11 @@
 package doltdb
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 )
-
-type stringer string
-
-func (s stringer) String() string {
-	return string(s)
-}
 
 var hashRegex = regexp.MustCompile(`^[0-9a-v]{32}$`)
 
@@ -55,9 +48,9 @@ const (
 // An Ancestor spec can be appended to the end of any of these in order to reach commits that are in the ancestor tree
 // of the referenced commit.
 type CommitSpec struct {
-	CommitStringer fmt.Stringer
-	CSType         CommitSpecType
-	ASpec          *AncestorSpec
+	BaseRef string
+	CSType  CommitSpecType
+	ASpec   *AncestorSpec
 }
 
 // NewCommitSpec parses a string specifying a commit using dolt commit spec
@@ -94,22 +87,13 @@ func NewCommitSpec(cSpecStr string) (*CommitSpec, error) {
 	}
 
 	if strings.ToLower(name) == head {
-		return &CommitSpec{stringer(head), headCommitSpec, as}, nil
+		return &CommitSpec{head, headCommitSpec, as}, nil
 	}
-
 	if hashRegex.MatchString(name) {
-		return &CommitSpec{stringer(name), HashCommitSpec, as}, nil
-	} else if ref.IsRef(name) {
-		dref, err := ref.Parse(name)
-
-		if err != nil {
-			return nil, err
-		}
-
-		return &CommitSpec{dref, RefCommitSpec, as}, nil
-	} else if IsValidUserBranchName(name) {
-		return &CommitSpec{ref.NewBranchRef(name), RefCommitSpec, as}, nil
+		return &CommitSpec{name, HashCommitSpec, as}, nil
 	}
-
-	return nil, ErrInvalidBranchOrHash
+	if !ref.IsValidBranchName(name) {
+		return nil, ErrInvalidBranchOrHash
+	}
+	return &CommitSpec{name, RefCommitSpec, as}, nil
 }
