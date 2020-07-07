@@ -47,6 +47,7 @@ type CommitSpecType string
 const (
 	RefCommitSpec  CommitSpecType = "ref"
 	HashCommitSpec CommitSpecType = "hash"
+	headCommitSpec CommitSpecType = "head"
 )
 
 // CommitSpec handles three different types of string representations of commits.  Commits can either be represented
@@ -71,7 +72,7 @@ func NewCommitSpec(cSpecStr, cwb string) (*CommitSpec, error) {
 	}
 
 	if strings.ToLower(name) == head {
-		name = cwb
+		return &CommitSpec{stringer(head), headCommitSpec, as}, nil
 	}
 
 	if hashRegex.MatchString(name) {

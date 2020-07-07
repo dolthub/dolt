@@ -277,6 +277,10 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 		commitSt, err = getCommitStForHash(ctx, ddb.db, cs.CommitStringer.String())
 	} else if cs.CSType == RefCommitSpec {
 		commitSt, err = getCommitStForRef(ctx, ddb.db, cs.CommitStringer.(ref.DoltRef))
+	} else if cs.CSType == headCommitSpec {
+		commitSt, err = getCommitStForRef(ctx, ddb.db, cwb)
+	} else {
+		panic("unrecognized commit spec CSType: " + cs.CSType)
 	}
 
 	if err != nil {

@@ -46,11 +46,11 @@ func TestNewCommitSpec(t *testing.T) {
 	}{
 		{"master", "", "refs/heads/master", "", false},
 		{"refs/heads/master", "", "refs/heads/master", "", false},
-		{"head", "refs/heads/master", "refs/heads/master", "", false},
-		{"head", "refs/heads/master", "refs/heads/master", "", false},
-		{"head^~2", "master", "refs/heads/master", "^~2", false},
+		{"head", "refs/heads/master", "head", "", false},
+		{"head", "refs/heads/master", "head", "", false},
+		{"head^~2", "master", "head", "^~2", false},
 		{"00000000000000000000000000000000", "", "00000000000000000000000000000000", "", false},
-		{"head", "", "", "", true},
+		{"head", "", "head", "", true},
 	}
 
 	for _, test := range tests {
