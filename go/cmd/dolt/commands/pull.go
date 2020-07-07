@@ -125,5 +125,5 @@ func pullRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, r env.Remote, srcR
 		return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
 	}
 
-	return mergeBranch(ctx, dEnv, destRef)
+	return mergeCommitSpec(ctx, dEnv, destRef.String())
 }

@@ -781,7 +781,6 @@ setup_ref_test() {
 }
 
 @test "can use refs/remotes/origin/... as commit reference for merge" {
-    skip "this currently panics"
     setup_ref_test
     dolt merge refs/remotes/origin/master
 }
