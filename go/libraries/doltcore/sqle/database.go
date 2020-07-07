@@ -275,7 +275,7 @@ func (db Database) rootAsOf(ctx *sql.Context, asOf interface{}) (*doltdb.RootVal
 }
 
 func (db Database) getRootForTime(ctx *sql.Context, asOf time.Time) (*doltdb.RootValue, error) {
-	cs, err := doltdb.NewCommitSpec("HEAD", db.rsr.CWBHeadRef().String())
+	cs, err := doltdb.NewCommitSpec("HEAD")
 	if err != nil {
 		return nil, err
 	}
@@ -317,7 +317,7 @@ func (db Database) getRootForTime(ctx *sql.Context, asOf time.Time) (*doltdb.Roo
 }
 
 func (db Database) getRootForCommitRef(ctx *sql.Context, commitRef string) (*doltdb.RootValue, error) {
-	cs, err := doltdb.NewCommitSpec(commitRef, db.rsr.CWBHeadRef().String())
+	cs, err := doltdb.NewCommitSpec(commitRef)
 	if err != nil {
 		return nil, err
 	}

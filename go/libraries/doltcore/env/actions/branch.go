@@ -80,7 +80,7 @@ func CopyBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, oldBranch, newBranc
 		return doltdb.ErrInvBranchName
 	}
 
-	cs, _ := doltdb.NewCommitSpec(oldBranch, "")
+	cs, _ := doltdb.NewCommitSpec(oldBranch)
 	cm, err := ddb.Resolve(ctx, cs, nil)
 
 	if err != nil {
@@ -123,7 +123,7 @@ func DeleteBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltRef,
 	}
 
 	if !opts.Force && !opts.Remote {
-		ms, err := doltdb.NewCommitSpec("master", "")
+		ms, err := doltdb.NewCommitSpec("master")
 		if err != nil {
 			return err
 		}
@@ -133,7 +133,7 @@ func DeleteBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltRef,
 			return err
 		}
 
-		cs, err := doltdb.NewCommitSpec(dref.String(), "")
+		cs, err := doltdb.NewCommitSpec(dref.String())
 		if err != nil {
 			return err
 		}
@@ -172,7 +172,7 @@ func CreateBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startingPoi
 		return doltdb.ErrInvBranchName
 	}
 
-	cs, err := doltdb.NewCommitSpec(startingPoint, dEnv.RepoState.CWBHeadRef().String())
+	cs, err := doltdb.NewCommitSpec(startingPoint)
 
 	if err != nil {
 		return err
@@ -205,7 +205,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return err
 	}
 
-	cs, err := doltdb.NewCommitSpec(brName, "")
+	cs, err := doltdb.NewCommitSpec(brName)
 
 	if err != nil {
 		return RootValueUnreadable{HeadRoot, err}
@@ -398,7 +398,7 @@ func IsBranch(ctx context.Context, dEnv *env.DoltEnv, str string) (bool, error) 
 }
 
 func MaybeGetCommit(ctx context.Context, dEnv *env.DoltEnv, str string) (*doltdb.Commit, error) {
-	cs, err := doltdb.NewCommitSpec(str, dEnv.RepoState.CWBHeadRef().String())
+	cs, err := doltdb.NewCommitSpec(str)
 
 	if err == nil {
 		cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())

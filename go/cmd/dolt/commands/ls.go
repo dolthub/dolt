@@ -116,7 +116,7 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 }
 
 func getRootForCommitSpecStr(ctx context.Context, csStr string, dEnv *env.DoltEnv) (string, *doltdb.RootValue, errhand.VerboseError) {
-	cs, err := doltdb.NewCommitSpec(csStr, dEnv.RepoState.CWBHeadRef().String())
+	cs, err := doltdb.NewCommitSpec(csStr)
 
 	if err != nil {
 		bdr := errhand.BuildDError(`"%s" is not a validly formatted branch, or commit reference.`, csStr)

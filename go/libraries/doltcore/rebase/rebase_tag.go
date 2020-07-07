@@ -48,7 +48,7 @@ func NeedsUniqueTagMigration(ctx context.Context, ddb *doltdb.DoltDB) (bool, err
 	}
 
 	for _, b := range bb {
-		cs, err := doltdb.NewCommitSpec(b.String(), "")
+		cs, err := doltdb.NewCommitSpec(b.String())
 
 		if err != nil {
 			return false, err
@@ -108,7 +108,7 @@ func MigrateUniqueTags(ctx context.Context, dEnv *env.DoltEnv) error {
 	var headCommits []*doltdb.Commit
 	for _, dRef := range branches {
 
-		cs, err := doltdb.NewCommitSpec(dRef.String(), "")
+		cs, err := doltdb.NewCommitSpec(dRef.String())
 
 		if err != nil {
 			return err
@@ -220,7 +220,7 @@ func MigrateUniqueTags(ctx context.Context, dEnv *env.DoltEnv) error {
 
 // TagRebaseForRef rebases the provided DoltRef, swapping all tags in the TagMapping.
 func TagRebaseForRef(ctx context.Context, dRef ref.DoltRef, ddb *doltdb.DoltDB, tagMapping TagMapping) (*doltdb.Commit, error) {
-	cs, err := doltdb.NewCommitSpec(dRef.String(), "")
+	cs, err := doltdb.NewCommitSpec(dRef.String())
 
 	if err != nil {
 		return nil, err

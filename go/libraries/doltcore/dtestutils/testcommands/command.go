@@ -252,7 +252,7 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 }
 
 func resolveCommit(t *testing.T, cSpecStr string, dEnv *env.DoltEnv) *doltdb.Commit {
-	cs, err := doltdb.NewCommitSpec(cSpecStr, dEnv.RepoState.CWBHeadRef().String())
+	cs, err := doltdb.NewCommitSpec(cSpecStr)
 	require.NoError(t, err)
 	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs, dEnv.RepoState.CWBHeadRef())
 	require.NoError(t, err)

@@ -148,7 +148,7 @@ func (sess *DoltSession) GetParentCommit(ctx context.Context, dbName string) (*d
 	}
 
 	h := hash.Parse(valStr)
-	cs, err := doltdb.NewCommitSpec(valStr, "")
+	cs, err := doltdb.NewCommitSpec(valStr)
 
 	if err != nil {
 		return nil, hash.Hash{}, err
@@ -177,7 +177,7 @@ func (sess *DoltSession) Set(ctx context.Context, key string, typ sql.Type, valu
 			return doltdb.ErrInvalidHash
 		}
 
-		cs, err := doltdb.NewCommitSpec(valStr, "")
+		cs, err := doltdb.NewCommitSpec(valStr)
 
 		if err != nil {
 			return err

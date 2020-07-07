@@ -141,7 +141,7 @@ func parseCommitSpec(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (*doltdb
 	}
 
 	comSpecStr := apr.Arg(0)
-	cs, err := doltdb.NewCommitSpec(comSpecStr, dEnv.RepoState.CWBHeadRef().String())
+	cs, err := doltdb.NewCommitSpec(comSpecStr)
 
 	if err != nil {
 		return nil, fmt.Errorf("invalid commit %s\n", comSpecStr)

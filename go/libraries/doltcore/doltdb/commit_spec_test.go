@@ -39,22 +39,21 @@ func TestCommitRegex(t *testing.T) {
 func TestNewCommitSpec(t *testing.T) {
 	tests := []struct {
 		inputStr        string
-		cwbName         string
 		expectedRefStr  string
 		expecteASpecStr string
 		expectErr       bool
 	}{
-		{"master", "", "refs/heads/master", "", false},
-		{"refs/heads/master", "", "refs/heads/master", "", false},
-		{"head", "refs/heads/master", "head", "", false},
-		{"head", "refs/heads/master", "head", "", false},
-		{"head^~2", "master", "head", "^~2", false},
-		{"00000000000000000000000000000000", "", "00000000000000000000000000000000", "", false},
-		{"head", "", "head", "", true},
+		{"master", "refs/heads/master", "", false},
+		{"refs/heads/master", "refs/heads/master", "", false},
+		{"head", "head", "", false},
+		{"head", "head", "", false},
+		{"head^~2", "head", "^~2", false},
+		{"00000000000000000000000000000000", "00000000000000000000000000000000", "", false},
+		{"head", "head", "", true},
 	}
 
 	for _, test := range tests {
-		cs, err := NewCommitSpec(test.inputStr, test.cwbName)
+		cs, err := NewCommitSpec(test.inputStr)
 
 		if err != nil {
 			if !test.expectErr {

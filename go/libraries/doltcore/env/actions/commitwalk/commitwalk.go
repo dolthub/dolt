@@ -105,7 +105,7 @@ func (q *q) SetInvisible(ctx context.Context, id hash.Hash) error {
 }
 
 func (q *q) load(ctx context.Context, h hash.Hash) (*doltdb.Commit, error) {
-	cs, err := doltdb.NewCommitSpec(h.String(), "")
+	cs, err := doltdb.NewCommitSpec(h.String())
 	if err != nil {
 		return nil, err
 	}

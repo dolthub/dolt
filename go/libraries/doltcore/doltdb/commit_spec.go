@@ -60,13 +60,35 @@ type CommitSpec struct {
 	ASpec          *AncestorSpec
 }
 
-// NewCommitSpec takes a spec string and the current working branch.  The current working branch is only relevant when
-// using "head" to reference a commit, but if it is not needed it will be ignored.
-func NewCommitSpec(cSpecStr, cwb string) (*CommitSpec, error) {
+// NewCommitSpec parses a string specifying a commit using dolt commit spec
+// syntax and returns a |*CommitSpec|. A commit spec has a base commit and an
+// optional ancestor specification. The syntax admits three types of base
+// commit references:
+// * head -- the literal string HEAD specifies the HEAD reference of the
+// current working set.
+// * a commit hash, like 46m0aqr8c1vuv76ml33cdtr8722hsbhn -- a fully specified
+// commit hash.
+// * a ref -- referring to a branch reference in the current dolt database.
+// Examples include `master`, `heads/master`, `refs/heads/master`,
+// `origin/master`, `refs/remotes/origin/master`.
+//
+// A commit spec has an optional ancestor specification, which describes a
+// traversal of commit parents, starting at the base commit, in order to arrive
+// at the actually specified commit. See |AncestorSpec|. Examples of
+// |CommitSpec|s:
+// * HEAD
+// * master
+// * HEAD~
+// * remotes/origin/master~~
+// * refs/heads/my-feature-branch^2~
+//
+// Constructing a |CommitSpec| does not mean the sepcified branch or commit
+// exists. This carries a description of how to find the specified commit. See
+// |doltdb.Resolve| for resolving a |CommitSpec| to a |Commit|.
+func NewCommitSpec(cSpecStr string) (*CommitSpec, error) {
 	cSpecStrLwr := strings.TrimSpace(cSpecStr)
 
 	name, as, err := SplitAncestorSpec(cSpecStrLwr)
-
 	if err != nil {
 		return nil, err
 	}

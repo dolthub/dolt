@@ -98,7 +98,7 @@ func NewBranchItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB) (*BranchItr, error) {
 	branchNames := make([]string, len(branches))
 	commits := make([]*doltdb.Commit, len(branches))
 	for i, branch := range branches {
-		cs, err := doltdb.NewCommitSpec(branch.GetPath(), "")
+		cs, err := doltdb.NewCommitSpec(branch.GetPath())
 
 		if err != nil {
 			return nil, err
@@ -211,7 +211,7 @@ func (bWr branchWriter) Insert(ctx *sql.Context, r sql.Row) error {
 		return err
 	}
 
-	cs, err := doltdb.NewCommitSpec(commitHash, "")
+	cs, err := doltdb.NewCommitSpec(commitHash)
 
 	if err != nil {
 		return err

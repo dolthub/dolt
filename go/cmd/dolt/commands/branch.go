@@ -155,7 +155,7 @@ func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 			continue
 		}
 
-		cs, _ := doltdb.NewCommitSpec(branch.String(), "")
+		cs, _ := doltdb.NewCommitSpec(branch.String())
 
 		shouldPrint := false
 		switch branch.GetType() {

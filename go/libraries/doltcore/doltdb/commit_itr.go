@@ -53,7 +53,7 @@ func CommitItrForAllBranches(ctx context.Context, ddb *DoltDB) (CommitItr, error
 
 	rootCommits := make([]*Commit, 0, len(refs))
 	for _, ref := range refs {
-		cs, err := NewCommitSpec(ref.String(), "")
+		cs, err := NewCommitSpec(ref.String())
 
 		if err != nil {
 			return nil, err

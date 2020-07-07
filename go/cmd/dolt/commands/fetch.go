@@ -236,7 +236,7 @@ func fetchRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, s
 		}
 	}
 
-	cs, _ := doltdb.NewCommitSpec(srcRef.String(), "")
+	cs, _ := doltdb.NewCommitSpec(srcRef.String())
 	srcDBCommit, err := srcDB.Resolve(ctx, cs, nil)
 
 	if err != nil {

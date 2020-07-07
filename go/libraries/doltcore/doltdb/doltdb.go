@@ -367,7 +367,7 @@ func (ddb *DoltDB) FastForward(ctx context.Context, branch ref.DoltRef, commit *
 
 // CanFastForward returns whether the given branch can be fast-forwarded to the commit given.
 func (ddb *DoltDB) CanFastForward(ctx context.Context, branch ref.DoltRef, new *Commit) (bool, error) {
-	currentSpec, _ := NewCommitSpec(branch.String(), "")
+	currentSpec, _ := NewCommitSpec(branch.String())
 	current, err := ddb.Resolve(ctx, currentSpec, nil)
 
 	if err != nil {

@@ -277,7 +277,7 @@ func pushToRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, mode ref.RefUpda
 		}
 	}
 
-	cs, _ := doltdb.NewCommitSpec(srcRef.GetPath(), "")
+	cs, _ := doltdb.NewCommitSpec(srcRef.GetPath())
 	cm, err := localDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
 
 	if err != nil {

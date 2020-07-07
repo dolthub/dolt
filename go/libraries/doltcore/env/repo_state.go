@@ -140,8 +140,7 @@ func (rs *RepoState) CWBHeadRef() ref.DoltRef {
 }
 
 func (rs *RepoState) CWBHeadSpec() *doltdb.CommitSpec {
-	spec, _ := doltdb.NewCommitSpec("HEAD", rs.CWBHeadRef().String())
-
+	spec, _ := doltdb.NewCommitSpec("HEAD")
 	return spec
 }
 

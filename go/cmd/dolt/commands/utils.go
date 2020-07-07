@@ -93,7 +93,7 @@ func ValidateTablesWithVErr(tbls []string, roots ...*doltdb.RootValue) errhand.V
 }
 
 func ResolveCommitWithVErr(dEnv *env.DoltEnv, cSpecStr string) (*doltdb.Commit, errhand.VerboseError) {
-	cs, err := doltdb.NewCommitSpec(cSpecStr, dEnv.RepoState.CWBHeadRef().String())
+	cs, err := doltdb.NewCommitSpec(cSpecStr)
 
 	if err != nil {
 		return nil, errhand.BuildDError("'%s' is not a valid commit", cSpecStr).Build()

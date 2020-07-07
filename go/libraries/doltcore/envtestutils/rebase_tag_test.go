@@ -442,7 +442,7 @@ func testRebaseTag(t *testing.T, test RebaseTagTest) {
 		require.NoError(t, err)
 		require.NotNil(t, rebasedCommit)
 
-		mcs, _ := doltdb.NewCommitSpec("master", "")
+		mcs, _ := doltdb.NewCommitSpec("master")
 		masterCm, _ := dEnv.DoltDB.Resolve(context.Background(), mcs, nil)
 		rch, _ := rebasedCommit.HashOf()
 		mch, _ := masterCm.HashOf()
@@ -475,9 +475,9 @@ func testRebaseTagHistory(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	mcs, _ := doltdb.NewCommitSpec("master", "")
+	mcs, _ := doltdb.NewCommitSpec("master")
 	oldMasterCm, _ := dEnv.DoltDB.Resolve(context.Background(), mcs, nil)
-	ocs, _ := doltdb.NewCommitSpec("other", "")
+	ocs, _ := doltdb.NewCommitSpec("other")
 	otherCm, _ := dEnv.DoltDB.Resolve(context.Background(), ocs, nil)
 
 	bs, _ := dEnv.DoltDB.GetBranches(context.Background()) // master

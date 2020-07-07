@@ -326,7 +326,7 @@ func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string) (from, 
 
 // todo: distinguish between non-existent CommitSpec and other errors, don't assume non-existent
 func maybeResolve(ctx context.Context, dEnv *env.DoltEnv, spec string) (*doltdb.RootValue, bool) {
-	cs, err := doltdb.NewCommitSpec(spec, dEnv.RepoState.CWBHeadRef().String())
+	cs, err := doltdb.NewCommitSpec(spec)
 	if err != nil {
 		return nil, false
 	}

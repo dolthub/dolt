@@ -31,7 +31,7 @@ func TestLog(t *testing.T) {
 		t.Error("Failed to init repo")
 	}
 
-	cs, _ := doltdb.NewCommitSpec("master", "")
+	cs, _ := doltdb.NewCommitSpec("master")
 	commit, _ := dEnv.DoltDB.Resolve(context.Background(), cs, nil)
 
 	cli.Println(commit)

@@ -1571,7 +1571,7 @@ func testSelectDiffQuery(t *testing.T, test SelectTest) {
 		test.AdditionalSetup(t, dEnv)
 	}
 
-	cs, err := doltdb.NewCommitSpec("master", "")
+	cs, err := doltdb.NewCommitSpec("master")
 	require.NoError(t, err)
 
 	cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)

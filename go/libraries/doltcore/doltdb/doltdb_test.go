@@ -73,7 +73,7 @@ func TestEmptyInMemoryRepoCreation(t *testing.T) {
 		t.Fatal("Unexpected error creating empty repo", err)
 	}
 
-	cs, _ := NewCommitSpec("master", "")
+	cs, _ := NewCommitSpec("master")
 	commit, err := ddb.Resolve(context.Background(), cs, nil)
 
 	if err != nil {
@@ -82,7 +82,7 @@ func TestEmptyInMemoryRepoCreation(t *testing.T) {
 
 	h, err := commit.HashOf()
 	assert.NoError(t, err)
-	cs2, _ := NewCommitSpec(h.String(), "")
+	cs2, _ := NewCommitSpec(h.String())
 	_, err = ddb.Resolve(context.Background(), cs2, nil)
 
 	if err != nil {
@@ -148,7 +148,7 @@ func TestLDNoms(t *testing.T) {
 	var tbl *Table
 	{
 		ddb, _ := LoadDoltDB(context.Background(), types.Format_7_18, LocalDirDoltDB)
-		cs, _ := NewCommitSpec("master", "")
+		cs, _ := NewCommitSpec("master")
 		commit, err := ddb.Resolve(context.Background(), cs, nil)
 
 		if err != nil {
