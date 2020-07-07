@@ -130,7 +130,7 @@ func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	var oldTbl, newTbl string
 	if apr.NArg() == 3 {
 		var cm *doltdb.Commit
-		cm, verr = commands.ResolveCommitWithVErr(dEnv, apr.Arg(0), dEnv.RepoState.CWBHeadRef().String())
+		cm, verr = commands.ResolveCommitWithVErr(dEnv, apr.Arg(0))
 		if verr != nil {
 			return commands.HandleVErrAndExitCode(verr, usage)
 		}

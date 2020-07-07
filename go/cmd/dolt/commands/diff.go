@@ -331,7 +331,7 @@ func maybeResolve(ctx context.Context, dEnv *env.DoltEnv, spec string) (*doltdb.
 		return nil, false
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs)
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
 	if err != nil {
 		return nil, false
 	}

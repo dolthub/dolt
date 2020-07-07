@@ -265,7 +265,8 @@ func getAncestor(ctx context.Context, vrw types.ValueReadWriter, commitSt types.
 }
 
 // Resolve takes a CommitSpec and returns a Commit, or an error if the commit cannot be found.
-func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec) (*Commit, error) {
+// If the CommitSpec is a HEAD, Resolve also needs the DoltRef of the current working branch.
+func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef) (*Commit, error) {
 	if cs == nil {
 		panic("nil commit spec")
 	}
@@ -362,8 +363,8 @@ func (ddb *DoltDB) FastForward(ctx context.Context, branch ref.DoltRef, commit *
 
 // CanFastForward returns whether the given branch can be fast-forwarded to the commit given.
 func (ddb *DoltDB) CanFastForward(ctx context.Context, branch ref.DoltRef, new *Commit) (bool, error) {
-	currentSpec, _ := NewCommitSpec("HEAD", branch.String())
-	current, err := ddb.Resolve(ctx, currentSpec)
+	currentSpec, _ := NewCommitSpec(branch.String(), "")
+	current, err := ddb.Resolve(ctx, currentSpec, nil)
 
 	if err != nil {
 		if err == ErrBranchNotFound {
@@ -399,7 +400,7 @@ func (ddb *DoltDB) SetHead(ctx context.Context, ref ref.DoltRef, cm *Commit) err
 func (ddb *DoltDB) CommitWithParentSpecs(ctx context.Context, valHash hash.Hash, dref ref.DoltRef, parentCmSpecs []*CommitSpec, cm *CommitMeta) (*Commit, error) {
 	var parentCommits []*Commit
 	for _, parentCmSpec := range parentCmSpecs {
-		cm, err := ddb.Resolve(ctx, parentCmSpec)
+		cm, err := ddb.Resolve(ctx, parentCmSpec, nil)
 
 		if err != nil {
 			return nil, err

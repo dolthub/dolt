@@ -326,8 +326,8 @@ func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinForma
 
 // initializeRepoState writes a default repo state to disk, consisting of a master branch and current root hash value.
 func (dEnv *DoltEnv) initializeRepoState(ctx context.Context) error {
-	cs, _ := doltdb.NewCommitSpec("HEAD", doltdb.MasterBranch)
-	commit, _ := dEnv.DoltDB.Resolve(ctx, cs)
+	cs, _ := doltdb.NewCommitSpec(doltdb.MasterBranch, "")
+	commit, _ := dEnv.DoltDB.Resolve(ctx, cs, nil)
 
 	root, err := commit.GetRootValue()
 	if err != nil {
@@ -382,7 +382,7 @@ func (dEnv *DoltEnv) RepoStateWriter() RepoStateWriter {
 }
 
 func (dEnv *DoltEnv) HeadRoot(ctx context.Context) (*doltdb.RootValue, error) {
-	commit, err := dEnv.DoltDB.Resolve(ctx, dEnv.RepoState.CWBHeadSpec())
+	commit, err := dEnv.DoltDB.Resolve(ctx, dEnv.RepoState.CWBHeadSpec(), dEnv.RepoState.CWBHeadRef())
 
 	if err != nil {
 		return nil, err

@@ -50,9 +50,9 @@ func TestGetDotDotRevisions(t *testing.T) {
 	err := env.InitRepo(context.Background(), types.Format_LD_1, "Bill Billerson", "bill@billerson.com")
 	require.NoError(t, err)
 
-	cs, err := doltdb.NewCommitSpec("HEAD", "master")
+	cs, err := doltdb.NewCommitSpec("master", "")
 	require.NoError(t, err)
-	commit, err := env.DoltDB.Resolve(context.Background(), cs)
+	commit, err := env.DoltDB.Resolve(context.Background(), cs, nil)
 	require.NoError(t, err)
 
 	rv, err := commit.GetRootValue()

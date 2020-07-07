@@ -80,8 +80,8 @@ func CopyBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, oldBranch, newBranc
 		return doltdb.ErrInvBranchName
 	}
 
-	cs, _ := doltdb.NewCommitSpec("head", oldBranch)
-	cm, err := ddb.Resolve(ctx, cs)
+	cs, _ := doltdb.NewCommitSpec(oldBranch, "")
+	cm, err := ddb.Resolve(ctx, cs, nil)
 
 	if err != nil {
 		return err
@@ -123,22 +123,22 @@ func DeleteBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltRef,
 	}
 
 	if !opts.Force && !opts.Remote {
-		ms, err := doltdb.NewCommitSpec("head", "master")
+		ms, err := doltdb.NewCommitSpec("master", "")
 		if err != nil {
 			return err
 		}
 
-		master, err := ddb.Resolve(ctx, ms)
+		master, err := ddb.Resolve(ctx, ms, nil)
 		if err != nil {
 			return err
 		}
 
-		cs, err := doltdb.NewCommitSpec("head", dref.String())
+		cs, err := doltdb.NewCommitSpec(dref.String(), "")
 		if err != nil {
 			return err
 		}
 
-		cm, err := ddb.Resolve(ctx, cs)
+		cm, err := ddb.Resolve(ctx, cs, nil)
 		if err != nil {
 			return err
 		}
@@ -178,7 +178,7 @@ func CreateBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startingPoi
 		return err
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs)
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
 
 	if err != nil {
 		return err
@@ -205,13 +205,13 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return err
 	}
 
-	cs, err := doltdb.NewCommitSpec("head", brName)
+	cs, err := doltdb.NewCommitSpec(brName, "")
 
 	if err != nil {
 		return RootValueUnreadable{HeadRoot, err}
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs)
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
 
 	if err != nil {
 		return RootValueUnreadable{HeadRoot, err}
@@ -401,7 +401,7 @@ func MaybeGetCommit(ctx context.Context, dEnv *env.DoltEnv, str string) (*doltdb
 	cs, err := doltdb.NewCommitSpec(str, dEnv.RepoState.CWBHeadRef().String())
 
 	if err == nil {
-		cm, err := dEnv.DoltDB.Resolve(ctx, cs)
+		cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
 
 		switch err {
 		case nil:

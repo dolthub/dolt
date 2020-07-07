@@ -140,13 +140,13 @@ func getBranchCommit(ctx *sql.Context, ok bool, val interface{}, err error, ddb 
 		return nil, hash.Hash{}, err
 	}
 
-	cs, err := doltdb.NewCommitSpec("HEAD", name)
+	cs, err := doltdb.NewCommitSpec(name, "")
 
 	if err != nil {
 		return nil, hash.Hash{}, err
 	}
 
-	cm, err := ddb.Resolve(ctx, cs)
+	cm, err := ddb.Resolve(ctx, cs, nil)
 
 	if err != nil {
 		return nil, hash.Hash{}, err

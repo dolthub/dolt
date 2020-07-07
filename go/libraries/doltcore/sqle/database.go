@@ -280,7 +280,7 @@ func (db Database) getRootForTime(ctx *sql.Context, asOf time.Time) (*doltdb.Roo
 		return nil, err
 	}
 
-	cm, err := db.ddb.Resolve(ctx, cs)
+	cm, err := db.ddb.Resolve(ctx, cs, db.rsr.CWBHeadRef())
 	if err != nil {
 		return nil, err
 	}
@@ -322,7 +322,7 @@ func (db Database) getRootForCommitRef(ctx *sql.Context, commitRef string) (*dol
 		return nil, err
 	}
 
-	cm, err := db.ddb.Resolve(ctx, cs)
+	cm, err := db.ddb.Resolve(ctx, cs, db.rsr.CWBHeadRef())
 	if err != nil {
 		return nil, err
 	}

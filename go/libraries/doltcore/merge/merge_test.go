@@ -271,8 +271,8 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 		panic(err)
 	}
 
-	masterHeadSpec, _ := doltdb.NewCommitSpec("head", "master")
-	masterHead, err := ddb.Resolve(context.Background(), masterHeadSpec)
+	masterHeadSpec, _ := doltdb.NewCommitSpec("master", "")
+	masterHead, err := ddb.Resolve(context.Background(), masterHeadSpec, nil)
 
 	if err != nil {
 		panic(err)

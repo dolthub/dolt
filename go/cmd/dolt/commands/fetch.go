@@ -236,8 +236,8 @@ func fetchRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, s
 		}
 	}
 
-	cs, _ := doltdb.NewCommitSpec("HEAD", srcRef.String())
-	srcDBCommit, err := srcDB.Resolve(ctx, cs)
+	cs, _ := doltdb.NewCommitSpec(srcRef.String(), "")
+	srcDBCommit, err := srcDB.Resolve(ctx, cs, nil)
 
 	if err != nil {
 		return nil, errhand.BuildDError("error: unable to find '%s' on '%s'", srcRef.GetPath(), rem.Name).Build()

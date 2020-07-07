@@ -159,13 +159,13 @@ func abortMerge(ctx context.Context, doltEnv *env.DoltEnv) errhand.VerboseError 
 }
 
 func mergeBranch(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRef) errhand.VerboseError {
-	cm1, verr := ResolveCommitWithVErr(dEnv, "HEAD", dEnv.RepoState.CWBHeadRef().String())
+	cm1, verr := ResolveCommitWithVErr(dEnv, "HEAD")
 
 	if verr != nil {
 		return verr
 	}
 
-	cm2, verr := ResolveCommitWithVErr(dEnv, dref.String(), dEnv.RepoState.CWBHeadRef().String())
+	cm2, verr := ResolveCommitWithVErr(dEnv, dref.String())
 
 	if verr != nil {
 		return verr

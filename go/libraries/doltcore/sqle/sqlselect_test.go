@@ -1571,10 +1571,10 @@ func testSelectDiffQuery(t *testing.T, test SelectTest) {
 		test.AdditionalSetup(t, dEnv)
 	}
 
-	cs, err := doltdb.NewCommitSpec("HEAD", "master")
+	cs, err := doltdb.NewCommitSpec("master", "")
 	require.NoError(t, err)
 
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs)
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
 	require.NoError(t, err)
 
 	root, err := cm.GetRootValue()

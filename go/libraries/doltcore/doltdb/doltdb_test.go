@@ -73,8 +73,8 @@ func TestEmptyInMemoryRepoCreation(t *testing.T) {
 		t.Fatal("Unexpected error creating empty repo", err)
 	}
 
-	cs, _ := NewCommitSpec("HEAD", "master")
-	commit, err := ddb.Resolve(context.Background(), cs)
+	cs, _ := NewCommitSpec("master", "")
+	commit, err := ddb.Resolve(context.Background(), cs, nil)
 
 	if err != nil {
 		t.Fatal("Could not find commit")
@@ -83,7 +83,7 @@ func TestEmptyInMemoryRepoCreation(t *testing.T) {
 	h, err := commit.HashOf()
 	assert.NoError(t, err)
 	cs2, _ := NewCommitSpec(h.String(), "")
-	_, err = ddb.Resolve(context.Background(), cs2)
+	_, err = ddb.Resolve(context.Background(), cs2, nil)
 
 	if err != nil {
 		t.Fatal("Failed to get commit by hash")
@@ -149,7 +149,7 @@ func TestLDNoms(t *testing.T) {
 	{
 		ddb, _ := LoadDoltDB(context.Background(), types.Format_7_18, LocalDirDoltDB)
 		cs, _ := NewCommitSpec("master", "")
-		commit, err := ddb.Resolve(context.Background(), cs)
+		commit, err := ddb.Resolve(context.Background(), cs, nil)
 
 		if err != nil {
 			t.Fatal("Couldn't find commit")

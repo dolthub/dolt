@@ -109,7 +109,7 @@ func (q *q) load(ctx context.Context, h hash.Hash) (*doltdb.Commit, error) {
 	if err != nil {
 		return nil, err
 	}
-	c, err := q.ddb.Resolve(ctx, cs)
+	c, err := q.ddb.Resolve(ctx, cs, nil)
 	if err != nil {
 		return nil, err
 	}

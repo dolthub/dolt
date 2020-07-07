@@ -442,8 +442,8 @@ func testRebaseTag(t *testing.T, test RebaseTagTest) {
 		require.NoError(t, err)
 		require.NotNil(t, rebasedCommit)
 
-		mcs, _ := doltdb.NewCommitSpec("HEAD", "master")
-		masterCm, _ := dEnv.DoltDB.Resolve(context.Background(), mcs)
+		mcs, _ := doltdb.NewCommitSpec("master", "")
+		masterCm, _ := dEnv.DoltDB.Resolve(context.Background(), mcs, nil)
 		rch, _ := rebasedCommit.HashOf()
 		mch, _ := masterCm.HashOf()
 		require.Equal(t, rch, mch)
@@ -475,10 +475,10 @@ func testRebaseTagHistory(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	mcs, _ := doltdb.NewCommitSpec("HEAD", "master")
-	oldMasterCm, _ := dEnv.DoltDB.Resolve(context.Background(), mcs)
-	ocs, _ := doltdb.NewCommitSpec("HEAD", "other")
-	otherCm, _ := dEnv.DoltDB.Resolve(context.Background(), ocs)
+	mcs, _ := doltdb.NewCommitSpec("master", "")
+	oldMasterCm, _ := dEnv.DoltDB.Resolve(context.Background(), mcs, nil)
+	ocs, _ := doltdb.NewCommitSpec("other", "")
+	otherCm, _ := dEnv.DoltDB.Resolve(context.Background(), ocs, nil)
 
 	bs, _ := dEnv.DoltDB.GetBranches(context.Background()) // master
 	newMasterCm, err := rebase.TagRebaseForRef(context.Background(), bs[0], dEnv.DoltDB, rebase.TagMapping{"people": map[uint64]uint64{DripTag: DripTagRebased}})

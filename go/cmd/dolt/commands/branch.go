@@ -155,7 +155,7 @@ func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 			continue
 		}
 
-		cs, _ := doltdb.NewCommitSpec("HEAD", branch.String())
+		cs, _ := doltdb.NewCommitSpec(branch.String(), "")
 
 		shouldPrint := false
 		switch branch.GetType() {
@@ -180,7 +180,7 @@ func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		}
 
 		if verbose {
-			cm, err := dEnv.DoltDB.Resolve(ctx, cs)
+			cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
 
 			if err == nil {
 				h, err := cm.HashOf()
