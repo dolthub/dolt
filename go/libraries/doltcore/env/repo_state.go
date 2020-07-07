@@ -143,7 +143,7 @@ func (rs *RepoState) CWBHeadSpec() *doltdb.CommitSpec {
 	return spec
 }
 
-func (rs *RepoState) StartMerge(dref ref.DoltRef, commit string, fs filesys.Filesys) error {
+func (rs *RepoState) StartMerge(commit string, fs filesys.Filesys) error {
 	rs.Merge = &MergeState{commit, rs.Working}
 	return rs.Save(fs)
 }

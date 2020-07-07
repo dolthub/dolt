@@ -228,7 +228,7 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		h2, err := cm2.HashOf()
 		require.NoError(t, err)
 
-		err = dEnv.RepoState.StartMerge(dref, h2.String(), dEnv.FS)
+		err = dEnv.RepoState.StartMerge(h2.String(), dEnv.FS)
 		if err != nil {
 			return err
 		}

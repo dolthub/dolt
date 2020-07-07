@@ -211,7 +211,7 @@ func mergeBranch(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRef) errha
 		cli.Println("Already up to date.")
 		return nil
 	} else {
-		return executeMerge(ctx, dEnv, cm1, cm2, dref, workingDiffs)
+		return executeMerge(ctx, dEnv, cm1, cm2, workingDiffs)
 	}
 }
 
@@ -291,7 +291,7 @@ and take the hash for your current branch and use it for the value for "staged" 
 	return nil
 }
 
-func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, dref ref.DoltRef, workingDiffs map[string]hash.Hash) errhand.VerboseError {
+func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, workingDiffs map[string]hash.Hash) errhand.VerboseError {
 	mergedRoot, tblToStats, err := merge.MergeCommits(ctx, dEnv.DoltDB, cm1, cm2)
 
 	if err != nil {
@@ -320,7 +320,7 @@ func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commi
 		return errhand.BuildDError("error: failed to hash commit").AddCause(err).Build()
 	}
 
-	err = dEnv.RepoState.StartMerge(dref, h2.String(), dEnv.FS)
+	err = dEnv.RepoState.StartMerge(h2.String(), dEnv.FS)
 
 	if err != nil {
 		return errhand.BuildDError("Unable to update the repo state").AddCause(err).Build()
