@@ -288,7 +288,7 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 			"refs/remotes/" + cs.BaseRef,
 		}
 		if strings.HasPrefix(cs.BaseRef, "refs/") {
-			candidates = []string {
+			candidates = []string{
 				cs.BaseRef,
 				"refs/" + cs.BaseRef,
 				"refs/heads/" + cs.BaseRef,
