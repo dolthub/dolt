@@ -22,11 +22,11 @@ jobs:
         # Keep this in sync with //go/utils/prepr/prepr.sh.
         run: |
           GOFLAGS="-mod=readonly" go build ./...
-          ./utils/repofmt/check_fmt.sh
-          ./Godeps/verify.sh
-          ./utils/checkcommitters/check_pr.sh
           go vet -mod=readonly ./...
           go run -mod=readonly ./utils/copyrightshdrs/
+          ./utils/repofmt/check_fmt.sh
+          ./utils/checkcommitters/check_pr.sh
+          ./Godeps/verify.sh
         env:
           BRANCH_NAME: ${{ github.head_ref }}
           CHANGE_TARGET: ${{ github.base_ref }}
