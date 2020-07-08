@@ -250,7 +250,7 @@ func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts 
 }
 
 func (db *database) CommitDangling(ctx context.Context, v types.Value, opts CommitOptions) (types.Struct, error) {
-	if (opts.ParentsList == types.EmptyList || opts.ParentsList.Len() == 0) {
+	if opts.ParentsList == types.EmptyList || opts.ParentsList.Len() == 0 {
 		return types.Struct{}, errors.New("cannot create commit without parents")
 	}
 
@@ -530,7 +530,7 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types
 
 func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (types.Struct, error) {
 	parents := opts.ParentsList
-	if (parents == types.EmptyList || parents.Len() == 0) {
+	if parents == types.EmptyList || parents.Len() == 0 {
 		var err error
 		parents, err = types.NewList(ctx, ds.Database())
 		if err != nil {
