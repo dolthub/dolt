@@ -74,6 +74,23 @@ func NewList(ctx context.Context, vrw ValueReadWriter, values ...Value) (List, e
 	return newList(seq), nil
 }
 
+func (l List) ToSet(ctx context.Context) (Set, error) {
+	s, err := NewSet(ctx, l.valueReadWriter())
+	if err != nil {
+		return Set{}, err
+	}
+	e := s.Edit()
+	err = l.IterAll(ctx, func(v Value, idx uint64) error {
+		se, err := e.Insert(v)
+		e = se
+		return err
+	})
+	if err != nil {
+		return Set{}, err
+	}
+	return e.Set(ctx)
+}
+
 // NewStreamingList creates a new List, populated with values, chunking if and when needed. As
 // chunks are created, they're written to vrw -- including the root chunk of the list. Once the
 // caller has closed values, the caller can read the completed List from the returned channel.

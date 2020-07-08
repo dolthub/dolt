@@ -59,7 +59,7 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 	//        \ds2
 	ds2, err := store.GetDataset(context.Background(), id2)
 	assert.NoError(err)
-	ds2, err = store.Commit(context.Background(), ds2, mustHeadValue(ds1), CommitOptions{Parents: mustSet(types.NewSet(context.Background(), store, mustHeadRef(ds1)))})
+	ds2, err = store.Commit(context.Background(), ds2, mustHeadValue(ds1), CommitOptions{ParentsList: mustList(types.NewList(context.Background(), store, mustHeadRef(ds1)))})
 	assert.NoError(err)
 	assert.True(mustGetValue(mustHead(ds2).MaybeGet(ValueField)).Equals(a))
 
@@ -78,14 +78,14 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 
 	// ds1: |a|    <- |b| <--|d|
 	//        \ds2 <- |c| <--/
-	mergeParents, err := types.NewSet(context.Background(), store, mustRef(types.NewRef(mustHead(ds1), types.Format_7_18)), mustRef(types.NewRef(mustHead(ds2), types.Format_7_18)))
+	mergeParents, err := types.NewList(context.Background(), store, mustRef(types.NewRef(mustHead(ds1), types.Format_7_18)), mustRef(types.NewRef(mustHead(ds2), types.Format_7_18)))
 	assert.NoError(err)
 	d := types.String("d")
-	ds2, err = store.Commit(context.Background(), ds2, d, CommitOptions{Parents: mergeParents})
+	ds2, err = store.Commit(context.Background(), ds2, d, CommitOptions{ParentsList: mergeParents})
 	assert.NoError(err)
 	assert.True(mustGetValue(mustHead(ds2).MaybeGet(ValueField)).Equals(d))
 
-	ds1, err = store.Commit(context.Background(), ds1, d, CommitOptions{Parents: mergeParents})
+	ds1, err = store.Commit(context.Background(), ds1, d, CommitOptions{ParentsList: mergeParents})
 	assert.NoError(err)
 	assert.True(mustGetValue(mustHead(ds1).MaybeGet(ValueField)).Equals(d))
 }

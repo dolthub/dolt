@@ -337,10 +337,10 @@ func assertMapOfStringToRefOfCommit(ctx context.Context, proposed, datasets type
 }
 
 func newOpts(vrw types.ValueReadWriter, parents ...types.Value) CommitOptions {
-	pSet, err := types.NewSet(context.Background(), vrw, parents...)
+	pList, err := types.NewList(context.Background(), vrw, parents...)
 	d.PanicIfError(err)
 
-	return CommitOptions{Parents: pSet}
+	return CommitOptions{ParentsList: pList}
 }
 
 func (suite *DatabaseSuite) TestDatabaseDuplicateCommit() {
@@ -405,9 +405,9 @@ func (suite *DatabaseSuite) TestDatabaseCommitMerge() {
 }
 
 func newOptsWithMerge(vrw types.ValueReadWriter, policy merge.ResolveFunc, parents ...types.Value) CommitOptions {
-	pset, err := types.NewSet(context.Background(), vrw, parents...)
+	plist, err := types.NewList(context.Background(), vrw, parents...)
 	d.PanicIfError(err)
-	return CommitOptions{Parents: pset, Policy: merge.NewThreeWay(policy)}
+	return CommitOptions{ParentsList: plist, Policy: merge.NewThreeWay(policy)}
 }
 
 func (suite *DatabaseSuite) TestDatabaseDelete() {

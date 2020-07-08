@@ -32,17 +32,19 @@ import (
 )
 
 const (
-	ParentsField = "parents"
-	ValueField   = "value"
-	MetaField    = "meta"
-	commitName   = "Commit"
+	ParentsField     = "parents"
+	ParentsListField = "parentsList"
+	ValueField       = "value"
+	MetaField        = "meta"
+	commitName       = "Commit"
 )
 
-var commitTemplate = types.MakeStructTemplate(commitName, []string{MetaField, ParentsField, ValueField})
+var commitTemplate = types.MakeStructTemplate(commitName, []string{MetaField, ParentsField, ParentsListField, ValueField})
 
 var valueCommitType = nomdl.MustParseType(`Struct Commit {
         meta: Struct {},
         parents: Set<Ref<Cycle<Commit>>>,
+        parentsList?: List<Ref<Cycle<Commit>>>,
         value: Value,
 }`)
 
@@ -54,12 +56,13 @@ var valueCommitType = nomdl.MustParseType(`Struct Commit {
 // struct Commit {
 //   meta: M,
 //   parents: Set<Ref<Cycle<Commit>>>,
+//   parentsList: List<Ref<Cycle<Commit>>>,
 //   value: T,
 // }
 // ```
 // where M is a struct type and T is any type.
-func NewCommit(value types.Value, parents types.Set, meta types.Struct) (types.Struct, error) {
-	return commitTemplate.NewStruct(meta.Format(), []types.Value{meta, parents, value})
+func NewCommit(value types.Value, parents types.Set, parentsList types.List, meta types.Struct) (types.Struct, error) {
+	return commitTemplate.NewStruct(meta.Format(), []types.Value{meta, parents, parentsList, value})
 }
 
 // FindCommonAncestor returns the most recent common ancestor of c1 and c2, if
@@ -159,7 +162,7 @@ func findCommonRef(a, b types.RefSlice) (types.Ref, bool) {
 	return types.Ref{}, false
 }
 
-func makeCommitStructType(metaType, parentsType, valueType *types.Type) (*types.Type, error) {
+func makeCommitStructType(metaType, parentsType, parentsListType, valueType *types.Type) (*types.Type, error) {
 	return types.MakeStructType("Commit",
 		types.StructField{
 			Name: MetaField,
@@ -168,6 +171,10 @@ func makeCommitStructType(metaType, parentsType, valueType *types.Type) (*types.
 		types.StructField{
 			Name: ParentsField,
 			Type: parentsType,
+		},
+		types.StructField{
+			Name: ParentsListField,
+			Type: parentsListType,
 		},
 		types.StructField{
 			Name: ValueField,

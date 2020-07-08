@@ -240,7 +240,8 @@ func TestPuller(t *testing.T) {
 	rootMap, err := types.NewMap(ctx, db)
 	require.NoError(t, err)
 
-	parent := types.EmptySet
+	parent, err := types.NewList(ctx, db)
+	require.NoError(t, err)
 	states := map[string]types.Ref{}
 	for _, delta := range deltas {
 		for tbl, sets := range delta.sets {
@@ -260,7 +261,7 @@ func TestPuller(t *testing.T) {
 		rootMap, err = me.Map(ctx)
 		require.NoError(t, err)
 
-		commitOpts := CommitOptions{Parents: parent}
+		commitOpts := CommitOptions{ParentsList: parent}
 		ds, err = db.Commit(ctx, ds, rootMap, commitOpts)
 		require.NoError(t, err)
 
@@ -268,7 +269,7 @@ func TestPuller(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, ok)
 
-		parent, err = types.NewSet(ctx, db, r)
+		parent, err = types.NewList(ctx, db, r)
 		require.NoError(t, err)
 
 		states[delta.name] = r
@@ -285,7 +286,7 @@ func TestPuller(t *testing.T) {
 	rootMap, err = me.Map(ctx)
 	require.NoError(t, err)
 
-	commitOpts := CommitOptions{Parents: parent}
+	commitOpts := CommitOptions{ParentsList: parent}
 	ds, err = db.Commit(ctx, ds, rootMap, commitOpts)
 	require.NoError(t, err)
 
@@ -465,28 +466,28 @@ func errIfNotEqual(ctx context.Context, ex, act types.Map) error {
 	return nil
 }
 
-func parentsAndTables(cm types.Struct) (types.Set, types.Map, error) {
-	ps, ok, err := cm.MaybeGet("parents")
+func parentsAndTables(cm types.Struct) (types.List, types.Map, error) {
+	ps, ok, err := cm.MaybeGet("parentsList")
 
 	if err != nil {
-		return types.EmptySet, types.EmptyMap, err
+		return types.EmptyList, types.EmptyMap, err
 	}
 
 	if !ok {
-		return types.EmptySet, types.EmptyMap, err
+		return types.EmptyList, types.EmptyMap, err
 	}
 
 	tbls, ok, err := cm.MaybeGet("value")
 
 	if err != nil {
-		return types.EmptySet, types.EmptyMap, err
+		return types.EmptyList, types.EmptyMap, err
 	}
 
 	if !ok {
-		return types.EmptySet, types.EmptyMap, err
+		return types.EmptyList, types.EmptyMap, err
 	}
 
-	return ps.(types.Set), tbls.(types.Map), nil
+	return ps.(types.List), tbls.(types.Map), nil
 }
 
 func writeValAndGetRef(ctx context.Context, vrw types.ValueReadWriter, val types.Value) (types.Ref, error) {

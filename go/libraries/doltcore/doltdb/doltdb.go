@@ -138,8 +138,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTime(ctx context.Context, name, email
 
 	cm, _ := NewCommitMetaWithUserTS(name, email, "Initialize data repository", t)
 
-	parentSet, err := types.NewSet(ctx, ddb.db)
-
+	parents, err := types.NewList(ctx, ddb.db)
 	if err != nil {
 		return err
 	}
@@ -150,7 +149,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTime(ctx context.Context, name, email
 		return err
 	}
 
-	commitOpts := datas.CommitOptions{Parents: parentSet, Meta: meta, Policy: nil}
+	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: meta, Policy: nil}
 
 	dref := ref.NewInternalRef(creationBranch)
 	ds, err = ddb.db.GetDataset(ctx, dref.String())
@@ -421,13 +420,13 @@ func (ddb *DoltDB) WriteDanglingCommit(ctx context.Context, valHash hash.Hash, p
 		return nil, errors.New("can't commit a value that is not a valid root value")
 	}
 
-	s, err := types.NewSet(ctx, ddb.db)
+	l, err := types.NewList(ctx, ddb.db)
 
 	if err != nil {
 		return nil, err
 	}
 
-	parentEditor := s.Edit()
+	parentEditor := l.Edit()
 
 	for _, cm := range parentCommits {
 		rf, err := types.NewRef(cm.commitSt, ddb.db.Format())
@@ -436,15 +435,10 @@ func (ddb *DoltDB) WriteDanglingCommit(ctx context.Context, valHash hash.Hash, p
 			return nil, err
 		}
 
-		_, err = parentEditor.Insert(rf)
-
-		if err != nil {
-			return nil, err
-		}
+		parentEditor = parentEditor.Append(rf)
 	}
 
-	parents, err := parentEditor.Set(ctx)
-
+	parents, err := parentEditor.List(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -455,7 +449,7 @@ func (ddb *DoltDB) WriteDanglingCommit(ctx context.Context, valHash hash.Hash, p
 		return nil, err
 	}
 
-	commitOpts := datas.CommitOptions{Parents: parents, Meta: st, Policy: nil}
+	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: st, Policy: nil}
 	commitSt, err = ddb.db.CommitDangling(ctx, val, commitOpts)
 
 	if err != nil {
@@ -483,13 +477,13 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 		return nil, err
 	}
 
-	s, err := types.NewSet(ctx, ddb.db)
+	l, err := types.NewList(ctx, ddb.db)
 
 	if err != nil {
 		return nil, err
 	}
 
-	parentEditor := s.Edit()
+	parentEditor := l.Edit()
 
 	headRef, hasHead, err := ds.MaybeHeadRef()
 
@@ -498,11 +492,7 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 	}
 
 	if hasHead {
-		_, err := parentEditor.Insert(headRef)
-
-		if err != nil {
-			return nil, err
-		}
+		parentEditor = parentEditor.Append(headRef)
 	}
 
 	for _, cm := range parentCommits {
@@ -512,14 +502,10 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 			return nil, err
 		}
 
-		_, err = parentEditor.Insert(rf)
-
-		if err != nil {
-			return nil, err
-		}
+		parentEditor = parentEditor.Append(rf)
 	}
 
-	parents, err := parentEditor.Set(ctx)
+	parents, err := parentEditor.List(ctx)
 
 	if err != nil {
 		return nil, err
@@ -531,7 +517,7 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 		return nil, err
 	}
 
-	commitOpts := datas.CommitOptions{Parents: parents, Meta: st, Policy: nil}
+	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: st, Policy: nil}
 	ds, err = ddb.db.GetDataset(ctx, dref.String())
 
 	if err != nil {
@@ -568,13 +554,13 @@ func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash 
 			return errors.New("can't commit a value that is not a valid root value")
 		}
 
-		s, err := types.NewSet(ctx, ddb.db)
+		l, err := types.NewList(ctx, ddb.db)
 
 		if err != nil {
 			return err
 		}
 
-		parentEditor := s.Edit()
+		parentEditor := l.Edit()
 
 		for _, cm := range parentCommits {
 			rf, err := types.NewRef(cm.commitSt, ddb.db.Format())
@@ -583,15 +569,11 @@ func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash 
 				return err
 			}
 
-			_, err = parentEditor.Insert(rf)
-
-			if err != nil {
-				return err
-			}
+			parentEditor = parentEditor.Append(rf)
 		}
 
 		// even orphans have parents
-		parents, err := parentEditor.Set(ctx)
+		parents, err := parentEditor.List(ctx)
 
 		if err != nil {
 			return err
@@ -603,7 +585,7 @@ func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash 
 			return err
 		}
 
-		commitOpts := datas.CommitOptions{Parents: parents, Meta: st, Policy: nil}
+		commitOpts := datas.CommitOptions{ParentsList: parents, Meta: st, Policy: nil}
 
 		commitSt, err = ddb.db.CommitDangling(ctx, val, commitOpts)
 
@@ -655,14 +637,12 @@ func writeValAndGetRef(ctx context.Context, vrw types.ValueReadWriter, val types
 // underlying storage cannot be accessed.
 func (ddb *DoltDB) ResolveParent(ctx context.Context, commit *Commit, parentIdx int) (*Commit, error) {
 	var parentCommitSt types.Struct
-	parentSet, err := commit.getParents()
-
+	parents, err := commit.getParents()
 	if err != nil {
 		return nil, err
 	}
 
-	itr, err := parentSet.IteratorAt(ctx, uint64(parentIdx))
-
+	itr, err := parents.IteratorAt(ctx, uint64(parentIdx))
 	if err != nil {
 		return nil, err
 	}
@@ -686,20 +666,18 @@ func (ddb *DoltDB) ResolveParent(ctx context.Context, commit *Commit, parentIdx 
 
 func (ddb *DoltDB) ResolveAllParents(ctx context.Context, commit *Commit) ([]*Commit, error) {
 	var parentCommitSt types.Struct
-	parentSet, err := commit.getParents()
-
+	parents, err := commit.getParents()
 	if err != nil {
 		return nil, err
 	}
 
-	itr, err := parentSet.IteratorAt(ctx, 0)
-
+	itr, err := parents.IteratorAt(ctx, 0)
 	if err != nil {
 		return nil, err
 	}
 
 	var allParents []*Commit
-	for i := 0; i < int(parentSet.Len()); i++ {
+	for i := 0; i < int(parents.Len()); i++ {
 		parentCommRef, err := itr.Next(ctx)
 		if err != nil {
 			return nil, err

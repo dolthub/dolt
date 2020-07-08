@@ -152,6 +152,11 @@ func mustSet(s types.Set, err error) types.Set {
 	return s
 }
 
+func mustList(l types.List, err error) types.List {
+	d.PanicIfError(err)
+	return l
+}
+
 func validate(ctx context.Context, nbf *types.NomsBinFormat, r types.Value) bool {
 	rootType := mustType(types.MakeMapType(types.PrimitiveTypeMap[types.StringKind], mustType(types.MakeRefType(types.PrimitiveTypeMap[types.ValueKind]))))
 	if isSub, err := types.IsValueSubtypeOf(nbf, r, rootType); err != nil {
