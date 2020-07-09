@@ -109,7 +109,10 @@ func (fkc *ForeignKeyCollection) AddKey(key *ForeignKey) error {
 		for i := 2; fkc.Contains(key.Name); i++ {
 			key.Name = fmt.Sprintf("fk_%s_%s_%d", key.TableName, key.ReferencedTableName, i)
 		}
-	} else if fkc.Contains(key.Name) {
+	}
+
+	_, ok := fkc.GetByNameCaseInsensitive(key.Name)
+	if ok {
 		return fmt.Errorf("a foreign key with the name `%s` already exists", key.Name)
 	}
 
@@ -141,7 +144,7 @@ func (fkc *ForeignKeyCollection) AllKeys() []*ForeignKey {
 
 // Contains returns whether the given foreign key name already exists for this collection.
 func (fkc *ForeignKeyCollection) Contains(foreignKeyName string) bool {
-	_, ok := fkc.foreignKeys[foreignKeyName]
+	_, ok := fkc.GetByNameCaseInsensitive(foreignKeyName)
 	return ok
 }
 
@@ -150,6 +153,7 @@ func (fkc *ForeignKeyCollection) Count() int {
 	return len(fkc.foreignKeys)
 }
 
+// GetByNameCaseInsensitive returns a ForeignKey with a matching case-insensitive name, and whether a match exists.
 func (fkc *ForeignKeyCollection) GetByNameCaseInsensitive(foreignKeyName string) (match *ForeignKey, ok bool) {
 	for name, fk := range fkc.foreignKeys {
 		if strings.ToLower(name) == strings.ToLower(foreignKeyName) {
