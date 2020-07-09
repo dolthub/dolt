@@ -267,3 +267,29 @@ func FilterColCollection(cc *ColCollection, cb func(col Column) (bool, error)) (
 	}
 	return NewColCollection(filtered...)
 }
+
+func ColCollUnion(colColls ...*ColCollection) (*ColCollection, error) {
+	var allCols []Column
+	// TODO: error on tag collision
+	for _, sch := range colColls {
+		err := sch.Iter(func(tag uint64, col Column) (stop bool, err error) {
+			allCols = append(allCols, col)
+			return false, nil
+		})
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return NewColCollection(allCols...)
+}
+
+// ColCollectionSetDifference returns the set difference leftCC - rightCC.
+func ColCollectionSetDifference(leftCC, rightCC *ColCollection) (d *ColCollection) {
+	d, _ = FilterColCollection(leftCC, func(col Column) (b bool, err error) {
+		_, ok := rightCC.GetByTag(col.Tag)
+		return !ok, nil
+	})
+	return d
+}

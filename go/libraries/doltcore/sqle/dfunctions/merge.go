@@ -78,7 +78,7 @@ func (cf *MergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, err
 	}
 
-	mergeRoot, _, err := merge.MergeCommits(ctx, ddb, parent, cm)
+	mergeRoot, _, err := merge.MergeCommits(ctx, parent, cm)
 	if err == merge.ErrFastForward {
 		return cmh.String(), nil
 	}

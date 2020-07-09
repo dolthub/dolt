@@ -39,16 +39,16 @@ type IndexCollection interface {
 	Equals(other IndexCollection) bool
 	// Get returns the index with the given name, or nil if it does not exist.
 	Get(indexName string) Index
-	// HasIndexOnColumns returns whether the collection contains an index that has this exact collection and ordering of columns.
+	GetByNameCaseInsensitive(indexName string) (Index, bool)
+	// GetIndexByTags returns whether the collection contains an index that has this exact collection and ordering of columns.
 	// Any hidden indexes are ignored.
-	HasIndexOnColumns(cols ...string) bool
-	// HasIndexOnTags returns whether the collection contains an index that has this exact collection and ordering of columns.
-	// Any hidden indexes are ignored.
-	HasIndexOnTags(tags ...uint64) bool
+	GetIndexByTags(tags ...uint64) (Index, bool)
 	// IndexesWithColumn returns all indexes that index the given column.
 	IndexesWithColumn(columnName string) []Index
 	// IndexesWithTag returns all indexes that index the given tag.
 	IndexesWithTag(tag uint64) []Index
+	// Iter
+	Iter(cb func(index Index) (stop bool, err error)) error
 	// Merge adds the given index if it does not already exist. Indexed columns are referenced by column name,
 	// rather than by tag number, which allows an index from a different table to be added as long as they have matching
 	// column names. If an index with the same name or column structure already exists, or the index contains different
@@ -135,7 +135,7 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 		return nil, fmt.Errorf("tags %v do not exist on this table", tags)
 	}
 	if !props.IsHidden {
-		if ixc.HasIndexOnTags(tags...) {
+		if ixc.hasIndexOnTags(tags...) {
 			return nil, fmt.Errorf("cannot create a duplicate index on this table")
 		}
 	}
@@ -200,7 +200,16 @@ func (ixc *indexCollectionImpl) Get(indexName string) Index {
 	return nil
 }
 
-func (ixc *indexCollectionImpl) HasIndexOnColumns(cols ...string) bool {
+func (ixc *indexCollectionImpl) GetByNameCaseInsensitive(indexName string) (Index, bool) {
+	for name, ix := range ixc.indexes {
+		if strings.ToLower(name) == strings.ToLower(indexName) {
+			return ix, true
+		}
+	}
+	return nil, false
+}
+
+func (ixc *indexCollectionImpl) hasIndexOnColumns(cols ...string) bool {
 	tags := make([]uint64, len(cols))
 	for i, col := range cols {
 		col, ok := ixc.colColl.NameToCol[col]
@@ -209,15 +218,20 @@ func (ixc *indexCollectionImpl) HasIndexOnColumns(cols ...string) bool {
 		}
 		tags[i] = col.Tag
 	}
-	return ixc.HasIndexOnTags(tags...)
+	return ixc.hasIndexOnTags(tags...)
 }
 
-func (ixc *indexCollectionImpl) HasIndexOnTags(tags ...uint64) bool {
+func (ixc *indexCollectionImpl) GetIndexByTags(tags ...uint64) (Index, bool) {
 	idx := ixc.containsColumnTagCollection(tags...)
 	if idx == nil || idx.isHidden {
-		return false
+		return nil, false
 	}
-	return true
+	return idx, true
+}
+
+func (ixc *indexCollectionImpl) hasIndexOnTags(tags ...uint64) bool {
+	_, ok := ixc.GetIndexByTags(tags...)
+	return ok
 }
 
 func (ixc *indexCollectionImpl) IndexesWithColumn(columnName string) []Index {
@@ -235,6 +249,19 @@ func (ixc *indexCollectionImpl) IndexesWithTag(tag uint64) []Index {
 		indexes[i] = idx
 	}
 	return indexes
+}
+
+func (ixc *indexCollectionImpl) Iter(cb func(index Index) (stop bool, err error)) error {
+	for _, ind := range ixc.indexes {
+		stop, err := cb(ind)
+		if err != nil {
+			return err
+		}
+		if stop {
+			break
+		}
+	}
+	return nil
 }
 
 func (ixc *indexCollectionImpl) Merge(includeHidden bool, indexes ...Index) {

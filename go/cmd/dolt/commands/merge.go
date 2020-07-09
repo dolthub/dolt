@@ -285,7 +285,7 @@ and take the hash for your current branch and use it for the value for "staged" 
 }
 
 func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, workingDiffs map[string]hash.Hash) errhand.VerboseError {
-	mergedRoot, tblToStats, err := merge.MergeCommits(ctx, dEnv.DoltDB, cm1, cm2)
+	mergedRoot, tblToStats, err := merge.MergeCommits(ctx, cm1, cm2)
 
 	if err != nil {
 		switch err {

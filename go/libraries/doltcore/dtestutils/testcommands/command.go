@@ -219,7 +219,7 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		assert.NoError(t, err)
 
 	} else {
-		mergedRoot, tblToStats, err := merge.MergeCommits(context.Background(), dEnv.DoltDB, cm1, cm2)
+		mergedRoot, tblToStats, err := merge.MergeCommits(context.Background(), cm1, cm2)
 		require.NoError(t, err)
 		for _, stats := range tblToStats {
 			require.True(t, stats.Conflicts == 0)

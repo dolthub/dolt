@@ -65,8 +65,8 @@ func TestIndexCollectionAddIndex(t *testing.T) {
 	for _, testIndex := range testIndexes {
 		t.Run(testIndex.Name(), func(t *testing.T) {
 			assert.False(t, indexColl.Contains(testIndex.Name()))
-			assert.False(t, indexColl.HasIndexOnColumns(testIndex.ColumnNames()...))
-			assert.False(t, indexColl.HasIndexOnTags(testIndex.IndexedColumnTags()...))
+			assert.False(t, indexColl.hasIndexOnColumns(testIndex.ColumnNames()...))
+			assert.False(t, indexColl.hasIndexOnTags(testIndex.IndexedColumnTags()...))
 			assert.Nil(t, indexColl.Get(testIndex.Name()))
 
 			indexColl.AddIndex(testIndex)
@@ -79,8 +79,8 @@ func TestIndexCollectionAddIndex(t *testing.T) {
 				assert.Equal(t, []Index{testIndex}, indexColl.IndexesWithColumn(col))
 			}
 			assert.True(t, indexColl.Contains(testIndex.Name()))
-			assert.True(t, indexColl.HasIndexOnColumns(testIndex.ColumnNames()...))
-			assert.True(t, indexColl.HasIndexOnTags(testIndex.IndexedColumnTags()...))
+			assert.True(t, indexColl.hasIndexOnColumns(testIndex.ColumnNames()...))
+			assert.True(t, indexColl.hasIndexOnTags(testIndex.IndexedColumnTags()...))
 		})
 		indexColl.clear(t)
 	}
@@ -107,8 +107,8 @@ func TestIndexCollectionAddIndex(t *testing.T) {
 			}
 			assert.True(t, indexColl.Contains(newIndex.Name()))
 			assert.False(t, indexColl.Contains(testIndex.Name()))
-			assert.True(t, indexColl.HasIndexOnColumns(newIndex.ColumnNames()...))
-			assert.True(t, indexColl.HasIndexOnTags(newIndex.IndexedColumnTags()...))
+			assert.True(t, indexColl.hasIndexOnColumns(newIndex.ColumnNames()...))
+			assert.True(t, indexColl.hasIndexOnTags(newIndex.IndexedColumnTags()...))
 		}
 	})
 
@@ -194,8 +194,8 @@ func TestIndexCollectionAddIndexByColNames(t *testing.T) {
 	for _, testIndex := range testIndexes {
 		t.Run(testIndex.index.Name(), func(t *testing.T) {
 			assert.False(t, indexColl.Contains(testIndex.index.Name()))
-			assert.False(t, indexColl.HasIndexOnColumns(testIndex.index.ColumnNames()...))
-			assert.False(t, indexColl.HasIndexOnTags(testIndex.index.IndexedColumnTags()...))
+			assert.False(t, indexColl.hasIndexOnColumns(testIndex.index.ColumnNames()...))
+			assert.False(t, indexColl.hasIndexOnTags(testIndex.index.IndexedColumnTags()...))
 			assert.Nil(t, indexColl.Get(testIndex.index.Name()))
 
 			resIndex, err := indexColl.AddIndexByColNames(testIndex.index.Name(), testIndex.cols, IndexProperties{IsUnique: testIndex.index.IsUnique(), IsHidden: false, Comment: testIndex.index.Comment()})
@@ -210,8 +210,8 @@ func TestIndexCollectionAddIndexByColNames(t *testing.T) {
 				assert.Equal(t, []Index{resIndex}, indexColl.IndexesWithColumn(col))
 			}
 			assert.True(t, indexColl.Contains(resIndex.Name()))
-			assert.True(t, indexColl.HasIndexOnColumns(resIndex.ColumnNames()...))
-			assert.True(t, indexColl.HasIndexOnTags(resIndex.IndexedColumnTags()...))
+			assert.True(t, indexColl.hasIndexOnColumns(resIndex.ColumnNames()...))
+			assert.True(t, indexColl.hasIndexOnTags(resIndex.IndexedColumnTags()...))
 		})
 		indexColl.clear(t)
 	}
@@ -278,8 +278,8 @@ func TestIndexCollectionAddIndexByColTags(t *testing.T) {
 	for _, testIndex := range testIndexes {
 		t.Run(testIndex.Name(), func(t *testing.T) {
 			assert.False(t, indexColl.Contains(testIndex.Name()))
-			assert.False(t, indexColl.HasIndexOnColumns(testIndex.ColumnNames()...))
-			assert.False(t, indexColl.HasIndexOnTags(testIndex.IndexedColumnTags()...))
+			assert.False(t, indexColl.hasIndexOnColumns(testIndex.ColumnNames()...))
+			assert.False(t, indexColl.hasIndexOnTags(testIndex.IndexedColumnTags()...))
 			assert.Nil(t, indexColl.Get(testIndex.Name()))
 
 			resIndex, err := indexColl.AddIndexByColTags(testIndex.Name(), testIndex.tags, IndexProperties{IsUnique: testIndex.IsUnique(), IsHidden: false, Comment: testIndex.Comment()})
@@ -294,8 +294,8 @@ func TestIndexCollectionAddIndexByColTags(t *testing.T) {
 				assert.Equal(t, []Index{resIndex}, indexColl.IndexesWithColumn(col))
 			}
 			assert.True(t, indexColl.Contains(resIndex.Name()))
-			assert.True(t, indexColl.HasIndexOnColumns(resIndex.ColumnNames()...))
-			assert.True(t, indexColl.HasIndexOnTags(resIndex.IndexedColumnTags()...))
+			assert.True(t, indexColl.hasIndexOnColumns(resIndex.ColumnNames()...))
+			assert.True(t, indexColl.hasIndexOnTags(resIndex.IndexedColumnTags()...))
 		})
 		indexColl.clear(t)
 	}

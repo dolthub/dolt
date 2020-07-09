@@ -18,8 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
-
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 
@@ -28,7 +26,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/valutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -142,41 +139,15 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, tableEditS
 		return nil, nil, err
 	}
 
-	{ // TODO: https://github.com/liquidata-inc/dolt/issues/773
-		equalSchemas, err := schema.SchemasAreEqual(tblSchema, mergeTblSchema)
-		if err != nil {
-			return nil, nil, err
-		}
-		if !equalSchemas {
-			return nil, nil, fmt.Errorf("cannot merge `%s` as schemas differ, please fix this before merging", tblName)
-		}
-		rootFkCollection, err := merger.root.GetForeignKeyCollection(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-		mergeFkCollection, err := merger.mergeRoot.GetForeignKeyCollection(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-		rootFks, _ := rootFkCollection.KeysForTable(tblName)
-		mergeFks, _ := mergeFkCollection.KeysForTable(tblName)
-		if len(rootFks) != len(mergeFks) {
-			return nil, nil, fmt.Errorf("cannot merge `%s` as foreign keys differ, please fix this before merging", tblName)
-		}
-		for i := range rootFks {
-			if !rootFks[i].Equals(mergeFks[i]) {
-				return nil, nil, fmt.Errorf("cannot merge `%s` as foreign key `%s` differs, please fix this before merging", tblName, rootFks[i].Name)
-			}
-		}
-	}
-
-	postMergeSchema, err := mergeTableSchema(tblSchema, mergeTblSchema, ancTblSchema)
+	postMergeSchema, schConflicts, err := SchemaMerge(tblSchema, mergeTblSchema, ancTblSchema, tblName)
 
 	if err != nil {
 		return nil, nil, err
 	}
-
-	postMergeSchema.Indexes().AddIndex(tblSchema.Indexes().AllIndexes()...)
+	if schConflicts.Count() != 0 {
+		// error on schema conflicts for now
+		return nil, nil, schConflicts.AsError()
+	}
 
 	rows, err := tbl.GetRowData(ctx)
 
@@ -291,57 +262,6 @@ func stopAndDrain(stop chan<- struct{}, drain <-chan types.ValueChanged) {
 	}
 }
 
-func mergeTableSchema(sch, mergeSch, ancSch schema.Schema) (schema.Schema, error) {
-	// (sch - ancSch) ∪ (mergeSch - ancSch) ∪ (sch ∩ mergeSch)
-
-	// columns remaining on both branches since the common ancestor
-	intersection, err := typed.TypedColCollectionIntersection(sch, mergeSch)
-
-	if err != nil {
-		return nil, err
-	}
-
-	// columns added on the main branch since the common ancestor
-	sub, err := typed.TypedColCollectionSubtraction(sch, ancSch)
-
-	if err != nil {
-		return nil, err
-	}
-
-	// columns added on the merge branch since the common ancestor
-	mergeSub, err := typed.TypedColCollectionSubtraction(mergeSch, ancSch)
-
-	if err != nil {
-		return nil, err
-	}
-
-	// check for name collisions
-	err = sub.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		ln := strings.ToLower(col.Name)
-		if mergeCol, found := mergeSub.LowerNameToCol[ln]; found {
-			if !col.Equals(mergeCol) {
-				return true, fmt.Errorf("name collision during merge for colummn %s, %v %v", ln, col, mergeCol)
-			}
-		}
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	// order of args here is important for correct column ordering in merged schema
-	// to be before any column in the intersection
-	// TODO: column ordering will break if a column added on sub or merge was reordered
-	union, err := typed.TypedColCollUnion(intersection, sub, mergeSub)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return schema.SchemaFromCols(union), nil
-}
-
 func mergeTableData(ctx context.Context, tblName string, sch schema.Schema, rows, mergeRows, ancRows types.Map, vrw types.ValueReadWriter, tblEdit *doltdb.SessionedTableEditor) (*doltdb.Table, types.Map, *MergeStats, error) {
 	//changeChan1, changeChan2 := make(chan diff.Difference, 32), make(chan diff.Difference, 32)
 	ae := atomicerr.New()
@@ -376,7 +296,7 @@ func mergeTableData(ctx context.Context, tblName string, sch schema.Schema, rows
 				break
 			}
 
-			// Get the next change from both a and b. If either diff(a, parent) or diff(b, parent) is complete, aChange or bChange will get an empty types.ValueChanged containing a nil Value. Generally, though, this allows us to proceed through both diffs in (key) order, considering the "current" change from both diffs at the same time.
+			// GetByName the next change from both a and b. If either diff(a, parent) or diff(b, parent) is complete, aChange or bChange will get an empty types.ValueChanged containing a nil Value. Generally, though, this allows us to proceed through both diffs in (key) order, considering the "current" change from both diffs at the same time.
 			if change.Key == nil {
 				change = <-changeChan
 			}
@@ -630,20 +550,20 @@ func rowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, 
 	return v, false, nil
 }
 
-func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, commit, mergeCommit *doltdb.Commit) (*doltdb.RootValue, map[string]*MergeStats, error) {
+func MergeCommits(ctx context.Context, commit, mergeCommit *doltdb.Commit) (*doltdb.RootValue, map[string]*MergeStats, error) {
 	ancCommit, err := doltdb.GetCommitAncestor(ctx, commit, mergeCommit)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	root, err := commit.GetRootValue()
+	ourRoot, err := commit.GetRootValue()
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	mergeRoot, err := mergeCommit.GetRootValue()
+	theirRoot, err := mergeCommit.GetRootValue()
 
 	if err != nil {
 		return nil, nil, err
@@ -655,9 +575,13 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, commit, mergeCommit *
 		return nil, nil, err
 	}
 
-	merger := NewMerger(ctx, root, mergeRoot, ancRoot, ddb.ValueReadWriter())
+	return MergeRoots(ctx, ourRoot, theirRoot, ancRoot)
+}
 
-	tblNames, err := doltdb.UnionTableNames(ctx, root, mergeRoot)
+func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootValue) (*doltdb.RootValue, map[string]*MergeStats, error) {
+	merger := NewMerger(ctx, ourRoot, theirRoot, ancRoot, ourRoot.VRW())
+
+	tblNames, err := doltdb.UnionTableNames(ctx, ourRoot, theirRoot)
 
 	if err != nil {
 		return nil, nil, err
@@ -665,8 +589,8 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, commit, mergeCommit *
 
 	tblToStats := make(map[string]*MergeStats)
 
-	newRoot := root
-	tableEditSession := doltdb.CreateTableEditSession(root, doltdb.TableEditSessionProps{
+	newRoot := ourRoot
+	tableEditSession := doltdb.CreateTableEditSession(ourRoot, doltdb.TableEditSessionProps{
 		ForeignKeyChecksDisabled: true,
 	})
 	var unconflicted []string
@@ -711,12 +635,23 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, commit, mergeCommit *
 		}
 	}
 
+	err = tableEditSession.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (value *doltdb.RootValue, err error) {
+		mergedFKColl, conflicts, err := ForeignKeysMerge(ctx, root, ourRoot, theirRoot, ancRoot)
+		if err != nil {
+			return nil, err
+		}
+		if len(conflicts) > 0 {
+			return nil, fmt.Errorf("foreign key conflicts")
+		}
+		return root.PutForeignKeyCollection(ctx, mergedFKColl)
+	})
+
 	err = tableEditSession.ValidateForeignKeys(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	newRoot, err = newRoot.UpdateSuperSchemasFromOther(ctx, unconflicted, mergeRoot)
+	newRoot, err = newRoot.UpdateSuperSchemasFromOther(ctx, unconflicted, theirRoot)
 
 	if err != nil {
 		return nil, nil, err
