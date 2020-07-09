@@ -140,9 +140,9 @@ UPDATE onepk SET pk1 = v1 + pk1;
 			twopkSch, err := twopk.GetSchema(context.Background())
 			require.NoError(t, err)
 
-			idx_v1 := onepkSch.Indexes().Get("idx_v1")
+			idx_v1 := onepkSch.Indexes().GetByName("idx_v1")
 			require.NotNil(t, idx_v1)
-			idx_v2v1 := twopkSch.Indexes().Get("idx_v2v1")
+			idx_v2v1 := twopkSch.Indexes().GetByName("idx_v2v1")
 			require.NotNil(t, idx_v2v1)
 
 			idx_v1RowData, err := onepk.GetIndexRowData(context.Background(), idx_v1.Name())
@@ -303,9 +303,9 @@ REPLACE INTO oneuni VALUES (4, 2, 2), (5, 2, 3), (3, 1, 1);
 			twouniSch, err := twouni.GetSchema(context.Background())
 			require.NoError(t, err)
 
-			idx_v1 := oneuniSch.Indexes().Get("idx_v1")
+			idx_v1 := oneuniSch.Indexes().GetByName("idx_v1")
 			require.NotNil(t, idx_v1)
-			idx_v1v2 := twouniSch.Indexes().Get("idx_v1v2")
+			idx_v1v2 := twouniSch.Indexes().GetByName("idx_v1v2")
 			require.NotNil(t, idx_v1v2)
 
 			idx_v1RowData, err := oneuni.GetIndexRowData(context.Background(), idx_v1.Name())

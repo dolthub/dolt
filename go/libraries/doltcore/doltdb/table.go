@@ -642,7 +642,7 @@ func (t *Table) RebuildIndexRowData(ctx context.Context, indexName string) (type
 		return types.EmptyMap, err
 	}
 
-	index := sch.Indexes().Get(indexName)
+	index := sch.Indexes().GetByName(indexName)
 	if index == nil {
 		return types.EmptyMap, fmt.Errorf("index `%s` does not exist", indexName)
 	}

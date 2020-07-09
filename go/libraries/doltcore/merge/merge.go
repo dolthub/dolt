@@ -297,7 +297,10 @@ func mergeTableData(ctx context.Context, tblName string, sch schema.Schema, rows
 				break
 			}
 
-			// GetByName the next change from both a and b. If either diff(a, parent) or diff(b, parent) is complete, aChange or bChange will get an empty types.ValueChanged containing a nil Value. Generally, though, this allows us to proceed through both diffs in (key) order, considering the "current" change from both diffs at the same time.
+			// Get the next change from both a and b. If either diff(a, parent) or diff(b, parent) is
+			// complete, aChange or bChange will get an empty types.ValueChanged containing a nil Value.
+			// Generally, though, this allows us to proceed through both diffs in (key) order, considering
+			// the "current" change from both diffs at the same time.
 			if change.Key == nil {
 				change = <-changeChan
 			}

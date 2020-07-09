@@ -128,7 +128,7 @@ func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	if err != nil {
 		return HandleErr(errhand.BuildDError("Unable to get schema for `%s`.", tableName).AddCause(err).Build(), nil)
 	}
-	index := tblSch.Indexes().Get(indexName)
+	index := tblSch.Indexes().GetByName(indexName)
 	if index == nil {
 		return HandleErr(errhand.BuildDError("The index `%s` does not exist on table `%s`.", indexName, tableName).Build(), nil)
 	}

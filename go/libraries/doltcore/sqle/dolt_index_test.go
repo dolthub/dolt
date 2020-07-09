@@ -1138,7 +1138,7 @@ INSERT INTO types VALUES (1, 4, '2020-05-14 12:00:03', 1.1, 'd', 1.1, 'a,c', '00
 			"types",
 		},
 	} {
-		index := tableSchemaMap[indexDetails.tableName].Indexes().Get(indexDetails.indexName)
+		index := tableSchemaMap[indexDetails.tableName].Indexes().GetByName(indexDetails.indexName)
 		indexData, err := tableMap[indexDetails.tableName].GetIndexRowData(ctx, index.Name())
 		require.NoError(t, err)
 		indexCols := make([]schema.Column, index.Count())

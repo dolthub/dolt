@@ -37,8 +37,9 @@ type IndexCollection interface {
 	// Equals returns whether this index collection is equivalent to another. Indexes are compared by everything except
 	// for their name, the names of all columns, and anything relating to the parent table's primary keys.
 	Equals(other IndexCollection) bool
-	// Get returns the index with the given name, or nil if it does not exist.
-	Get(indexName string) Index
+	// GetByName returns the index with the given name, or nil if it does not exist.
+	GetByName(indexName string) Index
+	// GetByName returns the index with a matching case-insensitive name, the bool return value indicates if a match was found.
 	GetByNameCaseInsensitive(indexName string) (Index, bool)
 	// GetIndexByTags returns whether the collection contains an index that has this exact collection and ordering of columns.
 	// Any hidden indexes are ignored.
@@ -47,7 +48,7 @@ type IndexCollection interface {
 	IndexesWithColumn(columnName string) []Index
 	// IndexesWithTag returns all indexes that index the given tag.
 	IndexesWithTag(tag uint64) []Index
-	// Iter
+	// Iter iterated over the indexes in the collection, calling the cb function on each.
 	Iter(cb func(index Index) (stop bool, err error)) error
 	// Merge adds the given index if it does not already exist. Indexed columns are referenced by column name,
 	// rather than by tag number, which allows an index from a different table to be added as long as they have matching
@@ -192,7 +193,7 @@ func (ixc *indexCollectionImpl) Equals(other IndexCollection) bool {
 	return true
 }
 
-func (ixc *indexCollectionImpl) Get(indexName string) Index {
+func (ixc *indexCollectionImpl) GetByName(indexName string) Index {
 	ix, ok := ixc.indexes[indexName]
 	if ok {
 		return ix
