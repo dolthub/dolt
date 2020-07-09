@@ -44,8 +44,8 @@ type BranchConfig struct {
 }
 
 type MergeState struct {
-	Commit          string             `json:"commit"`
-	PreMergeWorking string             `json:"working_pre_merge"`
+	Commit          string `json:"commit"`
+	PreMergeWorking string `json:"working_pre_merge"`
 }
 
 type RepoState struct {
