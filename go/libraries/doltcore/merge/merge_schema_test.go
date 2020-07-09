@@ -16,10 +16,6 @@ package merge_test
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/merge"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,8 +23,12 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/merge"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 )
 
 func TestMergeSchemas(t *testing.T) {
@@ -61,15 +61,15 @@ type mergeSchemaTest struct {
 }
 
 type mergeSchemaConflictTest struct {
-	name          string
-	setup         []testCommand
-	expConflict   merge.SchemaConflict
+	name        string
+	setup       []testCommand
+	expConflict merge.SchemaConflict
 }
 
 type mergeForeignKeyTest struct {
-	name   		  string
-	setup  		  []testCommand
-	fkColl 		  *doltdb.ForeignKeyCollection
+	name          string
+	setup         []testCommand
+	fkColl        *doltdb.ForeignKeyCollection
 	expFKConflict []merge.FKConflict
 }
 
@@ -87,7 +87,7 @@ var setupCommon = []testCommand{
 
 var mergeSchemaTests = []mergeSchemaTest{
 	{
-		name: "no changes",
+		name:  "no changes",
 		setup: []testCommand{},
 		sch: schemaFromColsAndIdxs(
 			colCollection(
@@ -273,8 +273,8 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			ColConflicts: []merge.ColConflict{
 				{
 					Kind:   merge.NameCollision,
-				 	Ours:   newColTypeInfo("c4", uint64(3), typeinfo.Int32Type, false),
-				 	Theirs: newColTypeInfo("c4", uint64(2), typeinfo.Int32Type, false),
+					Ours:   newColTypeInfo("c4", uint64(3), typeinfo.Int32Type, false),
+					Theirs: newColTypeInfo("c4", uint64(2), typeinfo.Int32Type, false),
 				},
 				{
 					Kind:   merge.NameCollision,
@@ -301,8 +301,8 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			IdxConflicts: []merge.IdxConflict{
 				{
 					Kind:   merge.NameCollision,
-					Ours:   schema.NewIndex("both", []uint64{1,2}, []uint64{1,2,0}, nil, schema.IndexProperties{}),
-					Theirs: schema.NewIndex("both", []uint64{2,3}, []uint64{2,3,0}, nil, schema.IndexProperties{}),
+					Ours:   schema.NewIndex("both", []uint64{1, 2}, []uint64{1, 2, 0}, nil, schema.IndexProperties{}),
+					Theirs: schema.NewIndex("both", []uint64{2, 3}, []uint64{2, 3, 0}, nil, schema.IndexProperties{}),
 				},
 			},
 		},
@@ -354,8 +354,8 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			IdxConflicts: []merge.IdxConflict{
 				{
 					Kind:   merge.TagCollision,
-					Ours:   schema.NewIndex("c3_idx", []uint64{3}, []uint64{3,0}, nil, schema.IndexProperties{}),
-					Theirs: schema.NewIndex("c3_index", []uint64{3}, []uint64{3,0}, nil, schema.IndexProperties{}),
+					Ours:   schema.NewIndex("c3_idx", []uint64{3}, []uint64{3, 0}, nil, schema.IndexProperties{}),
+					Theirs: schema.NewIndex("c3_index", []uint64{3}, []uint64{3, 0}, nil, schema.IndexProperties{}),
 				},
 			},
 		},
@@ -383,7 +383,7 @@ var setupForeignKeyTests = []testCommand{
 
 var mergeForeignKeyTests = []mergeForeignKeyTest{
 	{
-		name: "no changes",
+		name:  "no changes",
 		setup: []testCommand{},
 		fkColl: fkCollection(&doltdb.ForeignKey{
 			Name:                   "q1_fk",

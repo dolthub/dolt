@@ -17,9 +17,10 @@ package merge
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"strings"
 )
 
 type conflictKind byte
@@ -69,7 +70,7 @@ func (c ColConflict) String() string {
 }
 
 type IdxConflict struct {
-	Kind 		 conflictKind
+	Kind         conflictKind
 	Ours, Theirs schema.Index
 }
 
@@ -78,7 +79,7 @@ func (c IdxConflict) String() string {
 }
 
 type FKConflict struct {
-	Kind 		 conflictKind
+	Kind         conflictKind
 	Ours, Theirs *doltdb.ForeignKey
 }
 
@@ -87,7 +88,7 @@ func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch sc
 	// (sch - ancSch) ∪ (mergeSch - ancSch) ∪ (sch ∩ mergeSch)
 
 	sc = SchemaConflict{
-		TableName:    tblName,
+		TableName: tblName,
 	}
 
 	var mergedCC *schema.ColCollection
@@ -125,12 +126,12 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 	if err != nil {
 		return nil, nil, err
 	}
-	
+
 	anc, err := ancRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	
+
 	common, conflicts, err := foreignKeysInCommon(ours, theirs, anc)
 	if err != nil {
 		return nil, nil, err

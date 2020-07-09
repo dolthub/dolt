@@ -41,4 +41,3 @@ func TypedSchemaUnion(schemas ...schema.Schema) (schema.Schema, error) {
 	sch := schema.SchemaFromCols(allColColl)
 	return sch, nil
 }
-
