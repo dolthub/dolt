@@ -104,6 +104,8 @@ func ResolveCommitWithVErr(dEnv *env.DoltEnv, cSpecStr string) (*doltdb.Commit, 
 	if err != nil {
 		if err == doltdb.ErrInvalidAncestorSpec {
 			return nil, errhand.BuildDError("'%s' could not resolve ancestor spec", cSpecStr).Build()
+		} else if err == doltdb.ErrBranchNotFound {
+			return nil, errhand.BuildDError("unknown branch in commit spec: '%s'", cSpecStr).Build()
 		} else if doltdb.IsNotFoundErr(err) {
 			return nil, errhand.BuildDError("'%s' not found", cSpecStr).Build()
 		} else if err == doltdb.ErrFoundHashNotACommit {
