@@ -44,7 +44,6 @@ type BranchConfig struct {
 }
 
 type MergeState struct {
-	Head            ref.MarshalableRef `json:"head"`
 	Commit          string             `json:"commit"`
 	PreMergeWorking string             `json:"working_pre_merge"`
 }
@@ -144,8 +143,8 @@ func (rs *RepoState) CWBHeadSpec() *doltdb.CommitSpec {
 	return spec
 }
 
-func (rs *RepoState) StartMerge(dref ref.DoltRef, commit string, fs filesys.Filesys) error {
-	rs.Merge = &MergeState{ref.MarshalableRef{Ref: dref}, commit, rs.Working}
+func (rs *RepoState) StartMerge(commit string, fs filesys.Filesys) error {
+	rs.Merge = &MergeState{commit, rs.Working}
 	return rs.Save(fs)
 }
 

@@ -56,6 +56,26 @@ teardown() {
     [[ "$output" =~ "test1" ]] || false
 }
 
+@test "can merge commit spec with ancestor spec" {
+    dolt checkout -b merge_branch
+    dolt SQL -q "INSERT INTO test1 values (0,1,2)"
+    dolt add test1
+    dolt commit -m "add pk 0 to test1"
+
+    dolt SQL -q "INSERT INTO test1 values (1,2,3)"
+    dolt add test1
+    dolt commit -m "add pk 1 to test1"
+
+    dolt checkout master
+
+    run dolt merge merge_branch~
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Fast-forward" ]] || false
+    run dolt sql -q 'select count(*) from test1 where pk = 1'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| 0 " ]] || false
+}
+
 @test "ff merge doesn't stomp working changes" {
     dolt checkout -b merge_branch
     dolt SQL -q "INSERT INTO test1 values (0,1,2)"
