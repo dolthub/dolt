@@ -273,26 +273,26 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 
 	var commitSt types.Struct
 	var err error
-	switch cs.CSType {
-	case HashCommitSpec:
-		commitSt, err = getCommitStForHash(ctx, ddb.db, cs.BaseRef)
-	case RefCommitSpec:
+	switch cs.csType {
+	case hashCommitSpec:
+		commitSt, err = getCommitStForHash(ctx, ddb.db, cs.baseSpec)
+	case refCommitSpec:
 		// For a ref in a CommitSpec, we have the following behavior.
 		// If it starts with `refs/`, we look for an exact match before
 		// we try any suffix matches. After that, we try a match on the
 		// user supplied input, with the following three prefixes, in
 		// order: `refs/`, `refs/heads/`, `refs/remotes/`.
 		candidates := []string{
-			"refs/" + cs.BaseRef,
-			"refs/heads/" + cs.BaseRef,
-			"refs/remotes/" + cs.BaseRef,
+			"refs/" + cs.baseSpec,
+			"refs/heads/" + cs.baseSpec,
+			"refs/remotes/" + cs.baseSpec,
 		}
-		if strings.HasPrefix(cs.BaseRef, "refs/") {
+		if strings.HasPrefix(cs.baseSpec, "refs/") {
 			candidates = []string{
-				cs.BaseRef,
-				"refs/" + cs.BaseRef,
-				"refs/heads/" + cs.BaseRef,
-				"refs/remotes/" + cs.BaseRef,
+				cs.baseSpec,
+				"refs/" + cs.baseSpec,
+				"refs/heads/" + cs.baseSpec,
+				"refs/remotes/" + cs.baseSpec,
 			}
 		}
 		for _, candidate := range candidates {
@@ -307,14 +307,14 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 	case headCommitSpec:
 		commitSt, err = getCommitStForDatasetName(ctx, ddb.db, cwb.String())
 	default:
-		panic("unrecognized commit spec CSType: " + cs.CSType)
+		panic("unrecognized commit spec csType: " + cs.csType)
 	}
 
 	if err != nil {
 		return nil, err
 	}
 
-	commitSt, err = getAncestor(ctx, ddb.db, commitSt, cs.ASpec)
+	commitSt, err = getAncestor(ctx, ddb.db, commitSt, cs.aSpec)
 
 	if err != nil {
 		return nil, err

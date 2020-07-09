@@ -35,12 +35,12 @@ func IsValidBranchRef(dref ref.DoltRef) bool {
 	return dref.GetType() == ref.BranchRefType && IsValidUserBranchName(dref.GetPath())
 }
 
-type CommitSpecType string
+type commitSpecType string
 
 const (
-	RefCommitSpec  CommitSpecType = "ref"
-	HashCommitSpec CommitSpecType = "hash"
-	headCommitSpec CommitSpecType = "head"
+	refCommitSpec  commitSpecType = "ref"
+	hashCommitSpec commitSpecType = "hash"
+	headCommitSpec commitSpecType = "head"
 )
 
 // CommitSpec handles three different types of string representations of commits.  Commits can either be represented
@@ -48,9 +48,9 @@ const (
 // An Ancestor spec can be appended to the end of any of these in order to reach commits that are in the ancestor tree
 // of the referenced commit.
 type CommitSpec struct {
-	BaseRef string
-	CSType  CommitSpecType
-	ASpec   *AncestorSpec
+	baseSpec string
+	csType   commitSpecType
+	aSpec    *AncestorSpec
 }
 
 // NewCommitSpec parses a string specifying a commit using dolt commit spec
@@ -90,10 +90,10 @@ func NewCommitSpec(cSpecStr string) (*CommitSpec, error) {
 		return &CommitSpec{head, headCommitSpec, as}, nil
 	}
 	if hashRegex.MatchString(name) {
-		return &CommitSpec{name, HashCommitSpec, as}, nil
+		return &CommitSpec{name, hashCommitSpec, as}, nil
 	}
 	if !ref.IsValidBranchName(name) {
 		return nil, ErrInvalidBranchOrHash
 	}
-	return &CommitSpec{name, RefCommitSpec, as}, nil
+	return &CommitSpec{name, refCommitSpec, as}, nil
 }
