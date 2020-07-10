@@ -187,8 +187,8 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTime(ctx context.Context, name, email
 	return err
 }
 
-func getCommitStForDatasetName(ctx context.Context, db datas.Database, datasetName string) (types.Struct, error) {
-	ds, err := db.GetDataset(ctx, datasetName)
+func getCommitStForRefStr(ctx context.Context, db datas.Database, ref string) (types.Struct, error) {
+	ds, err := db.GetDataset(ctx, ref)
 
 	if err != nil {
 		return types.EmptyStruct(db.Format()), err
@@ -265,7 +265,7 @@ func getAncestor(ctx context.Context, vrw types.ValueReadWriter, commitSt types.
 }
 
 // Resolve takes a CommitSpec and returns a Commit, or an error if the commit cannot be found.
-// If the CommitSpec is a HEAD, Resolve also needs the DoltRef of the current working branch.
+// If the CommitSpec is HEAD, Resolve also needs the DoltRef of the current working branch.
 func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef) (*Commit, error) {
 	if cs == nil {
 		panic("nil commit spec")
@@ -296,7 +296,7 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 			}
 		}
 		for _, candidate := range candidates {
-			commitSt, err = getCommitStForDatasetName(ctx, ddb.db, candidate)
+			commitSt, err = getCommitStForRefStr(ctx, ddb.db, candidate)
 			if err == nil {
 				break
 			}
@@ -305,7 +305,7 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 			}
 		}
 	case headCommitSpec:
-		commitSt, err = getCommitStForDatasetName(ctx, ddb.db, cwb.String())
+		commitSt, err = getCommitStForRefStr(ctx, ddb.db, cwb.String())
 	default:
 		panic("unrecognized commit spec csType: " + cs.csType)
 	}
