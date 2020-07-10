@@ -89,10 +89,10 @@ func wrapGroupBy(g *plan.GroupBy) (node sql.Node, projections []sql.Expression, 
 	for i, col := range g.Schema() {
 		projections[i] = expression.NewGetField(i, col.Type, col.Name, col.Nullable)
 	}
-	g.Aggregate = append(g.Aggregate, g.Grouping...)
+	g.SelectedExprs = append(g.SelectedExprs, g.GroupByExprs...)
 
-	order = make([]plan.SortField, len(g.Grouping))
-	for i, exp := range g.Grouping {
+	order = make([]plan.SortField, len(g.GroupByExprs))
+	for i, exp := range g.GroupByExprs {
 		idx := i + len(projections)
 		order[i] = plan.SortField{
 			Column: expression.NewGetField(idx, exp.Type(), exp.String(), exp.IsNullable()),

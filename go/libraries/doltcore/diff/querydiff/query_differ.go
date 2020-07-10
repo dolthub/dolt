@@ -292,7 +292,7 @@ func getQueryPlans(fromCtx, toCtx *sql.Context, fromEng, toEng *sqle.Engine, que
 		return nil, nil, err
 	}
 
-	fromPlan, err = fromEng.Analyzer.Analyze(fromCtx, parsed)
+	fromPlan, err = fromEng.Analyzer.Analyze(fromCtx, parsed, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error executing query on from root: %s", err.Error())
 	}
@@ -301,7 +301,7 @@ func getQueryPlans(fromCtx, toCtx *sql.Context, fromEng, toEng *sqle.Engine, que
 		return nil, nil, err
 	}
 
-	toPlan, err = toEng.Analyzer.Analyze(toCtx, parsed)
+	toPlan, err = toEng.Analyzer.Analyze(toCtx, parsed, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error executing query on to root: %s", err.Error())
 	}
