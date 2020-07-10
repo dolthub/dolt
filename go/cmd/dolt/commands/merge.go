@@ -29,7 +29,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/merge"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/store/hash"
@@ -108,13 +107,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			return 1
 		}
 
-		branchName := apr.Arg(0)
-		dref, err := dEnv.FindRef(ctx, branchName)
-
-		if err != nil {
-			verr := errhand.BuildDError(fmt.Sprintf("unknown branch: %s", branchName)).Build()
-			return HandleVErrAndExitCode(verr, usage)
-		}
+		commitSpecStr := apr.Arg(0)
 
 		var root *doltdb.RootValue
 		root, verr = GetWorkingWithVErr(dEnv)
@@ -136,7 +129,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			}
 
 			if verr == nil {
-				verr = mergeBranch(ctx, dEnv, dref)
+				verr = mergeCommitSpec(ctx, dEnv, commitSpecStr)
 			}
 		}
 	}
@@ -158,14 +151,14 @@ func abortMerge(ctx context.Context, doltEnv *env.DoltEnv) errhand.VerboseError 
 	return errhand.BuildDError("fatal: failed to revert changes").AddCause(err).Build()
 }
 
-func mergeBranch(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRef) errhand.VerboseError {
-	cm1, verr := ResolveCommitWithVErr(dEnv, "HEAD", dEnv.RepoState.CWBHeadRef().String())
+func mergeCommitSpec(ctx context.Context, dEnv *env.DoltEnv, commitSpecStr string) errhand.VerboseError {
+	cm1, verr := ResolveCommitWithVErr(dEnv, "HEAD")
 
 	if verr != nil {
 		return verr
 	}
 
-	cm2, verr := ResolveCommitWithVErr(dEnv, dref.String(), dEnv.RepoState.CWBHeadRef().String())
+	cm2, verr := ResolveCommitWithVErr(dEnv, commitSpecStr)
 
 	if verr != nil {
 		return verr
@@ -211,7 +204,7 @@ func mergeBranch(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRef) errha
 		cli.Println("Already up to date.")
 		return nil
 	} else {
-		return executeMerge(ctx, dEnv, cm1, cm2, dref, workingDiffs)
+		return executeMerge(ctx, dEnv, cm1, cm2, workingDiffs)
 	}
 }
 
@@ -291,7 +284,7 @@ and take the hash for your current branch and use it for the value for "staged" 
 	return nil
 }
 
-func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, dref ref.DoltRef, workingDiffs map[string]hash.Hash) errhand.VerboseError {
+func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, workingDiffs map[string]hash.Hash) errhand.VerboseError {
 	mergedRoot, tblToStats, err := merge.MergeCommits(ctx, dEnv.DoltDB, cm1, cm2)
 
 	if err != nil {
@@ -320,7 +313,7 @@ func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commi
 		return errhand.BuildDError("error: failed to hash commit").AddCause(err).Build()
 	}
 
-	err = dEnv.RepoState.StartMerge(dref, h2.String(), dEnv.FS)
+	err = dEnv.RepoState.StartMerge(h2.String(), dEnv.FS)
 
 	if err != nil {
 		return errhand.BuildDError("Unable to update the repo state").AddCause(err).Build()

@@ -781,19 +781,16 @@ setup_ref_test() {
 }
 
 @test "can use refs/remotes/origin/... as commit reference for merge" {
-    skip "this currently panics"
     setup_ref_test
     dolt merge refs/remotes/origin/master
 }
 
 @test "can use remotes/origin/... as commit reference for log" {
-    skip "this does not work"
     setup_ref_test
     dolt log remotes/origin/master
 }
 
 @test "can use remotes/origin/... as commit reference for diff" {
-    skip "this does not work"
     setup_ref_test
     dolt diff HEAD remotes/origin/master
     dolt diff remotes/origin/master HEAD
@@ -805,13 +802,11 @@ setup_ref_test() {
 }
 
 @test "can use origin/... as commit reference for log" {
-    skip "this does not work"
     setup_ref_test
     dolt log origin/master
 }
 
 @test "can use origin/... as commit reference for diff" {
-    skip "this does not work"
     setup_ref_test
     dolt diff HEAD origin/master
     dolt diff origin/master HEAD

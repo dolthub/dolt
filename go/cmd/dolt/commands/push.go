@@ -277,8 +277,8 @@ func pushToRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, mode ref.RefUpda
 		}
 	}
 
-	cs, _ := doltdb.NewCommitSpec("HEAD", srcRef.GetPath())
-	cm, err := localDB.Resolve(ctx, cs)
+	cs, _ := doltdb.NewCommitSpec(srcRef.GetPath())
+	cm, err := localDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
 
 	if err != nil {
 		return errhand.BuildDError("error: refspec '%v' not found.", srcRef.GetPath()).Build()

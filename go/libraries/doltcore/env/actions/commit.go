@@ -88,7 +88,7 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProp
 
 	var mergeCmSpec []*doltdb.CommitSpec
 	if dEnv.IsMergeActive() {
-		spec, err := doltdb.NewCommitSpec(dEnv.RepoState.Merge.Commit, dEnv.RepoState.Merge.Head.Ref.String())
+		spec, err := doltdb.NewCommitSpec(dEnv.RepoState.Merge.Commit)
 
 		if err != nil {
 			panic("Corrupted repostate. Active merge state is not valid.")

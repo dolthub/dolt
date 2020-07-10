@@ -187,8 +187,8 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTime(ctx context.Context, name, email
 	return err
 }
 
-func getCommitStForRef(ctx context.Context, db datas.Database, dref ref.DoltRef) (types.Struct, error) {
-	ds, err := db.GetDataset(ctx, dref.String())
+func getCommitStForRefStr(ctx context.Context, db datas.Database, ref string) (types.Struct, error) {
+	ds, err := db.GetDataset(ctx, ref)
 
 	if err != nil {
 		return types.EmptyStruct(db.Format()), err
@@ -265,24 +265,56 @@ func getAncestor(ctx context.Context, vrw types.ValueReadWriter, commitSt types.
 }
 
 // Resolve takes a CommitSpec and returns a Commit, or an error if the commit cannot be found.
-func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec) (*Commit, error) {
+// If the CommitSpec is HEAD, Resolve also needs the DoltRef of the current working branch.
+func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef) (*Commit, error) {
 	if cs == nil {
 		panic("nil commit spec")
 	}
 
 	var commitSt types.Struct
 	var err error
-	if cs.CSType == HashCommitSpec {
-		commitSt, err = getCommitStForHash(ctx, ddb.db, cs.CommitStringer.String())
-	} else if cs.CSType == RefCommitSpec {
-		commitSt, err = getCommitStForRef(ctx, ddb.db, cs.CommitStringer.(ref.DoltRef))
+	switch cs.csType {
+	case hashCommitSpec:
+		commitSt, err = getCommitStForHash(ctx, ddb.db, cs.baseSpec)
+	case refCommitSpec:
+		// For a ref in a CommitSpec, we have the following behavior.
+		// If it starts with `refs/`, we look for an exact match before
+		// we try any suffix matches. After that, we try a match on the
+		// user supplied input, with the following three prefixes, in
+		// order: `refs/`, `refs/heads/`, `refs/remotes/`.
+		candidates := []string{
+			"refs/" + cs.baseSpec,
+			"refs/heads/" + cs.baseSpec,
+			"refs/remotes/" + cs.baseSpec,
+		}
+		if strings.HasPrefix(cs.baseSpec, "refs/") {
+			candidates = []string{
+				cs.baseSpec,
+				"refs/" + cs.baseSpec,
+				"refs/heads/" + cs.baseSpec,
+				"refs/remotes/" + cs.baseSpec,
+			}
+		}
+		for _, candidate := range candidates {
+			commitSt, err = getCommitStForRefStr(ctx, ddb.db, candidate)
+			if err == nil {
+				break
+			}
+			if err != ErrBranchNotFound {
+				return nil, err
+			}
+		}
+	case headCommitSpec:
+		commitSt, err = getCommitStForRefStr(ctx, ddb.db, cwb.String())
+	default:
+		panic("unrecognized commit spec csType: " + cs.csType)
 	}
 
 	if err != nil {
 		return nil, err
 	}
 
-	commitSt, err = getAncestor(ctx, ddb.db, commitSt, cs.ASpec)
+	commitSt, err = getAncestor(ctx, ddb.db, commitSt, cs.aSpec)
 
 	if err != nil {
 		return nil, err
@@ -362,8 +394,8 @@ func (ddb *DoltDB) FastForward(ctx context.Context, branch ref.DoltRef, commit *
 
 // CanFastForward returns whether the given branch can be fast-forwarded to the commit given.
 func (ddb *DoltDB) CanFastForward(ctx context.Context, branch ref.DoltRef, new *Commit) (bool, error) {
-	currentSpec, _ := NewCommitSpec("HEAD", branch.String())
-	current, err := ddb.Resolve(ctx, currentSpec)
+	currentSpec, _ := NewCommitSpec(branch.String())
+	current, err := ddb.Resolve(ctx, currentSpec, nil)
 
 	if err != nil {
 		if err == ErrBranchNotFound {
@@ -399,7 +431,7 @@ func (ddb *DoltDB) SetHead(ctx context.Context, ref ref.DoltRef, cm *Commit) err
 func (ddb *DoltDB) CommitWithParentSpecs(ctx context.Context, valHash hash.Hash, dref ref.DoltRef, parentCmSpecs []*CommitSpec, cm *CommitMeta) (*Commit, error) {
 	var parentCommits []*Commit
 	for _, parentCmSpec := range parentCmSpecs {
-		cm, err := ddb.Resolve(ctx, parentCmSpec)
+		cm, err := ddb.Resolve(ctx, parentCmSpec, nil)
 
 		if err != nil {
 			return nil, err

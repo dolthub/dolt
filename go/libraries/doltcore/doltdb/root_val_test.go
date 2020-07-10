@@ -30,8 +30,8 @@ func TestTableDiff(t *testing.T) {
 	ddb, _ := LoadDoltDB(ctx, types.Format_7_18, InMemDoltDB)
 	ddb.WriteEmptyRepo(ctx, "billy bob", "bigbillieb@fake.horse")
 
-	cs, _ := NewCommitSpec("head", "master")
-	cm, _ := ddb.Resolve(ctx, cs)
+	cs, _ := NewCommitSpec("master")
+	cm, _ := ddb.Resolve(ctx, cs, nil)
 
 	root, err := cm.GetRootValue()
 	assert.NoError(t, err)
@@ -113,8 +113,8 @@ func TestDocDiff(t *testing.T) {
 	ddb, _ := LoadDoltDB(ctx, types.Format_7_18, InMemDoltDB)
 	ddb.WriteEmptyRepo(ctx, "billy bob", "bigbillieb@fake.horse")
 
-	cs, _ := NewCommitSpec("head", "master")
-	cm, _ := ddb.Resolve(ctx, cs)
+	cs, _ := NewCommitSpec("master")
+	cm, _ := ddb.Resolve(ctx, cs, nil)
 
 	root, err := cm.GetRootValue()
 	assert.NoError(t, err)

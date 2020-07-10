@@ -92,18 +92,20 @@ func ValidateTablesWithVErr(tbls []string, roots ...*doltdb.RootValue) errhand.V
 	return nil
 }
 
-func ResolveCommitWithVErr(dEnv *env.DoltEnv, cSpecStr, cwb string) (*doltdb.Commit, errhand.VerboseError) {
-	cs, err := doltdb.NewCommitSpec(cSpecStr, cwb)
+func ResolveCommitWithVErr(dEnv *env.DoltEnv, cSpecStr string) (*doltdb.Commit, errhand.VerboseError) {
+	cs, err := doltdb.NewCommitSpec(cSpecStr)
 
 	if err != nil {
 		return nil, errhand.BuildDError("'%s' is not a valid commit", cSpecStr).Build()
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs)
+	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs, dEnv.RepoState.CWBHeadRef())
 
 	if err != nil {
 		if err == doltdb.ErrInvalidAncestorSpec {
-			return nil, errhand.BuildDError("'%s' is an invalid ancestor spec", cs.ASpec.SpecStr).Build()
+			return nil, errhand.BuildDError("'%s' could not resolve ancestor spec", cSpecStr).Build()
+		} else if err == doltdb.ErrBranchNotFound {
+			return nil, errhand.BuildDError("unknown branch in commit spec: '%s'", cSpecStr).Build()
 		} else if doltdb.IsNotFoundErr(err) {
 			return nil, errhand.BuildDError("'%s' not found", cSpecStr).Build()
 		} else if err == doltdb.ErrFoundHashNotACommit {

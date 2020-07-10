@@ -80,13 +80,13 @@ func (t *HashOf) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 			return nil, err
 		}
 
-		cs, err := doltdb.NewCommitSpec("HEAD", name)
+		cs, err := doltdb.NewCommitSpec(name)
 
 		if err != nil {
 			return nil, err
 		}
 
-		cm, err = ddb.Resolve(ctx, cs)
+		cm, err = ddb.Resolve(ctx, cs, nil)
 	}
 
 	if err != nil {

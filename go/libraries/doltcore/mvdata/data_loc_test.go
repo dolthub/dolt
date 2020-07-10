@@ -60,8 +60,8 @@ func createRootAndFS() (*doltdb.DoltDB, *doltdb.RootValue, filesys.Filesys) {
 	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_7_18, doltdb.InMemDoltDB)
 	ddb.WriteEmptyRepo(context.Background(), "billy bob", "bigbillieb@fake.horse")
 
-	cs, _ := doltdb.NewCommitSpec("HEAD", "master")
-	commit, _ := ddb.Resolve(context.Background(), cs)
+	cs, _ := doltdb.NewCommitSpec("master")
+	commit, _ := ddb.Resolve(context.Background(), cs, nil)
 	root, err := commit.GetRootValue()
 
 	if err != nil {

@@ -148,13 +148,13 @@ func (sess *DoltSession) GetParentCommit(ctx context.Context, dbName string) (*d
 	}
 
 	h := hash.Parse(valStr)
-	cs, err := doltdb.NewCommitSpec(valStr, "")
+	cs, err := doltdb.NewCommitSpec(valStr)
 
 	if err != nil {
 		return nil, hash.Hash{}, err
 	}
 
-	cm, err := dbd.ddb.Resolve(ctx, cs)
+	cm, err := dbd.ddb.Resolve(ctx, cs, nil)
 
 	if err != nil {
 		return nil, hash.Hash{}, err
@@ -177,13 +177,13 @@ func (sess *DoltSession) Set(ctx context.Context, key string, typ sql.Type, valu
 			return doltdb.ErrInvalidHash
 		}
 
-		cs, err := doltdb.NewCommitSpec(valStr, "")
+		cs, err := doltdb.NewCommitSpec(valStr)
 
 		if err != nil {
 			return err
 		}
 
-		cm, err := dbd.ddb.Resolve(ctx, cs)
+		cm, err := dbd.ddb.Resolve(ctx, cs, nil)
 
 		if err != nil {
 			return err
@@ -258,7 +258,7 @@ func (sess *DoltSession) AddDB(ctx context.Context, db Database) error {
 
 	cs := rsr.CWBHeadSpec()
 
-	cm, err := ddb.Resolve(ctx, cs)
+	cm, err := ddb.Resolve(ctx, cs, rsr.CWBHeadRef())
 
 	if err != nil {
 		return err

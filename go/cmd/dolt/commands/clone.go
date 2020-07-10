@@ -323,8 +323,8 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 		performPull = false
 	}
 
-	cs, _ := doltdb.NewCommitSpec("HEAD", branch)
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs)
+	cs, _ := doltdb.NewCommitSpec(branch)
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
 
 	if err != nil {
 		return errhand.BuildDError("error: could not get " + branch).AddCause(err).Build()
@@ -341,8 +341,8 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	// create remote refs corresponding to each of them. We delete all of
 	// the local branches except for the one corresponding to |branch|.
 	for _, brnch := range branches {
-		cs, _ := doltdb.NewCommitSpec("HEAD", brnch.GetPath())
-		cm, err := dEnv.DoltDB.Resolve(ctx, cs)
+		cs, _ := doltdb.NewCommitSpec(brnch.GetPath())
+		cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
 		if err != nil {
 			return errhand.BuildDError("error: could not resolve branch ref at " + brnch.String()).AddCause(err).Build()
 		}

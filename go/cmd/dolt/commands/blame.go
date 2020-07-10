@@ -157,7 +157,7 @@ func parseCommitSpecAndTableName(dEnv *env.DoltEnv, apr *argparser.ArgParseResul
 		return dEnv.RepoState.CWBHeadSpec(), tableName, nil
 	}
 
-	cs, err := doltdb.NewCommitSpec(comSpecStr, dEnv.RepoState.CWBHeadRef().String())
+	cs, err := doltdb.NewCommitSpec(comSpecStr)
 	if err != nil {
 		return nil, "", fmt.Errorf("invalid commit %s", comSpecStr)
 	}
@@ -166,7 +166,7 @@ func parseCommitSpecAndTableName(dEnv *env.DoltEnv, apr *argparser.ArgParseResul
 }
 
 func runBlame(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, tableName string) error {
-	commit, err := dEnv.DoltDB.Resolve(ctx, cs)
+	commit, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
 	if err != nil {
 		return err
 	}

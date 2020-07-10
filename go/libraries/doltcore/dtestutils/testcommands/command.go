@@ -228,7 +228,7 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		h2, err := cm2.HashOf()
 		require.NoError(t, err)
 
-		err = dEnv.RepoState.StartMerge(dref, h2.String(), dEnv.FS)
+		err = dEnv.RepoState.StartMerge(h2.String(), dEnv.FS)
 		if err != nil {
 			return err
 		}
@@ -252,9 +252,9 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 }
 
 func resolveCommit(t *testing.T, cSpecStr string, dEnv *env.DoltEnv) *doltdb.Commit {
-	cs, err := doltdb.NewCommitSpec(cSpecStr, dEnv.RepoState.Head.Ref.String())
+	cs, err := doltdb.NewCommitSpec(cSpecStr)
 	require.NoError(t, err)
-	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs)
+	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs, dEnv.RepoState.CWBHeadRef())
 	require.NoError(t, err)
 	return cm
 }

@@ -39,31 +39,30 @@ func TestCommitRegex(t *testing.T) {
 func TestNewCommitSpec(t *testing.T) {
 	tests := []struct {
 		inputStr        string
-		cwbName         string
 		expectedRefStr  string
 		expecteASpecStr string
 		expectErr       bool
 	}{
-		{"master", "", "refs/heads/master", "", false},
-		{"refs/heads/master", "", "refs/heads/master", "", false},
-		{"head", "refs/heads/master", "refs/heads/master", "", false},
-		{"head", "refs/heads/master", "refs/heads/master", "", false},
-		{"head^~2", "master", "refs/heads/master", "^~2", false},
-		{"00000000000000000000000000000000", "", "00000000000000000000000000000000", "", false},
-		{"head", "", "", "", true},
+		{"master", "master", "", false},
+		{"refs/heads/master", "refs/heads/master", "", false},
+		{"head", "head", "", false},
+		{"head", "head", "", false},
+		{"head^~2", "head", "^~2", false},
+		{"00000000000000000000000000000000", "00000000000000000000000000000000", "", false},
+		{"head", "head", "", true},
 	}
 
 	for _, test := range tests {
-		cs, err := NewCommitSpec(test.inputStr, test.cwbName)
+		cs, err := NewCommitSpec(test.inputStr)
 
 		if err != nil {
 			if !test.expectErr {
 				t.Error(test.inputStr, "Error didn't match expected.  Errored: ", err != nil)
 			}
-		} else if cs.CommitStringer.String() != test.expectedRefStr {
-			t.Error(test.inputStr, "expected name:", test.expectedRefStr, "actual name:", cs.CommitStringer.String())
-		} else if cs.ASpec.SpecStr != test.expecteASpecStr {
-			t.Error(test.inputStr, "expected ancestor spec:", test.expecteASpecStr, "actual ancestor spec:", cs.ASpec.SpecStr)
+		} else if cs.baseSpec != test.expectedRefStr {
+			t.Error(test.inputStr, "expected name:", test.expectedRefStr, "actual name:", cs.baseSpec)
+		} else if cs.aSpec.SpecStr != test.expecteASpecStr {
+			t.Error(test.inputStr, "expected ancestor spec:", test.expecteASpecStr, "actual ancestor spec:", cs.aSpec.SpecStr)
 		}
 	}
 }
