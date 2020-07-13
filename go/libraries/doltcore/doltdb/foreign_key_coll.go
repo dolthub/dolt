@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -87,6 +88,19 @@ func LoadForeignKeyCollection(ctx context.Context, fkMap types.Map) (*ForeignKey
 	return fkc, nil
 }
 
+func NewForeignKeyCollection(keys ...*ForeignKey) (*ForeignKeyCollection, error) {
+	fkc := &ForeignKeyCollection{
+		foreignKeys: make(map[string]*ForeignKey),
+	}
+	for _, k := range keys {
+		err := fkc.AddKey(k)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return fkc, nil
+}
+
 // AddKey adds the given foreign key to the collection. Checks that the given name is unique in the collection, and that
 // both column counts are equal. All other validation should occur before being added to the collection.
 func (fkc *ForeignKeyCollection) AddKey(key *ForeignKey) error {
@@ -95,7 +109,10 @@ func (fkc *ForeignKeyCollection) AddKey(key *ForeignKey) error {
 		for i := 2; fkc.Contains(key.Name); i++ {
 			key.Name = fmt.Sprintf("fk_%s_%s_%d", key.TableName, key.ReferencedTableName, i)
 		}
-	} else if fkc.Contains(key.Name) {
+	}
+
+	_, ok := fkc.GetByNameCaseInsensitive(key.Name)
+	if ok {
 		return fmt.Errorf("a foreign key with the name `%s` already exists", key.Name)
 	}
 
@@ -127,7 +144,7 @@ func (fkc *ForeignKeyCollection) AllKeys() []*ForeignKey {
 
 // Contains returns whether the given foreign key name already exists for this collection.
 func (fkc *ForeignKeyCollection) Contains(foreignKeyName string) bool {
-	_, ok := fkc.foreignKeys[foreignKeyName]
+	_, ok := fkc.GetByNameCaseInsensitive(foreignKeyName)
 	return ok
 }
 
@@ -136,9 +153,53 @@ func (fkc *ForeignKeyCollection) Count() int {
 	return len(fkc.foreignKeys)
 }
 
-// Get returns the foreign key with the given name, or nil if it does not exist.
-func (fkc *ForeignKeyCollection) Get(foreignKeyName string) *ForeignKey {
-	return fkc.foreignKeys[foreignKeyName]
+// GetByNameCaseInsensitive returns a ForeignKey with a matching case-insensitive name, and whether a match exists.
+func (fkc *ForeignKeyCollection) GetByNameCaseInsensitive(foreignKeyName string) (match *ForeignKey, ok bool) {
+	for name, fk := range fkc.foreignKeys {
+		if strings.ToLower(name) == strings.ToLower(foreignKeyName) {
+			return fk, true
+		}
+	}
+	return nil, false
+}
+
+// GetByTags gets the Foreign Key defined over the parent and child columns corresponding to tags parameters.
+func (fkc *ForeignKeyCollection) GetByTags(parentTags, childTags []uint64) (match *ForeignKey, ok bool) {
+	_ = fkc.Iter(func(fk *ForeignKey) (stop bool, err error) {
+		if len(fk.ReferencedTableColumns) != len(parentTags) {
+			return false, nil
+		}
+		for i, t := range fk.ReferencedTableColumns {
+			if t != parentTags[i] {
+				return false, nil
+			}
+		}
+
+		if len(fk.TableColumns) != len(childTags) {
+			return false, nil
+		}
+		for i, t := range fk.TableColumns {
+			if t != childTags[i] {
+				return false, nil
+			}
+		}
+		match, ok = fk, true
+		return true, nil
+	})
+	return match, ok
+}
+
+func (fkc *ForeignKeyCollection) Iter(cb func(fk *ForeignKey) (stop bool, err error)) error {
+	for _, fk := range fkc.foreignKeys {
+		stop, err := cb(fk)
+		if err != nil {
+			return err
+		}
+		if stop {
+			return err
+		}
+	}
+	return nil
 }
 
 // KeysForDisplay returns display-ready foreign keys that the given table declares. The results are intended only

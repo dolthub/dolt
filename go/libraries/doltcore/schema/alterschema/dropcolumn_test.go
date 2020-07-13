@@ -129,7 +129,7 @@ func TestDropColumn(t *testing.T) {
 			require.NoError(t, err)
 			originalSch, err := tbl.GetSchema(ctx)
 			require.NoError(t, err)
-			index := originalSch.Indexes().Get(dtestutils.IndexName)
+			index := originalSch.Indexes().GetByName(dtestutils.IndexName)
 			tt.expectedSchema.Indexes().AddIndex(index)
 			require.Equal(t, tt.expectedSchema, sch)
 
@@ -197,7 +197,7 @@ func TestDropColumnUsedByIndex(t *testing.T) {
 			require.NoError(t, err)
 			originalSch, err := tbl.GetSchema(ctx)
 			require.NoError(t, err)
-			index := originalSch.Indexes().Get(dtestutils.IndexName)
+			index := originalSch.Indexes().GetByName(dtestutils.IndexName)
 			assert.NotNil(t, index)
 			if tt.expectedIndex {
 				tt.expectedSchema.Indexes().AddIndex(index)
@@ -205,7 +205,7 @@ func TestDropColumnUsedByIndex(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Greater(t, indexRowData.Len(), uint64(0))
 			} else {
-				assert.Nil(t, sch.Indexes().Get(dtestutils.IndexName))
+				assert.Nil(t, sch.Indexes().GetByName(dtestutils.IndexName))
 				_, err := updatedTable.GetIndexRowData(ctx, dtestutils.IndexName)
 				assert.Error(t, err)
 			}

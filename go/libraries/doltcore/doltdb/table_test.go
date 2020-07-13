@@ -188,7 +188,7 @@ func TestIndexRebuildingWithOneIndex(t *testing.T) {
 	tSchema := createTestSchema(t)
 	_, err := tSchema.Indexes().RemoveIndex(testSchemaIndexAge)
 	require.NoError(t, err)
-	index := tSchema.Indexes().Get(testSchemaIndexName)
+	index := tSchema.Indexes().GetByName(testSchemaIndexName)
 	require.NotNil(t, index)
 	indexSch := index.Schema()
 	rowData, rows := createTestRowData(t, db, tSchema)
@@ -240,9 +240,9 @@ func TestIndexRebuildingWithTwoIndexes(t *testing.T) {
 	db, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_7_18, nil, nil)
 	tSchema := createTestSchema(t)
 
-	indexName := tSchema.Indexes().Get(testSchemaIndexName)
+	indexName := tSchema.Indexes().GetByName(testSchemaIndexName)
 	require.NotNil(t, indexName)
-	indexAge := tSchema.Indexes().Get(testSchemaIndexAge)
+	indexAge := tSchema.Indexes().GetByName(testSchemaIndexAge)
 	require.NotNil(t, indexAge)
 
 	indexNameSch := indexName.Schema()

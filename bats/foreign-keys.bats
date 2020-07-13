@@ -2154,6 +2154,7 @@ SQL
     dolt add -A
     dolt commit -m "updated parent"
     dolt checkout master
+    skip "todo: FK merge"
     dolt merge other
     
     run dolt sql -q "SELECT * FROM parent ORDER BY pk ASC" -r=csv
@@ -2207,6 +2208,7 @@ SQL
     dolt add -A
     dolt commit -m "updated parent"
     dolt checkout master
+    skip "todo: FK merge"
     run dolt merge other
     [ "$status" -eq "1" ]
     [[ "$output" =~ "violation" ]] || false
@@ -2340,6 +2342,7 @@ UPDATE child SET v1 = v1 + 1;
 SQL
     dolt add -A
     dolt commit -m "updated both"
+    skip "todo: FK merge"
     dolt checkout master
     dolt merge other
     
@@ -2396,6 +2399,7 @@ SQL
     dolt add -A
     dolt commit -m "updated both"
     dolt checkout master
+    skip "todo: FK merge"
     run dolt merge other
     [ "$status" -eq "1" ]
     [[ "$output" =~ "violation" ]] || false

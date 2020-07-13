@@ -155,6 +155,7 @@ func UntypeUnkeySchema(sch schema.Schema) (schema.Schema, error) {
 // The columns will all be of type types.StringKind and and IsPartOfPK will be false for every column, and all of the
 // columns will be in the schemas non-key ColumnCollection.
 func UntypedSchemaUnion(schemas ...schema.Schema) (schema.Schema, error) {
+	// todo: use colcoll union
 	unionSch, err := typed.TypedSchemaUnion(schemas...)
 
 	if err != nil {

@@ -56,6 +56,18 @@ type indexImpl struct {
 	comment   string
 }
 
+func NewIndex(name string, tags, allTags []uint64, indexColl *indexCollectionImpl, props IndexProperties) Index {
+	return &indexImpl{
+		name:      name,
+		tags:      tags,
+		allTags:   allTags,
+		indexColl: indexColl,
+		isHidden:  props.IsHidden,
+		isUnique:  props.IsUnique,
+		comment:   props.Comment,
+	}
+}
+
 func (ix *indexImpl) AllTags() []uint64 {
 	return ix.allTags
 }
@@ -77,19 +89,23 @@ func (ix *indexImpl) Count() int {
 }
 
 func (ix *indexImpl) Equals(other Index) bool {
-	otherIx, ok := other.(*indexImpl)
-	if !ok || len(ix.tags) != len(otherIx.tags) {
-		// allTags includes primary keys, which are dependent on the table and not the index, thus they're excluded
+	if ix.Count() != other.Count() {
 		return false
 	}
-	for i := range ix.tags {
-		if ix.tags[i] != otherIx.tags[i] {
+
+	// we're only interested in columns the index is defined over, not the table's primary keys
+	tt := ix.IndexedColumnTags()
+	ot := other.IndexedColumnTags()
+	for i := range tt {
+		if tt[i] != ot[i] {
 			return false
 		}
 	}
-	return ix.isHidden == otherIx.isHidden &&
-		ix.isUnique == otherIx.isUnique &&
-		ix.comment == otherIx.comment
+
+	return ix.IsHidden() == other.IsHidden() &&
+		ix.IsUnique() == other.IsUnique() &&
+		ix.Comment() == other.Comment() &&
+		ix.Name() == other.Name()
 }
 
 func (ix *indexImpl) GetColumn(tag uint64) (Column, bool) {

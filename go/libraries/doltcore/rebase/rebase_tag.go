@@ -26,7 +26,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	ndiff "github.com/liquidata-inc/dolt/go/store/diff"
@@ -530,10 +529,8 @@ func dropValsForDeletedColumns(ctx context.Context, nbf *types.NomsBinFormat, ro
 		return rows, nil
 	}
 
-	deletedCols, err := typed.TypedColCollectionSubtraction(parentSch, sch)
-	if err != nil {
-		return types.EmptyMap, err
-	}
+	deletedCols := schema.ColCollectionSetDifference(parentSch.GetAllCols(), sch.GetAllCols())
+
 	if deletedCols.Size() == 0 {
 		return rows, nil
 	}
