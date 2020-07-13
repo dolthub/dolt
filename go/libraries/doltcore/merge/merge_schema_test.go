@@ -32,16 +32,16 @@ import (
 )
 
 func TestMergeSchemas(t *testing.T) {
-	//for _, test := range mergeSchemaTests {
-	//	t.Run(test.name, func(t *testing.T) {
-	//		testMergeSchemas(t, test)
-	//	})
-	//}
-	//for _, test := range mergeSchemaConflictTests {
-	//	t.Run(test.name, func(t *testing.T) {
-	//		testMergeSchemasWithConflicts(t, test)
-	//	})
-	//}
+	for _, test := range mergeSchemaTests {
+		t.Run(test.name, func(t *testing.T) {
+			testMergeSchemas(t, test)
+		})
+	}
+	for _, test := range mergeSchemaConflictTests {
+		t.Run(test.name, func(t *testing.T) {
+			testMergeSchemasWithConflicts(t, test)
+		})
+	}
 	for _, test := range mergeForeignKeyTests {
 		t.Run(test.name, func(t *testing.T) {
 			testMergeForeignKeys(t, test)
