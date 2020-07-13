@@ -140,7 +140,7 @@ func TestNewCommit(t *testing.T) {
 	et2 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {},
                 parents: Set<Ref<Cycle<Commit>>>,
-                parentsList: List<Ref<Cycle<Commit>>>,
+                parents_list: List<Ref<Cycle<Commit>>>,
                 value: Float,
         }`)
 	assertTypeEquals(et2, at2)
@@ -154,7 +154,7 @@ func TestNewCommit(t *testing.T) {
 	et3 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {},
                 parents: Set<Ref<Cycle<Commit>>>,
-                parentsList: List<Ref<Cycle<Commit>>>,
+                parents_list: List<Ref<Cycle<Commit>>>,
                 value: Float | String,
         }`)
 	assertTypeEquals(et3, at3)
@@ -178,7 +178,7 @@ func TestNewCommit(t *testing.T) {
                         number: Float,
         	},
                 parents: Set<Ref<Cycle<Commit>>>,
-                parentsList: List<Ref<Cycle<Commit>>>,
+                parents_list: List<Ref<Cycle<Commit>>>,
                 value: Float | String,
         }`)
 	assertTypeEquals(et4, at4)
@@ -198,7 +198,7 @@ func TestNewCommit(t *testing.T) {
 	et5 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {},
                 parents: Set<Ref<Cycle<Commit>>>,
-                parentsList: List<Ref<Cycle<Commit>>>,
+                parents_list: List<Ref<Cycle<Commit>>>,
                 value: Float | String,
         }`)
 	assertTypeEquals(et5, at5)

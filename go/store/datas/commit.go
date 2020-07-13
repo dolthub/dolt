@@ -33,7 +33,12 @@ import (
 
 const (
 	ParentsField     = "parents"
-	ParentsListField = "parentsList"
+	// Added in July, 2020. Commits created with versions before this was
+	// added have only a Set of parents. Commits created after this was
+	// added carry a List of parents, because parent order can matter.
+	// `"parents"` is still written as a Set as well, so that commits
+	// created with newer versions of still usable by older versions.
+	ParentsListField = "parents_list"
 	ValueField       = "value"
 	MetaField        = "meta"
 	commitName       = "Commit"

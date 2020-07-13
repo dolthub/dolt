@@ -467,7 +467,7 @@ func errIfNotEqual(ctx context.Context, ex, act types.Map) error {
 }
 
 func parentsAndTables(cm types.Struct) (types.List, types.Map, error) {
-	ps, ok, err := cm.MaybeGet("parentsList")
+	ps, ok, err := cm.MaybeGet(ParentsListField)
 
 	if err != nil {
 		return types.EmptyList, types.EmptyMap, err

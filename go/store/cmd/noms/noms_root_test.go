@@ -51,11 +51,11 @@ func (s *nomsRootTestSuite) TestBasic() {
 	dbSpecStr := spec.CreateDatabaseSpecString("nbs", s.DBDir)
 	ds, _ = ds.Database().CommitValue(context.Background(), ds, types.String("hello!"))
 	c1, _ := s.MustRun(main, []string{"root", dbSpecStr})
-	s.Equal("1ijiai6majc7u8uvifgecb0fdblogr4v\n", c1)
+	s.Equal("maojl4udo9a7mtk2rnhuc08r0u7hc0fn\n", c1)
 
 	ds, _ = ds.Database().CommitValue(context.Background(), ds, types.String("goodbye"))
 	c2, _ := s.MustRun(main, []string{"root", dbSpecStr})
-	s.Equal("m8nr5eltahdjrqeul9p4u39lk4ug7hov\n", c2)
+	s.Equal("avdab61n1s1d1emdee7kb7e49quisr5n\n", c2)
 
 	// TODO: Would be good to test successful --update too, but requires changes to MustRun to allow
 	// input because of prompt :(.
