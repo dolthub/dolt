@@ -118,7 +118,7 @@ func TestNewCommit(t *testing.T) {
 	defer db.Close()
 
 	parents := mustList(types.NewList(context.Background(), db))
-	commit, err := NewCommit(types.Float(1), mustSet(parents.ToSet(context.Background())), parents, types.EmptyStruct(types.Format_7_18))
+	commit, err := NewCommit(context.Background(), types.Float(1), parents, types.EmptyStruct(types.Format_7_18))
 	assert.NoError(err)
 	at, err := types.TypeOf(commit)
 	assert.NoError(err)
@@ -133,7 +133,7 @@ func TestNewCommit(t *testing.T) {
 
 	// Committing another Float
 	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit, types.Format_7_18))))
-	commit2, err := NewCommit(types.Float(2), mustSet(parents.ToSet(context.Background())), parents, types.EmptyStruct(types.Format_7_18))
+	commit2, err := NewCommit(context.Background(), types.Float(2), parents, types.EmptyStruct(types.Format_7_18))
 	assert.NoError(err)
 	at2, err := types.TypeOf(commit2)
 	assert.NoError(err)
@@ -147,7 +147,7 @@ func TestNewCommit(t *testing.T) {
 
 	// Now commit a String
 	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit2, types.Format_7_18))))
-	commit3, err := NewCommit(types.String("Hi"), mustSet(parents.ToSet(context.Background())), parents, types.EmptyStruct(types.Format_7_18))
+	commit3, err := NewCommit(context.Background(), types.String("Hi"), parents, types.EmptyStruct(types.Format_7_18))
 	assert.NoError(err)
 	at3, err := types.TypeOf(commit3)
 	assert.NoError(err)
@@ -168,7 +168,7 @@ func TestNewCommit(t *testing.T) {
 	}`)
 	assertTypeEquals(metaType, mustType(types.TypeOf(meta)))
 	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit2, types.Format_7_18))))
-	commit4, err := NewCommit(types.String("Hi"), mustSet(parents.ToSet(context.Background())), parents, meta)
+	commit4, err := NewCommit(context.Background(), types.String("Hi"), parents, meta)
 	assert.NoError(err)
 	at4, err := types.TypeOf(commit4)
 	assert.NoError(err)
@@ -188,8 +188,8 @@ func TestNewCommit(t *testing.T) {
 		mustRef(types.NewRef(commit2, types.Format_7_18)),
 		mustRef(types.NewRef(commit3, types.Format_7_18))))
 	commit5, err := NewCommit(
+		context.Background(),
 		types.String("Hi"),
-		mustSet(parents.ToSet(context.Background())),
 		parents,
 		types.EmptyStruct(types.Format_7_18))
 	assert.NoError(err)
@@ -342,9 +342,9 @@ func TestNewCommitRegressionTest(t *testing.T) {
 	defer db.Close()
 
 	parents := mustList(types.NewList(context.Background(), db))
-	c1, err := NewCommit(types.String("one"), mustSet(parents.ToSet(context.Background())), parents, types.EmptyStruct(types.Format_7_18))
+	c1, err := NewCommit(context.Background(), types.String("one"), parents, types.EmptyStruct(types.Format_7_18))
 	assert.NoError(t, err)
-	cx, err := NewCommit(types.Bool(true), mustSet(parents.ToSet(context.Background())), parents, types.EmptyStruct(types.Format_7_18))
+	cx, err := NewCommit(context.Background(), types.Bool(true), parents, types.EmptyStruct(types.Format_7_18))
 	assert.NoError(t, err)
 	value := types.String("two")
 	parents, err = types.NewList(context.Background(), db, mustRef(types.NewRef(c1, types.Format_7_18)))
@@ -355,6 +355,6 @@ func TestNewCommitRegressionTest(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Used to fail
-	_, err = NewCommit(value, mustSet(parents.ToSet(context.Background())), parents, meta)
+	_, err = NewCommit(context.Background(), value, parents, meta)
 	assert.NoError(t, err)
 }

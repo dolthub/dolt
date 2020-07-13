@@ -257,12 +257,8 @@ func (db *database) CommitDangling(ctx context.Context, v types.Value, opts Comm
 	if opts.Meta.IsZeroValue() {
 		opts.Meta = types.EmptyStruct(db.Format())
 	}
-	parentsSet, err := opts.ParentsList.ToSet(ctx)
-	if err != nil {
-		return types.Struct{}, err
-	}
 
-	commitStruct, err := NewCommit(v, parentsSet, opts.ParentsList, opts.Meta)
+	commitStruct, err := NewCommit(ctx, v, opts.ParentsList, opts.Meta)
 	if err != nil {
 		return types.Struct{}, err
 	}
@@ -392,12 +388,7 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 						return err
 					}
 
-					s, err := l.ToSet(ctx)
-					if err != nil {
-						return err
-					}
-
-					newCom, err := NewCommit(merged, s, l, types.EmptyStruct(db.Format()))
+					newCom, err := NewCommit(ctx, merged, l, types.EmptyStruct(db.Format()))
 					if err != nil {
 						return err
 					}
@@ -552,11 +543,7 @@ func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitO
 	if meta.IsZeroValue() {
 		meta = types.EmptyStruct(ds.Database().Format())
 	}
-	parentsSet, err := parents.ToSet(ctx)
-	if err != nil {
-		return types.EmptyStruct(ds.Database().Format()), err
-	}
-	return NewCommit(v, parentsSet, parents, meta)
+	return NewCommit(ctx, v, parents, meta)
 }
 
 func (db *database) doHeadUpdate(ctx context.Context, ds Dataset, updateFunc func(ds Dataset) error) (Dataset, error) {

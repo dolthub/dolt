@@ -61,8 +61,12 @@ var valueCommitType = nomdl.MustParseType(`Struct Commit {
 // }
 // ```
 // where M is a struct type and T is any type.
-func NewCommit(value types.Value, parents types.Set, parentsList types.List, meta types.Struct) (types.Struct, error) {
-	return commitTemplate.NewStruct(meta.Format(), []types.Value{meta, parents, parentsList, value})
+func NewCommit(ctx context.Context, value types.Value, parentsList types.List, meta types.Struct) (types.Struct, error) {
+	parentsSet, err := parentsList.ToSet(ctx)
+	if err != nil {
+		return types.EmptyStruct(meta.Format()), err
+	}
+	return commitTemplate.NewStruct(meta.Format(), []types.Value{meta, parentsSet, parentsList, value})
 }
 
 // FindCommonAncestor returns the most recent common ancestor of c1 and c2, if
