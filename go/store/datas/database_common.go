@@ -250,27 +250,25 @@ func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts 
 }
 
 func (db *database) CommitDangling(ctx context.Context, v types.Value, opts CommitOptions) (types.Struct, error) {
-	if (opts.Parents == types.Set{}) {
+	if opts.ParentsList == types.EmptyList || opts.ParentsList.Len() == 0 {
 		return types.Struct{}, errors.New("cannot create commit without parents")
 	}
 
 	if opts.Meta.IsZeroValue() {
 		opts.Meta = types.EmptyStruct(db.Format())
 	}
-	commitStruct, err := NewCommit(v, opts.Parents, opts.Meta)
 
+	commitStruct, err := NewCommit(ctx, v, opts.ParentsList, opts.Meta)
 	if err != nil {
 		return types.Struct{}, err
 	}
 
 	_, err = db.WriteValue(ctx, commitStruct)
-
 	if err != nil {
 		return types.Struct{}, err
 	}
 
 	err = db.Flush(ctx)
-
 	if err != nil {
 		return types.Struct{}, err
 	}
@@ -385,12 +383,12 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 						return err
 					}
 
-					s, err := types.NewSet(ctx, db, commitRef, currentHeadRef)
+					l, err := types.NewList(ctx, db, commitRef, currentHeadRef)
 					if err != nil {
 						return err
 					}
 
-					newCom, err := NewCommit(merged, s, types.EmptyStruct(db.Format()))
+					newCom, err := NewCommit(ctx, merged, l, types.EmptyStruct(db.Format()))
 					if err != nil {
 						return err
 					}
@@ -522,11 +520,10 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types
 }
 
 func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (types.Struct, error) {
-	parents := opts.Parents
-	if (parents == types.Set{}) {
+	parents := opts.ParentsList
+	if parents == types.EmptyList || parents.Len() == 0 {
 		var err error
-		parents, err = types.NewSet(ctx, ds.Database())
-
+		parents, err = types.NewList(ctx, ds.Database())
 		if err != nil {
 			return types.EmptyStruct(ds.Database().Format()), err
 		}
@@ -534,14 +531,8 @@ func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitO
 		if headRef, ok, err := ds.MaybeHeadRef(); err != nil {
 			return types.EmptyStruct(ds.Database().Format()), err
 		} else if ok {
-			se, err := parents.Edit().Insert(headRef)
-
-			if err != nil {
-				return types.EmptyStruct(ds.Database().Format()), err
-			}
-
-			parents, err = se.Set(ctx)
-
+			le := parents.Edit().Append(headRef)
+			parents, err = le.List(ctx)
 			if err != nil {
 				return types.EmptyStruct(ds.Database().Format()), err
 			}
@@ -552,7 +543,7 @@ func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitO
 	if meta.IsZeroValue() {
 		meta = types.EmptyStruct(ds.Database().Format())
 	}
-	return NewCommit(v, parents, meta)
+	return NewCommit(ctx, v, parents, meta)
 }
 
 func (db *database) doHeadUpdate(ctx context.Context, ds Dataset, updateFunc func(ds Dataset) error) (Dataset, error) {

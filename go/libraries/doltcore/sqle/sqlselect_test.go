@@ -706,7 +706,7 @@ var BasicSelectTests = []SelectTest{
 		Query: "select * from dolt_log",
 		ExpectedRows: []sql.Row{
 			{
-				"p3hcpn726bhcsellrtitr85ckjotnv8d",
+				"0o2rnf5pq2s1nq3hj3609e1lt0socuf1",
 				"billy bob",
 				"bigbillieb@fake.horse",
 				time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -736,7 +736,7 @@ var BasicSelectTests = []SelectTest{
 		ExpectedRows: []sql.Row{
 			{
 				"master",
-				"p3hcpn726bhcsellrtitr85ckjotnv8d",
+				"0o2rnf5pq2s1nq3hj3609e1lt0socuf1",
 				"billy bob", "bigbillieb@fake.horse",
 				time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC),
 				"Initialize data repository",

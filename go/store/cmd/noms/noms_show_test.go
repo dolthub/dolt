@@ -44,11 +44,11 @@ type nomsShowTestSuite struct {
 }
 
 const (
-	res1 = "struct Commit {\n  meta: struct {},\n  parents: set {},\n  value: #nl181uu1ioc2j6t7mt9paidjlhlcjtgj,\n}"
+	res1 = "struct Commit {\n  meta: struct {},\n  parents: set {},\n  parents_list: [],\n  value: #nl181uu1ioc2j6t7mt9paidjlhlcjtgj,\n}"
 	res2 = "\"test string\""
-	res3 = "struct Commit {\n  meta: struct {},\n  parents: set {\n    #4g7ggl6999v5mlucl4a507n7k3kvckiq,\n  },\n  value: #82adk7hfcudg8fktittm672to66t6qeu,\n}"
+	res3 = "struct Commit {\n  meta: struct {},\n  parents: set {\n    #4g7ggl6999v5mlucl4a507n7k3kvckiq,\n  },\n  parents_list: [\n    #4g7ggl6999v5mlucl4a507n7k3kvckiq,\n  ],\n  value: #82adk7hfcudg8fktittm672to66t6qeu,\n}"
 	res4 = "[\n  \"elem1\",\n  2,\n  \"elem3\",\n]"
-	res5 = "struct Commit {\n  meta: struct {},\n  parents: set {\n    #3tmg89vabs2k6hotdock1kuo13j4lmqv,\n  },\n  value: #5cgfu2vk4nc21m1vjkjjpd2kvcm2df7q,\n}"
+	res5 = "struct Commit {\n  meta: struct {},\n  parents: set {\n    #3tmg89vabs2k6hotdock1kuo13j4lmqv,\n  },\n  parents_list: [\n    #3tmg89vabs2k6hotdock1kuo13j4lmqv,\n  ],\n  value: #5cgfu2vk4nc21m1vjkjjpd2kvcm2df7q,\n}"
 )
 
 func (s *nomsShowTestSuite) spec(str string) spec.Spec {

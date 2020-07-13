@@ -36,6 +36,7 @@ var pattern = regexp.MustCompile("([0-9a-v]{" + strconv.Itoa(hash.StringLen) + "
 
 // EqualsIgnoreHashes compares two strings, ignoring hashes in them.
 func EqualsIgnoreHashes(tt *testing.T, expected, actual string) {
+	tt.Helper()
 	if RemoveHashes(expected) != RemoveHashes(actual) {
 		assert.Equal(tt, expected, actual)
 	}
