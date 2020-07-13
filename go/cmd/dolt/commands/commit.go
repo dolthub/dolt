@@ -27,6 +27,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/merge"
@@ -95,7 +96,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		msg = getCommitMessageFromEditor(ctx, dEnv)
 	}
 
-	t := time.Now()
+	t := doltdb.CommitNowFunc()
 	if commitTimeStr, ok := apr.GetValue(dateParam); ok {
 		var err error
 		t, err = parseDate(commitTimeStr)

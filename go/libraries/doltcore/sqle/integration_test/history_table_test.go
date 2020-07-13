@@ -17,18 +17,24 @@ package integration_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/go-mysql-server/sql"
 )
 
 func TestHistoryTable(t *testing.T) {
+	// pin the commit time to get const hashes
+	doltdb.CommitNowFunc = constTimeFunc
+	doltdb.CommitLoc = time.UTC
+
 	for _, test := range historyTableTests {
 		t.Run(test.name, func(t *testing.T) {
 			testHistoryTable(t, test)
@@ -56,16 +62,12 @@ var setupCommon = []testCommand{
 	{commands.CommitCmd{}, []string{"-m", "first"}},
 	{commands.SqlCmd{}, []string{"-q", "insert into test values " +
 		"(0,0)," +
-		"(1,1)," +
-		"(2,2)," +
-		"(3,3);"}},
+		"(1,1);"}},
 	{commands.AddCmd{}, []string{"."}},
 	{commands.CommitCmd{}, []string{"-m", "second"}},
 	{commands.SqlCmd{}, []string{"-q", "insert into test values " +
-		"(4,4)," +
-		"(5,5)," +
-		"(6,6)," +
-		"(7,7);"}},
+		"(2,2)," +
+		"(3,3);"}},
 	{commands.AddCmd{}, []string{"."}},
 	{commands.CommitCmd{}, []string{"-m", "third"}},
 	{commands.SqlCmd{}, []string{"-q", "update test set c0 = c0+10 where c0 % 2 = 0"}},
@@ -82,23 +84,28 @@ var historyTableTests = []historyTableTest{
 			{int32(1), int32(1)},
 			{int32(2), int32(12)},
 			{int32(3), int32(3)},
-			{int32(4), int32(14)},
-			{int32(5), int32(5)},
-			{int32(6), int32(16)},
-			{int32(7), int32(7)},
 			{int32(0), int32(0)},
 			{int32(1), int32(1)},
 			{int32(2), int32(2)},
 			{int32(3), int32(3)},
-			{int32(4), int32(4)},
-			{int32(5), int32(5)},
-			{int32(6), int32(6)},
-			{int32(7), int32(7)},
 			{int32(0), int32(0)},
 			{int32(1), int32(1)},
-			{int32(2), int32(2)},
-			{int32(3), int32(3)},
-
+		},
+	},
+	{
+		name: "select commit_hash from dolt_history_test",
+		query: "select commit_hash from dolt_history_test",
+		rows: []sql.Row{
+			{"80k29cd1ljh5e7uvmrr713012o2lq8eo"},
+			{"80k29cd1ljh5e7uvmrr713012o2lq8eo"},
+			{"80k29cd1ljh5e7uvmrr713012o2lq8eo"},
+			{"80k29cd1ljh5e7uvmrr713012o2lq8eo"},
+			{"dlss2lrga4qrf9ncagbjl73s5jeerpdf"},
+			{"dlss2lrga4qrf9ncagbjl73s5jeerpdf"},
+			{"dlss2lrga4qrf9ncagbjl73s5jeerpdf"},
+			{"dlss2lrga4qrf9ncagbjl73s5jeerpdf"},
+			{"tra4quuj2hh2c94v876o7r28d3eapqgk"},
+			{"tra4quuj2hh2c94v876o7r28d3eapqgk"},
 		},
 	},
 }
@@ -126,4 +133,11 @@ func testHistoryTable(t *testing.T, test historyTableTest) {
 	for i := range test.rows {
 		assert.Equal(t, test.rows[i], actRows[i])
 	}
+}
+
+func constTimeFunc() time.Time {
+	t, _ := time.Parse(
+		time.RFC3339,
+		"2020-07-13T05:07:00-05:00")
+	return t
 }
