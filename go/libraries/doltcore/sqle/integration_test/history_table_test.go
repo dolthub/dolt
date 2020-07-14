@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/liquidata-inc/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -27,7 +28,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
-	"github.com/liquidata-inc/go-mysql-server/sql"
 )
 
 func TestHistoryTable(t *testing.T) {
@@ -131,7 +131,7 @@ func historyTableTests() []historyTableTest {
 		},
 		{
 			name: "compound or filter on commit hash",
-			query: fmt.Sprintf("select pk, c0, commit_hash from dolt_history_test " +
+			query: fmt.Sprintf("select pk, c0, commit_hash from dolt_history_test "+
 				"where commit_hash = '%s' or commit_hash = '%s';", HEAD_1, HEAD_2),
 			rows: []sql.Row{
 				{int32(0), int32(0), HEAD_1},
@@ -144,7 +144,7 @@ func historyTableTests() []historyTableTest {
 		},
 		{
 			name: "commit hash in value set",
-			query: fmt.Sprintf("select pk, c0, commit_hash from dolt_history_test " +
+			query: fmt.Sprintf("select pk, c0, commit_hash from dolt_history_test "+
 				"where commit_hash in ('%s', '%s');", HEAD_1, HEAD_2),
 			rows: []sql.Row{
 				{int32(0), int32(0), HEAD_1},
@@ -157,7 +157,7 @@ func historyTableTests() []historyTableTest {
 		},
 		{
 			name: "commit hash not in value set",
-			query: fmt.Sprintf("select pk, c0, commit_hash from dolt_history_test " +
+			query: fmt.Sprintf("select pk, c0, commit_hash from dolt_history_test "+
 				"where commit_hash not in ('%s','%s');", HEAD_1, HEAD_2),
 			rows: []sql.Row{
 				{int32(0), int32(10), HEAD},
@@ -190,11 +190,11 @@ func historyTableTests() []historyTableTest {
 	}
 }
 
-var HEAD   = ""  // HEAD
-var HEAD_1 = ""  // HEAD~1
-var HEAD_2 = ""  // HEAD~2
-var HEAD_3 = ""  // HEAD~3
-var INIT   = ""  // HEAD~4
+var HEAD = ""   // HEAD
+var HEAD_1 = "" // HEAD~1
+var HEAD_2 = "" // HEAD~2
+var HEAD_3 = "" // HEAD~3
+var INIT = ""   // HEAD~4
 
 func setupHistoryTests(t *testing.T) *env.DoltEnv {
 	ctx := context.Background()
@@ -212,11 +212,11 @@ func setupHistoryTests(t *testing.T) *env.DoltEnv {
 	rows, err := sqle.ExecuteSelect(dEnv, dEnv.DoltDB, root, q)
 	require.NoError(t, err)
 	require.Equal(t, 5, len(rows))
-	HEAD   = rows[0][0].(string)
+	HEAD = rows[0][0].(string)
 	HEAD_1 = rows[1][0].(string)
 	HEAD_2 = rows[2][0].(string)
 	HEAD_3 = rows[3][0].(string)
-	INIT   = rows[4][0].(string)
+	INIT = rows[4][0].(string)
 
 	return dEnv
 }
