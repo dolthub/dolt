@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/liquidata-inc/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -27,7 +28,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
-	"github.com/liquidata-inc/go-mysql-server/sql"
 )
 
 func TestHistoryTable(t *testing.T) {
@@ -43,10 +43,10 @@ func TestHistoryTable(t *testing.T) {
 }
 
 type historyTableTest struct {
-	name     string
-	query    string
-	setup    []testCommand
-	rows     []sql.Row
+	name  string
+	query string
+	setup []testCommand
+	rows  []sql.Row
 }
 
 type testCommand struct {
@@ -77,7 +77,7 @@ var setupCommon = []testCommand{
 
 var historyTableTests = []historyTableTest{
 	{
-		name: "select pk, c0 from dolt_history_test",
+		name:  "select pk, c0 from dolt_history_test",
 		query: "select pk, c0 from dolt_history_test",
 		rows: []sql.Row{
 			{int32(0), int32(10)},
@@ -93,7 +93,7 @@ var historyTableTests = []historyTableTest{
 		},
 	},
 	{
-		name: "select commit_hash from dolt_history_test",
+		name:  "select commit_hash from dolt_history_test",
 		query: "select commit_hash from dolt_history_test",
 		rows: []sql.Row{
 			{"4l64009toat97c0eama1j7hbst4br2l5"},
@@ -109,7 +109,7 @@ var historyTableTests = []historyTableTest{
 		},
 	},
 	{
-		name: "filter for a specific commit hash",
+		name:  "filter for a specific commit hash",
 		query: "select * from dolt_history_test where commit_hash = 'u1to822j6l5nf1nr0jjoum45nm0mo495';",
 		rows: []sql.Row{
 			{int32(0), int32(0), "u1to822j6l5nf1nr0jjoum45nm0mo495", "billy bob", constTimeFunc()},
@@ -119,7 +119,7 @@ var historyTableTests = []historyTableTest{
 		},
 	},
 	{
-		name: "filter out a specific commit hash",
+		name:  "filter out a specific commit hash",
 		query: "select * from dolt_history_test where commit_hash != 'u1to822j6l5nf1nr0jjoum45nm0mo495';",
 		rows: []sql.Row{
 			{int32(0), int32(10), "4l64009toat97c0eama1j7hbst4br2l5", "billy bob", constTimeFunc()},
@@ -171,7 +171,7 @@ var historyTableTests = []historyTableTest{
 		},
 	},
 	{
-		name: "commit is not null",
+		name:  "commit is not null",
 		query: "select * from dolt_history_test where commit_hash is not null;",
 		rows: []sql.Row{
 			{int32(0), int32(10), "4l64009toat97c0eama1j7hbst4br2l5", "billy bob", constTimeFunc()},
@@ -187,9 +187,9 @@ var historyTableTests = []historyTableTest{
 		},
 	},
 	{
-		name: "commit is null",
+		name:  "commit is null",
 		query: "select * from dolt_history_test where commit_hash is null;",
-		rows: []sql.Row{},
+		rows:  []sql.Row{},
 	},
 }
 
@@ -219,5 +219,5 @@ func testHistoryTable(t *testing.T, test historyTableTest) {
 }
 
 func constTimeFunc() time.Time {
-	return time.Unix(0,0).In(time.UTC)
+	return time.Unix(0, 0).In(time.UTC)
 }
