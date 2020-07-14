@@ -96,17 +96,100 @@ var historyTableTests = []historyTableTest{
 		name: "select commit_hash from dolt_history_test",
 		query: "select commit_hash from dolt_history_test",
 		rows: []sql.Row{
-			{"80k29cd1ljh5e7uvmrr713012o2lq8eo"},
-			{"80k29cd1ljh5e7uvmrr713012o2lq8eo"},
-			{"80k29cd1ljh5e7uvmrr713012o2lq8eo"},
-			{"80k29cd1ljh5e7uvmrr713012o2lq8eo"},
-			{"dlss2lrga4qrf9ncagbjl73s5jeerpdf"},
-			{"dlss2lrga4qrf9ncagbjl73s5jeerpdf"},
-			{"dlss2lrga4qrf9ncagbjl73s5jeerpdf"},
-			{"dlss2lrga4qrf9ncagbjl73s5jeerpdf"},
-			{"tra4quuj2hh2c94v876o7r28d3eapqgk"},
-			{"tra4quuj2hh2c94v876o7r28d3eapqgk"},
+			{"4l64009toat97c0eama1j7hbst4br2l5"},
+			{"4l64009toat97c0eama1j7hbst4br2l5"},
+			{"4l64009toat97c0eama1j7hbst4br2l5"},
+			{"4l64009toat97c0eama1j7hbst4br2l5"},
+			{"u1to822j6l5nf1nr0jjoum45nm0mo495"},
+			{"u1to822j6l5nf1nr0jjoum45nm0mo495"},
+			{"u1to822j6l5nf1nr0jjoum45nm0mo495"},
+			{"u1to822j6l5nf1nr0jjoum45nm0mo495"},
+			{"tq3f54aftrgie4h5v9746sjftlkstrgg"},
+			{"tq3f54aftrgie4h5v9746sjftlkstrgg"},
 		},
+	},
+	{
+		name: "filter for a specific commit hash",
+		query: "select * from dolt_history_test where commit_hash = 'u1to822j6l5nf1nr0jjoum45nm0mo495';",
+		rows: []sql.Row{
+			{int32(0), int32(0), "u1to822j6l5nf1nr0jjoum45nm0mo495", "billy bob", constTimeFunc()},
+			{int32(1), int32(1), "u1to822j6l5nf1nr0jjoum45nm0mo495", "billy bob", constTimeFunc()},
+			{int32(2), int32(2), "u1to822j6l5nf1nr0jjoum45nm0mo495", "billy bob", constTimeFunc()},
+			{int32(3), int32(3), "u1to822j6l5nf1nr0jjoum45nm0mo495", "billy bob", constTimeFunc()},
+		},
+	},
+	{
+		name: "filter out a specific commit hash",
+		query: "select * from dolt_history_test where commit_hash != 'u1to822j6l5nf1nr0jjoum45nm0mo495';",
+		rows: []sql.Row{
+			{int32(0), int32(10), "4l64009toat97c0eama1j7hbst4br2l5", "billy bob", constTimeFunc()},
+			{int32(1), int32(1), "4l64009toat97c0eama1j7hbst4br2l5", "billy bob", constTimeFunc()},
+			{int32(2), int32(12), "4l64009toat97c0eama1j7hbst4br2l5", "billy bob", constTimeFunc()},
+			{int32(3), int32(3), "4l64009toat97c0eama1j7hbst4br2l5", "billy bob", constTimeFunc()},
+			{int32(0), int32(0), "tq3f54aftrgie4h5v9746sjftlkstrgg", "billy bob", constTimeFunc()},
+			{int32(1), int32(1), "tq3f54aftrgie4h5v9746sjftlkstrgg", "billy bob", constTimeFunc()},
+		},
+	},
+	{
+		name: "compound or filter on commit hash",
+		query: "select * from dolt_history_test where " +
+			"commit_hash = 'u1to822j6l5nf1nr0jjoum45nm0mo495' or " +
+			"commit_hash = 'tq3f54aftrgie4h5v9746sjftlkstrgg';",
+		rows: []sql.Row{
+			{int32(0), int32(0), "u1to822j6l5nf1nr0jjoum45nm0mo495", "billy bob", constTimeFunc()},
+			{int32(1), int32(1), "u1to822j6l5nf1nr0jjoum45nm0mo495", "billy bob", constTimeFunc()},
+			{int32(2), int32(2), "u1to822j6l5nf1nr0jjoum45nm0mo495", "billy bob", constTimeFunc()},
+			{int32(3), int32(3), "u1to822j6l5nf1nr0jjoum45nm0mo495", "billy bob", constTimeFunc()},
+			{int32(0), int32(0), "tq3f54aftrgie4h5v9746sjftlkstrgg", "billy bob", constTimeFunc()},
+			{int32(1), int32(1), "tq3f54aftrgie4h5v9746sjftlkstrgg", "billy bob", constTimeFunc()},
+		},
+	},
+	{
+		name: "commit hash in value set",
+		query: "select * from dolt_history_test where commit_hash in " +
+			"('u1to822j6l5nf1nr0jjoum45nm0mo495', " +
+			" 'tq3f54aftrgie4h5v9746sjftlkstrgg');",
+		rows: []sql.Row{
+			{int32(0), int32(0), "u1to822j6l5nf1nr0jjoum45nm0mo495", "billy bob", constTimeFunc()},
+			{int32(1), int32(1), "u1to822j6l5nf1nr0jjoum45nm0mo495", "billy bob", constTimeFunc()},
+			{int32(2), int32(2), "u1to822j6l5nf1nr0jjoum45nm0mo495", "billy bob", constTimeFunc()},
+			{int32(3), int32(3), "u1to822j6l5nf1nr0jjoum45nm0mo495", "billy bob", constTimeFunc()},
+			{int32(0), int32(0), "tq3f54aftrgie4h5v9746sjftlkstrgg", "billy bob", constTimeFunc()},
+			{int32(1), int32(1), "tq3f54aftrgie4h5v9746sjftlkstrgg", "billy bob", constTimeFunc()},
+		},
+	},
+	{
+		name: "commit hash not in value set",
+		query: "select * from dolt_history_test where commit_hash not in " +
+			"('u1to822j6l5nf1nr0jjoum45nm0mo495', " +
+			" 'tq3f54aftrgie4h5v9746sjftlkstrgg');",
+		rows: []sql.Row{
+			{int32(0), int32(10), "4l64009toat97c0eama1j7hbst4br2l5", "billy bob", constTimeFunc()},
+			{int32(1), int32(1), "4l64009toat97c0eama1j7hbst4br2l5", "billy bob", constTimeFunc()},
+			{int32(2), int32(12), "4l64009toat97c0eama1j7hbst4br2l5", "billy bob", constTimeFunc()},
+			{int32(3), int32(3), "4l64009toat97c0eama1j7hbst4br2l5", "billy bob", constTimeFunc()},
+		},
+	},
+	{
+		name: "commit is not null",
+		query: "select * from dolt_history_test where commit_hash is not null;",
+		rows: []sql.Row{
+			{int32(0), int32(10), "4l64009toat97c0eama1j7hbst4br2l5", "billy bob", constTimeFunc()},
+			{int32(1), int32(1), "4l64009toat97c0eama1j7hbst4br2l5", "billy bob", constTimeFunc()},
+			{int32(2), int32(12), "4l64009toat97c0eama1j7hbst4br2l5", "billy bob", constTimeFunc()},
+			{int32(3), int32(3), "4l64009toat97c0eama1j7hbst4br2l5", "billy bob", constTimeFunc()},
+			{int32(0), int32(0), "u1to822j6l5nf1nr0jjoum45nm0mo495", "billy bob", constTimeFunc()},
+			{int32(1), int32(1), "u1to822j6l5nf1nr0jjoum45nm0mo495", "billy bob", constTimeFunc()},
+			{int32(2), int32(2), "u1to822j6l5nf1nr0jjoum45nm0mo495", "billy bob", constTimeFunc()},
+			{int32(3), int32(3), "u1to822j6l5nf1nr0jjoum45nm0mo495", "billy bob", constTimeFunc()},
+			{int32(0), int32(0), "tq3f54aftrgie4h5v9746sjftlkstrgg", "billy bob", constTimeFunc()},
+			{int32(1), int32(1), "tq3f54aftrgie4h5v9746sjftlkstrgg", "billy bob", constTimeFunc()},
+		},
+	},
+	{
+		name: "commit is null",
+		query: "select * from dolt_history_test where commit_hash is null;",
+		rows: []sql.Row{},
 	},
 }
 
@@ -136,8 +219,5 @@ func testHistoryTable(t *testing.T, test historyTableTest) {
 }
 
 func constTimeFunc() time.Time {
-	t, _ := time.Parse(
-		time.RFC3339,
-		"2020-07-13T05:07:00-05:00")
-	return t
+	return time.Unix(0,0).In(time.UTC)
 }
