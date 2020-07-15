@@ -25,7 +25,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/expreval"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/hash"
@@ -138,7 +137,7 @@ func (ht *HistoryTable) WithFilters(filters []sql.Expression) sql.Table {
 	}
 
 	if len(ht.commitFilters) > 0 {
-		commitCheck, err := getCommitFilterFunc(ht.ddb.Format(), ht.commitFilters)
+		commitCheck, err := getCommitFilterFunc(ht.commitFilters)
 
 		if err != nil {
 			return newStaticErrorTable(ht, err)
@@ -192,26 +191,8 @@ func splitCommitFilters(filters []sql.Expression) (commitFilters, rowFilters []s
 	return splitFilters(filters, getColumnFilterCheck(commitFilterCols))
 }
 
-func commitSchema() schema.Schema {
-	cols := []schema.Column{
-		schema.NewColumn(CommitterCol, doltdb.HistoryCommitterTag, types.StringKind, false),
-		schema.NewColumn(CommitHashCol, doltdb.HistoryCommitHashTag, types.StringKind, false),
-		schema.NewColumn(CommitDateCol, doltdb.HistoryCommitDateTag, types.TimestampKind, false),
-	}
-
-	colColl, _ := schema.NewColCollection(cols...)
-
-	return schema.UnkeyedSchemaFromCols(colColl)
-}
-
-var commitSch = commitSchema()
-
-func getCommitFilterFunc(nbf *types.NomsBinFormat, filters []sql.Expression) (doltdb.CommitFilter, error) {
-	expFunc, err := expreval.ExpressionFuncFromSQLExpressions(nbf, commitSch, filters)
-
-	if err != nil {
-		return nil, err
-	}
+func getCommitFilterFunc(filters []sql.Expression) (doltdb.CommitFilter, error) {
+	filters = transformFilters(filters...)
 
 	return func(ctx context.Context, h hash.Hash, cm *doltdb.Commit) (filterOut bool, err error) {
 		meta, err := cm.GetCommitMeta()
@@ -220,14 +201,44 @@ func getCommitFilterFunc(nbf *types.NomsBinFormat, filters []sql.Expression) (do
 			return false, err
 		}
 
-		commitFields := map[uint64]types.Value{
-			doltdb.HistoryCommitterTag:  types.String(meta.Name),
-			doltdb.HistoryCommitHashTag: types.String(h.String()),
-			doltdb.HistoryCommitDateTag: types.Timestamp(meta.Time()),
+		sc := sql.NewContext(ctx)
+		r := sql.Row{h.String(), meta.Name, meta.Time()}
+
+		for _, filter := range filters {
+			res, err := filter.Eval(sc, r)
+			if err != nil {
+				return false, err
+			}
+			b, ok := res.(bool)
+			if ok && !b {
+				return true, nil
+			}
 		}
 
-		return expFunc(ctx, commitFields)
+		return false, err
 	}, nil
+}
+
+func transformFilters(filters ...sql.Expression) []sql.Expression {
+	for i := range filters {
+		filters[i], _ = expression.TransformUp(filters[i], func(e sql.Expression) (sql.Expression, error) {
+			gf, ok := e.(*expression.GetField)
+			if !ok {
+				return e, nil
+			}
+			switch gf.Name() {
+			case CommitHashCol:
+				return gf.WithIndex(0), nil
+			case CommitterCol:
+				return gf.WithIndex(1), nil
+			case CommitDateCol:
+				return gf.WithIndex(2), nil
+			default:
+				return gf, nil
+			}
+		})
+	}
+	return filters
 }
 
 func (ht *HistoryTable) WithProjection(colNames []string) sql.Table {
