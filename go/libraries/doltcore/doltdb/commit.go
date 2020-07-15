@@ -24,9 +24,10 @@ import (
 )
 
 const (
-	metaField      = "meta"
-	parentsField   = "parents"
-	rootValueField = "value"
+	metaField        = "meta"
+	parentsField     = "parents"
+	parentsListField = "parentsList"
+	rootValueField   = "value"
 )
 
 var errCommitHasNoMeta = errors.New("commit has no metadata")
@@ -36,10 +37,61 @@ var errHasNoRootValue = errors.New("no root value")
 type Commit struct {
 	vrw      types.ValueReadWriter
 	commitSt types.Struct
+	parents  []types.Ref
 }
 
 func NewCommit(vrw types.ValueReadWriter, commitSt types.Struct) *Commit {
-	return &Commit{vrw, commitSt}
+	parents, err := readParents(vrw, commitSt)
+	if err != nil {
+		panic(err)
+	}
+	return &Commit{vrw, commitSt, parents}
+}
+
+func readParents(vrw types.ValueReadWriter, commitSt types.Struct) ([]types.Ref, error) {
+	if l, found, err := commitSt.MaybeGet(parentsListField); err != nil {
+		return nil, err
+	} else if found && l != nil {
+		l := l.(types.List)
+		parents := make([]types.Ref, 0, l.Len())
+		i, err := l.Iterator(context.TODO())
+		if err != nil {
+			return nil, err
+		}
+		for {
+			v, err := i.Next(context.TODO())
+			if err != nil {
+				return nil, err
+			}
+			if v == nil {
+				break
+			}
+			parents = append(parents, v.(types.Ref))
+		}
+		return parents, nil
+	}
+	if s, found, err := commitSt.MaybeGet(parentsField); err != nil {
+		return nil, err
+	} else if found && s != nil {
+		s := s.(types.Set)
+		parents := make([]types.Ref, 0, s.Len())
+		i, err := s.Iterator(context.TODO())
+		if err != nil {
+			return nil, err
+		}
+		for {
+			v, err := i.Next(context.TODO())
+			if err != nil {
+				return nil, err
+			}
+			if v == nil {
+				break
+			}
+			parents = append(parents, v.(types.Ref))
+		}
+		return parents, nil
+	}
+	return nil, nil
 }
 
 // HashOf returns the hash of the commit
@@ -79,43 +131,16 @@ func (c *Commit) GetCommitMeta() (*CommitMeta, error) {
 }
 
 func (c *Commit) ParentHashes(ctx context.Context) ([]hash.Hash, error) {
-	parentSet, err := c.getParents()
-
-	if err != nil {
-		return nil, err
+	hashes := make([]hash.Hash, len(c.parents))
+	for i, pr := range c.parents {
+		hashes[i] = pr.TargetHash()
 	}
-
-	hashes := make([]hash.Hash, 0, parentSet.Len())
-	err = parentSet.IterAll(ctx, func(parentVal types.Value) error {
-		parentRef := parentVal.(types.Ref)
-		parentHash := parentRef.TargetHash()
-		hashes = append(hashes, parentHash)
-
-		return nil
-	})
-
-	return hashes, err
-}
-
-func (c *Commit) getParents() (types.Set, error) {
-	if parVal, found, err := c.commitSt.MaybeGet(parentsField); err != nil {
-		return types.EmptySet, err
-	} else if found && parVal != nil {
-		return parVal.(types.Set), nil
-	}
-
-	return types.EmptySet, nil
+	return hashes, nil
 }
 
 // NumParents gets the number of parents a commit has.
 func (c *Commit) NumParents() (int, error) {
-	parents, err := c.getParents()
-
-	if err != nil {
-		return 0, err
-	}
-
-	return int(parents.Len()), nil
+	return len(c.parents), nil
 }
 
 func (c *Commit) Height() (uint64, error) {
@@ -127,35 +152,11 @@ func (c *Commit) Height() (uint64, error) {
 }
 
 func (c *Commit) getParent(ctx context.Context, idx int) (*types.Struct, error) {
-	parentSet, err := c.getParents()
-
-	if err != nil {
-		return nil, err
-	}
-
-	itr, err := parentSet.IteratorAt(ctx, uint64(idx))
-
-	if err != nil {
-		return nil, err
-	}
-
-	parentVal, err := itr.Next(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if parentVal == nil {
-		return nil, nil
-	}
-
-	parentRef := parentVal.(types.Ref)
+	parentRef := c.parents[idx]
 	targVal, err := parentRef.TargetValue(ctx, c.vrw)
-
 	if err != nil {
 		return nil, err
 	}
-
 	parentSt := targVal.(types.Struct)
 	return &parentSt, nil
 }
@@ -210,7 +211,7 @@ func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
 		return nil, err
 	}
 
-	return &Commit{cm1.vrw, ancestorSt}, nil
+	return NewCommit(cm1.vrw, ancestorSt), nil
 }
 
 func getCommitAncestorRef(ctx context.Context, ref1, ref2 types.Ref, vrw types.ValueReadWriter) (types.Ref, error) {
@@ -272,5 +273,5 @@ func (c *Commit) GetAncestor(ctx context.Context, as *AncestorSpec) (*Commit, er
 		return nil, err
 	}
 
-	return &Commit{c.vrw, ancestorSt}, nil
+	return NewCommit(c.vrw, ancestorSt), nil
 }
