@@ -76,6 +76,48 @@ teardown() {
     [[ "$output" =~ "| 0 " ]] || false
 }
 
+@test "dolt add fails on table with conflict" {
+    dolt checkout -b merge_branch
+    dolt SQL -q "INSERT INTO test1 values (0,1,1)"
+    dolt add test1
+    dolt commit -m "add pk 0 = 1,1 to test1"
+
+    dolt checkout master
+    dolt SQL -q "INSERT INTO test1 values (0,2,2)"
+    dolt add test1
+    dolt commit -m "add pk 0 = 2,2 to test1"
+
+    run dolt merge merge_branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test1" ]] || false
+
+    run dolt add test1
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "not all tables merged" ]] || false
+    [[ "$output" =~ "test1" ]] || false
+}
+
+@test "dolt commit fails with unmerged tables in working set" {
+    dolt checkout -b merge_branch
+    dolt SQL -q "INSERT INTO test1 values (0,1,1)"
+    dolt add test1
+    dolt commit -m "add pk 0 = 1,1 to test1"
+
+    dolt checkout master
+    dolt SQL -q "INSERT INTO test1 values (0,2,2)"
+    dolt add test1
+    dolt commit -m "add pk 0 = 2,2 to test1"
+
+    run dolt merge merge_branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test1" ]] || false
+
+    run dolt commit -m 'create a merge commit'
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "unresolved conflicts" ]] || false
+    [[ "$output" =~ "test1" ]] || false
+}
+
 @test "ff merge doesn't stomp working changes" {
     dolt checkout -b merge_branch
     dolt SQL -q "INSERT INTO test1 values (0,1,2)"

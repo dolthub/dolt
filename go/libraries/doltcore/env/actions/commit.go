@@ -88,6 +88,18 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProp
 
 	var mergeCmSpec []*doltdb.CommitSpec
 	if dEnv.IsMergeActive() {
+		root, err := dEnv.WorkingRoot(ctx)
+		if err != nil {
+			return err
+		}
+		inConflict, err := root.TablesInConflict(ctx)
+		if err != nil {
+			return err
+		}
+		if len(inConflict) > 0 {
+			return NewTblInConflictError(inConflict)
+		}
+
 		spec, err := doltdb.NewCommitSpec(dEnv.RepoState.Merge.Commit)
 
 		if err != nil {
