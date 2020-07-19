@@ -43,7 +43,7 @@ func createTestSchema() schema.Schema {
 
 	colColl, _ := schema.NewColCollection(columns...)
 	sch := schema.SchemaFromCols(colColl)
-	_, _ = sch.Indexes().AddIndexByColTags("idx_age", []uint64{3}, schema.IndexProperties{IsUnique: false, IsHidden: false, Comment: ""})
+	_, _ = sch.Indexes().AddIndexByColTags("idx_age", []uint64{3}, schema.IndexProperties{IsUnique: false, Comment: ""})
 	return sch
 }
 
@@ -277,7 +277,7 @@ func (tsd testSchemaData) decodeSchema() (schema.Schema, error) {
 	sch := schema.SchemaFromCols(colColl)
 
 	for _, encodedIndex := range tsd.IndexCollection {
-		_, err = sch.Indexes().AddIndexByColTags(encodedIndex.Name, encodedIndex.Tags, schema.IndexProperties{IsUnique: encodedIndex.Unique, IsHidden: encodedIndex.Hidden, Comment: encodedIndex.Comment})
+		_, err = sch.Indexes().AddIndexByColTags(encodedIndex.Name, encodedIndex.Tags, schema.IndexProperties{IsUnique: encodedIndex.Unique, Comment: encodedIndex.Comment})
 		if err != nil {
 			return nil, err
 		}

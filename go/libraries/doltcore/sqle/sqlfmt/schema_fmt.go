@@ -119,9 +119,6 @@ func createTableStmt(tableName string, sch schema.Schema, fmtCol fmtColFunc, for
 	sb.WriteRune(')')
 
 	for _, index := range sch.Indexes().AllIndexes() {
-		if index.IsHidden() {
-			continue
-		}
 		sb.WriteString(",\n  ")
 		if index.IsUnique() {
 			sb.WriteString("UNIQUE ")

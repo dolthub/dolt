@@ -33,8 +33,6 @@ type Index interface {
 	IndexedColumnTags() []uint64
 	// IsHidden returns whether the index is hidden and managed internally, such as for a foreign key. Such indexes do
 	// not cause column nor tag collisions with other indexes.
-	IsHidden() bool
-	// IsUnique returns whether the index enforces the UNIQUE constraint.
 	IsUnique() bool
 	// Name returns the name of the index.
 	Name() string
@@ -51,7 +49,6 @@ type indexImpl struct {
 	tags      []uint64
 	allTags   []uint64
 	indexColl *indexCollectionImpl
-	isHidden  bool
 	isUnique  bool
 	comment   string
 }
@@ -62,7 +59,6 @@ func NewIndex(name string, tags, allTags []uint64, indexColl *indexCollectionImp
 		tags:      tags,
 		allTags:   allTags,
 		indexColl: indexColl,
-		isHidden:  props.IsHidden,
 		isUnique:  props.IsUnique,
 		comment:   props.Comment,
 	}
@@ -102,8 +98,7 @@ func (ix *indexImpl) Equals(other Index) bool {
 		}
 	}
 
-	return ix.IsHidden() == other.IsHidden() &&
-		ix.IsUnique() == other.IsUnique() &&
+	return ix.IsUnique() == other.IsUnique() &&
 		ix.Comment() == other.Comment() &&
 		ix.Name() == other.Name()
 }
@@ -114,10 +109,6 @@ func (ix *indexImpl) GetColumn(tag uint64) (Column, bool) {
 
 func (ix *indexImpl) IndexedColumnTags() []uint64 {
 	return ix.tags
-}
-
-func (ix *indexImpl) IsHidden() bool {
-	return ix.isHidden
 }
 
 func (ix *indexImpl) IsUnique() bool {
@@ -165,7 +156,6 @@ func (ix *indexImpl) copy() *indexImpl {
 		tags:      tags,
 		allTags:   allTags,
 		indexColl: ix.indexColl,
-		isHidden:  ix.isHidden,
 		isUnique:  ix.isUnique,
 		comment:   ix.comment,
 	}
