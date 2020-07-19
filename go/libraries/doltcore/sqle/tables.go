@@ -800,7 +800,7 @@ func (t *AlterableDoltTable) createIndex(
 		return nil, nil, nil, fmt.Errorf("not yet supported")
 	}
 
-	if !hidden && !doltdb.IsValidTableName(indexName) {
+	if !doltdb.IsValidTableName(indexName) {
 		return nil, nil, nil, fmt.Errorf("invalid index name `%s` as they must match the regular expression %s", indexName, doltdb.TableNameRegexStr)
 	}
 
@@ -816,7 +816,7 @@ func (t *AlterableDoltTable) createIndex(
 	}
 
 	// create the index metadata, will error if index names are taken or an index with the same columns in the same order exists
-	index, err := tblSch.Indexes().AddIndexByColNames(indexName, realColNames, schema.IndexProperties{IsUnique: constraint == sql.IndexConstraint_Unique, IsHidden: hidden, Comment: comment})
+	index, err := tblSch.Indexes().AddIndexByColNames(indexName, realColNames, schema.IndexProperties{IsUnique: constraint == sql.IndexConstraint_Unique, Comment: comment})
 	if err != nil {
 		return nil, nil, nil, err
 	}
