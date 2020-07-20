@@ -58,6 +58,8 @@ CREATE TABLE three (
   v1 BIGINT,
   v2 BIGINT
 );
+ALTER TABLE one ADD INDEX secondary (v1);
+ALTER TABLE two ADD INDEX secondary (v1,v2);
 `)
 	if err != nil {
 		panic(err)
