@@ -421,6 +421,12 @@ func (te *TableEditor) flushEditAccumulator(ctx context.Context, teaInterface in
 
 	te.t = newTable
 	te.rowData = updatedMap
+	// not sure where it is, but setting these to nil fixes a memory leak
+	tea.addedKeys = nil
+	tea.affectedKeys = nil
+	tea.ed = nil
+	tea.insertedKeys = nil
+	tea.removedKeys = nil
 	return nil
 }
 
