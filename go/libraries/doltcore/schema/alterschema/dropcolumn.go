@@ -27,7 +27,7 @@ import (
 )
 
 // DropColumn drops a column from a table, and removes its associated cell values
-func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignKeys []*doltdb.ForeignKey) (*doltdb.Table, error) {
+func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignKeys []doltdb.ForeignKey) (*doltdb.Table, error) {
 	if tbl == nil {
 		panic("invalid parameters")
 	}

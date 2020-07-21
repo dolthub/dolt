@@ -15,7 +15,9 @@
 package doltdb
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"sort"
@@ -24,12 +26,14 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/marshal"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 type ForeignKeyCollection struct {
-	foreignKeys map[string]*ForeignKey
+	foreignKeys map[string]ForeignKey
 }
 
 type ForeignKeyReferenceOption byte
@@ -68,18 +72,137 @@ type ForeignKey struct {
 	OnDelete               ForeignKeyReferenceOption `noms:"on_delete" json:"on_delete"`
 }
 
+// Equals returns whether the given foreign key is equivalent to another. As tags are unique, we can compare using those
+// and ignore the table names, ensuring equality even through table and column renames.
+func (fk ForeignKey) Equals(other ForeignKey) bool {
+	if len(fk.TableColumns) != len(other.TableColumns) || len(fk.ReferencedTableColumns) != len(other.ReferencedTableColumns) {
+		return false
+	}
+	for i := range fk.TableColumns {
+		if fk.TableColumns[i] != other.TableColumns[i] {
+			return false
+		}
+	}
+	for i := range fk.ReferencedTableColumns {
+		if fk.ReferencedTableColumns[i] != other.ReferencedTableColumns[i] {
+			return false
+		}
+	}
+	return fk.Name == other.Name &&
+		fk.OnUpdate == other.OnUpdate &&
+		fk.OnDelete == other.OnDelete
+}
+
+// HashOf returns the Noms hash of a ForeignKey.
+func (fk ForeignKey) HashOf() hash.Hash {
+	var bb bytes.Buffer
+	bb.Write([]byte(fk.Name))
+	bb.Write([]byte(fk.TableName))
+	bb.Write([]byte(fk.TableIndex))
+	for _, t := range fk.TableColumns {
+		_ = binary.Write(&bb, binary.LittleEndian, t)
+	}
+	bb.Write([]byte(fk.ReferencedTableName))
+	bb.Write([]byte(fk.ReferencedTableIndex))
+	for _, t := range fk.ReferencedTableColumns {
+		_ = binary.Write(&bb, binary.LittleEndian, t)
+	}
+	bb.Write([]byte{byte(fk.OnUpdate), byte(fk.OnDelete)})
+
+	return hash.Of(bb.Bytes())
+}
+
+// ValidateData ensures that the foreign key is valid by comparing the index data from the given table against the index
+// data from the referenced table.
+func (fk ForeignKey) ValidateData(ctx context.Context, tableIndexData types.Map, refTableIndex schema.Index, refTableIndexData types.Map) error {
+	if fk.ReferencedTableIndex != refTableIndex.Name() {
+		return fmt.Errorf("cannot validate data as wrong referenced index was given: expected `%s` but received `%s`",
+			fk.ReferencedTableIndex, refTableIndex.Name())
+	}
+	refTableIndexSch := refTableIndex.Schema()
+	err := tableIndexData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+		indexTaggedValues, err := row.ParseTaggedValues(key.(types.Tuple))
+		if err != nil {
+			return true, err
+		}
+		refIndexKeyVals := make([]types.Value, len(fk.TableColumns)*2)
+		for i, colTag := range fk.TableColumns {
+			val, ok := indexTaggedValues[colTag]
+			if !ok {
+				return true, fmt.Errorf("cannot find value for tag `%d` on table `%s`", colTag, fk.TableName)
+			}
+			newTag := fk.ReferencedTableColumns[i]
+			refIndexKeyVals[2*i] = types.Uint(newTag)
+			refIndexKeyVals[2*i+1] = val
+		}
+		refIndexKey, err := types.NewTuple(refTableIndexData.Format(), refIndexKeyVals...)
+		if err != nil {
+			return true, err
+		}
+
+		indexIter := noms.NewNomsRangeReader(refTableIndexSch, refTableIndexData,
+			[]*noms.ReadRange{{Start: refIndexKey, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
+				return tuple.StartsWith(refIndexKey), nil
+			}}},
+		)
+		_, err = indexIter.ReadRow(ctx)
+		if err == nil { // row exists
+			return false, nil
+		} else if err != io.EOF {
+			return true, err
+		} else {
+			indexKeyStr, _ := types.EncodedValue(ctx, refIndexKey)
+			return true, fmt.Errorf("foreign key violation on `%s`.`%s`: `%s`", fk.Name, fk.TableName, indexKeyStr)
+		}
+	})
+	return err
+}
+
+// ValidateReferencedTableSchema verifies that the given schema matches the expectation of the referenced table.
+func (fk ForeignKey) ValidateReferencedTableSchema(sch schema.Schema) error {
+	allSchCols := sch.GetAllCols()
+	for _, colTag := range fk.ReferencedTableColumns {
+		_, ok := allSchCols.GetByTag(colTag)
+		if !ok {
+			return fmt.Errorf("foreign key `%s` has entered an invalid state, referenced table `%s` has unexpected schema",
+				fk.Name, fk.ReferencedTableName)
+		}
+	}
+	if !sch.Indexes().Contains(fk.ReferencedTableIndex) {
+		return fmt.Errorf("foreign key `%s` has entered an invalid state, referenced table `%s` is missing the index `%s`",
+			fk.Name, fk.ReferencedTableName, fk.ReferencedTableIndex)
+	}
+	return nil
+}
+
+// ValidateTableSchema verifies that the given schema matches the expectation of the declaring table.
+func (fk ForeignKey) ValidateTableSchema(sch schema.Schema) error {
+	allSchCols := sch.GetAllCols()
+	for _, colTag := range fk.TableColumns {
+		_, ok := allSchCols.GetByTag(colTag)
+		if !ok {
+			return fmt.Errorf("foreign key `%s` has entered an invalid state, table `%s` has unexpected schema", fk.Name, fk.TableName)
+		}
+	}
+	if !sch.Indexes().Contains(fk.TableIndex) {
+		return fmt.Errorf("foreign key `%s` has entered an invalid state, table `%s` is missing the index `%s`",
+			fk.Name, fk.TableName, fk.TableIndex)
+	}
+	return nil
+}
+
 // LoadForeignKeyCollection returns a new ForeignKeyCollection using the provided map returned previously by GetMap.
 func LoadForeignKeyCollection(ctx context.Context, fkMap types.Map) (*ForeignKeyCollection, error) {
 	fkc := &ForeignKeyCollection{
-		foreignKeys: make(map[string]*ForeignKey),
+		foreignKeys: make(map[string]ForeignKey),
 	}
-	err := fkMap.IterAll(ctx, func(_, value types.Value) error {
+	err := fkMap.IterAll(ctx, func(key, value types.Value) error {
 		foreignKey := &ForeignKey{}
 		err := marshal.Unmarshal(ctx, fkMap.Format(), value, foreignKey)
 		if err != nil {
 			return err
 		}
-		fkc.foreignKeys[foreignKey.Name] = foreignKey
+		fkc.foreignKeys[string(key.(types.String))] = *foreignKey
 		return nil
 	})
 	if err != nil {
@@ -88,9 +211,9 @@ func LoadForeignKeyCollection(ctx context.Context, fkMap types.Map) (*ForeignKey
 	return fkc, nil
 }
 
-func NewForeignKeyCollection(keys ...*ForeignKey) (*ForeignKeyCollection, error) {
+func NewForeignKeyCollection(keys ...ForeignKey) (*ForeignKeyCollection, error) {
 	fkc := &ForeignKeyCollection{
-		foreignKeys: make(map[string]*ForeignKey),
+		foreignKeys: make(map[string]ForeignKey),
 	}
 	for _, k := range keys {
 		err := fkc.AddKey(k)
@@ -103,34 +226,35 @@ func NewForeignKeyCollection(keys ...*ForeignKey) (*ForeignKeyCollection, error)
 
 // AddKey adds the given foreign key to the collection. Checks that the given name is unique in the collection, and that
 // both column counts are equal. All other validation should occur before being added to the collection.
-func (fkc *ForeignKeyCollection) AddKey(key *ForeignKey) error {
+func (fkc *ForeignKeyCollection) AddKey(key ForeignKey) error {
 	if key.Name == "" {
-		key.Name = fmt.Sprintf("fk_%s_%s_1", key.TableName, key.ReferencedTableName)
-		for i := 2; fkc.Contains(key.Name); i++ {
-			key.Name = fmt.Sprintf("fk_%s_%s_%d", key.TableName, key.ReferencedTableName, i)
-		}
+		// assign a name based on the hash
+		// 8 char = 5 base32 bytes, should be collision resistant
+		key.Name = key.HashOf().String()[:8]
 	}
 
-	_, ok := fkc.GetByNameCaseInsensitive(key.Name)
-	if ok {
+	if _, ok := fkc.GetByTags(key.TableColumns, key.ReferencedTableColumns); ok {
+		// this differs from MySQL's logic
+		return fmt.Errorf("a foreign key over columns %v and referenced columns %v already exists",
+			key.TableColumns, key.ReferencedTableColumns)
+	}
+	if _, ok := fkc.GetByNameCaseInsensitive(key.Name); ok {
 		return fmt.Errorf("a foreign key with the name `%s` already exists", key.Name)
 	}
-
 	if len(key.TableColumns) != len(key.ReferencedTableColumns) {
 		return fmt.Errorf("foreign keys must have the same number of columns declared and referenced")
 	}
-
 	if key.TableName == key.ReferencedTableName {
 		return fmt.Errorf("inter-table foreign keys are not yet supported")
 	}
 
-	fkc.foreignKeys[key.Name] = key
+	fkc.foreignKeys[key.HashOf().String()] = key
 	return nil
 }
 
 // AllKeys returns a slice, sorted by name ascending, containing all of the foreign keys in this collection.
-func (fkc *ForeignKeyCollection) AllKeys() []*ForeignKey {
-	fks := make([]*ForeignKey, len(fkc.foreignKeys))
+func (fkc *ForeignKeyCollection) AllKeys() []ForeignKey {
+	fks := make([]ForeignKey, len(fkc.foreignKeys))
 	i := 0
 	for _, fk := range fkc.foreignKeys {
 		fks[i] = fk
@@ -154,18 +278,21 @@ func (fkc *ForeignKeyCollection) Count() int {
 }
 
 // GetByNameCaseInsensitive returns a ForeignKey with a matching case-insensitive name, and whether a match exists.
-func (fkc *ForeignKeyCollection) GetByNameCaseInsensitive(foreignKeyName string) (match *ForeignKey, ok bool) {
-	for name, fk := range fkc.foreignKeys {
-		if strings.ToLower(name) == strings.ToLower(foreignKeyName) {
+func (fkc *ForeignKeyCollection) GetByNameCaseInsensitive(foreignKeyName string) (ForeignKey, bool) {
+	if foreignKeyName == "" {
+		return ForeignKey{}, false
+	}
+	for _, fk := range fkc.foreignKeys {
+		if strings.ToLower(fk.Name) == strings.ToLower(foreignKeyName) {
 			return fk, true
 		}
 	}
-	return nil, false
+	return ForeignKey{}, false
 }
 
 // GetByTags gets the Foreign Key defined over the parent and child columns corresponding to tags parameters.
-func (fkc *ForeignKeyCollection) GetByTags(parentTags, childTags []uint64) (match *ForeignKey, ok bool) {
-	_ = fkc.Iter(func(fk *ForeignKey) (stop bool, err error) {
+func (fkc *ForeignKeyCollection) GetByTags(childTags, parentTags []uint64) (match ForeignKey, ok bool) {
+	_ = fkc.Iter(func(fk ForeignKey) (stop bool, err error) {
 		if len(fk.ReferencedTableColumns) != len(parentTags) {
 			return false, nil
 		}
@@ -189,7 +316,7 @@ func (fkc *ForeignKeyCollection) GetByTags(parentTags, childTags []uint64) (matc
 	return match, ok
 }
 
-func (fkc *ForeignKeyCollection) Iter(cb func(fk *ForeignKey) (stop bool, err error)) error {
+func (fkc *ForeignKeyCollection) Iter(cb func(fk ForeignKey) (stop bool, err error)) error {
 	for _, fk := range fkc.foreignKeys {
 		stop, err := cb(fk)
 		if err != nil {
@@ -245,7 +372,7 @@ func (fkc *ForeignKeyCollection) KeysForDisplay(ctx context.Context, tableName s
 // declaredFk contains all foreign keys in which this table declared the foreign key. The array referencedByFk contains
 // all foreign keys in which this table is the referenced table. If the table contains a self-referential foreign key,
 // it will be present in both declaresFk and referencedByFk. Each array is sorted by name ascending.
-func (fkc *ForeignKeyCollection) KeysForTable(tableName string) (declaredFk, referencedByFk []*ForeignKey) {
+func (fkc *ForeignKeyCollection) KeysForTable(tableName string) (declaredFk, referencedByFk []ForeignKey) {
 	for _, foreignKey := range fkc.foreignKeys {
 		if foreignKey.TableName == tableName {
 			declaredFk = append(declaredFk, foreignKey)
@@ -270,67 +397,39 @@ func (fkc *ForeignKeyCollection) Map(ctx context.Context, vrw types.ValueReadWri
 		return types.EmptyMap, err
 	}
 	fkMapEditor := fkMap.Edit()
-	for _, foreignKey := range fkc.foreignKeys {
-		val, err := marshal.Marshal(ctx, vrw, *foreignKey)
+	for hashOf, foreignKey := range fkc.foreignKeys {
+		val, err := marshal.Marshal(ctx, vrw, foreignKey)
 		if err != nil {
 			return types.EmptyMap, err
 		}
-		fkMapEditor.Set(types.String(foreignKey.Name), val)
+		fkMapEditor.Set(types.String(hashOf), val)
 	}
 	return fkMapEditor.Map(ctx)
 }
 
 // RemoveKey removes a foreign key from the collection. It does not remove the associated indexes from their
 // respective tables.
-func (fkc *ForeignKeyCollection) RemoveKey(foreignKeyName string) (*ForeignKey, error) {
-	fk, ok := fkc.foreignKeys[foreignKeyName]
+func (fkc *ForeignKeyCollection) RemoveKey(foreignKeyName string) (ForeignKey, error) {
+	fk, ok := fkc.GetByNameCaseInsensitive(foreignKeyName)
 	if !ok {
-		return nil, fmt.Errorf("`%s` does not exist as a foreign key", foreignKeyName)
+		return fk, fmt.Errorf("`%s` does not exist as a foreign key", foreignKeyName)
 	}
-	delete(fkc.foreignKeys, foreignKeyName)
+	delete(fkc.foreignKeys, fk.HashOf().String())
 	return fk, nil
 }
 
 // RemoveTables removes all foreign keys associated with the given tables, if permitted. The operation assumes that ALL
 // tables to be removed are in a single call, as splitting tables into different calls may result in unintended errors.
 func (fkc *ForeignKeyCollection) RemoveTables(ctx context.Context, root *RootValue, tables ...string) (*RootValue, error) {
-	tableSet := make(map[string]struct{})
-	for _, table := range tables {
-		tableSet[table] = struct{}{}
-	}
-	for _, foreignKey := range fkc.foreignKeys {
-		_, declaringTable := tableSet[foreignKey.TableName]
-		_, referenceTable := tableSet[foreignKey.ReferencedTableName]
-		if referenceTable && !declaringTable {
-			return nil, fmt.Errorf("unable to remove `%s` since it is referenced from table `%s`", foreignKey.ReferencedTableName, foreignKey.TableName)
+	outgoing := set.NewStrSet(tables)
+	for _, fk := range fkc.foreignKeys {
+		dropChild := outgoing.Contains(fk.ReferencedTableName)
+		dropParent := outgoing.Contains(fk.TableName)
+		if dropParent && !dropChild {
+			return nil, fmt.Errorf("unable to remove `%s` since it is referenced from table `%s`", fk.ReferencedTableName, fk.TableName)
 		}
-		if declaringTable {
-			if !referenceTable {
-				tbl, ok, err := root.GetTable(ctx, foreignKey.ReferencedTableName)
-				if err != nil {
-					return nil, err
-				}
-				if !ok {
-					return nil, fmt.Errorf("table `%s` not found, unable to remove foreign key `%s`", foreignKey.ReferencedTableName, foreignKey.Name)
-				}
-				sch, err := tbl.GetSchema(ctx)
-				if err != nil {
-					return nil, err
-				}
-				_, err = sch.Indexes().RemoveIndex(foreignKey.TableIndex)
-				if err != nil {
-					return nil, err
-				}
-				tbl, err = tbl.UpdateSchema(ctx, sch)
-				if err != nil {
-					return nil, err
-				}
-				root, err = root.PutTable(ctx, foreignKey.ReferencedTableName, tbl)
-				if err != nil {
-					return nil, err
-				}
-			}
-			delete(fkc.foreignKeys, foreignKey.Name)
+		if dropChild {
+			delete(fkc.foreignKeys, fk.HashOf().String())
 		}
 	}
 	return root.PutForeignKeyCollection(ctx, fkc)
@@ -339,126 +438,29 @@ func (fkc *ForeignKeyCollection) RemoveTables(ctx context.Context, root *RootVal
 // RenameTable updates all foreign key entries in the collection with the updated table name. Does not check for name
 // collisions.
 func (fkc *ForeignKeyCollection) RenameTable(oldTableName, newTableName string) {
-	for _, foreignKey := range fkc.foreignKeys {
-		if foreignKey.TableName == oldTableName {
-			foreignKey.TableName = newTableName
+	updated := make(map[string]ForeignKey, len(fkc.foreignKeys))
+	for _, fk := range fkc.foreignKeys {
+		if fk.TableName == oldTableName {
+			fk.TableName = newTableName
 		}
-		if foreignKey.ReferencedTableName == oldTableName {
-			foreignKey.ReferencedTableName = newTableName
+		if fk.ReferencedTableName == oldTableName {
+			fk.ReferencedTableName = newTableName
 		}
+		updated[fk.HashOf().String()] = fk
 	}
+	fkc.foreignKeys = updated
 }
 
 // Stage takes the keys to add and remove and updates the current collection. Does not perform any key validation nor
 // name uniqueness verification, as this is intended for use in commit staging. Adding a foreign key and updating (such
 // as a table rename) an existing one are functionally the same.
-func (fkc *ForeignKeyCollection) Stage(ctx context.Context, fksToAdd []*ForeignKey, fksToRemove []*ForeignKey) {
-	for _, foreignKeyToAdd := range fksToAdd {
-		fkc.foreignKeys[foreignKeyToAdd.Name] = foreignKeyToAdd
+func (fkc *ForeignKeyCollection) Stage(ctx context.Context, fksToAdd []ForeignKey, fksToRemove []ForeignKey) {
+	for _, fk := range fksToAdd {
+		fkc.foreignKeys[fk.HashOf().String()] = fk
 	}
-	for _, foreignKeyToRemove := range fksToRemove {
-		delete(fkc.foreignKeys, foreignKeyToRemove.Name)
+	for _, fk := range fksToRemove {
+		delete(fkc.foreignKeys, fk.HashOf().String())
 	}
-}
-
-// ValidateData ensures that the foreign key is valid by comparing the index data from the given table against the index
-// data from the referenced table.
-func (fk *ForeignKey) ValidateData(ctx context.Context, tableIndexData types.Map, refTableIndex schema.Index, refTableIndexData types.Map) error {
-	if fk.ReferencedTableIndex != refTableIndex.Name() {
-		return fmt.Errorf("cannot validate data as wrong referenced index was given: expected `%s` but received `%s`",
-			fk.ReferencedTableIndex, refTableIndex.Name())
-	}
-	refTableIndexSch := refTableIndex.Schema()
-	err := tableIndexData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-		indexTaggedValues, err := row.ParseTaggedValues(key.(types.Tuple))
-		if err != nil {
-			return true, err
-		}
-		refIndexKeyVals := make([]types.Value, len(fk.TableColumns)*2)
-		for i, colTag := range fk.TableColumns {
-			val, ok := indexTaggedValues[colTag]
-			if !ok {
-				return true, fmt.Errorf("cannot find value for tag `%d` on table `%s`", colTag, fk.TableName)
-			}
-			newTag := fk.ReferencedTableColumns[i]
-			refIndexKeyVals[2*i] = types.Uint(newTag)
-			refIndexKeyVals[2*i+1] = val
-		}
-		refIndexKey, err := types.NewTuple(refTableIndexData.Format(), refIndexKeyVals...)
-		if err != nil {
-			return true, err
-		}
-
-		indexIter := noms.NewNomsRangeReader(refTableIndexSch, refTableIndexData,
-			[]*noms.ReadRange{{Start: refIndexKey, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
-				return tuple.StartsWith(refIndexKey), nil
-			}}},
-		)
-		_, err = indexIter.ReadRow(ctx)
-		if err == nil { // row exists
-			return false, nil
-		} else if err != io.EOF {
-			return true, err
-		} else {
-			indexKeyStr, _ := types.EncodedValue(ctx, refIndexKey)
-			return true, fmt.Errorf("foreign key violation on `%s`.`%s`: `%s`", fk.Name, fk.TableName, indexKeyStr)
-		}
-	})
-	return err
-}
-
-// Equals returns whether the given foreign key is equivalent to another. As tags are unique, we can compare using those
-// and ignore the table names, ensuring equality even through table and column renames.
-func (fk *ForeignKey) Equals(other *ForeignKey) bool {
-	if len(fk.TableColumns) != len(other.TableColumns) || len(fk.ReferencedTableColumns) != len(other.ReferencedTableColumns) {
-		return false
-	}
-	for i := range fk.TableColumns {
-		if fk.TableColumns[i] != other.TableColumns[i] {
-			return false
-		}
-	}
-	for i := range fk.ReferencedTableColumns {
-		if fk.ReferencedTableColumns[i] != other.ReferencedTableColumns[i] {
-			return false
-		}
-	}
-	return fk.Name == other.Name &&
-		fk.OnUpdate == other.OnUpdate &&
-		fk.OnDelete == other.OnDelete
-}
-
-// ValidateReferencedTableSchema verifies that the given schema matches the expectation of the referenced table.
-func (fk *ForeignKey) ValidateReferencedTableSchema(sch schema.Schema) error {
-	allSchCols := sch.GetAllCols()
-	for _, colTag := range fk.ReferencedTableColumns {
-		_, ok := allSchCols.GetByTag(colTag)
-		if !ok {
-			return fmt.Errorf("foreign key `%s` has entered an invalid state, referenced table `%s` has unexpected schema",
-				fk.Name, fk.ReferencedTableName)
-		}
-	}
-	if !sch.Indexes().Contains(fk.ReferencedTableIndex) {
-		return fmt.Errorf("foreign key `%s` has entered an invalid state, referenced table `%s` is missing the index `%s`",
-			fk.Name, fk.ReferencedTableName, fk.ReferencedTableIndex)
-	}
-	return nil
-}
-
-// ValidateTableSchema verifies that the given schema matches the expectation of the declaring table.
-func (fk *ForeignKey) ValidateTableSchema(sch schema.Schema) error {
-	allSchCols := sch.GetAllCols()
-	for _, colTag := range fk.TableColumns {
-		_, ok := allSchCols.GetByTag(colTag)
-		if !ok {
-			return fmt.Errorf("foreign key `%s` has entered an invalid state, table `%s` has unexpected schema", fk.Name, fk.TableName)
-		}
-	}
-	if !sch.Indexes().Contains(fk.TableIndex) {
-		return fmt.Errorf("foreign key `%s` has entered an invalid state, table `%s` is missing the index `%s`",
-			fk.Name, fk.TableName, fk.TableIndex)
-	}
-	return nil
 }
 
 // String returns the SQL reference option in uppercase.
@@ -506,10 +508,9 @@ func (fkc *ForeignKeyCollection) columnTagsToNames(ctx context.Context, tableNam
 // copy returns an exact copy of the calling collection. As collections are meant to be modified in-place, this ensures
 // that the original collection is not affected by any operations applied to the copied collection.
 func (fkc *ForeignKeyCollection) copy() *ForeignKeyCollection {
-	copiedForeignKeys := make(map[string]*ForeignKey)
-	for _, key := range fkc.foreignKeys {
-		valueKey := *key // value types are copied, so this essentially copies all fields (the slices never change so it's okay)
-		copiedForeignKeys[valueKey.Name] = &valueKey
+	copiedForeignKeys := make(map[string]ForeignKey)
+	for hashOf, key := range fkc.foreignKeys {
+		copiedForeignKeys[hashOf] = key
 	}
 	return &ForeignKeyCollection{copiedForeignKeys}
 }
