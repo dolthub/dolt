@@ -631,7 +631,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	if err != nil {
 		return err
 	}
-	foreignKey := &doltdb.ForeignKey{
+	foreignKey := doltdb.ForeignKey{
 		Name:                   fkName,
 		TableName:              t.name,
 		TableIndex:             tableIndex.Name(),
@@ -767,7 +767,7 @@ func parseFkReferenceOption(refOp sql.ForeignKeyReferenceOption) (doltdb.Foreign
 }
 
 // createIndex creates the given index on the given table with the given schema. Returns the updated table, updated schema, and created index.
-func (t *AlterableDoltTable) createIndex(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, columns []sql.IndexColumn, comment string, ) (*doltdb.Table, schema.Schema, schema.Index, error) {
+func (t *AlterableDoltTable) createIndex(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, columns []sql.IndexColumn, comment string) (*doltdb.Table, schema.Schema, schema.Index, error) {
 	if constraint != sql.IndexConstraint_None && constraint != sql.IndexConstraint_Unique {
 		return nil, nil, nil, fmt.Errorf("not yet supported")
 	}

@@ -74,12 +74,14 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 	require.NoError(t, err)
 
 	tests := []struct {
+		name          string
 		sqlStatement  string
 		expectedOne   []sql.Row
 		expectedTwo   []sql.Row
 		expectedThree []sql.Row
 	}{
 		{
+			"cascade updates",
 			`INSERT INTO one VALUES (1, 1, 4), (2, 2, 5), (3, 3, 6), (4, 4, 5);
 			INSERT INTO two VALUES (2, 1, 1), (3, 2, 2), (4, 3, 3), (5, 4, 4);
 			INSERT INTO three VALUES (3, 1, 1), (4, 2, 2), (5, 3, 3), (6, 4, 4);
@@ -90,6 +92,7 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 			[]sql.Row{{3, 5, 3}, {4, 7, 5}, {5, 9, 7}, {6, 9, 7}},
 		},
 		{
+			"cascade updates and deletes",
 			`INSERT INTO one VALUES (1, 1, 4), (2, 2, 5), (3, 3, 6), (4, 4, 5);
 			INSERT INTO two VALUES (2, 1, 1), (3, 2, 2), (4, 3, 3), (5, 4, 4);
 			INSERT INTO three VALUES (3, 1, 1), (4, 2, 2), (5, 3, 3), (6, 4, 4);
@@ -101,6 +104,7 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 			[]sql.Row{{3, 5, 3}, {4, 7, 5}},
 		},
 		{
+			"cascade insertions",
 			`INSERT INTO three VALUES (1, NULL, NULL), (2, NULL, 2), (3, 3, NULL);
 			INSERT INTO two VALUES (1, NULL, 1);`,
 			[]sql.Row{},
@@ -108,6 +112,7 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 			[]sql.Row{{1, nil, nil}, {2, nil, 2}, {3, 3, nil}},
 		},
 		{
+			"cascade updates and deletes after table and column renames",
 			`INSERT INTO one VALUES (1, 1, 4), (2, 2, 5), (3, 3, 6), (4, 4, 5);
 			INSERT INTO two VALUES (2, 1, 1), (3, 2, 2), (4, 3, 3), (5, 4, 4);
 			INSERT INTO three VALUES (3, 1, 1), (4, 2, 2), (5, 3, 3), (6, 4, 4);
@@ -122,20 +127,7 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 			[]sql.Row{{3, 5, 3}, {4, 7, 5}},
 		},
 		{
-			`INSERT INTO one VALUES (1, 1, 4), (2, 2, 5), (3, 3, 6), (4, 4, 5);
-			INSERT INTO two VALUES (2, 1, 1), (3, 2, 2), (4, 3, 3), (5, 4, 4);
-			INSERT INTO three VALUES (3, 1, 1), (4, 2, 2), (5, 3, 3), (6, 4, 4);
-			RENAME TABLE one TO new;
-			ALTER  TABLE new RENAME COLUMN v1 TO vnew;
-			UPDATE new SET vnew = vnew + v2;
-			DELETE FROM new WHERE pk = 3;
-			UPDATE two SET v2 = v1 - 2;
-			RENAME TABLE new TO one;`,
-			[]sql.Row{{1, 5, 4}, {2, 7, 5}, {4, 9, 5}},
-			[]sql.Row{{2, 5, 3}, {3, 7, 5}},
-			[]sql.Row{{3, 5, 3}, {4, 7, 5}},
-		},
-		{
+			"cascade inserts and deletes",
 			`INSERT INTO one VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
 			INSERT INTO two VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
 			DELETE FROM one;`,
@@ -144,6 +136,7 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 			[]sql.Row{},
 		},
 		{
+			"cascade inserts and deletes (ep. 2)",
 			`INSERT INTO one VALUES (1, NULL, 1);
 			INSERT INTO two VALUES (1, NULL, 1), (2, NULL, 2);
 			INSERT INTO three VALUES (1, NULL, 1), (2, NULL, 2);
@@ -156,7 +149,7 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 	}
 
 	for _, test := range tests {
-		t.Run(test.sqlStatement, func(t *testing.T) {
+		t.Run(test.name, func(t *testing.T) {
 			root := testRoot
 			for _, sqlStatement := range strings.Split(test.sqlStatement, ";") {
 				var err error
@@ -164,9 +157,9 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 				require.NoError(t, err)
 			}
 
-			assertTableEditorRows(t, root, test.expectedOne, "one")
-			assertTableEditorRows(t, root, test.expectedTwo, "two")
-			assertTableEditorRows(t, root, test.expectedThree, "three")
+			assertTableEditorRows(t, fk_dEnv, root, test.expectedOne, "one")
+			assertTableEditorRows(t, fk_dEnv, root, test.expectedTwo, "two")
+			assertTableEditorRows(t, fk_dEnv, root, test.expectedThree, "three")
 		})
 	}
 }
@@ -210,10 +203,10 @@ ALTER TABLE two ADD FOREIGN KEY (v1) REFERENCES one(v1) ON DELETE SET NULL ON UP
 			}
 
 			t.Run("one", func(t *testing.T) {
-				assertTableEditorRows(t, root, test.expectedOne, "one")
+				assertTableEditorRows(t, nil, root, test.expectedOne, "one")
 			})
 			t.Run("two", func(t *testing.T) {
-				assertTableEditorRows(t, root, test.expectedTwo, "two")
+				assertTableEditorRows(t, nil, root, test.expectedTwo, "two")
 			})
 		})
 	}
@@ -365,7 +358,7 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 	}
 }
 
-func assertTableEditorRows(t *testing.T, root *doltdb.RootValue, expected []sql.Row, tableName string) {
+func assertTableEditorRows(t *testing.T, fk_dEnv *env.DoltEnv, root *doltdb.RootValue, expected []sql.Row, tableName string) {
 	tbl, ok, err := root.GetTable(context.Background(), tableName)
 	require.NoError(t, err)
 	require.True(t, ok)
@@ -376,8 +369,8 @@ func assertTableEditorRows(t *testing.T, root *doltdb.RootValue, expected []sql.
 	rowData, err := tbl.GetRowData(context.Background())
 	require.NoError(t, err)
 
-	if assert.Equal(t, uint64(len(expected)), rowData.Len()) && len(expected) > 0 {
-		var sqlRows []sql.Row
+	var sqlRows []sql.Row
+	if len(expected) > 0 {
 		_ = rowData.IterAll(context.Background(), func(key, value types.Value) error {
 			r, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
 			assert.NoError(t, err)
@@ -386,7 +379,9 @@ func assertTableEditorRows(t *testing.T, root *doltdb.RootValue, expected []sql.
 			sqlRows = append(sqlRows, sqlRow)
 			return nil
 		})
-		assert.Equal(t, convertSqlRowToInt64(expected), sqlRows)
+		if !assert.Equal(t, convertSqlRowToInt64(expected), sqlRows) {
+			fmt.Println("")
+		}
 	}
 
 	// we can verify that each index also has the proper contents
@@ -439,7 +434,7 @@ func assertTableEditorRows(t *testing.T, root *doltdb.RootValue, expected []sql.
 			return false
 		})
 
-		if assert.Equal(t, uint64(len(expectedIndexRows)), indexRowData.Len()) && len(expectedIndexRows) > 0 {
+		if len(expectedIndexRows) > 0 {
 			var sqlRows []sql.Row
 			_ = indexRowData.IterAll(context.Background(), func(key, value types.Value) error {
 				r, err := row.FromNoms(indexSch, key.(types.Tuple), value.(types.Tuple))

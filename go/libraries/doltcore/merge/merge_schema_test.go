@@ -367,13 +367,12 @@ var setupForeignKeyTests = []testCommand{
 		"pk int not null primary key comment 'tag:0'," +
 		"t1 int not null comment 'tag:1'," +
 		"t2 int comment 'tag:2'," +
-		"t3 int comment 'tag:3'," +
-		"index c1_idx (t1));"}},
+		"t3 int comment 'tag:3');"}},
+	{commands.SqlCmd{}, []string{"-q", "alter table test add index t1_idx (t1);"}},
 	{commands.SqlCmd{}, []string{"-q", "create table quiz (" +
 		"pk int not null primary key comment 'tag:10'," +
 		"q1 int not null comment 'tag:11'," +
 		"q2 int not null comment 'tag:12'," +
-		"index q1_idx (q1)," +
 		"index q2_idx (q2)," +
 		"constraint q1_fk foreign key (q1) references test(t1));"}},
 	{commands.AddCmd{}, []string{"."}},
@@ -385,13 +384,13 @@ var mergeForeignKeyTests = []mergeForeignKeyTest{
 	{
 		name:  "no changes",
 		setup: []testCommand{},
-		fkColl: fkCollection(&doltdb.ForeignKey{
+		fkColl: fkCollection(doltdb.ForeignKey{
 			Name:                   "q1_fk",
 			TableName:              "quiz",
-			TableIndex:             "dolt_fk_1",
+			TableIndex:             "q1",
 			TableColumns:           []uint64{11},
 			ReferencedTableName:    "test",
-			ReferencedTableIndex:   "dolt_fk_1",
+			ReferencedTableIndex:   "t1_idx",
 			ReferencedTableColumns: []uint64{1}}),
 		expFKConflict: []merge.FKConflict{},
 	},
@@ -443,7 +442,7 @@ func newColTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, partOfP
 	return c
 }
 
-func fkCollection(fks ...*doltdb.ForeignKey) *doltdb.ForeignKeyCollection {
+func fkCollection(fks ...doltdb.ForeignKey) *doltdb.ForeignKeyCollection {
 	fkc, err := doltdb.NewForeignKeyCollection(fks...)
 	if err != nil {
 		panic(err)
@@ -576,8 +575,8 @@ func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 	assert.NoError(t, err)
 	assert.Equal(t, test.fkColl.Count(), fkc.Count())
 
-	err = test.fkColl.Iter(func(expFK *doltdb.ForeignKey) (stop bool, err error) {
-		actFK, ok := fkc.GetByTags(expFK.ReferencedTableColumns, expFK.TableColumns)
+	err = test.fkColl.Iter(func(expFK doltdb.ForeignKey) (stop bool, err error) {
+		actFK, ok := fkc.GetByTags(expFK.TableColumns, expFK.ReferencedTableColumns)
 		assert.True(t, ok)
 		assert.Equal(t, expFK, actFK)
 		return false, nil

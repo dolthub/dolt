@@ -80,7 +80,7 @@ func (c IdxConflict) String() string {
 
 type FKConflict struct {
 	Kind         conflictKind
-	Ours, Theirs *doltdb.ForeignKey
+	Ours, Theirs doltdb.ForeignKey
 }
 
 // SchemaMerge performs a three-way merge of ourSch, theirSch, and ancSch.
@@ -148,8 +148,8 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 	}
 
 	// check for conflicts between foreign keys added on each branch since the ancestor
-	_ = ourNewFKs.Iter(func(ourFK *doltdb.ForeignKey) (stop bool, err error) {
-		theirFK, ok := theirNewFKs.GetByTags(ourFK.ReferencedTableColumns, ourFK.TableColumns)
+	_ = ourNewFKs.Iter(func(ourFK doltdb.ForeignKey) (stop bool, err error) {
+		theirFK, ok := theirNewFKs.GetByTags(ourFK.TableColumns, ourFK.ReferencedTableColumns)
 		if ok && !ourFK.Equals(theirFK) {
 			conflicts = append(conflicts, FKConflict{
 				Kind:   TagCollision,
@@ -169,10 +169,10 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 		return false, err
 	})
 
-	err = ourNewFKs.Iter(func(ourFK *doltdb.ForeignKey) (stop bool, err error) {
+	err = ourNewFKs.Iter(func(ourFK doltdb.ForeignKey) (stop bool, err error) {
 		return false, common.AddKey(ourFK)
 	})
-	err = theirNewFKs.Iter(func(theirFK *doltdb.ForeignKey) (stop bool, err error) {
+	err = theirNewFKs.Iter(func(theirFK doltdb.ForeignKey) (stop bool, err error) {
 		return false, common.AddKey(theirFK)
 	})
 
@@ -412,8 +412,8 @@ func indexCollSetDifference(left, right schema.IndexCollection, cc *schema.ColCo
 
 func foreignKeysInCommon(ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection) (common *doltdb.ForeignKeyCollection, conflicts []FKConflict, err error) {
 	common, _ = doltdb.NewForeignKeyCollection()
-	err = ourFKs.Iter(func(ours *doltdb.ForeignKey) (stop bool, err error) {
-		theirs, ok := theirFKs.GetByTags(ours.ReferencedTableColumns, ours.TableColumns)
+	err = ourFKs.Iter(func(ours doltdb.ForeignKey) (stop bool, err error) {
+		theirs, ok := theirFKs.GetByTags(ours.TableColumns, ours.ReferencedTableColumns)
 		if !ok {
 			return false, nil
 		}
@@ -423,7 +423,7 @@ func foreignKeysInCommon(ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection) 
 			return false, err
 		}
 
-		anc, ok := ancFKs.GetByTags(ours.ReferencedTableColumns, ours.TableColumns)
+		anc, ok := ancFKs.GetByTags(ours.TableColumns, ours.ReferencedTableColumns)
 		if !ok {
 			// FKs added on both branch with different defs
 			conflicts = append(conflicts, FKConflict{
@@ -481,8 +481,8 @@ func foreignKeysInCommon(ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection) 
 
 func fkCollSetDifference(left, right *doltdb.ForeignKeyCollection) (d *doltdb.ForeignKeyCollection, err error) {
 	d, _ = doltdb.NewForeignKeyCollection()
-	err = left.Iter(func(fk *doltdb.ForeignKey) (stop bool, err error) {
-		_, ok := right.GetByTags(fk.ReferencedTableColumns, fk.TableColumns)
+	err = left.Iter(func(fk doltdb.ForeignKey) (stop bool, err error) {
+		_, ok := right.GetByTags(fk.TableColumns, fk.ReferencedTableColumns)
 		if !ok {
 			err = d.AddKey(fk)
 		}
@@ -499,7 +499,7 @@ func fkCollSetDifference(left, right *doltdb.ForeignKeyCollection) (d *doltdb.Fo
 // pruneInvalidForeignKeys removes from a ForeignKeyCollection any ForeignKey whose parent/child table/columns have been removed.
 func pruneInvalidForeignKeys(ctx context.Context, fkColl *doltdb.ForeignKeyCollection, mergedRoot *doltdb.RootValue) (pruned *doltdb.ForeignKeyCollection, err error) {
 	pruned, _ = doltdb.NewForeignKeyCollection()
-	err = fkColl.Iter(func(fk *doltdb.ForeignKey) (stop bool, err error) {
+	err = fkColl.Iter(func(fk doltdb.ForeignKey) (stop bool, err error) {
 		parentTbl, ok, err := mergedRoot.GetTable(ctx, fk.ReferencedTableName)
 		if err != nil || !ok {
 			return false, err
