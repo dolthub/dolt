@@ -369,6 +369,28 @@ var foreignKeyTests = []foreignKeyTest{
 		},
 	},
 	{
+		name: "create table with unnamed foreign key",
+		setup: []testCommand{
+			{commands.SqlCmd{}, []string{"-q", `create table new_table (
+				id int comment 'tag:20',
+				v1 int comment 'tag:21',
+				foreign key (v1) references parent(v1),
+				primary key(id));`}},
+		},
+		fks: []doltdb.ForeignKey{
+			{
+				Name: "7l96tsms",
+				TableName: "new_table",
+				// unnamed indexes take the column name
+				TableIndex: "v1",
+				TableColumns: []uint64{21},
+				ReferencedTableName: "parent",
+				ReferencedTableIndex: "v1_idx",
+				ReferencedTableColumns: []uint64{1},
+			},
+		},
+	},
+	{
 		name: "create unnamed multi-column foreign key",
 		setup: []testCommand{
 			{commands.SqlCmd{}, []string{"-q", `alter table parent add index v1v2_idx (v1, v2)`}},
