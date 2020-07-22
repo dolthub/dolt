@@ -423,8 +423,8 @@ func (fkc *ForeignKeyCollection) RemoveKey(foreignKeyName string) (ForeignKey, e
 func (fkc *ForeignKeyCollection) RemoveTables(ctx context.Context, root *RootValue, tables ...string) (*RootValue, error) {
 	outgoing := set.NewStrSet(tables)
 	for _, fk := range fkc.foreignKeys {
-		dropChild := outgoing.Contains(fk.ReferencedTableName)
-		dropParent := outgoing.Contains(fk.TableName)
+		dropChild := outgoing.Contains(fk.TableName)
+		dropParent := outgoing.Contains(fk.ReferencedTableName)
 		if dropParent && !dropChild {
 			return nil, fmt.Errorf("unable to remove `%s` since it is referenced from table `%s`", fk.ReferencedTableName, fk.TableName)
 		}
