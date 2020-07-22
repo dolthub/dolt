@@ -800,6 +800,12 @@ func (t *AlterableDoltTable) createIndex(
 		return nil, nil, nil, fmt.Errorf("not yet supported")
 	}
 
+	if indexName == "" {
+		indexName = columns[0].Name
+		for i := 2; tblSch.Indexes().Contains(indexName); i++ {
+			indexName = fmt.Sprintf("%s_%d", columns[0].Name, i)
+		}
+	}
 	if !hidden && !doltdb.IsValidTableName(indexName) {
 		return nil, nil, nil, fmt.Errorf("invalid index name `%s` as they must match the regular expression %s", indexName, doltdb.TableNameRegexStr)
 	}

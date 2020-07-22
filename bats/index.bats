@@ -23,6 +23,90 @@ teardown() {
     teardown_common
 }
 
+@test "index: CREATE TABLE INDEX" {
+    dolt sql <<SQL
+CREATE TABLE test(
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  INDEX (v1)
+);
+SQL
+    run dolt index ls test
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "v1(v1)" ]] || false
+    run dolt schema show test
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ 'INDEX `v1` (`v1`)' ]] || false
+}
+
+@test "index: CREATE TABLE UNIQUE INDEX" {
+    dolt sql <<SQL
+CREATE TABLE test(
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  UNIQUE INDEX (v1)
+);
+CREATE TABLE test2(
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  UNIQUE (v1)
+);
+SQL
+    run dolt index ls test
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "v1(v1)" ]] || false
+    run dolt schema show test
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ 'UNIQUE INDEX `v1` (`v1`)' ]] || false
+
+	run dolt index ls test2
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "v1(v1)" ]] || false
+    run dolt schema show test2
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ 'UNIQUE INDEX `v1` (`v1`)' ]] || false
+}
+
+@test "index: CREATE TABLE INDEX named with comment" {
+    dolt sql <<SQL
+CREATE TABLE test(
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  INDEX idx_v1 (v1, v2) COMMENT 'hello there'
+);
+SQL
+    run dolt index ls test
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "idx_v1(v1, v2)" ]] || false
+    run dolt schema show test
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ 'INDEX `idx_v1` (`v1`,`v2`)'" COMMENT 'hello there'" ]] || false
+}
+
+@test "index: CREATE TABLE INDEX multiple" {
+    dolt sql <<SQL
+CREATE TABLE test(
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  INDEX (v1),
+  INDEX (v1, v2)
+);
+SQL
+    run dolt index ls test
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "v1(v1)" ]] || false
+	[[ "$output" =~ "v1_2(v1, v2)" ]] || false
+    run dolt schema show test
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ 'INDEX `v1` (`v1`)' ]] || false
+	[[ "$output" =~ 'INDEX `v1_2` (`v1`,`v2`)' ]] || false
+}
+
 @test "index: CREATE INDEX then INSERT" {
     dolt sql <<SQL
 CREATE INDEX idx_v1 ON onepk(v1);
