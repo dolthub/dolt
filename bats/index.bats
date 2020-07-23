@@ -263,6 +263,18 @@ SQL
     [[ "${#lines[@]}" = "2" ]] || false
 }
 
+@test "index: ALTER TABLE CREATE INDEX unnamed" {
+    dolt sql <<SQL
+ALTER TABLE onepk ADD INDEX (v1);
+SQL
+    run dolt index ls onepk
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "v1(v1)" ]] || false
+    run dolt schema show onepk
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ 'INDEX `v1` (`v1`)' ]] || false
+}
+
 @test "index: INSERT then REPLACE" {
     dolt sql <<SQL
 CREATE INDEX idx_v1 ON onepk(v1);

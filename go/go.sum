@@ -425,6 +425,10 @@ github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200721111031-a8e43b8cbc41 h1
 github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200721111031-a8e43b8cbc41/go.mod h1:TnJGUmbNAcN5j/XuAbb+BQiRK4uqkRuf1ot5TvNA51A=
 github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200722090454-55d5a967f251 h1:J4vIBxoNzREk5MQqf3lCPrAOvWIEyVV8+7Iy41vmD5E=
 github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200722090454-55d5a967f251/go.mod h1:TnJGUmbNAcN5j/XuAbb+BQiRK4uqkRuf1ot5TvNA51A=
+github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200722100618-bc50f59ae693 h1:KxZ7CGwOhnoDIUw6wAy84RSOMxDVLvDJKwCjucvSxJA=
+github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200722100618-bc50f59ae693/go.mod h1:oK0sg+L1mLAHp4EOlGNNe3A1DoHopaMXX8z+N+PLo1Y=
+github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200723053706-0737dad3f893 h1:TuLP3wqgtxzDxHkwgL4ZnKS3uDYUYlWfMbKQI1N8F9c=
+github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200723053706-0737dad3f893/go.mod h1:MBtn6JaqJYAzAa6QxZmmBnLDtWLj9TQe/QO6owo68yo=
 github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0 h1:phMgajKClMUiIr+hF2LGt8KRuUa2Vd2GI1sNgHgSXoU=
 github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0/go.mod h1:YC1rI9k5gx8D02ljlbxDfZe80s/iq8bGvaaQsvR+qxs=
 github.com/liquidata-inc/mmap-go v1.0.3 h1:2LndAeAtup9rpvUmu4wZSYCsjCQ0Zpc+NqE+6+PnT7g=
@@ -433,6 +437,10 @@ github.com/liquidata-inc/sqllogictest/go v0.0.0-20200320151923-b11801f10e15 h1:H
 github.com/liquidata-inc/sqllogictest/go v0.0.0-20200320151923-b11801f10e15/go.mod h1:kKRVtyuomkqz15YFRpS0OT8kpsU8y/F3jyiZtvALdKU=
 github.com/liquidata-inc/vitess v0.0.0-20200630190834-3008c538467b h1:273sQxHnQq1QsgUpRVXRMEPwktf4y3dPTWm1Y8XEpkw=
 github.com/liquidata-inc/vitess v0.0.0-20200630190834-3008c538467b/go.mod h1:zCpP+FJseQinxNM5gkVPahLzv7lt3YI0aSvrT5k95Qk=
+github.com/liquidata-inc/vitess v0.0.0-20200722094123-05e391e1fbbd h1:YMtwl24HF2xmp3absIDbjZKJ6uCVvEAutNXtgKIiQ4A=
+github.com/liquidata-inc/vitess v0.0.0-20200722094123-05e391e1fbbd/go.mod h1:zCpP+FJseQinxNM5gkVPahLzv7lt3YI0aSvrT5k95Qk=
+github.com/liquidata-inc/vitess v0.0.0-20200723020829-dc668aea2a8c h1:J3s/tW6yGvGtTT2rWOhmWt0cMkQheIg8p7gejNRNk+o=
+github.com/liquidata-inc/vitess v0.0.0-20200723020829-dc668aea2a8c/go.mod h1:zCpP+FJseQinxNM5gkVPahLzv7lt3YI0aSvrT5k95Qk=
 github.com/lyft/protoc-gen-validate v0.0.13/go.mod h1:XbGvPuh87YZc5TdIa2/I4pLk0QoUACkjt2znoq26NVQ=
 github.com/magiconair/properties v1.8.0/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czPbwD3XqdrwzmxQ=
 github.com/markbates/oncer v0.0.0-20181203154359-bf2de49a0be2/go.mod h1:Ld9puTsIW75CHf65OeIOkyKbteujpZVXDpWK6YGZbxE=
