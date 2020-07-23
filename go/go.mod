@@ -45,7 +45,7 @@ require (
 	github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20200618184056-4de29fb992c7
-	github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200722090454-55d5a967f251
+	github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200723053706-0737dad3f893
 	github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0
 	github.com/liquidata-inc/mmap-go v1.0.3
 	github.com/liquidata-inc/sqllogictest/go v0.0.0-20200320151923-b11801f10e15
@@ -96,6 +96,6 @@ require (
 
 replace github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
 
-replace vitess.io/vitess => github.com/liquidata-inc/vitess v0.0.0-20200630190834-3008c538467b
+replace vitess.io/vitess => github.com/liquidata-inc/vitess v0.0.0-20200723020829-dc668aea2a8c
 
 go 1.13
