@@ -279,6 +279,24 @@ SQL
     [ "$status" -eq "1" ]
 }
 
+@test "foreign-keys: ALTER TABLE SET NULL on non-nullable column" {
+    dolt sql -q 'ALTER TABLE child MODIFY COLUMN v1 int NOT NULL'
+    run dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE SET NULL"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "SET NULL" ]] || false
+    [[ "$output" =~ "v1" ]] || false
+
+    run dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) ON UPDATE SET NULL"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "SET NULL" ]] || false
+    [[ "$output" =~ "v1" ]] || false
+
+    run dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE SET NULL ON UPDATE SET NULL"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "SET NULL" ]] || false
+    [[ "$output" =~ "v1" ]] || false
+}
+
 @test "foreign-keys: ADD FOREIGN KEY fails on existing table when data would cause violation" {
     dolt sql <<SQL
 INSERT INTO parent VALUES (1, 1, 1), (2, 2, 2);

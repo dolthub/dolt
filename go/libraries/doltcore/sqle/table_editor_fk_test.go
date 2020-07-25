@@ -379,9 +379,7 @@ func assertTableEditorRows(t *testing.T, fk_dEnv *env.DoltEnv, root *doltdb.Root
 			sqlRows = append(sqlRows, sqlRow)
 			return nil
 		})
-		if !assert.Equal(t, convertSqlRowToInt64(expected), sqlRows) {
-			fmt.Println("")
-		}
+		assert.Equal(t, convertSqlRowToInt64(expected), sqlRows)
 	}
 
 	// we can verify that each index also has the proper contents
