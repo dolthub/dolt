@@ -28,6 +28,8 @@ type IndexCollection interface {
 	AddIndexByColNames(indexName string, cols []string, props IndexProperties) (Index, error)
 	// AddIndexByColTags adds an index with the given name and column tags (in index order).
 	AddIndexByColTags(indexName string, tags []uint64, props IndexProperties) (Index, error)
+	// todo: this method is trash, clean up this interface
+	UnsafeAddIndexByColTags(indexName string, tags []uint64, props IndexProperties) (Index, error)
 	// AllIndexes returns a slice containing all of the indexes in this collection.
 	AllIndexes() []Index
 	// Contains returns whether the given index name already exists for this table.
@@ -132,6 +134,22 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 	if ixc.hasIndexOnTags(tags...) {
 		return nil, fmt.Errorf("cannot create a duplicate index on this table")
 	}
+	index := &indexImpl{
+		indexColl: ixc,
+		name:      indexName,
+		tags:      tags,
+		allTags:   combineAllTags(tags, ixc.pks),
+		isUnique:  props.IsUnique,
+		comment:   props.Comment,
+	}
+	ixc.indexes[indexName] = index
+	for _, tag := range tags {
+		ixc.colTagToIndex[tag] = append(ixc.colTagToIndex[tag], index)
+	}
+	return index, nil
+}
+
+func (ixc *indexCollectionImpl) UnsafeAddIndexByColTags(indexName string, tags []uint64, props IndexProperties) (Index, error) {
 	index := &indexImpl{
 		indexColl: ixc,
 		name:      indexName,
