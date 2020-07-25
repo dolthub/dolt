@@ -96,25 +96,6 @@ func TestNomsMarshalling(t *testing.T) {
 
 }
 
-func TestJSONMarshalling(t *testing.T) {
-	tSchema := createTestSchema()
-	jsonStr, err := MarshalAsJson(tSchema)
-
-	if err != nil {
-		t.Fatal("Failed to marshal Schema as a types.Value.")
-	}
-
-	jsonUnmarshalled, err := UnmarshalJson(jsonStr)
-
-	if err != nil {
-		t.Fatal("Failed to unmarshal types.Value as Schema")
-	}
-
-	if !reflect.DeepEqual(tSchema, jsonUnmarshalled) {
-		t.Error("Value different after marshalling and unmarshalling.")
-	}
-}
-
 func TestTypeInfoMarshalling(t *testing.T) {
 	//TODO: determine the storage format for BINARY
 	//TODO: determine the storage format for BLOB

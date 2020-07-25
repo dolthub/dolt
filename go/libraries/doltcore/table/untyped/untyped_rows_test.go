@@ -20,7 +20,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -139,13 +138,7 @@ func TestUntypedSchemaUnion(t *testing.T) {
 		if (err != nil) != test.expectErr {
 			t.Error(i, "expected err:", test.expectErr, "received err:", err != nil)
 		} else if err == nil {
-			if eq, err := schema.SchemasAreEqual(union, untypedSch); err != nil {
-				t.Error(err)
-			} else if !eq {
-				actualJson, _ := encoding.MarshalAsJson(untypedSch)
-				expectedJson, _ := encoding.MarshalAsJson(union)
-				t.Error(i, "\nexpected:\n", expectedJson, "\nactual:\n", actualJson)
-			}
+			assert.Equal(t, union, untypedSch)
 		}
 	}
 }
