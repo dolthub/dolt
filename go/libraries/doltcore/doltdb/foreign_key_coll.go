@@ -409,13 +409,18 @@ func (fkc *ForeignKeyCollection) Map(ctx context.Context, vrw types.ValueReadWri
 
 // RemoveKey removes a foreign key from the collection. It does not remove the associated indexes from their
 // respective tables.
-func (fkc *ForeignKeyCollection) RemoveKey(foreignKeyName string) (ForeignKey, error) {
-	fk, ok := fkc.GetByNameCaseInsensitive(foreignKeyName)
-	if !ok {
-		return fk, fmt.Errorf("`%s` does not exist as a foreign key", foreignKeyName)
+func (fkc *ForeignKeyCollection) RemoveKey(foreignKeyName string) error {
+	var key string
+	for k, fk := range fkc.foreignKeys {
+		if strings.ToLower(fk.Name) == strings.ToLower(foreignKeyName) {
+			key = k
+		}
 	}
-	delete(fkc.foreignKeys, fk.HashOf().String())
-	return fk, nil
+	if key == "" {
+		return fmt.Errorf("`%s` does not exist as a foreign key", foreignKeyName)
+	}
+	delete(fkc.foreignKeys, key)
+	return nil
 }
 
 // RemoveTables removes all foreign keys associated with the given tables, if permitted. The operation assumes that ALL

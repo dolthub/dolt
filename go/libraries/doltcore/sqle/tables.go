@@ -681,7 +681,7 @@ func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string) err
 	if err != nil {
 		return err
 	}
-	_, err = fkc.RemoveKey(fkName)
+	err = fkc.RemoveKey(fkName)
 	if err != nil {
 		return err
 	}

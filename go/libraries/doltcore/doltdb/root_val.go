@@ -1224,7 +1224,7 @@ func (root *RootValue) ValidateForeignKeys(ctx context.Context) (*RootValue, err
 				return nil, err
 			}
 		} else {
-			_, err := fkCollection.RemoveKey(foreignKey.Name)
+			err := fkCollection.RemoveKey(foreignKey.Name)
 			if err != nil {
 				return nil, err
 			}
