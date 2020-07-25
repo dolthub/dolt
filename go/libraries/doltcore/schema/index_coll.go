@@ -123,9 +123,6 @@ func (ixc *indexCollectionImpl) AddIndexByColNames(indexName string, cols []stri
 }
 
 func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint64, props IndexProperties) (Index, error) {
-	if strings.HasPrefix(indexName, "dolt_") {
-		return nil, fmt.Errorf("indexes cannot be prefixed with `dolt_`")
-	}
 	if ixc.Contains(indexName) {
 		return nil, fmt.Errorf("`%s` already exists as an index for this table", indexName)
 	}

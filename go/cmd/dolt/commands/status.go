@@ -73,27 +73,27 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 	stagedTblDiffs, notStagedTblDiffs, err := diff.GetTableDiffs(ctx, dEnv)
 
 	if err != nil {
-		cli.PrintErrln(toStatusVErr((err)))
+		cli.PrintErrln(toStatusVErr(err).Verbose())
 		return 1
 	}
 	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, dEnv)
 
 	if err != nil {
-		cli.PrintErrln(toStatusVErr((err)))
+		cli.PrintErrln(toStatusVErr(err).Verbose())
 		return 1
 	}
 
 	stagedDocDiffs, notStagedDocDiffs, err := diff.GetDocDiffs(ctx, dEnv)
 
 	if err != nil {
-		cli.PrintErrln(toStatusVErr((err)))
+		cli.PrintErrln(toStatusVErr(err).Verbose())
 		return 1
 	}
 
 	workingDocsInConflict, err := merge.GetDocsInConflict(ctx, dEnv)
 
 	if err != nil {
-		cli.PrintErrln(toStatusVErr((err)))
+		cli.PrintErrln(toStatusVErr(err).Verbose())
 		return 1
 	}
 
