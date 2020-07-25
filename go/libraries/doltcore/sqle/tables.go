@@ -772,13 +772,6 @@ func (t *AlterableDoltTable) createIndex(ctx *sql.Context, indexName string, usi
 		return nil, nil, nil, fmt.Errorf("not yet supported")
 	}
 
-	if indexName == "" {
-		indexName = columns[0].Name
-	}
-	if !doltdb.IsValidTableName(indexName) {
-		return nil, nil, nil, fmt.Errorf("invalid index name `%s` as they must match the regular expression %s", indexName, doltdb.TableNameRegexStr)
-	}
-
 	// get the real column names as CREATE INDEX columns are case-insensitive
 	var realColNames []string
 	allTableCols := t.sch.GetAllCols()
@@ -788,6 +781,13 @@ func (t *AlterableDoltTable) createIndex(ctx *sql.Context, indexName string, usi
 			return nil, nil, nil, fmt.Errorf("column `%s` does not exist for the table", indexCol.Name)
 		}
 		realColNames = append(realColNames, tableCol.Name)
+	}
+
+	if indexName == "" {
+		indexName = strings.Join(realColNames, "")
+	}
+	if !doltdb.IsValidTableName(indexName) {
+		return nil, nil, nil, fmt.Errorf("invalid index name `%s` as they must match the regular expression %s", indexName, doltdb.TableNameRegexStr)
 	}
 
 	// create the index metadata, will error if index names are taken or an index with the same columns in the same order exists

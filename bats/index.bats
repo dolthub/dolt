@@ -100,11 +100,11 @@ SQL
     run dolt index ls test
     [ "$status" -eq "0" ]
     [[ "$output" =~ "v1(v1)" ]] || false
-	[[ "$output" =~ "v1_2(v1, v2)" ]] || false
+	[[ "$output" =~ "v1v2(v1, v2)" ]] || false
     run dolt schema show test
     [ "$status" -eq "0" ]
     [[ "$output" =~ 'INDEX `v1` (`v1`)' ]] || false
-	[[ "$output" =~ 'INDEX `v1_2` (`v1`,`v2`)' ]] || false
+	[[ "$output" =~ 'INDEX `v1v2` (`v1`,`v2`)' ]] || false
 }
 
 @test "index: CREATE INDEX then INSERT" {
