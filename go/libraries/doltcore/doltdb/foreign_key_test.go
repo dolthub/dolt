@@ -442,4 +442,59 @@ var foreignKeyTests = []foreignKeyTest{
 			},
 		},
 	},
+	{
+		name: "create foreign key with pre-existing data",
+		setup: []testCommand{
+			{commands.SqlCmd{}, []string{"-q", `insert into parent (id,v1,v2) values 
+				(1,1,1),
+				(2,2,2);`}},
+			{commands.SqlCmd{}, []string{"-q", `insert into child (id,v1,v2) values 
+				(1,1,1),
+				(2,2,2),
+				(3,NULL,3);`}},
+			{commands.SqlCmd{}, []string{"-q", `alter table child add index v1_idx (v1)`}},
+			{commands.SqlCmd{}, []string{"-q", `alter table child 
+				add constraint fk1 foreign key (v1) references parent(v1)`}},
+		},
+		fks: []doltdb.ForeignKey{
+			{
+				Name:                   "fk1",
+				TableName:              "child",
+				TableIndex:             "v1_idx",
+				TableColumns:           []uint64{11},
+				ReferencedTableName:    "parent",
+				ReferencedTableIndex:   "v1_idx",
+				ReferencedTableColumns: []uint64{1},
+			},
+		},
+	},
+	{
+		name: "create multi-col foreign key with pre-existing data",
+		setup: []testCommand{
+			{commands.SqlCmd{}, []string{"-q", `insert into parent (id,v1,v2) values 
+				(1,1,1),
+				(2,2,NULL),
+				(3,NULL,3),
+				(4,NULL,NULL);`}},
+			{commands.SqlCmd{}, []string{"-q", `insert into child (id,v1,v2) values 
+				(1,1,1),
+				(2,2,NULL),
+				(3,NULL,3);`}},
+			{commands.SqlCmd{}, []string{"-q", `alter table parent add index v1v2 (v1,v2)`}},
+			{commands.SqlCmd{}, []string{"-q", `alter table child add index v1v2 (v1,v2)`}},
+			{commands.SqlCmd{}, []string{"-q", `alter table child 
+				add constraint fk1 foreign key (v1,v2) references parent(v1,v2)`}},
+		},
+		fks: []doltdb.ForeignKey{
+			{
+				Name:                   "fk1",
+				TableName:              "child",
+				TableIndex:             "v1v2",
+				TableColumns:           []uint64{11, 12},
+				ReferencedTableName:    "parent",
+				ReferencedTableIndex:   "v1v2",
+				ReferencedTableColumns: []uint64{1, 2},
+			},
+		},
+	},
 }

@@ -659,7 +659,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	if err != nil {
 		return err
 	}
-	err = foreignKey.ValidateData(ctx, tableIndexData, refTableIndex, refTableIndexData)
+	err = foreignKey.ConstraintIsSatisfied(ctx, tableIndexData, refTableIndexData, tableIndex, refTableIndex)
 	if err != nil {
 		return err
 	}

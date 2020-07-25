@@ -84,6 +84,15 @@ func GetFieldByNameWithDefault(colName string, defVal types.Value, r Row, sch sc
 	}
 }
 
+func IsEmpty(r Row) (b bool) {
+	b = true
+	_, _ = r.IterCols(func(_ uint64, _ types.Value) (stop bool, err error) {
+		b = false
+		return true, nil
+	})
+	return b
+}
+
 // IsValid returns whether the row given matches the types and satisfies all the constraints of the schema given.
 func IsValid(r Row, sch schema.Schema) (bool, error) {
 	column, constraint, err := findInvalidCol(r, sch)

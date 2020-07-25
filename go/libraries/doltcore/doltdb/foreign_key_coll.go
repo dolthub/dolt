@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
@@ -112,50 +113,75 @@ func (fk ForeignKey) HashOf() hash.Hash {
 	return hash.Of(bb.Bytes())
 }
 
-// ValidateData ensures that the foreign key is valid by comparing the index data from the given table against the index
+// ConstraintIsSatisfied ensures that the foreign key is valid by comparing the index data from the given table against the index
 // data from the referenced table.
-func (fk ForeignKey) ValidateData(ctx context.Context, tableIndexData types.Map, refTableIndex schema.Index, refTableIndexData types.Map) error {
-	if fk.ReferencedTableIndex != refTableIndex.Name() {
+func (fk ForeignKey) ConstraintIsSatisfied(ctx context.Context, childIdx, parentIdx types.Map, childDef, parentDef schema.Index) error {
+	if fk.ReferencedTableIndex != parentDef.Name() {
 		return fmt.Errorf("cannot validate data as wrong referenced index was given: expected `%s` but received `%s`",
-			fk.ReferencedTableIndex, refTableIndex.Name())
+			fk.ReferencedTableIndex, parentDef.Name())
 	}
-	refTableIndexSch := refTableIndex.Schema()
-	err := tableIndexData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-		indexTaggedValues, err := row.ParseTaggedValues(key.(types.Tuple))
-		if err != nil {
-			return true, err
+
+	tagMap := make(map[uint64]uint64, len(fk.TableColumns))
+	for i, childTag := range fk.TableColumns {
+		tagMap[childTag] = fk.ReferencedTableColumns[i]
+	}
+
+	// FieldMappings ignore columns not in the tagMap
+	fm, err := rowconv.NewFieldMapping(childDef.Schema(), parentDef.Schema(), tagMap)
+	if err != nil {
+		return err
+	}
+
+	rc, err := rowconv.NewRowConverter(fm)
+	if err != nil {
+		return err
+	}
+
+	rdr, err := noms.NewNomsMapReader(ctx, childIdx, childDef.Schema())
+	if err != nil {
+		return err
+	}
+
+	for {
+		childIdxRow, err := rdr.ReadRow(ctx)
+		if err == io.EOF {
+			break
 		}
-		refIndexKeyVals := make([]types.Value, len(fk.TableColumns)*2)
-		for i, colTag := range fk.TableColumns {
-			val, ok := indexTaggedValues[colTag]
-			if !ok {
-				return true, fmt.Errorf("cannot find value for tag `%d` on table `%s`", colTag, fk.TableName)
-			}
-			newTag := fk.ReferencedTableColumns[i]
-			refIndexKeyVals[2*i] = types.Uint(newTag)
-			refIndexKeyVals[2*i+1] = val
-		}
-		refIndexKey, err := types.NewTuple(refTableIndexData.Format(), refIndexKeyVals...)
 		if err != nil {
-			return true, err
+			return err
 		}
 
-		indexIter := noms.NewNomsRangeReader(refTableIndexSch, refTableIndexData,
-			[]*noms.ReadRange{{Start: refIndexKey, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
-				return tuple.StartsWith(refIndexKey), nil
+		parentIdxRow, err := rc.Convert(childIdxRow)
+		if err != nil {
+			return err
+		}
+		if row.IsEmpty(parentIdxRow) {
+			continue
+		}
+
+		partial, err := parentIdxRow.ReduceToIndexPartialKey(parentDef)
+		if err != nil {
+			return err
+		}
+
+		indexIter := noms.NewNomsRangeReader(parentDef.Schema(), parentIdx,
+			[]*noms.ReadRange{{Start: partial, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
+				return tuple.StartsWith(partial), nil
 			}}},
 		)
-		_, err = indexIter.ReadRow(ctx)
-		if err == nil { // row exists
-			return false, nil
-		} else if err != io.EOF {
-			return true, err
-		} else {
-			indexKeyStr, _ := types.EncodedValue(ctx, refIndexKey)
-			return true, fmt.Errorf("foreign key violation on `%s`.`%s`: `%s`", fk.Name, fk.TableName, indexKeyStr)
+
+		switch _, err = indexIter.ReadRow(ctx); err {
+		case nil:
+			continue // parent table contains child key
+		case io.EOF:
+			indexKeyStr, _ := types.EncodedValue(ctx, partial)
+			return fmt.Errorf("foreign key violation on `%s`.`%s`: `%s`", fk.Name, fk.TableName, indexKeyStr)
+		default:
+			return err
 		}
-	})
-	return err
+	}
+
+	return nil
 }
 
 // ValidateReferencedTableSchema verifies that the given schema matches the expectation of the referenced table.
