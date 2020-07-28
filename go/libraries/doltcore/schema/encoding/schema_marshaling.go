@@ -16,7 +16,6 @@ package encoding
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -166,7 +165,6 @@ func toSchemaData(sch schema.Schema) (schemaData, error) {
 			Tags:    index.IndexedColumnTags(),
 			Comment: index.Comment(),
 			Unique:  index.IsUnique(),
-			Hidden:  index.IsHidden(),
 		}
 	}
 
@@ -192,8 +190,9 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 	}
 
 	sch := schema.SchemaFromCols(colColl)
+
 	for _, encodedIndex := range sd.IndexCollection {
-		_, err = sch.Indexes().AddIndexByColTags(encodedIndex.Name, encodedIndex.Tags, schema.IndexProperties{IsUnique: encodedIndex.Unique, IsHidden: encodedIndex.Hidden, Comment: encodedIndex.Comment})
+		_, err = sch.Indexes().UnsafeAddIndexByColTags(encodedIndex.Name, encodedIndex.Tags, schema.IndexProperties{IsUnique: encodedIndex.Unique, Comment: encodedIndex.Comment})
 		if err != nil {
 			return nil, err
 		}
@@ -316,33 +315,4 @@ func UnmarshalSuperSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat
 	}
 
 	return ssd.decodeSuperSchema()
-}
-
-// MarshalAsJson takes a Schema and returns a string containing it's json encoding
-func MarshalAsJson(sch schema.Schema) (string, error) {
-	sd, err := toSchemaData(sch)
-
-	if err != nil {
-		return "", err
-	}
-
-	jsonStr, err := json.MarshalIndent(sd, "", "  ")
-
-	if err != nil {
-		return "", err
-	}
-
-	return string(jsonStr), nil
-}
-
-// UnmarshalJson takes a json string and Unmarshalls it into a Schema.
-func UnmarshalJson(jsonStr string) (schema.Schema, error) {
-	var sd schemaData
-	err := json.Unmarshal([]byte(jsonStr), &sd)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return sd.decodeSchema()
 }

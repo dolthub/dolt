@@ -122,6 +122,7 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProp
 	}
 
 	if props.CheckForeignKeys {
+		// todo: this is a big perf hit, rework
 		srt, err = srt.ValidateForeignKeys(ctx)
 
 		if err != nil {

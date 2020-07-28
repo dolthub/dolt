@@ -28,6 +28,8 @@ type IndexCollection interface {
 	AddIndexByColNames(indexName string, cols []string, props IndexProperties) (Index, error)
 	// AddIndexByColTags adds an index with the given name and column tags (in index order).
 	AddIndexByColTags(indexName string, tags []uint64, props IndexProperties) (Index, error)
+	// todo: this method is trash, clean up this interface
+	UnsafeAddIndexByColTags(indexName string, tags []uint64, props IndexProperties) (Index, error)
 	// AllIndexes returns a slice containing all of the indexes in this collection.
 	AllIndexes() []Index
 	// Contains returns whether the given index name already exists for this table.
@@ -54,7 +56,7 @@ type IndexCollection interface {
 	// rather than by tag number, which allows an index from a different table to be added as long as they have matching
 	// column names. If an index with the same name or column structure already exists, or the index contains different
 	// columns, then it is skipped.
-	Merge(includeHidden bool, indexes ...Index)
+	Merge(indexes ...Index)
 	// RemoveIndex removes an index from the table metadata.
 	RemoveIndex(indexName string) (Index, error)
 	// RenameIndex renames an index in the table metadata.
@@ -63,7 +65,6 @@ type IndexCollection interface {
 
 type IndexProperties struct {
 	IsUnique bool
-	IsHidden bool
 	Comment  string
 }
 
@@ -124,9 +125,7 @@ func (ixc *indexCollectionImpl) AddIndexByColNames(indexName string, cols []stri
 }
 
 func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint64, props IndexProperties) (Index, error) {
-	if props.IsHidden && !strings.HasPrefix(indexName, "dolt_") {
-		return nil, fmt.Errorf("hidden indexes must be prefixed with `dolt_`")
-	} else if !props.IsHidden && strings.HasPrefix(indexName, "dolt_") {
+	if strings.HasPrefix(indexName, "dolt_") {
 		return nil, fmt.Errorf("indexes cannot be prefixed with `dolt_`")
 	}
 	if ixc.Contains(indexName) {
@@ -135,17 +134,30 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 	if !ixc.tagsExist(tags...) {
 		return nil, fmt.Errorf("tags %v do not exist on this table", tags)
 	}
-	if !props.IsHidden {
-		if ixc.hasIndexOnTags(tags...) {
-			return nil, fmt.Errorf("cannot create a duplicate index on this table")
-		}
+	if ixc.hasIndexOnTags(tags...) {
+		return nil, fmt.Errorf("cannot create a duplicate index on this table")
 	}
 	index := &indexImpl{
 		indexColl: ixc,
 		name:      indexName,
 		tags:      tags,
 		allTags:   combineAllTags(tags, ixc.pks),
-		isHidden:  props.IsHidden,
+		isUnique:  props.IsUnique,
+		comment:   props.Comment,
+	}
+	ixc.indexes[indexName] = index
+	for _, tag := range tags {
+		ixc.colTagToIndex[tag] = append(ixc.colTagToIndex[tag], index)
+	}
+	return index, nil
+}
+
+func (ixc *indexCollectionImpl) UnsafeAddIndexByColTags(indexName string, tags []uint64, props IndexProperties) (Index, error) {
+	index := &indexImpl{
+		indexColl: ixc,
+		name:      indexName,
+		tags:      tags,
+		allTags:   combineAllTags(tags, ixc.pks),
 		isUnique:  props.IsUnique,
 		comment:   props.Comment,
 	}
@@ -224,7 +236,7 @@ func (ixc *indexCollectionImpl) hasIndexOnColumns(cols ...string) bool {
 
 func (ixc *indexCollectionImpl) GetIndexByTags(tags ...uint64) (Index, bool) {
 	idx := ixc.containsColumnTagCollection(tags...)
-	if idx == nil || idx.isHidden {
+	if idx == nil {
 		return nil, false
 	}
 	return idx, true
@@ -265,17 +277,13 @@ func (ixc *indexCollectionImpl) Iter(cb func(index Index) (stop bool, err error)
 	return nil
 }
 
-func (ixc *indexCollectionImpl) Merge(includeHidden bool, indexes ...Index) {
+func (ixc *indexCollectionImpl) Merge(indexes ...Index) {
 	for _, index := range indexes {
-		if !includeHidden && index.IsHidden() {
-			continue
-		}
 		if tags, ok := ixc.columnNamesToTags(index.ColumnNames()); ok && !ixc.Contains(index.Name()) {
 			newIndex := &indexImpl{
 				name:      index.Name(),
 				tags:      tags,
 				indexColl: ixc,
-				isHidden:  index.IsHidden(),
 				isUnique:  index.IsUnique(),
 				comment:   index.Comment(),
 			}

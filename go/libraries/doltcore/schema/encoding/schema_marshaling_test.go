@@ -43,7 +43,7 @@ func createTestSchema() schema.Schema {
 
 	colColl, _ := schema.NewColCollection(columns...)
 	sch := schema.SchemaFromCols(colColl)
-	_, _ = sch.Indexes().AddIndexByColTags("idx_age", []uint64{3}, schema.IndexProperties{IsUnique: false, IsHidden: false, Comment: ""})
+	_, _ = sch.Indexes().AddIndexByColTags("idx_age", []uint64{3}, schema.IndexProperties{IsUnique: false, Comment: ""})
 	return sch
 }
 
@@ -94,25 +94,6 @@ func TestNomsMarshalling(t *testing.T) {
 		t.Error("Value different after marshalling and unmarshalling.")
 	}
 
-}
-
-func TestJSONMarshalling(t *testing.T) {
-	tSchema := createTestSchema()
-	jsonStr, err := MarshalAsJson(tSchema)
-
-	if err != nil {
-		t.Fatal("Failed to marshal Schema as a types.Value.")
-	}
-
-	jsonUnmarshalled, err := UnmarshalJson(jsonStr)
-
-	if err != nil {
-		t.Fatal("Failed to unmarshal types.Value as Schema")
-	}
-
-	if !reflect.DeepEqual(tSchema, jsonUnmarshalled) {
-		t.Error("Value different after marshalling and unmarshalling.")
-	}
 }
 
 func TestTypeInfoMarshalling(t *testing.T) {
@@ -277,7 +258,7 @@ func (tsd testSchemaData) decodeSchema() (schema.Schema, error) {
 	sch := schema.SchemaFromCols(colColl)
 
 	for _, encodedIndex := range tsd.IndexCollection {
-		_, err = sch.Indexes().AddIndexByColTags(encodedIndex.Name, encodedIndex.Tags, schema.IndexProperties{IsUnique: encodedIndex.Unique, IsHidden: encodedIndex.Hidden, Comment: encodedIndex.Comment})
+		_, err = sch.Indexes().AddIndexByColTags(encodedIndex.Name, encodedIndex.Tags, schema.IndexProperties{IsUnique: encodedIndex.Unique, Comment: encodedIndex.Comment})
 		if err != nil {
 			return nil, err
 		}

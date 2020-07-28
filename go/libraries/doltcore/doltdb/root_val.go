@@ -837,8 +837,8 @@ func (root *RootValue) UpdateTablesFromOther(ctx context.Context, tblNames []str
 		return nil, err
 	}
 
-	var fksToAdd []*ForeignKey
-	var fksToRemove []*ForeignKey
+	var fksToAdd []ForeignKey
+	var fksToRemove []ForeignKey
 
 	me := tableMap.Edit()
 	for _, tblName := range tblNames {
@@ -1147,7 +1147,7 @@ func (root *RootValue) GetForeignKeyCollection(ctx context.Context) (*ForeignKey
 }
 
 // GetForeignKeyCollectionMap returns the persisted noms Map of the foreign key collection on this root. If the intent
-// is to retreive a ForeignKeyCollection in particular, it is advised to call GetForeignKeyCollection as it caches the
+// is to retrieve a ForeignKeyCollection in particular, it is advised to call GetForeignKeyCollection as it caches the
 // result for performance.
 func (root *RootValue) GetForeignKeyCollectionMap(ctx context.Context) (types.Map, error) {
 	v, found, err := root.valueSt.MaybeGet(foreignKeyKey)
@@ -1224,7 +1224,7 @@ func (root *RootValue) ValidateForeignKeys(ctx context.Context) (*RootValue, err
 				return nil, err
 			}
 		} else {
-			_, err := fkCollection.RemoveKey(foreignKey.Name)
+			err := fkCollection.RemoveKey(foreignKey.Name)
 			if err != nil {
 				return nil, err
 			}

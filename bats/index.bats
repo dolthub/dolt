@@ -100,11 +100,11 @@ SQL
     run dolt index ls test
     [ "$status" -eq "0" ]
     [[ "$output" =~ "v1(v1)" ]] || false
-	[[ "$output" =~ "v1_2(v1, v2)" ]] || false
+	[[ "$output" =~ "v1v2(v1, v2)" ]] || false
     run dolt schema show test
     [ "$status" -eq "0" ]
     [[ "$output" =~ 'INDEX `v1` (`v1`)' ]] || false
-	[[ "$output" =~ 'INDEX `v1_2` (`v1`,`v2`)' ]] || false
+	[[ "$output" =~ 'INDEX `v1v2` (`v1`,`v2`)' ]] || false
 }
 
 @test "index: CREATE INDEX then INSERT" {
@@ -559,30 +559,6 @@ SQL
     [ "$status" -eq "1" ]
     run dolt sql -q "ALTER TABLE onepk ADD INDEX dolt_idx_v1 (v1)"
     [ "$status" -eq "1" ]
-}
-
-@test "index: Disallow dropping 'dolt_' indexes" {
-    dolt sql <<SQL
-CREATE TABLE parent (
-  id INT PRIMARY KEY
-);
-CREATE TABLE child (
-  id INT PRIMARY KEY,
-  parent_id INT,
-  FOREIGN KEY (parent_id)
-    REFERENCES parent(id)
-);
-SQL
-
-    run dolt index ls child
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "dolt_fk_1(parent_id) HIDDEN" ]] || false
-    run dolt sql -q "DROP INDEX dolt_fk_1 ON child"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ 'internal index' ]] || false
-    run dolt sql -q "ALTER TABLE child DROP INDEX dolt_fk_1"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ 'internal index' ]] || false
 }
 
 @test "index: DROP INDEX" {

@@ -98,11 +98,11 @@ func init() {
 		UntypedRows = append(UntypedRows, r)
 	}
 
-	_, err := TypedSchema.Indexes().AddIndexByColTags(IndexName, []uint64{NameTag}, schema.IndexProperties{IsUnique: false, IsHidden: false, Comment: ""})
+	_, err := TypedSchema.Indexes().AddIndexByColTags(IndexName, []uint64{NameTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
 	if err != nil {
 		panic(err)
 	}
-	_, err = UntypedSchema.Indexes().AddIndexByColTags(IndexName, []uint64{NameTag}, schema.IndexProperties{IsUnique: false, IsHidden: false, Comment: ""})
+	_, err = UntypedSchema.Indexes().AddIndexByColTags(IndexName, []uint64{NameTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
 	if err != nil {
 		panic(err)
 	}
