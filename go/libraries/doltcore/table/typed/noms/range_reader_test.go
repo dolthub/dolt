@@ -68,8 +68,8 @@ var rangeReaderTests = []struct {
 	},
 	{
 		"test empty range starting after",
-	[]*ReadRange{NewRangeStartingAfter(mustTuple(100), lessThanCheck(200))},
-	[]int64(nil),
+		[]*ReadRange{NewRangeStartingAfter(mustTuple(100), lessThanCheck(200))},
+		[]int64(nil),
 	},
 	{
 		"test empty range starting at",
@@ -154,7 +154,6 @@ func TestRangeReader(t *testing.T) {
 		})
 	}
 }
-
 
 func TestRangeReaderOnEmptyMap(t *testing.T) {
 	ctx := context.Background()

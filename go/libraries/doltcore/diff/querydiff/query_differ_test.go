@@ -519,12 +519,6 @@ var engineQueryTests = [][]enginetest.QueryTest{
 var engineTestSkipSet = []string{
 	// query diff doesn't handle mutlidb queries
 	`SELECT * FROM foo.other_table`,
-
-	// dolt panics on these queries for empty mytable
-	"SELECT i FROM mytable WHERE i < 2",
-	"SELECT i FROM mytable WHERE 2 > i",
-	"SELECT i FROM mytable WHERE i <= 2 ORDER BY 1",
-	"SELECT i FROM mytable WHERE 2 >= i ORDER BY 1",
 }
 
 func skipEngineTest(test enginetest.QueryTest) bool {
