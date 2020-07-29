@@ -399,26 +399,28 @@ func (m Map) IteratorBackFrom(ctx context.Context, key Value) (MapIterator, erro
 		cur.advance(ctx)
 	}
 
-	item, err := cur.current()
-
-	if err != nil {
-		return nil, err
-	}
-
-	entry := item.(mapEntry)
-	isLess, err := entry.key.Less(m.Format(), key)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if !isLess && !key.Equals(entry.key) {
-		_, err := cur.advance(ctx)
+	if cur.valid() {
+		item, err := cur.current()
 
 		if err != nil {
 			return nil, err
 		}
-	}
+
+		entry := item.(mapEntry)
+		isLess, err := entry.key.Less(m.Format(), key)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if !isLess && !key.Equals(entry.key) {
+			_, err := cur.advance(ctx)
+
+			if err != nil {
+				return nil, err
+			}
+		}
+	} // else: we're at the beginning of the map
 
 	return &mapIterator{sequenceIter: cur}, nil
 }

@@ -28,8 +28,68 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+var rangeReaderTests = []struct {
+	name       string
+	ranges     []*ReadRange
+	expectKeys []int64
+}{
+	{
+		"test range ending at",
+		[]*ReadRange{NewRangeEndingAt(mustTuple(10), greaterThanCheck(2))},
+		[]int64{10, 8, 6, 4},
+	},
+	{
+		"test range ending before",
+		[]*ReadRange{NewRangeEndingBefore(mustTuple(10), greaterThanCheck(2))},
+		[]int64{8, 6, 4},
+	},
+	{
+		"test range starting at",
+		[]*ReadRange{NewRangeStartingAt(mustTuple(10), lessThanCheck(20))},
+		[]int64{10, 12, 14, 16, 18},
+	},
+	{
+		"test range starting after",
+		[]*ReadRange{NewRangeStartingAfter(mustTuple(10), lessThanCheck(20))},
+		[]int64{12, 14, 16, 18},
+	},
+	{
+		"test range iterating to the end",
+		[]*ReadRange{NewRangeStartingAt(mustTuple(100), lessThanCheck(200))},
+		[]int64{100},
+	},
+	{
+		"test multiple ranges",
+		[]*ReadRange{
+			NewRangeEndingBefore(mustTuple(10), greaterThanCheck(2)),
+			NewRangeStartingAt(mustTuple(10), lessThanCheck(20)),
+		},
+		[]int64{8, 6, 4, 10, 12, 14, 16, 18},
+	},
+	{
+		"test empty range starting after",
+		[]*ReadRange{NewRangeStartingAfter(mustTuple(100), lessThanCheck(200))},
+		[]int64(nil),
+	},
+	{
+		"test empty range starting at",
+		[]*ReadRange{NewRangeStartingAt(mustTuple(101), lessThanCheck(200))},
+		[]int64(nil),
+	},
+	{
+		"test empty range ending before",
+		[]*ReadRange{NewRangeEndingBefore(mustTuple(0), greaterThanCheck(-100))},
+		[]int64(nil),
+	},
+	{
+		"test empty range ending at",
+		[]*ReadRange{NewRangeEndingAt(mustTuple(-1), greaterThanCheck(-100))},
+		[]int64(nil),
+	},
+}
+
 func mustTuple(id int64) types.Tuple {
-	t, err := types.NewTuple(types.Format_Default, types.Uint(0), types.Int(id))
+	t, err := types.NewTuple(types.Format_Default, types.Uint(pkTag), types.Int(id))
 
 	if err != nil {
 		panic(err)
@@ -67,48 +127,7 @@ func TestRangeReader(t *testing.T) {
 	m, err = me.Map(ctx)
 	assert.NoError(t, err)
 
-	tests := []struct {
-		name       string
-		ranges     []*ReadRange
-		expectKeys []int64
-	}{
-		{
-			"test range ending at",
-			[]*ReadRange{NewRangeEndingAt(mustTuple(10), greaterThanCheck(2))},
-			[]int64{10, 8, 6, 4},
-		},
-		{
-			"test range ending before",
-			[]*ReadRange{NewRangeEndingBefore(mustTuple(10), greaterThanCheck(2))},
-			[]int64{8, 6, 4},
-		},
-		{
-			"test range starting at",
-			[]*ReadRange{NewRangeStartingAt(mustTuple(10), lessThanCheck(20))},
-			[]int64{10, 12, 14, 16, 18},
-		},
-		{
-			"test range starting after",
-			[]*ReadRange{NewRangeStartingAfter(mustTuple(10), lessThanCheck(20))},
-			[]int64{12, 14, 16, 18},
-		},
-		{
-			"test range iterating to the end",
-			[]*ReadRange{NewRangeStartingAt(mustTuple(100), lessThanCheck(200))},
-			[]int64{100},
-		},
-
-		{
-			"test multiple ranges",
-			[]*ReadRange{
-				NewRangeEndingBefore(mustTuple(10), greaterThanCheck(2)),
-				NewRangeStartingAt(mustTuple(10), lessThanCheck(20)),
-			},
-			[]int64{8, 6, 4, 10, 12, 14, 16, 18},
-		},
-	}
-
-	for _, test := range tests {
+	for _, test := range rangeReaderTests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			rd := NewNomsRangeReader(sch, m, test.ranges)
@@ -132,6 +151,33 @@ func TestRangeReader(t *testing.T) {
 			assert.NoError(t, err)
 
 			assert.Equal(t, test.expectKeys, keys)
+		})
+	}
+}
+
+func TestRangeReaderOnEmptyMap(t *testing.T) {
+	ctx := context.Background()
+	colColl, err := schema.NewColCollection(
+		schema.NewColumn("id", pkTag, types.IntKind, true),
+		schema.NewColumn("val", valTag, types.IntKind, false))
+	require.NoError(t, err)
+
+	sch := schema.SchemaFromCols(colColl)
+
+	var db datas.Database
+	storage := &chunks.MemoryStorage{}
+	db = datas.NewDatabase(storage.NewView())
+	m, err := types.NewMap(ctx, db)
+	assert.NoError(t, err)
+
+	for _, test := range rangeReaderTests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			rd := NewNomsRangeReader(sch, m, test.ranges)
+
+			r, err := rd.ReadRow(ctx)
+			assert.Equal(t, io.EOF, err)
+			assert.Nil(t, r)
 		})
 	}
 }
