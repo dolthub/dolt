@@ -33,14 +33,14 @@ import (
 // SQL database.
 type SqlExportWriter struct {
 	tableName       string
-	foreignKeys     []*doltdb.DisplayForeignKey
+	foreignKeys     []doltdb.ForeignKey
 	sch             schema.Schema
 	wr              io.WriteCloser
 	writtenFirstRow bool
 }
 
 // OpenSQLExportWriter returns a new SqlWriter for the table given writing to a file with the path given.
-func OpenSQLExportWriter(path string, tableName string, fs filesys.WritableFS, sch schema.Schema, foreignKeys []*doltdb.DisplayForeignKey) (*SqlExportWriter, error) {
+func OpenSQLExportWriter(path string, tableName string, fs filesys.WritableFS, sch schema.Schema, foreignKeys []doltdb.ForeignKey) (*SqlExportWriter, error) {
 	err := fs.MkDirs(filepath.Dir(path))
 	if err != nil {
 		return nil, err
@@ -84,7 +84,7 @@ func (w *SqlExportWriter) maybeWriteDropCreate() error {
 		var b strings.Builder
 		b.WriteString(sqlfmt.DropTableIfExistsStmt(w.tableName))
 		b.WriteRune('\n')
-		b.WriteString(sqlfmt.CreateTableStmtWithTags(w.tableName, w.sch, w.foreignKeys))
+		b.WriteString(sqlfmt.CreateTableStmtWithTags(w.tableName, w.sch, w.foreignKeys, nil))
 		if err := iohelp.WriteLine(w.wr, b.String()); err != nil {
 			return err
 		}

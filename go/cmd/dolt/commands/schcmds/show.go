@@ -133,6 +133,11 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 			}
 		}
 
+		fkc, err := root.GetForeignKeyCollection(ctx)
+		if err != nil {
+			return errhand.BuildDError("error: failed to read foreign key struct").AddCause(err).Build()
+		}
+
 		var notFound []string
 		for _, tblName := range tables {
 			tbl, ok, err := root.GetTable(ctx, tblName)
@@ -144,14 +149,7 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 			if !ok {
 				notFound = append(notFound, tblName)
 			} else {
-				fkc, err := root.GetForeignKeyCollection(ctx)
-				if err != nil {
-					return errhand.BuildDError("error: failed to read foreign key struct").AddCause(err).Build()
-				}
-				declaresFk, err := fkc.KeysForDisplay(ctx, tblName, root)
-				if err != nil {
-					return errhand.BuildDError("error: failed to assemble foreign key information").AddCause(err).Build()
-				}
+				declaresFk, _ := fkc.KeysForTable(tblName)
 				verr = printTblSchema(ctx, cmStr, tblName, tbl, declaresFk)
 				cli.Println()
 			}
@@ -165,7 +163,7 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 	return verr
 }
 
-func printTblSchema(ctx context.Context, cmStr string, tblName string, tbl *doltdb.Table, foreignKeys []*doltdb.DisplayForeignKey) errhand.VerboseError {
+func printTblSchema(ctx context.Context, cmStr string, tblName string, tbl *doltdb.Table, foreignKeys []doltdb.ForeignKey) errhand.VerboseError {
 	cli.Println(bold.Sprint(tblName), "@", cmStr)
 	sch, err := tbl.GetSchema(ctx)
 
@@ -173,6 +171,6 @@ func printTblSchema(ctx context.Context, cmStr string, tblName string, tbl *dolt
 		return errhand.BuildDError("unable to get schema").AddCause(err).Build()
 	}
 
-	cli.Println(sqlfmt.CreateTableStmtWithTags(tblName, sch, foreignKeys))
+	cli.Println(sqlfmt.CreateTableStmtWithTags(tblName, sch, foreignKeys, nil))
 	return nil
 }

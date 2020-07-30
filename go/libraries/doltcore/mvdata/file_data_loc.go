@@ -160,10 +160,7 @@ func (dl FileDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMov
 		if err != nil {
 			return nil, errhand.BuildDError("error: failed to read foreign key struct").AddCause(err).Build()
 		}
-		declaredFks, err := fkc.KeysForDisplay(ctx, mvOpts.SrcName(), root)
-		if err != nil {
-			return nil, errhand.BuildDError("error: failed to assemble foreign key information").AddCause(err).Build()
-		}
+		declaredFks, _ := fkc.KeysForTable(mvOpts.SrcName())
 		return sqlexport.OpenSQLExportWriter(dl.Path, mvOpts.SrcName(), fs, outSch, declaredFks)
 	}
 

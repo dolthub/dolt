@@ -184,11 +184,8 @@ func PrintSqlTableDiffs(ctx context.Context, r1, r2 *doltdb.RootValue, wr io.Wri
 				if err != nil {
 					return errhand.BuildDError("error: failed to read foreign key struct").AddCause(err).Build()
 				}
-				declaresFk, err := fkc.KeysForDisplay(ctx, tblName, r1)
-				if err != nil {
-					return errhand.BuildDError("error: failed to assemble foreign key information").AddCause(err).Build()
-				}
-				stmt := sqlfmt.CreateTableStmtWithTags(tblName, sch, declaresFk)
+				declaresFk, _ := fkc.KeysForTable(tblName)
+				stmt := sqlfmt.CreateTableStmtWithTags(tblName, sch, declaresFk, nil)
 				if err = iohelp.WriteLine(wr, stmt); err != nil {
 					return err
 				}

@@ -46,16 +46,16 @@ func TestDiffSchemas(t *testing.T) {
 
 	oldSch := schema.SchemaFromCols(oldColColl)
 	newSch := schema.SchemaFromCols(newColColl)
-	diffs, _ := DiffSchemas(oldSch, newSch)
+	diffs, _ := DiffSchColumns(oldSch, newSch)
 
-	expected := map[uint64]SchemaDifference{
+	expected := map[uint64]ColumnDifference{
 		0: {SchDiffNone, 0, &oldCols[0], &newCols[0]},
-		1: {SchDiffColRemoved, 1, &oldCols[1], nil},
-		2: {SchDiffColModified, 2, &oldCols[2], &newCols[1]},
-		3: {SchDiffColModified, 3, &oldCols[3], &newCols[2]},
-		4: {SchDiffColModified, 4, &oldCols[4], &newCols[3]},
-		5: {SchDiffColModified, 5, &oldCols[5], &newCols[4]},
-		6: {SchDiffColAdded, 6, nil, &newCols[5]},
+		1: {SchDiffRemoved, 1, &oldCols[1], nil},
+		2: {SchDiffModified, 2, &oldCols[2], &newCols[1]},
+		3: {SchDiffModified, 3, &oldCols[3], &newCols[2]},
+		4: {SchDiffModified, 4, &oldCols[4], &newCols[3]},
+		5: {SchDiffModified, 5, &oldCols[5], &newCols[4]},
+		6: {SchDiffAdded, 6, nil, &newCols[5]},
 	}
 
 	if !reflect.DeepEqual(diffs, expected) {

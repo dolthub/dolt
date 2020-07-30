@@ -706,28 +706,63 @@ func (t *AlterableDoltTable) GetForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyC
 		return nil, err
 	}
 
-	fks, err := fkc.KeysForDisplay(ctx, t.name, root)
-	if err != nil {
-		return nil, err
-	}
+	declaredFk, _ := fkc.KeysForTable(t.name)
+	toReturn := make([]sql.ForeignKeyConstraint, len(declaredFk))
 
-	toReturn := make([]sql.ForeignKeyConstraint, len(fks))
-	for i, fk := range fks {
-		toReturn[i] = t.toForeignKeyConstraint(fk)
+	for i, fk := range declaredFk {
+		parent, ok, err := root.GetTable(ctx, fk.ReferencedTableName)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, fmt.Errorf("cannot find table %s "+
+				"referenced in foreign key %s", fk.ReferencedTableName, fk.Name)
+		}
+
+		parentSch, err := parent.GetSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		toReturn[i], err = toForeignKeyConstraint(fk, t.sch, parentSch)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return toReturn, nil
 }
 
-func (t *AlterableDoltTable) toForeignKeyConstraint(key *doltdb.DisplayForeignKey) sql.ForeignKeyConstraint {
-	return sql.ForeignKeyConstraint{
-		Name:              key.Name,
-		Columns:           key.TableColumns,
-		ReferencedTable:   key.ReferencedTableName,
-		ReferencedColumns: key.ReferencedTableColumns,
-		OnUpdate:          toReferenceOption(key.OnUpdate),
-		OnDelete:          toReferenceOption(key.OnDelete),
+func toForeignKeyConstraint(fk doltdb.ForeignKey, childSch, parentSch schema.Schema) (cst sql.ForeignKeyConstraint, err error) {
+	cst = sql.ForeignKeyConstraint{
+		Name:              fk.Name,
+		Columns:           make([]string, len(fk.ReferencedTableColumns)),
+		ReferencedTable:   fk.ReferencedTableName,
+		ReferencedColumns: make([]string, len(fk.TableColumns)),
+		OnUpdate:          toReferenceOption(fk.OnUpdate),
+		OnDelete:          toReferenceOption(fk.OnDelete),
 	}
+
+	for i, tag := range fk.TableColumns {
+		c, ok := childSch.GetAllCols().GetByTag(tag)
+		if !ok {
+			return cst, fmt.Errorf("cannot find column for tag %d "+
+				"in table %s used in foreign key %s", tag, fk.TableName, fk.Name)
+		}
+		cst.Columns[i] = c.Name
+	}
+
+	for i, tag := range fk.ReferencedTableColumns {
+		c, ok := parentSch.GetAllCols().GetByTag(tag)
+		if !ok {
+			return cst, fmt.Errorf("cannot find column for tag %d "+
+				"in table %s used in foreign key %s", tag, fk.ReferencedTableName, fk.Name)
+		}
+		cst.ReferencedColumns[i] = c.Name
+
+	}
+
+	return cst, nil
 }
 
 func toReferenceOption(opt doltdb.ForeignKeyReferenceOption) sql.ForeignKeyReferenceOption {

@@ -47,19 +47,6 @@ const (
 	ForeignKeyReferenceOption_SetNull
 )
 
-// DisplayForeignKey is a representation of a Foreign Key that is meant for display, such as when displaying a schema.
-type DisplayForeignKey struct {
-	Name                   string
-	TableName              string
-	TableIndex             string
-	TableColumns           []string
-	ReferencedTableName    string
-	ReferencedTableIndex   string
-	ReferencedTableColumns []string
-	OnUpdate               ForeignKeyReferenceOption
-	OnDelete               ForeignKeyReferenceOption
-}
-
 // ForeignKey is the complete, internal representation of a Foreign Key.
 type ForeignKey struct {
 	Name                   string                    `noms:"name" json:"name"`
@@ -355,45 +342,6 @@ func (fkc *ForeignKeyCollection) Iter(cb func(fk ForeignKey) (stop bool, err err
 	return nil
 }
 
-// KeysForDisplay returns display-ready foreign keys that the given table declares. The results are intended only
-// for displaying key information to a user, and SHOULD NOT be used elsewhere. The results are sorted by name ascending.
-func (fkc *ForeignKeyCollection) KeysForDisplay(ctx context.Context, tableName string, root *RootValue) ([]*DisplayForeignKey, error) {
-	var declaresFk []*DisplayForeignKey
-	for _, foreignKey := range fkc.foreignKeys {
-		if foreignKey.TableName == tableName {
-			tableColumns, ok, err := fkc.columnTagsToNames(ctx, foreignKey.TableName, foreignKey.Name, foreignKey.TableColumns, root)
-			if err != nil {
-				return nil, err
-			}
-			if !ok { // root may be in an incomplete state regarding the foreign key, so we skip displaying any invalid keys
-				continue
-			}
-			refTableColumns, ok, err := fkc.columnTagsToNames(ctx, foreignKey.ReferencedTableName, foreignKey.Name, foreignKey.ReferencedTableColumns, root)
-			if err != nil {
-				return nil, err
-			}
-			if !ok {
-				continue
-			}
-			declaresFk = append(declaresFk, &DisplayForeignKey{
-				Name:                   foreignKey.Name,
-				TableName:              foreignKey.TableName,
-				TableIndex:             foreignKey.TableIndex,
-				TableColumns:           tableColumns,
-				ReferencedTableName:    foreignKey.ReferencedTableName,
-				ReferencedTableIndex:   foreignKey.ReferencedTableIndex,
-				ReferencedTableColumns: refTableColumns,
-				OnUpdate:               foreignKey.OnUpdate,
-				OnDelete:               foreignKey.OnDelete,
-			})
-		}
-	}
-	sort.Slice(declaresFk, func(i, j int) bool {
-		return declaresFk[i].Name < declaresFk[j].Name
-	})
-	return declaresFk, nil
-}
-
 // KeysForTable returns all foreign keys that reference the given table in some capacity. The returned array
 // declaredFk contains all foreign keys in which this table declared the foreign key. The array referencedByFk contains
 // all foreign keys in which this table is the referenced table. If the table contains a self-referential foreign key,
@@ -510,30 +458,6 @@ func (refOp ForeignKeyReferenceOption) String() string {
 	default:
 		return "INVALID"
 	}
-}
-
-// columnTagsToNames loads all of the column names for the tags given from the root given.
-func (fkc *ForeignKeyCollection) columnTagsToNames(ctx context.Context, tableName string, fkName string, colTags []uint64, root *RootValue) ([]string, bool, error) {
-	tbl, ok, err := root.GetTable(ctx, tableName)
-	if err != nil {
-		return nil, false, err
-	}
-	if !ok {
-		return nil, false, nil
-	}
-	tableSch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, false, err
-	}
-	tableColumns := make([]string, len(colTags))
-	for i := range colTags {
-		col, ok := tableSch.GetAllCols().GetByTag(colTags[i])
-		if !ok {
-			return nil, false, nil
-		}
-		tableColumns[i] = col.Name
-	}
-	return tableColumns, true, nil
 }
 
 // copy returns an exact copy of the calling collection. As collections are meant to be modified in-place, this ensures

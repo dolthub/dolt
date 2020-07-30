@@ -396,7 +396,7 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 		}
 
 		if dArgs.diffParts&SchemaOnlyDiff != 0 {
-			verr = diffSchemas(ctx, td, dArgs)
+			verr = diffSchemas(ctx, fromRoot, toRoot, td, dArgs)
 		}
 
 		if dArgs.diffParts&DataOnlyDiff != 0 {
@@ -416,62 +416,53 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 	return nil
 }
 
-func diffSchemas(ctx context.Context, td diff.TableDelta, dArgs *diffArgs) errhand.VerboseError {
+func diffSchemas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, td diff.TableDelta, dArgs *diffArgs) errhand.VerboseError {
+	fromSchemas, err := fromRoot.GetAllSchemas(ctx)
+	if err != nil {
+		return errhand.BuildDError("could not read schemas from fromRoot").AddCause(err).Build()
+	}
+	toSchemas, err := toRoot.GetAllSchemas(ctx)
+	if err != nil {
+		return errhand.BuildDError("could not read schemas from toRoot").AddCause(err).Build()
+	}
+
 	if dArgs.diffOutput == TabularDiffOutput {
-		fromSch, toSch, err := td.GetSchemas(ctx)
-		if err != nil {
-			return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
-		}
-
-		if eq, _ := schema.SchemasAreEqual(fromSch, toSch); eq {
-			return nil
-		}
-
 		if td.IsDrop() || td.IsAdd() {
 			panic("cannot perform tabular schema diff for added/dropped tables")
 		}
 
-		diffs, unionTags := diff.DiffSchemas(fromSch, toSch)
-
-		return tabularSchemaDiff(td.ToName, unionTags, diffs)
+		return tabularSchemaDiff(ctx, td, fromSchemas, toSchemas)
 	}
 
-	return sqlSchemaDiff(ctx, td)
+	return sqlSchemaDiff(ctx, td, toSchemas)
 }
 
-func tabularSchemaDiff(tableName string, tags []uint64, diffs map[uint64]diff.SchemaDifference) errhand.VerboseError {
-	cli.Println("  CREATE TABLE", tableName, "(")
+func tabularSchemaDiff(ctx context.Context, td diff.TableDelta, fromSchemas, toSchemas map[string]schema.Schema) errhand.VerboseError {
+	fromSch, toSch, err := td.GetSchemas(ctx)
+	if err != nil {
+		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
+	}
+	if eq, _ := schema.SchemasAreEqual(fromSch, toSch); eq {
+		return nil
+	}
 
-	oldPks := make([]string, 0)
-	newPks := make([]string, 0)
+	cli.Println("  CREATE TABLE", td.ToName, "(")
 
+	colDiffs, tags := diff.DiffSchColumns(fromSch, toSch)
 	for _, tag := range tags {
-		dff := diffs[tag]
+		dff := colDiffs[tag]
 		switch dff.DiffType {
 		case diff.SchDiffNone:
-			if dff.New.IsPartOfPK {
-				newPks = append(newPks, sqlfmt.QuoteIdentifier(dff.New.Name))
-				oldPks = append(oldPks, sqlfmt.QuoteIdentifier(dff.Old.Name))
-			}
 			cli.Println(sqlfmt.FmtColWithTag(4, 0, 0, *dff.New))
-		case diff.SchDiffColAdded:
-			if dff.New.IsPartOfPK {
-				newPks = append(newPks, sqlfmt.QuoteIdentifier(dff.New.Name))
-			}
+		case diff.SchDiffAdded:
 			cli.Println(color.GreenString("+ " + sqlfmt.FmtColWithTag(2, 0, 0, *dff.New)))
-		case diff.SchDiffColRemoved:
+		case diff.SchDiffRemoved:
 			// removed from sch2
-			if dff.Old.IsPartOfPK {
-				oldPks = append(oldPks, sqlfmt.QuoteIdentifier(dff.Old.Name))
-			}
 			cli.Println(color.RedString("- " + sqlfmt.FmtColWithTag(2, 0, 0, *dff.Old)))
-		case diff.SchDiffColModified:
+		case diff.SchDiffModified:
 			// changed in sch2
-			oldSqlType := dff.Old.TypeInfo.ToSqlType()
-			newSqlType := dff.New.TypeInfo.ToSqlType()
-
-			n0, t0, pk0 := dff.Old.Name, oldSqlType.String(), dff.Old.IsPartOfPK
-			n1, t1, pk1 := dff.New.Name, newSqlType.String(), dff.New.IsPartOfPK
+			n0, t0 := dff.Old.Name, dff.Old.TypeInfo.ToSqlType().String()
+			n1, t1 := dff.New.Name, dff.New.TypeInfo.ToSqlType().String()
 
 			nameLen := 0
 			typeLen := 0
@@ -488,28 +479,47 @@ func tabularSchemaDiff(tableName string, tags []uint64, diffs map[uint64]diff.Sc
 				typeLen = mathutil.Max(len(t0), len(t1))
 			}
 
-			if pk0 != pk1 {
-				if pk0 && !pk1 {
-					oldPks = append(oldPks, sqlfmt.QuoteIdentifier(n0))
-				} else {
-					newPks = append(newPks, sqlfmt.QuoteIdentifier(n1))
-				}
-				cli.Println(sqlfmt.FmtColWithTag(4, 0, 0, *dff.New))
-			} else {
-				cli.Println("< " + sqlfmt.FmtColWithNameAndType(2, nameLen, typeLen, n0, t0, *dff.Old))
-				cli.Println("> " + sqlfmt.FmtColWithNameAndType(2, nameLen, typeLen, n1, t1, *dff.New))
-			}
+			cli.Println("< " + sqlfmt.FmtColWithNameAndType(2, nameLen, typeLen, n0, t0, *dff.Old))
+			cli.Println("> " + sqlfmt.FmtColWithNameAndType(2, nameLen, typeLen, n1, t1, *dff.New))
 		}
 	}
 
-	oldPKStr := strings.Join(oldPks, ", ")
-	newPKStr := strings.Join(newPks, ", ")
+	if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
+		panic("primary key sets must be the same")
+	}
+	pkStr := strings.Join(fromSch.GetPKCols().GetColumnNames(), ", ")
+	cli.Print(sqlfmt.FmtColPrimaryKey(4, pkStr))
 
-	if oldPKStr != newPKStr {
-		cli.Print("< " + color.YellowString(sqlfmt.FmtColPrimaryKey(2, oldPKStr)))
-		cli.Print("> " + color.YellowString(sqlfmt.FmtColPrimaryKey(2, newPKStr)))
-	} else {
-		cli.Print(sqlfmt.FmtColPrimaryKey(4, oldPKStr))
+	for _, idxDiff := range diff.DiffSchIndexes(fromSch, toSch) {
+		switch idxDiff.DiffType {
+		case diff.SchDiffNone:
+			cli.Println("  " + sqlfmt.FmtIndex(idxDiff.To))
+		case diff.SchDiffAdded:
+			cli.Println(color.GreenString("+ " + sqlfmt.FmtIndex(idxDiff.To)))
+		case diff.SchDiffRemoved:
+			cli.Println(color.RedString("- " + sqlfmt.FmtIndex(idxDiff.From)))
+		case diff.SchDiffModified:
+			cli.Println("< " + sqlfmt.FmtIndex(idxDiff.From))
+			cli.Println("> " + sqlfmt.FmtIndex(idxDiff.To))
+		}
+	}
+
+	for _, fkDiff := range diff.DiffSchForeignKeys(td.FromFks, td.ToFks) {
+		switch fkDiff.DiffType {
+		case diff.SchDiffNone:
+			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
+			cli.Println("  " + sqlfmt.FmtForeignKey(fkDiff.To, toSch, parentSch))
+		case diff.SchDiffAdded:
+			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
+			cli.Println(color.GreenString("+ " + sqlfmt.FmtForeignKey(fkDiff.To, toSch, parentSch)))
+		case diff.SchDiffRemoved:
+			parentSch := toSchemas[fkDiff.From.ReferencedTableName]
+			cli.Println(color.RedString("- " + sqlfmt.FmtForeignKey(fkDiff.From, fromSch, parentSch)))
+		case diff.SchDiffModified:
+			fromParent, toParent := fromSchemas[fkDiff.From.ReferencedTableName], toSchemas[fkDiff.To.ReferencedTableName]
+			cli.Println("< " + sqlfmt.FmtForeignKey(fkDiff.From, fromSch, fromParent))
+			cli.Println("> " + sqlfmt.FmtForeignKey(fkDiff.To, toSch, toParent))
+		}
 	}
 
 	cli.Println("  );")
@@ -517,36 +527,65 @@ func tabularSchemaDiff(tableName string, tags []uint64, diffs map[uint64]diff.Sc
 	return nil
 }
 
-func sqlSchemaDiff(ctx context.Context, td diff.TableDelta) errhand.VerboseError {
+func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string]schema.Schema) errhand.VerboseError {
 	fromSch, toSch, err := td.GetSchemas(ctx)
 	if err != nil {
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
 	}
+
 	if td.IsDrop() {
 		cli.Println(sqlfmt.DropTableStmt(td.FromName))
 	} else if td.IsAdd() {
-		cli.Println(sqlfmt.CreateTableStmtWithTags(td.ToName, toSch, td.ToForeignKeys))
+		cli.Println(sqlfmt.CreateTableStmtWithTags(td.ToName, toSch, td.ToFks, nil))
 	} else {
 		if td.FromName != td.ToName {
 			cli.Println(sqlfmt.RenameTableStmt(td.FromName, td.ToName))
 		}
 
-		if eq, _ := schema.SchemasAreEqual(fromSch, toSch); eq {
+		eq, _ := schema.SchemasAreEqual(fromSch, toSch)
+		if eq && !td.HasFKChanges() {
 			return nil
 		}
 
-		colDiffs, unionTags := diff.DiffSchemas(fromSch, toSch)
-
+		colDiffs, unionTags := diff.DiffSchColumns(fromSch, toSch)
 		for _, tag := range unionTags {
 			cd := colDiffs[tag]
 			switch cd.DiffType {
 			case diff.SchDiffNone:
-			case diff.SchDiffColAdded:
+			case diff.SchDiffAdded:
 				cli.Println(sqlfmt.AlterTableAddColStmt(td.ToName, sqlfmt.FmtCol(0, 0, 0, *cd.New)))
-			case diff.SchDiffColRemoved:
+			case diff.SchDiffRemoved:
 				cli.Print(sqlfmt.AlterTableDropColStmt(td.ToName, cd.Old.Name))
-			case diff.SchDiffColModified:
+			case diff.SchDiffModified:
 				cli.Print(sqlfmt.AlterTableRenameColStmt(td.ToName, cd.Old.Name, cd.New.Name))
+			}
+		}
+
+		for _, idxDiff := range diff.DiffSchIndexes(fromSch, toSch) {
+			switch idxDiff.DiffType {
+			case diff.SchDiffNone:
+			case diff.SchDiffAdded:
+				cli.Println(sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
+			case diff.SchDiffRemoved:
+				cli.Println(sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
+			case diff.SchDiffModified:
+				cli.Println(sqlfmt.AlterTableDropIndexStmt(td.FromName, idxDiff.From))
+				cli.Println(sqlfmt.AlterTableAddIndexStmt(td.ToName, idxDiff.To))
+			}
+		}
+
+		for _, fkDiff := range diff.DiffSchForeignKeys(td.FromFks, td.ToFks) {
+			switch fkDiff.DiffType {
+			case diff.SchDiffNone:
+			case diff.SchDiffAdded:
+				parentSch := toSchemas[fkDiff.To.ReferencedTableName]
+				cli.Println(sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
+			case diff.SchDiffRemoved:
+				cli.Println(sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From))
+			case diff.SchDiffModified:
+				cli.Println(sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From))
+				parentSch := toSchemas[fkDiff.To.ReferencedTableName]
+				cli.Println(sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
 			}
 		}
 	}

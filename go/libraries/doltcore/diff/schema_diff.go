@@ -15,6 +15,9 @@
 package diff
 
 import (
+	"reflect"
+
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 )
 
@@ -24,15 +27,15 @@ const (
 	// SchDiffNone is the SchemaChangeType for two columns with the same tag that are identical
 	SchDiffNone SchemaChangeType = iota
 	// SchDiffAdded is the SchemaChangeType when a column is in the new schema but not the old
-	SchDiffColAdded
+	SchDiffAdded
 	// SchDiffRemoved is the SchemaChangeType when a column is in the old schema but not the new
-	SchDiffColRemoved
+	SchDiffRemoved
 	// SchDiffModified is the SchemaChangeType for two columns with the same tag that are different
-	SchDiffColModified
+	SchDiffModified
 )
 
-// SchemaDifference is the result of comparing two columns from two schemas.
-type SchemaDifference struct {
+// ColumnDifference is the result of comparing two columns from two schemas.
+type ColumnDifference struct {
 	DiffType SchemaChangeType
 	Tag      uint64
 	Old      *schema.Column
@@ -41,21 +44,21 @@ type SchemaDifference struct {
 
 type columnPair [2]*schema.Column
 
-// DiffSchemas compares two schemas by looking at columns with the same tag.
-func DiffSchemas(fromSch, toSch schema.Schema) (map[uint64]SchemaDifference, []uint64) {
+// DiffSchColumns compares two schemas by looking at columns with the same tag.
+func DiffSchColumns(fromSch, toSch schema.Schema) (map[uint64]ColumnDifference, []uint64) {
 	colPairMap, unionTags := pairColumns(fromSch, toSch)
 
-	diffs := make(map[uint64]SchemaDifference)
+	diffs := make(map[uint64]ColumnDifference)
 	for _, tag := range unionTags {
 		colPair := colPairMap[tag]
 		if colPair[0] == nil {
-			diffs[tag] = SchemaDifference{SchDiffColAdded, tag, nil, colPair[1]}
+			diffs[tag] = ColumnDifference{SchDiffAdded, tag, nil, colPair[1]}
 		} else if colPair[1] == nil {
-			diffs[tag] = SchemaDifference{SchDiffColRemoved, tag, colPair[0], nil}
+			diffs[tag] = ColumnDifference{SchDiffRemoved, tag, colPair[0], nil}
 		} else if !colPair[0].Equals(*colPair[1]) {
-			diffs[tag] = SchemaDifference{SchDiffColModified, tag, colPair[0], colPair[1]}
+			diffs[tag] = ColumnDifference{SchDiffModified, tag, colPair[0], colPair[1]}
 		} else {
-			diffs[tag] = SchemaDifference{SchDiffNone, tag, colPair[0], colPair[1]}
+			diffs[tag] = ColumnDifference{SchDiffNone, tag, colPair[0], colPair[1]}
 		}
 	}
 
@@ -88,4 +91,112 @@ func pairColumns(fromSch, toSch schema.Schema) (map[uint64]columnPair, []uint64)
 	})
 
 	return colPairMap, unionTags
+}
+
+type IndexDifference struct {
+	DiffType SchemaChangeType
+	From     schema.Index
+	To       schema.Index
+}
+
+// DiffSchIndexes
+func DiffSchIndexes(fromSch, toSch schema.Schema) (diffs []IndexDifference) {
+	_ = fromSch.Indexes().Iter(func(fromIdx schema.Index) (stop bool, err error) {
+		toIdx, ok := toSch.Indexes().GetIndexByTags(fromIdx.IndexedColumnTags()...)
+
+		if !ok {
+			diffs = append(diffs, IndexDifference{
+				DiffType: SchDiffRemoved,
+				From:     fromIdx,
+			})
+		}
+
+		d := IndexDifference{
+			DiffType: SchDiffModified,
+			From:     fromIdx,
+			To:       toIdx,
+		}
+
+		if fromIdx.Equals(toIdx) {
+			d.DiffType = SchDiffNone
+		}
+		diffs = append(diffs, d)
+
+		return false, nil
+	})
+
+	_ = toSch.Indexes().Iter(func(toIdx schema.Index) (stop bool, err error) {
+		// if we've seen this index, skip
+		for _, d := range diffs {
+			if d.To.Equals(toIdx) {
+				return false, nil
+			}
+		}
+
+		diffs = append(diffs, IndexDifference{
+			DiffType: SchDiffAdded,
+			To:       toIdx,
+		})
+
+		return false, nil
+	})
+
+	return diffs
+}
+
+type ForeignKeyDifference struct {
+	DiffType SchemaChangeType
+	From     doltdb.ForeignKey
+	To       doltdb.ForeignKey
+}
+
+func DiffSchForeignKeys(fromFks, toFKs []doltdb.ForeignKey) (diffs []ForeignKeyDifference) {
+	for _, from := range fromFks {
+		matched := false
+		for _, to := range toFKs {
+			if reflect.DeepEqual(from.ReferencedTableColumns, to.ReferencedTableColumns) &&
+				reflect.DeepEqual(from.TableColumns, to.TableColumns) {
+
+				matched = true
+				d := ForeignKeyDifference{
+					DiffType: SchDiffModified,
+					From:     from,
+					To:       to,
+				}
+
+				if from.Equals(to) {
+					d.DiffType = SchDiffNone
+				}
+				diffs = append(diffs, d)
+
+				break
+			}
+		}
+
+		if !matched {
+			diffs = append(diffs, ForeignKeyDifference{
+				DiffType: SchDiffRemoved,
+				From:     from,
+			})
+		}
+	}
+
+	for _, to := range toFKs {
+		seen := false
+		for _, d := range diffs {
+			if d.To.Equals(to) {
+				seen = true
+				break
+			}
+		}
+		if seen {
+			continue
+		}
+
+		diffs = append(diffs, ForeignKeyDifference{
+			DiffType: SchDiffAdded,
+			To:       to,
+		})
+	}
+	return diffs
 }
