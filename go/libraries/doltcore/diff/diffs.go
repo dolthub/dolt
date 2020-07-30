@@ -287,12 +287,7 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 		return nil, err
 	}
 
-	err = fromRoot.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
-		sch, err := table.GetSchema(ctx)
-		if err != nil {
-			return true, err
-		}
-
+	err = fromRoot.IterTables(ctx, func(name string, table *doltdb.Table, sch schema.Schema) (stop bool, err error) {
 		th, err := table.HashOf()
 		if err != nil {
 			return true, err
@@ -314,12 +309,7 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 		return nil, err
 	}
 
-	err = toRoot.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
-		sch, err := table.GetSchema(ctx)
-		if err != nil {
-			return true, err
-		}
-
+	err = toRoot.IterTables(ctx, func(name string, table *doltdb.Table, sch schema.Schema) (stop bool, err error) {
 		th, err := table.HashOf()
 		if err != nil {
 			return true, err

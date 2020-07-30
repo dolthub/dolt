@@ -339,11 +339,9 @@ func (root *RootValue) getTableSt(ctx context.Context, tName string) (*types.Str
 
 func (root *RootValue) GetAllSchemas(ctx context.Context) (map[string]schema.Schema, error) {
 	m := make(map[string]schema.Schema)
-	err := root.IterTables(ctx, func(name string, table *Table) (stop bool, err error) {
-		sch, err := table.GetSchema(ctx)
-		stop = err != nil
+	err := root.IterTables(ctx, func(name string, table *Table, sch schema.Schema) (stop bool, err error) {
 		m[name] = sch
-		return stop, err
+		return false, nil
 	})
 
 	if err != nil {
@@ -442,13 +440,8 @@ func (root *RootValue) GetTableInsensitive(ctx context.Context, tName string) (*
 // GetTableByColTag looks for the table containing the given column tag. It returns false if no table exists.
 // If the table containing the given tag has been deleted, it will return its name and a nil pointer.
 func (root *RootValue) GetTableByColTag(ctx context.Context, tag uint64) (tbl *Table, name string, found bool, err error) {
-	err = root.IterTables(ctx, func(tn string, t *Table) (bool, error) {
-		sch, err := t.GetSchema(ctx)
-		if err != nil {
-			return true, err
-		}
-
-		_, found = sch.GetAllCols().GetByTag(tag)
+	err = root.IterTables(ctx, func(tn string, t *Table, s schema.Schema) (bool, error) {
+		_, found = s.GetAllCols().GetByTag(tag)
 		if found {
 			name, tbl = tn, t
 		}
@@ -556,8 +549,7 @@ func (root *RootValue) HasConflicts(ctx context.Context) (bool, error) {
 }
 
 // IterTables calls the callback function cb on each table in this RootValue.
-func (root *RootValue) IterTables(ctx context.Context, cb func(name string, table *Table) (stop bool, err error)) error {
-	// todo: add Schema to callback signature
+func (root *RootValue) IterTables(ctx context.Context, cb func(name string, table *Table, sch schema.Schema) (stop bool, err error)) error {
 	tm, err := root.getTableMap()
 
 	if err != nil {
@@ -586,7 +578,12 @@ func (root *RootValue) IterTables(ctx context.Context, cb func(name string, tabl
 		name := string(nm.(types.String))
 		table := &Table{root.vrw, tableStruct.(types.Struct)}
 
-		stop, err := cb(name, table)
+		sch, err := table.GetSchema(ctx)
+		if err != nil {
+			return err
+		}
+
+		stop, err := cb(name, table, sch)
 
 		if err != nil || stop {
 			return err
