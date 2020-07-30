@@ -88,6 +88,14 @@ func DSessFromSess(sess sql.Session) *DoltSession {
 	return sess.(*DoltSession)
 }
 
+// Clears every table editor from each database.
+// TODO: find the exact location of the sqllogictest memory leak so that this may be removed
+func (sess *DoltSession) ClearEditors() {
+	for _, tes := range sess.dbEditors {
+		tes.Clear()
+	}
+}
+
 func (sess *DoltSession) CommitTransaction(ctx *sql.Context) error {
 	currentDb := sess.GetCurrentDatabase()
 	if currentDb == "" {

@@ -52,6 +52,18 @@ func CreateTableEditSession(root *RootValue, props TableEditSessionProps) *Table
 	}
 }
 
+// Clear removes all table editors from the session. If a reference is held to an editor that has been cleared, then
+// any usage of that cleared editor will have undefined behavior (likely a panic). In normal usage, this should not need
+// to be called.
+func (tes *TableEditSession) Clear() {
+	tes.writeMutex.Lock()
+	defer tes.writeMutex.Unlock()
+	for name, table := range tes.tables {
+		_, _ = table.tableEditor.tea.ed.FinishedEditing()
+		delete(tes.tables, name)
+	}
+}
+
 // GetTableEditor returns a SessionedTableEditor for the given table. If a schema is provided and it does not match the one
 // that is used for currently open editors (if any), then those editors will reload the table from the root.
 func (tes *TableEditSession) GetTableEditor(ctx context.Context, tableName string, tableSch schema.Schema) (*SessionedTableEditor, error) {
