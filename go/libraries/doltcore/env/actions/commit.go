@@ -71,7 +71,11 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProp
 
 	var stagedTblNames []string
 	for _, td := range staged {
-		stagedTblNames = append(stagedTblNames, td.ToName)
+		n := td.ToName
+		if td.IsDrop() {
+			n = td.FromName
+		}
+		stagedTblNames = append(stagedTblNames, n)
 	}
 
 	if len(staged) == 0 && !dEnv.IsMergeActive() && !props.AllowEmpty {

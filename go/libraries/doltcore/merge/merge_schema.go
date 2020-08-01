@@ -170,10 +170,10 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 	})
 
 	err = ourNewFKs.Iter(func(ourFK doltdb.ForeignKey) (stop bool, err error) {
-		return false, common.AddKey(ourFK)
+		return false, common.AddKeys(ourFK)
 	})
 	err = theirNewFKs.Iter(func(theirFK doltdb.ForeignKey) (stop bool, err error) {
-		return false, common.AddKey(theirFK)
+		return false, common.AddKeys(theirFK)
 	})
 
 	common, err = pruneInvalidForeignKeys(ctx, common, mergedRoot)
@@ -419,7 +419,7 @@ func foreignKeysInCommon(ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection) 
 		}
 
 		if theirs.Equals(ours) {
-			err = common.AddKey(ours)
+			err = common.AddKeys(ours)
 			return false, err
 		}
 
@@ -443,7 +443,7 @@ func foreignKeysInCommon(ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection) 
 					Theirs: fk,
 				})
 			} else {
-				err = common.AddKey(ours)
+				err = common.AddKeys(ours)
 			}
 			return false, err
 		}
@@ -458,7 +458,7 @@ func foreignKeysInCommon(ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection) 
 					Theirs: theirs,
 				})
 			} else {
-				err = common.AddKey(theirs)
+				err = common.AddKeys(theirs)
 			}
 			return false, err
 		}
@@ -484,7 +484,7 @@ func fkCollSetDifference(left, right *doltdb.ForeignKeyCollection) (d *doltdb.Fo
 	err = left.Iter(func(fk doltdb.ForeignKey) (stop bool, err error) {
 		_, ok := right.GetByTags(fk.TableColumns, fk.ReferencedTableColumns)
 		if !ok {
-			err = d.AddKey(fk)
+			err = d.AddKeys(fk)
 		}
 		return false, err
 	})
@@ -528,7 +528,7 @@ func pruneInvalidForeignKeys(ctx context.Context, fkColl *doltdb.ForeignKeyColle
 			}
 		}
 
-		err = pruned.AddKey(fk)
+		err = pruned.AddKeys(fk)
 		return false, err
 	})
 

@@ -16,6 +16,7 @@ package diff
 
 import (
 	"context"
+	"reflect"
 	"sort"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -282,7 +283,7 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 	fromTableFKs := make(map[uint64][]doltdb.ForeignKey)
 	fromTableHashes := make(map[uint64]hash.Hash)
 
-	fromFKC, err := toRoot.GetForeignKeyCollection(ctx)
+	fromFKC, err := fromRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -401,6 +402,13 @@ func (td TableDelta) IsDrop() bool {
 	return td.FromTable != nil && td.ToTable == nil
 }
 
+func (td TableDelta) IsRename() bool {
+	if td.IsAdd() || td.IsDrop() {
+		return false
+	}
+	return td.FromName != td.ToName
+}
+
 func (td TableDelta) HasFKChanges() bool {
 	if len(td.FromFks) != len(td.ToFks) {
 		return true
@@ -480,7 +488,7 @@ func fkSlicesAreEqual(from, to []doltdb.ForeignKey) bool {
 	})
 
 	for i := range from {
-		if !from[i].Equals(to[i]) {
+		if !reflect.DeepEqual(from[i], to[i]) {
 			return false
 		}
 	}

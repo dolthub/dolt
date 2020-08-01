@@ -642,7 +642,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 		OnUpdate:               onUpdateRefOp,
 		OnDelete:               onDeleteRefOp,
 	}
-	err = foreignKeyCollection.AddKey(foreignKey)
+	err = foreignKeyCollection.AddKeys(foreignKey)
 	if err != nil {
 		return err
 	}
@@ -681,7 +681,7 @@ func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string) err
 	if err != nil {
 		return err
 	}
-	err = fkc.RemoveKey(fkName)
+	err = fkc.RemoveKeyByName(fkName)
 	if err != nil {
 		return err
 	}

@@ -1076,13 +1076,19 @@ func (root *RootValue) RemoveTables(ctx context.Context, tables ...string) (*Roo
 
 	newRoot := newRootValue(root.vrw, rootValSt)
 
-	fkc, err := root.GetForeignKeyCollection(ctx)
+	fkc, err := newRoot.GetForeignKeyCollection(ctx)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return fkc.RemoveTables(ctx, newRoot, tables...)
+	err = fkc.RemoveTables(ctx, tables...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return newRoot.PutForeignKeyCollection(ctx, fkc)
 }
 
 // DocDiff returns the added, modified and removed docs when comparing a root value with an other (newer) value. If the other value,
@@ -1227,7 +1233,7 @@ func (root *RootValue) ValidateForeignKeys(ctx context.Context) (*RootValue, err
 				return nil, err
 			}
 		} else {
-			err := fkCollection.RemoveKey(foreignKey.Name)
+			err := fkCollection.RemoveKeyByName(foreignKey.Name)
 			if err != nil {
 				return nil, err
 			}

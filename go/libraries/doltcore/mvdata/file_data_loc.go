@@ -21,8 +21,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
-
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
@@ -156,12 +154,7 @@ func (dl FileDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMov
 	case JsonFile:
 		return json.OpenJSONWriter(dl.Path, fs, outSch)
 	case SqlFile:
-		fkc, err := root.GetForeignKeyCollection(ctx)
-		if err != nil {
-			return nil, errhand.BuildDError("error: failed to read foreign key struct").AddCause(err).Build()
-		}
-		declaredFks, _ := fkc.KeysForTable(mvOpts.SrcName())
-		return sqlexport.OpenSQLExportWriter(dl.Path, mvOpts.SrcName(), fs, outSch, declaredFks)
+		return sqlexport.OpenSQLExportWriter(ctx, dl.Path, fs, root, mvOpts.SrcName(), outSch)
 	}
 
 	panic("Invalid Data Format." + string(dl.Format))

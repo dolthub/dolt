@@ -17,6 +17,8 @@ package actions
 import (
 	"context"
 	"errors"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
@@ -24,7 +26,7 @@ import (
 
 var ErrTablesInConflict = errors.New("table is in conflict")
 
-func StageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, allowConflicts bool) error {
+func StageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string) error {
 	tables, docDetails, err := GetTblsAndDocDetails(dEnv, tbls)
 	if err != nil {
 		return err
@@ -43,7 +45,7 @@ func StageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, allowCon
 		return err
 	}
 
-	err = stageTables(ctx, dEnv, tables, staged, working, allowConflicts)
+	err = stageTables(ctx, dEnv, tables, staged, working)
 	if err != nil {
 		dEnv.ResetWorkingDocsToStagedDocs(ctx)
 		return err
@@ -67,7 +69,7 @@ func GetTblsAndDocDetails(dEnv *env.DoltEnv, tbls []string) (tables []string, do
 	return tbls, docDetails, nil
 }
 
-func StageAllTables(ctx context.Context, dEnv *env.DoltEnv, allowConflicts bool) error {
+func StageAllTables(ctx context.Context, dEnv *env.DoltEnv) error {
 	err := dEnv.PutDocsToWorking(ctx, nil)
 	if err != nil {
 		return err
@@ -85,7 +87,7 @@ func StageAllTables(ctx context.Context, dEnv *env.DoltEnv, allowConflicts bool)
 		return err
 	}
 
-	err = stageTables(ctx, dEnv, tbls, staged, working, allowConflicts)
+	err = stageTables(ctx, dEnv, tbls, staged, working)
 	if err != nil {
 		dEnv.ResetWorkingDocsToStagedDocs(ctx)
 		return err
@@ -93,66 +95,18 @@ func StageAllTables(ctx context.Context, dEnv *env.DoltEnv, allowConflicts bool)
 	return nil
 }
 
-func stageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, staged *doltdb.RootValue, working *doltdb.RootValue, allowConflicts bool) error {
+func stageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, staged *doltdb.RootValue, working *doltdb.RootValue) error {
 	err := ValidateTables(ctx, tbls, staged, working)
-
 	if err != nil {
 		return err
 	}
 
-	if !allowConflicts {
-		var inConflict []string
-		for _, tblName := range tbls {
-			tbl, _, err := working.GetTable(ctx, tblName)
-
-			if err != nil {
-				return err
-			}
-
-			if num, err := tbl.NumRowsInConflict(ctx); err != nil {
-				return err
-			} else if num > 0 {
-				if !allowConflicts {
-					inConflict = append(inConflict, tblName)
-				}
-			}
-		}
-
-		if len(inConflict) > 0 {
-			return NewTblInConflictError(inConflict)
-		}
+	working, err = checkTablesForConflicts(ctx, tbls, working)
+	if err != nil {
+		return err
 	}
 
-	for _, tblName := range tbls {
-		tbl, _, err := working.GetTable(ctx, tblName)
-
-		if err != nil {
-			return err
-		}
-
-		has, err := tbl.HasConflicts()
-
-		if has {
-			if num, err := tbl.NumRowsInConflict(ctx); err != nil {
-				return err
-			} else if num == 0 {
-				clrTbl, err := tbl.ClearConflicts()
-
-				if err != nil {
-					return err
-				}
-
-				working, err = working.PutTable(ctx, tblName, clrTbl)
-
-				if err != nil {
-					return err
-				}
-			}
-		}
-	}
-
-	staged, err = staged.UpdateTablesFromOther(ctx, tbls, working)
-
+	staged, err = moveTablesToStaged(ctx, tbls, staged, working)
 	if err != nil {
 		return err
 	}
@@ -173,6 +127,123 @@ func stageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, staged *
 	return doltdb.ErrNomsIO
 }
 
+func checkTablesForConflicts(ctx context.Context, tbls []string, working *doltdb.RootValue) (*doltdb.RootValue, error) {
+	var inConflict []string
+	for _, tblName := range tbls {
+		tbl, _, err := working.GetTable(ctx, tblName)
+		if err != nil {
+			return nil, err
+		}
+
+		has, err := tbl.HasConflicts()
+		if err != nil {
+			return nil, err
+		}
+		if has {
+			num, err := tbl.NumRowsInConflict(ctx)
+			if err != nil {
+				return nil, err
+			}
+
+			if num == 0 {
+				clrTbl, err := tbl.ClearConflicts()
+				if err != nil {
+					return nil, err
+				}
+
+				working, err = working.PutTable(ctx, tblName, clrTbl)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			if num > 0 {
+				inConflict = append(inConflict, tblName)
+			}
+		}
+	}
+
+	if len(inConflict) > 0 {
+		return nil, NewTblInConflictError(inConflict)
+	}
+
+	return working, nil
+}
+
+func moveTablesToStaged(ctx context.Context, tbls []string, staged, working *doltdb.RootValue) (newStaged *doltdb.RootValue, err error) {
+	tblSet := set.NewStrSet(tbls)
+
+	stagedFKs, err := staged.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tblDeltas, err := diff.GetTableDeltas(ctx, staged, working)
+	if err != nil {
+		return nil, err
+	}
+
+	tblsToDrop := set.NewStrSet(nil)
+
+	for _, td := range tblDeltas {
+		if td.IsDrop() {
+			if !tblSet.Contains(td.FromName) {
+				continue
+			}
+
+			tblsToDrop.Add(td.FromName)
+		} else {
+			if !tblSet.Contains(td.ToName) {
+				continue
+			}
+
+			if td.IsRename() {
+				// rename table before adding the new version so we don't have
+				// two copies of the same table
+				staged, err = staged.RenameTable(ctx, td.FromName, td.ToName)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			staged, err = staged.PutTable(ctx, td.ToName, td.ToTable)
+			if err != nil {
+				return nil, err
+			}
+
+			stagedFKs.RemoveKeys(td.FromFks...)
+			err = stagedFKs.AddKeys(td.ToFks...)
+			if err != nil {
+				return nil, err
+			}
+
+			ss, _, err := working.GetSuperSchema(ctx, td.ToName)
+			if err != nil {
+				return nil, err
+			}
+
+			staged, err = staged.PutSuperSchema(ctx, td.ToName, ss)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	staged, err = staged.PutForeignKeyCollection(ctx, stagedFKs)
+	if err != nil {
+		return nil, err
+	}
+
+	// RemoveTables also removes that table's ForeignKeys
+	staged, err = staged.RemoveTables(ctx, tblsToDrop.AsSlice()...)
+	if err != nil {
+		return nil, err
+	}
+
+	return staged, nil
+}
+
+// ValidateTables checks that all tables passed exist in at least one of the roots passed.
 func ValidateTables(ctx context.Context, tbls []string, roots ...*doltdb.RootValue) error {
 	var missing []string
 	for _, tbl := range tbls {

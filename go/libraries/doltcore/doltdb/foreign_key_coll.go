@@ -229,7 +229,7 @@ func NewForeignKeyCollection(keys ...ForeignKey) (*ForeignKeyCollection, error) 
 		foreignKeys: make(map[string]ForeignKey),
 	}
 	for _, k := range keys {
-		err := fkc.AddKey(k)
+		err := fkc.AddKeys(k)
 		if err != nil {
 			return nil, err
 		}
@@ -237,31 +237,33 @@ func NewForeignKeyCollection(keys ...ForeignKey) (*ForeignKeyCollection, error) 
 	return fkc, nil
 }
 
-// AddKey adds the given foreign key to the collection. Checks that the given name is unique in the collection, and that
+// AddKeys adds the given foreign key to the collection. Checks that the given name is unique in the collection, and that
 // both column counts are equal. All other validation should occur before being added to the collection.
-func (fkc *ForeignKeyCollection) AddKey(key ForeignKey) error {
-	if key.Name == "" {
-		// assign a name based on the hash
-		// 8 char = 5 base32 bytes, should be collision resistant
-		key.Name = key.HashOf().String()[:8]
-	}
+func (fkc *ForeignKeyCollection) AddKeys(fks ...ForeignKey) error {
+	for _, key := range fks {
+		if key.Name == "" {
+			// assign a name based on the hash
+			// 8 char = 5 base32 bytes, should be collision resistant
+			key.Name = key.HashOf().String()[:8]
+		}
 
-	if _, ok := fkc.GetByTags(key.TableColumns, key.ReferencedTableColumns); ok {
-		// this differs from MySQL's logic
-		return fmt.Errorf("a foreign key over columns %v and referenced columns %v already exists",
-			key.TableColumns, key.ReferencedTableColumns)
-	}
-	if _, ok := fkc.GetByNameCaseInsensitive(key.Name); ok {
-		return fmt.Errorf("a foreign key with the name `%s` already exists", key.Name)
-	}
-	if len(key.TableColumns) != len(key.ReferencedTableColumns) {
-		return fmt.Errorf("foreign keys must have the same number of columns declared and referenced")
-	}
-	if key.TableName == key.ReferencedTableName {
-		return fmt.Errorf("inter-table foreign keys are not yet supported")
-	}
+		if _, ok := fkc.GetByTags(key.TableColumns, key.ReferencedTableColumns); ok {
+			// this differs from MySQL's logic
+			return fmt.Errorf("a foreign key over columns %v and referenced columns %v already exists",
+				key.TableColumns, key.ReferencedTableColumns)
+		}
+		if _, ok := fkc.GetByNameCaseInsensitive(key.Name); ok {
+			return fmt.Errorf("a foreign key with the name `%s` already exists", key.Name)
+		}
+		if len(key.TableColumns) != len(key.ReferencedTableColumns) {
+			return fmt.Errorf("foreign keys must have the same number of columns declared and referenced")
+		}
+		if key.TableName == key.ReferencedTableName {
+			return fmt.Errorf("inter-table foreign keys are not yet supported")
+		}
 
-	fkc.foreignKeys[key.HashOf().String()] = key
+		fkc.foreignKeys[key.HashOf().String()] = key
+	}
 	return nil
 }
 
@@ -381,13 +383,29 @@ func (fkc *ForeignKeyCollection) Map(ctx context.Context, vrw types.ValueReadWri
 	return fkMapEditor.Map(ctx)
 }
 
-// RemoveKey removes a foreign key from the collection. It does not remove the associated indexes from their
+// RemoveKeys removes any Foreign Keys with matching column set from the collection.
+func (fkc *ForeignKeyCollection) RemoveKeys(fks ...ForeignKey) {
+	drops := set.NewStrSet(nil)
+	for _, outgoing := range fks {
+		for k, existing := range fkc.foreignKeys {
+			if outgoing.Equals(existing) {
+				drops.Add(k)
+			}
+		}
+	}
+	for _, k := range drops.AsSlice() {
+		delete(fkc.foreignKeys, k)
+	}
+}
+
+// RemoveKeyByName removes a foreign key from the collection. It does not remove the associated indexes from their
 // respective tables.
-func (fkc *ForeignKeyCollection) RemoveKey(foreignKeyName string) error {
+func (fkc *ForeignKeyCollection) RemoveKeyByName(foreignKeyName string) error {
 	var key string
 	for k, fk := range fkc.foreignKeys {
 		if strings.ToLower(fk.Name) == strings.ToLower(foreignKeyName) {
 			key = k
+			break
 		}
 	}
 	if key == "" {
@@ -399,19 +417,19 @@ func (fkc *ForeignKeyCollection) RemoveKey(foreignKeyName string) error {
 
 // RemoveTables removes all foreign keys associated with the given tables, if permitted. The operation assumes that ALL
 // tables to be removed are in a single call, as splitting tables into different calls may result in unintended errors.
-func (fkc *ForeignKeyCollection) RemoveTables(ctx context.Context, root *RootValue, tables ...string) (*RootValue, error) {
+func (fkc *ForeignKeyCollection) RemoveTables(ctx context.Context, tables ...string) error {
 	outgoing := set.NewStrSet(tables)
 	for _, fk := range fkc.foreignKeys {
 		dropChild := outgoing.Contains(fk.TableName)
 		dropParent := outgoing.Contains(fk.ReferencedTableName)
 		if dropParent && !dropChild {
-			return nil, fmt.Errorf("unable to remove `%s` since it is referenced from table `%s`", fk.ReferencedTableName, fk.TableName)
+			return fmt.Errorf("unable to remove `%s` since it is referenced from table `%s`", fk.ReferencedTableName, fk.TableName)
 		}
 		if dropChild {
 			delete(fkc.foreignKeys, fk.HashOf().String())
 		}
 	}
-	return root.PutForeignKeyCollection(ctx, fkc)
+	return nil
 }
 
 // RenameTable updates all foreign key entries in the collection with the updated table name. Does not check for name

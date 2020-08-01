@@ -170,6 +170,11 @@ func PrintSqlTableDiffs(ctx context.Context, r1, r2 *doltdb.RootValue, wr io.Wri
 		}
 	}
 
+	allSchemas, err := r1.GetAllSchemas(ctx)
+	if err != nil {
+		return err
+	}
+
 	// create tables and insert rows
 	for _, tblName := range creates {
 		if tbl, ok, err := r1.GetTable(ctx, tblName); err != nil {
@@ -185,7 +190,7 @@ func PrintSqlTableDiffs(ctx context.Context, r1, r2 *doltdb.RootValue, wr io.Wri
 					return errhand.BuildDError("error: failed to read foreign key struct").AddCause(err).Build()
 				}
 				declaresFk, _ := fkc.KeysForTable(tblName)
-				stmt := sqlfmt.CreateTableStmtWithTags(tblName, sch, declaresFk, nil)
+				stmt := sqlfmt.CreateTableStmtWithTags(tblName, sch, declaresFk, allSchemas)
 				if err = iohelp.WriteLine(wr, stmt); err != nil {
 					return err
 				}

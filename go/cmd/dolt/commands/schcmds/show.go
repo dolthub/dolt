@@ -16,6 +16,7 @@ package schcmds
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
 
 	"github.com/fatih/color"
 
@@ -25,7 +26,6 @@ import (
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
@@ -138,10 +138,14 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 			return errhand.BuildDError("error: failed to read foreign key struct").AddCause(err).Build()
 		}
 
+		allSchemas, err := root.GetAllSchemas(ctx)
+		if err != nil {
+			return errhand.BuildDError("unable to get schema").AddCause(err).Build()
+		}
+
 		var notFound []string
 		for _, tblName := range tables {
-			tbl, ok, err := root.GetTable(ctx, tblName)
-
+			ok, err := root.HasTable(ctx, tblName)
 			if err != nil {
 				return errhand.BuildDError("unable to get table '%s'", tblName).AddCause(err).Build()
 			}
@@ -149,8 +153,11 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 			if !ok {
 				notFound = append(notFound, tblName)
 			} else {
-				declaresFk, _ := fkc.KeysForTable(tblName)
-				verr = printTblSchema(ctx, cmStr, tblName, tbl, declaresFk)
+				fks, _ := fkc.KeysForTable(tblName)
+				sch := allSchemas[tblName]
+
+				cli.Println(bold.Sprint(tblName), "@", cmStr)
+				cli.Println(sqlfmt.CreateTableStmtWithTags(tblName, sch, fks, allSchemas))
 				cli.Println()
 			}
 		}
@@ -161,16 +168,4 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 	}
 
 	return verr
-}
-
-func printTblSchema(ctx context.Context, cmStr string, tblName string, tbl *doltdb.Table, foreignKeys []doltdb.ForeignKey) errhand.VerboseError {
-	cli.Println(bold.Sprint(tblName), "@", cmStr)
-	sch, err := tbl.GetSchema(ctx)
-
-	if err != nil {
-		return errhand.BuildDError("unable to get schema").AddCause(err).Build()
-	}
-
-	cli.Println(sqlfmt.CreateTableStmtWithTags(tblName, sch, foreignKeys, nil))
-	return nil
 }
