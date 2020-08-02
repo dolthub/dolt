@@ -18,9 +18,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
-
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 )
@@ -107,7 +104,7 @@ func stageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, staged *
 		return err
 	}
 
-	staged, err = moveTablesToStaged(ctx, tbls, staged, working)
+	staged, err = MoveTablesBetweenRoots(ctx, tbls, working, staged)
 	if err != nil {
 		return err
 	}
@@ -169,79 +166,6 @@ func checkTablesForConflicts(ctx context.Context, tbls []string, working *doltdb
 	}
 
 	return working, nil
-}
-
-func moveTablesToStaged(ctx context.Context, tbls []string, staged, working *doltdb.RootValue) (newStaged *doltdb.RootValue, err error) {
-	tblSet := set.NewStrSet(tbls)
-
-	stagedFKs, err := staged.GetForeignKeyCollection(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	tblDeltas, err := diff.GetTableDeltas(ctx, staged, working)
-	if err != nil {
-		return nil, err
-	}
-
-	tblsToDrop := set.NewStrSet(nil)
-
-	for _, td := range tblDeltas {
-		if td.IsDrop() {
-			if !tblSet.Contains(td.FromName) {
-				continue
-			}
-
-			tblsToDrop.Add(td.FromName)
-		} else {
-			if !tblSet.Contains(td.ToName) {
-				continue
-			}
-
-			if td.IsRename() {
-				// rename table before adding the new version so we don't have
-				// two copies of the same table
-				staged, err = staged.RenameTable(ctx, td.FromName, td.ToName)
-				if err != nil {
-					return nil, err
-				}
-			}
-
-			staged, err = staged.PutTable(ctx, td.ToName, td.ToTable)
-			if err != nil {
-				return nil, err
-			}
-
-			stagedFKs.RemoveKeys(td.FromFks...)
-			err = stagedFKs.AddKeys(td.ToFks...)
-			if err != nil {
-				return nil, err
-			}
-
-			ss, _, err := working.GetSuperSchema(ctx, td.ToName)
-			if err != nil {
-				return nil, err
-			}
-
-			staged, err = staged.PutSuperSchema(ctx, td.ToName, ss)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	staged, err = staged.PutForeignKeyCollection(ctx, stagedFKs)
-	if err != nil {
-		return nil, err
-	}
-
-	// RemoveTables also removes that table's ForeignKeys
-	staged, err = staged.RemoveTables(ctx, tblsToDrop.AsSlice()...)
-	if err != nil {
-		return nil, err
-	}
-
-	return staged, nil
 }
 
 // ValidateTables checks that all tables passed exist in at least one of the roots passed.

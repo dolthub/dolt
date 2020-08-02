@@ -17,8 +17,10 @@ package actions
 import (
 	"context"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 )
 
 func CheckoutAllTables(ctx context.Context, dEnv *env.DoltEnv) error {
@@ -48,6 +50,81 @@ func CheckoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tbls []string
 	}
 
 	return checkoutTablesAndDocs(ctx, dEnv, roots, tbls, docs)
+}
+
+// MoveTablesBetweenRoots copies tables with names in tbls from the src RootValue to the dest RootValue.
+// It matches tables between roots by column tags.
+func MoveTablesBetweenRoots(ctx context.Context, tbls []string, src, dest *doltdb.RootValue) (*doltdb.RootValue, error) {
+	tblSet := set.NewStrSet(tbls)
+
+	stagedFKs, err := dest.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tblDeltas, err := diff.GetTableDeltas(ctx, dest, src)
+	if err != nil {
+		return nil, err
+	}
+
+	tblsToDrop := set.NewStrSet(nil)
+
+	for _, td := range tblDeltas {
+		if td.IsDrop() {
+			if !tblSet.Contains(td.FromName) {
+				continue
+			}
+
+			tblsToDrop.Add(td.FromName)
+		} else {
+			if !tblSet.Contains(td.ToName) {
+				continue
+			}
+
+			if td.IsRename() {
+				// rename table before adding the new version so we don't have
+				// two copies of the same table
+				dest, err = dest.RenameTable(ctx, td.FromName, td.ToName)
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			dest, err = dest.PutTable(ctx, td.ToName, td.ToTable)
+			if err != nil {
+				return nil, err
+			}
+
+			stagedFKs.RemoveKeys(td.FromFks...)
+			err = stagedFKs.AddKeys(td.ToFks...)
+			if err != nil {
+				return nil, err
+			}
+
+			ss, _, err := src.GetSuperSchema(ctx, td.ToName)
+			if err != nil {
+				return nil, err
+			}
+
+			dest, err = dest.PutSuperSchema(ctx, td.ToName, ss)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	dest, err = dest.PutForeignKeyCollection(ctx, stagedFKs)
+	if err != nil {
+		return nil, err
+	}
+
+	// RemoveTables also removes that table's ForeignKeys
+	dest, err = dest.RemoveTables(ctx, tblsToDrop.AsSlice()...)
+	if err != nil {
+		return nil, err
+	}
+
+	return dest, nil
 }
 
 func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*doltdb.RootValue, tbls []string, docs []doltdb.DocDetails) error {

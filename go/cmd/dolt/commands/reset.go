@@ -278,7 +278,7 @@ func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootV
 }
 
 func resetStaged(ctx context.Context, dEnv *env.DoltEnv, tbls []string, staged, head *doltdb.RootValue) (*doltdb.RootValue, errhand.VerboseError) {
-	updatedRoot, err := staged.UpdateTablesFromOther(ctx, tbls, head)
+	updatedRoot, err := actions.MoveTablesBetweenRoots(ctx, tbls, head, staged)
 
 	if err != nil {
 		return nil, errhand.BuildDError("error: failed to update tables").AddCause(err).Build()

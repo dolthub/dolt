@@ -410,21 +410,7 @@ func (td TableDelta) IsRename() bool {
 }
 
 func (td TableDelta) HasFKChanges() bool {
-	if len(td.FromFks) != len(td.ToFks) {
-		return true
-	}
-	sort.Slice(td.FromFks, func(i, j int) bool {
-		return td.FromFks[i].Name < td.FromFks[j].Name
-	})
-	sort.Slice(td.ToFks, func(i, j int) bool {
-		return td.ToFks[i].Name < td.ToFks[j].Name
-	})
-	for i := range td.FromFks {
-		if !td.FromFks[i].EqualDefs(td.ToFks[i]) {
-			return true
-		}
-	}
-	return false
+	return fkSlicesAreEqual(td.FromFks, td.ToFks)
 }
 
 // GetSchemas returns the table's schema at the fromRoot and toRoot, or schema.Empty if the table did not exist.
