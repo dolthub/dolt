@@ -883,10 +883,11 @@ ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) 
 SQL
 
     dolt add -A
-    dolt reset parent
-    run dolt commit -m "will fail since parent is missing"
+    run dolt reset parent
     [ "$status" -eq "1" ]
     [[ "$output" =~ "parent" ]] || false
+    run dolt reset
+    [ "$status" -eq "0" ]
 }
 
 @test "foreign-keys: Commit, rename parent, commit only child" {

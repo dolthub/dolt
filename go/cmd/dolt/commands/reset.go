@@ -281,7 +281,8 @@ func resetStaged(ctx context.Context, dEnv *env.DoltEnv, tbls []string, staged, 
 	updatedRoot, err := actions.MoveTablesBetweenRoots(ctx, tbls, head, staged)
 
 	if err != nil {
-		return nil, errhand.BuildDError("error: failed to update tables").AddCause(err).Build()
+		tt := strings.Join(tbls, ", ")
+		return nil, errhand.BuildDError("error: failed to unstage tables: %s", tt).AddCause(err).Build()
 	}
 
 	return updatedRoot, UpdateStagedWithVErr(dEnv, updatedRoot)
