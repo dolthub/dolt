@@ -99,7 +99,8 @@ type IndexDifference struct {
 	To       schema.Index
 }
 
-// DiffSchIndexes
+// DiffSchIndexes matches two sets of Indexes based on column definitions.
+// It returns matched and unmatched Indexes as a slice of IndexDifferences.
 func DiffSchIndexes(fromSch, toSch schema.Schema) (diffs []IndexDifference) {
 	_ = fromSch.Indexes().Iter(func(fromIdx schema.Index) (stop bool, err error) {
 		toIdx, ok := toSch.Indexes().GetIndexByTags(fromIdx.IndexedColumnTags()...)
@@ -150,7 +151,9 @@ type ForeignKeyDifference struct {
 	To       doltdb.ForeignKey
 }
 
-func DiffSchForeignKeys(fromFks, toFKs []doltdb.ForeignKey) (diffs []ForeignKeyDifference) {
+// DiffForeignKeys matches two sets of ForeignKeys based on column definitions.
+// It returns matched and unmatched ForeignKeys as a slice of ForeignKeyDifferences.
+func DiffForeignKeys(fromFks, toFKs []doltdb.ForeignKey) (diffs []ForeignKeyDifference) {
 	for _, from := range fromFks {
 		matched := false
 		for _, to := range toFKs {
@@ -164,7 +167,7 @@ func DiffSchForeignKeys(fromFks, toFKs []doltdb.ForeignKey) (diffs []ForeignKeyD
 					To:       to,
 				}
 
-				if from.Equals(to) {
+				if from.DeepEquals(to) {
 					d.DiffType = SchDiffNone
 				}
 				diffs = append(diffs, d)
@@ -184,7 +187,7 @@ func DiffSchForeignKeys(fromFks, toFKs []doltdb.ForeignKey) (diffs []ForeignKeyD
 	for _, to := range toFKs {
 		seen := false
 		for _, d := range diffs {
-			if d.To.Equals(to) {
+			if d.To.DeepEquals(to) {
 				seen = true
 				break
 			}

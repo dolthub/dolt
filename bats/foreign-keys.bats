@@ -28,7 +28,6 @@ teardown() {
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk_named FOREIGN KEY (v1) REFERENCES parent(v1);
 SQL
-    dolt schema show child
     run dolt schema show child
     [ "$status" -eq "0" ]
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_named` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
@@ -714,7 +713,6 @@ SQL
 ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE CASCADE ON UPDATE RESTRICT;
 SQL
 
-    dolt schema show child
     run dolt schema show child
     [ "$status" -eq "0" ]
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`) ON DELETE CASCADE ON UPDATE RESTRICT' ]] || false
@@ -906,7 +904,7 @@ SQL
     run dolt commit -m "will fail since super_parent is missing"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "super_parent" ]] || false
-    dolt add .
+    dolt add super_parent
     dolt commit -m "passes now"
 }
 

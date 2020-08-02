@@ -504,7 +504,7 @@ func tabularSchemaDiff(ctx context.Context, td diff.TableDelta, fromSchemas, toS
 		}
 	}
 
-	for _, fkDiff := range diff.DiffSchForeignKeys(td.FromFks, td.ToFks) {
+	for _, fkDiff := range diff.DiffForeignKeys(td.FromFks, td.ToFks) {
 		switch fkDiff.DiffType {
 		case diff.SchDiffNone:
 			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
@@ -574,7 +574,7 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 			}
 		}
 
-		for _, fkDiff := range diff.DiffSchForeignKeys(td.FromFks, td.ToFks) {
+		for _, fkDiff := range diff.DiffForeignKeys(td.FromFks, td.ToFks) {
 			switch fkDiff.DiffType {
 			case diff.SchDiffNone:
 			case diff.SchDiffAdded:

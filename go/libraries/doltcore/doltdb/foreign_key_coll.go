@@ -49,6 +49,7 @@ const (
 
 // ForeignKey is the complete, internal representation of a Foreign Key.
 type ForeignKey struct {
+	// TODO: remove index names and retrieve indexes by column tags
 	Name                   string                    `noms:"name" json:"name"`
 	TableName              string                    `noms:"tbl_name" json:"tbl_name"`
 	TableIndex             string                    `noms:"tbl_index" json:"tbl_index"`
@@ -60,9 +61,9 @@ type ForeignKey struct {
 	OnDelete               ForeignKeyReferenceOption `noms:"on_delete" json:"on_delete"`
 }
 
-// Equals returns whether the given foreign key is equivalent to another. As tags are unique, we can compare using those
-// and ignore the table names, ensuring equality even through table and column renames.
-func (fk ForeignKey) Equals(other ForeignKey) bool {
+// EqualDefs returns whether two foreign keys have the same definition over the same column sets.
+// It does not compare table names or foreign key names.
+func (fk ForeignKey) EqualDefs(other ForeignKey) bool {
 	if len(fk.TableColumns) != len(other.TableColumns) || len(fk.ReferencedTableColumns) != len(other.ReferencedTableColumns) {
 		return false
 	}
@@ -79,6 +80,16 @@ func (fk ForeignKey) Equals(other ForeignKey) bool {
 	return fk.Name == other.Name &&
 		fk.OnUpdate == other.OnUpdate &&
 		fk.OnDelete == other.OnDelete
+}
+
+// DeepEquals compares all attributes of a foreign key to another, including name and table names.
+func (fk ForeignKey) DeepEquals(other ForeignKey) bool {
+	if !fk.EqualDefs(other) {
+		return false
+	}
+	return fk.Name == other.Name &&
+		fk.TableName == other.TableName &&
+		fk.ReferencedTableName == other.ReferencedTableName
 }
 
 // HashOf returns the Noms hash of a ForeignKey.
@@ -388,7 +399,7 @@ func (fkc *ForeignKeyCollection) RemoveKeys(fks ...ForeignKey) {
 	drops := set.NewStrSet(nil)
 	for _, outgoing := range fks {
 		for k, existing := range fkc.foreignKeys {
-			if outgoing.Equals(existing) {
+			if outgoing.EqualDefs(existing) {
 				drops.Add(k)
 			}
 		}

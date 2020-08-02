@@ -420,7 +420,7 @@ func (td TableDelta) HasFKChanges() bool {
 		return td.ToFks[i].Name < td.ToFks[j].Name
 	})
 	for i := range td.FromFks {
-		if !td.FromFks[i].Equals(td.ToFks[i]) {
+		if !td.FromFks[i].EqualDefs(td.ToFks[i]) {
 			return true
 		}
 	}
