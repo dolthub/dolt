@@ -110,6 +110,7 @@ func DiffSchIndexes(fromSch, toSch schema.Schema) (diffs []IndexDifference) {
 				DiffType: SchDiffRemoved,
 				From:     fromIdx,
 			})
+			return false, nil
 		}
 
 		d := IndexDifference{
@@ -129,7 +130,7 @@ func DiffSchIndexes(fromSch, toSch schema.Schema) (diffs []IndexDifference) {
 	_ = toSch.Indexes().Iter(func(toIdx schema.Index) (stop bool, err error) {
 		// if we've seen this index, skip
 		for _, d := range diffs {
-			if d.To.Equals(toIdx) {
+			if d.To != nil && d.To.Equals(toIdx) {
 				return false, nil
 			}
 		}

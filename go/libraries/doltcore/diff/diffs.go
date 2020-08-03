@@ -16,7 +16,6 @@ package diff
 
 import (
 	"context"
-	"reflect"
 	"sort"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -410,7 +409,7 @@ func (td TableDelta) IsRename() bool {
 }
 
 func (td TableDelta) HasFKChanges() bool {
-	return fkSlicesAreEqual(td.FromFks, td.ToFks)
+	return !fkSlicesAreEqual(td.FromFks, td.ToFks)
 }
 
 // GetSchemas returns the table's schema at the fromRoot and toRoot, or schema.Empty if the table did not exist.
@@ -474,7 +473,7 @@ func fkSlicesAreEqual(from, to []doltdb.ForeignKey) bool {
 	})
 
 	for i := range from {
-		if !reflect.DeepEqual(from[i], to[i]) {
+		if !from[i].DeepEquals(to[i]) {
 			return false
 		}
 	}

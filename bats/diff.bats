@@ -131,6 +131,40 @@ teardown() {
     [[ ! "$output" =~ "+  | 0" ]] || false
 }
 
+@test "diff with index and foreign key changes" {
+    dolt sql <<SQL
+CREATE TABLE parent (
+    pk bigint PRIMARY KEY,
+    c1 bigint,
+    c2 bigint,
+    INDEX c1 (c1)
+);
+ALTER TABLE test ADD CONSTRAINT fk1 FOREIGN KEY (c1) REFERENCES parent(c1);
+SQL
+    dolt add -A
+    dolt commit -m "added parent table, foreign key"
+    dolt sql <<SQL
+ALTER TABLE parent ADD INDEX c2 (c2);
+ALTER TABLE parent DROP INDEX c1;
+ALTER TABLE test DROP FOREIGN KEY fk1;
+ALTER TABLE test ADD CONSTRAINT fk2 FOREIGN KEY (c2) REFERENCES parent(c2);
+SQL
+    dolt diff test
+    run dolt diff test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "+    INDEX \`c2\` (\`c2\`)" ]] || false
+    [[ "$output" =~ "-    CONSTRAINT \`fk1\` FOREIGN KEY (\`c1\`)" ]] || false
+    [[ "$output" =~ "    REFERENCES \`parent\` (\`c1\`)" ]] || false
+    [[ "$output" =~ "+    CONSTRAINT \`fk2\` FOREIGN KEY (\`c2\`)" ]] || false
+    [[ "$output" =~ "    REFERENCES \`parent\` (\`c2\`)" ]] || false
+
+    dolt diff parent
+    run dolt diff parent
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "-    INDEX \`c1\` (\`c1\`)" ]] || false
+    [[ "$output" =~ "+    INDEX \`c2\` (\`c2\`)" ]] || false
+}
+
 @test "diff summary comparing working table to last commit" {
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"

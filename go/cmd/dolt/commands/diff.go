@@ -442,7 +442,9 @@ func tabularSchemaDiff(ctx context.Context, td diff.TableDelta, fromSchemas, toS
 	if err != nil {
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
 	}
-	if eq, _ := schema.SchemasAreEqual(fromSch, toSch); eq {
+
+	eq, _ := schema.SchemasAreEqual(fromSch, toSch)
+	if eq && !td.HasFKChanges() {
 		return nil
 	}
 
@@ -493,14 +495,14 @@ func tabularSchemaDiff(ctx context.Context, td diff.TableDelta, fromSchemas, toS
 	for _, idxDiff := range diff.DiffSchIndexes(fromSch, toSch) {
 		switch idxDiff.DiffType {
 		case diff.SchDiffNone:
-			cli.Println("  " + sqlfmt.FmtIndex(idxDiff.To))
+			cli.Println("     " + sqlfmt.FmtIndex(idxDiff.To))
 		case diff.SchDiffAdded:
-			cli.Println(color.GreenString("+ " + sqlfmt.FmtIndex(idxDiff.To)))
+			cli.Println(color.GreenString("+    " + sqlfmt.FmtIndex(idxDiff.To)))
 		case diff.SchDiffRemoved:
-			cli.Println(color.RedString("- " + sqlfmt.FmtIndex(idxDiff.From)))
+			cli.Println(color.RedString("-    " + sqlfmt.FmtIndex(idxDiff.From)))
 		case diff.SchDiffModified:
-			cli.Println("< " + sqlfmt.FmtIndex(idxDiff.From))
-			cli.Println("> " + sqlfmt.FmtIndex(idxDiff.To))
+			cli.Println("<    " + sqlfmt.FmtIndex(idxDiff.From))
+			cli.Println(">    " + sqlfmt.FmtIndex(idxDiff.To))
 		}
 	}
 
@@ -508,17 +510,17 @@ func tabularSchemaDiff(ctx context.Context, td diff.TableDelta, fromSchemas, toS
 		switch fkDiff.DiffType {
 		case diff.SchDiffNone:
 			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
-			cli.Println("  " + sqlfmt.FmtForeignKey(fkDiff.To, toSch, parentSch))
+			cli.Println("     " + sqlfmt.FmtForeignKey(fkDiff.To, toSch, parentSch))
 		case diff.SchDiffAdded:
 			parentSch := toSchemas[fkDiff.To.ReferencedTableName]
-			cli.Println(color.GreenString("+ " + sqlfmt.FmtForeignKey(fkDiff.To, toSch, parentSch)))
+			cli.Println(color.GreenString("+    " + sqlfmt.FmtForeignKey(fkDiff.To, toSch, parentSch)))
 		case diff.SchDiffRemoved:
 			parentSch := toSchemas[fkDiff.From.ReferencedTableName]
-			cli.Println(color.RedString("- " + sqlfmt.FmtForeignKey(fkDiff.From, fromSch, parentSch)))
+			cli.Println(color.RedString("-    " + sqlfmt.FmtForeignKey(fkDiff.From, fromSch, parentSch)))
 		case diff.SchDiffModified:
 			fromParent, toParent := fromSchemas[fkDiff.From.ReferencedTableName], toSchemas[fkDiff.To.ReferencedTableName]
-			cli.Println("< " + sqlfmt.FmtForeignKey(fkDiff.From, fromSch, fromParent))
-			cli.Println("> " + sqlfmt.FmtForeignKey(fkDiff.To, toSch, toParent))
+			cli.Println("<    " + sqlfmt.FmtForeignKey(fkDiff.From, fromSch, fromParent))
+			cli.Println(">    " + sqlfmt.FmtForeignKey(fkDiff.To, toSch, toParent))
 		}
 	}
 
