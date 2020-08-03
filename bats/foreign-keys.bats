@@ -47,6 +47,16 @@ SQL
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_named` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
 }
 
+@test "foreign-keys: parent table index recquired" {
+    # parent doesn't have an index over (v1,v2) to reference
+    run dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1,v2) REFERENCES parent(v1,v2);"
+    [ "$status" -ne "0" ]
+
+    # parent implicitly has an index over its primary key
+    run dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_id FOREIGN KEY (v1) REFERENCES parent(id);"
+    [ "$status" -eq "0" ]
+}
+
 @test "foreign-keys: CREATE TABLE Name Collision" {
     run dolt sql <<SQL
 CREATE TABLE child (
