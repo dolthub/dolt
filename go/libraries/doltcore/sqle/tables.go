@@ -17,7 +17,6 @@ package sqle
 import (
 	"errors"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"io"
 	"strings"
 
@@ -29,6 +28,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
