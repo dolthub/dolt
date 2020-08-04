@@ -863,6 +863,13 @@ func createIndexForTable(ctx *sql.Context, table *doltdb.Table, indexName string
 
 	if indexName == "" {
 		indexName = strings.Join(realColNames, "")
+		_, ok := sch.Indexes().GetByNameCaseInsensitive(indexName)
+		var i int
+		for ok {
+			i++
+			indexName = fmt.Sprintf("%s_%d", strings.Join(realColNames, ""), i)
+			_, ok = sch.Indexes().GetByNameCaseInsensitive(indexName)
+		}
 	}
 	if !doltdb.IsValidTableName(indexName) {
 		return nil, nil, nil, fmt.Errorf("invalid index name `%s` as they must match the regular expression %s", indexName, doltdb.TableNameRegexStr)

@@ -47,7 +47,7 @@ SQL
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_named` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
 }
 
-@test "foreign-keys: parent table index recquired" {
+@test "foreign-keys: parent table index required" {
     # parent doesn't have an index over (v1,v2) to reference
     run dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1,v2) REFERENCES parent(v1,v2);"
     [ "$status" -ne "0" ]
