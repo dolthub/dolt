@@ -33,7 +33,7 @@ import (
 // This type is thread-safe, and may be used in a multi-threaded environment.
 type IndexEditor struct {
 	keyCount   map[hash.Hash]int64
-	ed         *types.MapEditor
+	ed         types.EditAccumulator
 	data       types.Map
 	idx        schema.Index
 	idxSch     schema.Schema // idx.Schema() builds the schema every call, so we cache it here
@@ -51,7 +51,7 @@ type IndexEditor struct {
 func NewIndexEditor(index schema.Index, indexData types.Map) *IndexEditor {
 	return &IndexEditor{
 		keyCount:   make(map[hash.Hash]int64),
-		ed:         indexData.Edit(),
+		ed:         types.CreateEditAccForMapEdits(indexData.Format()),
 		data:       indexData,
 		idx:        index,
 		idxSch:     index.Schema(),
@@ -68,6 +68,8 @@ func (indexEd *IndexEditor) Flush(ctx context.Context) error {
 	indexEd.flushMutex.Lock()
 	defer indexEd.flushMutex.Unlock()
 
+	defer indexEd.ed.Close() // current edit accumulator is captured by defer
+
 	if indexEd.idx.IsUnique() {
 		for _, numOfKeys := range indexEd.keyCount {
 			if numOfKeys > 1 {
@@ -76,7 +78,12 @@ func (indexEd *IndexEditor) Flush(ctx context.Context) error {
 		}
 		indexEd.keyCount = make(map[hash.Hash]int64)
 	}
-	newIndexData, err := indexEd.ed.Map(ctx)
+	accEdits, err := indexEd.ed.FinishedEditing()
+	if err != nil {
+		indexEd.reset(indexEd.data)
+		return err
+	}
+	newIndexData, _, err := types.ApplyEdits(ctx, accEdits, indexEd.data)
 	if err != nil {
 		indexEd.reset(indexEd.data)
 		return err
@@ -138,7 +145,7 @@ func (indexEd *IndexEditor) UpdateIndex(ctx context.Context, originalIndexRow ro
 			indexEd.keyMutex.Unlock()
 		}
 		indexEd.mapMutex.Lock()
-		indexEd.ed.Remove(indexKey)
+		indexEd.ed.AddEdit(indexKey, nil)
 		indexEd.updated = true
 		indexEd.needsFlush = true
 		indexEd.mapMutex.Unlock()
@@ -174,7 +181,7 @@ func (indexEd *IndexEditor) UpdateIndex(ctx context.Context, originalIndexRow ro
 			indexEd.keyMutex.Unlock()
 		}
 		indexEd.mapMutex.Lock()
-		indexEd.ed.Set(indexKey, updatedIndexRow.NomsMapValue(indexEd.idxSch))
+		indexEd.ed.AddEdit(indexKey, updatedIndexRow.NomsMapValue(indexEd.idxSch))
 		indexEd.updated = true
 		indexEd.needsFlush = true
 		indexEd.mapMutex.Unlock()
@@ -185,7 +192,7 @@ func (indexEd *IndexEditor) UpdateIndex(ctx context.Context, originalIndexRow ro
 
 func (indexEd *IndexEditor) reset(indexData types.Map) {
 	indexEd.keyCount = make(map[hash.Hash]int64)
-	indexEd.ed = indexData.Edit()
+	indexEd.ed = types.CreateEditAccForMapEdits(indexData.Format())
 	indexEd.data = indexData
 	indexEd.needsFlush = false
 }
