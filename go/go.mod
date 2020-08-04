@@ -44,7 +44,7 @@ require (
 	github.com/juju/fslock v0.0.0-20160525022230-4d5c94c67b4b
 	github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
-	github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20200618184056-4de29fb992c7
+	github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20200730200742-c031ec8cba06
 	github.com/liquidata-inc/go-mysql-server v0.5.1-0.20200723053706-0737dad3f893
 	github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0
 	github.com/liquidata-inc/mmap-go v1.0.3
