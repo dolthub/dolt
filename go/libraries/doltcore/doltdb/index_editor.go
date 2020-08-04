@@ -68,8 +68,6 @@ func (indexEd *IndexEditor) Flush(ctx context.Context) error {
 	indexEd.flushMutex.Lock()
 	defer indexEd.flushMutex.Unlock()
 
-	defer indexEd.ed.Close() // current edit accumulator is captured by defer
-
 	if indexEd.idx.IsUnique() {
 		for _, numOfKeys := range indexEd.keyCount {
 			if numOfKeys > 1 {
@@ -78,6 +76,10 @@ func (indexEd *IndexEditor) Flush(ctx context.Context) error {
 		}
 		indexEd.keyCount = make(map[hash.Hash]int64)
 	}
+
+	// We have to ensure that the edit accumulator is closed, otherwise it will cause a memory leak
+	defer indexEd.ed.Close() // current edit accumulator is captured by defer
+
 	accEdits, err := indexEd.ed.FinishedEditing()
 	if err != nil {
 		indexEd.reset(indexEd.data)

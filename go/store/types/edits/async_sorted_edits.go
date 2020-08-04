@@ -176,6 +176,8 @@ func (ase *AsyncSortedEdits) FinishedEditing() (types.EditProvider, error) {
 	return ase.Iterator(), nil
 }
 
+// Close ensures that the accumulator is closed. Repeat calls are allowed. This and FinishedEditing are not thread safe,
+// and thus external synchronization is required.
 func (ase *AsyncSortedEdits) Close() {
 	if !ase.closed {
 		_, _ = ase.FinishedEditing()
