@@ -483,11 +483,29 @@ func (t *AlterableDoltTable) DropIndex(ctx *sql.Context, indexName string) error
 	if strings.HasPrefix(indexName, "dolt_") {
 		return fmt.Errorf("dolt internal indexes may not be dropped")
 	}
-	newTable, _, err := t.dropIndex(ctx, indexName)
+	root, err := t.db.GetRoot(ctx)
 	if err != nil {
 		return err
 	}
-	root, err := t.db.GetRoot(ctx)
+	fkc, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return err
+	}
+	ourKeys, referencingKeys := fkc.KeysForTable(t.name)
+	for _, k := range ourKeys {
+		if k.TableIndex == indexName {
+			return fmt.Errorf("cannot drop index: %s is referenced by foreign key %s",
+				k.TableIndex, k.Name)
+		}
+	}
+	for _, k := range referencingKeys {
+		if k.ReferencedTableIndex == indexName {
+			return fmt.Errorf("cannot drop index: %s is referenced by foreign key %s",
+				k.ReferencedTableIndex, k.Name)
+		}
+	}
+
+	newTable, _, err := t.dropIndex(ctx, indexName)
 	if err != nil {
 		return err
 	}
@@ -642,7 +660,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 		OnUpdate:               onUpdateRefOp,
 		OnDelete:               onDeleteRefOp,
 	}
-	err = foreignKeyCollection.AddKey(foreignKey)
+	err = foreignKeyCollection.AddKeys(foreignKey)
 	if err != nil {
 		return err
 	}
@@ -681,7 +699,7 @@ func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string) err
 	if err != nil {
 		return err
 	}
-	err = fkc.RemoveKey(fkName)
+	err = fkc.RemoveKeyByName(fkName)
 	if err != nil {
 		return err
 	}
@@ -706,28 +724,63 @@ func (t *AlterableDoltTable) GetForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyC
 		return nil, err
 	}
 
-	fks, err := fkc.KeysForDisplay(ctx, t.name, root)
-	if err != nil {
-		return nil, err
-	}
+	declaredFk, _ := fkc.KeysForTable(t.name)
+	toReturn := make([]sql.ForeignKeyConstraint, len(declaredFk))
 
-	toReturn := make([]sql.ForeignKeyConstraint, len(fks))
-	for i, fk := range fks {
-		toReturn[i] = t.toForeignKeyConstraint(fk)
+	for i, fk := range declaredFk {
+		parent, ok, err := root.GetTable(ctx, fk.ReferencedTableName)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, fmt.Errorf("cannot find table %s "+
+				"referenced in foreign key %s", fk.ReferencedTableName, fk.Name)
+		}
+
+		parentSch, err := parent.GetSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		toReturn[i], err = toForeignKeyConstraint(fk, t.sch, parentSch)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return toReturn, nil
 }
 
-func (t *AlterableDoltTable) toForeignKeyConstraint(key *doltdb.DisplayForeignKey) sql.ForeignKeyConstraint {
-	return sql.ForeignKeyConstraint{
-		Name:              key.Name,
-		Columns:           key.TableColumns,
-		ReferencedTable:   key.ReferencedTableName,
-		ReferencedColumns: key.ReferencedTableColumns,
-		OnUpdate:          toReferenceOption(key.OnUpdate),
-		OnDelete:          toReferenceOption(key.OnDelete),
+func toForeignKeyConstraint(fk doltdb.ForeignKey, childSch, parentSch schema.Schema) (cst sql.ForeignKeyConstraint, err error) {
+	cst = sql.ForeignKeyConstraint{
+		Name:              fk.Name,
+		Columns:           make([]string, len(fk.TableColumns)),
+		ReferencedTable:   fk.ReferencedTableName,
+		ReferencedColumns: make([]string, len(fk.ReferencedTableColumns)),
+		OnUpdate:          toReferenceOption(fk.OnUpdate),
+		OnDelete:          toReferenceOption(fk.OnDelete),
 	}
+
+	for i, tag := range fk.TableColumns {
+		c, ok := childSch.GetAllCols().GetByTag(tag)
+		if !ok {
+			return cst, fmt.Errorf("cannot find column for tag %d "+
+				"in table %s used in foreign key %s", tag, fk.TableName, fk.Name)
+		}
+		cst.Columns[i] = c.Name
+	}
+
+	for i, tag := range fk.ReferencedTableColumns {
+		c, ok := parentSch.GetAllCols().GetByTag(tag)
+		if !ok {
+			return cst, fmt.Errorf("cannot find column for tag %d "+
+				"in table %s used in foreign key %s", tag, fk.ReferencedTableName, fk.Name)
+		}
+		cst.ReferencedColumns[i] = c.Name
+
+	}
+
+	return cst, nil
 }
 
 func toReferenceOption(opt doltdb.ForeignKeyReferenceOption) sql.ForeignKeyReferenceOption {

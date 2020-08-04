@@ -47,21 +47,9 @@ const (
 	ForeignKeyReferenceOption_SetNull
 )
 
-// DisplayForeignKey is a representation of a Foreign Key that is meant for display, such as when displaying a schema.
-type DisplayForeignKey struct {
-	Name                   string
-	TableName              string
-	TableIndex             string
-	TableColumns           []string
-	ReferencedTableName    string
-	ReferencedTableIndex   string
-	ReferencedTableColumns []string
-	OnUpdate               ForeignKeyReferenceOption
-	OnDelete               ForeignKeyReferenceOption
-}
-
 // ForeignKey is the complete, internal representation of a Foreign Key.
 type ForeignKey struct {
+	// TODO: remove index names and retrieve indexes by column tags
 	Name                   string                    `noms:"name" json:"name"`
 	TableName              string                    `noms:"tbl_name" json:"tbl_name"`
 	TableIndex             string                    `noms:"tbl_index" json:"tbl_index"`
@@ -73,9 +61,9 @@ type ForeignKey struct {
 	OnDelete               ForeignKeyReferenceOption `noms:"on_delete" json:"on_delete"`
 }
 
-// Equals returns whether the given foreign key is equivalent to another. As tags are unique, we can compare using those
-// and ignore the table names, ensuring equality even through table and column renames.
-func (fk ForeignKey) Equals(other ForeignKey) bool {
+// EqualDefs returns whether two foreign keys have the same definition over the same column sets.
+// It does not compare table names or foreign key names.
+func (fk ForeignKey) EqualDefs(other ForeignKey) bool {
 	if len(fk.TableColumns) != len(other.TableColumns) || len(fk.ReferencedTableColumns) != len(other.ReferencedTableColumns) {
 		return false
 	}
@@ -92,6 +80,16 @@ func (fk ForeignKey) Equals(other ForeignKey) bool {
 	return fk.Name == other.Name &&
 		fk.OnUpdate == other.OnUpdate &&
 		fk.OnDelete == other.OnDelete
+}
+
+// DeepEquals compares all attributes of a foreign key to another, including name and table names.
+func (fk ForeignKey) DeepEquals(other ForeignKey) bool {
+	if !fk.EqualDefs(other) {
+		return false
+	}
+	return fk.Name == other.Name &&
+		fk.TableName == other.TableName &&
+		fk.ReferencedTableName == other.ReferencedTableName
 }
 
 // HashOf returns the Noms hash of a ForeignKey.
@@ -242,7 +240,7 @@ func NewForeignKeyCollection(keys ...ForeignKey) (*ForeignKeyCollection, error) 
 		foreignKeys: make(map[string]ForeignKey),
 	}
 	for _, k := range keys {
-		err := fkc.AddKey(k)
+		err := fkc.AddKeys(k)
 		if err != nil {
 			return nil, err
 		}
@@ -250,31 +248,33 @@ func NewForeignKeyCollection(keys ...ForeignKey) (*ForeignKeyCollection, error) 
 	return fkc, nil
 }
 
-// AddKey adds the given foreign key to the collection. Checks that the given name is unique in the collection, and that
+// AddKeys adds the given foreign key to the collection. Checks that the given name is unique in the collection, and that
 // both column counts are equal. All other validation should occur before being added to the collection.
-func (fkc *ForeignKeyCollection) AddKey(key ForeignKey) error {
-	if key.Name == "" {
-		// assign a name based on the hash
-		// 8 char = 5 base32 bytes, should be collision resistant
-		key.Name = key.HashOf().String()[:8]
-	}
+func (fkc *ForeignKeyCollection) AddKeys(fks ...ForeignKey) error {
+	for _, key := range fks {
+		if key.Name == "" {
+			// assign a name based on the hash
+			// 8 char = 5 base32 bytes, should be collision resistant
+			key.Name = key.HashOf().String()[:8]
+		}
 
-	if _, ok := fkc.GetByTags(key.TableColumns, key.ReferencedTableColumns); ok {
-		// this differs from MySQL's logic
-		return fmt.Errorf("a foreign key over columns %v and referenced columns %v already exists",
-			key.TableColumns, key.ReferencedTableColumns)
-	}
-	if _, ok := fkc.GetByNameCaseInsensitive(key.Name); ok {
-		return fmt.Errorf("a foreign key with the name `%s` already exists", key.Name)
-	}
-	if len(key.TableColumns) != len(key.ReferencedTableColumns) {
-		return fmt.Errorf("foreign keys must have the same number of columns declared and referenced")
-	}
-	if key.TableName == key.ReferencedTableName {
-		return fmt.Errorf("inter-table foreign keys are not yet supported")
-	}
+		if _, ok := fkc.GetByTags(key.TableColumns, key.ReferencedTableColumns); ok {
+			// this differs from MySQL's logic
+			return fmt.Errorf("a foreign key over columns %v and referenced columns %v already exists",
+				key.TableColumns, key.ReferencedTableColumns)
+		}
+		if _, ok := fkc.GetByNameCaseInsensitive(key.Name); ok {
+			return fmt.Errorf("a foreign key with the name `%s` already exists", key.Name)
+		}
+		if len(key.TableColumns) != len(key.ReferencedTableColumns) {
+			return fmt.Errorf("foreign keys must have the same number of columns declared and referenced")
+		}
+		if key.TableName == key.ReferencedTableName {
+			return fmt.Errorf("inter-table foreign keys are not yet supported")
+		}
 
-	fkc.foreignKeys[key.HashOf().String()] = key
+		fkc.foreignKeys[key.HashOf().String()] = key
+	}
 	return nil
 }
 
@@ -355,45 +355,6 @@ func (fkc *ForeignKeyCollection) Iter(cb func(fk ForeignKey) (stop bool, err err
 	return nil
 }
 
-// KeysForDisplay returns display-ready foreign keys that the given table declares. The results are intended only
-// for displaying key information to a user, and SHOULD NOT be used elsewhere. The results are sorted by name ascending.
-func (fkc *ForeignKeyCollection) KeysForDisplay(ctx context.Context, tableName string, root *RootValue) ([]*DisplayForeignKey, error) {
-	var declaresFk []*DisplayForeignKey
-	for _, foreignKey := range fkc.foreignKeys {
-		if foreignKey.TableName == tableName {
-			tableColumns, ok, err := fkc.columnTagsToNames(ctx, foreignKey.TableName, foreignKey.Name, foreignKey.TableColumns, root)
-			if err != nil {
-				return nil, err
-			}
-			if !ok { // root may be in an incomplete state regarding the foreign key, so we skip displaying any invalid keys
-				continue
-			}
-			refTableColumns, ok, err := fkc.columnTagsToNames(ctx, foreignKey.ReferencedTableName, foreignKey.Name, foreignKey.ReferencedTableColumns, root)
-			if err != nil {
-				return nil, err
-			}
-			if !ok {
-				continue
-			}
-			declaresFk = append(declaresFk, &DisplayForeignKey{
-				Name:                   foreignKey.Name,
-				TableName:              foreignKey.TableName,
-				TableIndex:             foreignKey.TableIndex,
-				TableColumns:           tableColumns,
-				ReferencedTableName:    foreignKey.ReferencedTableName,
-				ReferencedTableIndex:   foreignKey.ReferencedTableIndex,
-				ReferencedTableColumns: refTableColumns,
-				OnUpdate:               foreignKey.OnUpdate,
-				OnDelete:               foreignKey.OnDelete,
-			})
-		}
-	}
-	sort.Slice(declaresFk, func(i, j int) bool {
-		return declaresFk[i].Name < declaresFk[j].Name
-	})
-	return declaresFk, nil
-}
-
 // KeysForTable returns all foreign keys that reference the given table in some capacity. The returned array
 // declaredFk contains all foreign keys in which this table declared the foreign key. The array referencedByFk contains
 // all foreign keys in which this table is the referenced table. If the table contains a self-referential foreign key,
@@ -433,13 +394,29 @@ func (fkc *ForeignKeyCollection) Map(ctx context.Context, vrw types.ValueReadWri
 	return fkMapEditor.Map(ctx)
 }
 
-// RemoveKey removes a foreign key from the collection. It does not remove the associated indexes from their
+// RemoveKeys removes any Foreign Keys with matching column set from the collection.
+func (fkc *ForeignKeyCollection) RemoveKeys(fks ...ForeignKey) {
+	drops := set.NewStrSet(nil)
+	for _, outgoing := range fks {
+		for k, existing := range fkc.foreignKeys {
+			if outgoing.EqualDefs(existing) {
+				drops.Add(k)
+			}
+		}
+	}
+	for _, k := range drops.AsSlice() {
+		delete(fkc.foreignKeys, k)
+	}
+}
+
+// RemoveKeyByName removes a foreign key from the collection. It does not remove the associated indexes from their
 // respective tables.
-func (fkc *ForeignKeyCollection) RemoveKey(foreignKeyName string) error {
+func (fkc *ForeignKeyCollection) RemoveKeyByName(foreignKeyName string) error {
 	var key string
 	for k, fk := range fkc.foreignKeys {
 		if strings.ToLower(fk.Name) == strings.ToLower(foreignKeyName) {
 			key = k
+			break
 		}
 	}
 	if key == "" {
@@ -451,19 +428,19 @@ func (fkc *ForeignKeyCollection) RemoveKey(foreignKeyName string) error {
 
 // RemoveTables removes all foreign keys associated with the given tables, if permitted. The operation assumes that ALL
 // tables to be removed are in a single call, as splitting tables into different calls may result in unintended errors.
-func (fkc *ForeignKeyCollection) RemoveTables(ctx context.Context, root *RootValue, tables ...string) (*RootValue, error) {
+func (fkc *ForeignKeyCollection) RemoveTables(ctx context.Context, tables ...string) error {
 	outgoing := set.NewStrSet(tables)
 	for _, fk := range fkc.foreignKeys {
 		dropChild := outgoing.Contains(fk.TableName)
 		dropParent := outgoing.Contains(fk.ReferencedTableName)
 		if dropParent && !dropChild {
-			return nil, fmt.Errorf("unable to remove `%s` since it is referenced from table `%s`", fk.ReferencedTableName, fk.TableName)
+			return fmt.Errorf("unable to remove `%s` since it is referenced from table `%s`", fk.ReferencedTableName, fk.TableName)
 		}
 		if dropChild {
 			delete(fkc.foreignKeys, fk.HashOf().String())
 		}
 	}
-	return root.PutForeignKeyCollection(ctx, fkc)
+	return nil
 }
 
 // RenameTable updates all foreign key entries in the collection with the updated table name. Does not check for name
@@ -510,30 +487,6 @@ func (refOp ForeignKeyReferenceOption) String() string {
 	default:
 		return "INVALID"
 	}
-}
-
-// columnTagsToNames loads all of the column names for the tags given from the root given.
-func (fkc *ForeignKeyCollection) columnTagsToNames(ctx context.Context, tableName string, fkName string, colTags []uint64, root *RootValue) ([]string, bool, error) {
-	tbl, ok, err := root.GetTable(ctx, tableName)
-	if err != nil {
-		return nil, false, err
-	}
-	if !ok {
-		return nil, false, nil
-	}
-	tableSch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, false, err
-	}
-	tableColumns := make([]string, len(colTags))
-	for i := range colTags {
-		col, ok := tableSch.GetAllCols().GetByTag(colTags[i])
-		if !ok {
-			return nil, false, nil
-		}
-		tableColumns[i] = col.Name
-	}
-	return tableColumns, true, nil
 }
 
 // copy returns an exact copy of the calling collection. As collections are meant to be modified in-place, this ensures

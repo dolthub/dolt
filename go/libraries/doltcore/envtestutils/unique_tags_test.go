@@ -72,7 +72,7 @@ var UniqueTagsTests = []UniqueTagsTest{
 			tc.Query{Query: `create table test2 (pk int not null primary key comment 'tag:42');`},
 		},
 		ExpectedBranch: "master",
-		ExpectedErrStr: "two different columns with the same tag",
+		ExpectedErrStr: "Cannot create column pk, the tag 42 was already used in table test",
 	},
 	{
 		Name: "cannot add a duplicate tag within a table",
@@ -81,7 +81,7 @@ var UniqueTagsTests = []UniqueTagsTest{
 			tc.Query{Query: `alter table test add column c0 int comment 'tag:42';`},
 		},
 		ExpectedBranch: "master",
-		ExpectedErrStr: "two different columns with the same tag",
+		ExpectedErrStr: "Cannot create column c0, the tag 42 was already used in table test",
 	},
 	{
 		Name: "cannot add a duplicate tag across tables",
@@ -91,7 +91,7 @@ var UniqueTagsTests = []UniqueTagsTest{
 			tc.Query{Query: `alter table test add column c0 int comment 'tag:42';`},
 		},
 		ExpectedBranch: "master",
-		ExpectedErrStr: "two different columns with the same tag",
+		ExpectedErrStr: "Cannot create column c0, the tag 42 was already used in table other",
 	},
 	{
 		Name: "cannot add a tag that has previously existed in the same table's history",
@@ -135,6 +135,19 @@ var UniqueTagsTests = []UniqueTagsTest{
 			tc.CommitAll{Message: "dropped c0 from test on other"},
 			tc.Checkout{BranchName: "master"},
 			tc.Merge{BranchName: "other"},
+			tc.Query{Query: `alter table test add column c1 int comment 'tag:42';`},
+		},
+		ExpectedBranch: "master",
+		ExpectedErrStr: "two different columns with the same tag",
+	},
+	{
+		Name: "cannot add a tag that has previously existed in a deleted table",
+		Commands: []tc.Command{
+			tc.Query{Query: `create table quiz (pk int not null primary key comment 'tag:42');`},
+			tc.Query{Query: `create table test (pk int not null primary key comment 'tag:10');`},
+			tc.CommitAll{Message: "created tables test and quiz"},
+			tc.Query{Query: `drop table quiz;`},
+			tc.CommitAll{Message: "added column c0 to test on branch other"},
 			tc.Query{Query: `alter table test add column c1 int comment 'tag:42';`},
 		},
 		ExpectedBranch: "master",

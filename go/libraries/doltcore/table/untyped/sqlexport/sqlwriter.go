@@ -21,6 +21,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -33,14 +35,15 @@ import (
 // SQL database.
 type SqlExportWriter struct {
 	tableName       string
-	foreignKeys     []*doltdb.DisplayForeignKey
 	sch             schema.Schema
+	parentSchs      map[string]schema.Schema
+	foreignKeys     []doltdb.ForeignKey
 	wr              io.WriteCloser
 	writtenFirstRow bool
 }
 
 // OpenSQLExportWriter returns a new SqlWriter for the table given writing to a file with the path given.
-func OpenSQLExportWriter(path string, tableName string, fs filesys.WritableFS, sch schema.Schema, foreignKeys []*doltdb.DisplayForeignKey) (*SqlExportWriter, error) {
+func OpenSQLExportWriter(ctx context.Context, path string, fs filesys.WritableFS, root *doltdb.RootValue, tableName string, sch schema.Schema) (*SqlExportWriter, error) {
 	err := fs.MkDirs(filepath.Dir(path))
 	if err != nil {
 		return nil, err
@@ -51,7 +54,25 @@ func OpenSQLExportWriter(path string, tableName string, fs filesys.WritableFS, s
 		return nil, err
 	}
 
-	return &SqlExportWriter{tableName: tableName, foreignKeys: foreignKeys, sch: sch, wr: wr}, nil
+	allSchemas, err := root.GetAllSchemas(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	fkc, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, errhand.BuildDError("error: failed to read foreign key struct").AddCause(err).Build()
+	}
+
+	foreignKeys, _ := fkc.KeysForTable(tableName)
+
+	return &SqlExportWriter{
+		tableName:   tableName,
+		sch:         sch,
+		parentSchs:  allSchemas,
+		foreignKeys: foreignKeys,
+		wr:          wr,
+	}, nil
 }
 
 func NewSQLDiffWriter(wr io.WriteCloser, tableName string, sch schema.Schema) (*SqlExportWriter, error) {
@@ -84,7 +105,7 @@ func (w *SqlExportWriter) maybeWriteDropCreate() error {
 		var b strings.Builder
 		b.WriteString(sqlfmt.DropTableIfExistsStmt(w.tableName))
 		b.WriteRune('\n')
-		b.WriteString(sqlfmt.CreateTableStmtWithTags(w.tableName, w.sch, w.foreignKeys))
+		b.WriteString(sqlfmt.CreateTableStmtWithTags(w.tableName, w.sch, w.foreignKeys, w.parentSchs))
 		if err := iohelp.WriteLine(w.wr, b.String()); err != nil {
 			return err
 		}

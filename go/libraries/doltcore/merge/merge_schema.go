@@ -150,7 +150,9 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 	// check for conflicts between foreign keys added on each branch since the ancestor
 	_ = ourNewFKs.Iter(func(ourFK doltdb.ForeignKey) (stop bool, err error) {
 		theirFK, ok := theirNewFKs.GetByTags(ourFK.TableColumns, ourFK.ReferencedTableColumns)
-		if ok && !ourFK.Equals(theirFK) {
+		if ok && !ourFK.DeepEquals(theirFK) {
+			// Foreign Keys are defined over the same tags,
+			// but are not exactly equal
 			conflicts = append(conflicts, FKConflict{
 				Kind:   TagCollision,
 				Ours:   ourFK,
@@ -159,7 +161,8 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 		}
 
 		theirFK, ok = theirNewFKs.GetByNameCaseInsensitive(ourFK.Name)
-		if ok && !ourFK.Equals(theirFK) {
+		if ok && !ourFK.EqualDefs(theirFK) {
+			// Two different Foreign Keys have the same name
 			conflicts = append(conflicts, FKConflict{
 				Kind:   NameCollision,
 				Ours:   ourFK,
@@ -170,10 +173,10 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 	})
 
 	err = ourNewFKs.Iter(func(ourFK doltdb.ForeignKey) (stop bool, err error) {
-		return false, common.AddKey(ourFK)
+		return false, common.AddKeys(ourFK)
 	})
 	err = theirNewFKs.Iter(func(theirFK doltdb.ForeignKey) (stop bool, err error) {
-		return false, common.AddKey(theirFK)
+		return false, common.AddKeys(theirFK)
 	})
 
 	common, err = pruneInvalidForeignKeys(ctx, common, mergedRoot)
@@ -418,8 +421,8 @@ func foreignKeysInCommon(ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection) 
 			return false, nil
 		}
 
-		if theirs.Equals(ours) {
-			err = common.AddKey(ours)
+		if theirs.EqualDefs(ours) {
+			err = common.AddKeys(ours)
 			return false, err
 		}
 
@@ -433,7 +436,7 @@ func foreignKeysInCommon(ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection) 
 			})
 		}
 
-		if theirs.Equals(anc) {
+		if theirs.EqualDefs(anc) {
 			// FK modified on our branch since the ancestor
 			fk, ok := common.GetByNameCaseInsensitive(ours.Name)
 			if ok {
@@ -443,12 +446,12 @@ func foreignKeysInCommon(ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection) 
 					Theirs: fk,
 				})
 			} else {
-				err = common.AddKey(ours)
+				err = common.AddKeys(ours)
 			}
 			return false, err
 		}
 
-		if ours.Equals(anc) {
+		if ours.EqualDefs(anc) {
 			// FK modified on their branch since the ancestor
 			fk, ok := common.GetByNameCaseInsensitive(theirs.Name)
 			if ok {
@@ -458,7 +461,7 @@ func foreignKeysInCommon(ourFKs, theirFKs, ancFKs *doltdb.ForeignKeyCollection) 
 					Theirs: theirs,
 				})
 			} else {
-				err = common.AddKey(theirs)
+				err = common.AddKeys(theirs)
 			}
 			return false, err
 		}
@@ -484,7 +487,7 @@ func fkCollSetDifference(left, right *doltdb.ForeignKeyCollection) (d *doltdb.Fo
 	err = left.Iter(func(fk doltdb.ForeignKey) (stop bool, err error) {
 		_, ok := right.GetByTags(fk.TableColumns, fk.ReferencedTableColumns)
 		if !ok {
-			err = d.AddKey(fk)
+			err = d.AddKeys(fk)
 		}
 		return false, err
 	})
@@ -528,7 +531,7 @@ func pruneInvalidForeignKeys(ctx context.Context, fkColl *doltdb.ForeignKeyColle
 			}
 		}
 
-		err = pruned.AddKey(fk)
+		err = pruned.AddKeys(fk)
 		return false, err
 	})
 

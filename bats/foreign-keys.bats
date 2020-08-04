@@ -8,10 +8,10 @@ setup() {
 CREATE TABLE parent (
     id int PRIMARY KEY,
     v1 int,
-    v2 int
+    v2 int,
+    INDEX v1 (v1),
+    INDEX v2 (v2)
 );
-ALTER TABLE parent ADD INDEX v1 (v1);
-ALTER TABLE parent ADD INDEX v2 (v2);
 CREATE TABLE child (
     id int primary key,
     v1 int,
@@ -375,6 +375,26 @@ SQL
     dolt table rm parent
 }
 
+@test "foreign-keys: indexes used by foreign keys can't be dropped" {
+    dolt sql <<SQL
+ALTER TABLE child ADD INDEX v1 (v1);
+ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1);
+SQL
+    run dolt sql -q "ALTER TABLE child DROP INDEX v1"
+    [ "$status" -ne "0" ]
+    [[ "$output" =~ "cannot drop index: v1 is referenced by foreign key fk_name" ]] || false
+    run dolt sql -q "ALTER TABLE parent DROP INDEX v1"
+    [ "$status" -ne "0" ]
+    [[ "$output" =~ "cannot drop index: v1 is referenced by foreign key fk_name" ]] || false
+
+    run dolt sql -q "ALTER TABLE child DROP FOREIGN KEY fk_name"
+    [ "$status" -eq "0" ]
+    run dolt sql -q "ALTER TABLE child DROP INDEX v1"
+    [ "$status" -eq "0" ]
+    run dolt sql -q "ALTER TABLE parent DROP INDEX v1"
+    [ "$status" -eq "0" ]
+}
+
 @test "foreign-keys: dolt table cp" {
     dolt sql <<SQL
 CREATE TABLE one (
@@ -713,7 +733,6 @@ SQL
 ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE CASCADE ON UPDATE RESTRICT;
 SQL
 
-    dolt schema show child
     run dolt schema show child
     [ "$status" -eq "0" ]
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`) ON DELETE CASCADE ON UPDATE RESTRICT' ]] || false
@@ -743,7 +762,7 @@ SQL
     run dolt schema show child
     [ "$status" -eq "0" ]
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `super_parent` (`v1`) ON DELETE CASCADE ON UPDATE RESTRICT' ]] || false
-    dolt add super_parent
+    dolt add .
     dolt commit -m "renamed parent"
     run dolt schema show child
     [ "$status" -eq "0" ]
@@ -809,104 +828,18 @@ SQL
     dolt checkout master
     
     dolt sql <<SQL
-DROP TABLE child;
 ALTER TABLE parent ADD INDEX v1v2 (v1,v2);
-CREATE TABLE child (
-  pk int PRIMARY KEY,
-  v1 int,
-  v2 int,
-  CONSTRAINT fk_name FOREIGN KEY (v1,v2)
-    REFERENCES parent(v1,v2)
-);
+ALTER TABLE child DROP FOREIGN KEY fk_name;
+ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1,v2) REFERENCES parent(v1,v2)
 SQL
     run dolt schema show child
     [ "$status" -eq "0" ]
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`,`v2`) REFERENCES `parent` (`v1`,`v2`)' ]] || false
     dolt add -A
-    skip "todo: error in staging logic"
     dolt commit -m "different fk same name"
     run dolt schema show child
     [ "$status" -eq "0" ]
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`,`v2`) REFERENCES `parent` (`v1`,`v2`)' ]] || false
-    
-    dolt checkout original
-    run dolt schema show child
-    [ "$status" -eq "0" ]
-    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
-}
-
-@test "foreign-keys: Commit then recreate key with parent columns" {
-    dolt sql <<SQL
-ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE CASCADE ON UPDATE CASCADE;
-SQL
-
-    dolt add -A
-    dolt commit -m "has fk"
-    run dolt schema show child
-    [ "$status" -eq "0" ]
-    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
-    dolt checkout -b original
-    dolt checkout master
-    
-    dolt sql <<SQL
-ALTER TABLE child DROP FOREIGN KEY fk_name;
-DROP TABLE parent;
-CREATE TABLE parent (
-  pk int PRIMARY KEY,
-  vnew int
-);
-ALTER TABLE parent ADD INDEX vnew (vnew);
-ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(vnew);
-SQL
-    run dolt schema show child
-    [ "$status" -eq "0" ]
-    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`vnew`)' ]] || false
-    dolt add -A
-    skip "todo: error in staging logic"
-    dolt commit -m "different fk new parent col name"
-    run dolt schema show child
-    [ "$status" -eq "0" ]
-    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`vnew`)' ]] || false
-    
-    dolt checkout original
-    run dolt schema show child
-    [ "$status" -eq "0" ]
-    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
-}
-
-@test "foreign-keys: Commit then recreate key with parent renamed" {
-    dolt sql <<SQL
-ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE CASCADE ON UPDATE CASCADE;
-SQL
-
-    dolt add -A
-    dolt commit -m "has fk"
-    run dolt schema show child
-    [ "$status" -eq "0" ]
-    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`)' ]] || false
-    dolt checkout -b original
-    dolt checkout master
-    
-    dolt sql <<SQL
-ALTER TABLE child DROP FOREIGN KEY fk_name;
-DROP TABLE parent;
-CREATE TABLE new_parent (
-  pk int PRIMARY KEY,
-  v1 int,
-  v2 int
-);
-ALTER TABLE new_parent ADD INDEX v1 (v1);
-ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES new_parent(v1);
-SQL
-    run dolt schema show child
-    [ "$status" -eq "0" ]
-    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `new_parent` (`v1`)' ]] || false
-    dolt add -A
-    skip "todo: error in staging logic"
-    dolt commit -m "different fk new parent"
-    run dolt schema show child
-    [ "$status" -eq "0" ]
-    [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `new_parent` (`v1`)' ]] || false
     
     dolt checkout original
     run dolt schema show child
@@ -953,7 +886,6 @@ SQL
     [ "$status" -eq "0" ]
     ! [[ "$output" =~ "FOREIGN KEY" ]] || false
     dolt add -A
-    skip "todo: error in staging logic"
     dolt commit -m "no foreign key"
     run dolt schema show child
     [ "$status" -eq "0" ]
@@ -971,10 +903,11 @@ ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) 
 SQL
 
     dolt add -A
-    dolt reset parent
-    run dolt commit -m "will fail since parent is missing"
+    run dolt reset parent
     [ "$status" -eq "1" ]
     [[ "$output" =~ "parent" ]] || false
+    run dolt reset
+    [ "$status" -eq "0" ]
 }
 
 @test "foreign-keys: Commit, rename parent, commit only child" {
@@ -1021,20 +954,19 @@ SQL
     dolt add -A
     dolt commit -m "updated parent"
     dolt checkout master
-    skip "todo: FK merge"
     dolt merge other
     
-    run dolt sql -q "SELECT * FROM parent ORDER BY pk ASC" -r=csv
+    run dolt sql -q "SELECT * FROM parent ORDER BY id ASC" -r=csv
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "id,v1" ]] || false
     [[ "$output" =~ "1,0" ]] || false
     [[ "$output" =~ "2,1" ]] || false
     [[ "$output" =~ "3,2" ]] || false
     [[ "$output" =~ "4,3" ]] || false
     [[ "${#lines[@]}" = "5" ]] || false
-    run dolt sql -q "SELECT * FROM child ORDER BY pk ASC" -r=csv
+    run dolt sql -q "SELECT * FROM child ORDER BY id ASC" -r=csv
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "id,v1" ]] || false
     [[ "$output" =~ "2,1" ]] || false
     [[ "$output" =~ "3,2" ]] || false
     [[ "$output" =~ "4,3" ]] || false
@@ -1066,7 +998,6 @@ SQL
     dolt add -A
     dolt commit -m "updated parent"
     dolt checkout master
-    skip "todo: FK merge"
     run dolt merge other
     [ "$status" -eq "1" ]
     [[ "$output" =~ "violation" ]] || false
@@ -1098,20 +1029,19 @@ SQL
     dolt add -A
     dolt commit -m "updated child"
     dolt checkout master
-    skip "todo: FK merge"
     dolt merge other
     
-    run dolt sql -q "SELECT * FROM parent ORDER BY pk ASC" -r=csv
+    run dolt sql -q "SELECT * FROM parent ORDER BY id ASC" -r=csv
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "id,v1" ]] || false
     [[ "$output" =~ "1,1" ]] || false
     [[ "$output" =~ "2,2" ]] || false
     [[ "$output" =~ "3,3" ]] || false
     [[ "$output" =~ "4,4" ]] || false
     [[ "${#lines[@]}" = "5" ]] || false
-    run dolt sql -q "SELECT * FROM child ORDER BY pk ASC" -r=csv
+    run dolt sql -q "SELECT * FROM child ORDER BY id ASC" -r=csv
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "id,v1" ]] || false
     [[ "$output" =~ "2,2" ]] || false
     [[ "$output" =~ "3,3" ]] || false
     [[ "$output" =~ "4,4" ]] || false
@@ -1143,7 +1073,6 @@ SQL
     dolt add -A
     dolt commit -m "updated child"
     dolt checkout master
-    skip "todo: FK merge"
     run dolt merge other
     [ "$status" -eq "1" ]
     [[ "$output" =~ "violation" ]] || false
@@ -1175,22 +1104,21 @@ UPDATE child SET v1 = v1 + 1;
 SQL
     dolt add -A
     dolt commit -m "updated both"
-    skip "todo: FK merge"
     dolt checkout master
     dolt merge other
     
-    run dolt sql -q "SELECT * FROM parent ORDER BY pk ASC" -r=csv
+    run dolt sql -q "SELECT * FROM parent ORDER BY id ASC" -r=csv
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "id,v1" ]] || false
     [[ "$output" =~ "1,0" ]] || false
     [[ "$output" =~ "2,1" ]] || false
     [[ "$output" =~ "3,2" ]] || false
     [[ "$output" =~ "4,3" ]] || false
     [[ "$output" =~ "5,4" ]] || false
     [[ "${#lines[@]}" = "6" ]] || false
-    run dolt sql -q "SELECT * FROM child ORDER BY pk ASC" -r=csv
+    run dolt sql -q "SELECT * FROM child ORDER BY id ASC" -r=csv
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "id,v1" ]] || false
     [[ "$output" =~ "2,2" ]] || false
     [[ "$output" =~ "3,3" ]] || false
     [[ "$output" =~ "4,4" ]] || false
@@ -1223,7 +1151,6 @@ SQL
     dolt add -A
     dolt commit -m "updated both"
     dolt checkout master
-    skip "todo: FK merge"
     run dolt merge other
     [ "$status" -eq "1" ]
     [[ "$output" =~ "violation" ]] || false

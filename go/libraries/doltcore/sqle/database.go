@@ -595,7 +595,7 @@ func (db Database) createTable(ctx *sql.Context, tableName string, sch sql.Schem
 		return err
 	}
 
-	if exists, err := root.HasTable(ctx, tableName); err != nil {
+	if exists, err := root.TableNameInUse(ctx, tableName); err != nil {
 		return err
 	} else if exists {
 		return sql.ErrTableAlreadyExists.New(tableName)
@@ -606,19 +606,21 @@ func (db Database) createTable(ctx *sql.Context, tableName string, sch sql.Schem
 		return err
 	}
 
-	tt, err := root.TablesNamesForTags(ctx, doltSch.GetAllCols().Tags...)
-	if err != nil {
-		return err
-	}
-	if len(tt) > 0 {
-		var ee []string
-		_ = doltSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			if collisionTable, tagExists := tt[tag]; tagExists {
-				ee = append(ee, schema.ErrTagPrevUsed(tag, col.Name, collisionTable).Error())
-			}
-			return false, nil
-		})
-		return fmt.Errorf(strings.Join(ee, "\n"))
+	var conflictingTbls []string
+	_ = doltSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		_, tbl, exists, err := root.GetTableByColTag(ctx, tag)
+		if err != nil {
+			return true, err
+		}
+		if exists {
+			errStr := schema.ErrTagPrevUsed(tag, col.Name, tbl).Error()
+			conflictingTbls = append(conflictingTbls, errStr)
+		}
+		return false, nil
+	})
+
+	if len(conflictingTbls) > 0 {
+		return fmt.Errorf(strings.Join(conflictingTbls, "\n"))
 	}
 
 	newRoot, err := root.CreateEmptyTable(ctx, tableName, doltSch)
