@@ -383,7 +383,6 @@ SQL
     run dolt sql -q "ALTER TABLE child DROP INDEX v1"
     [ "$status" -ne "0" ]
     [[ "$output" =~ "cannot drop index: v1 is referenced by foreign key fk_name" ]] || false
-    dolt sql -q "ALTER TABLE parent DROP INDEX v1"
     run dolt sql -q "ALTER TABLE parent DROP INDEX v1"
     [ "$status" -ne "0" ]
     [[ "$output" =~ "cannot drop index: v1 is referenced by foreign key fk_name" ]] || false
