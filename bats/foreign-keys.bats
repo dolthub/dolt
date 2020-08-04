@@ -375,6 +375,27 @@ SQL
     dolt table rm parent
 }
 
+@test "foreign-keys: indexes used by foreign keys can't be dropped" {
+    dolt sql <<SQL
+ALTER TABLE child ADD INDEX v1 (v1);
+ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1);
+SQL
+    run dolt sql -q "ALTER TABLE child DROP INDEX v1"
+    [ "$status" -ne "0" ]
+    [[ "$output" =~ "cannot drop index: v1 is referenced by foreign key fk_name" ]] || false
+    dolt sql -q "ALTER TABLE parent DROP INDEX v1"
+    run dolt sql -q "ALTER TABLE parent DROP INDEX v1"
+    [ "$status" -ne "0" ]
+    [[ "$output" =~ "cannot drop index: v1 is referenced by foreign key fk_name" ]] || false
+
+    run dolt sql -q "ALTER TABLE child DROP FOREIGN KEY fk_name"
+    [ "$status" -eq "0" ]
+    run dolt sql -q "ALTER TABLE child DROP INDEX v1"
+    [ "$status" -eq "0" ]
+    run dolt sql -q "ALTER TABLE parent DROP INDEX v1"
+    [ "$status" -eq "0" ]
+}
+
 @test "foreign-keys: dolt table cp" {
     dolt sql <<SQL
 CREATE TABLE one (

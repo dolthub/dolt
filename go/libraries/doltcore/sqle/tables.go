@@ -483,11 +483,29 @@ func (t *AlterableDoltTable) DropIndex(ctx *sql.Context, indexName string) error
 	if strings.HasPrefix(indexName, "dolt_") {
 		return fmt.Errorf("dolt internal indexes may not be dropped")
 	}
-	newTable, _, err := t.dropIndex(ctx, indexName)
+	root, err := t.db.GetRoot(ctx)
 	if err != nil {
 		return err
 	}
-	root, err := t.db.GetRoot(ctx)
+	fkc, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return err
+	}
+	ourKeys, referencingKeys := fkc.KeysForTable(t.name)
+	for _, k := range ourKeys {
+		if k.TableIndex == indexName {
+			return fmt.Errorf("cannot drop index: %s is referenced by foreign key %s",
+				k.TableIndex, k.Name)
+		}
+	}
+	for _, k := range referencingKeys {
+		if k.ReferencedTableIndex == indexName {
+			return fmt.Errorf("cannot drop index: %s is referenced by foreign key %s",
+				k.ReferencedTableIndex, k.Name)
+		}
+	}
+
+	newTable, _, err := t.dropIndex(ctx, indexName)
 	if err != nil {
 		return err
 	}
@@ -736,9 +754,9 @@ func (t *AlterableDoltTable) GetForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyC
 func toForeignKeyConstraint(fk doltdb.ForeignKey, childSch, parentSch schema.Schema) (cst sql.ForeignKeyConstraint, err error) {
 	cst = sql.ForeignKeyConstraint{
 		Name:              fk.Name,
-		Columns:           make([]string, len(fk.ReferencedTableColumns)),
+		Columns:           make([]string, len(fk.TableColumns)),
 		ReferencedTable:   fk.ReferencedTableName,
-		ReferencedColumns: make([]string, len(fk.TableColumns)),
+		ReferencedColumns: make([]string, len(fk.ReferencedTableColumns)),
 		OnUpdate:          toReferenceOption(fk.OnUpdate),
 		OnDelete:          toReferenceOption(fk.OnDelete),
 	}

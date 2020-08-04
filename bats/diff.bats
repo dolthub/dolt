@@ -145,8 +145,8 @@ SQL
     dolt commit -m "added parent table, foreign key"
     dolt sql <<SQL
 ALTER TABLE parent ADD INDEX c2 (c2);
-ALTER TABLE parent DROP INDEX c1;
 ALTER TABLE test DROP FOREIGN KEY fk1;
+ALTER TABLE parent DROP INDEX c1;
 ALTER TABLE test ADD CONSTRAINT fk2 FOREIGN KEY (c2) REFERENCES parent(c2);
 SQL
     dolt diff test

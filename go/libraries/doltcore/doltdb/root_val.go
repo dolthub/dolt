@@ -146,7 +146,7 @@ func (root *RootValue) HasTable(ctx context.Context, tName string) (bool, error)
 	return tableMap.Has(ctx, types.String(tName))
 }
 
-// TableNamePrevUsed checks if a name can be used to create a new table. The most recent
+// TableNameInUse checks if a name can be used to create a new table. The most recent
 // names of all current tables and all previously existing tables cannot be used.
 func (root *RootValue) TableNameInUse(ctx context.Context, tName string) (bool, error) {
 	_, ok, err := root.GetSuperSchema(ctx, tName)
@@ -437,8 +437,8 @@ func (root *RootValue) GetTableInsensitive(ctx context.Context, tName string) (*
 	return tbl, foundKey, ok, nil
 }
 
-// GetTableByColTag looks for the table containing the given column tag. It returns false if no table exists.
-// If the table containing the given tag has been deleted, it will return its name and a nil pointer.
+// GetTableByColTag looks for the table containing the given column tag. It returns false if no table exists in the history.
+// If the table containing the given tag previously existed and was deleted, it will return its name and a nil pointer.
 func (root *RootValue) GetTableByColTag(ctx context.Context, tag uint64) (tbl *Table, name string, found bool, err error) {
 	err = root.IterTables(ctx, func(tn string, t *Table, s schema.Schema) (bool, error) {
 		_, found = s.GetAllCols().GetByTag(tag)
