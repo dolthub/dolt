@@ -13,14 +13,14 @@ jobs:
       matrix:
         os: [ ubuntu-latest, macos-latest ]
     steps:
-#      - name: Configure AWS Credentials
-#        uses: aws-actions/configure-aws-credentials@v1
-#        with:
-#          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-#          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-#          aws-region: us-west-2
-#          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-#          role-duration-seconds: 3600
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-duration-seconds: 3600
       - name: Setup Go 1.x
         uses: actions/setup-go@v2
         with:
@@ -67,9 +67,9 @@ jobs:
         run: |
           bats --tap .
         working-directory: ./bats
-#        env:
-#          AWS_SDK_LOAD_CONFIG: "1"
-#          AWS_REGION: "us-west-2"
-#          DOLT_BATS_AWS_TABLE: "dolt-ci-bats-manifests-us-west-2"
-#          DOLT_BATS_AWS_BUCKET: "dolt-ci-bats-chunks-us-west-2"
-#          DOLT_BATS_AWS_EXISTING_REPO: "aws_remote_bats_tests"
+        env:
+          AWS_SDK_LOAD_CONFIG: "1"
+          AWS_REGION: "us-west-2"
+          DOLT_BATS_AWS_TABLE: "dolt-ci-bats-manifests-us-west-2"
+          DOLT_BATS_AWS_BUCKET: "dolt-ci-bats-chunks-us-west-2"
+          DOLT_BATS_AWS_EXISTING_REPO: "aws_remote_bats_tests"
