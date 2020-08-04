@@ -144,11 +144,10 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash
 
 				var foundHashes []hash.Hash
 				for h := range hashes {
-					ord := tableIndex.lookupOrdinal(addr(h))
-
-					if ord < tableIndex.chunkCount {
+					e, ok := tableIndex.lookup(addr(h))
+					if ok {
 						foundHashes = append(foundHashes, h)
-						y[h] = Range{Offset: tableIndex.offsets[ord], Length: tableIndex.lengths[ord]}
+						y[h] = Range{Offset: e.offset(), Length: e.length()}
 					}
 				}
 

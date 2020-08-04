@@ -27,9 +27,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"os"
 	"sort"
 	"sync"
 
+	"github.com/edsrzf/mmap-go"
 	"github.com/golang/snappy"
 
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
@@ -107,6 +109,72 @@ type tableIndex struct {
 	prefixes, offsets     []uint64
 	lengths, ordinals     []uint32
 	suffixes              []byte
+}
+
+type indexResult struct {
+	o uint64
+	l uint32
+}
+
+func (ir indexResult) offset() uint64 {
+	return ir.o
+}
+
+func (ir indexResult) length() uint32 {
+	return ir.l
+}
+
+type mmapTableIndex struct {
+	chunkCount            uint32
+	totalUncompressedData uint64
+	prefixes              []uint64
+	data                  mmap.MMap
+}
+
+type mmapIndexEntry []byte
+
+func (e mmapIndexEntry) suffix() []byte {
+	return e[:addrSuffixSize]
+}
+
+func (e mmapIndexEntry) offset() uint64 {
+	return binary.BigEndian.Uint64(e[addrSuffixSize:])
+}
+
+func (e mmapIndexEntry) length() uint32 {
+	return binary.BigEndian.Uint32(e[addrSuffixSize+8:])
+}
+
+func mmapOffheapSize(chunks int) int {
+	pageSize := 4096
+	esz := addrSuffixSize + uint64Size + lengthSize
+	min := esz * chunks
+	if min%pageSize == 0 {
+		return min
+	} else {
+		return (min/pageSize + 1) * pageSize
+	}
+}
+
+func newMmapTableIndex(ti tableIndex, f *os.File) (mmap.MMap, error) {
+	// addrSuffixSize + offset + length
+	entryLen := addrSuffixSize + uint64Size + lengthSize
+	flags := 0
+	if f == nil {
+		flags = mmap.ANON
+	}
+	arr, err := mmap.MapRegion(f, mmapOffheapSize(len(ti.ordinals)), mmap.RDWR, flags, 0)
+	if err != nil {
+		return nil, err
+	}
+	for i := range ti.ordinals {
+		idx := i * entryLen
+		si := addrSuffixSize * ti.ordinals[i]
+		copy(arr[idx:], ti.suffixes[si:si+addrSuffixSize])
+		binary.BigEndian.PutUint64(arr[idx+addrSuffixSize:], ti.offsets[ti.ordinals[i]])
+		binary.BigEndian.PutUint32(arr[idx+addrSuffixSize+8:], ti.lengths[ti.ordinals[i]])
+	}
+	return arr, nil
 }
 
 type tableReaderAt interface {
@@ -274,6 +342,14 @@ func (ti tableIndex) lookupOrdinal(h addr) uint32 {
 	return ti.chunkCount
 }
 
+func (ti tableIndex) lookup(h addr) (indexResult, bool) {
+	ord := ti.lookupOrdinal(h)
+	if ord == ti.chunkCount {
+		return indexResult{}, false
+	}
+	return indexResult{ti.offsets[ord], ti.lengths[ord]}, true
+}
+
 // newTableReader parses a valid nbs table byte stream and returns a reader. buff must end with an NBS index
 // and footer, though it may contain an unspecified number of bytes before that data. r should allow
 // retrieving any desired range of bytes from the table.
@@ -337,32 +413,20 @@ func (tr tableReader) index() (tableIndex, error) {
 
 // returns true iff |h| can be found in this table.
 func (tr tableReader) has(h addr) (bool, error) {
-	ordinal := tr.lookupOrdinal(h)
-	count, err := tr.count()
-
-	if err != nil {
-		return false, err
-	}
-
-	return ordinal < count, nil
+	_, ok := tr.lookup(h)
+	return ok, nil
 }
 
 // returns the storage associated with |h|, iff present. Returns nil if absent. On success,
 // the returned byte slice directly references the underlying storage.
 func (tr tableReader) get(ctx context.Context, h addr, stats *Stats) ([]byte, error) {
-	ordinal := tr.lookupOrdinal(h)
-	cnt, err := tr.count()
-
-	if err != nil {
-		return nil, err
-	}
-
-	if ordinal == cnt {
+	e, found := tr.lookup(h)
+	if !found {
 		return nil, nil
 	}
 
-	offset := tr.offsets[ordinal]
-	length := uint64(tr.lengths[ordinal])
+	offset := e.offset()
+	length := uint64(e.length())
 	buff := make([]byte, length) // TODO: Avoid this allocation for every get
 
 	n, err := tr.r.ReadAtWithStats(ctx, buff, int64(offset), stats)
