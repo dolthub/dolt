@@ -19,7 +19,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -105,7 +104,7 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 
 	if dbLoadErr == nil && dEnv.HasDoltDir() {
 		if !dEnv.HasDoltTempTableDir() {
-			err := os.Mkdir(dEnv.TempTableFilesDir(), os.ModePerm)
+			err := dEnv.FS.MkDirs(dEnv.TempTableFilesDir())
 			dEnv.DBLoadError = err
 		} else {
 			// fire and forget cleanup routine.  Will delete as many old temp files as it can during the main commands execution.
@@ -282,7 +281,7 @@ func (dEnv *DoltEnv) createDirectories(dir string) (string, error) {
 		return "", fmt.Errorf("unable to make directory '%s', cause: %s", absDataDir, err.Error())
 	}
 
-	err = os.Mkdir(dEnv.TempTableFilesDir(), os.ModePerm)
+	err = dEnv.FS.MkDirs(dEnv.TempTableFilesDir())
 
 	if err != nil {
 		return "", fmt.Errorf("unable to make directory '%s', cause: %s", dEnv.TempTableFilesDir(), err.Error())
