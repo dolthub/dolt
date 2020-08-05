@@ -322,13 +322,13 @@ func (ti tableIndex) prefixIdx(prefix uint64) (idx uint32) {
 }
 
 // Return true IFF the suffix for prefix entry |idx| matches the address |a|.
-func (ti tableIndex) entrySuffixMatches(idx uint32, h addr) bool {
+func (ti tableIndex) entrySuffixMatches(idx uint32, h *addr) bool {
 	li := uint64(ti.ordinals[idx]) * addrSuffixSize
 	return bytes.Equal(h[addrPrefixSize:], ti.suffixes[li:li+addrSuffixSize])
 }
 
 // returns the ordinal of |h| if present. returns |ti.chunkCount| if absent
-func (ti tableIndex) lookupOrdinal(h addr) uint32 {
+func (ti tableIndex) lookupOrdinal(h *addr) uint32 {
 	prefix := h.Prefix()
 
 	for idx := ti.prefixIdx(prefix); idx < ti.chunkCount && ti.prefixes[idx] == prefix; idx++ {
@@ -349,7 +349,7 @@ func (ti tableIndex) indexEntry(idx uint32, a *addr) indexResult {
 	return indexResult{ti.offsets[ti.ordinals[idx]], ti.lengths[ti.ordinals[idx]]}
 }
 
-func (ti tableIndex) lookup(h addr) (indexResult, bool) {
+func (ti tableIndex) lookup(h *addr) (indexResult, bool) {
 	ord := ti.lookupOrdinal(h)
 	if ord == ti.chunkCount {
 		return indexResult{}, false
@@ -396,7 +396,7 @@ func (tr tableReader) hasMany(addrs []hasRecord) (bool, error) {
 
 		// prefixes are equal, so locate and compare against the corresponding suffix
 		for j := filterIdx; j < filterLen && addr.prefix == tr.prefixes[j]; j++ {
-			if tr.entrySuffixMatches(j, *addr.a) {
+			if tr.entrySuffixMatches(j, addr.a) {
 				addrs[i].has = true
 				break
 			}
@@ -424,14 +424,14 @@ func (tr tableReader) index() (tableIndex, error) {
 
 // returns true iff |h| can be found in this table.
 func (tr tableReader) has(h addr) (bool, error) {
-	_, ok := tr.lookup(h)
+	_, ok := tr.lookup(&h)
 	return ok, nil
 }
 
 // returns the storage associated with |h|, iff present. Returns nil if absent. On success,
 // the returned byte slice directly references the underlying storage.
 func (tr tableReader) get(ctx context.Context, h addr, stats *Stats) ([]byte, error) {
-	e, found := tr.lookup(h)
+	e, found := tr.lookup(&h)
 	if !found {
 		return nil, nil
 	}
@@ -740,7 +740,7 @@ func (tr tableReader) findOffsets(reqs []getRecord) (ors offsetRecSlice, remaini
 
 		// record all offsets within the table which contain the data required.
 		for j := filterIdx; j < filterLen && req.prefix == tr.prefixes[j]; j++ {
-			if tr.entrySuffixMatches(j, *req.a) {
+			if tr.entrySuffixMatches(j, req.a) {
 				reqs[i].found = true
 				entry := tr.indexEntry(j, nil)
 				ors = append(ors, offsetRec{req.a, entry.offset(), entry.length()})
