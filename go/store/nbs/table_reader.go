@@ -188,8 +188,10 @@ type tableReaderAt interface {
 // more chunks together into a single read request to backing storage.
 type tableReader struct {
 	tableIndex
-	r         tableReaderAt
-	blockSize uint64
+	prefixes   []uint64
+	chunkCount uint32
+	r          tableReaderAt
+	blockSize  uint64
 }
 
 // parses a valid nbs tableIndex from a byte stream. |buff| must end with an NBS index
@@ -319,9 +321,9 @@ func (ti tableIndex) prefixIdx(prefix uint64) (idx uint32) {
 	return
 }
 
-// Return true IFF the suffix at insertion order |ordinal| matches the address |a|.
-func (ti tableIndex) ordinalSuffixMatches(ordinal uint32, h addr) bool {
-	li := uint64(ordinal) * addrSuffixSize
+// Return true IFF the suffix for prefix entry |idx| matches the address |a|.
+func (ti tableIndex) entrySuffixMatches(idx uint32, h addr) bool {
+	li := uint64(ti.ordinals[idx]) * addrSuffixSize
 	return bytes.Equal(h[addrPrefixSize:], ti.suffixes[li:li+addrSuffixSize])
 }
 
@@ -330,9 +332,8 @@ func (ti tableIndex) lookupOrdinal(h addr) uint32 {
 	prefix := h.Prefix()
 
 	for idx := ti.prefixIdx(prefix); idx < ti.chunkCount && ti.prefixes[idx] == prefix; idx++ {
-		ordinal := ti.prefixIdxToOrdinal(idx)
-		if ti.ordinalSuffixMatches(ordinal, h) {
-			return ordinal
+		if ti.entrySuffixMatches(idx, h) {
+			return ti.ordinals[idx]
 		}
 	}
 
@@ -347,11 +348,15 @@ func (ti tableIndex) lookup(h addr) (indexResult, bool) {
 	return indexResult{ti.offsets[ord], ti.lengths[ord]}, true
 }
 
+func (ti tableIndex) prefixes_() []uint64 {
+	return ti.prefixes
+}
+
 // newTableReader parses a valid nbs table byte stream and returns a reader. buff must end with an NBS index
 // and footer, though it may contain an unspecified number of bytes before that data. r should allow
 // retrieving any desired range of bytes from the table.
 func newTableReader(index tableIndex, r tableReaderAt, blockSize uint64) tableReader {
-	return tableReader{index, r, blockSize}
+	return tableReader{index, index.prefixes_(), index.chunkCount, r, blockSize}
 }
 
 // Scan across (logically) two ordered slices of address prefixes.
@@ -359,7 +364,7 @@ func (tr tableReader) hasMany(addrs []hasRecord) (bool, error) {
 	// TODO: Use findInIndex if (tr.chunkCount - len(addrs)*Log2(tr.chunkCount)) > (tr.chunkCount - len(addrs))
 
 	filterIdx := uint32(0)
-	filterLen := uint32(len(tr.prefixes))
+	filterLen := uint32(tr.chunkCount)
 
 	var remaining bool
 	for i, addr := range addrs {
@@ -382,7 +387,7 @@ func (tr tableReader) hasMany(addrs []hasRecord) (bool, error) {
 
 		// prefixes are equal, so locate and compare against the corresponding suffix
 		for j := filterIdx; j < filterLen && addr.prefix == tr.prefixes[j]; j++ {
-			if tr.ordinalSuffixMatches(tr.prefixIdxToOrdinal(j), *addr.a) {
+			if tr.entrySuffixMatches(j, *addr.a) {
 				addrs[i].has = true
 				break
 			}
@@ -726,7 +731,7 @@ func (tr tableReader) findOffsets(reqs []getRecord) (ors offsetRecSlice, remaini
 
 		// record all offsets within the table which contain the data required.
 		for j := filterIdx; j < filterLen && req.prefix == tr.prefixes[j]; j++ {
-			if tr.ordinalSuffixMatches(tr.prefixIdxToOrdinal(j), *req.a) {
+			if tr.entrySuffixMatches(j, *req.a) {
 				reqs[i].found = true
 				ors = append(ors, offsetRec{req.a, tr.ordinals[j], tr.offsets[tr.ordinals[j]]})
 				break
