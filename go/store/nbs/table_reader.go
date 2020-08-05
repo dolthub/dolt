@@ -462,8 +462,8 @@ func (tr tableReader) get(ctx context.Context, h addr, stats *Stats) ([]byte, er
 
 type offsetRec struct {
 	a       *addr
-	ordinal uint32
 	offset  uint64
+	length  uint32
 }
 
 type offsetRecSlice []offsetRec
@@ -533,7 +533,7 @@ func (tr tableReader) readAtOffsetsWithCB(
 		}
 
 		localStart := rec.offset - readStart
-		localEnd := localStart + uint64(tr.lengths[rec.ordinal])
+		localEnd := localStart + uint64(rec.length)
 
 		if localEnd > readLength {
 			return errors.New("length goes past the end")
@@ -645,7 +645,7 @@ func (tr tableReader) getManyAtOffsetsWithReadFunc(
 			}
 
 			rec := offsetRecords[i]
-			length := tr.lengths[rec.ordinal]
+			length := rec.length
 
 			if batch == nil {
 				batch = make(offsetRecSlice, 1)
@@ -656,7 +656,7 @@ func (tr tableReader) getManyAtOffsetsWithReadFunc(
 				continue
 			}
 
-			if newReadEnd, canRead := canReadAhead(rec, tr.lengths[rec.ordinal], readStart, readEnd, tr.blockSize); canRead {
+			if newReadEnd, canRead := canReadAhead(rec, rec.length, readStart, readEnd, tr.blockSize); canRead {
 				batch = append(batch, rec)
 				readEnd = newReadEnd
 				i++
@@ -733,7 +733,7 @@ func (tr tableReader) findOffsets(reqs []getRecord) (ors offsetRecSlice, remaini
 		for j := filterIdx; j < filterLen && req.prefix == tr.prefixes[j]; j++ {
 			if tr.entrySuffixMatches(j, *req.a) {
 				reqs[i].found = true
-				ors = append(ors, offsetRec{req.a, tr.ordinals[j], tr.offsets[tr.ordinals[j]]})
+				ors = append(ors, offsetRec{req.a, tr.offsets[tr.ordinals[j]], tr.lengths[tr.ordinals[j]]})
 				break
 			}
 		}
@@ -775,7 +775,7 @@ func (tr tableReader) calcReads(reqs []getRecord, blockSize uint64) (reads int, 
 
 	for i := 0; i < len(offsetRecords); {
 		rec := offsetRecords[i]
-		length := tr.lengths[rec.ordinal]
+		length := rec.length
 
 		if !readStarted {
 			readStarted = true
@@ -786,7 +786,7 @@ func (tr tableReader) calcReads(reqs []getRecord, blockSize uint64) (reads int, 
 			continue
 		}
 
-		if newReadEnd, canRead := canReadAhead(rec, tr.lengths[rec.ordinal], readStart, readEnd, tr.blockSize); canRead {
+		if newReadEnd, canRead := canReadAhead(rec, rec.length, readStart, readEnd, tr.blockSize); canRead {
 			readEnd = newReadEnd
 			i++
 			continue

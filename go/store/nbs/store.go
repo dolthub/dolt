@@ -115,10 +115,8 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash
 					}
 
 					for _, offsetRec := range offsetRecSlice {
-						ord := offsetRec.ordinal
-						length := tr.lengths[ord]
 						h := hash.Hash(*offsetRec.a)
-						y[h] = Range{Offset: offsetRec.offset, Length: length}
+						y[h] = Range{Offset: offsetRec.offset, Length: offsetRec.length}
 
 						delete(hashes, h)
 					}
