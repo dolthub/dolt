@@ -340,6 +340,15 @@ func (ti tableIndex) lookupOrdinal(h addr) uint32 {
 	return ti.chunkCount
 }
 
+func (ti tableIndex) indexEntry(idx uint32, a *addr) indexResult {
+	if a != nil {
+		binary.BigEndian.PutUint64(a[:], ti.prefixes[idx])
+		li := uint64(ti.ordinals[idx]) * addrSuffixSize
+		copy(a[addrPrefixSize:], ti.suffixes[li:li+addrSuffixSize])
+	}
+	return indexResult{ti.offsets[ti.ordinals[idx]], ti.lengths[ti.ordinals[idx]]}
+}
+
 func (ti tableIndex) lookup(h addr) (indexResult, bool) {
 	ord := ti.lookupOrdinal(h)
 	if ord == ti.chunkCount {
@@ -461,9 +470,9 @@ func (tr tableReader) get(ctx context.Context, h addr, stats *Stats) ([]byte, er
 }
 
 type offsetRec struct {
-	a       *addr
-	offset  uint64
-	length  uint32
+	a      *addr
+	offset uint64
+	length uint32
 }
 
 type offsetRecSlice []offsetRec
@@ -733,7 +742,8 @@ func (tr tableReader) findOffsets(reqs []getRecord) (ors offsetRecSlice, remaini
 		for j := filterIdx; j < filterLen && req.prefix == tr.prefixes[j]; j++ {
 			if tr.entrySuffixMatches(j, *req.a) {
 				reqs[i].found = true
-				ors = append(ors, offsetRec{req.a, tr.offsets[tr.ordinals[j]], tr.lengths[tr.ordinals[j]]})
+				entry := tr.indexEntry(j, nil)
+				ors = append(ors, offsetRec{req.a, entry.offset(), entry.length()})
 				break
 			}
 		}
@@ -799,31 +809,16 @@ func (tr tableReader) calcReads(reqs []getRecord, blockSize uint64) (reads int, 
 }
 
 func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) error {
-	// Build reverse lookup table from ordinal -> chunk hash
-	hashes := make(addrSlice, len(tr.prefixes))
-	for idx, prefix := range tr.prefixes {
-		ordinal := tr.prefixIdxToOrdinal(uint32(idx))
-		binary.BigEndian.PutUint64(hashes[ordinal][:], prefix)
-		li := uint64(ordinal) * addrSuffixSize
-		copy(hashes[ordinal][addrPrefixSize:], tr.suffixes[li:li+addrSuffixSize])
-	}
-
-	chunkLen := tr.offsets[tr.chunkCount-1] + uint64(tr.lengths[tr.chunkCount-1])
-	buff := make([]byte, chunkLen)
-	n, err := tr.r.ReadAtWithStats(ctx, buff, int64(tr.offsets[0]), &Stats{})
-
-	if err != nil {
-		return err
-	}
-
-	if uint64(n) != chunkLen {
-		return errors.New("did not read all data")
-	}
-
-	sendChunk := func(i uint32) error {
-		localOffset := tr.offsets[i] - tr.offsets[0]
-
-		cmp, err := NewCompressedChunk(hash.Hash(hashes[i]), buff[localOffset:localOffset+uint64(tr.lengths[i])])
+	sendChunk := func(or offsetRec) error {
+		buff := make([]byte, or.length)
+		n, err := tr.r.ReadAtWithStats(ctx, buff, int64(or.offset), &Stats{})
+		if err != nil {
+			return err
+		}
+		if uint32(n) != or.length {
+			return errors.New("did not read all data")
+		}
+		cmp, err := NewCompressedChunk(hash.Hash(*or.a), buff)
 
 		if err != nil {
 			return err
@@ -835,13 +830,19 @@ func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) 
 			return err
 		}
 
-		chunks <- extractRecord{a: hashes[i], data: chnk.Data()}
+		chunks <- extractRecord{a: *or.a, data: chnk.Data()}
 		return nil
 	}
 
+	var ors offsetRecSlice
 	for i := uint32(0); i < tr.chunkCount; i++ {
-		err = sendChunk(i)
-
+		a := new(addr)
+		e := tr.indexEntry(i, a)
+		ors = append(ors, offsetRec{a, e.offset(), e.length()})
+	}
+	sort.Sort(ors)
+	for _, or := range ors {
+		err := sendChunk(or)
 		if err != nil {
 			return err
 		}
