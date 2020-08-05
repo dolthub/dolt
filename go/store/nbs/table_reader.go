@@ -293,13 +293,10 @@ func (ti tableIndex) prefixIdxToOrdinal(idx uint32) uint32 {
 // chunk in the file and that the last chunk in the file is in the
 // index.
 func (ti tableIndex) tableFileSize() uint64 {
-	len, offset := uint64(0), uint64(0)
-	for i := range ti.offsets {
-		if ti.offsets[i] >= offset {
-			offset = ti.offsets[i]
-			len = uint64(ti.lengths[i])
-		}
+	if ti.chunkCount == 0 {
+		return footerSize
 	}
+	len, offset := ti.offsets[ti.chunkCount-1], uint64(ti.lengths[ti.chunkCount-1])
 	return offset + len + indexSize(ti.chunkCount) + footerSize
 }
 

@@ -298,25 +298,20 @@ func (ts tableSet) physicalLen() (uint64, error) {
 	f := func(css chunkSources) (data uint64, err error) {
 		for _, haver := range css {
 			index, err := haver.index()
-
 			if err != nil {
 				return 0, err
 			}
-
-			data += indexSize(index.chunkCount)
-			data += index.offsets[index.chunkCount-1] + (uint64(index.lengths[index.chunkCount-1]))
+			data += index.tableFileSize()
 		}
 		return
 	}
 
 	lenNovel, err := f(ts.novel)
-
 	if err != nil {
 		return 0, err
 	}
 
 	lenUp, err := f(ts.upstream)
-
 	if err != nil {
 		return 0, err
 	}
