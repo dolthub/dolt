@@ -53,6 +53,9 @@ func TestAWSChunkSource(t *testing.T) {
 			uint32(len(chunks)),
 			ic,
 			&Stats{},
+			func (bs []byte) (tableIndex, error) {
+				return parseTableIndex(bs)
+			},
 		)
 
 		assert.NoError(t, err)

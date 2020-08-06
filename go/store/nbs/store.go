@@ -242,6 +242,30 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 	return updatedContents, nil
 }
 
+func NewAWSStoreWithMMapIndex(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64) (*NomsBlockStore, error) {
+	cacheOnce.Do(makeGlobalCaches)
+	readRateLimiter := make(chan struct{}, 32)
+	p := &awsTablePersister{
+		s3,
+		bucket,
+		readRateLimiter,
+		nil,
+		&ddbTableStore{ddb, table, readRateLimiter, nil},
+		awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize, maxDynamoItemSize, maxDynamoChunks},
+		globalIndexCache,
+		ns,
+		func (bs []byte) (tableIndex, error) {
+			ohi, err := parseTableIndex(bs)
+			if err != nil {
+				return nil, err
+			}
+			return newMmapTableIndex(ohi, nil)
+		},
+	}
+	mm := makeManifestManager(newDynamoManifest(table, ns, ddb))
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
+}
+
 func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 	readRateLimiter := make(chan struct{}, 32)
@@ -254,6 +278,9 @@ func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string
 		awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize, maxDynamoItemSize, maxDynamoChunks},
 		globalIndexCache,
 		ns,
+		func (bs []byte) (tableIndex, error) {
+			return parseTableIndex(bs)
+		},
 	}
 	mm := makeManifestManager(newDynamoManifest(table, ns, ddb))
 	return newNomsBlockStore(ctx, nbfVerStr, mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
