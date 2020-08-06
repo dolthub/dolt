@@ -58,7 +58,7 @@ func init() {
 func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *indexCache, fc *fdCache) (cs chunkSource, err error) {
 	path := filepath.Join(dir, h.String())
 
-	var index tableIndex
+	var index onHeapTableIndex
 	found := false
 	if indexCache != nil {
 		indexCache.lockEntry(h)
@@ -73,7 +73,7 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *index
 	}
 
 	if !found {
-		f := func() (ti tableIndex, err error) {
+		f := func() (ti onHeapTableIndex, err error) {
 			var f *os.File
 			f, err = fc.RefFile(path)
 

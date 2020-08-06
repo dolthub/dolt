@@ -182,7 +182,7 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 			return "", ferr
 		}
 
-		var index tableIndex
+		var index onHeapTableIndex
 		index, ferr = parseTableIndex(plan.mergedIndex)
 
 		if ferr != nil {

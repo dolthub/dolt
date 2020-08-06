@@ -98,14 +98,14 @@ func (sic *indexCache) unlockEntry(name addr) error {
 	return nil
 }
 
-func (sic *indexCache) get(name addr) (tableIndex, bool) {
+func (sic *indexCache) get(name addr) (onHeapTableIndex, bool) {
 	if idx, found := sic.cache.Get(name); found {
-		return idx.(tableIndex), true
+		return idx.(onHeapTableIndex), true
 	}
-	return tableIndex{}, false
+	return onHeapTableIndex{}, false
 }
 
-func (sic *indexCache) put(name addr, idx tableIndex) {
+func (sic *indexCache) put(name addr, idx onHeapTableIndex) {
 	indexSize := uint64(idx.chunkCount) * (addrSize + ordinalSize + lengthSize + uint64Size)
 	sic.cache.Add(name, indexSize, idx)
 }
@@ -246,7 +246,7 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 	prefixIndexRecs := make(prefixIndexSlice, 0, plan.chunkCount)
 	var ordinalOffset uint32
 	for _, sws := range plan.sources.sws {
-		var index tableIndex
+		var index onHeapTableIndex
 		index, err = sws.source.index()
 		ordinals := index.ordinals_()
 
@@ -312,6 +312,6 @@ func nameFromSuffixes(suffixes []byte) (name addr) {
 	return
 }
 
-func calcChunkDataLen(index tableIndex) uint64 {
+func calcChunkDataLen(index onHeapTableIndex) uint64 {
 	return index.offsets[index.chunkCount-1] + uint64(index.lengths[index.chunkCount-1])
 }

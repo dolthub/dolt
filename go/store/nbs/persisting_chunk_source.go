@@ -192,15 +192,15 @@ func (ccs *persistingChunkSource) hash() (addr, error) {
 	return ccs.cs.hash()
 }
 
-func (ccs *persistingChunkSource) index() (tableIndex, error) {
+func (ccs *persistingChunkSource) index() (onHeapTableIndex, error) {
 	err := ccs.wait()
 
 	if err != nil {
-		return tableIndex{}, err
+		return onHeapTableIndex{}, err
 	}
 
 	if ccs.cs == nil {
-		return tableIndex{}, ErrNoChunkSource
+		return onHeapTableIndex{}, ErrNoChunkSource
 	}
 
 	return ccs.cs.index()
@@ -282,8 +282,8 @@ func (ecs emptyChunkSource) hash() (addr, error) {
 	return addr{}, nil
 }
 
-func (ecs emptyChunkSource) index() (tableIndex, error) {
-	return tableIndex{}, nil
+func (ecs emptyChunkSource) index() (onHeapTableIndex, error) {
+	return onHeapTableIndex{}, nil
 }
 
 func (ecs emptyChunkSource) reader(context.Context) (io.Reader, error) {
