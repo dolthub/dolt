@@ -226,7 +226,7 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 			return compactionPlan{}, err
 		}
 
-		plan.chunkCount += index.chunkCount_()
+		plan.chunkCount += index.ChunkCount()
 
 		// Calculate the amount of chunk data in |src|
 		chunkDataLen := calcChunkDataLen(index)
@@ -253,8 +253,8 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 			return compactionPlan{}, err
 		}
 
-		ordinals := index.ordinals_()
-		prefixes := index.prefixes_()
+		ordinals := index.Ordinals()
+		prefixes := index.Prefixes()
 
 		// Add all the prefix tuples from this index to the list of all prefixIndexRecs, modifying the ordinals such that all entries from the 1st item in sources come after those in the 0th and so on.
 		for j, prefix := range prefixes {
@@ -291,10 +291,10 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 			// Build up the index one entry at a time.
 			var a addr
 			for i := 0; i < len(ordinals); i++ {
-				e := index.indexEntry(uint32(i), &a)
+				e := index.IndexEntry(uint32(i), &a)
 				li := lengthsPos + lengthSize * uint64(ordinals[i])
 				si := suffixesPos + addrSuffixSize * uint64(ordinals[i])
-				binary.BigEndian.PutUint32(plan.mergedIndex[li:], e.length())
+				binary.BigEndian.PutUint32(plan.mergedIndex[li:], e.Length())
 				copy(plan.mergedIndex[si:], a[addrPrefixSize:])
 			}
 			lengthsPos += lengthSize * uint64(len(ordinals))
@@ -329,5 +329,5 @@ func nameFromSuffixes(suffixes []byte) (name addr) {
 }
 
 func calcChunkDataLen(index tableIndex) uint64 {
-	return index.tableFileSize() - indexSize(index.chunkCount_()) - footerSize
+	return index.TableFileSize() - indexSize(index.ChunkCount()) - footerSize
 }

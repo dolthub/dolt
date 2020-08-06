@@ -143,10 +143,10 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash
 				var foundHashes []hash.Hash
 				for h := range hashes {
 					a := addr(h)
-					e, ok := tableIndex.lookup(&a)
+					e, ok := tableIndex.Lookup(&a)
 					if ok {
 						foundHashes = append(foundHashes, h)
-						y[h] = Range{Offset: e.offset(), Length: e.length()}
+						y[h] = Range{Offset: e.Offset(), Length: e.Length()}
 					}
 				}
 
@@ -963,7 +963,7 @@ func (nbs *NomsBlockStore) Size(ctx context.Context) (uint64, error) {
 		if err != nil {
 			return uint64(0), fmt.Errorf("error getting table file index for chunkSource. %w", err)
 		}
-		size += ti.tableFileSize()
+		size += ti.TableFileSize()
 	}
 	return size, nil
 }

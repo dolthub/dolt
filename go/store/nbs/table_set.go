@@ -301,7 +301,7 @@ func (ts tableSet) physicalLen() (uint64, error) {
 			if err != nil {
 				return 0, err
 			}
-			data += index.tableFileSize()
+			data += index.TableFileSize()
 		}
 		return
 	}
