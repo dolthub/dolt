@@ -263,7 +263,7 @@ type chunkSource interface {
 
 	// opens a Reader to the first byte of the chunkData segment of this table.
 	reader(context.Context) (io.Reader, error)
-	index() (onHeapTableIndex, error)
+	index() (tableIndex, error)
 }
 
 type chunkSources []chunkSource

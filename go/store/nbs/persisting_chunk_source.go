@@ -192,7 +192,7 @@ func (ccs *persistingChunkSource) hash() (addr, error) {
 	return ccs.cs.hash()
 }
 
-func (ccs *persistingChunkSource) index() (onHeapTableIndex, error) {
+func (ccs *persistingChunkSource) index() (tableIndex, error) {
 	err := ccs.wait()
 
 	if err != nil {
@@ -282,7 +282,7 @@ func (ecs emptyChunkSource) hash() (addr, error) {
 	return addr{}, nil
 }
 
-func (ecs emptyChunkSource) index() (onHeapTableIndex, error) {
+func (ecs emptyChunkSource) index() (tableIndex, error) {
 	return onHeapTableIndex{}, nil
 }
 

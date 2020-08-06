@@ -226,7 +226,7 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 			return compactionPlan{}, err
 		}
 
-		plan.chunkCount += index.chunkCount
+		plan.chunkCount += index.chunkCount_()
 
 		// Calculate the amount of chunk data in |src|
 		chunkDataLen := calcChunkDataLen(index)
@@ -246,16 +246,18 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 	prefixIndexRecs := make(prefixIndexSlice, 0, plan.chunkCount)
 	var ordinalOffset uint32
 	for _, sws := range plan.sources.sws {
-		var index onHeapTableIndex
+		var index tableIndex
 		index, err = sws.source.index()
-		ordinals := index.ordinals_()
 
 		if err != nil {
 			return compactionPlan{}, err
 		}
 
+		ordinals := index.ordinals_()
+		prefixes := index.prefixes_()
+
 		// Add all the prefix tuples from this index to the list of all prefixIndexRecs, modifying the ordinals such that all entries from the 1st item in sources come after those in the 0th and so on.
-		for j, prefix := range index.prefixes {
+		for j, prefix := range prefixes {
 			rec := prefixIndexRec{prefix: prefix, order: ordinalOffset + ordinals[j]}
 			prefixIndexRecs = append(prefixIndexRecs, rec)
 		}
@@ -269,21 +271,35 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 
 		ordinalOffset += cnt
 
-		// TODO: copy the lengths and suffixes as a byte-copy from src BUG #3438
-		// Bring over the lengths block, in order
-		for _, length := range index.lengths {
-			binary.BigEndian.PutUint32(plan.mergedIndex[lengthsPos:], length)
-			lengthsPos += lengthSize
+		if onHeap, ok := index.(onHeapTableIndex); ok {
+			// TODO: copy the lengths and suffixes as a byte-copy from src BUG #3438
+			// Bring over the lengths block, in order
+			for _, length := range onHeap.lengths {
+				binary.BigEndian.PutUint32(plan.mergedIndex[lengthsPos:], length)
+				lengthsPos += lengthSize
+			}
+
+			// Bring over the suffixes block, in order
+			n := copy(plan.mergedIndex[suffixesPos:], onHeap.suffixes)
+
+			if n != len(onHeap.suffixes) {
+				return compactionPlan{}, errors.New("failed to copy all data")
+			}
+
+			suffixesPos += uint64(n)
+		} else {
+			// Build up the index one entry at a time.
+			var a addr
+			for i := 0; i < len(ordinals); i++ {
+				e := index.indexEntry(uint32(i), &a)
+				li := lengthsPos + lengthSize * uint64(ordinals[i])
+				si := suffixesPos + addrSuffixSize * uint64(ordinals[i])
+				binary.BigEndian.PutUint32(plan.mergedIndex[li:], e.length())
+				copy(plan.mergedIndex[si:], a[addrPrefixSize:])
+			}
+			lengthsPos += lengthSize * uint64(len(ordinals))
+			suffixesPos += addrSuffixSize * uint64(len(ordinals))
 		}
-
-		// Bring over the suffixes block, in order
-		n := copy(plan.mergedIndex[suffixesPos:], index.suffixes)
-
-		if n != len(index.suffixes) {
-			return compactionPlan{}, errors.New("failed to copy all data")
-		}
-
-		suffixesPos += uint64(n)
 	}
 
 	// Sort all prefixTuples by hash and then insert them starting at the beginning of plan.mergedIndex
@@ -312,6 +328,6 @@ func nameFromSuffixes(suffixes []byte) (name addr) {
 	return
 }
 
-func calcChunkDataLen(index onHeapTableIndex) uint64 {
-	return index.offsets[index.chunkCount-1] + uint64(index.lengths[index.chunkCount-1])
+func calcChunkDataLen(index tableIndex) uint64 {
+	return index.tableFileSize() - indexSize(index.chunkCount_()) - footerSize
 }

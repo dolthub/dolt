@@ -146,12 +146,6 @@ type mmapOrdinal struct {
 	offset uint64
 }
 
-type mmapOrdinalSlice []mmapOrdinal
-
-func (s mmapOrdinalSlice) Len() int           { return len(s) }
-func (s mmapOrdinalSlice) Less(i, j int) bool { return s[i].offset < s[j].offset }
-func (s mmapOrdinalSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-
 func (i mmapTableIndex) tableFileSize() uint64 {
 	return i.fileSz
 }
@@ -164,6 +158,11 @@ func (i mmapTableIndex) totalUncompressedData_() uint64 {
 	return i.totalUncompressedData
 }
 
+type mmapOrdinalSlice []mmapOrdinal
+func (s mmapOrdinalSlice) Len() int           { return len(s) }
+func (s mmapOrdinalSlice) Less(i, j int) bool { return s[i].offset < s[j].offset }
+func (s mmapOrdinalSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+
 func (i mmapTableIndex) ordinals_() []uint32 {
 	s := mmapOrdinalSlice(make([]mmapOrdinal, i.chunkCount))
 	for idx := 0; uint32(idx) < i.chunkCount; idx++ {
@@ -174,7 +173,7 @@ func (i mmapTableIndex) ordinals_() []uint32 {
 	sort.Sort(s)
 	res := make([]uint32, i.chunkCount)
 	for j, r := range s {
-		res[j] = uint32(r.idx)
+		res[r.idx] = uint32(j)
 	}
 	return res
 }
@@ -302,6 +301,7 @@ type tableIndex interface {
 	indexEntry(idx uint32, a *addr) indexEntry
 	chunkCount_() uint32
 	totalUncompressedData_() uint64
+	tableFileSize() uint64
 }
 
 var _ tableIndex = mmapTableIndex{}
@@ -549,8 +549,8 @@ func (tr tableReader) uncompressedLen() (uint64, error) {
 	return tr.totalUncompressedData, nil
 }
 
-func (tr tableReader) index() (onHeapTableIndex, error) {
-	return tr.tableIndex.(onHeapTableIndex), nil
+func (tr tableReader) index() (tableIndex, error) {
+	return tr.tableIndex, nil
 }
 
 // returns true iff |h| can be found in this table.
