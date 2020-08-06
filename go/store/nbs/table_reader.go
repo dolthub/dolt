@@ -127,8 +127,71 @@ func (ir indexResult) length() uint32 {
 type mmapTableIndex struct {
 	chunkCount            uint32
 	totalUncompressedData uint64
+	fileSz                uint64
 	prefixes              []uint64
 	data                  mmap.MMap
+}
+
+func (i mmapTableIndex) prefixes_() []uint64 {
+	return i.prefixes
+}
+
+type mmapOrdinal struct {
+	idx    int
+	offset uint64
+}
+
+type mmapOrdinalSlice []mmapOrdinal
+
+func (s mmapOrdinalSlice) Len() int           { return len(s) }
+func (s mmapOrdinalSlice) Less(i, j int) bool { return s[i].offset < s[j].offset }
+func (s mmapOrdinalSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+
+func (i mmapTableIndex) tableFileSize() uint64 {
+	return i.fileSz
+}
+
+func (i mmapTableIndex) ordinals_() []uint32 {
+	s := mmapOrdinalSlice(make([]mmapOrdinal, i.chunkCount))
+	for idx := 0; uint32(idx) < i.chunkCount; idx++ {
+		mi := idx * (addrSuffixSize + 8 + 4)
+		e := mmapIndexEntry(i.data[mi:mi+addrSuffixSize + 8 + 4])
+		s[idx] = mmapOrdinal{idx, e.offset()}
+	}
+	sort.Sort(s)
+	res := make([]uint32, i.chunkCount)
+	for j, r := range s {
+		res[j] = uint32(r.idx)
+	}
+	return res
+}
+
+func (i mmapTableIndex) prefixIdx(prefix uint64) (idx uint32) {
+	// NOTE: The golang impl of sort.Search is basically inlined here. This method can be called in
+	// an extremely tight loop and inlining the code was a significant perf improvement.
+	idx, j := 0, i.chunkCount
+	for idx < j {
+		h := idx + (j-idx)/2 // avoid overflow when computing h
+		// i ≤ h < j
+		if i.prefixes[h] < prefix {
+			idx = h + 1 // preserves f(i-1) == false
+		} else {
+			j = h // preserves f(j) == true
+		}
+	}
+	return
+}
+
+func (i mmapTableIndex) lookup(h *addr) (mmapIndexEntry, bool) {
+	prefix := binary.BigEndian.Uint64(h[:])
+	for idx := i.prefixIdx(prefix); idx < i.chunkCount && i.prefixes[idx] == prefix; idx++ {
+		mi := idx * (addrSuffixSize + 8 + 4)
+		e := mmapIndexEntry(i.data[mi:mi+addrSuffixSize + 8 + 4])
+                if bytes.Equal(e.suffix(), h[addrPrefixSize:]) {
+                        return e, true
+                }
+	}
+        return mmapIndexEntry{}, false
 }
 
 type mmapIndexEntry []byte
@@ -156,7 +219,7 @@ func mmapOffheapSize(chunks int) int {
 	}
 }
 
-func newMmapTableIndex(ti tableIndex, f *os.File) (mmap.MMap, error) {
+func newMmapTableIndex(ti tableIndex, f *os.File) (mmapTableIndex, error) {
 	// addrSuffixSize + offset + length
 	entryLen := addrSuffixSize + uint64Size + lengthSize
 	flags := 0
@@ -165,7 +228,7 @@ func newMmapTableIndex(ti tableIndex, f *os.File) (mmap.MMap, error) {
 	}
 	arr, err := mmap.MapRegion(f, mmapOffheapSize(len(ti.ordinals)), mmap.RDWR, flags, 0)
 	if err != nil {
-		return nil, err
+		return mmapTableIndex{}, err
 	}
 	for i := range ti.ordinals {
 		idx := i * entryLen
@@ -174,7 +237,14 @@ func newMmapTableIndex(ti tableIndex, f *os.File) (mmap.MMap, error) {
 		binary.BigEndian.PutUint64(arr[idx+addrSuffixSize:], ti.offsets[ti.ordinals[i]])
 		binary.BigEndian.PutUint32(arr[idx+addrSuffixSize+8:], ti.lengths[ti.ordinals[i]])
 	}
-	return arr, nil
+
+	return mmapTableIndex {
+		ti.chunkCount,
+		ti.totalUncompressedData,
+		ti.tableFileSize(),
+		ti.prefixes_(),
+		arr,
+	}, nil
 }
 
 type tableReaderAt interface {
