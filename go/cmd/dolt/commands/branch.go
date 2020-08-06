@@ -68,6 +68,7 @@ const (
 	verboseFlag     = "verbose"
 	allFlag         = "all"
 	remoteFlag      = "remote"
+	showCurrentFlag = "show-current"
 )
 
 type BranchCmd struct{}
@@ -100,6 +101,7 @@ func (cmd BranchCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(verboseFlag, "v", "When in list mode, show the hash and commit subject line for each head")
 	ap.SupportsFlag(allFlag, "a", "When in list mode, shows remote tracked branches")
 	ap.SupportsFlag(remoteFlag, "r", "When in list mode, show only remote tracked branches. When with -d, delete a remote tracking branch.")
+	ap.SupportsFlag(showCurrentFlag, "", "Print the name of the current branch")
 	return ap
 }
 
@@ -125,6 +127,8 @@ func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return deleteForceBranches(ctx, dEnv, apr, usage)
 	case apr.Contains(listFlag):
 		return printBranches(ctx, dEnv, apr, usage)
+	case apr.Contains(showCurrentFlag):
+		return printCurrentBranch(ctx, dEnv)
 	case apr.NArg() > 0:
 		return createBranch(ctx, dEnv, apr, usage)
 	default:
@@ -199,6 +203,11 @@ func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		cli.Println(line)
 	}
 
+	return 0
+}
+
+func printCurrentBranch(ctx context.Context, dEnv *env.DoltEnv) int {
+	cli.Println(dEnv.RepoState.CWBHeadRef().GetPath())
 	return 0
 }
 
