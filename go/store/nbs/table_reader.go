@@ -159,6 +159,7 @@ func (i mmapTableIndex) TotalUncompressedData() uint64 {
 }
 
 type mmapOrdinalSlice []mmapOrdinal
+
 func (s mmapOrdinalSlice) Len() int           { return len(s) }
 func (s mmapOrdinalSlice) Less(i, j int) bool { return s[i].offset < s[j].offset }
 func (s mmapOrdinalSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
@@ -167,7 +168,7 @@ func (i mmapTableIndex) Ordinals() []uint32 {
 	s := mmapOrdinalSlice(make([]mmapOrdinal, i.chunkCount))
 	for idx := 0; uint32(idx) < i.chunkCount; idx++ {
 		mi := idx * (addrSuffixSize + 8 + 4)
-		e := mmapIndexEntry(i.data[mi:mi+addrSuffixSize + 8 + 4])
+		e := mmapIndexEntry(i.data[mi : mi+addrSuffixSize+8+4])
 		s[idx] = mmapOrdinal{idx, e.Offset()}
 	}
 	sort.Sort(s)
@@ -198,23 +199,23 @@ func (i mmapTableIndex) Lookup(h *addr) (indexEntry, bool) {
 	prefix := binary.BigEndian.Uint64(h[:])
 	for idx := i.prefixIdx(prefix); idx < i.chunkCount && i.prefixes[idx] == prefix; idx++ {
 		mi := idx * (addrSuffixSize + 8 + 4)
-		e := mmapIndexEntry(i.data[mi:mi+addrSuffixSize + 8 + 4])
-                if bytes.Equal(e.suffix(), h[addrPrefixSize:]) {
-                        return e, true
-                }
+		e := mmapIndexEntry(i.data[mi : mi+addrSuffixSize+8+4])
+		if bytes.Equal(e.suffix(), h[addrPrefixSize:]) {
+			return e, true
+		}
 	}
-        return mmapIndexEntry{}, false
+	return mmapIndexEntry{}, false
 }
 
 func (i mmapTableIndex) EntrySuffixMatches(idx uint32, h *addr) bool {
 	mi := idx * (addrSuffixSize + 8 + 4)
-	e := mmapIndexEntry(i.data[mi:mi+addrSuffixSize + 8 + 4])
+	e := mmapIndexEntry(i.data[mi : mi+addrSuffixSize+8+4])
 	return bytes.Equal(e.suffix(), h[addrPrefixSize:])
 }
 
 func (i mmapTableIndex) IndexEntry(idx uint32, a *addr) indexEntry {
 	mi := idx * (addrSuffixSize + 8 + 4)
-	e := mmapIndexEntry(i.data[mi:mi+addrSuffixSize + 8 + 4])
+	e := mmapIndexEntry(i.data[mi : mi+addrSuffixSize+8+4])
 	if a != nil {
 		binary.BigEndian.PutUint64(a[:], i.prefixes[idx])
 		copy(a[addrPrefixSize:], e.suffix())
@@ -266,7 +267,7 @@ func newMmapTableIndex(ti onHeapTableIndex, f *os.File) (mmapTableIndex, error) 
 		binary.BigEndian.PutUint32(arr[idx+addrSuffixSize+8:], ti.lengths[ti.ordinals[i]])
 	}
 
-	return mmapTableIndex {
+	return mmapTableIndex{
 		ti.chunkCount,
 		ti.totalUncompressedData,
 		ti.TableFileSize(),
@@ -286,11 +287,11 @@ type tableReaderAt interface {
 // more chunks together into a single read request to backing storage.
 type tableReader struct {
 	tableIndex
-	prefixes   []uint64
-	chunkCount uint32
+	prefixes              []uint64
+	chunkCount            uint32
 	totalUncompressedData uint64
-	r          tableReaderAt
-	blockSize  uint64
+	r                     tableReaderAt
+	blockSize             uint64
 }
 
 type tableIndex interface {

@@ -254,7 +254,7 @@ func NewAWSStoreWithMMapIndex(ctx context.Context, nbfVerStr string, table, ns, 
 		awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize, maxDynamoItemSize, maxDynamoChunks},
 		globalIndexCache,
 		ns,
-		func (bs []byte) (tableIndex, error) {
+		func(bs []byte) (tableIndex, error) {
 			ohi, err := parseTableIndex(bs)
 			if err != nil {
 				return nil, err
@@ -278,7 +278,7 @@ func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string
 		awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize, maxDynamoItemSize, maxDynamoChunks},
 		globalIndexCache,
 		ns,
-		func (bs []byte) (tableIndex, error) {
+		func(bs []byte) (tableIndex, error) {
 			return parseTableIndex(bs)
 		},
 	}

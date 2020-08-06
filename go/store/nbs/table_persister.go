@@ -292,8 +292,8 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 			var a addr
 			for i := 0; i < len(ordinals); i++ {
 				e := index.IndexEntry(uint32(i), &a)
-				li := lengthsPos + lengthSize * uint64(ordinals[i])
-				si := suffixesPos + addrSuffixSize * uint64(ordinals[i])
+				li := lengthsPos + lengthSize*uint64(ordinals[i])
+				si := suffixesPos + addrSuffixSize*uint64(ordinals[i])
 				binary.BigEndian.PutUint32(plan.mergedIndex[li:], e.Length())
 				copy(plan.mergedIndex[si:], a[addrPrefixSize:])
 			}

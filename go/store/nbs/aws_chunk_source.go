@@ -28,7 +28,7 @@ import (
 	"time"
 )
 
-type indexParserF func ([]byte) (tableIndex, error)
+type indexParserF func([]byte) (tableIndex, error)
 
 func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, indexCache *indexCache, stats *Stats, parseIndex indexParserF) (cs chunkSource, err error) {
 	if indexCache != nil {
