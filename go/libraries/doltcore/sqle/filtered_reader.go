@@ -75,7 +75,7 @@ func getSetForKeyColumn(nbf *types.NomsBinFormat, col schema.Column, filter sql.
 	case *expression.LessThanOrEqual:
 		lteOp := expreval.LessEqualOp{NBF: nbf}
 		return setForComparisonExp(nbf, col, typedExpr.BinaryExpression, lteOp, setForLteOp)
-	case *expression.In:
+	case *expression.InTuple:
 		return setForInExp(nbf, col, typedExpr.BinaryExpression)
 		// case *expression.Subquery:
 	}
