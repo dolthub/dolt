@@ -128,7 +128,7 @@ func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string,
 	case apr.Contains(listFlag):
 		return printBranches(ctx, dEnv, apr, usage)
 	case apr.Contains(showCurrentFlag):
-		return printCurrentBranch(ctx, dEnv)
+		return printCurrentBranch(dEnv)
 	case apr.NArg() > 0:
 		return createBranch(ctx, dEnv, apr, usage)
 	default:
@@ -206,7 +206,7 @@ func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	return 0
 }
 
-func printCurrentBranch(ctx context.Context, dEnv *env.DoltEnv) int {
+func printCurrentBranch(dEnv *env.DoltEnv) int {
 	cli.Println(dEnv.RepoState.CWBHeadRef().GetPath())
 	return 0
 }
