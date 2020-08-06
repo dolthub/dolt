@@ -361,6 +361,10 @@ func (ti tableIndex) prefixes_() []uint64 {
 	return ti.prefixes
 }
 
+func (ti tableIndex) ordinals_() []uint32 {
+	return ti.ordinals
+}
+
 // newTableReader parses a valid nbs table byte stream and returns a reader. buff must end with an NBS index
 // and footer, though it may contain an unspecified number of bytes before that data. r should allow
 // retrieving any desired range of bytes from the table.

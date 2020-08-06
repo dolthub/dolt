@@ -248,6 +248,7 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 	for _, sws := range plan.sources.sws {
 		var index tableIndex
 		index, err = sws.source.index()
+		ordinals := index.ordinals_()
 
 		if err != nil {
 			return compactionPlan{}, err
@@ -255,7 +256,7 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 
 		// Add all the prefix tuples from this index to the list of all prefixIndexRecs, modifying the ordinals such that all entries from the 1st item in sources come after those in the 0th and so on.
 		for j, prefix := range index.prefixes {
-			rec := prefixIndexRec{prefix: prefix, order: ordinalOffset + index.ordinals[j]}
+			rec := prefixIndexRec{prefix: prefix, order: ordinalOffset + ordinals[j]}
 			prefixIndexRecs = append(prefixIndexRecs, rec)
 		}
 
