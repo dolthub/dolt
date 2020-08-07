@@ -32,8 +32,8 @@ import (
 	"sync"
 
 	"github.com/golang/snappy"
-
 	"github.com/liquidata-inc/mmap-go"
+
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"github.com/liquidata-inc/dolt/go/store/hash"
