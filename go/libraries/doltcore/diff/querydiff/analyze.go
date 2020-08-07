@@ -36,6 +36,7 @@ func lazyQueryPlan(node sql.Node) (lazyNode sql.Node, projections []sql.Expressi
 	}
 
 	offset := 0
+	originalChildrenSchema := schema(node.Children())
 	lazyChildren := make([]sql.Node, len(children))
 	for i, c := range children {
 		c, pjs, ord, err := lazyQueryPlan(c)
@@ -57,8 +58,8 @@ func lazyQueryPlan(node sql.Node) (lazyNode sql.Node, projections []sql.Expressi
 		return nil, nil, nil, err
 	}
 
-	lazyNode, err = plan.TransformExpressions(node, func(e sql.Expression) (sql.Expression, error) {
-		return makeExpressionLazy(e, projections)
+	lazyNode, err = plan.TransformExpressionsWithNode(node, func(n sql.Node, e sql.Expression) (sql.Expression, error) {
+		return makeExpressionLazy(node, originalChildrenSchema, e, projections)
 	})
 	if err != nil {
 		return nil, nil, nil, err
@@ -83,6 +84,14 @@ func lazyQueryPlan(node sql.Node) (lazyNode sql.Node, projections []sql.Expressi
 	return lazyNode, projections, order, nil
 }
 
+func schema(nodes []sql.Node) sql.Schema {
+	var schema sql.Schema
+	for _, node := range nodes {
+		schema = append(schema, node.Schema()...)
+	}
+	return schema
+}
+
 // wrapGroupBy wraps a GroupBy node in a Sort node so its output can be ordered in query diffs.
 func wrapGroupBy(g *plan.GroupBy) (node sql.Node, projections []sql.Expression, order []plan.SortField) {
 	projections = make([]sql.Expression, len(g.Schema()))
@@ -102,14 +111,36 @@ func wrapGroupBy(g *plan.GroupBy) (node sql.Node, projections []sql.Expression, 
 	return plan.NewSort(order, g), projections, order
 }
 
-func makeExpressionLazy(e sql.Expression, composite []sql.Expression) (sql.Expression, error) {
-	gf, ok := e.(*expression.GetField)
-	if ok {
-		if gf.Index() >= len(composite) {
+func makeExpressionLazy(node sql.Node, originalChildSchema sql.Schema, e sql.Expression, exprs []sql.Expression) (sql.Expression, error) {
+	if gf, ok := e.(*expression.GetField); ok {
+		if gf.Index() >= len(exprs) {
 			return nil, fmt.Errorf("index out of bounds in lazy expression substitution")
 		}
-		e = composite[gf.Index()]
+		return exprs[gf.Index()], nil
 	}
+
+	// For subqueries, we need to apply the same lazy substitution to any expressions in the outer scope, and then shift
+	// the indexes of the inner scope to handle any erased projections.
+	if s, ok := e.(*plan.Subquery); ok {
+		childSchema := schema(node.Children())
+		newSubquery, err := plan.TransformExpressionsUp(s.Query, func(e sql.Expression) (sql.Expression, error) {
+			if gf, ok := e.(*expression.GetField); ok {
+				if gf.Index() < len(exprs) {
+					return exprs[gf.Index()], nil
+				} else {
+					// Part of the inner scope, shift indexes
+					offset := len(childSchema) - len(originalChildSchema)
+					return shiftFieldIndices(offset, e)[0], nil
+				}
+			}
+			return e, nil
+		})
+		if err != nil {
+			return nil, err
+		}
+		return s.WithQuery(newSubquery), nil
+	}
+
 	return e, nil
 }
 
@@ -136,9 +167,9 @@ func getOrderForTable(tbl sql.Table) (order []plan.SortField) {
 	return order
 }
 
-func shiftFieldIndices(offset int, composite ...sql.Expression) []sql.Expression {
-	shifted := make([]sql.Expression, len(composite))
-	for i, e := range composite {
+func shiftFieldIndices(offset int, exprs ...sql.Expression) []sql.Expression {
+	shifted := make([]sql.Expression, len(exprs))
+	for i, e := range exprs {
 		shifted[i], _ = expression.TransformUp(e, func(e sql.Expression) (sql.Expression, error) {
 			if gf, ok := e.(*expression.GetField); ok {
 				return gf.WithIndex(gf.Index() + offset), nil

@@ -36,12 +36,6 @@ import (
 	det "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/enginetest"
 )
 
-func TestQueryDiffer(t *testing.T) {
-	testQueryDiffer(t)
-	TestEngineTestQueryDifferBefore(t)
-	EngineTestQueryDifferAfter(t)
-}
-
 type queryDifferTest struct {
 	name     string
 	query    string
@@ -318,49 +312,6 @@ var groupByTests = []queryDifferTest{
 	},
 }
 
-func testQueryDiffer(t *testing.T) {
-	inner := func(t *testing.T, test queryDifferTest) {
-		dEnv := dtestutils.CreateTestEnv()
-		ctx := context.Background()
-		for _, c := range queryDifferTestSetup {
-			exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
-			assert.Equal(t, 0, exitCode)
-		}
-		for _, c := range test.setup {
-			exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
-			assert.Equal(t, 0, exitCode)
-		}
-
-		fromRoot, err := dEnv.HeadRoot(ctx)
-		require.NoError(t, err)
-		toRoot, err := dEnv.WorkingRoot(ctx)
-		require.NoError(t, err)
-
-		qd, err := querydiff.MakeQueryDiffer(ctx, dEnv, fromRoot, toRoot, test.query)
-		require.NoError(t, err)
-
-		qd.Start()
-		for _, expected := range test.diffRows {
-			from, to, err := qd.NextDiff()
-			assert.NoError(t, err)
-			assert.Equal(t, expected.from, from)
-			assert.Equal(t, expected.to, to)
-		}
-		from, to, err := qd.NextDiff()
-		assert.Nil(t, from)
-		assert.Nil(t, to)
-		assert.Equal(t, io.EOF, err)
-	}
-
-	for _, testSet := range queryDiffTests {
-		for _, test := range testSet {
-			t.Run(test.name, func(t *testing.T) {
-				inner(t, test)
-			})
-		}
-	}
-}
-
 var engineTestSetup = []testCommand{
 	{commands.SqlCmd{}, []string{"-q", "create table mytable (" +
 		"i bigint primary key," +
@@ -542,6 +493,49 @@ func skipEngineTest(test enginetest.QueryTest) bool {
 	return false
 }
 
+func TestQueryDiffer(t *testing.T) {
+	inner := func(t *testing.T, test queryDifferTest) {
+		dEnv := dtestutils.CreateTestEnv()
+		ctx := context.Background()
+		for _, c := range queryDifferTestSetup {
+			exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
+			assert.Equal(t, 0, exitCode)
+		}
+		for _, c := range test.setup {
+			exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
+			assert.Equal(t, 0, exitCode)
+		}
+
+		fromRoot, err := dEnv.HeadRoot(ctx)
+		require.NoError(t, err)
+		toRoot, err := dEnv.WorkingRoot(ctx)
+		require.NoError(t, err)
+
+		qd, err := querydiff.MakeQueryDiffer(ctx, dEnv, fromRoot, toRoot, test.query)
+		require.NoError(t, err)
+
+		qd.Start()
+		for _, expected := range test.diffRows {
+			from, to, err := qd.NextDiff()
+			assert.NoError(t, err)
+			assert.Equal(t, expected.from, from)
+			assert.Equal(t, expected.to, to)
+		}
+		from, to, err := qd.NextDiff()
+		assert.Nil(t, from)
+		assert.Nil(t, to)
+		assert.Equal(t, io.EOF, err)
+	}
+
+	for _, testSet := range queryDiffTests {
+		for _, test := range testSet {
+			t.Run(test.name, func(t *testing.T) {
+				inner(t, test)
+			})
+		}
+	}
+}
+
 func TestEngineTestQueryDifferBefore(t *testing.T) {
 	inner := func(t *testing.T, test enginetest.QueryTest, dEnv *env.DoltEnv) {
 		if skipEngineTest(test) {
@@ -593,7 +587,7 @@ func TestEngineTestQueryDifferBefore(t *testing.T) {
 	}
 }
 
-func EngineTestQueryDifferAfter(t *testing.T) {
+func TestEngineTestQueryDifferAfter(t *testing.T) {
 	inner := func(t *testing.T, test enginetest.QueryTest, dEnv *env.DoltEnv) {
 		if skipEngineTest(test) {
 			t.Skip()
