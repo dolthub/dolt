@@ -22,8 +22,8 @@ import (
 	"testing"
 
 	"github.com/liquidata-inc/go-mysql-server/sql"
-	"github.com/stretchr/testify/require"
 	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	dtu "github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"

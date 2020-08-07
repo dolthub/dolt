@@ -30,9 +30,9 @@ import (
 	"github.com/liquidata-inc/go-mysql-server/sql"
 	"github.com/liquidata-inc/go-mysql-server/sql/analyzer"
 	"github.com/liquidata-inc/ishell"
-	"gopkg.in/src-d/go-errors.v1"
 	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
 	"github.com/liquidata-inc/vitess/go/vt/vterrors"
+	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
