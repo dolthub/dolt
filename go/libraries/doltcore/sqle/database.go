@@ -26,7 +26,7 @@ import (
 	"github.com/liquidata-inc/go-mysql-server/sql/parse"
 	"github.com/liquidata-inc/go-mysql-server/sql/plan"
 	"gopkg.in/src-d/go-errors.v1"
-	"vitess.io/vitess/go/vt/proto/query"
+	"github.com/liquidata-inc/vitess/go/vt/proto/query"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"

@@ -25,7 +25,7 @@ import (
 	"github.com/liquidata-inc/go-mysql-server/server"
 	"github.com/liquidata-inc/go-mysql-server/sql"
 	"github.com/sirupsen/logrus"
-	"vitess.io/vitess/go/mysql"
+	"github.com/liquidata-inc/vitess/go/mysql"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"

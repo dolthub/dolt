@@ -26,7 +26,7 @@ import (
 	"github.com/liquidata-inc/go-mysql-server/sql/expression/function"
 	"github.com/liquidata-inc/go-mysql-server/sql/parse"
 	"github.com/liquidata-inc/go-mysql-server/sql/plan"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
