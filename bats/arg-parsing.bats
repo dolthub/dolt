@@ -60,3 +60,17 @@ DELIM
     [[ "$output" =~ "error: cannot checkout empty string" ]] || false
     [ $status -ne 0 ]
 }
+
+@test "dolt removes all untracked tables" {
+    dolt sql -q 'CREATE TABLE test (id int PRIMARY KEY);'
+    dolt sql -q 'CREATE TABLE toast (id int PRIMARY KEY);'
+    run dolt table rm .
+    skip "should remove all untracked tables with period" [ $status -eq 0 ]
+}
+
+@test "dolt removes untracked tables with wildcard" {
+    dolt sql -q 'CREATE TABLE test_one (id int PRIMARY KEY);'
+    dolt sql -q 'CREATE TABLE test_two (id int PRIMARY KEY);'
+    run dolt table rm test_*
+    skip "should remove untracked tables with wildcard" [ $status -eq 0 ]
+}
