@@ -45,21 +45,15 @@ type commitItr struct {
 
 // CommitItrForAllBranches returns a CommitItr which will iterate over all commits in all branches in a DoltDB
 func CommitItrForAllBranches(ctx context.Context, ddb *DoltDB) (CommitItr, error) {
-	refs, err := ddb.GetRefs(ctx)
+	branchRefs, err := ddb.GetBranches(ctx)
 
 	if err != nil {
 		return nil, err
 	}
 
-	rootCommits := make([]*Commit, 0, len(refs))
-	for _, ref := range refs {
-		cs, err := NewCommitSpec(ref.String())
-
-		if err != nil {
-			return nil, err
-		}
-
-		cm, err := ddb.Resolve(ctx, cs, nil)
+	rootCommits := make([]*Commit, 0, len(branchRefs))
+	for _, ref := range branchRefs {
+		cm, err := ddb.ResolveRef(ctx, ref)
 
 		if err != nil {
 			return nil, err

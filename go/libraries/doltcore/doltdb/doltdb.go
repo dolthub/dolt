@@ -284,6 +284,7 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 		candidates := []string{
 			"refs/" + cs.baseSpec,
 			"refs/heads/" + cs.baseSpec,
+			"refs/tags/" + cs.baseSpec,
 			"refs/remotes/" + cs.baseSpec,
 		}
 		if strings.HasPrefix(cs.baseSpec, "refs/") {
@@ -291,6 +292,7 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 				cs.baseSpec,
 				"refs/" + cs.baseSpec,
 				"refs/heads/" + cs.baseSpec,
+				"refs/tags/" + cs.baseSpec,
 				"refs/remotes/" + cs.baseSpec,
 			}
 		}
@@ -319,6 +321,18 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 		return nil, err
 	}
 
+	return NewCommit(ddb.db, commitSt), nil
+}
+
+// ResolveRef takes a DoltRef and returns a Commit, or an error if the commit cannot be found.
+func (ddb *DoltDB) ResolveRef(ctx context.Context, ref ref.DoltRef) (*Commit, error) {
+	commitSt, err := getCommitStForRefStr(ctx, ddb.db, ref.String())
+	if err == ErrBranchNotFound {
+		return nil, fmt.Errorf("could not resolve %s %s", ref.GetType(), ref.String())
+	}
+	if err != nil {
+		return nil, err
+	}
 	return NewCommit(ddb.db, commitSt), nil
 }
 
@@ -393,8 +407,7 @@ func (ddb *DoltDB) FastForward(ctx context.Context, branch ref.DoltRef, commit *
 
 // CanFastForward returns whether the given branch can be fast-forwarded to the commit given.
 func (ddb *DoltDB) CanFastForward(ctx context.Context, branch ref.DoltRef, new *Commit) (bool, error) {
-	currentSpec, _ := NewCommitSpec(branch.String())
-	current, err := ddb.Resolve(ctx, currentSpec, nil)
+	current, err := ddb.ResolveRef(ctx, branch)
 
 	if err != nil {
 		if err == ErrBranchNotFound {
@@ -691,7 +704,7 @@ func (ddb *DoltDB) ResolveAllParents(ctx context.Context, commit *Commit) ([]*Co
 	return resolved, nil
 }
 
-// HasBranch returns whether the branch given exists in this database.
+// HasBranch returns whether the branch given exists in this database.q
 func (ddb *DoltDB) HasRef(ctx context.Context, doltRef ref.DoltRef) (bool, error) {
 	dss, err := ddb.db.Datasets(ctx)
 
@@ -709,12 +722,18 @@ func (ddb *DoltDB) GetBranches(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, branchRefFilter)
 }
 
+var tagsRefFilter = map[ref.RefType]struct{}{ref.TagRefType: {}}
+
+func (ddb *DoltDB) GetTags(ctx context.Context) ([]ref.DoltRef, error) {
+	return ddb.GetRefsOfType(ctx, tagsRefFilter)
+}
+
 func (ddb *DoltDB) GetRefs(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, ref.RefTypes)
 }
 
 func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefType]struct{}) ([]ref.DoltRef, error) {
-	var branches []ref.DoltRef
+	var refs []ref.DoltRef
 	dss, err := ddb.db.Datasets(ctx)
 
 	if err != nil {
@@ -729,7 +748,7 @@ func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefT
 			dref, _ = ref.Parse(keyStr)
 
 			if _, ok := refTypeFilter[dref.GetType()]; ok {
-				branches = append(branches, dref)
+				refs = append(refs, dref)
 			}
 		}
 
@@ -740,7 +759,7 @@ func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefT
 		return nil, err
 	}
 
-	return branches, nil
+	return refs, nil
 }
 
 // NewBranchAtCommit creates a new branch with HEAD at the commit given. Branch names must pass IsValidUserBranchName.
@@ -749,6 +768,10 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, dref ref.DoltRef, comm
 		panic(fmt.Sprintf("invalid branch name %s, use IsValidUserBranchName check", dref.String()))
 	}
 
+	return ddb.newRefAtCommit(ctx, dref, commit)
+}
+
+func (ddb *DoltDB) newRefAtCommit(ctx context.Context, dref ref.DoltRef, commit *Commit) error {
 	ds, err := ddb.db.GetDataset(ctx, dref.String())
 
 	if err != nil {
@@ -767,7 +790,11 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, dref ref.DoltRef, comm
 }
 
 // DeleteBranch deletes the branch given, returning an error if it doesn't exist.
-func (ddb *DoltDB) DeleteBranch(ctx context.Context, dref ref.DoltRef) error {
+func (ddb *DoltDB) DeleteBranch(ctx context.Context, branch ref.DoltRef) error {
+	return ddb.deleteRef(ctx, branch)
+}
+
+func (ddb *DoltDB) deleteRef(ctx context.Context, dref ref.DoltRef) error {
 	ds, err := ddb.db.GetDataset(ctx, dref.String())
 
 	if err != nil {
@@ -779,6 +806,25 @@ func (ddb *DoltDB) DeleteBranch(ctx context.Context, dref ref.DoltRef) error {
 	}
 
 	_, err = ddb.db.Delete(ctx, ds)
+	return err
+}
+
+// NewTagAtCommit create a new tag at the commit given.
+func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, dref ref.DoltRef, commit *Commit) error {
+	if !IsValidTagRef(dref) {
+		panic(fmt.Sprintf("invalid tag name %s, use IsValidUserTagName check", dref.String()))
+	}
+
+	return ddb.newRefAtCommit(ctx, dref, commit)
+}
+
+func (ddb *DoltDB) DeleteTag(ctx context.Context, tag ref.DoltRef) error {
+	err := ddb.deleteRef(ctx, tag)
+
+	if err == ErrBranchNotFound {
+		return ErrTagNotFound
+	}
+
 	return err
 }
 

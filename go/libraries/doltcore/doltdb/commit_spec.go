@@ -35,6 +35,14 @@ func IsValidBranchRef(dref ref.DoltRef) bool {
 	return dref.GetType() == ref.BranchRefType && IsValidUserBranchName(dref.GetPath())
 }
 
+func IsValidTagRef(dref ref.DoltRef) bool {
+	s := dref.GetPath()
+	return dref.GetType() == ref.TagRefType &&
+		s != head &&
+		!hashRegex.MatchString(s) &&
+		ref.IsValidTagName(s)
+}
+
 type commitSpecType string
 
 const (
@@ -61,9 +69,11 @@ type CommitSpec struct {
 // current working set.
 // * a commit hash, like 46m0aqr8c1vuv76ml33cdtr8722hsbhn -- a fully specified
 // commit hash.
-// * a ref -- referring to a branch reference in the current dolt database.
-// Examples include `master`, `heads/master`, `refs/heads/master`,
+// * a ref -- referring to a branch or tag reference in the current dolt database.
+// Examples of branch refs include `master`, `heads/master`, `refs/heads/master`,
 // `origin/master`, `refs/remotes/origin/master`.
+// Examples of tag refs include `v1.0`, `tags/v1.0`, `refs/tags/v1.0`,
+// `origin/v1.0`, `refs/remotes/origin/v1.0`.
 //
 // A commit spec has an optional ancestor specification, which describes a
 // traversal of commit parents, starting at the base commit, in order to arrive

@@ -74,6 +74,19 @@ func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*Commi
 	return &CommitMeta{n, e, ms, d, userMS}, nil
 }
 
+func NewTagMeta(name, email, desc string) *CommitMeta {
+	n := strings.TrimSpace(name)
+	e := strings.TrimSpace(email)
+	d := strings.TrimSpace(desc)
+
+	ns := uint64(CommitNowFunc().UnixNano())
+	ms := ns / uMilliToNano
+
+	userMS := int64(ns) / milliToNano
+
+	return &CommitMeta{n, e, ms, d, userMS}
+}
+
 func getRequiredFromSt(st types.Struct, k string) (types.Value, error) {
 	if v, ok, err := st.MaybeGet(k); err != nil {
 		return nil, err
