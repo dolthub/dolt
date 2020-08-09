@@ -29,7 +29,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
-var shallowCloneDocs = cli.CommandDocumentationContent{
+var readTablesDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Fetch table(s) at a specific commit into a new dolt repo",
 	LongDesc: "A shallow clone operation will retrieve the state of table(s) from a remote repository at a given commit. " +
 		"Retrieved data is placed into the working state of a newly created local Dolt repository. Changes to the data cannot " +
@@ -40,32 +40,32 @@ var shallowCloneDocs = cli.CommandDocumentationContent{
 	},
 }
 
-// ShallowCloneCmd is the implementation of the shallow-clone command
-type ShallowCloneCmd struct{}
+// ReadTablesCmd is the implementation of the shallow-clone command
+type ReadTablesCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
-func (cmd ShallowCloneCmd) Name() string {
-	return "shallow-clone"
+func (cmd ReadTablesCmd) Name() string {
+	return "read-tables"
 }
 
 // Description returns a description of the command
-func (cmd ShallowCloneCmd) Description() string {
-	return shallowCloneDocs.ShortDesc
+func (cmd ReadTablesCmd) Description() string {
+	return readTablesDocs.ShortDesc
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ShallowCloneCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd ReadTablesCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
-	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, shallowCloneDocs, ap))
+	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, readTablesDocs, ap))
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
 // that it be run from within a data repository directory
-func (cmd ShallowCloneCmd) RequiresRepo() bool {
+func (cmd ReadTablesCmd) RequiresRepo() bool {
 	return false
 }
 
-func (cmd ShallowCloneCmd) createArgParser() *argparser.ArgParser {
+func (cmd ReadTablesCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = [][2]string{
 		{"remote-repo", "Remote repository to retrieve data from"},
@@ -77,10 +77,10 @@ func (cmd ShallowCloneCmd) createArgParser() *argparser.ArgParser {
 }
 
 // Exec executes the command
-func (cmd ShallowCloneCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, shallowCloneDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, readTablesDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() < 2 {

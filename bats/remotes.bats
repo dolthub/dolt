@@ -172,7 +172,7 @@ SQL
     [[ ! "$output" =~ "README.md" ]] || false
 }
 
-@test "shallow clones" {
+@test "read tables test" {
     # create table t1 and commit
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
@@ -184,7 +184,7 @@ SQL
     dolt add t1
     dolt commit -m "added t1"
 
-    #create table t2 and commit
+    # create table t2 and commit
     dolt sql <<SQL
 CREATE TABLE t2 (
   pk BIGINT NOT NULL,
@@ -208,8 +208,8 @@ SQL
     dolt push test-remote master
     cd "dolt-repo-clones"
 
-    # create a shallow clone of latest and verify we have all the tables
-    dolt shallow-clone http://localhost:50051/test-org/test-repo master
+    # Create a read latest tables and verify we have all the tables
+    dolt read-tables http://localhost:50051/test-org/test-repo master
     cd test-repo
     run dolt ls
     [ "$status" -eq 0 ]
@@ -218,8 +218,8 @@ SQL
     [[ "$output" =~ "t3" ]] || false
     cd ..
 
-    # shallow clone of specific tables with a specified directory
-    dolt shallow-clone --dir clone_t1_t2 http://localhost:50051/test-org/test-repo master t1 t2
+    # Read specific table from latest with a specified directory
+    dolt read-tables --dir clone_t1_t2 http://localhost:50051/test-org/test-repo master t1 t2
     cd clone_t1_t2
     run dolt ls
     [ "$status" -eq 0 ]
@@ -228,8 +228,8 @@ SQL
     [[ ! "$output" =~ "t3" ]] || false
     cd ..
 
-    # shallow clone of parent of parent of the tip of master should only have table t1
-    dolt shallow-clone --dir clone_t1 http://localhost:50051/test-org/test-repo master~2
+    # Read tables from parent of parent of the tip of master. Should only have table t1
+    dolt read-tables --dir clone_t1 http://localhost:50051/test-org/test-repo master~2
     cd clone_t1
     run dolt ls
     [ "$status" -eq 0 ]

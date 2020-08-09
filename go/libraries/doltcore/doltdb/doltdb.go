@@ -818,7 +818,7 @@ func (ddb *DoltDB) PushChunksForRefHash(ctx context.Context, tempDir string, src
 
 		return puller.Pull(ctx)
 	} else {
-		return errors.New("this type of chunk store does not supporlt this operation")
+		return errors.New("this type of chunk store does not support this operation")
 	}
 }
 
