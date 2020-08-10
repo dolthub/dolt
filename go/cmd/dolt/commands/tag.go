@@ -57,6 +57,11 @@ func (cmd TagCmd) Description() string {
 	return "Create, list, delete tags."
 }
 
+// Hidden should return true if this command should be hidden from the help text
+func (cmd *TagCmd) Hidden() bool {
+	return true
+}
+
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd TagCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
@@ -138,7 +143,6 @@ func (cmd TagCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	return HandleVErrAndExitCode(verr, usage)
 }
-
 
 func getTagProps(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (props actions.TagProps, err error) {
 	name, email, err := actions.GetNameAndEmail(dEnv.Config)

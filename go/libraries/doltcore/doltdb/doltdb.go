@@ -327,9 +327,6 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 // ResolveRef takes a DoltRef and returns a Commit, or an error if the commit cannot be found.
 func (ddb *DoltDB) ResolveRef(ctx context.Context, ref ref.DoltRef) (*Commit, error) {
 	commitSt, err := getCommitStForRefStr(ctx, ddb.db, ref.String())
-	if err == ErrBranchNotFound {
-		return nil, fmt.Errorf("could not resolve %s %s", ref.GetType(), ref.String())
-	}
 	if err != nil {
 		return nil, err
 	}

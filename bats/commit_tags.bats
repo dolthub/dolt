@@ -25,24 +25,30 @@ teardown() {
 }
 
 @test "create a tag with a explicit ref" {
-    run dolt tag v1.0 HEAD^
+    run dolt tag v1 HEAD^
     [ $status -eq 0 ]
     run dolt tag
     [ $status -eq 0 ]
-    [ "$output" = "v1.0" ]
+    [[ "$output" =~ "v1" ]] || false
 }
 
 @test "create a tag with implicit head ref" {
-    run dolt tag v1.0
+    run dolt tag v1
     [ $status -eq 0 ]
     run dolt tag
     [ $status -eq 0 ]
-    [ "$output" = "v1.0" ]
+    [[ "$output" =~ "v1" ]] || false
+}
+
+@test "create tag v1.2.3" {
+    skip "Noms doesn't support '.' in dataset names"
+    run dolt tag v1.2.3
+    [ $status -eq 0 ]
 }
 
 @test "delete a tag" {
-    dolt tag v1.0
-    dolt tag -d v1.0
+    dolt tag v1
+    dolt tag -d v1
     run dolt tag
     [ $status -eq 0 ]
     [ "$output" = "" ]
@@ -50,9 +56,9 @@ teardown() {
 
 @test "checkout a tag" {
     dolt branch comp HEAD^
-    dolt tag v1.0 HEAD^
+    dolt tag v1 HEAD^
     skip "need to implelement detached head first"
-    run dolt checkout v1.0
+    run dolt checkout v1
     [ $status -eq 0 ]
     run dolt diff comp
     [ $status -eq 0 ]
@@ -60,9 +66,9 @@ teardown() {
 }
 
 @test "commit onto checked out tag" {
-    dolt tag v1.0 HEAD^
+    dolt tag v1 HEAD^
     skip "need to implement detached head first"
-    dolt checkout v1.0
+    dolt checkout v1
     run dolt sql -q "insert into test values (8),(9)"
     [ $status -eq 0 ]
     dolt add -A
@@ -71,18 +77,19 @@ teardown() {
 }
 
 @test "use a tag as ref for diff" {
-    dolt tag v1.0 HEAD^
-    run dolt diff v1.0
+    dolt tag v1 HEAD^
+    run dolt diff v1
     [ $status -eq 0 ]
     [[ "$output" =~ "-  | 0" ]]
     [[ "$output" =~ "+  | 3" ]]
 }
 
-@use "use a tag as a ref for merge" {
-    dolt tag v1.0 HEAD
+@test "use a tag as a ref for merge" {
+    dolt tag v1 HEAD
     dolt checkout -b other HEAD^
     dolt sql -q "insert into test values (8),(9)"
-    run dolt merge v1.0
+    dolt add -A && dolt commit -m 'made changes'
+    run dolt merge v1
     [ $status -eq 0 ]
     run dolt sql -q "select * from test"
     [ $status -eq 0 ]
@@ -94,5 +101,38 @@ teardown() {
 }
 
 @test "push/pull tags to/from a remote" {
+    # reset env
+    rm -rf .dolt
+    mkdir repo remote
+    cd repo
 
+    dolt init
+    dolt sql -q "create table test (pk int primary key);"
+    dolt sql -q "insert into test values (0),(1),(2);"
+    dolt add -A && dolt commit -m "table test"
+    dolt sql -q "insert into test values (7),(8),(9);"
+    dolt add -A && dolt commit -m "more rows"
+
+    dolt remote add origin file://../remote
+    dolt push origin master
+    cd .. && dolt clone file://remote repo_clone && cd repo
+
+    run dolt tag v1 HEAD^
+    [ $status -eq 0 ]
+    run dolt tag v2 HEAD -m "SAMO"
+    [ $status -eq 0 ]
+
+    skip "todo"
+    run dolt push origin master
+    [ $status -eq 0 ]
+    cd ../repo_clone
+    run dolt pull
+    [ $status -eq 0 ]
+    run dolt tag
+    [ $status -eq 0 ]
+    [[ "$output" =~ "v1" ]] || false
+    [[ "$output" =~ "v2" ]] || false
+    run dolt tag -v
+    [ $status -eq 0 ]
+    [[ "$output" =~ "SAMO" ]] || false
 }

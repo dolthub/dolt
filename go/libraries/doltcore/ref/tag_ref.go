@@ -14,10 +14,33 @@
 
 package ref
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
+
+// The following list of patterns are all forbidden in a branch name.
+var InvalidTagNameRegex = regexp.MustCompile(strings.Join([]string{
+	// Any appearance of a period, currently unsupported by noms layer
+	//`[.*]`,
+	// Any appearance of the following characters: :, ?, [, \, ^, ~, SPACE, TAB, *
+	`:`, `\?`, `\[`, `\\`, `\^`, `~`, ` `, `\t`, `\*`,
+	// Any ASCII control character.
+	`[\x00-\x1f]`, `\x7f`,
+	// Any component ending with ".lock"
+	`\.lock\z`, `\.lock\/`,
+	// An exact name of "", "HEAD" or "-"
+	`\A\z`, `\AHEAD\z`, `\A-\z`,
+	// A name that looks exactly like a commit id
+	`\A[0-9a-v]{32}\z`,
+	// Any appearance of ".." or "@{"
+	`\.\.`, `@{`,
+	// Any empty component; that is, starting or ending with "/" or any appearance of "//"
+	`\/\/`, `\A\/`, `\/\z`,
+}, "|"))
 
 func IsValidTagName(tagName string) bool {
-	return IsValidBranchName(tagName)
+	return !InvalidTagNameRegex.MatchString(tagName)
 }
 
 type TagRef struct {
