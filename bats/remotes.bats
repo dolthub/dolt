@@ -172,6 +172,73 @@ SQL
     [[ ! "$output" =~ "README.md" ]] || false
 }
 
+@test "read tables test" {
+    # create table t1 and commit
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt sql <<SQL
+CREATE TABLE t1 (
+  pk BIGINT NOT NULL,
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt add t1
+    dolt commit -m "added t1"
+
+    # create table t2 and commit
+    dolt sql <<SQL
+CREATE TABLE t2 (
+  pk BIGINT NOT NULL,
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt add t2
+    dolt commit -m "added t2"
+
+    # create table t3 and commit
+    dolt sql <<SQL
+CREATE TABLE t3 (
+  pk BIGINT NOT NULL,
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt add t3
+    dolt commit -m "added t3"
+
+    # push repo
+    dolt push test-remote master
+    cd "dolt-repo-clones"
+
+    # Create a read latest tables and verify we have all the tables
+    dolt read-tables http://localhost:50051/test-org/test-repo master
+    cd test-repo
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "t1" ]] || false
+    [[ "$output" =~ "t2" ]] || false
+    [[ "$output" =~ "t3" ]] || false
+    cd ..
+
+    # Read specific table from latest with a specified directory
+    dolt read-tables --dir clone_t1_t2 http://localhost:50051/test-org/test-repo master t1 t2
+    cd clone_t1_t2
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "t1" ]] || false
+    [[ "$output" =~ "t2" ]] || false
+    [[ ! "$output" =~ "t3" ]] || false
+    cd ..
+
+    # Read tables from parent of parent of the tip of master. Should only have table t1
+    dolt read-tables --dir clone_t1 http://localhost:50051/test-org/test-repo master~2
+    cd clone_t1
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "t1" ]] || false
+    [[ ! "$output" =~ "t2" ]] || false
+    [[ ! "$output" =~ "t3" ]] || false
+    cd ..
+}
+
 @test "clone a remote with docs" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     echo "license-text" > LICENSE.md

@@ -352,3 +352,8 @@ func HandleVErrAndExitCode(verr errhand.VerboseError, usage cli.UsagePrinter) in
 
 	return 0
 }
+
+// BuildVerrAndExit is a shortcut for building a verbose error and calling HandleVerrAndExitCode with it
+func BuildVerrAndExit(errMsg string, cause error) int {
+	return HandleVErrAndExitCode(errhand.BuildDError(errMsg).AddCause(cause).Build(), nil)
+}

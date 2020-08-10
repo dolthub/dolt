@@ -806,6 +806,22 @@ func (ddb *DoltDB) PushChunks(ctx context.Context, tempDir string, srcDB *DoltDB
 	}
 }
 
+func (ddb *DoltDB) PushChunksForRefHash(ctx context.Context, tempDir string, srcDB *DoltDB, h hash.Hash, pullerEventCh chan datas.PullerEvent) error {
+	if datas.CanUsePuller(srcDB.db) && datas.CanUsePuller(ddb.db) {
+		puller, err := datas.NewPuller(ctx, tempDir, defaultChunksPerTF, srcDB.db, ddb.db, h, pullerEventCh)
+
+		if err == datas.ErrDBUpToDate {
+			return nil
+		} else if err != nil {
+			return err
+		}
+
+		return puller.Pull(ctx)
+	} else {
+		return errors.New("this type of chunk store does not support this operation")
+	}
+}
+
 // PullChunks initiates a pull into a database from the source database given, at the commit given. Progress is
 // communicated over the provided channel.
 func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB, cm *Commit, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
