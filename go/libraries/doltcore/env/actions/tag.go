@@ -110,7 +110,7 @@ type resolvedTag struct {
 	meta   *doltdb.CommitMeta
 }
 
-// IterResolvedTags iterates over tags in dEnv.DoltDB from newest to oldest, resolving the tagg to a commit and calling cb().
+// IterResolvedTags iterates over tags in dEnv.DoltDB from newest to oldest, resolving the tag to a commit and calling cb().
 func IterResolvedTags(ctx context.Context, dEnv *env.DoltEnv, cb func(tag ref.DoltRef, c *doltdb.Commit, meta *doltdb.CommitMeta) (stop bool, err error)) error {
 	tagRefs, err := dEnv.DoltDB.GetTags(ctx)
 

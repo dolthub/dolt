@@ -31,10 +31,12 @@ func IsValidUserBranchName(name string) bool {
 	return name != head && !hashRegex.MatchString(name) && ref.IsValidBranchName(name)
 }
 
+// IsValidBranchRef validates that a BranchRef doesn't violate naming constraints.
 func IsValidBranchRef(dref ref.DoltRef) bool {
 	return dref.GetType() == ref.BranchRefType && IsValidUserBranchName(dref.GetPath())
 }
 
+// IsValidTagRef validates that a TagRef doesn't violate naming constraints.
 func IsValidTagRef(dref ref.DoltRef) bool {
 	s := dref.GetPath()
 	return dref.GetType() == ref.TagRefType &&

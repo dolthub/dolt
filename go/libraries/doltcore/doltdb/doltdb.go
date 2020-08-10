@@ -701,7 +701,7 @@ func (ddb *DoltDB) ResolveAllParents(ctx context.Context, commit *Commit) ([]*Co
 	return resolved, nil
 }
 
-// HasBranch returns whether the branch given exists in this database.q
+// HasRef returns whether the branch given exists in this database.
 func (ddb *DoltDB) HasRef(ctx context.Context, doltRef ref.DoltRef) (bool, error) {
 	dss, err := ddb.db.Datasets(ctx)
 
@@ -721,10 +721,12 @@ func (ddb *DoltDB) GetBranches(ctx context.Context) ([]ref.DoltRef, error) {
 
 var tagsRefFilter = map[ref.RefType]struct{}{ref.TagRefType: {}}
 
+// GetTags returns a list of all tags in the database.
 func (ddb *DoltDB) GetTags(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, tagsRefFilter)
 }
 
+// GetRefs returns a list of all refs in the database.
 func (ddb *DoltDB) GetRefs(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, ref.RefTypes)
 }
@@ -807,12 +809,12 @@ func (ddb *DoltDB) deleteRef(ctx context.Context, dref ref.DoltRef) error {
 }
 
 // NewTagAtCommit create a new tag at the commit given.
-func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, dref ref.DoltRef, commit *Commit) error {
-	if !IsValidTagRef(dref) {
-		panic(fmt.Sprintf("invalid tag name %s, use IsValidUserTagName check", dref.String()))
+func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, tagRef ref.DoltRef, commit *Commit) error {
+	if !IsValidTagRef(tagRef) {
+		panic(fmt.Sprintf("invalid tag name %s, use IsValidUserTagName check", tagRef.String()))
 	}
 
-	return ddb.newRefAtCommit(ctx, dref, commit)
+	return ddb.newRefAtCommit(ctx, tagRef, commit)
 }
 
 func (ddb *DoltDB) DeleteTag(ctx context.Context, tag ref.DoltRef) error {

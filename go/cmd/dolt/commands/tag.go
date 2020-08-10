@@ -33,10 +33,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
-var tagForceFlagDesc = "Reset {{.LessThan}}branchname{{.GreaterThan}} to {{.LessThan}}startpoint{{.GreaterThan}}, even if {{.LessThan}}branchname{{.GreaterThan}} exists already. Without {{.EmphasisLeft}}-f{{.EmphasisRight}}, {{.EmphasisLeft}}dolt branch{{.EmphasisRight}} refuses to change an existing branch. In combination with {{.EmphasisLeft}}-d{{.EmphasisRight}} (or {{.EmphasisLeft}}--delete{{.EmphasisRight}}), allow deleting the branch irrespective of its merged status. In combination with -m (or {{.EmphasisLeft}}--move{{.EmphasisRight}}), allow renaming the branch even if the new branch name already exists, the same applies for {{.EmphasisLeft}}-c{{.EmphasisRight}} (or {{.EmphasisLeft}}--copy{{.EmphasisRight}})."
-
 var tagDocs = cli.CommandDocumentationContent{
-	ShortDesc: `List, create, or delete branches`,
+	ShortDesc: `Create, list, delete tags.`,
 	LongDesc:  ``,
 	Synopsis:  []string{},
 }
@@ -47,7 +45,7 @@ const (
 
 type TagCmd struct{}
 
-// TaggerName is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+// TaggerName returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd TagCmd) Name() string {
 	return "tag"
 }

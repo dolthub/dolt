@@ -74,6 +74,7 @@ func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*Commi
 	return &CommitMeta{n, e, ms, d, userMS}, nil
 }
 
+// NewTagMeta returns CommitMeta that can be used to create a tag.
 func NewTagMeta(name, email, desc string) *CommitMeta {
 	n := strings.TrimSpace(name)
 	e := strings.TrimSpace(email)

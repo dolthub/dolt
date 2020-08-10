@@ -19,7 +19,7 @@ import (
 	"strings"
 )
 
-// The following list of patterns are all forbidden in a branch name.
+// The following list of patterns are all forbidden in a tag name.
 var InvalidTagNameRegex = regexp.MustCompile(strings.Join([]string{
 	// Any appearance of a period, currently unsupported by noms layer
 	//`[.*]`,
@@ -39,6 +39,7 @@ var InvalidTagNameRegex = regexp.MustCompile(strings.Join([]string{
 	`\/\/`, `\A\/`, `\/\z`,
 }, "|"))
 
+// IsValidTagName validates that tagName passes naming constraints.
 func IsValidTagName(tagName string) bool {
 	return !InvalidTagNameRegex.MatchString(tagName)
 }
@@ -49,7 +50,7 @@ type TagRef struct {
 
 var _ DoltRef = TagRef{}
 
-// NewTagRef creates a reference to a local branch from a branch name or a branch ref e.g. master, or refs/heads/master
+// NewTagRef creates a reference to a local tag from a tag name or a tag ref e.g. v1, or refs/tag/v1
 func NewTagRef(tagName string) TagRef {
 	if IsRef(tagName) {
 		prefix := PrefixForType(TagRefType)
@@ -68,7 +69,7 @@ func (br TagRef) GetType() RefType {
 	return TagRefType
 }
 
-// GetPath returns the name of the branch
+// GetPath returns the name of the tag
 func (br TagRef) GetPath() string {
 	return br.tag
 }
@@ -78,6 +79,7 @@ func (br TagRef) String() string {
 	return String(br)
 }
 
+// MarshalJSON serializes a TagRef to JSON.
 func (br TagRef) MarshalJSON() ([]byte, error) {
 	return MarshalJSON(br)
 }
