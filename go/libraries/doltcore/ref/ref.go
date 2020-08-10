@@ -45,11 +45,14 @@ const (
 
 	// InternalRefType is a reference to a dolt internal commit
 	InternalRefType RefType = "internal"
+
+	// TagRefType is a reference to commit tag
+	TagRefType RefType = "tags"
 )
 
 // RefTypes is the set of all supported reference types.  External RefTypes can be added to this map in order to add
 // RefTypes for external tooling
-var RefTypes = map[RefType]struct{}{BranchRefType: {}, RemoteRefType: {}, InternalRefType: {}}
+var RefTypes = map[RefType]struct{}{BranchRefType: {}, RemoteRefType: {}, InternalRefType: {}, TagRefType: {}}
 
 // PrefixForType returns what a reference string for a given type should start with
 func PrefixForType(refType RefType) string {
@@ -85,7 +88,7 @@ func Equals(dr, other DoltRef) bool {
 	return dr.GetType() == other.GetType() && dr.GetPath() == other.GetPath()
 }
 
-// EqualsStr compares a DoltRef to a reference string to see if they are refering to the same thing
+// EqualsStr compares a DoltRef to a reference string to see if they are referring to the same thing
 func EqualsStr(dr DoltRef, str string) bool {
 	other, err := Parse(str)
 
@@ -137,6 +140,8 @@ func Parse(str string) (DoltRef, error) {
 				return NewRemoteRefFromPathStr(str)
 			case InternalRefType:
 				return NewInternalRef(str), nil
+			case TagRefType:
+				return NewTagRef(str), nil
 			default:
 				panic("unknown type " + rType)
 			}

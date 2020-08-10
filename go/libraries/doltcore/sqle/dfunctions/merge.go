@@ -134,19 +134,13 @@ func getBranchCommit(ctx *sql.Context, ok bool, val interface{}, err error, ddb 
 		return nil, hash.Hash{}, errors.New("branch name is not a string")
 	}
 
-	name, err := getBranchInsensitive(ctx, paramStr, ddb)
+	branchRef, err := getBranchInsensitive(ctx, paramStr, ddb)
 
 	if err != nil {
 		return nil, hash.Hash{}, err
 	}
 
-	cs, err := doltdb.NewCommitSpec(name)
-
-	if err != nil {
-		return nil, hash.Hash{}, err
-	}
-
-	cm, err := ddb.Resolve(ctx, cs, nil)
+	cm, err := ddb.ResolveRef(ctx, branchRef)
 
 	if err != nil {
 		return nil, hash.Hash{}, err

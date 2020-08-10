@@ -165,6 +165,8 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProp
 		return ErrEmptyCommitMessage
 	}
 
+	// DoltDB resolves the current working branch head ref to provide a parent commit.
+	// Any commit specs in mergeCmSpec are also resolved and added.
 	_, err = dEnv.DoltDB.CommitWithParentSpecs(ctx, h, dEnv.RepoState.CWBHeadRef(), mergeCmSpec, meta)
 
 	if err == nil {

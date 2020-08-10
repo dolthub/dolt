@@ -387,7 +387,7 @@ func (dEnv *DoltEnv) RepoStateWriter() RepoStateWriter {
 }
 
 func (dEnv *DoltEnv) HeadRoot(ctx context.Context) (*doltdb.RootValue, error) {
-	commit, err := dEnv.DoltDB.Resolve(ctx, dEnv.RepoState.CWBHeadSpec(), dEnv.RepoState.CWBHeadRef())
+	commit, err := dEnv.DoltDB.ResolveRef(ctx, dEnv.RepoState.CWBHeadRef())
 
 	if err != nil {
 		return nil, err

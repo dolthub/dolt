@@ -148,7 +148,8 @@ func checkoutRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, name string) e
 }
 
 func getRemoteBranchRef(ctx context.Context, dEnv *env.DoltEnv, name string) (ref.DoltRef, bool, error) {
-	refs, err := dEnv.DoltDB.GetRefs(ctx)
+	remoteRefFilter := map[ref.RefType]struct{}{ref.RemoteRefType: {}}
+	refs, err := dEnv.DoltDB.GetRefsOfType(ctx, remoteRefFilter)
 
 	if err != nil {
 		return nil, false, err
