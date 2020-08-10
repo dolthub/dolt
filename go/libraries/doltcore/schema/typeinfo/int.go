@@ -19,7 +19,7 @@ import (
 	"strconv"
 
 	"github.com/liquidata-inc/go-mysql-server/sql"
-	"vitess.io/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
 
 	"github.com/liquidata-inc/dolt/go/store/types"
 )

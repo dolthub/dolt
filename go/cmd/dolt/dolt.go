@@ -77,6 +77,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	dumpDocsCommand,
 	commands.MigrateCmd{},
 	indexcmds.Commands,
+	commands.ReadTablesCmd{},
 	commands.TagCmd{},
 })
 
