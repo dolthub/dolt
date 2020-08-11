@@ -25,7 +25,6 @@ jobs:
           go vet -mod=readonly ./...
           go run -mod=readonly ./utils/copyrightshdrs/
           ./utils/repofmt/check_fmt.sh
-          ./utils/checkcommitters/check_pr.sh
           ./Godeps/verify.sh
         env:
           BRANCH_NAME: ${{ github.head_ref }}
