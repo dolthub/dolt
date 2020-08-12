@@ -595,7 +595,7 @@ func (db Database) createTable(ctx *sql.Context, tableName string, sch sql.Schem
 		return err
 	}
 
-	if exists, err := root.TableNameInUse(ctx, tableName); err != nil {
+	if exists, err := root.HasTable(ctx, tableName); err != nil {
 		return err
 	} else if exists {
 		return sql.ErrTableAlreadyExists.New(tableName)
