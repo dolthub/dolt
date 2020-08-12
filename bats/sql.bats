@@ -38,7 +38,6 @@ teardown() {
     teardown_common
 }
 
-
 @test "sql select from multiple tables" {
     run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk"
     [ "$status" -eq 0 ]
@@ -408,6 +407,25 @@ SQL
     [[ "$output" =~ "one_pk" ]] || false
     [[ "$output" =~ "two_pk" ]] || false
     [[ "$output" =~ "has_datetimes" ]] || false
+}
+
+@test "show tables AS OF" {
+    dolt add .; dolt commit -m 'commit tables'
+    dolt sql <<SQL
+CREATE TABLE table_a(x int primary key);
+CREATE TABLE table_b(x int primary key);
+SQL
+    dolt add .; dolt commit -m 'commit tables'
+    
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
+    [[ "$output" =~ table_a ]] || false
+
+    run dolt sql -q "show tables AS OF 'HEAD~'" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ ! "$output" =~ table_a ]] || false    
 }
 
 @test "sql describe" {
