@@ -75,6 +75,32 @@ SQL
     [[ "$output" =~ "two different columns with the same tag" ]] || false
 }
 
+@test "Reusing a table name should NOT fail" {
+    dolt sql -q "CREATE TABLE one (pk int PRIMARY KEY);"
+    dolt sql -q "CREATE TABLE two (pk int PRIMARY KEY);"
+    dolt add -A && dolt commit -m "create test tables"
+    dolt sql -q "DROP TABLE one;"
+    dolt add -A && dolt commit -m "dropped table one"
+    dolt sql -q "DROP TABLE two;"
+    dolt sql -q "CREATE TABLE three (pk int PRIMARY KEY);"
+    dolt sql -q "DROP TABLE three;"
+
+    run dolt sql -q "CREATE TABLE one (pk int PRIMARY KEY);"
+    [ $status -eq 0 ]
+    run dolt sql -q "CREATE TABLE two (pk int PRIMARY KEY);"
+    [ $status -eq 0 ]
+    run dolt sql -q "CREATE TABLE three (pk int PRIMARY KEY);"
+    [ $status -eq 0 ]
+    run dolt ls
+    [[ "$output" =~ "one" ]] || false
+    [[ "$output" =~ "two" ]] || false
+    [[ "$output" =~ "three" ]] || false
+    run dolt add -A
+    [ $status -eq 0 ]
+    run dolt commit -m "commit recreated tables"
+    [ $status -eq 0 ]
+}
+
 @test "Alter table should not allow duplicate tags" {
     dolt sql <<SQL
 CREATE TABLE test (
