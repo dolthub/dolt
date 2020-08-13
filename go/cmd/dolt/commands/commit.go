@@ -175,8 +175,8 @@ func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cl
 		//n := printDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, notStagedDocs, false, 0, []string{})
 
 		//if n == 0 {
-			bdr := errhand.BuildDError(`no changes added to commit (use "dolt add")`)
-			return HandleVErrAndExitCode(bdr.Build(), usage)
+		bdr := errhand.BuildDError(`no changes added to commit (use "dolt add")`)
+		return HandleVErrAndExitCode(bdr.Build(), usage)
 		//}
 	}
 

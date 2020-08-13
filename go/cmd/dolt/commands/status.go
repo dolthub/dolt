@@ -103,7 +103,7 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 var tblDiffTypeToLabel = map[diff.TableDiffType]string{
 	diff.ModifiedTable: "modified:",
-	diff.RenamedTable: "renamed:",
+	diff.RenamedTable:  "renamed:",
 	diff.RemovedTable:  "deleted:",
 	diff.AddedTable:    "new table:",
 }
@@ -156,14 +156,14 @@ const (
 )
 
 func printStagedDiffs(wr io.Writer, stagedTbls []diff.TableDelta, stagedDocs *diff.DocDiffs, printHelp bool) int {
-	if len(stagedTbls) + stagedDocs.Len() > 0 {
+	if len(stagedTbls)+stagedDocs.Len() > 0 {
 		iohelp.WriteLine(wr, stagedHeader)
 
 		if printHelp {
 			iohelp.WriteLine(wr, stagedHeaderHelp)
 		}
 
-		lines := make([]string, 0, len(stagedTbls) + stagedDocs.Len())
+		lines := make([]string, 0, len(stagedTbls)+stagedDocs.Len())
 		for _, td := range stagedTbls {
 			if !doltdb.IsReadOnlySystemTable(td.CurName()) {
 				if td.IsAdd() {
@@ -278,7 +278,7 @@ func printDiffsNotStaged(ctx context.Context, dEnv *env.DoltEnv, wr io.Writer, n
 }
 
 func getModifiedAndRemovedNotStaged(notStagedTbls []diff.TableDelta, notStagedDocs *diff.DocDiffs, inCnfSet *set.StrSet) (lines []string) {
-	lines = make([]string, 0, len(notStagedTbls) + notStagedDocs.Len())
+	lines = make([]string, 0, len(notStagedTbls)+notStagedDocs.Len())
 	for _, td := range notStagedTbls {
 		if td.IsAdd() || inCnfSet.Contains(td.CurName()) || td.CurName() == doltdb.DocTableName {
 			continue
@@ -306,7 +306,7 @@ func getModifiedAndRemovedNotStaged(notStagedTbls []diff.TableDelta, notStagedDo
 }
 
 func getAddedNotStaged(notStagedTbls []diff.TableDelta, notStagedDocs *diff.DocDiffs) (lines []string) {
-	lines = make([]string, 0, len(notStagedTbls) + notStagedDocs.Len())
+	lines = make([]string, 0, len(notStagedTbls)+notStagedDocs.Len())
 	for _, td := range notStagedTbls {
 		if td.IsAdd() || td.IsRename() {
 			// per Git, unstaged renames are shown as drop + add
