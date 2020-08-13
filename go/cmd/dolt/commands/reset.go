@@ -261,7 +261,7 @@ func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootV
 		}
 	}
 
-	if removeModified + notStagedDocs.NumRemoved + notStagedDocs.NumModified > 0 {
+	if removeModified+notStagedDocs.NumRemoved+notStagedDocs.NumModified > 0 {
 		cli.Println("Unstaged changes after reset:")
 
 		var lines []string
