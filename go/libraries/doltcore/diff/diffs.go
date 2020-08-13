@@ -30,6 +30,7 @@ type TableDiffType int
 const (
 	AddedTable TableDiffType = iota
 	ModifiedTable
+	RenamedTable
 	RemovedTable
 )
 
@@ -401,11 +402,20 @@ func (td TableDelta) IsDrop() bool {
 	return td.FromTable != nil && td.ToTable == nil
 }
 
+// IsRename return true if the table was renamed between the fromRoot and toRoot.
 func (td TableDelta) IsRename() bool {
 	if td.IsAdd() || td.IsDrop() {
 		return false
 	}
 	return td.FromName != td.ToName
+}
+
+// CurName returns the most recent name of the table.
+func (td TableDelta) CurName() string {
+	if td.ToName != "" {
+		return td.ToName
+	}
+	return td.FromName
 }
 
 func (td TableDelta) HasFKChanges() bool {

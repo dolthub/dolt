@@ -26,11 +26,9 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/merge"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/editor"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
@@ -172,14 +170,14 @@ func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cl
 	}
 
 	if actions.IsNothingStaged(err) {
-		notStagedTbls := actions.NothingStagedTblDiffs(err)
-		notStagedDocs := actions.NothingStagedDocsDiffs(err)
-		n := printDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, notStagedDocs, false, 0, []string{})
+		//notStagedTbls := actions.NothingStagedTblDiffs(err)
+		//notStagedDocs := actions.NothingStagedDocsDiffs(err)
+		//n := printDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, notStagedDocs, false, 0, []string{})
 
-		if n == 0 {
+		//if n == 0 {
 			bdr := errhand.BuildDError(`no changes added to commit (use "dolt add")`)
 			return HandleVErrAndExitCode(bdr.Build(), usage)
-		}
+		//}
 	}
 
 	if actions.IsTblInConflict(err) {
@@ -213,18 +211,18 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
 	color.NoColor = true
 
 	currBranch := dEnv.RepoState.CWBHeadRef()
-	stagedTblDiffs, notStagedTblDiffs, _ := diff.GetTableDiffs(ctx, dEnv)
-
-	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, dEnv)
-	if err != nil {
-		workingTblsInConflict = []string{}
-	}
-
-	stagedDocDiffs, notStagedDocDiffs, _ := diff.GetDocDiffs(ctx, dEnv)
+	//stagedTblDiffs, notStagedTblDiffs, _ := diff.GetTableDiffs(ctx, dEnv)
+	//
+	//workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, dEnv)
+	//if err != nil {
+	//	workingTblsInConflict = []string{}
+	//}
+	//
+	//stagedDocDiffs, notStagedDocDiffs, _ := diff.GetDocDiffs(ctx, dEnv)
 
 	buf := bytes.NewBuffer([]byte{})
-	n := printStagedDiffs(buf, stagedTblDiffs, stagedDocDiffs, true)
-	n = printDiffsNotStaged(ctx, dEnv, buf, notStagedTblDiffs, notStagedDocDiffs, true, n, workingTblsInConflict)
+	//n := printStagedDiffs(buf, stagedTblDiffs, stagedDocDiffs, true)
+	//n = printDiffsNotStaged(ctx, dEnv, buf, notStagedTblDiffs, notStagedDocDiffs, true, n, workingTblsInConflict)
 
 	initialCommitMessage := "\n" + "# Please enter the commit message for your changes. Lines starting" + "\n" +
 		"# with '#' will be ignored, and an empty message aborts the commit." + "\n# On branch " + currBranch.GetPath() + "\n#" + "\n"

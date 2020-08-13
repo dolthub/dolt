@@ -110,11 +110,10 @@ SQL
     [ "$status" -eq 0 ]
     run dolt status
     [ "$status" -eq 0 ]
-    skip "table renames currently ignored by status"
     [[ "$output" =~ "deleted:        test" ]] || false
     [[ "$output" =~ "new table:      quiz" ]] || false
     dolt add .
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "renamed:    test -> quiz" ]] || false
+    [[ "$output" =~ "renamed:        test -> quiz" ]] || false
 }
