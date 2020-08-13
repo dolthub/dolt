@@ -117,3 +117,28 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "renamed:        test -> quiz" ]] || false
 }
+
+@test "unstaged changes after reset" {
+    dolt sql <<SQL
+CREATE TABLE one (pk int PRIMARY KEY);
+CREATE TABLE two (pk int PRIMARY KEY);
+INSERT INTO  one VALUES (0);
+INSERT INTO  two VALUES (0);
+SQL
+    dolt add -A && dolt commit -m "create tables one, two"
+    dolt sql <<SQL
+INSERT INTO  one VALUES (1);
+DROP TABLE   two;
+CREATE TABLE three (pk int PRIMARY KEY);
+SQL
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "modified:       one" ]] || false
+    [[ "$output" =~ "deleted:        two" ]] || false
+    [[ "$output" =~ "new table:      three" ]] || false
+    run dolt reset
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Unstaged changes after reset:" ]] || false
+    [[ "$output" =~ "M	one" ]] || false
+    [[ "$output" =~ "D	two" ]] || false
+}

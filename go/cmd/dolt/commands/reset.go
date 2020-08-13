@@ -244,7 +244,7 @@ func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootV
 		return
 	}
 
-	notStagedTbls, err := diff.GetTableDeltas(ctx, working, staged)
+	notStagedTbls, err := diff.GetTableDeltas(ctx, staged, working)
 	if err != nil {
 		return
 	}
@@ -266,7 +266,10 @@ func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootV
 
 		var lines []string
 		for _, td := range notStagedTbls {
-			if td.IsDrop() {
+			if td.IsAdd() {
+				//  pre Git, unstaged new tables are untracked
+				continue
+			} else if td.IsDrop() {
 				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[diff.RemovedTable], td.CurName()))
 			} else if td.IsRename() {
 				// per Git, unstaged renames are shown as drop + add
