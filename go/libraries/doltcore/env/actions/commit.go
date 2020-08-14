@@ -64,7 +64,7 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProp
 		return ErrEmptyCommitMessage
 	}
 
-	staged, _, err := diff.GetStagedUnstagedTableDeltas(ctx, dEnv)
+	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, dEnv)
 	if err != nil {
 		return err
 	}
@@ -79,13 +79,11 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProp
 	}
 
 	if len(staged) == 0 && !dEnv.IsMergeActive() && !props.AllowEmpty {
-		// todo: use TableDelta for status/errors
-		_, notStagedTbls, err := diff.GetTableDiffs(ctx, dEnv)
 		_, notStagedDocs, err := diff.GetDocDiffs(ctx, dEnv)
 		if err != nil {
 			return err
 		}
-		return NothingStaged{notStagedTbls, notStagedDocs}
+		return NothingStaged{notStaged, notStagedDocs}
 	}
 
 	name, email, err := GetNameAndEmail(dEnv.Config)

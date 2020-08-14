@@ -213,7 +213,7 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
 	color.NoColor = true
 
 	currBranch := dEnv.RepoState.CWBHeadRef()
-	stagedTblDiffs, notStagedTblDiffs, _ := diff.GetTableDiffs(ctx, dEnv)
+	stagedTblDiffs, notStagedTblDiffs, _ := diff.GetStagedUnstagedTableDeltas(ctx, dEnv)
 
 	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, dEnv)
 	if err != nil {

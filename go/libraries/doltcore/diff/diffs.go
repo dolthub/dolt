@@ -30,16 +30,9 @@ type TableDiffType int
 const (
 	AddedTable TableDiffType = iota
 	ModifiedTable
+	RenamedTable
 	RemovedTable
 )
-
-type TableDiffs struct {
-	NumAdded    int
-	NumModified int
-	NumRemoved  int
-	TableToType map[string]TableDiffType
-	Tables      []string
-}
 
 type DocDiffType int
 
@@ -89,91 +82,6 @@ type RootValueUnreadable struct {
 
 func (rvu RootValueUnreadable) Error() string {
 	return "error: Unable to read " + rvu.rootType.String()
-}
-
-// NewTableDiffs returns the TableDiffs between two roots.
-func NewTableDiffs(ctx context.Context, newer, older *doltdb.RootValue) (*TableDiffs, error) {
-	deltas, err := GetTableDeltas(ctx, older, newer)
-
-	if err != nil {
-		return nil, err
-	}
-
-	var added []string
-	var modified []string
-	var removed []string
-
-	for _, d := range deltas {
-		switch {
-		case d.IsAdd():
-			added = append(added, d.ToName)
-		case d.IsDrop():
-			removed = append(removed, d.FromName)
-		default:
-			modified = append(modified, d.ToName)
-		}
-	}
-
-	var tbls []string
-	tbls = append(tbls, added...)
-	tbls = append(tbls, modified...)
-	tbls = append(tbls, removed...)
-
-	tblToType := make(map[string]TableDiffType)
-	for _, tbl := range added {
-		tblToType[tbl] = AddedTable
-	}
-
-	for _, tbl := range modified {
-		tblToType[tbl] = ModifiedTable
-	}
-
-	for _, tbl := range removed {
-		tblToType[tbl] = RemovedTable
-	}
-
-	sort.Strings(tbls)
-
-	return &TableDiffs{len(added), len(modified), len(removed), tblToType, tbls}, err
-}
-
-func (td *TableDiffs) Len() int {
-	return len(td.Tables)
-}
-
-// GetTableDiffs returns the staged and unstaged TableDiffs for the repo.
-func GetTableDiffs(ctx context.Context, dEnv *env.DoltEnv) (*TableDiffs, *TableDiffs, error) {
-	headRoot, err := dEnv.HeadRoot(ctx)
-
-	if err != nil {
-		return nil, nil, RootValueUnreadable{HeadRoot, err}
-	}
-
-	stagedRoot, err := dEnv.StagedRoot(ctx)
-
-	if err != nil {
-		return nil, nil, RootValueUnreadable{StagedRoot, err}
-	}
-
-	workingRoot, err := dEnv.WorkingRoot(ctx)
-
-	if err != nil {
-		return nil, nil, RootValueUnreadable{WorkingRoot, err}
-	}
-
-	stagedDiffs, err := NewTableDiffs(ctx, stagedRoot, headRoot)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	notStagedDiffs, err := NewTableDiffs(ctx, workingRoot, stagedRoot)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return stagedDiffs, notStagedDiffs, nil
 }
 
 // NewDocDiffs returns DocDiffs for Dolt Docs between two roots.
@@ -401,11 +309,20 @@ func (td TableDelta) IsDrop() bool {
 	return td.FromTable != nil && td.ToTable == nil
 }
 
+// IsRename return true if the table was renamed between the fromRoot and toRoot.
 func (td TableDelta) IsRename() bool {
 	if td.IsAdd() || td.IsDrop() {
 		return false
 	}
 	return td.FromName != td.ToName
+}
+
+// CurName returns the most recent name of the table.
+func (td TableDelta) CurName() string {
+	if td.ToName != "" {
+		return td.ToName
+	}
+	return td.FromName
 }
 
 func (td TableDelta) HasFKChanges() bool {
