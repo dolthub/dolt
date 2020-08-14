@@ -89,6 +89,53 @@ func newCursorAt(ctx context.Context, seq orderedSequence, key orderedKey, forIn
 	return cur, nil
 }
 
+// newCursorBackFromValue returns a reverse sequence iterator starting from the last value <= the one given
+func newCursorBackFromValue(ctx context.Context, seq orderedSequence, val Value) (*sequenceCursor, error) {
+	var key orderedKey
+	if val != nil {
+		var err error
+		key, err = newOrderedKey(val, seq.format())
+
+		if err != nil {
+			return nil, err
+		}
+	}
+	return newCursorBackFrom(ctx, seq, key)
+}
+
+func newCursorBackFrom(ctx context.Context, seq orderedSequence, key orderedKey) (*sequenceCursor, error) {
+	var cur *sequenceCursor
+	for {
+		idx := 0
+		cur = newReverseSequenceCursor(cur, seq, idx)
+		if key != emptyKey {
+			// If we run off the end of the sequence, start the cursor at the last element.
+			ok, err := seekTo(cur, key, true)
+
+			if err != nil {
+				return nil, err
+			}
+
+			if !ok {
+				return cur, nil
+			}
+		}
+
+		cs, err := cur.getChildSequence(ctx)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if cs == nil {
+			break
+		}
+		seq = cs.(orderedSequence)
+	}
+	d.PanicIfFalse(cur != nil)
+	return cur, nil
+}
+
 func seekTo(cur *sequenceCursor, key orderedKey, lastPositionIfNotFound bool) (bool, error) {
 	seq := cur.seq.(orderedSequence)
 
