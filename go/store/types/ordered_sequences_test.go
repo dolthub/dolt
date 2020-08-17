@@ -32,7 +32,7 @@ func (t *testOrderedSequence) getKey(idx int) (orderedKey, error) {
 		return orderedKey{}, err
 	}
 	if cs != nil {
-		return cs.(*testOrderedSequence).getKey(0)
+		return cs.(*testOrderedSequence).getKey(cs.seqLen()-1)
 	}
 
 	return newOrderedKey(t.items[idx].(Value), Format_Default)
@@ -173,6 +173,7 @@ func TestNewCursorBackFromValue(t *testing.T) {
 		},
 	})
 
+	// TODO: figure out what the semantics for the first element of non-present key searches should be
 	testCases := []orderedSequenceTestCase{
 		newOrderedSequenceTestCase(0),
 		newOrderedSequenceTestCase(1, 1),
@@ -181,6 +182,7 @@ func TestNewCursorBackFromValue(t *testing.T) {
 		newOrderedSequenceTestCase(7, 7, 5, 4, 2, 1),
 		newOrderedSequenceTestCase(8, 7, 5, 4, 2, 1),
 		newOrderedSequenceTestCase(10, 10, 7, 5, 4, 2, 1),
+		newOrderedSequenceTestCase(11, 11, 10, 7, 5, 4, 2, 1),
 		newOrderedSequenceTestCase(12, 11, 10, 7, 5, 4, 2, 1),
 		newOrderedSequenceTestCase(20, 20, 11, 10, 7, 5, 4, 2, 1),
 		newOrderedSequenceTestCase(21, 20, 11, 10, 7, 5, 4, 2, 1),
@@ -197,10 +199,12 @@ func TestNewCursorBackFromValue(t *testing.T) {
 
 func assertCursorContents(t *testing.T, cursor *sequenceCursor, expectedVals []Int) {
 	more := true
-	var vals []Int
+	vals := make([]Int, 0)
 
 	for {
-		require.True(t, cursor.valid(), "more values expected")
+		if !cursor.valid() {
+			break
+		}
 		item, err := cursor.current()
 		require.NoError(t, err)
 		intVal, ok := item.(Int)
@@ -214,6 +218,5 @@ func assertCursorContents(t *testing.T, cursor *sequenceCursor, expectedVals []I
 		}
 	}
 
-	require.False(t, cursor.valid())
 	assert.Equal(t, expectedVals, vals)
 }
