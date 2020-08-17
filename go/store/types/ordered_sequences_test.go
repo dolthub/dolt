@@ -86,7 +86,11 @@ func newOrderedTestSequence(items []interface{}) *testOrderedSequence {
 
 	var sequenceItems []interface{}
 	for _, item := range items {
-		sequenceItems = append(sequenceItems, newOrderedTestSequence(item.([]interface{})))
+		if slice, ok := item.([]interface{}); ok {
+			sequenceItems = append(sequenceItems, newOrderedTestSequence(slice))
+		} else {
+			sequenceItems = append(sequenceItems, item)
+		}
 	}
 
 	return &testOrderedSequence{
@@ -165,8 +169,43 @@ func TestNewCursorAtValue(t *testing.T) {
 }
 
 func TestNewCursorBackFromValue(t *testing.T) {
-	testSequence := newOrderedTestSequence([]interface{}{
-		[]interface{}{
+	t.Run("single level sequence", func(t *testing.T) {
+		testSequence := newOrderedTestSequence([]interface{}{
+			Int(1),
+			Int(2),
+			Int(4),
+			Int(5),
+			Int(7),
+			Int(10),
+			Int(11),
+			Int(20),
+		})
+
+		testCases := []orderedSequenceTestCase{
+			newOrderedSequenceTestCase(0),
+			newOrderedSequenceTestCase(1, 1),
+			newOrderedSequenceTestCase(4, 4, 2, 1),
+			newOrderedSequenceTestCase(6, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(7, 7, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(8, 7, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(10, 10, 7, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(11, 11, 10, 7, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(12, 11, 10, 7, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(20, 20, 11, 10, 7, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(21, 20, 11, 10, 7, 5, 4, 2, 1),
+		}
+
+		for _, tt := range testCases {
+			t.Run(fmt.Sprintf("%d", tt.value), func(t *testing.T) {
+				cursor, err := newCursorBackFromValue(context.Background(), testSequence, tt.value)
+				require.NoError(t, err)
+				assertCursorContents(t, cursor, tt.expectedVals)
+			})
+		}
+	})
+
+	t.Run("two level sequence", func(t *testing.T) {
+		testSequence := newOrderedTestSequence([]interface{}{
 			[]interface{}{
 				Int(1),
 				Int(2),
@@ -176,8 +215,6 @@ func TestNewCursorBackFromValue(t *testing.T) {
 				Int(5),
 				Int(7),
 			},
-		},
-		[]interface{}{
 			[]interface{}{
 				Int(10),
 				Int(11),
@@ -185,37 +222,126 @@ func TestNewCursorBackFromValue(t *testing.T) {
 			[]interface{}{
 				Int(20),
 			},
-		},
+		})
+
+		testCases := []orderedSequenceTestCase{
+			newOrderedSequenceTestCase(0),
+			newOrderedSequenceTestCase(1, 1),
+			newOrderedSequenceTestCase(4, 4, 2, 1),
+			newOrderedSequenceTestCase(6, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(7, 7, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(8, 7, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(10, 10, 7, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(11, 11, 10, 7, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(12, 11, 10, 7, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(20, 20, 11, 10, 7, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(21, 20, 11, 10, 7, 5, 4, 2, 1),
+		}
+
+		for _, tt := range testCases {
+			t.Run(fmt.Sprintf("%d", tt.value), func(t *testing.T) {
+				cursor, err := newCursorBackFromValue(context.Background(), testSequence, tt.value)
+				require.NoError(t, err)
+				assertCursorContents(t, cursor, tt.expectedVals)
+			})
+		}
 	})
 
-	testCases := []orderedSequenceTestCase{
-		newOrderedSequenceTestCase(0),
-		newOrderedSequenceTestCase(1, 1),
-		newOrderedSequenceTestCase(4, 4, 2, 1),
-		newOrderedSequenceTestCase(6, 5, 4, 2, 1),
-		newOrderedSequenceTestCase(7, 7, 5, 4, 2, 1),
-		newOrderedSequenceTestCase(8, 7, 5, 4, 2, 1),
-		newOrderedSequenceTestCase(10, 10, 7, 5, 4, 2, 1),
-		newOrderedSequenceTestCase(11, 11, 10, 7, 5, 4, 2, 1),
-		newOrderedSequenceTestCase(12, 11, 10, 7, 5, 4, 2, 1),
-		newOrderedSequenceTestCase(20, 20, 11, 10, 7, 5, 4, 2, 1),
-		newOrderedSequenceTestCase(21, 20, 11, 10, 7, 5, 4, 2, 1),
-	}
-
-	for _, tt := range testCases {
-		t.Run(fmt.Sprintf("%d", tt.value), func(t *testing.T) {
-			cursor, err := newCursorBackFromValue(context.Background(), testSequence, tt.value)
-			require.NoError(t, err)
-			assertCursorContents(t, cursor, tt.expectedVals)
+	t.Run("three level sequence", func(t *testing.T) {
+		testSequence := newOrderedTestSequence([]interface{}{
+			[]interface{}{
+				[]interface{}{
+					Int(1),
+					Int(2),
+				},
+				[]interface{}{
+					Int(4),
+					Int(5),
+					Int(7),
+				},
+			},
+			[]interface{}{
+				[]interface{}{
+					Int(10),
+					Int(11),
+				},
+				[]interface{}{
+					Int(20),
+				},
+			},
 		})
-	}
 
-	// empty sequence
-	tt := newOrderedSequenceTestCase(1)
-	emptySequence := newOrderedTestSequence(nil)
-	cursor, err := newCursorBackFromValue(context.Background(), emptySequence, tt.value)
-	require.NoError(t, err)
-	assertCursorContents(t, cursor, tt.expectedVals)
+		testCases := []orderedSequenceTestCase{
+			newOrderedSequenceTestCase(0),
+			newOrderedSequenceTestCase(1, 1),
+			newOrderedSequenceTestCase(4, 4, 2, 1),
+			newOrderedSequenceTestCase(6, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(7, 7, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(8, 7, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(10, 10, 7, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(11, 11, 10, 7, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(12, 11, 10, 7, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(20, 20, 11, 10, 7, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(21, 20, 11, 10, 7, 5, 4, 2, 1),
+		}
+
+		for _, tt := range testCases {
+			t.Run(fmt.Sprintf("%d", tt.value), func(t *testing.T) {
+				cursor, err := newCursorBackFromValue(context.Background(), testSequence, tt.value)
+				require.NoError(t, err)
+				assertCursorContents(t, cursor, tt.expectedVals)
+			})
+		}
+	})
+
+	t.Run("mixed level sequence", func(t *testing.T) {
+		testSequence := newOrderedTestSequence([]interface{}{
+			[]interface{}{
+				[]interface{}{
+					Int(1),
+					Int(2),
+				},
+				[]interface{}{
+					Int(4),
+					Int(5),
+					Int(7),
+				},
+			},
+			[]interface{}{
+				Int(10),
+				Int(11),
+			},
+		})
+
+		testCases := []orderedSequenceTestCase{
+			newOrderedSequenceTestCase(0),
+			newOrderedSequenceTestCase(1, 1),
+			newOrderedSequenceTestCase(4, 4, 2, 1),
+			newOrderedSequenceTestCase(6, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(7, 7, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(8, 7, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(10, 10, 7, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(11, 11, 10, 7, 5, 4, 2, 1),
+			newOrderedSequenceTestCase(12, 11, 10, 7, 5, 4, 2, 1),
+		}
+
+		for _, tt := range testCases {
+			t.Run(fmt.Sprintf("%d", tt.value), func(t *testing.T) {
+				cursor, err := newCursorBackFromValue(context.Background(), testSequence, tt.value)
+				require.NoError(t, err)
+				assertCursorContents(t, cursor, tt.expectedVals)
+			})
+		}
+	})
+
+	t.Run("empty sequence", func(t *testing.T) {
+		// empty sequence
+		tt := newOrderedSequenceTestCase(1)
+		emptySequence := newOrderedTestSequence(nil)
+		cursor, err := newCursorBackFromValue(context.Background(), emptySequence, tt.value)
+		require.NoError(t, err)
+		assertCursorContents(t, cursor, tt.expectedVals)
+	})
 }
 
 func assertCursorContents(t *testing.T, cursor *sequenceCursor, expectedVals []Int) {
