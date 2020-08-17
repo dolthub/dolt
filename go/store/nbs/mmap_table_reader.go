@@ -163,6 +163,10 @@ func (mmtr *mmapTableReader) hash() (addr, error) {
 	return mmtr.h, nil
 }
 
+func (mmtr *mmapTableReader) Close() error {
+	return nil
+}
+
 type cacheReaderAt struct {
 	path string
 	fc   *fdCache

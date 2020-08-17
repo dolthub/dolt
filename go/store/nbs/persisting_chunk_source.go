@@ -94,6 +94,11 @@ func (ccs *persistingChunkSource) getReader() chunkReader {
 	return ccs.cs
 }
 
+func (ccs *persistingChunkSource) Close() error {
+	// persistingChunkSource does not own |cs| or |mt|. No need to close them.
+	return nil
+}
+
 func (ccs *persistingChunkSource) has(h addr) (bool, error) {
 	cr := ccs.getReader()
 
@@ -295,5 +300,9 @@ func (ecs emptyChunkSource) calcReads(reqs []getRecord, blockSize uint64) (reads
 }
 
 func (ecs emptyChunkSource) extract(ctx context.Context, chunks chan<- extractRecord) error {
+	return nil
+}
+
+func (ecs emptyChunkSource) Close() error {
 	return nil
 }

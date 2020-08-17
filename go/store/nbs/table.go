@@ -232,6 +232,8 @@ type chunkReader interface {
 	extract(ctx context.Context, chunks chan<- extractRecord) error
 	count() (uint32, error)
 	uncompressedLen() (uint64, error)
+
+	Close() error
 }
 
 type chunkReadPlanner interface {

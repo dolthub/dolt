@@ -30,6 +30,7 @@ import (
 	"os"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"github.com/golang/snappy"
 	"github.com/liquidata-inc/mmap-go"
@@ -135,6 +136,7 @@ type mmapTableIndex struct {
 	fileSz                uint64
 	prefixes              []uint64
 	data                  mmap.MMap
+	refCnt                *int32
 }
 
 func (i mmapTableIndex) Prefixes() []uint64 {
@@ -156,6 +158,22 @@ func (i mmapTableIndex) ChunkCount() uint32 {
 
 func (i mmapTableIndex) TotalUncompressedData() uint64 {
 	return i.totalUncompressedData
+}
+
+func (i mmapTableIndex) Close() error {
+	cnt := atomic.AddInt32(i.refCnt, -1)
+	if cnt == 0 {
+		return i.data.Unmap()
+	}
+	return nil
+}
+
+func (i mmapTableIndex) Clone() tableIndex {
+	cnt := atomic.AddInt32(i.refCnt, 1)
+	if cnt == 1 {
+		panic("Clone() called after last Close(). This index is no longer valid.")
+	}
+	return i
 }
 
 type mmapOrdinalSlice []mmapOrdinal
@@ -267,12 +285,15 @@ func newMmapTableIndex(ti onHeapTableIndex, f *os.File) (mmapTableIndex, error) 
 		binary.BigEndian.PutUint32(arr[idx+addrSuffixSize+8:], ti.lengths[ti.ordinals[i]])
 	}
 
+	refCnt := new(int32)
+	*refCnt = 1
 	return mmapTableIndex{
 		ti.chunkCount,
 		ti.totalUncompressedData,
 		ti.TableFileSize(),
 		ti.Prefixes(),
 		arr,
+		refCnt,
 	}, nil
 }
 
@@ -295,14 +316,20 @@ type tableReader struct {
 }
 
 type tableIndex interface {
-	Prefixes() []uint64
-	Ordinals() []uint32
-	Lookup(h *addr) (indexEntry, bool)
+	ChunkCount() uint32
 	EntrySuffixMatches(idx uint32, h *addr) bool
 	IndexEntry(idx uint32, a *addr) indexEntry
-	ChunkCount() uint32
-	TotalUncompressedData() uint64
+	Lookup(h *addr) (indexEntry, bool)
+	Ordinals() []uint32
+	Prefixes() []uint64
 	TableFileSize() uint64
+	TotalUncompressedData() uint64
+
+	Close() error
+
+	// Returns a tableIndex with the same contents which can be Close'd
+	// independently.
+	Clone() tableIndex
 }
 
 var _ tableIndex = mmapTableIndex{}
@@ -484,6 +511,14 @@ func (i onHeapTableIndex) ChunkCount() uint32 {
 
 func (i onHeapTableIndex) TotalUncompressedData() uint64 {
 	return i.totalUncompressedData
+}
+
+func (i onHeapTableIndex) Close() error {
+	return nil
+}
+
+func (i onHeapTableIndex) Clone() tableIndex {
+	return i
 }
 
 // newTableReader parses a valid nbs table byte stream and returns a reader. buff must end with an NBS index
@@ -986,6 +1021,10 @@ func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) 
 func (tr tableReader) reader(ctx context.Context) (io.Reader, error) {
 	i, _ := tr.index()
 	return io.LimitReader(&readerAdapter{tr.r, 0, ctx}, int64(i.TableFileSize())), nil
+}
+
+func (tr tableReader) Close() error {
+	return tr.tableIndex.Close()
 }
 
 type readerAdapter struct {

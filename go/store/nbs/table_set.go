@@ -319,6 +319,23 @@ func (ts tableSet) physicalLen() (uint64, error) {
 	return lenNovel + lenUp, nil
 }
 
+func (ts tableSet) Close() error {
+	var firstErr error
+	for _, t := range ts.novel {
+		err := t.Close()
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	for _, t := range ts.upstream {
+		err := t.Close()
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
 // Size returns the number of tables in this tableSet.
 func (ts tableSet) Size() int {
 	return len(ts.novel) + len(ts.upstream)

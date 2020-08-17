@@ -873,8 +873,8 @@ func (nbs *NomsBlockStore) Version() string {
 	return nbs.upstream.vers
 }
 
-func (nbs *NomsBlockStore) Close() (err error) {
-	return
+func (nbs *NomsBlockStore) Close() error {
+	return nbs.tables.Close()
 }
 
 func (nbs *NomsBlockStore) Stats() interface{} {
