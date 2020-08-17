@@ -70,6 +70,12 @@ func (t *testOrderedSequence) search(key orderedKey) (int, error) {
 // items is a slice of slices of slices... of Values. Each slice that contains non-value children will be treated as the
 // parent slice for N additional children, one for each slice.
 func newOrderedTestSequence(items []interface{}) *testOrderedSequence {
+	if len(items) == 0 {
+		return &testOrderedSequence{
+			testSequence: testSequence{nil},
+		}
+	}
+
 	_, firstChildIsValue := items[0].(Value)
 	if firstChildIsValue {
 		return &testOrderedSequence{
@@ -135,6 +141,7 @@ func TestNewCursorAtValue(t *testing.T) {
 		newOrderedSequenceTestCase(7, 7, 10, 11, 20),
 		newOrderedSequenceTestCase(8, 10, 11, 20),
 		newOrderedSequenceTestCase(10, 10, 11, 20),
+		newOrderedSequenceTestCase(11, 11, 20),
 		newOrderedSequenceTestCase(12, 20),
 		newOrderedSequenceTestCase(20, 20),
 		newOrderedSequenceTestCase(21),
@@ -147,6 +154,13 @@ func TestNewCursorAtValue(t *testing.T) {
 			assertCursorContents(t, cursor, tt.expectedVals)
 		})
 	}
+
+	// empty sequence
+	tt := newOrderedSequenceTestCase(1)
+	emptySequence := newOrderedTestSequence(nil)
+	cursor, err := newCursorAtValue(context.Background(), emptySequence, tt.value, false, false)
+	require.NoError(t, err)
+	assertCursorContents(t, cursor, tt.expectedVals)
 }
 
 func TestNewCursorBackFromValue(t *testing.T) {
@@ -173,7 +187,6 @@ func TestNewCursorBackFromValue(t *testing.T) {
 		},
 	})
 
-	// TODO: figure out what the semantics for the first element of non-present key searches should be
 	testCases := []orderedSequenceTestCase{
 		newOrderedSequenceTestCase(0),
 		newOrderedSequenceTestCase(1, 1),
@@ -195,6 +208,13 @@ func TestNewCursorBackFromValue(t *testing.T) {
 			assertCursorContents(t, cursor, tt.expectedVals)
 		})
 	}
+
+	// empty sequence
+	tt := newOrderedSequenceTestCase(1)
+	emptySequence := newOrderedTestSequence(nil)
+	cursor, err := newCursorBackFromValue(context.Background(), emptySequence, tt.value)
+	require.NoError(t, err)
+	assertCursorContents(t, cursor, tt.expectedVals)
 }
 
 func assertCursorContents(t *testing.T, cursor *sequenceCursor, expectedVals []Int) {

@@ -89,7 +89,7 @@ func newCursorAt(ctx context.Context, seq orderedSequence, key orderedKey, forIn
 	return cur, nil
 }
 
-// newCursorBackFromValue returns a reverse sequence iterator starting from the last value <= the one given
+// newCursorBackFromValue returns a reverse sequence iterator starting from the greatest value <= the one given
 func newCursorBackFromValue(ctx context.Context, seq orderedSequence, val Value) (*sequenceCursor, error) {
 	var key orderedKey
 	if val != nil {
@@ -132,6 +132,25 @@ func newCursorBackFrom(ctx context.Context, seq orderedSequence, key orderedKey)
 		}
 		seq = cs.(orderedSequence)
 	}
+
+	// If we overshot the key, back off by one. We want the greatest element <= key
+	if cur.valid() {
+		currKey, err := cur.seq.(orderedSequence).getKey(cur.idx)
+		d.PanicIfError(err)
+
+		isLess, err := key.Less(cur.seq.format(), currKey)
+		if err != nil {
+			return nil, err
+		}
+
+		if isLess {
+			_, err := cur.advance(ctx)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	d.PanicIfFalse(cur != nil)
 	return cur, nil
 }
@@ -148,7 +167,7 @@ func seekTo(cur *sequenceCursor, key orderedKey, lastPositionIfNotFound bool) (b
 	}
 
 	seqLen := seq.seqLen()
-	if cur.idx == seqLen && lastPositionIfNotFound {
+	if cur.idx == seqLen && seqLen > 0 && lastPositionIfNotFound {
 		d.PanicIfFalse(cur.idx > 0)
 		cur.idx--
 	}
