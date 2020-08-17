@@ -165,6 +165,9 @@ func (i mmapTableIndex) Close() error {
 	if cnt == 0 {
 		return i.data.Unmap()
 	}
+	if cnt < 0 {
+		panic("Close() called and reduced ref count to < 0.")
+	}
 	return nil
 }
 
@@ -1025,6 +1028,10 @@ func (tr tableReader) reader(ctx context.Context) (io.Reader, error) {
 
 func (tr tableReader) Close() error {
 	return tr.tableIndex.Close()
+}
+
+func (tr tableReader) Clone() tableReader {
+	return tableReader{tr.tableIndex.Clone(), tr.prefixes, tr.chunkCount, tr.totalUncompressedData, tr.r, tr.blockSize}
 }
 
 type readerAdapter struct {

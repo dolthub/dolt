@@ -431,7 +431,7 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 		}
 
 		if cnt > 0 {
-			merged.novel = append(merged.novel, t)
+			merged.novel = append(merged.novel, t.Clone())
 		}
 	}
 
@@ -467,7 +467,7 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 						return
 					}
 					if spec.name == h {
-						merged.upstream[idx] = existing
+						merged.upstream[idx] = existing.Clone()
 						return
 					}
 				}

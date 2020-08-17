@@ -99,6 +99,11 @@ func (ccs *persistingChunkSource) Close() error {
 	return nil
 }
 
+func (ccs *persistingChunkSource) Clone() chunkSource {
+	// persistingChunkSource does not own |cs| or |mt|. No need to Clone.
+	return ccs
+}
+
 func (ccs *persistingChunkSource) has(h addr) (bool, error) {
 	cr := ccs.getReader()
 
@@ -305,4 +310,8 @@ func (ecs emptyChunkSource) extract(ctx context.Context, chunks chan<- extractRe
 
 func (ecs emptyChunkSource) Close() error {
 	return nil
+}
+
+func (ecs emptyChunkSource) Clone() chunkSource {
+	return ecs
 }

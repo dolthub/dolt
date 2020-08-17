@@ -237,7 +237,12 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 	}
 
 	nbs.upstream = updatedContents
+	oldTables := nbs.tables
 	nbs.tables = newTables
+	err = oldTables.Close()
+	if err != nil {
+		return manifestContents{}, err
+	}
 
 	return updatedContents, nil
 }
@@ -360,7 +365,12 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager
 		}
 
 		nbs.upstream = contents
+		oldTables := nbs.tables
 		nbs.tables = newTables
+		err = oldTables.Close()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return nbs, nil
@@ -683,7 +693,12 @@ func (nbs *NomsBlockStore) Rebase(ctx context.Context) error {
 		}
 
 		nbs.upstream = contents
+		oldTables := nbs.tables
 		nbs.tables = newTables
+		err = oldTables.Close()
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -787,10 +802,16 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		}
 
 		nbs.upstream = upstream
+		oldTables := nbs.tables
 		nbs.tables = newTables
+		err = oldTables.Close()
 
 		if last != upstream.root {
 			return errOptimisticLockFailedRoot
+		}
+
+		if err != nil {
+			return err
 		}
 
 		return errOptimisticLockFailedTables
@@ -829,7 +850,12 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		}
 
 		nbs.upstream = newUpstream
+		oldTables := nbs.tables
 		nbs.tables = newTables
+		err = oldTables.Close()
+		if err != nil {
+			return err
+		}
 
 		return errOptimisticLockFailedTables
 	}

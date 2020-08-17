@@ -164,7 +164,11 @@ func (mmtr *mmapTableReader) hash() (addr, error) {
 }
 
 func (mmtr *mmapTableReader) Close() error {
-	return nil
+	return mmtr.tableReader.Close()
+}
+
+func (mmtr *mmapTableReader) Clone() chunkSource {
+	return &mmapTableReader{mmtr.tableReader.Clone(), mmtr.fc, mmtr.h}
 }
 
 type cacheReaderAt struct {
