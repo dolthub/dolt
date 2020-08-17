@@ -41,11 +41,12 @@ func (t *testOrderedSequence) getKey(idx int) (orderedKey, error) {
 
 func (t *testOrderedSequence) getChildSequence(_ context.Context, idx int) (sequence, error) {
 	child := t.items[idx]
-	childSeq, ok := child.(*testOrderedSequence)
-	if !ok {
+	switch child := child.(type) {
+	case *testOrderedSequence:
+		return child, nil
+	default:
 		return nil, nil
 	}
-	return childSeq, nil
 }
 
 func (t *testOrderedSequence) search(key orderedKey) (int, error) {
@@ -115,8 +116,43 @@ func newOrderedSequenceTestCase(val int, expectedValues ...int) orderedSequenceT
 }
 
 func TestNewCursorAtValue(t *testing.T) {
-	testSequence := newOrderedTestSequence([]interface{}{
-		[]interface{}{
+	t.Run("single level sequence", func(t *testing.T) {
+		testSequence := newOrderedTestSequence([]interface{}{
+			Int(1),
+			Int(2),
+			Int(4),
+			Int(5),
+			Int(7),
+			Int(10),
+			Int(11),
+			Int(20),
+		})
+
+		testCases := []orderedSequenceTestCase{
+			newOrderedSequenceTestCase(0, 1, 2, 4, 5, 7, 10, 11, 20),
+			newOrderedSequenceTestCase(1, 1, 2, 4, 5, 7, 10, 11, 20),
+			newOrderedSequenceTestCase(4, 4, 5, 7, 10, 11, 20),
+			newOrderedSequenceTestCase(6, 7, 10, 11, 20),
+			newOrderedSequenceTestCase(7, 7, 10, 11, 20),
+			newOrderedSequenceTestCase(8, 10, 11, 20),
+			newOrderedSequenceTestCase(10, 10, 11, 20),
+			newOrderedSequenceTestCase(11, 11, 20),
+			newOrderedSequenceTestCase(12, 20),
+			newOrderedSequenceTestCase(20, 20),
+			newOrderedSequenceTestCase(21),
+		}
+
+		for _, tt := range testCases {
+			t.Run(fmt.Sprintf("%d", tt.value), func(t *testing.T) {
+				cursor, err := newCursorAtValue(context.Background(), testSequence, tt.value, false, false)
+				require.NoError(t, err)
+				assertCursorContents(t, cursor, tt.expectedVals)
+			})
+		}
+	})
+
+	t.Run("2 level sequence", func(t *testing.T) {
+		testSequence := newOrderedTestSequence([]interface{}{
 			[]interface{}{
 				Int(1),
 				Int(2),
@@ -126,8 +162,6 @@ func TestNewCursorAtValue(t *testing.T) {
 				Int(5),
 				Int(7),
 			},
-		},
-		[]interface{}{
 			[]interface{}{
 				Int(10),
 				Int(11),
@@ -135,37 +169,141 @@ func TestNewCursorAtValue(t *testing.T) {
 			[]interface{}{
 				Int(20),
 			},
-		},
+		})
+
+		testCases := []orderedSequenceTestCase{
+			newOrderedSequenceTestCase(0, 1, 2, 4, 5, 7, 10, 11, 20),
+			newOrderedSequenceTestCase(1, 1, 2, 4, 5, 7, 10, 11, 20),
+			newOrderedSequenceTestCase(4, 4, 5, 7, 10, 11, 20),
+			newOrderedSequenceTestCase(6, 7, 10, 11, 20),
+			newOrderedSequenceTestCase(7, 7, 10, 11, 20),
+			newOrderedSequenceTestCase(8, 10, 11, 20),
+			newOrderedSequenceTestCase(10, 10, 11, 20),
+			newOrderedSequenceTestCase(11, 11, 20),
+			newOrderedSequenceTestCase(12, 20),
+			newOrderedSequenceTestCase(20, 20),
+			newOrderedSequenceTestCase(21),
+		}
+
+		for _, tt := range testCases {
+			t.Run(fmt.Sprintf("%d", tt.value), func(t *testing.T) {
+				cursor, err := newCursorAtValue(context.Background(), testSequence, tt.value, false, false)
+				require.NoError(t, err)
+				assertCursorContents(t, cursor, tt.expectedVals)
+			})
+		}
 	})
 
-	testCases := []orderedSequenceTestCase{
-		newOrderedSequenceTestCase(0, 1, 2, 4, 5, 7, 10, 11, 20),
-		newOrderedSequenceTestCase(1, 1, 2, 4, 5, 7, 10, 11, 20),
-		newOrderedSequenceTestCase(4, 4, 5, 7, 10, 11, 20),
-		newOrderedSequenceTestCase(6, 7, 10, 11, 20),
-		newOrderedSequenceTestCase(7, 7, 10, 11, 20),
-		newOrderedSequenceTestCase(8, 10, 11, 20),
-		newOrderedSequenceTestCase(10, 10, 11, 20),
-		newOrderedSequenceTestCase(11, 11, 20),
-		newOrderedSequenceTestCase(12, 20),
-		newOrderedSequenceTestCase(20, 20),
-		newOrderedSequenceTestCase(21),
-	}
-
-	for _, tt := range testCases {
-		t.Run(fmt.Sprintf("%d", tt.value), func(t *testing.T) {
-			cursor, err := newCursorAtValue(context.Background(), testSequence, tt.value, false, false)
-			require.NoError(t, err)
-			assertCursorContents(t, cursor, tt.expectedVals)
+	t.Run("3 level sequence", func(t *testing.T) {
+		testSequence := newOrderedTestSequence([]interface{}{
+			[]interface{}{
+				[]interface{}{
+					Int(1),
+					Int(2),
+				},
+				[]interface{}{
+					Int(4),
+					Int(5),
+					Int(7),
+				},
+			},
+			[]interface{}{
+				[]interface{}{
+					Int(10),
+					Int(11),
+				},
+				[]interface{}{
+					Int(20),
+				},
+			},
 		})
-	}
 
-	// empty sequence
-	tt := newOrderedSequenceTestCase(1)
-	emptySequence := newOrderedTestSequence(nil)
-	cursor, err := newCursorAtValue(context.Background(), emptySequence, tt.value, false, false)
-	require.NoError(t, err)
-	assertCursorContents(t, cursor, tt.expectedVals)
+		testCases := []orderedSequenceTestCase{
+			newOrderedSequenceTestCase(0, 1, 2, 4, 5, 7, 10, 11, 20),
+			newOrderedSequenceTestCase(1, 1, 2, 4, 5, 7, 10, 11, 20),
+			newOrderedSequenceTestCase(4, 4, 5, 7, 10, 11, 20),
+			newOrderedSequenceTestCase(6, 7, 10, 11, 20),
+			newOrderedSequenceTestCase(7, 7, 10, 11, 20),
+			newOrderedSequenceTestCase(8, 10, 11, 20),
+			newOrderedSequenceTestCase(10, 10, 11, 20),
+			newOrderedSequenceTestCase(11, 11, 20),
+			newOrderedSequenceTestCase(12, 20),
+			newOrderedSequenceTestCase(20, 20),
+			newOrderedSequenceTestCase(21),
+		}
+
+		for _, tt := range testCases {
+			t.Run(fmt.Sprintf("%d", tt.value), func(t *testing.T) {
+				cursor, err := newCursorAtValue(context.Background(), testSequence, tt.value, false, false)
+				require.NoError(t, err)
+				assertCursorContents(t, cursor, tt.expectedVals)
+			})
+		}
+	})
+
+	t.Run("unbalanced tree", func(t *testing.T) {
+		t.Skip("Unbalanced tree sequence cursors are broken")
+		testSequence := newOrderedTestSequence([]interface{}{
+			[]interface{}{ // interior node, level 1
+				[]interface{}{ // interior node, level 2
+					[]interface{}{ // value node, level 3
+						Int(1),
+					},
+					[]interface{}{ // value node, level 3
+						Int(2),
+					},
+				},
+				[]interface{}{ // interior node, level 2
+					[]interface{}{ // value node, level 3
+						Int(4),
+					},
+					[]interface{}{ // value node, level 3
+						Int(5),
+						Int(7),
+					},
+				},
+			},
+			[]interface{}{ // interior node, level 1
+				[]interface{}{ // value node, level 2
+					Int(10),
+					Int(11),
+				},
+				[]interface{}{ // value node, level 2
+					Int(20),
+				},
+			},
+		})
+
+		testCases := []orderedSequenceTestCase{
+			newOrderedSequenceTestCase(0, 1, 2, 4, 5, 7, 10, 11, 20),
+			newOrderedSequenceTestCase(1, 1, 2, 4, 5, 7, 10, 11, 20),
+			newOrderedSequenceTestCase(4, 4, 5, 7, 10, 11, 20),
+			newOrderedSequenceTestCase(6, 7, 10, 11, 20),
+			newOrderedSequenceTestCase(7, 7, 10, 11, 20),
+			newOrderedSequenceTestCase(8, 10, 11, 20),
+			newOrderedSequenceTestCase(10, 10, 11, 20),
+			newOrderedSequenceTestCase(11, 11, 20),
+			newOrderedSequenceTestCase(12, 20),
+			newOrderedSequenceTestCase(20, 20),
+			newOrderedSequenceTestCase(21),
+		}
+
+		for _, tt := range testCases {
+			t.Run(fmt.Sprintf("%d", tt.value), func(t *testing.T) {
+				cursor, err := newCursorAtValue(context.Background(), testSequence, tt.value, false, false)
+				require.NoError(t, err)
+				assertCursorContents(t, cursor, tt.expectedVals)
+			})
+		}
+	})
+
+	t.Run("empty sequence", func(t *testing.T) {
+		tt := newOrderedSequenceTestCase(1)
+		emptySequence := newOrderedTestSequence(nil)
+		cursor, err := newCursorAtValue(context.Background(), emptySequence, tt.value, false, false)
+		require.NoError(t, err)
+		assertCursorContents(t, cursor, tt.expectedVals)
+	})
 }
 
 func TestNewCursorBackFromValue(t *testing.T) {
@@ -294,22 +432,36 @@ func TestNewCursorBackFromValue(t *testing.T) {
 		}
 	})
 
-	t.Run("mixed level sequence", func(t *testing.T) {
+	t.Run("unbalanced tree", func(t *testing.T) {
+		t.Skip("Unbalanced tree sequence cursors are broken")
 		testSequence := newOrderedTestSequence([]interface{}{
-			[]interface{}{
-				[]interface{}{
-					Int(1),
-					Int(2),
+			[]interface{}{ // interior node, level 1
+				[]interface{}{ // interior node, level 2
+					[]interface{}{ // value node, level 3
+						Int(1),
+					},
+					[]interface{}{ // value node, level 3
+						Int(2),
+					},
 				},
-				[]interface{}{
-					Int(4),
-					Int(5),
-					Int(7),
+				[]interface{}{ // interior node, level 2
+					[]interface{}{ // value node, level 3
+						Int(4),
+					},
+					[]interface{}{ // value node, level 3
+						Int(5),
+						Int(7),
+					},
 				},
 			},
-			[]interface{}{
-				Int(10),
-				Int(11),
+			[]interface{}{ // interior node, level 1
+				[]interface{}{ // value node, level 2
+					Int(10),
+					Int(11),
+				},
+				[]interface{}{ // value node, level 2
+					Int(20),
+				},
 			},
 		})
 
