@@ -17,9 +17,10 @@ package types
 import (
 	"context"
 	"fmt"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 type testOrderedSequence struct {
@@ -32,7 +33,7 @@ func (t *testOrderedSequence) getKey(idx int) (orderedKey, error) {
 		return orderedKey{}, err
 	}
 	if cs != nil {
-		return cs.(*testOrderedSequence).getKey(cs.seqLen()-1)
+		return cs.(*testOrderedSequence).getKey(cs.seqLen() - 1)
 	}
 
 	return newOrderedKey(t.items[idx].(Value), Format_Default)
