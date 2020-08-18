@@ -25,8 +25,8 @@ import (
 	"github.com/liquidata-inc/go-mysql-server/sql"
 	"github.com/liquidata-inc/go-mysql-server/sql/parse"
 	"github.com/liquidata-inc/go-mysql-server/sql/plan"
+	"github.com/liquidata-inc/vitess/go/vt/proto/query"
 	"gopkg.in/src-d/go-errors.v1"
-	"vitess.io/vitess/go/vt/proto/query"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
@@ -606,19 +606,21 @@ func (db Database) createTable(ctx *sql.Context, tableName string, sch sql.Schem
 		return err
 	}
 
-	tt, err := root.TablesNamesForTags(ctx, doltSch.GetAllCols().Tags...)
-	if err != nil {
-		return err
-	}
-	if len(tt) > 0 {
-		var ee []string
-		_ = doltSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			if collisionTable, tagExists := tt[tag]; tagExists {
-				ee = append(ee, schema.ErrTagPrevUsed(tag, col.Name, collisionTable).Error())
-			}
-			return false, nil
-		})
-		return fmt.Errorf(strings.Join(ee, "\n"))
+	var conflictingTbls []string
+	_ = doltSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		_, tbl, exists, err := root.GetTableByColTag(ctx, tag)
+		if err != nil {
+			return true, err
+		}
+		if exists {
+			errStr := schema.ErrTagPrevUsed(tag, col.Name, tbl).Error()
+			conflictingTbls = append(conflictingTbls, errStr)
+		}
+		return false, nil
+	})
+
+	if len(conflictingTbls) > 0 {
+		return fmt.Errorf(strings.Join(conflictingTbls, "\n"))
 	}
 
 	newRoot, err := root.CreateEmptyTable(ctx, tableName, doltSch)

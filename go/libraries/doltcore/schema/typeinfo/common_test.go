@@ -20,8 +20,8 @@ import (
 	"testing"
 
 	"github.com/liquidata-inc/go-mysql-server/sql"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
 	"github.com/stretchr/testify/require"
-	"vitess.io/vitess/go/sqltypes"
 
 	"github.com/liquidata-inc/dolt/go/libraries/utils/mathutil"
 )

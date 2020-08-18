@@ -71,7 +71,7 @@ func TestGetComparisonType(t *testing.T) {
 		},
 		{
 			" > float(median)",
-			expression.NewIn(getId, expression.NewTuple(litOne, litTwo, litThree)).BinaryExpression,
+			expression.NewInTuple(getId, expression.NewTuple(litOne, litTwo, litThree)).BinaryExpression,
 			1,
 			3,
 			VariableInLiteralList,

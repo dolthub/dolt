@@ -56,7 +56,7 @@ type test struct {
 
 func TestSchemaAsCreateStmt(t *testing.T) {
 	tSchema := sqltestutil.PeopleTestSchema
-	stmt := CreateTableStmtWithTags("table_name", tSchema, nil)
+	stmt := CreateTableStmtWithTags("table_name", tSchema, nil, nil)
 
 	assert.Equal(t, expectedCreateSQL, stmt)
 }

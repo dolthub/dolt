@@ -69,25 +69,81 @@ func FmtColTagComment(tag uint64) string {
 	return fmt.Sprintf("%s%d", TagCommentPrefix, tag)
 }
 
+func FmtIndex(index schema.Index) string {
+	sb := strings.Builder{}
+	if index.IsUnique() {
+		sb.WriteString("UNIQUE ")
+	}
+	sb.WriteString("INDEX ")
+	sb.WriteString(QuoteIdentifier(index.Name()))
+	sb.WriteString(" (")
+	for i, indexColName := range index.ColumnNames() {
+		if i != 0 {
+			sb.WriteRune(',')
+		}
+		sb.WriteString(QuoteIdentifier(indexColName))
+	}
+	sb.WriteRune(')')
+	if len(index.Comment()) > 0 {
+		sb.WriteString(" COMMENT ")
+		sb.WriteString(QuoteComment(index.Comment()))
+	}
+	return sb.String()
+}
+
+func FmtForeignKey(fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
+	sb := strings.Builder{}
+	sb.WriteString("CONSTRAINT ")
+	sb.WriteString(QuoteIdentifier(fk.Name))
+	sb.WriteString(" FOREIGN KEY (")
+	for i, tag := range fk.TableColumns {
+		if i != 0 {
+			sb.WriteRune(',')
+		}
+		c, _ := sch.GetAllCols().GetByTag(tag)
+		sb.WriteString(QuoteIdentifier(c.Name))
+	}
+	sb.WriteString(")\n    REFERENCES ")
+	sb.WriteString(QuoteIdentifier(fk.ReferencedTableName))
+	sb.WriteString(" (")
+	for i, tag := range fk.ReferencedTableColumns {
+		if i != 0 {
+			sb.WriteRune(',')
+		}
+		c, _ := parentSch.GetAllCols().GetByTag(tag)
+		sb.WriteString(QuoteIdentifier(c.Name))
+	}
+	sb.WriteRune(')')
+	if fk.OnDelete != doltdb.ForeignKeyReferenceOption_DefaultAction {
+		sb.WriteString("\n    ON DELETE ")
+		sb.WriteString(fk.OnDelete.String())
+	}
+	if fk.OnUpdate != doltdb.ForeignKeyReferenceOption_DefaultAction {
+		sb.WriteString("\n    ON UPDATE ")
+		sb.WriteString(fk.OnUpdate.String())
+	}
+	return sb.String()
+}
+
 // CreateTableStmtWithTags generates a SQL CREATE TABLE command
-func CreateTableStmt(tableName string, sch schema.Schema, foreignKeys []*doltdb.DisplayForeignKey) string {
+func CreateTableStmt(tableName string, sch schema.Schema, foreignKeys []doltdb.ForeignKey, parentSchs map[string]schema.Schema) string {
 	return createTableStmt(tableName, sch, func(col schema.Column) string {
 		return FmtCol(2, 0, 0, col)
-	}, foreignKeys)
+	}, foreignKeys, parentSchs)
 }
 
 // CreateTableStmtWithTags generates a SQL CREATE TABLE command that includes the column tags as comments
-func CreateTableStmtWithTags(tableName string, sch schema.Schema, foreignKeys []*doltdb.DisplayForeignKey) string {
+func CreateTableStmtWithTags(tableName string, sch schema.Schema, foreignKeys []doltdb.ForeignKey, parentSchs map[string]schema.Schema) string {
 	return createTableStmt(tableName, sch, func(col schema.Column) string {
 		return FmtColWithTag(2, 0, 0, col)
-	}, foreignKeys)
+	}, foreignKeys, parentSchs)
 }
 
 type fmtColFunc func(col schema.Column) string
 
-func createTableStmt(tableName string, sch schema.Schema, fmtCol fmtColFunc, foreignKeys []*doltdb.DisplayForeignKey) string {
+func createTableStmt(tableName string, sch schema.Schema, fmtCol fmtColFunc, foreignKeys []doltdb.ForeignKey, parentSchs map[string]schema.Schema) string {
 
-	sb := &strings.Builder{}
+	sb := strings.Builder{}
 	sb.WriteString(fmt.Sprintf("CREATE TABLE %s (\n", QuoteIdentifier(tableName)))
 
 	firstLine := true
@@ -118,55 +174,14 @@ func createTableStmt(tableName string, sch schema.Schema, fmtCol fmtColFunc, for
 
 	sb.WriteRune(')')
 
-	for _, index := range sch.Indexes().AllIndexes() {
+	for _, idx := range sch.Indexes().AllIndexes() {
 		sb.WriteString(",\n  ")
-		if index.IsUnique() {
-			sb.WriteString("UNIQUE ")
-		}
-		sb.WriteString("INDEX ")
-		sb.WriteString(QuoteIdentifier(index.Name()))
-		sb.WriteString(" (")
-		for i, indexColName := range index.ColumnNames() {
-			if i != 0 {
-				sb.WriteRune(',')
-			}
-			sb.WriteString(QuoteIdentifier(indexColName))
-		}
-		sb.WriteRune(')')
-		if len(index.Comment()) > 0 {
-			sb.WriteString(" COMMENT ")
-			sb.WriteString(QuoteComment(index.Comment()))
-		}
+		sb.WriteString(FmtIndex(idx))
 	}
 
-	for _, foreignKey := range foreignKeys {
-		sb.WriteString(",\n  CONSTRAINT ")
-		sb.WriteString(QuoteIdentifier(foreignKey.Name))
-		sb.WriteString(" FOREIGN KEY (")
-		for i, fkColName := range foreignKey.TableColumns {
-			if i != 0 {
-				sb.WriteRune(',')
-			}
-			sb.WriteString(QuoteIdentifier(fkColName))
-		}
-		sb.WriteString(")\n    REFERENCES ")
-		sb.WriteString(QuoteIdentifier(foreignKey.ReferencedTableName))
-		sb.WriteString(" (")
-		for i, fkColName := range foreignKey.ReferencedTableColumns {
-			if i != 0 {
-				sb.WriteRune(',')
-			}
-			sb.WriteString(QuoteIdentifier(fkColName))
-		}
-		sb.WriteRune(')')
-		if foreignKey.OnDelete != doltdb.ForeignKeyReferenceOption_DefaultAction {
-			sb.WriteString("\n    ON DELETE ")
-			sb.WriteString(foreignKey.OnDelete.String())
-		}
-		if foreignKey.OnUpdate != doltdb.ForeignKeyReferenceOption_DefaultAction {
-			sb.WriteString("\n    ON UPDATE ")
-			sb.WriteString(foreignKey.OnUpdate.String())
-		}
+	for _, fk := range foreignKeys {
+		sb.WriteString(",\n  ")
+		sb.WriteString(FmtForeignKey(fk, sch, parentSchs[fk.ReferencedTableName]))
 	}
 
 	sb.WriteString("\n);")
@@ -230,5 +245,63 @@ func RenameTableStmt(fromName string, toName string) string {
 	b.WriteString(QuoteIdentifier(toName))
 	b.WriteString(";")
 
+	return b.String()
+}
+
+func AlterTableAddIndexStmt(tableName string, idx schema.Index) string {
+	var b strings.Builder
+	b.WriteString("ALTER TABLE ")
+	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(" ADD INDEX ")
+	b.WriteString(QuoteIdentifier(idx.Name()))
+	var cols []string
+	for _, cn := range idx.ColumnNames() {
+		cols = append(cols, QuoteIdentifier(cn))
+	}
+	b.WriteString("(" + strings.Join(cols, ",") + ");")
+	return b.String()
+}
+
+func AlterTableDropIndexStmt(tableName string, idx schema.Index) string {
+	var b strings.Builder
+	b.WriteString("ALTER TABLE ")
+	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(" DROP INDEX ")
+	b.WriteString(QuoteIdentifier(idx.Name()))
+	b.WriteRune(';')
+	return b.String()
+}
+
+func AlterTableAddForeignKeyStmt(fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
+	var b strings.Builder
+	b.WriteString("ALTER TABLE ")
+	b.WriteString(QuoteIdentifier(fk.TableName))
+	b.WriteString(" ADD CONSTRAINT ")
+	b.WriteString(QuoteIdentifier(fk.Name))
+	b.WriteString(" FOREIGN KEY ")
+	var childCols []string
+	for _, tag := range fk.TableColumns {
+		c, _ := sch.GetAllCols().GetByTag(tag)
+		childCols = append(childCols, QuoteIdentifier(c.Name))
+	}
+	b.WriteString("(" + strings.Join(childCols, ",") + ")")
+	b.WriteString(" REFERENCES ")
+	var parentCols []string
+	for _, tag := range fk.ReferencedTableColumns {
+		c, _ := parentSch.GetAllCols().GetByTag(tag)
+		parentCols = append(parentCols, QuoteIdentifier(c.Name))
+	}
+	b.WriteString(QuoteIdentifier(fk.ReferencedTableName))
+	b.WriteString(" (" + strings.Join(parentCols, ",") + ");")
+	return b.String()
+}
+
+func AlterTableDropForeignKeyStmt(fk doltdb.ForeignKey) string {
+	var b strings.Builder
+	b.WriteString("ALTER TABLE ")
+	b.WriteString(QuoteIdentifier(fk.TableName))
+	b.WriteString(" DROP FOREIGN KEY ")
+	b.WriteString(QuoteIdentifier(fk.Name))
+	b.WriteRune(';')
 	return b.String()
 }

@@ -185,12 +185,12 @@ func validateNewColumn(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.
 		return err
 	}
 
-	tt, err := root.TablesNamesForTags(ctx, tag)
+	_, tblName, found, err := root.GetTableByColTag(ctx, tag)
 	if err != nil {
 		return err
 	}
-	if len(tt) > 0 {
-		return schema.ErrTagPrevUsed(tag, newColName, tt[tag])
+	if found {
+		return schema.ErrTagPrevUsed(tag, newColName, tblName)
 	}
 
 	if !nullable && defaultVal == nil {

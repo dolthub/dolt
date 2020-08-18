@@ -23,6 +23,10 @@ import (
 
 var NoRemote = Remote{}
 
+func IsEmptyRemote(r Remote) bool {
+	return len(r.Name) == 0 && len(r.Url) == 0 && r.FetchSpecs == nil && r.Params == nil
+}
+
 type Remote struct {
 	Name       string            `json:"name"`
 	Url        string            `json:"url"`

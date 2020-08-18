@@ -72,6 +72,7 @@ type AsyncSortedEdits struct {
 	sortChan   chan types.KVPSlice
 	resultChan chan types.KVPSlice
 	doneChan   chan bool
+	closed     bool
 
 	accumulating []types.KVP
 	sortedColls  []*KVPCollection
@@ -141,10 +142,12 @@ func (ase *AsyncSortedEdits) pollSortedSlices() {
 	}
 }
 
-// FinishedEditing should be called once all edits have been added.  Once FinishedEditing is called adding more edits
+// FinishedEditing should be called once all edits have been added. Once FinishedEditing is called adding more edits
 // will have undefined behavior.
 func (ase *AsyncSortedEdits) FinishedEditing() (types.EditProvider, error) {
+	ase.closed = true
 	close(ase.sortChan)
+	defer close(ase.doneChan)
 
 	if len(ase.accumulating) > 0 {
 		sl := types.KVPSlice(ase.accumulating)
@@ -171,6 +174,14 @@ func (ase *AsyncSortedEdits) FinishedEditing() (types.EditProvider, error) {
 	}
 
 	return ase.Iterator(), nil
+}
+
+// Close ensures that the accumulator is closed. Repeat calls are allowed. This and FinishedEditing are not thread safe,
+// and thus external synchronization is required.
+func (ase *AsyncSortedEdits) Close() {
+	if !ase.closed {
+		_, _ = ase.FinishedEditing()
+	}
 }
 
 func (ase *AsyncSortedEdits) wait() {

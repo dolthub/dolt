@@ -40,15 +40,19 @@ type CreateEditAcc func(nbf *NomsBinFormat) EditAccumulator
 // }
 var CreateEditAccForMapEdits CreateEditAcc = NewDumbEditAccumulator
 
-// EditAccumulator is an interface for a datastructure that can have edits added to it.  Once all edits are
+// EditAccumulator is an interface for a datastructure that can have edits added to it. Once all edits are
 // added FinishedEditing can be called to get an EditProvider which provides the edits in sorted order
 type EditAccumulator interface {
 	// AddEdit adds an edit to the list of edits
 	AddEdit(k LesserValuable, v Valuable)
 
 	// FinishEditing should be called when all edits have been added to get an EditProvider which provides the
-	// edits in sorted order.  Adding more edits after calling FinishedEditing is an error
+	// edits in sorted order. Adding more edits after calling FinishedEditing is an error.
 	FinishedEditing() (EditProvider, error)
+
+	// Close ensures that the accumulator is closed. Repeat calls are allowed. Not guaranteed to be thread-safe, thus
+	// requires external synchronization.
+	Close()
 }
 
 // MapEditor allows for efficient editing of Map-typed prolly trees.

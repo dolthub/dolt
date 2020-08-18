@@ -89,9 +89,9 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	if apr.NArg() == 0 && !allFlag {
 		cli.Println("Nothing specified, nothing added.\n Maybe you wanted to say 'dolt add .'?")
 	} else if allFlag || apr.NArg() == 1 && apr.Arg(0) == "." {
-		err = actions.StageAllTables(ctx, dEnv, false)
+		err = actions.StageAllTables(ctx, dEnv)
 	} else {
-		err = actions.StageTables(ctx, dEnv, apr.Args(), false)
+		err = actions.StageTables(ctx, dEnv, apr.Args())
 	}
 
 	if err != nil {

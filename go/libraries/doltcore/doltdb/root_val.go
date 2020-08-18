@@ -146,74 +146,14 @@ func (root *RootValue) HasTable(ctx context.Context, tName string) (bool, error)
 	return tableMap.Has(ctx, types.String(tName))
 }
 
-// TableNamesForTags returns a map from column tags to the column's table.
-func (root *RootValue) TablesNamesForTags(ctx context.Context, tags ...uint64) (tagToTable map[uint64]string, err error) {
-	m, err := root.getOrCreateSuperSchemaMap(ctx)
-
+// TableNameInUse checks if a name can be used to create a new table. The most recent
+// names of all current tables and all previously existing tables cannot be used.
+func (root *RootValue) TableNameInUse(ctx context.Context, tName string) (bool, error) {
+	_, ok, err := root.GetSuperSchema(ctx, tName)
 	if err != nil {
-		return nil, err
+		return false, err
 	}
-
-	tagToTable = make(map[uint64]string)
-	err = m.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-		ssValRef := value.(types.Ref)
-		ssVal, err := ssValRef.TargetValue(ctx, root.vrw)
-
-		if err != nil {
-			return true, err
-		}
-
-		ss, err := encoding.UnmarshalSuperSchemaNomsValue(ctx, root.vrw.Format(), ssVal)
-
-		if err != nil {
-			return true, err
-		}
-
-		for _, t := range tags {
-			_, found := ss.GetByTag(t)
-
-			if found {
-				tagToTable[t] = string(key.(types.String))
-			}
-		}
-
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	// Now check if the tag exists in the working set of any table
-	tNames, err := root.GetTableNames(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	for _, tn := range tNames {
-		t, _, err := root.GetTable(ctx, tn)
-
-		if err != nil {
-			return nil, err
-		}
-
-		sch, err := t.GetSchema(ctx)
-
-		if err != nil {
-			return nil, err
-		}
-
-		for _, t := range tags {
-			_, found := sch.GetAllCols().GetByTag(t)
-
-			if found {
-				tagToTable[t] = tn
-			}
-		}
-	}
-
-	return tagToTable, nil
+	return ok, nil
 }
 
 // GetSuperSchema returns the SuperSchema for the table name specified if that table exists.
@@ -397,6 +337,20 @@ func (root *RootValue) getTableSt(ctx context.Context, tName string) (*types.Str
 	return &tableStruct, true, nil
 }
 
+func (root *RootValue) GetAllSchemas(ctx context.Context) (map[string]schema.Schema, error) {
+	m := make(map[string]schema.Schema)
+	err := root.IterTables(ctx, func(name string, table *Table, sch schema.Schema) (stop bool, err error) {
+		m[name] = sch
+		return false, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return m, nil
+}
+
 func (root *RootValue) GetTableHash(ctx context.Context, tName string) (hash.Hash, bool, error) {
 	tableMap, err := root.getTableMap()
 
@@ -483,6 +437,34 @@ func (root *RootValue) GetTableInsensitive(ctx context.Context, tName string) (*
 	return tbl, foundKey, ok, nil
 }
 
+// GetTableByColTag looks for the table containing the given column tag. It returns false if no table exists in the history.
+// If the table containing the given tag previously existed and was deleted, it will return its name and a nil pointer.
+func (root *RootValue) GetTableByColTag(ctx context.Context, tag uint64) (tbl *Table, name string, found bool, err error) {
+	err = root.IterTables(ctx, func(tn string, t *Table, s schema.Schema) (bool, error) {
+		_, found = s.GetAllCols().GetByTag(tag)
+		if found {
+			name, tbl = tn, t
+		}
+
+		return found, nil
+	})
+
+	if err != nil {
+		return nil, "", false, err
+	}
+
+	_ = root.iterSuperSchemas(ctx, func(tn string, ss *schema.SuperSchema) (bool, error) {
+		_, found = ss.GetByTag(tag)
+		if found {
+			name = tn
+		}
+
+		return found, nil
+	})
+
+	return tbl, name, found, nil
+}
+
 // GetTableNames retrieves the lists of all tables for a RootValue
 func (root *RootValue) GetTableNames(ctx context.Context) ([]string, error) {
 	tableMap, err := root.getTableMap()
@@ -567,7 +549,7 @@ func (root *RootValue) HasConflicts(ctx context.Context) (bool, error) {
 }
 
 // IterTables calls the callback function cb on each table in this RootValue.
-func (root *RootValue) IterTables(ctx context.Context, cb func(name string, table *Table) (stop bool, err error)) error {
+func (root *RootValue) IterTables(ctx context.Context, cb func(name string, table *Table, sch schema.Schema) (stop bool, err error)) error {
 	tm, err := root.getTableMap()
 
 	if err != nil {
@@ -596,12 +578,33 @@ func (root *RootValue) IterTables(ctx context.Context, cb func(name string, tabl
 		name := string(nm.(types.String))
 		table := &Table{root.vrw, tableStruct.(types.Struct)}
 
-		stop, err := cb(name, table)
+		sch, err := table.GetSchema(ctx)
+		if err != nil {
+			return err
+		}
+
+		stop, err := cb(name, table, sch)
 
 		if err != nil || stop {
 			return err
 		}
 	}
+}
+
+func (root *RootValue) iterSuperSchemas(ctx context.Context, cb func(name string, ss *schema.SuperSchema) (stop bool, err error)) error {
+	m, err := root.getOrCreateSuperSchemaMap(ctx)
+	if err != nil {
+		return err
+	}
+
+	return m.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+		name := string(key.(types.String))
+
+		// use GetSuperSchema() to pickup uncommitted SuperSchemas
+		ss, _, err := root.GetSuperSchema(ctx, name)
+
+		return cb(name, ss)
+	})
 }
 
 // PutSuperSchema writes a new map entry for the table name and super schema supplied, it will overwrite an existing entry.
@@ -1073,13 +1076,19 @@ func (root *RootValue) RemoveTables(ctx context.Context, tables ...string) (*Roo
 
 	newRoot := newRootValue(root.vrw, rootValSt)
 
-	fkc, err := root.GetForeignKeyCollection(ctx)
+	fkc, err := newRoot.GetForeignKeyCollection(ctx)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return fkc.RemoveTables(ctx, newRoot, tables...)
+	err = fkc.RemoveTables(ctx, tables...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return newRoot.PutForeignKeyCollection(ctx, fkc)
 }
 
 // DocDiff returns the added, modified and removed docs when comparing a root value with an other (newer) value. If the other value,
@@ -1224,7 +1233,7 @@ func (root *RootValue) ValidateForeignKeys(ctx context.Context) (*RootValue, err
 				return nil, err
 			}
 		} else {
-			err := fkCollection.RemoveKey(foreignKey.Name)
+			err := fkCollection.RemoveKeyByName(foreignKey.Name)
 			if err != nil {
 				return nil, err
 			}
@@ -1506,25 +1515,26 @@ func UnionTableNames(ctx context.Context, roots ...*RootValue) ([]string, error)
 	return set.Unique(allTblNames), nil
 }
 
+// validateTagUniqueness checks for tag collisions between the given table and the set of tables in then given root.
 func validateTagUniqueness(ctx context.Context, root *RootValue, tableName string, table *Table) error {
 	sch, err := table.GetSchema(ctx)
-
-	if err != nil {
-		return err
-	}
-
-	tt, err := root.TablesNamesForTags(ctx, sch.GetAllCols().Tags...)
-
 	if err != nil {
 		return err
 	}
 
 	var ee []string
-	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		tn, tagExists := tt[tag]
-		if tagExists && tn != tableName {
-			ee = append(ee, schema.ErrTagPrevUsed(tag, col.Name, tn).Error())
+	_ = root.iterSuperSchemas(ctx, func(tn string, ss *schema.SuperSchema) (stop bool, err error) {
+		if tn == tableName {
+			return false, nil
 		}
+
+		_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			_, ok := ss.GetByTag(tag)
+			if ok {
+				ee = append(ee, schema.ErrTagPrevUsed(tag, col.Name, tn).Error())
+			}
+			return false, nil
+		})
 		return false, nil
 	})
 

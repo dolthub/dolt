@@ -60,24 +60,30 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 }
 
 func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProps) error {
-	stagedTbls, notStagedTbls, err := diff.GetTableDiffs(ctx, dEnv)
-
 	if props.Message == "" {
 		return ErrEmptyCommitMessage
 	}
 
+	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, dEnv)
 	if err != nil {
 		return err
 	}
 
-	_, notStagedDocs, err := diff.GetDocDiffs(ctx, dEnv)
-
-	if err != nil {
-		return err
+	var stagedTblNames []string
+	for _, td := range staged {
+		n := td.ToName
+		if td.IsDrop() {
+			n = td.FromName
+		}
+		stagedTblNames = append(stagedTblNames, n)
 	}
 
-	if len(stagedTbls.Tables) == 0 && dEnv.RepoState.Merge == nil && !props.AllowEmpty {
-		return NothingStaged{notStagedTbls, notStagedDocs}
+	if len(staged) == 0 && !dEnv.IsMergeActive() && !props.AllowEmpty {
+		_, notStagedDocs, err := diff.GetDocDiffs(ctx, dEnv)
+		if err != nil {
+			return err
+		}
+		return NothingStaged{notStaged, notStagedDocs}
 	}
 
 	name, email, err := GetNameAndEmail(dEnv.Config)
@@ -115,16 +121,14 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProp
 		return err
 	}
 
-	srt, err = srt.UpdateSuperSchemasFromOther(ctx, stagedTbls.Tables, srt)
+	srt, err = srt.UpdateSuperSchemasFromOther(ctx, stagedTblNames, srt)
 
 	if err != nil {
 		return err
 	}
 
 	if props.CheckForeignKeys {
-		// todo: this is a big perf hit, rework
 		srt, err = srt.ValidateForeignKeys(ctx)
-
 		if err != nil {
 			return err
 		}
@@ -142,7 +146,7 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProp
 		return err
 	}
 
-	wrt, err = wrt.UpdateSuperSchemasFromOther(ctx, stagedTbls.Tables, srt)
+	wrt, err = wrt.UpdateSuperSchemasFromOther(ctx, stagedTblNames, srt)
 
 	if err != nil {
 		return err
@@ -159,6 +163,8 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProp
 		return ErrEmptyCommitMessage
 	}
 
+	// DoltDB resolves the current working branch head ref to provide a parent commit.
+	// Any commit specs in mergeCmSpec are also resolved and added.
 	_, err = dEnv.DoltDB.CommitWithParentSpecs(ctx, h, dEnv.RepoState.CWBHeadRef(), mergeCmSpec, meta)
 
 	if err == nil {

@@ -25,9 +25,9 @@ import (
 	sqle "github.com/liquidata-inc/go-mysql-server"
 	"github.com/liquidata-inc/go-mysql-server/sql"
 	"github.com/liquidata-inc/sqllogictest/go/logictest"
+	"github.com/liquidata-inc/vitess/go/vt/proto/query"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
 	"github.com/shopspring/decimal"
-	"vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -61,9 +61,6 @@ func (h *DoltHarness) Init() error {
 }
 
 func (h *DoltHarness) ExecuteStatement(statement string) error {
-	if h.sess != nil {
-		h.sess.ClearEditors()
-	}
 	ctx := sql.NewContext(
 		context.Background(),
 		sql.WithPid(rand.Uint64()),
@@ -82,9 +79,6 @@ func (h *DoltHarness) ExecuteStatement(statement string) error {
 }
 
 func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []string, err error) {
-	if h.sess != nil {
-		h.sess.ClearEditors()
-	}
 	pid := rand.Uint32()
 	ctx := sql.NewContext(
 		context.Background(),
@@ -129,9 +123,6 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	if h.sess != nil {
-		h.sess.ClearEditors()
-	}
 	h.sess = dsql.DefaultDoltSession()
 	h.idxReg = sql.NewIndexRegistry()
 	h.viewReg = sql.NewViewRegistry()

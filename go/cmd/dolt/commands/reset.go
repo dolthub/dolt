@@ -244,7 +244,7 @@ func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootV
 		return
 	}
 
-	notStagedTbls, err := diff.NewTableDiffs(ctx, working, staged)
+	notStagedTbls, err := diff.GetTableDeltas(ctx, staged, working)
 	if err != nil {
 		return
 	}
@@ -254,15 +254,28 @@ func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootV
 		return
 	}
 
-	if notStagedTbls.NumRemoved+notStagedTbls.NumModified+notStagedDocs.NumRemoved+notStagedDocs.NumModified > 0 {
+	removeModified := 0
+	for _, td := range notStagedTbls {
+		if !td.IsAdd() {
+			removeModified++
+		}
+	}
+
+	if removeModified+notStagedDocs.NumRemoved+notStagedDocs.NumModified > 0 {
 		cli.Println("Unstaged changes after reset:")
 
-		lines := make([]string, 0, notStagedTbls.Len()+notStagedDocs.Len())
-		for _, tblName := range notStagedTbls.Tables {
-			tdt := notStagedTbls.TableToType[tblName]
-
-			if tdt != diff.AddedTable && !doltdb.IsReadOnlySystemTable(tblName) {
-				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[tdt], tblName))
+		var lines []string
+		for _, td := range notStagedTbls {
+			if td.IsAdd() {
+				//  pre Git, unstaged new tables are untracked
+				continue
+			} else if td.IsDrop() {
+				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[diff.RemovedTable], td.CurName()))
+			} else if td.IsRename() {
+				// per Git, unstaged renames are shown as drop + add
+				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[diff.RemovedTable], td.FromName))
+			} else {
+				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[diff.ModifiedTable], td.CurName()))
 			}
 		}
 
@@ -278,10 +291,11 @@ func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootV
 }
 
 func resetStaged(ctx context.Context, dEnv *env.DoltEnv, tbls []string, staged, head *doltdb.RootValue) (*doltdb.RootValue, errhand.VerboseError) {
-	updatedRoot, err := staged.UpdateTablesFromOther(ctx, tbls, head)
+	updatedRoot, err := actions.MoveTablesBetweenRoots(ctx, tbls, head, staged)
 
 	if err != nil {
-		return nil, errhand.BuildDError("error: failed to update tables").AddCause(err).Build()
+		tt := strings.Join(tbls, ", ")
+		return nil, errhand.BuildDError("error: failed to unstage tables: %s", tt).AddCause(err).Build()
 	}
 
 	return updatedRoot, UpdateStagedWithVErr(dEnv, updatedRoot)

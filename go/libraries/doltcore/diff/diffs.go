@@ -30,16 +30,9 @@ type TableDiffType int
 const (
 	AddedTable TableDiffType = iota
 	ModifiedTable
+	RenamedTable
 	RemovedTable
 )
-
-type TableDiffs struct {
-	NumAdded    int
-	NumModified int
-	NumRemoved  int
-	TableToType map[string]TableDiffType
-	Tables      []string
-}
 
 type DocDiffType int
 
@@ -89,91 +82,6 @@ type RootValueUnreadable struct {
 
 func (rvu RootValueUnreadable) Error() string {
 	return "error: Unable to read " + rvu.rootType.String()
-}
-
-// NewTableDiffs returns the TableDiffs between two roots.
-func NewTableDiffs(ctx context.Context, newer, older *doltdb.RootValue) (*TableDiffs, error) {
-	deltas, err := GetTableDeltas(ctx, older, newer)
-
-	if err != nil {
-		return nil, err
-	}
-
-	var added []string
-	var modified []string
-	var removed []string
-
-	for _, d := range deltas {
-		switch {
-		case d.IsAdd():
-			added = append(added, d.ToName)
-		case d.IsDrop():
-			removed = append(removed, d.FromName)
-		default:
-			modified = append(modified, d.ToName)
-		}
-	}
-
-	var tbls []string
-	tbls = append(tbls, added...)
-	tbls = append(tbls, modified...)
-	tbls = append(tbls, removed...)
-
-	tblToType := make(map[string]TableDiffType)
-	for _, tbl := range added {
-		tblToType[tbl] = AddedTable
-	}
-
-	for _, tbl := range modified {
-		tblToType[tbl] = ModifiedTable
-	}
-
-	for _, tbl := range removed {
-		tblToType[tbl] = RemovedTable
-	}
-
-	sort.Strings(tbls)
-
-	return &TableDiffs{len(added), len(modified), len(removed), tblToType, tbls}, err
-}
-
-func (td *TableDiffs) Len() int {
-	return len(td.Tables)
-}
-
-// GetTableDiffs returns the staged and unstaged TableDiffs for the repo.
-func GetTableDiffs(ctx context.Context, dEnv *env.DoltEnv) (*TableDiffs, *TableDiffs, error) {
-	headRoot, err := dEnv.HeadRoot(ctx)
-
-	if err != nil {
-		return nil, nil, RootValueUnreadable{HeadRoot, err}
-	}
-
-	stagedRoot, err := dEnv.StagedRoot(ctx)
-
-	if err != nil {
-		return nil, nil, RootValueUnreadable{StagedRoot, err}
-	}
-
-	workingRoot, err := dEnv.WorkingRoot(ctx)
-
-	if err != nil {
-		return nil, nil, RootValueUnreadable{WorkingRoot, err}
-	}
-
-	stagedDiffs, err := NewTableDiffs(ctx, stagedRoot, headRoot)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	notStagedDiffs, err := NewTableDiffs(ctx, workingRoot, stagedRoot)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return stagedDiffs, notStagedDiffs, nil
 }
 
 // NewDocDiffs returns DocDiffs for Dolt Docs between two roots.
@@ -262,76 +170,81 @@ func GetDocDiffs(ctx context.Context, dEnv *env.DoltEnv) (*DocDiffs, *DocDiffs, 
 	return stagedDocDiffs, notStagedDocDiffs, nil
 }
 
+// TableDelta represents the change of a single table between two roots.
+// FromFKs and ToFKs contain Foreign Keys that constrain columns in this table,
+// they do not contain Foreign Keys that reference this table.
 type TableDelta struct {
-	FromName      string
-	ToName        string
-	FromTable     *doltdb.Table
-	ToTable       *doltdb.Table
-	ToForeignKeys []*doltdb.DisplayForeignKey // In the event that a table is an add, we'll display the FKs as well
+	FromName  string
+	ToName    string
+	FromTable *doltdb.Table
+	ToTable   *doltdb.Table
+	FromFks   []doltdb.ForeignKey
+	ToFks     []doltdb.ForeignKey
 }
 
-// GetTableDeltas returns a list of TableDelta objects for each table that changed between fromRoot and toRoot.
-func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) ([]TableDelta, error) {
-	var deltas []TableDelta
-	fromTable := make(map[uint64]*doltdb.Table)
+// GetTableDeltas returns a slice of TableDelta objects for each table that changed between fromRoot and toRoot.
+// It matches tables across roots using the tag of the first primary key column in the table's schema.
+func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (deltas []TableDelta, err error) {
+	fromTables := make(map[uint64]*doltdb.Table)
 	fromTableNames := make(map[uint64]string)
+	fromTableFKs := make(map[uint64][]doltdb.ForeignKey)
 	fromTableHashes := make(map[uint64]hash.Hash)
 
-	err := fromRoot.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
-		sch, err := table.GetSchema(ctx)
-		if err != nil {
-			return true, err
-		}
-
-		th, err := table.HashOf()
-		if err != nil {
-			return true, err
-		}
-
-		pkTag := sch.GetPKCols().GetColumns()[0].Tag
-		fromTable[pkTag] = table
-		fromTableNames[pkTag] = name
-		fromTableHashes[pkTag] = th
-		return false, nil
-	})
-
+	fromFKC, err := fromRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	err = toRoot.IterTables(ctx, func(name string, table *doltdb.Table) (stop bool, err error) {
-		sch, err := table.GetSchema(ctx)
-		if err != nil {
-			return true, err
-		}
-
+	err = fromRoot.IterTables(ctx, func(name string, table *doltdb.Table, sch schema.Schema) (stop bool, err error) {
 		th, err := table.HashOf()
 		if err != nil {
 			return true, err
 		}
 
 		pkTag := sch.GetPKCols().GetColumns()[0].Tag
+		fromTables[pkTag] = table
+		fromTableNames[pkTag] = name
+		fromTableHashes[pkTag] = th
+		fromTableFKs[pkTag], _ = fromFKC.KeysForTable(name)
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	toFKC, err := toRoot.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	err = toRoot.IterTables(ctx, func(name string, table *doltdb.Table, sch schema.Schema) (stop bool, err error) {
+		th, err := table.HashOf()
+		if err != nil {
+			return true, err
+		}
+
+		toFKs, _ := toFKC.KeysForTable(name)
+
+		pkTag := sch.GetPKCols().GetColumns()[0].Tag
 		oldName, ok := fromTableNames[pkTag]
 
-		fkc, err := toRoot.GetForeignKeyCollection(ctx)
-		if err != nil {
-			return true, err
-		}
-
-		toDisplayFks, err := fkc.KeysForDisplay(ctx, name, toRoot)
-		if err != nil {
-			return true, err
-		}
-
 		if !ok {
-			deltas = append(deltas, TableDelta{ToName: name, ToTable: table, ToForeignKeys: toDisplayFks})
-		} else if oldName != name || fromTableHashes[pkTag] != th {
 			deltas = append(deltas, TableDelta{
-				ToName:        name,
-				FromName:      fromTableNames[pkTag],
-				ToTable:       table,
-				FromTable:     fromTable[pkTag],
-				ToForeignKeys: toDisplayFks,
+				ToName:  name,
+				ToTable: table,
+				ToFks:   toFKs,
+			})
+		} else if oldName != name ||
+			fromTableHashes[pkTag] != th ||
+			!fkSlicesAreEqual(fromTableFKs[pkTag], toFKs) {
+
+			deltas = append(deltas, TableDelta{
+				FromName:  fromTableNames[pkTag],
+				ToName:    name,
+				FromTable: fromTables[pkTag],
+				ToTable:   table,
+				FromFks:   fromTableFKs[pkTag],
+				ToFks:     toFKs,
 			})
 		}
 
@@ -341,17 +254,49 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) ([]
 
 		return false, nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
 
 	// all unmatched tables in fromRoot must have been dropped
 	for pkTag, oldName := range fromTableNames {
-		deltas = append(deltas, TableDelta{FromName: oldName, FromTable: fromTable[pkTag]})
+		deltas = append(deltas, TableDelta{
+			FromName:  oldName,
+			FromTable: fromTables[pkTag],
+			FromFks:   fromTableFKs[pkTag],
+		})
 	}
 
 	return deltas, nil
+}
+
+func GetStagedUnstagedTableDeltas(ctx context.Context, dEnv *env.DoltEnv) (staged, unstaged []TableDelta, err error) {
+	headRoot, err := dEnv.HeadRoot(ctx)
+	if err != nil {
+		return nil, nil, RootValueUnreadable{HeadRoot, err}
+	}
+
+	stagedRoot, err := dEnv.StagedRoot(ctx)
+	if err != nil {
+		return nil, nil, RootValueUnreadable{StagedRoot, err}
+	}
+
+	workingRoot, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return nil, nil, RootValueUnreadable{WorkingRoot, err}
+	}
+
+	staged, err = GetTableDeltas(ctx, headRoot, stagedRoot)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	unstaged, err = GetTableDeltas(ctx, stagedRoot, workingRoot)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return staged, unstaged, nil
 }
 
 // IsAdd returns true if the table was added between the fromRoot and toRoot.
@@ -362,6 +307,26 @@ func (td TableDelta) IsAdd() bool {
 // IsDrop returns true if the table was dropped between the fromRoot and toRoot.
 func (td TableDelta) IsDrop() bool {
 	return td.FromTable != nil && td.ToTable == nil
+}
+
+// IsRename return true if the table was renamed between the fromRoot and toRoot.
+func (td TableDelta) IsRename() bool {
+	if td.IsAdd() || td.IsDrop() {
+		return false
+	}
+	return td.FromName != td.ToName
+}
+
+// CurName returns the most recent name of the table.
+func (td TableDelta) CurName() string {
+	if td.ToName != "" {
+		return td.ToName
+	}
+	return td.FromName
+}
+
+func (td TableDelta) HasFKChanges() bool {
+	return !fkSlicesAreEqual(td.FromFks, td.ToFks)
 }
 
 // GetSchemas returns the table's schema at the fromRoot and toRoot, or schema.Empty if the table did not exist.
@@ -410,4 +375,24 @@ func (td TableDelta) GetMaps(ctx context.Context) (from, to types.Map, err error
 	}
 
 	return from, to, nil
+}
+
+func fkSlicesAreEqual(from, to []doltdb.ForeignKey) bool {
+	if len(from) != len(to) {
+		return false
+	}
+
+	sort.Slice(from, func(i, j int) bool {
+		return from[i].Name < from[j].Name
+	})
+	sort.Slice(to, func(i, j int) bool {
+		return to[i].Name < to[j].Name
+	})
+
+	for i := range from {
+		if !from[i].DeepEquals(to[i]) {
+			return false
+		}
+	}
+	return true
 }

@@ -15,20 +15,13 @@
 package diff
 
 import (
-	"context"
 	"errors"
 	"io"
 
-	"github.com/fatih/color"
-
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/nullprinter"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -142,138 +135,4 @@ func (sds *SQLDiffSink) Close() error {
 	} else {
 		return errors.New("Already closed.")
 	}
-}
-
-// PrintSqlTableDiffs writes diffs of table definitions to output.
-func PrintSqlTableDiffs(ctx context.Context, r1, r2 *doltdb.RootValue, wr io.WriteCloser) error {
-	creates, _, drops, err := r1.TableDiff(ctx, r2)
-
-	if err != nil {
-		return err
-	}
-
-	creates, drops, renames, err := findRenames(ctx, r1, r2, creates, drops)
-
-	if err != nil {
-		return err
-	}
-
-	for k, v := range renames {
-		if err = iohelp.WriteLine(wr, sqlfmt.RenameTableStmt(k, v)); err != nil {
-			return err
-		}
-	}
-
-	for _, tblName := range drops {
-		if err = iohelp.WriteLine(wr, sqlfmt.DropTableStmt(tblName)); err != nil {
-			return err
-		}
-	}
-
-	// create tables and insert rows
-	for _, tblName := range creates {
-		if tbl, ok, err := r1.GetTable(ctx, tblName); err != nil {
-			return errors.New("error: unable to write SQL diff output for new table")
-		} else if !ok {
-			continue
-		} else {
-			if sch, err := tbl.GetSchema(ctx); err != nil {
-				return errors.New("error unable to get schema for table " + tblName)
-			} else {
-				fkc, err := r1.GetForeignKeyCollection(ctx)
-				if err != nil {
-					return errhand.BuildDError("error: failed to read foreign key struct").AddCause(err).Build()
-				}
-				declaresFk, err := fkc.KeysForDisplay(ctx, tblName, r1)
-				if err != nil {
-					return errhand.BuildDError("error: failed to assemble foreign key information").AddCause(err).Build()
-				}
-				stmt := sqlfmt.CreateTableStmtWithTags(tblName, sch, declaresFk)
-				if err = iohelp.WriteLine(wr, stmt); err != nil {
-					return err
-				}
-
-				// Insert all rows
-				transforms := pipeline.NewTransformCollection()
-				nullPrinter := nullprinter.NewNullPrinter(sch)
-				transforms.AppendTransforms(
-					pipeline.NewNamedTransform(nullprinter.NullPrintingStage, nullPrinter.ProcessRow),
-				)
-				sink, err := NewSQLDiffSink(wr, sch, tblName)
-				if err != nil {
-					return errors.New("error: unable to create SQL diff sink")
-				}
-
-				rowData, err := tbl.GetRowData(ctx)
-
-				if err != nil {
-					return errors.New("error: unable to get row data")
-				}
-
-				rd, err := noms.NewNomsMapReader(ctx, rowData, sch)
-
-				if err != nil {
-					return errors.New("error: unable to create map reader")
-				}
-
-				badRowCallback := func(tff *pipeline.TransformRowFailure) (quit bool) {
-					_ = iohelp.WriteLine(wr, color.RedString("error: failed to transform row %s.", row.Fmt(ctx, tff.Row, sch)))
-					return true
-				}
-
-				rdProcFunc := pipeline.ProcFuncForReader(ctx, rd)
-
-				sinkProcFunc := pipeline.ProcFuncForSinkFunc(sink.ProcRowForExport)
-				p := pipeline.NewAsyncPipeline(rdProcFunc, sinkProcFunc, transforms, badRowCallback)
-				p.Start()
-				err = p.Wait()
-			}
-		}
-	}
-	return err
-}
-
-func findRenames(ctx context.Context, r1, r2 *doltdb.RootValue, adds []string, drops []string) (added, dropped []string, renamed map[string]string, err error) {
-
-	renames := make(map[string]string, 0)
-	for i, add := range adds {
-		for j, drop := range drops {
-			addHash, foundAdd, err := r1.GetTableHash(ctx, add)
-
-			if err != nil {
-				return nil, nil, nil, err
-			}
-
-			dropHash, foundDrop, err := r2.GetTableHash(ctx, drop)
-
-			if err != nil {
-				return nil, nil, nil, err
-			}
-
-			if foundAdd && foundDrop {
-				if addHash.Equal(dropHash) {
-					renames[drop] = add
-					// mark tables as consumed
-					adds[i] = ""
-					drops[j] = ""
-				}
-			}
-		}
-	}
-
-	outAdds := make([]string, 0)
-	for _, tbl := range adds {
-		if tbl != "" {
-			outAdds = append(outAdds, tbl)
-		}
-	}
-
-	outDrops := make([]string, 0)
-	for _, tbl := range drops {
-		if tbl != "" {
-			outDrops = append(outDrops, tbl)
-		}
-	}
-
-	return outAdds, outDrops, renames, nil
 }

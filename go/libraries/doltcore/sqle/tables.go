@@ -21,13 +21,14 @@ import (
 	"strings"
 
 	"github.com/liquidata-inc/go-mysql-server/sql"
-	"vitess.io/vitess/go/sqltypes"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -458,7 +459,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 
 // CreateIndex implements sql.IndexAlterableTable
 func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, columns []sql.IndexColumn, comment string) error {
-	newTable, _, _, err := t.createIndex(ctx, indexName, using, constraint, columns, comment)
+	newTable, _, _, err := createIndexForTable(ctx, t.table, indexName, using, constraint, columns, comment)
 	if err != nil {
 		return err
 	}
@@ -483,11 +484,29 @@ func (t *AlterableDoltTable) DropIndex(ctx *sql.Context, indexName string) error
 	if strings.HasPrefix(indexName, "dolt_") {
 		return fmt.Errorf("dolt internal indexes may not be dropped")
 	}
-	newTable, _, err := t.dropIndex(ctx, indexName)
+	root, err := t.db.GetRoot(ctx)
 	if err != nil {
 		return err
 	}
-	root, err := t.db.GetRoot(ctx)
+	fkc, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return err
+	}
+	ourKeys, referencingKeys := fkc.KeysForTable(t.name)
+	for _, k := range ourKeys {
+		if k.TableIndex == indexName {
+			return fmt.Errorf("cannot drop index: %s is referenced by foreign key %s",
+				k.TableIndex, k.Name)
+		}
+	}
+	for _, k := range referencingKeys {
+		if k.ReferencedTableIndex == indexName {
+			return fmt.Errorf("cannot drop index: %s is referenced by foreign key %s",
+				k.ReferencedTableIndex, k.Name)
+		}
+	}
+
+	newTable, _, err := t.dropIndex(ctx, indexName)
 	if err != nil {
 		return err
 	}
@@ -611,7 +630,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	tableIndex, ok := t.sch.Indexes().GetIndexByTags(colTags...)
 	if !ok {
 		// if child index doesn't exist, create it
-		t.table, _, tableIndex, err = t.createIndex(ctx, "", sql.IndexUsing_Default, sql.IndexConstraint_None, sqlColNames, "")
+		t.table, _, tableIndex, err = createIndexForTable(ctx, t.table, "", sql.IndexUsing_Default, sql.IndexConstraint_None, sqlColNames, "")
 		if err != nil {
 			return err
 		}
@@ -623,8 +642,27 @@ func (t *AlterableDoltTable) CreateForeignKey(
 
 	refTableIndex, ok := refSch.Indexes().GetIndexByTags(refColTags...)
 	if !ok {
-		// parent index must exist
-		return fmt.Errorf("missing index for constraint '%s' in the referenced table '%s'", fkName, refTblName)
+		parentPKs := set.NewUint64Set(refSch.GetPKCols().Tags)
+		if parentPKs.ContainsAll(refColTags) {
+			// special exception for parent table primary keys
+			// todo: make clustered PK index usable as parent table FK index
+			var colNames []sql.IndexColumn
+			for _, t := range refColTags {
+				c, _ := refSch.GetAllCols().GetByTag(t)
+				colNames = append(colNames, sql.IndexColumn{Name: c.Name})
+			}
+			refTbl, _, refTableIndex, err = createIndexForTable(ctx, refTbl, "", sql.IndexUsing_Default, sql.IndexConstraint_None, colNames, "")
+			if err != nil {
+				return err
+			}
+			root, err = root.PutTable(ctx, refTblName, refTbl)
+			if err != nil {
+				return err
+			}
+		} else {
+			// parent index must exist
+			return fmt.Errorf("missing index for constraint '%s' in the referenced table '%s'", fkName, refTblName)
+		}
 	}
 
 	foreignKeyCollection, err := root.GetForeignKeyCollection(ctx)
@@ -642,7 +680,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 		OnUpdate:               onUpdateRefOp,
 		OnDelete:               onDeleteRefOp,
 	}
-	err = foreignKeyCollection.AddKey(foreignKey)
+	err = foreignKeyCollection.AddKeys(foreignKey)
 	if err != nil {
 		return err
 	}
@@ -681,7 +719,7 @@ func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string) err
 	if err != nil {
 		return err
 	}
-	err = fkc.RemoveKey(fkName)
+	err = fkc.RemoveKeyByName(fkName)
 	if err != nil {
 		return err
 	}
@@ -706,28 +744,63 @@ func (t *AlterableDoltTable) GetForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyC
 		return nil, err
 	}
 
-	fks, err := fkc.KeysForDisplay(ctx, t.name, root)
-	if err != nil {
-		return nil, err
-	}
+	declaredFk, _ := fkc.KeysForTable(t.name)
+	toReturn := make([]sql.ForeignKeyConstraint, len(declaredFk))
 
-	toReturn := make([]sql.ForeignKeyConstraint, len(fks))
-	for i, fk := range fks {
-		toReturn[i] = t.toForeignKeyConstraint(fk)
+	for i, fk := range declaredFk {
+		parent, ok, err := root.GetTable(ctx, fk.ReferencedTableName)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, fmt.Errorf("cannot find table %s "+
+				"referenced in foreign key %s", fk.ReferencedTableName, fk.Name)
+		}
+
+		parentSch, err := parent.GetSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		toReturn[i], err = toForeignKeyConstraint(fk, t.sch, parentSch)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return toReturn, nil
 }
 
-func (t *AlterableDoltTable) toForeignKeyConstraint(key *doltdb.DisplayForeignKey) sql.ForeignKeyConstraint {
-	return sql.ForeignKeyConstraint{
-		Name:              key.Name,
-		Columns:           key.TableColumns,
-		ReferencedTable:   key.ReferencedTableName,
-		ReferencedColumns: key.ReferencedTableColumns,
-		OnUpdate:          toReferenceOption(key.OnUpdate),
-		OnDelete:          toReferenceOption(key.OnDelete),
+func toForeignKeyConstraint(fk doltdb.ForeignKey, childSch, parentSch schema.Schema) (cst sql.ForeignKeyConstraint, err error) {
+	cst = sql.ForeignKeyConstraint{
+		Name:              fk.Name,
+		Columns:           make([]string, len(fk.TableColumns)),
+		ReferencedTable:   fk.ReferencedTableName,
+		ReferencedColumns: make([]string, len(fk.ReferencedTableColumns)),
+		OnUpdate:          toReferenceOption(fk.OnUpdate),
+		OnDelete:          toReferenceOption(fk.OnDelete),
 	}
+
+	for i, tag := range fk.TableColumns {
+		c, ok := childSch.GetAllCols().GetByTag(tag)
+		if !ok {
+			return cst, fmt.Errorf("cannot find column for tag %d "+
+				"in table %s used in foreign key %s", tag, fk.TableName, fk.Name)
+		}
+		cst.Columns[i] = c.Name
+	}
+
+	for i, tag := range fk.ReferencedTableColumns {
+		c, ok := parentSch.GetAllCols().GetByTag(tag)
+		if !ok {
+			return cst, fmt.Errorf("cannot find column for tag %d "+
+				"in table %s used in foreign key %s", tag, fk.ReferencedTableName, fk.Name)
+		}
+		cst.ReferencedColumns[i] = c.Name
+
+	}
+
+	return cst, nil
 }
 
 func toReferenceOption(opt doltdb.ForeignKeyReferenceOption) sql.ForeignKeyReferenceOption {
@@ -767,14 +840,19 @@ func parseFkReferenceOption(refOp sql.ForeignKeyReferenceOption) (doltdb.Foreign
 }
 
 // createIndex creates the given index on the given table with the given schema. Returns the updated table, updated schema, and created index.
-func (t *AlterableDoltTable) createIndex(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, columns []sql.IndexColumn, comment string) (*doltdb.Table, schema.Schema, schema.Index, error) {
+func createIndexForTable(ctx *sql.Context, table *doltdb.Table, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, columns []sql.IndexColumn, comment string) (*doltdb.Table, schema.Schema, schema.Index, error) {
 	if constraint != sql.IndexConstraint_None && constraint != sql.IndexConstraint_Unique {
 		return nil, nil, nil, fmt.Errorf("not yet supported")
 	}
 
+	sch, err := table.GetSchema(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
 	// get the real column names as CREATE INDEX columns are case-insensitive
 	var realColNames []string
-	allTableCols := t.sch.GetAllCols()
+	allTableCols := sch.GetAllCols()
 	for _, indexCol := range columns {
 		tableCol, ok := allTableCols.GetByNameCaseInsensitive(indexCol.Name)
 		if !ok {
@@ -785,31 +863,38 @@ func (t *AlterableDoltTable) createIndex(ctx *sql.Context, indexName string, usi
 
 	if indexName == "" {
 		indexName = strings.Join(realColNames, "")
+		_, ok := sch.Indexes().GetByNameCaseInsensitive(indexName)
+		var i int
+		for ok {
+			i++
+			indexName = fmt.Sprintf("%s_%d", strings.Join(realColNames, ""), i)
+			_, ok = sch.Indexes().GetByNameCaseInsensitive(indexName)
+		}
 	}
 	if !doltdb.IsValidTableName(indexName) {
 		return nil, nil, nil, fmt.Errorf("invalid index name `%s` as they must match the regular expression %s", indexName, doltdb.TableNameRegexStr)
 	}
 
 	// create the index metadata, will error if index names are taken or an index with the same columns in the same order exists
-	index, err := t.sch.Indexes().AddIndexByColNames(indexName, realColNames, schema.IndexProperties{IsUnique: constraint == sql.IndexConstraint_Unique, Comment: comment})
+	index, err := sch.Indexes().AddIndexByColNames(indexName, realColNames, schema.IndexProperties{IsUnique: constraint == sql.IndexConstraint_Unique, Comment: comment})
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
 	// update the table schema with the new index
-	newSchemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, t.table.ValueReadWriter(), t.sch)
+	newSchemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, table.ValueReadWriter(), sch)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	tableRowData, err := t.table.GetRowData(ctx)
+	tableRowData, err := table.GetRowData(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	indexData, err := t.table.GetIndexData(ctx)
+	indexData, err := table.GetIndexData(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	newTable, err := doltdb.NewTable(ctx, t.table.ValueReadWriter(), newSchemaVal, tableRowData, &indexData)
+	newTable, err := doltdb.NewTable(ctx, table.ValueReadWriter(), newSchemaVal, tableRowData, &indexData)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -823,7 +908,7 @@ func (t *AlterableDoltTable) createIndex(ctx *sql.Context, indexName string, usi
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	return newTable, t.sch, index, nil
+	return newTable, sch, index, nil
 }
 
 // dropIndex drops the given index on the given table with the given schema. Returns the updated table and updated schema.

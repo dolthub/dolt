@@ -34,27 +34,6 @@ teardown() {
     [[ ! "$ouput" =~ "Failed to merge schemas" ]] || false
 }
 
-@test "rename a table" {
-    dolt add test
-    dolt commit -m 'added table test'
-    run dolt sql -q 'alter table test rename to quiz'
-    [ "$status" -eq 0 ]
-    run dolt diff
-    [ "$status" -eq 0 ]
-    [[ "${lines[0]}" =~ "diff --dolt a/test b/quiz" ]] || false
-    [[ "${lines[1]}" =~ "--- a/test @" ]] || false
-    [[ "${lines[2]}" =~ "+++ b/quiz @" ]] || false
-    run dolt status
-    [ "$status" -eq 0 ]
-    skip "table renames currently ignored by status"
-    [[ "$output" =~ "deleted:        test" ]] || false
-    [[ "$output" =~ "new table:      quiz" ]] || false
-    dolt add .
-    run dolt status
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "renamed:    test -> quiz" ]] || false
-}
-
 @test "dolt schema rename column" {
     dolt sql -q 'insert into test values (1,1,1,1,1,1)'
     run dolt sql -q "alter table test rename column c1 to c0"

@@ -16,6 +16,5 @@ fi
 GOFLAGS="-mod=readonly" go build ./...
 ./utils/repofmt/check_fmt.sh
 ./Godeps/verify.sh
-go run ./utils/checkcommitters -dir "$target"
 go vet -mod=readonly ./...
 go run -mod=readonly ./utils/copyrightshdrs/

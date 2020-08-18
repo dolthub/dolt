@@ -133,10 +133,19 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 			}
 		}
 
+		fkc, err := root.GetForeignKeyCollection(ctx)
+		if err != nil {
+			return errhand.BuildDError("error: failed to read foreign key struct").AddCause(err).Build()
+		}
+
+		allSchemas, err := root.GetAllSchemas(ctx)
+		if err != nil {
+			return errhand.BuildDError("unable to get schema").AddCause(err).Build()
+		}
+
 		var notFound []string
 		for _, tblName := range tables {
-			tbl, ok, err := root.GetTable(ctx, tblName)
-
+			ok, err := root.HasTable(ctx, tblName)
 			if err != nil {
 				return errhand.BuildDError("unable to get table '%s'", tblName).AddCause(err).Build()
 			}
@@ -144,15 +153,11 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 			if !ok {
 				notFound = append(notFound, tblName)
 			} else {
-				fkc, err := root.GetForeignKeyCollection(ctx)
-				if err != nil {
-					return errhand.BuildDError("error: failed to read foreign key struct").AddCause(err).Build()
-				}
-				declaresFk, err := fkc.KeysForDisplay(ctx, tblName, root)
-				if err != nil {
-					return errhand.BuildDError("error: failed to assemble foreign key information").AddCause(err).Build()
-				}
-				verr = printTblSchema(ctx, cmStr, tblName, tbl, declaresFk)
+				fks, _ := fkc.KeysForTable(tblName)
+				sch := allSchemas[tblName]
+
+				cli.Println(bold.Sprint(tblName), "@", cmStr)
+				cli.Println(sqlfmt.CreateTableStmtWithTags(tblName, sch, fks, allSchemas))
 				cli.Println()
 			}
 		}
@@ -163,16 +168,4 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 	}
 
 	return verr
-}
-
-func printTblSchema(ctx context.Context, cmStr string, tblName string, tbl *doltdb.Table, foreignKeys []*doltdb.DisplayForeignKey) errhand.VerboseError {
-	cli.Println(bold.Sprint(tblName), "@", cmStr)
-	sch, err := tbl.GetSchema(ctx)
-
-	if err != nil {
-		return errhand.BuildDError("unable to get schema").AddCause(err).Build()
-	}
-
-	cli.Println(sqlfmt.CreateTableStmtWithTags(tblName, sch, foreignKeys))
-	return nil
 }

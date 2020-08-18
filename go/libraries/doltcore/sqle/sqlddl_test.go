@@ -21,9 +21,9 @@ import (
 	"testing"
 
 	"github.com/liquidata-inc/go-mysql-server/sql"
+	"github.com/liquidata-inc/vitess/go/sqltypes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"vitess.io/vitess/go/sqltypes"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
@@ -440,7 +440,7 @@ func TestAddColumn(t *testing.T) {
 		{
 			name:        "alter add column column not found",
 			query:       "alter table people add column newColumn float comment 'tag:100' after notFound",
-			expectedErr: "table people does not have column notFound",
+			expectedErr: `table "people" does not have column "notFound"`,
 		},
 		{
 			name:        "alter add column table not found",
@@ -719,7 +719,7 @@ func TestDropColumn(t *testing.T) {
 		{
 			name:        "column not found",
 			query:       "alter table people drop column notFound",
-			expectedErr: "table people does not have column notFound",
+			expectedErr: `table "people" does not have column "notFound"`,
 		},
 	}
 
@@ -830,7 +830,7 @@ func TestRenameColumn(t *testing.T) {
 		{
 			name:        "column not found",
 			query:       "alter table people rename column notFound to newNotFound",
-			expectedErr: "table people does not have column notFound",
+			expectedErr: `table "people" does not have column "notFound"`,
 		},
 		{
 			name:        "column name collision",

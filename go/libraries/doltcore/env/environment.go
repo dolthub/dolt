@@ -19,7 +19,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -105,7 +104,7 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, 
 
 	if dbLoadErr == nil && dEnv.HasDoltDir() {
 		if !dEnv.HasDoltTempTableDir() {
-			err := os.Mkdir(dEnv.TempTableFilesDir(), os.ModePerm)
+			err := dEnv.FS.MkDirs(dEnv.TempTableFilesDir())
 			dEnv.DBLoadError = err
 		} else {
 			// fire and forget cleanup routine.  Will delete as many old temp files as it can during the main commands execution.
@@ -282,6 +281,12 @@ func (dEnv *DoltEnv) createDirectories(dir string) (string, error) {
 		return "", fmt.Errorf("unable to make directory '%s', cause: %s", absDataDir, err.Error())
 	}
 
+	err = dEnv.FS.MkDirs(dEnv.TempTableFilesDir())
+
+	if err != nil {
+		return "", fmt.Errorf("unable to make directory '%s', cause: %s", dEnv.TempTableFilesDir(), err.Error())
+	}
+
 	return filepath.Join(absPath, dbfactory.DoltDir), nil
 }
 
@@ -303,7 +308,7 @@ func (dEnv *DoltEnv) InitDBAndRepoState(ctx context.Context, nbf *types.NomsBinF
 		return err
 	}
 
-	return dEnv.initializeRepoState(ctx)
+	return dEnv.InitializeRepoState(ctx)
 }
 
 // Inits the dolt DB of this environment with an empty commit at the time given and writes default docs to disk.
@@ -324,8 +329,8 @@ func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinForma
 	return nil
 }
 
-// initializeRepoState writes a default repo state to disk, consisting of a master branch and current root hash value.
-func (dEnv *DoltEnv) initializeRepoState(ctx context.Context) error {
+// InitializeRepoState writes a default repo state to disk, consisting of a master branch and current root hash value.
+func (dEnv *DoltEnv) InitializeRepoState(ctx context.Context) error {
 	cs, _ := doltdb.NewCommitSpec(doltdb.MasterBranch)
 	commit, _ := dEnv.DoltDB.Resolve(ctx, cs, nil)
 
@@ -382,7 +387,7 @@ func (dEnv *DoltEnv) RepoStateWriter() RepoStateWriter {
 }
 
 func (dEnv *DoltEnv) HeadRoot(ctx context.Context) (*doltdb.RootValue, error) {
-	commit, err := dEnv.DoltDB.Resolve(ctx, dEnv.RepoState.CWBHeadSpec(), dEnv.RepoState.CWBHeadRef())
+	commit, err := dEnv.DoltDB.ResolveRef(ctx, dEnv.RepoState.CWBHeadRef())
 
 	if err != nil {
 		return nil, err

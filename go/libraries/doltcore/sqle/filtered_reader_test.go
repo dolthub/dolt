@@ -177,7 +177,7 @@ func TestFilteredReader(t *testing.T) {
 		{
 			"one pk in filter",
 			oneIntPKSch,
-			[]sql.Expression{expression.NewIn(
+			[]sql.Expression{expression.NewInTuple(
 				expression.NewGetField(0, sql.Int64, pk0Name, false),
 				expression.NewTuple(
 					expression.NewLiteral(int64(0), sql.Int64),
@@ -319,7 +319,7 @@ func TestFilteredReader(t *testing.T) {
 		{
 			"two pk in filter on first pk",
 			twoIntPKSch,
-			[]sql.Expression{expression.NewIn(
+			[]sql.Expression{expression.NewInTuple(
 				expression.NewGetField(0, sql.Int64, pk0Name, false),
 				expression.NewTuple(
 					expression.NewLiteral(int64(0), sql.Int64),

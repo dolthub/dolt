@@ -101,6 +101,15 @@ func newTableEditAcc(nbf *types.NomsBinFormat) *tableEditAccumulator {
 	}
 }
 
+// Close ensures that all goroutines that may be open are properly disposed of. Attempting to call any other function
+// on this editor after calling this function is undefined behavior.
+func (te *TableEditor) Close() {
+	te.tea.ed.Close()
+	for _, indexEd := range te.indexEds {
+		indexEd.ed.Close()
+	}
+}
+
 // ContainsIndexedKey returns whether the given key is contained within the index. The key is assumed to be in the
 // format expected of the index, similar to searching on the index map itself.
 func (te *TableEditor) ContainsIndexedKey(ctx context.Context, key types.Tuple, indexName string) (bool, error) {
@@ -378,6 +387,7 @@ func (te *TableEditor) delete(key types.Tuple) error {
 func (te *TableEditor) flushEditAccumulator(ctx context.Context, teaInterface interface{}) error {
 	// We don't call any locks here since this is called from an ActionExecutor with a concurrency of 1
 	tea := teaInterface.(*tableEditAccumulator)
+	defer tea.ed.Close()
 
 	// For all added keys, check for and report a collision
 	for keyHash, addedKey := range tea.addedKeys {

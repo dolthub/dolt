@@ -26,7 +26,7 @@ import (
 	"github.com/liquidata-inc/go-mysql-server/sql/expression/function"
 	"github.com/liquidata-inc/go-mysql-server/sql/parse"
 	"github.com/liquidata-inc/go-mysql-server/sql/plan"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
@@ -71,7 +71,7 @@ func MakeQueryDiffer(ctx context.Context, dEnv *env.DoltEnv, fromRoot, toRoot *d
 	if err != nil {
 		return nil, err
 	}
-	fromIter, err := lazyFrom.RowIter(fromCtx)
+	fromIter, err := lazyFrom.RowIter(fromCtx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func MakeQueryDiffer(ctx context.Context, dEnv *env.DoltEnv, fromRoot, toRoot *d
 	if err != nil {
 		return nil, err
 	}
-	toIter, err := lazyTo.RowIter(toCtx)
+	toIter, err := lazyTo.RowIter(toCtx, nil)
 	if err != nil {
 		return nil, err
 	}
