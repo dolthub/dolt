@@ -16,7 +16,6 @@ package sqlserver
 
 import (
 	"context"
-	"github.com/liquidata-inc/go-mysql-server/sql/analyzer"
 	"net"
 	"strconv"
 	"time"
@@ -25,6 +24,7 @@ import (
 	"github.com/liquidata-inc/go-mysql-server/auth"
 	"github.com/liquidata-inc/go-mysql-server/server"
 	"github.com/liquidata-inc/go-mysql-server/sql"
+	"github.com/liquidata-inc/go-mysql-server/sql/analyzer"
 	"github.com/liquidata-inc/vitess/go/mysql"
 	"github.com/sirupsen/logrus"
 
