@@ -67,13 +67,19 @@ type ListenerYAMLConfig struct {
 	WriteTimeoutMillis *uint64 `yaml:"write_timeout_millis"`
 }
 
+// PerformanceYAMLConfig contains configuration parameters for performance tweaking
+type PerformanceYAMLConfig struct {
+	QueryParallelism *int `yaml:"query_parallelism"`
+}
+
 // YAMLConfig is a ServerConfig implementation which is read from a yaml file
 type YAMLConfig struct {
-	LogLevelStr    *string              `yaml:"log_level"`
-	BehaviorConfig BehaviorYAMLConfig   `yaml:"behavior"`
-	UserConfig     UserYAMLConfig       `yaml:"user"`
-	ListenerConfig ListenerYAMLConfig   `yaml:"listener"`
-	DatabaseConfig []DatabaseYAMLConfig `yaml:"databases"`
+	LogLevelStr       *string               `yaml:"log_level"`
+	BehaviorConfig    BehaviorYAMLConfig    `yaml:"behavior"`
+	UserConfig        UserYAMLConfig        `yaml:"user"`
+	ListenerConfig    ListenerYAMLConfig    `yaml:"listener"`
+	DatabaseConfig    []DatabaseYAMLConfig  `yaml:"databases"`
+	PerformanceConfig PerformanceYAMLConfig `yaml:"performance"`
 }
 
 func serverConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
@@ -224,4 +230,13 @@ func (cfg YAMLConfig) MaxConnections() uint64 {
 	}
 
 	return *cfg.ListenerConfig.MaxConnections
+}
+
+// QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer
+func (cfg YAMLConfig) QueryParallelism() int {
+	if cfg.PerformanceConfig.QueryParallelism == nil {
+		return defaultQueryParallelism
+	}
+
+	return *cfg.PerformanceConfig.QueryParallelism
 }
