@@ -32,16 +32,17 @@ import (
 )
 
 const (
-	hostFlag         = "host"
-	portFlag         = "port"
-	userFlag         = "user"
-	passwordFlag     = "password"
-	timeoutFlag      = "timeout"
-	readonlyFlag     = "readonly"
-	logLevelFlag     = "loglevel"
-	multiDBDirFlag   = "multi-db-dir"
-	noAutoCommitFlag = "no-auto-commit"
-	configFileFlag   = "config"
+	hostFlag             = "host"
+	portFlag             = "port"
+	userFlag             = "user"
+	passwordFlag         = "password"
+	timeoutFlag          = "timeout"
+	readonlyFlag         = "readonly"
+	logLevelFlag         = "loglevel"
+	multiDBDirFlag       = "multi-db-dir"
+	noAutoCommitFlag     = "no-auto-commit"
+	configFileFlag       = "config"
+	queryParallelismFlag = "query-parallelism"
 )
 
 var sqlServerDocs = cli.CommandDocumentationContent{
@@ -77,6 +78,8 @@ SUPPORTED CONFIG FILE FIELDS:
 
 		{{.EmphasisLeft}}listener.write_timeout_millis{{.EmphasisRight}} - The number of milliseconds that the server will wait for a write operation
 
+		{{.EmphasisLeft}}performance.query_parallelism{{.EmphasisRight}} - Amount of go routines spawned to process each query. Default is 1.
+
 		{{.EmphasisLeft}}databases{{.EmphasisRight}} - a list of dolt data repositories to make available as SQL databases. If databases is missing or empty then the working directory must be a valid dolt data repository which will be made available as a SQL database
 		
 		{{.EmphasisLeft}}databases[i].path{{.EmphasisRight}} - A path to a dolt data repository
@@ -86,7 +89,7 @@ SUPPORTED CONFIG FILE FIELDS:
 If a config file is not provided many of these settings may be configured on the command line.`,
 	Synopsis: []string{
 		"--config {{.LessThan}}file{{.GreaterThan}}",
-		"[-H {{.LessThan}}host{{.GreaterThan}}] [-P {{.LessThan}}port{{.GreaterThan}}] [-u {{.LessThan}}user{{.GreaterThan}}] [-p {{.LessThan}}password{{.GreaterThan}}] [-t {{.LessThan}}timeout{{.GreaterThan}}] [-l {{.LessThan}}loglevel{{.GreaterThan}}] [--multi-db-dir {{.LessThan}}directory{{.GreaterThan}}] [-r]",
+		"[-H {{.LessThan}}host{{.GreaterThan}}] [-P {{.LessThan}}port{{.GreaterThan}}] [-u {{.LessThan}}user{{.GreaterThan}}] [-p {{.LessThan}}password{{.GreaterThan}}] [-t {{.LessThan}}timeout{{.GreaterThan}}] [-l {{.LessThan}}loglevel{{.GreaterThan}}] [--multi-db-dir {{.LessThan}}directory{{.GreaterThan}}] [--query-parallelism {{.LessThan}}num-go-routines{{.GreaterThan}}] [-r]",
 	},
 }
 
@@ -124,6 +127,7 @@ func createArgParser() *argparser.ArgParser {
 	ap.SupportsString(logLevelFlag, "l", "Log level", fmt.Sprintf("Defines the level of logging provided\nOptions are: `trace', `debug`, `info`, `warning`, `error`, `fatal` (default `%v`)", serverConfig.LogLevel()))
 	ap.SupportsString(multiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases.")
 	ap.SupportsFlag(noAutoCommitFlag, "", "When provided sessions will not automatically commit their changes to the working set. Anything not manually committed will be lost.")
+	ap.SupportsInt(queryParallelismFlag, "", "num-go-routines", fmt.Sprintf("Set the number of go routines spawned to handle each query (default `%d`)", serverConfig.QueryParallelism()))
 	return ap
 }
 
@@ -230,6 +234,10 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 		if !cli.CheckEnvIsValid(dEnv) {
 			return nil, errors.New("not a valid dolt directory")
 		}
+	}
+
+	if queryParallelism, ok := apr.GetInt(queryParallelismFlag); ok {
+		serverConfig.withQueryParallelism(queryParallelism)
 	}
 
 	serverConfig.autoCommit = !apr.Contains(noAutoCommitFlag)
