@@ -136,7 +136,9 @@ func newCursorBackFrom(ctx context.Context, seq orderedSequence, key orderedKey)
 	// If we overshot the key, back off by one. We want the greatest element <= key
 	if cur.valid() {
 		currKey, err := cur.seq.(orderedSequence).getKey(cur.idx)
-		d.PanicIfError(err)
+		if err != nil {
+			return nil, err
+		}
 
 		isLess, err := key.Less(cur.seq.format(), currKey)
 		if err != nil {
