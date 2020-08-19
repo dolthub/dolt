@@ -78,13 +78,6 @@ func newOrderedTestSequence(items []interface{}) *testOrderedSequence {
 		}
 	}
 
-	_, firstChildIsValue := items[0].(Value)
-	if firstChildIsValue {
-		return &testOrderedSequence{
-			testSequence: testSequence{items},
-		}
-	}
-
 	var sequenceItems []interface{}
 	for _, item := range items {
 		if slice, ok := item.([]interface{}); ok {
