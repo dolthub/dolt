@@ -82,9 +82,13 @@ func (ts testSequence) format() *NomsBinFormat {
 	return Format_7_18
 }
 
-func (ts testSequence) getChildSequence(ctx context.Context, idx int) (sequence, error) {
+func (ts testSequence) getChildSequence(_ context.Context, idx int) (sequence, error) {
 	child := ts.items[idx]
-	return testSequence{child.([]interface{})}, nil
+	childSlice, ok := child.([]interface{})
+	if !ok {
+		return nil, nil
+	}
+	return testSequence{childSlice}, nil
 }
 
 func (ts testSequence) isLeaf() bool {
@@ -120,7 +124,7 @@ func (ts testSequence) typeOf() (*Type, error) {
 }
 
 func (ts testSequence) Len() uint64 {
-	panic("not reached")
+	return uint64(len(ts.items))
 }
 
 func (ts testSequence) Empty() bool {

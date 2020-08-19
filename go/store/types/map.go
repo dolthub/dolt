@@ -387,40 +387,11 @@ func (m Map) IteratorFrom(ctx context.Context, key Value) (MapIterator, error) {
 }
 
 func (m Map) IteratorBackFrom(ctx context.Context, key Value) (MapIterator, error) {
-	cur, err := newCursorAtValue(ctx, m.orderedSequence, key, false, false)
+	cur, err := newCursorBackFromValue(ctx, m.orderedSequence, key)
 
 	if err != nil {
 		return nil, err
 	}
-
-	// kinda hacky, but a lot less work than implementing newCursorFromValueAtEnd which would have to search back
-	cur.reverse = true
-	if !cur.valid() {
-		cur.advance(ctx)
-	}
-
-	if cur.valid() {
-		item, err := cur.current()
-
-		if err != nil {
-			return nil, err
-		}
-
-		entry := item.(mapEntry)
-		isLess, err := entry.key.Less(m.Format(), key)
-
-		if err != nil {
-			return nil, err
-		}
-
-		if !isLess && !key.Equals(entry.key) {
-			_, err := cur.advance(ctx)
-
-			if err != nil {
-				return nil, err
-			}
-		}
-	} // else: we're at the beginning of the map
 
 	return &mapIterator{sequenceIter: cur}, nil
 }
