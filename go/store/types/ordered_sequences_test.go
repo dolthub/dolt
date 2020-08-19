@@ -235,45 +235,41 @@ func TestNewCursorAtValue(t *testing.T) {
 	})
 
 	t.Run("unbalanced tree", func(t *testing.T) {
-		t.Skip("Unbalanced tree sequence cursors are broken")
-		testSequence := newOrderedTestSequence([]interface{}{
-			[]interface{}{ // interior node, level 1
-				[]interface{}{ // interior node, level 2
-					[]interface{}{ // value node, level 3
+		t.Skip("sequence cursors on unbalanced trees break")
+		// This breaks, because the sequence cursor algorithm only works on balanced trees. When the leaf nodes are at
+		// different depths, the calls to cursor.sync() error. Here's a call graph of calling advance() on a cursor on the
+		// test sequence below at the value 1:
+		// D -> advance()
+		//   C -> advance()
+		//     B -> advance()
+		//       A -> advance(), idx = 1 (E)
+		//     B.sync(): B = A.getChildSeq() = E
+		//   C.sync(): C = E.getChildSeq() = F
+		// D.sync(): error (F.getChildSeq() == nil, panic)
+		// The error is that reassigning the cursor's sequence has the side-effect of effectively reassigning the *parent*
+		// cursor of any child cursors, since sync() overwrites the sequence pointer of the cursor held by child cursors.
+		testSequence := newOrderedTestSequence([]interface{}{ // Seq A
+			[]interface{}{ // interior node, level 1, Seq B
+				[]interface{}{ // interior node, level 2, Seq C
+					[]interface{}{ // value node, level 3, Seq D
 						Int(1),
-					},
-					[]interface{}{ // value node, level 3
-						Int(2),
-					},
-				},
-				[]interface{}{ // interior node, level 2
-					[]interface{}{ // value node, level 3
-						Int(4),
-					},
-					[]interface{}{ // value node, level 3
-						Int(5),
-						Int(7),
 					},
 				},
 			},
-			[]interface{}{ // interior node, level 1
-				[]interface{}{ // value node, level 2
+			[]interface{}{ // interior node, level 1, Seq E
+				[]interface{}{ // value node, level 2, Seq F
 					Int(10),
 					Int(11),
-				},
-				[]interface{}{ // value node, level 2
+				}, []interface{}{ // value node, level 2, Seq G
 					Int(20),
 				},
 			},
 		})
 
 		testCases := []orderedSequenceTestCase{
-			newOrderedSequenceTestCase(0, 1, 2, 4, 5, 7, 10, 11, 20),
-			newOrderedSequenceTestCase(1, 1, 2, 4, 5, 7, 10, 11, 20),
-			newOrderedSequenceTestCase(4, 4, 5, 7, 10, 11, 20),
-			newOrderedSequenceTestCase(6, 7, 10, 11, 20),
-			newOrderedSequenceTestCase(7, 7, 10, 11, 20),
-			newOrderedSequenceTestCase(8, 10, 11, 20),
+			newOrderedSequenceTestCase(0, 1, 10, 11, 20),
+			newOrderedSequenceTestCase(1, 1, 10, 11, 20),
+			newOrderedSequenceTestCase(9, 10, 11, 20),
 			newOrderedSequenceTestCase(10, 10, 11, 20),
 			newOrderedSequenceTestCase(11, 11, 20),
 			newOrderedSequenceTestCase(12, 20),
@@ -414,60 +410,6 @@ func TestNewCursorBackFromValue(t *testing.T) {
 			newOrderedSequenceTestCase(12, 11, 10, 7, 5, 4, 2, 1),
 			newOrderedSequenceTestCase(20, 20, 11, 10, 7, 5, 4, 2, 1),
 			newOrderedSequenceTestCase(21, 20, 11, 10, 7, 5, 4, 2, 1),
-		}
-
-		for _, tt := range testCases {
-			t.Run(fmt.Sprintf("%d", tt.value), func(t *testing.T) {
-				cursor, err := newCursorBackFromValue(context.Background(), testSequence, tt.value)
-				require.NoError(t, err)
-				assertCursorContents(t, cursor, tt.expectedVals)
-			})
-		}
-	})
-
-	t.Run("unbalanced tree", func(t *testing.T) {
-		t.Skip("Unbalanced tree sequence cursors are broken")
-		testSequence := newOrderedTestSequence([]interface{}{
-			[]interface{}{ // interior node, level 1
-				[]interface{}{ // interior node, level 2
-					[]interface{}{ // value node, level 3
-						Int(1),
-					},
-					[]interface{}{ // value node, level 3
-						Int(2),
-					},
-				},
-				[]interface{}{ // interior node, level 2
-					[]interface{}{ // value node, level 3
-						Int(4),
-					},
-					[]interface{}{ // value node, level 3
-						Int(5),
-						Int(7),
-					},
-				},
-			},
-			[]interface{}{ // interior node, level 1
-				[]interface{}{ // value node, level 2
-					Int(10),
-					Int(11),
-				},
-				[]interface{}{ // value node, level 2
-					Int(20),
-				},
-			},
-		})
-
-		testCases := []orderedSequenceTestCase{
-			newOrderedSequenceTestCase(0),
-			newOrderedSequenceTestCase(1, 1),
-			newOrderedSequenceTestCase(4, 4, 2, 1),
-			newOrderedSequenceTestCase(6, 5, 4, 2, 1),
-			newOrderedSequenceTestCase(7, 7, 5, 4, 2, 1),
-			newOrderedSequenceTestCase(8, 7, 5, 4, 2, 1),
-			newOrderedSequenceTestCase(10, 10, 7, 5, 4, 2, 1),
-			newOrderedSequenceTestCase(11, 11, 10, 7, 5, 4, 2, 1),
-			newOrderedSequenceTestCase(12, 11, 10, 7, 5, 4, 2, 1),
 		}
 
 		for _, tt := range testCases {
