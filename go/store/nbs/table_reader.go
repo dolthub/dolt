@@ -484,12 +484,13 @@ func (ti onHeapTableIndex) lookupOrdinal(h *addr) uint32 {
 }
 
 func (ti onHeapTableIndex) IndexEntry(idx uint32, a *addr) indexEntry {
+	ord := ti.ordinals[idx]
 	if a != nil {
 		binary.BigEndian.PutUint64(a[:], ti.prefixes[idx])
-		li := uint64(ti.ordinals[idx]) * addrSuffixSize
+		li := uint64(ord) * addrSuffixSize
 		copy(a[addrPrefixSize:], ti.suffixes[li:li+addrSuffixSize])
 	}
-	return indexResult{ti.offsets[ti.ordinals[idx]], ti.lengths[ti.ordinals[idx]]}
+	return indexResult{ti.offsets[ord], ti.lengths[ord]}
 }
 
 func (ti onHeapTableIndex) Lookup(h *addr) (indexEntry, bool) {
