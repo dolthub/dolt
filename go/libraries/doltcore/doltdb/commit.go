@@ -24,10 +24,10 @@ import (
 )
 
 const (
-	metaField        = "meta"
-	parentsField     = "parents"
-	parentsListField = "parentsList"
-	rootValueField   = "value"
+	metaField        = datas.MetaField
+	parentsField     = datas.ParentsField
+	parentsListField = datas.ParentsListField
+	rootValueField   = datas.ValueField
 )
 
 var errCommitHasNoMeta = errors.New("commit has no metadata")
