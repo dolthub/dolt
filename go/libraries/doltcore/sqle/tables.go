@@ -200,7 +200,7 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 
 // Returns the table rows for the partition given
 func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
-	dPartition := partition.(doltTablePartition)
+	dPartition, _ := partition.(doltTablePartition)
 	return newRowIterator(t, ctx, &dPartition)
 }
 
