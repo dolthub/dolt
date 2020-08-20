@@ -200,8 +200,14 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 
 // Returns the table rows for the partition given
 func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
-	dPartition, _ := partition.(doltTablePartition)
-	return newRowIterator(t, ctx, &dPartition)
+	switch typedPartition := partition.(type) {
+	case doltTablePartition:
+		return newRowIterator(t, ctx, &typedPartition)
+	case singlePartition:
+		return newRowIterator(t, ctx, nil)
+	}
+
+	return nil, errors.New("unsupported partition type")
 }
 
 // WritableDoltTable allows updating, deleting, and inserting new rows. It implements sql.UpdatableTable and friends.
