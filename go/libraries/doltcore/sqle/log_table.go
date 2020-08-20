@@ -67,11 +67,11 @@ func (dt *LogTable) Schema() sql.Schema {
 
 // Partitions is a sql.Table interface function that returns a partition of the data.  Currently the data is unpartitioned.
 func (dt *LogTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
-	return &doltTablePartitionIter{}, nil
+	return newSinglePartitionIter(), nil
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
-func (dt *LogTable) PartitionRows(sqlCtx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+func (dt *LogTable) PartitionRows(sqlCtx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
 	return NewLogItr(sqlCtx, dt.dbName, dt.ddb)
 }
 

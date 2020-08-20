@@ -773,7 +773,7 @@ func RegisterSchemaFragments(ctx *sql.Context, db Database, root *doltdb.RootVal
 	if err != nil {
 		return err
 	}
-	iter, err := newRowIterator(&tbl.DoltTable, ctx)
+	iter, err := newRowIterator(&tbl.DoltTable, ctx, nil)
 	if err != nil {
 		return err
 	}
