@@ -20,6 +20,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/abiosoft/readline"
@@ -1076,7 +1077,7 @@ func newSqlEngine(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, ro
 		return nil, err
 	}
 
-	engine := sqle.New(c, analyzer.NewBuilder(c).Build(), &sqle.Config{Auth: au})
+	engine := sqle.New(c, analyzer.NewBuilder(c).WithParallelism(runtime.NumCPU()).Build(), &sqle.Config{Auth: au})
 	engine.AddDatabase(sql.NewInformationSchemaDatabase(engine.Catalog))
 
 	dsess := dsqle.DSessFromSess(sqlCtx.Session)
