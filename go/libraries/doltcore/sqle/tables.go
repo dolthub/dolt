@@ -45,9 +45,10 @@ var MinRowsPerPartition uint64 = 1024
 func init() {
 	isTest := false
 	for _, arg := range os.Args {
-		switch strings.ToLower(arg) {
-		case "-test.v", "-test.run":
+		lwr := strings.ToLower(arg)
+		if lwr == "-test.v" || lwr == "-test.run" || strings.HasPrefix(lwr, "-test.testlogfile") {
 			isTest = true
+			break
 		}
 	}
 
