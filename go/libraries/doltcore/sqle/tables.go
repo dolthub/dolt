@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -37,8 +38,23 @@ import (
 
 const (
 	partitionMultiplier = 2.0
-	minRowsPerPartition = 1024
 )
+
+var MinRowsPerPartition uint64 = 1024
+
+func init() {
+	isTest := false
+	for _, arg := range os.Args {
+		switch strings.ToLower(arg) {
+		case "-test.v", "-test.run":
+			isTest = true
+		}
+	}
+
+	if isTest {
+		MinRowsPerPartition = 2
+	}
+}
 
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
 type DoltTable struct {
@@ -151,8 +167,7 @@ func (t *DoltTable) sqlSchema() sql.Schema {
 	return sqlSch
 }
 
-// Returns the partitions for this table. We return a single partition, but could potentially get more performance by
-// returning multiple.
+// Returns the partitions for this table.
 func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	rowData, err := t.table.GetRowData(ctx)
 
@@ -167,7 +182,7 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	}
 
 	maxPartitions := uint64(partitionMultiplier * runtime.NumCPU())
-	numPartitions := (numElements / minRowsPerPartition) + 1
+	numPartitions := (numElements / MinRowsPerPartition) + 1
 
 	if numPartitions > maxPartitions {
 		numPartitions = maxPartitions
@@ -183,9 +198,9 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	return newDoltTablePartitionIter(rowData, partitions), nil
 }
 
-// Returns the table rows for the partition given (all rows of the table).
+// Returns the table rows for the partition given
 func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
-	dPartition, _ := partition.(doltTablePartition)
+	dPartition := partition.(doltTablePartition)
 	return newRowIterator(t, ctx, &dPartition)
 }
 
@@ -267,10 +282,12 @@ func newSinglePartitionIter() singlePartitionIter {
 	return singlePartitionIter{&sync.Once{}}
 }
 
+// Close is required by the sql.PartitionIter interface. Does nothing.
 func (itr singlePartitionIter) Close() error {
 	return nil
 }
 
+// Next returns the next partition if there is one, or io.EOF if there isn't.
 func (itr singlePartitionIter) Next() (sql.Partition, error) {
 	first := false
 	itr.once.Do(func() {
@@ -288,6 +305,8 @@ var _ sql.Partition = singlePartition{}
 
 type singlePartition struct{}
 
+// Key returns the key for this partition, which must uniquely identity the partition. We have only a single partition
+// per table, so we use a constant.
 func (sp singlePartition) Key() []byte {
 	return []byte("single")
 }
@@ -329,12 +348,13 @@ func (itr *doltTablePartitionIter) Next() (sql.Partition, error) {
 var _ sql.Partition = (*doltTablePartition)(nil)
 
 type doltTablePartition struct {
+	// start is the first index of this partition (inclusive)
 	start uint64
-	end   uint64
+	// all elements in the partition will be less than end (exclusive)
+	end uint64
 }
 
-// Key returns the key for this partition, which must uniquely identity the partition. We have only a single partition
-// per table, so we use a constant.
+// Key returns the key for this partition, which must uniquely identity the partition.
 func (p doltTablePartition) Key() []byte {
 	return []byte(strconv.FormatUint(p.start, 10) + " >= i < " + strconv.FormatUint(p.end, 10))
 }
