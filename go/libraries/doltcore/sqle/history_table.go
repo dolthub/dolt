@@ -55,7 +55,7 @@ type HistoryTable struct {
 	commitFilters         []sql.Expression
 	rowFilters            []sql.Expression
 	cmItr                 doltdb.CommitItr
-	readerCreateFuncCache map[hash.Hash]CreateReaderFunc
+	readerCreateFuncCache *ThreadSafeCRFuncCache
 }
 
 // NewHistoryTable creates a history table
@@ -115,7 +115,7 @@ func NewHistoryTable(ctx *sql.Context, db Database, tblName string) (sql.Table, 
 		ss:                    ss,
 		sqlSch:                sqlSch,
 		cmItr:                 cmItr,
-		readerCreateFuncCache: make(map[hash.Hash]CreateReaderFunc),
+		readerCreateFuncCache: NewThreadSafeCRFuncCache(),
 	}, nil
 }
 
@@ -325,7 +325,7 @@ func newRowItrForTableAtCommit(
 	tblName string,
 	ss *schema.SuperSchema,
 	filters []sql.Expression,
-	readerCreateFuncCache map[hash.Hash]CreateReaderFunc) (*rowItrForTableAtCommit, error) {
+	readerCreateFuncCache *ThreadSafeCRFuncCache) (*rowItrForTableAtCommit, error) {
 	root, err := cm.GetRootValue()
 
 	if err != nil {
@@ -367,15 +367,10 @@ func newRowItrForTableAtCommit(
 		return nil, err
 	}
 
-	var createReaderFunc CreateReaderFunc
-	if createReaderFunc, ok = readerCreateFuncCache[schHash]; !ok {
-		createReaderFunc, err = CreateReaderFuncLimitedByExpressions(tbl.Format(), tblSch, filters)
+	createReaderFunc, err := readerCreateFuncCache.GetOrCreate(schHash, tbl.Format(), tblSch, filters)
 
-		if err != nil {
-			return nil, err
-		}
-
-		readerCreateFuncCache[schHash] = createReaderFunc
+	if err != nil {
+		return nil, err
 	}
 
 	rd, err := createReaderFunc(ctx, m)
