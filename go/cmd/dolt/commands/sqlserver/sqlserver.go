@@ -78,7 +78,7 @@ SUPPORTED CONFIG FILE FIELDS:
 
 		{{.EmphasisLeft}}listener.write_timeout_millis{{.EmphasisRight}} - The number of milliseconds that the server will wait for a write operation
 
-		{{.EmphasisLeft}}performance.query_parallelism{{.EmphasisRight}} - Amount of go routines spawned to process each query. Default is 1.
+		{{.EmphasisLeft}}performance.query_parallelism{{.EmphasisRight}} - Amount of go routines spawned to process each query
 
 		{{.EmphasisLeft}}databases{{.EmphasisRight}} - a list of dolt data repositories to make available as SQL databases. If databases is missing or empty then the working directory must be a valid dolt data repository which will be made available as a SQL database
 		
