@@ -46,6 +46,7 @@ teardown() {
 
   EXPECTED=$( echo -e "table,num_conflicts\none_pk,1\ntwo_pk,1")
   run dolt sql -r csv -q "SELECT * FROM dolt_conflicts ORDER BY table"
+  echo $output
   [ "$status" -eq 0 ]
   [[ "$output" =~ "$EXPECTED" ]] || false
 
