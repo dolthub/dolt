@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"strings"
+	"sync"
 
 	"github.com/liquidata-inc/go-mysql-server/sql"
 	"github.com/liquidata-inc/go-mysql-server/sql/expression"
@@ -26,6 +27,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/setalgebra"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -207,6 +209,39 @@ func setForInExp(nbf *types.NomsBinFormat, col schema.Column, be expression.Bina
 // CreateReaderFunc creates a new instance of an object implementing TableReadCloser for the given types.Map.  The
 // readers created by calling this function will have the rows they return limited by a setalgebra.Set implementation.
 type CreateReaderFunc func(ctx context.Context, m types.Map) (table.TableReadCloser, error)
+
+// ThreadSafeCRFuncCache is a thread safe CreateReaderFunc cache
+type ThreadSafeCRFuncCache struct {
+	funcs map[hash.Hash]CreateReaderFunc
+	mu    *sync.Mutex
+}
+
+// NewThreadSafeCRFuncCache creates a new ThreadSafeCRFuncCache
+func NewThreadSafeCRFuncCache() *ThreadSafeCRFuncCache {
+	return &ThreadSafeCRFuncCache{make(map[hash.Hash]CreateReaderFunc), &sync.Mutex{}}
+}
+
+// GetOrCreate gets a CreateReaderFunc for the given hash if it exists in the cache.  If it doesn't it creates it and
+// caches it.
+func (cache *ThreadSafeCRFuncCache) GetOrCreate(h hash.Hash, nbf *types.NomsBinFormat, tblSch schema.Schema, filters []sql.Expression) (CreateReaderFunc, error) {
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+
+	f, ok := cache.funcs[h]
+
+	if ok {
+		return f, nil
+	}
+
+	f, err := CreateReaderFuncLimitedByExpressions(nbf, tblSch, filters)
+
+	if err != nil {
+		return nil, err
+	}
+
+	cache.funcs[h] = f
+	return f, nil
+}
 
 // CreateReaderFuncLimitedByExpressions takes a table schema and a slice of sql filters and returns a CreateReaderFunc
 // which limits the rows read based on the filters supplied.

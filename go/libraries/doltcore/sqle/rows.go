@@ -32,23 +32,43 @@ type doltTableRowIter struct {
 	rowData  types.Map
 	ctx      *sql.Context
 	nomsIter types.MapIterator
+	end      types.Value
+	nbf      *types.NomsBinFormat
 }
 
 // Returns a new row iterator for the table given
-func newRowIterator(tbl *DoltTable, ctx *sql.Context) (*doltTableRowIter, error) {
+func newRowIterator(tbl *DoltTable, ctx *sql.Context, partition *doltTablePartition) (*doltTableRowIter, error) {
 	rowData, err := tbl.table.GetRowData(ctx)
 
 	if err != nil {
 		return nil, err
 	}
 
-	mapIter, err := rowData.BufferedIterator(ctx)
+	var mapIter types.MapIterator
+	var end types.Value = nil
+	if partition == nil {
+		mapIter, err = rowData.BufferedIterator(ctx)
+	} else {
+		endIter, err := rowData.IteratorAt(ctx, partition.end)
+
+		if err != nil && err != io.EOF {
+			return nil, err
+		} else if err != io.EOF {
+			end, _, err = endIter.Next(ctx)
+
+			if err != nil && err != io.EOF {
+				return nil, err
+			}
+		}
+
+		mapIter, err = rowData.BufferedIteratorAt(ctx, partition.start)
+	}
 
 	if err != nil {
 		return nil, err
 	}
 
-	return &doltTableRowIter{table: tbl, rowData: rowData, ctx: ctx, nomsIter: mapIter}, nil
+	return &doltTableRowIter{table: tbl, rowData: rowData, ctx: ctx, nomsIter: mapIter, end: end, nbf: rowData.Format()}, nil
 }
 
 // Next returns the next row in this row iterator, or an io.EOF error if there aren't any more.
@@ -61,6 +81,18 @@ func (itr *doltTableRowIter) Next() (sql.Row, error) {
 
 	if key == nil && val == nil {
 		return nil, io.EOF
+	}
+
+	if itr.end != nil {
+		isLess, err := key.Less(itr.nbf, itr.end)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if !isLess {
+			return nil, io.EOF
+		}
 	}
 
 	doltRow, err := row.FromNoms(itr.table.sch, key.(types.Tuple), val.(types.Tuple))

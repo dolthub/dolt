@@ -23,7 +23,6 @@ package datetime
 
 import (
 	"context"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -94,7 +93,7 @@ func TestUnmarshalInvalid(t *testing.T) {
 	test(types.Float(42))
 	test(mustStruct(types.NewStruct(types.Format_7_18, "DateTime", types.StructData{})))
 	test(mustStruct(types.NewStruct(types.Format_7_18, "DateTime", types.StructData{
-		"secSinceEpoch": types.String(strconv.FormatInt(42, 10)),
+		"secSinceEpoch": types.String("42"),
 	})))
 	test(mustStruct(types.NewStruct(types.Format_7_18, "DateTime", types.StructData{
 		"SecSinceEpoch": types.Float(42),

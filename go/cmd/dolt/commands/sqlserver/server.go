@@ -24,6 +24,7 @@ import (
 	"github.com/liquidata-inc/go-mysql-server/auth"
 	"github.com/liquidata-inc/go-mysql-server/server"
 	"github.com/liquidata-inc/go-mysql-server/sql"
+	"github.com/liquidata-inc/go-mysql-server/sql/analyzer"
 	"github.com/liquidata-inc/vitess/go/mysql"
 	"github.com/sirupsen/logrus"
 
@@ -79,7 +80,10 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 	}
 
 	userAuth := auth.NewAudit(auth.NewNativeSingle(serverConfig.User(), serverConfig.Password(), permissions), auth.NewAuditLog(logrus.StandardLogger()))
-	sqlEngine := sqle.NewDefault()
+
+	c := sql.NewCatalog()
+	a := analyzer.NewBuilder(c).WithParallelism(serverConfig.QueryParallelism()).Build()
+	sqlEngine := sqle.New(c, a, nil)
 
 	err := sqlEngine.Catalog.Register(dfunctions.DoltFunctions...)
 

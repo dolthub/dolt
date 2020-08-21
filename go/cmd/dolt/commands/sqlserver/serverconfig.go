@@ -36,15 +36,16 @@ const (
 )
 
 const (
-	defaultHost           = "localhost"
-	defaultPort           = 3306
-	defaultUser           = "root"
-	defaultPass           = ""
-	defaultTimeout        = 30 * 1000
-	defaultReadOnly       = false
-	defaultLogLevel       = LogLevel_Info
-	defaultAutoCommit     = true
-	defaultMaxConnections = 1
+	defaultHost             = "localhost"
+	defaultPort             = 3306
+	defaultUser             = "root"
+	defaultPass             = ""
+	defaultTimeout          = 30 * 1000
+	defaultReadOnly         = false
+	defaultLogLevel         = LogLevel_Info
+	defaultAutoCommit       = true
+	defaultMaxConnections   = 1
+	defaultQueryParallelism = 2
 )
 
 // String returns the string representation of the log level.
@@ -93,19 +94,22 @@ type ServerConfig interface {
 	DatabaseNamesAndPaths() []env.EnvNameAndPath
 	// MaxConnections returns the maximum number of simultaneous connections the server will allow.  The default is 1
 	MaxConnections() uint64
+	// QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer
+	QueryParallelism() int
 }
 
 type commandLineServerConfig struct {
-	host            string
-	port            int
-	user            string
-	password        string
-	timeout         uint64
-	readOnly        bool
-	logLevel        LogLevel
-	dbNamesAndPaths []env.EnvNameAndPath
-	autoCommit      bool
-	maxConnections  uint64
+	host             string
+	port             int
+	user             string
+	password         string
+	timeout          uint64
+	readOnly         bool
+	logLevel         LogLevel
+	dbNamesAndPaths  []env.EnvNameAndPath
+	autoCommit       bool
+	maxConnections   uint64
+	queryParallelism int
 }
 
 // Host returns the domain that the server will run on. Accepts an IPv4 or IPv6 address, in addition to localhost.
@@ -158,6 +162,11 @@ func (cfg *commandLineServerConfig) MaxConnections() uint64 {
 	return cfg.maxConnections
 }
 
+// QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer
+func (cfg *commandLineServerConfig) QueryParallelism() int {
+	return cfg.queryParallelism
+}
+
 // DatabaseNamesAndPaths returns an array of env.EnvNameAndPathObjects corresponding to the databases to be loaded in
 // a multiple db configuration. If nil is returned the server will look for a database in the current directory and
 // give it a name automatically.
@@ -207,6 +216,19 @@ func (cfg *commandLineServerConfig) withLogLevel(loglevel LogLevel) *commandLine
 	return cfg
 }
 
+// withMaxConnections updates the maximum number of concurrent connections and returns the called
+// `*commandLineServerConfig`, which is useful for chaining calls.
+func (cfg *commandLineServerConfig) withMaxConnections(maxConnections uint64) *commandLineServerConfig {
+	cfg.maxConnections = maxConnections
+	return cfg
+}
+
+// withQueryParallelism updates the query parallelism and returns the called `*commandLineServerConfig`, which is useful for chaining calls.
+func (cfg *commandLineServerConfig) withQueryParallelism(queryParallelism int) *commandLineServerConfig {
+	cfg.queryParallelism = queryParallelism
+	return cfg
+}
+
 func (cfg *commandLineServerConfig) withDBNamesAndPaths(dbNamesAndPaths []env.EnvNameAndPath) *commandLineServerConfig {
 	cfg.dbNamesAndPaths = dbNamesAndPaths
 	return cfg
@@ -215,15 +237,16 @@ func (cfg *commandLineServerConfig) withDBNamesAndPaths(dbNamesAndPaths []env.En
 // DefaultServerConfig creates a `*ServerConfig` that has all of the options set to their default values.
 func DefaultServerConfig() *commandLineServerConfig {
 	return &commandLineServerConfig{
-		host:           defaultHost,
-		port:           defaultPort,
-		user:           defaultUser,
-		password:       defaultPass,
-		timeout:        defaultTimeout,
-		readOnly:       defaultReadOnly,
-		logLevel:       defaultLogLevel,
-		autoCommit:     defaultAutoCommit,
-		maxConnections: defaultMaxConnections,
+		host:             defaultHost,
+		port:             defaultPort,
+		user:             defaultUser,
+		password:         defaultPass,
+		timeout:          defaultTimeout,
+		readOnly:         defaultReadOnly,
+		logLevel:         defaultLogLevel,
+		autoCommit:       defaultAutoCommit,
+		maxConnections:   defaultMaxConnections,
+		queryParallelism: defaultQueryParallelism,
 	}
 }
 
