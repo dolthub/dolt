@@ -63,7 +63,7 @@ func makeTestSrcs(t *testing.T, tableSizes []uint32, p tablePersister) (srcs chu
 		}
 		cs, err := p.Persist(context.Background(), mt, nil, &Stats{})
 		assert.NoError(t, err)
-		srcs = append(srcs, cs)
+		srcs = append(srcs, cs.Clone())
 	}
 	return
 }
@@ -73,6 +73,8 @@ func TestConjoin(t *testing.T) {
 	makeTestTableSpecs := func(tableSizes []uint32, p tablePersister) (specs []tableSpec) {
 		for _, src := range makeTestSrcs(t, tableSizes, p) {
 			specs = append(specs, tableSpec{mustAddr(src.hash()), mustUint32(src.count())})
+			err := src.Close()
+			assert.NoError(t, err)
 		}
 		return
 	}

@@ -28,7 +28,9 @@ import (
 	"time"
 )
 
-func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, indexCache *indexCache, stats *Stats) (cs chunkSource, err error) {
+type indexParserF func([]byte) (tableIndex, error)
+
+func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, indexCache *indexCache, stats *Stats, parseIndex indexParserF) (cs chunkSource, err error) {
 	if indexCache != nil {
 		indexCache.lockEntry(name)
 		defer func() {
@@ -86,14 +88,14 @@ func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectRead
 	stats.IndexBytesPerRead.Sample(uint64(len(indexBytes)))
 	stats.IndexReadLatency.SampleTimeSince(t1)
 
-	index, err := parseTableIndex(indexBytes)
+	index, err := parseIndex(indexBytes)
 
 	if err != nil {
 		return emptyChunkSource{}, err
 	}
 
-	if indexCache != nil {
-		indexCache.put(name, index)
+	if ohi, ok := index.(onHeapTableIndex); indexCache != nil && ok {
+		indexCache.put(name, ohi)
 	}
 
 	return &chunkSourceAdapter{newTableReader(index, tra, s3BlockSize), name}, nil

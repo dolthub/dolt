@@ -412,7 +412,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 	assertContainAll := func(t *testing.T, store chunks.ChunkStore, srcs ...chunkSource) {
 		rdrs := make(chunkReaderGroup, len(srcs))
 		for i, src := range srcs {
-			rdrs[i] = src
+			rdrs[i] = src.Clone()
 		}
 		chunkChan := make(chan extractRecord, mustUint32(rdrs.count()))
 		err := rdrs.extract(context.Background(), chunkChan)
@@ -492,6 +492,10 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, ok)
 		assertContainAll(t, smallTableStore, srcs...)
+		for _, src := range srcs {
+			err := src.Close()
+			assert.NoError(t, err)
+		}
 	})
 
 	t.Run("ConjoinRetry", func(t *testing.T) {
@@ -523,6 +527,10 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, ok)
 		assertContainAll(t, smallTableStore, srcs...)
+		for _, src := range srcs {
+			err := src.Close()
+			assert.NoError(t, err)
+		}
 	})
 }
 

@@ -61,6 +61,7 @@ type awsTablePersister struct {
 	limits     awsLimits
 	indexCache *indexCache
 	ns         string
+	parseIndex indexParserF
 }
 
 type awsLimits struct {
@@ -90,6 +91,7 @@ func (s3p awsTablePersister) Open(ctx context.Context, name addr, chunkCount uin
 		chunkCount,
 		s3p.indexCache,
 		stats,
+		s3p.parseIndex,
 	)
 }
 

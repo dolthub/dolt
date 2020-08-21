@@ -314,3 +314,14 @@ func (crg chunkReaderGroup) extract(ctx context.Context, chunks chan<- extractRe
 
 	return nil
 }
+
+func (crg chunkReaderGroup) Close() error {
+	var firstErr error
+	for _, c := range crg {
+		err := c.Close()
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}

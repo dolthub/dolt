@@ -232,6 +232,9 @@ type chunkReader interface {
 	extract(ctx context.Context, chunks chan<- extractRecord) error
 	count() (uint32, error)
 	uncompressedLen() (uint64, error)
+
+	// Close releases resources retained by the |chunkReader|.
+	Close() error
 }
 
 type chunkReadPlanner interface {
@@ -264,6 +267,13 @@ type chunkSource interface {
 	// opens a Reader to the first byte of the chunkData segment of this table.
 	reader(context.Context) (io.Reader, error)
 	index() (tableIndex, error)
+
+	// Clone returns a |chunkSource| with the same contents as the
+	// original, but with independent |Close| behavior. A |chunkSource|
+	// cannot be |Close|d more than once, so if a |chunkSource| is being
+	// retained in two objects with independent life-cycle, it should be
+	// |Clone|d first.
+	Clone() chunkSource
 }
 
 type chunkSources []chunkSource
