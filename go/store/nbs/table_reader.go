@@ -130,6 +130,31 @@ func (ir indexResult) Length() uint32 {
 	return ir.l
 }
 
+// An mmapIndexEntry is an addrSuffix, a BigEndian uint64 for the offset and a
+// BigEnding uint32 for the chunk size.
+const mmapIndexEntrySize = addrSuffixSize + uint64Size + lengthSize
+
+type mmapOrdinalSlice []mmapOrdinal
+
+func (s mmapOrdinalSlice) Len() int           { return len(s) }
+func (s mmapOrdinalSlice) Less(i, j int) bool { return s[i].offset < s[j].offset }
+func (s mmapOrdinalSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+
+func (i mmapTableIndex) Ordinals() []uint32 {
+	s := mmapOrdinalSlice(make([]mmapOrdinal, i.chunkCount))
+	for idx := 0; uint32(idx) < i.chunkCount; idx++ {
+		mi := idx * mmapIndexEntrySize
+		e := mmapIndexEntry(i.data[mi : mi+mmapIndexEntrySize])
+		s[idx] = mmapOrdinal{idx, e.Offset()}
+	}
+	sort.Sort(s)
+	res := make([]uint32, i.chunkCount)
+	for j, r := range s {
+		res[r.idx] = uint32(j)
+	}
+	return res
+}
+
 type mmapTableIndex struct {
 	chunkCount            uint32
 	totalUncompressedData uint64
@@ -179,27 +204,6 @@ func (i mmapTableIndex) Clone() tableIndex {
 	return i
 }
 
-type mmapOrdinalSlice []mmapOrdinal
-
-func (s mmapOrdinalSlice) Len() int           { return len(s) }
-func (s mmapOrdinalSlice) Less(i, j int) bool { return s[i].offset < s[j].offset }
-func (s mmapOrdinalSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-
-func (i mmapTableIndex) Ordinals() []uint32 {
-	s := mmapOrdinalSlice(make([]mmapOrdinal, i.chunkCount))
-	for idx := 0; uint32(idx) < i.chunkCount; idx++ {
-		mi := idx * (addrSuffixSize + 8 + 4)
-		e := mmapIndexEntry(i.data[mi : mi+addrSuffixSize+8+4])
-		s[idx] = mmapOrdinal{idx, e.Offset()}
-	}
-	sort.Sort(s)
-	res := make([]uint32, i.chunkCount)
-	for j, r := range s {
-		res[r.idx] = uint32(j)
-	}
-	return res
-}
-
 func (i mmapTableIndex) prefixIdx(prefix uint64) (idx uint32) {
 	// NOTE: The golang impl of sort.Search is basically inlined here. This method can be called in
 	// an extremely tight loop and inlining the code was a significant perf improvement.
@@ -219,8 +223,8 @@ func (i mmapTableIndex) prefixIdx(prefix uint64) (idx uint32) {
 func (i mmapTableIndex) Lookup(h *addr) (indexEntry, bool) {
 	prefix := binary.BigEndian.Uint64(h[:])
 	for idx := i.prefixIdx(prefix); idx < i.chunkCount && i.prefixes[idx] == prefix; idx++ {
-		mi := idx * (addrSuffixSize + 8 + 4)
-		e := mmapIndexEntry(i.data[mi : mi+addrSuffixSize+8+4])
+		mi := idx * mmapIndexEntrySize
+		e := mmapIndexEntry(i.data[mi : mi+mmapIndexEntrySize])
 		if bytes.Equal(e.suffix(), h[addrPrefixSize:]) {
 			return e, true
 		}
@@ -229,14 +233,14 @@ func (i mmapTableIndex) Lookup(h *addr) (indexEntry, bool) {
 }
 
 func (i mmapTableIndex) EntrySuffixMatches(idx uint32, h *addr) bool {
-	mi := idx * (addrSuffixSize + 8 + 4)
-	e := mmapIndexEntry(i.data[mi : mi+addrSuffixSize+8+4])
+	mi := idx * mmapIndexEntrySize
+	e := mmapIndexEntry(i.data[mi : mi+mmapIndexEntrySize])
 	return bytes.Equal(e.suffix(), h[addrPrefixSize:])
 }
 
 func (i mmapTableIndex) IndexEntry(idx uint32, a *addr) indexEntry {
-	mi := idx * (addrSuffixSize + 8 + 4)
-	e := mmapIndexEntry(i.data[mi : mi+addrSuffixSize+8+4])
+	mi := idx * mmapIndexEntrySize
+	e := mmapIndexEntry(i.data[mi : mi+mmapIndexEntrySize])
 	if a != nil {
 		binary.BigEndian.PutUint64(a[:], i.prefixes[idx])
 		copy(a[addrPrefixSize:], e.suffix())
@@ -246,16 +250,19 @@ func (i mmapTableIndex) IndexEntry(idx uint32, a *addr) indexEntry {
 
 type mmapIndexEntry []byte
 
+const mmapIndexEntryOffsetStart = addrSuffixSize
+const mmapIndexEntryLengthStart = addrSuffixSize + uint64Size
+
 func (e mmapIndexEntry) suffix() []byte {
 	return e[:addrSuffixSize]
 }
 
 func (e mmapIndexEntry) Offset() uint64 {
-	return binary.BigEndian.Uint64(e[addrSuffixSize:])
+	return binary.BigEndian.Uint64(e[mmapIndexEntryOffsetStart:])
 }
 
 func (e mmapIndexEntry) Length() uint32 {
-	return binary.BigEndian.Uint32(e[addrSuffixSize+8:])
+	return binary.BigEndian.Uint32(e[mmapIndexEntryLengthStart:])
 }
 
 func mmapOffheapSize(chunks int) int {
@@ -270,8 +277,6 @@ func mmapOffheapSize(chunks int) int {
 }
 
 func newMmapTableIndex(ti onHeapTableIndex, f *os.File) (mmapTableIndex, error) {
-	// addrSuffixSize + offset + length
-	entryLen := addrSuffixSize + uint64Size + lengthSize
 	flags := 0
 	if f == nil {
 		flags = mmap.ANON
@@ -281,11 +286,11 @@ func newMmapTableIndex(ti onHeapTableIndex, f *os.File) (mmapTableIndex, error) 
 		return mmapTableIndex{}, err
 	}
 	for i := range ti.ordinals {
-		idx := i * entryLen
+		idx := i * mmapIndexEntrySize
 		si := addrSuffixSize * ti.ordinals[i]
 		copy(arr[idx:], ti.suffixes[si:si+addrSuffixSize])
-		binary.BigEndian.PutUint64(arr[idx+addrSuffixSize:], ti.offsets[ti.ordinals[i]])
-		binary.BigEndian.PutUint32(arr[idx+addrSuffixSize+8:], ti.lengths[ti.ordinals[i]])
+		binary.BigEndian.PutUint64(arr[idx+mmapIndexEntryOffsetStart:], ti.offsets[ti.ordinals[i]])
+		binary.BigEndian.PutUint32(arr[idx+mmapIndexEntryLengthStart:], ti.lengths[ti.ordinals[i]])
 	}
 
 	refCnt := new(int32)
@@ -319,19 +324,38 @@ type tableReader struct {
 }
 
 type tableIndex interface {
+	// ChunkCount returns the total number of chunks in the indexed file.
 	ChunkCount() uint32
+	// EntrySuffixMatches returns true if the entry at index |idx| matches
+	// the suffix of the address |h|. Used by |Lookup| after finding
+	// matching indexes based on |Prefixes|.
 	EntrySuffixMatches(idx uint32, h *addr) bool
+	// IndexEntry returns the |indexEntry| at |idx|. Optionally puts the
+	// full address of that entry in |a| if |a| is not |nil|.
 	IndexEntry(idx uint32, a *addr) indexEntry
+	// Lookup returns an |indexEntry| for the chunk corresponding to the
+	// provided address |h|. Second returns is |true| if an entry exists
+	// and |false| otherwise.
 	Lookup(h *addr) (indexEntry, bool)
+	// Ordinals returns a slice of indexes which maps the |i|th chunk in
+	// the indexed file to its corresponding entry in index. The |i|th
+	// entry in the result is the |i|th chunk in the indexed file, and its
+	// corresponding value in the slice is the index entry that maps to it.
 	Ordinals() []uint32
+	// Prefixes returns the sorted slice of |uint64| |addr| prefixes; each
+	// entry corresponds to an indexed chunk address.
 	Prefixes() []uint64
+	// TableFileSize returns the total size of the indexed table file, in bytes.
 	TableFileSize() uint64
+	// TotalUncompressedData returns the total uncompressed data size of
+	// the table file. Used for informational statistics only.
 	TotalUncompressedData() uint64
 
+	// Close releases any resources used by this tableIndex.
 	Close() error
 
-	// Returns a tableIndex with the same contents which can be Close'd
-	// independently.
+	// Clone returns a |tableIndex| with the same contents which can be
+	// |Close|d independently.
 	Clone() tableIndex
 }
 
@@ -433,10 +457,9 @@ func (ti onHeapTableIndex) prefixIdxToOrdinal(idx uint32) uint32 {
 	return ti.ordinals[idx]
 }
 
-// Returns the size of the table file that this index references.
-// This assumes that the index follows immediately after the last
-// chunk in the file and that the last chunk in the file is in the
-// index.
+// TableFileSize returns the size of the table file that this index references.
+// This assumes that the index follows immediately after the last chunk in the
+// file and that the last chunk in the file is in the index.
 func (ti onHeapTableIndex) TableFileSize() uint64 {
 	if ti.chunkCount == 0 {
 		return footerSize
@@ -445,8 +468,8 @@ func (ti onHeapTableIndex) TableFileSize() uint64 {
 	return offset + len + indexSize(ti.chunkCount) + footerSize
 }
 
-// returns the first position in |tr.prefixes| whose value == |prefix|. Returns |tr.chunkCount|
-// if absent
+// prefixIdx returns the first position in |tr.prefixes| whose value ==
+// |prefix|. Returns |tr.chunkCount| if absent
 func (ti onHeapTableIndex) prefixIdx(prefix uint64) (idx uint32) {
 	// NOTE: The golang impl of sort.Search is basically inlined here. This method can be called in
 	// an extremely tight loop and inlining the code was a significant perf improvement.
@@ -464,13 +487,15 @@ func (ti onHeapTableIndex) prefixIdx(prefix uint64) (idx uint32) {
 	return
 }
 
-// Return true IFF the suffix for prefix entry |idx| matches the address |a|.
+// EntrySuffixMatches returns true IFF the suffix for prefix entry |idx|
+// matches the address |a|.
 func (ti onHeapTableIndex) EntrySuffixMatches(idx uint32, h *addr) bool {
 	li := uint64(ti.ordinals[idx]) * addrSuffixSize
 	return bytes.Equal(h[addrPrefixSize:], ti.suffixes[li:li+addrSuffixSize])
 }
 
-// returns the ordinal of |h| if present. returns |ti.chunkCount| if absent
+// lookupOrdinal returns the ordinal of |h| if present. Returns |ti.chunkCount|
+// if absent.
 func (ti onHeapTableIndex) lookupOrdinal(h *addr) uint32 {
 	prefix := h.Prefix()
 
