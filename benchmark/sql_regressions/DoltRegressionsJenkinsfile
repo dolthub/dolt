@@ -1,7 +1,36 @@
 pipeline {
     agent {
         kubernetes {
-            label "liquidata-inc-ld-build"
+            defaultContainer "jnlp"
+            yaml """
+kind: "Pod"
+metadata:
+  annotations:
+    app: "jenkins-agent"
+    sidecar.istio.io/inject: "false"
+spec:
+  containers:
+  - image: "407903926827.dkr.ecr.us-west-2.amazonaws.com/liquidata/jnlp:latest"
+    imagePullPolicy: "Always"
+    name: "jnlp"
+    resources:
+      limits:
+        cpu: "1.8"
+        memory: "3Gi"
+      requests:
+        cpu: "1.8"
+        memory: "3Gi"
+    securityContext:
+      privileged: false
+    tty: true
+    workingDir: "/home/jenkins/agent"
+  restartPolicy: "Never"
+  securityContext:
+    fsGroup: 1000
+    runAsGroup: 1000
+    runAsUser: 1000
+  serviceAccount: "jenkins-agent-doltci"
+"""
         }
     }
     stages {
