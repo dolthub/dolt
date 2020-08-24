@@ -1,0 +1,79 @@
+package async
+
+import (
+	"context"
+	"io"
+	"sync"
+)
+
+// ReadFunc is a function that is called repeatedly in order to retrieve a stream of objects.  When all objects have been
+// been read from the stream then (nil, io.EOF) should be returned.
+type ReadFunc func(ctx context.Context) (interface{}, error)
+
+type objErrTuple struct {
+	obj interface{}
+	err error
+}
+
+// AsyncReader is a TableReadCloser implementation that spins up a go routine to keep reading data into
+// a buffer so that it is ready when the caller wants it.
+type AsyncReader struct {
+	readFunc ReadFunc
+	stopCh   chan struct{}
+	rowCh    chan objErrTuple
+	wg       *sync.WaitGroup
+}
+
+// NewAsyncReader creates a new AsyncReader
+func NewAsyncReader(rf ReadFunc, bufferSize int) *AsyncReader {
+	return &AsyncReader{rf, make(chan struct{}), make(chan objErrTuple, bufferSize), &sync.WaitGroup{}}
+}
+
+// Start the worker routine reading rows to the channel
+func (asRd *AsyncReader) Start(ctx context.Context) error {
+	asRd.wg.Add(1)
+	go func() {
+		defer asRd.wg.Done()
+		defer close(asRd.rowCh)
+		asRd.readObjects(ctx)
+	}()
+
+	return nil
+}
+
+// ReadObject reads an object
+func (asRd *AsyncReader) Read() (interface{}, error) {
+	objErrTup := <-asRd.rowCh
+
+	if objErrTup.obj == nil && objErrTup.err == nil {
+		return nil, io.EOF
+	}
+
+	return objErrTup.obj, objErrTup.err
+}
+
+// Close releases resources being held
+func (asRd *AsyncReader) Close() error {
+	close(asRd.stopCh)
+	asRd.wg.Wait()
+
+	return nil
+}
+
+// background read loop running in separate go routine
+func (asRd *AsyncReader) readObjects(ctx context.Context) {
+	for {
+		select {
+		case <-asRd.stopCh:
+			return
+		default:
+		}
+
+		obj, err := asRd.readFunc(ctx)
+		asRd.rowCh <- objErrTuple{obj, err}
+
+		if err != nil {
+			break
+		}
+	}
+}
