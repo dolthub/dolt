@@ -15,16 +15,20 @@ setup() {
     dolt init
     let PORT="$$ % (65536-1024) + 1024"
     USER="dolt"
-    dolt sql-server --host 0.0.0.0 --port=$PORT --user $USER &
+    dolt sql-server --host 0.0.0.0 --port=$PORT --user=$USER &
     SERVER_PID=$!
 }
 
 teardown() {
     cd ..
     rm -rf $REPO_NAME
-    kill -HUP $SERVER_PID
+    kill $SERVER_PID
 }
 
-@test "python mysql client" {
-    python3 $BATS_TEST_DIRNAME/python/mysql-client.py $USER $PORT $REPO_NAME
+@test "python mysql.connector client" {
+    python3 $BATS_TEST_DIRNAME/python/mysql.connector-test.py $USER $PORT $REPO_NAME
+}
+
+@test "python pymysql client" {
+    python3 $BATS_TEST_DIRNAME/python/pymysql-test.py $USER $PORT $REPO_NAME
 }

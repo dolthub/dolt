@@ -12,7 +12,6 @@ QUERY_RESPONSE = [
 ]
     
 def main():
-    print(sys.argv)
     user = sys.argv[1]
     port = sys.argv[2]
     db   = sys.argv[3]
@@ -21,7 +20,6 @@ def main():
                                          host="127.0.0.1",
                                          port=port,
                                          database=db)
-
 
     for query_response in QUERY_RESPONSE:
         query = list(query_response.keys())[0]
@@ -33,6 +31,8 @@ def main():
             print(exp_results)
             print(results)
             if ( results != exp_results ):
+                print("Query:")
+                print(query)
                 print("Expected:")
                 print(exp_results)
                 print("Received:")
