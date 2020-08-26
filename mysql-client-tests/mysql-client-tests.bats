@@ -15,7 +15,7 @@ setup() {
     dolt init
     let PORT="$$ % (65536-1024) + 1024"
     USER="dolt"
-    dolt sql-server --host 0.0.0.0 --port=$PORT --user=$USER &
+    dolt sql-server --host 0.0.0.0 --port=$PORT --user=$USER --loglevel=trace &
     SERVER_PID=$!
 }
 
@@ -36,4 +36,8 @@ teardown() {
 @test "mysql-connector-java client" {
     javac $BATS_TEST_DIRNAME/java/MySQLConnectorTest.java
     java -cp $BATS_TEST_DIRNAME/java:$BATS_TEST_DIRNAME/java/mysql-connector-java-8.0.21.jar MySQLConnectorTest $USER $PORT $REPO_NAME
+}
+
+@test "node mysql client" {
+    node $BATS_TEST_DIRNAME/node/index.js $USER $PORT $REPO_NAME
 }
