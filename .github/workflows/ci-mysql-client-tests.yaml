@@ -1,0 +1,17 @@
+on: [push]
+
+jobs:
+  mysql_client_integrations_job:
+    runs-on: ubuntu-latest
+    name: Run tests
+    steps:
+      # To use this repository's private action,
+      # you must check out the repository
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Hello world action step
+        uses: ./.github/actions # Uses an action in the root directory
+        id: mysql-tests
+      # Use the output from the `hello` step
+      - name: Get the output results
+        run: echo "The results were ${{ steps.tests.outputs.time }}"
