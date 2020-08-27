@@ -1,0 +1,70 @@
+FROM ubuntu:18.04
+COPY . /mysql-client-tests
+
+# install python
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt update -y
+RUN apt install -y software-properties-common
+
+RUN add-apt-repository ppa:deadsnakes/ppa -y
+RUN apt install python3.8 -y
+RUN python3 -V
+
+# install pip
+RUN apt-get -y install python3-pip
+
+# install curl
+RUN apt-get -y install curl
+
+# install mysql connector and pymsql
+RUN pip3 install mysql-connector-python
+RUN pip3 install PyMySQL
+
+# install java
+# Install OpenJDK-8
+RUN apt-get update && \
+    apt-get install -y openjdk-8-jdk && \
+    apt-get install -y ant && \
+    apt-get clean;
+
+# Fix certificate issues
+RUN apt-get update && \
+    apt-get install ca-certificates-java && \
+    apt-get clean && \
+    update-ca-certificates -f;
+
+# Setup JAVA_HOME -- useful for docker commandline
+ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64/
+RUN export JAVA_HOME
+
+# install mysql connector java
+RUN curl -L -o /mysql-client-tests/java/mysql-connector-java-8.0.21.jar \
+  https://repo1.maven.org/maven2/mysql/mysql-connector-java/8.0.21/mysql-connector-java-8.0.21.jar
+
+# install node and npm
+RUN apt update
+RUN curl -sL https://deb.nodesource.com/setup_14.x | bash -
+RUN cat /etc/apt/sources.list.d/nodesource.list
+RUN apt -y install nodejs
+
+# install bats
+RUN apt-get update
+RUN apt-get install bats
+
+# install dolt TODO build from source
+RUN curl -L https://github.com/liquidata-inc/dolt/releases/latest/download/install.sh | bash
+RUN dolt version
+
+# setup dolt config
+RUN dolt config --global --add metrics.disabled true
+RUN dolt config --global --add metrics.host localhost
+RUN dolt config --global --add user.name mysql-test-runner
+RUN dolt config --global --add user.email mysql-test-runner@liquidata.co
+
+# install node deps
+WORKDIR /mysql-client-tests/node
+RUN npm install
+
+# run tests
+WORKDIR /mysql-client-tests
+
