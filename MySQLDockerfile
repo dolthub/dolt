@@ -1,5 +1,6 @@
 FROM ubuntu:18.04
-COPY . /mysql-client-tests
+COPY ./mysql-client-tests /mysql-client-tests
+COPY ./go /dolt-go
 
 # install python
 ENV DEBIAN_FRONTEND=noninteractive
@@ -67,4 +68,4 @@ RUN npm install
 
 # run tests
 WORKDIR /mysql-client-tests
-
+#CMD ["bats", "mysql-client-tests.bats"]
