@@ -1,12 +1,12 @@
-let mysql = require('mysql');
+const mysql = require('mysql');
 
-var args = process.argv.slice(2);
+const args = process.argv.slice(2);
 
-var user = args[0];
-var port = args[1];
-var db   = args[2];
+const user = args[0];
+const port = args[1];
+const db   = args[2];
 
-var config = {
+const config = {
     host: '127.0.0.1',
     user: user,
     port: port,
@@ -15,7 +15,8 @@ var config = {
 
 class Database {
     constructor( config ) {
-        this.connection = mysql.createConnection( config );
+				this.connection = mysql.createConnection( config );
+				this.connection.connect();
     }
 
     query( sql, args ) {
@@ -23,33 +24,31 @@ class Database {
             this.connection.query( sql, args, ( err, rows ) => {
                 if ( err )
                     return reject( err );
-                resolve( rows );
+                return resolve( rows );
             } );
         } );
     }
     close() {
-        return new Promise( ( resolve, reject ) => {
-            this.connection.end( err => {
-                if ( err )
-                    return reject( err );
-		process.exit(0);
-                resolve();
-            } );
-        } );
+      this.connection.end(err => {
+				if (err) {
+					console.error(err)
+				} else {
+					console.log("db connection closed")
+				}
+			})
     }
 }
 
-
 async function main() {
-    var queries = [
-	"create table test (pk int, value int, primary key(pk))",
-	"describe test",
-	"select * from test",
-	"insert into test (pk, value) values (0,0)",
-	"select * from test"
+    const queries = [
+			"create table test (pk int, value int, primary key(pk))",
+			"describe test",
+			"select * from test",
+			"insert into test (pk, value) values (0,0)",
+			"select * from test"
     ];
 
-    var results = [
+    const results = [
 	{
 	    fieldCount: 0,
 	    affectedRows: 0,
@@ -87,27 +86,29 @@ async function main() {
 	[ { pk: 0, value: 0 } ]
     ];
 
-    var database = new Database(config);
+    const database = new Database(config);
 
-    var i;
-    for (i = 0; i < queries.length; i++) {
-	var query    = queries[i];
-	var expected = results[i];
-	await database.query(query).then( rows => {
-	    var result = JSON.parse(JSON.stringify(rows))
-	    if ( JSON.stringify(result) !== JSON.stringify(expected) ) {
-		console.log("Query:");
-		console.log(query);
-		console.log("Results:");
-		console.log(result);
-		console.log("Expected:");
-		console.log(expected);
-		process.exit(1)
-	    }
-	});
-    }
+		await Promise.all(queries.map((query, idx) => {
+			const expected = results[idx];
+			return database.query(query).then(rows => {
+				const resultStr = JSON.stringify(rows);
+				const result = JSON.parse(resultStr);
+				if (resultStr !== JSON.stringify(expected) ) {
+					console.log("Query:", query);
+					console.log("Results:", result);
+					console.log("Expected:", expected);
+					throw new Error("Query failed")
+				} else {
+					console.log("Query succeeded:", query)
+				}
+			}).catch(err => {
+				console.error(err)
+				process.exit(1);
+			});
+		}));
 
-    database.close()
+		database.close()
+    process.exit(0)
 }
 
 main();
