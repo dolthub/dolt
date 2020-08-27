@@ -16,6 +16,7 @@ package actions
 
 import (
 	"context"
+	"fmt"
 	"sort"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -88,11 +89,11 @@ func DeleteTags(ctx context.Context, dEnv *env.DoltEnv, tagNames ...string) erro
 type resolvedTag struct {
 	tag    ref.DoltRef
 	commit *doltdb.Commit
-	meta   *doltdb.CommitMeta
+	meta   *doltdb.TagMeta
 }
 
 // IterResolvedTags iterates over tags in dEnv.DoltDB from newest to oldest, resolving the tag to a commit and calling cb().
-func IterResolvedTags(ctx context.Context, dEnv *env.DoltEnv, cb func(tag ref.DoltRef, c *doltdb.Commit, meta *doltdb.CommitMeta) (stop bool, err error)) error {
+func IterResolvedTags(ctx context.Context, dEnv *env.DoltEnv, cb func(tag ref.DoltRef, c *doltdb.Commit, meta *doltdb.TagMeta) (stop bool, err error)) error {
 	tagRefs, err := dEnv.DoltDB.GetTags(ctx)
 
 	if err != nil {
@@ -100,15 +101,13 @@ func IterResolvedTags(ctx context.Context, dEnv *env.DoltEnv, cb func(tag ref.Do
 	}
 
 	var resolved []resolvedTag
-	for _, tag := range tagRefs {
-		commit, err := dEnv.DoltDB.ResolveRef(ctx, tag)
-
-		if err != nil {
-			return err
+	for _, r := range tagRefs {
+		tag, ok := r.(ref.TagRef)
+		if !ok {
+			return fmt.Errorf("DoltDB.GetTags() returned non-tag DoltRef")
 		}
 
-		meta, err := commit.GetCommitMeta()
-
+		commit, meta, err := dEnv.DoltDB.ResolveTag(ctx, tag)
 		if err != nil {
 			return err
 		}

@@ -204,7 +204,7 @@ func getCommitStForRefStr(ctx context.Context, db datas.Database, ref string) (t
 	}
 
 	if dsHead.Name() == datas.TagName {
-		cmRef, ok, err := dsHead.MaybeGet(datas.TagCommitRefField)
+		commitRef, ok, err := dsHead.MaybeGet(datas.TagCommitRefField)
 		if err != nil {
 			return types.EmptyStruct(db.Format()), err
 		}
@@ -213,7 +213,7 @@ func getCommitStForRefStr(ctx context.Context, db datas.Database, ref string) (t
 			return types.EmptyStruct(db.Format()), err
 		}
 
-		commitSt, err := cmRef.(types.Ref).TargetValue(ctx, db)
+		commitSt, err := commitRef.(types.Ref).TargetValue(ctx, db)
 		if err != nil {
 			return types.EmptyStruct(db.Format()), err
 		}
@@ -355,6 +355,57 @@ func (ddb *DoltDB) ResolveRef(ctx context.Context, ref ref.DoltRef) (*Commit, er
 		return nil, err
 	}
 	return NewCommit(ddb.db, commitSt), nil
+}
+
+func (ddb *DoltDB) ResolveTag(ctx context.Context, tagRef ref.TagRef) (*Commit, *TagMeta, error) {
+	ds, err := ddb.db.GetDataset(ctx, tagRef.String())
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	dsHead, hasHead := ds.MaybeHead()
+
+	if !hasHead {
+		return nil, nil, ErrBranchNotFound
+	}
+
+	if dsHead.Name() != datas.TagName {
+		return nil, nil, fmt.Errorf("dataset head is neither commit nor tag")
+	}
+
+	metaSt, ok, err := dsHead.MaybeGet(datas.TagMetaField)
+
+	if err != nil {
+		return nil, nil, err
+	}
+	if !ok {
+		return nil, nil, fmt.Errorf("tag struct does not have field %s", datas.TagMetaField)
+	}
+
+	tagMeta, err := tagMetaFromNomsSt(metaSt.(types.Struct))
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cmRef, ok, err := dsHead.MaybeGet(datas.TagCommitRefField)
+
+	if err != nil {
+		return nil, nil, err
+	}
+	if !ok {
+		return nil, nil, fmt.Errorf("tag struct does not have field %s", datas.TagCommitRefField)
+	}
+
+	commitSt, err := cmRef.(types.Ref).TargetValue(ctx, ddb.db)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	commit := NewCommit(ddb.db, commitSt.(types.Struct))
+
+	return commit, tagMeta, nil
 }
 
 // TODO: convenience method to resolve the head commit of a branch.
@@ -830,7 +881,7 @@ func (ddb *DoltDB) deleteRef(ctx context.Context, dref ref.DoltRef) error {
 }
 
 // NewTagAtCommit create a new tag at the commit given.
-func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, tagRef ref.DoltRef, c *Commit, meta *CommitMeta) error {
+func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, tagRef ref.DoltRef, c *Commit, meta *TagMeta) error {
 	if !IsValidTagRef(tagRef) {
 		panic(fmt.Sprintf("invalid tag name %s, use IsValidUserTagName check", tagRef.String()))
 	}

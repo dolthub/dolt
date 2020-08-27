@@ -31,7 +31,8 @@ const (
 	commitMetaUserTSKey    = "user_timestamp"
 	commitMetaVersionKey   = "metaversion"
 
-	metaVersion = "1.0"
+	commitMetaStName  = "metadata"
+	commitMetaVersion = "1.0"
 )
 
 var CommitNowFunc = time.Now
@@ -48,6 +49,7 @@ type CommitMeta struct {
 
 var uMilliToNano = uint64(time.Millisecond / time.Nanosecond)
 var milliToNano = int64(time.Millisecond / time.Nanosecond)
+var uSecToMilli = uint64(time.Second / time.Millisecond)
 var secToMilli = int64(time.Second / time.Millisecond)
 
 // NewCommitMeta creates a CommitMeta instance from a name, email, and description and uses the current time for the
@@ -132,11 +134,11 @@ func (cm *CommitMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, erro
 		commitMetaEmailKey:     types.String(cm.Email),
 		commitMetaDescKey:      types.String(cm.Description),
 		commitMetaTimestampKey: types.Uint(cm.Timestamp),
-		commitMetaVersionKey:   types.String(metaVersion),
+		commitMetaVersionKey:   types.String(commitMetaVersion),
 		commitMetaUserTSKey:    types.Int(cm.UserTimestamp),
 	}
 
-	return types.NewStruct(nbf, "metadata", metadata)
+	return types.NewStruct(nbf, commitMetaStName, metadata)
 }
 
 // Time returns the time at which the commit occurred

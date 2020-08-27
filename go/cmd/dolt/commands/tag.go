@@ -162,7 +162,7 @@ func getTagProps(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (props actio
 func listTags(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
 	var err error
 	if apr.Contains(verboseFlag) {
-		err = actions.IterResolvedTags(ctx, dEnv, func(tag ref.DoltRef, c *doltdb.Commit, meta *doltdb.CommitMeta) (bool, error) {
+		err = actions.IterResolvedTags(ctx, dEnv, func(tag ref.DoltRef, c *doltdb.Commit, meta *doltdb.TagMeta) (bool, error) {
 			h, err := c.HashOf()
 			if err != nil {
 				return false, nil
@@ -172,7 +172,7 @@ func listTags(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRes
 			return false, nil
 		})
 	} else {
-		err = actions.IterResolvedTags(ctx, dEnv, func(tag ref.DoltRef, _ *doltdb.Commit, _ *doltdb.CommitMeta) (bool, error) {
+		err = actions.IterResolvedTags(ctx, dEnv, func(tag ref.DoltRef, _ *doltdb.Commit, _ *doltdb.TagMeta) (bool, error) {
 			cli.Println(fmt.Sprintf("\t%s", tag.GetPath()))
 			return false, nil
 		})
@@ -185,7 +185,7 @@ func listTags(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRes
 	return nil
 }
 
-func verboseTagPrint(tag ref.DoltRef, h hash.Hash, meta *doltdb.CommitMeta) {
+func verboseTagPrint(tag ref.DoltRef, h hash.Hash, meta *doltdb.TagMeta) {
 	cli.Println(color.YellowString("%s\t%s", tag.GetPath(), h.String()))
 
 	cli.Printf("Tagger: %s <%s>\n", meta.Name, meta.Email)
