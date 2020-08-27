@@ -11,7 +11,7 @@ jobs:
         uses: actions/checkout@v2
       - name: Test mysql client integrations
         uses: ./ # Uses an action in the root directory
-        id: mysql-tests
-      # Use the output from the `hello` step
-      - name: Get the output results
-        run: echo "The results were ${{ steps.mysql-tests.outputs.results }}"
+#        id: mysql-tests
+#      # Use the output from the `hello` step
+#      - name: Get the output results
+#        run: echo "The results were ${{ steps.mysql-tests.outputs.results }}"
