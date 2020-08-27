@@ -194,11 +194,35 @@ func getCommitStForRefStr(ctx context.Context, db datas.Database, ref string) (t
 	}
 
 	dsHead, hasHead := ds.MaybeHead()
-	if hasHead {
+
+	if !hasHead {
+		return types.EmptyStruct(db.Format()), ErrBranchNotFound
+	}
+
+	if dsHead.Name() == datas.CommitName {
 		return dsHead, nil
 	}
 
-	return types.EmptyStruct(db.Format()), ErrBranchNotFound
+	if dsHead.Name() == datas.TagName {
+		cmRef, ok, err := dsHead.MaybeGet(datas.TagCommitRefField)
+		if err != nil {
+			return types.EmptyStruct(db.Format()), err
+		}
+		if !ok {
+			err = fmt.Errorf("tag struct does not have field %s", datas.TagCommitRefField)
+			return types.EmptyStruct(db.Format()), err
+		}
+
+		commitSt, err := cmRef.(types.Ref).TargetValue(ctx, db)
+		if err != nil {
+			return types.EmptyStruct(db.Format()), err
+		}
+
+		return commitSt.(types.Struct), nil
+	}
+
+	err = fmt.Errorf("dataset head is neither commit nor tag")
+	return types.EmptyStruct(db.Format()), err
 }
 
 func getCommitStForHash(ctx context.Context, db datas.Database, c string) (types.Struct, error) {
@@ -768,10 +792,6 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, dref ref.DoltRef, comm
 		panic(fmt.Sprintf("invalid branch name %s, use IsValidUserBranchName check", dref.String()))
 	}
 
-	return ddb.newRefAtCommit(ctx, dref, commit)
-}
-
-func (ddb *DoltDB) newRefAtCommit(ctx context.Context, dref ref.DoltRef, commit *Commit) error {
 	ds, err := ddb.db.GetDataset(ctx, dref.String())
 
 	if err != nil {
@@ -810,12 +830,43 @@ func (ddb *DoltDB) deleteRef(ctx context.Context, dref ref.DoltRef) error {
 }
 
 // NewTagAtCommit create a new tag at the commit given.
-func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, tagRef ref.DoltRef, commit *Commit) error {
+func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, tagRef ref.DoltRef, c *Commit, meta *CommitMeta) error {
 	if !IsValidTagRef(tagRef) {
 		panic(fmt.Sprintf("invalid tag name %s, use IsValidUserTagName check", tagRef.String()))
 	}
 
-	return ddb.newRefAtCommit(ctx, tagRef, commit)
+	ds, err := ddb.db.GetDataset(ctx, tagRef.String())
+
+	if err != nil {
+		return err
+	}
+
+	_, hasHead, err := ds.MaybeHeadRef()
+
+	if err != nil {
+		return err
+	}
+	if hasHead {
+		return fmt.Errorf("dataset already exists for tag %s", tagRef.String())
+	}
+
+	r, err := types.NewRef(c.commitSt, ddb.Format())
+
+	if err != nil {
+		return err
+	}
+
+	st, err := meta.toNomsStruct(ddb.db.Format())
+
+	if err != nil {
+		return err
+	}
+
+	tag := datas.TagOptions{Meta: st}
+
+	ds, err = ddb.db.Tag(ctx, ds, r, tag)
+
+	return err
 }
 
 func (ddb *DoltDB) DeleteTag(ctx context.Context, tag ref.DoltRef) error {

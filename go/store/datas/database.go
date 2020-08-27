@@ -95,6 +95,8 @@ type Database interface {
 	// of a conflict, Commit returns an 'ErrMergeNeeded' error.
 	CommitValue(ctx context.Context, ds Dataset, v types.Value) (Dataset, error)
 
+	Tag(ctx context.Context, ds Dataset, ref types.Ref, opts TagOptions) (Dataset, error)
+
 	// Delete removes the Dataset named ds.ID() from the map at the root of
 	// the Database. The Dataset data is not necessarily cleaned up at this
 	// time, but may be garbage collected in the future.

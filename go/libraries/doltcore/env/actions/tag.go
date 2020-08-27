@@ -58,28 +58,9 @@ func CreateTag(ctx context.Context, dEnv *env.DoltEnv, tagName, startPoint strin
 		return err
 	}
 
-	err = dEnv.DoltDB.NewTagAtCommit(ctx, tagRef, cm)
-
-	if err != nil {
-		return err
-	}
-
-	root, err := cm.GetRootValue()
-
-	if err != nil {
-		return err
-	}
-
-	h, err := root.HashOf()
-
-	if err != nil {
-		return err
-	}
-
 	meta := doltdb.NewTagMeta(props.TaggerName, props.TaggerEmail, props.Description)
 
-	_, err = dEnv.DoltDB.CommitWithParentCommits(ctx, h, tagRef, nil, meta)
-	return err
+	return dEnv.DoltDB.NewTagAtCommit(ctx, tagRef, cm, meta)
 }
 
 func DeleteTags(ctx context.Context, dEnv *env.DoltEnv, tagNames ...string) error {

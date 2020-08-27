@@ -44,10 +44,19 @@ type Dataset struct {
 }
 
 func newDataset(db Database, id string, head types.Value) (Dataset, error) {
-	headNilOrIsCommit := head == nil
-	if !headNilOrIsCommit {
-		var err error
-		headNilOrIsCommit, err = IsCommit(head)
+	check := head == nil
+
+	var err error
+	if !check {
+		check, err = IsCommit(head)
+
+		if err != nil {
+			return Dataset{}, err
+		}
+	}
+
+	if !check {
+		check, err = IsTag(head)
 
 		if err != nil {
 			return Dataset{}, err
@@ -55,7 +64,7 @@ func newDataset(db Database, id string, head types.Value) (Dataset, error) {
 	}
 
 	// precondition checks
-	d.PanicIfFalse(headNilOrIsCommit)
+	d.PanicIfFalse(check)
 	return Dataset{db, id, head}, nil
 }
 

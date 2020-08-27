@@ -41,15 +41,15 @@ const (
 	ParentsListField = "parents_list"
 	ValueField       = "value"
 	MetaField        = "meta"
-	commitName       = "Commit"
+	CommitName       = "Commit"
 )
 
-var commitTemplate = types.MakeStructTemplate(commitName, []string{MetaField, ParentsField, ParentsListField, ValueField})
+var commitTemplate = types.MakeStructTemplate(CommitName, []string{MetaField, ParentsField, ParentsListField, ValueField})
 
 var valueCommitType = nomdl.MustParseType(`Struct Commit {
         meta: Struct {},
         parents: Set<Ref<Cycle<Commit>>>,
-        parentsList?: List<Ref<Cycle<Commit>>>,
+        parents_list?: List<Ref<Cycle<Commit>>>,
         value: Value,
 }`)
 
