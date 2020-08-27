@@ -5,13 +5,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Run tests
     steps:
-      # To use this repository's private action,
-      # you must check out the repository
       - name: Checkout
         uses: actions/checkout@v2
       - name: Test mysql client integrations
-        uses: ./ # Uses an action in the root directory
-#        id: mysql-tests
-#      # Use the output from the `hello` step
-#      - name: Get the output results
-#        run: echo "The results were ${{ steps.mysql-tests.outputs.results }}"
+        uses: ./.github/actions/mysql-client-tests # Uses an action in the root directory
