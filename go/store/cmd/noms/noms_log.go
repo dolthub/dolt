@@ -172,7 +172,7 @@ func runLog(ctx context.Context, args []string) int {
 func printCommit(ctx context.Context, node LogNode, path types.Path, w io.Writer, db datas.Database, tz *time.Location) (err error) {
 	maxMetaFieldNameLength := func(commit types.Struct) int {
 		maxLen := 0
-		if m, ok, err := commit.MaybeGet(datas.MetaField); err != nil {
+		if m, ok, err := commit.MaybeGet(datas.CommitMetaField); err != nil {
 			panic(err)
 		} else if ok {
 			meta := m.(types.Struct)
@@ -293,7 +293,7 @@ func genGraph(node LogNode, lineno int) string {
 }
 
 func writeMetaLines(ctx context.Context, node LogNode, maxLines, lineno, maxLabelLen int, w io.Writer, tz *time.Location) (int, error) {
-	if m, ok, err := node.commit.MaybeGet(datas.MetaField); err != nil {
+	if m, ok, err := node.commit.MaybeGet(datas.CommitMetaField); err != nil {
 		panic(err)
 	} else if ok {
 		genPrefix := func(w *writers.PrefixWriter) []byte {

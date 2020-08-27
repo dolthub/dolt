@@ -49,7 +49,6 @@ type CommitMeta struct {
 
 var uMilliToNano = uint64(time.Millisecond / time.Nanosecond)
 var milliToNano = int64(time.Millisecond / time.Nanosecond)
-var uSecToMilli = uint64(time.Second / time.Millisecond)
 var secToMilli = int64(time.Second / time.Millisecond)
 
 // NewCommitMeta creates a CommitMeta instance from a name, email, and description and uses the current time for the

@@ -65,3 +65,16 @@ func IsTag(v types.Value) (bool, error) {
 		return types.IsValueSubtypeOf(s.Format(), v, valueTagType)
 	}
 }
+
+func makeTagStructType(metaType, refType *types.Type) (*types.Type, error) {
+	return types.MakeStructType(TagName,
+		types.StructField{
+			Name: TagMetaField,
+			Type: metaType,
+		},
+		types.StructField{
+			Name: TagCommitRefField,
+			Type: refType,
+		},
+	)
+}
