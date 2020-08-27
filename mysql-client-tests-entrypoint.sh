@@ -1,6 +1,6 @@
 #!/bin/sh
 
-echo "updating dolt config for tests:"
+echo "Updating dolt config for tests:"
 dolt config --global --add metrics.disabled true
 dolt config --global --add metrics.host localhost
 dolt config --global --add user.name mysql-test-runner
