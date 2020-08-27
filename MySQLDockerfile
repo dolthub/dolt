@@ -60,19 +60,9 @@ RUN apt -y install nodejs
 RUN apt-get -y update
 RUN apt-get -y install bats
 
-RUN dolt version
-
-# setup dolt config
-#RUN dolt config --global --add metrics.disabled true
-#RUN dolt config --global --add metrics.host localhost
-#RUN dolt config --global --add user.name mysql-test-runner
-#RUN dolt config --global --add user.email mysql-test-runner@liquidata.co
-
 # install node deps
 WORKDIR /mysql-client-tests/node
 RUN npm install
 
-# run tests
 WORKDIR /mysql-client-tests
-#CMD ["bats", "mysql-client-tests.bats"]
 ENTRYPOINT ["/mysql-client-tests/entrypoint.sh"]

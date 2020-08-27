@@ -1,4 +1,6 @@
-on: [push]
+name: Test MySQL Client integrations
+
+on: [pull_request]
 
 jobs:
   mysql_client_integrations_job:
@@ -8,4 +10,4 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
       - name: Test mysql client integrations
-        uses: ./.github/actions/mysql-client-tests # Uses an action in the root directory
+        uses: ./.github/actions/mysql-client-tests
