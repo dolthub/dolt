@@ -95,7 +95,7 @@ func (s *nomsCommitTestSuite) TestNomsCommitReadPathFromStdin() {
 	s.NoError(err)
 	s.True(h == ref.TargetHash(), "commit.value hash == writevalue hash")
 
-	meta, ok, err := commit.MaybeGet(datas.MetaField)
+	meta, ok, err := commit.MaybeGet(datas.CommitMetaField)
 	s.NoError(err)
 	s.True(ok)
 	d, ok, err := meta.(types.Struct).MaybeGet("date")
@@ -127,7 +127,7 @@ func (s *nomsCommitTestSuite) TestNomsCommitToDatasetWithoutHead() {
 	s.NoError(err)
 	s.True(h == ref.TargetHash(), "commit.value hash == writevalue hash")
 
-	metaVal, ok, err := commit.MaybeGet(datas.MetaField)
+	metaVal, ok, err := commit.MaybeGet(datas.CommitMetaField)
 	s.NoError(err)
 	s.True(ok)
 	meta := metaVal.(types.Struct)
@@ -195,7 +195,7 @@ func (s *nomsCommitTestSuite) TestNomsCommitMetadata() {
 
 	dsHead, ok := sp.GetDataset(context.Background()).MaybeHead()
 	s.True(ok)
-	metaOldVal, ok, err := dsHead.MaybeGet(datas.MetaField)
+	metaOldVal, ok, err := dsHead.MaybeGet(datas.CommitMetaField)
 	s.NoError(err)
 	s.True(ok)
 	metaOld := metaOldVal.(types.Struct)
@@ -210,7 +210,7 @@ func (s *nomsCommitTestSuite) TestNomsCommitMetadata() {
 
 	dsHead, ok = sp.GetDataset(context.Background()).MaybeHead()
 	s.True(ok)
-	metaNewVal, ok, err := dsHead.MaybeGet(datas.MetaField)
+	metaNewVal, ok, err := dsHead.MaybeGet(datas.CommitMetaField)
 	s.NoError(err)
 	s.True(ok)
 	metaNew := metaNewVal.(types.Struct)
@@ -234,7 +234,7 @@ func (s *nomsCommitTestSuite) TestNomsCommitMetadata() {
 
 	dsHead, ok = sp.GetDataset(context.Background()).MaybeHead()
 	s.True(ok)
-	metaNewVal, ok, err = dsHead.MaybeGet(datas.MetaField)
+	metaNewVal, ok, err = dsHead.MaybeGet(datas.CommitMetaField)
 	s.NoError(err)
 	s.True(ok)
 	metaNew = metaNewVal.(types.Struct)

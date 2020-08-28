@@ -417,6 +417,78 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 	return tryCommitErr
 }
 
+func (db *database) Tag(ctx context.Context, ds Dataset, ref types.Ref, opts TagOptions) (Dataset, error) {
+	return db.doHeadUpdate(
+		ctx,
+		ds,
+		func(ds Dataset) error {
+			st, err := NewTag(ctx, ref, opts.Meta)
+
+			if err != nil {
+				return err
+			}
+
+			return db.doTag(ctx, ds.ID(), st)
+		},
+	)
+}
+
+// doTag manages concurrent access the single logical piece of mutable state: the current Root. It uses
+// the same optimistic writing algorithm as doCommit (see above).
+func (db *database) doTag(ctx context.Context, datasetID string, tag types.Struct) error {
+	err := db.validateTag(ctx, tag)
+
+	if err != nil {
+		return err
+	}
+
+	// This could loop forever, given enough simultaneous writers. BUG 2565
+	var tryCommitErr error
+	for tryCommitErr = ErrOptimisticLockFailed; tryCommitErr == ErrOptimisticLockFailed; {
+		currentRootHash, err := db.rt.Root(ctx)
+
+		if err != nil {
+			return err
+		}
+
+		currentDatasets, err := db.Datasets(ctx)
+
+		if err != nil {
+			return err
+		}
+
+		tagRef, err := db.WriteValue(ctx, tag) // will be orphaned if the tryCommitChunks() below fails
+
+		if err != nil {
+			return err
+		}
+
+		_, hasHead, err := currentDatasets.MaybeGet(ctx, types.String(datasetID))
+
+		if err != nil {
+			return err
+		}
+
+		if hasHead {
+			return fmt.Errorf("datasets for tags (refs/tags/*) cannot be altered after creation")
+		}
+
+		ref, err := types.ToRefOfValue(tagRef, db.Format())
+		if err != nil {
+			return err
+		}
+
+		currentDatasets, err = currentDatasets.Edit().Set(types.String(datasetID), ref).Map(ctx)
+		if err != nil {
+			return err
+		}
+
+		tryCommitErr = db.tryCommitChunks(ctx, currentDatasets, currentRootHash)
+	}
+
+	return tryCommitErr
+}
+
 func (db *database) Delete(ctx context.Context, ds Dataset) (Dataset, error) {
 	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error { return db.doDelete(ctx, ds.ID()) })
 }
@@ -517,6 +589,32 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types
 	}
 
 	return v.(types.Struct), nil
+}
+
+func (db *database) validateTag(ctx context.Context, t types.Struct) error {
+	is, err := IsTag(t)
+	if err != nil {
+		return err
+	}
+	if !is {
+		return fmt.Errorf("Tag struct %s is malformed, IsTag() == false", t.String())
+	}
+
+	r, ok, err := t.MaybeGet(TagCommitRefField)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("tag is missing field %s", TagCommitRefField)
+	}
+
+	_, err = db.validateRefAsCommit(ctx, r.(types.Ref))
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (types.Struct, error) {

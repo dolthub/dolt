@@ -95,6 +95,15 @@ type Database interface {
 	// of a conflict, Commit returns an 'ErrMergeNeeded' error.
 	CommitValue(ctx context.Context, ds Dataset, v types.Value) (Dataset, error)
 
+	// Tag stores an immutable reference to a Value. It takes a Ref and a Dataset
+	// whose head must be nil (ie a newly created Dataset).
+	// The new Tag struct is constructed with `ref` and metadata about the tag
+	// contained in the struct `opts.Meta`.
+	// The returned Dataset is always the newest snapshot, regardless of
+	// success or failure, and Datasets() is updated to match backing storage
+	// upon return as well.
+	Tag(ctx context.Context, ds Dataset, ref types.Ref, opts TagOptions) (Dataset, error)
+
 	// Delete removes the Dataset named ds.ID() from the map at the root of
 	// the Database. The Dataset data is not necessarily cleaned up at this
 	// time, but may be garbage collected in the future.

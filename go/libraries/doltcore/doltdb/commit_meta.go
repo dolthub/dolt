@@ -31,7 +31,8 @@ const (
 	commitMetaUserTSKey    = "user_timestamp"
 	commitMetaVersionKey   = "metaversion"
 
-	metaVersion = "1.0"
+	commitMetaStName  = "metadata"
+	commitMetaVersion = "1.0"
 )
 
 var CommitNowFunc = time.Now
@@ -72,20 +73,6 @@ func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*Commi
 	userMS := userTS.UnixNano() / milliToNano
 
 	return &CommitMeta{n, e, ms, d, userMS}, nil
-}
-
-// NewTagMeta returns CommitMeta that can be used to create a tag.
-func NewTagMeta(name, email, desc string) *CommitMeta {
-	n := strings.TrimSpace(name)
-	e := strings.TrimSpace(email)
-	d := strings.TrimSpace(desc)
-
-	ns := uint64(CommitNowFunc().UnixNano())
-	ms := ns / uMilliToNano
-
-	userMS := int64(ns) / milliToNano
-
-	return &CommitMeta{n, e, ms, d, userMS}
 }
 
 func getRequiredFromSt(st types.Struct, k string) (types.Value, error) {
@@ -146,11 +133,11 @@ func (cm *CommitMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, erro
 		commitMetaEmailKey:     types.String(cm.Email),
 		commitMetaDescKey:      types.String(cm.Description),
 		commitMetaTimestampKey: types.Uint(cm.Timestamp),
-		commitMetaVersionKey:   types.String(metaVersion),
+		commitMetaVersionKey:   types.String(commitMetaVersion),
 		commitMetaUserTSKey:    types.Int(cm.UserTimestamp),
 	}
 
-	return types.NewStruct(nbf, "metadata", metadata)
+	return types.NewStruct(nbf, commitMetaStName, metadata)
 }
 
 // Time returns the time at which the commit occurred

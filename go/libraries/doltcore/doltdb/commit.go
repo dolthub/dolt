@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	metaField        = datas.MetaField
+	metaField        = datas.CommitMetaField
 	parentsField     = datas.ParentsField
 	parentsListField = datas.ParentsListField
 	rootValueField   = datas.ValueField
