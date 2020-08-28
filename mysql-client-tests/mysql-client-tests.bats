@@ -21,8 +21,8 @@ setup() {
 
 teardown() {
     cd ..
-    rm -rf $REPO_NAME
     kill $SERVER_PID
+    rm -rf $REPO_NAME    
 }
 
 @test "python mysql.connector client" {
@@ -40,4 +40,8 @@ teardown() {
 
 @test "node mysql client" {
     node $BATS_TEST_DIRNAME/node/index.js $USER $PORT $REPO_NAME
+}
+
+@test "c mysql connector" {
+    
 }
