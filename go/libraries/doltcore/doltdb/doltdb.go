@@ -371,7 +371,7 @@ func (ddb *DoltDB) ResolveTag(ctx context.Context, tagRef ref.TagRef) (*Commit, 
 	}
 
 	if dsHead.Name() != datas.TagName {
-		return nil, nil, fmt.Errorf("dataset head is neither commit nor tag")
+		return nil, nil, fmt.Errorf("tagRef head is not a tag")
 	}
 
 	metaSt, ok, err := dsHead.MaybeGet(datas.TagMetaField)

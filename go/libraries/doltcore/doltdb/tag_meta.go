@@ -27,6 +27,7 @@ const (
 	tagMetaEmailKey     = "email"
 	tagMetaDescKey      = "desc"
 	tagMetaTimestampKey = "timestamp"
+	tagMetaUserTSKey    = "user_timestamp"
 	tagMetaVersionKey   = "metaversion"
 
 	tagMetaStName  = "metadata"
@@ -38,14 +39,21 @@ var TagLoc = CommitLoc
 
 // TagMeta contains all the metadata that is associated with a tag within a data repo.
 type TagMeta struct {
-	Name        string
-	Email       string
-	Timestamp   uint64
-	Description string
+	Name          string
+	Email         string
+	Timestamp     uint64
+	Description   string
+	UserTimestamp int64
 }
 
-// NewTagMeta returns CommitMeta that can be used to create a tag.
+// NewTagMetaWithUserTS returns TagMeta that can be used to create a tag.
+// It uses the current time as the user timestamp.
 func NewTagMeta(name, email, desc string) *TagMeta {
+	return NewTagMetaWithUserTS(name, email, desc, TagNowFunc())
+}
+
+// NewTagMetaWithUserTS returns TagMeta that can be used to create a tag.
+func NewTagMetaWithUserTS(name, email, desc string, userTS time.Time) *TagMeta {
 	n := strings.TrimSpace(name)
 	e := strings.TrimSpace(email)
 	d := strings.TrimSpace(desc)
@@ -53,7 +61,9 @@ func NewTagMeta(name, email, desc string) *TagMeta {
 	ns := uint64(TagNowFunc().UnixNano())
 	ms := ns / uMilliToNano
 
-	return &TagMeta{n, e, ms, d}
+	userMS := userTS.UnixNano() / milliToNano
+
+	return &TagMeta{n, e, ms, d, userMS}
 }
 
 func tagMetaFromNomsSt(st types.Struct) (*TagMeta, error) {
@@ -81,11 +91,20 @@ func tagMetaFromNomsSt(st types.Struct) (*TagMeta, error) {
 		return nil, err
 	}
 
+	userTS, ok, err := st.MaybeGet(tagMetaUserTSKey)
+
+	if err != nil {
+		return nil, err
+	} else if !ok {
+		userTS = types.Int(int64(uint64(ts.(types.Uint))))
+	}
+
 	return &TagMeta{
 		string(n.(types.String)),
 		string(e.(types.String)),
 		uint64(ts.(types.Uint)),
 		string(d.(types.String)),
+		int64(userTS.(types.Int)),
 	}, nil
 }
 
@@ -96,6 +115,7 @@ func (tm *TagMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, error) 
 		tagMetaDescKey:      types.String(tm.Description),
 		tagMetaTimestampKey: types.Uint(tm.Timestamp),
 		tagMetaVersionKey:   types.String(tagMetaVersion),
+		commitMetaUserTSKey: types.Int(tm.UserTimestamp),
 	}
 
 	return types.NewStruct(nbf, tagMetaStName, metadata)

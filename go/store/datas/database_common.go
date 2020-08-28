@@ -436,10 +436,10 @@ func (db *database) Tag(ctx context.Context, ds Dataset, ref types.Ref, opts Tag
 // doTag manages concurrent access the single logical piece of mutable state: the current Root. It uses
 // the same optimistic writing algorithm as doCommit (see above).
 func (db *database) doTag(ctx context.Context, datasetID string, tag types.Struct) error {
-	if is, err := db.validateTag(ctx, tag); err != nil {
+	err := db.validateTag(ctx, tag)
+
+	if err != nil {
 		return err
-	} else if !is {
-		d.Panic("Can't tag using a non-Commit struct (dataset %s)", datasetID)
 	}
 
 	// This could loop forever, given enough simultaneous writers. BUG 2565
@@ -470,7 +470,7 @@ func (db *database) doTag(ctx context.Context, datasetID string, tag types.Struc
 		}
 
 		if hasHead {
-			d.Panic("datasets for tags (refs/tags/*) cannot be altered after creation")
+			return fmt.Errorf("datasets for tags (refs/tags/*) cannot be altered after creation")
 		}
 
 		ref, err := types.ToRefOfValue(tagRef, db.Format())
@@ -591,30 +591,30 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types
 	return v.(types.Struct), nil
 }
 
-func (db *database) validateTag(ctx context.Context, t types.Struct) (bool, error) {
+func (db *database) validateTag(ctx context.Context, t types.Struct) error {
 	is, err := IsTag(t)
 	if err != nil {
-		return false, err
+		return err
 	}
 	if !is {
-		return false, nil
+		return fmt.Errorf("Tag struct %s is malformed, IsTag() == false", t.String())
 	}
 
 	r, ok, err := t.MaybeGet(TagCommitRefField)
 	if err != nil {
-		return false, err
+		return err
 	}
 	if !ok {
-		return false, fmt.Errorf("tag is missing field %s", TagCommitRefField)
+		return fmt.Errorf("tag is missing field %s", TagCommitRefField)
 	}
 
 	_, err = db.validateRefAsCommit(ctx, r.(types.Ref))
 
 	if err != nil {
-		return false, err
+		return err
 	}
 
-	return true, nil
+	return nil
 }
 
 func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (types.Struct, error) {
