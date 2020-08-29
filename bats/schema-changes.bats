@@ -118,3 +118,19 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "PRIMARY KEY" ]] || false
 }
+
+@test "changing column does not allow nulls in primary key" {
+    dolt sql <<SQL
+CREATE TABLE test2(
+  pk1 BIGINT,
+  pk2 BIGINT,
+  v1 BIGINT,
+  PRIMARY KEY(pk1, pk2)
+);
+SQL
+    run dolt sql -q "INSERT INTO test2 (pk1, pk2) VALUES (1, null)"
+    [ "$status" -eq 1 ]
+    dolt sql -q "ALTER TABLE test2 CHANGE pk2 pk2new BIGINT"
+    run dolt sql -q "INSERT INTO test2 (pk1, pk2new) VALUES (1, null)"
+    [ "$status" -eq 1 ]
+}
