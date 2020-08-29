@@ -108,6 +108,9 @@ func NewColumnWithTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, 
 
 // IsNullable returns whether the column can be set to a null value.
 func (c Column) IsNullable() bool {
+	if c.IsPartOfPK {
+		return false
+	}
 	for _, cnst := range c.Constraints {
 		if cnst.GetConstraintType() == NotNullConstraintType {
 			return false
