@@ -298,30 +298,42 @@ func (ts tableSet) physicalLen() (uint64, error) {
 	f := func(css chunkSources) (data uint64, err error) {
 		for _, haver := range css {
 			index, err := haver.index()
-
 			if err != nil {
 				return 0, err
 			}
-
-			data += indexSize(index.chunkCount)
-			data += index.offsets[index.chunkCount-1] + (uint64(index.lengths[index.chunkCount-1]))
+			data += index.TableFileSize()
 		}
 		return
 	}
 
 	lenNovel, err := f(ts.novel)
-
 	if err != nil {
 		return 0, err
 	}
 
 	lenUp, err := f(ts.upstream)
-
 	if err != nil {
 		return 0, err
 	}
 
 	return lenNovel + lenUp, nil
+}
+
+func (ts tableSet) Close() error {
+	var firstErr error
+	for _, t := range ts.novel {
+		err := t.Close()
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	for _, t := range ts.upstream {
+		err := t.Close()
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
 }
 
 // Size returns the number of tables in this tableSet.
@@ -419,7 +431,7 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 		}
 
 		if cnt > 0 {
-			merged.novel = append(merged.novel, t)
+			merged.novel = append(merged.novel, t.Clone())
 		}
 	}
 
@@ -455,7 +467,7 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 						return
 					}
 					if spec.name == h {
-						merged.upstream[idx] = existing
+						merged.upstream[idx] = existing.Clone()
 						return
 					}
 				}

@@ -16,6 +16,7 @@ package enginetest
 
 import (
 	"context"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -62,7 +63,14 @@ func (d *DoltHarness) SkipQueryTest(query string) bool {
 }
 
 func (d *DoltHarness) Parallelism() int {
-	return 1
+	// always test with some parallelism
+	parallelism := runtime.NumCPU()
+
+	if parallelism <= 1 {
+		parallelism = 2
+	}
+
+	return parallelism
 }
 
 func (d *DoltHarness) NewContext() *sql.Context {

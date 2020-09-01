@@ -358,3 +358,12 @@ func TestNewCommitRegressionTest(t *testing.T) {
 	_, err = NewCommit(context.Background(), value, parents, meta)
 	assert.NoError(t, err)
 }
+
+func TestPersistedCommitConsts(t *testing.T) {
+	// changing constants that are persisted requires a migration strategy
+	assert.Equal(t, "parents", ParentsField)
+	assert.Equal(t, "parents_list", ParentsListField)
+	assert.Equal(t, "value", ValueField)
+	assert.Equal(t, "meta", CommitMetaField)
+	assert.Equal(t, "Commit", CommitName)
+}

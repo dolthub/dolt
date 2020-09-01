@@ -115,10 +115,8 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash
 					}
 
 					for _, offsetRec := range offsetRecSlice {
-						ord := offsetRec.ordinal
-						length := tr.lengths[ord]
 						h := hash.Hash(*offsetRec.a)
-						y[h] = Range{Offset: offsetRec.offset, Length: length}
+						y[h] = Range{Offset: offsetRec.offset, Length: offsetRec.length}
 
 						delete(hashes, h)
 					}
@@ -144,11 +142,11 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash
 
 				var foundHashes []hash.Hash
 				for h := range hashes {
-					ord := tableIndex.lookupOrdinal(addr(h))
-
-					if ord < tableIndex.chunkCount {
+					a := addr(h)
+					e, ok := tableIndex.Lookup(&a)
+					if ok {
 						foundHashes = append(foundHashes, h)
-						y[h] = Range{Offset: tableIndex.offsets[ord], Length: tableIndex.lengths[ord]}
+						y[h] = Range{Offset: e.Offset(), Length: e.Length()}
 					}
 				}
 
@@ -239,9 +237,38 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 	}
 
 	nbs.upstream = updatedContents
+	oldTables := nbs.tables
 	nbs.tables = newTables
+	err = oldTables.Close()
+	if err != nil {
+		return manifestContents{}, err
+	}
 
 	return updatedContents, nil
+}
+
+func NewAWSStoreWithMMapIndex(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64) (*NomsBlockStore, error) {
+	cacheOnce.Do(makeGlobalCaches)
+	readRateLimiter := make(chan struct{}, 32)
+	p := &awsTablePersister{
+		s3,
+		bucket,
+		readRateLimiter,
+		nil,
+		&ddbTableStore{ddb, table, readRateLimiter, nil},
+		awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize, maxDynamoItemSize, maxDynamoChunks},
+		globalIndexCache,
+		ns,
+		func(bs []byte) (tableIndex, error) {
+			ohi, err := parseTableIndex(bs)
+			if err != nil {
+				return nil, err
+			}
+			return newMmapTableIndex(ohi, nil)
+		},
+	}
+	mm := makeManifestManager(newDynamoManifest(table, ns, ddb))
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
 }
 
 func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64) (*NomsBlockStore, error) {
@@ -256,6 +283,9 @@ func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string
 		awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize, maxDynamoItemSize, maxDynamoChunks},
 		globalIndexCache,
 		ns,
+		func(bs []byte) (tableIndex, error) {
+			return parseTableIndex(bs)
+		},
 	}
 	mm := makeManifestManager(newDynamoManifest(table, ns, ddb))
 	return newNomsBlockStore(ctx, nbfVerStr, mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
@@ -335,7 +365,12 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager
 		}
 
 		nbs.upstream = contents
+		oldTables := nbs.tables
 		nbs.tables = newTables
+		err = oldTables.Close()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return nbs, nil
@@ -658,7 +693,12 @@ func (nbs *NomsBlockStore) Rebase(ctx context.Context) error {
 		}
 
 		nbs.upstream = contents
+		oldTables := nbs.tables
 		nbs.tables = newTables
+		err = oldTables.Close()
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -762,10 +802,16 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		}
 
 		nbs.upstream = upstream
+		oldTables := nbs.tables
 		nbs.tables = newTables
+		err = oldTables.Close()
 
 		if last != upstream.root {
 			return errOptimisticLockFailedRoot
+		}
+
+		if err != nil {
+			return err
 		}
 
 		return errOptimisticLockFailedTables
@@ -804,7 +850,12 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		}
 
 		nbs.upstream = newUpstream
+		oldTables := nbs.tables
 		nbs.tables = newTables
+		err = oldTables.Close()
+		if err != nil {
+			return err
+		}
 
 		return errOptimisticLockFailedTables
 	}
@@ -848,8 +899,8 @@ func (nbs *NomsBlockStore) Version() string {
 	return nbs.upstream.vers
 }
 
-func (nbs *NomsBlockStore) Close() (err error) {
-	return
+func (nbs *NomsBlockStore) Close() error {
+	return nbs.tables.Close()
 }
 
 func (nbs *NomsBlockStore) Stats() interface{} {
@@ -965,7 +1016,7 @@ func (nbs *NomsBlockStore) Size(ctx context.Context) (uint64, error) {
 		if err != nil {
 			return uint64(0), fmt.Errorf("error getting table file index for chunkSource. %w", err)
 		}
-		size += ti.tableFileSize()
+		size += ti.TableFileSize()
 	}
 	return size, nil
 }

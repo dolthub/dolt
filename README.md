@@ -8,6 +8,8 @@ It is inspired by RDBMS and Git, and attempts to blend concepts about both in a 
 
 We also built [DoltHub](https://www.dolthub.com), a cloud based storage solution for hosting Dolt databases, that facilitates collaborative management of databases. We host public data for free!
 
+If you want to discuss Dolt, feel free to join our [Discord](https://discord.com/invite/RFwfYpu). We are happy to discuss use-cases, the roadmap, or anything related to version controlled databases.
+
 ## Dolt CLI
 
 ```
@@ -303,6 +305,8 @@ dolt also supports directory, aws, and gcs based remotes:
 ## Issues
 
 If you have any issues with Dolt, find any bugs, or simply have a question, feel free to file an issue!
+
+If you want to discuss the project in a more open ended manner, join us on [Discord](https://discord.com/invite/RFwfYpu).
 
 # Credits and License
 

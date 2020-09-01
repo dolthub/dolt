@@ -23,10 +23,6 @@ func (csa chunkSourceAdapter) hash() (addr, error) {
 	return csa.h, nil
 }
 
-func (csa chunkSourceAdapter) index() (tableIndex, error) {
-	return csa.tableIndex, nil
-}
-
 func newReaderFromIndexData(indexCache *indexCache, idxData []byte, name addr, tra tableReaderAt, blockSize uint64) (cs chunkSource, err error) {
 	index, err := parseTableIndex(idxData)
 
@@ -47,4 +43,12 @@ func newReaderFromIndexData(indexCache *indexCache, idxData []byte, name addr, t
 	}
 
 	return &chunkSourceAdapter{newTableReader(index, tra, blockSize), name}, nil
+}
+
+func (csa chunkSourceAdapter) Close() error {
+	return csa.tableReader.Close()
+}
+
+func (csa chunkSourceAdapter) Clone() chunkSource {
+	return &chunkSourceAdapter{csa.tableReader.Clone(), csa.h}
 }

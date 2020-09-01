@@ -24,10 +24,10 @@ import (
 )
 
 const (
-	metaField        = "meta"
-	parentsField     = "parents"
-	parentsListField = "parentsList"
-	rootValueField   = "value"
+	metaField        = datas.CommitMetaField
+	parentsField     = datas.ParentsField
+	parentsListField = datas.ParentsListField
+	rootValueField   = datas.ValueField
 )
 
 var errCommitHasNoMeta = errors.New("commit has no metadata")
@@ -130,6 +130,7 @@ func (c *Commit) GetCommitMeta() (*CommitMeta, error) {
 	return nil, errors.New(h.String() + " is a commit without the required metadata.")
 }
 
+// ParentHashes returns the commit hashes for all parent commits.
 func (c *Commit) ParentHashes(ctx context.Context) ([]hash.Hash, error) {
 	hashes := make([]hash.Hash, len(c.parents))
 	for i, pr := range c.parents {
@@ -176,6 +177,11 @@ func (c *Commit) GetRootValue() (*RootValue, error) {
 	}
 
 	return nil, errHasNoRootValue
+}
+
+// GetStRef returns a Noms Ref for this Commit's Noms commit Struct.
+func (c *Commit) GetStRef() (types.Ref, error) {
+	return types.NewRef(c.commitSt, c.vrw.Format())
 }
 
 var ErrNoCommonAncestor = errors.New("no common ancestor")

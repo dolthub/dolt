@@ -361,7 +361,7 @@ func generateTypeInfoArrays(t *testing.T) ([][]TypeInfo, [][]types.Value) {
 				types.Decimal(decimal.RequireFromString("-1076416.875")),
 				types.Decimal(decimal.RequireFromString("198728394234798423466321.27349757"))},
 			{types.Uint(1), types.Uint(3), types.Uint(5), types.Uint(7), types.Uint(8)},                                                                                                    //Enum
-			{types.Float(1.0), types.Float(65513.75), types.Float(4293902592), types.Float(4.58E71), types.Float(7.172E285)},                                                               //Float
+			{types.Float(1.0), types.Float(65513.75), types.Float(4293902592), types.Float(4.58e71), types.Float(7.172e285)},                                                               //Float
 			{types.InlineBlob{0}, types.InlineBlob{21}, types.InlineBlob{1, 17}, types.InlineBlob{72, 42}, types.InlineBlob{21, 122, 236}},                                                 //InlineBlob
 			{types.Int(20), types.Int(215), types.Int(237493), types.Int(2035753568), types.Int(2384384576063)},                                                                            //Int
 			{types.Uint(1), types.Uint(5), types.Uint(64), types.Uint(42), types.Uint(192)},                                                                                                //Set

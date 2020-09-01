@@ -37,7 +37,7 @@ import (
 // to read data by inspecting the Head of a Dataset and write new data by
 // updating the Head of a Dataset via Commit() or similar. Particularly, new
 // data is not guaranteed to be persistent until after a Commit (Delete,
-// SetHead, or FastForward) operation completes.
+// SetHeadToCommit, or FastForward) operation completes.
 // The Database API is stateful, meaning that calls to GetDataset() or
 // Datasets() occurring after a call to Commit() (et al) will represent the
 // result of the Commit().
@@ -95,6 +95,15 @@ type Database interface {
 	// of a conflict, Commit returns an 'ErrMergeNeeded' error.
 	CommitValue(ctx context.Context, ds Dataset, v types.Value) (Dataset, error)
 
+	// Tag stores an immutable reference to a Value. It takes a Ref and a Dataset
+	// whose head must be nil (ie a newly created Dataset).
+	// The new Tag struct is constructed with `ref` and metadata about the tag
+	// contained in the struct `opts.Meta`.
+	// The returned Dataset is always the newest snapshot, regardless of
+	// success or failure, and Datasets() is updated to match backing storage
+	// upon return as well.
+	Tag(ctx context.Context, ds Dataset, ref types.Ref, opts TagOptions) (Dataset, error)
+
 	// Delete removes the Dataset named ds.ID() from the map at the root of
 	// the Database. The Dataset data is not necessarily cleaned up at this
 	// time, but may be garbage collected in the future.
@@ -104,11 +113,11 @@ type Database interface {
 	// of a conflict, Delete returns an 'ErrMergeNeeded' error.
 	Delete(ctx context.Context, ds Dataset) (Dataset, error)
 
-	// SetHead ignores any lineage constraints (e.g. the current Head being in
+	// SetHeadToCommit ignores any lineage constraints (e.g. the current Head being in
 	// commit’s Parent set) and force-sets a mapping from datasetID: commit in
 	// this database.
 	// All Values that have been written to this Database are guaranteed to be
-	// persistent after SetHead(). If the update cannot be performed, e.g.,
+	// persistent after SetHeadToCommit(). If the update cannot be performed, e.g.,
 	// because another process moved the current Head out from under you,
 	// error will be non-nil.
 	// The newest snapshot of the Dataset is always returned, so the caller an

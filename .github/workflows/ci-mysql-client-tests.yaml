@@ -1,0 +1,13 @@
+name: Test MySQL Client integrations
+
+on: [pull_request]
+
+jobs:
+  mysql_client_integrations_job:
+    runs-on: ubuntu-latest
+    name: Run tests
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Test mysql client integrations
+        uses: ./.github/actions/mysql-client-tests

@@ -85,7 +85,7 @@ func (ttw *TextTableWriter) writeTableHeader(r row.Row) error {
 		colnames.WriteString(" ")
 		colNameVal, ok := r.GetColVal(tag)
 		if !ok {
-			return false, errors.New("No column name value for tag " + string(tag))
+			return false, fmt.Errorf("No column name value for tag %d", tag)
 		}
 		colName := string(colNameVal.(types.String))
 

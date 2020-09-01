@@ -171,12 +171,18 @@ teardown() {
     dolt add test
     dolt commit -m "Added (1,1) row"
     run dolt sql -q "select * from dolt_history_test"
+    echo $output
+    echo ${#lines[@]}
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 7 ]
     run dolt sql -q "select * from dolt_history_test where pk=1"
+    echo $output
+    echo ${#lines[@]}
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
     run dolt sql -q "select * from dolt_history_test where pk=0"
+    echo $output
+    echo ${#lines[@]}
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
 }

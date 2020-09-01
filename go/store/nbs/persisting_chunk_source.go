@@ -94,6 +94,16 @@ func (ccs *persistingChunkSource) getReader() chunkReader {
 	return ccs.cs
 }
 
+func (ccs *persistingChunkSource) Close() error {
+	// persistingChunkSource does not own |cs| or |mt|. No need to close them.
+	return nil
+}
+
+func (ccs *persistingChunkSource) Clone() chunkSource {
+	// persistingChunkSource does not own |cs| or |mt|. No need to Clone.
+	return ccs
+}
+
 func (ccs *persistingChunkSource) has(h addr) (bool, error) {
 	cr := ccs.getReader()
 
@@ -196,11 +206,11 @@ func (ccs *persistingChunkSource) index() (tableIndex, error) {
 	err := ccs.wait()
 
 	if err != nil {
-		return tableIndex{}, err
+		return onHeapTableIndex{}, err
 	}
 
 	if ccs.cs == nil {
-		return tableIndex{}, ErrNoChunkSource
+		return onHeapTableIndex{}, ErrNoChunkSource
 	}
 
 	return ccs.cs.index()
@@ -283,7 +293,7 @@ func (ecs emptyChunkSource) hash() (addr, error) {
 }
 
 func (ecs emptyChunkSource) index() (tableIndex, error) {
-	return tableIndex{}, nil
+	return onHeapTableIndex{}, nil
 }
 
 func (ecs emptyChunkSource) reader(context.Context) (io.Reader, error) {
@@ -296,4 +306,12 @@ func (ecs emptyChunkSource) calcReads(reqs []getRecord, blockSize uint64) (reads
 
 func (ecs emptyChunkSource) extract(ctx context.Context, chunks chan<- extractRecord) error {
 	return nil
+}
+
+func (ecs emptyChunkSource) Close() error {
+	return nil
+}
+
+func (ecs emptyChunkSource) Clone() chunkSource {
+	return ecs
 }

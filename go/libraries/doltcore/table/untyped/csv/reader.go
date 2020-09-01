@@ -206,7 +206,7 @@ func validDelim(s string) bool {
 	return !(strings.Contains(s, "\"") ||
 		strings.Contains(s, "\r") ||
 		strings.Contains(s, "\n") ||
-		strings.Contains(s, string(0xFFFD))) // Unicode replacement char
+		strings.Contains(s, string([]byte{0xFF, 0xFD}))) // Unicode replacement char
 }
 
 func lengthNL(b []byte) int {

@@ -40,16 +40,16 @@ const (
 	// created with newer versions of still usable by older versions.
 	ParentsListField = "parents_list"
 	ValueField       = "value"
-	MetaField        = "meta"
-	commitName       = "Commit"
+	CommitMetaField  = "meta"
+	CommitName       = "Commit"
 )
 
-var commitTemplate = types.MakeStructTemplate(commitName, []string{MetaField, ParentsField, ParentsListField, ValueField})
+var commitTemplate = types.MakeStructTemplate(CommitName, []string{CommitMetaField, ParentsField, ParentsListField, ValueField})
 
 var valueCommitType = nomdl.MustParseType(`Struct Commit {
         meta: Struct {},
         parents: Set<Ref<Cycle<Commit>>>,
-        parentsList?: List<Ref<Cycle<Commit>>>,
+        parents_list?: List<Ref<Cycle<Commit>>>,
         value: Value,
 }`)
 
@@ -172,9 +172,9 @@ func findCommonRef(a, b types.RefSlice) (types.Ref, bool) {
 }
 
 func makeCommitStructType(metaType, parentsType, parentsListType, valueType *types.Type) (*types.Type, error) {
-	return types.MakeStructType("Commit",
+	return types.MakeStructType(CommitName,
 		types.StructField{
-			Name: MetaField,
+			Name: CommitMetaField,
 			Type: metaType,
 		},
 		types.StructField{
