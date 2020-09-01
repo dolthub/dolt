@@ -357,6 +357,7 @@ func (ddb *DoltDB) ResolveRef(ctx context.Context, ref ref.DoltRef) (*Commit, er
 	return NewCommit(ddb.db, commitSt), nil
 }
 
+// ResolveTag takes a TagRef and returns the corresponding Tag object.
 func (ddb *DoltDB) ResolveTag(ctx context.Context, tagRef ref.TagRef) (*Tag, error) {
 	ds, err := ddb.db.GetDataset(ctx, tagRef.String())
 

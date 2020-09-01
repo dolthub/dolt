@@ -17,9 +17,6 @@ package commands
 import (
 	"context"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
-
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -149,59 +146,4 @@ func pullRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, r env.Remote, srcR
 	}
 
 	return mergeCommitSpec(ctx, dEnv, destRef.String())
-}
-
-// fetchFollowTags fetches all tags from the source DB whose commits have already
-// been fetched into the destination DB.
-// todo: potentially too expensive to iterate over all srcDB tags
-func fetchFollowTags(ctx context.Context, dEnv *env.DoltEnv, srcDB, destDB *doltdb.DoltDB) errhand.VerboseError {
-	err := actions.IterResolvedTags(ctx, srcDB, func(tag *doltdb.Tag) (stop bool, err error) {
-		stRef, err := tag.GetStRef()
-		if err != nil {
-			return true, err
-		}
-
-		tagHash := stRef.TargetHash()
-
-		tv, err := destDB.ValueReadWriter().ReadValue(ctx, tagHash)
-		if err != nil {
-			return true, err
-		}
-		if tv != nil {
-			// tag is already fetched
-			return false, nil
-		}
-
-		cmHash, err := tag.Commit.HashOf()
-		if err != nil {
-			return true, err
-		}
-
-		cv, err := destDB.ValueReadWriter().ReadValue(ctx, cmHash)
-		if err != nil {
-			return true, err
-		}
-		if cv == nil {
-			// neither tag nor commit has been fetched
-			return false, nil
-		}
-
-		wg, progChan, pullerEventCh := runProgFuncs()
-		err = actions.FetchTag(ctx, dEnv, srcDB, destDB, tag, progChan, pullerEventCh)
-		stopProgFuncs(wg, progChan, pullerEventCh)
-
-		if err != nil {
-			return true, err
-		}
-
-		err = destDB.SetHead(ctx, tag.GetDoltRef(), stRef)
-
-		return false, err
-	})
-
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	return nil
 }

@@ -31,6 +31,7 @@ type Tag struct {
 	Commit *Commit
 }
 
+// NewTag creates a new Tag object.
 func NewTag(ctx context.Context, name string, vrw types.ValueReadWriter, tagSt types.Struct) (*Tag, error) {
 	metaSt, ok, err := tagSt.MaybeGet(datas.TagMetaField)
 
@@ -72,10 +73,12 @@ func NewTag(ctx context.Context, name string, vrw types.ValueReadWriter, tagSt t
 	}, nil
 }
 
+// GetStRef returns a Noms Ref for this Tag's Noms tag Struct.
 func (t *Tag) GetStRef() (types.Ref, error) {
 	return types.NewRef(t.tagSt, t.vrw.Format())
 }
 
+// GetDoltRef returns a DoltRef for this Tag.
 func (t *Tag) GetDoltRef() ref.DoltRef {
 	return ref.NewTagRef(t.Name)
 }

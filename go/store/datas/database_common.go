@@ -210,13 +210,13 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, newHeadRef types.
 		return err
 	}
 
-	stRef, err := db.WriteValue(ctx, newSt) // will be orphaned if the tryCommitChunks() below fails
+	refSt, err := db.WriteValue(ctx, newSt) // will be orphaned if the tryCommitChunks() below fails
 
 	if err != nil {
 		return err
 	}
 
-	ref, err := types.ToRefOfValue(stRef, db.Format())
+	ref, err := types.ToRefOfValue(refSt, db.Format())
 
 	if err != nil {
 		return err
