@@ -139,6 +139,12 @@ func parsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 	var verr errhand.VerboseError
 	if remoteOK && len(args) == 1 {
 		refSpecStr := args[0]
+
+		refSpecStr, err = disambiguateRefSpecStr(ctx, dEnv.DoltDB, refSpecStr)
+		if err != nil {
+			verr = errhand.VerboseErrorFromError(err)
+		}
+
 		refSpec, err = ref.ParseRefSpec(refSpecStr)
 
 		if err != nil {
