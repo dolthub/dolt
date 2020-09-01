@@ -34,6 +34,7 @@ teardown() {
     [[ "$output" =~ "blame - Show what revision and author last modified each row of a table." ]] || false
     [[ "$output" =~ "merge - Merge a branch." ]] || false
     [[ "$output" =~ "branch - Create, list, edit, delete branches." ]] || false
+    [[ "$output" =~ "tag - Create, list, delete tags" ]] || false
     [[ "$output" =~ "checkout - Checkout a branch or overwrite a table from HEAD." ]] || false
     [[ "$output" =~ "remote - Manage set of tracked repositories." ]] || false
     [[ "$output" =~ "push - Push to a dolt remote." ]] || false

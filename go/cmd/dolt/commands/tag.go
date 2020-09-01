@@ -33,8 +33,16 @@ import (
 
 var tagDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Create, list, delete tags.`,
-	LongDesc:  ``,
-	Synopsis:  []string{},
+	LongDesc: `If there are no non-option arguments, existing tags are listed.
+
+The command's second form creates a new tag named {{.LessThan}}tagname{{.GreaterThan}} which points to the current {{.EmphasisLeft}}HEAD{{.EmphasisRight}}, or {{.LessThan}}ref{{.GreaterThan}} if given. Optionally, a tag message can be passed using the {{.EmphasisLeft}}-m{{.EmphasisRight}} option. 
+
+With a {{.EmphasisLeft}}-d{{.EmphasisRight}}, {{.LessThan}}tagname{{.GreaterThan}} will be deleted.`,
+	Synopsis: []string{
+		`[-v]`,
+		`[-m {{.LessThan}}message{{.GreaterThan}}] {{.LessThan}}tagname{{.GreaterThan}} [{{.LessThan}}ref{{.GreaterThan}}]`,
+		`-d {{.LessThan}}tagname{{.GreaterThan}}`,
+	},
 }
 
 const (
@@ -53,11 +61,6 @@ func (cmd TagCmd) Description() string {
 	return "Create, list, delete tags."
 }
 
-// Hidden should return true if this command should be hidden from the help text
-func (cmd *TagCmd) Hidden() bool {
-	return true
-}
-
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd TagCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
@@ -67,9 +70,9 @@ func (cmd TagCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) er
 func (cmd TagCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	// todo: docs
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"start-point", "A commit that a new branch should point at."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"ref", "A commit ref that the tag should point at."})
 	ap.SupportsString(tagMessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the tag message.")
-	ap.SupportsFlag(verboseFlag, "v", "")
+	ap.SupportsFlag(verboseFlag, "v", "list tags along with their metadata.")
 	ap.SupportsFlag(deleteFlag, "d", "Delete a tag.")
 	return ap
 }
