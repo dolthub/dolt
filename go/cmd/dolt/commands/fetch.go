@@ -179,12 +179,13 @@ func mapRefspecsToRemotes(refSpecs []ref.RemoteRefSpec, dEnv *env.DoltEnv) (map[
 }
 
 func fetchRefSpecs(ctx context.Context, mode ref.RefUpdateMode, dEnv *env.DoltEnv, rem env.Remote, refSpecs []ref.RemoteRefSpec) errhand.VerboseError {
-	for _, rs := range refSpecs {
-		srcDB, err := rem.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
+	srcDB, err := rem.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
 
-		if err != nil {
-			return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
-		}
+	if err != nil {
+		return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
+	}
+
+	for _, rs := range refSpecs {
 
 		branchRefs, err := srcDB.GetRefs(ctx)
 
@@ -220,6 +221,12 @@ func fetchRefSpecs(ctx context.Context, mode ref.RefUpdateMode, dEnv *env.DoltEn
 				}
 			}
 		}
+	}
+
+	verr := fetchFollowTags(ctx, dEnv, srcDB, dEnv.DoltDB)
+
+	if verr != nil {
+		return verr
 	}
 
 	return nil
