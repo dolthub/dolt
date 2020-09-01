@@ -564,13 +564,13 @@ func (suite *DatabaseSuite) TestSetHead() {
 	a := types.String("a")
 	ds, err = suite.db.CommitValue(context.Background(), ds, a)
 	suite.NoError(err)
-	aCommitRef := mustHeadRef(ds) // To use in non-FF SetHead() below.
+	aCommitRef := mustHeadRef(ds) // To use in non-FF SetHeadToCommit() below.
 
 	b := types.String("b")
 	ds, err = suite.db.CommitValue(context.Background(), ds, b)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(b))
-	bCommitRef := mustHeadRef(ds) // To use in FF SetHead() below.
+	bCommitRef := mustHeadRef(ds) // To use in FF SetHeadToCommit() below.
 
 	ds, err = suite.db.SetHead(context.Background(), ds, aCommitRef)
 	suite.NoError(err)

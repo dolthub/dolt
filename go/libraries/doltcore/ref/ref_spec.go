@@ -101,6 +101,8 @@ func ParseRefSpecForRemote(remote, refSpecStr string) (RefSpec, error) {
 		return newLocalToRemoteTrackingRef(remote, fromRef.(BranchRef), toRef.(RemoteRef))
 	} else if fromRef.GetType() == BranchRefType && toRef.GetType() == BranchRefType {
 		return NewBranchToBranchRefSpec(fromRef.(BranchRef), toRef.(BranchRef))
+	} else if fromRef.GetType() == TagRefType && toRef.GetType() == TagRefType {
+		return NewTagToTagRefSpec(fromRef.(TagRef), toRef.(TagRef))
 	}
 
 	return nil, ErrUnsupportedMapping
@@ -157,6 +159,34 @@ func (rs BranchToBranchRefSpec) SrcRef(cwbRef DoltRef) DoltRef {
 // DestRef verifies the localRef matches the refspecs local pattern, and then maps it to a remote tracking branch, or
 // nil if it does not match the local pattern.
 func (rs BranchToBranchRefSpec) DestRef(r DoltRef) DoltRef {
+	if Equals(r, rs.srcRef) {
+		return rs.destRef
+	}
+
+	return nil
+}
+
+type TagToTagRefSpec struct {
+	srcRef  DoltRef
+	destRef DoltRef
+}
+
+// NewTagToTagRefSpec takes a source and destination TagRef and returns a RefSpec that maps source to dest.
+func NewTagToTagRefSpec(srcRef, destRef TagRef) (RefSpec, error) {
+	return TagToTagRefSpec{
+		srcRef:  srcRef,
+		destRef: destRef,
+	}, nil
+}
+
+// SrcRef will always determine the DoltRef specified as the source ref regardless to the cwbRef
+func (rs TagToTagRefSpec) SrcRef(_ DoltRef) DoltRef {
+	return rs.srcRef
+}
+
+// DestRef verifies the localRef matches the refspecs local pattern, and then maps it to a remote tracking branch, or
+// nil if it does not match the local pattern.
+func (rs TagToTagRefSpec) DestRef(r DoltRef) DoltRef {
 	if Equals(r, rs.srcRef) {
 		return rs.destRef
 	}

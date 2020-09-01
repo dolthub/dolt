@@ -350,7 +350,7 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 		}
 
 		remoteRef := ref.NewRemoteRef(remoteName, brnch.GetPath())
-		err = dEnv.DoltDB.SetHead(ctx, remoteRef, cm)
+		err = dEnv.DoltDB.SetHeadToCommit(ctx, remoteRef, cm)
 		if err != nil {
 			return errhand.BuildDError("error: could not create remote ref at " + remoteRef.String()).AddCause(err).Build()
 		}

@@ -70,40 +70,60 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pullDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
+
+	verr := pullFromRemote(ctx, dEnv, apr)
+
+	return HandleVErrAndExitCode(verr, usage)
+}
+
+func pullFromRemote(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
+	if apr.NArg() > 1 {
+		return errhand.BuildDError("dolt pull takes at most one arg").SetPrintUsage().Build()
+	}
+
 	branch := dEnv.RepoState.CWBHeadRef()
 
-	var verr errhand.VerboseError
 	var remoteName string
-	if apr.NArg() > 1 {
-		verr = errhand.BuildDError("").SetPrintUsage().Build()
-	} else {
-		if apr.NArg() == 1 {
-			remoteName = apr.Arg(0)
-		}
+	if apr.NArg() == 1 {
+		remoteName = apr.Arg(0)
+	}
 
-		var refSpecs []ref.RemoteRefSpec
-		refSpecs, verr = dEnv.GetRefSpecs(remoteName)
+	refSpecs, verr := dEnv.GetRefSpecs(remoteName)
+	if verr != nil {
+		return verr
+	}
 
-		if verr == nil {
-			if len(refSpecs) == 0 {
-				verr = errhand.BuildDError("error: no refspec for remote").Build()
-			} else {
-				remote := dEnv.RepoState.Remotes[refSpecs[0].GetRemote()]
+	if len(refSpecs) == 0 {
+		return errhand.BuildDError("error: no refspec for remote").Build()
+	}
 
-				for _, refSpec := range refSpecs {
-					if remoteTrackRef := refSpec.DestRef(branch); remoteTrackRef != nil {
-						verr = pullRemoteBranch(ctx, dEnv, remote, branch, remoteTrackRef)
+	remote := dEnv.RepoState.Remotes[refSpecs[0].GetRemote()]
 
-						if verr != nil {
-							break
-						}
-					}
-				}
+	for _, refSpec := range refSpecs {
+		remoteTrackRef := refSpec.DestRef(branch)
+
+		if remoteTrackRef != nil {
+			verr = pullRemoteBranch(ctx, dEnv, remote, branch, remoteTrackRef)
+
+			if verr != nil {
+				return verr
 			}
 		}
 	}
 
-	return HandleVErrAndExitCode(verr, usage)
+	srcDB, err := remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
+	}
+
+	verr = fetchFollowTags(ctx, dEnv, srcDB, dEnv.DoltDB)
+
+	if verr != nil {
+		return verr
+	}
+
+	return nil
 }
 
 func pullRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, r env.Remote, srcRef, destRef ref.DoltRef) errhand.VerboseError {
