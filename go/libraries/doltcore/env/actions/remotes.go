@@ -17,6 +17,7 @@ package actions
 import (
 	"context"
 	"errors"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
@@ -135,7 +136,6 @@ func FetchTag(ctx context.Context, dEnv *env.DoltEnv, srcDB, destDB *doltdb.Dolt
 
 	return destDB.PullChunks(ctx, dEnv.TempTableFilesDir(), srcDB, stRef, progChan, pullerEventCh)
 }
-
 
 func Clone(ctx context.Context, srcDB, destDB *doltdb.DoltDB, eventCh chan<- datas.TableFileEvent) error {
 	return srcDB.Clone(ctx, destDB, eventCh)

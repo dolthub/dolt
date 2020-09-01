@@ -162,6 +162,45 @@ SQL
     [[ "$output" =~ "v1" ]] || false
 }
 
+@test "tags are only pulled if their commit is pulled" {
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt sql <<SQL
+CREATE TABLE test (pk int PRIMARY KEY);
+INSERT INTO  test VALUES (1),(2),(3);
+SQL
+    dolt add . && dolt commit -m "added table test"
+    dolt push test-remote master
+    cd "dolt-repo-clones"
+    run dolt clone http://localhost:50051/test-org/test-repo
+    [ "$status" -eq 0 ]
+
+     cd ../
+    dolt tag v1 head
+    dolt push test-remote v1
+    dolt checkout -b other
+    dolt sql -q "INSERT INTO test VALUES (8),(9),(10)"
+    dolt add . && dolt commit -m "added values on branch other"
+    dolt push -u test-remote other
+    dolt tag other_tag head
+    dolt push test-remote other_tag
+
+    cd dolt-repo-clones/test-repo
+    run dolt pull
+    [[ "$output" =~ "Successfully" ]] || false
+    run dolt tag
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "v1" ]] || false
+    [[ ! "$output" =~ "other_tag" ]] || false
+    dolt fetch
+    dolt checkout other
+    run dolt pull
+    [ "$status" -eq 0 ]
+    run dolt tag
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "v1" ]] || false
+    [[ "$output" =~ "other_tag" ]] || false
+}
+
 @test "clone a remote" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL

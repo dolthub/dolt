@@ -303,8 +303,8 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 		// For a ref in a CommitSpec, we have the following behavior.
 		// If it starts with `refs/`, we look for an exact match before
 		// we try any suffix matches. After that, we try a match on the
-		// user supplied input, with the following three prefixes, in
-		// order: `refs/`, `refs/heads/`, `refs/remotes/`.
+		// user supplied input, with the following four prefixes, in
+		// order: `refs/`, `refs/heads/`, `refs/tags/`, `refs/remotes/`.
 		candidates := []string{
 			"refs/" + cs.baseSpec,
 			"refs/heads/" + cs.baseSpec,

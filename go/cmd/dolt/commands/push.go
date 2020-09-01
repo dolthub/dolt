@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -41,12 +40,7 @@ import (
 const (
 	SetUpstreamFlag = "set-upstream"
 	ForcePushFlag   = "force"
-
-	pushBranch pushKind = 0
-	pushTag    pushKind = 1
 )
-
-type pushKind byte
 
 type pushOpts struct {
 	srcRef      ref.DoltRef
@@ -54,7 +48,6 @@ type pushOpts struct {
 	remoteRef   ref.DoltRef
 	remote      env.Remote
 	mode        ref.RefUpdateMode
-	kind        pushKind
 	setUpstream bool
 }
 
@@ -128,26 +121,6 @@ func parsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 		return nil, errhand.BuildDError("error: failed to read remotes from config.").Build()
 	}
 
-	if apr.NArg() == 2 {
-		if !strings.Contains(apr.Arg(1), ":") {
-			rf := ref.NewTagRef(apr.Arg(1))
-			_, err := dEnv.DoltDB.ResolveTag(ctx, rf)
-			if err == nil {
-				remoteName := apr.Arg(0)
-				remote, remoteOK := remotes[remoteName]
-				if !remoteOK {
-					return nil, errhand.BuildDError("fatal: unknown remote " + remoteName).Build()
-				}
-				return &pushOpts{
-					srcRef: rf,
-					destRef: rf,
-					remote: remote,
-					kind: pushTag,
-				}, nil
-			}
-		}
-	}
-
 	remoteName := "origin"
 
 	args := apr.Args()
@@ -174,8 +147,13 @@ func parsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 	} else if len(args) == 2 {
 		remoteName = args[0]
 		refSpecStr := args[1]
-		refSpec, err = ref.ParseRefSpec(refSpecStr)
 
+		refSpecStr, err = disambiguateRefSpecStr(ctx, dEnv.DoltDB, refSpecStr)
+		if err != nil {
+			verr = errhand.VerboseErrorFromError(err)
+		}
+
+		refSpec, err = ref.ParseRefSpec(refSpecStr)
 		if err != nil {
 			verr = errhand.BuildDError("error: invalid refspec '%s'", refSpecStr).AddCause(err).Build()
 		}
@@ -229,21 +207,66 @@ func parsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 
 	src := refSpec.SrcRef(currentBranch)
 	dest := refSpec.DestRef(src)
-	remoteRef, verr := getTrackingRef(dest, remote)
+
+	var remoteRef ref.DoltRef
+
+	switch src.GetType() {
+	case ref.BranchRefType:
+		remoteRef, verr = getTrackingRef(dest, remote)
+	case ref.TagRefType:
+		if apr.Contains(SetUpstreamFlag) {
+			verr = errhand.BuildDError("cannot set upstream for tag").Build()
+		}
+	default:
+		verr = errhand.BuildDError("cannot push ref %s of type %s", src.String(), src.GetType()).Build()
+	}
+
+	if verr != nil {
+		return nil, verr
+	}
 
 	opts := &pushOpts{
 		srcRef:    src,
 		destRef:   dest,
 		remoteRef: remoteRef,
 		remote:    remote,
-		mode:      ref.RefUpdateMode{
+		mode: ref.RefUpdateMode{
 			Force: apr.Contains(ForcePushFlag),
 		},
-		kind: pushBranch,
 		setUpstream: apr.Contains(SetUpstreamFlag),
 	}
 
-	return opts, verr
+	return opts, nil
+}
+
+// if possible, convert refs to full spec names. prefer branches over tags.
+// eg "master" -> "refs/heads/master", "v1" -> "refs/tags/v1"
+func disambiguateRefSpecStr(ctx context.Context, ddb *doltdb.DoltDB, refSpecStr string) (string, error) {
+	brachRefs, err := ddb.GetBranches(ctx)
+
+	if err != nil {
+		return "", err
+	}
+
+	for _, br := range brachRefs {
+		if br.GetPath() == refSpecStr {
+			return br.String(), nil
+		}
+	}
+
+	tagRefs, err := ddb.GetTags(ctx)
+
+	if err != nil {
+		return "", err
+	}
+
+	for _, tr := range tagRefs {
+		if tr.GetPath() == refSpecStr {
+			return tr.String(), nil
+		}
+	}
+
+	return refSpecStr, nil
 }
 
 func doPush(ctx context.Context, dEnv *env.DoltEnv, opts *pushOpts) (verr errhand.VerboseError) {
@@ -267,16 +290,18 @@ func doPush(ctx context.Context, dEnv *env.DoltEnv, opts *pushOpts) (verr errhan
 		return bdr.Build()
 	}
 
-	if opts.kind == pushBranch {
+	switch opts.srcRef.GetType() {
+	case ref.BranchRefType:
 		if opts.srcRef == ref.EmptyBranchRef {
 			verr = deleteRemoteBranch(ctx, opts.destRef, opts.remoteRef, dEnv.DoltDB, destDB, opts.remote)
 		} else {
 			verr = pushToRemoteBranch(ctx, dEnv, opts.mode, opts.srcRef, opts.destRef, opts.remoteRef, dEnv.DoltDB, destDB, opts.remote)
 		}
-	} else {
+	case ref.TagRefType:
 		verr = pushTagToRemote(ctx, dEnv, opts.srcRef, opts.destRef, dEnv.DoltDB, destDB)
+	default:
+		verr = errhand.BuildDError("cannot push ref %s of type %s", opts.srcRef.String(), opts.srcRef.GetType()).Build()
 	}
-
 
 	if verr != nil {
 		return verr

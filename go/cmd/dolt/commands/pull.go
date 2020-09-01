@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 
@@ -78,7 +79,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func pullFromRemote(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, ) errhand.VerboseError {
+func pullFromRemote(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
 	if apr.NArg() > 1 {
 		return errhand.BuildDError("dolt pull takes at most one arg").SetPrintUsage().Build()
 	}

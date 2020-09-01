@@ -14,6 +14,7 @@ package doltdb
 import (
 	"context"
 	"fmt"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/dolt/go/store/datas"
 	"github.com/liquidata-inc/dolt/go/store/types"
