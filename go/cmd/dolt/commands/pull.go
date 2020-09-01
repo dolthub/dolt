@@ -16,6 +16,8 @@ package commands
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
@@ -70,40 +72,60 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pullDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
+
+	verr := pullFromRemote(ctx, dEnv, apr)
+
+	return HandleVErrAndExitCode(verr, usage)
+}
+
+func pullFromRemote(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, ) errhand.VerboseError {
+	if apr.NArg() > 1 {
+		return errhand.BuildDError("dolt pull takes at most one arg").SetPrintUsage().Build()
+	}
+
 	branch := dEnv.RepoState.CWBHeadRef()
 
-	var verr errhand.VerboseError
 	var remoteName string
-	if apr.NArg() > 1 {
-		verr = errhand.BuildDError("").SetPrintUsage().Build()
-	} else {
-		if apr.NArg() == 1 {
-			remoteName = apr.Arg(0)
-		}
+	if apr.NArg() == 1 {
+		remoteName = apr.Arg(0)
+	}
 
-		var refSpecs []ref.RemoteRefSpec
-		refSpecs, verr = dEnv.GetRefSpecs(remoteName)
+	refSpecs, verr := dEnv.GetRefSpecs(remoteName)
+	if verr != nil {
+		return verr
+	}
 
-		if verr == nil {
-			if len(refSpecs) == 0 {
-				verr = errhand.BuildDError("error: no refspec for remote").Build()
-			} else {
-				remote := dEnv.RepoState.Remotes[refSpecs[0].GetRemote()]
+	if len(refSpecs) == 0 {
+		return errhand.BuildDError("error: no refspec for remote").Build()
+	}
 
-				for _, refSpec := range refSpecs {
-					if remoteTrackRef := refSpec.DestRef(branch); remoteTrackRef != nil {
-						verr = pullRemoteBranch(ctx, dEnv, remote, branch, remoteTrackRef)
+	remote := dEnv.RepoState.Remotes[refSpecs[0].GetRemote()]
 
-						if verr != nil {
-							break
-						}
-					}
-				}
+	for _, refSpec := range refSpecs {
+		remoteTrackRef := refSpec.DestRef(branch)
+
+		if remoteTrackRef != nil {
+			verr = pullRemoteBranch(ctx, dEnv, remote, branch, remoteTrackRef)
+
+			if verr != nil {
+				return verr
 			}
 		}
 	}
 
-	return HandleVErrAndExitCode(verr, usage)
+	srcDB, err := remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
+	}
+
+	verr = fetchFollowTags(ctx, dEnv, srcDB, dEnv.DoltDB)
+
+	if verr != nil {
+		return verr
+	}
+
+	return nil
 }
 
 func pullRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, r env.Remote, srcRef, destRef ref.DoltRef) errhand.VerboseError {
@@ -126,4 +148,59 @@ func pullRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, r env.Remote, srcR
 	}
 
 	return mergeCommitSpec(ctx, dEnv, destRef.String())
+}
+
+// fetchFollowTags fetches all tags from the source DB whose commits have already
+// been fetched into the destination DB.
+// todo: potentially too expensive to iterate over all srcDB tags
+func fetchFollowTags(ctx context.Context, dEnv *env.DoltEnv, srcDB, destDB *doltdb.DoltDB) errhand.VerboseError {
+	err := actions.IterResolvedTags(ctx, srcDB, func(tag *doltdb.Tag) (stop bool, err error) {
+		stRef, err := tag.GetStRef()
+		if err != nil {
+			return true, err
+		}
+
+		tagHash := stRef.TargetHash()
+
+		tv, err := destDB.ValueReadWriter().ReadValue(ctx, tagHash)
+		if err != nil {
+			return true, err
+		}
+		if tv != nil {
+			// tag is already fetched
+			return false, nil
+		}
+
+		cmHash, err := tag.Commit.HashOf()
+		if err != nil {
+			return true, err
+		}
+
+		cv, err := destDB.ValueReadWriter().ReadValue(ctx, cmHash)
+		if err != nil {
+			return true, err
+		}
+		if cv == nil {
+			// neither tag nor commit has been fetched
+			return false, nil
+		}
+
+		wg, progChan, pullerEventCh := runProgFuncs()
+		err = actions.FetchTag(ctx, dEnv, srcDB, destDB, tag, progChan, pullerEventCh)
+		stopProgFuncs(wg, progChan, pullerEventCh)
+
+		if err != nil {
+			return true, err
+		}
+
+		err = destDB.SetHead(ctx, tag.GetDoltRef(), stRef)
+
+		return false, err
+	})
+
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	return nil
 }

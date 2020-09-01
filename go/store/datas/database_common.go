@@ -158,15 +158,41 @@ func (db *database) SetHead(ctx context.Context, ds Dataset, newHeadRef types.Re
 }
 
 func (db *database) doSetHead(ctx context.Context, ds Dataset, newHeadRef types.Ref) error {
-	if currentHeadRef, ok, err := ds.MaybeHeadRef(); err != nil {
+	newSt, err := newHeadRef.TargetValue(ctx, db)
+
+	if err != nil {
 		return err
-	} else if ok {
+	}
+
+	headType := newSt.(types.Struct).Name()
+
+	currentHeadRef, ok, err := ds.MaybeHeadRef()
+	if err != nil {
+		return err
+	}
+	if ok {
 		if newHeadRef.Equals(currentHeadRef) {
 			return nil
 		}
+
+		currSt, err := currentHeadRef.TargetValue(ctx, db)
+
+		if err != nil {
+			return err
+		}
+
+		headType = currSt.(types.Struct).Name()
 	}
 
-	commit, err := db.validateRefAsCommit(ctx, newHeadRef)
+	// the new head value must match the type of the old head value
+	switch headType {
+	case CommitName:
+		_, err = db.validateRefAsCommit(ctx, newHeadRef)
+	case TagName:
+		err = db.validateTag(ctx, newSt.(types.Struct))
+	default:
+		return fmt.Errorf("Unrecognized dataset value: %s", headType)
+	}
 
 	if err != nil {
 		return err
@@ -184,13 +210,13 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, newHeadRef types.
 		return err
 	}
 
-	commitRef, err := db.WriteValue(ctx, commit) // will be orphaned if the tryCommitChunks() below fails
+	stRef, err := db.WriteValue(ctx, newSt) // will be orphaned if the tryCommitChunks() below fails
 
 	if err != nil {
 		return err
 	}
 
-	ref, err := types.ToRefOfValue(commitRef, db.Format())
+	ref, err := types.ToRefOfValue(stRef, db.Format())
 
 	if err != nil {
 		return err

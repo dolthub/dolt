@@ -357,55 +357,24 @@ func (ddb *DoltDB) ResolveRef(ctx context.Context, ref ref.DoltRef) (*Commit, er
 	return NewCommit(ddb.db, commitSt), nil
 }
 
-func (ddb *DoltDB) ResolveTag(ctx context.Context, tagRef ref.TagRef) (*Commit, *TagMeta, error) {
+func (ddb *DoltDB) ResolveTag(ctx context.Context, tagRef ref.TagRef) (*Tag, error) {
 	ds, err := ddb.db.GetDataset(ctx, tagRef.String())
 
 	if err != nil {
-		return nil, nil, err
+		return nil, ErrTagNotFound
 	}
 
-	dsHead, hasHead := ds.MaybeHead()
+	tagSt, hasHead := ds.MaybeHead()
 
 	if !hasHead {
-		return nil, nil, ErrBranchNotFound
+		return nil, ErrTagNotFound
 	}
 
-	if dsHead.Name() != datas.TagName {
-		return nil, nil, fmt.Errorf("tagRef head is not a tag")
+	if tagSt.Name() != datas.TagName {
+		return nil, fmt.Errorf("tagRef head is not a tag")
 	}
 
-	metaSt, ok, err := dsHead.MaybeGet(datas.TagMetaField)
-
-	if err != nil {
-		return nil, nil, err
-	}
-	if !ok {
-		return nil, nil, fmt.Errorf("tag struct does not have field %s", datas.TagMetaField)
-	}
-
-	tagMeta, err := tagMetaFromNomsSt(metaSt.(types.Struct))
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	cmRef, ok, err := dsHead.MaybeGet(datas.TagCommitRefField)
-
-	if err != nil {
-		return nil, nil, err
-	}
-	if !ok {
-		return nil, nil, fmt.Errorf("tag struct does not have field %s", datas.TagCommitRefField)
-	}
-
-	commitSt, err := cmRef.(types.Ref).TargetValue(ctx, ddb.db)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	commit := NewCommit(ddb.db, commitSt.(types.Struct))
-
-	return commit, tagMeta, nil
+	return NewTag(ctx, tagRef.GetPath(), ddb.db, tagSt)
 }
 
 // TODO: convenience method to resolve the head commit of a branch.
@@ -492,21 +461,26 @@ func (ddb *DoltDB) CanFastForward(ctx context.Context, branch ref.DoltRef, new *
 	return current.CanFastForwardTo(ctx, new)
 }
 
-// SetHead sets the given ref to point at the given commit. It is used in the course of 'force' updates.
-func (ddb *DoltDB) SetHead(ctx context.Context, ref ref.DoltRef, cm *Commit) error {
+// SetHeadToCommit sets the given ref to point at the given commit. It is used in the course of 'force' updates.
+func (ddb *DoltDB) SetHeadToCommit(ctx context.Context, ref ref.DoltRef, cm *Commit) error {
+
+	stRef, err := types.NewRef(cm.commitSt, ddb.db.Format())
+
+	if err != nil {
+		return err
+	}
+
+	return ddb.SetHead(ctx, ref, stRef)
+}
+
+func (ddb *DoltDB) SetHead(ctx context.Context, ref ref.DoltRef, stRef types.Ref) error {
 	ds, err := ddb.db.GetDataset(ctx, ref.String())
 
 	if err != nil {
 		return err
 	}
 
-	r, err := types.NewRef(cm.commitSt, ddb.db.Format())
-
-	if err != nil {
-		return err
-	}
-
-	_, err = ddb.db.SetHead(ctx, ds, r)
+	_, err = ddb.db.SetHead(ctx, ds, stRef)
 	return err
 }
 
@@ -930,15 +904,9 @@ func (ddb *DoltDB) DeleteTag(ctx context.Context, tag ref.DoltRef) error {
 	return err
 }
 
-// PushChunks initiates a push into a database from the source database given, at the commit given. Pull progress is
+// PushChunks initiates a push into a database from the source database given, at the Value ref given. Pull progress is
 // communicated over the provided channel.
-func (ddb *DoltDB) PushChunks(ctx context.Context, tempDir string, srcDB *DoltDB, cm *Commit, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
-	rf, err := types.NewRef(cm.commitSt, ddb.db.Format())
-
-	if err != nil {
-		return err
-	}
-
+func (ddb *DoltDB) PushChunks(ctx context.Context, tempDir string, srcDB *DoltDB, rf types.Ref, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
 	if datas.CanUsePuller(srcDB.db) && datas.CanUsePuller(ddb.db) {
 		puller, err := datas.NewPuller(ctx, tempDir, defaultChunksPerTF, srcDB.db, ddb.db, rf.TargetHash(), pullerEventCh)
 
@@ -972,15 +940,9 @@ func (ddb *DoltDB) PushChunksForRefHash(ctx context.Context, tempDir string, src
 
 // PullChunks initiates a pull into a database from the source database given, at the commit given. Progress is
 // communicated over the provided channel.
-func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB, cm *Commit, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
-	rf, err := types.NewRef(cm.commitSt, ddb.db.Format())
-
-	if err != nil {
-		return err
-	}
-
+func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB, stRef types.Ref, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
 	if datas.CanUsePuller(srcDB.db) && datas.CanUsePuller(ddb.db) {
-		puller, err := datas.NewPuller(ctx, tempDir, 256*1024, srcDB.db, ddb.db, rf.TargetHash(), pullerEventCh)
+		puller, err := datas.NewPuller(ctx, tempDir, 256*1024, srcDB.db, ddb.db, stRef.TargetHash(), pullerEventCh)
 
 		if err == datas.ErrDBUpToDate {
 			return nil
@@ -990,7 +952,7 @@ func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB
 
 		return puller.Pull(ctx)
 	} else {
-		return datas.PullWithoutBatching(ctx, srcDB.db, ddb.db, rf, progChan)
+		return datas.PullWithoutBatching(ctx, srcDB.db, ddb.db, stRef, progChan)
 	}
 }
 

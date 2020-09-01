@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -40,7 +41,22 @@ import (
 const (
 	SetUpstreamFlag = "set-upstream"
 	ForcePushFlag   = "force"
+
+	pushBranch pushKind = 0
+	pushTag    pushKind = 1
 )
+
+type pushKind byte
+
+type pushOpts struct {
+	srcRef      ref.DoltRef
+	destRef     ref.DoltRef
+	remoteRef   ref.DoltRef
+	remote      env.Remote
+	mode        ref.RefUpdateMode
+	kind        pushKind
+	setUpstream bool
+}
 
 var pushDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Update remote refs along with associated objects",
@@ -94,16 +110,47 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pushDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
+	opts, verr := parsePushArgs(ctx, apr, dEnv)
+
+	if verr != nil {
+		return HandleVErrAndExitCode(verr, usage)
+	}
+
+	verr = doPush(ctx, dEnv, opts)
+
+	return HandleVErrAndExitCode(verr, usage)
+}
+
+func parsePushArgs(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) (*pushOpts, errhand.VerboseError) {
 	remotes, err := dEnv.GetRemotes()
 
 	if err != nil {
-		cli.PrintErrln("error: failed to read remotes from config.")
-		return 1
+		return nil, errhand.BuildDError("error: failed to read remotes from config.").Build()
+	}
+
+	if apr.NArg() == 2 {
+		if !strings.Contains(apr.Arg(1), ":") {
+			rf := ref.NewTagRef(apr.Arg(1))
+			_, err := dEnv.DoltDB.ResolveTag(ctx, rf)
+			if err == nil {
+				remoteName := apr.Arg(0)
+				remote, remoteOK := remotes[remoteName]
+				if !remoteOK {
+					return nil, errhand.BuildDError("fatal: unknown remote " + remoteName).Build()
+				}
+				return &pushOpts{
+					srcRef: rf,
+					destRef: rf,
+					remote: remote,
+					kind: pushTag,
+				}, nil
+			}
+		}
 	}
 
 	remoteName := "origin"
 
-	args = apr.Args()
+	args := apr.Args()
 	if len(args) == 1 {
 		if _, ok := remotes[args[0]]; ok {
 			remoteName = args[0]
@@ -136,21 +183,17 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		verr = errhand.BuildDError("error: --set-upstream requires <remote> and <refspec> params.").SetPrintUsage().Build()
 	} else if hasUpstream {
 		if len(args) > 0 {
-			cli.PrintErrf("fatal: upstream branch set for '%s'.  Use 'dolt push' without arguments to push.\n", currentBranch)
-			return 1
+			return nil, errhand.BuildDError("fatal: upstream branch set for '%s'.  Use 'dolt push' without arguments to push.\n", currentBranch).Build()
 		}
 
 		if currentBranch.GetPath() != upstream.Merge.Ref.GetPath() {
-			cli.PrintErrln("fatal: The upstream branch of your current branch does not match")
-			cli.PrintErrln("the name of your current branch.  To push to the upstream branch")
-			cli.PrintErrln("on the remote, use")
-			cli.PrintErrln()
-			cli.PrintErrln("\tdolt push origin HEAD:" + currentBranch.GetPath())
-			cli.PrintErrln()
-			cli.PrintErrln("To push to the branch of the same name on the remote, use")
-			cli.PrintErrln()
-			cli.PrintErrln("\tdolt push origin HEAD")
-			return 1
+			return nil, errhand.BuildDError("fatal: The upstream branch of your current branch does not match"+
+				"the name of your current branch.  To push to the upstream branch\n"+
+				"on the remote, use\n\n"+
+				"\tdolt push origin HEAD: %s\n\n"+
+				"To push to the branch of the same name on the remote, use\n\n"+
+				"\tdolt push origin HEAD",
+				currentBranch.GetPath()).Build()
 		}
 
 		remoteName = upstream.Remote
@@ -162,11 +205,9 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 				remoteName = defRemote.Name
 			}
 
-			cli.PrintErrln("fatal: The current branch " + currentBranch.GetPath() + " has no upstream branch.")
-			cli.PrintErrln("To push the current branch and set the remote as upstream, use")
-			cli.PrintErrln()
-			cli.PrintErrln("\tdolt push --set-upstream " + remoteName + " " + currentBranch.GetPath())
-			return 1
+			return nil, errhand.BuildDError("fatal: The current branch " + currentBranch.GetPath() + " has no upstream branch.\n" +
+				"To push the current branch and set the remote as upstream, use\n" +
+				"\tdolt push --set-upstream " + remoteName + " " + currentBranch.GetPath()).Build()
 		}
 
 		verr = errhand.BuildDError("").SetPrintUsage().Build()
@@ -175,67 +216,88 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	remote, remoteOK = remotes[remoteName]
 
 	if !remoteOK {
-		cli.PrintErrln("fatal: unknown remote " + remoteName)
-		return 1
+		return nil, errhand.BuildDError("fatal: unknown remote " + remoteName).Build()
 	}
 
-	if verr == nil {
-		hasRef, err := dEnv.DoltDB.HasRef(ctx, currentBranch)
+	hasRef, err := dEnv.DoltDB.HasRef(ctx, currentBranch)
+
+	if err != nil {
+		return nil, errhand.BuildDError("error: failed to read from db").AddCause(err).Build()
+	} else if !hasRef {
+		return nil, errhand.BuildDError("fatal: unknown branch " + currentBranch.GetPath()).Build()
+	}
+
+	src := refSpec.SrcRef(currentBranch)
+	dest := refSpec.DestRef(src)
+	remoteRef, verr := getTrackingRef(dest, remote)
+
+	opts := &pushOpts{
+		srcRef:    src,
+		destRef:   dest,
+		remoteRef: remoteRef,
+		remote:    remote,
+		mode:      ref.RefUpdateMode{
+			Force: apr.Contains(ForcePushFlag),
+		},
+		kind: pushBranch,
+		setUpstream: apr.Contains(SetUpstreamFlag),
+	}
+
+	return opts, verr
+}
+
+func doPush(ctx context.Context, dEnv *env.DoltEnv, opts *pushOpts) (verr errhand.VerboseError) {
+	destDB, err := opts.remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
+
+	if err != nil {
+		bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)
+
+		if err == remotestorage.ErrInvalidDoltSpecPath {
+			urlObj, _ := earl.Parse(opts.remote.Url)
+			bdr.AddDetails("For the remote: %s %s", opts.remote.Name, opts.remote.Url)
+
+			path := urlObj.Path
+			if path[0] == '/' {
+				path = path[1:]
+			}
+
+			bdr.AddDetails("'%s' should be in the format 'organization/repo'", path)
+		}
+
+		return bdr.Build()
+	}
+
+	if opts.kind == pushBranch {
+		if opts.srcRef == ref.EmptyBranchRef {
+			verr = deleteRemoteBranch(ctx, opts.destRef, opts.remoteRef, dEnv.DoltDB, destDB, opts.remote)
+		} else {
+			verr = pushToRemoteBranch(ctx, dEnv, opts.mode, opts.srcRef, opts.destRef, opts.remoteRef, dEnv.DoltDB, destDB, opts.remote)
+		}
+	} else {
+		verr = pushTagToRemote(ctx, dEnv, opts.srcRef, opts.destRef, dEnv.DoltDB, destDB)
+	}
+
+
+	if verr != nil {
+		return verr
+	}
+
+	if opts.setUpstream {
+		dEnv.RepoState.Branches[opts.srcRef.GetPath()] = env.BranchConfig{
+			Merge: ref.MarshalableRef{
+				Ref: opts.destRef,
+			},
+			Remote: opts.remote.Name,
+		}
+
+		err := dEnv.RepoState.Save(dEnv.FS)
 
 		if err != nil {
-			verr = errhand.BuildDError("error: failed to read from db").AddCause(err).Build()
-		} else if !hasRef {
-			verr = errhand.BuildDError("fatal: unknown branch " + currentBranch.GetPath()).Build()
-		} else {
-			src := refSpec.SrcRef(currentBranch)
-			dest := refSpec.DestRef(src)
-
-			var remoteRef ref.DoltRef
-			remoteRef, verr = getTrackingRef(dest, remote)
-
-			if verr == nil {
-				destDB, err := remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
-
-				if err != nil {
-					bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)
-
-					if err == remotestorage.ErrInvalidDoltSpecPath {
-						urlObj, _ := earl.Parse(remote.Url)
-						bdr.AddDetails("For the remote: %s %s", remote.Name, remote.Url)
-
-						path := urlObj.Path
-						if path[0] == '/' {
-							path = path[1:]
-						}
-
-						bdr.AddDetails("'%s' should be in the format 'organization/repo'", path)
-					}
-
-					verr = bdr.Build()
-				} else if src == ref.EmptyBranchRef {
-					verr = deleteRemoteBranch(ctx, dest, remoteRef, dEnv.DoltDB, destDB, remote)
-				} else {
-					updateMode := ref.RefUpdateMode{Force: apr.Contains(ForcePushFlag)}
-					verr = pushToRemoteBranch(ctx, dEnv, updateMode, src, dest, remoteRef, dEnv.DoltDB, destDB, remote)
-				}
-			}
-
-			if verr == nil && apr.Contains(SetUpstreamFlag) {
-				dEnv.RepoState.Branches[src.GetPath()] = env.BranchConfig{
-					Merge:  ref.MarshalableRef{Ref: dest},
-					Remote: remoteName,
-				}
-
-				err := dEnv.RepoState.Save(dEnv.FS)
-
-				if err != nil {
-					verr = errhand.BuildDError("error: failed to save repo state").AddCause(err).Build()
-				}
-			}
+			verr = errhand.BuildDError("error: failed to save repo state").AddCause(err).Build()
 		}
 	}
 
-	return HandleVErrAndExitCode(verr, usage)
+	return verr
 }
 
 func getTrackingRef(branchRef ref.DoltRef, remote env.Remote) (ref.DoltRef, errhand.VerboseError) {
@@ -301,6 +363,30 @@ func pushToRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, mode ref.RefUpda
 			} else {
 				return errhand.BuildDError("error: push failed").AddCause(err).Build()
 			}
+		}
+	}
+
+	return nil
+}
+
+func pushTagToRemote(ctx context.Context, dEnv *env.DoltEnv, srcRef, destRef ref.DoltRef, localDB, remoteDB *doltdb.DoltDB) errhand.VerboseError {
+	tg, err := localDB.ResolveTag(ctx, srcRef.(ref.TagRef))
+
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	wg, progChan, pullerEventCh := runProgFuncs()
+
+	err = actions.PushTag(ctx, dEnv, destRef.(ref.TagRef), localDB, remoteDB, tg, progChan, pullerEventCh)
+
+	stopProgFuncs(wg, progChan, pullerEventCh)
+
+	if err != nil {
+		if err == doltdb.ErrUpToDate {
+			cli.Println("Everything up-to-date")
+		} else {
+			return errhand.BuildDError("error: push failed").AddCause(err).Build()
 		}
 	}
 

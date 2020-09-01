@@ -27,10 +27,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 var tagDocs = cli.CommandDocumentationContent{
@@ -162,18 +160,13 @@ func getTagProps(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (props actio
 func listTags(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
 	var err error
 	if apr.Contains(verboseFlag) {
-		err = actions.IterResolvedTags(ctx, dEnv.DoltDB, func(tag ref.DoltRef, c *doltdb.Commit, meta *doltdb.TagMeta) (bool, error) {
-			h, err := c.HashOf()
-			if err != nil {
-				return false, nil
-			}
-
-			verboseTagPrint(tag, h, meta)
+		err = actions.IterResolvedTags(ctx, dEnv.DoltDB, func(tag *doltdb.Tag) (bool, error) {
+			verboseTagPrint(tag)
 			return false, nil
 		})
 	} else {
-		err = actions.IterResolvedTags(ctx, dEnv.DoltDB, func(tag ref.DoltRef, _ *doltdb.Commit, _ *doltdb.TagMeta) (bool, error) {
-			cli.Println(fmt.Sprintf("\t%s", tag.GetPath()))
+		err = actions.IterResolvedTags(ctx, dEnv.DoltDB, func(tag *doltdb.Tag) (bool, error) {
+			cli.Println(fmt.Sprintf("\t%s", tag.Name))
 			return false, nil
 		})
 	}
@@ -185,16 +178,18 @@ func listTags(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRes
 	return nil
 }
 
-func verboseTagPrint(tag ref.DoltRef, h hash.Hash, meta *doltdb.TagMeta) {
-	cli.Println(color.YellowString("%s\t%s", tag.GetPath(), h.String()))
+func verboseTagPrint(tag *doltdb.Tag) {
+	h, _ := tag.Commit.HashOf()
 
-	cli.Printf("Tagger: %s <%s>\n", meta.Name, meta.Email)
+	cli.Println(color.YellowString("%s\t%s", tag.Name, h.String()))
 
-	timeStr := meta.FormatTS()
+	cli.Printf("Tagger: %s <%s>\n", tag.Meta.Name, tag.Meta.Email)
+
+	timeStr := tag.Meta.FormatTS()
 	cli.Println("Date:  ", timeStr)
 
-	if meta.Description != "" {
-		formattedDesc := "\n\t" + strings.Replace(meta.Description, "\n", "\n\t", -1)
+	if tag.Meta.Description != "" {
+		formattedDesc := "\n\t" + strings.Replace(tag.Meta.Description, "\n", "\n\t", -1)
 		cli.Println(formattedDesc)
 	}
 	cli.Println("")

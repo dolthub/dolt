@@ -17,7 +17,6 @@ package actions
 import (
 	"context"
 	"errors"
-
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
@@ -43,7 +42,13 @@ func Push(ctx context.Context, dEnv *env.DoltEnv, mode ref.RefUpdateMode, destRe
 		}
 	}
 
-	err = destDB.PushChunks(ctx, dEnv.TempTableFilesDir(), srcDB, commit, progChan, pullerEventCh)
+	rf, err := commit.GetStRef()
+
+	if err != nil {
+		return err
+	}
+
+	err = destDB.PushChunks(ctx, dEnv.TempTableFilesDir(), srcDB, rf, progChan, pullerEventCh)
 
 	if err != nil {
 		return err
@@ -51,11 +56,11 @@ func Push(ctx context.Context, dEnv *env.DoltEnv, mode ref.RefUpdateMode, destRe
 
 	switch mode {
 	case ref.ForceUpdate:
-		err = destDB.SetHead(ctx, destRef, commit)
+		err = destDB.SetHeadToCommit(ctx, destRef, commit)
 		if err != nil {
 			return err
 		}
-		err = srcDB.SetHead(ctx, remoteRef, commit)
+		err = srcDB.SetHeadToCommit(ctx, remoteRef, commit)
 	case ref.FastForwardOnly:
 		err = destDB.FastForward(ctx, destRef, commit)
 		if err != nil {
@@ -65,6 +70,24 @@ func Push(ctx context.Context, dEnv *env.DoltEnv, mode ref.RefUpdateMode, destRe
 	}
 
 	return err
+}
+
+func PushTag(ctx context.Context, dEnv *env.DoltEnv, destRef ref.TagRef, srcDB, destDB *doltdb.DoltDB, tag *doltdb.Tag, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
+	var err error
+
+	rf, err := tag.GetStRef()
+
+	if err != nil {
+		return err
+	}
+
+	err = destDB.PushChunks(ctx, dEnv.TempTableFilesDir(), srcDB, rf, progChan, pullerEventCh)
+
+	if err != nil {
+		return err
+	}
+
+	return destDB.SetHead(ctx, destRef, rf)
 }
 
 // DeleteRemoteBranch validates targetRef is a branch on the remote database, and then deletes it, then deletes the
@@ -93,9 +116,26 @@ func DeleteRemoteBranch(ctx context.Context, targetRef ref.BranchRef, remoteRef 
 	return nil
 }
 
-func Fetch(ctx context.Context, dEnv *env.DoltEnv, destRef ref.DoltRef, srcDB, destDB *doltdb.DoltDB, srcDBCommit *doltdb.Commit, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
-	return destDB.PullChunks(ctx, dEnv.TempTableFilesDir(), srcDB, srcDBCommit, progChan, pullerEventCh)
+func FetchCommit(ctx context.Context, dEnv *env.DoltEnv, srcDB, destDB *doltdb.DoltDB, srcDBCommit *doltdb.Commit, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
+	stRef, err := srcDBCommit.GetStRef()
+
+	if err != nil {
+		return err
+	}
+
+	return destDB.PullChunks(ctx, dEnv.TempTableFilesDir(), srcDB, stRef, progChan, pullerEventCh)
 }
+
+func FetchTag(ctx context.Context, dEnv *env.DoltEnv, srcDB, destDB *doltdb.DoltDB, srcDBTag *doltdb.Tag, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
+	stRef, err := srcDBTag.GetStRef()
+
+	if err != nil {
+		return err
+	}
+
+	return destDB.PullChunks(ctx, dEnv.TempTableFilesDir(), srcDB, stRef, progChan, pullerEventCh)
+}
+
 
 func Clone(ctx context.Context, srcDB, destDB *doltdb.DoltDB, eventCh chan<- datas.TableFileEvent) error {
 	return srcDB.Clone(ctx, destDB, eventCh)

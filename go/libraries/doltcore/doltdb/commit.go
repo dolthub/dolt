@@ -178,6 +178,10 @@ func (c *Commit) GetRootValue() (*RootValue, error) {
 	return nil, errHasNoRootValue
 }
 
+func (c *Commit) GetStRef() (types.Ref, error) {
+	return types.NewRef(c.commitSt, c.vrw.Format())
+}
+
 var ErrNoCommonAncestor = errors.New("no common ancestor")
 
 func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {

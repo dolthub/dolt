@@ -15,19 +15,19 @@
 package commands
 
 import (
-	"context"
+"context"
 
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
-	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
-	"github.com/liquidata-inc/dolt/go/libraries/events"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/earl"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
+"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
+"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
+"github.com/liquidata-inc/dolt/go/libraries/events"
+"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+"github.com/liquidata-inc/dolt/go/libraries/utils/earl"
+"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 const (
@@ -204,7 +204,7 @@ func fetchRefSpecs(ctx context.Context, mode ref.RefUpdateMode, dEnv *env.DoltEn
 
 				switch mode {
 				case ref.ForceUpdate:
-					err = dEnv.DoltDB.SetHead(ctx, remoteTrackRef, srcDBCommit)
+					err = dEnv.DoltDB.SetHeadToCommit(ctx, remoteTrackRef, srcDBCommit)
 				case ref.FastForwardOnly:
 					ok, err := dEnv.DoltDB.CanFastForward(ctx, remoteTrackRef, srcDBCommit)
 					if !ok {
@@ -243,7 +243,7 @@ func fetchRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, s
 		return nil, errhand.BuildDError("error: unable to find '%s' on '%s'", srcRef.GetPath(), rem.Name).Build()
 	} else {
 		wg, progChan, pullerEventCh := runProgFuncs()
-		err = actions.Fetch(ctx, dEnv, destRef, srcDB, destDB, srcDBCommit, progChan, pullerEventCh)
+		err = actions.FetchCommit(ctx, dEnv, srcDB, destDB, srcDBCommit, progChan, pullerEventCh)
 		stopProgFuncs(wg, progChan, pullerEventCh)
 
 		if err != nil {
