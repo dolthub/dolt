@@ -42,8 +42,8 @@ int main(int argc, char **argv) {
   }
 
   for ( int i = 0; i < QUERIES_SIZE; i++ ) {
-    printf("QUERY: %s\n", queries[i]);
     if ( mysql_query(con, queries[i]) ) {
+      printf("QUERY FAILED: %s\n", queries[i]);
       fprintf(stderr, "%s\n", mysql_error(con));
       mysql_close(con);
       exit(1);
