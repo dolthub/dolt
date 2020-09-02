@@ -168,3 +168,7 @@ func TestInnerNestedInNaturalJoins(t *testing.T) {
 	t.Skip("No primary key in test tables")
 	enginetest.TestInnerNestedInNaturalJoins(t, newDoltHarness(t))
 }
+
+func TestColumnDefaults(t *testing.T) {
+	enginetest.TestColumnDefaults(t, newDoltHarness(t))
+}

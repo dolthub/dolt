@@ -34,6 +34,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
+	sqleSchema "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/schema"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -89,7 +90,7 @@ func newRow(vals row.TaggedValues, cc *schema.ColCollection) row.Row {
 }
 
 func newColTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, partOfPK bool, constraints ...schema.ColConstraint) schema.Column {
-	c, err := schema.NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, constraints...)
+	c, err := schema.NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, "", constraints...)
 	if err != nil {
 		panic("could not create column")
 	}
@@ -539,7 +540,7 @@ func checkRows(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, tableNam
 
 	s, rowIter, err := engine.Query(sqlCtx, selectQuery)
 	require.NoError(t, err)
-	_, err = dsqle.SqlSchemaToDoltSchema(context.Background(), root, tableName, s)
+	_, err = sqleSchema.ToDoltSchema(context.Background(), root, tableName, s)
 	require.NoError(t, err)
 
 	actualRows := []row.Row{}

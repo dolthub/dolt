@@ -54,7 +54,7 @@ var nameCollisionWithSch1 = mustSchema([]Column{
 
 var tagCollisionWithSch1 = mustSchema([]Column{
 	strCol("a", 1, true),
-	{"collision", 2, types.IntKind, false, typeinfo.Int32Type, nil},
+	{"collision", 2, types.IntKind, false, typeinfo.Int32Type, "", nil},
 })
 
 type SuperSchemaTest struct {
@@ -238,5 +238,5 @@ func mustColColl(cols []Column) *ColCollection {
 }
 
 func strCol(name string, tag uint64, isPK bool) Column {
-	return Column{name, tag, types.StringKind, isPK, typeinfo.StringDefaultType, nil}
+	return Column{name, tag, types.StringKind, isPK, typeinfo.StringDefaultType, "", nil}
 }

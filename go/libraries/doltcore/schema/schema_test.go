@@ -47,14 +47,14 @@ var ageVal = types.Uint(53)
 var titleVal = types.NullValue
 
 var pkCols = []Column{
-	{lnColName, lnColTag, types.StringKind, true, typeinfo.StringDefaultType, nil},
-	{fnColName, fnColTag, types.StringKind, true, typeinfo.StringDefaultType, nil},
+	{lnColName, lnColTag, types.StringKind, true, typeinfo.StringDefaultType, "", nil},
+	{fnColName, fnColTag, types.StringKind, true, typeinfo.StringDefaultType, "", nil},
 }
 var nonPkCols = []Column{
-	{addrColName, addrColTag, types.StringKind, false, typeinfo.StringDefaultType, nil},
-	{ageColName, ageColTag, types.UintKind, false, typeinfo.FromKind(types.UintKind), nil},
-	{titleColName, titleColTag, types.StringKind, false, typeinfo.StringDefaultType, nil},
-	{reservedColName, reservedColTag, types.StringKind, false, typeinfo.StringDefaultType, nil},
+	{addrColName, addrColTag, types.StringKind, false, typeinfo.StringDefaultType, "", nil},
+	{ageColName, ageColTag, types.UintKind, false, typeinfo.FromKind(types.UintKind), "", nil},
+	{titleColName, titleColTag, types.StringKind, false, typeinfo.StringDefaultType, "", nil},
+	{reservedColName, reservedColTag, types.StringKind, false, typeinfo.StringDefaultType, "", nil},
 }
 
 var allCols = append(append([]Column(nil), pkCols...), nonPkCols...)
@@ -98,7 +98,7 @@ func TestValidateForInsert(t *testing.T) {
 	})
 
 	t.Run("Name collision", func(t *testing.T) {
-		cols := append(allCols, Column{titleColName, 100, types.StringKind, false, typeinfo.StringDefaultType, nil})
+		cols := append(allCols, Column{titleColName, 100, types.StringKind, false, typeinfo.StringDefaultType, "", nil})
 		colColl, err := NewColCollection(cols...)
 		require.NoError(t, err)
 

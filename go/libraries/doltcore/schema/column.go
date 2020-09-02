@@ -42,6 +42,7 @@ var (
 		types.NullKind,
 		false,
 		typeinfo.UnknownType,
+		"",
 		nil,
 	}
 )
@@ -70,6 +71,9 @@ type Column struct {
 	// TypeInfo states the type of this column.
 	TypeInfo typeinfo.TypeInfo
 
+	// Default is the default value of this column. This is the string representation of a sql.Expression.
+	Default string
+
 	// Constraints are rules that can be checked on each column to say if the columns value is valid
 	Constraints []ColConstraint
 }
@@ -77,7 +81,7 @@ type Column struct {
 // NewColumn creates a Column instance with the default type info for the NomsKind
 func NewColumn(name string, tag uint64, kind types.NomsKind, partOfPK bool, constraints ...ColConstraint) Column {
 	typeInfo := typeinfo.FromKind(kind)
-	col, err := NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, constraints...)
+	col, err := NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, "", constraints...)
 	if err != nil {
 		panic(err)
 	}
@@ -85,7 +89,7 @@ func NewColumn(name string, tag uint64, kind types.NomsKind, partOfPK bool, cons
 }
 
 // NewColumnWithTypeInfo creates a Column instance with the given type info.
-func NewColumnWithTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, partOfPK bool, constraints ...ColConstraint) (Column, error) {
+func NewColumnWithTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, partOfPK bool, defaultVal string, constraints ...ColConstraint) (Column, error) {
 	for _, c := range constraints {
 		if c == nil {
 			return Column{}, errors.New("nil passed as a constraint")
@@ -102,6 +106,7 @@ func NewColumnWithTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, 
 		typeInfo.NomsKind(),
 		partOfPK,
 		typeInfo,
+		defaultVal,
 		constraints,
 	}, nil
 }

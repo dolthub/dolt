@@ -33,6 +33,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
+	sqleSchema "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
@@ -574,7 +575,7 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Schem
 	}
 
 	for _, col := range sch {
-		commentTag := extractTag(col)
+		commentTag := sqleSchema.ExtractTag(col)
 		if commentTag == schema.InvalidTag {
 			// we'll replace this invalid tag
 			continue
@@ -601,7 +602,7 @@ func (db Database) createTable(ctx *sql.Context, tableName string, sch sql.Schem
 		return sql.ErrTableAlreadyExists.New(tableName)
 	}
 
-	doltSch, err := SqlSchemaToDoltSchema(ctx, root, tableName, sch)
+	doltSch, err := sqleSchema.ToDoltSchema(ctx, root, tableName, sch)
 	if err != nil {
 		return err
 	}

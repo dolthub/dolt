@@ -17,10 +17,10 @@ package sqle
 import (
 	"github.com/liquidata-inc/go-mysql-server/sql"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/merge"
-	"github.com/liquidata-inc/dolt/go/store/types"
-
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/merge"
+	sqleSchema "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/schema"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 var _ sql.Table = ConflictsTable{}
@@ -61,7 +61,7 @@ func NewConflictsTable(ctx *sql.Context, db Database, tblName string) (sql.Table
 		return nil, err
 	}
 
-	sqlSch, err := doltSchemaToSqlSchema(doltdb.DoltConfTablePrefix+tblName, rd.GetSchema())
+	sqlSch, err := sqleSchema.FromDoltSchema(doltdb.DoltConfTablePrefix+tblName, rd.GetSchema())
 
 	if err != nil {
 		return nil, err
