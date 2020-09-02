@@ -33,7 +33,6 @@ func ModifyColumn(
 	tbl *doltdb.Table,
 	existingCol schema.Column,
 	newCol schema.Column,
-	defaultVal types.Value,
 	order *ColumnOrder,
 ) (*doltdb.Table, error) {
 
@@ -42,7 +41,7 @@ func ModifyColumn(
 		return nil, err
 	}
 
-	if err := validateModifyColumn(ctx, tbl, existingCol, newCol, defaultVal); err != nil {
+	if err := validateModifyColumn(ctx, tbl, existingCol, newCol); err != nil {
 		return nil, err
 	}
 
@@ -79,7 +78,7 @@ func ModifyColumn(
 }
 
 // validateModifyColumn returns an error if the column as specified cannot be added to the schema given.
-func validateModifyColumn(ctx context.Context, tbl *doltdb.Table, existingCol schema.Column, modifiedCol schema.Column, defaultVal types.Value) error {
+func validateModifyColumn(ctx context.Context, tbl *doltdb.Table, existingCol schema.Column, modifiedCol schema.Column) error {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return err
@@ -102,10 +101,6 @@ func validateModifyColumn(ctx context.Context, tbl *doltdb.Table, existingCol sc
 
 	if err != nil {
 		return err
-	}
-
-	if !types.IsNull(defaultVal) && defaultVal.Kind() != modifiedCol.Kind {
-		return fmt.Errorf("Type of default value (%v) doesn't match type of column (%v)", types.KindToString[defaultVal.Kind()], types.KindToString[modifiedCol.Kind])
 	}
 
 	return nil

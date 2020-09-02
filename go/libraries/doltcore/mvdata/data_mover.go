@@ -20,13 +20,14 @@ import (
 	"fmt"
 	"sync/atomic"
 
+	sqleSchema "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/schema"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
@@ -214,7 +215,7 @@ func SchAndTableNameFromFile(ctx context.Context, path string, fs filesys.Readab
 			return "", nil, err
 		}
 
-		tn, sch, err := sqle.ParseCreateTableStatement(ctx, root, string(data))
+		tn, sch, err := sqleSchema.ParseCreateTableStatement(ctx, root, string(data))
 
 		if err != nil {
 			return "", nil, fmt.Errorf("%s in schema file %s", err.Error(), path)

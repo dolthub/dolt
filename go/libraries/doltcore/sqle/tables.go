@@ -32,6 +32,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
+	sqleSchema "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -46,7 +47,11 @@ func init() {
 	isTest := false
 	for _, arg := range os.Args {
 		lwr := strings.ToLower(arg)
-		if lwr == "-test.v" || lwr == "-test.run" || strings.HasPrefix(lwr, "-test.testlogfile") {
+		if lwr == "-test.v" ||
+			lwr == "-test.run" ||
+			strings.HasPrefix(lwr, "-test.testlogfile") ||
+			strings.HasPrefix(lwr, "-test.timeout") ||
+			strings.HasPrefix(lwr, "-test.count") {
 			isTest = true
 			break
 		}
@@ -159,7 +164,7 @@ func (t *DoltTable) sqlSchema() sql.Schema {
 	}
 
 	// TODO: fix panics
-	sqlSch, err := doltSchemaToSqlSchema(t.name, t.sch)
+	sqlSch, err := sqleSchema.FromDoltSchema(t.name, t.sch)
 	if err != nil {
 		panic(err)
 	}
@@ -389,7 +394,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		return err
 	}
 
-	tag := extractTag(column)
+	tag := sqleSchema.ExtractTag(column)
 	if tag == schema.InvalidTag {
 		// generate a tag if we don't have a user-defined tag
 		ti, err := typeinfo.FromSqlType(column.Type)
@@ -404,7 +409,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		tag = tt[0]
 	}
 
-	col, err := SqlColToDoltCol(tag, column)
+	col, err := sqleSchema.ToDoltCol(tag, column)
 	if err != nil {
 		return err
 	}
@@ -418,15 +423,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		nullable = alterschema.Null
 	}
 
-	var defaultVal types.Value
-	if column.Default != nil {
-		defaultVal, err = col.TypeInfo.ConvertValueToNomsValue(column.Default)
-		if err != nil {
-			return err
-		}
-	}
-
-	updatedTable, err := alterschema.AddColumnToTable(ctx, root, table, t.name, col.Tag, col.Name, col.TypeInfo, nullable, defaultVal, orderToOrder(order))
+	updatedTable, err := alterschema.AddColumnToTable(ctx, root, table, t.name, col.Tag, col.Name, col.TypeInfo, nullable, col.Default, orderToOrder(order))
 	if err != nil {
 		return err
 	}
@@ -524,22 +521,14 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		panic(fmt.Sprintf("Column %s not found. This is a bug.", columnName))
 	}
 
-	tag := extractTag(column)
+	tag := sqleSchema.ExtractTag(column)
 	if tag != existingCol.Tag && tag != schema.InvalidTag {
 		return errors.New("cannot change the tag of an existing column")
 	}
 
-	col, err := SqlColToDoltCol(existingCol.Tag, column)
+	col, err := sqleSchema.ToDoltCol(existingCol.Tag, column)
 	if err != nil {
 		return err
-	}
-
-	var defVal types.Value
-	if column.Default != nil {
-		defVal, err = col.TypeInfo.ConvertValueToNomsValue(column.Default)
-		if err != nil {
-			return err
-		}
 	}
 
 	fkCollection, err := root.GetForeignKeyCollection(ctx)
@@ -554,7 +543,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		}
 	}
 
-	updatedTable, err := alterschema.ModifyColumn(ctx, table, existingCol, col, defVal, orderToOrder(order))
+	updatedTable, err := alterschema.ModifyColumn(ctx, table, existingCol, col, orderToOrder(order))
 	if err != nil {
 		return err
 	}

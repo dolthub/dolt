@@ -25,6 +25,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	sqleSchema "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/hash"
@@ -102,7 +103,7 @@ func NewHistoryTable(ctx *sql.Context, db Database, tblName string) (sql.Table, 
 	}
 
 	tableName := doltdb.DoltHistoryTablePrefix + tblName
-	sqlSch, err := doltSchemaToSqlSchema(tableName, sch)
+	sqlSch, err := sqleSchema.FromDoltSchema(tableName, sch)
 
 	if err != nil {
 		return nil, err

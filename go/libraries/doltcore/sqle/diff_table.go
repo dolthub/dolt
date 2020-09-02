@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/liquidata-inc/go-mysql-server/sql"
+	"github.com/liquidata-inc/go-mysql-server/sql/parse"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -27,6 +28,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/expreval"
+	sqleSchema "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -113,8 +115,14 @@ func NewDiffTable(ctx *sql.Context, db Database, tblName string) (sql.Table, err
 		return nil, err
 	}
 
-	sqlSch, err := doltSchemaToSqlSchema(diffTblName, j.GetSchema())
+	sqlSch, err := sqleSchema.FromDoltSchema(diffTblName, j.GetSchema())
 
+	if err != nil {
+		return nil, err
+	}
+
+	// parses to literal, no need to pass through analyzer
+	defaultVal, err := parse.StringToColumnDefaultValue(ctx, fmt.Sprintf(`"%s"`, diffTypeModified))
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +130,7 @@ func NewDiffTable(ctx *sql.Context, db Database, tblName string) (sql.Table, err
 	sqlSch = append(sqlSch, &sql.Column{
 		Name:     diffTypeColName,
 		Type:     sql.Text,
-		Default:  diffTypeModified,
+		Default:  defaultVal,
 		Nullable: false,
 		Source:   diffTblName,
 	})

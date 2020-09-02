@@ -44,6 +44,8 @@ type encodedColumn struct {
 
 	TypeInfo encodedTypeInfo `noms:"typeinfo,omitempty" json:"typeinfo,omitempty"`
 
+	Default string `noms:"default,omitempty" json:"default,omitempty"`
+
 	Constraints []encodedConstraint `noms:"col_constraints" json:"col_constraints"`
 
 	// NB: all new fields must have the 'omitempty' annotation. See comment above
@@ -81,6 +83,7 @@ func encodeColumn(col schema.Column) encodedColumn {
 		col.KindString(),
 		col.IsPartOfPK,
 		encodeTypeInfo(col.TypeInfo),
+		col.Default,
 		encodeAllColConstraints(col.Constraints),
 	}
 }
@@ -99,7 +102,7 @@ func (nfd encodedColumn) decodeColumn() (schema.Column, error) {
 		return schema.Column{}, errors.New("cannot decode column due to unknown schema format")
 	}
 	colConstraints := decodeAllColConstraint(nfd.Constraints)
-	return schema.NewColumnWithTypeInfo(nfd.Name, nfd.Tag, typeInfo, nfd.IsPartOfPK, colConstraints...)
+	return schema.NewColumnWithTypeInfo(nfd.Name, nfd.Tag, typeInfo, nfd.IsPartOfPK, nfd.Default, colConstraints...)
 }
 
 type encodedConstraint struct {

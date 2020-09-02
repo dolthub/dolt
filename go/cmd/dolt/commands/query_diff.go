@@ -29,6 +29,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
+	sqleSchema "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/fwt"
@@ -68,7 +69,7 @@ func diffQuery(ctx context.Context, dEnv *env.DoltEnv, fromRoot, toRoot *doltdb.
 }
 
 func doltSchWithPKFromSqlSchema(sch sql.Schema) schema.Schema {
-	dSch, _ := dsqle.SqlSchemaToDoltResultSchema(sch)
+	dSch, _ := sqleSchema.ToDoltResultSchema(sch)
 	// make the first col the PK
 	pk := false
 	newCC, _ := schema.MapColCollection(dSch.GetAllCols(), func(col schema.Column) (column schema.Column, err error) {

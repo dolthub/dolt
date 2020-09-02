@@ -40,6 +40,9 @@ func createTestSchema() schema.Schema {
 		schema.NewColumn("last", 2, types.StringKind, false, schema.NotNullConstraint{}),
 		schema.NewColumn("age", 3, types.UintKind, false),
 	}
+	for i := range columns {
+		columns[i].Default = `""`
+	}
 
 	colColl, _ := schema.NewColCollection(columns...)
 	sch := schema.SchemaFromCols(colColl)
@@ -145,7 +148,7 @@ func TestTypeInfoMarshalling(t *testing.T) {
 		t.Run(sqlType.String(), func(t *testing.T) {
 			ti, err := typeinfo.FromSqlType(sqlType)
 			require.NoError(t, err)
-			col, err := schema.NewColumnWithTypeInfo("pk", 1, ti, true)
+			col, err := schema.NewColumnWithTypeInfo("pk", 1, ti, true, "")
 			require.NoError(t, err)
 			colColl, err := schema.NewColCollection(col)
 			require.NoError(t, err)
@@ -204,6 +207,8 @@ type testEncodedColumn struct {
 
 	TypeInfo encodedTypeInfo `noms:"typeinfo" json:"typeinfo"`
 
+	Default string `noms:"default" json:"default"`
+
 	Constraints []encodedConstraint `noms:"col_constraints" json:"col_constraints"`
 }
 
@@ -234,7 +239,7 @@ func (tec testEncodedColumn) decodeColumn() (schema.Column, error) {
 		return schema.Column{}, errors.New("cannot decode column due to unknown schema format")
 	}
 	colConstraints := decodeAllColConstraint(tec.Constraints)
-	return schema.NewColumnWithTypeInfo(tec.Name, tec.Tag, typeInfo, tec.IsPartOfPK, colConstraints...)
+	return schema.NewColumnWithTypeInfo(tec.Name, tec.Tag, typeInfo, tec.IsPartOfPK, tec.Default, colConstraints...)
 }
 
 func (tsd testSchemaData) decodeSchema() (schema.Schema, error) {
