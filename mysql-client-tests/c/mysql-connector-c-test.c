@@ -5,14 +5,15 @@
 MYSQL mysql;
 MYSQL *conn;
 
-const int QUERIES_SIZE = 4;
-char *queries[QUERIES_SIZE] = {
-			       "create table test (pk int, value int, primary key(pk))",
-			       "describe test",
-			       "select * from test",
-			       "insert into test (pk, value) values (0,0)", 
-			       "select * from test"
-};
+const int QUERIES_SIZE = 5;
+char *queries[QUERIES_SIZE] =
+  {
+   "create table test (pk int, value int, primary key(pk))",
+   "describe test",
+   "select * from test",
+   "insert into test (pk, value) values (0,0)", 
+   "select * from test"
+  };
 
 int main(int argc, char **argv) { 
 
@@ -22,26 +23,27 @@ int main(int argc, char **argv) {
   
   MYSQL *con = mysql_init(NULL);
 
-  if (con == NULL) {
+  if ( con == NULL ) {
       fprintf(stderr, "%s\n", mysql_error(con));
       exit(1);
   }
 
-  if (mysql_real_connect(con,
+  if ( mysql_real_connect(con,
 			 "127.0.0.1",
 			 user,
 			 "",
 			 db,
 			 port,
 			 NULL,
-			 0) == NULL) {
+			 0 ) == NULL) {
     fprintf(stderr, "%s\n", mysql_error(con));
     mysql_close(con);
     exit(1);
   }
 
-  for (int i = 0; i <= QUERIES_SIZE; i++ ) {
-    if (mysql_query(con, queries[i])) {
+  for ( int i = 0; i < QUERIES_SIZE; i++ ) {
+    printf("QUERY: %s\n", queries[i]);
+    if ( mysql_query(con, queries[i]) ) {
       fprintf(stderr, "%s\n", mysql_error(con));
       mysql_close(con);
       exit(1);
@@ -54,5 +56,5 @@ int main(int argc, char **argv) {
 
   mysql_close(con);
   
-  return 1;
+  return 0;
 }
