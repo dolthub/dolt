@@ -26,6 +26,9 @@ RUN apt-get -y install python3-pip
 # install curl
 RUN apt-get -y install curl
 
+# install pkg-config
+RUN apt-get -y install pkg-config
+
 # install mysql-client and associated C libraries
 RUN apt-get -y install mysql-client
 
