@@ -45,9 +45,6 @@ teardown() {
 }
 
 @test "c mysql connector" {
-    # Must set LDFLAGS and CFLAGS to something like:
-    # LDFLAGS="-L/usr/local/Cellar/mysql-client/8.0.21/lib -lmysqlclient"
-    # CFLAGS="-I/usr/local/Cellar/mysql-client/8.0.21/include/mysql"
-    make $BATS_TEST_DIRNAME/c/mysql-connector-c-test
+    (cd $BATS_TEST_DIRNAME/c; make)
     $BATS_TEST_DIRNAME/c/mysql-connector-c-test $USER $PORT $REPO_NAME
 }
