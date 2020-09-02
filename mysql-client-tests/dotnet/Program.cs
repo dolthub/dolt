@@ -18,10 +18,6 @@ public class Tutorial1
         var port = args[1];
         var db = args[2];
 
-        //Console.WriteLine(user);
-        //Console.WriteLine(port);
-        //Console.WriteLine(db);
-
         string connStr = $"server=127.0.0.1;user={user};database={db};port={port};";
         Console.WriteLine(connStr);
         MySqlConnection conn = new MySqlConnection(connStr);
@@ -38,6 +34,7 @@ public class Tutorial1
         {
             Console.WriteLine(ex.ToString());
         }
+
         conn.Close();
         Console.WriteLine("Done.");
         return 0;
@@ -60,16 +57,37 @@ public class Tutorial1
 
     public static void ExecuteTest(MySqlConnection conn)
     {
-        string sql = "SELECT * FROM test";
+        string sql = "SELECT count(*) FROM test";
         using var cmd = new MySqlCommand(sql, conn);
 
-        using MySqlDataReader rdr = cmd.ExecuteReader();
+        //using MySqlDataReader rdr = cmd.ExecuteReader();
 
-        while (rdr.Read())
+        try
         {
-            // make sure results are correct
-            Console.WriteLine(rdr[0] + " -- " + rdr[1]);
+            object result = cmd.ExecuteScalar();
+            if (result != null)
+            {
+                int r = Convert.ToInt32(result);
+                Console.WriteLine("Number of entries in the database is: " + r);
+            }
         }
-        rdr.Close();
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+        }
+
+        //object result = cmd.ExecuteScalar();
+        //if (result != null)
+        //{
+        //    int r = Convert.ToInt32(result);
+        //    Console.WriteLine("Number of entries in the database is: " + r);
+        //}
+
+        //while (rdr.Read())
+        //{
+        //    // make sure results are correct
+        //    Console.WriteLine(rdr);
+        //}
+        //rdr.Close();
     }
 }
