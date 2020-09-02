@@ -17,6 +17,8 @@ setup() {
     USER="dolt"
     dolt sql-server --host 0.0.0.0 --port=$PORT --user=$USER --loglevel=trace &
     SERVER_PID=$!
+    # Give the server a chance to start
+    sleep 1
 }
 
 teardown() {
@@ -43,6 +45,9 @@ teardown() {
 }
 
 @test "c mysql connector" {
-    LDFLAGS="-L/usr/local/Cellar/mysql-client/8.0.21/lib -lmysqlclient" CFLAGS="-I/usr/local/Cellar/mysql-client/8.0.21/include/mysql" make $BATS_TEST_DIRNAME/c/mysql-connector-c-test
+    # Must set LDFLAGS and CFLAGS to something like:
+    # LDFLAGS="-L/usr/local/Cellar/mysql-client/8.0.21/lib -lmysqlclient"
+    # CFLAGS="-I/usr/local/Cellar/mysql-client/8.0.21/include/mysql"
+    make $BATS_TEST_DIRNAME/c/mysql-connector-c-test
     $BATS_TEST_DIRNAME/c/mysql-connector-c-test $USER $PORT $REPO_NAME
 }
