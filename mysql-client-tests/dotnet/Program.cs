@@ -18,7 +18,7 @@ public class Tutorial1
         var port = args[1];
         var db = args[2];
 
-        string connStr = $"server=127.0.0.1;user={user};database={db};port={port};";
+        string connStr = $"server=127.0.0.1;user={user};database={db};port={port};CharSet=utf8";
         Console.WriteLine(connStr);
         MySqlConnection conn = new MySqlConnection(connStr);
         try
@@ -57,10 +57,11 @@ public class Tutorial1
 
     public static void ExecuteTest(MySqlConnection conn)
     {
-        string sql = "SELECT count(*) FROM test";
-        using var cmd = new MySqlCommand(sql, conn);
+        string sql = "SELECT count(*) as count FROM test";
+        //using var cmd = new MySqlCommand(sql, conn);
+        using (var cmd = new MySqlCommand(sql, conn))
 
-        //using MySqlDataReader rdr = cmd.ExecuteReader();
+            //using MySqlDataReader rdr = cmd.ExecuteReader();
 
         try
         {
