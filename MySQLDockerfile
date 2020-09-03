@@ -7,65 +7,45 @@ ENV GOFLAGS="-mod=readonly"
 RUN go build -o dolt ./cmd/dolt
 
 FROM ubuntu:18.04
-COPY --from=builder /root/building/go/dolt /usr/local/bin/dolt
-COPY ./mysql-client-tests /mysql-client-tests
-COPY ./mysql-client-tests-entrypoint.sh /mysql-client-tests/entrypoint.sh
 
-# install python
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt update -y
 RUN apt install -y software-properties-common
 
+# install python, libmysqlclient-dev, java, bats
 RUN add-apt-repository ppa:deadsnakes/ppa -y
-RUN apt install python3.8 -y
-RUN python3 -V
+RUN apt install -y \
+	python3.8 \
+	python3-pip \
+	curl \
+	pkg-config \
+	mysql-client \
+	libmysqlclient-dev \
+	openjdk-8-jdk \
+	ant \
+	ca-certificates-java \
+	bats
 
-# install pip
-RUN apt-get -y install python3-pip
-
-# install curl
-RUN apt-get -y install curl
-
-# install pkg-config
-RUN apt-get -y install pkg-config
-
-# install mysql-client and associated C libraries
-RUN apt-get -y install mysql-client
-RUN apt-get -y install libmysqlclient-dev
+# install node
+RUN curl -sL https://deb.nodesource.com/setup_14.x | bash -
+RUN apt install -y nodejs
 
 # install mysql connector and pymsql
-RUN pip3 install mysql-connector-python
-RUN pip3 install PyMySQL
-
-# install OpenJDK-8
-RUN apt-get update && \
-    apt-get install -y openjdk-8-jdk && \
-    apt-get install -y ant && \
-    apt-get clean;
+RUN pip3 install mysql-connector-python PyMySQL
 
 # Fix certificate issues
-RUN apt-get update && \
-    apt-get install ca-certificates-java && \
-    apt-get clean && \
-    update-ca-certificates -f;
+RUN update-ca-certificates -f
 
 # Setup JAVA_HOME -- useful for docker commandline
 ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64/
-RUN export JAVA_HOME
+
+COPY --from=builder /root/building/go/dolt /usr/local/bin/dolt
+COPY ./mysql-client-tests /mysql-client-tests
+COPY ./mysql-client-tests-entrypoint.sh /mysql-client-tests/entrypoint.sh
 
 # install mysql connector java
 RUN curl -L -o /mysql-client-tests/java/mysql-connector-java-8.0.21.jar \
   https://repo1.maven.org/maven2/mysql/mysql-connector-java/8.0.21/mysql-connector-java-8.0.21.jar
-
-# install node and npm
-RUN apt update
-RUN curl -sL https://deb.nodesource.com/setup_14.x | bash -
-RUN cat /etc/apt/sources.list.d/nodesource.list
-RUN apt -y install nodejs
-
-# install bats
-RUN apt-get -y update
-RUN apt-get -y install bats
 
 # install node deps
 WORKDIR /mysql-client-tests/node
