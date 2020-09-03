@@ -48,3 +48,7 @@ teardown() {
     (cd $BATS_TEST_DIRNAME/c; make clean; make)
     $BATS_TEST_DIRNAME/c/mysql-connector-c-test $USER $PORT $REPO_NAME
 }
+
+@test "dotnet mysql connector" {
+    dotnet run -- $USER $PORT $REPO_NAME
+}
