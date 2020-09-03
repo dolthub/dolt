@@ -309,6 +309,39 @@ teardown() {
     [[ "${#lines[@]}" = "4" ]] || false
 }
 
+@test "default-values: Table referenced with column" {
+    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT DEFAULT (test.pk))"
+    dolt sql -q "INSERT INTO test (pk) VALUES (1), (2)"
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "\`v1\` BIGINT DEFAULT (pk)" ]] || false
+}
+
+@test "default-values: Column referenced with name change" {
+    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT, v2 BIGINT DEFAULT (v1 + 1))"
+    dolt sql -q "INSERT INTO test (pk, v1) VALUES (1, 2)"
+    dolt sql -q "ALTER TABLE test RENAME COLUMN v1 to v1x"
+    dolt sql -q "INSERT INTO test (pk, v1x) VALUES (2, 3)"
+    dolt sql -q "ALTER TABLE test CHANGE COLUMN v1x v1y BIGINT"
+    dolt sql -q "INSERT INTO test (pk, v1y) VALUES (3, 4)"
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1y,v2" ]] || false
+    [[ "$output" =~ "1,2,3" ]] || false
+    [[ "$output" =~ "2,3,4" ]] || false
+    [[ "$output" =~ "3,4,5" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+    run dolt schema show
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "\`v2\` BIGINT DEFAULT (v1y + 1)" ]] || false
+}
+
 @test "default-values: Invalid literal for column type" {
     run dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 INT UNSIGNED DEFAULT -1)"
     [ "$status" -eq "1" ]
