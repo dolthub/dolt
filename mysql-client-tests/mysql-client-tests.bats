@@ -45,6 +45,6 @@ teardown() {
 }
 
 @test "c mysql connector" {
-    (cd $BATS_TEST_DIRNAME/c; make)
+    (cd $BATS_TEST_DIRNAME/c; make clean; make)
     $BATS_TEST_DIRNAME/c/mysql-connector-c-test $USER $PORT $REPO_NAME
 }

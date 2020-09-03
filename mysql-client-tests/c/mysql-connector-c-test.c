@@ -1,10 +1,11 @@
 #include <stdio.h>
 #include <mysql.h>
 
+#define QUERIES_SIZE 5
+
 MYSQL mysql;
 MYSQL *conn;
 
-const int QUERIES_SIZE = 5;
 char *queries[QUERIES_SIZE] =
   {
    "create table test (pk int, value int, primary key(pk))",
