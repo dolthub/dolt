@@ -1,5 +1,4 @@
-#import <stdio.h>
-
+#include <stdio.h>
 #include <mysql.h>
 
 MYSQL mysql;

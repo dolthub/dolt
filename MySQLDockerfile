@@ -31,6 +31,7 @@ RUN apt-get -y install pkg-config
 
 # install mysql-client and associated C libraries
 RUN apt-get -y install mysql-client
+RUN apt-get -y install libmysqlclient-dev
 
 # install mysql connector and pymsql
 RUN pip3 install mysql-connector-python
