@@ -23,6 +23,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 )
 
+//TODO: This is a relic from before `SHOW CREATE TABLE` was implemented. We should remove this file altogether.
 const TagCommentPrefix = "tag:"
 
 //  FmtCol converts a column to a string with a given indent space count, name width, and type width.  If nameWidth or
@@ -53,6 +54,10 @@ func FmtColWithNameAndType(indent, nameWidth, typeWidth int, colName, typeStr st
 		default:
 			panic("FmtColWithNameAndType doesn't know how to format constraint type: " + cnst.GetConstraintType())
 		}
+	}
+
+	if col.Default != "" {
+		colStr += " DEFAULT " + col.Default
 	}
 
 	return colStr
