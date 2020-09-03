@@ -45,3 +45,7 @@ teardown() {
 @test "c mysql connector" {
     
 }
+
+@test "dotnet mysql connector" {
+    dotnet run -- $USER $PORT $REPO_NAME
+}
