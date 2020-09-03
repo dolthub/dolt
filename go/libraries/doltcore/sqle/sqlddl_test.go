@@ -31,6 +31,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
+	sqleSchema "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/schema"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -237,8 +238,8 @@ func TestCreateTable(t *testing.T) {
 							PRIMARY KEY (ip));`,
 			expectedTable: "ip2nation",
 			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumn(t, "ip", 100, sql.Uint32, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "country", 101, sql.MustCreateStringWithDefaults(sqltypes.Char, 2), false, schema.NotNullConstraint{})),
+				schemaNewColumnWDefVal(t, "ip", 100, sql.Uint32, true, "0", schema.NotNullConstraint{}),
+				schemaNewColumnWDefVal(t, "country", 101, sql.MustCreateStringWithDefaults(sqltypes.Char, 2), false, `""`, schema.NotNullConstraint{})),
 		},
 		{
 			name:          "Test ip2nationCountries",
@@ -253,13 +254,13 @@ func TestCreateTable(t *testing.T) {
 							lon float NOT NULL default 0.0 COMMENT 'tag:106',
 							PRIMARY KEY (code));`,
 			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumn(t, "code", 100, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 4), true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "iso_code_2", 101, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 2), false, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "iso_code_3", 102, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 3), false),
-				schemaNewColumn(t, "iso_country", 103, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "country", 104, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "lat", 105, sql.Float32, false, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "lon", 106, sql.Float32, false, schema.NotNullConstraint{})),
+				schemaNewColumnWDefVal(t, "code", 100, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 4), true, `""`, schema.NotNullConstraint{}),
+				schemaNewColumnWDefVal(t, "iso_code_2", 101, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 2), false, `""`, schema.NotNullConstraint{}),
+				schemaNewColumnWDefVal(t, "iso_code_3", 102, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 3), false, `""`),
+				schemaNewColumnWDefVal(t, "iso_country", 103, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, `""`, schema.NotNullConstraint{}),
+				schemaNewColumnWDefVal(t, "country", 104, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, `""`, schema.NotNullConstraint{}),
+				schemaNewColumnWDefVal(t, "lat", 105, sql.Float32, false, "0", schema.NotNullConstraint{}),
+				schemaNewColumnWDefVal(t, "lon", 106, sql.Float32, false, "0", schema.NotNullConstraint{})),
 		},
 	}
 
@@ -415,21 +416,21 @@ func TestAddColumn(t *testing.T) {
 			name:  "alter add column not null",
 			query: "alter table people add (newColumn varchar(80) not null default 'default' comment 'tag:100')",
 			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
-				schemaNewColumn(t, "newColumn", 100, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false, schema.NotNullConstraint{})),
+				schemaNewColumnWDefVal(t, "newColumn", 100, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false, `"default"`, schema.NotNullConstraint{})),
 			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 100, types.String("default")),
 		},
 		{
 			name:  "alter add column not null with expression default",
 			query: "alter table people add (newColumn int not null default 2+2/2 comment 'tag:100')",
 			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
-				schemaNewColumn(t, "newColumn", 100, sql.Int32, false, schema.NotNullConstraint{})),
+				schemaNewColumnWDefVal(t, "newColumn", 100, sql.Int32, false, "(2 + 2 / 2)", schema.NotNullConstraint{})),
 			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 100, types.Int(3)),
 		},
 		{
 			name:  "alter add column not null with negative expression",
 			query: "alter table people add (newColumn float not null default -1.1 comment 'tag:100')",
 			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
-				schemaNewColumn(t, "newColumn", 100, sql.Float32, false, schema.NotNullConstraint{})),
+				schemaNewColumnWDefVal(t, "newColumn", 100, sql.Float32, false, "-1.1", schema.NotNullConstraint{})),
 			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 100, types.Float(float32(-1.1))),
 		},
 		{
@@ -1231,8 +1232,8 @@ func TestParseCreateTableStatement(t *testing.T) {
 							PRIMARY KEY (ip));`,
 			expectedTable: "ip2nation",
 			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumn(t, "ip", 100, sql.Uint32, true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "country", 101, sql.MustCreateStringWithDefaults(sqltypes.Char, 2), false, schema.NotNullConstraint{})),
+				schemaNewColumnWDefVal(t, "ip", 100, sql.Uint32, true, "0", schema.NotNullConstraint{}),
+				schemaNewColumnWDefVal(t, "country", 101, sql.MustCreateStringWithDefaults(sqltypes.Char, 2), false, `""`, schema.NotNullConstraint{})),
 		},
 		{
 			name:          "Test ip2nationCountries",
@@ -1247,13 +1248,13 @@ func TestParseCreateTableStatement(t *testing.T) {
 							lon float NOT NULL default 0.0 COMMENT 'tag:106',
 							PRIMARY KEY (code));`,
 			expectedSchema: dtestutils.CreateSchema(
-				schemaNewColumn(t, "code", 100, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 4), true, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "iso_code_2", 101, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 2), false, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "iso_code_3", 102, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 3), false),
-				schemaNewColumn(t, "iso_country", 103, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "country", 104, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "lat", 105, sql.Float32, false, schema.NotNullConstraint{}),
-				schemaNewColumn(t, "lon", 106, sql.Float32, false, schema.NotNullConstraint{})),
+				schemaNewColumnWDefVal(t, "code", 100, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 4), true, `""`, schema.NotNullConstraint{}),
+				schemaNewColumnWDefVal(t, "iso_code_2", 101, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 2), false, `""`, schema.NotNullConstraint{}),
+				schemaNewColumnWDefVal(t, "iso_code_3", 102, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 3), false, `""`),
+				schemaNewColumnWDefVal(t, "iso_country", 103, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, `""`, schema.NotNullConstraint{}),
+				schemaNewColumnWDefVal(t, "country", 104, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 255), false, `""`, schema.NotNullConstraint{}),
+				schemaNewColumnWDefVal(t, "lat", 105, sql.Float32, false, "0", schema.NotNullConstraint{}),
+				schemaNewColumnWDefVal(t, "lon", 106, sql.Float32, false, "0", schema.NotNullConstraint{})),
 		},
 	}
 
@@ -1263,7 +1264,7 @@ func TestParseCreateTableStatement(t *testing.T) {
 			ctx := context.Background()
 			root, _ := dEnv.WorkingRoot(ctx)
 
-			tblName, sch, err := ParseCreateTableStatement(ctx, root, tt.query)
+			tblName, sch, err := sqleSchema.ParseCreateTableStatement(ctx, root, tt.query)
 
 			if tt.expectedErr != "" {
 				require.Error(t, err)

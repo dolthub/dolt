@@ -179,12 +179,13 @@ func mapRefspecsToRemotes(refSpecs []ref.RemoteRefSpec, dEnv *env.DoltEnv) (map[
 }
 
 func fetchRefSpecs(ctx context.Context, mode ref.RefUpdateMode, dEnv *env.DoltEnv, rem env.Remote, refSpecs []ref.RemoteRefSpec) errhand.VerboseError {
-	for _, rs := range refSpecs {
-		srcDB, err := rem.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
+	srcDB, err := rem.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
 
-		if err != nil {
-			return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
-		}
+	if err != nil {
+		return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
+	}
+
+	for _, rs := range refSpecs {
 
 		branchRefs, err := srcDB.GetRefs(ctx)
 
@@ -204,7 +205,7 @@ func fetchRefSpecs(ctx context.Context, mode ref.RefUpdateMode, dEnv *env.DoltEn
 
 				switch mode {
 				case ref.ForceUpdate:
-					err = dEnv.DoltDB.SetHead(ctx, remoteTrackRef, srcDBCommit)
+					err = dEnv.DoltDB.SetHeadToCommit(ctx, remoteTrackRef, srcDBCommit)
 				case ref.FastForwardOnly:
 					ok, err := dEnv.DoltDB.CanFastForward(ctx, remoteTrackRef, srcDBCommit)
 					if !ok {
@@ -220,6 +221,12 @@ func fetchRefSpecs(ctx context.Context, mode ref.RefUpdateMode, dEnv *env.DoltEn
 				}
 			}
 		}
+	}
+
+	verr := fetchFollowTags(ctx, dEnv, srcDB, dEnv.DoltDB)
+
+	if verr != nil {
+		return verr
 	}
 
 	return nil
@@ -243,7 +250,7 @@ func fetchRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, s
 		return nil, errhand.BuildDError("error: unable to find '%s' on '%s'", srcRef.GetPath(), rem.Name).Build()
 	} else {
 		wg, progChan, pullerEventCh := runProgFuncs()
-		err = actions.Fetch(ctx, dEnv, destRef, srcDB, destDB, srcDBCommit, progChan, pullerEventCh)
+		err = actions.FetchCommit(ctx, dEnv, srcDB, destDB, srcDBCommit, progChan, pullerEventCh)
 		stopProgFuncs(wg, progChan, pullerEventCh)
 
 		if err != nil {
@@ -252,4 +259,59 @@ func fetchRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, s
 	}
 
 	return srcDBCommit, nil
+}
+
+// fetchFollowTags fetches all tags from the source DB whose commits have already
+// been fetched into the destination DB.
+// todo: potentially too expensive to iterate over all srcDB tags
+func fetchFollowTags(ctx context.Context, dEnv *env.DoltEnv, srcDB, destDB *doltdb.DoltDB) errhand.VerboseError {
+	err := actions.IterResolvedTags(ctx, srcDB, func(tag *doltdb.Tag) (stop bool, err error) {
+		stRef, err := tag.GetStRef()
+		if err != nil {
+			return true, err
+		}
+
+		tagHash := stRef.TargetHash()
+
+		tv, err := destDB.ValueReadWriter().ReadValue(ctx, tagHash)
+		if err != nil {
+			return true, err
+		}
+		if tv != nil {
+			// tag is already fetched
+			return false, nil
+		}
+
+		cmHash, err := tag.Commit.HashOf()
+		if err != nil {
+			return true, err
+		}
+
+		cv, err := destDB.ValueReadWriter().ReadValue(ctx, cmHash)
+		if err != nil {
+			return true, err
+		}
+		if cv == nil {
+			// neither tag nor commit has been fetched
+			return false, nil
+		}
+
+		wg, progChan, pullerEventCh := runProgFuncs()
+		err = actions.FetchTag(ctx, dEnv, srcDB, destDB, tag, progChan, pullerEventCh)
+		stopProgFuncs(wg, progChan, pullerEventCh)
+
+		if err != nil {
+			return true, err
+		}
+
+		err = destDB.SetHead(ctx, tag.GetDoltRef(), stRef)
+
+		return false, err
+	})
+
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	return nil
 }

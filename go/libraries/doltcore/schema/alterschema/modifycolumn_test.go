@@ -32,7 +32,6 @@ func TestModifyColumn(t *testing.T) {
 		name           string
 		existingColumn schema.Column
 		newColumn      schema.Column
-		defaultVal     types.Value
 		order          *ColumnOrder
 		expectedSchema schema.Schema
 		expectedRows   []row.Row
@@ -105,13 +104,6 @@ func TestModifyColumn(t *testing.T) {
 			expectedErr:    "A column with the name name already exists",
 		},
 		{
-			name:           "wrong type for default value",
-			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
-			newColumn:      schema.NewColumn("newId", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
-			defaultVal:     types.String("not a string"),
-			expectedErr:    "Type of default value (String) doesn't match type of column (UUID)",
-		},
-		{
 			name:           "type change",
 			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
 			newColumn:      schema.NewColumn("newId", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
@@ -129,7 +121,7 @@ func TestModifyColumn(t *testing.T) {
 			tbl, _, err := root.GetTable(ctx, tableName)
 			assert.NoError(t, err)
 
-			updatedTable, err := ModifyColumn(ctx, tbl, tt.existingColumn, tt.newColumn, tt.defaultVal, tt.order)
+			updatedTable, err := ModifyColumn(ctx, tbl, tt.existingColumn, tt.newColumn, tt.order)
 			if len(tt.expectedErr) > 0 {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectedErr)

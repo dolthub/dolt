@@ -28,6 +28,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
+	sqleSchema "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/schema"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -439,7 +440,7 @@ func mustGetDoltSchema(sch sql.Schema, tableName string, testEnv *env.DoltEnv) s
 		panic(err)
 	}
 
-	doltSchema, err := SqlSchemaToDoltSchema(context.Background(), wrt, tableName, sch)
+	doltSchema, err := sqleSchema.ToDoltSchema(context.Background(), wrt, tableName, sch)
 	if err != nil {
 		panic(err)
 	}

@@ -27,16 +27,22 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 var tagDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Create, list, delete tags.`,
-	LongDesc:  ``,
-	Synopsis:  []string{},
+	LongDesc: `If there are no non-option arguments, existing tags are listed.
+
+The command's second form creates a new tag named {{.LessThan}}tagname{{.GreaterThan}} which points to the current {{.EmphasisLeft}}HEAD{{.EmphasisRight}}, or {{.LessThan}}ref{{.GreaterThan}} if given. Optionally, a tag message can be passed using the {{.EmphasisLeft}}-m{{.EmphasisRight}} option. 
+
+With a {{.EmphasisLeft}}-d{{.EmphasisRight}}, {{.LessThan}}tagname{{.GreaterThan}} will be deleted.`,
+	Synopsis: []string{
+		`[-v]`,
+		`[-m {{.LessThan}}message{{.GreaterThan}}] {{.LessThan}}tagname{{.GreaterThan}} [{{.LessThan}}ref{{.GreaterThan}}]`,
+		`-d {{.LessThan}}tagname{{.GreaterThan}}`,
+	},
 }
 
 const (
@@ -55,11 +61,6 @@ func (cmd TagCmd) Description() string {
 	return "Create, list, delete tags."
 }
 
-// Hidden should return true if this command should be hidden from the help text
-func (cmd *TagCmd) Hidden() bool {
-	return true
-}
-
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd TagCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
@@ -69,9 +70,9 @@ func (cmd TagCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) er
 func (cmd TagCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	// todo: docs
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"start-point", "A commit that a new branch should point at."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"ref", "A commit ref that the tag should point at."})
 	ap.SupportsString(tagMessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the tag message.")
-	ap.SupportsFlag(verboseFlag, "v", "")
+	ap.SupportsFlag(verboseFlag, "v", "list tags along with their metadata.")
 	ap.SupportsFlag(deleteFlag, "d", "Delete a tag.")
 	return ap
 }
@@ -162,18 +163,13 @@ func getTagProps(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (props actio
 func listTags(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
 	var err error
 	if apr.Contains(verboseFlag) {
-		err = actions.IterResolvedTags(ctx, dEnv.DoltDB, func(tag ref.DoltRef, c *doltdb.Commit, meta *doltdb.TagMeta) (bool, error) {
-			h, err := c.HashOf()
-			if err != nil {
-				return false, nil
-			}
-
-			verboseTagPrint(tag, h, meta)
+		err = actions.IterResolvedTags(ctx, dEnv.DoltDB, func(tag *doltdb.Tag) (bool, error) {
+			verboseTagPrint(tag)
 			return false, nil
 		})
 	} else {
-		err = actions.IterResolvedTags(ctx, dEnv.DoltDB, func(tag ref.DoltRef, _ *doltdb.Commit, _ *doltdb.TagMeta) (bool, error) {
-			cli.Println(fmt.Sprintf("\t%s", tag.GetPath()))
+		err = actions.IterResolvedTags(ctx, dEnv.DoltDB, func(tag *doltdb.Tag) (bool, error) {
+			cli.Println(fmt.Sprintf("\t%s", tag.Name))
 			return false, nil
 		})
 	}
@@ -185,16 +181,18 @@ func listTags(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRes
 	return nil
 }
 
-func verboseTagPrint(tag ref.DoltRef, h hash.Hash, meta *doltdb.TagMeta) {
-	cli.Println(color.YellowString("%s\t%s", tag.GetPath(), h.String()))
+func verboseTagPrint(tag *doltdb.Tag) {
+	h, _ := tag.Commit.HashOf()
 
-	cli.Printf("Tagger: %s <%s>\n", meta.Name, meta.Email)
+	cli.Println(color.YellowString("%s\t%s", tag.Name, h.String()))
 
-	timeStr := meta.FormatTS()
+	cli.Printf("Tagger: %s <%s>\n", tag.Meta.Name, tag.Meta.Email)
+
+	timeStr := tag.Meta.FormatTS()
 	cli.Println("Date:  ", timeStr)
 
-	if meta.Description != "" {
-		formattedDesc := "\n\t" + strings.Replace(meta.Description, "\n", "\n\t", -1)
+	if tag.Meta.Description != "" {
+		formattedDesc := "\n\t" + strings.Replace(tag.Meta.Description, "\n", "\n\t", -1)
 		cli.Println(formattedDesc)
 	}
 	cli.Println("")

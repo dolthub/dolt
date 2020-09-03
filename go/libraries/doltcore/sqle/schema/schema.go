@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package schema
 
 import (
 	"context"
@@ -20,11 +20,13 @@ import (
 	"strconv"
 	"strings"
 
+	sqle "github.com/liquidata-inc/go-mysql-server"
 	"github.com/liquidata-inc/go-mysql-server/sql"
 	"github.com/liquidata-inc/go-mysql-server/sql/parse"
 	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
@@ -33,31 +35,53 @@ import (
 
 var ErrPartiallyDefinedTags = fmt.Errorf("must define tags for all or none of the schema columns")
 
-// doltSchemaToSqlSchema returns the sql.Schema corresponding to the dolt schema given.
-func doltSchemaToSqlSchema(tableName string, sch schema.Schema) (sql.Schema, error) {
-	cols := make([]*sql.Column, sch.GetAllCols().Size())
-
-	var i int
-	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		var innerErr error
-		cols[i], innerErr = doltColToSqlCol(tableName, col)
-		if innerErr != nil {
-			return true, innerErr
+// ApplyDefaults applies the default values to the given indices, returning the resulting row.
+func ApplyDefaults(ctx context.Context, doltSchema schema.Schema, sqlSchema sql.Schema, indicesOfColumns []int, dRow row.Row) (row.Row, error) {
+	if len(indicesOfColumns) == 0 {
+		return dRow, nil
+	}
+	sqlCtx, ok := ctx.(*sql.Context)
+	if !ok {
+		sqlCtx = sql.NewContext(ctx)
+	}
+	doltCols := doltSchema.GetAllCols()
+	oldSqlRow := make(sql.Row, len(sqlSchema))
+	for i, tag := range doltCols.Tags {
+		val, ok := dRow.GetColVal(tag)
+		if ok {
+			var err error
+			oldSqlRow[i], err = doltCols.TagToCol[tag].TypeInfo.ConvertNomsValueToValue(val)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			oldSqlRow[i] = nil
 		}
-		i++
-		return false, nil
-	})
-
-	return cols, err
+	}
+	newSqlRow, err := sqle.ApplyDefaults(sqlCtx, sqlSchema, indicesOfColumns, oldSqlRow)
+	if err != nil {
+		return nil, err
+	}
+	newRow := make(row.TaggedValues)
+	for i, tag := range doltCols.Tags {
+		if newSqlRow[i] == nil {
+			continue
+		}
+		val, err := doltCols.TagToCol[tag].TypeInfo.ConvertValueToNomsValue(newSqlRow[i])
+		if err != nil {
+			return nil, err
+		}
+		newRow[tag] = val
+	}
+	return row.New(dRow.Format(), doltSchema, newRow)
 }
 
-// SqlSchemaToDoltResultSchema returns a dolt Schema from the sql schema given, suitable for use as a result set. For
-// creating tables, use SqlSchemaToDoltSchema.
-// todo: this function never returns an error
-func SqlSchemaToDoltResultSchema(sqlSchema sql.Schema) (schema.Schema, error) {
+// ToDoltResultSchema returns a dolt Schema from the sql schema given, suitable for use as a result set. For
+// creating tables, use ToDoltSchema.
+func ToDoltResultSchema(sqlSchema sql.Schema) (schema.Schema, error) {
 	var cols []schema.Column
 	for i, col := range sqlSchema {
-		convertedCol, err := SqlColToDoltCol(uint64(i), col)
+		convertedCol, err := ToDoltCol(uint64(i), col)
 		if err != nil {
 			return nil, err
 		}
@@ -93,7 +117,7 @@ func ParseCreateTableStatement(ctx context.Context, root *doltdb.RootValue, quer
 	buf := sqlparser.NewTrackedBuffer(nil)
 	tn.Format(buf)
 	tableName := buf.String()
-	sch, err := SqlSchemaToDoltSchema(ctx, root, tableName, s)
+	sch, err := ToDoltSchema(ctx, root, tableName, s)
 
 	if err != nil {
 		return "", nil, err
@@ -102,19 +126,44 @@ func ParseCreateTableStatement(ctx context.Context, root *doltdb.RootValue, quer
 	return tableName, sch, err
 }
 
-// SqlSchemaToDoltResultSchema returns a dolt Schema from the sql schema given, suitable for use in creating a table.
-// For result set schemas, see SqlSchemaToDoltResultSchema.
-func SqlSchemaToDoltSchema(ctx context.Context, root *doltdb.RootValue, tableName string, sqlSchema sql.Schema) (schema.Schema, error) {
+func FromDoltSchema(tableName string, sch schema.Schema) (sql.Schema, error) {
+	cols := make([]*sqle.ColumnWithRawDefault, sch.GetAllCols().Size())
+
+	var i int
+	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		sqlType := col.TypeInfo.ToSqlType()
+		cols[i] = &sqle.ColumnWithRawDefault{
+			SqlColumn: &sql.Column{
+				Name:       col.Name,
+				Type:       sqlType,
+				Default:    nil,
+				Nullable:   col.IsNullable(),
+				Source:     tableName,
+				PrimaryKey: col.IsPartOfPK,
+				Comment:    fmt.Sprintf("tag:%d", col.Tag),
+			},
+			Default: col.Default,
+		}
+		i++
+		return false, nil
+	})
+
+	return sqle.ResolveDefaults(tableName, cols)
+}
+
+// ToDoltSchema returns a dolt Schema from the sql schema given, suitable for use in creating a table.
+// For result set schemas, see ToDoltResultSchema.
+func ToDoltSchema(ctx context.Context, root *doltdb.RootValue, tableName string, sqlSchema sql.Schema) (schema.Schema, error) {
 	var cols []schema.Column
 	var err error
 
 	// Users must define all or none of the column tags
-	userDefinedTags := extractTag(sqlSchema[0]) != schema.InvalidTag
+	userDefinedTags := ExtractTag(sqlSchema[0]) != schema.InvalidTag
 	var tags []uint64
 
 	if userDefinedTags {
 		for _, col := range sqlSchema {
-			commentTag := extractTag(col)
+			commentTag := ExtractTag(col)
 			tags = append(tags, commentTag)
 			if commentTag == schema.InvalidTag {
 				return nil, ErrPartiallyDefinedTags
@@ -133,7 +182,7 @@ func SqlSchemaToDoltSchema(ctx context.Context, root *doltdb.RootValue, tableNam
 			kinds = append(kinds, ti.NomsKind())
 
 			// check for user defined tags
-			if extractTag(col) != schema.InvalidTag {
+			if ExtractTag(col) != schema.InvalidTag {
 				return nil, ErrPartiallyDefinedTags
 			}
 		}
@@ -148,7 +197,7 @@ func SqlSchemaToDoltSchema(ctx context.Context, root *doltdb.RootValue, tableNam
 	}
 
 	for i, col := range sqlSchema {
-		convertedCol, err := SqlColToDoltCol(tags[i], col)
+		convertedCol, err := ToDoltCol(tags[i], col)
 		if err != nil {
 			return nil, err
 		}
@@ -168,22 +217,8 @@ func SqlSchemaToDoltSchema(ctx context.Context, root *doltdb.RootValue, tableNam
 	return schema.SchemaFromCols(colColl), nil
 }
 
-// doltColToSqlCol returns the SQL column corresponding to the dolt column given.
-func doltColToSqlCol(tableName string, col schema.Column) (*sql.Column, error) {
-	sqlType := col.TypeInfo.ToSqlType()
-	return &sql.Column{
-		Name:       col.Name,
-		Type:       sqlType,
-		Default:    nil,
-		Nullable:   col.IsNullable(),
-		Source:     tableName,
-		PrimaryKey: col.IsPartOfPK,
-		Comment:    fmt.Sprintf("tag:%d", col.Tag),
-	}, nil
-}
-
-// doltColToSqlCol returns the dolt column corresponding to the SQL column given
-func SqlColToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
+// ToDoltCol returns the dolt column corresponding to the SQL column given
+func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 	var constraints []schema.ColConstraint
 	if !col.Nullable {
 		constraints = append(constraints, schema.NotNullConstraint{})
@@ -193,11 +228,11 @@ func SqlColToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 		return schema.Column{}, err
 	}
 
-	return schema.NewColumnWithTypeInfo(col.Name, tag, typeInfo, col.PrimaryKey, constraints...)
+	return schema.NewColumnWithTypeInfo(col.Name, tag, typeInfo, col.PrimaryKey, col.Default.String(), constraints...)
 }
 
-// Extracts the optional comment tag from a column type defn, or InvalidTag if it can't be extracted
-func extractTag(col *sql.Column) uint64 {
+// ExtractTag extracts the optional comment tag from a column type defn, or InvalidTag if it can't be extracted
+func ExtractTag(col *sql.Column) uint64 {
 	if len(col.Comment) == 0 {
 		return schema.InvalidTag
 	}

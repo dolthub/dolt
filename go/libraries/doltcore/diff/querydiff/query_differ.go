@@ -24,6 +24,7 @@ import (
 	sqle "github.com/liquidata-inc/go-mysql-server"
 	"github.com/liquidata-inc/go-mysql-server/sql"
 	"github.com/liquidata-inc/go-mysql-server/sql/expression/function"
+	"github.com/liquidata-inc/go-mysql-server/sql/information_schema"
 	"github.com/liquidata-inc/go-mysql-server/sql/parse"
 	"github.com/liquidata-inc/go-mysql-server/sql/plan"
 	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
@@ -257,7 +258,7 @@ func makeSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValu
 	sqlCtx.SetCurrentDatabase("db")
 
 	engine := sqle.NewDefault()
-	engine.AddDatabase(sql.NewInformationSchemaDatabase(engine.Catalog))
+	engine.AddDatabase(information_schema.NewInformationSchemaDatabase(engine.Catalog))
 
 	dsess := dsqle.DSessFromSess(sqlCtx.Session)
 

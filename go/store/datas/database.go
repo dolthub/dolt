@@ -37,7 +37,7 @@ import (
 // to read data by inspecting the Head of a Dataset and write new data by
 // updating the Head of a Dataset via Commit() or similar. Particularly, new
 // data is not guaranteed to be persistent until after a Commit (Delete,
-// SetHead, or FastForward) operation completes.
+// SetHeadToCommit, or FastForward) operation completes.
 // The Database API is stateful, meaning that calls to GetDataset() or
 // Datasets() occurring after a call to Commit() (et al) will represent the
 // result of the Commit().
@@ -113,11 +113,11 @@ type Database interface {
 	// of a conflict, Delete returns an 'ErrMergeNeeded' error.
 	Delete(ctx context.Context, ds Dataset) (Dataset, error)
 
-	// SetHead ignores any lineage constraints (e.g. the current Head being in
+	// SetHeadToCommit ignores any lineage constraints (e.g. the current Head being in
 	// commit’s Parent set) and force-sets a mapping from datasetID: commit in
 	// this database.
 	// All Values that have been written to this Database are guaranteed to be
-	// persistent after SetHead(). If the update cannot be performed, e.g.,
+	// persistent after SetHeadToCommit(). If the update cannot be performed, e.g.,
 	// because another process moved the current Head out from under you,
 	// error will be non-nil.
 	// The newest snapshot of the Dataset is always returned, so the caller an

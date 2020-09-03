@@ -17,6 +17,8 @@ setup() {
     USER="dolt"
     dolt sql-server --host 0.0.0.0 --port=$PORT --user=$USER --loglevel=trace &
     SERVER_PID=$!
+    # Give the server a chance to start
+    sleep 1
 }
 
 teardown() {
@@ -43,7 +45,8 @@ teardown() {
 }
 
 @test "c mysql connector" {
-    
+    (cd $BATS_TEST_DIRNAME/c; make clean; make)
+    $BATS_TEST_DIRNAME/c/mysql-connector-c-test $USER $PORT $REPO_NAME
 }
 
 @test "dotnet mysql connector" {

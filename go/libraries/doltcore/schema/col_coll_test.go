@@ -26,10 +26,10 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-var firstNameCol = Column{"first", 0, types.StringKind, false, typeinfo.StringDefaultType, nil}
-var lastNameCol = Column{"last", 1, types.StringKind, false, typeinfo.StringDefaultType, nil}
-var firstNameCapsCol = Column{"FiRsT", 2, types.StringKind, false, typeinfo.StringDefaultType, nil}
-var lastNameCapsCol = Column{"LAST", 3, types.StringKind, false, typeinfo.StringDefaultType, nil}
+var firstNameCol = Column{"first", 0, types.StringKind, false, typeinfo.StringDefaultType, "", nil}
+var lastNameCol = Column{"last", 1, types.StringKind, false, typeinfo.StringDefaultType, "", nil}
+var firstNameCapsCol = Column{"FiRsT", 2, types.StringKind, false, typeinfo.StringDefaultType, "", nil}
+var lastNameCapsCol = Column{"LAST", 3, types.StringKind, false, typeinfo.StringDefaultType, "", nil}
 
 func TestGetByNameAndTag(t *testing.T) {
 	cols := []Column{firstNameCol, lastNameCol, firstNameCapsCol, lastNameCapsCol}
@@ -111,7 +111,7 @@ func TestNewColCollectionErrorHandling(t *testing.T) {
 	}{
 		{
 			name:        "tag collision",
-			cols:        []Column{firstNameCol, lastNameCol, {"collision", 0, types.StringKind, false, typeinfo.StringDefaultType, nil}},
+			cols:        []Column{firstNameCol, lastNameCol, {"collision", 0, types.StringKind, false, typeinfo.StringDefaultType, "", nil}},
 			expectedErr: ErrColTagCollision,
 		},
 	}
@@ -127,18 +127,18 @@ func TestNewColCollectionErrorHandling(t *testing.T) {
 
 func TestAppendAndItrInSortOrder(t *testing.T) {
 	cols := []Column{
-		{"0", 0, types.StringKind, false, typeinfo.StringDefaultType, nil},
-		{"2", 2, types.StringKind, false, typeinfo.StringDefaultType, nil},
-		{"4", 4, types.StringKind, false, typeinfo.StringDefaultType, nil},
-		{"3", 3, types.StringKind, false, typeinfo.StringDefaultType, nil},
-		{"1", 1, types.StringKind, false, typeinfo.StringDefaultType, nil},
+		{"0", 0, types.StringKind, false, typeinfo.StringDefaultType, "", nil},
+		{"2", 2, types.StringKind, false, typeinfo.StringDefaultType, "", nil},
+		{"4", 4, types.StringKind, false, typeinfo.StringDefaultType, "", nil},
+		{"3", 3, types.StringKind, false, typeinfo.StringDefaultType, "", nil},
+		{"1", 1, types.StringKind, false, typeinfo.StringDefaultType, "", nil},
 	}
 	cols2 := []Column{
-		{"7", 7, types.StringKind, false, typeinfo.StringDefaultType, nil},
-		{"9", 9, types.StringKind, false, typeinfo.StringDefaultType, nil},
-		{"5", 5, types.StringKind, false, typeinfo.StringDefaultType, nil},
-		{"8", 8, types.StringKind, false, typeinfo.StringDefaultType, nil},
-		{"6", 6, types.StringKind, false, typeinfo.StringDefaultType, nil},
+		{"7", 7, types.StringKind, false, typeinfo.StringDefaultType, "", nil},
+		{"9", 9, types.StringKind, false, typeinfo.StringDefaultType, "", nil},
+		{"5", 5, types.StringKind, false, typeinfo.StringDefaultType, "", nil},
+		{"8", 8, types.StringKind, false, typeinfo.StringDefaultType, "", nil},
+		{"6", 6, types.StringKind, false, typeinfo.StringDefaultType, "", nil},
 	}
 
 	colColl, _ := NewColCollection(cols...)
