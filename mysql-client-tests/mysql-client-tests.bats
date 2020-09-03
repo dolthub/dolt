@@ -50,5 +50,6 @@ teardown() {
 }
 
 @test "dotnet mysql connector" {
-    dotnet run -- $USER $PORT $REPO_NAME
+    cd $BATS_TEST_DIRNAME/dotnet/
+    dotnet run -- $USER $PORT $REPO_NAME 3>&-
 }
