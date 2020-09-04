@@ -51,5 +51,6 @@ teardown() {
 
 @test "dotnet mysql connector" {
     cd $BATS_TEST_DIRNAME/dotnet/
+    # dotnet run uses output channel 3 which conflicts with bats so we pipe it to null
     dotnet run -- $USER $PORT $REPO_NAME 3>&-
 }
