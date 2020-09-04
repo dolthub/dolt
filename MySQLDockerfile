@@ -61,4 +61,4 @@ WORKDIR /mysql-client-tests/node
 RUN npm install
 
 WORKDIR /mysql-client-tests
-#ENTRYPOINT ["/mysql-client-tests/entrypoint.sh"]
+ENTRYPOINT ["/mysql-client-tests/entrypoint.sh"]
