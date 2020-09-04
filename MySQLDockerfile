@@ -18,6 +18,7 @@ RUN apt install -y \
 	python3.8 \
 	python3-pip \
 	curl \
+	wget \
 	pkg-config \
 	mysql-client \
 	libmysqlclient-dev \
@@ -25,6 +26,14 @@ RUN apt install -y \
 	ant \
 	ca-certificates-java \
 	bats
+
+# install dotnet
+RUN wget https://packages.microsoft.com/config/ubuntu/18.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
+RUN dpkg -i packages-microsoft-prod.deb
+RUN apt-get update; \
+      apt-get install -y apt-transport-https && \
+      apt-get update && \
+      apt-get install -y dotnet-sdk-3.1
 
 # install node
 RUN curl -sL https://deb.nodesource.com/setup_14.x | bash -
@@ -52,4 +61,4 @@ WORKDIR /mysql-client-tests/node
 RUN npm install
 
 WORKDIR /mysql-client-tests
-ENTRYPOINT ["/mysql-client-tests/entrypoint.sh"]
+#ENTRYPOINT ["/mysql-client-tests/entrypoint.sh"]
