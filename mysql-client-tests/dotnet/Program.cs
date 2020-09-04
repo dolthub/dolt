@@ -4,13 +4,21 @@ using System.Data;
 using MySql.Data;
 using MySql.Data.MySqlClient;
 
-public class Tutorial1
+class TestException : Exception
+{
+    public TestException(string message)
+    {
+        Console.WriteLine(message);
+    }
+}
+
+public class DoltSQL
 {
     public static int Main(string[] args)
     {
         if (args.Length != 3)
         {
-            System.Console.WriteLine("Must supply $USER $PORT $REPO arguments.");
+            Console.WriteLine("Must supply $USER $PORT $REPO arguments.");
             return 1;
         }
 
@@ -18,17 +26,14 @@ public class Tutorial1
         var port = args[1];
         var db = args[2];
 
-        string connStr = $"server=127.0.0.1;user={user};database={db};port={port};CharSet=utf8";
-        Console.WriteLine(connStr);
+        string connStr = $"server=127.0.0.1;user={user};database={db};port={port};CharSet=utf8;";
         MySqlConnection conn = new MySqlConnection(connStr);
+
         try
         {
-            Console.WriteLine("Connecting to MySQL...");
             conn.Open();
-            // Perform database operations
-
             SetupTest(conn);
-            ExecuteTest(conn);
+            QueryTest(conn);
         }
         catch (Exception ex)
         {
@@ -36,7 +41,6 @@ public class Tutorial1
         }
 
         conn.Close();
-        Console.WriteLine("Done.");
         return 0;
     }
 
@@ -45,9 +49,6 @@ public class Tutorial1
         using var cmd = new MySqlCommand();
         cmd.Connection = conn;
 
-        cmd.CommandText = "DROP TABLE IF EXISTS test";
-        cmd.ExecuteNonQuery();
-
         cmd.CommandText = @"CREATE TABLE test (pk int, value int, primary key(pk))";
         cmd.ExecuteNonQuery();
 
@@ -55,40 +56,26 @@ public class Tutorial1
         cmd.ExecuteNonQuery();
     }
 
-    public static void ExecuteTest(MySqlConnection conn)
+    public static void QueryTest(MySqlConnection conn)
     {
         string sql = "SELECT count(*) as count FROM test";
-        //using var cmd = new MySqlCommand(sql, conn);
         using (var cmd = new MySqlCommand(sql, conn))
-
-            //using MySqlDataReader rdr = cmd.ExecuteReader();
-
         try
         {
             object result = cmd.ExecuteScalar();
             if (result != null)
             {
                 int r = Convert.ToInt32(result);
-                Console.WriteLine("Number of entries in the database is: " + r);
+                if (r != 1)
+                {
+                        TestException ex = new TestException($"Expected 1, Recieved {r}");
+                        throw ex;
+                }
             }
         }
         catch (Exception ex)
         {
             Console.WriteLine(ex.ToString());
         }
-
-        //object result = cmd.ExecuteScalar();
-        //if (result != null)
-        //{
-        //    int r = Convert.ToInt32(result);
-        //    Console.WriteLine("Number of entries in the database is: " + r);
-        //}
-
-        //while (rdr.Read())
-        //{
-        //    // make sure results are correct
-        //    Console.WriteLine(rdr);
-        //}
-        //rdr.Close();
     }
 }
