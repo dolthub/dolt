@@ -25,6 +25,7 @@ import (
 	"github.com/liquidata-inc/go-mysql-server/server"
 	"github.com/liquidata-inc/go-mysql-server/sql"
 	"github.com/liquidata-inc/go-mysql-server/sql/analyzer"
+	"github.com/liquidata-inc/go-mysql-server/sql/information_schema"
 	"github.com/liquidata-inc/vitess/go/mysql"
 	"github.com/sirupsen/logrus"
 
@@ -120,7 +121,7 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 		sqlEngine.AddDatabase(db)
 	}
 
-	sqlEngine.AddDatabase(sql.NewInformationSchemaDatabase(sqlEngine.Catalog))
+	sqlEngine.AddDatabase(information_schema.NewInformationSchemaDatabase(sqlEngine.Catalog))
 
 	hostPort := net.JoinHostPort(serverConfig.Host(), strconv.Itoa(serverConfig.Port()))
 	readTimeout := time.Duration(serverConfig.ReadTimeout()) * time.Millisecond

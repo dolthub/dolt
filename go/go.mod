@@ -44,12 +44,13 @@ require (
 	github.com/juju/fslock v0.0.0-20160525022230-4d5c94c67b4b
 	github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
+	github.com/lestrrat-go/strftime v1.0.3 // indirect
 	github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20200730200742-c031ec8cba06
-	github.com/liquidata-inc/go-mysql-server v0.6.1-0.20200820215800-6e65638249cd
+	github.com/liquidata-inc/go-mysql-server v0.6.1-0.20200904201710-c0c3f00f86ce
 	github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0
 	github.com/liquidata-inc/mmap-go v1.0.3
 	github.com/liquidata-inc/sqllogictest/go v0.0.0-20200320151923-b11801f10e15
-	github.com/liquidata-inc/vitess v0.0.0-20200810233321-367ca83596b2
+	github.com/liquidata-inc/vitess v0.0.0-20200828190113-f278600fb87c
 	github.com/mattn/go-colorable v0.1.6 // indirect
 	github.com/mattn/go-isatty v0.0.12
 	github.com/mattn/go-runewidth v0.0.9
@@ -80,12 +81,12 @@ require (
 	go.opencensus.io v0.22.4 // indirect
 	go.uber.org/zap v1.15.0
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
-	golang.org/x/net v0.0.0-20200707034311-ab3426394381
-	golang.org/x/sys v0.0.0-20200625212154-ddb9806d33ae
+	golang.org/x/net v0.0.0-20200904194848-62affa334b73
+	golang.org/x/sys v0.0.0-20200831180312-196b9ba8737a
 	golang.org/x/tools v0.0.0-20200622150058-fcc5b64fe1f1 // indirect
 	google.golang.org/api v0.28.0
-	google.golang.org/genproto v0.0.0-20200715011427-11fb19a81f2c // indirect
-	google.golang.org/grpc v1.30.0
+	google.golang.org/genproto v0.0.0-20200904004341-0bd0a958aa1d // indirect
+	google.golang.org/grpc v1.31.1
 	google.golang.org/protobuf v1.25.0
 	gopkg.in/square/go-jose.v2 v2.5.1
 	gopkg.in/src-d/go-errors.v1 v1.0.0

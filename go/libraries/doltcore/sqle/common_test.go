@@ -31,6 +31,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
+	sqleSchema "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/schema"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -113,9 +114,13 @@ func SubsetSchema(sch schema.Schema, colNames ...string) schema.Schema {
 }
 
 func schemaNewColumn(t *testing.T, name string, tag uint64, sqlType sql.Type, partOfPK bool, constraints ...schema.ColConstraint) schema.Column {
+	return schemaNewColumnWDefVal(t, name, tag, sqlType, partOfPK, "", constraints...)
+}
+
+func schemaNewColumnWDefVal(t *testing.T, name string, tag uint64, sqlType sql.Type, partOfPK bool, defaultVal string, constraints ...schema.ColConstraint) schema.Column {
 	typeInfo, err := typeinfo.FromSqlType(sqlType)
 	require.NoError(t, err)
-	col, err := schema.NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, constraints...)
+	col, err := schema.NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, defaultVal, constraints...)
 	require.NoError(t, err)
 	return col
 }
@@ -135,7 +140,7 @@ func CreateWorkingRootUpdate() map[string]envtestutils.TableUpdate {
 
 // Returns the dolt schema given as a sql.Schema, or panics.
 func mustSqlSchema(sch schema.Schema) sql.Schema {
-	sqlSchema, err := doltSchemaToSqlSchema("", sch)
+	sqlSchema, err := sqleSchema.FromDoltSchema("", sch)
 	if err != nil {
 		panic(err)
 	}
