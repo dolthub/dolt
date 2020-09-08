@@ -29,23 +29,23 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-const expectedCreateSQL = "CREATE TABLE `table_name` (\n" +
-	"  `id` BIGINT NOT NULL COMMENT 'tag:200',\n" +
-	"  `first_name` LONGTEXT NOT NULL COMMENT 'tag:201',\n" +
-	"  `last_name` LONGTEXT NOT NULL COMMENT 'tag:202',\n" +
-	"  `is_married` BIT(1) COMMENT 'tag:203',\n" +
-	"  `age` BIGINT COMMENT 'tag:204',\n" +
-	"  `rating` DOUBLE COMMENT 'tag:206',\n" +
-	"  `uuid` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin COMMENT 'tag:207',\n" +
-	"  `num_episodes` BIGINT UNSIGNED COMMENT 'tag:208',\n" +
-	"  PRIMARY KEY (`id`)\n" +
-	");"
-const expectedDropSql = "DROP TABLE `table_name`;"
-const expectedDropIfExistsSql = "DROP TABLE IF EXISTS `table_name`;"
-const expectedAddColSql = "ALTER TABLE `table_name` ADD `c0` BIGINT NOT NULL COMMENT 'tag:9';"
-const expectedDropColSql = "ALTER TABLE `table_name` DROP `first_name`;"
-const expectedRenameColSql = "ALTER TABLE `table_name` RENAME COLUMN `id` TO `pk`;"
-const expectedRenameTableSql = "RENAME TABLE `table_name` TO `new_table_name`;"
+const expectedCreateSQL = `CREATE TABLE table_name (
+  id BIGINT NOT NULL COMMENT 'tag:200',
+  first_name LONGTEXT NOT NULL COMMENT 'tag:201',
+  last_name LONGTEXT NOT NULL COMMENT 'tag:202',
+  is_married BIT(1) COMMENT 'tag:203',
+  age BIGINT COMMENT 'tag:204',
+  rating DOUBLE COMMENT 'tag:206',
+  uuid CHAR(36) CHARACTER SET ascii COLLATE ascii_bin COMMENT 'tag:207',
+  num_episodes BIGINT UNSIGNED COMMENT 'tag:208',
+  PRIMARY KEY (id)
+);`
+const expectedDropSql = "DROP TABLE table_name;"
+const expectedDropIfExistsSql = "DROP TABLE IF EXISTS table_name;"
+const expectedAddColSql = "ALTER TABLE table_name ADD c0 BIGINT NOT NULL COMMENT 'tag:9';"
+const expectedDropColSql = "ALTER TABLE table_name DROP first_name;"
+const expectedRenameColSql = "ALTER TABLE table_name RENAME COLUMN id TO pk;"
+const expectedRenameTableSql = "RENAME TABLE table_name TO new_table_name;"
 
 type test struct {
 	name           string
@@ -74,7 +74,7 @@ func TestTableDropIfExistsStmt(t *testing.T) {
 }
 
 func TestAlterTableAddColStmt(t *testing.T) {
-	newColDef := "`c0` BIGINT NOT NULL COMMENT 'tag:9'"
+	newColDef := "c0 BIGINT NOT NULL COMMENT 'tag:9'"
 	stmt := AlterTableAddColStmt("table_name", newColDef)
 
 	assert.Equal(t, expectedAddColSql, stmt)
@@ -107,19 +107,19 @@ func TestRowAsInsertStmt(t *testing.T) {
 			name:           "simple row",
 			row:            dtestutils.NewTypedRow(id, "some guy", 100, false, strPointer("normie")),
 			sch:            dtestutils.TypedSchema,
-			expectedOutput: "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) VALUES ('00000000-0000-0000-0000-000000000000','some guy',100,FALSE,'normie');",
+			expectedOutput: "INSERT INTO people (id,name,age,is_married,title) VALUES ('00000000-0000-0000-0000-000000000000','some guy',100,FALSE,'normie');",
 		},
 		{
 			name:           "embedded quotes",
 			row:            dtestutils.NewTypedRow(id, `It's "Mister Perfect" to you`, 100, false, strPointer("normie")),
 			sch:            dtestutils.TypedSchema,
-			expectedOutput: "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) VALUES ('00000000-0000-0000-0000-000000000000','It\\'s \\\"Mister Perfect\\\" to you',100,FALSE,'normie');",
+			expectedOutput: "INSERT INTO people (id,name,age,is_married,title) VALUES ('00000000-0000-0000-0000-000000000000','It\\'s \\\"Mister Perfect\\\" to you',100,FALSE,'normie');",
 		},
 		{
 			name:           "null values",
 			row:            dtestutils.NewTypedRow(id, "some guy", 100, false, nil),
 			sch:            dtestutils.TypedSchema,
-			expectedOutput: "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) VALUES ('00000000-0000-0000-0000-000000000000','some guy',100,FALSE,NULL);",
+			expectedOutput: "INSERT INTO people (id,name,age,is_married,title) VALUES ('00000000-0000-0000-0000-000000000000','some guy',100,FALSE,NULL);",
 		},
 	}
 
@@ -132,7 +132,7 @@ func TestRowAsInsertStmt(t *testing.T) {
 		name:           "negative values and columns with spaces",
 		row:            dtestutils.NewRow(trickySch, types.Float(-3.14), types.Int(-42)),
 		sch:            trickySch,
-		expectedOutput: "INSERT INTO `people` (`a name with spaces`,`anotherColumn`) VALUES (-3.14,-42);",
+		expectedOutput: "INSERT INTO people (`a name with spaces`,anotherColumn) VALUES (-3.14,-42);",
 	})
 
 	for _, tt := range tests {
@@ -156,7 +156,7 @@ func TestRowAsDeleteStmt(t *testing.T) {
 			name:           "negative values and columns with spaces",
 			row:            dtestutils.NewRow(trickySch, types.Float(-3.14), types.Int(-42)),
 			sch:            trickySch,
-			expectedOutput: "DELETE FROM `tricky` WHERE (`a name with spaces`=-42);",
+			expectedOutput: "DELETE FROM tricky WHERE (`a name with spaces`=-42);",
 		},
 	}
 
@@ -178,19 +178,19 @@ func TestRowAsUpdateStmt(t *testing.T) {
 			name:           "simple row",
 			row:            dtestutils.NewTypedRow(id, "some guy", 100, false, strPointer("normie")),
 			sch:            dtestutils.TypedSchema,
-			expectedOutput: "UPDATE `people` SET `name`='some guy',`age`=100,`is_married`=FALSE,`title`='normie' WHERE (`id`='00000000-0000-0000-0000-000000000000');",
+			expectedOutput: "UPDATE people SET name='some guy',age=100,is_married=FALSE,title='normie' WHERE (id='00000000-0000-0000-0000-000000000000');",
 		},
 		{
 			name:           "embedded quotes",
 			row:            dtestutils.NewTypedRow(id, `It's "Mister Perfect" to you`, 100, false, strPointer("normie")),
 			sch:            dtestutils.TypedSchema,
-			expectedOutput: "UPDATE `people` SET `name`='It\\'s \\\"Mister Perfect\\\" to you',`age`=100,`is_married`=FALSE,`title`='normie' WHERE (`id`='00000000-0000-0000-0000-000000000000');",
+			expectedOutput: "UPDATE people SET name='It\\'s \\\"Mister Perfect\\\" to you',age=100,is_married=FALSE,title='normie' WHERE (id='00000000-0000-0000-0000-000000000000');",
 		},
 		{
 			name:           "null values",
 			row:            dtestutils.NewTypedRow(id, "some guy", 100, false, nil),
 			sch:            dtestutils.TypedSchema,
-			expectedOutput: "UPDATE `people` SET `name`='some guy',`age`=100,`is_married`=FALSE,`title`=NULL WHERE (`id`='00000000-0000-0000-0000-000000000000');",
+			expectedOutput: "UPDATE people SET name='some guy',age=100,is_married=FALSE,title=NULL WHERE (id='00000000-0000-0000-0000-000000000000');",
 		},
 	}
 
@@ -203,7 +203,7 @@ func TestRowAsUpdateStmt(t *testing.T) {
 		name:           "negative values and columns with spaces",
 		row:            dtestutils.NewRow(trickySch, types.Float(-3.14), types.Int(-42)),
 		sch:            trickySch,
-		expectedOutput: "UPDATE `people` SET `a name with spaces`=-3.14 WHERE (`anotherColumn`=-42);",
+		expectedOutput: "UPDATE people SET `a name with spaces`=-3.14 WHERE (anotherColumn=-42);",
 	})
 
 	for _, tt := range tests {

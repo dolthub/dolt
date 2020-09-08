@@ -17,6 +17,7 @@ package sqlfmt
 import (
 	"bytes"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/liquidata-inc/vitess/go/sqltypes"
@@ -29,9 +30,15 @@ import (
 
 const singleQuote = `'`
 
+var doesNotNeedBackticks = regexp.MustCompile(`^[_0-9a-zA-Z]+$`)
+
+
 // Quotes the identifier given with backticks.
 func QuoteIdentifier(s string) string {
-	return "`" + s + "`"
+	if doesNotNeedBackticks.MatchString(s) {
+		return s
+	}
+	return fmt.Sprintf("`%s`", s)
 }
 
 // QuoteComment quotes the given string with apostrophes, and escapes any contained within the string.

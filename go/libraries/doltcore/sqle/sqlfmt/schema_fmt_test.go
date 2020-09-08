@@ -36,28 +36,28 @@ func TestFmtCol(t *testing.T) {
 			0,
 			0,
 			0,
-			"`first` LONGTEXT COMMENT 'tag:0'",
+			"first LONGTEXT COMMENT 'tag:0'",
 		},
 		{
 			schema.NewColumn("last", 123, types.IntKind, true),
 			2,
 			0,
 			0,
-			"  `last` BIGINT COMMENT 'tag:123'",
+			"  last BIGINT COMMENT 'tag:123'",
 		},
 		{
 			schema.NewColumn("title", 2, types.UintKind, true),
 			0,
 			10,
 			0,
-			"   `title` BIGINT UNSIGNED COMMENT 'tag:2'",
+			"     title BIGINT UNSIGNED COMMENT 'tag:2'",
 		},
 		{
 			schema.NewColumn("aoeui", 52, types.UintKind, true),
 			0,
 			10,
 			15,
-			"   `aoeui` BIGINT UNSIGNED COMMENT 'tag:52'",
+			"     aoeui BIGINT UNSIGNED COMMENT 'tag:52'",
 		},
 	}
 
