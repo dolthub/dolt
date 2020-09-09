@@ -35,6 +35,10 @@ teardown() {
     python3 $BATS_TEST_DIRNAME/python/pymysql-test.py $USER $PORT $REPO_NAME
 }
 
+@test "python sqlachemy client" {
+    python3 $BATS_TEST_DIRNAME/python/sqlalchemy-test.py $USER $PORT $REPO_NAME
+}
+
 @test "mysql-connector-java client" {
     javac $BATS_TEST_DIRNAME/java/MySQLConnectorTest.java
     java -cp $BATS_TEST_DIRNAME/java:$BATS_TEST_DIRNAME/java/mysql-connector-java-8.0.21.jar MySQLConnectorTest $USER $PORT $REPO_NAME
