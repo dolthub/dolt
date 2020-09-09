@@ -40,7 +40,7 @@ RUN curl -sL https://deb.nodesource.com/setup_14.x | bash -
 RUN apt install -y nodejs
 
 # install mysql connector and pymsql
-RUN pip3 install mysql-connector-python PyMySQL
+RUN pip3 install mysql-connector-python PyMySQL sqlalchemy
 
 # Fix certificate issues
 RUN update-ca-certificates -f
