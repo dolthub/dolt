@@ -25,7 +25,9 @@ RUN apt install -y \
 	openjdk-8-jdk \
 	ant \
 	ca-certificates-java \
-	bats
+	bats \
+        perl \
+	cpanminus
 
 # install dotnet
 RUN wget https://packages.microsoft.com/config/ubuntu/18.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
@@ -59,6 +61,9 @@ RUN curl -L -o /mysql-client-tests/java/mysql-connector-java-8.0.21.jar \
 # install node deps
 WORKDIR /mysql-client-tests/node
 RUN npm install
+
+# install cpan dependencies
+RUN cpanm DBD::mysql
 
 WORKDIR /mysql-client-tests
 ENTRYPOINT ["/mysql-client-tests/entrypoint.sh"]
