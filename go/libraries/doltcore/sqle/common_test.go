@@ -75,8 +75,22 @@ func executeModify(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValu
 		return nil, err
 	}
 
-	_, _, err = engine.Query(sqlCtx, query)
+	_, iter, err := engine.Query(sqlCtx, query)
+	if err != nil {
+		return nil, err
+	}
 
+	for {
+		_, err := iter.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	err = iter.Close()
 	if err != nil {
 		return nil, err
 	}
