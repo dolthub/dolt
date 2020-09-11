@@ -1285,9 +1285,14 @@ func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, 
 	return nil
 }
 
-func printOKResult(ctx context.Context, iter sql.RowIter) error {
+func printOKResult(ctx context.Context, iter sql.RowIter) (returnErr error) {
 	row, err := iter.Next()
-	defer iter.Close()
+	defer func() {
+		err := iter.Close()
+		if returnErr == nil {
+			returnErr = err
+		}
+	}()
 
 	if err != nil {
 		return err
