@@ -60,10 +60,7 @@ func (d *DoltHarness) SkipQueryTest(query string) bool {
 		lowerQuery == "show variables" || // we set extra variables
 		strings.Contains(lowerQuery, "show create table") || // we set extra comment info
 		strings.Contains(lowerQuery, "show indexes from") || // we create / expose extra indexes (for foreign keys)
-		strings.Contains(lowerQuery, "on duplicate key update") || // not working yet
-		strings.Contains(lowerQuery, `update mytable set i = ("one", "two")`) ||
-			strings.Contains(lowerQuery, `update mytable set i = "one"`) ||
-			strings.Contains(lowerQuery, `update floattable set f64 = "one"`)
+		strings.Contains(lowerQuery, "on duplicate key update") // not working yet
 }
 
 

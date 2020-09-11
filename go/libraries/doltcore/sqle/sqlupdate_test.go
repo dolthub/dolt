@@ -315,33 +315,31 @@ var BasicUpdateTests = []UpdateTest{
 		UpdateQuery: `update people set first_name = null where id = 0`,
 		ExpectedErr: "Constraint failed for column 'first_name': Not null",
 	},
-	// TODO: fix
-	// {
-	// 	Name:        "type mismatch list -> string",
-	// 	UpdateQuery: `update people set first_name = ("one", "two") where id = 0`,
-	// 	ExpectedErr: "Type mismatch",
-	// },
+	{
+		Name:        "type mismatch list -> string",
+		UpdateQuery: `update people set first_name = ("one", "two") where id = 0`,
+		ExpectedErr: "Type mismatch",
+	},
 	{
 		Name:        "type mismatch int -> uuid",
 		UpdateQuery: `update people set uuid = 0 where id = 0`,
 		ExpectedErr: "Type mismatch",
 	},
-	// TODO: fix
-	// {
-	// 	Name:        "type mismatch string -> int",
-	// 	UpdateQuery: `update people set age = "pretty old" where id = 0`,
-	// 	ExpectedErr: "Type mismatch",
-	// },
-	// {
-	// 	Name:        "type mismatch string -> float",
-	// 	UpdateQuery: `update people set rating = "great" where id = 0`,
-	// 	ExpectedErr: "Type mismatch",
-	// },
-	// {
-	// 	Name:        "type mismatch string -> uint",
-	// 	UpdateQuery: `update people set num_episodes = "all of them" where id = 0`,
-	// 	ExpectedErr: "Type mismatch",
-	// },
+	{
+		Name:        "type mismatch string -> int",
+		UpdateQuery: `update people set age = "pretty old" where id = 0`,
+		ExpectedErr: "Type mismatch",
+	},
+	{
+		Name:        "type mismatch string -> float",
+		UpdateQuery: `update people set rating = "great" where id = 0`,
+		ExpectedErr: "Type mismatch",
+	},
+	{
+		Name:        "type mismatch string -> uint",
+		UpdateQuery: `update people set num_episodes = "all of them" where id = 0`,
+		ExpectedErr: "Type mismatch",
+	},
 	{
 		Name:        "type mismatch string -> uuid",
 		UpdateQuery: `update people set uuid = "not a uuid string" where id = 0`,
