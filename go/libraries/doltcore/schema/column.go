@@ -131,6 +131,7 @@ func (c Column) Equals(other Column) bool {
 		c.Kind == other.Kind &&
 		c.IsPartOfPK == other.IsPartOfPK &&
 		c.TypeInfo.Equals(other.TypeInfo) &&
+		c.Default == other.Default &&
 		ColConstraintsAreEqual(c.Constraints, other.Constraints)
 }
 
