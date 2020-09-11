@@ -944,7 +944,7 @@ func processBatchQuery(ctx *sql.Context, query string, se *sqlEngine) error {
 	return nil
 }
 
-func processNonInsertBatchQuery(ctx *sql.Context, se *sqlEngine, query string, sqlStatement sqlparser.Statement) error {
+func processNonInsertBatchQuery(ctx *sql.Context, se *sqlEngine, query string, sqlStatement sqlparser.Statement) (returnErr error) {
 	// We need to commit whatever batch edits we've accumulated so far before executing the query
 	err := flushBatchedEdits(ctx, se)
 	if err != nil {
@@ -957,7 +957,12 @@ func processNonInsertBatchQuery(ctx *sql.Context, se *sqlEngine, query string, s
 	}
 
 	if rowIter != nil {
-		defer rowIter.Close()
+		defer func() {
+			err := rowIter.Close()
+			if returnErr == nil {
+				returnErr = err
+			}
+		}()
 		err = mergeResultIntoStats(sqlStatement, rowIter, batchEditStats)
 		if err != nil {
 			return fmt.Errorf("error executing statement: %v", err.Error())
