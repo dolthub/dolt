@@ -46,11 +46,11 @@ require (
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/lestrrat-go/strftime v1.0.3 // indirect
 	github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20200730200742-c031ec8cba06
-	github.com/liquidata-inc/go-mysql-server v0.6.1-0.20200904201710-c0c3f00f86ce
+	github.com/liquidata-inc/go-mysql-server v0.6.1-0.20200911214625-e81d5c813cb5
 	github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0
 	github.com/liquidata-inc/mmap-go v1.0.3
 	github.com/liquidata-inc/sqllogictest/go v0.0.0-20200320151923-b11801f10e15
-	github.com/liquidata-inc/vitess v0.0.0-20200828190113-f278600fb87c
+	github.com/liquidata-inc/vitess v0.0.0-20200911213404-87f76781a7c7
 	github.com/mattn/go-colorable v0.1.6 // indirect
 	github.com/mattn/go-isatty v0.0.12
 	github.com/mattn/go-runewidth v0.0.9
