@@ -601,6 +601,7 @@ func dumbDownSchema(in schema.Schema) (schema.Schema, error) {
 	err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		col.Name = strconv.FormatUint(tag, 10)
 		col.Constraints = nil
+		col.Default = ""
 		dumbCols = append(dumbCols, col)
 
 		return false, nil
@@ -813,7 +814,7 @@ func createSplitter(fromSch schema.Schema, toSch schema.Schema, joiner *rowconv.
 
 		unionSch, err = untyped.UntypedSchemaUnion(dumbNewSch, dumbOldSch)
 		if err != nil {
-			return nil, nil, errhand.BuildDError("Failed to merge schemas").Build()
+			return nil, nil, errhand.BuildDError("Failed to merge schemas").AddCause(err).Build()
 		}
 
 	} else {
