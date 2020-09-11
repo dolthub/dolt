@@ -210,11 +210,13 @@ func drainIterator(iter sql.RowIter) error {
 	for {
 		_, err := iter.Next()
 		if err == io.EOF {
-			return nil
+			break
 		} else if err != nil {
 			return err
 		}
 	}
+
+	return iter.Close()
 }
 
 // This shouldn't be necessary -- the fact that an iterator can return an error but not clean up after itself in all
