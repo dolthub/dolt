@@ -173,7 +173,7 @@ func (te *TableEditor) GetIndexedRows(ctx context.Context, key types.Tuple, inde
 			return nil, err
 		}
 		if fieldsVal == nil {
-			keyStr, err :=  formatKey(ctx, te.nbf, key)
+			keyStr, err := formatKey(ctx, te.nbf, key)
 			if err != nil {
 				return nil, err
 			}
@@ -461,7 +461,7 @@ func formatKey(ctx context.Context, nbf *types.NomsBinFormat, key types.Value) (
 		if err != nil {
 			return "", err
 		}
-		if i % 2 == 1 {
+		if i%2 == 1 {
 			vals = append(vals, val)
 		}
 	}

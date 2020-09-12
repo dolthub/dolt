@@ -63,7 +63,6 @@ func (d *DoltHarness) SkipQueryTest(query string) bool {
 		strings.Contains(lowerQuery, "on duplicate key update") // not working yet
 }
 
-
 func (d *DoltHarness) Parallelism() int {
 	// always test with some parallelism
 	parallelism := runtime.NumCPU()
