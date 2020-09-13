@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
@@ -173,7 +174,7 @@ func (te *TableEditor) GetIndexedRows(ctx context.Context, key types.Tuple, inde
 			return nil, err
 		}
 		if fieldsVal == nil {
-			keyStr, err := formatKey(ctx, te.nbf, key)
+			keyStr, err := formatKey(ctx, key)
 			if err != nil {
 				return nil, err
 			}
@@ -247,7 +248,7 @@ func (te *TableEditor) InsertRow(ctx context.Context, dRow row.Row) error {
 	// If we've already inserted this key as part of this insert operation, that's an error. Inserting a row that
 	// already exists in the table will be handled in Close().
 	if _, ok := te.tea.addedKeys[keyHash]; ok {
-		keyStr, err := formatKey(ctx, te.nbf, key)
+		keyStr, err := formatKey(ctx, key)
 		if err != nil {
 			return err
 		}
@@ -400,7 +401,7 @@ func (te *TableEditor) flushEditAccumulator(ctx context.Context, teaInterface in
 				return errhand.BuildDError("failed to read table").AddCause(err).Build()
 			}
 			if rowExists {
-				keyStr, err := formatKey(ctx, te.nbf, addedKey)
+				keyStr, err := formatKey(ctx, addedKey)
 				if err != nil {
 					return err
 				}
@@ -443,14 +444,14 @@ func (te *TableEditor) flushEditAccumulator(ctx context.Context, teaInterface in
 	return nil
 }
 
-// formatKey returns a comma-separated string represnetation of the key given.
-func formatKey(ctx context.Context, nbf *types.NomsBinFormat, key types.Value) (string, error) {
+// formatKey returns a comma-separated string representation of the key given.
+func formatKey(ctx context.Context, key types.Value) (string, error) {
 	tuple, ok := key.(types.Tuple)
 	if !ok {
 		return "", fmt.Errorf("Expected types.Tuple but got %T", key)
 	}
 
-	var vals []types.Value
+	var vals []string
 	iter, err := tuple.Iterator()
 	if err != nil {
 		return "", err
@@ -462,16 +463,15 @@ func formatKey(ctx context.Context, nbf *types.NomsBinFormat, key types.Value) (
 			return "", err
 		}
 		if i%2 == 1 {
-			vals = append(vals, val)
+			str, err := types.EncodedValue(ctx, val)
+			if err != nil {
+				return "", err
+			}
+			vals = append(vals, str)
 		}
 	}
 
-	valsOnlyTuple, err := types.NewTuple(nbf, vals...)
-	if err != nil {
-		return "", err
-	}
-
-	return types.EncodedValue(ctx, valsOnlyTuple)
+	return fmt.Sprintf("(%s)", strings.Join(vals, ",")), nil
 }
 
 func (te *TableEditor) getIndexIterator(ctx context.Context, key types.Tuple, indexName string) (table.TableReadCloser, error) {
