@@ -76,8 +76,9 @@ func NewCommit(ctx context.Context, value types.Value, parentsList types.List, m
 
 // FindCommonAncestor returns the most recent common ancestor of c1 and c2, if
 // one exists, setting ok to true. If there is no common ancestor, ok is set
-// to false.
-func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr types.ValueReader) (a types.Ref, ok bool, err error) {
+// to false. Refs of |c1| are dereferenced through |vr1|, while refs of |c2|
+// are dereference through |vr2|.
+func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (a types.Ref, ok bool, err error) {
 	t1, err := types.TypeOf(c1)
 
 	if err != nil {
@@ -107,12 +108,12 @@ func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr types.ValueRea
 			if common, ok := findCommonRef(c1Parents, c2Parents); ok {
 				return common, true, nil
 			}
-			parentsToQueue(ctx, c1Parents, c1Q, vr)
-			parentsToQueue(ctx, c2Parents, c2Q, vr)
+			parentsToQueue(ctx, c1Parents, c1Q, vr1)
+			parentsToQueue(ctx, c2Parents, c2Q, vr2)
 		} else if c1Ht > c2Ht {
-			parentsToQueue(ctx, c1Q.PopRefsOfHeight(c1Ht), c1Q, vr)
+			parentsToQueue(ctx, c1Q.PopRefsOfHeight(c1Ht), c1Q, vr1)
 		} else {
-			parentsToQueue(ctx, c2Q.PopRefsOfHeight(c2Ht), c2Q, vr)
+			parentsToQueue(ctx, c2Q.PopRefsOfHeight(c2Ht), c2Q, vr2)
 		}
 	}
 
@@ -134,18 +135,28 @@ func parentsToQueue(ctx context.Context, refs types.RefSlice, q *types.RefByHeig
 		}
 
 		c := v.(types.Struct)
-		ps, ok, err := c.MaybeGet(ParentsField)
-
+		ps, ok, err := c.MaybeGet(ParentsListField)
 		if err != nil {
 			return err
 		}
-
 		if ok {
-			p := ps.(types.Set)
-			err = p.IterAll(ctx, func(v types.Value) error {
+			p := ps.(types.List)
+			err = p.IterAll(ctx, func(v types.Value, _ uint64) error {
 				q.PushBack(v.(types.Ref))
 				return nil
 			})
+		} else {
+			ps, ok, err := c.MaybeGet(ParentsField)
+			if err != nil {
+				return err
+			}
+			if ok {
+				p := ps.(types.Set)
+				err = p.IterAll(ctx, func(v types.Value) error {
+					q.PushBack(v.(types.Ref))
+					return nil
+				})
+			}
 		}
 	}
 

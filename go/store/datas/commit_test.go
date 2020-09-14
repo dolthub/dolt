@@ -258,7 +258,7 @@ func TestFindCommonAncestor(t *testing.T) {
 
 	// Assert that c is the common ancestor of a and b
 	assertCommonAncestor := func(expected, a, b types.Struct) {
-		found, ok, err := FindCommonAncestor(context.Background(), mustRef(types.NewRef(a, types.Format_7_18)), mustRef(types.NewRef(b, types.Format_7_18)), db)
+		found, ok, err := FindCommonAncestor(context.Background(), mustRef(types.NewRef(a, types.Format_7_18)), mustRef(types.NewRef(b, types.Format_7_18)), db, db)
 		assert.NoError(err)
 
 		if assert.True(ok) {
@@ -317,7 +317,7 @@ func TestFindCommonAncestor(t *testing.T) {
 	assertCommonAncestor(a1, a6, c3) // Traversing multiple parents on both sides
 
 	// No common ancestor
-	found, ok, err := FindCommonAncestor(context.Background(), mustRef(types.NewRef(d2, types.Format_7_18)), mustRef(types.NewRef(a6, types.Format_7_18)), db)
+	found, ok, err := FindCommonAncestor(context.Background(), mustRef(types.NewRef(d2, types.Format_7_18)), mustRef(types.NewRef(a6, types.Format_7_18)), db, db)
 	assert.NoError(err)
 
 	if !assert.False(ok) {
