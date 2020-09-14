@@ -222,8 +222,14 @@ func mustForkDB(t *testing.T, fromDB *doltdb.DoltDB, bn string, cm *doltdb.Commi
 	require.NoError(t, err)
 	p1 := make(chan datas.PullProgress)
 	p2 := make(chan datas.PullerEvent)
-	go func() { for range p1{ } }()
-	go func() { for range p2{ } }()
+	go func() {
+		for range p1 {
+		}
+	}()
+	go func() {
+		for range p2 {
+		}
+	}()
 	err = forkEnv.DoltDB.PullChunks(context.Background(), "", fromDB, stref, p1, p2)
 	require.NoError(t, err)
 	err = forkEnv.DoltDB.SetHead(context.Background(), ref.NewBranchRef(bn), stref)

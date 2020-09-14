@@ -23,8 +23,8 @@ package datas
 
 import (
 	"context"
-	"sort"
 	"fmt"
+	"sort"
 
 	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/hash"
