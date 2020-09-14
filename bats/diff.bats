@@ -411,3 +411,16 @@ SQL
     [ $status -eq 0 ]
     [ $output -eq $CORRECT_DIFF ]
 }
+
+@test "diff with branch@commit spec does not panic" {
+    dolt add .
+    dolt commit -m table
+    dolt checkout -b test-branch
+    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
+    dolt add test
+    dolt commit -m "added row"
+    FIRST_COMMIT=`dolt log | grep commit | cut -d " " -f 2 | tail -1`
+    dolt diff $FIRST_COMMIT test-branch
+    skip "The below panics."
+    dolt diff master@$FIRST_COMMIT test-branch
+}
