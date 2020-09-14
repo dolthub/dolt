@@ -24,6 +24,7 @@ package datas
 import (
 	"context"
 	"sort"
+	"fmt"
 
 	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/hash"
@@ -108,12 +109,24 @@ func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.Va
 			if common, ok := findCommonRef(c1Parents, c2Parents); ok {
 				return common, true, nil
 			}
-			parentsToQueue(ctx, c1Parents, c1Q, vr1)
-			parentsToQueue(ctx, c2Parents, c2Q, vr2)
+			err = parentsToQueue(ctx, c1Parents, c1Q, vr1)
+			if err != nil {
+				return types.Ref{}, false, err
+			}
+			err = parentsToQueue(ctx, c2Parents, c2Q, vr2)
+			if err != nil {
+				return types.Ref{}, false, err
+			}
 		} else if c1Ht > c2Ht {
-			parentsToQueue(ctx, c1Q.PopRefsOfHeight(c1Ht), c1Q, vr1)
+			err = parentsToQueue(ctx, c1Q.PopRefsOfHeight(c1Ht), c1Q, vr1)
+			if err != nil {
+				return types.Ref{}, false, err
+			}
 		} else {
-			parentsToQueue(ctx, c2Q.PopRefsOfHeight(c2Ht), c2Q, vr2)
+			err = parentsToQueue(ctx, c2Q.PopRefsOfHeight(c2Ht), c2Q, vr2)
+			if err != nil {
+				return types.Ref{}, false, err
+			}
 		}
 	}
 
@@ -129,12 +142,17 @@ func parentsToQueue(ctx context.Context, refs types.RefSlice, q *types.RefByHeig
 		seen[r.TargetHash()] = true
 
 		v, err := r.TargetValue(ctx, vr)
-
 		if err != nil {
 			return err
 		}
+		if v == nil {
+			return fmt.Errorf("target not found: %v", r.TargetHash())
+		}
 
-		c := v.(types.Struct)
+		c, ok := v.(types.Struct)
+		if !ok {
+			return fmt.Errorf("target ref is not struct: %v", v)
+		}
 		ps, ok, err := c.MaybeGet(ParentsListField)
 		if err != nil {
 			return err
