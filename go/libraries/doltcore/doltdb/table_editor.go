@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
@@ -31,7 +32,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-var ErrDuplicatePrimaryKeyFmt = "duplicate primary key given: (%v)"
+var ErrDuplicatePrimaryKeyFmt = "duplicate primary key given: %v"
 
 // TableEditor supports making multiple row edits (inserts, updates, deletes) to a table. It does error checking for key
 // collision etc. in the Close() method, as well as during Insert / Update.
@@ -173,7 +174,10 @@ func (te *TableEditor) GetIndexedRows(ctx context.Context, key types.Tuple, inde
 			return nil, err
 		}
 		if fieldsVal == nil {
-			keyStr, _ := types.EncodedValue(ctx, key)
+			keyStr, err := formatKey(ctx, key)
+			if err != nil {
+				return nil, err
+			}
 			return nil, fmt.Errorf("index key `%s` does not have a corresponding entry in table", keyStr)
 		}
 
@@ -244,11 +248,11 @@ func (te *TableEditor) InsertRow(ctx context.Context, dRow row.Row) error {
 	// If we've already inserted this key as part of this insert operation, that's an error. Inserting a row that
 	// already exists in the table will be handled in Close().
 	if _, ok := te.tea.addedKeys[keyHash]; ok {
-		value, err := types.EncodedValue(ctx, key)
+		keyStr, err := formatKey(ctx, key)
 		if err != nil {
 			return err
 		}
-		return fmt.Errorf(ErrDuplicatePrimaryKeyFmt, value)
+		return fmt.Errorf(ErrDuplicatePrimaryKeyFmt, keyStr)
 	}
 	te.tea.insertedKeys[keyHash] = key
 	te.tea.addedKeys[keyHash] = key
@@ -397,11 +401,11 @@ func (te *TableEditor) flushEditAccumulator(ctx context.Context, teaInterface in
 				return errhand.BuildDError("failed to read table").AddCause(err).Build()
 			}
 			if rowExists {
-				value, err := types.EncodedValue(ctx, addedKey)
+				keyStr, err := formatKey(ctx, addedKey)
 				if err != nil {
 					return err
 				}
-				return fmt.Errorf(ErrDuplicatePrimaryKeyFmt, value)
+				return fmt.Errorf(ErrDuplicatePrimaryKeyFmt, keyStr)
 			}
 		}
 	}
@@ -438,6 +442,36 @@ func (te *TableEditor) flushEditAccumulator(ctx context.Context, teaInterface in
 	tea.insertedKeys = nil
 	tea.removedKeys = nil
 	return nil
+}
+
+// formatKey returns a comma-separated string representation of the key given.
+func formatKey(ctx context.Context, key types.Value) (string, error) {
+	tuple, ok := key.(types.Tuple)
+	if !ok {
+		return "", fmt.Errorf("Expected types.Tuple but got %T", key)
+	}
+
+	var vals []string
+	iter, err := tuple.Iterator()
+	if err != nil {
+		return "", err
+	}
+
+	for iter.HasMore() {
+		i, val, err := iter.Next()
+		if err != nil {
+			return "", err
+		}
+		if i%2 == 1 {
+			str, err := types.EncodedValue(ctx, val)
+			if err != nil {
+				return "", err
+			}
+			vals = append(vals, str)
+		}
+	}
+
+	return fmt.Sprintf("(%s)", strings.Join(vals, ",")), nil
 }
 
 func (te *TableEditor) getIndexIterator(ctx context.Context, key types.Tuple, indexName string) (table.TableReadCloser, error) {

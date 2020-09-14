@@ -383,7 +383,7 @@ func newBatchedDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
 	return dsqle.NewBatchedDatabase(name, dEnv.DoltDB, dEnv.RepoState, dEnv.RepoStateWriter())
 }
 
-func execQuery(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, query string, format resultFormat) (map[string]*doltdb.RootValue, errhand.VerboseError) {
+func execQuery(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, query string, format resultFormat) (newRoot map[string]*doltdb.RootValue, verr errhand.VerboseError) {
 	dbs := CollectDBs(mrEnv, newDatabase)
 	se, err := newSqlEngine(sqlCtx, readOnly, mrEnv, roots, format, dbs...)
 	if err != nil {
@@ -397,7 +397,12 @@ func execQuery(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots
 	}
 
 	if rowIter != nil {
-		defer rowIter.Close()
+		defer func() {
+			err := rowIter.Close()
+			if verr == nil {
+				verr = errhand.VerboseErrorFromError(err)
+			}
+		}()
 		err = se.prettyPrintResults(sqlCtx, sqlSch, rowIter)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
@@ -667,8 +672,11 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv) error {
 			verr := formatQueryError("", err)
 			shell.Println(verr.Verbose())
 		} else if rowIter != nil {
-			defer rowIter.Close()
 			err = se.prettyPrintResults(ctx, sqlSch, rowIter)
+			closeErr := rowIter.Close()
+			if err == nil {
+				err = closeErr
+			}
 			if err != nil {
 				shell.Println(color.RedString(err.Error()))
 			}
@@ -828,7 +836,10 @@ func processQuery(ctx *sql.Context, query string, se *sqlEngine) (sql.Schema, sq
 		sch, rowIter, err := se.query(ctx, query)
 
 		if rowIter != nil {
-			_ = rowIter.Close()
+			err = rowIter.Close()
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 
 		if err != nil {
@@ -933,7 +944,7 @@ func processBatchQuery(ctx *sql.Context, query string, se *sqlEngine) error {
 	return nil
 }
 
-func processNonInsertBatchQuery(ctx *sql.Context, se *sqlEngine, query string, sqlStatement sqlparser.Statement) error {
+func processNonInsertBatchQuery(ctx *sql.Context, se *sqlEngine, query string, sqlStatement sqlparser.Statement) (returnErr error) {
 	// We need to commit whatever batch edits we've accumulated so far before executing the query
 	err := flushBatchedEdits(ctx, se)
 	if err != nil {
@@ -946,7 +957,12 @@ func processNonInsertBatchQuery(ctx *sql.Context, se *sqlEngine, query string, s
 	}
 
 	if rowIter != nil {
-		defer rowIter.Close()
+		defer func() {
+			err := rowIter.Close()
+			if returnErr == nil {
+				returnErr = err
+			}
+		}()
 		err = mergeResultIntoStats(sqlStatement, rowIter, batchEditStats)
 		if err != nil {
 			return fmt.Errorf("error executing statement: %v", err.Error())
@@ -971,14 +987,19 @@ func processNonInsertBatchQuery(ctx *sql.Context, se *sqlEngine, query string, s
 	return flushBatchedEdits(ctx, se)
 }
 
-func processBatchInsert(ctx *sql.Context, se *sqlEngine, query string, sqlStatement sqlparser.Statement) error {
+func processBatchInsert(ctx *sql.Context, se *sqlEngine, query string, sqlStatement sqlparser.Statement) (returnErr error) {
 	_, rowIter, err := se.query(ctx, query)
 	if err != nil {
 		return fmt.Errorf("Error inserting rows: %v", err.Error())
 	}
 
 	if rowIter != nil {
-		defer rowIter.Close()
+		defer func() {
+			err := rowIter.Close()
+			if returnErr == nil {
+				returnErr = err
+			}
+		}()
 		err = mergeResultIntoStats(sqlStatement, rowIter, batchEditStats)
 		if err != nil {
 			return fmt.Errorf("Error inserting rows: %v", err.Error())
@@ -1285,10 +1306,13 @@ func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, 
 	return nil
 }
 
-func printOKResult(ctx context.Context, iter sql.RowIter) error {
+func printOKResult(ctx context.Context, iter sql.RowIter) (returnErr error) {
 	row, err := iter.Next()
-	defer iter.Close()
+	if err != nil {
+		return err
+	}
 
+	err = iter.Close()
 	if err != nil {
 		return err
 	}
@@ -1419,7 +1443,7 @@ func (se *sqlEngine) ddl(ctx *sql.Context, ddl *sqlparser.DDL, query string) (sq
 	case sqlparser.CreateStr, sqlparser.DropStr, sqlparser.AlterStr, sqlparser.RenameStr:
 		_, ri, err := se.query(ctx, query)
 		if err == nil {
-			ri.Close()
+			err = ri.Close()
 		}
 		return nil, nil, err
 	default:

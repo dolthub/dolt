@@ -95,8 +95,9 @@ func (te *sqlTableEditor) Close(ctx *sql.Context) error {
 func (te *sqlTableEditor) flush(ctx *sql.Context) error {
 	newRoot, err := te.tableEditor.Flush(ctx)
 	if err != nil {
-		return errhand.BuildDError("failed to write table back to database").AddCause(err).Build()
+		return err
 	}
+
 	newTable, ok, err := newRoot.GetTable(ctx, te.t.name)
 	if err != nil {
 		return errhand.BuildDError("failed to load updated table").AddCause(err).Build()
