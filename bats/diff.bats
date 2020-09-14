@@ -420,6 +420,6 @@ SQL
     dolt add test
     dolt commit -m "added row"
     FIRST_COMMIT=`dolt log | grep commit | cut -d " " -f 2 | tail -1`
-    skip "The blow panics."
+    skip "The below panics."
     dolt diff master@$FIRST_COMMIT test-branch
 }
