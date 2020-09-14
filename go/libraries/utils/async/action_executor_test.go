@@ -130,8 +130,8 @@ func TestActionExecutorError(t *testing.T) {
 		}
 		err := actionExecutor.WaitForEmpty()
 		assert.Error(t, err)
-		sameErr := actionExecutor.WaitForEmpty()
-		assert.Equal(t, err, sameErr)
+		err = actionExecutor.WaitForEmpty()
+		assert.NoError(t, err)
 	}
 }
 
