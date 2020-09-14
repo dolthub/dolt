@@ -105,7 +105,7 @@ func TestGetDotDotRevisions(t *testing.T) {
 	masterHash := mustGetHash(t, masterCommits[6])
 	featurePreMergeHash := mustGetHash(t, featureCommits[3])
 
-	res, err := GetDotDotRevisions(context.Background(), env.DoltDB, featureHash, masterHash, 100)
+	res, err := GetDotDotRevisions(context.Background(), env.DoltDB, featureHash, env.DoltDB, masterHash, 100)
 	require.NoError(t, err)
 	assert.Len(t, res, 7)
 	assert.Equal(t, featureCommits[7], res[0])
@@ -116,18 +116,18 @@ func TestGetDotDotRevisions(t *testing.T) {
 	assert.Equal(t, featureCommits[2], res[5])
 	assert.Equal(t, featureCommits[1], res[6])
 
-	res, err = GetDotDotRevisions(context.Background(), env.DoltDB, masterHash, featureHash, 100)
+	res, err = GetDotDotRevisions(context.Background(), env.DoltDB, masterHash, env.DoltDB, featureHash, 100)
 	require.NoError(t, err)
 	assert.Len(t, res, 0)
 
-	res, err = GetDotDotRevisions(context.Background(), env.DoltDB, featureHash, masterHash, 3)
+	res, err = GetDotDotRevisions(context.Background(), env.DoltDB, featureHash, env.DoltDB, masterHash, 3)
 	require.NoError(t, err)
 	assert.Len(t, res, 3)
 	assert.Equal(t, featureCommits[7], res[0])
 	assert.Equal(t, featureCommits[6], res[1])
 	assert.Equal(t, featureCommits[5], res[2])
 
-	res, err = GetDotDotRevisions(context.Background(), env.DoltDB, featurePreMergeHash, masterHash, 3)
+	res, err = GetDotDotRevisions(context.Background(), env.DoltDB, featurePreMergeHash, env.DoltDB, masterHash, 3)
 	require.NoError(t, err)
 	assert.Len(t, res, 3)
 	assert.Equal(t, featureCommits[3], res[0])
