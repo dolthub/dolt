@@ -19,8 +19,9 @@ RUN apt install -y \
 	ant \
 	ca-certificates-java \
 	bats \
-  perl \
-	cpanminus
+        perl \
+	cpanminus \
+	git
 
 # install go
 WORKDIR /root
@@ -34,6 +35,9 @@ ENV GOPATH=$HOME/go
 ENV PATH=$PATH:$GOPATH/bin
 ENV PATH=$PATH:$GOPATH/bin:/usr/local/go/bin
 RUN go version
+
+# go get the MySQL dependency
+RUN go get -u github.com/go-sql-driver/mysql
 
 # install dolt from source
 WORKDIR /root/building
