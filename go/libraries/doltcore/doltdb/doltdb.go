@@ -187,6 +187,10 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTime(ctx context.Context, name, email
 }
 
 func getCommitStForRefStr(ctx context.Context, db datas.Database, ref string) (types.Struct, error) {
+	if !datas.DatasetFullRe.MatchString(ref) {
+		return types.EmptyStruct(db.Format()), fmt.Errorf("invalid ref format: %s", ref)
+	}
+
 	ds, err := db.GetDataset(ctx, ref)
 
 	if err != nil {

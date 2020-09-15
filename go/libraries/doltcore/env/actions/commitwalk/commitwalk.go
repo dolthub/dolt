@@ -23,6 +23,7 @@ import (
 )
 
 type c struct {
+	ddb       *doltdb.DoltDB
 	commit    *doltdb.Commit
 	hash      hash.Hash
 	height    uint64
@@ -34,8 +35,6 @@ type q struct {
 	pending           []*c
 	numVisiblePending int
 	loaded            map[hash.Hash]*c
-
-	ddb *doltdb.DoltDB
 }
 
 func (q *q) NumVisiblePending() int {
@@ -51,8 +50,8 @@ func (q *q) PopPending() *c {
 	return c
 }
 
-func (q *q) AddPendingIfUnseen(ctx context.Context, id hash.Hash) error {
-	c, err := q.Get(ctx, id)
+func (q *q) AddPendingIfUnseen(ctx context.Context, ddb *doltdb.DoltDB, id hash.Hash) error {
+	c, err := q.Get(ctx, ddb, id)
 	if err != nil {
 		return err
 	}
@@ -90,8 +89,8 @@ func (q *q) AddPendingIfUnseen(ctx context.Context, id hash.Hash) error {
 	return nil
 }
 
-func (q *q) SetInvisible(ctx context.Context, id hash.Hash) error {
-	c, err := q.Get(ctx, id)
+func (q *q) SetInvisible(ctx context.Context, ddb *doltdb.DoltDB, id hash.Hash) error {
+	c, err := q.Get(ctx, ddb, id)
 	if err != nil {
 		return err
 	}
@@ -104,24 +103,24 @@ func (q *q) SetInvisible(ctx context.Context, id hash.Hash) error {
 	return nil
 }
 
-func (q *q) load(ctx context.Context, h hash.Hash) (*doltdb.Commit, error) {
+func load(ctx context.Context, ddb *doltdb.DoltDB, h hash.Hash) (*doltdb.Commit, error) {
 	cs, err := doltdb.NewCommitSpec(h.String())
 	if err != nil {
 		return nil, err
 	}
-	c, err := q.ddb.Resolve(ctx, cs, nil)
+	c, err := ddb.Resolve(ctx, cs, nil)
 	if err != nil {
 		return nil, err
 	}
 	return c, nil
 }
 
-func (q *q) Get(ctx context.Context, id hash.Hash) (*c, error) {
+func (q *q) Get(ctx context.Context, ddb *doltdb.DoltDB, id hash.Hash) (*c, error) {
 	if l, ok := q.loaded[id]; ok {
 		return l, nil
 	}
 
-	l, err := q.load(ctx, id)
+	l, err := load(ctx, ddb, id)
 	if err != nil {
 		return nil, err
 	}
@@ -130,13 +129,13 @@ func (q *q) Get(ctx context.Context, id hash.Hash) (*c, error) {
 		return nil, err
 	}
 
-	c := &c{commit: l, height: h, hash: id}
+	c := &c{ddb: ddb, commit: l, height: h, hash: id}
 	q.loaded[id] = c
 	return c, nil
 }
 
-func newQueue(ddb *doltdb.DoltDB) *q {
-	return &q{ddb: ddb, loaded: make(map[hash.Hash]*c)}
+func newQueue() *q {
+	return &q{loaded: make(map[hash.Hash]*c)}
 }
 
 // GetDotDotRevisions returns the commits reachable from commit at hash
@@ -148,16 +147,16 @@ func newQueue(ddb *doltdb.DoltDB) *q {
 // ties are broken by timestamp; newer commits appear first.
 //
 // Roughly mimics `git log master..feature`.
-func GetDotDotRevisions(ctx context.Context, ddb *doltdb.DoltDB, includedHead hash.Hash, excludedHead hash.Hash, num int) ([]*doltdb.Commit, error) {
+func GetDotDotRevisions(ctx context.Context, includedDB *doltdb.DoltDB, includedHead hash.Hash, excludedDB *doltdb.DoltDB, excludedHead hash.Hash, num int) ([]*doltdb.Commit, error) {
 	commitList := make([]*doltdb.Commit, 0, num)
-	q := newQueue(ddb)
-	if err := q.SetInvisible(ctx, excludedHead); err != nil {
+	q := newQueue()
+	if err := q.SetInvisible(ctx, excludedDB, excludedHead); err != nil {
 		return nil, err
 	}
-	if err := q.AddPendingIfUnseen(ctx, excludedHead); err != nil {
+	if err := q.AddPendingIfUnseen(ctx, excludedDB, excludedHead); err != nil {
 		return nil, err
 	}
-	if err := q.AddPendingIfUnseen(ctx, includedHead); err != nil {
+	if err := q.AddPendingIfUnseen(ctx, includedDB, includedHead); err != nil {
 		return nil, err
 	}
 	for q.NumVisiblePending() > 0 {
@@ -168,11 +167,11 @@ func GetDotDotRevisions(ctx context.Context, ddb *doltdb.DoltDB, includedHead ha
 		}
 		for _, parentID := range parents {
 			if nextC.invisible {
-				if err := q.SetInvisible(ctx, parentID); err != nil {
+				if err := q.SetInvisible(ctx, nextC.ddb, parentID); err != nil {
 					return nil, err
 				}
 			}
-			if err := q.AddPendingIfUnseen(ctx, parentID); err != nil {
+			if err := q.AddPendingIfUnseen(ctx, nextC.ddb, parentID); err != nil {
 				return nil, err
 			}
 		}
@@ -231,7 +230,7 @@ func (i *commiterator) Next(ctx context.Context) (hash.Hash, *doltdb.Commit, err
 		}
 
 		for _, parentID := range parents {
-			if err := i.q.AddPendingIfUnseen(ctx, parentID); err != nil {
+			if err := i.q.AddPendingIfUnseen(ctx, nextC.ddb, parentID); err != nil {
 				return hash.Hash{}, nil, err
 			}
 		}
@@ -244,8 +243,8 @@ func (i *commiterator) Next(ctx context.Context) (hash.Hash, *doltdb.Commit, err
 
 // Reset implements doltdb.CommitItr
 func (i *commiterator) Reset(ctx context.Context) error {
-	i.q = newQueue(i.ddb)
-	if err := i.q.AddPendingIfUnseen(ctx, i.startCommitHash); err != nil {
+	i.q = newQueue()
+	if err := i.q.AddPendingIfUnseen(ctx, i.ddb, i.startCommitHash); err != nil {
 		return err
 	}
 	return nil
