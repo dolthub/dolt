@@ -54,8 +54,7 @@ teardown() {
 }
 
 @test "cpp mysql connector" {
-    (cd $BATS_TEST_DIRNAME/cpp; make clean; make)
-    $BATS_TEST_DIRNAME/cpp/mysql-connector-cpp-test $USER $PORT $REPO_NAME
+    $BATS_TEST_DIRNAME/cpp/_build/test_mysql_connector_cxx $USER $PORT $REPO_NAME
 }
 
 @test "dotnet mysql connector" {
