@@ -411,3 +411,22 @@ SQL
     [ $status -eq 0 ]
     [ $output -eq $CORRECT_DIFF ]
 }
+
+@test "diff with invalid ref does not panic" {
+    dolt add .
+    dolt commit -m table
+    dolt checkout -b test-branch
+    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
+    dolt add test
+    dolt commit -m "added row"
+    FIRST_COMMIT=`dolt log | grep commit | cut -d " " -f 2 | tail -1`
+    run dolt diff $FIRST_COMMIT test-branch
+    [ $status -eq 0 ]
+    [[ ! $output =~ "panic" ]]
+    run dolt diff master@$FIRST_COMMIT test-branch
+    [ $status -eq 1 ]
+    [[ ! $output =~ "panic" ]]
+    run dolt diff ref.with.period test-branch
+    [ $status -eq 1 ]
+    [[ ! $output =~ "panic" ]]
+}

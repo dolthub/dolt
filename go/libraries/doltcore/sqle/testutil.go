@@ -152,13 +152,13 @@ func ExecuteSelect(dEnv *env.DoltEnv, ddb *doltdb.DoltDB, root *doltdb.RootValue
 }
 
 func drainIter(iter sql.RowIter) error {
-	var returnedErr error
 	for {
 		_, err := iter.Next()
 		if err == io.EOF {
-			return returnedErr
+			break
 		} else if err != nil {
-			returnedErr = err
+			return err
 		}
 	}
+	return iter.Close()
 }

@@ -1,2 +1,5 @@
 c/mysql-connector-c-test
+cpp/_build
 java/MySQLConnectorTest.class
+java/mysql-connector-java-8.0.21.jar
+node/node_modules/
