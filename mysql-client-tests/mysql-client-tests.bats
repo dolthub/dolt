@@ -85,3 +85,7 @@ cmake ..
 @test "perl DBD:mysql client" {
     perl $BATS_TEST_DIRNAME/perl/dbd-mysql-test.pl $USER $PORT $REPO_NAME
 }
+
+@test "ruby ruby/mysql test" {
+    ruby $BATS_TEST_DIRNAME/ruby/ruby-mysql-test.rb $USER $PORT $REPO_NAME
+}
