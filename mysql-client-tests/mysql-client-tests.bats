@@ -57,6 +57,25 @@ teardown() {
     $BATS_TEST_DIRNAME/c/mysql-connector-c-test $USER $PORT $REPO_NAME
 }
 
+@test "cpp mysql connector" {
+    if [ -d $BATS_TEST_DIRNAME/cpp/_build ]
+    then
+	rm -rf $BATS_TEST_DIRNAME/cpp/_build/*
+    else
+	mkdir $BATS_TEST_DIRNAME/cpp/_build
+    fi
+    cd $BATS_TEST_DIRNAME/cpp/_build
+    if [[ `uname` = "Darwin" ]]; then
+	PATH=/usr/local/Cellar/mysql-client/8.0.21/bin/:"$PATH" cmake .. -DWITH_SSL=/usr/local/Cellar/openssl@1.1/1.1.1g/ -DWITH_JDBC=yes;
+    else
+        cmake ..
+    fi
+cmake ..
+    make -j 10
+    $BATS_TEST_DIRNAME/cpp/_build/test_mysql_connector_cxx $USER $PORT $REPO_NAME
+    cd -
+}
+
 @test "dotnet mysql connector" {
     cd $BATS_TEST_DIRNAME/dotnet/
     # dotnet run uses output channel 3 which conflicts with bats so we pipe it to null

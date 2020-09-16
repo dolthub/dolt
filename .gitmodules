@@ -10,3 +10,6 @@
 [submodule "proto/third_party/grpc-go"]
 	path = proto/third_party/grpc-go
 	url = https://github.com/grpc/grpc-go.git
+[submodule "mysql-client-tests/cpp/third_party/mysql-connector-cpp"]
+	path = mysql-client-tests/cpp/third_party/mysql-connector-cpp
+	url = https://github.com/mysql/mysql-connector-cpp.git

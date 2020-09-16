@@ -21,6 +21,9 @@ RUN apt install -y \
 	bats \
         perl \
 	cpanminus \
+	cmake \
+	g++ \
+	libmysqlcppconn-dev \
 	git
 
 # install go
