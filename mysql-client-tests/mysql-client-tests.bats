@@ -64,7 +64,7 @@ teardown() {
     if [[ `uname` = "Darwin" ]]; then
 	PATH=/usr/local/Cellar/mysql-client/8.0.21/bin/:"$PATH" cmake .. -DWITH_SSL=/usr/local/Cellar/openssl@1.1/1.1.1g/ -DWITH_JDBC=yes;
     else
-	cmake ..
+        cmake ..
     fi
 cmake ..
     make -j 10
