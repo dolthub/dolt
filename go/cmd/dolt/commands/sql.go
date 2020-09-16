@@ -1100,7 +1100,8 @@ func newSqlEngine(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, ro
 		return nil, err
 	}
 
-	engine := sqle.New(c, analyzer.NewBuilder(c).WithParallelism(runtime.NumCPU()).Build(), &sqle.Config{Auth: au})
+	parallelism := runtime.GOMAXPROCS(0)
+	engine := sqle.New(c, analyzer.NewBuilder(c).WithParallelism(parallelism).Build(), &sqle.Config{Auth: au})
 	engine.AddDatabase(information_schema.NewInformationSchemaDatabase(engine.Catalog))
 
 	dsess := dsqle.DSessFromSess(sqlCtx.Session)
