@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/abiosoft/readline"
@@ -1100,7 +1101,14 @@ func newSqlEngine(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, ro
 		return nil, err
 	}
 
-	engine := sqle.New(c, analyzer.NewBuilder(c).WithParallelism(runtime.NumCPU()).Build(), &sqle.Config{Auth: au})
+	parallelism := runtime.NumCPU()
+	if maxProcsStr := os.Getenv("GOMAXPROCS"); maxProcsStr != "" {
+		if n, err := strconv.ParseInt(maxProcsStr, 10, 64); err == nil && n <= 1 {
+			parallelism = 0
+		}
+	}
+
+	engine := sqle.New(c, analyzer.NewBuilder(c).WithParallelism(parallelism).Build(), &sqle.Config{Auth: au})
 	engine.AddDatabase(information_schema.NewInformationSchemaDatabase(engine.Catalog))
 
 	dsess := dsqle.DSessFromSess(sqlCtx.Session)
