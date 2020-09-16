@@ -27,7 +27,9 @@ RUN apt install -y \
 	ca-certificates-java \
 	bats \
         perl \
-	cpanminus
+	cpanminus \
+	cmake \
+	g++
 
 # install dotnet
 RUN wget https://packages.microsoft.com/config/ubuntu/18.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb

@@ -54,6 +54,15 @@ teardown() {
 }
 
 @test "cpp mysql connector" {
+    if [ -d $BATS_TEST_DIRNAME/cpp/_build ]
+    then
+	rm -rf $BATS_TEST_DIRNAME/cpp/_build/*
+    else
+	mkdir $BATS_TEST_DIRNAME/cpp/_build
+    fi
+    cd $BATS_TEST_DIRNAME/cpp/_build
+    cmake ..
+    make -j 10
     $BATS_TEST_DIRNAME/cpp/_build/test_mysql_connector_cxx $USER $PORT $REPO_NAME
 }
 
