@@ -194,10 +194,12 @@ func FromTupleSlices(nbf *types.NomsBinFormat, sch schema.Schema, keySl, valSl t
 
 		if col.IsPartOfPK {
 			return false, errors.New("writing columns that are part of the primary key to non-pk values. col:" + col.Name)
-		} else if !types.IsNull(val) && col.Kind != val.Kind() {
-			return false, errors.New("bug.  Setting a value to an incorrect kind. col:" + col.Name)
-		} else {
-			filteredVals[tag] = val
+		} else if !types.IsNull(val) {
+			if col.Kind != val.Kind() {
+				return false, errors.New("bug.  Setting a value to an incorrect kind. col:" + col.Name)
+			} else {
+				filteredVals[tag] = val
+			}
 		}
 
 		return false, nil
