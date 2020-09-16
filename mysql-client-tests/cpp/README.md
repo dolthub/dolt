@@ -1,3 +1,8 @@
+# General
+
+This code uses git submodules. You need to recursively pull all the submodules
+in order for it to build.
+
 # Building on OS X
 
 ```sh
