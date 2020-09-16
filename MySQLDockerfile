@@ -1,11 +1,3 @@
-FROM golang:1.15.0-buster as builder
-WORKDIR /root/building/go
-COPY ./go/ .
-
-# install dolt from source
-ENV GOFLAGS="-mod=readonly"
-RUN go build -o dolt ./cmd/dolt
-
 FROM ubuntu:18.04
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -14,6 +6,7 @@ RUN apt install -y software-properties-common
 
 # install python, libmysqlclient-dev, java, bats
 RUN add-apt-repository ppa:deadsnakes/ppa -y
+RUN apt update -y
 RUN apt install -y \
 	python3.8 \
 	python3-pip \
@@ -30,7 +23,30 @@ RUN apt install -y \
 	cpanminus \
 	cmake \
 	g++ \
-	libmysqlcppconn-dev
+	libmysqlcppconn-dev \
+	git
+
+# install go
+WORKDIR /root
+ENV GO_VERSION=1.15.1
+RUN curl -O "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz"
+RUN sha256sum "go${GO_VERSION}.linux-amd64.tar.gz"
+RUN tar -xvf "go${GO_VERSION}.linux-amd64.tar.gz" -C /usr/local
+RUN chown -R root:root /usr/local/go
+RUN mkdir -p $HOME/go/{bin,src}
+ENV GOPATH=$HOME/go
+ENV PATH=$PATH:$GOPATH/bin
+ENV PATH=$PATH:$GOPATH/bin:/usr/local/go/bin
+RUN go version
+
+# go get the MySQL dependency
+RUN go get -u github.com/go-sql-driver/mysql
+
+# install dolt from source
+WORKDIR /root/building
+COPY ./go/ .
+ENV GOFLAGS="-mod=readonly"
+RUN go build -o /usr/local/bin/dolt ./cmd/dolt
 
 # install dotnet
 RUN wget https://packages.microsoft.com/config/ubuntu/18.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
@@ -52,8 +68,7 @@ RUN update-ca-certificates -f
 
 # Setup JAVA_HOME -- useful for docker commandline
 ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64/
-
-COPY --from=builder /root/building/go/dolt /usr/local/bin/dolt
+ 
 COPY ./mysql-client-tests /mysql-client-tests
 COPY ./mysql-client-tests-entrypoint.sh /mysql-client-tests/entrypoint.sh
 

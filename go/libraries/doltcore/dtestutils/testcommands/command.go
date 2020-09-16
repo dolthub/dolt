@@ -17,6 +17,7 @@ package testcommands
 import (
 	"context"
 	"fmt"
+	"io"
 	"testing"
 	"time"
 
@@ -125,8 +126,22 @@ func (q Query) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	engine, sqlCtx, err := dsqle.NewTestEngine(context.Background(), sqlDb, root)
 	require.NoError(t, err)
 
-	_, _, err = engine.Query(sqlCtx, q.Query)
+	_, iter, err := engine.Query(sqlCtx, q.Query)
+	if err != nil {
+		return err
+	}
 
+	for {
+		_, err := iter.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+	}
+
+	err = iter.Close()
 	if err != nil {
 		return err
 	}

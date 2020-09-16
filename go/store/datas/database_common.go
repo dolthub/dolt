@@ -361,7 +361,7 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 					return err
 				}
 
-				ancestorRef, found, err := FindCommonAncestor(ctx, commitRef, currentHeadRef, db)
+				ancestorRef, found, err := FindCommonAncestor(ctx, commitRef, currentHeadRef, db, db)
 
 				if err != nil {
 					return err

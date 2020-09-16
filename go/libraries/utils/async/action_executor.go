@@ -71,7 +71,7 @@ func (aq *ActionExecutor) Execute(val interface{}) {
 	aq.syncCond.L.Lock()
 	defer aq.syncCond.L.Unlock()
 
-	if aq.err != nil { // if we've errored before, then no point in running anything again
+	if aq.err != nil { // If we've errored before, then no point in running anything again until we return the error.
 		return
 	}
 
@@ -90,7 +90,11 @@ func (aq *ActionExecutor) Execute(val interface{}) {
 // WaitForEmpty waits until the queue is empty, and then returns any errors that any actions may have encountered.
 func (aq *ActionExecutor) WaitForEmpty() error {
 	aq.finished.Wait()
-	return aq.err
+	aq.syncCond.L.Lock()
+	defer aq.syncCond.L.Unlock()
+	err := aq.err
+	aq.err = nil
+	return err
 }
 
 // work runs until the list is empty. If any error occurs from any action, then we do not call any further actions,
