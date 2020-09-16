@@ -152,26 +152,25 @@ func (tt TaggedValues) copy() TaggedValues {
 }
 
 func ParseTaggedValues(tpl types.Tuple) (TaggedValues, error) {
-	if tpl.Len()%2 != 0 {
-		panic("A tagged tuple must have an even column count.")
-	}
+	vals, err := tpl.AsSlice()
 
-	taggedTuple := make(TaggedValues, tpl.Len()/2)
-	i, err := tpl.Iterator()
 	if err != nil {
 		return nil, err
 	}
-	for i.HasMore() {
-		_, tag, err := i.Next()
-		if err != nil {
-			return nil, err
-		}
 
-		// i.HasMore() is true here because of assertion above.
-		_, val, err := i.Next()
-		if err != nil {
-			return nil, err
-		}
+	return TaggedValuesFromTupleValueSlice(vals)
+}
+
+func TaggedValuesFromTupleValueSlice(vals types.TupleValueSlice) (TaggedValues, error) {
+	valCount := len(vals)
+	if valCount%2 != 0 {
+		panic("A tagged tuple must have an even column count.")
+	}
+
+	taggedTuple := make(TaggedValues, valCount/2)
+	for i, j := 0, 0; j < valCount; i, j = i+1, j+2 {
+		tag := vals[j]
+		val := vals[j+1]
 
 		if tag.Kind() != types.UintKind {
 			panic("Invalid tagged tuple must have uint tags.")

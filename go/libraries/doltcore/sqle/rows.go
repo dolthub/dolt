@@ -32,7 +32,7 @@ type doltTableRowIter struct {
 	rowData  types.Map
 	ctx      *sql.Context
 	nomsIter types.MapIterator
-	end      types.Value
+	end      types.LesserValuable
 	nbf      *types.NomsBinFormat
 }
 
@@ -45,7 +45,7 @@ func newRowIterator(tbl *DoltTable, ctx *sql.Context, partition *doltTablePartit
 	}
 
 	var mapIter types.MapIterator
-	var end types.Value = nil
+	var end types.LesserValuable
 	if partition == nil {
 		mapIter, err = rowData.BufferedIterator(ctx)
 	} else {
@@ -53,11 +53,19 @@ func newRowIterator(tbl *DoltTable, ctx *sql.Context, partition *doltTablePartit
 
 		if err != nil && err != io.EOF {
 			return nil, err
-		} else if err != io.EOF {
-			end, _, err = endIter.Next(ctx)
+		} else if err == nil {
+			keyTpl, _, err := endIter.Next(ctx)
 
 			if err != nil && err != io.EOF {
 				return nil, err
+			}
+
+			if keyTpl != nil {
+				end, err = keyTpl.(types.Tuple).AsSlice()
+
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 
@@ -83,8 +91,14 @@ func (itr *doltTableRowIter) Next() (sql.Row, error) {
 		return nil, io.EOF
 	}
 
+	keySl, err := key.(types.Tuple).AsSlice()
+
+	if err != nil {
+		return nil, err
+	}
+
 	if itr.end != nil {
-		isLess, err := key.Less(itr.nbf, itr.end)
+		isLess, err := keySl.Less(itr.nbf, itr.end)
 
 		if err != nil {
 			return nil, err
@@ -95,18 +109,45 @@ func (itr *doltTableRowIter) Next() (sql.Row, error) {
 		}
 	}
 
-	doltRow, err := row.FromNoms(itr.table.sch, key.(types.Tuple), val.(types.Tuple))
+	valSl, err := val.(types.Tuple).AsSlice()
 
 	if err != nil {
 		return nil, err
 	}
 
-	return doltRowToSqlRow(doltRow, itr.table.sch)
+	return sqlRowFromNomsTupleValueSlices(keySl, valSl, itr.table.sch)
 }
 
 // Close required by sql.RowIter interface
 func (itr *doltTableRowIter) Close() error {
 	return nil
+}
+
+func sqlRowFromNomsTupleValueSlices(keySl, valSl types.TupleValueSlice, sch schema.Schema) (sql.Row, error) {
+	allCols := sch.GetAllCols()
+	colVals := make(sql.Row, allCols.Size())
+
+	for _, sl := range []types.TupleValueSlice{keySl, valSl} {
+		var convErr error
+		err := sl.Iter(func(tag uint64, val types.Value) (stop bool, err error) {
+			if idx, ok := allCols.TagToIdx[tag]; ok {
+				col := allCols.GetAtIndex(idx)
+				colVals[idx], convErr = col.TypeInfo.ConvertNomsValueToValue(val)
+
+				if convErr != nil {
+					return false, err
+				}
+			}
+
+			return false, nil
+		})
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return sql.NewRow(colVals...), nil
 }
 
 // Returns a SQL row representation for the dolt row given.
