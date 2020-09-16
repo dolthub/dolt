@@ -5,7 +5,24 @@
 
 
 #include "mysql_driver.h"
-#include <mysql/jdbc.h>
+#include "mysql_connection.h"
+#include "mysql_error.h"
+#include "cppconn/connection.h"
+#include "cppconn/build_config.h"
+#include "cppconn/resultset.h"
+#include "cppconn/sqlstring.h"
+#include "cppconn/config.h"
+#include "cppconn/datatype.h"
+#include "cppconn/version_info.h"
+#include "cppconn/driver.h"
+#include "cppconn/statement.h"
+#include "cppconn/metadata.h"
+#include "cppconn/warning.h"
+#include "cppconn/resultset_metadata.h"
+#include "cppconn/parameter_metadata.h"
+#include "cppconn/exception.h"
+#include "cppconn/prepared_statement.h"
+#include "cppconn/variant.h"
 
 #define QUERIES_SIZE 5
 
