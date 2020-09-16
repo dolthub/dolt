@@ -29,7 +29,8 @@ RUN apt install -y \
         perl \
 	cpanminus \
 	cmake \
-	g++
+	g++ \
+	libmysqlcppconn-dev
 
 # install dotnet
 RUN wget https://packages.microsoft.com/config/ubuntu/18.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
