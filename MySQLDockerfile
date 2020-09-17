@@ -4,7 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt update -y
 RUN apt install -y software-properties-common
 
-# install python, libmysqlclient-dev, java, bats
+# install python, libmysqlclient-dev, java, bats, git ruby, perl, cpan
 RUN add-apt-repository ppa:deadsnakes/ppa -y
 RUN apt update -y
 RUN apt install -y \
@@ -24,7 +24,9 @@ RUN apt install -y \
 	cmake \
 	g++ \
 	libmysqlcppconn-dev \
-	git
+	git \
+	ruby\
+	gem
 
 # install go
 WORKDIR /root
@@ -82,6 +84,11 @@ RUN npm install
 
 # install cpan dependencies
 RUN cpanm DBD::mysql
+
+# install ruby dependencies
+WORKDIR /mysql-client-tests/ruby
+RUN gem install bundler
+RUN bundle install
 
 WORKDIR /mysql-client-tests
 ENTRYPOINT ["/mysql-client-tests/entrypoint.sh"]
