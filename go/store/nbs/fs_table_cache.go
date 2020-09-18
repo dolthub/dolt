@@ -95,7 +95,7 @@ func (ftc *fsTableCache) init(concurrency int) error {
 				return errors.New(path + " is not a table file; cache dir must contain only table files")
 			}
 
-			ad, err := parseAddr([]byte(info.Name()))
+			ad, err := parseAddr(info.Name())
 
 			if err != nil {
 				return err

@@ -83,6 +83,8 @@ type DoltChunkStore struct {
 	httpFetcher HTTPFetcher
 }
 
+var _ nbs.TableFileStore = &DoltChunkStore{}
+
 func NewDoltChunkStoreFromPath(ctx context.Context, nbf *types.NomsBinFormat, path, host string, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
 	tokens := strings.Split(strings.Trim(path, "/"), "/")
 	if len(tokens) != 2 {
@@ -941,6 +943,11 @@ func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, nu
 	}
 
 	return nil
+}
+
+// PruneTableFiles deletes old table files that are no longer referenced in the manifest.
+func (dcs *DoltChunkStore) PruneTableFiles(ctx context.Context) error {
+	panic("Not Implemented")
 }
 
 // Sources retrieves the current root hash, and a list of all the table files

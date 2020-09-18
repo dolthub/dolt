@@ -528,3 +528,7 @@ func (ftp fakeTablePersister) Open(ctx context.Context, name addr, chunkCount ui
 	defer ftp.mu.RUnlock()
 	return chunkSourceAdapter{ftp.sources[name], name}, nil
 }
+
+func PruneTableFiles(ctx context.Context) error {
+	return nil
+}

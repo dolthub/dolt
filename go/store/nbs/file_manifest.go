@@ -197,7 +197,7 @@ func parseManifest(r io.Reader) (manifestContents, error) {
 		return manifestContents{}, err
 	}
 
-	ad, err := parseAddr([]byte(slices[2]))
+	ad, err := parseAddr(slices[2])
 
 	if err != nil {
 		return manifestContents{}, err

@@ -65,6 +65,11 @@ func (nbsMW *NBSMetricWrapper) SupportedOperations() TableFileStoreOps {
 	return nbsMW.nbs.SupportedOperations()
 }
 
+// PruneTableFiles deletes old table files that are no longer referenced in the manifest.
+func (nbsMW *NBSMetricWrapper) PruneTableFiles(ctx context.Context) error {
+	return nbsMW.nbs.PruneTableFiles(ctx)
+}
+
 // GetManyCompressed gets the compressed Chunks with |hashes| from the store. On return,
 // |foundChunks| will have been fully sent all chunks which have been
 // found. Any non-present chunks will silently be ignored.

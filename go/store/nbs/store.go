@@ -93,6 +93,8 @@ type NomsBlockStore struct {
 	stats *Stats
 }
 
+var _ TableFileStore = &NomsBlockStore{}
+
 type Range struct {
 	Offset uint64
 	Length uint32
@@ -204,10 +206,7 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 		contents = manifestContents{vers: nbs.upstream.vers}
 	}
 
-	currSpecs := make(map[addr]bool)
-	for _, spec := range contents.specs {
-		currSpecs[spec.name] = true
-	}
+	currSpecs := contents.getSpecSet()
 
 	var addCount int
 	for h, count := range updates {
@@ -1093,6 +1092,40 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, nu
 	_, err = nbs.UpdateManifest(ctx, map[hash.Hash]uint32{fileIdHash: uint32(numChunks)})
 
 	return err
+}
+
+// PruneTableFiles deletes old table files that are no longer referenced in the manifest.
+func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+
+	nbs.mm.LockForUpdate()
+	defer func() {
+		unlockErr := nbs.mm.UnlockForUpdate()
+
+		if err == nil {
+			err = unlockErr
+		}
+	}()
+
+	// no-op commit to persist tables and update manifest
+	ok, err := nbs.Commit(ctx, nbs.upstream.root, nbs.upstream.root)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("could not persist data before pruning table files")
+	}
+
+	ok, contents, err := nbs.mm.Fetch(ctx, &Stats{})
+	if err != nil{
+		return err
+	}
+	if !ok {
+		return nil  // no manifest exists
+	}
+
+	return nbs.p.PruneTableFiles(ctx, contents)
 }
 
 // SetRootChunk changes the root chunk hash from the previous value to the new root.

@@ -149,3 +149,7 @@ func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, ch
 
 	return &chunkSourceAdapter{newTableReader(index, tra, s3BlockSize), name}, nil
 }
+
+func (bsp *blobstorePersister) PruneTableFiles(ctx context.Context, contents manifestContents) error {
+	panic("Not Implemented")
+}
