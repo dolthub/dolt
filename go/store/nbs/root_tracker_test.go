@@ -429,6 +429,8 @@ type fakeTablePersister struct {
 	mu      *sync.RWMutex
 }
 
+var _ tablePersister = fakeTablePersister{}
+
 func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
 	if mustUint32(mt.count()) > 0 {
 		name, data, chunkCount, err := mt.write(haver, stats)
@@ -529,6 +531,6 @@ func (ftp fakeTablePersister) Open(ctx context.Context, name addr, chunkCount ui
 	return chunkSourceAdapter{ftp.sources[name], name}, nil
 }
 
-func PruneTableFiles(ctx context.Context) error {
+func (ftp fakeTablePersister) PruneTableFiles(_ context.Context, _ manifestContents) error {
 	return nil
 }

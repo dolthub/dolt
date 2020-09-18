@@ -303,6 +303,10 @@ func NewGCSStore(ctx context.Context, nbfVerStr string, bucketName, path string,
 }
 
 func NewLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64) (*NomsBlockStore, error) {
+	return newLocalStore(ctx, nbfVerStr, dir, memTableSize, defaultMaxTables)
+}
+
+func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64, maxTables int) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 	err := checkDir(dir)
 
@@ -312,7 +316,7 @@ func NewLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 
 	mm := makeManifestManager(fileManifest{dir})
 	p := newFSTablePersister(dir, globalFDCache, globalIndexCache)
-	nbs, err := newNomsBlockStore(ctx, nbfVerStr, mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
+	nbs, err := newNomsBlockStore(ctx, nbfVerStr, mm, p, inlineConjoiner{maxTables}, memTableSize)
 
 	if err != nil {
 		return nil, err
@@ -734,8 +738,9 @@ func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) 
 		// so that we avoid writing a bunch of unreachable small tables which result
 		// from optismistic lock failures. However, this means that the time to
 		// write tables is included in "commit" time and if all commits are
-		// serialized, it means alot more waiting. Allow "non-trivial" tables to be
-		// persisted outside of the commit-lock.
+		// serialized, it means alot more waiting.
+		// "non-trivial" tables are persisted here, outside of the commit-lock.
+		// all other tables are persisted in updateManifest()
 		nbs.mu.Lock()
 		defer nbs.mu.Unlock()
 
@@ -768,6 +773,8 @@ func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) 
 		}
 	}()
 
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
 	for {
 		if err := nbs.updateManifest(ctx, current, last); err == nil {
 			return true, nil
@@ -787,9 +794,8 @@ var (
 	errOptimisticLockFailedTables = fmt.Errorf("tables changed")
 )
 
+// callers must acquire lock |nbs.mu|
 func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last hash.Hash) error {
-	nbs.mu.Lock()
-	defer nbs.mu.Unlock()
 	if nbs.upstream.root != last {
 		return errLastRootMismatch
 	}
@@ -1108,21 +1114,28 @@ func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
 		}
 	}()
 
-	// no-op commit to persist tables and update manifest
-	ok, err := nbs.Commit(ctx, nbs.upstream.root, nbs.upstream.root)
+	for {
+		// flush all tables and update manifest
+		err = nbs.updateManifest(ctx, nbs.upstream.root, nbs.upstream.root)
+
+		if err == nil {
+			break
+		} else if err == errOptimisticLockFailedTables {
+			continue
+		} else {
+			return err
+		}
+
+		// Same behavior as Commit
+		// infinitely retries without backoff in the case off errOptimisticLockFailedTables
+	}
+
+	ok, contents, err := nbs.mm.Fetch(ctx, &Stats{})
 	if err != nil {
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("could not persist data before pruning table files")
-	}
-
-	ok, contents, err := nbs.mm.Fetch(ctx, &Stats{})
-	if err != nil{
-		return err
-	}
-	if !ok {
-		return nil  // no manifest exists
+		return nil // no manifest exists
 	}
 
 	return nbs.p.PruneTableFiles(ctx, contents)
@@ -1130,6 +1143,8 @@ func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
 
 // SetRootChunk changes the root chunk hash from the previous value to the new root.
 func (nbs *NomsBlockStore) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
 	for {
 		err := nbs.updateManifest(ctx, root, previous)
 

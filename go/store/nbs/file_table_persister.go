@@ -221,7 +221,7 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, contents manif
 		return err
 	}
 
-	for _, info :=  range fileInfos {
+	for _, info := range fileInfos {
 		if !info.Mode().IsRegular() {
 			continue
 		}
@@ -243,7 +243,7 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, contents manif
 		}
 
 		if _, ok := ss[addy]; ok {
-			continue  // file is referenced in the manifest
+			continue // file is referenced in the manifest
 		}
 
 		err = os.Remove(path.Join(ftp.dir, info.Name()))
