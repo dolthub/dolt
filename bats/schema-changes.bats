@@ -42,14 +42,14 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test @ working" ]] || false
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
-    [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'" ]] || false
-    [[ "$output" =~ "\`c2\` BIGINT COMMENT 'tag:2'" ]] || false
-    [[ "$output" =~ "\`c3\` BIGINT COMMENT 'tag:3'" ]] || false
-    [[ "$output" =~ "\`c4\` BIGINT COMMENT 'tag:4'" ]] || false
-    [[ "$output" =~ "\`c5\` BIGINT COMMENT 'tag:5'" ]] || false
+    [[ "$output" =~ "\`pk\` bigint NOT NULL" ]] || false
+    [[ "$output" =~ "\`c2\` bigint" ]] || false
+    [[ "$output" =~ "\`c3\` bigint" ]] || false
+    [[ "$output" =~ "\`c4\` bigint" ]] || false
+    [[ "$output" =~ "\`c5\` bigint" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
-    [[ "$output" =~ "\`c0\` BIGINT COMMENT 'tag:1'" ]] || false
-    [[ ! "$output" =~ "\`c1\` BIGINT COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`c0\` bigint" ]] || false
+    [[ ! "$output" =~ "\`c1\` bigint" ]] || false
     dolt sql -q "select * from test"
 }
 
@@ -61,13 +61,13 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test @ working" ]] || false
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
-    [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'" ]] || false
-    [[ "$output" =~ "\`c2\` BIGINT COMMENT 'tag:2'" ]] || false
-    [[ "$output" =~ "\`c3\` BIGINT COMMENT 'tag:3'" ]] || false
-    [[ "$output" =~ "\`c4\` BIGINT COMMENT 'tag:4'" ]] || false
-    [[ "$output" =~ "\`c5\` BIGINT COMMENT 'tag:5'" ]] || false
+    [[ "$output" =~ "\`pk\` bigint NOT NULL" ]] || false
+    [[ "$output" =~ "\`c2\` bigint" ]] || false
+    [[ "$output" =~ "\`c3\` bigint" ]] || false
+    [[ "$output" =~ "\`c4\` bigint" ]] || false
+    [[ "$output" =~ "\`c5\` bigint" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
-    [[ ! "$output" =~ "\`c1\` BIGINT COMMENT 'tag:1'" ]] || false
+    [[ ! "$output" =~ "\`c1\` bigint" ]] || false
     dolt sql -q "select * from test"
 }
 

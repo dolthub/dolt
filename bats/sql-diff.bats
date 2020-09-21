@@ -313,6 +313,9 @@ SQL
     [ ! "$output" = "" ]
 
     dolt diff -r sql firstbranch newbranch > query
+    echo "----------------------"
+    cat query
+    echo "----------------------"
     dolt checkout firstbranch
     dolt sql < query
     dolt add test

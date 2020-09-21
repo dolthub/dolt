@@ -497,12 +497,12 @@ SQL
     dolt sql -q "alter table one_pk modify column c5 bigint"
     run dolt schema show one_pk
     [ $status -eq 0 ]
-    [[ "$output" =~ '`pk` BIGINT NOT NULL COMMENT' ]] || false
-    [[ "$output" =~ '`c1` BIGINT COMMENT' ]] || false
-    [[ "$output" =~ '`c2` BIGINT COMMENT' ]] || false
-    [[ "$output" =~ '`c3` BIGINT COMMENT' ]] || false
-    [[ "$output" =~ '`c4` BIGINT COMMENT' ]] || false
-    [[ "$output" =~ '`c5` BIGINT COMMENT' ]] || false
+    [[ "$output" =~ '`pk` bigint NOT NULL' ]] || false
+    [[ "$output" =~ '`c1` bigint' ]] || false
+    [[ "$output" =~ '`c2` bigint' ]] || false
+    [[ "$output" =~ '`c3` bigint' ]] || false
+    [[ "$output" =~ '`c4` bigint' ]] || false
+    [[ "$output" =~ '`c5` bigint' ]] || false
     [[ "$output" =~ 'PRIMARY KEY (`pk`)' ]] || false
 }
 
@@ -511,25 +511,13 @@ SQL
     dolt sql -q "alter table one_pk change column c5 c5 bigint"
     run dolt schema show one_pk
     [ $status -eq 0 ]
-    [[ "$output" =~ '`pk` BIGINT NOT NULL COMMENT' ]] || false
-    [[ "$output" =~ '`c1` BIGINT COMMENT' ]] || false
-    [[ "$output" =~ '`c2` BIGINT COMMENT' ]] || false
-    [[ "$output" =~ '`c3` BIGINT COMMENT' ]] || false
-    [[ "$output" =~ '`c4` BIGINT COMMENT' ]] || false
-    [[ "$output" =~ '`c5` BIGINT COMMENT' ]] || false
+    [[ "$output" =~ '`pk` bigint NOT NULL' ]] || false
+    [[ "$output" =~ '`c1` bigint' ]] || false
+    [[ "$output" =~ '`c2` bigint' ]] || false
+    [[ "$output" =~ '`c3` bigint' ]] || false
+    [[ "$output" =~ '`c4` bigint' ]] || false
+    [[ "$output" =~ '`c5` bigint' ]] || false
     [[ "$output" =~ 'PRIMARY KEY (`pk`)' ]] || false
-}
-
-@test "sql alter table modify column with tag change" {
-    run dolt sql -q "alter table one_pk modify column c5 bigint comment 'tag:9999'"
-    [ $status -eq 1 ]
-    [[ "$output" =~ "cannot change the tag of an existing column" ]] || false
-}
-
-@test "sql alter table change column with tag change" {
-    run dolt sql -q "alter table one_pk change column c5 c5 bigint comment 'tag:9999'"
-    [ $status -eq 1 ]
-    [[ "$output" =~ "cannot change the tag of an existing column" ]] || false
 }
 
 @test "sql drop table" {

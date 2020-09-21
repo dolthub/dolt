@@ -16,14 +16,11 @@ package tblcmds
 
 import (
 	"context"
-
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/schcmds"
+	"fmt"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
@@ -87,51 +84,17 @@ func (cmd MvCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 		return 1
 	}
 
-	force := apr.Contains(forceParam)
-
-	working, verr := commands.GetWorkingWithVErr(dEnv)
-	if verr != nil {
-		return commands.HandleVErrAndExitCode(verr, usage)
-	}
-
 	oldName := apr.Arg(0)
 	newName := apr.Arg(1)
-
-	if doltdb.HasDoltPrefix(oldName) {
-		return commands.HandleVErrAndExitCode(
-			errhand.BuildDError("error renaming table %s", oldName).AddCause(doltdb.ErrSystemTableCannotBeModified).Build(), usage)
+	queryStr := ""
+	if force := apr.Contains(forceParam); force {
+		queryStr = fmt.Sprintf("DROP TABLE IF EXISTS `%s`;", newName)
 	}
+	queryStr = fmt.Sprintf("%sRENAME TABLE `%s` TO `%s`;", queryStr, oldName, newName)
 
-	if verr = schcmds.ValidateTableNameForCreate(newName); verr != nil {
-		return commands.HandleVErrAndExitCode(verr, usage)
-	}
-
-	_, ok, err := working.GetTable(ctx, oldName)
-
-	if err != nil {
-		verr = errhand.BuildDError("error: failed to read tables from working set").Build()
-		return commands.HandleVErrAndExitCode(verr, usage)
-	}
-	if !ok {
-		verr = errhand.BuildDError("Table '%s' not found.", oldName).Build()
-		return commands.HandleVErrAndExitCode(verr, usage)
-	}
-
-	has, err := working.HasTable(ctx, newName)
-
-	if err != nil {
-		verr = errhand.BuildDError("error: failed to read tables from working set").AddCause(err).Build()
-		return commands.HandleVErrAndExitCode(verr, usage)
-	} else if !force && has {
-		verr = errhand.BuildDError("Data already exists in '%s'.  Use -f to overwrite.", newName).Build()
-		return commands.HandleVErrAndExitCode(verr, usage)
-	}
-
-	working, err = working.RenameTable(ctx, oldName, newName)
-	if err != nil {
-		verr = errhand.BuildDError("Unable to remove '%s'", oldName).Build()
-		return commands.HandleVErrAndExitCode(verr, usage)
-	}
-
-	return commands.HandleVErrAndExitCode(commands.UpdateWorkingWithVErr(dEnv, working), usage)
+	return commands.SqlCmd{}.Exec(ctx, "", []string{
+		fmt.Sprintf("--%s", commands.BatchFlag),
+		fmt.Sprintf(`--%s`, commands.QueryFlag),
+		queryStr,
+	}, dEnv)
 }

@@ -269,11 +269,11 @@ func CompressSchema(sch schema.Schema, colNames ...string) schema.Schema {
 		}
 	} else {
 		cols = make([]schema.Column, sch.GetAllCols().Size())
-		sch.GetAllCols().IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
+		sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 			col.Tag = itag
 			cols[itag] = col
 			itag++
-			return false
+			return false, nil
 		})
 	}
 

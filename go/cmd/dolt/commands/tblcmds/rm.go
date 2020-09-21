@@ -16,6 +16,8 @@ package tblcmds
 
 import (
 	"context"
+	"fmt"
+	"io/ioutil"
 
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
@@ -83,33 +85,15 @@ func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 		}
 	}
 
-	working, verr := commands.GetWorkingWithVErr(dEnv)
-	if verr != nil {
-		return exitWithVerr(verr)
+	queryStr := ""
+	for _, tableName := range apr.Args() {
+		queryStr = fmt.Sprintf("%sDROP TABLE `%s`;", queryStr, tableName)
 	}
 
-	if verr := commands.ValidateTablesWithVErr(apr.Args(), working); verr != nil {
-		return exitWithVerr(verr)
-	}
-
-	if verr := removeTables(ctx, dEnv, apr.Args(), working); verr != nil {
-		return exitWithVerr(verr)
-	}
-
-	return 0
-}
-
-func exitWithVerr(verr errhand.VerboseError) int {
-	cli.PrintErrln(verr.Verbose())
-	return 1
-}
-
-func removeTables(ctx context.Context, dEnv *env.DoltEnv, tables []string, working *doltdb.RootValue) errhand.VerboseError {
-	working, err := working.RemoveTables(ctx, tables...)
-
-	if err != nil {
-		return errhand.BuildDError("Unable to remove table(s)").AddCause(err).Build()
-	}
-
-	return commands.UpdateWorkingWithVErr(dEnv, working)
+	cli.CliOut = ioutil.Discard // display nothing on success
+	return commands.SqlCmd{}.Exec(ctx, "", []string{
+		fmt.Sprintf("--%s", commands.BatchFlag),
+		fmt.Sprintf(`--%s`, commands.QueryFlag),
+		queryStr,
+	}, dEnv)
 }

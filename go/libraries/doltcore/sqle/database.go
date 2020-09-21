@@ -122,6 +122,11 @@ func (tc *tableCache) AllForRoot(root *doltdb.RootValue) (map[string]sql.Table, 
 	return nil, false
 }
 
+type SqlDatabase interface {
+	sql.Database
+	GetRoot(*sql.Context) (*doltdb.RootValue, error)
+}
+
 // Database implements sql.Database for a dolt DB.
 type Database struct {
 	name      string
@@ -132,7 +137,7 @@ type Database struct {
 	tc        *tableCache
 }
 
-var _ sql.Database = Database{}
+var _ SqlDatabase = Database{}
 var _ sql.VersionedDatabase = Database{}
 var _ sql.TableDropper = Database{}
 var _ sql.TableCreator = Database{}
@@ -388,9 +393,9 @@ func (db Database) getTable(ctx context.Context, root *doltdb.RootValue, tableNa
 	if doltdb.IsReadOnlySystemTable(tableName) {
 		table = &readonlyTable
 	} else if doltdb.HasDoltPrefix(tableName) {
-		table = &WritableDoltTable{DoltTable: readonlyTable}
+		table = &WritableDoltTable{DoltTable: readonlyTable, db: db}
 	} else {
-		table = &AlterableDoltTable{WritableDoltTable{DoltTable: readonlyTable}}
+		table = &AlterableDoltTable{WritableDoltTable{DoltTable: readonlyTable, db: db}}
 	}
 
 	db.tc.Put(tableName, root, table)
@@ -572,17 +577,6 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Schem
 
 	if !doltdb.IsValidTableName(tableName) {
 		return ErrInvalidTableName.New(tableName)
-	}
-
-	for _, col := range sch {
-		commentTag := sqleSchema.ExtractTag(col)
-		if commentTag == schema.InvalidTag {
-			// we'll replace this invalid tag
-			continue
-		}
-		if commentTag >= schema.ReservedTagMin {
-			return fmt.Errorf("tag %d is within the reserved tag space", commentTag)
-		}
 	}
 
 	return db.createTable(ctx, tableName, sch)

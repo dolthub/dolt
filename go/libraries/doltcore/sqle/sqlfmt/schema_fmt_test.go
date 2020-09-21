@@ -36,34 +36,34 @@ func TestFmtCol(t *testing.T) {
 			0,
 			0,
 			0,
-			"`first` LONGTEXT COMMENT 'tag:0'",
+			"`first` LONGTEXT",
 		},
 		{
 			schema.NewColumn("last", 123, types.IntKind, true),
 			2,
 			0,
 			0,
-			"  `last` BIGINT COMMENT 'tag:123'",
+			"  `last` BIGINT",
 		},
 		{
 			schema.NewColumn("title", 2, types.UintKind, true),
 			0,
 			10,
 			0,
-			"   `title` BIGINT UNSIGNED COMMENT 'tag:2'",
+			"   `title` BIGINT UNSIGNED",
 		},
 		{
 			schema.NewColumn("aoeui", 52, types.UintKind, true),
 			0,
 			10,
 			15,
-			"   `aoeui` BIGINT UNSIGNED COMMENT 'tag:52'",
+			"   `aoeui` BIGINT UNSIGNED",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.Expected, func(t *testing.T) {
-			actual := FmtColWithTag(test.Indent, test.NameWidth, test.TypeWidth, test.Col)
+			actual := FmtCol(test.Indent, test.NameWidth, test.TypeWidth, test.Col)
 			assert.Equal(t, test.Expected, actual)
 		})
 	}

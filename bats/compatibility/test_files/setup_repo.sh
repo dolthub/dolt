@@ -11,11 +11,11 @@ dolt branch no-data
 
 dolt sql <<SQL
 CREATE TABLE abc (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  a LONGTEXT COMMENT 'tag:100',
-  b DOUBLE COMMENT 'tag:101',
-  w BIGINT COMMENT 'tag:102',
-  x BIGINT COMMENT 'tag:103',
+  pk BIGINT NOT NULL,
+  a LONGTEXT,
+  b DOUBLE,
+  w BIGINT,
+  x BIGINT,
   PRIMARY KEY (pk)
 );
 INSERT INTO abc VALUES (0, 'asdf', 1.1, 0, 0);
@@ -32,7 +32,7 @@ dolt sql <<SQL
 DELETE FROM abc WHERE pk=1;
 INSERT INTO abc VALUES (3, 'data', 1.1, 0, 0);
 ALTER TABLE abc DROP COLUMN w;
-ALTER TABLE abc ADD COLUMN y BIGINT COMMENT 'tag:104';
+ALTER TABLE abc ADD COLUMN y BIGINT;
 SQL
 dolt add .
 dolt commit -m "made changes to master"
@@ -42,7 +42,7 @@ dolt sql <<SQL
 DELETE FROM abc WHERE pk=2;
 INSERT INTO abc VALUES (4, 'data', 1.1, 0, 0);
 ALTER TABLE abc DROP COLUMN x;
-ALTER TABLE abc ADD COLUMN z BIGINT COMMENT 'tag:105';
+ALTER TABLE abc ADD COLUMN z BIGINT;
 SQL
 dolt add .
 dolt commit -m "made changes to other"

@@ -30,14 +30,13 @@ type DoltIndex interface {
 	sql.Index
 	sql.AscendIndex
 	sql.DescendIndex
-	DoltDatabase() Database
 	Schema() schema.Schema
 	TableData() types.Map
 }
 
 type doltIndex struct {
 	cols         []schema.Column
-	db           Database
+	db           sql.Database
 	id           string
 	indexRowData types.Map
 	indexSch     schema.Schema
@@ -121,12 +120,7 @@ func (di *doltIndex) DescendRange(lessOrEqual, greaterOrEqual []interface{}) (sq
 
 // Database implement sql.Index
 func (di *doltIndex) Database() string {
-	return di.db.name
-}
-
-// DoltDatabase returns the dolt database that created this index.
-func (di *doltIndex) DoltDatabase() Database {
-	return di.db
+	return di.db.Name()
 }
 
 // Expressions implements sql.Index

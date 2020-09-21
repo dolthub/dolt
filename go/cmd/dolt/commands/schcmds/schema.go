@@ -24,6 +24,7 @@ var Commands = cli.NewSubCommandHandler("schema", "Commands for showing and impo
 	ExportCmd{},
 	ImportCmd{},
 	ShowCmd{},
+	TagsCmd{},
 })
 
 // ValidateTableNameForCreate validates the given table name for creation as a user table, returning an error if the

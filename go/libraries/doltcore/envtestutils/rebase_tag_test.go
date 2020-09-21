@@ -18,11 +18,11 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strconv"
 	"testing"
 
 	"github.com/liquidata-inc/go-mysql-server/sql"
 	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -44,8 +44,8 @@ const (
 	_
 	AgeTag
 )
-const DripTag = 13
-const DripTagRebased = 19
+const DripTag = 2360
+const DripTagRebased = 2361
 
 type RebaseTagTest struct {
 	// The name of this test. Names should be unique and descriptive.
@@ -65,13 +65,13 @@ type RebaseTagTest struct {
 	ExpectedErrStr string
 }
 
-var createPeopleTable = fmt.Sprintf(`
+var createPeopleTable = `
 	create table people (
-		id int comment 'tag:%d',
-		name varchar(20) not null comment 'tag:%d',
-		age int comment 'tag:%d',
+		id int,
+		name varchar(20) not null,
+		age int,
 		primary key (id)
-	);`, IdTag, NameTag, AgeTag)
+	);`
 
 func columnCollection(cols ...schema.Column) *schema.ColCollection {
 	pcc, err := schema.NewColCollection(cols...)
@@ -90,7 +90,7 @@ func newRow(vals row.TaggedValues, cc *schema.ColCollection) row.Row {
 }
 
 func newColTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, partOfPK bool, constraints ...schema.ColConstraint) schema.Column {
-	c, err := schema.NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, "", constraints...)
+	c, err := schema.NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, "", "", constraints...)
 	if err != nil {
 		panic("could not create column")
 	}
@@ -141,7 +141,7 @@ var RebaseTagTests = []RebaseTagTest{
 		Name: "rebase entire history",
 		Commands: []tc.Command{
 			tc.Query{Query: createPeopleTable},
-			tc.Query{Query: `alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+			tc.Query{Query: `alter table people add drip double;`},
 			tc.Query{Query: `insert into people (id, name, age, drip) values
 				(10, "Patty Bouvier", 40, 8.5),
 				(11, "Selma Bouvier", 40, 8.5);`},
@@ -161,7 +161,7 @@ var RebaseTagTests = []RebaseTagTest{
 		Commands: []tc.Command{
 			tc.Query{Query: createPeopleTable},
 			tc.CommitAll{Message: "made changes"},
-			tc.Query{Query: `alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+			tc.Query{Query: `alter table people add drip double;`},
 			tc.CommitAll{Message: "made changes"},
 		},
 		OldTag:            DripTag,
@@ -176,7 +176,7 @@ var RebaseTagTests = []RebaseTagTest{
 			tc.Query{Query: createPeopleTable},
 			tc.Query{Query: `insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`},
 			tc.CommitAll{Message: "made changes"},
-			tc.Query{Query: `alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+			tc.Query{Query: `alter table people add drip double;`},
 			tc.Query{Query: `insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`},
 			tc.CommitAll{Message: "made changes"},
 		},
@@ -195,7 +195,7 @@ var RebaseTagTests = []RebaseTagTest{
 			tc.Query{Query: createPeopleTable},
 			tc.Query{Query: `insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`},
 			tc.CommitAll{Message: "made changes"},
-			tc.Query{Query: `alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+			tc.Query{Query: `alter table people add drip double;`},
 			tc.Query{Query: `update people set drip=9.9 where id=9;`},
 			tc.CommitAll{Message: "made changes"},
 		},
@@ -213,7 +213,7 @@ var RebaseTagTests = []RebaseTagTest{
 			tc.Query{Query: createPeopleTable},
 			tc.Query{Query: `insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`},
 			tc.CommitAll{Message: "made changes"},
-			tc.Query{Query: `alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+			tc.Query{Query: `alter table people add drip double;`},
 			tc.Query{Query: `insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`},
 			tc.CommitAll{Message: "made changes"},
 			tc.Query{Query: `update people set drip=9.9 where id=11;`},
@@ -234,7 +234,7 @@ var RebaseTagTests = []RebaseTagTest{
 			tc.Query{Query: createPeopleTable},
 			tc.Query{Query: `insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`},
 			tc.CommitAll{Message: "made changes"},
-			tc.Query{Query: `alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+			tc.Query{Query: `alter table people add drip double;`},
 			tc.Query{Query: `insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`},
 			tc.CommitAll{Message: "made changes"},
 			tc.Query{Query: `update people set drip=9.9 where id=11;`},
@@ -258,7 +258,7 @@ var RebaseTagTests = []RebaseTagTest{
 				(7, "Maggie Simpson", 1),
 				(8, "Milhouse Van Houten", 8);`},
 			tc.CommitAll{Message: "made changes"},
-			tc.Query{Query: `alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+			tc.Query{Query: `alter table people add drip double;`},
 			tc.CommitAll{Message: "made changes"},
 			tc.Query{Query: `update people set age=2 where id=7;`},
 			tc.Query{Query: `delete from people where id=8;`},
@@ -281,7 +281,7 @@ var RebaseTagTests = []RebaseTagTest{
 			tc.Query{Query: createPeopleTable},
 			tc.CommitAll{Message: "made changes"},
 			tc.Branch{BranchName: "newBranch"},
-			tc.Query{Query: `alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+			tc.Query{Query: `alter table people add drip double;`},
 			tc.Query{Query: `insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`},
 			tc.CommitAll{Message: "made changes"},
 			tc.Checkout{BranchName: "newBranch"},
@@ -311,7 +311,7 @@ var RebaseTagTests = []RebaseTagTest{
 				(9, "Jacqueline Bouvier", 80);`},
 			tc.CommitAll{Message: "made changes"},
 			tc.Branch{BranchName: "newBranch"},
-			tc.Query{Query: `alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+			tc.Query{Query: `alter table people add drip double;`},
 			tc.Query{Query: `delete from people where id=6;`},
 			tc.Query{Query: `update people set drip=99.9 where id=7;`},
 			tc.Query{Query: `insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`},
@@ -343,7 +343,7 @@ var RebaseTagTests = []RebaseTagTest{
 			tc.CommitAll{Message: "made changes"},
 			tc.Branch{BranchName: "newBranch"},
 			tc.Checkout{BranchName: "newBranch"},
-			tc.Query{Query: `alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+			tc.Query{Query: `alter table people add drip double;`},
 			tc.Query{Query: `insert into people (id, name, age, drip) values (11, "Selma Bouvier", 40, 8.5);`},
 			tc.CommitAll{Message: "made changes"},
 			tc.Checkout{BranchName: "master"},
@@ -366,7 +366,7 @@ var RebaseTagTests = []RebaseTagTest{
 		Commands: []tc.Command{
 			tc.Query{Query: createPeopleTable},
 			tc.CommitAll{Message: "made changes"},
-			tc.Query{Query: `alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+			tc.Query{Query: `alter table people add drip double;`},
 			tc.Query{Query: `insert into people (id, name, age, drip) values (9, "Jacqueline Bouvier", 80, 8.5);`},
 			tc.CommitAll{Message: "made changes"},
 			tc.Branch{BranchName: "newBranch"},
@@ -395,7 +395,7 @@ var RebaseTagTests = []RebaseTagTest{
 			tc.Query{Query: createPeopleTable},
 			tc.Query{Query: `insert into people (id, name, age) values (7, "Maggie Simpson", 1);`},
 			tc.CommitAll{Message: "made changes"},
-			tc.Query{Query: `alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+			tc.Query{Query: `alter table people add drip double;`},
 			tc.CommitAll{Message: "made changes"},
 			tc.Query{Query: `insert into people (id, name, age) values (9, "Jacqueline Bouvier", 80);`},
 			tc.CommitAll{Message: "made changes"},
@@ -462,7 +462,7 @@ func testRebaseTagHistory(t *testing.T) {
 			(7, "Maggie Simpson", 1);`},
 		tc.CommitAll{Message: "made changes"}, // common ancestor of (newMaster, oldMaster) and (newMaster, other)
 
-		tc.Query{Query: `alter table people add drip double comment 'tag:` + strconv.Itoa(DripTag) + `';`},
+		tc.Query{Query: `alter table people add drip double;`},
 		tc.CommitAll{Message: "made changes"}, // common ancestor of (oldMaster, other)
 
 		tc.Branch{BranchName: "other"},
@@ -528,9 +528,13 @@ func checkSchema(t *testing.T, r *doltdb.RootValue, tableName string, expectedSc
 	require.NoError(t, err)
 	sch, err := tbl.GetSchema(context.Background())
 	require.NoError(t, err)
-	eq, err := schema.SchemasAreEqual(sch, expectedSch)
-	require.NoError(t, err)
-	require.True(t, eq)
+	require.Equal(t, expectedSch.GetAllCols().Size(), sch.GetAllCols().Size())
+	cols := sch.GetAllCols().GetColumns()
+	for i, expectedCol := range expectedSch.GetAllCols().GetColumns() {
+		col := cols[i]
+		col.Tag = expectedCol.Tag
+		assert.Equal(t, expectedCol, col)
+	}
 }
 
 func checkRows(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, tableName string, sch schema.Schema, selectQuery string, expectedRows []row.Row) {

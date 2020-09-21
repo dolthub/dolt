@@ -78,35 +78,58 @@ teardown() {
 @test "cp table with invalid name" {
     run dolt table cp test1 123
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "not a valid table name" ]] || false
+    [[ "$output" =~ "Invalid table name" ]] || false
     run dolt table cp test1 dolt_docs
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "not a valid table name" ]] || false
+    [[ "$output" =~ "Invalid table name" ]] || false
     [[ "$output" =~ "reserved" ]] || false
     run dolt table cp test1 dolt_query_catalog
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "not a valid table name" ]] || false
+    [[ "$output" =~ "Invalid table name" ]] || false
     [[ "$output" =~ "reserved" ]] || false
     run dolt table cp test1 dolt_reserved
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "not a valid table name" ]] || false
+    [[ "$output" =~ "Invalid table name" ]] || false
     [[ "$output" =~ "reserved" ]] || false
 }
 
 @test "mv table with invalid name" {
     run dolt table mv test1 123
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "not a valid table name" ]] || false
+    [[ "$output" =~ "Invalid table name" ]] || false
     run dolt table mv test1 dolt_docs
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "not a valid table name" ]] || false
+    [[ "$output" =~ "Invalid table name" ]] || false
     [[ "$output" =~ "reserved" ]] || false
     run dolt table mv test1 dolt_query_catalog
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "not a valid table name" ]] || false
+    [[ "$output" =~ "Invalid table name" ]] || false
     [[ "$output" =~ "reserved" ]] || false
     run dolt table mv test1 dolt_reserved
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "not a valid table name" ]] || false
+    [[ "$output" =~ "Invalid table name" ]] || false
     [[ "$output" =~ "reserved" ]] || false
+}
+
+@test "rm table" {
+    run dolt table rm test1
+    [ "$status" -eq 0 ]
+    run dolt sql -q 'show tables';
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "test1" ]] || false
+    [[ "$output" =~ "test2" ]] || false
+}
+
+@test "rm tables" {
+    run dolt table rm test1 test2
+    [ "$status" -eq 0 ]
+    run dolt ls;
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No tables" ]] || false
+}
+
+@test "rm nonexistent table" {
+    run dolt table rm abcdefz
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "not found" ]] || false
 }

@@ -44,7 +44,7 @@ type ColumnOrder struct {
 // table, since we must write a value for each row. If the column is not nullable, a default value must be provided.
 //
 // Returns an error if the column added conflicts with the existing schema in tag or name.
-func AddColumnToTable(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.Table, tblName string, tag uint64, newColName string, typeInfo typeinfo.TypeInfo, nullable Nullable, defaultVal string, order *ColumnOrder) (*doltdb.Table, error) {
+func AddColumnToTable(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.Table, tblName string, tag uint64, newColName string, typeInfo typeinfo.TypeInfo, nullable Nullable, defaultVal, comment string, order *ColumnOrder) (*doltdb.Table, error) {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err
@@ -54,7 +54,7 @@ func AddColumnToTable(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.T
 		return nil, err
 	}
 
-	newSchema, err := addColumnToSchema(sch, tag, newColName, typeInfo, nullable, order, defaultVal)
+	newSchema, err := addColumnToSchema(sch, tag, newColName, typeInfo, nullable, order, defaultVal, comment)
 	if err != nil {
 		return nil, err
 	}
@@ -131,8 +131,8 @@ func updateTableWithNewSchema(ctx context.Context, tblName string, tbl *doltdb.T
 }
 
 // addColumnToSchema creates a new schema with a column as specified by the params.
-func addColumnToSchema(sch schema.Schema, tag uint64, newColName string, typeInfo typeinfo.TypeInfo, nullable Nullable, order *ColumnOrder, defaultVal string) (schema.Schema, error) {
-	newCol, err := createColumn(nullable, newColName, tag, typeInfo, defaultVal)
+func addColumnToSchema(sch schema.Schema, tag uint64, newColName string, typeInfo typeinfo.TypeInfo, nullable Nullable, order *ColumnOrder, defaultVal, comment string) (schema.Schema, error) {
+	newCol, err := createColumn(nullable, newColName, tag, typeInfo, defaultVal, comment)
 	if err != nil {
 		return nil, err
 	}
@@ -162,11 +162,11 @@ func addColumnToSchema(sch schema.Schema, tag uint64, newColName string, typeInf
 	return newSch, nil
 }
 
-func createColumn(nullable Nullable, newColName string, tag uint64, typeInfo typeinfo.TypeInfo, defaultVal string) (schema.Column, error) {
+func createColumn(nullable Nullable, newColName string, tag uint64, typeInfo typeinfo.TypeInfo, defaultVal, comment string) (schema.Column, error) {
 	if nullable {
-		return schema.NewColumnWithTypeInfo(newColName, tag, typeInfo, false, defaultVal)
+		return schema.NewColumnWithTypeInfo(newColName, tag, typeInfo, false, defaultVal, comment)
 	} else {
-		return schema.NewColumnWithTypeInfo(newColName, tag, typeInfo, false, defaultVal, schema.NotNullConstraint{})
+		return schema.NewColumnWithTypeInfo(newColName, tag, typeInfo, false, defaultVal, comment, schema.NotNullConstraint{})
 	}
 }
 

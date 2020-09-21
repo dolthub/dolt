@@ -320,7 +320,7 @@ teardown() {
     [[ "${#lines[@]}" = "3" ]] || false
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v1\` BIGINT DEFAULT (pk)" ]] || false
+    [[ "$output" =~ "\`v1\` bigint DEFAULT (pk)" ]] || false
 }
 
 @test "default-values: Column referenced with name change" {
@@ -339,7 +339,7 @@ teardown() {
     [[ "${#lines[@]}" = "4" ]] || false
     run dolt schema show
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "\`v2\` BIGINT DEFAULT (v1y + 1)" ]] || false
+    [[ "$output" =~ "\`v2\` bigint DEFAULT (v1y + 1)" ]] || false
 }
 
 @test "default-values: Invalid literal for column type" {

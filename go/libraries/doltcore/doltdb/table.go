@@ -697,6 +697,30 @@ func (t *Table) DeleteIndexRowData(ctx context.Context, indexName string) (*Tabl
 	return t.SetIndexData(ctx, indexesMap)
 }
 
+// RenameIndexRowData changes the name for the index data. Does not verify that the new name is unoccupied. If the old
+// name does not exist, then this returns the called table without error.
+func (t *Table) RenameIndexRowData(ctx context.Context, oldIndexName, newIndexName string) (*Table, error) {
+	indexesMap, err := t.GetIndexData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	oldKey := types.String(oldIndexName)
+	newKey := types.String(newIndexName)
+	if indexRowData, ok, err := indexesMap.MaybeGet(ctx, oldKey); err != nil {
+		return nil, err
+	} else if ok {
+		indexesMap, err = indexesMap.Edit().Set(newKey, indexRowData).Remove(oldKey).Map(ctx)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		return t, nil
+	}
+
+	return t.SetIndexData(ctx, indexesMap)
+}
+
 func rebuildIndexRowData(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, tblRowData types.Map, index schema.Index) (types.Map, error) {
 	emptyIndexMap, err := types.NewMap(ctx, vrw)
 	if err != nil {

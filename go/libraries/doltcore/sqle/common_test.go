@@ -134,9 +134,21 @@ func schemaNewColumn(t *testing.T, name string, tag uint64, sqlType sql.Type, pa
 func schemaNewColumnWDefVal(t *testing.T, name string, tag uint64, sqlType sql.Type, partOfPK bool, defaultVal string, constraints ...schema.ColConstraint) schema.Column {
 	typeInfo, err := typeinfo.FromSqlType(sqlType)
 	require.NoError(t, err)
-	col, err := schema.NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, defaultVal, constraints...)
+	col, err := schema.NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, defaultVal, "", constraints...)
 	require.NoError(t, err)
 	return col
+}
+
+func equalSchemas(t *testing.T, expectedSch schema.Schema, sch schema.Schema) {
+	require.NotNil(t, expectedSch)
+	require.NotNil(t, sch)
+	require.Equal(t, expectedSch.GetAllCols().Size(), sch.GetAllCols().Size())
+	cols := sch.GetAllCols().GetColumns()
+	for i, expectedCol := range expectedSch.GetAllCols().GetColumns() {
+		col := cols[i]
+		col.Tag = expectedCol.Tag
+		assert.Equal(t, expectedCol, col)
+	}
 }
 
 // TODO: this shouldn't be here

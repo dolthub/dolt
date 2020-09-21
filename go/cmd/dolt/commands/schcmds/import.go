@@ -286,7 +286,7 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 
 	tblName := impArgs.tableName
 	// inferred schemas have no foreign keys
-	cli.Println(sqlfmt.CreateTableStmtWithTags(tblName, sch, nil, nil))
+	cli.Println(sqlfmt.CreateTableStmt(tblName, sch, nil, nil))
 
 	if !apr.Contains(dryRunFlag) {
 		tbl, tblExists, err := root.GetTable(ctx, tblName)

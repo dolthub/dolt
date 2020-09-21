@@ -245,9 +245,9 @@ DELIM
     [ "${lines[1]}" = "0,1,2,3" ]
     run dolt schema export test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "\`c1\` FLOAT" ]] || false
-    [[ "$output" =~ "\`c2\` FLOAT" ]] || false
-    [[ "$output" =~ "\`c3\` FLOAT" ]] || false
+    [[ "$output" =~ "\`c1\` float" ]] || false
+    [[ "$output" =~ "\`c2\` float" ]] || false
+    [[ "$output" =~ "\`c3\` float" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
@@ -260,9 +260,9 @@ DELIM
     [ "${lines[1]}" = "0,1,2,3" ]
     run dolt schema export test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "\`c1\` FLOAT" ]] || false
-    [[ "$output" =~ "\`c2\` FLOAT" ]] || false
-    [[ "$output" =~ "\`c3\` FLOAT" ]] || false
+    [[ "$output" =~ "\`c1\` float" ]] || false
+    [[ "$output" =~ "\`c2\` float" ]] || false
+    [[ "$output" =~ "\`c3\` float" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
@@ -461,12 +461,12 @@ DELIM
     run dolt schema show test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]]
-    [[ "$output" =~ "\`pk\` INT" ]]
-    [[ "$output" =~ "\`str\` LONGTEXT" ]]
-    [[ "$output" =~ "\`int\` INT UNSIGNED" ]]
-    [[ "$output" =~ "\`bool\` BIT(1)" ]]
-    [[ "$output" =~ "\`float\` FLOAT" ]]
-    [[ "$output" =~ "\`date\` DATE" ]]
-    [[ "$output" =~ "\`time\` TIME" ]]
-    [[ "$output" =~ "\`datetime\` DATETIME" ]]
+    [[ "$output" =~ "\`pk\` int" ]]
+    [[ "$output" =~ "\`str\` longtext" ]]
+    [[ "$output" =~ "\`int\` int unsigned" ]]
+    [[ "$output" =~ "\`bool\` bit(1)" ]]
+    [[ "$output" =~ "\`float\` float" ]]
+    [[ "$output" =~ "\`date\` date" ]]
+    [[ "$output" =~ "\`time\` time" ]]
+    [[ "$output" =~ "\`datetime\` datetime" ]]
 }

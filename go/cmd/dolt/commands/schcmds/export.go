@@ -20,13 +20,14 @@ import (
 	"io"
 	"os"
 
+	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
@@ -39,10 +40,6 @@ var schExportDocs = cli.CommandDocumentationContent{
 	},
 }
 
-const (
-	withTagsFlag = "with-tags"
-)
-
 type ExportCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -52,7 +49,7 @@ func (cmd ExportCmd) Name() string {
 
 // Description returns a description of the command
 func (cmd ExportCmd) Description() string {
-	return "Exports a table's schema."
+	return "Exports a table's schema in SQL form."
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
@@ -64,8 +61,7 @@ func (cmd ExportCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string)
 func (cmd ExportCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "table whose schema is being exported."})
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"commit", "commit at which point the schema will be displayed."})
-	ap.SupportsFlag(withTagsFlag, "", "Include column tags in exported schema")
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "the file that the schema will be written to."})
 	return ap
 }
 
@@ -122,6 +118,9 @@ func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root *do
 	var tablesToExport []string
 	var err error
 	if tblName != "" {
+		if doltdb.HasDoltPrefix(tblName) {
+			return errhand.BuildDError("%s not found", tblName).Build()
+		}
 		tablesToExport = []string{tblName}
 	} else {
 		tablesToExport, err = doltdb.GetNonSystemTableNames(ctx, root)
@@ -131,7 +130,7 @@ func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root *do
 	}
 
 	for _, tn := range tablesToExport {
-		verr := exportTblSchema(ctx, tn, root, wr, apr.Contains(withTagsFlag))
+		verr := exportTblSchema(ctx, tn, root, wr)
 		if verr != nil {
 			return verr
 		}
@@ -140,42 +139,11 @@ func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root *do
 	return nil
 }
 
-func exportTblSchema(ctx context.Context, tblName string, root *doltdb.RootValue, wr io.Writer, withTags bool) errhand.VerboseError {
-	if has, err := root.HasTable(ctx, tblName); err != nil {
-		return errhand.BuildDError("unable to read from database").AddCause(err).Build()
-	} else if !has {
-		return errhand.BuildDError("table %s not found", tblName).Build()
-	}
-
-	tbl, _, err := root.GetTable(ctx, tblName)
-
+func exportTblSchema(ctx context.Context, tblName string, root *doltdb.RootValue, wr io.Writer) errhand.VerboseError {
+	sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, root)
+	stmt, err := dsqle.GetCreateTableStmt(sqlCtx, engine, tblName)
 	if err != nil {
-		return errhand.BuildDError("unable to get table").AddCause(err).Build()
-	}
-
-	sch, err := tbl.GetSchema(ctx)
-
-	if err != nil {
-		return errhand.BuildDError("error: failed to get schema for table %s", tblName).AddCause(err).Build()
-	}
-
-	fkc, err := root.GetForeignKeyCollection(ctx)
-
-	if err != nil {
-		return errhand.BuildDError("error: failed to read foreign key struct").AddCause(err).Build()
-	}
-
-	declaresFk, _ := fkc.KeysForTable(tblName)
-	parentSchs, err := root.GetAllSchemas(ctx)
-	if err != nil {
-		return errhand.BuildDError("could not read schemas").AddCause(err).Build()
-	}
-
-	var stmt string
-	if withTags {
-		stmt = sqlfmt.CreateTableStmtWithTags(tblName, sch, declaresFk, parentSchs)
-	} else {
-		stmt = sqlfmt.CreateTableStmt(tblName, sch, declaresFk, parentSchs)
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	_, err = fmt.Fprintln(wr, stmt)
