@@ -5,21 +5,21 @@ setup() {
     setup_common
     dolt sql <<SQL
 CREATE TABLE test_int (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
+  pk BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
+  c3 BIGINT,
+  c4 BIGINT,
+  c5 BIGINT,
   PRIMARY KEY (pk)
 );
 CREATE TABLE test_string (
-  pk LONGTEXT NOT NULL COMMENT 'tag:6',
-  c1 LONGTEXT COMMENT 'tag:7',
-  c2 LONGTEXT COMMENT 'tag:8',
-  c3 LONGTEXT COMMENT 'tag:9',
-  c4 LONGTEXT COMMENT 'tag:10',
-  c5 LONGTEXT COMMENT 'tag:11',
+  pk LONGTEXT NOT NULL,
+  c1 LONGTEXT,
+  c2 LONGTEXT,
+  c3 LONGTEXT,
+  c4 LONGTEXT,
+  c5 LONGTEXT,
   PRIMARY KEY (pk)
 );
 SQL

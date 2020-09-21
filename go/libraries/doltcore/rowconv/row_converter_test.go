@@ -103,9 +103,9 @@ func TestUnneccessaryConversion(t *testing.T) {
 }
 
 func TestSpecialBoolHandling(t *testing.T) {
-	col1, err := schema.NewColumnWithTypeInfo("pk", 0, typeinfo.Int64Type, true, "")
+	col1, err := schema.NewColumnWithTypeInfo("pk", 0, typeinfo.Int64Type, true, "", "")
 	require.NoError(t, err)
-	col2, err := schema.NewColumnWithTypeInfo("v", 1, typeinfo.PseudoBoolType, false, "")
+	col2, err := schema.NewColumnWithTypeInfo("v", 1, typeinfo.PseudoBoolType, false, "", "")
 	require.NoError(t, err)
 	colColl, _ := schema.NewColCollection(col1, col2)
 	sch := schema.SchemaFromCols(colColl)

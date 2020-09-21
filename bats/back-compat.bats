@@ -24,9 +24,9 @@ teardown() {
         [[ "$output" =~ "newcolumn" ]] || false
         run dolt schema show
         [ "$status" -eq "0" ]
-        [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT " ]] || false
-        [[ "$output" =~ "\`a\` LONGTEXT COMMENT " ]] || false
-        [[ "$output" =~ "\`b\` DATETIME COMMENT " ]] || false
+        [[ "$output" =~ "\`pk\` bigint NOT NULL" ]] || false
+        [[ "$output" =~ "\`a\` longtext" ]] || false
+        [[ "$output" =~ "\`b\` datetime" ]] || false
         run dolt sql -q "select * from abc order by pk asc"
         [ "$status" -eq "0" ]
         [[ "${lines[3]}" =~ " 1 " ]] || false
@@ -35,9 +35,9 @@ teardown() {
         dolt checkout conflict
         run dolt schema show
         [ "$status" -eq "0" ]
-        [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT " ]] || false
-        [[ "$output" =~ "\`a\` LONGTEXT COMMENT " ]] || false
-        [[ "$output" =~ "\`b\` DATETIME COMMENT " ]] || false
+        [[ "$output" =~ "\`pk\` bigint NOT NULL" ]] || false
+        [[ "$output" =~ "\`a\` longtext" ]] || false
+        [[ "$output" =~ "\`b\` datetime" ]] || false
         run dolt sql -q "select * from abc order by pk asc"
         [ "$status" -eq "0" ]
         [[ "${lines[3]}" =~ " 1 " ]] || false
@@ -49,10 +49,10 @@ teardown() {
         dolt checkout newcolumn
         run dolt schema show
         [ "$status" -eq "0" ]
-        [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT " ]] || false
-        [[ "$output" =~ "\`a\` LONGTEXT COMMENT " ]] || false
-        [[ "$output" =~ "\`b\` DATETIME COMMENT " ]] || false
-        [[ "$output" =~ "\`c\` BIGINT UNSIGNED COMMENT " ]] || false
+        [[ "$output" =~ "\`pk\` bigint NOT NULL" ]] || false
+        [[ "$output" =~ "\`a\` longtext" ]] || false
+        [[ "$output" =~ "\`b\` datetime" ]] || false
+        [[ "$output" =~ "\`c\` bigint unsigned" ]] || false
         run dolt sql -q "select * from abc order by pk asc"
         [ "$status" -eq "0" ]
         [[ "${lines[3]}" =~ " 1 " ]] || false

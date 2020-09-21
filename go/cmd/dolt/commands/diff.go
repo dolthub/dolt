@@ -138,10 +138,10 @@ func (cmd DiffCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
 	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
 	ap.SupportsFlag(SummaryFlag, "", "Show summary of data changes")
-	ap.SupportsString(formatFlag, "r", "result output format", "How to format diff output. Valid values are tabular & sql. Defaults to tabular. ")
+	ap.SupportsString(FormatFlag, "r", "result output format", "How to format diff output. Valid values are tabular & sql. Defaults to tabular. ")
 	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
 	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
-	ap.SupportsString(queryFlag, "q", "query", "diffs the results of a query at two commits")
+	ap.SupportsString(QueryFlag, "q", "query", "diffs the results of a query at two commits")
 	return ap
 }
 
@@ -180,22 +180,22 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, d
 func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (from, to *doltdb.RootValue, dArgs *diffArgs, err error) {
 	dArgs = &diffArgs{}
 
-	if q, ok := apr.GetValue(queryFlag); ok {
+	if q, ok := apr.GetValue(QueryFlag); ok {
 		_, okWhere := apr.GetValue(whereParam)
 		_, okLimit := apr.GetInt(limitParam)
 		switch {
 		case okWhere:
-			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", queryFlag, whereParam)
+			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", QueryFlag, whereParam)
 		case okLimit:
-			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", queryFlag, limitParam)
+			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", QueryFlag, limitParam)
 		case apr.Contains(DataFlag):
-			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", queryFlag, DataFlag)
+			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", QueryFlag, DataFlag)
 		case apr.Contains(SchemaFlag):
-			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", queryFlag, SchemaFlag)
+			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", QueryFlag, SchemaFlag)
 		case apr.Contains(SummaryFlag):
-			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", queryFlag, SummaryFlag)
+			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", QueryFlag, SummaryFlag)
 		case apr.Contains(SQLFlag):
-			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", queryFlag, SQLFlag)
+			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", QueryFlag, SQLFlag)
 		}
 		dArgs.query = q
 	}
@@ -207,9 +207,9 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		dArgs.diffParts = SchemaOnlyDiff
 	}
 
-	f, _ := apr.GetValue(formatFlag)
+	f, _ := apr.GetValue(FormatFlag)
 	switch strings.ToLower(f) {
-	case "tablular":
+	case "tabular":
 		dArgs.diffOutput = TabularDiffOutput
 	case "sql":
 		dArgs.diffOutput = SQLDiffOutput
@@ -455,12 +455,12 @@ func tabularSchemaDiff(ctx context.Context, td diff.TableDelta, fromSchemas, toS
 		dff := colDiffs[tag]
 		switch dff.DiffType {
 		case diff.SchDiffNone:
-			cli.Println(sqlfmt.FmtColWithTag(4, 0, 0, *dff.New))
+			cli.Println(sqlfmt.FmtCol(4, 0, 0, *dff.New))
 		case diff.SchDiffAdded:
-			cli.Println(color.GreenString("+ " + sqlfmt.FmtColWithTag(2, 0, 0, *dff.New)))
+			cli.Println(color.GreenString("+ " + sqlfmt.FmtCol(2, 0, 0, *dff.New)))
 		case diff.SchDiffRemoved:
 			// removed from sch2
-			cli.Println(color.RedString("- " + sqlfmt.FmtColWithTag(2, 0, 0, *dff.Old)))
+			cli.Println(color.RedString("- " + sqlfmt.FmtCol(2, 0, 0, *dff.Old)))
 		case diff.SchDiffModified:
 			// changed in sch2
 			n0, t0 := dff.Old.Name, dff.Old.TypeInfo.ToSqlType().String()
@@ -538,7 +538,7 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 	if td.IsDrop() {
 		cli.Println(sqlfmt.DropTableStmt(td.FromName))
 	} else if td.IsAdd() {
-		cli.Println(sqlfmt.CreateTableStmtWithTags(td.ToName, toSch, td.ToFks, nil))
+		cli.Println(sqlfmt.CreateTableStmt(td.ToName, toSch, td.ToFks, nil))
 	} else {
 		if td.FromName != td.ToName {
 			cli.Println(sqlfmt.RenameTableStmt(td.FromName, td.ToName))

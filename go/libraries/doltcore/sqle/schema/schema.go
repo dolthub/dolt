@@ -17,8 +17,6 @@ package schema
 import (
 	"context"
 	"fmt"
-	"strconv"
-	"strings"
 
 	sqle "github.com/liquidata-inc/go-mysql-server"
 	"github.com/liquidata-inc/go-mysql-server/sql"
@@ -29,11 +27,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
-
-var ErrPartiallyDefinedTags = fmt.Errorf("must define tags for all or none of the schema columns")
 
 // ApplyDefaults applies the default values to the given indices, returning the resulting row.
 func ApplyDefaults(ctx context.Context, doltSchema schema.Schema, sqlSchema sql.Schema, indicesOfColumns []int, dRow row.Row) (row.Row, error) {
@@ -140,7 +135,8 @@ func FromDoltSchema(tableName string, sch schema.Schema) (sql.Schema, error) {
 				Nullable:   col.IsNullable(),
 				Source:     tableName,
 				PrimaryKey: col.IsPartOfPK,
-				Comment:    fmt.Sprintf("tag:%d", col.Tag),
+				Comment:    col.Comment,
+				Extra:      fmt.Sprintf("tag:%d", tag),
 			},
 			Default: col.Default,
 		}
@@ -157,39 +153,20 @@ func ToDoltSchema(ctx context.Context, root *doltdb.RootValue, tableName string,
 	var cols []schema.Column
 	var err error
 
-	// Users must define all or none of the column tags
-	userDefinedTags := ExtractTag(sqlSchema[0]) != schema.InvalidTag
-	var tags []uint64
-
-	if userDefinedTags {
-		for _, col := range sqlSchema {
-			commentTag := ExtractTag(col)
-			tags = append(tags, commentTag)
-			if commentTag == schema.InvalidTag {
-				return nil, ErrPartiallyDefinedTags
-			}
-		}
-	} else {
-		// generate tags for all columns
-		var names []string
-		var kinds []types.NomsKind
-		for _, col := range sqlSchema {
-			names = append(names, col.Name)
-			ti, err := typeinfo.FromSqlType(col.Type)
-			if err != nil {
-				return nil, err
-			}
-			kinds = append(kinds, ti.NomsKind())
-
-			// check for user defined tags
-			if ExtractTag(col) != schema.InvalidTag {
-				return nil, ErrPartiallyDefinedTags
-			}
-		}
-		tags, err = root.GenerateTagsForNewColumns(ctx, tableName, names, kinds)
+	// generate tags for all columns
+	var names []string
+	var kinds []types.NomsKind
+	for _, col := range sqlSchema {
+		names = append(names, col.Name)
+		ti, err := typeinfo.FromSqlType(col.Type)
 		if err != nil {
 			return nil, err
 		}
+		kinds = append(kinds, ti.NomsKind())
+	}
+	tags, err := root.GenerateTagsForNewColumns(ctx, tableName, names, kinds)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(tags) != len(sqlSchema) {
@@ -228,24 +205,5 @@ func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 		return schema.Column{}, err
 	}
 
-	return schema.NewColumnWithTypeInfo(col.Name, tag, typeInfo, col.PrimaryKey, col.Default.String(), constraints...)
-}
-
-// ExtractTag extracts the optional comment tag from a column type defn, or InvalidTag if it can't be extracted
-func ExtractTag(col *sql.Column) uint64 {
-	if len(col.Comment) == 0 {
-		return schema.InvalidTag
-	}
-
-	i := strings.Index(col.Comment, sqlfmt.TagCommentPrefix)
-	if i >= 0 {
-		startIdx := i + len(sqlfmt.TagCommentPrefix)
-		tag, err := strconv.ParseUint(col.Comment[startIdx:], 10, 64)
-		if err != nil {
-			return schema.InvalidTag
-		}
-		return tag
-	}
-
-	return schema.InvalidTag
+	return schema.NewColumnWithTypeInfo(col.Name, tag, typeInfo, col.PrimaryKey, col.Default.String(), col.Comment, constraints...)
 }

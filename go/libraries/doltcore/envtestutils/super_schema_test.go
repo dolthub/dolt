@@ -29,11 +29,10 @@ import (
 )
 
 const (
-	pkTag = iota
-	c0Tag
-	c1Tag
-	c11Tag
-	c12Tag
+	pkTag  = 16191
+	c0Tag  = 8734
+	c1Tag  = 15903
+	c11Tag = 15001
 )
 
 type SuperSchemaTest struct {
@@ -53,7 +52,7 @@ type SuperSchemaTest struct {
 	ExpectedErrStr string
 }
 
-var testableDef = fmt.Sprintf("create table testable (pk int not null primary key comment 'tag:%d');", pkTag)
+var testableDef = fmt.Sprintf("create table testable (pk int not null primary key);")
 
 var SuperSchemaTests = []SuperSchemaTest{
 	{
@@ -91,7 +90,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 		Commands: []tc.Command{
 			tc.Query{Query: testableDef},
 			tc.CommitAll{Message: "created table testable"},
-			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int;")},
 		},
 		ExpectedBranch: "master",
 		ExpectedSchema: schema.SchemaFromCols(columnCollection(
@@ -108,7 +107,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 		TableName: "testable",
 		Commands: []tc.Command{
 			tc.Query{Query: testableDef},
-			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int")},
 			tc.CommitAll{Message: "created table testable"},
 			tc.Query{Query: "alter table testable drop column c0"},
 			tc.CommitAll{Message: "dropped column c0"},
@@ -127,7 +126,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 		TableName: "testable",
 		Commands: []tc.Command{
 			tc.Query{Query: testableDef},
-			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int;")},
 			tc.CommitAll{Message: "created table testable"},
 			tc.Query{Query: "alter table testable drop column c0"},
 		},
@@ -145,7 +144,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 		TableName: "testable",
 		Commands: []tc.Command{
 			tc.Query{Query: testableDef},
-			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int;")},
 			tc.Query{Query: "alter table testable drop column c0"},
 		},
 		ExpectedBranch: "master",
@@ -162,9 +161,9 @@ var SuperSchemaTests = []SuperSchemaTest{
 		Commands: []tc.Command{
 			tc.Query{Query: testableDef},
 			tc.CommitAll{Message: "created table testable"},
-			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int;")},
 			tc.StageAll{},
-			tc.Query{Query: fmt.Sprintf("alter table testable add column c1 int comment 'tag:%d';", c1Tag)},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c1 int;")},
 			tc.CommitStaged{Message: "adding staged column c0"},
 			tc.ResetHard{},
 		},
@@ -183,14 +182,14 @@ var SuperSchemaTests = []SuperSchemaTest{
 		TableName: "testable",
 		Commands: []tc.Command{
 			tc.Query{Query: testableDef},
-			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int;")},
 			tc.CommitAll{Message: "created table testable"},
 			tc.Branch{BranchName: "other"},
 			tc.Checkout{BranchName: "other"},
-			tc.Query{Query: fmt.Sprintf("alter table testable add column c11 int comment 'tag:%d';", c11Tag)},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c11 int;")},
 			tc.CommitAll{Message: "added column c11 on branch other"},
 			tc.Checkout{BranchName: "master"},
-			tc.Query{Query: fmt.Sprintf("alter table testable add column c1 int comment 'tag:%d';", c1Tag)},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c1 int;")},
 		},
 		ExpectedBranch: "master",
 		ExpectedSchema: schema.SchemaFromCols(columnCollection(
@@ -209,14 +208,14 @@ var SuperSchemaTests = []SuperSchemaTest{
 		TableName: "testable",
 		Commands: []tc.Command{
 			tc.Query{Query: testableDef},
-			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int;")},
 			tc.CommitAll{Message: "created table testable"},
 			tc.Branch{BranchName: "other"},
 			tc.Checkout{BranchName: "other"},
-			tc.Query{Query: fmt.Sprintf("alter table testable add column c11 int comment 'tag:%d';", c11Tag)},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c11 int;")},
 			tc.CommitAll{Message: "added column c11 on branch other"},
 			tc.Checkout{BranchName: "master"},
-			tc.Query{Query: fmt.Sprintf("alter table testable add column c1 int comment 'tag:%d';", c1Tag)},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c1 int;")},
 			tc.CommitAll{Message: "added column c1 on branch master"},
 			tc.Checkout{BranchName: "other"},
 		},
@@ -238,14 +237,14 @@ var SuperSchemaTests = []SuperSchemaTest{
 		TableName: "testable",
 		Commands: []tc.Command{
 			tc.Query{Query: testableDef},
-			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int;")},
 			tc.CommitAll{Message: "created table testable"},
 			tc.Branch{BranchName: "other"},
 			tc.Checkout{BranchName: "other"},
-			tc.Query{Query: fmt.Sprintf("alter table testable add column c11 int comment 'tag:%d';", c11Tag)},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c11 int;")},
 			tc.CommitAll{Message: "added column c11 on branch other"},
 			tc.Checkout{BranchName: "master"},
-			tc.Query{Query: fmt.Sprintf("alter table testable add column c1 int comment 'tag:%d';", c1Tag)},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c1 int;")},
 			tc.CommitAll{Message: "added column c1 on branch master"},
 			tc.Merge{BranchName: "other"},
 		},
@@ -268,17 +267,17 @@ var SuperSchemaTests = []SuperSchemaTest{
 		TableName: "testable",
 		Commands: []tc.Command{
 			tc.Query{Query: testableDef},
-			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int;")},
 			tc.CommitAll{Message: "created table testable"},
 			tc.Branch{BranchName: "other"},
 			tc.Checkout{BranchName: "other"},
-			tc.Query{Query: fmt.Sprintf("alter table testable add column c11 int comment 'tag:%d';", c11Tag)},
-			tc.Query{Query: fmt.Sprintf("alter table testable add column c12 int comment 'tag:%d';", c12Tag)},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c11 int;")},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c12 int;")},
 			tc.CommitAll{Message: "added columns c11 and c12 on branch other"},
 			tc.Query{Query: "alter table testable drop column c12;"},
 			tc.CommitAll{Message: "dropped column c12 on branch other"},
 			tc.Checkout{BranchName: "master"},
-			tc.Query{Query: fmt.Sprintf("alter table testable add column c1 int comment 'tag:%d';", c1Tag)},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c1 int;")},
 			tc.CommitAll{Message: "added column c1 on branch master"},
 			tc.Merge{BranchName: "other"},
 			tc.CommitAll{Message: "Merged other into master"},
@@ -303,10 +302,10 @@ var SuperSchemaTests = []SuperSchemaTest{
 		TableName: "testable",
 		Commands: []tc.Command{
 			tc.Query{Query: testableDef},
-			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int comment 'tag:%d';", c0Tag)},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int;")},
 			tc.Query{Query: "create table foo (pk int not null primary key);"},
 			tc.CommitAll{Message: "created tables testable and foo"},
-			tc.Query{Query: fmt.Sprintf("alter table testable add column c1 int comment 'tag:%d';", c1Tag)},
+			tc.Query{Query: fmt.Sprintf("alter table testable add column c1 int;")},
 			tc.Query{Query: "create table qux (pk int not null primary key);"},
 			tc.Query{Query: "drop table foo;"},
 			tc.CommitAll{Message: "added column c1 on branch master, created table qux, dropped table foo"},

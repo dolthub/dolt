@@ -37,16 +37,16 @@ SQL
     [[ "$output" =~ "v1(v1)" ]] || false
     run dolt schema show test
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `v1` (`v1`)' ]] || false
 }
 
-@test "index: CREATE TABLE UNIQUE INDEX" {
+@test "index: CREATE TABLE UNIQUE KEY" {
     dolt sql <<SQL
 CREATE TABLE test(
   pk BIGINT PRIMARY KEY,
   v1 BIGINT,
   v2 BIGINT,
-  UNIQUE INDEX (v1)
+  UNIQUE KEY (v1)
 );
 CREATE TABLE test2(
   pk BIGINT PRIMARY KEY,
@@ -60,14 +60,14 @@ SQL
     [[ "$output" =~ "v1(v1)" ]] || false
     run dolt schema show test
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'UNIQUE INDEX `v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'UNIQUE KEY `v1` (`v1`)' ]] || false
 
 	run dolt index ls test2
     [ "$status" -eq "0" ]
     [[ "$output" =~ "v1(v1)" ]] || false
     run dolt schema show test2
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'UNIQUE INDEX `v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'UNIQUE KEY `v1` (`v1`)' ]] || false
 }
 
 @test "index: CREATE TABLE INDEX named with comment" {
@@ -84,7 +84,7 @@ SQL
     [[ "$output" =~ "idx_v1(v1, v2)" ]] || false
     run dolt schema show test
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1` (`v1`,`v2`)'" COMMENT 'hello there'" ]] || false
+    [[ "$output" =~ 'KEY `idx_v1` (`v1`,`v2`)'" COMMENT 'hello there'" ]] || false
 }
 
 @test "index: CREATE TABLE INDEX multiple" {
@@ -103,8 +103,8 @@ SQL
 	[[ "$output" =~ "v1v2(v1, v2)" ]] || false
     run dolt schema show test
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `v1` (`v1`)' ]] || false
-	[[ "$output" =~ 'INDEX `v1v2` (`v1`,`v2`)' ]] || false
+    [[ "$output" =~ 'KEY `v1` (`v1`)' ]] || false
+	[[ "$output" =~ 'KEY `v1v2` (`v1`,`v2`)' ]] || false
 }
 
 @test "index: CREATE INDEX then INSERT" {
@@ -126,7 +126,7 @@ SQL
     [[ "${#lines[@]}" = "6" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1` (`v1`)' ]] || false
     run dolt sql -q "SELECT pk1 FROM onepk WHERE v1 = 77" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1" ]] || false
@@ -151,7 +151,7 @@ SQL
     [[ "${#lines[@]}" = "6" ]] || false
     run dolt schema show twopk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v` (`v2`,`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v` (`v2`,`v1`)' ]] || false
     run dolt sql -q "SELECT pk1, pk2 FROM twopk WHERE v2 = 61 AND v1 = 53" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1,pk2" ]] || false
@@ -178,7 +178,7 @@ SQL
     [[ "${#lines[@]}" = "6" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1` (`v1`)' ]] || false
     run dolt sql -q "SELECT pk1 FROM onepk WHERE v1 = 77" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1" ]] || false
@@ -203,7 +203,7 @@ SQL
     [[ "${#lines[@]}" = "6" ]] || false
     run dolt schema show twopk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v` (`v2`,`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v` (`v2`,`v1`)' ]] || false
     run dolt sql -q "SELECT pk1, pk2 FROM twopk WHERE v2 = 61 AND v1 = 53" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1,pk2" ]] || false
@@ -230,7 +230,7 @@ SQL
     [[ "${#lines[@]}" = "6" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1` (`v1`)' ]] || false
     run dolt sql -q "SELECT pk1 FROM onepk WHERE v1 = 77" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1" ]] || false
@@ -255,7 +255,7 @@ SQL
     [[ "${#lines[@]}" = "6" ]] || false
     run dolt schema show twopk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v` (`v2`,`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v` (`v2`,`v1`)' ]] || false
     run dolt sql -q "SELECT pk1, pk2 FROM twopk WHERE v2 = 61 AND v1 = 53" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1,pk2" ]] || false
@@ -272,7 +272,7 @@ SQL
     [[ "$output" =~ "v1(v1)" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `v1` (`v1`)' ]] || false
 }
 
 @test "index: INSERT then REPLACE" {
@@ -503,7 +503,7 @@ SQL
     [[ "${#lines[@]}" = "6" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1` (`v1`)' ]] || false
     
     dolt sql <<SQL
 INSERT INTO twopk VALUES (1, 99, 51, 63), (2, 11, 55, 64), (3, 88, 52, 61), (4, 22, 54, 65), (5, 77, 53, 61);
@@ -523,7 +523,7 @@ SQL
     [[ "${#lines[@]}" = "6" ]] || false
     run dolt schema show twopk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v` (`v2`,`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v` (`v2`,`v1`)' ]] || false
 }
 
 @test "index: CREATE INDEX with same columns" {
@@ -538,7 +538,7 @@ SQL
     ! [[ "$output" =~ "idx_bad(v1)" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    ! [[ "$output" =~ 'INDEX `idx_bad` (`v1`)' ]] || false
+    ! [[ "$output" =~ 'KEY `idx_bad` (`v1`)' ]] || false
     
     dolt sql <<SQL
 INSERT INTO twopk VALUES (1, 99, 51, 63), (2, 11, 55, 64), (3, 88, 52, 61), (4, 22, 54, 65), (5, 77, 53, 61);
@@ -551,7 +551,7 @@ SQL
     ! [[ "$output" =~ "idx_bud(v2, v1)" ]] || false
     run dolt schema show twopk
     [ "$status" -eq "0" ]
-    ! [[ "$output" =~ 'INDEX `idx_bud` (`v2`,`v1`)' ]] || false
+    ! [[ "$output" =~ 'KEY `idx_bud` (`v2`,`v1`)' ]] || false
 }
 
 @test "index: Disallow 'dolt_' name prefix" {
@@ -574,16 +574,16 @@ SQL
     [[ "$output" =~ "idx_v1pk1(v1, pk1)" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1` (`v1`)' ]] || false
-    [[ "$output" =~ 'INDEX `idx_v1pk1` (`v1`,`pk1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1pk1` (`v1`,`pk1`)' ]] || false
     run dolt index ls twopk
     [ "$status" -eq "0" ]
     [[ "$output" =~ "idx_v2v1(v2, v1)" ]] || false
     [[ "$output" =~ "idx_v1v2(v1, v2)" ]] || false
     run dolt schema show twopk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v2v1` (`v2`,`v1`)' ]] || false
-    [[ "$output" =~ 'INDEX `idx_v1v2` (`v1`,`v2`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v2v1` (`v2`,`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1v2` (`v1`,`v2`)' ]] || false
     
     dolt sql <<SQL
 DROP INDEX idx_v1 ON onepk;
@@ -595,16 +595,16 @@ SQL
     ! [[ "$output" =~ "idx_v1(v1)" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1pk1` (`v1`,`pk1`)' ]] || false
-    ! [[ "$output" =~ 'INDEX `idx_v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1pk1` (`v1`,`pk1`)' ]] || false
+    ! [[ "$output" =~ 'KEY `idx_v1` (`v1`)' ]] || false
     run dolt index ls twopk
     [ "$status" -eq "0" ]
     [[ "$output" =~ "idx_v1v2(v1, v2)" ]] || false
     ! [[ "$output" =~ "idx_v2v1(v2, v1)" ]] || false
     run dolt schema show twopk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1v2` (`v1`,`v2`)' ]] || false
-    ! [[ "$output" =~ 'INDEX `idx_v2v1` (`v2`,`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1v2` (`v1`,`v2`)' ]] || false
+    ! [[ "$output" =~ 'KEY `idx_v2v1` (`v2`,`v1`)' ]] || false
 }
 
 @test "index: ALTER TABLE DROP INDEX" {
@@ -622,16 +622,16 @@ SQL
     ! [[ "$output" =~ "idx_v1(v1)" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1pk1` (`v1`,`pk1`)' ]] || false
-    ! [[ "$output" =~ 'INDEX `idx_v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1pk1` (`v1`,`pk1`)' ]] || false
+    ! [[ "$output" =~ 'KEY `idx_v1` (`v1`)' ]] || false
     run dolt index ls twopk
     [ "$status" -eq "0" ]
     [[ "$output" =~ "idx_v1v2(v1, v2)" ]] || false
     ! [[ "$output" =~ "idx_v2v1(v2, v1)" ]] || false
     run dolt schema show twopk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1v2` (`v1`,`v2`)' ]] || false
-    ! [[ "$output" =~ 'INDEX `idx_v2v1` (`v2`,`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1v2` (`v1`,`v2`)' ]] || false
+    ! [[ "$output" =~ 'KEY `idx_v2v1` (`v2`,`v1`)' ]] || false
 }
 
 @test "index: ALTER TABLE RENAME INDEX" {
@@ -649,9 +649,9 @@ SQL
     ! [[ "$output" =~ "idx_v1(v1)" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1pk1` (`v1`,`pk1`)' ]] || false
-    [[ "$output" =~ 'INDEX `idx_vfirst` (`v1`)' ]] || false
-    ! [[ "$output" =~ 'INDEX `idx_v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1pk1` (`v1`,`pk1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_vfirst` (`v1`)' ]] || false
+    ! [[ "$output" =~ 'KEY `idx_v1` (`v1`)' ]] || false
 }
 
 @test "index: RENAME TABLE" {
@@ -670,8 +670,8 @@ SQL
     [[ "$output" =~ "idx_v1v2(v1, v2)" ]] || false
     run dolt schema show newpk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1` (`v1`)' ]] || false
-    [[ "$output" =~ 'INDEX `idx_v1v2` (`v1`,`v2`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1v2` (`v1`,`v2`)' ]] || false
     run dolt index cat newpk idx_v1 -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "v1,pk1" ]] || false
@@ -712,8 +712,8 @@ SQL
     [[ "$output" =~ "idx_v1v2(v1, v2)" ]] || false
     run dolt schema show newpk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1` (`v1`)' ]] || false
-    [[ "$output" =~ 'INDEX `idx_v1v2` (`v1`,`v2`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1v2` (`v1`,`v2`)' ]] || false
     run dolt index cat newpk idx_v1 -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "v1,pk1" ]] || false
@@ -785,7 +785,7 @@ SQL
     [[ "${#lines[@]}" = "6" ]] || false
     run dolt schema show onepk_new
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1` (`v1`)' ]] || false
     run dolt sql -q "SELECT pk1 FROM onepk_new WHERE v1 = 77" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1" ]] || false
@@ -809,7 +809,7 @@ SQL
     [[ "${#lines[@]}" = "1" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1` (`v1`)' ]] || false
     run dolt sql -q "SELECT pk1 FROM onepk WHERE v1 = 77" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1" ]] || false
@@ -1686,7 +1686,7 @@ SQL
     [[ "${#lines[@]}" = "6" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1` (`v1`)' ]] || false
     run dolt sql -q "SELECT * FROM onepk WHERE v1 = 77" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1,v1,v2,v3" ]] || false
@@ -1704,7 +1704,7 @@ SQL
     [[ "${#lines[@]}" = "6" ]] || false
     run dolt schema show twopk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v` (`v2`,`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v` (`v2`,`v1`)' ]] || false
     run dolt sql -q "SELECT * FROM twopk WHERE v2 = 61 AND v1 = 53" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1,pk2,v1,v2,v3" ]] || false
@@ -1738,8 +1738,8 @@ SQL
     [[ "${#lines[@]}" = "6" ]] || false
     run dolt schema show onepk_new
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1` (`vnew`)' ]] || false
-    [[ "$output" =~ 'INDEX `idx_v2v1` (`v2`,`vnew`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1` (`vnew`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v2v1` (`v2`,`vnew`)' ]] || false
     run dolt sql -q "SELECT * FROM onepk_new WHERE vnew = 77" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1,vnew,v2" ]] || false
@@ -1773,8 +1773,8 @@ SQL
     [[ "${#lines[@]}" = "6" ]] || false
     run dolt schema show onepk_new
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1` (`v1`)' ]] || false
-    [[ "$output" =~ 'INDEX `idx_v2v1` (`v2`,`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v2v1` (`v2`,`v1`)' ]] || false
     run dolt sql -q "SELECT * FROM onepk_new WHERE v1 = 77" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1,v1,v2" ]] || false
@@ -1803,8 +1803,8 @@ SQL
     [[ "${#lines[@]}" = "6" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1` (`vnew`)' ]] || false
-    [[ "$output" =~ 'INDEX `idx_v2v1` (`v2`,`vnew`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1` (`vnew`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v2v1` (`v2`,`vnew`)' ]] || false
     run dolt sql -q "SELECT * FROM onepk WHERE vnew = 77" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1,vnew,v2" ]] || false
@@ -1833,8 +1833,8 @@ SQL
     [[ "${#lines[@]}" = "6" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1` (`v1`)' ]] || false
-    [[ "$output" =~ 'INDEX `idx_v2v1` (`v2`,`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v2v1` (`v2`,`v1`)' ]] || false
     run dolt sql -q "SELECT * FROM onepk WHERE v1 = 77" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1,v1,v2" ]] || false
@@ -1863,8 +1863,8 @@ SQL
     [[ "${#lines[@]}" = "6" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1` (`vnew`)' ]] || false
-    [[ "$output" =~ 'INDEX `idx_v2v1` (`v2`,`vnew`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1` (`vnew`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v2v1` (`v2`,`vnew`)' ]] || false
     run dolt sql -q "SELECT * FROM onepk WHERE vnew = 77" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1,vnew,v2" ]] || false
@@ -1889,10 +1889,10 @@ SQL
     ! [[ "$output" =~ "idx_v2v1(v2, v1)" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v2` (`v2`)' ]] || false
-    ! [[ "$output" =~ 'INDEX `idx_v1` (`v1`)' ]] || false
-    ! [[ "$output" =~ 'INDEX `idx_v2v1` (`v2`,`v1`)' ]] || false
-    ! [[ "$output" =~ 'INDEX `idx_v1v2` (`v1`,`v2`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v2` (`v2`)' ]] || false
+    ! [[ "$output" =~ 'KEY `idx_v1` (`v1`)' ]] || false
+    ! [[ "$output" =~ 'KEY `idx_v2v1` (`v2`,`v1`)' ]] || false
+    ! [[ "$output" =~ 'KEY `idx_v1v2` (`v1`,`v2`)' ]] || false
     run dolt index cat onepk idx_v2 -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "v2,pk1" ]] || false
@@ -1942,7 +1942,7 @@ SQL
     [[ "${#lines[@]}" = "6" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1` (`v1`)' ]] || false
     run dolt sql -q "SELECT pk1 FROM onepk WHERE v1 = 77" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1" ]] || false
@@ -1970,7 +1970,7 @@ SQL
     [[ "${#lines[@]}" = "6" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'UNIQUE INDEX `idx_v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'UNIQUE KEY `idx_v1` (`v1`)' ]] || false
     run dolt sql -q "SELECT pk1 FROM onepk WHERE v1 = 77" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1" ]] || false
@@ -2010,7 +2010,7 @@ SQL
     [[ "${#lines[@]}" = "6" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1` (`v1`)' ]] || false
     run dolt sql -q "SELECT pk1 FROM onepk WHERE v1 = 77" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1" ]] || false
@@ -2038,7 +2038,7 @@ SQL
     [[ "${#lines[@]}" = "6" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1` (`v1`)' ]] || false
     run dolt sql -q "SELECT pk1 FROM onepk WHERE v1 = 77" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1" ]] || false
@@ -2063,7 +2063,7 @@ SQL
     [[ "${#lines[@]}" = "6" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'UNIQUE INDEX `idx_v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'UNIQUE KEY `idx_v1` (`v1`)' ]] || false
     run dolt sql -q "SELECT pk1 FROM onepk WHERE v1 = 77" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1" ]] || false
@@ -2098,7 +2098,7 @@ SQL
     [[ "${#lines[@]}" = "6" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'UNIQUE INDEX `idx_v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'UNIQUE KEY `idx_v1` (`v1`)' ]] || false
     run dolt sql -q "SELECT pk1 FROM onepk WHERE v1 = 77" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1" ]] || false
@@ -2142,7 +2142,7 @@ SQL
     [[ "${#lines[@]}" = "9" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'INDEX `idx_v1` (`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1` (`v1`)' ]] || false
     run dolt sql -q "SELECT * FROM onepk WHERE v1 = 55" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1,v1,v2" ]] || false

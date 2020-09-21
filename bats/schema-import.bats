@@ -45,12 +45,12 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 10 ]
     [[ "${lines[0]}" =~ "test" ]] || false
-    [[ "$output" =~ "\`pk\` INT" ]] || false
-    [[ "$output" =~ "\`c1\` INT" ]] || false
-    [[ "$output" =~ "\`c2\` INT" ]] || false
-    [[ "$output" =~ "\`c3\` INT" ]] || false
-    [[ "$output" =~ "\`c4\` INT" ]] || false
-    [[ "$output" =~ "\`c5\` INT" ]] || false
+    [[ "$output" =~ "\`pk\` int" ]] || false
+    [[ "$output" =~ "\`c1\` int" ]] || false
+    [[ "$output" =~ "\`c2\` int" ]] || false
+    [[ "$output" =~ "\`c3\` int" ]] || false
+    [[ "$output" =~ "\`c4\` int" ]] || false
+    [[ "$output" =~ "\`c5\` int" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
@@ -101,13 +101,13 @@ DELIM
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 11 ]
     [[ "${lines[0]}" =~ "test" ]] || false
-    [[ "$output" =~ "\`pk\` INT" ]] || false
-    [[ "$output" =~ "\`int\` INT" ]] || false
-    [[ "$output" =~ "\`string\` LONGTEXT" ]] || false
-    [[ "$output" =~ "\`boolean\` BIT(1)" ]] || false
-    [[ "$output" =~ "\`float\` FLOAT" ]] || false
-    [[ "$output" =~ "\`uint\` INT" ]] || false
-    [[ "$output" =~ "\`uuid\` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin" ]] || false
+    [[ "$output" =~ "\`pk\` int" ]] || false
+    [[ "$output" =~ "\`int\` int" ]] || false
+    [[ "$output" =~ "\`string\` longtext" ]] || false
+    [[ "$output" =~ "\`boolean\` bit(1)" ]] || false
+    [[ "$output" =~ "\`float\` float" ]] || false
+    [[ "$output" =~ "\`uint\` int" ]] || false
+    [[ "$output" =~ "\`uuid\` char(36) character set ascii collate ascii_bin" ]] || false
 }
 
 @test "schema import with invalid names" {
@@ -141,13 +141,13 @@ DELIM
     run dolt schema show
     [ "${#lines[@]}" -eq 11 ]
     [[ "${lines[0]}" =~ "test" ]] || false
-    [[ "$output" =~ "\`pk1\` INT" ]] || false
-    [[ "$output" =~ "\`pk2\` INT" ]] || false
-    [[ "$output" =~ "\`c1\` INT" ]] || false
-    [[ "$output" =~ "\`c2\` INT" ]] || false
-    [[ "$output" =~ "\`c3\` INT" ]] || false
-    [[ "$output" =~ "\`c4\` INT" ]] || false
-    [[ "$output" =~ "\`c5\` INT" ]] || false
+    [[ "$output" =~ "\`pk1\` int" ]] || false
+    [[ "$output" =~ "\`pk2\` int" ]] || false
+    [[ "$output" =~ "\`c1\` int" ]] || false
+    [[ "$output" =~ "\`c2\` int" ]] || false
+    [[ "$output" =~ "\`c3\` int" ]] || false
+    [[ "$output" =~ "\`c4\` int" ]] || false
+    [[ "$output" =~ "\`c5\` int" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk1\`,\`pk2\`)" ]] || false
 }
 

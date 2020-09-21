@@ -6,24 +6,24 @@ setup() {
 
     dolt sql <<SQL
 CREATE TABLE test1 (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
+  pk BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
+  c3 BIGINT,
+  c4 BIGINT,
+  c5 BIGINT,
   PRIMARY KEY (pk)
 );
 SQL
 
     dolt sql <<SQL
 CREATE TABLE test2 (
-  \`pk\` BIGINT NOT NULL COMMENT 'tag:6',
-  \`int\` INT COMMENT 'tag:7',
-  \`string\` TEXT COMMENT 'tag:8',
-  \`boolean\` BOOLEAN COMMENT 'tag:9',
-  \`float\` DOUBLE COMMENT 'tag:10',
-  \`uint\` BIGINT UNSIGNED COMMENT 'tag:11',
+  \`pk\` BIGINT NOT NULL,
+  \`int\` INT,
+  \`string\` TEXT,
+  \`boolean\` BOOLEAN,
+  \`float\` DOUBLE,
+  \`uint\` BIGINT UNSIGNED,
   PRIMARY KEY (pk)
 );
 SQL
@@ -81,13 +81,4 @@ teardown() {
     [[ "$output" =~ "CREATE TABLE \`test2\`" ]] || false
     [[ ! "$output" =~ "working" ]] || false
     [[ ! "$output" =~ "dolt_" ]] || false
-}
-
-@test "dolt schema export --with-tags" {
-    run dolt schema export
-    [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "COMMENT 'tag:" ]] || false
-    run dolt schema export --with-tags
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "COMMENT 'tag:" ]] || false
 }

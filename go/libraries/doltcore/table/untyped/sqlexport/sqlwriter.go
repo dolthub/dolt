@@ -22,10 +22,10 @@ import (
 	"strings"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
-
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
@@ -39,6 +39,7 @@ type SqlExportWriter struct {
 	parentSchs      map[string]schema.Schema
 	foreignKeys     []doltdb.ForeignKey
 	wr              io.WriteCloser
+	root            *doltdb.RootValue
 	writtenFirstRow bool
 }
 
@@ -71,6 +72,7 @@ func OpenSQLExportWriter(ctx context.Context, path string, fs filesys.WritableFS
 		sch:         sch,
 		parentSchs:  allSchemas,
 		foreignKeys: foreignKeys,
+		root:        root,
 		wr:          wr,
 	}, nil
 }
@@ -87,7 +89,7 @@ func (w *SqlExportWriter) GetSchema() schema.Schema {
 
 // WriteRow will write a row to a table
 func (w *SqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
-	if err := w.maybeWriteDropCreate(); err != nil {
+	if err := w.maybeWriteDropCreate(ctx); err != nil {
 		return err
 	}
 
@@ -100,12 +102,17 @@ func (w *SqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
 	return iohelp.WriteLine(w.wr, stmt)
 }
 
-func (w *SqlExportWriter) maybeWriteDropCreate() error {
+func (w *SqlExportWriter) maybeWriteDropCreate(ctx context.Context) error {
 	if !w.writtenFirstRow {
 		var b strings.Builder
 		b.WriteString(sqlfmt.DropTableIfExistsStmt(w.tableName))
 		b.WriteRune('\n')
-		b.WriteString(sqlfmt.CreateTableStmtWithTags(w.tableName, w.sch, w.foreignKeys, w.parentSchs))
+		sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, w.root)
+		createTableStmt, err := dsqle.GetCreateTableStmt(sqlCtx, engine, w.tableName)
+		if err != nil {
+			return err
+		}
+		b.WriteString(createTableStmt)
 		if err := iohelp.WriteLine(w.wr, b.String()); err != nil {
 			return err
 		}
@@ -117,7 +124,7 @@ func (w *SqlExportWriter) maybeWriteDropCreate() error {
 // Close should flush all writes, release resources being held
 func (w *SqlExportWriter) Close(ctx context.Context) error {
 	// exporting an empty table will not get any WriteRow calls, so write the drop / create here
-	if err := w.maybeWriteDropCreate(); err != nil {
+	if err := w.maybeWriteDropCreate(ctx); err != nil {
 		return err
 	}
 

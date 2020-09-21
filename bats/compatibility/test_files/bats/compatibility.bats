@@ -61,15 +61,14 @@ teardown() {
     dolt checkout init
     run dolt schema show abc
     [ "$status" -eq 0 ]
-    [[ "${lines[0]}" =~ "abc @ working" ]] || false
-    [[ "${lines[1]}" =~ "CREATE TABLE \`abc\` (" ]] || false
-    [[ "${lines[2]}" =~ " \`pk\` BIGINT NOT NULL COMMENT " ]] || false
-    [[ "${lines[3]}" =~ " \`a\` LONGTEXT COMMENT " ]] || false
-    [[ "${lines[4]}" =~ " \`b\` DOUBLE COMMENT " ]] || false
-    [[ "${lines[5]}" =~ " \`w\` BIGINT COMMENT " ]] || false
-    [[ "${lines[6]}" =~ " \`x\` BIGINT COMMENT " ]] || false
-    [[ "${lines[7]}" =~ " PRIMARY KEY (\`pk\`)" ]] || false
-    [[ "${lines[8]}" =~ ");" ]] || false
+    [[ "${output,,}" =~ "abc @ working" ]] || false
+    [[ "${output,,}" =~ "create table \`abc\` (" ]] || false
+    [[ "${output,,}" =~ "\`pk\` bigint not null" ]] || false
+    [[ "${output,,}" =~ "\`a\` longtext" ]] || false
+    [[ "${output,,}" =~ "\`b\` double" ]] || false
+    [[ "${output,,}" =~ "\`w\` bigint" ]] || false
+    [[ "${output,,}" =~ "\`x\` bigint" ]] || false
+    [[ "${output,,}" =~ "primary key (\`pk\`)" ]] || false
 }
 
 @test "dolt sql 'select * from abc' on branch init" {
@@ -94,15 +93,14 @@ teardown() {
 
     run dolt schema show abc
     [ "$status" -eq 0 ]
-    [[ "${lines[0]}" =~ "abc @ working" ]] || false
-    [[ "${lines[1]}" =~ "CREATE TABLE \`abc\` (" ]] || false
-    [[ "${lines[2]}" =~ "\`pk\` BIGINT NOT NULL COMMENT " ]] || false
-    [[ "${lines[3]}" =~ "\`a\` LONGTEXT COMMENT " ]] || false
-    [[ "${lines[4]}" =~ "\`b\` DOUBLE COMMENT " ]] || false
-    [[ "${lines[5]}" =~ "\`x\` BIGINT COMMENT " ]] || false
-    [[ "${lines[6]}" =~ "\`y\` BIGINT COMMENT " ]] || false
-    [[ "${lines[7]}" =~ "PRIMARY KEY (\`pk\`)" ]] || false
-    [[ "${lines[8]}" =~ ");" ]] || false
+    [[ "${output,,}" =~ "abc @ working" ]] || false
+    [[ "${output,,}" =~ "create table \`abc\` (" ]] || false
+    [[ "${output,,}" =~ "\`pk\` bigint not null" ]] || false
+    [[ "${output,,}" =~ "\`a\` longtext" ]] || false
+    [[ "${output,,}" =~ "\`b\` double" ]] || false
+    [[ "${output,,}" =~ "\`x\` bigint" ]] || false
+    [[ "${output,,}" =~ "\`y\` bigint" ]] || false
+    [[ "${output,,}" =~ "primary key (\`pk\`)" ]] || false
 }
 
 
@@ -126,15 +124,14 @@ teardown() {
     dolt checkout other
     run dolt schema show abc
     [ "$status" -eq 0 ]
-    [[ "${lines[0]}" =~ "abc @ working" ]] || false
-    [[ "${lines[1]}" =~ "CREATE TABLE \`abc\` (" ]] || false
-    [[ "${lines[2]}" =~ "\`pk\` BIGINT NOT NULL COMMENT " ]] || false
-    [[ "${lines[3]}" =~ "\`a\` LONGTEXT COMMENT " ]] || false
-    [[ "${lines[4]}" =~ "\`b\` DOUBLE COMMENT " ]] || false
-    [[ "${lines[5]}" =~ "\`w\` BIGINT COMMENT " ]] || false
-    [[ "${lines[6]}" =~ "\`z\` BIGINT COMMENT " ]] || false
-    [[ "${lines[7]}" =~ "PRIMARY KEY (\`pk\`)" ]] || false
-    [[ "${lines[8]}" =~ ");" ]] || false
+    [[ "${output,,}" =~ "abc @ working" ]] || false
+    [[ "${output,,}" =~ "create table \`abc\` (" ]] || false
+    [[ "${output,,}" =~ "\`pk\` bigint not null" ]] || false
+    [[ "${output,,}" =~ "\`a\` longtext" ]] || false
+    [[ "${output,,}" =~ "\`b\` double" ]] || false
+    [[ "${output,,}" =~ "\`w\` bigint" ]] || false
+    [[ "${output,,}" =~ "\`z\` bigint" ]] || false
+    [[ "${output,,}" =~ "primary key (\`pk\`)" ]] || false
 }
 
 @test "dolt sql 'select * from abc' on branch other" {

@@ -23,20 +23,11 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 )
 
-//TODO: This is a relic from before `SHOW CREATE TABLE` was implemented. We should remove this file altogether.
-const TagCommentPrefix = "tag:"
-
 //  FmtCol converts a column to a string with a given indent space count, name width, and type width.  If nameWidth or
 // typeWidth are 0 or less than the length of the name or type, then the length of the name or type will be used
 func FmtCol(indent, nameWidth, typeWidth int, col schema.Column) string {
 	sqlType := col.TypeInfo.ToSqlType()
 	return FmtColWithNameAndType(indent, nameWidth, typeWidth, col.Name, sqlType.String(), col)
-}
-
-// FmtColWithTag follows the same logic as FmtCol, but includes the column's tag as a comment
-func FmtColWithTag(indent, nameWidth, typeWidth int, col schema.Column) string {
-	fc := FmtCol(indent, nameWidth, typeWidth, col)
-	return fmt.Sprintf("%s COMMENT '%s'", fc, FmtColTagComment(col.Tag))
 }
 
 // FmtColWithNameAndType creates a string representing a column within a sql create table statement with a given indent
@@ -60,6 +51,10 @@ func FmtColWithNameAndType(indent, nameWidth, typeWidth int, colName, typeStr st
 		colStr += " DEFAULT " + col.Default
 	}
 
+	if col.Comment != "" {
+		colStr += " COMMENT " + QuoteComment(col.Comment)
+	}
+
 	return colStr
 }
 
@@ -68,10 +63,6 @@ func FmtColWithNameAndType(indent, nameWidth, typeWidth int, colName, typeStr st
 func FmtColPrimaryKey(indent int, colStr string) string {
 	fmtStr := fmt.Sprintf("%%%ds PRIMARY KEY (%s)\n", indent, colStr)
 	return fmt.Sprintf(fmtStr, "")
-}
-
-func FmtColTagComment(tag uint64) string {
-	return fmt.Sprintf("%s%d", TagCommentPrefix, tag)
 }
 
 func FmtIndex(index schema.Index) string {
@@ -134,13 +125,6 @@ func FmtForeignKey(fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
 func CreateTableStmt(tableName string, sch schema.Schema, foreignKeys []doltdb.ForeignKey, parentSchs map[string]schema.Schema) string {
 	return createTableStmt(tableName, sch, func(col schema.Column) string {
 		return FmtCol(2, 0, 0, col)
-	}, foreignKeys, parentSchs)
-}
-
-// CreateTableStmtWithTags generates a SQL CREATE TABLE command that includes the column tags as comments
-func CreateTableStmtWithTags(tableName string, sch schema.Schema, foreignKeys []doltdb.ForeignKey, parentSchs map[string]schema.Schema) string {
-	return createTableStmt(tableName, sch, func(col schema.Column) string {
-		return FmtColWithTag(2, 0, 0, col)
 	}, foreignKeys, parentSchs)
 }
 

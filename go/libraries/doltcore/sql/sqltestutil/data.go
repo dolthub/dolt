@@ -119,7 +119,7 @@ func createAppearancesTestSchema() schema.Schema {
 }
 
 func newColumnWithTypeInfo(name string, tag uint64, info typeinfo.TypeInfo, partOfPk bool, constraints ...schema.ColConstraint) schema.Column {
-	col, err := schema.NewColumnWithTypeInfo(name, tag, info, partOfPk, "", constraints...)
+	col, err := schema.NewColumnWithTypeInfo(name, tag, info, partOfPk, "", "", constraints...)
 	if err != nil {
 		panic(fmt.Sprintf("unexpected error creating column: %s", err.Error()))
 	}

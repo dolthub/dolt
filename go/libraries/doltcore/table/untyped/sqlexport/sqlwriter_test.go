@@ -21,11 +21,15 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 type StringBuilderCloser struct {
@@ -47,7 +51,7 @@ func TestEndToEnd(t *testing.T) {
 	id := uuid.MustParse("00000000-0000-0000-0000-000000000000")
 	tableName := "people"
 
-	dropCreateStatement := sqlfmt.DropTableIfExistsStmt(tableName) + "\n" + sqlfmt.CreateTableStmtWithTags(tableName, dtestutils.TypedSchema, nil, nil)
+	dropCreateStatement := sqlfmt.DropTableIfExistsStmt(tableName) + "\nCREATE TABLE `people` (\n  `id` char(36) character set ascii collate ascii_bin NOT NULL,\n  `name` longtext NOT NULL,\n  `age` bigint unsigned NOT NULL,\n  `is_married` bit(1) NOT NULL,\n  `title` longtext,\n  PRIMARY KEY (`id`),\n  KEY `idx_name` (`name`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
 
 	type test struct {
 		name           string
@@ -78,18 +82,33 @@ func TestEndToEnd(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			dEnv := dtestutils.CreateTestEnv()
+			root, err := dEnv.WorkingRoot(ctx)
+			require.NoError(t, err)
+
+			schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, root.VRW(), tt.sch)
+			require.NoError(t, err)
+			emptyMap, err := types.NewMap(ctx, root.VRW())
+			require.NoError(t, err)
+			tbl, err := doltdb.NewTable(ctx, root.VRW(), schVal, emptyMap, nil)
+			require.NoError(t, err)
+			root, err = root.PutTable(ctx, tableName, tbl)
+			require.NoError(t, err)
+
 			var stringWr StringBuilderCloser
 			w := &SqlExportWriter{
 				tableName: tableName,
 				sch:       tt.sch,
 				wr:        &stringWr,
+				root:      root,
 			}
 
 			for _, r := range tt.rows {
-				assert.NoError(t, w.WriteRow(context.Background(), r))
+				assert.NoError(t, w.WriteRow(ctx, r))
 			}
 
-			assert.NoError(t, w.Close(context.Background()))
+			assert.NoError(t, w.Close(ctx))
 			assert.Equal(t, tt.expectedOutput, stringWr.String())
 		})
 	}

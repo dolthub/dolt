@@ -84,13 +84,13 @@ By default this command uses the dolt data repository in the current working dir
 }
 
 const (
-	queryFlag      = "query"
-	formatFlag     = "result-format"
+	QueryFlag      = "query"
+	FormatFlag     = "result-format"
 	saveFlag       = "save"
 	executeFlag    = "execute"
 	listSavedFlag  = "list-saved"
 	messageFlag    = "message"
-	batchFlag      = "batch"
+	BatchFlag      = "batch"
 	multiDBDirFlag = "multi-db-dir"
 	welcomeMsg     = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
@@ -120,13 +120,13 @@ func (cmd SqlCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) er
 func (cmd SqlCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"commit", "Commit to run read only queries against."})
-	ap.SupportsString(queryFlag, "q", "SQL query to run", "Runs a single query and exits")
-	ap.SupportsString(formatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv, json. Defaults to tabular. ")
+	ap.SupportsString(QueryFlag, "q", "SQL query to run", "Runs a single query and exits")
+	ap.SupportsString(FormatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv, json. Defaults to tabular. ")
 	ap.SupportsString(saveFlag, "s", "saved query name", "Used with --query, save the query to the query catalog with the name provided. Saved queries can be examined in the dolt_query_catalog system table.")
 	ap.SupportsString(executeFlag, "x", "saved query name", "Executes a saved query with the given name")
 	ap.SupportsFlag(listSavedFlag, "l", "Lists all saved queries")
 	ap.SupportsString(messageFlag, "m", "saved query description", "Used with --query and --save, saves the query with the descriptive message given. See also --name")
-	ap.SupportsFlag(batchFlag, "b", "batch mode, to run more than one query with --query, separated by ';'. Piping input to sql with no arguments also uses batch mode")
+	ap.SupportsFlag(BatchFlag, "b", "batch mode, to run more than one query with --query, separated by ';'. Piping input to sql with no arguments also uses batch mode")
 	ap.SupportsString(multiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within ")
 	return ap
 }
@@ -159,7 +159,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	var verr errhand.VerboseError
 	format := formatTabular
-	if formatSr, ok := apr.GetValue(formatFlag); ok {
+	if formatSr, ok := apr.GetValue(FormatFlag); ok {
 		format, verr = getFormat(formatSr)
 		if verr != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(verr), usage)
@@ -254,8 +254,8 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(err.(errhand.VerboseError), usage)
 	}
 
-	if query, queryOK := apr.GetValue(queryFlag); queryOK {
-		batchMode := apr.Contains(batchFlag)
+	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
+		batchMode := apr.Contains(BatchFlag)
 
 		if batchMode {
 			batchInput := strings.NewReader(query)
@@ -503,10 +503,10 @@ func getFormat(format string) (resultFormat, errhand.VerboseError) {
 }
 
 func validateSqlArgs(apr *argparser.ArgParseResults) error {
-	_, query := apr.GetValue(queryFlag)
+	_, query := apr.GetValue(QueryFlag)
 	_, save := apr.GetValue(saveFlag)
 	_, msg := apr.GetValue(messageFlag)
-	_, batch := apr.GetValue(batchFlag)
+	_, batch := apr.GetValue(BatchFlag)
 	_, list := apr.GetValue(listSavedFlag)
 	_, execute := apr.GetValue(executeFlag)
 	_, multiDB := apr.GetValue(multiDBDirFlag)

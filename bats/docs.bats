@@ -671,18 +671,17 @@ SQL
     [[ "$output" =~ "system table" ]] || false
 }
 
-@test "dolt schema command only does read operations for dolt_docs" {
+@test "dolt schema command does not show dolt_docs" {
     echo "a readme" > README.md
     echo "a license" > LICENSE.md
     dolt add .
     dolt commit -m "First commit of docs"
-    run dolt schema export dolt_docs export.schema
-    [ "$status" -eq 0 ]
     run dolt schema import -c --pks=pk dolt_docs `batshelper 1pk5col-ints.csv`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "reserved" ]] || false
     run dolt schema show dolt_docs
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "not found" ]] || false
     run dolt schema show
     [ "$status" -eq 0 ]
     [[ "$output" =~ "No tables in working set" ]] || false

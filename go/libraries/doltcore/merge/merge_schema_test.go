@@ -75,10 +75,10 @@ type mergeForeignKeyTest struct {
 
 var setupCommon = []testCommand{
 	{commands.SqlCmd{}, []string{"-q", "create table test (" +
-		"pk int not null primary key comment 'tag:0'," +
-		"c1 int not null comment 'tag:1'," +
-		"c2 int comment 'tag:2'," +
-		"c3 int comment 'tag:3');"}},
+		"pk int not null primary key," +
+		"c1 int not null," +
+		"c2 int," +
+		"c3 int);"}},
 	{commands.SqlCmd{}, []string{"-q", "create index c1_idx on test(c1)"}},
 	{commands.AddCmd{}, []string{"."}},
 	{commands.CommitCmd{}, []string{"-m", "setup common"}},
@@ -91,34 +91,34 @@ var mergeSchemaTests = []mergeSchemaTest{
 		setup: []testCommand{},
 		sch: schemaFromColsAndIdxs(
 			colCollection(
-				newColTypeInfo("pk", uint64(0), typeinfo.Int32Type, true, schema.NotNullConstraint{}),
-				newColTypeInfo("c1", uint64(1), typeinfo.Int32Type, false, schema.NotNullConstraint{}),
-				newColTypeInfo("c2", uint64(2), typeinfo.Int32Type, false),
-				newColTypeInfo("c3", uint64(3), typeinfo.Int32Type, false)),
-			schema.NewIndex("c1_idx", []uint64{1}, []uint64{1, 0}, nil, schema.IndexProperties{}),
+				newColTypeInfo("pk", uint64(3228), typeinfo.Int32Type, true, schema.NotNullConstraint{}),
+				newColTypeInfo("c1", uint64(8201), typeinfo.Int32Type, false, schema.NotNullConstraint{}),
+				newColTypeInfo("c2", uint64(8539), typeinfo.Int32Type, false),
+				newColTypeInfo("c3", uint64(4696), typeinfo.Int32Type, false)),
+			schema.NewIndex("c1_idx", []uint64{8201}, []uint64{8201, 3228}, nil, schema.IndexProperties{}),
 		),
 	},
 	{
 		name: "add cols, drop cols, merge",
 		setup: []testCommand{
 			{commands.SqlCmd{}, []string{"-q", "alter table test drop column c2;"}},
-			{commands.SqlCmd{}, []string{"-q", "alter table test add column c8 int comment 'tag:8';"}},
+			{commands.SqlCmd{}, []string{"-q", "alter table test add column c8 int;"}},
 			{commands.AddCmd{}, []string{"."}},
 			{commands.CommitCmd{}, []string{"-m", "modified branch master"}},
 			{commands.CheckoutCmd{}, []string{"other"}},
 			{commands.SqlCmd{}, []string{"-q", "alter table test drop column c3;"}},
-			{commands.SqlCmd{}, []string{"-q", "alter table test add column c9 int comment 'tag:9';"}},
+			{commands.SqlCmd{}, []string{"-q", "alter table test add column c9 int;"}},
 			{commands.AddCmd{}, []string{"."}},
 			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
 			{commands.CheckoutCmd{}, []string{"master"}},
 		},
 		sch: schemaFromColsAndIdxs(
 			colCollection(
-				newColTypeInfo("pk", uint64(0), typeinfo.Int32Type, true, schema.NotNullConstraint{}),
-				newColTypeInfo("c1", uint64(1), typeinfo.Int32Type, false, schema.NotNullConstraint{}),
-				newColTypeInfo("c8", uint64(8), typeinfo.Int32Type, false),
-				newColTypeInfo("c9", uint64(9), typeinfo.Int32Type, false)),
-			schema.NewIndex("c1_idx", []uint64{1}, []uint64{1, 0}, nil, schema.IndexProperties{}),
+				newColTypeInfo("pk", uint64(3228), typeinfo.Int32Type, true, schema.NotNullConstraint{}),
+				newColTypeInfo("c1", uint64(8201), typeinfo.Int32Type, false, schema.NotNullConstraint{}),
+				newColTypeInfo("c8", uint64(12393), typeinfo.Int32Type, false),
+				newColTypeInfo("c9", uint64(4508), typeinfo.Int32Type, false)),
+			schema.NewIndex("c1_idx", []uint64{8201}, []uint64{8201, 3228}, nil, schema.IndexProperties{}),
 		),
 	},
 	{
@@ -135,11 +135,11 @@ var mergeSchemaTests = []mergeSchemaTest{
 		},
 		sch: schemaFromColsAndIdxs(
 			colCollection(
-				newColTypeInfo("pk", uint64(0), typeinfo.Int32Type, true, schema.NotNullConstraint{}),
-				newColTypeInfo("c1", uint64(1), typeinfo.Int32Type, false),
-				newColTypeInfo("c2", uint64(2), typeinfo.Int32Type, false, schema.NotNullConstraint{}),
-				newColTypeInfo("c3", uint64(3), typeinfo.Int32Type, false)),
-			schema.NewIndex("c1_idx", []uint64{1}, []uint64{1, 0}, nil, schema.IndexProperties{}),
+				newColTypeInfo("pk", uint64(3228), typeinfo.Int32Type, true, schema.NotNullConstraint{}),
+				newColTypeInfo("c1", uint64(8201), typeinfo.Int32Type, false),
+				newColTypeInfo("c2", uint64(8539), typeinfo.Int32Type, false, schema.NotNullConstraint{}),
+				newColTypeInfo("c3", uint64(4696), typeinfo.Int32Type, false)),
+			schema.NewIndex("c1_idx", []uint64{8201}, []uint64{8201, 3228}, nil, schema.IndexProperties{}),
 		),
 	},
 	{
@@ -156,11 +156,11 @@ var mergeSchemaTests = []mergeSchemaTest{
 		},
 		sch: schemaFromColsAndIdxs(
 			colCollection(
-				newColTypeInfo("pk", uint64(0), typeinfo.Int32Type, true, schema.NotNullConstraint{}),
-				newColTypeInfo("c1", uint64(1), typeinfo.Int32Type, false, schema.NotNullConstraint{}),
-				newColTypeInfo("c2", uint64(2), typeinfo.Int32Type, false),
-				newColTypeInfo("c3", uint64(3), typeinfo.Int32Type, false)),
-			schema.NewIndex("c3_idx", []uint64{3}, []uint64{3, 0}, nil, schema.IndexProperties{}),
+				newColTypeInfo("pk", uint64(3228), typeinfo.Int32Type, true, schema.NotNullConstraint{}),
+				newColTypeInfo("c1", uint64(8201), typeinfo.Int32Type, false, schema.NotNullConstraint{}),
+				newColTypeInfo("c2", uint64(8539), typeinfo.Int32Type, false),
+				newColTypeInfo("c3", uint64(4696), typeinfo.Int32Type, false)),
+			schema.NewIndex("c3_idx", []uint64{4696}, []uint64{4696, 3228}, nil, schema.IndexProperties{}),
 		),
 	},
 	{
@@ -177,11 +177,11 @@ var mergeSchemaTests = []mergeSchemaTest{
 		},
 		sch: schemaFromColsAndIdxs(
 			colCollection(
-				newColTypeInfo("pk", uint64(0), typeinfo.Int32Type, true, schema.NotNullConstraint{}),
-				newColTypeInfo("c1", uint64(1), typeinfo.Int32Type, false, schema.NotNullConstraint{}),
-				newColTypeInfo("c22", uint64(2), typeinfo.Int32Type, false),
-				newColTypeInfo("c33", uint64(3), typeinfo.Int32Type, false)),
-			schema.NewIndex("c1_idx", []uint64{1}, []uint64{1, 0}, nil, schema.IndexProperties{}),
+				newColTypeInfo("pk", uint64(3228), typeinfo.Int32Type, true, schema.NotNullConstraint{}),
+				newColTypeInfo("c1", uint64(8201), typeinfo.Int32Type, false, schema.NotNullConstraint{}),
+				newColTypeInfo("c22", uint64(8539), typeinfo.Int32Type, false),
+				newColTypeInfo("c33", uint64(4696), typeinfo.Int32Type, false)),
+			schema.NewIndex("c1_idx", []uint64{8201}, []uint64{8201, 3228}, nil, schema.IndexProperties{}),
 		),
 	},
 	{
@@ -194,33 +194,33 @@ var mergeSchemaTests = []mergeSchemaTest{
 		},
 		sch: schemaFromColsAndIdxs(
 			colCollection(
-				newColTypeInfo("pk", uint64(0), typeinfo.Int32Type, true, schema.NotNullConstraint{}),
-				newColTypeInfo("c1", uint64(1), typeinfo.Int32Type, false, schema.NotNullConstraint{}),
-				newColTypeInfo("c2", uint64(2), typeinfo.Int32Type, false),
-				newColTypeInfo("c3", uint64(3), typeinfo.Int32Type, false)),
-			schema.NewIndex("c1_index", []uint64{1}, []uint64{1, 0}, nil, schema.IndexProperties{}),
+				newColTypeInfo("pk", uint64(3228), typeinfo.Int32Type, true, schema.NotNullConstraint{}),
+				newColTypeInfo("c1", uint64(8201), typeinfo.Int32Type, false, schema.NotNullConstraint{}),
+				newColTypeInfo("c2", uint64(8539), typeinfo.Int32Type, false),
+				newColTypeInfo("c3", uint64(4696), typeinfo.Int32Type, false)),
+			schema.NewIndex("c1_index", []uint64{8201}, []uint64{8201, 3228}, nil, schema.IndexProperties{}),
 		),
 	},
 	{
 		name: "add same column on both branches, merge",
 		setup: []testCommand{
-			{commands.SqlCmd{}, []string{"-q", "alter table test add column c4 int comment 'tag:4';"}},
+			{commands.SqlCmd{}, []string{"-q", "alter table test add column c4 int;"}},
 			{commands.AddCmd{}, []string{"."}},
 			{commands.CommitCmd{}, []string{"-m", "modified branch master"}},
 			{commands.CheckoutCmd{}, []string{"other"}},
-			{commands.SqlCmd{}, []string{"-q", "alter table test add column c4 int comment 'tag:4'"}},
+			{commands.SqlCmd{}, []string{"-q", "alter table test add column c4 int;"}},
 			{commands.AddCmd{}, []string{"."}},
 			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
 			{commands.CheckoutCmd{}, []string{"master"}},
 		},
 		sch: schemaFromColsAndIdxs(
 			colCollection(
-				newColTypeInfo("pk", uint64(0), typeinfo.Int32Type, true, schema.NotNullConstraint{}),
-				newColTypeInfo("c1", uint64(1), typeinfo.Int32Type, false, schema.NotNullConstraint{}),
-				newColTypeInfo("c2", uint64(2), typeinfo.Int32Type, false),
-				newColTypeInfo("c3", uint64(3), typeinfo.Int32Type, false),
-				newColTypeInfo("c4", uint64(4), typeinfo.Int32Type, false)),
-			schema.NewIndex("c1_idx", []uint64{1}, []uint64{1, 0}, nil, schema.IndexProperties{}),
+				newColTypeInfo("pk", uint64(3228), typeinfo.Int32Type, true, schema.NotNullConstraint{}),
+				newColTypeInfo("c1", uint64(8201), typeinfo.Int32Type, false, schema.NotNullConstraint{}),
+				newColTypeInfo("c2", uint64(8539), typeinfo.Int32Type, false),
+				newColTypeInfo("c3", uint64(4696), typeinfo.Int32Type, false),
+				newColTypeInfo("c4", uint64(1716), typeinfo.Int32Type, false)),
+			schema.NewIndex("c1_idx", []uint64{8201}, []uint64{8201, 3228}, nil, schema.IndexProperties{}),
 		),
 	},
 	{
@@ -237,12 +237,12 @@ var mergeSchemaTests = []mergeSchemaTest{
 		},
 		sch: schemaFromColsAndIdxs(
 			colCollection(
-				newColTypeInfo("pk", uint64(0), typeinfo.Int32Type, true, schema.NotNullConstraint{}),
-				newColTypeInfo("c1", uint64(1), typeinfo.Int32Type, false, schema.NotNullConstraint{}),
-				newColTypeInfo("c2", uint64(2), typeinfo.Int32Type, false),
-				newColTypeInfo("c3", uint64(3), typeinfo.Int32Type, false)),
-			schema.NewIndex("c1_idx", []uint64{1}, []uint64{1, 0}, nil, schema.IndexProperties{}),
-			schema.NewIndex("c3_idx", []uint64{3}, []uint64{3, 0}, nil, schema.IndexProperties{}),
+				newColTypeInfo("pk", uint64(3228), typeinfo.Int32Type, true, schema.NotNullConstraint{}),
+				newColTypeInfo("c1", uint64(8201), typeinfo.Int32Type, false, schema.NotNullConstraint{}),
+				newColTypeInfo("c2", uint64(8539), typeinfo.Int32Type, false),
+				newColTypeInfo("c3", uint64(4696), typeinfo.Int32Type, false)),
+			schema.NewIndex("c1_idx", []uint64{8201}, []uint64{8201, 3228}, nil, schema.IndexProperties{}),
+			schema.NewIndex("c3_idx", []uint64{4696}, []uint64{4696, 3228}, nil, schema.IndexProperties{}),
 		),
 	},
 }
@@ -258,12 +258,12 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 		name: "column name collisions",
 		setup: []testCommand{
 			{commands.SqlCmd{}, []string{"-q", "alter table test rename column c3 to c4;"}},
-			{commands.SqlCmd{}, []string{"-q", "alter table test add column C6 int comment 'tag:13';"}},
+			{commands.SqlCmd{}, []string{"-q", "alter table test add column C6 int;"}},
 			{commands.AddCmd{}, []string{"."}},
 			{commands.CommitCmd{}, []string{"-m", "modified branch master"}},
 			{commands.CheckoutCmd{}, []string{"other"}},
 			{commands.SqlCmd{}, []string{"-q", "alter table test rename column c2 to c4;"}},
-			{commands.SqlCmd{}, []string{"-q", "alter table test add column c6 int comment 'tag:19';"}},
+			{commands.SqlCmd{}, []string{"-q", "alter table test add column c6 int;"}},
 			{commands.AddCmd{}, []string{"."}},
 			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
 			{commands.CheckoutCmd{}, []string{"master"}},
@@ -301,8 +301,8 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			IdxConflicts: []merge.IdxConflict{
 				{
 					Kind:   merge.NameCollision,
-					Ours:   schema.NewIndex("both", []uint64{1, 2}, []uint64{1, 2, 0}, nil, schema.IndexProperties{}),
-					Theirs: schema.NewIndex("both", []uint64{2, 3}, []uint64{2, 3, 0}, nil, schema.IndexProperties{}),
+					Ours:   schema.NewIndex("both", []uint64{8201, 8539}, []uint64{8201, 8539, 3228}, nil, schema.IndexProperties{}),
+					Theirs: schema.NewIndex("both", []uint64{8539, 4696}, []uint64{8539, 4696, 3228}, nil, schema.IndexProperties{}),
 				},
 			},
 		},
@@ -310,13 +310,14 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 	{
 		name: "column definition collision",
 		setup: []testCommand{
-			{commands.SqlCmd{}, []string{"-q", "alter table test add column c40 int comment 'tag:4';"}},
-			{commands.SqlCmd{}, []string{"-q", "alter table test add column c6 bigint comment 'tag:6';"}},
+			{commands.SqlCmd{}, []string{"-q", "alter table test add column c40 int;"}},
+			{commands.SqlCmd{}, []string{"-q", "alter table test add column c6 bigint;"}},
 			{commands.AddCmd{}, []string{"."}},
 			{commands.CommitCmd{}, []string{"-m", "modified branch master"}},
 			{commands.CheckoutCmd{}, []string{"other"}},
-			{commands.SqlCmd{}, []string{"-q", "alter table test add column c44 int comment 'tag:4';"}},
-			{commands.SqlCmd{}, []string{"-q", "alter table test add column c6 tinyint comment 'tag:6';"}},
+			{commands.SqlCmd{}, []string{"-q", "alter table test add column c40 int;"}},
+			{commands.SqlCmd{}, []string{"-q", "alter table test rename column c40 to c44;"}},
+			{commands.SqlCmd{}, []string{"-q", "alter table test add column c6 tinyint;"}},
 			{commands.AddCmd{}, []string{"."}},
 			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
 			{commands.CheckoutCmd{}, []string{"master"}},
@@ -326,13 +327,13 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			ColConflicts: []merge.ColConflict{
 				{
 					Kind:   merge.TagCollision,
-					Ours:   newColTypeInfo("c40", uint64(4), typeinfo.Int32Type, false),
-					Theirs: newColTypeInfo("c44", uint64(4), typeinfo.Int32Type, false),
+					Ours:   newColTypeInfo("c40", uint64(679), typeinfo.Int32Type, false),
+					Theirs: newColTypeInfo("c44", uint64(679), typeinfo.Int32Type, false),
 				},
 				{
 					Kind:   merge.TagCollision,
-					Ours:   newColTypeInfo("c6", uint64(6), typeinfo.Int64Type, false),
-					Theirs: newColTypeInfo("c6", uint64(6), typeinfo.Int8Type, false),
+					Ours:   newColTypeInfo("c6", uint64(10774), typeinfo.Int64Type, false),
+					Theirs: newColTypeInfo("c6", uint64(10774), typeinfo.Int8Type, false),
 				},
 			},
 		},
@@ -354,8 +355,8 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			IdxConflicts: []merge.IdxConflict{
 				{
 					Kind:   merge.TagCollision,
-					Ours:   schema.NewIndex("c3_idx", []uint64{3}, []uint64{3, 0}, nil, schema.IndexProperties{}),
-					Theirs: schema.NewIndex("c3_index", []uint64{3}, []uint64{3, 0}, nil, schema.IndexProperties{}),
+					Ours:   schema.NewIndex("c3_idx", []uint64{4696}, []uint64{4696, 3228}, nil, schema.IndexProperties{}),
+					Theirs: schema.NewIndex("c3_index", []uint64{4696}, []uint64{4696, 3228}, nil, schema.IndexProperties{}),
 				},
 			},
 		},
@@ -364,15 +365,15 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 
 var setupForeignKeyTests = []testCommand{
 	{commands.SqlCmd{}, []string{"-q", "create table test (" +
-		"pk int not null primary key comment 'tag:0'," +
-		"t1 int not null comment 'tag:1'," +
-		"t2 int comment 'tag:2'," +
-		"t3 int comment 'tag:3');"}},
+		"pk int not null primary key," +
+		"t1 int not null," +
+		"t2 int," +
+		"t3 int);"}},
 	{commands.SqlCmd{}, []string{"-q", "alter table test add index t1_idx (t1);"}},
 	{commands.SqlCmd{}, []string{"-q", "create table quiz (" +
-		"pk int not null primary key comment 'tag:10'," +
-		"q1 int not null comment 'tag:11'," +
-		"q2 int not null comment 'tag:12'," +
+		"pk int not null primary key," +
+		"q1 int not null," +
+		"q2 int not null," +
 		"index q2_idx (q2)," +
 		"constraint q1_fk foreign key (q1) references test(t1));"}},
 	{commands.AddCmd{}, []string{"."}},
@@ -388,10 +389,10 @@ var mergeForeignKeyTests = []mergeForeignKeyTest{
 			Name:                   "q1_fk",
 			TableName:              "quiz",
 			TableIndex:             "q1",
-			TableColumns:           []uint64{11},
+			TableColumns:           []uint64{13001},
 			ReferencedTableName:    "test",
 			ReferencedTableIndex:   "t1_idx",
-			ReferencedTableColumns: []uint64{1}}),
+			ReferencedTableColumns: []uint64{12111}}),
 		expFKConflict: []merge.FKConflict{},
 	},
 	//{
@@ -435,7 +436,7 @@ func schemaFromColsAndIdxs(allCols *schema.ColCollection, indexes ...schema.Inde
 }
 
 func newColTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, partOfPK bool, constraints ...schema.ColConstraint) schema.Column {
-	c, err := schema.NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, "", constraints...)
+	c, err := schema.NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, "", "", constraints...)
 	if err != nil {
 		panic("could not create column")
 	}
