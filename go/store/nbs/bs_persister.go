@@ -151,5 +151,5 @@ func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, ch
 }
 
 func (bsp *blobstorePersister) PruneTableFiles(ctx context.Context, contents manifestContents) error {
-	panic("Not Implemented")
+	return ErrUnsupportedOperation
 }

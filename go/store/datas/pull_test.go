@@ -455,7 +455,7 @@ func (ttfs *TestTableFileStore) SupportedOperations() nbs.TableFileStoreOps {
 }
 
 func (ttfs *TestTableFileStore) PruneTableFiles(ctx context.Context) error {
-	return nil
+	return nbs.ErrUnsupportedOperation
 }
 
 func TestClone(t *testing.T) {

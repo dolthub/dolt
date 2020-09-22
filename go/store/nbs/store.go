@@ -1051,6 +1051,7 @@ func (nbs *NomsBlockStore) SupportedOperations() TableFileStoreOps {
 	return TableFileStoreOps{
 		CanRead:  true,
 		CanWrite: canwrite,
+		CanPrune: canwrite,
 	}
 }
 

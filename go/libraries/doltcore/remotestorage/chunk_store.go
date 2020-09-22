@@ -878,6 +878,7 @@ func (dcs *DoltChunkStore) SupportedOperations() nbs.TableFileStoreOps {
 	return nbs.TableFileStoreOps{
 		CanRead:  true,
 		CanWrite: true,
+		CanPrune: false,
 	}
 }
 
@@ -947,7 +948,7 @@ func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, nu
 
 // PruneTableFiles deletes old table files that are no longer referenced in the manifest.
 func (dcs *DoltChunkStore) PruneTableFiles(ctx context.Context) error {
-	panic("Not Implemented")
+	return nbs.ErrUnsupportedOperation
 }
 
 // Sources retrieves the current root hash, and a list of all the table files

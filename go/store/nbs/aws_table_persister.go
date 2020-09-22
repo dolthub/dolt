@@ -605,5 +605,5 @@ func (s3p awsTablePersister) uploadPart(ctx context.Context, data []byte, key, u
 }
 
 func (s3p awsTablePersister) PruneTableFiles(ctx context.Context, contents manifestContents) error {
-	panic("Not Implemented")
+	return ErrUnsupportedOperation
 }
