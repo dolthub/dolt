@@ -292,6 +292,48 @@ func TestIndexEditorConcurrencyUnique(t *testing.T) {
 	}
 }
 
+func TestIndexEditorUniqueMultipleNil(t *testing.T) {
+	format := types.Format_7_18
+	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
+	require.NoError(t, err)
+	colColl, err := schema.NewColCollection(
+		schema.NewColumn("pk", 0, types.IntKind, true),
+		schema.NewColumn("v1", 1, types.IntKind, false))
+	require.NoError(t, err)
+	tableSch := schema.SchemaFromCols(colColl)
+	index, err := tableSch.Indexes().AddIndexByColNames("idx_unique", []string{"v1"}, schema.IndexProperties{IsUnique: true, Comment: ""})
+	require.NoError(t, err)
+	indexSch := index.Schema()
+	emptyMap, err := types.NewMap(context.Background(), db)
+	require.NoError(t, err)
+
+	indexEditor := NewIndexEditor(index, emptyMap)
+	for i := 0; i < 3; i++ {
+		dRow, err := row.New(format, indexSch, row.TaggedValues{
+			0: types.NullValue,
+			1: types.Int(i),
+		})
+		require.NoError(t, err)
+		require.NoError(t, indexEditor.UpdateIndex(context.Background(), nil, dRow))
+	}
+	newIndexData, err := indexEditor.Map(context.Background())
+	require.NoError(t, err)
+	if assert.Equal(t, uint64(3), newIndexData.Len()) {
+		index := 0
+		_ = newIndexData.IterAll(context.Background(), func(key, value types.Value) error {
+			dReadRow, err := row.FromNoms(indexSch, key.(types.Tuple), value.(types.Tuple))
+			require.NoError(t, err)
+			dReadVals, err := row.GetTaggedVals(dReadRow)
+			require.NoError(t, err)
+			assert.Equal(t, row.TaggedValues{
+				1: types.Int(index), // We don't encode NULL values
+			}, dReadVals)
+			index++
+			return nil
+		})
+	}
+}
+
 func TestIndexEditorWriteAfterFlush(t *testing.T) {
 	format := types.Format_7_18
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)

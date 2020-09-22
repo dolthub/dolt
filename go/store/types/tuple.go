@@ -504,6 +504,23 @@ func (t Tuple) StartsWith(otherTuple Tuple) bool {
 	return bytes.HasPrefix(tplDec.buff[tplDec.offset:], otherDec.buff[otherDec.offset:])
 }
 
+func (t Tuple) Contains(v Value) (bool, error) {
+	itr, err := t.Iterator()
+	if err != nil {
+		return false, err
+	}
+	for itr.HasMore() {
+		_, tupleVal, err := itr.Next()
+		if err != nil {
+			return false, err
+		}
+		if tupleVal.Equals(v) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (t Tuple) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	panic("unreachable")
 }

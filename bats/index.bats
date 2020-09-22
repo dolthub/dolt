@@ -1993,6 +1993,33 @@ SQL
     [ "$status" -eq "0" ]
 }
 
+@test "index: UNIQUE allows multiple NULL values" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  UNIQUE INDEX (v1)
+);
+CREATE TABLE test2 (
+  pk BIGINT PRIMARY KEY,
+  v1 BIGINT,
+  v2 BIGINT,
+  UNIQUE INDEX (v1, v2)
+);
+INSERT INTO test VALUES (0, NULL), (1, NULL), (2, NULL);
+INSERT INTO test2 VALUES (0, NULL, NULL), (1, NULL, NULL), (2, 1, NULL), (3, 1, NULL), (4, NULL, 1), (5, NULL, 1);
+SQL
+    run dolt sql -q "SELECT * FROM test" -r=json
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ '{"rows": [{"pk":0},{"pk":1},{"pk":2}]}' ]] || false
+    run dolt sql -q "SELECT * FROM test WHERE v1 IS NULL" -r=json
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ '{"rows": [{"pk":0},{"pk":1},{"pk":2}]}' ]] || false
+    run dolt sql -q "SELECT * FROM test2" -r=json
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ '{"rows": [{"pk":0},{"pk":1},{"pk":2,"v1":1},{"pk":3,"v1":1},{"pk":4,"v2":1},{"pk":5,"v2":1}]}' ]] || false
+}
+
 @test "index: dolt table import -u" {
     dolt sql -q "CREATE INDEX idx_v1 ON onepk(v1)"
     dolt table import -u onepk `batshelper index_onepk.csv`

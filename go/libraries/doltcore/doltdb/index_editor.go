@@ -138,13 +138,17 @@ func (indexEd *IndexEditor) UpdateIndex(ctx context.Context, originalIndexRow ro
 			if err != nil {
 				return err
 			}
-			partialKeyHash, err := partialKey.Hash(originalIndexRow.Format())
-			if err != nil {
+			if hasNulls, err := partialKey.Contains(types.NullValue); err != nil {
 				return err
+			} else if !hasNulls {
+				partialKeyHash, err := partialKey.Hash(originalIndexRow.Format())
+				if err != nil {
+					return err
+				}
+				indexEd.keyMutex.Lock()
+				indexEd.keyCount[partialKeyHash]--
+				indexEd.keyMutex.Unlock()
 			}
-			indexEd.keyMutex.Lock()
-			indexEd.keyCount[partialKeyHash]--
-			indexEd.keyMutex.Unlock()
 		}
 		indexEd.mapMutex.Lock()
 		indexEd.ed.AddEdit(indexKey, nil)
@@ -162,25 +166,29 @@ func (indexEd *IndexEditor) UpdateIndex(ctx context.Context, originalIndexRow ro
 			if err != nil {
 				return err
 			}
-			partialKeyHash, err := partialKey.Hash(updatedIndexRow.Format())
-			if err != nil {
+			if hasNulls, err := partialKey.Contains(types.NullValue); err != nil {
 				return err
-			}
-			var mapIter table.TableReadCloser = noms.NewNomsRangeReader(indexEd.idxSch, indexEd.data,
-				[]*noms.ReadRange{{Start: partialKey, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
-					return tuple.StartsWith(partialKey), nil
-				}}})
-			_, err = mapIter.ReadRow(ctx)
-			if err == nil { // row exists
+			} else if !hasNulls {
+				partialKeyHash, err := partialKey.Hash(updatedIndexRow.Format())
+				if err != nil {
+					return err
+				}
+				var mapIter table.TableReadCloser = noms.NewNomsRangeReader(indexEd.idxSch, indexEd.data,
+					[]*noms.ReadRange{{Start: partialKey, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
+						return tuple.StartsWith(partialKey), nil
+					}}})
+				_, err = mapIter.ReadRow(ctx)
+				if err == nil { // row exists
+					indexEd.keyMutex.Lock()
+					indexEd.keyCount[partialKeyHash]++
+					indexEd.keyMutex.Unlock()
+				} else if err != io.EOF {
+					return err
+				}
 				indexEd.keyMutex.Lock()
 				indexEd.keyCount[partialKeyHash]++
 				indexEd.keyMutex.Unlock()
-			} else if err != io.EOF {
-				return err
 			}
-			indexEd.keyMutex.Lock()
-			indexEd.keyCount[partialKeyHash]++
-			indexEd.keyMutex.Unlock()
 		}
 		indexEd.mapMutex.Lock()
 		indexEd.ed.AddEdit(indexKey, updatedIndexRow.NomsMapValue(indexEd.idxSch))
