@@ -222,7 +222,7 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, contents manif
 	}
 
 	for _, info := range fileInfos {
-		if !info.Mode().IsRegular() {
+		if info.IsDir() {
 			continue
 		}
 		if strings.HasPrefix(info.Name(), tempTablePrefix) {
