@@ -48,6 +48,7 @@ type doltIndex struct {
 	comment      string
 }
 
+//TODO: have queries using IS NULL make use of indexes
 var _ DoltIndex = (*doltIndex)(nil)
 
 var alwaysContinueRangeCheck noms.InRangeCheck = func(tuple types.Tuple) (bool, error) {
