@@ -221,6 +221,12 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, contents manif
 		return err
 	}
 
+	err = ftp.fc.ShrinkCache()
+	
+	if err != nil {
+		return err
+	}
+
 	for _, info := range fileInfos {
 		if info.IsDir() {
 			continue
