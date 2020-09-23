@@ -79,6 +79,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.MigrateCmd{},
 	indexcmds.Commands,
 	commands.ReadTablesCmd{},
+	commands.GarbageCollectionCmd{},
 })
 
 func init() {
@@ -150,7 +151,7 @@ func runMain() int {
 	restoreIO := cli.InitIO()
 	defer restoreIO()
 
-	//warnIfMaxFilesTooLow()
+	warnIfMaxFilesTooLow()
 
 	ctx := context.Background()
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
@@ -199,7 +200,7 @@ func runMain() int {
 		return 1
 	}
 
-	//err = reconfigIfTempFileMoveFails(dEnv)
+	err = reconfigIfTempFileMoveFails(dEnv)
 
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to setup the temporary directory. %v`", err))

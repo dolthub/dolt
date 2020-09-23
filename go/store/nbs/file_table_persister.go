@@ -222,7 +222,7 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, contents manif
 	}
 
 	err = ftp.fc.ShrinkCache()
-	
+
 	if err != nil {
 		return err
 	}
