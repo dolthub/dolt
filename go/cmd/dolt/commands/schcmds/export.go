@@ -140,7 +140,7 @@ func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root *do
 }
 
 func exportTblSchema(ctx context.Context, tblName string, root *doltdb.RootValue, wr io.Writer) errhand.VerboseError {
-	sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, root)
+	sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(root))
 	stmt, err := dsqle.GetCreateTableStmt(sqlCtx, engine, tblName)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)

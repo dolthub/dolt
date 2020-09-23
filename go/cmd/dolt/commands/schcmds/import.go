@@ -34,7 +34,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
@@ -286,7 +286,13 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 
 	tblName := impArgs.tableName
 	// inferred schemas have no foreign keys
-	cli.Println(sqlfmt.CreateTableStmt(tblName, sch, nil, nil))
+	sqlDb := sqle.NewSingleTableDatabase(tblName, sch, nil, nil)
+	sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
+	stmt, err := sqle.GetCreateTableStmt(sqlCtx, engine, tblName)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+	cli.Println(stmt)
 
 	if !apr.Contains(dryRunFlag) {
 		tbl, tblExists, err := root.GetTable(ctx, tblName)

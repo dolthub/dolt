@@ -25,21 +25,9 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-const expectedCreateSQL = "CREATE TABLE `table_name` (\n" +
-	"  `id` BIGINT NOT NULL,\n" +
-	"  `first_name` LONGTEXT NOT NULL,\n" +
-	"  `last_name` LONGTEXT NOT NULL,\n" +
-	"  `is_married` BIT(1),\n" +
-	"  `age` BIGINT,\n" +
-	"  `rating` DOUBLE,\n" +
-	"  `uuid` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin,\n" +
-	"  `num_episodes` BIGINT UNSIGNED,\n" +
-	"  PRIMARY KEY (`id`)\n" +
-	");"
 const expectedDropSql = "DROP TABLE `table_name`;"
 const expectedDropIfExistsSql = "DROP TABLE IF EXISTS `table_name`;"
 const expectedAddColSql = "ALTER TABLE `table_name` ADD `c0` BIGINT NOT NULL;"
@@ -52,13 +40,6 @@ type test struct {
 	row            row.Row
 	sch            schema.Schema
 	expectedOutput string
-}
-
-func TestSchemaAsCreateStmt(t *testing.T) {
-	tSchema := sqltestutil.PeopleTestSchema
-	stmt := CreateTableStmt("table_name", tSchema, nil, nil)
-
-	assert.Equal(t, expectedCreateSQL, stmt)
 }
 
 func TestTableDropStmt(t *testing.T) {

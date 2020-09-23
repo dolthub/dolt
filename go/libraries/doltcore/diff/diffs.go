@@ -174,12 +174,13 @@ func GetDocDiffs(ctx context.Context, dEnv *env.DoltEnv) (*DocDiffs, *DocDiffs, 
 // FromFKs and ToFKs contain Foreign Keys that constrain columns in this table,
 // they do not contain Foreign Keys that reference this table.
 type TableDelta struct {
-	FromName  string
-	ToName    string
-	FromTable *doltdb.Table
-	ToTable   *doltdb.Table
-	FromFks   []doltdb.ForeignKey
-	ToFks     []doltdb.ForeignKey
+	FromName       string
+	ToName         string
+	FromTable      *doltdb.Table
+	ToTable        *doltdb.Table
+	FromFks        []doltdb.ForeignKey
+	ToFks          []doltdb.ForeignKey
+	ToFksParentSch map[string]schema.Schema
 }
 
 // GetTableDeltas returns a slice of TableDelta objects for each table that changed between fromRoot and toRoot.
@@ -224,27 +225,44 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 		}
 
 		toFKs, _ := toFKC.KeysForTable(name)
+		toFksParentSch := make(map[string]schema.Schema)
+		for _, toFk := range toFKs {
+			toRefTable, _, ok, err := toRoot.GetTableInsensitive(ctx, toFk.ReferencedTableName)
+			if err != nil {
+				return true, err
+			}
+			if !ok {
+				continue // as the schemas are for display-only, we can skip on any missing parents (they were deleted, etc.)
+			}
+			toRefSch, err := toRefTable.GetSchema(ctx)
+			if err != nil {
+				return true, err
+			}
+			toFksParentSch[toFk.ReferencedTableName] = toRefSch
+		}
 
 		pkTag := sch.GetPKCols().GetColumns()[0].Tag
 		oldName, ok := fromTableNames[pkTag]
 
 		if !ok {
 			deltas = append(deltas, TableDelta{
-				ToName:  name,
-				ToTable: table,
-				ToFks:   toFKs,
+				ToName:         name,
+				ToTable:        table,
+				ToFks:          toFKs,
+				ToFksParentSch: toFksParentSch,
 			})
 		} else if oldName != name ||
 			fromTableHashes[pkTag] != th ||
 			!fkSlicesAreEqual(fromTableFKs[pkTag], toFKs) {
 
 			deltas = append(deltas, TableDelta{
-				FromName:  fromTableNames[pkTag],
-				ToName:    name,
-				FromTable: fromTables[pkTag],
-				ToTable:   table,
-				FromFks:   fromTableFKs[pkTag],
-				ToFks:     toFKs,
+				FromName:       fromTableNames[pkTag],
+				ToName:         name,
+				FromTable:      fromTables[pkTag],
+				ToTable:        table,
+				FromFks:        fromTableFKs[pkTag],
+				ToFks:          toFKs,
+				ToFksParentSch: toFksParentSch,
 			})
 		}
 

@@ -121,63 +121,6 @@ func FmtForeignKey(fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
 	return sb.String()
 }
 
-// CreateTableStmtWithTags generates a SQL CREATE TABLE command
-func CreateTableStmt(tableName string, sch schema.Schema, foreignKeys []doltdb.ForeignKey, parentSchs map[string]schema.Schema) string {
-	return createTableStmt(tableName, sch, func(col schema.Column) string {
-		return FmtCol(2, 0, 0, col)
-	}, foreignKeys, parentSchs)
-}
-
-type fmtColFunc func(col schema.Column) string
-
-func createTableStmt(tableName string, sch schema.Schema, fmtCol fmtColFunc, foreignKeys []doltdb.ForeignKey, parentSchs map[string]schema.Schema) string {
-
-	sb := strings.Builder{}
-	sb.WriteString(fmt.Sprintf("CREATE TABLE %s (\n", QuoteIdentifier(tableName)))
-
-	firstLine := true
-	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if firstLine {
-			firstLine = false
-		} else {
-			sb.WriteString(",\n")
-		}
-
-		s := fmtCol(col)
-		sb.WriteString(s)
-
-		return false, nil
-	})
-
-	firstPK := true
-	_ = sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if firstPK {
-			sb.WriteString(",\n  PRIMARY KEY (")
-			firstPK = false
-		} else {
-			sb.WriteRune(',')
-		}
-		sb.WriteString(QuoteIdentifier(col.Name))
-		return false, nil
-	})
-
-	sb.WriteRune(')')
-
-	for _, idx := range sch.Indexes().AllIndexes() {
-		sb.WriteString(",\n  ")
-		sb.WriteString(FmtIndex(idx))
-	}
-
-	for _, fk := range foreignKeys {
-		sb.WriteString(",\n  ")
-		sb.WriteString(FmtForeignKey(fk, sch, parentSchs[fk.ReferencedTableName]))
-	}
-
-	sb.WriteString("\n);")
-
-	return sb.String()
-}
-
 func DropTableStmt(tableName string) string {
 	var b strings.Builder
 	b.WriteString("DROP TABLE ")
