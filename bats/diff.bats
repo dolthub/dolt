@@ -430,3 +430,28 @@ SQL
     [ $status -eq 1 ]
     [[ ! $output =~ "panic" ]]
 }
+
+@test "diff with foreign key and sql output" {
+    dolt sql <<SQL
+CREATE TABLE parent (
+  id int PRIMARY KEY,
+  pv1 int,
+  pv2 int,
+  INDEX v1 (pv1),
+  INDEX v2 (pv2)
+);
+SQL
+    dolt add -A
+    dolt commit -m "hi"
+    dolt sql <<SQL
+CREATE TABLE child (
+  id int primary key,
+  cv1 int,
+  cv2 int,
+  CONSTRAINT fk_named FOREIGN KEY (cv1) REFERENCES parent(pv1)
+);
+SQL
+    run dolt diff -s -r=sql master
+    [ $status -eq 0 ]
+    [[ $output =~ "CONSTRAINT \`fk_named\` FOREIGN KEY (\`cv1\`) REFERENCES \`parent\` (\`pv1\`)" ]] || false
+}

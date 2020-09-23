@@ -27,6 +27,10 @@ type UserSpaceDatabase struct {
 
 var _ SqlDatabase = (*UserSpaceDatabase)(nil)
 
+func NewUserSpaceDatabase(root *doltdb.RootValue) *UserSpaceDatabase {
+	return &UserSpaceDatabase{RootValue: root}
+}
+
 func (db *UserSpaceDatabase) Name() string {
 	return "dolt"
 }

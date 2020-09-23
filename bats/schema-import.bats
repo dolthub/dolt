@@ -59,12 +59,12 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 9 ]
     [[ "${lines[0]}" =~ "test" ]] || false
-    [[ "$output" =~ "\`pk\` INT" ]] || false
-    [[ "$output" =~ "\`c1\` INT" ]] || false
-    [[ "$output" =~ "\`c2\` INT" ]] || false
-    [[ "$output" =~ "\`c3\` INT" ]] || false
-    [[ "$output" =~ "\`c4\` INT" ]] || false
-    [[ "$output" =~ "\`c5\` INT" ]] || false
+    [[ "$output" =~ "\`pk\` int" ]] || false
+    [[ "$output" =~ "\`c1\` int" ]] || false
+    [[ "$output" =~ "\`c2\` int" ]] || false
+    [[ "$output" =~ "\`c3\` int" ]] || false
+    [[ "$output" =~ "\`c4\` int" ]] || false
+    [[ "$output" =~ "\`c5\` int" ]] || false
 
     run dolt ls
     [ "$status" -eq 0 ]
@@ -76,13 +76,13 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 10 ]
     [[ "${lines[0]}" =~ "test" ]] || false
-    [[ "$output" =~ "\`pk\` INT" ]] || false
-    [[ "$output" =~ "\`int\` INT" ]] || false
-    [[ "$output" =~ "\`string\` LONGTEXT" ]] || false
-    [[ "$output" =~ "\`boolean\` BIT(1)" ]] || false
-    [[ "$output" =~ "\`float\` FLOAT" ]] || false
-    [[ "$output" =~ "\`uint\` INT UNSIGNED" ]] || false
-    [[ "$output" =~ "\`uuid\` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin" ]] || false
+    [[ "$output" =~ "\`pk\` int" ]] || false
+    [[ "$output" =~ "\`int\` int" ]] || false
+    [[ "$output" =~ "\`string\` longtext" ]] || false
+    [[ "$output" =~ "\`boolean\` bit(1)" ]] || false
+    [[ "$output" =~ "\`float\` float" ]] || false
+    [[ "$output" =~ "\`uint\` int unsigned" ]] || false
+    [[ "$output" =~ "\`uuid\` char(36) character set ascii collate ascii_bin" ]] || false
 }
 
 @test "schema import with an empty csv" {
@@ -166,9 +166,9 @@ DELIM
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 7 ]
     [[ "${lines[0]}" =~ "test" ]] || false
-    [[ "$output" =~ "\`pk\` LONGTEXT" ]] || false
-    [[ "$output" =~ "\`headerOne\` LONGTEXT" ]] || false
-    [[ "$output" =~ "\`headerTwo\` INT" ]] || false
+    [[ "$output" =~ "\`pk\` longtext" ]] || false
+    [[ "$output" =~ "\`headerOne\` longtext" ]] || false
+    [[ "$output" =~ "\`headerTwo\` int" ]] || false
 }
 
 @test "schema import --keep-types" {
@@ -186,13 +186,13 @@ DELIM
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 11 ]
     [[ "${lines[0]}" =~ "test" ]] || false
-    [[ "$output" =~ "\`pk\` INT" ]] || false
-    [[ "$output" =~ "\`c1\` INT" ]] || false
-    [[ "$output" =~ "\`c2\` INT" ]] || false
-    [[ "$output" =~ "\`c3\` INT" ]] || false
-    [[ "$output" =~ "\`c4\` INT" ]] || false
-    [[ "$output" =~ "\`c5\` INT" ]] || false
-    [[ "$output" =~ "\`c6\` LONGTEXT" ]] || false
+    [[ "$output" =~ "\`pk\` int" ]] || false
+    [[ "$output" =~ "\`c1\` int" ]] || false
+    [[ "$output" =~ "\`c2\` int" ]] || false
+    [[ "$output" =~ "\`c3\` int" ]] || false
+    [[ "$output" =~ "\`c4\` int" ]] || false
+    [[ "$output" =~ "\`c5\` int" ]] || false
+    [[ "$output" =~ "\`c6\` longtext" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
@@ -207,13 +207,13 @@ DELIM
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 11 ]
     [[ "${lines[0]}" =~ "test" ]] || false
-    [[ "$output" =~ "\`pk\` INT" ]] || false
-    [[ "$output" =~ "\`c1\` LONGTEXT" ]] || false
-    [[ "$output" =~ "\`c2\` LONGTEXT" ]] || false
-    [[ "$output" =~ "\`c3\` LONGTEXT" ]] || false
-    [[ "$output" =~ "\`c4\` LONGTEXT" ]] || false
-    [[ "$output" =~ "\`c5\` LONGTEXT" ]] || false
-    [[ "$output" =~ "\`c6\` LONGTEXT" ]] || false
+    [[ "$output" =~ "\`pk\` int" ]] || false
+    [[ "$output" =~ "\`c1\` longtext" ]] || false
+    [[ "$output" =~ "\`c2\` longtext" ]] || false
+    [[ "$output" =~ "\`c3\` longtext" ]] || false
+    [[ "$output" =~ "\`c4\` longtext" ]] || false
+    [[ "$output" =~ "\`c5\` longtext" ]] || false
+    [[ "$output" =~ "\`c6\` longtext" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
@@ -227,7 +227,7 @@ DELIM
     run dolt schema import -c --pks=pk test 1pk-datetime.csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
-    [[ "$output" =~ "DATETIME" ]] || false;
+    [[ "$output" =~ "datetime" ]] || false;
 }
 
 @test "schema import uses specific date/time types" {
@@ -238,10 +238,10 @@ pk, c_date, c_time, c_datetime, c_date+time
 DELIM
     run dolt schema import -c --pks=pk test chrono.csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "\`c_date\` DATE" ]] || false
-    [[ "$output" =~ "\`c_time\` TIME" ]] || false
-    [[ "$output" =~ "\`c_datetime\` DATETIME" ]] || false
-    [[ "$output" =~ "\`c_date+time\` DATETIME" ]] || false
+    [[ "$output" =~ "\`c_date\` date" ]] || false
+    [[ "$output" =~ "\`c_time\` time" ]] || false
+    [[ "$output" =~ "\`c_datetime\` datetime" ]] || false
+    [[ "$output" =~ "\`c_date+time\` datetime" ]] || false
 }
 
 @test "schema import of two tables" {
@@ -319,7 +319,7 @@ DELIM
 JSON
     run dolt schema import -c -pks=pk -m=name-map.json test abc.csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "\`pk\` INT" ]] || false
+    [[ "$output" =~ "\`pk\` int" ]] || false
     [[ "$output" =~ "\`aa\`" ]] || false
     [[ "$output" =~ "\`bb\`" ]] || false
     [[ "$output" =~ "\`cc\`" ]] || false

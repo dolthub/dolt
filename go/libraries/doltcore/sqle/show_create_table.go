@@ -20,20 +20,17 @@ import (
 
 	sqle "github.com/liquidata-inc/go-mysql-server"
 	"github.com/liquidata-inc/go-mysql-server/sql"
-
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 )
 
 // These functions cannot be in the sqlfmt package as the reliance on the sqle package creates a circular reference.
 
-func PrepareCreateTableStmt(ctx context.Context, root *doltdb.RootValue) (*sql.Context, *sqle.Engine, *DoltSession) {
+func PrepareCreateTableStmt(ctx context.Context, sqlDb sql.Database) (*sql.Context, *sqle.Engine, *DoltSession) {
 	dsess := DefaultDoltSession()
 	sqlCtx := sql.NewContext(ctx,
 		sql.WithSession(dsess),
 		sql.WithIndexRegistry(sql.NewIndexRegistry()),
 		sql.WithViewRegistry(sql.NewViewRegistry()))
 	engine := sqle.NewDefault()
-	sqlDb := &UserSpaceDatabase{RootValue: root}
 	engine.AddDatabase(sqlDb)
 	dsess.SetCurrentDatabase(sqlDb.Name())
 	return sqlCtx, engine, dsess

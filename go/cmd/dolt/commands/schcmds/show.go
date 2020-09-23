@@ -133,7 +133,7 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 			}
 		}
 
-		sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, root)
+		sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(root))
 
 		var notFound []string
 		for _, tblName := range tables {

@@ -35,6 +35,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
@@ -538,7 +539,13 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 	if td.IsDrop() {
 		cli.Println(sqlfmt.DropTableStmt(td.FromName))
 	} else if td.IsAdd() {
-		cli.Println(sqlfmt.CreateTableStmt(td.ToName, toSch, td.ToFks, nil))
+		sqlDb := sqle.NewSingleTableDatabase(td.ToName, toSch, td.ToFks, td.ToFksParentSch)
+		sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
+		stmt, err := sqle.GetCreateTableStmt(sqlCtx, engine, td.ToName)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		cli.Println(stmt)
 	} else {
 		if td.FromName != td.ToName {
 			cli.Println(sqlfmt.RenameTableStmt(td.FromName, td.ToName))
