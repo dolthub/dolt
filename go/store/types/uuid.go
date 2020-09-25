@@ -19,7 +19,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const (

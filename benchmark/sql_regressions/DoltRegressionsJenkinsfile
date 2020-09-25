@@ -46,7 +46,7 @@ spec:
                 sh "rm -rf $TMPDIR && mkdir $TMPDIR"
                 sh "rm -rf $DOLT_ROOT_PATH && mkdir $DOLT_ROOT_PATH"
                 dir ("sqllogictest") {
-                    git url: "https://github.com/liquidata-inc/sqllogictest.git"
+                    git url: "https://github.com/dolthub/sqllogictest.git"
                 }
                 dir ("benchmark/sql_regressions") {
                     script {

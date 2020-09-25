@@ -18,8 +18,8 @@ import (
 	"context"
 	"io"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type c struct {

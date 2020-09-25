@@ -25,8 +25,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/liquidata-inc/dolt/go/store/d"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // Apply applies a Patch (list of diffs) to a graph. It fulfills the

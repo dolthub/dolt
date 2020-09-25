@@ -18,7 +18,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
 // SuperSchema is the union of all Schemas over the history of a table

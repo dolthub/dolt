@@ -19,11 +19,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // DropColumn drops a column from a table, and removes its associated cell values

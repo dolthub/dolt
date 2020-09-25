@@ -14,7 +14,7 @@
 
 package dfunctions
 
-import "github.com/liquidata-inc/go-mysql-server/sql"
+import "github.com/dolthub/go-mysql-server/sql"
 
 var DoltFunctions = []sql.Function{
 	sql.Function1{Name: HashOfFuncName, Fn: NewHashOf},

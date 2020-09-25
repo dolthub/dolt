@@ -25,10 +25,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
+	"github.com/dolthub/dolt/go/store/atomicerr"
 
-	"github.com/liquidata-inc/dolt/go/store/d"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 func threeWayListMerge(ctx context.Context, a, b, parent types.List) (merged types.List, err error) {

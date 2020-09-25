@@ -28,9 +28,9 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
+	"github.com/dolthub/dolt/go/store/atomicerr"
 
-	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/d"
 )
 
 // Blob represents a list of Blobs.

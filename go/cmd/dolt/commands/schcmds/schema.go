@@ -15,9 +15,9 @@
 package schcmds
 
 import (
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
 var Commands = cli.NewSubCommandHandler("schema", "Commands for showing and importing table schemas.", []cli.Command{

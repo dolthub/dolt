@@ -22,7 +22,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/liquidata-inc/dolt/go/store/util/tempfiles"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
 
 	"github.com/google/uuid"
 	"github.com/juju/fslock"

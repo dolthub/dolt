@@ -26,9 +26,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/liquidata-inc/dolt/go/store/nbs"
-	"github.com/liquidata-inc/dolt/go/store/types"
-	"github.com/liquidata-inc/dolt/go/store/util/clienttest"
+	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/util/clienttest"
 )
 
 func mustTuple(tpl types.Tuple, err error) types.Tuple {

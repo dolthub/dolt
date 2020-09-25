@@ -15,9 +15,9 @@
 package sqle
 
 import (
-	"github.com/liquidata-inc/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
 // UserSpaceDatabase in an implementation of sql.Database for root values. Does not expose any of the internal dolt tables.

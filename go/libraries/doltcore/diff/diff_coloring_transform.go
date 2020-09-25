@@ -17,8 +17,8 @@ package diff
 import (
 	"github.com/fatih/color"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 )
 
 var greenTextProp = map[string]interface{}{colorRowProp: color.GreenString}

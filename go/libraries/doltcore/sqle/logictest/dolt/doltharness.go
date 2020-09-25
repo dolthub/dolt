@@ -22,18 +22,18 @@ import (
 	"strconv"
 	"strings"
 
-	sqle "github.com/liquidata-inc/go-mysql-server"
-	"github.com/liquidata-inc/go-mysql-server/sql"
+	sqle "github.com/dolthub/go-mysql-server"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/vt/proto/query"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/liquidata-inc/sqllogictest/go/logictest"
-	"github.com/liquidata-inc/vitess/go/vt/proto/query"
-	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
 	"github.com/shopspring/decimal"
 
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	dsql "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	dsql "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 var _ logictest.Harness = &DoltHarness{}

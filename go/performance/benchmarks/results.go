@@ -23,8 +23,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type result struct {

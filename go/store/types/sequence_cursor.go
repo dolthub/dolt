@@ -25,7 +25,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/d"
 )
 
 type sequenceIterator interface {

@@ -21,7 +21,7 @@
 
 package types
 
-import "github.com/liquidata-inc/dolt/go/store/hash"
+import "github.com/dolthub/dolt/go/store/hash"
 
 var getHashOverride func(v Value) (hash.Hash, error)
 

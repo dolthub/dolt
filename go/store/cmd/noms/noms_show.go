@@ -30,12 +30,12 @@ import (
 
 	flag "github.com/juju/gnuflag"
 
-	"github.com/liquidata-inc/dolt/go/store/cmd/noms/util"
-	"github.com/liquidata-inc/dolt/go/store/config"
-	"github.com/liquidata-inc/dolt/go/store/types"
-	"github.com/liquidata-inc/dolt/go/store/util/datetime"
-	"github.com/liquidata-inc/dolt/go/store/util/outputpager"
-	"github.com/liquidata-inc/dolt/go/store/util/verbose"
+	"github.com/dolthub/dolt/go/store/cmd/noms/util"
+	"github.com/dolthub/dolt/go/store/config"
+	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/util/datetime"
+	"github.com/dolthub/dolt/go/store/util/outputpager"
+	"github.com/dolthub/dolt/go/store/util/verbose"
 )
 
 var nomsShow = &util.Command{

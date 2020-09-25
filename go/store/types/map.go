@@ -26,8 +26,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
-	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/atomicerr"
+	"github.com/dolthub/dolt/go/store/d"
 )
 
 var ErrKeysNotOrdered = errors.New("streaming map keys not ordered")

@@ -1,4 +1,4 @@
-module github.com/liquidata-inc/dolt/go
+module github.com/dolthub/dolt/go
 
 require (
 	cloud.google.com/go v0.58.0 // indirect
@@ -19,6 +19,9 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/codahale/blake2 v0.0.0-20150924215134-8d10d0420cbf
 	github.com/denisbrodbeck/machineid v1.0.1
+	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20200730200742-c031ec8cba06
+	github.com/dolthub/go-mysql-server v0.6.1-0.20200925223107-d90191d39435
+	github.com/dolthub/vitess v0.0.0-20200925174744-823c7e177c3f
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.9.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
@@ -45,12 +48,9 @@ require (
 	github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/lestrrat-go/strftime v1.0.3 // indirect
-	github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20200730200742-c031ec8cba06
-	github.com/liquidata-inc/go-mysql-server v0.6.1-0.20200921093816-a2f606c0d13d
 	github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0
 	github.com/liquidata-inc/mmap-go v1.0.3
 	github.com/liquidata-inc/sqllogictest/go v0.0.0-20200320151923-b11801f10e15
-	github.com/liquidata-inc/vitess v0.0.0-20200911213404-87f76781a7c7
 	github.com/mattn/go-colorable v0.1.6 // indirect
 	github.com/mattn/go-isatty v0.0.12
 	github.com/mattn/go-runewidth v0.0.9
@@ -96,6 +96,6 @@ require (
 	modernc.org/strutil v1.1.0 // indirect
 )
 
-replace github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
+replace github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
 
 go 1.13

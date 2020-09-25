@@ -30,13 +30,13 @@ import (
 	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
 
-	"github.com/liquidata-inc/dolt/go/store/cmd/noms/util"
-	"github.com/liquidata-inc/dolt/go/store/config"
-	"github.com/liquidata-inc/dolt/go/store/datas"
-	"github.com/liquidata-inc/dolt/go/store/types"
-	"github.com/liquidata-inc/dolt/go/store/util/profile"
-	"github.com/liquidata-inc/dolt/go/store/util/status"
-	"github.com/liquidata-inc/dolt/go/store/util/verbose"
+	"github.com/dolthub/dolt/go/store/cmd/noms/util"
+	"github.com/dolthub/dolt/go/store/config"
+	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/util/profile"
+	"github.com/dolthub/dolt/go/store/util/status"
+	"github.com/dolthub/dolt/go/store/util/verbose"
 )
 
 var (

@@ -19,16 +19,16 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
-	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/atomicerr"
+	"github.com/dolthub/dolt/go/store/hash"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/valutil"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/utils/valutil"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 var ErrFastForward = errors.New("fast forward")

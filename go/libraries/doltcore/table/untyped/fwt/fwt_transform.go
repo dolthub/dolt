@@ -15,9 +15,9 @@
 package fwt
 
 import (
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // TooLongBehavior determines how the FWTTransformer should behave when it encounters a column that is longer than what

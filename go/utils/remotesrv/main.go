@@ -27,8 +27,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	remotesapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 func main() {

@@ -25,9 +25,9 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 
-	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
+	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
 // Emitter is an interface used for processing a batch of events

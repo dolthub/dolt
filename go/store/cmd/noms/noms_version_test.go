@@ -27,8 +27,8 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/liquidata-inc/dolt/go/store/constants"
-	"github.com/liquidata-inc/dolt/go/store/util/clienttest"
+	"github.com/dolthub/dolt/go/store/constants"
+	"github.com/dolthub/dolt/go/store/util/clienttest"
 )
 
 func TestVersion(t *testing.T) {

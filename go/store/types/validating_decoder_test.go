@@ -26,7 +26,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/liquidata-inc/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/chunks"
 )
 
 func TestValidatingBatchingSinkDecode(t *testing.T) {

@@ -18,7 +18,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/strhelp"
+	"github.com/dolthub/dolt/go/libraries/utils/strhelp"
 )
 
 // RemoteRef is a reference to a reference that tracks a branch on a remote

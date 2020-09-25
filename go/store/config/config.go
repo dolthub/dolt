@@ -30,7 +30,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
-	"github.com/liquidata-inc/dolt/go/store/spec"
+	"github.com/dolthub/dolt/go/store/spec"
 )
 
 // All configuration

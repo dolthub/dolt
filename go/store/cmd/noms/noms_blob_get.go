@@ -30,12 +30,12 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 
-	"github.com/liquidata-inc/dolt/go/store/cmd/noms/util"
-	"github.com/liquidata-inc/dolt/go/store/config"
-	"github.com/liquidata-inc/dolt/go/store/types"
-	"github.com/liquidata-inc/dolt/go/store/util/profile"
-	"github.com/liquidata-inc/dolt/go/store/util/progressreader"
-	"github.com/liquidata-inc/dolt/go/store/util/status"
+	"github.com/dolthub/dolt/go/store/cmd/noms/util"
+	"github.com/dolthub/dolt/go/store/config"
+	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/util/profile"
+	"github.com/dolthub/dolt/go/store/util/progressreader"
+	"github.com/dolthub/dolt/go/store/util/status"
 )
 
 func nomsBlobGet(ctx context.Context, ds string, filePath string) int {

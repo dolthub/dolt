@@ -28,8 +28,8 @@ import (
 	"math"
 	"time"
 
-	"github.com/liquidata-inc/dolt/go/store/marshal"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/marshal"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (

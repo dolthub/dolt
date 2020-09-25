@@ -18,9 +18,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
 
 //  FmtCol converts a column to a string with a given indent space count, name width, and type width.  If nameWidth or

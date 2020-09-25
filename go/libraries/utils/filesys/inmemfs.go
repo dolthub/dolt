@@ -25,8 +25,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/osutil"
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 )
 
 // InMemNowFunc is a func() time.Time that can be used to supply the current time.  The default value gets the current

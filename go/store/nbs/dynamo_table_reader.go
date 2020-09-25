@@ -30,8 +30,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 
-	"github.com/liquidata-inc/dolt/go/store/util/sizecache"
-	"github.com/liquidata-inc/dolt/go/store/util/verbose"
+	"github.com/dolthub/dolt/go/store/util/sizecache"
+	"github.com/dolthub/dolt/go/store/util/verbose"
 )
 
 const (

@@ -20,7 +20,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
 type commandDocumentForMarkdown struct {

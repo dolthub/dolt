@@ -15,8 +15,8 @@
 package setalgebra
 
 import (
-	"github.com/liquidata-inc/dolt/go/store/hash"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // finiteSetUnion adds all points from both sets to a new FiniteSet

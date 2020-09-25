@@ -30,8 +30,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/liquidata-inc/dolt/go/store/constants"
-	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/constants"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type tableSpecsByAscendingCount []tableSpec

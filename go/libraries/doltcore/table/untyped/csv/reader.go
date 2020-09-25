@@ -26,13 +26,13 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // ReadBufSize is the size of the buffer used when reading the csv file.  It is set at the package level and all

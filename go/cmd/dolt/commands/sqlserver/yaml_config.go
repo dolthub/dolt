@@ -21,7 +21,7 @@ import (
 
 	"gopkg.in/yaml.v2"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
 func strPtr(s string) *string {

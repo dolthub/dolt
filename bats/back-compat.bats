@@ -122,7 +122,7 @@ teardown() {
 }
 
 @test "back-compat: resolving conflicts" {
-    skip https://github.com/liquidata-inc/dolt/issues/773
+    skip https://github.com/dolthub/dolt/issues/773
     for testdir in */; do
         cd "$testdir"
         run dolt migrate

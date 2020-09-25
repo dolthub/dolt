@@ -23,8 +23,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/osutil"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/test"
+	"github.com/dolthub/dolt/go/libraries/utils/osutil"
+	"github.com/dolthub/dolt/go/libraries/utils/test"
 )
 
 const (

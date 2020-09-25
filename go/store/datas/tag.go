@@ -17,8 +17,8 @@ package datas
 import (
 	"context"
 
-	"github.com/liquidata-inc/dolt/go/store/nomdl"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/nomdl"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (

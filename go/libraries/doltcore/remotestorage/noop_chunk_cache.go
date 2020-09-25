@@ -15,8 +15,8 @@
 package remotestorage
 
 import (
-	"github.com/liquidata-inc/dolt/go/store/hash"
-	"github.com/liquidata-inc/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/nbs"
 )
 
 // noopChunkCache is a ChunkCache implementation that stores nothing

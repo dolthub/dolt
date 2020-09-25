@@ -17,7 +17,7 @@ package types
 import (
 	"context"
 
-	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/d"
 )
 
 type bufferedSequenceIterator struct {

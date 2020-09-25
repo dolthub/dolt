@@ -30,7 +30,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/liquidata-inc/dolt/go/store/util/sizecache"
+	"github.com/dolthub/dolt/go/store/util/sizecache"
 )
 
 func TestDynamoTableReaderAt(t *testing.T) {

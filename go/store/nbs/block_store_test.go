@@ -35,11 +35,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/osutil"
-	"github.com/liquidata-inc/dolt/go/store/chunks"
-	"github.com/liquidata-inc/dolt/go/store/constants"
-	"github.com/liquidata-inc/dolt/go/store/d"
-	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/libraries/utils/osutil"
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/constants"
+	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const testMemTableSize = 1 << 8

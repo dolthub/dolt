@@ -30,8 +30,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/liquidata-inc/dolt/go/store/spec"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/spec"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type testSuite struct {

@@ -19,9 +19,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/config"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
 var globalCfg = set.NewStrSet([]string{globalParamName})

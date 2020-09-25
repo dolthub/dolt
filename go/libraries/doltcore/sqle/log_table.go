@@ -17,10 +17,10 @@ package sqle
 import (
 	"io"
 
-	"github.com/liquidata-inc/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 )
 
 var _ sql.Table = (*LogTable)(nil)

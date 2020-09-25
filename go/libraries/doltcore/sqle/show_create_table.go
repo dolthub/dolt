@@ -18,8 +18,8 @@ import (
 	"context"
 	"fmt"
 
-	sqle "github.com/liquidata-inc/go-mysql-server"
-	"github.com/liquidata-inc/go-mysql-server/sql"
+	sqle "github.com/dolthub/go-mysql-server"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // These functions cannot be in the sqlfmt package as the reliance on the sqle package creates a circular reference.

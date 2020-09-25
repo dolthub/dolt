@@ -30,7 +30,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/d"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"

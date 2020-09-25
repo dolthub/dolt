@@ -19,16 +19,16 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/liquidata-inc/go-mysql-server/sql"
-	"github.com/liquidata-inc/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/expreval"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/setalgebra"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
-	"github.com/liquidata-inc/dolt/go/store/hash"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expreval"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/setalgebra"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type createSetFunc func(nbf *types.NomsBinFormat, val types.Value) (setalgebra.Set, error)

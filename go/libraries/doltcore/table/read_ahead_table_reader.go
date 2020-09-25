@@ -17,9 +17,9 @@ package table
 import (
 	"context"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/async"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/utils/async"
 )
 
 var _ TableReadCloser = (*AsyncReadAheadTableReader)(nil)

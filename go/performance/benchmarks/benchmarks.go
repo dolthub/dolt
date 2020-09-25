@@ -23,14 +23,14 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/tblcmds"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/test"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/tblcmds"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/test"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (

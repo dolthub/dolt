@@ -18,8 +18,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // SessionedTableEditor represents a table editor obtained from a TableEditSession. This table editor may be shared

@@ -19,8 +19,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/mvdata"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata"
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 
 	"github.com/fatih/color"
 	"github.com/google/uuid"

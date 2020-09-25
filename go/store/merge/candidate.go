@@ -24,10 +24,10 @@ package merge
 import (
 	"context"
 
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
+	"github.com/dolthub/dolt/go/store/atomicerr"
 
-	"github.com/liquidata-inc/dolt/go/store/d"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // candidate represents a collection that is a candidate to be merged. This

@@ -14,7 +14,7 @@
 
 package pipeline
 
-import "github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+import "github.com/dolthub/dolt/go/libraries/doltcore/row"
 
 // ReadableMap is an interface that provides read only access to map properties
 type ReadableMap interface {

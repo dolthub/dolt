@@ -15,9 +15,9 @@
 package sqle
 
 import (
-	"github.com/liquidata-inc/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
 // The fixed schema for the `dolt_schemas` table.

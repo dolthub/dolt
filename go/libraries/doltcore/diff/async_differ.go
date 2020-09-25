@@ -19,10 +19,10 @@ import (
 	"errors"
 	"time"
 
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
+	"github.com/dolthub/dolt/go/store/atomicerr"
 
-	"github.com/liquidata-inc/dolt/go/store/diff"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/diff"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type AsyncDiffer struct {

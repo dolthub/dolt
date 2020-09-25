@@ -7,7 +7,7 @@ cd $script_dir/../..
 
 paths=`find . -maxdepth 1 -mindepth 1 \( -name gen -prune -o -type d -print -o -type f -name '*.go' -print \)`
 
-goimports -w -local github.com/liquidata-inc/dolt $paths
+goimports -w -local github.com/dolthub/dolt $paths
 
 bad_files=$(find $paths -name '*.go' | while read f; do
     if [[ $(awk '/import \(/{flag=1;next}/\)/{flag=0}flag' < $f | egrep -c '$^') -gt 2 ]]; then
@@ -20,5 +20,5 @@ if [ "$bad_files" != "" ]; then
         awk '/import \(/{flag=1}/\)/{flag=0}flag&&!/^$/||!flag' < "$f" > "$f.bak"
         mv "$f.bak" "$f"
     done
-    goimports -w -local github.com/liquidata-inc/dolt .
+    goimports -w -local github.com/dolthub/dolt .
 fi

@@ -17,9 +17,9 @@ package querydiff
 import (
 	"fmt"
 
-	"github.com/liquidata-inc/go-mysql-server/sql"
-	"github.com/liquidata-inc/go-mysql-server/sql/expression"
-	"github.com/liquidata-inc/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 )
 
 // lazyQueryPlan transforms a query plan by removing Project nodes and returning

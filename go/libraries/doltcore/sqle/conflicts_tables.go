@@ -15,12 +15,12 @@ package sqle
 // limitations under the License.
 
 import (
-	"github.com/liquidata-inc/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/merge"
-	sqleSchema "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/schema"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 var _ sql.Table = ConflictsTable{}

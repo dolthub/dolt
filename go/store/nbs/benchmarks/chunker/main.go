@@ -28,8 +28,8 @@ import (
 	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
 
-	"github.com/liquidata-inc/dolt/go/store/d"
-	"github.com/liquidata-inc/dolt/go/store/nbs/benchmarks/gen"
+	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/nbs/benchmarks/gen"
 )
 
 var (

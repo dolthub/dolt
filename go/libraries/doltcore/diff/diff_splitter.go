@@ -15,11 +15,11 @@
 package diff
 
 import (
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/valutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/dolthub/dolt/go/libraries/utils/valutil"
 )
 
 const (

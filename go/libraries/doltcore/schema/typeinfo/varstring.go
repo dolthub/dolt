@@ -20,10 +20,10 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/liquidata-inc/go-mysql-server/sql"
-	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
 
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (

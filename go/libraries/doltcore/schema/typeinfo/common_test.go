@@ -19,11 +19,11 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/liquidata-inc/go-mysql-server/sql"
-	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/stretchr/testify/require"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/mathutil"
+	"github.com/dolthub/dolt/go/libraries/utils/mathutil"
 )
 
 func generateBitTypes(t *testing.T, numOfTypes uint16) []TypeInfo {

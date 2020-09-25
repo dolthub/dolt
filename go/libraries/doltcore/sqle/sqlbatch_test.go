@@ -25,10 +25,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	. "github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 func TestSqlBatchInserts(t *testing.T) {

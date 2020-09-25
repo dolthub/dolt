@@ -19,8 +19,8 @@ import (
 	"errors"
 	"io"
 
-	"github.com/liquidata-inc/dolt/go/store/hash"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // CommitItr is an interface for iterating over a set of unique commits

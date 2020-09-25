@@ -19,10 +19,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/store/types"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
 
 // TableEditSession handles all edit operations on a table that may also update other tables. Serves as coordination

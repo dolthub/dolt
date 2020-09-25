@@ -26,12 +26,12 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
+	"github.com/dolthub/dolt/go/store/atomicerr"
 
-	"github.com/liquidata-inc/dolt/go/store/chunks"
-	"github.com/liquidata-inc/dolt/go/store/d"
-	"github.com/liquidata-inc/dolt/go/store/hash"
-	"github.com/liquidata-inc/dolt/go/store/util/sizecache"
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/util/sizecache"
 )
 
 // ValueReader is an interface that knows how to read Noms Values, e.g.

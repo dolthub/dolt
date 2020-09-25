@@ -51,11 +51,11 @@ These installation instructions assume that you have Go installed, and that `go`
 
 To install on Linux or Mac based systems run:
 
-```sudo bash -c 'curl -L https://github.com/liquidata-inc/dolt/releases/latest/download/install.sh | bash'```
+```sudo bash -c 'curl -L https://github.com/dolthub/dolt/releases/latest/download/install.sh | bash'```
 
 This will download the latest ```dolt``` release and put it in ```/usr/local/bin/```, which is probably on your ```PATH```.
 
-For Windows, locate the latest Microsoft Installer (`.msi` file) in [releases](https://github.com/liquidata-inc/dolt/releases), and run it. This will install the latest dolt. 
+For Windows, locate the latest Microsoft Installer (`.msi` file) in [releases](https://github.com/dolthub/dolt/releases), and run it. This will install the latest dolt. 
 
 ### From Source
 
@@ -313,5 +313,5 @@ If you want to discuss the project in a more open ended manner, join us on [Disc
 Dolt relies heavily on open source code and ideas from the [Noms](https://github.com/attic-labs/noms) project. We are very thankful to the Noms team for making this code freely available, without which we would not have been able to build Dolt so rapidly.
 
 Dolt is licensed under the Apache License, Version 2.0. See
-[LICENSE](https://github.com/liquidata-inc/dolt/blob/master/LICENSE) for
+[LICENSE](https://github.com/dolthub/dolt/blob/master/LICENSE) for
 details.

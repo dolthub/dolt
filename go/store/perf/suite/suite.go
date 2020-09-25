@@ -110,12 +110,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	testifySuite "github.com/stretchr/testify/suite"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/osutil"
-	"github.com/liquidata-inc/dolt/go/store/chunks"
-	"github.com/liquidata-inc/dolt/go/store/datas"
-	"github.com/liquidata-inc/dolt/go/store/marshal"
-	"github.com/liquidata-inc/dolt/go/store/spec"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/libraries/utils/osutil"
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/marshal"
+	"github.com/dolthub/dolt/go/store/spec"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 var (

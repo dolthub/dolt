@@ -26,8 +26,8 @@ import (
 	"errors"
 	"io"
 
-	"github.com/liquidata-inc/dolt/go/store/chunks"
-	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 func serializeHashes(w io.Writer, batch chunks.ReadBatch) error {

@@ -25,8 +25,8 @@ import (
 	"gopkg.in/square/go-jose.v2"
 	"gopkg.in/square/go-jose.v2/jwt"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
-	"github.com/liquidata-inc/dolt/go/store/util/datetime"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/util/datetime"
 )
 
 const (

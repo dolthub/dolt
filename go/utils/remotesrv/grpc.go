@@ -25,11 +25,11 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	remotesapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/remotestorage"
-	"github.com/liquidata-inc/dolt/go/store/hash"
-	"github.com/liquidata-inc/dolt/go/store/nbs"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type RemoteChunkStore struct {

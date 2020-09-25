@@ -19,7 +19,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (

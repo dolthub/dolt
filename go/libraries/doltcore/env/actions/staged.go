@@ -18,8 +18,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
 var ErrTablesInConflict = errors.New("table is in conflict")

@@ -22,10 +22,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
-	tc "github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils/testcommands"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	tc "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 )
 
 const (
@@ -231,7 +231,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 			newColTypeInfo("c11", c11Tag, typeinfo.Int32Type, false),
 		)),
 	},
-	// https://github.com/liquidata-inc/dolt/issues/773
+	// https://github.com/dolthub/dolt/issues/773
 	/*{
 		Name:      "super schema merge",
 		TableName: "testable",

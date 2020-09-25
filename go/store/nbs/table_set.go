@@ -27,9 +27,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
+	"github.com/dolthub/dolt/go/store/atomicerr"
 
-	"github.com/liquidata-inc/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/chunks"
 )
 
 const concurrentCompactions = 5

@@ -30,9 +30,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/liquidata-inc/dolt/go/store/chunks"
-	"github.com/liquidata-inc/dolt/go/store/datas"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 func isEmptyStruct(s types.Struct) bool {

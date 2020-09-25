@@ -17,9 +17,9 @@ package edits
 import (
 	"sort"
 
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
+	"github.com/dolthub/dolt/go/store/atomicerr"
 
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 func sorter(nbf *types.NomsBinFormat, in, out chan types.KVPSlice) error {

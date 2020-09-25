@@ -25,10 +25,10 @@ import (
 	"context"
 	"sync"
 
-	"github.com/liquidata-inc/dolt/go/store/constants"
+	"github.com/dolthub/dolt/go/store/constants"
 
-	"github.com/liquidata-inc/dolt/go/store/d"
-	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // MemoryStorage provides a "persistent" storage layer to back multiple

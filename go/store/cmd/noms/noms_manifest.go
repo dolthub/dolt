@@ -25,10 +25,10 @@ import (
 	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
 
-	"github.com/liquidata-inc/dolt/go/store/cmd/noms/util"
-	"github.com/liquidata-inc/dolt/go/store/d"
-	"github.com/liquidata-inc/dolt/go/store/nbs"
-	"github.com/liquidata-inc/dolt/go/store/spec"
+	"github.com/dolthub/dolt/go/store/cmd/noms/util"
+	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/spec"
 )
 
 var nomsManifest = &util.Command{

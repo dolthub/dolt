@@ -21,9 +21,9 @@ import (
 	"log"
 	"os"
 
-	"github.com/liquidata-inc/dolt/go/cmd/git-dolt/config"
-	"github.com/liquidata-inc/dolt/go/cmd/git-dolt/doltops"
-	"github.com/liquidata-inc/dolt/go/cmd/git-dolt/utils"
+	"github.com/dolthub/dolt/go/cmd/git-dolt/config"
+	"github.com/dolthub/dolt/go/cmd/git-dolt/doltops"
+	"github.com/dolthub/dolt/go/cmd/git-dolt/utils"
 )
 
 func main() {

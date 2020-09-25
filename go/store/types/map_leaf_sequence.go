@@ -22,7 +22,7 @@
 package types
 
 import (
-	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/d"
 )
 
 type mapLeafSequence struct {

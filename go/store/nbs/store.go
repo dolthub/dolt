@@ -37,10 +37,10 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
-	"github.com/liquidata-inc/dolt/go/store/blobstore"
-	"github.com/liquidata-inc/dolt/go/store/chunks"
-	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/atomicerr"
+	"github.com/dolthub/dolt/go/store/blobstore"
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 var ErrFetchFailure = errors.New("fetch failed")

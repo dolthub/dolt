@@ -30,8 +30,8 @@ import (
 	"strings"
 	"text/scanner"
 
-	"github.com/liquidata-inc/dolt/go/store/d"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // Parser provides ways to parse Noms types.

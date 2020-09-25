@@ -21,7 +21,7 @@ import (
 
 	"github.com/liquidata-inc/sqllogictest/go/logictest"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/logictest/dolt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/logictest/dolt"
 )
 
 // Runs all sqllogictest test files (or directories containing them) given as arguments.

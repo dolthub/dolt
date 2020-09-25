@@ -33,8 +33,8 @@ import (
 
 	"github.com/juju/fslock"
 
-	"github.com/liquidata-inc/dolt/go/store/hash"
-	"github.com/liquidata-inc/dolt/go/store/util/tempfiles"
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 const (

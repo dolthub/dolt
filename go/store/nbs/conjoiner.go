@@ -28,7 +28,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
+	"github.com/dolthub/dolt/go/store/atomicerr"
 )
 
 type conjoiner interface {

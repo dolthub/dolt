@@ -30,7 +30,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/d"
 )
 
 func assertSubtype(ctx context.Context, nbf *NomsBinFormat, t *Type, v Value) {

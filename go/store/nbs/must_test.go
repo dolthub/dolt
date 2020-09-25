@@ -14,7 +14,7 @@
 
 package nbs
 
-import "github.com/liquidata-inc/dolt/go/store/d"
+import "github.com/dolthub/dolt/go/store/d"
 
 func mustUint32(val uint32, err error) uint32 {
 	d.PanicIfError(err)

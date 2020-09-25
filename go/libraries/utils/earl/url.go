@@ -20,7 +20,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/osutil"
+	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 )
 
 var validHostRegex = regexp.MustCompile("^[-.a-zA-z0-9]*$")

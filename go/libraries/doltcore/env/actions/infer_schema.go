@@ -23,14 +23,14 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type typeInfoSet map[typeinfo.TypeInfo]struct{}

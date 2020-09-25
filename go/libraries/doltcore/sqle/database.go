@@ -22,20 +22,20 @@ import (
 	"sync"
 	"time"
 
-	"github.com/liquidata-inc/go-mysql-server/sql"
-	"github.com/liquidata-inc/go-mysql-server/sql/parse"
-	"github.com/liquidata-inc/go-mysql-server/sql/plan"
-	"github.com/liquidata-inc/vitess/go/vt/proto/query"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/parse"
+	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/vitess/go/vt/proto/query"
 	"gopkg.in/src-d/go-errors.v1"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions/commitwalk"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
-	sqleSchema "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqlfmt"
-	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
+	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type commitBehavior int8

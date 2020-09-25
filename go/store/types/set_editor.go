@@ -24,8 +24,8 @@ package types
 import (
 	"context"
 
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
-	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/atomicerr"
+	"github.com/dolthub/dolt/go/store/d"
 )
 
 // SetEditor allows for efficient editing of Set-typed prolly trees. Edits

@@ -22,8 +22,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
 
-	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 type SequentialNamer struct {

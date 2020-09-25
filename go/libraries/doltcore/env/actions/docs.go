@@ -17,9 +17,9 @@ package actions
 import (
 	"context"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
 // SaveTrackedDocsFromWorking saves docs from the working root to the filesystem, and doesn't modify untracked docs.

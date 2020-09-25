@@ -35,9 +35,9 @@ import (
 	"github.com/golang/snappy"
 	"github.com/liquidata-inc/mmap-go"
 
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
-	"github.com/liquidata-inc/dolt/go/store/chunks"
-	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/atomicerr"
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // CompressedChunk represents a chunk of data in a table file which is still compressed via snappy.

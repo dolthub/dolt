@@ -17,8 +17,8 @@ package commands
 import (
 	"fmt"
 
-	"github.com/liquidata-inc/dolt/go/cmd/git-dolt/config"
-	"github.com/liquidata-inc/dolt/go/cmd/git-dolt/utils"
+	"github.com/dolthub/dolt/go/cmd/git-dolt/config"
+	"github.com/dolthub/dolt/go/cmd/git-dolt/utils"
 )
 
 // Update updates the git-dolt pointer file at the given filename

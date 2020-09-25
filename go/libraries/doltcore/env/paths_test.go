@@ -18,7 +18,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 )
 
 func TestGetGlobalCfgPath(t *testing.T) {

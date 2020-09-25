@@ -18,10 +18,10 @@ import (
 	"context"
 	"errors"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/liquidata-inc/dolt/go/store/marshal"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/store/marshal"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // Correct Marshalling & Unmarshalling is essential to compatibility across Dolt versions

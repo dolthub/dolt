@@ -14,7 +14,7 @@
 
 package setalgebra
 
-import "github.com/liquidata-inc/dolt/go/store/types"
+import "github.com/dolthub/dolt/go/store/types"
 
 // IntervalEndpoint is a value at which an interval starts or ends, and a boolean which indicates whether
 // the Interval is open or closed at that endpoint.

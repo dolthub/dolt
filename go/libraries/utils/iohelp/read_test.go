@@ -25,9 +25,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/mathutil"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/osutil"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/test"
+	"github.com/dolthub/dolt/go/libraries/utils/mathutil"
+	"github.com/dolthub/dolt/go/libraries/utils/osutil"
+	"github.com/dolthub/dolt/go/libraries/utils/test"
 )
 
 func TestErrPreservingReader(t *testing.T) {
