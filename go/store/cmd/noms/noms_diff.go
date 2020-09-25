@@ -27,12 +27,12 @@ import (
 
 	flag "github.com/juju/gnuflag"
 
-	"github.com/liquidata-inc/dolt/go/store/cmd/noms/util"
-	"github.com/liquidata-inc/dolt/go/store/config"
-	"github.com/liquidata-inc/dolt/go/store/d"
-	"github.com/liquidata-inc/dolt/go/store/diff"
-	"github.com/liquidata-inc/dolt/go/store/util/outputpager"
-	"github.com/liquidata-inc/dolt/go/store/util/verbose"
+	"github.com/dolthub/dolt/go/store/cmd/noms/util"
+	"github.com/dolthub/dolt/go/store/config"
+	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/diff"
+	"github.com/dolthub/dolt/go/store/util/outputpager"
+	"github.com/dolthub/dolt/go/store/util/verbose"
 )
 
 var stat bool

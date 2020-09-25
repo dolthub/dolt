@@ -25,7 +25,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
+	"github.com/dolthub/dolt/go/store/atomicerr"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"

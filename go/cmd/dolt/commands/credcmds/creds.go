@@ -15,7 +15,7 @@
 package credcmds
 
 import (
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 )
 
 var Commands = cli.NewSubCommandHandler("creds", "Commands for managing credentials.", []cli.Command{

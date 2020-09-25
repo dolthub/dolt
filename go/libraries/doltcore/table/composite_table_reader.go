@@ -18,8 +18,8 @@ import (
 	"context"
 	"io"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
 
 // CompositeTableReader is a TableReader implementation which will concatenate the results

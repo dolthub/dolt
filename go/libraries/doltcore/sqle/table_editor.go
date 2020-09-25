@@ -15,10 +15,10 @@
 package sqle
 
 import (
-	"github.com/liquidata-inc/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
 // sqlTableEditor is a wrapper for *doltdb.SessionedTableEditor that complies with the SQL interface.

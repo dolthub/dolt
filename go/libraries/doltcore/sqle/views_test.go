@@ -18,11 +18,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/liquidata-inc/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 )
 
 // Not an exhaustive test of views -- we rely on bats tests for end-to-end verification.

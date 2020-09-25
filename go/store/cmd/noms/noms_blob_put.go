@@ -28,11 +28,11 @@ import (
 	"io"
 	"os"
 
-	"github.com/liquidata-inc/dolt/go/store/cmd/noms/util"
-	"github.com/liquidata-inc/dolt/go/store/config"
-	"github.com/liquidata-inc/dolt/go/store/d"
-	"github.com/liquidata-inc/dolt/go/store/types"
-	"github.com/liquidata-inc/dolt/go/store/util/profile"
+	"github.com/dolthub/dolt/go/store/cmd/noms/util"
+	"github.com/dolthub/dolt/go/store/config"
+	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/util/profile"
 )
 
 func nomsBlobPut(ctx context.Context, filePath string, dsPath string, concurrency int) int {

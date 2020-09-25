@@ -17,7 +17,7 @@ package types
 import (
 	"sort"
 
-	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/d"
 )
 
 // simplifyType returns a type that is a super type of the input type but is

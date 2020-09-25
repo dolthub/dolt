@@ -19,7 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/liquidata-inc/dolt/go/cmd/git-dolt/utils"
+	"github.com/dolthub/dolt/go/cmd/git-dolt/utils"
 )
 
 // Install configures this git repository for use with git-dolt; specifically, it sets up the

@@ -27,12 +27,12 @@ import (
 
 	"github.com/attic-labs/kingpin"
 
-	"github.com/liquidata-inc/dolt/go/store/cmd/noms/util"
-	"github.com/liquidata-inc/dolt/go/store/d"
-	"github.com/liquidata-inc/dolt/go/store/datas"
-	"github.com/liquidata-inc/dolt/go/store/diff"
-	"github.com/liquidata-inc/dolt/go/store/spec"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/cmd/noms/util"
+	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/diff"
+	"github.com/dolthub/dolt/go/store/spec"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 func nomsList(ctx context.Context, noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler) {

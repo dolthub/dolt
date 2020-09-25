@@ -20,19 +20,19 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/liquidata-inc/go-mysql-server/sql"
-	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
-	sqleSchema "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/schema"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	. "github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
+	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 func TestCreateTable(t *testing.T) {
@@ -987,7 +987,7 @@ func TestAlterSystemTables(t *testing.T) {
 		schemasTableDoltSchema(),
 		NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual")))
 
-	// The _history and _diff tables give not found errors right now because of https://github.com/liquidata-inc/dolt/issues/373.
+	// The _history and _diff tables give not found errors right now because of https://github.com/dolthub/dolt/issues/373.
 	// We can remove the divergent failure logic when the issue is fixed.
 	t.Run("Drop", func(t *testing.T) {
 		for _, tableName := range systemTableNames {

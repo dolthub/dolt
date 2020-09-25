@@ -4,7 +4,7 @@
 # It should be run as root, and can be run directly from a GitHub
 # release, for example as:
 #
-#   curl https://github.com/liquidata-inc/dolt/releases/download/v__DOLT_VERSION__/install.sh | sudo bash
+#   curl https://github.com/dolthub/dolt/releases/download/v__DOLT_VERSION__/install.sh | sudo bash
 #
 # All downloads occur over HTTPS from the Github releases page.
 
@@ -18,7 +18,7 @@ _() {
 set -euo pipefail
 
 DOLT_VERSION=__DOLT_VERSION__
-RELEASES_BASE_URL=https://github.com/liquidata-inc/dolt/releases/download/v"$DOLT_VERSION"
+RELEASES_BASE_URL=https://github.com/dolthub/dolt/releases/download/v"$DOLT_VERSION"
 INSTALL_URL=$RELEASES_BASE_URL/install.sh
 
 CURL_USER_AGENT=${CURL_USER_AGENT:-dolt-installer}

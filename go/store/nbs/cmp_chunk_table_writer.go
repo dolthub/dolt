@@ -24,7 +24,7 @@ import (
 
 	"github.com/golang/snappy"
 
-	nomshash "github.com/liquidata-inc/dolt/go/store/hash"
+	nomshash "github.com/dolthub/dolt/go/store/hash"
 )
 
 const defaultTableSinkBlockSize = 2 * 1024 * 1024

@@ -19,15 +19,15 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
 const (

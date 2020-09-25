@@ -15,8 +15,8 @@
 package setalgebra
 
 import (
-	"github.com/liquidata-inc/dolt/go/store/hash"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // finiteSetIntersection returns the set of points that are in both fs1 and fs2

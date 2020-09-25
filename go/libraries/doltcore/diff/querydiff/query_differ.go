@@ -21,18 +21,18 @@ import (
 	"math"
 	"strings"
 
-	sqle "github.com/liquidata-inc/go-mysql-server"
-	"github.com/liquidata-inc/go-mysql-server/sql"
-	"github.com/liquidata-inc/go-mysql-server/sql/expression/function"
-	"github.com/liquidata-inc/go-mysql-server/sql/information_schema"
-	"github.com/liquidata-inc/go-mysql-server/sql/parse"
-	"github.com/liquidata-inc/go-mysql-server/sql/plan"
-	"github.com/liquidata-inc/vitess/go/vt/sqlparser"
+	sqle "github.com/dolthub/go-mysql-server"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression/function"
+	"github.com/dolthub/go-mysql-server/sql/information_schema"
+	"github.com/dolthub/go-mysql-server/sql/parse"
+	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/store/atomicerr"
 )
 
 const (

@@ -17,10 +17,10 @@ package commands
 import (
 	"fmt"
 
-	"github.com/liquidata-inc/dolt/go/cmd/git-dolt/config"
-	"github.com/liquidata-inc/dolt/go/cmd/git-dolt/doltops"
-	"github.com/liquidata-inc/dolt/go/cmd/git-dolt/env"
-	"github.com/liquidata-inc/dolt/go/cmd/git-dolt/utils"
+	"github.com/dolthub/dolt/go/cmd/git-dolt/config"
+	"github.com/dolthub/dolt/go/cmd/git-dolt/doltops"
+	"github.com/dolthub/dolt/go/cmd/git-dolt/env"
+	"github.com/dolthub/dolt/go/cmd/git-dolt/utils"
 )
 
 // Link creates a git-dolt pointer file linking the given dolt remote

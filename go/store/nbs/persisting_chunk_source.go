@@ -29,9 +29,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
+	"github.com/dolthub/dolt/go/store/atomicerr"
 
-	"github.com/liquidata-inc/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/chunks"
 )
 
 var ErrNoReader = errors.New("could not get reader")

@@ -19,7 +19,7 @@ import (
 	"errors"
 	"path/filepath"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 // FileConfig is backed by a file in the filesystem.

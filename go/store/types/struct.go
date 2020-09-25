@@ -29,7 +29,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/d"
 )
 
 var EmptyStructType, _ = MakeStructType("")

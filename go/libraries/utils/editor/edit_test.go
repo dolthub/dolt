@@ -18,7 +18,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/osutil"
+	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 )
 
 func TestGetCmdNameAndArgsForEditor(t *testing.T) {

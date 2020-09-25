@@ -20,22 +20,22 @@ import (
 	"io"
 	"testing"
 
-	"github.com/liquidata-inc/go-mysql-server/sql"
-	"github.com/liquidata-inc/vitess/go/sqltypes"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	dtu "github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
-	tc "github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils/testcommands"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rebase"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
-	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
-	sqleSchema "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/schema"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	dtu "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	tc "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -274,7 +274,7 @@ var RebaseTagTests = []RebaseTagTest{
 			newRow(row.TaggedValues{IdTag: types.Int(9), NameTag: types.String("Jacqueline Bouvier"), AgeTag: types.Int(80)}, people),
 		},
 	},
-	// https://github.com/liquidata-inc/dolt/issues/773
+	// https://github.com/dolthub/dolt/issues/773
 	/*{
 		Name: "create new column on master, insert to table on other branch, merge",
 		Commands: []tc.Command{

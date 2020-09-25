@@ -29,9 +29,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
-	"github.com/liquidata-inc/dolt/go/store/util/sizecache"
-	"github.com/liquidata-inc/dolt/go/store/util/tempfiles"
+	"github.com/dolthub/dolt/go/store/atomicerr"
+	"github.com/dolthub/dolt/go/store/util/sizecache"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 type tableCache interface {

@@ -31,8 +31,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/liquidata-inc/dolt/go/store/d"
-	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // For an annotation like @type, 1st capture group is the annotation.

@@ -24,7 +24,7 @@ package types
 import (
 	"sync"
 
-	"github.com/liquidata-inc/dolt/go/store/sloppy"
+	"github.com/dolthub/dolt/go/store/sloppy"
 
 	"github.com/kch42/buzhash"
 )

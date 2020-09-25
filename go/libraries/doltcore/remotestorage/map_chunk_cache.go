@@ -17,8 +17,8 @@ package remotestorage
 import (
 	"sync"
 
-	"github.com/liquidata-inc/dolt/go/store/hash"
-	"github.com/liquidata-inc/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/nbs"
 )
 
 // mapChunkCache is a ChunkCache implementation that stores everything in an in memory map.

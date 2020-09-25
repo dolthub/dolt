@@ -17,9 +17,9 @@ package enginetest
 import (
 	"testing"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 
-	"github.com/liquidata-inc/go-mysql-server/enginetest"
+	"github.com/dolthub/go-mysql-server/enginetest"
 )
 
 func init() {

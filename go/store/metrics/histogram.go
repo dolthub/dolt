@@ -28,7 +28,7 @@ import (
 
 	"github.com/dustin/go-humanize"
 
-	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/d"
 )
 
 // Histogram is a shameless and low-rent knock of the chromium project's

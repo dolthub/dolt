@@ -27,11 +27,11 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/liquidata-inc/dolt/go/store/datas"
-	"github.com/liquidata-inc/dolt/go/store/nbs"
-	"github.com/liquidata-inc/dolt/go/store/spec"
-	"github.com/liquidata-inc/dolt/go/store/types"
-	"github.com/liquidata-inc/dolt/go/store/util/clienttest"
+	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/spec"
+	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/util/clienttest"
 )
 
 func TestDs(t *testing.T) {

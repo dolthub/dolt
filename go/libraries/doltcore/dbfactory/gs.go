@@ -20,9 +20,9 @@ import (
 
 	"cloud.google.com/go/storage"
 
-	"github.com/liquidata-inc/dolt/go/store/datas"
-	"github.com/liquidata-inc/dolt/go/store/nbs"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // GSFactory is a DBFactory implementation for creating GCS backed databases

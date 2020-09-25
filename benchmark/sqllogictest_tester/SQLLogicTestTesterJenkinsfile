@@ -20,10 +20,10 @@ pipeline {
                 sh "rm -rf $TMP_CSV_DIR && mkdir $TMP_CSV_DIR"
                 sh "rm -rf $DOLT_ROOT_PATH && mkdir $DOLT_ROOT_PATH"
                 dir ("sqllogictest") {
-                    git url: "https://github.com/liquidata-inc/sqllogictest.git"
+                    git url: "https://github.com/dolthub/sqllogictest.git"
                 }
                 dir ("tempDolt") {
-                    git url: "https://github.com/liquidata-inc/dolt.git"
+                    git url: "https://github.com/dolthub/dolt.git"
                 }
                 dir ("benchmark/sqllogictest_tester") {
                     sh "nice ./run_tester.sh ./tester.vars"

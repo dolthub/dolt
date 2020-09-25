@@ -19,7 +19,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 func TestSerializeAndDeserialize(t *testing.T) {

@@ -15,8 +15,8 @@
 package setalgebra
 
 import (
-	"github.com/liquidata-inc/dolt/go/store/hash"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // FiniteSet is your typical computer science set representing a finite number of unique objects stored in a map. An

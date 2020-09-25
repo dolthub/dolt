@@ -20,7 +20,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/liquidata-inc/dolt/go/store/blobstore"
+	"github.com/dolthub/dolt/go/store/blobstore"
 )
 
 type blobstorePersister struct {

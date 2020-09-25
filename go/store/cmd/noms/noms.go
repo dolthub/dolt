@@ -33,10 +33,10 @@ import (
 	"github.com/attic-labs/kingpin"
 	flag "github.com/juju/gnuflag"
 
-	"github.com/liquidata-inc/dolt/go/store/cmd/noms/util"
-	"github.com/liquidata-inc/dolt/go/store/util/exit"
-	"github.com/liquidata-inc/dolt/go/store/util/profile"
-	"github.com/liquidata-inc/dolt/go/store/util/verbose"
+	"github.com/dolthub/dolt/go/store/cmd/noms/util"
+	"github.com/dolthub/dolt/go/store/util/exit"
+	"github.com/dolthub/dolt/go/store/util/profile"
+	"github.com/dolthub/dolt/go/store/util/verbose"
 )
 
 var commands = []*util.Command{

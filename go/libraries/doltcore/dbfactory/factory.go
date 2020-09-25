@@ -20,9 +20,9 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/earl"
-	"github.com/liquidata-inc/dolt/go/store/datas"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/libraries/utils/earl"
+	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (

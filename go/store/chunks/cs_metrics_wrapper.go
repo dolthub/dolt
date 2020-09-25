@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // CSMetrics contains the metrics aggregated by a CSMetricsWrapper

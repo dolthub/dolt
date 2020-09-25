@@ -21,15 +21,15 @@ import (
 	"os"
 	"strings"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/json"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/csv"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/sqlexport"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/xlsx"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/json"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/sqlexport"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/xlsx"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 // DFFromString returns a data object from a string.

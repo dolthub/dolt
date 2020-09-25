@@ -14,7 +14,7 @@
 
 package sqle
 
-import "github.com/liquidata-inc/go-mysql-server/sql"
+import "github.com/dolthub/go-mysql-server/sql"
 
 // IndexedDoltTable is a wrapper for a DoltTable and a doltIndexLookup. It implements the sql.Table interface like
 // DoltTable, but its RowIter function returns values that match the indexLookup, instead of all rows. It's returned by

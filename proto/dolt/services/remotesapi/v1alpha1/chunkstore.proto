@@ -16,7 +16,7 @@ syntax = "proto3";
 
 package dolt.services.remotesapi.v1alpha1;
 
-option go_package = "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1;remotesapi";
+option go_package = "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1;remotesapi";
 
 service ChunkStoreService {
   rpc GetRepoMetadata(GetRepoMetadataRequest) returns (GetRepoMetadataResponse);

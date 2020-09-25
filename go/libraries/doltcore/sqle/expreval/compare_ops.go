@@ -15,9 +15,9 @@
 package expreval
 
 import (
-	"github.com/liquidata-inc/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 func compareLiterals(l1, l2 *expression.Literal) (int, error) {

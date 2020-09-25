@@ -27,7 +27,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // String is a Noms Value wrapper around the primitive string type.

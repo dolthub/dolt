@@ -1,4 +1,4 @@
-module github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi
+module github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi
 
 go 1.13
 

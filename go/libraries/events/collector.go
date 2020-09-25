@@ -20,7 +20,7 @@ import (
 
 	"github.com/denisbrodbeck/machineid"
 
-	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 )
 
 var machineID = "invalid"

@@ -26,10 +26,10 @@ import (
 	"context"
 	"io"
 
-	"github.com/liquidata-inc/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/nbs"
 
-	"github.com/liquidata-inc/dolt/go/store/chunks"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // Database provides versioned storage for noms values. While Values can be

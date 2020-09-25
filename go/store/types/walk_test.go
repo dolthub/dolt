@@ -28,7 +28,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/liquidata-inc/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/chunks"
 )
 
 func TestWalkTestSuite(t *testing.T) {

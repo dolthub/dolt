@@ -24,7 +24,7 @@ package diff
 import (
 	"bytes"
 
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // Patch is a list of difference objects that can be applied to a graph

@@ -15,8 +15,8 @@
 package types
 
 import (
-	"github.com/liquidata-inc/dolt/go/store/d"
-	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 func mustRef(ref Ref, err error) Ref {

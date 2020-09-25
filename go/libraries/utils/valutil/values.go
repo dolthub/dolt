@@ -15,7 +15,7 @@
 package valutil
 
 import (
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // NilSafeEqCheck compares two types.Value instances in a manner that handles nils as equal to types.NullValue

@@ -17,7 +17,7 @@ package types
 import (
 	"context"
 
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
+	"github.com/dolthub/dolt/go/store/atomicerr"
 )
 
 // EditProvider is an interface which provides map edits as KVPs where each edit is a key and the new value

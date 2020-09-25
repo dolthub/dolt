@@ -779,7 +779,7 @@ SQL
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `super_parent` (`v1`) ON DELETE CASCADE ON UPDATE RESTRICT' ]] || false
     
     dolt checkout -b last_commit HEAD~1
-    dolt reset --hard # See issue https://github.com/liquidata-inc/dolt/issues/752
+    dolt reset --hard # See issue https://github.com/dolthub/dolt/issues/752
     run dolt schema show child
     [ "$status" -eq "0" ]
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk_name` FOREIGN KEY (`v1`) REFERENCES `parent` (`v1`) ON DELETE CASCADE ON UPDATE RESTRICT' ]] || false

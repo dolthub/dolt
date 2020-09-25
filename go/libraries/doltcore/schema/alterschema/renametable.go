@@ -17,7 +17,7 @@ package alterschema
 import (
 	"context"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
 // RenameTable renames a table with in a RootValue and returns the updated root.

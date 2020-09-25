@@ -27,7 +27,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 func TestThreeWayListMerge(t *testing.T) {

@@ -22,9 +22,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 
-	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-	testLib "github.com/liquidata-inc/dolt/go/libraries/utils/test"
+	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	testLib "github.com/dolthub/dolt/go/libraries/utils/test"
 )
 
 var (

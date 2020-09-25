@@ -22,7 +22,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/liquidata-inc/dolt/go/cmd/git-dolt/commands"
+	"github.com/dolthub/dolt/go/cmd/git-dolt/commands"
 )
 
 func main() {

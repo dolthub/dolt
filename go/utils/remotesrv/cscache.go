@@ -19,8 +19,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/nbs"
 )
 
 const (

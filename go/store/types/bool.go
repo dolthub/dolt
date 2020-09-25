@@ -25,7 +25,7 @@ import (
 	"context"
 	"strconv"
 
-	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // Bool is a Noms Value wrapper around the primitive bool type.

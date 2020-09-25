@@ -9,7 +9,7 @@ function download_release() {
   basename=dolt-"$PLATFORM_TUPLE"
   filename="$basename".tar.gz
   filepath=binaries/"$ver"/"$filename"
-  url="https://github.com/liquidata-inc/dolt/releases/download/$ver/$filename"
+  url="https://github.com/dolthub/dolt/releases/download/$ver/$filename"
   curl -L -o "$filepath" "$url"
   cd "$dirname" && tar zxf "$filename"
   echo "$dirname"/"$basename"/bin

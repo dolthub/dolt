@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
 // LogLevel defines the available levels of logging for the server.

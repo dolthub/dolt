@@ -20,10 +20,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/funcitr"
+	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
 const (
@@ -158,7 +158,7 @@ const (
 )
 
 // Tags for dolt_docs table
-// for info on unaligned constant: https://github.com/liquidata-inc/dolt/pull/663
+// for info on unaligned constant: https://github.com/dolthub/dolt/pull/663
 const (
 	// DocNameTag is the tag of the name column in the docs table
 	DocNameTag = iota + SystemTableReservedMin + uint64(5)
@@ -187,7 +187,7 @@ const (
 )
 
 // Tags for dolt_query_catalog table
-// for info on unaligned constant: https://github.com/liquidata-inc/dolt/pull/663
+// for info on unaligned constant: https://github.com/dolthub/dolt/pull/663
 const (
 	// QueryCatalogIdTag is the tag of the id column in the query catalog table
 	QueryCatalogIdTag = iota + SystemTableReservedMin + uint64(3005)
@@ -216,7 +216,7 @@ const (
 )
 
 // Tags for dolt_schemas table
-// for info on unaligned constant: https://github.com/liquidata-inc/dolt/pull/663
+// for info on unaligned constant: https://github.com/dolthub/dolt/pull/663
 const (
 	DoltSchemasTypeTag = iota + SystemTableReservedMin + uint64(4003)
 	DoltSchemasNameTag

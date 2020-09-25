@@ -29,9 +29,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/liquidata-inc/dolt/go/store/util/tempfiles"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
 
-	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/d"
 )
 
 const tempTablePrefix = "nbs_table_"

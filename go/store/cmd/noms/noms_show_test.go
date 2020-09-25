@@ -28,11 +28,11 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/liquidata-inc/dolt/go/store/chunks"
-	"github.com/liquidata-inc/dolt/go/store/spec"
-	"github.com/liquidata-inc/dolt/go/store/types"
-	"github.com/liquidata-inc/dolt/go/store/util/clienttest"
-	"github.com/liquidata-inc/dolt/go/store/util/test"
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/spec"
+	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/util/clienttest"
+	"github.com/dolthub/dolt/go/store/util/test"
 )
 
 func TestNomsShow(t *testing.T) {

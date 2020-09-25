@@ -17,8 +17,8 @@ package env
 import (
 	"context"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 var NoRemote = Remote{}

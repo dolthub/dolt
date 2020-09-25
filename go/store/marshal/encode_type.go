@@ -28,7 +28,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // MarshalType computes a Noms type from a Go type

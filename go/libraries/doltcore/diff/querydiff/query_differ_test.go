@@ -21,19 +21,19 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/liquidata-inc/go-mysql-server/enginetest"
-	"github.com/liquidata-inc/go-mysql-server/sql"
-	"github.com/liquidata-inc/go-mysql-server/sql/expression"
-	"github.com/liquidata-inc/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/enginetest"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff/querydiff"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	det "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/enginetest"
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff/querydiff"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	det "github.com/dolthub/dolt/go/libraries/doltcore/sqle/enginetest"
 )
 
 type queryDifferTest struct {

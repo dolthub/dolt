@@ -18,7 +18,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
 func TestInit(t *testing.T) {

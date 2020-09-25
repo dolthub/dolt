@@ -24,7 +24,7 @@ package types
 import (
 	"context"
 
-	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/d"
 )
 
 // ListIterator can be used to efficiently iterate through a Noms List.
