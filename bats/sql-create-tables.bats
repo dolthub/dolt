@@ -348,3 +348,25 @@ SQL
     [[ "$output" =~ "\`c1\` bigint DEFAULT 5 COMMENT 'hi'" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
+
+@test "sql-create-tables: create like from other database" {
+    mkdir otherdb
+    cd otherdb
+    dolt init
+    dolt sql -q "CREATE TABLE othertable(pk bigint primary key, v1 bigint comment 'other')"
+    dolt add -A
+    dolt commit -m "some commit"
+    cd ..
+    mkdir workspace
+    cd workspace
+    dolt init
+    cd ..
+    dolt sql --multi-db-dir ./ -b -q "USE workspace;CREATE TABLE mytable LIKE otherdb.othertable;"
+    cd workspace
+    run dolt schema show mytable
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CREATE TABLE \`mytable\`" ]] || false
+    [[ "$output" =~ "\`pk\` bigint NOT NULL" ]] || false
+    [[ "$output" =~ "\`v1\` bigint COMMENT 'other'" ]] || false
+    [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
+}
