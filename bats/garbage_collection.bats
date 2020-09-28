@@ -17,7 +17,8 @@ teardown() {
 
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);
-INSERT INTO test VALUES (1),(2),(3),(4),(5);
+INSERT INTO test VALUES
+    (1),(2),(3),(4),(5);
 SQL
 
     run dolt gc
