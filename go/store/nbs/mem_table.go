@@ -79,7 +79,7 @@ func newMemTable(memTableSize uint64) *memTable {
 
 func (mt *memTable) addChunk(h addr, data []byte) bool {
 	if len(data) == 0 {
-		panic("NBS blocks cannont be zero length")
+		panic("NBS blocks cannot be zero length")
 	}
 	if _, ok := mt.chunks[h]; ok {
 		return true

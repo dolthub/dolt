@@ -27,6 +27,7 @@ import (
 	"crypto/sha512"
 	"encoding/base32"
 	"encoding/binary"
+	"errors"
 	"hash/crc32"
 	"io"
 	"sync"
@@ -169,9 +170,9 @@ func (a addr) Checksum() uint32 {
 	return binary.BigEndian.Uint32(a[addrSize-checksumSize:])
 }
 
-func parseAddr(b []byte) (addr, error) {
+func parseAddr(str string) (addr, error) {
 	var h addr
-	_, err := encoding.Decode(h[:], b)
+	_, err := encoding.Decode(h[:], []byte(str))
 	return h, err
 }
 
@@ -290,28 +291,35 @@ type TableFile interface {
 	Open(ctx context.Context) (io.ReadCloser, error)
 }
 
+var ErrUnsupportedOperation = errors.New("operation not supported")
+
 // Describes what is possible to do with TableFiles in a TableFileStore.
 type TableFileStoreOps struct {
 	// True is the TableFileStore supports reading table files.
 	CanRead bool
 	// True is the TableFileStore supports writing table files.
 	CanWrite bool
+	// True is the TableFileStore supports pruning unused table files.
+	CanPrune bool
 }
 
 // TableFileStore is an interface for interacting with table files directly
 type TableFileStore interface {
-	// Sources retrieves the current root hash, and a list of all the table files
+	// Sources retrieves the current root hash, and a list of all the table files.
 	Sources(ctx context.Context) (hash.Hash, []TableFile, error)
 
-	// Returns the total size, in bytes, of the table files in this Store.
+	// Size  returns the total size, in bytes, of the table files in this Store.
 	Size(ctx context.Context) (uint64, error)
 
-	// WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
+	// WriteTableFile will read a table file from the provided reader and write it to the TableFileStore.
 	WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader, contentLength uint64, contentHash []byte) error
+
+	// PruneTableFiles deletes old table files that are no longer referenced in the manifest.
+	PruneTableFiles(ctx context.Context) error
 
 	// SetRootChunk changes the root chunk hash from the previous value to the new root.
 	SetRootChunk(ctx context.Context, root, previous hash.Hash) error
 
-	// Returns a description of the support TableFile operations. Some stores only support reading table files, not writing.
+	// SupportedOperations returns a description of the support TableFile operations. Some stores only support reading table files, not writing.
 	SupportedOperations() TableFileStoreOps
 }

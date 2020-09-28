@@ -27,33 +27,49 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func TestNBSAsTableFileStore(t *testing.T) {
+func makeTestLocalStore(t *testing.T, maxTableFiles int) (st *NomsBlockStore, nomsDir string) {
 	ctx := context.Background()
-	testDir := filepath.Join(os.TempDir(), uuid.New().String())
+	nomsDir = filepath.Join(os.TempDir(), uuid.New().String())
 
-	err := os.MkdirAll(testDir, os.ModePerm)
+	err := os.MkdirAll(nomsDir, os.ModePerm)
 	require.NoError(t, err)
 
-	numTableFiles := 128
-
-	st, err := NewLocalStore(ctx, types.Format_Default.VersionString(), testDir, defaultMemTableSize)
+	st, err = newLocalStore(ctx, types.Format_Default.VersionString(), nomsDir, defaultMemTableSize, maxTableFiles)
 	require.NoError(t, err)
+	return st, nomsDir
+}
 
-	fileToData := make(map[string][]byte, numTableFiles)
+type fileToData map[string][]byte
+
+func populateLocalStore(t *testing.T, st *NomsBlockStore, numTableFiles int) fileToData {
+	ctx := context.Background()
+	fileToData := make(fileToData, numTableFiles)
 	for i := 0; i < numTableFiles; i++ {
 		var chunkData [][]byte
 		for j := 0; j < i+1; j++ {
 			chunkData = append(chunkData, []byte(fmt.Sprintf("%d:%d", i, j)))
 		}
 		data, addr, err := buildTable(chunkData)
+		require.NoError(t, err)
 		fileID := addr.String()
 		fileToData[fileID] = data
 		err = st.WriteTableFile(ctx, fileID, i+1, bytes.NewReader(data), 0, nil)
 		require.NoError(t, err)
 	}
+	return fileToData
+}
+
+func TestNBSAsTableFileStore(t *testing.T) {
+	ctx := context.Background()
+
+	numTableFiles := 128
+	assert.Greater(t, defaultMaxTables, numTableFiles)
+	st, _ := makeTestLocalStore(t, defaultMaxTables)
+	fileToData := populateLocalStore(t, st, numTableFiles)
 
 	_, sources, err := st.Sources(ctx)
 	require.NoError(t, err)
@@ -76,6 +92,100 @@ func TestNBSAsTableFileStore(t *testing.T) {
 
 		assert.Equal(t, expected, data)
 	}
+
+	size, err := st.Size(ctx)
+	require.NoError(t, err)
+	require.Greater(t, size, uint64(0))
+}
+
+type tableFileSet map[string]TableFile
+
+func (s tableFileSet) contains(fileName string) (ok bool) {
+	_, ok = s[fileName]
+	return ok
+}
+
+// findAbsent returns the table file names in |ftd| that don't exist in |s|
+func (s tableFileSet) findAbsent(ftd fileToData) (absent []string) {
+	for fileID := range ftd {
+		if !s.contains(fileID) {
+			absent = append(absent, fileID)
+		}
+	}
+	return absent
+}
+
+func tableFileSetFromSources(sources []TableFile) (s tableFileSet) {
+	s = make(tableFileSet, len(sources))
+	for _, src := range sources {
+		s[src.FileID()] = src
+	}
+	return s
+}
+
+func TestNBSPruneTableFiles(t *testing.T) {
+	ctx := context.Background()
+
+	// over populate table files
+	numTableFiles := 64
+	maxTableFiles := 16
+	st, nomsDir := makeTestLocalStore(t, maxTableFiles)
+	fileToData := populateLocalStore(t, st, numTableFiles)
+
+	// add a chunk and flush to trigger a conjoin
+	c := []byte("it's a boy!")
+	ok := st.addChunk(ctx, computeAddr(c), c)
+	require.True(t, ok)
+	ok, err := st.Commit(ctx, st.upstream.root, st.upstream.root)
+	require.True(t, ok)
+	require.NoError(t, err)
+
+	_, sources, err := st.Sources(ctx)
+	require.NoError(t, err)
+	assert.Greater(t, numTableFiles, len(sources))
+
+	// find which input table files were conjoined
+	tfSet := tableFileSetFromSources(sources)
+	absent := tfSet.findAbsent(fileToData)
+	// assert some input table files were conjoined
+	assert.NotEmpty(t, absent)
+
+	currTableFiles := func(dirName string) *set.StrSet {
+		infos, err := ioutil.ReadDir(dirName)
+		require.NoError(t, err)
+		curr := set.NewStrSet(nil)
+		for _, fi := range infos {
+			if fi.Name() != manifestFileName && fi.Name() != lockFileName {
+				curr.Add(fi.Name())
+			}
+		}
+		return curr
+	}
+
+	preGC := currTableFiles(nomsDir)
+	for _, tf := range sources {
+		assert.True(t, preGC.Contains(tf.FileID()))
+	}
+	for _, fileName := range absent {
+		assert.True(t, preGC.Contains(fileName))
+	}
+
+	err = st.PruneTableFiles(ctx)
+	assert.NoError(t, err)
+
+	postGC := currTableFiles(nomsDir)
+	for _, tf := range sources {
+		assert.True(t, preGC.Contains(tf.FileID()))
+	}
+	for _, fileName := range absent {
+		assert.False(t, postGC.Contains(fileName))
+	}
+	infos, err := ioutil.ReadDir(nomsDir)
+	require.NoError(t, err)
+
+	// assert that we only have files for current sources,
+	// the manifest, and the lock file
+	assert.Equal(t, len(sources)+2, len(infos))
 
 	size, err := st.Size(ctx)
 	require.NoError(t, err)

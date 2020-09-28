@@ -25,9 +25,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 
@@ -35,6 +39,27 @@ import (
 )
 
 const tempTablePrefix = "nbs_table_"
+
+type gcErrAccum map[string]error
+
+var _ error = gcErrAccum{}
+
+func (ea gcErrAccum) add(path string, err error) {
+	ea[path] = err
+}
+
+func (ea gcErrAccum) isEmpty() bool {
+	return len(ea) == 0
+}
+
+func (ea gcErrAccum) Error() string {
+	var sb strings.Builder
+	sb.WriteString("error garbage collecting the following files:")
+	for filePath, err := range ea {
+		sb.WriteString(fmt.Sprintf("\t%s: %s", filePath, err.Error()))
+	}
+	return sb.String()
+}
 
 func newFSTablePersister(dir string, fc *fdCache, indexCache *indexCache) tablePersister {
 	d.PanicIfTrue(fc == nil)
@@ -207,4 +232,61 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 	}
 
 	return ftp.Open(ctx, name, plan.chunkCount, stats)
+}
+
+func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, contents manifestContents) error {
+	ss := contents.getSpecSet()
+
+	fileInfos, err := ioutil.ReadDir(ftp.dir)
+
+	if err != nil {
+		return err
+	}
+
+	err = ftp.fc.ShrinkCache()
+
+	if err != nil {
+		return err
+	}
+
+	ea := make(gcErrAccum)
+	for _, info := range fileInfos {
+		if info.IsDir() {
+			continue
+		}
+
+		filePath := path.Join(ftp.dir, info.Name())
+
+		if strings.HasPrefix(info.Name(), tempTablePrefix) {
+			err = os.Remove(filePath)
+			if err != nil {
+				ea.add(filePath, err)
+			}
+			continue
+		}
+
+		if len(info.Name()) != 32 {
+			continue // not a table file
+		}
+
+		addy, err := parseAddr(info.Name())
+		if err != nil {
+			continue // not a table file
+		}
+
+		if _, ok := ss[addy]; ok {
+			continue // file is referenced in the manifest
+		}
+
+		err = os.Remove(filePath)
+		if err != nil {
+			ea.add(filePath, err)
+		}
+	}
+
+	if !ea.isEmpty() {
+		return ea
+	}
+
+	return nil
 }

@@ -412,6 +412,8 @@ type TestTableFileStore struct {
 	tableFiles map[string]*TestTableFile
 }
 
+var _ nbs.TableFileStore = &TestTableFileStore{}
+
 func (ttfs *TestTableFileStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableFile, error) {
 	var tblFiles []nbs.TableFile
 	for _, tblFile := range ttfs.tableFiles {
@@ -450,6 +452,10 @@ func (ttfs *TestTableFileStore) SupportedOperations() nbs.TableFileStoreOps {
 		CanRead:  true,
 		CanWrite: true,
 	}
+}
+
+func (ttfs *TestTableFileStore) PruneTableFiles(ctx context.Context) error {
+	return nbs.ErrUnsupportedOperation
 }
 
 func TestClone(t *testing.T) {

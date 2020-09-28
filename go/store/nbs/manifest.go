@@ -116,6 +116,14 @@ func (mc manifestContents) getSpec(i int) tableSpec {
 	return mc.specs[i]
 }
 
+func (mc manifestContents) getSpecSet() (ss map[addr]struct{}) {
+	ss = make(map[addr]struct{}, len(mc.specs))
+	for _, ts := range mc.specs {
+		ss[ts.name] = struct{}{}
+	}
+	return ss
+}
+
 func (mc manifestContents) size() (size uint64) {
 	size += uint64(len(mc.vers)) + addrSize + hash.ByteLen
 	for _, sp := range mc.specs {
@@ -317,7 +325,7 @@ func parseSpecs(tableInfo []string) ([]tableSpec, error) {
 	specs := make([]tableSpec, len(tableInfo)/2)
 	for i := range specs {
 		var err error
-		specs[i].name, err = parseAddr([]byte(tableInfo[2*i]))
+		specs[i].name, err = parseAddr(tableInfo[2*i])
 
 		if err != nil {
 			return nil, err
