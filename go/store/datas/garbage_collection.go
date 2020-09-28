@@ -17,7 +17,7 @@ package datas
 import (
 	"context"
 
-	"github.com/liquidata-inc/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/nbs"
 )
 
 func PruneTableFiles(ctx context.Context, db Database) error {

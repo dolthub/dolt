@@ -25,6 +25,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -38,6 +39,27 @@ import (
 )
 
 const tempTablePrefix = "nbs_table_"
+
+type gcErrAccum map[string]error
+
+var _ error = gcErrAccum{}
+
+func (ea gcErrAccum) add(path string, err error) {
+	ea[path] = err
+}
+
+func (ea gcErrAccum) isEmpty() bool {
+	return len(ea) == 0
+}
+
+func (ea gcErrAccum) Error() string {
+	var sb strings.Builder
+	sb.WriteString("error garbage collecting the following files:")
+	for filePath, err := range ea {
+		sb.WriteString(fmt.Sprintf("\t%s: %s", filePath, err.Error()))
+	}
+	return sb.String()
+}
 
 func newFSTablePersister(dir string, fc *fdCache, indexCache *indexCache) tablePersister {
 	d.PanicIfTrue(fc == nil)
@@ -227,14 +249,18 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, contents manif
 		return err
 	}
 
+	ea := make(gcErrAccum)
 	for _, info := range fileInfos {
 		if info.IsDir() {
 			continue
 		}
+
+		filePath := path.Join(ftp.dir, info.Name())
+
 		if strings.HasPrefix(info.Name(), tempTablePrefix) {
-			err = os.Remove(path.Join(ftp.dir, info.Name()))
+			err = os.Remove(filePath)
 			if err != nil {
-				return err
+				ea.add(filePath, err)
 			}
 			continue
 		}
@@ -252,10 +278,14 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, contents manif
 			continue // file is referenced in the manifest
 		}
 
-		err = os.Remove(path.Join(ftp.dir, info.Name()))
+		err = os.Remove(filePath)
 		if err != nil {
-			return err
+			ea.add(filePath, err)
 		}
+	}
+
+	if !ea.isEmpty() {
+		return ea
 	}
 
 	return nil
