@@ -176,7 +176,7 @@ def write_results_to_dolt(test_repo: Dolt,
         'username': username,
         'note': note,
         'timestamp': datetime.now(),
-        'dolt_version': '0.19.2',
+        'dolt_version': Dolt.version(),
         'system_info': get_os_detail()
     }
     to_insert = pd.DataFrame([{**metadata, **row} for row in results])
@@ -189,16 +189,23 @@ def get_os_detail():
     return '{}-{}-{}'.format(os.name, platform.system(), platform.release())
 
 
-def main():
+def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--tests', type=str, required=True)
+    parser.add_argument('--tests',
+                        help='List of benchmarks',
+                        type=str,
+                        required=True)
     parser.add_argument('--print-results', action='store_true', default=False)
     parser.add_argument('--write-results-to-dolthub', action='store_true', default=False)
     parser.add_argument('--remote-results-db', type=str, required=False)
     parser.add_argument('--remote-results-db-branch', type=str, required=False)
     parser.add_argument('--username', type=str, required=False, default=getpass.getuser())
     parser.add_argument('--note', type=str, required=False, default=None)
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def main():
+    args = get_args()
     test_list = args.tests.split(',')
     assert all(test in SUPPORTED_BENCHMARKS for test in test_list), 'Must provide list of supported tests'
     test_db = setup()
@@ -206,7 +213,6 @@ def main():
     results = test_loop(test_list, test_db, args.print_results)
     if args.write_results_to_dolthub:
         logger.info('Writing the results of the tests')
-        # This is a case where we really should be running a remote service
         write_results_to_dolt(test_db,
                               results,
                               args.username,
