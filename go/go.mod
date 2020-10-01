@@ -20,7 +20,7 @@ require (
 	github.com/codahale/blake2 v0.0.0-20150924215134-8d10d0420cbf
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20200730200742-c031ec8cba06
-	github.com/dolthub/go-mysql-server v0.6.1-0.20200925223107-d90191d39435
+	github.com/dolthub/go-mysql-server v0.6.1-0.20200929222626-6f68c007ab95
 	github.com/dolthub/vitess v0.0.0-20200925174744-823c7e177c3f
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.9.0

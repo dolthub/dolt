@@ -579,8 +579,9 @@ func TestSystemTableTags(t *testing.T) {
 	})
 	t.Run("dolt_schemas tags", func(t *testing.T) {
 		doltSchemasMin := sysTableMin + uint64(4003)
-		assert.Equal(t, doltSchemasMin+0, DoltSchemasTypeTag)
-		assert.Equal(t, doltSchemasMin+1, DoltSchemasNameTag)
-		assert.Equal(t, doltSchemasMin+2, DoltSchemasFragmentTag)
+		assert.Equal(t, doltSchemasMin+0, DoltSchemasIdTag)
+		assert.Equal(t, doltSchemasMin+1, DoltSchemasTypeTag)
+		assert.Equal(t, doltSchemasMin+2, DoltSchemasNameTag)
+		assert.Equal(t, doltSchemasMin+3, DoltSchemasFragmentTag)
 	})
 }

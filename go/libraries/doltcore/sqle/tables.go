@@ -1035,7 +1035,12 @@ func (t *AlterableDoltTable) updateFromRoot(ctx *sql.Context, root *doltdb.RootV
 	if !ok {
 		return fmt.Errorf("table `%s` cannot find itself", t.name)
 	}
-	updatedTable := updatedTableSql.(*AlterableDoltTable)
+	var updatedTable *AlterableDoltTable
+	if doltdb.HasDoltPrefix(t.name) && !doltdb.IsReadOnlySystemTable(t.name) {
+		updatedTable = &AlterableDoltTable{*updatedTableSql.(*WritableDoltTable)}
+	} else {
+		updatedTable = updatedTableSql.(*AlterableDoltTable)
+	}
 	t.WritableDoltTable.DoltTable = updatedTable.WritableDoltTable.DoltTable
 	return nil
 }

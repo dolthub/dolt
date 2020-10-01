@@ -49,6 +49,12 @@ func (ste *SessionedTableEditor) GetRow(ctx context.Context, key types.Tuple) (r
 	return ste.tableEditor.GetRow(ctx, key)
 }
 
+// GetRowData returns the row data from the TableEditor. This is equivalent to calling Table and then
+// GetRowData on the returned table, but a tad faster.
+func (ste *SessionedTableEditor) GetRowData(ctx context.Context) (types.Map, error) {
+	return ste.tableEditor.GetRowData(ctx)
+}
+
 // Flush is a shortcut to calling SessionTableEditor.Flush.
 func (ste *SessionedTableEditor) Flush(ctx context.Context) (*RootValue, error) {
 	return ste.tableEditSession.Flush(ctx)

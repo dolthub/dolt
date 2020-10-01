@@ -216,6 +216,21 @@ func (te *TableEditor) GetRow(ctx context.Context, key types.Tuple) (row.Row, bo
 	return r, true, nil
 }
 
+// GetRowData returns the row data from the TableEditor. This is equivalent to calling Table and then
+// GetRowData on the returned table, but a tad faster.
+func (te *TableEditor) GetRowData(ctx context.Context) (types.Map, error) {
+	te.Flush()
+	te.flushMutex.RLock()
+	defer te.flushMutex.RUnlock()
+
+	err := te.aq.WaitForEmpty()
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	return te.rowData, nil
+}
+
 // InsertRow adds the given row to the table. If the row already exists, use UpdateRow.
 func (te *TableEditor) InsertRow(ctx context.Context, dRow row.Row) error {
 	defer te.autoFlush()
