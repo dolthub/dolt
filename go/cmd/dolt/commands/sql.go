@@ -1444,7 +1444,16 @@ func (se *sqlEngine) ddl(ctx *sql.Context, ddl *sqlparser.DDL, query string) (sq
 	case sqlparser.CreateStr, sqlparser.DropStr, sqlparser.AlterStr, sqlparser.RenameStr:
 		_, ri, err := se.query(ctx, query)
 		if err == nil {
-			err = ri.Close()
+			for _, err = ri.Next(); err == nil; _, err = ri.Next() {
+			}
+			if err == io.EOF {
+				err = ri.Close()
+			} else {
+				closeErr := ri.Close()
+				if closeErr != nil {
+					err = errhand.BuildDError("error while executing ddl").AddCause(err).AddCause(closeErr).Build()
+				}
+			}
 		}
 		return nil, nil, err
 	default:

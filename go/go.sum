@@ -150,6 +150,7 @@ github.com/denisbrodbeck/machineid v1.0.1 h1:geKr9qtkB876mXguW2X6TU4ZynleN6ezuMS
 github.com/denisbrodbeck/machineid v1.0.1/go.mod h1:dJUwb7PTidGDeYyUBmXZ2GphQBbjJCrnectwCyxcUSI=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
 github.com/dgryski/go-sip13 v0.0.0-20181026042036-e10d5fee7954/go.mod h1:vAd38F8PWV+bWy6jNmig1y/TA+kYO4g3RSRF0IAv0no=
+github.com/dolthub/dolt v1.0.20 h1:Y9wbWxj2eD5XhnEWDsFGCB9onV7AIltmSneuyZK2Ep0=
 github.com/dolthub/go-mysql-server v0.6.1-0.20200925111808-f2e3f664a4a6 h1:IrbHhymz9fJzv7WINQ+KInkrXq+KvBgacmy606iuKn0=
 github.com/dolthub/go-mysql-server v0.6.1-0.20200925111808-f2e3f664a4a6/go.mod h1:lVjGA00yIbh3eYYVkk8nug51k3tDJgrP1dzdND4LbNE=
 github.com/dolthub/go-mysql-server v0.6.1-0.20200925124913-c9a9f6a33760 h1:O0RZUBcrwX+UFuSNwTGj8PJ5EelhlLGb4UT96zwbQWU=
@@ -158,6 +159,12 @@ github.com/dolthub/go-mysql-server v0.6.1-0.20200925175850-8c7ee5bc3433 h1:YuEbU
 github.com/dolthub/go-mysql-server v0.6.1-0.20200925175850-8c7ee5bc3433/go.mod h1:l6m7hM8ttCxNKSYchwc/QzuYmfC8s6Fk06Azqf3OgZE=
 github.com/dolthub/go-mysql-server v0.6.1-0.20200925223107-d90191d39435 h1:ycWR7ucTyyAJW65db+7FDWWhUbTQL6PBvLjGWv17980=
 github.com/dolthub/go-mysql-server v0.6.1-0.20200925223107-d90191d39435/go.mod h1:l6m7hM8ttCxNKSYchwc/QzuYmfC8s6Fk06Azqf3OgZE=
+github.com/dolthub/go-mysql-server v0.6.1-0.20200928122214-f23ac53c6107 h1:eXipq9l8TyYgFMKZVWOtTMUQlX6MxrzzMiMd+temoUk=
+github.com/dolthub/go-mysql-server v0.6.1-0.20200928122214-f23ac53c6107/go.mod h1:l6m7hM8ttCxNKSYchwc/QzuYmfC8s6Fk06Azqf3OgZE=
+github.com/dolthub/go-mysql-server v0.6.1-0.20200928153544-0d9e741d2d07 h1:EmaPlUCkllaQfQDTARDAZiWqynxTKttJ+U5cGMoveZ8=
+github.com/dolthub/go-mysql-server v0.6.1-0.20200928153544-0d9e741d2d07/go.mod h1:8oqMGi0sADtMwgvPeZigVvO/8dmxR4v4H/07Ad4K9hM=
+github.com/dolthub/go-mysql-server v0.6.1-0.20200929222626-6f68c007ab95 h1:jTAC/dryuATNiT83WlRHnmhEkBN1Nc8hZqQPH+81T/I=
+github.com/dolthub/go-mysql-server v0.6.1-0.20200929222626-6f68c007ab95/go.mod h1:8oqMGi0sADtMwgvPeZigVvO/8dmxR4v4H/07Ad4K9hM=
 github.com/dolthub/vitess v0.0.0-20200925110704-d86b438c5010 h1:E1ACd1EgHljV0Dgxfqp53PfdwXBMQUF0cGn964ZCYHA=
 github.com/dolthub/vitess v0.0.0-20200925110704-d86b438c5010/go.mod h1:hUE8oSk2H5JZnvtlLBhJPYC8WZCA5AoSntdLTcBvdBM=
 github.com/dolthub/vitess v0.0.0-20200925174744-823c7e177c3f h1:37HLaUKuZMDOxKT8Lxq7Z1IZLiwTp6UKaDR7xC5aihM=

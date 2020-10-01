@@ -204,21 +204,24 @@ const (
 const (
 	// SchemasTableName is the name of the dolt schema fragment table
 	SchemasTableName = "dolt_schemas"
-
-	// Currently: `view`.
+	// SchemasTablesIdCol is an incrementing integer that represents the insertion index.
+	SchemasTablesIdCol = "id"
+	// Currently: `view` or `trigger`.
 	SchemasTablesTypeCol = "type"
-
-	// // The name of the database entity.
+	// The name of the database entity.
 	SchemasTablesNameCol = "name"
 	// The schema fragment associated with the database entity.
 	// For example, the SELECT statement for a CREATE VIEW.
 	SchemasTablesFragmentCol = "fragment"
+	// The name of the index that is on the table.
+	SchemasTablesIndexName = "fragment_name"
 )
 
 // Tags for dolt_schemas table
 // for info on unaligned constant: https://github.com/dolthub/dolt/pull/663
 const (
-	DoltSchemasTypeTag = iota + SystemTableReservedMin + uint64(4003)
+	DoltSchemasIdTag = iota + SystemTableReservedMin + uint64(4003)
+	DoltSchemasTypeTag
 	DoltSchemasNameTag
 	DoltSchemasFragmentTag
 )

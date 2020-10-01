@@ -1278,7 +1278,7 @@ func schemasTableDoltSchema() schema.Schema {
 	// this is a dummy test environment and will not be used,
 	// dolt_schema table tags will be parsed from the comments in SchemaTableSchema()
 	testEnv := dtestutils.CreateTestEnv()
-	return mustGetDoltSchema(SchemasTableSchema(), doltdb.SchemasTableName, testEnv)
+	return mustGetDoltSchema(SchemasTableSqlSchema(), doltdb.SchemasTableName, testEnv)
 }
 
 func assertFails(t *testing.T, dEnv *env.DoltEnv, query, expectedErr string) {

@@ -425,10 +425,10 @@ var systemTableInsertTests = []InsertTest{
 	{
 		Name:            "insert into dolt_schemas",
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName, schemasTableDoltSchema()),
-		InsertQuery:     "insert into dolt_schemas (type, name, fragment) values ('view', 'name', 'select 2+2 from dual')",
+		InsertQuery:     "insert into dolt_schemas (id, type, name, fragment) values (1, 'view', 'name', 'select 2+2 from dual')",
 		SelectQuery:     "select * from dolt_schemas",
 		ExpectedRows: ToSqlRows(CompressSchema(schemasTableDoltSchema()),
-			NewRow(types.String("view"), types.String("name"), types.String("select 2+2 from dual")),
+			NewRow(types.Int(1), types.String("view"), types.String("name"), types.String("select 2+2 from dual")),
 		),
 		ExpectedSchema: CompressSchema(schemasTableDoltSchema()),
 	},

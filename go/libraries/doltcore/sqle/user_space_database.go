@@ -36,7 +36,7 @@ func (db *UserSpaceDatabase) Name() string {
 }
 
 func (db *UserSpaceDatabase) GetTableInsensitive(ctx *sql.Context, tableName string) (sql.Table, bool, error) {
-	if doltdb.HasDoltPrefix(tableName) {
+	if doltdb.IsReadOnlySystemTable(tableName) {
 		return nil, false, nil
 	}
 	table, tableName, ok, err := db.RootValue.GetTableInsensitive(ctx, tableName)
@@ -58,7 +58,13 @@ func (db *UserSpaceDatabase) GetTableNames(ctx *sql.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return filterDoltInternalTables(tableNames), nil
+	resultingTblNames := []string{}
+	for _, tbl := range tableNames {
+		if !doltdb.IsReadOnlySystemTable(tbl) {
+			resultingTblNames = append(resultingTblNames, tbl)
+		}
+	}
+	return resultingTblNames, nil
 }
 
 func (db *UserSpaceDatabase) GetRoot(*sql.Context) (*doltdb.RootValue, error) {

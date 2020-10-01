@@ -172,3 +172,7 @@ func TestInnerNestedInNaturalJoins(t *testing.T) {
 func TestColumnDefaults(t *testing.T) {
 	enginetest.TestColumnDefaults(t, newDoltHarness(t))
 }
+
+func TestTriggers(t *testing.T) {
+	enginetest.TestTriggers(t, newDoltHarness(t))
+}
