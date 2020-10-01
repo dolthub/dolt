@@ -15,8 +15,11 @@
 package sqle
 
 import (
+	"errors"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"io"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -24,6 +27,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
 )
+
+var ErrNomsToSQLUnsupportedType = errors.New("noms to sql unsupported type conversion")
 
 // An iterator over the rows of a table.
 type doltTableRowIter struct {
@@ -131,8 +136,7 @@ func sqlRowFromNomsTupleValueSlices(keySl, valSl types.TupleValueSlice, sch sche
 		var convErr error
 		err := sl.Iter(func(tag uint64, val types.Value) (stop bool, err error) {
 			if idx, ok := allCols.TagToIdx[tag]; ok {
-				col := allCols.GetAtIndex(idx)
-				colVals[idx], convErr = col.TypeInfo.ConvertNomsValueToValue(val)
+				colVals[idx], convErr = FastNomsToSql(val)
 
 				if convErr != nil {
 					return false, err
@@ -148,6 +152,32 @@ func sqlRowFromNomsTupleValueSlices(keySl, valSl types.TupleValueSlice, sch sche
 	}
 
 	return sql.NewRow(colVals...), nil
+}
+
+func FastNomsToSql(val types.Value) (interface{}, error) {
+	switch typedVal := val.(type) {
+	case types.String:
+		return string(typedVal), nil
+	case types.Bool:
+		return bool(typedVal), nil
+	case types.Float:
+		return float64(typedVal), nil
+	case types.Int:
+		return int64(typedVal), nil
+	case types.Uint:
+		return uint64(typedVal), nil
+	case types.Timestamp:
+		return time.Time(typedVal), nil
+	case types.Decimal:
+		f, _ := decimal.Decimal(typedVal).Float64()
+		return f, nil
+	case types.Null:
+		return nil, nil
+	case types.UUID:
+		return typedVal.String(), nil
+	default:
+		return nil, ErrNomsToSQLUnsupportedType
+	}
 }
 
 // Returns a SQL row representation for the dolt row given.
