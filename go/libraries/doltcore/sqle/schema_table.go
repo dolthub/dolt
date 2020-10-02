@@ -60,13 +60,12 @@ func GetOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 	if err != nil {
 		return nil, err
 	}
-	tableSchema := SchemasTableSchema()
 	var rowsToAdd []sql.Row
 	if found {
 		schemasTable := tbl.(*WritableDoltTable)
 		// Old schemas table does not contain the `id` column.
 		if !tbl.Schema().Contains(doltdb.SchemasTablesIdCol, doltdb.SchemasTableName) {
-			root, tableSchema, rowsToAdd, err = migrateOldSchemasTableToNew(ctx, db, root, tableSchema, schemasTable)
+			root, rowsToAdd, err = migrateOldSchemasTableToNew(ctx, db, root, schemasTable)
 			if err != nil {
 				return nil, err
 			}
@@ -75,7 +74,7 @@ func GetOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 		}
 	}
 	// Create the schemas table as an empty table
-	err = db.createDoltTable(ctx, doltdb.SchemasTableName, root, tableSchema)
+	err = db.createDoltTable(ctx, doltdb.SchemasTableName, root, SchemasTableSchema())
 	if err != nil {
 		return nil, err
 	}
@@ -144,36 +143,17 @@ func migrateOldSchemasTableToNew(
 	ctx *sql.Context,
 	db Database,
 	root *doltdb.RootValue,
-	tableSchema schema.Schema,
 	schemasTable *WritableDoltTable,
 ) (
 	*doltdb.RootValue,
-	schema.Schema,
 	[]sql.Row,
 	error,
 ) {
-	var rowsToAdd []sql.Row
-	// Use the existing tags since the table already exists so that diffs are more sane
-	newTableSchemaCols := []schema.Column{schema.NewColumn(
-		doltdb.SchemasTablesIdCol,
-		doltdb.DoltSchemasIdTag,
-		types.IntKind,
-		true,
-		schema.NotNullConstraint{},
-	)}
-	for _, col := range schemasTable.sch.GetAllCols().GetColumns() {
-		col.IsPartOfPK = false
-		newTableSchemaCols = append(newTableSchemaCols, col)
-	}
-	newSchemaColColl, err := schema.NewColCollection(newTableSchemaCols...)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	tableSchema = schema.SchemaFromCols(newSchemaColColl)
 	// Copy all of the old data over and add an index column
+	var rowsToAdd []sql.Row
 	rowData, err := schemasTable.table.GetRowData(ctx)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	id := int64(1)
 	err = rowData.IterAll(ctx, func(key, val types.Value) error {
@@ -192,17 +172,17 @@ func migrateOldSchemasTableToNew(
 		return nil
 	})
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	err = db.DropTable(ctx, doltdb.SchemasTableName)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	root, err = db.GetRoot(ctx)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
-	return root, tableSchema, rowsToAdd, nil
+	return root, rowsToAdd, nil
 }
 
 // fragFromSchemasTable returns the row with the given schema fragment if it exists.

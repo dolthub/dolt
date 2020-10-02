@@ -210,7 +210,7 @@ func manualResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 		return errhand.BuildDError("error: failed to get table hash").AddCause(err).Build()
 	}
 
-	if hash == updatedHash {
+	if hash != updatedHash {
 		root, err := root.PutTable(ctx, tblName, updatedTbl)
 
 		if err != nil {
