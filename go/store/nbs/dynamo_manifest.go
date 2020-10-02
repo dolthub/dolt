@@ -41,13 +41,13 @@ const (
 	dbAttr         = "db"
 	lockAttr       = "lck" // 'lock' is a reserved word in dynamo
 	rootAttr       = "root"
-	versAttr       = "vers"
+	versAttr       = "nomsVers"
 	nbsVersAttr    = "nbsVers"
 	tableSpecsAttr = "specs"
 )
 
 var (
-	valueEqualsExpression            = fmt.Sprintf("(%s = :prev) and (%s = :vers)", lockAttr, versAttr)
+	valueEqualsExpression            = fmt.Sprintf("(%s = :prev) and (%s = :nomsVers)", lockAttr, versAttr)
 	valueNotExistsOrEqualsExpression = fmt.Sprintf("attribute_not_exists("+lockAttr+") or %s", valueEqualsExpression)
 )
 
@@ -98,7 +98,7 @@ func (dm dynamoManifest) ParseIfExists(ctx context.Context, stats *Stats, readHo
 			return false, contents, ErrCorruptManifest
 		}
 		exists = true
-		contents.vers = *result.Item[versAttr].S
+		contents.nomsVers = *result.Item[versAttr].S
 		contents.root = hash.New(result.Item[rootAttr].B)
 		copy(contents.lock[:], result.Item[lockAttr].B)
 		if hasSpecs {
@@ -136,7 +136,7 @@ func (dm dynamoManifest) Update(ctx context.Context, lastLock addr, newContents 
 		Item: map[string]*dynamodb.AttributeValue{
 			dbAttr:      {S: aws.String(dm.db)},
 			nbsVersAttr: {S: aws.String(StorageVersion)},
-			versAttr:    {S: aws.String(newContents.vers)},
+			versAttr:    {S: aws.String(newContents.nomsVers)},
 			rootAttr:    {B: newContents.root[:]},
 			lockAttr:    {B: newContents.lock[:]},
 		},
@@ -155,7 +155,7 @@ func (dm dynamoManifest) Update(ctx context.Context, lastLock addr, newContents 
 	putArgs.ConditionExpression = aws.String(expr)
 	putArgs.ExpressionAttributeValues = map[string]*dynamodb.AttributeValue{
 		":prev": {B: lastLock[:]},
-		":vers": {S: aws.String(newContents.vers)},
+		":nomsVers": {S: aws.String(newContents.nomsVers)},
 	}
 
 	_, ddberr := dm.ddbsvc.PutItemWithContext(ctx, &putArgs)
@@ -171,7 +171,7 @@ func (dm dynamoManifest) Update(ctx context.Context, lastLock addr, newContents 
 				return manifestContents{}, errors.New("manifest not found")
 			}
 
-			if upstream.vers != newContents.vers {
+			if upstream.nomsVers != newContents.nomsVers {
 				return manifestContents{}, errors.New("version mismatch")
 			}
 

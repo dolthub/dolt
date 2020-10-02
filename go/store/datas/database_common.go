@@ -496,7 +496,7 @@ func (db *database) doTag(ctx context.Context, datasetID string, tag types.Struc
 		}
 
 		if hasHead {
-			return fmt.Errorf("datasets for tags (refs/tags/*) cannot be altered after creation")
+			return fmt.Errorf(fmt.Sprintf("tag %s already exists and cannot be altered after creation", datasetID))
 		}
 
 		ref, err := types.ToRefOfValue(tagRef, db.Format())

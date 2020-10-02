@@ -80,24 +80,30 @@ type manifestUpdater interface {
 type ManifestInfo interface {
 	GetVersion() string
 	GetLock() string
+	GetGCGen() string
 	GetRoot() hash.Hash
 	NumTableSpecs() int
 	GetTableSpecInfo(i int) TableSpecInfo
 }
 
 type manifestContents struct {
-	vers  string
-	lock  addr
-	root  hash.Hash
-	specs []tableSpec
+	nomsVers string
+	lock     addr
+	root     hash.Hash
+	gcGen    addr
+	specs    []tableSpec
 }
 
 func (mc manifestContents) GetVersion() string {
-	return mc.vers
+	return mc.nomsVers
 }
 
 func (mc manifestContents) GetLock() string {
 	return mc.lock.String()
+}
+
+func (mc manifestContents) GetGCGen() string {
+	return mc.gcGen.String()
 }
 
 func (mc manifestContents) GetRoot() hash.Hash {
@@ -125,7 +131,7 @@ func (mc manifestContents) getSpecSet() (ss map[addr]struct{}) {
 }
 
 func (mc manifestContents) size() (size uint64) {
-	size += uint64(len(mc.vers)) + addrSize + hash.ByteLen
+	size += uint64(len(mc.nomsVers)) + addrSize + hash.ByteLen
 	for _, sp := range mc.specs {
 		size += uint64(len(sp.name)) + uint32Size // for sp.chunkCount
 	}

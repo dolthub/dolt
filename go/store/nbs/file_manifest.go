@@ -24,6 +24,7 @@ package nbs
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -33,6 +34,7 @@ import (
 
 	"github.com/dolthub/fslock"
 
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
@@ -40,6 +42,11 @@ import (
 const (
 	manifestFileName = "manifest"
 	lockFileName     = "LOCK"
+
+	storageVersion5    = "5"
+	prevStorageVersion = "4"
+
+	prefixLen = 5
 )
 
 // fileManifest provides access to a NomsBlockStore manifest stored on disk in |dir|. The format
@@ -96,7 +103,7 @@ func (fm fileManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook
 		return false, manifestContents{}, err
 	}
 
-	// !exists(lockFileName) => unitialized store
+	// !exists(lockFileName) => uninitialized store
 	if locked {
 		var f io.ReadCloser
 		err = func() (ferr error) {
@@ -183,15 +190,15 @@ func parseManifest(r io.Reader) (manifestContents, error) {
 	}
 
 	slices := strings.Split(string(manifest), ":")
-	if len(slices) < 4 || len(slices)%2 == 1 {
+	if len(slices) < prefixLen || len(slices)%2 != 1 {
 		return manifestContents{}, ErrCorruptManifest
 	}
 
-	if StorageVersion != string(slices[0]) {
+	if storageVersion5 != string(slices[0]) {
 		return manifestContents{}, errors.New("invalid storage version")
 	}
 
-	specs, err := parseSpecs(slices[4:])
+	specs, err := parseSpecs(slices[prefixLen:])
 
 	if err != nil {
 		return manifestContents{}, err
@@ -204,10 +211,10 @@ func parseManifest(r io.Reader) (manifestContents, error) {
 	}
 
 	return manifestContents{
-		vers:  slices[1],
-		lock:  ad,
-		root:  hash.Parse(slices[3]),
-		specs: specs,
+		nomsVers: slices[1],
+		lock:     ad,
+		root:     hash.Parse(slices[3]),
+		specs:    specs,
 	}, nil
 }
 
@@ -294,8 +301,12 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 				return manifestContents{}, ferr
 			}
 
-			if newContents.vers != upstream.vers {
+			if newContents.nomsVers != upstream.nomsVers {
 				return manifestContents{}, errors.New("Update cannot change manifest version")
+			}
+
+			if newContents.gcGen != upstream.gcGen {
+				return manifestContents{}, chunks.ErrGCGenerationExpired
 			}
 
 			return upstream, nil
@@ -328,11 +339,195 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 }
 
 func writeManifest(temp io.Writer, contents manifestContents) error {
-	strs := make([]string, 2*len(contents.specs)+4)
-	strs[0], strs[1], strs[2], strs[3] = StorageVersion, contents.vers, contents.lock.String(), contents.root.String()
-	tableInfo := strs[4:]
+	strs := make([]string, 2*len(contents.specs)+prefixLen)
+	strs[0], strs[1], strs[2], strs[3], strs[4] = storageVersion5, contents.nomsVers, contents.lock.String(), contents.root.String(), contents.gcGen.String()
+	tableInfo := strs[prefixLen:]
 	formatSpecs(contents.specs, tableInfo)
 	_, err := io.WriteString(temp, strings.Join(strs, ":"))
 
 	return err
+}
+
+func MaybeMigrateFileManifest(ctx context.Context, nomsDir string) error {
+	f, err := openIfExists(filepath.Join(nomsDir, manifestFileName))
+	if err != nil {
+		return err
+	}
+	if f == nil {
+		// !exists(lockFileName) => uninitialized store
+		return nil
+	}
+	defer func() {
+		closeErr := f.Close()
+
+		if err == nil {
+			err = closeErr
+		}
+	}()
+
+	isVer4, contents, err := maybeParseVersion4Manifest(f)
+
+	if err != nil {
+		return err
+	}
+	if !isVer4 {
+		return nil
+	}
+
+	// update manifest contents
+	contents.gcGen = contents.lock
+
+	updated, err := updateVer4To5(ctx, nomsDir, contents.lock, contents)
+
+	if err != nil {
+		return err
+	}
+	if updated.lock != contents.lock {
+		return fmt.Errorf("manifest migration failed")
+	}
+
+	return nil
+}
+
+func maybeParseVersion4Manifest(r io.Reader) (ok bool, c manifestContents, err error) {
+	manifest, err := ioutil.ReadAll(r)
+
+	if err != nil {
+		return ok, c, err
+	}
+
+	slices := strings.Split(string(manifest), ":")
+	if len(slices) < 4 {
+		// version 4 prefix has len 4
+		// version 5 prefix has len 5
+		return ok, c, ErrCorruptManifest
+	}
+
+	manifestVersion := slices[0]
+	if manifestVersion == storageVersion5 {
+		return false, c, err
+	} else if manifestVersion != prevStorageVersion {
+		return false, c, fmt.Errorf("manifest manifestVersion is incompatible")
+	}
+
+	specs, err := parseSpecs(slices[4:])
+
+	if err != nil {
+		return ok, c, err
+	}
+
+	ad, err := parseAddr(slices[2])
+
+	if err != nil {
+		return ok, c, err
+	}
+
+	c = manifestContents{
+		nomsVers: slices[1],
+		lock:     ad,
+		root:     hash.Parse(slices[3]),
+		specs:    specs,
+	}
+
+	return true, c, err
+}
+
+func updateVer4To5(ctx context.Context, nomsDir string, lastLock addr, newContents manifestContents) (mc manifestContents, err error) {
+	var tempManifestPath string
+
+	// Write a temporary manifest file, to be renamed over manifestFileName upon success.
+	// The closure here ensures this file is closed before moving on.
+	tempManifestPath, err = func() (name string, ferr error) {
+		var temp *os.File
+		temp, ferr = tempfiles.MovableTempFileProvider.NewFile(nomsDir, "nbs_manifest_")
+
+		if ferr != nil {
+			return "", ferr
+		}
+
+		defer func() {
+			closeErr := temp.Close()
+
+			if ferr == nil {
+				ferr = closeErr
+			}
+		}()
+
+		ferr = writeManifest(temp, newContents)
+
+		if ferr != nil {
+			return "", ferr
+		}
+
+		return temp.Name(), nil
+	}()
+
+	if err != nil {
+		return manifestContents{}, err
+	}
+
+	defer os.Remove(tempManifestPath) // If we rename below, this will be a no-op
+
+	// Take manifest file lock
+	lck := newLock(nomsDir)
+	err = lck.Lock()
+
+	if err != nil {
+		return manifestContents{}, err
+	}
+
+	defer func() {
+		unlockErr := lck.Unlock()
+
+		if err == nil {
+			err = unlockErr
+		}
+	}()
+
+	var upstream manifestContents
+	// Read current manifest (if it exists). The closure ensures that the file is closed before moving on, so we can rename over it later if need be.
+	manifestPath := filepath.Join(nomsDir, manifestFileName)
+	upstream, err = func() (upstream manifestContents, ferr error) {
+		if f, ferr := openIfExists(manifestPath); ferr == nil && f != nil {
+			defer func() {
+				closeErr := f.Close()
+
+				if ferr != nil {
+					ferr = closeErr
+				}
+			}()
+
+			_, upstream, ferr = maybeParseVersion4Manifest(f)
+
+			if ferr != nil {
+				return manifestContents{}, ferr
+			}
+
+			return upstream, nil
+		} else if ferr != nil {
+			return manifestContents{}, ferr
+		}
+
+		if lastLock != (addr{}) {
+			return manifestContents{}, errors.New("new manifest created with non 0 lock")
+		}
+
+		return manifestContents{}, nil
+	}()
+
+	if err != nil {
+		return manifestContents{}, err
+	}
+
+	if lastLock != upstream.lock {
+		return upstream, nil
+	}
+
+	err = os.Rename(tempManifestPath, manifestPath)
+
+	if err != nil {
+		return manifestContents{}, err
+	}
+
+	return newContents, nil
 }

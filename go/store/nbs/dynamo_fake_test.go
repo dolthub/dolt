@@ -148,7 +148,7 @@ func (m *fakeDDB) PutItemWithContext(ctx aws.Context, input *dynamodb.PutItemInp
 }
 
 func checkCondition(current record, expressionAttrVals map[string]*dynamodb.AttributeValue) bool {
-	return current.vers == *expressionAttrVals[":vers"].S && bytes.Equal(current.lock, expressionAttrVals[":prev"].B)
+	return current.vers == *expressionAttrVals[":nomsVers"].S && bytes.Equal(current.lock, expressionAttrVals[":prev"].B)
 }
 
 func (m *fakeDDB) NumGets() int64 {

@@ -38,6 +38,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
@@ -154,6 +155,14 @@ func runMain() int {
 	warnIfMaxFilesTooLow()
 
 	ctx := context.Background()
+
+	err := nbs.MaybeMigrateFileManifest(ctx, dbfactory.DoltDataDir)
+
+	if err != nil {
+		cli.PrintErrln(err.Error())
+		return 1
+	}
+
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
 
 	if dEnv.DBLoadError == nil && commandNeedsMigrationCheck(args) {

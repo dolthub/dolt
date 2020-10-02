@@ -405,7 +405,7 @@ func (fm *fakeManifest) Update(ctx context.Context, lastLock addr, newContents m
 	fm.mu.Lock()
 	defer fm.mu.Unlock()
 	if fm.contents.lock == lastLock {
-		fm.contents = manifestContents{newContents.vers, newContents.lock, newContents.root, nil}
+		fm.contents = manifestContents{newContents.nomsVers, newContents.lock, newContents.root, nil}
 		fm.contents.specs = make([]tableSpec, len(newContents.specs))
 		copy(fm.contents.specs, newContents.specs)
 	}

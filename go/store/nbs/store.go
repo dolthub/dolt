@@ -51,6 +51,7 @@ var ErrFetchFailure = errors.New("fetch failed")
 
 const (
 	// StorageVersion is the version of the on-disk Noms Chunks Store data format.
+	// todo: how to handle discrepancies between file manifest and dynamo manifest
 	StorageVersion = "4"
 
 	defaultMemTableSize uint64 = (1 << 20) * 128 // 128MB
@@ -203,7 +204,7 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 	if err != nil {
 		return manifestContents{}, err
 	} else if !ok {
-		contents = manifestContents{vers: nbs.upstream.vers}
+		contents = manifestContents{nomsVers: nbs.upstream.nomsVers}
 	}
 
 	currSpecs := contents.getSpecSet()
@@ -346,7 +347,7 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager
 		p:        p,
 		c:        c,
 		tables:   newTableSet(p),
-		upstream: manifestContents{vers: nbfVerStr},
+		upstream: manifestContents{nomsVers: nbfVerStr},
 		mtSize:   memTableSize,
 		stats:    NewStats(),
 	}
@@ -872,10 +873,10 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 	}
 
 	newContents := manifestContents{
-		vers:  nbs.upstream.vers,
-		root:  current,
-		lock:  generateLockHash(current, specs),
-		specs: specs,
+		nomsVers: nbs.upstream.nomsVers,
+		root:     current,
+		lock:     generateLockHash(current, specs),
+		specs:    specs,
 	}
 
 	upstream, err := nbs.mm.Update(ctx, nbs.upstream.lock, newContents, nbs.stats, nil)
@@ -901,7 +902,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 }
 
 func (nbs *NomsBlockStore) Version() string {
-	return nbs.upstream.vers
+	return nbs.upstream.nomsVers
 }
 
 func (nbs *NomsBlockStore) Close() error {

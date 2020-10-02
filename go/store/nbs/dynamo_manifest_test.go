@@ -61,7 +61,7 @@ func TestDynamoManifestParseIfExists(t *testing.T) {
 	exists, contents, err := mm.ParseIfExists(context.Background(), stats, nil)
 	assert.NoError(err)
 	assert.True(exists)
-	assert.Equal("0", contents.vers)
+	assert.Equal("0", contents.nomsVers)
 	assert.Equal(newLock, contents.lock)
 	assert.Equal(newRoot, contents.root)
 	if assert.Len(contents.specs, 1) {
@@ -84,7 +84,7 @@ func TestDynamoManifestUpdateWontClobberOldVersion(t *testing.T) {
 	badRoot := hash.Of([]byte("bad root"))
 	ddb.putRecord(db, lock[:], badRoot[:], "0", "")
 
-	_, err := mm.Update(context.Background(), lock, manifestContents{vers: constants.NomsVersion}, stats, nil)
+	_, err := mm.Update(context.Background(), lock, manifestContents{nomsVers: constants.NomsVersion}, stats, nil)
 	assert.Error(err)
 }
 
@@ -175,7 +175,7 @@ func TestDynamoManifestUpdateEmpty(t *testing.T) {
 	mm, _ := makeDynamoManifestFake(t)
 	stats := &Stats{}
 
-	contents := manifestContents{vers: constants.NomsVersion, lock: computeAddr([]byte{0x01})}
+	contents := manifestContents{nomsVers: constants.NomsVersion, lock: computeAddr([]byte{0x01})}
 	upstream, err := mm.Update(context.Background(), addr{}, contents, stats, nil)
 	assert.NoError(err)
 	assert.Equal(contents.lock, upstream.lock)
