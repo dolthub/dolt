@@ -156,6 +156,7 @@ SQL
 
 @test "triggers: Upgrade dolt_schemas" {
     rm -rf .dolt
+    # old_dolt_schemas was created using v0.19.1, which is pre-id change
     cp -a $BATS_TEST_DIRNAME/helper/old_dolt_schemas/. ./.dolt/
     run dolt sql -q "SELECT * FROM dolt_schemas" -r=csv
     [ "$status" -eq "0" ]

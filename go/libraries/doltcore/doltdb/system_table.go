@@ -220,6 +220,11 @@ const (
 // Tags for dolt_schemas table
 // for info on unaligned constant: https://github.com/dolthub/dolt/pull/663
 const (
+	// Old tag numbers for reference
+	//DoltSchemasTypeTag = iota + SystemTableReservedMin + uint64(4003)
+	//DoltSchemasNameTag
+	//DoltSchemasFragmentTag
+
 	DoltSchemasIdTag = iota + SystemTableReservedMin + uint64(4007)
 	DoltSchemasTypeTag
 	DoltSchemasNameTag
