@@ -15,10 +15,13 @@
 package typeinfo
 
 import (
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/sqltypes"
+	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -44,6 +47,8 @@ const (
 	VarStringTypeIdentifier  Identifier = "varstring"
 	YearTypeIdentifier       Identifier = "year"
 )
+
+var ErrNomsToSQLUnsupportedType = errors.New("noms to sql unsupported type conversion")
 
 var Identifiers = map[Identifier]struct{}{
 	UnknownTypeIdentifier:    {},
@@ -218,6 +223,109 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		return &setType{setSQLType}, nil
 	default:
 		return nil, fmt.Errorf(`no type info can be created from SQL base type "%v"`, sqlType.String())
+	}
+}
+
+func FastNomsToSql(ti TypeInfo, val types.Value) (interface{}, error) {
+	switch typedVal := val.(type) {
+	case types.String:
+		return string(typedVal), nil
+	case types.Bool:
+		if typedVal {
+			return uint64(1), nil
+		} else {
+			return uint64(0), nil
+		}
+	case types.Float:
+		n := float64(typedVal)
+
+		switch ti.(*floatType).sqlFloatType {
+		case sql.Float32:
+			return float32(n), nil
+		case sql.Float64:
+			return n, nil
+		}
+
+		panic("new float type?")
+	case types.Int:
+		n := int64(typedVal)
+
+		switch typedType := ti.(type) {
+		case *intType:
+			switch typedType.sqlIntType {
+			case sql.Int8:
+				return int8(n), nil
+			case sql.Int16:
+				return int16(n), nil
+			case sql.Int24:
+				return int32(n), nil
+			case sql.Int32:
+				return int32(n), nil
+			case sql.Int64:
+				return n, nil
+			}
+		case *yearType:
+			return n, nil
+		case *timeType:
+			return typedType.sqlTimeType.Unmarshal(n), nil
+		}
+
+		panic("new int type?")
+	case types.Uint:
+		n := uint64(typedVal)
+
+		switch typedType := ti.(type) {
+		case *uintType:
+			switch typedType.sqlUintType {
+			case sql.Uint8:
+				return uint8(n), nil
+			case sql.Uint16:
+				return uint16(n), nil
+			case sql.Uint24:
+				return uint32(n), nil
+			case sql.Uint32:
+				return uint32(n), nil
+			case sql.Uint64:
+				return n, nil
+			}
+		case *bitType:
+			numBits := typedType.sqlBitType.NumberOfBits()
+
+			switch {
+			case numBits <= 8:
+				return uint8(n), nil
+			case numBits <= 16:
+				return uint16(n), nil
+			case numBits <= 32:
+				return uint32(n), nil
+			case numBits <= 64:
+				return n, nil
+			}
+		case *enumType:
+			if str, ok := typedType.sqlEnumType.At(int(n)); ok {
+				return str, nil
+			}
+			return "", sql.ErrConvertingToEnum.New(n)
+		case *setType:
+			res, err := typedType.sqlSetType.Unmarshal(n)
+			if err != nil {
+				return nil, fmt.Errorf(`"%v" cannot convert "%v" to value`, typedType.String(), val)
+			}
+			return res, nil
+		}
+
+		panic("new uint type?")
+	case types.Timestamp:
+		return time.Time(typedVal), nil
+	case types.Decimal:
+		f, _ := decimal.Decimal(typedVal).Float64()
+		return f, nil
+	case types.Null:
+		return nil, nil
+	case types.UUID:
+		return typedVal.String(), nil
+	default:
+		return nil, ErrNomsToSQLUnsupportedType
 	}
 }
 
