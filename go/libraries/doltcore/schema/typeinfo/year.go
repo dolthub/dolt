@@ -36,7 +36,7 @@ var YearType = &yearType{sql.Year}
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *yearType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Int); ok {
-		return ti.sqlYearType.Convert(int64(val))
+		return int16(val), nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil

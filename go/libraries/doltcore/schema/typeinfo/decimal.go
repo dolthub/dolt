@@ -68,7 +68,7 @@ func CreateDecimalTypeFromParams(params map[string]string) (TypeInfo, error) {
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *decimalType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Decimal); ok {
-		return ti.sqlDecimalType.Convert(decimal.Decimal(val))
+		return decimal.Decimal(val).StringFixed(int32(ti.sqlDecimalType.Scale())), nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil

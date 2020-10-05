@@ -56,11 +56,7 @@ func CreateBitTypeFromParams(params map[string]string) (TypeInfo, error) {
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *bitType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Uint); ok {
-		res, err := ti.sqlBitType.Convert(uint64(val))
-		if err != nil {
-			return nil, fmt.Errorf(`"%v" cannot convert "%v" to value`, ti.String(), val)
-		}
-		return res, nil
+		return uint64(val), nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil

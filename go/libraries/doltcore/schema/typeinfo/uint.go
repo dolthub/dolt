@@ -69,7 +69,18 @@ func CreateUintTypeFromParams(params map[string]string) (TypeInfo, error) {
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *uintType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Uint); ok {
-		return ti.sqlUintType.Convert(uint64(val))
+		switch ti.sqlUintType {
+		case sql.Uint8:
+			return uint8(val), nil
+		case sql.Uint16:
+			return uint16(val), nil
+		case sql.Uint24:
+			return uint32(val), nil
+		case sql.Uint32:
+			return uint32(val), nil
+		case sql.Uint64:
+			return uint64(val), nil
+		}
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil

@@ -69,7 +69,18 @@ func CreateIntTypeFromParams(params map[string]string) (TypeInfo, error) {
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *intType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Int); ok {
-		return ti.sqlIntType.Convert(int64(val))
+		switch ti.sqlIntType {
+		case sql.Int8:
+			return int8(val), nil
+		case sql.Int16:
+			return int16(val), nil
+		case sql.Int24:
+			return int32(val), nil
+		case sql.Int32:
+			return int32(val), nil
+		case sql.Int64:
+			return int64(val), nil
+		}
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil

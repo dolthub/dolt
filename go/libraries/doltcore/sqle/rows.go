@@ -22,7 +22,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -133,7 +132,7 @@ func sqlRowFromNomsTupleValueSlices(keySl, valSl types.TupleValueSlice, sch sche
 		err := sl.Iter(func(tag uint64, val types.Value) (stop bool, err error) {
 			if idx, ok := allCols.TagToIdx[tag]; ok {
 				col := allCols.GetByIndex(idx)
-				colVals[idx], convErr = typeinfo.FastNomsToSql(col.TypeInfo, val)
+				colVals[idx], convErr = col.TypeInfo.ConvertNomsValueToValue(val)
 
 				if convErr != nil {
 					return false, err
