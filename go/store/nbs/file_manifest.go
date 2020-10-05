@@ -211,10 +211,10 @@ func parseManifest(r io.Reader) (manifestContents, error) {
 	}
 
 	return manifestContents{
-		nomsVers: slices[1],
-		lock:     ad,
-		root:     hash.Parse(slices[3]),
-		specs:    specs,
+		vers:  slices[1],
+		lock:  ad,
+		root:  hash.Parse(slices[3]),
+		specs: specs,
 	}, nil
 }
 
@@ -301,7 +301,7 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 				return manifestContents{}, ferr
 			}
 
-			if newContents.nomsVers != upstream.nomsVers {
+			if newContents.vers != upstream.vers {
 				return manifestContents{}, errors.New("Update cannot change manifest version")
 			}
 
@@ -340,7 +340,7 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 
 func writeManifest(temp io.Writer, contents manifestContents) error {
 	strs := make([]string, 2*len(contents.specs)+prefixLen)
-	strs[0], strs[1], strs[2], strs[3], strs[4] = storageVersion5, contents.nomsVers, contents.lock.String(), contents.root.String(), contents.gcGen.String()
+	strs[0], strs[1], strs[2], strs[3], strs[4] = storageVersion5, contents.vers, contents.lock.String(), contents.root.String(), contents.gcGen.String()
 	tableInfo := strs[prefixLen:]
 	formatSpecs(contents.specs, tableInfo)
 	_, err := io.WriteString(temp, strings.Join(strs, ":"))
@@ -423,10 +423,10 @@ func maybeParseVersion4Manifest(r io.Reader) (ok bool, c manifestContents, err e
 	}
 
 	c = manifestContents{
-		nomsVers: slices[1],
-		lock:     ad,
-		root:     hash.Parse(slices[3]),
-		specs:    specs,
+		vers:  slices[1],
+		lock:  ad,
+		root:  hash.Parse(slices[3]),
+		specs: specs,
 	}
 
 	return true, c, err

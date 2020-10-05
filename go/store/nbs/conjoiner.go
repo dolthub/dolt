@@ -77,10 +77,10 @@ func conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater,
 		specs = append(specs, keepers...)
 
 		newContents := manifestContents{
-			nomsVers: upstream.nomsVers,
-			root:     upstream.root,
-			lock:     generateLockHash(upstream.root, specs),
-			specs:    specs,
+			vers:  upstream.vers,
+			root:  upstream.root,
+			lock:  generateLockHash(upstream.root, specs),
+			specs: specs,
 		}
 
 		var err error

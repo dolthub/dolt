@@ -87,15 +87,15 @@ type ManifestInfo interface {
 }
 
 type manifestContents struct {
-	nomsVers string
-	lock     addr
-	root     hash.Hash
-	gcGen    addr
-	specs    []tableSpec
+	vers  string  // NBF version
+	lock  addr
+	root  hash.Hash
+	gcGen addr
+	specs []tableSpec
 }
 
 func (mc manifestContents) GetVersion() string {
-	return mc.nomsVers
+	return mc.vers
 }
 
 func (mc manifestContents) GetLock() string {
@@ -131,7 +131,7 @@ func (mc manifestContents) getSpecSet() (ss map[addr]struct{}) {
 }
 
 func (mc manifestContents) size() (size uint64) {
-	size += uint64(len(mc.nomsVers)) + addrSize + hash.ByteLen
+	size += uint64(len(mc.vers)) + addrSize + hash.ByteLen
 	for _, sp := range mc.specs {
 		size += uint64(len(sp.name)) + uint32Size // for sp.chunkCount
 	}

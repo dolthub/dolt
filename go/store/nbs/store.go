@@ -204,7 +204,7 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 	if err != nil {
 		return manifestContents{}, err
 	} else if !ok {
-		contents = manifestContents{nomsVers: nbs.upstream.nomsVers}
+		contents = manifestContents{vers: nbs.upstream.vers}
 	}
 
 	currSpecs := contents.getSpecSet()
@@ -347,7 +347,7 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager
 		p:        p,
 		c:        c,
 		tables:   newTableSet(p),
-		upstream: manifestContents{nomsVers: nbfVerStr},
+		upstream: manifestContents{vers: nbfVerStr},
 		mtSize:   memTableSize,
 		stats:    NewStats(),
 	}
@@ -873,10 +873,10 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 	}
 
 	newContents := manifestContents{
-		nomsVers: nbs.upstream.nomsVers,
-		root:     current,
-		lock:     generateLockHash(current, specs),
-		specs:    specs,
+		vers:  nbs.upstream.vers,
+		root:  current,
+		lock:  generateLockHash(current, specs),
+		specs: specs,
 	}
 
 	upstream, err := nbs.mm.Update(ctx, nbs.upstream.lock, newContents, nbs.stats, nil)
@@ -902,7 +902,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 }
 
 func (nbs *NomsBlockStore) Version() string {
-	return nbs.upstream.nomsVers
+	return nbs.upstream.vers
 }
 
 func (nbs *NomsBlockStore) Close() error {
