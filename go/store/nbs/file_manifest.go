@@ -43,17 +43,20 @@ const (
 	manifestFileName = "manifest"
 	lockFileName     = "LOCK"
 
-	storageVersion5    = "5"
-	prevStorageVersion = "4"
+	storageVersion4 = "4"
 
 	prefixLen = 5
 )
 
 // fileManifest provides access to a NomsBlockStore manifest stored on disk in |dir|. The format
-// is currently human readable:
+// is currently human readable. The prefix contains 5 strings, followed by pairs of table file
+// hashes and their counts:
 //
-// |-- String --|-- String --|-------- String --------|-------- String --------|-- String --|- String --|...|-- String --|- String --|
-// | nbs version:Noms version:Base32-encoded lock hash:Base32-encoded root hash:table 1 hash:table 1 cnt:...:table N hash:table N cnt|
+// |-- String --|-- String --|-------- String --------|-------- String --------|-------- String -----------------|
+// | nbs version:Noms version:Base32-encoded lock hash:Base32-encoded root hash:Base32-encoded GC generation hash
+//
+// |-- String --|- String --|...|-- String --|- String --|
+// :table 1 hash:table 1 cnt:...:table N hash:table N cnt|
 type fileManifest struct {
 	dir string
 }
@@ -194,7 +197,7 @@ func parseManifest(r io.Reader) (manifestContents, error) {
 		return manifestContents{}, ErrCorruptManifest
 	}
 
-	if storageVersion5 != string(slices[0]) {
+	if StorageVersion != string(slices[0]) {
 		return manifestContents{}, errors.New("invalid storage version")
 	}
 
@@ -340,7 +343,7 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 
 func writeManifest(temp io.Writer, contents manifestContents) error {
 	strs := make([]string, 2*len(contents.specs)+prefixLen)
-	strs[0], strs[1], strs[2], strs[3], strs[4] = storageVersion5, contents.vers, contents.lock.String(), contents.root.String(), contents.gcGen.String()
+	strs[0], strs[1], strs[2], strs[3], strs[4] = StorageVersion, contents.vers, contents.lock.String(), contents.root.String(), contents.gcGen.String()
 	tableInfo := strs[prefixLen:]
 	formatSpecs(contents.specs, tableInfo)
 	_, err := io.WriteString(temp, strings.Join(strs, ":"))
@@ -404,9 +407,9 @@ func maybeParseVersion4Manifest(r io.Reader) (ok bool, c manifestContents, err e
 	}
 
 	manifestVersion := slices[0]
-	if manifestVersion == storageVersion5 {
+	if manifestVersion == StorageVersion {
 		return false, c, err
-	} else if manifestVersion != prevStorageVersion {
+	} else if manifestVersion != storageVersion4 {
 		return false, c, fmt.Errorf("manifest manifestVersion is incompatible")
 	}
 
@@ -432,6 +435,7 @@ func maybeParseVersion4Manifest(r io.Reader) (ok bool, c manifestContents, err e
 	return true, c, err
 }
 
+// this duplicates a lot of fileManifest.Update() because it needs to parse the upstream as version4
 func updateVer4To5(ctx context.Context, nomsDir string, lastLock addr, newContents manifestContents) (mc manifestContents, err error) {
 	var tempManifestPath string
 

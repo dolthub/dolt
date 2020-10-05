@@ -52,7 +52,7 @@ var ErrFetchFailure = errors.New("fetch failed")
 const (
 	// StorageVersion is the version of the on-disk Noms Chunks Store data format.
 	// todo: how to handle discrepancies between file manifest and dynamo manifest
-	StorageVersion = "4"
+	StorageVersion = "5"
 
 	defaultMemTableSize uint64 = (1 << 20) * 128 // 128MB
 	defaultMaxTables           = 256
