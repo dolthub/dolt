@@ -77,7 +77,7 @@ func CreateVarBinaryTypeFromParams(params map[string]string) (TypeInfo, error) {
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *varBinaryType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.String); ok {
-		return ti.sqlBinaryType.Convert(string(val))
+		return string(val), nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil

@@ -61,9 +61,8 @@ func CreateDatetimeTypeFromParams(params map[string]string) (TypeInfo, error) {
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *datetimeType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
-	//TODO: handle the zero value as a special case that is valid for all ranges
 	if val, ok := v.(types.Timestamp); ok {
-		return ti.sqlDatetimeType.Convert(time.Time(val))
+		return time.Time(val), nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil

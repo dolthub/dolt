@@ -59,7 +59,12 @@ func CreateFloatTypeFromParams(params map[string]string) (TypeInfo, error) {
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *floatType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Float); ok {
-		return ti.sqlFloatType.Convert(float64(val))
+		switch ti.sqlFloatType {
+		case sql.Float32:
+			return float32(val), nil
+		case sql.Float64:
+			return float64(val), nil
+		}
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
