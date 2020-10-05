@@ -19,7 +19,7 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/codahale/blake2 v0.0.0-20150924215134-8d10d0420cbf
 	github.com/denisbrodbeck/machineid v1.0.1
-	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20200730200742-c031ec8cba06
+	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078
 	github.com/dolthub/go-mysql-server v0.6.1-0.20201001225250-48db640bd4d5
 	github.com/dolthub/vitess v0.0.0-20200925174744-823c7e177c3f
 	github.com/dustin/go-humanize v1.0.0
