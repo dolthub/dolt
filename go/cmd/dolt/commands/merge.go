@@ -36,6 +36,7 @@ import (
 
 const (
 	abortParam = "abort"
+	squashParam = "squash"
 )
 
 var mergeDocs = cli.CommandDocumentationContent{
@@ -48,7 +49,7 @@ The second syntax ({{.LessThan}}dolt merge --abort{{.GreaterThan}}) can only be 
 `,
 
 	Synopsis: []string{
-		"{{.LessThan}}branch{{.GreaterThan}}",
+		"[--squash] {{.LessThan}}branch{{.GreaterThan}}",
 		"--abort",
 	},
 }
@@ -79,6 +80,7 @@ func (cmd MergeCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) 
 func (cmd MergeCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(abortParam, "", abortDetails)
+	ap.SupportsFlag(squashParam, "", "Merges changes to the working set without updating the commit history")
 	return ap
 }
 
@@ -129,7 +131,8 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			}
 
 			if verr == nil {
-				verr = mergeCommitSpec(ctx, dEnv, commitSpecStr)
+				squash := apr.Contains(squashParam)
+				verr = mergeCommitSpec(ctx, squash, dEnv, commitSpecStr)
 			}
 		}
 	}
@@ -151,7 +154,7 @@ func abortMerge(ctx context.Context, doltEnv *env.DoltEnv) errhand.VerboseError 
 	return errhand.BuildDError("fatal: failed to revert changes").AddCause(err).Build()
 }
 
-func mergeCommitSpec(ctx context.Context, dEnv *env.DoltEnv, commitSpecStr string) errhand.VerboseError {
+func mergeCommitSpec(ctx context.Context, squash bool, dEnv *env.DoltEnv, commitSpecStr string) errhand.VerboseError {
 	cm1, verr := ResolveCommitWithVErr(dEnv, "HEAD")
 
 	if verr != nil {
@@ -183,6 +186,10 @@ func mergeCommitSpec(ctx context.Context, dEnv *env.DoltEnv, commitSpecStr strin
 
 	cli.Println("Updating", h1.String()+".."+h2.String())
 
+	if squash {
+		cli.Println("Squash commit -- not updating HEAD")
+	}
+
 	tblNames, workingDiffs, err := dEnv.MergeWouldStompChanges(ctx, cm2)
 
 	if err != nil {
@@ -199,12 +206,12 @@ func mergeCommitSpec(ctx context.Context, dEnv *env.DoltEnv, commitSpecStr strin
 	}
 
 	if ok, err := cm1.CanFastForwardTo(ctx, cm2); ok {
-		return executeFFMerge(ctx, dEnv, cm2, workingDiffs)
+		return executeFFMerge(ctx, squash, dEnv, cm2, workingDiffs)
 	} else if err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
 		cli.Println("Already up to date.")
 		return nil
 	} else {
-		return executeMerge(ctx, dEnv, cm1, cm2, workingDiffs)
+		return executeMerge(ctx, squash, dEnv, cm1, cm2, workingDiffs)
 	}
 }
 
@@ -221,7 +228,7 @@ func applyChanges(ctx context.Context, root *doltdb.RootValue, workingDiffs map[
 	return root, nil
 }
 
-func executeFFMerge(ctx context.Context, dEnv *env.DoltEnv, cm2 *doltdb.Commit, workingDiffs map[string]hash.Hash) errhand.VerboseError {
+func executeFFMerge(ctx context.Context, squash bool, dEnv *env.DoltEnv, cm2 *doltdb.Commit, workingDiffs map[string]hash.Hash) errhand.VerboseError {
 	cli.Println("Fast-forward")
 
 	rv, err := cm2.GetRootValue()
@@ -255,10 +262,12 @@ func executeFFMerge(ctx context.Context, dEnv *env.DoltEnv, cm2 *doltdb.Commit, 
 		return errhand.BuildDError("error: unable to determine unstaged docs").AddCause(err).Build()
 	}
 
-	err = dEnv.DoltDB.FastForward(ctx, dEnv.RepoState.CWBHeadRef(), cm2)
+	if !squash {
+		err = dEnv.DoltDB.FastForward(ctx, dEnv.RepoState.CWBHeadRef(), cm2)
 
-	if err != nil {
-		return errhand.BuildDError("Failed to write database").AddCause(err).Build()
+		if err != nil {
+			return errhand.BuildDError("Failed to write database").AddCause(err).Build()
+		}
 	}
 
 	dEnv.RepoState.Working = workingHash.String()
@@ -284,7 +293,7 @@ and take the hash for your current branch and use it for the value for "staged" 
 	return nil
 }
 
-func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, workingDiffs map[string]hash.Hash) errhand.VerboseError {
+func executeMerge(ctx context.Context, squash bool, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, workingDiffs map[string]hash.Hash) errhand.VerboseError {
 	mergedRoot, tblToStats, err := merge.MergeCommits(ctx, cm1, cm2)
 
 	if err != nil {
@@ -313,10 +322,12 @@ func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commi
 		return errhand.BuildDError("error: failed to hash commit").AddCause(err).Build()
 	}
 
-	err = dEnv.RepoState.StartMerge(h2.String(), dEnv.FS)
+	if !squash {
+		err = dEnv.RepoState.StartMerge(h2.String(), dEnv.FS)
 
-	if err != nil {
-		return errhand.BuildDError("Unable to update the repo state").AddCause(err).Build()
+		if err != nil {
+			return errhand.BuildDError("Unable to update the repo state").AddCause(err).Build()
+		}
 	}
 
 	unstagedDocs, err := actions.GetUnstagedDocs(ctx, dEnv)
