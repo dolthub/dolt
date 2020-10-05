@@ -35,7 +35,7 @@ import (
 )
 
 const (
-	abortParam = "abort"
+	abortParam  = "abort"
 	squashParam = "squash"
 )
 
