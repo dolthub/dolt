@@ -45,7 +45,7 @@ func TestFixedBufferTableSink(t *testing.T) {
 
 func TestBufferedFileByteSink(t *testing.T) {
 	createSink := func() ByteSink {
-		sink, err := NewBufferedFileByteSink(4*1024, 16)
+		sink, err := NewBufferedFileByteSink("", 4*1024, 16)
 		require.NoError(t, err)
 
 		return sink

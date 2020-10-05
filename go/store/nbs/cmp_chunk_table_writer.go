@@ -49,8 +49,8 @@ type CmpChunkTableWriter struct {
 }
 
 // NewCmpChunkTableWriter creates a new CmpChunkTableWriter instance with a default ByteSink
-func NewCmpChunkTableWriter() (*CmpChunkTableWriter, error) {
-	s, err := NewBufferedFileByteSink(defaultTableSinkBlockSize, defaultChBufferSize)
+func NewCmpChunkTableWriter(tempDir string) (*CmpChunkTableWriter, error) {
+	s, err := NewBufferedFileByteSink(tempDir, defaultTableSinkBlockSize, defaultChBufferSize)
 
 	if err != nil {
 		return nil, err
