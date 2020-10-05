@@ -87,7 +87,7 @@ type ManifestInfo interface {
 }
 
 type manifestContents struct {
-	vers  string  // NBF version
+	vers  string // NBF version
 	lock  addr
 	root  hash.Hash
 	gcGen addr

@@ -118,7 +118,7 @@ func TestConjoin(t *testing.T) {
 	setup := func(lock addr, root hash.Hash, sizes []uint32) (fm *fakeManifest, p tablePersister, upstream manifestContents) {
 		p = newFakeTablePersister()
 		fm = &fakeManifest{}
-		fm.set(constants.NomsVersion, lock, root, makeTestTableSpecs(sizes, p), )
+		fm.set(constants.NomsVersion, lock, root, makeTestTableSpecs(sizes, p))
 
 		var err error
 		_, upstream, err = fm.ParseIfExists(context.Background(), nil, nil)
@@ -176,7 +176,7 @@ func TestConjoin(t *testing.T) {
 				newTable := makeExtra(p)
 				u := updatePreemptManifest{fm, func() {
 					specs := append([]tableSpec{}, upstream.specs...)
-					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, append(specs, newTable), )
+					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, append(specs, newTable))
 				}}
 				_, err := conjoin(context.Background(), upstream, u, p, stats)
 				assert.NoError(t, err)
@@ -196,7 +196,7 @@ func TestConjoin(t *testing.T) {
 				fm, p, upstream := setup(startLock, startRoot, c.precompact)
 
 				u := updatePreemptManifest{fm, func() {
-					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, upstream.specs[1:], )
+					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, upstream.specs[1:])
 				}}
 				_, err := conjoin(context.Background(), upstream, u, p, stats)
 				assert.NoError(t, err)
