@@ -177,3 +177,19 @@ teardown() {
     [[ "$output" =~ "+-------+" ]] || false
     [[ "$output" =~ "+-------+" ]] || false
 }
+
+@test "dolt_schemas" {
+    # this will fail for older dolt versions but BATS will swallow the error
+    run dolt migrate
+
+    run dolt sql -q "select * from dolt_schemas"
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "| type | name  | fragment             |" ]] || false
+    [[ "${lines[2]}" =~ "+------+-------+----------------------+" ]] || false
+    [[ "${lines[3]}" =~ "| view | view1 | SELECT 2+2 FROM dual |" ]] || false
+    run dolt sql -q 'select * from view1'
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "| 2 + 2 |" ]] || false
+    [[ "${lines[2]}" =~ "+-------+" ]] || false
+    [[ "${lines[3]}" =~ "| 4     |" ]] || false
+}
