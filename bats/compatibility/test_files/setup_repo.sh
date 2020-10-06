@@ -21,6 +21,7 @@ CREATE TABLE abc (
 INSERT INTO abc VALUES (0, 'asdf', 1.1, 0, 0);
 INSERT INTO abc VALUES (1, 'asdf', 1.1, 0, 0);
 INSERT INTO abc VALUES (2, 'asdf', 1.1, 0, 0);
+CREATE VIEW view1 AS SELECT 2+2 FROM dual;
 SQL
 dolt add .
 dolt commit -m "initialized data"
@@ -67,3 +68,7 @@ dolt schema show
 echo
 echo "dolt sql -q 'select * from abc;'"
 dolt sql -q 'select * from abc;'
+
+echo
+echo "dolt_schemas"
+dolt sql -q "select * from dolt_schemas"
