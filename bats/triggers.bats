@@ -163,7 +163,13 @@ SQL
     [[ "$output" =~ "type,name,fragment" ]] || false
     [[ "$output" =~ "view,view1,SELECT 2+2 FROM dual" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
-    dolt sql -q "CREATE VIEW view2 AS SELECT 2+2 FROM dual;"
+    run dolt sql -q "SELECT * FROM view1" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "2 + 2" ]] || false
+    [[ "$output" =~ "4" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+    # creating a new view/trigger will recreate the dolt_schemas table
+    dolt sql -q "CREATE VIEW view2 AS SELECT 3+3 FROM dual;"
     run dolt diff
     [ "$status" -eq "0" ]
     [[ "$output" =~ "deleted table" ]] || false
@@ -172,6 +178,16 @@ SQL
     [ "$status" -eq "0" ]
     [[ "$output" =~ "id,type,name,fragment" ]] || false
     [[ "$output" =~ "1,view,view1,SELECT 2+2 FROM dual" ]] || false
-    [[ "$output" =~ "2,view,view2,SELECT 2+2 FROM dual" ]] || false
+    [[ "$output" =~ "2,view,view2,SELECT 3+3 FROM dual" ]] || false
     [[ "${#lines[@]}" = "3" ]] || false
+    run dolt sql -q "SELECT * FROM view1" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "2 + 2" ]] || false
+    [[ "$output" =~ "4" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+    run dolt sql -q "SELECT * FROM view2" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "3 + 3" ]] || false
+    [[ "$output" =~ "6" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
 }

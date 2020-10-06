@@ -891,21 +891,40 @@ func RegisterSchemaFragments(ctx *sql.Context, db Database, root *doltdb.RootVal
 	var parseErrors []error
 
 	r, err := iter.Next()
-	for err == nil {
-		if r[1] == "view" {
-			name := r[2].(string)
-			definition := r[3].(string)
-			cv, err := parse.Parse(ctx, fmt.Sprintf("create view %s as %s", sqlfmt.QuoteIdentifier(name), definition))
-			if err != nil {
-				parseErrors = append(parseErrors, err)
-			} else {
-				err = ctx.Register(db.Name(), cv.(*plan.CreateView).Definition.AsView())
+	if stbl.Schema().Contains(doltdb.SchemasTablesIdCol, doltdb.SchemasTableName) { // new dolt_schemas added id column
+		for err == nil {
+			if r[1] == "view" {
+				name := r[2].(string)
+				definition := r[3].(string)
+				cv, err := parse.Parse(ctx, fmt.Sprintf("create view %s as %s", sqlfmt.QuoteIdentifier(name), definition))
 				if err != nil {
-					return err
+					parseErrors = append(parseErrors, err)
+				} else {
+					err = ctx.Register(db.Name(), cv.(*plan.CreateView).Definition.AsView())
+					if err != nil {
+						return err
+					}
 				}
 			}
+			r, err = iter.Next()
 		}
-		r, err = iter.Next()
+	} else {
+		for err == nil {
+			if r[0] == "view" {
+				name := r[1].(string)
+				definition := r[2].(string)
+				cv, err := parse.Parse(ctx, fmt.Sprintf("create view %s as %s", sqlfmt.QuoteIdentifier(name), definition))
+				if err != nil {
+					parseErrors = append(parseErrors, err)
+				} else {
+					err = ctx.Register(db.Name(), cv.(*plan.CreateView).Definition.AsView())
+					if err != nil {
+						return err
+					}
+				}
+			}
+			r, err = iter.Next()
+		}
 	}
 	if err != io.EOF {
 		return err
