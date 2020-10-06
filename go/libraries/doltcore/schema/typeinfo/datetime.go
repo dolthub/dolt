@@ -62,7 +62,7 @@ func CreateDatetimeTypeFromParams(params map[string]string) (TypeInfo, error) {
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *datetimeType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Timestamp); ok {
-		return time.Time(val), nil
+		return time.Time(val).UTC(), nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -143,8 +143,17 @@ func (ti *datetimeType) GetTypeParams() map[string]string {
 
 // IsValid implements TypeInfo interface.
 func (ti *datetimeType) IsValid(v types.Value) bool {
-	_, err := ti.ConvertNomsValueToValue(v)
-	return err == nil
+	if val, ok := v.(types.Timestamp); ok {
+		_, err := ti.sqlDatetimeType.Convert(time.Time(val))
+		if err != nil {
+			return false
+		}
+		return true
+	}
+	if _, ok := v.(types.Null); ok || v == nil {
+		return true
+	}
+	return false
 }
 
 // NomsKind implements TypeInfo interface.

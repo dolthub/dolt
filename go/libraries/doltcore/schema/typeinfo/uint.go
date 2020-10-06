@@ -176,8 +176,17 @@ func (ti *uintType) GetTypeParams() map[string]string {
 
 // IsValid implements TypeInfo interface.
 func (ti *uintType) IsValid(v types.Value) bool {
-	_, err := ti.ConvertNomsValueToValue(v)
-	return err == nil
+	if val, ok := v.(types.Uint); ok {
+		_, err := ti.sqlUintType.Convert(uint64(val))
+		if err != nil {
+			return false
+		}
+		return true
+	}
+	if _, ok := v.(types.Null); ok || v == nil {
+		return true
+	}
+	return false
 }
 
 // NomsKind implements TypeInfo interface.

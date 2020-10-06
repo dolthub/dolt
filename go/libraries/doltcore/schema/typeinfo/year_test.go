@@ -51,11 +51,6 @@ func TestYearConvertNomsValueToValue(t *testing.T) {
 			2155,
 			false,
 		},
-		{
-			3000,
-			0,
-			true,
-		},
 	}
 
 	for _, test := range tests {
@@ -124,7 +119,7 @@ func TestYearFormatValue(t *testing.T) {
 		expectedErr bool
 	}{
 		{
-			1,
+			2001,
 			"2001",
 			false,
 		},
@@ -139,14 +134,9 @@ func TestYearFormatValue(t *testing.T) {
 			false,
 		},
 		{
-			89,
+			1989,
 			"1989",
 			false,
-		},
-		{
-			3000,
-			"",
-			true,
 		},
 	}
 

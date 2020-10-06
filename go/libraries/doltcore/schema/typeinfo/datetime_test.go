@@ -34,7 +34,7 @@ func TestDatetimeConvertNomsValueToValue(t *testing.T) {
 	}{
 		{
 			DateType,
-			types.Timestamp(time.Date(1880, 1, 2, 4, 6, 3, 472382485, time.UTC)),
+			types.Timestamp(time.Date(1880, 1, 2, 0, 0, 0, 0, time.UTC)),
 			time.Date(1880, 1, 2, 0, 0, 0, 0, time.UTC),
 			false,
 		},
@@ -55,18 +55,6 @@ func TestDatetimeConvertNomsValueToValue(t *testing.T) {
 			types.Timestamp(time.Date(9999, 12, 31, 23, 59, 59, 999999000, time.UTC)),
 			time.Date(9999, 12, 31, 23, 59, 59, 999999000, time.UTC),
 			false,
-		},
-		{
-			TimestampType,
-			types.Timestamp(time.Date(2039, 1, 2, 4, 6, 3, 472382485, time.UTC)),
-			time.Time{},
-			true,
-		},
-		{
-			DatetimeType,
-			types.Timestamp(time.Date(5, 1, 2, 4, 6, 3, 472382485, time.UTC)),
-			time.Time{},
-			true,
 		},
 	}
 
@@ -171,18 +159,6 @@ func TestDatetimeFormatValue(t *testing.T) {
 			types.Timestamp(time.Date(9999, 12, 31, 23, 59, 59, 999999000, time.UTC)),
 			"9999-12-31 23:59:59.999999",
 			false,
-		},
-		{
-			TimestampType,
-			types.Timestamp(time.Date(2039, 1, 2, 4, 6, 3, 472382485, time.UTC)),
-			"",
-			true,
-		},
-		{
-			DatetimeType,
-			types.Timestamp(time.Date(5, 1, 2, 4, 6, 3, 472382485, time.UTC)),
-			"",
-			true,
 		},
 	}
 
