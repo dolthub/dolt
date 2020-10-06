@@ -156,8 +156,17 @@ func (ti *varBinaryType) GetTypeParams() map[string]string {
 
 // IsValid implements TypeInfo interface.
 func (ti *varBinaryType) IsValid(v types.Value) bool {
-	_, err := ti.ConvertNomsValueToValue(v)
-	return err == nil
+	if val, ok := v.(types.String); ok {
+		_, err := ti.sqlBinaryType.Convert(string(val))
+		if err != nil {
+			return false
+		}
+		return true
+	}
+	if _, ok := v.(types.Null); ok || v == nil {
+		return true
+	}
+	return false
 }
 
 // NomsKind implements TypeInfo interface.
