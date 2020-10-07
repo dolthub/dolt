@@ -68,7 +68,9 @@ var Identifiers = map[Identifier]struct{}{
 // TypeInfo is an interface used for encoding type information.
 type TypeInfo interface {
 	// ConvertNomsValueToValue converts a Noms value to a go value. The expected NomsKind of the given
-	// parameter is equivalent to the NomsKind returned by this type info.
+	// parameter is equivalent to the NomsKind returned by this type info. This is intended for retrieval
+	// from storage, thus we do no validation as we assume the stored value is already validated against
+	// the given type.
 	ConvertNomsValueToValue(v types.Value) (interface{}, error)
 
 	// ConvertValueToNomsValue converts a go value or Noms value to a Noms value. The type of the Noms

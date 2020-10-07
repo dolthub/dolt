@@ -57,18 +57,6 @@ func TestBitConvertNomsValueToValue(t *testing.T) {
 			math.MaxUint64,
 			false,
 		},
-		{
-			generateBitType(t, 1),
-			7,
-			0,
-			true,
-		},
-		{
-			generateBitType(t, 10),
-			374562394,
-			0,
-			true,
-		},
 	}
 
 	for _, test := range tests {
@@ -160,18 +148,6 @@ func TestBitFormatValue(t *testing.T) {
 			math.MaxUint64,
 			strconv.FormatUint(math.MaxUint64, 10),
 			false,
-		},
-		{
-			generateBitType(t, 1),
-			7,
-			"",
-			true,
-		},
-		{
-			generateBitType(t, 10),
-			374562394,
-			"",
-			true,
 		},
 	}
 

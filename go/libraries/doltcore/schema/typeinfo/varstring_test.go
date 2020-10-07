@@ -57,18 +57,6 @@ func TestVarStringConvertNomsValueToValue(t *testing.T) {
 			"  This is a sentence.  ",
 			false,
 		},
-		{
-			generateVarStringType(t, 2, false),
-			"yay",
-			"",
-			true,
-		},
-		{
-			generateVarStringType(t, 2, true),
-			"yey",
-			"",
-			true,
-		},
 	}
 
 	for _, test := range tests {
@@ -178,18 +166,6 @@ func TestVarStringFormatValue(t *testing.T) {
 			"  This is a sentence.  ",
 			"  This is a sentence.  ",
 			false,
-		},
-		{
-			generateVarStringType(t, 2, false),
-			"yay",
-			"",
-			true,
-		},
-		{
-			generateVarStringType(t, 2, true),
-			"yey",
-			"",
-			true,
 		},
 	}
 

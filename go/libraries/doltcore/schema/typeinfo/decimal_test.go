@@ -71,18 +71,6 @@ func TestDecimalConvertNomsValueToValue(t *testing.T) {
 			"4723245.01",
 			false,
 		},
-		{
-			generateDecimalType(t, 9, 2),
-			types.Decimal(decimal.RequireFromString("14723245.01")),
-			"",
-			true,
-		},
-		{
-			generateDecimalType(t, 5, 4),
-			types.Decimal(decimal.RequireFromString("55.7159")),
-			"",
-			true,
-		},
 	}
 
 	for _, test := range tests {
@@ -198,18 +186,6 @@ func TestDecimalFormatValue(t *testing.T) {
 			types.Decimal(decimal.RequireFromString("4723245.01")),
 			"4723245.01",
 			false,
-		},
-		{
-			generateDecimalType(t, 9, 2),
-			types.Decimal(decimal.RequireFromString("14723245.01")),
-			"",
-			true,
-		},
-		{
-			generateDecimalType(t, 5, 4),
-			types.Decimal(decimal.RequireFromString("55.7159")),
-			"",
-			true,
 		},
 	}
 

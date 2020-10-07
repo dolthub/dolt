@@ -123,8 +123,6 @@ func testTypeInfoConvertRoundTrip(t *testing.T, tiArrays [][]TypeInfo, vaArrays 
 								} else if ti.GetTypeIdentifier() != DecimalTypeIdentifier { // Any Decimal's on-disk representation varies by precision/scale
 									require.True(t, val.Equals(outVal), "\"%v\"\n\"%v\"", val, outVal)
 								}
-							} else {
-								assert.Error(t, err)
 							}
 						})
 					}
@@ -223,8 +221,6 @@ func testTypeInfoFormatParseRoundTrip(t *testing.T, tiArrays [][]TypeInfo, vaArr
 								} else if ti.GetTypeIdentifier() != DecimalTypeIdentifier { // Any Decimal's on-disk representation varies by precision/scale
 									require.True(t, val.Equals(outVal), "\"%v\"\n\"%v\"", val, outVal)
 								}
-							} else {
-								assert.Error(t, err)
 							}
 						})
 					}
