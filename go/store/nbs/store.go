@@ -1158,14 +1158,20 @@ func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
 }
 
 func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan hash.Hash, errChan chan<- error) (err error) {
+	//todo: error chan closing
+
 	ops := nbs.SupportedOperations()
 	if !ops.CanGC || !ops.CanPrune {
+		close(errChan)
 		return chunks.ErrUnsupportedOperation
 	}
 
 	if nbs.upstream.root != last {
+		close(errChan)
 		return errLastRootMismatch
 	}
+
+	// todo: acquire manifest lock
 
 	nbs.mu.RLock()
 	drainAndClose := func() {
@@ -1186,21 +1192,30 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Has
 	go func() {
 		defer drainAndClose()
 
-		err = nbs.copyMarkedChunks(ctx, keepChunks)
+		specs, err := nbs.copyMarkedChunks(ctx, keepChunks)
 
 		if err != nil {
 			errChan <- err
 			return
 		}
 
-		err = nbs.updateManifest(ctx, last, last)
+		err = nbs.swapTables(ctx, specs)
 
 		if err != nil {
 			errChan <- err
 			return
 		}
 
-		err = nbs.PruneTableFiles(ctx)
+		ok, contents, err := nbs.mm.Fetch(ctx, &Stats{})
+		if err != nil {
+			errChan <- err
+			return
+		}
+		if !ok {
+			panic("no manifest")
+		}
+
+		err = nbs.p.PruneTableFiles(ctx, contents)
 
 		if err != nil {
 			errChan <- err
@@ -1219,46 +1234,42 @@ func (nbs *NomsBlockStore) gcUnlock(ctx context.Context) error {
 	return nil
 }
 
-func (nbs *NomsBlockStore) copyMarkedChunks(ctx context.Context, keepChunks <-chan hash.Hash) error {
+func (nbs *NomsBlockStore) copyMarkedChunks(ctx context.Context, keepChunks <-chan hash.Hash) ([]tableSpec, error) {
 	s, err := nbs.copyTableSize()
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	gcc := newGarbageCollectionCopier(s)
+	gcc, err := newGarbageCollectionCopier(s)
 
-	for h := range keepChunks {
-		// todo: batch calls to nbs.GetMany()
-		c, err := nbs.Get(ctx, h)
+	if err != nil {
+		return nil, err
+	}
 
-		if err != nil {
-			return err
+	var h hash.Hash
+	ok := true
+	for ok {
+		select {
+		case h, ok = <-keepChunks:
+			if !ok {
+				break
+			}
+
+			// todo: batch calls to nbs.GetMany()
+			c, err := nbs.Get(ctx, h)
+
+			if err != nil {
+				return nil, err
+			}
+
+			gcc.addChunk(ctx, addr(h), c.Data())
 		}
-
-		gcc.addChunk(ctx, addr(h), c.Data())
 	}
 
 	nomsDir := nbs.p.(*fsTablePersister).dir
-	err = gcc.copyTablesToDir(nomsDir)
 
-	if err != nil {
-		return err
-	}
-
-	old := nbs.tables
-
-	nbs.tables = gcc.tables
-	nbs.p = gcc.ftp
-	nbs.mt = gcc.mt
-
-	err = old.Close()
-
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return gcc.copyTablesToDir(ctx, nomsDir)
 }
 
 // todo: what's the optimal table size to copy to?
@@ -1269,13 +1280,51 @@ func (nbs *NomsBlockStore) copyTableSize() (uint64, error) {
 		return 0, err
 	}
 
-	avgTableSize := total / uint64(nbs.tables.Upstream()+nbs.tables.Novel())
+	avgTableSize := total / uint64(nbs.tables.Upstream()+nbs.tables.Novel()+1)
 
 	// max(avgTableSize, defaultMemTableSize)
 	if avgTableSize > nbs.mtSize {
 		return avgTableSize, nil
 	}
 	return nbs.mtSize, nil
+}
+
+func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) error {
+	newContents := manifestContents{
+		vers:  nbs.upstream.vers,
+		root:  nbs.upstream.root,
+		lock:  generateLockHash(nbs.upstream.root, specs),
+		specs: specs,
+	}
+
+	// todo: lock outside of Update
+	upstream, err := nbs.mm.Update(ctx, nbs.upstream.lock, newContents, nbs.stats, nil)
+	if err != nil {
+		return err
+	}
+	if newContents.lock != upstream.lock {
+		panic("manifest was changed outside of the LOCK")
+	}
+
+	// clear memTable
+	nbs.mt = newMemTable(nbs.mtSize)
+
+	// clear nbs.tables.novel
+	nbs.tables, err = nbs.tables.Flatten()
+
+	if err != nil {
+		return nil
+	}
+
+	// replace nbs.tables.upstream with gc compacted tables
+	nbs.upstream = upstream
+	nbs.tables, err = nbs.tables.Rebase(ctx, specs, nbs.stats)
+
+	if err != nil {
+		return nil
+	}
+
+	return nil
 }
 
 // SetRootChunk changes the root chunk hash from the previous value to the new root.
