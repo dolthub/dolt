@@ -21,7 +21,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/abiosoft/readline"
 	sqle "github.com/dolthub/go-mysql-server"
@@ -58,6 +60,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
+	pipeline2 "github.com/dolthub/dolt/go/libraries/utils/pipeline"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -1188,6 +1191,10 @@ func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, 
 		return printOKResult(ctx, rowIter)
 	}
 
+	if se.resultFormat == formatCsv {
+		return se.prettyPrintCSVResults(ctx, sqlSch, rowIter)
+	}
+
 	nbf := types.Format_Default
 
 	doltSch, err := sqleSchema.ToDoltResultSchema(sqlSch)
@@ -1459,4 +1466,142 @@ func (se *sqlEngine) ddl(ctx *sql.Context, ddl *sqlparser.DDL, query string) (sq
 	default:
 		return nil, nil, fmt.Errorf("Unhandled DDL action %v in query %v", ddl.Action, query)
 	}
+}
+
+const (
+	readBatchSize  = 10
+	writeBatchSize = 1
+)
+
+func (se *sqlEngine) prettyPrintCSVResults(ctx context.Context, sch sql.Schema, iter sql.RowIter) error {
+	p := pipeline2.NewPipeline([]*pipeline2.Stage{
+		pipeline2.NewStage("read", nil, getReadStageFunc(iter), 0, 0, 0),
+		pipeline2.NewStage("process", nil, processStageFunc, 2, 1000, readBatchSize),
+		pipeline2.NewStage("write", nil, writeStageFunc, 0, 100, writeBatchSize),
+	})
+
+	writeIn, _ := p.GetInputChannel("write")
+	sb := strings.Builder{}
+	for i, col := range sch {
+		if i != 0 {
+			sb.WriteRune(',')
+		}
+
+		sb.WriteString(col.Name)
+	}
+	sb.WriteRune('\n')
+
+	str := sb.String()
+	writeIn <- []pipeline2.ItemWithProps{pipeline2.NewItemWithNoProps(&str)}
+
+	p.Start(ctx)
+	p.Wait()
+	return nil
+}
+
+func getReadStageFunc(iter sql.RowIter) pipeline2.StageFunc {
+	return func(ctx context.Context, _ []pipeline2.ItemWithProps) ([]pipeline2.ItemWithProps, error) {
+		items := make([]pipeline2.ItemWithProps, 0, readBatchSize)
+		for i := 0; i < 10; i++ {
+			r, err := iter.Next()
+
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				return nil, err
+			}
+
+			items = append(items, pipeline2.NewItemWithNoProps(r))
+		}
+
+		if len(items) == 0 {
+			return nil, io.EOF
+		}
+
+		return items, nil
+	}
+}
+
+func processStageFunc(ctx context.Context, items []pipeline2.ItemWithProps) ([]pipeline2.ItemWithProps, error) {
+	if items == nil {
+		return nil, nil
+	}
+
+	sb := &strings.Builder{}
+	sb.Grow(2048)
+	for _, item := range items {
+		r := item.GetItem().(sql.Row)
+
+		for colNum, col := range r {
+			var str string
+			if col != nil {
+				switch typedCol := col.(type) {
+				case int:
+					str = strconv.FormatInt(int64(typedCol), 10)
+				case int32:
+					str = strconv.FormatInt(int64(typedCol), 10)
+				case int64:
+					str = strconv.FormatInt(int64(typedCol), 10)
+				case int16:
+					str = strconv.FormatInt(int64(typedCol), 10)
+				case int8:
+					str = strconv.FormatInt(int64(typedCol), 10)
+				case uint:
+					str = strconv.FormatUint(uint64(typedCol), 10)
+				case uint32:
+					str = strconv.FormatUint(uint64(typedCol), 10)
+				case uint64:
+					str = strconv.FormatUint(uint64(typedCol), 10)
+				case uint16:
+					str = strconv.FormatUint(uint64(typedCol), 10)
+				case uint8:
+					str = strconv.FormatUint(uint64(typedCol), 10)
+				case float64:
+					str = strconv.FormatFloat(float64(typedCol), 'g', -1, 64)
+				case float32:
+					str = strconv.FormatFloat(float64(typedCol), 'g', -1, 32)
+				case string:
+					if len(typedCol) == 0 {
+						str = "\"\""
+					} else if strings.IndexRune(typedCol, ',') != -1 {
+						str = "\"" + typedCol + "\""
+					} else {
+						str = typedCol
+					}
+				case bool:
+					if typedCol {
+						str = "true"
+					} else {
+						str = "false"
+					}
+				case time.Time:
+					str = typedCol.Format("2006-01-02 15:04:05 -0700 MST")
+				}
+			}
+
+			sb.WriteString(str)
+
+			if colNum != len(r)-1 {
+				sb.WriteRune(',')
+			}
+		}
+
+		sb.WriteRune('\n')
+	}
+
+	str := sb.String()
+	return []pipeline2.ItemWithProps{pipeline2.NewItemWithNoProps(&str)}, nil
+}
+
+func writeStageFunc(ctx context.Context, items []pipeline2.ItemWithProps) ([]pipeline2.ItemWithProps, error) {
+	if items == nil {
+		return nil, nil
+	}
+
+	for _, item := range items {
+		str := *item.GetItem().(*string)
+		cli.Printf(str)
+	}
+
+	return nil, nil
 }
