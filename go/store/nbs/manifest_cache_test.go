@@ -91,7 +91,7 @@ func TestSizeCache(t *testing.T) {
 		lru++
 
 		// Putting a bigger value will dump multiple existing entries
-		err = c.Put("big", manifestContents{nomsVers: "big version"}, time.Now())
+		err = c.Put("big", manifestContents{vers: "big version"}, time.Now())
 		assert.NoError(err)
 		_, _, ok = c.Get(keys[lru])
 		assert.False(ok)
