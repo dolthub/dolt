@@ -532,5 +532,5 @@ func (ftp fakeTablePersister) Open(ctx context.Context, name addr, chunkCount ui
 }
 
 func (ftp fakeTablePersister) PruneTableFiles(_ context.Context, _ manifestContents) error {
-	return ErrUnsupportedOperation
+	return chunks.ErrUnsupportedOperation
 }

@@ -76,6 +76,16 @@ type ValueStore struct {
 	decodedChunks        *sizecache.SizeCache
 	nbf                  *NomsBinFormat
 
+	// Garbage collection waits on all pending writes
+	// to complete before starting in order to minimize
+	// duplicate write operations.
+	// - Calls to ValueStore write operations acquire
+	//   a read lock via gMu.RLock().
+	// - Calls to ValueStore garbage collection acquire
+	//   a write lock via gcMu.Lock(), which waits on
+	//   all current read locks to release.
+	gcMu sync.RWMutex
+
 	versOnce sync.Once
 }
 
@@ -93,6 +103,8 @@ func PanicIfDangling(ctx context.Context, unresolved hash.HashSet, cs chunks.Chu
 const (
 	defaultDecodedChunksSize = 1 << 25 // 32MB
 	defaultPendingPutMax     = 1 << 28 // 256MB
+
+	gcBuffSize = 1024
 )
 
 // newTestValueStore creates a simple struct that satisfies ValueReadWriter
@@ -338,6 +350,9 @@ func (lvs *ValueStore) WriteValue(ctx context.Context, v Value) (Ref, error) {
 // 2. The total data occupied by buffered chunks does not exceed
 //    lvs.bufferedChunksMax
 func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk, height uint64) {
+	lvs.gcMu.RLock()
+	defer lvs.gcMu.RUnlock()
+
 	lvs.bufferMu.Lock()
 	defer lvs.bufferMu.Unlock()
 
@@ -461,6 +476,9 @@ func (lvs *ValueStore) Rebase(ctx context.Context) error {
 // rebased. Until Commit() succeeds, no work of the ValueStore will be visible
 // to other readers of the underlying ChunkStore.
 func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
+	lvs.gcMu.RLock()
+	defer lvs.gcMu.RUnlock()
+
 	return func() (bool, error) {
 		lvs.bufferMu.Lock()
 		defer lvs.bufferMu.Unlock()
@@ -548,6 +566,86 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 
 		return true, nil
 	}()
+}
+
+// GC traverses the ValueStore from the root and removes unreferenced chunks from the ChunkStore
+func (lvs *ValueStore) GC(ctx context.Context) error {
+	collector, ok := lvs.cs.(chunks.ChunkStoreGarbageCollector)
+
+	if !ok {
+		return chunks.ErrUnsupportedOperation
+	}
+
+	lvs.versOnce.Do(lvs.expectVersion)
+
+	// wait on in-progress writes to finish
+	lvs.gcMu.Lock()
+	defer lvs.gcMu.Unlock()
+
+	root, err := lvs.Root(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	rootVal, err := lvs.ReadValue(ctx, root)
+	if err != nil {
+		return err
+	}
+	if rootVal == nil {
+		return nil // empty root
+	}
+
+	// closed by the collector
+	errChan := make(chan error)
+
+	err = func() error {
+		// todo: stop chan in case of io errors in ref walk
+		keepChunks := make(chan hash.Hash, gcBuffSize)
+		defer close(keepChunks) // signal that all chunks have been marked
+
+		err = collector.MarkAndSweepChunks(ctx, root, keepChunks, errChan)
+
+		if err != nil {
+			return err
+		}
+
+		// send the root chunk
+		keepChunks <- root
+
+		// todo: use a buffered refWalker to dedupe
+		err = rootVal.WalkRefs(lvs.nbf, func(reachable Ref) (err error) {
+			select {
+			case err = <-errChan:
+				return err
+			default:
+				keepChunks <- reachable.TargetHash()
+			}
+			return nil
+		})
+
+		return err
+	}()
+
+	if err != nil {
+		return err
+	}
+
+	// wait for sweep phase to complete
+	select {
+	case err = <-errChan:
+		if err != nil {
+			return err
+		}
+	}
+
+	// purge the cache
+	lvs.decodedChunks = sizecache.New(lvs.decodedChunks.Size())
+	lvs.bufferedChunks = make(map[hash.Hash]chunks.Chunk, lvs.bufferedChunkSize)
+	lvs.bufferedChunkSize = 0
+	lvs.withBufferedChildren = map[hash.Hash]uint64{}
+
+	return nil
 }
 
 // Close closes the underlying ChunkStore
