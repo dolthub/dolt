@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
@@ -56,24 +57,26 @@ type gcCopier struct {
 	stats *Stats
 }
 
-func newGarbageCollectionCopier(tableSize uint64) gcCopier {
-	// todo: minimize table index memory overhead
-	indexCache := newIndexCache(defaultIndexCacheSize)
-	// todo: are FD's valid after copy?
-	fdCache := newFDCache(defaultMaxTables)
-	tmpDir := tempfiles.MovableTempFileProvider.GetTempDir()
-	ftp := &fsTablePersister{tmpDir, fdCache, indexCache}
+func newGarbageCollectionCopier(tableSize uint64) (*gcCopier, error) {
+	tmpDir := filepath.Join(tempfiles.MovableTempFileProvider.GetTempDir(), "nbs_gc")
+	err := os.MkdirAll(tmpDir, os.ModePerm)
 
-	return gcCopier{
+	if err != nil {
+		return nil, err
+	}
+
+	ftp := &fsTablePersister{tmpDir, globalFDCache, globalIndexCache} // #FTP
+
+	return &gcCopier{
 		mtSize: tableSize,
 		tables: newTableSet(ftp),
 		ftp:    ftp,
 		tmpDir: tmpDir,
 		stats:  NewStats(),
-	}
+	}, nil
 }
 
-func (gcc gcCopier) addChunk(ctx context.Context, h addr, data []byte) bool {
+func (gcc *gcCopier) addChunk(ctx context.Context, h addr, data []byte) bool {
 	if gcc.mt == nil {
 		gcc.mt = newMemTable(gcc.mtSize)
 	}
@@ -85,11 +88,20 @@ func (gcc gcCopier) addChunk(ctx context.Context, h addr, data []byte) bool {
 	return true
 }
 
-func (gcc gcCopier) copyTablesToDir(destDir string) error {
+func (gcc *gcCopier) copyTablesToDir(ctx context.Context, destDir string) ([]tableSpec, error) {
+	gcc.tables = gcc.tables.Prepend(ctx, gcc.mt, gcc.stats)
+	gcc.mt = nil
+
+	err := gcc.tables.Close()
+
+	if err != nil {
+		return nil, err
+	}
+
 	specs, err := gcc.tables.ToSpecs()
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, spec := range specs {
@@ -100,9 +112,9 @@ func (gcc gcCopier) copyTablesToDir(destDir string) error {
 		err = os.Rename(tmp, dest)
 
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	return nil
+	return specs, nil
 }
