@@ -23,7 +23,7 @@ package chunks
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"io"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -88,4 +88,15 @@ type ChunkStore interface {
 	io.Closer
 }
 
-var ErrGCGenerationExpired = fmt.Errorf("garbage collection generation expired")
+// ChunkStoreGarbageCollector is a ChunkStore that supports garbage collection.
+type ChunkStoreGarbageCollector interface {
+	ChunkStore
+
+	// MarkAndSweepChunks provides a channel to send the hashes of chunks that should be kept.
+	// Clients must close |keepers| to finalize garbage collection.
+	MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan hash.Hash, errChan chan<- error) error
+}
+
+var ErrUnsupportedOperation = errors.New("operation not supported")
+
+var ErrGCGenerationExpired = errors.New("garbage collection generation expired")
