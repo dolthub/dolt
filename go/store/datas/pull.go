@@ -314,6 +314,8 @@ func pull(ctx context.Context, srcDB, sinkDB Database, sourceRef types.Ref, prog
 }
 
 func persistChunks(ctx context.Context, cs chunks.ChunkStore) error {
+	// todo: there is no call to rebase on an unsuccessful Commit()
+	// will  this loop forever?
 	var success bool
 	for !success {
 		r, err := cs.Root(ctx)

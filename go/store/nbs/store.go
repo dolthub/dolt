@@ -1061,11 +1061,12 @@ func (nbs *NomsBlockStore) chunkSourcesByAddr() (map[addr]chunkSource, error) {
 }
 
 func (nbs *NomsBlockStore) SupportedOperations() TableFileStoreOps {
-	_, canwrite := nbs.p.(*fsTablePersister)
+	_, ok := nbs.p.(*fsTablePersister)
 	return TableFileStoreOps{
 		CanRead:  true,
-		CanWrite: canwrite,
-		CanPrune: canwrite,
+		CanWrite: ok,
+		CanPrune: ok,
+		CanGC:    ok,
 	}
 }
 
@@ -1154,6 +1155,127 @@ func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
 	}
 
 	return nbs.p.PruneTableFiles(ctx, contents)
+}
+
+func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan hash.Hash, errChan chan<- error) (err error) {
+	ops := nbs.SupportedOperations()
+	if !ops.CanGC || !ops.CanPrune {
+		return chunks.ErrUnsupportedOperation
+	}
+
+	if nbs.upstream.root != last {
+		return errLastRootMismatch
+	}
+
+	nbs.mu.RLock()
+	drainAndClose := func() {
+		defer nbs.mu.RUnlock()
+		defer close(errChan)
+
+		for range keepChunks {
+			// drain the channel
+		}
+
+		err := nbs.gcUnlock(ctx)
+
+		if err != nil {
+			errChan <- err
+		}
+	}
+
+	go func() {
+		defer drainAndClose()
+
+		err = nbs.copyMarkedChunks(ctx, keepChunks)
+
+		if err != nil {
+			errChan <- err
+			return
+		}
+
+		err = nbs.updateManifest(ctx, last, last)
+
+		if err != nil {
+			errChan <- err
+			return
+		}
+
+		err = nbs.PruneTableFiles(ctx)
+
+		if err != nil {
+			errChan <- err
+			return
+		}
+	}()
+
+	return nil
+}
+
+func (nbs *NomsBlockStore) gcLock(ctx context.Context) error {
+	return nil
+}
+
+func (nbs *NomsBlockStore) gcUnlock(ctx context.Context) error {
+	return nil
+}
+
+func (nbs *NomsBlockStore) copyMarkedChunks(ctx context.Context, keepChunks <-chan hash.Hash) error {
+	s, err := nbs.copyTableSize()
+
+	if err != nil {
+		return err
+	}
+
+	gcc := newGarbageCollectionCopier(s)
+
+	for h := range keepChunks {
+		// todo: batch calls to nbs.GetMany()
+		c, err := nbs.Get(ctx, h)
+
+		if err != nil {
+			return err
+		}
+
+		gcc.addChunk(ctx, addr(h), c.Data())
+	}
+
+	nomsDir := nbs.p.(*fsTablePersister).dir
+	err = gcc.copyTablesToDir(nomsDir)
+
+	if err != nil {
+		return err
+	}
+
+	old := nbs.tables
+
+	nbs.tables = gcc.tables
+	nbs.p = gcc.ftp
+	nbs.mt = gcc.mt
+
+	err = old.Close()
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// todo: what's the optimal table size to copy to?
+func (nbs *NomsBlockStore) copyTableSize() (uint64, error) {
+	total, err := nbs.tables.physicalLen()
+
+	if err != nil {
+		return 0, err
+	}
+
+	avgTableSize := total / uint64(nbs.tables.Upstream()+nbs.tables.Novel())
+
+	// max(avgTableSize, defaultMemTableSize)
+	if avgTableSize > nbs.mtSize {
+		return avgTableSize, nil
+	}
+	return nbs.mtSize, nil
 }
 
 // SetRootChunk changes the root chunk hash from the previous value to the new root.

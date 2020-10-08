@@ -23,6 +23,7 @@ package chunks
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/dolthub/dolt/go/store/constants"
@@ -121,6 +122,9 @@ type MemoryStoreView struct {
 	storage *MemoryStorage
 }
 
+var _ ChunkStore = &MemoryStoreView{}
+var _ ChunkStoreGarbageCollector = &MemoryStoreView{}
+
 func (ms *MemoryStoreView) Get(ctx context.Context, h hash.Hash) (Chunk, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
@@ -216,6 +220,48 @@ func (ms *MemoryStoreView) Commit(ctx context.Context, current, last hash.Hash) 
 	}
 	ms.rootHash = ms.storage.Root(ctx)
 	return success, nil
+}
+
+func (ms *MemoryStoreView) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan hash.Hash, errChan chan<- error) error {
+	if last != ms.rootHash {
+		return fmt.Errorf("last does not match ms.Root()")
+	}
+
+	ms.mu.RLock()
+	drainAndClose := func() {
+		defer ms.mu.RUnlock()
+		defer close(errChan)
+
+		for range keepChunks {
+			// drain the channel
+		}
+	}
+
+	go func() {
+		defer drainAndClose()
+
+		keepers := make(map[hash.Hash]Chunk, ms.storage.Len())
+
+		var h hash.Hash
+		ok := true
+		for ok {
+			select {
+			case h, ok = <-keepChunks:
+				c, err := ms.Get(ctx, h)
+
+				if err != nil {
+					errChan <- err // unreachable
+				}
+
+				keepers[h] = c
+			}
+		}
+
+		ms.storage = &MemoryStorage{rootHash: ms.rootHash, data: keepers}
+		ms.pending = map[hash.Hash]Chunk{}
+	}()
+
+	return nil
 }
 
 func (ms *MemoryStoreView) Stats() interface{} {

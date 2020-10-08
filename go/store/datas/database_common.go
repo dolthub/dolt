@@ -61,6 +61,12 @@ func newDatabase(cs chunks.ChunkStore) *database {
 	}
 }
 
+var _ Database = &database{}
+var _ GarbageCollector = &database{}
+
+var _ rootTracker = &types.ValueStore{}
+var _ GarbageCollector = &types.ValueStore{}
+
 func (db *database) chunkStore() chunks.ChunkStore {
 	return db.ChunkStore()
 }
@@ -573,6 +579,11 @@ func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
 		}
 	}
 	return err
+}
+
+// GC traverses the database starting at the Root and removes all unreferenced data from persistent storage.
+func (db *database) GC(ctx context.Context) error {
+	return db.ValueStore.GC(ctx)
 }
 
 func (db *database) tryCommitChunks(ctx context.Context, currentDatasets types.Map, currentRootHash hash.Hash) error {

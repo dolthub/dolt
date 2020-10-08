@@ -139,3 +139,7 @@ func (c *SizeCache) Drop(key interface{}) {
 		delete(c.cache, key)
 	}
 }
+
+func (c *SizeCache) Size() uint64 {
+	return c.maxSize
+}
