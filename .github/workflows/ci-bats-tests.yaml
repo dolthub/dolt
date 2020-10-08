@@ -37,11 +37,11 @@ jobs:
       - name: Create CI Bin
         run: |
           mkdir -p ./.ci_bin
-          echo "::add-path::$(pwd)/.ci_bin"
+          echo "$(pwd)/.ci_bin" >> $GITHUB_PATH
       - name: Install Bats
         run: |
           npm i bats
-          echo "::add-path::$(pwd)/node_modules/.bin"
+          echo "$(pwd)/node_modules/.bin" >> $GITHUB_PATH
         working-directory: ./.ci_bin
       - name: Install Doltpy
         run: |
