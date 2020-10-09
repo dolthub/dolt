@@ -43,19 +43,9 @@ import (
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
-	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/json"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/fwt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/nullprinter"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -500,6 +490,8 @@ func getFormat(format string) (resultFormat, errhand.VerboseError) {
 		return formatCsv, nil
 	case "json":
 		return formatJson, nil
+	case "null":
+		return formatNull, nil
 	default:
 		return formatTabular, errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular, csv, json").Build()
 	}
@@ -1075,6 +1067,7 @@ const (
 	formatTabular resultFormat = iota
 	formatCsv
 	formatJson
+	formatNull // used for profiling 
 )
 
 type sqlEngine struct {
@@ -1185,133 +1178,27 @@ func (se *sqlEngine) query(ctx *sql.Context, query string) (sql.Schema, sql.RowI
 	return se.engine.Query(ctx, query)
 }
 
-// Pretty prints the output of the new SQL engine
+// streams results through a pipeline formatting and printing them
 func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, rowIter sql.RowIter) error {
 	if isOkResult(sqlSch) {
 		return printOKResult(ctx, rowIter)
 	}
 
-	if se.resultFormat == formatCsv {
-		return se.prettyPrintCSVResults(ctx, sqlSch, rowIter)
-	}
-
-	nbf := types.Format_Default
-
-	doltSch, err := sqleSchema.ToDoltResultSchema(sqlSch)
-	if err != nil {
-		return err
-	}
-
-	untypedSch, err := untyped.UntypeUnkeySchema(doltSch)
-	if err != nil {
-		return err
-	}
-
-	rowChannel := make(chan row.Row)
-	p := pipeline.NewPartialPipeline(pipeline.InFuncForChannel(rowChannel))
-
-	// Parts of the pipeline depend on the output format, such as how we print null values and whether we pad strings.
+	var p *pipeline2.Pipeline
 	switch se.resultFormat {
-	case formatTabular:
-		nullPrinter := nullprinter.NewNullPrinter(untypedSch)
-		p.AddStage(pipeline.NewNamedTransform(nullprinter.NullPrintingStage, nullPrinter.ProcessRow))
-		autoSizeTransform := fwt.NewAutoSizingFWTTransformer(untypedSch, fwt.PrintAllWhenTooLong, 10000)
-		p.AddStage(pipeline.NamedTransform{Name: fwtStageName, Func: autoSizeTransform.TransformToFWT})
-	}
-
-	// Redirect output to the CLI
-	cliWr := iohelp.NopWrCloser(cli.CliOut)
-
-	var wr table.TableWriteCloser
-
-	switch se.resultFormat {
-	case formatTabular:
-		wr, err = tabular.NewTextTableWriter(cliWr, untypedSch)
 	case formatCsv:
-		wr, err = csv.NewCSVWriter(cliWr, untypedSch, csv.NewCSVInfo())
+		p = createCSVPipeline(ctx, sqlSch, rowIter)
 	case formatJson:
-		wr, err = json.NewJSONWriter(cliWr, doltSch)
-	default:
-		panic("unimplemented output format type")
+		p = createJSONPipeline(ctx, sqlSch, rowIter)
+	case formatTabular:
+		p = createTabularPipeline(ctx, sqlSch, rowIter)
+	case formatNull:
+		p = createNullPipeline(ctx, sqlSch, rowIter)
 	}
 
-	if err != nil {
-		return err
-	}
+	p.Start(ctx)
+	return p.Wait()
 
-	p.RunAfter(func() { wr.Close(ctx) })
-
-	cliSink := pipeline.ProcFuncForWriter(ctx, wr)
-	p.SetOutput(cliSink)
-
-	p.SetBadRowCallback(func(tff *pipeline.TransformRowFailure) (quit bool) {
-		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(ctx, tff.Row, untypedSch)))
-		return true
-	})
-
-	colNames, err := schema.ExtractAllColNames(untypedSch)
-
-	if err != nil {
-		return err
-	}
-
-	r, err := untyped.NewRowFromTaggedStrings(nbf, untypedSch, colNames)
-
-	if err != nil {
-		return err
-	}
-
-	// Insert the table header row at the appropriate stage
-	if se.resultFormat == formatTabular {
-		p.InjectRow(fwtStageName, r)
-	}
-
-	// For some output formats, we want to convert everything to strings to be processed by the pipeline. For others,
-	// we want to leave types alone and let the writer figure out how to format it for output.
-	var rowFn func(r sql.Row) (row.Row, error)
-	switch se.resultFormat {
-	case formatJson:
-		rowFn = func(r sql.Row) (r2 row.Row, err error) {
-			return dsqle.SqlRowToDoltRow(nbf, r, doltSch)
-		}
-	default:
-		rowFn = func(r sql.Row) (row.Row, error) {
-			taggedVals := make(row.TaggedValues)
-			for i, col := range r {
-				if col != nil {
-					taggedVals[uint64(i)] = types.String(fmt.Sprintf("%v", col))
-				}
-			}
-			return row.New(nbf, untypedSch, taggedVals)
-		}
-	}
-
-	var iterErr error
-
-	// Read rows off the row iter and pass them to the pipeline channel
-	go func() {
-		defer close(rowChannel)
-		var sqlRow sql.Row
-		for sqlRow, iterErr = rowIter.Next(); iterErr == nil; sqlRow, iterErr = rowIter.Next() {
-			var r row.Row
-			r, iterErr = rowFn(sqlRow)
-
-			if iterErr == nil {
-				rowChannel <- r
-			}
-		}
-	}()
-
-	p.Start()
-	if err := p.Wait(); err != nil {
-		return fmt.Errorf("error processing results: %v", err)
-	}
-
-	if iterErr != io.EOF {
-		return fmt.Errorf("error processing results: %v", iterErr)
-	}
-
-	return nil
 }
 
 func printOKResult(ctx context.Context, iter sql.RowIter) (returnErr error) {
@@ -1473,11 +1360,11 @@ const (
 	writeBatchSize = 1
 )
 
-func (se *sqlEngine) prettyPrintCSVResults(ctx context.Context, sch sql.Schema, iter sql.RowIter) error {
+func createCSVPipeline(ctx context.Context, sch sql.Schema, iter sql.RowIter) *pipeline2.Pipeline {
 	p := pipeline2.NewPipeline([]*pipeline2.Stage{
 		pipeline2.NewStage("read", nil, getReadStageFunc(iter), 0, 0, 0),
-		pipeline2.NewStage("process", nil, processStageFunc, 2, 1000, readBatchSize),
-		pipeline2.NewStage("write", nil, writeStageFunc, 0, 100, writeBatchSize),
+		pipeline2.NewStage("process", nil, csvProcessStageFunc, 2, 1000, readBatchSize),
+		pipeline2.NewStage("write", nil, writeToCliOutStageFunc, 0, 100, writeBatchSize),
 	})
 
 	writeIn, _ := p.GetInputChannel("write")
@@ -1494,9 +1381,56 @@ func (se *sqlEngine) prettyPrintCSVResults(ctx context.Context, sch sql.Schema, 
 	str := sb.String()
 	writeIn <- []pipeline2.ItemWithProps{pipeline2.NewItemWithNoProps(&str)}
 
-	p.Start(ctx)
-	p.Wait()
+	return p
+}
+
+func createJSONPipeline(ctx context.Context, sch sql.Schema, iter sql.RowIter) *pipeline2.Pipeline {
+	p := pipeline2.NewPipeline([]*pipeline2.Stage{
+		pipeline2.NewStage("read", nil, getReadStageFunc(iter), 0, 0, 0),
+		pipeline2.NewStage("process", nil, getJSONProcessFunc(sch), 2, 1000, readBatchSize),
+		pipeline2.NewStage("write", writeJSONInitRoutineFunc, writeJSONToCliOutStageFunc, 0, 100, writeBatchSize),
+	})
+
+	return p
+}
+
+func createTabularPipeline(ctx context.Context, sch sql.Schema, iter sql.RowIter) *pipeline2.Pipeline {
+	/*p := pipeline2.NewPipeline([]*pipeline2.Stage{
+		pipeline2.NewStage("read", nil, getReadStageFunc(iter), 0, 0, 0),
+		pipeline2.NewStage("stringify", nil, rowsToStringSlices, 0, 1000, ),
+		pipeline2.NewStage("buffer_and_format", nil, , 0, 1000, readBatchSize),
+		pipeline2.NewStage("write", nil, writeToCliOutStageFunc, 0, 100, writeBatchSize),
+	})
+
+	writeIn, _ := p.GetInputChannel("buffer_and_format")
+	headers := make([]string, len(sch))
+	for i, col := range sch {
+		headers[i] = col.Name
+	}
+	writeIn <- []pipeline2.ItemWithProps{
+		pipeline2.NewItemWithProps(headers, map[string]interface{}{"headers": true}),
+	}
+
+	return p*/
+
 	return nil
+
+	// Parts of the pipeline depend on the output format, such as how we print null values and whether we pad strings.
+	/*switch se.resultFormat {
+	case formatTabular:
+		nullPrinter := nullprinter.NewNullPrinter(untypedSch)
+		p.AddStage(pipeline.NewNamedTransform(nullprinter.NullPrintingStage, nullPrinter.ProcessRow))
+		autoSizeTransform := fwt.NewAutoSizingFWTTransformer(untypedSch, fwt.PrintAllWhenTooLong, 10000)
+		p.AddStage(pipeline.NamedTransform{Name: fwtStageName, Func: autoSizeTransform.TransformToFWT})
+	}*/
+}
+
+
+func createNullPipeline(ctx context.Context, sch sql.Schema, iter sql.RowIter) *pipeline2.Pipeline {
+	return pipeline2.NewPipeline([]*pipeline2.Stage{
+		pipeline2.NewStage("read", nil, getReadStageFunc(iter), 0, 0, 0),
+		pipeline2.NewStage("drop", nil, dropOnFloor, 0, 100, writeBatchSize),
+	})
 }
 
 func getReadStageFunc(iter sql.RowIter) pipeline2.StageFunc {
@@ -1522,7 +1456,50 @@ func getReadStageFunc(iter sql.RowIter) pipeline2.StageFunc {
 	}
 }
 
-func processStageFunc(ctx context.Context, items []pipeline2.ItemWithProps) ([]pipeline2.ItemWithProps, error) {
+func sqlColToStr(col interface{}) string {
+	if col != nil {
+		switch typedCol := col.(type) {
+		case int:
+			return strconv.FormatInt(int64(typedCol), 10)
+		case int32:
+			return strconv.FormatInt(int64(typedCol), 10)
+		case int64:
+			return strconv.FormatInt(int64(typedCol), 10)
+		case int16:
+			return strconv.FormatInt(int64(typedCol), 10)
+		case int8:
+			return strconv.FormatInt(int64(typedCol), 10)
+		case uint:
+			return strconv.FormatUint(uint64(typedCol), 10)
+		case uint32:
+			return strconv.FormatUint(uint64(typedCol), 10)
+		case uint64:
+			return strconv.FormatUint(uint64(typedCol), 10)
+		case uint16:
+			return strconv.FormatUint(uint64(typedCol), 10)
+		case uint8:
+			return strconv.FormatUint(uint64(typedCol), 10)
+		case float64:
+			return strconv.FormatFloat(float64(typedCol), 'g', -1, 64)
+		case float32:
+			return strconv.FormatFloat(float64(typedCol), 'g', -1, 32)
+		case string:
+			return typedCol
+		case bool:
+			if typedCol {
+				return "true"
+			} else {
+				return "false"
+			}
+		case time.Time:
+			return typedCol.Format("2006-01-02 15:04:05 -0700 MST")
+		}
+	}
+
+	return ""
+}
+
+func csvProcessStageFunc(ctx context.Context, items []pipeline2.ItemWithProps) ([]pipeline2.ItemWithProps, error) {
 	if items == nil {
 		return nil, nil
 	}
@@ -1533,53 +1510,15 @@ func processStageFunc(ctx context.Context, items []pipeline2.ItemWithProps) ([]p
 		r := item.GetItem().(sql.Row)
 
 		for colNum, col := range r {
-			var str string
 			if col != nil {
-				switch typedCol := col.(type) {
-				case int:
-					str = strconv.FormatInt(int64(typedCol), 10)
-				case int32:
-					str = strconv.FormatInt(int64(typedCol), 10)
-				case int64:
-					str = strconv.FormatInt(int64(typedCol), 10)
-				case int16:
-					str = strconv.FormatInt(int64(typedCol), 10)
-				case int8:
-					str = strconv.FormatInt(int64(typedCol), 10)
-				case uint:
-					str = strconv.FormatUint(uint64(typedCol), 10)
-				case uint32:
-					str = strconv.FormatUint(uint64(typedCol), 10)
-				case uint64:
-					str = strconv.FormatUint(uint64(typedCol), 10)
-				case uint16:
-					str = strconv.FormatUint(uint64(typedCol), 10)
-				case uint8:
-					str = strconv.FormatUint(uint64(typedCol), 10)
-				case float64:
-					str = strconv.FormatFloat(float64(typedCol), 'g', -1, 64)
-				case float32:
-					str = strconv.FormatFloat(float64(typedCol), 'g', -1, 32)
-				case string:
-					if len(typedCol) == 0 {
-						str = "\"\""
-					} else if strings.IndexRune(typedCol, ',') != -1 {
-						str = "\"" + typedCol + "\""
-					} else {
-						str = typedCol
-					}
-				case bool:
-					if typedCol {
-						str = "true"
-					} else {
-						str = "false"
-					}
-				case time.Time:
-					str = typedCol.Format("2006-01-02 15:04:05 -0700 MST")
-				}
-			}
+				str := sqlColToStr(col)
 
-			sb.WriteString(str)
+				if len(str) == 0 {
+					str = "\"\""
+				}
+
+				sb.WriteString(str)
+			}
 
 			if colNum != len(r)-1 {
 				sb.WriteRune(',')
@@ -1593,7 +1532,115 @@ func processStageFunc(ctx context.Context, items []pipeline2.ItemWithProps) ([]p
 	return []pipeline2.ItemWithProps{pipeline2.NewItemWithNoProps(&str)}, nil
 }
 
-func writeStageFunc(ctx context.Context, items []pipeline2.ItemWithProps) ([]pipeline2.ItemWithProps, error) {
+func rowsToStringSlices(ctx context.Context, items []pipeline2.ItemWithProps) ([]pipeline2.ItemWithProps, error) {
+	if items == nil {
+		return nil, nil
+	}
+
+	var strSlices [][]string
+	for _, item := range items {
+		r := item.GetItem().(sql.Row)
+
+		colStrs := make([]string, len(r))
+		for colNum, col := range r {
+			if col != nil {
+				colStrs[colNum] = sqlColToStr(col)
+			}
+		}
+
+		strSlices = append(strSlices, colStrs)
+	}
+
+	return []pipeline2.ItemWithProps{pipeline2.NewItemWithNoProps(strSlices)}, nil
+}
+
+func getJSONProcessFunc(sch sql.Schema) pipeline2.StageFunc {
+	formats := make([]string, len(sch))
+	for i, col := range sch {
+		switch col.Type.(type) {
+		case sql.StringType, sql.DatetimeType, sql.EnumType, sql.TimeType:
+			formats[i] = fmt.Sprintf(`"%s":"%%s"`, col.Name)
+		default:
+			formats[i] = fmt.Sprintf(`"%s":%%s`, col.Name)
+		}
+	}
+
+	return func(ctx context.Context, items []pipeline2.ItemWithProps) ([]pipeline2.ItemWithProps, error) {
+		if items == nil {
+			return nil, nil
+		}
+
+		sb := &strings.Builder{}
+		sb.Grow(2048)
+		for i, item := range items {
+			r := item.GetItem().(sql.Row)
+
+			if i != 0 {
+				sb.WriteString(",\n\t{")
+			} else {
+				sb.WriteString("\t{")
+			}
+
+			validCols := 0
+			for colNum, col := range r {
+				if col != nil {
+					if validCols != 0 {
+						sb.WriteString(", ")
+					}
+
+					validCols++
+					str := fmt.Sprintf(formats[colNum], sqlColToStr(col))
+					sb.WriteString(str)
+				}
+			}
+
+			sb.WriteRune('}')
+		}
+
+		str := sb.String()
+		return []pipeline2.ItemWithProps{pipeline2.NewItemWithNoProps(&str)}, nil
+	}
+}
+
+func writeJSONInitRoutineFunc(ctx context.Context, index int) {
+	if index != 0 {
+		// writeJSONToCliOut assumes that it is not being run in parallel.
+		panic("cannot parallelize this routine")
+	}
+}
+
+func writeJSONToCliOutStageFunc(ctx context.Context, items []pipeline2.ItemWithProps) ([]pipeline2.ItemWithProps, error) {
+	const hasRunKey = 0
+
+	ls := ctx.Value(pipeline2.LocalStorageKey).(*pipeline2.LocalStorage)
+	_, hasRun := ls.Get(hasRunKey)
+	ls.Put(hasRunKey, true)
+
+	if items == nil {
+		if hasRun{
+			cli.Printf("\n]}\n")
+		} else {
+			cli.Printf("{\"data\":[]}\n")
+		}
+	} else {
+		for _, item := range items {
+			if hasRun {
+				cli.Printf(",\n")
+			} else {
+				cli.Printf("{\"data\": [\n")
+			}
+
+			str := *item.GetItem().(*string)
+			cli.Printf(str)
+
+			hasRun = true
+		}
+	}
+
+	return nil, nil
+}
+
+func writeToCliOutStageFunc(ctx context.Context, items []pipeline2.ItemWithProps) ([]pipeline2.ItemWithProps, error) {
 	if items == nil {
 		return nil, nil
 	}
@@ -1603,5 +1650,9 @@ func writeStageFunc(ctx context.Context, items []pipeline2.ItemWithProps) ([]pip
 		cli.Printf(str)
 	}
 
+	return nil, nil
+}
+
+func dropOnFloor(ctx context.Context, items []pipeline2.ItemWithProps) ([]pipeline2.ItemWithProps, error) {
 	return nil, nil
 }

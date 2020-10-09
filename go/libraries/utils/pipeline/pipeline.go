@@ -89,7 +89,7 @@ func (s *Stage) start(ctx context.Context, wg *sync.WaitGroup) {
 	wg.Add(parallelism)
 	stageWorkers := int32(parallelism)
 	for i := 0; i < parallelism; i++ {
-		go func() {
+		go func(routineIndex int) {
 			defer wg.Done()
 			defer func() {
 				if atomic.AddInt32(&stageWorkers, -1) == 0 {
@@ -105,7 +105,7 @@ func (s *Stage) start(ctx context.Context, wg *sync.WaitGroup) {
 			ctx = context.WithValue(ctx, LocalStorageKey, &LocalStorage{})
 
 			if s.initFunc != nil {
-				s.initFunc(ctx, i)
+				s.initFunc(ctx, routineIndex)
 			}
 
 			if s.inCh == nil {
@@ -113,7 +113,7 @@ func (s *Stage) start(ctx context.Context, wg *sync.WaitGroup) {
 			} else {
 				s.runPipelineStage(ctx)
 			}
-		}()
+		}(i)
 	}
 }
 
