@@ -37,10 +37,10 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-func makeFileManifestTempDir(t *testing.T) fileManifest {
+func makeFileManifestTempDir(t *testing.T) fileManifestv5 {
 	dir, err := ioutil.TempDir("", "")
 	assert.NoError(t, err)
-	return fileManifest{dir: dir} //, cache: newManifestCache(defaultManifestCacheSize)}
+	return fileManifestv5{dir: dir} //, cache: newManifestCache(defaultManifestCacheSize)}
 }
 
 func TestFileManifestLoadIfExists(t *testing.T) {
@@ -139,7 +139,7 @@ func TestFileManifestUpdateEmpty(t *testing.T) {
 	assert.True(upstream.root.IsEmpty())
 	assert.Empty(upstream.specs)
 
-	fm2 := fileManifest{fm.dir} // Open existent, but empty manifest
+	fm2 := fileManifestv5{fm.dir} // Open existent, but empty manifest
 	exists, upstream, err := fm2.ParseIfExists(context.Background(), stats, nil)
 	assert.NoError(err)
 	assert.True(exists)
