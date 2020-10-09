@@ -16,6 +16,7 @@ package dbfactory
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/store/blobstore"
 	"net/url"
 
 	"cloud.google.com/go/storage"
@@ -38,13 +39,34 @@ func (fact GSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, ur
 		return nil, err
 	}
 
-	gcsStore, err := nbs.NewGCSStore(ctx, nbf.VersionString(), urlObj.Host, urlObj.Path, gcs, defaultMemTableSize)
+	bucket := gcs.Bucket(urlObj.Host)
+	bs := blobstore.NewGCSBlobstore(bucket, urlObj.Path)
+	gcsStore, err := nbs.NewBSStore(ctx, nbf.VersionString(), bs, defaultMemTableSize)
 
 	if err != nil {
 		return nil, err
 	}
 
 	db = datas.NewDatabase(gcsStore)
+
+	return db, err
+}
+
+// MemBS is a DBFactory implementation for creating in memory blobstore backed databases for testing
+type MemBSFactory struct {
+}
+
+// CreateDB creates an in memory blobstore backed database
+func (fact MemBSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]string) (datas.Database, error) {
+	var db datas.Database
+	bs := blobstore.NewInMemoryBlobstore()
+	bsStore, err := nbs.NewBSStore(ctx, nbf.VersionString(), bs, defaultMemTableSize)
+
+	if err != nil {
+		return nil, err
+	}
+
+	db = datas.NewDatabase(bsStore)
 
 	return db, err
 }

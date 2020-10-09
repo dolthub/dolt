@@ -22,6 +22,7 @@
 package nbs
 
 import (
+	"cloud.google.com/go/storage"
 	"context"
 	"fmt"
 	"io"
@@ -33,7 +34,6 @@ import (
 	"sync"
 	"time"
 
-	"cloud.google.com/go/storage"
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
@@ -296,6 +296,13 @@ func NewGCSStore(ctx context.Context, nbfVerStr string, bucketName, path string,
 
 	bucket := gcs.Bucket(bucketName)
 	bs := blobstore.NewGCSBlobstore(bucket, path)
+	return NewBSStore(ctx, nbfVerStr, bs, memTableSize)
+}
+
+// NewBSStore returns an nbs implementation backed by a Blobstore
+func NewBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, memTableSize uint64) (*NomsBlockStore, error) {
+	cacheOnce.Do(makeGlobalCaches)
+
 	mm := makeManifestManager(blobstoreManifest{"manifest", bs})
 
 	p := &blobstorePersister{bs, s3BlockSize, globalIndexCache}

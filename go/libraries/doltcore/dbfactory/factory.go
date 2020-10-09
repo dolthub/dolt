@@ -44,6 +44,9 @@ const (
 	// HTTPScheme
 	HTTPScheme = "http"
 
+	// InMemBlobstore Scheme
+	MemBSScheme = "membs"
+
 	defaultScheme       = HTTPSScheme
 	defaultMemTableSize = 256 * 1024 * 1024
 )
@@ -56,10 +59,11 @@ type DBFactory interface {
 // DBFactories is a map from url scheme name to DBFactory.  Additional factories can be added to the DBFactories map
 // from external packages.
 var DBFactories = map[string]DBFactory{
-	AWSScheme:  AWSFactory{},
-	GSScheme:   GSFactory{},
-	FileScheme: FileFactory{},
-	MemScheme:  MemFactory{},
+	AWSScheme:   AWSFactory{},
+	GSScheme:    GSFactory{},
+	FileScheme:  FileFactory{},
+	MemScheme:   MemFactory{},
+	MemBSScheme: MemBSFactory{},
 }
 
 // InitializeFactories initializes any factories that rely on a GRPCConnectionProvider (Namely http and https)
