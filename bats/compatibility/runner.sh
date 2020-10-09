@@ -64,12 +64,8 @@ function test_dolt_version() {
   echo testing "$ver" at "$bin"
   PATH="`pwd`"/"$bin":"$PATH" setup_repo "$ver"
 
-# Changes to the NBS manifest broke forward compatibility when multiple clients with different
-# versions interact with the same repo instance. However, in a more realistic setting of
-# clients interacting with a repo through a remote, compatibility is not broken.
-# todo: update compatibility tests to have different client versions interact through a remote.
   # Run the bats tests with old dolt version hitting repositories from new dolt version
-  # PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/HEAD bats ./test_files/bats
+  PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/HEAD bats ./test_files/bats
 
   # Run the bats tests with new dolt version hitting repositories from old dolt version
   REPO_DIR="`pwd`"/repos/"$ver" bats ./test_files/bats

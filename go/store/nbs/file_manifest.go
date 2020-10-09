@@ -99,16 +99,18 @@ func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
 
 // parse the manifest in its given format
 func getFileManifest(ctx context.Context, dir string) (manifest, error) {
-	fm5 := fileManifestv5{dir}
+
 
 	f, err := openIfExists(filepath.Join(dir, manifestFileName))
 	if err != nil {
 		return nil, err
 	}
 	if f == nil {
-		return fm5, nil // initialize empty repos with v5
+		// initialize empty repos with v4
+		return fileManifestV4{dir}, nil
 	}
 
+	fm5 := fileManifestv5{dir}
 	ok, _, err := fm5.ParseIfExists(ctx, &Stats{}, nil)
 	if ok && err == nil {
 		return fm5, nil
