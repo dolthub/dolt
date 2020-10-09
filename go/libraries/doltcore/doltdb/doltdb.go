@@ -23,15 +23,15 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/spec"
-	"github.com/dolthub/dolt/go/store/types/edits"
-
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/pantoerr"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/types/edits"
 )
 
 func init() {
@@ -907,6 +907,113 @@ func (ddb *DoltDB) DeleteTag(ctx context.Context, tag ref.DoltRef) error {
 	}
 
 	return err
+}
+
+// GC performs garbage collection on this ddb. Values passed in |uncommitedVals| will be temporarily saved during gc.
+func (ddb *DoltDB) GC(ctx context.Context, uncommitedVals ...hash.Hash) error {
+	collector, ok := ddb.db.(datas.GarbageCollector)
+	if !ok {
+		return fmt.Errorf("this database does not support garbage collection")
+	}
+
+	err := ddb.pruneUnreferencedDatasets(ctx)
+	if err != nil {
+		return err
+	}
+
+	tmpDatasets := make([]datas.Dataset, len(uncommitedVals))
+	for i, h := range uncommitedVals {
+		v, err := ddb.db.ReadValue(ctx, h)
+		if err != nil {
+			return err
+		}
+		if v == nil {
+			return fmt.Errorf("empty value for value hash %s", h.String())
+		}
+
+		ds, err := ddb.db.GetDataset(ctx, fmt.Sprintf("tmp/%d", time.Now().UnixNano()))
+		if err != nil {
+			return err
+		}
+
+		r, err := writeValAndGetRef(ctx, ddb.db, v)
+		if err != nil {
+			return err
+		}
+
+		ds, err = ddb.db.CommitValue(ctx, ds, r)
+		if err != nil {
+			return err
+		}
+		if !ds.HasHead() {
+			return fmt.Errorf("could not save value %s", h.String())
+		}
+
+		tmpDatasets[i] = ds
+	}
+
+	err = collector.GC(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, ds := range tmpDatasets {
+		ds, err = ddb.db.Delete(ctx, ds)
+		if err != nil {
+			return err
+		}
+
+		if ds.HasHead() {
+			return fmt.Errorf("unsuccessful delete for dataset %s", ds.ID())
+		}
+	}
+
+	return nil
+}
+
+func (ddb *DoltDB) pruneUnreferencedDatasets(ctx context.Context) error {
+	rr, err := ddb.GetRefs(ctx)
+	if err != nil {
+		return err
+	}
+
+	refs := set.NewStrSet(nil)
+	for _, r := range rr {
+		refs.Add(r.String())
+	}
+
+	dd, err := ddb.db.Datasets(ctx)
+	if err != nil {
+		return err
+	}
+
+	var deletes []string
+	_ = dd.Iter(ctx, func(ds, _ types.Value) (stop bool, err error) {
+		dsID := string(ds.(types.String))
+		if !refs.Contains(dsID) {
+			deletes = append(deletes, dsID)
+		}
+		return false, nil
+	})
+
+	// e.g. flushes
+	for _, dsID := range deletes {
+		ds, err := ddb.db.GetDataset(ctx, dsID)
+		if err != nil {
+			return err
+		}
+
+		ds, err = ddb.db.Delete(ctx, ds)
+		if err != nil {
+			return err
+		}
+
+		if ds.HasHead() {
+			return fmt.Errorf("unsuccessful delete for dataset %s", ds.ID())
+		}
+	}
+
+	return nil
 }
 
 // PushChunks initiates a push into a database from the source database given, at the Value ref given. Pull progress is

@@ -28,6 +28,10 @@ import (
 	"github.com/dolthub/dolt/go/store/nbs"
 )
 
+const (
+	gcShallowFlag = "shallow"
+)
+
 var gcDocs = cli.CommandDocumentationContent{
 	ShortDesc: "",
 	LongDesc:  ``,
@@ -65,34 +69,53 @@ func (cmd GarbageCollectionCmd) CreateMarkdown(fs filesys.Filesys, path, command
 
 func (cmd GarbageCollectionCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
+	ap.SupportsFlag(gcShallowFlag, "s", "reclaim compaction garbage, but don't traverse the commit graph")
 	return ap
 }
 
 // Version displays the version of the running dolt client
 // Exec executes the command
 func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
-	_, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, lsDocs, ap))
-
 	var verr errhand.VerboseError
 
-	dEnv, err := maybeMigrateEnv(ctx, dEnv)
+	ap := cmd.createArgParser()
+	_, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, lsDocs, ap))
+	apr, err := ap.Parse(args)
 
 	if err != nil {
-		verr = errhand.BuildDError("could not load manifest for gc").AddCause(err).Build()
+		verr = errhand.VerboseErrorFromError(err)
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	db, ok := dEnv.DoltDB.ValueReadWriter().(datas.Database)
-	if !ok {
-		verr = errhand.BuildDError("this database does not support garbage collection").Build()
-		return HandleVErrAndExitCode(verr, usage)
-	}
+	if apr.Contains(gcShallowFlag) {
+		db, ok := dEnv.DoltDB.ValueReadWriter().(datas.Database)
+		if !ok {
+			verr = errhand.BuildDError("this database does not support shallow garbage collection").Build()
+			return HandleVErrAndExitCode(verr, usage)
+		}
 
-	err = datas.PruneTableFiles(ctx, db)
+		err = datas.PruneTableFiles(ctx, db)
 
-	if err != nil {
-		verr = errhand.BuildDError("an error occurred during garbage collection").AddCause(err).Build()
+		if err != nil {
+			verr = errhand.BuildDError("an error occurred during garbage collection").AddCause(err).Build()
+		}
+	} else {
+		// full gc
+		dEnv, err = maybeMigrateEnv(ctx, dEnv)
+
+		if err != nil {
+			verr = errhand.BuildDError("could not load manifest for gc").AddCause(err).Build()
+			return HandleVErrAndExitCode(verr, usage)
+		}
+
+		w := dEnv.RepoState.WorkingHash()
+		s := dEnv.RepoState.StagedHash()
+
+		err = dEnv.DoltDB.GC(ctx, w, s)
+
+		if err != nil {
+			verr = errhand.BuildDError("an error occurred during garbage collection").AddCause(err).Build()
+		}
 	}
 
 	return HandleVErrAndExitCode(verr, usage)
