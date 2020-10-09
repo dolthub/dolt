@@ -294,8 +294,7 @@ func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string
 func NewGCSStore(ctx context.Context, nbfVerStr string, bucketName, path string, gcs *storage.Client, memTableSize uint64) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 
-	bucket := gcs.Bucket(bucketName)
-	bs := blobstore.NewGCSBlobstore(bucket, path)
+	bs := blobstore.NewGCSBlobstore(gcs, bucketName, path)
 	return NewBSStore(ctx, nbfVerStr, bs, memTableSize)
 }
 

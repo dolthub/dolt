@@ -17,6 +17,7 @@ package blobstore
 import (
 	"context"
 	"io"
+	"path"
 	"strconv"
 
 	"cloud.google.com/go/storage"
@@ -29,13 +30,15 @@ const (
 
 // GCSBlobstore provides a GCS implementation of the Blobstore interface
 type GCSBlobstore struct {
-	bucket *storage.BucketHandle
-	prefix string
+	bucket     *storage.BucketHandle
+	bucketName string
+	prefix     string
 }
 
 // NewGCSBlobstore creates a new instance of a GCSBlobstare
-func NewGCSBlobstore(bucket *storage.BucketHandle, prefix string) *GCSBlobstore {
-	return &GCSBlobstore{bucket, prefix}
+func NewGCSBlobstore(gcs *storage.Client, bucketName, prefix string) *GCSBlobstore {
+	bucket := gcs.Bucket(bucketName)
+	return &GCSBlobstore{bucket, bucketName, prefix}
 }
 
 // Exists returns true if a blob exists for the given key, and false if it does not.
@@ -59,7 +62,7 @@ func (bs *GCSBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.R
 	attrs, err := oh.Attrs(ctx)
 
 	if err == storage.ErrObjectNotExist {
-		return nil, "", NotFound{key}
+		return nil, "", NotFound{"gs://" + path.Join(bs.bucketName, bs.prefix, key)}
 	} else if err != nil {
 		return nil, "", err
 	}

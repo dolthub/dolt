@@ -21,7 +21,7 @@ type NotFound struct {
 
 // Error returns the key which was not found
 func (nf NotFound) Error() string {
-	return nf.Key
+	return "Blob not found: " + nf.Key
 }
 
 // IsNotFoundError is a helper method used to determine if returned errors resulted

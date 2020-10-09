@@ -39,8 +39,7 @@ func (fact GSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, ur
 		return nil, err
 	}
 
-	bucket := gcs.Bucket(urlObj.Host)
-	bs := blobstore.NewGCSBlobstore(bucket, urlObj.Path)
+	bs := blobstore.NewGCSBlobstore(gcs, urlObj.Host, urlObj.Path)
 	gcsStore, err := nbs.NewBSStore(ctx, nbf.VersionString(), bs, defaultMemTableSize)
 
 	if err != nil {
