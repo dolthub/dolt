@@ -76,6 +76,19 @@ type manifestUpdater interface {
 	Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error)
 }
 
+type manifestGCGenUpdater interface {
+	// UpdateGCGen tries to write a new manifest containing |newContents|.
+	// Like Update(), it requires that |lastLock| matches the currently persisted
+	// lock hash. However, unlike Update() |newContents.root| must remain the same,
+	// while |newContents.gcGen| must be updated to a new value.
+	// Concrete implementations are responsible for ensuring that concurrent
+	// Update calls (and ParseIfExists calls) are correct.
+	// If writeHook is non-nil, it will be invoked while the implementation is
+	// guaranteeing exclusive access to the manifest. This allows for testing
+	// of race conditions.
+	UpdateGCGen(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error)
+}
+
 // ManifestInfo is an interface for retrieving data from a manifest outside of this package
 type ManifestInfo interface {
 	GetVersion() string
@@ -264,6 +277,7 @@ func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (exists bool,
 	return
 }
 
+// Update attempts to write a new manifest.
 // Callers MUST protect uses of Update with Lock/UnlockForUpdate.
 // Update does not call Lock/UnlockForUpdate() on its own because it is
 // intended to be used in a larger critical section along with updateWillFail.
@@ -286,6 +300,50 @@ func (mm manifestManager) Update(ctx context.Context, lastLock addr, newContents
 
 	f := func() (manifestContents, error) {
 		contents, err := mm.m.Update(ctx, lastLock, newContents, stats, writeHook)
+
+		if err != nil {
+			return contents, err
+		}
+
+		err = mm.cache.Put(mm.Name(), contents, t)
+
+		if err != nil {
+			return manifestContents{}, err
+		}
+
+		return contents, nil
+	}
+
+	contents, err = f()
+	return
+}
+
+// UpdateGCGen will update the manifest with a new garbage collection generation.
+// Callers MUST protect uses of UpdateGCGen with Lock/UnlockForUpdate.
+func (mm manifestManager) UpdateGCGen(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (contents manifestContents, err error) {
+	updater, ok := mm.m.(manifestGCGenUpdater)
+	if !ok {
+		return manifestContents{}, errors.New("manifest does not support updating gc gen")
+	}
+
+	if upstream, _, hit := mm.cache.Get(mm.Name()); hit {
+		if lastLock != upstream.lock {
+			return manifestContents{}, errors.New("manifest was modified during garbage collection")
+		}
+	}
+	t := time.Now()
+
+	mm.lockOutFetch()
+	defer func() {
+		afErr := mm.allowFetch()
+
+		if err == nil {
+			err = afErr
+		}
+	}()
+
+	f := func() (manifestContents, error) {
+		contents, err := updater.UpdateGCGen(ctx, lastLock, newContents, stats, writeHook)
 
 		if err != nil {
 			return contents, err
