@@ -67,6 +67,9 @@ func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
 		// no manifest exists, no need to migrate
 		return false, nil
 	}
+	defer func() {
+		err = f.Close()
+	}()
 
 	fm5 := fileManifestv5{dir}
 	ok, _, err := fm5.ParseIfExists(ctx, &Stats{}, nil)
@@ -115,6 +118,9 @@ func getFileManifest(ctx context.Context, dir string) (manifest, error) {
 		// initialize empty repos with v4
 		return fileManifestV4{dir}, nil
 	}
+	defer func() {
+		err = f.Close()
+	}()
 
 	fm5 := fileManifestv5{dir}
 	ok, _, err := fm5.ParseIfExists(ctx, &Stats{}, nil)
