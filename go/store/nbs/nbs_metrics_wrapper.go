@@ -40,6 +40,7 @@ func NewNBSMetricWrapper(nbs *NomsBlockStore) *NBSMetricWrapper {
 }
 
 var _ TableFileStore = &NBSMetricWrapper{}
+var _ chunks.ChunkStoreGarbageCollector = &NBSMetricWrapper{}
 
 // Sources retrieves the current root hash, and a list of all the table files
 func (nbsMW *NBSMetricWrapper) Sources(ctx context.Context) (hash.Hash, []TableFile, error) {
@@ -63,6 +64,10 @@ func (nbsMW *NBSMetricWrapper) SetRootChunk(ctx context.Context, root, previous 
 // Forwards SupportedOperations to wrapped block store.
 func (nbsMW *NBSMetricWrapper) SupportedOperations() TableFileStoreOps {
 	return nbsMW.nbs.SupportedOperations()
+}
+
+func (nbsMW *NBSMetricWrapper) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan hash.Hash, errChan chan<- error) error {
+	return nbsMW.nbs.MarkAndSweepChunks(ctx, last, keepChunks, errChan)
 }
 
 // PruneTableFiles deletes old table files that are no longer referenced in the manifest.

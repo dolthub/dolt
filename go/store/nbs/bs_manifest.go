@@ -44,7 +44,7 @@ func manifestVersionAndContents(ctx context.Context, bs blobstore.Blobstore) (st
 	}
 
 	defer reader.Close()
-	contents, err := fileManifestv5{}.parseManifest(reader)
+	contents, err := fileManifestV5{}.parseManifest(reader)
 
 	if err != nil {
 		return "", manifestContents{}, err
@@ -88,7 +88,7 @@ func (bsm blobstoreManifest) Update(ctx context.Context, lastLock addr, newConte
 
 	if contents.lock == lastLock {
 		buffer := bytes.NewBuffer(make([]byte, 64*1024)[:0])
-		err := fileManifestv5{}.writeManifest(buffer, newContents)
+		err := fileManifestV5{}.writeManifest(buffer, newContents)
 
 		if err != nil {
 			return manifestContents{}, err

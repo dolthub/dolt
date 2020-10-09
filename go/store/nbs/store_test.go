@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -33,14 +34,16 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 func makeTestLocalStore(t *testing.T, maxTableFiles int) (st *NomsBlockStore, nomsDir string) {
 	ctx := context.Background()
 	nomsDir = filepath.Join(tempfiles.MovableTempFileProvider.GetTempDir(), "noms_"+uuid.New().String()[:8])
-
 	err := os.MkdirAll(nomsDir, os.ModePerm)
+	require.NoError(t, err)
+
+	// create a v5 manifest
+	_, err = fileManifestV5{nomsDir}.Update(ctx, addr{}, manifestContents{}, &Stats{}, nil)
 	require.NoError(t, err)
 
 	st, err = newLocalStore(ctx, types.Format_Default.VersionString(), nomsDir, defaultMemTableSize, maxTableFiles)

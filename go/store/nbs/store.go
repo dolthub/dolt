@@ -1165,8 +1165,6 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Has
 		return errLastRootMismatch
 	}
 
-	// todo: acquire manifest lock
-
 	nbs.mu.RLock()
 	drainAndClose := func() {
 		defer nbs.mu.RUnlock()
@@ -1174,12 +1172,6 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Has
 
 		for range keepChunks {
 			// drain the channel
-		}
-
-		err := nbs.gcUnlock(ctx)
-
-		if err != nil {
-			errChan <- err
 		}
 	}
 
@@ -1220,16 +1212,8 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Has
 	return nil
 }
 
-func (nbs *NomsBlockStore) gcLock(ctx context.Context) error {
-	return nil
-}
-
-func (nbs *NomsBlockStore) gcUnlock(ctx context.Context) error {
-	return nil
-}
-
 func (nbs *NomsBlockStore) copyMarkedChunks(ctx context.Context, keepChunks <-chan hash.Hash) ([]tableSpec, error) {
-	s, err := nbs.copyTableSize()
+	s, err := nbs.gcTableSize()
 
 	if err != nil {
 		return nil, err
@@ -1267,7 +1251,7 @@ func (nbs *NomsBlockStore) copyMarkedChunks(ctx context.Context, keepChunks <-ch
 }
 
 // todo: what's the optimal table size to copy to?
-func (nbs *NomsBlockStore) copyTableSize() (uint64, error) {
+func (nbs *NomsBlockStore) gcTableSize() (uint64, error) {
 	total, err := nbs.tables.physicalLen()
 
 	if err != nil {
@@ -1284,20 +1268,28 @@ func (nbs *NomsBlockStore) copyTableSize() (uint64, error) {
 }
 
 func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) error {
+	newLock := generateLockHash(nbs.upstream.root, specs)
 	newContents := manifestContents{
 		vers:  nbs.upstream.vers,
 		root:  nbs.upstream.root,
-		lock:  generateLockHash(nbs.upstream.root, specs),
+		lock:  newLock,
+		gcGen: newLock,
 		specs: specs,
 	}
 
-	// todo: lock outside of Update
-	upstream, err := nbs.mm.Update(ctx, nbs.upstream.lock, newContents, nbs.stats, nil)
+	var err error
+	nbs.mm.LockForUpdate()
+	defer func() {
+		unlockErr := nbs.mm.UnlockForUpdate()
+
+		if err == nil {
+			err = unlockErr
+		}
+	}()
+
+	upstream, err := nbs.mm.UpdateGCGen(ctx, nbs.upstream.lock, newContents, nbs.stats, nil)
 	if err != nil {
 		return err
-	}
-	if newContents.lock != upstream.lock {
-		panic("manifest was changed outside of the LOCK")
 	}
 
 	// clear memTable
@@ -1315,7 +1307,7 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) er
 	nbs.tables, err = nbs.tables.Rebase(ctx, specs, nbs.stats)
 
 	if err != nil {
-		return nil
+		return err
 	}
 
 	return nil

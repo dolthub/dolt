@@ -22,6 +22,7 @@
 package types
 
 import (
+	"container/list"
 	"context"
 	"errors"
 	"sync"
@@ -75,16 +76,6 @@ type ValueStore struct {
 	enforceCompleteness  bool
 	decodedChunks        *sizecache.SizeCache
 	nbf                  *NomsBinFormat
-
-	// Garbage collection waits on all pending writes
-	// to complete before starting in order to minimize
-	// duplicate write operations.
-	// - Calls to ValueStore write operations acquire
-	//   a read lock via gMu.RLock().
-	// - Calls to ValueStore garbage collection acquire
-	//   a write lock via gcMu.Lock(), which waits on
-	//   all current read locks to release.
-	gcMu sync.RWMutex
 
 	versOnce sync.Once
 }
@@ -350,9 +341,6 @@ func (lvs *ValueStore) WriteValue(ctx context.Context, v Value) (Ref, error) {
 // 2. The total data occupied by buffered chunks does not exceed
 //    lvs.bufferedChunksMax
 func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk, height uint64) {
-	lvs.gcMu.RLock()
-	defer lvs.gcMu.RUnlock()
-
 	lvs.bufferMu.Lock()
 	defer lvs.bufferMu.Unlock()
 
@@ -476,9 +464,6 @@ func (lvs *ValueStore) Rebase(ctx context.Context) error {
 // rebased. Until Commit() succeeds, no work of the ValueStore will be visible
 // to other readers of the underlying ChunkStore.
 func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
-	lvs.gcMu.RLock()
-	defer lvs.gcMu.RUnlock()
-
 	return func() (bool, error) {
 		lvs.bufferMu.Lock()
 		defer lvs.bufferMu.Unlock()
@@ -578,10 +563,6 @@ func (lvs *ValueStore) GC(ctx context.Context) error {
 
 	lvs.versOnce.Do(lvs.expectVersion)
 
-	// wait on in-progress writes to finish
-	lvs.gcMu.Lock()
-	defer lvs.gcMu.Unlock()
-
 	root, err := lvs.Root(ctx)
 
 	if err != nil {
@@ -610,19 +591,41 @@ func (lvs *ValueStore) GC(ctx context.Context) error {
 			return err
 		}
 
-		// send the root chunk
+		// send root chunk
 		keepChunks <- root
 
-		// todo: use a buffered refWalker to dedupe
-		err = rootVal.WalkRefs(lvs.nbf, func(reachable Ref) (err error) {
-			select {
-			case err = <-errChan:
+		hashQueue := list.New()
+		hashQueue.PushBack(root)
+		for hashQueue.Len() > 0 {
+			e := hashQueue.Front()
+			h := e.Value.(hash.Hash)
+			hashQueue.Remove(e)
+
+			val, err := lvs.ReadValue(ctx, h)
+			if err != nil {
 				return err
-			default:
-				keepChunks <- reachable.TargetHash()
 			}
-			return nil
-		})
+			if val == nil {
+				return nil // empty root
+			}
+
+			// todo: use a buffered refWalker to dedupe
+			err = val.WalkRefs(lvs.nbf, func(reachable Ref) (err error) {
+				select {
+				case err = <-errChan:
+					return err
+				default:
+					h := reachable.TargetHash()
+					keepChunks <- h
+					hashQueue.PushBack(h)
+				}
+				return nil
+			})
+
+			if err != nil {
+				return err
+			}
+		}
 
 		return err
 	}()
