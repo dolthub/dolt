@@ -44,7 +44,7 @@ require (
 	github.com/hashicorp/memberlist v0.1.6 // indirect
 	github.com/jedib0t/go-pretty v4.3.1-0.20191104025401-85fe5d6a7c4d+incompatible
 	github.com/jpillora/backoff v1.0.0
-	github.com/juju/fslock v0.0.0-20160525022230-4d5c94c67b4b
+	github.com/dolthub/fslock v0.0.2
 	github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/lestrrat-go/strftime v1.0.3 // indirect
