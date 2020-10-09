@@ -85,21 +85,28 @@ func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
 		return false, fmt.Errorf("could not read file manifest")
 	}
 
-	noop := func(upstream, contents manifestContents) error { return nil }
+	check := func(upstream, contents manifestContents) error {
+		if upstream.gcGen == contents.gcGen {
+			return errors.New("error migrating manifest")
+		}
+		return nil
+	}
 	contents.gcGen = contents.lock
 
-	_, err = updateWithParseWriterAndChecker(ctx, dir, fm5.writeManifest, fm4.parseManifest, noop, contents.lock, contents, nil)
+	_, err = updateWithParseWriterAndChecker(ctx, dir, fm5.writeManifest, fm4.parseManifest, check, contents.lock, contents, nil)
 
 	if err != nil {
 		return false, nil
 	}
+
+	// clear manifest cache
+	makeGlobalCaches()
 
 	return true, err
 }
 
 // parse the manifest in its given format
 func getFileManifest(ctx context.Context, dir string) (manifest, error) {
-
 	f, err := openIfExists(filepath.Join(dir, manifestFileName))
 	if err != nil {
 		return nil, err
@@ -226,16 +233,19 @@ func (fm5 fileManifestv5) parseManifest(r io.Reader) (manifestContents, error) {
 		return manifestContents{}, err
 	}
 
-	ad, err := parseAddr(slices[2])
+	lock, err := parseAddr(slices[2])
 
 	if err != nil {
 		return manifestContents{}, err
 	}
 
+	gcGen, err := parseAddr(slices[4])
+
 	return manifestContents{
 		vers:  slices[1],
-		lock:  ad,
+		lock:  lock,
 		root:  hash.Parse(slices[3]),
+		gcGen: gcGen,
 		specs: specs,
 	}, nil
 }

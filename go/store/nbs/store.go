@@ -882,6 +882,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		vers:  nbs.upstream.vers,
 		root:  current,
 		lock:  generateLockHash(current, specs),
+		gcGen: nbs.upstream.gcGen,
 		specs: specs,
 	}
 
