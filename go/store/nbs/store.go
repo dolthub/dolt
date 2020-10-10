@@ -22,7 +22,6 @@
 package nbs
 
 import (
-	"cloud.google.com/go/storage"
 	"context"
 	"fmt"
 	"io"
@@ -34,6 +33,7 @@ import (
 	"sync"
 	"time"
 
+	"cloud.google.com/go/storage"
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 

@@ -16,11 +16,12 @@ package dbfactory
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/store/blobstore"
 	"net/url"
+	"path/filepath"
 
 	"cloud.google.com/go/storage"
 
+	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
@@ -51,14 +52,20 @@ func (fact GSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, ur
 	return db, err
 }
 
-// MemBS is a DBFactory implementation for creating in memory blobstore backed databases for testing
-type MemBSFactory struct {
+// LocalBSFactory is a DBFactory implementation for creating a local filesystem blobstore backed databases for testing
+type LocalBSFactory struct {
 }
 
-// CreateDB creates an in memory blobstore backed database
-func (fact MemBSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]string) (datas.Database, error) {
+// CreateDB creates a local filesystem blobstore backed database
+func (fact LocalBSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]string) (datas.Database, error) {
 	var db datas.Database
-	bs := blobstore.NewInMemoryBlobstore()
+	absPath, err := filepath.Abs(filepath.Join(urlObj.Host, urlObj.Path))
+
+	if err != nil {
+		return nil, err
+	}
+
+	bs := blobstore.NewLocalBlobstore(absPath)
 	bsStore, err := nbs.NewBSStore(ctx, nbf.VersionString(), bs, defaultMemTableSize)
 
 	if err != nil {
