@@ -101,7 +101,7 @@ func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
 	if err != nil {
 		return false, nil
 	}
-	
+
 	return true, err
 }
 
