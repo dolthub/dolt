@@ -253,21 +253,17 @@ func TestNBSCopyGC(t *testing.T) {
 	r, err := st.Root(ctx)
 	assert.NoError(t, err)
 
-	errChan := make(chan error)
 	keepChan := make(chan hash.Hash, 16)
-	err = st.MarkAndSweepChunks(ctx, r, keepChan, errChan)
-	require.NoError(t, err)
+	wg, ae := st.MarkAndSweepChunks(ctx, r, keepChan)
+	require.NoError(t, ae.Get())
 
 	for h := range keepers {
 		keepChan <- h
+		assert.NoError(t, ae.Get())
 	}
 	close(keepChan)
-
-	select {
-	case err, ok := <-errChan:
-		assert.False(t, ok)
-		assert.Nil(t, err)
-	}
+	assert.NoError(t, ae.Get())
+	wg.Wait()
 
 	for h, c := range keepers {
 		out, err := st.Get(ctx, h)
