@@ -202,6 +202,7 @@ func TestNBSPruneTableFiles(t *testing.T) {
 
 func makeChunkSet(N, size int) (s map[hash.Hash]chunks.Chunk) {
 	bb := make([]byte, size*N)
+	time.Sleep(10)
 	rand.Seed(time.Now().UnixNano())
 	rand.Read(bb)
 
