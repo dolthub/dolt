@@ -19,62 +19,52 @@ fi
 
 script_dir=$(dirname "$0")
 absolute_script_dir=$(realpath $script_dir)
-mkdir "$script_dir/working"
+working_dir="$script_dir/working"
+echo "Ensuring $working_dir exists and is empty"
+rm -rf $working_dir && mkdir "$script_dir/working"
 
 function build_binary_at_committish() {
-  working_dir="$script_dir/working"
   build_committish=$0
-
-  echo "Clearing existing $working_dir"
-  rm -rf "$working_dir/*"
 
   if [ "$build_commitish" != "current" ]; then
     echo "specific argument provided for 'commitish', cloning for fresh build"
     mkdir $working_dir && cd $working_dir
-    cd $working_dir
-    git clone git@github.com:dolthub/dolt.git
-    git fetch --all
-    git checkout $commitish
+    git clone git@github.com:dolthub/dolt.git && git fetch --all && git checkout $commitish
     cd "dolt/go"
-    commit=$(git rev-parse HEAD)
   else
     echo "build_committish arg passed as 'current', building from current repo"
-    working_dir="$script_dir/../go"
-    cd $working_dir
-
-    if [[ $(git status --porcelain) ]]; then
-      commit="$(git rev-parse HEAD)-dirty"
-    else
-      commit=$(git rev-parse HEAD)
-    fi
+    cd "$script_dir/../go"
   fi
 
+  commit="$(git rev-parse HEAD)"
+  if [[ $(git status --porcelain) ]]; then
+    commit="$commit-dirty"
+  fi
 
   echo "Commit is set to $commit"
-
   docker run --rm -v `pwd`:/src golang:1.14.2-buster /bin/bash -c '
-  set -e
-  set -o pipefail
-  apt-get update && apt-get install -y zip
-  cd /src
+    set -e
+    set -o pipefail
+    apt-get update && apt-get install -y zip
+    cd /src
 
-  o="out"
-  mkdir -p "$o/bin"
-  cp Godeps/LICENSES "$o/"
-  echo Building "$o/dolt"
-  obin="dolt"
-  GOOS="$linux" GOARCH="$amd64" go build -o "$o/bin/$obin" "./cmd/dolt/"
+    o="out"
+    mkdir -p "$o/bin"
+    cp Godeps/LICENSES "$o/"
+    echo Building "$o/dolt"
+    obin="dolt"
+    GOOS="$linux" GOARCH="$amd64" go build -o "$o/bin/$obin" "./cmd/dolt/"
   '
-
   echo "Moving binary to temp out/bin/dolt to $script_dir/working/$commit-dolt"
+
   mv "out/bin/dolt" "$absolute_script_dir/working/$commit-dolt"
-  "$commit-dolt"
+  echo "$commit-dolt"
 }
 
 
 echo "Building binaries and benchmarking for $committish_list"
 for committish in "$committish_list"; do
-  bin_committish=build_binary_at_committish($committish)
+  bin_committish=$(build_binary_at_committish($committish))
   docker run --rm -v `pwd`:/tools oscarbatori/dolt-sysbench /bin/bash -c '
     set -e
     set -o pipefail
