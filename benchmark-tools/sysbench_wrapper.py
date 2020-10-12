@@ -27,7 +27,7 @@ OUTPUT_MAPPING = {
     'other': 'sql_other_queries',
     'total': 'sql_total_queries',
     'transactions': 'sql_transactions',
-    'irgnored errors': 'sql_ignored_errors',
+    'ignored errors': 'sql_ignored_errors',
     'reconnects': 'sql_reconnects',
     'total time': 'total_time',
     'total number of events': 'total_number_of_events',
@@ -114,13 +114,13 @@ def run_test(test_repo: Dolt, test: str) -> str:
     # Prepare the test
     prepare_exitcode, prepare_output = _execute(sysbench_args + ['prepare'], os.getcwd())
     if prepare_exitcode != 0:
-        print(prepare_output)
+        logger.error(prepare_output)
         raise SysbenchFailureException(test, 'prepare', prepare_output)
 
     # Run the test
     run_exitcode, run_output = _execute(sysbench_args + ['run'], os.getcwd())
     if run_exitcode != 0:
-        print(run_output)
+        logger.error(run_output)
         raise SysbenchFailureException(test, 'run', prepare_output)
 
     return run_output
