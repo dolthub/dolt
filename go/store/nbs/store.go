@@ -1156,92 +1156,72 @@ func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
 	return nbs.p.PruneTableFiles(ctx, contents)
 }
 
-func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan hash.Hash) (group *sync.WaitGroup, ae *atomicerr.AtomicError) {
-	group = &sync.WaitGroup{}
-	ae = atomicerr.New()
-
+func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan hash.Hash) error {
 	ops := nbs.SupportedOperations()
 	if !ops.CanGC || !ops.CanPrune {
-		ae.SetIfError(chunks.ErrUnsupportedOperation)
-		return group, ae
+		return chunks.ErrUnsupportedOperation
 	}
 
 	if nbs.upstream.root != last {
-		ae.SetIfError(errLastRootMismatch)
-		return group, ae
+		return errLastRootMismatch
 	}
 
-	nbs.mu.RLock()
-	group.Add(1)
-	go func() {
-		defer func() {
-			for range keepChunks {
-				// drain the channel
-			}
-			group.Done()
-			nbs.mu.RUnlock()
-		}()
+	specs, err := nbs.copyMarkedChunks(ctx, keepChunks)
+	if err != nil {
+		return err
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 
-		specs, err := nbs.copyMarkedChunks(ctx, keepChunks)
+	err = nbs.swapTables(ctx, specs)
+	if err != nil {
+		return err
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 
-		if ae.SetIfErrAndCheck(err) {
-			return
-		}
+	ok, contents, err := nbs.mm.Fetch(ctx, &Stats{})
+	if err != nil {
+		return err
+	}
+	if !ok {
+		panic("no manifest")
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
 
-		err = nbs.swapTables(ctx, specs)
-
-		if ae.SetIfErrAndCheck(err) {
-			return
-		}
-
-		ok, contents, err := nbs.mm.Fetch(ctx, &Stats{})
-		if ae.SetIfErrAndCheck(err) {
-			return
-		}
-		if !ok {
-			panic("no manifest")
-		}
-
-		err = nbs.p.PruneTableFiles(ctx, contents)
-
-		if ae.SetIfErrAndCheck(err) {
-			return
-		}
-	}()
-
-	return group, ae
+	return nbs.p.PruneTableFiles(ctx, contents)
 }
 
 func (nbs *NomsBlockStore) copyMarkedChunks(ctx context.Context, keepChunks <-chan hash.Hash) ([]tableSpec, error) {
 	s, err := nbs.gcTableSize()
-
 	if err != nil {
 		return nil, err
 	}
 
 	gcc, err := newGarbageCollectionCopier(s)
-
 	if err != nil {
 		return nil, err
 	}
 
-	var h hash.Hash
-	ok := true
-	for ok {
+LOOP:
+	for {
 		select {
-		case h, ok = <-keepChunks:
+		case h, ok := <-keepChunks:
 			if !ok {
-				break
+				break LOOP
 			}
-
 			// todo: batch calls to nbs.GetMany()
 			c, err := nbs.Get(ctx, h)
-
 			if err != nil {
 				return nil, err
 			}
-
 			gcc.addChunk(ctx, addr(h), c.Data())
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		}
 	}
 
