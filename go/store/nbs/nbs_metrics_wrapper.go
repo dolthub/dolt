@@ -17,10 +17,11 @@ package nbs
 import (
 	"context"
 	"io"
+	"sync"
 	"sync/atomic"
 
+	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
-
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -66,8 +67,8 @@ func (nbsMW *NBSMetricWrapper) SupportedOperations() TableFileStoreOps {
 	return nbsMW.nbs.SupportedOperations()
 }
 
-func (nbsMW *NBSMetricWrapper) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan hash.Hash, errChan chan<- error) error {
-	return nbsMW.nbs.MarkAndSweepChunks(ctx, last, keepChunks, errChan)
+func (nbsMW *NBSMetricWrapper) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan hash.Hash) (*sync.WaitGroup, *atomicerr.AtomicError) {
+	return nbsMW.nbs.MarkAndSweepChunks(ctx, last, keepChunks)
 }
 
 // PruneTableFiles deletes old table files that are no longer referenced in the manifest.

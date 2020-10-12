@@ -577,19 +577,14 @@ func (lvs *ValueStore) GC(ctx context.Context) error {
 		return nil // empty root
 	}
 
-	// closed by the collector
-	errChan := make(chan error)
+	keepChunks := make(chan hash.Hash, gcBuffSize)
+	wg, ae := collector.MarkAndSweepChunks(ctx, root, keepChunks)
+	if ae.IsSet() {
+		return ae.Get()
+	}
 
 	err = func() error {
-		// todo: stop chan in case of io errors in ref walk
-		keepChunks := make(chan hash.Hash, gcBuffSize)
 		defer close(keepChunks) // signal that all chunks have been marked
-
-		err = collector.MarkAndSweepChunks(ctx, root, keepChunks, errChan)
-
-		if err != nil {
-			return err
-		}
 
 		// send root chunk
 		keepChunks <- root
@@ -609,38 +604,30 @@ func (lvs *ValueStore) GC(ctx context.Context) error {
 				return nil // empty root
 			}
 
-			// todo: use a buffered refWalker to dedupe
 			err = val.WalkRefs(lvs.nbf, func(reachable Ref) (err error) {
-				select {
-				case err = <-errChan:
-					return err
-				default:
-					h := reachable.TargetHash()
-					keepChunks <- h
-					hashQueue.PushBack(h)
-				}
+				h := reachable.TargetHash()
+				keepChunks <- h
+				hashQueue.PushBack(h)
 				return nil
 			})
 
 			if err != nil {
 				return err
 			}
+			if ae.IsSet() {
+				return ae.Get()
+			}
 		}
 
-		return err
+		return ae.Get()
 	}()
 
 	if err != nil {
 		return err
 	}
 
-	// wait for sweep phase to complete
-	select {
-	case err = <-errChan:
-		if err != nil {
-			return err
-		}
-	}
+	// wait for NBS to finish compaction
+	wg.Wait()
 
 	// purge the cache
 	lvs.decodedChunks = sizecache.New(lvs.decodedChunks.Size())

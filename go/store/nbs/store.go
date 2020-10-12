@@ -51,7 +51,6 @@ var ErrFetchFailure = errors.New("fetch failed")
 
 const (
 	// StorageVersion is the version of the on-disk Noms Chunks Store data format.
-	// todo: how to handle discrepancies between file manifest and dynamo manifest
 	StorageVersion = "5"
 
 	defaultMemTableSize uint64 = (1 << 20) * 128 // 128MB
@@ -1157,50 +1156,46 @@ func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
 	return nbs.p.PruneTableFiles(ctx, contents)
 }
 
-func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan hash.Hash, errChan chan<- error) (err error) {
-	//todo: error chan closing
+func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan hash.Hash) (group *sync.WaitGroup, ae *atomicerr.AtomicError) {
+	group = &sync.WaitGroup{}
+	ae = atomicerr.New()
 
 	ops := nbs.SupportedOperations()
 	if !ops.CanGC || !ops.CanPrune {
-		close(errChan)
-		return chunks.ErrUnsupportedOperation
+		ae.SetIfError(chunks.ErrUnsupportedOperation)
+		return group, ae
 	}
 
 	if nbs.upstream.root != last {
-		close(errChan)
-		return errLastRootMismatch
+		ae.SetIfError(errLastRootMismatch)
+		return group, ae
 	}
 
 	nbs.mu.RLock()
-	drainAndClose := func() {
-		defer nbs.mu.RUnlock()
-		defer close(errChan)
-
-		for range keepChunks {
-			// drain the channel
-		}
-	}
-
+	group.Add(1)
 	go func() {
-		defer drainAndClose()
+		defer func() {
+			for range keepChunks {
+				// drain the channel
+			}
+			group.Done()
+			nbs.mu.RUnlock()
+		}()
 
 		specs, err := nbs.copyMarkedChunks(ctx, keepChunks)
 
-		if err != nil {
-			errChan <- err
+		if ae.SetIfErrAndCheck(err) {
 			return
 		}
 
 		err = nbs.swapTables(ctx, specs)
 
-		if err != nil {
-			errChan <- err
+		if ae.SetIfErrAndCheck(err) {
 			return
 		}
 
 		ok, contents, err := nbs.mm.Fetch(ctx, &Stats{})
-		if err != nil {
-			errChan <- err
+		if ae.SetIfErrAndCheck(err) {
 			return
 		}
 		if !ok {
@@ -1209,13 +1204,12 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Has
 
 		err = nbs.p.PruneTableFiles(ctx, contents)
 
-		if err != nil {
-			errChan <- err
+		if ae.SetIfErrAndCheck(err) {
 			return
 		}
 	}()
 
-	return nil
+	return group, ae
 }
 
 func (nbs *NomsBlockStore) copyMarkedChunks(ctx context.Context, keepChunks <-chan hash.Hash) ([]tableSpec, error) {

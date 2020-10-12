@@ -25,6 +25,9 @@ import (
 	"context"
 	"errors"
 	"io"
+	"sync"
+
+	"github.com/dolthub/dolt/go/store/atomicerr"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -94,7 +97,7 @@ type ChunkStoreGarbageCollector interface {
 
 	// MarkAndSweepChunks provides a channel to send the hashes of chunks that should be kept.
 	// Clients must close |keepers| to finalize garbage collection.
-	MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan hash.Hash, errChan chan<- error) error
+	MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan hash.Hash) (*sync.WaitGroup, *atomicerr.AtomicError)
 }
 
 var ErrUnsupportedOperation = errors.New("operation not supported")
