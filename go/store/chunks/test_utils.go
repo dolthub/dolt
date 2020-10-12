@@ -23,12 +23,10 @@ package chunks
 
 import (
 	"context"
-	"sync"
 	"sync/atomic"
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -88,11 +86,10 @@ func (s *TestStoreView) Put(ctx context.Context, c Chunk) error {
 	return s.ChunkStore.Put(ctx, c)
 }
 
-func (s *TestStoreView) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan hash.Hash) (*sync.WaitGroup, *atomicerr.AtomicError) {
+func (s *TestStoreView) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan hash.Hash) error {
 	collector, ok := s.ChunkStore.(ChunkStoreGarbageCollector)
-
 	if !ok {
-		panic(ErrUnsupportedOperation)
+		return ErrUnsupportedOperation
 	}
 
 	return collector.MarkAndSweepChunks(ctx, last, keepChunks)

@@ -22,6 +22,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -254,16 +255,19 @@ func TestNBSCopyGC(t *testing.T) {
 	assert.NoError(t, err)
 
 	keepChan := make(chan hash.Hash, 16)
-	wg, ae := st.MarkAndSweepChunks(ctx, r, keepChan)
-	require.NoError(t, ae.Get())
-
+	var msErr error
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		msErr = st.MarkAndSweepChunks(ctx, r, keepChan)
+		wg.Done()
+	}()
 	for h := range keepers {
 		keepChan <- h
-		assert.NoError(t, ae.Get())
 	}
 	close(keepChan)
-	assert.NoError(t, ae.Get())
 	wg.Wait()
+	assert.NoError(t, msErr)
 
 	for h, c := range keepers {
 		out, err := st.Get(ctx, h)

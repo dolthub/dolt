@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -222,47 +221,29 @@ func (ms *MemoryStoreView) Commit(ctx context.Context, current, last hash.Hash) 
 	return success, nil
 }
 
-func (ms *MemoryStoreView) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan hash.Hash) (*sync.WaitGroup, *atomicerr.AtomicError) {
-	group := &sync.WaitGroup{}
-	ae := atomicerr.New()
+func (ms *MemoryStoreView) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan hash.Hash) error {
 	if last != ms.rootHash {
-		ae.SetIfError(fmt.Errorf("last does not match ms.Root()"))
-		return group, ae
+		return fmt.Errorf("last does not match ms.Root()")
 	}
 
-	ms.mu.RLock()
-	group.Add(1)
-	go func() {
-		defer func() {
-			for range keepChunks {
-				// drain the channel
+	keepers := make(map[hash.Hash]Chunk, ms.storage.Len())
+
+	for {
+		select {
+		case h := <-keepChunks:
+			c, err := ms.Get(ctx, h)
+			if err != nil {
+				return err
 			}
-			group.Done()
-			ms.mu.RUnlock()
-		}()
-
-		keepers := make(map[hash.Hash]Chunk, ms.storage.Len())
-
-		var h hash.Hash
-		ok := true
-		for ok {
-			select {
-			case h, ok = <-keepChunks:
-				c, err := ms.Get(ctx, h)
-
-				if ae.SetIfErrAndCheck(err) {
-					return
-				}
-
-				keepers[h] = c
-			}
+			keepers[h] = c
+		case <-ctx.Done():
+			return ctx.Err()
 		}
+	}
 
-		ms.storage = &MemoryStorage{rootHash: ms.rootHash, data: keepers}
-		ms.pending = map[hash.Hash]Chunk{}
-	}()
-
-	return group, ae
+	ms.storage = &MemoryStorage{rootHash: ms.rootHash, data: keepers}
+	ms.pending = map[hash.Hash]Chunk{}
+	return nil
 }
 
 func (ms *MemoryStoreView) Stats() interface{} {

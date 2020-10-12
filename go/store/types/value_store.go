@@ -27,8 +27,9 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
+	"golang.org/x/sync/errgroup"
 
+	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -578,17 +579,25 @@ func (lvs *ValueStore) GC(ctx context.Context) error {
 	}
 
 	keepChunks := make(chan hash.Hash, gcBuffSize)
-	wg, ae := collector.MarkAndSweepChunks(ctx, root, keepChunks)
-	if ae.IsSet() {
-		return ae.Get()
+
+	eg, egCtx := errgroup.WithContext(ctx)
+	eg.Go(func() error { return collector.MarkAndSweepChunks(egCtx, root, keepChunks) })
+
+	sendHash := func(h hash.Hash) error {
+		select {
+		case keepChunks <- h:
+			return nil
+		case <-egCtx.Done():
+			return egCtx.Err()
+		}
 	}
 
-	err = func() error {
-		defer close(keepChunks) // signal that all chunks have been marked
-
+	eg.Go(func() error {
 		// send root chunk
-		keepChunks <- root
-
+		err := sendHash(root)
+		if err != nil {
+			return err
+		}
 		hashQueue := list.New()
 		hashQueue.PushBack(root)
 		for hashQueue.Len() > 0 {
@@ -596,38 +605,35 @@ func (lvs *ValueStore) GC(ctx context.Context) error {
 			h := e.Value.(hash.Hash)
 			hashQueue.Remove(e)
 
-			val, err := lvs.ReadValue(ctx, h)
+			val, err := lvs.ReadValue(egCtx, h)
 			if err != nil {
 				return err
 			}
 			if val == nil {
-				return nil // empty root
+				return errors.New("dangling reference found in chunk store")
 			}
 
-			err = val.WalkRefs(lvs.nbf, func(reachable Ref) (err error) {
+			err = val.WalkRefs(lvs.nbf, func(reachable Ref) error {
 				h := reachable.TargetHash()
-				keepChunks <- h
+				err := sendHash(h)
+				if err != nil {
+					return err
+				}
 				hashQueue.PushBack(h)
 				return nil
 			})
-
 			if err != nil {
 				return err
 			}
-			if ae.IsSet() {
-				return ae.Get()
-			}
 		}
+		close(keepChunks)
+		return nil
+	})
 
-		return ae.Get()
-	}()
-
+	err = eg.Wait()
 	if err != nil {
 		return err
 	}
-
-	// wait for NBS to finish compaction
-	wg.Wait()
 
 	// purge the cache
 	lvs.decodedChunks = sizecache.New(lvs.decodedChunks.Size())
