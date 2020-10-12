@@ -345,7 +345,7 @@ func (fm4 fileManifestV4) writeManifest(temp io.Writer, contents manifestContent
 	return err
 }
 
-func parseIfExistsWithParser(_ context.Context, dir string, pr manifestParser, readHook func() error) (exists bool, contents manifestContents, err error) {
+func parseIfExistsWithParser(_ context.Context, dir string, parse manifestParser, readHook func() error) (exists bool, contents manifestContents, err error) {
 	var locked bool
 	locked, err = lockFileExists(dir)
 
@@ -404,7 +404,7 @@ func parseIfExistsWithParser(_ context.Context, dir string, pr manifestParser, r
 
 			exists = true
 
-			contents, err = pr(f)
+			contents, err = parse(f)
 
 			if err != nil {
 				return false, contents, err
@@ -415,7 +415,7 @@ func parseIfExistsWithParser(_ context.Context, dir string, pr manifestParser, r
 	return exists, contents, nil
 }
 
-func updateWithParseWriterAndChecker(_ context.Context, dir string, wr manifestWriter, pr manifestParser, vd manifestChecker, lastLock addr, newContents manifestContents, writeHook func() error) (mc manifestContents, err error) {
+func updateWithParseWriterAndChecker(_ context.Context, dir string, write manifestWriter, parse manifestParser, validate manifestChecker, lastLock addr, newContents manifestContents, writeHook func() error) (mc manifestContents, err error) {
 	var tempManifestPath string
 
 	// Write a temporary manifest file, to be renamed over manifestFileName upon success.
@@ -436,7 +436,7 @@ func updateWithParseWriterAndChecker(_ context.Context, dir string, wr manifestW
 			}
 		}()
 
-		ferr = wr(temp, newContents)
+		ferr = write(temp, newContents)
 
 		if ferr != nil {
 			return "", ferr
@@ -489,7 +489,7 @@ func updateWithParseWriterAndChecker(_ context.Context, dir string, wr manifestW
 				}
 			}()
 
-			upstream, ferr = pr(f)
+			upstream, ferr = parse(f)
 
 			if ferr != nil {
 				return manifestContents{}, ferr
@@ -520,7 +520,7 @@ func updateWithParseWriterAndChecker(_ context.Context, dir string, wr manifestW
 	}
 
 	// this is where we assert that gcGen is unchanged
-	err = vd(upstream, newContents)
+	err = validate(upstream, newContents)
 
 	if err != nil {
 		return manifestContents{}, err
