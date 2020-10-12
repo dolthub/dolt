@@ -6,3 +6,5 @@ go.sum
 go.mod
 .DS_Store
 .sqlhistory
+benchmark-tools/working
+benchmark-tools/output
