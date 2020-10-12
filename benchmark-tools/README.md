@@ -7,7 +7,7 @@ The basic goal of these tools is, given a commit, to:
 - connect to it using the [`sysbench` MySQL driver](https://github.com/akopytov/sysbench/tree/master/src/drivers/mysql)
 - execute the benchmarks specified
 
-In order to to do this in a repeatable way we build Dolt at the specified commit inside a Docker container. We then launch a separate container, install `sysbench`, mount the binary we produced in the build step, and execute the benchmarks specified inside that container for maximum repeatability.
+In order to to do this in a repeatable way we build Dolt at the specified commit inside a Docker container. We then launch a separate container, install `sysbench`, mount the binary we produced in the build step, and execute the specified benchmarks from inside that container.
 
 In the future we will want to provide the ability for users to execute these benchmarks on a wider set of infrastructure. As Dolt becomes more mature it will become increasingly necessary to have finer grained benchmarking. For now this should suffice as a tool for contributors to identify the efficacy of their changes.
 
