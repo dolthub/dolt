@@ -114,11 +114,13 @@ def run_test(test_repo: Dolt, test: str) -> str:
     # Prepare the test
     prepare_exitcode, prepare_output = _execute(sysbench_args + ['prepare'], os.getcwd())
     if prepare_exitcode != 0:
+        print(prepare_output)
         raise SysbenchFailureException(test, 'prepare', prepare_output)
 
     # Run the test
     run_exitcode, run_output = _execute(sysbench_args + ['run'], os.getcwd())
     if run_exitcode != 0:
+        print(run_output)
         raise SysbenchFailureException(test, 'run', prepare_output)
 
     return run_output
@@ -178,7 +180,8 @@ def write_output_file(committish: str, username: str, output: List[dict]):
             'database': 'dolt',
             'username': username,
             'committish': committish,
-            'timestamp': datetime.now()
+            'timestamp': datetime.now(),
+            'system_info': get_os_detail()
         }
         fieldnames = list(metadata.keys()) + ['test_name'] + list(OUTPUT_MAPPING.values())
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)

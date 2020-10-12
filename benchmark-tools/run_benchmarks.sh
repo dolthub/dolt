@@ -19,21 +19,22 @@ fi
 
 script_dir=$(dirname "$0")
 absolute_script_dir=$(realpath $script_dir)
-working_dir="$script_dir/working"
+working_dir="$absolute_script_dir/working"
 echo "Ensuring $working_dir exists and is empty"
-rm -rf $working_dir && mkdir "$script_dir/working"
+rm -rf $working_dir
+mkdir $working_dir
 
 function build_binary_at_committish() {
   build_committish=$0
 
   if [ "$build_commitish" != "current" ]; then
-    echo "specific argument provided for 'commitish', cloning for fresh build"
-    mkdir $working_dir && cd $working_dir
-    git clone git@github.com:dolthub/dolt.git && git fetch --all && git checkout $commitish
+    echo "$build_commitish argument provided for 'commitish', cloning for fresh build"
+    cd $working_dir
+    git clone git@github.com:dolthub/dolt.git && git fetch --all && git checkout $build_commitish
     cd "dolt/go"
   else
-    echo "build_committish arg passed as 'current', building from current repo"
-    cd "$script_dir/../go"
+    echo "$build_committish passed for committish arg, building from current repo"
+    cd "$absolute_script_dir/../go"
   fi
 
   commit="$(git rev-parse HEAD)"
@@ -63,14 +64,20 @@ function build_binary_at_committish() {
 
 
 echo "Building binaries and benchmarking for $committish_list"
-for committish in "$committish_list"; do
-  bin_committish=$(build_binary_at_committish($committish))
+for committish in $committish_list; do
+  echo "Building binary for $committish"
+  bin_committish=$(build_binary_at_committish $committish)
+  cd $absolute_script_dir
+  echo "Built binary $bin_committish, executing benchmarks"
   docker run --rm -v `pwd`:/tools oscarbatori/dolt-sysbench /bin/bash -c '
     set -e
     set -o pipefail
 
-    ln -s '/tools/$bin_committish' /usr/local/bin/dolt
+    ln -s /tools/working/'$bin_committish' /usr/bin/dolt
     cd /tools
+
+    dolt config --add --global user.name benchmark
+    dolt config --add --global user.email benchmark
 
     python3 \
       sysbench_wrapper.py \

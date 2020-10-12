@@ -3,9 +3,6 @@ FROM python:3.7-slim-stretch
 ENV DEBIAN_FRONTEND noninteractive
 ENV TERM linux
 
-RUN apt-get update
-RUN apt-get install -yqq --no-install-recommends software-properties-common curl
-RUN curl -s "https://packagecloud.io/install/repositories/akopytov/sysbench/script.deb.sh" | bash
 RUN set -ex \
     && buildDeps=' \
         freetds-dev \
@@ -20,7 +17,6 @@ RUN set -ex \
     && apt-get install -yqq --no-install-recommends \
         $buildDeps \
         apt-utils \
-        awscli \
         build-essential \
         ca-certificates \
         cpanminus \
@@ -65,10 +61,7 @@ RUN set -ex \
         libxtst6 \
         locales \
         lsb-release \
-        netcat \
-        perl \
-        rsync \
-        unzip \
-        wget \
-        xdg-utils
+        netcat
+RUN curl -s https://packagecloud.io/install/repositories/akopytov/sysbench/script.deb.sh | bash
+RUN apt -y install sysbench
 RUN pip install doltpy

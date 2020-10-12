@@ -25,4 +25,8 @@ def main():
     parser.add_argument('--remote-results-db-branch', type=str, required=False, default='master')
     args = parser.parse_args()
     logger.info('Writing the results of the tests')
-    write_results_to_dolt(args.remote_results_db, args.remote_results_db_branch)
+    write_results_to_dolt(args.results_directory, args.remote_results_db, args.remote_results_db_branch)
+
+
+if __name__ == '__main__':
+    main()
