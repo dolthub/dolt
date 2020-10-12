@@ -228,9 +228,13 @@ func (ms *MemoryStoreView) MarkAndSweepChunks(ctx context.Context, last hash.Has
 
 	keepers := make(map[hash.Hash]Chunk, ms.storage.Len())
 
+LOOP:
 	for {
 		select {
-		case h := <-keepChunks:
+		case h, ok := <-keepChunks:
+			if !ok {
+				break LOOP
+			}
 			c, err := ms.Get(ctx, h)
 			if err != nil {
 				return err
