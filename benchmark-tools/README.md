@@ -2,7 +2,7 @@
 This folder contains a toolkit for benchmarking Dolt SQL performance. [`sysbench`](https://github.com/akopytov/sysbench) is an industry standard tool for benchmarking database performance, particularly MySQL. This directory contains a set of tools for benchmarking Dolt using `sysbench` in a way that should make it convenient for Dolt contributors to measure the performance benefits their changes deliver.
 
 ## Architecture
-The basic goal is to run these tools is, given a commit, to:
+The basic goal of these tools is, given a commit, to:
 - run Dolt SQL server
 - connect to it using the [`sysbench` MySQL driver](https://github.com/akopytov/sysbench/tree/master/src/drivers/mysql)
 - execute the benchmarks specified
