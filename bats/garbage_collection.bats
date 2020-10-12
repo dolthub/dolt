@@ -99,3 +99,34 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "6" ]] || false
 }
+
+@test "dolt gc leave committed and uncommitted data" {
+    dolt sql <<SQL
+CREATE TABLE test (pk int PRIMARY KEY);
+INSERT INTO test VALUES
+    (1),(2),(3),(4),(5);
+SQL
+    dolt add .
+    dolt commit -m "added values 1 - 5"
+
+    # make some garbage
+    dolt sql -q "INSERT INTO test VALUES (6),(7),(8);"
+    dolt reset --hard
+
+    # leave data in the working set
+    dolt sql -q "INSERT INTO test VALUES (11),(12),(13),(14),(15);"
+
+    BEFORE=$(du .dolt/noms/ | sed 's/[^0-9]*//g')
+
+    run dolt gc
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT sum(pk) FROM test;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "80" ]] || false
+
+    AFTER=$(du .dolt/noms/ | sed 's/[^0-9]*//g')
+
+    # assert space was reclaimed
+    [ "$BEFORE" -gt "$AFTER" ]
+}
