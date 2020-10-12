@@ -33,9 +33,13 @@ const (
 )
 
 var gcDocs = cli.CommandDocumentationContent{
-	ShortDesc: "",
-	LongDesc:  ``,
-	Synopsis:  []string{},
+	ShortDesc: "Cleans up unreferenced data from the repository.",
+	LongDesc: `Searches the repository for data that is no longer referenced and no longer needed
+
+If the {{.EmphasisLeft}}--shallow{{.EmphasisRight}} flag is supplied, a faster but less thorough garbage collection will be performed.`,
+	Synopsis: []string{
+		"[--shallow]",
+	},
 }
 
 type GarbageCollectionCmd struct{}
@@ -47,12 +51,12 @@ func (cmd GarbageCollectionCmd) Name() string {
 
 // Description returns a description of the command
 func (cmd GarbageCollectionCmd) Description() string {
-	return "Cleans up unreferenced data from the database."
+	return gcDocs.ShortDesc
 }
 
 // Hidden should return true if this command should be hidden from the help text
 func (cmd GarbageCollectionCmd) Hidden() bool {
-	return true
+	return false
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -69,7 +73,7 @@ func (cmd GarbageCollectionCmd) CreateMarkdown(fs filesys.Filesys, path, command
 
 func (cmd GarbageCollectionCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsFlag(gcShallowFlag, "s", "reclaim compaction garbage, but don't traverse the commit graph")
+	ap.SupportsFlag(gcShallowFlag, "s", "perform a fast, but incomplete garbage collection pass")
 	return ap
 }
 
