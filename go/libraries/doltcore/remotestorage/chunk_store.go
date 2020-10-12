@@ -91,6 +91,7 @@ func NewDoltChunkStoreFromPath(ctx context.Context, nbf *types.NomsBinFormat, pa
 		return nil, ErrInvalidDoltSpecPath
 	}
 
+	// todo:
 	// this may just be a dolthub thing.  Need to revisit how we do this.
 	org := tokens[0]
 	repoName := tokens[1]

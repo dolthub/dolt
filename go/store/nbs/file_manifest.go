@@ -24,6 +24,7 @@ package nbs
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -33,6 +34,7 @@ import (
 
 	"github.com/dolthub/fslock"
 
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
@@ -40,14 +42,111 @@ import (
 const (
 	manifestFileName = "manifest"
 	lockFileName     = "LOCK"
+
+	storageVersion4 = "4"
+
+	prefixLen = 5
 )
 
-// fileManifest provides access to a NomsBlockStore manifest stored on disk in |dir|. The format
-// is currently human readable:
+type manifestParser func(r io.Reader) (manifestContents, error)
+type manifestWriter func(temp io.Writer, contents manifestContents) error
+type manifestChecker func(upstream, contents manifestContents) error
+
+// ParseManifest parses s a manifest file from the supplied reader
+func ParseManifest(r io.Reader) (ManifestInfo, error) {
+	fm5 := fileManifestv5{}
+	return fm5.parseManifest(r)
+}
+
+func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
+	f, err := openIfExists(filepath.Join(dir, manifestFileName))
+	if err != nil {
+		return false, err
+	}
+	if f == nil {
+		// no manifest exists, no need to migrate
+		return false, nil
+	}
+	defer func() {
+		err = f.Close()
+	}()
+
+	fm5 := fileManifestv5{dir}
+	ok, _, err := fm5.ParseIfExists(ctx, &Stats{}, nil)
+	if ok && err == nil {
+		// on v5, no need to migrate
+		return false, nil
+	}
+
+	fm4 := fileManifestV4{dir}
+	ok, contents, err := fm4.ParseIfExists(ctx, &Stats{}, nil)
+	if err != nil {
+		return false, err
+	}
+	if !ok {
+		// expected v4 or v5
+		return false, fmt.Errorf("could not read file manifest")
+	}
+
+	check := func(upstream, contents manifestContents) error {
+		if upstream.gcGen == contents.gcGen {
+			return errors.New("error migrating manifest")
+		}
+		return nil
+	}
+	contents.gcGen = contents.lock
+
+	_, err = updateWithParseWriterAndChecker(ctx, dir, fm5.writeManifest, fm4.parseManifest, check, contents.lock, contents, nil)
+
+	if err != nil {
+		return false, nil
+	}
+
+	// clear manifest cache
+	makeGlobalCaches()
+
+	return true, err
+}
+
+// parse the manifest in its given format
+func getFileManifest(ctx context.Context, dir string) (manifest, error) {
+	f, err := openIfExists(filepath.Join(dir, manifestFileName))
+	if err != nil {
+		return nil, err
+	}
+	if f == nil {
+		// initialize empty repos with v4
+		return fileManifestV4{dir}, nil
+	}
+	defer func() {
+		err = f.Close()
+	}()
+
+	fm5 := fileManifestv5{dir}
+	ok, _, err := fm5.ParseIfExists(ctx, &Stats{}, nil)
+	if ok && err == nil {
+		return fm5, nil
+	}
+
+	fm4 := fileManifestV4{dir}
+	ok, _, err = fm4.ParseIfExists(ctx, &Stats{}, nil)
+	if ok && err == nil {
+		return fm4, nil
+	}
+
+	return nil, fmt.Errorf("could not read file manifest")
+}
+
+// fileManifestv5 provides access to a NomsBlockStore manifest stored on disk in |dir|. The format
+// is currently human readable. The prefix contains 5 strings, followed by pairs of table file
+// hashes and their counts:
 //
-// |-- String --|-- String --|-------- String --------|-------- String --------|-- String --|- String --|...|-- String --|- String --|
-// | nbs version:Noms version:Base32-encoded lock hash:Base32-encoded root hash:table 1 hash:table 1 cnt:...:table N hash:table N cnt|
-type fileManifest struct {
+// |-- String --|-- String --|-------- String --------|-------- String --------|-------- String -----------------|
+// | nbs version:Noms version:Base32-encoded lock hash:Base32-encoded root hash:Base32-encoded GC generation hash
+//
+// |-- String --|- String --|...|-- String --|- String --|
+// :table 1 hash:table 1 cnt:...:table N hash:table N cnt|
+type fileManifestv5 struct {
 	dir string
 }
 
@@ -73,91 +172,6 @@ func lockFileExists(dir string) (bool, error) {
 	return true, nil
 }
 
-func (fm fileManifest) Name() string {
-	return fm.dir
-}
-
-// ParseIfExists looks for a LOCK and manifest file in fm.dir. If it finds
-// them, it takes the lock, parses the manifest and returns its contents,
-// setting |exists| to true. If not, it sets |exists| to false and returns. In
-// that case, the other return values are undefined. If |readHook| is non-nil,
-// it will be executed while ParseIfExists() holds the manifest file lock.
-// This is to allow for race condition testing.
-func (fm fileManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (exists bool, contents manifestContents, err error) {
-	t1 := time.Now()
-	defer func() {
-		stats.ReadManifestLatency.SampleTimeSince(t1)
-	}()
-
-	var locked bool
-	locked, err = lockFileExists(fm.dir)
-
-	if err != nil {
-		return false, manifestContents{}, err
-	}
-
-	// !exists(lockFileName) => unitialized store
-	if locked {
-		var f io.ReadCloser
-		err = func() (ferr error) {
-			lck := newLock(fm.dir)
-			ferr = lck.Lock()
-
-			if ferr != nil {
-				return ferr
-			}
-
-			defer func() {
-				unlockErr := lck.Unlock()
-
-				if ferr == nil {
-					ferr = unlockErr
-				}
-			}()
-
-			if readHook != nil {
-				ferr = readHook()
-
-				if ferr != nil {
-					return ferr
-				}
-			}
-
-			f, ferr = openIfExists(filepath.Join(fm.dir, manifestFileName))
-
-			if ferr != nil {
-				return ferr
-			}
-
-			return nil
-		}()
-
-		if err != nil {
-			return exists, contents, err
-		}
-
-		if f != nil {
-			defer func() {
-				closeErr := f.Close()
-
-				if err == nil {
-					err = closeErr
-				}
-			}()
-
-			exists = true
-
-			contents, err = parseManifest(f)
-
-			if err != nil {
-				return false, contents, err
-			}
-		}
-	}
-
-	return exists, contents, nil
-}
-
 // Returns nil if path does not exist
 func openIfExists(path string) (*os.File, error) {
 	f, err := os.Open(path)
@@ -170,12 +184,122 @@ func openIfExists(path string) (*os.File, error) {
 	return f, err
 }
 
-// ParseManifest parses s a manifest file from the supplied reader
-func ParseManifest(r io.Reader) (ManifestInfo, error) {
-	return parseManifest(r)
+func (fm5 fileManifestv5) Name() string {
+	return fm5.dir
 }
 
-func parseManifest(r io.Reader) (manifestContents, error) {
+// ParseIfExists looks for a LOCK and manifest file in fm.dir. If it finds
+// them, it takes the lock, parses the manifest and returns its contents,
+// setting |exists| to true. If not, it sets |exists| to false and returns. In
+// that case, the other return values are undefined. If |readHook| is non-nil,
+// it will be executed while ParseIfExists() holds the manifest file lock.
+// This is to allow for race condition testing.
+func (fm5 fileManifestv5) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (exists bool, contents manifestContents, err error) {
+	t1 := time.Now()
+	defer func() {
+		stats.ReadManifestLatency.SampleTimeSince(t1)
+	}()
+
+	return parseIfExistsWithParser(ctx, fm5.dir, fm5.parseManifest, readHook)
+}
+
+func (fm5 fileManifestv5) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
+	t1 := time.Now()
+	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
+
+	checker := func(upstream, contents manifestContents) error {
+		if contents.gcGen != upstream.gcGen {
+			return chunks.ErrGCGenerationExpired
+		}
+		return nil
+	}
+
+	return updateWithParseWriterAndChecker(ctx, fm5.dir, fm5.writeManifest, fm5.parseManifest, checker, lastLock, newContents, writeHook)
+}
+
+func (fm5 fileManifestv5) parseManifest(r io.Reader) (manifestContents, error) {
+	manifest, err := ioutil.ReadAll(r)
+
+	if err != nil {
+		return manifestContents{}, err
+	}
+
+	slices := strings.Split(string(manifest), ":")
+	if len(slices) < prefixLen || len(slices)%2 != 1 {
+		return manifestContents{}, ErrCorruptManifest
+	}
+
+	if StorageVersion != string(slices[0]) {
+		return manifestContents{}, errors.New("invalid storage version")
+	}
+
+	specs, err := parseSpecs(slices[prefixLen:])
+
+	if err != nil {
+		return manifestContents{}, err
+	}
+
+	lock, err := parseAddr(slices[2])
+
+	if err != nil {
+		return manifestContents{}, err
+	}
+
+	gcGen, err := parseAddr(slices[4])
+
+	return manifestContents{
+		vers:  slices[1],
+		lock:  lock,
+		root:  hash.Parse(slices[3]),
+		gcGen: gcGen,
+		specs: specs,
+	}, nil
+}
+
+func (fm5 fileManifestv5) writeManifest(temp io.Writer, contents manifestContents) error {
+	strs := make([]string, 2*len(contents.specs)+prefixLen)
+	strs[0], strs[1], strs[2], strs[3], strs[4] = StorageVersion, contents.vers, contents.lock.String(), contents.root.String(), contents.gcGen.String()
+	tableInfo := strs[prefixLen:]
+	formatSpecs(contents.specs, tableInfo)
+	_, err := io.WriteString(temp, strings.Join(strs, ":"))
+
+	return err
+}
+
+// fileManifestV4 is the previous versions of the NomsBlockStore manifest.
+// The format is as follows:
+//
+// |-- String --|-- String --|-------- String --------|-------- String --------|-- String --|- String --|...|-- String --|- String --|
+// | nbs version:Noms version:Base32-encoded lock hash:Base32-encoded root hash:table 1 hash:table 1 cnt:...:table N hash:table N cnt|
+type fileManifestV4 struct {
+	dir string
+}
+
+func (fm4 fileManifestV4) Name() string {
+	return fm4.dir
+}
+
+func (fm4 fileManifestV4) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (exists bool, contents manifestContents, err error) {
+	t1 := time.Now()
+	defer func() {
+		stats.ReadManifestLatency.SampleTimeSince(t1)
+	}()
+
+	return parseIfExistsWithParser(ctx, fm4.dir, fm4.parseManifest, readHook)
+}
+
+func (fm4 fileManifestV4) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
+	t1 := time.Now()
+	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
+
+	noop := func(_, _ manifestContents) error {
+		return nil
+	}
+
+	return updateWithParseWriterAndChecker(ctx, fm4.dir, fm4.writeManifest, fm4.parseManifest, noop, lastLock, newContents, writeHook)
+}
+
+func (fm4 fileManifestV4) parseManifest(r io.Reader) (manifestContents, error) {
 	manifest, err := ioutil.ReadAll(r)
 
 	if err != nil {
@@ -187,7 +311,7 @@ func parseManifest(r io.Reader) (manifestContents, error) {
 		return manifestContents{}, ErrCorruptManifest
 	}
 
-	if StorageVersion != string(slices[0]) {
+	if storageVersion4 != string(slices[0]) {
 		return manifestContents{}, errors.New("invalid storage version")
 	}
 
@@ -211,17 +335,94 @@ func parseManifest(r io.Reader) (manifestContents, error) {
 	}, nil
 }
 
-func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
-	t1 := time.Now()
-	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
+func (fm4 fileManifestV4) writeManifest(temp io.Writer, contents manifestContents) error {
+	strs := make([]string, 2*len(contents.specs)+4)
+	strs[0], strs[1], strs[2], strs[3] = storageVersion4, contents.vers, contents.lock.String(), contents.root.String()
+	tableInfo := strs[4:]
+	formatSpecs(contents.specs, tableInfo)
+	_, err := io.WriteString(temp, strings.Join(strs, ":"))
 
+	return err
+}
+
+func parseIfExistsWithParser(_ context.Context, dir string, parse manifestParser, readHook func() error) (exists bool, contents manifestContents, err error) {
+	var locked bool
+	locked, err = lockFileExists(dir)
+
+	if err != nil {
+		return false, manifestContents{}, err
+	}
+
+	// !exists(lockFileName) => unitialized store
+	if locked {
+		var f io.ReadCloser
+		err = func() (ferr error) {
+			lck := newLock(dir)
+			ferr = lck.Lock()
+
+			if ferr != nil {
+				return ferr
+			}
+
+			defer func() {
+				unlockErr := lck.Unlock()
+
+				if ferr == nil {
+					ferr = unlockErr
+				}
+			}()
+
+			if readHook != nil {
+				ferr = readHook()
+
+				if ferr != nil {
+					return ferr
+				}
+			}
+
+			f, ferr = openIfExists(filepath.Join(dir, manifestFileName))
+
+			if ferr != nil {
+				return ferr
+			}
+
+			return nil
+		}()
+
+		if err != nil {
+			return exists, contents, err
+		}
+
+		if f != nil {
+			defer func() {
+				closeErr := f.Close()
+
+				if err == nil {
+					err = closeErr
+				}
+			}()
+
+			exists = true
+
+			contents, err = parse(f)
+
+			if err != nil {
+				return false, contents, err
+			}
+		}
+	}
+
+	return exists, contents, nil
+}
+
+func updateWithParseWriterAndChecker(_ context.Context, dir string, write manifestWriter, parse manifestParser, validate manifestChecker, lastLock addr, newContents manifestContents, writeHook func() error) (mc manifestContents, err error) {
 	var tempManifestPath string
 
 	// Write a temporary manifest file, to be renamed over manifestFileName upon success.
 	// The closure here ensures this file is closed before moving on.
 	tempManifestPath, err = func() (name string, ferr error) {
 		var temp *os.File
-		temp, ferr = tempfiles.MovableTempFileProvider.NewFile(fm.dir, "nbs_manifest_")
+		temp, ferr = tempfiles.MovableTempFileProvider.NewFile(dir, "nbs_manifest_")
 
 		if ferr != nil {
 			return "", ferr
@@ -235,7 +436,7 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 			}
 		}()
 
-		ferr = writeManifest(temp, newContents)
+		ferr = write(temp, newContents)
 
 		if ferr != nil {
 			return "", ferr
@@ -251,7 +452,7 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 	defer os.Remove(tempManifestPath) // If we rename below, this will be a no-op
 
 	// Take manifest file lock
-	lck := newLock(fm.dir)
+	lck := newLock(dir)
 	err = lck.Lock()
 
 	if err != nil {
@@ -277,7 +478,7 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 
 	var upstream manifestContents
 	// Read current manifest (if it exists). The closure ensures that the file is closed before moving on, so we can rename over it later if need be.
-	manifestPath := filepath.Join(fm.dir, manifestFileName)
+	manifestPath := filepath.Join(dir, manifestFileName)
 	upstream, err = func() (upstream manifestContents, ferr error) {
 		if f, ferr := openIfExists(manifestPath); ferr == nil && f != nil {
 			defer func() {
@@ -288,7 +489,7 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 				}
 			}()
 
-			upstream, ferr = parseManifest(f)
+			upstream, ferr = parse(f)
 
 			if ferr != nil {
 				return manifestContents{}, ferr
@@ -318,6 +519,13 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 		return upstream, nil
 	}
 
+	// this is where we assert that gcGen is unchanged
+	err = validate(upstream, newContents)
+
+	if err != nil {
+		return manifestContents{}, err
+	}
+
 	err = os.Rename(tempManifestPath, manifestPath)
 
 	if err != nil {
@@ -325,14 +533,4 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 	}
 
 	return newContents, nil
-}
-
-func writeManifest(temp io.Writer, contents manifestContents) error {
-	strs := make([]string, 2*len(contents.specs)+4)
-	strs[0], strs[1], strs[2], strs[3] = StorageVersion, contents.vers, contents.lock.String(), contents.root.String()
-	tableInfo := strs[4:]
-	formatSpecs(contents.specs, tableInfo)
-	_, err := io.WriteString(temp, strings.Join(strs, ":"))
-
-	return err
 }

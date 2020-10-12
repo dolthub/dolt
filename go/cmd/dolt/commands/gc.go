@@ -19,10 +19,13 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/nbs"
 )
 
 var gcDocs = cli.CommandDocumentationContent{
@@ -73,16 +76,52 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 
 	var verr errhand.VerboseError
 
+	dEnv, err := maybeMigrateEnv(ctx, dEnv)
+
+	if err != nil {
+		verr = errhand.BuildDError("could not load manifest for gc").AddCause(err).Build()
+		return HandleVErrAndExitCode(verr, usage)
+	}
+
 	db, ok := dEnv.DoltDB.ValueReadWriter().(datas.Database)
 	if !ok {
 		verr = errhand.BuildDError("this database does not support garbage collection").Build()
+		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	err := datas.PruneTableFiles(ctx, db)
+	err = datas.PruneTableFiles(ctx, db)
 
 	if err != nil {
 		verr = errhand.BuildDError("an error occurred during garbage collection").AddCause(err).Build()
 	}
 
 	return HandleVErrAndExitCode(verr, usage)
+}
+
+func maybeMigrateEnv(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, error) {
+	migrated, err := nbs.MaybeMigrateFileManifest(ctx, dbfactory.DoltDataDir)
+	if err != nil {
+		return nil, err
+	}
+	if !migrated {
+		return dEnv, nil
+	}
+
+	// reload env with new manifest
+	tmp := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, dEnv.Version)
+
+	if tmp.CfgLoadErr != nil {
+		return nil, tmp.CfgLoadErr
+	}
+	if tmp.RSLoadErr != nil {
+		return nil, tmp.RSLoadErr
+	}
+	if tmp.DocsLoadErr != nil {
+		return nil, tmp.DocsLoadErr
+	}
+	if tmp.DBLoadError != nil {
+		return nil, tmp.DBLoadError
+	}
+
+	return tmp, nil
 }

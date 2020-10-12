@@ -51,7 +51,8 @@ var ErrFetchFailure = errors.New("fetch failed")
 
 const (
 	// StorageVersion is the version of the on-disk Noms Chunks Store data format.
-	StorageVersion = "4"
+	// todo: how to handle discrepancies between file manifest and dynamo manifest
+	StorageVersion = "5"
 
 	defaultMemTableSize uint64 = (1 << 20) * 128 // 128MB
 	defaultMaxTables           = 256
@@ -320,7 +321,13 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 		return nil, err
 	}
 
-	mm := makeManifestManager(fileManifest{dir})
+	m, err := getFileManifest(ctx, dir)
+
+	if err != nil {
+		return nil, err
+	}
+
+	mm := makeManifestManager(m)
 	p := newFSTablePersister(dir, globalFDCache, globalIndexCache)
 	nbs, err := newNomsBlockStore(ctx, nbfVerStr, mm, p, inlineConjoiner{maxTables}, memTableSize)
 
@@ -881,6 +888,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		vers:  nbs.upstream.vers,
 		root:  current,
 		lock:  generateLockHash(current, specs),
+		gcGen: nbs.upstream.gcGen,
 		specs: specs,
 	}
 

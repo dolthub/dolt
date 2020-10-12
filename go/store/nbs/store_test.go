@@ -29,11 +29,12 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 func makeTestLocalStore(t *testing.T, maxTableFiles int) (st *NomsBlockStore, nomsDir string) {
 	ctx := context.Background()
-	nomsDir = filepath.Join(os.TempDir(), uuid.New().String())
+	nomsDir = filepath.Join(tempfiles.MovableTempFileProvider.GetTempDir(), uuid.New().String())
 
 	err := os.MkdirAll(nomsDir, os.ModePerm)
 	require.NoError(t, err)

@@ -154,6 +154,7 @@ func runMain() int {
 	warnIfMaxFilesTooLow()
 
 	ctx := context.Background()
+
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
 
 	if dEnv.DBLoadError == nil && commandNeedsMigrationCheck(args) {

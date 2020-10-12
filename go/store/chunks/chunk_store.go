@@ -23,6 +23,7 @@ package chunks
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -86,3 +87,5 @@ type ChunkStore interface {
 	// undefined and probably crashy.
 	io.Closer
 }
+
+var ErrGCGenerationExpired = fmt.Errorf("garbage collection generation expired")

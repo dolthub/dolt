@@ -80,15 +80,17 @@ type manifestUpdater interface {
 type ManifestInfo interface {
 	GetVersion() string
 	GetLock() string
+	GetGCGen() string
 	GetRoot() hash.Hash
 	NumTableSpecs() int
 	GetTableSpecInfo(i int) TableSpecInfo
 }
 
 type manifestContents struct {
-	vers  string
+	vers  string // NBF version
 	lock  addr
 	root  hash.Hash
+	gcGen addr
 	specs []tableSpec
 }
 
@@ -98,6 +100,10 @@ func (mc manifestContents) GetVersion() string {
 
 func (mc manifestContents) GetLock() string {
 	return mc.lock.String()
+}
+
+func (mc manifestContents) GetGCGen() string {
+	return mc.gcGen.String()
 }
 
 func (mc manifestContents) GetRoot() hash.Hash {

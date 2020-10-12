@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/util/exit"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 const DefaultMemTableSize = 8 * (1 << 20) // 8MB
@@ -51,7 +52,8 @@ type ExitError struct {
 }
 
 func (suite *ClientTestSuite) SetupSuite() {
-	dir, err := ioutil.TempDir(os.TempDir(), "nomstest")
+	td := tempfiles.MovableTempFileProvider.GetTempDir()
+	dir, err := ioutil.TempDir(td, "nomstest")
 	d.Chk.NoError(err)
 	stdOutput, err := ioutil.TempFile(dir, "out")
 	d.Chk.NoError(err)
