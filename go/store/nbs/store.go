@@ -294,8 +294,14 @@ func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string
 func NewGCSStore(ctx context.Context, nbfVerStr string, bucketName, path string, gcs *storage.Client, memTableSize uint64) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 
-	bucket := gcs.Bucket(bucketName)
-	bs := blobstore.NewGCSBlobstore(bucket, path)
+	bs := blobstore.NewGCSBlobstore(gcs, bucketName, path)
+	return NewBSStore(ctx, nbfVerStr, bs, memTableSize)
+}
+
+// NewBSStore returns an nbs implementation backed by a Blobstore
+func NewBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, memTableSize uint64) (*NomsBlockStore, error) {
+	cacheOnce.Do(makeGlobalCaches)
+
 	mm := makeManifestManager(blobstoreManifest{"manifest", bs})
 
 	p := &blobstorePersister{bs, s3BlockSize, globalIndexCache}

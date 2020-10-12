@@ -80,7 +80,7 @@ func (bsm blobstoreManifest) Update(ctx context.Context, lastLock addr, newConte
 
 	ver, contents, err := manifestVersionAndContents(ctx, bsm.bs)
 
-	if err != nil {
+	if err != nil && !blobstore.IsNotFoundError(err) {
 		return manifestContents{}, err
 	}
 

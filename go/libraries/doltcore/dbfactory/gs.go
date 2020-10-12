@@ -17,9 +17,11 @@ package dbfactory
 import (
 	"context"
 	"net/url"
+	"path/filepath"
 
 	"cloud.google.com/go/storage"
 
+	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
@@ -38,13 +40,39 @@ func (fact GSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, ur
 		return nil, err
 	}
 
-	gcsStore, err := nbs.NewGCSStore(ctx, nbf.VersionString(), urlObj.Host, urlObj.Path, gcs, defaultMemTableSize)
+	bs := blobstore.NewGCSBlobstore(gcs, urlObj.Host, urlObj.Path)
+	gcsStore, err := nbs.NewBSStore(ctx, nbf.VersionString(), bs, defaultMemTableSize)
 
 	if err != nil {
 		return nil, err
 	}
 
 	db = datas.NewDatabase(gcsStore)
+
+	return db, err
+}
+
+// LocalBSFactory is a DBFactory implementation for creating a local filesystem blobstore backed databases for testing
+type LocalBSFactory struct {
+}
+
+// CreateDB creates a local filesystem blobstore backed database
+func (fact LocalBSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]string) (datas.Database, error) {
+	var db datas.Database
+	absPath, err := filepath.Abs(filepath.Join(urlObj.Host, urlObj.Path))
+
+	if err != nil {
+		return nil, err
+	}
+
+	bs := blobstore.NewLocalBlobstore(absPath)
+	bsStore, err := nbs.NewBSStore(ctx, nbf.VersionString(), bs, defaultMemTableSize)
+
+	if err != nil {
+		return nil, err
+	}
+
+	db = datas.NewDatabase(bsStore)
 
 	return db, err
 }
