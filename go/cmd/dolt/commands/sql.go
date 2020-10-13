@@ -1361,11 +1361,11 @@ const (
 )
 
 func createCSVPipeline(ctx context.Context, sch sql.Schema, iter sql.RowIter) *pipeline2.Pipeline {
-	p := pipeline2.NewPipeline([]*pipeline2.Stage{
+	p := pipeline2.NewPipeline(
 		pipeline2.NewStage("read", nil, getReadStageFunc(iter), 0, 0, 0),
 		pipeline2.NewStage("process", nil, csvProcessStageFunc, 2, 1000, readBatchSize),
 		pipeline2.NewStage("write", nil, writeToCliOutStageFunc, 0, 100, writeBatchSize),
-	})
+	)
 
 	writeIn, _ := p.GetInputChannel("write")
 	sb := strings.Builder{}
@@ -1385,22 +1385,22 @@ func createCSVPipeline(ctx context.Context, sch sql.Schema, iter sql.RowIter) *p
 }
 
 func createJSONPipeline(ctx context.Context, sch sql.Schema, iter sql.RowIter) *pipeline2.Pipeline {
-	p := pipeline2.NewPipeline([]*pipeline2.Stage{
+	p := pipeline2.NewPipeline(
 		pipeline2.NewStage("read", nil, getReadStageFunc(iter), 0, 0, 0),
 		pipeline2.NewStage("process", nil, getJSONProcessFunc(sch), 2, 1000, readBatchSize),
 		pipeline2.NewStage("write", writeJSONInitRoutineFunc, writeJSONToCliOutStageFunc, 0, 100, writeBatchSize),
-	})
+	)
 
 	return p
 }
 
 func createTabularPipeline(ctx context.Context, sch sql.Schema, iter sql.RowIter) *pipeline2.Pipeline {
-	/*p := pipeline2.NewPipeline([]*pipeline2.Stage{
+	/*p := pipeline2.NewPipeline(
 		pipeline2.NewStage("read", nil, getReadStageFunc(iter), 0, 0, 0),
 		pipeline2.NewStage("stringify", nil, rowsToStringSlices, 0, 1000, ),
 		pipeline2.NewStage("buffer_and_format", nil, , 0, 1000, readBatchSize),
 		pipeline2.NewStage("write", nil, writeToCliOutStageFunc, 0, 100, writeBatchSize),
-	})
+	)
 
 	writeIn, _ := p.GetInputChannel("buffer_and_format")
 	headers := make([]string, len(sch))
@@ -1426,10 +1426,10 @@ func createTabularPipeline(ctx context.Context, sch sql.Schema, iter sql.RowIter
 }
 
 func createNullPipeline(ctx context.Context, sch sql.Schema, iter sql.RowIter) *pipeline2.Pipeline {
-	return pipeline2.NewPipeline([]*pipeline2.Stage{
+	return pipeline2.NewPipeline(
 		pipeline2.NewStage("read", nil, getReadStageFunc(iter), 0, 0, 0),
 		pipeline2.NewStage("drop", nil, dropOnFloor, 0, 100, writeBatchSize),
-	})
+	)
 }
 
 func getReadStageFunc(iter sql.RowIter) pipeline2.StageFunc {

@@ -39,7 +39,7 @@ type Pipeline struct {
 
 // NewPipeline creates a new Pipeline from an ordered slice of stages. The first stage in the pipeline must produce data
 // and each stage will pass data on to the next stage.
-func NewPipeline(stages []*Stage) *Pipeline {
+func NewPipeline(stages ...*Stage) *Pipeline {
 	var nextInStage chan []ItemWithProps
 
 	outBatchSize := -1

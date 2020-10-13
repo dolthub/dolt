@@ -415,6 +415,7 @@ github.com/liquidata-inc/sqllogictest/go v0.0.0-20200320151923-b11801f10e15 h1:H
 github.com/liquidata-inc/sqllogictest/go v0.0.0-20200320151923-b11801f10e15/go.mod h1:kKRVtyuomkqz15YFRpS0OT8kpsU8y/F3jyiZtvALdKU=
 github.com/liquidata-inc/vitess v0.0.0-20200911213404-87f76781a7c7/go.mod h1:8PM478sNETVVNWL2tVW+Uy4LIH31/x/tphLIRPh/hF4=
 github.com/lyft/protoc-gen-validate v0.0.13/go.mod h1:XbGvPuh87YZc5TdIa2/I4pLk0QoUACkjt2znoq26NVQ=
+github.com/magiconair/properties v1.8.0 h1:LLgXmsheXeRoUOBOjtwPQCWIYqM/LU1ayDtDePerRcY=
 github.com/magiconair/properties v1.8.0/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czPbwD3XqdrwzmxQ=
 github.com/markbates/oncer v0.0.0-20181203154359-bf2de49a0be2/go.mod h1:Ld9puTsIW75CHf65OeIOkyKbteujpZVXDpWK6YGZbxE=
 github.com/markbates/safe v1.0.1/go.mod h1:nAqgmRi7cY2nqMc92/bSEeQA+R4OheNU2T1kNSCBdG0=

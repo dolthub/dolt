@@ -84,17 +84,18 @@ func (s *Stage) start(eg *errgroup.Group, ctx context.Context) {
 	stageWorkers := int32(parallelism)
 	for i := 0; i < parallelism; i++ {
 		routineIndex := i
+		routineCtx := context.WithValue(ctx, localStorageKey, LocalStorage{})
 		eg.Go(func() error {
 			defer func() {
 				if atomic.AddInt32(&stageWorkers, -1) == 0 {
-					close(s.outCh)
+					if s.outCh != nil {
+						close(s.outCh)
+					}
 				}
 			}()
 
-			ctx = context.WithValue(ctx, localStorageKey, &LocalStorage{})
-
 			if s.initFunc != nil {
-				err := s.initFunc(ctx, routineIndex)
+				err := s.initFunc(routineCtx, routineIndex)
 
 				if err != nil {
 					return err
@@ -102,9 +103,9 @@ func (s *Stage) start(eg *errgroup.Group, ctx context.Context) {
 			}
 
 			if s.inCh == nil {
-				return s.runFirstStageInPipeline(ctx)
+				return s.runFirstStageInPipeline(routineCtx)
 			} else {
-				return s.runPipelineStage(ctx)
+				return s.runPipelineStage(routineCtx)
 			}
 		})
 	}
@@ -166,8 +167,12 @@ func (s *Stage) transformBatch(ctx context.Context, inBatch []ItemWithProps) err
 		return err
 	}
 
-	for i := 0; i < len(outBatch); i++ {
-		currBatch := outBatch[i : i+s.outBatchSize]
+	for i := 0; i < len(outBatch); i += s.outBatchSize {
+		currBatch := outBatch[i:]
+
+		if len(currBatch) > s.outBatchSize {
+			currBatch = outBatch[i : i+s.outBatchSize]
+		}
 
 		select {
 		case <-ctx.Done():
