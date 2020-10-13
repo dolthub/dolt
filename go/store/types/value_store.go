@@ -22,12 +22,14 @@
 package types
 
 import (
+	"container/list"
 	"context"
 	"errors"
 	"sync"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
+	"golang.org/x/sync/errgroup"
 
+	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -93,6 +95,8 @@ func PanicIfDangling(ctx context.Context, unresolved hash.HashSet, cs chunks.Chu
 const (
 	defaultDecodedChunksSize = 1 << 25 // 32MB
 	defaultPendingPutMax     = 1 << 28 // 256MB
+
+	gcBuffSize = 1024
 )
 
 // newTestValueStore creates a simple struct that satisfies ValueReadWriter
@@ -548,6 +552,101 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 
 		return true, nil
 	}()
+}
+
+// GC traverses the ValueStore from the root and removes unreferenced chunks from the ChunkStore
+func (lvs *ValueStore) GC(ctx context.Context) error {
+	collector, ok := lvs.cs.(chunks.ChunkStoreGarbageCollector)
+
+	if !ok {
+		return chunks.ErrUnsupportedOperation
+	}
+
+	lvs.versOnce.Do(lvs.expectVersion)
+
+	root, err := lvs.Root(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	rootVal, err := lvs.ReadValue(ctx, root)
+	if err != nil {
+		return err
+	}
+	if rootVal == nil {
+		return nil // empty root
+	}
+
+	keepChunks := make(chan hash.Hash, gcBuffSize)
+
+	eg, egCtx := errgroup.WithContext(ctx)
+	eg.Go(func() error { return collector.MarkAndSweepChunks(egCtx, root, keepChunks) })
+
+	sendHash := func(h hash.Hash) error {
+		select {
+		case keepChunks <- h:
+			return nil
+		case <-egCtx.Done():
+			return egCtx.Err()
+		}
+	}
+
+	eg.Go(func() error {
+		// send root chunk
+		err := sendHash(root)
+		if err != nil {
+			return err
+		}
+		hashQueue := list.New()
+		visited := hash.NewHashSet(root)
+		hashQueue.PushBack(root)
+		for hashQueue.Len() > 0 {
+			e := hashQueue.Front()
+			h := e.Value.(hash.Hash)
+			hashQueue.Remove(e)
+
+			val, err := lvs.ReadValue(egCtx, h)
+			if err != nil {
+				return err
+			}
+			if val == nil {
+				return errors.New("dangling reference found in chunk store")
+			}
+
+			err = val.WalkRefs(lvs.nbf, func(reachable Ref) error {
+				h := reachable.TargetHash()
+				if visited.Has(h) {
+					return nil
+				}
+				err := sendHash(h)
+				if err != nil {
+					return err
+				}
+				hashQueue.PushBack(h)
+				visited.Insert(h)
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+		}
+		close(keepChunks)
+		return nil
+	})
+
+	err = eg.Wait()
+	if err != nil {
+		return err
+	}
+
+	// purge the cache
+	lvs.decodedChunks = sizecache.New(lvs.decodedChunks.Size())
+	lvs.bufferedChunks = make(map[hash.Hash]chunks.Chunk, lvs.bufferedChunkSize)
+	lvs.bufferedChunkSize = 0
+	lvs.withBufferedChildren = map[hash.Hash]uint64{}
+
+	return nil
 }
 
 // Close closes the underlying ChunkStore

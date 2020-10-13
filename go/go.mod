@@ -19,6 +19,7 @@ require (
 	github.com/codahale/blake2 v0.0.0-20150924215134-8d10d0420cbf
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078
+	github.com/dolthub/fslock v0.0.2
 	github.com/dolthub/go-mysql-server v0.6.1-0.20201001225250-48db640bd4d5
 	github.com/dolthub/vitess v0.0.0-20200925174744-823c7e177c3f
 	github.com/dustin/go-humanize v1.0.0
@@ -43,7 +44,6 @@ require (
 	github.com/hashicorp/memberlist v0.1.6 // indirect
 	github.com/jedib0t/go-pretty v4.3.1-0.20191104025401-85fe5d6a7c4d+incompatible
 	github.com/jpillora/backoff v1.0.0
-	github.com/dolthub/fslock v0.0.2
 	github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/lestrrat-go/strftime v1.0.3 // indirect
@@ -80,6 +80,7 @@ require (
 	go.uber.org/zap v1.15.0
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
 	golang.org/x/net v0.0.0-20200904194848-62affa334b73
+	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
 	golang.org/x/sys v0.0.0-20200905004654-be1d3432aa8f
 	google.golang.org/api v0.32.0
 	google.golang.org/grpc v1.32.0

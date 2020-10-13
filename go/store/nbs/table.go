@@ -27,7 +27,6 @@ import (
 	"crypto/sha512"
 	"encoding/base32"
 	"encoding/binary"
-	"errors"
 	"hash/crc32"
 	"io"
 	"sync"
@@ -291,8 +290,6 @@ type TableFile interface {
 	Open(ctx context.Context) (io.ReadCloser, error)
 }
 
-var ErrUnsupportedOperation = errors.New("operation not supported")
-
 // Describes what is possible to do with TableFiles in a TableFileStore.
 type TableFileStoreOps struct {
 	// True is the TableFileStore supports reading table files.
@@ -301,6 +298,8 @@ type TableFileStoreOps struct {
 	CanWrite bool
 	// True is the TableFileStore supports pruning unused table files.
 	CanPrune bool
+	// True is the TableFileStore supports garbage collecting chunks.
+	CanGC bool
 }
 
 // TableFileStore is an interface for interacting with table files directly
