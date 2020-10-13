@@ -578,7 +578,9 @@ func (t Tuple) fieldsToMap() (map[Value]Value, error) {
 			if err != nil {
 				return true, err
 			}
-			valMap[val] = value
+			if value.Kind() != NullKind {
+				valMap[val] = value
+			}
 		}
 
 		return false, nil
