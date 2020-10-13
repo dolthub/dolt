@@ -403,7 +403,7 @@ func execQuery(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots
 				verr = errhand.VerboseErrorFromError(err)
 			}
 		}()
-		err = se.prettyPrintResults(sqlCtx, sqlSch, rowIter)
+		err = PrettyPrintResults(sqlCtx, se.resultFormat, sqlSch, rowIter)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
@@ -672,7 +672,7 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv) error {
 			verr := formatQueryError("", err)
 			shell.Println(verr.Verbose())
 		} else if rowIter != nil {
-			err = se.prettyPrintResults(ctx, sqlSch, rowIter)
+			err = PrettyPrintResults(ctx, se.resultFormat, sqlSch, rowIter)
 			closeErr := rowIter.Close()
 			if err == nil {
 				err = closeErr
@@ -976,7 +976,7 @@ func processNonInsertBatchQuery(ctx *sql.Context, se *sqlEngine, query string, s
 				cli.Print("\n")
 				displayStrLen = 0
 			}
-			err = se.prettyPrintResults(ctx, sqlSch, rowIter)
+			err = PrettyPrintResults(ctx, se.resultFormat, sqlSch, rowIter)
 			if err != nil {
 				return err
 			}
@@ -1183,7 +1183,7 @@ func (se *sqlEngine) query(ctx *sql.Context, query string) (sql.Schema, sql.RowI
 }
 
 // Pretty prints the output of the new SQL engine
-func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, rowIter sql.RowIter) error {
+func PrettyPrintResults(ctx context.Context, resultFormat resultFormat, sqlSch sql.Schema, rowIter sql.RowIter) error {
 	if isOkResult(sqlSch) {
 		return printOKResult(ctx, rowIter)
 	}
@@ -1204,7 +1204,7 @@ func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, 
 	p := pipeline.NewPartialPipeline(pipeline.InFuncForChannel(rowChannel))
 
 	// Parts of the pipeline depend on the output format, such as how we print null values and whether we pad strings.
-	switch se.resultFormat {
+	switch resultFormat {
 	case formatTabular:
 		nullPrinter := nullprinter.NewNullPrinter(untypedSch)
 		p.AddStage(pipeline.NewNamedTransform(nullprinter.NullPrintingStage, nullPrinter.ProcessRow))
@@ -1217,7 +1217,7 @@ func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, 
 
 	var wr table.TableWriteCloser
 
-	switch se.resultFormat {
+	switch resultFormat {
 	case formatTabular:
 		wr, err = tabular.NewTextTableWriter(cliWr, untypedSch)
 	case formatCsv:
@@ -1255,14 +1255,14 @@ func (se *sqlEngine) prettyPrintResults(ctx context.Context, sqlSch sql.Schema, 
 	}
 
 	// Insert the table header row at the appropriate stage
-	if se.resultFormat == formatTabular {
+	if resultFormat == formatTabular {
 		p.InjectRow(fwtStageName, r)
 	}
 
 	// For some output formats, we want to convert everything to strings to be processed by the pipeline. For others,
 	// we want to leave types alone and let the writer figure out how to format it for output.
 	var rowFn func(r sql.Row) (row.Row, error)
-	switch se.resultFormat {
+	switch resultFormat {
 	case formatJson:
 		rowFn = func(r sql.Row) (r2 row.Row, err error) {
 			return dsqle.SqlRowToDoltRow(nbf, r, doltSch)
@@ -1415,7 +1415,7 @@ func (se *sqlEngine) checkThenDeleteAllRows(ctx *sql.Context, s *sqlparser.Delet
 						return false
 					}
 
-					_ = se.prettyPrintResults(ctx, sql.OkResultSchema, printRowIter)
+					_ = PrettyPrintResults(ctx, se.resultFormat, sql.OkResultSchema, printRowIter)
 
 					db, err := se.getDB(dbName)
 					if err != nil {

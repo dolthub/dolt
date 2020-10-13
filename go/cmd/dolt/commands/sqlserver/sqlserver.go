@@ -109,11 +109,11 @@ func (cmd SqlServerCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd SqlServerCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := createArgParser()
+	ap := cmd.CreateArgParser()
 	return commands.CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, sqlServerDocs, ap))
 }
 
-func createArgParser() *argparser.ArgParser {
+func (cmd SqlServerCmd) CreateArgParser() *argparser.ArgParser {
 	serverConfig := DefaultServerConfig()
 
 	ap := argparser.NewArgParser()
@@ -150,11 +150,11 @@ func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []stri
 }
 
 func startServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
-	ap := createArgParser()
+	ap := SqlServerCmd{}.CreateArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlServerDocs, ap))
 
 	apr := cli.ParseArgs(ap, args, help)
-	serverConfig, err := getServerConfig(dEnv, apr)
+	serverConfig, err := GetServerConfig(dEnv, apr)
 
 	if err != nil {
 		if serverController != nil {
@@ -182,7 +182,7 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 	return 0
 }
 
-func getServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerConfig, error) {
+func GetServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerConfig, error) {
 	cfgFile, ok := apr.GetValue(configFileFlag)
 
 	if ok {
