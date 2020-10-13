@@ -59,17 +59,13 @@ func ParseManifest(r io.Reader) (ManifestInfo, error) {
 }
 
 func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
-	f, err := openIfExists(filepath.Join(dir, manifestFileName))
-	if err != nil {
-		return false, err
-	}
-	if f == nil {
+	_, err := os.Stat(filepath.Join(dir, manifestFileName))
+	if os.IsNotExist(err) {
 		// no manifest exists, no need to migrate
 		return false, nil
+	} else if err != nil {
+		return false, err
 	}
-	defer func() {
-		err = f.Close()
-	}()
 
 	fm5 := fileManifestV5{dir}
 	ok, _, err := fm5.ParseIfExists(ctx, &Stats{}, nil)
@@ -99,7 +95,7 @@ func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
 	_, err = updateWithParseWriterAndChecker(ctx, dir, fm5.writeManifest, fm4.parseManifest, check, contents.lock, contents, nil)
 
 	if err != nil {
-		return false, nil
+		return false, err
 	}
 
 	return true, err
@@ -395,7 +391,6 @@ func parseIfExistsWithParser(_ context.Context, dir string, parse manifestParser
 			}
 
 			f, ferr = openIfExists(filepath.Join(dir, manifestFileName))
-
 			if ferr != nil {
 				return ferr
 			}
