@@ -128,5 +128,7 @@ SQL
     AFTER=$(du .dolt/noms/ | sed 's/[^0-9]*//g')
 
     # assert space was reclaimed
+    echo "$BEFORE"
+    echo "$AFTER"
     [ "$BEFORE" -gt "$AFTER" ]
 }

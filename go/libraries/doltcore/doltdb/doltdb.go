@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -25,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/pantoerr"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -921,6 +921,7 @@ func (ddb *DoltDB) GC(ctx context.Context, uncommitedVals ...hash.Hash) error {
 		return err
 	}
 
+	rand.Seed(time.Now().UnixNano())
 	tmpDatasets := make([]datas.Dataset, len(uncommitedVals))
 	for i, h := range uncommitedVals {
 		v, err := ddb.db.ReadValue(ctx, h)
@@ -931,7 +932,7 @@ func (ddb *DoltDB) GC(ctx context.Context, uncommitedVals ...hash.Hash) error {
 			return fmt.Errorf("empty value for value hash %s", h.String())
 		}
 
-		ds, err := ddb.db.GetDataset(ctx, fmt.Sprintf("tmp/%d", time.Now().UnixNano()))
+		ds, err := ddb.db.GetDataset(ctx, fmt.Sprintf("tmp/%d", rand.Int63()))
 		if err != nil {
 			return err
 		}
@@ -972,16 +973,6 @@ func (ddb *DoltDB) GC(ctx context.Context, uncommitedVals ...hash.Hash) error {
 }
 
 func (ddb *DoltDB) pruneUnreferencedDatasets(ctx context.Context) error {
-	rr, err := ddb.GetRefs(ctx)
-	if err != nil {
-		return err
-	}
-
-	refs := set.NewStrSet(nil)
-	for _, r := range rr {
-		refs.Add(r.String())
-	}
-
 	dd, err := ddb.db.Datasets(ctx)
 	if err != nil {
 		return err
@@ -990,7 +981,7 @@ func (ddb *DoltDB) pruneUnreferencedDatasets(ctx context.Context) error {
 	var deletes []string
 	_ = dd.Iter(ctx, func(ds, _ types.Value) (stop bool, err error) {
 		dsID := string(ds.(types.String))
-		if !refs.Contains(dsID) {
+		if !ref.IsRef(dsID) {
 			deletes = append(deletes, dsID)
 		}
 		return false, nil

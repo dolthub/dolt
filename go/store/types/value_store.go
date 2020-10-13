@@ -599,6 +599,7 @@ func (lvs *ValueStore) GC(ctx context.Context) error {
 			return err
 		}
 		hashQueue := list.New()
+		visited := hash.NewHashSet(root)
 		hashQueue.PushBack(root)
 		for hashQueue.Len() > 0 {
 			e := hashQueue.Front()
@@ -615,11 +616,15 @@ func (lvs *ValueStore) GC(ctx context.Context) error {
 
 			err = val.WalkRefs(lvs.nbf, func(reachable Ref) error {
 				h := reachable.TargetHash()
+				if visited.Has(h) {
+					return nil
+				}
 				err := sendHash(h)
 				if err != nil {
 					return err
 				}
 				hashQueue.PushBack(h)
+				visited.Insert(h)
 				return nil
 			})
 			if err != nil {
