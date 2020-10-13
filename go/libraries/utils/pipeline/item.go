@@ -1,8 +1,4 @@
-package pipeline
-
-import "sync/atomic"
-
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2020 Liquidata, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +11,8 @@ import "sync/atomic"
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+package pipeline
 
 // ReadableMap is an interface that provides read only access to map properties
 type ReadableMap interface {
@@ -58,8 +56,11 @@ func (ip ImmutableProperties) Set(updates map[string]interface{}) ImmutablePrope
 	return ImmutableProperties{allProps}
 }
 
+// ItemWithProps is an interface for an item which is passed through a pipeline
 type ItemWithProps interface {
+	// GetItem retrieves the item
 	GetItem() interface{}
+	// GetProperties retrieves properties attached to the item
 	GetProperties() ReadableMap
 }
 
@@ -76,6 +77,7 @@ func (iwp itemWithProps) GetProperties() ReadableMap {
 	return iwp.props
 }
 
+// NewItemWithNoProps creates an item with no properties
 func NewItemWithNoProps(item interface{}) ItemWithProps {
 	return itemWithProps{item, NoProps}
 }
@@ -83,28 +85,4 @@ func NewItemWithNoProps(item interface{}) ItemWithProps {
 // NewItemWithProps creates an item with props from an item and a map of properties
 func NewItemWithProps(item interface{}, props map[string]interface{}) ItemWithProps {
 	return itemWithProps{item, ImmutableProperties{props}}
-}
-
-type ErrorItem struct {
-	Err       error
-	ErrNumber uint32
-}
-
-func NewErrorItem(err error, errNum *uint32) ErrorItem {
-	return ErrorItem{
-		Err:       err,
-		ErrNumber: atomic.AddUint32(errNum, 1),
-	}
-}
-
-func (ei ErrorItem) GetItem() interface{} {
-	return nil
-}
-
-func (ei ErrorItem) GetProperties() ReadableMap {
-	return NoProps
-}
-
-func (ei ErrorItem) Error() string {
-	return ei.Err.Error()
 }

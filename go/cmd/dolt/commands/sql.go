@@ -1067,7 +1067,7 @@ const (
 	formatTabular resultFormat = iota
 	formatCsv
 	formatJson
-	formatNull // used for profiling 
+	formatNull // used for profiling
 )
 
 type sqlEngine struct {
@@ -1425,7 +1425,6 @@ func createTabularPipeline(ctx context.Context, sch sql.Schema, iter sql.RowIter
 	}*/
 }
 
-
 func createNullPipeline(ctx context.Context, sch sql.Schema, iter sql.RowIter) *pipeline2.Pipeline {
 	return pipeline2.NewPipeline([]*pipeline2.Stage{
 		pipeline2.NewStage("read", nil, getReadStageFunc(iter), 0, 0, 0),
@@ -1602,22 +1601,25 @@ func getJSONProcessFunc(sch sql.Schema) pipeline2.StageFunc {
 	}
 }
 
-func writeJSONInitRoutineFunc(ctx context.Context, index int) {
+// this function only exists to validate the write routine wasn't parallelized
+func writeJSONInitRoutineFunc(ctx context.Context, index int) error {
 	if index != 0 {
 		// writeJSONToCliOut assumes that it is not being run in parallel.
 		panic("cannot parallelize this routine")
 	}
+
+	return nil
 }
 
 func writeJSONToCliOutStageFunc(ctx context.Context, items []pipeline2.ItemWithProps) ([]pipeline2.ItemWithProps, error) {
 	const hasRunKey = 0
 
-	ls := ctx.Value(pipeline2.LocalStorageKey).(*pipeline2.LocalStorage)
+	ls := pipeline2.GetLocalStorage(ctx)
 	_, hasRun := ls.Get(hasRunKey)
 	ls.Put(hasRunKey, true)
 
 	if items == nil {
-		if hasRun{
+		if hasRun {
 			cli.Printf("\n]}\n")
 		} else {
 			cli.Printf("{\"data\":[]}\n")
