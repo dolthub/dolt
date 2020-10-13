@@ -27,11 +27,13 @@ type statementScanner struct {
 	lineNum            int // the current line number being parsed
 }
 
+const maxStatementBufferBytes = 100 * 1024 * 1024
+
 func NewSqlStatementScanner(input io.Reader) *statementScanner {
 	scanner := bufio.NewScanner(input)
-	const maxCapacity = 512 * 1024
-	buf := make([]byte, maxCapacity)
-	scanner.Buffer(buf, maxCapacity)
+	const initialCapacity = 512 * 1024
+	buf := make([]byte, initialCapacity)
+	scanner.Buffer(buf, maxStatementBufferBytes)
 
 	s := &statementScanner{
 		Scanner: scanner,
