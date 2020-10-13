@@ -405,7 +405,7 @@ func (fm *fakeManifest) Update(ctx context.Context, lastLock addr, newContents m
 	fm.mu.Lock()
 	defer fm.mu.Unlock()
 	if fm.contents.lock == lastLock {
-		fm.contents = manifestContents{newContents.vers, newContents.lock, newContents.root, nil}
+		fm.contents = manifestContents{newContents.vers, newContents.lock, newContents.root, addr(hash.Hash{}), nil}
 		fm.contents.specs = make([]tableSpec, len(newContents.specs))
 		copy(fm.contents.specs, newContents.specs)
 	}
@@ -413,7 +413,7 @@ func (fm *fakeManifest) Update(ctx context.Context, lastLock addr, newContents m
 }
 
 func (fm *fakeManifest) set(version string, lock addr, root hash.Hash, specs []tableSpec) {
-	fm.contents = manifestContents{version, lock, root, specs}
+	fm.contents = manifestContents{version, lock, root, addr(hash.Hash{}), specs}
 }
 
 func newFakeTableSet() tableSet {
@@ -532,5 +532,5 @@ func (ftp fakeTablePersister) Open(ctx context.Context, name addr, chunkCount ui
 }
 
 func (ftp fakeTablePersister) PruneTableFiles(_ context.Context, _ manifestContents) error {
-	return ErrUnsupportedOperation
+	return chunks.ErrUnsupportedOperation
 }

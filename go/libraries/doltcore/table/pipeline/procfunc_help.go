@@ -142,27 +142,41 @@ func InFuncForChannel(rowChan <-chan row.Row) InFunc {
 	return func(p *Pipeline, ch chan<- RowWithProps, badRowChan chan<- *TransformRowFailure, noMoreChan <-chan struct{}) {
 		defer close(ch)
 
-		for {
-			select {
-			case <-noMoreChan:
-				return
-			default:
-				break
-			}
-
+		more := true
+		for more {
 			if p.IsStopping() {
 				return
 			}
 
 			select {
+			case <-noMoreChan:
+				more = false
 			case r, ok := <-rowChan:
 				if ok {
 					ch <- RowWithProps{Row: r, Props: NoProps}
 				} else {
 					return
 				}
-			case <-time.After(100 * time.Millisecond):
-				// wake up and check stop condition
+			}
+		}
+
+		// no more data will be written to rowChan, but still need to make sure what was written is drained.
+		if !more {
+			for {
+				if p.IsStopping() {
+					return
+				}
+
+				select {
+				case r, ok := <-rowChan:
+					if ok {
+						ch <- RowWithProps{Row: r, Props: NoProps}
+					} else {
+						return
+					}
+				default:
+					return
+				}
 			}
 		}
 	}

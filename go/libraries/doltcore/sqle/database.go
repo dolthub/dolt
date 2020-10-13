@@ -784,7 +784,7 @@ func (db Database) CreateTrigger(ctx *sql.Context, definition sql.TriggerDefinit
 // DropTrigger implements sql.TriggerDatabase.
 func (db Database) DropTrigger(ctx *sql.Context, name string) error {
 	//TODO: add a sql error and use that as the param error instead
-	return db.dropFragFromSchemasTable(ctx, "trigger", name, fmt.Errorf("trigger `%s` cannot be found", name))
+	return db.dropFragFromSchemasTable(ctx, "trigger", name, sql.ErrTriggerDoesNotExist.New(name))
 }
 
 func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, definition string, existingErr error) (retErr error) {
@@ -833,7 +833,7 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 			retErr = err
 		}
 	}()
-	return inserter.Insert(ctx, sql.Row{indexToUse, fragType, name, definition})
+	return inserter.Insert(ctx, sql.Row{fragType, name, definition, indexToUse})
 }
 
 func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name string, missingErr error) error {
@@ -892,9 +892,9 @@ func RegisterSchemaFragments(ctx *sql.Context, db Database, root *doltdb.RootVal
 
 	r, err := iter.Next()
 	for err == nil {
-		if r[1] == "view" {
-			name := r[2].(string)
-			definition := r[3].(string)
+		if r[0] == "view" {
+			name := r[1].(string)
+			definition := r[2].(string)
 			cv, err := parse.Parse(ctx, fmt.Sprintf("create view %s as %s", sqlfmt.QuoteIdentifier(name), definition))
 			if err != nil {
 				parseErrors = append(parseErrors, err)

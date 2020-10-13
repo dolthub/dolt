@@ -1,8 +1,7 @@
 module github.com/dolthub/dolt/go
 
 require (
-	cloud.google.com/go v0.58.0 // indirect
-	cloud.google.com/go/storage v1.10.0
+	cloud.google.com/go/storage v1.12.0
 	github.com/BurntSushi/toml v0.3.1
 	github.com/DataDog/datadog-go v3.4.0+incompatible // indirect
 	github.com/OneOfOne/xxhash v1.2.7 // indirect
@@ -19,9 +18,10 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/codahale/blake2 v0.0.0-20150924215134-8d10d0420cbf
 	github.com/denisbrodbeck/machineid v1.0.1
-	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20200730200742-c031ec8cba06
-	github.com/dolthub/go-mysql-server v0.6.1-0.20201001225250-48db640bd4d5
-	github.com/dolthub/vitess v0.0.0-20200925174744-823c7e177c3f
+	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078
+	github.com/dolthub/fslock v0.0.2
+	github.com/dolthub/go-mysql-server v0.6.1-0.20201012180951-322369ab7e62
+	github.com/dolthub/vitess v0.0.0-20201009075426-dab8291dcb1b
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.9.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
@@ -33,7 +33,7 @@ require (
 	github.com/gogo/protobuf v1.3.1 // indirect
 	github.com/golang/protobuf v1.4.2
 	github.com/golang/snappy v0.0.1
-	github.com/google/go-cmp v0.5.0
+	github.com/google/go-cmp v0.5.2
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/handlers v1.4.2 // indirect
 	github.com/gorilla/mux v1.7.4 // indirect
@@ -44,7 +44,6 @@ require (
 	github.com/hashicorp/memberlist v0.1.6 // indirect
 	github.com/jedib0t/go-pretty v4.3.1-0.20191104025401-85fe5d6a7c4d+incompatible
 	github.com/jpillora/backoff v1.0.0
-	github.com/juju/fslock v0.0.0-20160525022230-4d5c94c67b4b
 	github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/lestrrat-go/strftime v1.0.3 // indirect
@@ -78,15 +77,13 @@ require (
 	github.com/uber/jaeger-client-go v2.22.1+incompatible // indirect
 	github.com/uber/jaeger-lib v2.2.0+incompatible // indirect
 	go.mongodb.org/mongo-driver v1.3.4 // indirect
-	go.opencensus.io v0.22.4 // indirect
 	go.uber.org/zap v1.15.0
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
 	golang.org/x/net v0.0.0-20200904194848-62affa334b73
-	golang.org/x/sys v0.0.0-20200831180312-196b9ba8737a
-	golang.org/x/tools v0.0.0-20200622150058-fcc5b64fe1f1 // indirect
-	google.golang.org/api v0.28.0
-	google.golang.org/genproto v0.0.0-20200904004341-0bd0a958aa1d // indirect
-	google.golang.org/grpc v1.31.1
+	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
+	golang.org/x/sys v0.0.0-20200905004654-be1d3432aa8f
+	google.golang.org/api v0.32.0
+	google.golang.org/grpc v1.32.0
 	google.golang.org/protobuf v1.25.0
 	gopkg.in/square/go-jose.v2 v2.5.1
 	gopkg.in/src-d/go-errors.v1 v1.0.0

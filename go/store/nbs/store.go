@@ -51,7 +51,7 @@ var ErrFetchFailure = errors.New("fetch failed")
 
 const (
 	// StorageVersion is the version of the on-disk Noms Chunks Store data format.
-	StorageVersion = "4"
+	StorageVersion = "5"
 
 	defaultMemTableSize uint64 = (1 << 20) * 128 // 128MB
 	defaultMaxTables           = 256
@@ -294,8 +294,14 @@ func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string
 func NewGCSStore(ctx context.Context, nbfVerStr string, bucketName, path string, gcs *storage.Client, memTableSize uint64) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 
-	bucket := gcs.Bucket(bucketName)
-	bs := blobstore.NewGCSBlobstore(bucket, path)
+	bs := blobstore.NewGCSBlobstore(gcs, bucketName, path)
+	return NewBSStore(ctx, nbfVerStr, bs, memTableSize)
+}
+
+// NewBSStore returns an nbs implementation backed by a Blobstore
+func NewBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, memTableSize uint64) (*NomsBlockStore, error) {
+	cacheOnce.Do(makeGlobalCaches)
+
 	mm := makeManifestManager(blobstoreManifest{"manifest", bs})
 
 	p := &blobstorePersister{bs, s3BlockSize, globalIndexCache}
@@ -314,7 +320,13 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 		return nil, err
 	}
 
-	mm := makeManifestManager(fileManifest{dir})
+	m, err := getFileManifest(ctx, dir)
+
+	if err != nil {
+		return nil, err
+	}
+
+	mm := makeManifestManager(m)
 	p := newFSTablePersister(dir, globalFDCache, globalIndexCache)
 	nbs, err := newNomsBlockStore(ctx, nbfVerStr, mm, p, inlineConjoiner{maxTables}, memTableSize)
 
@@ -875,6 +887,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		vers:  nbs.upstream.vers,
 		root:  current,
 		lock:  generateLockHash(current, specs),
+		gcGen: nbs.upstream.gcGen,
 		specs: specs,
 	}
 
@@ -1047,11 +1060,12 @@ func (nbs *NomsBlockStore) chunkSourcesByAddr() (map[addr]chunkSource, error) {
 }
 
 func (nbs *NomsBlockStore) SupportedOperations() TableFileStoreOps {
-	_, canwrite := nbs.p.(*fsTablePersister)
+	_, ok := nbs.p.(*fsTablePersister)
 	return TableFileStoreOps{
 		CanRead:  true,
-		CanWrite: canwrite,
-		CanPrune: canwrite,
+		CanWrite: ok,
+		CanPrune: ok,
+		CanGC:    ok,
 	}
 }
 
@@ -1140,6 +1154,143 @@ func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
 	}
 
 	return nbs.p.PruneTableFiles(ctx, contents)
+}
+
+func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan hash.Hash) error {
+	ops := nbs.SupportedOperations()
+	if !ops.CanGC || !ops.CanPrune {
+		return chunks.ErrUnsupportedOperation
+	}
+
+	if nbs.upstream.root != last {
+		return errLastRootMismatch
+	}
+
+	specs, err := nbs.copyMarkedChunks(ctx, keepChunks)
+	if err != nil {
+		return err
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	err = nbs.swapTables(ctx, specs)
+	if err != nil {
+		return err
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	ok, contents, err := nbs.mm.Fetch(ctx, &Stats{})
+	if err != nil {
+		return err
+	}
+	if !ok {
+		panic("no manifest")
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	return nbs.p.PruneTableFiles(ctx, contents)
+}
+
+func (nbs *NomsBlockStore) copyMarkedChunks(ctx context.Context, keepChunks <-chan hash.Hash) ([]tableSpec, error) {
+	s, err := nbs.gcTableSize()
+	if err != nil {
+		return nil, err
+	}
+
+	gcc, err := newGarbageCollectionCopier(s)
+	if err != nil {
+		return nil, err
+	}
+
+LOOP:
+	for {
+		select {
+		case h, ok := <-keepChunks:
+			if !ok {
+				break LOOP
+			}
+			// todo: batch calls to nbs.GetMany()
+			c, err := nbs.Get(ctx, h)
+			if err != nil {
+				return nil, err
+			}
+			gcc.addChunk(ctx, addr(h), c.Data())
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+
+	nomsDir := nbs.p.(*fsTablePersister).dir
+
+	return gcc.copyTablesToDir(ctx, nomsDir)
+}
+
+// todo: what's the optimal table size to copy to?
+func (nbs *NomsBlockStore) gcTableSize() (uint64, error) {
+	total, err := nbs.tables.physicalLen()
+
+	if err != nil {
+		return 0, err
+	}
+
+	avgTableSize := total / uint64(nbs.tables.Upstream()+nbs.tables.Novel()+1)
+
+	// max(avgTableSize, defaultMemTableSize)
+	if avgTableSize > nbs.mtSize {
+		return avgTableSize, nil
+	}
+	return nbs.mtSize, nil
+}
+
+func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) error {
+	newLock := generateLockHash(nbs.upstream.root, specs)
+	newContents := manifestContents{
+		vers:  nbs.upstream.vers,
+		root:  nbs.upstream.root,
+		lock:  newLock,
+		gcGen: newLock,
+		specs: specs,
+	}
+
+	var err error
+	nbs.mm.LockForUpdate()
+	defer func() {
+		unlockErr := nbs.mm.UnlockForUpdate()
+
+		if err == nil {
+			err = unlockErr
+		}
+	}()
+
+	upstream, err := nbs.mm.UpdateGCGen(ctx, nbs.upstream.lock, newContents, nbs.stats, nil)
+	if err != nil {
+		return err
+	}
+
+	// clear memTable
+	nbs.mt = newMemTable(nbs.mtSize)
+
+	// clear nbs.tables.novel
+	nbs.tables, err = nbs.tables.Flatten()
+
+	if err != nil {
+		return nil
+	}
+
+	// replace nbs.tables.upstream with gc compacted tables
+	nbs.upstream = upstream
+	nbs.tables, err = nbs.tables.Rebase(ctx, specs, nbs.stats)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // SetRootChunk changes the root chunk hash from the previous value to the new root.

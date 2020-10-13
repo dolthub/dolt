@@ -63,18 +63,6 @@ func TestUintConvertNomsValueToValue(t *testing.T) {
 			uint64(math.MaxInt64),
 			false,
 		},
-		{
-			Uint32Type,
-			math.MaxUint64,
-			0,
-			true,
-		},
-		{
-			Uint24Type,
-			1 << 25,
-			0,
-			true,
-		},
 	}
 
 	for _, test := range tests {
@@ -184,18 +172,6 @@ func TestUintFormatValue(t *testing.T) {
 			math.MaxUint64,
 			strconv.FormatUint(math.MaxUint64, 10),
 			false,
-		},
-		{
-			Uint32Type,
-			math.MaxUint64,
-			"",
-			true,
-		},
-		{
-			Uint24Type,
-			1 << 25,
-			"",
-			true,
 		},
 	}
 

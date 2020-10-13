@@ -76,7 +76,7 @@ func (m *fakeDDB) GetItemWithContext(ctx aws.Context, input *dynamodb.GetItemInp
 		item[dbAttr] = &dynamodb.AttributeValue{S: key}
 		switch e := e.(type) {
 		case record:
-			item[nbsVersAttr] = &dynamodb.AttributeValue{S: aws.String(StorageVersion)}
+			item[nbsVersAttr] = &dynamodb.AttributeValue{S: aws.String(AWSStorageVersion)}
 			item[versAttr] = &dynamodb.AttributeValue{S: aws.String(e.vers)}
 			item[rootAttr] = &dynamodb.AttributeValue{B: e.root}
 			item[lockAttr] = &dynamodb.AttributeValue{B: e.lock}
@@ -112,7 +112,7 @@ func (m *fakeDDB) PutItemWithContext(ctx aws.Context, input *dynamodb.PutItemInp
 
 	assert.NotNil(m.t, input.Item[nbsVersAttr], "%s should have been present", nbsVersAttr)
 	assert.NotNil(m.t, input.Item[nbsVersAttr].S, "nbsVers should have been a String: %+v", input.Item[nbsVersAttr])
-	assert.Equal(m.t, StorageVersion, *input.Item[nbsVersAttr].S)
+	assert.Equal(m.t, AWSStorageVersion, *input.Item[nbsVersAttr].S)
 
 	assert.NotNil(m.t, input.Item[versAttr], "%s should have been present", versAttr)
 	assert.NotNil(m.t, input.Item[versAttr].S, "nbsVers should have been a String: %+v", input.Item[versAttr])

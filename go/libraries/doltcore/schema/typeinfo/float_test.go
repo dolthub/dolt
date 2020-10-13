@@ -58,12 +58,6 @@ func TestFloatConvertNomsValueToValue(t *testing.T) {
 			float64(math.MaxFloat64),
 			false,
 		},
-		{
-			Float32Type,
-			math.MaxFloat64,
-			0,
-			true,
-		},
 	}
 
 	for _, test := range tests {
@@ -161,12 +155,6 @@ func TestFloatFormatValue(t *testing.T) {
 			math.MaxFloat64,
 			strconv.FormatFloat(math.MaxFloat64, 'f', -1, 64),
 			false,
-		},
-		{
-			Float32Type,
-			math.MaxFloat64,
-			"",
-			true,
 		},
 	}
 

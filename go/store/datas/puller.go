@@ -160,7 +160,7 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sink
 		return nil, ErrIncompatibleSourceChunkStore
 	}
 
-	wr, err := nbs.NewCmpChunkTableWriter()
+	wr, err := nbs.NewCmpChunkTableWriter(tempDir)
 
 	if err != nil {
 		return nil, err
@@ -403,7 +403,7 @@ func (p *Puller) getCmp(ctx context.Context, twDetails *TreeWalkEventDetails, le
 
 		if p.wr.Size() >= p.chunksPerTF {
 			completedTables <- FilledWriters{p.wr}
-			p.wr, err = nbs.NewCmpChunkTableWriter()
+			p.wr, err = nbs.NewCmpChunkTableWriter(p.tempDir)
 
 			if ae.SetIfError(err) {
 				continue

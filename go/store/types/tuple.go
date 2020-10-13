@@ -29,6 +29,82 @@ import (
 	"github.com/dolthub/dolt/go/store/d"
 )
 
+var _ LesserValuable = TupleValueSlice(nil)
+
+type TupleValueSlice []Value
+
+func (tvs TupleValueSlice) Iter(cb func(tag uint64, val Value) (stop bool, err error)) error {
+	l := len(tvs)
+	for i := 0; i < l; i += 2 {
+		stop, err := cb(uint64(tvs[i].(Uint)), tvs[i+1])
+
+		if err != nil {
+			return err
+		}
+
+		if stop {
+			break
+		}
+	}
+
+	return nil
+}
+
+func (tvs TupleValueSlice) Kind() NomsKind {
+	return TupleKind
+}
+
+func (tvs TupleValueSlice) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+	switch typedOther := other.(type) {
+	case Tuple:
+		val, err := NewTuple(nbf, tvs...)
+
+		if err != nil {
+			return false, err
+		}
+
+		return typedOther.Less(nbf, val)
+
+	case TupleValueSlice:
+		myLen := len(tvs)
+		otherLen := len(typedOther)
+		largerLen := myLen
+		if otherLen > largerLen {
+			largerLen = otherLen
+		}
+
+		var val Value
+		var otherVal Value
+		for i := 0; i < largerLen; i++ {
+			if i < myLen {
+				val = tvs[i]
+			}
+
+			if i < otherLen {
+				otherVal = typedOther[i]
+			}
+
+			if val == nil {
+				return true, nil
+			} else if otherVal == nil {
+				return false, nil
+			}
+
+			if !val.Equals(otherVal) {
+				return val.Less(nbf, otherVal)
+			}
+		}
+
+		return false, nil
+	default:
+		return TupleKind < other.Kind(), nil
+	}
+}
+
+func (tvs TupleValueSlice) Value(ctx context.Context) (Value, error) {
+	panic("not implemented")
+}
+
 func EmptyTuple(nbf *NomsBinFormat) Tuple {
 	t, err := NewTuple(nbf)
 	d.PanicIfError(err)
@@ -246,6 +322,23 @@ func (t Tuple) IteratorAt(pos uint64) (*TupleIterator, error) {
 	}
 
 	return &TupleIterator{dec, count, pos, t.format()}, nil
+}
+
+func (t Tuple) AsSlice() (TupleValueSlice, error) {
+	dec, count := t.decoderSkipToFields()
+
+	sl := make(TupleValueSlice, count)
+	for pos := uint64(0); pos < count; pos++ {
+		val, err := dec.readValue(t.nbf)
+
+		if err != nil {
+			return nil, err
+		}
+
+		sl[pos] = val
+	}
+
+	return sl, nil
 }
 
 // IterFields iterates over the fields, calling cb for every field in the tuple until cb returns false

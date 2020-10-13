@@ -19,23 +19,32 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 func makeTestLocalStore(t *testing.T, maxTableFiles int) (st *NomsBlockStore, nomsDir string) {
 	ctx := context.Background()
-	nomsDir = filepath.Join(os.TempDir(), uuid.New().String())
-
+	nomsDir = filepath.Join(tempfiles.MovableTempFileProvider.GetTempDir(), "noms_"+uuid.New().String()[:8])
 	err := os.MkdirAll(nomsDir, os.ModePerm)
+	require.NoError(t, err)
+
+	// create a v5 manifest
+	_, err = fileManifestV5{nomsDir}.Update(ctx, addr{}, manifestContents{}, &Stats{}, nil)
 	require.NoError(t, err)
 
 	st, err = newLocalStore(ctx, types.Format_Default.VersionString(), nomsDir, defaultMemTableSize, maxTableFiles)
@@ -190,4 +199,84 @@ func TestNBSPruneTableFiles(t *testing.T) {
 	size, err := st.Size(ctx)
 	require.NoError(t, err)
 	require.Greater(t, size, uint64(0))
+}
+
+func makeChunkSet(N, size int) (s map[hash.Hash]chunks.Chunk) {
+	bb := make([]byte, size*N)
+	time.Sleep(10)
+	rand.Seed(time.Now().UnixNano())
+	rand.Read(bb)
+
+	s = make(map[hash.Hash]chunks.Chunk, N)
+	offset := 0
+	for i := 0; i < N; i++ {
+		c := chunks.NewChunk(bb[offset : offset+size])
+		s[c.Hash()] = c
+		offset += size
+	}
+
+	return
+}
+
+func TestNBSCopyGC(t *testing.T) {
+	ctx := context.Background()
+	st, _ := makeTestLocalStore(t, 8)
+
+	keepers := makeChunkSet(64, 64)
+	tossers := makeChunkSet(64, 64)
+
+	for _, c := range keepers {
+		err := st.Put(ctx, c)
+		assert.NoError(t, err)
+	}
+	for h, c := range keepers {
+		out, err := st.Get(ctx, h)
+		assert.NoError(t, err)
+		assert.Equal(t, c, out)
+	}
+
+	for h := range tossers {
+		// assert mutually exclusive chunk sets
+		c, ok := keepers[h]
+		require.False(t, ok)
+		assert.Equal(t, chunks.Chunk{}, c)
+	}
+	for _, c := range tossers {
+		err := st.Put(ctx, c)
+		assert.NoError(t, err)
+	}
+	for h, c := range tossers {
+		out, err := st.Get(ctx, h)
+		assert.NoError(t, err)
+		assert.Equal(t, c, out)
+	}
+
+	r, err := st.Root(ctx)
+	assert.NoError(t, err)
+
+	keepChan := make(chan hash.Hash, 16)
+	var msErr error
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		msErr = st.MarkAndSweepChunks(ctx, r, keepChan)
+		wg.Done()
+	}()
+	for h := range keepers {
+		keepChan <- h
+	}
+	close(keepChan)
+	wg.Wait()
+	assert.NoError(t, msErr)
+
+	for h, c := range keepers {
+		out, err := st.Get(ctx, h)
+		require.NoError(t, err)
+		assert.Equal(t, c, out)
+	}
+	for h := range tossers {
+		out, err := st.Get(ctx, h)
+		require.NoError(t, err)
+		assert.Equal(t, chunks.EmptyChunk, out)
+	}
 }

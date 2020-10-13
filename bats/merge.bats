@@ -54,6 +54,52 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test2" ]] || false
     [[ "$output" =~ "test1" ]] || false
+
+    # make sure all the commits make it into the log
+    dolt add .
+    dolt commit -m "squash merge"
+
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "add pk 0 to test1" ]] || false
+    [[ "$output" =~ "add pk 1 to test1" ]] || false
+}
+
+@test "squash merge" {
+    dolt checkout -b merge_branch
+    dolt SQL -q "INSERT INTO test1 values (0,1,2)"
+    dolt add test1
+    dolt commit -m "add pk 0 to test1"
+
+    dolt checkout master
+    dolt SQL -q "INSERT INTO test1 values (1,2,3)"
+    dolt add test1
+    dolt commit -m "add pk 1 to test1"
+
+    dolt SQL -q "INSERT INTO test2 values (0,1,2)"
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test2" ]] || false
+    [[ ! "$output" =~ "test1" ]] || false
+
+    run dolt merge --squash merge_branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Squash" ]] || false
+    [[ ! "$output" =~ "Fast-forward" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test2" ]] || false
+    [[ "$output" =~ "test1" ]] || false
+
+    # make sure the squashed commit is not in the log.
+    dolt add .
+    dolt commit -m "squash merge"
+
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "add pk 1 to test1" ]] || false
+    [[ ! "$output" =~ "add pk 0 to test1" ]] || false
 }
 
 @test "can merge commit spec with ancestor spec" {

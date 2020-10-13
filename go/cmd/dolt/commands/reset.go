@@ -267,7 +267,7 @@ func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootV
 		var lines []string
 		for _, td := range notStagedTbls {
 			if td.IsAdd() {
-				//  pre Git, unstaged new tables are untracked
+				//  per Git, unstaged new tables are untracked
 				continue
 			} else if td.IsDrop() {
 				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[diff.RemovedTable], td.CurName()))

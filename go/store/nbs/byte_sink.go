@@ -169,8 +169,8 @@ type BufferedFileByteSink struct {
 }
 
 // NewBufferedFileByteSink creates a BufferedFileByteSink
-func NewBufferedFileByteSink(blockSize, chBufferSize int) (*BufferedFileByteSink, error) {
-	f, err := tempfiles.MovableTempFileProvider.NewFile("", "buffered_file_byte_sink_")
+func NewBufferedFileByteSink(tempDir string, blockSize, chBufferSize int) (*BufferedFileByteSink, error) {
+	f, err := tempfiles.MovableTempFileProvider.NewFile(tempDir, "buffered_file_byte_sink_")
 
 	if err != nil {
 		return nil, err

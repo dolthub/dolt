@@ -57,7 +57,7 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	}()
 
 	// for all the chunks we find, write them using the compressed writer
-	tw, err := NewCmpChunkTableWriter()
+	tw, err := NewCmpChunkTableWriter("")
 	require.NoError(t, err)
 	for cmpChnk := range found {
 		err = tw.AddCmpChunk(cmpChnk)

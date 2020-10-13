@@ -38,6 +38,9 @@ import (
 )
 
 const (
+	// DynamoManifest does not yet include GC Generation
+	AWSStorageVersion = "4"
+
 	dbAttr         = "db"
 	lockAttr       = "lck" // 'lock' is a reserved word in dynamo
 	rootAttr       = "root"
@@ -115,7 +118,7 @@ func (dm dynamoManifest) ParseIfExists(ctx context.Context, stats *Stats, readHo
 
 func validateManifest(item map[string]*dynamodb.AttributeValue) (valid, hasSpecs bool) {
 	if item[nbsVersAttr] != nil && item[nbsVersAttr].S != nil &&
-		StorageVersion == *item[nbsVersAttr].S &&
+		AWSStorageVersion == *item[nbsVersAttr].S &&
 		item[versAttr] != nil && item[versAttr].S != nil &&
 		item[lockAttr] != nil && item[lockAttr].B != nil &&
 		item[rootAttr] != nil && item[rootAttr].B != nil {
@@ -135,7 +138,7 @@ func (dm dynamoManifest) Update(ctx context.Context, lastLock addr, newContents 
 		TableName: aws.String(dm.table),
 		Item: map[string]*dynamodb.AttributeValue{
 			dbAttr:      {S: aws.String(dm.db)},
-			nbsVersAttr: {S: aws.String(StorageVersion)},
+			nbsVersAttr: {S: aws.String(AWSStorageVersion)},
 			versAttr:    {S: aws.String(newContents.vers)},
 			rootAttr:    {B: newContents.root[:]},
 			lockAttr:    {B: newContents.lock[:]},
