@@ -45,6 +45,8 @@ const (
 	MasterBranch     = "master"
 	CommitStructName = "Commit"
 
+	FeatureVersion int64 = 19
+
 	defaultChunksPerTF = 256 * 1024
 )
 

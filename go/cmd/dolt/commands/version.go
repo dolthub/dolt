@@ -17,10 +17,16 @@ package commands
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+)
+
+const (
+	featureVersionFlag = "feature"
 )
 
 type VersionCmd struct {
@@ -48,10 +54,38 @@ func (cmd VersionCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string
 	return nil
 }
 
+func (cmd VersionCmd) createArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(featureVersionFlag, "f", "query the feature version of this repository.")
+	return ap
+}
+
 // Version displays the version of the running dolt client
 // Exec executes the command
 func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	cli.Println("dolt version", cmd.VersionStr)
 
-	return 0
+	usage := func() {}
+	ap := cmd.createArgParser()
+	apr := cli.ParseArgs(ap, args, usage)
+
+	var verr errhand.VerboseError
+	if apr.Contains(featureVersionFlag) {
+		wr, err := dEnv.WorkingRoot(ctx)
+		if err != nil {
+			verr = errhand.BuildDError("could not read working root").AddCause(err).Build()
+			return HandleVErrAndExitCode(verr, usage)
+		}
+
+		fv, ok, err := wr.GetFeatureVersion(ctx)
+		if err != nil {
+			verr = errhand.BuildDError("error reading feature version").AddCause(err).Build()
+		} else if !ok {
+			verr = errhand.BuildDError("the current head does not have a feature version").Build()
+		} else {
+			cli.Println("feature version: %s", fv)
+		}
+	}
+
+	return HandleVErrAndExitCode(verr, usage)
 }
