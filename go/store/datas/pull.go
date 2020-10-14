@@ -121,7 +121,6 @@ func mapTableFiles(tblFiles []nbs.TableFile) ([]string, map[string]nbs.TableFile
 }
 
 func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<- TableFileEvent) error {
-	//cli.DeleteAndPrint(0, "HEREEEE\n")
 	root, tblFiles, err := srcTS.Sources(ctx)
 
 	if err != nil {

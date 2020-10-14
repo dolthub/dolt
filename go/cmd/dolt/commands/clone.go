@@ -285,7 +285,6 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	}()
 
 	err := actions.Clone(ctx, srcDB, dEnv.DoltDB, eventCh)
-
 	close(eventCh)
 	wg.Wait()
 
