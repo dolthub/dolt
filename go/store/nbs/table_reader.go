@@ -677,15 +677,17 @@ func (hs offsetRecSlice) Len() int           { return len(hs) }
 func (hs offsetRecSlice) Less(i, j int) bool { return hs[i].offset < hs[j].offset }
 func (hs offsetRecSlice) Swap(i, j int)      { hs[i], hs[j] = hs[j], hs[i] }
 
+var _ chunkReadPlanner = tableReader{}
+var _ chunkReader = tableReader{}
+
 func (tr tableReader) readCompressedAtOffsets(
 	ctx context.Context,
 	readStart, readEnd uint64,
-	reqs []getRecord,
 	offsets offsetRecSlice,
 	found func(CompressedChunk),
 	stats *Stats,
 ) error {
-	return tr.readAtOffsetsWithCB(ctx, readStart, readEnd, reqs, offsets, stats, func(cmp CompressedChunk) error {
+	return tr.readAtOffsetsWithCB(ctx, readStart, readEnd, offsets, stats, func(cmp CompressedChunk) error {
 		found(cmp)
 		return nil
 	})
@@ -694,12 +696,11 @@ func (tr tableReader) readCompressedAtOffsets(
 func (tr tableReader) readAtOffsets(
 	ctx context.Context,
 	readStart, readEnd uint64,
-	reqs []getRecord,
 	offsets offsetRecSlice,
 	found func(*chunks.Chunk),
 	stats *Stats,
 ) error {
-	return tr.readAtOffsetsWithCB(ctx, readStart, readEnd, reqs, offsets, stats, func(cmp CompressedChunk) error {
+	return tr.readAtOffsetsWithCB(ctx, readStart, readEnd, offsets, stats, func(cmp CompressedChunk) error {
 		chk, err := cmp.ToChunk()
 
 		if err != nil {
@@ -714,7 +715,6 @@ func (tr tableReader) readAtOffsets(
 func (tr tableReader) readAtOffsetsWithCB(
 	ctx context.Context,
 	readStart, readEnd uint64,
-	reqs []getRecord,
 	offsets offsetRecSlice,
 	stats *Stats,
 	cb func(cmp CompressedChunk) error,
@@ -773,51 +773,46 @@ func (tr tableReader) getMany(
 	// Pass #1: Iterate over |reqs| and |tr.prefixes| (both sorted by address) and build the set
 	// of table locations which must be read in order to satisfy the getMany operation.
 	offsetRecords, remaining := tr.findOffsets(reqs)
-	tr.getManyAtOffsets(ctx, reqs, offsetRecords, found, wg, ae, stats)
+	tr.getManyAtOffsets(ctx, offsetRecords, found, wg, ae, stats)
 	return remaining
 }
 func (tr tableReader) getManyCompressed(ctx context.Context, reqs []getRecord, found func(CompressedChunk), wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
 	// Pass #1: Iterate over |reqs| and |tr.prefixes| (both sorted by address) and build the set
 	// of table locations which must be read in order to satisfy the getMany operation.
 	offsetRecords, remaining := tr.findOffsets(reqs)
-	tr.getManyCompressedAtOffsets(ctx, reqs, offsetRecords, found, wg, ae, stats)
+	tr.getManyCompressedAtOffsets(ctx, offsetRecords, found, wg, ae, stats)
 	return remaining
 }
 
-func (tr tableReader) getManyCompressedAtOffsets(ctx context.Context, reqs []getRecord, offsetRecords offsetRecSlice, found func(CompressedChunk), wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) {
-	tr.getManyAtOffsetsWithReadFunc(ctx, reqs, offsetRecords, wg, ae, stats, func(
+func (tr tableReader) getManyCompressedAtOffsets(ctx context.Context, offsetRecords offsetRecSlice, found func(CompressedChunk), wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) {
+	tr.getManyAtOffsetsWithReadFunc(ctx, offsetRecords, wg, ae, stats, func(
 		ctx context.Context,
 		readStart, readEnd uint64,
-		reqs []getRecord,
 		offsets offsetRecSlice,
 		stats *Stats) error {
-
-		return tr.readCompressedAtOffsets(ctx, readStart, readEnd, reqs, offsets, found, stats)
+		return tr.readCompressedAtOffsets(ctx, readStart, readEnd, offsets, found, stats)
 	})
 }
 
 func (tr tableReader) getManyAtOffsets(
 	ctx context.Context,
-	reqs []getRecord,
 	offsetRecords offsetRecSlice,
 	found func(*chunks.Chunk),
 	wg *sync.WaitGroup,
 	ae *atomicerr.AtomicError,
 	stats *Stats,
 ) {
-	tr.getManyAtOffsetsWithReadFunc(ctx, reqs, offsetRecords, wg, ae, stats, func(
+	tr.getManyAtOffsetsWithReadFunc(ctx, offsetRecords, wg, ae, stats, func(
 		ctx context.Context,
 		readStart, readEnd uint64,
-		reqs []getRecord,
 		offsets offsetRecSlice,
 		stats *Stats) error {
-		return tr.readAtOffsets(ctx, readStart, readEnd, reqs, offsets, found, stats)
+		return tr.readAtOffsets(ctx, readStart, readEnd, offsets, found, stats)
 	})
 }
 
 func (tr tableReader) getManyAtOffsetsWithReadFunc(
 	ctx context.Context,
-	reqs []getRecord,
 	offsetRecords offsetRecSlice,
 	wg *sync.WaitGroup,
 	ae *atomicerr.AtomicError,
@@ -825,7 +820,6 @@ func (tr tableReader) getManyAtOffsetsWithReadFunc(
 	readAtOffsets func(
 		ctx context.Context,
 		readStart, readEnd uint64,
-		reqs []getRecord,
 		offsets offsetRecSlice,
 		stats *Stats) error,
 ) {
@@ -878,7 +872,7 @@ func (tr tableReader) getManyAtOffsetsWithReadFunc(
 	readBatches := func(batchCh <-chan readBatch) {
 		for rb := range batchCh {
 			if !ae.IsSet() {
-				err := readAtOffsets(ctx, rb.readStart, rb.readEnd, reqs, rb.batch, stats)
+				err := readAtOffsets(ctx, rb.readStart, rb.readEnd, rb.batch, stats)
 				ae.SetIfError(err)
 			}
 		}

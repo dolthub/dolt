@@ -241,7 +241,6 @@ type chunkReadPlanner interface {
 	findOffsets(reqs []getRecord) (ors offsetRecSlice, remaining bool)
 	getManyAtOffsets(
 		ctx context.Context,
-		reqs []getRecord,
 		offsetRecords offsetRecSlice,
 		found func(*chunks.Chunk),
 		wg *sync.WaitGroup,
@@ -250,7 +249,6 @@ type chunkReadPlanner interface {
 	)
 	getManyCompressedAtOffsets(
 		ctx context.Context,
-		reqs []getRecord,
 		offsetRecords offsetRecSlice,
 		found func(CompressedChunk),
 		wg *sync.WaitGroup,
