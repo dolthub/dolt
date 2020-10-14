@@ -164,7 +164,7 @@ func (ts tableSet) getMany(ctx context.Context, reqs []getRecord, found func(*ch
 	return f(ts.novel) && f(ts.upstream)
 }
 
-func (ts tableSet) getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan<- CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+func (ts tableSet) getManyCompressed(ctx context.Context, reqs []getRecord, found func(CompressedChunk), wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
 	f := func(css chunkSources) bool {
 		for _, haver := range css {
 			if ae.IsSet() {
@@ -175,7 +175,7 @@ func (ts tableSet) getManyCompressed(ctx context.Context, reqs []getRecord, foun
 				offsets, remaining := rp.findOffsets(reqs)
 
 				if len(offsets) > 0 {
-					rp.getManyCompressedAtOffsets(ctx, reqs, offsets, foundCmpChunks, wg, ae, stats)
+					rp.getManyCompressedAtOffsets(ctx, reqs, offsets, found, wg, ae, stats)
 				}
 
 				if !remaining {
@@ -185,7 +185,7 @@ func (ts tableSet) getManyCompressed(ctx context.Context, reqs []getRecord, foun
 				continue
 			}
 
-			remaining := haver.getManyCompressed(ctx, reqs, foundCmpChunks, wg, ae, stats)
+			remaining := haver.getManyCompressed(ctx, reqs, found, wg, ae, stats)
 
 			if !remaining {
 				return false

@@ -35,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
@@ -46,6 +47,7 @@ var ErrInvalidDoltSpecPath = errors.New("invalid dolt spec path")
 var globalHttpFetcher HTTPFetcher = &http.Client{}
 
 var _ nbs.TableFileStore = (*DoltChunkStore)(nil)
+var _ datas.NBSCompressedChunkStore = (*DoltChunkStore)(nil)
 var _ chunks.ChunkStore = (*DoltChunkStore)(nil)
 
 // We may need this to be configurable for users with really bad internet
@@ -173,7 +175,7 @@ func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 		}
 	}()
 
-	err := dcs.GetManyCompressed(ctx, hashes, foundCmp)
+	err := dcs.GetManyCompressed(ctx, hashes, func (c nbs.CompressedChunk) { foundCmp<-c })
 	close(foundCmp)
 
 	wg.Wait()
@@ -191,7 +193,7 @@ func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 
 // GetMany gets the Chunks with |hashes| from the store. On return, |foundChunks| will have been fully sent all chunks
 // which have been found. Any non-present chunks will silently be ignored.
-func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, foundChunks chan<- nbs.CompressedChunk) error {
+func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(nbs.CompressedChunk)) error {
 	hashToChunk := dcs.cache.Get(hashes)
 
 	notCached := make([]hash.Hash, 0, len(hashes))
@@ -201,12 +203,12 @@ func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.Ha
 		if c.IsEmpty() {
 			notCached = append(notCached, h)
 		} else {
-			foundChunks <- c
+			found(c)
 		}
 	}
 
 	if len(notCached) > 0 {
-		err := dcs.readChunksAndCache(ctx, hashes, notCached, foundChunks)
+		err := dcs.readChunksAndCache(ctx, hashes, notCached, found)
 
 		if err != nil {
 			return err
@@ -304,7 +306,7 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (m
 	return resourceToUrlAndRanges, nil
 }
 
-func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.HashSet, notCached []hash.Hash, foundChunks chan<- nbs.CompressedChunk) error {
+func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.HashSet, notCached []hash.Hash, found func(nbs.CompressedChunk)) error {
 	// get the locations where the chunks can be downloaded from
 	resourceToUrlAndRanges, err := dcs.getDLLocs(ctx, notCached)
 
@@ -328,7 +330,7 @@ func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.H
 
 			h := chunk.Hash()
 			if _, ok := hashes[h]; ok {
-				foundChunks <- chunk
+				found(chunk)
 			}
 		}
 	}()

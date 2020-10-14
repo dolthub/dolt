@@ -75,9 +75,9 @@ func (nbsMW *NBSMetricWrapper) PruneTableFiles(ctx context.Context) error {
 }
 
 // GetManyCompressed gets the compressed Chunks with |hashes| from the store. On return,
-// |foundChunks| will have been fully sent all chunks which have been
+// |found| will have been fully sent all chunks which have been
 // found. Any non-present chunks will silently be ignored.
-func (nbsMW *NBSMetricWrapper) GetManyCompressed(ctx context.Context, hashes hash.HashSet, cmpChChan chan<- CompressedChunk) error {
+func (nbsMW *NBSMetricWrapper) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(CompressedChunk)) error {
 	atomic.AddInt32(&nbsMW.TotalChunkGets, int32(len(hashes)))
-	return nbsMW.nbs.GetManyCompressed(ctx, hashes, cmpChChan)
+	return nbsMW.nbs.GetManyCompressed(ctx, hashes, found)
 }

@@ -471,9 +471,9 @@ func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 	})
 }
 
-func (nbs *NomsBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, foundCmpChunks chan<- CompressedChunk) error {
+func (nbs *NomsBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(CompressedChunk)) error {
 	return nbs.getManyWithFunc(ctx, hashes, func(ctx context.Context, cr chunkReader, reqs []getRecord, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
-		return cr.getManyCompressed(ctx, reqs, foundCmpChunks, wg, ae, nbs.stats)
+		return cr.getManyCompressed(ctx, reqs, found, wg, ae, nbs.stats)
 	})
 }
 

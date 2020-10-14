@@ -228,7 +228,7 @@ type chunkReader interface {
 	hasMany(addrs []hasRecord) (bool, error)
 	get(ctx context.Context, h addr, stats *Stats) ([]byte, error)
 	getMany(ctx context.Context, reqs []getRecord, found func(*chunks.Chunk), wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool
-	getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan<- CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool
+	getManyCompressed(ctx context.Context, reqs []getRecord, found func(CompressedChunk), wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool
 	extract(ctx context.Context, chunks chan<- extractRecord) error
 	count() (uint32, error)
 	uncompressedLen() (uint64, error)
@@ -252,7 +252,7 @@ type chunkReadPlanner interface {
 		ctx context.Context,
 		reqs []getRecord,
 		offsetRecords offsetRecSlice,
-		foundCmpChunks chan<- CompressedChunk,
+		found func(CompressedChunk),
 		wg *sync.WaitGroup,
 		ae *atomicerr.AtomicError,
 		stats *Stats,

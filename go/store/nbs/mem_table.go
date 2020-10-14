@@ -153,13 +153,13 @@ func (mt *memTable) getMany(ctx context.Context, reqs []getRecord, found func(*c
 	return remaining
 }
 
-func (mt *memTable) getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan<- CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+func (mt *memTable) getManyCompressed(ctx context.Context, reqs []getRecord, found func(CompressedChunk), wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
 	var remaining bool
 	for _, r := range reqs {
 		data := mt.chunks[*r.a]
 		if data != nil {
 			c := chunks.NewChunkWithHash(hash.Hash(*r.a), data)
-			foundCmpChunks <- ChunkToCompressedChunk(c)
+			found(ChunkToCompressedChunk(c))
 		} else {
 			remaining = true
 		}

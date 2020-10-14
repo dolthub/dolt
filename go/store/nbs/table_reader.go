@@ -682,11 +682,11 @@ func (tr tableReader) readCompressedAtOffsets(
 	readStart, readEnd uint64,
 	reqs []getRecord,
 	offsets offsetRecSlice,
-	foundCmpChunks chan<- CompressedChunk,
+	found func(CompressedChunk),
 	stats *Stats,
 ) error {
 	return tr.readAtOffsetsWithCB(ctx, readStart, readEnd, reqs, offsets, stats, func(cmp CompressedChunk) error {
-		foundCmpChunks <- cmp
+		found(cmp)
 		return nil
 	})
 }
@@ -776,15 +776,15 @@ func (tr tableReader) getMany(
 	tr.getManyAtOffsets(ctx, reqs, offsetRecords, found, wg, ae, stats)
 	return remaining
 }
-func (tr tableReader) getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan<- CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+func (tr tableReader) getManyCompressed(ctx context.Context, reqs []getRecord, found func(CompressedChunk), wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
 	// Pass #1: Iterate over |reqs| and |tr.prefixes| (both sorted by address) and build the set
 	// of table locations which must be read in order to satisfy the getMany operation.
 	offsetRecords, remaining := tr.findOffsets(reqs)
-	tr.getManyCompressedAtOffsets(ctx, reqs, offsetRecords, foundCmpChunks, wg, ae, stats)
+	tr.getManyCompressedAtOffsets(ctx, reqs, offsetRecords, found, wg, ae, stats)
 	return remaining
 }
 
-func (tr tableReader) getManyCompressedAtOffsets(ctx context.Context, reqs []getRecord, offsetRecords offsetRecSlice, foundCmpChunks chan<- CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) {
+func (tr tableReader) getManyCompressedAtOffsets(ctx context.Context, reqs []getRecord, offsetRecords offsetRecSlice, found func(CompressedChunk), wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) {
 	tr.getManyAtOffsetsWithReadFunc(ctx, reqs, offsetRecords, wg, ae, stats, func(
 		ctx context.Context,
 		readStart, readEnd uint64,
@@ -792,7 +792,7 @@ func (tr tableReader) getManyCompressedAtOffsets(ctx context.Context, reqs []get
 		offsets offsetRecSlice,
 		stats *Stats) error {
 
-		return tr.readCompressedAtOffsets(ctx, readStart, readEnd, reqs, offsets, foundCmpChunks, stats)
+		return tr.readCompressedAtOffsets(ctx, readStart, readEnd, reqs, offsets, found, stats)
 	})
 }
 

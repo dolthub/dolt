@@ -52,7 +52,7 @@ func TestCmpChunkTableWriter(t *testing.T) {
 
 	go func() {
 		defer close(found)
-		tr.getManyCompressed(ctx, reqs, found, wg, ae, &Stats{})
+		tr.getManyCompressed(ctx, reqs, func (c CompressedChunk) { found<-c }, wg, ae, &Stats{})
 		wg.Wait()
 	}()
 

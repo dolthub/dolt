@@ -277,9 +277,9 @@ func (crg chunkReaderGroup) getMany(ctx context.Context, reqs []getRecord, found
 	return true
 }
 
-func (crg chunkReaderGroup) getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan<- CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+func (crg chunkReaderGroup) getManyCompressed(ctx context.Context, reqs []getRecord, found func(CompressedChunk), wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
 	for _, haver := range crg {
-		remaining := haver.getManyCompressed(ctx, reqs, foundCmpChunks, wg, ae, stats)
+		remaining := haver.getManyCompressed(ctx, reqs, found, wg, ae, stats)
 
 		if !remaining {
 			return false
