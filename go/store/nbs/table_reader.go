@@ -824,66 +824,59 @@ func (tr tableReader) getManyAtOffsetsWithReadFunc(
 		readStart uint64
 		readEnd   uint64
 	}
-	buildBatches := func(batchCh chan<- readBatch) {
-		// |offsetRecords| contains all locations within the table
-		// which must be search in sorted order and without
-		// duplicates. Now scan forward, grouping sequences of reads
-		// into larger physical reads.
+	batches := make([]readBatch, 0)
 
-		var batch offsetRecSlice
-		var readStart, readEnd uint64
+	var batch offsetRecSlice
+	var readStart, readEnd uint64
+	for i := 0; i < len(offsetRecords); {
+		rec := offsetRecords[i]
+		length := rec.length
 
-		for i := 0; i < len(offsetRecords); {
-			rec := offsetRecords[i]
-			length := rec.length
-
-			if batch == nil {
-				batch = make(offsetRecSlice, 1)
-				batch[0] = offsetRecords[i]
-				readStart = rec.offset
-				readEnd = readStart + uint64(length)
-				i++
-				continue
-			}
-
-			if newReadEnd, canRead := canReadAhead(rec, rec.length, readStart, readEnd, tr.blockSize); canRead {
-				batch = append(batch, rec)
-				readEnd = newReadEnd
-				i++
-				continue
-			}
-
-			select {
-			case batchCh <- readBatch{batch, readStart, readEnd}:
-				break
-			case <-ctx.Done():
-				return
-			}
-			batch = nil
+		if batch == nil {
+			batch = make(offsetRecSlice, 1)
+			batch[0] = offsetRecords[i]
+			readStart = rec.offset
+			readEnd = readStart + uint64(length)
+			i++
+			continue
 		}
 
-		if batch != nil {
-			select {
-			case batchCh <- readBatch{batch, readStart, readEnd}:
-				break
-			case <-ctx.Done():
-				return
-			}
+		if newReadEnd, canRead := canReadAhead(rec, rec.length, readStart, readEnd, tr.blockSize); canRead {
+			batch = append(batch, rec)
+			readEnd = newReadEnd
+			i++
+			continue
 		}
+
+		batches = append(batches, readBatch{batch, readStart, readEnd})
+		batch = nil
 	}
-	batchCh := make(chan readBatch, 128)
+
+	if batch != nil {
+		batches = append(batches, readBatch{batch, readStart, readEnd})
+	}
+
+	idxCh := make(chan int, 128)
 	go func() {
-		defer close(batchCh)
-		buildBatches(batchCh)
+		defer close(idxCh)
+		for i := 0; i < len(batches); i++ {
+			select {
+			case idxCh <- i:
+				continue
+			case <-ctx.Done():
+				return
+			}
+		}
 	}()
 
 	readBatches := func() error {
 		for {
 			select {
-			case rb, ok := <-batchCh:
+			case i, ok := <-idxCh:
 				if !ok {
 					return nil
 				}
+				rb := batches[i]
 				err := readAtOffsets(ctx, rb.readStart, rb.readEnd, rb.batch, stats)
 				if err != nil {
 					return err
