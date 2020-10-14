@@ -60,7 +60,6 @@ teardown() {
 
     # filter out commands without "-h"
     cat all.txt \
-        | sed "s/remote//g"    \
         | sed "s/creds//g"     \
         | sed "s/version//g"   \
         | sed "s/schema//g"    \
