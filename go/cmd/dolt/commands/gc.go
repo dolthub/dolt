@@ -34,7 +34,7 @@ const (
 
 var gcDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Cleans up unreferenced data from the repository.",
-	LongDesc: `Searches the repository for data that is no longer referenced and no longer needed
+	LongDesc: `Searches the repository for data that is no longer referenced and no longer needed.
 
 If the {{.EmphasisLeft}}--shallow{{.EmphasisRight}} flag is supplied, a faster but less thorough garbage collection will be performed.`,
 	Synopsis: []string{
@@ -83,14 +83,10 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 	var verr errhand.VerboseError
 
 	ap := cmd.createArgParser()
-	_, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, lsDocs, ap))
-	apr, err := ap.Parse(args)
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, gcDocs, ap))
+	apr := cli.ParseArgs(ap, args, help)
 
-	if err != nil {
-		verr = errhand.VerboseErrorFromError(err)
-		return HandleVErrAndExitCode(verr, usage)
-	}
-
+	var err error
 	if apr.Contains(gcShallowFlag) {
 		db, ok := dEnv.DoltDB.ValueReadWriter().(datas.Database)
 		if !ok {
