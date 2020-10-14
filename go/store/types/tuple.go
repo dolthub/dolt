@@ -542,57 +542,6 @@ func (t Tuple) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	return TupleKind < other.Kind(), nil
 }
 
-// CountDifferencesBetweenTupleFields returns the number of fields that are different between two
-// tuples and does not panic if tuples are different lengths.
-func (t Tuple) CountDifferencesBetweenTupleFields(other Tuple) (uint64, error) {
-	changed := 0
-	tMap, err := t.fieldsToMap()
-	otherMap, err := other.fieldsToMap()
-
-	if err != nil {
-		return 0, err
-	}
-
-	for i, v := range tMap {
-		ov, ok := otherMap[i]
-		if !ok || !v.Equals(ov) {
-			changed++
-		}
-	}
-
-	for i := range otherMap {
-		if tMap[i] == nil {
-			changed++
-		}
-	}
-
-	return uint64(changed), nil
-}
-
-func (t Tuple) fieldsToMap() (map[Value]Value, error) {
-	valMap := make(map[Value]Value)
-
-	err := t.IterFields(func(index uint64, val Value) (stop bool, err error) {
-		if index%2 == 0 {
-			value, err := t.Get(index + 1)
-			if err != nil {
-				return true, err
-			}
-			if value.Kind() != NullKind {
-				valMap[val] = value
-			}
-		}
-
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return valMap, nil
-}
-
 func (t Tuple) StartsWith(otherTuple Tuple) bool {
 	tplDec, _ := t.decoderSkipToFields()
 	otherDec, _ := otherTuple.decoderSkipToFields()
