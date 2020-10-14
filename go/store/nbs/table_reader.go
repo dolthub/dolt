@@ -841,7 +841,7 @@ func (tr tableReader) getManyAtOffsetsWithReadFunc(
 			continue
 		}
 
-		if newReadEnd, canRead := canReadAhead(rec, rec.length, readStart, readEnd, tr.blockSize); canRead {
+		if newReadEnd, canRead := canReadAhead(rec, readEnd, tr.blockSize); canRead {
 			batch = append(batch, rec)
 			readEnd = newReadEnd
 			i++
@@ -943,7 +943,7 @@ func (tr tableReader) findOffsets(reqs []getRecord) (ors offsetRecSlice, remaini
 	return ors, remaining
 }
 
-func canReadAhead(fRec offsetRec, fLength uint32, readStart, readEnd, blockSize uint64) (newEnd uint64, canRead bool) {
+func canReadAhead(fRec offsetRec, readEnd, blockSize uint64) (newEnd uint64, canRead bool) {
 	if fRec.offset < readEnd {
 		// |offsetRecords| will contain an offsetRecord for *every* chunkRecord whose address
 		// prefix matches the prefix of a requested address. If the set of requests contains
@@ -957,7 +957,7 @@ func canReadAhead(fRec offsetRec, fLength uint32, readStart, readEnd, blockSize 
 		return readEnd, false
 	}
 
-	return fRec.offset + uint64(fLength), true
+	return fRec.offset + uint64(fRec.length), true
 }
 
 func (tr tableReader) calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool, err error) {
@@ -986,7 +986,7 @@ func (tr tableReader) calcReads(reqs []getRecord, blockSize uint64) (reads int, 
 			continue
 		}
 
-		if newReadEnd, canRead := canReadAhead(rec, rec.length, readStart, readEnd, tr.blockSize); canRead {
+		if newReadEnd, canRead := canReadAhead(rec, readEnd, tr.blockSize); canRead {
 			readEnd = newReadEnd
 			i++
 			continue
