@@ -66,9 +66,9 @@ func (s *TestStoreView) Get(ctx context.Context, h hash.Hash) (Chunk, error) {
 	return s.ChunkStore.Get(ctx, h)
 }
 
-func (s *TestStoreView) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan<- *Chunk) error {
+func (s *TestStoreView) GetMany(ctx context.Context, hashes hash.HashSet, found func(*Chunk)) error {
 	atomic.AddInt32(&s.reads, int32(len(hashes)))
-	return s.ChunkStore.GetMany(ctx, hashes, foundChunks)
+	return s.ChunkStore.GetMany(ctx, hashes, found)
 }
 
 func (s *TestStoreView) Has(ctx context.Context, h hash.Hash) (bool, error) {

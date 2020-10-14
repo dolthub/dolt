@@ -133,7 +133,7 @@ func (ccs *persistingChunkSource) get(ctx context.Context, h addr, stats *Stats)
 	return cr.get(ctx, h, stats)
 }
 
-func (ccs *persistingChunkSource) getMany(ctx context.Context, reqs []getRecord, foundChunks chan<- *chunks.Chunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+func (ccs *persistingChunkSource) getMany(ctx context.Context, reqs []getRecord, found func(*chunks.Chunk), wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
 	cr := ccs.getReader()
 
 	if cr == nil {
@@ -141,7 +141,7 @@ func (ccs *persistingChunkSource) getMany(ctx context.Context, reqs []getRecord,
 		return false
 	}
 
-	return cr.getMany(ctx, reqs, foundChunks, wg, ae, stats)
+	return cr.getMany(ctx, reqs, found, wg, ae, stats)
 }
 
 func (ccs *persistingChunkSource) getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan<- CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
@@ -272,7 +272,7 @@ func (ecs emptyChunkSource) get(ctx context.Context, h addr, stats *Stats) ([]by
 	return nil, nil
 }
 
-func (ecs emptyChunkSource) getMany(ctx context.Context, reqs []getRecord, foundChunks chan<- *chunks.Chunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+func (ecs emptyChunkSource) getMany(ctx context.Context, reqs []getRecord, found func(*chunks.Chunk), wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
 	return true
 }
 

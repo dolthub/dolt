@@ -135,22 +135,19 @@ func (dcs *DoltChunkStore) getRepoId() *remotesapi.RepoId {
 // Get the Chunk for the value of the hash in the store. If the hash is absent from the store EmptyChunk is returned.
 func (dcs *DoltChunkStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
 	hashes := hash.HashSet{h: struct{}{}}
-	foundChan := make(chan *chunks.Chunk, 1)
-	err := dcs.GetMany(ctx, hashes, foundChan)
-
+	var found *chunks.Chunk
+	err := dcs.GetMany(ctx, hashes, func (c *chunks.Chunk) { found = c })
 	if err != nil {
 		return chunks.EmptyChunk, err
 	}
-
-	select {
-	case ch := <-foundChan:
-		return *ch, nil
-	default:
+	if found != nil {
+		return *found, nil
+	} else {
 		return chunks.EmptyChunk, nil
 	}
 }
 
-func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan<- *chunks.Chunk) error {
+func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(*chunks.Chunk)) error {
 	ae := atomicerr.New()
 	wg := &sync.WaitGroup{}
 	foundCmp := make(chan nbs.CompressedChunk, 1024)
@@ -172,7 +169,7 @@ func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 				continue
 			}
 
-			foundChunks <- &c
+			found(&c)
 		}
 	}()
 

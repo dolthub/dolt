@@ -89,8 +89,8 @@ func (nbc *NomsBlockCache) Get(ctx context.Context, hash hash.Hash) (chunks.Chun
 // GetMany gets the Chunks with |hashes| from the store. On return,
 // |foundChunks| will have been fully sent all chunks which have been
 // found. Any non-present chunks will silently be ignored.
-func (nbc *NomsBlockCache) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *chunks.Chunk) error {
-	return nbc.chunks.GetMany(ctx, hashes, foundChunks)
+func (nbc *NomsBlockCache) GetMany(ctx context.Context, hashes hash.HashSet, found func(*chunks.Chunk)) error {
+	return nbc.chunks.GetMany(ctx, hashes, found)
 }
 
 // Count returns the number of items in the cache.

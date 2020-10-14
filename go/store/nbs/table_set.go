@@ -132,7 +132,7 @@ func (ts tableSet) get(ctx context.Context, h addr, stats *Stats) ([]byte, error
 	return f(ts.upstream)
 }
 
-func (ts tableSet) getMany(ctx context.Context, reqs []getRecord, foundChunks chan<- *chunks.Chunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+func (ts tableSet) getMany(ctx context.Context, reqs []getRecord, found func(*chunks.Chunk), wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
 	f := func(css chunkSources) bool {
 		for _, haver := range css {
 			if ae.IsSet() {
@@ -142,7 +142,7 @@ func (ts tableSet) getMany(ctx context.Context, reqs []getRecord, foundChunks ch
 			if rp, ok := haver.(chunkReadPlanner); ok {
 				offsets, remaining := rp.findOffsets(reqs)
 
-				rp.getManyAtOffsets(ctx, reqs, offsets, foundChunks, wg, ae, stats)
+				rp.getManyAtOffsets(ctx, reqs, offsets, found, wg, ae, stats)
 
 				if !remaining {
 					return false
@@ -151,7 +151,7 @@ func (ts tableSet) getMany(ctx context.Context, reqs []getRecord, foundChunks ch
 				continue
 			}
 
-			remaining := haver.getMany(ctx, reqs, foundChunks, wg, ae, stats)
+			remaining := haver.getMany(ctx, reqs, found, wg, ae, stats)
 
 			if !remaining {
 				return false

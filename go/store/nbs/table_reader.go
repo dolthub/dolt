@@ -696,7 +696,7 @@ func (tr tableReader) readAtOffsets(
 	readStart, readEnd uint64,
 	reqs []getRecord,
 	offsets offsetRecSlice,
-	foundChunks chan<- *chunks.Chunk,
+	found func(*chunks.Chunk),
 	stats *Stats,
 ) error {
 	return tr.readAtOffsetsWithCB(ctx, readStart, readEnd, reqs, offsets, stats, func(cmp CompressedChunk) error {
@@ -706,7 +706,7 @@ func (tr tableReader) readAtOffsets(
 			return err
 		}
 
-		foundChunks <- &chk
+		found(&chk)
 		return nil
 	})
 }
@@ -765,7 +765,7 @@ func (tr tableReader) readAtOffsetsWithCB(
 func (tr tableReader) getMany(
 	ctx context.Context,
 	reqs []getRecord,
-	foundChunks chan<- *chunks.Chunk,
+	found func(*chunks.Chunk),
 	wg *sync.WaitGroup,
 	ae *atomicerr.AtomicError,
 	stats *Stats) bool {
@@ -773,7 +773,7 @@ func (tr tableReader) getMany(
 	// Pass #1: Iterate over |reqs| and |tr.prefixes| (both sorted by address) and build the set
 	// of table locations which must be read in order to satisfy the getMany operation.
 	offsetRecords, remaining := tr.findOffsets(reqs)
-	tr.getManyAtOffsets(ctx, reqs, offsetRecords, foundChunks, wg, ae, stats)
+	tr.getManyAtOffsets(ctx, reqs, offsetRecords, found, wg, ae, stats)
 	return remaining
 }
 func (tr tableReader) getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan<- CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
@@ -800,7 +800,7 @@ func (tr tableReader) getManyAtOffsets(
 	ctx context.Context,
 	reqs []getRecord,
 	offsetRecords offsetRecSlice,
-	foundChunks chan<- *chunks.Chunk,
+	found func(*chunks.Chunk),
 	wg *sync.WaitGroup,
 	ae *atomicerr.AtomicError,
 	stats *Stats,
@@ -811,8 +811,7 @@ func (tr tableReader) getManyAtOffsets(
 		reqs []getRecord,
 		offsets offsetRecSlice,
 		stats *Stats) error {
-
-		return tr.readAtOffsets(ctx, readStart, readEnd, reqs, offsets, foundChunks, stats)
+		return tr.readAtOffsets(ctx, readStart, readEnd, reqs, offsets, found, stats)
 	})
 }
 

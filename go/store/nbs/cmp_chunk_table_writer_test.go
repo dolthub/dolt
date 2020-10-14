@@ -103,7 +103,7 @@ func readAllChunks(ctx context.Context, hashes hash.HashSet, reader tableReader)
 
 	go func() {
 		defer close(found)
-		reader.getMany(ctx, reqs, found, wg, ae, &Stats{})
+		reader.getMany(ctx, reqs, func (c *chunks.Chunk) { found<-c }, wg, ae, &Stats{})
 		wg.Wait()
 	}()
 

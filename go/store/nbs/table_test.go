@@ -217,7 +217,7 @@ func TestGetMany(t *testing.T) {
 	ae := atomicerr.New()
 
 	chunkChan := make(chan *chunks.Chunk, len(getBatch))
-	tr.getMany(context.Background(), getBatch, chunkChan, wg, ae, &Stats{})
+	tr.getMany(context.Background(), getBatch, func(c *chunks.Chunk) { chunkChan<-c }, wg, ae, &Stats{})
 	wg.Wait()
 	close(chunkChan)
 
@@ -383,7 +383,7 @@ func doTestNGetMany(t *testing.T, count int) {
 	ae := atomicerr.New()
 	wg := &sync.WaitGroup{}
 	chunkChan := make(chan *chunks.Chunk, len(getBatch))
-	tr.getMany(context.Background(), getBatch, chunkChan, wg, ae, &Stats{})
+	tr.getMany(context.Background(), getBatch, func (c *chunks.Chunk) { chunkChan<-c }, wg, ae, &Stats{})
 	wg.Wait()
 	close(chunkChan)
 

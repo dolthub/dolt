@@ -133,7 +133,7 @@ func (ms *MemoryStoreView) Get(ctx context.Context, h hash.Hash) (Chunk, error) 
 	return ms.storage.Get(ctx, h)
 }
 
-func (ms *MemoryStoreView) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan<- *Chunk) error {
+func (ms *MemoryStoreView) GetMany(ctx context.Context, hashes hash.HashSet, found func(*Chunk)) error {
 	for h := range hashes {
 		c, err := ms.Get(ctx, h)
 
@@ -142,7 +142,7 @@ func (ms *MemoryStoreView) GetMany(ctx context.Context, hashes hash.HashSet, fou
 		}
 
 		if !c.IsEmpty() {
-			foundChunks <- &c
+			found(&c)
 		}
 	}
 

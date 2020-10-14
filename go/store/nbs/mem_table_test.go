@@ -265,9 +265,9 @@ func (crg chunkReaderGroup) hasMany(addrs []hasRecord) (bool, error) {
 	return true, nil
 }
 
-func (crg chunkReaderGroup) getMany(ctx context.Context, reqs []getRecord, foundChunks chan<- *chunks.Chunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+func (crg chunkReaderGroup) getMany(ctx context.Context, reqs []getRecord, found func(*chunks.Chunk), wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
 	for _, haver := range crg {
-		remaining := haver.getMany(ctx, reqs, foundChunks, wg, ae, stats)
+		remaining := haver.getMany(ctx, reqs, found, wg, ae, stats)
 
 		if !remaining {
 			return false

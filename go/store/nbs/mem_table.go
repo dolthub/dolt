@@ -138,13 +138,13 @@ func (mt *memTable) get(ctx context.Context, h addr, stats *Stats) ([]byte, erro
 	return mt.chunks[h], nil
 }
 
-func (mt *memTable) getMany(ctx context.Context, reqs []getRecord, foundChunks chan<- *chunks.Chunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+func (mt *memTable) getMany(ctx context.Context, reqs []getRecord, found func(*chunks.Chunk), wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
 	var remaining bool
 	for _, r := range reqs {
 		data := mt.chunks[*r.a]
 		if data != nil {
 			c := chunks.NewChunkWithHash(hash.Hash(*r.a), data)
-			foundChunks <- &c
+			found(&c)
 		} else {
 			remaining = true
 		}

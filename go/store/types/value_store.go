@@ -29,7 +29,6 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -253,33 +252,19 @@ func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice
 	}
 
 	if len(remaining) != 0 {
-		// Request remaining hashes from ChunkStore, processing the found chunks as they come in.
-		foundChunks := make(chan *chunks.Chunk, 16)
-
-		ae := atomicerr.New()
-		go func() {
-			defer close(foundChunks)
-			err := lvs.cs.GetMany(ctx, remaining, foundChunks)
-			ae.SetIfError(err)
-		}()
-
-		var err error
-		for c := range foundChunks {
-			if err != nil {
-				continue // continue to drain even if there is an error
+		var decodeErr error
+		err := lvs.cs.GetMany(ctx, remaining, func(c *chunks.Chunk) {
+			if decodeErr != nil {
+				return
 			}
-
 			h := c.Hash()
-
-			foundValues[h], err = decode(h, c)
-		}
-
-		if ae.IsSet() {
-			return nil, ae.Get()
-		}
-
+			foundValues[h], decodeErr = decode(h, c)
+		})
 		if err != nil {
 			return nil, err
+		}
+		if decodeErr != nil {
+			return nil, decodeErr
 		}
 	}
 
