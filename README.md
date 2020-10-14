@@ -21,12 +21,13 @@ Valid commands for dolt are
                reset - Remove table changes from the list of staged table changes.
               commit - Record changes to the repository.
                  sql - Run a SQL query against tables in repository.
-          sql-server - Starts a MySQL-compatible server.
+          sql-server - Start a MySQL-compatible server.
                  log - Show commit logs.
                 diff - Diff a table.
                blame - Show what revision and author last modified each row of a table.
                merge - Merge a branch.
               branch - Create, list, edit, delete branches.
+                 tag - Create, list, delete tags.
             checkout - Checkout a branch or overwrite a table from HEAD.
               remote - Manage set of tracked repositories.
                 push - Push to a dolt remote.
@@ -41,6 +42,9 @@ Valid commands for dolt are
               schema - Commands for showing and importing table schemas.
                table - Commands for copying, renaming, deleting, and exporting tables.
            conflicts - Commands for viewing and resolving merge conflicts.
+             migrate - Executes a repository migration to update to the latest format.
+         read-tables - Fetch table(s) at a specific commit into a new dolt repo
+                  gc - Cleans up unreferenced data from the repository.
 ```
 
 ## Installation
