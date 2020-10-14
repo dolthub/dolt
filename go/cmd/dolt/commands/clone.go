@@ -247,7 +247,6 @@ func cloneProg(eventCh <-chan datas.TableFileEvent) {
 		chunksDownloaded  int64
 		cliPos            int
 	)
-
 	cliPos = cli.DeleteAndPrint(cliPos, "Retrieving remote information.")
 	for tblFEvt := range eventCh {
 		switch tblFEvt.EventType {
@@ -286,8 +285,8 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	}()
 
 	err := actions.Clone(ctx, srcDB, dEnv.DoltDB, eventCh)
-	close(eventCh)
 
+	close(eventCh)
 	wg.Wait()
 
 	if err != nil {

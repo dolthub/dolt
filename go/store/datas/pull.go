@@ -29,6 +29,8 @@ import (
 	"math"
 	"math/rand"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/cenkalti/backoff"
 	"github.com/golang/snappy"
 
@@ -62,6 +64,7 @@ func makeProgTrack(progressCh chan PullProgress) func(moreDone, moreKnown, moreA
 }
 
 func Clone(ctx context.Context, srcDB, sinkDB Database, eventCh chan<- TableFileEvent) error {
+
 	srcCS := srcDB.chunkStore().(interface{})
 	sinkCS := sinkDB.chunkStore().(interface{})
 
@@ -118,6 +121,7 @@ func mapTableFiles(tblFiles []nbs.TableFile) ([]string, map[string]nbs.TableFile
 }
 
 func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<- TableFileEvent) error {
+	//cli.DeleteAndPrint(0, "HEREEEE\n")
 	root, tblFiles, err := srcTS.Sources(ctx)
 
 	if err != nil {
@@ -136,60 +140,71 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 	i := 0
 	download := func(ctx context.Context) error {
 		var err error
+
+		maxGoroutines := 3
+		guard := make(chan struct{}, maxGoroutines)
+		eg, ctx := errgroup.WithContext(ctx)
+
 		for i < len(desiredFiles) {
-			fileID := desiredFiles[i]
-			tblFile, ok := fileIDToTF[fileID]
+			guard <- struct{}{} // would block if guard channel is already filled
+			func(i int) {
+				eg.Go(func() error {
+					fileID := desiredFiles[i]
+					tblFile, ok := fileIDToTF[fileID]
 
-			if !ok {
-				// conjoin happened during clone
-				return backoff.Permanent(errors.New("table file not found. please try again"))
-			}
-
-			err = func() (err error) {
-				var rd io.ReadCloser
-				rd, err = tblFile.Open(ctx)
-
-				if err != nil {
-					return err
-				}
-
-				defer func() {
-					closeErr := rd.Close()
-
-					if err == nil && closeErr != nil {
-						err = closeErr
+					if !ok {
+						// conjoin happened during clone
+						<-guard
+						return backoff.Permanent(errors.New("table file not found. please try again"))
 					}
-				}()
 
-				if eventCh != nil {
-					eventCh <- TableFileEvent{DownloadStart, []nbs.TableFile{tblFile}}
-				}
+					var rd io.ReadCloser
+					rd, err = tblFile.Open(ctx)
 
-				err = sinkTS.WriteTableFile(ctx, tblFile.FileID(), tblFile.NumChunks(), rd, 0, nil)
+					if err != nil {
+						<-guard
+						return err
+					}
 
-				if err != nil {
+					defer func() error {
+						closeErr := rd.Close()
+
+						if err == nil && closeErr != nil {
+							<-guard
+							return err
+						}
+						return nil
+					}()
+
 					if eventCh != nil {
-						eventCh <- TableFileEvent{DownloadFailed, []nbs.TableFile{tblFile}}
+						eventCh <- TableFileEvent{DownloadStart, []nbs.TableFile{tblFile}}
 					}
 
-					return err
-				}
+					err = sinkTS.WriteTableFile(ctx, tblFile.FileID(), tblFile.NumChunks(), rd, 0, nil)
 
-				if eventCh != nil {
-					eventCh <- TableFileEvent{DownloadSuccess, []nbs.TableFile{tblFile}}
-				}
+					if err != nil {
+						if eventCh != nil {
+							eventCh <- TableFileEvent{DownloadFailed, []nbs.TableFile{tblFile}}
+						}
 
-				return nil
-			}()
+						<-guard
+						return err
+					}
 
-			if err != nil {
-				break
-			}
+					if eventCh != nil {
+						eventCh <- TableFileEvent{DownloadSuccess, []nbs.TableFile{tblFile}}
+					}
+
+					<-guard
+					return nil
+				})
+			}(i)
 
 			i++
 		}
 
-		if err != nil {
+		if err := eg.Wait(); err != nil {
+			close(guard)
 			// If at any point there is an error we retrieve updated TableFile information before retrying.
 			var sourcesErr error
 			_, tblFiles, sourcesErr = srcTS.Sources(ctx)
@@ -202,7 +217,7 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 
 			return err
 		}
-
+		close(guard)
 		return nil
 	}
 
