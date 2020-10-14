@@ -229,6 +229,17 @@ var _ sql.DeletableTable = (*WritableDoltTable)(nil)
 var _ sql.InsertableTable = (*WritableDoltTable)(nil)
 var _ sql.ReplaceableTable = (*WritableDoltTable)(nil)
 
+func (t *WritableDoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
+	dil, ok := lookup.(*doltIndexLookup)
+	if !ok {
+		return newStaticErrorTable(t, fmt.Errorf("Unrecognized indexLookup %T", lookup))
+	}
+	return &WritableIndexedDoltTable{
+		WritableDoltTable: t,
+		indexLookup:       dil,
+	}
+}
+
 // Inserter implements sql.InsertableTable
 func (t *WritableDoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
 	te, err := t.getTableEditor(ctx)

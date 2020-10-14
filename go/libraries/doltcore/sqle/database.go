@@ -692,6 +692,10 @@ func (db Database) Flush(ctx *sql.Context) error {
 				if err := alterable.flushBatchedEdits(ctx); err != nil {
 					return err
 				}
+			} else if writable, ok := table.(*WritableIndexedDoltTable); ok {
+				if err := writable.flushBatchedEdits(ctx); err != nil {
+					return err
+				}
 			}
 		}
 	}
