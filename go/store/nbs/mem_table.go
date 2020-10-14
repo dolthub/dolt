@@ -25,9 +25,8 @@ import (
 	"context"
 	"errors"
 	"sort"
-	"sync"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -138,7 +137,7 @@ func (mt *memTable) get(ctx context.Context, h addr, stats *Stats) ([]byte, erro
 	return mt.chunks[h], nil
 }
 
-func (mt *memTable) getMany(ctx context.Context, reqs []getRecord, found func(*chunks.Chunk), wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+func (mt *memTable) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(*chunks.Chunk), stats *Stats) (bool, error) {
 	var remaining bool
 	for _, r := range reqs {
 		data := mt.chunks[*r.a]
@@ -149,11 +148,10 @@ func (mt *memTable) getMany(ctx context.Context, reqs []getRecord, found func(*c
 			remaining = true
 		}
 	}
-
-	return remaining
+	return remaining, nil
 }
 
-func (mt *memTable) getManyCompressed(ctx context.Context, reqs []getRecord, found func(CompressedChunk), wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+func (mt *memTable) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(CompressedChunk), stats *Stats) (bool, error) {
 	var remaining bool
 	for _, r := range reqs {
 		data := mt.chunks[*r.a]
@@ -165,7 +163,7 @@ func (mt *memTable) getManyCompressed(ctx context.Context, reqs []getRecord, fou
 		}
 	}
 
-	return remaining
+	return remaining, nil
 }
 
 func (mt *memTable) extract(ctx context.Context, chunks chan<- extractRecord) error {

@@ -29,9 +29,9 @@ import (
 	"encoding/binary"
 	"hash/crc32"
 	"io"
-	"sync"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -227,8 +227,8 @@ type chunkReader interface {
 	has(h addr) (bool, error)
 	hasMany(addrs []hasRecord) (bool, error)
 	get(ctx context.Context, h addr, stats *Stats) ([]byte, error)
-	getMany(ctx context.Context, reqs []getRecord, found func(*chunks.Chunk), wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool
-	getManyCompressed(ctx context.Context, reqs []getRecord, found func(CompressedChunk), wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool
+	getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(*chunks.Chunk), stats *Stats) (bool, error)
+	getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(CompressedChunk), stats *Stats) (bool, error)
 	extract(ctx context.Context, chunks chan<- extractRecord) error
 	count() (uint32, error)
 	uncompressedLen() (uint64, error)
@@ -241,20 +241,18 @@ type chunkReadPlanner interface {
 	findOffsets(reqs []getRecord) (ors offsetRecSlice, remaining bool)
 	getManyAtOffsets(
 		ctx context.Context,
+		eg *errgroup.Group,
 		offsetRecords offsetRecSlice,
 		found func(*chunks.Chunk),
-		wg *sync.WaitGroup,
-		ae *atomicerr.AtomicError,
 		stats *Stats,
-	)
+	) error
 	getManyCompressedAtOffsets(
 		ctx context.Context,
+		eg *errgroup.Group,
 		offsetRecords offsetRecSlice,
 		found func(CompressedChunk),
-		wg *sync.WaitGroup,
-		ae *atomicerr.AtomicError,
 		stats *Stats,
-	)
+	) error
 }
 
 type chunkSource interface {

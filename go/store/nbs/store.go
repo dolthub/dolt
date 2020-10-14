@@ -33,11 +33,11 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
 	"cloud.google.com/go/storage"
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -466,21 +466,21 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 }
 
 func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(*chunks.Chunk)) error {
-	return nbs.getManyWithFunc(ctx, hashes, func(ctx context.Context, cr chunkReader, reqs []getRecord, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
-		return cr.getMany(ctx, reqs, found, wg, ae, nbs.stats)
+	return nbs.getManyWithFunc(ctx, hashes, func(ctx context.Context, cr chunkReader, eg *errgroup.Group, reqs []getRecord, stats *Stats) (bool, error) {
+		return cr.getMany(ctx, eg, reqs, found, nbs.stats)
 	})
 }
 
 func (nbs *NomsBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(CompressedChunk)) error {
-	return nbs.getManyWithFunc(ctx, hashes, func(ctx context.Context, cr chunkReader, reqs []getRecord, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
-		return cr.getManyCompressed(ctx, reqs, found, wg, ae, nbs.stats)
+	return nbs.getManyWithFunc(ctx, hashes, func(ctx context.Context, cr chunkReader, eg *errgroup.Group, reqs []getRecord, stats *Stats) (bool, error) {
+		return cr.getManyCompressed(ctx, eg, reqs, found, nbs.stats)
 	})
 }
 
 func (nbs *NomsBlockStore) getManyWithFunc(
 	ctx context.Context,
 	hashes hash.HashSet,
-	getManyFunc func(ctx context.Context, cr chunkReader, reqs []getRecord, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool,
+	getManyFunc func(ctx context.Context, cr chunkReader, eg *errgroup.Group, reqs []getRecord, stats *Stats) (bool, error),
 ) error {
 	t1 := time.Now()
 	reqs := toGetRecords(hashes)
@@ -492,31 +492,31 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 		}
 	}()
 
-	ae := atomicerr.New()
-	wg := &sync.WaitGroup{}
+	eg, ctx := errgroup.WithContext(ctx)
 
-	tables, remaining := func() (tables chunkReader, remaining bool) {
+	tables, remaining, err := func() (tables chunkReader, remaining bool, err error) {
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
 		tables = nbs.tables
 		remaining = true
 		if nbs.mt != nil {
-			remaining = getManyFunc(ctx, nbs.mt, reqs, nil, ae, nbs.stats)
+			remaining, err = getManyFunc(ctx, nbs.mt, eg, reqs, nbs.stats)
 		}
-
 		return
 	}()
-
-	if err := ae.Get(); err != nil {
+	if err != nil {
 		return err
 	}
 
 	if remaining {
-		getManyFunc(ctx, tables, reqs, wg, ae, nbs.stats)
-		wg.Wait()
+		_, err = getManyFunc(ctx, tables, eg, reqs, nbs.stats)
 	}
 
-	return ae.Get()
+	if err != nil {
+		eg.Wait()
+		return err
+	}
+	return eg.Wait()
 }
 
 func toGetRecords(hashes hash.HashSet) []getRecord {

@@ -29,13 +29,12 @@ import (
 	"io"
 	"os"
 	"sort"
-	"sync"
 	"sync/atomic"
 
 	"github.com/golang/snappy"
 	"github.com/liquidata-inc/mmap-go"
+	"golang.org/x/sync/errgroup"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -764,28 +763,27 @@ func (tr tableReader) readAtOffsetsWithCB(
 // blocks which contain multiple stored blocks. |reqs| must be sorted by address prefix.
 func (tr tableReader) getMany(
 	ctx context.Context,
+	eg *errgroup.Group,
 	reqs []getRecord,
 	found func(*chunks.Chunk),
-	wg *sync.WaitGroup,
-	ae *atomicerr.AtomicError,
-	stats *Stats) bool {
+	stats *Stats) (bool, error) {
 
 	// Pass #1: Iterate over |reqs| and |tr.prefixes| (both sorted by address) and build the set
 	// of table locations which must be read in order to satisfy the getMany operation.
 	offsetRecords, remaining := tr.findOffsets(reqs)
-	tr.getManyAtOffsets(ctx, offsetRecords, found, wg, ae, stats)
-	return remaining
+	err := tr.getManyAtOffsets(ctx, eg, offsetRecords, found, stats)
+	return remaining, err
 }
-func (tr tableReader) getManyCompressed(ctx context.Context, reqs []getRecord, found func(CompressedChunk), wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+func (tr tableReader) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(CompressedChunk), stats *Stats) (bool, error) {
 	// Pass #1: Iterate over |reqs| and |tr.prefixes| (both sorted by address) and build the set
 	// of table locations which must be read in order to satisfy the getMany operation.
 	offsetRecords, remaining := tr.findOffsets(reqs)
-	tr.getManyCompressedAtOffsets(ctx, offsetRecords, found, wg, ae, stats)
-	return remaining
+	err := tr.getManyCompressedAtOffsets(ctx, eg, offsetRecords, found, stats)
+	return remaining, err
 }
 
-func (tr tableReader) getManyCompressedAtOffsets(ctx context.Context, offsetRecords offsetRecSlice, found func(CompressedChunk), wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) {
-	tr.getManyAtOffsetsWithReadFunc(ctx, offsetRecords, wg, ae, stats, func(
+func (tr tableReader) getManyCompressedAtOffsets(ctx context.Context, eg *errgroup.Group, offsetRecords offsetRecSlice, found func(CompressedChunk), stats *Stats) error {
+	return tr.getManyAtOffsetsWithReadFunc(ctx, eg, offsetRecords, stats, func(
 		ctx context.Context,
 		readStart, readEnd uint64,
 		offsets offsetRecSlice,
@@ -796,13 +794,12 @@ func (tr tableReader) getManyCompressedAtOffsets(ctx context.Context, offsetReco
 
 func (tr tableReader) getManyAtOffsets(
 	ctx context.Context,
+	eg *errgroup.Group,
 	offsetRecords offsetRecSlice,
 	found func(*chunks.Chunk),
-	wg *sync.WaitGroup,
-	ae *atomicerr.AtomicError,
 	stats *Stats,
-) {
-	tr.getManyAtOffsetsWithReadFunc(ctx, offsetRecords, wg, ae, stats, func(
+) error {
+	return tr.getManyAtOffsetsWithReadFunc(ctx, eg, offsetRecords, stats, func(
 		ctx context.Context,
 		readStart, readEnd uint64,
 		offsets offsetRecSlice,
@@ -813,16 +810,15 @@ func (tr tableReader) getManyAtOffsets(
 
 func (tr tableReader) getManyAtOffsetsWithReadFunc(
 	ctx context.Context,
+	eg *errgroup.Group,
 	offsetRecords offsetRecSlice,
-	wg *sync.WaitGroup,
-	ae *atomicerr.AtomicError,
 	stats *Stats,
 	readAtOffsets func(
 		ctx context.Context,
 		readStart, readEnd uint64,
 		offsets offsetRecSlice,
 		stats *Stats) error,
-) {
+) error {
 	type readBatch struct {
 		batch     offsetRecSlice
 		readStart uint64
@@ -838,10 +834,6 @@ func (tr tableReader) getManyAtOffsetsWithReadFunc(
 		var readStart, readEnd uint64
 
 		for i := 0; i < len(offsetRecords); {
-			if ae.IsSet() {
-				break
-			}
-
 			rec := offsetRecords[i]
 			length := rec.length
 
@@ -861,37 +853,53 @@ func (tr tableReader) getManyAtOffsetsWithReadFunc(
 				continue
 			}
 
-			batchCh <- readBatch{batch, readStart, readEnd}
+			select {
+			case batchCh <- readBatch{batch, readStart, readEnd}:
+				break
+			case <-ctx.Done():
+				return
+			}
 			batch = nil
 		}
 
-		if !ae.IsSet() && batch != nil {
-			batchCh <- readBatch{batch, readStart, readEnd}
-		}
-	}
-	readBatches := func(batchCh <-chan readBatch) {
-		for rb := range batchCh {
-			if !ae.IsSet() {
-				err := readAtOffsets(ctx, rb.readStart, rb.readEnd, rb.batch, stats)
-				ae.SetIfError(err)
+		if batch != nil {
+			select {
+			case batchCh <- readBatch{batch, readStart, readEnd}:
+				break
+			case <-ctx.Done():
+				return
 			}
 		}
 	}
-
-	ioParallelism := 4
-
 	batchCh := make(chan readBatch, 128)
 	go func() {
 		defer close(batchCh)
 		buildBatches(batchCh)
 	}()
-	wg.Add(ioParallelism)
-	for i := 0; i < ioParallelism; i++ {
-		go func() {
-			defer wg.Done()
-			readBatches(batchCh)
-		}()
+
+	readBatches := func() error {
+		for {
+			select {
+			case rb, ok := <-batchCh:
+				if !ok {
+					return nil
+				}
+				err := readAtOffsets(ctx, rb.readStart, rb.readEnd, rb.batch, stats)
+				if err != nil {
+					return err
+				}
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
 	}
+
+	ioParallelism := 4
+	for i := 0; i < ioParallelism; i++ {
+		eg.Go(readBatches)
+	}
+
+	return nil
 }
 
 // findOffsets iterates over |reqs| and |tr.prefixes| (both sorted by

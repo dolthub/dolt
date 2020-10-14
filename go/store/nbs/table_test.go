@@ -26,12 +26,11 @@ import (
 	"encoding/binary"
 	"fmt"
 	"sort"
-	"sync"
 	"testing"
 
+	"golang.org/x/sync/errgroup"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -213,22 +212,14 @@ func TestGetMany(t *testing.T) {
 	}
 	sort.Sort(getRecordByPrefix(getBatch))
 
-	wg := &sync.WaitGroup{}
-	ae := atomicerr.New()
+	eg, ctx := errgroup.WithContext(context.Background())
 
-	chunkChan := make(chan *chunks.Chunk, len(getBatch))
-	tr.getMany(context.Background(), getBatch, func(c *chunks.Chunk) { chunkChan<-c }, wg, ae, &Stats{})
-	wg.Wait()
-	close(chunkChan)
+	got := make([]*chunks.Chunk, 0)
+	_, err = tr.getMany(ctx, eg, getBatch, func(c *chunks.Chunk) { got = append(got, c) }, &Stats{})
+	assert.NoError(err)
+	assert.NoError(eg.Wait())
 
-	assert.NoError(ae.Get())
-
-	gotCount := 0
-	for range chunkChan {
-		gotCount++
-	}
-
-	assert.True(gotCount == len(getBatch))
+	assert.True(len(got) == len(getBatch))
 }
 
 func TestCalcReads(t *testing.T) {
@@ -380,21 +371,14 @@ func doTestNGetMany(t *testing.T, count int) {
 
 	sort.Sort(getRecordByPrefix(getBatch))
 
-	ae := atomicerr.New()
-	wg := &sync.WaitGroup{}
-	chunkChan := make(chan *chunks.Chunk, len(getBatch))
-	tr.getMany(context.Background(), getBatch, func (c *chunks.Chunk) { chunkChan<-c }, wg, ae, &Stats{})
-	wg.Wait()
-	close(chunkChan)
+	eg, ctx := errgroup.WithContext(context.Background())
 
-	assert.NoError(ae.Get())
+	got := make([]*chunks.Chunk, 0)
+	_, err = tr.getMany(ctx, eg, getBatch, func (c *chunks.Chunk) { got = append(got, c) }, &Stats{})
+	assert.NoError(err)
+	assert.NoError(eg.Wait())
 
-	gotCount := 0
-	for range chunkChan {
-		gotCount++
-	}
-
-	assert.True(gotCount == len(getBatch))
+	assert.True(len(got) == len(getBatch))
 }
 
 func Test65kGetMany(t *testing.T) {
