@@ -56,15 +56,17 @@ teardown() {
 @test "check all commands for valid help text" {
     # pipe all commands to a file
     # cut -s suppresses the line if it doesn't contain the delim
-    dolt | cut -f 1 -d " - " -s | sed "s/ //g" > commands.txt
+    dolt | cut -f 1 -d " - " -s | sed "s/ //g" > all.txt
 
     # filter out commands without "-h"
-    sed -i .bak "s/remote//g" commands.txt
-    sed -i .bak "s/creds//g" commands.txt
-    sed -i .bak "s/version//g" commands.txt
-    sed -i .bak "s/schema//g" commands.txt
-    sed -i .bak "s/table//g" commands.txt
-    sed -i .bak "s/conflicts//g" commands.txt
+    cat all.txt \
+        | sed "s/remote//g"    \
+        | sed "s/creds//g"     \
+        | sed "s/version//g"   \
+        | sed "s/schema//g"    \
+        | sed "s/table//g"     \
+        | sed "s/conflicts//g" \
+        > commands.txt
 
     cat commands.txt | while IFS= read -r cmd;
     do
