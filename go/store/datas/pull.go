@@ -29,15 +29,15 @@ import (
 	"math"
 	"math/rand"
 
+	"github.com/cenkalti/backoff"
+	"github.com/golang/snappy"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/cenkalti/backoff"
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/golang/snappy"
 )
 
 type PullProgress struct {
