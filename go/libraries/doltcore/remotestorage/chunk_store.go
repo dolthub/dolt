@@ -151,43 +151,22 @@ func (dcs *DoltChunkStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 
 func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(*chunks.Chunk)) error {
 	ae := atomicerr.New()
-	wg := &sync.WaitGroup{}
-	foundCmp := make(chan nbs.CompressedChunk, 1024)
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
-		var err error
-		for chable := range foundCmp {
-			if err != nil {
-				continue // drain
-			}
-
-			var c chunks.Chunk
-			c, err = chable.ToChunk()
-
-			if ae.SetIfError(err) {
-				continue
-			}
-
-			found(&c)
+	err := dcs.GetManyCompressed(ctx, hashes, func(cc nbs.CompressedChunk) {
+		if ae.IsSet() {
+			return
 		}
-	}()
-
-	err := dcs.GetManyCompressed(ctx, hashes, func(c nbs.CompressedChunk) { foundCmp <- c })
-	close(foundCmp)
-
-	wg.Wait()
-
+		c, err := cc.ToChunk()
+		if ae.SetIfErrAndCheck(err) {
+			return
+		}
+		found(&c)
+	})
 	if err != nil {
 		return err
 	}
-
-	if err := ae.Get(); err != nil {
+	if err = ae.Get(); err != nil {
 		return err
 	}
-
 	return nil
 }
 
