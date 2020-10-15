@@ -34,7 +34,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
@@ -348,20 +347,7 @@ func PullWithoutBatching(ctx context.Context, srcDB, sinkDB Database, sourceRef 
 // concurrently pull all chunks from this batch that the sink is missing out of the source
 func getChunks(ctx context.Context, srcDB Database, batch hash.HashSlice, sampleSize uint64, sampleCount uint64, updateProgress func(moreDone uint64, moreKnown uint64, moreApproxBytesWritten uint64)) (map[hash.Hash]*chunks.Chunk, error) {
 	neededChunks := map[hash.Hash]*chunks.Chunk{}
-	found := make(chan *chunks.Chunk)
-
-	ae := atomicerr.New()
-	go func() {
-		defer close(found)
-		err := srcDB.chunkStore().GetMany(ctx, batch.HashSet(), found)
-		ae.SetIfError(err)
-	}()
-
-	for c := range found {
-		if ae.IsSet() {
-			break
-		}
-
+	err := srcDB.chunkStore().GetMany(ctx, batch.HashSet(), func(c *chunks.Chunk) {
 		neededChunks[c.Hash()] = c
 
 		// Randomly sample amount of data written
@@ -370,12 +356,10 @@ func getChunks(ctx context.Context, srcDB Database, batch hash.HashSlice, sample
 			sampleCount++
 		}
 		updateProgress(1, 0, sampleSize/uint64(math.Max(1, float64(sampleCount))))
+	})
+	if err != nil {
+		return nil, err
 	}
-
-	if ae.IsSet() {
-		return nil, ae.Get()
-	}
-
 	return neededChunks, nil
 }
 

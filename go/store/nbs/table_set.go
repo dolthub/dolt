@@ -27,8 +27,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
+	"golang.org/x/sync/errgroup"
 
+	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 )
 
@@ -132,50 +133,44 @@ func (ts tableSet) get(ctx context.Context, h addr, stats *Stats) ([]byte, error
 	return f(ts.upstream)
 }
 
-func (ts tableSet) getMany(ctx context.Context, reqs []getRecord, foundChunks chan<- *chunks.Chunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+func (ts tableSet) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(*chunks.Chunk), stats *Stats) (remaining bool, err error) {
 	f := func(css chunkSources) bool {
 		for _, haver := range css {
-			if ae.IsSet() {
-				return false
-			}
-
 			if rp, ok := haver.(chunkReadPlanner); ok {
 				offsets, remaining := rp.findOffsets(reqs)
-
-				rp.getManyAtOffsets(ctx, reqs, offsets, foundChunks, wg, ae, stats)
-
+				err = rp.getManyAtOffsets(ctx, eg, offsets, found, stats)
+				if err != nil {
+					return true
+				}
 				if !remaining {
 					return false
 				}
-
 				continue
 			}
-
-			remaining := haver.getMany(ctx, reqs, foundChunks, wg, ae, stats)
-
+			remaining, err = haver.getMany(ctx, eg, reqs, found, stats)
+			if err != nil {
+				return true
+			}
 			if !remaining {
 				return false
 			}
 		}
-
 		return true
 	}
 
-	return f(ts.novel) && f(ts.upstream)
+	return f(ts.novel) && err == nil && f(ts.upstream), err
 }
 
-func (ts tableSet) getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan<- CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+func (ts tableSet) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(CompressedChunk), stats *Stats) (remaining bool, err error) {
 	f := func(css chunkSources) bool {
 		for _, haver := range css {
-			if ae.IsSet() {
-				return false
-			}
-
 			if rp, ok := haver.(chunkReadPlanner); ok {
 				offsets, remaining := rp.findOffsets(reqs)
-
 				if len(offsets) > 0 {
-					rp.getManyCompressedAtOffsets(ctx, reqs, offsets, foundCmpChunks, wg, ae, stats)
+					err = rp.getManyCompressedAtOffsets(ctx, eg, offsets, found, stats)
+					if err != nil {
+						return true
+					}
 				}
 
 				if !remaining {
@@ -185,8 +180,10 @@ func (ts tableSet) getManyCompressed(ctx context.Context, reqs []getRecord, foun
 				continue
 			}
 
-			remaining := haver.getManyCompressed(ctx, reqs, foundCmpChunks, wg, ae, stats)
-
+			remaining, err = haver.getManyCompressed(ctx, eg, reqs, found, stats)
+			if err != nil {
+				return true
+			}
 			if !remaining {
 				return false
 			}
@@ -195,7 +192,7 @@ func (ts tableSet) getManyCompressed(ctx context.Context, reqs []getRecord, foun
 		return true
 	}
 
-	return f(ts.novel) && f(ts.upstream)
+	return f(ts.novel) && err == nil && f(ts.upstream), err
 }
 
 func (ts tableSet) calcReads(reqs []getRecord, blockSize uint64) (reads int, split, remaining bool, err error) {

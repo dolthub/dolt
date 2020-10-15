@@ -29,8 +29,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
+	"golang.org/x/sync/errgroup"
 
+	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 )
 
@@ -133,26 +134,21 @@ func (ccs *persistingChunkSource) get(ctx context.Context, h addr, stats *Stats)
 	return cr.get(ctx, h, stats)
 }
 
-func (ccs *persistingChunkSource) getMany(ctx context.Context, reqs []getRecord, foundChunks chan<- *chunks.Chunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+func (ccs *persistingChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(*chunks.Chunk), stats *Stats) (bool, error) {
 	cr := ccs.getReader()
-
 	if cr == nil {
-		ae.SetIfError(ErrNoReader)
-		return false
+		return false, ErrNoReader
 	}
-
-	return cr.getMany(ctx, reqs, foundChunks, wg, ae, stats)
+	return cr.getMany(ctx, eg, reqs, found, stats)
 }
 
-func (ccs *persistingChunkSource) getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan<- CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+func (ccs *persistingChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(CompressedChunk), stats *Stats) (bool, error) {
 	cr := ccs.getReader()
-
 	if cr == nil {
-		ae.SetIfErrAndCheck(ErrNoReader)
-		return false
+		return false, ErrNoReader
 	}
 
-	return cr.getManyCompressed(ctx, reqs, foundCmpChunks, wg, ae, stats)
+	return cr.getManyCompressed(ctx, eg, reqs, found, stats)
 }
 
 func (ccs *persistingChunkSource) wait() error {
@@ -272,12 +268,12 @@ func (ecs emptyChunkSource) get(ctx context.Context, h addr, stats *Stats) ([]by
 	return nil, nil
 }
 
-func (ecs emptyChunkSource) getMany(ctx context.Context, reqs []getRecord, foundChunks chan<- *chunks.Chunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
-	return true
+func (ecs emptyChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(*chunks.Chunk), stats *Stats) (bool, error) {
+	return true, nil
 }
 
-func (ecs emptyChunkSource) getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan<- CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
-	return true
+func (ecs emptyChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(CompressedChunk), stats *Stats) (bool, error) {
+	return true, nil
 }
 
 func (ecs emptyChunkSource) count() (uint32, error) {

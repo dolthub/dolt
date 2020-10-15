@@ -77,9 +77,9 @@ func (csMW *CSMetricWrapper) Get(ctx context.Context, h hash.Hash) (Chunk, error
 // GetMany gets the Chunks with |hashes| from the store. On return,
 // |foundChunks| will have been fully sent all chunks which have been
 // found. Any non-present chunks will silently be ignored.
-func (csMW *CSMetricWrapper) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan<- *Chunk) error {
+func (csMW *CSMetricWrapper) GetMany(ctx context.Context, hashes hash.HashSet, found func(*Chunk)) error {
 	atomic.AddInt32(&csMW.TotalChunkGets, int32(len(hashes)))
-	return csMW.cs.GetMany(ctx, hashes, foundChunks)
+	return csMW.cs.GetMany(ctx, hashes, found)
 }
 
 // Returns true iff the value at the address |h| is contained in the

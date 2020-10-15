@@ -17,13 +17,12 @@ package nbs
 import (
 	"bytes"
 	"context"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -45,28 +44,23 @@ func TestCmpChunkTableWriter(t *testing.T) {
 		hashes.Insert(chnk.Hash())
 	}
 
-	ae := atomicerr.New()
-	wg := &sync.WaitGroup{}
 	reqs := toGetRecords(hashes)
-	found := make(chan CompressedChunk, 128)
+	found := make([]CompressedChunk, 0)
 
-	go func() {
-		defer close(found)
-		tr.getManyCompressed(ctx, reqs, found, wg, ae, &Stats{})
-		wg.Wait()
-	}()
+	eg, egCtx := errgroup.WithContext(ctx)
+	_, err = tr.getManyCompressed(egCtx, eg, reqs, func(c CompressedChunk) { found = append(found, c) }, &Stats{})
+	require.NoError(t, err)
+	require.NoError(t, eg.Wait())
 
 	// for all the chunks we find, write them using the compressed writer
 	tw, err := NewCmpChunkTableWriter("")
 	require.NoError(t, err)
-	for cmpChnk := range found {
+	for _, cmpChnk := range found {
 		err = tw.AddCmpChunk(cmpChnk)
 		require.NoError(t, err)
 		err = tw.AddCmpChunk(cmpChnk)
 		assert.Equal(t, err, ErrChunkAlreadyWritten)
 	}
-
-	require.NoError(t, ae.Get())
 
 	id, err := tw.Finish()
 	require.NoError(t, err)
@@ -96,24 +90,21 @@ func compareContentsOfTables(t *testing.T, ctx context.Context, hashes hash.Hash
 }
 
 func readAllChunks(ctx context.Context, hashes hash.HashSet, reader tableReader) (map[hash.Hash][]byte, error) {
-	wg := &sync.WaitGroup{}
-	ae := atomicerr.New()
 	reqs := toGetRecords(hashes)
-	found := make(chan *chunks.Chunk, 128)
-
-	go func() {
-		defer close(found)
-		reader.getMany(ctx, reqs, found, wg, ae, &Stats{})
-		wg.Wait()
-	}()
-
-	hashToData := make(map[hash.Hash][]byte)
-	for c := range found {
-		hashToData[c.Hash()] = c.Data()
+	found := make([]*chunks.Chunk, 0)
+	eg, ctx := errgroup.WithContext(ctx)
+	_, err := reader.getMany(ctx, eg, reqs, func(c *chunks.Chunk) { found = append(found, c) }, &Stats{})
+	if err != nil {
+		return nil, err
+	}
+	err = eg.Wait()
+	if err != nil {
+		return nil, err
 	}
 
-	if err := ae.Get(); err != nil {
-		return nil, err
+	hashToData := make(map[hash.Hash][]byte)
+	for _, c := range found {
+		hashToData[c.Hash()] = c.Data()
 	}
 
 	return hashToData, nil

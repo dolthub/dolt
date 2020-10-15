@@ -35,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
@@ -46,6 +47,7 @@ var ErrInvalidDoltSpecPath = errors.New("invalid dolt spec path")
 var globalHttpFetcher HTTPFetcher = &http.Client{}
 
 var _ nbs.TableFileStore = (*DoltChunkStore)(nil)
+var _ datas.NBSCompressedChunkStore = (*DoltChunkStore)(nil)
 var _ chunks.ChunkStore = (*DoltChunkStore)(nil)
 
 // We may need this to be configurable for users with really bad internet
@@ -135,66 +137,42 @@ func (dcs *DoltChunkStore) getRepoId() *remotesapi.RepoId {
 // Get the Chunk for the value of the hash in the store. If the hash is absent from the store EmptyChunk is returned.
 func (dcs *DoltChunkStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
 	hashes := hash.HashSet{h: struct{}{}}
-	foundChan := make(chan *chunks.Chunk, 1)
-	err := dcs.GetMany(ctx, hashes, foundChan)
-
+	var found *chunks.Chunk
+	err := dcs.GetMany(ctx, hashes, func(c *chunks.Chunk) { found = c })
 	if err != nil {
 		return chunks.EmptyChunk, err
 	}
-
-	select {
-	case ch := <-foundChan:
-		return *ch, nil
-	default:
+	if found != nil {
+		return *found, nil
+	} else {
 		return chunks.EmptyChunk, nil
 	}
 }
 
-func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan<- *chunks.Chunk) error {
+func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(*chunks.Chunk)) error {
 	ae := atomicerr.New()
-	wg := &sync.WaitGroup{}
-	foundCmp := make(chan nbs.CompressedChunk, 1024)
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
-		var err error
-		for chable := range foundCmp {
-			if err != nil {
-				continue // drain
-			}
-
-			var c chunks.Chunk
-			c, err = chable.ToChunk()
-
-			if ae.SetIfError(err) {
-				continue
-			}
-
-			foundChunks <- &c
+	err := dcs.GetManyCompressed(ctx, hashes, func(cc nbs.CompressedChunk) {
+		if ae.IsSet() {
+			return
 		}
-	}()
-
-	err := dcs.GetManyCompressed(ctx, hashes, foundCmp)
-	close(foundCmp)
-
-	wg.Wait()
-
+		c, err := cc.ToChunk()
+		if ae.SetIfErrAndCheck(err) {
+			return
+		}
+		found(&c)
+	})
 	if err != nil {
 		return err
 	}
-
-	if err := ae.Get(); err != nil {
+	if err = ae.Get(); err != nil {
 		return err
 	}
-
 	return nil
 }
 
 // GetMany gets the Chunks with |hashes| from the store. On return, |foundChunks| will have been fully sent all chunks
 // which have been found. Any non-present chunks will silently be ignored.
-func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, foundChunks chan<- nbs.CompressedChunk) error {
+func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(nbs.CompressedChunk)) error {
 	hashToChunk := dcs.cache.Get(hashes)
 
 	notCached := make([]hash.Hash, 0, len(hashes))
@@ -204,12 +182,12 @@ func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.Ha
 		if c.IsEmpty() {
 			notCached = append(notCached, h)
 		} else {
-			foundChunks <- c
+			found(c)
 		}
 	}
 
 	if len(notCached) > 0 {
-		err := dcs.readChunksAndCache(ctx, hashes, notCached, foundChunks)
+		err := dcs.readChunksAndCache(ctx, hashes, notCached, found)
 
 		if err != nil {
 			return err
@@ -307,7 +285,7 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (m
 	return resourceToUrlAndRanges, nil
 }
 
-func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.HashSet, notCached []hash.Hash, foundChunks chan<- nbs.CompressedChunk) error {
+func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.HashSet, notCached []hash.Hash, found func(nbs.CompressedChunk)) error {
 	// get the locations where the chunks can be downloaded from
 	resourceToUrlAndRanges, err := dcs.getDLLocs(ctx, notCached)
 
@@ -331,7 +309,7 @@ func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.H
 
 			h := chunk.Hash()
 			if _, ok := hashes[h]; ok {
-				foundChunks <- chunk
+				found(chunk)
 			}
 		}
 	}()
