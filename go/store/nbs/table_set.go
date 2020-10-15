@@ -133,82 +133,66 @@ func (ts tableSet) get(ctx context.Context, h addr, stats *Stats) ([]byte, error
 	return f(ts.upstream)
 }
 
-func (ts tableSet) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(*chunks.Chunk), stats *Stats) (bool, error) {
-	f := func(css chunkSources) (bool, error) {
+func (ts tableSet) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(*chunks.Chunk), stats *Stats) (remaining bool, err error) {
+	f := func(css chunkSources) bool {
 		for _, haver := range css {
 			if rp, ok := haver.(chunkReadPlanner); ok {
 				offsets, remaining := rp.findOffsets(reqs)
-				err := rp.getManyAtOffsets(ctx, eg, offsets, found, stats)
+				err = rp.getManyAtOffsets(ctx, eg, offsets, found, stats)
 				if err != nil {
-					return true, err
+					return true
 				}
 				if !remaining {
-					return false, nil
+					return false
 				}
 				continue
 			}
-
-			remaining, err := haver.getMany(ctx, eg, reqs, found, stats)
+			remaining, err = haver.getMany(ctx, eg, reqs, found, stats)
 			if err != nil {
-				return true, err
+				return true
 			}
 			if !remaining {
-				return false, nil
+				return false
 			}
 		}
-		return true, nil
+		return true
 	}
 
-	remaining, err := f(ts.novel)
-	if err != nil {
-		return true, err
-	}
-	if !remaining {
-		return false, nil
-	}
-	return f(ts.upstream)
+	return f(ts.novel) && err == nil && f(ts.upstream), err
 }
 
-func (ts tableSet) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(CompressedChunk), stats *Stats) (bool, error) {
-	f := func(css chunkSources) (bool, error) {
+func (ts tableSet) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(CompressedChunk), stats *Stats) (remaining bool, err error) {
+	f := func(css chunkSources) bool {
 		for _, haver := range css {
 			if rp, ok := haver.(chunkReadPlanner); ok {
 				offsets, remaining := rp.findOffsets(reqs)
-
 				if len(offsets) > 0 {
-					err := rp.getManyCompressedAtOffsets(ctx, eg, offsets, found, stats)
+					err = rp.getManyCompressedAtOffsets(ctx, eg, offsets, found, stats)
 					if err != nil {
-						return true, err
+						return true
 					}
 				}
 
 				if !remaining {
-					return false, nil
+					return false
 				}
 
 				continue
 			}
 
-			remaining, err := haver.getManyCompressed(ctx, eg, reqs, found, stats)
+			remaining, err = haver.getManyCompressed(ctx, eg, reqs, found, stats)
 			if err != nil {
-				return true, err
+				return true
 			}
 			if !remaining {
-				return false, nil
+				return false
 			}
 		}
 
-		return true, nil
+		return true
 	}
 
-	remaining, err := f(ts.novel)
-	if err != nil {
-		return true, err
-	}
-	if !remaining {
-		return false, nil
-	}
-	return f(ts.upstream)
+	return f(ts.novel) && err == nil && f(ts.upstream), err
 }
 
 func (ts tableSet) calcReads(reqs []getRecord, blockSize uint64) (reads int, split, remaining bool, err error) {
