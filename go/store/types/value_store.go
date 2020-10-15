@@ -252,8 +252,11 @@ func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice
 	}
 
 	if len(remaining) != 0 {
+		mu := new(sync.Mutex)
 		var decodeErr error
 		err := lvs.cs.GetMany(ctx, remaining, func(c *chunks.Chunk) {
+			mu.Lock()
+			defer mu.Unlock()
 			if decodeErr != nil {
 				return
 			}
