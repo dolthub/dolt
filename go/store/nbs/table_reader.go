@@ -681,12 +681,11 @@ var _ chunkReader = tableReader{}
 
 func (tr tableReader) readCompressedAtOffsets(
 	ctx context.Context,
-	readStart, readEnd uint64,
-	offsets offsetRecSlice,
+	rb readBatch,
 	found func(CompressedChunk),
 	stats *Stats,
 ) error {
-	return tr.readAtOffsetsWithCB(ctx, readStart, readEnd, offsets, stats, func(cmp CompressedChunk) error {
+	return tr.readAtOffsetsWithCB(ctx, rb, stats, func(cmp CompressedChunk) error {
 		found(cmp)
 		return nil
 	})
@@ -694,12 +693,11 @@ func (tr tableReader) readCompressedAtOffsets(
 
 func (tr tableReader) readAtOffsets(
 	ctx context.Context,
-	readStart, readEnd uint64,
-	offsets offsetRecSlice,
+	rb readBatch,
 	found func(*chunks.Chunk),
 	stats *Stats,
 ) error {
-	return tr.readAtOffsetsWithCB(ctx, readStart, readEnd, offsets, stats, func(cmp CompressedChunk) error {
+	return tr.readAtOffsetsWithCB(ctx, rb, stats, func(cmp CompressedChunk) error {
 		chk, err := cmp.ToChunk()
 
 		if err != nil {
@@ -713,16 +711,14 @@ func (tr tableReader) readAtOffsets(
 
 func (tr tableReader) readAtOffsetsWithCB(
 	ctx context.Context,
-	readStart, readEnd uint64,
-	offsets offsetRecSlice,
+	rb readBatch,
 	stats *Stats,
 	cb func(cmp CompressedChunk) error,
 ) error {
-	readLength := readEnd - readStart
+	readLength := rb.End() - rb.Start()
 	buff := make([]byte, readLength)
 
-	n, err := tr.r.ReadAtWithStats(ctx, buff, int64(readStart), stats)
-
+	n, err := tr.r.ReadAtWithStats(ctx, buff, int64(rb.Start()), stats)
 	if err != nil {
 		return err
 	}
@@ -731,26 +727,13 @@ func (tr tableReader) readAtOffsetsWithCB(
 		return errors.New("failed to read all data")
 	}
 
-	for _, rec := range offsets {
-		if rec.offset < readStart {
-			return errors.New("offset before the start")
-		}
-
-		localStart := rec.offset - readStart
-		localEnd := localStart + uint64(rec.length)
-
-		if localEnd > readLength {
-			return errors.New("length goes past the end")
-		}
-
-		cmp, err := NewCompressedChunk(hash.Hash(*rec.a), buff[localStart:localEnd])
-
+	for i := range rb {
+		cmp, err := rb.ExtractChunkFromRead(buff, i)
 		if err != nil {
 			return err
 		}
 
 		err = cb(cmp)
-
 		if err != nil {
 			return err
 		}
@@ -785,10 +768,9 @@ func (tr tableReader) getManyCompressed(ctx context.Context, eg *errgroup.Group,
 func (tr tableReader) getManyCompressedAtOffsets(ctx context.Context, eg *errgroup.Group, offsetRecords offsetRecSlice, found func(CompressedChunk), stats *Stats) error {
 	return tr.getManyAtOffsetsWithReadFunc(ctx, eg, offsetRecords, stats, func(
 		ctx context.Context,
-		readStart, readEnd uint64,
-		offsets offsetRecSlice,
+		rb readBatch,
 		stats *Stats) error {
-		return tr.readCompressedAtOffsets(ctx, readStart, readEnd, offsets, found, stats)
+		return tr.readCompressedAtOffsets(ctx, rb, found, stats)
 	})
 }
 
@@ -801,11 +783,53 @@ func (tr tableReader) getManyAtOffsets(
 ) error {
 	return tr.getManyAtOffsetsWithReadFunc(ctx, eg, offsetRecords, stats, func(
 		ctx context.Context,
-		readStart, readEnd uint64,
-		offsets offsetRecSlice,
+		rb readBatch,
 		stats *Stats) error {
-		return tr.readAtOffsets(ctx, readStart, readEnd, offsets, found, stats)
+		return tr.readAtOffsets(ctx, rb, found, stats)
 	})
+}
+
+type readBatch offsetRecSlice
+
+func (r readBatch) Start() uint64 {
+	return r[0].offset
+}
+
+func (r readBatch) End() uint64 {
+	last := r[len(r)-1]
+	return last.offset + uint64(last.length)
+}
+
+func (s readBatch) ExtractChunkFromRead(buff []byte, idx int) (CompressedChunk, error) {
+	rec := s[idx]
+	chunkStart := rec.offset - s.Start()
+	return NewCompressedChunk(hash.Hash(*rec.a), buff[chunkStart:chunkStart + uint64(rec.length)])
+}
+
+func toReadBatches(offsets offsetRecSlice, blockSize uint64) []readBatch {
+	res := make([]readBatch, 0)
+	var batch readBatch
+	for i := 0; i < len(offsets); {
+		rec := offsets[i]
+		if batch == nil {
+			batch = readBatch{rec}
+			i++
+			continue
+		}
+
+		if _, canRead := canReadAhead(rec, batch.End(), blockSize); canRead {
+			batch = append(batch, rec)
+			i++
+			continue
+		}
+
+		res = append(res, batch)
+		batch = nil
+	}
+	if batch != nil {
+		res = append(res, batch)
+	}
+	return res
 }
 
 func (tr tableReader) getManyAtOffsetsWithReadFunc(
@@ -815,78 +839,27 @@ func (tr tableReader) getManyAtOffsetsWithReadFunc(
 	stats *Stats,
 	readAtOffsets func(
 		ctx context.Context,
-		readStart, readEnd uint64,
-		offsets offsetRecSlice,
+		rb readBatch,
 		stats *Stats) error,
 ) error {
-	type readBatch struct {
-		batch     offsetRecSlice
-		readStart uint64
-		readEnd   uint64
-	}
-	batches := make([]readBatch, 0)
-
-	var batch offsetRecSlice
-	var readStart, readEnd uint64
-	for i := 0; i < len(offsetRecords); {
-		rec := offsetRecords[i]
-		length := rec.length
-
-		if batch == nil {
-			batch = make(offsetRecSlice, 1)
-			batch[0] = offsetRecords[i]
-			readStart = rec.offset
-			readEnd = readStart + uint64(length)
-			i++
-			continue
-		}
-
-		if newReadEnd, canRead := canReadAhead(rec, readEnd, tr.blockSize); canRead {
-			batch = append(batch, rec)
-			readEnd = newReadEnd
-			i++
-			continue
-		}
-
-		batches = append(batches, readBatch{batch, readStart, readEnd})
-		batch = nil
-	}
-
-	if batch != nil {
-		batches = append(batches, readBatch{batch, readStart, readEnd})
-	}
-
-	idxCh := make(chan int, 128)
-	go func() {
-		defer close(idxCh)
-		for i := 0; i < len(batches); i++ {
-			select {
-			case idxCh <- i:
-				continue
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
+	batches := toReadBatches(offsetRecords, tr.blockSize)
+	var idx int32
 	readBatches := func() error {
 		for {
-			select {
-			case i, ok := <-idxCh:
-				if !ok {
-					return nil
-				}
-				rb := batches[i]
-				err := readAtOffsets(ctx, rb.readStart, rb.readEnd, rb.batch, stats)
-				if err != nil {
-					return err
-				}
-			case <-ctx.Done():
+			if ctx.Err() != nil {
 				return ctx.Err()
+			}
+			i := atomic.AddInt32(&idx, 1) - 1
+			if int(i) >= len(batches) {
+				return nil
+			}
+			rb := batches[i]
+			err := readAtOffsets(ctx, rb, stats)
+			if err != nil {
+				return err
 			}
 		}
 	}
-
 	ioParallelism := 4
 	for i := 0; i < ioParallelism; i++ {
 		eg.Go(readBatches)
