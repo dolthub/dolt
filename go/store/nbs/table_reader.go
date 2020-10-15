@@ -803,7 +803,7 @@ func (r readBatch) End() uint64 {
 func (s readBatch) ExtractChunkFromRead(buff []byte, idx int) (CompressedChunk, error) {
 	rec := s[idx]
 	chunkStart := rec.offset - s.Start()
-	return NewCompressedChunk(hash.Hash(*rec.a), buff[chunkStart:chunkStart + uint64(rec.length)])
+	return NewCompressedChunk(hash.Hash(*rec.a), buff[chunkStart:chunkStart+uint64(rec.length)])
 }
 
 func toReadBatches(offsets offsetRecSlice, blockSize uint64) []readBatch {

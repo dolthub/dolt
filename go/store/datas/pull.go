@@ -344,7 +344,7 @@ func PullWithoutBatching(ctx context.Context, srcDB, sinkDB Database, sourceRef 
 // concurrently pull all chunks from this batch that the sink is missing out of the source
 func getChunks(ctx context.Context, srcDB Database, batch hash.HashSlice, sampleSize uint64, sampleCount uint64, updateProgress func(moreDone uint64, moreKnown uint64, moreApproxBytesWritten uint64)) (map[hash.Hash]*chunks.Chunk, error) {
 	neededChunks := map[hash.Hash]*chunks.Chunk{}
-	err := srcDB.chunkStore().GetMany(ctx, batch.HashSet(), func (c *chunks.Chunk) {
+	err := srcDB.chunkStore().GetMany(ctx, batch.HashSet(), func(c *chunks.Chunk) {
 		neededChunks[c.Hash()] = c
 
 		// Randomly sample amount of data written

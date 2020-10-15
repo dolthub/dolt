@@ -28,9 +28,9 @@ import (
 	"os"
 	"testing"
 
-	"golang.org/x/sync/errgroup"
 	"github.com/golang/snappy"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"

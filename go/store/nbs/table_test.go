@@ -28,8 +28,8 @@ import (
 	"sort"
 	"testing"
 
-	"golang.org/x/sync/errgroup"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -374,7 +374,7 @@ func doTestNGetMany(t *testing.T, count int) {
 	eg, ctx := errgroup.WithContext(context.Background())
 
 	got := make([]*chunks.Chunk, 0)
-	_, err = tr.getMany(ctx, eg, getBatch, func (c *chunks.Chunk) { got = append(got, c) }, &Stats{})
+	_, err = tr.getMany(ctx, eg, getBatch, func(c *chunks.Chunk) { got = append(got, c) }, &Stats{})
 	assert.NoError(err)
 	assert.NoError(eg.Wait())
 

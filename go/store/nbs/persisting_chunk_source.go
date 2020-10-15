@@ -26,8 +26,8 @@ import (
 	"context"
 	"errors"
 	"io"
-	"time"
 	"sync"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 

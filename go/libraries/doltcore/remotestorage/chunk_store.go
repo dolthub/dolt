@@ -138,7 +138,7 @@ func (dcs *DoltChunkStore) getRepoId() *remotesapi.RepoId {
 func (dcs *DoltChunkStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
 	hashes := hash.HashSet{h: struct{}{}}
 	var found *chunks.Chunk
-	err := dcs.GetMany(ctx, hashes, func (c *chunks.Chunk) { found = c })
+	err := dcs.GetMany(ctx, hashes, func(c *chunks.Chunk) { found = c })
 	if err != nil {
 		return chunks.EmptyChunk, err
 	}
@@ -175,7 +175,7 @@ func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 		}
 	}()
 
-	err := dcs.GetManyCompressed(ctx, hashes, func (c nbs.CompressedChunk) { foundCmp<-c })
+	err := dcs.GetManyCompressed(ctx, hashes, func(c nbs.CompressedChunk) { foundCmp <- c })
 	close(foundCmp)
 
 	wg.Wait()

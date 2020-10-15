@@ -33,10 +33,10 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/sync/errgroup"
 	"cloud.google.com/go/storage"
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"

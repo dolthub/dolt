@@ -19,9 +19,9 @@ import (
 	"context"
 	"testing"
 
-	"golang.org/x/sync/errgroup"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -48,7 +48,7 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	found := make([]CompressedChunk, 0)
 
 	eg, egCtx := errgroup.WithContext(ctx)
-	_, err = tr.getManyCompressed(egCtx, eg, reqs, func (c CompressedChunk) { found = append(found, c) }, &Stats{})
+	_, err = tr.getManyCompressed(egCtx, eg, reqs, func(c CompressedChunk) { found = append(found, c) }, &Stats{})
 	require.NoError(t, err)
 	require.NoError(t, eg.Wait())
 
@@ -93,7 +93,7 @@ func readAllChunks(ctx context.Context, hashes hash.HashSet, reader tableReader)
 	reqs := toGetRecords(hashes)
 	found := make([]*chunks.Chunk, 0)
 	eg, ctx := errgroup.WithContext(ctx)
-	_, err := reader.getMany(ctx, eg, reqs, func (c *chunks.Chunk) { found = append(found, c) }, &Stats{})
+	_, err := reader.getMany(ctx, eg, reqs, func(c *chunks.Chunk) { found = append(found, c) }, &Stats{})
 	if err != nil {
 		return nil, err
 	}
