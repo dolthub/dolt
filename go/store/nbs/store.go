@@ -94,6 +94,7 @@ type NomsBlockStore struct {
 }
 
 var _ TableFileStore = &NomsBlockStore{}
+var _ chunks.ChunkStoreGarbageCollector = &NomsBlockStore{}
 
 type Range struct {
 	Offset uint64
@@ -1156,7 +1157,7 @@ func (nbs *NomsBlockStore) PruneTableFiles(ctx context.Context) (err error) {
 	return nbs.p.PruneTableFiles(ctx, contents)
 }
 
-func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan hash.Hash) error {
+func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash) error {
 	ops := nbs.SupportedOperations()
 	if !ops.CanGC || !ops.CanPrune {
 		return chunks.ErrUnsupportedOperation
@@ -1196,13 +1197,8 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, last hash.Has
 	return nbs.p.PruneTableFiles(ctx, contents)
 }
 
-func (nbs *NomsBlockStore) copyMarkedChunks(ctx context.Context, keepChunks <-chan hash.Hash) ([]tableSpec, error) {
-	s, err := nbs.gcTableSize()
-	if err != nil {
-		return nil, err
-	}
-
-	gcc, err := newGarbageCollectionCopier(s)
+func (nbs *NomsBlockStore) copyMarkedChunks(ctx context.Context, keepChunks <-chan []hash.Hash) ([]tableSpec, error) {
+	gcc, err := newGarbageCollectionCopier()
 	if err != nil {
 		return nil, err
 	}
@@ -1210,16 +1206,27 @@ func (nbs *NomsBlockStore) copyMarkedChunks(ctx context.Context, keepChunks <-ch
 LOOP:
 	for {
 		select {
-		case h, ok := <-keepChunks:
+		case hs, ok := <-keepChunks:
 			if !ok {
 				break LOOP
 			}
-			// todo: batch calls to nbs.GetMany()
-			c, err := nbs.Get(ctx, h)
+			var addErr error
+			mu := new(sync.Mutex)
+			hashset := hash.NewHashSet(hs...)
+			err := nbs.GetManyCompressed(ctx, hashset, func(c CompressedChunk) {
+				mu.Lock()
+				defer mu.Unlock()
+				if addErr != nil {
+					return
+				}
+				addErr = gcc.addChunk(ctx, c)
+			})
 			if err != nil {
 				return nil, err
 			}
-			gcc.addChunk(ctx, addr(h), c.Data())
+			if addErr != nil {
+				return nil, addErr
+			}
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}

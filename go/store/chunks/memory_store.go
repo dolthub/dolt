@@ -221,7 +221,7 @@ func (ms *MemoryStoreView) Commit(ctx context.Context, current, last hash.Hash) 
 	return success, nil
 }
 
-func (ms *MemoryStoreView) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan hash.Hash) error {
+func (ms *MemoryStoreView) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash) error {
 	if last != ms.rootHash {
 		return fmt.Errorf("last does not match ms.Root()")
 	}
@@ -231,15 +231,17 @@ func (ms *MemoryStoreView) MarkAndSweepChunks(ctx context.Context, last hash.Has
 LOOP:
 	for {
 		select {
-		case h, ok := <-keepChunks:
+		case hs, ok := <-keepChunks:
 			if !ok {
 				break LOOP
 			}
-			c, err := ms.Get(ctx, h)
-			if err != nil {
-				return err
+			for _, h := range hs {
+				c, err := ms.Get(ctx, h)
+				if err != nil {
+					return err
+				}
+				keepers[h] = c
 			}
-			keepers[h] = c
 		case <-ctx.Done():
 			return ctx.Err()
 		}

@@ -22,7 +22,6 @@
 package types
 
 import (
-	"container/list"
 	"context"
 	"errors"
 	"sync"
@@ -566,57 +565,65 @@ func (lvs *ValueStore) GC(ctx context.Context) error {
 		return nil // empty root
 	}
 
-	keepChunks := make(chan hash.Hash, gcBuffSize)
+	keepChunks := make(chan []hash.Hash, gcBuffSize)
 
 	eg, egCtx := errgroup.WithContext(ctx)
 	eg.Go(func() error { return collector.MarkAndSweepChunks(egCtx, root, keepChunks) })
 
-	sendHash := func(h hash.Hash) error {
+	sendHashes := func(hs []hash.Hash) error {
 		select {
-		case keepChunks <- h:
+		case keepChunks <- hs:
 			return nil
 		case <-egCtx.Done():
 			return egCtx.Err()
 		}
 	}
+	batches := func(hs []hash.Hash) [][]hash.Hash {
+		res := make([][]hash.Hash, 0)
+		i := 0
+		for ; i+512 < len(hs); i += 512 {
+			res = append(res, hs[i:i+512])
+		}
+		if i < len(hs) {
+			res = append(res, hs[i:len(hs)])
+		}
+		return res
+	}
 
 	eg.Go(func() error {
-		// send root chunk
-		err := sendHash(root)
-		if err != nil {
-			return err
-		}
-		hashQueue := list.New()
+		hashQueue := []hash.Hash{root}
 		visited := hash.NewHashSet(root)
-		hashQueue.PushBack(root)
-		for hashQueue.Len() > 0 {
-			e := hashQueue.Front()
-			h := e.Value.(hash.Hash)
-			hashQueue.Remove(e)
-
-			val, err := lvs.ReadValue(egCtx, h)
-			if err != nil {
-				return err
-			}
-			if val == nil {
-				return errors.New("dangling reference found in chunk store")
-			}
-
-			err = val.WalkRefs(lvs.nbf, func(reachable Ref) error {
-				h := reachable.TargetHash()
-				if visited.Has(h) {
-					return nil
-				}
-				err := sendHash(h)
+		for len(hashQueue) > 0 {
+			// send set of hashes
+			batches := batches(hashQueue)
+			hashQueue = make([]hash.Hash, 0, len(hashQueue))
+			for _, batch := range batches {
+				err := sendHashes(batch)
 				if err != nil {
 					return err
 				}
-				hashQueue.PushBack(h)
-				visited.Insert(h)
-				return nil
-			})
-			if err != nil {
-				return err
+				vals, err := lvs.ReadManyValues(egCtx, batch)
+				if err != nil {
+					return err
+				}
+				if len(vals) != len(batch) {
+					return errors.New("dangling reference found in chunk store")
+				}
+
+				for _, val := range vals {
+					err = val.WalkRefs(lvs.nbf, func(reachable Ref) error {
+						h := reachable.TargetHash()
+						if visited.Has(h) {
+							return nil
+						}
+						visited.Insert(h)
+						hashQueue = append(hashQueue, h)
+						return nil
+					})
+					if err != nil {
+						return err
+					}
+				}
 			}
 		}
 		close(keepChunks)

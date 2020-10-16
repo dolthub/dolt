@@ -17,12 +17,8 @@ package nbs
 import (
 	"context"
 	"fmt"
-	"os"
 	"path"
-	"path/filepath"
 	"strings"
-
-	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 type gcErrAccum map[string]error
@@ -47,74 +43,42 @@ func (ea gcErrAccum) Error() string {
 }
 
 type gcCopier struct {
-	mt     *memTable
-	mtSize uint64
-
-	tables tableSet
-	ftp    *fsTablePersister
-	tmpDir string
-
-	stats *Stats
+	writer *CmpChunkTableWriter
 }
 
-func newGarbageCollectionCopier(tableSize uint64) (*gcCopier, error) {
-	tmpDir := filepath.Join(tempfiles.MovableTempFileProvider.GetTempDir(), "nbs_gc")
-	err := os.MkdirAll(tmpDir, os.ModePerm)
-
+func newGarbageCollectionCopier() (*gcCopier, error) {
+	writer, err := NewCmpChunkTableWriter("")
 	if err != nil {
 		return nil, err
 	}
-
-	ftp := &fsTablePersister{tmpDir, globalFDCache, globalIndexCache} // #FTP
-
-	return &gcCopier{
-		mtSize: tableSize,
-		tables: newTableSet(ftp),
-		ftp:    ftp,
-		tmpDir: tmpDir,
-		stats:  NewStats(),
-	}, nil
+	return &gcCopier{writer}, nil
 }
 
-func (gcc *gcCopier) addChunk(ctx context.Context, h addr, data []byte) bool {
-	if gcc.mt == nil {
-		gcc.mt = newMemTable(gcc.mtSize)
-	}
-	if !gcc.mt.addChunk(h, data) {
-		gcc.tables = gcc.tables.Prepend(ctx, gcc.mt, gcc.stats)
-		gcc.mt = newMemTable(gcc.mtSize)
-		return gcc.mt.addChunk(h, data)
-	}
-	return true
+func (gcc *gcCopier) addChunk(ctx context.Context, c CompressedChunk) error {
+	return gcc.writer.AddCmpChunk(c)
 }
 
 func (gcc *gcCopier) copyTablesToDir(ctx context.Context, destDir string) ([]tableSpec, error) {
-	gcc.tables = gcc.tables.Prepend(ctx, gcc.mt, gcc.stats)
-	gcc.mt = nil
-
-	err := gcc.tables.Close()
-
+	filename, err := gcc.writer.Finish()
 	if err != nil {
 		return nil, err
 	}
 
-	specs, err := gcc.tables.ToSpecs()
-
+	filepath := path.Join(destDir, filename)
+	err = gcc.writer.FlushToFile(filepath)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, spec := range specs {
-		tmp := path.Join(gcc.tmpDir, spec.name.String())
-		dest := path.Join(destDir, spec.name.String())
-
-		// if copy does not complete, new files will be orphaned
-		err = os.Rename(tmp, dest)
-
-		if err != nil {
-			return nil, err
-		}
+	addr, err := parseAddr(filename)
+	if err != nil {
+		return nil, err
 	}
 
-	return specs, nil
+	return []tableSpec{
+		tableSpec{
+			name:       addr,
+			chunkCount: gcc.writer.ChunkCount(),
+		},
+	}, nil
 }

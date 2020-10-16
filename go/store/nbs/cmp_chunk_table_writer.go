@@ -64,6 +64,10 @@ func (tw *CmpChunkTableWriter) Size() int {
 	return len(tw.prefixes)
 }
 
+func (tw *CmpChunkTableWriter) ChunkCount() uint32 {
+	return uint32(len(tw.prefixes))
+}
+
 // Gets the size of the entire table file in bytes
 func (tw *CmpChunkTableWriter) ContentLength() uint64 {
 	return tw.sink.Size()
