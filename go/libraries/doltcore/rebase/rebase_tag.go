@@ -363,7 +363,15 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		rebasedSch := schema.SchemaFromCols(schCC)
 
 		for _, index := range sch.Indexes().AllIndexes() {
-			_, err = rebasedSch.Indexes().AddIndexByColNames(index.Name(), index.ColumnNames(), schema.IndexProperties{IsUnique: index.IsUnique(), Comment: index.Comment()})
+			_, err = rebasedSch.Indexes().AddIndexByColNames(
+				index.Name(),
+				index.ColumnNames(),
+				schema.IndexProperties{
+					IsUnique:      index.IsUnique(),
+					IsUserDefined: index.IsUserDefined(),
+					Comment:       index.Comment(),
+				},
+			)
 			if err != nil {
 				return nil, err
 			}
