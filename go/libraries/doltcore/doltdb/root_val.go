@@ -117,6 +117,7 @@ func newRootFromMaps(vrw types.ValueReadWriter, tblMap types.Map, ssMap types.Ma
 		tablesKey:       tblMap,
 		superSchemasKey: ssMap,
 		foreignKeyKey:   fkMap,
+		featureVersKey:  types.Int(FeatureVersion),
 	}
 
 	st, err := types.NewStruct(vrw.Format(), ddbRootStructName, sd)

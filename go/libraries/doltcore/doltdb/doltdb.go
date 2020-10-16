@@ -45,10 +45,12 @@ const (
 	MasterBranch     = "master"
 	CommitStructName = "Commit"
 
-	FeatureVersion int64 = 19
+	FeatureVersion featureVersion = 19
 
 	defaultChunksPerTF = 256 * 1024
 )
+
+type featureVersion int64
 
 // LocalDirDoltDB stores the db in the current directory
 var LocalDirDoltDB = "file://./" + dbfactory.DoltDataDir
@@ -389,7 +391,12 @@ func (ddb *DoltDB) ResolveTag(ctx context.Context, tagRef ref.TagRef) (*Tag, err
 // WriteRootValue will write a doltdb.RootValue instance to the database.  This value will not be associated with a commit
 // and can be committed by hash at a later time.  Returns the hash of the value written.
 func (ddb *DoltDB) WriteRootValue(ctx context.Context, rv *RootValue) (hash.Hash, error) {
-	valRef, err := ddb.db.WriteValue(ctx, rv.valueSt)
+	st, err := rv.valueSt.Set(featureVersKey, types.Int(FeatureVersion))
+	if err != nil {
+		return hash.Hash{}, err
+	}
+
+	valRef, err := ddb.db.WriteValue(ctx, st)
 
 	if err != nil {
 		return hash.Hash{}, err
@@ -414,14 +421,30 @@ func (ddb *DoltDB) ReadRootValue(ctx context.Context, h hash.Hash) (*RootValue, 
 	if err != nil {
 		return nil, err
 	}
+	if val == nil {
+		return nil, errors.New("there is no dolt root value at that hash")
+	}
 
-	if val != nil {
-		if rootSt, ok := val.(types.Struct); ok && rootSt.Name() == ddbRootStructName {
-			return &RootValue{ddb.db, rootSt, nil}, nil
+	rootSt, ok := val.(types.Struct)
+	if !ok || rootSt.Name() != ddbRootStructName {
+		return nil, errors.New("there is no dolt root value at that hash")
+	}
+
+	v, ok, err := rootSt.MaybeGet(featureVersKey)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		ver := featureVersion(v.(types.Int))
+		if FeatureVersion < ver {
+			return nil, ErrClientOutOfDate{
+				clientVer: FeatureVersion,
+				repoVer:   ver,
+			}
 		}
 	}
 
-	return nil, errors.New("there is no dolt root value at that hash")
+	return &RootValue{ddb.db, rootSt, nil}, nil
 }
 
 // Commit will update a branch's head value to be that of a previously committed root value hash

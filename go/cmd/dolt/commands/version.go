@@ -83,7 +83,7 @@ func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string
 		} else if !ok {
 			verr = errhand.BuildDError("the current head does not have a feature version").Build()
 		} else {
-			cli.Println("feature version: %s", fv)
+			cli.Println("feature version:", fv)
 		}
 	}
 
