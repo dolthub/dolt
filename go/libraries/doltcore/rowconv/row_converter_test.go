@@ -32,13 +32,13 @@ import (
 )
 
 var srcCols, _ = schema.NewColCollection(
-	schema.NewColumn("uuidtostr", 0, types.UUIDKind, true),
-	schema.NewColumn("floattostr", 1, types.FloatKind, false),
-	schema.NewColumn("uinttostr", 2, types.UintKind, false),
-	schema.NewColumn("booltostr", 3, types.BoolKind, false),
-	schema.NewColumn("inttostr", 4, types.IntKind, false),
-	schema.NewColumn("stringtostr", 5, types.StringKind, false),
-	schema.NewColumn("timestamptostr", 6, types.TimestampKind, false),
+	schema.NewColumn("uuidtostr", 0, types.UUIDKind, true, "", false, ""),
+	schema.NewColumn("floattostr", 1, types.FloatKind, false, "", false, ""),
+	schema.NewColumn("uinttostr", 2, types.UintKind, false, "", false, ""),
+	schema.NewColumn("booltostr", 3, types.BoolKind, false, "", false, ""),
+	schema.NewColumn("inttostr", 4, types.IntKind, false, "", false, ""),
+	schema.NewColumn("stringtostr", 5, types.StringKind, false, "", false, ""),
+	schema.NewColumn("timestamptostr", 6, types.TimestampKind, false, "", false, ""),
 )
 
 var srcSch = schema.SchemaFromCols(srcCols)
@@ -103,9 +103,9 @@ func TestUnneccessaryConversion(t *testing.T) {
 }
 
 func TestSpecialBoolHandling(t *testing.T) {
-	col1, err := schema.NewColumnWithTypeInfo("pk", 0, typeinfo.Int64Type, true, "", "")
+	col1, err := schema.NewColumnWithTypeInfo("pk", 0, typeinfo.Int64Type, true, "", false, "")
 	require.NoError(t, err)
-	col2, err := schema.NewColumnWithTypeInfo("v", 1, typeinfo.PseudoBoolType, false, "", "")
+	col2, err := schema.NewColumnWithTypeInfo("v", 1, typeinfo.PseudoBoolType, false, "", false, "")
 	require.NoError(t, err)
 	colColl, _ := schema.NewColCollection(col1, col2)
 	sch := schema.SchemaFromCols(colColl)

@@ -93,8 +93,8 @@ func TestHandleRow(t *testing.T) {
 }
 
 func testSchema() schema.Schema {
-	col1 := schema.NewColumn("col1", 0, types.StringKind, false)
-	col2 := schema.NewColumn("col2", 1, types.StringKind, false)
+	col1 := schema.NewColumn("col1", 0, types.StringKind, false, "", false, "")
+	col2 := schema.NewColumn("col2", 1, types.StringKind, false, "", false, "")
 	colColl, _ := schema.NewColCollection(col1, col2)
 	return schema.UnkeyedSchemaFromCols(colColl)
 }

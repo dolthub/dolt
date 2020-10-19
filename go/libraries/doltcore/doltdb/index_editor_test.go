@@ -39,9 +39,9 @@ func TestIndexEditorConcurrency(t *testing.T) {
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	colColl, err := schema.NewColCollection(
-		schema.NewColumn("pk", 0, types.IntKind, true),
-		schema.NewColumn("v1", 1, types.IntKind, false),
-		schema.NewColumn("v2", 2, types.IntKind, false))
+		schema.NewColumn("pk", 0, types.IntKind, true, "", false, ""),
+		schema.NewColumn("v1", 1, types.IntKind, false, "", false, ""),
+		schema.NewColumn("v2", 2, types.IntKind, false, "", false, ""))
 	require.NoError(t, err)
 	tableSch := schema.SchemaFromCols(colColl)
 	index, err := tableSch.Indexes().AddIndexByColNames("idx_concurrency", []string{"v1"}, schema.IndexProperties{IsUnique: false, Comment: ""})
@@ -126,9 +126,9 @@ func TestIndexEditorConcurrencyPostInsert(t *testing.T) {
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	colColl, err := schema.NewColCollection(
-		schema.NewColumn("pk", 0, types.IntKind, true),
-		schema.NewColumn("v1", 1, types.IntKind, false),
-		schema.NewColumn("v2", 2, types.IntKind, false))
+		schema.NewColumn("pk", 0, types.IntKind, true, "", false, ""),
+		schema.NewColumn("v1", 1, types.IntKind, false, "", false, ""),
+		schema.NewColumn("v2", 2, types.IntKind, false, "", false, ""))
 	require.NoError(t, err)
 	tableSch := schema.SchemaFromCols(colColl)
 	index, err := tableSch.Indexes().AddIndexByColNames("idx_concurrency", []string{"v1"}, schema.IndexProperties{IsUnique: false, Comment: ""})
@@ -210,9 +210,9 @@ func TestIndexEditorConcurrencyUnique(t *testing.T) {
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	colColl, err := schema.NewColCollection(
-		schema.NewColumn("pk", 0, types.IntKind, true),
-		schema.NewColumn("v1", 1, types.IntKind, false),
-		schema.NewColumn("v2", 2, types.IntKind, false))
+		schema.NewColumn("pk", 0, types.IntKind, true, "", false, ""),
+		schema.NewColumn("v1", 1, types.IntKind, false, "", false, ""),
+		schema.NewColumn("v2", 2, types.IntKind, false, "", false, ""))
 	require.NoError(t, err)
 	tableSch := schema.SchemaFromCols(colColl)
 	index, err := tableSch.Indexes().AddIndexByColNames("idx_concurrency", []string{"v1"}, schema.IndexProperties{IsUnique: true, Comment: ""})
@@ -297,8 +297,8 @@ func TestIndexEditorUniqueMultipleNil(t *testing.T) {
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	colColl, err := schema.NewColCollection(
-		schema.NewColumn("pk", 0, types.IntKind, true),
-		schema.NewColumn("v1", 1, types.IntKind, false))
+		schema.NewColumn("pk", 0, types.IntKind, true, "", false, ""),
+		schema.NewColumn("v1", 1, types.IntKind, false, "", false, ""))
 	require.NoError(t, err)
 	tableSch := schema.SchemaFromCols(colColl)
 	index, err := tableSch.Indexes().AddIndexByColNames("idx_unique", []string{"v1"}, schema.IndexProperties{IsUnique: true, Comment: ""})
@@ -339,9 +339,9 @@ func TestIndexEditorWriteAfterFlush(t *testing.T) {
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	colColl, err := schema.NewColCollection(
-		schema.NewColumn("pk", 0, types.IntKind, true),
-		schema.NewColumn("v1", 1, types.IntKind, false),
-		schema.NewColumn("v2", 2, types.IntKind, false))
+		schema.NewColumn("pk", 0, types.IntKind, true, "", false, ""),
+		schema.NewColumn("v1", 1, types.IntKind, false, "", false, ""),
+		schema.NewColumn("v2", 2, types.IntKind, false, "", false, ""))
 	require.NoError(t, err)
 	tableSch := schema.SchemaFromCols(colColl)
 	index, err := tableSch.Indexes().AddIndexByColNames("idx_concurrency", []string{"v1"}, schema.IndexProperties{IsUnique: false, Comment: ""})

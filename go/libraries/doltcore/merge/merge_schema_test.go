@@ -436,7 +436,7 @@ func schemaFromColsAndIdxs(allCols *schema.ColCollection, indexes ...schema.Inde
 }
 
 func newColTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, partOfPK bool, constraints ...schema.ColConstraint) schema.Column {
-	c, err := schema.NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, "", "", constraints...)
+	c, err := schema.NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, "", false, "", constraints...)
 	if err != nil {
 		panic("could not create column")
 	}

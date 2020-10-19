@@ -96,8 +96,8 @@ func TestBasics(t *testing.T) {
 }
 
 var fakeFields, _ = schema.NewColCollection(
-	schema.NewColumn("a", 0, types.StringKind, true, schema.NotNullConstraint{}),
-	schema.NewColumn("b", 1, types.StringKind, false),
+	schema.NewColumn("a", 0, types.StringKind, true, "", false, "", schema.NotNullConstraint{}),
+	schema.NewColumn("b", 1, types.StringKind, false, "", false, ""),
 )
 
 func mustRow(r row.Row, err error) row.Row {

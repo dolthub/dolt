@@ -24,25 +24,25 @@ import (
 )
 
 var fieldsA, _ = schema.NewColCollection(
-	schema.NewColumn("a", 0, types.StringKind, true),
-	schema.NewColumn("b", 1, types.StringKind, false),
-	schema.NewColumn("c", 2, types.StringKind, false))
+	schema.NewColumn("a", 0, types.StringKind, true, "", false, ""),
+	schema.NewColumn("b", 1, types.StringKind, false, "", false, ""),
+	schema.NewColumn("c", 2, types.StringKind, false, "", false, ""))
 
 var fieldsB, _ = schema.NewColCollection(
-	schema.NewColumn("a", 0, types.StringKind, true),
-	schema.NewColumn("b", 1, types.StringKind, false))
+	schema.NewColumn("a", 0, types.StringKind, true, "", false, ""),
+	schema.NewColumn("b", 1, types.StringKind, false, "", false, ""))
 
 var fieldsC, _ = schema.NewColCollection(
-	schema.NewColumn("key", 3, types.UUIDKind, true),
-	schema.NewColumn("value", 4, types.StringKind, false))
+	schema.NewColumn("key", 3, types.UUIDKind, true, "", false, ""),
+	schema.NewColumn("value", 4, types.StringKind, false, "", false, ""))
 
 var fieldsCNoPK, _ = schema.NewColCollection(
-	schema.NewColumn("key", 3, types.UUIDKind, true),
-	schema.NewColumn("value", 4, types.StringKind, false))
+	schema.NewColumn("key", 3, types.UUIDKind, true, "", false, ""),
+	schema.NewColumn("value", 4, types.StringKind, false, "", false, ""))
 
 var fieldsD, _ = schema.NewColCollection(
-	schema.NewColumn("key", 3, types.StringKind, true),
-	schema.NewColumn("value", 4, types.StringKind, false))
+	schema.NewColumn("key", 3, types.StringKind, true, "", false, ""),
+	schema.NewColumn("value", 4, types.StringKind, false, "", false, ""))
 
 var schemaA = schema.SchemaFromCols(fieldsA)
 var schemaB = schema.SchemaFromCols(fieldsB)

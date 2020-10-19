@@ -40,13 +40,13 @@ const (
 )
 
 var oneIntPKSch = schema.SchemaFromCols(mustColColl(schema.NewColCollection(
-	schema.NewColumn(pk0Name, pk0Tag, types.IntKind, true),
-	schema.NewColumn(c1Name, c1Tag, types.IntKind, false))))
+	schema.NewColumn(pk0Name, pk0Tag, types.IntKind, true, "", false, ""),
+	schema.NewColumn(c1Name, c1Tag, types.IntKind, false, "", false, ""))))
 
 var twoIntPKSch = schema.SchemaFromCols(mustColColl(schema.NewColCollection(
-	schema.NewColumn(pk0Name, pk0Tag, types.IntKind, true),
-	schema.NewColumn(pk1Name, pk1Tag, types.IntKind, true),
-	schema.NewColumn(c1Name, c1Tag, types.IntKind, false))))
+	schema.NewColumn(pk0Name, pk0Tag, types.IntKind, true, "", false, ""),
+	schema.NewColumn(pk1Name, pk1Tag, types.IntKind, true, "", false, ""),
+	schema.NewColumn(c1Name, c1Tag, types.IntKind, false, "", false, ""))))
 
 func int64Range(start, end, stride int64) []int64 {
 	vals := make([]int64, 0, end-start)

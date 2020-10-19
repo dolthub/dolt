@@ -40,9 +40,9 @@ func TestTableEditorConcurrency(t *testing.T) {
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	colColl, err := schema.NewColCollection(
-		schema.NewColumn("pk", 0, types.IntKind, true),
-		schema.NewColumn("v1", 1, types.IntKind, false),
-		schema.NewColumn("v2", 2, types.IntKind, false))
+		schema.NewColumn("pk", 0, types.IntKind, true, "", false, ""),
+		schema.NewColumn("v1", 1, types.IntKind, false, "", false, ""),
+		schema.NewColumn("v2", 2, types.IntKind, false, "", false, ""))
 	require.NoError(t, err)
 	tableSch := schema.SchemaFromCols(colColl)
 	tableSchVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tableSch)
@@ -136,9 +136,9 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	colColl, err := schema.NewColCollection(
-		schema.NewColumn("pk", 0, types.IntKind, true),
-		schema.NewColumn("v1", 1, types.IntKind, false),
-		schema.NewColumn("v2", 2, types.IntKind, false))
+		schema.NewColumn("pk", 0, types.IntKind, true, "", false, ""),
+		schema.NewColumn("v1", 1, types.IntKind, false, "", false, ""),
+		schema.NewColumn("v2", 2, types.IntKind, false, "", false, ""))
 	require.NoError(t, err)
 	tableSch := schema.SchemaFromCols(colColl)
 	tableSchVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tableSch)
@@ -230,9 +230,9 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	colColl, err := schema.NewColCollection(
-		schema.NewColumn("pk", 0, types.IntKind, true),
-		schema.NewColumn("v1", 1, types.IntKind, false),
-		schema.NewColumn("v2", 2, types.IntKind, false))
+		schema.NewColumn("pk", 0, types.IntKind, true, "", false, ""),
+		schema.NewColumn("v1", 1, types.IntKind, false, "", false, ""),
+		schema.NewColumn("v2", 2, types.IntKind, false, "", false, ""))
 	require.NoError(t, err)
 	tableSch := schema.SchemaFromCols(colColl)
 	tableSchVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tableSch)
@@ -301,9 +301,9 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	colColl, err := schema.NewColCollection(
-		schema.NewColumn("pk", 0, types.IntKind, true),
-		schema.NewColumn("v1", 1, types.IntKind, false),
-		schema.NewColumn("v2", 2, types.IntKind, false))
+		schema.NewColumn("pk", 0, types.IntKind, true, "", false, ""),
+		schema.NewColumn("v1", 1, types.IntKind, false, "", false, ""),
+		schema.NewColumn("v2", 2, types.IntKind, false, "", false, ""))
 	require.NoError(t, err)
 	tableSch := schema.SchemaFromCols(colColl)
 	tableSchVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tableSch)

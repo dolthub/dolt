@@ -55,7 +55,7 @@ func TestAddColumnToTable(t *testing.T) {
 			colKind:    types.StringKind,
 			nullable:   Null,
 			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
-				schema.NewColumn("newCol", dtestutils.NextTag, types.StringKind, false)),
+				schema.NewColumn("newCol", dtestutils.NextTag, types.StringKind, false, "", false, "")),
 			expectedRows: dtestutils.TypedRows,
 		},
 		{
@@ -65,7 +65,7 @@ func TestAddColumnToTable(t *testing.T) {
 			colKind:    types.IntKind,
 			nullable:   Null,
 			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
-				schema.NewColumn("newCol", dtestutils.NextTag, types.IntKind, false)),
+				schema.NewColumn("newCol", dtestutils.NextTag, types.IntKind, false, "", false, "")),
 			expectedRows: dtestutils.TypedRows,
 		},
 		{
@@ -75,7 +75,7 @@ func TestAddColumnToTable(t *testing.T) {
 			colKind:    types.UintKind,
 			nullable:   Null,
 			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
-				schema.NewColumn("newCol", dtestutils.NextTag, types.UintKind, false)),
+				schema.NewColumn("newCol", dtestutils.NextTag, types.UintKind, false, "", false, "")),
 			expectedRows: dtestutils.TypedRows,
 		},
 		{
@@ -85,7 +85,7 @@ func TestAddColumnToTable(t *testing.T) {
 			colKind:    types.FloatKind,
 			nullable:   Null,
 			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
-				schema.NewColumn("newCol", dtestutils.NextTag, types.FloatKind, false)),
+				schema.NewColumn("newCol", dtestutils.NextTag, types.FloatKind, false, "", false, "")),
 			expectedRows: dtestutils.TypedRows,
 		},
 		{
@@ -95,7 +95,7 @@ func TestAddColumnToTable(t *testing.T) {
 			colKind:    types.BoolKind,
 			nullable:   Null,
 			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
-				schema.NewColumn("newCol", dtestutils.NextTag, types.BoolKind, false)),
+				schema.NewColumn("newCol", dtestutils.NextTag, types.BoolKind, false, "", false, "")),
 			expectedRows: dtestutils.TypedRows,
 		},
 		{
@@ -105,7 +105,7 @@ func TestAddColumnToTable(t *testing.T) {
 			colKind:    types.UUIDKind,
 			nullable:   Null,
 			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
-				schema.NewColumn("newCol", dtestutils.NextTag, types.UUIDKind, false)),
+				schema.NewColumn("newCol", dtestutils.NextTag, types.UUIDKind, false, "", false, "")),
 			expectedRows: dtestutils.TypedRows,
 		},
 		{
@@ -207,11 +207,11 @@ func TestAddColumnToTable(t *testing.T) {
 			order:      &ColumnOrder{First: true},
 			expectedSchema: dtestutils.CreateSchema(
 				schemaNewColumn("newCol", dtestutils.NextTag, types.IntKind, false, "42"),
-				schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
-				schema.NewColumn("name", dtestutils.NameTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
+				schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, "", false, "", schema.NotNullConstraint{}),
+				schema.NewColumn("name", dtestutils.NameTag, types.StringKind, false, "", false, "", schema.NotNullConstraint{}),
+				schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, "", false, "", schema.NotNullConstraint{}),
+				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, false, "", false, "", schema.NotNullConstraint{}),
+				schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false, "", false, ""),
 			),
 			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.Int(42)),
 		},
@@ -224,12 +224,12 @@ func TestAddColumnToTable(t *testing.T) {
 			defaultVal: "42",
 			order:      &ColumnOrder{After: "age"},
 			expectedSchema: dtestutils.CreateSchema(
-				schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
-				schema.NewColumn("name", dtestutils.NameTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, "", false, "", schema.NotNullConstraint{}),
+				schema.NewColumn("name", dtestutils.NameTag, types.StringKind, false, "", false, "", schema.NotNullConstraint{}),
+				schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, "", false, "", schema.NotNullConstraint{}),
 				schemaNewColumn("newCol", dtestutils.NextTag, types.IntKind, false, "42"),
-				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
+				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, false, "", false, "", schema.NotNullConstraint{}),
+				schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false, "", false, ""),
 			),
 			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.Int(42)),
 		},
@@ -330,7 +330,7 @@ func createEnvWithSeedData(t *testing.T) *env.DoltEnv {
 }
 
 func schemaNewColumn(name string, tag uint64, kind types.NomsKind, partOfPK bool, defaultVal string, constraints ...schema.ColConstraint) schema.Column {
-	col := schema.NewColumn(name, tag, kind, partOfPK, constraints...)
+	col := schema.NewColumn(name, tag, kind, partOfPK, "", false, "", constraints...)
 	col.Default = defaultVal
 	return col
 }

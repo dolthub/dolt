@@ -87,7 +87,7 @@ func TestTableDiff(t *testing.T) {
 	}
 
 	cc, _ := schema.NewColCollection(
-		schema.NewColumn("id", uint64(100), types.UUIDKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("id", uint64(100), types.UUIDKind, true, "", false, "", schema.NotNullConstraint{}),
 	)
 	tbl2, err := createTestTable(ddb.ValueReadWriter(), schema.SchemaFromCols(cc), m)
 	assert.NoError(t, err)
@@ -305,8 +305,8 @@ func TestAddNewerTextAndDocPkFromRow(t *testing.T) {
 
 func createTestDocsSchema() schema.Schema {
 	typedColColl, _ := schema.NewColCollection(
-		schema.NewColumn(DocPkColumnName, DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn(DocTextColumnName, DocTextTag, types.StringKind, false),
+		schema.NewColumn(DocPkColumnName, DocNameTag, types.StringKind, true, "", false, "", schema.NotNullConstraint{}),
+		schema.NewColumn(DocTextColumnName, DocTextTag, types.StringKind, false, "", false, ""),
 	)
 	return schema.SchemaFromCols(typedColColl)
 }

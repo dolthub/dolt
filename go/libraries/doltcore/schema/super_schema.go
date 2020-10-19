@@ -85,7 +85,7 @@ func (ss *SuperSchema) AddColumn(col Column) (err error) {
 
 	// we haven't seen this column before
 	ss.tagNames[col.Tag] = append(names, col.Name)
-	ss.allCols, err = ss.allCols.Append(stripColNameAndConstraints(col))
+	ss.allCols, err = ss.allCols.Append(simpleColumn(col))
 
 	return err
 }
@@ -290,7 +290,7 @@ func SuperSchemaUnion(superSchemas ...*SuperSchema) (*SuperSchema, error) {
 
 			if !found {
 				tagNameSets[tag] = set.NewStrSet(ss.AllColumnNames(tag))
-				cc, err = cc.Append(stripColNameAndConstraints(col))
+				cc, err = cc.Append(simpleColumn(col))
 			} else {
 				tagNameSets[tag].Add(ss.AllColumnNames(tag)...)
 			}
@@ -315,10 +315,14 @@ func SuperSchemaUnion(superSchemas ...*SuperSchema) (*SuperSchema, error) {
 	return &SuperSchema{cc, tn}, nil
 }
 
-func stripColNameAndConstraints(col Column) Column {
-	// track column names in SuperSchema.tagNames
-	col.Name = ""
-	// don't track constraints
-	col.Constraints = []ColConstraint(nil)
-	return col
+// SuperSchema only retains basic info about the column def
+func simpleColumn(col Column) Column {
+	return Column{
+		// column names are tracked in SuperSchema.tagNames
+		Name:       "",
+		Tag:        col.Tag,
+		Kind:       col.Kind,
+		IsPartOfPK: col.IsPartOfPK,
+		TypeInfo:   col.TypeInfo,
+	}
 }
