@@ -59,28 +59,50 @@ const (
 	UnknownKind NomsKind = 255
 )
 
-var KindToType = map[NomsKind]Value{
-	BlobKind:       Blob{},
-	BoolKind:       Bool(false),
-	CycleKind:      nil,
-	ListKind:       List{},
-	MapKind:        Map{},
-	FloatKind:      Float(0),
-	RefKind:        Ref{},
-	SetKind:        Set{},
-	StructKind:     Struct{},
-	StringKind:     String(""),
-	TypeKind:       &Type{},
-	UnionKind:      nil,
-	ValueKind:      nil,
-	UUIDKind:       UUID{},
-	IntKind:        Int(0),
-	UintKind:       Uint(0),
-	NullKind:       NullValue,
-	TupleKind:      EmptyTuple(Format_7_18),
-	InlineBlobKind: InlineBlob{},
-	TimestampKind:  Timestamp{},
-	DecimalKind:    Decimal{},
+var KindToType = make([]Value, 255)
+var SupportedKinds = make([]bool, 255)
+
+func init() {
+	KindToType[BlobKind] = Blob{}
+	KindToType[BoolKind] = Bool(false)
+	KindToType[ListKind] = List{}
+	KindToType[MapKind] = Map{}
+	KindToType[FloatKind] = Float(0)
+	KindToType[RefKind] = Ref{}
+	KindToType[SetKind] = Set{}
+	KindToType[StructKind] = Struct{}
+	KindToType[StringKind] = String("")
+	KindToType[TypeKind] = &Type{}
+	KindToType[UUIDKind] = UUID{}
+	KindToType[IntKind] = Int(0)
+	KindToType[UintKind] = Uint(0)
+	KindToType[NullKind] = NullValue
+	KindToType[TupleKind] = EmptyTuple(Format_7_18)
+	KindToType[InlineBlobKind] = InlineBlob{}
+	KindToType[TimestampKind] = Timestamp{}
+	KindToType[DecimalKind] = Decimal{}
+
+	SupportedKinds[BlobKind] = true
+	SupportedKinds[BoolKind] = true
+	SupportedKinds[CycleKind] = true
+	SupportedKinds[ListKind] = true
+	SupportedKinds[MapKind] = true
+	SupportedKinds[FloatKind] = true
+	SupportedKinds[RefKind] = true
+	SupportedKinds[SetKind] = true
+	SupportedKinds[StructKind] = true
+	SupportedKinds[StringKind] = true
+	SupportedKinds[TypeKind] = true
+	SupportedKinds[UnionKind] = true
+	SupportedKinds[ValueKind] = true
+	SupportedKinds[UUIDKind] = true
+	SupportedKinds[IntKind] = true
+	SupportedKinds[UintKind] = true
+	SupportedKinds[NullKind] = true
+	SupportedKinds[TupleKind] = true
+	SupportedKinds[InlineBlobKind] = true
+	SupportedKinds[TimestampKind] = true
+	SupportedKinds[DecimalKind] = true
 }
 
 var KindToTypeSlice []Value
