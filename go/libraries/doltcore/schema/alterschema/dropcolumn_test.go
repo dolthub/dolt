@@ -27,53 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-var TypedRowsWithoutAge []row.Row
-var TypedRowsWithoutTitle []row.Row
-var TypedRowsWithoutName []row.Row
-
-func init() {
-	for i := 0; i < len(dtestutils.UUIDS); i++ {
-		taggedValsSansAge := row.TaggedValues{
-			dtestutils.IdTag:        types.UUID(dtestutils.UUIDS[i]),
-			dtestutils.NameTag:      types.String(dtestutils.Names[i]),
-			dtestutils.TitleTag:     types.String(dtestutils.Titles[i]),
-			dtestutils.IsMarriedTag: types.Bool(dtestutils.MaritalStatus[i]),
-		}
-		schSansAge := dtestutils.RemoveColumnFromSchema(dtestutils.TypedSchema, dtestutils.AgeTag)
-		r, err := row.New(types.Format_7_18, schSansAge, taggedValsSansAge)
-		if err != nil {
-			panic(err)
-		}
-		TypedRowsWithoutAge = append(TypedRowsWithoutAge, r)
-
-		taggedValsSansTitle := row.TaggedValues{
-			dtestutils.IdTag:        types.UUID(dtestutils.UUIDS[i]),
-			dtestutils.NameTag:      types.String(dtestutils.Names[i]),
-			dtestutils.AgeTag:       types.Uint(dtestutils.Ages[i]),
-			dtestutils.IsMarriedTag: types.Bool(dtestutils.MaritalStatus[i]),
-		}
-		schSansTitle := dtestutils.RemoveColumnFromSchema(dtestutils.TypedSchema, dtestutils.TitleTag)
-		r, err = row.New(types.Format_7_18, schSansTitle, taggedValsSansTitle)
-		if err != nil {
-			panic(err)
-		}
-		TypedRowsWithoutTitle = append(TypedRowsWithoutTitle, r)
-
-		taggedValsSansName := row.TaggedValues{
-			dtestutils.IdTag:        types.UUID(dtestutils.UUIDS[i]),
-			dtestutils.AgeTag:       types.Uint(dtestutils.Ages[i]),
-			dtestutils.TitleTag:     types.String(dtestutils.Titles[i]),
-			dtestutils.IsMarriedTag: types.Bool(dtestutils.MaritalStatus[i]),
-		}
-		schSansName := dtestutils.RemoveColumnFromSchema(dtestutils.TypedSchema, dtestutils.NameTag)
-		r, err = row.New(types.Format_7_18, schSansName, taggedValsSansName)
-		if err != nil {
-			panic(err)
-		}
-		TypedRowsWithoutName = append(TypedRowsWithoutName, r)
-	}
-}
-
 func TestDropColumn(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -86,13 +39,13 @@ func TestDropColumn(t *testing.T) {
 			name:           "remove int",
 			colName:        "age",
 			expectedSchema: dtestutils.RemoveColumnFromSchema(dtestutils.TypedSchema, dtestutils.AgeTag),
-			expectedRows:   TypedRowsWithoutAge,
+			expectedRows:   dtestutils.TypedRows,
 		},
 		{
 			name:           "remove string",
 			colName:        "title",
 			expectedSchema: dtestutils.RemoveColumnFromSchema(dtestutils.TypedSchema, dtestutils.TitleTag),
-			expectedRows:   TypedRowsWithoutTitle,
+			expectedRows:   dtestutils.TypedRows,
 		},
 		{
 			name:        "column not found",
@@ -162,21 +115,21 @@ func TestDropColumnUsedByIndex(t *testing.T) {
 			colName:        "age",
 			expectedIndex:  true,
 			expectedSchema: dtestutils.RemoveColumnFromSchema(dtestutils.TypedSchema, dtestutils.AgeTag),
-			expectedRows:   TypedRowsWithoutAge,
+			expectedRows:   dtestutils.TypedRows,
 		},
 		{
 			name:           "remove string",
 			colName:        "title",
 			expectedIndex:  true,
 			expectedSchema: dtestutils.RemoveColumnFromSchema(dtestutils.TypedSchema, dtestutils.TitleTag),
-			expectedRows:   TypedRowsWithoutTitle,
+			expectedRows:   dtestutils.TypedRows,
 		},
 		{
 			name:           "remove name",
 			colName:        "name",
 			expectedIndex:  false,
 			expectedSchema: dtestutils.RemoveColumnFromSchema(dtestutils.TypedSchema, dtestutils.NameTag),
-			expectedRows:   TypedRowsWithoutName,
+			expectedRows:   dtestutils.TypedRows,
 		},
 	}
 
