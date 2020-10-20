@@ -1,0 +1,21 @@
+version: "3.8"
+services:
+  mysql:
+    image: mysql:latest
+    environment:
+      - MYSQL_ALLOW_EMPTY_PASSWORD="no"
+      - MYSQL_DATABASE=test
+      - MYSQL_USER=root
+    ports:
+      - "3306:3306"
+  sysbench:
+    build: ../sysbench
+    environment:
+      - SYSBENCH_TESTS
+      - TEST_USERNAME
+      - DB_HOST=db
+    volumes:
+      - ../python:/python
+      - ../output:/output
+    depends_on:
+      - mysql

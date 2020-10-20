@@ -2,9 +2,9 @@
 set -e
 set -o pipefail
 
-[ ! -z "$1" ] || (echo "Please supply a comma separated list of tests to be run"; exit 1)
+[ -n "$1" ] || (echo "Please supply a comma separated list of tests to be run"; exit 1)
 tests=$1
-[ ! -z "$1" ] || (echo "Please supply a username to associate with the benchmark"; exit 1)
+[ -n "$1" ] || (echo "Please supply a username to associate with the benchmark"; exit 1)
 username=$2
 committish_one=${3:-current}
 committish_two=${4:-current}
@@ -59,12 +59,16 @@ function build_binary_at_committish() {
     GOOS="$linux" GOARCH="$amd64" go build -o "$o/bin/$obin" "./cmd/dolt/"
   '
   echo "Moving binary to temp out/bin/dolt to $script_dir/working/$commit-dolt"
-  mv "out/bin/dolt" "$absolute_script_dir/working/$commit-dolt"
+  mv "out/bin/dolt" "$absolute_script_dir/dolt-builds/working/$commit-dolt"
 }
 
+# Set environment variables to be picked up by docker-compose
+SYSBENCH_TEST=$tests
+TEST_USERNAME=$username
 
 echo "Building binaries and benchmarking for $committish_list"
 for committish in $committish_list; do
+  DOLT_COMMITTISH=committish
   build_binary_at_committish "$committish"
   cd "$absolute_script_dir"
   if [ "$committish" != "current" ]; then
@@ -79,22 +83,14 @@ for committish in $committish_list; do
       committish="$cur_commit"
     fi
   fi
-  echo "Built binary $bin_committish, executing benchmarks"
-  docker run --rm -v `pwd`:/tools oscarbatori/dolt-sysbench /bin/bash -c '
-    set -e
-    set -o pipefail
+  echo "Built binary $bin_committish, moving to  dolt-buidls/dolt"
+  mv "dolt-builds/working/$bin_committish" "dolt-builds/dolt"
 
-    ln -s /tools/working/'"$bin_committish"' /usr/bin/dolt
-    cd /tools
+  cd dolt
+  docker-compose up -e DOLT_COMMITTISH,SYSBENCH_TEST,TEST_USERNAME
 
-    dolt config --add --global user.name benchmark
-    dolt config --add --global user.email benchmark
-
-    python3 \
-      sysbench_wrapper.py \
-      --committish='"$committish"' \
-      --tests='"$tests"' \
-      --username='"$username"'
-  '
 done
 
+echo "Running benchmarks for MySQL for comparison"
+cd mysql
+docker-compose run -e SYSBENCH_TEST,TEST_USERNAME
