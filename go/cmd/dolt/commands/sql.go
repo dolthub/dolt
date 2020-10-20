@@ -397,12 +397,6 @@ func execQuery(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots
 	}
 
 	if rowIter != nil {
-		defer func() {
-			err := rowIter.Close()
-			if verr == nil {
-				verr = errhand.VerboseErrorFromError(err)
-			}
-		}()
 		err = PrettyPrintResults(sqlCtx, se.resultFormat, sqlSch, rowIter)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
@@ -673,10 +667,6 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv) error {
 			shell.Println(verr.Verbose())
 		} else if rowIter != nil {
 			err = PrettyPrintResults(ctx, se.resultFormat, sqlSch, rowIter)
-			closeErr := rowIter.Close()
-			if err == nil {
-				err = closeErr
-			}
 			if err != nil {
 				shell.Println(color.RedString(err.Error()))
 			}
@@ -957,12 +947,6 @@ func processNonInsertBatchQuery(ctx *sql.Context, se *sqlEngine, query string, s
 	}
 
 	if rowIter != nil {
-		defer func() {
-			err := rowIter.Close()
-			if returnErr == nil {
-				returnErr = err
-			}
-		}()
 		err = mergeResultIntoStats(sqlStatement, rowIter, batchEditStats)
 		if err != nil {
 			return fmt.Errorf("error executing statement: %v", err.Error())
@@ -977,6 +961,11 @@ func processNonInsertBatchQuery(ctx *sql.Context, se *sqlEngine, query string, s
 				displayStrLen = 0
 			}
 			err = PrettyPrintResults(ctx, se.resultFormat, sqlSch, rowIter)
+			if err != nil {
+				return err
+			}
+		default:
+			err = rowIter.Close()
 			if err != nil {
 				return err
 			}
@@ -1183,10 +1172,17 @@ func (se *sqlEngine) query(ctx *sql.Context, query string) (sql.Schema, sql.RowI
 }
 
 // Pretty prints the output of the new SQL engine
-func PrettyPrintResults(ctx context.Context, resultFormat resultFormat, sqlSch sql.Schema, rowIter sql.RowIter) error {
+func PrettyPrintResults(ctx context.Context, resultFormat resultFormat, sqlSch sql.Schema, rowIter sql.RowIter) (rerr error) {
 	if isOkResult(sqlSch) {
 		return printOKResult(ctx, rowIter)
 	}
+
+	defer func() {
+		closeErr := rowIter.Close()
+		if rerr == nil && closeErr != nil {
+			rerr = closeErr
+		}
+	}()
 
 	nbf := types.Format_Default
 
@@ -1415,7 +1411,10 @@ func (se *sqlEngine) checkThenDeleteAllRows(ctx *sql.Context, s *sqlparser.Delet
 						return false
 					}
 
-					_ = PrettyPrintResults(ctx, se.resultFormat, sql.OkResultSchema, printRowIter)
+					err = PrettyPrintResults(ctx, se.resultFormat, sql.OkResultSchema, printRowIter)
+					if err != nil {
+						return false
+					}
 
 					db, err := se.getDB(dbName)
 					if err != nil {
