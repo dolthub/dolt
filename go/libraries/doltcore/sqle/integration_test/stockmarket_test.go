@@ -20259,7 +20259,7 @@ func TestExplain(t *testing.T) {
 	root, err = sqle.ExecuteSql(dEnv, root, createTables)
 	require.NoError(t, err)
 
-	rows, err := sqle.ExecuteSelect(dEnv, dEnv.DoltDB, root, "explain format = tree select * from daily_summary d join symbols t on d.Symbol = t.Symbol")
+	rows, err := sqle.ExecuteSelect(dEnv, dEnv.DoltDB, root, "explain select * from daily_summary d join symbols t on d.Symbol = t.Symbol")
 	require.NoError(t, err)
 	rowStrings := make([]string, len(rows))
 	for i, row := range rows {
@@ -20268,8 +20268,8 @@ func TestExplain(t *testing.T) {
 
 	expectedExplain := "IndexedJoin(d.Symbol = t.Symbol)\n" +
 		" ├─ TableAlias(d)\n" +
-		" │   └─ daily_summary\n" +
+		" │   └─ Table(daily_summary)\n" +
 		" └─ TableAlias(t)\n" +
-		"     └─ symbols"
+		"     └─ Table(symbols)"
 	assert.Equal(t, expectedExplain, strings.Join(rowStrings, "\n"))
 }
