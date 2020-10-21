@@ -584,9 +584,11 @@ func (lvs *ValueStore) GC(ctx context.Context) error {
 	}
 	const batchSize = 16384
 	batches := func(hs []hash.Hash) [][]hash.Hash {
+		// Return subslices of a copy, because the caller may
+		// mutate the parameter after the call.
 		copied := make([]hash.Hash, len(hs))
 		copy(copied, hs)
-		res := make([][]hash.Hash, 0)
+		var res [][]hash.Hash
 		i := 0
 		for ; i+batchSize < len(copied); i += batchSize {
 			res = append(res, copied[i:i+batchSize])

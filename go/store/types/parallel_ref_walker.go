@@ -44,7 +44,7 @@ func (w *parallelRefWalker) goWork() error {
 			if !ok {
 				return nil
 			}
-			res := make([]hash.Hash, 0)
+			var res []hash.Hash
 			for _, v := range work.vals {
 				err := v.WalkRefs(w.nbf, func(r Ref) error {
 					res = append(res, r.TargetHash())
@@ -77,22 +77,18 @@ func (w *parallelRefWalker) sendAllWork(vals ValueSlice) (int, chan []hash.Hash,
 	resCh := make(chan []hash.Hash, w.concurrency)
 	i, numSent := 0, 0
 	step := len(vals)/w.concurrency + 1
-	for ; i+step < len(vals); i += step {
+	for i < len(vals) {
+		j := i + step
+		if j > len(vals) {
+			j = len(vals)
+		}
 		if err := w.sendWork(parallelRefWalkerWork{
-			vals[i : i+step],
+			vals[i:j],
 			resCh,
 		}); err != nil {
 			return 0, nil, err
 		}
-		numSent++
-	}
-	if i < len(vals) {
-		if err := w.sendWork(parallelRefWalkerWork{
-			vals[i:len(vals)],
-			resCh,
-		}); err != nil {
-			return 0, nil, err
-		}
+		i = j
 		numSent++
 	}
 	return numSent, resCh, nil
