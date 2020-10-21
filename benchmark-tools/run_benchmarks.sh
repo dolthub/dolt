@@ -58,7 +58,9 @@ function build_binary_at_committish() {
     obin="dolt"
     GOOS="$linux" GOARCH="$amd64" go build -o "$o/bin/$obin" "./cmd/dolt/"
   '
-  echo "Moving binary to temp out/bin/dolt to $script_dir/working/$commit-dolt"
+  rm -rf "$absolute_script_dir/dolt-builds/working"
+  mkdir -p "$absolute_script_dir/dolt-builds/working"
+  echo "Moving binary to temp out/bin/dolt to $absolute_script_dir/dolt-builds/working/$commit-dolt"
   mv "out/bin/dolt" "$absolute_script_dir/dolt-builds/working/$commit-dolt"
 }
 
@@ -68,7 +70,7 @@ TEST_USERNAME=$username
 
 echo "Building binaries and benchmarking for $committish_list"
 for committish in $committish_list; do
-  DOLT_COMMITTISH=committish
+  DOLT_COMMITTISH=$committish
   build_binary_at_committish "$committish"
   cd "$absolute_script_dir"
   if [ "$committish" != "current" ]; then
@@ -83,11 +85,17 @@ for committish in $committish_list; do
       committish="$cur_commit"
     fi
   fi
-  echo "Built binary $bin_committish, moving to  dolt-buidls/dolt"
-  mv "dolt-builds/working/$bin_committish" "dolt-builds/dolt"
+  echo "Built binary $bin_committish, moving to  dolt-builds/dolt"
+  mv "$absolute_script_dir/dolt-builds/working/$bin_committish" "$absolute_script_dir/dolt-builds/dolt"
 
   cd dolt
-  docker-compose up -e DOLT_COMMITTISH,SYSBENCH_TEST,TEST_USERNAME
+  cat <<EOF >> $absolute_script_dir/working/dolt.env
+DOLT_COMMITTISH=$DOLT_COMMITTISH
+SYSBENCH_TEST=$SYSBENCH_TEST
+TEST_USERNAME=$TEST_USERNAME
+EOF
+  cat $absolute_script_dir/working/dolt.env
+  docker-compose --env-file $absolute_script_dir/working/dolt.env up
 
 done
 
