@@ -28,16 +28,16 @@ import (
 
 var queryCatalogCols, _ = schema.NewColCollection(
 	// QueryCatalogIdCol is the name of the primary key column of the query catalog table
-	schema.NewColumn(doltdb.QueryCatalogIdCol, doltdb.QueryCatalogIdTag, types.StringKind, true, "", false, "", schema.NotNullConstraint{}),
+	schema.NewColumn(doltdb.QueryCatalogIdCol, doltdb.QueryCatalogIdTag, types.StringKind, true, schema.NotNullConstraint{}),
 	// QueryCatalogOrderCol is the column containing the order of the queries in the catalog
-	schema.NewColumn(doltdb.QueryCatalogOrderCol, doltdb.QueryCatalogOrderTag, types.UintKind, false, "", false, "", schema.NotNullConstraint{}),
+	schema.NewColumn(doltdb.QueryCatalogOrderCol, doltdb.QueryCatalogOrderTag, types.UintKind, false, schema.NotNullConstraint{}),
 	// QueryCatalogNameCol is the name of the column containing the name of a query in the catalog
 	// TODO: parser won't handle a reserved word here, but it should. Only an issue for create table statements.
-	schema.NewColumn(doltdb.QueryCatalogNameCol, doltdb.QueryCatalogNameTag, types.StringKind, false, "", false, ""),
+	schema.NewColumn(doltdb.QueryCatalogNameCol, doltdb.QueryCatalogNameTag, types.StringKind, false),
 	// QueryCatalogQueryCol is the name of the column containing the query of a catalog entry
-	schema.NewColumn(doltdb.QueryCatalogQueryCol, doltdb.QueryCatalogQueryTag, types.StringKind, false, "", false, ""),
+	schema.NewColumn(doltdb.QueryCatalogQueryCol, doltdb.QueryCatalogQueryTag, types.StringKind, false),
 	// QueryCatalogDescriptionCol is the name of the column containing the description of a query in the catalog
-	schema.NewColumn(doltdb.QueryCatalogDescriptionCol, doltdb.QueryCatalogDescriptionTag, types.StringKind, false, "", false, ""),
+	schema.NewColumn(doltdb.QueryCatalogDescriptionCol, doltdb.QueryCatalogDescriptionTag, types.StringKind, false),
 )
 
 var ErrQueryNotFound = errors.NewKind("Query '%s' not found")

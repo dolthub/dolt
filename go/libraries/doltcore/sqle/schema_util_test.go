@@ -36,7 +36,7 @@ func NewResultSetSchema(colNamesAndTypes ...interface{}) schema.Schema {
 	for i := 0; i < len(colNamesAndTypes); i += 2 {
 		name := colNamesAndTypes[i].(string)
 		nomsKind := colNamesAndTypes[i+1].(types.NomsKind)
-		cols[i/2] = schema.NewColumn(name, uint64(i/2), nomsKind, false, "", false, "")
+		cols[i/2] = schema.NewColumn(name, uint64(i/2), nomsKind, false)
 	}
 
 	collection, err := schema.NewColCollection(cols...)
@@ -53,7 +53,7 @@ func NewResultSetRow(colVals ...types.Value) row.Row {
 	for i := 0; i < len(colVals); i++ {
 		taggedVals[uint64(i)] = colVals[i]
 		nomsKind := colVals[i].Kind()
-		cols[i] = schema.NewColumn(fmt.Sprintf("%v", i), uint64(i), nomsKind, false, "", false, "")
+		cols[i] = schema.NewColumn(fmt.Sprintf("%v", i), uint64(i), nomsKind, false)
 	}
 
 	collection, err := schema.NewColCollection(cols...)
@@ -86,13 +86,13 @@ func NewRowWithPks(pkColVals []types.Value, nonPkVals ...types.Value) row.Row {
 	for _, val := range pkColVals {
 		var constraints []schema.ColConstraint
 		constraints = append(constraints, schema.NotNullConstraint{})
-		cols = append(cols, schema.NewColumn(strconv.FormatInt(tag, 10), uint64(tag), val.Kind(), true, "", false, "", constraints...))
+		cols = append(cols, schema.NewColumn(strconv.FormatInt(tag, 10), uint64(tag), val.Kind(), true, constraints...))
 		taggedVals[uint64(tag)] = val
 		tag++
 	}
 
 	for _, val := range nonPkVals {
-		cols = append(cols, schema.NewColumn(strconv.FormatInt(tag, 10), uint64(tag), val.Kind(), false, "", false, ""))
+		cols = append(cols, schema.NewColumn(strconv.FormatInt(tag, 10), uint64(tag), val.Kind(), false))
 		taggedVals[uint64(tag)] = val
 		tag++
 	}
@@ -162,7 +162,7 @@ func NewSchemaForTable(tableName string, colNamesAndTypes ...interface{}) schema
 		if isPk {
 			constraints = append(constraints, schema.NotNullConstraint{})
 		}
-		cols[i/2] = schema.NewColumn(name, tag, nomsKind, isPk, "", false, "", constraints...)
+		cols[i/2] = schema.NewColumn(name, tag, nomsKind, isPk, constraints...)
 	}
 
 	colColl, err := schema.NewColCollection(cols...)

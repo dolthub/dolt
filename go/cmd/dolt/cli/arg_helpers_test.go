@@ -52,15 +52,15 @@ func TestParseKeyValues(t *testing.T) {
 	)
 
 	testKeyColColl, _ := schema.NewColCollection(
-		schema.NewColumn(lnColName, lnColTag, types.StringKind, true, "", false, ""),
-		schema.NewColumn(fnColName, fnColTag, types.StringKind, true, "", false, ""),
-		schema.NewColumn(mnColName, mnColTag, types.StringKind, true, "", false, ""),
+		schema.NewColumn(lnColName, lnColTag, types.StringKind, true),
+		schema.NewColumn(fnColName, fnColTag, types.StringKind, true),
+		schema.NewColumn(mnColName, mnColTag, types.StringKind, true),
 	)
 
 	sch := schema.SchemaFromCols(testKeyColColl)
 
 	singleKeyColColl, _ := schema.NewColCollection(
-		schema.NewColumn(lnColName, lnColTag, types.StringKind, true, "", false, ""),
+		schema.NewColumn(lnColName, lnColTag, types.StringKind, true),
 	)
 
 	singleKeySch := schema.SchemaFromCols(singleKeyColColl)

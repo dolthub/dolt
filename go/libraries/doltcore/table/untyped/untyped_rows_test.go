@@ -98,19 +98,19 @@ func TestNewUntypedSchema(t *testing.T) {
 
 func TestUntypedSchemaUnion(t *testing.T) {
 	cols := []schema.Column{
-		schema.NewColumn("a", 0, types.UUIDKind, true, "", false, "", schema.NotNullConstraint{}),
-		schema.NewColumn("b", 1, types.IntKind, true, "", false, ""),
-		schema.NewColumn("c", 2, types.UintKind, true, "", false, ""),
-		schema.NewColumn("d", 3, types.StringKind, false, "", false, ""),
-		schema.NewColumn("e", 4, types.BoolKind, false, "", false, ""),
+		schema.NewColumn("a", 0, types.UUIDKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("b", 1, types.IntKind, true),
+		schema.NewColumn("c", 2, types.UintKind, true),
+		schema.NewColumn("d", 3, types.StringKind, false),
+		schema.NewColumn("e", 4, types.BoolKind, false),
 	}
 
 	untypedColColl, _ := schema.NewColCollection(
-		schema.NewColumn("a", 0, types.StringKind, true, "", false, "", schema.NotNullConstraint{}),
-		schema.NewColumn("b", 1, types.StringKind, true, "", false, ""),
-		schema.NewColumn("c", 2, types.StringKind, true, "", false, ""),
-		schema.NewColumn("d", 3, types.StringKind, false, "", false, ""),
-		schema.NewColumn("e", 4, types.StringKind, false, "", false, ""))
+		schema.NewColumn("a", 0, types.StringKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("b", 1, types.StringKind, true),
+		schema.NewColumn("c", 2, types.StringKind, true),
+		schema.NewColumn("d", 3, types.StringKind, false),
+		schema.NewColumn("e", 4, types.StringKind, false))
 
 	unequalColCollumn := cols[1]
 	unequalColCollumn.Name = "bad"

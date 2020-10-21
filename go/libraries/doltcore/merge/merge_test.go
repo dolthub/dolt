@@ -104,10 +104,10 @@ func createRowMergeStruct(name string, vals, mergeVals, ancVals, expected []type
 
 	cols := make([]schema.Column, len(longest)+1)
 	// Schema needs a primary key to be valid, but all the logic being tested works only on the non-key columns.
-	cols[0] = schema.NewColumn("primaryKey", 0, types.IntKind, true, "", false, "")
+	cols[0] = schema.NewColumn("primaryKey", 0, types.IntKind, true)
 	for i, val := range longest {
 		tag := i + 1
-		cols[tag] = schema.NewColumn(strconv.FormatInt(int64(tag), 10), uint64(tag), val.Kind(), false, "", false, "")
+		cols[tag] = schema.NewColumn(strconv.FormatInt(int64(tag), 10), uint64(tag), val.Kind(), false)
 	}
 
 	colColl, _ := schema.NewColCollection(cols...)
@@ -225,9 +225,9 @@ const (
 )
 
 var colColl, _ = schema.NewColCollection(
-	schema.NewColumn("id", idTag, types.UUIDKind, true, "", false, "", schema.NotNullConstraint{}),
-	schema.NewColumn("name", nameTag, types.StringKind, false, "", false, "", schema.NotNullConstraint{}),
-	schema.NewColumn("title", titleTag, types.StringKind, false, "", false, ""),
+	schema.NewColumn("id", idTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+	schema.NewColumn("name", nameTag, types.StringKind, false, schema.NotNullConstraint{}),
+	schema.NewColumn("title", titleTag, types.StringKind, false),
 )
 var sch = schema.SchemaFromCols(colColl)
 

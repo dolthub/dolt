@@ -364,9 +364,9 @@ func TestIndexRebuildingWithTwoIndexes(t *testing.T) {
 func TestIndexRebuildingUniqueSuccessOneCol(t *testing.T) {
 	db, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_7_18, nil, nil)
 	colColl, _ := schema.NewColCollection(
-		schema.NewColumn("pk1", 1, types.IntKind, true, "", false, "", schema.NotNullConstraint{}),
-		schema.NewColumn("v1", 2, types.IntKind, false, "", false, ""),
-		schema.NewColumn("v2", 3, types.IntKind, false, "", false, ""),
+		schema.NewColumn("pk1", 1, types.IntKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("v1", 2, types.IntKind, false),
+		schema.NewColumn("v2", 3, types.IntKind, false),
 	)
 	sch := schema.SchemaFromCols(colColl)
 	rowData, _ := createTestRowDataFromTaggedValues(t, db, sch,
@@ -394,9 +394,9 @@ func TestIndexRebuildingUniqueSuccessOneCol(t *testing.T) {
 func TestIndexRebuildingUniqueSuccessTwoCol(t *testing.T) {
 	db, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_7_18, nil, nil)
 	colColl, _ := schema.NewColCollection(
-		schema.NewColumn("pk1", 1, types.IntKind, true, "", false, "", schema.NotNullConstraint{}),
-		schema.NewColumn("v1", 2, types.IntKind, false, "", false, ""),
-		schema.NewColumn("v2", 3, types.IntKind, false, "", false, ""),
+		schema.NewColumn("pk1", 1, types.IntKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("v1", 2, types.IntKind, false),
+		schema.NewColumn("v2", 3, types.IntKind, false),
 	)
 	sch := schema.SchemaFromCols(colColl)
 	rowData, _ := createTestRowDataFromTaggedValues(t, db, sch,
@@ -424,9 +424,9 @@ func TestIndexRebuildingUniqueSuccessTwoCol(t *testing.T) {
 func TestIndexRebuildingUniqueFailOneCol(t *testing.T) {
 	db, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_7_18, nil, nil)
 	colColl, _ := schema.NewColCollection(
-		schema.NewColumn("pk1", 1, types.IntKind, true, "", false, "", schema.NotNullConstraint{}),
-		schema.NewColumn("v1", 2, types.IntKind, false, "", false, ""),
-		schema.NewColumn("v2", 3, types.IntKind, false, "", false, ""),
+		schema.NewColumn("pk1", 1, types.IntKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("v1", 2, types.IntKind, false),
+		schema.NewColumn("v2", 3, types.IntKind, false),
 	)
 	sch := schema.SchemaFromCols(colColl)
 	rowData, _ := createTestRowDataFromTaggedValues(t, db, sch,
@@ -454,9 +454,9 @@ func TestIndexRebuildingUniqueFailOneCol(t *testing.T) {
 func TestIndexRebuildingUniqueFailTwoCol(t *testing.T) {
 	db, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_7_18, nil, nil)
 	colColl, _ := schema.NewColCollection(
-		schema.NewColumn("pk1", 1, types.IntKind, true, "", false, "", schema.NotNullConstraint{}),
-		schema.NewColumn("v1", 2, types.IntKind, false, "", false, ""),
-		schema.NewColumn("v2", 3, types.IntKind, false, "", false, ""),
+		schema.NewColumn("pk1", 1, types.IntKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("v1", 2, types.IntKind, false),
+		schema.NewColumn("v2", 3, types.IntKind, false),
 	)
 	sch := schema.SchemaFromCols(colColl)
 	rowData, _ := createTestRowDataFromTaggedValues(t, db, sch,

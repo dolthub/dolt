@@ -45,12 +45,12 @@ const testSchemaIndexAge = "idx_age"
 
 func createTestSchema(t *testing.T) schema.Schema {
 	colColl, _ := schema.NewColCollection(
-		schema.NewColumn("id", idTag, types.UUIDKind, true, "", false, "", schema.NotNullConstraint{}),
-		schema.NewColumn("first", firstTag, types.StringKind, false, "", false, "", schema.NotNullConstraint{}),
-		schema.NewColumn("last", lastTag, types.StringKind, false, "", false, "", schema.NotNullConstraint{}),
-		schema.NewColumn("is_married", isMarriedTag, types.BoolKind, false, "", false, ""),
-		schema.NewColumn("age", ageTag, types.UintKind, false, "", false, ""),
-		schema.NewColumn("empty", emptyTag, types.IntKind, false, "", false, ""),
+		schema.NewColumn("id", idTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("first", firstTag, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("last", lastTag, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("is_married", isMarriedTag, types.BoolKind, false),
+		schema.NewColumn("age", ageTag, types.UintKind, false),
+		schema.NewColumn("empty", emptyTag, types.IntKind, false),
 	)
 	sch := schema.SchemaFromCols(colColl)
 	_, err := sch.Indexes().AddIndexByColTags(testSchemaIndexName, []uint64{firstTag, lastTag}, schema.IndexProperties{IsUnique: false, Comment: ""})

@@ -32,10 +32,10 @@ const (
 )
 
 var peopleCols, _ = schema.NewColCollection(
-	schema.NewColumn("last", lastTag, types.StringKind, true, "", false, ""),
-	schema.NewColumn("first", firstTag, types.StringKind, true, "", false, ""),
-	schema.NewColumn("age", ageTag, types.IntKind, false, "", false, ""),
-	schema.NewColumn("city", cityTag, types.StringKind, false, "", false, ""),
+	schema.NewColumn("last", lastTag, types.StringKind, true),
+	schema.NewColumn("first", firstTag, types.StringKind, true),
+	schema.NewColumn("age", ageTag, types.IntKind, false),
+	schema.NewColumn("city", cityTag, types.StringKind, false),
 )
 
 var peopleSch = schema.SchemaFromCols(peopleCols)

@@ -25,7 +25,7 @@ import (
 )
 
 func TestBadRow(t *testing.T) {
-	cols, _ := schema.NewColCollection(schema.NewColumn("id", 0, types.IntKind, true, "", false, ""))
+	cols, _ := schema.NewColCollection(schema.NewColumn("id", 0, types.IntKind, true))
 	sch := schema.SchemaFromCols(cols)
 	emptyRow, err := row.New(types.Format_7_18, sch, row.TaggedValues{})
 

@@ -37,8 +37,8 @@ const (
 func TestReaderForKeys(t *testing.T) {
 	ctx := context.Background()
 	colColl, err := schema.NewColCollection(
-		schema.NewColumn("id", pkTag, types.IntKind, true, "", false, ""),
-		schema.NewColumn("val", valTag, types.IntKind, false, "", false, ""))
+		schema.NewColumn("id", pkTag, types.IntKind, true),
+		schema.NewColumn("val", valTag, types.IntKind, false))
 	require.NoError(t, err)
 
 	sch := schema.SchemaFromCols(colColl)

@@ -31,7 +31,7 @@ import (
 func TestRenameTable(t *testing.T) {
 	otherTable := "other"
 	cc, _ := schema.NewColCollection(
-		schema.NewColumn("id", uint64(100), types.UUIDKind, true, "", false, "", schema.NotNullConstraint{}),
+		schema.NewColumn("id", uint64(100), types.UUIDKind, true, schema.NotNullConstraint{}),
 	)
 	otherSch := schema.SchemaFromCols(cc)
 

@@ -105,8 +105,8 @@ func TestRowAsInsertStmt(t *testing.T) {
 	}
 
 	trickySch := dtestutils.CreateSchema(
-		schema.NewColumn("a name with spaces", 0, types.FloatKind, false, "", false, ""),
-		schema.NewColumn("anotherColumn", 1, types.IntKind, true, "", false, ""),
+		schema.NewColumn("a name with spaces", 0, types.FloatKind, false),
+		schema.NewColumn("anotherColumn", 1, types.IntKind, true),
 	)
 
 	tests = append(tests, test{
@@ -128,8 +128,8 @@ func TestRowAsInsertStmt(t *testing.T) {
 func TestRowAsDeleteStmt(t *testing.T) {
 	tableName := "tricky"
 	trickySch := dtestutils.CreateSchema(
-		schema.NewColumn("anotherCol", 0, types.FloatKind, false, "", false, ""),
-		schema.NewColumn("a name with spaces", 1, types.IntKind, true, "", false, ""),
+		schema.NewColumn("anotherCol", 0, types.FloatKind, false),
+		schema.NewColumn("a name with spaces", 1, types.IntKind, true),
 	)
 
 	tests := []test{
@@ -176,8 +176,8 @@ func TestRowAsUpdateStmt(t *testing.T) {
 	}
 
 	trickySch := dtestutils.CreateSchema(
-		schema.NewColumn("a name with spaces", 0, types.FloatKind, false, "", false, ""),
-		schema.NewColumn("anotherColumn", 1, types.IntKind, true, "", false, ""),
+		schema.NewColumn("a name with spaces", 0, types.FloatKind, false),
+		schema.NewColumn("anotherColumn", 1, types.IntKind, true),
 	)
 
 	tests = append(tests, test{

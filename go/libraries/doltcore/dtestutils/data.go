@@ -50,11 +50,11 @@ const (
 const IndexName = "idx_name"
 
 var typedColColl, _ = schema.NewColCollection(
-	schema.NewColumn("id", IdTag, types.UUIDKind, true, "", false, "", schema.NotNullConstraint{}),
-	schema.NewColumn("name", NameTag, types.StringKind, false, "", false, "", schema.NotNullConstraint{}),
-	schema.NewColumn("age", AgeTag, types.UintKind, false, "", false, "", schema.NotNullConstraint{}),
-	schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false, "", false, "", schema.NotNullConstraint{}),
-	schema.NewColumn("title", TitleTag, types.StringKind, false, "", false, ""),
+	schema.NewColumn("id", IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+	schema.NewColumn("name", NameTag, types.StringKind, false, schema.NotNullConstraint{}),
+	schema.NewColumn("age", AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
+	schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false, schema.NotNullConstraint{}),
+	schema.NewColumn("title", TitleTag, types.StringKind, false),
 )
 
 var TypedSchema = schema.SchemaFromCols(typedColColl)
@@ -204,7 +204,7 @@ func AddColToRows(t *testing.T, rs []row.Row, tag uint64, val types.Value) []row
 		return rs
 	}
 
-	colColl, err := schema.NewColCollection(schema.NewColumn("unused", tag, val.Kind(), false, "", false, ""))
+	colColl, err := schema.NewColCollection(schema.NewColumn("unused", tag, val.Kind(), false))
 	require.NoError(t, err)
 	fakeSch := schema.UnkeyedSchemaFromCols(colColl)
 

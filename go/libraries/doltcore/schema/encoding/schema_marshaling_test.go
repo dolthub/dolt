@@ -36,10 +36,10 @@ import (
 
 func createTestSchema() schema.Schema {
 	columns := []schema.Column{
-		schema.NewColumn("id", 4, types.UUIDKind, true, `""`, true, `""`, schema.NotNullConstraint{}),
-		schema.NewColumn("first", 1, types.StringKind, false, "default_str", false, ""),
-		schema.NewColumn("last", 2, types.StringKind, false, "", false, "comment_str", schema.NotNullConstraint{}),
-		schema.NewColumn("age", 3, types.UintKind, false, "", false, ""),
+		schema.NewColumn("id", 4, types.UUIDKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("first", 1, types.StringKind, false),
+		schema.NewColumn("last", 2, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("age", 3, types.UintKind, false),
 	}
 
 	colColl, _ := schema.NewColCollection(columns...)

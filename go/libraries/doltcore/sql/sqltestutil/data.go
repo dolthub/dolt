@@ -87,33 +87,33 @@ var AppearancesTableName = "appearances"
 
 func createPeopleTestSchema() schema.Schema {
 	colColl, _ := schema.NewColCollection(
-		schema.NewColumn("id", IdTag, types.IntKind, true, "", false, "", schema.NotNullConstraint{}),
-		schema.NewColumn("first_name", FirstNameTag, types.StringKind, false, "", false, "", schema.NotNullConstraint{}),
-		schema.NewColumn("last_name", LastNameTag, types.StringKind, false, "", false, "", schema.NotNullConstraint{}),
-		schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false, "", false, ""),
-		schema.NewColumn("age", AgeTag, types.IntKind, false, "", false, ""),
-		schema.NewColumn("rating", RatingTag, types.FloatKind, false, "", false, ""),
-		schema.NewColumn("uuid", UuidTag, types.UUIDKind, false, "", false, ""),
-		schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false, "", false, ""),
+		schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("first_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
+		schema.NewColumn("age", AgeTag, types.IntKind, false),
+		schema.NewColumn("rating", RatingTag, types.FloatKind, false),
+		schema.NewColumn("uuid", UuidTag, types.UUIDKind, false),
+		schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
 	)
 	return schema.SchemaFromCols(colColl)
 }
 
 func createEpisodesTestSchema() schema.Schema {
 	colColl, _ := schema.NewColCollection(
-		schema.NewColumn("id", EpisodeIdTag, types.IntKind, true, "", false, "", schema.NotNullConstraint{}),
-		schema.NewColumn("name", EpNameTag, types.StringKind, false, "", false, "", schema.NotNullConstraint{}),
+		schema.NewColumn("id", EpisodeIdTag, types.IntKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("name", EpNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 		newColumnWithTypeInfo("air_date", EpAirDateTag, typeinfo.DatetimeType, false),
-		schema.NewColumn("rating", EpRatingTag, types.FloatKind, false, "", false, ""),
+		schema.NewColumn("rating", EpRatingTag, types.FloatKind, false),
 	)
 	return schema.SchemaFromCols(colColl)
 }
 
 func createAppearancesTestSchema() schema.Schema {
 	colColl, _ := schema.NewColCollection(
-		schema.NewColumn("character_id", AppCharacterTag, types.IntKind, true, "", false, "", schema.NotNullConstraint{}),
-		schema.NewColumn("episode_id", AppEpTag, types.IntKind, true, "", false, "", schema.NotNullConstraint{}),
-		schema.NewColumn("comments", AppCommentsTag, types.StringKind, false, "", false, ""),
+		schema.NewColumn("character_id", AppCharacterTag, types.IntKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("episode_id", AppEpTag, types.IntKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("comments", AppCommentsTag, types.StringKind, false),
 	)
 	return schema.SchemaFromCols(colColl)
 }
@@ -366,23 +366,23 @@ func CreateEmptyTestDatabase(dEnv *env.DoltEnv, t *testing.T) {
 	dtestutils.CreateTestTable(t, dEnv, AppearancesTableName, AppearancesTestSchema)
 }
 
-var idColTag0TypeUUID = schema.NewColumn("id", 0, types.IntKind, true, "", false, "")
-var firstColTag1TypeStr = schema.NewColumn("first_name", 1, types.StringKind, false, "", false, "")
-var lastColTag2TypeStr = schema.NewColumn("last_name", 2, types.StringKind, false, "", false, "")
-var addrColTag3TypeStr = schema.NewColumn("addr", 3, types.StringKind, false, "", false, "")
-var ageColTag4TypeInt = schema.NewColumn("age", 4, types.IntKind, false, "", false, "")
-var ageColTag5TypeUint = schema.NewColumn("age", 5, types.UintKind, false, "", false, "")
+var idColTag0TypeUUID = schema.NewColumn("id", 0, types.IntKind, true)
+var firstColTag1TypeStr = schema.NewColumn("first_name", 1, types.StringKind, false)
+var lastColTag2TypeStr = schema.NewColumn("last_name", 2, types.StringKind, false)
+var addrColTag3TypeStr = schema.NewColumn("addr", 3, types.StringKind, false)
+var ageColTag4TypeInt = schema.NewColumn("age", 4, types.IntKind, false)
+var ageColTag5TypeUint = schema.NewColumn("age", 5, types.UintKind, false)
 
 var DiffSchema = dtestutils.MustSchema(
-	schema.NewColumn("to_id", 0, types.IntKind, false, "", false, ""),
-	schema.NewColumn("to_first_name", 1, types.StringKind, false, "", false, ""),
-	schema.NewColumn("to_last_name", 2, types.StringKind, false, "", false, ""),
-	schema.NewColumn("to_addr", 3, types.StringKind, false, "", false, ""),
-	schema.NewColumn("from_id", 7, types.IntKind, false, "", false, ""),
-	schema.NewColumn("from_first_name", 8, types.StringKind, false, "", false, ""),
-	schema.NewColumn("from_last_name", 9, types.StringKind, false, "", false, ""),
-	schema.NewColumn("from_addr", 10, types.StringKind, false, "", false, ""),
-	schema.NewColumn("diff_type", 14, types.StringKind, false, "", false, ""),
+	schema.NewColumn("to_id", 0, types.IntKind, false),
+	schema.NewColumn("to_first_name", 1, types.StringKind, false),
+	schema.NewColumn("to_last_name", 2, types.StringKind, false),
+	schema.NewColumn("to_addr", 3, types.StringKind, false),
+	schema.NewColumn("from_id", 7, types.IntKind, false),
+	schema.NewColumn("from_first_name", 8, types.StringKind, false),
+	schema.NewColumn("from_last_name", 9, types.StringKind, false),
+	schema.NewColumn("from_addr", 10, types.StringKind, false),
+	schema.NewColumn("diff_type", 14, types.StringKind, false),
 )
 
 const TableWithHistoryName = "test_table"

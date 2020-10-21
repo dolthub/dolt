@@ -32,28 +32,28 @@ func TestFmtCol(t *testing.T) {
 		Expected  string
 	}{
 		{
-			schema.NewColumn("first", 0, types.StringKind, true, "", false, ""),
+			schema.NewColumn("first", 0, types.StringKind, true),
 			0,
 			0,
 			0,
 			"`first` LONGTEXT",
 		},
 		{
-			schema.NewColumn("last", 123, types.IntKind, true, "", false, ""),
+			schema.NewColumn("last", 123, types.IntKind, true),
 			2,
 			0,
 			0,
 			"  `last` BIGINT",
 		},
 		{
-			schema.NewColumn("title", 2, types.UintKind, true, "", false, ""),
+			schema.NewColumn("title", 2, types.UintKind, true),
 			0,
 			10,
 			0,
 			"   `title` BIGINT UNSIGNED",
 		},
 		{
-			schema.NewColumn("aoeui", 52, types.UintKind, true, "", false, ""),
+			schema.NewColumn("aoeui", 52, types.UintKind, true),
 			0,
 			10,
 			15,

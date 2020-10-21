@@ -91,8 +91,8 @@ func NewDiffTable(ctx *sql.Context, db Database, tblName string) (sql.Table, err
 		return nil, err
 	}
 
-	_ = ss.AddColumn(schema.NewColumn("commit", doltdb.DiffCommitTag, types.StringKind, false, "", false, ""))
-	_ = ss.AddColumn(schema.NewColumn("commit_date", doltdb.DiffCommitDateTag, types.TimestampKind, false, "", false, ""))
+	_ = ss.AddColumn(schema.NewColumn("commit", doltdb.DiffCommitTag, types.StringKind, false))
+	_ = ss.AddColumn(schema.NewColumn("commit_date", doltdb.DiffCommitDateTag, types.TimestampKind, false))
 
 	sch, err := ss.GenerateSchema()
 
@@ -406,10 +406,10 @@ func selectFuncForFilters(nbf *types.NomsBinFormat, filters []sql.Expression) (p
 	)
 
 	colColl, err := schema.NewColCollection(
-		schema.NewColumn(toCommit, toCommitTag, types.StringKind, false, "", false, ""),
-		schema.NewColumn(fromCommit, fromCommitTag, types.StringKind, false, "", false, ""),
-		schema.NewColumn(toCommitDate, toCommitDateTag, types.TimestampKind, false, "", false, ""),
-		schema.NewColumn(fromCommitDate, fromCommitDateTag, types.TimestampKind, false, "", false, ""),
+		schema.NewColumn(toCommit, toCommitTag, types.StringKind, false),
+		schema.NewColumn(fromCommit, fromCommitTag, types.StringKind, false),
+		schema.NewColumn(toCommitDate, toCommitDateTag, types.TimestampKind, false),
+		schema.NewColumn(fromCommitDate, fromCommitDateTag, types.TimestampKind, false),
 	)
 
 	if err != nil {

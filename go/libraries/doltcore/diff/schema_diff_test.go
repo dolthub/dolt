@@ -24,21 +24,21 @@ import (
 
 func TestDiffSchemas(t *testing.T) {
 	oldCols := []schema.Column{
-		schema.NewColumn("unchanged", 0, types.StringKind, true, "", false, "", schema.NotNullConstraint{}),
-		schema.NewColumn("dropped", 1, types.StringKind, true, "", false, ""),
-		schema.NewColumn("renamed", 2, types.StringKind, false, "", false, ""),
-		schema.NewColumn("type_changed", 3, types.StringKind, false, "", false, ""),
-		schema.NewColumn("moved_to_pk", 4, types.StringKind, false, "", false, ""),
-		schema.NewColumn("contraint_added", 5, types.StringKind, false, "", false, ""),
+		schema.NewColumn("unchanged", 0, types.StringKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("dropped", 1, types.StringKind, true),
+		schema.NewColumn("renamed", 2, types.StringKind, false),
+		schema.NewColumn("type_changed", 3, types.StringKind, false),
+		schema.NewColumn("moved_to_pk", 4, types.StringKind, false),
+		schema.NewColumn("contraint_added", 5, types.StringKind, false),
 	}
 
 	newCols := []schema.Column{
-		schema.NewColumn("unchanged", 0, types.StringKind, true, "", false, "", schema.NotNullConstraint{}),
-		schema.NewColumn("renamed_new", 2, types.StringKind, false, "", false, ""),
-		schema.NewColumn("type_changed", 3, types.IntKind, false, "", false, ""),
-		schema.NewColumn("moved_to_pk", 4, types.StringKind, true, "", false, ""),
-		schema.NewColumn("contraint_added", 5, types.StringKind, false, "", false, "", schema.NotNullConstraint{}),
-		schema.NewColumn("added", 6, types.StringKind, false, "", false, ""),
+		schema.NewColumn("unchanged", 0, types.StringKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("renamed_new", 2, types.StringKind, false),
+		schema.NewColumn("type_changed", 3, types.IntKind, false),
+		schema.NewColumn("moved_to_pk", 4, types.StringKind, true),
+		schema.NewColumn("contraint_added", 5, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("added", 6, types.StringKind, false),
 	}
 
 	oldColColl, _ := schema.NewColCollection(oldCols...)

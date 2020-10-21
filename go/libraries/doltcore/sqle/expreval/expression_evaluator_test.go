@@ -204,9 +204,9 @@ func TestNewAndAndOrFuncs(t *testing.T) {
 
 func TestNewComparisonFunc(t *testing.T) {
 	colColl, _ := schema.NewColCollection(
-		schema.NewColumn("col0", 0, types.IntKind, true, "", false, ""),
-		schema.NewColumn("col1", 1, types.IntKind, false, "", false, ""),
-		schema.NewColumn("date", 2, types.TimestampKind, false, "", false, ""),
+		schema.NewColumn("col0", 0, types.IntKind, true),
+		schema.NewColumn("col1", 1, types.IntKind, false),
+		schema.NewColumn("date", 2, types.TimestampKind, false),
 	)
 	testSch := schema.SchemaFromCols(colColl)
 

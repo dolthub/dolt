@@ -40,10 +40,10 @@ const (
 )
 
 var colColl, _ = schema.NewColCollection(
-	schema.NewColumn(idCol, idColTag, types.UUIDKind, true, "", false, "", schema.NotNullConstraint{}),
-	schema.NewColumn(nameCol, nameColTag, types.StringKind, false, "", false, ""),
-	schema.NewColumn(ageCol, ageColTag, types.UintKind, false, "", false, ""),
-	schema.NewColumn(titleCol, titleColTag, types.StringKind, false, "", false, ""),
+	schema.NewColumn(idCol, idColTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+	schema.NewColumn(nameCol, nameColTag, types.StringKind, false),
+	schema.NewColumn(ageCol, ageColTag, types.UintKind, false),
+	schema.NewColumn(titleCol, titleColTag, types.StringKind, false),
 )
 var sch = schema.SchemaFromCols(colColl)
 
