@@ -43,8 +43,9 @@ type IndexCollection interface {
 	GetByName(indexName string) Index
 	// GetByName returns the index with a matching case-insensitive name, the bool return value indicates if a match was found.
 	GetByNameCaseInsensitive(indexName string) (Index, bool)
+	// GetIndexByColumnNames returns whether the collection contains an index that has this exact collection and ordering of columns.
+	GetIndexByColumnNames(cols ...string) (Index, bool)
 	// GetIndexByTags returns whether the collection contains an index that has this exact collection and ordering of columns.
-	// Any hidden indexes are ignored.
 	GetIndexByTags(tags ...uint64) (Index, bool)
 	// IndexesWithColumn returns all indexes that index the given column.
 	IndexesWithColumn(columnName string) []Index
@@ -64,8 +65,9 @@ type IndexCollection interface {
 }
 
 type IndexProperties struct {
-	IsUnique bool
-	Comment  string
+	IsUnique      bool
+	IsUserDefined bool
+	Comment       string
 }
 
 type indexCollectionImpl struct {
@@ -138,12 +140,13 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 		return nil, fmt.Errorf("cannot create a duplicate index on this table")
 	}
 	index := &indexImpl{
-		indexColl: ixc,
-		name:      indexName,
-		tags:      tags,
-		allTags:   combineAllTags(tags, ixc.pks),
-		isUnique:  props.IsUnique,
-		comment:   props.Comment,
+		indexColl:     ixc,
+		name:          indexName,
+		tags:          tags,
+		allTags:       combineAllTags(tags, ixc.pks),
+		isUnique:      props.IsUnique,
+		isUserDefined: props.IsUserDefined,
+		comment:       props.Comment,
 	}
 	ixc.indexes[indexName] = index
 	for _, tag := range tags {
@@ -154,12 +157,13 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 
 func (ixc *indexCollectionImpl) UnsafeAddIndexByColTags(indexName string, tags []uint64, props IndexProperties) (Index, error) {
 	index := &indexImpl{
-		indexColl: ixc,
-		name:      indexName,
-		tags:      tags,
-		allTags:   combineAllTags(tags, ixc.pks),
-		isUnique:  props.IsUnique,
-		comment:   props.Comment,
+		indexColl:     ixc,
+		name:          indexName,
+		tags:          tags,
+		allTags:       combineAllTags(tags, ixc.pks),
+		isUnique:      props.IsUnique,
+		isUserDefined: props.IsUserDefined,
+		comment:       props.Comment,
 	}
 	ixc.indexes[indexName] = index
 	for _, tag := range tags {
@@ -234,6 +238,18 @@ func (ixc *indexCollectionImpl) hasIndexOnColumns(cols ...string) bool {
 	return ixc.hasIndexOnTags(tags...)
 }
 
+func (ixc *indexCollectionImpl) GetIndexByColumnNames(cols ...string) (Index, bool) {
+	tags := make([]uint64, len(cols))
+	for i, col := range cols {
+		col, ok := ixc.colColl.NameToCol[col]
+		if !ok {
+			return nil, false
+		}
+		tags[i] = col.Tag
+	}
+	return ixc.GetIndexByTags(tags...)
+}
+
 func (ixc *indexCollectionImpl) GetIndexByTags(tags ...uint64) (Index, bool) {
 	idx := ixc.containsColumnTagCollection(tags...)
 	if idx == nil {
@@ -281,11 +297,12 @@ func (ixc *indexCollectionImpl) Merge(indexes ...Index) {
 	for _, index := range indexes {
 		if tags, ok := ixc.columnNamesToTags(index.ColumnNames()); ok && !ixc.Contains(index.Name()) {
 			newIndex := &indexImpl{
-				name:      index.Name(),
-				tags:      tags,
-				indexColl: ixc,
-				isUnique:  index.IsUnique(),
-				comment:   index.Comment(),
+				name:          index.Name(),
+				tags:          tags,
+				indexColl:     ixc,
+				isUnique:      index.IsUnique(),
+				isUserDefined: index.IsUserDefined(),
+				comment:       index.Comment(),
 			}
 			ixc.AddIndex(newIndex)
 		}

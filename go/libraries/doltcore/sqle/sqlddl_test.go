@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -1242,6 +1243,112 @@ func TestParseCreateTableStatement(t *testing.T) {
 				assert.Equal(t, tt.expectedTable, tblName)
 			}
 		})
+	}
+}
+
+func TestIndexOverwrite(t *testing.T) {
+	ctx := context.Background()
+	dEnv := dtestutils.CreateTestEnv()
+	root, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		panic(err)
+	}
+	root, err = ExecuteSql(dEnv, root, `
+CREATE TABLE parent (
+  pk bigint PRIMARY KEY,
+  v1 bigint,
+  INDEX (v1)
+);
+CREATE TABLE child (
+  pk varchar(10) PRIMARY KEY,
+  parent_value bigint,
+  CONSTRAINT fk_child FOREIGN KEY (parent_value)
+    REFERENCES parent(v1)
+);
+CREATE TABLE child_idx (
+  pk varchar(10) PRIMARY KEY,
+  parent_value bigint,
+  INDEX (parent_value),
+  CONSTRAINT fk_child_idx FOREIGN KEY (parent_value)
+    REFERENCES parent(v1)
+);
+CREATE TABLE child_unq (
+  pk varchar(10) PRIMARY KEY,
+  parent_value bigint,
+  CONSTRAINT fk_child_unq FOREIGN KEY (parent_value)
+    REFERENCES parent(v1)
+);
+CREATE TABLE child_non_unq (
+  pk varchar(10) PRIMARY KEY,
+  parent_value bigint,
+  CONSTRAINT fk_child_non_unq FOREIGN KEY (parent_value)
+    REFERENCES parent(v1)
+);
+INSERT INTO parent VALUES (1, 1), (2, 2), (3, 3), (4, NULL), (5, 5), (6, 6), (7, 7);
+INSERT INTO child VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', 3), ('5', 5);
+INSERT INTO child_idx VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', 3), ('5', 5);
+INSERT INTO child_unq VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', NULL), ('5', 5);
+INSERT INTO child_non_unq VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', 3), ('5', 5);
+`)
+	// test index creation
+	require.NoError(t, err)
+	root, err = ExecuteSql(dEnv, root, "CREATE INDEX abc ON child (parent_value);")
+	require.NoError(t, err)
+	_, err = ExecuteSql(dEnv, root, "CREATE INDEX abc_idx ON child_idx (parent_value);")
+	if assert.Error(t, err) {
+		assert.Contains(t, err.Error(), "duplicate")
+	}
+	root, err = ExecuteSql(dEnv, root, "CREATE UNIQUE INDEX abc_unq ON child_unq (parent_value);")
+	require.NoError(t, err)
+	_, err = ExecuteSql(dEnv, root, "CREATE UNIQUE INDEX abc_non_unq ON child_non_unq (parent_value);")
+	if assert.Error(t, err) {
+		assert.Contains(t, err.Error(), "UNIQUE constraint violation")
+	}
+
+	// check foreign keys for updated index (or verify they weren't updated)
+	fkc, err := root.GetForeignKeyCollection(ctx)
+	require.NoError(t, err)
+	fkChild, ok := fkc.GetByNameCaseInsensitive("fk_child")
+	require.True(t, ok)
+	require.Equal(t, "abc", fkChild.TableIndex)
+	fkChildIdx, ok := fkc.GetByNameCaseInsensitive("fk_child_idx")
+	require.True(t, ok)
+	require.Equal(t, "parent_value", fkChildIdx.TableIndex)
+	fkChildUnq, ok := fkc.GetByNameCaseInsensitive("fk_child_unq")
+	require.True(t, ok)
+	require.Equal(t, "abc_unq", fkChildUnq.TableIndex)
+	fkChildNonUnq, ok := fkc.GetByNameCaseInsensitive("fk_child_non_unq")
+	require.True(t, ok)
+	require.Equal(t, "parent_value", fkChildNonUnq.TableIndex)
+
+	// insert tests against index
+	root, err = ExecuteSql(dEnv, root, "INSERT INTO child VALUES ('6', 5)")
+	require.NoError(t, err)
+	root, err = ExecuteSql(dEnv, root, "INSERT INTO child_idx VALUES ('6', 5)")
+	require.NoError(t, err)
+	_, err = ExecuteSql(dEnv, root, "INSERT INTO child_unq VALUES ('6', 5)")
+	if assert.Error(t, err) {
+		assert.Contains(t, err.(errhand.VerboseError).Verbose(), "UNIQUE constraint violation")
+	}
+	root, err = ExecuteSql(dEnv, root, "INSERT INTO child_non_unq VALUES ('6', 5)")
+	require.NoError(t, err)
+
+	// insert tests against foreign key
+	_, err = ExecuteSql(dEnv, root, "INSERT INTO child VALUES ('9', 9)")
+	if assert.Error(t, err) {
+		assert.Contains(t, err.Error(), "foreign key violation")
+	}
+	_, err = ExecuteSql(dEnv, root, "INSERT INTO child_idx VALUES ('9', 9)")
+	if assert.Error(t, err) {
+		assert.Contains(t, err.Error(), "foreign key violation")
+	}
+	_, err = ExecuteSql(dEnv, root, "INSERT INTO child_unq VALUES ('9', 9)")
+	if assert.Error(t, err) {
+		assert.Contains(t, err.Error(), "foreign key violation")
+	}
+	_, err = ExecuteSql(dEnv, root, "INSERT INTO child_non_unq VALUES ('9', 9)")
+	if assert.Error(t, err) {
+		assert.Contains(t, err.Error(), "foreign key violation")
 	}
 }
 

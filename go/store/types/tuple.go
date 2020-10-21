@@ -246,6 +246,34 @@ func (t Tuple) WalkValues(ctx context.Context, cb ValueCallback) error {
 	return nil
 }
 
+// PrefixEquals returns whether the given Tuple and calling Tuple have equivalent values up to the given count. Useful
+// for testing Tuple equality for partial keys. If the Tuples are not of the same length, and one Tuple's length is less
+// than the given count, then this returns false. If the Tuples are of the same length and they're both less than the
+// given count, then this function is equivalent to Equals.
+func (t Tuple) PrefixEquals(ctx context.Context, other Tuple, prefixCount uint64) (bool, error) {
+	tDec, tCount := t.decoderSkipToFields()
+	otherDec, otherCount := other.decoderSkipToFields()
+	if tCount == otherCount && tCount < prefixCount {
+		return t.Equals(other), nil
+	} else if tCount != otherCount && (tCount < prefixCount || otherCount < prefixCount) {
+		return false, nil
+	}
+	for i := uint64(0); i < prefixCount; i++ {
+		val, err := tDec.readValue(t.format())
+		if err != nil {
+			return false, err
+		}
+		otherVal, err := otherDec.readValue(t.format())
+		if err != nil {
+			return false, err
+		}
+		if !val.Equals(otherVal) {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
 func (t Tuple) typeOf() (*Type, error) {
 	dec, count := t.decoderSkipToFields()
 	ts := make(typeSlice, 0, count)
