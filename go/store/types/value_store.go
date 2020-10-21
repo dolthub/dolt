@@ -22,9 +22,9 @@
 package types
 
 import (
-	"container/list"
 	"context"
 	"errors"
+	"runtime"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
@@ -95,7 +95,7 @@ const (
 	defaultDecodedChunksSize = 1 << 25 // 32MB
 	defaultPendingPutMax     = 1 << 28 // 256MB
 
-	gcBuffSize = 1024
+	gcBuffSize = 16
 )
 
 // newTestValueStore creates a simple struct that satisfies ValueReadWriter
@@ -563,63 +563,70 @@ func (lvs *ValueStore) GC(ctx context.Context) error {
 		return err
 	}
 	if rootVal == nil {
-		return nil // empty root
+		// empty root
+		return nil
 	}
 
-	keepChunks := make(chan hash.Hash, gcBuffSize)
+	keepChunks := make(chan []hash.Hash, gcBuffSize)
 
-	eg, egCtx := errgroup.WithContext(ctx)
-	eg.Go(func() error { return collector.MarkAndSweepChunks(egCtx, root, keepChunks) })
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		return collector.MarkAndSweepChunks(ctx, root, keepChunks)
+	})
 
-	sendHash := func(h hash.Hash) error {
+	keepHashes := func(hs []hash.Hash) error {
 		select {
-		case keepChunks <- h:
+		case keepChunks <- hs:
 			return nil
-		case <-egCtx.Done():
-			return egCtx.Err()
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
+	const batchSize = 16384
+	batches := func(hs []hash.Hash) [][]hash.Hash {
+		// Return subslices of a copy, because the caller may
+		// mutate the parameter after the call.
+		copied := make([]hash.Hash, len(hs))
+		copy(copied, hs)
+		var res [][]hash.Hash
+		i := 0
+		for ; i+batchSize < len(copied); i += batchSize {
+			res = append(res, copied[i:i+batchSize])
+		}
+		if i < len(hs) {
+			res = append(res, copied[i:len(hs)])
+		}
+		return res
+	}
+
+	walker := newParallelRefWalker(ctx, lvs.nbf, runtime.GOMAXPROCS(0)-1)
 
 	eg.Go(func() error {
-		// send root chunk
-		err := sendHash(root)
-		if err != nil {
-			return err
-		}
-		hashQueue := list.New()
+		toVisit := []hash.Hash{root}
 		visited := hash.NewHashSet(root)
-		hashQueue.PushBack(root)
-		for hashQueue.Len() > 0 {
-			e := hashQueue.Front()
-			h := e.Value.(hash.Hash)
-			hashQueue.Remove(e)
-
-			val, err := lvs.ReadValue(egCtx, h)
-			if err != nil {
-				return err
-			}
-			if val == nil {
-				return errors.New("dangling reference found in chunk store")
-			}
-
-			err = val.WalkRefs(lvs.nbf, func(reachable Ref) error {
-				h := reachable.TargetHash()
-				if visited.Has(h) {
-					return nil
+		for len(toVisit) > 0 {
+			batches := batches(toVisit)
+			toVisit = toVisit[0:0]
+			for _, batch := range batches {
+				if err := keepHashes(batch); err != nil {
+					return err
 				}
-				err := sendHash(h)
+				vals, err := lvs.ReadManyValues(ctx, batch)
 				if err != nil {
 					return err
 				}
-				hashQueue.PushBack(h)
-				visited.Insert(h)
-				return nil
-			})
-			if err != nil {
-				return err
+				if len(vals) != len(batch) {
+					return errors.New("dangling reference found in chunk store")
+				}
+				hashes, err := walker.GetRefs(visited, vals)
+				if err != nil {
+					return err
+				}
+				toVisit = append(toVisit, hashes...)
 			}
 		}
 		close(keepChunks)
+		walker.Close()
 		return nil
 	})
 

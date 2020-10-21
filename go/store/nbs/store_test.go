@@ -254,7 +254,7 @@ func TestNBSCopyGC(t *testing.T) {
 	r, err := st.Root(ctx)
 	assert.NoError(t, err)
 
-	keepChan := make(chan hash.Hash, 16)
+	keepChan := make(chan []hash.Hash, 16)
 	var msErr error
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -263,7 +263,7 @@ func TestNBSCopyGC(t *testing.T) {
 		wg.Done()
 	}()
 	for h := range keepers {
-		keepChan <- h
+		keepChan <- []hash.Hash{h}
 	}
 	close(keepChan)
 	wg.Wait()

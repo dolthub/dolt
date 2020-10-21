@@ -97,7 +97,7 @@ type ChunkStoreGarbageCollector interface {
 	// and MarkAndSweepChunks returns, the chunk store will only have the
 	// chunks sent on |keepChunks| and will have removed all other content
 	// from the ChunkStore.
-	MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan hash.Hash) error
+	MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash) error
 }
 
 var ErrUnsupportedOperation = errors.New("operation not supported")
