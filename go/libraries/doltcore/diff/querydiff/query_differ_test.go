@@ -579,20 +579,13 @@ func TestEngineTestQueryDifferBefore(t *testing.T) {
 	// engineTestQueries are read-only, sharing a dEnv speeds up tests
 	dEnv := setupEngineTests(t)
 
-	inner(t, enginetest.QueryTest{
-		Query:    "SELECT * FROM mytable mt INNER JOIN othertable ot ON mt.i = ot.i2 AND mt.i > 2",
-		Expected: []sql.Row{
-			{int64(3), "third row", "first", int64(3)},
-		},
-	}, dEnv)
-
-	// for _, testSet := range engineQueryTests {
-	// 	for _, test := range testSet {
-	// 		t.Run(test.Query, func(t *testing.T) {
-	// 			inner(t, test, dEnv)
-	// 		})
-	// 	}
-	// }
+	for _, testSet := range engineQueryTests {
+		for _, test := range testSet {
+			t.Run(test.Query, func(t *testing.T) {
+				inner(t, test, dEnv)
+			})
+		}
+	}
 }
 
 func TestEngineTestQueryDifferAfter(t *testing.T) {
