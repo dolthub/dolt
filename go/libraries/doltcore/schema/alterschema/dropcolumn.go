@@ -20,10 +20,8 @@ import (
 	"fmt"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // DropColumn drops a column from a table, and removes its associated cell values
@@ -102,64 +100,15 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 
 	rd, err := tbl.GetRowData(ctx)
 
-	prunedRowData, err := dropColumnValuesForTag(ctx, tbl.Format(), newSch, rd, dropTag)
-
-	if err != nil {
-		return nil, err
-	}
-
 	indexData, err := tbl.GetIndexData(ctx)
 	if err != nil {
 		return nil, err
 	}
-	newTable, err := doltdb.NewTable(ctx, vrw, schemaVal, prunedRowData, &indexData)
+	newTable, err := doltdb.NewTable(ctx, vrw, schemaVal, rd, &indexData)
 
 	if err != nil {
 		return nil, err
 	}
 
 	return newTable, nil
-}
-
-func dropColumnValuesForTag(ctx context.Context, nbf *types.NomsBinFormat, newSch schema.Schema, rowData types.Map, dropTag uint64) (types.Map, error) {
-	re := rowData.Edit()
-
-	mi, err := rowData.BufferedIterator(ctx)
-
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	for {
-		k, v, err := mi.Next(ctx)
-
-		if k == nil || v == nil {
-			break
-		}
-
-		if err != nil {
-			return types.EmptyMap, err
-		}
-
-		// can't drop primary key columns, tag is in map value
-		tv, err := row.ParseTaggedValues(v.(types.Tuple))
-
-		if err != nil {
-			return types.EmptyMap, err
-		}
-
-		_, found := tv[dropTag]
-		if found {
-			delete(tv, dropTag)
-			re.Set(k, tv.NomsTupleForNonPKCols(nbf, newSch.GetNonPKCols()))
-		}
-	}
-
-	prunedRowData, err := re.Map(ctx)
-
-	if err != nil {
-		return types.EmptyMap, nil
-	}
-
-	return prunedRowData, nil
 }
