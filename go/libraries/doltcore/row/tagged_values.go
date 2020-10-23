@@ -199,3 +199,30 @@ func (tt TaggedValues) String() string {
 	str += "\n}"
 	return str
 }
+
+// CountCellDiffs returns the number of fields that are different between two
+// tuples and does not panic if tuples are different lengths.
+func CountCellDiffs(from, to types.Tuple) (uint64, error) {
+	changed := 0
+	f, err := ParseTaggedValues(from)
+	t, err := ParseTaggedValues(to)
+
+	if err != nil {
+		return 0, err
+	}
+
+	for i, v := range f {
+		ov, ok := t[i]
+		if !ok || !v.Equals(ov) {
+			changed++
+		}
+	}
+
+	for i := range t {
+		if f[i] == nil {
+			changed++
+		}
+	}
+
+	return uint64(changed), nil
+}
