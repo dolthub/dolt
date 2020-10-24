@@ -14,7 +14,9 @@
 
 package sqle
 
-import "github.com/dolthub/go-mysql-server/sql"
+import (
+	"github.com/dolthub/go-mysql-server/sql"
+)
 
 // IndexedDoltTable is a wrapper for a DoltTable and a doltIndexLookup. It implements the sql.Table interface like
 // DoltTable, but its RowIter function returns values that match the indexLookup, instead of all rows. It's returned by
@@ -53,4 +55,22 @@ func (idt *IndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, er
 
 func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
 	return idt.indexLookup.RowIter(ctx)
+}
+
+type WritableIndexedDoltTable struct {
+	*WritableDoltTable
+	indexLookup *doltIndexLookup
+}
+
+var _ sql.IndexedTable = (*WritableIndexedDoltTable)(nil)
+var _ sql.UpdatableTable = (*WritableIndexedDoltTable)(nil)
+var _ sql.DeletableTable = (*WritableIndexedDoltTable)(nil)
+var _ sql.ReplaceableTable = (*WritableIndexedDoltTable)(nil)
+
+func (t *WritableIndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
+	return newSinglePartitionIter(), nil
+}
+
+func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
+	return t.indexLookup.RowIter(ctx)
 }
