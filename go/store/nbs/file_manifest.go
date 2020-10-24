@@ -24,7 +24,6 @@ package nbs
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -47,6 +46,8 @@ const (
 
 	prefixLen = 5
 )
+
+var ErrUnreadableManifest = errors.New("could not read file manifest")
 
 type manifestParser func(r io.Reader) (manifestContents, error)
 type manifestWriter func(temp io.Writer, contents manifestContents) error
@@ -81,7 +82,7 @@ func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
 	}
 	if !ok {
 		// expected v4 or v5
-		return false, fmt.Errorf("could not read file manifest")
+		return false, ErrUnreadableManifest
 	}
 
 	check := func(upstream, contents manifestContents) error {
@@ -127,7 +128,7 @@ func getFileManifest(ctx context.Context, dir string) (manifest, error) {
 		return fm4, nil
 	}
 
-	return nil, fmt.Errorf("could not read file manifest")
+	return nil, ErrUnreadableManifest
 }
 
 // fileManifestV5 provides access to a NomsBlockStore manifest stored on disk in |dir|. The format
