@@ -49,6 +49,7 @@ class SysbenchFailureException(Exception):
 
 
 def main():
+    logger.setLevel(logging.INFO)
     args = get_args()
     test_list = args.tests.split(',')
     assert all(test in SUPPORTED_BENCHMARKS for test in test_list), 'Must provide list of supported tests'

@@ -19,7 +19,7 @@ fi
 
 script_dir=$(dirname "$0")
 absolute_script_dir=$(realpath "$script_dir")
-working_dir="$absolute_script_dir/working"
+working_dir="$absolute_script_dir/dolt-builds/working"
 echo "Ensuring $working_dir exists and is empty"
 rm -rf "$working_dir"
 mkdir "$working_dir"
@@ -58,39 +58,35 @@ function build_binary_at_committish() {
     obin="dolt"
     GOOS="$linux" GOARCH="$amd64" go build -o "$o/bin/$obin" "./cmd/dolt/"
   '
-  echo "Moving binary to temp out/bin/dolt to $script_dir/working/$commit-dolt"
-  mv "out/bin/dolt" "$absolute_script_dir/dolt-builds/working/$commit-dolt"
+  echo "Moving binary to temp out/bin/dolt to $working_dir/$commit-dolt"
+  mv "out/bin/dolt" "$working_dir/$commit-dolt"
+  echo "$working_dir/$commit-dolt"
 }
 
-# Set environment variables to be picked up by docker-compose
-SYSBENCH_TEST=$tests
-TEST_USERNAME=$username
+function run_sysbench() {
+  subdir=$1
+  env_vars_string=$2
+  cd "$subdir"
+  echo "Running docker-compose from $(pwd), with the following environment variables:"
+  echo "$env_vars_string"
+  docker-compose run $env_vars_string sysbench --build --rm --remove-orphans
+  docker-compose down --remove-orphans
+  cd ..
+}
+
+function get_commit() {
+
+}
 
 echo "Building binaries and benchmarking for $committish_list"
 for committish in $committish_list; do
-  DOLT_COMMITTISH=committish
-  build_binary_at_committish "$committish"
+  bin_committish="$(build_binary_at_committish "$committish" | tail -1)"
   cd "$absolute_script_dir"
-  if [ "$committish" != "current" ]; then
-    bin_committish="$committish-dolt"
-  else
-    cur_commit=$(git rev-parse HEAD)
-    if [[ $(git status --porcelain) ]]; then
-      bin_committish="$cur_commit-dirty-dolt"
-      committish="$cur_commit"
-    else
-      bin_committish="$cur_commit-dolt"
-      committish="$cur_commit"
-    fi
-  fi
-  echo "Built binary $bin_committish, moving to  dolt-buidls/dolt"
-  mv "dolt-builds/working/$bin_committish" "dolt-builds/dolt"
-
-  cd dolt
-  docker-compose up -e DOLT_COMMITTISH,SYSBENCH_TEST,TEST_USERNAME
-
+  echo "Built binary $bin_committish, copying to dolt-buidls/dolt for benchmarking"
+  cp "$bin_committish" "$working_dir/dolt"
+  run_sysbench dolt "-e DOLT_COMMITTISH=$committish -e SYSBENCH_TESTS=$tests -e TEST_USERNAME=$username"
 done
 
-echo "Running benchmarks for MySQL for comparison"
-cd mysql
-docker-compose run -e SYSBENCH_TEST,TEST_USERNAME
+echo "Benchmarking MySQL for comparison"
+run_sysbench mysql "-e SYSBENCH_TESTS=$tests -e TEST_USERNAME=$username"
+echo "All done!"
