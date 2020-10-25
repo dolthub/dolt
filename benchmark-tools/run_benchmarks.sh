@@ -74,8 +74,16 @@ function run_sysbench() {
   cd ..
 }
 
-function get_commit() {
-
+function get_commit_signature() {
+  if [ "$1" == "current" ]; then
+    if [[ $(git status --porcelain) ]]; then
+      echo "$(git rev-parse HEAD)-dirty"
+    else
+      git rev-parse HEAD
+    fi
+  else
+    echo "$1"
+  fi
 }
 
 echo "Building binaries and benchmarking for $committish_list"
@@ -84,7 +92,7 @@ for committish in $committish_list; do
   cd "$absolute_script_dir"
   echo "Built binary $bin_committish, copying to dolt-buidls/dolt for benchmarking"
   cp "$bin_committish" "$working_dir/dolt"
-  run_sysbench dolt "-e DOLT_COMMITTISH=$committish -e SYSBENCH_TESTS=$tests -e TEST_USERNAME=$username"
+  run_sysbench dolt "-e DOLT_COMMITTISH=$(get_commit_signature $committish | tail -1) -e SYSBENCH_TESTS=$tests -e TEST_USERNAME=$username"
 done
 
 echo "Benchmarking MySQL for comparison"
