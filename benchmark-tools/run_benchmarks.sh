@@ -4,7 +4,7 @@ set -o pipefail
 
 [ -n "$1" ] || (echo "Please supply a comma separated list of tests to be run"; exit 1)
 tests=$1
-[ -n "$1" ] || (echo "Please supply a username to associate with the benchmark"; exit 1)
+[ -n "$2" ] || (echo "Please supply a username to associate with the benchmark"; exit 1)
 username=$2
 committish_one=${3:-current}
 committish_two=${4:-current}
