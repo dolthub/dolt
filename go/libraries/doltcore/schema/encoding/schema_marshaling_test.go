@@ -191,7 +191,7 @@ func TestMirroredTypes(t *testing.T) {
 
 // testEncodedColumn is a mirror type of encodedColumn that helps ensure compatibility between Dolt versions
 //
-// If a field in encodedColumn is not options, it should be added WITHOUT the "omitempty" annotation here
+// If a field in encodedColumn is not optional, it should be added WITHOUT the "omitempty" annotation here
 // in order to guarantee that all fields in encodeColumn are always being written when encodedColumn is serialized.
 // See the comment above type encodeColumn.
 type testEncodedColumn struct {
