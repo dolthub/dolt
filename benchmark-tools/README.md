@@ -1,18 +1,19 @@
 ## Background
-This folder contains a toolkit for benchmarking Dolt SQL performance. [`sysbench`](https://github.com/akopytov/sysbench) is an industry standard tool for benchmarking database performance, particularly MySQL. This directory contains a set of tools for benchmarking Dolt using `sysbench` in a way that should make it convenient for Dolt contributors to measure the performance benefits their changes deliver.
+This folder contains a toolkit for benchmarking Dolt SQL performance. [`sysbench`](https://github.com/akopytov/sysbench) is an industry standard tool for benchmarking database performance, particularly MySQL. The goal is make it convenient for the Dolt team and open source contributors to measure the impact of changes.
 
 ## Architecture
 The basic goal of these tools is, given a commit, to:
-- run Dolt SQL server
-- connect to it using the [`sysbench` MySQL driver](https://github.com/akopytov/sysbench/tree/master/src/drivers/mysql)
-- execute the benchmarks specified
+- build Dolt at the specified commit
+- stand up container running Dolt SQL server
+- stand up container running [`sysbench` MySQL driver](https://github.com/akopytov/sysbench/tree/master/src/drivers/mysql) that connects to the Dolt SQL server 
+- execute the benchmarks specified in the `sysbench` container
 
 In order to to do this in a repeatable way we build Dolt at the specified commit inside a Docker container. We then launch a separate container, install `sysbench`, mount the binary we produced in the build step, and execute the specified benchmarks from inside that container.
 
 In the future we will want to provide the ability for users to execute these benchmarks on a wider set of infrastructure. As Dolt becomes more mature it will become increasingly necessary to have finer grained benchmarking. For now this should suffice as a tool for contributors to identify the efficacy of their changes.
 
 ## Components
-We briefly outline the components used. The main entry points are `run_benchmarks.sh` which takes care of building and running the benchmarks, and `push_output_to_dolthub.py`, which publishes benchmarking results to DoltHub. We also discuss `sysbench_scripts`, which is a way of exposing the `sysbench` scripting API.
+We briefly outline the components used. The main entry points are `run_benchmarks.sh` which takes care of building and running the benchmarks via `docker-compose`, and `push_output_to_dolthub.py`, which publishes benchmarking results to DoltHub. We also discuss `sysbench_scripts`, which is a way of exposing the `sysbench` scripting API.
 
 ### `run_benchmarks.sh`
 This is the top level entry point for these tools. Suppose we want to compare our local, potentially dirty, copy of Dolt to some commit, say commit `19f9e571d033374ceae2ad5c277b9cfe905cdd66`. We would then run the following:
@@ -36,7 +37,7 @@ Each one of these files will contain a line for each test we specified.
 ### Requirements
 To run this stack a few things are required:
 - a bash shell to execute `run_benchmarks.sh`
-- Docker: the binaries are built inside a container
+- Docker: the Dolt binaries are built in Docker, MySQL and Dolt are run in a container, as is `sysbench`
 - Python: if you want to upload results to DoltHub, we use Doltpy's tools for pushing data to DoltHub
 
 ### Uploading to DoltHub

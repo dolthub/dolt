@@ -2,9 +2,9 @@
 set -e
 set -o pipefail
 
-[ ! -z "$1" ] || (echo "Please supply a comma separated list of tests to be run"; exit 1)
+[ -n "$1" ] || (echo "Please supply a comma separated list of tests to be run"; exit 1)
 tests=$1
-[ ! -z "$1" ] || (echo "Please supply a username to associate with the benchmark"; exit 1)
+[ -n "$2" ] || (echo "Please supply a username to associate with the benchmark"; exit 1)
 username=$2
 committish_one=${3:-current}
 committish_two=${4:-current}
@@ -19,7 +19,7 @@ fi
 
 script_dir=$(dirname "$0")
 absolute_script_dir=$(realpath "$script_dir")
-working_dir="$absolute_script_dir/working"
+working_dir="$absolute_script_dir/dolt-builds/working"
 echo "Ensuring $working_dir exists and is empty"
 rm -rf "$working_dir"
 mkdir "$working_dir"
@@ -31,8 +31,8 @@ function build_binary_at_committish() {
   if [ "$build_committish" != "current" ]; then
     echo "$build_committish argument provided for 'commitish', cloning for fresh build"
     cd "$working_dir"
-    git clone git@github.com:dolthub/dolt.git && git fetch --all
-    cd "dolt/go"
+    git clone git@github.com:dolthub/dolt.git dolt-temp-checkout && git fetch --all
+    cd "dolt-temp-checkout/go"
     git checkout "$build_committish"
   else
     echo "$build_committish passed for committish arg, building from current repo"
@@ -58,43 +58,45 @@ function build_binary_at_committish() {
     obin="dolt"
     GOOS="$linux" GOARCH="$amd64" go build -o "$o/bin/$obin" "./cmd/dolt/"
   '
-  echo "Moving binary to temp out/bin/dolt to $script_dir/working/$commit-dolt"
-  mv "out/bin/dolt" "$absolute_script_dir/working/$commit-dolt"
+  echo "Moving binary to temp out/bin/dolt to $working_dir/$commit-dolt"
+  mv "out/bin/dolt" "$working_dir/$commit-dolt"
+  echo "$working_dir/$commit-dolt"
 }
 
+function run_sysbench() {
+  subdir=$1
+  env_vars_string=$2
+  cd "$subdir"
+  echo "Building Docker containers for sysbench and $subdir"
+  docker-compose build
+  echo "Running docker-compose from $(pwd), with the following environment variables:"
+  echo "$env_vars_string"
+  docker-compose run $env_vars_string sysbench --rm
+  docker-compose down --remove-orphans
+  cd ..
+}
+
+function get_commit_signature() {
+  if [ "$1" == "current" ]; then
+    if [[ $(git status --porcelain) ]]; then
+      echo "$(git rev-parse HEAD)-dirty"
+    else
+      git rev-parse HEAD
+    fi
+  else
+    echo "$1"
+  fi
+}
 
 echo "Building binaries and benchmarking for $committish_list"
 for committish in $committish_list; do
-  build_binary_at_committish "$committish"
+  bin_committish="$(build_binary_at_committish "$committish" | tail -1)"
   cd "$absolute_script_dir"
-  if [ "$committish" != "current" ]; then
-    bin_committish="$committish-dolt"
-  else
-    cur_commit=$(git rev-parse HEAD)
-    if [[ $(git status --porcelain) ]]; then
-      bin_committish="$cur_commit-dirty-dolt"
-      committish="$cur_commit"
-    else
-      bin_committish="$cur_commit-dolt"
-      committish="$cur_commit"
-    fi
-  fi
-  echo "Built binary $bin_committish, executing benchmarks"
-  docker run --rm -v `pwd`:/tools oscarbatori/dolt-sysbench /bin/bash -c '
-    set -e
-    set -o pipefail
-
-    ln -s /tools/working/'"$bin_committish"' /usr/bin/dolt
-    cd /tools
-
-    dolt config --add --global user.name benchmark
-    dolt config --add --global user.email benchmark
-
-    python3 \
-      sysbench_wrapper.py \
-      --committish='"$committish"' \
-      --tests='"$tests"' \
-      --username='"$username"'
-  '
+  echo "Built binary $bin_committish, copying to $working_dir/dolt for benchmarking"
+  cp "$bin_committish" "$working_dir/dolt"
+  run_sysbench dolt "-e DOLT_COMMITTISH=$(get_commit_signature $committish | tail -1) -e SYSBENCH_TESTS=$tests -e TEST_USERNAME=$username"
 done
 
+echo "Benchmarking MySQL for comparison"
+run_sysbench mysql "-e SYSBENCH_TESTS=$tests -e TEST_USERNAME=$username"
+echo "All done!"

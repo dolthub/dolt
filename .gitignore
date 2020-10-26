@@ -6,5 +6,6 @@ go.sum
 go.mod
 .DS_Store
 .sqlhistory
-benchmark-tools/working
+benchmark-tools/dolt-builds/dolt
+benchmark-tools/dolt-builds/working
 benchmark-tools/output

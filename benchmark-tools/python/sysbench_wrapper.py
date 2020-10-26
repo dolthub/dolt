@@ -3,13 +3,10 @@ import getpass
 import logging
 import os
 import platform
-import tempfile
 from datetime import datetime
 from subprocess import Popen, PIPE
-from typing import List, Tuple
-from doltpy.core import Dolt
+from typing import List, Optional
 import csv
-
 
 logger = logging.getLogger(__name__)
 
@@ -50,30 +47,43 @@ class SysbenchFailureException(Exception):
         return '{} failed to {} with message:\n'.format(self.test, self.stage, self.message)
 
 
-def setup() -> Dolt:
-    # Setup a test repository and start the server
-    logger.info('Setting up test repo for benchmarking')
-    test_repo = init_empty_test_repo()
-    logger.info('Test repo directory {}, starting Dolt SQL server'.format(test_repo.repo_dir()))
-    test_repo.sql_server()
-    return test_repo
+def main():
+    logger.setLevel(logging.INFO)
+    args = get_args()
+    test_list = args.tests.split(',')
+    assert all(test in SUPPORTED_BENCHMARKS for test in test_list), 'Must provide list of supported tests'
 
-
-def init_empty_test_repo() -> Dolt:
-    temp_dir = tempfile.mkdtemp()
-    repo_path, repo_data_dir = get_repo_path_tmp_path(temp_dir)
-    assert not os.path.exists(repo_data_dir)
-    return Dolt.init(repo_path)
-
-
-def get_repo_path_tmp_path(path: str, subpath: str = None) -> Tuple[str, str]:
-    if subpath:
-        return os.path.join(path, subpath), os.path.join(path, subpath, '.dolt')
+    if args.committish:
+        logger.info('Committish provided, benchmarking Dolt')
+        run_dolt_benchmarks(args.db_host, args.committish, args.username, test_list)
     else:
-        return path, os.path.join(path, '.dolt')
+        logger.info('No committish provided, benchmarking MySQL')
+        run_mysql_benchmarks(args.db_host, args.username, test_list)
 
 
-def test_loop(test_list: List[str], test_repo) -> List[dict]:
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--db-host', help='The host for the database we will connect to')
+    parser.add_argument('--committish', help='Commit used to build Dolt bianry being tested')
+    parser.add_argument('--tests', help='List of benchmarks', type=str, required=True)
+    parser.add_argument('--username', type=str, required=False, default=getpass.getuser())
+    parser.add_argument('--note', type=str, required=False, default=None)
+    return parser.parse_args()
+
+
+def run_dolt_benchmarks(test_db_host: str, committish: str, username: str, test_list: List[str]):
+    logger.info('Executing the following tests in sysbench against Dolt: {}'.format(test_list))
+    results = test_loop(test_db_host, test_list, 'test')
+    write_output_file('dolt', committish, username, results)
+
+
+def run_mysql_benchmarks(test_db_host: str, username: str, test_list: List[str]):
+    logger.info('Executing the following tests in sysbench against MySQL: {}'.format(test_list))
+    results = test_loop(test_db_host, test_list, 'test')
+    write_output_file('mysql', None, username, results)
+
+
+def test_loop(test_db_host: str, test_list: List[str], test_db: str) -> List[dict]:
     """
     This is the main loop for running the tests and collecting the output
     :param test_list:
@@ -82,7 +92,7 @@ def test_loop(test_list: List[str], test_repo) -> List[dict]:
     result = []
     for test in test_list:
         try:
-            test_output = run_test(test_repo, test)
+            test_output = run_test(test_db_host, test_db, test)
             cur_test_res = parse_output(test_output)
             cur_test_res['test_name'] = test
             result.append(cur_test_res)
@@ -96,19 +106,15 @@ def test_loop(test_list: List[str], test_repo) -> List[dict]:
     return result
 
 
-def run_test(test_repo: Dolt, test: str) -> str:
-    # ensure table is removed
-    if TEST_TABLE in [t.name for t in test_repo.ls()]:
-        test_repo.table_rm(TEST_TABLE)
-
+def run_test(test_db_host: str, test_db: str, test: str) -> str:
     sysbench_args = [
         'sysbench',
         test,
         '--table-size=1000000',
         '--db-driver=mysql',
-        '--mysql-db={}'.format(test_repo.repo_name),
+        '--mysql-db={}'.format(test_db),
         '--mysql-user=root',
-        '--mysql-host=127.0.0.1',
+        '--mysql-host={}'.format(test_db_host),
     ]
 
     # Prepare the test
@@ -161,23 +167,14 @@ def get_os_detail():
     return '{}-{}-{}'.format(os.name, platform.system(), platform.release())
 
 
-def get_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--committish', help='Commit used to build Dolt bianry being tested', required=True)
-    parser.add_argument('--tests', help='List of benchmarks', type=str, required=True)
-    parser.add_argument('--username', type=str, required=False, default=getpass.getuser())
-    parser.add_argument('--note', type=str, required=False, default=None)
-    return parser.parse_args()
-
-
-def write_output_file(committish: str, username: str, output: List[dict]):
-    if not os.path.exists('output'):
-        os.mkdir('output')
-    output_file = 'output/{}.csv'.format(committish)
+def write_output_file(database_name: str, committish: Optional[str], username: str, output: List[dict]):
+    if not os.path.exists('/output'):
+        os.mkdir('/output')
+    output_file = '/output/{}.csv'.format(committish if committish else database_name)
     logger.info('Writing output file to {}'.format(output_file))
     with open(output_file, 'w', newline='') as csvfile:
         metadata = {
-            'database': 'dolt',
+            'database': database_name,
             'username': username,
             'committish': committish,
             'timestamp': datetime.now(),
@@ -189,16 +186,6 @@ def write_output_file(committish: str, username: str, output: List[dict]):
         for row in output:
             to_write = {**row, **metadata}
             writer.writerow(to_write)
-
-
-def main():
-    args = get_args()
-    test_list = args.tests.split(',')
-    assert all(test in SUPPORTED_BENCHMARKS for test in test_list), 'Must provide list of supported tests'
-    test_db = setup()
-    logger.info('Executing the following tests in sysbench: {}'.format(test_list))
-    results = test_loop(test_list, test_db)
-    write_output_file(args.committish, args.username, results)
 
 
 if __name__ == '__main__':
