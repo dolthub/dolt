@@ -3,7 +3,7 @@ services:
   db:
     image: mysql:5.7
     environment:
-      - MYSQL_ALLOW_EMPTY_PASSWORD="no"
+      - MYSQL_ALLOW_EMPTY_PASSWORD="yes"
       - MYSQL_DATABASE=test
       - MYSQL_USER=root
   sysbench:
