@@ -196,6 +196,7 @@ func CheckEnvIsValid(dEnv *env.DoltEnv) bool {
 		PrintErrln(dEnv.DBLoadError.Error())
 		if dEnv.DBLoadError == nbs.ErrUnreadableManifest {
 			PrintErrln("\tyou might need to upgrade your Dolt client")
+			PrintErrln("\tvisit https://github.com/dolthub/dolt/releases/latest/")
 		}
 		return false
 	}

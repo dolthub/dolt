@@ -49,7 +49,8 @@ type ErrClientOutOfDate struct {
 }
 
 func (e ErrClientOutOfDate) Error() string {
-	return fmt.Sprintf("client (version: %d) is out of date and must upgrade to read this repo (version: %d).", e.clientVer, e.repoVer)
+	return fmt.Sprintf(`client (version: %d) is out of date and must upgrade to read this repo (version: %d).
+	visit https://github.com/dolthub/dolt/releases/latest/`, e.clientVer, e.repoVer)
 }
 
 func IsInvalidFormatErr(err error) bool {
