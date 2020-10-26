@@ -20,7 +20,7 @@ def write_results_to_dolt(results_dir: str, remote: str, branch: str):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--results-directory', )
+    parser.add_argument('--results-directory', type=str, required=True)
     parser.add_argument('--remote-results-db', type=str, required=True)
     parser.add_argument('--remote-results-db-branch', type=str, required=False, default='master')
     args = parser.parse_args()

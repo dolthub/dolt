@@ -1,7 +1,7 @@
 version: "3.8"
 services:
   db:
-    image: mysql:latest
+    image: mysql:5.7
     environment:
       - MYSQL_ALLOW_EMPTY_PASSWORD="no"
       - MYSQL_DATABASE=test
