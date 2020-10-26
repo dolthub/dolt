@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"math/rand"
 	"strings"
 	"time"
@@ -46,7 +45,7 @@ const (
 	MasterBranch     = "master"
 	CommitStructName = "Commit"
 
-	FeatureVersion featureVersion = math.MinInt64
+	FeatureVersion featureVersion = 0
 
 	defaultChunksPerTF = 256 * 1024
 )
