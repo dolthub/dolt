@@ -28,7 +28,10 @@ import (
 	"github.com/dolthub/go-mysql-server/auth"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/information_schema"
+	"github.com/dolthub/go-mysql-server/sql/parse"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/dolthub/vitess/go/vt/vterrors"
 	"github.com/fatih/color"
@@ -915,7 +918,12 @@ func processBatchQuery(ctx *sql.Context, query string, se *sqlEngine) error {
 		return fmt.Errorf("Error parsing SQL: %v.", err.Error())
 	}
 
-	if canProcessAsBatchInsert(sqlStatement) {
+	canBatch, err := canProcessAsBatchInsert(ctx, sqlStatement, se, query)
+	if err != nil {
+		cli.PrintErrln(err)
+		return err
+	}
+	if canBatch {
 		err = processBatchInsert(ctx, se, query, sqlStatement)
 		if err != nil {
 			return err
@@ -1003,18 +1011,54 @@ func processBatchInsert(ctx *sql.Context, se *sqlEngine, query string, sqlStatem
 }
 
 // canProcessBatchInsert returns whether the given statement can be processed as a batch insert. Only simple inserts
-// (inserting a list of values) can be processed in this way. Other kinds of insert (notably INSERT INTO SELECT AS) need
-// a flushed root and can't benefit from batch optimizations.
-func canProcessAsBatchInsert(sqlStatement sqlparser.Statement) bool {
+// (inserting a list of values) can be processed in this way. Other kinds of insert (notably INSERT INTO SELECT AS and
+// AUTO_INCREMENT) need a flushed root and can't benefit from batch optimizations.
+func canProcessAsBatchInsert(ctx *sql.Context, sqlStatement sqlparser.Statement, se *sqlEngine, query string) (bool, error) {
 	switch s := sqlStatement.(type) {
 	case *sqlparser.Insert:
-		if _, ok := s.Rows.(sqlparser.Values); ok {
-			return true
+		if _, ok := s.Rows.(sqlparser.Values); !ok {
+			return false, nil
 		}
-		return false
+		hasAutoInc, err := insertsIntoAutoIncrementCol(ctx, se, query)
+		if err != nil {
+			return false, err
+		}
+		if hasAutoInc {
+			return false, nil
+		}
+		return true, nil
 	default:
-		return false
+		return false, nil
 	}
+}
+
+// parses the query to check if it inserts into a table with AUTO_INCREMENT
+func insertsIntoAutoIncrementCol(ctx *sql.Context, se *sqlEngine, query string) (bool, error) {
+	p, err := parse.Parse(ctx, query)
+	if err != nil {
+		return false, err
+	}
+
+	if _, ok := p.(*plan.InsertInto); !ok {
+		return false, nil
+	}
+
+	a, err := se.engine.Analyzer.Analyze(ctx, p, nil)
+	if err != nil {
+		return false, err
+	}
+
+	isAutoInc := false
+	_, err = plan.TransformExpressionsUp(a, func(exp sql.Expression) (sql.Expression, error) {
+		if _, ok := exp.(*expression.AutoIncrement); ok {
+			isAutoInc = true
+		}
+		return exp, nil
+	})
+	if err != nil {
+		return false, err
+	}
+	return isAutoInc, nil
 }
 
 func updateBatchInsertOutput() {

@@ -129,14 +129,15 @@ func FromDoltSchema(tableName string, sch schema.Schema) (sql.Schema, error) {
 		sqlType := col.TypeInfo.ToSqlType()
 		cols[i] = &sqle.ColumnWithRawDefault{
 			SqlColumn: &sql.Column{
-				Name:       col.Name,
-				Type:       sqlType,
-				Default:    nil,
-				Nullable:   col.IsNullable(),
-				Source:     tableName,
-				PrimaryKey: col.IsPartOfPK,
-				Comment:    col.Comment,
-				Extra:      fmt.Sprintf("tag:%d", tag),
+				Name:          col.Name,
+				Type:          sqlType,
+				Default:       nil,
+				Nullable:      col.IsNullable(),
+				Source:        tableName,
+				PrimaryKey:    col.IsPartOfPK,
+				AutoIncrement: col.AutoIncrement,
+				Comment:       col.Comment,
+				Extra:         fmt.Sprintf("tag:%d", tag),
 			},
 			Default: col.Default,
 		}
@@ -205,5 +206,5 @@ func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 		return schema.Column{}, err
 	}
 
-	return schema.NewColumnWithTypeInfo(col.Name, tag, typeInfo, col.PrimaryKey, col.Default.String(), col.Comment, constraints...)
+	return schema.NewColumnWithTypeInfo(col.Name, tag, typeInfo, col.PrimaryKey, col.Default.String(), col.AutoIncrement, col.Comment, constraints...)
 }

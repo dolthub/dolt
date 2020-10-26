@@ -134,7 +134,7 @@ func schemaNewColumn(t *testing.T, name string, tag uint64, sqlType sql.Type, pa
 func schemaNewColumnWDefVal(t *testing.T, name string, tag uint64, sqlType sql.Type, partOfPK bool, defaultVal string, constraints ...schema.ColConstraint) schema.Column {
 	typeInfo, err := typeinfo.FromSqlType(sqlType)
 	require.NoError(t, err)
-	col, err := schema.NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, defaultVal, "", constraints...)
+	col, err := schema.NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, defaultVal, false, "", constraints...)
 	require.NoError(t, err)
 	return col
 }
