@@ -9,6 +9,14 @@ teardown() {
     teardown_common
 }
 
+@test "dolt version --feature" {
+    # bump this test with feature version bumps
+    run dolt version --feature
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "dolt version" ]] || false
+    [[ "$output" =~ "the current head does not have a feature version" ]] || false
+}
+
 @test "no changes" {
     dolt status
     run dolt status

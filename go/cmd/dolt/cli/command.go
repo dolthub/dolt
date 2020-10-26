@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/nbs"
 )
 
 func isHelp(str string) bool {
@@ -193,6 +194,10 @@ func CheckEnvIsValid(dEnv *env.DoltEnv) bool {
 	} else if dEnv.DBLoadError != nil {
 		PrintErrln(color.RedString("Failed to load database."))
 		PrintErrln(dEnv.DBLoadError.Error())
+		if dEnv.DBLoadError == nbs.ErrUnreadableManifest {
+			PrintErrln("\tyou might need to upgrade your Dolt client")
+			PrintErrln("\tvisit https://github.com/dolthub/dolt/releases/latest/")
+		}
 		return false
 	}
 

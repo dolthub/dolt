@@ -45,8 +45,12 @@ const (
 	MasterBranch     = "master"
 	CommitStructName = "Commit"
 
+	FeatureVersion featureVersion = 0
+
 	defaultChunksPerTF = 256 * 1024
 )
+
+type featureVersion int64
 
 // LocalDirDoltDB stores the db in the current directory
 var LocalDirDoltDB = "file://./" + dbfactory.DoltDataDir
@@ -412,14 +416,30 @@ func (ddb *DoltDB) ReadRootValue(ctx context.Context, h hash.Hash) (*RootValue, 
 	if err != nil {
 		return nil, err
 	}
+	if val == nil {
+		return nil, errors.New("there is no dolt root value at that hash")
+	}
 
-	if val != nil {
-		if rootSt, ok := val.(types.Struct); ok && rootSt.Name() == ddbRootStructName {
-			return &RootValue{ddb.db, rootSt, nil}, nil
+	rootSt, ok := val.(types.Struct)
+	if !ok || rootSt.Name() != ddbRootStructName {
+		return nil, errors.New("there is no dolt root value at that hash")
+	}
+
+	v, ok, err := rootSt.MaybeGet(featureVersKey)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		ver := featureVersion(v.(types.Int))
+		if FeatureVersion < ver {
+			return nil, ErrClientOutOfDate{
+				clientVer: FeatureVersion,
+				repoVer:   ver,
+			}
 		}
 	}
 
-	return nil, errors.New("there is no dolt root value at that hash")
+	return &RootValue{ddb.db, rootSt, nil}, nil
 }
 
 // Commit will update a branch's head value to be that of a previously committed root value hash

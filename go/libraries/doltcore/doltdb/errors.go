@@ -14,7 +14,10 @@
 
 package doltdb
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 var ErrInvBranchName = errors.New("not a valid user branch name")
 var ErrInvTagName = errors.New("not a valid user tag name")
@@ -39,6 +42,16 @@ var ErrNoConflicts = errors.New("no conflicts")
 var ErrUpToDate = errors.New("up to date")
 var ErrIsAhead = errors.New("current fast forward from a to b. a is ahead of b already")
 var ErrIsBehind = errors.New("cannot reverse from b to a. b is a is behind a already")
+
+type ErrClientOutOfDate struct {
+	repoVer   featureVersion
+	clientVer featureVersion
+}
+
+func (e ErrClientOutOfDate) Error() string {
+	return fmt.Sprintf(`client (version: %d) is out of date and must upgrade to read this repo (version: %d).
+	visit https://github.com/dolthub/dolt/releases/latest/`, e.clientVer, e.repoVer)
+}
 
 func IsInvalidFormatErr(err error) bool {
 	switch err {
