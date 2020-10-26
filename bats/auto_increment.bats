@@ -34,6 +34,23 @@ teardown() {
     [[ "$output" =~ "6,66" ]] || false
 }
 
+@test "create auto_increment table with out-of-line PK def" {
+    run dolt sql <<SQL
+CREATE TABLE ai (
+    pk int AUTO_INCREMENT,
+    c0 int,
+    PRIMARY KEY(pk)
+);
+INSERT INTO ai VALUES (NULL,1),(NULL,2),(NULL,3);
+SQL
+    [ "$status" -eq 0 ]
+    run dolt sql -q "SELECT * FROM ai;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+    [[ "$output" =~ "3,3" ]] || false
+}
+
 @test "insert into empty auto_increment table" {
     run dolt sql -q "INSERT INTO test (c0) VALUES (1);"
     [ "$status" -eq 0 ]
