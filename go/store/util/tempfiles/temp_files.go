@@ -17,6 +17,7 @@ package tempfiles
 import (
 	"io/ioutil"
 	"os"
+	"sync"
 )
 
 // TempFileProvider is an interface which provides methods for creating temporary files.
@@ -36,12 +37,13 @@ type TempFileProvider interface {
 type TempFileProviderAt struct {
 	tempDir      string
 	filesCreated []string
+	mu           sync.Mutex
 }
 
 // NewTempFileProviderAt creates a new TempFileProviderAt instance with the provided directory to create files in. The
 // directory is assumed to have been created already.
 func NewTempFileProviderAt(tempDir string) *TempFileProviderAt {
-	return &TempFileProviderAt{tempDir, nil}
+	return &TempFileProviderAt{tempDir, nil, sync.Mutex{}}
 }
 
 // GetTempDir returns the directory where temp files will be created by default
@@ -52,6 +54,8 @@ func (tfp *TempFileProviderAt) GetTempDir() string {
 // NewFile creates a new temporary file in the directory dir, opens the file for reading and writing, and returns
 // the resulting *os.File. If dir is "" then the default temp dir is used.
 func (tfp *TempFileProviderAt) NewFile(dir, pattern string) (*os.File, error) {
+	tfp.mu.Lock()
+	defer tfp.mu.Unlock()
 	if dir == "" {
 		dir = tfp.tempDir
 	}
@@ -67,6 +71,8 @@ func (tfp *TempFileProviderAt) NewFile(dir, pattern string) (*os.File, error) {
 
 // Clean makes a best effort attempt to delete all temp files created by calls to NewFile
 func (tfp *TempFileProviderAt) Clean() {
+	tfp.mu.Lock()
+	defer tfp.mu.Unlock()
 	for _, filename := range tfp.filesCreated {
 		// best effort. ignore errors
 		_ = os.Remove(filename)
