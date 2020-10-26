@@ -47,8 +47,13 @@ teardown() {
 
     run dolt sql -q "INSERT INTO test (c0) VALUES (101);"
     [ "$status" -eq 0 ]
-    run dolt sql -q "SELECT * FROM test WHERE c0 > 100;" -r csv
+    run dolt sql -q "INSERT INTO test VALUES (2,2);"
     [ "$status" -eq 0 ]
+    run dolt sql -q "SELECT * FROM test;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+    [[ "$output" =~ "100,100" ]] || false
     [[ "$output" =~ "101,101" ]] || false
 }
 
@@ -61,11 +66,31 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "2,2" ]] || false
 
-    run dolt sql -q "INSERT INTO test VALUES (NULL,3);"
+    run dolt sql -q "INSERT INTO test VALUES (NULL,3), (10,10), (NULL,11);"
     [ "$status" -eq 0 ]
     run dolt sql -q "SELECT * FROM test WHERE c0 > 2;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "3,3" ]] || false
+    [[ "$output" =~ "10,10" ]] || false
+    [[ "$output" =~ "11,11" ]] || false
+}
+
+@test "insert into auto_increment table with 0" {
+    dolt sql -q "INSERT INTO test VALUES (1,1);"
+
+    run dolt sql -q "INSERT INTO test (pk,c0) VALUES (0,2);"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "SELECT * FROM test WHERE c0 > 1;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2,2" ]] || false
+
+    run dolt sql -q "INSERT INTO test VALUES (0,3), (10,10), (0,11);"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "SELECT * FROM test WHERE c0 > 2;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3,3" ]] || false
+    [[ "$output" =~ "10,10" ]] || false
+    [[ "$output" =~ "11,11" ]] || false
 }
 
 @test "insert into auto_increment table via batch mode" {
