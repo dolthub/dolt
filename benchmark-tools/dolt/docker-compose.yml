@@ -2,8 +2,6 @@ version: "3.8"
 services:
   db:
     build: ../dolt-builds
-    ports:
-      - "3306:3306"
   sysbench:
     build: ../sysbench
     environment:

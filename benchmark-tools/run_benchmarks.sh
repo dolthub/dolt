@@ -31,8 +31,8 @@ function build_binary_at_committish() {
   if [ "$build_committish" != "current" ]; then
     echo "$build_committish argument provided for 'commitish', cloning for fresh build"
     cd "$working_dir"
-    git clone git@github.com:dolthub/dolt.git && git fetch --all
-    cd "dolt/go"
+    git clone git@github.com:dolthub/dolt.git dolt-temp-checkout && git fetch --all
+    cd "dolt-temp-checkout/go"
     git checkout "$build_committish"
   else
     echo "$build_committish passed for committish arg, building from current repo"
@@ -67,9 +67,11 @@ function run_sysbench() {
   subdir=$1
   env_vars_string=$2
   cd "$subdir"
+  echo "Building Docker containers for sysbench and $subdir"
+  docker-compose build
   echo "Running docker-compose from $(pwd), with the following environment variables:"
   echo "$env_vars_string"
-  docker-compose run $env_vars_string sysbench --build --rm --remove-orphans
+  docker-compose run $env_vars_string sysbench --rm
   docker-compose down --remove-orphans
   cd ..
 }
@@ -90,7 +92,7 @@ echo "Building binaries and benchmarking for $committish_list"
 for committish in $committish_list; do
   bin_committish="$(build_binary_at_committish "$committish" | tail -1)"
   cd "$absolute_script_dir"
-  echo "Built binary $bin_committish, copying to dolt-buidls/dolt for benchmarking"
+  echo "Built binary $bin_committish, copying to $working_dir/dolt for benchmarking"
   cp "$bin_committish" "$working_dir/dolt"
   run_sysbench dolt "-e DOLT_COMMITTISH=$(get_commit_signature $committish | tail -1) -e SYSBENCH_TESTS=$tests -e TEST_USERNAME=$username"
 done

@@ -7,7 +7,7 @@ from datetime import datetime
 from subprocess import Popen, PIPE
 from typing import List, Optional
 import csv
-
+import sqlalchemy as sa
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ def main():
     logger.setLevel(logging.INFO)
     args = get_args()
     test_list = args.tests.split(',')
-    assert all(test in SUPPORTED_BENCHMARKS for test in test_list), 'Must provide list of supported tests'
+    assert all(test in SUPPORTED_BENCHMARKS for test in test_list), 'Must provide list of supported tests' 
     if args.committish:
         logger.info('Committish provided, benchmarking Dolt')
         run_dolt_benchmarks(args.db_host, args.committish, args.username, test_list)
