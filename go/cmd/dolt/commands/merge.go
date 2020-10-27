@@ -37,6 +37,7 @@ import (
 const (
 	abortParam  = "abort"
 	squashParam = "squash"
+	noFFParam   = "no-ff"
 )
 
 var mergeDocs = cli.CommandDocumentationContent{
@@ -50,6 +51,7 @@ The second syntax ({{.LessThan}}dolt merge --abort{{.GreaterThan}}) can only be 
 
 	Synopsis: []string{
 		"[--squash] {{.LessThan}}branch{{.GreaterThan}}",
+		"--no-ff [-m message] {{.LessThan}}branch{{.GreaterThan}}",
 		"--abort",
 	},
 }
@@ -81,6 +83,8 @@ func (cmd MergeCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(abortParam, "", abortDetails)
 	ap.SupportsFlag(squashParam, "", "Merges changes to the working set without updating the commit history")
+	ap.SupportsFlag(noFFParam, "", "Create a merge commit even when the merge resolves as a fast-forward.")
+	ap.SupportsString(commitMessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
 	return ap
 }
 
@@ -94,6 +98,11 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, mergeDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
+
+	if apr.ContainsAll(squashParam, noFFParam) {
+		cli.PrintErrf("error: Flags '--%s' and '--%s' cannot be used together.\n", squashParam, noFFParam)
+		return 1
+	}
 
 	var verr errhand.VerboseError
 	if apr.Contains(abortParam) {
@@ -131,8 +140,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			}
 
 			if verr == nil {
-				squash := apr.Contains(squashParam)
-				verr = mergeCommitSpec(ctx, squash, dEnv, commitSpecStr)
+				verr = mergeCommitSpec(ctx, apr, dEnv, commitSpecStr)
 			}
 		}
 	}
@@ -154,7 +162,7 @@ func abortMerge(ctx context.Context, doltEnv *env.DoltEnv) errhand.VerboseError 
 	return errhand.BuildDError("fatal: failed to revert changes").AddCause(err).Build()
 }
 
-func mergeCommitSpec(ctx context.Context, squash bool, dEnv *env.DoltEnv, commitSpecStr string) errhand.VerboseError {
+func mergeCommitSpec(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, commitSpecStr string) errhand.VerboseError {
 	cm1, verr := ResolveCommitWithVErr(dEnv, "HEAD")
 
 	if verr != nil {
@@ -186,6 +194,7 @@ func mergeCommitSpec(ctx context.Context, squash bool, dEnv *env.DoltEnv, commit
 
 	cli.Println("Updating", h1.String()+".."+h2.String())
 
+	squash := apr.Contains(squashParam)
 	if squash {
 		cli.Println("Squash commit -- not updating HEAD")
 	}
@@ -206,13 +215,59 @@ func mergeCommitSpec(ctx context.Context, squash bool, dEnv *env.DoltEnv, commit
 	}
 
 	if ok, err := cm1.CanFastForwardTo(ctx, cm2); ok {
-		return executeFFMerge(ctx, squash, dEnv, cm2, workingDiffs)
+		if apr.Contains(noFFParam) {
+			return execNoFFMerge(ctx, apr, dEnv, cm2, verr, workingDiffs)
+		} else {
+			return executeFFMerge(ctx, squash, dEnv, cm2, workingDiffs)
+		}
 	} else if err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
 		cli.Println("Already up to date.")
 		return nil
 	} else {
 		return executeMerge(ctx, squash, dEnv, cm1, cm2, workingDiffs)
 	}
+}
+
+func execNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, cm2 *doltdb.Commit, verr errhand.VerboseError, workingDiffs map[string]hash.Hash) errhand.VerboseError {
+	mergedRoot, err := cm2.GetRootValue()
+
+	if err != nil {
+		return errhand.BuildDError("error: reading from database").AddCause(err).Build()
+	}
+
+	verr = commitMergedRoot(ctx, false, dEnv, mergedRoot, workingDiffs, cm2, map[string]*merge.MergeStats{})
+
+	if verr != nil {
+		return verr
+	}
+
+	msg, msgOk := apr.GetValue(commitMessageArg)
+	if !msgOk {
+		msg = getCommitMessageFromEditor(ctx, dEnv)
+	}
+
+	t := doltdb.CommitNowFunc()
+	if commitTimeStr, ok := apr.GetValue(dateParam); ok {
+		var err error
+		t, err = parseDate(commitTimeStr)
+
+		if err != nil {
+			return errhand.BuildDError("error: invalid date").AddCause(err).Build()
+		}
+	}
+
+	err = actions.CommitStaged(ctx, dEnv, actions.CommitStagedProps{
+		Message:          msg,
+		Date:             t,
+		AllowEmpty:       apr.Contains(allowEmptyFlag),
+		CheckForeignKeys: !apr.Contains(forceFlag),
+	})
+
+	if err != nil {
+		return errhand.BuildDError("error: committing").AddCause(err).Build()
+	}
+
+	return nil
 }
 
 func applyChanges(ctx context.Context, root *doltdb.RootValue, workingDiffs map[string]hash.Hash) (*doltdb.RootValue, errhand.VerboseError) {
@@ -306,6 +361,12 @@ func executeMerge(ctx context.Context, squash bool, dEnv *env.DoltEnv, cm1, cm2 
 			return errhand.BuildDError("Bad merge").AddCause(err).Build()
 		}
 	}
+
+	return commitMergedRoot(ctx, squash, dEnv, mergedRoot, workingDiffs, cm2, tblToStats)
+}
+
+func commitMergedRoot(ctx context.Context, squash bool, dEnv *env.DoltEnv, mergedRoot *doltdb.RootValue, workingDiffs map[string]hash.Hash, cm2 *doltdb.Commit, tblToStats map[string]*merge.MergeStats) errhand.VerboseError {
+	var err error
 
 	workingRoot := mergedRoot
 	if len(workingDiffs) > 0 {
