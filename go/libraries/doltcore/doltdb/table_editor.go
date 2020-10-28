@@ -377,7 +377,9 @@ func (te *TableEditor) Table() (*Table, error) {
 // automatically flush the edits.
 func (te *TableEditor) autoFlush() {
 	te.flushMutex.RLock()
+	te.writeMutex.Lock()
 	runFlush := te.tea.opCount >= tableEditorMaxOps
+	te.writeMutex.Unlock()
 	te.flushMutex.RUnlock()
 
 	if runFlush {

@@ -91,10 +91,6 @@ func (r *JSONReader) VerifySchema(sch schema.Schema) (bool, error) {
 }
 
 func (r *JSONReader) ReadRow(ctx context.Context) (row.Row, error) {
-	if r.jsonStream.Err() != nil {
-		return nil, r.jsonStream.Err()
-	}
-
 	if r.sampleRow != nil {
 		ret := r.sampleRow
 		r.sampleRow = nil
