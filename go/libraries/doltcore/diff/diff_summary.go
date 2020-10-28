@@ -30,24 +30,28 @@ type DiffSummaryProgress struct {
 }
 
 // Summary reports a summary of diff changes between two values
-func Summary(ctx context.Context, ch chan DiffSummaryProgress, from, to types.Map) error {
+func Summary(ctx context.Context, ch chan DiffSummaryProgress, from, to types.Map) (err error) {
 	ad := NewAsyncDiffer(1024)
 	ad.Start(ctx, from, to)
-	defer ad.Close()
+	defer func() {
+		if cerr := ad.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	ch <- DiffSummaryProgress{OldSize: from.Len(), NewSize: to.Len()}
 
-	for !ad.IsDone() {
-		diffs, err := ad.GetDiffs(100, time.Millisecond)
-
+	hasMore := true
+	var diffs []*diff.Difference
+	for hasMore {
+		diffs, hasMore, err = ad.GetDiffs(100, time.Millisecond)
 		if err != nil {
 			return err
 		}
 
 		for i := range diffs {
 			curr := diffs[i]
-			err := reportChanges(curr, ch)
-
+			err := reportChanges(ctx, curr, ch)
 			if err != nil {
 				return err
 			}
@@ -57,12 +61,13 @@ func Summary(ctx context.Context, ch chan DiffSummaryProgress, from, to types.Ma
 	return nil
 }
 
-func reportChanges(change *diff.Difference, ch chan<- DiffSummaryProgress) error {
+func reportChanges(ctx context.Context, change *diff.Difference, ch chan<- DiffSummaryProgress) error {
+	var summary DiffSummaryProgress
 	switch change.ChangeType {
 	case types.DiffChangeAdded:
-		ch <- DiffSummaryProgress{Adds: 1}
+		summary = DiffSummaryProgress{Adds: 1}
 	case types.DiffChangeRemoved:
-		ch <- DiffSummaryProgress{Removes: 1}
+		summary = DiffSummaryProgress{Removes: 1}
 	case types.DiffChangeModified:
 		oldTuple := change.OldValue.(types.Tuple)
 		newTuple := change.NewValue.(types.Tuple)
@@ -70,10 +75,14 @@ func reportChanges(change *diff.Difference, ch chan<- DiffSummaryProgress) error
 		if err != nil {
 			return err
 		}
-		ch <- DiffSummaryProgress{Changes: 1, CellChanges: cellChanges}
+		summary = DiffSummaryProgress{Changes: 1, CellChanges: cellChanges}
 	default:
 		return errors.New("unknown change type")
 	}
-
-	return nil
+	select {
+	case ch <- summary:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }

@@ -28,7 +28,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -307,13 +306,11 @@ func (suite *DatabaseSuite) TestDatasetsMapType() {
 }
 
 func assertMapOfStringToRefOfCommit(ctx context.Context, proposed, datasets types.Map, vr types.ValueReader) {
-	ae := atomicerr.New()
-	stopChan := make(chan struct{})
-	defer close(stopChan)
+	var derr error
 	changes := make(chan types.ValueChanged)
 	go func() {
 		defer close(changes)
-		proposed.Diff(ctx, datasets, ae, changes, stopChan)
+		derr = proposed.Diff(ctx, datasets, changes)
 	}()
 	for change := range changes {
 		switch change.ChangeType {
@@ -334,6 +331,7 @@ func assertMapOfStringToRefOfCommit(ctx context.Context, proposed, datasets type
 			}
 		}
 	}
+	d.PanicIfError(derr)
 }
 
 func newOpts(vrw types.ValueReadWriter, parents ...types.Value) CommitOptions {

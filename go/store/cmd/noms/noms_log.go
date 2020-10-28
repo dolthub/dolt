@@ -403,18 +403,19 @@ func writeDiffLines(ctx context.Context, node LogNode, path types.Path, db datas
 	d.PanicIfError(err)
 
 	var old, neu types.Value
-	functions.All(
-		func() {
+	err = functions.All(
+		func() error {
 			var err error
 			old, err = path.Resolve(ctx, parentCommit, db)
-			d.PanicIfError(err)
+			return err
 		},
-		func() {
+		func() error {
 			var err error
 			neu, err = path.Resolve(ctx, node.commit, db)
-			d.PanicIfError(err)
+			return err
 		},
 	)
+	d.PanicIfError(err)
 
 	// TODO: It would be better to treat this as an add or remove, but that requires generalization
 	// of some of the code in PrintDiff() because it cannot tolerate nil parameters.

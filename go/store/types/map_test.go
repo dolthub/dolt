@@ -35,7 +35,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 )
@@ -322,16 +321,14 @@ func newMapTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 
 func (suite *mapTestSuite) createStreamingMap(vs *ValueStore) Map {
 	kvChan := make(chan Value)
-	ae := atomicerr.New()
-	mapChan := NewStreamingMap(context.Background(), vs, ae, kvChan)
+	streamingMap := NewStreamingMap(context.Background(), vs, kvChan)
 	for _, entry := range suite.elems.entries.entries {
 		kvChan <- entry.key
 		kvChan <- entry.value
 	}
 	close(kvChan)
-	m := <-mapChan
-	suite.NoError(ae.Get())
-
+	m, err := streamingMap.Wait()
+	suite.NoError(err)
 	return m
 }
 
@@ -357,16 +354,10 @@ func (suite *mapTestSuite) TestStreamingMapOrder() {
 	}
 	close(kvChan)
 
-	ae := atomicerr.New()
-	readInput := func(vrw ValueReadWriter, kvs <-chan Value, outChan chan<- Map) {
-		readMapInput(context.Background(), vrw, ae, kvs, outChan)
-	}
+	sm := NewStreamingMap(context.Background(), vs, kvChan)
+	_, err := sm.Wait()
 
-	outChan := newStreamingMap(vs, kvChan, readInput)
-	_, ok := <-outChan
-
-	suite.False(ok)
-	suite.True(ae.Get() == ErrKeysNotOrdered)
+	suite.Assert().EqualError(err, ErrKeysNotOrdered.Error())
 }
 
 func (suite *mapTestSuite) TestStreamingMap2() {
@@ -432,11 +423,10 @@ func getTestRefToValueOrderMap(scale int, vrw ValueReadWriter) testMap {
 }
 
 func accumulateMapDiffChanges(m1, m2 Map) (added []Value, removed []Value, modified []Value, err error) {
-	ae := atomicerr.New()
 	changes := make(chan ValueChanged)
 	go func() {
-		m1.Diff(context.Background(), m2, ae, changes, nil)
-		close(changes)
+		defer close(changes)
+		err = m1.Diff(context.Background(), m2, changes)
 	}()
 	for change := range changes {
 		if change.ChangeType == DiffChangeAdded {
@@ -447,7 +437,7 @@ func accumulateMapDiffChanges(m1, m2 Map) (added []Value, removed []Value, modif
 			modified = append(modified, change.Key)
 		}
 	}
-	return added, removed, modified, ae.Get()
+	return added, removed, modified, err
 }
 
 func diffMapTest(assert *assert.Assertions, m1 Map, m2 Map, numAddsExpected int, numRemovesExpected int, numModifiedExpected int) (added []Value, removed []Value, modified []Value) {

@@ -24,8 +24,6 @@ package merge
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
-
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -35,7 +33,7 @@ import (
 // threeWayOrderedSequenceMerge() can remain agnostic to which kind of
 // collections it's actually working with.
 type candidate interface {
-	diff(ctx context.Context, parent candidate, ae *atomicerr.AtomicError, change chan<- types.ValueChanged, stop <-chan struct{})
+	diff(ctx context.Context, parent candidate, change chan<- types.ValueChanged) error
 	get(ctx context.Context, k types.Value) (types.Value, bool, error)
 	pathConcat(ctx context.Context, change types.ValueChanged, path types.Path) (out types.Path, err error)
 	getValue() types.Value
@@ -45,8 +43,8 @@ type mapCandidate struct {
 	m types.Map
 }
 
-func (mc mapCandidate) diff(ctx context.Context, p candidate, ae *atomicerr.AtomicError, change chan<- types.ValueChanged, stop <-chan struct{}) {
-	mc.m.Diff(ctx, p.(mapCandidate).m, ae, change, stop)
+func (mc mapCandidate) diff(ctx context.Context, p candidate, change chan<- types.ValueChanged) error {
+	return mc.m.Diff(ctx, p.(mapCandidate).m, change)
 }
 
 func (mc mapCandidate) get(ctx context.Context, k types.Value) (types.Value, bool, error) {
@@ -77,8 +75,8 @@ type setCandidate struct {
 	s types.Set
 }
 
-func (sc setCandidate) diff(ctx context.Context, p candidate, ae *atomicerr.AtomicError, change chan<- types.ValueChanged, stop <-chan struct{}) {
-	sc.s.Diff(ctx, p.(setCandidate).s, ae, change, stop)
+func (sc setCandidate) diff(ctx context.Context, p candidate, change chan<- types.ValueChanged) error {
+	return sc.s.Diff(ctx, p.(setCandidate).s, change)
 }
 
 func (sc setCandidate) get(ctx context.Context, k types.Value) (types.Value, bool, error) {
@@ -109,9 +107,8 @@ type structCandidate struct {
 	s types.Struct
 }
 
-func (sc structCandidate) diff(ctx context.Context, p candidate, ae *atomicerr.AtomicError, change chan<- types.ValueChanged, stop <-chan struct{}) {
-	err := sc.s.Diff(p.(structCandidate).s, change, stop)
-	ae.SetIfError(err)
+func (sc structCandidate) diff(ctx context.Context, p candidate, change chan<- types.ValueChanged) error {
+	return sc.s.Diff(ctx, p.(structCandidate).s, change)
 }
 
 func (sc structCandidate) get(ctx context.Context, key types.Value) (types.Value, bool, error) {

@@ -826,7 +826,7 @@ func TestListModifyAfterRead(t *testing.T) {
 func accumulateDiffSplices(l1, l2 List) (diff []Splice) {
 	diffChan := make(chan Splice)
 	go func() {
-		err := l1.Diff(context.Background(), l2, diffChan, nil)
+		err := l1.Diff(context.Background(), l2, diffChan)
 		d.PanicIfError(err)
 		close(diffChan)
 	}()
@@ -840,7 +840,7 @@ func accumulateDiffSplicesWithLimit(l1, l2 List, maxSpliceMatrixSize uint64) (di
 	diffChan := make(chan Splice)
 
 	go func() {
-		err = l1.DiffWithLimit(context.Background(), l2, diffChan, nil, maxSpliceMatrixSize)
+		err = l1.DiffWithLimit(context.Background(), l2, diffChan, maxSpliceMatrixSize)
 		close(diffChan)
 	}()
 
