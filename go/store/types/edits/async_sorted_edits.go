@@ -37,6 +37,7 @@ type AsyncSortedEdits struct {
 
 	nbf *types.NomsBinFormat
 
+	sortWork  chan types.KVPSort
 	sortGroup *errgroup.Group
 	sortCtx   context.Context
 	sema      *semaphore.Weighted
@@ -47,12 +48,14 @@ type AsyncSortedEdits struct {
 // 'sortConcurrency' go routines
 func NewAsyncSortedEdits(nbf *types.NomsBinFormat, sliceSize, asyncConcurrency, sortConcurrency int) *AsyncSortedEdits {
 	group, groupCtx := errgroup.WithContext(context.TODO())
+	sortCh := make(chan types.KVPSort, asyncConcurrency*4)
 	return &AsyncSortedEdits{
 		sliceSize:       sliceSize,
 		sortConcurrency: sortConcurrency,
 		accumulating:    make([]types.KVP, 0, sliceSize),
 		sortedColls:     nil,
 		nbf:             nbf,
+		sortWork:        sortCh,
 		sortGroup:       group,
 		sortCtx:         groupCtx,
 		sema:            semaphore.NewWeighted(int64(asyncConcurrency)),
@@ -64,16 +67,36 @@ func (ase *AsyncSortedEdits) AddEdit(k types.LesserValuable, v types.Valuable) {
 	ase.accumulating = append(ase.accumulating, types.KVP{Key: k, Val: v})
 	if len(ase.accumulating) == ase.sliceSize {
 		coll := NewKVPCollection(ase.nbf, ase.accumulating)
+		// ase.accumulating is getting sorted asynchronously and
+		// in-place down below. We add it to |sortedColls| here.  By
+		// the time |sortedColls| is used, it will be sorted.
 		ase.sortedColls = append(ase.sortedColls, coll)
-		toSort := ase.accumulating
+		ase.sortWork <- types.KVPSort{Values: ase.accumulating, NBF: ase.nbf}
 		ase.accumulating = make([]types.KVP, 0, ase.sliceSize)
-		if err := ase.sema.Acquire(ase.sortCtx, 1); err != nil {
-			return
+		if ase.sema.TryAcquire(1) {
+			ase.sortGroup.Go(ase.sortWorker)
 		}
-		ase.sortGroup.Go(func() error {
-			defer ase.sema.Release(1)
-			return types.SortWithErroringLess(types.KVPSort{Values: toSort, NBF: ase.nbf})
-		})
+	}
+}
+
+// sortWorker is the async method that makes progress on |sortWork| until it
+// is exhausted and then exits. Releases |1| from |ase.sema| when it exits.
+func (ase *AsyncSortedEdits) sortWorker() error {
+	defer ase.sema.Release(1)
+	for {
+		select {
+		case toSort, ok := <-ase.sortWork:
+			if !ok {
+				return nil
+			}
+			if err := types.SortWithErroringLess(toSort); err != nil {
+				return err
+			}
+		case <-ase.sortCtx.Done():
+			return ase.sortCtx.Err()
+		default:
+			return nil
+		}
 	}
 }
 
@@ -83,14 +106,20 @@ func (ase *AsyncSortedEdits) FinishedEditing() (types.EditProvider, error) {
 	ase.closed = true
 
 	if len(ase.accumulating) > 0 {
-		err := types.SortWithErroringLess(types.KVPSort{Values: ase.accumulating, NBF: ase.nbf})
-		if err != nil {
-			return nil, err
-		}
-
+		ase.sortWork <- types.KVPSort{Values: ase.accumulating, NBF: ase.nbf}
 		coll := NewKVPCollection(ase.nbf, ase.accumulating)
 		ase.sortedColls = append(ase.sortedColls, coll)
 		ase.accumulating = nil
+	}
+
+	close(ase.sortWork)
+
+	// Calling thread helps work through remaining |sortWork| until it's sorted.
+	for toSort := range ase.sortWork {
+		err := types.SortWithErroringLess(toSort)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if err := ase.sortGroup.Wait(); err != nil {
