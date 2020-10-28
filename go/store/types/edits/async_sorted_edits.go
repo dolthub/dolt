@@ -71,11 +71,21 @@ func (ase *AsyncSortedEdits) AddEdit(k types.LesserValuable, v types.Valuable) {
 		// in-place down below. We add it to |sortedColls| here.  By
 		// the time |sortedColls| is used, it will be sorted.
 		ase.sortedColls = append(ase.sortedColls, coll)
-		ase.sortWork <- types.KVPSort{Values: ase.accumulating, NBF: ase.nbf}
-		ase.accumulating = make([]types.KVP, 0, ase.sliceSize)
+		toSort := types.KVPSort{Values: ase.accumulating, NBF: ase.nbf}
+		select {
+		case ase.sortWork <- toSort:
+			break
+		default:
+			if err := types.SortWithErroringLess(toSort); err != nil {
+				ase.sortGroup.Go(func() error {
+					return err
+				})
+			}
+		}
 		if ase.sema.TryAcquire(1) {
 			ase.sortGroup.Go(ase.sortWorker)
 		}
+		ase.accumulating = make([]types.KVP, 0, ase.sliceSize)
 	}
 }
 
@@ -106,7 +116,15 @@ func (ase *AsyncSortedEdits) FinishedEditing() (types.EditProvider, error) {
 	ase.closed = true
 
 	if len(ase.accumulating) > 0 {
-		ase.sortWork <- types.KVPSort{Values: ase.accumulating, NBF: ase.nbf}
+		toSort := types.KVPSort{Values: ase.accumulating, NBF: ase.nbf}
+		select {
+		case ase.sortWork <- toSort:
+			break
+		default:
+			if err := types.SortWithErroringLess(toSort); err != nil {
+				return nil, err
+			}
+		}
 		coll := NewKVPCollection(ase.nbf, ase.accumulating)
 		ase.sortedColls = append(ase.sortedColls, coll)
 		ase.accumulating = nil
@@ -116,8 +134,7 @@ func (ase *AsyncSortedEdits) FinishedEditing() (types.EditProvider, error) {
 
 	// Calling thread helps work through remaining |sortWork| until it's sorted.
 	for toSort := range ase.sortWork {
-		err := types.SortWithErroringLess(toSort)
-		if err != nil {
+		if err := types.SortWithErroringLess(toSort); err != nil {
 			return nil, err
 		}
 	}
