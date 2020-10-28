@@ -187,6 +187,49 @@ teardown() {
     [[ ! "$output" =~ "test1" ]] || false
 }
 
+@test "no-ff merge" {
+    dolt checkout -b merge_branch
+    dolt SQL -q "INSERT INTO test1 values (0,1,2)"
+    dolt add test1
+    dolt commit -m "modify test1"
+
+    dolt checkout master
+    run dolt merge merge_branch --no-ff -m "no-ff merge"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "Fast-forward" ]] || false
+
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "no-ff merge" ]] || false
+}
+
+@test "no-ff merge doesn't stomp working changes and doesn't fast forward" {
+    dolt checkout -b merge_branch
+    dolt SQL -q "INSERT INTO test1 values (0,1,2)"
+    dolt add test1
+    dolt commit -m "modify test1"
+
+    dolt checkout master
+    dolt SQL -q "INSERT INTO test2 values (0,1,2)"
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test2" ]] || false
+    [[ ! "$output" =~ "test1" ]] || false
+
+    run dolt merge merge_branch --no-ff -m "no-ff merge"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "Fast-forward" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test2" ]] || false
+    [[ ! "$output" =~ "test1" ]] || false
+
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "no-ff merge" ]] || false
+}
+
 @test "3way merge rejected when working changes touch same tables" {
     dolt checkout -b merge_branch
     dolt SQL -q "INSERT INTO test1 values (0,1,2)"
