@@ -15,130 +15,65 @@
 package edits
 
 import (
+	"context"
 	"sort"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
+	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
-
-func sorter(nbf *types.NomsBinFormat, in, out chan types.KVPSlice) error {
-	for kvps := range in {
-		err := types.SortWithErroringLess(types.KVPSort{Values: kvps, NBF: nbf})
-
-		if err != nil {
-			return err
-		}
-
-		out <- kvps
-	}
-
-	return nil
-}
-
-func merger(in chan [2]*KVPCollection, out chan *KVPCollection) error {
-	for {
-		colls, ok := <-in
-
-		if !ok {
-			return nil
-		}
-
-		var res *KVPCollection
-		if colls[1] == nil {
-			res = colls[0]
-		} else {
-			var err error
-			res, err = colls[0].DestructiveMerge(colls[1])
-
-			if err != nil {
-				return err
-			}
-		}
-
-		out <- res
-	}
-}
 
 // AsyncSortedEdits is a data structure that can have edits added to it, and as they are added it will
 // send them in batches to be sorted.  Once all edits have been added the batches of edits can then
 // be merge sorted together.
 type AsyncSortedEdits struct {
-	sliceSize        int
-	sortConcurrency  int
-	asyncConcurrency int
-
-	ae         *atomicerr.AtomicError
-	sortChan   chan types.KVPSlice
-	resultChan chan types.KVPSlice
-	doneChan   chan bool
-	closed     bool
+	sliceSize       int
+	sortConcurrency int
+	closed          bool
 
 	accumulating []types.KVP
 	sortedColls  []*KVPCollection
 
 	nbf *types.NomsBinFormat
+
+	sortGroup *errgroup.Group
+	sortCtx   context.Context
+	sema      *semaphore.Weighted
 }
 
 // NewAsyncSortedEdits creates an AsyncSortedEdits object that creates batches of size 'sliceSize' and kicks off
 // 'asyncConcurrency' go routines for background sorting of batches.  The final Sort call is processed with
 // 'sortConcurrency' go routines
 func NewAsyncSortedEdits(nbf *types.NomsBinFormat, sliceSize, asyncConcurrency, sortConcurrency int) *AsyncSortedEdits {
-	ae := atomicerr.New()
-	sortChan := make(chan types.KVPSlice, asyncConcurrency*8)
-	resChan := make(chan types.KVPSlice, asyncConcurrency*8)
-	doneChan := make(chan bool, asyncConcurrency)
-
-	for i := 0; i < asyncConcurrency; i++ {
-		go func() {
-			defer func() {
-				doneChan <- true
-			}()
-
-			err := sorter(nbf, sortChan, resChan)
-			ae.SetIfError(err)
-		}()
-	}
-
+	group, groupCtx := errgroup.WithContext(context.TODO())
 	return &AsyncSortedEdits{
-		sliceSize:        sliceSize,
-		asyncConcurrency: asyncConcurrency,
-		sortConcurrency:  sortConcurrency,
-		ae:               ae,
-		sortChan:         sortChan,
-		resultChan:       resChan,
-		doneChan:         doneChan,
-		accumulating:     make([]types.KVP, 0, sliceSize),
-		sortedColls:      nil,
-		nbf:              nbf,
+		sliceSize:       sliceSize,
+		sortConcurrency: sortConcurrency,
+		accumulating:    make([]types.KVP, 0, sliceSize),
+		sortedColls:     nil,
+		nbf:             nbf,
+		sortGroup:       group,
+		sortCtx:         groupCtx,
+		sema:            semaphore.NewWeighted(int64(asyncConcurrency)),
 	}
 }
 
 // AddEdit adds an edit
 func (ase *AsyncSortedEdits) AddEdit(k types.LesserValuable, v types.Valuable) {
 	ase.accumulating = append(ase.accumulating, types.KVP{Key: k, Val: v})
-
 	if len(ase.accumulating) == ase.sliceSize {
-		ase.asyncSortAcc()
-	}
-}
-
-func (ase *AsyncSortedEdits) asyncSortAcc() {
-	ase.sortChan <- ase.accumulating
-	ase.accumulating = make([]types.KVP, 0, ase.sliceSize)
-	ase.pollSortedSlices()
-}
-
-func (ase *AsyncSortedEdits) pollSortedSlices() {
-	for {
-		select {
-		case val := <-ase.resultChan:
-			coll := NewKVPCollection(ase.nbf, val)
-			ase.sortedColls = append(ase.sortedColls, coll)
-
-		default:
+		coll := NewKVPCollection(ase.nbf, ase.accumulating)
+		ase.sortedColls = append(ase.sortedColls, coll)
+		toSort := ase.accumulating
+		if err := ase.sema.Acquire(ase.sortCtx, 1); err != nil {
 			return
 		}
+		ase.sortGroup.Go(func() error {
+			defer ase.sema.Release(1)
+			return types.SortWithErroringLess(types.KVPSort{Values: toSort, NBF: ase.nbf})
+		})
+		ase.accumulating = make([]types.KVP, 0, ase.sliceSize)
 	}
 }
 
@@ -146,34 +81,27 @@ func (ase *AsyncSortedEdits) pollSortedSlices() {
 // will have undefined behavior.
 func (ase *AsyncSortedEdits) FinishedEditing() (types.EditProvider, error) {
 	ase.closed = true
-	close(ase.sortChan)
-	defer close(ase.doneChan)
 
 	if len(ase.accumulating) > 0 {
-		sl := types.KVPSlice(ase.accumulating)
-		err := types.SortWithErroringLess(types.KVPSort{Values: sl, NBF: ase.nbf})
-
+		err := types.SortWithErroringLess(types.KVPSort{Values: ase.accumulating, NBF: ase.nbf})
 		if err != nil {
 			return nil, err
 		}
 
-		coll := NewKVPCollection(ase.nbf, sl)
+		coll := NewKVPCollection(ase.nbf, ase.accumulating)
 		ase.sortedColls = append(ase.sortedColls, coll)
+		ase.accumulating = nil
 	}
 
-	ase.wait()
-
-	if err := ase.ae.Get(); err != nil {
+	if err := ase.sortGroup.Wait(); err != nil {
 		return nil, err
 	}
 
-	ase.Sort()
-
-	if err := ase.ae.Get(); err != nil {
+	if err := ase.mergeCollections(); err != nil {
 		return nil, err
 	}
 
-	return ase.Iterator(), nil
+	return ase.iterator(), nil
 }
 
 // Close ensures that the accumulator is closed. Repeat calls are allowed. This and FinishedEditing are not thread safe,
@@ -184,87 +112,42 @@ func (ase *AsyncSortedEdits) Close() {
 	}
 }
 
-func (ase *AsyncSortedEdits) wait() {
-	running := ase.asyncConcurrency
-
-	for running > 0 {
-		select {
-		case val := <-ase.resultChan:
-			coll := NewKVPCollection(ase.nbf, val)
-			ase.sortedColls = append(ase.sortedColls, coll)
-
-		case <-ase.doneChan:
-			running--
-		}
-	}
-
-	for {
-		select {
-		case val := <-ase.resultChan:
-			coll := NewKVPCollection(ase.nbf, val)
-			ase.sortedColls = append(ase.sortedColls, coll)
-		default:
-			close(ase.resultChan)
-			return
-		}
-	}
-}
-
-// Sort performs a concurrent merge sort.  Once this completes use the Iterator method for getting a KVPIterator
-// which can be used to iterate over all the KVPs in order.
-func (ase *AsyncSortedEdits) Sort() {
+// mergeCollections performs a concurrent sorted-merge of |sortedColls|. Must be called after |sortGroup| is complete.
+// Once this completes use the |iterator| method for getting a KVPIterator which can be used to iterate over all the
+// KVPs in order.
+func (ase *AsyncSortedEdits) mergeCollections() error {
+	sema := semaphore.NewWeighted(int64(ase.sortConcurrency))
 	for len(ase.sortedColls) > 2 {
 		pairs := pairCollections(ase.sortedColls)
-		ase.sortedColls = nil
+		ase.sortedColls = make([]*KVPCollection, len(pairs))
+		mergeGroup, ctx := errgroup.WithContext(context.TODO())
 
-		numPairs := len(pairs)
-
-		numGoRs := ase.sortConcurrency
-		if numGoRs > numPairs {
-			numGoRs = numPairs
-		}
-
-		sortChan := make(chan [2]*KVPCollection, numPairs)
-		resChan := make(chan *KVPCollection, numPairs)
-		for i := 0; i < numGoRs; i++ {
-			go func() {
-				defer func() {
-					ase.doneChan <- true
-				}()
-
-				err := merger(sortChan, resChan)
-				ase.ae.SetIfError(err)
-			}()
-		}
-
-		for _, pair := range pairs {
-			sortChan <- pair
-		}
-
-		close(sortChan)
-
-		for numGoRs > 0 {
-			select {
-			case val := <-resChan:
-				ase.sortedColls = append(ase.sortedColls, val)
-
-			case <-ase.doneChan:
-				numGoRs--
+		for i := range pairs {
+			colls := pairs[i]
+			if colls[1] == nil {
+				ase.sortedColls[i] = colls[0]
+			} else {
+				if err := sema.Acquire(ctx, 1); err != nil {
+					if werr := mergeGroup.Wait(); werr != nil {
+						return werr
+					}
+					return err
+				}
+				capi := i
+				mergeGroup.Go(func() error {
+					defer sema.Release(1)
+					var err error
+					ase.sortedColls[capi], err = colls[0].DestructiveMerge(colls[1])
+					return err
+				})
 			}
 		}
 
-		done := false
-		for !done {
-			select {
-			case val := <-resChan:
-				ase.sortedColls = append(ase.sortedColls, val)
-
-			default:
-				close(resChan)
-				done = true
-			}
+		if err := mergeGroup.Wait(); err != nil {
+			return err
 		}
 	}
+	return nil
 }
 
 // we pair collections so that as you perform many merges you end up with collections of edits that are similarly sized
@@ -289,8 +172,8 @@ func pairCollections(colls []*KVPCollection) [][2]*KVPCollection {
 	return pairs
 }
 
-// Iterator returns a KVPIterator instance that can iterate over all the KVPs in order.
-func (ase *AsyncSortedEdits) Iterator() types.EditProvider {
+// iterator returns a KVPIterator instance that can iterate over all the KVPs in order.
+func (ase *AsyncSortedEdits) iterator() types.EditProvider {
 	switch len(ase.sortedColls) {
 	case 0:
 		return types.EmptyEditProvider{}
@@ -309,6 +192,5 @@ func (ase *AsyncSortedEdits) Size() int64 {
 	for _, coll := range ase.sortedColls {
 		size += coll.Size()
 	}
-
 	return size
 }
