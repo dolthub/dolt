@@ -66,6 +66,7 @@ func (ase *AsyncSortedEdits) AddEdit(k types.LesserValuable, v types.Valuable) {
 		coll := NewKVPCollection(ase.nbf, ase.accumulating)
 		ase.sortedColls = append(ase.sortedColls, coll)
 		toSort := ase.accumulating
+		ase.accumulating = make([]types.KVP, 0, ase.sliceSize)
 		if err := ase.sema.Acquire(ase.sortCtx, 1); err != nil {
 			return
 		}
@@ -73,7 +74,6 @@ func (ase *AsyncSortedEdits) AddEdit(k types.LesserValuable, v types.Valuable) {
 			defer ase.sema.Release(1)
 			return types.SortWithErroringLess(types.KVPSort{Values: toSort, NBF: ase.nbf})
 		})
-		ase.accumulating = make([]types.KVP, 0, ase.sliceSize)
 	}
 }
 
