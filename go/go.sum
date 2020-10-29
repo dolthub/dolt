@@ -148,7 +148,12 @@ github.com/dolthub/go-mysql-server v0.6.1-0.20201027202458-51fc2de5f4a2/go.mod h
 =======
 github.com/dolthub/go-mysql-server v0.6.1-0.20201029203709-35b589cd19a1 h1:A5s7qAlWU1bLT4eh59Is6G67u3R5tCwPJzG0Q+Vsvv8=
 github.com/dolthub/go-mysql-server v0.6.1-0.20201029203709-35b589cd19a1/go.mod h1:fVmfY3Gcq8g1cjSQBt1vjHjdIPaZ5d2xKd32mJq39t0=
+<<<<<<< HEAD
 >>>>>>> picking up COM_FIELD_LIST support from vitess
+=======
+github.com/dolthub/go-mysql-server v0.6.1-0.20201029204516-6b2296898c2d h1:dF2DoQKQnO0p1IGNVRbbzuzn0HV5W4LP524MwSxIrUs=
+github.com/dolthub/go-mysql-server v0.6.1-0.20201029204516-6b2296898c2d/go.mod h1:fVmfY3Gcq8g1cjSQBt1vjHjdIPaZ5d2xKd32mJq39t0=
+>>>>>>> fixed merge conflict in GMS
 github.com/dolthub/vitess v0.0.0-20201009075426-dab8291dcb1b h1:cc/rikSvXHuZaXjF2mxgUJzHE7MntbXqm31aIYKRZPg=
 github.com/dolthub/vitess v0.0.0-20201009075426-dab8291dcb1b/go.mod h1:hUE8oSk2H5JZnvtlLBhJPYC8WZCA5AoSntdLTcBvdBM=
 github.com/dolthub/vitess v0.0.0-20201029194225-fde3230ed7ff h1:FITQHnMxA+bNgNoZuxSVoir+HTXrqbCflHze1Z+DP4g=
