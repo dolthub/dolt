@@ -244,7 +244,7 @@ Then you'll need to add and commit the merged data:
 
 ## Adding Remotes
 
-Dolt supports remotes in a similar manner to Git. Liquidata, the company behind Dolt, also created DoltHub, a hosting service for Dolt databases. In the following we use DoltHub as an example for setting up a remote.
+Dolt supports remotes in a similar manner to Git. We also created DoltHub, a hosting service for Dolt databases. In the following we use DoltHub as an example for setting up a remote.
 
 If you haven't done so already, setting up your default servers will make it easier to add and clone remotes
 
