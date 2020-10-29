@@ -19,6 +19,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+
 	"github.com/dolthub/dolt/go/store/diff"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -64,7 +66,7 @@ func reportChanges(change *diff.Difference, ch chan<- DiffSummaryProgress) error
 	case types.DiffChangeModified:
 		oldTuple := change.OldValue.(types.Tuple)
 		newTuple := change.NewValue.(types.Tuple)
-		cellChanges, err := oldTuple.CountDifferencesBetweenTupleFields(newTuple)
+		cellChanges, err := row.CountCellDiffs(oldTuple, newTuple)
 		if err != nil {
 			return err
 		}

@@ -35,6 +35,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 
 	"github.com/dolthub/dolt/go/store/atomicerr"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/util/verbose"
 )
 
@@ -605,5 +606,5 @@ func (s3p awsTablePersister) uploadPart(ctx context.Context, data []byte, key, u
 }
 
 func (s3p awsTablePersister) PruneTableFiles(ctx context.Context, contents manifestContents) error {
-	return ErrUnsupportedOperation
+	return chunks.ErrUnsupportedOperation
 }

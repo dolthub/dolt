@@ -23,6 +23,7 @@ package chunks
 
 import (
 	"context"
+	"errors"
 	"io"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -38,7 +39,7 @@ type ChunkStore interface {
 	// GetMany gets the Chunks with |hashes| from the store. On return,
 	// |foundChunks| will have been fully sent all chunks which have been
 	// found. Any non-present chunks will silently be ignored.
-	GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan<- *Chunk) error
+	GetMany(ctx context.Context, hashes hash.HashSet, found func(*Chunk)) error
 
 	// Returns true iff the value at the address |h| is contained in the
 	// store
@@ -86,3 +87,19 @@ type ChunkStore interface {
 	// undefined and probably crashy.
 	io.Closer
 }
+
+// ChunkStoreGarbageCollector is a ChunkStore that supports garbage collection.
+type ChunkStoreGarbageCollector interface {
+	ChunkStore
+
+	// MarkAndSweepChunks expects |keepChunks| to receive the chunk hashes
+	// that should be kept in the chunk store. Once |keepChunks| is closed
+	// and MarkAndSweepChunks returns, the chunk store will only have the
+	// chunks sent on |keepChunks| and will have removed all other content
+	// from the ChunkStore.
+	MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash) error
+}
+
+var ErrUnsupportedOperation = errors.New("operation not supported")
+
+var ErrGCGenerationExpired = errors.New("garbage collection generation expired")

@@ -20,7 +20,6 @@ import (
 	"sync/atomic"
 
 	"github.com/dolthub/dolt/go/store/chunks"
-
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -40,6 +39,7 @@ func NewNBSMetricWrapper(nbs *NomsBlockStore) *NBSMetricWrapper {
 }
 
 var _ TableFileStore = &NBSMetricWrapper{}
+var _ chunks.ChunkStoreGarbageCollector = &NBSMetricWrapper{}
 
 // Sources retrieves the current root hash, and a list of all the table files
 func (nbsMW *NBSMetricWrapper) Sources(ctx context.Context) (hash.Hash, []TableFile, error) {
@@ -65,15 +65,19 @@ func (nbsMW *NBSMetricWrapper) SupportedOperations() TableFileStoreOps {
 	return nbsMW.nbs.SupportedOperations()
 }
 
+func (nbsMW *NBSMetricWrapper) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash) error {
+	return nbsMW.nbs.MarkAndSweepChunks(ctx, last, keepChunks)
+}
+
 // PruneTableFiles deletes old table files that are no longer referenced in the manifest.
 func (nbsMW *NBSMetricWrapper) PruneTableFiles(ctx context.Context) error {
 	return nbsMW.nbs.PruneTableFiles(ctx)
 }
 
 // GetManyCompressed gets the compressed Chunks with |hashes| from the store. On return,
-// |foundChunks| will have been fully sent all chunks which have been
+// |found| will have been fully sent all chunks which have been
 // found. Any non-present chunks will silently be ignored.
-func (nbsMW *NBSMetricWrapper) GetManyCompressed(ctx context.Context, hashes hash.HashSet, cmpChChan chan<- CompressedChunk) error {
+func (nbsMW *NBSMetricWrapper) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(CompressedChunk)) error {
 	atomic.AddInt32(&nbsMW.TotalChunkGets, int32(len(hashes)))
-	return nbsMW.nbs.GetManyCompressed(ctx, hashes, cmpChChan)
+	return nbsMW.nbs.GetManyCompressed(ctx, hashes, found)
 }

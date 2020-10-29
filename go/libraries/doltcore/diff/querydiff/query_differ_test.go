@@ -578,6 +578,7 @@ func TestEngineTestQueryDifferBefore(t *testing.T) {
 
 	// engineTestQueries are read-only, sharing a dEnv speeds up tests
 	dEnv := setupEngineTests(t)
+
 	for _, testSet := range engineQueryTests {
 		for _, test := range testSet {
 			t.Run(test.Query, func(t *testing.T) {

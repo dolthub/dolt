@@ -19,9 +19,9 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/dolthub/fslock"
 	"github.com/fatih/color"
 	"github.com/golang/protobuf/proto"
-	"github.com/juju/fslock"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"

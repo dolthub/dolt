@@ -47,6 +47,10 @@ func FmtColWithNameAndType(indent, nameWidth, typeWidth int, colName, typeStr st
 		}
 	}
 
+	if col.AutoIncrement {
+		colStr += " AUTO_INCREMENT"
+	}
+
 	if col.Default != "" {
 		colStr += " DEFAULT " + col.Default
 	}

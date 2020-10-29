@@ -17,6 +17,7 @@ package blobstore
 import (
 	"context"
 	"io"
+	"path"
 	"strconv"
 
 	"cloud.google.com/go/storage"
@@ -29,20 +30,27 @@ const (
 
 // GCSBlobstore provides a GCS implementation of the Blobstore interface
 type GCSBlobstore struct {
-	bucket *storage.BucketHandle
-	prefix string
+	bucket     *storage.BucketHandle
+	bucketName string
+	prefix     string
 }
 
 // NewGCSBlobstore creates a new instance of a GCSBlobstare
-func NewGCSBlobstore(bucket *storage.BucketHandle, prefix string) *GCSBlobstore {
-	return &GCSBlobstore{bucket, prefix}
+func NewGCSBlobstore(gcs *storage.Client, bucketName, prefix string) *GCSBlobstore {
+	for len(prefix) > 0 && prefix[0] == '/' {
+		prefix = prefix[1:]
+	}
+
+	bucket := gcs.Bucket(bucketName)
+	return &GCSBlobstore{bucket, bucketName, prefix}
 }
 
 // Exists returns true if a blob exists for the given key, and false if it does not.
 // For InMemoryBlobstore instances error should never be returned (though other
 // implementations of this interface can)
 func (bs *GCSBlobstore) Exists(ctx context.Context, key string) (bool, error) {
-	oh := bs.bucket.Object(bs.prefix + key)
+	absKey := path.Join(bs.prefix, key)
+	oh := bs.bucket.Object(absKey)
 	_, err := oh.Attrs(ctx)
 
 	if err == storage.ErrObjectNotExist {
@@ -55,11 +63,12 @@ func (bs *GCSBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 // Get retrieves an io.reader for the portion of a blob specified by br along with
 // its version
 func (bs *GCSBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, string, error) {
-	oh := bs.bucket.Object(bs.prefix + key)
+	absKey := path.Join(bs.prefix, key)
+	oh := bs.bucket.Object(absKey)
 	attrs, err := oh.Attrs(ctx)
 
 	if err == storage.ErrObjectNotExist {
-		return nil, "", NotFound{key}
+		return nil, "", NotFound{"gs://" + path.Join(bs.bucketName, absKey)}
 	} else if err != nil {
 		return nil, "", err
 	}
@@ -104,7 +113,7 @@ func writeObj(writer *storage.Writer, reader io.Reader) (string, error) {
 
 // Put sets the blob and the version for a key
 func (bs *GCSBlobstore) Put(ctx context.Context, key string, reader io.Reader) (string, error) {
-	absKey := bs.prefix + key
+	absKey := path.Join(bs.prefix, key)
 	oh := bs.bucket.Object(absKey)
 	writer := oh.NewWriter(ctx)
 
@@ -114,7 +123,8 @@ func (bs *GCSBlobstore) Put(ctx context.Context, key string, reader io.Reader) (
 // CheckAndPut will check the current version of a blob against an expectedVersion, and if the
 // versions match it will update the data and version associated with the key
 func (bs *GCSBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, reader io.Reader) (string, error) {
-	oh := bs.bucket.Object(bs.prefix + key)
+	absKey := path.Join(bs.prefix, key)
+	oh := bs.bucket.Object(absKey)
 
 	var conditionalHandle *storage.ObjectHandle
 	if expectedVersion != "" {

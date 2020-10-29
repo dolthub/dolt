@@ -24,9 +24,10 @@ package types
 import (
 	"context"
 	"errors"
+	"runtime"
 	"sync"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
@@ -93,6 +94,8 @@ func PanicIfDangling(ctx context.Context, unresolved hash.HashSet, cs chunks.Chu
 const (
 	defaultDecodedChunksSize = 1 << 25 // 32MB
 	defaultPendingPutMax     = 1 << 28 // 256MB
+
+	gcBuffSize = 16
 )
 
 // newTestValueStore creates a simple struct that satisfies ValueReadWriter
@@ -249,33 +252,22 @@ func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice
 	}
 
 	if len(remaining) != 0 {
-		// Request remaining hashes from ChunkStore, processing the found chunks as they come in.
-		foundChunks := make(chan *chunks.Chunk, 16)
-
-		ae := atomicerr.New()
-		go func() {
-			defer close(foundChunks)
-			err := lvs.cs.GetMany(ctx, remaining, foundChunks)
-			ae.SetIfError(err)
-		}()
-
-		var err error
-		for c := range foundChunks {
-			if err != nil {
-				continue // continue to drain even if there is an error
+		mu := new(sync.Mutex)
+		var decodeErr error
+		err := lvs.cs.GetMany(ctx, remaining, func(c *chunks.Chunk) {
+			mu.Lock()
+			defer mu.Unlock()
+			if decodeErr != nil {
+				return
 			}
-
 			h := c.Hash()
-
-			foundValues[h], err = decode(h, c)
-		}
-
-		if ae.IsSet() {
-			return nil, ae.Get()
-		}
-
+			foundValues[h], decodeErr = decode(h, c)
+		})
 		if err != nil {
 			return nil, err
+		}
+		if decodeErr != nil {
+			return nil, decodeErr
 		}
 	}
 
@@ -548,6 +540,108 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 
 		return true, nil
 	}()
+}
+
+// GC traverses the ValueStore from the root and removes unreferenced chunks from the ChunkStore
+func (lvs *ValueStore) GC(ctx context.Context) error {
+	collector, ok := lvs.cs.(chunks.ChunkStoreGarbageCollector)
+
+	if !ok {
+		return chunks.ErrUnsupportedOperation
+	}
+
+	lvs.versOnce.Do(lvs.expectVersion)
+
+	root, err := lvs.Root(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	rootVal, err := lvs.ReadValue(ctx, root)
+	if err != nil {
+		return err
+	}
+	if rootVal == nil {
+		// empty root
+		return nil
+	}
+
+	keepChunks := make(chan []hash.Hash, gcBuffSize)
+
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		return collector.MarkAndSweepChunks(ctx, root, keepChunks)
+	})
+
+	keepHashes := func(hs []hash.Hash) error {
+		select {
+		case keepChunks <- hs:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	const batchSize = 16384
+	batches := func(hs []hash.Hash) [][]hash.Hash {
+		// Return subslices of a copy, because the caller may
+		// mutate the parameter after the call.
+		copied := make([]hash.Hash, len(hs))
+		copy(copied, hs)
+		var res [][]hash.Hash
+		i := 0
+		for ; i+batchSize < len(copied); i += batchSize {
+			res = append(res, copied[i:i+batchSize])
+		}
+		if i < len(hs) {
+			res = append(res, copied[i:len(hs)])
+		}
+		return res
+	}
+
+	walker := newParallelRefWalker(ctx, lvs.nbf, runtime.GOMAXPROCS(0)-1)
+
+	eg.Go(func() error {
+		toVisit := []hash.Hash{root}
+		visited := hash.NewHashSet(root)
+		for len(toVisit) > 0 {
+			batches := batches(toVisit)
+			toVisit = toVisit[0:0]
+			for _, batch := range batches {
+				if err := keepHashes(batch); err != nil {
+					return err
+				}
+				vals, err := lvs.ReadManyValues(ctx, batch)
+				if err != nil {
+					return err
+				}
+				if len(vals) != len(batch) {
+					return errors.New("dangling reference found in chunk store")
+				}
+				hashes, err := walker.GetRefs(visited, vals)
+				if err != nil {
+					return err
+				}
+				toVisit = append(toVisit, hashes...)
+			}
+		}
+		close(keepChunks)
+		walker.Close()
+		return nil
+	})
+
+	err = eg.Wait()
+	if err != nil {
+		return err
+	}
+
+	// purge the cache
+	lvs.decodedChunks = sizecache.New(lvs.decodedChunks.Size())
+	lvs.bufferedChunks = make(map[hash.Hash]chunks.Chunk, lvs.bufferedChunkSize)
+	lvs.bufferedChunkSize = 0
+	lvs.withBufferedChildren = map[hash.Hash]uint64{}
+
+	return nil
 }
 
 // Close closes the underlying ChunkStore

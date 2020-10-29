@@ -26,13 +26,12 @@ import (
 	"context"
 	"io/ioutil"
 	"os"
-	"sync"
 	"testing"
 
 	"github.com/golang/snappy"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/sync/errgroup"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/types"
@@ -265,28 +264,30 @@ func (crg chunkReaderGroup) hasMany(addrs []hasRecord) (bool, error) {
 	return true, nil
 }
 
-func (crg chunkReaderGroup) getMany(ctx context.Context, reqs []getRecord, foundChunks chan<- *chunks.Chunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+func (crg chunkReaderGroup) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(*chunks.Chunk), stats *Stats) (bool, error) {
 	for _, haver := range crg {
-		remaining := haver.getMany(ctx, reqs, foundChunks, wg, ae, stats)
-
+		remaining, err := haver.getMany(ctx, eg, reqs, found, stats)
+		if err != nil {
+			return true, err
+		}
 		if !remaining {
-			return false
+			return false, nil
 		}
 	}
-
-	return true
+	return true, nil
 }
 
-func (crg chunkReaderGroup) getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan<- CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+func (crg chunkReaderGroup) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(CompressedChunk), stats *Stats) (bool, error) {
 	for _, haver := range crg {
-		remaining := haver.getManyCompressed(ctx, reqs, foundCmpChunks, wg, ae, stats)
-
+		remaining, err := haver.getManyCompressed(ctx, eg, reqs, found, stats)
+		if err != nil {
+			return true, err
+		}
 		if !remaining {
-			return false
+			return false, nil
 		}
 	}
-
-	return true
+	return true, nil
 }
 
 func (crg chunkReaderGroup) count() (count uint32, err error) {

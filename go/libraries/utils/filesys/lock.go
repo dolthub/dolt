@@ -18,7 +18,7 @@ import (
 	"errors"
 	"sync/atomic"
 
-	"github.com/juju/fslock"
+	"github.com/dolthub/fslock"
 )
 
 const unlockedStateValue int32 = 0

@@ -348,6 +348,43 @@ func TestSkipEnforceCompleteness(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestGC(t *testing.T) {
+	assert := assert.New(t)
+
+	ctx := context.Background()
+	vs := newTestValueStore()
+	r1 := mustRef(vs.WriteValue(ctx, String("committed")))
+	r2 := mustRef(vs.WriteValue(ctx, String("unreferenced")))
+	set1 := mustSet(NewSet(ctx, vs, r1))
+	set2 := mustSet(NewSet(ctx, vs, r2))
+
+	h1 := mustRef(vs.WriteValue(ctx, set1)).TargetHash()
+
+	rt, err := vs.Root(ctx)
+	assert.NoError(err)
+	ok, err := vs.Commit(ctx, h1, rt)
+	assert.NoError(err)
+	assert.True(ok)
+	h2 := mustRef(vs.WriteValue(ctx, set2)).TargetHash()
+
+	v1, err := vs.ReadValue(ctx, h1) // non-nil
+	assert.NoError(err)
+	assert.NotNil(v1)
+	v2, err := vs.ReadValue(ctx, h2) // non-nil
+	assert.NoError(err)
+	assert.NotNil(v2)
+
+	err = vs.GC(ctx)
+	assert.NoError(err)
+
+	v1, err = vs.ReadValue(ctx, h1) // non-nil
+	assert.NoError(err)
+	assert.NotNil(v1)
+	v2, err = vs.ReadValue(ctx, h2) // nil
+	assert.NoError(err)
+	assert.Nil(v2)
+}
+
 type badVersionStore struct {
 	chunks.ChunkStore
 }

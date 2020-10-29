@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"log"
 	"math/rand"
+	"os"
 	"reflect"
 	"testing"
 
@@ -30,17 +31,18 @@ import (
 )
 
 const (
-	key           = "test"
-	rmwRetries    = 5
-	testGCSBucket = ""
+	key        = "test"
+	rmwRetries = 5
 )
 
 var (
-	ctx    context.Context
-	bucket *storage.BucketHandle
+	ctx           context.Context
+	bucket        *storage.BucketHandle
+	testGCSBucket string
 )
 
 func init() {
+	testGCSBucket = os.Getenv("TEST_GCS_BUCKET")
 	if testGCSBucket != "" {
 		ctx = context.Background()
 		gcs, err := storage.NewClient(ctx)
@@ -54,6 +56,7 @@ func init() {
 }
 
 type BlobstoreTest struct {
+	bsType         string
 	bs             Blobstore
 	rmwConcurrency int
 	rmwIterations  int
@@ -61,7 +64,7 @@ type BlobstoreTest struct {
 
 func appendGCSTest(tests []BlobstoreTest) []BlobstoreTest {
 	if testGCSBucket != "" {
-		gcsTest := BlobstoreTest{&GCSBlobstore{bucket, uuid.New().String() + "/"}, 4, 4}
+		gcsTest := BlobstoreTest{"gcs", &GCSBlobstore{bucket, testGCSBucket, uuid.New().String() + "/"}, 4, 4}
 		tests = append(tests, gcsTest)
 	}
 
@@ -75,12 +78,12 @@ func appendLocalTest(tests []BlobstoreTest) []BlobstoreTest {
 		panic("Could not create temp dir")
 	}
 
-	return append(tests, BlobstoreTest{NewLocalBlobstore(dir), 10, 20})
+	return append(tests, BlobstoreTest{"local", NewLocalBlobstore(dir), 10, 20})
 }
 
 func newBlobStoreTests() []BlobstoreTest {
 	var tests []BlobstoreTest
-	tests = append(tests, BlobstoreTest{NewInMemoryBlobstore(), 10, 20})
+	tests = append(tests, BlobstoreTest{"inmem", NewInMemoryBlobstore(), 10, 20})
 	tests = appendLocalTest(tests)
 	tests = appendGCSTest(tests)
 
@@ -119,7 +122,9 @@ func testPutAndGetBack(t *testing.T, bs Blobstore) {
 
 func TestPutAndGetBack(t *testing.T) {
 	for _, bsTest := range newBlobStoreTests() {
-		testPutAndGetBack(t, bsTest.bs)
+		t.Run(bsTest.bsType, func(t *testing.T) {
+			testPutAndGetBack(t, bsTest.bs)
+		})
 	}
 }
 
@@ -133,7 +138,9 @@ func testGetMissing(t *testing.T, bs Blobstore) {
 
 func TestGetMissing(t *testing.T) {
 	for _, bsTest := range newBlobStoreTests() {
-		testGetMissing(t, bsTest.bs)
+		t.Run(bsTest.bsType, func(t *testing.T) {
+			testGetMissing(t, bsTest.bs)
+		})
 	}
 }
 
@@ -168,7 +175,9 @@ func testCheckAndPutError(t *testing.T, bs Blobstore) {
 
 func TestCheckAndPutError(t *testing.T) {
 	for _, bsTest := range newBlobStoreTests() {
-		testCheckAndPutError(t, bsTest.bs)
+		t.Run(bsTest.bsType, func(t *testing.T) {
+			testCheckAndPutError(t, bsTest.bs)
+		})
 	}
 }
 
@@ -194,7 +203,9 @@ func testCheckAndPut(t *testing.T, bs Blobstore) {
 
 func TestCheckAndPut(t *testing.T) {
 	for _, bsTest := range newBlobStoreTests() {
-		testCheckAndPut(t, bsTest.bs)
+		t.Run(bsTest.bsType, func(t *testing.T) {
+			testCheckAndPut(t, bsTest.bs)
+		})
 	}
 }
 
@@ -276,10 +287,12 @@ func testConcurrentCheckAndPuts(t *testing.T, bsTest BlobstoreTest, key string) 
 
 func TestConcurrentCheckAndPuts(t *testing.T) {
 	for _, bsTest := range newBlobStoreTests() {
-		if bsTest.rmwIterations*bsTest.rmwConcurrency > 255 {
-			panic("Test epects less than 255 total updates or it won't work as is.")
-		}
-		testConcurrentCheckAndPuts(t, bsTest, uuid.New().String())
+		t.Run(bsTest.bsType, func(t *testing.T) {
+			if bsTest.rmwIterations*bsTest.rmwConcurrency > 255 {
+				panic("Test epects less than 255 total updates or it won't work as is.")
+			}
+			testConcurrentCheckAndPuts(t, bsTest, uuid.New().String())
+		})
 	}
 }
 
@@ -333,32 +346,22 @@ func TestGetRange(t *testing.T) {
 
 	tests := newBlobStoreTests()
 	for _, bsTest := range tests {
-		setupRangeTest(t, bsTest.bs, testData)
-	}
+		t.Run(bsTest.bsType, func(t *testing.T) {
+			setupRangeTest(t, bsTest.bs, testData)
+			// test full range
+			testGetRange(t, bsTest.bs, AllRange, rangeData(0, maxValue))
+			// test first 2048 bytes (1024 shorts)
+			testGetRange(t, bsTest.bs, NewBlobRange(0, 2048), rangeData(0, 1024))
 
-	// test full range
-	for _, bsTest := range tests {
-		testGetRange(t, bsTest.bs, AllRange, rangeData(0, maxValue))
-	}
+			// test range of values from 1024 to 2048 stored in bytes 2048 to 4096 of the original testData
+			testGetRange(t, bsTest.bs, NewBlobRange(2*1024, 2*1024), rangeData(1024, 2048))
 
-	// test first 2048 bytes (1024 shorts)
-	for _, bsTest := range tests {
-		testGetRange(t, bsTest.bs, NewBlobRange(0, 2048), rangeData(0, 1024))
-	}
+			// test the last 2048 bytes of data which will be the last 1024 shorts
+			testGetRange(t, bsTest.bs, NewBlobRange(-2*1024, 0), rangeData(maxValue-1024, maxValue))
 
-	// test range of values from 1024 to 2048 stored in bytes 2048 to 4096 of the original testData
-	for _, bsTest := range tests {
-		testGetRange(t, bsTest.bs, NewBlobRange(2*1024, 2*1024), rangeData(1024, 2048))
-	}
-
-	// test the last 2048 bytes of data which will be the last 1024 shorts
-	for _, bsTest := range tests {
-		testGetRange(t, bsTest.bs, NewBlobRange(-2*1024, 0), rangeData(maxValue-1024, maxValue))
-	}
-
-	// test the range beginning 2048 bytes from the end of size 512 which will be shorts 1024 from the end til 768 from the end
-	for _, bsTest := range tests {
-		testGetRange(t, bsTest.bs, NewBlobRange(-2*1024, 512), rangeData(maxValue-1024, maxValue-768))
+			// test the range beginning 2048 bytes from the end of size 512 which will be shorts 1024 from the end til 768 from the end
+			testGetRange(t, bsTest.bs, NewBlobRange(-2*1024, 512), rangeData(maxValue-1024, maxValue-768))
+		})
 	}
 }
 

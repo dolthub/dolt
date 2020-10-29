@@ -35,6 +35,7 @@ const (
 	tablesKey       = "tables"
 	superSchemasKey = "super_schemas"
 	foreignKeyKey   = "foreign_key"
+	featureVersKey  = "feature_ver"
 )
 
 // RootValue defines the structure used inside all Liquidata noms dbs
@@ -129,6 +130,16 @@ func newRootFromMaps(vrw types.ValueReadWriter, tblMap types.Map, ssMap types.Ma
 
 func (root *RootValue) VRW() types.ValueReadWriter {
 	return root.vrw
+}
+
+// GetFeatureVersion returns the feature version of this root, if one is written
+func (root *RootValue) GetFeatureVersion(ctx context.Context) (ver int64, ok bool, err error) {
+	v, ok, err := root.valueSt.MaybeGet(featureVersKey)
+	if err != nil || !ok {
+		return ver, ok, err
+	}
+	ver = int64(v.(types.Int))
+	return ver, ok, err
 }
 
 func (root *RootValue) HasTable(ctx context.Context, tName string) (bool, error) {

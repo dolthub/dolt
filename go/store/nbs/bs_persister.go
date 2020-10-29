@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/dolthub/dolt/go/store/blobstore"
+	"github.com/dolthub/dolt/go/store/chunks"
 )
 
 type blobstorePersister struct {
@@ -151,5 +152,5 @@ func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, ch
 }
 
 func (bsp *blobstorePersister) PruneTableFiles(ctx context.Context, contents manifestContents) error {
-	return ErrUnsupportedOperation
+	return chunks.ErrUnsupportedOperation
 }

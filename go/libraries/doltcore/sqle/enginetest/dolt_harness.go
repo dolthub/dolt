@@ -31,9 +31,10 @@ import (
 )
 
 type DoltHarness struct {
-	t       *testing.T
-	session *sqle.DoltSession
-	mrEnv   env.MultiRepoEnv
+	t           *testing.T
+	session     *sqle.DoltSession
+	mrEnv       env.MultiRepoEnv
+	parallelism int
 }
 
 var _ enginetest.Harness = (*DoltHarness)(nil)
@@ -52,6 +53,14 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 	}
 }
 
+// WithParallelism returns a copy of the harness with parallelism set to the given number of threads. A value of 0 or
+// less means to use the system parallelism settings.
+func (d *DoltHarness) WithParallelism(parallelism int) *DoltHarness {
+	nd := *d
+	nd.parallelism = parallelism
+	return &nd
+}
+
 // Logic to skip unsupported queries
 func (d *DoltHarness) SkipQueryTest(query string) bool {
 	lowerQuery := strings.ToLower(query)
@@ -64,14 +73,19 @@ func (d *DoltHarness) SkipQueryTest(query string) bool {
 }
 
 func (d *DoltHarness) Parallelism() int {
-	// always test with some parallelism
-	parallelism := runtime.NumCPU()
+	if d.parallelism <= 0 {
 
-	if parallelism <= 1 {
-		parallelism = 2
+		// always test with some parallelism
+		parallelism := runtime.NumCPU()
+
+		if parallelism <= 1 {
+			parallelism = 2
+		}
+
+		return parallelism
 	}
 
-	return parallelism
+	return d.parallelism
 }
 
 func (d *DoltHarness) NewContext() *sql.Context {

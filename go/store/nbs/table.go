@@ -27,12 +27,11 @@ import (
 	"crypto/sha512"
 	"encoding/base32"
 	"encoding/binary"
-	"errors"
 	"hash/crc32"
 	"io"
-	"sync"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -228,8 +227,8 @@ type chunkReader interface {
 	has(h addr) (bool, error)
 	hasMany(addrs []hasRecord) (bool, error)
 	get(ctx context.Context, h addr, stats *Stats) ([]byte, error)
-	getMany(ctx context.Context, reqs []getRecord, foundChunks chan<- *chunks.Chunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool
-	getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan<- CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool
+	getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(*chunks.Chunk), stats *Stats) (bool, error)
+	getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(CompressedChunk), stats *Stats) (bool, error)
 	extract(ctx context.Context, chunks chan<- extractRecord) error
 	count() (uint32, error)
 	uncompressedLen() (uint64, error)
@@ -242,22 +241,18 @@ type chunkReadPlanner interface {
 	findOffsets(reqs []getRecord) (ors offsetRecSlice, remaining bool)
 	getManyAtOffsets(
 		ctx context.Context,
-		reqs []getRecord,
+		eg *errgroup.Group,
 		offsetRecords offsetRecSlice,
-		foundChunks chan<- *chunks.Chunk,
-		wg *sync.WaitGroup,
-		ae *atomicerr.AtomicError,
+		found func(*chunks.Chunk),
 		stats *Stats,
-	)
+	) error
 	getManyCompressedAtOffsets(
 		ctx context.Context,
-		reqs []getRecord,
+		eg *errgroup.Group,
 		offsetRecords offsetRecSlice,
-		foundCmpChunks chan<- CompressedChunk,
-		wg *sync.WaitGroup,
-		ae *atomicerr.AtomicError,
+		found func(CompressedChunk),
 		stats *Stats,
-	)
+	) error
 }
 
 type chunkSource interface {
@@ -291,8 +286,6 @@ type TableFile interface {
 	Open(ctx context.Context) (io.ReadCloser, error)
 }
 
-var ErrUnsupportedOperation = errors.New("operation not supported")
-
 // Describes what is possible to do with TableFiles in a TableFileStore.
 type TableFileStoreOps struct {
 	// True is the TableFileStore supports reading table files.
@@ -301,6 +294,8 @@ type TableFileStoreOps struct {
 	CanWrite bool
 	// True is the TableFileStore supports pruning unused table files.
 	CanPrune bool
+	// True is the TableFileStore supports garbage collecting chunks.
+	CanGC bool
 }
 
 // TableFileStore is an interface for interacting with table files directly

@@ -721,6 +721,44 @@ func (t *Table) RenameIndexRowData(ctx context.Context, oldIndexName, newIndexNa
 	return t.SetIndexData(ctx, indexesMap)
 }
 
+// VerifyIndexRowData verifies that the index with the given name's data matches what the index expects.
+func (t *Table) VerifyIndexRowData(ctx context.Context, indexName string) error {
+	sch, err := t.GetSchema(ctx)
+	if err != nil {
+		return err
+	}
+
+	index := sch.Indexes().GetByName(indexName)
+	if index == nil {
+		return fmt.Errorf("index `%s` does not exist", indexName)
+	}
+
+	indexesMap, err := t.GetIndexData(ctx)
+	if err != nil {
+		return err
+	}
+
+	indexMapRef, ok, err := indexesMap.MaybeGet(ctx, types.String(indexName))
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("index `%s` is missing its data", indexName)
+	}
+
+	indexMapValue, err := indexMapRef.(types.Ref).TargetValue(ctx, t.vrw)
+	if err != nil {
+		return err
+	}
+
+	iter, err := indexMapValue.(types.Map).Iterator(ctx)
+	if err != nil {
+		return err
+	}
+
+	return index.VerifyMap(ctx, iter, indexMapValue.(types.Map).Format())
+}
+
 func rebuildIndexRowData(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, tblRowData types.Map, index schema.Index) (types.Map, error) {
 	emptyIndexMap, err := types.NewMap(ctx, vrw)
 	if err != nil {

@@ -164,9 +164,9 @@ func addColumnToSchema(sch schema.Schema, tag uint64, newColName string, typeInf
 
 func createColumn(nullable Nullable, newColName string, tag uint64, typeInfo typeinfo.TypeInfo, defaultVal, comment string) (schema.Column, error) {
 	if nullable {
-		return schema.NewColumnWithTypeInfo(newColName, tag, typeInfo, false, defaultVal, comment)
+		return schema.NewColumnWithTypeInfo(newColName, tag, typeInfo, false, defaultVal, false, comment)
 	} else {
-		return schema.NewColumnWithTypeInfo(newColName, tag, typeInfo, false, defaultVal, comment, schema.NotNullConstraint{})
+		return schema.NewColumnWithTypeInfo(newColName, tag, typeInfo, false, defaultVal, false, comment, schema.NotNullConstraint{})
 	}
 }
 

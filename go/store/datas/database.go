@@ -158,6 +158,16 @@ func NewDatabase(cs chunks.ChunkStore) Database {
 	return newDatabase(cs)
 }
 
+// GarbageCollector provides a method to
+// remove unreferenced data from a store.
+type GarbageCollector interface {
+	types.ValueReadWriter
+
+	// GC traverses the database starting at the Root and removes
+	// all unreferenced data from persistent storage.
+	GC(ctx context.Context) error
+}
+
 // CanUsePuller returns true if a datas.Puller can be used to pull data from one Database into another.  Not all
 // Databases support this yet.
 func CanUsePuller(db Database) bool {

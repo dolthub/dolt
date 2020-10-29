@@ -59,14 +59,16 @@ type TestStoreView struct {
 	writes int32
 }
 
+var _ ChunkStoreGarbageCollector = &TestStoreView{}
+
 func (s *TestStoreView) Get(ctx context.Context, h hash.Hash) (Chunk, error) {
 	atomic.AddInt32(&s.reads, 1)
 	return s.ChunkStore.Get(ctx, h)
 }
 
-func (s *TestStoreView) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan<- *Chunk) error {
+func (s *TestStoreView) GetMany(ctx context.Context, hashes hash.HashSet, found func(*Chunk)) error {
 	atomic.AddInt32(&s.reads, int32(len(hashes)))
-	return s.ChunkStore.GetMany(ctx, hashes, foundChunks)
+	return s.ChunkStore.GetMany(ctx, hashes, found)
 }
 
 func (s *TestStoreView) Has(ctx context.Context, h hash.Hash) (bool, error) {
@@ -82,6 +84,15 @@ func (s *TestStoreView) HasMany(ctx context.Context, hashes hash.HashSet) (hash.
 func (s *TestStoreView) Put(ctx context.Context, c Chunk) error {
 	atomic.AddInt32(&s.writes, 1)
 	return s.ChunkStore.Put(ctx, c)
+}
+
+func (s *TestStoreView) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash) error {
+	collector, ok := s.ChunkStore.(ChunkStoreGarbageCollector)
+	if !ok {
+		return ErrUnsupportedOperation
+	}
+
+	return collector.MarkAndSweepChunks(ctx, last, keepChunks)
 }
 
 func (s *TestStoreView) Reads() int {

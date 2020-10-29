@@ -23,10 +23,10 @@ package chunks
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/dolthub/dolt/go/store/constants"
-
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -121,6 +121,9 @@ type MemoryStoreView struct {
 	storage *MemoryStorage
 }
 
+var _ ChunkStore = &MemoryStoreView{}
+var _ ChunkStoreGarbageCollector = &MemoryStoreView{}
+
 func (ms *MemoryStoreView) Get(ctx context.Context, h hash.Hash) (Chunk, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
@@ -130,7 +133,7 @@ func (ms *MemoryStoreView) Get(ctx context.Context, h hash.Hash) (Chunk, error) 
 	return ms.storage.Get(ctx, h)
 }
 
-func (ms *MemoryStoreView) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan<- *Chunk) error {
+func (ms *MemoryStoreView) GetMany(ctx context.Context, hashes hash.HashSet, found func(*Chunk)) error {
 	for h := range hashes {
 		c, err := ms.Get(ctx, h)
 
@@ -139,7 +142,7 @@ func (ms *MemoryStoreView) GetMany(ctx context.Context, hashes hash.HashSet, fou
 		}
 
 		if !c.IsEmpty() {
-			foundChunks <- &c
+			found(&c)
 		}
 	}
 
@@ -216,6 +219,37 @@ func (ms *MemoryStoreView) Commit(ctx context.Context, current, last hash.Hash) 
 	}
 	ms.rootHash = ms.storage.Root(ctx)
 	return success, nil
+}
+
+func (ms *MemoryStoreView) MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash) error {
+	if last != ms.rootHash {
+		return fmt.Errorf("last does not match ms.Root()")
+	}
+
+	keepers := make(map[hash.Hash]Chunk, ms.storage.Len())
+
+LOOP:
+	for {
+		select {
+		case hs, ok := <-keepChunks:
+			if !ok {
+				break LOOP
+			}
+			for _, h := range hs {
+				c, err := ms.Get(ctx, h)
+				if err != nil {
+					return err
+				}
+				keepers[h] = c
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	ms.storage = &MemoryStorage{rootHash: ms.rootHash, data: keepers}
+	ms.pending = map[hash.Hash]Chunk{}
+	return nil
 }
 
 func (ms *MemoryStoreView) Stats() interface{} {

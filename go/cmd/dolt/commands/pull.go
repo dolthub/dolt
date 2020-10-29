@@ -57,6 +57,7 @@ func (cmd PullCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) e
 
 func (cmd PullCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
+	ap.SupportsFlag(squashParam, "", "Merges changes to the working set without updating the commit history")
 	return ap
 }
 
@@ -103,7 +104,8 @@ func pullFromRemote(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPa
 		remoteTrackRef := refSpec.DestRef(branch)
 
 		if remoteTrackRef != nil {
-			verr = pullRemoteBranch(ctx, dEnv, remote, branch, remoteTrackRef)
+			squash := apr.Contains(squashParam)
+			verr = pullRemoteBranch(ctx, squash, dEnv, remote, branch, remoteTrackRef)
 
 			if verr != nil {
 				return verr
@@ -126,7 +128,7 @@ func pullFromRemote(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPa
 	return nil
 }
 
-func pullRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, r env.Remote, srcRef, destRef ref.DoltRef) errhand.VerboseError {
+func pullRemoteBranch(ctx context.Context, squash bool, dEnv *env.DoltEnv, r env.Remote, srcRef, destRef ref.DoltRef) errhand.VerboseError {
 	srcDB, err := r.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
 
 	if err != nil {
@@ -145,5 +147,5 @@ func pullRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, r env.Remote, srcR
 		return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
 	}
 
-	return mergeCommitSpec(ctx, dEnv, destRef.String())
+	return mergeCommitSpec(ctx, squash, dEnv, destRef.String())
 }

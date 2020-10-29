@@ -195,7 +195,7 @@ func (r *refWalker) walkValue(nbf *NomsBinFormat, cb RefCallback) error {
 		d.Panic("A value instance can never have type %s", k)
 	default:
 		if IsPrimitiveKind(k) {
-			if emptyVal, ok := KindToType[k]; ok {
+			if emptyVal := KindToType[k]; emptyVal != nil {
 				r.skipKind()
 				emptyVal.skip(nbf, &r.binaryNomsReader)
 				return nil

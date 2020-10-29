@@ -26,7 +26,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/juju/fslock"
+	"github.com/dolthub/fslock"
 )
 
 func main() {

@@ -17,6 +17,8 @@ package nbs
 import (
 	"bytes"
 	"context"
+	"io"
+	"strings"
 
 	"github.com/dolthub/dolt/go/store/blobstore"
 )
@@ -42,7 +44,7 @@ func manifestVersionAndContents(ctx context.Context, bs blobstore.Blobstore) (st
 	}
 
 	defer reader.Close()
-	contents, err := parseManifest(reader)
+	contents, err := fileManifestV5{}.parseManifest(reader)
 
 	if err != nil {
 		return "", manifestContents{}, err
@@ -80,13 +82,13 @@ func (bsm blobstoreManifest) Update(ctx context.Context, lastLock addr, newConte
 
 	ver, contents, err := manifestVersionAndContents(ctx, bsm.bs)
 
-	if err != nil {
+	if err != nil && !blobstore.IsNotFoundError(err) {
 		return manifestContents{}, err
 	}
 
 	if contents.lock == lastLock {
 		buffer := bytes.NewBuffer(make([]byte, 64*1024)[:0])
-		err := writeManifest(buffer, newContents)
+		err := fileManifestV5{}.writeManifest(buffer, newContents)
 
 		if err != nil {
 			return manifestContents{}, err
@@ -104,4 +106,14 @@ func (bsm blobstoreManifest) Update(ctx context.Context, lastLock addr, newConte
 	}
 
 	return contents, nil
+}
+
+func writeVer4Manifest(temp io.Writer, contents manifestContents) error {
+	strs := make([]string, 2*len(contents.specs)+4)
+	strs[0], strs[1], strs[2], strs[3] = storageVersion4, contents.vers, contents.lock.String(), contents.root.String()
+	tableInfo := strs[4:]
+	formatSpecs(contents.specs, tableInfo)
+	_, err := io.WriteString(temp, strings.Join(strs, ":"))
+
+	return err
 }

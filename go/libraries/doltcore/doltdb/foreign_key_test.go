@@ -46,7 +46,7 @@ type testCommand struct {
 	args []string
 }
 
-var setupCommon = []testCommand{
+var fkSetupCommon = []testCommand{
 	{commands.SqlCmd{}, []string{"-q", "create table parent (" +
 		"id int," +
 		"v1 int," +
@@ -65,7 +65,7 @@ func testForeignKeys(t *testing.T, test foreignKeyTest) {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
 
-	for _, c := range setupCommon {
+	for _, c := range fkSetupCommon {
 		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
 		require.Equal(t, 0, exitCode)
 	}

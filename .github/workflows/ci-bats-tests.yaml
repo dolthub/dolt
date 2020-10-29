@@ -12,8 +12,20 @@ jobs:
       fail-fast: true
       matrix:
         os: [ ubuntu-latest, macos-latest ]
+    env:
+      use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
     steps:
+      - name: Conditionally Set ENV VARS for AWS tests
+        run: |
+          if [[ $use_credentials == true ]]; then
+            echo "AWS_SDK_LOAD_CONFIG=1" >> $GITHUB_ENV
+            echo "AWS_REGION=us-west-2" >> $GITHUB_ENV
+            echo "DOLT_BATS_AWS_TABLE=dolt-ci-bats-manifests-us-west-2" >> $GITHUB_ENV
+            echo "DOLT_BATS_AWS_BUCKET=dolt-ci-bats-chunks-us-west-2" >> $GITHUB_ENV
+            echo "DOLT_BATS_AWS_EXISTING_REPO=aws_remote_bats_tests" >> $GITHUB_ENV
+          fi
       - name: Configure AWS Credentials
+        if: ${{ env.use_credentials == 'true' }}
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -37,11 +49,11 @@ jobs:
       - name: Create CI Bin
         run: |
           mkdir -p ./.ci_bin
-          echo "::add-path::$(pwd)/.ci_bin"
+          echo "$(pwd)/.ci_bin" >> $GITHUB_PATH
       - name: Install Bats
         run: |
           npm i bats
-          echo "::add-path::$(pwd)/node_modules/.bin"
+          echo "$(pwd)/node_modules/.bin" >> $GITHUB_PATH
         working-directory: ./.ci_bin
       - name: Install Doltpy
         run: |
@@ -56,8 +68,8 @@ jobs:
           go build -mod=readonly -o ../.ci_bin/remotesrv ./utils/remotesrv/.
       - name: Setup Dolt Config
         run: |
-          dolt config --global --add user.name 'Liquidata Actions'
-          dolt config --global --add user.email 'actions@liquidata.co'
+          dolt config --global --add user.name 'Dolthub Actions'
+          dolt config --global --add user.email 'actions@dolthub.com'
       - name: Install expect
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get install -y expect
@@ -67,9 +79,3 @@ jobs:
         run: |
           bats --tap .
         working-directory: ./bats
-        env:
-          AWS_SDK_LOAD_CONFIG: "1"
-          AWS_REGION: "us-west-2"
-          DOLT_BATS_AWS_TABLE: "dolt-ci-bats-manifests-us-west-2"
-          DOLT_BATS_AWS_BUCKET: "dolt-ci-bats-chunks-us-west-2"
-          DOLT_BATS_AWS_EXISTING_REPO: "aws_remote_bats_tests"

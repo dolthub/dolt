@@ -14,6 +14,13 @@
 
 package schema
 
+import (
+	"context"
+	"fmt"
+
+	"github.com/dolthub/dolt/go/store/types"
+)
+
 type Index interface {
 	// AllTags returns the tags of the columns in the entire index, including the primary keys.
 	// If we imagined a dolt index as being a standard dolt table, then the tags would represent the schema columns.
@@ -31,43 +38,50 @@ type Index interface {
 	GetColumn(tag uint64) (Column, bool)
 	// IndexedColumnTags returns the tags of the columns in the index.
 	IndexedColumnTags() []uint64
-	// IsHidden returns whether the index is hidden and managed internally, such as for a foreign key. Such indexes do
-	// not cause column nor tag collisions with other indexes.
+	// IsUnique returns whether the given index has the UNIQUE constraint.
 	IsUnique() bool
+	// IsUserDefined returns whether the given index was created by a user or automatically generated.
+	IsUserDefined() bool
 	// Name returns the name of the index.
 	Name() string
 	// PrimaryKeyTags returns the primary keys of the indexed table, in the order that they're stored for that table.
 	PrimaryKeyTags() []uint64
 	// Schema returns the schema for the internal index map. Can be used for table operations.
 	Schema() Schema
+	// VerifyMap returns whether the given map iterator contains all valid keys and values for this index.
+	VerifyMap(ctx context.Context, iter types.MapIterator, nbf *types.NomsBinFormat) error
 }
 
 var _ Index = (*indexImpl)(nil)
 
 type indexImpl struct {
-	name      string
-	tags      []uint64
-	allTags   []uint64
-	indexColl *indexCollectionImpl
-	isUnique  bool
-	comment   string
+	name          string
+	tags          []uint64
+	allTags       []uint64
+	indexColl     *indexCollectionImpl
+	isUnique      bool
+	isUserDefined bool
+	comment       string
 }
 
 func NewIndex(name string, tags, allTags []uint64, indexColl *indexCollectionImpl, props IndexProperties) Index {
 	return &indexImpl{
-		name:      name,
-		tags:      tags,
-		allTags:   allTags,
-		indexColl: indexColl,
-		isUnique:  props.IsUnique,
-		comment:   props.Comment,
+		name:          name,
+		tags:          tags,
+		allTags:       allTags,
+		indexColl:     indexColl,
+		isUnique:      props.IsUnique,
+		isUserDefined: props.IsUserDefined,
+		comment:       props.Comment,
 	}
 }
 
+// AllTags implements Index.
 func (ix *indexImpl) AllTags() []uint64 {
 	return ix.allTags
 }
 
+// ColumnNames implements Index.
 func (ix *indexImpl) ColumnNames() []string {
 	colNames := make([]string, len(ix.tags))
 	for i, tag := range ix.tags {
@@ -76,14 +90,17 @@ func (ix *indexImpl) ColumnNames() []string {
 	return colNames
 }
 
+// Comment implements Index.
 func (ix *indexImpl) Comment() string {
 	return ix.comment
 }
 
+// Count implements Index.
 func (ix *indexImpl) Count() int {
 	return len(ix.tags)
 }
 
+// Equals implements Index.
 func (ix *indexImpl) Equals(other Index) bool {
 	if ix.Count() != other.Count() {
 		return false
@@ -103,26 +120,37 @@ func (ix *indexImpl) Equals(other Index) bool {
 		ix.Name() == other.Name()
 }
 
+// GetColumn implements Index.
 func (ix *indexImpl) GetColumn(tag uint64) (Column, bool) {
 	return ix.indexColl.colColl.GetByTag(tag)
 }
 
+// IndexedColumnTags implements Index.
 func (ix *indexImpl) IndexedColumnTags() []uint64 {
 	return ix.tags
 }
 
+// IsUnique implements Index.
 func (ix *indexImpl) IsUnique() bool {
 	return ix.isUnique
 }
 
+// IsUserDefined implements Index.
+func (ix *indexImpl) IsUserDefined() bool {
+	return ix.isUserDefined
+}
+
+// Name implements Index.
 func (ix *indexImpl) Name() string {
 	return ix.name
 }
 
+// PrimaryKeyTags implements Index.
 func (ix *indexImpl) PrimaryKeyTags() []uint64 {
 	return ix.indexColl.pks
 }
 
+// Schema implements Index.
 func (ix *indexImpl) Schema() Schema {
 	cols := make([]Column, len(ix.allTags))
 	for i, tag := range ix.allTags {
@@ -146,17 +174,72 @@ func (ix *indexImpl) Schema() Schema {
 	}
 }
 
-func (ix *indexImpl) copy() *indexImpl {
-	tags := make([]uint64, len(ix.tags))
-	_ = copy(tags, ix.tags)
-	allTags := make([]uint64, len(ix.allTags))
-	_ = copy(allTags, ix.allTags)
-	return &indexImpl{
-		name:      ix.name,
-		tags:      tags,
-		allTags:   allTags,
-		indexColl: ix.indexColl,
-		isUnique:  ix.isUnique,
-		comment:   ix.comment,
+// VerifyMap implements Index.
+func (ix *indexImpl) VerifyMap(ctx context.Context, iter types.MapIterator, nbf *types.NomsBinFormat) error {
+	lastKey := types.EmptyTuple(nbf)
+	var keyVal types.Value
+	var valVal types.Value
+	expectedVal := types.EmptyTuple(nbf)
+	var err error
+	cols := make([]Column, len(ix.allTags))
+	for i, tag := range ix.allTags {
+		var ok bool
+		cols[i], ok = ix.indexColl.colColl.TagToCol[tag]
+		if !ok {
+			return fmt.Errorf("index `%s` has column with tag `%d` which cannot be found", ix.name, tag)
+		}
 	}
+
+	for keyVal, valVal, err = iter.Next(ctx); err == nil && keyVal != nil; keyVal, valVal, err = iter.Next(ctx) {
+		key := keyVal.(types.Tuple)
+		i := 0
+		hasNull := false
+		if key.Len() != uint64(2*len(cols)) {
+			return fmt.Errorf("mismatched value count in key tuple compared to what index `%s` expects", ix.name)
+		}
+		err = key.WalkValues(ctx, func(v types.Value) error {
+			colIndex := i / 2
+			isTag := i%2 == 0
+			if isTag {
+				if !v.Equals(types.Uint(cols[colIndex].Tag)) {
+					return fmt.Errorf("column order of map does not match what index `%s` expects", ix.name)
+				}
+			} else {
+				if types.IsNull(v) {
+					hasNull = true
+				} else if v.Kind() != cols[colIndex].TypeInfo.NomsKind() {
+					return fmt.Errorf("column value in map does not match what index `%s` expects", ix.name)
+				}
+			}
+			i++
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		if ix.isUnique && !hasNull {
+			partialKeysEqual, err := key.PrefixEquals(ctx, lastKey, uint64(len(ix.tags)*2))
+			if err != nil {
+				return err
+			}
+			if partialKeysEqual {
+				return fmt.Errorf("UNIQUE constraint violation while verifying index: %s", ix.name)
+			}
+		}
+		if !expectedVal.Equals(valVal) {
+			return fmt.Errorf("index map value should be empty")
+		}
+		lastKey = key
+	}
+	return err
+}
+
+// copy returns an exact copy of the calling index.
+func (ix *indexImpl) copy() *indexImpl {
+	newIx := *ix
+	newIx.tags = make([]uint64, len(ix.tags))
+	_ = copy(newIx.tags, ix.tags)
+	newIx.allTags = make([]uint64, len(ix.allTags))
+	_ = copy(newIx.allTags, ix.allTags)
+	return &newIx
 }

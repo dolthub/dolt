@@ -301,7 +301,7 @@ func (rs *RemoteChunkStore) GetRepoMetadata(ctx context.Context, req *remotesapi
 
 	return &remotesapi.GetRepoMetadataResponse{
 		NbfVersion:  cs.Version(),
-		NbsVersion:  nbs.StorageVersion,
+		NbsVersion:  req.ClientRepoFormat.NbsVersion,
 		StorageSize: size,
 	}, nil
 }

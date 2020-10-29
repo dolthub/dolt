@@ -98,40 +98,79 @@ teardown() {
 }
 
 @test "executed saved" {
-    Q1="select pk, pk1, pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1"
-    Q1_UPDATED="select pk, pk1, pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1 and pk < 3"
+    Q1="select pk, pk1, pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1 order by 1"
     Q2="select pk from one_pk"
     dolt sql -q "$Q1" -s name1
     dolt sql -q "$Q2" -s name2
 
-    # executed Q1 and verify output
-    EXPECTED=$(echo -e "pk,pk1,pk2\n0,0,0\n1,0,1\n2,1,0\n3,1,1")
+    # save Q1 and verify output
+    EXPECTED=$(cat <<'EOF'
+pk,pk1,pk2
+0,0,0
+1,0,1
+2,1,0
+3,1,1
+EOF
+)
+
     run dolt sql -r csv -x name1
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED" ]] || false
 
-    # executed Q2 and verify output
-    EXPECTED=$(echo -e "pk\n0\n1\n2\n3")
+    # save Q2 and verify output
+    EXPECTED=$(cat <<'EOF'
+pk
+0
+1
+2
+3
+EOF
+)
+
     run dolt sql -r csv -x name2
-    echo $output
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED" ]] || false
 
-    # execute list-saved and verify output
-    EXPECTED=$(echo -e "id,display_order,name,query,description\nname1,1,name1,\"$Q1\",\"\"\nname2,2,name2,$Q2,\"\"")
+    # execute list-saved and verify output. I have no idea why the
+    # query on the second line isn't quoted, assuming it's a bash
+    # interpretation thing. Has quotes when run by hand.
+    EXPECTED=$(cat <<'EOF'
+id,display_order,name,query,description
+name1,1,name1,"select pk, pk1, pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1 order by 1",""
+name2,2,name2,select pk from one_pk,""
+EOF
+)
+
     run dolt sql --list-saved -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED" ]] || false
 
-    # update an existing verify output, and verify query catalog is updated
+    # update an existing query, and verify query catalog is updated
+    Q1_UPDATED="select pk, pk1, pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1 and pk < 3 order by 1 desc"
     dolt sql -q "$Q1_UPDATED" -s name1
 
-    EXPECTED=$(echo -e "pk,pk1,pk2\n2,1,0\n1,0,1\n0,0,0")
-    run dolt sql -r csv -x name1
+    # execute list-saved and verify output
+    EXPECTED=$(cat <<'EOF'
+id,display_order,name,query,description
+name1,1,name1,"select pk, pk1, pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1 and pk < 3 order by 1 desc",""
+name2,2,name2,select pk from one_pk,""
+EOF
+)
+
+    run dolt sql --list-saved -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED" ]] || false
-    EXPECTED=$(echo -e "id,display_order,name,query,description\nname1,1,name1,\"$Q1_UPDATED\",\"\"\nname2,2,name2,$Q2,\"\"")
-    run dolt sql --list-saved -r csv
+    
+    EXPECTED=$(cat <<'EOF'
+pk,pk1,pk2
+2,1,0
+1,0,1
+0,0,0
+EOF
+)
+
+    # Execute updated saved query and verify once output
+    run dolt sql -r csv -x name1
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED" ]] || false
 }

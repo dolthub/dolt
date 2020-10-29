@@ -63,7 +63,7 @@ type CmpChnkAndRefs struct {
 
 type NBSCompressedChunkStore interface {
 	chunks.ChunkStore
-	GetManyCompressed(context.Context, hash.HashSet, chan<- nbs.CompressedChunk) error
+	GetManyCompressed(context.Context, hash.HashSet, func(nbs.CompressedChunk)) error
 }
 
 // Puller is used to sync data between to Databases
@@ -338,7 +338,7 @@ func (p *Puller) getCmp(ctx context.Context, twDetails *TreeWalkEventDetails, le
 	ae := atomicerr.New()
 	go func() {
 		defer close(found)
-		err := p.srcChunkStore.GetManyCompressed(ctx, batch, found)
+		err := p.srcChunkStore.GetManyCompressed(ctx, batch, func(c nbs.CompressedChunk) { found <- c })
 		ae.SetIfError(err)
 	}()
 

@@ -37,10 +37,10 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-func makeFileManifestTempDir(t *testing.T) fileManifest {
+func makeFileManifestTempDir(t *testing.T) fileManifestV5 {
 	dir, err := ioutil.TempDir("", "")
 	assert.NoError(t, err)
-	return fileManifest{dir: dir} //, cache: newManifestCache(defaultManifestCacheSize)}
+	return fileManifestV5{dir: dir} //, cache: newManifestCache(defaultManifestCacheSize)}
 }
 
 func TestFileManifestLoadIfExists(t *testing.T) {
@@ -57,7 +57,9 @@ func TestFileManifestLoadIfExists(t *testing.T) {
 	jerk := computeAddr([]byte("jerk"))
 	newRoot := hash.Of([]byte("new root"))
 	tableName := hash.Of([]byte("table1"))
-	err = clobberManifest(fm.dir, strings.Join([]string{StorageVersion, "0", jerk.String(), newRoot.String(), tableName.String(), "0"}, ":"))
+	gcGen := addr{}
+	m := strings.Join([]string{StorageVersion, "0", jerk.String(), newRoot.String(), gcGen.String(), tableName.String(), "0"}, ":")
+	err = clobberManifest(fm.dir, m)
 	assert.NoError(err)
 
 	// ParseIfExists should now reflect the manifest written above.
@@ -83,7 +85,9 @@ func TestFileManifestLoadIfExistsHoldsLock(t *testing.T) {
 	lock := computeAddr([]byte("locker"))
 	newRoot := hash.Of([]byte("new root"))
 	tableName := hash.Of([]byte("table1"))
-	err := clobberManifest(fm.dir, strings.Join([]string{StorageVersion, constants.NomsVersion, lock.String(), newRoot.String(), tableName.String(), "0"}, ":"))
+	gcGen := addr{}
+	m := strings.Join([]string{StorageVersion, constants.NomsVersion, lock.String(), newRoot.String(), gcGen.String(), tableName.String(), "0"}, ":")
+	err := clobberManifest(fm.dir, m)
 	assert.NoError(err)
 
 	// ParseIfExists should now reflect the manifest written above.
@@ -91,7 +95,8 @@ func TestFileManifestLoadIfExistsHoldsLock(t *testing.T) {
 		// This should fail to get the lock, and therefore _not_ clobber the manifest.
 		lock := computeAddr([]byte("newlock"))
 		badRoot := hash.Of([]byte("bad root"))
-		b, err := tryClobberManifest(fm.dir, strings.Join([]string{StorageVersion, "0", lock.String(), badRoot.String(), tableName.String(), "0"}, ":"))
+		m = strings.Join([]string{StorageVersion, "0", lock.String(), badRoot.String(), gcGen.String(), tableName.String(), "0"}, ":")
+		b, err := tryClobberManifest(fm.dir, m)
 		assert.NoError(err, string(b))
 		return err
 	})
@@ -113,7 +118,8 @@ func TestFileManifestUpdateWontClobberOldVersion(t *testing.T) {
 	stats := &Stats{}
 
 	// Simulate another process having already put old Noms data in dir/.
-	err := clobberManifest(fm.dir, strings.Join([]string{StorageVersion, "0", addr{}.String(), hash.Hash{}.String()}, ":"))
+	m := strings.Join([]string{StorageVersion, "0", addr{}.String(), hash.Hash{}.String(), addr{}.String()}, ":")
+	err := clobberManifest(fm.dir, m)
 	assert.NoError(err)
 
 	_, err = fm.Update(context.Background(), addr{}, manifestContents{}, stats, nil)
@@ -133,7 +139,7 @@ func TestFileManifestUpdateEmpty(t *testing.T) {
 	assert.True(upstream.root.IsEmpty())
 	assert.Empty(upstream.specs)
 
-	fm2 := fileManifest{fm.dir} // Open existent, but empty manifest
+	fm2 := fileManifestV5{fm.dir} // Open existent, but empty manifest
 	exists, upstream, err := fm2.ParseIfExists(context.Background(), stats, nil)
 	assert.NoError(err)
 	assert.True(exists)
@@ -166,7 +172,9 @@ func TestFileManifestUpdate(t *testing.T) {
 		// This should fail to get the lock, and therefore _not_ clobber the manifest. So the Update should succeed.
 		lock := computeAddr([]byte("nolock"))
 		newRoot2 := hash.Of([]byte("noroot"))
-		b, err := tryClobberManifest(fm.dir, strings.Join([]string{StorageVersion, constants.NomsVersion, lock.String(), newRoot2.String()}, ":"))
+		gcGen := addr{}
+		m := strings.Join([]string{StorageVersion, constants.NomsVersion, lock.String(), newRoot2.String(), gcGen.String()}, ":")
+		b, err := tryClobberManifest(fm.dir, m)
 		assert.NoError(err, string(b))
 		return nil
 	})
@@ -191,7 +199,9 @@ func TestFileManifestUpdate(t *testing.T) {
 	// Now, test the case where the optimistic lock fails because someone else updated only the tables since last we checked
 	jerkLock := computeAddr([]byte("jerk"))
 	tableName := computeAddr([]byte("table1"))
-	err = clobberManifest(fm.dir, strings.Join([]string{StorageVersion, constants.NomsVersion, jerkLock.String(), contents2.root.String(), tableName.String(), "1"}, ":"))
+	gcGen := addr{}
+	m := strings.Join([]string{StorageVersion, constants.NomsVersion, jerkLock.String(), contents2.root.String(), gcGen.String(), tableName.String(), "1"}, ":")
+	err = clobberManifest(fm.dir, m)
 	assert.NoError(err)
 
 	contents3 := manifestContents{lock: computeAddr([]byte("locker 3")), root: hash.Of([]byte("new root 3")), vers: constants.NomsVersion}

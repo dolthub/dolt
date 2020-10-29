@@ -18,20 +18,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"strings"
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/spec"
-	"github.com/dolthub/dolt/go/store/types/edits"
-
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/pantoerr"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/types/edits"
 )
 
 func init() {
@@ -45,8 +45,12 @@ const (
 	MasterBranch     = "master"
 	CommitStructName = "Commit"
 
+	FeatureVersion featureVersion = 0
+
 	defaultChunksPerTF = 256 * 1024
 )
+
+type featureVersion int64
 
 // LocalDirDoltDB stores the db in the current directory
 var LocalDirDoltDB = "file://./" + dbfactory.DoltDataDir
@@ -412,14 +416,30 @@ func (ddb *DoltDB) ReadRootValue(ctx context.Context, h hash.Hash) (*RootValue, 
 	if err != nil {
 		return nil, err
 	}
+	if val == nil {
+		return nil, errors.New("there is no dolt root value at that hash")
+	}
 
-	if val != nil {
-		if rootSt, ok := val.(types.Struct); ok && rootSt.Name() == ddbRootStructName {
-			return &RootValue{ddb.db, rootSt, nil}, nil
+	rootSt, ok := val.(types.Struct)
+	if !ok || rootSt.Name() != ddbRootStructName {
+		return nil, errors.New("there is no dolt root value at that hash")
+	}
+
+	v, ok, err := rootSt.MaybeGet(featureVersKey)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		ver := featureVersion(v.(types.Int))
+		if FeatureVersion < ver {
+			return nil, ErrClientOutOfDate{
+				clientVer: FeatureVersion,
+				repoVer:   ver,
+			}
 		}
 	}
 
-	return nil, errors.New("there is no dolt root value at that hash")
+	return &RootValue{ddb.db, rootSt, nil}, nil
 }
 
 // Commit will update a branch's head value to be that of a previously committed root value hash
@@ -907,6 +927,104 @@ func (ddb *DoltDB) DeleteTag(ctx context.Context, tag ref.DoltRef) error {
 	}
 
 	return err
+}
+
+// GC performs garbage collection on this ddb. Values passed in |uncommitedVals| will be temporarily saved during gc.
+func (ddb *DoltDB) GC(ctx context.Context, uncommitedVals ...hash.Hash) error {
+	collector, ok := ddb.db.(datas.GarbageCollector)
+	if !ok {
+		return fmt.Errorf("this database does not support garbage collection")
+	}
+
+	err := ddb.pruneUnreferencedDatasets(ctx)
+	if err != nil {
+		return err
+	}
+
+	rand.Seed(time.Now().UnixNano())
+	tmpDatasets := make([]datas.Dataset, len(uncommitedVals))
+	for i, h := range uncommitedVals {
+		v, err := ddb.db.ReadValue(ctx, h)
+		if err != nil {
+			return err
+		}
+		if v == nil {
+			return fmt.Errorf("empty value for value hash %s", h.String())
+		}
+
+		ds, err := ddb.db.GetDataset(ctx, fmt.Sprintf("tmp/%d", rand.Int63()))
+		if err != nil {
+			return err
+		}
+
+		r, err := writeValAndGetRef(ctx, ddb.db, v)
+		if err != nil {
+			return err
+		}
+
+		ds, err = ddb.db.CommitValue(ctx, ds, r)
+		if err != nil {
+			return err
+		}
+		if !ds.HasHead() {
+			return fmt.Errorf("could not save value %s", h.String())
+		}
+
+		tmpDatasets[i] = ds
+	}
+
+	err = collector.GC(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, ds := range tmpDatasets {
+		ds, err = ddb.db.Delete(ctx, ds)
+		if err != nil {
+			return err
+		}
+
+		if ds.HasHead() {
+			return fmt.Errorf("unsuccessful delete for dataset %s", ds.ID())
+		}
+	}
+
+	return nil
+}
+
+func (ddb *DoltDB) pruneUnreferencedDatasets(ctx context.Context) error {
+	dd, err := ddb.db.Datasets(ctx)
+	if err != nil {
+		return err
+	}
+
+	var deletes []string
+	_ = dd.Iter(ctx, func(ds, _ types.Value) (stop bool, err error) {
+		dsID := string(ds.(types.String))
+		if !ref.IsRef(dsID) {
+			deletes = append(deletes, dsID)
+		}
+		return false, nil
+	})
+
+	// e.g. flushes
+	for _, dsID := range deletes {
+		ds, err := ddb.db.GetDataset(ctx, dsID)
+		if err != nil {
+			return err
+		}
+
+		ds, err = ddb.db.Delete(ctx, ds)
+		if err != nil {
+			return err
+		}
+
+		if ds.HasHead() {
+			return fmt.Errorf("unsuccessful delete for dataset %s", ds.ID())
+		}
+	}
+
+	return nil
 }
 
 // PushChunks initiates a push into a database from the source database given, at the Value ref given. Pull progress is
