@@ -142,10 +142,17 @@ github.com/dolthub/go-mysql-server v0.6.1-0.20201024152926-3179097f3258 h1:tn5cm
 github.com/dolthub/go-mysql-server v0.6.1-0.20201024152926-3179097f3258/go.mod h1:4/3X6Z6hROrbhHuZtcwFjn+4NiJKHmIM2DO5qcjhDTU=
 github.com/dolthub/go-mysql-server v0.6.1-0.20201026215820-ba4538cf7b29 h1:gzc5C1Fed7xwCIQtMJvW2ZcKBHw32EsbOMsWwtOO2Wc=
 github.com/dolthub/go-mysql-server v0.6.1-0.20201026215820-ba4538cf7b29/go.mod h1:4/3X6Z6hROrbhHuZtcwFjn+4NiJKHmIM2DO5qcjhDTU=
+<<<<<<< HEAD
 github.com/dolthub/go-mysql-server v0.6.1-0.20201027202458-51fc2de5f4a2 h1:N7Cr5tCzVQ001Kr67wZA5AuVOIob1L8+Z0hVkecTGJ8=
 github.com/dolthub/go-mysql-server v0.6.1-0.20201027202458-51fc2de5f4a2/go.mod h1:4/3X6Z6hROrbhHuZtcwFjn+4NiJKHmIM2DO5qcjhDTU=
+=======
+github.com/dolthub/go-mysql-server v0.6.1-0.20201029203709-35b589cd19a1 h1:A5s7qAlWU1bLT4eh59Is6G67u3R5tCwPJzG0Q+Vsvv8=
+github.com/dolthub/go-mysql-server v0.6.1-0.20201029203709-35b589cd19a1/go.mod h1:fVmfY3Gcq8g1cjSQBt1vjHjdIPaZ5d2xKd32mJq39t0=
+>>>>>>> picking up COM_FIELD_LIST support from vitess
 github.com/dolthub/vitess v0.0.0-20201009075426-dab8291dcb1b h1:cc/rikSvXHuZaXjF2mxgUJzHE7MntbXqm31aIYKRZPg=
 github.com/dolthub/vitess v0.0.0-20201009075426-dab8291dcb1b/go.mod h1:hUE8oSk2H5JZnvtlLBhJPYC8WZCA5AoSntdLTcBvdBM=
+github.com/dolthub/vitess v0.0.0-20201029194225-fde3230ed7ff h1:FITQHnMxA+bNgNoZuxSVoir+HTXrqbCflHze1Z+DP4g=
+github.com/dolthub/vitess v0.0.0-20201029194225-fde3230ed7ff/go.mod h1:hUE8oSk2H5JZnvtlLBhJPYC8WZCA5AoSntdLTcBvdBM=
 github.com/dustin/go-humanize v0.0.0-20171111073723-bb3d318650d4/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
 github.com/dustin/go-humanize v1.0.0 h1:VSnTsYCnlFHaM2/igO1h6X3HA71jcobQuxemgkq4zYo=
 github.com/dustin/go-humanize v1.0.0/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
