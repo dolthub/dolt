@@ -6,12 +6,12 @@ from sqlalchemy import create_engine
 import sys
 
 QUERY_RESPONSE = [
-    { "create table test (pk int, value int, primary key(pk))": [] },
+    { "create table test (pk int, `value` int, primary key(pk))": [] },
     { "describe test": [
         ('pk', 'int', 'NO', 'PRI', '', ''),
         ('value', 'int', 'YES', '', '', '')
     ] },
-    { "insert into test (pk, value) values (0,0)": () },
+    { "insert into test (pk, `value`) values (0,0)": () },
     { "select * from test": [(0,0)] }
 ]
     
