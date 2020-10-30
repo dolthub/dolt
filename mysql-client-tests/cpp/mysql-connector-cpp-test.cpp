@@ -28,10 +28,10 @@
 
 std::string queries[QUERIES_SIZE] =
   {
-   "create table test (pk int, value int, primary key(pk))",
+   "create table test (pk int, `value` int, primary key(pk))",
    "describe test",
    "select * from test",
-   "insert into test (pk, value) values (0,0)", 
+   "insert into test (pk, `value`) values (0,0)",
    "select * from test"
   };
 
