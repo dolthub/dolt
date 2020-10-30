@@ -27,6 +27,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"sync"
 
 	flag "github.com/juju/gnuflag"
 
@@ -92,10 +93,10 @@ func runMerge(ctx context.Context, args []string) int {
 	}
 
 	policy := decidePolicy(resolver)
-	pc := newMergeProgressChan()
+	pc, closer := newMergeProgressChan()
 	merged, err := policy(ctx, left, right, ancestor, db, pc)
+	closer()
 	util.CheckErrorNoUsage(err)
-	close(pc)
 
 	leftHeadRef, ok, err := leftDS.MaybeHeadRef()
 	d.PanicIfError(err)
@@ -214,16 +215,19 @@ func getCommonAncestor(ctx context.Context, r1, r2 types.Ref, vr types.ValueRead
 	return v.(types.Struct), true
 }
 
-func newMergeProgressChan() chan struct{} {
+func newMergeProgressChan() (chan struct{}, func()) {
 	pc := make(chan struct{}, 128)
+	wg := new(sync.WaitGroup)
+	wg.Add(1)
 	go func() {
 		count := 0
 		for range pc {
 			count++
 			status.Printf("Applied %d changes...", count)
 		}
+		wg.Done()
 	}()
-	return pc
+	return pc, func() { close(pc); wg.Wait() }
 }
 
 func decidePolicy(policy string) merge.Policy {
