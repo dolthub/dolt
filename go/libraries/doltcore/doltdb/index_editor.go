@@ -32,13 +32,13 @@ import (
 //
 // This type is thread-safe, and may be used in a multi-threaded environment.
 type IndexEditor struct {
-	keyCount   map[hash.Hash]int64
-	ed         types.EditAccumulator
-	data       types.Map
-	idx        schema.Index
-	idxSch     schema.Schema // idx.Schema() builds the schema every call, so we cache it here
-	needsFlush bool          // Whether the map editor has pending edits
-	updated    bool          // Whether the data has changed since the editor was created
+	keyCount            map[hash.Hash]int64
+	ed                  types.EditAccumulator
+	data                types.Map
+	idx                 schema.Index
+	idxSch              schema.Schema // idx.Schema() builds the schema every call, so we cache it here
+	numOutstandingEdits uint64        // The number of edits that have been made since the last flush
+	updated             bool          // Whether the data has changed since the editor was created
 
 	// This mutex blocks on key count updates
 	keyMutex *sync.Mutex
@@ -48,18 +48,20 @@ type IndexEditor struct {
 	flushMutex *sync.RWMutex
 }
 
+const indexEditorMaxEdits = 16384
+
 func NewIndexEditor(index schema.Index, indexData types.Map) *IndexEditor {
 	return &IndexEditor{
-		keyCount:   make(map[hash.Hash]int64),
-		ed:         types.CreateEditAccForMapEdits(indexData.Format()),
-		data:       indexData,
-		idx:        index,
-		idxSch:     index.Schema(),
-		needsFlush: false,
-		updated:    false,
-		keyMutex:   &sync.Mutex{},
-		mapMutex:   &sync.Mutex{},
-		flushMutex: &sync.RWMutex{},
+		keyCount:            make(map[hash.Hash]int64),
+		ed:                  types.CreateEditAccForMapEdits(indexData.Format()),
+		data:                indexData,
+		idx:                 index,
+		idxSch:              index.Schema(),
+		numOutstandingEdits: 0,
+		updated:             false,
+		keyMutex:            &sync.Mutex{},
+		mapMutex:            &sync.Mutex{},
+		flushMutex:          &sync.RWMutex{},
 	}
 }
 
@@ -107,7 +109,16 @@ func (indexEd *IndexEditor) Index() schema.Index {
 // Map returns a Map based on the edits given, if any. If Flush() was not called prior, it will be called here.
 func (indexEd *IndexEditor) Map(ctx context.Context) (types.Map, error) {
 	indexEd.flushMutex.RLock() // if a Flush is ongoing then we need to wait
-	if indexEd.needsFlush {
+
+	needsFlush := false
+	indexEd.mapMutex.Lock() // reads and writes to numOutstandingEdits is guarded by mapMutex
+	if indexEd.numOutstandingEdits > 0 {
+		indexEd.numOutstandingEdits = 0
+		needsFlush = true
+	}
+	indexEd.mapMutex.Unlock()
+
+	if needsFlush {
 		indexEd.flushMutex.RUnlock() // Flush locks flushMutex, so we must unlock to prevent deadlock
 		err := indexEd.Flush(ctx)    // if this panics and is caught higher up then we are fine since we read unlocked
 		if err != nil {
@@ -120,7 +131,8 @@ func (indexEd *IndexEditor) Map(ctx context.Context) (types.Map, error) {
 }
 
 // UpdateIndex updates the index map according to the given reduced index rows.
-func (indexEd *IndexEditor) UpdateIndex(ctx context.Context, originalIndexRow row.Row, updatedIndexRow row.Row) error {
+func (indexEd *IndexEditor) UpdateIndex(ctx context.Context, originalIndexRow row.Row, updatedIndexRow row.Row) (err error) {
+	defer indexEd.autoFlush(ctx, &err)
 	indexEd.flushMutex.RLock()
 	defer indexEd.flushMutex.RUnlock()
 
@@ -153,7 +165,7 @@ func (indexEd *IndexEditor) UpdateIndex(ctx context.Context, originalIndexRow ro
 		indexEd.mapMutex.Lock()
 		indexEd.ed.AddEdit(indexKey, nil)
 		indexEd.updated = true
-		indexEd.needsFlush = true
+		indexEd.numOutstandingEdits++
 		indexEd.mapMutex.Unlock()
 	}
 	if updatedIndexRow != nil {
@@ -193,16 +205,37 @@ func (indexEd *IndexEditor) UpdateIndex(ctx context.Context, originalIndexRow ro
 		indexEd.mapMutex.Lock()
 		indexEd.ed.AddEdit(indexKey, updatedIndexRow.NomsMapValue(indexEd.idxSch))
 		indexEd.updated = true
-		indexEd.needsFlush = true
+		indexEd.numOutstandingEdits++
 		indexEd.mapMutex.Unlock()
 	}
 
 	return nil
 }
 
+// autoFlush is called at the end of every write call (after all locks have been released) and checks if we need to
+// automatically flush the edits.
+func (indexEd *IndexEditor) autoFlush(ctx context.Context, err *error) {
+	if *err != nil {
+		return
+	}
+	indexEd.flushMutex.RLock()
+	indexEd.mapMutex.Lock()
+	runFlush := false
+	if indexEd.numOutstandingEdits >= indexEditorMaxEdits {
+		indexEd.numOutstandingEdits = 0
+		runFlush = true
+	}
+	indexEd.mapMutex.Unlock()
+	indexEd.flushMutex.RUnlock()
+
+	if runFlush {
+		*err = indexEd.Flush(ctx)
+	}
+}
+
 func (indexEd *IndexEditor) reset(indexData types.Map) {
 	indexEd.keyCount = make(map[hash.Hash]int64)
 	indexEd.ed = types.CreateEditAccForMapEdits(indexData.Format())
 	indexEd.data = indexData
-	indexEd.needsFlush = false
+	indexEd.numOutstandingEdits++
 }
