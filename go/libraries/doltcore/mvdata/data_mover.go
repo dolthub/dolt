@@ -255,14 +255,6 @@ func InferSchema(ctx context.Context, root *doltdb.RootValue, rd table.TableRead
 		return col, nil
 	})
 
-	// Verify all provided primary keys are being used
-	for _, pk := range pks {
-		col, ok := newCols.GetByName(pk)
-		if !ok || !col.IsPartOfPK {
-			return nil, errhand.BuildDError("provided primary keys do not match data schema").Build()
-		}
-	}
-
 	newCols, err = root.GenerateTagsForNewColColl(ctx, tableName, newCols)
 	if err != nil {
 		return nil, errhand.BuildDError("failed to generate new schema").AddCause(err).Build()
