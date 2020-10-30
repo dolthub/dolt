@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sync/atomic"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
 
@@ -31,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
 type CsvOptions struct {
@@ -233,4 +235,38 @@ func SchAndTableNameFromFile(ctx context.Context, path string, fs filesys.Readab
 	} else {
 		return "", nil, errors.New("no schema file to parse")
 	}
+}
+
+func InferSchema(ctx context.Context, root *doltdb.RootValue, rd table.TableReadCloser, tableName string, pks []string, args actions.InferenceArgs) (schema.Schema, error) {
+	var err error
+
+	if len(pks) == 0 {
+		pks = rd.GetSchema().GetPKCols().GetColumnNames()
+	}
+
+	infCols, err := actions.InferColumnTypesFromTableReader(ctx, root, rd, args)
+	if err != nil {
+		return nil, err
+	}
+
+	pkSet := set.NewStrSet(pks)
+	newCols, _ := schema.MapColCollection(infCols, func(col schema.Column) (schema.Column, error) {
+		col.IsPartOfPK = pkSet.Contains(col.Name)
+		return col, nil
+	})
+
+	// Verify all provided primary keys are being used
+	for _, pk := range pks {
+		col, ok := newCols.GetByName(pk)
+		if !ok || !col.IsPartOfPK {
+			return nil, errhand.BuildDError("provided primary keys do not match data schema").Build()
+		}
+	}
+
+	newCols, err = root.GenerateTagsForNewColColl(ctx, tableName, newCols)
+	if err != nil {
+		return nil, errhand.BuildDError("failed to generate new schema").AddCause(err).Build()
+	}
+
+	return schema.SchemaFromCols(newCols), nil
 }
