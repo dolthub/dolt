@@ -17,9 +17,10 @@ package enginetest
 import (
 	"testing"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-
 	"github.com/dolthub/go-mysql-server/enginetest"
+	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
 func init() {
@@ -28,6 +29,28 @@ func init() {
 
 func TestQueries(t *testing.T) {
 	enginetest.TestQueries(t, newDoltHarness(t))
+}
+
+func TestSingleQuery(t *testing.T) {
+	t.Skip()
+
+	var test enginetest.QueryTest
+	test = enginetest.QueryTest{
+		Query: `SELECT i FROM mytable mt 
+						 WHERE (SELECT i FROM mytable where i = mt.i and i > 2) IS NOT NULL
+						 AND (SELECT i2 FROM othertable where i2 = i) IS NOT NULL
+						 ORDER BY i`,
+		Expected: []sql.Row{
+			{3},
+		},
+	}
+
+	harness := newDoltHarness(t)
+	engine := enginetest.NewEngine(t, harness)
+	engine.Analyzer.Debug = true
+	engine.Analyzer.Verbose = true
+
+	enginetest.TestQuery(t, harness, engine, test.Query, test.Expected)
 }
 
 func TestVersionedQueries(t *testing.T) {
