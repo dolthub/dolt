@@ -665,16 +665,6 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv) error {
 			return
 		}
 
-		if sqlSch, rowIter, err := processQuery(ctx, query, se); err != nil {
-			verr := formatQueryError("", err)
-			shell.Println(verr.Verbose())
-		} else if rowIter != nil {
-			err = PrettyPrintResults(ctx, se.resultFormat, sqlSch, rowIter)
-			if err != nil {
-				shell.Println(color.RedString(err.Error()))
-			}
-		}
-
 		// TODO: there's a bug in the readline library when editing multi-line history entries.
 		// Longer term we need to switch to a new readline library, like in this bug:
 		// https://github.com/cockroachdb/cockroach/issues/15460
@@ -683,6 +673,16 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv) error {
 		if err := shell.AddHistory(singleLine); err != nil {
 			// TODO: handle better, like by turning off history writing for the rest of the session
 			shell.Println(color.RedString(err.Error()))
+		}
+
+		if sqlSch, rowIter, err := processQuery(ctx, query, se); err != nil {
+			verr := formatQueryError("", err)
+			shell.Println(verr.Verbose())
+		} else if rowIter != nil {
+			err = PrettyPrintResults(ctx, se.resultFormat, sqlSch, rowIter)
+			if err != nil {
+				shell.Println(color.RedString(err.Error()))
+			}
 		}
 
 		currPrompt := fmt.Sprintf("%s> ", ctx.GetCurrentDatabase())
@@ -1217,16 +1217,16 @@ func (se *sqlEngine) query(ctx *sql.Context, query string) (sql.Schema, sql.RowI
 
 // Pretty prints the output of the new SQL engine
 func PrettyPrintResults(ctx context.Context, resultFormat resultFormat, sqlSch sql.Schema, rowIter sql.RowIter) (rerr error) {
-	if isOkResult(sqlSch) {
-		return printOKResult(ctx, rowIter)
-	}
-
 	defer func() {
 		closeErr := rowIter.Close()
 		if rerr == nil && closeErr != nil {
 			rerr = closeErr
 		}
 	}()
+
+	if isOkResult(sqlSch) {
+		return printOKResult(ctx, rowIter)
+	}
 
 	nbf := types.Format_Default
 
