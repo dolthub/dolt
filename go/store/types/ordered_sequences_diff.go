@@ -26,6 +26,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/dolthub/dolt/go/libraries/utils/async"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/util/functions"
 )
@@ -60,33 +61,17 @@ func orderedSequenceDiffBest(ctx context.Context, last orderedSequence, current 
 	lrChanges := make(chan ValueChanged)
 	tdChanges := make(chan ValueChanged)
 
-	origCtx := ctx
 	eg, ctx := errgroup.WithContext(ctx)
-	lrCtx, lrCancel := context.WithCancel(ctx)
-	tdCtx, tdCancel := context.WithCancel(ctx)
 
-	eg.Go(func() error {
+	lrCancel := async.GoWithCancel(ctx, eg, func(ctx context.Context) error {
 		defer close(lrChanges)
-		err := orderedSequenceDiffLeftRight(lrCtx, last, current, lrChanges)
-		if err == context.Canceled {
-			// it's possible left-to-right was canceled by the
-			// optimistic read below. Return the parent context's
-			// Err().
-			return origCtx.Err()
-		}
-		return err
+		return orderedSequenceDiffLeftRight(ctx, last, current, lrChanges)
 	})
-	eg.Go(func() error {
+	tdCancel := async.GoWithCancel(ctx, eg, func(ctx context.Context) error {
 		defer close(tdChanges)
-		err := orderedSequenceDiffTopDown(tdCtx, last, current, tdChanges)
-		if err == context.Canceled {
-			// it's possible top down was canceled because
-			// left-to-right won the race. Return the parent
-			// context's Err().
-			return origCtx.Err()
-		}
-		return err
+		return orderedSequenceDiffTopDown(ctx, last, current, tdChanges)
 	})
+
 	eg.Go(func() error {
 		defer lrCancel()
 		defer tdCancel()
@@ -130,10 +115,7 @@ func orderedSequenceDiffBest(ctx context.Context, last orderedSequence, current 
 		return nil
 	})
 
-	if err := eg.Wait(); err != nil {
-		return err
-	}
-	return origCtx.Err()
+	return eg.Wait()
 }
 
 // Streams the diff from |last| to |current| into |changes|, using a top-down approach.

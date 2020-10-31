@@ -21,6 +21,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/dolthub/dolt/go/libraries/utils/async"
 	"github.com/dolthub/dolt/go/store/diff"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -51,17 +52,9 @@ func tableDontDescendLists(v1, v2 types.Value) bool {
 
 func (ad *AsyncDiffer) Start(ctx context.Context, from, to types.Map) {
 	ad.eg, ad.egCtx = errgroup.WithContext(ctx)
-	var diffCtx context.Context
-	diffCtx, ad.egCancel = context.WithCancel(ad.egCtx)
-	ad.eg.Go(func() error {
+	ad.egCancel = async.GoWithCancel(ad.egCtx, ad.eg, func(ctx context.Context) error {
 		defer close(ad.diffChan)
-		err := diff.Diff(diffCtx, from, to, ad.diffChan, true, tableDontDescendLists)
-		if err == context.Canceled {
-			// If diffCtx was canceled but egCtx was not, we want
-			// to return success here.
-			return ad.egCtx.Err()
-		}
-		return err
+		return diff.Diff(ctx, from, to, ad.diffChan, true, tableDontDescendLists)
 	})
 }
 
