@@ -293,7 +293,7 @@ func (te *tableEditorWriteCloser) gc(ctx context.Context) error {
 		return err
 	}
 
-	i, err := inProgresRoot.HashOf()
+	i, err := te.dEnv.DoltDB.WriteRootValue(ctx, inProgresRoot)
 	if err != nil {
 		return err
 	}
@@ -303,7 +303,7 @@ func (te *tableEditorWriteCloser) gc(ctx context.Context) error {
 
 // Close implements TableWriteCloser
 func (te *tableEditorWriteCloser) Close(ctx context.Context) error {
-	_, err := te.tableEditor.Flush(ctx)
+	err := te.gc(ctx)
 	if te.statsCB != nil {
 		te.statsCB(te.stats)
 	}

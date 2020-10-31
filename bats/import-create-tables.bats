@@ -470,3 +470,19 @@ DELIM
     [[ "$output" =~ "\`time\` time" ]]
     [[ "$output" =~ "\`datetime\` datetime" ]]
 }
+
+@test "table import -c collects garbage" {
+    echo "pk" > pk.csv
+    seq 0 100000 >> pk.csv
+
+    run dolt table import -c -pk=pk test pk.csv
+    [ "$status" -eq 0 ]
+
+    # assert that we already collected garbage
+    BEFORE=$(du .dolt/noms/ | sed 's/[^0-9]*//g')
+    run dolt gc
+    AFTER=$(du .dolt/noms/ | sed 's/[^0-9]*//g')
+
+    # less than 10% smaller
+    [ "$BEFORE" -lt $(($AFTER * 11 / 10)) ]
+}

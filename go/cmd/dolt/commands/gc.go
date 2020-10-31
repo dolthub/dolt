@@ -101,7 +101,7 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 		}
 	} else {
 		// full gc
-		dEnv, err = maybeMigrateEnv(ctx, dEnv)
+		dEnv, err = MaybeMigrateEnv(ctx, dEnv)
 
 		if err != nil {
 			verr = errhand.BuildDError("could not load manifest for gc").AddCause(err).Build()
@@ -121,7 +121,7 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func maybeMigrateEnv(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, error) {
+func MaybeMigrateEnv(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, error) {
 	migrated, err := nbs.MaybeMigrateFileManifest(ctx, dbfactory.DoltDataDir)
 	if err != nil {
 		return nil, err
