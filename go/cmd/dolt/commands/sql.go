@@ -1225,7 +1225,7 @@ func PrettyPrintResults(ctx context.Context, resultFormat resultFormat, sqlSch s
 	}()
 
 	if isOkResult(sqlSch) {
-		return printOKResult(ctx, rowIter)
+		return printOKResult(rowIter)
 	}
 
 	nbf := types.Format_Default
@@ -1347,13 +1347,8 @@ func PrettyPrintResults(ctx context.Context, resultFormat resultFormat, sqlSch s
 	return nil
 }
 
-func printOKResult(ctx context.Context, iter sql.RowIter) (returnErr error) {
+func printOKResult(iter sql.RowIter) (returnErr error) {
 	row, err := iter.Next()
-	if err != nil {
-		return err
-	}
-
-	err = iter.Close()
 	if err != nil {
 		return err
 	}
