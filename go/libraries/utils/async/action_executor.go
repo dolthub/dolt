@@ -36,7 +36,7 @@ type ActionExecutor struct {
 	ctx         context.Context
 	concurrency uint32
 	err         error
-	finished    *WaitGroup
+	finished    *sync.WaitGroup
 	linkedList  *list.List
 	running     uint32
 	maxBuffer   uint64
@@ -57,12 +57,17 @@ func NewActionExecutor(ctx context.Context, action Action, concurrency uint32, m
 		action:      action,
 		concurrency: concurrency,
 		ctx:         ctx,
-		finished:    &WaitGroup{},
+		finished:    &sync.WaitGroup{},
 		linkedList:  list.New(),
 		running:     0,
 		maxBuffer:   maxBuffer,
 		syncCond:    sync.NewCond(&sync.Mutex{}),
 	}
+}
+
+type work struct {
+	val interface{}
+	wg  *sync.WaitGroup
 }
 
 // Execute adds the value to the end of the queue to be executed. If any action encountered an error before this call,
@@ -79,7 +84,7 @@ func (aq *ActionExecutor) Execute(val interface{}) {
 		aq.syncCond.Wait()
 	}
 	aq.finished.Add(1)
-	aq.linkedList.PushBack(val)
+	aq.linkedList.PushBack(work{val, aq.finished})
 
 	if aq.running < aq.concurrency {
 		aq.running++
@@ -87,9 +92,15 @@ func (aq *ActionExecutor) Execute(val interface{}) {
 	}
 }
 
-// WaitForEmpty waits until the queue is empty, and then returns any errors that any actions may have encountered.
+// WaitForEmpty waits until all the work that has been submitted before
+// the call to |WaitForEmpty| has completed. It returns any errors that
+// any actions may have encountered.
 func (aq *ActionExecutor) WaitForEmpty() error {
-	aq.finished.Wait()
+	aq.syncCond.L.Lock()
+	wg := aq.finished
+	aq.finished = &sync.WaitGroup{}
+	aq.syncCond.L.Unlock()
+	wg.Wait()
 	aq.syncCond.L.Lock()
 	defer aq.syncCond.L.Unlock()
 	err := aq.err
@@ -123,7 +134,7 @@ func (aq *ActionExecutor) work() {
 						err = fmt.Errorf("panic in ActionExecutor:\n%v", r)
 					}
 				}()
-				err = aq.action(aq.ctx, element.Value)
+				err = aq.action(aq.ctx, element.Value.(work).val)
 			}()
 			// Technically, two actions could error at the same time and only one would persist their error. For async
 			// tasks, we don't care as much about which action errored, just that an action error.
@@ -134,6 +145,6 @@ func (aq *ActionExecutor) work() {
 			}
 		}
 
-		aq.finished.Done()
+		element.Value.(work).wg.Done()
 	}
 }
