@@ -258,12 +258,6 @@ func calcTableMergeStats(ctx context.Context, tbl *doltdb.Table, mergeTbl *doltd
 	return ms, nil
 }
 
-func stopAndDrain(stop chan<- struct{}, drain <-chan types.ValueChanged) {
-	close(stop)
-	for range drain {
-	}
-}
-
 func mergeTableData(ctx context.Context, tblName string, sch schema.Schema, rows, mergeRows, ancRows types.Map, vrw types.ValueReadWriter, tblEdit *doltdb.SessionedTableEditor) (*doltdb.Table, types.Map, *MergeStats, error) {
 	changeChan, mergeChangeChan := make(chan types.ValueChanged, 32), make(chan types.ValueChanged, 32)
 
@@ -366,7 +360,10 @@ func mergeTableData(ctx context.Context, tblName string, sch schema.Schema, rows
 						return err
 					}
 
-					addConflict(conflictValChan, key, conflictTuple)
+					err = addConflict(conflictValChan, sm.Done(), key, conflictTuple)
+					if err != nil {
+						return err
+					}
 				} else {
 					err = applyChange(ctx, tblEdit, rows, sch, stats, types.ValueChanged{ChangeType: change.ChangeType, Key: key, OldValue: r, NewValue: mergedRow})
 					if err != nil {
@@ -406,9 +403,18 @@ func mergeTableData(ctx context.Context, tblName string, sch schema.Schema, rows
 	return mergedTable, conflicts, stats, nil
 }
 
-func addConflict(conflictChan chan types.Value, key types.Value, value types.Tuple) {
-	conflictChan <- key
-	conflictChan <- value
+func addConflict(conflictChan chan types.Value, done <-chan struct{}, key types.Value, value types.Tuple) error {
+	select {
+	case conflictChan <- key:
+	case <-done:
+		return context.Canceled
+	}
+	select {
+	case conflictChan <- value:
+	case <-done:
+		return context.Canceled
+	}
+	return nil
 }
 
 func applyChange(ctx context.Context, tableEditor *doltdb.SessionedTableEditor, rowData types.Map, sch schema.Schema, stats *MergeStats, change types.ValueChanged) error {
