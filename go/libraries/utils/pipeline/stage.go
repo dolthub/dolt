@@ -148,7 +148,7 @@ func (s *Stage) runPipelineStage(ctx context.Context) error {
 
 		case inBatch, ok := <-s.inCh:
 			if !ok {
-				return nil
+				return s.transformBatch(ctx, nil)
 			}
 
 			err := s.transformBatch(ctx, inBatch)

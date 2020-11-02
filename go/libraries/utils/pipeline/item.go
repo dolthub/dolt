@@ -29,6 +29,14 @@ type ImmutableProperties struct {
 	props map[string]interface{}
 }
 
+func NewImmutableProps(props map[string]interface{}) ImmutableProperties {
+	return ImmutableProperties{props}
+}
+
+func (ip ImmutableProperties) Len() int {
+	return len(ip.props)
+}
+
 // Get retrieves an element from the map, and a bool which says if there was a property that exists with that name at all
 func (ip ImmutableProperties) Get(propName string) (interface{}, bool) {
 	if ip.props == nil {
@@ -61,7 +69,7 @@ type ItemWithProps interface {
 	// GetItem retrieves the item
 	GetItem() interface{}
 	// GetProperties retrieves properties attached to the item
-	GetProperties() ReadableMap
+	GetProperties() ImmutableProperties
 }
 
 type itemWithProps struct {
@@ -73,7 +81,7 @@ func (iwp itemWithProps) GetItem() interface{} {
 	return iwp.item
 }
 
-func (iwp itemWithProps) GetProperties() ReadableMap {
+func (iwp itemWithProps) GetProperties() ImmutableProperties {
 	return iwp.props
 }
 
@@ -83,6 +91,6 @@ func NewItemWithNoProps(item interface{}) ItemWithProps {
 }
 
 // NewItemWithProps creates an item with props from an item and a map of properties
-func NewItemWithProps(item interface{}, props map[string]interface{}) ItemWithProps {
-	return itemWithProps{item, ImmutableProperties{props}}
+func NewItemWithProps(item interface{}, props ImmutableProperties) ItemWithProps {
+	return itemWithProps{item, props}
 }

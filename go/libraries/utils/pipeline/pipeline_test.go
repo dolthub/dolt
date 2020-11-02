@@ -145,7 +145,7 @@ func TestParallelProcessingPipeline(t *testing.T) {
 		out := make([]ItemWithProps, len(in))
 		for i, item := range in {
 			str := item.GetItem().(string)
-			out[i] = NewItemWithProps(str+" processed", map[string]interface{}{routineIndexProperty: routineIdex})
+			out[i] = NewItemWithProps(str+" processed", NewImmutableProps(map[string]interface{}{routineIndexProperty: routineIdex}))
 		}
 
 		return out, nil

@@ -24,19 +24,6 @@ import (
 // it expected
 type TooLongBehavior int
 
-const (
-	// ErrorWhenTooLong treats each row containing a column that is longer than expected as a bad row
-	ErrorWhenTooLong TooLongBehavior = iota
-	//SkipRowWhenTooLong caller can use ErrorWhenTooLong and ignore rows that return ErrColumnTooLong
-	// TruncateWhenTooLong will cut off the end of columns that are too long
-	TruncateWhenTooLong
-	// HashFillWhenTooLong will result in ######### being printed in place of the columns that are longer than expected.
-	HashFillWhenTooLong
-	// PrintAllWhenTooLong will print the entire column for every row.  When this happens results will not be valid
-	// fixed width text files
-	PrintAllWhenTooLong
-)
-
 // FWTTransformer transforms columns to be of fixed width.
 type FWTTransformer struct {
 	sch       schema.Schema

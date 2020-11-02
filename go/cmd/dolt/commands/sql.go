@@ -17,12 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"io"
-	"os"
-	"path/filepath"
-	"runtime"
-	"strings"
-
 	"github.com/abiosoft/readline"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/auth"
@@ -38,29 +32,25 @@ import (
 	"github.com/flynn-archive/go-shlex"
 	"github.com/liquidata-inc/ishell"
 	"gopkg.in/src-d/go-errors.v1"
+	"io"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
-	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/json"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/fwt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/nullprinter"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
+	pipeline2 "github.com/dolthub/dolt/go/libraries/utils/pipeline"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -494,6 +484,8 @@ func getFormat(format string) (resultFormat, errhand.VerboseError) {
 		return formatCsv, nil
 	case "json":
 		return formatJson, nil
+	case "null":
+		return formatNull, nil
 	default:
 		return formatTabular, errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular, csv, json").Build()
 	}
@@ -1105,6 +1097,7 @@ const (
 	formatTabular resultFormat = iota
 	formatCsv
 	formatJson
+	formatNull // used for profiling
 )
 
 type sqlEngine struct {
@@ -1215,7 +1208,6 @@ func (se *sqlEngine) query(ctx *sql.Context, query string) (sql.Schema, sql.RowI
 	return se.engine.Query(ctx, query)
 }
 
-// Pretty prints the output of the new SQL engine
 func PrettyPrintResults(ctx context.Context, resultFormat resultFormat, sqlSch sql.Schema, rowIter sql.RowIter) (rerr error) {
 	if isOkResult(sqlSch) {
 		return printOKResult(ctx, rowIter)
@@ -1228,126 +1220,27 @@ func PrettyPrintResults(ctx context.Context, resultFormat resultFormat, sqlSch s
 		}
 	}()
 
-	nbf := types.Format_Default
-
-	doltSch, err := sqleSchema.ToDoltResultSchema(sqlSch)
-	if err != nil {
-		return err
-	}
-
-	untypedSch, err := untyped.UntypeUnkeySchema(doltSch)
-	if err != nil {
-		return err
-	}
-
-	rowChannel := make(chan row.Row)
-	p := pipeline.NewPartialPipeline(pipeline.InFuncForChannel(rowChannel))
-
-	// Parts of the pipeline depend on the output format, such as how we print null values and whether we pad strings.
-	switch resultFormat {
-	case formatTabular:
-		nullPrinter := nullprinter.NewNullPrinter(untypedSch)
-		p.AddStage(pipeline.NewNamedTransform(nullprinter.NullPrintingStage, nullPrinter.ProcessRow))
-		autoSizeTransform := fwt.NewAutoSizingFWTTransformer(untypedSch, fwt.PrintAllWhenTooLong, 10000)
-		p.AddStage(pipeline.NamedTransform{Name: fwtStageName, Func: autoSizeTransform.TransformToFWT})
-	}
-
-	// Redirect output to the CLI
-	cliWr := iohelp.NopWrCloser(cli.CliOut)
-
-	var wr table.TableWriteCloser
-
-	switch resultFormat {
-	case formatTabular:
-		wr, err = tabular.NewTextTableWriter(cliWr, untypedSch)
-	case formatCsv:
-		wr, err = csv.NewCSVWriter(cliWr, untypedSch, csv.NewCSVInfo())
-	case formatJson:
-		wr, err = json.NewJSONWriter(cliWr, doltSch)
-	default:
-		panic("unimplemented output format type")
-	}
-
-	if err != nil {
-		return err
-	}
-
-	p.RunAfter(func() { wr.Close(ctx) })
-
-	cliSink := pipeline.ProcFuncForWriter(ctx, wr)
-	p.SetOutput(cliSink)
-
-	p.SetBadRowCallback(func(tff *pipeline.TransformRowFailure) (quit bool) {
-		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(ctx, tff.Row, untypedSch)))
-		return true
-	})
-
-	colNames, err := schema.ExtractAllColNames(untypedSch)
-
-	if err != nil {
-		return err
-	}
-
-	r, err := untyped.NewRowFromTaggedStrings(nbf, untypedSch, colNames)
-
-	if err != nil {
-		return err
-	}
-
-	// Insert the table header row at the appropriate stage
-	if resultFormat == formatTabular {
-		p.InjectRow(fwtStageName, r)
-	}
-
 	// For some output formats, we want to convert everything to strings to be processed by the pipeline. For others,
 	// we want to leave types alone and let the writer figure out how to format it for output.
-	var rowFn func(r sql.Row) (row.Row, error)
+	var p *pipeline2.Pipeline
 	switch resultFormat {
+	case formatCsv:
+		p = createCSVPipeline(ctx, sqlSch, rowIter)
 	case formatJson:
-		rowFn = func(r sql.Row) (r2 row.Row, err error) {
-			return dsqle.SqlRowToDoltRow(nbf, r, doltSch)
-		}
-	default:
-		rowFn = func(r sql.Row) (row.Row, error) {
-			taggedVals := make(row.TaggedValues)
-			for i, col := range r {
-				if col != nil {
-					taggedVals[uint64(i)] = types.String(fmt.Sprintf("%v", col))
-				}
-			}
-			return row.New(nbf, untypedSch, taggedVals)
-		}
+		p = createJSONPipeline(ctx, sqlSch, rowIter)
+	case formatTabular:
+		p = createTabularPipeline(ctx, sqlSch, rowIter)
+	case formatNull:
+		p = createNullPipeline(ctx, sqlSch, rowIter)
 	}
 
-	var iterErr error
+	p.Start(ctx)
+	rerr = p.Wait()
 
-	// Read rows off the row iter and pass them to the pipeline channel
-	go func() {
-		defer close(rowChannel)
-		var sqlRow sql.Row
-		for sqlRow, iterErr = rowIter.Next(); iterErr == nil; sqlRow, iterErr = rowIter.Next() {
-			var r row.Row
-			r, iterErr = rowFn(sqlRow)
-
-			if iterErr == nil {
-				rowChannel <- r
-			}
-		}
-	}()
-
-	p.Start()
-	if err := p.Wait(); err != nil {
-		return fmt.Errorf("error processing results: %v", err)
-	}
-
-	if iterErr != io.EOF {
-		return fmt.Errorf("error processing results: %v", iterErr)
-	}
-
-	return nil
+	return rerr
 }
 
-func printOKResult(ctx context.Context, iter sql.RowIter) (returnErr error) {
+func printOKResult(_ context.Context, iter sql.RowIter) (returnErr error) {
 	row, err := iter.Next()
 	if err != nil {
 		return err
@@ -1503,3 +1396,5 @@ func (se *sqlEngine) ddl(ctx *sql.Context, ddl *sqlparser.DDL, query string) (sq
 		return nil, nil, fmt.Errorf("Unhandled DDL action %v in query %v", ddl.Action, query)
 	}
 }
+
+
