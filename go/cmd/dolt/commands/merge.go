@@ -235,7 +235,7 @@ func execNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 		return errhand.BuildDError("error: reading from database").AddCause(err).Build()
 	}
 
-	verr = commitMergedRoot(ctx, false, dEnv, mergedRoot, workingDiffs, cm2, map[string]*merge.MergeStats{})
+	verr = mergedRootToWorking(ctx, false, dEnv, mergedRoot, workingDiffs, cm2, map[string]*merge.MergeStats{})
 
 	if verr != nil {
 		return verr
@@ -362,10 +362,10 @@ func executeMerge(ctx context.Context, squash bool, dEnv *env.DoltEnv, cm1, cm2 
 		}
 	}
 
-	return commitMergedRoot(ctx, squash, dEnv, mergedRoot, workingDiffs, cm2, tblToStats)
+	return mergedRootToWorking(ctx, squash, dEnv, mergedRoot, workingDiffs, cm2, tblToStats)
 }
 
-func commitMergedRoot(ctx context.Context, squash bool, dEnv *env.DoltEnv, mergedRoot *doltdb.RootValue, workingDiffs map[string]hash.Hash, cm2 *doltdb.Commit, tblToStats map[string]*merge.MergeStats) errhand.VerboseError {
+func mergedRootToWorking(ctx context.Context, squash bool, dEnv *env.DoltEnv, mergedRoot *doltdb.RootValue, workingDiffs map[string]hash.Hash, cm2 *doltdb.Commit, tblToStats map[string]*merge.MergeStats) errhand.VerboseError {
 	var err error
 
 	workingRoot := mergedRoot
