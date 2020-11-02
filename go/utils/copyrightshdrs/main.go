@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -24,7 +23,7 @@ import (
 	"strings"
 )
 
-var ExpectedHeader = regexp.MustCompile(`// Copyright (2019|2020|2019-2020) Liquidata, Inc.
+var ExpectedHeader = regexp.MustCompile(`// Copyright (2019|2020|2019-2020) Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 \(the "License"\);
 // you may not use this file except in compliance with the License.
@@ -40,9 +39,9 @@ var ExpectedHeader = regexp.MustCompile(`// Copyright (2019|2020|2019-2020) Liqu
 
 `)
 
-var ExpectedHeaderForFileFromNoms = []byte(`// Copyright 2019 Liquidata, Inc.
+var ExpectedHeaderForFileFromNoms = regexp.MustCompile(`// Copyright (2019|2020|2019-2020) Dolthub, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 \(the "License"\);
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -395,7 +394,7 @@ func CheckGo() bool {
 			}
 			var passes bool
 			if hasNomsHeader {
-				passes = bytes.HasPrefix(bs, ExpectedHeaderForFileFromNoms)
+				passes = ExpectedHeaderForFileFromNoms.Match(bs)
 			} else {
 				passes = ExpectedHeader.Match(bs)
 			}
