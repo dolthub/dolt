@@ -43,10 +43,7 @@ func createTestSchema() schema.Schema {
 	}
 
 	colColl, _ := schema.NewColCollection(columns...)
-	sch, err := schema.SchemaFromCols(colColl)
-	if err != nil {
-		panic(err)
-	}
+	sch := schema.MustSchemaFromCols(colColl)
 	_, _ = sch.Indexes().AddIndexByColTags("idx_age", []uint64{3}, schema.IndexProperties{IsUnique: false, Comment: ""})
 	return sch
 }

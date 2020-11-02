@@ -430,10 +430,7 @@ func colCollection(cols ...schema.Column) *schema.ColCollection {
 
 // SchemaFromColsAndIdxs creates a Schema from a ColCollection and an IndexCollection.
 func schemaFromColsAndIdxs(allCols *schema.ColCollection, indexes ...schema.Index) schema.Schema {
-	sch, err := schema.SchemaFromCols(allCols)
-	if err != nil {
-		panic(err)
-	}
+	sch := schema.MustSchemaFromCols(allCols)
 	sch.Indexes().AddIndex(indexes...)
 	return sch
 }

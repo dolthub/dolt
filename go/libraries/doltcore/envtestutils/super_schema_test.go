@@ -24,7 +24,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	tc "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/testcommands"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 )
@@ -64,7 +63,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 			tc.CommitAll{Message: "created table testable"},
 		},
 		ExpectedBranch: "master",
-		ExpectedSchema: env.MustSchemaFromCols(columnCollection(
+		ExpectedSchema: schema.MustSchemaFromCols(columnCollection(
 			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
 		)),
 		ExpectedSuperSchema: superSchemaFromCols(columnCollection(
@@ -78,7 +77,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 			tc.Query{Query: testableDef},
 		},
 		ExpectedBranch: "master",
-		ExpectedSchema: env.MustSchemaFromCols(columnCollection(
+		ExpectedSchema: schema.MustSchemaFromCols(columnCollection(
 			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
 		)),
 		ExpectedSuperSchema: superSchemaFromCols(columnCollection(
@@ -94,7 +93,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 			tc.Query{Query: fmt.Sprintf("alter table testable add column c0 int;")},
 		},
 		ExpectedBranch: "master",
-		ExpectedSchema: env.MustSchemaFromCols(columnCollection(
+		ExpectedSchema: schema.MustSchemaFromCols(columnCollection(
 			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
 			newColTypeInfo("c0", c0Tag, typeinfo.Int32Type, false),
 		)),
@@ -114,7 +113,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 			tc.CommitAll{Message: "dropped column c0"},
 		},
 		ExpectedBranch: "master",
-		ExpectedSchema: env.MustSchemaFromCols(columnCollection(
+		ExpectedSchema: schema.MustSchemaFromCols(columnCollection(
 			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
 		)),
 		ExpectedSuperSchema: superSchemaFromCols(columnCollection(
@@ -132,7 +131,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 			tc.Query{Query: "alter table testable drop column c0"},
 		},
 		ExpectedBranch: "master",
-		ExpectedSchema: env.MustSchemaFromCols(columnCollection(
+		ExpectedSchema: schema.MustSchemaFromCols(columnCollection(
 			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
 		)),
 		ExpectedSuperSchema: superSchemaFromCols(columnCollection(
@@ -149,7 +148,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 			tc.Query{Query: "alter table testable drop column c0"},
 		},
 		ExpectedBranch: "master",
-		ExpectedSchema: env.MustSchemaFromCols(columnCollection(
+		ExpectedSchema: schema.MustSchemaFromCols(columnCollection(
 			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
 		)),
 		ExpectedSuperSchema: superSchemaFromCols(columnCollection(
@@ -169,7 +168,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 			tc.ResetHard{},
 		},
 		ExpectedBranch: "master",
-		ExpectedSchema: env.MustSchemaFromCols(columnCollection(
+		ExpectedSchema: schema.MustSchemaFromCols(columnCollection(
 			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
 			newColTypeInfo("c0", c0Tag, typeinfo.Int32Type, false),
 		)),
@@ -193,7 +192,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 			tc.Query{Query: fmt.Sprintf("alter table testable add column c1 int;")},
 		},
 		ExpectedBranch: "master",
-		ExpectedSchema: env.MustSchemaFromCols(columnCollection(
+		ExpectedSchema: schema.MustSchemaFromCols(columnCollection(
 			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
 			newColTypeInfo("c0", c0Tag, typeinfo.Int32Type, false),
 			newColTypeInfo("c1", c1Tag, typeinfo.Int32Type, false),
@@ -221,7 +220,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 			tc.Checkout{BranchName: "other"},
 		},
 		ExpectedBranch: "other",
-		ExpectedSchema: env.MustSchemaFromCols(columnCollection(
+		ExpectedSchema: schema.MustSchemaFromCols(columnCollection(
 			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
 			newColTypeInfo("c0", c0Tag, typeinfo.Int32Type, false),
 			newColTypeInfo("c11", c11Tag, typeinfo.Int32Type, false),
@@ -250,7 +249,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 			tc.Merge{BranchName: "other"},
 		},
 		ExpectedBranch: "master",
-		ExpectedSchema: env.MustSchemaFromCols(columnCollection(
+		ExpectedSchema: schema.MustSchemaFromCols(columnCollection(
 			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
 			newColTypeInfo("c0", c0Tag, typeinfo.Int32Type, false),
 			newColTypeInfo("c1", c1Tag, typeinfo.Int32Type, false),
@@ -284,7 +283,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 			tc.CommitAll{Message: "Merged other into master"},
 		},
 		ExpectedBranch: "master",
-		ExpectedSchema: env.MustSchemaFromCols(columnCollection(
+		ExpectedSchema: schema.MustSchemaFromCols(columnCollection(
 			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
 			newColTypeInfo("c0", c0Tag, typeinfo.Int32Type, false),
 			newColTypeInfo("c1", c1Tag, typeinfo.Int32Type, false),
@@ -312,7 +311,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 			tc.CommitAll{Message: "added column c1 on branch master, created table qux, dropped table foo"},
 		},
 		ExpectedBranch: "master",
-		ExpectedSchema: env.MustSchemaFromCols(columnCollection(
+		ExpectedSchema: schema.MustSchemaFromCols(columnCollection(
 			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
 			newColTypeInfo("c0", c0Tag, typeinfo.Int32Type, false),
 			newColTypeInfo("c1", c1Tag, typeinfo.Int32Type, false),
@@ -340,7 +339,7 @@ var SuperSchemaTests = []SuperSchemaTest{
 			tc.Checkout{BranchName: "first"},
 		},
 		ExpectedBranch: "first",
-		ExpectedSchema: env.MustSchemaFromCols(columnCollection(
+		ExpectedSchema: schema.MustSchemaFromCols(columnCollection(
 			newColTypeInfo("pk", pkTag, typeinfo.Int32Type, true, schema.NotNullConstraint{}),
 		)),
 		ExpectedSuperSchema: superSchemaFromCols(columnCollection(
@@ -392,7 +391,7 @@ func testSuperSchema(t *testing.T, test SuperSchemaTest) {
 }
 
 func superSchemaFromCols(cols *schema.ColCollection) *schema.SuperSchema {
-	sch := env.MustSchemaFromCols(cols)
+	sch := schema.MustSchemaFromCols(cols)
 	ss, _ := schema.NewSuperSchema(sch)
 	return ss
 }

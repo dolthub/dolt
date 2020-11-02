@@ -82,7 +82,7 @@ func columnCollection(cols ...schema.Column) *schema.ColCollection {
 }
 
 func newRow(vals row.TaggedValues, cc *schema.ColCollection) row.Row {
-	r, err := row.New(types.Format_7_18, env.MustSchemaFromCols(cc), vals)
+	r, err := row.New(types.Format_7_18, schema.MustSchemaFromCols(cc), vals)
 	if err != nil {
 		panic(err)
 	}
@@ -134,7 +134,7 @@ var RebaseTagTests = []RebaseTagTest{
 		OldTag:            DripTag,
 		NewTag:            DripTagRebased,
 		SelectResultQuery: "select * from people;",
-		ExpectedSchema:    env.MustSchemaFromCols(people),
+		ExpectedSchema:    schema.MustSchemaFromCols(people),
 		ExpectedRows:      []row.Row{},
 	},
 	{
@@ -150,7 +150,7 @@ var RebaseTagTests = []RebaseTagTest{
 		OldTag:            DripTag,
 		NewTag:            DripTagRebased,
 		SelectResultQuery: "select * from people;",
-		ExpectedSchema:    env.MustSchemaFromCols(peopleWithDrip),
+		ExpectedSchema:    schema.MustSchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
 			newRow(row.TaggedValues{IdTag: types.Int(10), NameTag: types.String("Patty Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(8.5)}, peopleWithDrip),
 			newRow(row.TaggedValues{IdTag: types.Int(11), NameTag: types.String("Selma Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(8.5)}, peopleWithDrip),
@@ -167,7 +167,7 @@ var RebaseTagTests = []RebaseTagTest{
 		OldTag:            DripTag,
 		NewTag:            DripTagRebased,
 		SelectResultQuery: "select * from people;",
-		ExpectedSchema:    env.MustSchemaFromCols(peopleWithDrip),
+		ExpectedSchema:    schema.MustSchemaFromCols(peopleWithDrip),
 		ExpectedRows:      []row.Row{},
 	},
 	{
@@ -183,7 +183,7 @@ var RebaseTagTests = []RebaseTagTest{
 		OldTag:            DripTag,
 		NewTag:            DripTagRebased,
 		SelectResultQuery: "select * from people;",
-		ExpectedSchema:    env.MustSchemaFromCols(peopleWithDrip),
+		ExpectedSchema:    schema.MustSchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
 			newRow(row.TaggedValues{IdTag: types.Int(9), NameTag: types.String("Jacqueline Bouvier"), AgeTag: types.Int(80)}, people),
 			newRow(row.TaggedValues{IdTag: types.Int(11), NameTag: types.String("Selma Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(8.5)}, peopleWithDrip),
@@ -202,7 +202,7 @@ var RebaseTagTests = []RebaseTagTest{
 		OldTag:            DripTag,
 		NewTag:            DripTagRebased,
 		SelectResultQuery: "select * from people;",
-		ExpectedSchema:    env.MustSchemaFromCols(peopleWithDrip),
+		ExpectedSchema:    schema.MustSchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
 			newRow(row.TaggedValues{IdTag: types.Int(9), NameTag: types.String("Jacqueline Bouvier"), AgeTag: types.Int(80), DripTagRebased: types.Float(9.9)}, peopleWithDrip),
 		},
@@ -222,7 +222,7 @@ var RebaseTagTests = []RebaseTagTest{
 		OldTag:            DripTag,
 		NewTag:            DripTagRebased,
 		SelectResultQuery: "select * from people;",
-		ExpectedSchema:    env.MustSchemaFromCols(peopleWithDrip),
+		ExpectedSchema:    schema.MustSchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
 			newRow(row.TaggedValues{IdTag: types.Int(9), NameTag: types.String("Jacqueline Bouvier"), AgeTag: types.Int(80)}, people),
 			newRow(row.TaggedValues{IdTag: types.Int(11), NameTag: types.String("Selma Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(9.9)}, peopleWithDrip),
@@ -244,7 +244,7 @@ var RebaseTagTests = []RebaseTagTest{
 		OldTag:            DripTag,
 		NewTag:            DripTagRebased,
 		SelectResultQuery: "select * from people;",
-		ExpectedSchema:    env.MustSchemaFromCols(peopleWithDrip),
+		ExpectedSchema:    schema.MustSchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
 			newRow(row.TaggedValues{IdTag: types.Int(9), NameTag: types.String("Jacqueline Bouvier"), AgeTag: types.Int(80), DripTagRebased: types.Float(1.1)}, peopleWithDrip),
 			newRow(row.TaggedValues{IdTag: types.Int(11), NameTag: types.String("Selma Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(9.9)}, peopleWithDrip),
@@ -268,7 +268,7 @@ var RebaseTagTests = []RebaseTagTest{
 		OldTag:            DripTag,
 		NewTag:            DripTagRebased,
 		SelectResultQuery: "select * from people;",
-		ExpectedSchema:    env.MustSchemaFromCols(peopleWithDrip),
+		ExpectedSchema:    schema.MustSchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
 			newRow(row.TaggedValues{IdTag: types.Int(7), NameTag: types.String("Maggie Simpson"), AgeTag: types.Int(2)}, people),
 			newRow(row.TaggedValues{IdTag: types.Int(9), NameTag: types.String("Jacqueline Bouvier"), AgeTag: types.Int(80)}, people),
@@ -294,7 +294,7 @@ var RebaseTagTests = []RebaseTagTest{
 		OldTag:            DripTag,
 		NewTag:            DripTagRebased,
 		SelectResultQuery: "select * from people;",
-		ExpectedSchema:    env.MustSchemaFromCols(peopleWithDrip),
+		ExpectedSchema:    schschema.MustSchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
 			newRow(row.TaggedValues{IdTag: types.Int(9), NameTag: types.String("Jacqueline Bouvier"), AgeTag: types.Int(80)}, people),
 			newRow(row.TaggedValues{IdTag: types.Int(11), NameTag: types.String("Selma Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(8.5)}, peopleWithDrip),
@@ -328,7 +328,7 @@ var RebaseTagTests = []RebaseTagTest{
 		OldTag:            DripTag,
 		NewTag:            DripTagRebased,
 		SelectResultQuery: "select * from people;",
-		ExpectedSchema:    env.MustSchemaFromCols(peopleWithDrip),
+		ExpectedSchema:    schema.MustSchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
 			newRow(row.TaggedValues{IdTag: types.Int(7), NameTag: types.String("Maggie Simpson"), AgeTag: types.Int(1), DripTagRebased: types.Float(99.9)}, peopleWithDrip),
 			newRow(row.TaggedValues{IdTag: types.Int(9), NameTag: types.String("Jacqueline Bouvier"), AgeTag: types.Int(40)}, people),
@@ -355,7 +355,7 @@ var RebaseTagTests = []RebaseTagTest{
 		OldTag:            DripTag,
 		NewTag:            DripTagRebased,
 		SelectResultQuery: "select * from people;",
-		ExpectedSchema:    env.MustSchemaFromCols(peopleWithDrip),
+		ExpectedSchema:    schema.MustSchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
 			newRow(row.TaggedValues{IdTag: types.Int(9), NameTag: types.String("Jacqueline Bouvier"), AgeTag: types.Int(80)}, people),
 			newRow(row.TaggedValues{IdTag: types.Int(11), NameTag: types.String("Selma Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(8.5)}, peopleWithDrip),
@@ -382,7 +382,7 @@ var RebaseTagTests = []RebaseTagTest{
 		OldTag:            DripTag,
 		NewTag:            DripTagRebased,
 		SelectResultQuery: "select * from people;",
-		ExpectedSchema:    env.MustSchemaFromCols(peopleWithDrip),
+		ExpectedSchema:    schema.MustSchemaFromCols(peopleWithDrip),
 		ExpectedRows: []row.Row{
 			newRow(row.TaggedValues{IdTag: types.Int(9), NameTag: types.String("Jacqueline Bouvier"), AgeTag: types.Int(80), DripTagRebased: types.Float(8.5)}, peopleWithDrip),
 			newRow(row.TaggedValues{IdTag: types.Int(10), NameTag: types.String("Patty Bouvier"), AgeTag: types.Int(40), DripTagRebased: types.Float(8.5)}, peopleWithDrip),
@@ -407,7 +407,7 @@ var RebaseTagTests = []RebaseTagTest{
 		OldTag:            DripTag,
 		NewTag:            DripTagRebased,
 		SelectResultQuery: "select * from people;",
-		ExpectedSchema:    env.MustSchemaFromCols(people),
+		ExpectedSchema:    schema.MustSchemaFromCols(people),
 		ExpectedRows: []row.Row{
 			newRow(row.TaggedValues{IdTag: types.Int(7), NameTag: types.String("Maggie Simpson"), AgeTag: types.Int(1)}, people),
 		},
@@ -485,7 +485,7 @@ func testRebaseTagHistory(t *testing.T) {
 	newMasterCm, err := rebase.TagRebaseForRef(context.Background(), bs[0], dEnv.DoltDB, rebase.TagMapping{"people": map[uint64]uint64{DripTag: DripTagRebased}})
 	require.NoError(t, err)
 
-	expectedSch := env.MustSchemaFromCols(peopleWithDrip)
+	expectedSch := schema.MustSchemaFromCols(peopleWithDrip)
 	rebasedRoot, _ := newMasterCm.GetRootValue()
 	checkSchema(t, rebasedRoot, "people", expectedSch)
 	checkRows(t, dEnv, rebasedRoot, "people", expectedSch, "select * from people;", []row.Row{

@@ -100,11 +100,3 @@ func hasDocFile(fs filesys.ReadWriteFS, file string) bool {
 	exists, isDir := fs.Exists(getDocFile(file))
 	return exists && !isDir
 }
-
-func MustSchemaFromCols(typedColColl *schema.ColCollection) schema.Schema {
-	sch, err := schema.SchemaFromCols(typedColColl)
-	if err != nil {
-		panic(err)
-	}
-	return sch
-}
