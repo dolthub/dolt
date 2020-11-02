@@ -18,9 +18,10 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/stretchr/testify/require"
 )
 
 func TestDiffSchemas(t *testing.T) {

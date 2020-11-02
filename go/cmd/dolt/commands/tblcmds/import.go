@@ -366,6 +366,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	mover, nDMErr := newImportDataMover(ctx, root, dEnv.FS, mvOpts, importStatsCB)
 
 	if nDMErr != nil {
+
 		verr = newDataMoverErrToVerr(mvOpts, nDMErr)
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
@@ -420,13 +421,11 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.
 	}
 
 	wrSch, dmce := getImportSchema(ctx, root, fs, impOpts)
-
 	if dmce != nil {
 		return nil, dmce
 	}
 
 	rd, srcIsSorted, err := impOpts.src.NewReader(ctx, root, fs, impOpts.srcOptions)
-
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
 	}
@@ -510,7 +509,6 @@ func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Fil
 		}
 
 		outSch, err := mvdata.InferSchema(ctx, root, rd, impOpts.tableName, impOpts.primaryKeys, impOpts)
-
 		if err != nil {
 			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 		}
