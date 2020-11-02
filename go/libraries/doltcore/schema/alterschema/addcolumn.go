@@ -156,7 +156,10 @@ func addColumnToSchema(sch schema.Schema, tag uint64, newColName string, typeInf
 	if err != nil {
 		return nil, err
 	}
-	newSch := schema.SchemaFromCols(collection)
+	newSch, err := schema.SchemaFromCols(collection)
+	if err != nil {
+		return nil, err
+	}
 	newSch.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
 
 	return newSch, nil

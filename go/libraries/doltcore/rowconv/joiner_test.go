@@ -38,7 +38,7 @@ var peopleCols, _ = schema.NewColCollection(
 	schema.NewColumn("city", cityTag, types.StringKind, false),
 )
 
-var peopleSch = schema.SchemaFromCols(peopleCols)
+var peopleSch = schema.MustSchemaFromCols(peopleCols)
 
 type toJoinAndExpectedResult struct {
 	toJoinVals map[string]row.TaggedValues

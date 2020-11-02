@@ -41,7 +41,8 @@ func TestReaderForKeys(t *testing.T) {
 		schema.NewColumn("val", valTag, types.IntKind, false))
 	require.NoError(t, err)
 
-	sch := schema.SchemaFromCols(colColl)
+	sch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
 
 	var db datas.Database
 	storage := &chunks.MemoryStorage{}

@@ -33,7 +33,8 @@ func TestRenameTable(t *testing.T) {
 	cc, _ := schema.NewColCollection(
 		schema.NewColumn("id", uint64(100), types.UUIDKind, true, schema.NotNullConstraint{}),
 	)
-	otherSch := schema.SchemaFromCols(cc)
+	otherSch, err := schema.SchemaFromCols(cc)
+	require.NoError(t, err)
 
 	tests := []struct {
 		name           string

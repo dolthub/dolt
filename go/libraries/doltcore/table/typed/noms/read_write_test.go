@@ -45,7 +45,7 @@ var colColl, _ = schema.NewColCollection(
 	schema.NewColumn(ageCol, ageColTag, types.UintKind, false),
 	schema.NewColumn(titleCol, titleColTag, types.StringKind, false),
 )
-var sch = schema.SchemaFromCols(colColl)
+var sch = schema.MustSchemaFromCols(colColl)
 
 var uuids = []uuid.UUID{
 	uuid.Must(uuid.Parse("00000000-0000-0000-0000-000000000000")),

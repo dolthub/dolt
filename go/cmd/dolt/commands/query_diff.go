@@ -79,7 +79,11 @@ func doltSchWithPKFromSqlSchema(sch sql.Schema) schema.Schema {
 		}
 		return col, nil
 	})
-	return schema.SchemaFromCols(newCC)
+	s, err := schema.SchemaFromCols(newCC)
+	if err != nil {
+		panic(err)
+	}
+	return s
 }
 
 func nextQueryDiff(qd *querydiff.QueryDiffer, joiner *rowconv.Joiner) (row.Row, pipeline.ImmutableProperties, error) {

@@ -57,7 +57,7 @@ var typedColColl, _ = schema.NewColCollection(
 	schema.NewColumn("title", TitleTag, types.StringKind, false),
 )
 
-var TypedSchema = schema.SchemaFromCols(typedColColl)
+var TypedSchema = schema.MustSchemaFromCols(typedColColl)
 var UntypedSchema, _ = untyped.UntypeSchema(TypedSchema)
 var TypedRows []row.Row
 var UntypedRows []row.Row

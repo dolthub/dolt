@@ -43,7 +43,10 @@ func createTestSchema() schema.Schema {
 	}
 
 	colColl, _ := schema.NewColCollection(columns...)
-	sch := schema.SchemaFromCols(colColl)
+	sch, err := schema.SchemaFromCols(colColl)
+	if err != nil {
+		panic(err)
+	}
 	_, _ = sch.Indexes().AddIndexByColTags("idx_age", []uint64{3}, schema.IndexProperties{IsUnique: false, Comment: ""})
 	return sch
 }
@@ -150,7 +153,8 @@ func TestTypeInfoMarshalling(t *testing.T) {
 			require.NoError(t, err)
 			colColl, err := schema.NewColCollection(col)
 			require.NoError(t, err)
-			originalSch := schema.SchemaFromCols(colColl)
+			originalSch, err := schema.SchemaFromCols(colColl)
+			require.NoError(t, err)
 
 			nbf, err := types.GetFormatForVersionString(constants.FormatDefaultString)
 			require.NoError(t, err)
@@ -262,7 +266,10 @@ func (tsd testSchemaData) decodeSchema() (schema.Schema, error) {
 		return nil, err
 	}
 
-	sch := schema.SchemaFromCols(colColl)
+	sch, err := schema.SchemaFromCols(colColl)
+	if err != nil {
+		return nil, err
+	}
 
 	for _, encodedIndex := range tsd.IndexCollection {
 		_, err = sch.Indexes().AddIndexByColTags(encodedIndex.Name, encodedIndex.Tags, schema.IndexProperties{IsUnique: encodedIndex.Unique, Comment: encodedIndex.Comment})

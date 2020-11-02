@@ -226,7 +226,7 @@ func superSchemaDeepEqual(t *testing.T, ss1, ss2 *SuperSchema) {
 }
 
 func mustSchema(cols []Column) Schema {
-	return SchemaFromCols(mustColColl(cols))
+	return MustSchemaFromCols(mustColColl(cols))
 }
 
 func mustColColl(cols []Column) *ColCollection {

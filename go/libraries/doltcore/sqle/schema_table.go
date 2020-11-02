@@ -47,7 +47,7 @@ func SchemasTableSchema() schema.Schema {
 	if err != nil {
 		panic(err) // should never happen
 	}
-	return schema.SchemaFromCols(colColl)
+	return schema.MustSchemaFromCols(colColl)
 }
 
 // GetOrCreateDoltSchemasTable returns the `dolt_schemas` table in `db`, creating it if it does not already exist.

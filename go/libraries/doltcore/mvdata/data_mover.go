@@ -260,5 +260,10 @@ func InferSchema(ctx context.Context, root *doltdb.RootValue, rd table.TableRead
 		return nil, errhand.BuildDError("failed to generate new schema").AddCause(err).Build()
 	}
 
-	return schema.SchemaFromCols(newCols), nil
+	sch, err := schema.SchemaFromCols(newCols)
+	if err != nil {
+		return nil, errhand.BuildDError("failed to get schema from cols").AddCause(err).Build()
+	}
+
+	return sch, nil
 }
