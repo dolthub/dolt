@@ -208,7 +208,8 @@ func TestNewComparisonFunc(t *testing.T) {
 		schema.NewColumn("col1", 1, types.IntKind, false),
 		schema.NewColumn("date", 2, types.TimestampKind, false),
 	)
-	testSch := schema.SchemaFromCols(colColl)
+	testSch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
 
 	const (
 		eq  string = "eq"

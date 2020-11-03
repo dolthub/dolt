@@ -106,7 +106,10 @@ func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch sc
 		return nil, sc, nil
 	}
 
-	sch = schema.SchemaFromCols(mergedCC)
+	sch, err = schema.SchemaFromCols(mergedCC)
+	if err != nil {
+		return nil, sc, err
+	}
 	_ = mergedIdxs.Iter(func(index schema.Index) (stop bool, err error) {
 		sch.Indexes().AddIndex(index)
 		return false, nil

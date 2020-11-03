@@ -18,6 +18,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
@@ -57,13 +59,15 @@ func TestParseKeyValues(t *testing.T) {
 		schema.NewColumn(mnColName, mnColTag, types.StringKind, true),
 	)
 
-	sch := schema.SchemaFromCols(testKeyColColl)
+	sch, err := schema.SchemaFromCols(testKeyColColl)
+	require.NoError(t, err)
 
 	singleKeyColColl, _ := schema.NewColCollection(
 		schema.NewColumn(lnColName, lnColTag, types.StringKind, true),
 	)
 
-	singleKeySch := schema.SchemaFromCols(singleKeyColColl)
+	singleKeySch, err := schema.SchemaFromCols(singleKeyColColl)
+	require.NoError(t, err)
 
 	tests := []struct {
 		sch          schema.Schema

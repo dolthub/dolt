@@ -88,7 +88,10 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 		return nil, err
 	}
 
-	newSch := schema.SchemaFromCols(colColl)
+	newSch, err := schema.SchemaFromCols(colColl)
+	if err != nil {
+		return nil, err
+	}
 	newSch.Indexes().AddIndex(tblSch.Indexes().AllIndexes()...)
 
 	vrw := tbl.ValueReadWriter()

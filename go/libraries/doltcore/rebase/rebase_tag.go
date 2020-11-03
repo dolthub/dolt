@@ -360,7 +360,10 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 			return nil, err
 		}
 
-		rebasedSch := schema.SchemaFromCols(schCC)
+		rebasedSch, err := schema.SchemaFromCols(schCC)
+		if err != nil {
+			return nil, err
+		}
 
 		for _, index := range sch.Indexes().AllIndexes() {
 			_, err = rebasedSch.Indexes().AddIndexByColNames(

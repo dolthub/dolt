@@ -192,7 +192,7 @@ func ToDoltSchema(ctx context.Context, root *doltdb.RootValue, tableName string,
 		return nil, err
 	}
 
-	return schema.SchemaFromCols(colColl), nil
+	return schema.SchemaFromCols(colColl)
 }
 
 // ToDoltCol returns the dolt column corresponding to the SQL column given

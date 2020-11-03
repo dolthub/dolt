@@ -44,11 +44,11 @@ var fieldsD, _ = schema.NewColCollection(
 	schema.NewColumn("key", 3, types.StringKind, true),
 	schema.NewColumn("value", 4, types.StringKind, false))
 
-var schemaA = schema.SchemaFromCols(fieldsA)
-var schemaB = schema.SchemaFromCols(fieldsB)
-var schemaC = schema.SchemaFromCols(fieldsC)
-var schemaCNoPK = schema.SchemaFromCols(fieldsCNoPK)
-var schemaD = schema.SchemaFromCols(fieldsD)
+var schemaA = schema.MustSchemaFromCols(fieldsA)
+var schemaB = schema.MustSchemaFromCols(fieldsB)
+var schemaC = schema.MustSchemaFromCols(fieldsC)
+var schemaCNoPK = schema.MustSchemaFromCols(fieldsCNoPK)
+var schemaD = schema.MustSchemaFromCols(fieldsD)
 
 func TestFieldMapping(t *testing.T) {
 	tests := []struct {
