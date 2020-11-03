@@ -49,10 +49,10 @@ public class DoltSQL
         using var cmd = new MySqlCommand();
         cmd.Connection = conn;
 
-        cmd.CommandText = @"CREATE TABLE test (pk int, value int, primary key(pk))";
+        cmd.CommandText = @"CREATE TABLE test (pk int, `value` int, primary key(pk))";
         cmd.ExecuteNonQuery();
 
-        cmd.CommandText = "INSERT INTO test(pk, value) VALUES(0,0)";
+        cmd.CommandText = "INSERT INTO test(pk, `value`) VALUES(0,0)";
         cmd.ExecuteNonQuery();
     }
 

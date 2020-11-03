@@ -3,6 +3,8 @@ name: Test Go
 on:
   pull_request:
     branches: [ master ]
+    paths:
+      - 'go/**'
 
 jobs:
   test:
@@ -21,4 +23,4 @@ jobs:
     - uses: actions/checkout@v2
     - name: Test All
       working-directory: ./go
-      run: go test ./...
+      run: go test -race ./...

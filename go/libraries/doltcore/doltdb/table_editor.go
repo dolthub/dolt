@@ -1,4 +1,4 @@
-// Copyright 2020 Liquidata, Inc.
+// Copyright 2020 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -377,7 +377,9 @@ func (te *TableEditor) Table() (*Table, error) {
 // automatically flush the edits.
 func (te *TableEditor) autoFlush() {
 	te.flushMutex.RLock()
+	te.writeMutex.Lock()
 	runFlush := te.tea.opCount >= tableEditorMaxOps
+	te.writeMutex.Unlock()
 	te.flushMutex.RUnlock()
 
 	if runFlush {
