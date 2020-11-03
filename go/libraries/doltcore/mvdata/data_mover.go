@@ -79,6 +79,8 @@ const (
 	CreateSorterErr   DataMoverCreationErrType = "Create sorter error"
 )
 
+var ErrProvidedPkNotFound = errors.New("provided primary key not found")
+
 type DataMoverCreationError struct {
 	ErrType DataMoverCreationErrType
 	Cause   error
@@ -255,15 +257,18 @@ func InferSchema(ctx context.Context, root *doltdb.RootValue, rd table.TableRead
 		return col, nil
 	})
 
+	// check that all provided primary keys are being used
+	for _, pk := range pks {
+		col, ok := newCols.GetByName(pk)
+		if !col.IsPartOfPK || !ok {
+			return nil, ErrProvidedPkNotFound
+		}
+	}
+
 	newCols, err = root.GenerateTagsForNewColColl(ctx, tableName, newCols)
 	if err != nil {
 		return nil, errhand.BuildDError("failed to generate new schema").AddCause(err).Build()
 	}
 
-	sch, err := schema.SchemaFromCols(newCols)
-	if err != nil {
-		return nil, errhand.BuildDError("failed to get schema from cols").AddCause(err).Build()
-	}
-
-	return sch, nil
+	return schema.SchemaFromCols(newCols)
 }

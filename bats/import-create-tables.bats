@@ -158,6 +158,14 @@ DELIM
     [[ "$output" =~ "column 'batmansparents' not found" ]] || false
 }
 
+@test "try to table import with one valid and one nonexistant --pk arg" {
+    run dolt table import -c -pk="pk,batmansparents" test 1pk5col-ints.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Error determining the output schema." ]] || false
+    skip "--pk args is not validated to be an existing column"
+    [[ "$output" =~ "column 'batmansparents' not found" ]] || false
+}
+
 @test "create a table with two primary keys from csv import" {
     run dolt table import -c --pk=pk1,pk2 test `batshelper 2pk5col-ints.csv`
     [ "$status" -eq 0 ]
