@@ -122,7 +122,7 @@ func Diff(ctx context.Context, v1, v2 types.Value, dChan chan<- Difference, left
 		if !d.shouldDescend(v1, v2) {
 			return d.sendDiff(ctx, Difference{Path: nil, ChangeType: types.DiffChangeModified, OldValue: v1, NewValue: v2})
 		} else {
-			d.Go(func() error {
+			d.GoCatchPanic(func() error {
 				return d.diff(ctx, nil, v1, v2)
 			})
 			return d.Wait()
@@ -148,7 +148,7 @@ func (d differ) diff(ctx context.Context, p types.Path, v1, v2 types.Value) erro
 
 var AsyncPanicErr = errors.New("async panic")
 
-func (d differ) Go(f func() error) {
+func (d differ) GoCatchPanic(f func() error) {
 	d.eg.Go(func() (err error) {
 		defer func() {
 			if r := recover(); r != nil {
@@ -171,7 +171,7 @@ func (d differ) Wait() error {
 func (d differ) diffLists(ctx context.Context, p types.Path, v1, v2 types.List) error {
 	spliceChan := make(chan types.Splice)
 
-	d.Go(func() error {
+	d.GoCatchPanic(func() error {
 		defer close(spliceChan)
 		return v2.Diff(ctx, v1, spliceChan)
 	})
@@ -343,7 +343,7 @@ func (d differ) diffSets(ctx context.Context, p types.Path, v1, v2 types.Set) er
 func (d differ) diffOrdered(ctx context.Context, p types.Path, ppf pathPartFunc, df diffFunc, kf, v1, v2 valueFunc) error {
 	changeChan := make(chan types.ValueChanged)
 
-	d.eg.Go(func() error {
+	d.GoCatchPanic(func() error {
 		defer close(changeChan)
 		return df(ctx, changeChan)
 	})
