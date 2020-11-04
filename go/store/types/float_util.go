@@ -26,6 +26,15 @@ import (
 	"math"
 )
 
+func Round(v Value) Value {
+	switch val := v.(type) {
+	case Float:
+		return Float(math.Round(float64(val)))
+	default:
+		return val
+	}
+}
+
 func float64IsInt(f float64) bool {
 	return math.Trunc(f) == f
 }

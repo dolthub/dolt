@@ -35,6 +35,7 @@ const (
 	conflictsKey       = "conflicts"
 	conflictSchemasKey = "conflict_schemas"
 	indexesKey         = "indexes"
+	autoIncrementKey   = "auto_increment"
 
 	// TableNameRegexStr is the regular expression that valid tables must match.
 	TableNameRegexStr = `^[a-zA-Z]{1}$|^[a-zA-Z]+[-_0-9a-zA-Z]*[0-9a-zA-Z]+$`
@@ -790,4 +791,52 @@ func rebuildIndexRowData(ctx context.Context, vrw types.ValueReadWriter, sch sch
 		return types.EmptyMap, err
 	}
 	return rebuiltIndexMap, nil
+}
+
+func (t *Table) GetAutoIncrementValue(ctx context.Context) (types.Value, error) {
+	val, ok, err := t.tableStruct.MaybeGet(autoIncrementKey)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		return val, nil
+	}
+
+	sch, err := t.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	kind := types.UnknownKind
+	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if col.AutoIncrement {
+			kind = col.Kind
+			stop = true
+		}
+		return
+	})
+	switch kind {
+	case types.IntKind:
+		return types.Int(0), nil
+	case types.UintKind:
+		return types.Uint(0), nil
+	case types.FloatKind:
+		return types.Float(0), nil
+	default:
+		return nil, fmt.Errorf("auto increment set for non-numeric column type")
+	}
+}
+
+func (t *Table) SetAutoIncrementValue(val types.Value) (*Table, error) {
+	switch val.(type) {
+	case types.Int, types.Uint, types.Float:
+		st, err := t.tableStruct.Set(autoIncrementKey, val)
+		if err != nil {
+			return nil, err
+		}
+		return &Table{t.vrw, st}, nil
+
+	default:
+		return nil, fmt.Errorf("cannot set auto increment to non-numeric value")
+	}
 }

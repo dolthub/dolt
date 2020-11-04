@@ -65,10 +65,31 @@ func init() {
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
 type DoltTable struct {
 	name   string
-	table  *doltdb.Table
-	sch    schema.Schema
 	sqlSch sql.Schema
 	db     SqlDatabase
+
+	table   *doltdb.Table
+	sch     schema.Schema
+	autoCol schema.Column
+}
+
+func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase) DoltTable {
+	var autoCol schema.Column
+	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if col.AutoIncrement {
+			autoCol = col
+			stop = true
+		}
+		return
+	})
+
+	return DoltTable{
+		name:    name,
+		db:      db,
+		table:   tbl,
+		sch:     sch,
+		autoCol: autoCol,
+	}
 }
 
 var _ sql.Table = (*DoltTable)(nil)
@@ -142,6 +163,15 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	}
 
 	return sqlIndexes, nil
+}
+
+// GetAutoIncrementValue gets the last AUTO_INCREMENT value
+func (t *DoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
+	val, err := t.table.GetAutoIncrementValue(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return t.autoCol.TypeInfo.ConvertNomsValueToValue(val)
 }
 
 // Name returns the name of the table.
@@ -228,6 +258,7 @@ var _ sql.UpdatableTable = (*WritableDoltTable)(nil)
 var _ sql.DeletableTable = (*WritableDoltTable)(nil)
 var _ sql.InsertableTable = (*WritableDoltTable)(nil)
 var _ sql.ReplaceableTable = (*WritableDoltTable)(nil)
+var _ sql.AutoIncrementTable = (*WritableDoltTable)(nil)
 
 func (t *WritableDoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 	dil, ok := lookup.(*doltIndexLookup)
@@ -295,6 +326,14 @@ func (t *WritableDoltTable) Updater(ctx *sql.Context) sql.RowUpdater {
 		return newStaticErrorEditor(err)
 	}
 	return te
+}
+
+// GetAutoIncrementValue gets the last AUTO_INCREMENT value
+func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
+	if t.ed != nil {
+		return t.ed.GetAutoIncrementValue()
+	}
+	return t.DoltTable.GetAutoIncrementValue(ctx)
 }
 
 // GetForeignKeys implements sql.ForeignKeyTable

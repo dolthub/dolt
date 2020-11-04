@@ -17,7 +17,7 @@ require (
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078
 	github.com/dolthub/fslock v0.0.2
-	github.com/dolthub/go-mysql-server v0.6.1-0.20201030211810-94cc16e4a146
+	github.com/dolthub/go-mysql-server v0.6.1-0.20201105203803-ab3980f54fcb
 	github.com/dolthub/sqllogictest/go v0.0.0-20201105013724-5123fc66e12c
 	github.com/dolthub/vitess v0.0.0-20201030211154-aac4fea7230f
 	github.com/dustin/go-humanize v1.0.0

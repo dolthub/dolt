@@ -83,6 +83,11 @@ func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Ro
 	return te.tableEditor.UpdateRow(ctx, dOldRow, dNewRow)
 }
 
+func (te *sqlTableEditor) GetAutoIncrementValue() (interface{}, error) {
+	val := te.tableEditor.GetAutoIncrementValue()
+	return te.t.DoltTable.autoCol.TypeInfo.ConvertNomsValueToValue(val)
+}
+
 // Close implements Closer
 func (te *sqlTableEditor) Close(ctx *sql.Context) error {
 	// If we're running in batched mode, don't flush the edits until explicitly told to do so by the parent table.
