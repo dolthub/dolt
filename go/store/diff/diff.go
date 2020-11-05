@@ -23,15 +23,16 @@ package diff
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 type (
-	diffFunc     func(changeChan chan<- types.ValueChanged, stopChan <-chan struct{})
+	diffFunc     func(ctx context.Context, changeChan chan<- types.ValueChanged) error
 	pathPartFunc func(v types.Value) (types.PathPart, error)
 	valueFunc    func(k types.Value) (types.Value, error)
 )
@@ -63,12 +64,13 @@ type ShouldDescFunc func(v1, v2 types.Value) bool
 type differ struct {
 	// Channel used to send Difference objects back to caller
 	diffChan chan<- Difference
-	// Channel that caller should close() to terminate Diff function.
-	stopChan chan struct{}
 	// Use LeftRight diff as opposed to TopDown
 	leftRight bool
 
 	shouldDescend ShouldDescFunc
+
+	eg         *errgroup.Group
+	asyncPanic *atomic.Value
 }
 
 // Diff traverses two graphs simultaneously looking for differences. It returns
@@ -102,138 +104,157 @@ type differ struct {
 //    for dif := range dChan {
 //        <some code>
 //    }
-func Diff(ctx context.Context, ae *atomicerr.AtomicError, v1, v2 types.Value, dChan chan<- Difference, stopChan chan struct{}, leftRight bool, descFunc ShouldDescFunc) {
+func Diff(ctx context.Context, v1, v2 types.Value, dChan chan<- Difference, leftRight bool, descFunc ShouldDescFunc) error {
 	if descFunc == nil {
 		descFunc = ShouldDescend
 	}
 
-	d := differ{diffChan: dChan, stopChan: stopChan, leftRight: leftRight, shouldDescend: descFunc}
+	eg, ctx := errgroup.WithContext(ctx)
+	d := differ{
+		diffChan:      dChan,
+		leftRight:     leftRight,
+		shouldDescend: descFunc,
+
+		eg:         eg,
+		asyncPanic: new(atomic.Value),
+	}
 	if !v1.Equals(v2) {
 		if !d.shouldDescend(v1, v2) {
-			d.sendDiff(Difference{Path: nil, ChangeType: types.DiffChangeModified, OldValue: v1, NewValue: v2})
+			return d.sendDiff(ctx, Difference{Path: nil, ChangeType: types.DiffChangeModified, OldValue: v1, NewValue: v2})
 		} else {
-			d.diff(ctx, nil, ae, v1, v2)
+			d.GoCatchPanic(func() error {
+				return d.diff(ctx, nil, v1, v2)
+			})
+			return d.Wait()
 		}
 	}
+	return nil
 }
 
-func (d differ) diff(ctx context.Context, p types.Path, ae *atomicerr.AtomicError, v1, v2 types.Value) bool {
+func (d differ) diff(ctx context.Context, p types.Path, v1, v2 types.Value) error {
 	switch v1.Kind() {
 	case types.ListKind:
-		return d.diffLists(ctx, p, ae, v1.(types.List), v2.(types.List))
+		return d.diffLists(ctx, p, v1.(types.List), v2.(types.List))
 	case types.MapKind:
-		return d.diffMaps(ctx, p, ae, v1.(types.Map), v2.(types.Map))
+		return d.diffMaps(ctx, p, v1.(types.Map), v2.(types.Map))
 	case types.SetKind:
-		return d.diffSets(ctx, p, ae, v1.(types.Set), v2.(types.Set))
+		return d.diffSets(ctx, p, v1.(types.Set), v2.(types.Set))
 	case types.StructKind:
-		return d.diffStructs(ctx, p, ae, v1.(types.Struct), v2.(types.Struct))
+		return d.diffStructs(ctx, p, v1.(types.Struct), v2.(types.Struct))
 	default:
 		panic("Unrecognized type in diff function")
 	}
 }
 
-func (d differ) diffLists(ctx context.Context, p types.Path, ae *atomicerr.AtomicError, v1, v2 types.List) (stop bool) {
-	spliceChan := make(chan types.Splice)
-	stopChan := make(chan struct{}, 1) // buffer size of 1s, so this won't block if diff already finished
+var AsyncPanicErr = errors.New("async panic")
 
-	var rp atomic.Value
-	go func() {
-		defer close(spliceChan)
+func (d differ) GoCatchPanic(f func() error) {
+	d.eg.Go(func() (err error) {
 		defer func() {
 			if r := recover(); r != nil {
-				rp.Store(r)
+				d.asyncPanic.Store(r)
+				err = AsyncPanicErr
 			}
 		}()
-		err := v2.Diff(ctx, v1, spliceChan, stopChan)
+		return f()
+	})
+}
 
-		ae.SetIfError(err)
-	}()
+func (d differ) Wait() error {
+	err := d.eg.Wait()
+	if p := d.asyncPanic.Load(); p != nil {
+		panic(p)
+	}
+	return err
+}
+
+func (d differ) diffLists(ctx context.Context, p types.Path, v1, v2 types.List) error {
+	spliceChan := make(chan types.Splice)
+
+	d.GoCatchPanic(func() error {
+		defer close(spliceChan)
+		return v2.Diff(ctx, v1, spliceChan)
+	})
 
 	for splice := range spliceChan {
-		if stop || ae.IsSet() {
-			break
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
-
 		if splice.SpRemoved == splice.SpAdded {
 			// Heuristic: list only has modifications.
 			for i := uint64(0); i < splice.SpRemoved; i++ {
 				lastEl, err := v1.Get(ctx, splice.SpAt+i)
-
-				if ae.SetIfError(err) {
-					break
+				if err != nil {
+					return err
 				}
 
 				newEl, err := v2.Get(ctx, splice.SpFrom+i)
-
-				if ae.SetIfError(err) {
-					break
+				if err != nil {
+					return err
 				}
 
 				if d.shouldDescend(lastEl, newEl) {
 					idx := types.Float(splice.SpAt + i)
-					stop = d.diff(ctx, append(p, types.NewIndexPath(idx)), ae, lastEl, newEl)
+					err := d.diff(ctx, append(p, types.NewIndexPath(idx)), lastEl, newEl)
+					if err != nil {
+						return err
+					}
 				} else {
 					p1 := p.Append(types.NewIndexPath(types.Float(splice.SpAt + i)))
 					oldVal, err := v1.Get(ctx, splice.SpAt+i)
-
-					if ae.SetIfError(err) {
-						return true
+					if err != nil {
+						return err
 					}
 
 					newVal, err := v2.Get(ctx, splice.SpFrom+i)
-
-					if ae.SetIfError(err) {
-						return true
+					if err != nil {
+						return err
 					}
 
 					dif := Difference{Path: p1, ChangeType: types.DiffChangeModified, OldValue: oldVal, NewValue: newVal}
-					stop = !d.sendDiff(dif)
+					err = d.sendDiff(ctx, dif)
+					if err != nil {
+						return err
+					}
 				}
 			}
 			continue
 		}
 
 		// Heuristic: list only has additions/removals.
-		for i := uint64(0); i < splice.SpRemoved && !stop; i++ {
+		for i := uint64(0); i < splice.SpRemoved; i++ {
 			p1 := p.Append(types.NewIndexPath(types.Float(splice.SpAt + i)))
 			oldVal, err := v1.Get(ctx, splice.SpAt+i)
-
-			if ae.SetIfError(err) {
-				return true
+			if err != nil {
+				return err
 			}
 
 			dif := Difference{Path: p1, ChangeType: types.DiffChangeRemoved, OldValue: oldVal, NewValue: nil}
-			stop = !d.sendDiff(dif)
+			err = d.sendDiff(ctx, dif)
+			if err != nil {
+				return err
+			}
 		}
-		for i := uint64(0); i < splice.SpAdded && !stop; i++ {
+		for i := uint64(0); i < splice.SpAdded; i++ {
 			p1 := p.Append(types.NewIndexPath(types.Float(splice.SpFrom + i)))
 			newVal, err := v2.Get(ctx, splice.SpFrom+i)
-
-			if ae.SetIfError(err) {
-				return true
+			if err != nil {
+				return err
 			}
 
 			dif := Difference{Path: p1, ChangeType: types.DiffChangeAdded, OldValue: nil, NewValue: newVal}
-			stop = !d.sendDiff(dif)
+			err = d.sendDiff(ctx, dif)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
-	if stop {
-		stopChan <- struct{}{}
-		// Wait for diff to stop.
-		for range spliceChan {
-		}
-	}
-
-	if r := rp.Load(); r != nil {
-		panic(r)
-	}
-
-	return
+	return nil
 }
 
-func (d differ) diffMaps(ctx context.Context, p types.Path, ae *atomicerr.AtomicError, v1, v2 types.Map) bool {
-	return d.diffOrdered(ctx, p, ae,
+func (d differ) diffMaps(ctx context.Context, p types.Path, v1, v2 types.Map) error {
+	return d.diffOrdered(ctx, p,
 		func(v types.Value) (types.PathPart, error) {
 			if types.ValueCanBePathIndex(v) {
 				return types.NewIndexPath(v), nil
@@ -247,11 +268,11 @@ func (d differ) diffMaps(ctx context.Context, p types.Path, ae *atomicerr.Atomic
 				return types.NewHashIndexPath(h), nil
 			}
 		},
-		func(cc chan<- types.ValueChanged, sc <-chan struct{}) {
+		func(ctx context.Context, cc chan<- types.ValueChanged) error {
 			if d.leftRight {
-				v2.DiffLeftRight(ctx, v1, ae, cc, sc)
+				return v2.DiffLeftRight(ctx, v1, cc)
 			} else {
-				v2.DiffHybrid(ctx, v1, ae, cc, sc)
+				return v2.DiffHybrid(ctx, v1, cc)
 			}
 		},
 		func(k types.Value) (types.Value, error) {
@@ -268,17 +289,16 @@ func (d differ) diffMaps(ctx context.Context, p types.Path, ae *atomicerr.Atomic
 	)
 }
 
-func (d differ) diffStructs(ctx context.Context, p types.Path, ae *atomicerr.AtomicError, v1, v2 types.Struct) bool {
+func (d differ) diffStructs(ctx context.Context, p types.Path, v1, v2 types.Struct) error {
 	str := func(v types.Value) string {
 		return string(v.(types.String))
 	}
-	return d.diffOrdered(ctx, p, ae,
+	return d.diffOrdered(ctx, p,
 		func(v types.Value) (types.PathPart, error) {
 			return types.NewFieldPath(str(v)), nil
 		},
-		func(cc chan<- types.ValueChanged, sc <-chan struct{}) {
-			err := v2.Diff(v1, cc, sc)
-			ae.SetIfError(err)
+		func(ctx context.Context, cc chan<- types.ValueChanged) error {
+			return v2.Diff(ctx, v1, cc)
 		},
 		func(k types.Value) (types.Value, error) { return k, nil },
 		func(k types.Value) (types.Value, error) {
@@ -292,8 +312,8 @@ func (d differ) diffStructs(ctx context.Context, p types.Path, ae *atomicerr.Ato
 	)
 }
 
-func (d differ) diffSets(ctx context.Context, p types.Path, ae *atomicerr.AtomicError, v1, v2 types.Set) bool {
-	return d.diffOrdered(ctx, p, ae,
+func (d differ) diffSets(ctx context.Context, p types.Path, v1, v2 types.Set) error {
+	return d.diffOrdered(ctx, p,
 		func(v types.Value) (types.PathPart, error) {
 			if types.ValueCanBePathIndex(v) {
 				return types.NewIndexPath(v), nil
@@ -307,11 +327,11 @@ func (d differ) diffSets(ctx context.Context, p types.Path, ae *atomicerr.Atomic
 
 			return types.NewHashIndexPath(h), nil
 		},
-		func(cc chan<- types.ValueChanged, sc <-chan struct{}) {
+		func(ctx context.Context, cc chan<- types.ValueChanged) error {
 			if d.leftRight {
-				v2.DiffLeftRight(ctx, v1, ae, cc, sc)
+				return v2.DiffLeftRight(ctx, v1, cc)
 			} else {
-				v2.DiffHybrid(ctx, v1, ae, cc, sc)
+				return v2.DiffHybrid(ctx, v1, cc)
 			}
 		},
 		func(k types.Value) (types.Value, error) { return k, nil },
@@ -320,36 +340,27 @@ func (d differ) diffSets(ctx context.Context, p types.Path, ae *atomicerr.Atomic
 	)
 }
 
-func (d differ) diffOrdered(ctx context.Context, p types.Path, ae *atomicerr.AtomicError, ppf pathPartFunc, df diffFunc, kf, v1, v2 valueFunc) (stop bool) {
+func (d differ) diffOrdered(ctx context.Context, p types.Path, ppf pathPartFunc, df diffFunc, kf, v1, v2 valueFunc) error {
 	changeChan := make(chan types.ValueChanged)
-	stopChan := make(chan struct{}, 1) // buffer size of 1, so this won't block if diff already finished
 
-	var rp atomic.Value
-	go func() {
+	d.GoCatchPanic(func() error {
 		defer close(changeChan)
-		defer func() {
-			if r := recover(); r != nil {
-				rp.Store(r)
-			}
-		}()
-		df(changeChan, stopChan)
-	}()
+		return df(ctx, changeChan)
+	})
 
 	for change := range changeChan {
-		if stop || ae.IsSet() {
-			break
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
 
 		k, err := kf(change.Key)
-
-		if ae.SetIfError(err) {
-			return true
+		if err != nil {
+			return err
 		}
 
 		ppfRes, err := ppf(k)
-
-		if ae.SetIfError(err) {
-			return true
+		if err != nil {
+			return err
 		}
 
 		p1 := p.Append(ppfRes)
@@ -357,56 +368,55 @@ func (d differ) diffOrdered(ctx context.Context, p types.Path, ae *atomicerr.Ato
 		switch change.ChangeType {
 		case types.DiffChangeAdded:
 			newVal, err := v2(change.Key)
-
-			if ae.SetIfError(err) {
-				return true
+			if err != nil {
+				return err
 			}
 
 			dif := Difference{Path: p1, ChangeType: types.DiffChangeAdded, OldValue: nil, NewValue: newVal, NewKeyValue: k, KeyValue: change.Key}
-			stop = !d.sendDiff(dif)
+			err = d.sendDiff(ctx, dif)
+			if err != nil {
+				return err
+			}
 		case types.DiffChangeRemoved:
 			oldVal, err := v1(change.Key)
-
-			if ae.SetIfError(err) {
-				return true
+			if err != nil {
+				return err
 			}
 
 			dif := Difference{Path: p1, ChangeType: types.DiffChangeRemoved, OldValue: oldVal, KeyValue: change.Key}
-			stop = !d.sendDiff(dif)
+			err = d.sendDiff(ctx, dif)
+			if err != nil {
+				return err
+			}
 		case types.DiffChangeModified:
 			c1, err := v1(change.Key)
-
-			if ae.SetIfError(err) {
-				return true
+			if err != nil {
+				return err
 			}
 
 			c2, err := v2(change.Key)
-
-			if ae.SetIfError(err) {
-				return true
+			if err != nil {
+				return err
 			}
+
 			if d.shouldDescend(c1, c2) {
-				stop = d.diff(ctx, p1, ae, c1, c2)
+				err = d.diff(ctx, p1, c1, c2)
+				if err != nil {
+					return err
+				}
 			} else {
 				dif := Difference{Path: p1, ChangeType: types.DiffChangeModified, OldValue: c1, NewValue: c2, KeyValue: change.Key}
-				stop = !d.sendDiff(dif)
+				err = d.sendDiff(ctx, dif)
+				if err != nil {
+					return err
+				}
 			}
 		default:
 			panic("unknown change type")
 		}
 	}
 
-	if stop {
-		stopChan <- struct{}{}
-		for range changeChan {
-		}
-	}
-
-	if r := rp.Load(); r != nil {
-		panic(r)
-	}
-
-	return
+	return nil
 }
 
 // shouldDescend returns true, if Value is not primitive or is a Ref.
@@ -415,12 +425,11 @@ func ShouldDescend(v1, v2 types.Value) bool {
 	return !types.IsPrimitiveKind(kind) && kind == v2.Kind() && kind != types.RefKind && kind != types.TupleKind
 }
 
-// stopSent returns true if a message has been sent to this StopChannel
-func (d differ) sendDiff(dif Difference) bool {
+func (d differ) sendDiff(ctx context.Context, dif Difference) error {
 	select {
-	case <-d.stopChan:
-		return false
+	case <-ctx.Done():
+		return ctx.Err()
 	case d.diffChan <- dif:
-		return true
+		return nil
 	}
 }

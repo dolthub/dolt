@@ -26,7 +26,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/dolthub/dolt/go/store/d"
 )
 
@@ -89,107 +90,125 @@ func NewMap(ctx context.Context, vrw ValueReadWriter, kv ...Value) (Map, error) 
 	return newMap(seq.(orderedSequence)), nil
 }
 
-// NewStreamingMap takes an input channel of values and returns a output
-// channel that will produce a finished Map. Values sent to the input channel
-// must be alternating keys and values. (e.g. k1, v1, k2, v2...). Moreover keys
-// need to be added to the channel in Noms sortorder, adding key values to the
-// input channel out of order will result in a panic. Once the input channel is
-// closed by the caller, a finished Map will be sent to the output channel. See
-// graph_builder.go for building collections with values that are not in order.
-func NewStreamingMap(ctx context.Context, vrw ValueReadWriter, ae *atomicerr.AtomicError, kvs <-chan Value) <-chan Map {
+// NewStreamingMap takes an input channel of values and returns a value that
+// will produce a finished Map when |.Wait()| is called.  Values sent to the
+// input channel must be alternating keys and values. (e.g.  k1, v1, k2,
+// v2...). Moreover keys need to be added to the channel in Noms sortorder,
+// adding key values to the input channel out of order will result in an error.
+// Once the input channel is closed by the caller, a finished Map will be
+// available from the |Wait| call.
+//
+// See graph_builder.go for building collections with values that are not in
+// order.
+func NewStreamingMap(ctx context.Context, vrw ValueReadWriter, kvs <-chan Value) *StreamingMap {
 	d.PanicIfTrue(vrw == nil)
-	return newStreamingMap(vrw, kvs, func(vrw ValueReadWriter, kvs <-chan Value, outChan chan<- Map) {
-		go func() {
-			readMapInput(ctx, vrw, ae, kvs, outChan)
-		}()
+	sm := &StreamingMap{}
+	sm.eg, sm.egCtx = errgroup.WithContext(context.TODO())
+	sm.eg.Go(func() error {
+		m, err := readMapInput(sm.egCtx, vrw, kvs)
+		sm.m = m
+		return err
 	})
+	return sm
 }
 
-type streamingMapReadFunc func(vrw ValueReadWriter, kvs <-chan Value, outChan chan<- Map)
-
-func newStreamingMap(vrw ValueReadWriter, kvs <-chan Value, readFunc streamingMapReadFunc) <-chan Map {
-	outChan := make(chan Map, 1)
-	readFunc(vrw, kvs, outChan)
-	return outChan
+type StreamingMap struct {
+	eg    *errgroup.Group
+	egCtx context.Context
+	m     Map
 }
 
-func readMapInput(ctx context.Context, vrw ValueReadWriter, ae *atomicerr.AtomicError, kvs <-chan Value, outChan chan<- Map) {
-	defer close(outChan)
+func (sm *StreamingMap) Wait() (Map, error) {
+	err := sm.eg.Wait()
+	return sm.m, err
+}
 
+// Done returns a signal channel which is closed once the StreamingMap is no
+// longer reading from the key/values channel. A send to the key/value channel
+// should be in a select with a read from this channel to ensure that the send
+// does not deadlock.
+func (sm *StreamingMap) Done() <-chan struct{} {
+	return sm.egCtx.Done()
+}
+
+func readMapInput(ctx context.Context, vrw ValueReadWriter, kvs <-chan Value) (Map, error) {
 	ch, err := newEmptyMapSequenceChunker(ctx, vrw)
-
-	if ae.SetIfError(err) {
-		return
+	if err != nil {
+		return EmptyMap, err
 	}
 
 	var lastK Value
 	nextIsKey := true
 	var k Value
-	for v := range kvs {
-		if nextIsKey {
-			k = v
-
-			if lastK != nil {
-				isLess, err := lastK.Less(vrw.Format(), k)
-
-				if ae.SetIfError(err) {
-					return
-				}
-
-				if !isLess {
-					ae.SetIfError(ErrKeysNotOrdered)
-					return
-				}
+LOOP:
+	for {
+		select {
+		case v, ok := <-kvs:
+			if !ok {
+				break LOOP
 			}
-			lastK = k
-			nextIsKey = false
-			continue
-		}
-		_, err := ch.Append(ctx, mapEntry{key: k, value: v})
+			if nextIsKey {
+				k = v
 
-		if ae.SetIfError(err) {
-			return
-		}
+				if lastK != nil {
+					isLess, err := lastK.Less(vrw.Format(), k)
+					if err != nil {
+						return EmptyMap, err
+					}
+					if !isLess {
+						return EmptyMap, ErrKeysNotOrdered
+					}
+				}
+				lastK = k
+				nextIsKey = false
+			} else {
+				_, err := ch.Append(ctx, mapEntry{key: k, value: v})
+				if err != nil {
+					return EmptyMap, err
+				}
 
-		nextIsKey = true
+				nextIsKey = true
+			}
+		case <-ctx.Done():
+			return EmptyMap, ctx.Err()
+		}
 	}
 
 	seq, err := ch.Done(ctx)
-
-	if ae.SetIfError(err) {
-		return
+	if err != nil {
+		return EmptyMap, err
 	}
 
-	outChan <- newMap(seq.(orderedSequence))
+	return newMap(seq.(orderedSequence)), nil
 }
 
 // Diff computes the diff from |last| to |m| using the top-down algorithm,
 // which completes as fast as possible while taking longer to return early
 // results than left-to-right.
-func (m Map) Diff(ctx context.Context, last Map, ae *atomicerr.AtomicError, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+func (m Map) Diff(ctx context.Context, last Map, changes chan<- ValueChanged) error {
 	if m.Equals(last) {
-		return
+		return nil
 	}
-	orderedSequenceDiffTopDown(ctx, last.orderedSequence, m.orderedSequence, ae, changes, closeChan)
+	return orderedSequenceDiffTopDown(ctx, last.orderedSequence, m.orderedSequence, changes)
 }
 
 // DiffHybrid computes the diff from |last| to |m| using a hybrid algorithm
 // which balances returning results early vs completing quickly, if possible.
-func (m Map) DiffHybrid(ctx context.Context, last Map, ae *atomicerr.AtomicError, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+func (m Map) DiffHybrid(ctx context.Context, last Map, changes chan<- ValueChanged) error {
 	if m.Equals(last) {
-		return
+		return nil
 	}
-	orderedSequenceDiffBest(ctx, last.orderedSequence, m.orderedSequence, ae, changes, closeChan)
+	return orderedSequenceDiffBest(ctx, last.orderedSequence, m.orderedSequence, changes)
 }
 
 // DiffLeftRight computes the diff from |last| to |m| using a left-to-right
 // streaming approach, optimised for returning results early, but not
 // completing quickly.
-func (m Map) DiffLeftRight(ctx context.Context, last Map, ae *atomicerr.AtomicError, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+func (m Map) DiffLeftRight(ctx context.Context, last Map, changes chan<- ValueChanged) error {
 	if m.Equals(last) {
-		return
+		return nil
 	}
-	orderedSequenceDiffLeftRight(ctx, last.orderedSequence, m.orderedSequence, ae, changes, closeChan)
+	return orderedSequenceDiffLeftRight(ctx, last.orderedSequence, m.orderedSequence, changes)
 }
 
 // Collection interface

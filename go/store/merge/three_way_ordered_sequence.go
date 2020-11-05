@@ -25,7 +25,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/types"
@@ -34,115 +34,138 @@ import (
 type applyFunc func(candidate, types.ValueChanged, types.Value) (candidate, error)
 
 func (m *merger) threeWayOrderedSequenceMerge(ctx context.Context, a, b, parent candidate, apply applyFunc, path types.Path) (types.Value, error) {
-	ae := atomicerr.New()
 	aChangeChan, bChangeChan := make(chan types.ValueChanged), make(chan types.ValueChanged)
-	aStopChan, bStopChan := make(chan struct{}, 1), make(chan struct{}, 1)
 
-	go func() {
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
 		defer close(aChangeChan)
-		a.diff(ctx, parent, ae, aChangeChan, aStopChan)
-	}()
-	go func() {
+		return a.diff(ctx, parent, aChangeChan)
+	})
+	eg.Go(func() error {
 		defer close(bChangeChan)
-		b.diff(ctx, parent, ae, bChangeChan, bStopChan)
-	}()
-
-	defer stopAndDrain(aStopChan, aChangeChan)
-	defer stopAndDrain(bStopChan, bChangeChan)
+		return b.diff(ctx, parent, bChangeChan)
+	})
 
 	merged := parent
-	aChange, bChange := types.ValueChanged{}, types.ValueChanged{}
-	for {
-		// Get the next change from both a and b. If either diff(a, parent) or diff(b, parent) is complete, aChange or bChange will get an empty types.ValueChanged containing a nil Value. Generally, though, this allows us to proceed through both diffs in (key) order, considering the "current" change from both diffs at the same time.
-		if aChange.Key == nil {
-			aChange = <-aChangeChan
-		}
-		if bChange.Key == nil {
-			bChange = <-bChangeChan
-		}
-
-		// Both channels are producing zero values, so we're done.
-		if aChange.Key == nil && bChange.Key == nil {
-			break
-		}
-
-		// Since diff generates changes in key-order, and we never skip over a change without processing it, we can simply compare the keys at which aChange and bChange occurred to determine if either is safe to apply to the merge result without further processing. This is because if, e.g. aChange.V.Less(bChange.V), we know that the diff of b will never generate a change at that key. If it was going to, it would have done so on an earlier iteration of this loop and been processed at that time.
-		// It's also obviously OK to apply a change if only one diff is generating any changes, e.g. aChange.V is non-nil and bChange.V is nil.
-		if aChange.Key != nil {
-			var err error
-			noBOrALessB := bChange.Key == nil
-			if !noBOrALessB {
-				noBOrALessB, err = aChange.Key.Less(m.vrw.Format(), bChange.Key)
-
-				if err != nil {
-					return nil, err
+	eg.Go(func() error {
+		aChange, bChange := types.ValueChanged{}, types.ValueChanged{}
+		for {
+			// Get the next change from both a and b. If either diff(a,
+			// parent) or diff(b, parent) is complete, aChange or bChange
+			// will get an empty types.ValueChanged containing a nil Value.
+			// Generally, though, this allows us to proceed through both
+			// diffs in (key) order, considering the "current" change from
+			// both diffs at the same time.
+			if aChange.Key == nil {
+				select {
+				case aChange = <-aChangeChan:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			}
+			if bChange.Key == nil {
+				select {
+				case bChange = <-bChangeChan:
+				case <-ctx.Done():
+					return ctx.Err()
 				}
 			}
 
-			if noBOrALessB {
-				v, _, err := a.get(ctx, aChange.Key)
-
-				if err != nil {
-					return nil, err
-				}
-
-				merged, err = apply(merged, aChange, v)
-
-				if err != nil {
-					return nil, err
-				}
-
-				aChange = types.ValueChanged{}
-				continue
-			}
-		}
-
-		if bChange.Key != nil {
-			var err error
-			noAOrBLessA := aChange.Key == nil
-
-			if !noAOrBLessA {
-				noAOrBLessA, err = bChange.Key.Less(m.vrw.Format(), aChange.Key)
-
-				if err != nil {
-					return nil, err
-				}
+			// Both channels are producing zero values, so we're done.
+			if aChange.Key == nil && bChange.Key == nil {
+				break
 			}
 
-			if noAOrBLessA {
-				v, _, err := b.get(ctx, bChange.Key)
-
-				if err != nil {
-					return nil, err
+			// Since diff generates changes in key-order, and we
+			// never skip over a change without processing it, we
+			// can simply compare the keys at which aChange and
+			// bChange occurred to determine if either is safe to
+			// apply to the merge result without further
+			// processing. This is because if, e.g.
+			// aChange.V.Less(bChange.V), we know that the diff of
+			// b will never generate a change at that key. If it
+			// was going to, it would have done so on an earlier
+			// iteration of this loop and been processed at that
+			// time.
+			//
+			// It's also obviously OK to apply a change if only one
+			// diff is generating any changes, e.g. aChange.V is
+			// non-nil and bChange.V is nil.
+			if aChange.Key != nil {
+				var err error
+				noBOrALessB := bChange.Key == nil
+				if !noBOrALessB {
+					noBOrALessB, err = aChange.Key.Less(m.vrw.Format(), bChange.Key)
+					if err != nil {
+						return err
+					}
 				}
 
-				merged, err = apply(merged, bChange, v)
+				if noBOrALessB {
+					v, _, err := a.get(ctx, aChange.Key)
+					if err != nil {
+						return err
+					}
 
-				if err != nil {
-					return nil, err
+					merged, err = apply(merged, aChange, v)
+					if err != nil {
+						return err
+					}
+
+					aChange = types.ValueChanged{}
+					continue
 				}
-
-				bChange = types.ValueChanged{}
-				continue
 			}
-		}
 
-		if !aChange.Key.Equals(bChange.Key) {
-			d.Panic("Diffs have skewed!") // Sanity check.
-		}
+			if bChange.Key != nil {
+				var err error
+				noAOrBLessA := aChange.Key == nil
 
-		change, mergedVal, err := m.mergeChanges(ctx, aChange, bChange, a, b, parent, apply, path)
-		if err != nil {
-			return parent.getValue(), err
-		}
-		merged, err = apply(merged, change, mergedVal)
+				if !noAOrBLessA {
+					noAOrBLessA, err = bChange.Key.Less(m.vrw.Format(), aChange.Key)
+					if err != nil {
+						return err
+					}
+				}
 
-		if err != nil {
-			return nil, err
-		}
+				if noAOrBLessA {
+					v, _, err := b.get(ctx, bChange.Key)
+					if err != nil {
+						return err
+					}
 
-		aChange, bChange = types.ValueChanged{}, types.ValueChanged{}
+					merged, err = apply(merged, bChange, v)
+					if err != nil {
+						return err
+					}
+
+					bChange = types.ValueChanged{}
+					continue
+				}
+			}
+
+			if !aChange.Key.Equals(bChange.Key) {
+				d.Panic("Diffs have skewed!") // Sanity check.
+			}
+
+			change, mergedVal, err := m.mergeChanges(ctx, aChange, bChange, a, b, parent, apply, path)
+			if err != nil {
+				return err
+			}
+			merged, err = apply(merged, change, mergedVal)
+			if err != nil {
+				return err
+			}
+
+			aChange, bChange = types.ValueChanged{}, types.ValueChanged{}
+		}
+		return nil
+	})
+
+	if err := eg.Wait(); err != nil {
+		return nil, err
 	}
+
 	return merged.getValue(), nil
 }
 
@@ -237,12 +260,6 @@ func (m *merger) mergeChanges(ctx context.Context, aChange, bChange types.ValueC
 	}
 
 	return change, nil, newMergeConflict("Conflict:\n%s = %s\nvs\n%s = %s", aDesc, aStr, bDesc, bStr)
-}
-
-func stopAndDrain(stop chan<- struct{}, drain <-chan types.ValueChanged) {
-	close(stop)
-	for range drain {
-	}
 }
 
 func describeChange(change types.ValueChanged) (string, error) {

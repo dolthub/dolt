@@ -89,7 +89,9 @@ func TestTableDiff(t *testing.T) {
 	cc, _ := schema.NewColCollection(
 		schema.NewColumn("id", uint64(100), types.UUIDKind, true, schema.NotNullConstraint{}),
 	)
-	tbl2, err := createTestTable(ddb.ValueReadWriter(), schema.SchemaFromCols(cc), m)
+	tableSch, err := schema.SchemaFromCols(cc)
+	assert.NoError(t, err)
+	tbl2, err := createTestTable(ddb.ValueReadWriter(), tableSch, m)
 	assert.NoError(t, err)
 
 	root4, err := root3.PutTable(ctx, "tbl2", tbl2)
@@ -308,7 +310,11 @@ func createTestDocsSchema() schema.Schema {
 		schema.NewColumn(DocPkColumnName, DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn(DocTextColumnName, DocTextTag, types.StringKind, false),
 	)
-	return schema.SchemaFromCols(typedColColl)
+	sch, err := schema.SchemaFromCols(typedColColl)
+	if err != nil {
+		panic(err)
+	}
+	return sch
 }
 
 func getDocRows(t *testing.T, sch schema.Schema, rowVal types.Value) []row.Row {

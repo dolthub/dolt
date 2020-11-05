@@ -115,7 +115,7 @@ var imt *table.InMemTable
 var imtRows []row.Row
 
 func init() {
-	fakeSchema = schema.SchemaFromCols(fakeFields)
+	fakeSchema = schema.MustSchemaFromCols(fakeFields)
 
 	imtRows = []row.Row{
 		mustRow(row.New(types.Format_7_18, fakeSchema, row.TaggedValues{0: types.String("a"), 1: types.String("1")})),

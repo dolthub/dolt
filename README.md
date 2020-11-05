@@ -305,6 +305,10 @@ dolt also supports directory, aws, and gcs based remotes:
 - gs - you can use a GCS bucket as well. Setup here should be straight forward. You'll need to create a gcs bucket, and you'll need to use the gcloud auth login command in order to setup your credentials.
 
   dolt remote add <remote> gs://gcs-bucket/database
+	
+## Windows Subsystem for Linux
+
+For Windows users, Dolt works and is fully tested with WSL 1. If you are using WSL 2, then [you may run into issues](https://github.com/dolthub/dolt/issues/992) as Dolt does not support it. We recommend all WSL 2 users to switch to WSL 1 when using Dolt.
 
 ## Issues
 

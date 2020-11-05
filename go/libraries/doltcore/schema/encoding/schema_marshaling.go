@@ -199,7 +199,10 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 		return nil, err
 	}
 
-	sch := schema.SchemaFromCols(colColl)
+	sch, err := schema.SchemaFromCols(colColl)
+	if err != nil {
+		return nil, err
+	}
 
 	for _, encodedIndex := range sd.IndexCollection {
 		_, err = sch.Indexes().UnsafeAddIndexByColTags(

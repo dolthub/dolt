@@ -30,7 +30,6 @@ import (
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -40,7 +39,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -374,6 +372,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	mover, nDMErr := newImportDataMover(ctx, root, dEnv, mvOpts, importStatsCB)
 
 	if nDMErr != nil {
+
 		verr = newDataMoverErrToVerr(mvOpts, nDMErr)
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
@@ -426,15 +425,13 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 	if ow {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: fmt.Errorf("%s already exists. Use -f to overwrite.", impOpts.DestName())}
 	}
-
+	
 	wrSch, dmce := getImportSchema(ctx, root, dEnv.FS, impOpts)
-
 	if dmce != nil {
 		return nil, dmce
 	}
 
 	rd, srcIsSorted, err := impOpts.src.NewReader(ctx, root, dEnv.FS, impOpts.srcOptions)
-
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
 	}
@@ -487,7 +484,6 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 }
 
 func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, impOpts *importOptions) (schema.Schema, *mvdata.DataMoverCreationError) {
-
 	if impOpts.schFile != "" {
 		tn, out, err := mvdata.SchAndTableNameFromFile(ctx, impOpts.schFile, fs, root)
 
@@ -518,8 +514,7 @@ func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Fil
 			return rd.GetSchema(), nil
 		}
 
-		outSch, err := inferSchema(ctx, root, rd, impOpts)
-
+		outSch, err := mvdata.InferSchema(ctx, root, rd, impOpts.tableName, impOpts.primaryKeys, impOpts)
 		if err != nil {
 			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 		}
@@ -535,34 +530,6 @@ func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Fil
 	defer tblRd.Close(ctx)
 
 	return tblRd.GetSchema(), nil
-}
-
-func inferSchema(ctx context.Context, root *doltdb.RootValue, rd table.TableReadCloser, impOpts *importOptions) (schema.Schema, error) {
-	var err error
-
-	pks := impOpts.primaryKeys
-	if len(pks) == 0 {
-		pks = rd.GetSchema().GetPKCols().GetColumnNames()
-	}
-
-	infCols, err := actions.InferColumnTypesFromTableReader(ctx, root, rd, impOpts)
-
-	if err != nil {
-		return nil, err
-	}
-
-	pkSet := set.NewStrSet(pks)
-	newCols, _ := schema.MapColCollection(infCols, func(col schema.Column) (schema.Column, error) {
-		col.IsPartOfPK = pkSet.Contains(col.Name)
-		return col, nil
-	})
-
-	newCols, err = root.GenerateTagsForNewColColl(ctx, impOpts.tableName, newCols)
-	if err != nil {
-		return nil, errhand.BuildDError("failed to generate new schema").AddCause(err).Build()
-	}
-
-	return schema.SchemaFromCols(newCols), nil
 }
 
 func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationError) errhand.VerboseError {

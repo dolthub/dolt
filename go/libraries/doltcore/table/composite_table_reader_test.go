@@ -40,7 +40,8 @@ func TestCompositeTableReader(t *testing.T) {
 		schema.NewColumn("val", 1, types.IntKind, false),
 	)
 	require.NoError(t, err)
-	sch := schema.SchemaFromCols(coll)
+	sch, err := schema.SchemaFromCols(coll)
+	require.NoError(t, err)
 
 	var readers []TableReadCloser
 	var expectedKeys []uint64

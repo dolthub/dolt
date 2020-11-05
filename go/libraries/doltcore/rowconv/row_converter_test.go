@@ -41,7 +41,7 @@ var srcCols, _ = schema.NewColCollection(
 	schema.NewColumn("timestamptostr", 6, types.TimestampKind, false),
 )
 
-var srcSch = schema.SchemaFromCols(srcCols)
+var srcSch = schema.MustSchemaFromCols(srcCols)
 
 func TestRowConverter(t *testing.T) {
 	mapping, err := TypedToUntypedMapping(srcSch)
@@ -108,7 +108,8 @@ func TestSpecialBoolHandling(t *testing.T) {
 	col2, err := schema.NewColumnWithTypeInfo("v", 1, typeinfo.PseudoBoolType, false, "", false, "")
 	require.NoError(t, err)
 	colColl, _ := schema.NewColCollection(col1, col2)
-	sch := schema.SchemaFromCols(colColl)
+	sch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
 	untypedSch, err := untyped.UntypeSchema(sch)
 	require.NoError(t, err)
 

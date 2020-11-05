@@ -123,30 +123,30 @@ func readSetInput(ctx context.Context, vrw ValueReadWriter, ae *atomicerr.Atomic
 // Diff computes the diff from |last| to |m| using the top-down algorithm,
 // which completes as fast as possible while taking longer to return early
 // results than left-to-right.
-func (s Set) Diff(ctx context.Context, last Set, ae *atomicerr.AtomicError, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+func (s Set) Diff(ctx context.Context, last Set, changes chan<- ValueChanged) error {
 	if s.Equals(last) {
-		return
+		return nil
 	}
-	orderedSequenceDiffTopDown(ctx, last.orderedSequence, s.orderedSequence, ae, changes, closeChan)
+	return orderedSequenceDiffTopDown(ctx, last.orderedSequence, s.orderedSequence, changes)
 }
 
 // DiffHybrid computes the diff from |last| to |s| using a hybrid algorithm
 // which balances returning results early vs completing quickly, if possible.
-func (s Set) DiffHybrid(ctx context.Context, last Set, ae *atomicerr.AtomicError, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+func (s Set) DiffHybrid(ctx context.Context, last Set, changes chan<- ValueChanged) error {
 	if s.Equals(last) {
-		return
+		return nil
 	}
-	orderedSequenceDiffBest(ctx, last.orderedSequence, s.orderedSequence, ae, changes, closeChan)
+	return orderedSequenceDiffBest(ctx, last.orderedSequence, s.orderedSequence, changes)
 }
 
 // DiffLeftRight computes the diff from |last| to |s| using a left-to-right
 // streaming approach, optimised for returning results early, but not
 // completing quickly.
-func (s Set) DiffLeftRight(ctx context.Context, last Set, ae *atomicerr.AtomicError, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+func (s Set) DiffLeftRight(ctx context.Context, last Set, changes chan<- ValueChanged) error {
 	if s.Equals(last) {
-		return
+		return nil
 	}
-	orderedSequenceDiffLeftRight(ctx, last.orderedSequence, s.orderedSequence, ae, changes, closeChan)
+	return orderedSequenceDiffLeftRight(ctx, last.orderedSequence, s.orderedSequence, changes)
 }
 
 func (s Set) asSequence() sequence {

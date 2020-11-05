@@ -39,11 +39,11 @@ const (
 	c1Tag   = 2
 )
 
-var oneIntPKSch = schema.SchemaFromCols(mustColColl(schema.NewColCollection(
+var oneIntPKSch = schema.MustSchemaFromCols(mustColColl(schema.NewColCollection(
 	schema.NewColumn(pk0Name, pk0Tag, types.IntKind, true),
 	schema.NewColumn(c1Name, c1Tag, types.IntKind, false))))
 
-var twoIntPKSch = schema.SchemaFromCols(mustColColl(schema.NewColCollection(
+var twoIntPKSch = schema.MustSchemaFromCols(mustColColl(schema.NewColCollection(
 	schema.NewColumn(pk0Name, pk0Tag, types.IntKind, true),
 	schema.NewColumn(pk1Name, pk1Tag, types.IntKind, true),
 	schema.NewColumn(c1Name, c1Tag, types.IntKind, false))))
