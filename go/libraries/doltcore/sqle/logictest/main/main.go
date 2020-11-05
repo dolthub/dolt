@@ -19,7 +19,7 @@ import (
 	"encoding/json"
 	"os"
 
-	"github.com/liquidata-inc/sqllogictest/go/logictest"
+	"github.com/dolthub/sqllogictest/go/logictest"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/logictest/dolt"
 )
