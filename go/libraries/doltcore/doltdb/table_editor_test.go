@@ -44,7 +44,8 @@ func TestTableEditorConcurrency(t *testing.T) {
 		schema.NewColumn("v1", 1, types.IntKind, false),
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	require.NoError(t, err)
-	tableSch := schema.SchemaFromCols(colColl)
+	tableSch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
 	tableSchVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tableSch)
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
@@ -140,7 +141,8 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 		schema.NewColumn("v1", 1, types.IntKind, false),
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	require.NoError(t, err)
-	tableSch := schema.SchemaFromCols(colColl)
+	tableSch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
 	tableSchVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tableSch)
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
@@ -234,7 +236,8 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 		schema.NewColumn("v1", 1, types.IntKind, false),
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	require.NoError(t, err)
-	tableSch := schema.SchemaFromCols(colColl)
+	tableSch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
 	tableSchVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tableSch)
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
@@ -305,7 +308,8 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 		schema.NewColumn("v1", 1, types.IntKind, false),
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	require.NoError(t, err)
-	tableSch := schema.SchemaFromCols(colColl)
+	tableSch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
 	tableSchVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tableSch)
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)

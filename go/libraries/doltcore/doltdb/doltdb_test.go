@@ -52,8 +52,9 @@ func createTestSchema(t *testing.T) schema.Schema {
 		schema.NewColumn("age", ageTag, types.UintKind, false),
 		schema.NewColumn("empty", emptyTag, types.IntKind, false),
 	)
-	sch := schema.SchemaFromCols(colColl)
-	_, err := sch.Indexes().AddIndexByColTags(testSchemaIndexName, []uint64{firstTag, lastTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
+	sch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
+	_, err = sch.Indexes().AddIndexByColTags(testSchemaIndexName, []uint64{firstTag, lastTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
 	require.NoError(t, err)
 	_, err = sch.Indexes().AddIndexByColTags(testSchemaIndexAge, []uint64{ageTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
 	require.NoError(t, err)

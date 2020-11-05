@@ -33,7 +33,7 @@ import (
 // CreateSchema returns a schema from the columns given, panicking on any errors.
 func CreateSchema(columns ...schema.Column) schema.Schema {
 	colColl, _ := schema.NewColCollection(columns...)
-	return schema.SchemaFromCols(colColl)
+	return schema.MustSchemaFromCols(colColl)
 }
 
 // Creates a row with the schema given, having the values given. Starts at tag 0 and counts up.
@@ -59,7 +59,7 @@ func AddColumnToSchema(sch schema.Schema, col schema.Column) schema.Schema {
 	if err != nil {
 		panic(err)
 	}
-	return schema.SchemaFromCols(columns)
+	return schema.MustSchemaFromCols(columns)
 }
 
 // RemoveColumnFromSchema returns a new schema with the given tag missing, but otherwise identical. At least one
@@ -81,7 +81,7 @@ func RemoveColumnFromSchema(sch schema.Schema, tagToRemove uint64) schema.Schema
 	if err != nil {
 		panic(err)
 	}
-	return schema.SchemaFromCols(columns)
+	return schema.MustSchemaFromCols(columns)
 }
 
 // Compares two noms Floats for approximate equality
@@ -133,6 +133,6 @@ func MustSchema(cols ...schema.Column) schema.Schema {
 	if !hasPKCols {
 		return schema.UnkeyedSchemaFromCols(colColl)
 	} else {
-		return schema.SchemaFromCols(colColl)
+		return schema.MustSchemaFromCols(colColl)
 	}
 }

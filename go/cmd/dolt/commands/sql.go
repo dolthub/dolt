@@ -17,6 +17,12 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+
 	"github.com/abiosoft/readline"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/auth"
@@ -32,11 +38,6 @@ import (
 	"github.com/flynn-archive/go-shlex"
 	"github.com/liquidata-inc/ishell"
 	"gopkg.in/src-d/go-errors.v1"
-	"io"
-	"os"
-	"path/filepath"
-	"runtime"
-	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -50,7 +51,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
-	pipeline2 "github.com/dolthub/dolt/go/libraries/utils/pipeline"
+	"github.com/dolthub/dolt/go/libraries/utils/pipeline"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -657,16 +658,6 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv) error {
 			return
 		}
 
-		if sqlSch, rowIter, err := processQuery(ctx, query, se); err != nil {
-			verr := formatQueryError("", err)
-			shell.Println(verr.Verbose())
-		} else if rowIter != nil {
-			err = PrettyPrintResults(ctx, se.resultFormat, sqlSch, rowIter)
-			if err != nil {
-				shell.Println(color.RedString(err.Error()))
-			}
-		}
-
 		// TODO: there's a bug in the readline library when editing multi-line history entries.
 		// Longer term we need to switch to a new readline library, like in this bug:
 		// https://github.com/cockroachdb/cockroach/issues/15460
@@ -675,6 +666,16 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv) error {
 		if err := shell.AddHistory(singleLine); err != nil {
 			// TODO: handle better, like by turning off history writing for the rest of the session
 			shell.Println(color.RedString(err.Error()))
+		}
+
+		if sqlSch, rowIter, err := processQuery(ctx, query, se); err != nil {
+			verr := formatQueryError("", err)
+			shell.Println(verr.Verbose())
+		} else if rowIter != nil {
+			err = PrettyPrintResults(ctx, se.resultFormat, sqlSch, rowIter)
+			if err != nil {
+				shell.Println(color.RedString(err.Error()))
+			}
 		}
 
 		currPrompt := fmt.Sprintf("%s> ", ctx.GetCurrentDatabase())
@@ -1209,10 +1210,6 @@ func (se *sqlEngine) query(ctx *sql.Context, query string) (sql.Schema, sql.RowI
 }
 
 func PrettyPrintResults(ctx context.Context, resultFormat resultFormat, sqlSch sql.Schema, rowIter sql.RowIter) (rerr error) {
-	if isOkResult(sqlSch) {
-		return printOKResult(ctx, rowIter)
-	}
-
 	defer func() {
 		closeErr := rowIter.Close()
 		if rerr == nil && closeErr != nil {
@@ -1220,9 +1217,13 @@ func PrettyPrintResults(ctx context.Context, resultFormat resultFormat, sqlSch s
 		}
 	}()
 
+	if isOkResult(sqlSch) {
+		return printOKResult(rowIter)
+	}
+
 	// For some output formats, we want to convert everything to strings to be processed by the pipeline. For others,
 	// we want to leave types alone and let the writer figure out how to format it for output.
-	var p *pipeline2.Pipeline
+	var p *pipeline.Pipeline
 	switch resultFormat {
 	case formatCsv:
 		p = createCSVPipeline(ctx, sqlSch, rowIter)
@@ -1240,13 +1241,8 @@ func PrettyPrintResults(ctx context.Context, resultFormat resultFormat, sqlSch s
 	return rerr
 }
 
-func printOKResult(_ context.Context, iter sql.RowIter) (returnErr error) {
+func printOKResult(iter sql.RowIter) (returnErr error) {
 	row, err := iter.Next()
-	if err != nil {
-		return err
-	}
-
-	err = iter.Close()
 	if err != nil {
 		return err
 	}
@@ -1396,5 +1392,3 @@ func (se *sqlEngine) ddl(ctx *sql.Context, ddl *sqlparser.DDL, query string) (sq
 		return nil, nil, fmt.Errorf("Unhandled DDL action %v in query %v", ddl.Action, query)
 	}
 }
-
-

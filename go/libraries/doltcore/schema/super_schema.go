@@ -226,7 +226,7 @@ func (ss *SuperSchema) GenerateSchema() (Schema, error) {
 	if err != nil {
 		return nil, err
 	}
-	return SchemaFromCols(cc), nil
+	return SchemaFromCols(cc)
 }
 
 // NameMapForSchema creates a field name mapping needed to construct a rowconv.RowConverter

@@ -17,9 +17,6 @@ package noms
 import (
 	"context"
 	"errors"
-	"fmt"
-
-	"github.com/dolthub/dolt/go/store/atomicerr"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -35,19 +32,18 @@ type NomsMapCreator struct {
 
 	lastPK  types.LesserValuable
 	kvsChan chan<- types.Value
-	mapChan <-chan types.Map
-	ae      *atomicerr.AtomicError
 
+	streamingMap *types.StreamingMap
+
+	err    error
 	result *types.Map
 }
 
 // NewNomsMapCreator creates a new NomsMapCreator.
 func NewNomsMapCreator(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) *NomsMapCreator {
-	ae := atomicerr.New()
 	kvsChan := make(chan types.Value)
-	mapChan := types.NewStreamingMap(ctx, vrw, ae, kvsChan)
-
-	return &NomsMapCreator{sch, vrw, nil, kvsChan, mapChan, ae, nil}
+	streamingMap := types.NewStreamingMap(ctx, vrw, kvsChan)
+	return &NomsMapCreator{sch, vrw, nil, kvsChan, streamingMap, nil, nil}
 }
 
 // GetSchema gets the schema of the rows that this writer writes
@@ -58,12 +54,21 @@ func (nmc *NomsMapCreator) GetSchema() schema.Schema {
 // WriteRow will write a row to a table.  The primary key for each row must be greater than the primary key of the row
 // written before it.
 func (nmc *NomsMapCreator) WriteRow(ctx context.Context, r row.Row) error {
+	if nmc.err != nil {
+		return nmc.err
+	}
 	if nmc.kvsChan == nil {
 		return errors.New("writing to NomsMapCreator after closing")
 	}
 
-	if err := nmc.ae.Get(); err != nil {
-		return err
+	send := func(v types.Value) error {
+		select {
+		case nmc.kvsChan <- v:
+			return nil
+		case <-nmc.streamingMap.Done():
+			_, err := nmc.streamingMap.Wait()
+			return err
+		}
 	}
 
 	err := func() error {
@@ -74,7 +79,6 @@ func (nmc *NomsMapCreator) WriteRow(ctx context.Context, r row.Row) error {
 		if !isOK {
 			var err error
 			isOK, err = nmc.lastPK.Less(nmc.vrw.Format(), pk)
-
 			if err != nil {
 				return err
 			}
@@ -82,19 +86,21 @@ func (nmc *NomsMapCreator) WriteRow(ctx context.Context, r row.Row) error {
 
 		if isOK {
 			pkVal, err := pk.Value(ctx)
-
 			if err != nil {
 				return err
 			}
 
 			fv, err := fieldVals.Value(ctx)
-
 			if err != nil {
 				return err
 			}
 
-			nmc.kvsChan <- pkVal
-			nmc.kvsChan <- fv
+			if err := send(pkVal); err != nil {
+				return err
+			}
+			if err := send(fv); err != nil {
+				return err
+			}
 			nmc.lastPK = pk
 
 			return nil
@@ -103,31 +109,26 @@ func (nmc *NomsMapCreator) WriteRow(ctx context.Context, r row.Row) error {
 		}
 	}()
 
-	nmc.ae.SetIfError(err)
+	if err != nil {
+		close(nmc.kvsChan)
+		nmc.kvsChan = nil
+		nmc.err = err
+	}
+
 	return err
 }
 
 // Close should flush all writes, release resources being held.  After this call is made no more rows may be written,
 // and the value of GetMap becomes valid.
 func (nmc *NomsMapCreator) Close(ctx context.Context) error {
+	if nmc.err != nil {
+		return nmc.err
+	}
 	if nmc.result == nil {
-		var err error
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					err = fmt.Errorf("panic occured during closing: %v", r)
-				}
-			}()
-
-			close(nmc.kvsChan)
-
-			result := <-nmc.mapChan
-			nmc.result = &result
-
-			nmc.kvsChan = nil
-			nmc.mapChan = nil
-		}()
-
+		close(nmc.kvsChan)
+		nmc.kvsChan = nil
+		m, err := nmc.streamingMap.Wait()
+		nmc.result = &m
 		return err
 	} else {
 		return errors.New("Already closed.")

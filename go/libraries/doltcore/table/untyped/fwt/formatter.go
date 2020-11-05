@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package fwt
 import (
 	"errors"
 	"fmt"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"

@@ -73,7 +73,8 @@ func TestReader(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	sch := schema.SchemaFromCols(colColl)
+	sch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
 
 	reader, err := OpenJSONReader(types.Format_LD_1, "file.json", fs, sch)
 	require.NoError(t, err)
@@ -152,7 +153,8 @@ func TestReaderBadJson(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	sch := schema.SchemaFromCols(colColl)
+	sch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
 
 	reader, err := OpenJSONReader(types.Format_LD_1, "file.json", fs, sch)
 	require.NoError(t, err)

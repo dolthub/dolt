@@ -23,9 +23,8 @@ package types
 
 import (
 	"context"
+	"sync"
 	"testing"
-
-	"github.com/dolthub/dolt/go/store/atomicerr"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -35,7 +34,7 @@ const (
 	lengthOfNumbersTest = 1000
 )
 
-type diffFn func(ctx context.Context, last orderedSequence, current orderedSequence, ae *atomicerr.AtomicError, changes chan<- ValueChanged, closeChan <-chan struct{}) bool
+type diffFn func(ctx context.Context, last orderedSequence, current orderedSequence, changes chan<- ValueChanged) error
 
 type diffTestSuite struct {
 	suite.Suite
@@ -60,12 +59,10 @@ func newDiffTestSuite(from1, to1, by1, from2, to2, by2, numAddsExpected, numRemo
 }
 
 func accumulateOrderedSequenceDiffChanges(o1, o2 orderedSequence, df diffFn) (added []Value, removed []Value, modified []Value, err error) {
-	ae := atomicerr.New()
 	changes := make(chan ValueChanged)
-	closeChan := make(chan struct{})
 	go func() {
-		df(context.Background(), o1, o2, ae, changes, closeChan)
-		close(changes)
+		defer close(changes)
+		err = df(context.Background(), o1, o2, changes)
 	}()
 	for change := range changes {
 		if change.ChangeType == DiffChangeAdded {
@@ -76,7 +73,7 @@ func accumulateOrderedSequenceDiffChanges(o1, o2 orderedSequence, df diffFn) (ad
 			modified = append(modified, change.Key)
 		}
 	}
-	return added, removed, modified, ae.Get()
+	return added, removed, modified, err
 }
 
 func (suite *diffTestSuite) TestDiff() {
@@ -222,7 +219,7 @@ func TestOrderedSequencesDisjoint(t *testing.T) {
 func TestOrderedSequencesDiffCloseWithoutReading(t *testing.T) {
 	vs := newTestValueStore()
 
-	runTest := func(df diffFn) {
+	runTest := func(t *testing.T, df diffFn) {
 		set1, err := NewSet(context.Background(), vs)
 		assert.NoError(t, err)
 		s1 := set1.orderedSequence
@@ -231,25 +228,26 @@ func TestOrderedSequencesDiffCloseWithoutReading(t *testing.T) {
 		assert.NoError(t, err)
 		s2 := set2.orderedSequence
 
-		ae := atomicerr.New()
 		changeChan := make(chan ValueChanged)
-		closeChan := make(chan struct{})
-		stopChan := make(chan struct{})
+		ctx, cancel := context.WithCancel(context.Background())
 
+		var wg sync.WaitGroup
+		wg.Add(1)
 		go func() {
-			df(context.Background(), s1, s2, ae, changeChan, closeChan)
-			stopChan <- struct{}{}
+			defer close(changeChan)
+			defer wg.Done()
+			err = df(ctx, s1, s2, changeChan)
 		}()
 
-		closeChan <- struct{}{}
-		<-stopChan
+		cancel()
+		wg.Wait()
 
-		assert.NoError(t, ae.Get())
+		assert.Equal(t, err, context.Canceled)
 	}
 
-	runTest(orderedSequenceDiffBest)
-	runTest(orderedSequenceDiffLeftRight)
-	runTest(orderedSequenceDiffTopDown)
+	t.Run("Best", func(t *testing.T) { runTest(t, orderedSequenceDiffBest) })
+	t.Run("LeftRight", func(t *testing.T) { runTest(t, orderedSequenceDiffLeftRight) })
+	t.Run("TopDown", func(t *testing.T) { runTest(t, orderedSequenceDiffTopDown) })
 }
 
 func TestOrderedSequenceDiffWithMetaNodeGap(t *testing.T) {
@@ -292,13 +290,16 @@ func TestOrderedSequenceDiffWithMetaNodeGap(t *testing.T) {
 	assert.NoError(err)
 
 	runTest := func(df diffFn) {
-		ae := atomicerr.New()
+		var err error
 		changes := make(chan ValueChanged)
 		go func() {
-			df(context.Background(), s1, s2, ae, changes, nil)
+			defer close(changes)
+			err = df(context.Background(), s1, s2, changes)
+			if err != nil {
+				return
+			}
 			changes <- ValueChanged{}
-			df(context.Background(), s2, s1, ae, changes, nil)
-			close(changes)
+			err = df(context.Background(), s2, s1, changes)
 		}()
 
 		expected := []ValueChanged{
@@ -315,7 +316,7 @@ func TestOrderedSequenceDiffWithMetaNodeGap(t *testing.T) {
 			i++
 		}
 		assert.Equal(len(expected), i)
-		assert.NoError(ae.Get())
+		assert.NoError(err)
 	}
 
 	runTest(orderedSequenceDiffBest)

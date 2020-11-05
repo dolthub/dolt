@@ -620,7 +620,7 @@ func dumbDownSchema(in schema.Schema) (schema.Schema, error) {
 
 	dumbColColl, _ := schema.NewColCollection(dumbCols...)
 
-	return schema.SchemaFromCols(dumbColColl), nil
+	return schema.SchemaFromCols(dumbColColl)
 }
 
 func toNamer(name string) string {
