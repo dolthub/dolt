@@ -68,9 +68,9 @@ type DoltTable struct {
 	sqlSch sql.Schema
 	db     SqlDatabase
 
-	table   *doltdb.Table
-	sch     schema.Schema
-	autoCol schema.Column
+	table      *doltdb.Table
+	sch        schema.Schema
+	autoIncCol schema.Column
 }
 
 func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase) DoltTable {
@@ -84,11 +84,11 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatab
 	})
 
 	return DoltTable{
-		name:    name,
-		db:      db,
-		table:   tbl,
-		sch:     sch,
-		autoCol: autoCol,
+		name:       name,
+		db:         db,
+		table:      tbl,
+		sch:        sch,
+		autoIncCol: autoCol,
 	}
 }
 
@@ -171,7 +171,7 @@ func (t *DoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}, error)
 	if err != nil {
 		return nil, err
 	}
-	return t.autoCol.TypeInfo.ConvertNomsValueToValue(val)
+	return t.autoIncCol.TypeInfo.ConvertNomsValueToValue(val)
 }
 
 // Name returns the name of the table.
@@ -330,6 +330,9 @@ func (t *WritableDoltTable) Updater(ctx *sql.Context) sql.RowUpdater {
 
 // GetAutoIncrementValue gets the last AUTO_INCREMENT value
 func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
+	if !t.autoIncCol.AutoIncrement {
+		return nil, fmt.Errorf("this table has no AUTO_INCREMENT columns")
+	}
 	if t.ed != nil {
 		return t.ed.GetAutoIncrementValue()
 	}

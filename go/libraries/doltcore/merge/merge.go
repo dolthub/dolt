@@ -194,25 +194,25 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, tableEditS
 	if conflicts.Len() > 0 {
 
 		asr, err := ancTbl.GetSchemaRef()
-
 		if err != nil {
 			return nil, nil, err
 		}
 
 		sr, err := tbl.GetSchemaRef()
-
 		if err != nil {
 			return nil, nil, err
 		}
 
 		msr, err := mergeTbl.GetSchemaRef()
-
 		if err != nil {
 			return nil, nil, err
 		}
 
 		schemas := doltdb.NewConflict(asr, sr, msr)
 		resultTbl, err = resultTbl.SetConflicts(ctx, schemas, conflicts)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	resultTbl, err = mergeAutoIncrementValues(ctx, tbl, mergeTbl, resultTbl)

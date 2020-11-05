@@ -85,7 +85,7 @@ func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Ro
 
 func (te *sqlTableEditor) GetAutoIncrementValue() (interface{}, error) {
 	val := te.tableEditor.GetAutoIncrementValue()
-	return te.t.DoltTable.autoCol.TypeInfo.ConvertNomsValueToValue(val)
+	return te.t.DoltTable.autoIncCol.TypeInfo.ConvertNomsValueToValue(val)
 }
 
 // Close implements Closer
