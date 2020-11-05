@@ -7,6 +7,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/fwt"
 	pipeline2 "github.com/dolthub/dolt/go/libraries/utils/pipeline"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
 	"io"
 	"strconv"
 	"strings"
@@ -17,6 +18,15 @@ const (
 	readBatchSize  = 10
 	writeBatchSize = 1
 )
+
+// noParallelizationInitFunc only exists to validate the routine wasn't parallelized
+func noParallelizationInitFunc(ctx context.Context, index int) error {
+	if index != 0 {
+		panic("cannot parallelize this routine")
+	}
+
+	return nil
+}
 
 // sqlColToStr is a utility function for converting a sql column of type interface{} to a string
 func sqlColToStr(col interface{}) string {
@@ -55,7 +65,7 @@ func sqlColToStr(col interface{}) string {
 				return "false"
 			}
 		case time.Time:
-			return typedCol.Format("2006-01-02 15:04:05 -0700 MST")
+			return typedCol.Format("2006-01-02 15:04:05.999999 -0700 MST")
 		}
 	}
 
@@ -105,7 +115,7 @@ func writeToCliOutStageFunc(ctx context.Context, items []pipeline2.ItemWithProps
 
 func createNullPipeline(_ context.Context, sch sql.Schema, iter sql.RowIter) *pipeline2.Pipeline {
 	return pipeline2.NewPipeline(
-		pipeline2.NewStage("read", nil, getReadStageFunc(iter, readBatchSize), 0, 0, 0),
+		pipeline2.NewStage("read", noParallelizationInitFunc, getReadStageFunc(iter, readBatchSize), 0, 0, 0),
 		pipeline2.NewStage("drop", nil, dropOnFloor, 0, 100, writeBatchSize),
 	)
 }
@@ -120,9 +130,9 @@ func dropOnFloor(ctx context.Context, items []pipeline2.ItemWithProps) ([]pipeli
 
 func createCSVPipeline(_ context.Context, sch sql.Schema, iter sql.RowIter) *pipeline2.Pipeline {
 	p := pipeline2.NewPipeline(
-		pipeline2.NewStage("read", nil, getReadStageFunc(iter, readBatchSize), 0, 0, 0),
+		pipeline2.NewStage("read", noParallelizationInitFunc, getReadStageFunc(iter, readBatchSize), 0, 0, 0),
 		pipeline2.NewStage("process", nil, csvProcessStageFunc, 2, 1000, readBatchSize),
-		pipeline2.NewStage("write", nil, writeToCliOutStageFunc, 0, 100, writeBatchSize),
+		pipeline2.NewStage("write", noParallelizationInitFunc, writeToCliOutStageFunc, 0, 100, writeBatchSize),
 	)
 
 	writeIn, _ := p.GetInputChannel("write")
@@ -160,6 +170,10 @@ func csvProcessStageFunc(ctx context.Context, items []pipeline2.ItemWithProps) (
 					str = "\"\""
 				}
 
+				if strings.IndexRune(str, ',') != -1 {
+					str = "\"" + str + "\""
+				}
+
 				sb.WriteString(str)
 			}
 
@@ -182,9 +196,9 @@ func csvProcessStageFunc(ctx context.Context, items []pipeline2.ItemWithProps) (
 
 func createJSONPipeline(_ context.Context, sch sql.Schema, iter sql.RowIter) *pipeline2.Pipeline {
 	p := pipeline2.NewPipeline(
-		pipeline2.NewStage("read", nil, getReadStageFunc(iter, readBatchSize), 0, 0, 0),
+		pipeline2.NewStage("read", noParallelizationInitFunc, getReadStageFunc(iter, readBatchSize), 0, 0, 0),
 		pipeline2.NewStage("process", nil, getJSONProcessFunc(sch), 2, 1000, readBatchSize),
-		pipeline2.NewStage("write", writeJSONInitRoutineFunc, writeJSONToCliOutStageFunc, 0, 100, writeBatchSize),
+		pipeline2.NewStage("write", noParallelizationInitFunc, writeJSONToCliOutStageFunc, 0, 100, writeBatchSize),
 	)
 
 	return p
@@ -212,16 +226,16 @@ func getJSONProcessFunc(sch sql.Schema) pipeline2.StageFunc {
 			r := item.GetItem().(sql.Row)
 
 			if i != 0 {
-				sb.WriteString(",\n\t{")
+				sb.WriteString(",{")
 			} else {
-				sb.WriteString("\t{")
+				sb.WriteString("{")
 			}
 
 			validCols := 0
 			for colNum, col := range r {
 				if col != nil {
 					if validCols != 0 {
-						sb.WriteString(", ")
+						sb.WriteString(",")
 					}
 
 					validCols++
@@ -238,21 +252,9 @@ func getJSONProcessFunc(sch sql.Schema) pipeline2.StageFunc {
 	}
 }
 
-// this function only exists to validate the write routine wasn't parallelized
-func writeJSONInitRoutineFunc(ctx context.Context, index int) error {
-	if index != 0 {
-		// writeJSONToCliOut assumes that it is not being run in parallel.
-		panic("cannot parallelize this routine")
-	}
 
-	return nil
-}
 
 func writeJSONToCliOutStageFunc(ctx context.Context, items []pipeline2.ItemWithProps) ([]pipeline2.ItemWithProps, error) {
-	if items == nil {
-		return nil, nil
-	}
-
 	const hasRunKey = 0
 
 	ls := pipeline2.GetLocalStorage(ctx)
@@ -261,16 +263,16 @@ func writeJSONToCliOutStageFunc(ctx context.Context, items []pipeline2.ItemWithP
 
 	if items == nil {
 		if hasRun {
-			cli.Printf("\n]}\n")
+			cli.Printf("]}")
 		} else {
-			cli.Printf("{\"data\":[]}\n")
+			cli.Printf("{\"rows\":[]}")
 		}
 	} else {
 		for _, item := range items {
 			if hasRun {
-				cli.Printf(",\n")
+				cli.Printf(",")
 			} else {
-				cli.Printf("{\"data\": [\n")
+				cli.Printf("{\"rows\": [")
 			}
 
 			str := *item.GetItem().(*string)
@@ -286,15 +288,148 @@ func writeJSONToCliOutStageFunc(ctx context.Context, items []pipeline2.ItemWithP
 
 // tabular pipeline creation and pipeline functions
 
+
+type tabularPipelineStages struct {
+	rowSep string
+}
+
+func (tps *tabularPipelineStages) getFixWidthStageFunc(samples int) func(context.Context, []pipeline2.ItemWithProps) ([]pipeline2.ItemWithProps, error) {
+	bufferring := true
+	buffer := make([]pipeline2.ItemWithProps, 0, samples)
+	idxToMaxWidth := make(map[int]int)
+	idxToMaxNumRunes := make(map[int]int)
+	var fwf fwt.FixedWidthFormatter
+	return func(_ context.Context, items []pipeline2.ItemWithProps) ([]pipeline2.ItemWithProps, error) {
+		if items == nil {
+			bufferring = false
+			fwf = fwt.NewFixedWidthFormatter(fwt.HashFillWhenTooLong, idxMapToSlice(idxToMaxWidth), idxMapToSlice(idxToMaxNumRunes))
+			tps.rowSep = genRowSepString(fwf)
+			return tps.formatItems(fwf, buffer)
+		}
+
+		if bufferring {
+			for _, item := range items {
+				cols := item.GetItem().([]string)
+
+				for colIdx, colStr := range cols {
+					strWidth := fwt.StringWidth(colStr)
+					if strWidth > idxToMaxWidth[colIdx] {
+						idxToMaxWidth[colIdx] = strWidth
+					}
+
+					numRunes := len([]rune(colStr))
+					if numRunes > idxToMaxNumRunes[colIdx] {
+						idxToMaxNumRunes[colIdx] = numRunes
+					}
+				}
+
+				buffer = append(buffer, item)
+			}
+
+			if len(buffer) > samples {
+				bufferring = false
+				fwf = fwt.NewFixedWidthFormatter(fwt.HashFillWhenTooLong, idxMapToSlice(idxToMaxWidth), idxMapToSlice(idxToMaxNumRunes))
+				tps.rowSep = genRowSepString(fwf)
+				return tps.formatItems(fwf, buffer)
+			}
+
+			return nil, nil
+		}
+
+		return tps.formatItems(fwf, buffer)
+	}
+}
+
+func (tps *tabularPipelineStages) formatItems(fwf fwt.FixedWidthFormatter, items []pipeline2.ItemWithProps) ([]pipeline2.ItemWithProps, error) {
+	results := make([]pipeline2.ItemWithProps, len(items))
+	for i, item := range items {
+		cols := item.GetItem().([]string)
+		formatted, err := fwf.Format(cols)
+
+		if err != nil {
+			return nil, err
+		}
+
+		results[i] = pipeline2.NewItemWithProps(formatted, item.GetProperties())
+	}
+
+	return results, nil
+}
+
+func (tps *tabularPipelineStages) getBorderFunc() func(context.Context, []pipeline2.ItemWithProps) ([]pipeline2.ItemWithProps, error) {
+	return func(_ context.Context, items []pipeline2.ItemWithProps) ([]pipeline2.ItemWithProps, error) {
+		if items == nil {
+			return []pipeline2.ItemWithProps{pipeline2.NewItemWithNoProps(&tps.rowSep)}, nil
+		}
+
+		sb := &strings.Builder{}
+		sb.Grow(2048)
+		for _, item := range items {
+			props := item.GetProperties()
+			headers := false
+			if _, ok := props.Get("headers"); ok {
+				headers = true
+				sb.WriteString(tps.rowSep)
+			}
+
+			cols := item.GetItem().([]string)
+
+			for _, str := range cols {
+				sb.WriteString("| ")
+				sb.WriteString(str)
+				sb.WriteRune(' ')
+			}
+
+			sb.WriteString("|\n")
+
+			if headers {
+				sb.WriteString(tps.rowSep)
+			}
+		}
+
+		str := sb.String()
+		return []pipeline2.ItemWithProps{pipeline2.NewItemWithNoProps(&str)}, nil
+	}
+}
+
+func idxMapToSlice(idxMap map[int]int) []int {
+	sl := make([]int, len(idxMap))
+	for idx, val := range idxMap {
+		sl[idx] = val
+	}
+
+	return sl
+}
+
+
+func genRowSepString(fwf fwt.FixedWidthFormatter) string {
+	rowSepRunes := make([]rune, fwf.TotalWidth + (3*len(fwf.Widths)) + 2)
+	for i := 0; i < len(rowSepRunes); i++ {
+		rowSepRunes[i] = '-'
+	}
+
+	var pos int
+	for _, width := range fwf.Widths {
+		rowSepRunes[pos] = '+'
+		pos += width + 3
+	}
+
+	rowSepRunes[pos] = '+'
+	rowSepRunes[pos+1] = '\n'
+
+	return string(rowSepRunes)
+}
+
 func createTabularPipeline(_ context.Context, sch sql.Schema, iter sql.RowIter) *pipeline2.Pipeline {
 	const samplesForAutoSizing = 1000
+	tps := &tabularPipelineStages{}
 
 	p := pipeline2.NewPipeline(
 		pipeline2.NewStage("read", nil, getReadStageFunc(iter, readBatchSize), 0, 0, 0),
 		pipeline2.NewStage("stringify", nil, rowsToStringSlices, 0, 1000,  1000),
-		pipeline2.NewStage("fix_width", nil , getFixWidthStageFunc(samplesForAutoSizing), 0, 1000, readBatchSize),
-		pipeline2.NewStage("cell_borders", nil, getBorderFunc(), 0, 1000, readBatchSize),
-		pipeline2.NewStage("write", nil, writeToCliOutStageFunc, 0, 100, writeBatchSize),
+		pipeline2.NewStage("fix_width", noParallelizationInitFunc , tps.getFixWidthStageFunc(samplesForAutoSizing), 0, 1000, readBatchSize),
+		pipeline2.NewStage("cell_borders", noParallelizationInitFunc, tps.getBorderFunc(), 0, 1000, readBatchSize),
+		pipeline2.NewStage("write", noParallelizationInitFunc, writeToCliOutStageFunc, 0, 100, writeBatchSize),
 	)
 
 	writeIn, _ := p.GetInputChannel("fix_width")
@@ -321,8 +456,20 @@ func rowsToStringSlices(_ context.Context, items []pipeline2.ItemWithProps) ([]p
 
 		cols := make([]string, len(r))
 		for colNum, col := range r {
-			if col != nil {
+			isNull := col == nil
+
+			if !isNull {
+				sqlTypeInst, isType := col.(sql.Type)
+
+				if isType && sqlTypeInst.Type() == sqltypes.Null {
+					isNull = true
+				}
+			}
+
+			if !isNull {
 				cols[colNum] = sqlColToStr(col)
+			} else {
+				cols[colNum] = "<NULL>"
 			}
 		}
 
@@ -332,130 +479,6 @@ func rowsToStringSlices(_ context.Context, items []pipeline2.ItemWithProps) ([]p
 	return rows, nil
 }
 
-var testSepStr = ""
-
-func getFixWidthStageFunc(samples int) func(context.Context, []pipeline2.ItemWithProps) ([]pipeline2.ItemWithProps, error) {
-	bufferring := true
-	buffer := make([]pipeline2.ItemWithProps, 0, samples)
-	idxToMaxWidth := make(map[int]int)
-	idxToMaxNumRunes := make(map[int]int)
-	var fwf fwt.FixedWidthFormatter
-	return func(_ context.Context, items []pipeline2.ItemWithProps) ([]pipeline2.ItemWithProps, error) {
-		if items == nil {
-			bufferring = false
-			fwf = fwt.NewFixedWidthFormatter(fwt.HashFillWhenTooLong, idxMapToSlice(idxToMaxWidth), idxMapToSlice(idxToMaxNumRunes))
-			testSepStr = genRowSepString(fwf)
-			return formatItems(fwf, buffer)
-		}
-
-		if bufferring {
-			for _, item := range items {
-				cols := item.GetItem().([]string)
-
-				for colIdx, colStr := range cols {
-					strWidth := fwt.StringWidth(colStr)
-					if strWidth > idxToMaxWidth[colIdx] {
-						idxToMaxWidth[colIdx] = strWidth
-					}
-
-					numRunes := len([]rune(colStr))
-					if numRunes > idxToMaxNumRunes[colIdx] {
-						idxToMaxNumRunes[colIdx] = numRunes
-					}
-				}
-
-				buffer = append(buffer, item)
-			}
-
-			if len(buffer) > samples {
-				bufferring = false
-				fwf = fwt.NewFixedWidthFormatter(fwt.HashFillWhenTooLong, idxMapToSlice(idxToMaxWidth), idxMapToSlice(idxToMaxNumRunes))
-				testSepStr = genRowSepString(fwf)
-				return formatItems(fwf, buffer)
-			}
-
-			return nil, nil
-		}
-
-		return formatItems(fwf, buffer)
-	}
-}
-
-func formatItems(fwf fwt.FixedWidthFormatter, items []pipeline2.ItemWithProps) ([]pipeline2.ItemWithProps, error) {
-	results := make([]pipeline2.ItemWithProps, len(items))
-	for i, item := range items {
-		cols := item.GetItem().([]string)
-		formatted, err := fwf.Format(cols)
-
-		if err != nil {
-			return nil, err
-		}
-
-		results[i] = pipeline2.NewItemWithProps(formatted, item.GetProperties())
-	}
-
-	return results, nil
-}
-
-func idxMapToSlice(idxMap map[int]int) []int {
-	sl := make([]int, len(idxMap))
-	for idx, val := range idxMap {
-		sl[idx] = val
-	}
-
-	return sl
-}
-
-func getBorderFunc() func(context.Context, []pipeline2.ItemWithProps) ([]pipeline2.ItemWithProps, error) {
-	return func(_ context.Context, items []pipeline2.ItemWithProps) ([]pipeline2.ItemWithProps, error) {
-		if items == nil {
-			return []pipeline2.ItemWithProps{pipeline2.NewItemWithNoProps(&testSepStr)}, nil
-		}
-
-		sb := &strings.Builder{}
-		sb.Grow(2048)
-		for _, item := range items {
-			props := item.GetProperties()
-			headers := false
-			if _, ok := props.Get("headers"); ok {
-				headers = true
-				sb.WriteString(testSepStr)
-			}
-
-			cols := item.GetItem().([]string)
-
-			sb.WriteString("| ")
-			for _, str := range cols {
-				sb.WriteString(str)
-				sb.WriteString( " | ")
-			}
-
-			sb.WriteRune('\n')
-
-			if headers {
-				sb.WriteString(testSepStr)
-			}
-		}
-
-		str := sb.String()
-		return []pipeline2.ItemWithProps{pipeline2.NewItemWithNoProps(&str)}, nil
-	}
-}
 
 
-func genRowSepString(fwf fwt.FixedWidthFormatter) string {
-	rowSepRunes := make([]rune, fwf.TotalWidth + 5)
-	for i := 0; i < len(rowSepRunes); i++ {
-		rowSepRunes[i] = '-'
-	}
 
-	rowSepRunes[0] = '+'
-	rowSepRunes[fwf.TotalWidth + 4] = '\n'
-	pos := 2
-	for _, width := range fwf.Widths {
-		pos += width
-		rowSepRunes[pos+1] = '+'
-	}
-
-	return string(rowSepRunes)
-}

@@ -185,7 +185,8 @@ SQL
 
     run dolt sql -r json -q "select * from test order by a"
     [ $status -eq 0 ]
-    [ "$output" == '{"rows": [{"a":1,"b":1.5,"c":"1","d":"2020-01-01 00:00:00"},{"a":2,"b":2.5,"c":"2","d":"2020-02-02 00:00:00"},{"a":3,"c":"3","d":"2020-03-03 00:00:00"},{"a":4,"b":4.5,"d":"2020-04-04 00:00:00"},{"a":5,"b":5.5,"c":"5"}]}' ]
+    echo $output
+    [ "$output" == '{"rows": [{"a":1,"b":1.5,"c":"1","d":"2020-01-01 00:00:00 +0000 UTC"},{"a":2,"b":2.5,"c":"2","d":"2020-02-02 00:00:00 +0000 UTC"},{"a":3,"c":"3","d":"2020-03-03 00:00:00 +0000 UTC"},{"a":4,"b":4.5,"d":"2020-04-04 00:00:00 +0000 UTC"},{"a":5,"b":5.5,"c":"5"}]}' ]
 }
 
 @test "sql ambiguous column name" {
@@ -656,15 +657,16 @@ SQL
 @test "sql divide by zero does not panic" {
     run dolt sql -q "select 1/0 from dual"
     [ $status -eq 0 ]
-    [[ "$output" =~ " NULL " ]] || false
+    echo $output
+    [[ "$output" =~ "<NULL>" ]] || false
     [[ ! "$output" =~ "panic: " ]] || false
     run dolt sql -q "select 1.0/0.0 from dual"
     [ $status -eq 0 ]
-    [[ "$output" =~ " NULL " ]] || false
+    [[ "$output" =~ "<NULL>" ]] || false
     [[ ! "$output" =~ "panic: " ]] || false
     run dolt sql -q "select 1 div 0 from dual"
     [ $status -eq 0 ]
-    [[ "$output" =~ " NULL " ]] || false
+    [[ "$output" =~ "<NULL>" ]] || false
     [[ ! "$output" =~ "panic: " ]] || false
 }
 
