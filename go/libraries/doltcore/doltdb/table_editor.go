@@ -48,6 +48,10 @@ type TableEditor struct {
 
 	rowData types.Map // cached for GetRow and ContainsKey operations
 
+	hasAutoInc bool
+	autoIncCol schema.Column
+	autoIncVal types.Value
+
 	// This mutex blocks on each operation, so that map reads and updates are serialized
 	writeMutex *sync.Mutex
 	// This mutex ensures that Flush is only called once all current write operations have completed
@@ -89,6 +93,23 @@ func NewTableEditor(ctx context.Context, t *Table, tableSch schema.Schema) (*Tab
 		}
 		te.indexEds[i] = NewIndexEditor(index, indexData)
 	}
+
+	err = tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if col.AutoIncrement {
+			te.autoIncVal, err = t.GetAutoIncrementValue(ctx)
+			if err != nil {
+				return true, err
+			}
+			te.hasAutoInc = true
+			te.autoIncCol = col
+			return true, err
+		}
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	return te, nil
 }
 
@@ -273,6 +294,20 @@ func (te *TableEditor) InsertRow(ctx context.Context, dRow row.Row) error {
 	te.tea.addedKeys[keyHash] = key
 	te.tea.affectedKeys[keyHash] = key
 
+	if te.hasAutoInc {
+		// autoIncVal = max(autoIncVal, insertVal)
+		insertVal, ok := dRow.GetColVal(te.autoIncCol.Tag)
+		if ok {
+			less, err := te.autoIncVal.Less(te.nbf, insertVal)
+			if err != nil {
+				return err
+			}
+			if less {
+				te.autoIncVal = types.Round(insertVal)
+			}
+		}
+	}
+
 	te.tea.ed.AddEdit(key, dRow.NomsMapValue(te.tSch))
 	te.tea.opCount++
 	return nil
@@ -355,6 +390,10 @@ func (te *TableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow r
 	return nil
 }
 
+func (te *TableEditor) GetAutoIncrementValue() types.Value {
+	return te.autoIncVal
+}
+
 // Flush finalizes all of the changes made so far.
 func (te *TableEditor) Flush() {
 	te.flushMutex.Lock()
@@ -370,6 +409,14 @@ func (te *TableEditor) Flush() {
 func (te *TableEditor) Table() (*Table, error) {
 	te.Flush()
 	err := te.aq.WaitForEmpty()
+
+	if te.hasAutoInc {
+		te.t, err = te.t.SetAutoIncrementValue(te.autoIncVal)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return te.t, err
 }
 
