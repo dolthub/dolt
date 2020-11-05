@@ -229,3 +229,48 @@ SQL
     [ "$status" -ne 0 ]
     [[ "$output" =~ "there can be only one auto_increment column and it must be defined as a key" ]] || false
 }
+
+@test "AUTO_INCREMENT merge master branch ahead" {
+    dolt sql -q "INSERT INTO test (c0) VALUES (0),(1),(2)"
+    dolt add -A
+    dolt commit -m "made some inserts"
+
+    dolt checkout -b other
+    dolt sql -q "INSERT INTO test VALUES (10,10),(NULL,11);"
+    dolt add -A
+    dolt commit -m "inserted 10 & 11 on other"
+
+    dolt checkout master
+    dolt sql -q "INSERT INTO test VALUES (20,20),(NULL,21);"
+    dolt add -A
+    dolt commit -m "inserted 20 & 21 on master"
+    dolt merge other
+
+    dolt sql -q "INSERT INTO test VALUES (NULL,22);"
+    run dolt sql -q "SELECT pk FROM test WHERE c0 = 22;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "22" ]] || false
+}
+
+@test "AUTO_INCREMENT merge other branch ahead" {
+    dolt sql -q "INSERT INTO test (c0) VALUES (0),(1),(2)"
+    dolt add -A
+    dolt commit -m "made some inserts"
+
+    dolt branch other
+    dolt sql -q "INSERT INTO test VALUES (10,10),(NULL,11);"
+    dolt add -A
+    dolt commit -m "inserted 10 & 11 on master"
+
+    dolt checkout other
+    dolt sql -q "INSERT INTO test VALUES (20,20),(NULL,21);"
+    dolt add -A
+    dolt commit -m "inserted 20 & 21 on other"
+
+    dolt checkout master
+    dolt merge other
+    dolt sql -q "INSERT INTO test VALUES (NULL,22);"
+    run dolt sql -q "SELECT pk FROM test WHERE c0 = 22;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "22" ]] || false
+}
