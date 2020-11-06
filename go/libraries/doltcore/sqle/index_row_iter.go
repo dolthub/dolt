@@ -24,18 +24,19 @@ import (
 )
 
 type indexLookupRowIterAdapter struct {
-	indexLookup *doltIndexLookup
-	ctx         *sql.Context
+	idx     DoltIndex
+	keyIter IndexLookupKeyIterator
+	ctx     *sql.Context
 }
 
 func (i *indexLookupRowIterAdapter) Next() (sql.Row, error) {
-	key, err := i.indexLookup.keyIter.NextKey(i.ctx)
+	key, err := i.keyIter.NextKey(i.ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	tableData := i.indexLookup.idx.TableData()
-	pkTuple := key.NomsTupleForPKCols(tableData.Format(), i.indexLookup.idx.Schema().GetPKCols())
+	tableData := i.idx.TableData()
+	pkTuple := key.NomsTupleForPKCols(tableData.Format(), i.idx.Schema().GetPKCols())
 	pkTupleVal, err := pkTuple.Value(i.ctx)
 	if err != nil {
 		return nil, err
@@ -49,12 +50,12 @@ func (i *indexLookupRowIterAdapter) Next() (sql.Row, error) {
 		return nil, io.EOF
 	}
 
-	r, err := row.FromNoms(i.indexLookup.idx.Schema(), pkTupleVal.(types.Tuple), fieldsVal.(types.Tuple))
+	r, err := row.FromNoms(i.idx.Schema(), pkTupleVal.(types.Tuple), fieldsVal.(types.Tuple))
 	if err != nil {
 		return nil, err
 	}
 
-	return doltRowToSqlRow(r, i.indexLookup.idx.Schema())
+	return doltRowToSqlRow(r, i.idx.Schema())
 }
 
 func (*indexLookupRowIterAdapter) Close() error {
