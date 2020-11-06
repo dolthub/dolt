@@ -21,8 +21,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
@@ -192,7 +194,10 @@ func TestCreateRdWr(t *testing.T) {
 		//{NewDataLocation("file.nbf", ""), reflect.TypeOf((*nbf.NBFReader)(nil)).Elem(), reflect.TypeOf((*nbf.NBFWriter)(nil)).Elem()},
 	}
 
-	_, root, fs := createRootAndFS()
+	dEnv := dtestutils.CreateTestEnv()
+	root, err := dEnv.WorkingRoot(context.Background())
+	require.NoError(t, err)
+	dEnv.FS.WriteFile(testSchemaFileName, []byte(testSchema))
 
 	mvOpts := &testDataMoverOptions{}
 
@@ -201,7 +206,7 @@ func TestCreateRdWr(t *testing.T) {
 
 		loc := test.dl
 
-		wr, err := loc.NewCreatingWriter(context.Background(), mvOpts, root, fs, true, fakeSchema, nil)
+		wr, err := loc.NewCreatingWriter(context.Background(), mvOpts, dEnv, root, true, fakeSchema, nil)
 
 		if err != nil {
 			t.Fatal("Unexpected error creating writer.", err)
@@ -225,7 +230,7 @@ func TestCreateRdWr(t *testing.T) {
 			assert.NoError(t, err)
 		}
 
-		rd, _, err := loc.NewReader(context.Background(), root, fs, JSONOptions{TableName: testTableName, SchFile: testSchemaFileName})
+		rd, _, err := loc.NewReader(context.Background(), root, dEnv.FS, JSONOptions{TableName: testTableName, SchFile: testSchemaFileName})
 
 		if err != nil {
 			t.Fatal("Unexpected error creating writer", err)
