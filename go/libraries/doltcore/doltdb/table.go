@@ -817,11 +817,11 @@ func (t *Table) GetAutoIncrementValue(ctx context.Context) (types.Value, error) 
 	})
 	switch kind {
 	case types.IntKind:
-		return types.Int(0), nil
+		return types.Int(1), nil
 	case types.UintKind:
-		return types.Uint(0), nil
+		return types.Uint(1), nil
 	case types.FloatKind:
-		return types.Float(0), nil
+		return types.Float(1), nil
 	default:
 		return nil, fmt.Errorf("auto increment set for non-numeric column type")
 	}
