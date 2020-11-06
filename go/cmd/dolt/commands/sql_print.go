@@ -295,7 +295,6 @@ func writeJSONToCliOutStageFunc(ctx context.Context, items []pipeline.ItemWithPr
 
 // tabular pipeline creation and pipeline functions
 
-
 func createTabularPipeline(_ context.Context, sch sql.Schema, iter sql.RowIter) *pipeline.Pipeline {
 	const samplesForAutoSizing = 10000
 	tps := &tabularPipelineStages{}
