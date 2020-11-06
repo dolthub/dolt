@@ -295,6 +295,66 @@ func writeJSONToCliOutStageFunc(ctx context.Context, items []pipeline.ItemWithPr
 
 // tabular pipeline creation and pipeline functions
 
+
+func createTabularPipeline(_ context.Context, sch sql.Schema, iter sql.RowIter) *pipeline.Pipeline {
+	const samplesForAutoSizing = 10000
+	tps := &tabularPipelineStages{}
+
+	p := pipeline.NewPipeline(
+		pipeline.NewStage("read", nil, getReadStageFunc(iter, readBatchSize), 0, 0, 0),
+		pipeline.NewStage("stringify", nil, rowsToStringSlices, 0, 1000, 1000),
+		pipeline.NewStage("fix_width", noParallelizationInitFunc, tps.getFixWidthStageFunc(samplesForAutoSizing), 0, 1000, readBatchSize),
+		pipeline.NewStage("cell_borders", noParallelizationInitFunc, tps.getBorderFunc(), 0, 1000, readBatchSize),
+		pipeline.NewStage("write", noParallelizationInitFunc, writeToCliOutStageFunc, 0, 100, writeBatchSize),
+	)
+
+	writeIn, _ := p.GetInputChannel("fix_width")
+	headers := make([]string, len(sch))
+	for i, col := range sch {
+		headers[i] = col.Name
+	}
+
+	writeIn <- []pipeline.ItemWithProps{
+		pipeline.NewItemWithProps(headers, pipeline.NewImmutableProps(map[string]interface{}{"headers": true})),
+	}
+
+	return p
+}
+
+func rowsToStringSlices(_ context.Context, items []pipeline.ItemWithProps) ([]pipeline.ItemWithProps, error) {
+	if items == nil {
+		return nil, nil
+	}
+
+	rows := make([]pipeline.ItemWithProps, len(items))
+	for i, item := range items {
+		r := item.GetItem().(sql.Row)
+
+		cols := make([]string, len(r))
+		for colNum, col := range r {
+			isNull := col == nil
+
+			if !isNull {
+				sqlTypeInst, isType := col.(sql.Type)
+
+				if isType && sqlTypeInst.Type() == sqltypes.Null {
+					isNull = true
+				}
+			}
+
+			if !isNull {
+				cols[colNum] = sqlColToStr(col)
+			} else {
+				cols[colNum] = "<NULL>"
+			}
+		}
+
+		rows[i] = pipeline.NewItemWithNoProps(cols)
+	}
+
+	return rows, nil
+}
+
 type tabularPipelineStages struct {
 	rowSep string
 }
@@ -342,7 +402,7 @@ func (tps *tabularPipelineStages) getFixWidthStageFunc(samples int) func(context
 			return nil, nil
 		}
 
-		return tps.formatItems(fwf, buffer)
+		return tps.formatItems(fwf, items)
 	}
 }
 
@@ -423,63 +483,4 @@ func genRowSepString(fwf fwt.FixedWidthFormatter) string {
 	rowSepRunes[pos+1] = '\n'
 
 	return string(rowSepRunes)
-}
-
-func createTabularPipeline(_ context.Context, sch sql.Schema, iter sql.RowIter) *pipeline.Pipeline {
-	const samplesForAutoSizing = 1000
-	tps := &tabularPipelineStages{}
-
-	p := pipeline.NewPipeline(
-		pipeline.NewStage("read", nil, getReadStageFunc(iter, readBatchSize), 0, 0, 0),
-		pipeline.NewStage("stringify", nil, rowsToStringSlices, 0, 1000, 1000),
-		pipeline.NewStage("fix_width", noParallelizationInitFunc, tps.getFixWidthStageFunc(samplesForAutoSizing), 0, 1000, readBatchSize),
-		pipeline.NewStage("cell_borders", noParallelizationInitFunc, tps.getBorderFunc(), 0, 1000, readBatchSize),
-		pipeline.NewStage("write", noParallelizationInitFunc, writeToCliOutStageFunc, 0, 100, writeBatchSize),
-	)
-
-	writeIn, _ := p.GetInputChannel("fix_width")
-	headers := make([]string, len(sch))
-	for i, col := range sch {
-		headers[i] = col.Name
-	}
-
-	writeIn <- []pipeline.ItemWithProps{
-		pipeline.NewItemWithProps(headers, pipeline.NewImmutableProps(map[string]interface{}{"headers": true})),
-	}
-
-	return p
-}
-
-func rowsToStringSlices(_ context.Context, items []pipeline.ItemWithProps) ([]pipeline.ItemWithProps, error) {
-	if items == nil {
-		return nil, nil
-	}
-
-	rows := make([]pipeline.ItemWithProps, len(items))
-	for i, item := range items {
-		r := item.GetItem().(sql.Row)
-
-		cols := make([]string, len(r))
-		for colNum, col := range r {
-			isNull := col == nil
-
-			if !isNull {
-				sqlTypeInst, isType := col.(sql.Type)
-
-				if isType && sqlTypeInst.Type() == sqltypes.Null {
-					isNull = true
-				}
-			}
-
-			if !isNull {
-				cols[colNum] = sqlColToStr(col)
-			} else {
-				cols[colNum] = "<NULL>"
-			}
-		}
-
-		rows[i] = pipeline.NewItemWithNoProps(cols)
-	}
-
-	return rows, nil
 }
