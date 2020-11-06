@@ -21,8 +21,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/lookup"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -31,7 +30,9 @@ type DoltIndex interface {
 	sql.AscendIndex
 	sql.DescendIndex
 	Schema() schema.Schema
+	IndexSchema() schema.Schema
 	TableData() types.Map
+	IndexRowData() types.Map
 }
 
 type doltIndex struct {
@@ -51,66 +52,97 @@ type doltIndex struct {
 //TODO: have queries using IS NULL make use of indexes
 var _ DoltIndex = (*doltIndex)(nil)
 
-var alwaysContinueRangeCheck noms.InRangeCheck = func(tuple types.Tuple) (bool, error) {
-	return true, nil
-}
-
 // AscendGreaterOrEqual implements sql.AscendIndex
 func (di *doltIndex) AscendGreaterOrEqual(keys ...interface{}) (sql.IndexLookup, error) {
-	tpl, err := di.keysToTuple(keys, false)
+	tpl, err := di.keysToTuple(keys)
 	if err != nil {
 		return nil, err
 	}
-	readRange := &noms.ReadRange{Start: tpl, Inclusive: true, Reverse: false, Check: alwaysContinueRangeCheck}
-	return di.rangeToIndexLookup(readRange)
+	return &doltIndexLookup{
+		idx: di,
+		ranges: []lookup.Range{
+			lookup.GreaterOrEqualRange(tpl),
+		},
+	}, nil
 }
 
 // AscendLessThan implements sql.AscendIndex
 func (di *doltIndex) AscendLessThan(keys ...interface{}) (sql.IndexLookup, error) {
-	tpl, err := di.keysToTuple(keys, false)
+	tpl, err := di.keysToTuple(keys)
 	if err != nil {
 		return nil, err
 	}
-	readRange := &noms.ReadRange{Start: tpl, Inclusive: false, Reverse: true, Check: alwaysContinueRangeCheck}
-	return di.rangeToIndexLookup(readRange)
+	return &doltIndexLookup{
+		idx: di,
+		ranges: []lookup.Range{
+			lookup.LessThanRange(tpl),
+		},
+	}, nil
 }
 
 // AscendRange implements sql.AscendIndex
 // TODO: rename this from AscendRange to BetweenRange or something
 func (di *doltIndex) AscendRange(greaterOrEqual, lessThanOrEqual []interface{}) (sql.IndexLookup, error) {
-	greaterTpl, err := di.keysToTuple(greaterOrEqual, false)
+	greaterTpl, err := di.keysToTuple(greaterOrEqual)
 	if err != nil {
 		return nil, err
 	}
-	lessTpl, err := di.keysToTuple(lessThanOrEqual, true)
+	lessTpl, err := di.keysToTuple(lessThanOrEqual)
 	if err != nil {
 		return nil, err
 	}
-	nbf := di.indexRowData.Format()
-	readRange := &noms.ReadRange{Start: greaterTpl, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
-		return tuple.Less(nbf, lessTpl)
-	}}
-	return di.rangeToIndexLookup(readRange)
+	// In the case of possible partial keys, we need to match at the end for matched values, so we append a tag that is
+	// beyond the allowed maximum. This will be ignored if it's a full key and not a partial key.
+	lessTpl, err = lessTpl.Append(types.Uint(uint64(0xffffffffffffffff)))
+	if err != nil {
+		return nil, err
+	}
+	return &doltIndexLookup{
+		idx: di,
+		ranges: []lookup.Range{
+			lookup.ClosedRange(greaterTpl, lessTpl),
+		},
+	}, nil
 }
 
 // DescendGreater implements sql.DescendIndex
 func (di *doltIndex) DescendGreater(keys ...interface{}) (sql.IndexLookup, error) {
-	tpl, err := di.keysToTuple(keys, true)
+	tpl, err := di.keysToTuple(keys)
 	if err != nil {
 		return nil, err
 	}
-	readRange := &noms.ReadRange{Start: tpl, Inclusive: true, Reverse: false, Check: alwaysContinueRangeCheck}
-	return di.rangeToIndexLookup(readRange)
+	// In the case of possible partial keys, we need to match at the end for matched values, so we append a tag that is
+	// beyond the allowed maximum. This will be ignored if it's a full key and not a partial key.
+	tpl, err = tpl.Append(types.Uint(uint64(0xffffffffffffffff)))
+	if err != nil {
+		return nil, err
+	}
+	return &doltIndexLookup{
+		idx: di,
+		ranges: []lookup.Range{
+			lookup.GreaterThanRange(tpl),
+		},
+	}, nil
 }
 
 // DescendLessOrEqual implements sql.DescendIndex
 func (di *doltIndex) DescendLessOrEqual(keys ...interface{}) (sql.IndexLookup, error) {
-	tpl, err := di.keysToTuple(keys, true)
+	tpl, err := di.keysToTuple(keys)
 	if err != nil {
 		return nil, err
 	}
-	readRange := &noms.ReadRange{Start: tpl, Inclusive: true, Reverse: true, Check: alwaysContinueRangeCheck}
-	return di.rangeToIndexLookup(readRange)
+	// In the case of possible partial keys, we need to match at the end for matched values, so we append a tag that is
+	// beyond the allowed maximum. This will be ignored if it's a full key and not a partial key.
+	tpl, err = tpl.Append(types.Uint(uint64(0xffffffffffffffff)))
+	if err != nil {
+		return nil, err
+	}
+	return &doltIndexLookup{
+		idx: di,
+		ranges: []lookup.Range{
+			lookup.LessOrEqualRange(tpl),
+		},
+	}, nil
 }
 
 // DescendRange implements sql.DescendIndex
@@ -135,14 +167,22 @@ func (di *doltIndex) Expressions() []string {
 
 // Get implements sql.Index
 func (di *doltIndex) Get(keys ...interface{}) (sql.IndexLookup, error) {
-	tpl, err := di.keysToTuple(keys, false)
+	tpl, err := di.keysToTuple(keys)
 	if err != nil {
 		return nil, err
 	}
-	readRange := &noms.ReadRange{Start: tpl, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
-		return tuple.StartsWith(tpl), nil
-	}}
-	return di.rangeToIndexLookup(readRange)
+	// We can convert an equals into a range by appending a tag that is beyond the maximum. This will be ignored if
+	// it's a full key and not a partial key.
+	tplMax, err := tpl.Append(types.Uint(uint64(0xffffffffffffffff)))
+	if err != nil {
+		return nil, err
+	}
+	return &doltIndexLookup{
+		idx: di,
+		ranges: []lookup.Range{
+			lookup.ClosedRange(tpl, tplMax),
+		},
+	}, nil
 }
 
 // Has implements sql.Index
@@ -170,9 +210,14 @@ func (di *doltIndex) IndexType() string {
 	return "BTREE"
 }
 
-// Schema returns the dolt schema of this index.
+// Schema returns the dolt table schema of this index.
 func (di *doltIndex) Schema() schema.Schema {
 	return di.tableSch
+}
+
+// Schema returns the dolt index schema.
+func (di *doltIndex) IndexSchema() schema.Schema {
+	return di.indexSch
 }
 
 // Table implements sql.Index
@@ -185,7 +230,12 @@ func (di *doltIndex) TableData() types.Map {
 	return di.tableData
 }
 
-func (di *doltIndex) keysToTuple(keys []interface{}, appendMaxValue bool) (types.Tuple, error) {
+// IndexRowData returns the map of index row data.
+func (di *doltIndex) IndexRowData() types.Map {
+	return di.indexRowData
+}
+
+func (di *doltIndex) keysToTuple(keys []interface{}) (types.Tuple, error) {
 	nbf := di.indexRowData.Format()
 	if len(di.cols) != len(keys) {
 		return types.EmptyTuple(nbf), errors.New("keys must specify all columns for an index")
@@ -198,20 +248,5 @@ func (di *doltIndex) keysToTuple(keys []interface{}, appendMaxValue bool) (types
 		}
 		vals = append(vals, types.Uint(col.Tag), val)
 	}
-	// In the case of possible partial keys, we may need to match at the beginning or end for matched values, so we
-	// append a tag that is beyond the allowed maximum. This will be ignored if it's a full key and not a partial key.
-	if appendMaxValue {
-		vals = append(vals, types.Uint(uint64(0xffffffffffffffff)))
-	}
 	return types.NewTuple(nbf, vals...)
-}
-
-func (di *doltIndex) rangeToIndexLookup(readRange *noms.ReadRange) (sql.IndexLookup, error) {
-	var mapIter table.TableReadCloser = noms.NewNomsRangeReader(di.indexSch, di.indexRowData, []*noms.ReadRange{readRange})
-	return &doltIndexLookup{
-		di,
-		&doltIndexKeyIter{
-			indexMapIter: mapIter,
-		},
-	}, nil
 }
