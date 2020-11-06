@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -79,7 +79,7 @@ func doltSchWithPKFromSqlSchema(sch sql.Schema) schema.Schema {
 		}
 		return col, nil
 	})
-	return schema.SchemaFromCols(newCC)
+	return schema.MustSchemaFromCols(newCC)
 }
 
 func nextQueryDiff(qd *querydiff.QueryDiffer, joiner *rowconv.Joiner) (row.Row, pipeline.ImmutableProperties, error) {

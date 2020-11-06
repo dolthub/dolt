@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,7 +52,7 @@ type inlineConjoiner struct {
 }
 
 func (c inlineConjoiner) ConjoinRequired(ts tableSet) bool {
-	return ts.Size() > c.maxTables
+	return ts.Size() > c.maxTables && len(ts.upstream) >= 2
 }
 
 func (c inlineConjoiner) Conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) (manifestContents, error) {

@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@ package cli
 import (
 	"context"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -57,13 +59,15 @@ func TestParseKeyValues(t *testing.T) {
 		schema.NewColumn(mnColName, mnColTag, types.StringKind, true),
 	)
 
-	sch := schema.SchemaFromCols(testKeyColColl)
+	sch, err := schema.SchemaFromCols(testKeyColColl)
+	require.NoError(t, err)
 
 	singleKeyColColl, _ := schema.NewColCollection(
 		schema.NewColumn(lnColName, lnColTag, types.StringKind, true),
 	)
 
-	singleKeySch := schema.SchemaFromCols(singleKeyColColl)
+	singleKeySch, err := schema.SchemaFromCols(singleKeyColColl)
+	require.NoError(t, err)
 
 	tests := []struct {
 		sch          schema.Schema

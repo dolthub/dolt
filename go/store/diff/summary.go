@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,8 +27,8 @@ import (
 	"sync/atomic"
 
 	humanize "github.com/dustin/go-humanize"
+	"golang.org/x/sync/errgroup"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
@@ -69,172 +69,244 @@ func Summary(ctx context.Context, value1, value2 types.Value) {
 		}
 	}
 
+	eg, ctx := errgroup.WithContext(ctx)
 	var rp atomic.Value
-	ae := atomicerr.New()
 	ch := make(chan diffSummaryProgress)
-	go func() {
+
+	eg.Go(func() (err error) {
 		defer close(ch)
 		defer func() {
 			if r := recover(); r != nil {
 				rp.Store(r)
+				err = fmt.Errorf("panic")
 			}
 		}()
-		diffSummary(ctx, ae, ch, value1, value2)
-	}()
-
-	acc := diffSummaryProgress{}
-	for p := range ch {
-		if ae.IsSet() {
-			break
+		err = diffSummary(ctx, ch, value1, value2)
+		return
+	})
+	eg.Go(func() error {
+		acc := diffSummaryProgress{}
+	LOOP:
+		for {
+			select {
+			case p, ok := <-ch:
+				if !ok {
+					break LOOP
+				}
+				acc.Adds += p.Adds
+				acc.Removes += p.Removes
+				acc.Changes += p.Changes
+				acc.NewSize += p.NewSize
+				acc.OldSize += p.OldSize
+				if status.WillPrint() {
+					formatStatus(acc, singular, plural)
+				}
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
+		formatStatus(acc, singular, plural)
+		status.Done()
+		return nil
+	})
 
-		acc.Adds += p.Adds
-		acc.Removes += p.Removes
-		acc.Changes += p.Changes
-		acc.NewSize += p.NewSize
-		acc.OldSize += p.OldSize
-		if status.WillPrint() {
-			formatStatus(acc, singular, plural)
+	if err := eg.Wait(); err != nil {
+		if r := rp.Load(); r != nil {
+			panic(r)
 		}
-	}
-
-	if err := ae.Get(); err != nil {
 		panic(err)
 	}
 
-	if r := rp.Load(); r != nil {
-		panic(r)
-	}
-
-	formatStatus(acc, singular, plural)
-	status.Done()
 }
 
 type diffSummaryProgress struct {
 	Adds, Removes, Changes, NewSize, OldSize uint64
 }
 
-func diffSummary(ctx context.Context, ae *atomicerr.AtomicError, ch chan diffSummaryProgress, v1, v2 types.Value) {
+func diffSummary(ctx context.Context, ch chan diffSummaryProgress, v1, v2 types.Value) error {
 	if !v1.Equals(v2) {
 		if ShouldDescend(v1, v2) {
+			var err error
 			switch v1.Kind() {
 			case types.ListKind:
-				diffSummaryList(ctx, ae, ch, v1.(types.List), v2.(types.List))
+				err = diffSummaryList(ctx, ch, v1.(types.List), v2.(types.List))
 			case types.MapKind:
-				diffSummaryMap(ctx, ae, ch, v1.(types.Map), v2.(types.Map))
+				err = diffSummaryMap(ctx, ch, v1.(types.Map), v2.(types.Map))
 			case types.SetKind:
-				diffSummarySet(ctx, ae, ch, v1.(types.Set), v2.(types.Set))
+				err = diffSummarySet(ctx, ch, v1.(types.Set), v2.(types.Set))
 			case types.StructKind:
-				diffSummaryStructs(ae, ch, v1.(types.Struct), v2.(types.Struct))
+				err = diffSummaryStructs(ctx, ch, v1.(types.Struct), v2.(types.Struct))
 			default:
 				panic("Unrecognized type in diff function")
+			}
+			if err != nil {
+				return err
 			}
 		} else {
 			ch <- diffSummaryProgress{Adds: 1, Removes: 1, NewSize: 1, OldSize: 1}
 		}
 	}
+	return nil
 }
 
-func diffSummaryList(ctx context.Context, ae *atomicerr.AtomicError, ch chan<- diffSummaryProgress, v1, v2 types.List) {
-	ch <- diffSummaryProgress{OldSize: v1.Len(), NewSize: v2.Len()}
+func diffSummaryList(ctx context.Context, ch chan<- diffSummaryProgress, v1, v2 types.List) error {
+	select {
+	case ch <- diffSummaryProgress{OldSize: v1.Len(), NewSize: v2.Len()}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 
 	spliceChan := make(chan types.Splice)
-	stopChan := make(chan struct{}, 1) // buffer size of 1, so this won't block if diff already finished
+	eg, ctx := errgroup.WithContext(ctx)
 
 	var rp atomic.Value
-	go func() {
+	eg.Go(func() (err error) {
 		defer close(spliceChan)
 		defer func() {
 			if r := recover(); r != nil {
 				rp.Store(r)
+				err = fmt.Errorf("panic")
 			}
 		}()
-		err := v2.Diff(ctx, v1, spliceChan, stopChan)
-		d.PanicIfError(err)
-	}()
+		return v2.Diff(ctx, v1, spliceChan)
+	})
 
-	for splice := range spliceChan {
-		if splice.SpRemoved == splice.SpAdded {
-			ch <- diffSummaryProgress{Changes: splice.SpRemoved}
-		} else {
-			ch <- diffSummaryProgress{Adds: splice.SpAdded, Removes: splice.SpRemoved}
+	eg.Go(func() (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				rp.Store(r)
+				err = fmt.Errorf("panic")
+			}
+		}()
+	LOOP:
+		for {
+			select {
+			case splice, ok := <-spliceChan:
+				if !ok {
+					break LOOP
+				}
+				var summary diffSummaryProgress
+				if splice.SpRemoved == splice.SpAdded {
+					summary = diffSummaryProgress{Changes: splice.SpRemoved}
+				} else {
+					summary = diffSummaryProgress{Adds: splice.SpAdded, Removes: splice.SpRemoved}
+				}
+				select {
+				case ch <- summary:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
-	}
+		return nil
+	})
 
-	if r := rp.Load(); r != nil {
-		panic(r)
+	if err := eg.Wait(); err != nil {
+		if r := rp.Load(); r != nil {
+			panic(r)
+		}
+		return err
 	}
+	return nil
 }
 
-func diffSummaryMap(ctx context.Context, ae *atomicerr.AtomicError, ch chan<- diffSummaryProgress, v1, v2 types.Map) {
-	diffSummaryValueChanged(ae, ch, v1.Len(), v2.Len(), func(changeChan chan<- types.ValueChanged, stopChan <-chan struct{}) {
-		v2.Diff(ctx, v1, ae, changeChan, stopChan)
+func diffSummaryMap(ctx context.Context, ch chan<- diffSummaryProgress, v1, v2 types.Map) error {
+	return diffSummaryValueChanged(ctx, ch, v1.Len(), v2.Len(), func(ctx context.Context, changeChan chan<- types.ValueChanged) error {
+		return v2.Diff(ctx, v1, changeChan)
 	})
 }
 
-func diffSummarySet(ctx context.Context, ae *atomicerr.AtomicError, ch chan<- diffSummaryProgress, v1, v2 types.Set) {
-	diffSummaryValueChanged(ae, ch, v1.Len(), v2.Len(), func(changeChan chan<- types.ValueChanged, stopChan <-chan struct{}) {
-		v2.Diff(ctx, v1, ae, changeChan, stopChan)
+func diffSummarySet(ctx context.Context, ch chan<- diffSummaryProgress, v1, v2 types.Set) error {
+	return diffSummaryValueChanged(ctx, ch, v1.Len(), v2.Len(), func(ctx context.Context, changeChan chan<- types.ValueChanged) error {
+		return v2.Diff(ctx, v1, changeChan)
 	})
 }
 
-func diffSummaryStructs(ae *atomicerr.AtomicError, ch chan<- diffSummaryProgress, v1, v2 types.Struct) {
+func diffSummaryStructs(ctx context.Context, ch chan<- diffSummaryProgress, v1, v2 types.Struct) error {
 	// TODO: Operate on values directly
 	t1, err := types.TypeOf(v1)
-
-	if ae.SetIfError(err) {
-		return
+	if err != nil {
+		return err
 	}
 
 	t2, err := types.TypeOf(v2)
-
-	if ae.SetIfError(err) {
-		return
+	if err != nil {
+		return err
 	}
 
 	size1 := uint64(t1.Desc.(types.StructDesc).Len())
 	size2 := uint64(t2.Desc.(types.StructDesc).Len())
-	diffSummaryValueChanged(ae, ch, size1, size2, func(changeChan chan<- types.ValueChanged, stopChan <-chan struct{}) {
-		err := v2.Diff(v1, changeChan, stopChan)
-		ae.SetIfError(err)
+	return diffSummaryValueChanged(ctx, ch, size1, size2, func(ctx context.Context, changeChan chan<- types.ValueChanged) error {
+		return v2.Diff(ctx, v1, changeChan)
 	})
 }
 
-func diffSummaryValueChanged(ae *atomicerr.AtomicError, ch chan<- diffSummaryProgress, oldSize, newSize uint64, f diffFunc) {
-	ch <- diffSummaryProgress{OldSize: oldSize, NewSize: newSize}
+func diffSummaryValueChanged(ctx context.Context, ch chan<- diffSummaryProgress, oldSize, newSize uint64, f diffFunc) error {
+	select {
+	case ch <- diffSummaryProgress{OldSize: oldSize, NewSize: newSize}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 
 	changeChan := make(chan types.ValueChanged)
-	stopChan := make(chan struct{}, 1) // buffer size of 1, so this won't block if diff already finished
+
+	eg, ctx := errgroup.WithContext(ctx)
 
 	var rp atomic.Value
-	go func() {
+	eg.Go(func() (err error) {
 		defer close(changeChan)
 		defer func() {
 			if r := recover(); r != nil {
 				rp.Store(r)
+				err = fmt.Errorf("panic")
 			}
 		}()
-		f(changeChan, stopChan)
-	}()
-	reportChanges(ch, changeChan)
-	if r := rp.Load(); r != nil {
-		panic(r)
+		return f(ctx, changeChan)
+	})
+	eg.Go(func() error {
+		return reportChanges(ctx, ch, changeChan)
+	})
+	if err := eg.Wait(); err != nil {
+		if r := rp.Load(); r != nil {
+			panic(r)
+		}
+		return err
 	}
+	return nil
 }
 
-func reportChanges(ch chan<- diffSummaryProgress, changeChan chan types.ValueChanged) {
-	for change := range changeChan {
-		switch change.ChangeType {
-		case types.DiffChangeAdded:
-			ch <- diffSummaryProgress{Adds: 1}
-		case types.DiffChangeRemoved:
-			ch <- diffSummaryProgress{Removes: 1}
-		case types.DiffChangeModified:
-			ch <- diffSummaryProgress{Changes: 1}
-		default:
-			panic("unknown change type")
+func reportChanges(ctx context.Context, ch chan<- diffSummaryProgress, changeChan chan types.ValueChanged) error {
+LOOP:
+	for {
+		select {
+		case change, ok := <-changeChan:
+			if !ok {
+				break LOOP
+			}
+			var summary diffSummaryProgress
+			switch change.ChangeType {
+			case types.DiffChangeAdded:
+				summary = diffSummaryProgress{Adds: 1}
+			case types.DiffChangeRemoved:
+				summary = diffSummaryProgress{Removes: 1}
+			case types.DiffChangeModified:
+				summary = diffSummaryProgress{Changes: 1}
+			default:
+				panic("unknown change type")
+			}
+			select {
+			case ch <- summary:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
+	return nil
 }
 
 func formatStatus(acc diffSummaryProgress, singular, plural string) {

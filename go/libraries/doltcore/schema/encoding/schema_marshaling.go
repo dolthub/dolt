@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -199,7 +199,10 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 		return nil, err
 	}
 
-	sch := schema.SchemaFromCols(colColl)
+	sch, err := schema.SchemaFromCols(colColl)
+	if err != nil {
+		return nil, err
+	}
 
 	for _, encodedIndex := range sd.IndexCollection {
 		_, err = sch.Indexes().UnsafeAddIndexByColTags(

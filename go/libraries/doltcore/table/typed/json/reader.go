@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -91,10 +91,6 @@ func (r *JSONReader) VerifySchema(sch schema.Schema) (bool, error) {
 }
 
 func (r *JSONReader) ReadRow(ctx context.Context) (row.Row, error) {
-	if r.jsonStream.Err() != nil {
-		return nil, r.jsonStream.Err()
-	}
-
 	if r.sampleRow != nil {
 		ret := r.sampleRow
 		r.sampleRow = nil

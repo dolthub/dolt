@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -73,7 +73,8 @@ func TestReader(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	sch := schema.SchemaFromCols(colColl)
+	sch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
 
 	reader, err := OpenJSONReader(types.Format_LD_1, "file.json", fs, sch)
 	require.NoError(t, err)
@@ -152,7 +153,8 @@ func TestReaderBadJson(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	sch := schema.SchemaFromCols(colColl)
+	sch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
 
 	reader, err := OpenJSONReader(types.Format_LD_1, "file.json", fs, sch)
 	require.NoError(t, err)

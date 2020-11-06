@@ -3,9 +3,9 @@ use strict;
 use DBI;
 
 my $QUERY_RESPONSE = [
-    { "create table test (pk int, value int, primary key(pk))" => '0E0' },
+    { "create table test (pk int, `value` int, primary key(pk))" => '0E0' },
     { "describe test" => 2 },
-    { "insert into test (pk, value) values (0,0)" => 1 },
+    { "insert into test (pk, `value`) values (0,0)" => 1 },
     { "select * from test" => 1 }
     ];
 

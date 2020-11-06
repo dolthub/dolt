@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -418,8 +418,11 @@ func CombineColCollections(ctx context.Context, root *doltdb.RootValue, inferred
 	if err != nil {
 		return nil, errhand.BuildDError("failed to generate new schema").AddCause(err).Build()
 	}
-
-	return schema.SchemaFromCols(combined), nil
+	sch, err := schema.SchemaFromCols(combined)
+	if err != nil {
+		return nil, errhand.BuildDError("failed to get schema from cols").AddCause(err).Build()
+	}
+	return sch, nil
 }
 
 func columnsForSchemaCreate(inferredCols *schema.ColCollection, pkNames []string) (newCols *schema.ColCollection) {

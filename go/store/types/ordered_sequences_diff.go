@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,10 +23,10 @@ package types
 
 import (
 	"context"
-	"sync"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
+	"golang.org/x/sync/errgroup"
 
+	"github.com/dolthub/dolt/go/libraries/utils/async"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/util/functions"
 )
@@ -44,12 +44,12 @@ type ValueChanged struct {
 	Key, OldValue, NewValue Value
 }
 
-func sendChange(changes chan<- ValueChanged, stopChan <-chan struct{}, change ValueChanged) bool {
+func sendChange(ctx context.Context, changes chan<- ValueChanged, change ValueChanged) error {
 	select {
 	case changes <- change:
-		return true
-	case <-stopChan:
-		return false
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
@@ -57,192 +57,161 @@ func sendChange(changes chan<- ValueChanged, stopChan <-chan struct{}, change Va
 // The left-right diff is expected to return results earlier, whereas the top-down approach is faster overall. This "best" algorithm runs both:
 // - early results from left-right are sent to |changes|.
 // - if/when top-down catches up, left-right is stopped and the rest of the changes are streamed from top-down.
-func orderedSequenceDiffBest(ctx context.Context, last orderedSequence, current orderedSequence, ae *atomicerr.AtomicError, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
+func orderedSequenceDiffBest(ctx context.Context, last orderedSequence, current orderedSequence, changes chan<- ValueChanged) error {
 	lrChanges := make(chan ValueChanged)
 	tdChanges := make(chan ValueChanged)
-	// Give the stop channels a buffer size of 1 so that they won't block (see below).
-	lrStopChan := make(chan struct{}, 1)
-	tdStopChan := make(chan struct{}, 1)
 
-	// Ensure all diff functions have finished doing work by the time this function returns, otherwise database reads might cause deadlock - e.g. https://github.com/attic-labs/noms/issues/2165.
-	wg := &sync.WaitGroup{}
+	eg, ctx := errgroup.WithContext(ctx)
 
-	defer func() {
-		// Stop diffing. The left-right or top-down diff might have already finished, but sending to the stop channels won't block due to the buffer.
-		lrStopChan <- struct{}{}
-		tdStopChan <- struct{}{}
-		wg.Wait()
-	}()
-
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
+	lrCancel := async.GoWithCancel(ctx, eg, func(ctx context.Context) error {
 		defer close(lrChanges)
-
-		orderedSequenceDiffLeftRight(ctx, last, current, ae, lrChanges, lrStopChan)
-	}()
-	go func() {
-		defer wg.Done()
+		return orderedSequenceDiffLeftRight(ctx, last, current, lrChanges)
+	})
+	tdCancel := async.GoWithCancel(ctx, eg, func(ctx context.Context) error {
 		defer close(tdChanges)
+		return orderedSequenceDiffTopDown(ctx, last, current, tdChanges)
+	})
 
-		orderedSequenceDiffTopDown(ctx, last, current, ae, tdChanges, tdStopChan)
-	}()
+	eg.Go(func() error {
+		defer lrCancel()
+		defer tdCancel()
 
-	// Stream left-right changes while the top-down diff algorithm catches up.
-	var lrChangeCount, tdChangeCount int
-
-	for multiplexing := true; multiplexing; {
-		if ae.IsSet() {
-			return false
-		}
-
-		select {
-		case <-stopChan:
-			return false
-		case c, ok := <-lrChanges:
-			if !ok {
-				// Left-right diff completed.
-				return true
-			}
-			lrChangeCount++
-			if !sendChange(changes, stopChan, c) {
-				return false
-			}
-		case c, ok := <-tdChanges:
-			if !ok {
-				// Top-down diff completed.
-				return true
-			}
-			tdChangeCount++
-			if tdChangeCount > lrChangeCount {
-				// Top-down diff has overtaken left-right diff.
-				if !sendChange(changes, stopChan, c) {
-					return false
+		// Stream left-right changes while the top-down diff algorithm catches up.
+		var lrChangeCount, tdChangeCount int
+		for multiplexing := true; multiplexing; {
+			select {
+			case c, ok := <-lrChanges:
+				if !ok {
+					// Left-to-right diff completed.
+					return nil
 				}
-				lrStopChan <- struct{}{}
-				multiplexing = false
+				lrChangeCount++
+				if err := sendChange(ctx, changes, c); err != nil {
+					return err
+				}
+			case c, ok := <-tdChanges:
+				if !ok {
+					// Top-down diff completed.
+					return nil
+				}
+				tdChangeCount++
+				if tdChangeCount > lrChangeCount {
+					// Top-down diff has overtaken left-right diff.
+					if err := sendChange(ctx, changes, c); err != nil {
+						return err
+					}
+					lrCancel()
+					multiplexing = false
+				}
 			}
 		}
-	}
 
-	for c := range tdChanges {
-		if !sendChange(changes, stopChan, c) {
-			return false
+		for c := range tdChanges {
+			if err := sendChange(ctx, changes, c); err != nil {
+				return err
+			}
 		}
-	}
-	return true
+
+		return nil
+	})
+
+	return eg.Wait()
 }
 
 // Streams the diff from |last| to |current| into |changes|, using a top-down approach.
 // Top-down is parallel and efficiently returns the complete diff, but compared to left-right it's slow to start streaming changes.
-func orderedSequenceDiffTopDown(ctx context.Context, last orderedSequence, current orderedSequence, ae *atomicerr.AtomicError, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
-	return orderedSequenceDiffInternalNodes(ctx, last, current, ae, changes, stopChan)
+func orderedSequenceDiffTopDown(ctx context.Context, last orderedSequence, current orderedSequence, changes chan<- ValueChanged) error {
+	return orderedSequenceDiffInternalNodes(ctx, last, current, changes)
 }
 
 // TODO - something other than the literal edit-distance, which is way too much cpu work for this case - https://github.com/attic-labs/noms/issues/2027
-func orderedSequenceDiffInternalNodes(ctx context.Context, last orderedSequence, current orderedSequence, ae *atomicerr.AtomicError, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
-	if last.treeLevel() > current.treeLevel() && !ae.IsSet() {
+func orderedSequenceDiffInternalNodes(ctx context.Context, last orderedSequence, current orderedSequence, changes chan<- ValueChanged) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	if last.treeLevel() > current.treeLevel() {
 		lastChild, err := last.getCompositeChildSequence(ctx, 0, uint64(last.seqLen()))
-
-		if ae.SetIfError(err) {
-			return false
+		if err != nil {
+			return err
 		}
-
-		return orderedSequenceDiffInternalNodes(ctx, lastChild.(orderedSequence), current, ae, changes, stopChan)
+		return orderedSequenceDiffInternalNodes(ctx, lastChild.(orderedSequence), current, changes)
 	}
 
-	if current.treeLevel() > last.treeLevel() && !ae.IsSet() {
+	if current.treeLevel() > last.treeLevel() {
 		currentChild, err := current.getCompositeChildSequence(ctx, 0, uint64(current.seqLen()))
-
-		if ae.SetIfError(err) {
-			return false
+		if err != nil {
+			return err
 		}
-
-		return orderedSequenceDiffInternalNodes(ctx, last, currentChild.(orderedSequence), ae, changes, stopChan)
+		return orderedSequenceDiffInternalNodes(ctx, last, currentChild.(orderedSequence), changes)
 	}
 
-	if last.isLeaf() && current.isLeaf() && !ae.IsSet() {
-		return orderedSequenceDiffLeftRight(ctx, last, current, ae, changes, stopChan)
-	}
-
-	if ae.IsSet() {
-		return false
+	if last.isLeaf() && current.isLeaf() {
+		return orderedSequenceDiffLeftRight(ctx, last, current, changes)
 	}
 
 	compareFn := last.getCompareFn(current)
 	initialSplices, err := calcSplices(uint64(last.seqLen()), uint64(current.seqLen()), DEFAULT_MAX_SPLICE_MATRIX_SIZE,
 		func(i uint64, j uint64) (bool, error) { return compareFn(int(i), int(j)) })
-
-	if ae.SetIfError(err) {
-		return false
+	if err != nil {
+		return err
 	}
 
 	for _, splice := range initialSplices {
-		if ae.IsSet() {
-			return false
-		}
-
 		var lastChild, currentChild orderedSequence
-		functions.All(
-			func() {
+		err := functions.All(
+			func() error {
 				seq, err := last.getCompositeChildSequence(ctx, splice.SpAt, splice.SpRemoved)
-
-				if !ae.SetIfError(err) {
-					lastChild = seq.(orderedSequence)
+				if err != nil {
+					return err
 				}
+				lastChild = seq.(orderedSequence)
+				return nil
 			},
-			func() {
+			func() error {
 				seq, err := current.getCompositeChildSequence(ctx, splice.SpFrom, splice.SpAdded)
-
-				if !ae.SetIfError(err) {
-					currentChild = seq.(orderedSequence)
+				if err != nil {
+					return err
 				}
+				currentChild = seq.(orderedSequence)
+				return nil
 			},
 		)
+		if err != nil {
+			return err
+		}
 
-		if !orderedSequenceDiffInternalNodes(ctx, lastChild, currentChild, ae, changes, stopChan) {
-			return false
+		if err := orderedSequenceDiffInternalNodes(ctx, lastChild, currentChild, changes); err != nil {
+			return err
 		}
 	}
 
-	return true
+	return nil
 }
 
 // Streams the diff from |last| to |current| into |changes|, using a left-right approach.
 // Left-right immediately descends to the first change and starts streaming changes, but compared to top-down it's serial and much slower to calculate the full diff.
-func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, current orderedSequence, ae *atomicerr.AtomicError, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
+func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, current orderedSequence, changes chan<- ValueChanged) error {
 	lastCur, err := newCursorAt(ctx, last, emptyKey, false, false)
-
-	if ae.SetIfError(err) {
-		return false
+	if err != nil {
+		return err
 	}
 
 	currentCur, err := newCursorAt(ctx, current, emptyKey, false, false)
-
-	if ae.SetIfError(err) {
-		return false
+	if err != nil {
+		return err
 	}
 
 	for lastCur.valid() && currentCur.valid() {
-		if ae.IsSet() {
-			return false
-		}
-
 		err := fastForward(ctx, lastCur, currentCur)
-
-		if ae.SetIfError(err) {
-			return false
+		if err != nil {
+			return err
 		}
 
 		for lastCur.valid() && currentCur.valid() {
-			if ae.IsSet() {
-				return false
-			}
-
 			equals, err := lastCur.seq.getCompareFn(currentCur.seq)(lastCur.idx, currentCur.idx)
-
-			if ae.SetIfError(err) {
-				return false
+			if err != nil {
+				return err
 			}
 
 			if equals {
@@ -250,135 +219,120 @@ func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, cur
 			}
 
 			lastKey, err := getCurrentKey(lastCur)
-
-			if ae.SetIfError(err) {
-				return false
+			if err != nil {
+				return err
 			}
 
 			currentKey, err := getCurrentKey(currentCur)
-
-			if ae.SetIfError(err) {
-				return false
+			if err != nil {
+				return err
 			}
 
-			if isLess, err := currentKey.Less(last.format(), lastKey); ae.SetIfError(err) {
-				return false
+			if isLess, err := currentKey.Less(last.format(), lastKey); err != nil {
+				return err
 			} else if isLess {
 				mv, err := getMapValue(currentCur)
-
-				if ae.SetIfError(err) {
-					return false
+				if err != nil {
+					return err
 				}
 
-				if !sendChange(changes, stopChan, ValueChanged{DiffChangeAdded, currentKey.v, nil, mv}) {
-					return false
+				if err := sendChange(ctx, changes, ValueChanged{DiffChangeAdded, currentKey.v, nil, mv}); err != nil {
+					return err
 				}
 
 				_, err = currentCur.advance(ctx)
-
-				if ae.SetIfError(err) {
-					return false
+				if err != nil {
+					return err
 				}
 			} else {
-				if isLess, err := lastKey.Less(last.format(), currentKey); ae.SetIfError(err) {
-					return false
+				if isLess, err := lastKey.Less(last.format(), currentKey); err != nil {
+					return err
 				} else if isLess {
 					mv, err := getMapValue(lastCur)
-
-					if ae.SetIfError(err) {
-						return false
+					if err != nil {
+						return err
 					}
 
-					if !sendChange(changes, stopChan, ValueChanged{DiffChangeRemoved, lastKey.v, mv, nil}) {
-						return false
+					if err := sendChange(ctx, changes, ValueChanged{DiffChangeRemoved, lastKey.v, mv, nil}); err != nil {
+						return err
 					}
 
 					_, err = lastCur.advance(ctx)
-
-					if ae.SetIfError(err) {
-						return false
+					if err != nil {
+						return err
 					}
 				} else {
 					lmv, err := getMapValue(lastCur)
-
-					if ae.SetIfError(err) {
-						return false
+					if err != nil {
+						return err
 					}
 
 					cmv, err := getMapValue(currentCur)
-
-					if ae.SetIfError(err) {
-						return false
+					if err != nil {
+						return err
 					}
 
-					if !sendChange(changes, stopChan, ValueChanged{DiffChangeModified, lastKey.v, lmv, cmv}) {
-						return false
+					if err := sendChange(ctx, changes, ValueChanged{DiffChangeModified, lastKey.v, lmv, cmv}); err != nil {
+						return err
 					}
 
 					_, err = lastCur.advance(ctx)
-
-					if ae.SetIfError(err) {
-						return false
+					if err != nil {
+						return err
 					}
 
 					_, err = currentCur.advance(ctx)
-
-					if ae.SetIfError(err) {
-						return false
+					if err != nil {
+						return err
 					}
 				}
 			}
 		}
 	}
 
-	for lastCur.valid() && !ae.IsSet() {
+	for lastCur.valid() {
 		lastKey, err := getCurrentKey(lastCur)
-
-		if ae.SetIfError(err) {
-			return false
+		if err != nil {
+			return err
 		}
 
 		mv, err := getMapValue(lastCur)
-		if ae.SetIfError(err) {
-			return false
+		if err != nil {
+			return err
 		}
 
-		if !sendChange(changes, stopChan, ValueChanged{DiffChangeRemoved, lastKey.v, mv, nil}) {
-			return false
+		if err := sendChange(ctx, changes, ValueChanged{DiffChangeRemoved, lastKey.v, mv, nil}); err != nil {
+			return err
 		}
 
 		_, err = lastCur.advance(ctx)
-
-		if ae.SetIfError(err) {
-			return false
+		if err != nil {
+			return err
 		}
 	}
 
-	for currentCur.valid() && !ae.IsSet() {
+	for currentCur.valid() {
 		currKey, err := getCurrentKey(currentCur)
-
-		if ae.SetIfError(err) {
-			return false
+		if err != nil {
+			return err
 		}
 
 		mv, err := getMapValue(currentCur)
-
-		if ae.SetIfError(err) {
-			return false
+		if err != nil {
+			return err
 		}
 
-		if !sendChange(changes, stopChan, ValueChanged{DiffChangeAdded, currKey.v, nil, mv}) {
-			return false
+		if err := sendChange(ctx, changes, ValueChanged{DiffChangeAdded, currKey.v, nil, mv}); err != nil {
+			return err
 		}
 
 		_, err = currentCur.advance(ctx)
-
-		if ae.SetIfError(err) {
-			return false
+		if err != nil {
+			return err
 		}
 	}
 
-	return true
+	return nil
 }
 
 /**

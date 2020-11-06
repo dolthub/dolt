@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -113,7 +113,7 @@ var imt *table.InMemTable
 var imtRows []row.Row
 
 func init() {
-	fakeSchema = schema.SchemaFromCols(fakeFields)
+	fakeSchema = schema.MustSchemaFromCols(fakeFields)
 
 	imtRows = []row.Row{
 		mustRow(row.New(types.Format_7_18, fakeSchema, row.TaggedValues{0: types.String("a"), 1: types.String("1")})),

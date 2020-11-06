@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,8 +52,9 @@ func createTestSchema(t *testing.T) schema.Schema {
 		schema.NewColumn("age", ageTag, types.UintKind, false),
 		schema.NewColumn("empty", emptyTag, types.IntKind, false),
 	)
-	sch := schema.SchemaFromCols(colColl)
-	_, err := sch.Indexes().AddIndexByColTags(testSchemaIndexName, []uint64{firstTag, lastTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
+	sch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
+	_, err = sch.Indexes().AddIndexByColTags(testSchemaIndexName, []uint64{firstTag, lastTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
 	require.NoError(t, err)
 	_, err = sch.Indexes().AddIndexByColTags(testSchemaIndexAge, []uint64{ageTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
 	require.NoError(t, err)

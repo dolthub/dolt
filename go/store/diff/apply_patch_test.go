@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/marshal"
@@ -151,12 +150,11 @@ func newTestValueStore() *types.ValueStore {
 }
 
 func getPatch(g1, g2 types.Value) (Patch, error) {
-	ae := atomicerr.New()
+	var derr error
 	dChan := make(chan Difference)
-	sChan := make(chan struct{})
 	go func() {
-		Diff(context.Background(), ae, g1, g2, dChan, sChan, true, nil)
-		close(dChan)
+		defer close(dChan)
+		derr = Diff(context.Background(), g1, g2, dChan, true, nil)
 	}()
 
 	patch := Patch{}
@@ -164,7 +162,7 @@ func getPatch(g1, g2 types.Value) (Patch, error) {
 		patch = append(patch, dif)
 	}
 
-	return patch, ae.Get()
+	return patch, derr
 }
 
 func checkApplyPatch(assert *assert.Assertions, g1, expectedG2 types.Value, k1, k2 string) {
@@ -285,12 +283,11 @@ func TestUpdateNode(t *testing.T) {
 }
 
 func checkApplyDiffs(a *assert.Assertions, n1, n2 types.Value, leftRight bool) {
-	ae := atomicerr.New()
+	var derr error
 	dChan := make(chan Difference)
-	sChan := make(chan struct{})
 	go func() {
-		Diff(context.Background(), ae, n1, n2, dChan, sChan, leftRight, nil)
-		close(dChan)
+		defer close(dChan)
+		derr = Diff(context.Background(), n1, n2, dChan, leftRight, nil)
 	}()
 
 	difs := Patch{}
@@ -298,7 +295,7 @@ func checkApplyDiffs(a *assert.Assertions, n1, n2 types.Value, leftRight bool) {
 		difs = append(difs, dif)
 	}
 
-	a.NoError(ae.Get())
+	a.NoError(derr)
 
 	res, err := Apply(context.Background(), types.Format_7_18, n1, difs)
 	a.NoError(err)

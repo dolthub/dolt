@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -192,7 +192,7 @@ func ToDoltSchema(ctx context.Context, root *doltdb.RootValue, tableName string,
 		return nil, err
 	}
 
-	return schema.SchemaFromCols(colColl), nil
+	return schema.SchemaFromCols(colColl)
 }
 
 // ToDoltCol returns the dolt column corresponding to the SQL column given

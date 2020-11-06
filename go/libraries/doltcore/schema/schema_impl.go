@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ type schemaImpl struct {
 }
 
 // SchemaFromCols creates a Schema from a collection of columns
-func SchemaFromCols(allCols *ColCollection) Schema {
+func SchemaFromCols(allCols *ColCollection) (Schema, error) {
 	var pkCols []Column
 	var nonPKCols []Column
 
@@ -46,7 +46,7 @@ func SchemaFromCols(allCols *ColCollection) Schema {
 	}
 
 	if len(pkCols) == 0 {
-		panic("no primary key columns specified")
+		return nil, ErrNoPrimaryKeyColumns
 	}
 
 	pkColColl, _ := NewColCollection(pkCols...)
@@ -57,7 +57,15 @@ func SchemaFromCols(allCols *ColCollection) Schema {
 		nonPKCols:       nonPKColColl,
 		allCols:         allCols,
 		indexCollection: NewIndexCollection(allCols),
+	}, nil
+}
+
+func MustSchemaFromCols(typedColColl *ColCollection) Schema {
+	sch, err := SchemaFromCols(typedColColl)
+	if err != nil {
+		panic(err)
 	}
+	return sch
 }
 
 // ValidateForInsert returns an error if the given schema cannot be written to the dolt database.

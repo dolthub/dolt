@@ -1,4 +1,4 @@
-// Copyright 2019-2020 Liquidata, Inc.
+// Copyright 2019-2020 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -392,7 +392,7 @@ func (db Database) getTable(ctx context.Context, root *doltdb.RootValue, tableNa
 
 	var table sql.Table
 
-	readonlyTable := DoltTable{name: tableName, table: tbl, sch: sch, db: db}
+	readonlyTable := NewDoltTable(tableName, sch, tbl, db)
 	if doltdb.IsReadOnlySystemTable(tableName) {
 		table = &readonlyTable
 	} else if doltdb.HasDoltPrefix(tableName) {

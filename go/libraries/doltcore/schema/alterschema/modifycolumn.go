@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -195,7 +195,10 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 		return nil, err
 	}
 
-	newSch := schema.SchemaFromCols(collection)
+	newSch, err := schema.SchemaFromCols(collection)
+	if err != nil {
+		return nil, err
+	}
 	newSch.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
 	return newSch, nil
 }

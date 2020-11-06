@@ -1,4 +1,4 @@
-// Copyright 2020 Liquidata, Inc.
+// Copyright 2020 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -226,7 +226,7 @@ func (ss *SuperSchema) GenerateSchema() (Schema, error) {
 	if err != nil {
 		return nil, err
 	}
-	return SchemaFromCols(cc), nil
+	return SchemaFromCols(cc)
 }
 
 // NameMapForSchema creates a field name mapping needed to construct a rowconv.RowConverter

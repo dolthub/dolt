@@ -1,4 +1,4 @@
-// Copyright 2020 Liquidata, Inc.
+// Copyright 2020 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -102,7 +102,7 @@ func NewRowWithPks(pkColVals []types.Value, nonPkVals ...types.Value) row.Row {
 		panic(err.Error())
 	}
 
-	sch := schema.SchemaFromCols(colColl)
+	sch := schema.MustSchemaFromCols(colColl)
 
 	r, err := row.New(types.Format_7_18, sch, taggedVals)
 
@@ -170,7 +170,7 @@ func NewSchemaForTable(tableName string, colNamesAndTypes ...interface{}) schema
 		panic(err.Error())
 	}
 
-	return schema.SchemaFromCols(colColl)
+	return schema.MustSchemaFromCols(colColl)
 }
 
 // Returns the logical concatenation of the schemas and rows given, rewriting all tag numbers to begin at zero. The row

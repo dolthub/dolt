@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,42 +23,39 @@ package types
 
 import "context"
 
-func sendSpliceChange(changes chan<- Splice, closeChan <-chan struct{}, splice Splice) bool {
+func sendSpliceChange(ctx context.Context, changes chan<- Splice, splice Splice) error {
 	select {
 	case changes <- splice:
-	case <-closeChan:
-		return false
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
-	return true
 }
 
-func indexedSequenceDiff(ctx context.Context, last sequence, lastOffset uint64, current sequence, currentOffset uint64, changes chan<- Splice, closeChan <-chan struct{}, maxSpliceMatrixSize uint64) (bool, error) {
+func indexedSequenceDiff(ctx context.Context, last sequence, lastOffset uint64, current sequence, currentOffset uint64, changes chan<- Splice, maxSpliceMatrixSize uint64) error {
 	if last.treeLevel() > current.treeLevel() {
 		lastChild, err := last.getCompositeChildSequence(ctx, 0, uint64(last.seqLen()))
-
 		if err != nil {
-			return false, err
+			return err
 		}
 
-		return indexedSequenceDiff(ctx, lastChild, lastOffset, current, currentOffset, changes, closeChan, maxSpliceMatrixSize)
+		return indexedSequenceDiff(ctx, lastChild, lastOffset, current, currentOffset, changes, maxSpliceMatrixSize)
 	}
 
 	if current.treeLevel() > last.treeLevel() {
 		currentChild, err := current.getCompositeChildSequence(ctx, 0, uint64(current.seqLen()))
-
 		if err != nil {
-			return false, err
+			return err
 		}
 
-		return indexedSequenceDiff(ctx, last, lastOffset, currentChild, currentOffset, changes, closeChan, maxSpliceMatrixSize)
+		return indexedSequenceDiff(ctx, last, lastOffset, currentChild, currentOffset, changes, maxSpliceMatrixSize)
 	}
 
 	compareFn := last.getCompareFn(current)
 	initialSplices, err := calcSplices(uint64(last.seqLen()), uint64(current.seqLen()), maxSpliceMatrixSize,
 		func(i uint64, j uint64) (bool, error) { return compareFn(int(i), int(j)) })
-
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	for _, splice := range initialSplices {
@@ -68,9 +65,8 @@ func indexedSequenceDiff(ctx context.Context, last sequence, lastOffset uint64, 
 			if splice.SpAdded > 0 {
 				splice.SpFrom += currentOffset
 			}
-
-			if !sendSpliceChange(changes, closeChan, splice) {
-				return false, nil
+			if err := sendSpliceChange(ctx, changes, splice); err != nil {
+				return err
 			}
 			continue
 		}
@@ -81,33 +77,29 @@ func indexedSequenceDiff(ctx context.Context, last sequence, lastOffset uint64, 
 			beginRemoveIndex := uint64(0)
 			if splice.SpAt > 0 {
 				beginRemoveIndex, err = last.cumulativeNumberOfLeaves(int(splice.SpAt) - 1)
-
 				if err != nil {
-					return false, err
+					return err
 				}
 			}
 			endRemoveIndex := uint64(0)
 			if splice.SpAt+splice.SpRemoved > 0 {
 				endRemoveIndex, err = last.cumulativeNumberOfLeaves(int(splice.SpAt+splice.SpRemoved) - 1)
-
 				if err != nil {
-					return false, err
+					return err
 				}
 			}
 			beginAddIndex := uint64(0)
 			if splice.SpFrom > 0 {
 				beginAddIndex, err = current.cumulativeNumberOfLeaves(int(splice.SpFrom) - 1)
-
 				if err != nil {
-					return false, err
+					return err
 				}
 			}
 			endAddIndex := uint64(0)
 			if splice.SpFrom+splice.SpAdded > 0 {
 				endAddIndex, err = current.cumulativeNumberOfLeaves(int(splice.SpFrom+splice.SpAdded) - 1)
-
 				if err != nil {
-					return false, err
+					return err
 				}
 			}
 
@@ -119,31 +111,28 @@ func indexedSequenceDiff(ctx context.Context, last sequence, lastOffset uint64, 
 				splice.SpFrom = currentOffset + beginAddIndex
 			}
 
-			if !sendSpliceChange(changes, closeChan, splice) {
-				return false, nil
+			if err := sendSpliceChange(ctx, changes, splice); err != nil {
+				return err
 			}
 			continue
 		}
 
 		// Meta sequence splice which includes removed & added sub-sequences. Must recurse down.
 		lastChild, err := last.getCompositeChildSequence(ctx, splice.SpAt, splice.SpRemoved)
-
 		if err != nil {
-			return false, err
+			return err
 		}
 
 		currentChild, err := current.getCompositeChildSequence(ctx, splice.SpFrom, splice.SpAdded)
-
 		if err != nil {
-			return false, err
+			return err
 		}
 
 		lastChildOffset := lastOffset
 		if splice.SpAt > 0 {
 			cnt, err := last.cumulativeNumberOfLeaves(int(splice.SpAt) - 1)
-
 			if err != nil {
-				return false, err
+				return err
 			}
 
 			lastChildOffset += cnt
@@ -151,20 +140,17 @@ func indexedSequenceDiff(ctx context.Context, last sequence, lastOffset uint64, 
 		currentChildOffset := currentOffset
 		if splice.SpFrom > 0 {
 			cnt, err := current.cumulativeNumberOfLeaves(int(splice.SpFrom) - 1)
-
 			if err != nil {
-				return false, err
+				return err
 			}
 
 			currentChildOffset += cnt
 		}
 
-		if ok, err := indexedSequenceDiff(ctx, lastChild, lastChildOffset, currentChild, currentChildOffset, changes, closeChan, maxSpliceMatrixSize); err != nil {
-			return false, err
-		} else if !ok {
-			return false, nil
+		if err := indexedSequenceDiff(ctx, lastChild, lastChildOffset, currentChild, currentChildOffset, changes, maxSpliceMatrixSize); err != nil {
+			return err
 		}
 	}
 
-	return true, nil
+	return nil
 }

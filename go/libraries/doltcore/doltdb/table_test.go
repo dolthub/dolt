@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -368,7 +368,8 @@ func TestIndexRebuildingUniqueSuccessOneCol(t *testing.T) {
 		schema.NewColumn("v1", 2, types.IntKind, false),
 		schema.NewColumn("v2", 3, types.IntKind, false),
 	)
-	sch := schema.SchemaFromCols(colColl)
+	sch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
 	rowData, _ := createTestRowDataFromTaggedValues(t, db, sch,
 		row.TaggedValues{1: types.Int(1), 2: types.Int(1), 3: types.Int(1)},
 		row.TaggedValues{1: types.Int(2), 2: types.Int(2), 3: types.Int(2)},
@@ -398,7 +399,8 @@ func TestIndexRebuildingUniqueSuccessTwoCol(t *testing.T) {
 		schema.NewColumn("v1", 2, types.IntKind, false),
 		schema.NewColumn("v2", 3, types.IntKind, false),
 	)
-	sch := schema.SchemaFromCols(colColl)
+	sch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
 	rowData, _ := createTestRowDataFromTaggedValues(t, db, sch,
 		row.TaggedValues{1: types.Int(1), 2: types.Int(1), 3: types.Int(1)},
 		row.TaggedValues{1: types.Int(2), 2: types.Int(1), 3: types.Int(2)},
@@ -428,7 +430,8 @@ func TestIndexRebuildingUniqueFailOneCol(t *testing.T) {
 		schema.NewColumn("v1", 2, types.IntKind, false),
 		schema.NewColumn("v2", 3, types.IntKind, false),
 	)
-	sch := schema.SchemaFromCols(colColl)
+	sch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
 	rowData, _ := createTestRowDataFromTaggedValues(t, db, sch,
 		row.TaggedValues{1: types.Int(1), 2: types.Int(1), 3: types.Int(1)},
 		row.TaggedValues{1: types.Int(2), 2: types.Int(2), 3: types.Int(2)},
@@ -458,7 +461,8 @@ func TestIndexRebuildingUniqueFailTwoCol(t *testing.T) {
 		schema.NewColumn("v1", 2, types.IntKind, false),
 		schema.NewColumn("v2", 3, types.IntKind, false),
 	)
-	sch := schema.SchemaFromCols(colColl)
+	sch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
 	rowData, _ := createTestRowDataFromTaggedValues(t, db, sch,
 		row.TaggedValues{1: types.Int(1), 2: types.Int(1), 3: types.Int(1)},
 		row.TaggedValues{1: types.Int(2), 2: types.Int(1), 3: types.Int(2)},

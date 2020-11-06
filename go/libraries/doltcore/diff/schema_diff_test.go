@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@ package diff
 import (
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
@@ -44,8 +46,10 @@ func TestDiffSchemas(t *testing.T) {
 	oldColColl, _ := schema.NewColCollection(oldCols...)
 	newColColl, _ := schema.NewColCollection(newCols...)
 
-	oldSch := schema.SchemaFromCols(oldColColl)
-	newSch := schema.SchemaFromCols(newColColl)
+	oldSch, err := schema.SchemaFromCols(oldColColl)
+	require.NoError(t, err)
+	newSch, err := schema.SchemaFromCols(newColColl)
+	require.NoError(t, err)
 	diffs, _ := DiffSchColumns(oldSch, newSch)
 
 	expected := map[uint64]ColumnDifference{

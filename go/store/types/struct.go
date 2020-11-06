@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -463,7 +463,7 @@ func (s Struct) Delete(n string) (Struct, error) {
 	return Struct{valueImpl{s.vrw, s.format(), w.data(), nil}}, nil
 }
 
-func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan struct{}) error {
+func (s Struct) Diff(ctx context.Context, last Struct, changes chan<- ValueChanged) error {
 	if s.Equals(last) {
 		return nil
 	}
@@ -525,8 +525,10 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 			fn2 = ""
 		}
 
-		if change != (ValueChanged{}) && !sendChange(changes, closeChan, change) {
-			return nil
+		if change != (ValueChanged{}) {
+			if err := sendChange(ctx, changes, change); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -541,8 +543,8 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 			return err
 		}
 
-		if !sendChange(changes, closeChan, ValueChanged{DiffChangeAdded, String(fn1), nil, v1}) {
-			return nil
+		if err := sendChange(ctx, changes, ValueChanged{DiffChangeAdded, String(fn1), nil, v1}); err != nil {
+			return err
 		}
 	}
 
@@ -557,8 +559,8 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 			return err
 		}
 
-		if !sendChange(changes, closeChan, ValueChanged{DiffChangeRemoved, String(fn2), v2, nil}) {
-			return nil
+		if err := sendChange(ctx, changes, ValueChanged{DiffChangeRemoved, String(fn2), v2, nil}); err != nil {
+			return err
 		}
 	}
 

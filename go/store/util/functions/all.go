@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,18 +21,28 @@
 
 package functions
 
-import "sync"
+import (
+	"sync"
+	"sync/atomic"
+)
 
 // All runs all functions in |fs| in parallel, and returns when all functions have returned.
-func All(fs ...func()) {
+func All(fs ...func() error) error {
+	var res atomic.Value
 	wg := &sync.WaitGroup{}
 	wg.Add(len(fs))
-	for _, f_ := range fs {
-		f := f_
+	for _, f := range fs {
+		capf := f
 		go func() {
-			f()
-			wg.Done()
+			defer wg.Done()
+			if err := capf(); err != nil {
+				res.Store(err)
+			}
 		}()
 	}
 	wg.Wait()
+	if err := res.Load(); err != nil {
+		return err.(error)
+	}
+	return nil
 }

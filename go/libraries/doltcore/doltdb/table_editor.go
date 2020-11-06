@@ -1,4 +1,4 @@
-// Copyright 2020 Liquidata, Inc.
+// Copyright 2020 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,6 +48,10 @@ type TableEditor struct {
 
 	rowData types.Map // cached for GetRow and ContainsKey operations
 
+	hasAutoInc bool
+	autoIncCol schema.Column
+	autoIncVal types.Value
+
 	// This mutex blocks on each operation, so that map reads and updates are serialized
 	writeMutex *sync.Mutex
 	// This mutex ensures that Flush is only called once all current write operations have completed
@@ -89,6 +93,23 @@ func NewTableEditor(ctx context.Context, t *Table, tableSch schema.Schema) (*Tab
 		}
 		te.indexEds[i] = NewIndexEditor(index, indexData)
 	}
+
+	err = tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if col.AutoIncrement {
+			te.autoIncVal, err = t.GetAutoIncrementValue(ctx)
+			if err != nil {
+				return true, err
+			}
+			te.hasAutoInc = true
+			te.autoIncCol = col
+			return true, err
+		}
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	return te, nil
 }
 
@@ -273,6 +294,21 @@ func (te *TableEditor) InsertRow(ctx context.Context, dRow row.Row) error {
 	te.tea.addedKeys[keyHash] = key
 	te.tea.affectedKeys[keyHash] = key
 
+	if te.hasAutoInc {
+		// autoIncVal = max(autoIncVal, insertVal)
+		insertVal, ok := dRow.GetColVal(te.autoIncCol.Tag)
+		if ok {
+			less, err := te.autoIncVal.Less(te.nbf, insertVal)
+			if err != nil {
+				return err
+			}
+			if less {
+				te.autoIncVal = types.Round(insertVal)
+			}
+			te.autoIncVal = types.Increment(te.autoIncVal)
+		}
+	}
+
 	te.tea.ed.AddEdit(key, dRow.NomsMapValue(te.tSch))
 	te.tea.opCount++
 	return nil
@@ -355,6 +391,16 @@ func (te *TableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow r
 	return nil
 }
 
+func (te *TableEditor) GetAutoIncrementValue() types.Value {
+	return te.autoIncVal
+}
+
+func (te *TableEditor) SetAutoIncrementValue(v types.Value) (err error) {
+	te.autoIncVal = v
+	te.t, err = te.t.SetAutoIncrementValue(te.autoIncVal)
+	return
+}
+
 // Flush finalizes all of the changes made so far.
 func (te *TableEditor) Flush() {
 	te.flushMutex.Lock()
@@ -370,6 +416,14 @@ func (te *TableEditor) Flush() {
 func (te *TableEditor) Table() (*Table, error) {
 	te.Flush()
 	err := te.aq.WaitForEmpty()
+
+	if te.hasAutoInc {
+		te.t, err = te.t.SetAutoIncrementValue(te.autoIncVal)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return te.t, err
 }
 
@@ -377,7 +431,9 @@ func (te *TableEditor) Table() (*Table, error) {
 // automatically flush the edits.
 func (te *TableEditor) autoFlush() {
 	te.flushMutex.RLock()
+	te.writeMutex.Lock()
 	runFlush := te.tea.opCount >= tableEditorMaxOps
+	te.writeMutex.Unlock()
 	te.flushMutex.RUnlock()
 
 	if runFlush {

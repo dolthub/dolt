@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ func NewUntypedSchemaWithFirstTag(firstTag uint64, colNames ...string) (map[stri
 	}
 
 	colColl, _ := schema.NewColCollection(cols...)
-	sch := schema.SchemaFromCols(colColl)
+	sch := schema.MustSchemaFromCols(colColl)
 
 	return nameToTag, sch
 }
@@ -98,7 +98,7 @@ func UntypeSchema(sch schema.Schema) (schema.Schema, error) {
 		return nil, err
 	}
 
-	return schema.SchemaFromCols(colColl), nil
+	return schema.SchemaFromCols(colColl)
 }
 
 // UnkeySchema takes a schema and returns a schema with the same columns and types, but stripped of constraints and

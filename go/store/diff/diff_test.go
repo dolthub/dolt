@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/test"
@@ -108,24 +107,19 @@ func createStruct(name string, kv ...interface{}) types.Struct {
 }
 
 func pathsFromDiff(v1, v2 types.Value, leftRight bool) ([]string, error) {
-	ae := atomicerr.New()
+	var derr error
 	dChan := make(chan Difference)
-	sChan := make(chan struct{})
-
 	go func() {
-		Diff(context.Background(), ae, v1, v2, dChan, sChan, leftRight, nil)
-		close(dChan)
+		defer close(dChan)
+		derr = Diff(context.Background(), v1, v2, dChan, leftRight, nil)
 	}()
 
 	var paths []string
 	for d := range dChan {
-		if ae.IsSet() {
-			return nil, ae.Get()
-		}
 		paths = append(paths, d.Path.String())
 	}
 
-	return paths, nil
+	return paths, derr
 }
 
 func mustParsePath(assert *assert.Assertions, s string) types.Path {

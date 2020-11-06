@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -72,7 +72,7 @@ func (cmd ReadTablesCmd) createArgParser() *argparser.ArgParser {
 		{"commit", "Branch or commit hash representing a point in time to retrieve tables from"},
 		{"table", " Optional tables to retrieve.  If omitted, all tables are retrieved."},
 	}
-	ap.SupportsString(dirParamName, "d", "directory", "directory to createe and put retrieved table data.")
+	ap.SupportsString(dirParamName, "d", "directory", "directory to create and put retrieved table data.")
 	return ap
 }
 

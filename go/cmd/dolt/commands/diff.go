@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -620,7 +620,7 @@ func dumbDownSchema(in schema.Schema) (schema.Schema, error) {
 
 	dumbColColl, _ := schema.NewColCollection(dumbCols...)
 
-	return schema.SchemaFromCols(dumbColColl), nil
+	return schema.SchemaFromCols(dumbColColl)
 }
 
 func toNamer(name string) string {

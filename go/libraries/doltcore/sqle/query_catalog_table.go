@@ -1,4 +1,4 @@
-// Copyright 2020 Liquidata, Inc.
+// Copyright 2020 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -82,7 +82,7 @@ func (sq SavedQuery) asRow() (row.Row, error) {
 	return row.New(types.Format_Default, DoltQueryCatalogSchema, taggedVals)
 }
 
-var DoltQueryCatalogSchema = schema.SchemaFromCols(queryCatalogCols)
+var DoltQueryCatalogSchema = schema.MustSchemaFromCols(queryCatalogCols)
 
 // Creates the query catalog table if it doesn't exist.
 func createQueryCatalogIfNotExists(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {

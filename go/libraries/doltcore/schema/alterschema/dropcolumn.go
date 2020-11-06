@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -88,7 +88,10 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 		return nil, err
 	}
 
-	newSch := schema.SchemaFromCols(colColl)
+	newSch, err := schema.SchemaFromCols(colColl)
+	if err != nil {
+		return nil, err
+	}
 	newSch.Indexes().AddIndex(tblSch.Indexes().AllIndexes()...)
 
 	vrw := tbl.ValueReadWriter()

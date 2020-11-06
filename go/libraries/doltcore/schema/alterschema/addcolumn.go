@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -156,7 +156,10 @@ func addColumnToSchema(sch schema.Schema, tag uint64, newColName string, typeInf
 	if err != nil {
 		return nil, err
 	}
-	newSch := schema.SchemaFromCols(collection)
+	newSch, err := schema.SchemaFromCols(collection)
+	if err != nil {
+		return nil, err
+	}
 	newSch.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
 
 	return newSch, nil

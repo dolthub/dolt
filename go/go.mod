@@ -17,8 +17,9 @@ require (
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078
 	github.com/dolthub/fslock v0.0.2
-	github.com/dolthub/go-mysql-server v0.6.1-0.20201026215820-ba4538cf7b29
-	github.com/dolthub/vitess v0.0.0-20201009075426-dab8291dcb1b
+	github.com/dolthub/go-mysql-server v0.6.1-0.20201106005010-6faca804df09
+	github.com/dolthub/sqllogictest/go v0.0.0-20201105013724-5123fc66e12c
+	github.com/dolthub/vitess v0.0.0-20201105231317-8886950f2053
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.9.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
@@ -40,7 +41,6 @@ require (
 	github.com/lestrrat-go/strftime v1.0.3 // indirect
 	github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0
 	github.com/liquidata-inc/mmap-go v1.0.3
-	github.com/liquidata-inc/sqllogictest/go v0.0.0-20200320151923-b11801f10e15
 	github.com/mattn/go-colorable v0.1.6 // indirect
 	github.com/mattn/go-isatty v0.0.12
 	github.com/mattn/go-runewidth v0.0.9

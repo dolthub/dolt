@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ func TestAll(t *testing.T) {
 	// Set |res| via |ch| to test it's running in parallel - if not, they'll deadlock.
 	var res int
 	ch := make(chan int)
-	All(func() { ch <- 42 }, func() { res = <-ch })
+	All(func() error { ch <- 42; return nil }, func() error { res = <-ch; return nil })
 
 	assert.Equal(42, res)
 }

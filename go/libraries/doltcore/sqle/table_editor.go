@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -81,6 +81,22 @@ func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Ro
 	}
 
 	return te.tableEditor.UpdateRow(ctx, dOldRow, dNewRow)
+}
+
+func (te *sqlTableEditor) GetAutoIncrementValue() (interface{}, error) {
+	val := te.tableEditor.GetAutoIncrementValue()
+	return te.t.DoltTable.autoIncCol.TypeInfo.ConvertNomsValueToValue(val)
+}
+
+func (te *sqlTableEditor) SetAutoIncrementValue(ctx *sql.Context, val interface{}) error {
+	nomsVal, err := te.t.DoltTable.autoIncCol.TypeInfo.ConvertValueToNomsValue(val)
+	if err != nil {
+		return err
+	}
+	if err = te.tableEditor.SetAutoIncrementValue(nomsVal); err != nil {
+		return err
+	}
+	return te.flush(ctx)
 }
 
 // Close implements Closer

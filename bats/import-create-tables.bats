@@ -152,9 +152,17 @@ DELIM
 
 @test "try to table import with nonexistant --pk arg" {
     run dolt table import -c -pk="batmansparents" test 1pk5col-ints.csv
-    [ "$status" -ne 1 ]
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Error determining the output schema." ]] || false
     skip "--pk args is not validated to be an existing column"
-    [[ ! "$output" =~ "panic" ]] || false
+    [[ "$output" =~ "column 'batmansparents' not found" ]] || false
+}
+
+@test "try to table import with one valid and one nonexistant --pk arg" {
+    run dolt table import -c -pk="pk,batmansparents" test 1pk5col-ints.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Error determining the output schema." ]] || false
+    skip "--pk args is not validated to be an existing column"
     [[ "$output" =~ "column 'batmansparents' not found" ]] || false
 }
 

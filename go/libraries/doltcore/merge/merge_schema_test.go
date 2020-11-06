@@ -1,4 +1,4 @@
-// Copyright 2020 Liquidata, Inc.
+// Copyright 2020 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -430,7 +430,7 @@ func colCollection(cols ...schema.Column) *schema.ColCollection {
 
 // SchemaFromColsAndIdxs creates a Schema from a ColCollection and an IndexCollection.
 func schemaFromColsAndIdxs(allCols *schema.ColCollection, indexes ...schema.Index) schema.Schema {
-	sch := schema.SchemaFromCols(allCols)
+	sch := schema.MustSchemaFromCols(allCols)
 	sch.Indexes().AddIndex(indexes...)
 	return sch
 }

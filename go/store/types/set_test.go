@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -294,11 +294,10 @@ func getTestRefToValueOrderSet(scale int, vrw ValueReadWriter) testSet {
 }
 
 func accumulateSetDiffChanges(ctx context.Context, s1, s2 Set) (added []Value, removed []Value, err error) {
-	ae := atomicerr.New()
 	changes := make(chan ValueChanged)
 	go func() {
-		s1.Diff(ctx, s2, ae, changes, nil)
-		close(changes)
+		defer close(changes)
+		err = s1.Diff(ctx, s2, changes)
 	}()
 	for change := range changes {
 		if change.ChangeType == DiffChangeAdded {
@@ -307,7 +306,7 @@ func accumulateSetDiffChanges(ctx context.Context, s1, s2 Set) (added []Value, r
 			removed = append(removed, change.Key)
 		}
 	}
-	return added, removed, ae.Get()
+	return added, removed, err
 }
 
 func diffSetTest(assert *assert.Assertions, s1 Set, s2 Set, numAddsExpected int, numRemovesExpected int) (added []Value, removed []Value) {

@@ -1,4 +1,4 @@
-// Copyright 2020 Liquidata, Inc.
+// Copyright 2020 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,7 +40,8 @@ func TestCompositeTableReader(t *testing.T) {
 		schema.NewColumn("val", 1, types.IntKind, false),
 	)
 	require.NoError(t, err)
-	sch := schema.SchemaFromCols(coll)
+	sch, err := schema.SchemaFromCols(coll)
+	require.NoError(t, err)
 
 	var readers []TableReadCloser
 	var expectedKeys []uint64

@@ -1,4 +1,4 @@
-// Copyright 2020 Liquidata, Inc.
+// Copyright 2020 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ func SchemasTableSchema() schema.Schema {
 	if err != nil {
 		panic(err) // should never happen
 	}
-	return schema.SchemaFromCols(colColl)
+	return schema.MustSchemaFromCols(colColl)
 }
 
 // GetOrCreateDoltSchemasTable returns the `dolt_schemas` table in `db`, creating it if it does not already exist.

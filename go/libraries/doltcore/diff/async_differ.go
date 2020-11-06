@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,27 +19,29 @@ import (
 	"errors"
 	"time"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
+	"golang.org/x/sync/errgroup"
 
+	"github.com/dolthub/dolt/go/libraries/utils/async"
 	"github.com/dolthub/dolt/go/store/diff"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 type AsyncDiffer struct {
-	ae         *atomicerr.AtomicError
-	stopChan   chan struct{}
 	diffChan   chan diff.Difference
 	bufferSize int
-	isDone     bool
+
+	eg       *errgroup.Group
+	egCtx    context.Context
+	egCancel func()
 }
 
 func NewAsyncDiffer(bufferedDiffs int) *AsyncDiffer {
 	return &AsyncDiffer{
-		atomicerr.New(),
-		make(chan struct{}),
 		make(chan diff.Difference, bufferedDiffs),
 		bufferedDiffs,
-		false,
+		nil,
+		context.Background(),
+		func() {},
 	}
 }
 
@@ -49,71 +51,47 @@ func tableDontDescendLists(v1, v2 types.Value) bool {
 }
 
 func (ad *AsyncDiffer) Start(ctx context.Context, from, to types.Map) {
-	go func() {
+	ad.eg, ad.egCtx = errgroup.WithContext(ctx)
+	ad.egCancel = async.GoWithCancel(ad.egCtx, ad.eg, func(ctx context.Context) error {
 		defer close(ad.diffChan)
-		defer func() {
-			// Ignore a panic from Diff...
-			recover()
-		}()
-		diff.Diff(ctx, ad.ae, from, to, ad.diffChan, ad.stopChan, true, tableDontDescendLists)
-	}()
+		return diff.Diff(ctx, from, to, ad.diffChan, true, tableDontDescendLists)
+	})
 }
 
-func (ad *AsyncDiffer) IsDone() bool {
-	return ad.isDone
+func (ad *AsyncDiffer) Close() error {
+	ad.egCancel()
+	return ad.eg.Wait()
 }
 
-func (ad *AsyncDiffer) Close() {
-	defer func() {
-		// ignore close failures
-		recover()
-	}()
-
-	ad.isDone = true
-	close(ad.stopChan)
-}
-
-func (ad *AsyncDiffer) GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Difference, error) {
-	if err := ad.ae.Get(); err != nil {
-		return nil, err
-	}
-
+func (ad *AsyncDiffer) GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Difference, bool, error) {
 	diffs := make([]*diff.Difference, 0, ad.bufferSize)
 	timeoutChan := time.After(timeout)
-	if !ad.isDone {
-		for {
-			select {
-			case d, more := <-ad.diffChan:
-				if more {
-					diffs = append(diffs, &d)
-
-					if numDiffs != 0 && numDiffs == len(diffs) {
-						return diffs, nil
-					}
-				} else {
-					ad.isDone = true
-					return diffs, nil
+	for {
+		select {
+		case d, more := <-ad.diffChan:
+			if more {
+				diffs = append(diffs, &d)
+				if numDiffs != 0 && numDiffs == len(diffs) {
+					return diffs, true, nil
 				}
-
-			case <-timeoutChan:
-				return diffs, nil
+			} else {
+				return diffs, false, ad.eg.Wait()
 			}
+		case <-timeoutChan:
+			return diffs, true, nil
+		case <-ad.egCtx.Done():
+			return nil, false, ad.eg.Wait()
 		}
 	}
-
-	return diffs, nil
 }
 
 func (ad *AsyncDiffer) ReadAll() ([]*diff.Difference, error) {
-	diffs, err := ad.GetDiffs(0, 5*time.Minute)
-
+	diffs, hasMore, err := ad.GetDiffs(0, 5*time.Minute)
 	if err != nil {
 		return nil, err
 	}
-
-	if !ad.isDone {
+	if hasMore {
 		return nil, errors.New("Unable to read the diffs in a reasonable amount of time")
 	}
-
 	return diffs, nil
 }

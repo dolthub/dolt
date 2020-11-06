@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -105,7 +105,8 @@ func TestRangeReader(t *testing.T) {
 		schema.NewColumn("val", valTag, types.IntKind, false))
 	require.NoError(t, err)
 
-	sch := schema.SchemaFromCols(colColl)
+	sch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
 
 	var db datas.Database
 	storage := &chunks.MemoryStorage{}
@@ -162,7 +163,8 @@ func TestRangeReaderOnEmptyMap(t *testing.T) {
 		schema.NewColumn("val", valTag, types.IntKind, false))
 	require.NoError(t, err)
 
-	sch := schema.SchemaFromCols(colColl)
+	sch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
 
 	var db datas.Database
 	storage := &chunks.MemoryStorage{}

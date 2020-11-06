@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ var ErrColNotFound = errors.New("column not found")
 // different type or tag
 var ErrColNameCollision = errors.New("two different columns with the same name exist")
 
-// ErrNoPrimaryKeyColumns is an error that is returned when wo
+// ErrNoPrimaryKeyColumns is an error that is returned when no primary key columns are found
 var ErrNoPrimaryKeyColumns = errors.New("no primary key columns")
 
 var EmptyColColl = &ColCollection{

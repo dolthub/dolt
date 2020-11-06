@@ -1,4 +1,4 @@
-// Copyright 2020 Liquidata, Inc.
+// Copyright 2020 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,7 +43,8 @@ func TestIndexEditorConcurrency(t *testing.T) {
 		schema.NewColumn("v1", 1, types.IntKind, false),
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	require.NoError(t, err)
-	tableSch := schema.SchemaFromCols(colColl)
+	tableSch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
 	index, err := tableSch.Indexes().AddIndexByColNames("idx_concurrency", []string{"v1"}, schema.IndexProperties{IsUnique: false, Comment: ""})
 	require.NoError(t, err)
 	indexSch := index.Schema()
@@ -130,7 +131,8 @@ func TestIndexEditorConcurrencyPostInsert(t *testing.T) {
 		schema.NewColumn("v1", 1, types.IntKind, false),
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	require.NoError(t, err)
-	tableSch := schema.SchemaFromCols(colColl)
+	tableSch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
 	index, err := tableSch.Indexes().AddIndexByColNames("idx_concurrency", []string{"v1"}, schema.IndexProperties{IsUnique: false, Comment: ""})
 	require.NoError(t, err)
 	indexSch := index.Schema()
@@ -214,7 +216,8 @@ func TestIndexEditorConcurrencyUnique(t *testing.T) {
 		schema.NewColumn("v1", 1, types.IntKind, false),
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	require.NoError(t, err)
-	tableSch := schema.SchemaFromCols(colColl)
+	tableSch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
 	index, err := tableSch.Indexes().AddIndexByColNames("idx_concurrency", []string{"v1"}, schema.IndexProperties{IsUnique: true, Comment: ""})
 	require.NoError(t, err)
 	indexSch := index.Schema()
@@ -300,7 +303,8 @@ func TestIndexEditorUniqueMultipleNil(t *testing.T) {
 		schema.NewColumn("pk", 0, types.IntKind, true),
 		schema.NewColumn("v1", 1, types.IntKind, false))
 	require.NoError(t, err)
-	tableSch := schema.SchemaFromCols(colColl)
+	tableSch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
 	index, err := tableSch.Indexes().AddIndexByColNames("idx_unique", []string{"v1"}, schema.IndexProperties{IsUnique: true, Comment: ""})
 	require.NoError(t, err)
 	indexSch := index.Schema()
@@ -343,7 +347,8 @@ func TestIndexEditorWriteAfterFlush(t *testing.T) {
 		schema.NewColumn("v1", 1, types.IntKind, false),
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	require.NoError(t, err)
-	tableSch := schema.SchemaFromCols(colColl)
+	tableSch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
 	index, err := tableSch.Indexes().AddIndexByColNames("idx_concurrency", []string{"v1"}, schema.IndexProperties{IsUnique: false, Comment: ""})
 	require.NoError(t, err)
 	indexSch := index.Schema()

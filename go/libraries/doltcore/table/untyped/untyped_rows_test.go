@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -115,7 +115,7 @@ func TestUntypedSchemaUnion(t *testing.T) {
 	unequalColCollumn := cols[1]
 	unequalColCollumn.Name = "bad"
 
-	untypedSch := schema.SchemaFromCols(untypedColColl)
+	untypedSch := schema.MustSchemaFromCols(untypedColColl)
 
 	tests := []struct {
 		colsA     []schema.Column
@@ -130,8 +130,8 @@ func TestUntypedSchemaUnion(t *testing.T) {
 	for i, test := range tests {
 		colCollA, _ := schema.NewColCollection(test.colsA...)
 		colCollB, _ := schema.NewColCollection(test.colsB...)
-		schA := schema.SchemaFromCols(colCollA)
-		schB := schema.SchemaFromCols(colCollB)
+		schA := schema.MustSchemaFromCols(colCollA)
+		schB := schema.MustSchemaFromCols(colCollB)
 
 		union, err := UntypedSchemaUnion(schA, schB)
 

@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,8 +26,8 @@ import (
 	"io"
 
 	"github.com/dustin/go-humanize"
+	"golang.org/x/sync/errgroup"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/writers"
 )
@@ -60,99 +60,84 @@ func PrintDiff(ctx context.Context, w io.Writer, v1, v2 types.Value, leftRight b
 		return line(ctx, w, ADD, nil, v2)
 	}
 
-	ae := atomicerr.New()
+	eg, ctx := errgroup.WithContext(ctx)
 	dChan := make(chan Difference, 16)
-	stopChan := make(chan struct{})
-	stopDiff := func() {
-		close(stopChan)
-		for range dChan {
-		}
-	}
 
 	// From here on, we can assume that every Difference will have at least one
-	// element in the Path
-	go func() {
+	// element in the Path.
+	eg.Go(func() error {
 		defer close(dChan)
+		return Diff(ctx, v1, v2, dChan, leftRight, nil)
+	})
+	eg.Go(func() error {
+		var lastParentPath types.Path
+		wroteHdr := false
+		firstTime := true
 
-		Diff(ctx, ae, v1, v2, dChan, stopChan, leftRight, nil)
-	}()
-
-	var lastParentPath types.Path
-	wroteHdr := false
-	firstTime := true
-
-	for d := range dChan {
-		if ae.IsSet() {
-			break
-		}
-
-		parentPath := d.Path[:len(d.Path)-1]
-		parentPathChanged := !parentPath.Equals(lastParentPath)
-		lastParentPath = parentPath
-		if parentPathChanged && wroteHdr {
-			err = writeFooter(w, &wroteHdr)
-
-			if ae.SetIfError(err) {
-				break
-			}
-		}
-		if parentPathChanged || firstTime {
-			firstTime = false
-			err = writeHeader(w, parentPath, &wroteHdr)
-
-			if ae.SetIfError(err) {
-				break
-			}
-		}
-
-		lastPart := d.Path[len(d.Path)-1]
-		parentEl, err := parentPath.Resolve(ctx, v1, nil)
-
-		var key types.Value
-		var pfunc printFunc = line
-
-		switch parent := parentEl.(type) {
-		case types.Map:
-			if indexPath, ok := lastPart.(types.IndexPath); ok {
-				key = indexPath.Index
-			} else if hip, ok := lastPart.(types.HashIndexPath); ok {
-				// In this case, the map has a non-primitive key so the value
-				// is a ref to the key. We need the actual key, not a ref to it.
-				hip1 := hip
-				hip1.IntoKey = true
-				key, err = hip1.Resolve(ctx, parent, nil)
-
-				if ae.SetIfError(err) {
-					break
+		for d := range dChan {
+			parentPath := d.Path[:len(d.Path)-1]
+			parentPathChanged := !parentPath.Equals(lastParentPath)
+			lastParentPath = parentPath
+			if parentPathChanged && wroteHdr {
+				err = writeFooter(w, &wroteHdr)
+				if err != nil {
+					return err
 				}
-			} else {
-				panic("unexpected Path type")
 			}
-		case types.Set:
-			// default values are ok
-		case types.Struct:
-			key = types.String(lastPart.(types.FieldPath).Name)
-			pfunc = field
-		case types.List:
-			// default values are ok
+			if parentPathChanged || firstTime {
+				firstTime = false
+				err = writeHeader(w, parentPath, &wroteHdr)
+				if err != nil {
+					return err
+				}
+			}
+
+			lastPart := d.Path[len(d.Path)-1]
+			parentEl, err := parentPath.Resolve(ctx, v1, nil)
+
+			var key types.Value
+			var pfunc printFunc = line
+
+			switch parent := parentEl.(type) {
+			case types.Map:
+				if indexPath, ok := lastPart.(types.IndexPath); ok {
+					key = indexPath.Index
+				} else if hip, ok := lastPart.(types.HashIndexPath); ok {
+					// In this case, the map has a non-primitive key so the value
+					// is a ref to the key. We need the actual key, not a ref to it.
+					hip1 := hip
+					hip1.IntoKey = true
+					key, err = hip1.Resolve(ctx, parent, nil)
+					if err != nil {
+						return err
+					}
+				} else {
+					panic("unexpected Path type")
+				}
+			case types.Set:
+				// default values are ok
+			case types.Struct:
+				key = types.String(lastPart.(types.FieldPath).Name)
+				pfunc = field
+			case types.List:
+				// default values are ok
+			}
+
+			if d.OldValue != nil {
+				err = pfunc(ctx, w, DEL, key, d.OldValue)
+			}
+			if d.NewValue != nil {
+				err = pfunc(ctx, w, ADD, key, d.NewValue)
+			}
+			if err != nil {
+				return err
+			}
 		}
 
-		if d.OldValue != nil {
-			err = pfunc(ctx, w, DEL, key, d.OldValue)
-		}
-		if d.NewValue != nil {
-			err = pfunc(ctx, w, ADD, key, d.NewValue)
-		}
-		if err != nil {
-			stopDiff()
-			break
-		}
-	}
+		return writeFooter(w, &wroteHdr)
+	})
 
-	err = writeFooter(w, &wroteHdr)
-	ae.SetIfError(err)
-
-	return ae.Get()
+	return eg.Wait()
 }
 
 func writeHeader(w io.Writer, p types.Path, wroteHdr *bool) error {

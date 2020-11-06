@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/google/uuid"
@@ -299,7 +300,10 @@ func TestPuller(t *testing.T) {
 	for k, rootRef := range states {
 		t.Run(k, func(t *testing.T) {
 			eventCh := make(chan PullerEvent, 128)
+			wg := new(sync.WaitGroup)
+			wg.Add(1)
 			go func() {
+				defer wg.Done()
 				for evt := range eventCh {
 					var details interface{}
 					switch evt.EventType {
@@ -329,6 +333,7 @@ func TestPuller(t *testing.T) {
 			err = plr.Pull(ctx)
 			close(eventCh)
 			require.NoError(t, err)
+			wg.Wait()
 
 			sinkDS, err := sinkdb.GetDataset(ctx, "ds")
 			sinkDS, err = sinkdb.FastForward(ctx, sinkDS, rootRef)

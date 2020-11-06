@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,38 +25,36 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 func threeWayListMerge(ctx context.Context, a, b, parent types.List) (merged types.List, err error) {
-	ae := atomicerr.New()
 	aSpliceChan, bSpliceChan := make(chan types.Splice), make(chan types.Splice)
-	aStopChan, bStopChan := make(chan struct{}, 1), make(chan struct{}, 1)
 
-	go func() {
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
 		defer close(aSpliceChan)
-		err := a.Diff(ctx, parent, aSpliceChan, aStopChan)
-		ae.SetIfError(err)
-	}()
-	go func() {
+		return a.Diff(ctx, parent, aSpliceChan)
+	})
+	eg.Go(func() error {
 		defer close(bSpliceChan)
-		err := b.Diff(ctx, parent, bSpliceChan, bStopChan)
-		ae.SetIfError(err)
-	}()
+		return b.Diff(ctx, parent, bSpliceChan)
+	})
 
-	stopAndDrain := func(stop chan<- struct{}, drain <-chan types.Splice) {
-		close(stop)
-		for range drain {
-		}
-	}
-
-	defer stopAndDrain(aStopChan, aSpliceChan)
-	defer stopAndDrain(bStopChan, bSpliceChan)
-
-	// The algorithm below relies on determining whether one splice "comes before" another, and whether the splices coming from the two diffs remove/add precisely the same elements. Unfortunately, the Golang zero-value for types.Splice (which is what gets read out of a/bSpliceChan when they're closed) is actaually a valid splice, albeit a meaningless one that indicates a no-op. It "comes before" any other splice, so having it in play really gums up the logic below. Rather than specifically checking for it all over the place, swap the zero-splice out for one full of SPLICE_UNASSIGNED, which is really the proper invalid splice value. That splice doesn't come before ANY valid splice, so the logic below can flow more clearly.
+	// The algorithm below relies on determining whether one splice "comes
+	// before" another, and whether the splices coming from the two diffs
+	// remove/add precisely the same elements. Unfortunately, the Golang
+	// zero-value for types.Splice (which is what gets read out of
+	// a/bSpliceChan when they're closed) is actaually a valid splice,
+	// albeit a meaningless one that indicates a no-op. It "comes before"
+	// any other splice, so having it in play really gums up the logic
+	// below. Rather than specifically checking for it all over the place,
+	// swap the zero-splice out for one full of SPLICE_UNASSIGNED, which is
+	// really the proper invalid splice value. That splice doesn't come
+	// before ANY valid splice, so the logic below can flow more clearly.
 	zeroSplice := types.Splice{}
 	zeroToInvalid := func(sp types.Splice) types.Splice {
 		if sp == zeroSplice {
@@ -67,59 +65,74 @@ func threeWayListMerge(ctx context.Context, a, b, parent types.List) (merged typ
 	invalidSplice := zeroToInvalid(types.Splice{})
 
 	merged = parent
-	offset := uint64(0)
-	aSplice, bSplice := invalidSplice, invalidSplice
-	for {
-		// Get the next splice from both a and b. If either diff(a, parent) or diff(b, parent) is complete, aSplice or bSplice will get an invalid types.Splice. Generally, though, this allows us to proceed through both diffs in (index) order, considering the "current" splice from both diffs at the same time.
-		if aSplice == invalidSplice {
-			aSplice = zeroToInvalid(<-aSpliceChan)
-		}
-		if bSplice == invalidSplice {
-			bSplice = zeroToInvalid(<-bSpliceChan)
-		}
-		// Both channels are producing zero values, so we're done.
-		if aSplice == invalidSplice && bSplice == invalidSplice {
-			break
-		}
-		if overlap(aSplice, bSplice) {
-			if mergeable, err := canMerge(ctx, a, b, aSplice, bSplice); err != nil {
-				return types.EmptyList, err
-			} else if mergeable {
-				splice := merge(aSplice, bSplice)
-				merged, err = apply(ctx, a, merged, offset, splice)
+	eg.Go(func() error {
+		offset := uint64(0)
+		aSplice, bSplice := invalidSplice, invalidSplice
+		for {
+			// Get the next splice from both a and b. If either diff(a,
+			// parent) or diff(b, parent) is complete, aSplice or bSplice
+			// will get an invalid types.Splice. Generally, though, this
+			// allows us to proceed through both diffs in (index) order,
+			// considering the "current" splice from both diffs at the same
+			// time.
+			if aSplice == invalidSplice {
+				select {
+				case a := <-aSpliceChan:
+					aSplice = zeroToInvalid(a)
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			}
+			if bSplice == invalidSplice {
+				select {
+				case b := <-bSpliceChan:
+					bSplice = zeroToInvalid(b)
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			}
+			// Both channels are producing zero values, so we're done.
+			if aSplice == invalidSplice && bSplice == invalidSplice {
+				break
+			}
+			if overlap(aSplice, bSplice) {
+				if mergeable, err := canMerge(ctx, a, b, aSplice, bSplice); err != nil {
+					return err
+				} else if mergeable {
+					splice := merge(aSplice, bSplice)
+					merged, err = apply(ctx, a, merged, offset, splice)
+					if err != nil {
+						return err
+					}
 
+					offset += splice.SpAdded - splice.SpRemoved
+					aSplice, bSplice = invalidSplice, invalidSplice
+					continue
+				}
+				return newMergeConflict("Overlapping splices: %s vs %s", describeSplice(aSplice), describeSplice(bSplice))
+			}
+			if aSplice.SpAt < bSplice.SpAt {
+				merged, err = apply(ctx, a, merged, offset, aSplice)
 				if err != nil {
-					return types.EmptyList, err
+					return err
 				}
 
-				offset += splice.SpAdded - splice.SpRemoved
-				aSplice, bSplice = invalidSplice, invalidSplice
+				offset += aSplice.SpAdded - aSplice.SpRemoved
+				aSplice = invalidSplice
 				continue
 			}
-			return parent, newMergeConflict("Overlapping splices: %s vs %s", describeSplice(aSplice), describeSplice(bSplice))
-		}
-		if aSplice.SpAt < bSplice.SpAt {
-			merged, err = apply(ctx, a, merged, offset, aSplice)
-
+			merged, err = apply(ctx, b, merged, offset, bSplice)
 			if err != nil {
-				return types.EmptyList, err
+				return err
 			}
 
-			offset += aSplice.SpAdded - aSplice.SpRemoved
-			aSplice = invalidSplice
-			continue
+			offset += bSplice.SpAdded - bSplice.SpRemoved
+			bSplice = invalidSplice
 		}
-		merged, err = apply(ctx, b, merged, offset, bSplice)
+		return nil
+	})
 
-		if err != nil {
-			return types.EmptyList, err
-		}
-
-		offset += bSplice.SpAdded - bSplice.SpRemoved
-		bSplice = invalidSplice
-	}
-
-	if err := ae.Get(); err != nil {
+	if err := eg.Wait(); err != nil {
 		return types.EmptyList, err
 	}
 

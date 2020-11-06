@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@ Andy Anderson,27,
 		{Name: titleColName, Tag: titleColTag, Kind: types.StringKind, IsPartOfPK: false, Constraints: nil},
 	}
 	colColl, _ := schema.NewColCollection(inCols...)
-	rowSch := schema.SchemaFromCols(colColl)
+	rowSch := schema.MustSchemaFromCols(colColl)
 	rows := []row.Row{
 		mustRow(row.New(types.Format_7_18, rowSch, row.TaggedValues{
 			nameColTag:  types.String("Bill Billerson"),

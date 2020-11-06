@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -387,15 +387,15 @@ func (l List) Format() *NomsBinFormat {
 
 // Diff streams the diff from last to the current list to the changes channel. Caller can close
 // closeChan to cancel the diff operation.
-func (l List) Diff(ctx context.Context, last List, changes chan<- Splice, closeChan <-chan struct{}) error {
-	return l.DiffWithLimit(ctx, last, changes, closeChan, DEFAULT_MAX_SPLICE_MATRIX_SIZE)
+func (l List) Diff(ctx context.Context, last List, changes chan<- Splice) error {
+	return l.DiffWithLimit(ctx, last, changes, DEFAULT_MAX_SPLICE_MATRIX_SIZE)
 }
 
 // DiffWithLimit streams the diff from last to the current list to the changes channel. Caller can
 // close closeChan to cancel the diff operation.
 // The maxSpliceMatrixSize determines the how big of an edit distance matrix we are willing to
 // compute versus just saying the thing changed.
-func (l List) DiffWithLimit(ctx context.Context, last List, changes chan<- Splice, closeChan <-chan struct{}, maxSpliceMatrixSize uint64) error {
+func (l List) DiffWithLimit(ctx context.Context, last List, changes chan<- Splice, maxSpliceMatrixSize uint64) error {
 	if l.Equals(last) {
 		return nil
 	}
@@ -409,8 +409,7 @@ func (l List) DiffWithLimit(ctx context.Context, last List, changes chan<- Splic
 		return nil
 	}
 
-	_, err := indexedSequenceDiff(ctx, last.sequence, 0, l.sequence, 0, changes, closeChan, maxSpliceMatrixSize)
-	return err
+	return indexedSequenceDiff(ctx, last.sequence, 0, l.sequence, 0, changes, maxSpliceMatrixSize)
 }
 
 func (l List) newChunker(ctx context.Context, cur *sequenceCursor, vrw ValueReadWriter) (*sequenceChunker, error) {

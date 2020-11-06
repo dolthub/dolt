@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,7 +62,8 @@ var allCols = append(append([]Column(nil), pkCols...), nonPkCols...)
 func TestSchema(t *testing.T) {
 	colColl, err := NewColCollection(allCols...)
 	require.NoError(t, err)
-	schFromCols := SchemaFromCols(colColl)
+	schFromCols, err := SchemaFromCols(colColl)
+	require.NoError(t, err)
 
 	testSchema("SchemaFromCols", schFromCols, t)
 
@@ -81,9 +82,8 @@ func TestSchemaWithNoPKs(t *testing.T) {
 	colColl, err := NewColCollection(nonPkCols...)
 	require.NoError(t, err)
 
-	assert.Panics(t, func() {
-		SchemaFromCols(colColl)
-	})
+	_, err = SchemaFromCols(colColl)
+	assert.Equal(t, ErrNoPrimaryKeyColumns, err)
 
 	assert.NotPanics(t, func() {
 		UnkeyedSchemaFromCols(colColl)

@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ var doltDocsColumns, _ = schema.NewColCollection(
 	schema.NewColumn(doltdb.DocPkColumnName, doltdb.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
 	schema.NewColumn(doltdb.DocTextColumnName, doltdb.DocTextTag, types.StringKind, false),
 )
-var DoltDocsSchema = schema.SchemaFromCols(doltDocsColumns)
+var DoltDocsSchema = schema.MustSchemaFromCols(doltDocsColumns)
 
 // AllValidDocDetails is a list of all valid docs with static fields DocPk and File. All other DocDetail fields
 // are dynamic and must be added, modified or removed as needed.

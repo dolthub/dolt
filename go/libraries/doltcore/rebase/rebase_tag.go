@@ -1,4 +1,4 @@
-// Copyright 2020 Liquidata, Inc.
+// Copyright 2020 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -360,7 +360,10 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 			return nil, err
 		}
 
-		rebasedSch := schema.SchemaFromCols(schCC)
+		rebasedSch, err := schema.SchemaFromCols(schCC)
+		if err != nil {
+			return nil, err
+		}
 
 		for _, index := range sch.Indexes().AllIndexes() {
 			_, err = rebasedSch.Indexes().AddIndexByColNames(
@@ -468,8 +471,7 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 	return newRoot, nil
 }
 
-func replayRowDiffs(ctx context.Context, vrw types.ValueReadWriter, rSch schema.Schema, rows, parentRows, rebasedParentRows types.Map, tagMapping map[uint64]uint64) (types.Map, error) {
-
+func replayRowDiffs(ctx context.Context, vrw types.ValueReadWriter, rSch schema.Schema, rows, parentRows, rebasedParentRows types.Map, tagMapping map[uint64]uint64) (res types.Map, err error) {
 	unmappedTags := set.NewUint64Set(rSch.GetAllCols().Tags)
 	tm := make(map[uint64]uint64)
 	for ot, nt := range tagMapping {
@@ -485,15 +487,16 @@ func replayRowDiffs(ctx context.Context, vrw types.ValueReadWriter, rSch schema.
 	ad := diff.NewAsyncDiffer(diffBufSize)
 	// get all differences (including merges) between original commit and its parent
 	ad.Start(ctx, parentRows, rows)
-	defer ad.Close()
-
-	for {
-		if ad.IsDone() {
-			break
+	defer func() {
+		if cerr := ad.Close(); cerr != nil && err == nil {
+			err = cerr
 		}
+	}()
 
-		diffs, err := ad.GetDiffs(diffBufSize/2, time.Second)
-
+	hasMore := true
+	var diffs []*ndiff.Difference
+	for hasMore {
+		diffs, hasMore, err = ad.GetDiffs(diffBufSize/2, time.Second)
 		if err != nil {
 			return types.EmptyMap, err
 		}
@@ -504,9 +507,8 @@ func replayRowDiffs(ctx context.Context, vrw types.ValueReadWriter, rSch schema.
 			}
 
 			key, newVal, err := modifyDifferenceTag(d, rows.Format(), rSch, tm)
-
 			if err != nil {
-				return types.EmptyMap, nil
+				return types.EmptyMap, err
 			}
 
 			switch d.ChangeType {
@@ -524,7 +526,7 @@ func replayRowDiffs(ctx context.Context, vrw types.ValueReadWriter, rSch schema.
 		}
 	}
 
-	err := nmu.Close(ctx)
+	err = nmu.Close(ctx)
 	if err != nil {
 		return types.EmptyMap, err
 	}

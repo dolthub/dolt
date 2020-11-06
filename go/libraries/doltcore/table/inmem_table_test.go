@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ var fields, _ = schema.NewColCollection(
 	schema.Column{Name: "is_great", Tag: greatTag, Kind: types.BoolKind, IsPartOfPK: true, TypeInfo: typeinfo.BoolType, Constraints: nil},
 )
 
-var rowSch = schema.SchemaFromCols(fields)
+var rowSch = schema.MustSchemaFromCols(fields)
 
 func mustRow(r row.Row, err error) row.Row {
 	if err != nil {

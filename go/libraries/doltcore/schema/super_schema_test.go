@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -226,7 +226,7 @@ func superSchemaDeepEqual(t *testing.T, ss1, ss2 *SuperSchema) {
 }
 
 func mustSchema(cols []Column) Schema {
-	return SchemaFromCols(mustColColl(cols))
+	return MustSchemaFromCols(mustColColl(cols))
 }
 
 func mustColColl(cols []Column) *ColCollection {

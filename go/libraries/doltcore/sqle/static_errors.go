@@ -1,4 +1,4 @@
-// Copyright 2020 Liquidata, Inc.
+// Copyright 2020 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -69,6 +69,10 @@ func (e *staticErrorEditor) Delete(*sql.Context, sql.Row) error {
 }
 
 func (e *staticErrorEditor) Update(*sql.Context, sql.Row, sql.Row) error {
+	return e.err
+}
+
+func (e *staticErrorEditor) SetAutoIncrementValue(*sql.Context, interface{}) error {
 	return e.err
 }
 
