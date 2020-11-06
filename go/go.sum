@@ -140,6 +140,8 @@ github.com/dolthub/go-mysql-server v0.6.1-0.20201105231447-cd9d147c7d13 h1:jtwoq
 github.com/dolthub/go-mysql-server v0.6.1-0.20201105231447-cd9d147c7d13/go.mod h1:69ws/iwxL664UM+Rrdh69f0Bnix3pUHkHCS8uPc/cSI=
 github.com/dolthub/go-mysql-server v0.6.1-0.20201105233313-047f2c9c2ce5 h1:4n3/N0H/5MGikEXOckV7O/mmAzkTQ11lmGd8iYGjPLU=
 github.com/dolthub/go-mysql-server v0.6.1-0.20201105233313-047f2c9c2ce5/go.mod h1:69ws/iwxL664UM+Rrdh69f0Bnix3pUHkHCS8uPc/cSI=
+github.com/dolthub/go-mysql-server v0.6.1-0.20201106005010-6faca804df09 h1:g5O/JQc4N5qQAxENlra7W2VbjdHqiltkvZoddiW+jfM=
+github.com/dolthub/go-mysql-server v0.6.1-0.20201106005010-6faca804df09/go.mod h1:69ws/iwxL664UM+Rrdh69f0Bnix3pUHkHCS8uPc/cSI=
 github.com/dolthub/sqllogictest/go v0.0.0-20201105013724-5123fc66e12c h1:ZIo6IOXU3/rJK4lp83QRq1zGhQrjQQtlmE2b7H1Vv/k=
 github.com/dolthub/sqllogictest/go v0.0.0-20201105013724-5123fc66e12c/go.mod h1:siLfyv2c92W1eN/R4QqG/+RjjX5W2+gCTRjZxBjI3TY=
 github.com/dolthub/vitess v0.0.0-20201030211154-aac4fea7230f h1:My5J2+UejT0tivbgBYBePhr+7Xc5FoOW5ENU5ZwmKf8=
