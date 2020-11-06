@@ -425,7 +425,7 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.D
 	if ow {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: fmt.Errorf("%s already exists. Use -f to overwrite.", impOpts.DestName())}
 	}
-	
+
 	wrSch, dmce := getImportSchema(ctx, root, dEnv.FS, impOpts)
 	if dmce != nil {
 		return nil, dmce
