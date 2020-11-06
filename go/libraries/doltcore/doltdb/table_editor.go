@@ -305,6 +305,7 @@ func (te *TableEditor) InsertRow(ctx context.Context, dRow row.Row) error {
 			if less {
 				te.autoIncVal = types.Round(insertVal)
 			}
+			te.autoIncVal = types.Increment(te.autoIncVal)
 		}
 	}
 
@@ -392,6 +393,12 @@ func (te *TableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow r
 
 func (te *TableEditor) GetAutoIncrementValue() types.Value {
 	return te.autoIncVal
+}
+
+func (te *TableEditor) SetAutoIncrementValue(v types.Value) (err error) {
+	te.autoIncVal = v
+	te.t, err = te.t.SetAutoIncrementValue(te.autoIncVal)
+	return
 }
 
 // Flush finalizes all of the changes made so far.

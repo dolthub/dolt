@@ -328,6 +328,15 @@ func (t *WritableDoltTable) Updater(ctx *sql.Context) sql.RowUpdater {
 	return te
 }
 
+// AutoIncrementSetter implements sql.AutoIncrementTable
+func (t *WritableDoltTable) AutoIncrementSetter(ctx *sql.Context) sql.AutoIncrementSetter {
+	te, err := t.getTableEditor(ctx)
+	if err != nil {
+		return newStaticErrorEditor(err)
+	}
+	return te
+}
+
 // GetAutoIncrementValue gets the last AUTO_INCREMENT value
 func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
 	if !t.autoIncCol.AutoIncrement {

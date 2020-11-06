@@ -274,3 +274,23 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "22" ]] || false
 }
+
+@test "AUTO_INCREMENT with ALTER TABLE" {
+    run dolt sql -q "ALTER TABLE test AUTO_INCREMENT = 10;"
+    [ "$status" -eq 0 ]
+    dolt sql -q "INSERT INTO test VALUES (NULL,10);"
+    run dolt sql -q "SELECT * FROM test;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "10,10" ]] || false
+
+    dolt sql <<SQL
+ALTER TABLE test AUTO_INCREMENT = 20;
+INSERT INTO test VALUES (NULL,20),(30,30),(NULL,31);
+SQL
+    run dolt sql -q "SELECT * FROM test;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "10,10" ]] || false
+    [[ "$output" =~ "20,20" ]] || false
+    [[ "$output" =~ "30,30" ]] || false
+    [[ "$output" =~ "31,31" ]] || false
+}
