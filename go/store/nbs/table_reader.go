@@ -31,8 +31,8 @@ import (
 	"sort"
 	"sync/atomic"
 
-	"github.com/golang/snappy"
 	"github.com/dolthub/mmap-go"
+	"github.com/golang/snappy"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/chunks"
