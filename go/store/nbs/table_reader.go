@@ -32,7 +32,7 @@ import (
 	"sync/atomic"
 
 	"github.com/golang/snappy"
-	"github.com/liquidata-inc/mmap-go"
+	"github.com/dolthub/mmap-go"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/chunks"
