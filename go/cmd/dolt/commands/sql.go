@@ -32,11 +32,11 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/information_schema"
 	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/ishell"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/dolthub/vitess/go/vt/vterrors"
 	"github.com/fatih/color"
 	"github.com/flynn-archive/go-shlex"
-	"github.com/liquidata-inc/ishell"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
