@@ -599,7 +599,7 @@ func (lvs *ValueStore) GC(ctx context.Context) error {
 		return res
 	}
 
-	concurrency := runtime.GOMAXPROCS(0)-1
+	concurrency := runtime.GOMAXPROCS(0) - 1
 	if concurrency < 1 {
 		concurrency = 1
 	}

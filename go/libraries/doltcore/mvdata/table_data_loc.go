@@ -91,7 +91,7 @@ func (dl TableDataLocation) NewReader(ctx context.Context, root *doltdb.RootValu
 
 // NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
 // an existing table.
-func (dl TableDataLocation) NewCreatingWriter(ctx context.Context, _ DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, _ bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
+func (dl TableDataLocation) NewCreatingWriter(ctx context.Context, _ DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, _ bool, outSch schema.Schema, statsCB noms.StatsCB, useGC bool) (table.TableWriteCloser, error) {
 	if outSch.GetPKCols().Size() == 0 {
 		return nil, ErrNoPK
 	}
@@ -126,12 +126,13 @@ func (dl TableDataLocation) NewCreatingWriter(ctx context.Context, _ DataMoverOp
 		statsCB:     statsCB,
 		tableEditor: tableEditor,
 		tableSch:    outSch,
+		useGC:       useGC,
 	}, nil
 }
 
 // NewUpdatingWriter will create a TableWriteCloser for a DataLocation that will update and append rows based on
 // their primary key.
-func (dl TableDataLocation) NewUpdatingWriter(ctx context.Context, _ DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, _ bool, _ schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
+func (dl TableDataLocation) NewUpdatingWriter(ctx context.Context, _ DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, _ bool, _ schema.Schema, statsCB noms.StatsCB, useGC bool) (table.TableWriteCloser, error) {
 	tbl, ok, err := root.GetTable(ctx, dl.Name)
 	if err != nil {
 		return nil, err
@@ -161,12 +162,13 @@ func (dl TableDataLocation) NewUpdatingWriter(ctx context.Context, _ DataMoverOp
 		statsCB:     statsCB,
 		tableEditor: tableEditor,
 		tableSch:    tblSch,
+		useGC:       useGC,
 	}, nil
 }
 
 // NewReplacingWriter will create a TableWriteCloser for a DataLocation that will overwrite an existing table while
 // preserving schema
-func (dl TableDataLocation) NewReplacingWriter(ctx context.Context, _ DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, _ bool, _ schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
+func (dl TableDataLocation) NewReplacingWriter(ctx context.Context, _ DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, _ bool, _ schema.Schema, statsCB noms.StatsCB, useGC bool) (table.TableWriteCloser, error) {
 	tbl, ok, err := root.GetTable(ctx, dl.Name)
 	if err != nil {
 		return nil, err
@@ -210,6 +212,7 @@ func (dl TableDataLocation) NewReplacingWriter(ctx context.Context, _ DataMoverO
 		statsCB:     statsCB,
 		tableEditor: tableEditor,
 		tableSch:    tblSch,
+		useGC:       useGC,
 	}, nil
 }
 
@@ -219,6 +222,7 @@ type tableEditorWriteCloser struct {
 	initialData types.Map
 	tableSch    schema.Schema
 	insertOnly  bool
+	useGC       bool
 
 	statsCB noms.StatsCB
 	stats   types.AppliedEditStats
@@ -285,6 +289,10 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 }
 
 func (te *tableEditorWriteCloser) gc(ctx context.Context) error {
+	if !te.useGC {
+		return nil
+	}
+
 	w := te.dEnv.RepoState.WorkingHash()
 	s := te.dEnv.RepoState.StagedHash()
 
