@@ -203,49 +203,7 @@ func (dt *DiffTable) WithFilters(filters []sql.Expression) sql.Table {
 
 func (dt *DiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	dp := part.(diffPartition)
-	fromData, fromSch, err := tableData(ctx, dp.from, dt.ddb)
-
-	if err != nil {
-		return nil, err
-	}
-
-	toData, toSch, err := tableData(ctx, dp.to, dt.ddb)
-
-	if err != nil {
-		return nil, err
-	}
-
-	fromConv, err := rowConvForSchema(dt.ss, fromSch)
-
-	if err != nil {
-		return nil, err
-	}
-
-	toConv, err := rowConvForSchema(dt.ss, toSch)
-
-	if err != nil {
-		return nil, err
-	}
-
-	sch := dt.joiner.GetSchema()
-	toCol, _ := sch.GetAllCols().GetByName(toCommit)
-	fromCol, _ := sch.GetAllCols().GetByName(fromCommit)
-	toDateCol, _ := sch.GetAllCols().GetByName(toCommitDate)
-	fromDateCol, _ := sch.GetAllCols().GetByName(fromCommitDate)
-
-	fromCmInfo := commitInfo{types.String(dp.fromName), dp.fromDate, fromCol.Tag, fromDateCol.Tag}
-	toCmInfo := commitInfo{types.String(dp.toName), dp.toDate, toCol.Tag, toDateCol.Tag}
-
-	return newDiffRowItr(
-		ctx,
-		dt.joiner,
-		fromData,
-		toData,
-		fromConv,
-		toConv,
-		fromCmInfo,
-		toCmInfo,
-	), nil
+	return dp.getRowIter(ctx, dt.ddb, dt.ss, dt.joiner)
 }
 
 func tableData(ctx *sql.Context, tbl *doltdb.Table, ddb *doltdb.DoltDB) (types.Map, schema.Schema, error) {
@@ -393,6 +351,52 @@ type diffPartition struct {
 
 func (dp diffPartition) Key() []byte {
 	return []byte(dp.toName + dp.fromName)
+}
+
+func (dp diffPartition) getRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, ss *schema.SuperSchema, joiner *rowconv.Joiner) (sql.RowIter, error) {
+	fromData, fromSch, err := tableData(ctx, dp.from, ddb)
+
+	if err != nil {
+		return nil, err
+	}
+
+	toData, toSch, err := tableData(ctx, dp.to, ddb)
+
+	if err != nil {
+		return nil, err
+	}
+
+	fromConv, err := rowConvForSchema(ss, fromSch)
+
+	if err != nil {
+		return nil, err
+	}
+
+	toConv, err := rowConvForSchema(ss, toSch)
+
+	if err != nil {
+		return nil, err
+	}
+
+	sch := joiner.GetSchema()
+	toCol, _ := sch.GetAllCols().GetByName(toCommit)
+	fromCol, _ := sch.GetAllCols().GetByName(fromCommit)
+	toDateCol, _ := sch.GetAllCols().GetByName(toCommitDate)
+	fromDateCol, _ := sch.GetAllCols().GetByName(fromCommitDate)
+
+	fromCmInfo := commitInfo{types.String(dp.fromName), dp.fromDate, fromCol.Tag, fromDateCol.Tag}
+	toCmInfo := commitInfo{types.String(dp.toName), dp.toDate, toCol.Tag, toDateCol.Tag}
+
+	return newDiffRowItr(
+		ctx,
+		joiner,
+		fromData,
+		toData,
+		fromConv,
+		toConv,
+		fromCmInfo,
+		toCmInfo,
+	), nil
 }
 
 type partitionSelectFunc func(*sql.Context, diffPartition) (bool, error)

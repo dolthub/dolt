@@ -207,9 +207,10 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 	lwrName := strings.ToLower(tblName)
 
 	prefixToNew := map[string]func(*sql.Context, Database, string) (sql.Table, error){
-		doltdb.DoltDiffTablePrefix:    NewDiffTable,
-		doltdb.DoltHistoryTablePrefix: NewHistoryTable,
-		doltdb.DoltConfTablePrefix:    NewConflictsTable,
+		doltdb.DoltDiffTablePrefix:       NewDiffTable,
+		doltdb.DoltCommitDiffTablePrefix: NewCommitDiffTable,
+		doltdb.DoltHistoryTablePrefix:    NewHistoryTable,
+		doltdb.DoltConfTablePrefix:       NewConflictsTable,
 	}
 
 	for prefix, newFunc := range prefixToNew {
