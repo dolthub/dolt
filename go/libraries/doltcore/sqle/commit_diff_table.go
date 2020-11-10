@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2020 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,12 +18,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression"
-	"github.com/dolthub/go-mysql-server/sql/parse"
 	"io"
 	"strings"
 	"sync"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/parse"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -39,15 +40,15 @@ var ErrExactlyOneFromCommit = errors.New("dolt_commit_diff_* tables must be filt
 var _ sql.Table = (*CommitDiffTable)(nil)
 
 type CommitDiffTable struct {
-	name             string
-	dbName           string
-	ddb              *doltdb.DoltDB
-	ss               *schema.SuperSchema
-	joiner           *rowconv.Joiner
-	sqlSch           sql.Schema
-	workingRoot      *doltdb.RootValue
-	fromCommitFilter *expression.Equals
-	toCommitFilter   *expression.Equals
+	name              string
+	dbName            string
+	ddb               *doltdb.DoltDB
+	ss                *schema.SuperSchema
+	joiner            *rowconv.Joiner
+	sqlSch            sql.Schema
+	workingRoot       *doltdb.RootValue
+	fromCommitFilter  *expression.Equals
+	toCommitFilter    *expression.Equals
 	requiredFilterErr error
 }
 
@@ -120,13 +121,13 @@ func NewCommitDiffTable(ctx *sql.Context, db Database, tblName string) (sql.Tabl
 	})
 
 	return &CommitDiffTable{
-		name: tblName,
-		dbName: dbName,
-		ddb: ddb,
+		name:        tblName,
+		dbName:      dbName,
+		ddb:         ddb,
 		workingRoot: workingRoot,
-		ss: ss,
-		joiner: j,
-		sqlSch: sqlSch,
+		ss:          ss,
+		joiner:      j,
+		sqlSch:      sqlSch,
 	}, nil
 }
 
@@ -199,8 +200,8 @@ func (dt *CommitDiffTable) Schema() sql.Schema {
 
 type SliceOfPartitionsItr struct {
 	partitions []sql.Partition
-	i int
-	mu *sync.Mutex
+	i          int
+	mu         *sync.Mutex
 }
 
 func NewSliceOfPartitionsItr(partitions []sql.Partition) *SliceOfPartitionsItr {
@@ -394,4 +395,3 @@ func (dt *CommitDiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (
 	dp := part.(diffPartition)
 	return dp.getRowIter(ctx, dt.ddb, dt.ss, dt.joiner)
 }
-
