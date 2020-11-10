@@ -15,7 +15,9 @@
 package lookup
 
 import (
+	"context"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -30,6 +32,8 @@ type Cut interface {
 	Format() *types.NomsBinFormat
 	// Less returns whether the calling Cut represents a position smaller than the given tuple.
 	Less(types.Tuple) (bool, error)
+	// String returns the Cut as a string for debugging purposes. Will panic on errors.
+	String() string
 	// TypeAsLowerBound returns the bound type if the calling Cut is the lower bound of a range.
 	TypeAsLowerBound() BoundType
 	// TypeAsLowerBound returns the bound type if the calling Cut is the upper bound of a range.
@@ -46,4 +50,24 @@ func GetKey(c Cut) types.Tuple {
 	default:
 		panic(fmt.Errorf("GetKey on '%T' should be impossible", c))
 	}
+}
+
+func cutKeyToString(tpl types.Tuple) string {
+	var vals []string
+	iter, err := tpl.Iterator()
+	if err != nil {
+		panic(err)
+	}
+	for iter.HasMore() {
+		_, val, err := iter.Next()
+		if err != nil {
+			panic(err)
+		}
+		str, err := types.EncodedValue(context.Background(), val)
+		if err != nil {
+			panic(err)
+		}
+		vals = append(vals, str)
+	}
+	return fmt.Sprintf("%s", strings.Join(vals, ","))
 }

@@ -15,6 +15,8 @@
 package lookup
 
 import (
+	"fmt"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -104,8 +106,8 @@ func AllRange() Range {
 // EmptyRange returns the empty range.
 func EmptyRange() Range {
 	return Range{
-		Above{},
-		Above{},
+		AboveAll{},
+		AboveAll{},
 	}
 }
 
@@ -148,6 +150,11 @@ func (r Range) IsConnected(other Range) (bool, error) {
 		return false, err
 	}
 	return comp <= 0, nil
+}
+
+// String returns Range Cut as a string for debugging purposes. Will panic on errors.
+func (r Range) String() string {
+	return fmt.Sprintf("Range(%s, %s)", r.LowerBound.String(), r.UpperBound.String())
 }
 
 // ToReadRange returns this range as a Noms ReadRange.
