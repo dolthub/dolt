@@ -17,6 +17,6 @@ jobs:
           homebrew-tap: Homebrew/homebrew-core
           base-branch: master
           download-url: ${{format('https://github.com/dolthub/dolt/archive/{0}.tar.gz', steps.get_version.outputs.VERSION)}}
-          commit-message: ${{format('dolt {0}', steps.get_version.outputs.VERSION)}}
+          commit-message: "Bumped ${{format('dolt {0}', steps.get_version.outputs.VERSION)}} using https://github.com/mislav/bump-homebrew-formula-action"
         env:
           COMMITTER_TOKEN: ${{secrets.HOMEBREW_GITHUB_TOKEN}}
