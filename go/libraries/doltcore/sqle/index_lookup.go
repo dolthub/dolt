@@ -44,9 +44,6 @@ func (il *doltIndexLookup) String() string {
 
 // IsMergeable implements sql.MergeableIndexLookup
 func (il *doltIndexLookup) IsMergeable(indexLookup sql.IndexLookup) bool {
-	if il != nil {
-		return false //TODO: remove this when tests are added
-	}
 	otherIl, ok := indexLookup.(*doltIndexLookup)
 	if !ok {
 		return false
@@ -74,6 +71,7 @@ func (il *doltIndexLookup) Intersection(indexLookups ...sql.IndexLookup) (sql.In
 				newRangeCombination = append(newRangeCombination, rc)
 			}
 		}
+		rangeCombinations = newRangeCombination
 	}
 	var newRanges []lookup.Range
 	var err error

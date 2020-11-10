@@ -82,6 +82,11 @@ func (a Above) Less(tpl types.Tuple) (bool, error) {
 	return a.key.Less(a.key.Format(), tpl)
 }
 
+// String implements Cut.
+func (a Above) String() string {
+	return fmt.Sprintf("Above[%s]", cutKeyToString(a.key))
+}
+
 // TypeAsLowerBound implements Cut.
 func (Above) TypeAsLowerBound() BoundType {
 	return Open
