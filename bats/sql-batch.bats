@@ -5,12 +5,12 @@ setup() {
     setup_common
     dolt sql <<SQL
 CREATE TABLE test (
-  pk BIGINT NOT NULL COMMENT 'tag:0',
-  c1 BIGINT COMMENT 'tag:1',
-  c2 BIGINT COMMENT 'tag:2',
-  c3 BIGINT COMMENT 'tag:3',
-  c4 BIGINT COMMENT 'tag:4',
-  c5 BIGINT COMMENT 'tag:5',
+  pk bigint NOT NULL,
+  c1 bigint,
+  c2 bigint,
+  c3 bigint,
+  c4 bigint,
+  c5 bigint,
   PRIMARY KEY (pk)
 );
 SQL
@@ -78,4 +78,45 @@ SQL
     [[ "$output" =~ "Error processing batch" ]] || false
     [[ "$output" =~ "error on line 10 for query" ]] || false
     [[ "$output" =~ "poop" ]] || false
+}
+
+@test "sql reset_hard() function" {
+    mkdir test && cd test && dolt init
+    dolt sql <<SQL
+CREATE TABLE test (
+    pk int PRIMARY KEY,
+    c0 int
+);
+SQL
+    dolt add -A && dolt commit -m "added table test"
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "working tree clean" ]] || false
+
+    dolt sql <<SQL
+INSERT INTO test VALUES (1,1);
+SQL
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
+
+   dolt sql <<SQL
+SET @@test_head=reset_hard();
+REPLACE INTO dolt_branches (hash,name) VALUES (@@test_head,'master');
+SQL
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "working tree clean" ]] || false
+
+    dolt sql <<SQL
+INSERT INTO test VALUES (1,1);
+SET @@test_head = reset_hard();
+REPLACE INTO dolt_branches (hash,name) VALUES (@@test_head,'master');
+SQL
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "working tree clean" ]] || false
 }

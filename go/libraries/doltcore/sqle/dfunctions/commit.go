@@ -51,7 +51,7 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	commitMessage, ok := val.(string)
 
 	if !ok {
-		return nil, errors.New("branch name is not a string")
+		return nil, errors.New("commit message is not a string")
 	}
 
 	dbName := ctx.GetCurrentDatabase()

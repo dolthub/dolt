@@ -147,6 +147,51 @@ teardown() {
     server_query 0 "SET @@repo1_head=hashof('test_branch');SELECT * FROM one_pk ORDER by pk" ";pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
 }
 
+@test "test reset_hard" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+    dolt sql <<SQL
+CREATE TABLE test (
+    pk int PRIMARY KEY,
+    c0 int
+);
+INSERT INTO test VALUES (1,1),(2,2),(3,3);
+SQL
+    dolt add -A && dolt commit -m "added table test"
+
+    start_sql_server repo1
+
+    # add some working changes
+    server_query 1 "INSERT INTO test VALUES (7,7);"
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
+
+    multi_query 1 "
+        SET @@repo1_head = reset_hard();
+        REPLACE INTO dolt_branches (name,hash) VALUES ('master', @@repo1_head);"
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "working tree clean" ]] || false
+    run dolt sql -q "SELECT sum(pk), sum(c0) FROM test;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "6,6" ]] || false
+
+    multi_query 1 "
+        INSERT INTO test VALUES (8,8);
+        SET @@repo1_head=reset_hard();
+        REPLACE INTO dolt_branches (name,hash) VALUES ('master', @@repo1_head);"
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "working tree clean" ]] || false
+    run dolt sql -q "SELECT sum(pk), sum(c0) FROM test;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "6,6" ]] || false
+}
+
 @test "test multi db with use statements" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
