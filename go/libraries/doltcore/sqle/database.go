@@ -225,34 +225,22 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 		}
 	}
 
-	if lwrName == doltdb.LogTableName {
-		lt, err := NewLogTable(ctx, db.Name())
-
-		if err != nil {
-			return nil, false, err
-		}
-
-		return lt, true, nil
+	sysTblToNew := map[string]func(*sql.Context, string) (sql.Table, error){
+		doltdb.LogTableName:                NewLogTable,
+		doltdb.TableOfTablesInConflictName: NewTableOfTablesInConflict,
+		doltdb.BranchesTableName:           NewBranchesTable,
+		doltdb.CommitsTableName:            NewCommitsTable,
 	}
 
-	if lwrName == doltdb.TableOfTablesInConflictName {
-		ct, err := NewTableOfTablesInConflict(ctx, db.Name())
+	for tblName, newFunc := range sysTblToNew {
+		if lwrName == tblName {
+			dt, err := newFunc(ctx, db.name)
+			if err != nil {
+				return nil, false, err
+			}
 
-		if err != nil {
-			return nil, false, err
+			return dt, true, nil
 		}
-
-		return ct, true, nil
-	}
-
-	if lwrName == doltdb.BranchesTableName {
-		bt, err := NewBranchesTable(ctx, db.Name())
-
-		if err != nil {
-			return nil, false, err
-		}
-
-		return bt, true, nil
 	}
 
 	return db.getTable(ctx, root, tblName)

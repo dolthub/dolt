@@ -260,6 +260,9 @@ const (
 	// TableOfTablesInConflictName is the conflicts system table name
 	TableOfTablesInConflictName = "dolt_conflicts"
 
-	// BranchesTableName is the system table name
+	// BranchesTableName is the branches system table name
 	BranchesTableName = "dolt_branches"
+
+	// CommitsTableName is the commits system table name
+	CommitsTableName = "dolt_commits"
 )

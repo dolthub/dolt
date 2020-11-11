@@ -186,3 +186,40 @@ teardown() {
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
 }
+
+@test "dolt_commits smoke test" {
+    dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY);"
+    dolt add -A && dolt commit -m "added table test"
+
+    dolt branch other
+
+    dolt sql -q "INSERT INTO test VALUES (0);"
+    dolt add -A && dolt commit -m "added values to test on master"
+
+    dolt checkout other
+    dolt sql -q "INSERT INTO test VALUES (1);"
+    dolt add -A && dolt commit -m "added values to test on other"
+
+    run dolt sql -q "SELECT count(*) FROM dolt_commits;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "4" ]] || false
+}
+
+@test "dolt_ancestor_commits smoke test" {
+    skip "not implemented"
+    dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY);"
+    dolt add -A && dolt commit -m "added table test"
+
+    dolt branch other
+
+    dolt sql -q "INSERT INTO test VALUES (0);"
+    dolt add -A && dolt commit -m "added values to test on master"
+
+    dolt checkout other
+    dolt sql -q "INSERT INTO test VALUES (1);"
+    dolt add -A && dolt commit -m "added values to test on other"
+
+    run dolt sql -q "SELECT count(*) FROM dolt_commit_ancestors;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "4" ]] || false
+}
