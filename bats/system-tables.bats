@@ -37,6 +37,7 @@ teardown() {
     run dolt ls --all
     [ $status -eq 0 ]
     [[ "$output" =~ "dolt_history_test" ]] || false
+    [[ "$output" =~ "dolt_diff_test" ]] || false
     [[ "$output" =~ "dolt_commit_diff_test" ]] || false
 }
 
@@ -149,6 +150,7 @@ teardown() {
 }
 
 @test "query dolt_diff_ and dolt_commit_diff_ highlighting differences" {
+    dolt branch before_creation master
     dolt sql -q "CREATE TABLE test (pk INT, c1 INT, PRIMARY KEY(pk))"
     dolt add test
     dolt commit -m "Added test table"
@@ -176,6 +178,16 @@ teardown() {
 
     EXPECTED=$(echo -e "to_pk,to_c1,from_pk,from_c1,diff_type\n1,1,,,added\n2,2,,,added\n3,5,,,added")
     run dolt sql -r csv -q 'SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM dolt_commit_diff_test WHERE to_commit="WORKING" and from_commit=hashof("start") ORDER BY to_pk'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    EXPECTED=$(echo -e "to_pk,to_c1,from_pk,from_c1,diff_type\n1,1,,,added\n2,2,,,added\n3,5,,,added")
+    run dolt sql -r csv -q 'SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM dolt_commit_diff_test WHERE to_commit="WORKING" and from_commit=hashof("before_creation") ORDER BY to_pk'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    EXPECTED=$(echo -e "to_pk,to_c1,from_pk,from_c1,diff_type\n2,2,,,added")
+    run dolt sql -r csv -q 'SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM dolt_commit_diff_test WHERE to_commit="WORKING" and from_commit=hashof("before_creation") and to_pk = 2 ORDER BY to_pk'
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED" ]] || false
 

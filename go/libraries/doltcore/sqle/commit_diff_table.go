@@ -273,28 +273,21 @@ func (dt *CommitDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, erro
 }
 
 func (dt *CommitDiffTable) rootValForFilter(ctx *sql.Context, eqFilter *expression.Equals) (*doltdb.RootValue, string, *types.Timestamp, error) {
-	var hashStr string
-	var ok bool
-	if _, isGetField := eqFilter.BinaryExpression.Left.(*expression.GetField); !isGetField {
-		val, err := eqFilter.BinaryExpression.Left.Eval(ctx, nil)
+	gf, nonGF := eqFilter.Left(), eqFilter.Right()
+	if _, ok := gf.(*expression.GetField); !ok {
+		nonGF, gf = eqFilter.Left(), eqFilter.Right()
+	}
 
-		if err != nil {
-			return nil, "", nil, err
-		}
+	val, err := nonGF.Eval(ctx, nil)
 
-		if hashStr, ok = val.(string); !ok {
-			return nil, "", nil, fmt.Errorf("received '%v' when expecting commit hash string", val)
-		}
-	} else if _, isGetField = eqFilter.BinaryExpression.Right.(*expression.GetField); !isGetField {
-		val, err := eqFilter.BinaryExpression.Right.Eval(ctx, nil)
+	if err != nil {
+		return nil, "", nil, err
+	}
 
-		if err != nil {
-			return nil, "", nil, err
-		}
+	hashStr, ok := val.(string)
 
-		if hashStr, ok = val.(string); !ok {
-			return nil, "", nil, fmt.Errorf("received '%v' when expecting commit hash string", val)
-		}
+	if !ok {
+		return nil, "", nil, fmt.Errorf("received '%v' when expecting commit hash string", val)
 	}
 
 	var root *doltdb.RootValue
@@ -335,18 +328,13 @@ func (dt *CommitDiffTable) rootValForFilter(ctx *sql.Context, eqFilter *expressi
 
 // HandledFilters returns the list of filters that will be handled by the table itself
 func (dt *CommitDiffTable) HandledFilters(filters []sql.Expression) []sql.Expression {
-	var remaining []sql.Expression
+	var commitFilters []sql.Expression
 	for _, filter := range filters {
 		isCommitFilter := false
 
 		if eqFilter, isEquality := filter.(*expression.Equals); isEquality {
-			sql.Inspect(filter, func(e sql.Expression) (cont bool) {
-				if e == nil {
-					return true
-				}
-
-				switch val := e.(type) {
-				case *expression.GetField:
+			for _, e := range []sql.Expression{eqFilter.Left(), eqFilter.Right()} {
+				if val, ok := e.(*expression.GetField); ok {
 					switch strings.ToLower(val.Name()) {
 					case toCommit:
 						if dt.toCommitFilter != nil {
@@ -364,17 +352,15 @@ func (dt *CommitDiffTable) HandledFilters(filters []sql.Expression) []sql.Expres
 						dt.fromCommitFilter = eqFilter
 					}
 				}
-
-				return true
-			})
+			}
 		}
 
-		if !isCommitFilter {
-			remaining = append(remaining, filter)
+		if isCommitFilter {
+			commitFilters = append(commitFilters, filter)
 		}
 	}
 
-	return remaining
+	return commitFilters
 }
 
 // Filters returns the list of filters that are applied to this table.
