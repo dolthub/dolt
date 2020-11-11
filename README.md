@@ -1,16 +1,24 @@
-## Dolt
+# Dolt
 
 Dolt is Git for data!
 
-Dolt is a relational database, i.e. it has tables, and you can execute SQL queries against those tables. It also has version control primitives that operate at the level of table cell. Thus Dolt is a database that supports fine grained value-wise version control, where all changes to data and schema are stored in commit log.
+Dolt is a SQL database that you can fork, clone, branch, merge, push
+and pull just like a git repository. Connect to Dolt just like any
+MySQL database to run queries or update the data using SQL
+commands. Use the command line interface to import CSV files, commit
+your changes, push them to a remote, or merge your teammate's changes.
 
-It is inspired by RDBMS and Git, and attempts to blend concepts about both in a manner that allows users to better manage, distribute, and collaborate on, data.
+All the commands you know for Git work exactly the same for Dolt. Git
+versions files, Dolt versions tables. It's like Git and MySQL had a
+baby!
 
-We also built [DoltHub](https://www.dolthub.com), a cloud based storage solution for hosting Dolt databases, that facilitates collaborative management of databases. We host public data for free!
+We also built [DoltHub](https://www.dolthub.com), a place to share
+Dolt databases. We host public data for free!
 
-If you want to discuss Dolt, feel free to join our [Discord](https://discord.com/invite/RFwfYpu). We are happy to discuss use-cases, the roadmap, or anything related to version controlled databases.
+[Join us on Discord](https://discord.com/invite/RFwfYpu) to say hi and
+ask questions!
 
-## Dolt CLI
+# Dolt CLI
 
 ```
 $ dolt
@@ -47,46 +55,50 @@ Valid commands for dolt are
                   gc - Cleans up unreferenced data from the repository.
 ```
 
-## Installation
+# Installation
 
-These installation instructions assume that you have Go installed, and that `go` is in your path.
+## From Latest Release
 
-### From Latest Release
-
-To install on Linux or Mac based systems run:
-
-```sudo bash -c 'curl -L https://github.com/dolthub/dolt/releases/latest/download/install.sh | bash'```
-
-This will download the latest ```dolt``` release and put it in ```/usr/local/bin/```, which is probably on your ```PATH```.
-
-For Windows, locate the latest Microsoft Installer (`.msi` file) in [releases](https://github.com/dolthub/dolt/releases), and run it. This will install the latest dolt. 
-
-### From Source
-
-Alternatively clone this repository and then, assuming you cloned the repository into your home directory:
+To install on Linux or Mac based systems run this command in your
+terminal:
 
 ```
-$ cd ~/dolt/go
-$ go install ./cmd/dolt
-[...]
-$ go install ./cmd/git-dolt
-[...]
-$ go install ./cmd/git-dolt-smudge
-[...]
+sudo bash -c 'curl -L https://github.com/dolthub/dolt/releases/latest/download/install.sh | bash'
 ```
 
-This will install the requisite binaries at `$GOPATH/bin`, which defaults to `$HOME/go`, thus you should see something like (unless you set `$GOPATH` to something else):
+This will download the latest `dolt` release and put it in
+`/usr/local/bin/`, which is probably on your `$PATH`.
+
+### Homebrew
+
+Dolt is on Homebrew, updated every release.
 
 ```
-$ ls -ltr $HOME/go/bin/
-dolt             git-dolt         git-dolt-smudge
+brew install dolt
 ```
 
-Ensure that `$GOPATH/bin` is on your path, and then proceed.
+### Windows
 
-### Verify
+Download the latest Microsoft Installer (`.msi` file) in
+[releases](https://github.com/dolthub/dolt/releases) and run
+it. Package manager releases coming soon!
 
-Whichever method you used, verify that your installation has succeeded as follows:
+For information on running on Windows, see [here](windows.md).
+
+## From Source
+
+Make sure you have Go installed, and that `go` is in your path.
+
+Clone this repository and cd into the `go` directory. Then run:
+
+```
+go install ./cmd/dolt
+```
+
+# Configuration
+
+Verify that your installation has succeeded by running `dolt` in your
+terminal.
 
 ```
 $ dolt
@@ -94,25 +106,25 @@ Valid commands for dolt are
 [...]
 ```
 
-Finally, setup your name and email in the global config (this should be very familiar to Git users):
+Configure `dolt` with your user name and email, which you'll need to
+create commits. The commands work exactly the same as git.
 
 ```
 $ dolt config --global --add user.email YOU@DOMAIN.COM
 $ dolt config --global --add user.name "YOUR NAME"
 ```
 
-You're all set to start getting value from Dolt!
+# Getting started
 
-## First Repository
-
-Suppose we want to create a table of state populations from 1790 in Dolt, then:
+Let's create our first repo, storing state population data.
 
 ```
-$ mkdir state-populations
-$ cd state-populations
+$ mkdir state-pops
+$ cd state-pops
 ```
 
-Initialize the directory, and load some data:
+Run `dolt init` to set up a new `dolt` repo, just like you do with
+git. Then run some SQL queries to insert data.
 
 ```
 $ dolt init
@@ -142,10 +154,11 @@ $ dolt sql -q 'insert into state_populations (state, population) values
 ("North Carolina", 393751),
 ("Maine", 96540),
 ("Rhode Island", 68825)'
-Rows inserted: 17
+Query OK, 17 rows affected
 ```
 
-Now let's run some SQL against it:
+Use `dolt sql` to jump into a SQL shell, or run single queries with
+the `-q` option.
 
 ```
 $ dolt sql -q "select * from state_populations where state = 'New York'"
@@ -156,169 +169,205 @@ $ dolt sql -q "select * from state_populations where state = 'New York'"
 +----------+------------+
 ```
 
-Assuming you're satisfied, create a commit as follows:
+`add` the new tables and `commit` them. Every command matches `git`
+exactly, but with tables instead of files.
 
 ```
 $ dolt add .
-$ dolt commit -m "Add state populations from 1790"
+$ dolt commit -m "initial data"
 $ dolt status
 On branch master
 nothing to commit, working tree clean
 ```
 
-You've just generated your first commit to a relational database with version control!
+Update the tables with more SQL commands, this time using the shell:
 
-Alternatively, you can import CSV and PSV files, where the file type is inferred from the extension. Suppose your state populations are in a file:
+```
+$ dolt sql
+# Welcome to the DoltSQL shell.
+# Statements must be terminated with ';'.
+# "exit" or "quit" (or Ctrl-D) to exit.
+state_pops> update state_populations set population = 0 where state like 'New%';
+Query OK, 3 rows affected
+Rows matched: 3  Changed: 3  Warnings: 0
+state_pops> exit
+Bye
+```
+
+See what you changed with `dolt diff`:
+
+```
+$ dolt diff
+diff --dolt a/state_populations b/state_populations
+--- a/state_populations @ qqr3vd0ea6264oddfk4nmte66cajlhfl
++++ b/state_populations @ 17cinjh5jpimilefd57b4ifeetjcbvn2
++-----+---------------+------------+
+|     | state         | population |
++-----+---------------+------------+
+|  <  | New Hampshire | 141885     |
+|  >  | New Hampshire | 0          |
+|  <  | New Jersey    | 184139     |
+|  >  | New Jersey    | 0          |
+|  <  | New York      | 340120     |
+|  >  | New York      | 0          |
++-----+---------------+------------+
+```
+
+Then commit your changes once more with `dolt add` and `dolt commit`.
+
+```
+$ dolt add state_populations
+$ dolt commit -m "More like Old Jersey"
+```
+
+See the history of your repository with `dolt log`.
+
+```
+% dolt log
+commit babgn65p1r5n36ao4gfdj99811qauo8j
+Author: Zach Musgrave <zach@dolthub.com>
+Date:   Wed Nov 11 13:42:27 -0800 2020
+
+    More like Old Jersey
+
+commit 9hgk7jb7hlkvvkbornpldcopqh2gn6jo
+Author: Zach Musgrave <zach@dolthub.com>
+Date:   Wed Nov 11 13:40:53 -0800 2020
+        
+    initial data
+                
+commit 8o8ldh58pjovn8uvqvdq2olf7dm63dj9
+Author: Zach Musgrave <zach@dolthub.com>
+Date:   Wed Nov 11 13:36:24 -0800 2020
+
+    Initialize data repository
+```
+
+# Importing data
+
+If you have data in flat files like CSV or JSON, you can import them
+using the `dolt table import` command. Use `dolt table import -u` to
+add data to an existing table, or `dolt table import -c` to create a
+new one.
 
 ```
 $ head -n3 data.csv
 state,population
 Delaware,59096
 Maryland,319728
-$ dolt table import -pk=state state_populations data.csv
+$ dolt table import -c -pk=state state_populations data.csv
 ```
 
-Note if you do not have a file extension, i.e. your file is called `data`, Dolt will think you are trying to import from another table and thus not behave in the way you expect.
+# Branch and merge
 
-## Modifying Data
-
-Override the table with the contents of another file:
-
-```
-$ dolt table import --update-table <table> <csv_file>
-```
-
-To add or update rows, use the SQL interface:
+Just like with git, it's a good idea to make changes on your own
+branch, then merge them back to `master`. The `dolt checkout` command
+works exactly the same as `git checkout`.
 
 ```
-$ dolt sql --query 'INSERT INTO state_populations VALUES ("My State", 0)'
-Rows inserted: 1
-$ dolt sql --query 'UPDATE state_populations SET population=1 where state="My State"'
-Rows updated: 1
+$ dolt checkout -b <branch>
 ```
 
-Now you can see that you have changes to a table that are not staged for commit, in the same way that Git does not automatically stage modified files for commit:
+The `merge` command works the same too.
 
 ```
-$ dolt status
-On branch master
-Changes not staged for commit:
-  (use "dolt add <table>" to update what will be committed)
-  (use "dolt checkout <table>" to discard changes in working directory)
-	modified:       state_populations
-$ dolt diff
-diff --dolt a/state_populations b/state_populations
---- a/state_populations @ u0b70pnkhsl1s6rmc6o44nlphdslgipj
-+++ b/state_populations @ gbk38aq4o35hfj692fnb32apbpfpamu0
-+-----+----------+------------+
-|     | state    | population |
-+-----+----------+------------+
-|  +  | My State | 1          |
-+-----+----------+------------+
+$ dolt merge <branch>
 ```
 
-If you're happy with the changes, you can go ahead and commit them:
+# Working with remotes
+
+Dolt supports remotes just like git. Remotes are set up automatically
+when you clone data from one.
 
 ```
-$ dolt add state_populations
-$ dolt commit -m "Added 'My State'"
+$ dolt clone dolthub/corona-virus
+...
+$ cd corona-virus
+$ dolt remote -v
+origin https://doltremoteapi.dolthub.com/dolthub/corona-virus
 ```
 
-Well done, you updated a table, and committed your changes!
-
-## Simple Branching Workflow
-
-When making changes it is advisable to create a new branch which will serve as the workspace for your changes. Choose a short branch name that describes the work you are planning to do. Again, this works identically to Git:
-
-    dolt checkout -b <branch>
-
-Once you've made your changes, add and commit the modified tables like you did previously. Once your work is done and you are ready to get all your changes back into the master branch run:
-
-    dolt checkout master
-    dolt merge <branch>
-
-Then you'll need to add and commit the merged data:
-
-    dolt add .
-    dolt commit -m "Merge work from <branch> into master"
-
-## Adding Remotes
-
-Dolt supports remotes in a similar manner to Git. We also created DoltHub, a hosting service for Dolt databases. In the following we use DoltHub as an example for setting up a remote.
-
-If you haven't done so already, setting up your default servers will make it easier to add and clone remotes
+To push to a remote, you'll need credentials. Run `dolt login` to open
+a browser to sign in and cache your local credentials. You can sign
+into DoltHub with your Google account, your Github account, or with a
+user name and password.
 
 ```
 $ dolt login
-[...]
 ```
 
-Which should open a browser window where you can create a credential for HTTPS. Upon successful creation the following will appear in the shell:
+If you have a repo that you created locally that you now want to push
+to a remote, add a remote exactly like you would with git.
 
 ```
-Key successfully associated with user: youusername email you@youremail.com
+$ dolt remote add origin myname/myRepo
+$ dolt remote -v
+origin https://doltremoteapi.dolthub.com/myname/myRepo
 ```
 
-Next you'll want to make sure you've created the remote at https://www.dolthub.com . Once created you can add the remote. As an example, if the repository is created under an organization named "org", with the name "repo" you could add the remote like so:
+And then push to it.
 
-    dolt remote add origin org/repo
+```
+$ dolt push origin master
+```
 
-Once the remote is added viewing the remote using the command:
+## Other remotes 
 
-    dolt remote -v
+`dolt` also supports directory, aws, and gcs based remotes:
 
-should show something like this:
+- file - Use a directory on your machine
 
-    origin https://doltremoteapi.dolthub.com/org/repo
+```
+dolt remote add <remote> file:///Users/xyz/abs/path/
+```
 
-If you've created the repository on the web and added a remote, you should be able to push the branch "master" to the remote named "origin" like so
+- aws - Use an S3 bucket
 
-    dolt push origin master
+```
+dolt remote add <remote> aws://dynamo-table:s3-bucket/database
+```
 
-Once that is succeeded others can clone the repository (assuming you've given them permission.)
+- gs - Use a GCS bucket
 
-    dolt clone org/repo
+```
+dolt remote add <remote> gs://gcs-bucket/database
+```
 
-## Interesting Datasets to Clone
+# Interesting datasets to clone
 
-Just like Git, run `dolt clone Liquidata/word-net` to get a clone from DoltHub of the WordNet repository locally once you have run ```dolt login``` to log in to [DoltHub](https://www.dolthub.com).
+[DoltHub](https://dolthub.com) has lots of interesting datasets to
+explore and clone. Here are some of our favorites.
 
-- WordNet: https://www.dolthub.com/repositories/Liquidata/word-net
-- ImageNet: https://www.dolthub.com/repositories/Liquidata/image-net
-- Google Open Images: https://www.dolthub.com/repositories/Liquidata/open-images  
-- Iris Classification: https://www.dolthub.com/repositories/Liquidata/classified-iris-measurements  
-- Public Holidays: https://www.dolthub.com/repositories/oscarbatori/holidays  
-- IP Address to Country: https://www.dolthub.com/repositories/Liquidata/ip-to-country
+- Coronavirus: https://www.dolthub.com/repositories/dolthub/corona-virus
+- WordNet: https://www.dolthub.com/repositories/dolthub/word-net
+- ImageNet: https://www.dolthub.com/repositories/dolthub/image-net
+- Google Open Images: https://www.dolthub.com/repositories/dolthub/open-images
+- Iris Classification: https://www.dolthub.com/repositories/dolthub/classified-iris-measurements
+- Public Holidays: https://www.dolthub.com/repositories/oscarbatori/holidays
+- IP Address to Country: https://www.dolthub.com/repositories/dolthub/ip-to-country
 
-## Other remotes
+# More documentation
 
-dolt also supports directory, aws, and gcs based remotes:
+There's a lot more to Dolt than can fit in a README file! For full
+documentation, check out the [docs on
+DoltHub](https://www.dolthub.com/docs/). Some of the topics we didn't
+cover here:
 
-- file - you can use a directory as a remote that can be pushed to, cloned, and pulled from just like any other remote by providing a file uri for the directory
-
-  dolt remote add <remote> file:///Users/xyz/abs/path/
-
-- aws - you can use your aws cloud resources directly (If you are interested in trying this contact the dolt team directly as we are still writing documentation).
-
-  dolt remote add <remote> aws://dynamo-table:s3-bucket/database
-
-- gs - you can use a GCS bucket as well. Setup here should be straight forward. You'll need to create a gcs bucket, and you'll need to use the gcloud auth login command in order to setup your credentials.
-
-  dolt remote add <remote> gs://gcs-bucket/database
-	
-## Windows Subsystem for Linux
-
-For Windows users, Dolt works and is fully tested with WSL 1. If you are using WSL 2, then [you may run into issues](https://github.com/dolthub/dolt/issues/992) as Dolt does not support it. We recommend all WSL 2 users to switch to WSL 1 when using Dolt.
-
-## Issues
-
-If you have any issues with Dolt, find any bugs, or simply have a question, feel free to file an issue!
-
-If you want to discuss the project in a more open ended manner, join us on [Discord](https://discord.com/invite/RFwfYpu).
+* [Querying past revisions of your
+  tables](https://www.dolthub.com/docs/reference/sql/#querying-non-head-revisions-of-a-database)
+* [Starting a SQL
+  server](https://www.dolthub.com/docs/tutorials/using-sql/#getting-started_mysql-server)
+* [Selecting the diff between two
+  commits](https://www.dolthub.com/docs/reference/sql/#dolt-system-tables)
+* [Documentation for all CLI
+  commands](https://www.dolthub.com/docs/reference/cli/)
 
 # Credits and License
 
-Dolt relies heavily on open source code and ideas from the [Noms](https://github.com/attic-labs/noms) project. We are very thankful to the Noms team for making this code freely available, without which we would not have been able to build Dolt so rapidly.
+Dolt relies heavily on open source code and ideas from the
+[Noms](https://github.com/attic-labs/noms) project. We are very
+thankful to the Noms team for making this code freely available,
+without which we would not have been able to build Dolt so rapidly.
 
 Dolt is licensed under the Apache License, Version 2.0. See
 [LICENSE](https://github.com/dolthub/dolt/blob/master/LICENSE) for
