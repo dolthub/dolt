@@ -91,16 +91,14 @@ func (di *doltIndex) AscendRange(greaterOrEqual, lessThanOrEqual []interface{}) 
 	if err != nil {
 		return nil, err
 	}
-	// In the case of possible partial keys, we need to match at the end for matched values, so we append a tag that is
-	// beyond the allowed maximum. This will be ignored if it's a full key and not a partial key.
-	lessTpl, err = lessTpl.Append(types.Uint(uint64(0xffffffffffffffff)))
+	r, err := lookup.ClosedRange(greaterTpl, lessTpl)
 	if err != nil {
 		return nil, err
 	}
 	return &doltIndexLookup{
 		idx: di,
 		ranges: []lookup.Range{
-			lookup.ClosedRange(greaterTpl, lessTpl),
+			r,
 		},
 	}, nil
 }
@@ -111,16 +109,14 @@ func (di *doltIndex) DescendGreater(keys ...interface{}) (sql.IndexLookup, error
 	if err != nil {
 		return nil, err
 	}
-	// In the case of possible partial keys, we need to match at the end for matched values, so we append a tag that is
-	// beyond the allowed maximum. This will be ignored if it's a full key and not a partial key.
-	tpl, err = tpl.Append(types.Uint(uint64(0xffffffffffffffff)))
+	r, err := lookup.GreaterThanRange(tpl)
 	if err != nil {
 		return nil, err
 	}
 	return &doltIndexLookup{
 		idx: di,
 		ranges: []lookup.Range{
-			lookup.GreaterThanRange(tpl),
+			r,
 		},
 	}, nil
 }
@@ -131,16 +127,14 @@ func (di *doltIndex) DescendLessOrEqual(keys ...interface{}) (sql.IndexLookup, e
 	if err != nil {
 		return nil, err
 	}
-	// In the case of possible partial keys, we need to match at the end for matched values, so we append a tag that is
-	// beyond the allowed maximum. This will be ignored if it's a full key and not a partial key.
-	tpl, err = tpl.Append(types.Uint(uint64(0xffffffffffffffff)))
+	r, err := lookup.LessOrEqualRange(tpl)
 	if err != nil {
 		return nil, err
 	}
 	return &doltIndexLookup{
 		idx: di,
 		ranges: []lookup.Range{
-			lookup.LessOrEqualRange(tpl),
+			r,
 		},
 	}, nil
 }
@@ -171,16 +165,14 @@ func (di *doltIndex) Get(keys ...interface{}) (sql.IndexLookup, error) {
 	if err != nil {
 		return nil, err
 	}
-	// We can convert an equals into a range by appending a tag that is beyond the maximum. This will be ignored if
-	// it's a full key and not a partial key.
-	tplMax, err := tpl.Append(types.Uint(uint64(0xffffffffffffffff)))
+	r, err := lookup.ClosedRange(tpl, tpl)
 	if err != nil {
 		return nil, err
 	}
 	return &doltIndexLookup{
 		idx: di,
 		ranges: []lookup.Range{
-			lookup.ClosedRange(tpl, tplMax),
+			r,
 		},
 	}, nil
 }

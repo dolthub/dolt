@@ -104,10 +104,9 @@ func setupMergeableIndexes(t *testing.T) (*sqle.Engine, *testMergeableIndexDb, *
 
 // Database made to test mergeable indexes while using the full SQL engine.
 type testMergeableIndexDb struct {
-	t            *testing.T
-	tbl          *AlterableDoltTable
-	countLookups func(int)            // We count the number of lookups encountered to see if the expected number of lookups were intersected/combined
-	finalRanges  func([]lookup.Range) // We return the final range set to compare to the expected ranges
+	t           *testing.T
+	tbl         *AlterableDoltTable
+	finalRanges func([]lookup.Range) // We return the final range set to compare to the expected ranges
 }
 
 func (db *testMergeableIndexDb) Name() string {
@@ -118,7 +117,6 @@ func (db *testMergeableIndexDb) GetTableInsensitive(_ *sql.Context, tblName stri
 		return &testMergeableIndexTable{
 			AlterableDoltTable: db.tbl,
 			t:                  db.t,
-			countLookups:       db.countLookups,
 			finalRanges:        db.finalRanges,
 		}, true, nil
 	}
@@ -131,10 +129,9 @@ func (db *testMergeableIndexDb) GetTableNames(_ *sql.Context) ([]string, error) 
 // Table made to test mergeable indexes by intercepting specific index-related functions.
 type testMergeableIndexTable struct {
 	*AlterableDoltTable
-	t            *testing.T
-	il           *testMergeableIndexLookup
-	countLookups func(int)
-	finalRanges  func([]lookup.Range)
+	t           *testing.T
+	il          *testMergeableIndexLookup
+	finalRanges func([]lookup.Range) // We return the final range set to compare to the expected ranges
 }
 
 var _ sql.IndexedTable = (*testMergeableIndexTable)(nil)
@@ -146,10 +143,9 @@ func (tbl *testMergeableIndexTable) GetIndexes(ctx *sql.Context) ([]sql.Index, e
 	}
 	for i, index := range indexes {
 		indexes[i] = &testMergeableDoltIndex{
-			doltIndex:    index.(*doltIndex),
-			t:            tbl.t,
-			countLookups: tbl.countLookups,
-			finalRanges:  tbl.finalRanges,
+			doltIndex:   index.(*doltIndex),
+			t:           tbl.t,
+			finalRanges: tbl.finalRanges,
 		}
 	}
 	return indexes, nil
@@ -161,7 +157,6 @@ func (tbl *testMergeableIndexTable) WithIndexLookup(lookup sql.IndexLookup) sql.
 		AlterableDoltTable: tbl.AlterableDoltTable,
 		t:                  tbl.t,
 		il:                 il,
-		countLookups:       tbl.countLookups,
 		finalRanges:        tbl.finalRanges,
 	}
 }
@@ -175,9 +170,8 @@ func (tbl *testMergeableIndexTable) PartitionRows(ctx *sql.Context, _ sql.Partit
 // Index made to test mergeable indexes by intercepting all calls that return lookups and returning modified lookups.
 type testMergeableDoltIndex struct {
 	*doltIndex
-	t            *testing.T
-	countLookups func(int)
-	finalRanges  func([]lookup.Range)
+	t           *testing.T
+	finalRanges func([]lookup.Range) // We return the final range set to compare to the expected ranges
 }
 
 func (di *testMergeableDoltIndex) Get(keys ...interface{}) (sql.IndexLookup, error) {
@@ -185,7 +179,6 @@ func (di *testMergeableDoltIndex) Get(keys ...interface{}) (sql.IndexLookup, err
 	return &testMergeableIndexLookup{
 		doltIndexLookup: indexLookup.(*doltIndexLookup),
 		t:               di.t,
-		countLookups:    di.countLookups,
 		finalRanges:     di.finalRanges,
 	}, err
 }
@@ -194,7 +187,6 @@ func (di *testMergeableDoltIndex) AscendGreaterOrEqual(keys ...interface{}) (sql
 	return &testMergeableIndexLookup{
 		doltIndexLookup: indexLookup.(*doltIndexLookup),
 		t:               di.t,
-		countLookups:    di.countLookups,
 		finalRanges:     di.finalRanges,
 	}, err
 }
@@ -203,7 +195,6 @@ func (di *testMergeableDoltIndex) AscendLessThan(keys ...interface{}) (sql.Index
 	return &testMergeableIndexLookup{
 		doltIndexLookup: indexLookup.(*doltIndexLookup),
 		t:               di.t,
-		countLookups:    di.countLookups,
 		finalRanges:     di.finalRanges,
 	}, err
 }
@@ -212,7 +203,6 @@ func (di *testMergeableDoltIndex) AscendRange(greaterOrEqual, lessThanOrEqual []
 	return &testMergeableIndexLookup{
 		doltIndexLookup: indexLookup.(*doltIndexLookup),
 		t:               di.t,
-		countLookups:    di.countLookups,
 		finalRanges:     di.finalRanges,
 	}, err
 }
@@ -221,7 +211,6 @@ func (di *testMergeableDoltIndex) DescendGreater(keys ...interface{}) (sql.Index
 	return &testMergeableIndexLookup{
 		doltIndexLookup: indexLookup.(*doltIndexLookup),
 		t:               di.t,
-		countLookups:    di.countLookups,
 		finalRanges:     di.finalRanges,
 	}, err
 }
@@ -230,7 +219,6 @@ func (di *testMergeableDoltIndex) DescendLessOrEqual(keys ...interface{}) (sql.I
 	return &testMergeableIndexLookup{
 		doltIndexLookup: indexLookup.(*doltIndexLookup),
 		t:               di.t,
-		countLookups:    di.countLookups,
 		finalRanges:     di.finalRanges,
 	}, err
 }
@@ -239,7 +227,6 @@ func (di *testMergeableDoltIndex) DescendRange(lessOrEqual, greaterOrEqual []int
 	return &testMergeableIndexLookup{
 		doltIndexLookup: indexLookup.(*doltIndexLookup),
 		t:               di.t,
-		countLookups:    di.countLookups,
 		finalRanges:     di.finalRanges,
 	}, err
 }
@@ -247,16 +234,14 @@ func (di *testMergeableDoltIndex) DescendRange(lessOrEqual, greaterOrEqual []int
 // Lookup made to test mergeable indexes by intercepting the lookup functions and adding tracking for testing.
 type testMergeableIndexLookup struct {
 	*doltIndexLookup
-	t            *testing.T
-	countLookups func(int)
-	finalRanges  func([]lookup.Range)
+	t           *testing.T
+	finalRanges func([]lookup.Range) // We return the final range set to compare to the expected ranges
 }
 
 func (il *testMergeableIndexLookup) IsMergeable(indexLookup sql.IndexLookup) bool {
 	return il.doltIndexLookup.IsMergeable(indexLookup.(*testMergeableIndexLookup).doltIndexLookup)
 }
 func (il *testMergeableIndexLookup) Intersection(indexLookups ...sql.IndexLookup) (sql.IndexLookup, error) {
-	il.countLookups(len(indexLookups) + 1) // include 1 for the caller
 	newLookups := make([]sql.IndexLookup, len(indexLookups))
 	for i, otherIl := range indexLookups {
 		newLookups[i] = otherIl.(*testMergeableIndexLookup).doltIndexLookup
@@ -268,12 +253,10 @@ func (il *testMergeableIndexLookup) Intersection(indexLookups ...sql.IndexLookup
 	return &testMergeableIndexLookup{
 		doltIndexLookup: intersectedIl.(*doltIndexLookup),
 		t:               il.t,
-		countLookups:    il.countLookups,
 		finalRanges:     il.finalRanges,
 	}, nil
 }
 func (il *testMergeableIndexLookup) Union(indexLookups ...sql.IndexLookup) (sql.IndexLookup, error) {
-	il.countLookups(len(indexLookups) + 1) // include 1 for the caller
 	newLookups := make([]sql.IndexLookup, len(indexLookups))
 	for i, otherIl := range indexLookups {
 		newLookups[i] = otherIl.(*testMergeableIndexLookup).doltIndexLookup
@@ -285,7 +268,6 @@ func (il *testMergeableIndexLookup) Union(indexLookups ...sql.IndexLookup) (sql.
 	return &testMergeableIndexLookup{
 		doltIndexLookup: unionedIl.(*doltIndexLookup),
 		t:               il.t,
-		countLookups:    il.countLookups,
 		finalRanges:     il.finalRanges,
 	}, nil
 }
@@ -300,21 +282,18 @@ type indexTuple struct {
 	cols []schema.Column
 }
 
-func (it *indexTuple) tuple(appendMaxValue bool, vals ...int) types.Tuple {
+func (it *indexTuple) tuple(vals ...int) types.Tuple {
 	if len(it.cols) != len(vals) {
-		panic("y u coz panik?")
+		panic("len of columns in index does not match the given number of values")
 	}
 	valsWithTags := make([]types.Value, len(vals)*2)
 	for i, val := range vals {
 		valsWithTags[2*i] = types.Uint(it.cols[i].Tag)
 		valsWithTags[2*i+1] = types.Int(val)
 	}
-	if appendMaxValue {
-		valsWithTags = append(valsWithTags, types.Uint(uint64(0xffffffffffffffff)))
-	}
 	tpl, err := types.NewTuple(it.nbf, valsWithTags...)
 	if err != nil {
-		panic("how dis panik?")
+		panic(err)
 	}
 	return tpl
 }
