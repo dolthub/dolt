@@ -206,7 +206,6 @@ teardown() {
 }
 
 @test "dolt_ancestor_commits smoke test" {
-    skip "not implemented"
     dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY);"
     dolt add -A && dolt commit -m "added table test"
 
@@ -219,7 +218,11 @@ teardown() {
     dolt sql -q "INSERT INTO test VALUES (1);"
     dolt add -A && dolt commit -m "added values to test on other"
 
+    dolt checkout master
+    dolt merge other
+    dolt add -A && dolt commit -m "merged other"
+
     run dolt sql -q "SELECT count(*) FROM dolt_commit_ancestors;" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "4" ]] || false
+    [[ "$output" =~ "6" ]] || false
 }

@@ -230,6 +230,7 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 		doltdb.TableOfTablesInConflictName: NewTableOfTablesInConflict,
 		doltdb.BranchesTableName:           NewBranchesTable,
 		doltdb.CommitsTableName:            NewCommitsTable,
+		doltdb.CommitAncestorsTableName:    NewCommitAncestorsTable,
 	}
 
 	for tblName, newFunc := range sysTblToNew {
