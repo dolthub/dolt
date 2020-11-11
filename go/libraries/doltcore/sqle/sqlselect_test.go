@@ -660,6 +660,11 @@ var BasicSelectTests = []SelectTest{
 		ExpectedErr: `Unknown table: 'dolt_diff_dne'`,
 	},
 	{
+		Name:        "unknown diff table",
+		Query:       "select * from dolt_commit_diff_dne",
+		ExpectedErr: `Unknown table: 'dolt_commit_diff_dne'`,
+	},
+	{
 		Name:        "unknown history table",
 		Query:       "select * from dolt_history_dne",
 		ExpectedErr: `Unknown table: 'dolt_history_dne'`,

@@ -140,6 +140,7 @@ var generatedSystemTables = []string{
 
 var generatedSystemTablePrefixes = []string{
 	DoltDiffTablePrefix,
+	DoltCommitDiffTablePrefix,
 	DoltHistoryTablePrefix,
 	DoltConfTablePrefix,
 }
@@ -236,6 +237,8 @@ const (
 	DoltHistoryTablePrefix = "dolt_history_"
 	// DoltdDiffTablePrefix is the prefix assigned to all the generated diff tables
 	DoltDiffTablePrefix = "dolt_diff_"
+	// DoltCommitDiffTablePrefix is the prefix assigned to all the generated commit diff tables
+	DoltCommitDiffTablePrefix = "dolt_commit_diff_"
 	// DoltConfTablePrefix is the prefix assigned to all the generated conflict tables
 	DoltConfTablePrefix = "dolt_conflicts_"
 )
