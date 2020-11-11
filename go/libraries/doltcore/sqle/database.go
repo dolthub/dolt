@@ -220,7 +220,7 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 	case strings.HasPrefix(lwrName, doltdb.DoltCommitDiffTablePrefix):
 		suffix := tblName[len(doltdb.DoltCommitDiffTablePrefix):]
 		found = true
-		dt, err = dtables.NewCommitDiffTable(ctx, suffix, db.ddb, root, head)
+		dt, err = dtables.NewCommitDiffTable(ctx, suffix, db.ddb, root)
 	case strings.HasPrefix(lwrName, doltdb.DoltHistoryTablePrefix):
 		suffix := tblName[len(doltdb.DoltHistoryTablePrefix):]
 		found = true

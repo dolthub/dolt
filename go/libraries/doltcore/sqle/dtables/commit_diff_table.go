@@ -51,7 +51,7 @@ type CommitDiffTable struct {
 	requiredFilterErr error
 }
 
-func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue, _ *doltdb.Commit) (sql.Table, error) {
+func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue) (sql.Table, error) {
 	diffTblName := doltdb.DoltCommitDiffTablePrefix + tblName
 
 	ss, err := calcSuperDuperSchema(ctx, ddb, root, tblName)

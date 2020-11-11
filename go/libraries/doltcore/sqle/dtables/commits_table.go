@@ -33,7 +33,7 @@ type CommitsTable struct {
 }
 
 // NewCommitsTable creates a CommitsTable
-func NewCommitsTable(ctx *sql.Context, ddb *doltdb.DoltDB) sql.Table {
+func NewCommitsTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
 	return &CommitsTable{ddb: ddb}
 }
 
