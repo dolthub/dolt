@@ -8,7 +8,7 @@ MySQL database to run queries or update the data using SQL
 commands. Use the command line interface to import CSV files, commit
 your changes, push them to a remote, or merge your teammate's changes.
 
-All the commands you know from Git work exactly the same for Dolt. Git
+All the commands you know for Git work exactly the same for Dolt. Git
 versions files, Dolt versions tables. It's like Git and MySQL had a
 baby!
 
@@ -74,7 +74,7 @@ This will download the latest `dolt` release and put it in
 Dolt is on Homebrew, updated every release.
 
 ```
-$ brew install dolt
+brew install dolt
 ```
 
 ### Windows
@@ -92,12 +92,13 @@ Make sure you have Go installed, and that `go` is in your path.
 Clone this repository and cd into the `go` directory. Then run:
 
 ```
-$ go install ./cmd/dolt
+go install ./cmd/dolt
 ```
 
 # Configuration
 
-Verify that your installation has succeeded by running `dolt` in your terminal.
+Verify that your installation has succeeded by running `dolt` in your
+terminal.
 
 ```
 $ dolt
@@ -123,7 +124,7 @@ $ cd state-populations
 ```
 
 Run `dolt init` to set up a new `dolt` repo, just like you do with
-`git`. Then run some SQL queries to insert data.
+git. Then run some SQL queries to insert data.
 
 ```
 $ dolt init
@@ -153,10 +154,11 @@ $ dolt sql -q 'insert into state_populations (state, population) values
 ("North Carolina", 393751),
 ("Maine", 96540),
 ("Rhode Island", 68825)'
-Rows inserted: 17
+Query OK, 17 rows affected
 ```
 
-Now let's run some queries:
+Use `dolt sql` to jump into a SQL shell, or run single queries with
+the `-q` option.
 
 ```
 $ dolt sql -q "select * from state_populations where state = 'New York'"
@@ -167,15 +169,78 @@ $ dolt sql -q "select * from state_populations where state = 'New York'"
 +----------+------------+
 ```
 
-`add` the modified tables and `commit` them. Every command matches
-`git` exactly, but with tables instead of files.
+`add` the new tables and `commit` them. Every command matches `git`
+exactly, but with tables instead of files.
 
 ```
 $ dolt add .
-$ dolt commit -m "Add state populations from 1790"
+$ dolt commit -m "initial data"
 $ dolt status
 On branch master
 nothing to commit, working tree clean
+```
+
+Update the tables with more SQL commands, this time using the shell:
+
+```
+$ dolt sql
+# Welcome to the DoltSQL shell.
+# Statements must be terminated with ';'.
+# "exit" or "quit" (or Ctrl-D) to exit.
+state_pops> update state_populations set population = 0 where state like 'New%';
+Query OK, 3 rows affected
+Rows matched: 3  Changed: 3  Warnings: 0
+state_pops> exit
+Bye
+```
+
+See what you changed with `dolt diff`:
+
+```
+$ dolt diff
+diff --dolt a/state_populations b/state_populations
+--- a/state_populations @ qqr3vd0ea6264oddfk4nmte66cajlhfl
++++ b/state_populations @ 17cinjh5jpimilefd57b4ifeetjcbvn2
++-----+---------------+------------+
+|     | state         | population |
++-----+---------------+------------+
+|  <  | New Hampshire | 141885     |
+|  >  | New Hampshire | 0          |
+|  <  | New Jersey    | 184139     |
+|  >  | New Jersey    | 0          |
+|  <  | New York      | 340120     |
+|  >  | New York      | 0          |
++-----+---------------+------------+
+```
+
+Then commit your changes once more with `dolt add` and `dolt commit`.
+
+```
+$ dolt add state_populations
+$ dolt commit -m "More like Old Jersey"
+```
+
+See the history of your repository with `dolt log`.
+
+```
+% dolt log
+commit babgn65p1r5n36ao4gfdj99811qauo8j
+Author: Zach Musgrave <zach@dolthub.com>
+Date:   Wed Nov 11 13:42:27 -0800 2020
+
+    More like Old Jersey
+
+commit 9hgk7jb7hlkvvkbornpldcopqh2gn6jo
+Author: Zach Musgrave <zach@dolthub.com>
+Date:   Wed Nov 11 13:40:53 -0800 2020
+        
+    initial data
+                
+commit 8o8ldh58pjovn8uvqvdq2olf7dm63dj9
+Author: Zach Musgrave <zach@dolthub.com>
+Date:   Wed Nov 11 13:36:24 -0800 2020
+
+    Initialize data repository
 ```
 
 # Importing data
@@ -195,7 +260,7 @@ $ dolt table import -c -pk=state state_populations data.csv
 
 # Branch and merge
 
-Just like with `git`, it's a good idea to make changes on your own
+Just like with git, it's a good idea to make changes on your own
 branch, then merge them back to `master`. The `dolt checkout` command
 works exactly the same as `git checkout`.
 
@@ -203,7 +268,7 @@ works exactly the same as `git checkout`.
 $ dolt checkout -b <branch>
 ```
 
-The `merge command works the same too.
+The `merge` command works the same too.
 
 ```
 $ dolt merge <branch>
@@ -232,7 +297,7 @@ $ dolt login
 ```
 
 If you have a repo that you created locally that you now want to push
-to a remote, add a remote exactly like you would with `git`.
+to a remote, add a remote exactly like you would with git.
 
 ```
 $ dolt remote add origin myname/myRepo
@@ -243,7 +308,7 @@ origin https://doltremoteapi.dolthub.com/myname/myRepo
 And then push to it.
 
 ```
-dolt push origin master
+$ dolt push origin master
 ```
 
 ## Other remotes 
