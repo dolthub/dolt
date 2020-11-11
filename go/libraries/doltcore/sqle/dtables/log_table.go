@@ -21,7 +21,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/common"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 )
 
 var _ sql.Table = (*LogTable)(nil)
@@ -62,7 +62,7 @@ func (dt *LogTable) Schema() sql.Schema {
 
 // Partitions is a sql.Table interface function that returns a partition of the data.  Currently the data is unpartitioned.
 func (dt *LogTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
-	return common.NewSinglePartitionIter(), nil
+	return sqlutil.NewSinglePartitionIter(), nil
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition

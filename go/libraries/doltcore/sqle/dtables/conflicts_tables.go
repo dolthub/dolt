@@ -17,11 +17,10 @@ package dtables
 import (
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/common"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -90,7 +89,7 @@ func (ct ConflictsTable) Schema() sql.Schema {
 
 // Partitions returns a PartitionIter which can be used to get all the data partitions
 func (ct ConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	return common.NewSinglePartitionIter(), nil
+	return sqlutil.NewSinglePartitionIter(), nil
 }
 
 // PartitionRows returns a RowIter for the given partition
@@ -118,7 +117,7 @@ func (itr conflictRowIter) Next() (sql.Row, error) {
 		return nil, err
 	}
 
-	return common.DoltRowToSqlRow(cnf, itr.rd.GetSchema())
+	return sqlutil.DoltRowToSqlRow(cnf, itr.rd.GetSchema())
 }
 
 // Close the iterator.
@@ -139,7 +138,7 @@ type conflictDeleter struct {
 // Close is called.
 func (cd *conflictDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 	cnfSch := cd.ct.rd.GetSchema()
-	cnfRow, err := common.SqlRowToDoltRow(cd.ct.tbl.Format(), r, cnfSch)
+	cnfRow, err := sqlutil.SqlRowToDoltRow(cd.ct.tbl.Format(), r, cnfSch)
 
 	if err != nil {
 		return err

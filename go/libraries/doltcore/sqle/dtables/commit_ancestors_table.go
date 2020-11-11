@@ -20,7 +20,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/common"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 )
 
 var _ sql.Table = (*CommitAncestorsTable)(nil)
@@ -58,7 +58,7 @@ func (dt *CommitAncestorsTable) Schema() sql.Schema {
 // Partitions is a sql.Table interface function that returns a partition
 // of the data. Currently the data is unpartitioned.
 func (dt *CommitAncestorsTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
-	return common.NewSinglePartitionIter(), nil
+	return sqlutil.NewSinglePartitionIter(), nil
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition.

@@ -20,7 +20,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/common"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -56,7 +56,7 @@ func (i *indexLookupRowIterAdapter) Next() (sql.Row, error) {
 		return nil, err
 	}
 
-	return common.DoltRowToSqlRow(r, i.idx.Schema())
+	return sqlutil.DoltRowToSqlRow(r, i.idx.Schema())
 }
 
 func (*indexLookupRowIterAdapter) Close() error {

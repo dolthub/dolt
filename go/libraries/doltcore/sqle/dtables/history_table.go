@@ -25,8 +25,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/common"
 	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -121,7 +121,7 @@ func (ht *HistoryTable) WithFilters(filters []sql.Expression) sql.Table {
 		commitCheck, err := getCommitFilterFunc(ht.commitFilters)
 
 		if err != nil {
-			return common.NewStaticErrorTable(ht, err)
+			return sqlutil.NewStaticErrorTable(ht, err)
 		}
 
 		ht.cmItr = doltdb.NewFilteringCommitItr(ht.cmItr, commitCheck)
@@ -421,7 +421,7 @@ func (tblItr *rowItrForTableAtCommit) Next() (sql.Row, error) {
 		}
 	}
 
-	return common.DoltRowToSqlRow(r, tblItr.sch)
+	return sqlutil.DoltRowToSqlRow(r, tblItr.sch)
 }
 
 // Close the iterator.

@@ -27,9 +27,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/common"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expreval"
 	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -285,7 +285,7 @@ func (itr *diffRowItr) Next() (sql.Row, error) {
 		}
 	}
 
-	sqlRow, err := common.DoltRowToSqlRow(r, itr.sch)
+	sqlRow, err := sqlutil.DoltRowToSqlRow(r, itr.sch)
 
 	if err != nil {
 		return nil, err

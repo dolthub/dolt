@@ -32,8 +32,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/common"
 	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -101,7 +101,7 @@ var _ sql.ForeignKeyTable = (*DoltTable)(nil)
 func (t *DoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 	dil, ok := lookup.(*doltIndexLookup)
 	if !ok {
-		return common.NewStaticErrorTable(t, fmt.Errorf("Unrecognized indexLookup %T", lookup))
+		return sqlutil.NewStaticErrorTable(t, fmt.Errorf("Unrecognized indexLookup %T", lookup))
 	}
 	return &IndexedDoltTable{
 		table:       t,
@@ -241,7 +241,7 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 	switch typedPartition := partition.(type) {
 	case doltTablePartition:
 		return newRowIterator(t, ctx, &typedPartition)
-	case common.SinglePartition:
+	case sqlutil.SinglePartition:
 		return newRowIterator(t, ctx, nil)
 	}
 
@@ -264,7 +264,7 @@ var _ sql.AutoIncrementTable = (*WritableDoltTable)(nil)
 func (t *WritableDoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 	dil, ok := lookup.(*doltIndexLookup)
 	if !ok {
-		return common.NewStaticErrorTable(t, fmt.Errorf("Unrecognized indexLookup %T", lookup))
+		return sqlutil.NewStaticErrorTable(t, fmt.Errorf("Unrecognized indexLookup %T", lookup))
 	}
 	return &WritableIndexedDoltTable{
 		WritableDoltTable: t,
@@ -276,7 +276,7 @@ func (t *WritableDoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 func (t *WritableDoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
 	te, err := t.getTableEditor(ctx)
 	if err != nil {
-		return common.NewStaticErrorEditor(err)
+		return sqlutil.NewStaticErrorEditor(err)
 	}
 	return te
 }
@@ -306,7 +306,7 @@ func (t *WritableDoltTable) flushBatchedEdits(ctx *sql.Context) error {
 func (t *WritableDoltTable) Deleter(ctx *sql.Context) sql.RowDeleter {
 	te, err := t.getTableEditor(ctx)
 	if err != nil {
-		return common.NewStaticErrorEditor(err)
+		return sqlutil.NewStaticErrorEditor(err)
 	}
 	return te
 }
@@ -315,7 +315,7 @@ func (t *WritableDoltTable) Deleter(ctx *sql.Context) sql.RowDeleter {
 func (t *WritableDoltTable) Replacer(ctx *sql.Context) sql.RowReplacer {
 	te, err := t.getTableEditor(ctx)
 	if err != nil {
-		return common.NewStaticErrorEditor(err)
+		return sqlutil.NewStaticErrorEditor(err)
 	}
 	return te
 }
@@ -324,7 +324,7 @@ func (t *WritableDoltTable) Replacer(ctx *sql.Context) sql.RowReplacer {
 func (t *WritableDoltTable) Updater(ctx *sql.Context) sql.RowUpdater {
 	te, err := t.getTableEditor(ctx)
 	if err != nil {
-		return common.NewStaticErrorEditor(err)
+		return sqlutil.NewStaticErrorEditor(err)
 	}
 	return te
 }
@@ -333,7 +333,7 @@ func (t *WritableDoltTable) Updater(ctx *sql.Context) sql.RowUpdater {
 func (t *WritableDoltTable) AutoIncrementSetter(ctx *sql.Context) sql.AutoIncrementSetter {
 	te, err := t.getTableEditor(ctx)
 	if err != nil {
-		return common.NewStaticErrorEditor(err)
+		return sqlutil.NewStaticErrorEditor(err)
 	}
 	return te
 }

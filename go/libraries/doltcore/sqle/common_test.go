@@ -31,8 +31,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/common"
 	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -106,7 +106,7 @@ func ToSqlRows(sch schema.Schema, rs ...row.Row) []sql.Row {
 	sqlRows := make([]sql.Row, len(rs))
 	compressedSch := CompressSchema(sch)
 	for i := range rs {
-		sqlRows[i], _ = common.DoltRowToSqlRow(CompressRow(sch, rs[i]), compressedSch)
+		sqlRows[i], _ = sqlutil.DoltRowToSqlRow(CompressRow(sch, rs[i]), compressedSch)
 	}
 	return sqlRows
 }

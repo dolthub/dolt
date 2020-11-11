@@ -47,10 +47,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/common"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/json"
@@ -1307,7 +1307,7 @@ func PrettyPrintResults(ctx context.Context, resultFormat resultFormat, sqlSch s
 	switch resultFormat {
 	case formatJson:
 		rowFn = func(r sql.Row) (r2 row.Row, err error) {
-			return common.SqlRowToDoltRow(nbf, r, doltSch)
+			return sqlutil.SqlRowToDoltRow(nbf, r, doltSch)
 		}
 	default:
 		rowFn = func(r sql.Row) (row.Row, error) {

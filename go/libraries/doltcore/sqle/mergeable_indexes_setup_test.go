@@ -25,8 +25,8 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/common"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/lookup"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -162,7 +162,7 @@ func (tbl *testMergeableIndexTable) WithIndexLookup(lookup sql.IndexLookup) sql.
 	}
 }
 func (tbl *testMergeableIndexTable) Partitions(_ *sql.Context) (sql.PartitionIter, error) {
-	return common.NewSinglePartitionIter(), nil
+	return sqlutil.NewSinglePartitionIter(), nil
 }
 func (tbl *testMergeableIndexTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
 	return tbl.il.RowIter(ctx)

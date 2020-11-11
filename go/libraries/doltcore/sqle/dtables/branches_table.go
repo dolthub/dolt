@@ -22,7 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/common"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 )
 
 var _ sql.Table = (*BranchesTable)(nil)
@@ -67,7 +67,7 @@ func (bt *BranchesTable) Schema() sql.Schema {
 
 // Partitions is a sql.Table interface function that returns a partition of the data.  Currently the data is unpartitioned.
 func (bt *BranchesTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
-	return common.NewSinglePartitionIter(), nil
+	return sqlutil.NewSinglePartitionIter(), nil
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
