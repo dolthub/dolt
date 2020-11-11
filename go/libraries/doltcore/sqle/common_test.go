@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
-	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -167,7 +166,7 @@ func CreateWorkingRootUpdate() map[string]envtestutils.TableUpdate {
 
 // Returns the dolt schema given as a sql.Schema, or panics.
 func mustSqlSchema(sch schema.Schema) sql.Schema {
-	sqlSchema, err := sqleSchema.FromDoltSchema("", sch)
+	sqlSchema, err := sqlutil.FromDoltSchema("", sch)
 	if err != nil {
 		panic(err)
 	}

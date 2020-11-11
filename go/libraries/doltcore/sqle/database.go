@@ -35,8 +35,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
-	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -596,7 +596,7 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Sc
 		return sql.ErrTableAlreadyExists.New(tableName)
 	}
 
-	doltSch, err := sqleSchema.ToDoltSchema(ctx, root, tableName, sch)
+	doltSch, err := sqlutil.ToDoltSchema(ctx, root, tableName, sch)
 	if err != nil {
 		return err
 	}

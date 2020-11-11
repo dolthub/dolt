@@ -49,7 +49,6 @@ import (
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
-	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
@@ -1232,7 +1231,7 @@ func PrettyPrintResults(ctx context.Context, resultFormat resultFormat, sqlSch s
 
 	nbf := types.Format_Default
 
-	doltSch, err := sqleSchema.ToDoltResultSchema(sqlSch)
+	doltSch, err := sqlutil.ToDoltResultSchema(sqlSch)
 	if err != nil {
 		return err
 	}

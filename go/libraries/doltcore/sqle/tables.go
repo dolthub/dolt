@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
@@ -196,7 +195,7 @@ func (t *DoltTable) sqlSchema() sql.Schema {
 	}
 
 	// TODO: fix panics
-	sqlSch, err := sqleSchema.FromDoltSchema(t.name, t.sch)
+	sqlSch, err := sqlutil.FromDoltSchema(t.name, t.sch)
 	if err != nil {
 		panic(err)
 	}
@@ -468,7 +467,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		return err
 	}
 
-	col, err := sqleSchema.ToDoltCol(tags[0], column)
+	col, err := sqlutil.ToDoltCol(tags[0], column)
 	if err != nil {
 		return err
 	}
@@ -580,7 +579,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		panic(fmt.Sprintf("Column %s not found. This is a bug.", columnName))
 	}
 
-	col, err := sqleSchema.ToDoltCol(existingCol.Tag, column)
+	col, err := sqlutil.ToDoltCol(existingCol.Tag, column)
 	if err != nil {
 		return err
 	}

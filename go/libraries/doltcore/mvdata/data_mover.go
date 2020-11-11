@@ -20,13 +20,13 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
@@ -227,7 +227,7 @@ func SchAndTableNameFromFile(ctx context.Context, path string, fs filesys.Readab
 			return "", nil, err
 		}
 
-		tn, sch, err := sqleSchema.ParseCreateTableStatement(ctx, root, string(data))
+		tn, sch, err := sqlutil.ParseCreateTableStatement(ctx, root, string(data))
 
 		if err != nil {
 			return "", nil, fmt.Errorf("%s in schema file %s", err.Error(), path)

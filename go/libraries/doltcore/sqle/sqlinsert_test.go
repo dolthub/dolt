@@ -29,7 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	. "github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
-	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -441,7 +441,7 @@ func mustGetDoltSchema(sch sql.Schema, tableName string, testEnv *env.DoltEnv) s
 		panic(err)
 	}
 
-	doltSchema, err := sqleSchema.ToDoltSchema(context.Background(), wrt, tableName, sch)
+	doltSchema, err := sqlutil.ToDoltSchema(context.Background(), wrt, tableName, sch)
 	if err != nil {
 		panic(err)
 	}

@@ -23,14 +23,13 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 // The fixed SQL schema for the `dolt_schemas` table.
 func SchemasTableSqlSchema() sql.Schema {
-	sqlSchema, err := sqleSchema.FromDoltSchema(doltdb.SchemasTableName, SchemasTableSchema())
+	sqlSchema, err := sqlutil.FromDoltSchema(doltdb.SchemasTableName, SchemasTableSchema())
 	if err != nil {
 		panic(err) // should never happen
 	}

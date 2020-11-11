@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -83,7 +82,7 @@ func NewHistoryTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root 
 	}
 
 	tableName := doltdb.DoltHistoryTablePrefix + tblName
-	sqlSch, err := sqleSchema.FromDoltSchema(tableName, sch)
+	sqlSch, err := sqlutil.FromDoltSchema(tableName, sch)
 
 	if err != nil {
 		return nil, err
