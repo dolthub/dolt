@@ -69,7 +69,7 @@ func TestTableEditor(t *testing.T) {
 				require.NoError(t, ed.Insert(ctx, r(troyMclure, PeopleTestSchema)))
 			},
 			selectQuery: "select * from people where id >= 10",
-			expectedRows: common.ToSqlRows(PeopleTestSchema,
+			expectedRows: ToSqlRows(PeopleTestSchema,
 				edna, krusty, smithers, ralph, martin, skinner, fatTony, troyMclure,
 			),
 		},
@@ -81,7 +81,7 @@ func TestTableEditor(t *testing.T) {
 				require.NoError(t, ed.Delete(ctx, r(edna, PeopleTestSchema)))
 			},
 			selectQuery: "select * from people where id >= 10",
-			expectedRows: common.ToSqlRows(PeopleTestSchema,
+			expectedRows: ToSqlRows(PeopleTestSchema,
 				krusty,
 			),
 		},
@@ -95,7 +95,7 @@ func TestTableEditor(t *testing.T) {
 				require.NoError(t, ed.Delete(ctx, r(Homer, PeopleTestSchema)))
 			},
 			selectQuery: "select * from people where id >= 10 or id = 0",
-			expectedRows: common.ToSqlRows(PeopleTestSchema,
+			expectedRows: ToSqlRows(PeopleTestSchema,
 				krusty, fatTony,
 			),
 		},
@@ -107,7 +107,7 @@ func TestTableEditor(t *testing.T) {
 				require.NoError(t, ed.Update(ctx, r(edna, PeopleTestSchema), r(MutateRow(PeopleTestSchema, edna, AgeTag, 1), PeopleTestSchema)))
 			},
 			selectQuery: "select * from people where id >= 10",
-			expectedRows: common.ToSqlRows(PeopleTestSchema,
+			expectedRows: ToSqlRows(PeopleTestSchema,
 				MutateRow(PeopleTestSchema, edna, AgeTag, 1),
 				krusty,
 			),
@@ -127,7 +127,7 @@ func TestTableEditor(t *testing.T) {
 				require.NoError(t, ed.Insert(ctx, r(ralph, PeopleTestSchema)))
 			},
 			selectQuery: "select * from people where id >= 10",
-			expectedRows: common.ToSqlRows(PeopleTestSchema,
+			expectedRows: ToSqlRows(PeopleTestSchema,
 				MutateRow(PeopleTestSchema, edna, AgeTag, 1),
 				krusty,
 				ralph,
@@ -142,7 +142,7 @@ func TestTableEditor(t *testing.T) {
 				require.NoError(t, ed.Update(ctx, r(edna, PeopleTestSchema), r(MutateRow(PeopleTestSchema, edna, IdTag, 30), PeopleTestSchema)))
 			},
 			selectQuery: "select * from people where id >= 10",
-			expectedRows: common.ToSqlRows(PeopleTestSchema,
+			expectedRows: ToSqlRows(PeopleTestSchema,
 				krusty,
 				MutateRow(PeopleTestSchema, edna, IdTag, 30),
 			),
@@ -181,7 +181,7 @@ func TestTableEditor(t *testing.T) {
 			root, err = db.GetRoot(ctx)
 			require.NoError(t, err)
 
-			actualRows, _, err := common.executeSelect(context.Background(), dEnv, root, test.selectQuery)
+			actualRows, _, err := executeSelect(context.Background(), dEnv, root, test.selectQuery)
 			require.NoError(t, err)
 			assert.Equal(t, test.expectedRows, actualRows)
 		})

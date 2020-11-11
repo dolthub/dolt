@@ -125,7 +125,7 @@ UPDATE onepk SET pk1 = v1 + pk1;
 			root := index_initialRoot
 			for _, sqlStatement := range strings.Split(test.sqlStatement, ";") {
 				var err error
-				root, err = common.executeModify(context.Background(), index_dEnv, root, sqlStatement)
+				root, err = executeModify(context.Background(), index_dEnv, root, sqlStatement)
 				require.NoError(t, err)
 			}
 
@@ -281,7 +281,7 @@ REPLACE INTO oneuni VALUES (4, 2, 2), (5, 2, 3), (3, 1, 1);
 			root := index_initialRoot
 			var err error
 			for _, sqlStatement := range strings.Split(test.sqlStatement, ";") {
-				root, err = common.executeModify(context.Background(), index_dEnv, root, sqlStatement)
+				root, err = executeModify(context.Background(), index_dEnv, root, sqlStatement)
 				if err != nil {
 					break
 				}

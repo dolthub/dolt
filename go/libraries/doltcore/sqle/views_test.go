@@ -23,7 +23,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/common"
 )
 
 // Not an exhaustive test of views -- we rely on bats tests for end-to-end verification.
@@ -48,7 +47,7 @@ func TestViews(t *testing.T) {
 		{int64(3)},
 		{int64(4)},
 	}
-	rows, _, err := common.executeSelect(context.Background(), dEnv, root, "select * from plus1")
+	rows, _, err := executeSelect(context.Background(), dEnv, root, "select * from plus1")
 	require.NoError(t, err)
 	assert.Equal(t, expectedRows, rows)
 
