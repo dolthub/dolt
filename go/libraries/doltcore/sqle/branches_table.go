@@ -36,7 +36,7 @@ type BranchesTable struct {
 }
 
 // NewBranchesTable creates a BranchesTable
-func NewBranchesTable(sqlCtx *sql.Context, dbName string) (*BranchesTable, error) {
+func NewBranchesTable(sqlCtx *sql.Context, dbName string) (sql.Table, error) {
 	ddb, ok := DSessFromSess(sqlCtx.Session).GetDoltDB(dbName)
 
 	if !ok {

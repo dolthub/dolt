@@ -251,3 +251,90 @@ teardown() {
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
 }
+
+@test "query dolt_commits" {
+    run dolt sql -q "SELECT count(*) FROM dolt_commits;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+
+    dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY);"
+    dolt add -A && dolt commit -m "added table test"
+
+    dolt branch other
+
+    dolt sql -q "INSERT INTO test VALUES (0);"
+    dolt add -A && dolt commit -m "added values to test on master"
+
+    dolt checkout other
+    dolt sql -q "INSERT INTO test VALUES (1);"
+    dolt add -A && dolt commit -m "added values to test on other"
+
+    run dolt sql -q "SELECT count(*) FROM dolt_commits;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "4" ]] || false
+}
+
+@test "query dolt_ancestor_commits" {
+    run dolt sql -q "SELECT count(*) FROM dolt_commit_ancestors;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+    run dolt sql -q "SELECT parent_hash FROM dolt_commit_ancestors;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "NULL" ]] || false
+
+    dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY);"
+    dolt add -A && dolt commit -m "commit A"
+
+    dolt branch other
+
+    dolt sql -q "INSERT INTO test VALUES (0);"
+    dolt add -A && dolt commit -m "commit B"
+
+    dolt checkout other
+    dolt sql -q "INSERT INTO test VALUES (1);"
+    dolt add -A && dolt commit -m "commit C"
+
+    dolt checkout master
+    dolt merge other
+    dolt add -A && dolt commit -m "commit M"
+
+    #         C--M
+    #        /  /
+    #  --*--A--B
+
+    run dolt sql -q "SELECT count(*) FROM dolt_commit_ancestors;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "6" ]] || false
+}
+
+@test "join dolt_commits and dolt_commit_ancestors" {
+    dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY);"
+    dolt add -A && dolt commit -m "commit A"
+
+    dolt branch other
+
+    dolt sql -q "INSERT INTO test VALUES (0);"
+    dolt add -A && dolt commit -m "commit B"
+
+    dolt checkout other
+    dolt sql -q "INSERT INTO test VALUES (1);"
+    dolt add -A && dolt commit -m "commit C"
+
+    dolt checkout master
+    dolt merge other
+    dolt add -A && dolt commit -m "commit M"
+
+    run dolt sql -q "
+        SELECT an.parent_index,cm.message
+        FROM dolt_commits as cm
+        JOIN dolt_commit_ancestors as an
+        ON cm.commit_hash = an.parent_hash
+        ORDER BY cm.date;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "parent_index,message" ]] || false
+    [[ "$output" =~ "0,Initialize data repository" ]] || false
+    [[ "$output" =~ "0,commit A" ]] || false
+    [[ "$output" =~ "0,commit A" ]] || false
+    [[ "$output" =~ "0,commit B" ]] || false
+    [[ "$output" =~ "1,commit C" ]] || false
+}

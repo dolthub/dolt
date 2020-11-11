@@ -32,7 +32,7 @@ type LogTable struct {
 }
 
 // NewLogTable creates a LogTable
-func NewLogTable(ctx *sql.Context, dbName string) (*LogTable, error) {
+func NewLogTable(ctx *sql.Context, dbName string) (sql.Table, error) {
 	ddb, ok := DSessFromSess(ctx.Session).GetDoltDB(dbName)
 
 	if !ok {
