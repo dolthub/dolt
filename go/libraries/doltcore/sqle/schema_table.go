@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/common"
 	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -161,7 +162,7 @@ func migrateOldSchemasTableToNew(
 		if err != nil {
 			return err
 		}
-		sqlRow, err := doltRowToSqlRow(dRow, schemasTable.sch)
+		sqlRow, err := common.DoltRowToSqlRow(dRow, schemasTable.sch)
 		if err != nil {
 			return err
 		}

@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/common"
 	"io"
 	"testing"
 
@@ -105,7 +106,7 @@ func ToSqlRows(sch schema.Schema, rs ...row.Row) []sql.Row {
 	sqlRows := make([]sql.Row, len(rs))
 	compressedSch := CompressSchema(sch)
 	for i := range rs {
-		sqlRows[i], _ = doltRowToSqlRow(CompressRow(sch, rs[i]), compressedSch)
+		sqlRows[i], _ = common.DoltRowToSqlRow(CompressRow(sch, rs[i]), compressedSch)
 	}
 	return sqlRows
 }

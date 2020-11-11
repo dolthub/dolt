@@ -47,7 +47,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/common"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
@@ -278,7 +280,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			}
 		}
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
-		sq, err := dsqle.RetrieveFromQueryCatalog(ctx, roots[currentDB], savedQueryName)
+		sq, err := dtables.RetrieveFromQueryCatalog(ctx, roots[currentDB], savedQueryName)
 
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -571,7 +573,7 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 
 // Saves the query given to the catalog with the name and message given.
 func saveQuery(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, query string, name string, message string) (*doltdb.RootValue, errhand.VerboseError) {
-	_, newRoot, err := dsqle.NewQueryCatalogEntryWithNameAsID(ctx, root, name, query, message)
+	_, newRoot, err := dtables.NewQueryCatalogEntryWithNameAsID(ctx, root, name, query, message)
 	if err != nil {
 		return nil, errhand.BuildDError("Couldn't save query").AddCause(err).Build()
 	}
@@ -1305,7 +1307,7 @@ func PrettyPrintResults(ctx context.Context, resultFormat resultFormat, sqlSch s
 	switch resultFormat {
 	case formatJson:
 		rowFn = func(r sql.Row) (r2 row.Row, err error) {
-			return dsqle.SqlRowToDoltRow(nbf, r, doltSch)
+			return common.SqlRowToDoltRow(nbf, r, doltSch)
 		}
 	default:
 		rowFn = func(r sql.Row) (row.Row, error) {

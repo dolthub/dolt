@@ -16,6 +16,7 @@ package integration_test
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"strings"
 	"testing"
 
@@ -24,7 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
 // This tests running queries against a modified subset of the stockmarket data set found here:

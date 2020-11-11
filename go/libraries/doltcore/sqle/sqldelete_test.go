@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	. "github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -201,12 +202,12 @@ var systemTableDeleteTests = []DeleteTest{
 	{
 		Name: "delete dolt_query_catalog",
 		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
-			DoltQueryCatalogSchema,
+			dtables.DoltQueryCatalogSchema,
 			NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 2+2 from dual"), types.String("description"))),
 		DeleteQuery:    "delete from dolt_query_catalog",
 		SelectQuery:    "select * from dolt_query_catalog",
-		ExpectedRows:   ToSqlRows(DoltQueryCatalogSchema),
-		ExpectedSchema: CompressSchema(DoltQueryCatalogSchema),
+		ExpectedRows:   ToSqlRows(dtables.DoltQueryCatalogSchema),
+		ExpectedSchema: CompressSchema(dtables.DoltQueryCatalogSchema),
 	},
 	{
 		Name: "delete dolt_schemas",
@@ -215,7 +216,7 @@ var systemTableDeleteTests = []DeleteTest{
 			NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual"))),
 		DeleteQuery:    "delete from dolt_schemas",
 		SelectQuery:    "select * from dolt_schemas",
-		ExpectedRows:   ToSqlRows(DoltQueryCatalogSchema),
+		ExpectedRows:   ToSqlRows(dtables.DoltQueryCatalogSchema),
 		ExpectedSchema: schemasTableDoltSchema(),
 	},
 }

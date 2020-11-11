@@ -28,7 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/common"
 	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
@@ -91,7 +91,7 @@ func nextQueryDiff(qd *querydiff.QueryDiffer, joiner *rowconv.Joiner) (row.Row, 
 	rows := make(map[string]row.Row)
 	if fromRow != nil {
 		sch := joiner.SchemaForName(diff.From)
-		oldRow, err := dsqle.SqlRowToDoltRow(types.Format_Default, fromRow, sch)
+		oldRow, err := common.SqlRowToDoltRow(types.Format_Default, fromRow, sch)
 		if err != nil {
 			return nil, pipeline.ImmutableProperties{}, err
 		}
@@ -100,7 +100,7 @@ func nextQueryDiff(qd *querydiff.QueryDiffer, joiner *rowconv.Joiner) (row.Row, 
 
 	if toRow != nil {
 		sch := joiner.SchemaForName(diff.To)
-		newRow, err := dsqle.SqlRowToDoltRow(types.Format_Default, toRow, sch)
+		newRow, err := common.SqlRowToDoltRow(types.Format_Default, toRow, sch)
 		if err != nil {
 			return nil, pipeline.ImmutableProperties{}, err
 		}

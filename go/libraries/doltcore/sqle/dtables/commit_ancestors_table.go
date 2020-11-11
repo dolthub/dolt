@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package dtables
 
 import (
 	"context"
@@ -20,6 +20,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/common"
 )
 
 var _ sql.Table = (*CommitAncestorsTable)(nil)
@@ -27,18 +28,12 @@ var _ sql.Table = (*CommitAncestorsTable)(nil)
 // CommitAncestorsTable is a sql.Table that implements a system table which
 // shows (commit, parent_commit) relationships for all commits in the repo.
 type CommitAncestorsTable struct {
-	dbName string
-	ddb    *doltdb.DoltDB
+	ddb *doltdb.DoltDB
 }
 
 // NewCommitAncestorsTable creates a CommitAncestorsTable
-func NewCommitAncestorsTable(ctx *sql.Context, dbName string) (sql.Table, error) {
-	ddb, ok := DSessFromSess(ctx.Session).GetDoltDB(dbName)
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	return &CommitAncestorsTable{dbName: dbName, ddb: ddb}, nil
+func NewCommitAncestorsTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
+	return &CommitAncestorsTable{ddb: ddb}
 }
 
 // Name is a sql.Table interface function which returns the name of the table.
@@ -63,7 +58,7 @@ func (dt *CommitAncestorsTable) Schema() sql.Schema {
 // Partitions is a sql.Table interface function that returns a partition
 // of the data. Currently the data is unpartitioned.
 func (dt *CommitAncestorsTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
-	return newSinglePartitionIter(), nil
+	return common.NewSinglePartitionIter(), nil
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition.

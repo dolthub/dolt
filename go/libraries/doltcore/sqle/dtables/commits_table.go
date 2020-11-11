@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package dtables
 
 import (
 	"context"
@@ -20,6 +20,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/common"
 )
 
 var _ sql.Table = (*CommitsTable)(nil)
@@ -32,14 +33,8 @@ type CommitsTable struct {
 }
 
 // NewCommitsTable creates a CommitsTable
-func NewCommitsTable(ctx *sql.Context, dbName string) (sql.Table, error) {
-	ddb, ok := DSessFromSess(ctx.Session).GetDoltDB(dbName)
-
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	return &CommitsTable{dbName: dbName, ddb: ddb}, nil
+func NewCommitsTable(ctx *sql.Context, ddb *doltdb.DoltDB) sql.Table {
+	return &CommitsTable{ddb: ddb}
 }
 
 // Name is a sql.Table interface function which returns the name of the table.
@@ -66,7 +61,7 @@ func (dt *CommitsTable) Schema() sql.Schema {
 // Partitions is a sql.Table interface function that returns a partition
 // of the data. Currently the data is unpartitioned.
 func (dt *CommitsTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
-	return newSinglePartitionIter(), nil
+	return common.NewSinglePartitionIter(), nil
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition.

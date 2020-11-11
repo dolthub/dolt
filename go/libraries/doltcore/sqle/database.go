@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -203,46 +204,53 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 	return db.GetTableInsensitiveWithRoot(ctx, root, tblName)
 }
 
-func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.RootValue, tblName string) (sql.Table, bool, error) {
+func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.RootValue, tblName string) (dt sql.Table, found bool, err error) {
 	lwrName := strings.ToLower(tblName)
 
-	prefixToNew := map[string]func(*sql.Context, Database, string) (sql.Table, error){
-		doltdb.DoltDiffTablePrefix:       NewDiffTable,
-		doltdb.DoltCommitDiffTablePrefix: NewCommitDiffTable,
-		doltdb.DoltHistoryTablePrefix:    NewHistoryTable,
-		doltdb.DoltConfTablePrefix:       NewConflictsTable,
+	head, _, err := DSessFromSess(ctx.Session).GetParentCommit(ctx, db.name)
+	if err != nil {
+		return nil, false, err
 	}
 
-	for prefix, newFunc := range prefixToNew {
-		if strings.HasPrefix(lwrName, prefix) {
-			tblName = tblName[len(prefix):]
-			dt, err := newFunc(ctx, db, tblName)
-
-			if err != nil {
-				return nil, false, err
-			}
-
-			return dt, true, nil
-		}
+	switch {
+	case strings.HasPrefix(lwrName, doltdb.DoltDiffTablePrefix):
+		suffix := tblName[len(doltdb.DoltDiffTablePrefix):]
+		found = true
+		dt, err = dtables.NewDiffTable(ctx, suffix, db.ddb, root, head)
+	case strings.HasPrefix(lwrName, doltdb.DoltCommitDiffTablePrefix):
+		suffix := tblName[len(doltdb.DoltCommitDiffTablePrefix):]
+		found = true
+		dt, err = dtables.NewCommitDiffTable(ctx, suffix, db.ddb, root, head)
+	case strings.HasPrefix(lwrName, doltdb.DoltHistoryTablePrefix):
+		suffix := tblName[len(doltdb.DoltHistoryTablePrefix):]
+		found = true
+		dt, err = dtables.NewHistoryTable(ctx, suffix, db.ddb, root, head)
+	case strings.HasPrefix(lwrName, doltdb.DoltConfTablePrefix):
+		suffix := tblName[len(doltdb.DoltConfTablePrefix):]
+		found = true
+		dt, err = dtables.NewConflictsTable(ctx, suffix, root, dtables.RootSetter(db))
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	if found {
+		return dt, found, nil
 	}
 
-	sysTblToNew := map[string]func(*sql.Context, string) (sql.Table, error){
-		doltdb.LogTableName:                NewLogTable,
-		doltdb.TableOfTablesInConflictName: NewTableOfTablesInConflict,
-		doltdb.BranchesTableName:           NewBranchesTable,
-		doltdb.CommitsTableName:            NewCommitsTable,
-		doltdb.CommitAncestorsTableName:    NewCommitAncestorsTable,
+	switch lwrName {
+	case doltdb.LogTableName:
+		dt, found = dtables.NewLogTable(ctx, db.ddb, head), true
+	case doltdb.TableOfTablesInConflictName:
+		dt, found = dtables.NewTableOfTablesInConflict(ctx, db.ddb, root), true
+	case doltdb.BranchesTableName:
+		dt, found = dtables.NewBranchesTable(ctx, db.ddb), true
+	case doltdb.CommitsTableName:
+		dt, found = dtables.NewCommitsTable(ctx, db.ddb), true
+	case doltdb.CommitAncestorsTableName:
+		dt, found = dtables.NewCommitAncestorsTable(ctx, db.ddb), true
 	}
-
-	for tblName, newFunc := range sysTblToNew {
-		if lwrName == tblName {
-			dt, err := newFunc(ctx, db.name)
-			if err != nil {
-				return nil, false, err
-			}
-
-			return dt, true, nil
-		}
+	if found {
+		return dt, found, nil
 	}
 
 	return db.getTable(ctx, root, tblName)

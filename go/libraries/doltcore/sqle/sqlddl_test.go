@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	. "github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -982,7 +983,7 @@ func TestAlterSystemTables(t *testing.T) {
 		env.DoltDocsSchema,
 		NewRow(types.String("LICENSE.md"), types.String("A license")))
 	dtestutils.CreateTestTable(t, dEnv, doltdb.DoltQueryCatalogTableName,
-		DoltQueryCatalogSchema,
+		dtables.DoltQueryCatalogSchema,
 		NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 2+2 from dual"), types.String("description")))
 	dtestutils.CreateTestTable(t, dEnv, doltdb.SchemasTableName,
 		schemasTableDoltSchema(),

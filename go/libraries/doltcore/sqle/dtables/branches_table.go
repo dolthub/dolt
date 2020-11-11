@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package dtables
 
 import (
 	"errors"
@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/common"
 )
 
 var _ sql.Table = (*BranchesTable)(nil)
@@ -36,14 +37,8 @@ type BranchesTable struct {
 }
 
 // NewBranchesTable creates a BranchesTable
-func NewBranchesTable(sqlCtx *sql.Context, dbName string) (sql.Table, error) {
-	ddb, ok := DSessFromSess(sqlCtx.Session).GetDoltDB(dbName)
-
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	return &BranchesTable{ddb}, nil
+func NewBranchesTable(_ *sql.Context, ddb *doltdb.DoltDB) sql.Table {
+	return &BranchesTable{ddb}
 }
 
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant
@@ -72,7 +67,7 @@ func (bt *BranchesTable) Schema() sql.Schema {
 
 // Partitions is a sql.Table interface function that returns a partition of the data.  Currently the data is unpartitioned.
 func (bt *BranchesTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
-	return newSinglePartitionIter(), nil
+	return common.NewSinglePartitionIter(), nil
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
