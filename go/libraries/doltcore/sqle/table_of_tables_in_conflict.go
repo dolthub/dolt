@@ -31,7 +31,7 @@ type TableOfTablesInConflict struct {
 }
 
 // NewTableOfTablesInConflict creates a TableOfTablesInConflict
-func NewTableOfTablesInConflict(ctx *sql.Context, dbName string) (*TableOfTablesInConflict, error) {
+func NewTableOfTablesInConflict(ctx *sql.Context, dbName string) (sql.Table, error) {
 	ddb, ok := DSessFromSess(ctx.Session).GetDoltDB(dbName)
 
 	if !ok {
