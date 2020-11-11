@@ -966,7 +966,7 @@ func TestRenameTable(t *testing.T) {
 }
 
 func TestAlterSystemTables(t *testing.T) {
-	systemTableNames := []string{"dolt_docs", "dolt_log", "dolt_history_people", "dolt_diff_people"}
+	systemTableNames := []string{"dolt_docs", "dolt_log", "dolt_history_people", "dolt_diff_people", "dolt_commit_diff_people"}
 	reservedTableNames := []string{"dolt_schemas", "dolt_query_catalog"}
 
 	dEnv := dtestutils.CreateTestEnv()
