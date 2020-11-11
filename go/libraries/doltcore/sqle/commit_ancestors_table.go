@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2020 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,8 +24,8 @@ import (
 
 var _ sql.Table = (*CommitAncestorsTable)(nil)
 
-// CommitAncestorsTable is a sql.Table implementation that implements a
-// system table which shows (commit, parent_commit) relationships.
+// CommitAncestorsTable is a sql.Table that implements a system table which
+// shows (commit, parent_commit) relationships for all commits in the repo.
 type CommitAncestorsTable struct {
 	dbName string
 	ddb    *doltdb.DoltDB
@@ -56,6 +56,7 @@ func (dt *CommitAncestorsTable) Schema() sql.Schema {
 	return []*sql.Column{
 		{Name: "commit_hash", Type: sql.Text, Source: doltdb.CommitAncestorsTableName, PrimaryKey: true},
 		{Name: "parent_hash", Type: sql.Text, Source: doltdb.CommitAncestorsTableName, PrimaryKey: true},
+		{Name: "parent_index", Type: sql.Int32, Source: doltdb.CommitAncestorsTableName, PrimaryKey: true},
 	}
 }
 
@@ -70,7 +71,7 @@ func (dt *CommitAncestorsTable) PartitionRows(sqlCtx *sql.Context, _ sql.Partiti
 	return NewCommitAncestorsRowItr(sqlCtx, dt.ddb)
 }
 
-// CommitAncestorsRowItr is a sql.RowItr implementation which iterates over each
+// CommitAncestorsRowItr is a sql.RowItr which iterates over each
 // (commit, parent_commit) pair as if it's a row in the table.
 type CommitAncestorsRowItr struct {
 	ctx   context.Context
@@ -99,6 +100,7 @@ func (itr *CommitAncestorsRowItr) Next() (sql.Row, error) {
 	if len(itr.cache) == 0 {
 		ch, cm, err := itr.itr.Next(itr.ctx)
 		if err != nil {
+			// When complete itr.Next will return io.EOF
 			return nil, err
 		}
 
@@ -119,7 +121,7 @@ func (itr *CommitAncestorsRowItr) Next() (sql.Row, error) {
 				return nil, err
 			}
 
-			itr.cache[i] = sql.NewRow(ch.String(), ph.String())
+			itr.cache[i] = sql.NewRow(ch.String(), ph.String(), int32(i))
 		}
 	}
 

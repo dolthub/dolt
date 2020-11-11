@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2020 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,8 +24,8 @@ import (
 
 var _ sql.Table = (*CommitsTable)(nil)
 
-// CommitsTable is a sql.Table implementation that implements a
-// system table which shows the commit log for the entire repo.
+// CommitsTable is a sql.Table that implements a system table which
+// shows the combined commit log for all branches in the repo.
 type CommitsTable struct {
 	dbName string
 	ddb    *doltdb.DoltDB
@@ -74,8 +74,7 @@ func (dt *CommitsTable) PartitionRows(sqlCtx *sql.Context, _ sql.Partition) (sql
 	return NewCommitsRowItr(sqlCtx, dt.ddb)
 }
 
-// CommitsRowItr is a sql.RowItr implementation which iterates over each
-// commit as if it's a row in the table.
+// CommitsRowItr is a sql.RowItr which iterates over each commit as if it's a row in the table.
 type CommitsRowItr struct {
 	ctx context.Context
 	itr doltdb.CommitItr

@@ -259,8 +259,17 @@ teardown() {
     dolt merge other
     dolt add -A && dolt commit -m "commit M"
 
-    run dolt sql -q "SELECT cm.message, an.parent_hash FROM dolt_commits as cm
-        JOIN dolt_commit_ancestors as an ON cm.commit_hash = an.commit_hash;" -r csv
+    run dolt sql -q "
+        SELECT an.parent_index,cm.message
+        FROM dolt_commits as cm
+        JOIN dolt_commit_ancestors as an
+        ON cm.commit_hash = an.parent_hash
+        ORDER BY cm.date;" -r csv
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 7 ]  # 6 results + header
+    [[ "$output" =~ "parent_index,message" ]] || false
+    [[ "$output" =~ "0,Initialize data repository" ]] || false
+    [[ "$output" =~ "0,commit A" ]] || false
+    [[ "$output" =~ "0,commit A" ]] || false
+    [[ "$output" =~ "0,commit B" ]] || false
+    [[ "$output" =~ "1,commit C" ]] || false
 }
