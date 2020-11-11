@@ -187,7 +187,11 @@ teardown() {
     [ "${#lines[@]}" -eq 6 ]
 }
 
-@test "dolt_commits smoke test" {
+@test "query dolt_commits" {
+    run dolt sql -q "SELECT count(*) FROM dolt_commits;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+
     dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY);"
     dolt add -A && dolt commit -m "added table test"
 
@@ -205,24 +209,58 @@ teardown() {
     [[ "$output" =~ "4" ]] || false
 }
 
-@test "dolt_ancestor_commits smoke test" {
+@test "query dolt_ancestor_commits" {
+    run dolt sql -q "SELECT count(*) FROM dolt_commit_ancestors;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+    run dolt sql -q "SELECT parent_hash FROM dolt_commit_ancestors;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "NULL" ]] || false
+
     dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY);"
-    dolt add -A && dolt commit -m "added table test"
+    dolt add -A && dolt commit -m "commit A"
 
     dolt branch other
 
     dolt sql -q "INSERT INTO test VALUES (0);"
-    dolt add -A && dolt commit -m "added values to test on master"
+    dolt add -A && dolt commit -m "commit B"
 
     dolt checkout other
     dolt sql -q "INSERT INTO test VALUES (1);"
-    dolt add -A && dolt commit -m "added values to test on other"
+    dolt add -A && dolt commit -m "commit C"
 
     dolt checkout master
     dolt merge other
-    dolt add -A && dolt commit -m "merged other"
+    dolt add -A && dolt commit -m "commit M"
+
+    #         C--M
+    #        /  /
+    #  --*--A--B
 
     run dolt sql -q "SELECT count(*) FROM dolt_commit_ancestors;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "6" ]] || false
+}
+
+@test "join dolt_commits and dolt_commit_ancestors" {
+    dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY);"
+    dolt add -A && dolt commit -m "commit A"
+
+    dolt branch other
+
+    dolt sql -q "INSERT INTO test VALUES (0);"
+    dolt add -A && dolt commit -m "commit B"
+
+    dolt checkout other
+    dolt sql -q "INSERT INTO test VALUES (1);"
+    dolt add -A && dolt commit -m "commit C"
+
+    dolt checkout master
+    dolt merge other
+    dolt add -A && dolt commit -m "commit M"
+
+    run dolt sql -q "SELECT cm.message, an.parent_hash FROM dolt_commits as cm
+        JOIN dolt_commit_ancestors as an ON cm.commit_hash = an.commit_hash;" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 7 ]  # 6 results + header
 }
