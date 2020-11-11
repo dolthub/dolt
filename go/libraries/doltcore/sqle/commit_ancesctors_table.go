@@ -24,7 +24,8 @@ import (
 
 var _ sql.Table = (*CommitAncestorsTable)(nil)
 
-// CommitAncestorsTable is a sql.Table implementation that implements a system table which shows the dolt commit log
+// CommitAncestorsTable is a sql.Table implementation that implements a
+// system table which shows (commit, parent_commit) relationships.
 type CommitAncestorsTable struct {
 	dbName string
 	ddb    *doltdb.DoltDB
@@ -33,7 +34,6 @@ type CommitAncestorsTable struct {
 // NewCommitAncestorsTable creates a CommitAncestorsTable
 func NewCommitAncestorsTable(ctx *sql.Context, dbName string) (sql.Table, error) {
 	ddb, ok := DSessFromSess(ctx.Session).GetDoltDB(dbName)
-
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
@@ -41,19 +41,17 @@ func NewCommitAncestorsTable(ctx *sql.Context, dbName string) (sql.Table, error)
 	return &CommitAncestorsTable{dbName: dbName, ddb: ddb}, nil
 }
 
-// Name is a sql.Table interface function which returns the name of the table which is defined by the constant
-// CommitAncestorsTableName
+// Name is a sql.Table interface function which returns the name of the table.
 func (dt *CommitAncestorsTable) Name() string {
 	return doltdb.CommitAncestorsTableName
 }
 
-// String is a sql.Table interface function which returns the name of the table which is defined by the constant
-// CommitAncestorsTableName
+// String is a sql.Table interface function which returns the name of the table.
 func (dt *CommitAncestorsTable) String() string {
 	return doltdb.CommitAncestorsTableName
 }
 
-// Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
+// Schema is a sql.Table interface function that gets the sql.Schema of the commit_ancestors system table.
 func (dt *CommitAncestorsTable) Schema() sql.Schema {
 	return []*sql.Column{
 		{Name: "commit_hash", Type: sql.Text, Source: doltdb.CommitAncestorsTableName, PrimaryKey: true},
@@ -61,27 +59,24 @@ func (dt *CommitAncestorsTable) Schema() sql.Schema {
 	}
 }
 
-// Partitions is a sql.Table interface function that returns a partition of the data. Currently the data is unpartitioned.
+// Partitions is a sql.Table interface function that returns a partition
+// of the data. Currently the data is unpartitioned.
 func (dt *CommitAncestorsTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 	return newSinglePartitionIter(), nil
 }
 
-// PartitionRows is a sql.Table interface function that gets a row iterator for a partition
+// PartitionRows is a sql.Table interface function that gets a row iterator for a partition.
 func (dt *CommitAncestorsTable) PartitionRows(sqlCtx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
 	return NewCommitAncestorsRowItr(sqlCtx, dt.ddb)
 }
 
-type hashPair struct {
-	commitHash string
-	parentHash string
-}
-
-// CommitAncestorsRowItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
+// CommitAncestorsRowItr is a sql.RowItr implementation which iterates over each
+// (commit, parent_commit) pair as if it's a row in the table.
 type CommitAncestorsRowItr struct {
-	ctx    context.Context
-	itr    doltdb.CommitItr
-	ddb    *doltdb.DoltDB
-	cached []hashPair
+	ctx   context.Context
+	itr   doltdb.CommitItr
+	ddb   *doltdb.DoltDB
+	cache []sql.Row
 }
 
 // NewCommitAncestorsRowItr creates a CommitAncestorsRowItr from the current environment.
@@ -101,7 +96,7 @@ func NewCommitAncestorsRowItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB) (*CommitA
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
 func (itr *CommitAncestorsRowItr) Next() (sql.Row, error) {
-	if len(itr.cached) == 0 {
+	if len(itr.cache) == 0 {
 		ch, cm, err := itr.itr.Next(itr.ctx)
 		if err != nil {
 			return nil, err
@@ -117,22 +112,19 @@ func (itr *CommitAncestorsRowItr) Next() (sql.Row, error) {
 			return sql.NewRow(ch.String(), nil), nil
 		}
 
-		itr.cached = make([]hashPair, len(parents))
+		itr.cache = make([]sql.Row, len(parents))
 		for i, p := range parents {
 			ph, err := p.HashOf()
 			if err != nil {
 				return nil, err
 			}
 
-			itr.cached[i] = hashPair{
-				commitHash: ch.String(),
-				parentHash: ph.String(),
-			}
+			itr.cache[i] = sql.NewRow(ch.String(), ph.String())
 		}
 	}
 
-	r := sql.NewRow(itr.cached[0].commitHash, itr.cached[0].parentHash)
-	itr.cached = itr.cached[1:]
+	r := itr.cache[0]
+	itr.cache = itr.cache[1:]
 	return r, nil
 }
 

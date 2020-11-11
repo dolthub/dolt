@@ -24,7 +24,8 @@ import (
 
 var _ sql.Table = (*CommitsTable)(nil)
 
-// CommitsTable is a sql.Table implementation that implements a system table which shows the dolt commit log
+// CommitsTable is a sql.Table implementation that implements a
+// system table which shows the commit log for the entire repo.
 type CommitsTable struct {
 	dbName string
 	ddb    *doltdb.DoltDB
@@ -41,19 +42,17 @@ func NewCommitsTable(ctx *sql.Context, dbName string) (sql.Table, error) {
 	return &CommitsTable{dbName: dbName, ddb: ddb}, nil
 }
 
-// Name is a sql.Table interface function which returns the name of the table which is defined by the constant
-// CommitsTableName
+// Name is a sql.Table interface function which returns the name of the table.
 func (dt *CommitsTable) Name() string {
 	return doltdb.CommitsTableName
 }
 
-// String is a sql.Table interface function which returns the name of the table which is defined by the constant
-// CommitsTableName
+// String is a sql.Table interface function which returns the name of the table.
 func (dt *CommitsTable) String() string {
 	return doltdb.CommitsTableName
 }
 
-// Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
+// Schema is a sql.Table interface function that gets the sql.Schema of the commits system table.
 func (dt *CommitsTable) Schema() sql.Schema {
 	return []*sql.Column{
 		{Name: "commit_hash", Type: sql.Text, Source: doltdb.CommitsTableName, PrimaryKey: true},
@@ -64,17 +63,19 @@ func (dt *CommitsTable) Schema() sql.Schema {
 	}
 }
 
-// Partitions is a sql.Table interface function that returns a partition of the data. Currently the data is unpartitioned.
+// Partitions is a sql.Table interface function that returns a partition
+// of the data. Currently the data is unpartitioned.
 func (dt *CommitsTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 	return newSinglePartitionIter(), nil
 }
 
-// PartitionRows is a sql.Table interface function that gets a row iterator for a partition
+// PartitionRows is a sql.Table interface function that gets a row iterator for a partition.
 func (dt *CommitsTable) PartitionRows(sqlCtx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
 	return NewCommitsRowItr(sqlCtx, dt.ddb)
 }
 
-// CommitsRowItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
+// CommitsRowItr is a sql.RowItr implementation which iterates over each
+// commit as if it's a row in the table.
 type CommitsRowItr struct {
 	ctx context.Context
 	itr doltdb.CommitItr

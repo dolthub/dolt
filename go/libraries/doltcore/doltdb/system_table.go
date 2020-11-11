@@ -266,6 +266,6 @@ const (
 	// CommitsTableName is the commits system table name
 	CommitsTableName = "dolt_commits"
 
-	// CommitAncestorsTableName is the commits system table name
+	// CommitAncestorsTableName is the commit_ancestors system table name
 	CommitAncestorsTableName = "dolt_commit_ancestors"
 )
