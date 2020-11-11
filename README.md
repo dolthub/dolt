@@ -119,8 +119,8 @@ $ dolt config --global --add user.name "YOUR NAME"
 Let's create our first repo, storing state population data.
 
 ```
-$ mkdir state-populations
-$ cd state-populations
+$ mkdir state-pops
+$ cd state-pops
 ```
 
 Run `dolt init` to set up a new `dolt` repo, just like you do with
@@ -284,7 +284,7 @@ $ dolt clone dolthub/corona-virus
 ...
 $ cd corona-virus
 $ dolt remote -v
-origin https://doltremoteapi.dolthub.com/Liquidata/corona-virus
+origin https://doltremoteapi.dolthub.com/dolthub/corona-virus
 ```
 
 To push to a remote, you'll need credentials. Run `dolt login` to open
@@ -333,17 +333,18 @@ dolt remote add <remote> aws://dynamo-table:s3-bucket/database
 dolt remote add <remote> gs://gcs-bucket/database
 ```
 
-# Interesting Datasets to Clone
+# Interesting datasets to clone
 
 [DoltHub](https://dolthub.com) has lots of interesting datasets to
 explore and clone. Here are some of our favorites.
 
-- WordNet: https://www.dolthub.com/repositories/Liquidata/word-net
-- ImageNet: https://www.dolthub.com/repositories/Liquidata/image-net
-- Google Open Images: https://www.dolthub.com/repositories/Liquidata/open-images  
-- Iris Classification: https://www.dolthub.com/repositories/Liquidata/classified-iris-measurements  
-- Public Holidays: https://www.dolthub.com/repositories/oscarbatori/holidays  
-- IP Address to Country: https://www.dolthub.com/repositories/Liquidata/ip-to-country
+- Coronavirus: https://www.dolthub.com/repositories/dolthub/corona-virus
+- WordNet: https://www.dolthub.com/repositories/dolthub/word-net
+- ImageNet: https://www.dolthub.com/repositories/dolthub/image-net
+- Google Open Images: https://www.dolthub.com/repositories/dolthub/open-images
+- Iris Classification: https://www.dolthub.com/repositories/dolthub/classified-iris-measurements
+- Public Holidays: https://www.dolthub.com/repositories/oscarbatori/holidays
+- IP Address to Country: https://www.dolthub.com/repositories/dolthub/ip-to-country
 
 # More documentation
 

@@ -1,6 +1,6 @@
 # Windows support
 
-Dolt is test and supported on windows! If you find any problems
+Dolt is tested and supported on windows! If you find any problems
 specific to Windows, please file an
 [issue](https://github.com/dolthub/dolt/issues/) and let us know.
 
