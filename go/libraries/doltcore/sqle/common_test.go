@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/common"
 	"io"
 	"testing"
 
@@ -32,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/common"
 	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
 	"github.com/dolthub/dolt/go/store/types"
 )

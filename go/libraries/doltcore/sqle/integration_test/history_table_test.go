@@ -17,7 +17,6 @@ package integration_test
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -28,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
 func TestHistoryTable(t *testing.T) {
