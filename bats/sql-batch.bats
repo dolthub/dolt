@@ -80,7 +80,7 @@ SQL
     [[ "$output" =~ "poop" ]] || false
 }
 
-@test "sql reset_hard() function" {
+@test "sql dolt_reset('hard') function" {
     mkdir test && cd test && dolt init
     dolt sql <<SQL
 CREATE TABLE test (
@@ -102,7 +102,7 @@ SQL
     [[ "$output" =~ "test" ]] || false
 
    dolt sql <<SQL
-SET @@test_head=reset_hard();
+SET @@test_head=dolt_reset('hard');
 REPLACE INTO dolt_branches (hash,name) VALUES (@@test_head,'master');
 SQL
 
@@ -112,7 +112,7 @@ SQL
 
     dolt sql <<SQL
 INSERT INTO test VALUES (1,1);
-SET @@test_head = reset_hard();
+SET @@test_head = dolt_reset('hard');
 REPLACE INTO dolt_branches (hash,name) VALUES (@@test_head,'master');
 SQL
 

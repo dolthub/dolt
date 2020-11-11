@@ -169,7 +169,7 @@ SQL
     [[ "$output" =~ "test" ]] || false
 
     multi_query 1 "
-        SET @@repo1_head = reset_hard();
+        SET @@repo1_head = dolt_reset('hard');
         REPLACE INTO dolt_branches (name,hash) VALUES ('master', @@repo1_head);"
 
     run dolt status
@@ -181,7 +181,7 @@ SQL
 
     multi_query 1 "
         INSERT INTO test VALUES (8,8);
-        SET @@repo1_head=reset_hard();
+        SET @@repo1_head=dolt_reset('hard');
         REPLACE INTO dolt_branches (name,hash) VALUES ('master', @@repo1_head);"
 
     run dolt status

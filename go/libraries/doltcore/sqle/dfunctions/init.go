@@ -20,5 +20,5 @@ var DoltFunctions = []sql.Function{
 	sql.Function1{Name: HashOfFuncName, Fn: NewHashOf},
 	sql.Function1{Name: CommitFuncName, Fn: NewCommitFunc},
 	sql.Function1{Name: MergeFuncName, Fn: NewMergeFunc},
-	sql.Function0{Name: ResetHardFuncName, Fn: NewResetHardFunc},
+	sql.Function1{Name: resetFuncName, Fn: NewDoltResetFunc},
 }

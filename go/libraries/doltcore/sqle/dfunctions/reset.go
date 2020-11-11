@@ -15,30 +15,56 @@
 package dfunctions
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
-const ResetHardFuncName = "reset_hard"
+const (
+	resetFuncName = "dolt_reset"
 
-type ResetHardFunc struct{}
+	resetHardParameter = "hard"
+)
 
-// NewResetHardFunc creates a new ResetHardFunc expression.
-func NewResetHardFunc() sql.Expression {
-	return ResetHardFunc{}
+type DoltResetFunc struct {
+	expression.UnaryExpression
+}
+
+// NewDoltResetFunc creates a new DoltResetFunc expression.
+func NewDoltResetFunc(e sql.Expression) sql.Expression {
+	return DoltResetFunc{expression.UnaryExpression{Child: e}}
 }
 
 // Eval implements the Expression interface.
-func (rf ResetHardFunc) Eval(ctx *sql.Context, _ sql.Row) (interface{}, error) {
+func (rf DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
+	val, err := rf.Child.Eval(ctx, row)
+	if err != nil {
+		return nil, err
+	}
+	arg, ok := val.(string)
+	if !ok {
+		return nil, sql.ErrInvalidChildType.New(rf.Child.String(), rf.Child.Type(), sql.Text.Type())
+	}
+
 	dbName := ctx.GetCurrentDatabase()
 	dSess := sqle.DSessFromSess(ctx.Session)
+
+	var h hash.Hash
+	if strings.ToLower(arg) != "hard" {
+		return nil, fmt.Errorf("invalid arugument to %s(): %s", resetFuncName, arg)
+	}
+
 	parent, _, err := dSess.GetParentCommit(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
 
-	h, err := parent.HashOf()
+	h, err = parent.HashOf()
 	if err != nil {
 		return nil, err
 	}
@@ -47,34 +73,34 @@ func (rf ResetHardFunc) Eval(ctx *sql.Context, _ sql.Row) (interface{}, error) {
 }
 
 // Resolved implements the Expression interface.
-func (rf ResetHardFunc) Resolved() bool {
-	return true
+func (rf DoltResetFunc) Resolved() bool {
+	return rf.Child.Resolved()
 }
 
 // String implements the Stringer interface.
-func (rf ResetHardFunc) String() string {
-	return "RESET_HARD()"
+func (rf DoltResetFunc) String() string {
+	return fmt.Sprintf("RESET_HARD(%s)", rf.Child.String())
 }
 
 // IsNullable implements the Expression interface.
-func (rf ResetHardFunc) IsNullable() bool {
+func (rf DoltResetFunc) IsNullable() bool {
 	return false
 }
 
 // Children implements the Expression interface.
-func (rf ResetHardFunc) Children() []sql.Expression {
-	return nil
+func (rf DoltResetFunc) Children() []sql.Expression {
+	return []sql.Expression{rf.Child}
 }
 
 // WithChildren implements the Expression interface.
-func (rf ResetHardFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
-	if len(children) != 0 {
-		return nil, sql.ErrInvalidChildrenNumber.New(rf, len(children), 0)
+func (rf DoltResetFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
+	if len(children) != 1 {
+		return nil, sql.ErrInvalidChildrenNumber.New(rf, len(children), 1)
 	}
-	return rf, nil
+	return NewDoltResetFunc(children[0]), nil
 }
 
 // Type implements the Expression interface.
-func (rf ResetHardFunc) Type() sql.Type {
+func (rf DoltResetFunc) Type() sql.Type {
 	return sql.Text
 }
