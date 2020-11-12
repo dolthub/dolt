@@ -136,6 +136,8 @@ var generatedSystemTables = []string{
 	BranchesTableName,
 	LogTableName,
 	TableOfTablesInConflictName,
+	CommitsTableName,
+	CommitAncestorsTableName,
 }
 
 var generatedSystemTablePrefixes = []string{
