@@ -29,6 +29,7 @@ type DoltIndex interface {
 	sql.Index
 	sql.AscendIndex
 	sql.DescendIndex
+	sql.NegateIndex
 	Schema() schema.Schema
 	IndexSchema() schema.Schema
 	TableData() types.Map
@@ -173,6 +174,26 @@ func (di *doltIndex) Get(keys ...interface{}) (sql.IndexLookup, error) {
 		idx: di,
 		ranges: []lookup.Range{
 			r,
+		},
+	}, nil
+}
+
+// Not implements sql.NegateIndex
+func (di *doltIndex) Not(keys ...interface{}) (sql.IndexLookup, error) {
+	tpl, err := di.keysToTuple(keys)
+	if err != nil {
+		return nil, err
+	}
+	r1 := lookup.LessThanRange(tpl)
+	r2, err := lookup.GreaterThanRange(tpl)
+	if err != nil {
+		return nil, err
+	}
+	return &doltIndexLookup{
+		idx: di,
+		ranges: []lookup.Range{
+			r1,
+			r2,
 		},
 	}, nil
 }
