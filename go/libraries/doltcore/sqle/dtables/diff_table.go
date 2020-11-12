@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package dtables
 
 import (
 	"context"
@@ -28,7 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expreval"
-	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -57,9 +57,11 @@ func fromNamer(name string) string {
 var _ sql.Table = (*DiffTable)(nil)
 
 type DiffTable struct {
-	name             string
-	dbName           string
-	ddb              *doltdb.DoltDB
+	name        string
+	ddb         *doltdb.DoltDB
+	workingRoot *doltdb.RootValue
+	head        *doltdb.Commit
+
 	ss               *schema.SuperSchema
 	joiner           *rowconv.Joiner
 	sqlSch           sql.Schema
@@ -67,26 +69,10 @@ type DiffTable struct {
 	rowFilters       []sql.Expression
 }
 
-func NewDiffTable(ctx *sql.Context, db Database, tblName string) (sql.Table, error) {
-	sess := DSessFromSess(ctx.Session)
-	dbName := db.Name()
-
-	ddb, ok := sess.GetDoltDB(dbName)
-
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
-	}
-
+func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue, head *doltdb.Commit) (sql.Table, error) {
 	diffTblName := doltdb.DoltDiffTablePrefix + tblName
 
-	workingRoot, ok := sess.GetRoot(dbName)
-
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	ss, err := calcSuperSchema(ctx, workingRoot, tblName)
-
+	ss, err := calcSuperSchema(ctx, root, tblName)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +101,7 @@ func NewDiffTable(ctx *sql.Context, db Database, tblName string) (sql.Table, err
 		return nil, err
 	}
 
-	sqlSch, err := sqleSchema.FromDoltSchema(diffTblName, j.GetSchema())
+	sqlSch, err := sqlutil.FromDoltSchema(diffTblName, j.GetSchema())
 
 	if err != nil {
 		return nil, err
@@ -135,7 +121,17 @@ func NewDiffTable(ctx *sql.Context, db Database, tblName string) (sql.Table, err
 		Source:   diffTblName,
 	})
 
-	return &DiffTable{tblName, dbName, ddb, ss, j, sqlSch, nil, nil}, nil
+	return &DiffTable{
+		name:             tblName,
+		ddb:              ddb,
+		workingRoot:      root,
+		head:             head,
+		ss:               ss,
+		joiner:           j,
+		sqlSch:           sqlSch,
+		partitionFilters: nil,
+		rowFilters:       nil,
+	}, nil
 }
 
 func (dt *DiffTable) Name() string {
@@ -151,20 +147,7 @@ func (dt *DiffTable) Schema() sql.Schema {
 }
 
 func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	sess := DSessFromSess(ctx.Session)
-	rootCmt, _, err := sess.GetParentCommit(ctx, dt.dbName)
-
-	if err != nil {
-		return nil, err
-	}
-
-	workingRoot, ok := sess.GetRoot(dt.dbName)
-
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dt.dbName)
-	}
-
-	cmItr := doltdb.CommitItrForRoots(dt.ddb, rootCmt)
+	cmItr := doltdb.CommitItrForRoots(dt.ddb, dt.head)
 
 	sf, err := selectFuncForFilters(dt.ddb.Format(), dt.partitionFilters)
 
@@ -172,7 +155,7 @@ func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 		return nil, err
 	}
 
-	return newDiffPartitions(ctx, cmItr, workingRoot, dt.name, sf)
+	return newDiffPartitions(ctx, cmItr, dt.workingRoot, dt.name, sf)
 }
 
 var partitionFilterCols = set.NewStrSet([]string{toCommit, fromCommit, toCommitDate, fromCommitDate})
@@ -301,7 +284,7 @@ func (itr *diffRowItr) Next() (sql.Row, error) {
 		}
 	}
 
-	sqlRow, err := doltRowToSqlRow(r, itr.sch)
+	sqlRow, err := sqlutil.DoltRowToSqlRow(r, itr.sch)
 
 	if err != nil {
 		return nil, err

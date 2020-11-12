@@ -32,7 +32,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	. "github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
-	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -982,7 +983,7 @@ func TestAlterSystemTables(t *testing.T) {
 		env.DoltDocsSchema,
 		NewRow(types.String("LICENSE.md"), types.String("A license")))
 	dtestutils.CreateTestTable(t, dEnv, doltdb.DoltQueryCatalogTableName,
-		DoltQueryCatalogSchema,
+		dtables.DoltQueryCatalogSchema,
 		NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 2+2 from dual"), types.String("description")))
 	dtestutils.CreateTestTable(t, dEnv, doltdb.SchemasTableName,
 		schemasTableDoltSchema(),
@@ -1232,7 +1233,7 @@ func TestParseCreateTableStatement(t *testing.T) {
 			ctx := context.Background()
 			root, _ := dEnv.WorkingRoot(ctx)
 
-			tblName, sch, err := sqleSchema.ParseCreateTableStatement(ctx, root, tt.query)
+			tblName, sch, err := sqlutil.ParseCreateTableStatement(ctx, root, tt.query)
 
 			if tt.expectedErr != "" {
 				require.Error(t, err)

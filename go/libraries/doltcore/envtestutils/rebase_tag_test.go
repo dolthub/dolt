@@ -34,7 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -544,7 +544,7 @@ func checkRows(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, tableNam
 
 	s, rowIter, err := engine.Query(sqlCtx, selectQuery)
 	require.NoError(t, err)
-	_, err = sqleSchema.ToDoltSchema(context.Background(), root, tableName, s)
+	_, err = sqlutil.ToDoltSchema(context.Background(), root, tableName, s)
 	require.NoError(t, err)
 
 	actualRows := []row.Row{}
@@ -554,7 +554,7 @@ func checkRows(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, tableNam
 			break
 		}
 		require.NoError(t, err)
-		rr, err := dsqle.SqlRowToDoltRow(root.VRW().Format(), r, sch)
+		rr, err := sqlutil.SqlRowToDoltRow(root.VRW().Format(), r, sch)
 		require.NoError(t, err)
 		actualRows = append(actualRows, rr)
 	}

@@ -22,7 +22,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -89,7 +89,7 @@ func updateTableWithNewSchema(ctx context.Context, tblName string, tbl *doltdb.T
 
 	me := rowData.Edit()
 
-	newSqlSchema, err := sqleSchema.FromDoltSchema(tblName, newSchema)
+	newSqlSchema, err := sqlutil.FromDoltSchema(tblName, newSchema)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +109,7 @@ func updateTableWithNewSchema(ctx context.Context, tblName string, tbl *doltdb.T
 		if err != nil {
 			return true, err
 		}
-		newRow, err := sqleSchema.ApplyDefaults(ctx, newSchema, newSqlSchema, []int{columnIndex}, oldRow)
+		newRow, err := sqlutil.ApplyDefaults(ctx, newSchema, newSqlSchema, []int{columnIndex}, oldRow)
 		if err != nil {
 			return true, err
 		}

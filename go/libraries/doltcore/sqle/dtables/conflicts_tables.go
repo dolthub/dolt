@@ -1,4 +1,4 @@
-package sqle
+package dtables
 
 // Copyright 2019 Dolthub, Inc.
 //
@@ -19,7 +19,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -28,25 +28,19 @@ var _ sql.Table = ConflictsTable{}
 // ConflictsTable is a sql.Table implementation that provides access to the conflicts that exist for a user table
 type ConflictsTable struct {
 	tblName string
-	dbName  string
 	sqlSch  sql.Schema
 	root    *doltdb.RootValue
 	tbl     *doltdb.Table
 	rd      *merge.ConflictReader
-	db      Database
+	rs      RootSetter
+}
+
+type RootSetter interface {
+	SetRoot(ctx *sql.Context, root *doltdb.RootValue) error
 }
 
 // NewConflictsTable returns a new ConflictsTableTable instance
-func NewConflictsTable(ctx *sql.Context, db Database, tblName string) (sql.Table, error) {
-	sess := DSessFromSess(ctx.Session)
-	dbName := db.Name()
-
-	root, ok := sess.GetRoot(dbName)
-
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
-	}
-
+func NewConflictsTable(ctx *sql.Context, tblName string, root *doltdb.RootValue, rs RootSetter) (sql.Table, error) {
 	tbl, ok, err := root.GetTable(ctx, tblName)
 
 	if err != nil {
@@ -61,13 +55,20 @@ func NewConflictsTable(ctx *sql.Context, db Database, tblName string) (sql.Table
 		return nil, err
 	}
 
-	sqlSch, err := sqleSchema.FromDoltSchema(doltdb.DoltConfTablePrefix+tblName, rd.GetSchema())
+	sqlSch, err := sqlutil.FromDoltSchema(doltdb.DoltConfTablePrefix+tblName, rd.GetSchema())
 
 	if err != nil {
 		return nil, err
 	}
 
-	return ConflictsTable{tblName, dbName, sqlSch, root, tbl, rd, db}, nil
+	return ConflictsTable{
+		tblName: tblName,
+		sqlSch:  sqlSch,
+		root:    root,
+		tbl:     tbl,
+		rd:      rd,
+		rs:      rs,
+	}, nil
 }
 
 // Name returns the name of the table
@@ -87,7 +88,7 @@ func (ct ConflictsTable) Schema() sql.Schema {
 
 // Partitions returns a PartitionIter which can be used to get all the data partitions
 func (ct ConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	return newSinglePartitionIter(), nil
+	return sqlutil.NewSinglePartitionIter(), nil
 }
 
 // PartitionRows returns a RowIter for the given partition
@@ -98,7 +99,7 @@ func (ct ConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sq
 // Deleter returns a RowDeleter for this table. The RowDeleter will get one call to Delete for each row to be deleted,
 // and will end with a call to Close() to finalize the delete operation.
 func (ct ConflictsTable) Deleter(*sql.Context) sql.RowDeleter {
-	return &conflictDeleter{ct, nil}
+	return &conflictDeleter{ct: ct, rs: ct.rs}
 }
 
 type conflictRowIter struct {
@@ -115,7 +116,7 @@ func (itr conflictRowIter) Next() (sql.Row, error) {
 		return nil, err
 	}
 
-	return doltRowToSqlRow(cnf, itr.rd.GetSchema())
+	return sqlutil.DoltRowToSqlRow(cnf, itr.rd.GetSchema())
 }
 
 // Close the iterator.
@@ -123,10 +124,11 @@ func (itr conflictRowIter) Close() error {
 	return itr.rd.Close()
 }
 
-var _ sql.RowDeleter = &conflictDeleter{ConflictsTable{}, nil}
+var _ sql.RowDeleter = &conflictDeleter{}
 
 type conflictDeleter struct {
 	ct  ConflictsTable
+	rs  RootSetter
 	pks []types.Value
 }
 
@@ -135,7 +137,7 @@ type conflictDeleter struct {
 // Close is called.
 func (cd *conflictDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 	cnfSch := cd.ct.rd.GetSchema()
-	cnfRow, err := SqlRowToDoltRow(cd.ct.tbl.Format(), r, cnfSch)
+	cnfRow, err := sqlutil.SqlRowToDoltRow(cd.ct.tbl.Format(), r, cnfSch)
 
 	if err != nil {
 		return err
@@ -165,5 +167,5 @@ func (cd *conflictDeleter) Close(ctx *sql.Context) error {
 		return err
 	}
 
-	return cd.ct.db.SetRoot(ctx, updatedRoot)
+	return cd.rs.SetRoot(ctx, updatedRoot)
 }

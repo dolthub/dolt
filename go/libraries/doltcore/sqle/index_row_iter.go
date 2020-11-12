@@ -17,10 +17,11 @@ package sqle
 import (
 	"io"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/store/types"
-
 	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type indexLookupRowIterAdapter struct {
@@ -55,7 +56,7 @@ func (i *indexLookupRowIterAdapter) Next() (sql.Row, error) {
 		return nil, err
 	}
 
-	return doltRowToSqlRow(r, i.idx.Schema())
+	return sqlutil.DoltRowToSqlRow(r, i.idx.Schema())
 }
 
 func (*indexLookupRowIterAdapter) Close() error {

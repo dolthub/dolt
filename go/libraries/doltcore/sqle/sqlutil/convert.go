@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2020 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package schema
+package sqlutil
 
 import (
 	"context"
@@ -20,8 +20,6 @@ import (
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/parse"
-	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -30,45 +28,47 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// ApplyDefaults applies the default values to the given indices, returning the resulting row.
-func ApplyDefaults(ctx context.Context, doltSchema schema.Schema, sqlSchema sql.Schema, indicesOfColumns []int, dRow row.Row) (row.Row, error) {
-	if len(indicesOfColumns) == 0 {
-		return dRow, nil
-	}
-	sqlCtx, ok := ctx.(*sql.Context)
-	if !ok {
-		sqlCtx = sql.NewContext(ctx)
-	}
-	doltCols := doltSchema.GetAllCols()
-	oldSqlRow := make(sql.Row, len(sqlSchema))
-	for i, tag := range doltCols.Tags {
-		val, ok := dRow.GetColVal(tag)
-		if ok {
-			var err error
-			oldSqlRow[i], err = doltCols.TagToCol[tag].TypeInfo.ConvertNomsValueToValue(val)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			oldSqlRow[i] = nil
+// Returns a SQL row representation for the dolt row given.
+func DoltRowToSqlRow(doltRow row.Row, sch schema.Schema) (sql.Row, error) {
+	colVals := make(sql.Row, sch.GetAllCols().Size())
+
+	i := 0
+	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		var innerErr error
+		value, _ := doltRow.GetColVal(tag)
+		colVals[i], innerErr = col.TypeInfo.ConvertNomsValueToValue(value)
+		if innerErr != nil {
+			return true, innerErr
 		}
-	}
-	newSqlRow, err := sqle.ApplyDefaults(sqlCtx, sqlSchema, indicesOfColumns, oldSqlRow)
+		i++
+		return false, nil
+	})
+
 	if err != nil {
 		return nil, err
 	}
-	newRow := make(row.TaggedValues)
-	for i, tag := range doltCols.Tags {
-		if newSqlRow[i] == nil {
-			continue
+
+	return sql.NewRow(colVals...), nil
+}
+
+// Returns a Dolt row representation for SQL row given
+func SqlRowToDoltRow(nbf *types.NomsBinFormat, r sql.Row, doltSchema schema.Schema) (row.Row, error) {
+	taggedVals := make(row.TaggedValues)
+	allCols := doltSchema.GetAllCols()
+	for i, val := range r {
+		tag := allCols.Tags[i]
+		schCol := allCols.TagToCol[tag]
+		if val != nil {
+			var err error
+			taggedVals[tag], err = schCol.TypeInfo.ConvertValueToNomsValue(val)
+			if err != nil {
+				return nil, err
+			}
+		} else if !schCol.IsNullable() {
+			return nil, fmt.Errorf("column <%v> received nil but is non-nullable", schCol.Name)
 		}
-		val, err := doltCols.TagToCol[tag].TypeInfo.ConvertValueToNomsValue(newSqlRow[i])
-		if err != nil {
-			return nil, err
-		}
-		newRow[tag] = val
 	}
-	return row.New(dRow.Format(), doltSchema, newRow)
+	return row.New(nbf, doltSchema, taggedVals)
 }
 
 // ToDoltResultSchema returns a dolt Schema from the sql schema given, suitable for use as a result set. For
@@ -89,36 +89,6 @@ func ToDoltResultSchema(sqlSchema sql.Schema) (schema.Schema, error) {
 	}
 
 	return schema.UnkeyedSchemaFromCols(colColl), nil
-}
-
-// ParseCreateTableStatement will parse a CREATE TABLE ddl statement and use it to create a Dolt Schema. A RootValue
-// is used to generate unique tags for the Schema
-func ParseCreateTableStatement(ctx context.Context, root *doltdb.RootValue, query string) (string, schema.Schema, error) {
-	// todo: verify create table statement
-	ddl, err := sqlparser.ParseStrictDDL(query)
-
-	if err != nil {
-		return "", nil, err
-	}
-
-	ts := ddl.(*sqlparser.DDL).TableSpec
-	s, err := parse.TableSpecToSchema(sql.NewContext(ctx), ts)
-
-	if err != nil {
-		return "", nil, err
-	}
-
-	tn := ddl.(*sqlparser.DDL).Table
-	buf := sqlparser.NewTrackedBuffer(nil)
-	tn.Format(buf)
-	tableName := buf.String()
-	sch, err := ToDoltSchema(ctx, root, tableName, s)
-
-	if err != nil {
-		return "", nil, err
-	}
-
-	return tableName, sch, err
 }
 
 func FromDoltSchema(tableName string, sch schema.Schema) (sql.Schema, error) {

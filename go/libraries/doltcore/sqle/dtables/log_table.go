@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package dtables
 
 import (
 	"io"
@@ -21,25 +21,20 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 )
 
 var _ sql.Table = (*LogTable)(nil)
 
 // LogTable is a sql.Table implementation that implements a system table which shows the dolt commit log
 type LogTable struct {
-	dbName string
-	ddb    *doltdb.DoltDB
+	ddb  *doltdb.DoltDB
+	head *doltdb.Commit
 }
 
 // NewLogTable creates a LogTable
-func NewLogTable(ctx *sql.Context, dbName string) (sql.Table, error) {
-	ddb, ok := DSessFromSess(ctx.Session).GetDoltDB(dbName)
-
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	return &LogTable{dbName: dbName, ddb: ddb}, nil
+func NewLogTable(_ *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
+	return &LogTable{ddb: ddb, head: head}
 }
 
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant
@@ -67,12 +62,12 @@ func (dt *LogTable) Schema() sql.Schema {
 
 // Partitions is a sql.Table interface function that returns a partition of the data.  Currently the data is unpartitioned.
 func (dt *LogTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
-	return newSinglePartitionIter(), nil
+	return sqlutil.NewSinglePartitionIter(), nil
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
 func (dt *LogTable) PartitionRows(sqlCtx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
-	return NewLogItr(sqlCtx, dt.dbName, dt.ddb)
+	return NewLogItr(sqlCtx, dt.ddb, dt.head)
 }
 
 // LogItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
@@ -82,15 +77,8 @@ type LogItr struct {
 }
 
 // NewLogItr creates a LogItr from the current environment.
-func NewLogItr(sqlCtx *sql.Context, dbName string, ddb *doltdb.DoltDB) (*LogItr, error) {
-	sess := DSessFromSess(sqlCtx.Session)
-	commit, _, err := sess.GetParentCommit(sqlCtx, dbName)
-
-	if err != nil {
-		return nil, err
-	}
-
-	commits, err := actions.TimeSortedCommits(sqlCtx, ddb, commit, -1)
+func NewLogItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) (*LogItr, error) {
+	commits, err := actions.TimeSortedCommits(sqlCtx, ddb, head, -1)
 
 	if err != nil {
 		return nil, err

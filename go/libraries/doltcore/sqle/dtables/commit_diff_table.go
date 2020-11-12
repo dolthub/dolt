@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package dtables
 
 import (
 	"context"
@@ -30,7 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -41,7 +41,6 @@ var _ sql.Table = (*CommitDiffTable)(nil)
 
 type CommitDiffTable struct {
 	name              string
-	dbName            string
 	ddb               *doltdb.DoltDB
 	ss                *schema.SuperSchema
 	joiner            *rowconv.Joiner
@@ -52,25 +51,10 @@ type CommitDiffTable struct {
 	requiredFilterErr error
 }
 
-func NewCommitDiffTable(ctx *sql.Context, db Database, tblName string) (sql.Table, error) {
-	sess := DSessFromSess(ctx.Session)
-	dbName := db.Name()
-
-	ddb, ok := sess.GetDoltDB(dbName)
-
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
-	}
-
+func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue) (sql.Table, error) {
 	diffTblName := doltdb.DoltCommitDiffTablePrefix + tblName
 
-	workingRoot, ok := sess.GetRoot(dbName)
-
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	ss, err := calcSuperDuperSchema(ctx, ddb, workingRoot, tblName)
+	ss, err := calcSuperDuperSchema(ctx, ddb, root, tblName)
 
 	if err != nil {
 		return nil, err
@@ -100,7 +84,7 @@ func NewCommitDiffTable(ctx *sql.Context, db Database, tblName string) (sql.Tabl
 		return nil, err
 	}
 
-	sqlSch, err := sqleSchema.FromDoltSchema(diffTblName, j.GetSchema())
+	sqlSch, err := sqlutil.FromDoltSchema(diffTblName, j.GetSchema())
 
 	if err != nil {
 		return nil, err
@@ -122,9 +106,8 @@ func NewCommitDiffTable(ctx *sql.Context, db Database, tblName string) (sql.Tabl
 
 	return &CommitDiffTable{
 		name:        tblName,
-		dbName:      dbName,
 		ddb:         ddb,
-		workingRoot: workingRoot,
+		workingRoot: root,
 		ss:          ss,
 		joiner:      j,
 		sqlSch:      sqlSch,
