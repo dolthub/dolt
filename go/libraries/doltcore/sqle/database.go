@@ -212,6 +212,7 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 		return nil, false, err
 	}
 
+	// NOTE: system tables are not suitable for caching
 	switch {
 	case strings.HasPrefix(lwrName, doltdb.DoltDiffTablePrefix):
 		suffix := tblName[len(doltdb.DoltDiffTablePrefix):]
@@ -237,6 +238,7 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 		return dt, found, nil
 	}
 
+	// NOTE: system tables are not suitable for caching
 	switch lwrName {
 	case doltdb.LogTableName:
 		dt, found = dtables.NewLogTable(ctx, db.ddb, head), true
