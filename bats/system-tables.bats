@@ -23,6 +23,8 @@ teardown() {
     run dolt ls --all
     [ $status -eq 0 ]
     [[ "$output" =~ "dolt_log" ]] || false
+    [[ "$output" =~ "dolt_commits" ]] || false
+    [[ "$output" =~ "dolt_commit_ancestors" ]] || false
     [[ "$output" =~ "dolt_conflicts" ]] || false
     [[ "$output" =~ "dolt_branches" ]] || false
     [[ "$output" =~ "dolt_query_catalog" ]] || false
