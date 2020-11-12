@@ -51,6 +51,7 @@ teardown() {
     [[ "$output" =~ "conflicts - Commands for viewing and resolving merge conflicts." ]] || false
     [[ "$output" =~ "migrate - Executes a repository migration to update to the latest format." ]] || false
     [[ "$output" =~ "gc - Cleans up unreferenced data from the repository." ]] || false
+    [[ "$output" =~ "filter-branch - Edits the commit history using the provided query." ]] || false
 }
 
 @test "check all commands for valid help text" {
