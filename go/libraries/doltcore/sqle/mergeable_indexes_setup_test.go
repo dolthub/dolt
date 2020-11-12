@@ -183,6 +183,14 @@ func (di *testMergeableDoltIndex) Get(keys ...interface{}) (sql.IndexLookup, err
 		finalRanges:     di.finalRanges,
 	}, err
 }
+func (di *testMergeableDoltIndex) Not(keys ...interface{}) (sql.IndexLookup, error) {
+	indexLookup, err := di.doltIndex.Not(keys...)
+	return &testMergeableIndexLookup{
+		doltIndexLookup: indexLookup.(*doltIndexLookup),
+		t:               di.t,
+		finalRanges:     di.finalRanges,
+	}, err
+}
 func (di *testMergeableDoltIndex) AscendGreaterOrEqual(keys ...interface{}) (sql.IndexLookup, error) {
 	indexLookup, err := di.doltIndex.AscendGreaterOrEqual(keys...)
 	return &testMergeableIndexLookup{
