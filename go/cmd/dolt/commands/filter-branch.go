@@ -16,16 +16,35 @@ package commands
 
 import (
 	"context"
+	"fmt"
+	"io"
+	"runtime"
+	"strings"
+
+	sqle "github.com/dolthub/go-mysql-server"
+	"github.com/dolthub/go-mysql-server/auth"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
+	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
+const (
+	dbName = "filterDB"
+)
+
 var filterBranchDocs = cli.CommandDocumentationContent{
 	ShortDesc: "",
-	LongDesc: ``,
+	LongDesc:  ``,
 
 	Synopsis: []string{
 		"",
@@ -68,11 +87,124 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, filterBranchDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
-	var verr errhand.VerboseError
-
-	if apr.Contains(allFlag) {
-		cli.Println(allFlag)
+	if apr.NArg() != 1 {
+		args := strings.Join(apr.Args(), ", ")
+		verr := errhand.BuildDError("%s takes exactly 1 arg, %d provided: %s", cmd.Name(), apr.NArg(), args).Build()
+		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	return HandleVErrAndExitCode(verr, usage)
+	query := apr.Arg(0)
+
+	replay := func(ctx context.Context, root, _, _ *doltdb.RootValue) (*doltdb.RootValue, error) {
+		return processFilterQuery(ctx, dEnv, root, query)
+	}
+
+	var err error
+	if apr.Contains(allFlag) {
+		err = rebase.AllBranches(ctx, dEnv, replay, rebase.EntireHistory)
+	} else {
+		err = rebase.CurrentBranch(ctx, dEnv, replay, rebase.EntireHistory)
+	}
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	return 0
+}
+
+func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string) (*doltdb.RootValue, error) {
+	sqlCtx, se, err := monoSqlEngine(ctx, dEnv, root)
+	if err != nil {
+		return nil, err
+	}
+
+	sqlStatement, err := sqlparser.Parse(query)
+	if err != nil {
+		return nil, err
+	}
+
+	itr := sql.RowsToRowIter()
+	switch s := sqlStatement.(type) {
+	case *sqlparser.Delete:
+		ok := se.checkThenDeleteAllRows(sqlCtx, s)
+		if !ok {
+			_, itr, err = se.query(sqlCtx, query)
+		}
+	default:
+		// todo: support insert, update, ddl
+		return nil, fmt.Errorf("SQL statement not supported for filter-branch: '%v'.", query)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	for {
+		_, err = itr.Next()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		}
+	}
+	err = itr.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	roots, err := se.getRoots(sqlCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	return roots[dbName], nil
+}
+
+// monoSqlEngine packages up the context necessary to run sql queries against single root.
+func monoSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue) (*sql.Context, *sqlEngine, error) {
+	dsess := dsqle.DefaultDoltSession()
+
+	sqlCtx := sql.NewContext(ctx,
+		sql.WithSession(dsess),
+		sql.WithIndexRegistry(sql.NewIndexRegistry()),
+		sql.WithViewRegistry(sql.NewViewRegistry()))
+	_ = sqlCtx.Set(sqlCtx, sql.AutoCommitSessionVar, sql.Boolean, true)
+
+	db := dsqle.NewDatabase(dbName, dEnv.DoltDB, dEnv.RepoState, dEnv.RepoStateWriter())
+
+	cat := sql.NewCatalog()
+	err := cat.Register(dfunctions.DoltFunctions...)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	parallelism := runtime.GOMAXPROCS(0)
+	azr := analyzer.NewBuilder(cat).WithParallelism(parallelism).Build()
+
+	engine := sqle.New(cat, azr, &sqle.Config{Auth: new(auth.None)})
+	engine.AddDatabase(db)
+
+	err = dsess.AddDB(sqlCtx, db)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = db.SetRoot(sqlCtx, root)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = dsqle.RegisterSchemaFragments(sqlCtx, db, root)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	sqlCtx.SetCurrentDatabase(dbName)
+
+	se := &sqlEngine{
+		dbs:    map[string]dsqle.Database{dbName: db},
+		mrEnv:  env.MultiRepoEnv{dbName: dEnv},
+		engine: engine,
+	}
+
+	return sqlCtx, se, nil
 }

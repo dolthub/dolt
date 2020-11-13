@@ -238,7 +238,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		sql.WithSession(dsess),
 		sql.WithIndexRegistry(sql.NewIndexRegistry()),
 		sql.WithViewRegistry(sql.NewViewRegistry()))
-	sqlCtx.Set(sqlCtx, sql.AutoCommitSessionVar, sql.Boolean, true)
+	_ = sqlCtx.Set(sqlCtx, sql.AutoCommitSessionVar, sql.Boolean, true)
 
 	roots := make(map[string]*doltdb.RootValue)
 
@@ -252,10 +252,6 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	if len(initialRoots) == 1 {
 		sqlCtx.SetCurrentDatabase(name)
 		currentDB = name
-	}
-
-	if err != nil {
-		return HandleVErrAndExitCode(err.(errhand.VerboseError), usage)
 	}
 
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {

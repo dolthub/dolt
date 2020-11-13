@@ -18,22 +18,169 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type visitedSet map[hash.Hash]*doltdb.Commit
 
-type replayCommitFn func(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue) (rebaseRoot *doltdb.RootValue, err error)
+type ReplayCommitFn func(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue) (rebaseRoot *doltdb.RootValue, err error)
 
-type needsRebaseFn func(ctx context.Context, cm *doltdb.Commit) (bool, error)
+type NeedsRebaseFn func(ctx context.Context, cm *doltdb.Commit) (bool, error)
 
-func entireHistory(_ context.Context, cm *doltdb.Commit) (bool, error) {
+func EntireHistory(_ context.Context, cm *doltdb.Commit) (bool, error) {
 	n, err := cm.NumParents()
 	return n != 0, err
 }
 
-func rebase(ctx context.Context, ddb *doltdb.DoltDB, replay replayCommitFn, nerf needsRebaseFn, origins ...*doltdb.Commit) ([]*doltdb.Commit, error) {
+func GetHeadCommits(ctx context.Context, dEnv *env.DoltEnv) (heads []*doltdb.Commit, branches []ref.DoltRef, err error) {
+	branches, err = dEnv.DoltDB.GetBranches(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	heads = make([]*doltdb.Commit, len(branches))
+	for i, dRef := range branches {
+
+		cs, err := doltdb.NewCommitSpec(dRef.String())
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		heads[i], err = dEnv.DoltDB.Resolve(ctx, cs, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	return
+}
+
+// MigrateUniqueTags rebases the history of the repo to uniquify tags within branch histories.
+func AllBranches(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn) error {
+	ddb := dEnv.DoltDB
+	cwbSpec := dEnv.RepoState.CWBHeadSpec()
+	cwbRef := dEnv.RepoState.CWBHeadRef()
+	dd, err := dEnv.GetAllValidDocDetails()
+	if err != nil {
+		return err
+	}
+
+	headCommits, branches, err := GetHeadCommits(ctx, dEnv)
+	if err != nil {
+		return err
+	}
+
+	newCommits, err := rebase(ctx, ddb, replay, nerf, headCommits...)
+	if err != nil {
+		return err
+	}
+
+	for idx, dRef := range branches {
+
+		err = ddb.DeleteBranch(ctx, dRef)
+		if err != nil {
+			return err
+		}
+
+		err = ddb.NewBranchAtCommit(ctx, dRef, newCommits[idx])
+		if err != nil {
+			return err
+		}
+	}
+
+	cm, err := dEnv.DoltDB.Resolve(ctx, cwbSpec, cwbRef)
+	if err != nil {
+		return err
+	}
+
+	r, err := cm.GetRootValue()
+	if err != nil {
+		return err
+	}
+
+	_, err = dEnv.UpdateStagedRoot(ctx, r)
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.UpdateWorkingRoot(ctx, r)
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.PutDocsToWorking(ctx, dd)
+	if err != nil {
+		return err
+	}
+
+	_, err = dEnv.PutDocsToStaged(ctx, dd)
+	return err
+}
+
+// MigrateUniqueTags rebases the history of the repo to uniquify tags within branch histories.
+func CurrentBranch(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn) error {
+	ddb := dEnv.DoltDB
+	cwbSpec := dEnv.RepoState.CWBHeadSpec()
+	cwbRef := dEnv.RepoState.CWBHeadRef()
+	dd, err := dEnv.GetAllValidDocDetails()
+	if err != nil {
+		return err
+	}
+
+	head, err := dEnv.DoltDB.Resolve(ctx, cwbSpec, cwbRef)
+	if err != nil {
+		return err
+	}
+
+	newCommits, err := rebase(ctx, ddb, replay, nerf, head)
+	if err != nil {
+		return err
+	}
+
+	err = ddb.DeleteBranch(ctx, cwbRef)
+	if err != nil {
+		return err
+	}
+
+	err = ddb.NewBranchAtCommit(ctx, cwbRef, newCommits[0])
+	if err != nil {
+		return err
+	}
+
+	cm, err := dEnv.DoltDB.Resolve(ctx, cwbSpec, cwbRef)
+	if err != nil {
+		return err
+	}
+
+	r, err := cm.GetRootValue()
+	if err != nil {
+		return err
+	}
+
+	_, err = dEnv.UpdateStagedRoot(ctx, r)
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.UpdateWorkingRoot(ctx, r)
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.PutDocsToWorking(ctx, dd)
+	if err != nil {
+		return err
+	}
+
+	_, err = dEnv.PutDocsToStaged(ctx, dd)
+	return err
+}
+
+func rebase(ctx context.Context, ddb *doltdb.DoltDB, replay ReplayCommitFn, nerf NeedsRebaseFn, origins ...*doltdb.Commit) ([]*doltdb.Commit, error) {
 	var rebasedCommits []*doltdb.Commit
 	vs := make(visitedSet)
 	for _, cm := range origins {
@@ -49,7 +196,7 @@ func rebase(ctx context.Context, ddb *doltdb.DoltDB, replay replayCommitFn, nerf
 	return rebasedCommits, nil
 }
 
-func rebaseRecursive(ctx context.Context, ddb *doltdb.DoltDB, replay replayCommitFn, nerf needsRebaseFn, vs visitedSet, commit *doltdb.Commit) (*doltdb.Commit, error) {
+func rebaseRecursive(ctx context.Context, ddb *doltdb.DoltDB, replay ReplayCommitFn, nerf NeedsRebaseFn, vs visitedSet, commit *doltdb.Commit) (*doltdb.Commit, error) {
 	commitHash, err := commit.HashOf()
 	if err != nil {
 		return nil, err
