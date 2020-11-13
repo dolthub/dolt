@@ -26,6 +26,8 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
+	"github.com/fatih/color"
+	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -36,6 +38,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const (
@@ -93,10 +96,10 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
+	notFound := make(missingTbls)
 	query := apr.Arg(0)
-
 	replay := func(ctx context.Context, root, _, _ *doltdb.RootValue) (*doltdb.RootValue, error) {
-		return processFilterQuery(ctx, dEnv, root, query)
+		return processFilterQuery(ctx, dEnv, root, query, notFound)
 	}
 
 	var err error
@@ -109,16 +112,27 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
+	for h, e := range notFound {
+		cli.PrintErrln(color.YellowString("for root value %s: %s", h.String(), e.Error()))
+	}
+
 	return 0
 }
 
-func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string) (*doltdb.RootValue, error) {
+type missingTbls map[hash.Hash]*errors.Error
+
+func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string, mt missingTbls) (*doltdb.RootValue, error) {
 	sqlCtx, se, err := monoSqlEngine(ctx, dEnv, root)
 	if err != nil {
 		return nil, err
 	}
 
 	sqlStatement, err := sqlparser.Parse(query)
+	if err != nil {
+		return nil, err
+	}
+
+	rh, err := root.HashOf()
 	if err != nil {
 		return nil, err
 	}
@@ -133,6 +147,12 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.Roo
 	default:
 		// todo: support insert, update, ddl
 		return nil, fmt.Errorf("SQL statement not supported for filter-branch: '%v'.", query)
+	}
+
+	err, ok := captureTblNotFoundErr(err, mt, rh)
+	if ok {
+		// table doesn't exist, save the error and continue
+		return root, nil
 	}
 	if err != nil {
 		return nil, err
@@ -207,4 +227,12 @@ func monoSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValu
 	}
 
 	return sqlCtx, se, nil
+}
+
+func captureTblNotFoundErr(e error, mt missingTbls, h hash.Hash) (error, bool) {
+	if sql.ErrTableNotFound.Is(e) {
+		mt[h] = e.(*errors.Error)
+		return nil, true
+	}
+	return e, false
 }
