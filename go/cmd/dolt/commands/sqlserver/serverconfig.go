@@ -40,7 +40,7 @@ const (
 	defaultPort             = 3306
 	defaultUser             = "root"
 	defaultPass             = ""
-	defaultTimeout          = 30 * 1000
+	defaultTimeout          = 8 * 60 * 60 * 1000  // 8 hours, same as MySQL
 	defaultReadOnly         = false
 	defaultLogLevel         = LogLevel_Info
 	defaultAutoCommit       = true
