@@ -36,122 +36,62 @@ func EntireHistory(_ context.Context, cm *doltdb.Commit) (bool, error) {
 	return n != 0, err
 }
 
-func GetHeadCommits(ctx context.Context, dEnv *env.DoltEnv) (heads []*doltdb.Commit, branches []ref.DoltRef, err error) {
-	branches, err = dEnv.DoltDB.GetBranches(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	heads = make([]*doltdb.Commit, len(branches))
-	for i, dRef := range branches {
-
-		cs, err := doltdb.NewCommitSpec(dRef.String())
-
-		if err != nil {
-			return nil, nil, err
-		}
-
-		heads[i], err = dEnv.DoltDB.Resolve(ctx, cs, nil)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-	return
-}
-
 // AllBranches rewrites the history of all branches in the repo using the |replay| function.
 func AllBranches(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn) error {
-	ddb := dEnv.DoltDB
-	cwbSpec := dEnv.RepoState.CWBHeadSpec()
-	cwbRef := dEnv.RepoState.CWBHeadRef()
-	dd, err := dEnv.GetAllValidDocDetails()
+	branches, err := dEnv.DoltDB.GetBranches(ctx)
 	if err != nil {
 		return err
 	}
 
-	headCommits, branches, err := GetHeadCommits(ctx, dEnv)
-	if err != nil {
-		return err
-	}
-
-	newCommits, err := rebase(ctx, ddb, replay, nerf, headCommits...)
-	if err != nil {
-		return err
-	}
-
-	for idx, dRef := range branches {
-
-		err = ddb.DeleteBranch(ctx, dRef)
-		if err != nil {
-			return err
-		}
-
-		err = ddb.NewBranchAtCommit(ctx, dRef, newCommits[idx])
-		if err != nil {
-			return err
-		}
-	}
-
-	cm, err := dEnv.DoltDB.Resolve(ctx, cwbSpec, cwbRef)
-	if err != nil {
-		return err
-	}
-
-	r, err := cm.GetRootValue()
-	if err != nil {
-		return err
-	}
-
-	_, err = dEnv.UpdateStagedRoot(ctx, r)
-	if err != nil {
-		return err
-	}
-
-	err = dEnv.UpdateWorkingRoot(ctx, r)
-	if err != nil {
-		return err
-	}
-
-	err = dEnv.PutDocsToWorking(ctx, dd)
-	if err != nil {
-		return err
-	}
-
-	_, err = dEnv.PutDocsToStaged(ctx, dd)
-	return err
+	return rebaseRefs(ctx, dEnv, replay, nerf, branches...)
 }
 
 // CurrentBranch rewrites the history of the current branch using the |replay| function.
 func CurrentBranch(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn) error {
+	return rebaseRefs(ctx, dEnv, replay, nerf, dEnv.RepoState.CWBHeadRef())
+}
+
+func rebaseRefs(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn, refs ...ref.DoltRef) error {
 	ddb := dEnv.DoltDB
-	cwbSpec := dEnv.RepoState.CWBHeadSpec()
 	cwbRef := dEnv.RepoState.CWBHeadRef()
 	dd, err := dEnv.GetAllValidDocDetails()
 	if err != nil {
 		return err
 	}
 
-	head, err := dEnv.DoltDB.Resolve(ctx, cwbSpec, cwbRef)
+	heads := make([]*doltdb.Commit, len(refs))
+	for i, dRef := range refs {
+		heads[i], err = ddb.ResolveRef(ctx, dRef)
+		if err != nil {
+			return err
+		}
+	}
+
+	newHeads, err := rebase(ctx, ddb, replay, nerf, heads...)
 	if err != nil {
 		return err
 	}
 
-	newCommits, err := rebase(ctx, ddb, replay, nerf, head)
-	if err != nil {
-		return err
+	for i, dRef := range refs {
+
+		switch dRef.(type) {
+		case ref.BranchRef:
+			err = ddb.DeleteBranch(ctx, dRef)
+			if err != nil {
+				return err
+			}
+			err = ddb.NewBranchAtCommit(ctx, dRef, newHeads[i])
+
+		default:
+			return fmt.Errorf("cannot rebase ref: %s", ref.String(dRef))
+		}
+
+		if err != nil {
+			return err
+		}
 	}
 
-	err = ddb.DeleteBranch(ctx, cwbRef)
-	if err != nil {
-		return err
-	}
-
-	err = ddb.NewBranchAtCommit(ctx, cwbRef, newCommits[0])
-	if err != nil {
-		return err
-	}
-
-	cm, err := dEnv.DoltDB.Resolve(ctx, cwbSpec, cwbRef)
+	cm, err := dEnv.DoltDB.ResolveRef(ctx, cwbRef)
 	if err != nil {
 		return err
 	}
