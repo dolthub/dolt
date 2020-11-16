@@ -150,3 +150,24 @@ SQL
     [[ "$output" =~ "M	one" ]] || false
     [[ "$output" =~ "D	two" ]] || false
 }
+
+@test "dolt reset --hard <commit-spec>" {
+    dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY);"
+    dolt add -A && dolt commit -m "made table test"
+    dolt sql -q "INSERT INTO test VALUES (1);"
+    dolt add -A && dolt commit -m "inserted 1"
+    dolt sql -q "INSERT INTO test VALUES (2);"
+    dolt add -A && dolt commit -m "inserted 2"
+
+    run dolt reset --hard HEAD^
+    [ "$status" -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    run dolt sql -q "SELECT sum(pk) FROM test" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+}
