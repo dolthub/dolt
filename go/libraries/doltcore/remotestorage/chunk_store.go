@@ -198,7 +198,7 @@ func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.Ha
 }
 
 const (
-	getLocsBatchSize      = 128 * 1024
+	getLocsBatchSize      = 32 * 1024
 	getLocsMaxConcurrency = 4
 )
 
@@ -972,23 +972,38 @@ func (drtf DoltRemoteTableFile) NumChunks() int {
 	return int(drtf.info.NumChunks)
 }
 
+var ErrRemoteTableFileGet = errors.New("HTTP GET for remote table file failed")
+
+func sanitizeSignedUrl(url string) string {
+	si := strings.Index(url, "Signature=")
+	if si == -1 {
+		return url
+	}
+	ei := strings.Index(url[si:], "&")
+	if ei == -1 {
+		return url[:si+15] + "..."
+	} else {
+		return url[:si+15] + "..." + url[si:][ei:]
+	}
+}
+
 // Open returns an io.ReadCloser which can be used to read the bytes of a table file.
 func (drtf DoltRemoteTableFile) Open(ctx context.Context) (io.ReadCloser, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, drtf.info.Url, nil)
-
 	if err != nil {
 		return nil, err
 	}
 
 	resp, err := drtf.dcs.httpFetcher.Do(req)
-
 	if err != nil {
 		return nil, err
 	}
 
 	if resp.StatusCode/100 != 2 {
-		resp.Body.Close()
-		return nil, errors.New("failed to open file")
+		defer resp.Body.Close()
+		body := make([]byte, 4096)
+		n, _ := io.ReadFull(resp.Body, body)
+		return nil, fmt.Errorf("%w: status code: %d;\nurl: %s\n\nbody:\n\n%s\n", ErrRemoteTableFileGet, resp.StatusCode, sanitizeSignedUrl(drtf.info.Url), string(body[0:n]))
 	}
 
 	return resp.Body, nil
