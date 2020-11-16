@@ -108,8 +108,26 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 }
 
 func resetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, workingRoot, stagedRoot, headRoot *doltdb.RootValue) errhand.VerboseError {
-	if apr.NArg() != 0 {
-		return errhand.BuildDError("--%s does not support additional params", HardResetParam).SetPrintUsage().Build()
+	if apr.NArg() > 1 {
+		return errhand.BuildDError("--%s supports at most one additional param", HardResetParam).SetPrintUsage().Build()
+	}
+
+	var newHead *doltdb.Commit
+	if apr.NArg() == 1 {
+		cs, err := doltdb.NewCommitSpec(apr.Arg(0))
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+
+		newHead, err = dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+
+		headRoot, err = newHead.GetRootValue()
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
 	}
 
 	// need to save the state of files that aren't tracked
@@ -164,6 +182,12 @@ func resetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 	err = actions.SaveTrackedDocsFromWorking(ctx, dEnv)
 	if err != nil {
 		return errhand.BuildDError("error: failed to update docs on the filesystem.").AddCause(err).Build()
+	}
+
+	if newHead != nil {
+		if err = dEnv.DoltDB.SetHeadToCommit(ctx, dEnv.RepoState.CWBHeadRef(), newHead); err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
 	}
 
 	return nil
