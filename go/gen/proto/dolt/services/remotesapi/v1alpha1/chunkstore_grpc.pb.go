@@ -4,7 +4,6 @@ package remotesapi
 
 import (
 	context "context"
-
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -21,7 +20,12 @@ type ChunkStoreServiceClient interface {
 	GetRepoMetadata(ctx context.Context, in *GetRepoMetadataRequest, opts ...grpc.CallOption) (*GetRepoMetadataResponse, error)
 	HasChunks(ctx context.Context, in *HasChunksRequest, opts ...grpc.CallOption) (*HasChunksResponse, error)
 	// Get the download locations for a list of chunk hashes.
+	// Deprecated. Use StreamDownloadLocations.
 	GetDownloadLocations(ctx context.Context, in *GetDownloadLocsRequest, opts ...grpc.CallOption) (*GetDownloadLocsResponse, error)
+	// Get the download locations for a list of chunk hashes. Streaming to
+	// support large and incrementally available payloads. Results are generated
+	// as requests come in.
+	StreamDownloadLocations(ctx context.Context, opts ...grpc.CallOption) (ChunkStoreService_StreamDownloadLocationsClient, error)
 	// Get upload locations for a list of table file hashes.
 	// NOTE: We upload full table files but download individual chunks.
 	GetUploadLocations(ctx context.Context, in *GetUploadLocsRequest, opts ...grpc.CallOption) (*GetUploadLocsResponse, error)
@@ -65,6 +69,37 @@ func (c *chunkStoreServiceClient) GetDownloadLocations(ctx context.Context, in *
 		return nil, err
 	}
 	return out, nil
+}
+
+func (c *chunkStoreServiceClient) StreamDownloadLocations(ctx context.Context, opts ...grpc.CallOption) (ChunkStoreService_StreamDownloadLocationsClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_ChunkStoreService_serviceDesc.Streams[0], "/dolt.services.remotesapi.v1alpha1.ChunkStoreService/StreamDownloadLocations", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &chunkStoreServiceStreamDownloadLocationsClient{stream}
+	return x, nil
+}
+
+type ChunkStoreService_StreamDownloadLocationsClient interface {
+	Send(*GetDownloadLocsRequest) error
+	Recv() (*GetDownloadLocsResponse, error)
+	grpc.ClientStream
+}
+
+type chunkStoreServiceStreamDownloadLocationsClient struct {
+	grpc.ClientStream
+}
+
+func (x *chunkStoreServiceStreamDownloadLocationsClient) Send(m *GetDownloadLocsRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *chunkStoreServiceStreamDownloadLocationsClient) Recv() (*GetDownloadLocsResponse, error) {
+	m := new(GetDownloadLocsResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 func (c *chunkStoreServiceClient) GetUploadLocations(ctx context.Context, in *GetUploadLocsRequest, opts ...grpc.CallOption) (*GetUploadLocsResponse, error) {
@@ -128,7 +163,12 @@ type ChunkStoreServiceServer interface {
 	GetRepoMetadata(context.Context, *GetRepoMetadataRequest) (*GetRepoMetadataResponse, error)
 	HasChunks(context.Context, *HasChunksRequest) (*HasChunksResponse, error)
 	// Get the download locations for a list of chunk hashes.
+	// Deprecated. Use StreamDownloadLocations.
 	GetDownloadLocations(context.Context, *GetDownloadLocsRequest) (*GetDownloadLocsResponse, error)
+	// Get the download locations for a list of chunk hashes. Streaming to
+	// support large and incrementally available payloads. Results are generated
+	// as requests come in.
+	StreamDownloadLocations(ChunkStoreService_StreamDownloadLocationsServer) error
 	// Get upload locations for a list of table file hashes.
 	// NOTE: We upload full table files but download individual chunks.
 	GetUploadLocations(context.Context, *GetUploadLocsRequest) (*GetUploadLocsResponse, error)
@@ -152,6 +192,9 @@ func (*UnimplementedChunkStoreServiceServer) HasChunks(context.Context, *HasChun
 }
 func (*UnimplementedChunkStoreServiceServer) GetDownloadLocations(context.Context, *GetDownloadLocsRequest) (*GetDownloadLocsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetDownloadLocations not implemented")
+}
+func (*UnimplementedChunkStoreServiceServer) StreamDownloadLocations(ChunkStoreService_StreamDownloadLocationsServer) error {
+	return status.Errorf(codes.Unimplemented, "method StreamDownloadLocations not implemented")
 }
 func (*UnimplementedChunkStoreServiceServer) GetUploadLocations(context.Context, *GetUploadLocsRequest) (*GetUploadLocsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetUploadLocations not implemented")
@@ -229,6 +272,32 @@ func _ChunkStoreService_GetDownloadLocations_Handler(srv interface{}, ctx contex
 		return srv.(ChunkStoreServiceServer).GetDownloadLocations(ctx, req.(*GetDownloadLocsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
+}
+
+func _ChunkStoreService_StreamDownloadLocations_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ChunkStoreServiceServer).StreamDownloadLocations(&chunkStoreServiceStreamDownloadLocationsServer{stream})
+}
+
+type ChunkStoreService_StreamDownloadLocationsServer interface {
+	Send(*GetDownloadLocsResponse) error
+	Recv() (*GetDownloadLocsRequest, error)
+	grpc.ServerStream
+}
+
+type chunkStoreServiceStreamDownloadLocationsServer struct {
+	grpc.ServerStream
+}
+
+func (x *chunkStoreServiceStreamDownloadLocationsServer) Send(m *GetDownloadLocsResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *chunkStoreServiceStreamDownloadLocationsServer) Recv() (*GetDownloadLocsRequest, error) {
+	m := new(GetDownloadLocsRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 func _ChunkStoreService_GetUploadLocations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -380,6 +449,13 @@ var _ChunkStoreService_serviceDesc = grpc.ServiceDesc{
 			Handler:    _ChunkStoreService_AddTableFiles_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "StreamDownloadLocations",
+			Handler:       _ChunkStoreService_StreamDownloadLocations_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "dolt/services/remotesapi/v1alpha1/chunkstore.proto",
 }
