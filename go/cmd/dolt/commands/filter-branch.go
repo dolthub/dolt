@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2020 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ const (
 
 var filterBranchDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Edits the commit history using the provided query",
-	LongDesc:  `Traverses the commit history to the initial commite starting at the current HEAD commit. Replays all commits, rewriting the history using the provided SQL query.
+	LongDesc: `Traverses the commit history to the initial commite starting at the current HEAD commit. Replays all commits, rewriting the history using the provided SQL query.
 
 If the {{.EmphasisLeft}}--all{{.EmphasisRight}} flag is supplied, the traversal starts with the HEAD commits of all branches.
 `,
@@ -66,7 +66,7 @@ func (cmd FilterBranchCmd) Name() string {
 
 // Description returns a description of the command
 func (cmd FilterBranchCmd) Description() string {
-	return filterBranchDocs.ShortDesc
+	return fmt.Sprintf("%s.", filterBranchDocs.ShortDesc)
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path

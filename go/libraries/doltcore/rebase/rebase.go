@@ -59,7 +59,7 @@ func GetHeadCommits(ctx context.Context, dEnv *env.DoltEnv) (heads []*doltdb.Com
 	return
 }
 
-// MigrateUniqueTags rebases the history of the repo to uniquify tags within branch histories.
+// AllBranches rewrites the history of all branches in the repo using the |replay| function.
 func AllBranches(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn) error {
 	ddb := dEnv.DoltDB
 	cwbSpec := dEnv.RepoState.CWBHeadSpec()
@@ -121,7 +121,7 @@ func AllBranches(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, 
 	return err
 }
 
-// MigrateUniqueTags rebases the history of the repo to uniquify tags within branch histories.
+// CurrentBranch rewrites the history of the current branch using the |replay| function.
 func CurrentBranch(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn) error {
 	ddb := dEnv.DoltDB
 	cwbSpec := dEnv.RepoState.CWBHeadSpec()
