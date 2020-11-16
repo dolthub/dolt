@@ -158,6 +158,7 @@ SQL
     dolt add -A && dolt commit -m "inserted 1"
     dolt sql -q "INSERT INTO test VALUES (2);"
     dolt add -A && dolt commit -m "inserted 2"
+    dolt sql -q "INSERT INTO test VALUES (3);"
 
     run dolt reset --hard HEAD^
     [ "$status" -eq 0 ]
