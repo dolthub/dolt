@@ -24,8 +24,6 @@ import (
 // LogLevel defines the available levels of logging for the server.
 type LogLevel string
 
-var CliVersion = "test"
-
 const (
 	LogLevel_Trace   LogLevel = "trace"
 	LogLevel_Debug   LogLevel = "debug"
