@@ -18,22 +18,109 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type visitedSet map[hash.Hash]*doltdb.Commit
 
-type replayCommitFn func(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue) (rebaseRoot *doltdb.RootValue, err error)
+type ReplayCommitFn func(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue) (rebaseRoot *doltdb.RootValue, err error)
 
-type needsRebaseFn func(ctx context.Context, cm *doltdb.Commit) (bool, error)
+type NeedsRebaseFn func(ctx context.Context, cm *doltdb.Commit) (bool, error)
 
-func entireHistory(_ context.Context, cm *doltdb.Commit) (bool, error) {
+func EntireHistory(_ context.Context, cm *doltdb.Commit) (bool, error) {
 	n, err := cm.NumParents()
 	return n != 0, err
 }
 
-func rebase(ctx context.Context, ddb *doltdb.DoltDB, replay replayCommitFn, nerf needsRebaseFn, origins ...*doltdb.Commit) ([]*doltdb.Commit, error) {
+// AllBranches rewrites the history of all branches in the repo using the |replay| function.
+func AllBranches(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn) error {
+	branches, err := dEnv.DoltDB.GetBranches(ctx)
+	if err != nil {
+		return err
+	}
+
+	return rebaseRefs(ctx, dEnv, replay, nerf, branches...)
+}
+
+// CurrentBranch rewrites the history of the current branch using the |replay| function.
+func CurrentBranch(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn) error {
+	return rebaseRefs(ctx, dEnv, replay, nerf, dEnv.RepoState.CWBHeadRef())
+}
+
+func rebaseRefs(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn, refs ...ref.DoltRef) error {
+	ddb := dEnv.DoltDB
+	cwbRef := dEnv.RepoState.CWBHeadRef()
+	dd, err := dEnv.GetAllValidDocDetails()
+	if err != nil {
+		return err
+	}
+
+	heads := make([]*doltdb.Commit, len(refs))
+	for i, dRef := range refs {
+		heads[i], err = ddb.ResolveRef(ctx, dRef)
+		if err != nil {
+			return err
+		}
+	}
+
+	newHeads, err := rebase(ctx, ddb, replay, nerf, heads...)
+	if err != nil {
+		return err
+	}
+
+	for i, dRef := range refs {
+
+		switch dRef.(type) {
+		case ref.BranchRef:
+			err = ddb.DeleteBranch(ctx, dRef)
+			if err != nil {
+				return err
+			}
+			err = ddb.NewBranchAtCommit(ctx, dRef, newHeads[i])
+
+		default:
+			return fmt.Errorf("cannot rebase ref: %s", ref.String(dRef))
+		}
+
+		if err != nil {
+			return err
+		}
+	}
+
+	cm, err := dEnv.DoltDB.ResolveRef(ctx, cwbRef)
+	if err != nil {
+		return err
+	}
+
+	r, err := cm.GetRootValue()
+	if err != nil {
+		return err
+	}
+
+	_, err = dEnv.UpdateStagedRoot(ctx, r)
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.UpdateWorkingRoot(ctx, r)
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.PutDocsToWorking(ctx, dd)
+	if err != nil {
+		return err
+	}
+
+	_, err = dEnv.PutDocsToStaged(ctx, dd)
+	return err
+}
+
+func rebase(ctx context.Context, ddb *doltdb.DoltDB, replay ReplayCommitFn, nerf NeedsRebaseFn, origins ...*doltdb.Commit) ([]*doltdb.Commit, error) {
 	var rebasedCommits []*doltdb.Commit
 	vs := make(visitedSet)
 	for _, cm := range origins {
@@ -49,7 +136,7 @@ func rebase(ctx context.Context, ddb *doltdb.DoltDB, replay replayCommitFn, nerf
 	return rebasedCommits, nil
 }
 
-func rebaseRecursive(ctx context.Context, ddb *doltdb.DoltDB, replay replayCommitFn, nerf needsRebaseFn, vs visitedSet, commit *doltdb.Commit) (*doltdb.Commit, error) {
+func rebaseRecursive(ctx context.Context, ddb *doltdb.DoltDB, replay ReplayCommitFn, nerf NeedsRebaseFn, vs visitedSet, commit *doltdb.Commit) (*doltdb.Commit, error) {
 	commitHash, err := commit.HashOf()
 	if err != nil {
 		return nil, err

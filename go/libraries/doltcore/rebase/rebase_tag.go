@@ -89,43 +89,6 @@ func NeedsUniqueTagMigration(ctx context.Context, ddb *doltdb.DoltDB) (bool, err
 
 // MigrateUniqueTags rebases the history of the repo to uniquify tags within branch histories.
 func MigrateUniqueTags(ctx context.Context, dEnv *env.DoltEnv) error {
-	ddb := dEnv.DoltDB
-	cwbSpec := dEnv.RepoState.CWBHeadSpec()
-	cwbRef := dEnv.RepoState.CWBHeadRef()
-	dd, err := dEnv.GetAllValidDocDetails()
-
-	if err != nil {
-		return err
-	}
-
-	branches, err := dEnv.DoltDB.GetBranches(ctx)
-
-	if err != nil {
-		return err
-	}
-
-	var headCommits []*doltdb.Commit
-	for _, dRef := range branches {
-
-		cs, err := doltdb.NewCommitSpec(dRef.String())
-
-		if err != nil {
-			return err
-		}
-
-		cm, err := ddb.Resolve(ctx, cs, nil)
-
-		if err != nil {
-			return err
-		}
-
-		headCommits = append(headCommits, cm)
-	}
-
-	if len(branches) != len(headCommits) {
-		panic("error in uniquifying tags")
-	}
-
 	builtTagMappings := make(map[hash.Hash]TagMapping)
 
 	// DFS the commit graph find a unique new tag for all existing tags in every table in history
@@ -162,59 +125,7 @@ func MigrateUniqueTags(ctx context.Context, dEnv *env.DoltEnv) error {
 		return rebasedRoot, nil
 	}
 
-	newCommits, err := rebase(ctx, ddb, replay, entireHistory, headCommits...)
-
-	if err != nil {
-		return err
-	}
-
-	for idx, dRef := range branches {
-
-		err = ddb.DeleteBranch(ctx, dRef)
-
-		if err != nil {
-			return err
-		}
-
-		err = ddb.NewBranchAtCommit(ctx, dRef, newCommits[idx])
-
-		if err != nil {
-			return err
-		}
-	}
-
-	cm, err := dEnv.DoltDB.Resolve(ctx, cwbSpec, cwbRef)
-
-	if err != nil {
-		return err
-	}
-
-	r, err := cm.GetRootValue()
-
-	if err != nil {
-		return err
-	}
-
-	_, err = dEnv.UpdateStagedRoot(ctx, r)
-
-	if err != nil {
-		return err
-	}
-
-	err = dEnv.UpdateWorkingRoot(ctx, r)
-
-	if err != nil {
-		return err
-	}
-
-	err = dEnv.PutDocsToWorking(ctx, dd)
-
-	if err != nil {
-		return err
-	}
-
-	_, err = dEnv.PutDocsToStaged(ctx, dd)
-	return err
+	return AllBranches(ctx, dEnv, replay, EntireHistory)
 }
 
 // TagRebaseForRef rebases the provided DoltRef, swapping all tags in the TagMapping.
