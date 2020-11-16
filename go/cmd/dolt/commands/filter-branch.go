@@ -46,11 +46,14 @@ const (
 )
 
 var filterBranchDocs = cli.CommandDocumentationContent{
-	ShortDesc: "",
-	LongDesc:  ``,
+	ShortDesc: "Edits the commit history using the provided query",
+	LongDesc:  `Traverses the commit history to the initial commite starting at the current HEAD commit. Replays all commits, rewriting the history using the provided SQL query.
+
+If the {{.EmphasisLeft}}--all{{.EmphasisRight}} flag is supplied, the traversal starts with the HEAD commits of all branches.
+`,
 
 	Synopsis: []string{
-		"",
+		"[--all] {{.LessThan}}query{{.GreaterThan}}",
 	},
 }
 
@@ -63,7 +66,7 @@ func (cmd FilterBranchCmd) Name() string {
 
 // Description returns a description of the command
 func (cmd FilterBranchCmd) Description() string {
-	return "Edits the commit history using the provided query."
+	return filterBranchDocs.ShortDesc
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
