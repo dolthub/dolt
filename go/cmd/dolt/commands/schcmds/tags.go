@@ -16,8 +16,6 @@ package schcmds
 
 import (
 	"context"
-	"fmt"
-	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -25,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
 
 //SELECT table_name AS 'table', column_name AS 'column', SUBSTR(extra, 5) AS tag FROM information_schema.columns WHERE table_name = 'XXX';
@@ -69,11 +68,14 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	apr := cli.ParseArgs(ap, args, help)
 
 	tables := apr.Args()
+
+	root, verr := commands.GetWorkingWithVErr(dEnv)
+
+	if verr != nil {
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+
 	if len(tables) == 0 {
-		root, verr := commands.GetWorkingWithVErr(dEnv)
-		if verr != nil {
-			return commands.HandleVErrAndExitCode(verr, usage)
-		}
 		var err error
 		tables, err = root.GetTableNames(ctx)
 
@@ -87,24 +89,41 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			return 0
 		}
 	}
-	for i := 0; i < len(tables); i++ {
-		tables[i] = fmt.Sprintf("'%s'", tables[i])
-	}
 
-	//TODO: implement REGEXP_SUBSTR in go-mysql-server and use it here instead of SUBSTR, as this will eventually break
-	queryStr := fmt.Sprintf("SELECT table_name AS 'table', column_name AS 'column', "+
-		"SUBSTR(extra, 5) AS tag FROM information_schema.columns WHERE table_name IN (%s)", strings.Join(tables, ","))
+	for _, tableName := range tables {
+		table, _, err := root.GetTable(ctx, tableName)
 
-	if formatStr, ok := apr.GetValue(commands.FormatFlag); ok {
-		return commands.SqlCmd{}.Exec(ctx, "", []string{
-			fmt.Sprintf(`--%s=%s`, commands.FormatFlag, formatStr),
-			fmt.Sprintf(`--%s`, commands.QueryFlag),
-			queryStr + ";",
-		}, dEnv)
-	} else {
-		return commands.SqlCmd{}.Exec(ctx, "", []string{
-			fmt.Sprintf(`--%s`, commands.QueryFlag),
-			queryStr + ";",
-		}, dEnv)
+		if err != nil {
+			cli.PrintErr(err)
+			return -1
+		}
+
+		sch, err := table.GetSchema(ctx)
+
+		sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			cli.Printf("%s | %s | %d \n", tableName, col.Name, tag)
+			return false, nil
+		})
+
+		if err != nil {
+			return -1
+		}
+
+
 	}
+	//err = root.IterTables(ctx, func(name string, table *doltdb.Table, sch schema.Schema) (stop bool, err error) {
+	//
+	//	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+	//		cli.Printf("%s | %s | %d \n", name, col.Name, tag)
+	//		return false, nil
+	//	})
+	//
+	//	if err != nil {
+	//		return true, err
+	//	}
+	//
+	//	return false, nil
+	//})
+
+	return 0
 }
