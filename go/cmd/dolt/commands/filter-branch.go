@@ -47,13 +47,15 @@ const (
 
 var filterBranchDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Edits the commit history using the provided query",
-	LongDesc: `Traverses the commit history to the initial commite starting at the current HEAD commit. Replays all commits, rewriting the history using the provided SQL query.
+	LongDesc: `Traverses the commit history to the initial commit starting at the current HEAD commit. Replays all commits, rewriting the history using the provided SQL query.
+
+If a {{.LessThan}}commit-spec{{.GreaterThan}} is provided, the traversal will stop when the commit is reached and rewriting will begin at that commit, or will error if the commit is not found.
 
 If the {{.EmphasisLeft}}--all{{.EmphasisRight}} flag is supplied, the traversal starts with the HEAD commits of all branches.
 `,
 
 	Synopsis: []string{
-		"[--all] {{.LessThan}}query{{.GreaterThan}}",
+		"[--all] {{.LessThan}}query{{.GreaterThan}} [{{.LessThan}}commit{{.GreaterThan}}]",
 	},
 }
 
@@ -92,24 +94,29 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, filterBranchDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
+	var err error
 
-	if apr.NArg() != 1 {
+	if apr.NArg() < 1 || apr.NArg() > 2 {
 		args := strings.Join(apr.Args(), ", ")
-		verr := errhand.BuildDError("%s takes exactly 1 arg, %d provided: %s", cmd.Name(), apr.NArg(), args).Build()
+		verr := errhand.BuildDError("%s takes 1 or 2 args, %d provided: %s", cmd.Name(), apr.NArg(), args).Build()
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	notFound := make(missingTbls)
 	query := apr.Arg(0)
+	notFound := make(missingTbls)
 	replay := func(ctx context.Context, root, _, _ *doltdb.RootValue) (*doltdb.RootValue, error) {
 		return processFilterQuery(ctx, dEnv, root, query, notFound)
 	}
 
-	var err error
+	nerf, err := getNerf(ctx, dEnv, apr)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
 	if apr.Contains(allFlag) {
-		err = rebase.AllBranches(ctx, dEnv, replay, rebase.EntireHistory)
+		err = rebase.AllBranches(ctx, dEnv, replay, nerf)
 	} else {
-		err = rebase.CurrentBranch(ctx, dEnv, replay, rebase.EntireHistory)
+		err = rebase.CurrentBranch(ctx, dEnv, replay, nerf)
 	}
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -120,6 +127,24 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 	}
 
 	return 0
+}
+
+func getNerf(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (rebase.NeedsRebaseFn, error) {
+	if apr.NArg() == 1 {
+		return rebase.EntireHistory(), nil
+	}
+
+	spec, err := doltdb.NewCommitSpec(apr.Arg(1))
+	if err != nil {
+		return nil, err
+	}
+
+	cm, err := dEnv.DoltDB.Resolve(ctx, spec, dEnv.RepoState.CWBHeadRef())
+	if err != nil {
+		return nil, err
+	}
+
+	return rebase.StopAtCommit(cm), nil
 }
 
 type missingTbls map[hash.Hash]*errors.Error

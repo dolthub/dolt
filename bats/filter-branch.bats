@@ -24,7 +24,7 @@ teardown() {
     dolt sql -q "INSERT INTO test VALUES (7,7),(8,8),(9,9);"
     dolt add -A && dolt commit -m "added more rows"
 
-    dolt filter-branch "delete FROM test WHERE pk > 1;"
+    dolt filter-branch "DELETE FROM test WHERE pk > 1;"
     run dolt sql -q "SELECT count(*) FROM test" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "2" ]] || false
@@ -46,7 +46,7 @@ teardown() {
     dolt add -A && dolt commit -m "added more rows"
 
     dolt checkout master
-    dolt filter-branch --all "delete FROM test WHERE pk > 4;"
+    dolt filter-branch --all "DELETE FROM test WHERE pk > 4;"
 
     run dolt sql -q "SELECT pk,c0 FROM dolt_history_test ORDER BY pk" -r csv
     [ "$status" -eq 0 ]
@@ -69,12 +69,12 @@ teardown() {
     [[ "$output" =~ "4,4" ]] || false
 }
 
-@test "filter branch with missing table" {
+@test "filter-branch with missing table" {
     dolt sql -q "DROP TABLE test;"
     dolt add -A && dolt commit -m "dropped test"
 
     # filter-branch warns about missing table but doesn't error
-    run dolt filter-branch "delete FROM test WHERE pk > 1;"
+    run dolt filter-branch "DELETE FROM test WHERE pk > 1;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "table not found: test" ]] || false
 
@@ -83,16 +83,37 @@ teardown() {
     [[ "$output" =~ "2" ]] || false
 }
 
-@test "filter branch forks history" {
+@test "filter-branch forks history" {
     dolt branch other
 
     dolt sql -q "INSERT INTO test VALUES (7,7),(8,8),(9,9);"
     dolt add -A && dolt commit -m "added more rows"
 
-    dolt filter-branch "delete FROM test WHERE pk > 1;"
+    dolt filter-branch "DELETE FROM test WHERE pk > 1;"
 
     dolt checkout other
     run dolt sql -q "SELECT * FROM test WHERE pk > 1" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "2,2" ]] || false
+}
+
+@test "filter-branch until commit" {
+    dolt sql -q "INSERT INTO test VALUES (7,7)"
+    dolt add -A && dolt commit -m "added (7,7)"
+    dolt sql -q "INSERT INTO test VALUES (8,8)"
+    dolt add -A && dolt commit -m "added (8,8)"
+    dolt sql -q "INSERT INTO test VALUES (9,9)"
+    dolt add -A && dolt commit -m "added (9,9)"
+
+    dolt filter-branch "DELETE FROM test WHERE pk > 2;" HEAD~2
+
+    run dolt sql -q "SELECT max(pk), max(c0) FROM test AS OF 'HEAD';" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2,2" ]] || false
+    run dolt sql -q "SELECT max(pk), max(c0) FROM test AS OF 'HEAD~1';" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2,2" ]] || false
+    run dolt sql -q "SELECT max(pk), max(c0) FROM test AS OF 'HEAD~2';" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "7,7" ]] || false
 }

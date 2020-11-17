@@ -31,9 +31,42 @@ type ReplayCommitFn func(ctx context.Context, root, parentRoot, rebasedParentRoo
 
 type NeedsRebaseFn func(ctx context.Context, cm *doltdb.Commit) (bool, error)
 
-func EntireHistory(_ context.Context, cm *doltdb.Commit) (bool, error) {
-	n, err := cm.NumParents()
-	return n != 0, err
+// EntireHistory returns a |NeedsRebaseFn| that rebases the entire commit history.
+func EntireHistory() NeedsRebaseFn {
+	return func(_ context.Context, cm *doltdb.Commit) (bool, error) {
+		n, err := cm.NumParents()
+		return n != 0, err
+	}
+}
+
+// StopAtCommit returns a |NeedsRebaseFn| that rebases the commit history until
+// |stopCommit| is reached. It will error if |stopCommit| is not reached.
+func StopAtCommit(stopCommit *doltdb.Commit) NeedsRebaseFn {
+	return func(ctx context.Context, cm *doltdb.Commit) (bool, error) {
+		h, err := cm.HashOf()
+		if err != nil {
+			return false, err
+		}
+
+		sh, err := stopCommit.HashOf()
+		if err != nil {
+			return false, err
+		}
+
+		if h.Equal(sh) {
+			return false, nil
+		}
+
+		n, err := cm.NumParents()
+		if err != nil {
+			return false, err
+		}
+		if n == 0 {
+			return false, fmt.Errorf("commit %s not found in history", sh)
+		}
+
+		return true, nil
+	}
 }
 
 // AllBranches rewrites the history of all branches in the repo using the |replay| function.
