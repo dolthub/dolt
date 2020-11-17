@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
+	"github.com/dolthub/vitess/go/vt/vterrors"
 	"github.com/fatih/color"
 	"gopkg.in/src-d/go-errors.v1"
 
@@ -58,6 +59,8 @@ If the {{.EmphasisLeft}}--all{{.EmphasisRight}} flag is supplied, the traversal 
 		"[--all] {{.LessThan}}query{{.GreaterThan}} [{{.LessThan}}commit{{.GreaterThan}}]",
 	},
 }
+
+type missingTbls map[hash.Hash]*errors.Error
 
 type FilterBranchCmd struct{}
 
@@ -146,20 +149,13 @@ func getNerf(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResu
 	return rebase.StopAtCommit(cm), nil
 }
 
-type missingTbls map[hash.Hash]*errors.Error
-
 func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit, query string, mt missingTbls) (*doltdb.RootValue, error) {
 	root, err := cm.GetRootValue()
 	if err != nil {
 		return nil, err
 	}
 
-	sqlCtx, se, err := monoSqlEngine(ctx, dEnv, cm)
-	if err != nil {
-		return nil, err
-	}
-
-	sqlStatement, err := sqlparser.Parse(query)
+	sqlCtx, eng, err := monoSqlEngine(ctx, dEnv, cm)
 	if err != nil {
 		return nil, err
 	}
@@ -169,16 +165,38 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 		return nil, err
 	}
 
-	itr := sql.RowsToRowIter()
+	sqlStatement, err := sqlparser.Parse(query)
+	if err != nil {
+		return nil, err
+	}
+
+	itr := sql.RowsToRowIter() // empty RowIter
 	switch s := sqlStatement.(type) {
+	case *sqlparser.Insert, *sqlparser.Update:
+		_, itr, err = eng.query(sqlCtx, query)
+
 	case *sqlparser.Delete:
-		ok := se.checkThenDeleteAllRows(sqlCtx, s)
+		ok := eng.checkThenDeleteAllRows(sqlCtx, s)
 		if !ok {
-			_, itr, err = se.query(sqlCtx, query)
+			_, itr, err = eng.query(sqlCtx, query)
 		}
+
+	case *sqlparser.DDL:
+		_, err := sqlparser.ParseStrictDDL(query)
+		if se, ok := vterrors.AsSyntaxError(err); ok {
+			return nil, vterrors.SyntaxError{Message: "While Parsing DDL: " + se.Message, Position: se.Position, Statement: se.Statement}
+		}
+		if err != nil {
+			return nil, fmt.Errorf("error parsing DDL: %v", err.Error())
+		}
+		// ddl returns a nil itr
+		_, _, err = eng.ddl(sqlCtx, s, query)
+
+	case *sqlparser.Select, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union:
+		return nil, fmt.Errorf("filter-branch queries must be write queries: '%s'", query)
+
 	default:
-		// todo: support insert, update, ddl
-		return nil, fmt.Errorf("SQL statement not supported for filter-branch: '%v'.", query)
+		return nil, fmt.Errorf("SQL statement not supported for filter-branch: '%s'", query)
 	}
 
 	err, ok := captureTblNotFoundErr(err, mt, rh)
@@ -203,7 +221,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 		return nil, err
 	}
 
-	roots, err := se.getRoots(sqlCtx)
+	roots, err := eng.getRoots(sqlCtx)
 	if err != nil {
 		return nil, err
 	}

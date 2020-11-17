@@ -11,6 +11,9 @@ CREATE TABLE test (
 );
 INSERT INTO test VALUES
     (0,0),(1,1),(2,2);
+CREATE TABLE to_drop (
+    pk int PRIMARY KEY
+);
 SQL
     dolt add -A
     dolt commit -m "added table test"
@@ -116,4 +119,108 @@ teardown() {
     run dolt sql -q "SELECT max(pk), max(c0) FROM test AS OF 'HEAD~2';" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "7,7" ]] || false
+}
+
+function setup_write_test {
+    dolt sql -q "INSERT INTO test VALUES (4,4);"
+    dolt add -A && dolt commit -m "4"
+
+    dolt sql -q "INSERT INTO test VALUES (5,5);"
+    dolt add -A && dolt commit -m "5"
+}
+
+@test "filter-branch INSERT INTO" {
+    setup_write_test
+
+    dolt filter-branch "INSERT INTO test VALUES (9,9);"
+
+    run dolt sql -q "SELECT pk,c0 FROM dolt_history_test ORDER BY pk DESC LIMIT 4;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "9,9" ]] || false
+    [[ "$output" =~ "9,9" ]] || false
+    [[ "$output" =~ "9,9" ]] || false
+    [[ "$output" =~ "5,5" ]] || false
+}
+
+@test "filter-branch UPDATE" {
+    setup_write_test
+
+    dolt filter-branch "UPDATE test SET c0 = 9 WHERE pk = 2;"
+
+    run dolt sql -q "SELECT pk,c0 FROM dolt_history_test ORDER BY c0 DESC LIMIT 4;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2,9" ]] || false
+    [[ "$output" =~ "2,9" ]] || false
+    [[ "$output" =~ "2,9" ]] || false
+    [[ "$output" =~ "5,5" ]] || false
+}
+
+@test "filter-branch ADD/DROP column" {
+    setup_write_test
+
+    dolt filter-branch "ALTER TABLE TEST ADD COLUMN c1 int;"
+
+    for commit in HEAD HEAD~1 HEAD~2; do
+        run dolt sql -q "SELECT * FROM test AS OF '$commit';" -r csv
+        [ "$status" -eq 0 ]
+        [[ "$output" =~ "pk,c0,c1" ]] || false
+    done
+
+    dolt filter-branch "ALTER TABLE TEST DROP COLUMN c0;"
+
+    for commit in HEAD HEAD~1 HEAD~2; do
+        run dolt sql -q "SELECT * FROM test AS OF '$commit';" -r csv
+        [ "$status" -eq 0 ]
+        [[ "$output" =~ "pk,c1" ]] || false
+    done
+}
+
+@test "filter-branch ADD/DROP table" {
+    setup_write_test
+
+    for commit in HEAD HEAD~1 HEAD~2; do
+        run dolt sql -q "SHOW TABLES AS OF '$commit';" -r csv
+        [ "$status" -eq 0 ]
+        [[ ! "$output" =~ "added" ]] || false
+    done
+
+    dolt filter-branch "CREATE TABLE added (pk int PRIMARY KEY);"
+
+    for commit in HEAD HEAD~1 HEAD~2; do
+        run dolt sql -q "SHOW TABLES AS OF '$commit';" -r csv
+        [ "$status" -eq 0 ]
+        [[ "$output" =~ "added" ]] || false
+    done
+
+
+    for commit in HEAD HEAD~1 HEAD~2; do
+        run dolt sql -q "SHOW TABLES AS OF '$commit';" -r csv
+        [ "$status" -eq 0 ]
+        [[ "$output" =~ "to_drop" ]] || false
+    done
+
+    dolt filter-branch "DROP TABLE to_drop;"
+
+    for commit in HEAD HEAD~1 HEAD~2; do
+        run dolt sql -q "SHOW TABLES AS OF '$commit';" -r csv
+        [ "$status" -eq 0 ]
+        [[ ! "$output" =~ "to_drop" ]] || false
+    done
+}
+
+@test "filter-branch error on conflict" {
+    setup_write_test
+
+    run dolt filter-branch "INSERT INTO test VALUES (1,2);"
+    [ "$status" -ne 0 ]
+    [[ ! "$output" =~ "panic" ]] || false
+
+    run dolt filter-branch "REPLACE INTO test VALUES (1,2);"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT pk,c0 FROM dolt_history_test WHERE pk=1;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,2" ]] || false
+    [[ "$output" =~ "1,2" ]] || false
+    [[ "$output" =~ "1,2" ]] || false
 }
