@@ -42,6 +42,20 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+var DownloadHedger *Hedger
+
+func init() {
+	// TODO: This does not necessarily respond well to changes in network
+	// conditions during the program's runtime.
+	DownloadHedger = NewHedger(
+		8,
+		NewMinStrategy(
+			1*time.Second,
+			NewPercentileStrategy(0, 60*60*1000, 4, 95.0),
+		),
+	)
+}
+
 var ErrUploadFailed = errors.New("upload failed")
 var ErrInvalidDoltSpecPath = errors.New("invalid dolt spec path")
 
@@ -270,7 +284,7 @@ func (gr *GetRange) WorkFunc(ctx context.Context, fetcher HTTPFetcher, chunkChan
 		return func() error { return nil }
 	}
 	return func() error {
-		comprData, err := rangeDownloadWithRetries(ctx, fetcher, gr.ChunkStartOffset(0), gr.RangeLen(), gr.Url)
+		comprData, err := hedgedRangeDownloadWithRetries(ctx, fetcher, gr.ChunkStartOffset(0), gr.RangeLen(), gr.Url)
 		if err != nil {
 			return err
 		}
@@ -740,7 +754,7 @@ func aggregateDownloads(aggDistance uint64, resourceGets map[string]*GetRange) [
 
 const (
 	chunkAggDistance       = 8 * 1024
-	maxDownloadConcurrency = 64
+	maxDownloadConcurrency = 16
 )
 
 // creates work functions for each download and executes them in parallel.  The work functions write downloaded chunks
@@ -758,6 +772,19 @@ func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, resourceGets map[
 	err := concurrentExec(work, maxDownloadConcurrency)
 
 	return err
+}
+
+func hedgedRangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, length uint64, urlStr string) ([]byte, error) {
+	res, err := DownloadHedger.Do(ctx, Work{
+		Work: func(ctx context.Context) (interface{}, error) {
+			return rangeDownloadWithRetries(ctx, fetcher, offset, length, urlStr)
+		},
+		Size: int(length),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return res.([]byte), nil
 }
 
 // rangeDownloadWithRetries executes an http get with the 'Range' header to get a range of bytes from a file.  Request
