@@ -27,8 +27,6 @@ import (
 
 type visitedSet map[hash.Hash]*doltdb.Commit
 
-type ReplayCommitFn func(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue) (rebaseRoot *doltdb.RootValue, err error)
-
 type NeedsRebaseFn func(ctx context.Context, cm *doltdb.Commit) (bool, error)
 
 // EntireHistory returns a |NeedsRebaseFn| that rebases the entire commit history.
@@ -69,6 +67,32 @@ func StopAtCommit(stopCommit *doltdb.Commit) NeedsRebaseFn {
 	}
 }
 
+type ReplayRootFn func(ctx context.Context, root, parentRoot, rebasedParentRoot *doltdb.RootValue) (rebaseRoot *doltdb.RootValue, err error)
+
+type ReplayCommitFn func(ctx context.Context, commit, parent, rebasedParent *doltdb.Commit) (rebaseRoot *doltdb.RootValue, err error)
+
+// wrapReplayRootFn converts a |ReplayRootFn| to a |ReplayCommitFn|
+func wrapReplayRootFn(fn ReplayRootFn) ReplayCommitFn {
+	return func(ctx context.Context, commit, parent, rebasedParent *doltdb.Commit) (rebaseRoot *doltdb.RootValue, err error) {
+		root, err := commit.GetRootValue()
+		if err != nil {
+			return nil, err
+		}
+
+		parentRoot, err := parent.GetRootValue()
+		if err != nil {
+			return nil, err
+		}
+
+		rebasedParentRoot, err := rebasedParent.GetRootValue()
+		if err != nil {
+			return nil, err
+		}
+
+		return fn(ctx, root, parentRoot, rebasedParentRoot)
+	}
+}
+
 // AllBranches rewrites the history of all branches in the repo using the |replay| function.
 func AllBranches(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn) error {
 	branches, err := dEnv.DoltDB.GetBranches(ctx)
@@ -82,6 +106,23 @@ func AllBranches(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, 
 // CurrentBranch rewrites the history of the current branch using the |replay| function.
 func CurrentBranch(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn) error {
 	return rebaseRefs(ctx, dEnv, replay, nerf, dEnv.RepoState.CWBHeadRef())
+}
+
+// AllBranchesByRoots rewrites the history of all branches in the repo using the |replay| function.
+func AllBranchesByRoots(ctx context.Context, dEnv *env.DoltEnv, replay ReplayRootFn, nerf NeedsRebaseFn) error {
+	branches, err := dEnv.DoltDB.GetBranches(ctx)
+	if err != nil {
+		return err
+	}
+
+	replayCommit := wrapReplayRootFn(replay)
+	return rebaseRefs(ctx, dEnv, replayCommit, nerf, branches...)
+}
+
+// CurrentBranchByRoot rewrites the history of the current branch using the |replay| function.
+func CurrentBranchByRoot(ctx context.Context, dEnv *env.DoltEnv, replay ReplayRootFn, nerf NeedsRebaseFn) error {
+	replayCommit := wrapReplayRootFn(replay)
+	return rebaseRefs(ctx, dEnv, replayCommit, nerf, dEnv.RepoState.CWBHeadRef())
 }
 
 func rebaseRefs(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn, refs ...ref.DoltRef) error {
@@ -206,45 +247,22 @@ func rebaseRecursive(ctx context.Context, ddb *doltdb.DoltDB, replay ReplayCommi
 		allRebasedParents = append(allRebasedParents, rp)
 	}
 
-	root, err := commit.GetRootValue()
-
-	if err != nil {
-		return nil, err
-	}
-
-	parentRoot, err := allParents[0].GetRootValue()
-
-	if err != nil {
-		return nil, err
-	}
-
-	// we can diff off of any parent
-	rebasedParentRoot, err := allRebasedParents[0].GetRootValue()
-
-	if err != nil {
-		return nil, err
-	}
-
-	rebasedRoot, err := replay(ctx, root, parentRoot, rebasedParentRoot)
-
+	rebasedRoot, err := replay(ctx, commit, allParents[0], allRebasedParents[0])
 	if err != nil {
 		return nil, err
 	}
 
 	valueHash, err := ddb.WriteRootValue(ctx, rebasedRoot)
-
 	if err != nil {
 		return nil, err
 	}
 
 	oldMeta, err := commit.GetCommitMeta()
-
 	if err != nil {
 		return nil, err
 	}
 
 	rebasedCommit, err := ddb.CommitDanglingWithParentCommits(ctx, valueHash, allRebasedParents, oldMeta)
-
 	if err != nil {
 		return nil, err
 	}

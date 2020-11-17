@@ -94,7 +94,6 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, filterBranchDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
-	var err error
 
 	if apr.NArg() < 1 || apr.NArg() > 2 {
 		args := strings.Join(apr.Args(), ", ")
@@ -104,8 +103,8 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 
 	query := apr.Arg(0)
 	notFound := make(missingTbls)
-	replay := func(ctx context.Context, root, _, _ *doltdb.RootValue) (*doltdb.RootValue, error) {
-		return processFilterQuery(ctx, dEnv, root, query, notFound)
+	replay := func(ctx context.Context, commit, _, _ *doltdb.Commit) (*doltdb.RootValue, error) {
+		return processFilterQuery(ctx, dEnv, commit, query, notFound)
 	}
 
 	nerf, err := getNerf(ctx, dEnv, apr)
@@ -134,12 +133,12 @@ func getNerf(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResu
 		return rebase.EntireHistory(), nil
 	}
 
-	spec, err := doltdb.NewCommitSpec(apr.Arg(1))
+	cs, err := doltdb.NewCommitSpec(apr.Arg(1))
 	if err != nil {
 		return nil, err
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(ctx, spec, dEnv.RepoState.CWBHeadRef())
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
 	if err != nil {
 		return nil, err
 	}
@@ -149,8 +148,13 @@ func getNerf(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResu
 
 type missingTbls map[hash.Hash]*errors.Error
 
-func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string, mt missingTbls) (*doltdb.RootValue, error) {
-	sqlCtx, se, err := monoSqlEngine(ctx, dEnv, root)
+func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit, query string, mt missingTbls) (*doltdb.RootValue, error) {
+	root, err := cm.GetRootValue()
+	if err != nil {
+		return nil, err
+	}
+
+	sqlCtx, se, err := monoSqlEngine(ctx, dEnv, cm)
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +212,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.Roo
 }
 
 // monoSqlEngine packages up the context necessary to run sql queries against single root.
-func monoSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue) (*sql.Context, *sqlEngine, error) {
+func monoSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*sql.Context, *sqlEngine, error) {
 	dsess := dsqle.DefaultDoltSession()
 
 	sqlCtx := sql.NewContext(ctx,
@@ -232,6 +236,11 @@ func monoSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValu
 	engine.AddDatabase(db)
 
 	err = dsess.AddDB(sqlCtx, db)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	root, err := cm.GetRootValue()
 	if err != nil {
 		return nil, nil, err
 	}
