@@ -70,7 +70,6 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	tables := apr.Args()
 
 	root, verr := commands.GetWorkingWithVErr(dEnv)
-
 	if verr != nil {
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
@@ -108,8 +107,6 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		if err != nil {
 			return -1
 		}
-
-
 	}
 	//err = root.IterTables(ctx, func(name string, table *doltdb.Table, sch schema.Schema) (stop bool, err error) {
 	//
