@@ -265,7 +265,7 @@ func (gr *GetRange) ChunkByteRange(i int) (uint64, uint64) {
 	return start, end
 }
 
-func (gr *GetRange) WorkFunc(ctx context.Context, fetcher HTTPFetcher, chunkChan chan nbs.CompressedChunk) func() error {
+func (gr *GetRange) GetDownloadFunc(ctx context.Context, fetcher HTTPFetcher, chunkChan chan nbs.CompressedChunk) func() error {
 	if len(gr.Ranges) == 0 {
 		return func() error { return nil }
 	}
@@ -751,7 +751,7 @@ func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, resourceGets map[
 	// loop over all the gets that need to be downloaded and create a work function for each
 	work := make([]func() error, len(gets))
 	for i, get := range gets {
-		work[i] = get.WorkFunc(ctx, dcs.httpFetcher, chunkChan)
+		work[i] = get.GetDownloadFunc(ctx, dcs.httpFetcher, chunkChan)
 	}
 
 	// execute the work
