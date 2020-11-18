@@ -40,7 +40,10 @@ const (
 	allowEmptyFlag   = "allow-empty"
 	dateParam        = "date"
 	commitMessageArg = "message"
+	authorParam 	 = "author"
 )
+
+// hello
 
 var commitDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Record changes to the repository",
@@ -82,6 +85,7 @@ func (cmd CommitCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(allowEmptyFlag, "", "Allow recording a commit that has the exact same data as its sole parent. This is usually a mistake, so it is disabled by default. This option bypasses that safety.")
 	ap.SupportsString(dateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
 	ap.SupportsFlag(forceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
+	ap.SupportsFlag(authorParam, "", "Specify an explicit author using the standard A U Thor <author@example.com> format." )
 	return ap
 }
 
@@ -147,6 +151,7 @@ func parseDate(dateStr string) (time.Time, error) {
 	return time.Time{}, errors.New("error: '" + dateStr + "' is not in a supported format.")
 }
 
+// TODO: Add behavior for bad author parse
 func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cli.UsagePrinter) int {
 	if err == nil {
 		return 0
