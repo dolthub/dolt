@@ -106,7 +106,7 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	rows := make([]sql.Row, 0)
 
 	for _, tableName := range tables {
-		table, ok, err := root.GetTable(ctx, tableName) // TODO: Handle case
+		table, ok, err := root.GetTable(ctx, strings.ToLower(tableName)) // TODO: Handle case
 
 		if err != nil {
 			return 1
@@ -120,7 +120,7 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			}
 
 			_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-				currRow := sql.NewRow(tableName, col.Name, tag)
+				currRow := sql.NewRow(strings.ToLower(tableName), col.Name, tag)
 
 				rows = append(rows, currRow)
 
