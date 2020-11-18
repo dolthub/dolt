@@ -43,6 +43,20 @@ SQL
     [[ "$output" =~ "new_name,c1,8201" ]] || false
 }
 
+@test "Schema tags should be case insensitive to tables" {
+    dolt sql <<SQL
+CREATE TABLE TeSt (
+  pk BIGINT NOT NULL,
+  c1 BIGINT,
+  PRIMARY KEY (pk));
+SQL
+    run dolt schema tags test -r=csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "TeSt,pk,3228" ]] || false
+    [[ "$output" =~ "TeSt,c1,8201" ]] || false
+}
+
+
 @test "Merging two branches that added same tag, name, type, and constraints" {
     dolt sql <<SQL
 CREATE TABLE test (

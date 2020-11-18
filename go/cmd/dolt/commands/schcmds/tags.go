@@ -16,6 +16,7 @@ package schcmds
 
 import (
 	"context"
+
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -105,13 +106,13 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		}
 
 		if err != nil {
-			return 1
+			return commands.HandleVErrAndExitCode(errhand.BuildDError("Could not load table %s.", tableName).AddCause(err).Build(), usage)
 		}
 
 		sch, err := table.GetSchema(ctx)
 
 		if err != nil {
-			return 1
+			return commands.HandleVErrAndExitCode(errhand.BuildDError("Could not load %s schema.", tableName).AddCause(err).Build(), usage)
 		}
 
 		_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
