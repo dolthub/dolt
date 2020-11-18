@@ -123,11 +123,7 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	}
 
-	outputFmt, verr := commands.GetResultFormat("tabular")
-
-	if verr != nil {
-		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(verr), usage)
-	}
+	outputFmt := commands.FormatTabular
 
 	formatSr, ok := apr.GetValue(commands.FormatFlag)
 
@@ -138,13 +134,9 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		if verr != nil {
 			return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(verr), usage)
 		}
-	}
+	
 
 	err = commands.PrettyPrintResults(ctx, outputFmt, headerSchema, sql.RowsToRowIter(rows...))
 
-	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-
-	return 0
+	return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 }
