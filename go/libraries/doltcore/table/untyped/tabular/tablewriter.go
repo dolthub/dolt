@@ -174,7 +174,6 @@ func (ttw *TextTableWriter) WriteRow(ctx context.Context, r row.Row) error {
 	}
 
 	allCols := ttw.sch.GetAllCols()
-
 	var rowVals strings.Builder
 	rowVals.WriteString("|")
 	err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
