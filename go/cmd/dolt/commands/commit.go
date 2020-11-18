@@ -43,6 +43,7 @@ const (
 	authorParam 	 = "author"
 )
 
+/// Test
 
 var commitDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Record changes to the repository",
