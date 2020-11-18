@@ -15,8 +15,9 @@
 package remotestorage
 
 import (
-	"sync"
-	"sync/atomic"
+	"context"
+
+	"golang.org/x/sync/errgroup"
 )
 
 func concurrentExec(work []func() error, concurrency int) error {
@@ -26,76 +27,43 @@ func concurrentExec(work []func() error, concurrency int) error {
 		concurrency = len(work)
 	}
 
-	// Buffer size needs to be able to take in all the work, otherwise it can deadlock if an error causes the workers to
-	// close the stop channel
-	workChan := make(chan func() error, len(work))
+	ch := make(chan func() error)
 
-	var wg sync.WaitGroup
-	var firstErr atomic.Value
-	var closeOnce sync.Once
+	eg, ctx := errgroup.WithContext(context.Background())
 
-	// start worker go routines based on the supplied concurrency
-	stopChan := make(chan struct{})
+	// Push the work...
+	eg.Go(func() error {
+		defer close(ch)
+		for _, w := range work {
+			select {
+			case ch <- w:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		return nil
+	})
+
+	// Do the work...
 	for i := 0; i < concurrency; i++ {
-		wg.Add(1)
-
-		//worker go routine
-		go func() {
-			defer wg.Done()
-
+		eg.Go(func() error {
 			for {
-				// verify we haven't received a stop message, fall through immediately if not
 				select {
-				case <-stopChan:
-					return
-				default:
-				}
-
-				// wait for a work or stop message
-				select {
-				case w, ok := <-workChan:
+				case w, ok := <-ch:
 					if !ok {
-						// workChan closed.  Time to exit
-						return
+						return nil
 					}
-
-					// do the work and capture any errors
-					err := w()
-
-					if err != nil {
-						// If one or more errors occur, the first error will close the stopChan and be saved as the
-						// error that gets returned.
-						closeOnce.Do(func() {
-							close(stopChan)
-							firstErr.Store(err)
-						})
-
-						return
+					if err := w(); err != nil {
+						return err
 					}
-
-				// stop message received while waiting for work
-				case <-stopChan:
-					return
+				case <-ctx.Done():
+					return ctx.Err()
 				}
 			}
-		}()
+		})
 	}
 
-	// write the work routines to the work channel
-	for _, w := range work {
-		workChan <- w
-	}
-
-	close(workChan)
-	wg.Wait()
-
-	firstErrVal := firstErr.Load()
-
-	if firstErrVal != nil {
-		return firstErrVal.(error)
-	}
-
-	return nil
+	return eg.Wait()
 }
 
 func batchItr(elemCount, batchSize int, cb func(start, end int) (stop bool)) {
