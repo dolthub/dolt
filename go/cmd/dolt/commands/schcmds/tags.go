@@ -16,20 +16,16 @@ package schcmds
 
 import (
 	"context"
-	"strconv"
+	"github.com/dolthub/go-mysql-server/sql"
 	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var tblTagsDocs = cli.CommandDocumentationContent{
@@ -101,65 +97,44 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		}
 	}
 
-	// Define a schema and table writer for output
-	var inCols = []schema.Column{
-		{Name: "table", Tag: 0, Kind: types.StringKind, IsPartOfPK: false, Constraints: nil},
-		{Name: "column", Tag: 1, Kind: types.StringKind, IsPartOfPK: false, Constraints: nil},
-		{Name: "tag", Tag: 2, Kind: types.StringKind, IsPartOfPK: false, Constraints: nil},
-	}
-	colColl, _ := schema.NewColCollection(inCols...)
-	rowSch := schema.UnkeyedSchemaFromCols(colColl)
-
-	_, outSch := untyped.NewUntypedSchema("table", "column", "tag")
-	var stringWr StringBuilderCloser
-	tableWr, err := tabular.NewTextTableWriter(&stringWr, outSch)
-
-	if err != nil {
-		return 1
+	var headerSchema = sql.Schema{
+		{Name: "table", Type: sql.Text, Default: nil},
+		{Name: "column", Type: sql.Text, Default: nil},
+		{Name: "tag", Type: sql.Uint64, Default: nil},
 	}
 
-	// Write the header row
-	header, err := row.New(types.Format_LD_1, rowSch, row.TaggedValues{
-		0: types.String("table"),
-		1: types.String("column"),
-		2: types.String("tag"),
-	})
-
-	err = tableWr.WriteRow(ctx, header)
+	rows := make([]sql.Row, 0)
 
 	for _, tableName := range tables {
 		table, ok, err := root.GetTable(ctx, tableName) // TODO: Handle case
-
-		if !ok {
-			return commands.HandleVErrAndExitCode(errhand.BuildDError("unable to find table given in args.").AddCause(err).Build(), usage)
-		}
-
-		sch, err := table.GetSchema(ctx)
 
 		if err != nil {
 			return 1
 		}
 
-		_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			currRow, err := row.New(types.Format_7_18, rowSch, row.TaggedValues{
-				0: types.String(tableName),
-				1: types.String(col.Name),
-				2: types.String(strconv.FormatUint(tag, 10)),
+		if ok {
+			sch, err := table.GetSchema(ctx)
+
+			if err != nil {
+				return 1
+			}
+
+			_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+				currRow := sql.NewRow(tableName, col.Name, tag)
+
+				rows = append(rows, currRow)
+
+				return false, err
 			})
-
-			err = tableWr.WriteRow(ctx, currRow)
-
-			return false, err
-		})
+		}
 	}
 
-	err = tableWr.Close(ctx)
+	// Print the results in a SQL Tabular format.
+	err := commands.PrettyPrintResults(ctx, 0, headerSchema, sql.RowsToRowIter(rows...))
 
 	if err != nil {
 		return 1
 	}
-
-	cli.Printf(stringWr.String())
 
 	return 0
 }

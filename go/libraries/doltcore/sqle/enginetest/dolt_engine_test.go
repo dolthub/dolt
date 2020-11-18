@@ -70,7 +70,6 @@ func TestQueryErrors(t *testing.T) {
 }
 
 func TestInfoSchema(t *testing.T) {
-	t.Skip("Info schema is broken by presence of tags in EXTRA")
 	enginetest.TestInfoSchema(t, newDoltHarness(t))
 }
 
@@ -195,7 +194,6 @@ func TestInnerNestedInNaturalJoins(t *testing.T) {
 }
 
 func TestColumnDefaults(t *testing.T) {
-	t.Skip("Broken by tag info in EXTRA")
 	enginetest.TestColumnDefaults(t, newDoltHarness(t))
 }
 
