@@ -39,15 +39,6 @@ A list of tables can optionally be provided.  If it is omitted then all tables w
 	},
 }
 
-// WriterCloser type for the tabular writer
-type StringBuilderCloser struct {
-	strings.Builder
-}
-
-func (*StringBuilderCloser) Close() error {
-	return nil
-}
-
 type TagsCmd struct{}
 
 var _ cli.Command = TagsCmd{}
