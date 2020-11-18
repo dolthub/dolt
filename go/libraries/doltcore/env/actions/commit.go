@@ -36,6 +36,8 @@ type CommitStagedProps struct {
 	Date             time.Time
 	AllowEmpty       bool
 	CheckForeignKeys bool
+	Author			 string
+	Email			 string
 }
 
 // GetNameAndEmail returns the name and email from the supplied config
@@ -87,6 +89,14 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProp
 	}
 
 	name, email, err := GetNameAndEmail(dEnv.Config)
+
+	if props.Author != "" {
+		name = props.Author
+	}
+
+	if props.Email != "" {
+		email = props.Email
+	}
 
 	if err != nil {
 		return err

@@ -110,12 +110,21 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		}
 	}
 
-	err := actions.CommitStaged(ctx, dEnv, actions.CommitStagedProps{
+	name, email, err := actions.GetNameAndEmail(dEnv.Config)
+
+	if err != nil {
+		return 1 // Fix this
+	}
+
+	err = actions.CommitStaged(ctx, dEnv, actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
 		AllowEmpty:       apr.Contains(allowEmptyFlag),
 		CheckForeignKeys: !apr.Contains(forceFlag),
+		Author: name,
+		Email: email,
 	})
+
 	if err == nil {
 		// if the commit was successful, print it out using the log command
 		return LogCmd{}.Exec(ctx, "log", []string{"-n=1"}, dEnv)
