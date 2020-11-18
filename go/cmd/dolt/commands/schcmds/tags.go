@@ -134,7 +134,7 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		if verr != nil {
 			return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(verr), usage)
 		}
-	
+	}
 
 	err = commands.PrettyPrintResults(ctx, outputFmt, headerSchema, sql.RowsToRowIter(rows...))
 
