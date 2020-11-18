@@ -131,6 +131,10 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		}
 	}
 
+	formatStr, ok := apr.GetValue(commands.FormatFlag)
+
+	cli.Println(formatStr, ok)
+
 	// Print the results in a SQL Tabular format.
 	err := commands.PrettyPrintResults(ctx, 0, headerSchema, sql.RowsToRowIter(rows...))
 
