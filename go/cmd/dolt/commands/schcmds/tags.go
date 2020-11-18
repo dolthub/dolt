@@ -16,8 +16,6 @@ package schcmds
 
 import (
 	"context"
-	"strings"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -99,47 +97,52 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	rows := make([]sql.Row, 0)
 
 	for _, tableName := range tables {
-		table, ok, err := root.GetTable(ctx, strings.ToLower(tableName))
+		table, foundTableKey, ok, err := root.GetTableInsensitive(ctx, tableName)
+
+		// Return an error if table is not found
+		if !ok {
+			return commands.HandleVErrAndExitCode(errhand.BuildDError("Can't find table %s.", tableName).AddCause(err).Build(), usage)
+		}
 
 		if err != nil {
 			return 1
 		}
 
-		if ok {
-			sch, err := table.GetSchema(ctx)
+		sch, err := table.GetSchema(ctx)
 
-			if err != nil {
-				return 1
-			}
-
-			_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-				currRow := sql.NewRow(strings.ToLower(tableName), col.Name, tag)
-
-				rows = append(rows, currRow)
-
-				return false, err
-			})
+		if err != nil {
+			return 1
 		}
+
+		_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			rows = append(rows, sql.NewRow(foundTableKey, col.Name, tag))
+
+			return false, err
+		})
+
+	}
+
+	outputFmt, verr := commands.GetResultFormat("tabular")
+
+	if verr != nil {
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(verr), usage)
 	}
 
 	formatSr, ok := apr.GetValue(commands.FormatFlag)
 
 	var err error
 	if ok {
-		resultFormat, verr := commands.GetFormat(formatSr)
+		outputFmt, verr = commands.GetResultFormat(formatSr)
 
 		if verr != nil {
 			return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(verr), usage)
 		}
-
-		err = commands.PrettyPrintResults(ctx, resultFormat, headerSchema, sql.RowsToRowIter(rows...))
-	} else {
-		// Default to tabular.
-		err = commands.PrettyPrintResults(ctx, 0, headerSchema, sql.RowsToRowIter(rows...))
 	}
 
+	err = commands.PrettyPrintResults(ctx, outputFmt, headerSchema, sql.RowsToRowIter(rows...))
+
 	if err != nil {
-		return 1
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
 	return 0

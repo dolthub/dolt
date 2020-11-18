@@ -164,7 +164,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	var verr errhand.VerboseError
 	format := formatTabular
 	if formatSr, ok := apr.GetValue(FormatFlag); ok {
-		format, verr = GetFormat(formatSr)
+		format, verr = GetResultFormat(formatSr)
 		if verr != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(verr), usage)
 		}
@@ -487,7 +487,7 @@ func formatQueryError(message string, err error) errhand.VerboseError {
 	}
 }
 
-func GetFormat(format string) (resultFormat, errhand.VerboseError) {
+func GetResultFormat(format string) (resultFormat, errhand.VerboseError) {
 	switch strings.ToLower(format) {
 	case "tabular":
 		return formatTabular, nil
