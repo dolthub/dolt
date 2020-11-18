@@ -141,7 +141,7 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(verr), usage)
 		}
 
-		err = commands.PrettyPrintResults(ctx, resultFormat , headerSchema, sql.RowsToRowIter(rows...))
+		err = commands.PrettyPrintResults(ctx, resultFormat, headerSchema, sql.RowsToRowIter(rows...))
 	} else {
 		// Default to tabular.
 		err = commands.PrettyPrintResults(ctx, 0, headerSchema, sql.RowsToRowIter(rows...))
