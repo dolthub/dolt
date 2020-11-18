@@ -131,12 +131,21 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		}
 	}
 
-	formatStr, ok := apr.GetValue(commands.FormatFlag)
+	formatSr, ok := apr.GetValue(commands.FormatFlag)
 
-	cli.Println(formatStr, ok)
+	var err error
+	if ok {
+		resultFormat, verr := commands.GetFormat(formatSr)
 
-	// Print the results in a SQL Tabular format.
-	err := commands.PrettyPrintResults(ctx, 0, headerSchema, sql.RowsToRowIter(rows...))
+		if verr != nil {
+			return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(verr), usage)
+		}
+
+		err = commands.PrettyPrintResults(ctx, resultFormat , headerSchema, sql.RowsToRowIter(rows...))
+	} else {
+		// Default to tabular.
+		err = commands.PrettyPrintResults(ctx, 0, headerSchema, sql.RowsToRowIter(rows...))
+	}
 
 	if err != nil {
 		return 1
