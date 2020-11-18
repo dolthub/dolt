@@ -99,7 +99,7 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	rows := make([]sql.Row, 0)
 
 	for _, tableName := range tables {
-		table, ok, err := root.GetTable(ctx, strings.ToLower(tableName)) // TODO: Handle case
+		table, ok, err := root.GetTable(ctx, strings.ToLower(tableName))
 
 		if err != nil {
 			return 1
