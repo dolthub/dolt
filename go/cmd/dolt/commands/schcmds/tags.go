@@ -16,18 +16,17 @@ package schcmds
 
 import (
 	"context"
-	"fmt"
-	"strings"
+
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
-
-//SELECT table_name AS 'table', column_name AS 'column', SUBSTR(extra, 5) AS tag FROM information_schema.columns WHERE table_name = 'XXX';
 
 var tblTagsDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Shows the column tags of one or more tables.",
@@ -69,11 +68,13 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	apr := cli.ParseArgs(ap, args, help)
 
 	tables := apr.Args()
+
+	root, verr := commands.GetWorkingWithVErr(dEnv)
+	if verr != nil {
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+
 	if len(tables) == 0 {
-		root, verr := commands.GetWorkingWithVErr(dEnv)
-		if verr != nil {
-			return commands.HandleVErrAndExitCode(verr, usage)
-		}
 		var err error
 		tables, err = root.GetTableNames(ctx)
 
@@ -87,24 +88,63 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			return 0
 		}
 	}
-	for i := 0; i < len(tables); i++ {
-		tables[i] = fmt.Sprintf("'%s'", tables[i])
+
+	var headerSchema = sql.Schema{
+		{Name: "table", Type: sql.Text, Default: nil},
+		{Name: "column", Type: sql.Text, Default: nil},
+		{Name: "tag", Type: sql.Uint64, Default: nil},
 	}
 
-	//TODO: implement REGEXP_SUBSTR in go-mysql-server and use it here instead of SUBSTR, as this will eventually break
-	queryStr := fmt.Sprintf("SELECT table_name AS 'table', column_name AS 'column', "+
-		"SUBSTR(extra, 5) AS tag FROM information_schema.columns WHERE table_name IN (%s)", strings.Join(tables, ","))
+	rows := make([]sql.Row, 0)
 
-	if formatStr, ok := apr.GetValue(commands.FormatFlag); ok {
-		return commands.SqlCmd{}.Exec(ctx, "", []string{
-			fmt.Sprintf(`--%s=%s`, commands.FormatFlag, formatStr),
-			fmt.Sprintf(`--%s`, commands.QueryFlag),
-			queryStr + ";",
-		}, dEnv)
-	} else {
-		return commands.SqlCmd{}.Exec(ctx, "", []string{
-			fmt.Sprintf(`--%s`, commands.QueryFlag),
-			queryStr + ";",
-		}, dEnv)
+	for _, tableName := range tables {
+		table, foundTableKey, ok, err := root.GetTableInsensitive(ctx, tableName)
+
+		// Return an error if table is not found
+		if !ok {
+			return commands.HandleVErrAndExitCode(errhand.BuildDError("Can't find table %s.", tableName).AddCause(err).Build(), usage)
+		}
+
+		if err != nil {
+			return commands.HandleVErrAndExitCode(errhand.BuildDError("Could not load table %s.", tableName).AddCause(err).Build(), usage)
+		}
+
+		sch, err := table.GetSchema(ctx)
+
+		if err != nil {
+			return commands.HandleVErrAndExitCode(errhand.BuildDError("Could not load %s schema.", tableName).AddCause(err).Build(), usage)
+		}
+
+		_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			rows = append(rows, sql.NewRow(foundTableKey, col.Name, tag))
+
+			return false, err
+		})
+
 	}
+
+	outputFmt, verr := commands.GetResultFormat("tabular")
+
+	if verr != nil {
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(verr), usage)
+	}
+
+	formatSr, ok := apr.GetValue(commands.FormatFlag)
+
+	var err error
+	if ok {
+		outputFmt, verr = commands.GetResultFormat(formatSr)
+
+		if verr != nil {
+			return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(verr), usage)
+		}
+	}
+
+	err = commands.PrettyPrintResults(ctx, outputFmt, headerSchema, sql.RowsToRowIter(rows...))
+
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	return 0
 }
