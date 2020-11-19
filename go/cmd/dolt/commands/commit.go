@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -40,6 +41,7 @@ const (
 	allowEmptyFlag   = "allow-empty"
 	dateParam        = "date"
 	commitMessageArg = "message"
+	authorParam      = "author"
 )
 
 var commitDocs = cli.CommandDocumentationContent{
@@ -82,6 +84,7 @@ func (cmd CommitCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(allowEmptyFlag, "", "Allow recording a commit that has the exact same data as its sole parent. This is usually a mistake, so it is disabled by default. This option bypasses that safety.")
 	ap.SupportsString(dateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
 	ap.SupportsFlag(forceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
+	ap.SupportsString(authorParam, "", "author", "Specify an explicit author using the standard A U Thor <author@example.com> format.")
 	return ap
 }
 
@@ -90,6 +93,20 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, commitDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
+
+	name, email, err := actions.GetNameAndEmail(dEnv.Config)
+
+	if err != nil {
+		return handleCommitErr(ctx, dEnv, err, usage)
+	}
+
+	if authorStr, ok := apr.GetValue(authorParam); ok {
+		name, email, err = parseAuthor(authorStr)
+
+		if err != nil {
+			return handleCommitErr(ctx, dEnv, err, usage)
+		}
+	}
 
 	msg, msgOk := apr.GetValue(commitMessageArg)
 	if !msgOk {
@@ -106,12 +123,15 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		}
 	}
 
-	err := actions.CommitStaged(ctx, dEnv, actions.CommitStagedProps{
+	err = actions.CommitStaged(ctx, dEnv, actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
 		AllowEmpty:       apr.Contains(allowEmptyFlag),
 		CheckForeignKeys: !apr.Contains(forceFlag),
+		Name:             name,
+		Email:            email,
 	})
+
 	if err == nil {
 		// if the commit was successful, print it out using the log command
 		return LogCmd{}.Exec(ctx, "log", []string{"-n=1"}, dEnv)
@@ -145,6 +165,25 @@ func parseDate(dateStr string) (time.Time, error) {
 	}
 
 	return time.Time{}, errors.New("error: '" + dateStr + "' is not in a supported format.")
+}
+
+func parseAuthor(authorStr string) (string, string, error) {
+	if len(authorStr) == 0 {
+		return "", "", errors.New("Option 'author' requires a value")
+	}
+
+	reg := regexp.MustCompile("(?m)([^)]+) \\<([^)]+)") // Regex matches Name <email
+	matches := reg.FindStringSubmatch(authorStr)        // This function places the original string at the beginning of matches
+
+	// If name and email are provided
+	if len(matches) != 3 {
+		return "", "", errors.New("Author not formatted correctly. Use 'Name <author@example.com>' format")
+	}
+
+	name := matches[1]
+	email := strings.ReplaceAll(matches[2], ">", "")
+
+	return name, email, nil
 }
 
 func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cli.UsagePrinter) int {
