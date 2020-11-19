@@ -36,7 +36,7 @@ type CommitStagedProps struct {
 	Date             time.Time
 	AllowEmpty       bool
 	CheckForeignKeys bool
-	Author           string
+	Name             string
 	Email            string
 }
 
@@ -154,7 +154,7 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProp
 		return err
 	}
 
-	meta, noCommitMsgErr := doltdb.NewCommitMetaWithUserTS(name, email, props.Message, props.Date)
+	meta, noCommitMsgErr := doltdb.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
 	if noCommitMsgErr != nil {
 		return ErrEmptyCommitMessage
 	}

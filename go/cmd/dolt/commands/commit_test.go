@@ -57,7 +57,7 @@ func TestParseDate(t *testing.T) {
 func TestParseAuthor(t *testing.T) {
 	tests := []struct {
 		authorStr string
-		expAuthor string
+		expName   string
 		expEmail  string
 		expErr    bool
 	}{
@@ -78,7 +78,7 @@ func TestParseAuthor(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, author, test.expAuthor)
+				assert.Equal(t, author, test.expName)
 				assert.Equal(t, email, test.expEmail)
 			}
 		})

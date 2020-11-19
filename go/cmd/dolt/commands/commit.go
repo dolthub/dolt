@@ -130,7 +130,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		Date:             t,
 		AllowEmpty:       apr.Contains(allowEmptyFlag),
 		CheckForeignKeys: !apr.Contains(forceFlag),
-		Author:           name,
+		Name:             name,
 		Email:            email,
 	})
 
@@ -182,10 +182,10 @@ func parseAuthor(authorStr string) (string, string, error) {
 		return "", "", errors.New("Author not formatted correctly. Use 'Name <author@example.com>' format")
 	}
 
-	author := matches[1]
+	name := matches[1]
 	email := strings.ReplaceAll(matches[2], ">", "")
 
-	return author, email, nil
+	return name, email, nil
 }
 
 func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cli.UsagePrinter) int {
