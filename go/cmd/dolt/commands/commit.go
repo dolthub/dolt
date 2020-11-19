@@ -41,7 +41,7 @@ const (
 	allowEmptyFlag   = "allow-empty"
 	dateParam        = "date"
 	commitMessageArg = "message"
-	authorParam 	 = "author"
+	authorParam      = "author"
 )
 
 /// Test
@@ -86,7 +86,7 @@ func (cmd CommitCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(allowEmptyFlag, "", "Allow recording a commit that has the exact same data as its sole parent. This is usually a mistake, so it is disabled by default. This option bypasses that safety.")
 	ap.SupportsString(dateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
 	ap.SupportsFlag(forceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
-	ap.SupportsString(authorParam, "",  "author", "Specify an explicit author using the standard A U Thor <author@example.com> format." )
+	ap.SupportsString(authorParam, "", "author", "Specify an explicit author using the standard A U Thor <author@example.com> format.")
 	return ap
 }
 
@@ -130,8 +130,8 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		Date:             t,
 		AllowEmpty:       apr.Contains(allowEmptyFlag),
 		CheckForeignKeys: !apr.Contains(forceFlag),
-		Author: name,
-		Email: email,
+		Author:           name,
+		Email:            email,
 	})
 
 	if err == nil {
@@ -175,7 +175,7 @@ func parseAuthor(authorStr string) (string, string, error) {
 	}
 
 	reg := regexp.MustCompile("(?m)([^)]+) \\<([^)]+)") // Regex matches Name <email
-	matches:= reg.FindStringSubmatch(authorStr)  // This function places the original string at the beginning of matches
+	matches := reg.FindStringSubmatch(authorStr)        // This function places the original string at the beginning of matches
 
 	// If name and email are provided
 	if len(matches) != 3 {

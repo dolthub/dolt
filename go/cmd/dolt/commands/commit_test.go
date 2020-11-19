@@ -58,8 +58,8 @@ func TestParseAuthor(t *testing.T) {
 	tests := []struct {
 		authorStr string
 		expAuthor string
-		expEmail string
-		expErr  bool
+		expEmail  string
+		expErr    bool
 	}{
 		{"Hi <hi@hi.com>", "Hi", "hi@hi.com", false},
 		{"John Doe <hi@hi.com>", "John Doe", "hi@hi.com", false},

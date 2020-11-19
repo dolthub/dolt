@@ -36,8 +36,8 @@ type CommitStagedProps struct {
 	Date             time.Time
 	AllowEmpty       bool
 	CheckForeignKeys bool
-	Author			 string
-	Email			 string
+	Author           string
+	Email            string
 }
 
 // GetNameAndEmail returns the name and email from the supplied config
