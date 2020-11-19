@@ -22,7 +22,8 @@ require (
 	github.com/dolthub/ishell v0.0.0-20201107004254-1592c0036c8d
 	github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66
 	github.com/dolthub/sqllogictest/go v0.0.0-20201105013724-5123fc66e12c
-	github.com/dolthub/vitess v0.0.0-20201111232835-de121b254639
+	github.com/dolthub/sysbench v0.0.0-20200910140329-bbee5d5dc5e2 // indirect
+	github.com/dolthub/vitess v0.0.0-20201119173718-382d38925c66
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.9.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
