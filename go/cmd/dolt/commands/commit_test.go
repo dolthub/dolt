@@ -53,3 +53,34 @@ func TestParseDate(t *testing.T) {
 		})
 	}
 }
+
+func TestParseAuthor(t *testing.T) {
+	tests := []struct {
+		authorStr string
+		expAuthor string
+		expEmail string
+		expErr  bool
+	}{
+		{"Hi <hi@hi.com>", "Hi", "hi@hi.com", false},
+		{"John Doe <hi@hi.com>", "John Doe", "hi@hi.com", false},
+		{"John Doe <hi@hi.com", "John Doe", "hi@hi.com", false},
+		{"John Doe", "", "", true},
+		{"<hi@hi.com>", "", "", true},
+		{"", "", "", true},
+		{"John Doe hi@hi.com", "", "", true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.authorStr, func(t *testing.T) {
+			author, email, err := parseAuthor(test.authorStr)
+
+			if test.expErr {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, author, test.expAuthor)
+				assert.Equal(t, email, test.expEmail)
+			}
+		})
+	}
+}

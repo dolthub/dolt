@@ -99,7 +99,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	name, email, err := actions.GetNameAndEmail(dEnv.Config)
 
 	if err != nil {
-		return 1 // Fix this
+		return handleCommitErr(ctx, dEnv, err, usage)
 	}
 
 	if nameAuthor, ok := apr.GetValue(authorParam); ok {
@@ -174,18 +174,18 @@ func parseAuthor(authorStr string) (string, string, error) {
 		return "", "", errors.New("Option 'author' requires a value")
 	}
 
-	reg := regexp.MustCompile("(?m)([^)]+) \\<([^)]+)\\>") // Regex matches Name <email>
-	matches:= reg.FindStringSubmatch(authorStr)  // This function places the original string at the beginning
+	reg := regexp.MustCompile("(?m)([^)]+) \\<([^)]+)") // Regex matches Name <email
+	matches:= reg.FindStringSubmatch(authorStr)  // This function places the original string at the beginning of matches
 
 	// If name and email are provided
-	if len(matches) == 3 {
-		author := matches[0]
-		email := matches[1]
-
-		return author, email, nil
-	} else {
+	if len(matches) != 3 {
 		return "", "", errors.New("Author not formatted correctly. Use 'Name <author@example.com>' format")
 	}
+
+	author := matches[1]
+	email := strings.ReplaceAll(matches[2], ">", "")
+
+	return author, email, nil
 }
 
 func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cli.UsagePrinter) int {
