@@ -85,7 +85,7 @@ func (cmd CommitCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(allowEmptyFlag, "", "Allow recording a commit that has the exact same data as its sole parent. This is usually a mistake, so it is disabled by default. This option bypasses that safety.")
 	ap.SupportsString(dateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
 	ap.SupportsFlag(forceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
-	ap.SupportsFlag(authorParam, "", "Specify an explicit author using the standard A U Thor <author@example.com> format." )
+	ap.SupportsString(authorParam, "",  "string", "Specify an explicit author using the standard A U Thor <author@example.com> format." )
 	return ap
 }
 
@@ -94,6 +94,21 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, commitDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
+
+	name, email, err := actions.GetNameAndEmail(dEnv.Config)
+
+	if err != nil {
+		return 1 // Fix this
+	}
+
+	if nameAuthor, ok := apr.GetValue(authorParam); ok {
+		cli.Println(nameAuthor)
+		name, email, err = parseAuthor(nameAuthor)
+
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.BuildDError("error: invalid author info").AddCause(err).Build(), usage)
+		}
+	}
 
 	msg, msgOk := apr.GetValue(commitMessageArg)
 	if !msgOk {
@@ -108,12 +123,6 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.BuildDError("error: invalid date").AddCause(err).Build(), usage)
 		}
-	}
-
-	name, email, err := actions.GetNameAndEmail(dEnv.Config)
-
-	if err != nil {
-		return 1 // Fix this
 	}
 
 	err = actions.CommitStaged(ctx, dEnv, actions.CommitStagedProps{
@@ -158,6 +167,28 @@ func parseDate(dateStr string) (time.Time, error) {
 	}
 
 	return time.Time{}, errors.New("error: '" + dateStr + "' is not in a supported format.")
+}
+
+func parseAuthor(authorStr string) (string, string, error) {
+
+	if len(authorStr) == 0 {
+		bdr := errhand.BuildDError("Option 'author' requires a value")
+		return "", "", bdr.Build()
+	}
+
+	spl := strings.Split(authorStr, "<")
+
+	// If name and email are provided
+	if len(spl) == 2 {
+		author := spl[0]
+		email := strings.ReplaceAll(spl[1], ">", "")
+
+		return author, email, nil
+	} else {
+		// TODO: Get this to only print one error
+		bdr := errhand.BuildDError("Author not formatted correctly. Use 'A U Thor <author@example.com>' format")
+		return "", "", bdr.Build()
+	}
 }
 
 // TODO: Add behavior for bad author parse
