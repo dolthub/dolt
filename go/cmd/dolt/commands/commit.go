@@ -102,8 +102,8 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return handleCommitErr(ctx, dEnv, err, usage)
 	}
 
-	if nameAuthor, ok := apr.GetValue(authorParam); ok {
-		name, email, err = parseAuthor(nameAuthor)
+	if authorStr, ok := apr.GetValue(authorParam); ok {
+		name, email, err = parseAuthor(authorStr)
 
 		if err != nil {
 			return handleCommitErr(ctx, dEnv, err, usage)

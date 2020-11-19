@@ -88,20 +88,6 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProp
 		return NothingStaged{notStaged, notStagedDocs}
 	}
 
-	name, email, err := GetNameAndEmail(dEnv.Config)
-
-	if props.Author != "" {
-		name = props.Author
-	}
-
-	if props.Email != "" {
-		email = props.Email
-	}
-
-	if err != nil {
-		return err
-	}
-
 	var mergeCmSpec []*doltdb.CommitSpec
 	if dEnv.IsMergeActive() {
 		root, err := dEnv.WorkingRoot(ctx)
