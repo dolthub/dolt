@@ -224,3 +224,27 @@ function setup_write_test {
     [[ "$output" =~ "1,2" ]] || false
     [[ "$output" =~ "1,2" ]] || false
 }
+
+@test "filter-branch error on incorrect schema" {
+    setup_write_test
+
+    dolt sql <<SQL
+ALTER TABLE test ADD COLUMN c1 int;
+INSERT INTO test VALUES (6,6,6);
+SQL
+    dolt add -A && dolt commit -m "added column c1"
+
+    run dolt filter-branch "INSERT INTO test VALUES (9,9);"
+    [ "$status" -ne 0 ]
+    [[ ! "$output" =~ "panic" ]] || false
+
+    run dolt filter-branch "INSERT INTO test (pk,c0) VALUES (9,9);"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT pk,c0 FROM dolt_history_test WHERE pk=9;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "9,9" ]] || false
+    [[ "$output" =~ "9,9" ]] || false
+    [[ "$output" =~ "9,9" ]] || false
+    [[ "$output" =~ "9,9" ]] || false
+}

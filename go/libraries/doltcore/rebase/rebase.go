@@ -60,7 +60,7 @@ func StopAtCommit(stopCommit *doltdb.Commit) NeedsRebaseFn {
 			return false, err
 		}
 		if n == 0 {
-			return false, fmt.Errorf("commit %s not found in history", sh)
+			return false, fmt.Errorf("commit %s is missing from the commit history of at least one rebase head", sh)
 		}
 
 		return true, nil
