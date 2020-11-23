@@ -193,14 +193,16 @@ func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cl
 
 	if err == actions.ErrNameNotConfigured {
 		bdr := errhand.BuildDError("Could not determine %s.", env.UserNameKey)
-		bdr.AddDetails("dolt config [--global|--local] --add %[1]s \"FIRST LAST\"", env.UserNameKey)
+		bdr.AddDetails("Log into DoltHub: dolt login")
+		bdr.AddDetails("OR add name to config: dolt config [--global|--local] --add %[1]s \"FIRST LAST\"", env.UserNameKey)
 
 		return HandleVErrAndExitCode(bdr.Build(), usage)
 	}
 
 	if err == actions.ErrEmailNotConfigured {
 		bdr := errhand.BuildDError("Could not determine %s.", env.UserEmailKey)
-		bdr.AddDetails("dolt config [--global|--local] --add %[1]s \"EMAIL_ADDRESS\"", env.UserEmailKey)
+		bdr.AddDetails("Log into DoltHub: dolt login")
+		bdr.AddDetails("OR add email to config: dolt config [--global|--local] --add %[1]s \"EMAIL_ADDRESS\"", env.UserEmailKey)
 
 		return HandleVErrAndExitCode(bdr.Build(), usage)
 	}

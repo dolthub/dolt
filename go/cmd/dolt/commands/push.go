@@ -392,6 +392,11 @@ func pushToRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, mode ref.RefUpda
 				cli.Println("hint: 'dolt pull ...') before pushing again.")
 				return errhand.BuildDError("").Build()
 			} else {
+				errString := err.Error()
+				if errString == "rpc error: code = PermissionDenied desc = permission denied" {
+					cli.Println("hint: have you logged into DoltHub using 'dolt login'?")
+					cli.Println("hint: check that user.email in 'dolt config --list' has write perms to DoltHub repo")
+				}
 				return errhand.BuildDError("error: push failed").AddCause(err).Build()
 			}
 		}
