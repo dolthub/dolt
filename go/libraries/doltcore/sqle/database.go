@@ -392,7 +392,7 @@ func (db Database) getTable(ctx context.Context, root *doltdb.RootValue, tableNa
 
 	var table sql.Table
 
-	readonlyTable := DoltTable{name: tableName, table: tbl, sch: sch, db: db}
+	readonlyTable := NewDoltTable(tableName, sch, tbl, db)
 	if doltdb.IsReadOnlySystemTable(tableName) {
 		table = &readonlyTable
 	} else if doltdb.HasDoltPrefix(tableName) {

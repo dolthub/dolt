@@ -215,7 +215,7 @@ func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	mover, verr := NewExportDataMover(ctx, root, dEnv.FS, exOpts, importStatsCB)
+	mover, verr := NewExportDataMover(ctx, root, dEnv, exOpts, importStatsCB)
 
 	if verr != nil {
 		return commands.HandleVErrAndExitCode(verr, usage)
@@ -234,11 +234,11 @@ func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	return 0
 }
 
-func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, exOpts *exportOptions, statsCB noms.StatsCB) (*mvdata.DataMover, errhand.VerboseError) {
+func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, exOpts *exportOptions, statsCB noms.StatsCB) (*mvdata.DataMover, errhand.VerboseError) {
 	var rd table.TableReadCloser
 	var err error
 
-	ow, err := exOpts.checkOverwrite(ctx, root, fs)
+	ow, err := exOpts.checkOverwrite(ctx, root, dEnv.FS)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
 	}
@@ -246,7 +246,7 @@ func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.
 		return nil, errhand.BuildDError("%s already exists. Use -f to overwrite.", exOpts.DestName()).Build()
 	}
 
-	rd, srcIsSorted, err := exOpts.src.NewReader(ctx, root, fs, exOpts.srcOptions)
+	rd, srcIsSorted, err := exOpts.src.NewReader(ctx, root, dEnv.FS, exOpts.srcOptions)
 
 	if err != nil {
 		return nil, errhand.BuildDError("Error creating reader for %s.", exOpts.SrcName()).AddCause(err).Build()
@@ -262,7 +262,7 @@ func NewExportDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.
 	inSch := rd.GetSchema()
 	outSch := inSch
 
-	wr, err := exOpts.dest.NewCreatingWriter(ctx, exOpts, root, fs, srcIsSorted, outSch, statsCB)
+	wr, err := exOpts.dest.NewCreatingWriter(ctx, exOpts, dEnv, root, srcIsSorted, outSch, statsCB, true)
 
 	if err != nil {
 		return nil, errhand.BuildDError("Could not create table writer for %s", exOpts.tableName).AddCause(err).Build()

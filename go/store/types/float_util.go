@@ -26,6 +26,28 @@ import (
 	"math"
 )
 
+func Round(v Value) Value {
+	switch val := v.(type) {
+	case Float:
+		return Float(math.Round(float64(val)))
+	default:
+		return val
+	}
+}
+
+func Increment(v Value) Value {
+	switch val := v.(type) {
+	case Int:
+		return Int(int64(val) + 1)
+	case Uint:
+		return Uint(uint64(val) + 1)
+	case Float:
+		return Float(float64(val) + 1)
+	default:
+		return val
+	}
+}
+
 func float64IsInt(f float64) bool {
 	return math.Trunc(f) == f
 }

@@ -343,3 +343,11 @@ func (ste *SessionedTableEditor) validateForInsert(ctx context.Context, dRow row
 	}
 	return nil
 }
+
+func (ste *SessionedTableEditor) GetAutoIncrementValue() types.Value {
+	return ste.tableEditor.GetAutoIncrementValue()
+}
+
+func (ste *SessionedTableEditor) SetAutoIncrementValue(v types.Value) error {
+	return ste.tableEditor.SetAutoIncrementValue(v)
+}

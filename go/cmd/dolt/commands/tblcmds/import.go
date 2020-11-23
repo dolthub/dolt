@@ -150,7 +150,7 @@ func (m importOptions) srcIsStream() bool {
 	return isStream
 }
 
-func getImportMoveOptions(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) (*importOptions, errhand.VerboseError) {
+func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) (*importOptions, errhand.VerboseError) {
 	tableName := apr.Arg(0)
 
 	path := ""
@@ -217,8 +217,6 @@ func getImportMoveOptions(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) (*i
 	}
 
 	if moveOp != CreateOp {
-
-		ctx := context.Background()
 		root, err := dEnv.WorkingRoot(ctx)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
@@ -345,12 +343,20 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, importDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
-	verr := validateImportArgs(apr)
+	dEnv, err := commands.MaybeMigrateEnv(ctx, dEnv)
+
+	var verr errhand.VerboseError
+	if err != nil {
+		verr = errhand.BuildDError("could not load manifest for gc").AddCause(err).Build()
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+
+	verr = validateImportArgs(apr)
 	if verr != nil {
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	mvOpts, verr := getImportMoveOptions(apr, dEnv)
+	mvOpts, verr := getImportMoveOptions(ctx, apr, dEnv)
 
 	if verr != nil {
 		return commands.HandleVErrAndExitCode(verr, usage)
@@ -363,7 +369,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	mover, nDMErr := newImportDataMover(ctx, root, dEnv.FS, mvOpts, importStatsCB)
+	mover, nDMErr := newImportDataMover(ctx, root, dEnv, mvOpts, importStatsCB)
 
 	if nDMErr != nil {
 
@@ -409,10 +415,10 @@ func importStatsCB(stats types.AppliedEditStats) {
 	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
 }
 
-func newImportDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, impOpts *importOptions, statsCB noms.StatsCB) (*mvdata.DataMover, *mvdata.DataMoverCreationError) {
+func newImportDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, impOpts *importOptions, statsCB noms.StatsCB) (*mvdata.DataMover, *mvdata.DataMoverCreationError) {
 	var err error
 
-	ow, err := impOpts.checkOverwrite(ctx, root, fs)
+	ow, err := impOpts.checkOverwrite(ctx, root, dEnv.FS)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
 	}
@@ -420,12 +426,12 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: fmt.Errorf("%s already exists. Use -f to overwrite.", impOpts.DestName())}
 	}
 
-	wrSch, dmce := getImportSchema(ctx, root, fs, impOpts)
+	wrSch, dmce := getImportSchema(ctx, root, dEnv.FS, impOpts)
 	if dmce != nil {
 		return nil, dmce
 	}
 
-	rd, srcIsSorted, err := impOpts.src.NewReader(ctx, root, fs, impOpts.srcOptions)
+	rd, srcIsSorted, err := impOpts.src.NewReader(ctx, root, dEnv.FS, impOpts.srcOptions)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
 	}
@@ -458,11 +464,11 @@ func newImportDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.
 	var wr table.TableWriteCloser
 	switch impOpts.operation {
 	case CreateOp:
-		wr, err = impOpts.dest.NewCreatingWriter(ctx, impOpts, root, fs, srcIsSorted, wrSch, statsCB)
+		wr, err = impOpts.dest.NewCreatingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB, true)
 	case ReplaceOp:
-		wr, err = impOpts.dest.NewReplacingWriter(ctx, impOpts, root, fs, srcIsSorted, wrSch, statsCB)
+		wr, err = impOpts.dest.NewReplacingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB, true)
 	case UpdateOp:
-		wr, err = impOpts.dest.NewUpdatingWriter(ctx, impOpts, root, fs, srcIsSorted, wrSch, statsCB)
+		wr, err = impOpts.dest.NewUpdatingWriter(ctx, impOpts, dEnv, root, srcIsSorted, wrSch, statsCB, true)
 	default:
 		err = errors.New("invalid move operation")
 	}

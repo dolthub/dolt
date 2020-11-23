@@ -599,7 +599,11 @@ func (lvs *ValueStore) GC(ctx context.Context) error {
 		return res
 	}
 
-	walker := newParallelRefWalker(ctx, lvs.nbf, runtime.GOMAXPROCS(0)-1)
+	concurrency := runtime.GOMAXPROCS(0) - 1
+	if concurrency < 1 {
+		concurrency = 1
+	}
+	walker := newParallelRefWalker(ctx, lvs.nbf, concurrency)
 
 	eg.Go(func() error {
 		toVisit := []hash.Hash{root}

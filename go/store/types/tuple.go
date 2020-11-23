@@ -326,6 +326,9 @@ func (t Tuple) decoderSkipToFields() (valueDecoder, uint64) {
 
 // Len is the number of fields in the struct.
 func (t Tuple) Len() uint64 {
+	if len(t.buff) == 0 {
+		return 0
+	}
 	_, count := t.decoderSkipToFields()
 	return count
 }
@@ -502,30 +505,6 @@ func (t Tuple) splitFieldsAt(n uint64) (prolog, head, tail []byte, count uint64,
 
 	return
 }
-
-/*func (t Tuple) Equals(otherVal Value) bool {
-	if otherTuple, ok := otherVal.(Tuple); ok {
-		itr := t.Iterator()
-		otherItr := otherTuple.Iterator()
-
-		if itr.Len() != otherItr.Len() {
-			return false
-		}
-
-		for itr.HasMore() {
-			_, val := itr.Next()
-			_, otherVal := otherItr.Next()
-
-			if !val.Equals(otherVal) {
-				return false
-			}
-		}
-
-		return true
-	}
-
-	return false
-}*/
 
 func (t Tuple) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if otherTuple, ok := other.(Tuple); ok {

@@ -52,7 +52,7 @@ type inlineConjoiner struct {
 }
 
 func (c inlineConjoiner) ConjoinRequired(ts tableSet) bool {
-	return ts.Size() > c.maxTables
+	return ts.Size() > c.maxTables && len(ts.upstream) >= 2
 }
 
 func (c inlineConjoiner) Conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) (manifestContents, error) {

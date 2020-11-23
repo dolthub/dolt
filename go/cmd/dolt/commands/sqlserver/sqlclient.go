@@ -25,10 +25,10 @@ import (
 
 	"github.com/abiosoft/readline"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/ishell"
 	"github.com/fatih/color"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gocraft/dbr/v2"
-	"github.com/liquidata-inc/ishell"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"

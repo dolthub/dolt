@@ -185,7 +185,7 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, tableEditS
 		return nil, nil, err
 	}
 
-	mergedTable, conflicts, stats, err := mergeTableData(ctx, tblName, postMergeSchema, rows, mergeRows, ancRows, merger.vrw, updatedTblEditor)
+	resultTbl, conflicts, stats, err := mergeTableData(ctx, tblName, postMergeSchema, rows, mergeRows, ancRows, merger.vrw, updatedTblEditor)
 
 	if err != nil {
 		return nil, nil, err
@@ -194,28 +194,33 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, tableEditS
 	if conflicts.Len() > 0 {
 
 		asr, err := ancTbl.GetSchemaRef()
-
 		if err != nil {
 			return nil, nil, err
 		}
 
 		sr, err := tbl.GetSchemaRef()
-
 		if err != nil {
 			return nil, nil, err
 		}
 
 		msr, err := mergeTbl.GetSchemaRef()
-
 		if err != nil {
 			return nil, nil, err
 		}
 
 		schemas := doltdb.NewConflict(asr, sr, msr)
-		mergedTable, err = mergedTable.SetConflicts(ctx, schemas, conflicts)
+		resultTbl, err = resultTbl.SetConflicts(ctx, schemas, conflicts)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
-	return mergedTable, stats, nil
+	resultTbl, err = mergeAutoIncrementValues(ctx, tbl, mergeTbl, resultTbl)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return resultTbl, stats, nil
 }
 
 func calcTableMergeStats(ctx context.Context, tbl *doltdb.Table, mergeTbl *doltdb.Table) (MergeStats, error) {
@@ -551,6 +556,41 @@ func rowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, 
 	}
 
 	return v, false, nil
+}
+
+func mergeAutoIncrementValues(ctx context.Context, tbl, otherTbl, resultTbl *doltdb.Table) (*doltdb.Table, error) {
+	// only need to check one table, no PK changes yet
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+	auto := false
+	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if col.AutoIncrement {
+			auto, stop = true, true
+		}
+		return
+	})
+	if !auto {
+		return resultTbl, nil
+	}
+
+	autoVal, err := tbl.GetAutoIncrementValue(ctx)
+	if err != nil {
+		return nil, err
+	}
+	mergeAutoVal, err := otherTbl.GetAutoIncrementValue(ctx)
+	if err != nil {
+		return nil, err
+	}
+	less, err := autoVal.Less(tbl.Format(), mergeAutoVal)
+	if err != nil {
+		return nil, err
+	}
+	if less {
+		autoVal = mergeAutoVal
+	}
+	return resultTbl.SetAutoIncrementValue(autoVal)
 }
 
 func MergeCommits(ctx context.Context, commit, mergeCommit *doltdb.Commit) (*doltdb.RootValue, map[string]*MergeStats, error) {
