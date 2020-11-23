@@ -12,7 +12,8 @@ logger = logging.getLogger(__name__)
 
 # This is the list of benchmarks that we have validated can successfully run with Dolt
 SUPPORTED_BENCHMARKS = [
-    'bulk_insert'
+    'bulk_insert',
+    'oltp_read_write'
 ]
 
 TEST_TABLE = 'sbtest1'
@@ -112,6 +113,7 @@ def run_test(test_db_host: str, test_db: str, test: str) -> str:
         test,
         '--table-size=1000000',
         '--db-driver=mysql',
+        '--db-ps-mode=disable',
         '--mysql-db={}'.format(test_db),
         '--mysql-user=root',
         '--mysql-host={}'.format(test_db_host),
