@@ -47,6 +47,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -152,9 +153,9 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	args = apr.Args()
 
 	var verr errhand.VerboseError
-	format := formatTabular
+	format := FormatTabular
 	if formatSr, ok := apr.GetValue(FormatFlag); ok {
-		format, verr = getFormat(formatSr)
+		format, verr = GetResultFormat(formatSr)
 		if verr != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(verr), usage)
 		}
@@ -228,7 +229,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		sql.WithSession(dsess),
 		sql.WithIndexRegistry(sql.NewIndexRegistry()),
 		sql.WithViewRegistry(sql.NewViewRegistry()))
-	sqlCtx.Set(sqlCtx, sql.AutoCommitSessionVar, sql.Boolean, true)
+	_ = sqlCtx.Set(sqlCtx, sql.AutoCommitSessionVar, sql.Boolean, true)
 
 	roots := make(map[string]*doltdb.RootValue)
 
@@ -242,10 +243,6 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	if len(initialRoots) == 1 {
 		sqlCtx.SetCurrentDatabase(name)
 		currentDB = name
-	}
-
-	if err != nil {
-		return HandleVErrAndExitCode(err.(errhand.VerboseError), usage)
 	}
 
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
@@ -269,7 +266,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			}
 		}
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
-		sq, err := dsqle.RetrieveFromQueryCatalog(ctx, roots[currentDB], savedQueryName)
+		sq, err := dtables.RetrieveFromQueryCatalog(ctx, roots[currentDB], savedQueryName)
 
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -477,18 +474,18 @@ func formatQueryError(message string, err error) errhand.VerboseError {
 	}
 }
 
-func getFormat(format string) (resultFormat, errhand.VerboseError) {
+func GetResultFormat(format string) (resultFormat, errhand.VerboseError) {
 	switch strings.ToLower(format) {
 	case "tabular":
-		return formatTabular, nil
+		return FormatTabular, nil
 	case "csv":
-		return formatCsv, nil
+		return FormatCsv, nil
 	case "json":
-		return formatJson, nil
+		return FormatJson, nil
 	case "null":
-		return formatNull, nil
+		return FormatNull, nil
 	default:
-		return formatTabular, errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular, csv, json").Build()
+		return FormatTabular, errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular, csv, json").Build()
 	}
 }
 
@@ -564,7 +561,7 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 
 // Saves the query given to the catalog with the name and message given.
 func saveQuery(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, query string, name string, message string) (*doltdb.RootValue, errhand.VerboseError) {
-	_, newRoot, err := dsqle.NewQueryCatalogEntryWithNameAsID(ctx, root, name, query, message)
+	_, newRoot, err := dtables.NewQueryCatalogEntryWithNameAsID(ctx, root, name, query, message)
 	if err != nil {
 		return nil, errhand.BuildDError("Couldn't save query").AddCause(err).Build()
 	}
@@ -1095,10 +1092,10 @@ func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s 
 type resultFormat byte
 
 const (
-	formatTabular resultFormat = iota
-	formatCsv
-	formatJson
-	formatNull // used for profiling
+	FormatTabular resultFormat = iota
+	FormatCsv
+	FormatJson
+	FormatNull // used for profiling
 )
 
 type sqlEngine struct {
@@ -1225,13 +1222,13 @@ func PrettyPrintResults(ctx context.Context, resultFormat resultFormat, sqlSch s
 	// we want to leave types alone and let the writer figure out how to format it for output.
 	var p *pipeline.Pipeline
 	switch resultFormat {
-	case formatCsv:
+	case FormatCsv:
 		p = createCSVPipeline(ctx, sqlSch, rowIter)
-	case formatJson:
+	case FormatJson:
 		p = createJSONPipeline(ctx, sqlSch, rowIter)
-	case formatTabular:
+	case FormatTabular:
 		p = createTabularPipeline(ctx, sqlSch, rowIter)
-	case formatNull:
+	case FormatNull:
 		p = createNullPipeline(ctx, sqlSch, rowIter)
 	}
 

@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	. "github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -658,6 +659,11 @@ var BasicSelectTests = []SelectTest{
 		Name:        "unknown diff table",
 		Query:       "select * from dolt_diff_dne",
 		ExpectedErr: `Unknown table: 'dolt_diff_dne'`,
+	},
+	{
+		Name:        "unknown diff table",
+		Query:       "select * from dolt_commit_diff_dne",
+		ExpectedErr: `Unknown table: 'dolt_commit_diff_dne'`,
 	},
 	{
 		Name:        "unknown history table",
@@ -1470,8 +1476,8 @@ var systemTableSelectTests = []SelectTest{
 	{
 		Name: "select from dolt_query_catalog",
 		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
-			DoltQueryCatalogSchema,
-			NewRowWithSchema(DoltQueryCatalogSchema,
+			dtables.DoltQueryCatalogSchema,
+			NewRowWithSchema(dtables.DoltQueryCatalogSchema,
 				types.String("existingEntry"),
 				types.Uint(2),
 				types.String("example"),
@@ -1479,10 +1485,10 @@ var systemTableSelectTests = []SelectTest{
 				types.String("description")),
 		),
 		Query: "select * from dolt_query_catalog",
-		ExpectedRows: ToSqlRows(CompressSchema(DoltQueryCatalogSchema),
+		ExpectedRows: ToSqlRows(CompressSchema(dtables.DoltQueryCatalogSchema),
 			NewRow(types.String("existingEntry"), types.Uint(2), types.String("example"), types.String("select 2+2 from dual"), types.String("description")),
 		),
-		ExpectedSchema: CompressSchema(DoltQueryCatalogSchema),
+		ExpectedSchema: CompressSchema(dtables.DoltQueryCatalogSchema),
 	},
 	{
 		Name: "select from dolt_schemas",

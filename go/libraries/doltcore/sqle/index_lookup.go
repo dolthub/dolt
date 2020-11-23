@@ -44,9 +44,6 @@ func (il *doltIndexLookup) String() string {
 
 // IsMergeable implements sql.MergeableIndexLookup
 func (il *doltIndexLookup) IsMergeable(indexLookup sql.IndexLookup) bool {
-	if il != nil {
-		return false //TODO: remove this when tests are added
-	}
 	otherIl, ok := indexLookup.(*doltIndexLookup)
 	if !ok {
 		return false
@@ -74,6 +71,7 @@ func (il *doltIndexLookup) Intersection(indexLookups ...sql.IndexLookup) (sql.In
 				newRangeCombination = append(newRangeCombination, rc)
 			}
 		}
+		rangeCombinations = newRangeCombination
 	}
 	var newRanges []lookup.Range
 	var err error
@@ -136,13 +134,9 @@ func (il *doltIndexLookup) RowIter(ctx *sql.Context) (sql.RowIter, error) {
 	for i, lookupRange := range il.ranges {
 		readRanges[i] = lookupRange.ToReadRange()
 	}
-	return &indexLookupRowIterAdapter{
-		idx: il.idx,
-		keyIter: &doltIndexKeyIter{
-			indexMapIter: noms.NewNomsRangeReader(il.idx.IndexSchema(), il.idx.IndexRowData(), readRanges),
-		},
-		ctx: ctx,
-	}, nil
+	return NewIndexLookupRowIterAdapter(ctx, il.idx, &doltIndexKeyIter{
+		indexMapIter: noms.NewNomsRangeReader(il.idx.IndexSchema(), il.idx.IndexRowData(), readRanges),
+	}), nil
 }
 
 type doltIndexKeyIter struct {

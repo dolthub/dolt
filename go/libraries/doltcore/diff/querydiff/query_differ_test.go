@@ -478,6 +478,11 @@ func skipEngineTest(test enginetest.QueryTest) bool {
 		return true
 	}
 
+	if test.Bindings != nil {
+		// todo: support bindings in query diff
+		return true
+	}
+
 	lowerQuery := strings.ToLower(test.Query)
 	if strings.Contains(lowerQuery, "myview1") {
 		// todo: support for history table

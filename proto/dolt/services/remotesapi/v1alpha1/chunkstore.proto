@@ -24,7 +24,13 @@ service ChunkStoreService {
   rpc HasChunks(HasChunksRequest) returns (HasChunksResponse);
 
   // Get the download locations for a list of chunk hashes.
+  // Deprecated. Use StreamDownloadLocations.
   rpc GetDownloadLocations(GetDownloadLocsRequest) returns (GetDownloadLocsResponse);
+
+  // Get the download locations for a list of chunk hashes. Streaming to
+  // support large and incrementally available payloads. Results are generated
+  // as requests come in.
+  rpc StreamDownloadLocations(stream GetDownloadLocsRequest) returns (stream GetDownloadLocsResponse);
 
   // Get upload locations for a list of table file hashes.
   // NOTE: We upload full table files but download individual chunks.

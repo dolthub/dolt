@@ -36,13 +36,14 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
 const (
-	Version = "0.21.4"
+	Version = "0.22.0"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -81,11 +82,12 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	indexcmds.Commands,
 	commands.ReadTablesCmd{},
 	commands.GarbageCollectionCmd{},
+	commands.FilterBranchCmd{},
 })
 
 func init() {
 	dumpDocsCommand.DoltCommand = doltCommand
-	sqlserver.CliVersion = Version
+	dfunctions.VersionString = Version
 }
 
 const chdirFlag = "--chdir"

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package dtables
 
 import (
 	"io"
@@ -26,19 +26,13 @@ var _ sql.Table = (*TableOfTablesInConflict)(nil)
 
 // TableOfTablesInConflict is a sql.Table implementation that implements a system table which shows the current conflicts
 type TableOfTablesInConflict struct {
-	dbName string
-	ddb    *doltdb.DoltDB
+	ddb  *doltdb.DoltDB
+	root *doltdb.RootValue
 }
 
 // NewTableOfTablesInConflict creates a TableOfTablesInConflict
-func NewTableOfTablesInConflict(ctx *sql.Context, dbName string) (*TableOfTablesInConflict, error) {
-	ddb, ok := DSessFromSess(ctx.Session).GetDoltDB(dbName)
-
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	return &TableOfTablesInConflict{dbName: dbName, ddb: ddb}, nil
+func NewTableOfTablesInConflict(_ *sql.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue) sql.Table {
+	return &TableOfTablesInConflict{ddb: ddb, root: root}
 }
 
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant
@@ -95,6 +89,8 @@ type tablesInConflict struct {
 	pos        int
 }
 
+var _ sql.RowIter = &tableInConflict{}
+
 // Next returns the next partition or io.EOF when done
 func (p *tablesInConflict) Next() (sql.Partition, error) {
 	if p.pos >= len(p.partitions) {
@@ -114,14 +110,7 @@ func (p *tablesInConflict) Close() error {
 
 // Partitions is a sql.Table interface function that returns a partition of the data.  Conflict data is partitioned by table.
 func (dt *TableOfTablesInConflict) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	sess := DSessFromSess(ctx.Session)
-	root, ok := sess.GetRoot(dt.dbName)
-
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dt.dbName)
-	}
-
-	tblNames, err := root.TablesInConflict(ctx)
+	tblNames, err := dt.root.TablesInConflict(ctx)
 
 	if err != nil {
 		return nil, err
@@ -129,7 +118,7 @@ func (dt *TableOfTablesInConflict) Partitions(ctx *sql.Context) (sql.PartitionIt
 
 	var partitions []*tableInConflict
 	for _, tblName := range tblNames {
-		tbl, ok, err := root.GetTable(ctx, tblName)
+		tbl, ok, err := dt.root.GetTable(ctx, tblName)
 
 		if err != nil {
 			return nil, err

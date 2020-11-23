@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package dtables
 
 import (
 	"context"
@@ -25,7 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -60,28 +60,7 @@ type HistoryTable struct {
 }
 
 // NewHistoryTable creates a history table
-func NewHistoryTable(ctx *sql.Context, db Database, tblName string) (sql.Table, error) {
-	sess := DSessFromSess(ctx.Session)
-	dbName := db.Name()
-
-	ddb, ok := sess.GetDoltDB(dbName)
-
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	head, _, err := sess.GetParentCommit(ctx, dbName)
-
-	if err != nil {
-		return nil, err
-	}
-
-	root, ok := sess.GetRoot(dbName)
-
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
-	}
-
+func NewHistoryTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue, head *doltdb.Commit) (sql.Table, error) {
 	ss, err := calcSuperSchema(ctx, root, tblName)
 
 	if err != nil {
@@ -103,7 +82,7 @@ func NewHistoryTable(ctx *sql.Context, db Database, tblName string) (sql.Table, 
 	}
 
 	tableName := doltdb.DoltHistoryTablePrefix + tblName
-	sqlSch, err := sqleSchema.FromDoltSchema(tableName, sch)
+	sqlSch, err := sqlutil.FromDoltSchema(tableName, sch)
 
 	if err != nil {
 		return nil, err
@@ -141,7 +120,7 @@ func (ht *HistoryTable) WithFilters(filters []sql.Expression) sql.Table {
 		commitCheck, err := getCommitFilterFunc(ht.commitFilters)
 
 		if err != nil {
-			return newStaticErrorTable(ht, err)
+			return sqlutil.NewStaticErrorTable(ht, err)
 		}
 
 		ht.cmItr = doltdb.NewFilteringCommitItr(ht.cmItr, commitCheck)
@@ -441,7 +420,7 @@ func (tblItr *rowItrForTableAtCommit) Next() (sql.Row, error) {
 		}
 	}
 
-	return doltRowToSqlRow(r, tblItr.sch)
+	return sqlutil.DoltRowToSqlRow(r, tblItr.sch)
 }
 
 // Close the iterator.

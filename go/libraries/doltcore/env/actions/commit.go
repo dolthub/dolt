@@ -36,6 +36,8 @@ type CommitStagedProps struct {
 	Date             time.Time
 	AllowEmpty       bool
 	CheckForeignKeys bool
+	Name             string
+	Email            string
 }
 
 // GetNameAndEmail returns the name and email from the supplied config
@@ -84,12 +86,6 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProp
 			return err
 		}
 		return NothingStaged{notStaged, notStagedDocs}
-	}
-
-	name, email, err := GetNameAndEmail(dEnv.Config)
-
-	if err != nil {
-		return err
 	}
 
 	var mergeCmSpec []*doltdb.CommitSpec
@@ -156,6 +152,20 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProp
 
 	if err != nil {
 		return err
+	}
+
+	name, email, err := GetNameAndEmail(dEnv.Config)
+
+	if err != nil {
+		return err
+	}
+
+	if props.Name != "" {
+		name = props.Name
+	}
+
+	if props.Email != "" {
+		email = props.Email
 	}
 
 	meta, noCommitMsgErr := doltdb.NewCommitMetaWithUserTS(name, email, props.Message, props.Date)

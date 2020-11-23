@@ -50,7 +50,7 @@ func TestSingleQuery(t *testing.T) {
 	engine.Analyzer.Debug = true
 	engine.Analyzer.Verbose = true
 
-	enginetest.TestQuery(t, harness, engine, test.Query, test.Expected)
+	enginetest.TestQuery(t, harness, engine, test.Query, test.Expected, nil)
 }
 
 func TestVersionedQueries(t *testing.T) {

@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	. "github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -380,8 +381,8 @@ var systemTableUpdateTests = []UpdateTest{
 	{
 		Name: "update dolt_query_catalog",
 		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
-			DoltQueryCatalogSchema,
-			NewRowWithSchema(DoltQueryCatalogSchema,
+			dtables.DoltQueryCatalogSchema,
+			NewRowWithSchema(dtables.DoltQueryCatalogSchema,
 				types.String("abc123"),
 				types.Uint(1),
 				types.String("example"),
@@ -390,9 +391,9 @@ var systemTableUpdateTests = []UpdateTest{
 			)),
 		UpdateQuery: "update dolt_query_catalog set display_order = display_order + 1",
 		SelectQuery: "select * from dolt_query_catalog",
-		ExpectedRows: ToSqlRows(CompressSchema(DoltQueryCatalogSchema),
+		ExpectedRows: ToSqlRows(CompressSchema(dtables.DoltQueryCatalogSchema),
 			NewRow(types.String("abc123"), types.Uint(2), types.String("example"), types.String("select 2+2 from dual"), types.String("description"))),
-		ExpectedSchema: CompressSchema(DoltQueryCatalogSchema),
+		ExpectedSchema: CompressSchema(dtables.DoltQueryCatalogSchema),
 	},
 	{
 		Name: "update dolt_schemas",

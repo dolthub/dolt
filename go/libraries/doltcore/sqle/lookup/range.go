@@ -15,6 +15,8 @@
 package lookup
 
 import (
+	"fmt"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -26,26 +28,62 @@ type Range struct {
 }
 
 // OpenRange returns a range representing {l < x < u}.
-func OpenRange(lower, upper types.Tuple) Range {
+func OpenRange(lower, upper types.Tuple) (Range, error) {
+	var err error
+	// If partial key, moves the start to after all tuples matching the given. This will be ignored if it's a full key.
+	lower, err = lower.Append(types.Uint(uint64(0xffffffffffffffff)))
+	if err != nil {
+		return Range{}, err
+	}
 	return Range{
 		Above{key: lower},
 		Below{key: upper},
+	}, nil
+}
+
+// MustOpenRange is the same as OpenRange except that it panics on errors.
+func MustOpenRange(lower, upper types.Tuple) Range {
+	r, err := OpenRange(lower, upper)
+	if err != nil {
+		panic(err)
 	}
+	return r
 }
 
 // ClosedRange returns a range representing {l <= x <= u}.
-func ClosedRange(lower, upper types.Tuple) Range {
+func ClosedRange(lower, upper types.Tuple) (Range, error) {
+	var err error
+	// If partial key, moves the end to after all tuples matching the given. This will be ignored if it's a full key.
+	upper, err = upper.Append(types.Uint(uint64(0xffffffffffffffff)))
+	if err != nil {
+		return Range{}, err
+	}
 	return Range{
 		Below{key: lower},
 		Above{key: upper},
+	}, nil
+}
+
+// MustClosedRange is the same as ClosedRange except that it panics on errors.
+func MustClosedRange(lower, upper types.Tuple) Range {
+	r, err := ClosedRange(lower, upper)
+	if err != nil {
+		panic(err)
 	}
+	return r
 }
 
 // CustomRange returns a range defined by the bounds given.
-func CustomRange(lower, upper types.Tuple, lowerBound, upperBound BoundType) Range {
+func CustomRange(lower, upper types.Tuple, lowerBound, upperBound BoundType) (Range, error) {
+	var err error
 	var lCut Cut
 	var uCut Cut
 	if lowerBound == Open {
+		// If partial key, moves the start to after all tuples matching the given. This will be ignored if it's a full key.
+		lower, err = lower.Append(types.Uint(uint64(0xffffffffffffffff)))
+		if err != nil {
+			return Range{}, err
+		}
 		lCut = Above{key: lower}
 	} else {
 		lCut = Below{key: lower}
@@ -53,12 +91,26 @@ func CustomRange(lower, upper types.Tuple, lowerBound, upperBound BoundType) Ran
 	if upperBound == Open {
 		uCut = Below{key: upper}
 	} else {
+		// If partial key, moves the end to after all tuples matching the given. This will be ignored if it's a full key.
+		upper, err = upper.Append(types.Uint(uint64(0xffffffffffffffff)))
+		if err != nil {
+			return Range{}, err
+		}
 		uCut = Above{key: upper}
 	}
 	return Range{
 		lCut,
 		uCut,
+	}, nil
+}
+
+// MustCustomRange is the same as CustomRange except that it panics on errors.
+func MustCustomRange(lower, upper types.Tuple, lowerBound, upperBound BoundType) Range {
+	r, err := CustomRange(lower, upper, lowerBound, upperBound)
+	if err != nil {
+		panic(err)
 	}
+	return r
 }
 
 // LessThanRange returns a range representing {x < u}.
@@ -70,19 +122,49 @@ func LessThanRange(upper types.Tuple) Range {
 }
 
 // LessOrEqualRange returns a range representing  {x <= u}.
-func LessOrEqualRange(upper types.Tuple) Range {
+func LessOrEqualRange(upper types.Tuple) (Range, error) {
+	var err error
+	// If partial key, moves the end to after all tuples matching the given. This will be ignored if it's a full key.
+	upper, err = upper.Append(types.Uint(uint64(0xffffffffffffffff)))
+	if err != nil {
+		return Range{}, err
+	}
 	return Range{
 		BelowAll{},
 		Above{key: upper},
+	}, nil
+}
+
+// MustLessOrEqualRange is the same as LessOrEqualRange except that it panics on errors.
+func MustLessOrEqualRange(upper types.Tuple) Range {
+	r, err := LessOrEqualRange(upper)
+	if err != nil {
+		panic(err)
 	}
+	return r
 }
 
 // GreaterThanRange returns a range representing {x > l}.
-func GreaterThanRange(lower types.Tuple) Range {
+func GreaterThanRange(lower types.Tuple) (Range, error) {
+	var err error
+	// If partial key, moves the start to after all tuples matching the given. This will be ignored if it's a full key.
+	lower, err = lower.Append(types.Uint(uint64(0xffffffffffffffff)))
+	if err != nil {
+		return Range{}, err
+	}
 	return Range{
 		Above{key: lower},
 		AboveAll{},
+	}, nil
+}
+
+// MustGreaterThanRange is the same as GreaterThanRange except that it panics on errors.
+func MustGreaterThanRange(lower types.Tuple) Range {
+	r, err := GreaterThanRange(lower)
+	if err != nil {
+		panic(err)
 	}
+	return r
 }
 
 // GreaterOrEqualRange returns a range representing {x >= l}.
@@ -104,8 +186,8 @@ func AllRange() Range {
 // EmptyRange returns the empty range.
 func EmptyRange() Range {
 	return Range{
-		Above{},
-		Above{},
+		AboveAll{},
+		AboveAll{},
 	}
 }
 
@@ -148,6 +230,11 @@ func (r Range) IsConnected(other Range) (bool, error) {
 		return false, err
 	}
 	return comp <= 0, nil
+}
+
+// String returns Range Cut as a string for debugging purposes. Will panic on errors.
+func (r Range) String() string {
+	return fmt.Sprintf("Range(%s, %s)", r.LowerBound.String(), r.UpperBound.String())
 }
 
 // ToReadRange returns this range as a Noms ReadRange.

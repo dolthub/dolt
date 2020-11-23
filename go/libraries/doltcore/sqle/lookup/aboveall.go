@@ -42,6 +42,11 @@ func (AboveAll) Less(types.Tuple) (bool, error) {
 	return false, nil
 }
 
+// String implements Cut.
+func (AboveAll) String() string {
+	return "AboveAll"
+}
+
 // TypeAsLowerBound implements Cut.
 func (AboveAll) TypeAsLowerBound() BoundType {
 	panic("AboveAll TypeAsLowerBound should be unreachable")

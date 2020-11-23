@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package dtables_test
 
 import (
 	"context"
@@ -25,6 +25,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 )
 
 func TestInsertIntoQueryCatalogTable(t *testing.T) {
@@ -39,14 +41,14 @@ func TestInsertIntoQueryCatalogTable(t *testing.T) {
 	require.False(t, ok)
 
 	queryStr := "select 1 from dual"
-	sq, root, err := NewQueryCatalogEntryWithRandID(ctx, root, "name", queryStr, "description")
+	sq, root, err := dtables.NewQueryCatalogEntryWithRandID(ctx, root, "name", queryStr, "description")
 	require.NoError(t, err)
 	require.True(t, sq.ID != "")
 	assert.Equal(t, queryStr, sq.Query)
 	assert.Equal(t, "name", sq.Name)
 	assert.Equal(t, "description", sq.Description)
 
-	retrieved, err := RetrieveFromQueryCatalog(ctx, root, sq.ID)
+	retrieved, err := dtables.RetrieveFromQueryCatalog(ctx, root, sq.ID)
 	require.NoError(t, err)
 	assert.Equal(t, sq, retrieved)
 
@@ -54,7 +56,7 @@ func TestInsertIntoQueryCatalogTable(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	rows, err := ExecuteSelect(dEnv, dEnv.DoltDB, root, "select display_order, query, name, description from "+doltdb.DoltQueryCatalogTableName)
+	rows, err := sqle.ExecuteSelect(dEnv, dEnv.DoltDB, root, "select display_order, query, name, description from "+doltdb.DoltQueryCatalogTableName)
 	require.NoError(t, err)
 	expectedRows := []sql.Row{
 		{uint64(1), "select 1 from dual", "name", "description"},
@@ -63,18 +65,18 @@ func TestInsertIntoQueryCatalogTable(t *testing.T) {
 	assert.Equal(t, expectedRows, rows)
 
 	queryStr2 := "select 2 from dual"
-	sq2, root, err := NewQueryCatalogEntryWithNameAsID(ctx, root, "name2", queryStr2, "description2")
+	sq2, root, err := dtables.NewQueryCatalogEntryWithNameAsID(ctx, root, "name2", queryStr2, "description2")
 	require.NoError(t, err)
 	assert.Equal(t, "name2", sq2.ID)
 	assert.Equal(t, "name2", sq2.Name)
 	assert.Equal(t, queryStr2, sq2.Query)
 	assert.Equal(t, "description2", sq2.Description)
 
-	retrieved2, err := RetrieveFromQueryCatalog(ctx, root, sq2.ID)
+	retrieved2, err := dtables.RetrieveFromQueryCatalog(ctx, root, sq2.ID)
 	require.NoError(t, err)
 	assert.Equal(t, sq2, retrieved2)
 
-	rows, err = ExecuteSelect(dEnv, dEnv.DoltDB, root, "select display_order, query, name, description from "+doltdb.DoltQueryCatalogTableName+" order by display_order")
+	rows, err = sqle.ExecuteSelect(dEnv, dEnv.DoltDB, root, "select display_order, query, name, description from "+doltdb.DoltQueryCatalogTableName+" order by display_order")
 	require.NoError(t, err)
 	expectedRows = []sql.Row{
 		{uint64(1), "select 1 from dual", "name", "description"},
@@ -83,7 +85,7 @@ func TestInsertIntoQueryCatalogTable(t *testing.T) {
 
 	assert.Equal(t, expectedRows, rows)
 
-	rows, err = ExecuteSelect(dEnv, dEnv.DoltDB, root, "select id from "+doltdb.DoltQueryCatalogTableName)
+	rows, err = sqle.ExecuteSelect(dEnv, dEnv.DoltDB, root, "select id from "+doltdb.DoltQueryCatalogTableName)
 	require.NoError(t, err)
 	for _, r := range rows {
 		assert.NotEmpty(t, r)
@@ -91,7 +93,7 @@ func TestInsertIntoQueryCatalogTable(t *testing.T) {
 	}
 
 	queryStr3 := "select 3 from dual"
-	sq3, root, err := NewQueryCatalogEntryWithNameAsID(ctx, root, "name2", queryStr3, "description3")
+	sq3, root, err := dtables.NewQueryCatalogEntryWithNameAsID(ctx, root, "name2", queryStr3, "description3")
 	require.NoError(t, err)
 	assert.Equal(t, "name2", sq3.ID)
 	assert.Equal(t, "name2", sq3.Name)

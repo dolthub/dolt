@@ -32,7 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	sqleSchema "github.com/dolthub/dolt/go/libraries/doltcore/sqle/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -100,7 +100,7 @@ var _ sql.ForeignKeyTable = (*DoltTable)(nil)
 func (t *DoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 	dil, ok := lookup.(*doltIndexLookup)
 	if !ok {
-		return newStaticErrorTable(t, fmt.Errorf("Unrecognized indexLookup %T", lookup))
+		return sqlutil.NewStaticErrorTable(t, fmt.Errorf("Unrecognized indexLookup %T", lookup))
 	}
 	return &IndexedDoltTable{
 		table:       t,
@@ -195,7 +195,7 @@ func (t *DoltTable) sqlSchema() sql.Schema {
 	}
 
 	// TODO: fix panics
-	sqlSch, err := sqleSchema.FromDoltSchema(t.name, t.sch)
+	sqlSch, err := sqlutil.FromDoltSchema(t.name, t.sch)
 	if err != nil {
 		panic(err)
 	}
@@ -215,7 +215,7 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	numElements := rowData.Len()
 
 	if numElements == 0 {
-		return newSinglePartitionIter(), nil
+		return newDoltTablePartitionIter(rowData, doltTablePartition{0, 1}), nil
 	}
 
 	maxPartitions := uint64(partitionMultiplier * runtime.NumCPU())
@@ -232,7 +232,7 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	}
 	partitions[numPartitions-1] = doltTablePartition{(numPartitions - 1) * itemsPerPartition, numElements}
 
-	return newDoltTablePartitionIter(rowData, partitions), nil
+	return newDoltTablePartitionIter(rowData, partitions...), nil
 }
 
 // Returns the table rows for the partition given
@@ -240,7 +240,7 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 	switch typedPartition := partition.(type) {
 	case doltTablePartition:
 		return newRowIterator(t, ctx, &typedPartition)
-	case singlePartition:
+	case sqlutil.SinglePartition:
 		return newRowIterator(t, ctx, nil)
 	}
 
@@ -263,7 +263,7 @@ var _ sql.AutoIncrementTable = (*WritableDoltTable)(nil)
 func (t *WritableDoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 	dil, ok := lookup.(*doltIndexLookup)
 	if !ok {
-		return newStaticErrorTable(t, fmt.Errorf("Unrecognized indexLookup %T", lookup))
+		return sqlutil.NewStaticErrorTable(t, fmt.Errorf("Unrecognized indexLookup %T", lookup))
 	}
 	return &WritableIndexedDoltTable{
 		WritableDoltTable: t,
@@ -275,7 +275,7 @@ func (t *WritableDoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 func (t *WritableDoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
 	te, err := t.getTableEditor(ctx)
 	if err != nil {
-		return newStaticErrorEditor(err)
+		return sqlutil.NewStaticErrorEditor(err)
 	}
 	return te
 }
@@ -305,7 +305,7 @@ func (t *WritableDoltTable) flushBatchedEdits(ctx *sql.Context) error {
 func (t *WritableDoltTable) Deleter(ctx *sql.Context) sql.RowDeleter {
 	te, err := t.getTableEditor(ctx)
 	if err != nil {
-		return newStaticErrorEditor(err)
+		return sqlutil.NewStaticErrorEditor(err)
 	}
 	return te
 }
@@ -314,7 +314,7 @@ func (t *WritableDoltTable) Deleter(ctx *sql.Context) sql.RowDeleter {
 func (t *WritableDoltTable) Replacer(ctx *sql.Context) sql.RowReplacer {
 	te, err := t.getTableEditor(ctx)
 	if err != nil {
-		return newStaticErrorEditor(err)
+		return sqlutil.NewStaticErrorEditor(err)
 	}
 	return te
 }
@@ -323,7 +323,7 @@ func (t *WritableDoltTable) Replacer(ctx *sql.Context) sql.RowReplacer {
 func (t *WritableDoltTable) Updater(ctx *sql.Context) sql.RowUpdater {
 	te, err := t.getTableEditor(ctx)
 	if err != nil {
-		return newStaticErrorEditor(err)
+		return sqlutil.NewStaticErrorEditor(err)
 	}
 	return te
 }
@@ -332,7 +332,7 @@ func (t *WritableDoltTable) Updater(ctx *sql.Context) sql.RowUpdater {
 func (t *WritableDoltTable) AutoIncrementSetter(ctx *sql.Context) sql.AutoIncrementSetter {
 	te, err := t.getTableEditor(ctx)
 	if err != nil {
-		return newStaticErrorEditor(err)
+		return sqlutil.NewStaticErrorEditor(err)
 	}
 	return te
 }
@@ -387,45 +387,6 @@ func (t *DoltTable) GetForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint
 	return toReturn, nil
 }
 
-var _ sql.PartitionIter = singlePartitionIter{}
-
-type singlePartitionIter struct {
-	once *sync.Once
-}
-
-func newSinglePartitionIter() singlePartitionIter {
-	return singlePartitionIter{&sync.Once{}}
-}
-
-// Close is required by the sql.PartitionIter interface. Does nothing.
-func (itr singlePartitionIter) Close() error {
-	return nil
-}
-
-// Next returns the next partition if there is one, or io.EOF if there isn't.
-func (itr singlePartitionIter) Next() (sql.Partition, error) {
-	first := false
-	itr.once.Do(func() {
-		first = true
-	})
-
-	if !first {
-		return nil, io.EOF
-	}
-
-	return singlePartition{}, nil
-}
-
-var _ sql.Partition = singlePartition{}
-
-type singlePartition struct{}
-
-// Key returns the key for this partition, which must uniquely identity the partition. We have only a single partition
-// per table, so we use a constant.
-func (sp singlePartition) Key() []byte {
-	return []byte("single")
-}
-
 var _ sql.PartitionIter = (*doltTablePartitionIter)(nil)
 
 // doltTablePartitionIter, an object that knows how to return the single partition exactly once.
@@ -436,7 +397,7 @@ type doltTablePartitionIter struct {
 	partitions []doltTablePartition
 }
 
-func newDoltTablePartitionIter(rowData types.Map, partitions []doltTablePartition) *doltTablePartitionIter {
+func newDoltTablePartitionIter(rowData types.Map, partitions ...doltTablePartition) *doltTablePartitionIter {
 	return &doltTablePartitionIter{0, &sync.Mutex{}, rowData, partitions}
 }
 
@@ -506,7 +467,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		return err
 	}
 
-	col, err := sqleSchema.ToDoltCol(tags[0], column)
+	col, err := sqlutil.ToDoltCol(tags[0], column)
 	if err != nil {
 		return err
 	}
@@ -618,7 +579,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		panic(fmt.Sprintf("Column %s not found. This is a bug.", columnName))
 	}
 
-	col, err := sqleSchema.ToDoltCol(existingCol.Tag, column)
+	col, err := sqlutil.ToDoltCol(existingCol.Tag, column)
 	if err != nil {
 		return err
 	}

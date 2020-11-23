@@ -141,7 +141,7 @@ test_mutation() {
 }
 
 @test "delete all one_pk, <>, pk" {
-    test_mutation "delete from one_pk where pk1 <> 1024" "one_pk" "$one_pk_header"
+    test_mutation "delete from one_pk where pk1 <> 1024" "one_pk" "$one_pk_header" "yes"
 }
 
 @test "delete all two_pk, >, pk" {
@@ -221,7 +221,7 @@ test_mutation() {
 }
 
 @test "delete all one_pk, <>, pk + non-pk" {
-    test_mutation "delete from one_pk where pk1 <> 1024 and c1 <> 1024" "one_pk" "$one_pk_header"
+    test_mutation "delete from one_pk where pk1 <> 1024 and c1 <> 1024" "one_pk" "$one_pk_header" "yes"
 }
 
 @test "delete all two_pk, >, pk + non-pk" {
@@ -269,7 +269,7 @@ test_mutation() {
 }
 
 @test "update all one_pk, <>, pk" {
-    test_mutation "update one_pk set c2 = 256 where pk1 <> 1024" "one_pk" "$one_pk_all_updated"
+    test_mutation "update one_pk set c2 = 256 where pk1 <> 1024" "one_pk" "$one_pk_all_updated" "yes"
 }
 
 @test "update all two_pk, >, pk" {
@@ -349,7 +349,7 @@ test_mutation() {
 }
 
 @test "update all one_pk, <>, pk + non-pk" {
-    test_mutation "update one_pk set c2 = 256 where pk1 <> 1024 and c1 <> 1024" "one_pk" "$one_pk_all_updated"
+    test_mutation "update one_pk set c2 = 256 where pk1 <> 1024 and c1 <> 1024" "one_pk" "$one_pk_all_updated" "yes"
 }
 
 @test "update all two_pk, >, pk + non-pk" {
