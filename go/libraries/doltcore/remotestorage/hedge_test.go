@@ -73,7 +73,7 @@ func TestHedgerHedgesWork(t *testing.T) {
 				<-ctx.Done()
 				close(ch)
 				return 1, nil
-			} else {
+			} else if i == 2 {
 				return 2, nil
 			}
 			panic("unexpected value in ch")
