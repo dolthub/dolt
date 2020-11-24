@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
+	"github.com/dolthub/vitess/go/vt/vterrors"
 	"github.com/fatih/color"
 	"gopkg.in/src-d/go-errors.v1"
 
@@ -47,15 +48,19 @@ const (
 
 var filterBranchDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Edits the commit history using the provided query",
-	LongDesc: `Traverses the commit history to the initial commite starting at the current HEAD commit. Replays all commits, rewriting the history using the provided SQL query.
+	LongDesc: `Traverses the commit history to the initial commit starting at the current HEAD commit. Replays all commits, rewriting the history using the provided SQL query.
+
+If a {{.LessThan}}commit-spec{{.GreaterThan}} is provided, the traversal will stop when the commit is reached and rewriting will begin at that commit, or will error if the commit is not found.
 
 If the {{.EmphasisLeft}}--all{{.EmphasisRight}} flag is supplied, the traversal starts with the HEAD commits of all branches.
 `,
 
 	Synopsis: []string{
-		"[--all] {{.LessThan}}query{{.GreaterThan}}",
+		"[--all] {{.LessThan}}query{{.GreaterThan}} [{{.LessThan}}commit{{.GreaterThan}}]",
 	},
 }
+
+type missingTbls map[hash.Hash]*errors.Error
 
 type FilterBranchCmd struct{}
 
@@ -93,23 +98,27 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, filterBranchDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
-	if apr.NArg() != 1 {
+	if apr.NArg() < 1 || apr.NArg() > 2 {
 		args := strings.Join(apr.Args(), ", ")
-		verr := errhand.BuildDError("%s takes exactly 1 arg, %d provided: %s", cmd.Name(), apr.NArg(), args).Build()
+		verr := errhand.BuildDError("%s takes 1 or 2 args, %d provided: %s", cmd.Name(), apr.NArg(), args).Build()
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	notFound := make(missingTbls)
 	query := apr.Arg(0)
-	replay := func(ctx context.Context, root, _, _ *doltdb.RootValue) (*doltdb.RootValue, error) {
-		return processFilterQuery(ctx, dEnv, root, query, notFound)
+	notFound := make(missingTbls)
+	replay := func(ctx context.Context, commit, _, _ *doltdb.Commit) (*doltdb.RootValue, error) {
+		return processFilterQuery(ctx, dEnv, commit, query, notFound)
 	}
 
-	var err error
+	nerf, err := getNerf(ctx, dEnv, apr)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
 	if apr.Contains(allFlag) {
-		err = rebase.AllBranches(ctx, dEnv, replay, rebase.EntireHistory)
+		err = rebase.AllBranches(ctx, dEnv, replay, nerf)
 	} else {
-		err = rebase.CurrentBranch(ctx, dEnv, replay, rebase.EntireHistory)
+		err = rebase.CurrentBranch(ctx, dEnv, replay, nerf)
 	}
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -122,15 +131,31 @@ func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []s
 	return 0
 }
 
-type missingTbls map[hash.Hash]*errors.Error
+func getNerf(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (rebase.NeedsRebaseFn, error) {
+	if apr.NArg() == 1 {
+		return rebase.EntireHistory(), nil
+	}
 
-func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, query string, mt missingTbls) (*doltdb.RootValue, error) {
-	sqlCtx, se, err := monoSqlEngine(ctx, dEnv, root)
+	cs, err := doltdb.NewCommitSpec(apr.Arg(1))
 	if err != nil {
 		return nil, err
 	}
 
-	sqlStatement, err := sqlparser.Parse(query)
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
+	if err != nil {
+		return nil, err
+	}
+
+	return rebase.StopAtCommit(cm), nil
+}
+
+func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit, query string, mt missingTbls) (*doltdb.RootValue, error) {
+	root, err := cm.GetRootValue()
+	if err != nil {
+		return nil, err
+	}
+
+	sqlCtx, eng, err := monoSqlEngine(ctx, dEnv, cm)
 	if err != nil {
 		return nil, err
 	}
@@ -140,16 +165,38 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.Roo
 		return nil, err
 	}
 
-	itr := sql.RowsToRowIter()
+	sqlStatement, err := sqlparser.Parse(query)
+	if err != nil {
+		return nil, err
+	}
+
+	itr := sql.RowsToRowIter() // empty RowIter
 	switch s := sqlStatement.(type) {
+	case *sqlparser.Insert, *sqlparser.Update:
+		_, itr, err = eng.query(sqlCtx, query)
+
 	case *sqlparser.Delete:
-		ok := se.checkThenDeleteAllRows(sqlCtx, s)
+		ok := eng.checkThenDeleteAllRows(sqlCtx, s)
 		if !ok {
-			_, itr, err = se.query(sqlCtx, query)
+			_, itr, err = eng.query(sqlCtx, query)
 		}
+
+	case *sqlparser.DDL:
+		_, err := sqlparser.ParseStrictDDL(query)
+		if se, ok := vterrors.AsSyntaxError(err); ok {
+			return nil, vterrors.SyntaxError{Message: "While Parsing DDL: " + se.Message, Position: se.Position, Statement: se.Statement}
+		}
+		if err != nil {
+			return nil, fmt.Errorf("error parsing DDL: %v", err.Error())
+		}
+		// ddl returns a nil itr
+		_, _, err = eng.ddl(sqlCtx, s, query)
+
+	case *sqlparser.Select, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union:
+		return nil, fmt.Errorf("filter-branch queries must be write queries: '%s'", query)
+
 	default:
-		// todo: support insert, update, ddl
-		return nil, fmt.Errorf("SQL statement not supported for filter-branch: '%v'.", query)
+		return nil, fmt.Errorf("SQL statement not supported for filter-branch: '%s'", query)
 	}
 
 	err, ok := captureTblNotFoundErr(err, mt, rh)
@@ -174,7 +221,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.Roo
 		return nil, err
 	}
 
-	roots, err := se.getRoots(sqlCtx)
+	roots, err := eng.getRoots(sqlCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +230,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.Roo
 }
 
 // monoSqlEngine packages up the context necessary to run sql queries against single root.
-func monoSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue) (*sql.Context, *sqlEngine, error) {
+func monoSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*sql.Context, *sqlEngine, error) {
 	dsess := dsqle.DefaultDoltSession()
 
 	sqlCtx := sql.NewContext(ctx,
@@ -207,6 +254,11 @@ func monoSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValu
 	engine.AddDatabase(db)
 
 	err = dsess.AddDB(sqlCtx, db)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	root, err := cm.GetRootValue()
 	if err != nil {
 		return nil, nil, err
 	}

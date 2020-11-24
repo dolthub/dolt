@@ -162,9 +162,9 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	args = apr.Args()
 
 	var verr errhand.VerboseError
-	format := formatTabular
+	format := FormatTabular
 	if formatSr, ok := apr.GetValue(FormatFlag); ok {
-		format, verr = getFormat(formatSr)
+		format, verr = GetResultFormat(formatSr)
 		if verr != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(verr), usage)
 		}
@@ -483,16 +483,16 @@ func formatQueryError(message string, err error) errhand.VerboseError {
 	}
 }
 
-func getFormat(format string) (resultFormat, errhand.VerboseError) {
+func GetResultFormat(format string) (resultFormat, errhand.VerboseError) {
 	switch strings.ToLower(format) {
 	case "tabular":
-		return formatTabular, nil
+		return FormatTabular, nil
 	case "csv":
-		return formatCsv, nil
+		return FormatCsv, nil
 	case "json":
-		return formatJson, nil
+		return FormatJson, nil
 	default:
-		return formatTabular, errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular, csv, json").Build()
+		return FormatTabular, errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular, csv, json").Build()
 	}
 }
 
@@ -1099,9 +1099,9 @@ func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s 
 type resultFormat byte
 
 const (
-	formatTabular resultFormat = iota
-	formatCsv
-	formatJson
+	FormatTabular resultFormat = iota
+	FormatCsv
+	FormatJson
 )
 
 type sqlEngine struct {
@@ -1242,7 +1242,7 @@ func PrettyPrintResults(ctx context.Context, resultFormat resultFormat, sqlSch s
 
 	// Parts of the pipeline depend on the output format, such as how we print null values and whether we pad strings.
 	switch resultFormat {
-	case formatTabular:
+	case FormatTabular:
 		nullPrinter := nullprinter.NewNullPrinter(untypedSch)
 		p.AddStage(pipeline.NewNamedTransform(nullprinter.NullPrintingStage, nullPrinter.ProcessRow))
 		autoSizeTransform := fwt.NewAutoSizingFWTTransformer(untypedSch, fwt.PrintAllWhenTooLong, 10000)
@@ -1255,11 +1255,11 @@ func PrettyPrintResults(ctx context.Context, resultFormat resultFormat, sqlSch s
 	var wr table.TableWriteCloser
 
 	switch resultFormat {
-	case formatTabular:
+	case FormatTabular:
 		wr, err = tabular.NewTextTableWriter(cliWr, untypedSch)
-	case formatCsv:
+	case FormatCsv:
 		wr, err = csv.NewCSVWriter(cliWr, untypedSch, csv.NewCSVInfo())
-	case formatJson:
+	case FormatJson:
 		wr, err = json.NewJSONWriter(cliWr, doltSch)
 	default:
 		panic("unimplemented output format type")
@@ -1292,7 +1292,7 @@ func PrettyPrintResults(ctx context.Context, resultFormat resultFormat, sqlSch s
 	}
 
 	// Insert the table header row at the appropriate stage
-	if resultFormat == formatTabular {
+	if resultFormat == FormatTabular {
 		p.InjectRow(fwtStageName, r)
 	}
 
@@ -1300,7 +1300,7 @@ func PrettyPrintResults(ctx context.Context, resultFormat resultFormat, sqlSch s
 	// we want to leave types alone and let the writer figure out how to format it for output.
 	var rowFn func(r sql.Row) (row.Row, error)
 	switch resultFormat {
-	case formatJson:
+	case FormatJson:
 		rowFn = func(r sql.Row) (r2 row.Row, err error) {
 			return sqlutil.SqlRowToDoltRow(nbf, r, doltSch)
 		}

@@ -107,7 +107,6 @@ func FromDoltSchema(tableName string, sch schema.Schema) (sql.Schema, error) {
 				PrimaryKey:    col.IsPartOfPK,
 				AutoIncrement: col.AutoIncrement,
 				Comment:       col.Comment,
-				Extra:         fmt.Sprintf("tag:%d", tag),
 			},
 			Default: col.Default,
 		}
