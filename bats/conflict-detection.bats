@@ -323,7 +323,7 @@ SQL
 
     run dolt sql -q 'select * from test;'
     [ $status -eq 0 ]
-    [[ "${lines[3]}" =~ "| 0  | 1  | 2  | 3  | 4  | 5  | <NULL> | <NULL> |" ]] || false
+    [[ "${lines[3]}" =~ "| 0  | 1  | 2  | 3  | 4  | 5  |  NULL  |  NULL  |" ]] || false
 }
 
 @test "two branches add same column, different types. merge. conflict" {

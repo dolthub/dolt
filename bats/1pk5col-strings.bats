@@ -73,12 +73,12 @@ teardown() {
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     # select orders by primary key right now so aaron, brian, tim
-    [[ "${lines[4]}" =~ "<NULL>" ]] || false
-    [[ ! "${lines[5]}" =~ "<NULL>" ]] || false
+    [[ "${lines[4]}" =~ "NULL" ]] || false
+    [[ ! "${lines[5]}" =~ "NULL" ]] || false
     doltselectoutput=$output
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "<NULL>" ]] || false
+    [[ "$output" =~ "NULL" ]] || false
     [ "$output" = "$doltselectoutput" ]
     # Make sure we don't get a table with no spaces because that bug was
     # generated when making changes to NULL printing

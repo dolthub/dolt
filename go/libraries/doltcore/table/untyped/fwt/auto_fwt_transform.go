@@ -20,7 +20,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// AutoSizingFWTTransformer samples rows to automatically determine maximum column Widths to provide to FWTTransformer.
+// AutoSizingFWTTransformer samples rows to automatically determine maximum column widths to provide to FWTTransformer.
 type AutoSizingFWTTransformer struct {
 	// The number of rows to sample to determine column widths
 	numSamples int

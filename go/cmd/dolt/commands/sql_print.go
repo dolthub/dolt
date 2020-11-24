@@ -344,7 +344,7 @@ func rowsToStringSlices(_ context.Context, items []pipeline.ItemWithProps) ([]pi
 			if !isNull {
 				cols[colNum] = sqlColToStr(col)
 			} else {
-				cols[colNum] = "<NULL>"
+				cols[colNum] = "NULL"
 			}
 		}
 

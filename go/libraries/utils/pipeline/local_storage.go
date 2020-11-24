@@ -18,6 +18,7 @@ import "context"
 
 const localStorageKey = "ls"
 
+// TODO: get rid of this
 // LocalStorage provides routine local storage on go routines spawned by a pipeline
 type LocalStorage map[int]interface{}
 

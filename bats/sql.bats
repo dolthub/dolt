@@ -204,7 +204,7 @@ SQL
 @test "sql select the same column twice using column aliases" {
     run dolt sql -q "select pk,c1 as foo,c1 as bar from one_pk"
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "<NULL>" ]] || false
+    [[ ! "$output" =~ "NULL" ]] || false
     [[ "$output" =~ "foo" ]] || false
     [[ "$output" =~ "bar" ]] || false
 }
@@ -212,7 +212,7 @@ SQL
 @test "sql select same column twice using table aliases" {
     run dolt sql -q "select foo.pk,foo.c1,bar.c1 from one_pk as foo, one_pk as bar"
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "<NULL>" ]] || false
+    [[ ! "$output" =~ "NULL" ]] || false
     [[ "$output" =~ "c1" ]] || false
 }
 
@@ -600,7 +600,7 @@ SQL
     run dolt sql -q "SELECT GREATEST(CAST(NOW() AS CHAR), CAST(NULL AS CHAR)) FROM dual;"
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
-    [[ "${lines[3]}" =~ " <NULL> " ]] || false
+    [[ "${lines[3]}" =~ " NULL " ]] || false
 }
 
 @test "sql date_format function" {
@@ -658,15 +658,15 @@ SQL
     run dolt sql -q "select 1/0 from dual"
     [ $status -eq 0 ]
     echo $output
-    [[ "$output" =~ "<NULL>" ]] || false
+    [[ "$output" =~ "NULL" ]] || false
     [[ ! "$output" =~ "panic: " ]] || false
     run dolt sql -q "select 1.0/0.0 from dual"
     [ $status -eq 0 ]
-    [[ "$output" =~ "<NULL>" ]] || false
+    [[ "$output" =~ "NULL" ]] || false
     [[ ! "$output" =~ "panic: " ]] || false
     run dolt sql -q "select 1 div 0 from dual"
     [ $status -eq 0 ]
-    [[ "$output" =~ "<NULL>" ]] || false
+    [[ "$output" =~ "NULL" ]] || false
     [[ ! "$output" =~ "panic: " ]] || false
 }
 

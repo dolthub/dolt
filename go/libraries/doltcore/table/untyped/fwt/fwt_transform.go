@@ -20,10 +20,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 )
 
-// TooLongBehavior determines how the FWTTransformer should behave when it encounters a column that is longer than what
-// it expected
-type TooLongBehavior int
-
 // FWTTransformer transforms columns to be of fixed width.
 type FWTTransformer struct {
 	sch       schema.Schema

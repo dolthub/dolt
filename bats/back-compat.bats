@@ -138,7 +138,7 @@ teardown() {
         [[ "${lines[3]}" =~ " 2 " ]] || false
         [[ "${lines[3]}" =~ " something " ]] || false
         [[ "${lines[3]}" =~ " 2020-01-14 20:48:37.13061 " ]] || false
-        [[ "${lines[3]}" =~ " <NULL> " ]] || false
+        [[ "${lines[3]}" =~ "  NULL  " ]] || false
         [[ "${lines[4]}" =~ " theirs " ]] || false
         [[ "${lines[4]}" =~ " 2 " ]] || false
         [[ "${lines[4]}" =~ " something " ]] || false

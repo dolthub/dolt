@@ -364,11 +364,11 @@ SQL
     [ "${#lines[@]}" -eq 11 ]
     [ "${lines[3]}" = '| a  | ""        | 1         |' ]
     [ "${lines[4]}" = '| b  |           | 2         |' ]
-    [ "${lines[5]}" = "| c  | <NULL>    | 3         |" ]
-    [ "${lines[6]}" = '| d  | row four  | <NULL>    |' ]
-    [ "${lines[7]}" = "| e  | row five  | <NULL>    |" ]
+    [ "${lines[5]}" = "| c  | NULL      | 3         |" ]
+    [ "${lines[6]}" = '| d  | row four  | NULL      |' ]
+    [ "${lines[7]}" = "| e  | row five  | NULL      |" ]
     [ "${lines[8]}" = "| f  | row six   | 6         |" ]
-    [ "${lines[9]}" = "| g  | <NULL>    | <NULL>    |" ]
+    [ "${lines[9]}" = "| g  | NULL      | NULL      |" ]
 }
 
 @test "table import with schema different from data file" {
@@ -412,11 +412,11 @@ SQL
     [ "${#lines[@]}" -eq 11 ]
     [ "${lines[3]}" = '| a  | ""        | 1         |' ]
     [ "${lines[4]}" = '| b  |           | 2         |' ]
-    [ "${lines[5]}" = "| c  | <NULL>    | 3         |" ]
+    [ "${lines[5]}" = "| c  | NULL      | 3         |" ]
     [ "${lines[6]}" = "| d  | row four  |           |" ]
-    [ "${lines[7]}" = "| e  | row five  | <NULL>    |" ]
+    [ "${lines[7]}" = "| e  | row five  | NULL      |" ]
     [ "${lines[8]}" = "| f  | row six   | 6         |" ]
-    [ "${lines[9]}" = "| g  | <NULL>    | <NULL>    |" ]
+    [ "${lines[9]}" = "| g  | NULL      | NULL      |" ]
 }
 
 @test "create a table with null values from json import with json file" {
@@ -439,11 +439,11 @@ SQL
     [ "${#lines[@]}" -eq 11 ]
     [ "${lines[3]}" = '| a  | ""        | 1         |' ]
     [ "${lines[4]}" = '| b  |           | 2         |' ]
-    [ "${lines[5]}" = "| c  | <NULL>    | 3         |" ]
-    [ "${lines[6]}" = "| d  | row four  | <NULL>    |" ]
-    [ "${lines[7]}" = "| e  | row five  | <NULL>    |" ]
+    [ "${lines[5]}" = "| c  | NULL      | 3         |" ]
+    [ "${lines[6]}" = "| d  | row four  | NULL      |" ]
+    [ "${lines[7]}" = "| e  | row five  | NULL      |" ]
     [ "${lines[8]}" = "| f  | row six   | 6         |" ]
-    [ "${lines[9]}" = "| g  | <NULL>    | <NULL>    |" ]
+    [ "${lines[9]}" = "| g  | NULL      | NULL      |" ]
 }
 
 @test "fail to create a table with null values from json import with json file" {

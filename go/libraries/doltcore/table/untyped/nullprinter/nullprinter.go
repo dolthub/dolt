@@ -21,7 +21,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-const PrintedNull = "<NULL>"
+const PrintedNull = "NULL"
 
 const NullPrintingStage = "null printing"
 

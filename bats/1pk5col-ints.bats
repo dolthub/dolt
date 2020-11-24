@@ -638,11 +638,11 @@ DELIM
     dolt sql -q "insert into test (pk) values (2)"
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "<NULL>" ]] || false
+    [[ "$output" =~ "NULL" ]] || false
     doltsqloutput=$output
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "<NULL>" ]] || false
+    [[ "$output" =~ "NULL" ]] || false
     [ "$output" = "$doltsqloutput" ]
     # Make sure we don't get a table with no spaces because that bug was
     # generated when making changes to NULL printing
@@ -656,7 +656,7 @@ DELIM
     run dolt sql -q "select * from test where c1 is null"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
-    [[ "$output" =~ "<NULL>" ]] || false
+    [[ "$output" =~ "NULL" ]] || false
 }
 
 @test "display correct merge stats" {

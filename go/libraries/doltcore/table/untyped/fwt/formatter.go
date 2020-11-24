@@ -24,6 +24,10 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+// TooLongBehavior determines how the FWTTransformer should behave when it encounters a column that is longer than what
+// it expected
+type TooLongBehavior int
+
 const (
 	// ErrorWhenTooLong treats each row containing a column that is longer than expected as a bad row
 	ErrorWhenTooLong TooLongBehavior = iota
@@ -37,9 +41,13 @@ const (
 	PrintAllWhenTooLong
 )
 
+// ErrRowCountMismatch is returned when the number of columns does not match the expected count
 var ErrRowCountMismatch = errors.New("number of columns passed to formatter does not match expected count")
+
+// ErrColumnTooLong is returned when the width exceeds the maximum
 var ErrColumnTooLong = errors.New("column width exceeded maximum width for column and TooLongBehavior is ErrorWhenTooLong")
 
+// FixedWithFormatter is a utility class for taking a row and generating fixed with output
 type FixedWidthFormatter struct {
 	colCount   int
 	Widths     []int
@@ -51,6 +59,7 @@ type FixedWidthFormatter struct {
 	tooLngBhv TooLongBehavior
 }
 
+// NewFixedWidthFormatter returns a new fixed width formatter
 func NewFixedWidthFormatter(tooLongBhv TooLongBehavior, printWidths []int, maxRunes []int) FixedWidthFormatter {
 	numCols := len(printWidths)
 
@@ -84,6 +93,7 @@ func NewFixedWidthFormatter(tooLongBhv TooLongBehavior, printWidths []int, maxRu
 	}
 }
 
+// FixedWidthFormatterForSchema takes a schema and creates a FixedWidthFormatter based on the columns within that schema
 func FixedWidthFormatterForSchema(sch schema.Schema, tooLongBhv TooLongBehavior, tagToPrintWidth map[uint64]int, tagToMaxRunes map[uint64]int) FixedWidthFormatter {
 	allCols := sch.GetAllCols()
 
@@ -115,6 +125,7 @@ func FixedWidthFormatterForSchema(sch schema.Schema, tooLongBhv TooLongBehavior,
 	return NewFixedWidthFormatter(tooLongBhv, widths, maxRunes)
 }
 
+// FormatRow takes a row and converts it so that the columns are appropriately sized
 func (fwf FixedWidthFormatter) FormatRow(r row.Row, sch schema.Schema) (row.Row, error) {
 	destFields := make(row.TaggedValues)
 	idx := 0
@@ -146,6 +157,7 @@ func (fwf FixedWidthFormatter) FormatRow(r row.Row, sch schema.Schema) (row.Row,
 	return row.New(r.Format(), sch, destFields)
 }
 
+// Format takes an array of columns strings and makes each column the approriate width
 func (fwf FixedWidthFormatter) Format(cols []string) ([]string, error) {
 	if len(cols) != fwf.colCount {
 		return nil, ErrRowCountMismatch
@@ -164,6 +176,8 @@ func (fwf FixedWidthFormatter) Format(cols []string) ([]string, error) {
 	return formatted, nil
 }
 
+// FormatColumn takes a column string and a column index and returns a column string that is the appropriate width for
+// that column
 func (fwf FixedWidthFormatter) FormatColumn(colStr string, colIdx int) (string, error) {
 	colWidth := fwf.Widths[colIdx]
 
