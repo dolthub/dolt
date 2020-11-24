@@ -51,7 +51,7 @@ func init() {
 		8,
 		NewMinStrategy(
 			1*time.Second,
-			NewPercentileStrategy(0, 60*60*1000, 4, 95.0),
+			NewPercentileStrategy(0, 1*time.Hour, 95.0),
 		),
 	)
 }

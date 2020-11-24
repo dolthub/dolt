@@ -29,7 +29,13 @@ import (
 // should respect |ctx| cancellation. |Size| will be passed to the |Strategy|
 // as a parameter to compute the potential hedge retry timeout for this Work.
 type Work struct {
+	// Work is the function that will be called by |Hedger.Do|. It will be
+	// called at least once, and possibly multiple times depending on how
+	// long it takes and the |Hedger|'s |Strategy|.
 	Work func(context.Context) (interface{}, error)
+
+	// Size is an integer representation of the size of the work.
+	// Potentially used by |Strategy|, not used by |Hedger|.
 	Size int
 }
 
@@ -53,21 +59,25 @@ func NewHedger(maxOutstanding int64, strat Strategy) *Hedger {
 // Stategy provides a way estimate the hedge timeout for |Work| given to a
 // |Hedger|.
 type Strategy interface {
-	// Return the expect Duration of a piece of Work with |Size| |sz|.
+	// Duration returns the expected |time.Duration| of a piece of Work
+	// with |Size| |sz|.
 	Duration(sz int) time.Duration
-	// Called by |Hedger| when work is completed. |sz| is the |Size| of the
-	// work. |n| is the nth hedge which completed first, with 1 being the
-	// unhedged request. |d| is the duration the |Work| function took for
-	// the request that completed. |err| is any |error| returned from
-	// |Work|.
+	// Observe is called by |Hedger| when work is completed. |sz| is the
+	// |Size| of the work. |n| is the nth hedge which completed first, with
+	// 1 being the unhedged request. |d| is the duration the |Work|
+	// function took for the request that completed. |err| is any |error|
+	// returned from |Work|.
 	Observe(sz, n int, d time.Duration, err error)
 }
 
-func NewPercentileStrategy(low, high int64, sigfigs int, perc float64) *PercentileStrategy {
+// NewPercentileStrategy returns an initialized |PercentileStrategy| |Hedger|.
+func NewPercentileStrategy(low, high time.Duration, perc float64) *PercentileStrategy {
+	lowi := int64(low / time.Millisecond)
+	highi := int64(high / time.Millisecond)
 	return &PercentileStrategy{
 		perc,
-		hdrhistogram.New(low, high, sigfigs),
-		sync.Mutex{},
+		hdrhistogram.New(lowi, highi, 3),
+		new(sync.Mutex),
 	}
 }
 
@@ -78,15 +88,17 @@ func NewPercentileStrategy(low, high int64, sigfigs int, perc float64) *Percenti
 type PercentileStrategy struct {
 	Percentile float64
 	histogram  *hdrhistogram.Histogram
-	mu         sync.Mutex
+	mu         *sync.Mutex
 }
 
+// Duration implements |Strategy|.
 func (ps *PercentileStrategy) Duration(sz int) time.Duration {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	return time.Duration(ps.histogram.ValueAtQuantile(ps.Percentile)) * time.Millisecond
 }
 
+// Observe implements |Strategy|.
 func (ps *PercentileStrategy) Observe(sz, n int, d time.Duration, err error) {
 	if err == nil {
 		ps.mu.Lock()
@@ -106,11 +118,15 @@ func NewMinStrategy(min time.Duration, delegate Strategy) *MinStrategy {
 	}
 }
 
+// MinStrategy optionally delegates to another |Strategy| and clamps its
+// |Duration| results to a minimum of |Min|.
 type MinStrategy struct {
+	// Min is the minimum |time.Duration| that |Duration| should return.
 	Min        time.Duration
 	underlying Strategy
 }
 
+// Duration implements |Strategy|.
 func (ms *MinStrategy) Duration(sz int) time.Duration {
 	if ms.underlying == nil {
 		return ms.Min
@@ -122,13 +138,14 @@ func (ms *MinStrategy) Duration(sz int) time.Duration {
 	return u
 }
 
+// Observe implements |Strategy|.
 func (ms *MinStrategy) Observe(sz, n int, d time.Duration, err error) {
 	if ms.underlying != nil {
 		ms.underlying.Observe(sz, n, d, err)
 	}
 }
 
-// Run |w| to completion, potentially spawning concurrent hedge runs of it.
+// Do runs |w| to completion, potentially spawning concurrent hedge runs of it.
 // Returns the results from the first invocation that completes, and cancels
 // the contexts of all invocations.
 func (h *Hedger) Do(ctx context.Context, w Work) (interface{}, error) {

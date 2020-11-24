@@ -24,7 +24,7 @@ import (
 )
 
 func TestPercentileStrategy(t *testing.T) {
-	s := NewPercentileStrategy(0, 60*60*1000, 4, 95.0)
+	s := NewPercentileStrategy(0, 1*time.Hour, 95.0)
 	for i := 0; i < 90; i++ {
 		s.Observe(1, 1, 1*time.Millisecond, nil)
 	}
@@ -36,7 +36,7 @@ func TestPercentileStrategy(t *testing.T) {
 }
 
 func TestMinStrategy(t *testing.T) {
-	u := NewPercentileStrategy(0, 60*60*1000, 4, 95.0)
+	u := NewPercentileStrategy(0, 1*time.Hour, 95.0)
 	s := NewMinStrategy(1*time.Second, u)
 	d := s.Duration(10)
 	assert.Equal(t, d, 1*time.Second)
@@ -126,9 +126,9 @@ func TestHedgerContextCancelObeyed(t *testing.T) {
 	}()
 	_, err := h.Do(ctx, Work{
 		Work: func(ctx context.Context) (interface{}, error) {
-			canCh<-struct{}{}
+			canCh <- struct{}{}
 			<-ctx.Done()
-			resCh<-struct{}{}
+			resCh <- struct{}{}
 			return nil, nil
 		},
 	})
