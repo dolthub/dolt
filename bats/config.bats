@@ -131,3 +131,24 @@ teardown() {
     [[ "$output" =~ "local" ]] || false
     [[ ! "$output" =~ "global" ]] || false
 }
+
+@test "Commit to repo w/ ---author and without config vars sets" {
+    dolt config --global --add user.name "bats tester"
+    dolt config --global --add user.email "joshn@doe.com"
+
+    dolt init
+    dolt sql -q  "
+    CREATE TABLE test (
+      pk BIGINT NOT NULL COMMENT 'tag:0',
+      c1 BIGINT COMMENT 'tag:1',
+      c2 BIGINT COMMENT 'tag:2',
+      c3 BIGINT COMMENT 'tag:3',
+      c4 BIGINT COMMENT 'tag:4',
+      c5 BIGINT COMMENT 'tag:5',
+      PRIMARY KEY (pk)
+    );"
+
+     dolt add .
+     run dolt commit --author="John Doe <john@doe.com>" -m="works"
+     [ "$status" -eq 0 ]
+}
