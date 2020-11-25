@@ -64,7 +64,7 @@ func (cmd MigrateCmd) createArgParser() *argparser.ArgParser {
 
 // EventType returns the type of the event to log
 func (cmd MigrateCmd) EventType() eventsapi.ClientEventType {
-	return eventsapi.ClientEventType_TYPE_UNSPECIFIED
+	return eventsapi.ClientEventType_MIGRATE
 }
 
 // Exec executes the command

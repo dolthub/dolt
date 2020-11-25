@@ -32,6 +32,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
@@ -87,10 +88,9 @@ func (cmd FilterBranchCmd) createArgParser() *argparser.ArgParser {
 }
 
 // EventType returns the type of the event to log
-// todo: make event
-//func (cmd FilterBranchCmd) EventType() eventsapi.ClientEventType {
-//	return eventsapi.ClientEventType_LS
-//}
+func (cmd FilterBranchCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_FILTER_BRANCH
+}
 
 // Exec executes the command
 func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {

@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2020 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -78,6 +78,10 @@ enum ClientEventType {
     CREDS_USE = 47;
     CREDS_IMPORT = 48;
     REMOTEAPI_ADD_TABLE_FILES = 49;
+    MIGRATE = 50;
+    TAG = 51;
+    GARBAGE_COLLECTION = 52;
+    FILTER_BRANCH = 53;
 }
 
 enum MetricID {
