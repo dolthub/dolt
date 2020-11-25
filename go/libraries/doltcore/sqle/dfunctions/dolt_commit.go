@@ -2,6 +2,12 @@ package dfunctions
 
 import (
 	"fmt"
+	"errors"
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"time"
+
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/go-mysql-server/sql"
 	"strings"
@@ -35,40 +41,82 @@ func createArgParser() *argparser.ArgParser {
 }
 
 
+// we are more permissive than what is documented.
+var supportedLayouts = []string{
+	"2006/01/02",
+	"2006/01/02T15:04:05",
+	"2006/01/02T15:04:05Z07:00",
+
+	"2006.01.02",
+	"2006.01.02T15:04:05",
+	"2006.01.02T15:04:05Z07:00",
+
+	"2006-01-02",
+	"2006-01-02T15:04:05",
+	"2006-01-02T15:04:05Z07:00",
+}
+
+func parseDate(dateStr string) (time.Time, error) {
+	for _, layout := range supportedLayouts {
+		t, err := time.Parse(layout, dateStr)
+
+		if err == nil {
+			return t, nil
+		}
+	}
+
+	return time.Time{}, errors.New("error: '" + dateStr + "' is not in a supported format.")
+}
+
 func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
-	//ap := createArgParser()
+	ap := createArgParser()
 
+	//// Get the args from the children
+	var args []string
+	for i := range d.children {
+		str := d.children[i].String() // TODO: Do we need to eval here?
+		args = append(args, str)
+	}
 
-	// TODO: Ask connection limit here what's up (autocommit disableb? )
+	cli.Println(args)
 
-	// TODO: Help and usage?
+	apr := cli.ParseArgs(ap, args, nil) // TODO: Fix usage printer
 
-	// Get the args from the children
-	//var args []string
-	//for i := range d.children {
-	//	str := d.children[i].String() // TODO: Do we need to eval here?
-	//	args = append(args, str)
-	//}
-	//
-	//apr := cli.ParseArgs(ap, args, nil) // TODO: Fix usage printer
-	//
 	//msg, msgOk := apr.GetValue(commitMessageArg)
 	//if !msgOk {
 	//	return nil, fmt.Errorf("Must provide commit message.")
 	//}
-	//
-	//t := time.Now()
-	//if commitTimeStr, ok := apr.GetValue(dateParam); ok {
-	//	var err error
-	//	t, err = commands.ParseDate(commitTimeStr)
-	//
-	//	if err != nil {
-	//		return nil, fmt.Errorf(err.Error())
-	//	}
-	//}
-	//
-	//dbName := ctx.GetCurrentDatabase()
-	//dSess := sqle.DSessFromSess(ctx.Session)
+
+	t := time.Now()
+	if commitTimeStr, ok := apr.GetValue(dateParam); ok {
+		var err error
+		t, err = parseDate(commitTimeStr)
+
+		if err != nil {
+			return nil, fmt.Errorf(err.Error())
+		}
+	}
+
+
+	dbName := ctx.GetCurrentDatabase()
+	dSess := sqle.DSessFromSess(ctx.Session)
+
+	doltdb, _ := dSess.GetDoltDB(dbName)
+	rsr, _ := dSess.GetDoltDBRepoStateReader(dbName)
+	rsw, _ := dSess.GetDoltDBRepoStateWriter(dbName)
+
+	err := actions.CommitStaged(ctx, doltdb, rsr, rsw, actions.CommitStagedProps{
+		Message:          "Here is a commit",
+		Date:             t,
+		AllowEmpty:       apr.Contains(allowEmptyFlag),
+		CheckForeignKeys: !apr.Contains(forceFlag),
+		Name: "John",
+		Email: "John@doe.com",
+	})
+
+	if err != nil {
+		return err, fmt.Errorf(err.Error())
+	}
 
 	// sessions have different dbs. Have different ways of updating. You need to to figure out that
 	// interaction. Why are we not using denv instead of RepoStateWriter.
@@ -78,12 +126,6 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 
 	//db, _ := dSess.GetDoltDB(dbName)
 	//
-	//err := actions.CommitStaged(ctx, dEnv, actions.CommitStagedProps{
-	//	Message:          msg,
-	//	Date:             t,
-	//	AllowEmpty:       apr.Contains(allowEmptyFlag),
-	//	CheckForeignKeys: !apr.Contains(forceFlag),
-	//})
 
 	// watch how code based from sql engine through debugger all the way to dolt commit
 
@@ -112,7 +154,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 
 	// want to flush things to disk.
 
-	return "", nil
+	return "Committed this", err
 }
 
 func (d DoltCommitFunc) String() string {

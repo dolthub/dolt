@@ -61,11 +61,7 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 	return name, email, nil
 }
 
-// TODO: Might need to pass in a repo state writer
-// Should be able to refer to it
-// swap to a rsw
 func CommitStaged(ctx context.Context, ddb *doltdb.DoltDB, reader env.RepoStateReader, writer env.RepoStateWriter, props CommitStagedProps) error {
-	//rsw := dEnv.RepoStateWriter()
 	if props.Message == "" {
 		return ErrEmptyCommitMessage
 	}
