@@ -1694,7 +1694,7 @@ SQL
     [[ "${#lines[@]}" = "2" ]] || false
     run dolt sql -q "SELECT * FROM onepk WHERE v1 = 77" -r=tabular
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "<NULL>" ]] || false
+    [[ "$output" =~ "NULL" ]] || false
     
     run dolt index cat twopk idx_v -r=csv
     [ "$status" -eq "0" ]

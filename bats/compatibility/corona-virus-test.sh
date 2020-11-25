@@ -60,7 +60,7 @@ function export_tables() {
     places
   do
     dolt table export "$table" "$table$1.csv"
-    dolt sql -r csv -q "select * from $table" | sed 's/<NULL>//g' > "$table$1.sql.csv"
+    dolt sql -r csv -q "select * from $table" | sed 's/NULL//g' > "$table$1.sql.csv"
   done
 }
 

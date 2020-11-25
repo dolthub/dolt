@@ -107,13 +107,8 @@ func (asTr *AutoSizingFWTTransformer) handleRow(r pipeline.RowWithProps, outChan
 
 func (asTr *AutoSizingFWTTransformer) flush(outChan chan<- pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure, stopChan <-chan struct{}) {
 	if asTr.fwtTr == nil {
-		fwtSch, err := NewFWTSchemaWithWidths(asTr.sch, asTr.printWidths, asTr.maxRunes)
-
-		if err != nil {
-			panic(err)
-		}
-
-		asTr.fwtTr = NewFWTTransformer(fwtSch, asTr.tooLngBhv)
+		fwf := FixedWidthFormatterForSchema(asTr.sch, asTr.tooLngBhv, asTr.printWidths, asTr.maxRunes)
+		asTr.fwtTr = NewFWTTransformer(asTr.sch, fwf)
 	}
 
 	for i := 0; i < len(asTr.rowBuffer); i++ {

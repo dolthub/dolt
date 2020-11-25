@@ -112,11 +112,11 @@ teardown() {
 
     run dolt sql -q 'select * from abc;'
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "| pk | a    | b   | x | y      |" ]] || false
-    [[ "${lines[2]}" =~ "+----+------+-----+---+--------+" ]] || false
-    [[ "${lines[3]}" =~ "| 0  | asdf | 1.1 | 0 | <NULL> |" ]] || false
-    [[ "${lines[4]}" =~ "| 2  | asdf | 1.1 | 0 | <NULL> |" ]] || false
-    [[ "${lines[5]}" =~ "| 3  | data | 1.1 | 0 | <NULL> |" ]] || false
+    [[ "${lines[1]}" =~ "| pk | a    | b   | x | y   |" ]] || false
+    [[ "${lines[2]}" =~ "+----+------+-----+---+-----+" ]] || false
+    [[ "${lines[3]}" =~ "| 0  | asdf | 1.1 | 0 | 121 |" ]] || false
+    [[ "${lines[4]}" =~ "| 2  | asdf | 1.1 | 0 | 121 |" ]] || false
+    [[ "${lines[5]}" =~ "| 3  | data | 1.1 | 0 | 121 |" ]] || false
 }
 
 @test "dolt schema show on branch other" {
@@ -126,6 +126,7 @@ teardown() {
     dolt checkout other
     run dolt schema show abc
     [ "$status" -eq 0 ]
+    echo $output
     output=`echo $output | tr '[:upper:]' '[:lower:]'` # lowercase the output
     [[ "${output}" =~ "abc @ working" ]] || false
     [[ "${output}" =~ "create table \`abc\` (" ]] || false
@@ -144,11 +145,11 @@ teardown() {
     dolt checkout other
     run dolt sql -q 'select * from abc;'
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "| pk | a    | b   | w | z      |" ]] || false
-    [[ "${lines[2]}" =~ "+----+------+-----+---+--------+" ]] || false
-    [[ "${lines[3]}" =~ "| 0  | asdf | 1.1 | 0 | <NULL> |" ]] || false
-    [[ "${lines[4]}" =~ "| 1  | asdf | 1.1 | 0 | <NULL> |" ]] || false
-    [[ "${lines[5]}" =~ "| 4  | data | 1.1 | 0 | <NULL> |" ]] || false
+    [[ "${lines[1]}" =~ "| pk | a    | b   | w | z   |" ]] || false
+    [[ "${lines[2]}" =~ "+----+------+-----+---+-----+" ]] || false
+    [[ "${lines[3]}" =~ "| 0  | asdf | 1.1 | 0 | 122 |" ]] || false
+    [[ "${lines[4]}" =~ "| 1  | asdf | 1.1 | 0 | 122 |" ]] || false
+    [[ "${lines[5]}" =~ "| 4  | data | 1.1 | 0 | 122 |" ]] || false
 
     dolt checkout master
 }

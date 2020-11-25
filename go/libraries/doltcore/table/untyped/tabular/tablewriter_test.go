@@ -69,14 +69,14 @@ func TestWriter(t *testing.T) {
 		"43    ",
 		"25    ",
 		"29    ",
-		"<NULL>",
+		"NULL  ",
 	}
 	titles := []string{
 		"title                            ",
 		"Regional Manager                 ",
 		"Secretary                        ",
 		"Assistant to the Regional Manager",
-		"<NULL>                           ",
+		"NULL                             ",
 	}
 
 	rows := make([]row.Row, len(ages))
@@ -105,7 +105,7 @@ func TestWriter(t *testing.T) {
 | Michael Scott  | 43     | Regional Manager                  |
 | Pam Beasley    | 25     | Secretary                         |
 | Dwight Schrute | 29     | Assistant to the Regional Manager |
-| Jim Halpêrt    | <NULL> | <NULL>                            |
+| Jim Halpêrt    | NULL   | NULL                              |
 +----------------+--------+-----------------------------------+
 `
 		// strip off the first newline, inserted for nice printing
@@ -134,7 +134,7 @@ func TestWriter(t *testing.T) {
 | Pam Beasley    | 25     | Secretary                         |
 +----------------+--------+-----------------------------------+
 | Dwight Schrute | 29     | Assistant to the Regional Manager |
-| Jim Halpêrt    | <NULL> | <NULL>                            |
+| Jim Halpêrt    | NULL   | NULL                              |
 +----------------+--------+-----------------------------------+
 `
 		// strip off the first newline, inserted for nice printing
@@ -161,7 +161,7 @@ func TestWriter(t *testing.T) {
 | Michael Scott  | 43     | Regional Manager                  |
 | Pam Beasley    | 25     | Secretary                         |
 | Dwight Schrute | 29     | Assistant to the Regional Manager |
-| Jim Halpêrt    | <NULL> | <NULL>                            |
+| Jim Halpêrt    | NULL   | NULL                              |
 +----------------+--------+-----------------------------------+
 `
 		// strip off the first newline, inserted for nice printing
@@ -188,7 +188,7 @@ func TestWriter(t *testing.T) {
 | Michael Scott  | 43     | Regional Manager                  |
 | Pam Beasley    | 25     | Secretary                         |
 | Dwight Schrute | 29     | Assistant to the Regional Manager |
-| Jim Halpêrt    | <NULL> | <NULL>                            |
+| Jim Halpêrt    | NULL   | NULL                              |
 +----------------+--------+-----------------------------------+
 `
 		// strip off the first newline, inserted for nice printing
@@ -234,7 +234,7 @@ func TestEastAsianLanguages(t *testing.T) {
 		"43    ",
 		"25    ",
 		"29    ",
-		"<NULL>",
+		"NULL  ",
 		"aあいう",
 	}
 	titles := []string{
@@ -242,7 +242,7 @@ func TestEastAsianLanguages(t *testing.T) {
 		"Regional Manager                 ",
 		"Secretary                        ",
 		"Assistant to the Regional Manager",
-		"<NULL>                           ",
+		"NULL                             ",
 		"だ/東京特許許可局局長はよく柿喰う客だ   ",
 	}
 
@@ -272,7 +272,7 @@ func TestEastAsianLanguages(t *testing.T) {
 | Michael Scott  | 43     | Regional Manager                  |
 | Pam Beasley    | 25     | Secretary                         |
 | Dwight Schrute | 29     | Assistant to the Regional Manager |
-| Jim Halpêrt    | <NULL> | <NULL>                            |
+| Jim Halpêrt    | NULL   | NULL                              |
 | つのだ☆HIRO     | aあいう | だ/東京特許許可局局長はよく柿喰う客だ    |
 +-----------------+---------+------------------------------------------+
 `
