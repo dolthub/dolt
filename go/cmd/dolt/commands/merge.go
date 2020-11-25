@@ -249,7 +249,7 @@ func execNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 	t := doltdb.CommitNowFunc()
 	if commitTimeStr, ok := apr.GetValue(dateParam); ok {
 		var err error
-		t, err = parseDate(commitTimeStr)
+		t, err = ParseDate(commitTimeStr)
 
 		if err != nil {
 			return errhand.BuildDError("error: invalid date").AddCause(err).Build()

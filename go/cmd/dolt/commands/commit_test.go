@@ -42,7 +42,7 @@ func TestParseDate(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.dateStr, func(t *testing.T) {
-			result, err := parseDate(test.dateStr)
+			result, err := ParseDate(test.dateStr)
 
 			if test.expErr {
 				assert.Error(t, err)

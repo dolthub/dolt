@@ -24,6 +24,3 @@ var DoltFunctions = []sql.Function{
 	sql.Function0{Name: VersionFuncName, Fn: NewVersion},
 	sql.FunctionN{Name: DoltCommitFuncName, Fn: NewDoltCommitFunc},
 }
-
-
-// TODO: Add dolt_commit to DoltFunctions

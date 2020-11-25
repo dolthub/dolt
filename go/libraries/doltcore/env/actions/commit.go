@@ -61,12 +61,16 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 	return name, email, nil
 }
 
-func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProps) error {
+// TODO: Might need to pass in a repo state writer
+// Should be able to refer to it
+// swap to a rsw
+func CommitStaged(ctx context.Context, ddb *doltdb.DoltDB, reader env.RepoStateReader, writer env.RepoStateWriter, props CommitStagedProps) error {
+	//rsw := dEnv.RepoStateWriter()
 	if props.Message == "" {
 		return ErrEmptyCommitMessage
 	}
 
-	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, dEnv)
+	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, ddb, reader)
 	if err != nil {
 		return err
 	}
@@ -80,8 +84,8 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProp
 		stagedTblNames = append(stagedTblNames, n)
 	}
 
-	if len(staged) == 0 && !dEnv.IsMergeActive() && !props.AllowEmpty {
-		_, notStagedDocs, err := diff.GetDocDiffs(ctx, dEnv)
+	if len(staged) == 0 && !reader.IsMergeActive() && !props.AllowEmpty {
+		_, notStagedDocs, err := diff.GetDocDiffs(ctx, ddb, reader)
 		if err != nil {
 			return err
 		}
@@ -89,8 +93,8 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProp
 	}
 
 	var mergeCmSpec []*doltdb.CommitSpec
-	if dEnv.IsMergeActive() {
-		root, err := dEnv.WorkingRoot(ctx)
+	if reader.IsMergeActive() {
+		root, err := env.WorkingRoot(ctx, ddb, reader)
 		if err != nil {
 			return err
 		}
@@ -102,7 +106,7 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProp
 			return NewTblInConflictError(inConflict)
 		}
 
-		spec, err := doltdb.NewCommitSpec(dEnv.RepoState.Merge.Commit)
+		spec, err := doltdb.NewCommitSpec(reader.GetMergeCommit())
 
 		if err != nil {
 			panic("Corrupted repostate. Active merge state is not valid.")
@@ -111,7 +115,7 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProp
 		mergeCmSpec = []*doltdb.CommitSpec{spec}
 	}
 
-	srt, err := dEnv.StagedRoot(ctx)
+	srt, err := env.StagedRoot(ctx, ddb, reader)
 
 	if err != nil {
 		return err
@@ -130,13 +134,13 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProp
 		}
 	}
 
-	h, err := dEnv.UpdateStagedRoot(ctx, srt)
+	h, err := writer.UpdateStagedRoot(ctx, srt)
 
 	if err != nil {
 		return err
 	}
 
-	wrt, err := dEnv.WorkingRoot(ctx)
+	wrt, err := env.WorkingRoot(ctx, ddb, reader)
 
 	if err != nil {
 		return err
@@ -148,23 +152,24 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProp
 		return err
 	}
 
-	err = dEnv.UpdateWorkingRoot(ctx, wrt)
+	err = env.UpdateWorkingRoot(ctx, ddb, writer, wrt)
 
 	if err != nil {
 		return err
 	}
-
+	
 	meta, noCommitMsgErr := doltdb.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
+
 	if noCommitMsgErr != nil {
 		return ErrEmptyCommitMessage
 	}
 
 	// DoltDB resolves the current working branch head ref to provide a parent commit.
 	// Any commit specs in mergeCmSpec are also resolved and added.
-	_, err = dEnv.DoltDB.CommitWithParentSpecs(ctx, h, dEnv.RepoState.CWBHeadRef(), mergeCmSpec, meta)
+	_, err = ddb.CommitWithParentSpecs(ctx, h, reader.CWBHeadRef(), mergeCmSpec, meta)
 
 	if err == nil {
-		dEnv.RepoState.ClearMerge(dEnv.FS)
+		err = writer.ClearMerge()
 	}
 
 	return err

@@ -123,7 +123,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		}
 	}
 
-	err = actions.CommitStaged(ctx, dEnv, actions.CommitStagedProps{
+	err = actions.CommitStaged(ctx, dEnv.DoltDB, nil, dEnv.RepoStateWriter(), actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
 		AllowEmpty:       apr.Contains(allowEmptyFlag),

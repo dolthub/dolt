@@ -38,7 +38,7 @@ type dbData struct {
 var _ sql.Session = &DoltSession{}
 
 // DoltSession is the sql.Session implementation used by dolt.  It is accessible through a *sql.Context instance
-type DoltSession struct {
+type DoltSession struct  {
 	sql.Session
 	dbRoots   map[string]dbRoot
 	dbDatas   map[string]dbData

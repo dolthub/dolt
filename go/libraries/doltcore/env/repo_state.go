@@ -29,12 +29,16 @@ type RepoStateReader interface {
 	CWBHeadSpec() *doltdb.CommitSpec
 	WorkingHash() hash.Hash
 	StagedHash() hash.Hash
+	IsMergeActive() bool
+	GetMergeCommit() string
 }
 
 type RepoStateWriter interface {
 	// SetCWBHeadRef(context.Context, ref.DoltRef) error
 	// SetCWBHeadSpec(context.Context, *doltdb.CommitSpec) error
 	SetWorkingHash(context.Context, hash.Hash) error
+	UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) (hash.Hash, error)
+	ClearMerge() error
 	//	SetStagedHash(context.Context, hash.Hash) error
 }
 
@@ -168,4 +172,41 @@ func (rs *RepoState) WorkingHash() hash.Hash {
 
 func (rs *RepoState) StagedHash() hash.Hash {
 	return hash.Parse(rs.Staged)
+}
+
+func (rs* RepoState) IsMergeActive() bool {
+	return rs.Merge != nil
+}
+
+func (rs* RepoState) GetMergeCommit() string {
+	return rs.Merge.Commit
+}
+
+func HeadRoot(ctx context.Context, ddb *doltdb.DoltDB, reader RepoStateReader) (*doltdb.RootValue, error) {
+	commit, err := ddb.ResolveRef(ctx, reader.CWBHeadRef())
+
+	if err != nil {
+		return nil, err
+	}
+
+	return commit.GetRootValue()
+}
+
+func StagedRoot(ctx context.Context, ddb *doltdb.DoltDB, reader RepoStateReader) (*doltdb.RootValue, error) {
+	return ddb.ReadRootValue(ctx, reader.StagedHash())
+}
+
+
+func WorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, reader RepoStateReader) (*doltdb.RootValue, error) {
+	return ddb.ReadRootValue(ctx, reader.WorkingHash())
+}
+
+func UpdateWorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, writer RepoStateWriter, newRoot *doltdb.RootValue) error {
+	h, err := ddb.WriteRootValue(ctx, newRoot)
+
+	if err != nil {
+		return doltdb.ErrNomsIO
+	}
+
+	return writer.SetWorkingHash(ctx, h)
 }

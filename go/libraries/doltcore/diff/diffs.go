@@ -85,7 +85,7 @@ func (rvu RootValueUnreadable) Error() string {
 }
 
 // NewDocDiffs returns DocDiffs for Dolt Docs between two roots.
-func NewDocDiffs(ctx context.Context, dEnv *env.DoltEnv, older *doltdb.RootValue, newer *doltdb.RootValue, docDetails []doltdb.DocDetails) (*DocDiffs, error) {
+func NewDocDiffs(ctx context.Context, older *doltdb.RootValue, newer *doltdb.RootValue, docDetails []doltdb.DocDetails) (*DocDiffs, error) {
 	var added []string
 	var modified []string
 	var removed []string
@@ -136,33 +136,33 @@ func (nd *DocDiffs) Len() int {
 }
 
 // GetDocDiffs retrieves staged and unstaged DocDiffs.
-func GetDocDiffs(ctx context.Context, dEnv *env.DoltEnv) (*DocDiffs, *DocDiffs, error) {
-	docDetails, err := dEnv.GetAllValidDocDetails()
+func GetDocDiffs(ctx context.Context, ddb *doltdb.DoltDB, reader env.RepoStateReader) (*DocDiffs, *DocDiffs, error) {
+	docDetails, err := dEnv.GetAllValidDocDetails() // TODO: Doc diffs
 	if err != nil {
 		return nil, nil, err
 	}
 
-	workingRoot, err := dEnv.WorkingRoot(ctx)
+	workingRoot, err := env.WorkingRoot(ctx, ddb, reader)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	notStagedDocDiffs, err := NewDocDiffs(ctx, dEnv, workingRoot, nil, docDetails)
+	notStagedDocDiffs, err := NewDocDiffs(ctx, workingRoot, nil, docDetails)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	headRoot, err := dEnv.HeadRoot(ctx)
+	headRoot, err := env.HeadRoot(ctx, ddb, reader)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	stagedRoot, err := dEnv.StagedRoot(ctx)
+	stagedRoot, err := env.StagedRoot(ctx, ddb, reader)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	stagedDocDiffs, err := NewDocDiffs(ctx, dEnv, headRoot, stagedRoot, nil)
+	stagedDocDiffs, err := NewDocDiffs(ctx, headRoot, stagedRoot, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -288,18 +288,18 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 	return deltas, nil
 }
 
-func GetStagedUnstagedTableDeltas(ctx context.Context, dEnv *env.DoltEnv) (staged, unstaged []TableDelta, err error) {
-	headRoot, err := dEnv.HeadRoot(ctx)
+func GetStagedUnstagedTableDeltas(ctx context.Context,  ddb *doltdb.DoltDB, reader env.RepoStateReader) (staged, unstaged []TableDelta, err error) {
+	headRoot, err := env.HeadRoot(ctx, ddb, reader)
 	if err != nil {
 		return nil, nil, RootValueUnreadable{HeadRoot, err}
 	}
 
-	stagedRoot, err := dEnv.StagedRoot(ctx)
+	stagedRoot, err := env.StagedRoot(ctx, ddb, reader)
 	if err != nil {
 		return nil, nil, RootValueUnreadable{StagedRoot, err}
 	}
 
-	workingRoot, err := dEnv.WorkingRoot(ctx)
+	workingRoot, err := env.WorkingRoot(ctx, ddb, reader)
 	if err != nil {
 		return nil, nil, RootValueUnreadable{WorkingRoot, err}
 	}

@@ -222,7 +222,6 @@ func (t *Table) NumRowsInConflict(ctx context.Context) (uint64, error) {
 		if err != nil {
 			return 0, err
 		}
-
 		confMap = v.(types.Map)
 	}
 
