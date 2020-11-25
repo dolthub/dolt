@@ -31,6 +31,7 @@ type RepoStateReader interface {
 	StagedHash() hash.Hash
 	IsMergeActive() bool
 	GetMergeCommit() string
+	GetAllValidDocDetails() ([]doltdb.DocDetails, error)
 }
 
 type RepoStateWriter interface {
@@ -180,6 +181,11 @@ func (rs* RepoState) IsMergeActive() bool {
 
 func (rs* RepoState) GetMergeCommit() string {
 	return rs.Merge.Commit
+}
+
+// TODO: Refactor all of this out
+func (rs* RepoState) GetAllValidDocDetails()  ([]doltdb.DocDetails, error) {
+	return nil, nil
 }
 
 func HeadRoot(ctx context.Context, ddb *doltdb.DoltDB, reader RepoStateReader) (*doltdb.RootValue, error) {

@@ -70,7 +70,7 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, statusDocs, ap))
 	cli.ParseArgs(ap, args, help)
 
-	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, dEnv)
+	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
 
 	if err != nil {
 		cli.PrintErrln(toStatusVErr(err).Verbose())
@@ -83,7 +83,7 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 1
 	}
 
-	stagedDocDiffs, notStagedDocDiffs, err := diff.GetDocDiffs(ctx, dEnv)
+	stagedDocDiffs, notStagedDocDiffs, err := diff.GetDocDiffs(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
 
 	if err != nil {
 		cli.PrintErrln(toStatusVErr(err).Verbose())

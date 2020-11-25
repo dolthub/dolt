@@ -123,7 +123,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		}
 	}
 
-	err = actions.CommitStaged(ctx, dEnv.DoltDB, nil, dEnv.RepoStateWriter(), actions.CommitStagedProps{
+	err = actions.CommitStaged(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
 		AllowEmpty:       apr.Contains(allowEmptyFlag),
@@ -252,14 +252,14 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
 	color.NoColor = true
 
 	currBranch := dEnv.RepoState.CWBHeadRef()
-	stagedTblDiffs, notStagedTblDiffs, _ := diff.GetStagedUnstagedTableDeltas(ctx, dEnv)
+	stagedTblDiffs, notStagedTblDiffs, _ := diff.GetStagedUnstagedTableDeltas(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
 
 	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, dEnv)
 	if err != nil {
 		workingTblsInConflict = []string{}
 	}
 
-	stagedDocDiffs, notStagedDocDiffs, _ := diff.GetDocDiffs(ctx, dEnv)
+	stagedDocDiffs, notStagedDocDiffs, _ := diff.GetDocDiffs(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
 
 	buf := bytes.NewBuffer([]byte{})
 	n := printStagedDiffs(buf, stagedTblDiffs, stagedDocDiffs, true)

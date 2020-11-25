@@ -114,7 +114,7 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	t := time.Now()
 	if commitTimeStr, ok := apr.GetValue(dateParam); ok {
 		var err error
-		t, err = ParseDate(commitTimeStr)
+		t, err = parseDate(commitTimeStr)
 
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.BuildDError("error: invalid date").AddCause(err).Build(), usage)
