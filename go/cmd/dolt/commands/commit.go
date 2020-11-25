@@ -90,6 +90,8 @@ func (cmd CommitCmd) createArgParser() *argparser.ArgParser {
 
 // Exec executes the command
 func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+
+	cli.Println(args)
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, commitDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)

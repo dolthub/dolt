@@ -1,8 +1,8 @@
 package dfunctions
 
 import (
-	"fmt"
 	"errors"
+	"fmt"
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -82,10 +82,11 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 
 	apr := cli.ParseArgs(ap, args, nil) // TODO: Fix usage printer
 
-	//msg, msgOk := apr.GetValue(commitMessageArg)
-	//if !msgOk {
-	//	return nil, fmt.Errorf("Must provide commit message.")
-	//}
+	msg, msgOk := apr.GetValue(commitMessageArg)
+	if !msgOk {
+		msg = "This is vinai's commit"
+		//return nil, fmt.Errorf("Must provide commit message.")
+	}
 
 	t := time.Now()
 	if commitTimeStr, ok := apr.GetValue(dateParam); ok {
@@ -105,8 +106,9 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	rsr, _ := dSess.GetDoltDBRepoStateReader(dbName)
 	rsw, _ := dSess.GetDoltDBRepoStateWriter(dbName)
 
+	msg = "This is vinai's commit"
 	err := actions.CommitStaged(ctx, doltdb, rsr, rsw, actions.CommitStagedProps{
-		Message:          "Here is a commit",
+		Message:          msg,
 		Date:             t,
 		AllowEmpty:       apr.Contains(allowEmptyFlag),
 		CheckForeignKeys: !apr.Contains(forceFlag),
@@ -114,47 +116,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		Email: "John@doe.com",
 	})
 
-	if err != nil {
-		return err, fmt.Errorf(err.Error())
-	}
-
-	// sessions have different dbs. Have different ways of updating. You need to to figure out that
-	// interaction. Why are we not using denv instead of RepoStateWriter.
-
-	// Might need to implement new methods to commit data. After changing methods, change actions
-	// to take in a repo state writer instead of an environment.
-
-	//db, _ := dSess.GetDoltDB(dbName)
-	//
-
-	// watch how code based from sql engine through debugger all the way to dolt commit
-
-	// give myself a couple days. Want to get in with laser focus.
-	// Spend a couple of days top down. Need to better understand the code base.
-
-
-	// dolt and mysql server are totally. Go-mysql-server is a query planner. The engine has a
-	// way to say this has a schema.
-
-	// core.go in go-mysql-interface (Read this!). Wants to integrate with the query engine
-	// mysql layer sits on a dolt layer. Dolt implements go-mysql-layer. One capability is
-	// defining user function. Way to plug in that. Defining these custom functions that hook into
-	// go-mysql-server.
-
-	// dolt layer is independent of the sql layer .
-
-	// 1. First job is to a deep dive into a command line function. Look at what happens. See what
-	// happens when you run these things. Get a feel for how these works. Understand this layer and can't do anything
-	// above.
-
-	/*
-	 * How they change from above them. We'll
-	 */
-
-
-	// want to flush things to disk.
-
-	return "Committed this", err
+	return "", err
 }
 
 func (d DoltCommitFunc) String() string {
