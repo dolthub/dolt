@@ -154,21 +154,7 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProp
 		return err
 	}
 
-	name, email, err := GetNameAndEmail(dEnv.Config)
-
-	if err != nil {
-		return err
-	}
-
-	if props.Name != "" {
-		name = props.Name
-	}
-
-	if props.Email != "" {
-		email = props.Email
-	}
-
-	meta, noCommitMsgErr := doltdb.NewCommitMetaWithUserTS(name, email, props.Message, props.Date)
+	meta, noCommitMsgErr := doltdb.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
 	if noCommitMsgErr != nil {
 		return ErrEmptyCommitMessage
 	}
