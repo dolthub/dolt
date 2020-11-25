@@ -19,6 +19,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -75,6 +76,11 @@ func (cmd GarbageCollectionCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(gcShallowFlag, "s", "perform a fast, but incomplete garbage collection pass")
 	return ap
+}
+
+// EventType returns the type of the event to log
+func (cmd GarbageCollectionCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_GARBAGE_COLLECTION
 }
 
 // Version displays the version of the running dolt client

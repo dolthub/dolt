@@ -79,7 +79,7 @@ func (cmd TagCmd) createArgParser() *argparser.ArgParser {
 
 // EventType returns the type of the event to log
 func (cmd TagCmd) EventType() eventsapi.ClientEventType {
-	return eventsapi.ClientEventType_BRANCH
+	return eventsapi.ClientEventType_TAG
 }
 
 // Exec executes the command
