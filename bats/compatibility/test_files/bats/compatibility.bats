@@ -112,6 +112,7 @@ teardown() {
 
     run dolt sql -q 'select * from abc;'
     [ "$status" -eq 0 ]
+    echo $output
     [[ "${lines[1]}" =~ "| pk | a    | b   | x | y    |" ]] || false
     [[ "${lines[2]}" =~ "+----+------+-----+---+------+" ]] || false
     [[ "${lines[3]}" =~ "| 0  | asdf | 1.1 | 0 | NULL |" ]] || false
@@ -126,6 +127,7 @@ teardown() {
     dolt checkout other
     run dolt schema show abc
     [ "$status" -eq 0 ]
+    echo $output
     output=`echo $output | tr '[:upper:]' '[:lower:]'` # lowercase the output
     [[ "${output}" =~ "abc @ working" ]] || false
     [[ "${output}" =~ "create table \`abc\` (" ]] || false
@@ -144,6 +146,7 @@ teardown() {
     dolt checkout other
     run dolt sql -q 'select * from abc;'
     [ "$status" -eq 0 ]
+    echo $output
     [[ "${lines[1]}" =~ "| pk | a    | b   | w | z    |" ]] || false
     [[ "${lines[2]}" =~ "+----+------+-----+---+------+" ]] || false
     [[ "${lines[3]}" =~ "| 0  | asdf | 1.1 | 0 | NULL |" ]] || false
