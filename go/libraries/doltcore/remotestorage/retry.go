@@ -15,6 +15,8 @@
 package remotestorage
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -47,6 +49,10 @@ func processHttpResp(resp *http.Response, err error) error {
 		}
 
 		return backoff.Permanent(httpErr)
+	}
+
+	if errors.Is(err, context.Canceled) {
+		return backoff.Permanent(err)
 	}
 
 	return err
