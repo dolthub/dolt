@@ -34,6 +34,7 @@ DELETE FROM abc WHERE pk=1;
 INSERT INTO abc VALUES (3, 'data', 1.1, 0, 0);
 ALTER TABLE abc DROP COLUMN w;
 ALTER TABLE abc ADD COLUMN y BIGINT;
+UPDATE abc SET y = 121;
 SQL
 dolt add .
 dolt commit -m "made changes to master"
@@ -44,6 +45,7 @@ DELETE FROM abc WHERE pk=2;
 INSERT INTO abc VALUES (4, 'data', 1.1, 0, 0);
 ALTER TABLE abc DROP COLUMN x;
 ALTER TABLE abc ADD COLUMN z BIGINT;
+UPDATE abc SET z = 122;
 SQL
 dolt add .
 dolt commit -m "made changes to other"
