@@ -75,14 +75,12 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	args := make([]string, 1)
 	for i := range d.children {
 		temp := d.children[i].String()
-		str := temp[1 : len(temp)-1] // TODO: Need to make this more robust
+		str := temp[1 : len(temp)-1] // TODO: Need to make this more robust. Might need to handle escaping
 		args = append(args, str)
 	}
 
-	cli.Println(args)
-
 	apr := cli.ParseArgs(ap, args, nil) // TODO: Fix usage printer
-	cli.Println(apr.Options())
+
 	msg, msgOk := apr.GetValue(commitMessageArg)
 	if !msgOk {
 		return nil, fmt.Errorf("Must provide commit message.")
@@ -106,7 +104,6 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	rsr, _ := dSess.GetDoltDBRepoStateReader(dbName)
 	rsw, _ := dSess.GetDoltDBRepoStateWriter(dbName)
 
-	msg = "This is vinai's commit"
 	err := actions.CommitStaged(ctx, doltdb, rsr, rsw, actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
@@ -141,6 +138,7 @@ func (d DoltCommitFunc) WithChildren(children ...sql.Expression) (sql.Expression
 }
 
 func (d DoltCommitFunc) Resolved() bool {
+	// TODO: Fix this
 	//for _, child := range d.children {
 	//	if !child.Resolved() {
 	//		return false
