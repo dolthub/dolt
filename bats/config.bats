@@ -148,15 +148,19 @@ teardown() {
       PRIMARY KEY (pk)
     );"
 
-     dolt config --global --unset user.name
-     dolt config --global --unset user.email
+    dolt config --global --unset user.name
+    dolt config --global --unset user.email
 
-     run dolt config --list
-     [ "$status" -eq 0 ]
-     [ "${#lines[@]}" -eq 0 ]
+    run dolt config --list
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
 
-      dolt add .
-      run dolt commit --author="John Doe <john@doe.com>" -m="works"
-      [ "$status" -eq 0 ]
+    dolt add .
+    run dolt commit --author="John Doe <john@doe.com>" -m="Commit1"
+    [ "$status" -eq 0 ]
+
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Commit1" ]] || false
 
 }
