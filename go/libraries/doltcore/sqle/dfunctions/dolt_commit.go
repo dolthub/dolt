@@ -72,20 +72,20 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	ap := createArgParser()
 
 	//// Get the args from the children
-	var args []string
+	args := make([]string, 1)
 	for i := range d.children {
-		str := d.children[i].String() // TODO: Do we need to eval here?
+		temp := d.children[i].String()
+		str := temp[1 : len(temp)-1] // TODO: Need to make this more robust
 		args = append(args, str)
 	}
 
 	cli.Println(args)
 
 	apr := cli.ParseArgs(ap, args, nil) // TODO: Fix usage printer
-
+	cli.Println(apr.Options())
 	msg, msgOk := apr.GetValue(commitMessageArg)
 	if !msgOk {
-		msg = "This is vinai's commit"
-		//return nil, fmt.Errorf("Must provide commit message.")
+		return nil, fmt.Errorf("Must provide commit message.")
 	}
 
 	t := time.Now()
