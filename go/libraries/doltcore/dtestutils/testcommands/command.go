@@ -60,7 +60,7 @@ func (c CommitStaged) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	name, email, err := actions.GetNameAndEmail(dEnv.Config)
 
 	if err != nil {
-		return nil
+		return err
 	}
 
 	return actions.CommitStaged(context.Background(), dEnv, actions.CommitStagedProps{
@@ -88,7 +88,7 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	name, email, err := actions.GetNameAndEmail(dEnv.Config)
 
 	if err != nil {
-		return nil
+		return err
 	}
 
 	return actions.CommitStaged(context.Background(), dEnv, actions.CommitStagedProps{
