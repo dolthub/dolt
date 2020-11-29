@@ -108,21 +108,21 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	dbName := ctx.GetCurrentDatabase()
 	dSess := sqle.DSessFromSess(ctx.Session)
 
-	doltdb, dok := dSess.GetDoltDB(dbName)
+	doltdb, ok := dSess.GetDoltDB(dbName)
 
-	if !dok {
+	if !ok {
 		return nil, fmt.Errorf("Could not load %s", dbName)
 	}
 
-	rsr, rsrok := dSess.GetDoltDBRepoStateReader(dbName)
+	rsr, ok := dSess.GetDoltDBRepoStateReader(dbName)
 
-	if !rsrok {
+	if !ok {
 		return nil, fmt.Errorf("Could not load the %s RepoStateReader", dbName)
 	}
 
-	rsw, rswok := dSess.GetDoltDBRepoStateWriter(dbName)
+	rsw, ok := dSess.GetDoltDBRepoStateWriter(dbName)
 
-	if !rswok {
+	if !ok {
 		return nil, fmt.Errorf("Could not load the %s RepoStateWriter", dbName)
 	}
 
