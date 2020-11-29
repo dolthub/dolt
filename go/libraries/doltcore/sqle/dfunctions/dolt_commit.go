@@ -6,6 +6,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"regexp"
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -29,6 +30,7 @@ const (
 	dateParam        = "date"
 	commitMessageArg = "message"
 	forceFlag		 = "force"
+	authorParam      = "author"
 )
 
 func createArgParser() *argparser.ArgParser {
@@ -37,6 +39,7 @@ func createArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(allowEmptyFlag, "", "Allow recording a commit that has the exact same data as its sole parent. This is usually a mistake, so it is disabled by default. This option bypasses that safety.")
 	ap.SupportsString(dateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
 	ap.SupportsFlag(forceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
+	ap.SupportsString(authorParam, "", "author", "Specify an explicit author using the standard A U Thor <author@example.com> format.")
 	return ap
 }
 
@@ -68,10 +71,39 @@ func parseDate(dateStr string) (time.Time, error) {
 	return time.Time{}, errors.New("error: '" + dateStr + "' is not in a supported format.")
 }
 
+func parseAuthor(authorStr string) (string, string, error) {
+	if len(authorStr) == 0 {
+		return "", "", errors.New("Option 'author' requires a value")
+	}
+
+	reg := regexp.MustCompile("(?m)([^)]+) \\<([^)]+)") // Regex matches Name <email
+	matches := reg.FindStringSubmatch(authorStr)        // This function places the original string at the beginning of matches
+
+	// If name and email are provided
+	if len(matches) != 3 {
+		return "", "", errors.New("Author not formatted correctly. Use 'Name <author@example.com>' format")
+	}
+
+	name := matches[1]
+	email := strings.ReplaceAll(matches[2], ">", "")
+
+	return name, email, nil
+}
+
 func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
+	// Get the information for the sql context.
+	dbName := ctx.GetCurrentDatabase()
+	dSess := sqle.DSessFromSess(ctx.Session)
+
+
+	// TODO: Fix err handling here.
+	doltdb, _ := dSess.GetDoltDB(dbName)
+	rsr, _ := dSess.GetDoltDBRepoStateReader(dbName)
+	rsw, _ := dSess.GetDoltDBRepoStateWriter(dbName)
+
 	ap := createArgParser()
 
-	//// Get the args from the children
+	// Get the args for DOLT_COMMIT.
 	args := make([]string, 1)
 	for i := range d.children {
 		temp := d.children[i].String()
@@ -79,13 +111,28 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		args = append(args, str)
 	}
 
-	apr := cli.ParseArgs(ap, args, nil) // TODO: Fix usage printer
+	apr := cli.ParseArgs(ap, args, nil)
 
+	// Parse the author flag. Return an error if not.
+	var name, email string
+	var err error
+	if authorStr, ok := apr.GetValue(authorParam); ok {
+		name, email, err = parseAuthor(authorStr)
+		// TODO: Set name and email in cli if not set.
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		return nil, fmt.Errorf("Must specify author flag.")
+	}
+
+	// Get the commit message.
 	msg, msgOk := apr.GetValue(commitMessageArg)
 	if !msgOk {
 		return nil, fmt.Errorf("Must provide commit message.")
 	}
 
+	// Specify the time if the date parameter is not.
 	t := time.Now()
 	if commitTimeStr, ok := apr.GetValue(dateParam); ok {
 		var err error
@@ -96,24 +143,16 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		}
 	}
 
-
-	dbName := ctx.GetCurrentDatabase()
-	dSess := sqle.DSessFromSess(ctx.Session)
-
-	doltdb, _ := dSess.GetDoltDB(dbName)
-	rsr, _ := dSess.GetDoltDBRepoStateReader(dbName)
-	rsw, _ := dSess.GetDoltDBRepoStateWriter(dbName)
-
-	err := actions.CommitStaged(ctx, doltdb, rsr, rsw, actions.CommitStagedProps{
+	err = actions.CommitStaged(ctx, doltdb, rsr, rsw, actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
 		AllowEmpty:       apr.Contains(allowEmptyFlag),
 		CheckForeignKeys: !apr.Contains(forceFlag),
-		Name: "John",
-		Email: "John@doe.com",
+		Name: name,
+		Email: email,
 	})
 
-	return "", err
+	return "Commit Staged.", err
 }
 
 func (d DoltCommitFunc) String() string {
@@ -138,12 +177,6 @@ func (d DoltCommitFunc) WithChildren(children ...sql.Expression) (sql.Expression
 }
 
 func (d DoltCommitFunc) Resolved() bool {
-	// TODO: Fix this
-	//for _, child := range d.children {
-	//	if !child.Resolved() {
-	//		return false
-	//	}
-	//}
 	return true
 }
 

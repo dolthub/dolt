@@ -371,7 +371,6 @@ type repoStateReader struct {
 	dEnv *DoltEnv
 }
 
-
 func (r* repoStateReader) CWBHeadRef() ref.DoltRef {
 	return r.dEnv.RepoState.CWBHeadRef()
 }
