@@ -168,10 +168,6 @@ func (res *ArgParseResults) GetIntOrDefault(name string, defVal int) int {
 	return defVal
 }
 
-func (res *ArgParseResults) Options() map[string]string {
-	return res.options
-}
-
 func (res *ArgParseResults) Args() []string {
 	return res.args
 }

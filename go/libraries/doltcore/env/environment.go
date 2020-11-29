@@ -371,31 +371,31 @@ type repoStateReader struct {
 	dEnv *DoltEnv
 }
 
-func (r* repoStateReader) CWBHeadRef() ref.DoltRef {
+func (r *repoStateReader) CWBHeadRef() ref.DoltRef {
 	return r.dEnv.RepoState.CWBHeadRef()
 }
 
-func (r* repoStateReader) CWBHeadSpec() *doltdb.CommitSpec {
+func (r *repoStateReader) CWBHeadSpec() *doltdb.CommitSpec {
 	return r.dEnv.RepoState.CWBHeadSpec()
 }
 
-func (r* repoStateReader) WorkingHash() hash.Hash {
+func (r *repoStateReader) WorkingHash() hash.Hash {
 	return r.dEnv.RepoState.WorkingHash()
 }
 
-func (r* repoStateReader) StagedHash() hash.Hash {
+func (r *repoStateReader) StagedHash() hash.Hash {
 	return hash.Parse(r.dEnv.RepoState.Staged)
 }
 
-func (r* repoStateReader) IsMergeActive() bool {
+func (r *repoStateReader) IsMergeActive() bool {
 	return r.dEnv.RepoState.Merge != nil
 }
 
-func (r* repoStateReader) GetMergeCommit() string {
+func (r *repoStateReader) GetMergeCommit() string {
 	return r.dEnv.RepoState.Merge.Commit
 }
 
-func (r* repoStateReader) GetAllValidDocDetails() ([]doltdb.DocDetails, error) {
+func (r *repoStateReader) GetAllValidDocDetails() ([]doltdb.DocDetails, error) {
 	return r.dEnv.GetAllValidDocDetails()
 }
 
@@ -418,7 +418,7 @@ func (r *repoStateWriter) SetWorkingHash(ctx context.Context, h hash.Hash) error
 	return nil
 }
 
-func (r *repoStateWriter)  UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) (hash.Hash, error) {
+func (r *repoStateWriter) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) (hash.Hash, error) {
 	return r.dEnv.UpdateStagedRoot(ctx, newRoot)
 }
 

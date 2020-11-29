@@ -288,7 +288,7 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 	return deltas, nil
 }
 
-func GetStagedUnstagedTableDeltas(ctx context.Context,  ddb *doltdb.DoltDB, reader env.RepoStateReader) (staged, unstaged []TableDelta, err error) {
+func GetStagedUnstagedTableDeltas(ctx context.Context, ddb *doltdb.DoltDB, reader env.RepoStateReader) (staged, unstaged []TableDelta, err error) {
 	headRoot, err := env.HeadRoot(ctx, ddb, reader)
 	if err != nil {
 		return nil, nil, RootValueUnreadable{HeadRoot, err}

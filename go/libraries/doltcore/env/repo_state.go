@@ -17,6 +17,7 @@ package env
 import (
 	"context"
 	"encoding/json"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -174,16 +175,16 @@ func (rs *RepoState) StagedHash() hash.Hash {
 	return hash.Parse(rs.Staged)
 }
 
-func (rs* RepoState) IsMergeActive() bool {
+func (rs *RepoState) IsMergeActive() bool {
 	return rs.Merge != nil
 }
 
-func (rs* RepoState) GetMergeCommit() string {
+func (rs *RepoState) GetMergeCommit() string {
 	return rs.Merge.Commit
 }
 
-// TODO: Refactor all of this out
-func (rs* RepoState) GetAllValidDocDetails()  ([]doltdb.DocDetails, error) {
+// TODO: Can you implement this with the fs?
+func (rs *RepoState) GetAllValidDocDetails() ([]doltdb.DocDetails, error) {
 	return nil, nil
 }
 
@@ -200,7 +201,6 @@ func HeadRoot(ctx context.Context, ddb *doltdb.DoltDB, reader RepoStateReader) (
 func StagedRoot(ctx context.Context, ddb *doltdb.DoltDB, reader RepoStateReader) (*doltdb.RootValue, error) {
 	return ddb.ReadRootValue(ctx, reader.StagedHash())
 }
-
 
 func WorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, reader RepoStateReader) (*doltdb.RootValue, error) {
 	return ddb.ReadRootValue(ctx, reader.WorkingHash())

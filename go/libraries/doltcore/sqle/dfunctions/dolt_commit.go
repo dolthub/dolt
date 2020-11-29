@@ -3,15 +3,16 @@ package dfunctions
 import (
 	"errors"
 	"fmt"
+	"regexp"
+	"strings"
+	"time"
+
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"regexp"
-	"time"
-
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/go-mysql-server/sql"
-	"strings"
 )
 
 const DoltCommitFuncName = "dolt_commit"
@@ -29,7 +30,7 @@ const (
 	allowEmptyFlag   = "allow-empty"
 	dateParam        = "date"
 	commitMessageArg = "message"
-	forceFlag		 = "force"
+	forceFlag        = "force"
 	authorParam      = "author"
 )
 
@@ -42,7 +43,6 @@ func createArgParser() *argparser.ArgParser {
 	ap.SupportsString(authorParam, "", "author", "Specify an explicit author using the standard A U Thor <author@example.com> format.")
 	return ap
 }
-
 
 // we are more permissive than what is documented.
 var supportedLayouts = []string{
@@ -90,16 +90,41 @@ func parseAuthor(authorStr string) (string, string, error) {
 	return name, email, nil
 }
 
+// Trims the double quotes for the param/
+func trimQuotes(param string) string {
+	if len(param) > 0 && param[0] == '"' {
+		param = param[1:]
+	}
+
+	if len(param) > 0 && param[len(param)-1] == '"' {
+		param = param[:len(param)-1]
+	}
+
+	return param
+}
+
 func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	// Get the information for the sql context.
 	dbName := ctx.GetCurrentDatabase()
 	dSess := sqle.DSessFromSess(ctx.Session)
 
+	doltdb, dok := dSess.GetDoltDB(dbName)
 
-	// TODO: Fix err handling here.
-	doltdb, _ := dSess.GetDoltDB(dbName)
-	rsr, _ := dSess.GetDoltDBRepoStateReader(dbName)
-	rsw, _ := dSess.GetDoltDBRepoStateWriter(dbName)
+	if !dok {
+		return nil, fmt.Errorf("Could not load %s", dbName)
+	}
+
+	rsr, rsrok := dSess.GetDoltDBRepoStateReader(dbName)
+
+	if !rsrok {
+		return nil, fmt.Errorf("Could not load the %s RepoStateReader", dbName)
+	}
+
+	rsw, rswok := dSess.GetDoltDBRepoStateWriter(dbName)
+
+	if !rswok {
+		return nil, fmt.Errorf("Could not load the %s RepoStateWriter", dbName)
+	}
 
 	ap := createArgParser()
 
@@ -107,7 +132,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	args := make([]string, 1)
 	for i := range d.children {
 		temp := d.children[i].String()
-		str := temp[1 : len(temp)-1] // TODO: Need to make this more robust. Might need to handle escaping
+		str := trimQuotes(temp)
 		args = append(args, str)
 	}
 
@@ -118,7 +143,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	var err error
 	if authorStr, ok := apr.GetValue(authorParam); ok {
 		name, email, err = parseAuthor(authorStr)
-		// TODO: Set name and email in cli if not set.
+		// TODO: Set name and email in cli if not set????
 		if err != nil {
 			return nil, err
 		}
@@ -148,8 +173,8 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		Date:             t,
 		AllowEmpty:       apr.Contains(allowEmptyFlag),
 		CheckForeignKeys: !apr.Contains(forceFlag),
-		Name: name,
-		Email: email,
+		Name:             name,
+		Email:            email,
 	})
 
 	return "Commit Staged.", err

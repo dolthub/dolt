@@ -153,7 +153,7 @@ func CommitStaged(ctx context.Context, ddb *doltdb.DoltDB, reader env.RepoStateR
 	if err != nil {
 		return err
 	}
-	
+
 	meta, noCommitMsgErr := doltdb.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
 
 	if noCommitMsgErr != nil {
