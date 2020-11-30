@@ -44,13 +44,12 @@ teardown() {
     [[ "$output" =~ "$regex" ]] || false
 }
 
-@test "DOLT_COMMIT with a message and no author throws error" {
+@test "DOLT_COMMIT with just a message reads session parameters" {
     run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
-    [ $status -eq 1 ]
+    [ $status -eq 0 ]
     run dolt log
     [ $status -eq 0 ]
-    regex='Initialize'
+    [[ "$output" =~ "Commit1" ]] || false
+    regex='Bats Tests <bats@email.fake>'
     [[ "$output" =~ "$regex" ]] || false
 }
-
-

@@ -162,7 +162,8 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 			return nil, err
 		}
 	} else {
-		return nil, fmt.Errorf("Must specify author flag.")
+		name = dSess.Username
+		email = dSess.Email
 	}
 
 	// Get the commit message.
@@ -191,7 +192,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		Email:            email,
 	})
 
-	return "Commit Staged.", err
+	return "Staged", err
 }
 
 func (d DoltCommitFunc) String() string {
