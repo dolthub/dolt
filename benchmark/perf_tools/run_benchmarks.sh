@@ -4,10 +4,12 @@ set -o pipefail
 
 [ -n "$1" ] || (echo "Please supply a comma separated list of tests to be run"; exit 1)
 tests=$1
-[ -n "$2" ] || (echo "Please supply a username to associate with the benchmark"; exit 1)
-username=$2
-committish_one=${3:-current}
-committish_two=${4:-current}
+[ -n "$2" ] || (echo "Please supply an integer value for the table size used in the benchmarks"; exit 1)
+table_size=$2
+[ -n "$3" ] || (echo "Please supply a username to associate with the benchmark"; exit 1)
+username=$3
+committish_one=${4:-current}
+committish_two=${5:-current}
 
 if [ "$committish_one" == "$committish_two" ]; then
   echo "A single commit, $committish_one provided, proceeding with benchmark"
@@ -20,6 +22,7 @@ fi
 script_dir=$(dirname "$0")
 absolute_script_dir=$(realpath "$script_dir")
 working_dir="$absolute_script_dir/dolt-builds/working"
+run_id="$(openssl rand -hex 12)"
 echo "Ensuring $working_dir exists and is empty"
 rm -rf "$working_dir"
 mkdir "$working_dir"
@@ -36,7 +39,7 @@ function build_binary_at_committish() {
     git checkout "$build_committish"
   else
     echo "$build_committish passed for committish arg, building from current repo"
-    cd "$absolute_script_dir/../go"
+    cd "$absolute_script_dir/../../go"
   fi
 
   commit="$(git rev-parse HEAD)"
@@ -94,9 +97,9 @@ for committish in $committish_list; do
   cd "$absolute_script_dir"
   echo "Built binary $bin_committish, copying to $working_dir/dolt for benchmarking"
   cp "$bin_committish" "$working_dir/dolt"
-  run_sysbench dolt "-e DOLT_COMMITTISH=$(get_commit_signature $committish | tail -1) -e SYSBENCH_TESTS=$tests -e TEST_USERNAME=$username"
+  run_sysbench dolt "-e DOLT_COMMITTISH=$(get_commit_signature $committish | tail -1) -e SYSBENCH_TESTS=$tests -e TEST_USERNAME=$username -e RUN_ID=$run_id -e TABLE_SIZE=$table_size"
 done
 
 echo "Benchmarking MySQL for comparison"
-run_sysbench mysql "-e SYSBENCH_TESTS=$tests -e TEST_USERNAME=$username"
+run_sysbench mysql "-e SYSBENCH_TESTS=$tests -e TEST_USERNAME=$username -e RUN_ID=$run_id -e TABLE_SIZE=$table_size"
 echo "All done!"
