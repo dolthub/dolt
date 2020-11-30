@@ -7,12 +7,14 @@ if [ -n "$DOLT_COMMITTISH" ]; then
     --db-host="$DB_HOST" \
     --committish="$DOLT_COMMITTISH" \
     --tests="$SYSBENCH_TESTS" \
-    --username="$TEST_USERNAME"
+    --username="$TEST_USERNAME" \
+    --run-id="$RUN_ID"
 else
   sleep 30
   echo "Running sysbench tests $SYSBENCH_TESTS against MySQL for test user $TEST_USERNAME"
   python /python/sysbench_wrapper.py \
     --db-host="$DB_HOST" \
     --tests="$SYSBENCH_TESTS" \
-    --username="$TEST_USERNAME"
+    --username="$TEST_USERNAME" \
+    --run-id="$RUN_ID"
 fi
