@@ -104,7 +104,7 @@ func parseAuthor(authorStr string) (string, string, error) {
 	return name, email, nil
 }
 
-// Trims the double quotes for the param/
+// Trims the double quotes for the param.
 func trimQuotes(param string) string {
 	if len(param) > 0 && param[0] == '"' {
 		param = param[1:]
@@ -157,7 +157,6 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	var err error
 	if authorStr, ok := apr.GetValue(authorParam); ok {
 		name, email, err = parseAuthor(authorStr)
-		// TODO: Set name and email in cli if not set????
 		if err != nil {
 			return nil, err
 		}

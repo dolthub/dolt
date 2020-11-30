@@ -29,8 +29,6 @@ teardown() {
     run dolt log
     [ $status -eq 0 ]
     [[ "$output" =~ "Commit1" ]] || false
-    run dolt log
-    [ $status -eq 0 ]
     regex='John Doe <john@doe.com>'
     [[ "$output" =~ "$regex" ]] || false
 }

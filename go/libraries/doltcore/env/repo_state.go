@@ -183,7 +183,7 @@ func (rs *RepoState) GetMergeCommit() string {
 	return rs.Merge.Commit
 }
 
-// TODO: Can you implement this with the fs?
+// TODO: This functionality is currently unsupported by the SQL session.
 func (rs *RepoState) GetAllValidDocDetails() ([]doltdb.DocDetails, error) {
 	return nil, nil
 }
