@@ -21,6 +21,8 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -392,6 +394,11 @@ func pushToRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, mode ref.RefUpda
 				cli.Println("hint: 'dolt pull ...') before pushing again.")
 				return errhand.BuildDError("").Build()
 			} else {
+				status, ok := status.FromError(err)
+				if ok && status.Code() == codes.PermissionDenied {
+					cli.Println("hint: have you logged into DoltHub using 'dolt login'?")
+					cli.Println("hint: check that user.email in 'dolt config --list' has write perms to DoltHub repo")
+				}
 				return errhand.BuildDError("error: push failed").AddCause(err).Build()
 			}
 		}
