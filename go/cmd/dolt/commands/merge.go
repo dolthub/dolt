@@ -256,11 +256,19 @@ func execNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 		}
 	}
 
+	name, email, err := actions.GetNameAndEmail(dEnv.Config)
+
+	if err != nil {
+		return errhand.BuildDError("error: committing").AddCause(err).Build()
+	}
+
 	err = actions.CommitStaged(ctx, dEnv, actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
 		AllowEmpty:       apr.Contains(allowEmptyFlag),
 		CheckForeignKeys: !apr.Contains(forceFlag),
+		Name:             name,
+		Email:            email,
 	})
 
 	if err != nil {
