@@ -17,7 +17,12 @@ SUPPORTED_BENCHMARKS = [
     'oltp_insert',
     'oltp_point_select',
     'select_random_points',
-    'select_random_ranges'
+    'select_random_ranges',
+    'oltp_delete',
+    'oltp_write_only',
+    'oltp_read_write',
+    'oltp_update_index',
+    'oltp_update_non_index'
 ]
 
 TEST_TABLE = 'sbtest1'
@@ -56,7 +61,10 @@ def main():
     logger.setLevel(logging.INFO)
     args = get_args()
     test_list = args.tests.split(',')
-    assert all(test in SUPPORTED_BENCHMARKS for test in test_list), 'Must provide list of supported tests'
+    if len(test_list) == 1 and test_list == ['all']:
+        test_list = SUPPORTED_BENCHMARKS
+    else:
+        assert all(test in SUPPORTED_BENCHMARKS for test in test_list), 'Must provide list of supported tests'
 
     logger.info('Running with run ID {}'.format(args.run_id))
     if args.committish:
@@ -71,7 +79,7 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--db-host', help='The host for the database we will connect to')
     parser.add_argument('--committish', help='Commit used to build Dolt bianry being tested')
-    parser.add_argument('--tests', help='List of benchmarks', type=str, required=True)
+    parser.add_argument('--tests', help='List of benchmarks', type=str, default=True)
     parser.add_argument('--username', type=str, required=False, default=getpass.getuser())
     parser.add_argument('--note', type=str, required=False, default=None)
     parser.add_argument('--table-size', type=int, default=10000)
@@ -195,21 +203,23 @@ def write_output_file(run_id: str,
                       table_size: int):
     if not os.path.exists('/output'):
         os.mkdir('/output')
-    output_file = '/output/{}.csv'.format(committish if committish else database_name)
+    output_file = '/output/{}.csv'.format(run_id)
+    file_exists = os.path.exists(output_file)
     logger.info('Writing output file to {}'.format(output_file))
-    with open(output_file, 'w', newline='') as csvfile:
+    with open(output_file, 'a' if file_exists else 'w', newline='') as csvfile:
         metadata = {
             'run_id': run_id,
             'database': database_name,
             'username': username,
-            'committish': committish or 'n/a',
+            'committish': committish or 'not-applicable',
             'timestamp': timestamp,
             'system_info': get_os_detail(),
             'table_size': table_size
         }
         fieldnames = list(metadata.keys()) + ['test_name'] + list(OUTPUT_MAPPING.values())
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writeheader()
+        if not file_exists:
+            writer.writeheader()
         for row in output:
             to_write = {**row, **metadata}
             writer.writerow(to_write)

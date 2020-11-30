@@ -20,21 +20,17 @@ We also execute the same set of benchmarks against MySQL for comparison. All the
 ## Example
 A common use-case might be to compare Dolt built from the current working set in your local checkout to MySQL. To do this we can run the following:
 ```
-./run_benchmarks.sh \
-    bulk_insert,oltp_read_only,oltp_insert,oltp_point_select,select_random_points,select_random_ranges
-    <username> \
-    current
+$ ./run_benchmarks.sh all <your-username> current
 ```
 
-This takes the current checkout of Dolt, builds a binary, and executes the benchmarks in a `docker-compose` setup. It does the same for MySQL. This produces two CSV files containing the results in `bencharm/perf_tools/output`. An example would be:
+This takes the current checkout of Dolt, builds a binary, and executes the supported benchmarks in a `docker-compose` setup. It does the same for MySQL. Each invocation of `run_benchmarks.sh` is associatd with a run ID, for example `58296063ab3c2a6701f8f986`. This run ID identifies the CSV file: 
 ```
-ls -ltr output
+$ ls -ltr output
 total 16
--rw-r--r--  1 oscarbatori  staff  1727 Nov 29 19:59 cedbe9b0d2516b4b05661af2b07f0765bc6f1816-dirty.csv
--rw-r--r--@ 1 oscarbatori  staff  1539 Nov 29 22:04 mysql.csv
+-rw-r--r--  1 oscarbatori  staff  1727 Nov 29 19:59 58296063ab3c2a6701f8f986.csv
 ```
 
-This indicates that the results for `current`, the HEAD of the currently checked branch that has uncommitted changes in the working set, are stored in `cedbe9b0d2516b4b05661af2b07f0765bc6f1816-dirty.csv`, where "dirty" implies the presence of uncommitted changes. The `mysql.csv` file contains results for MySQL. 
+Each row corresponds to an invocation of test on either MySQL, or a compilation of Dolt. Each row indicates this.
 
 ## Requirements
 To run this stack a few things are required:
@@ -45,7 +41,7 @@ To run this stack a few things are required:
 ## Uploading to DoltHub
 We can upload the results to DoltHub using `push_results_to_dolthub.py` as follows:
 ```
-python push_outputp_to_dolthub.py --result-directory output --remote-results-db dolthub/dolt-benchmarks-test --branch test-run
+$ python push_outputp_to_dolthub.py --results-file output/58296063ab3c2a6701f8f986.csv --remote-results-db dolthub/dolt-benchmarks-test --branch test-run
 ```
 
 These results will then be available to the team for analysis, and via our API for rendering on our benchmarking documentation.
