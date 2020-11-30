@@ -51,3 +51,18 @@ teardown() {
     regex='Bats Tests <bats@email.fake>'
     [[ "$output" =~ "$regex" ]] || false
 }
+
+@test "DOLT_COMMIT works with --author without config variables set" {
+    dolt config --global --unset user.name
+    dolt config --global --unset user.email
+
+    dolt add .
+    run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1', '--author', 'John Doe <john@doe.com>')"
+    [ "$status" -eq 0 ]
+
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Commit1" ]] || false
+    regex='John Doe <john@doe.com>'
+    [[ "$output" =~ "$regex" ]] || false
+}
