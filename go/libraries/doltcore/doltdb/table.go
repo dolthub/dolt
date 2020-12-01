@@ -403,52 +403,6 @@ func (t *Table) GetRow(ctx context.Context, pk types.Tuple, sch schema.Schema) (
 	return r, true, nil
 }
 
-// GetRows takes in a PKItr which will supply a stream of primary keys to be pulled from the table.  Each key is
-// looked up sequentially.  If row data exists for a given pk it is converted to a TableRow, and added to the rows
-// slice. If row data does not exist for a given pk it will be added to the missing slice.  The numPKs argument, if
-// known helps allocate the right amount of memory for the results, but if the number of pks being requested isn't
-// known then 0 can be used.
-func (t *Table) GetRows(ctx context.Context, pkItr PKItr, numPKs int, sch schema.Schema) (rows []row.Row, missing []types.Value, err error) {
-	if numPKs < 0 {
-		numPKs = 0
-	}
-
-	rows = make([]row.Row, 0, numPKs)
-	missing = make([]types.Value, 0, numPKs)
-
-	rowMap, err := t.GetRowData(ctx)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	for pk, ok, err := pkItr(); ok; pk, ok, err = pkItr() {
-		if err != nil {
-			return nil, nil, err
-		}
-
-		fieldsVal, _, err := rowMap.MaybeGet(ctx, pk)
-
-		if err != nil {
-			return nil, nil, err
-		}
-
-		if fieldsVal == nil {
-			missing = append(missing, pk)
-		} else {
-			r, err := row.FromNoms(sch, pk, fieldsVal.(types.Tuple))
-
-			if err != nil {
-				return nil, nil, err
-			}
-
-			rows = append(rows, r)
-		}
-	}
-
-	return rows, missing, nil
-}
-
 // UpdateRows replaces the current row data and returns and updated Table.  Calls to UpdateRows will not be written to the
 // database.  The root must be updated with the updated table, and the root must be committed or written.
 func (t *Table) UpdateRows(ctx context.Context, updatedRows types.Map) (*Table, error) {

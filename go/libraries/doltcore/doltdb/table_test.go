@@ -97,6 +97,77 @@ func createTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData t
 	return tbl, nil
 }
 
+// PKItr defines a function that iterates over a collection of noms values.  The PKItr will return a valid value
+// and true until all the values in the collection are exhausted.  At that time nil and false will be returned.
+type PKItr func() (val types.Tuple, ok bool, err error)
+
+func SingleColPKItr(nbf *types.NomsBinFormat, pkTag uint64, vals []types.Value) func() (types.Tuple, bool, error) {
+	next := 0
+	size := len(vals)
+	return func() (types.Tuple, bool, error) {
+		current := next
+		next++
+
+		if current < size {
+			tpl, err := types.NewTuple(nbf, types.Uint(pkTag), vals[current])
+
+			if err != nil {
+				return types.EmptyTuple(nbf), false, err
+			}
+
+			return tpl, true, nil
+		}
+
+		return types.EmptyTuple(nbf), false, nil
+	}
+}
+
+// GetRows takes in a PKItr which will supply a stream of primary keys to be pulled from the table.  Each key is
+// looked up sequentially.  If row data exists for a given pk it is converted to a TableRow, and added to the rows
+// slice. If row data does not exist for a given pk it will be added to the missing slice.  The numPKs argument, if
+// known helps allocate the right amount of memory for the results, but if the number of pks being requested isn't
+// known then 0 can be used.
+func GetRows(ctx context.Context, t *Table, pkItr PKItr, numPKs int, sch schema.Schema) (rows []row.Row, missing []types.Value, err error) {
+	if numPKs < 0 {
+		numPKs = 0
+	}
+
+	rows = make([]row.Row, 0, numPKs)
+	missing = make([]types.Value, 0, numPKs)
+
+	rowMap, err := t.GetRowData(ctx)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for pk, ok, err := pkItr(); ok; pk, ok, err = pkItr() {
+		if err != nil {
+			return nil, nil, err
+		}
+
+		fieldsVal, _, err := rowMap.MaybeGet(ctx, pk)
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if fieldsVal == nil {
+			missing = append(missing, pk)
+		} else {
+			r, err := row.FromNoms(sch, pk, fieldsVal.(types.Tuple))
+
+			if err != nil {
+				return nil, nil, err
+			}
+
+			rows = append(rows, r)
+		}
+	}
+
+	return rows, missing, nil
+}
+
 func TestIsValidTableName(t *testing.T) {
 	assert.True(t, IsValidTableName("a"))
 	assert.True(t, IsValidTableName("a1"))
@@ -144,7 +215,7 @@ func TestTables(t *testing.T) {
 	}
 
 	idItr := SingleColPKItr(types.Format_7_18, idTag, ids)
-	readRows, missing, err := tbl.GetRows(context.Background(), idItr, -1, tSchema)
+	readRows, missing, err := GetRows(context.Background(), tbl, idItr, -1, tSchema)
 	assert.NoError(t, err)
 
 	if len(readRows) != len(rows) {
