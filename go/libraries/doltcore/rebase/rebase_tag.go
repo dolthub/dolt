@@ -395,11 +395,15 @@ func replayRowDiffs(ctx context.Context, vrw types.ValueReadWriter, rSch schema.
 
 	nmu := noms.NewNomsMapUpdater(ctx, vrw, rebasedParentRows, rSch, func(stats types.AppliedEditStats) {})
 
-	ad := diff.NewAsyncDiffer(diffBufSize)
+	df, err := diff.GetDiffer(diffBufSize, rSch)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
 	// get all differences (including merges) between original commit and its parent
-	ad.Start(ctx, parentRows, rows)
+	df.Start(ctx, parentRows, rows)
 	defer func() {
-		if cerr := ad.Close(); cerr != nil && err == nil {
+		if cerr := df.Close(); cerr != nil && err == nil {
 			err = cerr
 		}
 	}()
@@ -407,7 +411,7 @@ func replayRowDiffs(ctx context.Context, vrw types.ValueReadWriter, rSch schema.
 	hasMore := true
 	var diffs []*ndiff.Difference
 	for hasMore {
-		diffs, hasMore, err = ad.GetDiffs(diffBufSize/2, time.Second)
+		diffs, hasMore, err = df.GetDiffs(diffBufSize/2, time.Second)
 		if err != nil {
 			return types.EmptyMap, err
 		}

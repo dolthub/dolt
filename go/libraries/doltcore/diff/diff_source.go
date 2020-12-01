@@ -32,15 +32,15 @@ const (
 )
 
 type RowDiffSource struct {
-	ad         *AsyncDiffer
+	df         Differ
 	joiner     *rowconv.Joiner
 	oldRowConv *rowconv.RowConverter
 	newRowConv *rowconv.RowConverter
 }
 
-func NewRowDiffSource(ad *AsyncDiffer, joiner *rowconv.Joiner) *RowDiffSource {
+func NewRowDiffSource(df Differ, joiner *rowconv.Joiner) *RowDiffSource {
 	return &RowDiffSource{
-		ad,
+		df,
 		joiner,
 		rowconv.IdentityConverter,
 		rowconv.IdentityConverter,
@@ -60,7 +60,7 @@ func (rdRd *RowDiffSource) GetSchema() schema.Schema {
 // NextDiff reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
 // will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
 func (rdRd *RowDiffSource) NextDiff() (row.Row, pipeline.ImmutableProperties, error) {
-	diffs, hasMore, err := rdRd.ad.GetDiffs(1, time.Second)
+	diffs, hasMore, err := rdRd.df.GetDiffs(1, time.Second)
 	if err != nil {
 		return nil, pipeline.ImmutableProperties{}, err
 	}
@@ -73,7 +73,7 @@ func (rdRd *RowDiffSource) NextDiff() (row.Row, pipeline.ImmutableProperties, er
 	}
 
 	if len(diffs) != 1 {
-		panic("only a single diff requested, multiple returned.  bug in AsyncDiffer")
+		panic("only a single diff requested, multiple returned.  bug in asyncDiffer")
 	}
 
 	d := diffs[0]
@@ -127,6 +127,6 @@ func (rdRd *RowDiffSource) NextDiff() (row.Row, pipeline.ImmutableProperties, er
 
 // Close should release resources being held
 func (rdRd *RowDiffSource) Close() error {
-	rdRd.ad.Close()
+	rdRd.df.Close()
 	return nil
 }

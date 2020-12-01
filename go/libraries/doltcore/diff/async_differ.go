@@ -17,16 +17,47 @@ package diff
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/async"
 	"github.com/dolthub/dolt/go/store/diff"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-type AsyncDiffer struct {
+// Differ produces row diffs of two maps
+type Differ interface {
+	// Start initializes the iterator to iterate over 2 maps
+	Start(ctx context.Context, from, to types.Map)
+	// Close cleans up any resources
+	Close() error
+	// are not available it will return what is available.  A timeout of 0 returns what is immediately available without waiting.
+	// a timeout of -1 will wait indefinitely until the number of diffs are available, or it can return all remaining diffs
+	GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Difference, bool, error)
+}
+
+func GetDiffer(bufSz int, schs ...schema.Schema) (Differ, error) {
+	if len(schs) == 0 {
+		return nil, fmt.Errorf("must give schemas to get differ")
+	}
+	keyless := schema.IsKeyless(schs[0])
+	for _, sch := range schs {
+		if schema.IsKeyless(sch) != keyless {
+			return nil, fmt.Errorf("all schemas must be keyed or keyless")
+		}
+	}
+
+	ad := newAsyncDiffer(bufSz)
+	if keyless {
+		return keylessDiffer{ad}, nil
+	}
+	return ad, nil
+}
+
+type asyncDiffer struct {
 	diffChan   chan diff.Difference
 	bufferSize int
 
@@ -35,8 +66,8 @@ type AsyncDiffer struct {
 	egCancel func()
 }
 
-func NewAsyncDiffer(bufferedDiffs int) *AsyncDiffer {
-	return &AsyncDiffer{
+func newAsyncDiffer(bufferedDiffs int) *asyncDiffer {
+	return &asyncDiffer{
 		make(chan diff.Difference, bufferedDiffs),
 		bufferedDiffs,
 		nil,
@@ -50,7 +81,7 @@ func tableDontDescendLists(v1, v2 types.Value) bool {
 	return !types.IsPrimitiveKind(kind) && kind != types.TupleKind && kind == v2.Kind() && kind != types.RefKind
 }
 
-func (ad *AsyncDiffer) Start(ctx context.Context, from, to types.Map) {
+func (ad *asyncDiffer) Start(ctx context.Context, from, to types.Map) {
 	ad.eg, ad.egCtx = errgroup.WithContext(ctx)
 	ad.egCancel = async.GoWithCancel(ad.egCtx, ad.eg, func(ctx context.Context) error {
 		defer close(ad.diffChan)
@@ -58,12 +89,12 @@ func (ad *AsyncDiffer) Start(ctx context.Context, from, to types.Map) {
 	})
 }
 
-func (ad *AsyncDiffer) Close() error {
+func (ad *asyncDiffer) Close() error {
 	ad.egCancel()
 	return ad.eg.Wait()
 }
 
-func (ad *AsyncDiffer) GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Difference, bool, error) {
+func (ad *asyncDiffer) GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Difference, bool, error) {
 	diffs := make([]*diff.Difference, 0, ad.bufferSize)
 	timeoutChan := time.After(timeout)
 	for {
@@ -85,7 +116,7 @@ func (ad *AsyncDiffer) GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Di
 	}
 }
 
-func (ad *AsyncDiffer) ReadAll() ([]*diff.Difference, error) {
+func (ad *asyncDiffer) ReadAll() ([]*diff.Difference, error) {
 	diffs, hasMore, err := ad.GetDiffs(0, 5*time.Minute)
 	if err != nil {
 		return nil, err

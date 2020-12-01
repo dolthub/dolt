@@ -29,6 +29,10 @@ type Schema interface {
 	Indexes() IndexCollection
 }
 
+func IsKeyless(sch Schema) bool {
+	return sch.GetPKCols().Size() == 0
+}
+
 // ColFromTag returns a schema.Column from a schema and a tag
 func ColFromTag(sch Schema, tag uint64) (Column, bool) {
 	return sch.GetAllCols().GetByTag(tag)

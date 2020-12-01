@@ -225,13 +225,21 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, tableEditS
 
 func calcTableMergeStats(ctx context.Context, tbl *doltdb.Table, mergeTbl *doltdb.Table) (MergeStats, error) {
 	rows, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return MergeStats{}, err
+	}
 
+	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return MergeStats{}, err
 	}
 
 	mergeRows, err := mergeTbl.GetRowData(ctx)
+	if err != nil {
+		return MergeStats{}, err
+	}
 
+	mergeSch, err := mergeTbl.GetSchema(ctx)
 	if err != nil {
 		return MergeStats{}, err
 	}
@@ -240,7 +248,7 @@ func calcTableMergeStats(ctx context.Context, tbl *doltdb.Table, mergeTbl *doltd
 	ch := make(chan diff.DiffSummaryProgress)
 	go func() {
 		defer close(ch)
-		err := diff.Summary(ctx, ch, rows, mergeRows)
+		err := diff.Summary(ctx, ch, rows, mergeRows, sch, mergeSch)
 
 		ae.SetIfError(err)
 	}()

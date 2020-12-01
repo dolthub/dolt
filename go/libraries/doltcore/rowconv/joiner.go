@@ -180,3 +180,10 @@ func (j *Joiner) GetSchema() schema.Schema {
 func (j *Joiner) SchemaForName(name string) schema.Schema {
 	return j.srcSchemas[name]
 }
+
+func (j *Joiner) SourceSchemas() (src []schema.Schema) {
+	for _, sch := range j.srcSchemas {
+		src = append(src, sch)
+	}
+	return src
+}

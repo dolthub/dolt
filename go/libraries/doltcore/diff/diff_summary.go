@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/diff"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -30,11 +30,15 @@ type DiffSummaryProgress struct {
 }
 
 // Summary reports a summary of diff changes between two values
-func Summary(ctx context.Context, ch chan DiffSummaryProgress, from, to types.Map) (err error) {
-	ad := NewAsyncDiffer(1024)
-	ad.Start(ctx, from, to)
+func Summary(ctx context.Context, ch chan DiffSummaryProgress, from, to types.Map, fromSch, toSch schema.Schema) (err error) {
+	df, err := GetDiffer(1024, fromSch, toSch)
+	if err != nil {
+		return err
+	}
+
+	df.Start(ctx, from, to)
 	defer func() {
-		if cerr := ad.Close(); cerr != nil && err == nil {
+		if cerr := df.Close(); cerr != nil && err == nil {
 			err = cerr
 		}
 	}()
@@ -44,7 +48,7 @@ func Summary(ctx context.Context, ch chan DiffSummaryProgress, from, to types.Ma
 	hasMore := true
 	var diffs []*diff.Difference
 	for hasMore {
-		diffs, hasMore, err = ad.GetDiffs(100, time.Millisecond)
+		diffs, hasMore, err = df.GetDiffs(100, time.Millisecond)
 		if err != nil {
 			return err
 		}

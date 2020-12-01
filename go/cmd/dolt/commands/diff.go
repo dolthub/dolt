@@ -393,7 +393,7 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 
 		if dArgs.diffParts&Summary != 0 {
 			numCols := fromSch.GetAllCols().Size()
-			verr = diffSummary(ctx, fromMap, toMap, numCols)
+			verr = diffSummary(ctx, fromMap, toMap, fromSch, toSch, numCols)
 		}
 
 		if dArgs.diffParts&SchemaOnlyDiff != 0 {
@@ -649,11 +649,15 @@ func diffRows(ctx context.Context, fromRows, toRows types.Map, fromSch, toSch sc
 		return verr
 	}
 
-	ad := diff.NewAsyncDiffer(1024)
-	ad.Start(ctx, fromRows, toRows)
-	defer ad.Close()
+	df, err := diff.GetDiffer(1024, fromSch, toSch)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
 
-	src := diff.NewRowDiffSource(ad, joiner)
+	df.Start(ctx, fromRows, toRows)
+	defer df.Close()
+
+	src := diff.NewRowDiffSource(df, joiner)
 	defer src.Close()
 
 	oldColNames, verr := mapTagToColName(fromSch, unionSch)
@@ -970,12 +974,12 @@ func printTableDiffSummary(td diff.TableDelta) {
 	}
 }
 
-func diffSummary(ctx context.Context, from types.Map, to types.Map, colLen int) errhand.VerboseError {
+func diffSummary(ctx context.Context, from, to types.Map, fromSch, toSch schema.Schema, colLen int) errhand.VerboseError {
 	ae := atomicerr.New()
 	ch := make(chan diff.DiffSummaryProgress)
 	go func() {
 		defer close(ch)
-		err := diff.Summary(ctx, ch, from, to)
+		err := diff.Summary(ctx, ch, from, to, fromSch, toSch)
 
 		ae.SetIfError(err)
 	}()

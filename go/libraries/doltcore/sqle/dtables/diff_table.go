@@ -219,7 +219,7 @@ func tableData(ctx *sql.Context, tbl *doltdb.Table, ddb *doltdb.DoltDB) (types.M
 var _ sql.RowIter = (*diffRowItr)(nil)
 
 type diffRowItr struct {
-	ad             *diff.AsyncDiffer
+	df             diff.Differ
 	diffSrc        *diff.RowDiffSource
 	joiner         *rowconv.Joiner
 	sch            schema.Schema
@@ -234,14 +234,18 @@ type commitInfo struct {
 	dateTag uint64
 }
 
-func newDiffRowItr(ctx context.Context, joiner *rowconv.Joiner, rowDataFrom, rowDataTo types.Map, convFrom, convTo *rowconv.RowConverter, from, to commitInfo) *diffRowItr {
-	ad := diff.NewAsyncDiffer(1024)
-	ad.Start(ctx, rowDataFrom, rowDataTo)
+func newDiffRowItr(ctx context.Context, joiner *rowconv.Joiner, rowDataFrom, rowDataTo types.Map, convFrom, convTo *rowconv.RowConverter, from, to commitInfo) (*diffRowItr, error) {
+	df, err := diff.GetDiffer(1024, joiner.SourceSchemas()...)
+	if err != nil {
+		return nil, err
+	}
 
-	src := diff.NewRowDiffSource(ad, joiner)
+	df.Start(ctx, rowDataFrom, rowDataTo)
+
+	src := diff.NewRowDiffSource(df, joiner)
 	src.AddInputRowConversion(convFrom, convTo)
 
-	return &diffRowItr{ad, src, joiner, joiner.GetSchema(), from, to}
+	return &diffRowItr{df, src, joiner, joiner.GetSchema(), from, to}, nil
 }
 
 // Next returns the next row
@@ -303,7 +307,7 @@ func (itr *diffRowItr) Next() (sql.Row, error) {
 
 // Close closes the iterator
 func (itr *diffRowItr) Close() (err error) {
-	defer itr.ad.Close()
+	defer itr.df.Close()
 	defer func() {
 		closeErr := itr.diffSrc.Close()
 
@@ -379,7 +383,7 @@ func (dp diffPartition) getRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, ss *sch
 		toConv,
 		fromCmInfo,
 		toCmInfo,
-	), nil
+	)
 }
 
 type partitionSelectFunc func(*sql.Context, diffPartition) (bool, error)
