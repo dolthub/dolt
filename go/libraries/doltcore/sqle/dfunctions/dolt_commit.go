@@ -143,7 +143,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	ap := createArgParser()
 
 	// Get the args for DOLT_COMMIT.
-	args := make([]string, 1)
+	args := make([]string, 0)
 	for i := range d.children {
 		temp := d.children[i].String()
 		str := trimQuotes(temp)
