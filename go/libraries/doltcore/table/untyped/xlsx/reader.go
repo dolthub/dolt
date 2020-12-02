@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"io/ioutil"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -38,12 +39,20 @@ type XLSXReader struct {
 	rows   []row.Row
 }
 
-func OpenXLSXReaderFromBinary(nbf *types.NomsBinFormat, r io.ReadCloser, content []byte, info *XLSXFileInfo) (*XLSXReader, error) {
+func OpenXLSXReaderFromBinary(nbf *types.NomsBinFormat, r io.ReadCloser, info *XLSXFileInfo) (*XLSXReader, error) {
 	br := bufio.NewReaderSize(r, ReadBufSize)
 
-	colStrs, err := getColHeadersFromBinary(content, info.SheetName)
+	contents, err := ioutil.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
 
-	data, err := getXlsxRowsFromBinary(content, info.SheetName)
+	colStrs, err := getColHeadersFromBinary(contents, info.SheetName)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := getXlsxRowsFromBinary(contents, info.SheetName)
 	if err != nil {
 		return nil, err
 	}
