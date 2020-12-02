@@ -16,6 +16,8 @@ package xlsx
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
 	"reflect"
 	"testing"
 
@@ -63,10 +65,34 @@ func TestDecodeXLSXRows(t *testing.T) {
 
 func TestGetRows(t *testing.T) {
 	path := "test_files/employees.xlsx"
-	stateCols, _ := getXlsxRows(path, "states")
-	employeeCols, _ := getXlsxRows(path, "employees")
+	stateCols, _ := getXlsxRowsFromPath(path, "states")
+	employeeCols, _ := getXlsxRowsFromPath(path, "employees")
 
 	if stateCols != nil || employeeCols == nil {
 		t.Fatal("error")
 	}
+}
+
+func TestGetRowsFromBinary(t *testing.T) {
+	xlsxBinary := getBytesFromXlsx()
+	stateCols, _ := getXlsxRowsFromBinary(xlsxBinary, "states")
+	employeeCols, _ := getXlsxRowsFromBinary(xlsxBinary, "employees")
+
+	if stateCols != nil || employeeCols == nil {
+		t.Fatal("error")
+	}
+}
+
+func getBytesFromXlsx() []byte {
+	f, err := os.Open("test_files/employees.xlsx")
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	bs, err := ioutil.ReadAll(f)
+	if err != nil {
+		panic(err)
+	}
+	return bs
 }
