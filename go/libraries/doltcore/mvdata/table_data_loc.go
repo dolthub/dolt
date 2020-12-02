@@ -290,7 +290,7 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 
 func (te *tableEditorWriteCloser) gc(ctx context.Context) error {
 	//if !te.useGC {
-		return nil
+	return nil
 	//}
 	//
 	//w := te.dEnv.RepoState.WorkingHash()
