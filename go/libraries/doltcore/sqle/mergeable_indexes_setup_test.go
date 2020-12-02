@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -30,7 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func setupMergeableIndexes(t *testing.T) (*sqle.Engine, *testMergeableIndexDb, *indexTuple, *indexTuple) {
+func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *testMergeableIndexDb, *indexTuple, *indexTuple) {
 	dEnv := dtestutils.CreateTestEnv()
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
@@ -38,31 +39,21 @@ func setupMergeableIndexes(t *testing.T) (*sqle.Engine, *testMergeableIndexDb, *
 	engine, sqlCtx, err := NewTestEngine(context.Background(), db, root)
 	require.NoError(t, err)
 
-	_, iter, err := engine.Query(sqlCtx, `CREATE TABLE test (
+	_, iter, err := engine.Query(sqlCtx, fmt.Sprintf(`CREATE TABLE %s (
 		pk bigint PRIMARY KEY,
 		v1 bigint,
 		v2 bigint,
 		INDEX idxv1 (v1),
 		INDEX idxv2v1 (v2,v1)
-	)`)
+	)`, tableName))
 	require.NoError(t, err)
 	require.NoError(t, drainIter(iter))
 
-	_, iter, err = engine.Query(sqlCtx, `INSERT INTO test VALUES
-		(0, 10, 20),
-		(1, 11, 21),
-		(2, 12, 22),
-		(3, 13, 23),
-		(4, 14, 24),
-		(5, 15, 25),
-		(6, 16, 26),
-		(7, 17, 27),
-		(8, 18, 28),
-		(9, 19, 29);`)
+	_, iter, err = engine.Query(sqlCtx, insertQuery)
 	require.NoError(t, err)
 	require.NoError(t, drainIter(iter))
 
-	sqlTbl, ok, err := db.GetTableInsensitive(sqlCtx, "test")
+	sqlTbl, ok, err := db.GetTableInsensitive(sqlCtx, tableName)
 	require.NoError(t, err)
 	require.True(t, ok)
 	tbl, ok := sqlTbl.(*AlterableDoltTable)
@@ -299,6 +290,19 @@ func (it *indexTuple) tuple(vals ...int) types.Tuple {
 	for i, val := range vals {
 		valsWithTags[2*i] = types.Uint(it.cols[i].Tag)
 		valsWithTags[2*i+1] = types.Int(val)
+	}
+	tpl, err := types.NewTuple(it.nbf, valsWithTags...)
+	if err != nil {
+		panic(err)
+	}
+	return tpl
+}
+
+func (it *indexTuple) nilTuple() types.Tuple {
+	valsWithTags := make([]types.Value, len(it.cols)*2)
+	for i := 0; i < len(it.cols); i++ {
+		valsWithTags[2*i] = types.Uint(it.cols[i].Tag)
+		valsWithTags[2*i+1] = types.NullValue
 	}
 	tpl, err := types.NewTuple(it.nbf, valsWithTags...)
 	if err != nil {
