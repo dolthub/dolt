@@ -15,8 +15,9 @@
 package xlsx
 
 import (
-	"bytes"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"reflect"
 	"testing"
 
@@ -83,17 +84,15 @@ func TestGetRowsFromBinary(t *testing.T) {
 }
 
 func getBytesFromXlsx() []byte {
-	path := "test_files/employees.xlsx"
-
-	file, err := openFile(path)
+	f, err := os.Open("test_files/employees.xlsx")
 	if err != nil {
 		panic(err)
 	}
+	defer f.Close()
 
-	var b bytes.Buffer
-	if err := file.Write(&b); err != nil {
+	bs, err := ioutil.ReadAll(f)
+	if err != nil {
 		panic(err)
 	}
-
-	return b.Bytes()
+	return bs
 }
