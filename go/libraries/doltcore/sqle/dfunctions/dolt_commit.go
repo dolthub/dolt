@@ -15,9 +15,7 @@
 package dfunctions
 
 import (
-	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
@@ -56,52 +54,6 @@ func createArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(forceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
 	ap.SupportsString(authorParam, "", "author", "Specify an explicit author using the standard A U Thor <author@example.com> format.")
 	return ap
-}
-
-// we are more permissive than what is documented.
-var supportedLayouts = []string{
-	"2006/01/02",
-	"2006/01/02T15:04:05",
-	"2006/01/02T15:04:05Z07:00",
-
-	"2006.01.02",
-	"2006.01.02T15:04:05",
-	"2006.01.02T15:04:05Z07:00",
-
-	"2006-01-02",
-	"2006-01-02T15:04:05",
-	"2006-01-02T15:04:05Z07:00",
-}
-
-func parseDate(dateStr string) (time.Time, error) {
-	for _, layout := range supportedLayouts {
-		t, err := time.Parse(layout, dateStr)
-
-		if err == nil {
-			return t, nil
-		}
-	}
-
-	return time.Time{}, errors.New("error: '" + dateStr + "' is not in a supported format.")
-}
-
-func parseAuthor(authorStr string) (string, string, error) {
-	if len(authorStr) == 0 {
-		return "", "", errors.New("Option 'author' requires a value")
-	}
-
-	reg := regexp.MustCompile("(?m)([^)]+) \\<([^)]+)") // Regex matches Name <email
-	matches := reg.FindStringSubmatch(authorStr)        // This function places the original string at the beginning of matches
-
-	// If name and email are provided
-	if len(matches) != 3 {
-		return "", "", errors.New("Author not formatted correctly. Use 'Name <author@example.com>' format")
-	}
-
-	name := matches[1]
-	email := strings.ReplaceAll(matches[2], ">", "")
-
-	return name, email, nil
 }
 
 // Trims the double quotes for the param.
@@ -156,7 +108,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	var name, email string
 	var err error
 	if authorStr, ok := apr.GetValue(authorParam); ok {
-		name, email, err = parseAuthor(authorStr)
+		name, email, err = actions.ParseAuthor(authorStr)
 		if err != nil {
 			return nil, err
 		}
@@ -175,7 +127,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	t := time.Now()
 	if commitTimeStr, ok := apr.GetValue(dateParam); ok {
 		var err error
-		t, err = parseDate(commitTimeStr)
+		t, err = actions.ParseDate(commitTimeStr)
 
 		if err != nil {
 			return nil, fmt.Errorf(err.Error())

@@ -136,13 +136,13 @@ func (nd *DocDiffs) Len() int {
 }
 
 // GetDocDiffs retrieves staged and unstaged DocDiffs.
-func GetDocDiffs(ctx context.Context, ddb *doltdb.DoltDB, reader env.RepoStateReader) (*DocDiffs, *DocDiffs, error) {
-	docDetails, err := reader.GetAllValidDocDetails()
+func GetDocDiffs(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (*DocDiffs, *DocDiffs, error) {
+	docDetails, err := rsr.GetAllValidDocDetails()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	workingRoot, err := env.WorkingRoot(ctx, ddb, reader)
+	workingRoot, err := env.WorkingRoot(ctx, ddb, rsr)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -152,12 +152,12 @@ func GetDocDiffs(ctx context.Context, ddb *doltdb.DoltDB, reader env.RepoStateRe
 		return nil, nil, err
 	}
 
-	headRoot, err := env.HeadRoot(ctx, ddb, reader)
+	headRoot, err := env.HeadRoot(ctx, ddb, rsr)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	stagedRoot, err := env.StagedRoot(ctx, ddb, reader)
+	stagedRoot, err := env.StagedRoot(ctx, ddb, rsr)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -288,18 +288,18 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 	return deltas, nil
 }
 
-func GetStagedUnstagedTableDeltas(ctx context.Context, ddb *doltdb.DoltDB, reader env.RepoStateReader) (staged, unstaged []TableDelta, err error) {
-	headRoot, err := env.HeadRoot(ctx, ddb, reader)
+func GetStagedUnstagedTableDeltas(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (staged, unstaged []TableDelta, err error) {
+	headRoot, err := env.HeadRoot(ctx, ddb, rsr)
 	if err != nil {
 		return nil, nil, RootValueUnreadable{HeadRoot, err}
 	}
 
-	stagedRoot, err := env.StagedRoot(ctx, ddb, reader)
+	stagedRoot, err := env.StagedRoot(ctx, ddb, rsr)
 	if err != nil {
 		return nil, nil, RootValueUnreadable{StagedRoot, err}
 	}
 
-	workingRoot, err := env.WorkingRoot(ctx, ddb, reader)
+	workingRoot, err := env.WorkingRoot(ctx, ddb, rsr)
 	if err != nil {
 		return nil, nil, RootValueUnreadable{WorkingRoot, err}
 	}

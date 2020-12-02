@@ -17,7 +17,9 @@ package actions
 import (
 	"context"
 	"errors"
+	"regexp"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -38,6 +40,52 @@ type CommitStagedProps struct {
 	CheckForeignKeys bool
 	Name             string
 	Email            string
+}
+
+// we are more permissive than what is documented.
+var SupportedLayouts = []string{
+	"2006/01/02",
+	"2006/01/02T15:04:05",
+	"2006/01/02T15:04:05Z07:00",
+
+	"2006.01.02",
+	"2006.01.02T15:04:05",
+	"2006.01.02T15:04:05Z07:00",
+
+	"2006-01-02",
+	"2006-01-02T15:04:05",
+	"2006-01-02T15:04:05Z07:00",
+}
+
+func ParseDate(dateStr string) (time.Time, error) {
+	for _, layout := range SupportedLayouts {
+		t, err := time.Parse(layout, dateStr)
+
+		if err == nil {
+			return t, nil
+		}
+	}
+
+	return time.Time{}, errors.New("error: '" + dateStr + "' is not in a supported format.")
+}
+
+func ParseAuthor(authorStr string) (string, string, error) {
+	if len(authorStr) == 0 {
+		return "", "", errors.New("Option 'author' requires a value")
+	}
+
+	reg := regexp.MustCompile("(?m)([^)]+) \\<([^)]+)") // Regex matches Name <email
+	matches := reg.FindStringSubmatch(authorStr)        // This function places the original string at the beginning of matches
+
+	// If name and email are provided
+	if len(matches) != 3 {
+		return "", "", errors.New("Author not formatted correctly. Use 'Name <author@example.com>' format")
+	}
+
+	name := matches[1]
+	email := strings.ReplaceAll(matches[2], ">", "")
+
+	return name, email, nil
 }
 
 // GetNameAndEmail returns the name and email from the supplied config
@@ -61,12 +109,12 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 	return name, email, nil
 }
 
-func CommitStaged(ctx context.Context, ddb *doltdb.DoltDB, reader env.RepoStateReader, writer env.RepoStateWriter, props CommitStagedProps) error {
+func CommitStaged(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, rsw env.RepoStateWriter, props CommitStagedProps) error {
 	if props.Message == "" {
 		return ErrEmptyCommitMessage
 	}
 
-	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, ddb, reader)
+	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, ddb, rsr)
 	if err != nil {
 		return err
 	}
@@ -80,8 +128,8 @@ func CommitStaged(ctx context.Context, ddb *doltdb.DoltDB, reader env.RepoStateR
 		stagedTblNames = append(stagedTblNames, n)
 	}
 
-	if len(staged) == 0 && !reader.IsMergeActive() && !props.AllowEmpty {
-		_, notStagedDocs, err := diff.GetDocDiffs(ctx, ddb, reader)
+	if len(staged) == 0 && !rsr.IsMergeActive() && !props.AllowEmpty {
+		_, notStagedDocs, err := diff.GetDocDiffs(ctx, ddb, rsr)
 		if err != nil {
 			return err
 		}
@@ -89,8 +137,8 @@ func CommitStaged(ctx context.Context, ddb *doltdb.DoltDB, reader env.RepoStateR
 	}
 
 	var mergeCmSpec []*doltdb.CommitSpec
-	if reader.IsMergeActive() {
-		root, err := env.WorkingRoot(ctx, ddb, reader)
+	if rsr.IsMergeActive() {
+		root, err := env.WorkingRoot(ctx, ddb, rsr)
 		if err != nil {
 			return err
 		}
@@ -102,7 +150,7 @@ func CommitStaged(ctx context.Context, ddb *doltdb.DoltDB, reader env.RepoStateR
 			return NewTblInConflictError(inConflict)
 		}
 
-		spec, err := doltdb.NewCommitSpec(reader.GetMergeCommit())
+		spec, err := doltdb.NewCommitSpec(rsr.GetMergeCommit())
 
 		if err != nil {
 			panic("Corrupted repostate. Active merge state is not valid.")
@@ -111,7 +159,7 @@ func CommitStaged(ctx context.Context, ddb *doltdb.DoltDB, reader env.RepoStateR
 		mergeCmSpec = []*doltdb.CommitSpec{spec}
 	}
 
-	srt, err := env.StagedRoot(ctx, ddb, reader)
+	srt, err := env.StagedRoot(ctx, ddb, rsr)
 
 	if err != nil {
 		return err
@@ -130,13 +178,13 @@ func CommitStaged(ctx context.Context, ddb *doltdb.DoltDB, reader env.RepoStateR
 		}
 	}
 
-	h, err := writer.UpdateStagedRoot(ctx, srt)
+	h, err := rsw.UpdateStagedRoot(ctx, srt)
 
 	if err != nil {
 		return err
 	}
 
-	wrt, err := env.WorkingRoot(ctx, ddb, reader)
+	wrt, err := env.WorkingRoot(ctx, ddb, rsr)
 
 	if err != nil {
 		return err
@@ -148,7 +196,7 @@ func CommitStaged(ctx context.Context, ddb *doltdb.DoltDB, reader env.RepoStateR
 		return err
 	}
 
-	err = env.UpdateWorkingRoot(ctx, ddb, writer, wrt)
+	err = env.UpdateWorkingRoot(ctx, ddb, rsw, wrt)
 
 	if err != nil {
 		return err
@@ -162,10 +210,10 @@ func CommitStaged(ctx context.Context, ddb *doltdb.DoltDB, reader env.RepoStateR
 
 	// DoltDB resolves the current working branch head ref to provide a parent commit.
 	// Any commit specs in mergeCmSpec are also resolved and added.
-	_, err = ddb.CommitWithParentSpecs(ctx, h, reader.CWBHeadRef(), mergeCmSpec, meta)
+	_, err = ddb.CommitWithParentSpecs(ctx, h, rsr.CWBHeadRef(), mergeCmSpec, meta)
 
 	if err == nil {
-		err = writer.ClearMerge()
+		err = rsw.ClearMerge()
 	}
 
 	return err

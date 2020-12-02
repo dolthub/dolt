@@ -17,7 +17,6 @@ package env
 import (
 	"context"
 	"encoding/json"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -183,11 +182,6 @@ func (rs *RepoState) GetMergeCommit() string {
 	return rs.Merge.Commit
 }
 
-// TODO: This functionality is currently unsupported by the SQL session.
-func (rs *RepoState) GetAllValidDocDetails() ([]doltdb.DocDetails, error) {
-	return nil, nil
-}
-
 func HeadRoot(ctx context.Context, ddb *doltdb.DoltDB, reader RepoStateReader) (*doltdb.RootValue, error) {
 	commit, err := ddb.ResolveRef(ctx, reader.CWBHeadRef())
 
@@ -200,6 +194,10 @@ func HeadRoot(ctx context.Context, ddb *doltdb.DoltDB, reader RepoStateReader) (
 
 func StagedRoot(ctx context.Context, ddb *doltdb.DoltDB, reader RepoStateReader) (*doltdb.RootValue, error) {
 	return ddb.ReadRootValue(ctx, reader.StagedHash())
+}
+
+func UpdateStagedRoot(ctx context.Context,  ddb *doltdb.DoltDB, writer RepoStateWriter, newRoot *doltdb.RootValue) {
+
 }
 
 func WorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, reader RepoStateReader) (*doltdb.RootValue, error) {

@@ -11,7 +11,6 @@ CREATE TABLE test (
 
 INSERT INTO test VALUES (0),(1),(2);
 SQL
-    dolt add .
     dolt sql <<SQL
 DELETE FROM test WHERE pk = 0;
 INSERT INTO test VALUES (3);
@@ -31,6 +30,14 @@ teardown() {
     [[ "$output" =~ "Commit1" ]] || false
     regex='John Doe <john@doe.com>'
     [[ "$output" =~ "$regex" ]] || false
+
+     run dolt sql -q "SELECT * from dolt_log"
+     [ $status -eq 0 ]
+     [[ "$output" =~ "Commit1" ]] || false
+
+     run dolt sql -q "SELECT * from dolt_commits ORDER BY Date DESC;"
+     [ $status -eq 0 ]
+     [[ "$output" =~ "Commit1" ]] || false
 }
 
 @test "DOLT_COMMIT without a message throws error" {
@@ -65,4 +72,12 @@ teardown() {
     [[ "$output" =~ "Commit1" ]] || false
     regex='John Doe <john@doe.com>'
     [[ "$output" =~ "$regex" ]] || false
+
+     run dolt sql -q "SELECT * from dolt_log"
+     [ $status -eq 0 ]
+     [[ "$output" =~ "Commit1" ]] || false
+
+     run dolt sql -q "SELECT * from dolt_commits ORDER BY Date DESC;"
+     [ $status -eq 0 ]
+     [[ "$output" =~ "Commit1" ]] || false
 }

@@ -17,13 +17,9 @@ package commands
 import (
 	"bytes"
 	"context"
-	"errors"
-	"os"
-	"regexp"
-	"strings"
-	"time"
-
 	"github.com/fatih/color"
+	"os"
+	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -99,7 +95,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	// Check if the author flag is provided otherwise get the name and email stored in configs
 	if authorStr, ok := apr.GetValue(authorParam); ok {
-		name, email, err = parseAuthor(authorStr)
+		name, email, err = actions.ParseAuthor(authorStr)
 	} else {
 		name, email, err = actions.GetNameAndEmail(dEnv.Config)
 	}
@@ -116,7 +112,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	t := doltdb.CommitNowFunc()
 	if commitTimeStr, ok := apr.GetValue(dateParam); ok {
 		var err error
-		t, err = parseDate(commitTimeStr)
+		t, err = actions.ParseDate(commitTimeStr)
 
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.BuildDError("error: invalid date").AddCause(err).Build(), usage)
@@ -138,52 +134,6 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 
 	return handleCommitErr(ctx, dEnv, err, usage)
-}
-
-// we are more permissive than what is documented.
-var supportedLayouts = []string{
-	"2006/01/02",
-	"2006/01/02T15:04:05",
-	"2006/01/02T15:04:05Z07:00",
-
-	"2006.01.02",
-	"2006.01.02T15:04:05",
-	"2006.01.02T15:04:05Z07:00",
-
-	"2006-01-02",
-	"2006-01-02T15:04:05",
-	"2006-01-02T15:04:05Z07:00",
-}
-
-func parseDate(dateStr string) (time.Time, error) {
-	for _, layout := range supportedLayouts {
-		t, err := time.Parse(layout, dateStr)
-
-		if err == nil {
-			return t, nil
-		}
-	}
-
-	return time.Time{}, errors.New("error: '" + dateStr + "' is not in a supported format.")
-}
-
-func parseAuthor(authorStr string) (string, string, error) {
-	if len(authorStr) == 0 {
-		return "", "", errors.New("Option 'author' requires a value")
-	}
-
-	reg := regexp.MustCompile("(?m)([^)]+) \\<([^)]+)") // Regex matches Name <email
-	matches := reg.FindStringSubmatch(authorStr)        // This function places the original string at the beginning of matches
-
-	// If name and email are provided
-	if len(matches) != 3 {
-		return "", "", errors.New("Author not formatted correctly. Use 'Name <author@example.com>' format")
-	}
-
-	name := matches[1]
-	email := strings.ReplaceAll(matches[2], ">", "")
-
-	return name, email, nil
 }
 
 func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cli.UsagePrinter) int {
