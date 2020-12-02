@@ -80,6 +80,7 @@ func conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater,
 			vers:  upstream.vers,
 			root:  upstream.root,
 			lock:  generateLockHash(upstream.root, specs),
+			gcGen: upstream.gcGen,
 			specs: specs,
 		}
 
