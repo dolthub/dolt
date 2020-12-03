@@ -63,13 +63,13 @@ func (cmd CommitCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd CommitCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := actions.CreateCommitArgParser()
+	ap := cli.CreateCommitArgParser()
 	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, commitDocs, ap))
 }
 
 // Exec executes the command
 func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := actions.CreateCommitArgParser()
+	ap := cli.CreateCommitArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, commitDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
@@ -77,8 +77,8 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	var err error
 
 	// Check if the author flag is provided otherwise get the name and email stored in configs
-	if authorStr, ok := apr.GetValue(actions.AuthorParam); ok {
-		name, email, err = actions.ParseAuthor(authorStr)
+	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
+		name, email, err = cli.ParseAuthor(authorStr)
 	} else {
 		name, email, err = actions.GetNameAndEmail(dEnv.Config)
 	}
@@ -87,15 +87,15 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return handleCommitErr(ctx, dEnv, err, usage)
 	}
 
-	msg, msgOk := apr.GetValue(actions.CommitMessageArg)
+	msg, msgOk := apr.GetValue(cli.CommitMessageArg)
 	if !msgOk {
 		msg = getCommitMessageFromEditor(ctx, dEnv)
 	}
 
 	t := doltdb.CommitNowFunc()
-	if commitTimeStr, ok := apr.GetValue(actions.DateParam); ok {
+	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
 		var err error
-		t, err = actions.ParseDate(commitTimeStr)
+		t, err = cli.ParseDate(commitTimeStr)
 
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.BuildDError("error: invalid date").AddCause(err).Build(), usage)
@@ -105,8 +105,8 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	_, err = actions.CommitStaged(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
-		AllowEmpty:       apr.Contains(actions.AllowEmptyFlag),
-		CheckForeignKeys: !apr.Contains(actions.ForceFlag),
+		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
+		CheckForeignKeys: !apr.Contains(cli.ForceFlag),
 		Name:             name,
 		Email:            email,
 	})

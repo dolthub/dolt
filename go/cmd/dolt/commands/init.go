@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
@@ -75,7 +74,7 @@ func (cmd InitCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(usernameParamName, "", "name", fmt.Sprintf("The name used in commits to this repo. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config.", env.UserNameKey))
 	ap.SupportsString(emailParamName, "", "email", fmt.Sprintf("The email address used. If not provided will be taken from {{.EmphasisLeft}}%s{{.EmphasisRight}} in the global config.", env.UserEmailKey))
-	ap.SupportsString(actions.DateParam, "", "date", "Specify the date used in the initial commit. If not specified the current system time is used.")
+	ap.SupportsString(cli.DateParam, "", "date", "Specify the date used in the initial commit. If not specified the current system time is used.")
 
 	return ap
 }
@@ -113,9 +112,9 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	t := time.Now()
-	if commitTimeStr, ok := apr.GetValue(actions.DateParam); ok {
+	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
 		var err error
-		t, err = actions.ParseDate(commitTimeStr)
+		t, err = cli.ParseDate(commitTimeStr)
 
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.BuildDError("error: invalid date").AddCause(err).Build(), usage)

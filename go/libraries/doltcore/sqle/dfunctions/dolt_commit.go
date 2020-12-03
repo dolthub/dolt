@@ -30,24 +30,12 @@ type DoltCommitFunc struct {
 	children []sql.Expression
 }
 
-// NewDoltCommitFunc creates a new DoltCommitFunc expression.
+// NewDoltCommitFunc creates a new DoltCommitFunc expression whose children represents the args passed in DOLT_COMMIT.
 func NewDoltCommitFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &DoltCommitFunc{children: args}, nil
 }
 
-// Trims the double quotes for the param.
-func trimQuotes(param string) string {
-	if len(param) > 0 && param[0] == '"' {
-		param = param[1:]
-	}
-
-	if len(param) > 0 && param[len(param)-1] == '"' {
-		param = param[:len(param)-1]
-	}
-
-	return param
-}
-
+// Runs DOLT_COMMIT in the sql engine which models the behavior of `dolt commit`. Commits staged staged changes to head.
 func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	// Get the information for the sql context.
 	dbName := ctx.GetCurrentDatabase()
@@ -71,25 +59,24 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		return nil, fmt.Errorf("Could not load the %s RepoStateWriter", dbName)
 	}
 
-	ap := actions.CreateCommitArgParser()
+	ap := cli.CreateCommitArgParser()
 
 	// Get the args for DOLT_COMMIT.
-	args := make([]string, 0)
+	args := make([]string, len(d.children))
 	for i := range d.children {
-		temp, err := d.children[i].Eval(ctx, row)
+		childVal, err := d.children[i].Eval(ctx, row)
 
 		if err != nil {
 			return nil, err
 		}
 
-		text, err := sql.Text.Convert(temp)
+		text, err := sql.Text.Convert(childVal)
 
 		if err != nil {
 			return nil, err
 		}
 
-		str := trimQuotes(text.(string))
-		args = append(args, str)
+		args[i] = text.(string)
 	}
 
 	apr := cli.ParseArgs(ap, args, nil)
@@ -97,8 +84,8 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	// Parse the author flag. Return an error if not.
 	var name, email string
 	var err error
-	if authorStr, ok := apr.GetValue(actions.AuthorParam); ok {
-		name, email, err = actions.ParseAuthor(authorStr)
+	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
+		name, email, err = cli.ParseAuthor(authorStr)
 		if err != nil {
 			return nil, err
 		}
@@ -108,16 +95,16 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	}
 
 	// Get the commit message.
-	msg, msgOk := apr.GetValue(actions.CommitMessageArg)
+	msg, msgOk := apr.GetValue(cli.CommitMessageArg)
 	if !msgOk {
 		return nil, fmt.Errorf("Must provide commit message.")
 	}
 
 	// Specify the time if the date parameter is not.
 	t := ctx.QueryTime()
-	if commitTimeStr, ok := apr.GetValue(actions.DateParam); ok {
+	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
 		var err error
-		t, err = actions.ParseDate(commitTimeStr)
+		t, err = cli.ParseDate(commitTimeStr)
 
 		if err != nil {
 			return nil, fmt.Errorf(err.Error())
@@ -127,8 +114,8 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	h, err := actions.CommitStaged(ctx, ddb, rsr, rsw, actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
-		AllowEmpty:       apr.Contains(actions.AllowEmptyFlag),
-		CheckForeignKeys: !apr.Contains(actions.ForceFlag),
+		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
+		CheckForeignKeys: !apr.Contains(cli.ForceFlag),
 		Name:             name,
 		Email:            email,
 	})

@@ -1,4 +1,3 @@
-// Copyright 2019 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package commands
+package cli
 
 import (
 	"testing"
 	"time"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,7 +41,7 @@ func TestParseDate(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.dateStr, func(t *testing.T) {
-			result, err := actions.ParseDate(test.dateStr)
+			result, err := ParseDate(test.dateStr)
 
 			if test.expErr {
 				assert.Error(t, err)
@@ -74,7 +71,7 @@ func TestParseAuthor(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.authorStr, func(t *testing.T) {
-			author, email, err := actions.ParseAuthor(test.authorStr)
+			author, email, err := ParseAuthor(test.authorStr)
 
 			if test.expErr {
 				assert.Error(t, err)
