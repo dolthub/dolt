@@ -17,6 +17,7 @@ package actions
 import (
 	"context"
 	"errors"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"regexp"
 	"sort"
 	"strings"
@@ -57,6 +58,8 @@ var SupportedLayouts = []string{
 	"2006-01-02T15:04:05Z07:00",
 }
 
+
+// Parses a date string. Used by multiple commands.
 func ParseDate(dateStr string) (time.Time, error) {
 	for _, layout := range SupportedLayouts {
 		t, err := time.Parse(layout, dateStr)
@@ -69,6 +72,7 @@ func ParseDate(dateStr string) (time.Time, error) {
 	return time.Time{}, errors.New("error: '" + dateStr + "' is not in a supported format.")
 }
 
+// Parses the author flag for the commit method.
 func ParseAuthor(authorStr string) (string, string, error) {
 	if len(authorStr) == 0 {
 		return "", "", errors.New("Option 'author' requires a value")
@@ -86,6 +90,25 @@ func ParseAuthor(authorStr string) (string, string, error) {
 	email := strings.ReplaceAll(matches[2], ">", "")
 
 	return name, email, nil
+}
+
+const (
+	AllowEmptyFlag   = "allow-empty"
+	DateParam        = "date"
+	CommitMessageArg = "message"
+	AuthorParam      = "author"
+	ForceFlag		 = "force"
+)
+
+// Creates the argparser shared dolt commit cli and DOLT_COMMIT>
+func CreateCommitArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsString(CommitMessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
+	ap.SupportsFlag(AllowEmptyFlag, "", "Allow recording a commit that has the exact same data as its sole parent. This is usually a mistake, so it is disabled by default. This option bypasses that safety.")
+	ap.SupportsString(DateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
+	ap.SupportsFlag(ForceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
+	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor <author@example.com> format.")
+	return ap
 }
 
 // GetNameAndEmail returns the name and email from the supplied config
@@ -109,14 +132,14 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 	return name, email, nil
 }
 
-func CommitStaged(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, rsw env.RepoStateWriter, props CommitStagedProps) error {
+func CommitStaged(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, rsw env.RepoStateWriter, props CommitStagedProps) (string, error) {
 	if props.Message == "" {
-		return ErrEmptyCommitMessage
+		return "", ErrEmptyCommitMessage
 	}
 
 	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, ddb, rsr)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	var stagedTblNames []string
@@ -131,23 +154,23 @@ func CommitStaged(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateRead
 	if len(staged) == 0 && !rsr.IsMergeActive() && !props.AllowEmpty {
 		_, notStagedDocs, err := diff.GetDocDiffs(ctx, ddb, rsr)
 		if err != nil {
-			return err
+			return "", err
 		}
-		return NothingStaged{notStaged, notStagedDocs}
+		return "", NothingStaged{notStaged, notStagedDocs}
 	}
 
 	var mergeCmSpec []*doltdb.CommitSpec
 	if rsr.IsMergeActive() {
 		root, err := env.WorkingRoot(ctx, ddb, rsr)
 		if err != nil {
-			return err
+			return "", err
 		}
 		inConflict, err := root.TablesInConflict(ctx)
 		if err != nil {
-			return err
+			return "", err
 		}
 		if len(inConflict) > 0 {
-			return NewTblInConflictError(inConflict)
+			return "", NewTblInConflictError(inConflict)
 		}
 
 		spec, err := doltdb.NewCommitSpec(rsr.GetMergeCommit())
@@ -162,61 +185,63 @@ func CommitStaged(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateRead
 	srt, err := env.StagedRoot(ctx, ddb, rsr)
 
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	srt, err = srt.UpdateSuperSchemasFromOther(ctx, stagedTblNames, srt)
 
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if props.CheckForeignKeys {
 		srt, err = srt.ValidateForeignKeys(ctx)
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
 
 	h, err := rsw.UpdateStagedRoot(ctx, srt)
 
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	wrt, err := env.WorkingRoot(ctx, ddb, rsr)
 
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	wrt, err = wrt.UpdateSuperSchemasFromOther(ctx, stagedTblNames, srt)
 
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	err = env.UpdateWorkingRoot(ctx, ddb, rsw, wrt)
 
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	meta, noCommitMsgErr := doltdb.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
 
 	if noCommitMsgErr != nil {
-		return ErrEmptyCommitMessage
+		return "", ErrEmptyCommitMessage
 	}
 
 	// DoltDB resolves the current working branch head ref to provide a parent commit.
 	// Any commit specs in mergeCmSpec are also resolved and added.
-	_, err = ddb.CommitWithParentSpecs(ctx, h, rsr.CWBHeadRef(), mergeCmSpec, meta)
+	c, err := ddb.CommitWithParentSpecs(ctx, h, rsr.CWBHeadRef(), mergeCmSpec, meta)
 
 	if err == nil {
 		err = rsw.ClearMerge()
 	}
 
-	return err
+	h, err = c.HashOf()
+
+	return h.String(), err
 }
 
 // TimeSortedCommits returns a reverse-chronological (latest-first) list of the most recent `n` ancestors of `commit`.

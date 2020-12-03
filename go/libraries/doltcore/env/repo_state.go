@@ -196,10 +196,6 @@ func StagedRoot(ctx context.Context, ddb *doltdb.DoltDB, reader RepoStateReader)
 	return ddb.ReadRootValue(ctx, reader.StagedHash())
 }
 
-func UpdateStagedRoot(ctx context.Context,  ddb *doltdb.DoltDB, writer RepoStateWriter, newRoot *doltdb.RootValue) {
-
-}
-
 func WorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, reader RepoStateReader) (*doltdb.RootValue, error) {
 	return ddb.ReadRootValue(ctx, reader.WorkingHash())
 }

@@ -63,7 +63,7 @@ func (c CommitStaged) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	return actions.CommitStaged(context.Background(), dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), actions.CommitStagedProps{
+	_, err = actions.CommitStaged(context.Background(), dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), actions.CommitStagedProps{
 		Message:          c.Message,
 		Date:             time.Now(),
 		AllowEmpty:       false,
@@ -71,6 +71,8 @@ func (c CommitStaged) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		Name:             name,
 		Email:            email,
 	})
+
+	return err
 }
 
 type CommitAll struct {
@@ -91,7 +93,7 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	return actions.CommitStaged(context.Background(), dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), actions.CommitStagedProps{
+	_, err = actions.CommitStaged(context.Background(), dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), actions.CommitStagedProps{
 		Message:          c.Message,
 		Date:             time.Now(),
 		AllowEmpty:       false,
@@ -99,6 +101,8 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		Name:             name,
 		Email:            email,
 	})
+
+	return err
 }
 
 type ResetHard struct{}

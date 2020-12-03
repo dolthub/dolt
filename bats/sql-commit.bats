@@ -25,19 +25,22 @@ teardown() {
 @test "DOLT_COMMIT with a message and author" {
     run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1', '--author', 'John Doe <john@doe.com>')"
     [ $status -eq 0 ]
+    DCOMMIT=$output
+
     run dolt log
     [ $status -eq 0 ]
     [[ "$output" =~ "Commit1" ]] || false
     regex='John Doe <john@doe.com>'
     [[ "$output" =~ "$regex" ]] || false
 
-     run dolt sql -q "SELECT * from dolt_log"
-     [ $status -eq 0 ]
-     [[ "$output" =~ "Commit1" ]] || false
+    # Check that dolt_log has the same hash as the output of DOLT_COMMIT
+    run dolt sql -q "SELECT commit_hash from dolt_log LIMIT 1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "$DCOMMIT" ]] || false
 
-     run dolt sql -q "SELECT * from dolt_commits ORDER BY Date DESC;"
-     [ $status -eq 0 ]
-     [[ "$output" =~ "Commit1" ]] || false
+    run dolt sql -q "SELECT * from dolt_commits ORDER BY Date DESC;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Commit1" ]] || false
 }
 
 @test "DOLT_COMMIT without a message throws error" {
@@ -66,6 +69,7 @@ teardown() {
     dolt add .
     run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1', '--author', 'John Doe <john@doe.com>')"
     [ "$status" -eq 0 ]
+    DCOMMIT=$output
 
     run dolt log
     [ "$status" -eq 0 ]
@@ -73,11 +77,16 @@ teardown() {
     regex='John Doe <john@doe.com>'
     [[ "$output" =~ "$regex" ]] || false
 
-     run dolt sql -q "SELECT * from dolt_log"
-     [ $status -eq 0 ]
-     [[ "$output" =~ "Commit1" ]] || false
+    run dolt sql -q "SELECT * from dolt_log"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Commit1" ]] || false
 
-     run dolt sql -q "SELECT * from dolt_commits ORDER BY Date DESC;"
-     [ $status -eq 0 ]
-     [[ "$output" =~ "Commit1" ]] || false
+    # Check that dolt_log has the same hash as the output of DOLT_COMMIT
+    run dolt sql -q "SELECT commit_hash from dolt_log LIMIT 1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "$DCOMMIT" ]] || false
+
+    run dolt sql -q "SELECT * from dolt_commits ORDER BY Date DESC;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Commit1" ]] || false
 }

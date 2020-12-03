@@ -16,15 +16,10 @@ package dfunctions
 
 import (
 	"fmt"
-	"strings"
-	"time"
-
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 const DoltCommitFuncName = "dolt_commit"
@@ -36,24 +31,6 @@ type DoltCommitFunc struct {
 // NewDoltCommitFunc creates a new DoltCommitFunc expression.
 func NewDoltCommitFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &DoltCommitFunc{children: args}, nil
-}
-
-const (
-	allowEmptyFlag   = "allow-empty"
-	dateParam        = "date"
-	commitMessageArg = "message"
-	forceFlag        = "force"
-	authorParam      = "author"
-)
-
-func createArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.SupportsString(commitMessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
-	ap.SupportsFlag(allowEmptyFlag, "", "Allow recording a commit that has the exact same data as its sole parent. This is usually a mistake, so it is disabled by default. This option bypasses that safety.")
-	ap.SupportsString(dateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
-	ap.SupportsFlag(forceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
-	ap.SupportsString(authorParam, "", "author", "Specify an explicit author using the standard A U Thor <author@example.com> format.")
-	return ap
 }
 
 // Trims the double quotes for the param.
@@ -74,7 +51,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	dbName := ctx.GetCurrentDatabase()
 	dSess := sqle.DSessFromSess(ctx.Session)
 
-	doltdb, ok := dSess.GetDoltDB(dbName)
+	ddb, ok := dSess.GetDoltDB(dbName)
 
 	if !ok {
 		return nil, fmt.Errorf("Could not load %s", dbName)
@@ -92,13 +69,25 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		return nil, fmt.Errorf("Could not load the %s RepoStateWriter", dbName)
 	}
 
-	ap := createArgParser()
+	ap := actions.CreateCommitArgParser()
 
 	// Get the args for DOLT_COMMIT.
 	args := make([]string, 0)
 	for i := range d.children {
-		temp := d.children[i].String()
-		str := trimQuotes(temp)
+		eval, err := d.children[i].Eval(ctx, row)
+
+		if err != nil {
+			return "", err
+		}
+
+		eval, err = sql.Text.Convert(eval)
+
+		if eval != nil {
+			return "", nil
+		}
+
+		str := trimQuotes(string.(eval))
+
 		args = append(args, str)
 	}
 
@@ -107,7 +96,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	// Parse the author flag. Return an error if not.
 	var name, email string
 	var err error
-	if authorStr, ok := apr.GetValue(authorParam); ok {
+	if authorStr, ok := apr.GetValue(actions.AuthorParam); ok {
 		name, email, err = actions.ParseAuthor(authorStr)
 		if err != nil {
 			return nil, err
@@ -118,14 +107,14 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	}
 
 	// Get the commit message.
-	msg, msgOk := apr.GetValue(commitMessageArg)
+	msg, msgOk := apr.GetValue(actions.CommitMessageArg)
 	if !msgOk {
 		return nil, fmt.Errorf("Must provide commit message.")
 	}
 
 	// Specify the time if the date parameter is not.
-	t := time.Now()
-	if commitTimeStr, ok := apr.GetValue(dateParam); ok {
+	t := ctx.QueryTime()
+	if commitTimeStr, ok := apr.GetValue(actions.DateParam); ok {
 		var err error
 		t, err = actions.ParseDate(commitTimeStr)
 
@@ -134,16 +123,16 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		}
 	}
 
-	err = actions.CommitStaged(ctx, doltdb, rsr, rsw, actions.CommitStagedProps{
+	h, err := actions.CommitStaged(ctx, ddb, rsr, rsw, actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
-		AllowEmpty:       apr.Contains(allowEmptyFlag),
-		CheckForeignKeys: !apr.Contains(forceFlag),
+		AllowEmpty:       apr.Contains(actions.AllowEmptyFlag),
+		CheckForeignKeys: !apr.Contains(actions.ForceFlag),
 		Name:             name,
 		Email:            email,
 	})
 
-	return "Staged", err
+	return h, err
 }
 
 func (d DoltCommitFunc) String() string {
@@ -152,7 +141,7 @@ func (d DoltCommitFunc) String() string {
 	for _, child := range d.children {
 		childrenStrings = append(childrenStrings, child.String())
 	}
-	return fmt.Sprintf("DOLT_COMMIT(%s)", strings.Join(childrenStrings, " "))
+	return fmt.Sprintf("commit_hash")
 }
 
 func (d DoltCommitFunc) Type() sql.Type {
@@ -168,6 +157,11 @@ func (d DoltCommitFunc) WithChildren(children ...sql.Expression) (sql.Expression
 }
 
 func (d DoltCommitFunc) Resolved() bool {
+	for _, child := range d.Children() {
+		if !child.Resolved() {
+			return false
+		}
+	}
 	return true
 }
 

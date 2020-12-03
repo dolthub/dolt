@@ -15,6 +15,7 @@
 package commands
 
 import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"testing"
 	"time"
 
@@ -42,7 +43,7 @@ func TestParseDate(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.dateStr, func(t *testing.T) {
-			result, err := parseDate(test.dateStr)
+			result, err := actions.ParseDate(test.dateStr)
 
 			if test.expErr {
 				assert.Error(t, err)
@@ -72,7 +73,7 @@ func TestParseAuthor(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.authorStr, func(t *testing.T) {
-			author, email, err := parseAuthor(test.authorStr)
+			author, email, err := actions.ParseAuthor(test.authorStr)
 
 			if test.expErr {
 				assert.Error(t, err)

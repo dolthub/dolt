@@ -28,16 +28,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-)
-
-const (
-	allowEmptyFlag   = "allow-empty"
-	dateParam        = "date"
-	commitMessageArg = "message"
-	authorParam      = "author"
 )
 
 var commitDocs = cli.CommandDocumentationContent{
@@ -70,23 +62,13 @@ func (cmd CommitCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd CommitCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := actions.CreateCommitArgParser()
 	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, commitDocs, ap))
-}
-
-func (cmd CommitCmd) createArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.SupportsString(commitMessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
-	ap.SupportsFlag(allowEmptyFlag, "", "Allow recording a commit that has the exact same data as its sole parent. This is usually a mistake, so it is disabled by default. This option bypasses that safety.")
-	ap.SupportsString(dateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
-	ap.SupportsFlag(forceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
-	ap.SupportsString(authorParam, "", "author", "Specify an explicit author using the standard A U Thor <author@example.com> format.")
-	return ap
 }
 
 // Exec executes the command
 func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := actions.CreateCommitArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, commitDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
@@ -94,7 +76,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	var err error
 
 	// Check if the author flag is provided otherwise get the name and email stored in configs
-	if authorStr, ok := apr.GetValue(authorParam); ok {
+	if authorStr, ok := apr.GetValue(actions.AuthorParam); ok {
 		name, email, err = actions.ParseAuthor(authorStr)
 	} else {
 		name, email, err = actions.GetNameAndEmail(dEnv.Config)
@@ -104,13 +86,13 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return handleCommitErr(ctx, dEnv, err, usage)
 	}
 
-	msg, msgOk := apr.GetValue(commitMessageArg)
+	msg, msgOk := apr.GetValue(actions.CommitMessageArg)
 	if !msgOk {
 		msg = getCommitMessageFromEditor(ctx, dEnv)
 	}
 
 	t := doltdb.CommitNowFunc()
-	if commitTimeStr, ok := apr.GetValue(dateParam); ok {
+	if commitTimeStr, ok := apr.GetValue(actions.DateParam); ok {
 		var err error
 		t, err = actions.ParseDate(commitTimeStr)
 
@@ -119,11 +101,11 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		}
 	}
 
-	err = actions.CommitStaged(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), actions.CommitStagedProps{
+	_, err = actions.CommitStaged(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
-		AllowEmpty:       apr.Contains(allowEmptyFlag),
-		CheckForeignKeys: !apr.Contains(forceFlag),
+		AllowEmpty:       apr.Contains(actions.AllowEmptyFlag),
+		CheckForeignKeys: !apr.Contains(actions.ForceFlag),
 		Name:             name,
 		Email:            email,
 	})
