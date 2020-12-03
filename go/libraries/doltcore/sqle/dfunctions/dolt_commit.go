@@ -81,9 +81,16 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 
 	apr := cli.ParseArgs(ap, args, nil)
 
+	// Check if the -all param is provided. Stage all tables if so.
+	allFlag := apr.Contains(cli.AllFlag)
+
+	var err error
+	if allFlag {
+		err = actions.StageAllTables(ctx, ddb, rsr, rsw)
+	}
+
 	// Parse the author flag. Return an error if not.
 	var name, email string
-	var err error
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
 		name, email, err = cli.ParseAuthor(authorStr)
 		if err != nil {

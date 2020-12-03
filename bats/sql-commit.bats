@@ -15,7 +15,6 @@ SQL
 DELETE FROM test WHERE pk = 0;
 INSERT INTO test VALUES (3);
 SQL
-    dolt add .
 }
 
 teardown() {
@@ -23,7 +22,7 @@ teardown() {
 }
 
 @test "DOLT_COMMIT with a message and author" {
-    run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1', '--author', 'John Doe <john@doe.com>')"
+    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1', '--author', 'John Doe <john@doe.com>')"
     [ $status -eq 0 ]
     DCOMMIT=$output
 
@@ -44,7 +43,7 @@ teardown() {
 }
 
 @test "DOLT_COMMIT without a message throws error" {
-    run dolt sql -q "SELECT DOLT_COMMIT()"
+    run dolt sql -q "SELECT DOLT_COMMIT('-a')"
     [ $status -eq 1 ]
     run dolt log
     [ $status -eq 0 ]
@@ -53,7 +52,7 @@ teardown() {
 }
 
 @test "DOLT_COMMIT with just a message reads session parameters" {
-    run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
+    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
     [ $status -eq 0 ]
     run dolt log
     [ $status -eq 0 ]
@@ -67,7 +66,7 @@ teardown() {
     dolt config --global --unset user.email
 
     dolt add .
-    run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1', '--author', 'John Doe <john@doe.com>')"
+    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1', '--author', 'John Doe <john@doe.com>')"
     [ "$status" -eq 0 ]
     DCOMMIT=$output
 
