@@ -26,6 +26,8 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+var ErrTableNameMatchSheetName = errors.New("table name must match excel sheet name.")
+
 func UnmarshalFromXLSX(path string) ([][][]string, error) {
 	data, err := openFile(path)
 
@@ -43,6 +45,17 @@ func UnmarshalFromXLSX(path string) ([][][]string, error) {
 
 func openFile(path string) (*xlsx.File, error) {
 	data, err := xlsx.OpenFile(path)
+
+	if err != nil {
+		msg := strings.ReplaceAll(err.Error(), "zip", "xlsx")
+		return nil, fmt.Errorf(msg)
+	}
+
+	return data, nil
+}
+
+func openBinary(content []byte) (*xlsx.File, error) {
+	data, err := xlsx.OpenBinary(content)
 
 	if err != nil {
 		msg := strings.ReplaceAll(err.Error(), "zip", "xlsx")
@@ -92,13 +105,25 @@ func decodeXLSXRows(nbf *types.NomsBinFormat, xlData [][][]string, sch schema.Sc
 	return rows, nil
 }
 
-func getXlsxRows(path string, tblName string) ([][][]string, error) {
+func getXlsxRowsFromPath(path string, tblName string) ([][][]string, error) {
 	data, err := openFile(path)
-
 	if err != nil {
 		return nil, err
 	}
 
+	return getXlsxRows(data, tblName)
+}
+
+func getXlsxRowsFromBinary(content []byte, tblName string) ([][][]string, error) {
+	data, err := openBinary(content)
+	if err != nil {
+		return nil, err
+	}
+
+	return getXlsxRows(data, tblName)
+}
+
+func getXlsxRows(data *xlsx.File, tblName string) ([][][]string, error) {
 	var rows [][]string
 	var allRows [][][]string
 	for _, sheet := range data.Sheets {
@@ -116,5 +141,5 @@ func getXlsxRows(path string, tblName string) ([][][]string, error) {
 		}
 
 	}
-	return nil, errors.New("table name must match excel sheet name.")
+	return nil, ErrTableNameMatchSheetName
 }

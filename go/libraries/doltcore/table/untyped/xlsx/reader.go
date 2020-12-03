@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"io/ioutil"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -38,18 +39,20 @@ type XLSXReader struct {
 	rows   []row.Row
 }
 
-func OpenXLSXReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS, info *XLSXFileInfo) (*XLSXReader, error) {
-	r, err := fs.OpenForRead(path)
+func OpenXLSXReaderFromBinary(nbf *types.NomsBinFormat, r io.ReadCloser, info *XLSXFileInfo) (*XLSXReader, error) {
+	br := bufio.NewReaderSize(r, ReadBufSize)
 
+	contents, err := ioutil.ReadAll(r)
 	if err != nil {
 		return nil, err
 	}
 
-	br := bufio.NewReaderSize(r, ReadBufSize)
+	colStrs, err := getColHeadersFromBinary(contents, info.SheetName)
+	if err != nil {
+		return nil, err
+	}
 
-	colStrs, err := getColHeaders(path, info.SheetName)
-
-	data, err := getXlsxRows(path, info.SheetName)
+	data, err := getXlsxRowsFromBinary(contents, info.SheetName)
 	if err != nil {
 		return nil, err
 	}
@@ -65,8 +68,45 @@ func OpenXLSXReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS
 	return &XLSXReader{r, br, info, sch, 0, decodedRows}, nil
 }
 
-func getColHeaders(path string, sheetName string) ([]string, error) {
-	data, err := getXlsxRows(path, sheetName)
+func OpenXLSXReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS, info *XLSXFileInfo) (*XLSXReader, error) {
+	r, err := fs.OpenForRead(path)
+
+	if err != nil {
+		return nil, err
+	}
+
+	br := bufio.NewReaderSize(r, ReadBufSize)
+
+	colStrs, err := getColHeadersFromPath(path, info.SheetName)
+
+	data, err := getXlsxRowsFromPath(path, info.SheetName)
+	if err != nil {
+		return nil, err
+	}
+
+	_, sch := untyped.NewUntypedSchema(colStrs...)
+
+	decodedRows, err := decodeXLSXRows(nbf, data, sch)
+	if err != nil {
+		r.Close()
+		return nil, err
+	}
+
+	return &XLSXReader{r, br, info, sch, 0, decodedRows}, nil
+}
+
+func getColHeadersFromPath(path string, sheetName string) ([]string, error) {
+	data, err := getXlsxRowsFromPath(path, sheetName)
+	if err != nil {
+		return nil, err
+	}
+
+	colHeaders := data[0][0]
+	return colHeaders, nil
+}
+
+func getColHeadersFromBinary(content []byte, sheetName string) ([]string, error) {
+	data, err := getXlsxRowsFromBinary(content, sheetName)
 	if err != nil {
 		return nil, err
 	}
