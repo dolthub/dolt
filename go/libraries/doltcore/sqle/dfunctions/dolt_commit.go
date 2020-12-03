@@ -16,10 +16,12 @@ package dfunctions
 
 import (
 	"fmt"
+
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 const DoltCommitFuncName = "dolt_commit"
@@ -74,20 +76,19 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	// Get the args for DOLT_COMMIT.
 	args := make([]string, 0)
 	for i := range d.children {
-		eval, err := d.children[i].Eval(ctx, row)
+		temp, err := d.children[i].Eval(ctx, row)
 
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
-		eval, err = sql.Text.Convert(eval)
+		text, err := sql.Text.Convert(temp)
 
-		if eval != nil {
-			return "", nil
+		if err != nil {
+			return nil, err
 		}
 
-		str := trimQuotes(string.(eval))
-
+		str := trimQuotes(text.(string))
 		args = append(args, str)
 	}
 

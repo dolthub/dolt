@@ -17,11 +17,12 @@ package actions
 import (
 	"context"
 	"errors"
-	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -57,7 +58,6 @@ var SupportedLayouts = []string{
 	"2006-01-02T15:04:05",
 	"2006-01-02T15:04:05Z07:00",
 }
-
 
 // Parses a date string. Used by multiple commands.
 func ParseDate(dateStr string) (time.Time, error) {
@@ -97,7 +97,7 @@ const (
 	DateParam        = "date"
 	CommitMessageArg = "message"
 	AuthorParam      = "author"
-	ForceFlag		 = "force"
+	ForceFlag        = "force"
 )
 
 // Creates the argparser shared dolt commit cli and DOLT_COMMIT>
