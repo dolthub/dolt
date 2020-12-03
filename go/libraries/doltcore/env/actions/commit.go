@@ -91,7 +91,7 @@ func CommitStaged(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateRead
 
 	var mergeCmSpec []*doltdb.CommitSpec
 	if rsr.IsMergeActive() {
-		root, err := env.WorkingRoot(ctx, ddb, rsr)
+		root, err := rsr.WorkingRoot(ctx)
 		if err != nil {
 			return "", err
 		}
@@ -112,7 +112,7 @@ func CommitStaged(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateRead
 		mergeCmSpec = []*doltdb.CommitSpec{spec}
 	}
 
-	srt, err := env.StagedRoot(ctx, ddb, rsr)
+	srt, err := rsr.StagedRoot(ctx)
 
 	if err != nil {
 		return "", err
@@ -137,7 +137,7 @@ func CommitStaged(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateRead
 		return "", err
 	}
 
-	wrt, err := env.WorkingRoot(ctx, ddb, rsr)
+	wrt, err := rsr.WorkingRoot(ctx)
 
 	if err != nil {
 		return "", err
@@ -149,7 +149,7 @@ func CommitStaged(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateRead
 		return "", err
 	}
 
-	err = env.UpdateWorkingRoot(ctx, ddb, rsw, wrt)
+	err = rsw.UpdateWorkingRoot(ctx, wrt)
 
 	if err != nil {
 		return "", err

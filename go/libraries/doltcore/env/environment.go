@@ -399,6 +399,18 @@ func (r *repoStateReader) GetAllValidDocDetails() ([]doltdb.DocDetails, error) {
 	return r.dEnv.GetAllValidDocDetails()
 }
 
+func (r *repoStateReader) WorkingRoot(ctx context.Context) (*doltdb.RootValue, error) {
+	return r.dEnv.WorkingRoot(ctx)
+}
+
+func (r *repoStateReader) HeadRoot(ctx context.Context) (*doltdb.RootValue, error) {
+	return r.dEnv.HeadRoot(ctx)
+}
+
+func (r *repoStateReader) StagedRoot(ctx context.Context) (*doltdb.RootValue, error) {
+	return r.dEnv.StagedRoot(ctx)
+}
+
 func (dEnv *DoltEnv) RepoStateReader() RepoStateReader {
 	return &repoStateReader{dEnv}
 }
@@ -420,6 +432,10 @@ func (r *repoStateWriter) SetWorkingHash(ctx context.Context, h hash.Hash) error
 
 func (r *repoStateWriter) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) (hash.Hash, error) {
 	return r.dEnv.UpdateStagedRoot(ctx, newRoot)
+}
+
+func (r *repoStateWriter) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
+	return r.dEnv.UpdateWorkingRoot(ctx, newRoot)
 }
 
 func (r *repoStateWriter) ClearMerge() error {

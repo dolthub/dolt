@@ -32,15 +32,19 @@ type RepoStateReader interface {
 	IsMergeActive() bool
 	GetMergeCommit() string
 	GetAllValidDocDetails() ([]doltdb.DocDetails, error)
+	WorkingRoot(ctx context.Context) (*doltdb.RootValue, error)
+	HeadRoot(ctx context.Context) (*doltdb.RootValue, error)
+	StagedRoot(ctx context.Context) (*doltdb.RootValue, error)
 }
 
 type RepoStateWriter interface {
 	// SetCWBHeadRef(context.Context, ref.DoltRef) error
 	// SetCWBHeadSpec(context.Context, *doltdb.CommitSpec) error
+	//	SetStagedHash(context.Context, hash.Hash) error
 	SetWorkingHash(context.Context, hash.Hash) error
 	UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) (hash.Hash, error)
 	ClearMerge() error
-	//	SetStagedHash(context.Context, hash.Hash) error
+	UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error
 }
 
 type BranchConfig struct {
@@ -181,32 +185,4 @@ func (rs *RepoState) IsMergeActive() bool {
 
 func (rs *RepoState) GetMergeCommit() string {
 	return rs.Merge.Commit
-}
-
-func HeadRoot(ctx context.Context, ddb *doltdb.DoltDB, reader RepoStateReader) (*doltdb.RootValue, error) {
-	commit, err := ddb.ResolveRef(ctx, reader.CWBHeadRef())
-
-	if err != nil {
-		return nil, err
-	}
-
-	return commit.GetRootValue()
-}
-
-func StagedRoot(ctx context.Context, ddb *doltdb.DoltDB, reader RepoStateReader) (*doltdb.RootValue, error) {
-	return ddb.ReadRootValue(ctx, reader.StagedHash())
-}
-
-func WorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, reader RepoStateReader) (*doltdb.RootValue, error) {
-	return ddb.ReadRootValue(ctx, reader.WorkingHash())
-}
-
-func UpdateWorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, writer RepoStateWriter, newRoot *doltdb.RootValue) error {
-	h, err := ddb.WriteRootValue(ctx, newRoot)
-
-	if err != nil {
-		return doltdb.ErrNomsIO
-	}
-
-	return writer.SetWorkingHash(ctx, h)
 }
