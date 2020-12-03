@@ -118,7 +118,7 @@ func (d *DoltHarness) NewDatabase(name string) sql.Database {
 	require.NoError(d.t, err)
 
 	d.mrEnv.AddEnv(name, dEnv)
-	db := sqle.NewDatabase(name, dEnv.DoltDB, dEnv.RepoState, dEnv.RepoStateWriter())
+	db := sqle.NewDatabase(name, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter())
 	require.NoError(d.t, d.session.AddDB(enginetest.NewContext(d), db))
 	require.NoError(d.t, db.SetRoot(enginetest.NewContext(d).WithCurrentDB(db.Name()), root))
 	return db
