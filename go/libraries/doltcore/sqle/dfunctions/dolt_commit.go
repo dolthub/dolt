@@ -89,6 +89,10 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		err = actions.StageAllTables(ctx, ddb, rsr, rsw)
 	}
 
+	if err != nil {
+		return nil, fmt.Errorf(err.Error())
+	}
+
 	// Parse the author flag. Return an error if not.
 	var name, email string
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {

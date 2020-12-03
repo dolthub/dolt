@@ -26,6 +26,11 @@ teardown() {
     [ $status -eq 0 ]
     DCOMMIT=$output
 
+    # Check that everything was added
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+
     run dolt log
     [ $status -eq 0 ]
     [[ "$output" =~ "Commit1" ]] || false
@@ -65,10 +70,14 @@ teardown() {
     dolt config --global --unset user.name
     dolt config --global --unset user.email
 
-    dolt add .
     run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1', '--author', 'John Doe <john@doe.com>')"
     [ "$status" -eq 0 ]
     DCOMMIT=$output
+
+    # Check that everything was added
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
 
     run dolt log
     [ "$status" -eq 0 ]
