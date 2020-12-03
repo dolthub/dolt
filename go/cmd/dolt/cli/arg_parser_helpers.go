@@ -77,7 +77,7 @@ const (
 	CommitMessageArg = "message"
 	AuthorParam      = "author"
 	ForceFlag        = "force"
-	AllFlag		     = "all"
+	AllFlag          = "all"
 )
 
 // Creates the argparser shared dolt commit cli and DOLT_COMMIT.

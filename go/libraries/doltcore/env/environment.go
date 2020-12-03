@@ -419,7 +419,7 @@ type repoStateWriter struct {
 	dEnv *DoltEnv
 }
 
-func  (r *repoStateWriter) SetStagedHash(ctx context.Context, h hash.Hash) error {
+func (r *repoStateWriter) SetStagedHash(ctx context.Context, h hash.Hash) error {
 	r.dEnv.RepoState.Staged = h.String()
 	err := r.dEnv.RepoState.Save(r.dEnv.FS)
 
