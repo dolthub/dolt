@@ -77,6 +77,7 @@ const (
 	CommitMessageArg = "message"
 	AuthorParam      = "author"
 	ForceFlag        = "force"
+	AllFlag		     = "all"
 )
 
 // Creates the argparser shared dolt commit cli and DOLT_COMMIT.
@@ -87,5 +88,6 @@ func CreateCommitArgParser() *argparser.ArgParser {
 	ap.SupportsString(DateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
 	ap.SupportsFlag(ForceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
 	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor <author@example.com> format.")
+	ap.SupportsString(AllFlag, "a", "all", "Adds all edited files in working to staged.")
 	return ap
 }
