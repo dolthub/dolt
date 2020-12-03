@@ -1362,6 +1362,20 @@ func TestMergeableIndexesNulls(t *testing.T) {
 			[]int64{},
 		},
 		{
+			"v1 IS NULL OR v1 IS NOT NULL",
+			[]lookup.Range{
+				lookup.AllRange(),
+			},
+			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+		},
+		{
+			"v1 IS NULL AND v1 IS NOT NULL",
+			[]lookup.Range{
+				lookup.EmptyRange(),
+			},
+			[]int64{},
+		},
+		{
 			"v1 IS NOT NULL",
 			[]lookup.Range{
 				lookup.LessThanRange(idxv1.nilTuple()),
