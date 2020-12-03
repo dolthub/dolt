@@ -249,7 +249,7 @@ func nullSafeRowEquality(left, right sql.Row, sch sql.Schema) (bool, error) {
 }
 
 func makeSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue) (*sql.Context, *sqle.Engine, error) {
-	doltSqlDB := dsqle.NewDatabase("db", dEnv.DoltDB, dEnv.RepoState, dEnv.RepoStateWriter())
+	doltSqlDB := dsqle.NewDatabase("db", dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter())
 
 	sqlCtx := sql.NewContext(ctx,
 		sql.WithSession(dsqle.DefaultDoltSession()),

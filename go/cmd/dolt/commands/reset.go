@@ -273,7 +273,7 @@ func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootV
 		return
 	}
 
-	notStagedDocs, err := diff.NewDocDiffs(ctx, dEnv, working, nil, nil)
+	notStagedDocs, err := diff.NewDocDiffs(ctx, working, nil, nil)
 	if err != nil {
 		return
 	}

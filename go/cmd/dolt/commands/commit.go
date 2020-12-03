@@ -17,11 +17,8 @@ package commands
 import (
 	"bytes"
 	"context"
-	"errors"
 	"os"
-	"regexp"
 	"strings"
-	"time"
 
 	"github.com/fatih/color"
 
@@ -32,16 +29,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-)
-
-const (
-	allowEmptyFlag   = "allow-empty"
-	dateParam        = "date"
-	commitMessageArg = "message"
-	authorParam      = "author"
 )
 
 var commitDocs = cli.CommandDocumentationContent{
@@ -74,23 +63,13 @@ func (cmd CommitCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd CommitCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cli.CreateCommitArgParser()
 	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, commitDocs, ap))
-}
-
-func (cmd CommitCmd) createArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.SupportsString(commitMessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
-	ap.SupportsFlag(allowEmptyFlag, "", "Allow recording a commit that has the exact same data as its sole parent. This is usually a mistake, so it is disabled by default. This option bypasses that safety.")
-	ap.SupportsString(dateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
-	ap.SupportsFlag(forceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
-	ap.SupportsString(authorParam, "", "author", "Specify an explicit author using the standard A U Thor <author@example.com> format.")
-	return ap
 }
 
 // Exec executes the command
 func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cli.CreateCommitArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, commitDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
@@ -98,8 +77,8 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	var err error
 
 	// Check if the author flag is provided otherwise get the name and email stored in configs
-	if authorStr, ok := apr.GetValue(authorParam); ok {
-		name, email, err = parseAuthor(authorStr)
+	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
+		name, email, err = cli.ParseAuthor(authorStr)
 	} else {
 		name, email, err = actions.GetNameAndEmail(dEnv.Config)
 	}
@@ -108,26 +87,26 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return handleCommitErr(ctx, dEnv, err, usage)
 	}
 
-	msg, msgOk := apr.GetValue(commitMessageArg)
+	msg, msgOk := apr.GetValue(cli.CommitMessageArg)
 	if !msgOk {
 		msg = getCommitMessageFromEditor(ctx, dEnv)
 	}
 
 	t := doltdb.CommitNowFunc()
-	if commitTimeStr, ok := apr.GetValue(dateParam); ok {
+	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
 		var err error
-		t, err = parseDate(commitTimeStr)
+		t, err = cli.ParseDate(commitTimeStr)
 
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.BuildDError("error: invalid date").AddCause(err).Build(), usage)
 		}
 	}
 
-	err = actions.CommitStaged(ctx, dEnv, actions.CommitStagedProps{
+	_, err = actions.CommitStaged(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
-		AllowEmpty:       apr.Contains(allowEmptyFlag),
-		CheckForeignKeys: !apr.Contains(forceFlag),
+		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
+		CheckForeignKeys: !apr.Contains(cli.ForceFlag),
 		Name:             name,
 		Email:            email,
 	})
@@ -138,52 +117,6 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 
 	return handleCommitErr(ctx, dEnv, err, usage)
-}
-
-// we are more permissive than what is documented.
-var supportedLayouts = []string{
-	"2006/01/02",
-	"2006/01/02T15:04:05",
-	"2006/01/02T15:04:05Z07:00",
-
-	"2006.01.02",
-	"2006.01.02T15:04:05",
-	"2006.01.02T15:04:05Z07:00",
-
-	"2006-01-02",
-	"2006-01-02T15:04:05",
-	"2006-01-02T15:04:05Z07:00",
-}
-
-func parseDate(dateStr string) (time.Time, error) {
-	for _, layout := range supportedLayouts {
-		t, err := time.Parse(layout, dateStr)
-
-		if err == nil {
-			return t, nil
-		}
-	}
-
-	return time.Time{}, errors.New("error: '" + dateStr + "' is not in a supported format.")
-}
-
-func parseAuthor(authorStr string) (string, string, error) {
-	if len(authorStr) == 0 {
-		return "", "", errors.New("Option 'author' requires a value")
-	}
-
-	reg := regexp.MustCompile("(?m)([^)]+) \\<([^)]+)") // Regex matches Name <email
-	matches := reg.FindStringSubmatch(authorStr)        // This function places the original string at the beginning of matches
-
-	// If name and email are provided
-	if len(matches) != 3 {
-		return "", "", errors.New("Author not formatted correctly. Use 'Name <author@example.com>' format")
-	}
-
-	name := matches[1]
-	email := strings.ReplaceAll(matches[2], ">", "")
-
-	return name, email, nil
 }
 
 func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cli.UsagePrinter) int {
@@ -254,14 +187,14 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
 	color.NoColor = true
 
 	currBranch := dEnv.RepoState.CWBHeadRef()
-	stagedTblDiffs, notStagedTblDiffs, _ := diff.GetStagedUnstagedTableDeltas(ctx, dEnv)
+	stagedTblDiffs, notStagedTblDiffs, _ := diff.GetStagedUnstagedTableDeltas(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
 
 	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, dEnv)
 	if err != nil {
 		workingTblsInConflict = []string{}
 	}
 
-	stagedDocDiffs, notStagedDocDiffs, _ := diff.GetDocDiffs(ctx, dEnv)
+	stagedDocDiffs, notStagedDocDiffs, _ := diff.GetDocDiffs(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
 
 	buf := bytes.NewBuffer([]byte{})
 	n := printStagedDiffs(buf, stagedTblDiffs, stagedDocDiffs, true)

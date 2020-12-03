@@ -61,14 +61,15 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 	return name, email, nil
 }
 
-func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProps) error {
+// CommitStaged adds a new commit to HEAD with the given props. Returns the new commit's hash as a string and an error.
+func CommitStaged(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, rsw env.RepoStateWriter, props CommitStagedProps) (string, error) {
 	if props.Message == "" {
-		return ErrEmptyCommitMessage
+		return "", ErrEmptyCommitMessage
 	}
 
-	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, dEnv)
+	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, ddb, rsr)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	var stagedTblNames []string
@@ -80,29 +81,29 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProp
 		stagedTblNames = append(stagedTblNames, n)
 	}
 
-	if len(staged) == 0 && !dEnv.IsMergeActive() && !props.AllowEmpty {
-		_, notStagedDocs, err := diff.GetDocDiffs(ctx, dEnv)
+	if len(staged) == 0 && !rsr.IsMergeActive() && !props.AllowEmpty {
+		_, notStagedDocs, err := diff.GetDocDiffs(ctx, ddb, rsr)
 		if err != nil {
-			return err
+			return "", err
 		}
-		return NothingStaged{notStaged, notStagedDocs}
+		return "", NothingStaged{notStaged, notStagedDocs}
 	}
 
 	var mergeCmSpec []*doltdb.CommitSpec
-	if dEnv.IsMergeActive() {
-		root, err := dEnv.WorkingRoot(ctx)
+	if rsr.IsMergeActive() {
+		root, err := env.WorkingRoot(ctx, ddb, rsr)
 		if err != nil {
-			return err
+			return "", err
 		}
 		inConflict, err := root.TablesInConflict(ctx)
 		if err != nil {
-			return err
+			return "", err
 		}
 		if len(inConflict) > 0 {
-			return NewTblInConflictError(inConflict)
+			return "", NewTblInConflictError(inConflict)
 		}
 
-		spec, err := doltdb.NewCommitSpec(dEnv.RepoState.Merge.Commit)
+		spec, err := doltdb.NewCommitSpec(rsr.GetMergeCommit())
 
 		if err != nil {
 			panic("Corrupted repostate. Active merge state is not valid.")
@@ -111,63 +112,66 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, props CommitStagedProp
 		mergeCmSpec = []*doltdb.CommitSpec{spec}
 	}
 
-	srt, err := dEnv.StagedRoot(ctx)
+	srt, err := env.StagedRoot(ctx, ddb, rsr)
 
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	srt, err = srt.UpdateSuperSchemasFromOther(ctx, stagedTblNames, srt)
 
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if props.CheckForeignKeys {
 		srt, err = srt.ValidateForeignKeys(ctx)
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
 
-	h, err := dEnv.UpdateStagedRoot(ctx, srt)
+	h, err := rsw.UpdateStagedRoot(ctx, srt)
 
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	wrt, err := dEnv.WorkingRoot(ctx)
+	wrt, err := env.WorkingRoot(ctx, ddb, rsr)
 
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	wrt, err = wrt.UpdateSuperSchemasFromOther(ctx, stagedTblNames, srt)
 
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	err = dEnv.UpdateWorkingRoot(ctx, wrt)
+	err = env.UpdateWorkingRoot(ctx, ddb, rsw, wrt)
 
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	meta, noCommitMsgErr := doltdb.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
+
 	if noCommitMsgErr != nil {
-		return ErrEmptyCommitMessage
+		return "", ErrEmptyCommitMessage
 	}
 
 	// DoltDB resolves the current working branch head ref to provide a parent commit.
 	// Any commit specs in mergeCmSpec are also resolved and added.
-	_, err = dEnv.DoltDB.CommitWithParentSpecs(ctx, h, dEnv.RepoState.CWBHeadRef(), mergeCmSpec, meta)
+	c, err := ddb.CommitWithParentSpecs(ctx, h, rsr.CWBHeadRef(), mergeCmSpec, meta)
 
 	if err == nil {
-		dEnv.RepoState.ClearMerge(dEnv.FS)
+		err = rsw.ClearMerge()
 	}
 
-	return err
+	h, err = c.HashOf()
+
+	return h.String(), err
 }
 
 // TimeSortedCommits returns a reverse-chronological (latest-first) list of the most recent `n` ancestors of `commit`.

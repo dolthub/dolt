@@ -35,7 +35,7 @@ func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.E
 	dEnv := dtestutils.CreateTestEnv()
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
-	db := NewDatabase("dolt", dEnv.DoltDB, dEnv.RepoState, dEnv.RepoStateWriter())
+	db := NewDatabase("dolt", dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter())
 	engine, sqlCtx, err := NewTestEngine(context.Background(), db, root)
 	require.NoError(t, err)
 

@@ -973,7 +973,7 @@ func testDoltIndex(t *testing.T, keys []interface{}, expectedRows []sql.Row, ind
 func doltIndexSetup(t *testing.T) map[string]DoltIndex {
 	ctx := NewTestSQLCtx(context.Background())
 	dEnv := dtestutils.CreateTestEnv()
-	db := NewDatabase("dolt", dEnv.DoltDB, dEnv.RepoState, dEnv.RepoStateWriter())
+	db := NewDatabase("dolt", dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter())
 	root, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		panic(err)

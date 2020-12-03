@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2020 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package commands
+package cli
 
 import (
 	"testing"
@@ -42,7 +42,7 @@ func TestParseDate(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.dateStr, func(t *testing.T) {
-			result, err := parseDate(test.dateStr)
+			result, err := ParseDate(test.dateStr)
 
 			if test.expErr {
 				assert.Error(t, err)
@@ -72,7 +72,7 @@ func TestParseAuthor(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.authorStr, func(t *testing.T) {
-			author, email, err := parseAuthor(test.authorStr)
+			author, email, err := ParseAuthor(test.authorStr)
 
 			if test.expErr {
 				assert.Error(t, err)

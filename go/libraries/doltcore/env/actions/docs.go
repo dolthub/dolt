@@ -59,7 +59,7 @@ func SaveDocsFromRoot(ctx context.Context, root *doltdb.RootValue, dEnv *env.Dol
 
 // SaveTrackedDocs writes the docs from the targetRoot to the filesystem. The working root is used to identify untracked docs, which are left unchanged.
 func SaveTrackedDocs(ctx context.Context, dEnv *env.DoltEnv, workRoot, targetRoot *doltdb.RootValue, localDocs env.Docs) error {
-	docDiffs, err := diff.NewDocDiffs(ctx, dEnv, workRoot, nil, localDocs)
+	docDiffs, err := diff.NewDocDiffs(ctx, workRoot, nil, localDocs)
 	if err != nil {
 		return err
 	}
@@ -143,7 +143,7 @@ func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, dEnv *env.DoltEnv, 
 
 // GetUnstagedDocs retrieves the unstaged docs (docs from the filesystem).
 func GetUnstagedDocs(ctx context.Context, dEnv *env.DoltEnv) (env.Docs, error) {
-	_, unstagedDocDiffs, err := diff.GetDocDiffs(ctx, dEnv)
+	_, unstagedDocDiffs, err := diff.GetDocDiffs(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
 	if err != nil {
 		return nil, err
 	}

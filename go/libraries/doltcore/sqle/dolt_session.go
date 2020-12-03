@@ -33,6 +33,7 @@ type dbRoot struct {
 type dbData struct {
 	ddb *doltdb.DoltDB
 	rsw env.RepoStateWriter
+	rsr env.RepoStateReader
 }
 
 var _ sql.Session = &DoltSession{}
@@ -67,7 +68,7 @@ func NewDoltSession(ctx context.Context, sqlSess sql.Session, username, email st
 	dbDatas := make(map[string]dbData)
 	dbEditors := make(map[string]*doltdb.TableEditSession)
 	for _, db := range dbs {
-		dbDatas[db.Name()] = dbData{rsw: db.rsw, ddb: db.ddb}
+		dbDatas[db.Name()] = dbData{rsw: db.rsw, ddb: db.ddb, rsr: db.rsr}
 		dbEditors[db.Name()] = doltdb.CreateTableEditSession(nil, doltdb.TableEditSessionProps{})
 	}
 
@@ -119,6 +120,26 @@ func (sess *DoltSession) GetDoltDB(dbName string) (*doltdb.DoltDB, bool) {
 	}
 
 	return d.ddb, true
+}
+
+func (sess *DoltSession) GetDoltDBRepoStateWriter(dbName string) (env.RepoStateWriter, bool) {
+	d, ok := sess.dbDatas[dbName]
+
+	if !ok {
+		return nil, false
+	}
+
+	return d.rsw, true
+}
+
+func (sess *DoltSession) GetDoltDBRepoStateReader(dbName string) (env.RepoStateReader, bool) {
+	d, ok := sess.dbDatas[dbName]
+
+	if !ok {
+		return nil, false
+	}
+
+	return d.rsr, true
 }
 
 // GetRoot returns the current *RootValue for a given database associated with the session
@@ -252,7 +273,7 @@ func (sess *DoltSession) AddDB(ctx context.Context, db Database) error {
 	rsw := db.GetStateWriter()
 	ddb := db.GetDoltDB()
 
-	sess.dbDatas[db.Name()] = dbData{rsw: rsw, ddb: ddb}
+	sess.dbDatas[db.Name()] = dbData{rsr: rsr, rsw: rsw, ddb: ddb}
 
 	sess.dbEditors[db.Name()] = doltdb.CreateTableEditSession(nil, doltdb.TableEditSessionProps{})
 

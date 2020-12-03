@@ -32,7 +32,7 @@ import (
 func TestSchemaTableRecreation(t *testing.T) {
 	ctx := NewTestSQLCtx(context.Background())
 	dEnv := dtestutils.CreateTestEnv()
-	db := NewDatabase("dolt", dEnv.DoltDB, dEnv.RepoState, dEnv.RepoStateWriter())
+	db := NewDatabase("dolt", dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter())
 	err := DSessFromSess(ctx.Session).AddDB(ctx, db)
 	require.NoError(t, err)
 	ctx.SetCurrentDatabase(db.Name())
