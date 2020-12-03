@@ -40,11 +40,13 @@ type RepoStateReader interface {
 type RepoStateWriter interface {
 	// SetCWBHeadRef(context.Context, ref.DoltRef) error
 	// SetCWBHeadSpec(context.Context, *doltdb.CommitSpec) error
-	//	SetStagedHash(context.Context, hash.Hash) error
+	SetStagedHash(context.Context, hash.Hash) error
 	SetWorkingHash(context.Context, hash.Hash) error
 	UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) (hash.Hash, error)
 	ClearMerge() error
 	UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error
+	PutDocsToWorking(ctx context.Context, docDetails []doltdb.DocDetails) error
+	ResetWorkingDocsToStagedDos(ctx context.Context) error
 }
 
 type BranchConfig struct {

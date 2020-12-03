@@ -89,7 +89,7 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	if apr.NArg() == 0 && !allFlag {
 		cli.Println("Nothing specified, nothing added.\n Maybe you wanted to say 'dolt add .'?")
 	} else if allFlag || apr.NArg() == 1 && apr.Arg(0) == "." {
-		err = actions.StageAllTables(ctx, dEnv)
+		err = actions.StageAllTables(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter())
 	} else {
 		err = actions.StageTables(ctx, dEnv, apr.Args())
 	}

@@ -43,7 +43,7 @@ func StageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string) error {
 		return err
 	}
 
-	err = stageTables(ctx, dEnv, tables, staged, working)
+	err = stageTables(ctx, dEnv.DoltDB, dEnv.RepoStateWriter(), tables, staged, working)
 	if err != nil {
 		dEnv.ResetWorkingDocsToStagedDocs(ctx)
 		return err
@@ -67,13 +67,20 @@ func GetTblsAndDocDetails(dEnv *env.DoltEnv, tbls []string) (tables []string, do
 	return tbls, docDetails, nil
 }
 
-func StageAllTables(ctx context.Context, dEnv *env.DoltEnv) error {
-	err := dEnv.PutDocsToWorking(ctx, nil)
+func StageAllTables(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, rsw env.RepoStateWriter) error {
+	err := rsw.PutDocsToWorking(ctx, nil)
+
 	if err != nil {
 		return err
 	}
 
-	staged, working, err := getStagedAndWorking(ctx, dEnv)
+	staged, err := rsr.StagedRoot(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	working, err := rsr.WorkingRoot(ctx)
 
 	if err != nil {
 		return err
@@ -85,15 +92,16 @@ func StageAllTables(ctx context.Context, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	err = stageTables(ctx, dEnv, tbls, staged, working)
+	err = stageTables(ctx, ddb, rsw, tbls, staged, working)
 	if err != nil {
-		dEnv.ResetWorkingDocsToStagedDocs(ctx)
+		rsw.ResetWorkingDocsToStagedDos(ctx)
 		return err
 	}
+
 	return nil
 }
 
-func stageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, staged *doltdb.RootValue, working *doltdb.RootValue) error {
+func stageTables(ctx context.Context, db *doltdb.DoltDB, rsw env.RepoStateWriter, tbls []string, staged *doltdb.RootValue, working *doltdb.RootValue) error {
 	err := ValidateTables(ctx, tbls, staged, working)
 	if err != nil {
 		return err
@@ -109,12 +117,11 @@ func stageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, staged *
 		return err
 	}
 
-	if wh, err := dEnv.DoltDB.WriteRootValue(ctx, working); err == nil {
-		if sh, err := dEnv.DoltDB.WriteRootValue(ctx, staged); err == nil {
-			dEnv.RepoState.Staged = sh.String()
-			dEnv.RepoState.Working = wh.String()
+	if err := rsw.UpdateWorkingRoot(ctx, working); err == nil {
+		if sh, err := db.WriteRootValue(ctx, staged); err == nil {
+			err = rsw.SetStagedHash(ctx, sh)
 
-			if err = dEnv.RepoState.Save(dEnv.FS); err != nil {
+			if err != nil {
 				return env.ErrStateUpdate
 			}
 

@@ -419,6 +419,17 @@ type repoStateWriter struct {
 	dEnv *DoltEnv
 }
 
+func  (r *repoStateWriter) SetStagedHash(ctx context.Context, h hash.Hash) error {
+	r.dEnv.RepoState.Staged = h.String()
+	err := r.dEnv.RepoState.Save(r.dEnv.FS)
+
+	if err != nil {
+		return ErrStateUpdate
+	}
+
+	return nil
+}
+
 func (r *repoStateWriter) SetWorkingHash(ctx context.Context, h hash.Hash) error {
 	r.dEnv.RepoState.Working = h.String()
 	err := r.dEnv.RepoState.Save(r.dEnv.FS)
@@ -440,6 +451,14 @@ func (r *repoStateWriter) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb
 
 func (r *repoStateWriter) ClearMerge() error {
 	return r.dEnv.RepoState.ClearMerge(r.dEnv.FS)
+}
+
+func (r *repoStateWriter) PutDocsToWorking(ctx context.Context, docDetails []doltdb.DocDetails) error {
+	return r.dEnv.PutDocsToWorking(ctx, docDetails)
+}
+
+func (r *repoStateWriter) ResetWorkingDocsToStagedDos(ctx context.Context) error {
+	return r.dEnv.ResetWorkingDocsToStagedDocs(ctx)
 }
 
 func (dEnv *DoltEnv) RepoStateWriter() RepoStateWriter {

@@ -78,7 +78,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	var err error
 	if allFlag {
-		err = actions.StageAllTables(ctx, dEnv)
+		err = actions.StageAllTables(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter())
 	}
 
 	if err != nil {
