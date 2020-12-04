@@ -73,9 +73,19 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, commitDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
-	var name, email string
-	var err error
+	// Check if the -all param is provided. Stage all tables if so.
+	allFlag := apr.Contains(cli.AllFlag)
 
+	var err error
+	if allFlag {
+		err = actions.StageAllTables(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter())
+	}
+
+	if err != nil {
+		return handleCommitErr(ctx, dEnv, err, help)
+	}
+
+	var name, email string
 	// Check if the author flag is provided otherwise get the name and email stored in configs
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
 		name, email, err = cli.ParseAuthor(authorStr)

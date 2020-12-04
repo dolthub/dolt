@@ -45,7 +45,7 @@ func (a StageAll) CommandString() string { return "stage_all" }
 
 // Exec executes a StageAll command on a test dolt environment.
 func (a StageAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
-	return actions.StageAllTables(context.Background(), dEnv)
+	return actions.StageAllTables(context.Background(), dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter())
 }
 
 type CommitStaged struct {
@@ -84,7 +84,7 @@ func (c CommitAll) CommandString() string { return fmt.Sprintf("commit: %s", c.M
 
 // Exec executes a CommitAll command on a test dolt environment.
 func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
-	err := actions.StageAllTables(context.Background(), dEnv)
+	err := actions.StageAllTables(context.Background(), dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter())
 	require.NoError(t, err)
 
 	name, email, err := actions.GetNameAndEmail(dEnv.Config)
