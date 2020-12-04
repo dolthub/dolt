@@ -29,13 +29,24 @@ type RepoStateReader interface {
 	CWBHeadSpec() *doltdb.CommitSpec
 	WorkingHash() hash.Hash
 	StagedHash() hash.Hash
+	IsMergeActive() bool
+	GetMergeCommit() string
+	GetAllValidDocDetails() ([]doltdb.DocDetails, error)
+	WorkingRoot(ctx context.Context) (*doltdb.RootValue, error)
+	HeadRoot(ctx context.Context) (*doltdb.RootValue, error)
+	StagedRoot(ctx context.Context) (*doltdb.RootValue, error)
 }
 
 type RepoStateWriter interface {
 	// SetCWBHeadRef(context.Context, ref.DoltRef) error
 	// SetCWBHeadSpec(context.Context, *doltdb.CommitSpec) error
+	SetStagedHash(context.Context, hash.Hash) error
 	SetWorkingHash(context.Context, hash.Hash) error
-	//	SetStagedHash(context.Context, hash.Hash) error
+	UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) (hash.Hash, error)
+	ClearMerge() error
+	UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error
+	PutDocsToWorking(ctx context.Context, docDetails []doltdb.DocDetails) error
+	ResetWorkingDocsToStagedDos(ctx context.Context) error
 }
 
 type BranchConfig struct {
@@ -168,4 +179,12 @@ func (rs *RepoState) WorkingHash() hash.Hash {
 
 func (rs *RepoState) StagedHash() hash.Hash {
 	return hash.Parse(rs.Staged)
+}
+
+func (rs *RepoState) IsMergeActive() bool {
+	return rs.Merge != nil
+}
+
+func (rs *RepoState) GetMergeCommit() string {
+	return rs.Merge.Commit
 }

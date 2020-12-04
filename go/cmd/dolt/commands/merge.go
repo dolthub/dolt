@@ -84,7 +84,7 @@ func (cmd MergeCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(abortParam, "", abortDetails)
 	ap.SupportsFlag(squashParam, "", "Merges changes to the working set without updating the commit history")
 	ap.SupportsFlag(noFFParam, "", "Create a merge commit even when the merge resolves as a fast-forward.")
-	ap.SupportsString(commitMessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
+	ap.SupportsString(cli.CommitMessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
 	return ap
 }
 
@@ -241,15 +241,15 @@ func execNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 		return verr
 	}
 
-	msg, msgOk := apr.GetValue(commitMessageArg)
+	msg, msgOk := apr.GetValue(cli.CommitMessageArg)
 	if !msgOk {
 		msg = getCommitMessageFromEditor(ctx, dEnv)
 	}
 
 	t := doltdb.CommitNowFunc()
-	if commitTimeStr, ok := apr.GetValue(dateParam); ok {
+	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
 		var err error
-		t, err = parseDate(commitTimeStr)
+		t, err = cli.ParseDate(commitTimeStr)
 
 		if err != nil {
 			return errhand.BuildDError("error: invalid date").AddCause(err).Build()
@@ -262,10 +262,10 @@ func execNoFFMerge(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 		return errhand.BuildDError("error: committing").AddCause(err).Build()
 	}
 
-	err = actions.CommitStaged(ctx, dEnv, actions.CommitStagedProps{
+	_, err = actions.CommitStaged(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
-		AllowEmpty:       apr.Contains(allowEmptyFlag),
+		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
 		CheckForeignKeys: !apr.Contains(forceFlag),
 		Name:             name,
 		Email:            email,

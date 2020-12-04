@@ -45,7 +45,7 @@ func (a StageAll) CommandString() string { return "stage_all" }
 
 // Exec executes a StageAll command on a test dolt environment.
 func (a StageAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
-	return actions.StageAllTables(context.Background(), dEnv)
+	return actions.StageAllTables(context.Background(), dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter())
 }
 
 type CommitStaged struct {
@@ -63,7 +63,7 @@ func (c CommitStaged) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	return actions.CommitStaged(context.Background(), dEnv, actions.CommitStagedProps{
+	_, err = actions.CommitStaged(context.Background(), dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), actions.CommitStagedProps{
 		Message:          c.Message,
 		Date:             time.Now(),
 		AllowEmpty:       false,
@@ -71,6 +71,8 @@ func (c CommitStaged) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		Name:             name,
 		Email:            email,
 	})
+
+	return err
 }
 
 type CommitAll struct {
@@ -82,7 +84,7 @@ func (c CommitAll) CommandString() string { return fmt.Sprintf("commit: %s", c.M
 
 // Exec executes a CommitAll command on a test dolt environment.
 func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
-	err := actions.StageAllTables(context.Background(), dEnv)
+	err := actions.StageAllTables(context.Background(), dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter())
 	require.NoError(t, err)
 
 	name, email, err := actions.GetNameAndEmail(dEnv.Config)
@@ -91,7 +93,7 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	return actions.CommitStaged(context.Background(), dEnv, actions.CommitStagedProps{
+	_, err = actions.CommitStaged(context.Background(), dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), actions.CommitStagedProps{
 		Message:          c.Message,
 		Date:             time.Now(),
 		AllowEmpty:       false,
@@ -99,6 +101,8 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		Name:             name,
 		Email:            email,
 	})
+
+	return err
 }
 
 type ResetHard struct{}
@@ -138,7 +142,7 @@ func (q Query) CommandString() string { return fmt.Sprintf("query %s", q.Query) 
 func (q Query) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
-	sqlDb := dsqle.NewDatabase("dolt", dEnv.DoltDB, dEnv.RepoState, dEnv.RepoStateWriter())
+	sqlDb := dsqle.NewDatabase("dolt", dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter())
 	engine, sqlCtx, err := dsqle.NewTestEngine(context.Background(), sqlDb, root)
 	require.NoError(t, err)
 

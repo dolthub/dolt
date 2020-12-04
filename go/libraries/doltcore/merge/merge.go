@@ -756,5 +756,5 @@ func GetDocsInConflict(ctx context.Context, dEnv *env.DoltEnv) (*diff.DocDiffs, 
 		return nil, err
 	}
 
-	return diff.NewDocDiffs(ctx, dEnv, workingRoot, nil, docDetails)
+	return diff.NewDocDiffs(ctx, workingRoot, nil, docDetails)
 }
