@@ -98,6 +98,18 @@ teardown() {
     [[ ! "$output" =~ "Untracked files" ]] || false
 }
 
+@test "dolt commit with -a flag adds all changes" {
+    dolt sql -q "insert into test1 values (0, 1, 2, 3, 4, 5)"
+    dolt sql -q "insert into test2 values (0, 1, 2, 3, 4, 5)"
+    run dolt commit -a -m "Commit1"
+    [[ "$output" =~ "Commit1" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+    [[ ! "$output" =~ "Untracked files" ]] || false
+}
+
 @test "dolt reset . resets all tables" {
     dolt add --all
     run dolt status

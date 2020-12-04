@@ -21,7 +21,7 @@ teardown() {
     teardown_common
 }
 
-@test "DOLT_COMMIT with a message and author" {
+@test "DOLT_COMMIT with all flag, message and author" {
     run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1', '--author', 'John Doe <john@doe.com>')"
     [ $status -eq 0 ]
     DCOMMIT=$output
@@ -57,8 +57,25 @@ teardown() {
 }
 
 @test "DOLT_COMMIT with just a message reads session parameters" {
-    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
+    dolt add .
+
+    run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
     [ $status -eq 0 ]
+    run dolt log
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Commit1" ]] || false
+    regex='Bats Tests <bats@email.fake>'
+    [[ "$output" =~ "$regex" ]] || false
+}
+
+@test "DOLT_COMMIT with the all flag performs properly" {
+    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
+
+    # Check that everything was added
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+
     run dolt log
     [ $status -eq 0 ]
     [[ "$output" =~ "Commit1" ]] || false
@@ -70,14 +87,11 @@ teardown() {
     dolt config --global --unset user.name
     dolt config --global --unset user.email
 
-    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1', '--author', 'John Doe <john@doe.com>')"
+    dolt add .
+
+    run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1', '--author', 'John Doe <john@doe.com>')"
     [ "$status" -eq 0 ]
     DCOMMIT=$output
-
-    # Check that everything was added
-    run dolt diff
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
 
     run dolt log
     [ "$status" -eq 0 ]
