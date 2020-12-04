@@ -17,8 +17,9 @@ package sqle
 import (
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 )
 
@@ -34,7 +35,7 @@ import (
 // unbroken chain of INSERT statements, where we have taken pains to batch writes to speed things up.
 type sqlTableEditor struct {
 	t           *WritableDoltTable
-	tableEditor *doltdb.SessionedTableEditor
+	tableEditor *editor.SessionedTableEditor
 }
 
 var _ sql.RowReplacer = (*sqlTableEditor)(nil)

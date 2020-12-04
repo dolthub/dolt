@@ -61,7 +61,7 @@ func TestDropColumn(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dEnv := createEnvWithSeedData(t)
+			dEnv := dtestutils.CreateEnvWithSeedData(t)
 			ctx := context.Background()
 
 			root, err := dEnv.WorkingRoot(ctx)
@@ -135,7 +135,7 @@ func TestDropColumnUsedByIndex(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dEnv := createEnvWithSeedData(t)
+			dEnv := dtestutils.CreateEnvWithSeedData(t)
 			ctx := context.Background()
 
 			root, err := dEnv.WorkingRoot(ctx)
@@ -155,7 +155,7 @@ func TestDropColumnUsedByIndex(t *testing.T) {
 			if tt.expectedIndex {
 				tt.expectedSchema.Indexes().AddIndex(index)
 				indexRowData, err := updatedTable.GetIndexRowData(ctx, dtestutils.IndexName)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Greater(t, indexRowData.Len(), uint64(0))
 			} else {
 				assert.Nil(t, sch.Indexes().GetByName(dtestutils.IndexName))

@@ -21,8 +21,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
@@ -47,7 +45,11 @@ const (
 	TitleTag
 	NextTag // leave last
 )
-const IndexName = "idx_name"
+
+const (
+	TableName = "people"
+	IndexName = "idx_name"
+)
 
 var typedColColl, _ = schema.NewColCollection(
 	schema.NewColumn("id", IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
@@ -57,7 +59,10 @@ var typedColColl, _ = schema.NewColCollection(
 	schema.NewColumn("title", TitleTag, types.StringKind, false),
 )
 
+// modified by init()
 var TypedSchema = schema.MustSchemaFromCols(typedColColl)
+
+// modified by init()
 var UntypedSchema, _ = untyped.UntypeSchema(TypedSchema)
 var TypedRows []row.Row
 var UntypedRows []row.Row
@@ -129,52 +134,6 @@ func NewTypedRow(id uuid.UUID, name string, age uint, isMarried bool, title *str
 	}
 
 	return r
-}
-
-func AddRowToRoot(dEnv *env.DoltEnv, ctx context.Context, root *doltdb.RootValue, tblName string, r row.Row) (*doltdb.RootValue, error) {
-
-	tbl, _, err := root.GetTable(ctx, tblName)
-
-	if err != nil {
-		return nil, err
-	}
-
-	sch, err := tbl.GetSchema(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	m, err := tbl.GetRowData(ctx)
-
-	if err != nil {
-		return nil, err
-	} else {
-		me := m.Edit()
-		updated, err := me.Set(r.NomsMapKey(sch), r.NomsMapValue(sch)).Map(ctx)
-
-		if err != nil {
-			return nil, err
-		} else {
-			tbl, err = tbl.UpdateRows(ctx, updated)
-
-			if err != nil {
-				return nil, err
-			} else {
-				root, err = root.PutTable(ctx, tblName, tbl)
-
-				if err != nil {
-					return nil, err
-				} else {
-					err = dEnv.UpdateWorkingRoot(context.Background(), root)
-					if err != nil {
-						return nil, err
-					}
-					return dEnv.WorkingRoot(ctx)
-				}
-			}
-		}
-	}
 }
 
 func CreateTestDataTable(typed bool) (*table.InMemTable, schema.Schema) {

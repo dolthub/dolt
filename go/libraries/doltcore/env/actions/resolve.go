@@ -17,6 +17,8 @@ package actions
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
@@ -52,7 +54,7 @@ func AutoResolveTables(ctx context.Context, dEnv *env.DoltEnv, autoResolver merg
 }
 
 func autoResolve(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, autoResolver merge.AutoResolver, tbls []string) error {
-	tableEditSession := doltdb.CreateTableEditSession(root, doltdb.TableEditSessionProps{})
+	tableEditSession := editor.CreateTableEditSession(root, editor.TableEditSessionProps{})
 
 	for _, tblName := range tbls {
 		tbl, ok, err := root.GetTable(ctx, tblName)

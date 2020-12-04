@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/json"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
@@ -135,7 +134,7 @@ func TestExists(t *testing.T) {
 		//NewDataLocation("file.nbf", ""),
 	}
 
-	ddb, root, fs := createRootAndFS()
+	_, root, fs := createRootAndFS()
 
 	for _, loc := range testLocations {
 		t.Run(loc.String(), func(t *testing.T) {
@@ -146,12 +145,8 @@ func TestExists(t *testing.T) {
 			}
 
 			if tableVal, isTable := loc.(TableDataLocation); isTable {
-				schVal, _ := encoding.MarshalSchemaAsNomsValue(context.Background(), ddb.ValueReadWriter(), fakeSchema)
-				m, err := types.NewMap(context.Background(), ddb.ValueReadWriter())
-				assert.NoError(t, err)
-				tbl, err := doltdb.NewTable(context.Background(), ddb.ValueReadWriter(), schVal, m, nil)
-				assert.NoError(t, err)
-				root, err = root.PutTable(context.Background(), tableVal.Name, tbl)
+				var err error
+				root, err = root.CreateEmptyTable(context.Background(), tableVal.Name, fakeSchema)
 				assert.NoError(t, err)
 			} else if fileVal, isFile := loc.(FileDataLocation); isFile {
 				err := fs.WriteFile(fileVal.Path, []byte("test"))

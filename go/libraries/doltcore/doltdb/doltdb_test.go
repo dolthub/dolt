@@ -20,12 +20,15 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/test"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -43,6 +46,11 @@ const (
 const testSchemaIndexName = "idx_name"
 const testSchemaIndexAge = "idx_age"
 
+var id0, _ = uuid.NewRandom()
+var id1, _ = uuid.NewRandom()
+var id2, _ = uuid.NewRandom()
+var id3, _ = uuid.NewRandom()
+
 func createTestSchema(t *testing.T) schema.Schema {
 	colColl, _ := schema.NewColCollection(
 		schema.NewColumn("id", idTag, types.UUIDKind, true, schema.NotNullConstraint{}),
@@ -59,6 +67,113 @@ func createTestSchema(t *testing.T) schema.Schema {
 	_, err = sch.Indexes().AddIndexByColTags(testSchemaIndexAge, []uint64{ageTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
 	require.NoError(t, err)
 	return sch
+}
+
+func createTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData types.Map) (*Table, error) {
+	schemaVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), vrw, tSchema)
+
+	if err != nil {
+		return nil, err
+	}
+
+	empty, _ := types.NewMap(context.Background(), vrw)
+	tbl, err := NewTable(context.Background(), vrw, schemaVal, rowData, empty)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return tbl, nil
+}
+
+func createTestRowData(t *testing.T, vrw types.ValueReadWriter, sch schema.Schema) (types.Map, []row.Row) {
+	return createTestRowDataFromTaggedValues(t, vrw, sch,
+		row.TaggedValues{
+			idTag: types.UUID(id0), firstTag: types.String("bill"), lastTag: types.String("billerson"), ageTag: types.Uint(53)},
+		row.TaggedValues{
+			idTag: types.UUID(id1), firstTag: types.String("eric"), lastTag: types.String("ericson"), isMarriedTag: types.Bool(true), ageTag: types.Uint(21)},
+		row.TaggedValues{
+			idTag: types.UUID(id2), firstTag: types.String("john"), lastTag: types.String("johnson"), isMarriedTag: types.Bool(false), ageTag: types.Uint(53)},
+		row.TaggedValues{
+			idTag: types.UUID(id3), firstTag: types.String("robert"), lastTag: types.String("robertson"), ageTag: types.Uint(36)},
+	)
+}
+
+func createTestRowDataFromTaggedValues(t *testing.T, vrw types.ValueReadWriter, sch schema.Schema, vals ...row.TaggedValues) (types.Map, []row.Row) {
+	var err error
+	rows := make([]row.Row, len(vals))
+
+	m, err := types.NewMap(context.Background(), vrw)
+	assert.NoError(t, err)
+	ed := m.Edit()
+
+	for i, val := range vals {
+		r, err := row.New(types.Format_7_18, sch, val)
+		require.NoError(t, err)
+		rows[i] = r
+		ed = ed.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
+	}
+
+	m, err = ed.Map(context.Background())
+	assert.NoError(t, err)
+
+	return m, rows
+}
+
+func TestIsValidTableName(t *testing.T) {
+	assert.True(t, IsValidTableName("a"))
+	assert.True(t, IsValidTableName("a1"))
+	assert.True(t, IsValidTableName("a1_b_c------1"))
+	assert.True(t, IsValidTableName("Add-098234_lkjasdf0p98"))
+	assert.False(t, IsValidTableName("1"))
+	assert.False(t, IsValidTableName("-"))
+	assert.False(t, IsValidTableName("-a"))
+	assert.False(t, IsValidTableName("__a"))
+	assert.False(t, IsValidTableName(""))
+	assert.False(t, IsValidTableName("1a"))
+	assert.False(t, IsValidTableName("a1-"))
+	assert.False(t, IsValidTableName("ab!!c"))
+}
+
+// DO NOT CHANGE THIS TEST
+// It is necessary to ensure consistent system table definitions
+// for more info: https://github.com/dolthub/dolt/pull/663
+func TestSystemTableTags(t *testing.T) {
+	var sysTableMin uint64 = 1 << 51
+
+	t.Run("asdf", func(t *testing.T) {
+		assert.Equal(t, sysTableMin, SystemTableReservedMin)
+	})
+	t.Run("dolt_doc tags", func(t *testing.T) {
+		docTableMin := sysTableMin + uint64(5)
+		assert.Equal(t, docTableMin+0, DocNameTag)
+		assert.Equal(t, docTableMin+1, DocTextTag)
+	})
+	t.Run("dolt_history_ tags", func(t *testing.T) {
+		doltHistoryMin := sysTableMin + uint64(1000)
+		assert.Equal(t, doltHistoryMin+0, HistoryCommitterTag)
+		assert.Equal(t, doltHistoryMin+1, HistoryCommitHashTag)
+		assert.Equal(t, doltHistoryMin+2, HistoryCommitDateTag)
+	})
+	t.Run("dolt_diff_ tags", func(t *testing.T) {
+		diffTableMin := sysTableMin + uint64(2000)
+		assert.Equal(t, diffTableMin+0, DiffCommitTag)
+	})
+	t.Run("dolt_query_catalog tags", func(t *testing.T) {
+		queryCatalogMin := sysTableMin + uint64(3005)
+		assert.Equal(t, queryCatalogMin+0, QueryCatalogIdTag)
+		assert.Equal(t, queryCatalogMin+1, QueryCatalogOrderTag)
+		assert.Equal(t, queryCatalogMin+2, QueryCatalogNameTag)
+		assert.Equal(t, queryCatalogMin+3, QueryCatalogQueryTag)
+		assert.Equal(t, queryCatalogMin+4, QueryCatalogDescriptionTag)
+	})
+	t.Run("dolt_schemas tags", func(t *testing.T) {
+		doltSchemasMin := sysTableMin + uint64(4007)
+		assert.Equal(t, doltSchemasMin+0, DoltSchemasIdTag)
+		assert.Equal(t, doltSchemasMin+1, DoltSchemasTypeTag)
+		assert.Equal(t, doltSchemasMin+2, DoltSchemasNameTag)
+		assert.Equal(t, doltSchemasMin+3, DoltSchemasFragmentTag)
+	})
 }
 
 func TestEmptyInMemoryRepoCreation(t *testing.T) {

@@ -107,7 +107,7 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 	if err != nil {
 		return nil, err
 	}
-	newTable, err := doltdb.NewTable(ctx, vrw, schemaVal, rd, &indexData)
+	newTable, err := doltdb.NewTable(ctx, vrw, schemaVal, rd, indexData)
 
 	if err != nil {
 		return nil, err

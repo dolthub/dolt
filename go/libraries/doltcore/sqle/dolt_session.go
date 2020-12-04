@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -43,7 +44,7 @@ type DoltSession struct {
 	sql.Session
 	dbRoots   map[string]dbRoot
 	dbDatas   map[string]dbData
-	dbEditors map[string]*doltdb.TableEditSession
+	dbEditors map[string]*editor.TableEditSession
 
 	Username string
 	Email    string
@@ -55,7 +56,7 @@ func DefaultDoltSession() *DoltSession {
 		Session:   sql.NewBaseSession(),
 		dbRoots:   make(map[string]dbRoot),
 		dbDatas:   make(map[string]dbData),
-		dbEditors: make(map[string]*doltdb.TableEditSession),
+		dbEditors: make(map[string]*editor.TableEditSession),
 		Username:  "",
 		Email:     "",
 	}
@@ -66,10 +67,10 @@ func DefaultDoltSession() *DoltSession {
 func NewDoltSession(ctx context.Context, sqlSess sql.Session, username, email string, dbs ...Database) (*DoltSession, error) {
 	dbRoots := make(map[string]dbRoot)
 	dbDatas := make(map[string]dbData)
-	dbEditors := make(map[string]*doltdb.TableEditSession)
+	dbEditors := make(map[string]*editor.TableEditSession)
 	for _, db := range dbs {
 		dbDatas[db.Name()] = dbData{rsw: db.rsw, ddb: db.ddb, rsr: db.rsr}
-		dbEditors[db.Name()] = doltdb.CreateTableEditSession(nil, doltdb.TableEditSessionProps{})
+		dbEditors[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
 	}
 
 	sess := &DoltSession{sqlSess, dbRoots, dbDatas, dbEditors, username, email}
@@ -275,7 +276,7 @@ func (sess *DoltSession) AddDB(ctx context.Context, db Database) error {
 
 	sess.dbDatas[db.Name()] = dbData{rsr: rsr, rsw: rsw, ddb: ddb}
 
-	sess.dbEditors[db.Name()] = doltdb.CreateTableEditSession(nil, doltdb.TableEditSessionProps{})
+	sess.dbEditors[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
 
 	cs := rsr.CWBHeadSpec()
 

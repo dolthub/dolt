@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package doltdb
+package editor
 
 import (
 	"context"
@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
@@ -33,6 +34,18 @@ var id0, _ = uuid.NewRandom()
 var id1, _ = uuid.NewRandom()
 var id2, _ = uuid.NewRandom()
 var id3, _ = uuid.NewRandom()
+
+const (
+	idTag        = 0
+	firstTag     = 1
+	lastTag      = 2
+	isMarriedTag = 3
+	ageTag       = 4
+	emptyTag     = 5
+
+	testSchemaIndexName = "idx_name"
+	testSchemaIndexAge  = "idx_age"
+)
 
 func createTestRowData(t *testing.T, vrw types.ValueReadWriter, sch schema.Schema) (types.Map, []row.Row) {
 	return createTestRowDataFromTaggedValues(t, vrw, sch,
@@ -81,83 +94,22 @@ func createTestRowDataFromTaggedValues(t *testing.T, vrw types.ValueReadWriter, 
 	return m, rows
 }
 
-func createTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData types.Map) (*Table, error) {
-	schemaVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), vrw, tSchema)
-
-	if err != nil {
-		return nil, err
-	}
-
-	tbl, err := NewTable(context.Background(), vrw, schemaVal, rowData, nil)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return tbl, nil
-}
-
-func TestIsValidTableName(t *testing.T) {
-	assert.True(t, IsValidTableName("a"))
-	assert.True(t, IsValidTableName("a1"))
-	assert.True(t, IsValidTableName("a1_b_c------1"))
-	assert.True(t, IsValidTableName("Add-098234_lkjasdf0p98"))
-	assert.False(t, IsValidTableName("1"))
-	assert.False(t, IsValidTableName("-"))
-	assert.False(t, IsValidTableName("-a"))
-	assert.False(t, IsValidTableName("__a"))
-	assert.False(t, IsValidTableName(""))
-	assert.False(t, IsValidTableName("1a"))
-	assert.False(t, IsValidTableName("a1-"))
-	assert.False(t, IsValidTableName("ab!!c"))
-}
-
-func TestTables(t *testing.T) {
-	db, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_7_18, nil, nil)
-
-	tSchema := createTestSchema(t)
-	rowData, rows := createTestRowData(t, db, tSchema)
-	tbl, err := createTestTable(db, tSchema, rowData)
-	assert.NoError(t, err)
-
-	if err != nil {
-		t.Fatal("Failed to create table.")
-	}
-
-	badUUID, _ := uuid.NewRandom()
-	ids := []types.Value{types.UUID(id0), types.UUID(id1), types.UUID(id2), types.UUID(id3), types.UUID(badUUID)}
-
-	readRow0, ok, err := tbl.GetRowByPKVals(context.Background(), row.TaggedValues{idTag: ids[0]}, tSchema)
-	assert.NoError(t, err)
-
-	if !ok {
-		t.Error("Could not find row 0 in table")
-	} else if !row.AreEqual(readRow0, rows[0], tSchema) {
-		t.Error(row.Fmt(context.Background(), readRow0, tSchema), "!=", row.Fmt(context.Background(), rows[0], tSchema))
-	}
-
-	_, ok, err = tbl.GetRowByPKVals(context.Background(), row.TaggedValues{idTag: types.UUID(badUUID)}, tSchema)
-	assert.NoError(t, err)
-
-	if ok {
-		t.Error("GetRow should have returned false.")
-	}
-
-	idItr := SingleColPKItr(types.Format_7_18, idTag, ids)
-	readRows, missing, err := tbl.GetRows(context.Background(), idItr, -1, tSchema)
-	assert.NoError(t, err)
-
-	if len(readRows) != len(rows) {
-		t.Error("Did not find all the expected rows")
-	} else if len(missing) != 1 {
-		t.Error("Expected one missing row for badUUID")
-	}
-
-	for i, r := range rows {
-		if !row.AreEqual(r, readRows[i], tSchema) {
-			t.Error(row.Fmt(context.Background(), readRows[i], tSchema), "!=", row.Fmt(context.Background(), r, tSchema))
-		}
-	}
+func createTestSchema(t *testing.T) schema.Schema {
+	colColl, _ := schema.NewColCollection(
+		schema.NewColumn("id", idTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("first", firstTag, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("last", lastTag, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("is_married", isMarriedTag, types.BoolKind, false),
+		schema.NewColumn("age", ageTag, types.UintKind, false),
+		schema.NewColumn("empty", emptyTag, types.IntKind, false),
+	)
+	sch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
+	_, err = sch.Indexes().AddIndexByColTags(testSchemaIndexName, []uint64{firstTag, lastTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
+	require.NoError(t, err)
+	_, err = sch.Indexes().AddIndexByColTags(testSchemaIndexAge, []uint64{ageTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
+	require.NoError(t, err)
+	return sch
 }
 
 func TestIndexRebuildingWithZeroIndexes(t *testing.T) {
@@ -174,12 +126,12 @@ func TestIndexRebuildingWithZeroIndexes(t *testing.T) {
 	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, schemaVal, rowData)
 	require.NoError(t, err)
 
-	rebuildAllTable, err := originalTable.RebuildIndexData(context.Background())
+	rebuildAllTable, err := RebuildAllIndexes(context.Background(), originalTable)
 	require.NoError(t, err)
 	_, err = rebuildAllTable.GetIndexRowData(context.Background(), testSchemaIndexName)
 	require.Error(t, err)
 
-	_, err = originalTable.RebuildIndexRowData(context.Background(), testSchemaIndexName)
+	_, err = RebuildIndex(context.Background(), originalTable, testSchemaIndexName)
 	require.Error(t, err)
 }
 
@@ -212,7 +164,7 @@ func TestIndexRebuildingWithOneIndex(t *testing.T) {
 
 	var indexRows []row.Row
 
-	rebuildAllTable, err := originalTable.RebuildIndexData(context.Background())
+	rebuildAllTable, err := RebuildAllIndexes(context.Background(), originalTable)
 	require.NoError(t, err)
 	indexRowData, err := rebuildAllTable.GetIndexRowData(context.Background(), testSchemaIndexName)
 	require.NoError(t, err)
@@ -225,7 +177,7 @@ func TestIndexRebuildingWithOneIndex(t *testing.T) {
 	assert.ElementsMatch(t, indexExpectedRows, indexRows)
 
 	indexRows = nil
-	indexRowData, err = originalTable.RebuildIndexRowData(context.Background(), testSchemaIndexName)
+	indexRowData, err = RebuildIndex(context.Background(), originalTable, testSchemaIndexName)
 	require.NoError(t, err)
 	_ = indexRowData.IterAll(context.Background(), func(key, value types.Value) error {
 		indexRow, err := row.FromNoms(indexSch, key.(types.Tuple), value.(types.Tuple))
@@ -261,7 +213,7 @@ func TestIndexRebuildingWithTwoIndexes(t *testing.T) {
 
 	// do two runs, data should not be different regardless of how many times it's ran
 	for i := 0; i < 2; i++ {
-		rebuildAllTable, err = rebuildAllTable.RebuildIndexData(context.Background())
+		rebuildAllTable, err = RebuildAllIndexes(context.Background(), rebuildAllTable)
 		require.NoError(t, err)
 
 		indexNameRowData, err := rebuildAllTable.GetIndexRowData(context.Background(), testSchemaIndexName)
@@ -286,7 +238,7 @@ func TestIndexRebuildingWithTwoIndexes(t *testing.T) {
 		assert.ElementsMatch(t, indexAgeExpectedRows, indexRows)
 		indexRows = nil
 
-		indexNameRowData, err = originalTable.RebuildIndexRowData(context.Background(), testSchemaIndexName)
+		indexNameRowData, err = RebuildIndex(context.Background(), originalTable, testSchemaIndexName)
 		require.NoError(t, err)
 		_ = indexNameRowData.IterAll(context.Background(), func(key, value types.Value) error {
 			indexRow, err := row.FromNoms(indexNameSch, key.(types.Tuple), value.(types.Tuple))
@@ -297,7 +249,7 @@ func TestIndexRebuildingWithTwoIndexes(t *testing.T) {
 		assert.ElementsMatch(t, indexNameExpectedRows, indexRows)
 		indexRows = nil
 
-		indexAgeRowData, err = originalTable.RebuildIndexRowData(context.Background(), testSchemaIndexAge)
+		indexAgeRowData, err = RebuildIndex(context.Background(), originalTable, testSchemaIndexAge)
 		require.NoError(t, err)
 		_ = indexAgeRowData.IterAll(context.Background(), func(key, value types.Value) error {
 			indexRow, err := row.FromNoms(indexAgeSch, key.(types.Tuple), value.(types.Tuple))
@@ -314,7 +266,7 @@ func TestIndexRebuildingWithTwoIndexes(t *testing.T) {
 	indexNameExpectedRows, indexAgeExpectedRows = rowsToIndexRows(t, rows, indexName, indexAge)
 	updatedTable, err := rebuildAllTable.UpdateRows(context.Background(), rowData)
 	require.NoError(t, err)
-	rebuildAllTable, err = updatedTable.RebuildIndexData(context.Background())
+	rebuildAllTable, err = RebuildAllIndexes(context.Background(), updatedTable)
 	require.NoError(t, err)
 
 	indexNameRowData, err := rebuildAllTable.GetIndexRowData(context.Background(), testSchemaIndexName)
@@ -339,7 +291,7 @@ func TestIndexRebuildingWithTwoIndexes(t *testing.T) {
 	assert.ElementsMatch(t, indexAgeExpectedRows, indexRows)
 	indexRows = nil
 
-	indexNameRowData, err = updatedTable.RebuildIndexRowData(context.Background(), testSchemaIndexName)
+	indexNameRowData, err = RebuildIndex(context.Background(), updatedTable, testSchemaIndexName)
 	require.NoError(t, err)
 	_ = indexNameRowData.IterAll(context.Background(), func(key, value types.Value) error {
 		indexRow, err := row.FromNoms(indexNameSch, key.(types.Tuple), value.(types.Tuple))
@@ -350,7 +302,7 @@ func TestIndexRebuildingWithTwoIndexes(t *testing.T) {
 	assert.ElementsMatch(t, indexNameExpectedRows, indexRows)
 	indexRows = nil
 
-	indexAgeRowData, err = updatedTable.RebuildIndexRowData(context.Background(), testSchemaIndexAge)
+	indexAgeRowData, err = RebuildIndex(context.Background(), updatedTable, testSchemaIndexAge)
 	require.NoError(t, err)
 	_ = indexAgeRowData.IterAll(context.Background(), func(key, value types.Value) error {
 		indexRow, err := row.FromNoms(indexAgeSch, key.(types.Tuple), value.(types.Tuple))
@@ -385,10 +337,10 @@ func TestIndexRebuildingUniqueSuccessOneCol(t *testing.T) {
 	updatedTable, err := originalTable.UpdateSchema(context.Background(), sch)
 	require.NoError(t, err)
 
-	_, err = updatedTable.RebuildIndexData(context.Background())
+	_, err = RebuildAllIndexes(context.Background(), updatedTable)
 	require.NoError(t, err)
 
-	_, err = updatedTable.RebuildIndexRowData(context.Background(), index.Name())
+	_, err = RebuildIndex(context.Background(), updatedTable, index.Name())
 	require.NoError(t, err)
 }
 
@@ -416,10 +368,10 @@ func TestIndexRebuildingUniqueSuccessTwoCol(t *testing.T) {
 	updatedTable, err := originalTable.UpdateSchema(context.Background(), sch)
 	require.NoError(t, err)
 
-	_, err = updatedTable.RebuildIndexData(context.Background())
+	_, err = RebuildAllIndexes(context.Background(), updatedTable)
 	require.NoError(t, err)
 
-	_, err = updatedTable.RebuildIndexRowData(context.Background(), index.Name())
+	_, err = RebuildIndex(context.Background(), updatedTable, index.Name())
 	require.NoError(t, err)
 }
 
@@ -447,10 +399,10 @@ func TestIndexRebuildingUniqueFailOneCol(t *testing.T) {
 	updatedTable, err := originalTable.UpdateSchema(context.Background(), sch)
 	require.NoError(t, err)
 
-	_, err = updatedTable.RebuildIndexData(context.Background())
+	_, err = RebuildAllIndexes(context.Background(), updatedTable)
 	require.Error(t, err)
 
-	_, err = updatedTable.RebuildIndexRowData(context.Background(), index.Name())
+	_, err = RebuildIndex(context.Background(), updatedTable, index.Name())
 	require.Error(t, err)
 }
 
@@ -479,46 +431,16 @@ func TestIndexRebuildingUniqueFailTwoCol(t *testing.T) {
 	updatedTable, err := originalTable.UpdateSchema(context.Background(), sch)
 	require.NoError(t, err)
 
-	_, err = updatedTable.RebuildIndexData(context.Background())
+	_, err = RebuildAllIndexes(context.Background(), updatedTable)
 	require.Error(t, err)
 
-	_, err = updatedTable.RebuildIndexRowData(context.Background(), index.Name())
+	_, err = RebuildIndex(context.Background(), updatedTable, index.Name())
 	require.Error(t, err)
 }
 
-func createTableWithoutIndexRebuilding(ctx context.Context, vrw types.ValueReadWriter, schemaVal types.Value, rowData types.Map) (*Table, error) {
-	indexData, err := types.NewMap(ctx, vrw)
-	if err != nil {
-		return nil, err
-	}
-
-	schemaRef, err := writeValAndGetRef(ctx, vrw, schemaVal)
-	if err != nil {
-		return nil, err
-	}
-
-	rowDataRef, err := writeValAndGetRef(ctx, vrw, rowData)
-	if err != nil {
-		return nil, err
-	}
-
-	indexesRef, err := writeValAndGetRef(ctx, vrw, indexData)
-	if err != nil {
-		return nil, err
-	}
-
-	sd := types.StructData{
-		schemaRefKey: schemaRef,
-		tableRowsKey: rowDataRef,
-		indexesKey:   indexesRef,
-	}
-
-	tableStruct, err := types.NewStruct(vrw.Format(), tableStructName, sd)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Table{vrw, tableStruct}, nil
+func createTableWithoutIndexRebuilding(ctx context.Context, vrw types.ValueReadWriter, schemaVal types.Value, rowData types.Map) (*doltdb.Table, error) {
+	empty, _ := types.NewMap(ctx, vrw)
+	return doltdb.NewTable(ctx, vrw, schemaVal, rowData, empty)
 }
 
 func rowsToIndexRows(t *testing.T, rows []row.Row, indexName schema.Index, indexAge schema.Index) (indexNameExpectedRows []row.Row, indexAgeExpectedRows []row.Row) {
@@ -547,45 +469,4 @@ func rowsToIndexRows(t *testing.T, rows []row.Row, indexName schema.Index, index
 		require.NoError(t, err)
 	}
 	return
-}
-
-// DO NOT CHANGE THIS TEST
-// It is necessary to ensure consistent system table definitions
-// for more info: https://github.com/dolthub/dolt/pull/663
-func TestSystemTableTags(t *testing.T) {
-	var sysTableMin uint64 = 1 << 51
-
-	t.Run("asdf", func(t *testing.T) {
-		assert.Equal(t, sysTableMin, SystemTableReservedMin)
-	})
-	t.Run("dolt_doc tags", func(t *testing.T) {
-		docTableMin := sysTableMin + uint64(5)
-		assert.Equal(t, docTableMin+0, DocNameTag)
-		assert.Equal(t, docTableMin+1, DocTextTag)
-	})
-	t.Run("dolt_history_ tags", func(t *testing.T) {
-		doltHistoryMin := sysTableMin + uint64(1000)
-		assert.Equal(t, doltHistoryMin+0, HistoryCommitterTag)
-		assert.Equal(t, doltHistoryMin+1, HistoryCommitHashTag)
-		assert.Equal(t, doltHistoryMin+2, HistoryCommitDateTag)
-	})
-	t.Run("dolt_diff_ tags", func(t *testing.T) {
-		diffTableMin := sysTableMin + uint64(2000)
-		assert.Equal(t, diffTableMin+0, DiffCommitTag)
-	})
-	t.Run("dolt_query_catalog tags", func(t *testing.T) {
-		queryCatalogMin := sysTableMin + uint64(3005)
-		assert.Equal(t, queryCatalogMin+0, QueryCatalogIdTag)
-		assert.Equal(t, queryCatalogMin+1, QueryCatalogOrderTag)
-		assert.Equal(t, queryCatalogMin+2, QueryCatalogNameTag)
-		assert.Equal(t, queryCatalogMin+3, QueryCatalogQueryTag)
-		assert.Equal(t, queryCatalogMin+4, QueryCatalogDescriptionTag)
-	})
-	t.Run("dolt_schemas tags", func(t *testing.T) {
-		doltSchemasMin := sysTableMin + uint64(4007)
-		assert.Equal(t, doltSchemasMin+0, DoltSchemasIdTag)
-		assert.Equal(t, doltSchemasMin+1, DoltSchemasTypeTag)
-		assert.Equal(t, doltSchemasMin+2, DoltSchemasNameTag)
-		assert.Equal(t, doltSchemasMin+3, DoltSchemasFragmentTag)
-	})
 }

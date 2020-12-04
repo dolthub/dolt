@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package doltdb
+package editor
 
 import (
 	"context"
@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
@@ -50,7 +51,7 @@ func TestTableEditorConcurrency(t *testing.T) {
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := NewTable(context.Background(), db, tableSchVal, emptyMap, nil)
+	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap)
 	require.NoError(t, err)
 
 	for i := 0; i < tableEditorConcurrencyIterations; i++ {
@@ -147,7 +148,7 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := NewTable(context.Background(), db, tableSchVal, emptyMap, nil)
+	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap)
 	require.NoError(t, err)
 
 	tableEditor, err := NewTableEditor(context.Background(), table, tableSch)
@@ -242,7 +243,7 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := NewTable(context.Background(), db, tableSchVal, emptyMap, nil)
+	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap)
 	require.NoError(t, err)
 
 	tableEditor, err := NewTableEditor(context.Background(), table, tableSch)
@@ -314,7 +315,7 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := NewTable(context.Background(), db, tableSchVal, emptyMap, nil)
+	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap)
 	require.NoError(t, err)
 
 	tableEditor, err := NewTableEditor(context.Background(), table, tableSch)

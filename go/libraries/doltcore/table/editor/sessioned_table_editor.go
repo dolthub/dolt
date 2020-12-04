@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package doltdb
+package editor
 
 import (
 	"context"
 	"fmt"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/store/types"
@@ -27,8 +29,8 @@ import (
 type SessionedTableEditor struct {
 	tableEditSession  *TableEditSession
 	tableEditor       *TableEditor
-	referencedTables  []ForeignKey // The tables that we reference to ensure an insert or update is valid
-	referencingTables []ForeignKey // The tables that reference us to ensure their inserts and updates are valid
+	referencedTables  []doltdb.ForeignKey // The tables that we reference to ensure an insert or update is valid
+	referencingTables []doltdb.ForeignKey // The tables that reference us to ensure their inserts and updates are valid
 }
 
 // ContainsIndexedKey returns whether the given key is contained within the index. The key is assumed to be in the
@@ -56,7 +58,7 @@ func (ste *SessionedTableEditor) GetRowData(ctx context.Context) (types.Map, err
 }
 
 // Flush is a shortcut to calling SessionTableEditor.Flush.
-func (ste *SessionedTableEditor) Flush(ctx context.Context) (*RootValue, error) {
+func (ste *SessionedTableEditor) Flush(ctx context.Context) (*doltdb.RootValue, error) {
 	return ste.tableEditSession.Flush(ctx)
 }
 
@@ -150,14 +152,14 @@ func (ste *SessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 		}
 
 		switch foreignKey.OnDelete {
-		case ForeignKeyReferenceOption_Cascade:
+		case doltdb.ForeignKeyReferenceOption_Cascade:
 			for _, rowToDelete := range referencingRows {
 				err = referencingSte.DeleteRow(ctx, rowToDelete)
 				if err != nil {
 					return err
 				}
 			}
-		case ForeignKeyReferenceOption_SetNull:
+		case doltdb.ForeignKeyReferenceOption_SetNull:
 			for _, oldRow := range referencingRows {
 				newRow := oldRow
 				for _, colTag := range foreignKey.TableColumns {
@@ -171,7 +173,7 @@ func (ste *SessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 					return err
 				}
 			}
-		case ForeignKeyReferenceOption_DefaultAction, ForeignKeyReferenceOption_NoAction, ForeignKeyReferenceOption_Restrict:
+		case doltdb.ForeignKeyReferenceOption_DefaultAction, doltdb.ForeignKeyReferenceOption_NoAction, doltdb.ForeignKeyReferenceOption_Restrict:
 			indexKeyStr, _ := types.EncodedValue(ctx, indexKey)
 			return fmt.Errorf("foreign key constraint violation on `%s`.`%s`: cannot delete rows with value `%s`",
 				foreignKey.TableName, foreignKey.Name, indexKeyStr)
@@ -222,7 +224,7 @@ func (ste *SessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 		}
 
 		switch foreignKey.OnUpdate {
-		case ForeignKeyReferenceOption_Cascade:
+		case doltdb.ForeignKeyReferenceOption_Cascade:
 			// NULL handling is usually done higher, so if a new value is NULL then we need to error
 			for i := range foreignKey.ReferencedTableColumns {
 				if incomingVal, _ := dNewRow.GetColVal(foreignKey.ReferencedTableColumns[i]); types.IsNull(incomingVal) {
@@ -251,7 +253,7 @@ func (ste *SessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 					return err
 				}
 			}
-		case ForeignKeyReferenceOption_SetNull:
+		case doltdb.ForeignKeyReferenceOption_SetNull:
 			for _, oldRow := range referencingRows {
 				newRow := oldRow
 				for _, colTag := range foreignKey.TableColumns {
@@ -265,7 +267,7 @@ func (ste *SessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 					return err
 				}
 			}
-		case ForeignKeyReferenceOption_DefaultAction, ForeignKeyReferenceOption_NoAction, ForeignKeyReferenceOption_Restrict:
+		case doltdb.ForeignKeyReferenceOption_DefaultAction, doltdb.ForeignKeyReferenceOption_NoAction, doltdb.ForeignKeyReferenceOption_Restrict:
 			indexKeyStr, _ := types.EncodedValue(ctx, indexKey)
 			return fmt.Errorf("foreign key constraint violation on `%s`.`%s`: cannot update rows with value `%s`",
 				foreignKey.TableName, foreignKey.Name, indexKeyStr)
