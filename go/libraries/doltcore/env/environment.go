@@ -417,7 +417,8 @@ func (dEnv *DoltEnv) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootV
 	return h, nil
 }
 
-func (dEnv *DoltEnv) PutTableToWorking(ctx context.Context, rows types.Map, sch schema.Schema, tableName string) error {
+// todo: move this out of env to actions
+func (dEnv *DoltEnv) PutTableToWorking(ctx context.Context, sch schema.Schema, rows types.Map, indexData types.Map, tableName string) error {
 	root, err := dEnv.WorkingRoot(ctx)
 
 	if err != nil {
@@ -431,7 +432,7 @@ func (dEnv *DoltEnv) PutTableToWorking(ctx context.Context, rows types.Map, sch 
 		return ErrMarshallingSchema
 	}
 
-	tbl, err := doltdb.NewTable(ctx, vrw, schVal, rows, nil)
+	tbl, err := doltdb.NewTable(ctx, vrw, schVal, rows, indexData)
 
 	if err != nil {
 		return err
@@ -1030,7 +1031,12 @@ func createDocsTableOnRoot(ctx context.Context, dEnv *DoltEnv, root *doltdb.Root
 			return nil, ErrMarshallingSchema
 		}
 
-		newDocsTbl, err := doltdb.NewTable(ctx, root.VRW(), schVal, *wr.GetMap(), nil)
+		empty, err := types.NewMap(ctx, root.VRW())
+		if err != nil {
+			return nil, err
+		}
+
+		newDocsTbl, err := doltdb.NewTable(ctx, root.VRW(), schVal, wr.GetMap(), empty)
 		if err != nil {
 			return nil, err
 		}

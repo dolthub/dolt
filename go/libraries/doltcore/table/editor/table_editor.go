@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package doltdb
+package editor
 
 import (
 	"context"
@@ -21,12 +21,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/async"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -39,7 +39,7 @@ var ErrDuplicatePrimaryKeyFmt = "duplicate primary key given: %v"
 //
 // This type is thread-safe, and may be used in a multi-threaded environment.
 type TableEditor struct {
-	t        *Table
+	t        *doltdb.Table
 	tSch     schema.Schema
 	tea      *tableEditAccumulator
 	aq       *async.ActionExecutor
@@ -69,7 +69,7 @@ type tableEditAccumulator struct {
 
 const tableEditorMaxOps = 16384
 
-func NewTableEditor(ctx context.Context, t *Table, tableSch schema.Schema) (*TableEditor, error) {
+func NewTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema) (*TableEditor, error) {
 	te := &TableEditor{
 		t:          t,
 		tSch:       tableSch,
@@ -413,7 +413,7 @@ func (te *TableEditor) Flush() {
 }
 
 // Table returns a Table based on the edits given, if any. If Flush() was not called prior, it will be called here.
-func (te *TableEditor) Table() (*Table, error) {
+func (te *TableEditor) Table() (*doltdb.Table, error) {
 	te.Flush()
 	err := te.aq.WaitForEmpty()
 
@@ -568,7 +568,7 @@ func (te *TableEditor) getIndexIterator(ctx context.Context, key types.Tuple, in
 	), nil
 }
 
-func (te *TableEditor) updateIndexes(ctx context.Context, tea *tableEditAccumulator, tbl *Table, originalRowData types.Map, updated types.Map) (*Table, error) {
+func (te *TableEditor) updateIndexes(ctx context.Context, tea *tableEditAccumulator, tbl *doltdb.Table, originalRowData types.Map, updated types.Map) (*doltdb.Table, error) {
 	// We don't call any locks here since this is called from an ActionExecutor with a concurrency of 1
 	if len(te.indexEds) == 0 {
 		return tbl, nil

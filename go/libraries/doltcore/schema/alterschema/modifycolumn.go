@@ -19,6 +19,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -63,7 +65,7 @@ func ModifyColumn(
 	if !newCol.TypeInfo.Equals(existingCol.TypeInfo) ||
 		newCol.IsNullable() != existingCol.IsNullable() {
 		for _, index := range sch.Indexes().IndexesWithTag(existingCol.Tag) {
-			rebuiltIndexData, err := updatedTable.RebuildIndexRowData(ctx, index.Name())
+			rebuiltIndexData, err := editor.RebuildIndex(ctx, updatedTable, index.Name())
 			if err != nil {
 				return nil, err
 			}
@@ -145,7 +147,7 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, newSc
 		return nil, err
 	}
 
-	return doltdb.NewTable(ctx, vrw, newSchemaVal, rowData, &indexData)
+	return doltdb.NewTable(ctx, vrw, newSchemaVal, rowData, indexData)
 }
 
 // replaceColumnInSchema replaces the column with the name given with its new definition, optionally reordering it.

@@ -98,19 +98,22 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	imt := table.NewInMemTable(sch)
 
 	for _, r := range rs {
-		imt.AppendRow(r)
+		_ = imt.AppendRow(r)
 	}
 
+	ctx := context.Background()
+	vrw := dEnv.DoltDB.ValueReadWriter()
 	rd := table.NewInMemTableReader(imt)
-	wr := noms.NewNomsMapCreator(context.Background(), dEnv.DoltDB.ValueReadWriter(), sch)
+	wr := noms.NewNomsMapCreator(ctx, vrw, sch)
 
-	_, _, err := table.PipeRows(context.Background(), rd, wr, false)
-	rd.Close(context.Background())
-	wr.Close(context.Background())
+	_, _, err := table.PipeRows(ctx, rd, wr, false)
+	_ = rd.Close(ctx)
+	_ = wr.Close(ctx)
 
 	require.Nil(t, err, "Failed to seed initial data")
 
-	err = dEnv.PutTableToWorking(context.Background(), *wr.GetMap(), wr.GetSchema(), tableName)
+	empty, _ := types.NewMap(ctx, vrw)
+	err = dEnv.PutTableToWorking(ctx, wr.GetSchema(), wr.GetMap(), empty, tableName)
 	require.Nil(t, err, "Unable to put initial value of table in in-mem noms db")
 }
 

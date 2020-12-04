@@ -24,12 +24,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -255,7 +252,7 @@ func TestAddColumnToTable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dEnv := createEnvWithSeedData(t)
+			dEnv := dtestutils.CreateEnvWithSeedData(t)
 			ctx := context.Background()
 
 			root, err := dEnv.WorkingRoot(ctx)
@@ -299,34 +296,10 @@ func TestAddColumnToTable(t *testing.T) {
 			assert.Equal(t, tt.expectedRows, foundRows)
 
 			indexRowData, err := updatedTable.GetIndexRowData(ctx, dtestutils.IndexName)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Greater(t, indexRowData.Len(), uint64(0))
 		})
 	}
-}
-
-func createEnvWithSeedData(t *testing.T) *env.DoltEnv {
-	dEnv := dtestutils.CreateTestEnv()
-	imt, sch := dtestutils.CreateTestDataTable(true)
-
-	rd := table.NewInMemTableReader(imt)
-	wr := noms.NewNomsMapCreator(context.Background(), dEnv.DoltDB.ValueReadWriter(), sch)
-
-	_, _, err := table.PipeRows(context.Background(), rd, wr, false)
-	rd.Close(context.Background())
-	wr.Close(context.Background())
-
-	if err != nil {
-		t.Error("Failed to seed initial data", err)
-	}
-
-	err = dEnv.PutTableToWorking(context.Background(), *wr.GetMap(), wr.GetSchema(), tableName)
-
-	if err != nil {
-		t.Error("Unable to put initial value of table in in mem noms db", err)
-	}
-
-	return dEnv
 }
 
 func schemaNewColumn(name string, tag uint64, kind types.NomsKind, partOfPK bool, defaultVal string, constraints ...schema.ColConstraint) schema.Column {

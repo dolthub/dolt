@@ -37,6 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -867,7 +868,7 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 }
 
 // TableEditSession returns the TableEditSession for this database from the given context.
-func (db Database) TableEditSession(ctx *sql.Context) *doltdb.TableEditSession {
+func (db Database) TableEditSession(ctx *sql.Context) *editor.TableEditSession {
 	return DSessFromSess(ctx.Session).dbEditors[db.name]
 }
 

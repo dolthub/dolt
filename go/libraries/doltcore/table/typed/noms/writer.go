@@ -25,5 +25,5 @@ type NomsMapWriteCloser interface {
 	table.TableWriteCloser
 
 	// GetMap retrieves the resulting types.Map once close is called
-	GetMap() *types.Map
+	GetMap() types.Map
 }

@@ -360,7 +360,12 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		rshs := rsh.String()
 		fmt.Println(rshs)
 
-		rebasedTable, err := doltdb.NewTable(ctx, rebasedParentRoot.VRW(), rebasedSchVal, rebasedRows, nil)
+		emptyMap, err := types.NewMap(ctx, root.VRW()) // migration predates secondary indexes
+		if err != nil {
+			return nil, err
+		}
+
+		rebasedTable, err := doltdb.NewTable(ctx, rebasedParentRoot.VRW(), rebasedSchVal, rebasedRows, emptyMap)
 
 		if err != nil {
 			return nil, err
@@ -446,7 +451,7 @@ func replayRowDiffs(ctx context.Context, vrw types.ValueReadWriter, rSch schema.
 		return types.EmptyMap, err
 	}
 
-	return *nmu.GetMap(), nil
+	return nmu.GetMap(), nil
 }
 
 func dropValsForDeletedColumns(ctx context.Context, nbf *types.NomsBinFormat, rows types.Map, sch, parentSch schema.Schema) (types.Map, error) {

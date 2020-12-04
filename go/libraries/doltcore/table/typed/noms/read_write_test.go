@@ -99,17 +99,17 @@ func TestReadWrite(t *testing.T) {
 	testReadAndCompare(t, updatedMap, expectedRows)
 }
 
-func testNomsMapCreator(t *testing.T, vrw types.ValueReadWriter, rows []row.Row) *types.Map {
+func testNomsMapCreator(t *testing.T, vrw types.ValueReadWriter, rows []row.Row) types.Map {
 	mc := NewNomsMapCreator(context.Background(), vrw, sch)
 	return testNomsWriteCloser(t, mc, rows)
 }
 
-func testNomsMapUpdate(t *testing.T, vrw types.ValueReadWriter, initialMapVal *types.Map, rows []row.Row) *types.Map {
-	mu := NewNomsMapUpdater(context.Background(), vrw, *initialMapVal, sch, nil)
+func testNomsMapUpdate(t *testing.T, vrw types.ValueReadWriter, initialMapVal types.Map, rows []row.Row) types.Map {
+	mu := NewNomsMapUpdater(context.Background(), vrw, initialMapVal, sch, nil)
 	return testNomsWriteCloser(t, mu, rows)
 }
 
-func testNomsWriteCloser(t *testing.T, nwc NomsMapWriteCloser, rows []row.Row) *types.Map {
+func testNomsWriteCloser(t *testing.T, nwc NomsMapWriteCloser, rows []row.Row) types.Map {
 	for _, r := range rows {
 		err := nwc.WriteRow(context.Background(), r)
 
@@ -136,17 +136,12 @@ func testNomsWriteCloser(t *testing.T, nwc NomsMapWriteCloser, rows []row.Row) *
 		t.Error("Should give error for writing after closing.")
 	}
 
-	mapVal := nwc.GetMap()
+	return nwc.GetMap()
 
-	if mapVal == nil {
-		t.Fatal("DestRef should not be nil")
-	}
-
-	return mapVal
 }
 
-func testReadAndCompare(t *testing.T, initialMapVal *types.Map, expectedRows []row.Row) {
-	mr, err := NewNomsMapReader(context.Background(), *initialMapVal, sch)
+func testReadAndCompare(t *testing.T, initialMapVal types.Map, expectedRows []row.Row) {
+	mr, err := NewNomsMapReader(context.Background(), initialMapVal, sch)
 	assert.NoError(t, err)
 
 	actualRows, numBad, err := table.ReadAllRows(context.Background(), mr, true)

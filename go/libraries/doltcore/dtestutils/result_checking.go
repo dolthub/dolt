@@ -15,14 +15,14 @@
 package dtestutils
 
 /*
-func CheckResultTable(t *testing.T, tableName string, dEnv *env.DoltEnv, expectedTable *table.InMemTable, pkInExpectedTable string) {
+func CheckResultTable(t *testing.T, TableName string, dEnv *env.DoltEnv, expectedTable *table.InMemTable, pkInExpectedTable string) {
 	root, err := dEnv.WorkingRoot()
 
 	if err != nil {
 		t.Error("Could not get dolt working root value", err)
 	}
 
-	tbl, ok := root.GetTable(tableName)
+	tbl, ok := root.GetTable(TableName)
 
 	if !ok {
 		t.Error("Could not find table")

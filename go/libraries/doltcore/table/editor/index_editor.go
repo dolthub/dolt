@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package doltdb
+package editor
 
 import (
 	"context"
 	"fmt"
 	"io"
 	"sync"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -238,4 +241,146 @@ func (indexEd *IndexEditor) reset(indexData types.Map) {
 	indexEd.ed = types.CreateEditAccForMapEdits(indexData.Format())
 	indexEd.data = indexData
 	indexEd.numOutstandingEdits++
+}
+
+// NewTable creates a noms Struct which stores the schema and the row data. If indexData is nil, then it is rebuilt.
+func BuildIndexesForTable(ctx context.Context, vrw types.ValueReadWriter, schemaVal types.Value, rowData types.Map, indexData *types.Map) error {
+	if indexData == nil {
+		sch, err := encoding.UnmarshalSchemaNomsValue(ctx, rowData.Format(), schemaVal)
+		if err != nil {
+			return err
+		}
+		indexesMap, err := types.NewMap(ctx, vrw)
+		if err != nil {
+			return err
+		}
+
+		for _, index := range sch.Indexes().AllIndexes() {
+			rebuiltIndexRowData, err := RebuildIndexRowData(ctx, vrw, sch, rowData, index)
+			if err != nil {
+				return err
+			}
+			rebuiltIndexRowDataRef, err := doltdb.WriteValAndGetRef(ctx, vrw, rebuiltIndexRowData)
+			if err != nil {
+				return err
+			}
+			indexesMap, err = indexesMap.Edit().Set(types.String(index.Name()), rebuiltIndexRowDataRef).Map(ctx)
+			if err != nil {
+				return err
+			}
+		}
+
+		indexData = &indexesMap
+	}
+
+	//schemaRef, err := doltdb.WriteValAndGetRef(ctx, vrw, schemaVal)
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//rowDataRef, err := doltdb.WriteValAndGetRef(ctx, vrw, rowData)
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//indexesRef, err := doltdb.WriteValAndGetRef(ctx, vrw, indexData)
+	//if err != nil {
+	//	return err
+	//}
+
+	return nil
+}
+
+func RebuildIndex(ctx context.Context, tbl *doltdb.Table, indexName string) (types.Map, error) {
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	tableRowData, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	index := sch.Indexes().GetByName(indexName)
+	if index == nil {
+		return types.EmptyMap, fmt.Errorf("index `%s` does not exist", indexName)
+	}
+
+	rebuiltIndexData, err := RebuildIndexRowData(ctx, tbl.ValueReadWriter(), sch, tableRowData, index)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+	return rebuiltIndexData, nil
+}
+
+func RebuildAllIndexes(ctx context.Context, t *doltdb.Table) (*doltdb.Table, error) {
+	sch, err := t.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if sch.Indexes().Count() == 0 {
+		return t, nil
+	}
+
+	tableRowData, err := t.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	indexesMap, err := t.GetIndexData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, index := range sch.Indexes().AllIndexes() {
+		rebuiltIndexRowData, err := RebuildIndexRowData(ctx, t.ValueReadWriter(), sch, tableRowData, index)
+		if err != nil {
+			return nil, err
+		}
+		rebuiltIndexRowDataRef, err := doltdb.WriteValAndGetRef(ctx, t.ValueReadWriter(), rebuiltIndexRowData)
+		if err != nil {
+			return nil, err
+		}
+		indexesMap, err = indexesMap.Edit().Set(types.String(index.Name()), rebuiltIndexRowDataRef).Map(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return t.SetIndexData(ctx, indexesMap)
+}
+
+func RebuildIndexRowData(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, tblRowData types.Map, index schema.Index) (types.Map, error) {
+	emptyIndexMap, err := types.NewMap(ctx, vrw)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+	indexEditor := NewIndexEditor(index, emptyIndexMap)
+
+	err = tblRowData.IterAll(ctx, func(key, value types.Value) error {
+		dRow, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
+		if err != nil {
+			return err
+		}
+		indexRow, err := dRow.ReduceToIndex(index)
+		if err != nil {
+			return err
+		}
+		err = indexEditor.UpdateIndex(ctx, nil, indexRow)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	rebuiltIndexMap, err := indexEditor.Map(ctx)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+	return rebuiltIndexMap, nil
 }
