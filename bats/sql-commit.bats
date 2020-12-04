@@ -21,34 +21,10 @@ teardown() {
     teardown_common
 }
 
-@test "DOLT_COMMIT with all flag, message and author" {
-    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1', '--author', 'John Doe <john@doe.com>')"
-    [ $status -eq 0 ]
-    DCOMMIT=$output
-
-    # Check that everything was added
-    run dolt diff
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
-
-    run dolt log
-    [ $status -eq 0 ]
-    [[ "$output" =~ "Commit1" ]] || false
-    regex='John Doe <john@doe.com>'
-    [[ "$output" =~ "$regex" ]] || false
-
-    # Check that dolt_log has the same hash as the output of DOLT_COMMIT
-    run dolt sql -q "SELECT commit_hash from dolt_log LIMIT 1"
-    [ $status -eq 0 ]
-    [[ "$output" =~ "$DCOMMIT" ]] || false
-
-    run dolt sql -q "SELECT * from dolt_commits ORDER BY Date DESC;"
-    [ $status -eq 0 ]
-    [[ "$output" =~ "Commit1" ]] || false
-}
-
 @test "DOLT_COMMIT without a message throws error" {
-    run dolt sql -q "SELECT DOLT_COMMIT('-a')"
+    dolt add .
+
+    run dolt sql -q "SELECT DOLT_COMMIT()"
     [ $status -eq 1 ]
     run dolt log
     [ $status -eq 0 ]
@@ -81,6 +57,32 @@ teardown() {
     [[ "$output" =~ "Commit1" ]] || false
     regex='Bats Tests <bats@email.fake>'
     [[ "$output" =~ "$regex" ]] || false
+}
+
+@test "DOLT_COMMIT with all flag, message and author" {
+    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1', '--author', 'John Doe <john@doe.com>')"
+    [ $status -eq 0 ]
+    DCOMMIT=$output
+
+    # Check that everything was added
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+
+    run dolt log
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Commit1" ]] || false
+    regex='John Doe <john@doe.com>'
+    [[ "$output" =~ "$regex" ]] || false
+
+    # Check that dolt_log has the same hash as the output of DOLT_COMMIT
+    run dolt sql -q "SELECT commit_hash from dolt_log LIMIT 1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "$DCOMMIT" ]] || false
+
+    run dolt sql -q "SELECT * from dolt_commits ORDER BY Date DESC;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Commit1" ]] || false
 }
 
 @test "DOLT_COMMIT works with --author without config variables set" {
