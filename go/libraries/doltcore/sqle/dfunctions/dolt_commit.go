@@ -41,6 +41,12 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	dbName := ctx.GetCurrentDatabase()
 	dSess := sqle.DSessFromSess(ctx.Session)
 
+	_, val := dSess.Session.Get(sql.AutoCommitSessionVar)
+
+	if !(val.(bool)) {
+		return nil, fmt.Errorf("AUTOCOMMIT must be set to true.")
+	}
+
 	ddb, ok := dSess.GetDoltDB(dbName)
 
 	if !ok {
