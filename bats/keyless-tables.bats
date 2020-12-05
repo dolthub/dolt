@@ -367,3 +367,89 @@ SQL
     [[ "$output" = "9,9" ]] || false
     [[ "$output" = "9,9" ]] || false
 }
+
+@test "keyless diff delete on two branches" {
+    dolt branch other
+
+    dolt sql -q "DELETE FROM keyless WHERE c0 = 0"
+    dolt commit -am "inserted on master"
+
+    dolt checkout other
+    dolt sql -q "DELETE FROM keyless WHERE c0 = 2"
+    dolt commit -am "inserted on other"
+
+    run dolt diff master
+    [ $status -eq 0 ]
+    [[ "$output" = "|  +  | 0  | 0  |" ]] || false
+    [[ "$output" = "|  -  | 2  | 2  |" ]] || false
+}
+
+@test "keyless merge deletes from two branches" {
+    dolt branch other
+
+    dolt sql -q "DELETE FROM keyless WHERE c0 = 0"
+    dolt commit -am "inserted on master"
+
+    dolt checkout other
+    dolt sql -q "DELETE FROM keyless WHERE c0 = 2"
+    dolt commit -am "inserted on other"
+
+    run dolt merge master
+    [ $status -eq 0 ]
+    run dolt sql -q "SELECT * FROM keyless;" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" = "1,1" ]] || false
+    [[ "$output" = "1,1" ]] || false
+}
+
+@test "keyless diff delete+add against working" {
+    dolt sql <<SQL
+DELETE FROM keyless WHERE c0 = 2;
+INSERT INTO keyless VALUES (2,2)
+SQL
+    run dolt diff
+    [ $status -eq 0 ]
+    [[ "$output" = "|  +  | 2  | 2  |" ]] || false
+    [[ "$output" = "|  -  | 2  | 2  |" ]] || false
+}
+
+@test "keyless diff delete+add on two branches" {
+    dolt branch other
+
+    dolt sql -q "INSERT INTO keyless VALUES (2,2);"
+    dolt commit -am "inserted on master"
+
+    dolt checkout other
+    dolt sql <<SQL
+DELETE FROM keyless WHERE c0 = 2;
+INSERT INTO keyless VALUES (2,2)
+SQL
+    dolt commit -am "inserted on other"
+
+    run dolt diff master
+    [ $status -eq 0 ]
+    [[ "$output" = "|  -  | 2  | 2  |" ]] || false
+}
+
+@test "keyless merge delete+add on two branches" {
+    dolt branch other
+
+    dolt sql -q "INSERT INTO keyless VALUES (2,2);"
+    dolt commit -am "inserted on master"
+
+    dolt checkout other
+    dolt sql <<SQL
+DELETE FROM keyless WHERE c0 = 2;
+INSERT INTO keyless VALUES (2,2)
+SQL
+    dolt commit -am "inserted on other"
+
+    run dolt merge master
+    [ $status -eq 0 ]
+    run dolt sql -q "SELECT * FROM keyless;" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" = "0,0" ]] || false
+    [[ "$output" = "1,1" ]] || false
+    [[ "$output" = "1,1" ]] || false
+    [[ "$output" = "2,2" ]] || false
+}
