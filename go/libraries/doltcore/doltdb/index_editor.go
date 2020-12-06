@@ -70,17 +70,17 @@ func (indexEd *IndexEditor) Flush(ctx context.Context) error {
 	indexEd.flushMutex.Lock()
 	defer indexEd.flushMutex.Unlock()
 
+	// We have to ensure that the edit accumulator is closed, otherwise it will cause a memory leak
+	defer indexEd.ed.Close() // current edit accumulator is captured by defer
+
 	if indexEd.idx.IsUnique() {
 		for _, numOfKeys := range indexEd.keyCount {
 			if numOfKeys > 1 {
+				indexEd.reset(indexEd.data)
 				return fmt.Errorf("UNIQUE constraint violation on index: %s", indexEd.idx.Name())
 			}
 		}
-		indexEd.keyCount = make(map[hash.Hash]int64)
 	}
-
-	// We have to ensure that the edit accumulator is closed, otherwise it will cause a memory leak
-	defer indexEd.ed.Close() // current edit accumulator is captured by defer
 
 	accEdits, err := indexEd.ed.FinishedEditing()
 	if err != nil {
