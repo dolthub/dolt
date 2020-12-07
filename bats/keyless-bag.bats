@@ -105,7 +105,7 @@ CSV
     [ "$output" = "" ]
 }
 
-# in-place updates create become add/drop
+# in-place updates create become drop/add
 @test "keyless diff with in-place updates (working set)" {
     dolt sql -q "UPDATE keyless SET c1 = 9 where c0 = 2;"
     run dolt diff
@@ -114,7 +114,7 @@ CSV
     [[ "$lines[@]" = "|  +  | 2  | 9  |" ]] || false
 }
 
-# in-place updates create become add/drop
+# in-place updates create become drop/add
 @test "keyless sql diff with in-place updates (working set)" {
     dolt sql -q "UPDATE keyless SET c1 = 9 where c0 = 2;"
     run dolt diff -r sql
@@ -145,7 +145,7 @@ CSV
     [ "$output" = "" ]
 }
 
-# in-place updates create cell-wise diffs
+# in-place updates diff as drop/add
 @test "keyless diff with in-place updates (branches)" {
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
     dolt commit -am "added rows"
@@ -168,7 +168,7 @@ CSV
     [[ "$lines[@]" = "|  +  | 9  | 29  |" ]] || false
 }
 
-# where in-place updates are divergent, both versions are kept
+# where in-place updates are divergent, both versions are kept on merge
 # same for hidden key and bag semantics
 @test "keyless merge with in-place updates (branches)" {
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"

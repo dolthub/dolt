@@ -30,17 +30,17 @@ teardown() {
     run dolt sql -q "SHOW CREATE TABLE keyless;" -r csv
     [ $status -eq 0 ]
     [[ "$lines[@]" = "CREATE TABLE \`keyless\` (" ]] || false
-    [[ "$lines[@]" = "\`c1\` int," ]] || false
-    [[ "$lines[@]" = "\`c2\` int" ]] || false
-    [[ "$lines[@]" = ")" ]] || false
+    [[ "$lines[@]" = "\`c0\` int," ]] || false
+    [[ "$lines[@]" = "\`c1\` int" ]] || false
+    [[ "$lines[@]" = ");" ]] || false
 
-    run dolt sql -q "SELECT count(*) FROM keyless;" -r csv
+    run dolt sql -q "SELECT sum(c0),sum(c1) FROM keyless;" -r csv
     [ $status -eq 0 ]
-    [[ "$output" = "4" ]] || false
+    [[ "$output" = "4,4" ]] || false
 }
 
 @test "delete from keyless" {
-    run dolt sql -q "DELETE FROM keyless WHERE c1 = 2;"
+    run dolt sql -q "DELETE FROM keyless WHERE c0 = 2;"
     [ $status -eq 0 ]
 
     run dolt sql -q "SELECT * FROM keyless ORDER BY c0;" -r csv
@@ -50,6 +50,7 @@ teardown() {
     [[ "$lines[@]" = "1,1" ]] || false
 }
 
+# order will differ without 'ORDER BY' clause
 @test "update keyless" {
     run dolt sql -q "UPDATE keyless SET c0 = 9 WHERE c0 = 2;"
     [ $status -eq 0 ]
@@ -71,11 +72,11 @@ c0,c1
 1,1
 1,1
 CSV
-    dolt table import -c tbl data.csv
-    run dolt sql -q "SELECT count(*) FROM tbl;" -r csv
+    dolt table import -c imported data.csv
+    run dolt sql -q "SELECT count(*) FROM imported;" -r csv
     [ $status -eq 0 ]
     [[ "$lines[@]" = "4" ]] || false
-    run dolt sql -q "SELECT sum(c0),sum(c1) FROM tbl;" -r csv
+    run dolt sql -q "SELECT sum(c0),sum(c1) FROM imported;" -r csv
     [ $status -eq 0 ]
     [[ "$lines[@]" = "4,4" ]] || false
 }
@@ -93,7 +94,7 @@ CSV
     run dolt sql -q "SELECT count(*) FROM keyless;" -r csv
     [ $status -eq 0 ]
     [[ "$lines[@]" = "8" ]] || false
-    run dolt sql -q "SELECT sum(c0),sum(c1) FROM tbl;" -r csv
+    run dolt sql -q "SELECT sum(c0),sum(c1) FROM keyless;" -r csv
     [ $status -eq 0 ]
     [[ "$lines[@]" = "8,8" ]] || false
 }
@@ -274,6 +275,7 @@ SQL
     [ "${#lines[@]}" -eq 4 ]
 }
 
+# order will differ without 'ORDER BY' clause
 @test "keyless merge duplicate updates" {
     make_dupe_table
 
@@ -289,7 +291,7 @@ SQL
 
     run dolt merge right
     [ $status -eq 0 ]
-    run dolt sql -q "SELECT * FROM dupe ORDER BY c1" -r csv
+    run dolt sql -q "SELECT * FROM dupe ORDER BY c0" -r csv
     [ $status -eq 0 ]
     [[ "$lines[@]" = "1,1" ]] || false
     [[ "$lines[@]" = "1,1" ]] || false

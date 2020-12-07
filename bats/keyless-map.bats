@@ -173,7 +173,8 @@ CSV
     [[ "$lines[@]" = "|  >  | 9  | 29  |" ]] || false
 }
 
-# where in-place updates are divergent, both versions are kept
+# where in-place updates are divergent, both versions are kept on merge
+# same for hidden key and bag semantics
 @test "keyless merge with in-place updates (branches)" {
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
     dolt commit -am "added rows"
@@ -213,7 +214,7 @@ CSV
     [ $status -eq 0 ]
     [[ "$lines[@]" = "|  -  | 7  | 7  |" ]] || false
     [[ "$lines[@]" = "|  +  | 9  | 9  |" ]] || false
-        # row (8,8) creates no diff
+    # row (8,8) creates no diff
     [[ "$lines[@]" = "|  -  | 9  | 9  |" ]] || false
     [[ "$lines[@]" = "|  +  | 7  | 7  |" ]] || false
 }
