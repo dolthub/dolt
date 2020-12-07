@@ -120,6 +120,11 @@ func (ti *uuidType) ParseValue(str *string) (types.Value, error) {
 	return types.UUID(uuidVal), nil
 }
 
+// Promote implements TypeInfo interface.
+func (ti *uuidType) Promote() TypeInfo {
+	return ti
+}
+
 // String implements TypeInfo interface.
 func (ti *uuidType) String() string {
 	return "Uuid"

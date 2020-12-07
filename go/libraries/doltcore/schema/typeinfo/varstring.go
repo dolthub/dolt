@@ -197,6 +197,11 @@ func (ti *varStringType) ParseValue(str *string) (types.Value, error) {
 	return ti.ConvertValueToNomsValue(*str)
 }
 
+// Promote implements TypeInfo interface.
+func (ti *varStringType) Promote() TypeInfo {
+	return &varStringType{ti.sqlStringType.Promote().(sql.StringType)}
+}
+
 // String implements TypeInfo interface.
 func (ti *varStringType) String() string {
 	sqlType := ""

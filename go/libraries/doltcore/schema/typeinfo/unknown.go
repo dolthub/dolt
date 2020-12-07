@@ -73,6 +73,11 @@ func (ti *unknownImpl) ParseValue(*string) (types.Value, error) {
 	return nil, fmt.Errorf(`"Unknown" cannot convert any strings to a Noms value`)
 }
 
+// Promote implements TypeInfo interface.
+func (ti *unknownImpl) Promote() TypeInfo {
+	return ti
+}
+
 // String implements TypeInfo interface.
 func (ti *unknownImpl) String() string {
 	return "Unknown"

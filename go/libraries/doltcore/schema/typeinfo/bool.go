@@ -149,6 +149,11 @@ func (ti *boolType) ParseValue(str *string) (types.Value, error) {
 	return ti.ConvertValueToNomsValue(*str)
 }
 
+// Promote implements TypeInfo interface.
+func (ti *boolType) Promote() TypeInfo {
+	return ti
+}
+
 // String implements TypeInfo interface.
 func (ti *boolType) String() string {
 	return "Bool"

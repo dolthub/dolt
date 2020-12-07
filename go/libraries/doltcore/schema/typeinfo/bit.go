@@ -164,6 +164,11 @@ func (ti *bitType) ParseValue(str *string) (types.Value, error) {
 	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
 }
 
+// Promote implements TypeInfo interface.
+func (ti *bitType) Promote() TypeInfo {
+	return &bitType{ti.sqlBitType.Promote().(sql.BitType)}
+}
+
 // String implements TypeInfo interface.
 func (ti *bitType) String() string {
 	return fmt.Sprintf("Bit(%v)", ti.sqlBitType.NumberOfBits())

@@ -178,6 +178,11 @@ func (ti *enumType) ParseValue(str *string) (types.Value, error) {
 	return types.Uint(val), nil
 }
 
+// Promote implements TypeInfo interface.
+func (ti *enumType) Promote() TypeInfo {
+	return &enumType{ti.sqlEnumType.Promote().(sql.EnumType)}
+}
+
 // String implements TypeInfo interface.
 func (ti *enumType) String() string {
 	return fmt.Sprintf(`Enum(Collation: %v, Values: %v)`, ti.sqlEnumType.Collation().String(), strings.Join(ti.sqlEnumType.Values(), ", "))

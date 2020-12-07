@@ -189,6 +189,11 @@ func (ti *varBinaryType) ParseValue(str *string) (types.Value, error) {
 	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
 }
 
+// Promote implements TypeInfo interface.
+func (ti *varBinaryType) Promote() TypeInfo {
+	return &varBinaryType{ti.sqlBinaryType.Promote().(sql.StringType)}
+}
+
 // String implements TypeInfo interface.
 func (ti *varBinaryType) String() string {
 	sqlType := ""

@@ -118,6 +118,11 @@ func (ti *timeType) ParseValue(str *string) (types.Value, error) {
 	return types.Int(val), nil
 }
 
+// Promote implements TypeInfo interface.
+func (ti *timeType) Promote() TypeInfo {
+	return &timeType{ti.sqlTimeType.Promote().(sql.TimeType)}
+}
+
 // String implements TypeInfo interface.
 func (ti *timeType) String() string {
 	return "Time"
