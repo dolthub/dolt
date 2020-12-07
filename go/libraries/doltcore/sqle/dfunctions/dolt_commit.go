@@ -16,7 +16,6 @@ package dfunctions
 
 import (
 	"fmt"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -138,6 +137,32 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	})
 
 	return h, err
+}
+
+
+func hasWorkingSetChanges(ctx *sql.Context, sess *sqle.DoltSession, dbName string) bool {
+	_, _, parentRoot, err := getParent(ctx, nil, sess, dbName)
+
+	// TODO: Error
+	if err != nil {
+		return false
+	}
+
+	root, ok := sess.GetRoot(dbName)
+
+	// TODO: error
+	if !ok {
+		return false
+	}
+
+	err = checkForUncommittedChanges(root, parentRoot)
+
+	// TODO: do a specific error check
+	if err != nil {
+		return true
+	}
+
+	return false
 }
 
 func (d DoltCommitFunc) String() string {
