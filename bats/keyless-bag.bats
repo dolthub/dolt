@@ -20,16 +20,16 @@ teardown() {
     teardown_common
 }
 
-@test "keyless tables read in insert order" {
+@test "keyless tables read in sorted order" {
     run dolt sql -q "SELECT * FROM keyless;" -r csv
     [ $status -eq 0 ]
-    [[ "$lines[@]" = "0,0" ]] || false
-    [[ "$lines[@]" = "2,2" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
+    [[ "$output" = "0,0" ]] || false
+    [[ "$output" = "1,1" ]] || false
+    [[ "$output" = "1,1" ]] || false
+    [[ "$output" = "2,2" ]] || false
 }
 
-# hidden key will maintain the import row order
+# tables read in sorted order
 @test "keyless table import" {
     cat <<CSV > data.csv
 c0,c1
@@ -45,13 +45,13 @@ CSV
     run dolt sql -q "SELECT * FROM tbl;" -r csv
     [ $status -eq 0 ]
     [[ "$lines[@]" = "0,0" ]] || false
+    [[ "$lines[@]" = "1,1" ]] || false
+    [[ "$lines[@]" = "1,1" ]] || false
     [[ "$lines[@]" = "2,2" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
 }
 
 # updates are appends to the end of the table
-# import order is maintained
+# tables read in sorted order
 @test "keyless table update" {
     cat <<CSV > data.csv
 c0,c1
@@ -67,16 +67,16 @@ CSV
     run dolt sql -q "SELECT * FROM keyless;" -r csv
     [ $status -eq 0 ]
     [[ "$lines[@]" = "0,0" ]] || false
-    [[ "$lines[@]" = "2,2" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
     [[ "$lines[@]" = "0,0" ]] || false
+    [[ "$lines[@]" = "1,1" ]] || false
+    [[ "$lines[@]" = "1,1" ]] || false
+    [[ "$lines[@]" = "1,1" ]] || false
+    [[ "$lines[@]" = "1,1" ]] || false
     [[ "$lines[@]" = "2,2" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
+    [[ "$lines[@]" = "2,2" ]] || false
 }
 
-# row order is respected, sorting data creates a diff
+# tables are read/stored in sorted order
 @test "keyless table replace" {
     cat <<CSV > data.csv
 c0,c1
@@ -102,23 +102,19 @@ CSV
     [ $status -eq 0 ]
     run dolt diff
     [ $status -eq 0 ]
-    [[ "$lines[@]" = "|  -  | 2  | 2  |" ]] || false
-    [[ "$lines[@]" = "|  +  | 1  | 1  |" ]] || false
-    # third row creates no diff
-    [[ "$lines[@]" = "|  -  | 1  | 1  |" ]] || false
-    [[ "$lines[@]" = "|  +  | 2  | 2  |" ]] || false
+    [ "$output" = "" ]
 }
 
-# in-place updates create cell-wise diffs
+# in-place updates create become add/drop
 @test "keyless diff with in-place updates (working set)" {
     dolt sql -q "UPDATE keyless SET c1 = 9 where c0 = 2;"
     run dolt diff
     [ $status -eq 0 ]
-    [[ "$lines[@]" = "|  <  | 2  | 2  |" ]] || false
-    [[ "$lines[@]" = "|  >  | 2  | 9  |" ]] || false
+    [[ "$lines[@]" = "|  -  | 2  | 2  |" ]] || false
+    [[ "$lines[@]" = "|  +  | 2  | 9  |" ]] || false
 }
 
-# diff -r sql can't create update statements
+# in-place updates create become add/drop
 @test "keyless sql diff with in-place updates (working set)" {
     dolt sql -q "UPDATE keyless SET c1 = 9 where c0 = 2;"
     run dolt diff -r sql
@@ -127,7 +123,7 @@ CSV
     [[ "$lines[@]" = "INSERT INTO keyless (c0,c1) VALUES (2,9);" ]] || false
 }
 
-# update patch deletes from middle and inserts at the end
+# update patch always recreates identical branches
 @test "keyless updates as a sql diff patch" {
     dolt branch left
     dolt checkout -b right
@@ -146,8 +142,7 @@ CSV
 
     run dolt diff right
     [ $status -eq 0 ]
-    [[ "$lines[@]" = "|  -  | 2  | 9  |" ]] || false
-    [[ "$lines[@]" = "|  +  | 2  | 9  |" ]] || false
+    [ "$output" = "" ]
 }
 
 # in-place updates create cell-wise diffs
@@ -165,15 +160,16 @@ CSV
 
     run dolt diff master
     [ $status -eq 0 ]
-    [[ "$lines[@]" = "|  <  | 7  | 17  |" ]] || false
-    [[ "$lines[@]" = "|  >  | 7  | 27  |" ]] || false
-    [[ "$lines[@]" = "|  <  | 8  | 18  |" ]] || false
-    [[ "$lines[@]" = "|  >  | 8  | 28  |" ]] || false
-    [[ "$lines[@]" = "|  <  | 9  | 19  |" ]] || false
-    [[ "$lines[@]" = "|  >  | 9  | 29  |" ]] || false
+    [[ "$lines[@]" = "|  -  | 7  | 17  |" ]] || false
+    [[ "$lines[@]" = "|  +  | 7  | 27  |" ]] || false
+    [[ "$lines[@]" = "|  -  | 8  | 18  |" ]] || false
+    [[ "$lines[@]" = "|  +  | 8  | 28  |" ]] || false
+    [[ "$lines[@]" = "|  -  | 9  | 19  |" ]] || false
+    [[ "$lines[@]" = "|  +  | 9  | 29  |" ]] || false
 }
 
 # where in-place updates are divergent, both versions are kept
+# same for hidden key and bag semantics
 @test "keyless merge with in-place updates (branches)" {
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
     dolt commit -am "added rows"
@@ -198,7 +194,7 @@ CSV
     [[ "$lines[@]" = "9,19" ]] || false
 }
 
-# hidden key creates insert order, which creates a diff
+# bag semantics diffs membership, not order
 @test "keyless diff branches with reordered mutation history" {
     dolt branch other
 
@@ -211,14 +207,10 @@ CSV
 
     run dolt diff master
     [ $status -eq 0 ]
-    [[ "$lines[@]" = "|  -  | 7  | 7  |" ]] || false
-    [[ "$lines[@]" = "|  +  | 9  | 9  |" ]] || false
-        # row (8,8) creates no diff
-    [[ "$lines[@]" = "|  -  | 9  | 9  |" ]] || false
-    [[ "$lines[@]" = "|  +  | 7  | 7  |" ]] || false
+    [ "$output" = "" ]
 }
 
-# hidden key creates insert order, which creates a diff
+# bag semantics diffs membership, not order
 @test "keyless merge branches with reordered mutation history" {
     dolt branch other
 
@@ -234,13 +226,11 @@ CSV
     run dolt sql -q "SELECT * FROM keyless WHERE c0 > 6;" -r csv
     [ $status -eq 0 ]
     [[ "$lines[@]" = "7,7" ]] || false
-    [[ "$lines[@]" = "9,9" ]] || false
     [[ "$lines[@]" = "8,8" ]] || false
     [[ "$lines[@]" = "9,9" ]] || false
-    [[ "$lines[@]" = "7,7" ]] || false
 }
 
-# hidden key is created on insert and doesn't change
+# convergent row data has convergent storage representation
 @test "keyless diff branches with convergent mutation history" {
     dolt branch other
 
@@ -257,15 +247,10 @@ SQL
 
     run dolt diff master
     [ $status -eq 0 ]
-    [[ "$lines[@]" = "|  -  | 7  | 7  |" ]] || false
-    [[ "$lines[@]" = "|  +  | 7  | 7  |" ]] || false
-    [[ "$lines[@]" = "|  -  | 8  | 8  |" ]] || false
-    [[ "$lines[@]" = "|  +  | 8  | 8  |" ]] || false
-    [[ "$lines[@]" = "|  -  | 9  | 9  |" ]] || false
-    [[ "$lines[@]" = "|  +  | 9  | 9  |" ]] || false
+    [ "$output" = "" ]
 }
 
-# hidden key is created on insert and doesn't change
+# convergent row data has convergent storage representation
 @test "keyless merge branches with convergent mutation history" {
     dolt branch other
 
@@ -286,14 +271,11 @@ SQL
     run dolt sql -q "SELECT * FROM keyless WHERE c0 > 6;" -r csv
     [ $status -eq 0 ]
     [[ "$lines[@]" = "7,7" ]] || false
-    [[ "$lines[@]" = "7,7" ]] || false
     [[ "$lines[@]" = "8,8" ]] || false
-    [[ "$lines[@]" = "8,8" ]] || false
-    [[ "$lines[@]" = "9,9" ]] || false
     [[ "$lines[@]" = "9,9" ]] || false
 }
 
-# extra row creates a cascading diff
+# bag semantics give minimal diff
 @test "keyless diff branches with offset mutation history" {
     dolt branch other
 
@@ -307,13 +289,8 @@ SQL
     run dolt diff master
     [ $status -eq 0 ]
     [[ "$lines[@]" = "|  +  | 7  | 7  |" ]] || false
-    [[ "$lines[@]" = "|  -  | 8  | 8  |" ]] || false
-    [[ "$lines[@]" = "|  +  | 8  | 8  |" ]] || false
-    [[ "$lines[@]" = "|  -  | 9  | 9  |" ]] || false
-    [[ "$lines[@]" = "|  +  | 9  | 9  |" ]] || false
 }
 
-# extra row creates a cascading diff
 @test "keyless merge branches with offset mutation history" {
     dolt branch other
 
@@ -331,8 +308,6 @@ SQL
     [[ "$lines[@]" = "7,7" ]] || false
     [[ "$lines[@]" = "7,7" ]] || false
     [[ "$lines[@]" = "8,8" ]] || false
-    [[ "$lines[@]" = "8,8" ]] || false
-    [[ "$lines[@]" = "9,9" ]] || false
     [[ "$lines[@]" = "9,9" ]] || false
 }
 
@@ -343,11 +318,9 @@ INSERT INTO keyless VALUES (2,2)
 SQL
     run dolt diff
     [ $status -eq 0 ]
-    [[ "$lines[@]" = "|  +  | 2  | 2  |" ]] || false
-    [[ "$lines[@]" = "|  -  | 2  | 2  |" ]] || false
+    [ "$output" = "" ]
 }
 
-# row gets deleted from the middle and added to the end
 @test "keyless diff delete+add on two branches" {
     dolt branch left
     dolt checkout -b right
@@ -384,6 +357,5 @@ SQL
     [ $status -eq 0 ]
     run dolt diff master
     [ $status -eq 0 ]
-    [[ "$lines[@]" = "|  -  | 2  | 2  |" ]] || false
-    [[ "$lines[@]" = "|  +  | 2  | 2  |" ]] || false
+    [ "$output" = "" ]
 }
