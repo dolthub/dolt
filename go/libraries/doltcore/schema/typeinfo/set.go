@@ -178,6 +178,11 @@ func (ti *setType) ParseValue(str *string) (types.Value, error) {
 	return types.Uint(val), nil
 }
 
+// Promote implements TypeInfo interface.
+func (ti *setType) Promote() TypeInfo {
+	return &setType{ti.sqlSetType.Promote().(sql.SetType)}
+}
+
 // String implements TypeInfo interface.
 func (ti *setType) String() string {
 	return fmt.Sprintf(`Set(Collation: %v, Values: %v)`, ti.sqlSetType.Collation().String(), strings.Join(ti.sqlSetType.Values(), ","))

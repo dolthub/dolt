@@ -170,6 +170,11 @@ func (ti *floatType) ParseValue(str *string) (types.Value, error) {
 	return ti.ConvertValueToNomsValue(*str)
 }
 
+// Promote implements TypeInfo interface.
+func (ti *floatType) Promote() TypeInfo {
+	return &floatType{ti.sqlFloatType.Promote().(sql.NumberType)}
+}
+
 // String implements TypeInfo interface.
 func (ti *floatType) String() string {
 	switch ti.sqlFloatType.Type() {

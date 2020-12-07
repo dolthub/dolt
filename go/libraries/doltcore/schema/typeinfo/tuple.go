@@ -91,6 +91,11 @@ func (ti *tupleType) ParseValue(str *string) (types.Value, error) {
 	return nil, fmt.Errorf(`"%v" cannot parse strings`, ti.String())
 }
 
+// Promote implements TypeInfo interface.
+func (ti *tupleType) Promote() TypeInfo {
+	return ti
+}
+
 // String implements TypeInfo interface.
 func (ti *tupleType) String() string {
 	return "Tuple"

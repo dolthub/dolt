@@ -134,6 +134,11 @@ func (ti *yearType) ParseValue(str *string) (types.Value, error) {
 	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
 }
 
+// Promote implements TypeInfo interface.
+func (ti *yearType) Promote() TypeInfo {
+	return &yearType{ti.sqlYearType.Promote().(sql.YearType)}
+}
+
 // String implements TypeInfo interface.
 func (ti *yearType) String() string {
 	return "Year"

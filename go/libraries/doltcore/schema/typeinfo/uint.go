@@ -202,6 +202,11 @@ func (ti *uintType) ParseValue(str *string) (types.Value, error) {
 	return ti.ConvertValueToNomsValue(*str)
 }
 
+// Promote implements TypeInfo interface.
+func (ti *uintType) Promote() TypeInfo {
+	return &uintType{ti.sqlUintType.Promote().(sql.NumberType)}
+}
+
 // String implements TypeInfo interface.
 func (ti *uintType) String() string {
 	switch ti.sqlUintType.Type() {

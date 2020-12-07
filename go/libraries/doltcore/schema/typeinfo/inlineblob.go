@@ -128,6 +128,11 @@ func (ti *inlineBlobType) ParseValue(str *string) (types.Value, error) {
 	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
 }
 
+// Promote implements TypeInfo interface.
+func (ti *inlineBlobType) Promote() TypeInfo {
+	return &inlineBlobType{ti.sqlBinaryType.Promote().(sql.StringType)}
+}
+
 // String implements TypeInfo interface.
 func (ti *inlineBlobType) String() string {
 	return "InlineBlob"

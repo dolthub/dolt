@@ -160,6 +160,11 @@ func (ti *decimalType) ParseValue(str *string) (types.Value, error) {
 	return ti.ConvertValueToNomsValue(*str)
 }
 
+// Promote implements TypeInfo interface.
+func (ti *decimalType) Promote() TypeInfo {
+	return &decimalType{ti.sqlDecimalType.Promote().(sql.DecimalType)}
+}
+
 // String implements TypeInfo interface.
 func (ti *decimalType) String() string {
 	return fmt.Sprintf("Decimal(%v, %v)", ti.sqlDecimalType.Precision(), ti.sqlDecimalType.Scale())

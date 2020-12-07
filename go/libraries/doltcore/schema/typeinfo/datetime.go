@@ -176,6 +176,11 @@ func (ti *datetimeType) ParseValue(str *string) (types.Value, error) {
 	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
 }
 
+// Promote implements TypeInfo interface.
+func (ti *datetimeType) Promote() TypeInfo {
+	return &datetimeType{ti.sqlDatetimeType.Promote().(sql.DatetimeType)}
+}
+
 // String implements TypeInfo interface.
 func (ti *datetimeType) String() string {
 	return fmt.Sprintf(`Datetime(SQL: "%v")`, ti.sqlDatetimeType.String())
