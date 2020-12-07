@@ -16,6 +16,9 @@ package dtestutils
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"math"
 	"testing"
 
@@ -107,14 +110,29 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	wr := noms.NewNomsMapCreator(ctx, vrw, sch)
 
 	_, _, err := table.PipeRows(ctx, rd, wr, false)
-	_ = rd.Close(ctx)
-	_ = wr.Close(ctx)
+	require.NoError(t, err)
+	err = rd.Close(ctx)
+	require.NoError(t, err)
+	err = wr.Close(ctx)
+	require.NoError(t, err)
 
-	require.Nil(t, err, "Failed to seed initial data")
+	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
+	require.NoError(t, err)
+	empty, err := types.NewMap(ctx, vrw)
+	require.NoError(t, err)
+	tbl, err := doltdb.NewTable(ctx, vrw, schVal, wr.GetMap(), empty)
+	require.NoError(t, err)
+	tbl, err = editor.RebuildAllIndexes(ctx, tbl)
+	require.NoError(t, err)
 
-	empty, _ := types.NewMap(ctx, vrw)
-	err = dEnv.PutTableToWorking(ctx, wr.GetSchema(), wr.GetMap(), empty, tableName)
-	require.Nil(t, err, "Unable to put initial value of table in in-mem noms db")
+	sch, err = tbl.GetSchema(ctx)
+	require.NoError(t, err)
+	rows, err := tbl.GetRowData(ctx)
+	require.NoError(t, err)
+	indexes, err := tbl.GetIndexData(ctx)
+	require.NoError(t, err)
+	err = dEnv.PutTableToWorking(ctx, sch, rows, indexes, tableName)
+	require.NoError(t, err)
 }
 
 // MustSchema takes a variable number of columns and returns a schema.
