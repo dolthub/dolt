@@ -20270,6 +20270,6 @@ func TestExplain(t *testing.T) {
 		" ├─ TableAlias(d)\n" +
 		" │   └─ Table(daily_summary)\n" +
 		" └─ TableAlias(t)\n" +
-		"     └─ Table(symbols)"
+		"     └─ IndexedTableAccess(symbols on [symbols.Symbol])"
 	assert.Equal(t, expectedExplain, strings.Join(rowStrings, "\n"))
 }
