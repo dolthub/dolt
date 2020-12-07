@@ -16,6 +16,7 @@ package dtestutils
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -74,20 +75,26 @@ func CreateEnvWithSeedData(t *testing.T) *env.DoltEnv {
 	err = wr.Close(ctx)
 	require.NoError(t, err)
 
-	wrSch := wr.GetSchema()
-	wrSch.Indexes().Merge(sch.Indexes().AllIndexes()...)
+	ai := sch.Indexes().AllIndexes()
+	sch = wr.GetSchema()
+	sch.Indexes().Merge(ai...)
 
-	idxSch := sch.Indexes().GetByName(IndexName)
-	idxRows, err := editor.RebuildIndexRowData(ctx, vrw, sch, wr.GetMap(), idxSch)
+	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
+	require.NoError(t, err)
+	empty, err := types.NewMap(ctx, vrw)
+	require.NoError(t, err)
+	tbl, err := doltdb.NewTable(ctx, vrw, schVal, wr.GetMap(), empty)
+	require.NoError(t, err)
+	tbl, err = editor.RebuildAllIndexes(ctx, tbl)
 	require.NoError(t, err)
 
-	idxRef, err := doltdb.WriteValAndGetRef(ctx, vrw, idxRows)
+	sch, err = tbl.GetSchema(ctx)
 	require.NoError(t, err)
-
-	indexMap, err := types.NewMap(ctx, vrw, types.String(IndexName), idxRef)
+	rows, err := tbl.GetRowData(ctx)
 	require.NoError(t, err)
-
-	err = dEnv.PutTableToWorking(ctx, wrSch, wr.GetMap(), indexMap, TableName)
+	indexes, err := tbl.GetIndexData(ctx)
+	require.NoError(t, err)
+	err = dEnv.PutTableToWorking(ctx, sch, rows, indexes, TableName)
 	require.NoError(t, err)
 
 	return dEnv

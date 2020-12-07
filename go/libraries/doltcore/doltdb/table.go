@@ -55,7 +55,7 @@ type Table struct {
 	tableStruct types.Struct
 }
 
-// NewTable creates a noms Struct which stores the schema and the row data. If indexData is nil, then it is rebuilt.
+// NewTable creates a noms Struct which stores row data, index data, and schema.
 func NewTable(ctx context.Context, vrw types.ValueReadWriter, schemaVal types.Value, rowData types.Map, indexData types.Map) (*Table, error) {
 	schemaRef, err := WriteValAndGetRef(ctx, vrw, schemaVal)
 	if err != nil {

@@ -17,11 +17,10 @@ package actions
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 type AutoResolveStats struct {

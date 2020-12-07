@@ -17,11 +17,11 @@ package indexcmds
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )

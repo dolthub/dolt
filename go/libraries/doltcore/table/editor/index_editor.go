@@ -21,8 +21,6 @@ import (
 	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
@@ -243,54 +241,6 @@ func (indexEd *IndexEditor) reset(indexData types.Map) {
 	indexEd.numOutstandingEdits++
 }
 
-// NewTable creates a noms Struct which stores the schema and the row data. If indexData is nil, then it is rebuilt.
-func BuildIndexesForTable(ctx context.Context, vrw types.ValueReadWriter, schemaVal types.Value, rowData types.Map, indexData *types.Map) error {
-	if indexData == nil {
-		sch, err := encoding.UnmarshalSchemaNomsValue(ctx, rowData.Format(), schemaVal)
-		if err != nil {
-			return err
-		}
-		indexesMap, err := types.NewMap(ctx, vrw)
-		if err != nil {
-			return err
-		}
-
-		for _, index := range sch.Indexes().AllIndexes() {
-			rebuiltIndexRowData, err := RebuildIndexRowData(ctx, vrw, sch, rowData, index)
-			if err != nil {
-				return err
-			}
-			rebuiltIndexRowDataRef, err := doltdb.WriteValAndGetRef(ctx, vrw, rebuiltIndexRowData)
-			if err != nil {
-				return err
-			}
-			indexesMap, err = indexesMap.Edit().Set(types.String(index.Name()), rebuiltIndexRowDataRef).Map(ctx)
-			if err != nil {
-				return err
-			}
-		}
-
-		indexData = &indexesMap
-	}
-
-	//schemaRef, err := doltdb.WriteValAndGetRef(ctx, vrw, schemaVal)
-	//if err != nil {
-	//	return err
-	//}
-	//
-	//rowDataRef, err := doltdb.WriteValAndGetRef(ctx, vrw, rowData)
-	//if err != nil {
-	//	return err
-	//}
-	//
-	//indexesRef, err := doltdb.WriteValAndGetRef(ctx, vrw, indexData)
-	//if err != nil {
-	//	return err
-	//}
-
-	return nil
-}
-
 func RebuildIndex(ctx context.Context, tbl *doltdb.Table, indexName string) (types.Map, error) {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
@@ -307,7 +257,7 @@ func RebuildIndex(ctx context.Context, tbl *doltdb.Table, indexName string) (typ
 		return types.EmptyMap, fmt.Errorf("index `%s` does not exist", indexName)
 	}
 
-	rebuiltIndexData, err := RebuildIndexRowData(ctx, tbl.ValueReadWriter(), sch, tableRowData, index)
+	rebuiltIndexData, err := rebuildIndexRowData(ctx, tbl.ValueReadWriter(), sch, tableRowData, index)
 	if err != nil {
 		return types.EmptyMap, err
 	}
@@ -335,7 +285,7 @@ func RebuildAllIndexes(ctx context.Context, t *doltdb.Table) (*doltdb.Table, err
 	}
 
 	for _, index := range sch.Indexes().AllIndexes() {
-		rebuiltIndexRowData, err := RebuildIndexRowData(ctx, t.ValueReadWriter(), sch, tableRowData, index)
+		rebuiltIndexRowData, err := rebuildIndexRowData(ctx, t.ValueReadWriter(), sch, tableRowData, index)
 		if err != nil {
 			return nil, err
 		}
@@ -352,7 +302,7 @@ func RebuildAllIndexes(ctx context.Context, t *doltdb.Table) (*doltdb.Table, err
 	return t.SetIndexData(ctx, indexesMap)
 }
 
-func RebuildIndexRowData(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, tblRowData types.Map, index schema.Index) (types.Map, error) {
+func rebuildIndexRowData(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, tblRowData types.Map, index schema.Index) (types.Map, error) {
 	emptyIndexMap, err := types.NewMap(ctx, vrw)
 	if err != nil {
 		return types.EmptyMap, err

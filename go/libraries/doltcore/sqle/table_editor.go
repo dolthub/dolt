@@ -17,10 +17,9 @@ package sqle
 import (
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 // sqlTableEditor is a wrapper for *doltdb.SessionedTableEditor that complies with the SQL interface.

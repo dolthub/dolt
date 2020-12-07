@@ -216,30 +216,3 @@ func TestServerSelect(t *testing.T) {
 		})
 	}
 }
-
-//func dtestutils.CreateEnvWithSeedData(t *testing.T) *env.DoltEnv {
-//	dEnv := dtestutils.CreateTestEnv()
-//	imt, sch := dtestutils.CreateTestDataTable(true)
-//
-//	ctx := context.Background()
-//	vrw := dEnv.DoltDB.ValueReadWriter()
-//	rd := table.NewInMemTableReader(imt)
-//	wr := noms.NewNomsMapCreator(ctx, vrw, sch)
-//
-//	_, _, err := table.PipeRows(ctx, rd, wr, false)
-//	_ = rd.Close(ctx)
-//	_ = wr.Close(ctx)
-//
-//	if err != nil {
-//		t.Error("Failed to seed initial data", err)
-//	}
-//
-//	empty, _ := types.NewMap(ctx, vrw)
-//	err = dEnv.PutTableToWorking(context.Background(), wr.GetSchema(), wr.GetMap(), empty,"people")
-//
-//	if err != nil {
-//		t.Error("Unable to put initial value of table in in mem noms db", err)
-//	}
-//
-//	return dEnv
-//}
