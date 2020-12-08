@@ -2,8 +2,6 @@
 
 Dolt is Git for data!
 
-![Dolt!](./dolt_hi.svg)
-
 Dolt is a SQL database that you can fork, clone, branch, merge, push
 and pull just like a git repository. Connect to Dolt just like any
 MySQL database to run queries or update the data using SQL
@@ -17,6 +15,7 @@ baby!
 We also built [DoltHub](https://www.dolthub.com), a place to share
 Dolt databases. We host public data for free!
 
+<img style="max-width: 100px; height: auto" src="./dolt_hi.svg"/>
 [Join us on Discord](https://discord.com/invite/RFwfYpu) to say hi and
 ask questions!
 
