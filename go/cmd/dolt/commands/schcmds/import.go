@@ -303,22 +303,21 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 			return errhand.BuildDError("error: failed to encode schema.").AddCause(err).Build()
 		}
 
-		m, err := types.NewMap(ctx, root.VRW())
+		empty, err := types.NewMap(ctx, root.VRW())
 
 		if err != nil {
 			return errhand.BuildDError("error: failed to create table.").AddCause(err).Build()
 		}
 
-		var indexData *types.Map
+		indexData := empty
 		if tblExists {
-			existingIndexData, err := tbl.GetIndexData(ctx)
+			indexData, err = tbl.GetIndexData(ctx)
 			if err != nil {
 				return errhand.BuildDError("error: failed to create table.").AddCause(err).Build()
 			}
-			indexData = &existingIndexData
 		}
 
-		tbl, err = doltdb.NewTable(ctx, root.VRW(), schVal, m, indexData)
+		tbl, err = doltdb.NewTable(ctx, root.VRW(), schVal, empty, indexData)
 
 		if err != nil {
 			return errhand.BuildDError("error: failed to create table.").AddCause(err).Build()

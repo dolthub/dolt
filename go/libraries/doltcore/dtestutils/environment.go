@@ -16,9 +16,16 @@ package dtestutils
 
 import (
 	"context"
+	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -48,6 +55,47 @@ func CreateTestEnv() *env.DoltEnv {
 	if err != nil {
 		panic("Failed to initialize environment:" + err.Error())
 	}
+
+	return dEnv
+}
+
+func CreateEnvWithSeedData(t *testing.T) *env.DoltEnv {
+	dEnv := CreateTestEnv()
+	imt, sch := CreateTestDataTable(true)
+
+	ctx := context.Background()
+	vrw := dEnv.DoltDB.ValueReadWriter()
+	rd := table.NewInMemTableReader(imt)
+	wr := noms.NewNomsMapCreator(ctx, vrw, sch)
+
+	_, _, err := table.PipeRows(ctx, rd, wr, false)
+	require.NoError(t, err)
+	err = rd.Close(ctx)
+	require.NoError(t, err)
+	err = wr.Close(ctx)
+	require.NoError(t, err)
+
+	ai := sch.Indexes().AllIndexes()
+	sch = wr.GetSchema()
+	sch.Indexes().Merge(ai...)
+
+	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
+	require.NoError(t, err)
+	empty, err := types.NewMap(ctx, vrw)
+	require.NoError(t, err)
+	tbl, err := doltdb.NewTable(ctx, vrw, schVal, wr.GetMap(), empty)
+	require.NoError(t, err)
+	tbl, err = editor.RebuildAllIndexes(ctx, tbl)
+	require.NoError(t, err)
+
+	sch, err = tbl.GetSchema(ctx)
+	require.NoError(t, err)
+	rows, err := tbl.GetRowData(ctx)
+	require.NoError(t, err)
+	indexes, err := tbl.GetIndexData(ctx)
+	require.NoError(t, err)
+	err = dEnv.PutTableToWorking(ctx, sch, rows, indexes, TableName)
+	require.NoError(t, err)
 
 	return dEnv
 }

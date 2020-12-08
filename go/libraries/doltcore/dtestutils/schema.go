@@ -22,10 +22,13 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -98,20 +101,38 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	imt := table.NewInMemTable(sch)
 
 	for _, r := range rs {
-		imt.AppendRow(r)
+		_ = imt.AppendRow(r)
 	}
 
+	ctx := context.Background()
+	vrw := dEnv.DoltDB.ValueReadWriter()
 	rd := table.NewInMemTableReader(imt)
-	wr := noms.NewNomsMapCreator(context.Background(), dEnv.DoltDB.ValueReadWriter(), sch)
+	wr := noms.NewNomsMapCreator(ctx, vrw, sch)
 
-	_, _, err := table.PipeRows(context.Background(), rd, wr, false)
-	rd.Close(context.Background())
-	wr.Close(context.Background())
+	_, _, err := table.PipeRows(ctx, rd, wr, false)
+	require.NoError(t, err)
+	err = rd.Close(ctx)
+	require.NoError(t, err)
+	err = wr.Close(ctx)
+	require.NoError(t, err)
 
-	require.Nil(t, err, "Failed to seed initial data")
+	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
+	require.NoError(t, err)
+	empty, err := types.NewMap(ctx, vrw)
+	require.NoError(t, err)
+	tbl, err := doltdb.NewTable(ctx, vrw, schVal, wr.GetMap(), empty)
+	require.NoError(t, err)
+	tbl, err = editor.RebuildAllIndexes(ctx, tbl)
+	require.NoError(t, err)
 
-	err = dEnv.PutTableToWorking(context.Background(), *wr.GetMap(), wr.GetSchema(), tableName)
-	require.Nil(t, err, "Unable to put initial value of table in in-mem noms db")
+	sch, err = tbl.GetSchema(ctx)
+	require.NoError(t, err)
+	rows, err := tbl.GetRowData(ctx)
+	require.NoError(t, err)
+	indexes, err := tbl.GetIndexData(ctx)
+	require.NoError(t, err)
+	err = dEnv.PutTableToWorking(ctx, sch, rows, indexes, tableName)
+	require.NoError(t, err)
 }
 
 // MustSchema takes a variable number of columns and returns a schema.

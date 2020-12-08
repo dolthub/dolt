@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -261,22 +262,16 @@ func init() {
 	index, _ = sch.Indexes().AddIndexByColTags("idx_name", []uint64{nameTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
 }
 
-func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, types.Map, types.Map) {
+func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, types.Map, types.Map) {
 	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_7_18, doltdb.InMemDoltDB)
 	vrw := ddb.ValueReadWriter()
 
 	err := ddb.WriteEmptyRepo(context.Background(), name, email)
-
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 
 	masterHeadSpec, _ := doltdb.NewCommitSpec("master")
 	masterHead, err := ddb.Resolve(context.Background(), masterHeadSpec, nil)
-
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 
 	initialRows, err := types.NewMap(context.Background(), vrw,
 		keyTuples[0], valsToTestTupleWithoutPks([]types.Value{types.String("person 1"), types.String("dufus")}),
@@ -289,10 +284,7 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 		keyTuples[7], valsToTestTupleWithoutPks([]types.Value{types.String("person 8"), types.String("miss")}),
 		keyTuples[8], valsToTestTupleWithoutPks([]types.Value{types.String("person 9"), types.NullValue}),
 	)
-
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 
 	updateRowEditor := initialRows.Edit()                                                                                          // leave 0 as is
 	updateRowEditor.Remove(keyTuples[1])                                                                                           // remove 1 from both
@@ -306,10 +298,7 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 	updateRowEditor.Set(keyTuples[12], valsToTestTupleWithoutPks([]types.Value{types.String("person thirteen"), types.NullValue})) // add 12 in both with differences
 
 	updatedRows, err := updateRowEditor.Map(context.Background())
-
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 
 	mergeRowEditor := initialRows.Edit()                                                                                                 // leave 0 as is
 	mergeRowEditor.Remove(keyTuples[1])                                                                                                  // remove 1 from both
@@ -323,10 +312,7 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 	mergeRowEditor.Set(keyTuples[12], valsToTestTupleWithoutPks([]types.Value{types.String("person number thirteen"), types.NullValue})) // add 12 in both with differences
 
 	mergeRows, err := mergeRowEditor.Map(context.Background())
-
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 
 	expectedRows, err := types.NewMap(context.Background(), vrw,
 		keyTuples[0], mustGetValue(initialRows.MaybeGet(context.Background(), keyTuples[0])), // unaltered
@@ -356,71 +342,65 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 		keyTuples[8], mustTuple(updateConflict.ToNomsList(vrw)),
 		keyTuples[12], mustTuple(addConflict.ToNomsList(vrw)),
 	)
+	require.NoError(t, err)
 
-	if err != nil {
-		panic(err)
-	}
+	schVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), vrw, sch)
+	require.NoError(t, err)
 
-	schVal, _ := encoding.MarshalSchemaAsNomsValue(context.Background(), vrw, sch)
+	emptyMap, err := types.NewMap(context.Background(), vrw)
+	require.NoError(t, err)
 
-	tbl, err := doltdb.NewTable(context.Background(), vrw, schVal, initialRows, nil)
+	tbl, err := doltdb.NewTable(context.Background(), vrw, schVal, initialRows, emptyMap)
+	require.NoError(t, err)
+	tbl, err = editor.RebuildAllIndexes(context.Background(), tbl)
+	require.NoError(t, err)
 
-	if err != nil {
-		panic(err)
-	}
+	updatedTbl, err := doltdb.NewTable(context.Background(), vrw, schVal, updatedRows, emptyMap)
+	require.NoError(t, err)
+	updatedTbl, err = editor.RebuildAllIndexes(context.Background(), updatedTbl)
+	require.NoError(t, err)
 
-	updatedTbl, err := doltdb.NewTable(context.Background(), vrw, schVal, updatedRows, nil)
-
-	if err != nil {
-		panic(err)
-	}
-
-	mergeTbl, err := doltdb.NewTable(context.Background(), vrw, schVal, mergeRows, nil)
-
-	if err != nil {
-		panic(err)
-	}
+	mergeTbl, err := doltdb.NewTable(context.Background(), vrw, schVal, mergeRows, emptyMap)
+	require.NoError(t, err)
+	mergeTbl, err = editor.RebuildAllIndexes(context.Background(), mergeTbl)
+	require.NoError(t, err)
 
 	mRoot, err := masterHead.GetRootValue()
-
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 
 	mRoot, err = mRoot.PutTable(context.Background(), tableName, tbl)
-
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 
 	updatedRoot, err := mRoot.PutTable(context.Background(), tableName, updatedTbl)
-
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 
 	mergeRoot, err := mRoot.PutTable(context.Background(), tableName, mergeTbl)
+	require.NoError(t, err)
 
-	if err != nil {
-		panic(err)
-	}
+	masterHash, err := ddb.WriteRootValue(context.Background(), mRoot)
+	require.NoError(t, err)
+	hash, err := ddb.WriteRootValue(context.Background(), updatedRoot)
+	require.NoError(t, err)
+	mergeHash, err := ddb.WriteRootValue(context.Background(), mergeRoot)
+	require.NoError(t, err)
 
-	masterHash, _ := ddb.WriteRootValue(context.Background(), mRoot)
-	hash, _ := ddb.WriteRootValue(context.Background(), updatedRoot)
-	mergeHash, _ := ddb.WriteRootValue(context.Background(), mergeRoot)
+	meta, err := doltdb.NewCommitMeta(name, email, "fake")
+	require.NoError(t, err)
+	initialCommit, err := ddb.Commit(context.Background(), masterHash, ref.NewBranchRef("master"), meta)
+	require.NoError(t, err)
+	commit, err := ddb.Commit(context.Background(), hash, ref.NewBranchRef("master"), meta)
+	require.NoError(t, err)
 
-	meta, _ := doltdb.NewCommitMeta(name, email, "fake")
-	initialCommit, _ := ddb.Commit(context.Background(), masterHash, ref.NewBranchRef("master"), meta)
-	commit, _ := ddb.Commit(context.Background(), hash, ref.NewBranchRef("master"), meta)
-
-	ddb.NewBranchAtCommit(context.Background(), ref.NewBranchRef("to-merge"), initialCommit)
-	mergeCommit, _ := ddb.Commit(context.Background(), mergeHash, ref.NewBranchRef("to-merge"), meta)
+	err = ddb.NewBranchAtCommit(context.Background(), ref.NewBranchRef("to-merge"), initialCommit)
+	require.NoError(t, err)
+	mergeCommit, err := ddb.Commit(context.Background(), mergeHash, ref.NewBranchRef("to-merge"), meta)
+	require.NoError(t, err)
 
 	return vrw, commit, mergeCommit, expectedRows, expectedConflicts
 }
 
 func TestMergeCommits(t *testing.T) {
-	vrw, commit, mergeCommit, expectedRows, expectedConflicts := setupMergeTest()
+	vrw, commit, mergeCommit, expectedRows, expectedConflicts := setupMergeTest(t)
 
 	root, err := commit.GetRootValue()
 	require.NoError(t, err)
@@ -439,7 +419,7 @@ func TestMergeCommits(t *testing.T) {
 	require.False(t, ff)
 
 	merger := NewMerger(context.Background(), root, mergeRoot, ancRoot, vrw)
-	tableEditSession := doltdb.CreateTableEditSession(root, doltdb.TableEditSessionProps{})
+	tableEditSession := editor.CreateTableEditSession(root, editor.TableEditSessionProps{})
 	merged, stats, err := merger.MergeTable(context.Background(), tableName, tableEditSession)
 
 	if err != nil {
@@ -456,9 +436,11 @@ func TestMergeCommits(t *testing.T) {
 	assert.NoError(t, err)
 	targVal, err := schRef.TargetValue(context.Background(), vrw)
 	assert.NoError(t, err)
-	expected, err := doltdb.NewTable(context.Background(), vrw, targVal, expectedRows, nil)
+	emptyMap, err := types.NewMap(context.Background(), vrw)
 	assert.NoError(t, err)
-	expected, err = expected.RebuildIndexData(context.Background())
+	expected, err := doltdb.NewTable(context.Background(), vrw, targVal, expectedRows, emptyMap)
+	assert.NoError(t, err)
+	expected, err = editor.RebuildAllIndexes(context.Background(), expected)
 	assert.NoError(t, err)
 	expected, err = expected.SetConflicts(context.Background(), doltdb.NewConflict(schRef, schRef, schRef), expectedConflicts)
 	assert.NoError(t, err)

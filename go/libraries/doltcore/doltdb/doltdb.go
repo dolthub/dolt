@@ -725,7 +725,7 @@ func (ddb *DoltDB) Format() *types.NomsBinFormat {
 	return ddb.db.Format()
 }
 
-func writeValAndGetRef(ctx context.Context, vrw types.ValueReadWriter, val types.Value) (types.Ref, error) {
+func WriteValAndGetRef(ctx context.Context, vrw types.ValueReadWriter, val types.Value) (types.Ref, error) {
 	valRef, err := types.NewRef(val, vrw.Format())
 
 	if err != nil {
@@ -957,7 +957,7 @@ func (ddb *DoltDB) GC(ctx context.Context, uncommitedVals ...hash.Hash) error {
 			return err
 		}
 
-		r, err := writeValAndGetRef(ctx, ddb.db, v)
+		r, err := WriteValAndGetRef(ctx, ddb.db, v)
 		if err != nil {
 			return err
 		}

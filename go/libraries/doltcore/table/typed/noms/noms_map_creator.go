@@ -136,7 +136,7 @@ func (nmc *NomsMapCreator) Close(ctx context.Context) error {
 }
 
 // GetMap retrieves the resulting types.Map once close is called
-func (nmc *NomsMapCreator) GetMap() *types.Map {
+func (nmc *NomsMapCreator) GetMap() types.Map {
 	// Might want to panic if this was never closed
-	return nmc.result
+	return *nmc.result
 }

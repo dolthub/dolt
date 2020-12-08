@@ -23,8 +23,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
@@ -96,25 +96,12 @@ func (dl TableDataLocation) NewCreatingWriter(ctx context.Context, _ DataMoverOp
 		return nil, ErrNoPK
 	}
 
-	m, err := types.NewMap(ctx, root.VRW())
-	if err != nil {
-		return nil, err
-	}
-	tblSchVal, err := encoding.MarshalSchemaAsNomsValue(ctx, root.VRW(), outSch)
+	updatedRoot, err := root.CreateEmptyTable(ctx, dl.Name, outSch)
 	if err != nil {
 		return nil, err
 	}
 
-	tbl, err := doltdb.NewTable(ctx, root.VRW(), tblSchVal, m, nil)
-	if err != nil {
-		return nil, err
-	}
-	updatedRoot, err := root.PutTable(ctx, dl.Name, tbl)
-	if err != nil {
-		return nil, err
-	}
-
-	tableEditor, err := doltdb.CreateTableEditSession(updatedRoot, doltdb.TableEditSessionProps{}).GetTableEditor(ctx, dl.Name, outSch)
+	tableEditor, err := editor.CreateTableEditSession(updatedRoot, editor.TableEditSessionProps{}).GetTableEditor(ctx, dl.Name, outSch)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +109,7 @@ func (dl TableDataLocation) NewCreatingWriter(ctx context.Context, _ DataMoverOp
 	return &tableEditorWriteCloser{
 		dEnv:        dEnv,
 		insertOnly:  true,
-		initialData: m,
+		initialData: types.EmptyMap,
 		statsCB:     statsCB,
 		tableEditor: tableEditor,
 		tableSch:    outSch,
@@ -150,7 +137,7 @@ func (dl TableDataLocation) NewUpdatingWriter(ctx context.Context, _ DataMoverOp
 		return nil, err
 	}
 
-	tableEditor, err := doltdb.CreateTableEditSession(root, doltdb.TableEditSessionProps{}).GetTableEditor(ctx, dl.Name, tblSch)
+	tableEditor, err := editor.CreateTableEditSession(root, editor.TableEditSessionProps{}).GetTableEditor(ctx, dl.Name, tblSch)
 	if err != nil {
 		return nil, err
 	}
@@ -177,30 +164,18 @@ func (dl TableDataLocation) NewReplacingWriter(ctx context.Context, _ DataMoverO
 		return nil, errors.New("Could not find table " + dl.Name)
 	}
 
-	m, err := types.NewMap(ctx, root.VRW())
-	if err != nil {
-		return nil, err
-	}
 	tblSch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err
 	}
-	tblSchVal, err := encoding.MarshalSchemaAsNomsValue(ctx, root.VRW(), tblSch)
+
+	// overwrites existing table
+	updatedRoot, err := root.CreateEmptyTable(ctx, dl.Name, tblSch)
 	if err != nil {
 		return nil, err
 	}
 
-	tbl, err = doltdb.NewTable(ctx, root.VRW(), tblSchVal, m, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	updatedRoot, err := root.PutTable(ctx, dl.Name, tbl)
-	if err != nil {
-		return nil, err
-	}
-
-	tableEditor, err := doltdb.CreateTableEditSession(updatedRoot, doltdb.TableEditSessionProps{}).GetTableEditor(ctx, dl.Name, tblSch)
+	tableEditor, err := editor.CreateTableEditSession(updatedRoot, editor.TableEditSessionProps{}).GetTableEditor(ctx, dl.Name, tblSch)
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +183,7 @@ func (dl TableDataLocation) NewReplacingWriter(ctx context.Context, _ DataMoverO
 	return &tableEditorWriteCloser{
 		dEnv:        dEnv,
 		insertOnly:  true,
-		initialData: m,
+		initialData: types.EmptyMap,
 		statsCB:     statsCB,
 		tableEditor: tableEditor,
 		tableSch:    tblSch,
@@ -218,7 +193,7 @@ func (dl TableDataLocation) NewReplacingWriter(ctx context.Context, _ DataMoverO
 
 type tableEditorWriteCloser struct {
 	dEnv        *env.DoltEnv
-	tableEditor *doltdb.SessionedTableEditor
+	tableEditor *editor.SessionedTableEditor
 	initialData types.Map
 	tableSch    schema.Schema
 	insertOnly  bool

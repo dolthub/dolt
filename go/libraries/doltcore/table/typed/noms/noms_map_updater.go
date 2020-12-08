@@ -162,6 +162,6 @@ func (nmu *NomsMapUpdater) Close(ctx context.Context) error {
 }
 
 // GetMap retrieves the resulting types.Map once close is called
-func (nmu *NomsMapUpdater) GetMap() *types.Map {
-	return &nmu.result.m
+func (nmu *NomsMapUpdater) GetMap() types.Map {
+	return nmu.result.m
 }

@@ -633,7 +633,7 @@ func (root *RootValue) PutSuperSchema(ctx context.Context, tName string, ss *sch
 		return nil, err
 	}
 
-	ssRef, err := writeValAndGetRef(ctx, newRoot.VRW(), ssVal)
+	ssRef, err := WriteValAndGetRef(ctx, newRoot.VRW(), ssVal)
 
 	if err != nil {
 		return nil, err
@@ -663,7 +663,7 @@ func (root *RootValue) PutTable(ctx context.Context, tName string, table *Table)
 		return nil, err
 	}
 
-	tableRef, err := writeValAndGetRef(ctx, root.VRW(), table.tableStruct)
+	tableRef, err := WriteValAndGetRef(ctx, root.VRW(), table.tableStruct)
 
 	if err != nil {
 		return nil, err
@@ -709,12 +709,29 @@ func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch s
 		return nil, err
 	}
 
-	m, err := types.NewMap(ctx, root.VRW())
+	empty, err := types.NewMap(ctx, root.VRW())
 	if err != nil {
 		return nil, err
 	}
 
-	tbl, err := NewTable(ctx, root.VRW(), schVal, m, nil)
+	emptyRef, err := WriteValAndGetRef(ctx, root.VRW(), empty)
+	if err != nil {
+		return nil, err
+	}
+
+	ed := empty.Edit()
+	sch.Indexes().Iter(func(index schema.Index) (stop bool, err error) {
+		// create an empty indexRowData map for every index
+		ed.Set(types.String(index.Name()), emptyRef)
+		return
+	})
+
+	indexes, err := ed.Map(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tbl, err := NewTable(ctx, root.VRW(), schVal, empty, indexes)
 	if err != nil {
 		return nil, err
 	}
@@ -951,7 +968,7 @@ func (root *RootValue) UpdateSuperSchemasFromOther(ctx context.Context, tblNames
 			return nil, err
 		}
 
-		ssRef, err := writeValAndGetRef(ctx, newRoot.VRW(), ssVal)
+		ssRef, err := WriteValAndGetRef(ctx, newRoot.VRW(), ssVal)
 
 		if err != nil {
 			return nil, err

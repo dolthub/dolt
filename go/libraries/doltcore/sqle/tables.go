@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -1074,7 +1075,7 @@ func createIndexForTable(
 	if err != nil {
 		return nil, err
 	}
-	newTable, err := doltdb.NewTable(ctx, table.ValueReadWriter(), newSchemaVal, tableRowData, &indexData)
+	newTable, err := doltdb.NewTable(ctx, table.ValueReadWriter(), newSchemaVal, tableRowData, indexData)
 	if err != nil {
 		return nil, err
 	}
@@ -1089,7 +1090,7 @@ func createIndexForTable(
 			return nil, err
 		}
 	} else { // set the index row data and get a new root with the updated table
-		indexRowData, err := newTable.RebuildIndexRowData(ctx, index.Name())
+		indexRowData, err := editor.RebuildIndex(ctx, newTable, index.Name())
 		if err != nil {
 			return nil, err
 		}

@@ -25,9 +25,6 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 )
 
 type testPerson struct {
@@ -54,7 +51,7 @@ func TestServerArgs(t *testing.T) {
 			"-t", "5",
 			"-l", "info",
 			"-r",
-		}, createEnvWithSeedData(t), serverController)
+		}, dtestutils.CreateEnvWithSeedData(t), serverController)
 	}()
 	err := serverController.WaitForStart()
 	require.NoError(t, err)
@@ -86,7 +83,7 @@ listener:
 `
 	serverController := CreateServerController()
 	go func() {
-		dEnv := createEnvWithSeedData(t)
+		dEnv := dtestutils.CreateEnvWithSeedData(t)
 		dEnv.FS.WriteFile("config.yaml", []byte(yamlConfig))
 		startServer(context.Background(), "test", "dolt sql-server", []string{
 			"--config", "config.yaml",
@@ -104,7 +101,7 @@ listener:
 }
 
 func TestServerBadArgs(t *testing.T) {
-	env := createEnvWithSeedData(t)
+	env := dtestutils.CreateEnvWithSeedData(t)
 
 	tests := [][]string{
 		{"-H", "127.0.0.0.1"},
@@ -133,7 +130,7 @@ func TestServerBadArgs(t *testing.T) {
 }
 
 func TestServerGoodParams(t *testing.T) {
-	env := createEnvWithSeedData(t)
+	env := dtestutils.CreateEnvWithSeedData(t)
 
 	tests := []ServerConfig{
 		DefaultServerConfig(),
@@ -170,7 +167,7 @@ func TestServerGoodParams(t *testing.T) {
 }
 
 func TestServerSelect(t *testing.T) {
-	env := createEnvWithSeedData(t)
+	env := dtestutils.CreateEnvWithSeedData(t)
 	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15300)
 
 	sc := CreateServerController()
@@ -218,28 +215,4 @@ func TestServerSelect(t *testing.T) {
 			assert.ElementsMatch(t, peoples, test.expectedRes)
 		})
 	}
-}
-
-func createEnvWithSeedData(t *testing.T) *env.DoltEnv {
-	dEnv := dtestutils.CreateTestEnv()
-	imt, sch := dtestutils.CreateTestDataTable(true)
-
-	rd := table.NewInMemTableReader(imt)
-	wr := noms.NewNomsMapCreator(context.Background(), dEnv.DoltDB.ValueReadWriter(), sch)
-
-	_, _, err := table.PipeRows(context.Background(), rd, wr, false)
-	rd.Close(context.Background())
-	wr.Close(context.Background())
-
-	if err != nil {
-		t.Error("Failed to seed initial data", err)
-	}
-
-	err = dEnv.PutTableToWorking(context.Background(), *wr.GetMap(), wr.GetSchema(), "people")
-
-	if err != nil {
-		t.Error("Unable to put initial value of table in in mem noms db", err)
-	}
-
-	return dEnv
 }

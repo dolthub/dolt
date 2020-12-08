@@ -67,7 +67,7 @@ func TestRenameTable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dEnv := createEnvWithSeedData(t)
+			dEnv := dtestutils.CreateEnvWithSeedData(t)
 			ctx := context.Background()
 
 			dtestutils.CreateTestTable(t, dEnv, otherTable, otherSch)

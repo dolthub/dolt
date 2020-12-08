@@ -55,47 +55,19 @@ type Table struct {
 	tableStruct types.Struct
 }
 
-// NewTable creates a noms Struct which stores the schema and the row data. If indexData is nil, then it is rebuilt.
-func NewTable(ctx context.Context, vrw types.ValueReadWriter, schemaVal types.Value, rowData types.Map, indexData *types.Map) (*Table, error) {
-	if indexData == nil {
-		sch, err := encoding.UnmarshalSchemaNomsValue(ctx, rowData.Format(), schemaVal)
-		if err != nil {
-			return nil, err
-		}
-		indexesMap, err := types.NewMap(ctx, vrw)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, index := range sch.Indexes().AllIndexes() {
-			rebuiltIndexRowData, err := rebuildIndexRowData(ctx, vrw, sch, rowData, index)
-			if err != nil {
-				return nil, err
-			}
-			rebuiltIndexRowDataRef, err := writeValAndGetRef(ctx, vrw, rebuiltIndexRowData)
-			if err != nil {
-				return nil, err
-			}
-			indexesMap, err = indexesMap.Edit().Set(types.String(index.Name()), rebuiltIndexRowDataRef).Map(ctx)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		indexData = &indexesMap
-	}
-
-	schemaRef, err := writeValAndGetRef(ctx, vrw, schemaVal)
+// NewTable creates a noms Struct which stores row data, index data, and schema.
+func NewTable(ctx context.Context, vrw types.ValueReadWriter, schemaVal types.Value, rowData types.Map, indexData types.Map) (*Table, error) {
+	schemaRef, err := WriteValAndGetRef(ctx, vrw, schemaVal)
 	if err != nil {
 		return nil, err
 	}
 
-	rowDataRef, err := writeValAndGetRef(ctx, vrw, rowData)
+	rowDataRef, err := WriteValAndGetRef(ctx, vrw, rowData)
 	if err != nil {
 		return nil, err
 	}
 
-	indexesRef, err := writeValAndGetRef(ctx, vrw, indexData)
+	indexesRef, err := WriteValAndGetRef(ctx, vrw, indexData)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +96,7 @@ func (t *Table) ValueReadWriter() types.ValueReadWriter {
 }
 
 func (t *Table) SetConflicts(ctx context.Context, schemas Conflict, conflictData types.Map) (*Table, error) {
-	conflictsRef, err := writeValAndGetRef(ctx, t.vrw, conflictData)
+	conflictsRef, err := WriteValAndGetRef(ctx, t.vrw, conflictData)
 
 	if err != nil {
 		return nil, err
@@ -330,7 +302,7 @@ func (t *Table) UpdateSchema(ctx context.Context, sch schema.Schema) (*Table, er
 	if err != nil {
 		return nil, err
 	}
-	newTable, err := NewTable(ctx, t.vrw, newSchemaVal, rowData, &indexData)
+	newTable, err := NewTable(ctx, t.vrw, newSchemaVal, rowData, indexData)
 	if err != nil {
 		return nil, err
 	}
@@ -451,7 +423,7 @@ func (t *Table) GetRows(ctx context.Context, pkItr PKItr, numPKs int, sch schema
 // UpdateRows replaces the current row data and returns and updated Table.  Calls to UpdateRows will not be written to the
 // database.  The root must be updated with the updated table, and the root must be committed or written.
 func (t *Table) UpdateRows(ctx context.Context, updatedRows types.Map) (*Table, error) {
-	rowDataRef, err := writeValAndGetRef(ctx, t.vrw, updatedRows)
+	rowDataRef, err := WriteValAndGetRef(ctx, t.vrw, updatedRows)
 
 	if err != nil {
 		return nil, err
@@ -516,7 +488,7 @@ func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (i
 		return nil, nil, nil, err
 	}
 
-	conflictsRef, err := writeValAndGetRef(ctx, t.vrw, conflicts)
+	conflictsRef, err := WriteValAndGetRef(ctx, t.vrw, conflicts)
 
 	if err != nil {
 		return nil, nil, nil, err
@@ -553,48 +525,9 @@ func (t *Table) GetIndexData(ctx context.Context) (types.Map, error) {
 	return indexesMap.(types.Map), nil
 }
 
-// RebuildIndexData rebuilds all of the data for each index, and returns an updated Table.
-func (t *Table) RebuildIndexData(ctx context.Context) (*Table, error) {
-	sch, err := t.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if sch.Indexes().Count() == 0 {
-		return t, nil
-	}
-
-	tableRowData, err := t.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	indexesMap, err := t.GetIndexData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, index := range sch.Indexes().AllIndexes() {
-		rebuiltIndexRowData, err := rebuildIndexRowData(ctx, t.vrw, sch, tableRowData, index)
-		if err != nil {
-			return nil, err
-		}
-		rebuiltIndexRowDataRef, err := writeValAndGetRef(ctx, t.vrw, rebuiltIndexRowData)
-		if err != nil {
-			return nil, err
-		}
-		indexesMap, err = indexesMap.Edit().Set(types.String(index.Name()), rebuiltIndexRowDataRef).Map(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return t.SetIndexData(ctx, indexesMap)
-}
-
 // SetIndexData replaces the current internal index map, and returns an updated Table.
 func (t *Table) SetIndexData(ctx context.Context, indexesMap types.Map) (*Table, error) {
-	indexesRef, err := writeValAndGetRef(ctx, t.vrw, indexesMap)
+	indexesRef, err := WriteValAndGetRef(ctx, t.vrw, indexesMap)
 	if err != nil {
 		return nil, err
 	}
@@ -630,30 +563,6 @@ func (t *Table) GetIndexRowData(ctx context.Context, indexName string) (types.Ma
 	return indexMap.(types.Map), nil
 }
 
-// RebuildIndexRowData rebuilds the data for the given index, and returns the updated Map.
-func (t *Table) RebuildIndexRowData(ctx context.Context, indexName string) (types.Map, error) {
-	sch, err := t.GetSchema(ctx)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	tableRowData, err := t.GetRowData(ctx)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	index := sch.Indexes().GetByName(indexName)
-	if index == nil {
-		return types.EmptyMap, fmt.Errorf("index `%s` does not exist", indexName)
-	}
-
-	rebuiltIndexData, err := rebuildIndexRowData(ctx, t.vrw, sch, tableRowData, index)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-	return rebuiltIndexData, nil
-}
-
 // SetIndexRowData replaces the current row data for the given index and returns an updated Table.
 func (t *Table) SetIndexRowData(ctx context.Context, indexName string, indexRowData types.Map) (*Table, error) {
 	indexesMap, err := t.GetIndexData(ctx)
@@ -661,7 +570,7 @@ func (t *Table) SetIndexRowData(ctx context.Context, indexName string, indexRowD
 		return nil, err
 	}
 
-	indexRowDataRef, err := writeValAndGetRef(ctx, t.vrw, indexRowData)
+	indexRowDataRef, err := WriteValAndGetRef(ctx, t.vrw, indexRowData)
 	if err != nil {
 		return nil, err
 	}
@@ -757,39 +666,6 @@ func (t *Table) VerifyIndexRowData(ctx context.Context, indexName string) error 
 	}
 
 	return index.VerifyMap(ctx, iter, indexMapValue.(types.Map).Format())
-}
-
-func rebuildIndexRowData(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, tblRowData types.Map, index schema.Index) (types.Map, error) {
-	emptyIndexMap, err := types.NewMap(ctx, vrw)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-	indexEditor := NewIndexEditor(index, emptyIndexMap)
-
-	err = tblRowData.IterAll(ctx, func(key, value types.Value) error {
-		dRow, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
-		if err != nil {
-			return err
-		}
-		indexRow, err := dRow.ReduceToIndex(index)
-		if err != nil {
-			return err
-		}
-		err = indexEditor.UpdateIndex(ctx, nil, indexRow)
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	rebuiltIndexMap, err := indexEditor.Map(ctx)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-	return rebuiltIndexMap, nil
 }
 
 func (t *Table) GetAutoIncrementValue(ctx context.Context) (types.Value, error) {
