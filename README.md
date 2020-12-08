@@ -12,7 +12,7 @@ All the commands you know for Git work exactly the same for Dolt. Git
 versions files, Dolt versions tables. It's like Git and MySQL had a
 baby!
 
-<img style="height: 150px; float: left" src="./dolt_hi.svg"/>
+<img align="left" height="100" src="./dolt_hi.svg"/>
 
 We also built [DoltHub](https://www.dolthub.com), a place to share
 Dolt databases. We host public data for free!
