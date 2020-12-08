@@ -1,6 +1,8 @@
 # Dolt
 
-Dolt is Git for data!
+<img align="left" height="300" src="./dolt_hi.svg"/>
+
+### Dolt is Git for Data!
 
 Dolt is a SQL database that you can fork, clone, branch, merge, push
 and pull just like a git repository. Connect to Dolt just like any
