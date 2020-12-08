@@ -49,7 +49,7 @@ func NewMerger(ctx context.Context, root, mergeRoot, ancRoot *doltdb.RootValue, 
 }
 
 // MergeTable merges schema and table data for the table tblName.
-func (merger *Merger) MergeTable(ctx context.Context, tblName string, tableEditSession *editor.TableEditSession) (*doltdb.Table, *MergeStats, error) {
+func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *editor.TableEditSession) (*doltdb.Table, *MergeStats, error) {
 	tbl, ok, err := merger.root.GetTable(ctx, tblName)
 
 	if err != nil {
@@ -115,7 +115,7 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, tableEditS
 			ms, err = calcTableMergeStats(ctx, tbl, mergeTbl)
 		}
 		// force load the table editor since this counts as a change
-		_, err := tableEditSession.GetTableEditor(ctx, tblName, nil)
+		_, err := sess.GetTableEditor(ctx, tblName, nil)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -176,17 +176,17 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, tableEditS
 		return nil, nil, err
 	}
 
-	err = tableEditSession.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+	err = sess.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
 		return root.PutTable(ctx, tblName, updatedTbl)
 	})
 
-	updatedTblEditor, err := tableEditSession.GetTableEditor(ctx, tblName, nil)
+	updatedTblEditor, err := sess.GetTableEditor(ctx, tblName, nil)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	resultTbl, conflicts, stats, err := mergeTableData(ctx, tblName, postMergeSchema, rows, mergeRows, ancRows, merger.vrw, updatedTblEditor)
+	resultTbl, conflicts, stats, err := mergeTableData(ctx, merger.vrw, tblName, postMergeSchema, rows, mergeRows, ancRows, updatedTblEditor, sess)
 
 	if err != nil {
 		return nil, nil, err
@@ -264,7 +264,7 @@ func calcTableMergeStats(ctx context.Context, tbl *doltdb.Table, mergeTbl *doltd
 	return ms, nil
 }
 
-func mergeTableData(ctx context.Context, tblName string, sch schema.Schema, rows, mergeRows, ancRows types.Map, vrw types.ValueReadWriter, tblEdit *editor.SessionedTableEditor) (*doltdb.Table, types.Map, *MergeStats, error) {
+func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, tblName string, sch schema.Schema, rows, mergeRows, ancRows types.Map, tblEdit editor.TableEditor, sess *editor.TableEditSession) (*doltdb.Table, types.Map, *MergeStats, error) {
 	changeChan, mergeChangeChan := make(chan types.ValueChanged, 32), make(chan types.ValueChanged, 32)
 
 	eg, ctx := errgroup.WithContext(ctx)
@@ -393,7 +393,7 @@ func mergeTableData(ctx context.Context, tblName string, sch schema.Schema, rows
 	if err != nil {
 		return nil, types.EmptyMap, nil, err
 	}
-	newRoot, err := tblEdit.Flush(ctx)
+	newRoot, err := sess.Flush(ctx)
 	if err != nil {
 		return nil, types.EmptyMap, nil, err
 	}
@@ -423,7 +423,7 @@ func addConflict(conflictChan chan types.Value, done <-chan struct{}, key types.
 	return nil
 }
 
-func applyChange(ctx context.Context, tableEditor *editor.SessionedTableEditor, rowData types.Map, sch schema.Schema, stats *MergeStats, change types.ValueChanged) error {
+func applyChange(ctx context.Context, tableEditor editor.TableEditor, rowData types.Map, sch schema.Schema, stats *MergeStats, change types.ValueChanged) error {
 	switch change.ChangeType {
 	case types.DiffChangeAdded:
 		newRow, err := row.FromNoms(sch, change.Key.(types.Tuple), change.NewValue.(types.Tuple))

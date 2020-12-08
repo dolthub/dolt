@@ -34,13 +34,26 @@ import (
 
 var ErrDuplicatePrimaryKeyFmt = "duplicate primary key given: %v"
 
-// TableEditor supports making multiple row edits (inserts, updates, deletes) to a table. It does error checking for key
+type TableEditor interface {
+	InsertRow(ctx context.Context, r row.Row) error
+	UpdateRow(ctx context.Context, old, new row.Row) error
+	DeleteKey(ctx context.Context, key types.Tuple) error
+
+	GetAutoIncrementValue() types.Value
+	SetAutoIncrementValue(v types.Value) (err error)
+
+	Table(ctx context.Context) (*doltdb.Table, error)
+}
+
+// tableEditor supports making multiple row edits (inserts, updates, deletes) to a table. It does error checking for key
 // collision etc. in the Close() method, as well as during Insert / Update.
 //
-// This type is thread-safe, and may be used in a multi-threaded environment.
-type TableEditor struct {
-	t        *doltdb.Table
-	tSch     schema.Schema
+// This type is thread-safe, and may be used in a multi-threaded environment.d
+type tableEditor struct {
+	t    *doltdb.Table
+	tSch schema.Schema
+	name string
+
 	tea      *tableEditAccumulator
 	aq       *async.ActionExecutor
 	nbf      *types.NomsBinFormat
@@ -69,10 +82,11 @@ type tableEditAccumulator struct {
 
 const tableEditorMaxOps = 16384
 
-func NewTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema) (*TableEditor, error) {
-	te := &TableEditor{
+func NewTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, name string) (*tableEditor, error) {
+	te := &tableEditor{
 		t:          t,
 		tSch:       tableSch,
+		name:       name,
 		tea:        newTableEditAcc(t.Format()),
 		nbf:        t.Format(),
 		indexEds:   make([]*IndexEditor, tableSch.Indexes().Count()),
@@ -125,7 +139,7 @@ func newTableEditAcc(nbf *types.NomsBinFormat) *tableEditAccumulator {
 
 // Close ensures that all goroutines that may be open are properly disposed of. Attempting to call any other function
 // on this editor after calling this function is undefined behavior.
-func (te *TableEditor) Close() {
+func (te *tableEditor) Close() {
 	te.tea.ed.Close()
 	for _, indexEd := range te.indexEds {
 		indexEd.ed.Close()
@@ -134,7 +148,7 @@ func (te *TableEditor) Close() {
 
 // ContainsIndexedKey returns whether the given key is contained within the index. The key is assumed to be in the
 // format expected of the index, similar to searching on the index map itself.
-func (te *TableEditor) ContainsIndexedKey(ctx context.Context, key types.Tuple, indexName string) (bool, error) {
+func (te *tableEditor) ContainsIndexedKey(ctx context.Context, key types.Tuple, indexName string) (bool, error) {
 	te.Flush()
 	te.flushMutex.RLock()
 	defer te.flushMutex.RUnlock()
@@ -161,7 +175,7 @@ func (te *TableEditor) ContainsIndexedKey(ctx context.Context, key types.Tuple, 
 
 // GetIndexedRows returns all matching rows for the given key on the index. The key is assumed to be in the format
 // expected of the index, similar to searching on the index map itself.
-func (te *TableEditor) GetIndexedRows(ctx context.Context, key types.Tuple, indexName string) ([]row.Row, error) {
+func (te *tableEditor) GetIndexedRows(ctx context.Context, key types.Tuple, indexName string) ([]row.Row, error) {
 	te.Flush()
 	te.flushMutex.RLock()
 	defer te.flushMutex.RUnlock()
@@ -211,9 +225,9 @@ func (te *TableEditor) GetIndexedRows(ctx context.Context, key types.Tuple, inde
 	return rows, nil
 }
 
-// GetRow returns the row matching the key given from the TableEditor. This is equivalent to calling Table and then
+// GetRow returns the row matching the key given from the tableEditor. This is equivalent to calling Table and then
 // GetRow on the returned table, but a tad faster.
-func (te *TableEditor) GetRow(ctx context.Context, key types.Tuple) (row.Row, bool, error) {
+func (te *tableEditor) GetRow(ctx context.Context, key types.Tuple) (row.Row, bool, error) {
 	te.Flush()
 	te.flushMutex.RLock()
 	defer te.flushMutex.RUnlock()
@@ -237,9 +251,9 @@ func (te *TableEditor) GetRow(ctx context.Context, key types.Tuple) (row.Row, bo
 	return r, true, nil
 }
 
-// GetRowData returns the row data from the TableEditor. This is equivalent to calling Table and then
+// GetRowData returns the row data from the tableEditor. This is equivalent to calling Table and then
 // GetRowData on the returned table, but a tad faster.
-func (te *TableEditor) GetRowData(ctx context.Context) (types.Map, error) {
+func (te *tableEditor) GetRowData(ctx context.Context) (types.Map, error) {
 	te.Flush()
 	te.flushMutex.RLock()
 	defer te.flushMutex.RUnlock()
@@ -253,7 +267,7 @@ func (te *TableEditor) GetRowData(ctx context.Context) (types.Map, error) {
 }
 
 // InsertRow adds the given row to the table. If the row already exists, use UpdateRow.
-func (te *TableEditor) InsertRow(ctx context.Context, dRow row.Row) error {
+func (te *tableEditor) InsertRow(ctx context.Context, dRow row.Row) error {
 	defer te.autoFlush()
 	te.flushMutex.RLock()
 	defer te.flushMutex.RUnlock()
@@ -270,13 +284,13 @@ func (te *TableEditor) InsertRow(ctx context.Context, dRow row.Row) error {
 	// We allow each write operation to perform as much work as possible before acquiring the lock. This minimizes the
 	// lock time and slightly increases throughput. Although this introduces variability in the amount of time before
 	// the lock is acquired, this is a non-issue, which is elaborated on using this example function.
-	// func Example(ctx context.Context, te *TableEditor, someRow row.Row) {
+	// func Example(ctx context.Context, te *tableEditor, someRow row.Row) {
 	//     go te.Insert(ctx, someRow)
 	//     go te.Delete(ctx, someRow)
 	// }
 	// Let's pretend the table already has someRow. Go will run goroutines in any arbitrary order, sequentially or
 	// concurrently, and thus running Example() may see that Delete() executes before Insert(), causing a different
-	// result as Insert() executing first would result in an error. Such an issue must be handled above the TableEditor.
+	// result as Insert() executing first would result in an error. Such an issue must be handled above the tableEditor.
 	// Since we cannot guarantee any of that here, we can delay our lock acquisition.
 	te.writeMutex.Lock()
 	defer te.writeMutex.Unlock()
@@ -315,7 +329,7 @@ func (te *TableEditor) InsertRow(ctx context.Context, dRow row.Row) error {
 }
 
 // DeleteKey removes the given key from the table.
-func (te *TableEditor) DeleteKey(ctx context.Context, key types.Tuple) error {
+func (te *tableEditor) DeleteKey(ctx context.Context, key types.Tuple) error {
 	defer te.autoFlush()
 	te.flushMutex.RLock()
 	defer te.flushMutex.RUnlock()
@@ -325,7 +339,7 @@ func (te *TableEditor) DeleteKey(ctx context.Context, key types.Tuple) error {
 
 // DeleteRow removes the given row from the table. This essentially acts as a convenience function for DeleteKey, while
 // ensuring proper thread safety.
-func (te *TableEditor) DeleteRow(ctx context.Context, dRow row.Row) error {
+func (te *tableEditor) DeleteRow(ctx context.Context, dRow row.Row) error {
 	defer te.autoFlush()
 	te.flushMutex.RLock()
 	defer te.flushMutex.RUnlock()
@@ -339,7 +353,7 @@ func (te *TableEditor) DeleteRow(ctx context.Context, dRow row.Row) error {
 }
 
 // UpdateRow takes the current row and new rows, and updates it accordingly.
-func (te *TableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row) error {
+func (te *tableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row) error {
 	defer te.autoFlush()
 	te.flushMutex.RLock()
 	defer te.flushMutex.RUnlock()
@@ -391,18 +405,18 @@ func (te *TableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow r
 	return nil
 }
 
-func (te *TableEditor) GetAutoIncrementValue() types.Value {
+func (te *tableEditor) GetAutoIncrementValue() types.Value {
 	return te.autoIncVal
 }
 
-func (te *TableEditor) SetAutoIncrementValue(v types.Value) (err error) {
+func (te *tableEditor) SetAutoIncrementValue(v types.Value) (err error) {
 	te.autoIncVal = v
 	te.t, err = te.t.SetAutoIncrementValue(te.autoIncVal)
 	return
 }
 
 // Flush finalizes all of the changes made so far.
-func (te *TableEditor) Flush() {
+func (te *tableEditor) Flush() {
 	te.flushMutex.Lock()
 	defer te.flushMutex.Unlock()
 
@@ -413,7 +427,7 @@ func (te *TableEditor) Flush() {
 }
 
 // Table returns a Table based on the edits given, if any. If Flush() was not called prior, it will be called here.
-func (te *TableEditor) Table() (*doltdb.Table, error) {
+func (te *tableEditor) Table() (*doltdb.Table, error) {
 	te.Flush()
 	err := te.aq.WaitForEmpty()
 
@@ -429,7 +443,7 @@ func (te *TableEditor) Table() (*doltdb.Table, error) {
 
 // autoFlush is called at the end of every write call (after all locks have been released) and checks if we need to
 // automatically flush the edits.
-func (te *TableEditor) autoFlush() {
+func (te *tableEditor) autoFlush() {
 	te.flushMutex.RLock()
 	te.writeMutex.Lock()
 	runFlush := te.tea.opCount >= tableEditorMaxOps
@@ -441,7 +455,7 @@ func (te *TableEditor) autoFlush() {
 	}
 }
 
-func (te *TableEditor) delete(key types.Tuple) error {
+func (te *tableEditor) delete(key types.Tuple) error {
 	keyHash, err := key.Hash(te.nbf)
 	if err != nil {
 		return err
@@ -459,7 +473,7 @@ func (te *TableEditor) delete(key types.Tuple) error {
 	return nil
 }
 
-func (te *TableEditor) flushEditAccumulator(ctx context.Context, teaInterface interface{}) error {
+func (te *tableEditor) flushEditAccumulator(ctx context.Context, teaInterface interface{}) error {
 	// We don't call any locks here since this is called from an ActionExecutor with a concurrency of 1
 	tea := teaInterface.(*tableEditAccumulator)
 	defer tea.ed.Close()
@@ -545,7 +559,7 @@ func formatKey(ctx context.Context, key types.Value) (string, error) {
 	return fmt.Sprintf("(%s)", strings.Join(vals, ",")), nil
 }
 
-func (te *TableEditor) getIndexIterator(ctx context.Context, key types.Tuple, indexName string) (table.TableReadCloser, error) {
+func (te *tableEditor) getIndexIterator(ctx context.Context, key types.Tuple, indexName string) (table.TableReadCloser, error) {
 	var indexEd *IndexEditor
 	for _, ie := range te.indexEds {
 		if ie.Index().Name() == indexName {
@@ -568,7 +582,7 @@ func (te *TableEditor) getIndexIterator(ctx context.Context, key types.Tuple, in
 	), nil
 }
 
-func (te *TableEditor) updateIndexes(ctx context.Context, tea *tableEditAccumulator, tbl *doltdb.Table, originalRowData types.Map, updated types.Map) (*doltdb.Table, error) {
+func (te *tableEditor) updateIndexes(ctx context.Context, tea *tableEditAccumulator, tbl *doltdb.Table, originalRowData types.Map, updated types.Map) (*doltdb.Table, error) {
 	// We don't call any locks here since this is called from an ActionExecutor with a concurrency of 1
 	if len(te.indexEds) == 0 {
 		return tbl, nil

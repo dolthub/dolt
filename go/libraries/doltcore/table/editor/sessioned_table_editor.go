@@ -23,46 +23,19 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// SessionedTableEditor represents a table editor obtained from a TableEditSession. This table editor may be shared
+// sessionedTableEditor represents a table editor obtained from a TableEditSession. This table editor may be shared
 // by multiple callers. It is thread safe.
-type SessionedTableEditor struct {
+type sessionedTableEditor struct {
 	tableEditSession  *TableEditSession
-	tableEditor       *TableEditor
+	tableEditor       *tableEditor
 	referencedTables  []doltdb.ForeignKey // The tables that we reference to ensure an insert or update is valid
 	referencingTables []doltdb.ForeignKey // The tables that reference us to ensure their inserts and updates are valid
 }
 
-// ContainsIndexedKey returns whether the given key is contained within the index. The key is assumed to be in the
-// format expected of the index, similar to searching on the index map itself.
-func (ste *SessionedTableEditor) ContainsIndexedKey(ctx context.Context, key types.Tuple, indexName string) (bool, error) {
-	return ste.tableEditor.ContainsIndexedKey(ctx, key, indexName)
-}
-
-// GetIndexedRows returns all matching rows for the given key on the index. The key is assumed to be in the format
-// expected of the index, similar to searching on the index map itself.
-func (ste *SessionedTableEditor) GetIndexedRows(ctx context.Context, key types.Tuple, indexName string) ([]row.Row, error) {
-	return ste.tableEditor.GetIndexedRows(ctx, key, indexName)
-}
-
-// GetRow returns the row matching the key given from the TableEditor. This is equivalent to calling Table and then
-// GetRow on the returned table, but a tad faster.
-func (ste *SessionedTableEditor) GetRow(ctx context.Context, key types.Tuple) (row.Row, bool, error) {
-	return ste.tableEditor.GetRow(ctx, key)
-}
-
-// GetRowData returns the row data from the TableEditor. This is equivalent to calling Table and then
-// GetRowData on the returned table, but a tad faster.
-func (ste *SessionedTableEditor) GetRowData(ctx context.Context) (types.Map, error) {
-	return ste.tableEditor.GetRowData(ctx)
-}
-
-// Flush is a shortcut to calling SessionTableEditor.Flush.
-func (ste *SessionedTableEditor) Flush(ctx context.Context) (*doltdb.RootValue, error) {
-	return ste.tableEditSession.Flush(ctx)
-}
+var _ TableEditor = &sessionedTableEditor{}
 
 // InsertRow adds the given row to the table. If the row already exists, use UpdateRow.
-func (ste *SessionedTableEditor) InsertRow(ctx context.Context, dRow row.Row) error {
+func (ste *sessionedTableEditor) InsertRow(ctx context.Context, dRow row.Row) error {
 	ste.tableEditSession.writeMutex.RLock()
 	defer ste.tableEditSession.writeMutex.RUnlock()
 
@@ -75,7 +48,7 @@ func (ste *SessionedTableEditor) InsertRow(ctx context.Context, dRow row.Row) er
 }
 
 // DeleteKey removes the given key from the table.
-func (ste *SessionedTableEditor) DeleteKey(ctx context.Context, key types.Tuple) error {
+func (ste *sessionedTableEditor) DeleteKey(ctx context.Context, key types.Tuple) error {
 	ste.tableEditSession.writeMutex.RLock()
 	defer ste.tableEditSession.writeMutex.RUnlock()
 
@@ -96,36 +69,42 @@ func (ste *SessionedTableEditor) DeleteKey(ctx context.Context, key types.Tuple)
 	return ste.tableEditor.DeleteKey(ctx, key)
 }
 
-// DeleteRow removes the given row from the table, along with any applicable rows from tables that have a foreign key
-// referencing this table.
-func (ste *SessionedTableEditor) DeleteRow(ctx context.Context, dRow row.Row) error {
-	ste.tableEditSession.writeMutex.RLock()
-	defer ste.tableEditSession.writeMutex.RUnlock()
-
-	return ste.deleteRow(ctx, dRow)
-}
-
 // UpdateRow takes the current row and new row, and updates it accordingly. Any applicable rows from tables that have a
 // foreign key referencing this table will also be updated.
-func (ste *SessionedTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row) error {
+func (ste *sessionedTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row) error {
 	ste.tableEditSession.writeMutex.RLock()
 	defer ste.tableEditSession.writeMutex.RUnlock()
 
 	return ste.updateRow(ctx, dOldRow, dNewRow, true)
 }
 
-// deleteRow is the same as DeleteRow, except that it does not acquire any locks.
-func (ste *SessionedTableEditor) deleteRow(ctx context.Context, dRow row.Row) error {
-	err := ste.handleReferencingRowsOnDelete(ctx, dRow)
+func (ste *sessionedTableEditor) GetAutoIncrementValue() types.Value {
+	return ste.tableEditor.GetAutoIncrementValue()
+}
+
+func (ste *sessionedTableEditor) SetAutoIncrementValue(v types.Value) error {
+	return ste.tableEditor.SetAutoIncrementValue(v)
+}
+
+func (ste *sessionedTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
+	root, err := ste.tableEditSession.Flush(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return ste.tableEditor.DeleteRow(ctx, dRow)
+	name := ste.tableEditor.name
+	tbl, ok, err := root.GetTable(ctx, name)
+	if !ok {
+		return nil, fmt.Errorf("edit session failed to flush table %s", name)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return tbl, nil
 }
 
 // handleReferencingRowsOnDelete handles updating referencing foreign keys on delete operations
-func (ste *SessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Context, dRow row.Row) error {
+func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Context, dRow row.Row) error {
 	if ste.tableEditSession.Props.ForeignKeyChecksDisabled {
 		return nil
 	}
@@ -153,7 +132,11 @@ func (ste *SessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 		switch foreignKey.OnDelete {
 		case doltdb.ForeignKeyReferenceOption_Cascade:
 			for _, rowToDelete := range referencingRows {
-				err = referencingSte.DeleteRow(ctx, rowToDelete)
+				key, err := row.KeyTupleFromRow(ctx, rowToDelete, referencingSte.tableEditor.tSch)
+				if err != nil {
+					return err
+				}
+				err = referencingSte.DeleteKey(ctx, key)
 				if err != nil {
 					return err
 				}
@@ -184,7 +167,7 @@ func (ste *SessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 	return nil
 }
 
-func (ste *SessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Context, dOldRow row.Row, dNewRow row.Row) error {
+func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Context, dOldRow row.Row, dNewRow row.Row) error {
 	if ste.tableEditSession.Props.ForeignKeyChecksDisabled {
 		return nil
 	}
@@ -282,7 +265,7 @@ func (ste *SessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 // items have tags from newTags, while the tags from dRow are expected to match originalTags. Both parameter slices are
 // assumed to have equivalent ordering and length. If the key contains any nulls, then we return true to indicate that
 // we do not propagate an ON DELETE/UPDATE.
-func (ste *SessionedTableEditor) reduceRowAndConvert(nbf *types.NomsBinFormat, originalTags []uint64, newTags []uint64, dRow row.Row) (types.Tuple, bool, error) {
+func (ste *sessionedTableEditor) reduceRowAndConvert(nbf *types.NomsBinFormat, originalTags []uint64, newTags []uint64, dRow row.Row) (types.Tuple, bool, error) {
 	keyVals := make([]types.Value, len(originalTags)*2)
 	for i, colTag := range originalTags {
 		val, ok := dRow.GetColVal(colTag)
@@ -300,7 +283,7 @@ func (ste *SessionedTableEditor) reduceRowAndConvert(nbf *types.NomsBinFormat, o
 	return tpl, false, nil
 }
 
-func (ste *SessionedTableEditor) updateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row, checkReferences bool) error {
+func (ste *sessionedTableEditor) updateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row, checkReferences bool) error {
 	if checkReferences {
 		err := ste.validateForInsert(ctx, dNewRow)
 		if err != nil {
@@ -317,7 +300,7 @@ func (ste *SessionedTableEditor) updateRow(ctx context.Context, dOldRow row.Row,
 }
 
 // validateForInsert returns whether the given row is able to be inserted into the target table.
-func (ste *SessionedTableEditor) validateForInsert(ctx context.Context, dRow row.Row) error {
+func (ste *sessionedTableEditor) validateForInsert(ctx context.Context, dRow row.Row) error {
 	if ste.tableEditSession.Props.ForeignKeyChecksDisabled {
 		return nil
 	}
@@ -343,12 +326,4 @@ func (ste *SessionedTableEditor) validateForInsert(ctx context.Context, dRow row
 		}
 	}
 	return nil
-}
-
-func (ste *SessionedTableEditor) GetAutoIncrementValue() types.Value {
-	return ste.tableEditor.GetAutoIncrementValue()
-}
-
-func (ste *SessionedTableEditor) SetAutoIncrementValue(v types.Value) error {
-	return ste.tableEditor.SetAutoIncrementValue(v)
 }

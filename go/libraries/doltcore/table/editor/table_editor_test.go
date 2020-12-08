@@ -30,11 +30,15 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// The number of times we will loop through the tests to ensure consistent results
-const tableEditorConcurrencyIterations = 1000
+const (
+	// The number of times we will loop through the tests to ensure consistent results
+	tableEditorConcurrencyIterations = 1000
 
-// The number of rows we expect the test to end up with
-const tableEditorConcurrencyFinalCount = 100
+	// The number of rows we expect the test to end up with
+	tableEditorConcurrencyFinalCount = 100
+
+	tableName = "t"
+)
 
 func TestTableEditorConcurrency(t *testing.T) {
 	format := types.Format_7_18
@@ -55,7 +59,7 @@ func TestTableEditorConcurrency(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := 0; i < tableEditorConcurrencyIterations; i++ {
-		tableEditor, err := NewTableEditor(context.Background(), table, tableSch)
+		tableEditor, err := NewTableEditor(context.Background(), table, tableSch, tableName)
 		require.NoError(t, err)
 		wg := &sync.WaitGroup{}
 
@@ -151,7 +155,7 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap)
 	require.NoError(t, err)
 
-	tableEditor, err := NewTableEditor(context.Background(), table, tableSch)
+	tableEditor, err := NewTableEditor(context.Background(), table, tableSch, tableName)
 	require.NoError(t, err)
 	for i := 0; i < tableEditorConcurrencyFinalCount*2; i++ {
 		dRow, err := row.New(format, tableSch, row.TaggedValues{
@@ -166,7 +170,7 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := 0; i < tableEditorConcurrencyIterations; i++ {
-		tableEditor, err := NewTableEditor(context.Background(), table, tableSch)
+		tableEditor, err := NewTableEditor(context.Background(), table, tableSch, tableName)
 		require.NoError(t, err)
 		wg := &sync.WaitGroup{}
 
@@ -246,7 +250,7 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap)
 	require.NoError(t, err)
 
-	tableEditor, err := NewTableEditor(context.Background(), table, tableSch)
+	tableEditor, err := NewTableEditor(context.Background(), table, tableSch, tableName)
 	require.NoError(t, err)
 
 	for i := 0; i < 20; i++ {
@@ -318,7 +322,7 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap)
 	require.NoError(t, err)
 
-	tableEditor, err := NewTableEditor(context.Background(), table, tableSch)
+	tableEditor, err := NewTableEditor(context.Background(), table, tableSch, tableName)
 	require.NoError(t, err)
 
 	for i := 0; i < 3; i++ {

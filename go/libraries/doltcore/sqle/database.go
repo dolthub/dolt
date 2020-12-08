@@ -812,7 +812,11 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 	if err != nil {
 		return err
 	}
-	rowData, err := te.GetRowData(ctx)
+	dTable, err := te.Table(ctx)
+	if err != nil {
+		return err
+	}
+	rowData, err := dTable.GetRowData(ctx)
 	if err != nil {
 		return err
 	}

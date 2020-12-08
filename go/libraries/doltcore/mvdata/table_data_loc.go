@@ -101,7 +101,8 @@ func (dl TableDataLocation) NewCreatingWriter(ctx context.Context, _ DataMoverOp
 		return nil, err
 	}
 
-	tableEditor, err := editor.CreateTableEditSession(updatedRoot, editor.TableEditSessionProps{}).GetTableEditor(ctx, dl.Name, outSch)
+	sess := editor.CreateTableEditSession(updatedRoot, editor.TableEditSessionProps{})
+	tableEditor, err := sess.GetTableEditor(ctx, dl.Name, outSch)
 	if err != nil {
 		return nil, err
 	}
@@ -112,6 +113,7 @@ func (dl TableDataLocation) NewCreatingWriter(ctx context.Context, _ DataMoverOp
 		initialData: types.EmptyMap,
 		statsCB:     statsCB,
 		tableEditor: tableEditor,
+		sess:        sess,
 		tableSch:    outSch,
 		useGC:       useGC,
 	}, nil
@@ -137,7 +139,8 @@ func (dl TableDataLocation) NewUpdatingWriter(ctx context.Context, _ DataMoverOp
 		return nil, err
 	}
 
-	tableEditor, err := editor.CreateTableEditSession(root, editor.TableEditSessionProps{}).GetTableEditor(ctx, dl.Name, tblSch)
+	sess := editor.CreateTableEditSession(root, editor.TableEditSessionProps{})
+	tableEditor, err := sess.GetTableEditor(ctx, dl.Name, tblSch)
 	if err != nil {
 		return nil, err
 	}
@@ -148,6 +151,7 @@ func (dl TableDataLocation) NewUpdatingWriter(ctx context.Context, _ DataMoverOp
 		initialData: m,
 		statsCB:     statsCB,
 		tableEditor: tableEditor,
+		sess:        sess,
 		tableSch:    tblSch,
 		useGC:       useGC,
 	}, nil
@@ -175,7 +179,8 @@ func (dl TableDataLocation) NewReplacingWriter(ctx context.Context, _ DataMoverO
 		return nil, err
 	}
 
-	tableEditor, err := editor.CreateTableEditSession(updatedRoot, editor.TableEditSessionProps{}).GetTableEditor(ctx, dl.Name, tblSch)
+	sess := editor.CreateTableEditSession(updatedRoot, editor.TableEditSessionProps{})
+	tableEditor, err := sess.GetTableEditor(ctx, dl.Name, tblSch)
 	if err != nil {
 		return nil, err
 	}
@@ -186,6 +191,7 @@ func (dl TableDataLocation) NewReplacingWriter(ctx context.Context, _ DataMoverO
 		initialData: types.EmptyMap,
 		statsCB:     statsCB,
 		tableEditor: tableEditor,
+		sess:        sess,
 		tableSch:    tblSch,
 		useGC:       useGC,
 	}, nil
@@ -193,7 +199,8 @@ func (dl TableDataLocation) NewReplacingWriter(ctx context.Context, _ DataMoverO
 
 type tableEditorWriteCloser struct {
 	dEnv        *env.DoltEnv
-	tableEditor *editor.SessionedTableEditor
+	tableEditor editor.TableEditor
+	sess        *editor.TableEditSession
 	initialData types.Map
 	tableSch    schema.Schema
 	insertOnly  bool
@@ -208,7 +215,7 @@ type tableEditorWriteCloser struct {
 var _ DataMoverCloser = (*tableEditorWriteCloser)(nil)
 
 func (te *tableEditorWriteCloser) Flush(ctx context.Context) (*doltdb.RootValue, error) {
-	return te.tableEditor.Flush(ctx)
+	return te.sess.Flush(ctx)
 }
 
 // GetSchema implements TableWriteCloser
@@ -271,7 +278,7 @@ func (te *tableEditorWriteCloser) gc(ctx context.Context) error {
 	w := te.dEnv.RepoState.WorkingHash()
 	s := te.dEnv.RepoState.StagedHash()
 
-	inProgresRoot, err := te.tableEditor.Flush(ctx)
+	inProgresRoot, err := te.sess.Flush(ctx)
 	if err != nil {
 		return err
 	}
