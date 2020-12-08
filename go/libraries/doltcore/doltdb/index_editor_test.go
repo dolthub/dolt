@@ -400,3 +400,38 @@ func TestIndexEditorWriteAfterFlush(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, sameIndexData.Equals(newIndexData))
 }
+
+func TestIndexEditorFlushClearsUniqueError(t *testing.T) {
+	format := types.Format_7_18
+	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
+	require.NoError(t, err)
+	colColl, err := schema.NewColCollection(
+		schema.NewColumn("pk", 0, types.IntKind, true),
+		schema.NewColumn("v1", 1, types.IntKind, false))
+	require.NoError(t, err)
+	tableSch, err := schema.SchemaFromCols(colColl)
+	require.NoError(t, err)
+	index, err := tableSch.Indexes().AddIndexByColNames("idx_unq", []string{"v1"}, schema.IndexProperties{IsUnique: true, Comment: ""})
+	require.NoError(t, err)
+	indexSch := index.Schema()
+	emptyMap, err := types.NewMap(context.Background(), db)
+	require.NoError(t, err)
+
+	indexEditor := NewIndexEditor(index, emptyMap)
+	dRow, err := row.New(format, indexSch, row.TaggedValues{
+		0: types.Int(1),
+		1: types.Int(1),
+	})
+	require.NoError(t, err)
+	require.NoError(t, indexEditor.UpdateIndex(context.Background(), nil, dRow))
+	dRow, err = row.New(format, indexSch, row.TaggedValues{
+		0: types.Int(2),
+		1: types.Int(1),
+	})
+	require.NoError(t, err)
+	require.NoError(t, indexEditor.UpdateIndex(context.Background(), nil, dRow))
+	err = indexEditor.Flush(context.Background())
+	require.Error(t, err)
+	err = indexEditor.Flush(context.Background())
+	require.NoError(t, err)
+}
