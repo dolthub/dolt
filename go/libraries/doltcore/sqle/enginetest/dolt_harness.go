@@ -161,14 +161,14 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf 
 
 	if _, err := e.Catalog.FunctionRegistry.Function(dfunctions.CommitFuncName); sql.ErrFunctionNotFound.Is(err) {
 		require.NoError(d.t,
-			e.Catalog.FunctionRegistry.Register(sql.Function1{Name: dfunctions.CommitFuncName, Fn: dfunctions.NewCommitFunc}))
+			e.Catalog.FunctionRegistry.Register(sql.FunctionN{Name: dfunctions.CommitFuncName, Fn: dfunctions.NewCommitFunc}))
 	}
 
 	asOfString, ok := asOf.(string)
 	require.True(d.t, ok)
 
 	_, iter, err := e.Query(enginetest.NewContext(d),
-		"set @@"+ddb.HeadKey()+" = COMMIT('test commit');")
+		"set @@"+ddb.HeadKey()+" = COMMIT('-m', 'test commit');")
 	require.NoError(d.t, err)
 	_, err = sql.RowIterToRows(iter)
 	require.NoError(d.t, err)

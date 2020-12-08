@@ -63,21 +63,10 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	ap := cli.CreateCommitArgParser()
 
 	// Get the args for DOLT_COMMIT.
-	args := make([]string, len(d.children))
-	for i := range d.children {
-		childVal, err := d.children[i].Eval(ctx, row)
+	args, err := getDoltArgs(ctx, row, d.Children())
 
-		if err != nil {
-			return nil, err
-		}
-
-		text, err := sql.Text.Convert(childVal)
-
-		if err != nil {
-			return nil, err
-		}
-
-		args[i] = text.(string)
+	if err != nil {
+		return nil, err
 	}
 
 	apr := cli.ParseArgs(ap, args, nil)
@@ -168,6 +157,27 @@ func hasStagedSetChanges(ctx *sql.Context, rsr env.RepoStateReader) (bool, error
 	}
 
 	return rsr.StagedHash() != headHash, nil
+}
+
+func getDoltArgs(ctx *sql.Context, row sql.Row, children []sql.Expression) ([]string, error) {
+	args := make([]string, len(children))
+	for i := range children {
+		childVal, err := children[i].Eval(ctx, row)
+
+		if err != nil {
+			return nil, err
+		}
+
+		text, err := sql.Text.Convert(childVal)
+
+		if err != nil {
+			return nil, err
+		}
+
+		args[i] = text.(string)
+	}
+
+	return args, nil
 }
 
 func (d DoltCommitFunc) String() string {

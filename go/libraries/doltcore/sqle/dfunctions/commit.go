@@ -15,12 +15,12 @@
 package dfunctions
 
 import (
-	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
@@ -28,34 +28,41 @@ import (
 const CommitFuncName = "commit"
 
 type CommitFunc struct {
-	expression.UnaryExpression
+	children []sql.Expression
 }
 
 // NewCommitFunc creates a new CommitFunc expression.
-func NewCommitFunc(e sql.Expression) sql.Expression {
-	return &CommitFunc{expression.UnaryExpression{Child: e}}
+func NewCommitFunc(args ...sql.Expression) (sql.Expression, error) {
+	return &CommitFunc{children: args}, nil
 }
 
 // Eval implements the Expression interface.
 func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
-	val, err := cf.Child.Eval(ctx, row)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if val == nil {
-		return nil, nil
-	}
-
-	commitMessage, ok := val.(string)
-
-	if !ok {
-		return nil, errors.New("commit message is not a string")
-	}
-
 	dbName := ctx.GetCurrentDatabase()
 	dSess := sqle.DSessFromSess(ctx.Session)
+
+	//  Get the params associated with COMMIT.
+	ap := cli.CreateCommitArgParser()
+	args, err := getDoltArgs(ctx, row, cf.Children())
+	apr := cli.ParseArgs(ap, args, nil)
+
+	var name, email string
+	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
+		name, email, err = cli.ParseAuthor(authorStr)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		name = dSess.Username
+		email = dSess.Email
+	}
+
+	// Get the commit message.
+	commitMessage, msgOk := apr.GetValue(cli.CommitMessageArg)
+	if !msgOk {
+		return nil, fmt.Errorf("Must provide commit message.")
+	}
+
 	parent, _, err := dSess.GetParentCommit(ctx, dbName)
 
 	if err != nil {
@@ -80,11 +87,7 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, err
 	}
 
-	if dSess.Username == "" || dSess.Email == "" {
-		return nil, errors.New("commit function failure: Username and/or email not configured")
-	}
-
-	meta, err := doltdb.NewCommitMeta(dSess.Username, dSess.Email, commitMessage)
+	meta, err := doltdb.NewCommitMeta(name, email, commitMessage)
 
 	if err != nil {
 		return nil, err
@@ -107,24 +110,38 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 
 // String implements the Stringer interface.
 func (cf *CommitFunc) String() string {
-	return fmt.Sprintf("COMMIT(%s)", cf.Child.String())
+	childrenStrings := make([]string, len(cf.children))
+
+	for i, child := range cf.children {
+		childrenStrings[i] = child.String()
+	}
+
+	return fmt.Sprintf("COMMIT(%s)", strings.Join(childrenStrings, ","))
 }
 
 // IsNullable implements the Expression interface.
 func (cf *CommitFunc) IsNullable() bool {
-	return cf.Child.IsNullable()
+	return false
+}
+
+func (cf *CommitFunc) Resolved() bool {
+	for _, child := range cf.Children() {
+		if !child.Resolved() {
+			return false
+		}
+	}
+	return true
+}
+
+func (cf *CommitFunc) Children() []sql.Expression {
+	return cf.children
 }
 
 // WithChildren implements the Expression interface.
 func (cf *CommitFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
-	if len(children) != 1 {
-		return nil, sql.ErrInvalidChildrenNumber.New(cf, len(children), 1)
-	}
-
-	return NewCommitFunc(children[0]), nil
+	return NewCommitFunc(children...)
 }
 
-// Type implements the Expression interface.
 func (cf *CommitFunc) Type() sql.Type {
 	return sql.Text
 }

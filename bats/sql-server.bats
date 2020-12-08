@@ -195,11 +195,14 @@ teardown() {
     INSERT INTO one_pk (pk) VALUES (0);
     INSERT INTO one_pk (pk,c1) VALUES (1,1);
     INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);
-    SET @@repo1_head=commit('test commit message');
+    SET @@repo1_head=commit('-m', 'test commit message', '--author', 'John Doe <john@example.com>');
     INSERT INTO dolt_branches (name,hash) VALUES ('test_branch', @@repo1_head);"
 
     # validate new branch was created
     server_query 0 "SELECT name,latest_commit_message FROM dolt_branches" "name,latest_commit_message\nmaster,Initialize data repository\ntest_branch,test commit message"
+
+    # Check that the author information is correct.
+    server_query 0 "SELECT latest_committer,latest_committer_email FROM dolt_branches ORDER BY latest_commit_date DESC LIMIT 1" "latest_committer,latest_committer_email\nJohn Doe,john@example.com"
 
     # validate no tables on master still
     server_query 0 "SHOW tables" ""
