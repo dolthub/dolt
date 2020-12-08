@@ -2,6 +2,8 @@
 
 Dolt is Git for data!
 
+![Dolt!](./dolt_hi.svg)
+
 Dolt is a SQL database that you can fork, clone, branch, merge, push
 and pull just like a git repository. Connect to Dolt just like any
 MySQL database to run queries or update the data using SQL
