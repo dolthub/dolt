@@ -1,6 +1,6 @@
 # Dolt
 
-<img align="left" height="320" src="./dolt_hi.svg"/>
+<img align="left" height="310" src="./dolt_hi.svg"/>
 
 ### Dolt is Git for Data!
 
