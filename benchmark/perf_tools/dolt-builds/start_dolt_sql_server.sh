@@ -7,4 +7,4 @@ cd /test
 dolt config --global --add user.name benchmark
 dolt config --global --add user.email benchmark@dolthub.com
 dolt init
-exec dolt sql-server --host=0.0.0.0
+exec dolt sql-server --host=0.0.0.0 --query-parallelism=8
