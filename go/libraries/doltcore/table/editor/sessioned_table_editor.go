@@ -18,6 +18,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/store/types"
@@ -27,7 +29,7 @@ import (
 // by multiple callers. It is thread safe.
 type sessionedTableEditor struct {
 	tableEditSession  *TableEditSession
-	tableEditor       *tableEditor
+	tableEditor       TableEditor
 	referencedTables  []doltdb.ForeignKey // The tables that we reference to ensure an insert or update is valid
 	referencingTables []doltdb.ForeignKey // The tables that reference us to ensure their inserts and updates are valid
 }
@@ -53,13 +55,20 @@ func (ste *sessionedTableEditor) DeleteKey(ctx context.Context, key types.Tuple)
 	defer ste.tableEditSession.writeMutex.RUnlock()
 
 	if !ste.tableEditSession.Props.ForeignKeyChecksDisabled && len(ste.referencingTables) > 0 {
-		dRow, ok, err := ste.tableEditor.GetRow(ctx, key)
+		tbl, err := ste.tableEditor.Table(ctx)
+		if err != nil {
+			return err
+		}
+		sch := ste.tableEditor.Schema()
+
+		dRow, ok, err := tbl.GetRow(ctx, key, sch)
 		if err != nil {
 			return err
 		}
 		if !ok {
 			return nil
 		}
+
 		err = ste.handleReferencingRowsOnDelete(ctx, dRow)
 		if err != nil {
 			return err
@@ -92,7 +101,7 @@ func (ste *sessionedTableEditor) Table(ctx context.Context) (*doltdb.Table, erro
 		return nil, err
 	}
 
-	name := ste.tableEditor.name
+	name := ste.tableEditor.Name()
 	tbl, ok, err := root.GetTable(ctx, name)
 	if !ok {
 		return nil, fmt.Errorf("edit session failed to flush table %s", name)
@@ -101,6 +110,22 @@ func (ste *sessionedTableEditor) Table(ctx context.Context) (*doltdb.Table, erro
 		return nil, err
 	}
 	return tbl, nil
+}
+
+func (ste *sessionedTableEditor) Schema() schema.Schema {
+	return ste.tableEditor.Schema()
+}
+
+func (ste *sessionedTableEditor) Name() string {
+	return ste.tableEditor.Name()
+}
+
+func (ste *sessionedTableEditor) Format() *types.NomsBinFormat {
+	return ste.tableEditor.Format()
+}
+
+func (ste *sessionedTableEditor) Close() error {
+	return ste.tableEditor.Close()
 }
 
 // handleReferencingRowsOnDelete handles updating referencing foreign keys on delete operations
@@ -114,14 +139,14 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 		if !ok {
 			return fmt.Errorf("unable to get table editor as `%s` is missing", foreignKey.TableName)
 		}
-		indexKey, hasNulls, err := ste.reduceRowAndConvert(ste.tableEditor.nbf, foreignKey.ReferencedTableColumns, foreignKey.TableColumns, dRow)
+		indexKey, hasNulls, err := ste.reduceRowAndConvert(ste.tableEditor.Format(), foreignKey.ReferencedTableColumns, foreignKey.TableColumns, dRow)
 		if err != nil {
 			return err
 		}
 		if hasNulls {
 			continue
 		}
-		referencingRows, err := referencingSte.tableEditor.GetIndexedRows(ctx, indexKey, foreignKey.TableIndex)
+		referencingRows, err := GetIndexedRows(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex)
 		if err != nil {
 			return err
 		}
@@ -132,7 +157,7 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 		switch foreignKey.OnDelete {
 		case doltdb.ForeignKeyReferenceOption_Cascade:
 			for _, rowToDelete := range referencingRows {
-				key, err := row.KeyTupleFromRow(ctx, rowToDelete, referencingSte.tableEditor.tSch)
+				key, err := row.KeyTupleFromRow(ctx, rowToDelete, referencingSte.tableEditor.Schema())
 				if err != nil {
 					return err
 				}
@@ -145,7 +170,7 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 			for _, oldRow := range referencingRows {
 				newRow := oldRow
 				for _, colTag := range foreignKey.TableColumns {
-					newRow, err = newRow.SetColVal(colTag, types.NullValue, referencingSte.tableEditor.tSch)
+					newRow, err = newRow.SetColVal(colTag, types.NullValue, referencingSte.tableEditor.Schema())
 					if err != nil {
 						return err
 					}
@@ -177,14 +202,14 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 		if !ok {
 			return fmt.Errorf("unable to get table editor as `%s` is missing", foreignKey.TableName)
 		}
-		indexKey, hasNulls, err := ste.reduceRowAndConvert(ste.tableEditor.nbf, foreignKey.ReferencedTableColumns, foreignKey.TableColumns, dOldRow)
+		indexKey, hasNulls, err := ste.reduceRowAndConvert(ste.tableEditor.Format(), foreignKey.ReferencedTableColumns, foreignKey.TableColumns, dOldRow)
 		if err != nil {
 			return err
 		}
 		if hasNulls {
 			continue
 		}
-		referencingRows, err := referencingSte.tableEditor.GetIndexedRows(ctx, indexKey, foreignKey.TableIndex)
+		referencingRows, err := GetIndexedRows(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex)
 		if err != nil {
 			return err
 		}
@@ -210,7 +235,7 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 			// NULL handling is usually done higher, so if a new value is NULL then we need to error
 			for i := range foreignKey.ReferencedTableColumns {
 				if incomingVal, _ := dNewRow.GetColVal(foreignKey.ReferencedTableColumns[i]); types.IsNull(incomingVal) {
-					col, ok := referencingSte.tableEditor.tSch.GetAllCols().GetByTag(foreignKey.TableColumns[i])
+					col, ok := referencingSte.tableEditor.Schema().GetAllCols().GetByTag(foreignKey.TableColumns[i])
 					if !ok {
 						return fmt.Errorf("column with tag `%d` not found on `%s` from foreign key `%s`",
 							foreignKey.TableColumns[i], foreignKey.TableName, foreignKey.Name)
@@ -225,7 +250,7 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 				newRow := rowToUpdate
 				for i := range foreignKey.ReferencedTableColumns {
 					incomingVal, _ := dNewRow.GetColVal(foreignKey.ReferencedTableColumns[i])
-					newRow, err = newRow.SetColVal(foreignKey.TableColumns[i], incomingVal, referencingSte.tableEditor.tSch)
+					newRow, err = newRow.SetColVal(foreignKey.TableColumns[i], incomingVal, referencingSte.tableEditor.Schema())
 					if err != nil {
 						return err
 					}
@@ -239,7 +264,7 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 			for _, oldRow := range referencingRows {
 				newRow := oldRow
 				for _, colTag := range foreignKey.TableColumns {
-					newRow, err = newRow.SetColVal(colTag, types.NullValue, referencingSte.tableEditor.tSch)
+					newRow, err = newRow.SetColVal(colTag, types.NullValue, referencingSte.tableEditor.Schema())
 					if err != nil {
 						return err
 					}
@@ -305,7 +330,7 @@ func (ste *sessionedTableEditor) validateForInsert(ctx context.Context, dRow row
 		return nil
 	}
 	for _, foreignKey := range ste.referencedTables {
-		indexKey, hasNulls, err := ste.reduceRowAndConvert(ste.tableEditor.nbf, foreignKey.TableColumns, foreignKey.ReferencedTableColumns, dRow)
+		indexKey, hasNulls, err := ste.reduceRowAndConvert(ste.tableEditor.Format(), foreignKey.TableColumns, foreignKey.ReferencedTableColumns, dRow)
 		if err != nil {
 			return err
 		}
@@ -316,7 +341,7 @@ func (ste *sessionedTableEditor) validateForInsert(ctx context.Context, dRow row
 		if !ok {
 			return fmt.Errorf("unable to get table editor as `%s` is missing", foreignKey.ReferencedTableName)
 		}
-		exists, err := referencingSte.tableEditor.ContainsIndexedKey(ctx, indexKey, foreignKey.ReferencedTableIndex)
+		exists, err := ContainsIndexedKey(ctx, referencingSte.tableEditor, indexKey, foreignKey.ReferencedTableIndex)
 		if err != nil {
 			return err
 		}
