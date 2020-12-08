@@ -15,11 +15,11 @@
 package merge
 
 import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata/pipeline"
+	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata/untyped"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/dolthub/dolt/go/store/types"
 )
 

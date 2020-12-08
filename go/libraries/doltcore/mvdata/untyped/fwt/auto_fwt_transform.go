@@ -15,8 +15,8 @@
 package fwt
 
 import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata/pipeline"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/store/types"
 )
 

@@ -21,9 +21,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata/pipeline"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 )
 
 type FilterFn = func(r row.Row) (matchesFilter bool)

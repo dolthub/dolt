@@ -15,10 +15,10 @@
 package untyped
 
 import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata/typed"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed"
 	"github.com/dolthub/dolt/go/store/types"
 )
 

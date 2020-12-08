@@ -26,7 +26,7 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/fwt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata/untyped/fwt"
 	"github.com/dolthub/dolt/go/libraries/utils/pipeline"
 )
 

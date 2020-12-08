@@ -17,7 +17,7 @@ package lookup
 import (
 	"fmt"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/noms"
 	"github.com/dolthub/dolt/go/store/types"
 )
 

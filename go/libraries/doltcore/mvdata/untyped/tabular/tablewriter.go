@@ -25,9 +25,9 @@ import (
 
 	"github.com/acarl005/stripansi"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata/untyped/fwt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/types"
 )

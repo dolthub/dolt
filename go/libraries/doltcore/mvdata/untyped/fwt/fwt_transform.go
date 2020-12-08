@@ -15,9 +15,9 @@
 package fwt
 
 import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata/pipeline"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 )
 
 // FWTTransformer transforms columns to be of fixed width.

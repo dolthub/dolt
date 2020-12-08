@@ -26,7 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	ndiff "github.com/dolthub/dolt/go/store/diff"
 	"github.com/dolthub/dolt/go/store/hash"
