@@ -85,6 +85,16 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, schemaVal types.Va
 		indexData = &indexesMap
 	}
 
+	sch, err := encoding.UnmarshalSchemaNomsValue(ctx, vrw.Format(), schemaVal)
+	if err != nil {
+		return nil, err
+	}
+
+	if sch.Indexes().Count() != int(indexData.Len()) {
+		a, b := sch.Indexes().Count(), indexData.Len()
+		return nil, fmt.Errorf("schema has %d indexes, index map has %d", a, b)
+	}
+
 	schemaRef, err := writeValAndGetRef(ctx, vrw, schemaVal)
 	if err != nil {
 		return nil, err
