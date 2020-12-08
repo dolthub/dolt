@@ -141,6 +141,7 @@ def run_test(test_db_host: str, test_db: str, test: str, table_size: int) -> str
         '--mysql-db={}'.format(test_db),
         '--mysql-user=root',
         '--mysql-host={}'.format(test_db_host),
+        '--rand-seed=1'
     ]
 
     _run_stage(test, 'prepare', sysbench_args)
