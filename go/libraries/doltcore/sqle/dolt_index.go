@@ -255,9 +255,8 @@ func (di *doltIndex) keysToTuple(keys []interface{}) (types.Tuple, error) {
 	}
 	var vals []types.Value
 	for i, col := range di.cols {
-		// As an example, if our TypeInfo is Int8, we should not fail to create a tuple if given the value 9001.
-		// Instead, the index will return no values. Comparisons should happen at the widest type, only storage
-		// should care that the value perfectly conforms to the target TypeInfo.
+		// As an example, if our TypeInfo is Int8, we should not fail to create a tuple if we are returning all keys
+		// that have a value of less than 9001, thus we promote the TypeInfo to the widest type.
 		val, err := col.TypeInfo.Promote().ConvertValueToNomsValue(keys[i])
 		if err != nil {
 			return types.EmptyTuple(nbf), err
