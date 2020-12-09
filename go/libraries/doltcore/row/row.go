@@ -15,6 +15,7 @@
 package row
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -62,7 +63,7 @@ func GetFieldByName(colName string, r Row, sch schema.Schema) (types.Value, bool
 	col, ok := sch.GetAllCols().GetByName(colName)
 
 	if !ok {
-		panic("Requesting column that isn't in the schema. This is a bug. columns should be verified in the schema beforet attempted retrieval.")
+		panic("Requesting column that isn't in the schema. This is a bug. columns should be verified in the schema before attempted retrieval.")
 	} else {
 		return r.GetColVal(col.Tag)
 	}
@@ -72,7 +73,7 @@ func GetFieldByNameWithDefault(colName string, defVal types.Value, r Row, sch sc
 	col, ok := sch.GetAllCols().GetByName(colName)
 
 	if !ok {
-		panic("Requesting column that isn't in the schema. This is a bug. columns should be verified in the schema beforet attempted retrieval.")
+		panic("Requesting column that isn't in the schema. This is a bug. columns should be verified in the schema before attempted retrieval.")
 	} else {
 		val, ok := r.GetColVal(col.Tag)
 
@@ -183,4 +184,9 @@ func GetTaggedVals(row Row) (TaggedValues, error) {
 	}
 
 	return taggedVals, nil
+}
+
+func KeyTupleFromRow(ctx context.Context, row Row, sch schema.Schema) (types.Tuple, error) {
+	val, err := row.NomsMapKey(sch).Value(ctx)
+	return val.(types.Tuple), err
 }

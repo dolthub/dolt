@@ -31,7 +31,7 @@ type TableEditSession struct {
 	Props TableEditSessionProps
 
 	root       *doltdb.RootValue
-	tables     map[string]*SessionedTableEditor
+	tables     map[string]*sessionedTableEditor
 	writeMutex *sync.RWMutex // This mutex is specifically for changes that affect the TES or all STEs
 }
 
@@ -47,14 +47,14 @@ func CreateTableEditSession(root *doltdb.RootValue, props TableEditSessionProps)
 	return &TableEditSession{
 		Props:      props,
 		root:       root,
-		tables:     make(map[string]*SessionedTableEditor),
+		tables:     make(map[string]*sessionedTableEditor),
 		writeMutex: &sync.RWMutex{},
 	}
 }
 
-// GetTableEditor returns a SessionedTableEditor for the given table. If a schema is provided and it does not match the one
+// GetTableEditor returns a TableEditor for the given table. If a schema is provided and it does not match the one
 // that is used for currently open editors (if any), then those editors will reload the table from the root.
-func (tes *TableEditSession) GetTableEditor(ctx context.Context, tableName string, tableSch schema.Schema) (*SessionedTableEditor, error) {
+func (tes *TableEditSession) GetTableEditor(ctx context.Context, tableName string, tableSch schema.Schema) (TableEditor, error) {
 	tes.writeMutex.Lock()
 	defer tes.writeMutex.Unlock()
 
@@ -127,8 +127,16 @@ func (tes *TableEditSession) ValidateForeignKeys(ctx context.Context) error {
 	} else {
 		// if we loaded foreign keys then all referenced tables exist, so we can just use them
 		for _, ste := range tes.tables {
-			err = ste.tableEditor.rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-				r, err := row.FromNoms(ste.tableEditor.tSch, key.(types.Tuple), value.(types.Tuple))
+			tbl, err := ste.tableEditor.Table(ctx)
+			if err != nil {
+				return err
+			}
+			rowData, err := tbl.GetRowData(ctx)
+			if err != nil {
+				return err
+			}
+			err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+				r, err := row.FromNoms(ste.tableEditor.Schema(), key.(types.Tuple), value.(types.Tuple))
 				if err != nil {
 					return true, err
 				}
@@ -158,9 +166,9 @@ func (tes *TableEditSession) flush(ctx context.Context) (*doltdb.RootValue, erro
 	var rootErr error
 	for tableName, ste := range tes.tables {
 		// we can run all of the Table calls concurrently as long as we guard updating the root
-		go func(tableName string, ste *SessionedTableEditor) {
+		go func(tableName string, ste *sessionedTableEditor) {
 			defer wg.Done()
-			updatedTable, err := ste.tableEditor.Table()
+			updatedTable, err := ste.tableEditor.Table(ctx)
 			// we lock immediately after doing the operation, since both error setting and root updating are guarded
 			rootMutex.Lock()
 			defer rootMutex.Unlock()
@@ -189,7 +197,7 @@ func (tes *TableEditSession) flush(ctx context.Context) (*doltdb.RootValue, erro
 }
 
 // getTableEditor is the inner implementation for GetTableEditor, allowing recursive calls
-func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName string, tableSch schema.Schema) (*SessionedTableEditor, error) {
+func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName string, tableSch schema.Schema) (*sessionedTableEditor, error) {
 	if tes.root == nil {
 		return nil, fmt.Errorf("must call SetRoot before a table editor will be returned")
 	}
@@ -200,14 +208,14 @@ func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName strin
 	if ok {
 		if tableSch == nil {
 			return localTableEditor, nil
-		} else if ok, err = schema.SchemasAreEqual(tableSch, localTableEditor.tableEditor.tSch); err == nil && ok {
+		} else if ok, err = schema.SchemasAreEqual(tableSch, localTableEditor.tableEditor.Schema()); err == nil && ok {
 			return localTableEditor, nil
 		}
 		// Any existing references to this localTableEditor should be preserved, so we just change the underlying values
 		localTableEditor.referencedTables = nil
 		localTableEditor.referencingTables = nil
 	} else {
-		localTableEditor = &SessionedTableEditor{
+		localTableEditor = &sessionedTableEditor{
 			tableEditSession:  tes,
 			tableEditor:       nil,
 			referencedTables:  nil,
@@ -230,7 +238,7 @@ func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName strin
 		}
 	}
 
-	tableEditor, err := NewTableEditor(ctx, t, tableSch)
+	tableEditor, err := NewTableEditor(ctx, t, tableSch, tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +261,7 @@ func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName strin
 }
 
 // loadForeignKeys loads all tables mentioned in foreign keys for the given editor
-func (tes *TableEditSession) loadForeignKeys(ctx context.Context, localTableEditor *SessionedTableEditor) error {
+func (tes *TableEditSession) loadForeignKeys(ctx context.Context, localTableEditor *sessionedTableEditor) error {
 	// these are the tables that reference us, so we need to update them
 	for _, foreignKey := range localTableEditor.referencingTables {
 		_, err := tes.getTableEditor(ctx, foreignKey.TableName, nil)
@@ -289,7 +297,9 @@ func (tes *TableEditSession) setRoot(ctx context.Context, root *doltdb.RootValue
 			return err
 		}
 		if !ok { // table was removed in newer root
-			localTableEditor.tableEditor.Close()
+			if err := localTableEditor.tableEditor.Close(); err != nil {
+				return err
+			}
 			delete(tes.tables, tableName)
 			continue
 		}
@@ -297,11 +307,13 @@ func (tes *TableEditSession) setRoot(ctx context.Context, root *doltdb.RootValue
 		if err != nil {
 			return err
 		}
-		newTableEditor, err := NewTableEditor(ctx, t, tSch)
+		newTableEditor, err := NewTableEditor(ctx, t, tSch, tableName)
 		if err != nil {
 			return err
 		}
-		localTableEditor.tableEditor.Close()
+		if err := localTableEditor.tableEditor.Close(); err != nil {
+			return err
+		}
 		localTableEditor.tableEditor = newTableEditor
 		localTableEditor.referencedTables, localTableEditor.referencingTables = fkCollection.KeysForTable(tableName)
 		err = tes.loadForeignKeys(ctx, localTableEditor)

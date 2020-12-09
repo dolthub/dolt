@@ -17,6 +17,8 @@ package sqle
 import (
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -34,7 +36,8 @@ import (
 // unbroken chain of INSERT statements, where we have taken pains to batch writes to speed things up.
 type sqlTableEditor struct {
 	t           *WritableDoltTable
-	tableEditor *editor.SessionedTableEditor
+	tableEditor editor.TableEditor
+	sess        *editor.TableEditSession
 }
 
 var _ sql.RowReplacer = (*sqlTableEditor)(nil)
@@ -43,13 +46,15 @@ var _ sql.RowInserter = (*sqlTableEditor)(nil)
 var _ sql.RowDeleter = (*sqlTableEditor)(nil)
 
 func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor, error) {
-	tableEditor, err := t.db.TableEditSession(ctx).GetTableEditor(ctx, t.name, t.sch)
+	sess := t.db.TableEditSession(ctx)
+	tableEditor, err := sess.GetTableEditor(ctx, t.name, t.sch)
 	if err != nil {
 		return nil, err
 	}
 	return &sqlTableEditor{
 		t:           t,
 		tableEditor: tableEditor,
+		sess:        sess,
 	}, nil
 }
 
@@ -68,7 +73,12 @@ func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 		return err
 	}
 
-	return te.tableEditor.DeleteRow(ctx, dRow)
+	key, err := row.KeyTupleFromRow(ctx, dRow, te.t.sch)
+	if err != nil {
+		return err
+	}
+
+	return te.tableEditor.DeleteKey(ctx, key)
 }
 
 func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
@@ -110,7 +120,7 @@ func (te *sqlTableEditor) Close(ctx *sql.Context) error {
 }
 
 func (te *sqlTableEditor) flush(ctx *sql.Context) error {
-	newRoot, err := te.tableEditor.Flush(ctx)
+	newRoot, err := te.sess.Flush(ctx)
 	if err != nil {
 		return err
 	}
