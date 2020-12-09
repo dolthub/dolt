@@ -79,6 +79,12 @@ CSV
     run dolt sql -q "SELECT sum(c0),sum(c1) FROM imported;" -r csv
     [ $status -eq 0 ]
     [[ "$lines[@]" = "4,4" ]] || false
+    run dolt sql -q "SELECT * FROM tbl;" -r csv
+    [ $status -eq 0 ]
+    [[ "$lines[@]" = "0,0" ]] || false
+    [[ "$lines[@]" = "1,1" ]] || false
+    [[ "$lines[@]" = "1,1" ]] || false
+    [[ "$lines[@]" = "2,2" ]] || false
 }
 
 # updates are always appends
@@ -94,9 +100,16 @@ CSV
     run dolt sql -q "SELECT count(*) FROM keyless;" -r csv
     [ $status -eq 0 ]
     [[ "$lines[@]" = "8" ]] || false
-    run dolt sql -q "SELECT sum(c0),sum(c1) FROM keyless;" -r csv
+    run dolt sql -q "SELECT * FROM keyless;" -r csv
     [ $status -eq 0 ]
-    [[ "$lines[@]" = "8,8" ]] || false
+    [[ "$lines[@]" = "0,0" ]] || false
+    [[ "$lines[@]" = "0,0" ]] || false
+    [[ "$lines[@]" = "1,1" ]] || false
+    [[ "$lines[@]" = "1,1" ]] || false
+    [[ "$lines[@]" = "1,1" ]] || false
+    [[ "$lines[@]" = "1,1" ]] || false
+    [[ "$lines[@]" = "2,2" ]] || false
+    [[ "$lines[@]" = "2,2" ]] || false
 }
 
 @test "keyless diff against working set" {
@@ -335,53 +348,6 @@ SQL
     [[ "$output" = "1,1" ]] || false
     [[ "$output" = "1,1" ]] || false
     [[ "$output" = "2,2" ]] || false
-}
-
-# tables read in sorted order
-@test "keyless table import" {
-    cat <<CSV > data.csv
-c0,c1
-0,0
-2,2
-1,1
-1,1
-CSV
-    dolt table import -c tbl data.csv
-    run dolt sql -q "SELECT count(*) FROM tbl;" -r csv
-    [ $status -eq 0 ]
-    [[ "$lines[@]" = "4" ]] || false
-    run dolt sql -q "SELECT * FROM tbl;" -r csv
-    [ $status -eq 0 ]
-    [[ "$lines[@]" = "0,0" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
-    [[ "$lines[@]" = "2,2" ]] || false
-}
-
-# updates are appends to the end of the table
-# tables read in sorted order
-@test "keyless table update" {
-    cat <<CSV > data.csv
-c0,c1
-0,0
-2,2
-1,1
-1,1
-CSV
-    dolt table import -u keyless data.csv
-    run dolt sql -q "SELECT count(*) FROM keyless;" -r csv
-    [ $status -eq 0 ]
-    [[ "$lines[@]" = "8" ]] || false
-    run dolt sql -q "SELECT * FROM keyless;" -r csv
-    [ $status -eq 0 ]
-    [[ "$lines[@]" = "0,0" ]] || false
-    [[ "$lines[@]" = "0,0" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
-    [[ "$lines[@]" = "2,2" ]] || false
-    [[ "$lines[@]" = "2,2" ]] || false
 }
 
 # tables are read/stored in sorted order
