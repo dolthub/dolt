@@ -183,15 +183,8 @@ CSV
     dolt commit -am "updated on other"
 
     run dolt merge master
-    [ $status -eq 0 ]
-    run dolt sql -q "SELECT * FROM keyless WHERE c0 > 6;" -r csv
-    [ $status -eq 0 ]
-    [[ "$lines[@]" = "7,27" ]] || false
-    [[ "$lines[@]" = "7,17" ]] || false
-    [[ "$lines[@]" = "8,28" ]] || false
-    [[ "$lines[@]" = "8,18" ]] || false
-    [[ "$lines[@]" = "9,29" ]] || false
-    [[ "$lines[@]" = "9,19" ]] || false
+    [ $status -ne 0 ]
+    [[ "$output" = "conflict" ]] || false
 }
 
 # bag semantics diffs membership, not order
@@ -223,6 +216,9 @@ CSV
 
     run dolt merge master
     [ $status -eq 0 ]
+     run dolt sql -q "SELECT count(*) FROM keyless WHERE c0 > 6;" -r csv
+    [ $status -eq 0 ]
+    [[ "$lines[@]" = "3" ]] || false
     run dolt sql -q "SELECT * FROM keyless WHERE c0 > 6;" -r csv
     [ $status -eq 0 ]
     [[ "$lines[@]" = "7,7" ]] || false
@@ -230,7 +226,7 @@ CSV
     [[ "$lines[@]" = "9,9" ]] || false
 }
 
-# convergent row data has convergent storage representation
+# convergent row data history with convergent data has convergent storage representation
 @test "keyless diff branches with convergent mutation history" {
     dolt branch other
 
@@ -267,12 +263,8 @@ SQL
     dolt commit -am "inserted on other"
 
     run dolt merge master
-    [ $status -eq 0 ]
-    run dolt sql -q "SELECT * FROM keyless WHERE c0 > 6;" -r csv
-    [ $status -eq 0 ]
-    [[ "$lines[@]" = "7,7" ]] || false
-    [[ "$lines[@]" = "8,8" ]] || false
-    [[ "$lines[@]" = "9,9" ]] || false
+    [ $status -ne 0 ]
+    [[ "$output" = "conflict" ]] || false
 }
 
 # bag semantics give minimal diff
@@ -288,6 +280,7 @@ SQL
 
     run dolt diff master
     [ $status -eq 0 ]
+    # todo: assert line-length == 1
     [[ "$lines[@]" = "|  +  | 7  | 7  |" ]] || false
 }
 
@@ -302,13 +295,8 @@ SQL
     dolt commit -am "inserted on other"
 
     run dolt merge master
-    [ $status -eq 0 ]
-    run dolt sql -q "SELECT * FROM keyless WHERE c0 > 6;" -r csv
-    [ $status -eq 0 ]
-    [[ "$lines[@]" = "7,7" ]] || false
-    [[ "$lines[@]" = "7,7" ]] || false
-    [[ "$lines[@]" = "8,8" ]] || false
-    [[ "$lines[@]" = "9,9" ]] || false
+    [ $status -ne 0 ]
+    [[ "$output" = "conflict" ]] || false
 }
 
 @test "keyless diff delete+add against working" {
@@ -347,11 +335,11 @@ SQL
     dolt checkout -b right
 
     dolt sql -q "DELETE FROM keyless WHERE c0 = 2;"
-    dolt commit -am "deleted ones on right"
+    dolt commit -am "deleted twos on right"
 
     dolt checkout left
     dolt sql -q "INSERT INTO keyless VALUES (2,2);"
-    dolt commit -am "deleted twos on left"
+    dolt commit -am "inserted twos on left"
 
     run dolt merge right
     [ $status -eq 0 ]

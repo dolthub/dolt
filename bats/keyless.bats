@@ -244,13 +244,8 @@ SQL
     dolt commit -am "deleted four rows on left"
 
     run dolt merge right
-    [ $status -eq 0 ]
-    run dolt diff master
-    [ $status -eq 0 ]
-    [[ "$output" = "|  -  | 1  | 1  |" ]] || false
-    [[ "$output" = "|  -  | 1  | 1  |" ]] || false
-    [[ "$output" = "|  -  | 1  | 1  |" ]] || false
-    [[ "$output" = "|  -  | 1  | 1  |" ]] || false
+    [ $status -ne 0 ]
+    [[ "$output" = "conflict" ]] || false
 }
 
 @test "keyless diff duplicate updates" {
@@ -289,20 +284,9 @@ SQL
     dolt sql -q "UPDATE dupe SET c1 = 2 LIMIT 4;"
     dolt commit -am "updated four rows on left"
 
-    run dolt merge right
-    [ $status -eq 0 ]
-    run dolt sql -q "SELECT * FROM dupe ORDER BY c0" -r csv
-    [ $status -eq 0 ]
-    [[ "$lines[@]" = "1,1" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
-    [[ "$lines[@]" = "1,2" ]] || false
-    [[ "$lines[@]" = "1,2" ]] || false
-    [[ "$lines[@]" = "1,2" ]] || false
-    [[ "$lines[@]" = "1,2" ]] || false
+    run dolt merge master
+    [ $status -ne 0 ]
+    [[ "$output" = "conflict" ]] || false
 }
 
 @test "keyless sql diff" {
