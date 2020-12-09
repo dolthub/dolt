@@ -254,6 +254,18 @@ func InferSchema(ctx context.Context, root *doltdb.RootValue, rd table.TableRead
 	pkSet := set.NewStrSet(pks)
 	newCols, _ := schema.MapColCollection(infCols, func(col schema.Column) (schema.Column, error) {
 		col.IsPartOfPK = pkSet.Contains(col.Name)
+		if col.IsPartOfPK {
+			hasNotNull := false
+			for _, constraint := range col.Constraints {
+				if _, ok := constraint.(schema.NotNullConstraint); ok {
+					hasNotNull = true
+					break
+				}
+			}
+			if !hasNotNull {
+				col.Constraints = append(col.Constraints, schema.NotNullConstraint{})
+			}
+		}
 		return col, nil
 	})
 
