@@ -41,25 +41,19 @@ type JSONReader struct {
 
 func OpenJSONReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS, sch schema.Schema) (*JSONReader, error) {
 	r, err := fs.OpenForRead(path)
-
 	if err != nil {
 		return nil, err
 	}
 
-	return newJsonReader(nbf, r, fs, sch, path)
+	return NewJSONReader(nbf, r, sch)
 }
 
-func newJsonReader(nbf *types.NomsBinFormat, r io.ReadCloser, fs filesys.ReadableFS, sch schema.Schema, tblPath string) (*JSONReader, error) {
+func NewJSONReader(nbf *types.NomsBinFormat, r io.ReadCloser, sch schema.Schema) (*JSONReader, error) {
 	if sch == nil {
 		return nil, errors.New("schema must be provided to JsonReader")
 	}
 
-	tblData, err := fs.OpenForRead(tblPath)
-	if err != nil {
-		return nil, err
-	}
-
-	decoder := jstream.NewDecoder(tblData, 2) // extract JSON values at a depth level of 1
+	decoder := jstream.NewDecoder(r, 2) // extract JSON values at a depth level of 1
 
 	return &JSONReader{nbf: nbf, closer: r, sch: sch, jsonStream: decoder}, nil
 }
