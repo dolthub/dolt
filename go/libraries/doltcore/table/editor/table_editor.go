@@ -52,7 +52,7 @@ type TableEditor interface {
 // tableEditor supports making multiple row edits (inserts, updates, deletes) to a table. It does error checking for key
 // collision etc. in the Close() method, as well as during Insert / Update.
 //
-// This type is thread-safe, and may be used in a multi-threaded environment.d
+// This type is thread-safe, and may be used in a multi-threaded environment.
 type tableEditor struct {
 	t    *doltdb.Table
 	tSch schema.Schema

@@ -52,7 +52,7 @@ func CreateTableEditSession(root *doltdb.RootValue, props TableEditSessionProps)
 	}
 }
 
-// GetTableEditor returns a sessionedTableEditor for the given table. If a schema is provided and it does not match the one
+// GetTableEditor returns a TableEditor for the given table. If a schema is provided and it does not match the one
 // that is used for currently open editors (if any), then those editors will reload the table from the root.
 func (tes *TableEditSession) GetTableEditor(ctx context.Context, tableName string, tableSch schema.Schema) (TableEditor, error) {
 	tes.writeMutex.Lock()

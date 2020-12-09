@@ -114,7 +114,7 @@ func TestTableEditorConcurrency(t *testing.T) {
 		}
 		wg.Wait()
 
-		newTable, err := tableEditor.Table(nil)
+		newTable, err := tableEditor.Table(context.Background())
 		require.NoError(t, err)
 		newTableData, err := newTable.GetRowData(context.Background())
 		require.NoError(t, err)
@@ -166,7 +166,7 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow))
 	}
-	table, err = tableEditor.Table(nil)
+	table, err = tableEditor.Table(context.Background())
 	require.NoError(t, err)
 
 	for i := 0; i < tableEditorConcurrencyIterations; i++ {
@@ -209,7 +209,7 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 		}
 		wg.Wait()
 
-		newTable, err := tableEditor.Table(nil)
+		newTable, err := tableEditor.Table(context.Background())
 		require.NoError(t, err)
 		newTableData, err := newTable.GetRowData(context.Background())
 		require.NoError(t, err)
@@ -263,7 +263,7 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow))
 	}
 
-	_, err = tableEditor.Table(nil)
+	_, err = tableEditor.Table(context.Background())
 	require.NoError(t, err)
 
 	for i := 10; i < 20; i++ {
@@ -276,7 +276,7 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 		require.NoError(t, tableEditor.DeleteRow(context.Background(), dRow))
 	}
 
-	newTable, err := tableEditor.Table(nil)
+	newTable, err := tableEditor.Table(context.Background())
 	require.NoError(t, err)
 	newTableData, err := newTable.GetRowData(context.Background())
 	require.NoError(t, err)
@@ -297,7 +297,7 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 		})
 	}
 
-	sameTable, err := tableEditor.Table(nil)
+	sameTable, err := tableEditor.Table(context.Background())
 	require.NoError(t, err)
 	sameTableData, err := sameTable.GetRowData(context.Background())
 	require.NoError(t, err)
@@ -335,7 +335,7 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow))
 	}
 
-	_, err = tableEditor.Table(nil)
+	_, err = tableEditor.Table(context.Background())
 	require.NoError(t, err)
 
 	for i := 0; i < 3; i++ {
@@ -348,9 +348,9 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow))
 	}
 
-	_, err = tableEditor.Table(nil)
+	_, err = tableEditor.Table(context.Background())
 	require.Error(t, err)
-	_, err = tableEditor.Table(nil)
+	_, err = tableEditor.Table(context.Background())
 	require.NoError(t, err)
 
 	for i := 3; i < 10; i++ {
@@ -363,7 +363,7 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow))
 	}
 
-	newTable, err := tableEditor.Table(nil)
+	newTable, err := tableEditor.Table(context.Background())
 	require.NoError(t, err)
 	newTableData, err := newTable.GetRowData(context.Background())
 	require.NoError(t, err)
