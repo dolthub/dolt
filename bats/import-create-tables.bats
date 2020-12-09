@@ -29,10 +29,12 @@ DELIM
     "four":"c3"
 }
 JSON
+
     cat <<DELIM > name-map-data.csv
 one,two,three,four
 0,1,2,3
 DELIM
+
     cat <<SQL > name-map-sch.sql
 CREATE TABLE test (
     pk int not null,
@@ -457,6 +459,25 @@ CREATE TABLE test (
 SQL
     run dolt table import -u test `batshelper empty-strings-null-values.json`
     [ "$status" -eq 1 ]
+}
+
+@test "fail on import table creation when defined pk has a NULL value" {
+    cat <<DELIM > null-pk-1.csv
+pk,v1
+"a",1
+,2
+DELIM
+    cat <<DELIM > null-pk-2.csv
+pk1,pk2,v1
+0,0,0
+1,,1
+DELIM
+    run dolt table import -c --pk=pk test null-pk-1.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "pk" ]]
+    run dolt table import -c --pk=pk1,pk2 test null-pk-2.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "pk2" ]]
 }
 
 @test "table import -c infers types from data" {
