@@ -22,8 +22,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/async"
 )
 
-var _ TableReadCloser = (*AsyncReadAheadTableReader)(nil)
-
 // AsyncReadAheadTableReader is a TableReadCloser implementation that spins up a go routine to keep reading data into
 // a buffered channel so that it is ready when the caller wants it.
 type AsyncReadAheadTableReader struct {
@@ -62,11 +60,6 @@ func (tr *AsyncReadAheadTableReader) ReadRow(ctx context.Context) (row.Row, erro
 	}
 
 	return obj.(row.Row), err
-}
-
-// VerifySchema checks that the incoming schema matches the schema from the existing table
-func (tr *AsyncReadAheadTableReader) VerifySchema(outSch schema.Schema) (bool, error) {
-	return tr.backingReader.VerifySchema(outSch)
 }
 
 // Close releases resources being held

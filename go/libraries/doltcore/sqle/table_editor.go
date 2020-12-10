@@ -20,7 +20,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
@@ -59,7 +58,7 @@ func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor,
 }
 
 func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
-	dRow, err := sqlutil.SqlRowToDoltRow(te.t.table.Format(), sqlRow, te.t.sch)
+	dRow, err := row.SqlRowToDoltRow(te.t.table.Format(), sqlRow, te.t.sch)
 	if err != nil {
 		return err
 	}
@@ -68,7 +67,7 @@ func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 }
 
 func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
-	dRow, err := sqlutil.SqlRowToDoltRow(te.t.table.Format(), sqlRow, te.t.sch)
+	dRow, err := row.SqlRowToDoltRow(te.t.table.Format(), sqlRow, te.t.sch)
 	if err != nil {
 		return err
 	}
@@ -82,11 +81,11 @@ func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 }
 
 func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
-	dOldRow, err := sqlutil.SqlRowToDoltRow(te.t.table.Format(), oldRow, te.t.sch)
+	dOldRow, err := row.SqlRowToDoltRow(te.t.table.Format(), oldRow, te.t.sch)
 	if err != nil {
 		return err
 	}
-	dNewRow, err := sqlutil.SqlRowToDoltRow(te.t.table.Format(), newRow, te.t.sch)
+	dNewRow, err := row.SqlRowToDoltRow(te.t.table.Format(), newRow, te.t.sch)
 	if err != nil {
 		return err
 	}

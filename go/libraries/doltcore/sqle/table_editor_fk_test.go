@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -375,7 +374,7 @@ func assertTableEditorRows(t *testing.T, fk_dEnv *env.DoltEnv, root *doltdb.Root
 		_ = rowData.IterAll(context.Background(), func(key, value types.Value) error {
 			r, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
 			assert.NoError(t, err)
-			sqlRow, err := sqlutil.DoltRowToSqlRow(r, sch)
+			sqlRow, err := row.DoltRowToSqlRow(r, sch)
 			assert.NoError(t, err)
 			sqlRows = append(sqlRows, sqlRow)
 			return nil
@@ -438,7 +437,7 @@ func assertTableEditorRows(t *testing.T, fk_dEnv *env.DoltEnv, root *doltdb.Root
 			_ = indexRowData.IterAll(context.Background(), func(key, value types.Value) error {
 				r, err := row.FromNoms(indexSch, key.(types.Tuple), value.(types.Tuple))
 				assert.NoError(t, err)
-				sqlRow, err := sqlutil.DoltRowToSqlRow(r, indexSch)
+				sqlRow, err := row.DoltRowToSqlRow(r, indexSch)
 				assert.NoError(t, err)
 				sqlRows = append(sqlRows, sqlRow)
 				return nil

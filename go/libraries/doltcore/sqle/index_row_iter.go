@@ -20,7 +20,6 @@ import (
 	"runtime"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/async"
 	"github.com/dolthub/dolt/go/store/types"
 
@@ -143,7 +142,7 @@ func (i *indexLookupRowIterAdapter) processKey(_ context.Context, valInt interfa
 		return err
 	}
 
-	sqlRow, err := sqlutil.DoltRowToSqlRow(r, i.idx.Schema())
+	sqlRow, err := row.DoltRowToSqlRow(r, i.idx.Schema())
 	if err != nil {
 		return err
 	}

@@ -54,6 +54,10 @@ func ExtractAllColNames(sch Schema) (map[uint64]string, error) {
 	return colNames, nil
 }
 
+func IsKeyless(sch Schema) bool {
+	return sch.GetPKCols().Size() == 0
+}
+
 // TODO: this function never returns an error
 // SchemasAreEqual tests equality of two schemas.
 func SchemasAreEqual(sch1, sch2 Schema) (bool, error) {

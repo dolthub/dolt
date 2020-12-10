@@ -18,6 +18,8 @@ import (
 	"context"
 	"io"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
@@ -110,7 +112,24 @@ func (nrr *NomsRangeReader) GetSchema() schema.Schema {
 // IsBadRow(err) will be return true. This is a potentially non-fatal error and callers can decide if they want to
 // continue on a bad row, or fail.
 func (nrr *NomsRangeReader) ReadRow(ctx context.Context) (row.Row, error) {
-	var err error
+	key, val, err := nrr.next(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return row.FromNoms(nrr.sch, key, val)
+}
+
+func (nrr *NomsRangeReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
+	key, val, err := nrr.next(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return row.SqlRowFromTuples(nrr.sch, key, val)
+}
+
+func (nrr *NomsRangeReader) next(ctx context.Context) (key, val types.Tuple, err error) {
 	for nrr.itr != nil || nrr.idx < len(nrr.ranges) {
 		var k types.Value
 		var v types.Value
@@ -125,7 +144,7 @@ func (nrr *NomsRangeReader) ReadRow(ctx context.Context) (row.Row, error) {
 			}
 
 			if err != nil {
-				return nil, err
+				return key, val, err
 			}
 
 			nrr.currCheck = r.Check
@@ -140,7 +159,7 @@ func (nrr *NomsRangeReader) ReadRow(ctx context.Context) (row.Row, error) {
 		}
 
 		if err != nil {
-			return nil, err
+			return key, val, err
 		}
 
 		var inRange bool
@@ -148,7 +167,7 @@ func (nrr *NomsRangeReader) ReadRow(ctx context.Context) (row.Row, error) {
 			inRange, err = nrr.currCheck(k.(types.Tuple))
 
 			if err != nil {
-				return nil, err
+				return key, val, err
 			}
 
 			if !inRange {
@@ -156,7 +175,7 @@ func (nrr *NomsRangeReader) ReadRow(ctx context.Context) (row.Row, error) {
 				nrr.currCheck = nil
 				continue
 			} else {
-				return row.FromNoms(nrr.sch, k.(types.Tuple), v.(types.Tuple))
+				return k.(types.Tuple), v.(types.Tuple), nil
 			}
 		} else {
 			nrr.itr = nil
@@ -164,7 +183,7 @@ func (nrr *NomsRangeReader) ReadRow(ctx context.Context) (row.Row, error) {
 		}
 	}
 
-	return nil, io.EOF
+	return key, val, io.EOF
 }
 
 // VerifySchema checks that the incoming schema matches the schema from the existing table
