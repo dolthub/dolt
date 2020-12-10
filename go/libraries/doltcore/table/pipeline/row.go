@@ -14,7 +14,10 @@
 
 package pipeline
 
-import "github.com/dolthub/dolt/go/libraries/doltcore/row"
+import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
+)
 
 // ReadableMap is an interface that provides read only access to map properties
 type ReadableMap interface {
@@ -68,4 +71,35 @@ type RowWithProps struct {
 // NewRowWithProps creates a RowWith props from a row and a map of properties
 func NewRowWithProps(r row.Row, props map[string]interface{}) RowWithProps {
 	return RowWithProps{r, ImmutableProperties{props}}
+}
+
+// GetRowConvTranformFunc can be used to wrap a RowConverter and use that RowConverter in a pipeline.
+func GetRowConvTransformFunc(rc *rowconv.RowConverter) func(row.Row, ReadableMap) ([]*TransformedRowResult, string) {
+	if rc.IdentityConverter {
+		return func(inRow row.Row, props ReadableMap) (outRows []*TransformedRowResult, badRowDetails string) {
+			return []*TransformedRowResult{{RowData: inRow, PropertyUpdates: nil}}, ""
+		}
+	} else {
+		return func(inRow row.Row, props ReadableMap) (outRows []*TransformedRowResult, badRowDetails string) {
+			outRow, err := rc.Convert(inRow)
+
+			if err != nil {
+				return nil, err.Error()
+			}
+
+			if isv, err := row.IsValid(outRow, rc.DestSch); err != nil {
+				return nil, err.Error()
+			} else if !isv {
+				col, err := row.GetInvalidCol(outRow, rc.DestSch)
+
+				if err != nil {
+					return nil, "invalid column"
+				} else {
+					return nil, "invalid column: " + col.Name
+				}
+			}
+
+			return []*TransformedRowResult{{RowData: outRow, PropertyUpdates: nil}}, ""
+		}
+	}
 }

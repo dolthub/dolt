@@ -23,6 +23,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -367,27 +368,28 @@ func TestInsert(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
 			dEnv := dtestutils.CreateEnvWithSeedData(t)
 
 			args := []string{"-q", test.query}
 
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv)
+			result := SqlCmd{}.Exec(ctx, commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 
 			if result == 0 {
-				root, err := dEnv.WorkingRoot(context.Background())
+				root, err := dEnv.WorkingRoot(ctx)
 				assert.Nil(t, err)
 
 				// Assert that all expected IDs exist after the insert
 				for _, expectedid := range test.expectedIds {
-					table, _, err := root.GetTable(context.Background(), tableName)
+					tbl, _, err := root.GetTable(ctx, tableName)
 					assert.NoError(t, err)
 					taggedVals := row.TaggedValues{dtestutils.IdTag: types.UUID(expectedid)}
 					key := taggedVals.NomsTupleForPKCols(types.Format_7_18, dtestutils.TypedSchema.GetPKCols())
-					kv, err := key.Value(context.Background())
+					kv, err := key.Value(ctx)
 					assert.NoError(t, err)
-					_, ok, err := table.GetRow(context.Background(), kv.(types.Tuple), dtestutils.TypedSchema)
+					_, ok, err := table.GetRow(ctx, tbl, dtestutils.TypedSchema, kv.(types.Tuple))
 					assert.NoError(t, err)
 					assert.True(t, ok, "expected id not found")
 				}
@@ -456,22 +458,22 @@ func TestUpdate(t *testing.T) {
 			args := []string{"-q", test.query}
 
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv)
+			result := SqlCmd{}.Exec(ctx, commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 
 			if result == 0 {
-				root, err := dEnv.WorkingRoot(context.Background())
+				root, err := dEnv.WorkingRoot(ctx)
 				assert.Nil(t, err)
 
 				// Assert that all rows have been updated
 				for i, expectedid := range test.expectedIds {
-					table, _, err := root.GetTable(context.Background(), tableName)
+					tbl, _, err := root.GetTable(ctx, tableName)
 					assert.NoError(t, err)
 					taggedVals := row.TaggedValues{dtestutils.IdTag: types.UUID(expectedid)}
 					key := taggedVals.NomsTupleForPKCols(types.Format_7_18, dtestutils.TypedSchema.GetPKCols())
 					kv, err := key.Value(ctx)
 					assert.NoError(t, err)
-					row, ok, err := table.GetRow(ctx, kv.(types.Tuple), dtestutils.TypedSchema)
+					row, ok, err := table.GetRow(ctx, tbl, dtestutils.TypedSchema, kv.(types.Tuple))
 					assert.NoError(t, err)
 					assert.True(t, ok, "expected id not found")
 					ageVal, _ := row.GetColVal(dtestutils.AgeTag)
@@ -535,22 +537,22 @@ func TestDelete(t *testing.T) {
 			args := []string{"-q", test.query}
 
 			commandStr := "dolt sql"
-			result := SqlCmd{}.Exec(context.TODO(), commandStr, args, dEnv)
+			result := SqlCmd{}.Exec(ctx, commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 
 			if result == 0 {
-				root, err := dEnv.WorkingRoot(context.Background())
+				root, err := dEnv.WorkingRoot(ctx)
 				assert.Nil(t, err)
 
 				// Assert that all rows have been deleted
 				for _, expectedid := range test.deletedIds {
-					table, _, err := root.GetTable(context.Background(), tableName)
+					tbl, _, err := root.GetTable(ctx, tableName)
 					assert.NoError(t, err)
 					taggedVals := row.TaggedValues{dtestutils.IdTag: types.UUID(expectedid)}
 					key := taggedVals.NomsTupleForPKCols(types.Format_7_18, dtestutils.TypedSchema.GetPKCols())
 					kv, err := key.Value(ctx)
 					assert.NoError(t, err)
-					_, ok, err := table.GetRow(ctx, kv.(types.Tuple), dtestutils.TypedSchema)
+					_, ok, err := table.GetRow(ctx, tbl, dtestutils.TypedSchema, kv.(types.Tuple))
 					assert.NoError(t, err)
 					assert.False(t, ok, "row not deleted")
 				}

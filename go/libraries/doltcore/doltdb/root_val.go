@@ -1366,11 +1366,12 @@ func addValuesToDocs(ctx context.Context, tbl *Table, sch *schema.Schema, docDet
 // AddValueToDocFromTbl updates the Value field of a docDetail using the provided table and schema.
 func AddValueToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, docDetail DocDetails) (DocDetails, error) {
 	if tbl != nil && sch != nil {
-		pkTaggedVal := row.TaggedValues{
-			DocNameTag: types.String(docDetail.DocPk),
+		key, err := DocTblKeyFromName(tbl.Format(), docDetail.DocPk)
+		if err != nil {
+			return DocDetails{}, err
 		}
 
-		docRow, ok, err := tbl.GetRowByPKVals(ctx, pkTaggedVal, *sch)
+		docRow, ok, err := getDocRow(ctx, tbl, *sch, key)
 		if err != nil {
 			return DocDetails{}, err
 		}
@@ -1390,11 +1391,12 @@ func AddValueToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, d
 // AddNewerTextToDocFromTbl updates the NewerText field of a docDetail using the provided table and schema.
 func AddNewerTextToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, doc DocDetails) (DocDetails, error) {
 	if tbl != nil && sch != nil {
-		pkTaggedVal := row.TaggedValues{
-			DocNameTag: types.String(doc.DocPk),
+		key, err := DocTblKeyFromName(tbl.Format(), doc.DocPk)
+		if err != nil {
+			return DocDetails{}, err
 		}
 
-		docRow, ok, err := tbl.GetRowByPKVals(ctx, pkTaggedVal, *sch)
+		docRow, ok, err := getDocRow(ctx, tbl, *sch, key)
 		if err != nil {
 			return DocDetails{}, err
 		}

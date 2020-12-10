@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -67,8 +66,8 @@ func TestRowConverter(t *testing.T) {
 	})
 
 	assert.NoError(t, err)
-	results, _ := GetRowConvTransformFunc(rConv)(inRow, pipeline.ImmutableProperties{})
-	outData := results[0].RowData
+	outData, err := rConv.Convert(inRow)
+	assert.NoError(t, err)
 
 	destSch := mapping.DestSch
 	expected, err := row.New(types.Format_7_18, destSch, row.TaggedValues{
@@ -122,10 +121,9 @@ func TestSpecialBoolHandling(t *testing.T) {
 		1: types.String("true"),
 	})
 	require.NoError(t, err)
-	results, errStr := GetRowConvTransformFunc(rconv)(inRow, pipeline.ImmutableProperties{})
-	require.NotNil(t, results)
-	require.Empty(t, errStr)
-	outData := results[0].RowData
+	outData, err := rconv.Convert(inRow)
+	require.NoError(t, err)
+	require.NotNil(t, outData)
 
 	expected, err := row.New(types.Format_7_18, mapping.DestSch, row.TaggedValues{
 		0: types.Int(76),
@@ -136,7 +134,7 @@ func TestSpecialBoolHandling(t *testing.T) {
 
 	rconvNoHandle, err := NewRowConverter(mapping)
 	require.NoError(t, err)
-	results, errStr = GetRowConvTransformFunc(rconvNoHandle)(inRow, pipeline.ImmutableProperties{})
+	results, errStr := rconvNoHandle.Convert(inRow)
 	assert.Nil(t, results)
 	assert.NotEmpty(t, errStr)
 }

@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
@@ -72,13 +73,11 @@ func updateTableWithNewSchema(ctx context.Context, tblName string, tbl *doltdb.T
 	}
 
 	rowData, err := tbl.GetRowData(ctx)
-
 	if err != nil {
 		return nil, err
 	}
 
 	indexData, err := tbl.GetIndexData(ctx)
-
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +104,7 @@ func updateTableWithNewSchema(ctx context.Context, tblName string, tbl *doltdb.T
 	}
 
 	err = rowData.Iter(ctx, func(k, v types.Value) (stop bool, err error) {
-		oldRow, _, err := tbl.GetRow(ctx, k.(types.Tuple), newSchema)
+		oldRow, err := row.FromNoms(newSchema, k.(types.Tuple), v.(types.Tuple))
 		if err != nil {
 			return true, err
 		}

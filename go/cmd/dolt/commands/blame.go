@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jedib0t/go-pretty/table"
+	pretty "github.com/jedib0t/go-pretty/table"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -365,12 +366,12 @@ func maybeTableFromCommit(ctx context.Context, c *doltdb.Commit, tableName strin
 
 // maybeRowFromTable takes a table and a primary key and returns a (possibly nil) pointer to a row
 func maybeRowFromTable(ctx context.Context, t *doltdb.Table, rowPK types.Value) (*row.Row, error) {
-	schema, err := t.GetSchema(ctx)
+	sch, err := t.GetSchema(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error getting schema from table: %v", err)
 	}
 
-	row, ok, err := t.GetRow(ctx, rowPK.(types.Tuple), schema)
+	r, ok, err := table.GetRow(ctx, t, sch, rowPK.(types.Tuple))
 	if err != nil {
 		return nil, fmt.Errorf("error getting row from table: %v", err)
 	}
@@ -378,7 +379,7 @@ func maybeRowFromTable(ctx context.Context, t *doltdb.Table, rowPK types.Value) 
 		return nil, nil
 	}
 
-	return &row, err
+	return &r, err
 }
 
 func schemaFromCommit(ctx context.Context, c *doltdb.Commit, tableName string) (schema.Schema, error) {
@@ -544,7 +545,7 @@ func (bg *blameGraph) String(ctx context.Context, pkColNames []string) string {
 		header = append(header, cellText)
 	}
 
-	t := table.NewWriter()
+	t := pretty.NewWriter()
 	t.AppendHeader(header)
 	for _, v := range *bg {
 		pkVals := getPKStrs(ctx, v.Key)

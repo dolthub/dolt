@@ -18,10 +18,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -61,7 +61,7 @@ func (ste *sessionedTableEditor) DeleteKey(ctx context.Context, key types.Tuple)
 		}
 		sch := ste.tableEditor.Schema()
 
-		dRow, ok, err := tbl.GetRow(ctx, key, sch)
+		dRow, ok, err := table.GetRow(ctx, tbl, sch, key)
 		if err != nil {
 			return err
 		}

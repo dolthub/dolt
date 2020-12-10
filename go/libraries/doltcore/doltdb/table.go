@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -333,91 +332,6 @@ func (t *Table) HasTheSameSchema(t2 *Table) (bool, error) {
 // HashOf returns the hash of the underlying table struct
 func (t *Table) HashOf() (hash.Hash, error) {
 	return t.tableStruct.Hash(t.vrw.Format())
-}
-
-func (t *Table) GetRowByPKVals(ctx context.Context, pkVals row.TaggedValues, sch schema.Schema) (row.Row, bool, error) {
-	pkTuple := pkVals.NomsTupleForPKCols(t.vrw.Format(), sch.GetPKCols())
-	pkTupleVal, err := pkTuple.Value(ctx)
-
-	if err != nil {
-		return nil, false, err
-	}
-
-	return t.GetRow(ctx, pkTupleVal.(types.Tuple), sch)
-}
-
-// GetRow uses the noms DestRef containing the row data to lookup a row by primary key.  If a valid row exists with this pk
-// then the supplied TableRowFactory will be used to create a TableRow using the row data.
-func (t *Table) GetRow(ctx context.Context, pk types.Tuple, sch schema.Schema) (row.Row, bool, error) {
-	rowMap, err := t.GetRowData(ctx)
-
-	if err != nil {
-		return nil, false, err
-	}
-
-	fieldsVal, _, err := rowMap.MaybeGet(ctx, pk)
-
-	if err != nil {
-		return nil, false, err
-	}
-
-	if fieldsVal == nil {
-		return nil, false, nil
-	}
-
-	r, err := row.FromNoms(sch, pk, fieldsVal.(types.Tuple))
-
-	if err != nil {
-		return nil, false, err
-	}
-
-	return r, true, nil
-}
-
-// GetRows takes in a PKItr which will supply a stream of primary keys to be pulled from the table.  Each key is
-// looked up sequentially.  If row data exists for a given pk it is converted to a TableRow, and added to the rows
-// slice. If row data does not exist for a given pk it will be added to the missing slice.  The numPKs argument, if
-// known helps allocate the right amount of memory for the results, but if the number of pks being requested isn't
-// known then 0 can be used.
-func (t *Table) GetRows(ctx context.Context, pkItr PKItr, numPKs int, sch schema.Schema) (rows []row.Row, missing []types.Value, err error) {
-	if numPKs < 0 {
-		numPKs = 0
-	}
-
-	rows = make([]row.Row, 0, numPKs)
-	missing = make([]types.Value, 0, numPKs)
-
-	rowMap, err := t.GetRowData(ctx)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	for pk, ok, err := pkItr(); ok; pk, ok, err = pkItr() {
-		if err != nil {
-			return nil, nil, err
-		}
-
-		fieldsVal, _, err := rowMap.MaybeGet(ctx, pk)
-
-		if err != nil {
-			return nil, nil, err
-		}
-
-		if fieldsVal == nil {
-			missing = append(missing, pk)
-		} else {
-			r, err := row.FromNoms(sch, pk, fieldsVal.(types.Tuple))
-
-			if err != nil {
-				return nil, nil, err
-			}
-
-			rows = append(rows, r)
-		}
-	}
-
-	return rows, missing, nil
 }
 
 // UpdateRows replaces the current row data and returns and updated Table.  Calls to UpdateRows will not be written to the

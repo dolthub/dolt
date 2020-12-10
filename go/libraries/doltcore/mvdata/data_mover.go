@@ -211,7 +211,7 @@ func NameMapTransform(inSch schema.Schema, outSch schema.Schema, mapper rowconv.
 
 	transforms := pipeline.NewTransformCollection()
 	if !rconv.IdentityConverter {
-		nt := pipeline.NewNamedTransform("Mapping transform", rowconv.GetRowConvTransformFunc(rconv))
+		nt := pipeline.NewNamedTransform("Mapping transform", pipeline.GetRowConvTransformFunc(rconv))
 		transforms.AppendTransforms(nt)
 	}
 
