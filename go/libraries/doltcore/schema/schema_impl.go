@@ -19,6 +19,8 @@ import (
 	"strings"
 )
 
+var FeatureFlagKeylessSchema = false
+
 // EmptySchema is an instance of a schema with no columns.
 var EmptySchema = &schemaImpl{
 	pkCols:          EmptyColColl,
@@ -45,7 +47,7 @@ func SchemaFromCols(allCols *ColCollection) (Schema, error) {
 		}
 	}
 
-	if len(pkCols) == 0 {
+	if len(pkCols) == 0 && !FeatureFlagKeylessSchema {
 		return nil, ErrNoPrimaryKeyColumns
 	}
 
@@ -78,7 +80,7 @@ func ValidateForInsert(allCols *ColCollection) error {
 		}
 	}
 
-	if !seenPkCol {
+	if !seenPkCol && !FeatureFlagKeylessSchema {
 		return ErrNoPrimaryKeyColumns
 	}
 
