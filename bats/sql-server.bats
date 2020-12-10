@@ -89,7 +89,7 @@ teardown() {
     [[ "$output" =~ "No tables in working set" ]] || false
 
     # check that dolt_commit throws an error when autocommit is off
-    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
+    run server_query 0 "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')" ""
     [ "$status" -eq 1 ]
 
     run dolt ls
