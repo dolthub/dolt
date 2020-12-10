@@ -136,7 +136,7 @@ func TestDocDiff(t *testing.T) {
 
 	// Create tbl1 with one license row
 	sch := createTestDocsSchema()
-	licRow := getDocRow(t, sch, LicensePk, types.String("license row"))
+	licRow := makeDocRow(t, sch, LicensePk, types.String("license row"))
 	m, _ := createTestRows(t, ddb.ValueReadWriter(), sch, []row.Row{licRow})
 	tbl1, err := createTestTable(ddb.ValueReadWriter(), sch, m)
 	assert.NoError(t, err)
@@ -154,7 +154,7 @@ func TestDocDiff(t *testing.T) {
 	}
 
 	// Create tbl2 with one readme row
-	readmeRow := getDocRow(t, sch, ReadmePk, types.String("readme row"))
+	readmeRow := makeDocRow(t, sch, ReadmePk, types.String("readme row"))
 	m, _ = createTestRows(t, ddb.ValueReadWriter(), sch, []row.Row{readmeRow})
 	tbl2, err := createTestTable(ddb.ValueReadWriter(), sch, m)
 	assert.NoError(t, err)
@@ -172,7 +172,7 @@ func TestDocDiff(t *testing.T) {
 	}
 
 	// Create tbl3 with 2 doc rows (readme, license)
-	readmeRowUpdated := getDocRow(t, sch, ReadmePk, types.String("a different readme"))
+	readmeRowUpdated := makeDocRow(t, sch, ReadmePk, types.String("a different readme"))
 	m, _ = createTestRows(t, ddb.ValueReadWriter(), sch, []row.Row{readmeRowUpdated, licRow})
 	tbl3, err := createTestTable(ddb.ValueReadWriter(), sch, m)
 	assert.NoError(t, err)
@@ -319,15 +319,15 @@ func createTestDocsSchema() schema.Schema {
 
 func getDocRows(t *testing.T, sch schema.Schema, rowVal types.Value) []row.Row {
 	rows := make([]row.Row, 2)
-	row1 := getDocRow(t, sch, LicensePk, rowVal)
+	row1 := makeDocRow(t, sch, LicensePk, rowVal)
 	rows[0] = row1
-	row2 := getDocRow(t, sch, ReadmePk, rowVal)
+	row2 := makeDocRow(t, sch, ReadmePk, rowVal)
 	rows[1] = row2
 
 	return rows
 }
 
-func getDocRow(t *testing.T, sch schema.Schema, pk string, rowVal types.Value) row.Row {
+func makeDocRow(t *testing.T, sch schema.Schema, pk string, rowVal types.Value) row.Row {
 	row, err := row.New(types.Format_7_18, sch, row.TaggedValues{
 		DocNameTag: types.String(pk),
 		DocTextTag: rowVal,

@@ -16,6 +16,7 @@ package noms
 
 import (
 	"context"
+	"io"
 	"testing"
 
 	"github.com/google/uuid"
@@ -24,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -101,66 +101,89 @@ func TestReadWrite(t *testing.T) {
 
 func testNomsMapCreator(t *testing.T, vrw types.ValueReadWriter, rows []row.Row) types.Map {
 	mc := NewNomsMapCreator(context.Background(), vrw, sch)
-	return testNomsWriteCloser(t, mc, rows)
-}
 
-func testNomsMapUpdate(t *testing.T, vrw types.ValueReadWriter, initialMapVal types.Map, rows []row.Row) types.Map {
-	mu := NewNomsMapUpdater(context.Background(), vrw, initialMapVal, sch, nil)
-	return testNomsWriteCloser(t, mu, rows)
-}
-
-func testNomsWriteCloser(t *testing.T, nwc NomsMapWriteCloser, rows []row.Row) types.Map {
 	for _, r := range rows {
-		err := nwc.WriteRow(context.Background(), r)
+		err := mc.WriteRow(context.Background(), r)
 
 		if err != nil {
 			t.Error("Failed to write row.", err)
 		}
 	}
 
-	err := nwc.Close(context.Background())
+	err := mc.Close(context.Background())
 
 	if err != nil {
 		t.Fatal("Failed to close writer")
 	}
 
-	err = nwc.Close(context.Background())
+	err = mc.Close(context.Background())
 
 	if err == nil {
 		t.Error("Should give error for having already been closed")
 	}
 
-	err = nwc.WriteRow(context.Background(), rows[0])
+	err = mc.WriteRow(context.Background(), rows[0])
 
 	if err == nil {
 		t.Error("Should give error for writing after closing.")
 	}
 
-	return nwc.GetMap()
+	return mc.GetMap()
+}
 
+func testNomsMapUpdate(t *testing.T, vrw types.ValueReadWriter, initialMapVal types.Map, rows []row.Row) types.Map {
+	mu := NewNomsMapUpdater(context.Background(), vrw, initialMapVal, sch, nil)
+
+	for _, r := range rows {
+		err := mu.WriteRow(context.Background(), r)
+
+		if err != nil {
+			t.Error("Failed to write row.", err)
+		}
+	}
+
+	err := mu.Close(context.Background())
+
+	if err != nil {
+		t.Fatal("Failed to close writer")
+	}
+
+	err = mu.Close(context.Background())
+
+	if err == nil {
+		t.Error("Should give error for having already been closed")
+	}
+
+	err = mu.WriteRow(context.Background(), rows[0])
+
+	if err == nil {
+		t.Error("Should give error for writing after closing.")
+	}
+
+	return mu.GetMap()
 }
 
 func testReadAndCompare(t *testing.T, initialMapVal types.Map, expectedRows []row.Row) {
+	ctx := context.Background()
 	mr, err := NewNomsMapReader(context.Background(), initialMapVal, sch)
 	assert.NoError(t, err)
 
-	actualRows, numBad, err := table.ReadAllRows(context.Background(), mr, true)
+	var r row.Row
+	var actualRows []row.Row
+	for {
+		r, err = mr.ReadRow(ctx)
+		if err == io.EOF {
+			break
+		}
+		assert.NoError(t, err)
 
-	if err != nil {
-		t.Fatal("Failed to read rows from map.")
+		actualRows = append(actualRows, r)
 	}
-
-	if numBad != 0 {
-		t.Error("Unexpectedly bad rows")
-	}
-
-	if len(actualRows) != len(expectedRows) {
-		t.Fatal("Number of rows read does not match expectation")
-	}
+	assert.Equal(t, len(actualRows), len(expectedRows))
 
 	for i := 0; i < len(expectedRows); i++ {
 		if !row.AreEqual(actualRows[i], expectedRows[i], sch) {
-			t.Error(row.Fmt(context.Background(), actualRows[i], sch), "!=", row.Fmt(context.Background(), expectedRows[i], sch))
+			t.Error(row.Fmt(ctx, actualRows[i], sch), "!=", row.Fmt(context.Background(), expectedRows[i], sch))
 		}
 	}
 }

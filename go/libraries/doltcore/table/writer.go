@@ -12,17 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package noms
+package table
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 // NomsMapWriteCloser is a TableWriteCloser where the resulting map that is being written from can be retrieved after
 // it is closed.
 type NomsMapWriteCloser interface {
-	table.TableWriteCloser
+	TableWriteCloser
 
 	// GetMap retrieves the resulting types.Map once close is called
 	GetMap() types.Map

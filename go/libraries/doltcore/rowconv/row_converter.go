@@ -20,7 +20,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -219,35 +218,4 @@ func isNecessary(srcSch, destSch schema.Schema, destToSrc map[uint64]uint64) (bo
 	}
 
 	return false, nil
-}
-
-// GetRowConvTranformFunc can be used to wrap a RowConverter and use that RowConverter in a pipeline.
-func GetRowConvTransformFunc(rc *RowConverter) func(row.Row, pipeline.ReadableMap) ([]*pipeline.TransformedRowResult, string) {
-	if rc.IdentityConverter {
-		return func(inRow row.Row, props pipeline.ReadableMap) (outRows []*pipeline.TransformedRowResult, badRowDetails string) {
-			return []*pipeline.TransformedRowResult{{RowData: inRow, PropertyUpdates: nil}}, ""
-		}
-	} else {
-		return func(inRow row.Row, props pipeline.ReadableMap) (outRows []*pipeline.TransformedRowResult, badRowDetails string) {
-			outRow, err := rc.Convert(inRow)
-
-			if err != nil {
-				return nil, err.Error()
-			}
-
-			if isv, err := row.IsValid(outRow, rc.DestSch); err != nil {
-				return nil, err.Error()
-			} else if !isv {
-				col, err := row.GetInvalidCol(outRow, rc.DestSch)
-
-				if err != nil {
-					return nil, "invalid column"
-				} else {
-					return nil, "invalid column: " + col.Name
-				}
-			}
-
-			return []*pipeline.TransformedRowResult{{RowData: outRow, PropertyUpdates: nil}}, ""
-		}
-	}
 }

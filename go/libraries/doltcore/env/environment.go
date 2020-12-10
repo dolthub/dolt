@@ -1039,7 +1039,12 @@ func updateDocsOnRoot(ctx context.Context, dEnv *DoltEnv, root *doltdb.RootValue
 
 	me := m.Edit()
 	for _, doc := range docDetails {
-		docRow, exists, err := docTbl.GetRowByPKVals(context.Background(), row.TaggedValues{doltdb.DocNameTag: types.String(doc.DocPk)}, sch)
+		key, err := doltdb.DocTblKeyFromName(docTbl.Format(), doc.DocPk)
+		if err != nil {
+			return nil, err
+		}
+
+		docRow, exists, err := table.GetRow(ctx, docTbl, sch, key)
 		if err != nil {
 			return nil, err
 		}
