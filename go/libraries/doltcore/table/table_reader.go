@@ -49,14 +49,16 @@ type TableReadCloser interface {
 	TableCloser
 }
 
+// SqlTableReader is a  TableReader that can read rows as sql.Row.
 type SqlTableReader interface {
 	TableReader
 
-	// todo
+	// ReadRow reads a row from a table as go-mysql-server sql.Row.
 	ReadSqlRow(ctx context.Context) (sql.Row, error)
 }
 
-func NewTableReader(ctx context.Context, tbl *doltdb.Table, val types.Value) (SqlTableReader, error) {
+// NewTableReader creates a SqlTableReader from |tbl| starting from the first record.
+func NewTableReader(ctx context.Context, tbl *doltdb.Table) (SqlTableReader, error) {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err
@@ -68,6 +70,7 @@ func NewTableReader(ctx context.Context, tbl *doltdb.Table, val types.Value) (Sq
 	return newPkTableReader(ctx, tbl, sch, false)
 }
 
+// NewBufferedTableReader creates a buffered SqlTableReader from |tbl| starting from the first record.
 func NewBufferedTableReader(ctx context.Context, tbl *doltdb.Table) (SqlTableReader, error) {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
@@ -80,7 +83,8 @@ func NewBufferedTableReader(ctx context.Context, tbl *doltdb.Table) (SqlTableRea
 	return newPkTableReader(ctx, tbl, sch, true)
 }
 
-// half-open interval: [start, end)
+// NewBufferedTableReaderForPartition creates a SqlTableReader that reads the rows of |tbl| with indexes
+// in the half-open interval [start, end).
 func NewBufferedTableReaderForPartition(ctx context.Context, tbl *doltdb.Table, start, end uint64) (SqlTableReader, error) {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
@@ -93,6 +97,8 @@ func NewBufferedTableReaderForPartition(ctx context.Context, tbl *doltdb.Table, 
 	return newPkTableReaderForPartition(ctx, tbl, sch, start, end)
 }
 
+// NewTableReaderForRanges creates a SqlTableReader that reads the rows of |tbl| corresponding to the
+// the noms.ReadRandes in |ranges|.
 func NewTableReaderForRanges(ctx context.Context, tbl *doltdb.Table, ranges ...*noms.ReadRange) (SqlTableReader, error) {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
@@ -105,6 +111,8 @@ func NewTableReaderForRanges(ctx context.Context, tbl *doltdb.Table, ranges ...*
 	return newPkTableReaderForRanges(ctx, tbl, sch, ranges...)
 }
 
+// NewTableReaderFrom creates a SqlTableReader that reads the rows of |tbl| beginning at the record
+// whose types.Map key is >= |val|.
 func NewTableReaderFrom(ctx context.Context, tbl *doltdb.Table, val types.Value) (SqlTableReader, error) {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {

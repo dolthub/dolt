@@ -23,7 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// todo: where should this go?
+// SqlRowFromTuples constructs a go-mysql-server/sql.Row from Noms tuples.
 func SqlRowFromTuples(sch schema.Schema, key, val types.Tuple) (sql.Row, error) {
 	allCols := sch.GetAllCols()
 	colVals := make(sql.Row, allCols.Size())
@@ -60,7 +60,7 @@ func SqlRowFromTuples(sch schema.Schema, key, val types.Tuple) (sql.Row, error) 
 	return sql.NewRow(colVals...), nil
 }
 
-// Returns a SQL row representation for the dolt row given.
+// DoltRowToSqlRow constructs a go-mysql-server sql.Row from a Dolt row.Row.
 func DoltRowToSqlRow(doltRow Row, sch schema.Schema) (sql.Row, error) {
 	colVals := make(sql.Row, sch.GetAllCols().Size())
 
@@ -83,7 +83,7 @@ func DoltRowToSqlRow(doltRow Row, sch schema.Schema) (sql.Row, error) {
 	return sql.NewRow(colVals...), nil
 }
 
-// Returns a Dolt row representation for SQL row given
+// SqlRowToDoltRow constructs a Dolt row.Row from a go-mysql-server sql.Row.
 func SqlRowToDoltRow(nbf *types.NomsBinFormat, r sql.Row, doltSchema schema.Schema) (Row, error) {
 	taggedVals := make(TaggedValues)
 	allCols := doltSchema.GetAllCols()

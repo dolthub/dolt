@@ -32,7 +32,7 @@ func TestSqlIntegration(t *testing.T) {
 
 	const tblName = "test"
 
-	tests := []struct{
+	tests := []struct {
 		name      string
 		setup     []string
 		isKeyless bool
@@ -43,7 +43,7 @@ func TestSqlIntegration(t *testing.T) {
 			isKeyless: false,
 		},
 		{
-			name:      "",
+			name:      "keyless",
 			setup:     []string{"CREATE TABLE test (pk int);"},
 			isKeyless: true,
 		},

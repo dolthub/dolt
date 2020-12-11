@@ -36,10 +36,12 @@ type pkTableReader struct {
 var _ SqlTableReader = pkTableReader{}
 var _ SqlTableReader = &noms.NomsRangeReader{}
 
+// GetSchema implements the TableReader interface.
 func (rdr pkTableReader) GetSchema() schema.Schema {
 	return rdr.sch
 }
 
+// ReadRow implements the TableReader interface.
 func (rdr pkTableReader) ReadRow(ctx context.Context) (row.Row, error) {
 	key, val, err := rdr.iter.Next(ctx)
 
@@ -52,6 +54,7 @@ func (rdr pkTableReader) ReadRow(ctx context.Context) (row.Row, error) {
 	return row.FromNoms(rdr.sch, key.(types.Tuple), val.(types.Tuple))
 }
 
+// ReadSqlRow implements the SqlTableReader interface.
 func (rdr pkTableReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 	key, val, err := rdr.iter.Next(ctx)
 
@@ -143,6 +146,7 @@ func newPkTableReaderForPartition(ctx context.Context, tbl *doltdb.Table, sch sc
 	}, nil
 }
 
+// ReadRow implements the TableReader interface.
 func (rdr *partitionTableReader) ReadRow(ctx context.Context) (row.Row, error) {
 	if rdr.remaining == 0 {
 		return nil, io.EOF
@@ -152,6 +156,7 @@ func (rdr *partitionTableReader) ReadRow(ctx context.Context) (row.Row, error) {
 	return rdr.SqlTableReader.ReadRow(ctx)
 }
 
+// ReadSqlRow implements the SqlTableReader interface.
 func (rdr *partitionTableReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 	if rdr.remaining == 0 {
 		return nil, io.EOF

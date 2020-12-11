@@ -22,6 +22,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/async"
 )
 
+var _ TableReadCloser = (*AsyncReadAheadTableReader)(nil)
+
 // AsyncReadAheadTableReader is a TableReadCloser implementation that spins up a go routine to keep reading data into
 // a buffered channel so that it is ready when the caller wants it.
 type AsyncReadAheadTableReader struct {
