@@ -83,7 +83,7 @@ RUN cpanm DBD::mysql
 COPY ./mysql-client-tests/ruby/Gemfile /mysql-client-tests/ruby/
 COPY ./mysql-client-tests/ruby/Gemfile.lock /mysql-client-tests/ruby/
 WORKDIR /mysql-client-tests/ruby
-RUN gem install bundler
+RUN gem install bundler -v 2.1.4
 RUN bundle install
 
 # install dolt from source
