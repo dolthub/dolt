@@ -289,6 +289,8 @@ func FromKind(kind types.NomsKind) TypeInfo {
 		return Uint64Type
 	case types.UUIDKind:
 		return UuidType
+	case types.DecimalKind:
+		return DecimalDefaultType
 	default:
 		panic(fmt.Errorf(`no default type info for NomsKind "%v"`, kind.String()))
 	}
