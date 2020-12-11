@@ -62,17 +62,28 @@ func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (s
 type WritableIndexedDoltTable struct {
 	*WritableDoltTable
 	indexLookup *doltIndexLookup
+	projectedCols []string
 }
 
 var _ sql.IndexedTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.UpdatableTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.DeletableTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.ReplaceableTable = (*WritableIndexedDoltTable)(nil)
+var _ sql.ProjectedTable = (*WritableIndexedDoltTable)(nil)
 
 func (t *WritableIndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	return sqlutil.NewSinglePartitionIter(), nil
 }
 
 func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
-	return t.indexLookup.RowIter(ctx)
+	return t.indexLookup.RowIterWithProjection(ctx, t.projectedCols)
+}
+
+func (t *WritableIndexedDoltTable) WithProjection(colNames []string) sql.Table {
+	t.projectedCols = colNames
+	return t
+}
+
+func (t *WritableIndexedDoltTable) Projection() []string {
+	return t.projectedCols
 }

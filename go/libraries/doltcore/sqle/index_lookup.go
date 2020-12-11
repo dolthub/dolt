@@ -130,13 +130,40 @@ func (il *doltIndexLookup) Union(indexLookups ...sql.IndexLookup) (sql.IndexLook
 
 // RowIter returns a row iterator for this index lookup. The iterator will return the single matching row for the index.
 func (il *doltIndexLookup) RowIter(ctx *sql.Context) (sql.RowIter, error) {
+	return il.RowIterWithProjection(ctx, nil)
+}
+
+func (il *doltIndexLookup) RowIterWithProjection(ctx *sql.Context, columns []string) (sql.RowIter, error) {
 	readRanges := make([]*noms.ReadRange, len(il.ranges))
 	for i, lookupRange := range il.ranges {
 		readRanges[i] = lookupRange.ToReadRange()
 	}
-	return NewIndexLookupRowIterAdapter(ctx, il.idx, &doltIndexKeyIter{
-		indexMapIter: noms.NewNomsRangeReader(il.idx.IndexSchema(), il.idx.IndexRowData(), readRanges),
-	}), nil
+
+	idxItr := &doltIndexKeyIter{indexMapIter: noms.NewNomsRangeReader(il.idx.IndexSchema(), il.idx.IndexRowData(), readRanges)}
+
+	covers := il.indexCoversCols(columns)
+	if covers {
+		return NewCoveringIndexRowIterAdapter(ctx, il.idx, idxItr), nil
+	} else {
+		return NewIndexLookupRowIterAdapter(ctx, il.idx, idxItr), nil
+	}
+}
+
+func (il *doltIndexLookup) indexCoversCols(cols []string) bool {
+	if cols == nil {
+		return false
+	}
+
+	idxCols := il.idx.IndexSchema().GetAllCols()
+	covers := true
+	for _, colName := range cols {
+		if _, ok := idxCols.GetByName(colName); !ok {
+			covers = false
+			break
+		}
+	}
+
+	return covers
 }
 
 type doltIndexKeyIter struct {

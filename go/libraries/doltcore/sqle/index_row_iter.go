@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"io"
 	"runtime"
 
@@ -148,5 +149,59 @@ func (i *indexLookupRowIterAdapter) processKey(_ context.Context, valInt interfa
 		return err
 	}
 	i.buffer[val.position] = sqlRow
+	return nil
+}
+
+type coveringIndexRowIterAdapter struct {
+	idx       DoltIndex
+	keyIter   IndexLookupKeyIterator
+	ctx       *sql.Context
+	pkCols	  *schema.ColCollection
+	nonPKCols *schema.ColCollection
+	nbf       *types.NomsBinFormat
+}
+
+func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter IndexLookupKeyIterator) *coveringIndexRowIterAdapter {
+	sch := idx.Schema()
+	return &coveringIndexRowIterAdapter{
+		idx:     idx,
+		keyIter: keyIter,
+		ctx:     ctx,
+		pkCols:  sch.GetPKCols(),
+		nonPKCols: sch.GetNonPKCols(),
+		nbf:     idx.TableData().Format(),
+	}
+}
+
+// Next returns the next row from the iterator.
+func (ci *coveringIndexRowIterAdapter) Next() (sql.Row, error) {
+	taggedVals, err := ci.keyIter.NextKey(ci.ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	pk, err := taggedVals.NomsTupleForPKCols(ci.nbf, ci.pkCols).Value(ci.ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	nonPK, err := taggedVals.NomsTupleForNonPKCols(ci.nbf, ci.nonPKCols).Value(ci.ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	r, err := row.FromNoms(ci.idx.Schema(), pk.(types.Tuple), nonPK.(types.Tuple))
+
+	if err != nil {
+		return nil, err
+	}
+
+	return sqlutil.DoltRowToSqlRow(r, ci.idx.Schema())
+}
+
+func (ci *coveringIndexRowIterAdapter) Close() error {
 	return nil
 }
