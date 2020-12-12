@@ -15,13 +15,13 @@
 package enginetest
 
 import (
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
 func init() {

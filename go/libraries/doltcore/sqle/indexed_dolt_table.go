@@ -17,11 +17,12 @@ package sqle
 import (
 	"encoding/binary"
 	"errors"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/lookup"
-	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 	"sync"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/lookup"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 )
 
@@ -64,10 +65,9 @@ func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (s
 	return idt.indexLookup.RowIter(ctx)
 }
 
-
 type rangePartition struct {
 	partitionRange lookup.Range
-	keyBytes []byte
+	keyBytes       []byte
 }
 
 func (rp rangePartition) Key() []byte {
@@ -76,15 +76,15 @@ func (rp rangePartition) Key() []byte {
 
 type rangePartitionIter struct {
 	ranges []lookup.Range
-	curr int
-	mu *sync.Mutex
+	curr   int
+	mu     *sync.Mutex
 }
 
 func NewRangePartitionIter(ranges []lookup.Range) *rangePartitionIter {
 	return &rangePartitionIter{
 		ranges: ranges,
-		curr: 0,
-		mu: &sync.Mutex{},
+		curr:   0,
+		mu:     &sync.Mutex{},
 	}
 }
 

@@ -2,15 +2,17 @@ package store
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/nbs"
-	"github.com/dolthub/dolt/go/store/types"
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/require"
 	"math/rand"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -111,28 +113,6 @@ func BenchmarkSimulatedIndex(b *testing.B) {
 	m := vals[0].(types.Map)
 	idx := vals[1].(types.Map)
 
-	for {
-		idxItr, err := idx.Iterator(ctx)
-		require.NoError(b, err)
-
-		for j := 0; j < rangeSize; j++ {
-			idxKey, _, err := idxItr.Next(ctx)
-			require.NoError(b, err)
-
-			if idxKey == nil {
-				break
-			}
-
-			vals, err := idxKey.(types.Tuple).AsSlice()
-			require.NoError(b, err)
-			keyTup, err := types.NewTuple(nbf, vals[2:]...)
-
-			k, _, err := m.MaybeGet(ctx, keyTup)
-			require.NoError(b, err)
-			require.NotNil(b, k)
-		}
-	}
-
 	b.ResetTimer()
 
 	var idxItr types.MapIterator
@@ -158,6 +138,34 @@ func BenchmarkSimulatedIndex(b *testing.B) {
 			k, _, err := m.MaybeGet(ctx, keyTup)
 			require.NoError(b, err)
 			require.NotNil(b, k)
+		}
+	}
+}
+
+func BenchmarkSimulatedCoveringIndex(b *testing.B) {
+	ctx := context.Background()
+	rng := rand.New(rand.NewSource(0))
+	nbf, vals := readTupleFromDB(ctx, b, simIdxBenchDataset)
+
+	idx := vals[1].(types.Map)
+
+	b.ResetTimer()
+
+	var idxItr types.MapIterator
+	for i := 0; i < b.N; i++ {
+		randf := rng.Float64()
+		rangeStartKey, err := types.NewTuple(nbf, types.Uint(5), types.Float(randf))
+		require.NoError(b, err)
+		idxItr, err = idx.IteratorFrom(ctx, rangeStartKey)
+		require.NoError(b, err)
+
+		for j := 0; j < rangeSize; j++ {
+			idxKey, _, err := idxItr.Next(ctx)
+			require.NoError(b, err)
+
+			if idxKey == nil {
+				break
+			}
 		}
 	}
 }

@@ -16,16 +16,17 @@ package sqle
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"io"
 	"runtime"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/async"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
-
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type indexLookupRowIterAdapter struct {
@@ -154,52 +155,50 @@ func (i *indexLookupRowIterAdapter) processKey(_ context.Context, valInt interfa
 
 type coveringIndexRowIterAdapter struct {
 	idx       DoltIndex
-	keyIter   IndexLookupKeyIterator
+	keyIter   nomsKeyIter
+	conv      KVToSqlRowConverter
 	ctx       *sql.Context
-	pkCols	  *schema.ColCollection
+	pkCols    *schema.ColCollection
 	nonPKCols *schema.ColCollection
 	nbf       *types.NomsBinFormat
 }
 
-func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter IndexLookupKeyIterator) *coveringIndexRowIterAdapter {
+func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsKeyIter, resultCols []string) *coveringIndexRowIterAdapter {
 	sch := idx.Schema()
+	cols := sch.GetAllCols().GetColumns()
+	tagToSqlColIdx := make(map[uint64]int)
+
+	resultColSet := set.NewStrSet(resultCols)
+	for i, col := range cols {
+		if resultColSet.Contains(col.Name) {
+			tagToSqlColIdx[col.Tag] = i
+		}
+	}
+
 	return &coveringIndexRowIterAdapter{
 		idx:     idx,
 		keyIter: keyIter,
-		ctx:     ctx,
-		pkCols:  sch.GetPKCols(),
+		conv: KVToSqlRowConverter{
+			tagToSqlColIdx: tagToSqlColIdx,
+			cols:           cols,
+			rowSize:        len(cols),
+		},
+		ctx:       ctx,
+		pkCols:    sch.GetPKCols(),
 		nonPKCols: sch.GetNonPKCols(),
-		nbf:     idx.TableData().Format(),
+		nbf:       idx.TableData().Format(),
 	}
 }
 
 // Next returns the next row from the iterator.
 func (ci *coveringIndexRowIterAdapter) Next() (sql.Row, error) {
-	taggedVals, err := ci.keyIter.NextKey(ci.ctx)
+	key, err := ci.keyIter.ReadKey(ci.ctx)
 
 	if err != nil {
 		return nil, err
 	}
 
-	pk, err := taggedVals.NomsTupleForPKCols(ci.nbf, ci.pkCols).Value(ci.ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	nonPK, err := taggedVals.NomsTupleForNonPKCols(ci.nbf, ci.nonPKCols).Value(ci.ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	r, err := row.FromNoms(ci.idx.Schema(), pk.(types.Tuple), nonPK.(types.Tuple))
-
-	if err != nil {
-		return nil, err
-	}
-
-	return sqlutil.DoltRowToSqlRow(r, ci.idx.Schema())
+	return ci.conv.ConvertKVToSqlRow(key, nil)
 }
 
 func (ci *coveringIndexRowIterAdapter) Close() error {

@@ -110,6 +110,22 @@ func (nrr *NomsRangeReader) GetSchema() schema.Schema {
 // IsBadRow(err) will be return true. This is a potentially non-fatal error and callers can decide if they want to
 // continue on a bad row, or fail.
 func (nrr *NomsRangeReader) ReadRow(ctx context.Context) (row.Row, error) {
+	k, v, err := nrr.ReadKV(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return row.FromNoms(nrr.sch, k.(types.Tuple), v.(types.Tuple))
+}
+
+func (nrr *NomsRangeReader) ReadKey(ctx context.Context) (types.Value, error) {
+	k, _, err := nrr.ReadKV(ctx)
+
+	return k, err
+}
+
+func (nrr *NomsRangeReader) ReadKV(ctx context.Context) (types.Value, types.Value, error) {
 	var err error
 	for nrr.itr != nil || nrr.idx < len(nrr.ranges) {
 		var k types.Value
@@ -125,7 +141,7 @@ func (nrr *NomsRangeReader) ReadRow(ctx context.Context) (row.Row, error) {
 			}
 
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 
 			nrr.currCheck = r.Check
@@ -140,7 +156,7 @@ func (nrr *NomsRangeReader) ReadRow(ctx context.Context) (row.Row, error) {
 		}
 
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		var inRange bool
@@ -148,7 +164,7 @@ func (nrr *NomsRangeReader) ReadRow(ctx context.Context) (row.Row, error) {
 			inRange, err = nrr.currCheck(k.(types.Tuple))
 
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 
 			if !inRange {
@@ -156,7 +172,7 @@ func (nrr *NomsRangeReader) ReadRow(ctx context.Context) (row.Row, error) {
 				nrr.currCheck = nil
 				continue
 			} else {
-				return row.FromNoms(nrr.sch, k.(types.Tuple), v.(types.Tuple))
+				return k, v, nil
 			}
 		} else {
 			nrr.itr = nil
@@ -164,7 +180,7 @@ func (nrr *NomsRangeReader) ReadRow(ctx context.Context) (row.Row, error) {
 		}
 	}
 
-	return nil, io.EOF
+	return nil, nil, io.EOF
 }
 
 // VerifySchema checks that the incoming schema matches the schema from the existing table

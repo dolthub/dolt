@@ -15,14 +15,16 @@
 package sqle
 
 import (
+	"context"
+	"errors"
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/lookup"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type IndexLookupKeyIterator interface {
@@ -156,26 +158,16 @@ func (il *doltIndexLookup) RowIterForRanges(ctx *sql.Context, ranges []lookup.Ra
 		readRanges[i] = lookupRange.ToReadRange()
 	}
 
-	idxItr := &doltIndexKeyIter{indexMapIter: noms.NewNomsRangeReader(il.idx.IndexSchema(), il.idx.IndexRowData(), readRanges)}
+	nrr := noms.NewNomsRangeReader(il.idx.IndexSchema(), il.idx.IndexRowData(), readRanges)
 
 	covers := il.indexCoversCols(columns)
 	if covers {
-		return NewCoveringIndexRowIterAdapter(ctx, il.idx, idxItr), nil
+		return NewCoveringIndexRowIterAdapter(ctx, il.idx, nrr, columns), nil
 	} else {
-		return NewIndexLookupRowIterAdapter(ctx, il.idx, idxItr), nil
+		return nil, errors.New("fix me") //NewIndexLookupRowIterAdapter(ctx, il.idx, idxItr), nil
 	}
 }
 
-type doltIndexKeyIter struct {
-	indexMapIter table.TableReadCloser
-}
-
-var _ IndexLookupKeyIterator = (*doltIndexKeyIter)(nil)
-
-func (iter *doltIndexKeyIter) NextKey(ctx *sql.Context) (row.TaggedValues, error) {
-	indexRow, err := iter.indexMapIter.ReadRow(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return row.GetTaggedVals(indexRow)
+type nomsKeyIter interface {
+	ReadKey(ctx context.Context) (types.Value, error)
 }
