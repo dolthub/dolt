@@ -167,7 +167,7 @@ func fromTaggedVals(nbf *types.NomsBinFormat, sch schema.Schema, keyVals, nonKey
 func FromTupleSlices(nbf *types.NomsBinFormat, sch schema.Schema, keySl, valSl types.TupleValueSlice) (Row, error) {
 	allCols := sch.GetAllCols()
 
-	err := keySl.Iter(func(tag uint64, val types.Value) (stop bool, err error) {
+	err := iterPkTuple(keySl, func(tag uint64, val types.Value) (stop bool, err error) {
 		col, ok := allCols.GetByTag(tag)
 
 		if !ok {
@@ -186,7 +186,7 @@ func FromTupleSlices(nbf *types.NomsBinFormat, sch schema.Schema, keySl, valSl t
 	}
 
 	filteredVals := make(TaggedValues, len(valSl))
-	err = valSl.Iter(func(tag uint64, val types.Value) (stop bool, err error) {
+	err = iterPkTuple(valSl, func(tag uint64, val types.Value) (stop bool, err error) {
 		col, ok := allCols.GetByTag(tag)
 		if !ok {
 			return false, nil

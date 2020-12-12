@@ -218,3 +218,17 @@ func MustRowData(t *testing.T, ctx context.Context, vrw types.ValueReadWriter, s
 
 	return &m
 }
+
+// MustMap contructs a types.Map for a slice of alternating key, value types.Value.
+func MustMap(t *testing.T, vrw types.ValueReadWriter, kv ...types.Value) types.Map {
+	m, err := types.NewMap(context.Background(), vrw, kv...)
+	require.NoError(t, err)
+	return m
+}
+
+// MustMap contructs a types.Tuple for a slice of types.Values.
+func MustTuple(t *testing.T, vals ...types.Value) types.Tuple {
+	tup, err := types.NewTuple(types.Format_Default, vals...)
+	require.NoError(t, err)
+	return tup
+}

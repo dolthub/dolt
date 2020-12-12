@@ -15,6 +15,7 @@
 package types
 
 import (
+	"bytes"
 	"context"
 
 	"github.com/google/uuid"
@@ -25,6 +26,21 @@ import (
 const (
 	uuidNumBytes = 16
 )
+
+// UUIDHashedFromValues generates a UUID from the first 16 byes of the hash.Hash
+// generated from serialized |vals|.
+func UUIDHashedFromValues(nbf *NomsBinFormat, vals ...Value) (UUID, error) {
+	w := binaryNomsWriter{make([]byte, 4), 0}
+	for _, v := range vals {
+		if err := v.writeTo(&w, nbf); err != nil {
+			return [16]byte{}, err
+		}
+	}
+
+	h := hash.Of(w.data())
+	id, err := uuid.FromBytes(h[:uuidNumBytes])
+	return UUID(id), err
+}
 
 type UUID uuid.UUID
 
@@ -38,16 +54,7 @@ func (v UUID) Equals(other Value) bool {
 
 func (v UUID) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if v2, ok := other.(UUID); ok {
-		for i := 0; i < uuidNumBytes; i++ {
-			b1 := v[i]
-			b2 := v2[i]
-
-			if b1 != b2 {
-				return b1 < b2, nil
-			}
-		}
-
-		return false, nil
+		return bytes.Compare(v[:], v2[:]) < 0, nil
 	}
 	return UUIDKind < other.Kind(), nil
 }

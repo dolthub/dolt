@@ -16,7 +16,6 @@ package table
 
 import (
 	"context"
-	"fmt"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -112,10 +111,6 @@ type partitionTableReader struct {
 var _ SqlTableReader = &partitionTableReader{}
 
 func newPkTableReaderForPartition(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, start, end uint64) (SqlTableReader, error) {
-	if start > end {
-		return nil, fmt.Errorf("invalid partition table reader, start (%d) > end (%d)", start, end)
-	}
-
 	rows, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
@@ -133,16 +128,6 @@ func newPkTableReaderForPartition(ctx context.Context, tbl *doltdb.Table, sch sc
 		},
 		remaining: end - start,
 	}, nil
-}
-
-// ReadRow implements the TableReader interface.
-func (rdr *partitionTableReader) ReadRow(ctx context.Context) (row.Row, error) {
-	if rdr.remaining == 0 {
-		return nil, io.EOF
-	}
-	rdr.remaining -= 1
-
-	return rdr.SqlTableReader.ReadRow(ctx)
 }
 
 // ReadSqlRow implements the SqlTableReader interface.
