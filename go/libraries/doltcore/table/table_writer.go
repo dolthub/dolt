@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2020 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,14 +15,23 @@
 package table
 
 import (
-	"github.com/dolthub/dolt/go/store/types"
+	"context"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
 
-// NomsMapWriteCloser is a TableWriteCloser where the resulting map that is being written from can be retrieved after
-// it is closed.
-type NomsMapWriteCloser interface {
-	TableWriteCloser
+// TableWriteCloser is an interface for writing rows to a table
+type TableWriter interface {
+	// GetSchema gets the schema of the rows that this writer writes
+	GetSchema() schema.Schema
 
-	// GetMap retrieves the resulting types.Map once close is called
-	GetMap() types.Map
+	// WriteRow will write a row to a table
+	WriteRow(ctx context.Context, r row.Row) error
+}
+
+// TableWriteCloser is an interface for writing rows to a table, that can be closed
+type TableWriteCloser interface {
+	TableWriter
+	TableCloser
 }
