@@ -20,6 +20,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
@@ -81,10 +82,24 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 
 	apr := cli.ParseArgs(ap, args, nil)
 
-	// Check if the -all param is provided. Stage all tables if so.
 	allFlag := apr.Contains(cli.AllFlag)
+	allowEmpty := apr.Contains(cli.AllowEmptyFlag)
 
-	var err error
+	// Check if there are no changes in the working set but the -a flag is true
+	if allFlag && !hasWorkingSetChanges(rsr) && !allowEmpty {
+		return nil, fmt.Errorf("Cannot commit an empty commit. See the --allow-empty if you want to.")
+	}
+
+	// Check if there are no changes in the staged set but the -a flag is false
+	hasStagedChanges, err := hasStagedSetChanges(ctx, rsr)
+	if err != nil {
+		return nil, err
+	}
+
+	if !allFlag && !hasStagedChanges && !allowEmpty {
+		return nil, fmt.Errorf("Cannot commit an empty commit. See the --allow-empty if you want to.")
+	}
+
 	if allFlag {
 		err = actions.StageAllTables(ctx, ddb, rsr, rsw)
 	}
@@ -132,6 +147,27 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	})
 
 	return h, err
+}
+
+func hasWorkingSetChanges(rsr env.RepoStateReader) bool {
+	return rsr.WorkingHash() != rsr.StagedHash()
+}
+
+// TODO: We should not be dealing with root objects here but commit specs.
+func hasStagedSetChanges(ctx *sql.Context, rsr env.RepoStateReader) (bool, error) {
+	root, err := rsr.HeadRoot(ctx)
+
+	if err != nil {
+		return false, err
+	}
+
+	headHash, err := root.HashOf()
+
+	if err != nil {
+		return false, err
+	}
+
+	return rsr.StagedHash() != headHash, nil
 }
 
 func (d DoltCommitFunc) String() string {

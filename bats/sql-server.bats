@@ -65,6 +65,68 @@ teardown() {
     [[ "$output" =~ "one_pk" ]] || false
 }
 
+
+@test "test dolt sql interface works properly with autocommit" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+    start_sql_server repo1
+
+    # No tables at the start
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No tables in working set" ]] || false
+
+    # create table with autocommit off and verify there are still no tables
+    server_query 0 "CREATE TABLE one_pk (
+        pk BIGINT NOT NULL COMMENT 'tag:0',
+        c1 BIGINT COMMENT 'tag:1',
+        c2 BIGINT COMMENT 'tag:2',
+        PRIMARY KEY (pk)
+    )" ""
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No tables in working set" ]] || false
+
+    # check that dolt_commit throws an error when autocommit is off
+    run server_query 0 "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')" ""
+    [ "$status" -eq 1 ]
+
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No tables in working set" ]] || false
+
+    # create table with autocommit on and verify table creation
+    server_query 1 "CREATE TABLE one_pk (
+        pk BIGINT NOT NULL COMMENT 'tag:0',
+        c1 BIGINT COMMENT 'tag:1',
+        c2 BIGINT COMMENT 'tag:2',
+        PRIMARY KEY (pk)
+    )" ""
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "one_pk" ]] || false
+
+    # check that dolt_commit works properly when autocommit is on
+    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
+    [ "$status" -eq 0 ]
+
+    # check that dolt_commit throws error now that there are no working set changes.
+    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
+    [ "$status" -eq 1 ]
+
+    # Make a change to the working set but not the staged set.
+    run dolt sql -q "INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3)"
+
+    # check that dolt_commit throws error now that there are no staged changes.
+    run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
+    [ "$status" -eq 1 ]
+
+    run dolt log
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Commit1" ]] || false
+}
+
 @test "test basic querying via dolt sql-server" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
