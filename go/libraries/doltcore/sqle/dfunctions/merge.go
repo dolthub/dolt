@@ -43,9 +43,14 @@ func NewMergeFunc(args ...sql.Expression) (sql.Expression, error) {
 func (cf *MergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	sess := sqle.DSessFromSess(ctx.Session)
 
-	// Get the params associated with MERGE. We can share the commit argparser for now.
+	// TODO: Move to a separate MERGE argparser.
 	ap := cli.CreateCommitArgParser()
 	args, err := getDoltArgs(ctx, row, cf.Children())
+
+	if err != nil {
+		return nil, err
+	}
+
 	apr := cli.ParseArgs(ap, args, nil)
 
 	// The fist argument should be the branch name.
