@@ -239,7 +239,7 @@ teardown() {
     INSERT INTO one_pk (pk) VALUES (0);
     INSERT INTO one_pk (pk,c1) VALUES (1,1);
     INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);
-    SET @@repo1_head=commit('test commit message');
+    SET @@repo1_head=commit('-m', 'test commit message');
     INSERT INTO dolt_branches (name,hash) VALUES ('test_branch', @@repo1_head);"
 
     # validate new branch was created
@@ -264,12 +264,12 @@ teardown() {
     multi_query 0 "
     SET @@repo1_head=hashof('master');
     UPDATE one_pk SET c1=10 WHERE pk=2;
-    SET @@repo1_head=commit('Change c 1 to 10');
+    SET @@repo1_head=commit('-m', 'Change c 1 to 10');
     INSERT INTO dolt_branches (name,hash) VALUES ('master', @@repo1_head);
 
     SET @@repo1_head=hashof('test_branch');
     INSERT INTO one_pk (pk,c1,c2) VALUES (4,4,4);
-    SET @@repo1_head=commit('add 4');
+    SET @@repo1_head=commit('-m', 'add 4');
     INSERT INTO dolt_branches (name,hash) VALUES ('test_branch', @@repo1_head);"
 
     multi_query 0 "
