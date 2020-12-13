@@ -111,6 +111,17 @@ teardown() {
     run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
     [ "$status" -eq 0 ]
 
+    # check that dolt_commit throws error now that there are no working set changes.
+    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
+    [ "$status" -eq 1 ]
+
+    # Make a change to the working set but not the staged set.
+    run dolt sql -q "INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3)"
+
+    # check that dolt_commit throws error now that there are no staged changes.
+    run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
+    [ "$status" -eq 1 ]
+
     run dolt log
     [ $status -eq 0 ]
     [[ "$output" =~ "Commit1" ]] || false
