@@ -290,7 +290,7 @@ func FromKind(kind types.NomsKind) TypeInfo {
 	case types.UUIDKind:
 		return UuidType
 	case types.DecimalKind:
-		return DecimalDefaultType
+		return &decimalType{sql.MustCreateDecimalType(65, 30)}
 	default:
 		panic(fmt.Errorf(`no default type info for NomsKind "%v"`, kind.String()))
 	}
