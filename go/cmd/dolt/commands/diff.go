@@ -69,7 +69,6 @@ const (
 	whereParam  = "where"
 	limitParam  = "limit"
 	SQLFlag     = "sql"
-	CachedFlag  = "cached"
 )
 
 type DiffSink interface {
@@ -144,7 +143,6 @@ func (cmd DiffCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
 	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
 	ap.SupportsString(QueryFlag, "q", "query", "diffs the results of a query at two commits")
-	ap.SupportsFlag(CachedFlag, "c", "Show only the unstaged data changes.")
 	return ap
 }
 
@@ -199,8 +197,6 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", QueryFlag, SummaryFlag)
 		case apr.Contains(SQLFlag):
 			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", QueryFlag, SQLFlag)
-		case apr.Contains(CachedFlag):
-			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", QueryFlag, CachedFlag)
 		}
 		dArgs.query = q
 	}
@@ -234,7 +230,7 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	dArgs.limit, _ = apr.GetInt(limitParam)
 	dArgs.where = apr.GetValueOrDefault(whereParam, "")
 
-	from, to, leftover, err := getDiffRoots(ctx, dEnv, apr.Args(), apr.Contains(CachedFlag))
+	from, to, leftover, err := getDiffRoots(ctx, dEnv, apr.Args())
 
 	if err != nil {
 		return nil, nil, nil, err
@@ -285,28 +281,17 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	return from, to, dArgs, nil
 }
 
-func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string, isCached bool) (from, to *doltdb.RootValue, leftover []string, err error) {
-	stagedRoot, err := dEnv.StagedRoot(ctx)
+func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string) (from, to *doltdb.RootValue, leftover []string, err error) {
+	headRoot, err := dEnv.StagedRoot(ctx)
 	workingRoot, err := dEnv.WorkingRootWithDocs(ctx)
-	headRoot, err := dEnv.HeadRoot(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	// default unstaged roots
-	fromRoot := stagedRoot
-	toRoot := workingRoot
-
-	// staged roots
-	if isCached {
-		fromRoot = headRoot
-		toRoot = stagedRoot
-	}
-
 	if len(args) == 0 {
 		// `dolt diff`
-		from = fromRoot
-		to = toRoot
+		from = headRoot
+		to = workingRoot
 		return from, to, nil, nil
 	}
 
@@ -314,15 +299,15 @@ func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string, isCache
 
 	if !ok {
 		// `dolt diff ...tables`
-		from = fromRoot
-		to = toRoot
+		from = headRoot
+		to = workingRoot
 		leftover = args
 		return from, to, leftover, nil
 	}
 
 	if len(args) == 1 {
 		// `dolt diff from_commit`
-		to = toRoot
+		to = workingRoot
 		return from, to, nil, nil
 	}
 
@@ -330,7 +315,7 @@ func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string, isCache
 
 	if !ok {
 		// `dolt diff from_commit ...tables`
-		to = toRoot
+		to = workingRoot
 		leftover = args[1:]
 		return from, to, leftover, nil
 	}
