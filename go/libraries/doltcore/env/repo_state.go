@@ -184,10 +184,12 @@ func (rs *RepoState) GetMergeCommit() string {
 	return rs.Merge.Commit
 }
 
+// Returns the working root.
 func WorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.RootValue, error) {
 	return ddb.ReadRootValue(ctx, rsr.WorkingHash())
 }
 
+// Updates the working root.
 func UpdateWorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, rsw RepoStateWriter, newRoot *doltdb.RootValue) (hash.Hash, error) {
 	h, err := ddb.WriteRootValue(ctx, newRoot)
 
@@ -204,6 +206,7 @@ func UpdateWorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, rsw RepoStateWri
 	return h, nil
 }
 
+// Returns the head root.
 func HeadRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.RootValue, error) {
 	commit, err := ddb.ResolveRef(ctx, rsr.CWBHeadRef())
 
@@ -214,10 +217,12 @@ func HeadRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*do
 	return commit.GetRootValue()
 }
 
+// Returns the staged root.
 func StagedRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.RootValue, error) {
 	return ddb.ReadRootValue(ctx, rsr.StagedHash())
 }
 
+// Updates the staged root.
 func UpdateStagedRoot(ctx context.Context, ddb *doltdb.DoltDB, rsw RepoStateWriter, newRoot *doltdb.RootValue) (hash.Hash, error) {
 	h, err := ddb.WriteRootValue(ctx, newRoot)
 
