@@ -80,13 +80,18 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tblName string
 			return false, err
 		}
 
-		originalRow, err := row.FromNoms(tblSch, key.(types.Tuple), cnf.Value.(types.Tuple))
-		if err != nil {
-			return false, err
-		}
-
 		if types.IsNull(updated) {
-			err := tableEditor.DeleteRow(ctx, originalRow)
+			// todo: unhack
+			empty, err := types.NewTuple(tbl.Format())
+			if err != nil {
+				return false, err
+			}
+			originalRow, err := row.FromNoms(tblSch, key.(types.Tuple), empty)
+			if err != nil {
+				return false, err
+			}
+
+			err = tableEditor.DeleteRow(ctx, originalRow)
 			if err != nil {
 				return false, err
 			}
@@ -108,6 +113,10 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tblName string
 					return false, err
 				}
 			} else {
+				originalRow, err := row.FromNoms(tblSch, key.(types.Tuple), cnf.Value.(types.Tuple))
+				if err != nil {
+					return false, err
+				}
 				err = tableEditor.UpdateRow(ctx, originalRow, updatedRow)
 				if err != nil {
 					return false, err
