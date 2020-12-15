@@ -17,6 +17,7 @@ package diff
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -52,8 +53,13 @@ func tableDontDescendLists(v1, v2 types.Value) bool {
 
 func (ad *AsyncDiffer) Start(ctx context.Context, from, to types.Map) {
 	ad.eg, ad.egCtx = errgroup.WithContext(ctx)
-	ad.egCancel = async.GoWithCancel(ad.egCtx, ad.eg, func(ctx context.Context) error {
+	ad.egCancel = async.GoWithCancel(ad.egCtx, ad.eg, func(ctx context.Context) (err error) {
 		defer close(ad.diffChan)
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("panic in diff.Diff: %v", r)
+			}
+		}()
 		return diff.Diff(ctx, from, to, ad.diffChan, true, tableDontDescendLists)
 	})
 }
