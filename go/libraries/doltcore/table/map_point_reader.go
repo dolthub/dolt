@@ -37,12 +37,14 @@ func NewMapPointReader(m types.Map, keys ...types.Value) types.MapIterator {
 	}
 }
 
+// Next implements types.MapIterator.
 func (pr *PointReader) Next(ctx context.Context) (k, v types.Value, err error) {
 	if pr.idx >= len(pr.keys) {
 		return nil, nil, io.EOF
 	}
 
 	k = pr.keys[pr.idx]
+	// todo: optimize by implementing MapIterator.Seek()
 	v, _, err = pr.m.MaybeGet(ctx, k)
 	if err != nil {
 		return nil, nil, err

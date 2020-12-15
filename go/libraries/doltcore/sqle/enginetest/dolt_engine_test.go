@@ -44,7 +44,7 @@ func limitTestQueriesTo(queries ...string) {
 
 func TestQueries(t *testing.T) {
 	schema.FeatureFlagKeylessSchema = true
-	defer func() { schema.FeatureFlagKeylessSchema = true }()
+	defer func() { schema.FeatureFlagKeylessSchema = false }()
 
 	// limitTestQueriesTo(...) // whitelist queries you want run.
 

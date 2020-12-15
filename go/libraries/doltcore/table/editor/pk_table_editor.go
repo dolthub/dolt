@@ -468,7 +468,7 @@ func (te *pkTableEditor) delete(key types.Tuple) error {
 }
 
 func (te *pkTableEditor) flushEditAccumulator(ctx context.Context, teaInterface interface{}) error {
-	// We don'tbl call any locks here since this is called from an ActionExecutor with a concurrency of 1
+	// We don't call any locks here since this is called from an ActionExecutor with a concurrency of 1
 	tea := teaInterface.(*tableEditAccumulator)
 	defer tea.ed.Close()
 
@@ -488,7 +488,7 @@ func (te *pkTableEditor) flushEditAccumulator(ctx context.Context, teaInterface 
 			}
 		}
 	}
-	// For all removed keys, remove the map entries that weren'tbl added elsewhere by other updates
+	// For all removed keys, remove the map entries that weren't added elsewhere by other updates
 	for keyHash, removedKey := range tea.removedKeys {
 		if _, ok := tea.addedKeys[keyHash]; !ok {
 			tea.ed.AddEdit(removedKey, nil)
@@ -554,7 +554,7 @@ func formatKey(ctx context.Context, key types.Value) (string, error) {
 }
 
 func (te *pkTableEditor) updateIndexes(ctx context.Context, tea *tableEditAccumulator, tbl *doltdb.Table, originalRowData types.Map, updated types.Map) (*doltdb.Table, error) {
-	// We don'tbl call any locks here since this is called from an ActionExecutor with a concurrency of 1
+	// We don't call any locks here since this is called from an ActionExecutor with a concurrency of 1
 	if len(te.indexEds) == 0 {
 		return tbl, nil
 	}

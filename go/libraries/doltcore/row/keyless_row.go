@@ -26,14 +26,14 @@ var ErrZeroCardinality = fmt.Errorf("read row with zero cardinality")
 // keylessRow is a Row without PRIMARY_KEY fields
 //
 // key: Tuple(
-//			UUID(hash.Of(tag1, val1, ..., tagN, valN))
-//		)
+//          UUID(hash.Of(tag1, val1, ..., tagN, valN))
+//      )
 // val: Tuple(
-//			Uint(count),
-//			Uint(tag1), Value(val1),
-//			...,
-//			Uint(tagN), Value(valN)
-//		)
+//          Uint(count),
+//          Uint(tag1), Value(val1),
+//          ...,
+//          Uint(tagN), Value(valN)
+//      )
 type keylessRow struct {
 	key types.Tuple
 	val types.Tuple

@@ -27,14 +27,6 @@ import (
 var ErrRowNotValid = errors.New("invalid row for current schema")
 
 type Row interface {
-	// todo: this method might not make sense in the context of keyless tables
-	// Returns the noms map key for this row, using the schema provided.
-	NomsMapKey(sch schema.Schema) types.LesserValuable
-
-	// todo: this method does not make sense in the context of keyless tables
-	// Returns the noms map value for this row, using the schema provided.
-	NomsMapValue(sch schema.Schema) types.Valuable
-
 	// Iterates over all the columns in the row. Columns that have no value set will not be visited.
 	IterCols(cb func(tag uint64, val types.Value) (stop bool, err error)) (bool, error)
 
@@ -51,6 +43,15 @@ type Row interface {
 
 	// Format returns the types.NomsBinFormat for this row.
 	Format() *types.NomsBinFormat
+
+	// TODO(andy): NomsMapKey & NomsMapValue don't make sense in the context
+	// of keyless tables. Make these methods package private.
+
+	// Returns the noms map key for this row, using the schema provided.
+	NomsMapKey(sch schema.Schema) types.LesserValuable
+
+	// Returns the noms map value for this row, using the schema provided.
+	NomsMapValue(sch schema.Schema) types.Valuable
 }
 
 func GetFieldByName(colName string, r Row, sch schema.Schema) (types.Value, bool) {

@@ -133,7 +133,7 @@ func newKeylessTableEditor(ctx context.Context, tbl *doltdb.Table, sch schema.Sc
 	return te, nil
 }
 
-// InsertRow adds the given row to the table. If the row already exists, use UpdateRow.
+// InsertRow implements TableEditor.
 func (kte *keylessTableEditor) InsertRow(ctx context.Context, r row.Row) (err error) {
 	kte.mu.Lock()
 	defer kte.mu.Unlock()
@@ -149,7 +149,7 @@ func (kte *keylessTableEditor) InsertRow(ctx context.Context, r row.Row) (err er
 	return kte.acc.increment(key, val)
 }
 
-// DeleteKey removes the given key from the table.
+// DeleteRow implements TableEditor.
 func (kte *keylessTableEditor) DeleteRow(ctx context.Context, r row.Row) (err error) {
 	kte.mu.Lock()
 	defer kte.mu.Unlock()
@@ -165,7 +165,7 @@ func (kte *keylessTableEditor) DeleteRow(ctx context.Context, r row.Row) (err er
 	return kte.acc.decrement(key, val)
 }
 
-// UpdateRow takes the current row and new rows, and updates it accordingly.
+// UpdateRow implements TableEditor.
 func (kte *keylessTableEditor) UpdateRow(ctx context.Context, old row.Row, new row.Row) (err error) {
 	kte.mu.Lock()
 	defer kte.mu.Unlock()
@@ -191,10 +191,12 @@ func (kte *keylessTableEditor) UpdateRow(ctx context.Context, old row.Row, new r
 	return kte.acc.increment(key, val)
 }
 
+// GetAutoIncrementValue implements TableEditor, AUTO_INCREMENT is not yet supported for keyless tables.
 func (kte *keylessTableEditor) GetAutoIncrementValue() types.Value {
 	return types.NullValue
 }
 
+// SetAutoIncrementValue implements TableEditor, AUTO_INCREMENT is not yet supported for keyless tables.
 func (kte *keylessTableEditor) SetAutoIncrementValue(v types.Value) (err error) {
 	return fmt.Errorf("keyless tables do not support AUTO_INCREMENT")
 }
@@ -217,20 +219,22 @@ func (kte *keylessTableEditor) Table(ctx context.Context) (*doltdb.Table, error)
 	return kte.tbl, nil
 }
 
+// Schema implements TableEditor.
 func (kte *keylessTableEditor) Schema() schema.Schema {
 	return kte.sch
 }
 
+// Name implements TableEditor.
 func (kte *keylessTableEditor) Name() string {
 	return kte.name
 }
 
+// Format implements TableEditor.
 func (kte *keylessTableEditor) Format() *types.NomsBinFormat {
 	return kte.tbl.Format()
 }
 
-// Close ensures that all goroutines that may be open are properly disposed of. Attempting to call any other function
-// on this editor after calling this function is undefined behavior.
+// Close implements TableEditor.
 func (kte *keylessTableEditor) Close() error {
 	return nil
 }
