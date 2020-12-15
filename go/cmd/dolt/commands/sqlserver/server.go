@@ -203,7 +203,7 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommi
 }
 
 func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
-	return dsqle.NewDatabase(name, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter())
+	return dsqle.NewDatabase(name, dEnv.DbData())
 }
 
 func dbsAsDSQLDBs(dbs []sql.Database) []dsqle.Database {

@@ -45,7 +45,7 @@ func (a StageAll) CommandString() string { return "stage_all" }
 
 // Exec executes a StageAll command on a test dolt environment.
 func (a StageAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
-	return actions.StageAllTables(context.Background(), dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter())
+	return actions.StageAllTables(context.Background(), dEnv.DbData())
 }
 
 type CommitStaged struct {
@@ -63,7 +63,9 @@ func (c CommitStaged) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	_, err = actions.CommitStaged(context.Background(), dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), actions.CommitStagedProps{
+	dbData := dEnv.DbData()
+
+	_, err = actions.CommitStaged(context.Background(), dbData, actions.CommitStagedProps{
 		Message:          c.Message,
 		Date:             time.Now(),
 		AllowEmpty:       false,
@@ -84,7 +86,7 @@ func (c CommitAll) CommandString() string { return fmt.Sprintf("commit: %s", c.M
 
 // Exec executes a CommitAll command on a test dolt environment.
 func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
-	err := actions.StageAllTables(context.Background(), dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter())
+	err := actions.StageAllTables(context.Background(), dEnv.DbData())
 	require.NoError(t, err)
 
 	name, email, err := actions.GetNameAndEmail(dEnv.Config)
@@ -93,7 +95,9 @@ func (c CommitAll) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	_, err = actions.CommitStaged(context.Background(), dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), actions.CommitStagedProps{
+	dbData := dEnv.DbData()
+
+	_, err = actions.CommitStaged(context.Background(), dbData, actions.CommitStagedProps{
 		Message:          c.Message,
 		Date:             time.Now(),
 		AllowEmpty:       false,
@@ -142,7 +146,7 @@ func (q Query) CommandString() string { return fmt.Sprintf("query %s", q.Query) 
 func (q Query) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
-	sqlDb := dsqle.NewDatabase("dolt", dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter())
+	sqlDb := dsqle.NewDatabase("dolt", dEnv.DbData())
 	engine, sqlCtx, err := dsqle.NewTestEngine(context.Background(), sqlDb, root)
 	require.NoError(t, err)
 

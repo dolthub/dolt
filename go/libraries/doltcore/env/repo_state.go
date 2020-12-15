@@ -31,7 +31,6 @@ type RepoStateReader interface {
 	StagedHash() hash.Hash
 	IsMergeActive() bool
 	GetMergeCommit() string
-	GetAllValidDocDetails() ([]doltdb.DocDetails, error)
 }
 
 type RepoStateWriter interface {
@@ -40,8 +39,19 @@ type RepoStateWriter interface {
 	SetStagedHash(context.Context, hash.Hash) error
 	SetWorkingHash(context.Context, hash.Hash) error
 	ClearMerge() error
+}
+
+type DocsReadWriter interface {
+	GetAllValidDocDetails() ([]doltdb.DocDetails, error)
 	PutDocsToWorking(ctx context.Context, docDetails []doltdb.DocDetails) error
-	ResetWorkingDocsToStagedDos(ctx context.Context) error
+	ResetWorkingDocsToStagedDocs(ctx context.Context) error
+}
+
+type DbData struct {
+	Ddb *doltdb.DoltDB
+	Rsw RepoStateWriter
+	Rsr RepoStateReader
+	Drw DocsReadWriter
 }
 
 type BranchConfig struct {

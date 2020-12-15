@@ -31,19 +31,13 @@ type dbRoot struct {
 	root    *doltdb.RootValue
 }
 
-type dbData struct {
-	ddb *doltdb.DoltDB
-	rsw env.RepoStateWriter
-	rsr env.RepoStateReader
-}
-
 var _ sql.Session = &DoltSession{}
 
 // DoltSession is the sql.Session implementation used by dolt.  It is accessible through a *sql.Context instance
 type DoltSession struct {
 	sql.Session
 	dbRoots   map[string]dbRoot
-	dbDatas   map[string]dbData
+	dbDatas   map[string]env.DbData
 	dbEditors map[string]*editor.TableEditSession
 
 	Username string
@@ -55,7 +49,7 @@ func DefaultDoltSession() *DoltSession {
 	sess := &DoltSession{
 		Session:   sql.NewBaseSession(),
 		dbRoots:   make(map[string]dbRoot),
-		dbDatas:   make(map[string]dbData),
+		dbDatas:   make(map[string]env.DbData),
 		dbEditors: make(map[string]*editor.TableEditSession),
 		Username:  "",
 		Email:     "",
@@ -66,10 +60,10 @@ func DefaultDoltSession() *DoltSession {
 // NewDoltSession creates a DoltSession object from a standard sql.Session and 0 or more Database objects.
 func NewDoltSession(ctx context.Context, sqlSess sql.Session, username, email string, dbs ...Database) (*DoltSession, error) {
 	dbRoots := make(map[string]dbRoot)
-	dbDatas := make(map[string]dbData)
+	dbDatas := make(map[string]env.DbData)
 	dbEditors := make(map[string]*editor.TableEditSession)
 	for _, db := range dbs {
-		dbDatas[db.Name()] = dbData{rsw: db.rsw, ddb: db.ddb, rsr: db.rsr}
+		dbDatas[db.Name()] = env.DbData{Rsw: db.rsw, Ddb: db.ddb, Rsr: db.rsr, Drw: db.drw}
 		dbEditors[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
 	}
 
@@ -104,12 +98,12 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context) error {
 	dbData := sess.dbDatas[currentDb]
 
 	root := dbRoot.root
-	h, err := dbData.ddb.WriteRootValue(ctx, root)
+	h, err := dbData.Ddb.WriteRootValue(ctx, root)
 	if err != nil {
 		return err
 	}
 
-	return dbData.rsw.SetWorkingHash(ctx, h)
+	return dbData.Rsw.SetWorkingHash(ctx, h)
 }
 
 // GetDoltDB returns the *DoltDB for a given database by name
@@ -120,7 +114,7 @@ func (sess *DoltSession) GetDoltDB(dbName string) (*doltdb.DoltDB, bool) {
 		return nil, false
 	}
 
-	return d.ddb, true
+	return d.Ddb, true
 }
 
 func (sess *DoltSession) GetDoltDBRepoStateWriter(dbName string) (env.RepoStateWriter, bool) {
@@ -130,7 +124,7 @@ func (sess *DoltSession) GetDoltDBRepoStateWriter(dbName string) (env.RepoStateW
 		return nil, false
 	}
 
-	return d.rsw, true
+	return d.Rsw, true
 }
 
 func (sess *DoltSession) GetDoltDBRepoStateReader(dbName string) (env.RepoStateReader, bool) {
@@ -140,7 +134,50 @@ func (sess *DoltSession) GetDoltDBRepoStateReader(dbName string) (env.RepoStateR
 		return nil, false
 	}
 
-	return d.rsr, true
+	return d.Rsr, true
+}
+
+func (sess *DoltSession) GetDoltDBDocsReadWriter(dbName string) (env.DocsReadWriter, bool) {
+	d, ok := sess.dbDatas[dbName]
+
+	if !ok {
+		return nil, false
+	}
+
+	return d.Drw, true
+}
+
+func (sess *DoltSession) GetDbData(dbName string) (env.DbData, bool) {
+	ddb, ok := sess.GetDoltDB(dbName)
+
+	if !ok {
+		return env.DbData{}, false
+	}
+
+	rsr, ok := sess.GetDoltDBRepoStateReader(dbName)
+
+	if !ok {
+		return env.DbData{}, false
+	}
+
+	rsw, ok := sess.GetDoltDBRepoStateWriter(dbName)
+
+	if !ok {
+		return env.DbData{}, false
+	}
+
+	drw, ok := sess.GetDoltDBDocsReadWriter(dbName)
+
+	if !ok {
+		return env.DbData{}, false
+	}
+
+	return env.DbData{
+		Ddb: ddb,
+		Rsr: rsr,
+		Rsw: rsw,
+		Drw: drw,
+	}, true
 }
 
 // GetRoot returns the current *RootValue for a given database associated with the session
@@ -176,7 +213,7 @@ func (sess *DoltSession) GetParentCommit(ctx context.Context, dbName string) (*d
 		return nil, hash.Hash{}, err
 	}
 
-	cm, err := dbd.ddb.Resolve(ctx, cs, nil)
+	cm, err := dbd.Ddb.Resolve(ctx, cs, nil)
 
 	if err != nil {
 		return nil, hash.Hash{}, err
@@ -205,7 +242,7 @@ func (sess *DoltSession) Set(ctx context.Context, key string, typ sql.Type, valu
 			return err
 		}
 
-		cm, err := dbd.ddb.Resolve(ctx, cs, nil)
+		cm, err := dbd.Ddb.Resolve(ctx, cs, nil)
 
 		if err != nil {
 			return err
@@ -272,9 +309,10 @@ func (sess *DoltSession) AddDB(ctx context.Context, db Database) error {
 	name := db.Name()
 	rsr := db.GetStateReader()
 	rsw := db.GetStateWriter()
+	drw := db.GetDocsReadWriter()
 	ddb := db.GetDoltDB()
 
-	sess.dbDatas[db.Name()] = dbData{rsr: rsr, rsw: rsw, ddb: ddb}
+	sess.dbDatas[db.Name()] = env.DbData{Drw: drw, Rsr: rsr, Rsw: rsw, Ddb: ddb}
 
 	sess.dbEditors[db.Name()] = editor.CreateTableEditSession(nil, editor.TableEditSessionProps{})
 

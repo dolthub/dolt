@@ -67,8 +67,13 @@ func GetTblsAndDocDetails(dEnv *env.DoltEnv, tbls []string) (tables []string, do
 	return tbls, docDetails, nil
 }
 
-func StageAllTables(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, rsw env.RepoStateWriter) error {
-	err := rsw.PutDocsToWorking(ctx, nil)
+func StageAllTables(ctx context.Context, dbData env.DbData) error {
+	ddb := dbData.Ddb
+	rsr := dbData.Rsr
+	rsw := dbData.Rsw
+	drw := dbData.Drw
+
+	err := drw.PutDocsToWorking(ctx, nil)
 
 	if err != nil {
 		return err
@@ -94,7 +99,7 @@ func StageAllTables(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateRe
 
 	err = stageTables(ctx, ddb, rsw, tbls, staged, working)
 	if err != nil {
-		rsw.ResetWorkingDocsToStagedDos(ctx)
+		drw.ResetWorkingDocsToStagedDocs(ctx)
 		return err
 	}
 
