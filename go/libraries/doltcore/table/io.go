@@ -17,51 +17,32 @@ package table
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
-// TableReader is an interface for reading rows from a table
-type TableReader interface {
-	// GetSchema gets the schema of the rows that this reader will return
-	GetSchema() schema.Schema
+// GetRow returns a row from |tbl| corresponding to |key| if it exists.
+func GetRow(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, key types.Tuple) (r row.Row, ok bool, err error) {
+	rowMap, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return nil, false, err
+	}
 
-	// ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and calling
-	// IsBadRow(err) will be return true. This is a potentially non-fatal error and callers can decide if they want to
-	// continue on a bad row, or fail.
-	ReadRow(ctx context.Context) (row.Row, error)
+	var fields types.Value
+	fields, ok, err = rowMap.MaybeGet(ctx, key)
+	if err != nil || !ok {
+		return nil, ok, err
+	}
 
-	// VerifySchema checks that the incoming schema matches the schema from the existing table
-	VerifySchema(outSch schema.Schema) (bool, error)
-}
-
-// TableWriteCloser is an interface for writing rows to a table
-type TableWriter interface {
-	// GetSchema gets the schema of the rows that this writer writes
-	GetSchema() schema.Schema
-
-	// WriteRow will write a row to a table
-	WriteRow(ctx context.Context, r row.Row) error
-}
-
-// TableCloser is an interface for a table stream that can be closed to release resources
-type TableCloser interface {
-	// Close should release resources being held
-	Close(ctx context.Context) error
-}
-
-// TableReadCloser is an interface for reading rows from a table, that can be closed.
-type TableReadCloser interface {
-	TableReader
-	TableCloser
-}
-
-// TableWriteCloser is an interface for writing rows to a table, that can be closed
-type TableWriteCloser interface {
-	TableWriter
-	TableCloser
+	r, err = row.FromNoms(sch, key, fields.(types.Tuple))
+	return
 }
 
 // PipeRows will read a row from given TableReader and write it to the provided TableWriter.  It will do this
@@ -135,42 +116,73 @@ func ReadAllRows(ctx context.Context, rd TableReader, contOnBadRow bool) ([]row.
 	return nil, badRowCount, err
 }
 
-// ReadAllRowsToMap reads all rows from a TableReader and returns a map containing those rows keyed off of the index
-// provided.
-/*func ReadAllRowsToMap(rd TableReader, keyIndex int, contOnBadRow bool) (map[types.Value][]row.Row, int, error) {
-	if keyIndex < 0 || keyIndex >= rd.GetSchema().NumFields() {
-		panic("Invalid index is out of range of fields.")
+// ForeignKeyIsSatisfied ensures that the foreign key is valid by comparing the index data from the given table
+// against the index data from the referenced table.
+func ForeignKeyIsSatisfied(ctx context.Context, fk doltdb.ForeignKey, childIdx, parentIdx types.Map, childDef, parentDef schema.Index) error {
+	if fk.ReferencedTableIndex != parentDef.Name() {
+		return fmt.Errorf("cannot validate data as wrong referenced index was given: expected `%s` but received `%s`",
+			fk.ReferencedTableIndex, parentDef.Name())
 	}
 
-	var err error
-	rows := make(map[types.Value][]row.Row)
+	tagMap := make(map[uint64]uint64, len(fk.TableColumns))
+	for i, childTag := range fk.TableColumns {
+		tagMap[childTag] = fk.ReferencedTableColumns[i]
+	}
 
-	badRowCount := 0
+	// FieldMappings ignore columns not in the tagMap
+	fm, err := rowconv.NewFieldMapping(childDef.Schema(), parentDef.Schema(), tagMap)
+	if err != nil {
+		return err
+	}
+
+	rc, err := rowconv.NewRowConverter(fm)
+	if err != nil {
+		return err
+	}
+
+	rdr, err := noms.NewNomsMapReader(ctx, childIdx, childDef.Schema())
+	if err != nil {
+		return err
+	}
+
 	for {
-		var r row.Row
-		r, err = rd.ReadRow()
-
-		if err != nil && err != io.EOF || r == nil {
-			if IsBadRow(err) {
-				badRowCount++
-
-				if contOnBadRow {
-					continue
-				}
-			}
-
+		childIdxRow, err := rdr.ReadRow(ctx)
+		if err == io.EOF {
 			break
 		}
+		if err != nil {
+			return err
+		}
 
-		keyVal, _ := row.GetField(keyIndex)
-		rowsForThisKey := rows[keyVal]
-		rowsForThisKey = append(rowsForThisKey, r)
-		rows[keyVal] = rowsForThisKey
+		parentIdxRow, err := rc.Convert(childIdxRow)
+		if err != nil {
+			return err
+		}
+		if row.IsEmpty(parentIdxRow) {
+			continue
+		}
+
+		partial, err := parentIdxRow.ReduceToIndexPartialKey(parentDef)
+		if err != nil {
+			return err
+		}
+
+		indexIter := noms.NewNomsRangeReader(parentDef.Schema(), parentIdx,
+			[]*noms.ReadRange{{Start: partial, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
+				return tuple.StartsWith(partial), nil
+			}}},
+		)
+
+		switch _, err = indexIter.ReadRow(ctx); err {
+		case nil:
+			continue // parent table contains child key
+		case io.EOF:
+			indexKeyStr, _ := types.EncodedValue(ctx, partial)
+			return fmt.Errorf("foreign key violation on `%s`.`%s`: `%s`", fk.Name, fk.TableName, indexKeyStr)
+		default:
+			return err
+		}
 	}
 
-	if err == nil || err == io.EOF {
-		return rows, badRowCount, nil
-	}
-
-	return nil, badRowCount, err
-}*/
+	return nil
+}

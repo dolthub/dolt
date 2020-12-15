@@ -17,10 +17,11 @@ package dfunctions
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -30,26 +31,40 @@ import (
 const MergeFuncName = "merge"
 
 type MergeFunc struct {
-	expression.UnaryExpression
+	children []sql.Expression
 }
 
 // NewMergeFunc creates a new MergeFunc expression.
-func NewMergeFunc(e sql.Expression) sql.Expression {
-	return &MergeFunc{expression.UnaryExpression{Child: e}}
+func NewMergeFunc(args ...sql.Expression) (sql.Expression, error) {
+	return &MergeFunc{children: args}, nil
 }
 
 // Eval implements the Expression interface.
 func (cf *MergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
-	val, err := cf.Child.Eval(ctx, row)
+	sess := sqle.DSessFromSess(ctx.Session)
+
+	// TODO: Move to a separate MERGE argparser.
+	ap := cli.CreateCommitArgParser()
+	args, err := getDoltArgs(ctx, row, cf.Children())
+
 	if err != nil {
 		return nil, err
-	} else if val == nil {
-		return nil, nil
 	}
 
-	sess := sqle.DSessFromSess(ctx.Session)
-	if sess.Username == "" || sess.Email == "" {
-		return nil, errors.New("commit function failure: Username and/or email not configured")
+	apr := cli.ParseArgs(ap, args, nil)
+
+	// The fist argument should be the branch name.
+	branchName := apr.Arg(0)
+
+	var name, email string
+	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
+		name, email, err = cli.ParseAuthor(authorStr)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		name = sess.Username
+		email = sess.Email
 	}
 
 	dbName := sess.GetCurrentDatabase()
@@ -73,14 +88,25 @@ func (cf *MergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, err
 	}
 
-	cm, cmh, err := getBranchCommit(ctx, ok, val, err, ddb)
+	cm, cmh, err := getBranchCommit(ctx, ok, branchName, err, ddb)
 	if err != nil {
 		return nil, err
 	}
 
-	mergeRoot, _, err := merge.MergeCommits(ctx, parent, cm)
-	if err == merge.ErrFastForward {
+	// No need to write a merge commit, if the parent can ffw to the commit coming from the branch.
+	canFF, err := parent.CanFastForwardTo(ctx, cm)
+	if err != nil {
+		return nil, err
+	}
+
+	if canFF {
 		return cmh.String(), nil
+	}
+
+	mergeRoot, _, err := merge.MergeCommits(ctx, parent, cm)
+
+	if err != nil {
+		return nil, err
 	}
 
 	h, err := ddb.WriteRootValue(ctx, mergeRoot)
@@ -89,7 +115,7 @@ func (cf *MergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	commitMessage := fmt.Sprintf("SQL Generated commit merging %s into %s", ph.String(), cmh.String())
-	meta, err := doltdb.NewCommitMeta(sess.Username, sess.Email, commitMessage)
+	meta, err := doltdb.NewCommitMeta(name, email, commitMessage)
 	if err != nil {
 		return nil, err
 	}
@@ -173,21 +199,35 @@ func getParent(ctx *sql.Context, err error, sess *sqle.DoltSession, dbName strin
 
 // String implements the Stringer interface.
 func (cf *MergeFunc) String() string {
-	return fmt.Sprintf("Merge(%s)", cf.Child.String())
+	childrenStrings := make([]string, len(cf.children))
+
+	for i, child := range cf.children {
+		childrenStrings[i] = child.String()
+	}
+	return fmt.Sprintf("Merge(%s)", strings.Join(childrenStrings, ","))
 }
 
 // IsNullable implements the Expression interface.
 func (cf *MergeFunc) IsNullable() bool {
-	return cf.Child.IsNullable()
+	return false
+}
+
+func (cf *MergeFunc) Resolved() bool {
+	for _, child := range cf.Children() {
+		if !child.Resolved() {
+			return false
+		}
+	}
+	return true
+}
+
+func (cf *MergeFunc) Children() []sql.Expression {
+	return cf.children
 }
 
 // WithChildren implements the Expression interface.
 func (cf *MergeFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
-	if len(children) != 1 {
-		return nil, sql.ErrInvalidChildrenNumber.New(cf, len(children), 1)
-	}
-
-	return NewMergeFunc(children[0]), nil
+	return NewMergeFunc(children...)
 }
 
 // Type implements the Expression interface.

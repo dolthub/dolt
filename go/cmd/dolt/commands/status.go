@@ -185,6 +185,7 @@ func printStagedDiffs(wr io.Writer, stagedTbls []diff.TableDelta, stagedDocs *di
 		}
 
 		iohelp.WriteLine(wr, color.GreenString(strings.Join(lines, "\n")))
+		return len(stagedTbls) + stagedDocs.Len()
 	}
 
 	return 0

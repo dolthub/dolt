@@ -22,54 +22,10 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
 )
-
-// Returns a SQL row representation for the dolt row given.
-func DoltRowToSqlRow(doltRow row.Row, sch schema.Schema) (sql.Row, error) {
-	colVals := make(sql.Row, sch.GetAllCols().Size())
-
-	i := 0
-	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		var innerErr error
-		value, _ := doltRow.GetColVal(tag)
-		colVals[i], innerErr = col.TypeInfo.ConvertNomsValueToValue(value)
-		if innerErr != nil {
-			return true, innerErr
-		}
-		i++
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return sql.NewRow(colVals...), nil
-}
-
-// Returns a Dolt row representation for SQL row given
-func SqlRowToDoltRow(nbf *types.NomsBinFormat, r sql.Row, doltSchema schema.Schema) (row.Row, error) {
-	taggedVals := make(row.TaggedValues)
-	allCols := doltSchema.GetAllCols()
-	for i, val := range r {
-		tag := allCols.Tags[i]
-		schCol := allCols.TagToCol[tag]
-		if val != nil {
-			var err error
-			taggedVals[tag], err = schCol.TypeInfo.ConvertValueToNomsValue(val)
-			if err != nil {
-				return nil, err
-			}
-		} else if !schCol.IsNullable() {
-			return nil, fmt.Errorf("column <%v> received nil but is non-nullable", schCol.Name)
-		}
-	}
-	return row.New(nbf, doltSchema, taggedVals)
-}
 
 // ToDoltResultSchema returns a dolt Schema from the sql schema given, suitable for use as a result set. For
 // creating tables, use ToDoltSchema.

@@ -12,15 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dfunctions
+package editor
 
-import "github.com/dolthub/go-mysql-server/sql"
+import (
+	"context"
+	"fmt"
 
-var DoltFunctions = []sql.Function{
-	sql.Function1{Name: HashOfFuncName, Fn: NewHashOf},
-	sql.FunctionN{Name: CommitFuncName, Fn: NewCommitFunc},
-	sql.FunctionN{Name: MergeFuncName, Fn: NewMergeFunc},
-	sql.Function1{Name: resetFuncName, Fn: NewDoltResetFunc},
-	sql.Function0{Name: VersionFuncName, Fn: NewVersion},
-	sql.FunctionN{Name: DoltCommitFuncName, Fn: NewDoltCommitFunc},
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+)
+
+func newKeylessTableEditor(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, name string) (TableEditor, error) {
+	return nil, fmt.Errorf("keylessTableEditor unimplemented")
 }

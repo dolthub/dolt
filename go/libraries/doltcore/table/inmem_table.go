@@ -19,6 +19,8 @@ import (
 	"io"
 	"sort"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
@@ -113,6 +115,8 @@ type InMemTableReader struct {
 	current int
 }
 
+var _ SqlTableReader = &InMemTableReader{}
+
 // NewInMemTableReader creates an instance of a TableReader from an InMemTable
 func NewInMemTableReader(imt *InMemTable) *InMemTableReader {
 	return &InMemTableReader{imt, 0}
@@ -131,6 +135,15 @@ func (rd *InMemTableReader) ReadRow(ctx context.Context) (row.Row, error) {
 	}
 
 	return nil, io.EOF
+}
+
+func (rd *InMemTableReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
+	r, err := rd.ReadRow(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return row.DoltRowToSqlRow(r, rd.GetSchema())
 }
 
 // Close should release resources being held

@@ -138,24 +138,24 @@ $ dolt sql -q "show tables"
 +-------------------+
 | state_populations |
 +-------------------+
-$ dolt sql -q 'insert into state_populations (state, population) values
-("Delaware", 59096),
-("Maryland", 319728),
-("Tennessee", 35691),
-("Virginia", 691937),
-("Connecticut", 237946),
-("Massachusetts", 378787),
-("South Carolina", 249073),
-("New Hampshire", 141885),
-("Vermont", 85425),
-("Georgia", 82548),
-("Pennsylvania", 434373),
-("Kentucky", 73677),
-("New York", 340120),
-("New Jersey", 184139),
-("North Carolina", 393751),
-("Maine", 96540),
-("Rhode Island", 68825)'
+$ dolt sql -q "insert into state_populations (state, population) values
+('Delaware', 59096),
+('Maryland', 319728),
+('Tennessee', 35691),
+('Virginia', 691937),
+('Connecticut', 237946),
+('Massachusetts', 378787),
+('South Carolina', 249073),
+('New Hampshire', 141885),
+('Vermont', 85425),
+('Georgia', 82548),
+('Pennsylvania', 434373),
+('Kentucky', 73677),
+('New York', 340120),
+('New Jersey', 184139),
+('North Carolina', 393751),
+('Maine', 96540),
+('Rhode Island', 68825)"
 Query OK, 17 rows affected
 ```
 
