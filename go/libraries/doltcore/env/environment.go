@@ -461,6 +461,10 @@ func (d *docsReadWriter) ResetWorkingDocsToStagedDocs(ctx context.Context) error
 	return d.dEnv.ResetWorkingDocsToStagedDocs(ctx)
 }
 
+func (d *docsReadWriter) GetOneDocDetail(docName string) (doc doltdb.DocDetails, err error) {
+	return d.dEnv.GetOneDocDetail(docName)
+}
+
 func (dEnv *DoltEnv) DocsReadWriter() DocsReadWriter {
 	return &docsReadWriter{dEnv}
 }

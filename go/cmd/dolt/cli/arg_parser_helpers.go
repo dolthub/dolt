@@ -91,3 +91,10 @@ func CreateCommitArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(AllFlag, "a", "Adds all edited files in working to staged.")
 	return ap
 }
+
+func CreateAddArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "Working table(s) to add to the list tables staged to be committed. The abbreviation '.' can be used to add all tables."})
+	ap.SupportsFlag("all", "A", "Stages any and all changes (adds, deletes, and modifications).")
+	return ap
+}

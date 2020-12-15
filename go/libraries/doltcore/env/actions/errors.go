@@ -136,12 +136,12 @@ func (rts RootTypeSet) IsEmpty() bool {
 }
 
 type RootValueUnreadable struct {
-	rootType RootType
+	RootType RootType
 	Cause    error
 }
 
 func (rvu RootValueUnreadable) Error() string {
-	return "error: Unable to read " + rvu.rootType.String()
+	return "error: Unable to read " + rvu.RootType.String()
 }
 
 func IsRootValUnreachable(err error) bool {
@@ -156,7 +156,7 @@ func GetUnreachableRootType(err error) RootType {
 		panic("Must validate with IsRootValUnreachable before calling GetUnreachableRootType")
 	}
 
-	return rvu.rootType
+	return rvu.RootType
 }
 
 func GetUnreachableRootCause(err error) error {
