@@ -294,19 +294,17 @@ func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string, isCache
 	}
 
 	// default unstaged roots
-	fromRoot := stagedRoot
-	toRoot := workingRoot
+	from = stagedRoot
+	to = workingRoot
 
 	// staged roots
 	if isCached {
-		fromRoot = headRoot
-		toRoot = stagedRoot
+		from = headRoot
+		to = stagedRoot
 	}
 
 	if len(args) == 0 {
 		// `dolt diff`
-		from = fromRoot
-		to = toRoot
 		return from, to, nil, nil
 	}
 
@@ -314,15 +312,12 @@ func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string, isCache
 
 	if !ok {
 		// `dolt diff ...tables`
-		from = fromRoot
-		to = toRoot
 		leftover = args
 		return from, to, leftover, nil
 	}
 
 	if len(args) == 1 {
 		// `dolt diff from_commit`
-		to = toRoot
 		return from, to, nil, nil
 	}
 
@@ -330,7 +325,6 @@ func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string, isCache
 
 	if !ok {
 		// `dolt diff from_commit ...tables`
-		to = toRoot
 		leftover = args[1:]
 		return from, to, leftover, nil
 	}
