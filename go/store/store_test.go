@@ -1,6 +1,6 @@
 package store
 
-import (
+/*import (
 	"context"
 	"math/rand"
 	"os"
@@ -23,7 +23,7 @@ const (
 
 func poe(err error) {
 	if err != nil {
-		poe(err)
+		panic(err)
 	}
 }
 
@@ -168,4 +168,4 @@ func BenchmarkSimulatedCoveringIndex(b *testing.B) {
 			}
 		}
 	}
-}
+}*/

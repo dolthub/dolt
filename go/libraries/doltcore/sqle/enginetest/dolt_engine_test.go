@@ -28,7 +28,21 @@ func init() {
 	sqle.MinRowsPerPartition = 2
 }
 
+func limitTestQueriesTo(queries ...string) {
+	querySet := set.NewStrSet(queries)
+
+	var broken []enginetest.QueryTest
+	for _, t := range enginetest.QueryTests {
+		if querySet.Contains(t.Query) {
+			broken = append(broken, t)
+		}
+	}
+
+	enginetest.QueryTests = broken
+}
+
 func TestQueries(t *testing.T) {
+	// limitTestQueriesTo(...) // whitelist queries you want run.
 	enginetest.TestQueries(t, newDoltHarness(t))
 }
 

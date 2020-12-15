@@ -16,6 +16,19 @@ type KVToSqlRowConverter struct {
 	rowSize        int
 }
 
+func NewKVToSqlRowConverterForCols(cols []schema.Column) *KVToSqlRowConverter {
+	tagToSqlColIdx := make(map[uint64]int)
+	for i, col := range cols {
+		tagToSqlColIdx[col.Tag] = i
+	}
+
+	return &KVToSqlRowConverter{
+		tagToSqlColIdx: tagToSqlColIdx,
+		cols:           cols,
+		rowSize:        len(cols),
+	}
+}
+
 func (conv *KVToSqlRowConverter) ConvertKVToSqlRow(k, v types.Value) (sql.Row, error) {
 	keyTup := k.(types.Tuple)
 	var valTup types.Tuple
@@ -53,6 +66,10 @@ func (conv *KVToSqlRowConverter) processTuple(cols []interface{}, filled int, tu
 			return 0, err
 		}
 
+		if tag == nil {
+			break
+		}
+
 		if sqlColIdx, ok := conv.tagToSqlColIdx[uint64(tag.(types.Uint))]; !ok {
 			err = tupItr.Skip()
 
@@ -83,7 +100,7 @@ type KVGetFunc func(ctx context.Context) (types.Value, types.Value, error)
 
 type DoltMapIter struct {
 	kvGet KVGetFunc
-	conv  KVToSqlRowConverter
+	conv  *KVToSqlRowConverter
 }
 
 func NewDoltMapIterFromNomsMapItr(mapItr types.MapIterator, cols []schema.Column) *DoltMapIter {
@@ -103,17 +120,9 @@ func NewDoltMapIterFromNomsMapItr(mapItr types.MapIterator, cols []schema.Column
 }
 
 func NewDoltMapIter(keyValGet KVGetFunc, cols []schema.Column) *DoltMapIter {
-	tagToSqlColIdx := make(map[uint64]int)
-	for i, col := range cols {
-		tagToSqlColIdx[col.Tag] = i
-	}
-
 	return &DoltMapIter{
 		kvGet: keyValGet,
-		conv: KVToSqlRowConverter{
-			tagToSqlColIdx: tagToSqlColIdx,
-			cols:           cols,
-		},
+		conv:  NewKVToSqlRowConverterForCols(cols),
 	}
 }
 

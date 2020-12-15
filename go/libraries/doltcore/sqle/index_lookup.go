@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -140,7 +139,7 @@ func (il *doltIndexLookup) indexCoversCols(cols []string) bool {
 		return false
 	}
 
-	idxCols := il.idx.IndexSchema().GetAllCols()
+	idxCols := il.idx.IndexSchema().GetPKCols()
 	covers := true
 	for _, colName := range cols {
 		if _, ok := idxCols.GetByName(colName); !ok {
@@ -164,7 +163,7 @@ func (il *doltIndexLookup) RowIterForRanges(ctx *sql.Context, ranges []lookup.Ra
 	if covers {
 		return NewCoveringIndexRowIterAdapter(ctx, il.idx, nrr, columns), nil
 	} else {
-		return nil, errors.New("fix me") //NewIndexLookupRowIterAdapter(ctx, il.idx, idxItr), nil
+		return NewIndexLookupRowIterAdapter(ctx, il.idx, nrr), nil
 	}
 }
 
