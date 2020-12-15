@@ -125,7 +125,7 @@ func (i *indexLookupRowIterAdapter) queueRows() {
 	}
 }
 
-func (i *indexLookupRowIterAdapter) indexKeyToTableKey(nbf *types.NomsBinFormat, indexKey types.Tuple) (types.Value, error){
+func (i *indexLookupRowIterAdapter) indexKeyToTableKey(nbf *types.NomsBinFormat, indexKey types.Tuple) (types.Value, error) {
 	tplItr, err := indexKey.Iterator()
 
 	if err != nil {
