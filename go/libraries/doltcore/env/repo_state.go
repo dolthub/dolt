@@ -238,9 +238,3 @@ func UpdateStagedRoot(ctx context.Context, ddb *doltdb.DoltDB, rsw RepoStateWrit
 
 	return h, nil
 }
-
-
-
-
-
-
