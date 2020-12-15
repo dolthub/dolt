@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	. "github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 )
 
 type tableEditorTest struct {
@@ -188,7 +189,7 @@ func TestTableEditor(t *testing.T) {
 }
 
 func r(r row.Row, sch schema.Schema) sql.Row {
-	sqlRow, err := row.DoltRowToSqlRow(r, sch)
+	sqlRow, err := sqlutil.DoltRowToSqlRow(r, sch)
 	if err != nil {
 		panic(err)
 	}

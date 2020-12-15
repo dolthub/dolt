@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -155,7 +156,7 @@ UPDATE onepk SET pk1 = v1 + pk1;
 				_ = idx_v1RowData.IterAll(context.Background(), func(key, value types.Value) error {
 					r, err := row.FromNoms(idx_v1.Schema(), key.(types.Tuple), value.(types.Tuple))
 					assert.NoError(t, err)
-					sqlRow, err := row.DoltRowToSqlRow(r, idx_v1.Schema())
+					sqlRow, err := sqlutil.DoltRowToSqlRow(r, idx_v1.Schema())
 					assert.NoError(t, err)
 					sqlRows = append(sqlRows, sqlRow)
 					return nil
@@ -167,7 +168,7 @@ UPDATE onepk SET pk1 = v1 + pk1;
 				_ = idx_v2v1RowData.IterAll(context.Background(), func(key, value types.Value) error {
 					r, err := row.FromNoms(idx_v2v1.Schema(), key.(types.Tuple), value.(types.Tuple))
 					assert.NoError(t, err)
-					sqlRow, err := row.DoltRowToSqlRow(r, idx_v2v1.Schema())
+					sqlRow, err := sqlutil.DoltRowToSqlRow(r, idx_v2v1.Schema())
 					assert.NoError(t, err)
 					sqlRows = append(sqlRows, sqlRow)
 					return nil
@@ -318,7 +319,7 @@ REPLACE INTO oneuni VALUES (4, 2, 2), (5, 2, 3), (3, 1, 1);
 				_ = idx_v1RowData.IterAll(context.Background(), func(key, value types.Value) error {
 					r, err := row.FromNoms(idx_v1.Schema(), key.(types.Tuple), value.(types.Tuple))
 					assert.NoError(t, err)
-					sqlRow, err := row.DoltRowToSqlRow(r, idx_v1.Schema())
+					sqlRow, err := sqlutil.DoltRowToSqlRow(r, idx_v1.Schema())
 					assert.NoError(t, err)
 					sqlRows = append(sqlRows, sqlRow)
 					return nil
@@ -330,7 +331,7 @@ REPLACE INTO oneuni VALUES (4, 2, 2), (5, 2, 3), (3, 1, 1);
 				_ = idx_v1v2RowData.IterAll(context.Background(), func(key, value types.Value) error {
 					r, err := row.FromNoms(idx_v1v2.Schema(), key.(types.Tuple), value.(types.Tuple))
 					assert.NoError(t, err)
-					sqlRow, err := row.DoltRowToSqlRow(r, idx_v1v2.Schema())
+					sqlRow, err := sqlutil.DoltRowToSqlRow(r, idx_v1v2.Schema())
 					assert.NoError(t, err)
 					sqlRows = append(sqlRows, sqlRow)
 					return nil

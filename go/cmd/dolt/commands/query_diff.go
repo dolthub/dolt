@@ -90,7 +90,7 @@ func nextQueryDiff(qd *querydiff.QueryDiffer, joiner *rowconv.Joiner) (row.Row, 
 	rows := make(map[string]row.Row)
 	if fromRow != nil {
 		sch := joiner.SchemaForName(diff.From)
-		oldRow, err := row.SqlRowToDoltRow(types.Format_Default, fromRow, sch)
+		oldRow, err := sqlutil.SqlRowToDoltRow(types.Format_Default, fromRow, sch)
 		if err != nil {
 			return nil, pipeline.ImmutableProperties{}, err
 		}
@@ -99,7 +99,7 @@ func nextQueryDiff(qd *querydiff.QueryDiffer, joiner *rowconv.Joiner) (row.Row, 
 
 	if toRow != nil {
 		sch := joiner.SchemaForName(diff.To)
-		newRow, err := row.SqlRowToDoltRow(types.Format_Default, toRow, sch)
+		newRow, err := sqlutil.SqlRowToDoltRow(types.Format_Default, toRow, sch)
 		if err != nil {
 			return nil, pipeline.ImmutableProperties{}, err
 		}

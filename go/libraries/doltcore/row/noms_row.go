@@ -47,7 +47,7 @@ func FromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) (Row, error) {
 
 	allCols := sch.GetAllCols()
 
-	err = iterPkTuple(keySl, func(tag uint64, val types.Value) (stop bool, err error) {
+	err = IterPkTuple(keySl, func(tag uint64, val types.Value) (stop bool, err error) {
 		col, ok := allCols.GetByTag(tag)
 
 		if !ok {
@@ -65,7 +65,7 @@ func FromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) (Row, error) {
 	}
 
 	filteredVals := make(TaggedValues, len(valSl))
-	err = iterPkTuple(valSl, func(tag uint64, val types.Value) (stop bool, err error) {
+	err = IterPkTuple(valSl, func(tag uint64, val types.Value) (stop bool, err error) {
 		col, ok := allCols.GetByTag(tag)
 		if !ok {
 			return false, nil
@@ -240,7 +240,7 @@ func (nr nomsRow) NomsMapValue(sch schema.Schema) types.Valuable {
 	return nr.value.NomsTupleForNonPKCols(nr.nbf, sch.GetNonPKCols())
 }
 
-func iterPkTuple(tvs types.TupleValueSlice, cb func(tag uint64, val types.Value) (stop bool, err error)) error {
+func IterPkTuple(tvs types.TupleValueSlice, cb func(tag uint64, val types.Value) (stop bool, err error)) error {
 	if len(tvs)%2 != 0 {
 		return fmt.Errorf("expected len(TupleValueSlice) to be even, got %d", len(tvs))
 	}

@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -70,7 +71,7 @@ func (rdr *keylessTableReader) ReadSqlRow(ctx context.Context) (sql.Row, error) 
 		return nil, err
 	}
 
-	return row.DoltRowToSqlRow(r, rdr.sch)
+	return sqlutil.DoltRowToSqlRow(r, rdr.sch)
 }
 
 func newKeylessTableReader(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, buffered bool) (SqlTableReader, error) {

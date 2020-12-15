@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -61,7 +62,7 @@ func (rdr pkTableReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 		return nil, io.EOF
 	}
 
-	return row.SqlRowFromTuples(rdr.sch, key.(types.Tuple), val.(types.Tuple))
+	return noms.SqlRowFromTuples(rdr.sch, key.(types.Tuple), val.(types.Tuple))
 }
 
 func newPkTableReader(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, buffered bool) (SqlTableReader, error) {

@@ -19,7 +19,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -117,7 +116,7 @@ func (itr conflictRowIter) Next() (sql.Row, error) {
 		return nil, err
 	}
 
-	return row.DoltRowToSqlRow(cnf, itr.rd.GetSchema())
+	return sqlutil.DoltRowToSqlRow(cnf, itr.rd.GetSchema())
 }
 
 // Close the iterator.
@@ -138,7 +137,7 @@ type conflictDeleter struct {
 // Close is called.
 func (cd *conflictDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 	cnfSch := cd.ct.rd.GetSchema()
-	cnfRow, err := row.SqlRowToDoltRow(cd.ct.tbl.Format(), r, cnfSch)
+	cnfRow, err := sqlutil.SqlRowToDoltRow(cd.ct.tbl.Format(), r, cnfSch)
 
 	if err != nil {
 		return err

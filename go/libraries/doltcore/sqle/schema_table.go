@@ -161,7 +161,7 @@ func migrateOldSchemasTableToNew(
 		if err != nil {
 			return err
 		}
-		sqlRow, err := row.DoltRowToSqlRow(dRow, schemasTable.sch)
+		sqlRow, err := sqlutil.DoltRowToSqlRow(dRow, schemasTable.sch)
 		if err != nil {
 			return err
 		}

@@ -284,7 +284,7 @@ func (itr *diffRowItr) Next() (sql.Row, error) {
 		}
 	}
 
-	sqlRow, err := row.DoltRowToSqlRow(r, itr.sch)
+	sqlRow, err := sqlutil.DoltRowToSqlRow(r, itr.sch)
 
 	if err != nil {
 		return nil, err
