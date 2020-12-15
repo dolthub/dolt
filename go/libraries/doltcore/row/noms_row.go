@@ -234,42 +234,6 @@ func FromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) (Row, error) {
 	return FromTupleSlices(nomsKey.Format(), sch, keySl, valSl)
 }
 
-func (nr nomsRow) ReduceToIndex(idx schema.Index) (Row, error) {
-	newRow := nomsRow{
-		key:   make(TaggedValues),
-		value: make(TaggedValues),
-		nbf:   nr.nbf,
-	}
-
-	for _, tag := range idx.AllTags() {
-		val, ok := nr.key[tag]
-		if !ok {
-			val, ok = nr.value[tag]
-			if !ok {
-				continue
-			}
-		}
-		newRow.key[tag] = val
-	}
-
-	return newRow, nil
-}
-
-func (nr nomsRow) ReduceToIndexPartialKey(idx schema.Index) (types.Tuple, error) {
-	var vals []types.Value
-	for _, tag := range idx.IndexedColumnTags() {
-		val, ok := nr.key[tag]
-		if !ok {
-			val, ok = nr.value[tag]
-			if !ok {
-				val = types.NullValue
-			}
-		}
-		vals = append(vals, types.Uint(tag), val)
-	}
-	return types.NewTuple(nr.nbf, vals...)
-}
-
 func (nr nomsRow) NomsMapKey(sch schema.Schema) types.LesserValuable {
 	return nr.key.NomsTupleForPKCols(nr.nbf, sch.GetPKCols())
 }

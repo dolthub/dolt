@@ -350,7 +350,7 @@ func TestIndexEditorUniqueMultipleNil(t *testing.T) {
 			dReadVals, err := row.GetTaggedVals(dReadRow)
 			require.NoError(t, err)
 			assert.Equal(t, row.TaggedValues{
-				1: types.Int(index), // We don't encode NULL values
+				1: types.Int(index), // We don'tbl encode NULL values
 			}, dReadVals)
 			index++
 			return nil

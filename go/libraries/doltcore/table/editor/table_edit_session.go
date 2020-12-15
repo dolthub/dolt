@@ -111,7 +111,7 @@ func (tes *TableEditSession) ValidateForeignKeys(ctx context.Context) error {
 	}
 
 	if tes.Props.ForeignKeyChecksDisabled {
-		// When fk checks are disabled, we don't load any foreign key data. Although we could load them here now, we can
+		// When fk checks are disabled, we don'tbl load any foreign key data. Although we could load them here now, we can
 		// take a bit of a performance hit and create an internal edit session that loads all of the foreign keys.
 		// Otherwise, to preserve this edit session would create a much larger (and more difficult to understand) block
 		// of code. The primary perf hit comes from foreign keys that reference tables that declare foreign keys of

@@ -16,6 +16,7 @@ package table_test
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"testing"
 
@@ -25,7 +26,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	dtu "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
@@ -48,7 +48,7 @@ func TestKeylessTableReader(t *testing.T) {
 	makeBag := func(vrw types.ValueReadWriter, sch schema.Schema, rows ...bagRow) types.Map {
 		var tups []types.Value
 		for _, r := range rows {
-			k, v, err := row.EncodeKeylessSqlRows(vrw.Format(), sch, r.vals, r.count)
+			k, v, err := encodeKeylessSqlRows(vrw.Format(), sch, r.vals, r.count)
 			require.NoError(t, err)
 			require.NotNil(t, k)
 			require.NotNil(t, v)
@@ -151,4 +151,56 @@ func TestKeylessTableReader(t *testing.T) {
 			compareRows(t, test.expected, rdr)
 		})
 	}
+}
+
+func encodeKeylessSqlRows(nbf *types.NomsBinFormat, sch schema.Schema, r sql.Row, count uint64) (key, val types.Tuple, err error) {
+	if len(r) != sch.GetAllCols().Size() {
+		rl, sl := len(r), sch.GetAllCols().Size()
+		return key, val, fmt.Errorf("row length (%d) != schema length (%d)", rl, sl)
+	}
+
+	size := 0
+	for _, v := range r {
+		// skip NULLS
+		if v != nil {
+			size++
+		}
+	}
+
+	// { Uint(count), Uint(tag1), Value(val1), ..., Uint(tagN), Value(valN) }
+	vals := make([]types.Value, 1+(size*2))
+	vals[0] = types.Uint(count)
+
+	idx := 0
+	err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		v := r[idx]
+		if v != nil {
+			vals[2*idx+1] = types.Uint(tag)
+			vals[2*idx+2], err = col.TypeInfo.ConvertValueToNomsValue(v)
+		}
+		idx++
+
+		stop = err != nil
+		return
+	})
+	if err != nil {
+		return key, val, err
+	}
+
+	id, err := types.UUIDHashedFromValues(nbf, vals[1:]...)
+	if err != nil {
+		return key, val, err
+	}
+
+	key, err = types.NewTuple(nbf, id)
+	if err != nil {
+		return key, val, err
+	}
+
+	val, err = types.NewTuple(nbf, vals...)
+	if err != nil {
+		return key, val, err
+	}
+
+	return key, val, nil
 }

@@ -36,7 +36,7 @@ const writeBufSize = 256 * 1024
 
 // TextTableWriter implements TableWriter.  It writes table headers and rows as ascii-art tables.
 // The first row written must be the column names for the table to write, and all rows written are assumed to have the
-// same width for their respective columns (including the column names themselves). Values for all columns in the
+// same width for their respective columns (including the column names themselves). values for all columns in the
 // schema must be set on each row.
 type TextTableWriter struct {
 	closer        io.Closer

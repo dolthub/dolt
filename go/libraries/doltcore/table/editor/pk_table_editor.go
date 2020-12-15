@@ -31,12 +31,16 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+const (
+	tableEditorMaxOps = 16384
+)
+
 var ErrDuplicatePrimaryKeyFmt = "duplicate primary key given: %v"
 
 type TableEditor interface {
 	InsertRow(ctx context.Context, r row.Row) error
 	UpdateRow(ctx context.Context, old, new row.Row) error
-	DeleteKey(ctx context.Context, key types.Tuple) error
+	DeleteRow(ctx context.Context, r row.Row) error
 
 	GetAutoIncrementValue() types.Value
 	SetAutoIncrementValue(v types.Value) (err error)
@@ -92,8 +96,6 @@ type tableEditAccumulator struct {
 	removedKeys  map[hash.Hash]types.Value
 	affectedKeys map[hash.Hash]types.Value
 }
-
-const tableEditorMaxOps = 16384
 
 func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema, name string) (*pkTableEditor, error) {
 	te := &pkTableEditor{
@@ -245,47 +247,6 @@ func GetIndexedRows(ctx context.Context, te TableEditor, key types.Tuple, indexN
 	return rows, nil
 }
 
-// GetRow returns the row matching the key given from the pkTableEditor. This is equivalent to calling Table and then
-// GetRow on the returned table, but a tad faster.
-func (te *pkTableEditor) GetRow(ctx context.Context, key types.Tuple) (row.Row, bool, error) {
-	te.flush()
-	te.flushMutex.RLock()
-	defer te.flushMutex.RUnlock()
-
-	err := te.aq.WaitForEmpty()
-	if err != nil {
-		return nil, false, err
-	}
-
-	fieldsVal, _, err := te.rowData.MaybeGet(ctx, key)
-	if err != nil {
-		return nil, false, err
-	}
-	if fieldsVal == nil {
-		return nil, false, nil
-	}
-	r, err := row.FromNoms(te.tSch, key, fieldsVal.(types.Tuple))
-	if err != nil {
-		return nil, false, err
-	}
-	return r, true, nil
-}
-
-// GetRowData returns the row data from the pkTableEditor. This is equivalent to calling Table and then
-// GetRowData on the returned table, but a tad faster.
-func (te *pkTableEditor) GetRowData(ctx context.Context) (types.Map, error) {
-	te.flush()
-	te.flushMutex.RLock()
-	defer te.flushMutex.RUnlock()
-
-	err := te.aq.WaitForEmpty()
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	return te.rowData, nil
-}
-
 // InsertRow adds the given row to the table. If the row already exists, use UpdateRow.
 func (te *pkTableEditor) InsertRow(ctx context.Context, dRow row.Row) error {
 	defer te.autoFlush()
@@ -346,15 +307,6 @@ func (te *pkTableEditor) InsertRow(ctx context.Context, dRow row.Row) error {
 	te.tea.ed.AddEdit(key, dRow.NomsMapValue(te.tSch))
 	te.tea.opCount++
 	return nil
-}
-
-// DeleteKey removes the given key from the table.
-func (te *pkTableEditor) DeleteKey(ctx context.Context, key types.Tuple) error {
-	defer te.autoFlush()
-	te.flushMutex.RLock()
-	defer te.flushMutex.RUnlock()
-
-	return te.delete(key)
 }
 
 // DeleteRow removes the given row from the table. This essentially acts as a convenience function for DeleteKey, while
@@ -516,7 +468,7 @@ func (te *pkTableEditor) delete(key types.Tuple) error {
 }
 
 func (te *pkTableEditor) flushEditAccumulator(ctx context.Context, teaInterface interface{}) error {
-	// We don't call any locks here since this is called from an ActionExecutor with a concurrency of 1
+	// We don'tbl call any locks here since this is called from an ActionExecutor with a concurrency of 1
 	tea := teaInterface.(*tableEditAccumulator)
 	defer tea.ed.Close()
 
@@ -536,7 +488,7 @@ func (te *pkTableEditor) flushEditAccumulator(ctx context.Context, teaInterface 
 			}
 		}
 	}
-	// For all removed keys, remove the map entries that weren't added elsewhere by other updates
+	// For all removed keys, remove the map entries that weren'tbl added elsewhere by other updates
 	for keyHash, removedKey := range tea.removedKeys {
 		if _, ok := tea.addedKeys[keyHash]; !ok {
 			tea.ed.AddEdit(removedKey, nil)
@@ -602,7 +554,7 @@ func formatKey(ctx context.Context, key types.Value) (string, error) {
 }
 
 func (te *pkTableEditor) updateIndexes(ctx context.Context, tea *tableEditAccumulator, tbl *doltdb.Table, originalRowData types.Map, updated types.Map) (*doltdb.Table, error) {
-	// We don't call any locks here since this is called from an ActionExecutor with a concurrency of 1
+	// We don'tbl call any locks here since this is called from an ActionExecutor with a concurrency of 1
 	if len(te.indexEds) == 0 {
 		return tbl, nil
 	}
@@ -635,13 +587,13 @@ func (te *pkTableEditor) updateIndexes(ctx context.Context, tea *tableEditAccumu
 			var originalIndexRow row.Row
 			var updatedIndexRow row.Row
 			if originalRow != nil {
-				originalIndexRow, err = originalRow.ReduceToIndex(indexEd.Index())
+				originalIndexRow, err = row.ReduceToIndex(indexEd.Index(), originalRow)
 				if err != nil {
 					return err
 				}
 			}
 			if updatedRow != nil {
-				updatedIndexRow, err = updatedRow.ReduceToIndex(indexEd.Index())
+				updatedIndexRow, err = row.ReduceToIndex(indexEd.Index(), updatedRow)
 				if err != nil {
 					return err
 				}

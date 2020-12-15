@@ -27,9 +27,11 @@ import (
 var ErrRowNotValid = errors.New("invalid row for current schema")
 
 type Row interface {
+	// todo: this method might not make sense in the context of keyless tables
 	// Returns the noms map key for this row, using the schema provided.
 	NomsMapKey(sch schema.Schema) types.LesserValuable
 
+	// todo: this method does not make sense in the context of keyless tables
 	// Returns the noms map value for this row, using the schema provided.
 	NomsMapValue(sch schema.Schema) types.Valuable
 
@@ -47,15 +49,7 @@ type Row interface {
 	// Sets a value for the column with the tag given, returning a new row with the update.
 	SetColVal(tag uint64, val types.Value, sch schema.Schema) (Row, error)
 
-	// ReduceToIndex reduces a row to only the columns contained in an index, including the parent table's primary
-	// keys. Only the column tags that are in the index will be included in the reduced row. The full index does not
-	// have to be matched.
-	ReduceToIndex(idx schema.Index) (Row, error)
-
-	// ReduceToIndexPartialKey reduces a row to only the columns contained in an index, not including the parent table's
-	// primary keys. The Tuple is then returned, allowing all matching rows on an index to be found.
-	ReduceToIndexPartialKey(idx schema.Index) (types.Tuple, error)
-
+	// Format returns the types.NomsBinFormat for this row.
 	Format() *types.NomsBinFormat
 }
 
@@ -83,6 +77,47 @@ func GetFieldByNameWithDefault(colName string, defVal types.Value, r Row, sch sc
 
 		return val
 	}
+}
+
+func ReduceToIndex(idx schema.Index, r Row) (Row, error) {
+	newRow := nomsRow{
+		key:   make(TaggedValues),
+		value: make(TaggedValues),
+		nbf:   r.Format(),
+	}
+	for _, tag := range idx.AllTags() {
+		if val, ok := r.GetColVal(tag); ok {
+			newRow.key[tag] = val
+		}
+	}
+
+	return newRow, nil
+}
+
+func ReduceToIndexPartialKey(idx schema.Index, r Row) (types.Tuple, error) {
+	var vals []types.Value
+	for _, tag := range idx.IndexedColumnTags() {
+		val, ok := r.GetColVal(tag)
+		if !ok {
+			val = types.NullValue
+		}
+		vals = append(vals, types.Uint(tag), val)
+	}
+	return types.NewTuple(r.Format(), vals...)
+}
+
+func Deconstruct(ctx context.Context, sch schema.Schema, r Row) (key, val types.Tuple, err error) {
+	k, err := r.NomsMapKey(sch).Value(ctx)
+	if err != nil {
+		return key, val, err
+	}
+
+	v, err := r.NomsMapValue(sch).Value(ctx)
+	if err != nil {
+		return key, val, err
+	}
+
+	return k.(types.Tuple), v.(types.Tuple), nil
 }
 
 func IsEmpty(r Row) (b bool) {
@@ -184,9 +219,4 @@ func GetTaggedVals(row Row) (TaggedValues, error) {
 	}
 
 	return taggedVals, nil
-}
-
-func KeyTupleFromRow(ctx context.Context, row Row, sch schema.Schema) (types.Tuple, error) {
-	val, err := row.NomsMapKey(sch).Value(ctx)
-	return val.(types.Tuple), err
 }

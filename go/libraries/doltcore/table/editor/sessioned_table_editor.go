@@ -21,7 +21,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -50,32 +49,18 @@ func (ste *sessionedTableEditor) InsertRow(ctx context.Context, dRow row.Row) er
 }
 
 // DeleteKey removes the given key from the table.
-func (ste *sessionedTableEditor) DeleteKey(ctx context.Context, key types.Tuple) error {
+func (ste *sessionedTableEditor) DeleteRow(ctx context.Context, r row.Row) error {
 	ste.tableEditSession.writeMutex.RLock()
 	defer ste.tableEditSession.writeMutex.RUnlock()
 
 	if !ste.tableEditSession.Props.ForeignKeyChecksDisabled && len(ste.referencingTables) > 0 {
-		tbl, err := ste.tableEditor.Table(ctx)
-		if err != nil {
-			return err
-		}
-		sch := ste.tableEditor.Schema()
-
-		dRow, ok, err := table.GetRow(ctx, tbl, sch, key)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return nil
-		}
-
-		err = ste.handleReferencingRowsOnDelete(ctx, dRow)
+		err := ste.handleReferencingRowsOnDelete(ctx, r)
 		if err != nil {
 			return err
 		}
 	}
 
-	return ste.tableEditor.DeleteKey(ctx, key)
+	return ste.tableEditor.DeleteRow(ctx, r)
 }
 
 // UpdateRow takes the current row and new row, and updates it accordingly. Any applicable rows from tables that have a
@@ -157,11 +142,7 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 		switch foreignKey.OnDelete {
 		case doltdb.ForeignKeyReferenceOption_Cascade:
 			for _, rowToDelete := range referencingRows {
-				key, err := row.KeyTupleFromRow(ctx, rowToDelete, referencingSte.tableEditor.Schema())
-				if err != nil {
-					return err
-				}
-				err = referencingSte.DeleteKey(ctx, key)
+				err = referencingSte.DeleteRow(ctx, rowToDelete)
 				if err != nil {
 					return err
 				}

@@ -72,12 +72,7 @@ func (te *sqlTableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 		return err
 	}
 
-	key, err := row.KeyTupleFromRow(ctx, dRow, te.t.sch)
-	if err != nil {
-		return err
-	}
-
-	return te.tableEditor.DeleteKey(ctx, key)
+	return te.tableEditor.DeleteRow(ctx, dRow)
 }
 
 func (te *sqlTableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {

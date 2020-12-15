@@ -464,7 +464,16 @@ func applyChange(ctx context.Context, tableEditor editor.TableEditor, rowData ty
 		}
 		stats.Modifications++
 	case types.DiffChangeRemoved:
-		err := tableEditor.DeleteKey(ctx, change.Key.(types.Tuple))
+		empty, err := types.NewTuple(tableEditor.Format())
+		if err != nil {
+			return err
+		}
+		// todo(andy): unhack
+		oldRow, err := row.FromNoms(sch, change.Key.(types.Tuple), empty)
+		if err != nil {
+			return err
+		}
+		err = tableEditor.DeleteRow(ctx, oldRow)
 		if err != nil {
 			return err
 		}

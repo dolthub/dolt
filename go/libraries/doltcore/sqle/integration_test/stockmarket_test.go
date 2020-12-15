@@ -9092,7 +9092,7 @@ INSERT INTO symbols VALUES ('CASY','Caseys General Stores, Inc.','Consumer Durab
 INSERT INTO symbols VALUES ('CAT','Caterpillar, Inc.','Capital Goods',NULL);
 INSERT INTO symbols VALUES ('CATB','Catabasis Pharmaceuticals, Inc.','Health Care',2015);
 INSERT INTO symbols VALUES ('CATC','Cambridge Bancorp','Finance',NULL);
-INSERT INTO symbols VALUES ('CATH','Global X S&P 500 Catholic Values ETF',NULL,NULL);
+INSERT INTO symbols VALUES ('CATH','Global X S&P 500 Catholic values ETF',NULL,NULL);
 INSERT INTO symbols VALUES ('CATM','Cardtronics plc','Miscellaneous',2007);
 INSERT INTO symbols VALUES ('CATO','Cato Corporation (The)','Consumer Services',NULL);
 INSERT INTO symbols VALUES ('CATS','Catasys, Inc.','Health Care',NULL);
@@ -15684,7 +15684,7 @@ INSERT INTO join_result VALUES ('stock','CASY','us','2017-11-01',114.74,115.95,1
 INSERT INTO join_result VALUES ('stock','CAT','us','2017-11-01',135.67,137.3,135.43,136.29,3628080,'0','Caterpillar, Inc.','Capital Goods',NULL);
 INSERT INTO join_result VALUES ('stock','CATB','us','2017-11-01',2.05,2.05,1.93,1.96,304448,'0','Catabasis Pharmaceuticals, Inc.','Health Care',2015);
 INSERT INTO join_result VALUES ('stock','CATC','us','2017-11-01',72.2,73.5,72.2,73.5,977,'0','Cambridge Bancorp','Finance',NULL);
-INSERT INTO join_result VALUES ('stock','CATH','us','2017-11-01',31.925,31.95,31.8,31.83,46920,'0','Global X S&P 500 Catholic Values ETF',NULL,NULL);
+INSERT INTO join_result VALUES ('stock','CATH','us','2017-11-01',31.925,31.95,31.8,31.83,46920,'0','Global X S&P 500 Catholic values ETF',NULL,NULL);
 INSERT INTO join_result VALUES ('stock','CATM','us','2017-11-01',23.01,23.11,22.2,22.58,275390,'0','Cardtronics plc','Miscellaneous',2007);
 INSERT INTO join_result VALUES ('stock','CATO','us','2017-11-01',12.97,13.08,12.73,12.95,178699,'0','Cato Corporation (The)','Consumer Services',NULL);
 INSERT INTO join_result VALUES ('stock','CATS','us','2017-11-01',3.58,3.78,3.506,3.66,48677,'0','Catasys, Inc.','Health Care',NULL);

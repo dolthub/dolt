@@ -37,7 +37,7 @@ const (
 	// The number of rows we expect the test to end up with
 	tableEditorConcurrencyFinalCount = 100
 
-	tableName = "t"
+	tableName = "tbl"
 )
 
 func TestTableEditorConcurrency(t *testing.T) {
