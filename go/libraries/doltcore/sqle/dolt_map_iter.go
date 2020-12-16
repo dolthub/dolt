@@ -25,8 +25,8 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// KVToSqlRowConverter takes noms types.Value key value pairs and converts them directly to a sql.Row directly.  It
-// can be configured to only process a portion of the columns and map columens to desired output columns.
+// KVToSqlRowConverter takes noms types.Value key value pairs and converts them directly to a sql.Row.  It
+// can be configured to only process a portion of the columns and map columns to desired output columns.
 type KVToSqlRowConverter struct {
 	tagToSqlColIdx map[uint64]int
 	cols           []schema.Column
@@ -36,7 +36,7 @@ type KVToSqlRowConverter struct {
 	rowSize int
 }
 
-// NewKVToSqlRowConverterForCols returns a KVToSqlConverter instance based on the list of rows passed in
+// NewKVToSqlRowConverterForCols returns a KVToSqlConverter instance based on the list of columns passed in
 func NewKVToSqlRowConverterForCols(cols []schema.Column) *KVToSqlRowConverter {
 	tagToSqlColIdx := make(map[uint64]int)
 	for i, col := range cols {
