@@ -41,14 +41,14 @@ func TestKeylessTableReader(t *testing.T) {
 		schema.NewColumn("c1", 1, types.IntKind, false))
 
 	type bagRow struct {
-		vals  sql.Row
-		count uint64
+		vals        sql.Row
+		cardinality uint64
 	}
 
 	makeBag := func(vrw types.ValueReadWriter, sch schema.Schema, rows ...bagRow) types.Map {
 		var tups []types.Value
 		for _, r := range rows {
-			k, v, err := encodeKeylessSqlRows(vrw.Format(), sch, r.vals, r.count)
+			k, v, err := encodeKeylessSqlRows(vrw.Format(), sch, r.vals, r.cardinality)
 			require.NoError(t, err)
 			require.NotNil(t, k)
 			require.NotNil(t, v)
@@ -153,7 +153,7 @@ func TestKeylessTableReader(t *testing.T) {
 	}
 }
 
-func encodeKeylessSqlRows(nbf *types.NomsBinFormat, sch schema.Schema, r sql.Row, count uint64) (key, val types.Tuple, err error) {
+func encodeKeylessSqlRows(nbf *types.NomsBinFormat, sch schema.Schema, r sql.Row, cardinality uint64) (key, val types.Tuple, err error) {
 	if len(r) != sch.GetAllCols().Size() {
 		rl, sl := len(r), sch.GetAllCols().Size()
 		return key, val, fmt.Errorf("row length (%d) != schema length (%d)", rl, sl)
@@ -168,15 +168,16 @@ func encodeKeylessSqlRows(nbf *types.NomsBinFormat, sch schema.Schema, r sql.Row
 	}
 
 	// { Uint(count), Uint(tag1), Value(val1), ..., Uint(tagN), Value(valN) }
-	vals := make([]types.Value, 1+(size*2))
-	vals[0] = types.Uint(count)
+	vals := make([]types.Value, 2+(size*2))
+	vals[0] = types.Uint(schema.KeylessRowCardinalityTag)
+	vals[1] = types.Uint(cardinality)
 
 	idx := 0
 	err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		v := r[idx]
 		if v != nil {
-			vals[2*idx+1] = types.Uint(tag)
-			vals[2*idx+2], err = col.TypeInfo.ConvertValueToNomsValue(v)
+			vals[2*idx+2] = types.Uint(tag)
+			vals[2*idx+3], err = col.TypeInfo.ConvertValueToNomsValue(v)
 		}
 		idx++
 
@@ -187,7 +188,7 @@ func encodeKeylessSqlRows(nbf *types.NomsBinFormat, sch schema.Schema, r sql.Row
 		return key, val, err
 	}
 
-	id, err := types.UUIDHashedFromValues(nbf, vals[1:]...)
+	id, err := types.UUIDHashedFromValues(nbf, vals[2:]...)
 	if err != nil {
 		return key, val, err
 	}

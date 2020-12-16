@@ -21,14 +21,20 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+const (
+	cardinalityValIdx = uint64(1)
+)
+
 var ErrZeroCardinality = fmt.Errorf("read row with zero cardinality")
 
 // keylessRow is a Row without PRIMARY_KEY fields
 //
 // key: Tuple(
+// 			Uint(schema.KeylessRowIdTag),
 //          UUID(hash.Of(tag1, val1, ..., tagN, valN))
 //      )
 // val: Tuple(
+// 			Uint(schema.KeylessRowCardinalityTag),
 //          Uint(cardinality),
 //          Uint(tag1), Value(val1),
 //            ...
@@ -46,7 +52,7 @@ func KeylessRow(nbf *types.NomsBinFormat, vals ...types.Value) (Row, error) {
 }
 
 func KeylessRowsFromTuples(key, val types.Tuple) (Row, uint64, error) {
-	c, err := val.Get(0)
+	c, err := val.Get(1)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -65,13 +71,18 @@ func keylessRowWithCardinality(nbf *types.NomsBinFormat, card uint64, vals ...ty
 	if err != nil {
 		return nil, err
 	}
+	idTag := types.Uint(schema.KeylessRowIdTag)
 
-	kt, err := types.NewTuple(nbf, id)
+	kt, err := types.NewTuple(nbf, idTag, id)
 	if err != nil {
 		return nil, err
 	}
 
-	vals = append([]types.Value{types.Uint(card)}, vals...)
+	prefix := []types.Value{
+		types.Uint(schema.KeylessRowCardinalityTag),
+		types.Uint(card),
+	}
+	vals = append(prefix, vals...)
 
 	vt, err := types.NewTuple(nbf, vals...)
 	if err != nil {
@@ -93,7 +104,7 @@ func (r keylessRow) NomsMapValue(sch schema.Schema) types.Valuable {
 }
 
 func (r keylessRow) IterCols(cb func(tag uint64, val types.Value) (stop bool, err error)) (bool, error) {
-	iter, err := r.val.Iterator()
+	iter, err := r.val.IteratorAt(cardinalityValIdx) // skip cardinality tag
 	if err != nil {
 		return false, err
 	}
@@ -137,7 +148,7 @@ func (r keylessRow) IterCols(cb func(tag uint64, val types.Value) (stop bool, er
 }
 
 func (r keylessRow) IterSchema(sch schema.Schema, cb func(tag uint64, val types.Value) (stop bool, err error)) (bool, error) {
-	iter, err := r.val.Iterator()
+	iter, err := r.val.IteratorAt(cardinalityValIdx) // skip cardinality tag
 	if err != nil {
 		return false, err
 	}
@@ -198,7 +209,7 @@ func (r keylessRow) GetColVal(tag uint64) (val types.Value, ok bool) {
 }
 
 func (r keylessRow) SetColVal(updateTag uint64, updateVal types.Value, sch schema.Schema) (Row, error) {
-	iter, err := r.val.Iterator()
+	iter, err := r.val.IteratorAt(cardinalityValIdx) // skip cardinality tag
 	if err != nil {
 		return nil, err
 	}

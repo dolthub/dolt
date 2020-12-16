@@ -30,6 +30,10 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+const (
+	cardinalityValIdx = uint64(1)
+)
+
 // keylessTableEditor accumulates and applies row edits to keyless tables.
 type keylessTableEditor struct {
 	tbl  *doltdb.Table
@@ -341,7 +345,7 @@ func setCardinality(val types.Tuple, card int64) (v types.Tuple, ok bool, err er
 		return types.Tuple{}, false, nil
 	}
 
-	v, err = val.Set(0, types.Uint(card))
+	v, err = val.Set(cardinalityValIdx, types.Uint(card))
 	if err != nil {
 		return v, false, err
 	}
@@ -351,7 +355,7 @@ func setCardinality(val types.Tuple, card int64) (v types.Tuple, ok bool, err er
 
 // for deletes (cardinality < 1): |ok| is set false
 func updateCardinality(val types.Tuple, delta int64) (v types.Tuple, ok bool, err error) {
-	c, err := val.Get(0)
+	c, err := val.Get(cardinalityValIdx)
 	if err != nil {
 		return v, false, err
 	}
@@ -361,7 +365,7 @@ func updateCardinality(val types.Tuple, delta int64) (v types.Tuple, ok bool, er
 		return types.Tuple{}, false, nil
 	}
 
-	v, err = val.Set(0, types.Uint(card))
+	v, err = val.Set(cardinalityValIdx, types.Uint(card))
 	if err != nil {
 		return v, false, err
 	}
