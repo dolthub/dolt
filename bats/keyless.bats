@@ -18,6 +18,26 @@ teardown() {
     teardown_common
 }
 
+@test "feature flag gates keyless tables" {
+    run dolt sql <<SQL
+CREATE TABLE test (
+    c0 int,
+    c1 int
+);
+SQL
+    [ $status -ne 0 ]
+    [[ ! "$output" =~ "panic" ]] || false
+
+    run dolt ls
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "test" ]] || false
+    [[ ! "$output" =~ "panic" ]] || false
+
+    run dolt sql -q "SELECT * FROM keyless;"
+    [ $status -ne 0 ]
+    [[ ! "$output" =~ "panic" ]] || false
+}
+
 @test "create keyless table" {
     # created in setup()
 

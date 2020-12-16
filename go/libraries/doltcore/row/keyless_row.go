@@ -29,9 +29,9 @@ var ErrZeroCardinality = fmt.Errorf("read row with zero cardinality")
 //          UUID(hash.Of(tag1, val1, ..., tagN, valN))
 //      )
 // val: Tuple(
-//          Uint(count),
+//          Uint(cardinality),
 //          Uint(tag1), Value(val1),
-//          ...,
+//            ...
 //          Uint(tagN), Value(valN)
 //      )
 type keylessRow struct {
