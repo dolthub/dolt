@@ -447,7 +447,6 @@ func (ddb *DoltDB) Commit(ctx context.Context, valHash hash.Hash, dref ref.DoltR
 		panic("can't commit to ref that isn't branch atm.  will probably remove this.")
 	}
 
-	// TODO: this nil seems wrong
 	return ddb.CommitWithParentSpecs(ctx, valHash, dref, nil, cm)
 }
 
@@ -524,6 +523,11 @@ func (ddb *DoltDB) CommitWithParentSpecs(ctx context.Context, valHash hash.Hash,
 }
 
 func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Hash, dref ref.DoltRef, parentCommits []*Commit, cm *CommitMeta) (*Commit, error) {
+	valHash, err := ddb.injectFeatureVersion(ctx, valHash)
+	if err != nil {
+		return nil, err
+	}
+
 	var commitSt types.Struct
 	val, err := ddb.db.ReadValue(ctx, valHash)
 
@@ -606,6 +610,11 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 // dangling commits are unreferenced by any branch or ref. They are created in the course of programmatic updates
 // such as rebase. You must create a ref to a dangling commit for it to be reachable
 func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash hash.Hash, parentCommits []*Commit, cm *CommitMeta) (*Commit, error) {
+	valHash, err := ddb.injectFeatureVersion(ctx, valHash)
+	if err != nil {
+		return nil, err
+	}
+
 	var commitSt types.Struct
 	val, err := ddb.db.ReadValue(ctx, valHash)
 	if err != nil {
@@ -648,6 +657,22 @@ func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash 
 	}
 
 	return NewCommit(ddb.db, commitSt), nil
+}
+
+// injectFeatureVersion reads the RootVal from |valHash|, set its feature version to |FeatureVersion|, and
+// writes it back to the |ddb| to be committed.
+func (ddb *DoltDB) injectFeatureVersion(ctx context.Context, valHash hash.Hash) (updated hash.Hash, err error) {
+	root, err := ddb.ReadRootValue(ctx, valHash)
+	if err != nil {
+		return updated, err
+	}
+
+	root, err = root.SetFeatureVersion(ctx, FeatureVersion)
+	if err != nil {
+		return updated, err
+	}
+
+	return ddb.WriteRootValue(ctx, root)
 }
 
 // ValueReadWriter returns the underlying noms database as a types.ValueReadWriter.
