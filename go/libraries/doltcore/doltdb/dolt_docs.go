@@ -23,7 +23,7 @@ import (
 )
 
 func DocTblKeyFromName(fmt *types.NomsBinFormat, name string) (types.Tuple, error) {
-	return types.NewTuple(fmt, types.Uint(DocNameTag), types.String(name))
+	return types.NewTuple(fmt, types.Uint(schema.DocNameTag), types.String(name))
 }
 
 func getDocRow(ctx context.Context, docTbl *Table, sch schema.Schema, key types.Tuple) (r row.Row, ok bool, err error) {

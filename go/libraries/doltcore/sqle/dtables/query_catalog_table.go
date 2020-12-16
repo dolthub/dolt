@@ -28,16 +28,16 @@ import (
 
 var queryCatalogCols, _ = schema.NewColCollection(
 	// QueryCatalogIdCol is the name of the primary key column of the query catalog table
-	schema.NewColumn(doltdb.QueryCatalogIdCol, doltdb.QueryCatalogIdTag, types.StringKind, true, schema.NotNullConstraint{}),
+	schema.NewColumn(doltdb.QueryCatalogIdCol, schema.QueryCatalogIdTag, types.StringKind, true, schema.NotNullConstraint{}),
 	// QueryCatalogOrderCol is the column containing the order of the queries in the catalog
-	schema.NewColumn(doltdb.QueryCatalogOrderCol, doltdb.QueryCatalogOrderTag, types.UintKind, false, schema.NotNullConstraint{}),
+	schema.NewColumn(doltdb.QueryCatalogOrderCol, schema.QueryCatalogOrderTag, types.UintKind, false, schema.NotNullConstraint{}),
 	// QueryCatalogNameCol is the name of the column containing the name of a query in the catalog
 	// TODO: parser won't handle a reserved word here, but it should. Only an issue for create table statements.
-	schema.NewColumn(doltdb.QueryCatalogNameCol, doltdb.QueryCatalogNameTag, types.StringKind, false),
+	schema.NewColumn(doltdb.QueryCatalogNameCol, schema.QueryCatalogNameTag, types.StringKind, false),
 	// QueryCatalogQueryCol is the name of the column containing the query of a catalog entry
-	schema.NewColumn(doltdb.QueryCatalogQueryCol, doltdb.QueryCatalogQueryTag, types.StringKind, false),
+	schema.NewColumn(doltdb.QueryCatalogQueryCol, schema.QueryCatalogQueryTag, types.StringKind, false),
 	// QueryCatalogDescriptionCol is the name of the column containing the description of a query in the catalog
-	schema.NewColumn(doltdb.QueryCatalogDescriptionCol, doltdb.QueryCatalogDescriptionTag, types.StringKind, false),
+	schema.NewColumn(doltdb.QueryCatalogDescriptionCol, schema.QueryCatalogDescriptionTag, types.StringKind, false),
 )
 
 var ErrQueryNotFound = errors.NewKind("Query '%s' not found")
@@ -57,10 +57,10 @@ func savedQueryFromKV(id string, valTuple types.Tuple) (SavedQuery, error) {
 		return SavedQuery{}, err
 	}
 
-	nameVal := tv.GetWithDefault(doltdb.QueryCatalogNameTag, types.String(""))
-	queryVal := tv.GetWithDefault(doltdb.QueryCatalogQueryTag, types.String(""))
-	descVal := tv.GetWithDefault(doltdb.QueryCatalogDescriptionTag, types.String(""))
-	orderVal := tv.GetWithDefault(doltdb.QueryCatalogOrderTag, types.Uint(0))
+	nameVal := tv.GetWithDefault(schema.QueryCatalogNameTag, types.String(""))
+	queryVal := tv.GetWithDefault(schema.QueryCatalogQueryTag, types.String(""))
+	descVal := tv.GetWithDefault(schema.QueryCatalogDescriptionTag, types.String(""))
+	orderVal := tv.GetWithDefault(schema.QueryCatalogOrderTag, types.Uint(0))
 
 	return SavedQuery{
 		ID:          id,
@@ -73,11 +73,11 @@ func savedQueryFromKV(id string, valTuple types.Tuple) (SavedQuery, error) {
 
 func (sq SavedQuery) asRow() (row.Row, error) {
 	taggedVals := make(row.TaggedValues)
-	taggedVals[doltdb.QueryCatalogIdTag] = types.String(sq.ID)
-	taggedVals[doltdb.QueryCatalogOrderTag] = types.Uint(sq.Order)
-	taggedVals[doltdb.QueryCatalogNameTag] = types.String(sq.Name)
-	taggedVals[doltdb.QueryCatalogQueryTag] = types.String(sq.Query)
-	taggedVals[doltdb.QueryCatalogDescriptionTag] = types.String(sq.Description)
+	taggedVals[schema.QueryCatalogIdTag] = types.String(sq.ID)
+	taggedVals[schema.QueryCatalogOrderTag] = types.Uint(sq.Order)
+	taggedVals[schema.QueryCatalogNameTag] = types.String(sq.Name)
+	taggedVals[schema.QueryCatalogQueryTag] = types.String(sq.Query)
+	taggedVals[schema.QueryCatalogDescriptionTag] = types.String(sq.Description)
 
 	return row.New(types.Format_Default, DoltQueryCatalogSchema, taggedVals)
 }
@@ -196,7 +196,7 @@ func RetrieveFromQueryCatalog(ctx context.Context, root *doltdb.RootValue, id st
 		return SavedQuery{}, err
 	}
 
-	k, err := types.NewTuple(root.VRW().Format(), types.Uint(doltdb.QueryCatalogIdTag), types.String(id))
+	k, err := types.NewTuple(root.VRW().Format(), types.Uint(schema.QueryCatalogIdTag), types.String(id))
 
 	if err != nil {
 		return SavedQuery{}, err
@@ -218,7 +218,7 @@ func getMaxQueryOrder(data types.Map, ctx context.Context) uint64 {
 	maxOrder := uint64(0)
 	data.IterAll(ctx, func(key, value types.Value) error {
 		r, _ := row.FromNoms(DoltQueryCatalogSchema, key.(types.Tuple), value.(types.Tuple))
-		orderVal, ok := r.GetColVal(doltdb.QueryCatalogOrderTag)
+		orderVal, ok := r.GetColVal(schema.QueryCatalogOrderTag)
 		if ok {
 			order := uint64(orderVal.(types.Uint))
 			if order > maxOrder {

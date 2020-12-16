@@ -38,14 +38,15 @@ type Row interface {
 	// doesn't contain a value for that tag.
 	GetColVal(tag uint64) (types.Value, bool)
 
-	// Sets a value for the column with the tag given, returning a new row with the update.
-	SetColVal(tag uint64, val types.Value, sch schema.Schema) (Row, error)
-
 	// Format returns the types.NomsBinFormat for this row.
 	Format() *types.NomsBinFormat
 
-	// TODO(andy): NomsMapKey & NomsMapValue don't make sense in the context
-	// of keyless tables. Make these methods package private.
+	// TODO(andy): NomsMapKey, NomsMapValue, & SetColVal
+	// don't make sense in the context of keyless tables.
+	// Make these methods package private.
+
+	// Sets a value for the column with the tag given, returning a new row with the update.
+	SetColVal(tag uint64, val types.Value, sch schema.Schema) (Row, error)
 
 	// Returns the noms map key for this row, using the schema provided.
 	NomsMapKey(sch schema.Schema) types.LesserValuable

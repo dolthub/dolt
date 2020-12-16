@@ -196,8 +196,8 @@ func TestAddNewerTextAndDocPkFromRow(t *testing.T) {
 	assert.Equal(t, "", doc1.DocPk)
 
 	licenseRow, err := row.New(types.Format_7_18, sch, row.TaggedValues{
-		DocNameTag: types.String(LicensePk),
-		DocTextTag: types.String("license!"),
+		schema.DocNameTag: types.String(LicensePk),
+		schema.DocTextTag: types.String("license!"),
 	})
 	assert.NoError(t, err)
 
@@ -222,8 +222,8 @@ func TestAddNewerTextAndDocPkFromRow(t *testing.T) {
 
 func createTestDocsSchema() schema.Schema {
 	typedColColl, _ := schema.NewColCollection(
-		schema.NewColumn(DocPkColumnName, DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn(DocTextColumnName, DocTextTag, types.StringKind, false),
+		schema.NewColumn(DocPkColumnName, schema.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn(DocTextColumnName, schema.DocTextTag, types.StringKind, false),
 	)
 	sch, err := schema.SchemaFromCols(typedColColl)
 	if err != nil {
@@ -244,8 +244,8 @@ func getDocRows(t *testing.T, sch schema.Schema, rowVal types.Value) []row.Row {
 
 func makeDocRow(t *testing.T, sch schema.Schema, pk string, rowVal types.Value) row.Row {
 	row, err := row.New(types.Format_7_18, sch, row.TaggedValues{
-		DocNameTag: types.String(pk),
-		DocTextTag: rowVal,
+		schema.DocNameTag: types.String(pk),
+		schema.DocTextTag: rowVal,
 	})
 	assert.NoError(t, err)
 

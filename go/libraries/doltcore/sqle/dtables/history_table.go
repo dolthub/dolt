@@ -67,9 +67,9 @@ func NewHistoryTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root 
 		return nil, err
 	}
 
-	_ = ss.AddColumn(schema.NewColumn(CommitHashCol, doltdb.HistoryCommitHashTag, types.StringKind, false))
-	_ = ss.AddColumn(schema.NewColumn(CommitterCol, doltdb.HistoryCommitterTag, types.StringKind, false))
-	_ = ss.AddColumn(schema.NewColumn(CommitDateCol, doltdb.HistoryCommitDateTag, types.TimestampKind, false))
+	_ = ss.AddColumn(schema.NewColumn(CommitHashCol, schema.HistoryCommitHashTag, types.StringKind, false))
+	_ = ss.AddColumn(schema.NewColumn(CommitterCol, schema.HistoryCommitterTag, types.StringKind, false))
+	_ = ss.AddColumn(schema.NewColumn(CommitDateCol, schema.HistoryCommitDateTag, types.TimestampKind, false))
 
 	sch, err := ss.GenerateSchema()
 

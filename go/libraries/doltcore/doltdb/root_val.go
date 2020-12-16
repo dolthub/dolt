@@ -1279,7 +1279,7 @@ func AddValueToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, d
 		}
 
 		if ok {
-			docValue, _ := docRow.GetColVal(DocTextTag)
+			docValue, _ := docRow.GetColVal(schema.DocTextTag)
 			docDetail.Value = docValue
 		} else {
 			docDetail.Value = nil
@@ -1303,7 +1303,7 @@ func AddNewerTextToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schem
 			return DocDetails{}, err
 		}
 		if ok {
-			docValue, _ := docRow.GetColVal(DocTextTag)
+			docValue, _ := docRow.GetColVal(schema.DocTextTag)
 			doc.NewerText = []byte(docValue.(types.String))
 		} else {
 			doc.NewerText = nil
@@ -1315,7 +1315,7 @@ func AddNewerTextToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schem
 }
 
 func addNewerTextToDocFromRow(ctx context.Context, r row.Row, doc *DocDetails) (DocDetails, error) {
-	docValue, ok := r.GetColVal(DocTextTag)
+	docValue, ok := r.GetColVal(schema.DocTextTag)
 	if !ok {
 		doc.NewerText = nil
 	} else {
@@ -1329,7 +1329,7 @@ func addNewerTextToDocFromRow(ctx context.Context, r row.Row, doc *DocDetails) (
 }
 
 func addDocPKToDocFromRow(r row.Row, doc *DocDetails) (DocDetails, error) {
-	colVal, _ := r.GetColVal(DocNameTag)
+	colVal, _ := r.GetColVal(schema.DocNameTag)
 	if colVal == nil {
 		doc.DocPk = ""
 	} else {
