@@ -93,7 +93,7 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, err
 	}
 
-	cm, err := ddb.WriteDanglingCommit(ctx, h, []*doltdb.Commit{parent}, meta)
+	cm, err := ddb.CommitDanglingWithParentCommits(ctx, h, []*doltdb.Commit{parent}, meta)
 
 	if err != nil {
 		return nil, err
