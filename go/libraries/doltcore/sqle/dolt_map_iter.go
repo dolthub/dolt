@@ -33,7 +33,7 @@ type KVToSqlRowConverter struct {
 	// rowSize is the number of columns in the output row.  This may be bigger than the number of columns being converted,
 	// but not less.  When rowSize is bigger than the number of columns being processed that means that some of the columns
 	// in the output row will be filled with nils
-	rowSize        int
+	rowSize int
 }
 
 // NewKVToSqlRowConverterForCols returns a KVToSqlConverter instance based on the list of rows passed in

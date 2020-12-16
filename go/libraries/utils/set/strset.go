@@ -15,9 +15,10 @@
 package set
 
 import (
-	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
 	"sort"
 	"strings"
+
+	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
 )
 
 // StrSet is a simple set implementation providing standard set operations for strings.
