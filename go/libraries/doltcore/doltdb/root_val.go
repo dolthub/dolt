@@ -142,6 +142,15 @@ func (root *RootValue) GetFeatureVersion(ctx context.Context) (ver int64, ok boo
 	return ver, ok, err
 }
 
+func (root *RootValue) SetFeatureVersion(ctx context.Context, ver featureVersion) (*RootValue, error) {
+	st, err := root.valueSt.Set(featureVersKey, types.Int(ver))
+	if err != nil {
+		return nil, err
+	}
+
+	return newRootValue(root.vrw, st), nil
+}
+
 func (root *RootValue) HasTable(ctx context.Context, tName string) (bool, error) {
 	val, found, err := root.valueSt.MaybeGet(tablesKey)
 
