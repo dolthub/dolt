@@ -77,8 +77,8 @@ func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *do
 		return nil, err
 	}
 
-	_ = ss.AddColumn(schema.NewColumn("commit", doltdb.DiffCommitTag, types.StringKind, false))
-	_ = ss.AddColumn(schema.NewColumn("commit_date", doltdb.DiffCommitDateTag, types.TimestampKind, false))
+	_ = ss.AddColumn(schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false))
+	_ = ss.AddColumn(schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
 
 	sch, err := ss.GenerateSchema()
 
@@ -284,7 +284,7 @@ func (itr *diffRowItr) Next() (sql.Row, error) {
 		}
 	}
 
-	sqlRow, err := row.DoltRowToSqlRow(r, itr.sch)
+	sqlRow, err := sqlutil.DoltRowToSqlRow(r, itr.sch)
 
 	if err != nil {
 		return nil, err

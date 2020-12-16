@@ -227,6 +227,10 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 		numPartitions = maxPartitions
 	}
 
+	if schema.IsKeyless(t.sch) {
+		numPartitions = 1
+	}
+
 	partitions := make([]doltTablePartition, numPartitions)
 	itemsPerPartition := numElements / numPartitions
 	for i := uint64(0); i < numPartitions-1; i++ {

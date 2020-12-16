@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -63,7 +64,7 @@ func TestSchemaTableRecreation(t *testing.T) {
 	_ = rowData.IterAll(ctx, func(keyTpl, valTpl types.Value) error {
 		dRow, err := row.FromNoms(sqlTbl.(*WritableDoltTable).sch, keyTpl.(types.Tuple), valTpl.(types.Tuple))
 		require.NoError(t, err)
-		sqlRow, err := row.DoltRowToSqlRow(dRow, sqlTbl.(*WritableDoltTable).sch)
+		sqlRow, err := sqlutil.DoltRowToSqlRow(dRow, sqlTbl.(*WritableDoltTable).sch)
 		require.NoError(t, err)
 		assert.Equal(t, expectedVals[index], sqlRow)
 		index++
@@ -82,7 +83,7 @@ func TestSchemaTableRecreation(t *testing.T) {
 	_ = rowData.IterAll(ctx, func(keyTpl, valTpl types.Value) error {
 		dRow, err := row.FromNoms(tbl.sch, keyTpl.(types.Tuple), valTpl.(types.Tuple))
 		require.NoError(t, err)
-		sqlRow, err := row.DoltRowToSqlRow(dRow, tbl.sch)
+		sqlRow, err := sqlutil.DoltRowToSqlRow(dRow, tbl.sch)
 		require.NoError(t, err)
 		assert.Equal(t, expectedVals[index], sqlRow)
 		index++

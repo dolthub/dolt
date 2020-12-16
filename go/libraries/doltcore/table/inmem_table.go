@@ -23,6 +23,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -143,7 +144,7 @@ func (rd *InMemTableReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	return row.DoltRowToSqlRow(r, rd.GetSchema())
+	return sqlutil.DoltRowToSqlRow(r, rd.GetSchema())
 }
 
 // Close should release resources being held

@@ -713,23 +713,23 @@ func handleSystemTableMappings(ctx context.Context, tblName string, root *doltdb
 	switch tblName {
 	case doltdb.DocTableName:
 		newTagsByColName = map[string]uint64{
-			doltdb.DocPkColumnName:   doltdb.DocNameTag,
-			doltdb.DocTextColumnName: doltdb.DocTextTag,
+			doltdb.DocPkColumnName:   schema.DocNameTag,
+			doltdb.DocTextColumnName: schema.DocTextTag,
 		}
 	case doltdb.DoltQueryCatalogTableName:
 		newTagsByColName = map[string]uint64{
-			doltdb.QueryCatalogIdCol:          doltdb.QueryCatalogIdTag,
-			doltdb.QueryCatalogOrderCol:       doltdb.QueryCatalogOrderTag,
-			doltdb.QueryCatalogNameCol:        doltdb.QueryCatalogNameTag,
-			doltdb.QueryCatalogQueryCol:       doltdb.QueryCatalogQueryTag,
-			doltdb.QueryCatalogDescriptionCol: doltdb.QueryCatalogDescriptionTag,
+			doltdb.QueryCatalogIdCol:          schema.QueryCatalogIdTag,
+			doltdb.QueryCatalogOrderCol:       schema.QueryCatalogOrderTag,
+			doltdb.QueryCatalogNameCol:        schema.QueryCatalogNameTag,
+			doltdb.QueryCatalogQueryCol:       schema.QueryCatalogQueryTag,
+			doltdb.QueryCatalogDescriptionCol: schema.QueryCatalogDescriptionTag,
 		}
 	case doltdb.SchemasTableName:
 		newTagsByColName = map[string]uint64{
-			doltdb.SchemasTablesIdCol:       doltdb.DoltSchemasIdTag,
-			doltdb.SchemasTablesTypeCol:     doltdb.DoltSchemasTypeTag,
-			doltdb.SchemasTablesNameCol:     doltdb.DoltSchemasNameTag,
-			doltdb.SchemasTablesFragmentCol: doltdb.DoltSchemasFragmentTag,
+			doltdb.SchemasTablesIdCol:       schema.DoltSchemasIdTag,
+			doltdb.SchemasTablesTypeCol:     schema.DoltSchemasTypeTag,
+			doltdb.SchemasTablesNameCol:     schema.DoltSchemasNameTag,
+			doltdb.SchemasTablesFragmentCol: schema.DoltSchemasFragmentTag,
 		}
 	}
 

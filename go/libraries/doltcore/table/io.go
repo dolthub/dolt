@@ -162,7 +162,7 @@ func ForeignKeyIsSatisfied(ctx context.Context, fk doltdb.ForeignKey, childIdx, 
 			continue
 		}
 
-		partial, err := parentIdxRow.ReduceToIndexPartialKey(parentDef)
+		partial, err := row.ReduceToIndexPartialKey(parentDef, parentIdxRow)
 		if err != nil {
 			return err
 		}

@@ -12,32 +12,44 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package doltdb
+package table
 
 import (
 	"context"
+	"io"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func DocTblKeyFromName(fmt *types.NomsBinFormat, name string) (types.Tuple, error) {
-	return types.NewTuple(fmt, types.Uint(schema.DocNameTag), types.String(name))
+type PointReader struct {
+	m    types.Map
+	keys []types.Value
+	idx  int
 }
 
-func getDocRow(ctx context.Context, docTbl *Table, sch schema.Schema, key types.Tuple) (r row.Row, ok bool, err error) {
-	rowMap, err := docTbl.GetRowData(ctx)
+var _ types.MapIterator = &PointReader{}
+
+// read the map values for a set of map keys
+func NewMapPointReader(m types.Map, keys ...types.Value) types.MapIterator {
+	return &PointReader{
+		m:    m,
+		keys: keys,
+	}
+}
+
+// Next implements types.MapIterator.
+func (pr *PointReader) Next(ctx context.Context) (k, v types.Value, err error) {
+	if pr.idx >= len(pr.keys) {
+		return nil, nil, io.EOF
+	}
+
+	k = pr.keys[pr.idx]
+	// todo: optimize by implementing MapIterator.Seek()
+	v, _, err = pr.m.MaybeGet(ctx, k)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, err
 	}
+	pr.idx++
 
-	var fields types.Value
-	fields, ok, err = rowMap.MaybeGet(ctx, key)
-	if err != nil || !ok {
-		return nil, ok, err
-	}
-
-	r, err = row.FromNoms(sch, key, fields.(types.Tuple))
-	return
+	return k, v, err
 }

@@ -16,6 +16,7 @@ package row
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
@@ -25,6 +26,73 @@ type nomsRow struct {
 	key   TaggedValues
 	value TaggedValues
 	nbf   *types.NomsBinFormat
+}
+
+var _ Row = nomsRow{}
+
+func FromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) (Row, error) {
+	if schema.IsKeyless(sch) {
+		panic("FromNoms only supports pk rows")
+	}
+
+	keySl, err := nomsKey.AsSlice()
+	if err != nil {
+		return nil, err
+	}
+
+	valSl, err := nomsVal.AsSlice()
+	if err != nil {
+		return nil, err
+	}
+
+	allCols := sch.GetAllCols()
+
+	err = IterPkTuple(keySl, func(tag uint64, val types.Value) (stop bool, err error) {
+		col, ok := allCols.GetByTag(tag)
+
+		if !ok {
+			return false, errors.New("Trying to set a value on an unknown tag is a bug for the key.  Validation should happen upstream. col:" + col.Name)
+		} else if !col.IsPartOfPK {
+			return false, errors.New("writing columns that are not part of the primary key to pk values. col:" + col.Name)
+		} else if !types.IsNull(val) && col.Kind != val.Kind() {
+			return false, errors.New("bug.  Setting a value to an incorrect kind. col: " + col.Name)
+		}
+
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	filteredVals := make(TaggedValues, len(valSl))
+	err = IterPkTuple(valSl, func(tag uint64, val types.Value) (stop bool, err error) {
+		col, ok := allCols.GetByTag(tag)
+		if !ok {
+			return false, nil
+		}
+
+		if col.IsPartOfPK {
+			return false, errors.New("writing columns that are part of the primary key to non-pk values. col:" + col.Name)
+		} else if !types.IsNull(val) {
+			if col.Kind != val.Kind() {
+				return false, errors.New("bug.  Setting a value to an incorrect kind. col:" + col.Name)
+			} else {
+				filteredVals[tag] = val
+			}
+		}
+
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	taggedKeyVals, err := TaggedValuesFromTupleValueSlice(keySl)
+	if err != nil {
+		return nil, err
+	}
+
+	return nomsRow{taggedKeyVals, filteredVals, nomsKey.Format()}, nil
 }
 
 func (nr nomsRow) IterSchema(sch schema.Schema, cb func(tag uint64, val types.Value) (stop bool, err error)) (bool, error) {
@@ -164,116 +232,31 @@ func fromTaggedVals(nbf *types.NomsBinFormat, sch schema.Schema, keyVals, nonKey
 	return nomsRow{keyVals, filteredVals, nbf}, nil
 }
 
-func FromTupleSlices(nbf *types.NomsBinFormat, sch schema.Schema, keySl, valSl types.TupleValueSlice) (Row, error) {
-	allCols := sch.GetAllCols()
-
-	err := keySl.Iter(func(tag uint64, val types.Value) (stop bool, err error) {
-		col, ok := allCols.GetByTag(tag)
-
-		if !ok {
-			return false, errors.New("Trying to set a value on an unknown tag is a bug for the key.  Validation should happen upstream. col:" + col.Name)
-		} else if !col.IsPartOfPK {
-			return false, errors.New("writing columns that are not part of the primary key to pk values. col:" + col.Name)
-		} else if !types.IsNull(val) && col.Kind != val.Kind() {
-			return false, errors.New("bug.  Setting a value to an incorrect kind. col: " + col.Name)
-		}
-
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	filteredVals := make(TaggedValues, len(valSl))
-	err = valSl.Iter(func(tag uint64, val types.Value) (stop bool, err error) {
-		col, ok := allCols.GetByTag(tag)
-		if !ok {
-			return false, nil
-		}
-
-		if col.IsPartOfPK {
-			return false, errors.New("writing columns that are part of the primary key to non-pk values. col:" + col.Name)
-		} else if !types.IsNull(val) {
-			if col.Kind != val.Kind() {
-				return false, errors.New("bug.  Setting a value to an incorrect kind. col:" + col.Name)
-			} else {
-				filteredVals[tag] = val
-			}
-		}
-
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	taggedKeyVals, err := TaggedValuesFromTupleValueSlice(keySl)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return nomsRow{taggedKeyVals, filteredVals, nbf}, nil
-}
-
-func FromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) (Row, error) {
-	keySl, err := nomsKey.AsSlice()
-
-	if err != nil {
-		return nil, err
-	}
-
-	valSl, err := nomsVal.AsSlice()
-
-	if err != nil {
-		return nil, err
-	}
-
-	return FromTupleSlices(nomsKey.Format(), sch, keySl, valSl)
-}
-
-func (nr nomsRow) ReduceToIndex(idx schema.Index) (Row, error) {
-	newRow := nomsRow{
-		key:   make(TaggedValues),
-		value: make(TaggedValues),
-		nbf:   nr.nbf,
-	}
-
-	for _, tag := range idx.AllTags() {
-		val, ok := nr.key[tag]
-		if !ok {
-			val, ok = nr.value[tag]
-			if !ok {
-				continue
-			}
-		}
-		newRow.key[tag] = val
-	}
-
-	return newRow, nil
-}
-
-func (nr nomsRow) ReduceToIndexPartialKey(idx schema.Index) (types.Tuple, error) {
-	var vals []types.Value
-	for _, tag := range idx.IndexedColumnTags() {
-		val, ok := nr.key[tag]
-		if !ok {
-			val, ok = nr.value[tag]
-			if !ok {
-				val = types.NullValue
-			}
-		}
-		vals = append(vals, types.Uint(tag), val)
-	}
-	return types.NewTuple(nr.nbf, vals...)
-}
-
 func (nr nomsRow) NomsMapKey(sch schema.Schema) types.LesserValuable {
 	return nr.key.NomsTupleForPKCols(nr.nbf, sch.GetPKCols())
 }
 
 func (nr nomsRow) NomsMapValue(sch schema.Schema) types.Valuable {
 	return nr.value.NomsTupleForNonPKCols(nr.nbf, sch.GetNonPKCols())
+}
+
+func IterPkTuple(tvs types.TupleValueSlice, cb func(tag uint64, val types.Value) (stop bool, err error)) error {
+	if len(tvs)%2 != 0 {
+		return fmt.Errorf("expected len(TupleValueSlice) to be even, got %d", len(tvs))
+	}
+
+	l := len(tvs)
+	for i := 0; i < l; i += 2 {
+		stop, err := cb(uint64(tvs[i].(types.Uint)), tvs[i+1])
+
+		if err != nil {
+			return err
+		}
+
+		if stop {
+			break
+		}
+	}
+
+	return nil
 }

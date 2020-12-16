@@ -33,23 +33,6 @@ var _ LesserValuable = TupleValueSlice(nil)
 
 type TupleValueSlice []Value
 
-func (tvs TupleValueSlice) Iter(cb func(tag uint64, val Value) (stop bool, err error)) error {
-	l := len(tvs)
-	for i := 0; i < l; i += 2 {
-		stop, err := cb(uint64(tvs[i].(Uint)), tvs[i+1])
-
-		if err != nil {
-			return err
-		}
-
-		if stop {
-			break
-		}
-	}
-
-	return nil
-}
-
 func (tvs TupleValueSlice) Kind() NomsKind {
 	return TupleKind
 }

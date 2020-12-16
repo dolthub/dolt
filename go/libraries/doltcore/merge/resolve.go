@@ -81,7 +81,17 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tblName string
 		}
 
 		if types.IsNull(updated) {
-			err := tableEditor.DeleteKey(ctx, key.(types.Tuple))
+			// todo: unhack
+			empty, err := types.NewTuple(tbl.Format())
+			if err != nil {
+				return false, err
+			}
+			originalRow, err := row.FromNoms(tblSch, key.(types.Tuple), empty)
+			if err != nil {
+				return false, err
+			}
+
+			err = tableEditor.DeleteRow(ctx, originalRow)
 			if err != nil {
 				return false, err
 			}

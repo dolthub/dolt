@@ -42,6 +42,7 @@ var _ enginetest.SkippingHarness = (*DoltHarness)(nil)
 var _ enginetest.IndexHarness = (*DoltHarness)(nil)
 var _ enginetest.VersionedDBHarness = (*DoltHarness)(nil)
 var _ enginetest.ForeignKeyHarness = (*DoltHarness)(nil)
+var _ enginetest.KeylessTableHarness = (*DoltHarness)(nil)
 
 func newDoltHarness(t *testing.T) *DoltHarness {
 	session, err := sqle.NewDoltSession(context.Background(), enginetest.NewBaseSession(), "test", "email@test.com")
@@ -109,6 +110,10 @@ func (d *DoltHarness) SupportsNativeIndexCreation() bool {
 }
 
 func (d *DoltHarness) SupportsForeignKeys() bool {
+	return true
+}
+
+func (d *DoltHarness) SupportsKeylessTables() bool {
 	return true
 }
 

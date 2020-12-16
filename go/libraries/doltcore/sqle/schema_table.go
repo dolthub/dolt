@@ -39,10 +39,10 @@ func SchemasTableSqlSchema() sql.Schema {
 // The fixed dolt schema for the `dolt_schemas` table.
 func SchemasTableSchema() schema.Schema {
 	colColl, err := schema.NewColCollection(
-		schema.NewColumn(doltdb.SchemasTablesTypeCol, doltdb.DoltSchemasTypeTag, types.StringKind, false),
-		schema.NewColumn(doltdb.SchemasTablesNameCol, doltdb.DoltSchemasNameTag, types.StringKind, false),
-		schema.NewColumn(doltdb.SchemasTablesFragmentCol, doltdb.DoltSchemasFragmentTag, types.StringKind, false),
-		schema.NewColumn(doltdb.SchemasTablesIdCol, doltdb.DoltSchemasIdTag, types.IntKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn(doltdb.SchemasTablesTypeCol, schema.DoltSchemasTypeTag, types.StringKind, false),
+		schema.NewColumn(doltdb.SchemasTablesNameCol, schema.DoltSchemasNameTag, types.StringKind, false),
+		schema.NewColumn(doltdb.SchemasTablesFragmentCol, schema.DoltSchemasFragmentTag, types.StringKind, false),
+		schema.NewColumn(doltdb.SchemasTablesIdCol, schema.DoltSchemasIdTag, types.IntKind, true, schema.NotNullConstraint{}),
 	)
 	if err != nil {
 		panic(err) // should never happen
@@ -161,7 +161,7 @@ func migrateOldSchemasTableToNew(
 		if err != nil {
 			return err
 		}
-		sqlRow, err := row.DoltRowToSqlRow(dRow, schemasTable.sch)
+		sqlRow, err := sqlutil.DoltRowToSqlRow(dRow, schemasTable.sch)
 		if err != nil {
 			return err
 		}

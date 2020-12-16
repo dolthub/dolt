@@ -399,7 +399,7 @@ func TestReduceToIndex(t *testing.T) {
 		require.NoError(t, err)
 		expectedIndex, err := New(types.Format_7_18, index.Schema(), tvCombo.expectedIndex)
 		require.NoError(t, err)
-		indexRow, err := row.ReduceToIndex(index)
+		indexRow, err := ReduceToIndex(index, row)
 		assert.NoError(t, err)
 		assert.True(t, AreEqual(expectedIndex, indexRow, index.Schema()))
 	}

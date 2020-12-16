@@ -16,6 +16,7 @@ package table
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -50,7 +51,8 @@ type TableReadCloser interface {
 
 // SqlTableReader is a  TableReader that can read rows as sql.Row.
 type SqlTableReader interface {
-	TableReader
+	// GetSchema gets the schema of the rows that this reader will return
+	GetSchema() schema.Schema
 
 	// ReadRow reads a row from a table as go-mysql-server sql.Row.
 	ReadSqlRow(ctx context.Context) (sql.Row, error)
@@ -85,6 +87,10 @@ func NewBufferedTableReader(ctx context.Context, tbl *doltdb.Table) (SqlTableRea
 // NewBufferedTableReaderForPartition creates a SqlTableReader that reads the rows of |tbl| with indexes
 // in the half-open interval [start, end).
 func NewBufferedTableReaderForPartition(ctx context.Context, tbl *doltdb.Table, start, end uint64) (SqlTableReader, error) {
+	if start > end {
+		return nil, fmt.Errorf("invalid partition table reader, start (%d) > end (%d)", start, end)
+	}
+
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err

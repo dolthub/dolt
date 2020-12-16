@@ -4,67 +4,87 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 setup() {
     setup_common
 
-    skip "unimplemented"
-
-    dolt sql <<SQL
+    dolt --keyless sql <<SQL
 CREATE TABLE keyless (
     c0 int,
     c1 int
 );
 INSERT INTO keyless VALUES (0,0),(2,2),(1,1),(1,1);
 SQL
-    dolt commit -am "init"
+    dolt --keyless commit -am "init"
 }
 
 teardown() {
     teardown_common
 }
 
-@test "create keyless table" {
-    # created in setup()
+@test "feature flag gates keyless tables" {
+    run dolt sql <<SQL
+CREATE TABLE test (
+    c0 int,
+    c1 int
+);
+SQL
+    [ $status -ne 0 ]
+    [[ ! "$output" =~ "panic" ]] || false
 
     run dolt ls
     [ $status -eq 0 ]
-    [[ "$lines[@]" = "keyless" ]] || false
+    [[ ! "$output" =~ "test" ]] || false
+    [[ ! "$output" =~ "panic" ]] || false
 
-    run dolt sql -q "SHOW CREATE TABLE keyless;" -r csv
-    [ $status -eq 0 ]
-    [[ "$lines[@]" = "CREATE TABLE \`keyless\` (" ]] || false
-    [[ "$lines[@]" = "\`c0\` int," ]] || false
-    [[ "$lines[@]" = "\`c1\` int" ]] || false
-    [[ "$lines[@]" = ");" ]] || false
+    run dolt sql -q "SELECT * FROM keyless;"
+    [ $status -ne 0 ]
+    [[ ! "$output" =~ "panic" ]] || false
+}
 
-    run dolt sql -q "SELECT sum(c0),sum(c1) FROM keyless;" -r csv
+@test "create keyless table" {
+    # created in setup()
+
+    run dolt --keyless ls
     [ $status -eq 0 ]
-    [[ "$output" = "4,4" ]] || false
+    [[ "$output" =~ "keyless" ]] || false
+
+    dolt --keyless sql -q "SHOW CREATE TABLE keyless;"
+    run dolt --keyless sql -q "SHOW CREATE TABLE keyless;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "CREATE TABLE \`keyless\` (" ]] || false
+    [[ "$output" =~ "\`c0\` int," ]] || false
+    [[ "$output" =~ "\`c1\` int" ]] || false
+    [[ "$output" =~ ")" ]] || false
+
+    dolt --keyless sql -q "SELECT sum(c0),sum(c1) FROM keyless;" -r csv
+    run dolt --keyless sql -q "SELECT sum(c0),sum(c1) FROM keyless;" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" =~ "4,4" ]] || false
 }
 
 @test "delete from keyless" {
-    run dolt sql -q "DELETE FROM keyless WHERE c0 = 2;"
+    run dolt --keyless sql -q "DELETE FROM keyless WHERE c0 = 2;"
     [ $status -eq 0 ]
 
-    run dolt sql -q "SELECT * FROM keyless ORDER BY c0;" -r csv
+    run dolt --keyless sql -q "SELECT * FROM keyless ORDER BY c0;" -r csv
     [ $status -eq 0 ]
-    [[ "$lines[@]" = "0,0" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
+    [[ "${lines[1]}" = "0,0" ]] || false
+    [[ "${lines[2]}" = "1,1" ]] || false
+    [[ "${lines[3]}" = "1,1" ]] || false
 }
 
-# order will differ without 'ORDER BY' clause
 @test "update keyless" {
-    run dolt sql -q "UPDATE keyless SET c0 = 9 WHERE c0 = 2;"
+    run dolt --keyless sql -q "UPDATE keyless SET c0 = 9 WHERE c0 = 2;"
     [ $status -eq 0 ]
 
-    run dolt sql -q "SELECT * FROM keyless ORDER BY c0;" -r csv
+    run dolt --keyless sql -q "SELECT * FROM keyless ORDER BY c0;" -r csv
     [ $status -eq 0 ]
-    [[ "$lines[@]" = "0,0" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
-    [[ "$lines[@]" = "9,2" ]] || false
+    [[ "${lines[1]}" = "0,0" ]] || false
+    [[ "${lines[2]}" = "1,1" ]] || false
+    [[ "${lines[3]}" = "1,1" ]] || false
+    [[ "${lines[4]}" = "9,2" ]] || false
 }
 
 # keyless tables allow duplicate rows
 @test "keyless table import" {
+    skip "unimplemented"
     cat <<CSV > data.csv
 c0,c1
 0,0
@@ -89,6 +109,7 @@ CSV
 
 # updates are always appends
 @test "keyless table update" {
+    skip "unimplemented"
     cat <<CSV > data.csv
 c0,c1
 0,0
@@ -113,6 +134,7 @@ CSV
 }
 
 @test "keyless diff against working set" {
+    skip "unimplemented"
     dolt sql -q "INSERT INTO keyless VALUES (9,9);"
     run dolt diff
     [ $status -eq 0 ]
@@ -120,6 +142,7 @@ CSV
 }
 
 @test "keyless merge fast-forward" {
+    skip "unimplemented"
     dolt checkout -b other
     dolt sql -q "INSERT INTO keyless VALUES (9,9);"
     dolt commit -am "9,9"
@@ -132,6 +155,7 @@ CSV
 }
 
 @test "keyless diff branches with identical mutation history" {
+    skip "unimplemented"
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -147,6 +171,7 @@ CSV
 }
 
 @test "keyless merge branches with identical mutation history" {
+    skip "unimplemented"
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -166,6 +191,7 @@ CSV
 }
 
 @test "keyless diff deletes from two branches" {
+    skip "unimplemented"
     dolt branch left
     dolt checkout -b right
 
@@ -186,6 +212,7 @@ CSV
 }
 
 @test "keyless merge deletes from two branches" {
+    skip "unimplemented"
     dolt branch left
     dolt checkout -b right
 
@@ -218,6 +245,7 @@ SQL
 }
 
 @test "keyless diff duplicate deletes" {
+    skip "unimplemented"
     make_dupe_table
 
     dolt branch left
@@ -244,6 +272,7 @@ SQL
 }
 
 @test "keyless merge duplicate deletes" {
+    skip "unimplemented"
     make_dupe_table
 
     dolt branch left
@@ -262,6 +291,7 @@ SQL
 }
 
 @test "keyless diff duplicate updates" {
+    skip "unimplemented"
     make_dupe_table
 
     dolt branch left
@@ -285,6 +315,7 @@ SQL
 
 # order will differ without 'ORDER BY' clause
 @test "keyless merge duplicate updates" {
+    skip "unimplemented"
     make_dupe_table
 
     dolt branch left
@@ -303,6 +334,7 @@ SQL
 }
 
 @test "keyless sql diff" {
+    skip "unimplemented"
     dolt sql <<SQL
 DELETE FROM keyless WHERE c0 = 2;
 INSERT INTO keyless VALUES (3,3);
@@ -322,6 +354,7 @@ SQL
 }
 
 @test "keyless sql diff as a patch" {
+    skip "unimplemented"
     dolt branch left
     dolt checkout -b right
 
@@ -342,6 +375,7 @@ SQL
 
 
 @test "keyless tables read in sorted order" {
+    skip "unimplemented"
     run dolt sql -q "SELECT * FROM keyless;" -r csv
     [ $status -eq 0 ]
     [[ "$output" = "0,0" ]] || false
@@ -352,6 +386,7 @@ SQL
 
 # tables are read/stored in sorted order
 @test "keyless table replace" {
+    skip "unimplemented"
     cat <<CSV > data.csv
 c0,c1
 0,0
@@ -381,6 +416,7 @@ CSV
 
 # in-place updates create become drop/add
 @test "keyless diff with in-place updates (working set)" {
+    skip "unimplemented"
     dolt sql -q "UPDATE keyless SET c1 = 9 where c0 = 2;"
     run dolt diff
     [ $status -eq 0 ]
@@ -390,6 +426,7 @@ CSV
 
 # in-place updates create become drop/add
 @test "keyless sql diff with in-place updates (working set)" {
+    skip "unimplemented"
     dolt sql -q "UPDATE keyless SET c1 = 9 where c0 = 2;"
     run dolt diff -r sql
     [ $status -eq 0 ]
@@ -399,6 +436,7 @@ CSV
 
 # update patch always recreates identical branches
 @test "keyless updates as a sql diff patch" {
+    skip "unimplemented"
     dolt branch left
     dolt checkout -b right
 
@@ -421,6 +459,7 @@ CSV
 
 # in-place updates diff as drop/add
 @test "keyless diff with in-place updates (branches)" {
+    skip "unimplemented"
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
     dolt commit -am "added rows"
     dolt branch other
@@ -445,6 +484,7 @@ CSV
 # where in-place updates are divergent, both versions are kept on merge
 # same for hidden key and bag semantics
 @test "keyless merge with in-place updates (branches)" {
+    skip "unimplemented"
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
     dolt commit -am "added rows"
     dolt branch other
@@ -463,6 +503,7 @@ CSV
 
 # bag semantics diffs membership, not order
 @test "keyless diff branches with reordered mutation history" {
+    skip "unimplemented"
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -479,6 +520,7 @@ CSV
 
 # bag semantics diffs membership, not order
 @test "keyless merge branches with reordered mutation history" {
+    skip "unimplemented"
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -502,6 +544,7 @@ CSV
 
 # convergent row data history with convergent data has convergent storage representation
 @test "keyless diff branches with convergent mutation history" {
+    skip "unimplemented"
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -522,6 +565,7 @@ SQL
 
 # convergent row data has convergent storage representation
 @test "keyless merge branches with convergent mutation history" {
+    skip "unimplemented"
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -543,6 +587,7 @@ SQL
 
 # bag semantics give minimal diff
 @test "keyless diff branches with offset mutation history" {
+    skip "unimplemented"
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -559,6 +604,7 @@ SQL
 }
 
 @test "keyless merge branches with offset mutation history" {
+    skip "unimplemented"
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -574,6 +620,7 @@ SQL
 }
 
 @test "keyless diff delete+add against working" {
+    skip "unimplemented"
     dolt sql <<SQL
 DELETE FROM keyless WHERE c0 = 2;
 INSERT INTO keyless VALUES (2,2)
@@ -584,6 +631,7 @@ SQL
 }
 
 @test "keyless diff delete+add on two branches" {
+    skip "unimplemented"
     dolt branch left
     dolt checkout -b right
 
@@ -605,6 +653,7 @@ SQL
 
 # row gets deleted from the middle and added to the end
 @test "keyless merge delete+add on two branches" {
+    skip "unimplemented"
     dolt branch left
     dolt checkout -b right
 
