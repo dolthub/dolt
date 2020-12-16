@@ -211,9 +211,9 @@ func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nom
 	cols := sch.GetAllCols().GetColumns()
 	tagToSqlColIdx := make(map[uint64]int)
 
-	resultColSet := set.NewStrSet(resultCols)
+	resultColSet := set.NewCaseInsensitiveStrSet(resultCols)
 	for i, col := range cols {
-		_, partOfIdxKey := idxCols.GetByName(col.Name)
+		_, partOfIdxKey := idxCols.GetByNameCaseInsensitive(col.Name)
 		if partOfIdxKey && resultColSet.Contains(col.Name) {
 			tagToSqlColIdx[col.Tag] = i
 		}

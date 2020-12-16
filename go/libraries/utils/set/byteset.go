@@ -15,14 +15,14 @@
 package set
 
 type ByteSet struct {
-	bytes map[byte]interface{}
+	bytes map[byte]bool
 }
 
 func NewByteSet(bytes []byte) *ByteSet {
-	s := &ByteSet{make(map[byte]interface{}, len(bytes))}
+	s := &ByteSet{make(map[byte]bool, len(bytes))}
 
 	for _, b := range bytes {
-		s.bytes[b] = emptyInstance
+		s.bytes[b] = true
 	}
 
 	return s

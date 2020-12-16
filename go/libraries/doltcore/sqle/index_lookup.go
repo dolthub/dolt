@@ -142,7 +142,7 @@ func (il *doltIndexLookup) indexCoversCols(cols []string) bool {
 	idxCols := il.idx.IndexSchema().GetPKCols()
 	covers := true
 	for _, colName := range cols {
-		if _, ok := idxCols.GetByName(colName); !ok {
+		if _, ok := idxCols.GetByNameCaseInsensitive(colName); !ok {
 			covers = false
 			break
 		}

@@ -15,52 +15,76 @@
 package set
 
 import (
+	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
 	"sort"
 	"strings"
 )
 
-var emptyInstance = struct{}{}
-
 // StrSet is a simple set implementation providing standard set operations for strings.
 type StrSet struct {
-	items map[string]interface{}
+	items         map[string]bool
+	caseSensitive bool
 }
 
 // NewStrSet creates a set from a list of strings
-func NewStrSet(items []string) *StrSet {
-	s := &StrSet{make(map[string]interface{}, len(items))}
+func newStrSet(items []string, caseSensitive bool) *StrSet {
+	s := &StrSet{make(map[string]bool, len(items)), caseSensitive}
 
 	if items != nil {
 		for _, item := range items {
-			s.items[item] = emptyInstance
+			s.items[item] = true
 		}
 	}
 
 	return s
 }
 
+func NewStrSet(items []string) *StrSet {
+	return newStrSet(items, true)
+}
+
+func NewCaseInsensitiveStrSet(items []string) *StrSet {
+	lwrStrs := funcitr.MapStrings(items, strings.ToLower)
+	return newStrSet(lwrStrs, false)
+}
+
 // Add adds new items to the set
 func (s *StrSet) Add(items ...string) {
 	for _, item := range items {
-		s.items[item] = emptyInstance
+		if !s.caseSensitive {
+			item = strings.ToLower(item)
+		}
+		s.items[item] = true
 	}
 }
 
 // Remove removes existing items from the set
 func (s *StrSet) Remove(items ...string) {
 	for _, item := range items {
+		if !s.caseSensitive {
+			item = strings.ToLower(item)
+		}
+
 		delete(s.items, item)
 	}
 }
 
 // Contains returns true if the item being checked is already in the set.
 func (s *StrSet) Contains(item string) bool {
+	if !s.caseSensitive {
+		item = strings.ToLower(item)
+	}
+
 	_, present := s.items[item]
 	return present
 }
 
 // ContainsAll returns true if all the items being checked are already in the set.
 func (s *StrSet) ContainsAll(items []string) bool {
+	if !s.caseSensitive {
+		items = funcitr.MapStrings(items, strings.ToLower)
+	}
+
 	for _, item := range items {
 		if _, present := s.items[item]; !present {
 			return false
@@ -71,6 +95,8 @@ func (s *StrSet) ContainsAll(items []string) bool {
 }
 
 func (s *StrSet) Equals(other *StrSet) bool {
+	// two string sets can be equal even if one is sensitive and the other is insensitive as long al the items are a
+	// case sensitive match.
 	ss := s.AsSlice()
 	os := other.AsSlice()
 	sort.Strings(ss)
@@ -93,7 +119,8 @@ func (s *StrSet) Size() int {
 	return len(s.items)
 }
 
-// AsSlice converts the set to a slice of strings
+// AsSlice converts the set to a slice of strings.  If this is an insensitive set the resulting slice will be lowercase
+// regardless of the case that was used when adding the string to the set
 func (s *StrSet) AsSlice() []string {
 	size := len(s.items)
 	sl := make([]string, size)
