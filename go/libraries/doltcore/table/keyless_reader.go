@@ -31,9 +31,8 @@ type keylessTableReader struct {
 	iter types.MapIterator
 	sch  schema.Schema
 
-	// duplicates
-	row        row.Row
-	duplicates uint64
+	row             row.Row
+	remainingCopies uint64
 }
 
 var _ SqlTableReader = &keylessTableReader{}
@@ -45,7 +44,7 @@ func (rdr *keylessTableReader) GetSchema() schema.Schema {
 
 // ReadSqlRow implements the SqlTableReader interface.
 func (rdr *keylessTableReader) ReadRow(ctx context.Context) (row.Row, error) {
-	if rdr.duplicates == 0 {
+	if rdr.remainingCopies == 0 {
 		key, val, err := rdr.iter.Next(ctx)
 		if err != nil {
 			return nil, err
@@ -53,13 +52,13 @@ func (rdr *keylessTableReader) ReadRow(ctx context.Context) (row.Row, error) {
 			return nil, io.EOF
 		}
 
-		rdr.row, rdr.duplicates, err = row.KeylessRowsFromTuples(key.(types.Tuple), val.(types.Tuple))
+		rdr.row, rdr.remainingCopies, err = row.KeylessRowsFromTuples(key.(types.Tuple), val.(types.Tuple))
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	rdr.duplicates -= 1
+	rdr.remainingCopies -= 1
 
 	return rdr.row, nil
 }

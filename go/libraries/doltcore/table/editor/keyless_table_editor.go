@@ -183,7 +183,7 @@ func (kte *keylessTableEditor) UpdateRow(ctx context.Context, old row.Row, new r
 		return err
 	}
 
-	key, val, err = row.Deconstruct(ctx, kte.sch, old)
+	key, val, err = row.Deconstruct(ctx, kte.sch, new)
 	if err != nil {
 		return err
 	}
