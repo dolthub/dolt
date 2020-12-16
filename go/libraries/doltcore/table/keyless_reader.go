@@ -20,7 +20,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -30,10 +29,6 @@ func newKeylessTableReader(ctx context.Context, tbl *doltdb.Table, sch schema.Sc
 
 func newKeylessTableReaderForPartition(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, start, end uint64) (SqlTableReader, error) {
 	return nil, fmt.Errorf("newKeylessTableReaderForPartition is unimplemented")
-}
-
-func newKeylessTableReaderForRanges(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, ranges ...*noms.ReadRange) (SqlTableReader, error) {
-	return nil, fmt.Errorf("newKeylessTableReaderForRanges is unimplemented")
 }
 
 func newKeylessTableReaderFrom(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, val types.Value) (SqlTableReader, error) {

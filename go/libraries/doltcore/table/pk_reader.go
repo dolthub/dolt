@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -34,7 +33,6 @@ type pkTableReader struct {
 }
 
 var _ SqlTableReader = pkTableReader{}
-var _ SqlTableReader = &noms.NomsRangeReader{}
 
 // GetSchema implements the TableReader interface.
 func (rdr pkTableReader) GetSchema() schema.Schema {
@@ -87,15 +85,6 @@ func newPkTableReader(ctx context.Context, tbl *doltdb.Table, sch schema.Schema,
 		iter: iter,
 		sch:  sch,
 	}, nil
-}
-
-func newPkTableReaderForRanges(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, ranges ...*noms.ReadRange) (SqlTableReader, error) {
-	rows, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return noms.NewNomsRangeReader(sch, rows, ranges), nil
 }
 
 func newPkTableReaderFrom(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, val types.Value) (SqlTableReader, error) {

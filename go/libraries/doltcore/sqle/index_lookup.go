@@ -15,14 +15,15 @@
 package sqle
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/lookup"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type IndexLookupKeyIterator interface {
@@ -130,25 +131,42 @@ func (il *doltIndexLookup) Union(indexLookups ...sql.IndexLookup) (sql.IndexLook
 
 // RowIter returns a row iterator for this index lookup. The iterator will return the single matching row for the index.
 func (il *doltIndexLookup) RowIter(ctx *sql.Context) (sql.RowIter, error) {
-	readRanges := make([]*noms.ReadRange, len(il.ranges))
-	for i, lookupRange := range il.ranges {
+	return il.RowIterForRanges(ctx, il.ranges, nil)
+}
+
+func (il *doltIndexLookup) indexCoversCols(cols []string) bool {
+	if cols == nil {
+		return false
+	}
+
+	idxCols := il.idx.IndexSchema().GetPKCols()
+	covers := true
+	for _, colName := range cols {
+		if _, ok := idxCols.GetByNameCaseInsensitive(colName); !ok {
+			covers = false
+			break
+		}
+	}
+
+	return covers
+}
+
+func (il *doltIndexLookup) RowIterForRanges(ctx *sql.Context, ranges []lookup.Range, columns []string) (sql.RowIter, error) {
+	readRanges := make([]*noms.ReadRange, len(ranges))
+	for i, lookupRange := range ranges {
 		readRanges[i] = lookupRange.ToReadRange()
 	}
-	return NewIndexLookupRowIterAdapter(ctx, il.idx, &doltIndexKeyIter{
-		indexMapIter: noms.NewNomsRangeReader(il.idx.IndexSchema(), il.idx.IndexRowData(), readRanges),
-	}), nil
-}
 
-type doltIndexKeyIter struct {
-	indexMapIter table.TableReadCloser
-}
+	nrr := noms.NewNomsRangeReader(il.idx.IndexSchema(), il.idx.IndexRowData(), readRanges)
 
-var _ IndexLookupKeyIterator = (*doltIndexKeyIter)(nil)
-
-func (iter *doltIndexKeyIter) NextKey(ctx *sql.Context) (row.TaggedValues, error) {
-	indexRow, err := iter.indexMapIter.ReadRow(ctx)
-	if err != nil {
-		return nil, err
+	covers := il.indexCoversCols(columns)
+	if covers {
+		return NewCoveringIndexRowIterAdapter(ctx, il.idx, nrr, columns), nil
+	} else {
+		return NewIndexLookupRowIterAdapter(ctx, il.idx, nrr), nil
 	}
-	return row.GetTaggedVals(indexRow)
+}
+
+type nomsKeyIter interface {
+	ReadKey(ctx context.Context) (types.Value, error)
 }

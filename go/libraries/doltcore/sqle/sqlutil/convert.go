@@ -139,3 +139,13 @@ func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 
 	return schema.NewColumnWithTypeInfo(col.Name, tag, typeInfo, col.PrimaryKey, col.Default.String(), col.AutoIncrement, col.Comment, constraints...)
 }
+
+func GetColNamesFromSqlSchema(sqlSch sql.Schema) []string {
+	colNames := make([]string, len(sqlSch))
+
+	for i, col := range sqlSch {
+		colNames[i] = col.Name
+	}
+
+	return colNames
+}

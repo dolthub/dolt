@@ -22,7 +22,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -95,20 +94,6 @@ func NewBufferedTableReaderForPartition(ctx context.Context, tbl *doltdb.Table, 
 		return newKeylessTableReaderForPartition(ctx, tbl, sch, start, end)
 	}
 	return newPkTableReaderForPartition(ctx, tbl, sch, start, end)
-}
-
-// NewTableReaderForRanges creates a SqlTableReader that reads the rows of |tbl| corresponding to the
-// the noms.ReadRandes in |ranges|.
-func NewTableReaderForRanges(ctx context.Context, tbl *doltdb.Table, ranges ...*noms.ReadRange) (SqlTableReader, error) {
-	sch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if schema.IsKeyless(sch) {
-		return newKeylessTableReaderForRanges(ctx, tbl, sch, ranges...)
-	}
-	return newPkTableReaderForRanges(ctx, tbl, sch, ranges...)
 }
 
 // NewTableReaderFrom creates a SqlTableReader that reads the rows of |tbl| beginning at the record

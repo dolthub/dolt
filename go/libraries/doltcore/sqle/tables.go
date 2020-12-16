@@ -270,6 +270,7 @@ func (t *WritableDoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 	return &WritableIndexedDoltTable{
 		WritableDoltTable: t,
 		indexLookup:       dil,
+		projectedCols:     sqlutil.GetColNamesFromSqlSchema(t.sqlSch),
 	}
 }
 

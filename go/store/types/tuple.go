@@ -135,6 +135,20 @@ func (itr *TupleIterator) Next() (uint64, Value, error) {
 	return itr.count, nil, nil
 }
 
+func (itr *TupleIterator) Skip() error {
+	if itr.pos < itr.count {
+		err := itr.dec.skipValue(itr.nbf)
+
+		if err != nil {
+			return err
+		}
+
+		itr.pos++
+	}
+
+	return nil
+}
+
 func (itr *TupleIterator) HasMore() bool {
 	return itr.pos < itr.count
 }
