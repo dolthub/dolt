@@ -27,19 +27,16 @@ import (
 // DoltRowToSqlRow constructs a go-mysql-server sql.Row from a Dolt row.Row.
 func DoltRowToSqlRow(doltRow row.Row, sch schema.Schema) (sql.Row, error) {
 	colVals := make(sql.Row, sch.GetAllCols().Size())
-
 	i := 0
-	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		var innerErr error
-		value, _ := doltRow.GetColVal(tag)
-		colVals[i], innerErr = col.TypeInfo.ConvertNomsValueToValue(value)
-		if innerErr != nil {
-			return true, innerErr
-		}
-		i++
-		return false, nil
-	})
 
+	_, err := doltRow.IterSchema(sch, func(tag uint64, val types.Value) (stop bool, err error) {
+		col, _ := sch.GetAllCols().GetByTag(tag)
+		colVals[i], err = col.TypeInfo.ConvertNomsValueToValue(val)
+		i++
+
+		stop = err != nil
+		return
+	})
 	if err != nil {
 		return nil, err
 	}
