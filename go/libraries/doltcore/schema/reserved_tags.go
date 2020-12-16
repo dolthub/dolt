@@ -14,6 +14,13 @@
 
 package schema
 
+// ** WARNING - DO NOT CHANGE **
+//
+// consistency in these values
+// is critical for compatibility
+//
+// ** WARNING - DO NOT CHANGE **
+
 const (
 	// SystemTableReservedMin defines the lower bound of the tag space reserved for system tables
 	SystemTableReservedMin uint64 = ReservedTagMin << 1

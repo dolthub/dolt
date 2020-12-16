@@ -22,7 +22,9 @@ import (
 )
 
 const (
-	cardinalityValIdx = uint64(1)
+	KeylessCardinalityTagIdx = uint64(0)
+	KeylessCardinalityValIdx = uint64(1)
+	KeylessFirstValIdx       = uint64(2)
 )
 
 var ErrZeroCardinality = fmt.Errorf("read row with zero cardinality")
@@ -104,16 +106,9 @@ func (r keylessRow) NomsMapValue(sch schema.Schema) types.Valuable {
 }
 
 func (r keylessRow) IterCols(cb func(tag uint64, val types.Value) (stop bool, err error)) (bool, error) {
-	iter, err := r.val.IteratorAt(cardinalityValIdx) // skip cardinality tag
+	iter, err := r.val.IteratorAt(KeylessFirstValIdx) // skip cardinality tag & val
 	if err != nil {
 		return false, err
-	}
-	_, card, err := iter.Next()
-	if err != nil {
-		return false, err
-	}
-	if card.(types.Uint) < 1 {
-		return false, ErrZeroCardinality
 	}
 
 	for {
@@ -148,16 +143,9 @@ func (r keylessRow) IterCols(cb func(tag uint64, val types.Value) (stop bool, er
 }
 
 func (r keylessRow) IterSchema(sch schema.Schema, cb func(tag uint64, val types.Value) (stop bool, err error)) (bool, error) {
-	iter, err := r.val.IteratorAt(cardinalityValIdx) // skip cardinality tag
+	iter, err := r.val.IteratorAt(KeylessFirstValIdx) // skip cardinality tag & val
 	if err != nil {
 		return false, err
-	}
-	_, card, err := iter.Next()
-	if err != nil {
-		return false, err
-	}
-	if card.(types.Uint) < 1 {
-		return false, ErrZeroCardinality
 	}
 
 	tags := sch.GetAllCols().Tags
@@ -209,7 +197,7 @@ func (r keylessRow) GetColVal(tag uint64) (val types.Value, ok bool) {
 }
 
 func (r keylessRow) SetColVal(updateTag uint64, updateVal types.Value, sch schema.Schema) (Row, error) {
-	iter, err := r.val.IteratorAt(cardinalityValIdx) // skip cardinality tag
+	iter, err := r.val.IteratorAt(KeylessCardinalityValIdx) // skip cardinality tag
 	if err != nil {
 		return nil, err
 	}
@@ -217,11 +205,7 @@ func (r keylessRow) SetColVal(updateTag uint64, updateVal types.Value, sch schem
 	if err != nil {
 		return nil, err
 	}
-
 	card := uint64(c.(types.Uint))
-	if card < 1 {
-		return nil, ErrZeroCardinality
-	}
 
 	i := 0
 	vals := make([]types.Value, sch.GetAllCols().Size())

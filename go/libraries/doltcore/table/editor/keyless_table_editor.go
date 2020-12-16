@@ -30,10 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-const (
-	cardinalityValIdx = uint64(1)
-)
-
 // keylessTableEditor accumulates and applies row edits to keyless tables.
 type keylessTableEditor struct {
 	tbl  *doltdb.Table
@@ -316,9 +312,9 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc) (*do
 		var ok bool
 		if v == nil {
 			// row does not yet exist
-			v, ok, err = setCardinality(delta.val, delta.delta)
+			v, ok, err = initializeCardinality(delta.val, delta.delta)
 		} else {
-			v, ok, err = updateCardinality(v.(types.Tuple), delta.delta)
+			v, ok, err = modifyCardinalityWithDelta(v.(types.Tuple), delta.delta)
 		}
 		if err != nil {
 			return nil, err
@@ -340,12 +336,12 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc) (*do
 }
 
 // for deletes (cardinality < 1): |ok| is set false
-func setCardinality(val types.Tuple, card int64) (v types.Tuple, ok bool, err error) {
+func initializeCardinality(val types.Tuple, card int64) (v types.Tuple, ok bool, err error) {
 	if card < 1 {
 		return types.Tuple{}, false, nil
 	}
 
-	v, err = val.Set(cardinalityValIdx, types.Uint(card))
+	v, err = val.Set(row.KeylessCardinalityValIdx, types.Uint(card))
 	if err != nil {
 		return v, false, err
 	}
@@ -354,8 +350,8 @@ func setCardinality(val types.Tuple, card int64) (v types.Tuple, ok bool, err er
 }
 
 // for deletes (cardinality < 1): |ok| is set false
-func updateCardinality(val types.Tuple, delta int64) (v types.Tuple, ok bool, err error) {
-	c, err := val.Get(cardinalityValIdx)
+func modifyCardinalityWithDelta(val types.Tuple, delta int64) (v types.Tuple, ok bool, err error) {
+	c, err := val.Get(row.KeylessCardinalityValIdx)
 	if err != nil {
 		return v, false, err
 	}
@@ -365,7 +361,7 @@ func updateCardinality(val types.Tuple, delta int64) (v types.Tuple, ok bool, er
 		return types.Tuple{}, false, nil
 	}
 
-	v, err = val.Set(cardinalityValIdx, types.Uint(card))
+	v, err = val.Set(row.KeylessCardinalityValIdx, types.Uint(card))
 	if err != nil {
 		return v, false, err
 	}

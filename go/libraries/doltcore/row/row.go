@@ -81,7 +81,7 @@ func GetFieldByNameWithDefault(colName string, defVal types.Value, r Row, sch sc
 	}
 }
 
-// ReduceToIndex creates and index record from a primary storage record.
+// ReduceToIndex creates an index record from a primary storage record.
 func ReduceToIndex(idx schema.Index, r Row) (Row, error) {
 	newRow := nomsRow{
 		key:   make(TaggedValues),
@@ -97,7 +97,7 @@ func ReduceToIndex(idx schema.Index, r Row) (Row, error) {
 	return newRow, nil
 }
 
-// ReduceToIndexPartialKey creates and index record from a primary storage record.
+// ReduceToIndexPartialKey creates an index record from a primary storage record.
 func ReduceToIndexPartialKey(idx schema.Index, r Row) (types.Tuple, error) {
 	var vals []types.Value
 	for _, tag := range idx.IndexedColumnTags() {
