@@ -309,17 +309,22 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc) (*do
 			return nil, err
 		}
 
+		var ok bool
 		if v == nil {
 			// row does not yet exist
-			v, err = setCardinality(delta.val, delta.delta)
+			v, ok, err = setCardinality(delta.val, delta.delta)
 		} else {
-			v, err = updateCardinality(v.(types.Tuple), delta.delta)
+			v, ok, err = updateCardinality(v.(types.Tuple), delta.delta)
 		}
 		if err != nil {
 			return nil, err
 		}
 
-		ed.Set(k, v)
+		if ok {
+			ed.Set(k, v)
+		} else {
+			ed.Remove(k)
+		}
 	}
 
 	rowData, err = ed.Map(ctx)
@@ -330,24 +335,36 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc) (*do
 	return tbl.UpdateRows(ctx, rowData)
 }
 
-func setCardinality(val types.Tuple, delta int64) (types.Tuple, error) {
-	if delta < 1 {
-		err := fmt.Errorf("attempted to initialize row with non-positive cardinality")
-		return types.Tuple{}, err
+// for deletes (cardinality < 1): |ok| is set false
+func setCardinality(val types.Tuple, card int64) (v types.Tuple, ok bool, err error) {
+	if card < 1 {
+		return types.Tuple{}, false, nil
 	}
-	return val.Set(0, types.Uint(delta))
+
+	v, err = val.Set(0, types.Uint(card))
+	if err != nil {
+		return v, false, err
+	}
+
+	return v, true, nil
 }
 
-func updateCardinality(val types.Tuple, delta int64) (v types.Tuple, err error) {
+// for deletes (cardinality < 1): |ok| is set false
+func updateCardinality(val types.Tuple, delta int64) (v types.Tuple, ok bool, err error) {
 	c, err := val.Get(0)
 	if err != nil {
-		return v, err
+		return v, false, err
 	}
 
 	card := int64(c.(types.Uint)) + delta // lossy
-	if card < 0 {
-		card = 0
+	if card < 1 {
+		return types.Tuple{}, false, nil
 	}
 
-	return val.Set(0, types.Uint(card))
+	v, err = val.Set(0, types.Uint(card))
+	if err != nil {
+		return v, false, err
+	}
+
+	return v, true, nil
 }

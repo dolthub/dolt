@@ -44,7 +44,7 @@ func (rdr *keylessTableReader) GetSchema() schema.Schema {
 
 // ReadSqlRow implements the SqlTableReader interface.
 func (rdr *keylessTableReader) ReadRow(ctx context.Context) (row.Row, error) {
-	if rdr.remainingCopies == 0 {
+	if rdr.remainingCopies <= 0 {
 		key, val, err := rdr.iter.Next(ctx)
 		if err != nil {
 			return nil, err
@@ -55,6 +55,9 @@ func (rdr *keylessTableReader) ReadRow(ctx context.Context) (row.Row, error) {
 		rdr.row, rdr.remainingCopies, err = row.KeylessRowsFromTuples(key.(types.Tuple), val.(types.Tuple))
 		if err != nil {
 			return nil, err
+		}
+		if rdr.remainingCopies == 0 {
+			return nil, row.ErrZeroCardinality
 		}
 	}
 

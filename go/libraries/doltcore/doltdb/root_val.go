@@ -38,7 +38,7 @@ const (
 	featureVersKey  = "feature_ver"
 )
 
-// RootValue defines the structure used inside all Liquidata noms dbs
+// RootValue defines the structure used inside all Dolthub noms dbs
 type RootValue struct {
 	vrw     types.ValueReadWriter
 	valueSt types.Struct

@@ -202,7 +202,7 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 			return true, err
 		}
 
-		pkTag := sch.GetPKCols().GetColumns()[0].Tag
+		pkTag := getUniqueTag(sch)
 		fromTables[pkTag] = table
 		fromTableNames[pkTag] = name
 		fromTableHashes[pkTag] = th
@@ -241,7 +241,7 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 			toFksParentSch[toFk.ReferencedTableName] = toRefSch
 		}
 
-		pkTag := sch.GetPKCols().GetColumns()[0].Tag
+		pkTag := getUniqueTag(sch)
 		oldName, ok := fromTableNames[pkTag]
 
 		if !ok {
@@ -315,6 +315,14 @@ func GetStagedUnstagedTableDeltas(ctx context.Context, ddb *doltdb.DoltDB, rsr e
 	}
 
 	return staged, unstaged, nil
+}
+
+func getUniqueTag(sch schema.Schema) uint64 {
+	if schema.IsKeyless(sch) {
+		// todo: this will break for column changes
+		return sch.GetNonPKCols().Tags[0]
+	}
+	return sch.GetPKCols().Tags[0]
 }
 
 // IsAdd returns true if the table was added between the fromRoot and toRoot.
