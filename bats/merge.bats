@@ -268,3 +268,43 @@ teardown() {
     run dolt merge merge_branch
     [ "$status" -eq 1 ]
 }
+
+@test "merge: --no-fk" {
+    dolt sql <<SQL
+ALTER TABLE test1 ADD INDEX (c1);
+ALTER TABLE test2 ADD INDEX (c1);
+INSERT INTO test1 VALUES (1,1,1), (2,2,2), (3,3,3);
+INSERT INTO test2 VALUES (1,1,1), (2,2,2), (3,3,3);
+ALTER TABLE test1 ADD CONSTRAINT fk_test1 FOREIGN KEY (c1) REFERENCES test2 (c1);
+ALTER TABLE test2 ADD CONSTRAINT fk_test2 FOREIGN KEY (c1) REFERENCES test1 (c1);
+SQL
+    dolt add -A
+    dolt commit -m "Random commit"
+    dolt branch other
+    dolt sql <<SQL
+SET FOREIGN_KEY_CHECKS=0;
+INSERT INTO test1 VALUES (4,4,4);
+INSERT INTO test2 VALUES (4,4,4);
+SET FOREIGN_KEY_CHECKS=1;
+SQL
+    dolt verify-constraints test1 test2
+    dolt add -A
+    dolt commit -m "Added values on master"
+    dolt checkout other
+    dolt sql <<SQL
+SET FOREIGN_KEY_CHECKS=0;
+INSERT INTO test1 VALUES (5,5,5);
+INSERT INTO test2 VALUES (5,5,5);
+SET FOREIGN_KEY_CHECKS=1;
+SQL
+    dolt verify-constraints test1 test2
+    dolt add -A
+    dolt commit -m "Added values on other"
+
+    run dolt merge -m "Merge" master
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "foreign key violation" ]] || false
+
+    dolt merge --no-fk -m "Merge" master
+    dolt verify-constraints test1 test2
+}

@@ -38,6 +38,7 @@ const (
 	abortParam  = "abort"
 	squashParam = "squash"
 	noFFParam   = "no-ff"
+	noFKParam   = "no-fk"
 )
 
 var mergeDocs = cli.CommandDocumentationContent{
@@ -50,7 +51,7 @@ The second syntax ({{.LessThan}}dolt merge --abort{{.GreaterThan}}) can only be 
 `,
 
 	Synopsis: []string{
-		"[--squash] {{.LessThan}}branch{{.GreaterThan}}",
+		"[--squash] [--no-fk] {{.LessThan}}branch{{.GreaterThan}}",
 		"--no-ff [-m message] {{.LessThan}}branch{{.GreaterThan}}",
 		"--abort",
 	},
@@ -84,6 +85,7 @@ func (cmd MergeCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(abortParam, "", abortDetails)
 	ap.SupportsFlag(squashParam, "", "Merges changes to the working set without updating the commit history")
 	ap.SupportsFlag(noFFParam, "", "Create a merge commit even when the merge resolves as a fast-forward.")
+	ap.SupportsFlag(noFKParam, "", "Disables foreign key constraints during the merge, which may result in broken merges.")
 	ap.SupportsString(cli.CommitMessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
 	return ap
 }
@@ -102,6 +104,9 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	if apr.ContainsAll(squashParam, noFFParam) {
 		cli.PrintErrf("error: Flags '--%s' and '--%s' cannot be used together.\n", squashParam, noFFParam)
 		return 1
+	}
+	if apr.Contains(noFKParam) {
+		ctx = context.WithValue(ctx, merge.ForeignKeyChecksDisabledCtxKey, true)
 	}
 
 	var verr errhand.VerboseError

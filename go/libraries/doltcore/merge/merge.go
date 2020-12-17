@@ -36,6 +36,10 @@ import (
 var ErrFastForward = errors.New("fast forward")
 var ErrSameTblAddedTwice = errors.New("table with same name added in 2 commits can't be merged")
 
+// Assign ForeignKeyChecksDisabledCtxKey a boolean value to the context to disable fk checks. If nothing is assigned, then it
+// assumes a false of false.
+const ForeignKeyChecksDisabledCtxKey = "ForeignKeyChecksDisabled"
+
 type Merger struct {
 	root      *doltdb.RootValue
 	mergeRoot *doltdb.RootValue
@@ -643,8 +647,12 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 	tblToStats := make(map[string]*MergeStats)
 
 	newRoot := ourRoot
+	foreignKeyChecksDisabled := false
+	if disabled, ok := ctx.Value(ForeignKeyChecksDisabledCtxKey).(bool); ok && disabled {
+		foreignKeyChecksDisabled = true
+	}
 	tableEditSession := editor.CreateTableEditSession(ourRoot, editor.TableEditSessionProps{
-		ForeignKeyChecksDisabled: true,
+		ForeignKeyChecksDisabled: foreignKeyChecksDisabled,
 	})
 	var unconflicted []string
 	// need to validate merges can be done on all tables before starting the actual merges.
