@@ -53,6 +53,16 @@ func (us *Uint64Set) Remove(i uint64) {
 	delete(us.uints, i)
 }
 
+func (us *Uint64Set) Intersection(other *Uint64Set) *Uint64Set {
+	inter := &Uint64Set{uints: make(map[uint64]bool)}
+	for member := range us.uints {
+		if other.Contains(member) {
+			inter.Add(member)
+		}
+	}
+	return inter
+}
+
 func (us *Uint64Set) AsSlice() []uint64 {
 	sl := make([]uint64, 0, us.Size())
 	for k := range us.uints {

@@ -82,6 +82,23 @@ SQL
     [[ "${lines[4]}" = "9,2" ]] || false
 }
 
+@test "keyless column add/drop" {
+    run dolt --keyless sql <<SQL
+ALTER TABLE keyless ADD COLUMN c2 int;
+ALTER TABLE keyless DROP COLUMN c0;
+SQL
+    [ $status -eq 0 ]
+
+    dolt --keyless sql -q "SELECT * FROM keyless ORDER BY c1;" -r csv
+    run dolt --keyless sql -q "SELECT * FROM keyless ORDER BY c1;" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" = "c1,c2" ]] || false
+    [[ "${lines[1]}" = "0," ]] || false
+    [[ "${lines[2]}" = "1," ]] || false
+    [[ "${lines[3]}" = "1," ]] || false
+    [[ "${lines[4]}" = "2," ]] || false
+}
+
 # keyless tables allow duplicate rows
 @test "keyless table import" {
     skip "unimplemented"
@@ -187,6 +204,27 @@ SQL
     [[ "${lines[10]}" = "2,2,,"  ]] || false
 }
 
+@test "keyless diff column add/drop" {
+    run dolt --keyless sql <<SQL
+ALTER TABLE keyless ADD COLUMN c2 int;
+ALTER TABLE keyless DROP COLUMN c0;
+SQL
+    [ $status -eq 0 ]
+
+    dolt --keyless diff
+    run dolt --keyless diff
+    [ $status -eq 0 ]
+    [[ "${lines[3]}"  =~ "CREATE TABLE keyless (" ]] || false
+    [[ "${lines[4]}"  =~ "-   \`c0\` INT"         ]] || false
+    [[ "${lines[5]}"  =~ "    \`c1\` INT"         ]] || false
+    [[ "${lines[6]}"  =~ "+   \`c2\` INT"         ]] || false
+    [[ "${lines[7]}"  =~ "     PRIMARY KEY ()"    ]] || false
+    [[ "${lines[8]}"  =~ ");"                     ]] || false
+
+    [[ "${lines[10]}" =~ "|  <  | c1 |    | c0 |" ]] || false
+    [[ "${lines[11]}" =~ "|  >  | c1 | c2 |    |" ]] || false
+}
+
 @test "keyless merge fast-forward" {
     skip "unimplemented"
     dolt checkout -b other
@@ -210,6 +248,7 @@ SQL
     dolt --keyless sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
     dolt --keyless commit -am "inserted on other"
 
+    dolt --keyless diff master
     run dolt --keyless diff master
     [ $status -eq 0 ]
     [ "$output" = "" ]
