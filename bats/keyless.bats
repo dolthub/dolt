@@ -189,6 +189,7 @@ SQL
     run dolt --keyless sql -q "
         SELECT to_c0, to_c1, from_c0, from_c1
         FROM dolt_diff_keyless
+        WHERE from_commit = hashof('HEAD')
         ORDER BY to_commit_date" -r csv
     [ $status -eq 0 ]
     [[ "${lines[0]}"  = "to_c0,to_c1,from_c0,from_c1"  ]] || false
@@ -198,10 +199,6 @@ SQL
     [[ "${lines[4]}"  = "1,9,,"  ]] || false
     [[ "${lines[5]}"  = "1,9,,"  ]] || false
     [[ "${lines[6]}"  = ",,0,0"  ]] || false
-    [[ "${lines[7]}"  = "1,1,,"  ]] || false
-    [[ "${lines[8]}"  = "1,1,,"  ]] || false
-    [[ "${lines[9]}"  = "0,0,,"  ]] || false
-    [[ "${lines[10]}" = "2,2,,"  ]] || false
 }
 
 @test "keyless diff column add/drop" {

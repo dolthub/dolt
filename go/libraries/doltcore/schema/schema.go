@@ -55,7 +55,8 @@ func ExtractAllColNames(sch Schema) (map[uint64]string, error) {
 }
 
 func IsKeyless(sch Schema) bool {
-	return sch.GetPKCols().Size() == 0
+	return sch.GetPKCols().Size() == 0 &&
+		sch.GetAllCols().Size() != 0
 }
 
 // TODO: this function never returns an error

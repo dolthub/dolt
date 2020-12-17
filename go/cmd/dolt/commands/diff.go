@@ -641,6 +641,9 @@ func diffRows(ctx context.Context, td diff.TableDelta, dArgs *diffArgs) errhand.
 	if err != nil {
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
 	}
+	if td.IsAdd() {
+		fromSch = toSch
+	}
 
 	fromRows, toRows, err := td.GetMaps(ctx)
 	if err != nil {
