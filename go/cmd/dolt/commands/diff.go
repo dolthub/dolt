@@ -47,7 +47,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/mathutil"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/atomicerr"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 type diffOutput int
@@ -386,11 +385,6 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 			return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
 		}
 
-		fromMap, toMap, err := td.GetMaps(ctx)
-		if err != nil {
-			return errhand.BuildDError("could not get row data for table %s", td.ToName).AddCause(err).Build()
-		}
-
 		if dArgs.diffParts&Summary != 0 {
 			numCols := fromSch.GetAllCols().Size()
 			verr = diffSummary(ctx, td, numCols)
@@ -406,7 +400,7 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 			} else if td.IsAdd() {
 				fromSch = toSch
 			}
-			verr = diffRows(ctx, fromMap, toMap, fromSch, toSch, dArgs, tblName)
+			verr = diffRows(ctx, td, dArgs)
 		}
 
 		if verr != nil {
@@ -631,7 +625,17 @@ func fromNamer(name string) string {
 	return diff.From + "_" + name
 }
 
-func diffRows(ctx context.Context, fromRows, toRows types.Map, fromSch, toSch schema.Schema, dArgs *diffArgs, tblName string) errhand.VerboseError {
+func diffRows(ctx context.Context, td diff.TableDelta, dArgs *diffArgs) errhand.VerboseError {
+	fromSch, toSch, err := td.GetSchemas(ctx)
+	if err != nil {
+		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
+	}
+
+	fromRows, toRows, err := td.GetMaps(ctx)
+	if err != nil {
+		return errhand.BuildDError("could not get row data for table %s", td.ToName).AddCause(err).Build()
+	}
+
 	joiner, err := rowconv.NewJoiner(
 		[]rowconv.NamedSchema{
 			{Name: diff.From, Sch: fromSch},
@@ -649,11 +653,15 @@ func diffRows(ctx context.Context, fromRows, toRows types.Map, fromSch, toSch sc
 		return verr
 	}
 
-	ad := diff.NewAsyncDiffer(1024)
-	ad.Start(ctx, fromRows, toRows)
-	defer ad.Close()
+	rd, err := diff.NewRowDiffer(ctx, td, 1024)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
 
-	src := diff.NewRowDiffSource(ad, joiner)
+	rd.Start(ctx, fromRows, toRows)
+	defer rd.Close()
+
+	src := diff.NewRowDiffSource(rd, joiner)
 	defer src.Close()
 
 	oldColNames, verr := mapTagToColName(fromSch, unionSch)
@@ -678,7 +686,7 @@ func diffRows(ctx context.Context, fromRows, toRows types.Map, fromSch, toSch sc
 	if dArgs.diffOutput == TabularDiffOutput {
 		sink, err = diff.NewColorDiffSink(iohelp.NopWrCloser(cli.CliOut), unionSch, numHeaderRows)
 	} else {
-		sink, err = diff.NewSQLDiffSink(iohelp.NopWrCloser(cli.CliOut), unionSch, tblName)
+		sink, err = diff.NewSQLDiffSink(iohelp.NopWrCloser(cli.CliOut), unionSch, td.CurName())
 	}
 
 	if err != nil {

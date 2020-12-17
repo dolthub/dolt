@@ -30,7 +30,7 @@ type DiffSummaryProgress struct {
 	Adds, Removes, Changes, CellChanges, NewSize, OldSize uint64
 }
 
-type reporter func (ctx context.Context, change *diff.Difference, ch chan<- DiffSummaryProgress) error
+type reporter func(ctx context.Context, change *diff.Difference, ch chan<- DiffSummaryProgress) error
 
 // todo: make package private once dolthub is migrated
 // Summary reports a summary of diff changes between two values

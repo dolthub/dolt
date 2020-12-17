@@ -16,8 +16,8 @@ package diff
 
 import (
 	"context"
-	"sort"
 	"fmt"
+	"sort"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"

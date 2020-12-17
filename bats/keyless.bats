@@ -134,20 +134,21 @@ CSV
 }
 
 @test "keyless diff against working set" {
-    skip "unimplemented"
     dolt --keyless sql <<SQL
 DELETE FROM keyless WHERE c0 = 0;
 INSERT INTO keyless VALUES (8,8);
 UPDATE keyless SET c1 = 9 WHERE c0 = 1;
 SQL
+    dolt --keyless diff
     run dolt --keyless diff
     [ $status -eq 0 ]
-    [[ "$output" = "|  -  | 0  | 0  |" ]] || false
-    [[ "$output" = "|  -  | 1  | 1  |" ]] || false
-    [[ "$output" = "|  -  | 1  | 1  |" ]] || false
-    [[ "$output" = "|  +  | 8  | 8  |" ]] || false
-    [[ "$output" = "|  +  | 1  | 9  |" ]] || false
-    [[ "$output" = "|  +  | 1  | 9  |" ]] || false
+    # output order is random
+    [[ "$output" =~ "|  -  | 0  | 0  |" ]] || false
+    [[ "$output" =~ "|  +  | 8  | 8  |" ]] || false
+    [[ "$output" =~ "|  -  | 1  | 1  |" ]] || false
+    [[ "$output" =~ "|  -  | 1  | 1  |" ]] || false
+    [[ "$output" =~ "|  +  | 1  | 9  |" ]] || false
+    [[ "$output" =~ "|  +  | 1  | 9  |" ]] || false
 }
 
 @test "keyless diff --summary" {
