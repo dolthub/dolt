@@ -17,6 +17,7 @@ package diff
 import (
 	"context"
 	"sort"
+	"fmt"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -378,6 +379,23 @@ func (td TableDelta) GetSchemas(ctx context.Context) (from, to schema.Schema, er
 	}
 
 	return from, to, nil
+}
+
+func (td TableDelta) IsKeyless(ctx context.Context) (bool, error) {
+	f, t, err := td.GetSchemas(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	from, to := schema.IsKeyless(f), schema.IsKeyless(t)
+
+	if from && to {
+		return true, nil
+	} else if !from && !to {
+		return false, nil
+	} else {
+		return false, fmt.Errorf("mismatched keyless and keyed schemas for table %s", td.CurName())
+	}
 }
 
 // GetMaps returns the table's row map at the fromRoot and toRoot, or and empty map if the table did not exist.
