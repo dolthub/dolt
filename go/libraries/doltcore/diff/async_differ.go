@@ -41,9 +41,12 @@ type RowDiffer interface {
 
 func NewRowDiffer(ctx context.Context, fromSch, toSch schema.Schema, buf int) RowDiffer {
 	ad := NewAsyncDiffer(buf)
-	if schema.IsKeyless(fromSch) && schema.IsKeyless(toSch) {
+
+	// assumes no PK changes
+	if schema.IsKeyless(fromSch) || schema.IsKeyless(toSch) {
 		return &keylessDiffer{AsyncDiffer: ad}
 	}
+
 	return ad
 }
 
