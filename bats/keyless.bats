@@ -157,11 +157,34 @@ DELETE FROM keyless WHERE c0 = 0;
 INSERT INTO keyless VALUES (8,8);
 UPDATE keyless SET c1 = 9 WHERE c0 = 1;
 SQL
-    dolt --keyless diff --summary
     run dolt --keyless diff --summary
     [ $status -eq 0 ]
     [[ "$output" =~ "3 Rows Added" ]] || false
     [[ "$output" =~ "3 Rows Deleted" ]] || false
+}
+
+@test "keyless dolt_diff_ table" {
+    dolt --keyless sql <<SQL
+DELETE FROM keyless WHERE c0 = 0;
+INSERT INTO keyless VALUES (8,8);
+UPDATE keyless SET c1 = 9 WHERE c0 = 1;
+SQL
+    run dolt --keyless sql -q "
+        SELECT to_c0, to_c1, from_c0, from_c1
+        FROM dolt_diff_keyless
+        ORDER BY to_commit_date" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[0]}"  = "to_c0,to_c1,from_c0,from_c1"  ]] || false
+    [[ "${lines[1]}"  = "8,8,,"  ]] || false
+    [[ "${lines[2]}"  = ",,1,1"  ]] || false
+    [[ "${lines[3]}"  = ",,1,1"  ]] || false
+    [[ "${lines[4]}"  = "1,9,,"  ]] || false
+    [[ "${lines[5]}"  = "1,9,,"  ]] || false
+    [[ "${lines[6]}"  = ",,0,0"  ]] || false
+    [[ "${lines[7]}"  = "1,1,,"  ]] || false
+    [[ "${lines[8]}"  = "1,1,,"  ]] || false
+    [[ "${lines[9]}"  = "0,0,,"  ]] || false
+    [[ "${lines[10]}" = "2,2,,"  ]] || false
 }
 
 @test "keyless merge fast-forward" {

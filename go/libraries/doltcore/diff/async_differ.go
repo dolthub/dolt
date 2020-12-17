@@ -22,6 +22,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/async"
 	"github.com/dolthub/dolt/go/store/diff"
 	"github.com/dolthub/dolt/go/store/types"
@@ -38,19 +39,12 @@ type RowDiffer interface {
 	Close() error
 }
 
-func NewRowDiffer(ctx context.Context, td TableDelta, buf int) (RowDiffer, error) {
-	keyless, err := td.IsKeyless(ctx)
-	if err != nil {
-		return nil, err
-	}
-
+func NewRowDiffer(ctx context.Context, fromSch, toSch schema.Schema, buf int) RowDiffer {
 	ad := NewAsyncDiffer(buf)
-
-	if keyless {
-		return &keylessDiffer{AsyncDiffer: ad}, nil
+	if schema.IsKeyless(fromSch) && schema.IsKeyless(toSch) {
+		return &keylessDiffer{AsyncDiffer: ad}
 	}
-
-	return ad, nil
+	return ad
 }
 
 // todo: make package private
@@ -65,6 +59,7 @@ type AsyncDiffer struct {
 
 var _ RowDiffer = &AsyncDiffer{}
 
+// todo: make package private once dolthub is migrated
 func NewAsyncDiffer(bufferedDiffs int) *AsyncDiffer {
 	return &AsyncDiffer{
 		make(chan diff.Difference, bufferedDiffs),
