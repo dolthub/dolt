@@ -393,7 +393,7 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 
 		if dArgs.diffParts&Summary != 0 {
 			numCols := fromSch.GetAllCols().Size()
-			verr = diffSummary(ctx, fromMap, toMap, numCols)
+			verr = diffSummary(ctx, td, numCols)
 		}
 
 		if dArgs.diffParts&SchemaOnlyDiff != 0 {
@@ -970,12 +970,13 @@ func printTableDiffSummary(td diff.TableDelta) {
 	}
 }
 
-func diffSummary(ctx context.Context, from types.Map, to types.Map, colLen int) errhand.VerboseError {
+func diffSummary(ctx context.Context, td diff.TableDelta, colLen int) errhand.VerboseError {
+	// todo: use errgroup.Group
 	ae := atomicerr.New()
 	ch := make(chan diff.DiffSummaryProgress)
 	go func() {
 		defer close(ch)
-		err := diff.Summary(ctx, ch, from, to)
+		err := diff.SummaryForTableDelta(ctx, ch, td)
 
 		ae.SetIfError(err)
 	}()
@@ -1009,26 +1010,23 @@ func diffSummary(ctx context.Context, from types.Map, to types.Map, colLen int) 
 		return errhand.BuildDError("").AddCause(err).Build()
 	}
 
-	if acc.NewSize > 0 || acc.OldSize > 0 {
-		formatSummary(acc, colLen)
-	} else {
+	keyless, err := td.IsKeyless(ctx)
+	if err != nil {
+		return nil
+	}
+
+	if (acc.Adds + acc.Removes + acc.Changes) == 0 {
 		cli.Println("No data changes. See schema changes by using -s or --schema.")
+	} else if keyless {
+		formatKeylessSummary(acc)
+	} else {
+		formatSummary(acc, colLen)
 	}
 
 	return nil
 }
 
 func formatSummary(acc diff.DiffSummaryProgress, colLen int) {
-	pluralize := func(singular, plural string, n uint64) string {
-		var noun string
-		if n != 1 {
-			noun = plural
-		} else {
-			noun = singular
-		}
-		return fmt.Sprintf("%s %s", humanize.Comma(int64(n)), noun)
-	}
-
 	rowsUnmodified := uint64(acc.OldSize - acc.Changes - acc.Removes)
 	unmodified := pluralize("Row Unmodified", "Rows Unmodified", rowsUnmodified)
 	insertions := pluralize("Row Added", "Rows Added", acc.Adds)
@@ -1055,4 +1053,22 @@ func formatSummary(acc diff.DiffSummaryProgress, colLen int) {
 	cli.Printf("%s (%.2f%%)\n", changes, safePercent(acc.Changes, acc.OldSize))
 	cli.Printf("%s (%.2f%%)\n", cellChanges, percentCellsChanged)
 	cli.Printf("(%s vs %s)\n\n", oldValues, newValues)
+}
+
+func formatKeylessSummary(acc diff.DiffSummaryProgress) {
+	insertions := pluralize("Row Added", "Rows Added", acc.Adds)
+	deletions := pluralize("Row Deleted", "Rows Deleted", acc.Removes)
+
+	cli.Printf("%s\n", insertions)
+	cli.Printf("%s\n", deletions)
+}
+
+func pluralize(singular, plural string, n uint64) string {
+	var noun string
+	if n != 1 {
+		noun = plural
+	} else {
+		noun = singular
+	}
+	return fmt.Sprintf("%s %s", humanize.Comma(int64(n)), noun)
 }

@@ -135,10 +135,32 @@ CSV
 
 @test "keyless diff against working set" {
     skip "unimplemented"
-    dolt sql -q "INSERT INTO keyless VALUES (9,9);"
-    run dolt diff
+    dolt --keyless sql <<SQL
+DELETE FROM keyless WHERE c0 = 0;
+INSERT INTO keyless VALUES (8,8);
+UPDATE keyless SET c1 = 9 WHERE c0 = 1;
+SQL
+    run dolt --keyless diff
     [ $status -eq 0 ]
-    [[ "$lines[@]" = "|  +  | 9  | 9  |" ]] || false
+    [[ "$output" = "|  -  | 0  | 0  |" ]] || false
+    [[ "$output" = "|  -  | 1  | 1  |" ]] || false
+    [[ "$output" = "|  -  | 1  | 1  |" ]] || false
+    [[ "$output" = "|  +  | 8  | 8  |" ]] || false
+    [[ "$output" = "|  +  | 1  | 9  |" ]] || false
+    [[ "$output" = "|  +  | 1  | 9  |" ]] || false
+}
+
+@test "keyless diff --summary" {
+    dolt --keyless sql <<SQL
+DELETE FROM keyless WHERE c0 = 0;
+INSERT INTO keyless VALUES (8,8);
+UPDATE keyless SET c1 = 9 WHERE c0 = 1;
+SQL
+    dolt --keyless diff --summary
+    run dolt --keyless diff --summary
+    [ $status -eq 0 ]
+    [[ "$output" =~ "3 Rows Added" ]] || false
+    [[ "$output" =~ "3 Rows Deleted" ]] || false
 }
 
 @test "keyless merge fast-forward" {
