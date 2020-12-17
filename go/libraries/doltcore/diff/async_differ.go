@@ -206,7 +206,7 @@ func convertDiff(df diff.Difference) (diff.Difference, uint64, error) {
 		} else if delta < 0 {
 			df.ChangeType = types.DiffChangeRemoved
 			df.NewValue = nil
-			return df, uint64(delta), nil
+			return df, uint64(-delta), nil
 		} else {
 			return df, 0, fmt.Errorf("diff with delta = 0 for key: %s", df.KeyValue.HumanReadableString())
 		}
