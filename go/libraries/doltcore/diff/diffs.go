@@ -142,7 +142,7 @@ func GetDocDiffs(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReade
 		return nil, nil, err
 	}
 
-	workingRoot, err := rsr.WorkingRoot(ctx)
+	workingRoot, err := env.WorkingRoot(ctx, ddb, rsr)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -152,12 +152,12 @@ func GetDocDiffs(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReade
 		return nil, nil, err
 	}
 
-	headRoot, err := rsr.HeadRoot(ctx)
+	headRoot, err := env.HeadRoot(ctx, ddb, rsr)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	stagedRoot, err := rsr.StagedRoot(ctx)
+	stagedRoot, err := env.StagedRoot(ctx, ddb, rsr)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -289,17 +289,17 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 }
 
 func GetStagedUnstagedTableDeltas(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (staged, unstaged []TableDelta, err error) {
-	headRoot, err := rsr.HeadRoot(ctx)
+	headRoot, err := env.HeadRoot(ctx, ddb, rsr)
 	if err != nil {
 		return nil, nil, RootValueUnreadable{HeadRoot, err}
 	}
 
-	stagedRoot, err := rsr.StagedRoot(ctx)
+	stagedRoot, err := env.StagedRoot(ctx, ddb, rsr)
 	if err != nil {
 		return nil, nil, RootValueUnreadable{StagedRoot, err}
 	}
 
-	workingRoot, err := rsr.WorkingRoot(ctx)
+	workingRoot, err := env.WorkingRoot(ctx, ddb, rsr)
 	if err != nil {
 		return nil, nil, RootValueUnreadable{WorkingRoot, err}
 	}

@@ -20,6 +20,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -80,7 +81,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	}
 
 	// Check if there are no changes in the staged set but the -a flag is false
-	hasStagedChanges, err := hasStagedSetChanges(ctx, rsr)
+	hasStagedChanges, err := hasStagedSetChanges(ctx, ddb, rsr)
 	if err != nil {
 		return nil, err
 	}
@@ -143,8 +144,8 @@ func hasWorkingSetChanges(rsr env.RepoStateReader) bool {
 }
 
 // TODO: We should not be dealing with root objects here but commit specs.
-func hasStagedSetChanges(ctx *sql.Context, rsr env.RepoStateReader) (bool, error) {
-	root, err := rsr.HeadRoot(ctx)
+func hasStagedSetChanges(ctx *sql.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (bool, error) {
+	root, err := env.HeadRoot(ctx, ddb, rsr)
 
 	if err != nil {
 		return false, err

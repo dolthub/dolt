@@ -32,9 +32,6 @@ type RepoStateReader interface {
 	IsMergeActive() bool
 	GetMergeCommit() string
 	GetAllValidDocDetails() ([]doltdb.DocDetails, error)
-	WorkingRoot(ctx context.Context) (*doltdb.RootValue, error)
-	HeadRoot(ctx context.Context) (*doltdb.RootValue, error)
-	StagedRoot(ctx context.Context) (*doltdb.RootValue, error)
 }
 
 type RepoStateWriter interface {
@@ -42,9 +39,7 @@ type RepoStateWriter interface {
 	// SetCWBHeadSpec(context.Context, *doltdb.CommitSpec) error
 	SetStagedHash(context.Context, hash.Hash) error
 	SetWorkingHash(context.Context, hash.Hash) error
-	UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) (hash.Hash, error)
 	ClearMerge() error
-	UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error
 	PutDocsToWorking(ctx context.Context, docDetails []doltdb.DocDetails) error
 	ResetWorkingDocsToStagedDos(ctx context.Context) error
 }
@@ -187,4 +182,59 @@ func (rs *RepoState) IsMergeActive() bool {
 
 func (rs *RepoState) GetMergeCommit() string {
 	return rs.Merge.Commit
+}
+
+// Returns the working root.
+func WorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.RootValue, error) {
+	return ddb.ReadRootValue(ctx, rsr.WorkingHash())
+}
+
+// Updates the working root.
+func UpdateWorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, rsw RepoStateWriter, newRoot *doltdb.RootValue) (hash.Hash, error) {
+	h, err := ddb.WriteRootValue(ctx, newRoot)
+
+	if err != nil {
+		return hash.Hash{}, doltdb.ErrNomsIO
+	}
+
+	err = rsw.SetWorkingHash(ctx, h)
+
+	if err != nil {
+		return hash.Hash{}, ErrStateUpdate
+	}
+
+	return h, nil
+}
+
+// Returns the head root.
+func HeadRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.RootValue, error) {
+	commit, err := ddb.ResolveRef(ctx, rsr.CWBHeadRef())
+
+	if err != nil {
+		return nil, err
+	}
+
+	return commit.GetRootValue()
+}
+
+// Returns the staged root.
+func StagedRoot(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.RootValue, error) {
+	return ddb.ReadRootValue(ctx, rsr.StagedHash())
+}
+
+// Updates the staged root.
+func UpdateStagedRoot(ctx context.Context, ddb *doltdb.DoltDB, rsw RepoStateWriter, newRoot *doltdb.RootValue) (hash.Hash, error) {
+	h, err := ddb.WriteRootValue(ctx, newRoot)
+
+	if err != nil {
+		return hash.Hash{}, doltdb.ErrNomsIO
+	}
+
+	err = rsw.SetStagedHash(ctx, h)
+
+	if err != nil {
+		return hash.Hash{}, ErrStateUpdate
+	}
+
+	return h, nil
 }

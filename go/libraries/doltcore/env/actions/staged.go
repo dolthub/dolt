@@ -74,13 +74,13 @@ func StageAllTables(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateRe
 		return err
 	}
 
-	staged, err := rsr.StagedRoot(ctx)
+	staged, err := env.StagedRoot(ctx, ddb, rsr)
 
 	if err != nil {
 		return err
 	}
 
-	working, err := rsr.WorkingRoot(ctx)
+	working, err := env.WorkingRoot(ctx, ddb, rsr)
 
 	if err != nil {
 		return err
@@ -117,8 +117,8 @@ func stageTables(ctx context.Context, db *doltdb.DoltDB, rsw env.RepoStateWriter
 		return err
 	}
 
-	if err := rsw.UpdateWorkingRoot(ctx, working); err == nil {
-		if sh, err := db.WriteRootValue(ctx, staged); err == nil {
+	if _, err := env.UpdateWorkingRoot(ctx, db, rsw, working); err == nil {
+		if sh, err := env.UpdateStagedRoot(ctx, db, rsw, staged); err == nil {
 			err = rsw.SetStagedHash(ctx, sh)
 
 			if err != nil {
