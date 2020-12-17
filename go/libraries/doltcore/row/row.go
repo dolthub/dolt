@@ -55,6 +55,29 @@ type Row interface {
 	NomsMapValue(sch schema.Schema) types.Valuable
 }
 
+func FromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) (Row, error) {
+	if schema.IsKeyless(sch) {
+		row, _, err := KeylessRowsFromTuples(nomsKey, nomsVal)
+		return row, err
+	}
+	return pkRowFromNoms(sch, nomsKey, nomsVal)
+}
+
+// ToNoms returns the storage-layer tuples corresponding to |r|.
+func ToNoms(ctx context.Context, sch schema.Schema, r Row) (key, val types.Tuple, err error) {
+	k, err := r.NomsMapKey(sch).Value(ctx)
+	if err != nil {
+		return key, val, err
+	}
+
+	v, err := r.NomsMapValue(sch).Value(ctx)
+	if err != nil {
+		return key, val, err
+	}
+
+	return k.(types.Tuple), v.(types.Tuple), nil
+}
+
 func GetFieldByName(colName string, r Row, sch schema.Schema) (types.Value, bool) {
 	col, ok := sch.GetAllCols().GetByName(colName)
 
@@ -108,21 +131,6 @@ func ReduceToIndexPartialKey(idx schema.Index, r Row) (types.Tuple, error) {
 		vals = append(vals, types.Uint(tag), val)
 	}
 	return types.NewTuple(r.Format(), vals...)
-}
-
-// Deconstruct returns the storage-layer tuples corresponding to |r|.
-func Deconstruct(ctx context.Context, sch schema.Schema, r Row) (key, val types.Tuple, err error) {
-	k, err := r.NomsMapKey(sch).Value(ctx)
-	if err != nil {
-		return key, val, err
-	}
-
-	v, err := r.NomsMapValue(sch).Value(ctx)
-	if err != nil {
-		return key, val, err
-	}
-
-	return k.(types.Tuple), v.(types.Tuple), nil
 }
 
 func IsEmpty(r Row) (b bool) {

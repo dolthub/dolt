@@ -30,11 +30,7 @@ type nomsRow struct {
 
 var _ Row = nomsRow{}
 
-func FromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) (Row, error) {
-	if schema.IsKeyless(sch) {
-		panic("FromNoms only supports pk rows")
-	}
-
+func pkRowFromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) (Row, error) {
 	keySl, err := nomsKey.AsSlice()
 	if err != nil {
 		return nil, err
