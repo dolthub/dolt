@@ -43,7 +43,7 @@ teardown() {
     run dolt sql -q "SELECT DOLT_ADD('test')"
     run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
 
-    # Check that everything was added
+    # Check that just test was added and not test2.
     run dolt status
     [ "$status" -eq 0 ]
     regex='test2'
@@ -61,7 +61,7 @@ teardown() {
     run dolt sql -q "SELECT DOLT_ADD('test', 'test2')"
     run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
 
-    # Check that everything was added
+    # Check that both test and test2 are added.
     run dolt diff
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
