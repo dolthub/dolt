@@ -239,7 +239,7 @@ func monoSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) (*
 		sql.WithViewRegistry(sql.NewViewRegistry()))
 	_ = sqlCtx.Set(sqlCtx, sql.AutoCommitSessionVar, sql.Boolean, true)
 
-	db := dsqle.NewDatabase(dbName, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter())
+	db := dsqle.NewDatabase(dbName, dEnv.DbData())
 
 	cat := sql.NewCatalog()
 	err := cat.Register(dfunctions.DoltFunctions...)

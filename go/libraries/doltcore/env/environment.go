@@ -445,6 +445,26 @@ func (dEnv *DoltEnv) RepoStateWriter() RepoStateWriter {
 	return &repoStateWriter{dEnv}
 }
 
+type docsReadWriter struct {
+	dEnv *DoltEnv
+}
+
+func (d *docsReadWriter) GetAllValidDocDetails() ([]doltdb.DocDetails, error) {
+	return d.dEnv.GetAllValidDocDetails()
+}
+
+func (d *docsReadWriter) PutDocsToWorking(ctx context.Context, docDetails []doltdb.DocDetails) error {
+	return d.dEnv.PutDocsToWorking(ctx, docDetails)
+}
+
+func (d *docsReadWriter) ResetWorkingDocsToStagedDocs(ctx context.Context) error {
+	return d.dEnv.ResetWorkingDocsToStagedDocs(ctx)
+}
+
+func (dEnv *DoltEnv) DocsReadWriter() DocsReadWriter {
+	return &docsReadWriter{dEnv}
+}
+
 func (dEnv *DoltEnv) HeadRoot(ctx context.Context) (*doltdb.RootValue, error) {
 	commit, err := dEnv.DoltDB.ResolveRef(ctx, dEnv.RepoState.CWBHeadRef())
 
@@ -453,6 +473,15 @@ func (dEnv *DoltEnv) HeadRoot(ctx context.Context) (*doltdb.RootValue, error) {
 	}
 
 	return commit.GetRootValue()
+}
+
+func (dEnv *DoltEnv) DbData() DbData {
+	return DbData{
+		Ddb: dEnv.DoltDB,
+		Rsw: dEnv.RepoStateWriter(),
+		Rsr: dEnv.RepoStateReader(),
+		Drw: dEnv.DocsReadWriter(),
+	}
 }
 
 func (dEnv *DoltEnv) StagedRoot(ctx context.Context) (*doltdb.RootValue, error) {

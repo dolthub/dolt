@@ -42,24 +42,14 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	// Get the information for the sql context.
 	dbName := ctx.GetCurrentDatabase()
 	dSess := sqle.DSessFromSess(ctx.Session)
-
-	ddb, ok := dSess.GetDoltDB(dbName)
+	dbData, ok := dSess.GetDbData(dbName)
 
 	if !ok {
 		return nil, fmt.Errorf("Could not load %s", dbName)
 	}
 
-	rsr, ok := dSess.GetDoltDBRepoStateReader(dbName)
-
-	if !ok {
-		return nil, fmt.Errorf("Could not load the %s RepoStateReader", dbName)
-	}
-
-	rsw, ok := dSess.GetDoltDBRepoStateWriter(dbName)
-
-	if !ok {
-		return nil, fmt.Errorf("Could not load the %s RepoStateWriter", dbName)
-	}
+	ddb := dbData.Ddb
+	rsr := dbData.Rsr
 
 	ap := cli.CreateCommitArgParser()
 
@@ -91,7 +81,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	}
 
 	if allFlag {
-		err = actions.StageAllTables(ctx, ddb, rsr, rsw)
+		err = actions.StageAllTables(ctx, dbData)
 	}
 
 	if err != nil {
@@ -127,7 +117,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		}
 	}
 
-	h, err := actions.CommitStaged(ctx, ddb, rsr, rsw, actions.CommitStagedProps{
+	h, err := actions.CommitStaged(ctx, dbData, actions.CommitStagedProps{
 		Message:          msg,
 		Date:             t,
 		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),

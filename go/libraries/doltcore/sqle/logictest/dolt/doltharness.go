@@ -334,7 +334,7 @@ func resetEnv(root *doltdb.RootValue) *doltdb.RootValue {
 }
 
 func sqlNewEngine(dEnv *env.DoltEnv) (*sqle.Engine, error) {
-	db := dsql.NewDatabase("dolt", dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter())
+	db := dsql.NewDatabase("dolt", dEnv.DbData())
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
 

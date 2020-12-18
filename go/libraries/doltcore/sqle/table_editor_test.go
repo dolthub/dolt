@@ -158,7 +158,7 @@ func TestTableEditor(t *testing.T) {
 
 			ctx := NewTestSQLCtx(context.Background())
 			root, _ := dEnv.WorkingRoot(context.Background())
-			db := NewDatabase("dolt", dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter())
+			db := NewDatabase("dolt", dEnv.DbData())
 			_ = DSessFromSess(ctx.Session).AddDB(ctx, db)
 			ctx.SetCurrentDatabase(db.Name())
 			err := db.SetRoot(ctx, root)

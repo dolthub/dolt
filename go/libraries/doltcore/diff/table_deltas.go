@@ -139,8 +139,8 @@ func (nd *DocDiffs) Len() int {
 }
 
 // GetDocDiffs retrieves staged and unstaged DocDiffs.
-func GetDocDiffs(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (*DocDiffs, *DocDiffs, error) {
-	docDetails, err := rsr.GetAllValidDocDetails()
+func GetDocDiffs(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, drw env.DocsReadWriter) (*DocDiffs, *DocDiffs, error) {
+	docDetails, err := drw.GetAllValidDocDetails()
 	if err != nil {
 		return nil, nil, err
 	}

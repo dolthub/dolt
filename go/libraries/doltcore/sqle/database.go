@@ -137,6 +137,7 @@ type Database struct {
 	ddb       *doltdb.DoltDB
 	rsr       env.RepoStateReader
 	rsw       env.RepoStateWriter
+	drw       env.DocsReadWriter
 	batchMode commitBehavior
 	tc        *tableCache
 }
@@ -149,12 +150,13 @@ var _ sql.TableRenamer = Database{}
 var _ sql.TriggerDatabase = Database{}
 
 // NewDatabase returns a new dolt database to use in queries.
-func NewDatabase(name string, ddb *doltdb.DoltDB, rsr env.RepoStateReader, rsw env.RepoStateWriter) Database {
+func NewDatabase(name string, dbData env.DbData) Database {
 	return Database{
 		name:      name,
-		ddb:       ddb,
-		rsr:       rsr,
-		rsw:       rsw,
+		ddb:       dbData.Ddb,
+		rsr:       dbData.Rsr,
+		rsw:       dbData.Rsw,
+		drw:       dbData.Drw,
 		batchMode: single,
 		tc:        &tableCache{&sync.Mutex{}, make(map[*doltdb.RootValue]map[string]sql.Table)},
 	}
@@ -162,12 +164,13 @@ func NewDatabase(name string, ddb *doltdb.DoltDB, rsr env.RepoStateReader, rsw e
 
 // NewBatchedDatabase returns a new dolt database executing in batch insert mode. Integrators must call Flush() to
 // commit any outstanding edits.
-func NewBatchedDatabase(name string, ddb *doltdb.DoltDB, rsr env.RepoStateReader, rsw env.RepoStateWriter) Database {
+func NewBatchedDatabase(name string, dbData env.DbData) Database {
 	return Database{
 		name:      name,
-		ddb:       ddb,
-		rsr:       rsr,
-		rsw:       rsw,
+		ddb:       dbData.Ddb,
+		rsr:       dbData.Rsr,
+		rsw:       dbData.Rsw,
+		drw:       dbData.Drw,
 		batchMode: batched,
 		tc:        &tableCache{&sync.Mutex{}, make(map[*doltdb.RootValue]map[string]sql.Table)},
 	}
@@ -191,6 +194,10 @@ func (db Database) GetStateReader() env.RepoStateReader {
 // GetStateWriter gets the RepoStateWriter for a Database
 func (db Database) GetStateWriter() env.RepoStateWriter {
 	return db.rsw
+}
+
+func (db Database) GetDocsReadWriter() env.DocsReadWriter {
+	return db.drw
 }
 
 // GetTableInsensitive is used when resolving tables in queries. It returns a best-effort case-insensitive match for

@@ -367,11 +367,11 @@ func execBatch(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots
 type createDBFunc func(name string, dEnv *env.DoltEnv) dsqle.Database
 
 func newDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
-	return dsqle.NewDatabase(name, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter())
+	return dsqle.NewDatabase(name, dEnv.DbData())
 }
 
 func newBatchedDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
-	return dsqle.NewBatchedDatabase(name, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.RepoStateWriter())
+	return dsqle.NewBatchedDatabase(name, dEnv.DbData())
 }
 
 func execQuery(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, query string, format resultFormat) (newRoot map[string]*doltdb.RootValue, verr errhand.VerboseError) {
