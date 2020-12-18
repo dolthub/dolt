@@ -370,6 +370,13 @@ SQL
     run dolt --keyless merge right
     [ $status -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
+
+    run dolt --keyless conflicts resolve --ours dupe
+    [ $status -eq 0 ]
+    dolt --keyless commit -am "resolved"
+    run dolt --keyless sql -q "select sum(c0), sum(c1) from dupe" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "6,6" ]] || false
 }
 
 @test "keyless diff duplicate updates" {
@@ -407,9 +414,16 @@ SQL
     dolt --keyless sql -q "UPDATE dupe SET c1 = 2 LIMIT 4;"
     dolt --keyless commit -am "updated four rows on left"
 
-    dolt --keyless merge right
-    # [ $status -eq 0 ]
-    # [[ "$output" =~ "CONFLICT" ]] || false
+    run dolt --keyless merge right
+    [ $status -eq 0 ]
+    [[ "$output" =~ "CONFLICT" ]] || false
+
+    run dolt --keyless conflicts resolve --theirs dupe
+    [ $status -eq 0 ]
+    dolt --keyless commit -am "resolved"
+    run dolt --keyless sql -q "select sum(c0), sum(c1) from dupe" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "10,12" ]] || false
 }
 
 @test "keyless sql diff" {
@@ -559,9 +573,26 @@ CSV
     dolt --keyless sql -q "UPDATE keyless SET c1 = c1+20 WHERE c0 > 6"
     dolt --keyless commit -am "updated on other"
 
-    dolt --keyless merge master
-    # [ $status -eq 0 ]
-    # [[ "$output" =~ "CONFLICT" ]] || false
+    run dolt --keyless merge master
+    [ $status -eq 0 ]
+    [[ "$output" =~ "CONFLICT" ]] || false
+
+    dolt --keyless conflicts resolve --ours keyless
+    run dolt --keyless conflicts resolve --ours keyless
+    [ $status -eq 0 ]
+    dolt --keyless commit -am "resolved"
+
+    skip "incorrect resolve"
+    # updates become delete+add
+    # conflict is generated for delete
+    # the corresponding add does not conflict
+    # on resolve, we get both sets of adds
+
+    run dolt --keyless sql -q "select * from keyless where c0 > 6 order by c0" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "7,17" ]] || false
+    [[ "${lines[1]}" = "8,18" ]] || false
+    [[ "${lines[1]}" = "9,19" ]] || false
 }
 
 @test "keyless diff branches with reordered mutation history" {
@@ -638,6 +669,15 @@ SQL
     run dolt --keyless merge master
     [ $status -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
+
+    run dolt --keyless conflicts resolve --theirs keyless
+    [ $status -eq 0 ]
+    dolt --keyless commit -am "resolved"
+    run dolt --keyless sql -q "select * from keyless where c0 > 6 order by c0" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "7,7" ]] || false
+    [[ "${lines[2]}" = "8,8" ]] || false
+    [[ "${lines[3]}" = "9,9" ]] || false
 }
 
 @test "keyless diff branches with offset mutation history" {
@@ -669,6 +709,16 @@ SQL
     run dolt --keyless merge master
     [ $status -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
+
+    run dolt --keyless conflicts resolve --ours keyless
+    [ $status -eq 0 ]
+    dolt --keyless commit -am "resolved"
+    run dolt --keyless sql -q "select * from keyless where c0 > 6 order by c0" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "7,7" ]] || false
+    [[ "${lines[2]}" = "7,7" ]] || false
+    [[ "${lines[3]}" = "8,8" ]] || false
+    [[ "${lines[4]}" = "9,9" ]] || false
 }
 
 @test "keyless diff delete+add against working" {
@@ -712,7 +762,17 @@ SQL
     dolt --keyless sql -q "INSERT INTO keyless VALUES (2,2);"
     dolt --keyless commit -am "inserted twos on left"
 
-    dolt --keyless merge right
-    # [ $status -eq 0 ]
-    # [[ "$output" =~ "CONFLICT" ]] || false
+    run dolt --keyless merge right
+    [ $status -eq 0 ]
+    [[ "$output" =~ "CONFLICT" ]] || false
+
+    run dolt --keyless conflicts resolve --theirs keyless
+    [ $status -eq 0 ]
+    dolt --keyless commit -am "resolved"
+    run dolt --keyless sql -q "select * from keyless order by c0" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "0,0" ]] || false
+    [[ "${lines[2]}" = "1,1" ]] || false
+    [[ "${lines[3]}" = "1,1" ]] || false
+    [ "${#lines[@]}" -eq 4 ]
 }
