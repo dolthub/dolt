@@ -376,7 +376,7 @@ func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, tblName stri
 						return err
 					}
 				} else {
-					err = applyChange(ctx, tblEdit, rows, sch, stats, types.ValueChanged{ChangeType: change.ChangeType, Key: key, OldValue: r, NewValue: mergedRow})
+					err = applyChange(ctx, tblEdit, rows, sch, stats, types.ValueChanged{ChangeType: change.ChangeType, Key: key, OldValue: ancRow, NewValue: mergedRow})
 					if err != nil {
 						return err
 					}
