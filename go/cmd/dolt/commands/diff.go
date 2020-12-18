@@ -47,7 +47,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/mathutil"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/atomicerr"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 type diffOutput int
@@ -355,6 +354,17 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 
 	for _, td := range tableDeltas {
 
+		if dArgs.diffOutput == SQLDiffOutput {
+			ok, err := td.IsKeyless(ctx)
+			if err != nil {
+				return errhand.VerboseErrorFromError(err)
+			}
+			if ok {
+				// todo: implement keyless SQL diff
+				continue
+			}
+		}
+
 		if !dArgs.tableSet.Contains(td.FromName) && !dArgs.tableSet.Contains(td.ToName) {
 			continue
 		}
@@ -386,14 +396,9 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 			return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
 		}
 
-		fromMap, toMap, err := td.GetMaps(ctx)
-		if err != nil {
-			return errhand.BuildDError("could not get row data for table %s", td.ToName).AddCause(err).Build()
-		}
-
 		if dArgs.diffParts&Summary != 0 {
 			numCols := fromSch.GetAllCols().Size()
-			verr = diffSummary(ctx, fromMap, toMap, numCols)
+			verr = diffSummary(ctx, td, numCols)
 		}
 
 		if dArgs.diffParts&SchemaOnlyDiff != 0 {
@@ -406,7 +411,7 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 			} else if td.IsAdd() {
 				fromSch = toSch
 			}
-			verr = diffRows(ctx, fromMap, toMap, fromSch, toSch, dArgs, tblName)
+			verr = diffRows(ctx, td, dArgs)
 		}
 
 		if verr != nil {
@@ -631,7 +636,20 @@ func fromNamer(name string) string {
 	return diff.From + "_" + name
 }
 
-func diffRows(ctx context.Context, fromRows, toRows types.Map, fromSch, toSch schema.Schema, dArgs *diffArgs, tblName string) errhand.VerboseError {
+func diffRows(ctx context.Context, td diff.TableDelta, dArgs *diffArgs) errhand.VerboseError {
+	fromSch, toSch, err := td.GetSchemas(ctx)
+	if err != nil {
+		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
+	}
+	if td.IsAdd() {
+		fromSch = toSch
+	}
+
+	fromRows, toRows, err := td.GetMaps(ctx)
+	if err != nil {
+		return errhand.BuildDError("could not get row data for table %s", td.ToName).AddCause(err).Build()
+	}
+
 	joiner, err := rowconv.NewJoiner(
 		[]rowconv.NamedSchema{
 			{Name: diff.From, Sch: fromSch},
@@ -649,11 +667,12 @@ func diffRows(ctx context.Context, fromRows, toRows types.Map, fromSch, toSch sc
 		return verr
 	}
 
-	ad := diff.NewAsyncDiffer(1024)
-	ad.Start(ctx, fromRows, toRows)
-	defer ad.Close()
+	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024) // assumes no pk changes
 
-	src := diff.NewRowDiffSource(ad, joiner)
+	rd.Start(ctx, fromRows, toRows)
+	defer rd.Close()
+
+	src := diff.NewRowDiffSource(rd, joiner)
 	defer src.Close()
 
 	oldColNames, verr := mapTagToColName(fromSch, unionSch)
@@ -678,7 +697,7 @@ func diffRows(ctx context.Context, fromRows, toRows types.Map, fromSch, toSch sc
 	if dArgs.diffOutput == TabularDiffOutput {
 		sink, err = diff.NewColorDiffSink(iohelp.NopWrCloser(cli.CliOut), unionSch, numHeaderRows)
 	} else {
-		sink, err = diff.NewSQLDiffSink(iohelp.NopWrCloser(cli.CliOut), unionSch, tblName)
+		sink, err = diff.NewSQLDiffSink(iohelp.NopWrCloser(cli.CliOut), unionSch, td.CurName())
 	}
 
 	if err != nil {
@@ -970,12 +989,13 @@ func printTableDiffSummary(td diff.TableDelta) {
 	}
 }
 
-func diffSummary(ctx context.Context, from types.Map, to types.Map, colLen int) errhand.VerboseError {
+func diffSummary(ctx context.Context, td diff.TableDelta, colLen int) errhand.VerboseError {
+	// todo: use errgroup.Group
 	ae := atomicerr.New()
 	ch := make(chan diff.DiffSummaryProgress)
 	go func() {
 		defer close(ch)
-		err := diff.Summary(ctx, ch, from, to)
+		err := diff.SummaryForTableDelta(ctx, ch, td)
 
 		ae.SetIfError(err)
 	}()
@@ -1009,26 +1029,26 @@ func diffSummary(ctx context.Context, from types.Map, to types.Map, colLen int) 
 		return errhand.BuildDError("").AddCause(err).Build()
 	}
 
-	if acc.NewSize > 0 || acc.OldSize > 0 {
-		formatSummary(acc, colLen)
-	} else {
+	keyless, err := td.IsKeyless(ctx)
+	if err != nil {
+		return nil
+	}
+
+	if (acc.Adds + acc.Removes + acc.Changes) == 0 {
 		cli.Println("No data changes. See schema changes by using -s or --schema.")
+		return nil
+	}
+
+	if keyless {
+		printKeylessSummary(acc)
+	} else {
+		printSummary(acc, colLen)
 	}
 
 	return nil
 }
 
-func formatSummary(acc diff.DiffSummaryProgress, colLen int) {
-	pluralize := func(singular, plural string, n uint64) string {
-		var noun string
-		if n != 1 {
-			noun = plural
-		} else {
-			noun = singular
-		}
-		return fmt.Sprintf("%s %s", humanize.Comma(int64(n)), noun)
-	}
-
+func printSummary(acc diff.DiffSummaryProgress, colLen int) {
 	rowsUnmodified := uint64(acc.OldSize - acc.Changes - acc.Removes)
 	unmodified := pluralize("Row Unmodified", "Rows Unmodified", rowsUnmodified)
 	insertions := pluralize("Row Added", "Rows Added", acc.Adds)
@@ -1055,4 +1075,22 @@ func formatSummary(acc diff.DiffSummaryProgress, colLen int) {
 	cli.Printf("%s (%.2f%%)\n", changes, safePercent(acc.Changes, acc.OldSize))
 	cli.Printf("%s (%.2f%%)\n", cellChanges, percentCellsChanged)
 	cli.Printf("(%s vs %s)\n\n", oldValues, newValues)
+}
+
+func printKeylessSummary(acc diff.DiffSummaryProgress) {
+	insertions := pluralize("Row Added", "Rows Added", acc.Adds)
+	deletions := pluralize("Row Deleted", "Rows Deleted", acc.Removes)
+
+	cli.Printf("%s\n", insertions)
+	cli.Printf("%s\n", deletions)
+}
+
+func pluralize(singular, plural string, n uint64) string {
+	var noun string
+	if n != 1 {
+		noun = plural
+	} else {
+		noun = singular
+	}
+	return fmt.Sprintf("%s %s", humanize.Comma(int64(n)), noun)
 }

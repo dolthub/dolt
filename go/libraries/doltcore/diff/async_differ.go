@@ -16,17 +16,42 @@ package diff
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/async"
 	"github.com/dolthub/dolt/go/store/diff"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+type RowDiffer interface {
+	// Start starts the RowDiffer.
+	Start(ctx context.Context, from, to types.Map)
+
+	// GetDiffs returns the requested number of diff.Differences, or times out.
+	GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Difference, bool, error)
+
+	// Close closes the RowDiffer.
+	Close() error
+}
+
+func NewRowDiffer(ctx context.Context, fromSch, toSch schema.Schema, buf int) RowDiffer {
+	ad := NewAsyncDiffer(buf)
+
+	// assumes no PK changes
+	// mixed diffing of keyless and pk tables no supported
+	if schema.IsKeyless(fromSch) || schema.IsKeyless(toSch) {
+		return &keylessDiffer{AsyncDiffer: ad}
+	}
+
+	return ad
+}
+
+// todo: make package private
 type AsyncDiffer struct {
 	diffChan   chan diff.Difference
 	bufferSize int
@@ -36,6 +61,9 @@ type AsyncDiffer struct {
 	egCancel func()
 }
 
+var _ RowDiffer = &AsyncDiffer{}
+
+// todo: make package private once dolthub is migrated
 func NewAsyncDiffer(bufferedDiffs int) *AsyncDiffer {
 	return &AsyncDiffer{
 		make(chan diff.Difference, bufferedDiffs),
@@ -91,13 +119,97 @@ func (ad *AsyncDiffer) GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Di
 	}
 }
 
-func (ad *AsyncDiffer) ReadAll() ([]*diff.Difference, error) {
-	diffs, hasMore, err := ad.GetDiffs(0, 5*time.Minute)
-	if err != nil {
-		return nil, err
+type keylessDiffer struct {
+	*AsyncDiffer
+
+	df         diff.Difference
+	copiesLeft uint64
+}
+
+var _ RowDiffer = &keylessDiffer{}
+
+func (kd *keylessDiffer) GetDiffs(numDiffs int, timeout time.Duration) (diffs []*diff.Difference, more bool, err error) {
+	timeoutChan := time.After(timeout)
+	diffs = make([]*diff.Difference, numDiffs)
+	idx := 0
+
+	for {
+		// first populate |diffs| with copies of |kd.df|
+		for (idx < numDiffs) && (kd.copiesLeft > 0) {
+			diffs[idx] = &kd.df
+
+			idx++
+			kd.copiesLeft--
+		}
+		if idx == numDiffs {
+			return diffs, true, nil
+		}
+
+		// then get another Difference
+		var d diff.Difference
+		select {
+		case <-timeoutChan:
+			return diffs, true, nil
+
+		case <-kd.egCtx.Done():
+			return nil, false, kd.eg.Wait()
+
+		case d, more = <-kd.diffChan:
+			if !more {
+				return diffs[:idx], more, nil
+			}
+
+			kd.df, kd.copiesLeft, err = convertDiff(d)
+			if err != nil {
+				return nil, false, err
+			}
+		}
 	}
-	if hasMore {
-		return nil, errors.New("Unable to read the diffs in a reasonable amount of time")
+
+}
+
+// convertDiff reports the cardinality of a change,
+// and converts updates to adds or deletes
+func convertDiff(df diff.Difference) (diff.Difference, uint64, error) {
+	var oldCard uint64
+	if df.OldValue != nil {
+		v, err := df.OldValue.(types.Tuple).Get(row.KeylessCardinalityValIdx)
+		if err != nil {
+			return df, 0, err
+		}
+		oldCard = uint64(v.(types.Uint))
 	}
-	return diffs, nil
+
+	var newCard uint64
+	if df.NewValue != nil {
+		v, err := df.NewValue.(types.Tuple).Get(row.KeylessCardinalityValIdx)
+		if err != nil {
+			return df, 0, err
+		}
+		newCard = uint64(v.(types.Uint))
+	}
+
+	switch df.ChangeType {
+	case types.DiffChangeRemoved:
+		return df, oldCard, nil
+
+	case types.DiffChangeAdded:
+		return df, newCard, nil
+
+	case types.DiffChangeModified:
+		delta := int64(newCard) - int64(oldCard)
+		if delta > 0 {
+			df.ChangeType = types.DiffChangeAdded
+			df.OldValue = nil
+			return df, uint64(delta), nil
+		} else if delta < 0 {
+			df.ChangeType = types.DiffChangeRemoved
+			df.NewValue = nil
+			return df, uint64(-delta), nil
+		} else {
+			panic(fmt.Sprintf("diff with delta = 0 for key: %s", df.KeyValue.HumanReadableString()))
+		}
+	default:
+		return df, 0, fmt.Errorf("unexpected DiffChange type %d", df.ChangeType)
+	}
 }

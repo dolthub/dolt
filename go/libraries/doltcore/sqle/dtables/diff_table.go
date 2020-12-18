@@ -15,7 +15,6 @@
 package dtables
 
 import (
-	"context"
 	"errors"
 	"fmt"
 
@@ -219,7 +218,7 @@ func tableData(ctx *sql.Context, tbl *doltdb.Table, ddb *doltdb.DoltDB) (types.M
 var _ sql.RowIter = (*diffRowItr)(nil)
 
 type diffRowItr struct {
-	ad             *diff.AsyncDiffer
+	ad             diff.RowDiffer
 	diffSrc        *diff.RowDiffSource
 	joiner         *rowconv.Joiner
 	sch            schema.Schema
@@ -232,16 +231,6 @@ type commitInfo struct {
 	date    *types.Timestamp
 	nameTag uint64
 	dateTag uint64
-}
-
-func newDiffRowItr(ctx context.Context, joiner *rowconv.Joiner, rowDataFrom, rowDataTo types.Map, convFrom, convTo *rowconv.RowConverter, from, to commitInfo) *diffRowItr {
-	ad := diff.NewAsyncDiffer(1024)
-	ad.Start(ctx, rowDataFrom, rowDataTo)
-
-	src := diff.NewRowDiffSource(ad, joiner)
-	src.AddInputRowConversion(convFrom, convTo)
-
-	return &diffRowItr{ad, src, joiner, joiner.GetSchema(), from, to}
 }
 
 // Next returns the next row
@@ -370,16 +359,20 @@ func (dp diffPartition) getRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, ss *sch
 	fromCmInfo := commitInfo{types.String(dp.fromName), dp.fromDate, fromCol.Tag, fromDateCol.Tag}
 	toCmInfo := commitInfo{types.String(dp.toName), dp.toDate, toCol.Tag, toDateCol.Tag}
 
-	return newDiffRowItr(
-		ctx,
-		joiner,
-		fromData,
-		toData,
-		fromConv,
-		toConv,
-		fromCmInfo,
-		toCmInfo,
-	), nil
+	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024)
+	rd.Start(ctx, fromData, toData)
+
+	src := diff.NewRowDiffSource(rd, joiner)
+	src.AddInputRowConversion(fromConv, toConv)
+
+	return &diffRowItr{
+		ad:             rd,
+		diffSrc:        src,
+		joiner:         joiner,
+		sch:            joiner.GetSchema(),
+		fromCommitInfo: fromCmInfo,
+		toCommitInfo:   toCmInfo,
+	}, nil
 }
 
 type partitionSelectFunc func(*sql.Context, diffPartition) (bool, error)

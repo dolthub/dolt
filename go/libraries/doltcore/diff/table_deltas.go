@@ -16,7 +16,10 @@ package diff
 
 import (
 	"context"
+	"fmt"
 	"sort"
+
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -186,6 +189,11 @@ type TableDelta struct {
 // GetTableDeltas returns a slice of TableDelta objects for each table that changed between fromRoot and toRoot.
 // It matches tables across roots using the tag of the first primary key column in the table's schema.
 func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (deltas []TableDelta, err error) {
+	deltas, err = getKeylessDeltas(ctx, fromRoot, toRoot)
+	if err != nil {
+		return nil, err
+	}
+
 	fromTables := make(map[uint64]*doltdb.Table)
 	fromTableNames := make(map[uint64]string)
 	fromTableFKs := make(map[uint64][]doltdb.ForeignKey)
@@ -197,6 +205,10 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 	}
 
 	err = fromRoot.IterTables(ctx, func(name string, table *doltdb.Table, sch schema.Schema) (stop bool, err error) {
+		if schema.IsKeyless(sch) {
+			return
+		}
+
 		th, err := table.HashOf()
 		if err != nil {
 			return true, err
@@ -219,26 +231,19 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 	}
 
 	err = toRoot.IterTables(ctx, func(name string, table *doltdb.Table, sch schema.Schema) (stop bool, err error) {
+		if schema.IsKeyless(sch) {
+			return
+		}
+
 		th, err := table.HashOf()
 		if err != nil {
 			return true, err
 		}
 
 		toFKs, _ := toFKC.KeysForTable(name)
-		toFksParentSch := make(map[string]schema.Schema)
-		for _, toFk := range toFKs {
-			toRefTable, _, ok, err := toRoot.GetTableInsensitive(ctx, toFk.ReferencedTableName)
-			if err != nil {
-				return true, err
-			}
-			if !ok {
-				continue // as the schemas are for display-only, we can skip on any missing parents (they were deleted, etc.)
-			}
-			toRefSch, err := toRefTable.GetSchema(ctx)
-			if err != nil {
-				return true, err
-			}
-			toFksParentSch[toFk.ReferencedTableName] = toRefSch
+		toFksParentSch, err := getFkParentSchs(ctx, toRoot, toFKs...)
+		if err != nil {
+			return false, err
 		}
 
 		pkTag := getUniqueTag(sch)
@@ -317,12 +322,116 @@ func GetStagedUnstagedTableDeltas(ctx context.Context, ddb *doltdb.DoltDB, rsr e
 	return staged, unstaged, nil
 }
 
+// we don't have any stable identifier to a keyless table, have to do an n^2 match
+// todo: this is a good reason to implement table tags
+func getKeylessDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (deltas []TableDelta, err error) {
+	type fromTable struct {
+		tags *set.Uint64Set
+		tbl  *doltdb.Table
+		hsh  hash.Hash
+	}
+
+	fromTables := make(map[string]fromTable)
+	err = fromRoot.IterTables(ctx, func(name string, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
+		if !schema.IsKeyless(sch) {
+			return
+		}
+
+		h, err := tbl.HashOf()
+		if err != nil {
+			return false, err
+		}
+
+		fromTables[name] = fromTable{
+			tags: set.NewUint64Set(sch.GetAllCols().Tags),
+			tbl:  tbl,
+			hsh:  h,
+		}
+		return
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	err = toRoot.IterTables(ctx, func(name string, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
+		if !schema.IsKeyless(sch) {
+			return
+		}
+
+		toTblHash, err := tbl.HashOf()
+		if err != nil {
+			return false, err
+		}
+
+		delta := TableDelta{
+			ToName:  name,
+			ToTable: tbl,
+		}
+
+		toTableTags := set.NewUint64Set(sch.GetAllCols().Tags)
+		for fromName, fromTbl := range fromTables {
+
+			// |tbl| and |fromTbl| have the same identity
+			// if they have column tags in common
+			if toTableTags.Intersection(fromTbl.tags).Size() > 0 {
+
+				// consume matched fromTable
+				delete(fromTables, fromName)
+
+				if toTblHash.Equal(fromTbl.hsh) {
+					// no diff, skip table
+					return
+				}
+
+				delta.FromName = fromName
+				delta.FromTable = fromTbl.tbl
+				break
+			}
+		}
+
+		// append if matched or unmatched
+		deltas = append(deltas, delta)
+		return
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// all unmatched pairs are table drops
+	for name, fromPair := range fromTables {
+		deltas = append(deltas, TableDelta{
+			FromName:  name,
+			FromTable: fromPair.tbl,
+		})
+	}
+
+	return deltas, nil
+}
+
 func getUniqueTag(sch schema.Schema) uint64 {
 	if schema.IsKeyless(sch) {
-		// todo: this will break for column changes
-		return sch.GetNonPKCols().Tags[0]
+		panic("keyless tables have no stable column tags")
 	}
 	return sch.GetPKCols().Tags[0]
+}
+
+func getFkParentSchs(ctx context.Context, root *doltdb.RootValue, fks ...doltdb.ForeignKey) (map[string]schema.Schema, error) {
+	schs := make(map[string]schema.Schema)
+	for _, toFk := range fks {
+		toRefTable, _, ok, err := root.GetTableInsensitive(ctx, toFk.ReferencedTableName)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			continue // as the schemas are for display-only, we can skip on any missing parents (they were deleted, etc.)
+		}
+		toRefSch, err := toRefTable.GetSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
+		schs[toFk.ReferencedTableName] = toRefSch
+	}
+	return schs, nil
 }
 
 // IsAdd returns true if the table was added between the fromRoot and toRoot.
@@ -378,6 +487,23 @@ func (td TableDelta) GetSchemas(ctx context.Context) (from, to schema.Schema, er
 	}
 
 	return from, to, nil
+}
+
+func (td TableDelta) IsKeyless(ctx context.Context) (bool, error) {
+	f, t, err := td.GetSchemas(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	from, to := schema.IsKeyless(f), schema.IsKeyless(t)
+
+	if from && to {
+		return true, nil
+	} else if !from && !to {
+		return false, nil
+	} else {
+		return false, fmt.Errorf("mismatched keyless and keyed schemas for table %s", td.CurName())
+	}
 }
 
 // GetMaps returns the table's row map at the fromRoot and toRoot, or and empty map if the table did not exist.

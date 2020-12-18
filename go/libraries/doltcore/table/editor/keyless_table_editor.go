@@ -141,7 +141,7 @@ func (kte *keylessTableEditor) InsertRow(ctx context.Context, r row.Row) (err er
 	defer func() { err = kte.autoFlush(ctx) }()
 
 	var key, val types.Tuple
-	key, val, err = row.Deconstruct(ctx, kte.sch, r)
+	key, val, err = row.ToNoms(ctx, kte.sch, r)
 	if err != nil {
 		return err
 	}
@@ -157,7 +157,7 @@ func (kte *keylessTableEditor) DeleteRow(ctx context.Context, r row.Row) (err er
 	defer func() { err = kte.autoFlush(ctx) }()
 
 	var key, val types.Tuple
-	key, val, err = row.Deconstruct(ctx, kte.sch, r)
+	key, val, err = row.ToNoms(ctx, kte.sch, r)
 	if err != nil {
 		return err
 	}
@@ -173,7 +173,7 @@ func (kte *keylessTableEditor) UpdateRow(ctx context.Context, old row.Row, new r
 	defer func() { err = kte.autoFlush(ctx) }()
 
 	var key, val types.Tuple
-	key, val, err = row.Deconstruct(ctx, kte.sch, old)
+	key, val, err = row.ToNoms(ctx, kte.sch, old)
 	if err != nil {
 		return err
 	}
@@ -183,7 +183,7 @@ func (kte *keylessTableEditor) UpdateRow(ctx context.Context, old row.Row, new r
 		return err
 	}
 
-	key, val, err = row.Deconstruct(ctx, kte.sch, new)
+	key, val, err = row.ToNoms(ctx, kte.sch, new)
 	if err != nil {
 		return err
 	}

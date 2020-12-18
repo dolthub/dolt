@@ -32,13 +32,13 @@ const (
 )
 
 type RowDiffSource struct {
-	ad         *AsyncDiffer
+	ad         RowDiffer
 	joiner     *rowconv.Joiner
 	oldRowConv *rowconv.RowConverter
 	newRowConv *rowconv.RowConverter
 }
 
-func NewRowDiffSource(ad *AsyncDiffer, joiner *rowconv.Joiner) *RowDiffSource {
+func NewRowDiffSource(ad RowDiffer, joiner *rowconv.Joiner) *RowDiffSource {
 	return &RowDiffSource{
 		ad,
 		joiner,
