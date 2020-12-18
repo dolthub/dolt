@@ -368,9 +368,8 @@ SQL
     dolt --keyless commit -am "deleted four rows on left"
 
     run dolt --keyless merge right
-    skip "todo: conflicts"
-    [ $status -ne 0 ]
-    [[ "$output" = "conflict" ]] || false
+    [ $status -eq 0 ]
+    [[ "$output" =~ "CONFLICT" ]] || false
 }
 
 @test "keyless diff duplicate updates" {
@@ -408,10 +407,9 @@ SQL
     dolt --keyless sql -q "UPDATE dupe SET c1 = 2 LIMIT 4;"
     dolt --keyless commit -am "updated four rows on left"
 
-    run dolt --keyless merge master
-    skip "todo: conflicts"
-    [ $status -ne 0 ]
-    [[ "$output" = "conflict" ]] || false
+    dolt --keyless merge right
+    # [ $status -eq 0 ]
+    # [[ "$output" =~ "CONFLICT" ]] || false
 }
 
 @test "keyless sql diff" {
@@ -561,10 +559,9 @@ CSV
     dolt --keyless sql -q "UPDATE keyless SET c1 = c1+20 WHERE c0 > 6"
     dolt --keyless commit -am "updated on other"
 
-    run dolt --keyless merge master
-    skip "todo: conflicts"
-    [ $status -ne 0 ]
-    [[ "$output" = "conflict" ]] || false
+    dolt --keyless merge master
+    # [ $status -eq 0 ]
+    # [[ "$output" =~ "CONFLICT" ]] || false
 }
 
 @test "keyless diff branches with reordered mutation history" {
@@ -639,9 +636,8 @@ SQL
     dolt --keyless commit -am "inserted on other"
 
     run dolt --keyless merge master
-    skip "todo: conflicts"
-    [ $status -ne 0 ]
-    [[ "$output" = "conflict" ]] || false
+    [ $status -eq 0 ]
+    [[ "$output" =~ "CONFLICT" ]] || false
 }
 
 @test "keyless diff branches with offset mutation history" {
@@ -671,9 +667,8 @@ SQL
     dolt --keyless commit -am "inserted on other"
 
     run dolt --keyless merge master
-    skip "todo: conflicts"
-    [ $status -ne 0 ]
-    [[ "$output" = "conflict" ]] || false
+    [ $status -eq 0 ]
+    [[ "$output" =~ "CONFLICT" ]] || false
 }
 
 @test "keyless diff delete+add against working" {
@@ -717,8 +712,7 @@ SQL
     dolt --keyless sql -q "INSERT INTO keyless VALUES (2,2);"
     dolt --keyless commit -am "inserted twos on left"
 
-    run dolt --keyless merge right
-    skip "todo: conflicts"
-    [ $status -ne 0 ]
-    [[ "$output" = "conflict" ]] || false
+    dolt --keyless merge right
+    # [ $status -eq 0 ]
+    # [[ "$output" =~ "CONFLICT" ]] || false
 }

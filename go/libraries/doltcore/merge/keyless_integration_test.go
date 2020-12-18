@@ -115,27 +115,81 @@ func TestKeylessMergeConflicts(t *testing.T) {
 	defer func() { schema.FeatureFlagKeylessSchema = false }()
 
 	tests := []struct {
-		name      string
-		setup     []testCommand
-		merge     testCommand
+		name  string
+		setup []testCommand
+		// Tuple(
+		//    Tuple(baseVal)
+		//    Tuple(val)
+		//    Tuple(mergeVal)
+		// )
 		conflicts tupleSet
 	}{
 		{
-			name: "fast-forward merge",
+			name: "identical parallel changes",
 			setup: []testCommand{
 				{cmd.SqlCmd{}, []string{"-q", "insert into noKey values (1,2),(1,2);"}},
 				{cmd.CommitCmd{}, []string{"-am", "added rows"}},
-				{cmd.CheckoutCmd{}, []string{"other"}},
+				{cmd.CheckoutCmd{}, []string{"-b", "other"}},
 				{cmd.SqlCmd{}, []string{"-q", "insert into noKey values (3,4);"}},
 				{cmd.CommitCmd{}, []string{"-am", "added rows on other"}},
 				{cmd.CheckoutCmd{}, []string{"master"}},
 				{cmd.SqlCmd{}, []string{"-q", "insert into noKey values (3,4);"}},
 				{cmd.CommitCmd{}, []string{"-am", "added rows on master"}},
+				{cmd.MergeCmd{}, []string{"other"}},
 			},
-			merge: testCommand{cmd.MergeCmd{}, []string{"other"}},
 			conflicts: mustTupleSet(
-				dtu.MustTuple(cardTag, types.Uint(2), c1Tag, types.Int(1), c2Tag, types.Int(2)),
-				dtu.MustTuple(cardTag, types.Uint(1), c1Tag, types.Int(3), c2Tag, types.Int(4)),
+				dtu.MustTuple(
+					types.NullValue,
+					dtu.MustTuple(cardTag, types.Uint(1), c1Tag, types.Int(3), c2Tag, types.Int(4)),
+					dtu.MustTuple(cardTag, types.Uint(1), c1Tag, types.Int(3), c2Tag, types.Int(4)),
+				),
+			),
+		},
+		{
+			name: "asymmetric parallel deletes",
+			setup: []testCommand{
+				{cmd.SqlCmd{}, []string{"-q", "insert into noKey values (1,2),(1,2),(1,2),(1,2);"}},
+				{cmd.CommitCmd{}, []string{"-am", "added rows"}},
+				{cmd.CheckoutCmd{}, []string{"-b", "other"}},
+				{cmd.SqlCmd{}, []string{"-q", "delete from noKey where (c1,c2) = (1,2) limit 1;"}},
+				{cmd.CommitCmd{}, []string{"-am", "deleted 1 row on other"}},
+				{cmd.CheckoutCmd{}, []string{"master"}},
+				{cmd.SqlCmd{}, []string{"-q", "delete from noKey where (c1,c2) = (1,2) limit 2;"}},
+				{cmd.CommitCmd{}, []string{"-am", "deleted 2 rows on master"}},
+				{cmd.MergeCmd{}, []string{"other"}},
+			},
+			conflicts: mustTupleSet(
+				dtu.MustTuple(
+					dtu.MustTuple(cardTag, types.Uint(4), c1Tag, types.Int(1), c2Tag, types.Int(2)),
+					dtu.MustTuple(cardTag, types.Uint(2), c1Tag, types.Int(1), c2Tag, types.Int(2)),
+					dtu.MustTuple(cardTag, types.Uint(3), c1Tag, types.Int(1), c2Tag, types.Int(2)),
+				),
+			),
+		},
+		{
+			name: "asymmetric parallel updates",
+			setup: []testCommand{
+				{cmd.SqlCmd{}, []string{"-q", "insert into noKey values (1,2),(1,2),(1,2),(1,2);"}},
+				{cmd.CommitCmd{}, []string{"-am", "added rows"}},
+				{cmd.CheckoutCmd{}, []string{"-b", "other"}},
+				{cmd.SqlCmd{}, []string{"-q", "update noKey set c2 = 9 limit 1;"}},
+				{cmd.CommitCmd{}, []string{"-am", "deleted 1 row on other"}},
+				{cmd.CheckoutCmd{}, []string{"master"}},
+				{cmd.SqlCmd{}, []string{"-q", "update noKey set c2 = 9 limit 2;"}},
+				{cmd.CommitCmd{}, []string{"-am", "deleted 2 rows on master"}},
+				{cmd.MergeCmd{}, []string{"other"}},
+			},
+			conflicts: mustTupleSet(
+				dtu.MustTuple(
+					dtu.MustTuple(cardTag, types.Uint(4), c1Tag, types.Int(1), c2Tag, types.Int(2)),
+					dtu.MustTuple(cardTag, types.Uint(2), c1Tag, types.Int(1), c2Tag, types.Int(2)),
+					dtu.MustTuple(cardTag, types.Uint(3), c1Tag, types.Int(1), c2Tag, types.Int(2)),
+				),
+				dtu.MustTuple(
+					types.NullValue,
+					dtu.MustTuple(cardTag, types.Uint(2), c1Tag, types.Int(1), c2Tag, types.Int(9)),
+					dtu.MustTuple(cardTag, types.Uint(1), c1Tag, types.Int(1), c2Tag, types.Int(9)),
+				),
 			),
 		},
 	}
@@ -157,10 +211,6 @@ func TestKeylessMergeConflicts(t *testing.T) {
 				require.Equal(t, 0, exitCode)
 			}
 
-			m := test.merge
-			exitCode := m.cmd.Exec(ctx, m.cmd.Name(), m.args, dEnv)
-			require.Equal(t, 1, exitCode)
-
 			root, err = dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
 			tbl, _, err := root.GetTable(ctx, tblName)
@@ -168,6 +218,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 			_, conflicts, err := tbl.GetConflicts(ctx)
 			require.NoError(t, err)
 
+			assert.True(t, conflicts.Len() > 0)
 			assert.Equal(t, int(conflicts.Len()), len(test.conflicts))
 
 			actual, err := conflicts.Iterator(ctx)
