@@ -43,6 +43,7 @@ func NewRowDiffer(ctx context.Context, fromSch, toSch schema.Schema, buf int) Ro
 	ad := NewAsyncDiffer(buf)
 
 	// assumes no PK changes
+	// mixed diffing of keyless and pk tables no supported
 	if schema.IsKeyless(fromSch) || schema.IsKeyless(toSch) {
 		return &keylessDiffer{AsyncDiffer: ad}
 	}
@@ -206,7 +207,7 @@ func convertDiff(df diff.Difference) (diff.Difference, uint64, error) {
 			df.NewValue = nil
 			return df, uint64(-delta), nil
 		} else {
-			return df, 0, fmt.Errorf("diff with delta = 0 for key: %s", df.KeyValue.HumanReadableString())
+			panic(fmt.Sprintf("diff with delta = 0 for key: %s", df.KeyValue.HumanReadableString()))
 		}
 	default:
 		return df, 0, fmt.Errorf("unexpected DiffChange type %d", df.ChangeType)

@@ -1036,16 +1036,19 @@ func diffSummary(ctx context.Context, td diff.TableDelta, colLen int) errhand.Ve
 
 	if (acc.Adds + acc.Removes + acc.Changes) == 0 {
 		cli.Println("No data changes. See schema changes by using -s or --schema.")
-	} else if keyless {
-		formatKeylessSummary(acc)
+		return nil
+	}
+
+	if keyless {
+		printKeylessSummary(acc)
 	} else {
-		formatSummary(acc, colLen)
+		printSummary(acc, colLen)
 	}
 
 	return nil
 }
 
-func formatSummary(acc diff.DiffSummaryProgress, colLen int) {
+func printSummary(acc diff.DiffSummaryProgress, colLen int) {
 	rowsUnmodified := uint64(acc.OldSize - acc.Changes - acc.Removes)
 	unmodified := pluralize("Row Unmodified", "Rows Unmodified", rowsUnmodified)
 	insertions := pluralize("Row Added", "Rows Added", acc.Adds)
@@ -1074,7 +1077,7 @@ func formatSummary(acc diff.DiffSummaryProgress, colLen int) {
 	cli.Printf("(%s vs %s)\n\n", oldValues, newValues)
 }
 
-func formatKeylessSummary(acc diff.DiffSummaryProgress) {
+func printKeylessSummary(acc diff.DiffSummaryProgress) {
 	insertions := pluralize("Row Added", "Rows Added", acc.Adds)
 	deletions := pluralize("Row Deleted", "Rows Deleted", acc.Removes)
 

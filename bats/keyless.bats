@@ -156,16 +156,15 @@ DELETE FROM keyless WHERE c0 = 0;
 INSERT INTO keyless VALUES (8,8);
 UPDATE keyless SET c1 = 9 WHERE c0 = 1;
 SQL
-    dolt --keyless diff
     run dolt --keyless diff
     [ $status -eq 0 ]
     # output order is random
-    [[ "$output" =~ "|  -  | 0  | 0  |" ]] || false
-    [[ "$output" =~ "|  +  | 8  | 8  |" ]] || false
-    [[ "$output" =~ "|  -  | 1  | 1  |" ]] || false
-    [[ "$output" =~ "|  -  | 1  | 1  |" ]] || false
-    [[ "$output" =~ "|  +  | 1  | 9  |" ]] || false
-    [[ "$output" =~ "|  +  | 1  | 9  |" ]] || false
+    [[ "${lines[6]}"  =~ "|  +  | 8  | 8  |" ]] || false
+    [[ "${lines[7]}"  =~ "|  -  | 1  | 1  |" ]] || false
+    [[ "${lines[8]}"  =~ "|  -  | 1  | 1  |" ]] || false
+    [[ "${lines[9]}"  =~ "|  +  | 1  | 9  |" ]] || false
+    [[ "${lines[10]}" =~ "|  +  | 1  | 9  |" ]] || false
+    [[ "${lines[11]}" =~ "|  -  | 0  | 0  |" ]] || false
 }
 
 @test "keyless diff --summary" {
