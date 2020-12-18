@@ -395,7 +395,6 @@ SQL
     [ "${#lines[@]}" -eq 15 ] # 8 diffs + 6 header + 1 footer
 }
 
-# order will differ without 'ORDER BY' clause
 @test "keyless merge duplicate updates" {
     make_dupe_table
 
