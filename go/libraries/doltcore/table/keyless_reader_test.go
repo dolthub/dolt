@@ -135,17 +135,18 @@ func TestKeylessTableReader(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		rowMap := makeBag(vrw, sch, test.rows...)
-		tbl, err := doltdb.NewTable(ctx, vrw, schVal, rowMap, empty)
-		require.NoError(t, err)
-
 		t.Run(test.name, func(t *testing.T) {
+			rowMap := makeBag(vrw, sch, test.rows...)
+			tbl, err := doltdb.NewTable(ctx, vrw, schVal, rowMap, empty)
+			require.NoError(t, err)
 			rdr, err := table.NewTableReader(ctx, tbl)
 			require.NoError(t, err)
 			compareRows(t, test.expected, rdr)
 		})
-
 		t.Run(test.name+"_buffered", func(t *testing.T) {
+			rowMap := makeBag(vrw, sch, test.rows...)
+			tbl, err := doltdb.NewTable(ctx, vrw, schVal, rowMap, empty)
+			require.NoError(t, err)
 			rdr, err := table.NewBufferedTableReader(ctx, tbl)
 			require.NoError(t, err)
 			compareRows(t, test.expected, rdr)
