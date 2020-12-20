@@ -225,7 +225,7 @@ pk,c1,c2,c3,c4,c5
 0,1,2,3,4,5
 a,b,c,d,e,f
 DELIM
-    run dolt table import -c ints_table data.csv
+    run dolt table import -c -pk=pk ints_table data.csv
     [ $status -eq 0 ]
     run dolt schema tags -r=csv
     [ $status -eq 0 ]
