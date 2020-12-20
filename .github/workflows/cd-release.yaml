@@ -1,0 +1,103 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'SemVer format release tag, i.e. 0.23.4'
+        required: true
+
+jobs:
+  bump-version:
+    name: Bump Version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Bump Version
+        id: bump-version
+        run: |
+          git config --global user.name dolt-release-bot
+          git config --global user.email dolt-release-bot@dolthub.com
+          ./go/utils/publishrelease/prepare-release.sh ${{ github.event.inputs.version }}
+
+  create-release:
+    needs: bump-version
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Checkout release tag
+        run: |
+          git fetch --tags --all
+          git checkout tags/v${{ github.event.inputs.version }} -b v${{ github.event.inputs.version }}
+      - name: Build Binaries
+        run: |
+          go/utils/publishrelease/buildbinaries.sh
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.event.inputs.version }}
+          release_name: ${{ github.event.inputs.version }}
+          draft: false
+          prerelease: false
+      - name: Upload Linux Distro
+        id: upload-linux-distro
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: go/out/dolt-linux-amd64.tar.gz
+          asset_name: dolt-linux-amd64.tar.gz
+          asset_content_type: application/zip
+      - name: Upload OSX Distro
+        id: upload-osx-distro
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: go/out/dolt-darwin-amd64.tar.gz
+          asset_name: dolt-darwin-amd64.tar.gz
+          asset_content_type: application/zip
+      - name: Upload Windows Distro
+        id: upload-windows-distro
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: go/out/dolt-windows-amd64.zip
+          asset_name: dolt-windows-amd64.zip
+          asset_content_type: application/zip
+      - name: Upload Install Script
+        id: upload-install-script
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: go/out/install.sh
+          asset_name: install.sh
+          asset_content_type: text/plain
+
+  homebrew-bump:
+    needs: bump-version
+    name: Bump Dolt Homebrew formula
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Homebrew PR
+        uses: mislav/bump-homebrew-formula-action@v1
+        with:
+          formula-name: dolt
+          homebrew-tap: Homebrew/homebrew-core
+          base-branch: master
+          download-url: ${{format('https://github.com/dolthub/dolt/archive/v{0}.tar.gz', github.event.inputs.version)}}
+          commit-message: ${{format('dolt v{0}', github.event.inputs.version)}}
+        env:
+          COMMITTER_TOKEN: ${{secrets.HOMEBREW_GITHUB_TOKEN}}
