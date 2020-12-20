@@ -68,6 +68,25 @@ func KeylessRowsFromTuples(key, val types.Tuple) (Row, uint64, error) {
 	return r, card, err
 }
 
+func keylessRowFromTaggedValued(nbf *types.NomsBinFormat, sch schema.Schema, tv TaggedValues) (Row, error) {
+	vals := make([]types.Value, len(tv)*2)
+	i := 0
+
+	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if v, ok := tv[tag]; ok {
+			vals[i] = types.Uint(tag)
+			vals[i+1] = v
+			i += 2
+		}
+		return
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return keylessRowWithCardinality(nbf, 1, vals...)
+}
+
 func keylessRowWithCardinality(nbf *types.NomsBinFormat, card uint64, vals ...types.Value) (Row, error) {
 	id, err := types.UUIDHashedFromValues(nbf, vals...) // don't hash cardinality
 	if err != nil {
@@ -208,7 +227,7 @@ func (r keylessRow) SetColVal(updateTag uint64, updateVal types.Value, sch schem
 	card := uint64(c.(types.Uint))
 
 	i := 0
-	vals := make([]types.Value, sch.GetAllCols().Size())
+	vals := make([]types.Value, sch.GetAllCols().Size()*2)
 
 	_, err = r.IterSchema(sch, func(tag uint64, val types.Value) (stop bool, err error) {
 		if tag == updateTag {
