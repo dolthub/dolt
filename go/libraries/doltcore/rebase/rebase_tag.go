@@ -101,9 +101,6 @@ func MigrateUniqueTags(ctx context.Context, dEnv *env.DoltEnv) error {
 		parentTagMapping, found := builtTagMappings[h]
 		if !found {
 			parentTagMapping = make(TagMapping)
-			if !rootsMustBeEqual(parentRoot, rebasedParentRoot) {
-				return nil, fmt.Errorf("error rebasing, roots not equal")
-			}
 		}
 
 		tagMapping, err := buildTagMapping(ctx, root, rebasedParentRoot, parentTagMapping)
@@ -739,16 +736,4 @@ func handleSystemTableMappings(ctx context.Context, tblName string, root *doltdb
 	})
 
 	return nil
-}
-
-func rootsMustBeEqual(r1, r2 *doltdb.RootValue) bool {
-	h1, err := r1.HashOf()
-	if err != nil {
-		panic(err)
-	}
-	h2, err := r2.HashOf()
-	if err != nil {
-		panic(err)
-	}
-	return h1.Equal(h2)
 }
