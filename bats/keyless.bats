@@ -18,6 +18,14 @@ teardown() {
     teardown_common
 }
 
+@test "feature gate add/drop column" {
+    run dolt sql -q "ALTER TABLE keyless DROP COLUMN c0;"
+    [ $status -ne 0 ]
+
+    run dolt sql -q "ALTER TABLE keyless ADD COLUMN c2 int;"
+    [ $status -ne 0 ]
+}
+
 @test "create keyless table" {
     # created in setup()
 
@@ -63,6 +71,7 @@ teardown() {
 }
 
 @test "keyless column add/drop" {
+    skip "unimplemented"
     run dolt sql <<SQL
 ALTER TABLE keyless ADD COLUMN c2 int;
 ALTER TABLE keyless DROP COLUMN c0;
@@ -221,6 +230,7 @@ SQL
 }
 
 @test "keyless diff column add/drop" {
+    skip "unimplemented"
     run dolt sql <<SQL
 ALTER TABLE keyless ADD COLUMN c2 int;
 ALTER TABLE keyless DROP COLUMN c0;
