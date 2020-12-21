@@ -148,6 +148,33 @@ CSV
     [[ "${lines[8]}" = "2,2" ]] || false
 }
 
+@test "keyless table export CSV" {
+    dolt --keyless table export keyless
+    run dolt --keyless table export keyless
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" = "c0,c1" ]] || false
+    [[ "${lines[1]}" = "1,1" ]] || false
+    [[ "${lines[2]}" = "1,1" ]] || false
+    [[ "${lines[3]}" = "0,0" ]] || false
+    [[ "${lines[4]}" = "2,2" ]] || false
+}
+
+@test "keyless table export SQL" {
+    dolt --keyless table export keyless export.sql
+    cat export.sql
+    run cat export.sql
+    [[ "${lines[0]}" = "DROP TABLE IF EXISTS \`keyless\`;"   ]] || false
+    [[ "${lines[1]}" = "CREATE TABLE \`keyless\` ("          ]] || false
+    [[ "${lines[2]}" = "  \`c0\` int,"  ]] || false
+    [[ "${lines[3]}" = "  \`c1\` int"   ]] || false
+    [[ "${lines[4]}" = ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"     ]] || false
+    [[ "${lines[5]}" = "INSERT INTO \`keyless\` (\`c0\`,\`c1\`) VALUES (1,1);" ]] || false
+    [[ "${lines[6]}" = "INSERT INTO \`keyless\` (\`c0\`,\`c1\`) VALUES (1,1);" ]] || false
+    [[ "${lines[7]}" = "INSERT INTO \`keyless\` (\`c0\`,\`c1\`) VALUES (0,0);" ]] || false
+    [[ "${lines[8]}" = "INSERT INTO \`keyless\` (\`c0\`,\`c1\`) VALUES (2,2);" ]] || false
+
+}
+
 @test "keyless diff against working set" {
     dolt --keyless sql <<SQL
 DELETE FROM keyless WHERE c0 = 0;
