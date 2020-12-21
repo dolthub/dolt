@@ -34,8 +34,36 @@ type reporter func(ctx context.Context, change *diff.Difference, ch chan<- DiffS
 
 // todo: make package private once dolthub is migrated
 // Summary reports a summary of diff changes between two values
+// Summary reports a summary of diff changes between two values
 func Summary(ctx context.Context, ch chan DiffSummaryProgress, from, to types.Map) (err error) {
-	return summaryWithReporter(ctx, ch, from, to, reportPkChanges)
+	ad := NewAsyncDiffer(1024)
+	ad.Start(ctx, from, to)
+	defer func() {
+		if cerr := ad.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
+
+	ch <- DiffSummaryProgress{OldSize: from.Len(), NewSize: to.Len()}
+
+	hasMore := true
+	var diffs []*diff.Difference
+	for hasMore {
+		diffs, hasMore, err = ad.GetDiffs(100, time.Millisecond)
+		if err != nil {
+			return err
+		}
+
+		for i := range diffs {
+			curr := diffs[i]
+			err := reportPkChanges(ctx, curr, ch)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func SummaryForTableDelta(ctx context.Context, ch chan DiffSummaryProgress, td TableDelta) error {
