@@ -51,7 +51,6 @@ func NewMerger(ctx context.Context, root, mergeRoot, ancRoot *doltdb.RootValue, 
 // MergeTable merges schema and table data for the table tblName.
 func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *editor.TableEditSession) (*doltdb.Table, *MergeStats, error) {
 	tbl, ok, err := merger.root.GetTable(ctx, tblName)
-
 	if err != nil {
 		return nil, nil, err
 	}
@@ -59,14 +58,12 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 	var h hash.Hash
 	if ok {
 		h, err = tbl.HashOf()
-
 		if err != nil {
 			return nil, nil, err
 		}
 	}
 
 	mergeTbl, mergeOk, err := merger.mergeRoot.GetTable(ctx, tblName)
-
 	if err != nil {
 		return nil, nil, err
 	}
@@ -74,76 +71,81 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 	var mh hash.Hash
 	if mergeOk {
 		mh, err = mergeTbl.HashOf()
-
 		if err != nil {
 			return nil, nil, err
 		}
 	}
 
 	ancTbl, ancOk, err := merger.ancRoot.GetTable(ctx, tblName)
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	var anch hash.Hash
+	var ancTblSchema schema.Schema
 	if ancOk {
 		anch, err = ancTbl.HashOf()
-
+		if err != nil {
+			return nil, nil, err
+		}
+		ancTblSchema, err = ancTbl.GetSchema(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
 	}
 
-	if ok && mergeOk && h == mh {
-		return tbl, &MergeStats{Operation: TableUnmodified}, nil
-	}
-
-	if !ancOk {
-		if mergeOk && ok {
-			return nil, nil, ErrSameTblAddedTwice
-		} else if ok {
-			return tbl, &MergeStats{Operation: TableUnmodified}, nil
+	{ // short-circuit logic
+		if ancOk && schema.IsKeyless(ancTblSchema) {
+			if ok && mergeOk && ancOk && h == mh && h == anch {
+				return tbl, &MergeStats{Operation: TableUnmodified}, nil
+			}
 		} else {
-			return mergeTbl, &MergeStats{Operation: TableAdded}, nil
+			if ok && mergeOk && h == mh {
+				return tbl, &MergeStats{Operation: TableUnmodified}, nil
+			}
 		}
-	}
 
-	if h == anch {
-		ms := MergeStats{Operation: TableModified}
-		if h != mh {
-			ms, err = calcTableMergeStats(ctx, tbl, mergeTbl)
+		if !ancOk {
+			if mergeOk && ok {
+				return nil, nil, ErrSameTblAddedTwice
+			} else if ok {
+				// fast-forward
+				return tbl, &MergeStats{Operation: TableUnmodified}, nil
+			} else {
+				// fast-forward
+				return mergeTbl, &MergeStats{Operation: TableAdded}, nil
+			}
 		}
-		// force load the table editor since this counts as a change
-		_, err := sess.GetTableEditor(ctx, tblName, nil)
-		if err != nil {
-			return nil, nil, err
+
+		if h == anch {
+			// fast-forward
+			ms := MergeStats{Operation: TableModified}
+			if h != mh {
+				ms, err = calcTableMergeStats(ctx, tbl, mergeTbl)
+			}
+			// force load the table editor since this counts as a change
+			_, err := sess.GetTableEditor(ctx, tblName, nil)
+			if err != nil {
+				return nil, nil, err
+			}
+			return mergeTbl, &ms, nil
+		} else if mh == anch {
+			// fast-forward
+			return tbl, &MergeStats{Operation: TableUnmodified}, nil
 		}
-		return mergeTbl, &ms, nil
-	} else if mh == anch {
-		return tbl, &MergeStats{Operation: TableUnmodified}, nil
 	}
 
 	tblSchema, err := tbl.GetSchema(ctx)
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	mergeTblSchema, err := mergeTbl.GetSchema(ctx)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	ancTblSchema, err := ancTbl.GetSchema(ctx)
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	postMergeSchema, schConflicts, err := SchemaMerge(tblSchema, mergeTblSchema, ancTblSchema, tblName)
-
 	if err != nil {
 		return nil, nil, err
 	}
@@ -153,25 +155,21 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 	}
 
 	rows, err := tbl.GetRowData(ctx)
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	mergeRows, err := mergeTbl.GetRowData(ctx)
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	ancRows, err := ancTbl.GetRowData(ctx)
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	updatedTbl, err := tbl.UpdateSchema(ctx, postMergeSchema)
-
 	if err != nil {
 		return nil, nil, err
 	}
@@ -181,13 +179,11 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 	})
 
 	updatedTblEditor, err := sess.GetTableEditor(ctx, tblName, nil)
-
 	if err != nil {
 		return nil, nil, err
 	}
 
 	resultTbl, conflicts, stats, err := mergeTableData(ctx, merger.vrw, tblName, postMergeSchema, rows, mergeRows, ancRows, updatedTblEditor, sess)
-
 	if err != nil {
 		return nil, nil, err
 	}
@@ -264,7 +260,21 @@ func calcTableMergeStats(ctx context.Context, tbl *doltdb.Table, mergeTbl *doltd
 	return ms, nil
 }
 
+type rowMerger func(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, r, mergeRow, baseRow types.Value) (types.Value, bool, error)
+
+type applicator func(ctx context.Context, sch schema.Schema, tableEditor editor.TableEditor, rowData types.Map, stats *MergeStats, change types.ValueChanged) error
+
 func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, tblName string, sch schema.Schema, rows, mergeRows, ancRows types.Map, tblEdit editor.TableEditor, sess *editor.TableEditSession) (*doltdb.Table, types.Map, *MergeStats, error) {
+	var rowMerge rowMerger
+	var applyChange applicator
+	if schema.IsKeyless(sch) {
+		rowMerge = keylessRowMerge
+		applyChange = applyKeylessChange
+	} else {
+		rowMerge = pkRowMerge
+		applyChange = applyPkChange
+	}
+
 	changeChan, mergeChangeChan := make(chan types.ValueChanged, 32), make(chan types.ValueChanged, 32)
 
 	eg, ctx := errgroup.WithContext(ctx)
@@ -328,6 +338,7 @@ func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, tblName stri
 
 				if mkNilOrKeyLess {
 					// change will already be in the map
+					// TODO(andy) apply changes to ancestor instead of "ours"
 					change = types.ValueChanged{}
 					processed = true
 				}
@@ -343,7 +354,7 @@ func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, tblName stri
 				}
 
 				if keyNilOrMKLess {
-					err = applyChange(ctx, tblEdit, rows, sch, stats, mergeChange)
+					err = applyChange(ctx, sch, tblEdit, rows, stats, mergeChange)
 					if err != nil {
 						return err
 					}
@@ -371,10 +382,16 @@ func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, tblName stri
 						return err
 					}
 				} else {
-					err = applyChange(ctx, tblEdit, rows, sch, stats, types.ValueChanged{ChangeType: change.ChangeType, Key: key, OldValue: r, NewValue: mergedRow})
+					vc := types.ValueChanged{ChangeType: change.ChangeType, Key: key, OldValue: ancRow, NewValue: mergedRow}
+					err = applyChange(ctx, sch, tblEdit, rows, stats, vc)
 					if err != nil {
 						return err
 					}
+				}
+
+				_, err = sess.Flush(ctx)
+				if err != nil {
+					return err
 				}
 
 				change = types.ValueChanged{}
@@ -423,13 +440,15 @@ func addConflict(conflictChan chan types.Value, done <-chan struct{}, key types.
 	return nil
 }
 
-func applyChange(ctx context.Context, tableEditor editor.TableEditor, rowData types.Map, sch schema.Schema, stats *MergeStats, change types.ValueChanged) error {
+func applyPkChange(ctx context.Context, sch schema.Schema, tableEditor editor.TableEditor, rowData types.Map, stats *MergeStats, change types.ValueChanged) error {
 	switch change.ChangeType {
 	case types.DiffChangeAdded:
 		newRow, err := row.FromNoms(sch, change.Key.(types.Tuple), change.NewValue.(types.Tuple))
 		if err != nil {
 			return err
 		}
+		// TODO(andy): because we apply changes to "ours" instead of ancestor
+		// we have to check for duplicate primary key errors here.
 		val, ok, err := rowData.MaybeGet(ctx, change.Key)
 		if err != nil {
 			return err
@@ -464,12 +483,7 @@ func applyChange(ctx context.Context, tableEditor editor.TableEditor, rowData ty
 		}
 		stats.Modifications++
 	case types.DiffChangeRemoved:
-		empty, err := types.NewTuple(tableEditor.Format())
-		if err != nil {
-			return err
-		}
-		// todo(andy): unhack
-		oldRow, err := row.FromNoms(sch, change.Key.(types.Tuple), empty)
+		oldRow, err := row.FromNoms(sch, change.Key.(types.Tuple), change.OldValue.(types.Tuple))
 		if err != nil {
 			return err
 		}
@@ -483,7 +497,104 @@ func applyChange(ctx context.Context, tableEditor editor.TableEditor, rowData ty
 	return nil
 }
 
-func rowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, r, mergeRow, baseRow types.Value) (types.Value, bool, error) {
+func applyKeylessChange(ctx context.Context, sch schema.Schema, tableEditor editor.TableEditor, _ types.Map, stats *MergeStats, change types.ValueChanged) (err error) {
+	apply := func(ch types.ValueChanged) error {
+		switch ch.ChangeType {
+		case types.DiffChangeAdded:
+			newRow, err := row.FromNoms(sch, ch.Key.(types.Tuple), ch.NewValue.(types.Tuple))
+			if err != nil {
+				return err
+			}
+			err = tableEditor.InsertRow(ctx, newRow)
+			if err != nil {
+				return err
+			}
+			stats.Adds++
+		case types.DiffChangeModified:
+			oldRow, err := row.FromNoms(sch, ch.Key.(types.Tuple), ch.OldValue.(types.Tuple))
+			if err != nil {
+				return err
+			}
+			newRow, err := row.FromNoms(sch, ch.Key.(types.Tuple), ch.NewValue.(types.Tuple))
+			if err != nil {
+				return err
+			}
+			err = tableEditor.UpdateRow(ctx, oldRow, newRow)
+			if err != nil {
+				return err
+			}
+			stats.Modifications++
+		case types.DiffChangeRemoved:
+			oldRow, err := row.FromNoms(sch, ch.Key.(types.Tuple), ch.OldValue.(types.Tuple))
+			if err != nil {
+				return err
+			}
+			err = tableEditor.DeleteRow(ctx, oldRow)
+			if err != nil {
+				return err
+			}
+			stats.Deletes++
+		}
+		return nil
+	}
+
+	var card uint64
+	change, card, err = convertValueChanged(change)
+
+	for card > 0 {
+		if err = apply(change); err != nil {
+			return err
+		}
+		card--
+	}
+	return nil
+}
+
+func convertValueChanged(vc types.ValueChanged) (types.ValueChanged, uint64, error) {
+	var oldCard uint64
+	if vc.OldValue != nil {
+		v, err := vc.OldValue.(types.Tuple).Get(row.KeylessCardinalityValIdx)
+		if err != nil {
+			return vc, 0, err
+		}
+		oldCard = uint64(v.(types.Uint))
+	}
+
+	var newCard uint64
+	if vc.NewValue != nil {
+		v, err := vc.NewValue.(types.Tuple).Get(row.KeylessCardinalityValIdx)
+		if err != nil {
+			return vc, 0, err
+		}
+		newCard = uint64(v.(types.Uint))
+	}
+
+	switch vc.ChangeType {
+	case types.DiffChangeRemoved:
+		return vc, oldCard, nil
+
+	case types.DiffChangeAdded:
+		return vc, newCard, nil
+
+	case types.DiffChangeModified:
+		delta := int64(newCard) - int64(oldCard)
+		if delta > 0 {
+			vc.ChangeType = types.DiffChangeAdded
+			vc.OldValue = nil
+			return vc, uint64(delta), nil
+		} else if delta < 0 {
+			vc.ChangeType = types.DiffChangeRemoved
+			vc.NewValue = nil
+			return vc, uint64(-delta), nil
+		} else {
+			panic(fmt.Sprintf("diff with delta = 0 for key: %s", vc.Key.HumanReadableString()))
+		}
+	default:
+		return vc, 0, fmt.Errorf("unexpected DiffChange type %d", vc.ChangeType)
+	}
+}
+
+func pkRowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, r, mergeRow, baseRow types.Value) (types.Value, bool, error) {
 	var baseVals row.TaggedValues
 	if baseRow == nil {
 		if r.Equals(mergeRow) {
@@ -506,13 +617,11 @@ func rowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, 
 	}
 
 	rowVals, err := row.ParseTaggedValues(r.(types.Tuple))
-
 	if err != nil {
 		return nil, false, err
 	}
 
 	mergeVals, err := row.ParseTaggedValues(mergeRow.(types.Tuple))
-
 	if err != nil {
 		return nil, false, err
 	}
@@ -566,6 +675,12 @@ func rowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, 
 	}
 
 	return v, false, nil
+}
+
+func keylessRowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, val, mergeVal, ancVal types.Value) (types.Value, bool, error) {
+	// both sides of the merge produced a diff for this key,
+	// so we always throw a conflict
+	return nil, true, nil
 }
 
 func mergeAutoIncrementValues(ctx context.Context, tbl, otherTbl, resultTbl *doltdb.Table) (*doltdb.Table, error) {

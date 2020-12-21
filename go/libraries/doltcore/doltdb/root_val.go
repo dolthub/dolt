@@ -720,11 +720,14 @@ func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch s
 	}
 
 	ed := empty.Edit()
-	sch.Indexes().Iter(func(index schema.Index) (stop bool, err error) {
+	err = sch.Indexes().Iter(func(index schema.Index) (stop bool, err error) {
 		// create an empty indexRowData map for every index
 		ed.Set(types.String(index.Name()), emptyRef)
 		return
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	indexes, err := ed.Map(ctx)
 	if err != nil {

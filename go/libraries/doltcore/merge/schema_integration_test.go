@@ -31,6 +31,11 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 )
 
+type testCommand struct {
+	cmd  cli.Command
+	args []string
+}
+
 func TestMergeSchemas(t *testing.T) {
 	for _, test := range mergeSchemaTests {
 		t.Run(test.name, func(t *testing.T) {
@@ -47,11 +52,6 @@ func TestMergeSchemas(t *testing.T) {
 			testMergeForeignKeys(t, test)
 		})
 	}
-}
-
-type testCommand struct {
-	cmd  cli.Command
-	args []string
 }
 
 type mergeSchemaTest struct {
