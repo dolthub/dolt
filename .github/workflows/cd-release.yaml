@@ -19,7 +19,7 @@ jobs:
         run: |
           git config --global user.name dolt-release-bot
           git config --global user.email dolt-release-bot@dolthub.com
-          ./go/utils/publishrelease/prepare-release.sh ${{ github.event.inputs.version }}
+          ./go/utils/publishrelease/bump-version.sh ${{ github.event.inputs.version }}
 
   create-release:
     needs: bump-version
