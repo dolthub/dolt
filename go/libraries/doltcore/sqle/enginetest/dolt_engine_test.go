@@ -158,6 +158,10 @@ func TestDeleteFromErrors(t *testing.T) {
 	enginetest.TestDeleteErrors(t, newDoltHarness(t))
 }
 
+func TestTruncate(t *testing.T) {
+	enginetest.TestTruncate(t, newDoltHarness(t))
+}
+
 func TestCreateTable(t *testing.T) {
 	t.Skipf("Skipping: no support for BLOB type")
 	enginetest.TestCreateTable(t, newDoltHarness(t))

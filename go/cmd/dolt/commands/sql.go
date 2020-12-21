@@ -53,7 +53,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 	"github.com/dolthub/dolt/go/libraries/utils/pipeline"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var sqlDocs = cli.CommandDocumentationContent{
@@ -836,10 +835,6 @@ func processQuery(ctx *sql.Context, query string, se *sqlEngine) (sql.Schema, sq
 
 		return sch, nil, err
 	case *sqlparser.Delete:
-		ok := se.checkThenDeleteAllRows(ctx, s)
-		if ok {
-			return nil, nil, err
-		}
 		return se.query(ctx, query)
 	case *sqlparser.DDL:
 		_, err := sqlparser.ParseStrictDDL(query)
@@ -1263,114 +1258,11 @@ func isOkResult(sch sql.Schema) bool {
 	return sch.Equals(sql.OkResultSchema)
 }
 
-// Checks if the query is a naked delete and then deletes all rows if so. Returns true if it did so, false otherwise.
-func (se *sqlEngine) checkThenDeleteAllRows(ctx *sql.Context, s *sqlparser.Delete) bool {
-	if s.Where == nil && s.Limit == nil && s.Partitions == nil && len(s.TableExprs) == 1 {
-		if ate, ok := s.TableExprs[0].(*sqlparser.AliasedTableExpr); ok {
-			if ste, ok := ate.Expr.(sqlparser.TableName); ok {
-				dbName := ctx.Session.GetCurrentDatabase()
-				if !ste.Qualifier.IsEmpty() {
-					dbName = ste.Qualifier.String()
-				}
-
-				roots, err := se.getRoots(ctx)
-				if err != nil {
-					return false
-				}
-
-				root, ok := roots[dbName]
-
-				if !ok {
-					return false
-				}
-
-				tName := ste.Name.String()
-				table, ok, err := root.GetTable(ctx, tName)
-				if err == nil && ok {
-
-					// Let the SQL engine handle system table deletes to avoid duplicating business logic here
-					if doltdb.HasDoltPrefix(tName) {
-						return false
-					}
-
-					// Let the SQL engine handle foreign key deletion as well
-					fkCollection, err := root.GetForeignKeyCollection(ctx)
-					if err != nil {
-						return false
-					}
-					_, referencedTables := fkCollection.KeysForTable(tName)
-					if len(referencedTables) > 0 {
-						return false
-					}
-
-					rowData, err := table.GetRowData(ctx)
-					if err != nil {
-						return false
-					}
-
-					result := sql.OkResult{RowsAffected: rowData.Len()}
-					printRowIter := sql.RowsToRowIter(sql.NewRow(result))
-
-					emptyMap, err := types.NewMap(ctx, root.VRW())
-					if err != nil {
-						return false
-					}
-
-					newTable, err := table.UpdateRows(ctx, emptyMap)
-					if err != nil {
-						return false
-					}
-
-					sch, err := table.GetSchema(ctx)
-					if err != nil {
-						return false
-					}
-					for _, index := range sch.Indexes().AllIndexes() {
-						emptyMap, err = types.NewMap(ctx, root.VRW())
-						if err != nil {
-							return false
-						}
-						newTable, err = newTable.SetIndexRowData(ctx, index.Name(), emptyMap)
-						if err != nil {
-							return false
-						}
-					}
-
-					newRoot, err := root.PutTable(ctx, tName, newTable)
-					if err != nil {
-						return false
-					}
-
-					err = PrettyPrintResults(ctx, se.resultFormat, sql.OkResultSchema, printRowIter)
-					if err != nil {
-						return false
-					}
-
-					db, err := se.getDB(dbName)
-					if err != nil {
-						return false
-					}
-
-					err = db.SetRoot(ctx, newRoot)
-
-					if err != nil {
-						return false
-					}
-
-					return true
-				}
-			}
-		}
-	}
-
-	return false
-}
-
 // Executes a SQL DDL statement (create, update, etc.). Updates the new root value in
 // the sqlEngine if necessary.
 func (se *sqlEngine) ddl(ctx *sql.Context, ddl *sqlparser.DDL, query string) (sql.Schema, sql.RowIter, error) {
 	switch ddl.Action {
-	case sqlparser.CreateStr, sqlparser.DropStr, sqlparser.AlterStr, sqlparser.RenameStr:
+	case sqlparser.CreateStr, sqlparser.DropStr, sqlparser.AlterStr, sqlparser.RenameStr, sqlparser.TruncateStr:
 		_, ri, err := se.query(ctx, query)
 		if err == nil {
 			for _, err = ri.Next(); err == nil; _, err = ri.Next() {
