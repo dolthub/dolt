@@ -17,7 +17,6 @@ package types
 import (
 	"bytes"
 	"context"
-
 	"github.com/google/uuid"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -32,6 +31,9 @@ const (
 func UUIDHashedFromValues(nbf *NomsBinFormat, vals ...Value) (UUID, error) {
 	w := binaryNomsWriter{make([]byte, 4), 0}
 	for _, v := range vals {
+		if v == nil || v.Kind() == NullKind {
+			continue
+		}
 		if err := v.writeTo(&w, nbf); err != nil {
 			return [16]byte{}, err
 		}

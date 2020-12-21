@@ -107,18 +107,29 @@ c0,c1
 2,2
 1,1
 1,1
+,9
 CSV
     dolt --keyless table import -c imported data.csv
     run dolt --keyless sql -q "SELECT count(*) FROM imported;" -r csv
     [ $status -eq 0 ]
-    [[ "${lines[1]}" = "4" ]] || false
-    dolt --keyless sql -q "SELECT c0,c1 FROM imported ORDER BY c0;" -r csv
-    run dolt --keyless sql -q "SELECT c0,c1 FROM imported ORDER BY c0;" -r csv
+    [[ "${lines[1]}" = "5" ]] || false
+    run dolt --keyless sql -q "SELECT c0,c1 FROM imported ORDER BY c1;" -r csv
     [ $status -eq 0 ]
     [[ "${lines[1]}" = "0,0" ]] || false
     [[ "${lines[2]}" = "1,1" ]] || false
     [[ "${lines[3]}" = "1,1" ]] || false
     [[ "${lines[4]}" = "2,2" ]] || false
+    [[ "${lines[5]}" = ",9" ]] || false
+
+    # tests for NULL hashing in keyless tables
+    dolt --keyless sql -q "UPDATE imported SET c1 = c1 + 10"
+    run dolt --keyless sql -q "SELECT c0,c1 FROM imported ORDER BY c1;" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "0,10" ]] || false
+    [[ "${lines[2]}" = "1,11" ]] || false
+    [[ "${lines[3]}" = "1,11" ]] || false
+    [[ "${lines[4]}" = "2,12" ]] || false
+    [[ "${lines[5]}" = ",19" ]] || false
 }
 
 # updates are always appends

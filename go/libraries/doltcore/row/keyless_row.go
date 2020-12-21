@@ -73,7 +73,8 @@ func keylessRowFromTaggedValued(nbf *types.NomsBinFormat, sch schema.Schema, tv 
 	i := 0
 
 	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if v, ok := tv[tag]; ok {
+		v, ok := tv[tag]
+		if ok && v.Kind() != types.NullKind {
 			vals[i] = types.Uint(tag)
 			vals[i+1] = v
 			i += 2
@@ -84,7 +85,7 @@ func keylessRowFromTaggedValued(nbf *types.NomsBinFormat, sch schema.Schema, tv 
 		return nil, err
 	}
 
-	return keylessRowWithCardinality(nbf, 1, vals...)
+	return keylessRowWithCardinality(nbf, 1, vals[:i]...)
 }
 
 func keylessRowWithCardinality(nbf *types.NomsBinFormat, card uint64, vals ...types.Value) (Row, error) {
