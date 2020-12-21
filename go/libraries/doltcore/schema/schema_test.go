@@ -98,9 +98,6 @@ func TestIsKeyless(t *testing.T) {
 	ok := IsKeyless(pkSch)
 	assert.False(t, ok)
 
-	FeatureFlagKeylessSchema = true
-	defer func() { FeatureFlagKeylessSchema = false }()
-
 	cc, err = NewColCollection(nonPkCols...)
 	require.NoError(t, err)
 
@@ -126,15 +123,6 @@ func TestValidateForInsert(t *testing.T) {
 		err = ValidateForInsert(colColl)
 		assert.Error(t, err)
 		assert.Equal(t, err, ErrColNameCollision)
-	})
-
-	t.Run("No primary keys", func(t *testing.T) {
-		colColl, err := NewColCollection(nonPkCols...)
-		require.NoError(t, err)
-
-		err = ValidateForInsert(colColl)
-		assert.Error(t, err)
-		assert.Equal(t, err, ErrNoPrimaryKeyColumns)
 	})
 }
 
