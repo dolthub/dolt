@@ -19,7 +19,7 @@ import (
 	"strings"
 )
 
-var FeatureFlagKeylessSchema = false
+var FeatureFlagKeylessSchema = true
 
 // EmptySchema is an instance of a schema with no columns.
 var EmptySchema = &schemaImpl{
