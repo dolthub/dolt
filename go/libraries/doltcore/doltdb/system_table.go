@@ -134,6 +134,7 @@ var generatedSystemTables = []string{
 	TableOfTablesInConflictName,
 	CommitsTableName,
 	CommitAncestorsTableName,
+	StatusTableName,
 }
 
 var generatedSystemTablePrefixes = []string{
@@ -218,4 +219,7 @@ const (
 
 	// CommitAncestorsTableName is the commit_ancestors system table name
 	CommitAncestorsTableName = "dolt_commit_ancestors"
+
+	// StatusTableName is the status system table name.
+	StatusTableName = "dolt_status"
 )
