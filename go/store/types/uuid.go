@@ -17,6 +17,7 @@ package types
 import (
 	"bytes"
 	"context"
+
 	"github.com/google/uuid"
 
 	"github.com/dolthub/dolt/go/store/hash"

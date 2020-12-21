@@ -67,7 +67,7 @@ func (rdr pkTableReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 }
 
 // Close implements the TableReadCloser interface.
-func (rdr pkTableReader) Close (_ context.Context) error {
+func (rdr pkTableReader) Close(_ context.Context) error {
 	return nil
 }
 
