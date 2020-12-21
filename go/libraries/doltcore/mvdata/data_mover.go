@@ -242,10 +242,6 @@ func SchAndTableNameFromFile(ctx context.Context, path string, fs filesys.Readab
 func InferSchema(ctx context.Context, root *doltdb.RootValue, rd table.TableReadCloser, tableName string, pks []string, args actions.InferenceArgs) (schema.Schema, error) {
 	var err error
 
-	if len(pks) == 0 {
-		pks = rd.GetSchema().GetPKCols().GetColumnNames()
-	}
-
 	infCols, err := actions.InferColumnTypesFromTableReader(ctx, root, rd, args)
 	if err != nil {
 		return nil, err

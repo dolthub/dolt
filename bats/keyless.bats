@@ -101,32 +101,39 @@ SQL
 
 # keyless tables allow duplicate rows
 @test "keyless table import" {
-    skip "unimplemented"
     cat <<CSV > data.csv
 c0,c1
 0,0
 2,2
 1,1
 1,1
+,9
 CSV
-    dolt table import -c imported data.csv
-    run dolt sql -q "SELECT count(*) FROM imported;" -r csv
+    dolt --keyless table import -c imported data.csv
+    run dolt --keyless sql -q "SELECT count(*) FROM imported;" -r csv
     [ $status -eq 0 ]
-    [[ "$lines[@]" = "4" ]] || false
-    run dolt sql -q "SELECT sum(c0),sum(c1) FROM imported;" -r csv
+    [[ "${lines[1]}" = "5" ]] || false
+    run dolt --keyless sql -q "SELECT c0,c1 FROM imported ORDER BY c1;" -r csv
     [ $status -eq 0 ]
-    [[ "$lines[@]" = "4,4" ]] || false
-    run dolt sql -q "SELECT * FROM tbl;" -r csv
+    [[ "${lines[1]}" = "0,0" ]] || false
+    [[ "${lines[2]}" = "1,1" ]] || false
+    [[ "${lines[3]}" = "1,1" ]] || false
+    [[ "${lines[4]}" = "2,2" ]] || false
+    [[ "${lines[5]}" = ",9" ]] || false
+
+    # tests for NULL hashing in keyless tables
+    dolt --keyless sql -q "UPDATE imported SET c1 = c1 + 10"
+    run dolt --keyless sql -q "SELECT c0,c1 FROM imported ORDER BY c1;" -r csv
     [ $status -eq 0 ]
-    [[ "$lines[@]" = "0,0" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
-    [[ "$lines[@]" = "2,2" ]] || false
+    [[ "${lines[1]}" = "0,10" ]] || false
+    [[ "${lines[2]}" = "1,11" ]] || false
+    [[ "${lines[3]}" = "1,11" ]] || false
+    [[ "${lines[4]}" = "2,12" ]] || false
+    [[ "${lines[5]}" = ",19" ]] || false
 }
 
 # updates are always appends
 @test "keyless table update" {
-    skip "unimplemented"
     cat <<CSV > data.csv
 c0,c1
 0,0
@@ -134,20 +141,49 @@ c0,c1
 1,1
 1,1
 CSV
-    dolt table import -u keyless data.csv
-    run dolt sql -q "SELECT count(*) FROM keyless;" -r csv
+    dolt --keyless table import -u keyless data.csv
+    dolt --keyless sql -q "SELECT * FROM keyless ORDER BY c0;" -r csv
+    run dolt --keyless sql -q "SELECT count(*) FROM keyless;" -r csv
     [ $status -eq 0 ]
-    [[ "$lines[@]" = "8" ]] || false
-    run dolt sql -q "SELECT * FROM keyless;" -r csv
+    [[ "${lines[1]}" = "8" ]] || false
+    dolt --keyless sql -q "SELECT * FROM keyless ORDER BY c0;" -r csv
+    run dolt --keyless sql -q "SELECT * FROM keyless ORDER BY c0;" -r csv
     [ $status -eq 0 ]
-    [[ "$lines[@]" = "0,0" ]] || false
-    [[ "$lines[@]" = "0,0" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
-    [[ "$lines[@]" = "1,1" ]] || false
-    [[ "$lines[@]" = "2,2" ]] || false
-    [[ "$lines[@]" = "2,2" ]] || false
+    [[ "${lines[1]}" = "0,0" ]] || false
+    [[ "${lines[2]}" = "0,0" ]] || false
+    [[ "${lines[3]}" = "1,1" ]] || false
+    [[ "${lines[4]}" = "1,1" ]] || false
+    [[ "${lines[5]}" = "1,1" ]] || false
+    [[ "${lines[6]}" = "1,1" ]] || false
+    [[ "${lines[7]}" = "2,2" ]] || false
+    [[ "${lines[8]}" = "2,2" ]] || false
+}
+
+@test "keyless table export CSV" {
+    dolt --keyless table export keyless
+    run dolt --keyless table export keyless
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" = "c0,c1" ]] || false
+    [[ "${lines[1]}" = "1,1" ]] || false
+    [[ "${lines[2]}" = "1,1" ]] || false
+    [[ "${lines[3]}" = "0,0" ]] || false
+    [[ "${lines[4]}" = "2,2" ]] || false
+}
+
+@test "keyless table export SQL" {
+    dolt --keyless table export keyless export.sql
+    cat export.sql
+    run cat export.sql
+    [[ "${lines[0]}" = "DROP TABLE IF EXISTS \`keyless\`;"   ]] || false
+    [[ "${lines[1]}" = "CREATE TABLE \`keyless\` ("          ]] || false
+    [[ "${lines[2]}" = "  \`c0\` int,"  ]] || false
+    [[ "${lines[3]}" = "  \`c1\` int"   ]] || false
+    [[ "${lines[4]}" = ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"     ]] || false
+    [[ "${lines[5]}" = "INSERT INTO \`keyless\` (\`c0\`,\`c1\`) VALUES (1,1);" ]] || false
+    [[ "${lines[6]}" = "INSERT INTO \`keyless\` (\`c0\`,\`c1\`) VALUES (1,1);" ]] || false
+    [[ "${lines[7]}" = "INSERT INTO \`keyless\` (\`c0\`,\`c1\`) VALUES (0,0);" ]] || false
+    [[ "${lines[8]}" = "INSERT INTO \`keyless\` (\`c0\`,\`c1\`) VALUES (2,2);" ]] || false
+
 }
 
 @test "keyless diff against working set" {
@@ -467,7 +503,6 @@ SQL
 }
 
 @test "keyless table replace" {
-    skip "unimplemented"
     cat <<CSV > data.csv
 c0,c1
 0,0
@@ -475,24 +510,26 @@ c0,c1
 1,1
 1,1
 CSV
-    run dolt table import -r keyless data.csv
+    run dolt --keyless table import -r keyless data.csv
     [ $status -eq 0 ]
-    run dolt diff
+    dolt --keyless diff
+    run dolt --keyless diff
     [ $status -eq 0 ]
     [ "$output" = "" ]
 
     cat <<CSV > data2.csv
 c0,c1
+9,9
 0,0
 1,1
 1,1
 2,2
 CSV
-    run dolt table import -r keyless data2.csv
+    run dolt --keyless table import -r keyless data2.csv
     [ $status -eq 0 ]
-    run dolt diff
+    run dolt --keyless diff
     [ $status -eq 0 ]
-    [ "$output" = "" ]
+    [[ "$output" =~ "|  +  | 9  | 9  |" ]] || false
 }
 
 # in-place updates create become drop/add

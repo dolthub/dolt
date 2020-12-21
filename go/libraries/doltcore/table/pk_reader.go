@@ -33,6 +33,7 @@ type pkTableReader struct {
 }
 
 var _ SqlTableReader = pkTableReader{}
+var _ TableReadCloser = pkTableReader{}
 
 // GetSchema implements the TableReader interface.
 func (rdr pkTableReader) GetSchema() schema.Schema {
@@ -65,10 +66,15 @@ func (rdr pkTableReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 	return noms.SqlRowFromTuples(rdr.sch, key.(types.Tuple), val.(types.Tuple))
 }
 
-func newPkTableReader(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, buffered bool) (SqlTableReader, error) {
+// Close implements the TableReadCloser interface.
+func (rdr pkTableReader) Close(_ context.Context) error {
+	return nil
+}
+
+func newPkTableReader(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, buffered bool) (pkTableReader, error) {
 	rows, err := tbl.GetRowData(ctx)
 	if err != nil {
-		return nil, err
+		return pkTableReader{}, err
 	}
 
 	var iter types.MapIterator
@@ -78,7 +84,7 @@ func newPkTableReader(ctx context.Context, tbl *doltdb.Table, sch schema.Schema,
 		iter, err = rows.BufferedIterator(ctx)
 	}
 	if err != nil {
-		return nil, err
+		return pkTableReader{}, err
 	}
 
 	return pkTableReader{

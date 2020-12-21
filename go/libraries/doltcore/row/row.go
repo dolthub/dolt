@@ -55,6 +55,13 @@ type Row interface {
 	NomsMapValue(sch schema.Schema) types.Valuable
 }
 
+func New(nbf *types.NomsBinFormat, sch schema.Schema, colVals TaggedValues) (Row, error) {
+	if schema.IsKeyless(sch) {
+		return keylessRowFromTaggedValued(nbf, sch, colVals)
+	}
+	return pkRowFromTaggedValues(nbf, sch, colVals)
+}
+
 func FromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) (Row, error) {
 	if schema.IsKeyless(sch) {
 		row, _, err := KeylessRowsFromTuples(nomsKey, nomsVal)
