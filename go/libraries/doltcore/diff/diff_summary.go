@@ -35,6 +35,10 @@ type reporter func(ctx context.Context, change *diff.Difference, ch chan<- DiffS
 // todo: make package private once dolthub is migrated
 // Summary reports a summary of diff changes between two values
 func Summary(ctx context.Context, ch chan DiffSummaryProgress, from, to types.Map) (err error) {
+	ch <- DiffSummaryProgress{
+		OldSize: from.Len(),
+		NewSize: to.Len(),
+	}
 	return summaryWithReporter(ctx, ch, from, to, reportPkChanges)
 }
 
