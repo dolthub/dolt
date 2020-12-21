@@ -67,11 +67,6 @@ func TestCreateTable(t *testing.T) {
 			expectedErr:   "syntax error",
 		},
 		{
-			name:        "Test no primary keys",
-			query:       "create table testTable (id int, age int)",
-			expectedErr: "no primary key columns",
-		},
-		{
 			name:        "Test bad table name",
 			query:       "create table _testTable (id int primary key, age int)",
 			expectedErr: "Invalid table name",
@@ -1056,11 +1051,6 @@ func TestParseCreateTableStatement(t *testing.T) {
 			query:         "create table testTable id int, age int",
 			expectedTable: "testTable",
 			expectedErr:   "syntax error",
-		},
-		{
-			name:        "Test no primary keys",
-			query:       "create table testTable (id int, age int)",
-			expectedErr: "no primary key columns",
 		},
 		{
 			name:        "Test bad table name begins with number",

@@ -83,7 +83,6 @@ func TestSchemaWithNoPKs(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = SchemaFromCols(colColl)
-	assert.Equal(t, ErrNoPrimaryKeyColumns, err)
 
 	assert.NotPanics(t, func() {
 		UnkeyedSchemaFromCols(colColl)
