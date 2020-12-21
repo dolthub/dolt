@@ -51,8 +51,8 @@ func (s StatusTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 	return sqlutil.NewSinglePartitionIter(), nil
 }
 
-func (s StatusTable) PartitionRows(context *sql.Context, partition sql.Partition) (sql.RowIter, error) {
-	panic("implement me")
+func (s StatusTable) PartitionRows(context *sql.Context, _ sql.Partition) (sql.RowIter, error) {
+	return NewStatusItr(context, s.ddb, s.rsr)
 }
 
 // NewStatusTable creates a StatusTable
