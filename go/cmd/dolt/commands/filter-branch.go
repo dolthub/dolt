@@ -176,10 +176,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 		_, itr, err = eng.query(sqlCtx, query)
 
 	case *sqlparser.Delete:
-		ok := eng.checkThenDeleteAllRows(sqlCtx, s)
-		if !ok {
-			_, itr, err = eng.query(sqlCtx, query)
-		}
+		_, itr, err = eng.query(sqlCtx, query)
 
 	case *sqlparser.DDL:
 		_, err := sqlparser.ParseStrictDDL(query)
