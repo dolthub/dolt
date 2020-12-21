@@ -221,10 +221,6 @@ DELETE FROM keyless WHERE c0 = 0;
 INSERT INTO keyless VALUES (8,8);
 UPDATE keyless SET c1 = 9 WHERE c0 = 1;
 SQL
-    dolt --keyless sql -q "
-        SELECT to_c0, to_c1, from_c0, from_c1
-        FROM dolt_diff_keyless
-        ORDER BY to_commit_date" -r csv
     run dolt --keyless sql -q "
         SELECT to_c0, to_c1, from_c0, from_c1
         FROM dolt_diff_keyless
