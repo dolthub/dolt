@@ -118,8 +118,7 @@ var _ sql.ProjectedTable = (*WritableIndexedDoltTable)(nil)
 
 type WritableIndexedDoltTable struct {
 	*WritableDoltTable
-	indexLookup   *doltIndexLookup
-	projectedCols []string
+	indexLookup *doltIndexLookup
 }
 
 func (t *WritableIndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {

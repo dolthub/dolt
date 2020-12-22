@@ -42,7 +42,7 @@ func limitTestQueriesTo(queries ...string) {
 }
 
 func TestQueries(t *testing.T) {
-	// limitTestQueriesTo(...) // whitelist queries you want run.
+	limitTestQueriesTo("SELECT i FROM niltable WHERE i2 IS NOT NULL ORDER BY 1") // whitelist queries you want run.
 
 	enginetest.TestQueries(t, newDoltHarness(t))
 }
