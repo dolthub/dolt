@@ -371,6 +371,16 @@ var engineTestSetup = []testCommand{
 	{commands.SqlCmd{}, []string{"-q", `create view myview as select * from mytable`}},
 	//{commands.SqlCmd{}, []string{"-q", "create view myview1 as select * from myhistorytable"}},
 	{commands.SqlCmd{}, []string{"-q", "create view myview2 as select * from myview where i = 1"}},
+	{commands.SqlCmd{}, []string{"-q", `
+CREATE TABLE people (
+	dob DATE,
+	first_name VARCHAR(64),
+	last_name VARCHAR(64),
+	middle_name VARCHAR(64),
+	height_inches TINYINT,
+	gender TINYINT,
+	primary key (dob,first_name,last_name,middle_name)
+)`}},
 	{commands.AddCmd{}, []string{"."}},
 	{commands.CommitCmd{}, []string{"-m", "setup enginetest test tables"}},
 	{commands.SqlCmd{}, []string{"-q", "insert into mytable values " +
@@ -444,13 +454,21 @@ var engineTestSetup = []testCommand{
 		"(6, NULL, '2');"}},
 	{commands.SqlCmd{}, []string{"-q", `insert into reservedWordsTable values 
 		("1", "1.1", "aaa", "create");`}},
+	{commands.SqlCmd{}, []string{"-q", `
+INSERT INTO people (dob,first_name,last_name,middle_name,height_inches,gender)
+VALUES
+("1970-12-01", "jon", "smith", "", 72, 0),
+("1980-01-11", "jon", "smith", "", 67, 0),
+("1990-02-21", "jane", "doe", "", 68, 1),
+("2000-12-31", "frank", "franklin", "", 70, 2),
+("2010-03-15", "jane", "doe", "", 69, 1)`}},
 }
 
 func setupEngineTests(t *testing.T) *env.DoltEnv {
 	dEnv := dtestutils.CreateTestEnv()
 	for _, c := range engineTestSetup {
 		exitCode := c.cmd.Exec(context.Background(), c.cmd.Name(), c.args, dEnv)
-		assert.Equal(t, 0, exitCode)
+		require.Equal(t, 0, exitCode)
 	}
 	return dEnv
 }

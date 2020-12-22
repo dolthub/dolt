@@ -30,7 +30,7 @@ import (
 type indexLookupRowIterAdapter struct {
 	idx     DoltIndex
 	keyIter nomsKeyIter
-	pkTags  *set.Uint64Set
+	pkTags  map[uint64]int
 	conv    *KVToSqlRowConverter
 	ctx     *sql.Context
 	rowChan chan sql.Row
@@ -45,7 +45,11 @@ type keyPos struct {
 
 // NewIndexLookupRowIterAdapter returns a new indexLookupRowIterAdapter.
 func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsKeyIter) *indexLookupRowIterAdapter {
-	pkTags := set.NewUint64Set(idx.Schema().GetPKCols().Tags)
+	pkTags := make(map[uint64]int)
+	for i, tag := range idx.Schema().GetPKCols().Tags {
+		pkTags[tag] = i
+	}
+
 	conv := NewKVToSqlRowConverterForCols(idx.Schema().GetAllCols().GetColumns())
 	iter := &indexLookupRowIterAdapter{
 		idx:     idx,
@@ -132,7 +136,7 @@ func (i *indexLookupRowIterAdapter) indexKeyToTableKey(nbf *types.NomsBinFormat,
 		return nil, err
 	}
 
-	var resVals []types.Value
+	resVals := make([]types.Value, len(i.pkTags)*2)
 	for {
 		_, tagVal, err := tplItr.Next()
 
@@ -145,15 +149,17 @@ func (i *indexLookupRowIterAdapter) indexKeyToTableKey(nbf *types.NomsBinFormat,
 		}
 
 		tag := uint64(tagVal.(types.Uint))
+		idx, inPK := i.pkTags[tag]
 
-		if i.pkTags.Contains(tag) {
+		if inPK {
 			_, valVal, err := tplItr.Next()
 
 			if err != nil {
 				return nil, err
 			}
 
-			resVals = append(resVals, tagVal, valVal)
+			resVals[idx*2] = tagVal
+			resVals[idx*2+1] = valVal
 		} else {
 			err := tplItr.Skip()
 
