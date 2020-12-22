@@ -145,9 +145,8 @@ func TestCreateTable(t *testing.T) {
 		query       string
 		expectedRes int
 	}{
-		{"create table people (id int)", 1}, // no primary key
-		{"create table", 1},                 // bad syntax
-		{"create table (id int ", 1},        // bad syntax
+		{"create table", 1},          // bad syntax
+		{"create table (id int ", 1}, // bad syntax
 		{"create table people (id int primary key)", 0},
 		{"create table people (id int primary key, age int)", 0},
 		{"create table people (id int primary key, age int, first_name varchar(80), is_married bit)", 0},

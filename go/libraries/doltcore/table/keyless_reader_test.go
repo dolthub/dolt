@@ -33,9 +33,6 @@ import (
 )
 
 func TestKeylessTableReader(t *testing.T) {
-	schema.FeatureFlagKeylessSchema = true
-	defer func() { schema.FeatureFlagKeylessSchema = false }()
-
 	sch := dtu.CreateSchema(
 		schema.NewColumn("c0", 0, types.IntKind, false),
 		schema.NewColumn("c1", 1, types.IntKind, false))

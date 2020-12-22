@@ -42,8 +42,6 @@ var c2Tag = types.Uint(2)
 var cardTag = types.Uint(schema.KeylessRowCardinalityTag)
 
 func TestKeylessMerge(t *testing.T) {
-	schema.FeatureFlagKeylessSchema = true
-	defer func() { schema.FeatureFlagKeylessSchema = false }()
 
 	tests := []struct {
 		name     string
@@ -134,9 +132,6 @@ func TestKeylessMerge(t *testing.T) {
 }
 
 func TestKeylessMergeConflicts(t *testing.T) {
-	schema.FeatureFlagKeylessSchema = true
-	defer func() { schema.FeatureFlagKeylessSchema = false }()
-
 	tests := []struct {
 		name  string
 		setup []testCommand

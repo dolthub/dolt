@@ -51,6 +51,10 @@ func AddColumnToTable(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.T
 		return nil, err
 	}
 
+	if schema.IsKeyless(sch) {
+		return nil, ErrKeylessAltTbl
+	}
+
 	if err := validateNewColumn(ctx, root, tbl, tblName, tag, newColName, typeInfo, nullable, defaultVal); err != nil {
 		return nil, err
 	}
