@@ -201,7 +201,7 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
 	currBranch := dEnv.RepoState.CWBHeadRef()
 	stagedTblDiffs, notStagedTblDiffs, _ := diff.GetStagedUnstagedTableDeltas(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
 
-	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, dEnv)
+	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
 	if err != nil {
 		workingTblsInConflict = []string{}
 	}

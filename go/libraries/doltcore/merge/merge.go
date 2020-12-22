@@ -713,22 +713,22 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 	return newRoot, tblToStats, nil
 }
 
-func GetTablesInConflict(ctx context.Context, dEnv *env.DoltEnv) (workingInConflict, stagedInConflict, headInConflict []string, err error) {
+func GetTablesInConflict(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (workingInConflict, stagedInConflict, headInConflict []string, err error) {
 	var headRoot, stagedRoot, workingRoot *doltdb.RootValue
 
-	headRoot, err = dEnv.HeadRoot(ctx)
+	headRoot, err = env.HeadRoot(ctx, ddb, rsr)
 
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	stagedRoot, err = dEnv.StagedRoot(ctx)
+	stagedRoot, err = env.StagedRoot(ctx, ddb, rsr)
 
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	workingRoot, err = dEnv.WorkingRoot(ctx)
+	workingRoot, err = env.WorkingRoot(ctx, ddb, rsr)
 
 	if err != nil {
 		return nil, nil, nil, err

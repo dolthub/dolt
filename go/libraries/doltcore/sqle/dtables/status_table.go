@@ -19,6 +19,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/go-mysql-server/sql"
 	"io"
@@ -28,6 +29,7 @@ import (
 type StatusTable struct {
 	ddb *doltdb.DoltDB
 	rsr env.RepoStateReader
+	drw env.DocsReadWriter
 }
 
 func (s StatusTable) Name() string {
@@ -52,12 +54,12 @@ func (s StatusTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 }
 
 func (s StatusTable) PartitionRows(context *sql.Context, _ sql.Partition) (sql.RowIter, error) {
-	return NewStatusItr(context, s.ddb, s.rsr)
+	return NewStatusItr(context, &s)
 }
 
 // NewStatusTable creates a StatusTable
-func NewStatusTable(_ *sql.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) sql.Table {
-	return &StatusTable{ddb, rsr}
+func NewStatusTable(_ *sql.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, drw env.DocsReadWriter) sql.Table {
+	return &StatusTable{ddb: ddb, rsr: rsr, drw: drw}
 }
 
 // BranchItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
@@ -69,8 +71,20 @@ type StatusItr struct {
 }
 
 // TODO: Refactor out status constants
-func NewStatusItr(ctx *sql.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (*StatusItr, error) {
+func NewStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
+	ddb := st.ddb
+	rsr := st.rsr
+	// drw := st.drw
+
 	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, ddb, rsr)
+
+	if err != nil {
+		return &StatusItr{}, err
+	}
+
+	// stagedDocDiffs, notStagedDocDiffs, err := diff.GetDocDiffs(ctx, ddb, rsr, drw)
+
+	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, ddb, rsr)
 
 	if err != nil {
 		return &StatusItr{}, err
@@ -113,6 +127,12 @@ func NewStatusItr(ctx *sql.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader)
 			tables[i] = td.CurName()
 			statuses[i] = "modified"
 		}
+	}
+
+	for i, tdName := range workingTblsInConflict {
+		isStaged[i] = false
+		statuses[i] = "merge conflict"
+		tables[i] = tdName
 	}
 
 
