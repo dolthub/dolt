@@ -181,10 +181,6 @@ SQL
     dolt sql < 1pk5col-ints-sch.sql
     run dolt table import -u test 1pk5col-rpt-ints.csv
     [ "$status" -eq 1 ]
-}
-
-@test "update table with con" {
-    dolt sql < 1pk5col-ints-sch.sql
 
     # Works with --continue
     run dolt table import -u --continue test 1pk5col-rpt-ints.csv
