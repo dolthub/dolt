@@ -755,13 +755,13 @@ func GetTablesInConflict(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoSt
 	return workingInConflict, stagedInConflict, headInConflict, err
 }
 
-func GetDocsInConflict(ctx context.Context, dEnv *env.DoltEnv) (*diff.DocDiffs, error) {
-	docDetails, err := dEnv.GetAllValidDocDetails()
+func GetDocsInConflict(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, drw env.DocsReadWriter) (*diff.DocDiffs, error) {
+	docDetails, err := drw.GetAllValidDocDetails()
 	if err != nil {
 		return nil, err
 	}
 
-	workingRoot, err := dEnv.WorkingRoot(ctx)
+	workingRoot, err := env.WorkingRoot(ctx, ddb, rsr)
 	if err != nil {
 		return nil, err
 	}

@@ -70,19 +70,22 @@ type StatusItr struct {
 	idx		int
 }
 
-// TODO: Refactor out status constants
 func NewStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 	ddb := st.ddb
 	rsr := st.rsr
-	// drw := st.drw
+	drw := st.drw
 
-	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, ddb, rsr)
+	stagedTables, unstagedTables, err := diff.GetStagedUnstagedTableDeltas(ctx, ddb, rsr)
 
 	if err != nil {
 		return &StatusItr{}, err
 	}
 
-	// stagedDocDiffs, notStagedDocDiffs, err := diff.GetDocDiffs(ctx, ddb, rsr, drw)
+	stagedDocDiffs, notStagedDocDiffs, err := diff.GetDocDiffs(ctx, ddb, rsr, drw)
+
+	if err != nil {
+		return &StatusItr{}, err
+	}
 
 	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, ddb, rsr)
 
@@ -90,53 +93,132 @@ func NewStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		return &StatusItr{}, err
 	}
 
-	tLength := len(staged) + len(notStaged)
+	workingDocsInConflict, err := merge.GetDocsInConflict(ctx, ddb, rsr, drw)
+
+	if err != nil {
+		return &StatusItr{}, err
+	}
+
+	tLength := len(stagedTables) + len(unstagedTables) + len(stagedDocDiffs.Docs) + len(notStagedDocDiffs.Docs) + len(workingTblsInConflict) + len(workingDocsInConflict.Docs)
 	tables := make([]string, tLength)
 	isStaged := make([]bool, tLength)
 	statuses := make([]string, tLength)
 
-	for i, td := range staged {
-		isStaged[i] = true
+	itr := StatusItr{tables: tables, isStaged: isStaged, statuses: statuses, idx: 0}
+
+	idx := handleStagedTables(stagedTables, &itr, 0)
+	idx = handleUnstagedTables(unstagedTables, &itr, idx)
+	idx = handleStagedDocDiffs(stagedDocDiffs, &itr, idx)
+	idx = handleUnstagedDocDiffs(notStagedDocDiffs, &itr, idx)
+	idx = handleWorkingTablesInConflict(workingTblsInConflict, &itr, idx)
+	idx = handleWorkingDocConflicts(workingDocsInConflict, &itr, idx)
+
+	return &itr, nil
+}
+
+func handleStagedTables(staged []diff.TableDelta, itr *StatusItr, idx int) int {
+	for _, td := range staged {
+		itr.isStaged[idx] = true
 		if td.IsAdd() {
-			tables[i] = td.CurName()
-			statuses[i] = "new table"
+			itr.tables[idx] = td.CurName()
+			itr.statuses[idx] = "new table"
 		} else if td.IsDrop() {
-			tables[i] = td.CurName()
-			statuses[i] = "deleted"
+			itr.tables[idx] = td.CurName()
+			itr.statuses[idx] = "deleted"
 		} else if td.IsRename() {
-			tables[i] = fmt.Sprintf("%s -> %s", td.FromName, td.ToName)
-			statuses[i] = "renamed"
+			itr.tables[idx] = fmt.Sprintf("%s -> %s", td.FromName, td.ToName)
+			itr.statuses[idx] = "renamed"
 		} else {
-			tables[i] = td.CurName()
-			statuses[i] = "modified"
+			itr.tables[idx] = td.CurName()
+			itr.statuses[idx] = "modified"
 		}
+
+		idx += 1
 	}
 
-	for i, td := range notStaged {
-		isStaged[i] = false
+	return idx
+}
+
+func handleUnstagedTables(notStaged []diff.TableDelta, itr *StatusItr, idx int) int {
+	for _, td := range notStaged {
+		itr.isStaged[idx] = false
 		if td.IsAdd() {
-			tables[i] = td.CurName()
-			statuses[i] = "new table"
+			itr.tables[idx] = td.CurName()
+			itr.statuses[idx] = "new table"
 		} else if td.IsDrop() {
-			tables[i] = td.CurName()
-			statuses[i] = "deleted"
+			itr.tables[idx] = td.CurName()
+			itr.statuses[idx] = "deleted"
 		} else if td.IsRename() {
-			tables[i] = fmt.Sprintf("%s -> %s", td.FromName, td.ToName)
-			statuses[i] = "renamed"
+			itr.tables[idx] = fmt.Sprintf("%s -> %s", td.FromName, td.ToName)
+			itr.statuses[idx] = "renamed"
 		} else {
-			tables[i] = td.CurName()
-			statuses[i] = "modified"
+			itr.tables[idx] = td.CurName()
+			itr.statuses[idx] = "modified"
 		}
+
+		idx += 1
+	}
+	return idx
+}
+
+var docDiffTypeToLabel = map[diff.DocDiffType]string{
+	diff.ModifiedDoc: "modified",
+	diff.RemovedDoc:  "deleted",
+	diff.AddedDoc:    "new doc",
+}
+
+func handleStagedDocDiffs(staged *diff.DocDiffs, itr *StatusItr, idx int) int {
+	for _, docName := range staged.Docs {
+		dType := staged.DocToType[docName]
+
+		itr.tables[idx] = docName
+		itr.isStaged[idx] = true
+		itr.statuses[idx] = docDiffTypeToLabel[dType]
+
+		idx += 1
 	}
 
-	for i, tdName := range workingTblsInConflict {
-		isStaged[i] = false
-		statuses[i] = "merge conflict"
-		tables[i] = tdName
+	return idx
+}
+
+func handleUnstagedDocDiffs(notStaged *diff.DocDiffs, itr *StatusItr, idx int) int {
+	for _, docName := range notStaged.Docs {
+		dType := notStaged.DocToType[docName]
+
+		itr.tables[idx] = docName
+		itr.isStaged[idx] = false
+		itr.statuses[idx] = docDiffTypeToLabel[dType]
+
+		idx += 1
 	}
 
+	return idx
+}
 
-	return &StatusItr{tables: tables, isStaged: isStaged, statuses: statuses, idx: 0}, nil
+const mergeConflictStatus = "conflict"
+
+func handleWorkingTablesInConflict(workingTables []string, itr *StatusItr, idx int) int {
+	for _, tableName := range workingTables {
+		itr.tables[idx] = tableName
+		itr.isStaged[idx] = false
+		itr.statuses[idx] = mergeConflictStatus
+
+		idx += 1
+	}
+
+	return idx
+}
+
+func handleWorkingDocConflicts(workingDocs *diff.DocDiffs, itr *StatusItr, idx int) int {
+	for _, docName := range workingDocs.Docs {
+		itr.tables[idx] = docName
+		itr.isStaged[idx] = false
+		itr.statuses[idx] = mergeConflictStatus
+
+		idx += 1
+	}
+
+	return idx
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.

@@ -90,7 +90,7 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 1
 	}
 
-	workingDocsInConflict, err := merge.GetDocsInConflict(ctx, dEnv)
+	workingDocsInConflict, err := merge.GetDocsInConflict(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.DocsReadWriter())
 
 	if err != nil {
 		cli.PrintErrln(toStatusVErr(err).Verbose())
