@@ -16,13 +16,15 @@ package dtables
 
 import (
 	"fmt"
+	"io"
+
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/go-mysql-server/sql"
-	"io"
 )
 
 // StatusTable is a sql.Table implementation that implements a system table which shows the dolt branches
@@ -48,7 +50,6 @@ func (s StatusTable) Schema() sql.Schema {
 	}
 }
 
-// TODO: Better understand partitions.
 func (s StatusTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 	return sqlutil.NewSinglePartitionIter(), nil
 }
@@ -64,10 +65,10 @@ func NewStatusTable(_ *sql.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader,
 
 // BranchItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
 type StatusItr struct {
-	tables []string
+	tables   []string
 	isStaged []bool
-	statuses  []string
-	idx		int
+	statuses []string
+	idx      int
 }
 
 func NewStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
@@ -100,6 +101,7 @@ func NewStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 	}
 
 	tLength := len(stagedTables) + len(unstagedTables) + len(stagedDocDiffs.Docs) + len(notStagedDocDiffs.Docs) + len(workingTblsInConflict) + len(workingDocsInConflict.Docs)
+
 	tables := make([]string, tLength)
 	isStaged := make([]bool, tLength)
 	statuses := make([]string, tLength)
@@ -116,21 +118,28 @@ func NewStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 	return &itr, nil
 }
 
+var tblDiffTypeToLabel = map[diff.TableDiffType]string{
+	diff.ModifiedTable: "modified",
+	diff.RenamedTable:  "renamed",
+	diff.RemovedTable:  "deleted",
+	diff.AddedTable:    "new table",
+}
+
 func handleStagedTables(staged []diff.TableDelta, itr *StatusItr, idx int) int {
 	for _, td := range staged {
 		itr.isStaged[idx] = true
 		if td.IsAdd() {
 			itr.tables[idx] = td.CurName()
-			itr.statuses[idx] = "new table"
+			itr.statuses[idx] = tblDiffTypeToLabel[diff.AddedTable]
 		} else if td.IsDrop() {
 			itr.tables[idx] = td.CurName()
-			itr.statuses[idx] = "deleted"
+			itr.statuses[idx] = tblDiffTypeToLabel[diff.RemovedTable]
 		} else if td.IsRename() {
 			itr.tables[idx] = fmt.Sprintf("%s -> %s", td.FromName, td.ToName)
-			itr.statuses[idx] = "renamed"
+			itr.statuses[idx] = tblDiffTypeToLabel[diff.RemovedTable]
 		} else {
 			itr.tables[idx] = td.CurName()
-			itr.statuses[idx] = "modified"
+			itr.statuses[idx] = tblDiffTypeToLabel[diff.ModifiedTable]
 		}
 
 		idx += 1
@@ -144,16 +153,16 @@ func handleUnstagedTables(notStaged []diff.TableDelta, itr *StatusItr, idx int) 
 		itr.isStaged[idx] = false
 		if td.IsAdd() {
 			itr.tables[idx] = td.CurName()
-			itr.statuses[idx] = "new table"
+			itr.statuses[idx] = tblDiffTypeToLabel[diff.AddedTable]
 		} else if td.IsDrop() {
 			itr.tables[idx] = td.CurName()
-			itr.statuses[idx] = "deleted"
+			itr.statuses[idx] = tblDiffTypeToLabel[diff.RemovedTable]
 		} else if td.IsRename() {
 			itr.tables[idx] = fmt.Sprintf("%s -> %s", td.FromName, td.ToName)
-			itr.statuses[idx] = "renamed"
+			itr.statuses[idx] = tblDiffTypeToLabel[diff.RenamedTable]
 		} else {
 			itr.tables[idx] = td.CurName()
-			itr.statuses[idx] = "modified"
+			itr.statuses[idx] = tblDiffTypeToLabel[diff.ModifiedTable]
 		}
 
 		idx += 1
@@ -239,55 +248,3 @@ func (itr *StatusItr) Next() (sql.Row, error) {
 func (itr *StatusItr) Close() error {
 	return nil
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
