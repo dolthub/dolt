@@ -13,10 +13,6 @@ CREATE TABLE test2 (
 );
 INSERT INTO test VALUES (0),(1),(2);
 SQL
-    dolt sql <<SQL
-DELETE FROM test WHERE pk = 0;
-INSERT INTO test VALUES (3);
-SQL
 }
 
 teardown() {
@@ -25,6 +21,22 @@ teardown() {
 
 @test "DOLT_ADD all flag works" {
     run dolt sql -q "SELECT DOLT_ADD('-A')"
+    run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
+
+    # Check that everything was added
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+
+    run dolt log
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Commit1" ]] || false
+    regex='Bats Tests <bats@email.fake>'
+    [[ "$output" =~ "$regex" ]] || false
+}
+
+@test "DOLT_ADD all w/ . works" {
+    run dolt sql -q "SELECT DOLT_ADD('.')"
     run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
 
     # Check that everything was added
@@ -71,4 +83,19 @@ teardown() {
     [[ "$output" =~ "Commit1" ]] || false
     regex='Bats Tests <bats@email.fake>'
     [[ "$output" =~ "$regex" ]] || false
+}
+
+@test "Check that Dolt add works with docs" {
+     echo readme-text > README.md
+     run ls
+     [[ "$output" =~ "README.md" ]] || false
+
+     run dolt sql -q "SELECT DOLT_ADD('README.md')"
+     [ "$status" -eq 0 ]
+
+     # Check that the README was added as a new doc.
+     run dolt status
+     [ "$status" -eq 0 ]
+     regex='new doc'
+     [[ "$output" =~ "$regex" ]] || false
 }

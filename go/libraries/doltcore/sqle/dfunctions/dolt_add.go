@@ -37,21 +37,21 @@ func (d DoltAddFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	dbData, ok := dSess.GetDbData(dbName)
 
 	if !ok {
-		return nil, fmt.Errorf("Could not load %s", dbName)
+		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}
 
 	ap := cli.CreateAddArgParser()
 	args, err := getDoltArgs(ctx, row, d.Children())
 
 	if err != nil {
-		return nil, err
+		return 1, err
 	}
 
 	apr := cli.ParseArgs(ap, args, nil)
 	allFlag := apr.Contains(cli.AllFlag)
 
 	if apr.NArg() == 0 && !allFlag {
-		return nil, fmt.Errorf("Nothing specified, nothing added.\n Maybe you wanted to say 'dolt add .'?")
+		return 1, fmt.Errorf("Nothing specified, nothing added. Maybe you wanted to say 'dolt add .'?")
 	} else if allFlag || apr.NArg() == 1 && apr.Arg(0) == "." {
 		err = actions.StageAllTables(ctx, dbData)
 	} else {
@@ -59,10 +59,10 @@ func (d DoltAddFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	if err != nil {
-		return nil, err
+		return 1, err
 	}
 
-	return "", nil
+	return 0, nil
 }
 
 func (d DoltAddFunc) Resolved() bool {
@@ -85,7 +85,7 @@ func (d DoltAddFunc) String() string {
 }
 
 func (d DoltAddFunc) Type() sql.Type {
-	return sql.Text
+	return sql.Int8
 }
 
 func (d DoltAddFunc) IsNullable() bool {

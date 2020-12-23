@@ -461,8 +461,9 @@ func (d *docsReadWriter) ResetWorkingDocsToStagedDocs(ctx context.Context) error
 	return d.dEnv.ResetWorkingDocsToStagedDocs(ctx)
 }
 
-func (d *docsReadWriter) GetOneDocDetail(docName string) (doc doltdb.DocDetails, err error) {
-	return d.dEnv.GetOneDocDetail(docName)
+// GetDocDetail returns the details of a specific document passed as docName.
+func (d *docsReadWriter) GetDocDetail(docName string) (doc doltdb.DocDetails, err error) {
+	return d.dEnv.GetDocDetail(docName)
 }
 
 func (dEnv *DoltEnv) DocsReadWriter() DocsReadWriter {
@@ -905,7 +906,7 @@ func (dEnv *DoltEnv) GetAllValidDocDetails() (docs []doltdb.DocDetails, err erro
 	return docs, nil
 }
 
-func (dEnv *DoltEnv) GetOneDocDetail(docName string) (doc doltdb.DocDetails, err error) {
+func (dEnv *DoltEnv) GetDocDetail(docName string) (doc doltdb.DocDetails, err error) {
 	for _, doc := range *AllValidDocDetails {
 		if doc.DocPk == docName {
 			newerText, err := dEnv.GetLocalFileText(doc.File)

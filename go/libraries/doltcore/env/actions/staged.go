@@ -60,7 +60,7 @@ func StageTables(ctx context.Context, dbData env.DbData, tbls []string) error {
 // appended to a docDetails slice. We return a tuple of tables, docDetails and error.
 func GetTblsAndDocDetails(drw env.DocsReadWriter, tbls []string) (tables []string, docDetails []doltdb.DocDetails, err error) {
 	for i, tbl := range tbls {
-		docDetail, err := drw.GetOneDocDetail(tbl)
+		docDetail, err := drw.GetDocDetail(tbl)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -221,7 +221,7 @@ func getStagedAndWorking(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoSt
 	return roots[StagedRoot], roots[WorkingRoot], nil
 }
 
-// Get all wanted roots.
+// getRoots gets all wanted roots.
 func getRoots(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, rootTypes ...RootType) (map[RootType]*doltdb.RootValue, error) {
 	roots := make(map[RootType]*doltdb.RootValue)
 	for _, rt := range rootTypes {
