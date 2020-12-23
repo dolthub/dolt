@@ -30,7 +30,10 @@ type TableEditSession struct {
 
 	root       *doltdb.RootValue
 	tables     map[string]*sessionedTableEditor
-	writeMutex *sync.RWMutex // This mutex is specifically for changes that affect the TES or all STEs
+
+	// session-wide lock that blocks table edits while
+	// performing operations that affect the entire db
+	lock *sync.RWMutex
 }
 
 // TableEditSessionProps are properties that define different functionality for the TableEditSession.
@@ -43,26 +46,26 @@ type TableEditSessionProps struct {
 // table editors are returned.
 func CreateTableEditSession(root *doltdb.RootValue, props TableEditSessionProps) *TableEditSession {
 	return &TableEditSession{
-		Props:      props,
-		root:       root,
-		tables:     make(map[string]*sessionedTableEditor),
-		writeMutex: &sync.RWMutex{},
+		Props:  props,
+		root:   root,
+		tables: make(map[string]*sessionedTableEditor),
+		lock:   &sync.RWMutex{},
 	}
 }
 
 // GetTableEditor returns a TableEditor for the given table. If a schema is provided and it does not match the one
 // that is used for currently open editors (if any), then those editors will reload the table from the root.
 func (tes *TableEditSession) GetTableEditor(ctx context.Context, tableName string, tableSch schema.Schema) (TableEditor, error) {
-	tes.writeMutex.Lock()
-	defer tes.writeMutex.Unlock()
+	tes.lock.Lock()
+	defer tes.lock.Unlock()
 
 	return tes.getTableEditor(ctx, tableName, tableSch)
 }
 
 // Flush returns an updated root with all of the changed tables.
 func (tes *TableEditSession) Flush(ctx context.Context) (*doltdb.RootValue, error) {
-	tes.writeMutex.Lock()
-	defer tes.writeMutex.Unlock()
+	tes.lock.Lock()
+	defer tes.lock.Unlock()
 
 	return tes.flush(ctx)
 }
@@ -73,8 +76,8 @@ func (tes *TableEditSession) Flush(ctx context.Context) (*doltdb.RootValue, erro
 // been flushed. If the purpose is to add a new table, foreign key, etc. (using Flush followed up with SetRoot), then
 // use UpdateRoot. Calling the two functions manually for the purposes of root modification may lead to race conditions.
 func (tes *TableEditSession) SetRoot(ctx context.Context, root *doltdb.RootValue) error {
-	tes.writeMutex.Lock()
-	defer tes.writeMutex.Unlock()
+	tes.lock.Lock()
+	defer tes.lock.Unlock()
 
 	return tes.setRoot(ctx, root)
 }
@@ -83,8 +86,8 @@ func (tes *TableEditSession) SetRoot(ctx context.Context, root *doltdb.RootValue
 // key, etc.) and passes in the flushed root. The function may then safely modify the root, and return the modified root
 // (assuming no errors). The TableEditSession will update itself in accordance with the newly returned root.
 func (tes *TableEditSession) UpdateRoot(ctx context.Context, updatingFunc func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error)) error {
-	tes.writeMutex.Lock()
-	defer tes.writeMutex.Unlock()
+	tes.lock.Lock()
+	defer tes.lock.Unlock()
 
 	root, err := tes.flush(ctx)
 	if err != nil {
@@ -100,8 +103,8 @@ func (tes *TableEditSession) UpdateRoot(ctx context.Context, updatingFunc func(c
 // ValidateForeignKeys ensures that all open table editors conform to their foreign key constraints. This does not
 // consider any tables that do not have open editors.
 func (tes *TableEditSession) ValidateForeignKeys(ctx context.Context) error {
-	tes.writeMutex.Lock()
-	defer tes.writeMutex.Unlock()
+	tes.lock.Lock()
+	defer tes.lock.Unlock()
 
 	_, err := tes.flush(ctx)
 	if err != nil {
@@ -221,9 +224,9 @@ func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName strin
 		localTableEditor.deps = nil
 	} else {
 		localTableEditor = &sessionedTableEditor{
-			tableEditSession:  tes,
-			tableEditor:       nil,
-			deps:  nil,
+			sess:        tes,
+			tableEditor: nil,
+			deps:        nil,
 		}
 		tes.tables[tableName] = localTableEditor
 	}

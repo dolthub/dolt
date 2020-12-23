@@ -27,8 +27,8 @@ import (
 // sessionedTableEditor represents a table editor obtained from a TableEditSession. This table editor may be shared
 // by multiple callers. It is thread safe.
 type sessionedTableEditor struct {
-	tableEditSession *TableEditSession
-	tableEditor      TableEditor
+	tableEditor TableEditor
+	sess        *TableEditSession
 
 	deps []editDependency
 }
@@ -37,8 +37,8 @@ var _ TableEditor = &sessionedTableEditor{}
 
 // InsertRow adds the given row to the table. If the row already exists, use UpdateRow.
 func (ste *sessionedTableEditor) InsertRow(ctx context.Context, dRow row.Row) error {
-	ste.tableEditSession.writeMutex.RLock()
-	defer ste.tableEditSession.writeMutex.RUnlock()
+	ste.sess.lock.RLock()
+	defer ste.sess.lock.RUnlock()
 
 	// broadcast to dependencies
 	for _, dep := range ste.deps {
@@ -52,8 +52,8 @@ func (ste *sessionedTableEditor) InsertRow(ctx context.Context, dRow row.Row) er
 
 // DeleteKey removes the given key from the table.
 func (ste *sessionedTableEditor) DeleteRow(ctx context.Context, dRow row.Row) error {
-	ste.tableEditSession.writeMutex.RLock()
-	defer ste.tableEditSession.writeMutex.RUnlock()
+	ste.sess.lock.RLock()
+	defer ste.sess.lock.RUnlock()
 
 	// broadcast to dependencies
 	for _, dep := range ste.deps {
@@ -68,8 +68,8 @@ func (ste *sessionedTableEditor) DeleteRow(ctx context.Context, dRow row.Row) er
 // UpdateRow takes the current row and new row, and updates it accordingly. Any applicable rows from tables that have a
 // foreign key referencing this table will also be updated.
 func (ste *sessionedTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row) error {
-	ste.tableEditSession.writeMutex.RLock()
-	defer ste.tableEditSession.writeMutex.RUnlock()
+	ste.sess.lock.RLock()
+	defer ste.sess.lock.RUnlock()
 
 	// broadcast to dependencies
 	for _, dep := range ste.deps {
@@ -86,11 +86,14 @@ func (ste *sessionedTableEditor) GetAutoIncrementValue() types.Value {
 }
 
 func (ste *sessionedTableEditor) SetAutoIncrementValue(v types.Value) error {
+	ste.sess.lock.RLock()
+	defer ste.sess.lock.RUnlock()
+	
 	return ste.tableEditor.SetAutoIncrementValue(v)
 }
 
 func (ste *sessionedTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
-	root, err := ste.tableEditSession.Flush(ctx)
+	root, err := ste.sess.Flush(ctx)
 	if err != nil {
 		return nil, err
 	}
