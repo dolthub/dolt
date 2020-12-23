@@ -296,7 +296,6 @@ func (te *pkTableEditor) InsertRow(ctx context.Context, dRow row.Row) error {
 			return err
 		}
 		return &ErrDuplicatePrimaryKeyFmt{keyStr: keyStr}
-		//return table.NewBadRow(dRow, fmt.Sprintf("ErrDuplicatePrimaryKeyFmt", keyStr))
 	}
 	te.tea.insertedKeys[keyHash] = key
 	te.tea.addedKeys[keyHash] = key
