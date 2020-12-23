@@ -17,7 +17,6 @@ package editor
 import (
 	"context"
 	"fmt"
-	"io"
 	"strings"
 	"sync"
 
@@ -25,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/async"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -150,101 +148,6 @@ func newTableEditAcc(nbf *types.NomsBinFormat) *tableEditAccumulator {
 		removedKeys:  make(map[hash.Hash]types.Value),
 		affectedKeys: make(map[hash.Hash]types.Value),
 	}
-}
-
-// ContainsIndexedKey returns whether the given key is contained within the index. The key is assumed to be in the
-// format expected of the index, similar to searching on the index map itself.
-func ContainsIndexedKey(ctx context.Context, te TableEditor, key types.Tuple, indexName string) (bool, error) {
-	tbl, err := te.Table(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	idxSch := te.Schema().Indexes().GetByName(indexName)
-	idxMap, err := tbl.GetIndexRowData(ctx, indexName)
-	if err != nil {
-		return false, err
-	}
-
-	indexIter := noms.NewNomsRangeReader(idxSch.Schema(), idxMap,
-		[]*noms.ReadRange{{Start: key, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
-			return tuple.StartsWith(key), nil
-		}}},
-	)
-
-	_, err = indexIter.ReadRow(ctx)
-	if err == nil { // row exists
-		return true, nil
-	} else if err != io.EOF {
-		return false, err
-	} else {
-		return false, nil
-	}
-}
-
-// GetIndexedRows returns all matching rows for the given key on the index. The key is assumed to be in the format
-// expected of the index, similar to searching on the index map itself.
-func GetIndexedRows(ctx context.Context, te TableEditor, key types.Tuple, indexName string) ([]row.Row, error) {
-	tbl, err := te.Table(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	idxSch := te.Schema().Indexes().GetByName(indexName)
-	idxMap, err := tbl.GetIndexRowData(ctx, indexName)
-	if err != nil {
-		return nil, err
-	}
-
-	indexIter := noms.NewNomsRangeReader(idxSch.Schema(), idxMap,
-		[]*noms.ReadRange{{Start: key, Inclusive: true, Reverse: false, Check: func(tuple types.Tuple) (bool, error) {
-			return tuple.StartsWith(key), nil
-		}}},
-	)
-
-	rowData, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var rows []row.Row
-	for {
-		r, err := indexIter.ReadRow(ctx)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		indexRowTaggedValues, err := row.GetTaggedVals(r)
-		if err != nil {
-			return nil, err
-		}
-
-		pkTuple := indexRowTaggedValues.NomsTupleForPKCols(te.Format(), te.Schema().GetPKCols())
-		pkTupleVal, err := pkTuple.Value(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		fieldsVal, _, err := rowData.MaybeGet(ctx, pkTupleVal)
-		if err != nil {
-			return nil, err
-		}
-		if fieldsVal == nil {
-			keyStr, err := formatKey(ctx, key)
-			if err != nil {
-				return nil, err
-			}
-			return nil, fmt.Errorf("index key `%s` does not have a corresponding entry in table", keyStr)
-		}
-
-		tableRow, err := row.FromNoms(te.Schema(), pkTupleVal.(types.Tuple), fieldsVal.(types.Tuple))
-		rows = append(rows, tableRow)
-	}
-
-	return rows, nil
 }
 
 // InsertRow adds the given row to the table. If the row already exists, use UpdateRow.

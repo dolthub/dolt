@@ -20,9 +20,7 @@ import (
 	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // TableEditSession handles all edit operations on a table that may also update other tables. Serves as coordination
@@ -110,47 +108,48 @@ func (tes *TableEditSession) ValidateForeignKeys(ctx context.Context) error {
 		return err
 	}
 
-	if tes.Props.ForeignKeyChecksDisabled {
-		// When fk checks are disabled, we don't load any foreign key data. Although we could load them here now, we can
-		// take a bit of a performance hit and create an internal edit session that loads all of the foreign keys.
-		// Otherwise, to preserve this edit session would create a much larger (and more difficult to understand) block
-		// of code. The primary perf hit comes from foreign keys that reference tables that declare foreign keys of
-		// their own, which is not common, so the average perf hit is relatively minimal.
-		validationTes := CreateTableEditSession(tes.root, TableEditSessionProps{})
-		for tableName, _ := range tes.tables {
-			_, err = validationTes.getTableEditor(ctx, tableName, nil)
-			if err != nil {
-				return err
-			}
-		}
-		return validationTes.ValidateForeignKeys(ctx)
-	} else {
-		// if we loaded foreign keys then all referenced tables exist, so we can just use them
-		for _, ste := range tes.tables {
-			tbl, err := ste.tableEditor.Table(ctx)
-			if err != nil {
-				return err
-			}
-			rowData, err := tbl.GetRowData(ctx)
-			if err != nil {
-				return err
-			}
-			err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-				r, err := row.FromNoms(ste.tableEditor.Schema(), key.(types.Tuple), value.(types.Tuple))
-				if err != nil {
-					return true, err
-				}
-				err = ste.validateForInsert(ctx, r)
-				if err != nil {
-					return true, err
-				}
-				return false, nil
-			})
-			if err != nil {
-				return err
-			}
-		}
-	}
+	// todo
+	//if tes.Props.ForeignKeyChecksDisabled {
+	//	// When fk checks are disabled, we don't load any foreign key data. Although we could load them here now, we can
+	//	// take a bit of a performance hit and create an internal edit session that loads all of the foreign keys.
+	//	// Otherwise, to preserve this edit session would create a much larger (and more difficult to understand) block
+	//	// of code. The primary perf hit comes from foreign keys that reference tables that declare foreign keys of
+	//	// their own, which is not common, so the average perf hit is relatively minimal.
+	//	validationTes := CreateTableEditSession(tes.root, TableEditSessionProps{})
+	//	for tableName, _ := range tes.tables {
+	//		_, err = validationTes.getTableEditor(ctx, tableName, nil)
+	//		if err != nil {
+	//			return err
+	//		}
+	//	}
+	//	return validationTes.ValidateForeignKeys(ctx)
+	//} else {
+	//	// if we loaded foreign keys then all referenced tables exist, so we can just use them
+	//	for _, ste := range tes.tables {
+	//		tbl, err := ste.tableEditor.Table(ctx)
+	//		if err != nil {
+	//			return err
+	//		}
+	//		rowData, err := tbl.GetRowData(ctx)
+	//		if err != nil {
+	//			return err
+	//		}
+	//		err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+	//			r, err := row.FromNoms(ste.tableEditor.Schema(), key.(types.Tuple), value.(types.Tuple))
+	//			if err != nil {
+	//				return true, err
+	//			}
+	//			err = ste.validateForInsert(ctx, r)
+	//			if err != nil {
+	//				return true, err
+	//			}
+	//			return false, nil
+	//		})
+	//		if err != nil {
+	//			return err
+	//		}
+	//	}
+	//}
 
 	return nil
 }
@@ -208,18 +207,23 @@ func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName strin
 	if ok {
 		if tableSch == nil {
 			return localTableEditor, nil
-		} else if ok, err = schema.SchemasAreEqual(tableSch, localTableEditor.tableEditor.Schema()); err == nil && ok {
+		}
+
+		ok, err = schema.SchemasAreEqual(tableSch, localTableEditor.tableEditor.Schema())
+		if err != nil {
+			return nil, err
+		}
+		if ok {
 			return localTableEditor, nil
 		}
+
 		// Any existing references to this localTableEditor should be preserved, so we just change the underlying values
-		localTableEditor.referencedTables = nil
-		localTableEditor.referencingTables = nil
+		localTableEditor.deps = nil
 	} else {
 		localTableEditor = &sessionedTableEditor{
 			tableEditSession:  tes,
 			tableEditor:       nil,
-			referencedTables:  nil,
-			referencingTables: nil,
+			deps:  nil,
 		}
 		tes.tables[tableName] = localTableEditor
 	}
@@ -251,8 +255,7 @@ func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName strin
 	if err != nil {
 		return nil, err
 	}
-	localTableEditor.referencedTables, localTableEditor.referencingTables = fkCollection.KeysForTable(tableName)
-	err = tes.loadForeignKeys(ctx, localTableEditor)
+	err = tes.loadForeignKeys(ctx, localTableEditor, fkCollection)
 	if err != nil {
 		return nil, err
 	}
@@ -261,20 +264,27 @@ func (tes *TableEditSession) getTableEditor(ctx context.Context, tableName strin
 }
 
 // loadForeignKeys loads all tables mentioned in foreign keys for the given editor
-func (tes *TableEditSession) loadForeignKeys(ctx context.Context, localTableEditor *sessionedTableEditor) error {
+func (tes *TableEditSession) loadForeignKeys(ctx context.Context, localTableEditor *sessionedTableEditor, fkc *doltdb.ForeignKeyCollection) error {
+	parentTbls, childTbls := fkc.KeysForTable(localTableEditor.Name())
+	localTableEditor.deps = make([]editDependency, len(parentTbls) + len(childTbls))
+
 	// these are the tables that reference us, so we need to update them
-	for _, foreignKey := range localTableEditor.referencingTables {
-		_, err := tes.getTableEditor(ctx, foreignKey.TableName, nil)
+	for i, fk := range childTbls {
+		ste, err := tes.getTableEditor(ctx, fk.TableName, nil)
 		if err != nil {
 			return err
 		}
+		localTableEditor.deps[i] = newChildDependency(ste, fk)
 	}
+
 	// these are the tables that we reference, so we need to refer to them
-	for _, foreignKey := range localTableEditor.referencedTables {
-		_, err := tes.getTableEditor(ctx, foreignKey.ReferencedTableName, nil)
+	offset := len(childTbls)
+	for i, fk := range parentTbls {
+		ste, err := tes.getTableEditor(ctx, fk.ReferencedTableName, nil)
 		if err != nil {
 			return err
 		}
+		localTableEditor.deps[i+offset] = newParentDependency(ste, fk)
 	}
 	return nil
 }
@@ -315,8 +325,7 @@ func (tes *TableEditSession) setRoot(ctx context.Context, root *doltdb.RootValue
 			return err
 		}
 		localTableEditor.tableEditor = newTableEditor
-		localTableEditor.referencedTables, localTableEditor.referencingTables = fkCollection.KeysForTable(tableName)
-		err = tes.loadForeignKeys(ctx, localTableEditor)
+		err = tes.loadForeignKeys(ctx, localTableEditor, fkCollection)
 		if err != nil {
 			return err
 		}
