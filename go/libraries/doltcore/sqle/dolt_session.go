@@ -370,7 +370,7 @@ func (sess *DoltSession) AddDB(ctx context.Context, db Database) error {
 
 func newTableCache() TableCache {
 	return tableCache{
-		mu: &sync.Mutex{},
+		mu:     &sync.Mutex{},
 		tables: make(map[*doltdb.RootValue]map[string]sql.Table),
 	}
 }

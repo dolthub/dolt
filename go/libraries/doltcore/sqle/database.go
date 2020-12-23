@@ -73,7 +73,6 @@ func IsWorkingKey(key string) (bool, string) {
 	return false, ""
 }
 
-
 type SqlDatabase interface {
 	sql.Database
 	GetRoot(*sql.Context) (*doltdb.RootValue, error)
