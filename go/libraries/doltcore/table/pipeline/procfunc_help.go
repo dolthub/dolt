@@ -19,6 +19,8 @@ import (
 	"io"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 )
@@ -98,7 +100,7 @@ func ProcFuncForSinkFunc(sinkFunc SinkFunc) OutFunc {
 					err := sinkFunc(r.Row, r.Props)
 
 					if err != nil {
-						if table.IsBadRow(err) {
+						if table.IsBadRow(err) || editor.IsDuplicatePrimaryKeyError(err) {
 							badRowChan <- &TransformRowFailure{r.Row, "writer", err.Error()}
 						} else {
 							p.StopWithErr(err)
