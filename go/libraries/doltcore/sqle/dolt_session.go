@@ -59,7 +59,7 @@ type TableCache interface {
 	AllForRoot(root *doltdb.RootValue) (map[string]sql.Table, bool)
 
 	// Purge removes all entries from the cache.
-	Purge()
+	Clear()
 }
 
 // DefaultDoltSession creates a DoltSession object with default values
@@ -311,7 +311,7 @@ func (sess *DoltSession) Set(ctx context.Context, key string, typ sql.Type, valu
 			return err
 		}
 
-		sess.caches[dbName].Purge()
+		sess.caches[dbName].Clear()
 
 		return nil
 	}
@@ -429,7 +429,7 @@ func (tc tableCache) AllForRoot(root *doltdb.RootValue) (map[string]sql.Table, b
 	return nil, false
 }
 
-func (tc tableCache) Purge() {
+func (tc tableCache) Clear() {
 	for rt := range tc.tables {
 		delete(tc.tables, rt)
 	}
