@@ -170,3 +170,21 @@ SQL
     [[ "${lines[5]}" =~ "start date" ]] || false
     [[ "${lines[6]}" =~ "end date" ]]   || false
 }
+
+@test "update table with repeat pk in csv throws error" {
+    cat <<DELIM > 1pk5col-rpt-ints.csv
+pk,c1,c2,c3,c4,c5
+1,1,2,3,4,5
+1,1,2,3,4,5
+DELIM
+
+    dolt sql < 1pk5col-ints-sch.sql
+    run dolt table import -u test 1pk5col-rpt-ints.csv
+    [ "$status" -eq 1 ]
+
+    # Works with --continue
+    run dolt table import -u --continue test 1pk5col-rpt-ints.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0Lines skipped: 1" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+}
