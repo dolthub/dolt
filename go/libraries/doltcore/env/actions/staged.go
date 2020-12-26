@@ -221,7 +221,7 @@ func getStagedAndWorking(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoSt
 	return roots[StagedRoot], roots[WorkingRoot], nil
 }
 
-// getRoots gets all wanted roots.
+// getRoots returns a RootValue object for each root type passed in rootTypes.
 func getRoots(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, rootTypes ...RootType) (map[RootType]*doltdb.RootValue, error) {
 	roots := make(map[RootType]*doltdb.RootValue)
 	for _, rt := range rootTypes {

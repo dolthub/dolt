@@ -33,6 +33,11 @@ type DoltAddFunc struct {
 
 func (d DoltAddFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	dbName := ctx.GetCurrentDatabase()
+
+	if len(dbName) == 0 {
+		return 1, fmt.Errorf("Empty database name.")
+	}
+
 	dSess := sqle.DSessFromSess(ctx.Session)
 	dbData, ok := dSess.GetDbData(dbName)
 
