@@ -265,6 +265,7 @@ var _ sql.DeletableTable = (*WritableDoltTable)(nil)
 var _ sql.InsertableTable = (*WritableDoltTable)(nil)
 var _ sql.ReplaceableTable = (*WritableDoltTable)(nil)
 var _ sql.AutoIncrementTable = (*WritableDoltTable)(nil)
+var _ sql.TruncateableTable = (*WritableDoltTable)(nil)
 
 func (t *WritableDoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 	dil, ok := lookup.(*doltIndexLookup)
@@ -324,6 +325,43 @@ func (t *WritableDoltTable) Replacer(ctx *sql.Context) sql.RowReplacer {
 		return sqlutil.NewStaticErrorEditor(err)
 	}
 	return te
+}
+
+// Truncate implements sql.TruncateableTable
+func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
+	rowData, err := t.table.GetRowData(ctx)
+	if err != nil {
+		return 0, err
+	}
+	numOfRows := int(rowData.Len())
+	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, t.table.ValueReadWriter(), t.sch)
+	if err != nil {
+		return 0, err
+	}
+	empty, err := types.NewMap(ctx, t.table.ValueReadWriter())
+	if err != nil {
+		return 0, err
+	}
+	newTable, err := doltdb.NewTable(ctx, t.table.ValueReadWriter(), schVal, empty, empty)
+	if err != nil {
+		return 0, err
+	}
+	newTable, err = editor.RebuildAllIndexes(ctx, newTable)
+
+	root, err := t.db.GetRoot(ctx)
+	if err != nil {
+		return 0, err
+	}
+	newRoot, err := root.PutTable(ctx, t.name, newTable)
+	if err != nil {
+		return 0, err
+	}
+	err = t.db.SetRoot(ctx, newRoot)
+	if err != nil {
+		return 0, err
+	}
+	t.table = newTable
+	return numOfRows, nil
 }
 
 // Updater implements sql.UpdatableTable
@@ -618,6 +656,10 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 
 // CreateIndex implements sql.IndexAlterableTable
 func (t *AlterableDoltTable) CreateIndex(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, columns []sql.IndexColumn, comment string) error {
+	if schema.IsKeyless(t.sch) {
+		return fmt.Errorf("indexes on keyless tables are not supported")
+	}
+
 	ret, err := createIndexForTable(ctx, t.table, indexName, using, constraint, columns, true, comment)
 	if err != nil {
 		return err

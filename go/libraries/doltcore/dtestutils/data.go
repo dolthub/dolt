@@ -227,8 +227,10 @@ func MustMap(t *testing.T, vrw types.ValueReadWriter, kv ...types.Value) types.M
 }
 
 // MustMap contructs a types.Tuple for a slice of types.Values.
-func MustTuple(t *testing.T, vals ...types.Value) types.Tuple {
+func MustTuple(vals ...types.Value) types.Tuple {
 	tup, err := types.NewTuple(types.Format_Default, vals...)
-	require.NoError(t, err)
+	if err != nil {
+		panic(err)
+	}
 	return tup
 }

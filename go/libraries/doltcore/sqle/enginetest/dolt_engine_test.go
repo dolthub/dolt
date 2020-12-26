@@ -20,7 +20,6 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
@@ -43,9 +42,6 @@ func limitTestQueriesTo(queries ...string) {
 }
 
 func TestQueries(t *testing.T) {
-	schema.FeatureFlagKeylessSchema = true
-	defer func() { schema.FeatureFlagKeylessSchema = false }()
-
 	// limitTestQueriesTo(...) // whitelist queries you want run.
 
 	enginetest.TestQueries(t, newDoltHarness(t))
@@ -156,6 +152,10 @@ func TestDeleteFrom(t *testing.T) {
 
 func TestDeleteFromErrors(t *testing.T) {
 	enginetest.TestDeleteErrors(t, newDoltHarness(t))
+}
+
+func TestTruncate(t *testing.T) {
+	enginetest.TestTruncate(t, newDoltHarness(t))
 }
 
 func TestCreateTable(t *testing.T) {

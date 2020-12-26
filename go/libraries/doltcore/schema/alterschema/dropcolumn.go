@@ -24,6 +24,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 )
 
+var ErrKeylessAltTbl = errors.New("schema alterations not supported for keyless tables")
+
 // DropColumn drops a column from a table, and removes its associated cell values
 func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignKeys []doltdb.ForeignKey) (*doltdb.Table, error) {
 	if tbl == nil {
@@ -31,9 +33,12 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 	}
 
 	tblSch, err := tbl.GetSchema(ctx)
-
 	if err != nil {
 		return nil, err
+	}
+
+	if schema.IsKeyless(tblSch) {
+		return nil, ErrKeylessAltTbl
 	}
 
 	allCols := tblSch.GetAllCols()

@@ -35,7 +35,19 @@ const (
 	tableEditorMaxOps = 16384
 )
 
-var ErrDuplicatePrimaryKeyFmt = "duplicate primary key given: %v"
+type ErrDuplicatePrimaryKeyFmt struct {
+	keyStr string
+}
+
+func (e *ErrDuplicatePrimaryKeyFmt) Error() string {
+	return fmt.Sprintf("duplicate primary key given: %v", e.keyStr)
+}
+
+func IsDuplicatePrimaryKeyError(err error) bool {
+	_, ok := err.(*ErrDuplicatePrimaryKeyFmt)
+
+	return ok
+}
 
 type TableEditor interface {
 	InsertRow(ctx context.Context, r row.Row) error
@@ -283,7 +295,7 @@ func (te *pkTableEditor) InsertRow(ctx context.Context, dRow row.Row) error {
 		if err != nil {
 			return err
 		}
-		return fmt.Errorf(ErrDuplicatePrimaryKeyFmt, keyStr)
+		return &ErrDuplicatePrimaryKeyFmt{keyStr: keyStr}
 	}
 	te.tea.insertedKeys[keyHash] = key
 	te.tea.addedKeys[keyHash] = key
@@ -484,7 +496,7 @@ func (te *pkTableEditor) flushEditAccumulator(ctx context.Context, teaInterface 
 				if err != nil {
 					return err
 				}
-				return fmt.Errorf(ErrDuplicatePrimaryKeyFmt, keyStr)
+				return &ErrDuplicatePrimaryKeyFmt{keyStr: keyStr}
 			}
 		}
 	}

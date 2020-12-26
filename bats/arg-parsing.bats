@@ -48,7 +48,7 @@ DELIM
 
 @test "dolt supports chaining of modal arguments" {
     dolt sql -q "create table test(pk int, primary key (pk))"
-    dolt table import -fc test `batshelper 1pk5col-ints.csv`
+    dolt table import -fc -pk=pk test `batshelper 1pk5col-ints.csv`
 }
 
 @test "dolt checkout with empty string returns error" {

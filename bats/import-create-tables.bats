@@ -203,7 +203,7 @@ pk||c1||c2||c3||c4||c5
 0||1||2||3||4||5
 1||1||2||3||4||5
 DELIM
-    run dolt table import -c --delim="||" test 1pk5col-ints.csv
+    run dolt table import -c -pk=pk --delim="||" test 1pk5col-ints.csv
     [ "$status" -eq 0 ]
     run dolt sql -r csv -q "select * from test"
     [ "$status" -eq 0 ]
@@ -355,7 +355,7 @@ SQL
 }
 
 @test "create a table with null values from csv import" {
-    run dolt table import -c test empty-strings-null-values.csv
+    run dolt table import -c -pk=pk test empty-strings-null-values.csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls

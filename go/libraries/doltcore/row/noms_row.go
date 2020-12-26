@@ -152,7 +152,7 @@ func (nr nomsRow) Format() *types.NomsBinFormat {
 	return nr.nbf
 }
 
-func New(nbf *types.NomsBinFormat, sch schema.Schema, colVals TaggedValues) (Row, error) {
+func pkRowFromTaggedValues(nbf *types.NomsBinFormat, sch schema.Schema, colVals TaggedValues) (Row, error) {
 	allCols := sch.GetAllCols()
 
 	keyVals := make(TaggedValues)

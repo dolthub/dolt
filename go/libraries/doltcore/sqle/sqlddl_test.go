@@ -61,15 +61,18 @@ func TestCreateTable(t *testing.T) {
 				schemaNewColumn(t, "age", 7208, sql.Int32, false)),
 		},
 		{
+			name:          "Test create two column keyless schema",
+			query:         "create table testTable (id int, age int)",
+			expectedTable: "testTable",
+			expectedSchema: dtestutils.CreateSchema(
+				schemaNewColumn(t, "id", 4817, sql.Int32, false),
+				schemaNewColumn(t, "age", 7208, sql.Int32, false)),
+		},
+		{
 			name:          "Test syntax error",
 			query:         "create table testTable id int, age int",
 			expectedTable: "testTable",
 			expectedErr:   "syntax error",
-		},
-		{
-			name:        "Test no primary keys",
-			query:       "create table testTable (id int, age int)",
-			expectedErr: "no primary key columns",
 		},
 		{
 			name:        "Test bad table name",
@@ -1056,11 +1059,6 @@ func TestParseCreateTableStatement(t *testing.T) {
 			query:         "create table testTable id int, age int",
 			expectedTable: "testTable",
 			expectedErr:   "syntax error",
-		},
-		{
-			name:        "Test no primary keys",
-			query:       "create table testTable (id int, age int)",
-			expectedErr: "no primary key columns",
 		},
 		{
 			name:        "Test bad table name begins with number",

@@ -44,7 +44,7 @@ import (
 )
 
 const (
-	Version = "0.22.6"
+	Version = "0.22.7"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -162,7 +162,7 @@ func runMain() int {
 	restoreIO := cli.InitIO()
 	defer restoreIO()
 
-	//warnIfMaxFilesTooLow()
+	warnIfMaxFilesTooLow()
 
 	ctx := context.Background()
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
@@ -211,7 +211,7 @@ func runMain() int {
 		return 1
 	}
 
-	//err = reconfigIfTempFileMoveFails(dEnv)
+	err = reconfigIfTempFileMoveFails(dEnv)
 
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to setup the temporary directory. %v`", err))

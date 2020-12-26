@@ -36,6 +36,7 @@ type keylessTableReader struct {
 }
 
 var _ SqlTableReader = &keylessTableReader{}
+var _ TableReadCloser = &keylessTableReader{}
 
 // GetSchema implements the TableReader interface.
 func (rdr *keylessTableReader) GetSchema() schema.Schema {
@@ -76,7 +77,12 @@ func (rdr *keylessTableReader) ReadSqlRow(ctx context.Context) (sql.Row, error) 
 	return sqlutil.DoltRowToSqlRow(r, rdr.sch)
 }
 
-func newKeylessTableReader(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, buffered bool) (SqlTableReader, error) {
+// Close implements the TableReadCloser interface.
+func (rdr *keylessTableReader) Close(_ context.Context) error {
+	return nil
+}
+
+func newKeylessTableReader(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, buffered bool) (*keylessTableReader, error) {
 	rows, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err

@@ -27,11 +27,8 @@ import (
 )
 
 func TestSqlIntegration(t *testing.T) {
-	schema.FeatureFlagKeylessSchema = true
-	defer func() { schema.FeatureFlagKeylessSchema = false }()
 
 	const tblName = "test"
-
 	tests := []struct {
 		name      string
 		setup     []string

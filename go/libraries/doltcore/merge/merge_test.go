@@ -207,7 +207,7 @@ func TestRowMerge(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actualResult, isConflict, err := rowMerge(context.Background(), types.Format_7_18, test.sch, test.row, test.mergeRow, test.ancRow)
+			actualResult, isConflict, err := pkRowMerge(context.Background(), types.Format_7_18, test.sch, test.row, test.mergeRow, test.ancRow)
 			assert.NoError(t, err)
 			assert.Equal(t, test.expectedResult, actualResult, "expected "+mustString(types.EncodedValue(context.Background(), test.expectedResult))+"got "+mustString(types.EncodedValue(context.Background(), actualResult)))
 			assert.Equal(t, test.expectConflict, isConflict)

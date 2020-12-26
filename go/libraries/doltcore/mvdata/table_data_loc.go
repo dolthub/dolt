@@ -59,29 +59,14 @@ func (dl TableDataLocation) Exists(ctx context.Context, root *doltdb.RootValue, 
 // NewReader creates a TableReadCloser for the DataLocation
 func (dl TableDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue, _ filesys.ReadableFS, _ interface{}) (rdCl table.TableReadCloser, sorted bool, err error) {
 	tbl, ok, err := root.GetTable(ctx, dl.Name)
-
 	if err != nil {
 		return nil, false, err
 	}
-
 	if !ok {
 		return nil, false, doltdb.ErrTableNotFound
 	}
 
-	sch, err := tbl.GetSchema(ctx)
-
-	if err != nil {
-		return nil, false, err
-	}
-
-	rowData, err := tbl.GetRowData(ctx)
-
-	if err != nil {
-		return nil, false, err
-	}
-
-	rd, err := noms.NewNomsMapReader(ctx, rowData, sch)
-
+	rd, err := table.NewDoltTableReader(ctx, tbl)
 	if err != nil {
 		return nil, false, err
 	}
@@ -92,10 +77,6 @@ func (dl TableDataLocation) NewReader(ctx context.Context, root *doltdb.RootValu
 // NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
 // an existing table.
 func (dl TableDataLocation) NewCreatingWriter(ctx context.Context, _ DataMoverOptions, dEnv *env.DoltEnv, root *doltdb.RootValue, _ bool, outSch schema.Schema, statsCB noms.StatsCB, useGC bool) (table.TableWriteCloser, error) {
-	if outSch.GetPKCols().Size() == 0 {
-		return nil, ErrNoPK
-	}
-
 	updatedRoot, err := root.CreateEmptyTable(ctx, dl.Name, outSch)
 	if err != nil {
 		return nil, err
@@ -145,9 +126,12 @@ func (dl TableDataLocation) NewUpdatingWriter(ctx context.Context, _ DataMoverOp
 		return nil, err
 	}
 
+	// keyless tables are updated as append only
+	insertOnly := schema.IsKeyless(tblSch)
+
 	return &tableEditorWriteCloser{
 		dEnv:        dEnv,
-		insertOnly:  false,
+		insertOnly:  insertOnly,
 		initialData: m,
 		statsCB:     statsCB,
 		tableEditor: tableEditor,
@@ -239,9 +223,16 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 	_ = atomic.AddInt64(&te.gcOps, 1)
 
 	if te.insertOnly {
+		err := te.tableEditor.InsertRow(ctx, r)
+
+		if err != nil {
+			return err
+		}
+
 		_ = atomic.AddInt64(&te.statOps, 1)
 		te.stats.Additions++
-		return te.tableEditor.InsertRow(ctx, r)
+		return nil
+
 	} else {
 		pkTuple, err := r.NomsMapKey(te.tableSch).Value(ctx)
 		if err != nil {
@@ -252,9 +243,15 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 			return err
 		}
 		if !ok {
+			err := te.tableEditor.InsertRow(ctx, r)
+
+			if err != nil {
+				return err
+			}
+
 			_ = atomic.AddInt64(&te.statOps, 1)
 			te.stats.Additions++
-			return te.tableEditor.InsertRow(ctx, r)
+			return nil
 		}
 		oldRow, err := row.FromNoms(te.tableSch, pkTuple.(types.Tuple), val.(types.Tuple))
 		if err != nil {
@@ -264,9 +261,15 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 			te.stats.SameVal++
 			return nil
 		}
+		err = te.tableEditor.UpdateRow(ctx, oldRow, r)
+
+		if err != nil {
+			return err
+		}
+
 		_ = atomic.AddInt64(&te.statOps, 1)
 		te.stats.Modifications++
-		return te.tableEditor.UpdateRow(ctx, oldRow, r)
+		return nil
 	}
 }
 

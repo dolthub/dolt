@@ -25,6 +25,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/dolt/go/store/d"
 )
@@ -578,9 +579,37 @@ func (t Tuple) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
 }
 
 func (t Tuple) String() string {
-	panic("unreachable")
+	b := strings.Builder{}
+	iter, err := t.Iterator()
+	if err != nil {
+		b.WriteString(err.Error())
+		return b.String()
+	}
+
+	b.WriteString("Tuple(")
+
+	seenOne := false
+	for {
+		_, v, err := iter.Next()
+		if v == nil {
+			break
+		}
+		if err != nil {
+			b.WriteString(err.Error())
+			return b.String()
+		}
+
+		if seenOne {
+			b.WriteString(", ")
+		}
+		seenOne = true
+
+		b.WriteString(v.HumanReadableString())
+	}
+	b.WriteString(")")
+	return b.String()
 }
 
 func (t Tuple) HumanReadableString() string {
-	panic("unreachable")
+	return t.String()
 }
