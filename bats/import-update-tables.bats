@@ -22,12 +22,6 @@ pk,c1,c2,c3,c4,c5
 1,1,2,3,4,5
 DELIM
 
-    cat <<DELIM > 1pk5col-rpt-ints.csv
-pk,c1,c2,c3,c4,c5
-1,1,2,3,4,5
-1,1,2,3,4,5
-DELIM
-
     cat <<SQL > employees-sch.sql
 CREATE TABLE employees (
   \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
@@ -178,6 +172,12 @@ SQL
 }
 
 @test "update table with repeat pk in csv throws error" {
+    cat <<DELIM > 1pk5col-rpt-ints.csv
+pk,c1,c2,c3,c4,c5
+1,1,2,3,4,5
+1,1,2,3,4,5
+DELIM
+
     dolt sql < 1pk5col-ints-sch.sql
     run dolt table import -u test 1pk5col-rpt-ints.csv
     [ "$status" -eq 1 ]

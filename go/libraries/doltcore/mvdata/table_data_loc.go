@@ -239,13 +239,16 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 	_ = atomic.AddInt64(&te.gcOps, 1)
 
 	if te.insertOnly {
-		if err := te.tableEditor.InsertRow(ctx, r); err != nil {
+		err := te.tableEditor.InsertRow(ctx, r)
+
+		if err != nil {
 			return err
-		} else {
-			_ = atomic.AddInt64(&te.statOps, 1)
-			te.stats.Additions++
-			return nil
 		}
+
+		_ = atomic.AddInt64(&te.statOps, 1)
+		te.stats.Additions++
+		return nil
+
 	} else {
 		pkTuple, err := r.NomsMapKey(te.tableSch).Value(ctx)
 		if err != nil {
@@ -256,13 +259,15 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 			return err
 		}
 		if !ok {
-			if err := te.tableEditor.InsertRow(ctx, r); err != nil {
+			err := te.tableEditor.InsertRow(ctx, r)
+
+			if err != nil {
 				return err
-			} else {
-				_ = atomic.AddInt64(&te.statOps, 1)
-				te.stats.Additions++
-				return nil
 			}
+
+			_ = atomic.AddInt64(&te.statOps, 1)
+			te.stats.Additions++
+			return nil
 		}
 		oldRow, err := row.FromNoms(te.tableSch, pkTuple.(types.Tuple), val.(types.Tuple))
 		if err != nil {
@@ -272,13 +277,15 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 			te.stats.SameVal++
 			return nil
 		}
-		if err := te.tableEditor.UpdateRow(ctx, oldRow, r); err != nil {
+		err = te.tableEditor.UpdateRow(ctx, oldRow, r)
+
+		if err != nil {
 			return err
-		} else {
-			_ = atomic.AddInt64(&te.statOps, 1)
-			te.stats.Modifications++
-			return nil
 		}
+
+		_ = atomic.AddInt64(&te.statOps, 1)
+		te.stats.Modifications++
+		return nil
 	}
 }
 
