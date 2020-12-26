@@ -199,7 +199,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return doltdb.ErrAlreadyOnBranch
 	}
 
-	currRoots, err := getRoots(ctx, dEnv, HeadRoot, WorkingRoot, StagedRoot)
+	currRoots, err := getRoots(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), HeadRoot, WorkingRoot, StagedRoot)
 
 	if err != nil {
 		return err
@@ -373,7 +373,7 @@ func writeRoot(ctx context.Context, dEnv *env.DoltEnv, tblHashes map[string]hash
 }
 
 func RootsWithTable(ctx context.Context, dEnv *env.DoltEnv, table string) (RootTypeSet, error) {
-	roots, err := getRoots(ctx, dEnv, ActiveRoots...)
+	roots, err := getRoots(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), ActiveRoots...)
 
 	if err != nil {
 		return nil, err

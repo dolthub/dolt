@@ -24,28 +24,33 @@ import (
 
 var ErrTablesInConflict = errors.New("table is in conflict")
 
-func StageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string) error {
-	tables, docDetails, err := GetTblsAndDocDetails(dEnv, tbls)
+func StageTables(ctx context.Context, dbData env.DbData, tbls []string) error {
+	ddb := dbData.Ddb
+	rsr := dbData.Rsr
+	rsw := dbData.Rsw
+	drw := dbData.Drw
+
+	tables, docDetails, err := GetTblsAndDocDetails(drw, tbls)
 	if err != nil {
 		return err
 	}
 
 	if len(docDetails) > 0 {
-		err = dEnv.PutDocsToWorking(ctx, docDetails)
+		err = drw.PutDocsToWorking(ctx, docDetails)
 		if err != nil {
 			return err
 		}
 	}
 
-	staged, working, err := getStagedAndWorking(ctx, dEnv)
+	staged, working, err := getStagedAndWorking(ctx, ddb, rsr)
 
 	if err != nil {
 		return err
 	}
 
-	err = stageTables(ctx, dEnv.DoltDB, dEnv.RepoStateWriter(), tables, staged, working)
+	err = stageTables(ctx, ddb, rsw, tables, staged, working)
 	if err != nil {
-		dEnv.ResetWorkingDocsToStagedDocs(ctx)
+		drw.ResetWorkingDocsToStagedDocs(ctx)
 		return err
 	}
 	return nil
@@ -53,9 +58,9 @@ func StageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string) error {
 
 // GetTblsAndDocDetails takes a slice of strings where valid doc names are replaced with doc table name. Doc names are
 // appended to a docDetails slice. We return a tuple of tables, docDetails and error.
-func GetTblsAndDocDetails(dEnv *env.DoltEnv, tbls []string) (tables []string, docDetails []doltdb.DocDetails, err error) {
+func GetTblsAndDocDetails(drw env.DocsReadWriter, tbls []string) (tables []string, docDetails []doltdb.DocDetails, err error) {
 	for i, tbl := range tbls {
-		docDetail, err := dEnv.GetOneDocDetail(tbl)
+		docDetail, err := drw.GetDocDetail(tbl)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -206,8 +211,8 @@ func ValidateTables(ctx context.Context, tbls []string, roots ...*doltdb.RootVal
 	return NewTblNotExistError(missing)
 }
 
-func getStagedAndWorking(ctx context.Context, dEnv *env.DoltEnv) (*doltdb.RootValue, *doltdb.RootValue, error) {
-	roots, err := getRoots(ctx, dEnv, StagedRoot, WorkingRoot)
+func getStagedAndWorking(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (*doltdb.RootValue, *doltdb.RootValue, error) {
+	roots, err := getRoots(ctx, ddb, rsr, StagedRoot, WorkingRoot)
 
 	if err != nil {
 		return nil, nil, err
@@ -216,28 +221,19 @@ func getStagedAndWorking(ctx context.Context, dEnv *env.DoltEnv) (*doltdb.RootVa
 	return roots[StagedRoot], roots[WorkingRoot], nil
 }
 
-func getWorkingAndHead(ctx context.Context, dEnv *env.DoltEnv) (*doltdb.RootValue, *doltdb.RootValue, error) {
-	roots, err := getRoots(ctx, dEnv, WorkingRoot, HeadRoot)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return roots[WorkingRoot], roots[HeadRoot], nil
-}
-
-func getRoots(ctx context.Context, dEnv *env.DoltEnv, rootTypes ...RootType) (map[RootType]*doltdb.RootValue, error) {
+// getRoots returns a RootValue object for each root type passed in rootTypes.
+func getRoots(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, rootTypes ...RootType) (map[RootType]*doltdb.RootValue, error) {
 	roots := make(map[RootType]*doltdb.RootValue)
 	for _, rt := range rootTypes {
 		var err error
 		var root *doltdb.RootValue
 		switch rt {
 		case StagedRoot:
-			root, err = dEnv.StagedRoot(ctx)
+			root, err = env.StagedRoot(ctx, ddb, rsr)
 		case WorkingRoot:
-			root, err = dEnv.WorkingRoot(ctx)
+			root, err = env.WorkingRoot(ctx, ddb, rsr)
 		case HeadRoot:
-			root, err = dEnv.HeadRoot(ctx)
+			root, err = env.HeadRoot(ctx, ddb, rsr)
 		default:
 			panic("Method does not support this root type.")
 		}
