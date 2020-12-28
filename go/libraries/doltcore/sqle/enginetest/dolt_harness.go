@@ -70,7 +70,6 @@ func (d *DoltHarness) SkipQueryTest(query string) bool {
 		lowerQuery == "show variables" || // we set extra variables
 		strings.Contains(lowerQuery, "show create table") || // we set extra comment info
 		strings.Contains(lowerQuery, "show indexes from") || // we create / expose extra indexes (for foreign keys)
-		strings.Contains(lowerQuery, "on duplicate key update") || // not working yet
 		query == `SELECT i FROM mytable mt 
 						 WHERE (SELECT i FROM mytable where i = mt.i and i > 2) IS NOT NULL
 						 AND (SELECT i2 FROM othertable where i2 = i) IS NOT NULL

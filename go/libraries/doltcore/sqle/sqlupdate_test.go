@@ -293,8 +293,8 @@ var BasicUpdateTests = []UpdateTest{
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
-		Name:        "update multiple rows pk increment order by asc",
-		UpdateQuery: `update people set id = id + 1 order by id asc`,
+		Name:        "update multiple rows pk increment order by desc",
+		UpdateQuery: `update people set id = id + 1 order by id desc`,
 		SelectQuery: `select * from people order by id`,
 		ExpectedRows: ToSqlRows(PeopleTestSchema,
 			MutateRow(PeopleTestSchema, Homer, IdTag, HomerId+1),
@@ -305,6 +305,11 @@ var BasicUpdateTests = []UpdateTest{
 			MutateRow(PeopleTestSchema, Barney, IdTag, BarneyId+1),
 		),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
+		Name:        "update multiple rows pk increment order by asc",
+		UpdateQuery: `update people set id = id + 1 order by id asc`,
+		ExpectedErr: "duplicate primary key",
 	},
 	{
 		Name:        "update primary key col",
