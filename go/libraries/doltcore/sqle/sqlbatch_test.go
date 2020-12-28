@@ -195,9 +195,8 @@ func TestSqlBatchInsertErrors(t *testing.T) {
 
 	_, rowIter, err := engine.Query(sqlCtx, `insert into people (id, first_name, last_name, is_married, age, rating, uuid, num_episodes) values
 					(0, "Maggie", "Simpson", false, 1, 5.1, '00000000-0000-0000-0000-000000000007', 677)`)
-	// This won't generate an error until we commit the batch (duplicate key)
 	assert.NoError(t, err)
-	assert.NoError(t, drainIter(rowIter))
+	assert.Error(t, drainIter(rowIter))
 
 	// This generates an error at insert time because of the bad type for the uuid column
 	_, rowIter, err = engine.Query(sqlCtx, `insert into people values
@@ -205,8 +204,7 @@ func TestSqlBatchInsertErrors(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Error(t, drainIter(rowIter))
 
-	// Error from the first statement appears here
-	assert.Error(t, db.Flush(sqlCtx))
+	assert.NoError(t, db.Flush(sqlCtx))
 }
 
 func assertRowSetsEqual(t *testing.T, expected, actual []row.Row) {
