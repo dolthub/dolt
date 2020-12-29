@@ -15,8 +15,11 @@
 package commands
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
 	"io"
 	"strconv"
 	"strings"
@@ -170,35 +173,32 @@ func csvProcessStageFunc(ctx context.Context, items []pipeline.ItemWithProps) ([
 		return nil, nil
 	}
 
-	sb := &strings.Builder{}
-	sb.Grow(2048)
+	var b bytes.Buffer
+	wr := bufio.NewWriter(&b)
+
 	for _, item := range items {
 		r := item.GetItem().(sql.Row)
+		colValStrs := make([]*string, 0, len(r))
 
-		for colNum, col := range r {
+		for _, col := range r {
 			if col != nil {
 				str := sqlColToStr(col)
-
-				if len(str) == 0 {
-					str = "\"\""
-				}
-
-				if strings.IndexRune(str, ',') != -1 {
-					str = "\"" + str + "\""
-				}
-				
-				sb.WriteString(str)
-			}
-
-			if colNum != len(r)-1 {
-				sb.WriteRune(',')
+				colValStrs = append(colValStrs, &str)
+			} else {
+				colValStrs = append(colValStrs, nil)
 			}
 		}
 
-		sb.WriteRune('\n')
+		err := csv.WriteCSVRow(wr, colValStrs, false)
+
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	str := sb.String()
+	wr.Flush()
+
+	str := b.String()
 	return []pipeline.ItemWithProps{pipeline.NewItemWithNoProps(&str)}, nil
 }
 

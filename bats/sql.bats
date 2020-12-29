@@ -175,6 +175,7 @@ SQL
 
     run dolt sql -r csv -q "select * from test order by a"
     [ $status -eq 0 ]
+    echo $output
     [[ "$output" =~ "a,b,c,d" ]] || false
     [[ "$output" =~ '1,1.5,1,2020-01-01 00:00:00 +0000 UTC' ]] || false
     [[ "$output" =~ '2,2.5,2,2020-02-02 00:00:00 +0000 UTC' ]] || false
@@ -203,8 +204,14 @@ SQL
 
     run dolt sql -r json -q "select * from test order by a"
     [ $status -eq 0 ]
-    echo $output
     [ "$output" == '{"rows": [{"a":1,"v":"{\"key\": \"value\"}"},{"a":2,"v":"\"Hello\""}]}' ]
+
+    run dolt sql -r csv -q "select * from test order by a"
+    [ $status -eq 0 ]
+    echo $output
+    [[ "$output" =~ "a,v" ]] || false
+    [[ "$output" =~ '1,"{""key"": ""value""}"' ]] || false
+    [[ "$output" =~ '2,"""Hello"""' ]] || false
 }
 
 @test "sql ambiguous column name" {
