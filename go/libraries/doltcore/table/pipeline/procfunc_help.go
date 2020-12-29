@@ -63,9 +63,9 @@ func ProcFuncForSourceFunc(sourceFunc SourceFunc) InFunc {
 
 			if r != nil {
 				select {
-					case ch <- RowWithProps{r, props}:
-					case <- p.stopChan:
-						return
+				case ch <- RowWithProps{r, props}:
+				case <-p.stopChan:
+					return
 				}
 			}
 		}
