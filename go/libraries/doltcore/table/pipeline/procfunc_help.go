@@ -35,7 +35,7 @@ func ProcFuncForSourceFunc(sourceFunc SourceFunc) InFunc {
 	return func(p *Pipeline, ch chan<- RowWithProps, badRowChan chan<- *TransformRowFailure, noMoreChan <-chan struct{}) {
 		defer close(ch)
 
-		for {
+		for !p.IsStopping() {
 			select {
 			case <-noMoreChan:
 				return
@@ -61,12 +61,12 @@ func ProcFuncForSourceFunc(sourceFunc SourceFunc) InFunc {
 				panic("Readers should not be returning nil without error.  io.EOF should be used when done.")
 			}
 
-			if p.IsStopping() {
-				return
-			}
-
 			if r != nil {
-				ch <- RowWithProps{r, props}
+				select {
+				case ch <- RowWithProps{r, props}:
+				case <-p.stopChan:
+					return
+				}
 			}
 		}
 	}
