@@ -30,7 +30,7 @@ import (
 type orderedSequence interface {
 	sequence
 	getKey(idx int) (orderedKey, error)
-	search(key orderedKey) (int, error)
+	search(key orderedKey, seqLen int) (int, error)
 }
 
 func newSetMetaSequence(level uint64, tuples []metaTuple, vrw ValueReadWriter) (metaSequence, error) {
@@ -160,15 +160,17 @@ func newCursorBackFrom(ctx context.Context, seq orderedSequence, key orderedKey)
 func seekTo(cur *sequenceCursor, key orderedKey, lastPositionIfNotFound bool) (bool, error) {
 	seq := cur.seq.(orderedSequence)
 
+	// seqLen isn't cheap. cache it and pass it to search
+	seqLen := seq.seqLen()
+
 	var err error
 	// Find smallest idx in seq where key(idx) >= key
-	cur.idx, err = seq.search(key)
+	cur.idx, err = seq.search(key, seqLen)
 
 	if err != nil {
 		return false, err
 	}
 
-	seqLen := seq.seqLen()
 	if cur.idx == seqLen && seqLen > 0 && lastPositionIfNotFound {
 		d.PanicIfFalse(cur.idx > 0)
 		cur.idx--

@@ -294,7 +294,7 @@ func (ml mapLeafSequence) getKey(idx int) (orderedKey, error) {
 	return newOrderedKey(v, ml.format())
 }
 
-func (ml mapLeafSequence) search(key orderedKey) (int, error) {
+func (ml mapLeafSequence) search(key orderedKey, seqLen int) (int, error) {
 	n, err := SearchWithErroringLess(int(ml.Len()), func(i int) (bool, error) {
 		k, err := ml.getKey(i)
 

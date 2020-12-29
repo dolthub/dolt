@@ -240,7 +240,7 @@ func (ms metaSequence) getKey(idx int) (orderedKey, error) {
 	return dec.readOrderedKey(ms.format())
 }
 
-func (ms metaSequence) search(key orderedKey) (int, error) {
+func (ms metaSequence) search(key orderedKey, seqLen int) (int, error) {
 	res, err := SearchWithErroringLess(int(ms.seqLen()), func(i int) (bool, error) {
 		ordKey, err := ms.getKey(i)
 
@@ -582,7 +582,7 @@ func (es emptySequence) getKey(idx int) (orderedKey, error) {
 	panic("empty sequence")
 }
 
-func (es emptySequence) search(key orderedKey) (int, error) {
+func (es emptySequence) search(key orderedKey, seqLen int) (int, error) {
 	panic("empty sequence")
 }
 

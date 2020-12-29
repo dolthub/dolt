@@ -49,7 +49,7 @@ func (t *testOrderedSequence) getChildSequence(_ context.Context, idx int) (sequ
 	}
 }
 
-func (t *testOrderedSequence) search(key orderedKey) (int, error) {
+func (t *testOrderedSequence) search(key orderedKey, seqLen int) (int, error) {
 	idx, err := SearchWithErroringLess(int(t.Len()), func(i int) (bool, error) {
 		k, err := t.getKey(i)
 
