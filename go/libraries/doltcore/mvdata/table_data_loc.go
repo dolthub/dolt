@@ -216,7 +216,7 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 
 	if atomic.LoadInt64(&te.gcOps) >= tableWriterGCRate {
 		atomic.StoreInt64(&te.gcOps, 0)
-		if err := te.gc(ctx); err != nil {
+		if err := te.GC(ctx); err != nil {
 			return err
 		}
 	}
@@ -273,7 +273,7 @@ func (te *tableEditorWriteCloser) WriteRow(ctx context.Context, r row.Row) error
 	}
 }
 
-func (te *tableEditorWriteCloser) gc(ctx context.Context) error {
+func (te *tableEditorWriteCloser) GC(ctx context.Context) error {
 	if !te.useGC {
 		return nil
 	}
@@ -296,9 +296,8 @@ func (te *tableEditorWriteCloser) gc(ctx context.Context) error {
 
 // Close implements TableWriteCloser
 func (te *tableEditorWriteCloser) Close(ctx context.Context) error {
-	err := te.gc(ctx)
 	if te.statsCB != nil {
 		te.statsCB(te.stats)
 	}
-	return err
+	return nil
 }
