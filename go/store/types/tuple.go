@@ -162,11 +162,11 @@ func (itr *TupleIterator) Pos() uint64 {
 	return itr.pos
 }
 
-func (itr *TupleIterator) ReuseOnTuple(t Tuple) error {
-	return itr.ReuseOnTupleAt(t, 0)
+func (itr *TupleIterator) InitForTuple(t Tuple) error {
+	return itr.InitForTupleAt(t, 0)
 }
 
-func (itr *TupleIterator) ReuseOnTupleAt(t Tuple, pos uint64) error {
+func (itr *TupleIterator) InitForTupleAt(t Tuple, pos uint64) error {
 	if itr.dec == nil {
 		dec := t.decoder()
 		itr.dec = &dec
@@ -388,17 +388,14 @@ func (t Tuple) Iterator() (*TupleIterator, error) {
 }
 
 func (t Tuple) IteratorAt(pos uint64) (*TupleIterator, error) {
-	dec, count := t.decoderSkipToFields()
+	itr := &TupleIterator{}
+	err := itr.InitForTupleAt(t, pos)
 
-	for i := uint64(0); i < pos; i++ {
-		err := dec.skipValue(t.format())
-
-		if err != nil {
-			return nil, err
-		}
+	if err != nil {
+		return nil, err
 	}
 
-	return &TupleIterator{&dec, count, pos, t.format()}, nil
+	return itr, nil
 }
 
 func (t Tuple) AsSlice() (TupleValueSlice, error) {
@@ -420,7 +417,10 @@ func (t Tuple) AsSlice() (TupleValueSlice, error) {
 
 // IterFields iterates over the fields, calling cb for every field in the tuple until cb returns false
 func (t Tuple) IterFields(cb func(index uint64, value Value) (stop bool, err error)) error {
-	itr, err := t.Iterator()
+	itr := TupleItrPool.Get().(*TupleIterator)
+	defer TupleItrPool.Put(itr)
+
+	err := itr.InitForTuple(t)
 
 	if err != nil {
 		return err
@@ -558,14 +558,14 @@ func (t Tuple) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 		defer tupItrPairPool.Put(itrs)
 
 		itr := itrs.thisItr
-		err := itr.ReuseOnTuple(t)
+		err := itr.InitForTuple(t)
 
 		if err != nil {
 			return false, err
 		}
 
 		otherItr := itrs.otherItr
-		err = otherItr.ReuseOnTuple(otherTuple)
+		err = otherItr.InitForTuple(otherTuple)
 
 		if err != nil {
 			return false, err
@@ -607,10 +607,14 @@ func (t Tuple) StartsWith(otherTuple Tuple) bool {
 }
 
 func (t Tuple) Contains(v Value) (bool, error) {
-	itr, err := t.Iterator()
+	itr := TupleItrPool.Get().(*TupleIterator)
+	defer TupleItrPool.Put(itr)
+
+	err := itr.InitForTuple(t)
 	if err != nil {
 		return false, err
 	}
+
 	for itr.HasMore() {
 		_, tupleVal, err := itr.Next()
 		if err != nil {
@@ -633,7 +637,11 @@ func (t Tuple) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
 
 func (t Tuple) String() string {
 	b := strings.Builder{}
-	iter, err := t.Iterator()
+
+	iter := TupleItrPool.Get().(*TupleIterator)
+	defer TupleItrPool.Put(iter)
+
+	err := iter.InitForTuple(t)
 	if err != nil {
 		b.WriteString(err.Error())
 		return b.String()

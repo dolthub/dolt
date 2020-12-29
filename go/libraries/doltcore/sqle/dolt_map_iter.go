@@ -131,7 +131,7 @@ func (conv *KVToSqlRowConverter) ConvertKVToSqlRow(k, v types.Value) (sql.Row, e
 }
 
 func (conv *KVToSqlRowConverter) processTuple(cols []interface{}, valsToFill int, maxTag uint64, tup types.Tuple, tupItr *types.TupleIterator) error {
-	err := tupItr.ReuseOnTuple(tup)
+	err := tupItr.InitForTuple(tup)
 
 	if err != nil {
 		return err
