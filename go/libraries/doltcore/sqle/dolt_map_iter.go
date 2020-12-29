@@ -116,7 +116,7 @@ func (conv *KVToSqlRowConverter) ConvertKVToSqlRow(k, v types.Value) (sql.Row, e
 		}
 	}
 
-	if conv.valsFromVal > 0 && !valTup.Empty() {
+	if conv.valsFromVal > 0 {
 		err := conv.processTuple(cols, conv.valsFromVal, conv.maxValTag, valTup)
 
 		if err != nil {
