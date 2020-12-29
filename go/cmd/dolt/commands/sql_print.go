@@ -249,7 +249,9 @@ func getJSONProcessFunc(sch sql.Schema) pipeline.StageFunc {
 					}
 
 					validCols++
-					str := fmt.Sprintf(formats[colNum], sqlColToStr(col))
+					colStr := sqlColToStr(col)
+					colStr = strings.Replace(colStr, "\"", "\\\"", -1)
+					str := fmt.Sprintf(formats[colNum], colStr)
 					sb.WriteString(str)
 				}
 			}
