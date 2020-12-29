@@ -241,7 +241,7 @@ func (ms metaSequence) getKey(idx int) (orderedKey, error) {
 }
 
 func (ms metaSequence) search(key orderedKey, seqLen int) (int, error) {
-	res, err := SearchWithErroringLess(int(ms.seqLen()), func(i int) (bool, error) {
+	res, err := SearchWithErroringLess(seqLen, func(i int) (bool, error) {
 		ordKey, err := ms.getKey(i)
 
 		if err != nil {
