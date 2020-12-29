@@ -55,7 +55,7 @@ func (s StatusTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 }
 
 func (s StatusTable) PartitionRows(context *sql.Context, _ sql.Partition) (sql.RowIter, error) {
-	return NewStatusItr(context, &s)
+	return newStatusItr(context, &s)
 }
 
 // NewStatusTable creates a StatusTable
@@ -63,7 +63,7 @@ func NewStatusTable(_ *sql.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader,
 	return &StatusTable{ddb: ddb, rsr: rsr, drw: drw}
 }
 
-// BranchItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
+// StatusIter is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
 type StatusItr struct {
 	tables   []string
 	isStaged []bool
@@ -71,7 +71,7 @@ type StatusItr struct {
 	idx      int
 }
 
-func NewStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
+func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 	ddb := st.ddb
 	rsr := st.rsr
 	drw := st.drw
@@ -82,7 +82,7 @@ func NewStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		return &StatusItr{}, err
 	}
 
-	stagedDocDiffs, notStagedDocDiffs, err := diff.GetDocDiffs(ctx, ddb, rsr, drw)
+	stagedDocDiffs, unStagedDocDiffs, err := diff.GetDocDiffs(ctx, ddb, rsr, drw)
 
 	if err != nil {
 		return &StatusItr{}, err
@@ -100,22 +100,20 @@ func NewStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		return &StatusItr{}, err
 	}
 
-	tLength := len(stagedTables) + len(unstagedTables) + len(stagedDocDiffs.Docs) + len(notStagedDocDiffs.Docs) + len(workingTblsInConflict) + len(workingDocsInConflict.Docs)
+	tLength := len(stagedTables) + len(unstagedTables) + len(stagedDocDiffs.Docs) + len(unStagedDocDiffs.Docs) + len(workingTblsInConflict) + len(workingDocsInConflict.Docs)
 
 	tables := make([]string, tLength)
 	isStaged := make([]bool, tLength)
 	statuses := make([]string, tLength)
 
-	itr := StatusItr{tables: tables, isStaged: isStaged, statuses: statuses, idx: 0}
+	itr := &StatusItr{tables: tables, isStaged: isStaged, statuses: statuses, idx: 0}
 
-	idx := handleStagedTables(stagedTables, &itr, 0)
-	idx = handleUnstagedTables(unstagedTables, &itr, idx)
-	idx = handleStagedDocDiffs(stagedDocDiffs, &itr, idx)
-	idx = handleUnstagedDocDiffs(notStagedDocDiffs, &itr, idx)
-	idx = handleWorkingTablesInConflict(workingTblsInConflict, &itr, idx)
-	idx = handleWorkingDocConflicts(workingDocsInConflict, &itr, idx)
+	idx := handleStagedUnstagedTables(stagedTables, unstagedTables, itr, 0)
+	idx = handleStagedUnstagedDocDiffs(stagedDocDiffs, unStagedDocDiffs, itr, idx)
+	idx = handleWorkingTablesInConflict(workingTblsInConflict, itr, idx)
+	idx = handleWorkingDocConflicts(workingDocsInConflict, itr, idx)
 
-	return &itr, nil
+	return itr, nil
 }
 
 var tblDiffTypeToLabel = map[diff.TableDiffType]string{
@@ -125,9 +123,10 @@ var tblDiffTypeToLabel = map[diff.TableDiffType]string{
 	diff.AddedTable:    "new table",
 }
 
-func handleStagedTables(staged []diff.TableDelta, itr *StatusItr, idx int) int {
-	for _, td := range staged {
-		itr.isStaged[idx] = true
+func handleStagedUnstagedTables(staged, unstaged []diff.TableDelta, itr *StatusItr, idx int) int {
+	combined := append(staged, unstaged...)
+	for i, td := range combined {
+		itr.isStaged[idx] = i < len(staged)
 		if td.IsAdd() {
 			itr.tables[idx] = td.CurName()
 			itr.statuses[idx] = tblDiffTypeToLabel[diff.AddedTable]
@@ -145,28 +144,6 @@ func handleStagedTables(staged []diff.TableDelta, itr *StatusItr, idx int) int {
 		idx += 1
 	}
 
-	return idx
-}
-
-func handleUnstagedTables(notStaged []diff.TableDelta, itr *StatusItr, idx int) int {
-	for _, td := range notStaged {
-		itr.isStaged[idx] = false
-		if td.IsAdd() {
-			itr.tables[idx] = td.CurName()
-			itr.statuses[idx] = tblDiffTypeToLabel[diff.AddedTable]
-		} else if td.IsDrop() {
-			itr.tables[idx] = td.CurName()
-			itr.statuses[idx] = tblDiffTypeToLabel[diff.RemovedTable]
-		} else if td.IsRename() {
-			itr.tables[idx] = fmt.Sprintf("%s -> %s", td.FromName, td.ToName)
-			itr.statuses[idx] = tblDiffTypeToLabel[diff.RenamedTable]
-		} else {
-			itr.tables[idx] = td.CurName()
-			itr.statuses[idx] = tblDiffTypeToLabel[diff.ModifiedTable]
-		}
-
-		idx += 1
-	}
 	return idx
 }
 
@@ -176,26 +153,13 @@ var docDiffTypeToLabel = map[diff.DocDiffType]string{
 	diff.AddedDoc:    "new doc",
 }
 
-func handleStagedDocDiffs(staged *diff.DocDiffs, itr *StatusItr, idx int) int {
-	for _, docName := range staged.Docs {
+func handleStagedUnstagedDocDiffs(staged *diff.DocDiffs, unstaged *diff.DocDiffs, itr *StatusItr, idx int) int {
+	combined := append(staged.Docs, unstaged.Docs...)
+	for i, docName := range combined {
 		dType := staged.DocToType[docName]
 
 		itr.tables[idx] = docName
-		itr.isStaged[idx] = true
-		itr.statuses[idx] = docDiffTypeToLabel[dType]
-
-		idx += 1
-	}
-
-	return idx
-}
-
-func handleUnstagedDocDiffs(notStaged *diff.DocDiffs, itr *StatusItr, idx int) int {
-	for _, docName := range notStaged.Docs {
-		dType := notStaged.DocToType[docName]
-
-		itr.tables[idx] = docName
-		itr.isStaged[idx] = false
+		itr.isStaged[idx] = i < len(staged.Docs)
 		itr.statuses[idx] = docDiffTypeToLabel[dType]
 
 		idx += 1

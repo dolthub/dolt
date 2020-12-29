@@ -33,6 +33,19 @@ teardown() {
     [[ "$output" =~ 'test,true,new table' ]] || false
 }
 
+@test "table that has staged and unstaged changes shows up twice" {
+    # Stage one set of changes.
+    dolt add test
+
+    # Make a modification that isn't staged.
+    dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
+
+    run dolt sql -r csv -q "select * from dolt_status"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'test,true,new table' ]] || false
+    [[ "$output" =~ 'test,false,modified' ]] || false
+}
 
 @test "status properly works with staged and not staged doc diffs" {
     echo readme-text > README.md
