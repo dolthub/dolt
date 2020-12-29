@@ -186,7 +186,7 @@ func csvProcessStageFunc(ctx context.Context, items []pipeline.ItemWithProps) ([
 				if strings.IndexRune(str, ',') != -1 {
 					str = "\"" + str + "\""
 				}
-
+				
 				sb.WriteString(str)
 			}
 
