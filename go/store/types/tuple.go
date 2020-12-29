@@ -26,6 +26,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/dolthub/dolt/go/store/d"
 )
@@ -96,8 +97,24 @@ func EmptyTuple(nbf *NomsBinFormat) Tuple {
 	return t
 }
 
+func newTupleIterator() interface{} {
+	return &TupleIterator{}
+}
+
+type tupleItrPair struct {
+	thisItr  *TupleIterator
+	otherItr *TupleIterator
+}
+
+func newTupleIteratorPair() interface{} {
+	return &tupleItrPair{&TupleIterator{}, &TupleIterator{}}
+}
+
+var TupleItrPool = &sync.Pool{New: newTupleIterator}
+var tupItrPairPool = &sync.Pool{New: newTupleIteratorPair}
+
 type TupleIterator struct {
-	dec   valueDecoder
+	dec   *valueDecoder
 	count uint64
 	pos   uint64
 	nbf   *NomsBinFormat
@@ -143,6 +160,37 @@ func (itr *TupleIterator) Len() uint64 {
 
 func (itr *TupleIterator) Pos() uint64 {
 	return itr.pos
+}
+
+func (itr *TupleIterator) ReuseOnTuple(t Tuple) error {
+	return itr.ReuseOnTupleAt(t, 0)
+}
+
+func (itr *TupleIterator) ReuseOnTupleAt(t Tuple, pos uint64) error {
+	if itr.dec == nil {
+		dec := t.decoder()
+		itr.dec = &dec
+	} else {
+		itr.dec.buff = t.buff
+		itr.dec.offset = 0
+		itr.dec.vrw = t.vrw
+	}
+
+	itr.dec.skipKind()
+	count := itr.dec.readCount()
+
+	for i := uint64(0); i < pos; i++ {
+		err := itr.dec.skipValue(t.format())
+
+		if err != nil {
+			return err
+		}
+	}
+
+	itr.count = count
+	itr.pos = pos
+	itr.nbf = t.format()
+	return nil
 }
 
 type Tuple struct {
@@ -350,7 +398,7 @@ func (t Tuple) IteratorAt(pos uint64) (*TupleIterator, error) {
 		}
 	}
 
-	return &TupleIterator{dec, count, pos, t.format()}, nil
+	return &TupleIterator{&dec, count, pos, t.format()}, nil
 }
 
 func (t Tuple) AsSlice() (TupleValueSlice, error) {
@@ -506,13 +554,18 @@ func (t Tuple) splitFieldsAt(n uint64) (prolog, head, tail []byte, count uint64,
 
 func (t Tuple) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if otherTuple, ok := other.(Tuple); ok {
-		itr, err := t.Iterator()
+		itrs := tupItrPairPool.Get().(*tupleItrPair)
+		defer tupItrPairPool.Put(itrs)
+
+		itr := itrs.thisItr
+		err := itr.ReuseOnTuple(t)
 
 		if err != nil {
 			return false, err
 		}
 
-		otherItr, err := otherTuple.Iterator()
+		otherItr := itrs.otherItr
+		err = otherItr.ReuseOnTuple(otherTuple)
 
 		if err != nil {
 			return false, err
