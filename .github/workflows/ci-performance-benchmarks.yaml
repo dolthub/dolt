@@ -1,0 +1,39 @@
+name: Benchmark Dolt Performance
+
+on:
+  push:
+    branches:
+      - 'db/ci-performance'
+
+jobs:
+  performance:
+    runs-on: ubuntu-latest
+    name: Benchmark Performance
+    steps:
+      - name: Install aws-iam-authenticator
+        run: |
+          curl -o aws-iam-authenticator https://amazon-eks.s3.us-west-2.amazonaws.com/1.18.8/2020-09-18/bin/linux/amd64/aws-iam-authenticator && \
+          chmod +x ./aws-iam-authenticator && \
+          sudo cp ./aws-iam-authenticator /usr/local/bin/aws-iam-authenticator
+          aws-iam-authenticator version
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+      - name: Get ID
+        run: aws sts get-caller-identity
+      - name: Auth kubeconfig
+        run: |
+          echo "$CONFIG" > kubeconfig
+          KUBECONFIG=kubeconfig kubectl config set-credentials github-actions-dolt --exec-api-version=client.authentication.k8s.io/v1alpha1 --exec-command=aws-iam-authenticator --exec-arg=token --exec-arg=-i --exec-arg=eks-cluster-1
+          KUBECONFIG=kubeconfig kubectl config set-context github-actions-dolt-context --cluster=eks-cluster-1 --user=github-actions-dolt --namespace=performance-benchmarking
+          KUBECONFIG=kubeconfig kubectl config use-context github-actions-dolt-context
+          KUBECONFIG=kubeconfig kubectl config view
+          KUBECONFIG=kubeconfig kubectl get pods -n performance-benchmarking
+        env:
+          CONFIG: ${{ secrets.CORP_KUBECONFIG }}
+      - name: Get Pods
+        run: |
+          KUBECONFIG=kubeconfig kubectl get pods -n performance-benchmarking
