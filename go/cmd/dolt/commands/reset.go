@@ -98,7 +98,7 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		if apr.ContainsAll(HardResetParam, SoftResetParam) {
 			verr = errhand.BuildDError("error: --%s and --%s are mutually exclusive options.", HardResetParam, SoftResetParam).Build()
 		} else if apr.Contains(HardResetParam) {
-			verr = resetHard(ctx, dEnv, apr, workingRoot, stagedRoot, headRoot)
+			verr = resetHard(ctx, dEnv.DbData(), apr, workingRoot, stagedRoot, headRoot)
 		} else {
 			verr = resetSoft(ctx, dEnv, apr, stagedRoot, headRoot)
 		}
@@ -107,10 +107,14 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func resetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, workingRoot, stagedRoot, headRoot *doltdb.RootValue) errhand.VerboseError {
+func resetHard(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, workingRoot, stagedRoot, headRoot *doltdb.RootValue) errhand.VerboseError {
 	if apr.NArg() > 1 {
 		return errhand.BuildDError("--%s supports at most one additional param", HardResetParam).SetPrintUsage().Build()
 	}
+
+	ddb := dbData.Ddb
+	rsr := dbData.Rsr
+	rsw := dbData.Rsw
 
 	var newHead *doltdb.Commit
 	if apr.NArg() == 1 {
@@ -119,7 +123,7 @@ func resetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 			return errhand.VerboseErrorFromError(err)
 		}
 
-		newHead, err = dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
+		newHead, err = ddb.Resolve(ctx, cs, rsr.CWBHeadRef())
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -167,25 +171,25 @@ func resetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 	}
 
 	// TODO: update working and staged in one repo_state write.
-	err = dEnv.UpdateWorkingRoot(ctx, newWkRoot)
+	_, err = env.UpdateWorkingRoot(ctx, ddb, rsw, newWkRoot)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to update the working tables.").AddCause(err).Build()
 	}
 
-	_, err = dEnv.UpdateStagedRoot(ctx, headRoot)
+	_, err = env.UpdateStagedRoot(ctx, ddb, rsw, headRoot)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to update the staged tables.").AddCause(err).Build()
 	}
 
-	err = actions.SaveTrackedDocsFromWorking(ctx, dEnv)
+	err = actions.SaveTrackedDocsFromWorking(ctx, dbData)
 	if err != nil {
 		return errhand.BuildDError("error: failed to update docs on the filesystem.").AddCause(err).Build()
 	}
 
 	if newHead != nil {
-		if err = dEnv.DoltDB.SetHeadToCommit(ctx, dEnv.RepoState.CWBHeadRef(), newHead); err != nil {
+		if err = ddb.SetHeadToCommit(ctx, rsr.CWBHeadRef(), newHead); err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
 	}
@@ -216,7 +220,7 @@ func resetSoft(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 		}
 	}
 
-	tables, docs, err := actions.GetTblsAndDocDetails(dEnv, tbls)
+	tables, docs, err := actions.GetTblsAndDocDetails(dEnv.DocsReadWriter(), tbls)
 	if err != nil {
 		return errhand.BuildDError("error: failed to get all tables").AddCause(err).Build()
 	}

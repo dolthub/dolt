@@ -46,6 +46,9 @@ type DocsReadWriter interface {
 	PutDocsToWorking(ctx context.Context, docDetails []doltdb.DocDetails) error
 	ResetWorkingDocsToStagedDocs(ctx context.Context) error
 	GetDocDetail(docName string) (doc doltdb.DocDetails, err error)
+	UpdateFSDocsToRootDocs(ctx context.Context, root *doltdb.RootValue, docs Docs) error
+	GetFS() filesys.Filesys
+	GetDocs() Docs
 }
 
 type DbData struct {

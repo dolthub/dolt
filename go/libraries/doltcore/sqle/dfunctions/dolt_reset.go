@@ -14,7 +14,11 @@
 
 package dfunctions
 
-import "github.com/dolthub/go-mysql-server/sql"
+import (
+	"fmt"
+	"github.com/dolthub/go-mysql-server/sql"
+	"strings"
+)
 
 const DoltResetFuncName = "dolt_reset"
 
@@ -22,32 +26,58 @@ type DoltResetFunc struct {
 	children []sql.Expression
 }
 
+func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
+	dbName := ctx.GetCurrentDatabase()
+
+	if len(dbName) == 0 {
+		return "", fmt.Errorf("Empty database name.")
+	}
+
+
+
+
+	return "", nil
+}
+
+
 func (d DoltResetFunc) Resolved() bool {
-	panic("implement me")
+	for _, child := range d.Children() {
+		if !child.Resolved() {
+			return false
+		}
+	}
+	return true
 }
 
 func (d DoltResetFunc) String() string {
-	panic("implement me")
+	childrenStrings := make([]string, len(d.children))
+
+	for i, child := range d.children {
+		childrenStrings[i] = child.String()
+	}
+
+	return fmt.Sprintf("DOLT_RESET(%s)", strings.Join(childrenStrings, ","))
 }
 
 func (d DoltResetFunc) Type() sql.Type {
-	panic("implement me")
+	return sql.Text
 }
 
 func (d DoltResetFunc) IsNullable() bool {
-	panic("implement me")
-}
-
-func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
-	panic("implement me")
+	for _, child := range d.Children() {
+		if child.IsNullable() {
+			return true
+		}
+	}
+	return false
 }
 
 func (d DoltResetFunc) Children() []sql.Expression {
-	panic("implement me")
+	return d.children
 }
 
 func (d DoltResetFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
-	panic("implement me")
+	return NewDoltResetFunc(children...)
 }
 
 func NewDoltResetFunc(args ...sql.Expression) (sql.Expression, error) {
