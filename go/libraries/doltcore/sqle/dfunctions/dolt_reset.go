@@ -16,6 +16,10 @@ package dfunctions
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/go-mysql-server/sql"
 	"strings"
 )
@@ -33,8 +37,38 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return "", fmt.Errorf("Empty database name.")
 	}
 
+	dSess := sqle.DSessFromSess(ctx.Session)
+	dbData, ok := dSess.GetDbData(dbName)
 
+	if !ok {
+		return 1, fmt.Errorf("Could not load database %s", dbName)
+	}
 
+	ap := cli.CreateResetArgParser()
+	args, err := getDoltArgs(ctx, row, d.Children())
+
+	if err != nil {
+		return 1, err
+	}
+
+	apr := cli.ParseArgs(ap, args, nil)
+
+	working, staged, head, err := env.GetRoots(ctx, dbData.Ddb, dbData.Rsr)
+
+	if err != nil {
+		return 1, err
+	}
+
+	if apr.ContainsAll(cli.HardResetParam, cli.SoftResetParam) {
+		return "", fmt.Errorf("error: --%s and --%s are mutually exclusive options.", cli.HardResetParam, cli.SoftResetParam)
+	} else if apr.Contains(cli.HardResetParam) {
+		// TODO: This gets parsed as --hard. Not sure how good the ux there is....
+		verr := actions.ResetHard(ctx, dbData, apr, working, staged, head)
+
+		if verr != nil {
+			return "", fmt.Errorf(verr.Error())
+		}
+	}
 
 	return "", nil
 }

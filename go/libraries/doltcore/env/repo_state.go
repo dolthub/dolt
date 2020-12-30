@@ -17,7 +17,6 @@ package env
 import (
 	"context"
 	"encoding/json"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -251,4 +250,26 @@ func UpdateStagedRoot(ctx context.Context, ddb *doltdb.DoltDB, rsw RepoStateWrit
 	}
 
 	return h, nil
+}
+
+func GetRoots(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, error) {
+	working, err := WorkingRoot(ctx, ddb, rsr)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	staged, err := StagedRoot(ctx, ddb, rsr)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	head, err := HeadRoot(ctx, ddb, rsr)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return working, staged, head, nil
 }

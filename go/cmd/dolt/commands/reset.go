@@ -71,20 +71,13 @@ func (cmd ResetCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ResetCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cli.CreateResetArgParser()
 	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, resetDocContent, ap))
-}
-
-func (cmd ResetCmd) createArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.SupportsFlag(HardResetParam, "", "Resets the working tables and staged tables. Any changes to tracked tables in the working tree since {{.LessThan}}commit{{.GreaterThan}} are discarded.")
-	ap.SupportsFlag(SoftResetParam, "", "Does not touch the working tables, but removes all tables staged to be committed.")
-	return ap
 }
 
 // Exec executes the command
 func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cli.CreateResetArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, resetDocContent, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
@@ -98,103 +91,13 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		if apr.ContainsAll(HardResetParam, SoftResetParam) {
 			verr = errhand.BuildDError("error: --%s and --%s are mutually exclusive options.", HardResetParam, SoftResetParam).Build()
 		} else if apr.Contains(HardResetParam) {
-			verr = resetHard(ctx, dEnv.DbData(), apr, workingRoot, stagedRoot, headRoot)
+			verr = actions.ResetHard(ctx, dEnv.DbData(), apr, workingRoot, stagedRoot, headRoot)
 		} else {
 			verr = resetSoft(ctx, dEnv, apr, stagedRoot, headRoot)
 		}
 	}
 
 	return HandleVErrAndExitCode(verr, usage)
-}
-
-func resetHard(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, workingRoot, stagedRoot, headRoot *doltdb.RootValue) errhand.VerboseError {
-	if apr.NArg() > 1 {
-		return errhand.BuildDError("--%s supports at most one additional param", HardResetParam).SetPrintUsage().Build()
-	}
-
-	ddb := dbData.Ddb
-	rsr := dbData.Rsr
-	rsw := dbData.Rsw
-
-	var newHead *doltdb.Commit
-	if apr.NArg() == 1 {
-		cs, err := doltdb.NewCommitSpec(apr.Arg(0))
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-
-		newHead, err = ddb.Resolve(ctx, cs, rsr.CWBHeadRef())
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-
-		headRoot, err = newHead.GetRootValue()
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-	}
-
-	// need to save the state of files that aren't tracked
-	untrackedTables := make(map[string]*doltdb.Table)
-	wTblNames, err := workingRoot.GetTableNames(ctx)
-
-	if err != nil {
-		return errhand.BuildDError("error: failed to read tables from the working set").AddCause(err).Build()
-	}
-
-	for _, tblName := range wTblNames {
-		untrackedTables[tblName], _, err = workingRoot.GetTable(ctx, tblName)
-
-		if err != nil {
-			return errhand.BuildDError("error: failed to read '%s' from the working set", tblName).AddCause(err).Build()
-		}
-	}
-
-	headTblNames, err := stagedRoot.GetTableNames(ctx)
-
-	if err != nil {
-		return errhand.BuildDError("error: failed to read tables from head").AddCause(err).Build()
-	}
-
-	for _, tblName := range headTblNames {
-		delete(untrackedTables, tblName)
-	}
-
-	newWkRoot := headRoot
-	for tblName, tbl := range untrackedTables {
-		if tblName != doltdb.DocTableName {
-			newWkRoot, err = newWkRoot.PutTable(ctx, tblName, tbl)
-		}
-		if err != nil {
-			return errhand.BuildDError("error: failed to write table back to database").Build()
-		}
-	}
-
-	// TODO: update working and staged in one repo_state write.
-	_, err = env.UpdateWorkingRoot(ctx, ddb, rsw, newWkRoot)
-
-	if err != nil {
-		return errhand.BuildDError("error: failed to update the working tables.").AddCause(err).Build()
-	}
-
-	_, err = env.UpdateStagedRoot(ctx, ddb, rsw, headRoot)
-
-	if err != nil {
-		return errhand.BuildDError("error: failed to update the staged tables.").AddCause(err).Build()
-	}
-
-	err = actions.SaveTrackedDocsFromWorking(ctx, dbData)
-	if err != nil {
-		return errhand.BuildDError("error: failed to update docs on the filesystem.").AddCause(err).Build()
-	}
-
-	if newHead != nil {
-		if err = ddb.SetHeadToCommit(ctx, rsr.CWBHeadRef(), newHead); err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-	}
-
-	return nil
 }
 
 // RemoveDocsTbl takes a slice of table names and returns a new slice with DocTableName removed.
