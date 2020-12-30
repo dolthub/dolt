@@ -457,6 +457,10 @@ func (d *docsReadWriter) PutDocsToWorking(ctx context.Context, docDetails []dolt
 	return d.dEnv.PutDocsToWorking(ctx, docDetails)
 }
 
+func (d *docsReadWriter) PutDocsToStaged(ctx context.Context, docDetails []doltdb.DocDetails) (*doltdb.RootValue, error) {
+	return d.dEnv.PutDocsToStaged(ctx, docDetails)
+}
+
 func (d *docsReadWriter) ResetWorkingDocsToStagedDocs(ctx context.Context) error {
 	return d.dEnv.ResetWorkingDocsToStagedDocs(ctx)
 }
@@ -476,6 +480,10 @@ func (d *docsReadWriter) GetFS() filesys.Filesys {
 
 func (d *docsReadWriter) GetDocs() Docs {
 	return d.dEnv.Docs
+}
+
+func (d *docsReadWriter) GetDocsWithNewerTextFromRoot(ctx context.Context, root *doltdb.RootValue, docs Docs) (Docs, error) {
+	return d.dEnv.GetDocsWithNewerTextFromRoot(ctx, root, docs)
 }
 
 func (dEnv *DoltEnv) DocsReadWriter() DocsReadWriter {

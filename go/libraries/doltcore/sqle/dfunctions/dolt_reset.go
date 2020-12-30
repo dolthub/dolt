@@ -62,7 +62,7 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	if apr.ContainsAll(cli.HardResetParam, cli.SoftResetParam) {
 		return "", fmt.Errorf("error: --%s and --%s are mutually exclusive options.", cli.HardResetParam, cli.SoftResetParam)
 	} else if apr.Contains(cli.HardResetParam) {
-		// TODO: This gets parsed as --hard. Not sure how good the ux there is....
+		// TODO: This gets parsed as --hard. Not sure how good the ux there is....ww
 		verr := actions.ResetHard(ctx, dbData, apr, working, staged, head)
 
 		if verr != nil {

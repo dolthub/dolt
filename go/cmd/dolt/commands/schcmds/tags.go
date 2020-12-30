@@ -16,6 +16,7 @@ package schcmds
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -82,7 +83,7 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			return commands.HandleVErrAndExitCode(errhand.BuildDError("unable to get table names.").AddCause(err).Build(), usage)
 		}
 
-		tables = commands.RemoveDocsTbl(tables)
+		tables = actions.RemoveDocsTbl(tables)
 		if len(tables) == 0 {
 			cli.Println("No tables in working set")
 			return 0

@@ -20,6 +20,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"strings"
 )
 
 func ResetHard(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, workingRoot, stagedRoot, headRoot *doltdb.RootValue) errhand.VerboseError {
@@ -107,6 +108,101 @@ func ResetHard(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseRe
 	if newHead != nil {
 		if err = ddb.SetHeadToCommit(ctx, rsr.CWBHeadRef(), newHead); err != nil {
 			return errhand.VerboseErrorFromError(err)
+		}
+	}
+
+	return nil
+}
+
+
+func ResetSoft(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, stagedRoot, headRoot *doltdb.RootValue) (*doltdb.RootValue, errhand.VerboseError) {
+	ddb := dbData.Ddb
+	rsw := dbData.Rsw
+	drw := dbData.Drw
+
+	tbls := apr.Args()
+
+	if len(tbls) == 0 || (len(tbls) == 1 && tbls[0] == ".") {
+		var err error
+		tbls, err = doltdb.UnionTableNames(ctx, stagedRoot, headRoot)
+
+		if err != nil {
+			return nil, errhand.BuildDError("error: failed to get all tables").AddCause(err).Build()
+		}
+	}
+
+	tables, docs, err := GetTblsAndDocDetails(drw, tbls)
+	if err != nil {
+		return nil, errhand.BuildDError("error: failed to get all tables").AddCause(err).Build()
+	}
+
+	if len(docs) > 0 {
+		tables = RemoveDocsTbl(tables)
+	}
+
+	verr := validateTablesWithVErr(tables, stagedRoot, headRoot)
+
+	if verr != nil {
+		return nil, verr
+	}
+
+	stagedRoot, err = resetDocs(ctx, drw, headRoot, docs)
+	if err != nil {
+		return nil, errhand.BuildDError("error: failed to reset docs").AddCause(err).Build()
+	}
+
+	stagedRoot, verr = resetStaged(ctx, ddb, rsw, tables, stagedRoot, headRoot)
+
+	if verr != nil {
+		return nil, verr
+	}
+
+	return stagedRoot, nil
+}
+
+func resetDocs(ctx context.Context, drw env.DocsReadWriter, headRoot *doltdb.RootValue, docDetails env.Docs) (newStgRoot *doltdb.RootValue, err error) {
+	docs, err := drw.GetDocsWithNewerTextFromRoot(ctx, headRoot, docDetails)
+	if err != nil {
+		return nil, err
+	}
+
+	err = drw.PutDocsToWorking(ctx, docs)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return drw.PutDocsToStaged(ctx, docs)
+}
+
+func resetStaged(ctx context.Context, ddb *doltdb.DoltDB, rsw env.RepoStateWriter, tbls []string, staged, head *doltdb.RootValue) (*doltdb.RootValue, errhand.VerboseError) {
+	updatedRoot, err := MoveTablesBetweenRoots(ctx, tbls, head, staged)
+
+	if err != nil {
+		tt := strings.Join(tbls, ", ")
+		return nil, errhand.BuildDError("error: failed to unstage tables: %s", tt).AddCause(err).Build()
+	}
+
+	// return updatedRoot, commands.UpdateStagedWithVErr(ddb, rsw, updatedRoot)
+	return updatedRoot, nil
+}
+
+
+func validateTablesWithVErr(tbls []string, roots ...*doltdb.RootValue) errhand.VerboseError {
+	err := ValidateTables(context.TODO(), tbls, roots...)
+
+	if err != nil {
+		if IsTblNotExist(err) {
+			tbls := GetTablesForError(err)
+			bdr := errhand.BuildDError("Invalid Table(s):")
+
+			for _, tbl := range tbls {
+				bdr.AddDetails("\t" + tbl)
+			}
+
+			return bdr.Build()
+		} else {
+			return errhand.BuildDError("fatal: " + err.Error()).Build()
 		}
 	}
 

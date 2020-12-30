@@ -16,6 +16,7 @@ package schcmds
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 
 	"github.com/fatih/color"
 
@@ -126,7 +127,7 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 				return errhand.BuildDError("unable to get table names.").AddCause(err).Build()
 			}
 
-			tables = commands.RemoveDocsTbl(tables)
+			tables = actions.RemoveDocsTbl(tables)
 			if len(tables) == 0 {
 				cli.Println("No tables in working set")
 				return nil
