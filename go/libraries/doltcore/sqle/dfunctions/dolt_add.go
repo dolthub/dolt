@@ -94,6 +94,11 @@ func (d DoltAddFunc) Type() sql.Type {
 }
 
 func (d DoltAddFunc) IsNullable() bool {
+	for _, child := range d.Children() {
+		if child.IsNullable() {
+			return true
+		}
+	}
 	return false
 }
 
