@@ -178,14 +178,14 @@ func csvProcessStageFunc(ctx context.Context, items []pipeline.ItemWithProps) ([
 
 	for _, item := range items {
 		r := item.GetItem().(sql.Row)
-		colValStrs := make([]*string, 0, len(r))
+		colValStrs := make([]*string, len(r))
 
-		for _, col := range r {
+		for colNum, col := range r {
 			if col != nil {
 				str := sqlColToStr(col)
-				colValStrs = append(colValStrs, &str)
+				colValStrs[colNum] = &str
 			} else {
-				colValStrs = append(colValStrs, nil)
+				colValSrs[colNum] = nil
 			}
 		}
 
