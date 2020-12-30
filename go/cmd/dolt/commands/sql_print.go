@@ -185,7 +185,7 @@ func csvProcessStageFunc(ctx context.Context, items []pipeline.ItemWithProps) ([
 				str := sqlColToStr(col)
 				colValStrs[colNum] = &str
 			} else {
-				colValSrs[colNum] = nil
+				colValStrs[colNum] = nil
 			}
 		}
 
