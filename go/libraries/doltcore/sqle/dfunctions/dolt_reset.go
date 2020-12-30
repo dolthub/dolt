@@ -17,6 +17,7 @@ package dfunctions
 import (
 	"fmt"
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -59,15 +60,19 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return 1, err
 	}
 
+	var verr errhand.VerboseError
+
 	if apr.ContainsAll(cli.HardResetParam, cli.SoftResetParam) {
 		return "", fmt.Errorf("error: --%s and --%s are mutually exclusive options.", cli.HardResetParam, cli.SoftResetParam)
 	} else if apr.Contains(cli.HardResetParam) {
 		// TODO: This gets parsed as --hard. Not sure how good the ux there is....ww
-		verr := actions.ResetHard(ctx, dbData, apr, working, staged, head)
+		verr = actions.ResetHard(ctx, dbData, apr, working, staged, head)
+	} else {
+		_, verr = actions.ResetSoft(ctx, dbData, apr, staged, head)
+	}
 
-		if verr != nil {
-			return "", fmt.Errorf(verr.Error())
-		}
+	if verr != nil {
+		return "", fmt.Errorf(verr.Error())
 	}
 
 	return "", nil

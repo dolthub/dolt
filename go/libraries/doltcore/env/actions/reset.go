@@ -183,8 +183,7 @@ func resetStaged(ctx context.Context, ddb *doltdb.DoltDB, rsw env.RepoStateWrite
 		return nil, errhand.BuildDError("error: failed to unstage tables: %s", tt).AddCause(err).Build()
 	}
 
-	// return updatedRoot, commands.UpdateStagedWithVErr(ddb, rsw, updatedRoot)
-	return updatedRoot, nil
+	return updatedRoot, env.UpdateStagedRootWithVErr(ddb, rsw, updatedRoot)
 }
 
 

@@ -17,6 +17,7 @@ package env
 import (
 	"context"
 	"encoding/json"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -252,6 +253,19 @@ func UpdateStagedRoot(ctx context.Context, ddb *doltdb.DoltDB, rsw RepoStateWrit
 	}
 
 	return h, nil
+}
+
+func UpdateStagedRootWithVErr(ddb *doltdb.DoltDB, rsw RepoStateWriter, updatedRoot *doltdb.RootValue) errhand.VerboseError {
+	_, err := UpdateStagedRoot(context.Background(), ddb, rsw, updatedRoot)
+
+	switch err {
+	case doltdb.ErrNomsIO:
+		return errhand.BuildDError("fatal: failed to write value").Build()
+	case ErrStateUpdate:
+		return errhand.BuildDError("fatal: failed to update the staged root state").Build()
+	}
+
+	return nil
 }
 
 func GetRoots(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, error) {
