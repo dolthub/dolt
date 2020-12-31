@@ -93,6 +93,11 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			verr = actions.ResetHard(ctx, dEnv.DbData(), apr, workingRoot, stagedRoot, headRoot)
 		} else {
 			stagedRoot, verr = actions.ResetSoft(ctx, dEnv.DbData(), apr, stagedRoot, headRoot)
+
+			if verr != nil {
+				return HandleVErrAndExitCode(verr, usage)
+			}
+
 			printNotStaged(ctx, dEnv, stagedRoot)
 		}
 	}
