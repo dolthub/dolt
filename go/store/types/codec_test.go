@@ -78,21 +78,30 @@ func TestCodecReadFloat(t *testing.T) {
 
 func TestUnrolledDecode(t *testing.T) {
 	const NumDecodes = 100000
+	masks := []uint64{
+		0xFF,
+		0xFFFF,
+		0xFFFFFF,
+		0xFFFFFFFF,
+		0xFFFFFFFFFF,
+		0xFFFFFFFFFFFF,
+		0xFFFFFFFFFFFFFF,
+		0xFFFFFFFFFFFFFFFF}
 
 	buf := make([]byte, 10)
 	r := rand.New(rand.NewSource(0))
 	for i := 0; i < NumDecodes; i++ {
-		expectedVal := r.Uint64()
+		expectedVal := r.Uint64() & masks[i%8]
 		expectedSize := binary.PutUvarint(buf, expectedVal)
 
 		res, size := unrolledDecodeUVarint(buf)
 		require.Equal(t, expectedSize, size)
-		require.Equal(t, expectedVal, res, "%d. expected: %d = %x, actual: %d = %x", i, expectedVal, expectedVal, res, res)
+		require.Equal(t, expectedVal, res)
 	}
 
 	for i := 0; i < NumDecodes; i++ {
 		//non-negative
-		expectedVal := r.Int63()
+		expectedVal := int64(uint64(r.Int63()) & masks[i%8])
 		expectedSize := binary.PutVarint(buf, expectedVal)
 
 		res, size := unrolledDecodeVarint(buf)
