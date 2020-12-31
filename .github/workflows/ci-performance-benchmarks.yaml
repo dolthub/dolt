@@ -14,6 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Validate Commentor
+        id: set_valid
         run: ./.github/scripts/performance-benchmarking/validate-commentor.sh "$ACTOR"
         env:
           ACTOR: ${{ github.actor }}
