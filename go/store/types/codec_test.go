@@ -22,9 +22,12 @@
 package types
 
 import (
+	"encoding/binary"
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCodecWriteFloat(t *testing.T) {
@@ -72,3 +75,113 @@ func TestCodecReadFloat(t *testing.T) {
 	test([]byte{1 * 2, 8 * 2}, 256) // 1 * 2*8
 	test([]byte{15*2 - 1, 0}, -15)  // -15 * 2*0
 }
+
+func TestUnrolledDecode(t *testing.T) {
+	const NumDecodes = 100000
+
+	buf := make([]byte, 10)
+	r := rand.New(rand.NewSource(0))
+	for i := 0; i < NumDecodes; i++ {
+		expectedVal := r.Uint64()
+		expectedSize := binary.PutUvarint(buf, expectedVal)
+
+		res, size := unrolledDecodeUVarint(buf)
+		require.Equal(t, expectedSize, size)
+		require.Equal(t, expectedVal, res, "%d. expected: %d = %x, actual: %d = %x", i, expectedVal, expectedVal, res, res)
+	}
+
+	for i := 0; i < NumDecodes; i++ {
+		//non-negative
+		expectedVal := r.Int63()
+		expectedSize := binary.PutVarint(buf, expectedVal)
+
+		res, size := unrolledDecodeVarint(buf)
+		require.Equal(t, expectedSize, size)
+		require.Equal(t, expectedVal, res)
+
+		// negative
+		expectedVal = -expectedVal
+		expectedSize = binary.PutVarint(buf, expectedVal)
+
+		res, size = unrolledDecodeVarint(buf)
+		require.Equal(t, expectedSize, size)
+		require.Equal(t, expectedVal, res)
+	}
+}
+
+func BenchmarkUnrolledDecodeUVarint(b *testing.B) {
+	const DecodesPerTest = 1000000
+
+	type ve struct {
+		val      uint64
+		encoding []byte
+	}
+
+	toDecode := make([]ve, b.N*DecodesPerTest)
+
+	r := rand.New(rand.NewSource(0))
+	for i := 0; i < b.N*DecodesPerTest; i++ {
+		var min uint64
+		for j := 0; j < i%9; j++ {
+			min = min<<7 | 0x80
+		}
+
+		val := min + r.Uint64()&0x7f
+		buf := make([]byte, 9)
+		size := binary.PutUvarint(buf, val)
+		require.Equal(b, i%9+1, size, "%d. min: %x, val: %x, expected_size: %d, size: %d", i, min, val, i%9+1, size)
+
+		toDecode[i] = ve{val, buf}
+	}
+
+	type result struct {
+		size int
+		val  uint64
+	}
+
+	decodeBenchmark := []struct {
+		name       string
+		decodeFunc func([]byte) (uint64, int)
+		results    []result
+	}{
+		{"binary.UVarint", binary.Uvarint, make([]result, len(toDecode))},
+		{"unrolled", unrolledDecodeUVarint, make([]result, len(toDecode))},
+		//{"denwc.varint.UVarint", varint.Uvarint, make([]result, len(toDecode))},
+		//{"noBranch", varuintNoBranch, make([]result, len(toDecode))},
+	}
+
+	b.ResetTimer()
+	for _, decodeBench := range decodeBenchmark {
+		b.Run(decodeBench.name, func(b *testing.B) {
+			for i, valAndEnc := range toDecode {
+				val, size := decodeBench.decodeFunc(valAndEnc.encoding)
+				decodeBench.results[i] = result{size, val}
+			}
+		})
+	}
+	b.StopTimer()
+
+	for _, decodeBench := range decodeBenchmark {
+		for i, valAndEnc := range toDecode {
+			assert.Equal(b, valAndEnc.val, decodeBench.results[i].val)
+			assert.Equal(b, i%9+1, decodeBench.results[i].size)
+		}
+	}
+}
+
+/*func varuintNoBranch(buf []byte) (uint64, int) {
+	var b uint64
+	var x uint64
+	var count uint64
+	more := uint64(1)
+
+	for i, shift := 0, 0; i < 9; i, shift = i+1, shift+7 {
+		count += more
+		b = uint64(buf[i])
+		x |= more * ((b & 0x7f) << shift)
+		more &= (b & 0x80) >> 7
+	}
+
+	retCount := int(count) * (-2*int(more) + 1)
+	return x, retCount
+}*/
