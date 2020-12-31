@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     name: Benchmark Performance
     steps:
+      - name: Checkout
+        uses: actions/checkout@v2
       - name: Install aws-iam-authenticator
         run: |
           curl -o aws-iam-authenticator https://amazon-eks.s3.us-west-2.amazonaws.com/1.18.8/2020-09-18/bin/linux/amd64/aws-iam-authenticator && \
@@ -30,6 +32,18 @@ jobs:
           KUBECONFIG=kubeconfig kubectl config use-context github-actions-dolt-context
         env:
           CONFIG: ${{ secrets.CORP_KUBECONFIG }}
-      - name: Get Pods
+      - name: Run benchmarks and wait
         run: |
+          uuid=$(uuidgen)
+          podname="performance-benchmarking-$uuid"
+
+          ./.github/scripts/performance-benchmarking/get-pod-spec-json.sh "$podname" "$FROM_VERSION" "$TO_VERSION" > pod.json
+
+          KUBECONFIG=kubeconfig kubectl apply -f pod.json
+
+          while [[ $(KUBECONFIG=kubeconfig kubectl get pod/"$podname" -n performance-benchmarking -o 'jsonpath={..status.conditions[?(@.type=="Ready")].reason}') != "PodCompleted" ]]; do echo "waiting for pod" && sleep 1; done
+
           KUBECONFIG=kubeconfig kubectl get pods -n performance-benchmarking
+        env:
+          FROM_VERSION: 0.22.6
+          TO_VERSION: 0.22.8
