@@ -21,7 +21,7 @@ jobs:
   check-comments:
     runs-on: ubuntu-latest
     needs: validate-commentor
-    if: ${{ needs.validate-commentor.outputs.valid = 'true' }}
+    if: ${{ needs.validate-commentor.outputs.valid == 'true' }}
     outputs:
       benchmark: ${{ steps.set_benchmark.outputs.benchmark }}
       comment-body: ${{ steps.set_body.outputs.body }}
@@ -98,10 +98,14 @@ jobs:
           while [[ $(KUBECONFIG=kubeconfig kubectl get pod/"$podname" -n performance-benchmarking -o 'jsonpath={..status.conditions[?(@.type=="Ready")].reason}') != "PodCompleted" ]]; do echo "waiting for pod" && sleep 60; done
 
           KUBECONFIG=kubeconfig kubectl delete pod/"$podname" -n performance-benchmarking
+
+          echo "::set-output name=object-key::$timeprefix/$actorprefix/compare-results.log"
         env:
           FROM_VERSION: ${{ github.sha }}
           TO_VERSION: ${{ steps.comment-branch.outputs.head_sha }}
           ACTOR: ${{ github.actor }}
       - name: Get benchmark results
         run: |
-          echo "Get benchmark results here"
+          echo "Get benchmark results here: $KEY"
+        env:
+          KEY: ${{ steps.run-benchmarks.outputs.object-key }}
