@@ -22,16 +22,12 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-2
-      - name: Get ID
-        run: aws sts get-caller-identity
-      - name: Auth kubeconfig
+      - name: Create and Auth kubeconfig
         run: |
           echo "$CONFIG" > kubeconfig
           KUBECONFIG=kubeconfig kubectl config set-credentials github-actions-dolt --exec-api-version=client.authentication.k8s.io/v1alpha1 --exec-command=aws-iam-authenticator --exec-arg=token --exec-arg=-i --exec-arg=eks-cluster-1
           KUBECONFIG=kubeconfig kubectl config set-context github-actions-dolt-context --cluster=eks-cluster-1 --user=github-actions-dolt --namespace=performance-benchmarking
           KUBECONFIG=kubeconfig kubectl config use-context github-actions-dolt-context
-          KUBECONFIG=kubeconfig kubectl config view
-          KUBECONFIG=kubeconfig kubectl get pods -n performance-benchmarking
         env:
           CONFIG: ${{ secrets.CORP_KUBECONFIG }}
       - name: Get Pods
