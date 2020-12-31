@@ -1,13 +1,55 @@
 name: Benchmark Dolt Performance
 
 on:
-  push:
-    branches:
-      - 'db/ci-performance'
+  pull_request:
+    types: [ opened ]
+  issue_comment:
+    types: [ created ]
 
 jobs:
+  validate-commentor:
+    runs-on: ubuntu-latest
+    outputs:
+      valid: ${{ steps.set_valid.outputs.valid }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Validate Commentor
+        run: ./.github/scripts/performance-benchmarking/validate-commentor.sh "$ACTOR"
+        env:
+          ACTOR: ${{ github.actor }}
+
+  check-comments:
+    runs-on: ubuntu-latest
+    needs: validate-commentor
+    if: ${{ needs.validate-commentor.outputs.valid = 'true' }}
+    outputs:
+      benchmark: ${{ steps.set_benchmark.outputs.benchmark }}
+      comment-body: ${{ steps.set_body.outputs.body }}
+    steps:
+      - name: Check for Deploy Trigger
+        uses: dolthub/pull-request-comment-trigger@master
+        id: check
+        with:
+          trigger: '@benchmark'
+          reaction: rocket
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#      - name: Set Comment Body
+#        run: |
+#          echo "::set-output name=body::$(echo $BODY)"
+#        id: set_body
+#        env:
+#          BODY: ${{ steps.check.outputs.comment_body }}
+      - name: Set Benchmark
+        if: ${{ steps.check.outputs.triggered == 'true' }}
+        id: set_benchmark
+        run: |
+          echo "::set-output name=benchmark::true"
+
   performance:
     runs-on: ubuntu-latest
+    needs: check-comments
+    if: ${{ needs.check-comments.outputs.benchmark == 'true' }}
     name: Benchmark Performance
     steps:
       - name: Checkout
@@ -24,6 +66,10 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-2
+      - uses: xt0rted/pull-request-comment-branch@v1
+        id: comment-branch
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Create and Auth kubeconfig
         run: |
           echo "$CONFIG" > kubeconfig
@@ -32,18 +78,30 @@ jobs:
           KUBECONFIG=kubeconfig kubectl config use-context github-actions-dolt-context
         env:
           CONFIG: ${{ secrets.CORP_KUBECONFIG }}
-      - name: Run benchmarks and wait
+      - name: Run benchmarks
+        id: run-benchmarks
         run: |
+          echo "Setting from version to: $FROM_VERSION"
+          echo "Setting to version to: $TO_VERSION"
+
           uuid=$(uuidgen)
           podname="performance-benchmarking-$uuid"
 
-          ./.github/scripts/performance-benchmarking/get-pod-spec-json.sh "$podname" "$FROM_VERSION" "$TO_VERSION" > pod.json
+          timeprefix=$(date +%Y/%m/%d)
+
+          actorprefix="$ACTOR/$TO_VERSION"
+
+          ./.github/scripts/performance-benchmarking/get-pod-spec-json.sh "$podname" "$FROM_VERSION" "$TO_VERSION" "$timeprefix" "$actorprefix" > pod.json
 
           KUBECONFIG=kubeconfig kubectl apply -f pod.json
 
-          while [[ $(KUBECONFIG=kubeconfig kubectl get pod/"$podname" -n performance-benchmarking -o 'jsonpath={..status.conditions[?(@.type=="Ready")].reason}') != "PodCompleted" ]]; do echo "waiting for pod" && sleep 1; done
+          while [[ $(KUBECONFIG=kubeconfig kubectl get pod/"$podname" -n performance-benchmarking -o 'jsonpath={..status.conditions[?(@.type=="Ready")].reason}') != "PodCompleted" ]]; do echo "waiting for pod" && sleep 60; done
 
-          KUBECONFIG=kubeconfig kubectl get pods -n performance-benchmarking
+          KUBECONFIG=kubeconfig kubectl delete pod/"$podname" -n performance-benchmarking
         env:
-          FROM_VERSION: 0.22.6
-          TO_VERSION: 0.22.8
+          FROM_VERSION: ${{ github.sha }}
+          TO_VERSION: ${{ steps.comment-branch.outputs.head_sha }}
+          ACTOR: ${{ github.actor }}
+      - name: Get benchmark results
+        run: |
+          echo "Get benchmark results here"

@@ -2,14 +2,16 @@
 
 set -e
 
-if [ ! -n "$1" ] || [ ! -n "$2" ] || [ ! -n "$3" ]; then
-    echo  "Usage: ./get-pod-spec-json <podname> <fromVersion> <toVersion>"
+if [ "$#" -ne 5 ]; then
+    echo  "Usage: ./get-pod-spec-json <podname> <fromVersion> <toVersion> <timeprefix> <actorprefix>"
     exit 1
 fi
 
 podname="$1"
 fromVersion="$2"
 toVersion="$3"
+timeprefix="$4"
+actorprefix="$5"
 
 echo '
 {
@@ -28,6 +30,9 @@ echo '
         "args": [
           "--from-version='$fromVersion'",
           "--to-version='$toVersion'",
+          "--bucket=performance-benchmarking-github-actions-results",
+          "--results-dir='$timeprefix'",
+          "--results-prefix='$actorprefix'",
           "select * from from_results;",
           "select * from to_results;"
         ]
