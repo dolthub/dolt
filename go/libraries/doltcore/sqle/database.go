@@ -202,6 +202,8 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 		dt, found = dtables.NewCommitsTable(ctx, db.ddb), true
 	case doltdb.CommitAncestorsTableName:
 		dt, found = dtables.NewCommitAncestorsTable(ctx, db.ddb), true
+	case doltdb.StatusTableName:
+		dt, found = dtables.NewStatusTable(ctx, db.ddb, db.rsr, db.drw), true
 	}
 	if found {
 		return dt, found, nil
