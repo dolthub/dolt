@@ -85,26 +85,32 @@ jobs:
           echo "Setting from version to: $FROM_VERSION"
           echo "Setting to version to: $TO_VERSION"
 
-          uuid=$(uuidgen)
-          podname="performance-benchmarking-$uuid"
+          jobname="performance-benchmarking-$ACTOR"
 
           timeprefix=$(date +%Y/%m/%d)
 
           actorprefix="$ACTOR/$TO_VERSION"
 
-          ./.github/scripts/performance-benchmarking/get-pod-spec-json.sh "$podname" "$FROM_VERSION" "$TO_VERSION" "$timeprefix" "$actorprefix" > pod.json
+          ./.github/scripts/performance-benchmarking/get-job-json.sh "$jobname" "$FROM_VERSION" "$TO_VERSION" "$timeprefix" "$actorprefix" > job.json
 
-          KUBECONFIG=kubeconfig kubectl apply -f pod.json
+          KUBECONFIG=kubeconfig kubectl apply -f job.json
 
-          while [[ $(KUBECONFIG=kubeconfig kubectl get pod/"$podname" -n performance-benchmarking -o 'jsonpath={..status.conditions[?(@.type=="Ready")].reason}') != "PodCompleted" ]]; do echo "waiting for pod" && sleep 60; done
+          errors=(KUBECONFIG=kubeconfig kubectl wait job/"$jobname" --for=condition=complete -n performance-benchmarking --timeout=400s 2>&1 || true)
 
-          KUBECONFIG=kubeconfig kubectl delete pod/"$podname" -n performance-benchmarking
-
-          echo "::set-output name=object-key::$timeprefix/$actorprefix/compare-results.log"
+          if [ -z "$errors" ]; then
+            KUBECONFIG=kubeconfig kubectl delete job/"$jobname" -n performance-benchmarking
+            echo "::set-output name=object-key::$timeprefix/$actorprefix/compare-results.log"
+            exit 0
+          else
+            KUBECONFIG=kubeconfig kubectl logs job/"$jobname" -n performance-benchmarking
+            exit 1
+          fi
         env:
           FROM_VERSION: ${{ github.sha }}
           TO_VERSION: ${{ steps.comment-branch.outputs.head_sha }}
           ACTOR: ${{ github.actor }}
+#          KUBECONFIG: "./kubeconfig"
+#          TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-job-json.sh"
       - name: Get benchmark results
         run: |
           echo "Get benchmark results here: $KEY"
