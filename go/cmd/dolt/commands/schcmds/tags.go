@@ -16,7 +16,6 @@ package schcmds
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -24,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"

@@ -16,13 +16,15 @@ package dfunctions
 
 import (
 	"fmt"
+	"strings"
+
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/go-mysql-server/sql"
-	"strings"
 )
 
 const DoltResetFuncName = "dolt_reset"
@@ -35,7 +37,7 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {
-		return "", fmt.Errorf("Empty database name.")
+		return 1, fmt.Errorf("Empty database name.")
 	}
 
 	dSess := sqle.DSessFromSess(ctx.Session)
@@ -63,21 +65,19 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	var verr errhand.VerboseError
 
 	if apr.ContainsAll(cli.HardResetParam, cli.SoftResetParam) {
-		return "", fmt.Errorf("error: --%s and --%s are mutually exclusive options.", cli.HardResetParam, cli.SoftResetParam)
+		return 1, fmt.Errorf("error: --%s and --%s are mutually exclusive options.", cli.HardResetParam, cli.SoftResetParam)
 	} else if apr.Contains(cli.HardResetParam) {
-		// TODO: This gets parsed as --hard. Not sure how good the ux there is....ww
 		verr = actions.ResetHard(ctx, dbData, apr, working, staged, head)
 	} else {
 		_, verr = actions.ResetSoft(ctx, dbData, apr, staged, head)
 	}
 
 	if verr != nil {
-		return "", fmt.Errorf(verr.Error())
+		return 1, fmt.Errorf(verr.Error())
 	}
 
-	return "", nil
+	return 0, nil
 }
-
 
 func (d DoltResetFunc) Resolved() bool {
 	for _, child := range d.Children() {
@@ -99,7 +99,7 @@ func (d DoltResetFunc) String() string {
 }
 
 func (d DoltResetFunc) Type() sql.Type {
-	return sql.Text
+	return sql.Int8
 }
 
 func (d DoltResetFunc) IsNullable() bool {

@@ -16,15 +16,15 @@ package actions
 
 import (
 	"context"
+	"strings"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"strings"
 )
 
 func ResetHard(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, workingRoot, stagedRoot, headRoot *doltdb.RootValue) errhand.VerboseError {
-	// TODO: Reset that hard additional param
 	if apr.NArg() > 1 {
 		return errhand.BuildDError("--%s supports at most one additional param", "hard").SetPrintUsage().Build()
 	}
@@ -87,7 +87,6 @@ func ResetHard(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseRe
 		}
 	}
 
-	// TODO: update working and staged in one repo_state write.
 	_, err = env.UpdateWorkingRoot(ctx, ddb, rsw, newWkRoot)
 
 	if err != nil {
@@ -113,7 +112,6 @@ func ResetHard(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseRe
 
 	return nil
 }
-
 
 func ResetSoft(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, stagedRoot, headRoot *doltdb.RootValue) (*doltdb.RootValue, errhand.VerboseError) {
 	ddb := dbData.Ddb
@@ -185,7 +183,6 @@ func resetStaged(ctx context.Context, ddb *doltdb.DoltDB, rsw env.RepoStateWrite
 
 	return updatedRoot, env.UpdateStagedRootWithVErr(ddb, rsw, updatedRoot)
 }
-
 
 func validateTablesWithVErr(tbls []string, roots ...*doltdb.RootValue) errhand.VerboseError {
 	err := ValidateTables(context.TODO(), tbls, roots...)
