@@ -95,16 +95,8 @@ jobs:
 
           KUBECONFIG=kubeconfig kubectl apply -f job.json
 
-          errors=(KUBECONFIG=kubeconfig kubectl wait job/"$jobname" --for=condition=complete -n performance-benchmarking --timeout=400s 2>&1 || true)
+          KUBECONFIG=kubeconfig kubectl wait job/"$jobname" --for=condition=complete -n performance-benchmarking --timeout=400s
 
-          if [ -z "$errors" ]; then
-            KUBECONFIG=kubeconfig kubectl delete job/"$jobname" -n performance-benchmarking
-            echo "::set-output name=object-key::$timeprefix/$actorprefix/compare-results.log"
-            exit 0
-          else
-            KUBECONFIG=kubeconfig kubectl logs job/"$jobname" -n performance-benchmarking
-            exit 1
-          fi
         env:
           FROM_VERSION: ${{ github.sha }}
           TO_VERSION: ${{ steps.comment-branch.outputs.head_sha }}
