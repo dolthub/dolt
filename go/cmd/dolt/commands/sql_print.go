@@ -189,7 +189,7 @@ func csvProcessStageFunc(ctx context.Context, items []pipeline.ItemWithProps) ([
 			}
 		}
 
-		err := csv.WriteCSVRow(wr, colValStrs, false)
+		err := csv.WriteCSVRow(wr, colValStrs, ",", false)
 
 		if err != nil {
 			return nil, err

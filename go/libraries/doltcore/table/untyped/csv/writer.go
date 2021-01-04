@@ -147,15 +147,15 @@ func (csvw *CSVWriter) Close(ctx context.Context) error {
 }
 
 func (csvw *CSVWriter) write(record []*string) error {
-	return WriteCSVRow(csvw.wr, record, csvw.useCRLF)
+	return WriteCSVRow(csvw.wr, record, csvw.info.Delim, csvw.useCRLF)
 }
 
 // WriteCSVRow is directly copied from csv.Writer.Write() with the addition of the `isNull []bool` parameter
 // this method has been adapted for Dolt's special quoting logic, ie `10,,""` -> (10,NULL,"")
-func WriteCSVRow(wr *bufio.Writer, record []*string, useCRLF bool) error {
+func WriteCSVRow(wr *bufio.Writer, record []*string, delim string, useCRLF bool) error {
 	for n, field := range record {
 		if n > 0 {
-			if _, err := wr.WriteString(","); err != nil {
+			if _, err := wr.WriteString(delim); err != nil {
 				return err
 			}
 		}
@@ -169,7 +169,7 @@ func WriteCSVRow(wr *bufio.Writer, record []*string, useCRLF bool) error {
 
 		// If we don't have to have a quoted field then just
 		// write out the field and continue to the next field.
-		if !fieldNeedsQuotes(field) {
+		if !fieldNeedsQuotes(field, delim) {
 			if _, err := wr.WriteString(*field); err != nil {
 				return err
 			}
@@ -247,13 +247,14 @@ func WriteCSVRow(wr *bufio.Writer, record []*string, useCRLF bool) error {
 // 		of Microsoft Excel and Google Drive.
 // 		For Postgres, quote the data terminating string `\.`.
 //
-func fieldNeedsQuotes(field *string) bool {
+func fieldNeedsQuotes(field *string, delim string) bool {
 	if field != nil && *field == "" {
 		// special Dolt logic
 		return true
 	}
 
-	if *field == `\.` || strings.Contains(*field, ",") || strings.ContainsAny(*field, "\"\r\n") {
+	// TODO: This is the offending line!
+	if *field == `\.` || strings.Contains(*field, delim) || strings.ContainsAny(*field, "\"\r\n") {
 		return true
 	}
 
