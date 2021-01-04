@@ -42,7 +42,7 @@ teardown() {
 }
 
 @test "DOLT_RESET --hard works on staged docs" {
-    skip "No idea what the correct behavior is"
+    skip "Skipping until functionality to delete local document works."
     echo ~license~ > LICENSE.md
     echo ~readme~ > README.md
     dolt add .
