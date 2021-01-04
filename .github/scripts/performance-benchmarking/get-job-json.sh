@@ -34,6 +34,7 @@ echo '
               "--from-version='$fromVersion'",
               "--to-version='$toVersion'",
               "--bucket=performance-benchmarking-github-actions-results",
+              "--region=us-west-2",
               "--results-dir='$timeprefix'",
               "--results-prefix='$actorprefix'",
               "select * from from_results;",
