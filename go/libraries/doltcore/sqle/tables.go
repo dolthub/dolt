@@ -132,9 +132,11 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 		return nil, err
 	}
 
+	var sqlIndexes []sql.Index
 	cols := sch.GetPKCols().GetColumns()
-	sqlIndexes := []sql.Index{
-		&doltIndex{
+
+	if len(cols) > 0 {
+		sqlIndexes = append(sqlIndexes, &doltIndex{
 			cols:         cols,
 			db:           t.db,
 			id:           "PRIMARY",
@@ -145,7 +147,7 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 			tableName:    t.Name(),
 			tableSch:     sch,
 			unique:       true,
-		},
+		})
 	}
 
 	for _, index := range sch.Indexes().AllIndexes() {

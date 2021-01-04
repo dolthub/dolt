@@ -22,7 +22,8 @@ teardown() {
 }
 
 @test "DOLT_COMMIT without a message throws error" {
-    dolt add .
+    run dolt sql -q "SELECT DOLT_ADD('.')"
+    [ $status -eq 0 ]
 
     run dolt sql -q "SELECT DOLT_COMMIT()"
     [ $status -eq 1 ]
@@ -33,7 +34,8 @@ teardown() {
 }
 
 @test "DOLT_COMMIT with just a message reads session parameters" {
-    dolt add .
+    run dolt sql -q "SELECT DOLT_ADD('.')"
+    [ $status -eq 0 ]
 
     run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
     [ $status -eq 0 ]
@@ -89,7 +91,7 @@ teardown() {
     dolt config --global --unset user.name
     dolt config --global --unset user.email
 
-    dolt add .
+    run dolt sql -q "SELECT DOLT_ADD('.')"
 
     run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1', '--author', 'John Doe <john@doe.com>')"
     [ "$status" -eq 0 ]

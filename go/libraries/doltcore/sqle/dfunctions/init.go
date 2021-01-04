@@ -23,4 +23,5 @@ var DoltFunctions = []sql.Function{
 	sql.Function1{Name: resetFuncName, Fn: NewDoltResetFunc},
 	sql.Function0{Name: VersionFuncName, Fn: NewVersion},
 	sql.FunctionN{Name: DoltCommitFuncName, Fn: NewDoltCommitFunc},
+	sql.FunctionN{Name: DoltAddFuncName, Fn: NewDoltAddFunc},
 }

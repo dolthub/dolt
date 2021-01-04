@@ -19,6 +19,8 @@ import (
 	"io"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 )
@@ -33,7 +35,7 @@ func ProcFuncForSourceFunc(sourceFunc SourceFunc) InFunc {
 	return func(p *Pipeline, ch chan<- RowWithProps, badRowChan chan<- *TransformRowFailure, noMoreChan <-chan struct{}) {
 		defer close(ch)
 
-		for {
+		for !p.IsStopping() {
 			select {
 			case <-noMoreChan:
 				return
@@ -59,12 +61,12 @@ func ProcFuncForSourceFunc(sourceFunc SourceFunc) InFunc {
 				panic("Readers should not be returning nil without error.  io.EOF should be used when done.")
 			}
 
-			if p.IsStopping() {
-				return
-			}
-
 			if r != nil {
-				ch <- RowWithProps{r, props}
+				select {
+				case ch <- RowWithProps{r, props}:
+				case <-p.stopChan:
+					return
+				}
 			}
 		}
 	}
@@ -98,7 +100,7 @@ func ProcFuncForSinkFunc(sinkFunc SinkFunc) OutFunc {
 					err := sinkFunc(r.Row, r.Props)
 
 					if err != nil {
-						if table.IsBadRow(err) {
+						if table.IsBadRow(err) || sql.ErrPrimaryKeyViolation.Is(err) {
 							badRowChan <- &TransformRowFailure{r.Row, "writer", err.Error()}
 						} else {
 							p.StopWithErr(err)
