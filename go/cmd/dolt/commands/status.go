@@ -76,7 +76,7 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 		cli.PrintErrln(toStatusVErr(err).Verbose())
 		return 1
 	}
-	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, dEnv)
+	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, dEnv.DoltDB, dEnv.RepoStateReader())
 
 	if err != nil {
 		cli.PrintErrln(toStatusVErr(err).Verbose())
@@ -90,7 +90,7 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 1
 	}
 
-	workingDocsInConflict, err := merge.GetDocsInConflict(ctx, dEnv)
+	workingDocsInConflict, err := merge.GetDocsInConflict(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.DocsReadWriter())
 
 	if err != nil {
 		cli.PrintErrln(toStatusVErr(err).Verbose())
