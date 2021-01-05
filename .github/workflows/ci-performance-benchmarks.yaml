@@ -49,7 +49,7 @@ jobs:
 
   performance:
     runs-on: ubuntu-latest
-    needs: check-comments
+    needs: [validate-commentor, check-comments]
     if: ${{ needs.check-comments.outputs.benchmark == 'true' }}
     name: Benchmark Performance
     steps:
