@@ -38,6 +38,7 @@ KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json
 out=$(KUBECONFIG="$KUBECONFIG" kubectl wait job/"$jobname" --for=condition=complete -n performance-benchmarking --timeout=600s)
 
 if [ "$out" != "job.batch/$jobname condition met" ]; then
+  echo "output of kubectl wait: $out"
   KUBECONFIG="$KUBECONFIG" kubectl logs job/"$jobname" -n performance-benchmarking
 else
   echo "::set-output name=object-key::$timeprefix/$actorprefix/comparison-results.log"
