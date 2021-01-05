@@ -35,12 +35,6 @@ jobs:
           reaction: rocket
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#      - name: Set Comment Body
-#        run: |
-#          echo "::set-output name=body::$(echo $BODY)"
-#        id: set_body
-#        env:
-#          BODY: ${{ steps.check.outputs.comment_body }}
       - name: Set Benchmark
         if: ${{ steps.check.outputs.triggered == 'true' }}
         id: set_benchmark
@@ -89,7 +83,18 @@ jobs:
           KUBECONFIG: "./kubeconfig"
           TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-job-json.sh"
       - name: Get benchmark results
+        id: get-results
         run: |
           echo "Get benchmark results here: $KEY"
+          aws s3api get-object --bucket=performance-benchmarking-github-actions-results --key="$KEY" results.log
+          echo "::set-output name=results::$(cat results.log)"
         env:
           KEY: ${{ steps.run-benchmarks.outputs.object-key }}
+      - name: View context attributes
+        uses: actions/github-script@v3
+        with:
+          script: |
+            console.log("This is body:", process.env.BODY)
+            console.log(context)
+        env:
+          BODY: ${{ steps.get-results.outputs.results }}
