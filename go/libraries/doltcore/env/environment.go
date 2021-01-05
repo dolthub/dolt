@@ -470,22 +470,6 @@ func (d *docsReadWriter) GetDocDetail(docName string) (doc doltdb.DocDetails, er
 	return d.dEnv.GetDocDetail(docName)
 }
 
-func (d *docsReadWriter) UpdateFSDocsToRootDocs(ctx context.Context, root *doltdb.RootValue, docs Docs) error {
-	return d.dEnv.UpdateFSDocsToRootDocs(ctx, root, docs)
-}
-
-func (d *docsReadWriter) GetFS() filesys.Filesys {
-	return d.dEnv.FS
-}
-
-func (d *docsReadWriter) GetDocs() Docs {
-	return d.dEnv.Docs
-}
-
-func (d *docsReadWriter) GetDocsWithNewerTextFromRoot(ctx context.Context, root *doltdb.RootValue, docs Docs) (Docs, error) {
-	return d.dEnv.GetDocsWithNewerTextFromRoot(ctx, root, docs)
-}
-
 func (dEnv *DoltEnv) DocsReadWriter() DocsReadWriter {
 	return &docsReadWriter{dEnv}
 }

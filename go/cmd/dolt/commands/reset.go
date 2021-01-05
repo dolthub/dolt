@@ -90,9 +90,9 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		if apr.ContainsAll(HardResetParam, SoftResetParam) {
 			verr = errhand.BuildDError("error: --%s and --%s are mutually exclusive options.", HardResetParam, SoftResetParam).Build()
 		} else if apr.Contains(HardResetParam) {
-			verr = actions.ResetHard(ctx, dEnv.DbData(), apr, workingRoot, stagedRoot, headRoot)
+			verr = actions.ResetHard(ctx, dEnv, apr, workingRoot, stagedRoot, headRoot)
 		} else {
-			stagedRoot, verr = actions.ResetSoft(ctx, dEnv.DbData(), apr, stagedRoot, headRoot)
+			stagedRoot, verr = actions.ResetSoft(ctx, dEnv, apr, stagedRoot, headRoot)
 
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)

@@ -79,7 +79,8 @@ teardown() {
     [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
 }
 
-@test "DOLT_RESET --soft works on staged docs" {
+# Todo fix thix case.
+@test "DOLT_RESET --soft ignores staged docs" {
     echo ~license~ > LICENSE.md
     dolt add .
 

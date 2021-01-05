@@ -23,18 +23,14 @@ import (
 )
 
 // SaveTrackedDocsFromWorking saves docs from the working root to the filesystem, and doesn't modify untracked docs.
-func SaveTrackedDocsFromWorking(ctx context.Context, dbData env.DbData) error {
-	ddb := dbData.Ddb
-	rsr := dbData.Rsr
-	drw := dbData.Drw
-
-	localDocs := drw.GetDocs()
-	workingRoot, err := env.WorkingRoot(ctx, ddb, rsr)
+func SaveTrackedDocsFromWorking(ctx context.Context, dEnv *env.DoltEnv) error {
+	localDocs := dEnv.Docs
+	workingRoot, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		return err
 	}
 
-	return SaveTrackedDocs(ctx, drw, workingRoot, workingRoot, localDocs)
+	return SaveTrackedDocs(ctx, dEnv, workingRoot, workingRoot, localDocs)
 }
 
 // SaveDocsFromWorking saves docs from the working root to the filesystem, and could overwrite untracked docs.
@@ -62,7 +58,7 @@ func SaveDocsFromRoot(ctx context.Context, root *doltdb.RootValue, dEnv *env.Dol
 }
 
 // SaveTrackedDocs writes the docs from the targetRoot to the filesystem. The working root is used to identify untracked docs, which are left unchanged.
-func SaveTrackedDocs(ctx context.Context, drw env.DocsReadWriter, workRoot, targetRoot *doltdb.RootValue, localDocs env.Docs) error {
+func SaveTrackedDocs(ctx context.Context, dEnv *env.DoltEnv, workRoot, targetRoot *doltdb.RootValue, localDocs env.Docs) error {
 	docDiffs, err := diff.NewDocDiffs(ctx, workRoot, nil, localDocs)
 	if err != nil {
 		return err
@@ -70,9 +66,9 @@ func SaveTrackedDocs(ctx context.Context, drw env.DocsReadWriter, workRoot, targ
 
 	docs := removeUntrackedDocs(localDocs, docDiffs)
 
-	err = drw.UpdateFSDocsToRootDocs(ctx, targetRoot, docs)
+	err = dEnv.UpdateFSDocsToRootDocs(ctx, targetRoot, docs)
 	if err != nil {
-		localDocs.Save(drw.GetFS())
+		localDocs.Save(dEnv.FS)
 		return err
 	}
 
@@ -183,5 +179,5 @@ func SaveDocsFromWorkingExcludingFSChanges(ctx context.Context, dEnv *env.DoltEn
 		docsToSave = dEnv.Docs
 	}
 
-	return SaveTrackedDocs(ctx, dEnv.DocsReadWriter(), workingRoot, workingRoot, docsToSave)
+	return SaveTrackedDocs(ctx, dEnv, workingRoot, workingRoot, docsToSave)
 }

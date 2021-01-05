@@ -67,9 +67,9 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	if apr.ContainsAll(cli.HardResetParam, cli.SoftResetParam) {
 		return 1, fmt.Errorf("error: --%s and --%s are mutually exclusive options.", cli.HardResetParam, cli.SoftResetParam)
 	} else if apr.Contains(cli.HardResetParam) {
-		verr = actions.ResetHard(ctx, dbData, apr, working, staged, head)
+		verr = actions.ResetHardTables(ctx, dbData, apr, working, staged, head)
 	} else {
-		_, verr = actions.ResetSoft(ctx, dbData, apr, staged, head)
+		_, verr = actions.ResetSoftTables(ctx, dbData, apr, staged, head)
 	}
 
 	if verr != nil {
