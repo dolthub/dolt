@@ -113,7 +113,7 @@ func (d *DoltHarness) SupportsForeignKeys() bool {
 }
 
 func (d *DoltHarness) SupportsKeylessTables() bool {
-	return false
+	return true
 }
 
 func (d *DoltHarness) NewDatabase(name string) sql.Database {
