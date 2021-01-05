@@ -65,16 +65,19 @@ func init() {
 	}
 }
 
+type projected interface {
+	Project() []string
+}
+
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
 type DoltTable struct {
 	name   string
 	sqlSch sql.Schema
 	db     SqlDatabase
 
-	table         *doltdb.Table
-	sch           schema.Schema
-	autoIncCol    schema.Column
-	projectedCols []string
+	table      *doltdb.Table
+	sch        schema.Schema
+	autoIncCol schema.Column
 }
 
 func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase) DoltTable {
@@ -441,14 +444,18 @@ func (t *DoltTable) GetForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint
 	return toReturn, nil
 }
 
-/*func (t *DoltTable) WithProjection(colNames []string) sql.Table {
-	t.projectedCols = colNames
-	return t
+type projectedDoltTable struct {
+	*DoltTable
+	projectedCols []string
 }
 
-func (t *DoltTable) Projection() []string {
+func (t *projectedDoltTable) Projection() []string {
 	return t.projectedCols
-}*/
+}
+
+func (t *DoltTable) WithProjection(colNames []string) sql.Table {
+	return &projectedDoltTable{t, colNames}
+}
 
 var _ sql.PartitionIter = (*doltTablePartitionIter)(nil)
 

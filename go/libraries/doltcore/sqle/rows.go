@@ -93,9 +93,13 @@ func newKeyedRowIter(ctx context.Context, tbl *DoltTable, partition *doltTablePa
 	cols := sch.GetAllCols().GetColumns()
 	tagToSqlColIdx := make(map[uint64]int)
 
-	resultColSet := set.NewCaseInsensitiveStrSet(tbl.projectedCols)
+	var projectedCols []string
+	if projTbl, ok := interface{}(tbl).(projected); ok {
+		projectedCols = projTbl.Project()
+	}
+	resultColSet := set.NewCaseInsensitiveStrSet(projectedCols)
 	for i, col := range cols {
-		if len(tbl.projectedCols) == 0 || resultColSet.Contains(col.Name) {
+		if len(projectedCols) == 0 || resultColSet.Contains(col.Name) {
 			tagToSqlColIdx[col.Tag] = i
 		}
 	}
