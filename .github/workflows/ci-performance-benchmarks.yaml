@@ -81,28 +81,13 @@ jobs:
           CONFIG: ${{ secrets.CORP_KUBECONFIG }}
       - name: Run benchmarks
         id: run-benchmarks
-        run: |
-          echo "Setting from version to: $FROM_VERSION"
-          echo "Setting to version to: $TO_VERSION"
-
-          jobname="performance-benchmarking-$ACTOR"
-
-          timeprefix=$(date +%Y/%m/%d)
-
-          actorprefix="$ACTOR/$TO_VERSION"
-
-          ./.github/scripts/performance-benchmarking/get-job-json.sh "$jobname" "$FROM_VERSION" "$TO_VERSION" "$timeprefix" "$actorprefix" > job.json
-
-          KUBECONFIG=kubeconfig kubectl apply -f job.json
-
-          KUBECONFIG=kubeconfig kubectl wait job/"$jobname" --for=condition=complete -n performance-benchmarking --timeout=400s
-
+        run: ./.github/scripts/performance-benchmarking/run-benchmarks.sh
         env:
           FROM_VERSION: ${{ github.sha }}
           TO_VERSION: ${{ steps.comment-branch.outputs.head_sha }}
           ACTOR: ${{ github.actor }}
-#          KUBECONFIG: "./kubeconfig"
-#          TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-job-json.sh"
+          KUBECONFIG: "./kubeconfig"
+          TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-job-json.sh"
       - name: Get benchmark results
         run: |
           echo "Get benchmark results here: $KEY"
