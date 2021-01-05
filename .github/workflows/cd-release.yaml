@@ -112,7 +112,10 @@ jobs:
           homebrew-tap: Homebrew/homebrew-core
           base-branch: master
           download-url: ${{format('https://github.com/dolthub/dolt/archive/v{0}.tar.gz', github.event.inputs.version)}}
-          commit-message: ${{format('dolt v{0}', github.event.inputs.version)}}
+          commit-message: |
+            ${{format('dolt {0}', github.event.inputs.version)}}
+
+            Created by https://github.com/mislav/bump-homebrew-formula-action
         env:
           COMMITTER_TOKEN: ${{secrets.HOMEBREW_GITHUB_TOKEN}}
       - name: Discord Notify
