@@ -88,6 +88,8 @@ jobs:
           echo "Get benchmark results here: $KEY"
           aws s3api get-object --bucket=performance-benchmarking-github-actions-results --key="$KEY" results.log
           results=$(cat results.log)
+
+          results="${results//$'\n'/'%0A'}"
           echo "::set-output name=results::$results"
         env:
           KEY: ${{ steps.run-benchmarks.outputs.object-key }}
