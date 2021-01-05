@@ -38,6 +38,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/flynn-archive/go-shlex"
 	"gopkg.in/src-d/go-errors.v1"
+	"github.com/opentracing/opentracing-go"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -227,7 +228,8 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	sqlCtx := sql.NewContext(ctx,
 		sql.WithSession(dsess),
 		sql.WithIndexRegistry(sql.NewIndexRegistry()),
-		sql.WithViewRegistry(sql.NewViewRegistry()))
+		sql.WithViewRegistry(sql.NewViewRegistry()),
+		sql.WithTracer(opentracing.GlobalTracer()))
 	_ = sqlCtx.Set(sqlCtx, sql.AutoCommitSessionVar, sql.Boolean, true)
 
 	roots := make(map[string]*doltdb.RootValue)

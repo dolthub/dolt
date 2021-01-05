@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
+	"github.com/opentracing/opentracing-go"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -254,7 +255,8 @@ func makeSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValu
 	sqlCtx := sql.NewContext(ctx,
 		sql.WithSession(dsqle.DefaultDoltSession()),
 		sql.WithIndexRegistry(sql.NewIndexRegistry()),
-		sql.WithViewRegistry(sql.NewViewRegistry()))
+		sql.WithViewRegistry(sql.NewViewRegistry()),
+		sql.WithTracer(opentracing.GlobalTracer()))
 	sqlCtx.SetCurrentDatabase("db")
 
 	engine := sqle.NewDefault()

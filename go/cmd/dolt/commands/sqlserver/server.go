@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/information_schema"
 	"github.com/dolthub/vitess/go/mysql"
+	"github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -176,7 +177,8 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommi
 			ctx,
 			sql.WithIndexRegistry(ir),
 			sql.WithViewRegistry(vr),
-			sql.WithSession(doltSess))
+			sql.WithSession(doltSess),
+			sql.WithTracer(opentracing.GlobalTracer()))
 
 		dbs := dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())
 		for _, db := range dbs {
