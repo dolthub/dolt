@@ -87,14 +87,21 @@ jobs:
         run: |
           echo "Get benchmark results here: $KEY"
           aws s3api get-object --bucket=performance-benchmarking-github-actions-results --key="$KEY" results.log
-          echo "::set-output name=results::$(cat results.log)"
+          results=$(cat results.log)
+          echo '::set-output name=results::"$results"'
         env:
           KEY: ${{ steps.run-benchmarks.outputs.object-key }}
       - name: View context attributes
         uses: actions/github-script@v3
         with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
             console.log("This is body:", process.env.BODY)
-            console.log(context)
+            github.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '👋 Thanks for reporting!'
+            })
         env:
           BODY: ${{ steps.get-results.outputs.results }}
