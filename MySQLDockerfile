@@ -50,7 +50,7 @@ RUN dpkg -i packages-microsoft-prod.deb
 RUN apt-get update; \
       apt-get install -y apt-transport-https && \
       apt-get update && \
-      apt-get install -y dotnet-sdk-3.1
+      apt-get install -y dotnet-sdk-5.0
 
 # install node
 RUN curl -sL https://deb.nodesource.com/setup_14.x | bash -
