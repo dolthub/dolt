@@ -35,15 +35,9 @@ source "$TEMPLATE_SCRIPT" "$jobname" "$FROM_VERSION" "$TO_VERSION" "$timeprefix"
 
 KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json
 
-errors=$(KUBECONFIG="$KUBECONFIG" kubectl wait job/"$jobname" --for=condition=complete -n performance-benchmarking --timeout=600s 2>&1 || true)
+KUBECONFIG="$KUBECONFIG" kubectl wait job/"$jobname" --for=condition=complete -n performance-benchmarking --timeout=600s
 
-echo "This is the value of errors: $errors"
+KUBECONFIG="$KUBECONFIG" kubectl delete job/"$jobname" -n performance-benchmarking
+echo "::set-output name=object-key::$timeprefix/$actorprefix/compare-results.log"
 
-if [ -z "$errors" ]; then
-  KUBECONFIG="$KUBECONFIG" kubectl delete job/"$jobname" -n performance-benchmarking
-  echo "::set-output name=object-key::$timeprefix/$actorprefix/compare-results.log"
-  exit 0
-else
-  KUBECONFIG="$KUBECONFIG" kubectl logs job/"$jobname" -n performance-benchmarking
-  exit 1
-fi
+exit 0
