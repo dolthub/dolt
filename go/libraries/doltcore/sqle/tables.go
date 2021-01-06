@@ -15,6 +15,7 @@
 package sqle
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -64,6 +65,10 @@ func init() {
 	}
 }
 
+type projected interface {
+	Project() []string
+}
+
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
 type DoltTable struct {
 	name   string
@@ -98,12 +103,18 @@ var _ sql.Table = (*DoltTable)(nil)
 var _ sql.IndexedTable = (*DoltTable)(nil)
 var _ sql.ForeignKeyTable = (*DoltTable)(nil)
 
+// projected tables disabled for now.  Looks like some work needs to be done in the analyzer as there are cases
+// where the projected columns do not contain every column needed.  Seed this with natural and other joins.  There
+// may be other cases.
+//var _ sql.ProjectedTable = (*DoltTable)(nil)
+
 // WithIndexLookup implements sql.IndexedTable
 func (t *DoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 	dil, ok := lookup.(*doltIndexLookup)
 	if !ok {
 		return sqlutil.NewStaticErrorTable(t, fmt.Errorf("Unrecognized indexLookup %T", lookup))
 	}
+
 	return &IndexedDoltTable{
 		table:       t,
 		indexLookup: dil,
@@ -277,7 +288,6 @@ func (t *WritableDoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 	return &WritableIndexedDoltTable{
 		WritableDoltTable: t,
 		indexLookup:       dil,
-		projectedCols:     sqlutil.GetColNamesFromSqlSchema(t.sqlSch),
 	}
 }
 
@@ -434,6 +444,19 @@ func (t *DoltTable) GetForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint
 	return toReturn, nil
 }
 
+type projectedDoltTable struct {
+	*DoltTable
+	projectedCols []string
+}
+
+func (t *projectedDoltTable) Projection() []string {
+	return t.projectedCols
+}
+
+func (t *DoltTable) WithProjection(colNames []string) sql.Table {
+	return &projectedDoltTable{t, colNames}
+}
+
 var _ sql.PartitionIter = (*doltTablePartitionIter)(nil)
 
 // doltTablePartitionIter, an object that knows how to return the single partition exactly once.
@@ -480,6 +503,43 @@ type doltTablePartition struct {
 // Key returns the key for this partition, which must uniquely identity the partition.
 func (p doltTablePartition) Key() []byte {
 	return []byte(strconv.FormatUint(p.start, 10) + " >= i < " + strconv.FormatUint(p.end, 10))
+}
+
+// IteratorForPartition returns a types.MapIterator implementation which will iterate through the values
+// for index = start; index < end.  This iterator is not thread safe and should only be used from a single go routine
+// unless paired with a mutex
+func (p doltTablePartition) IteratorForPartition(ctx context.Context, m types.Map) (types.MapIterator, error) {
+	return newPartitionIter(ctx, m, p.start, p.end)
+}
+
+type partitionIter struct {
+	pos  uint64
+	end  uint64
+	iter types.MapIterator
+}
+
+func newPartitionIter(ctx context.Context, m types.Map, start, end uint64) (*partitionIter, error) {
+	iter, err := m.BufferedIteratorAt(ctx, start)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &partitionIter{
+		start,
+		end,
+		iter,
+	}, nil
+}
+
+func (p *partitionIter) Next(ctx context.Context) (k, v types.Value, err error) {
+	if p.pos >= p.end {
+		// types package does not use io.EOF
+		return nil, nil, nil
+	}
+
+	p.pos++
+	return p.iter.Next(ctx)
 }
 
 // AlterableDoltTable allows altering the schema of the table. It implements sql.AlterableTable.
