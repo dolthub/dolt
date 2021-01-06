@@ -519,7 +519,7 @@ type partitionIter struct {
 }
 
 func newPartitionIter(ctx context.Context, m types.Map, start, end uint64) (*partitionIter, error) {
-	iter, err := m.IteratorAt(ctx, start)
+	iter, err := m.BufferedIteratorAt(ctx, start)
 
 	if err != nil {
 		return nil, err

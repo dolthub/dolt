@@ -81,7 +81,7 @@ func newKeyedRowIter(ctx context.Context, tbl *DoltTable, partition *doltTablePa
 
 	var mapIter types.MapIterator
 	if partition == nil {
-		mapIter, err = rowData.Iterator(ctx)
+		mapIter, err = rowData.BufferedIterator(ctx)
 	} else {
 		mapIter, err = partition.IteratorForPartition(ctx, rowData)
 	}
