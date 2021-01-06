@@ -19,6 +19,7 @@ import (
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -111,11 +112,13 @@ func newPkTableReaderFrom(ctx context.Context, tbl *doltdb.Table, sch schema.Sch
 }
 
 type partitionTableReader struct {
-	SqlTableReader
-	remaining uint64
+	eg  *errgroup.Group
+	kvs <-chan types.Value
+
+	sch schema.Schema
 }
 
-var _ SqlTableReader = &partitionTableReader{}
+var _ SqlTableReader = partitionTableReader{}
 
 func newPkTableReaderForPartition(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, start, end uint64) (SqlTableReader, error) {
 	rows, err := tbl.GetRowData(ctx)
@@ -123,26 +126,48 @@ func newPkTableReaderForPartition(ctx context.Context, tbl *doltdb.Table, sch sc
 		return nil, err
 	}
 
-	iter, err := rows.BufferedIteratorAt(ctx, start)
-	if err != nil {
-		return nil, err
-	}
+	eg, ctx := errgroup.WithContext(ctx)
+	kvs := make(chan types.Value, 2)
 
-	return &partitionTableReader{
-		SqlTableReader: pkTableReader{
-			iter: iter,
-			sch:  sch,
-		},
-		remaining: end - start,
+	eg.Go(func() error {
+		defer close(kvs)
+		return rows.IterRange(ctx, start, end, func(key, value types.Value) error {
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
+				kvs <- key
+				kvs <- value
+			}
+			return nil
+		})
+	})
+
+	return partitionTableReader{
+		eg:  eg,
+		kvs: kvs,
+		sch: sch,
 	}, nil
 }
 
+// GetSchema implements the TableReader interface.
+func (rdr partitionTableReader) GetSchema() schema.Schema {
+	return rdr.sch
+}
+
 // ReadSqlRow implements the SqlTableReader interface.
-func (rdr *partitionTableReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
-	if rdr.remaining == 0 {
+func (rdr partitionTableReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
+	key := <-rdr.kvs
+	val := <-rdr.kvs
+
+	if key == nil || val == nil {
 		return nil, io.EOF
 	}
-	rdr.remaining -= 1
 
-	return rdr.SqlTableReader.ReadSqlRow(ctx)
+	return noms.SqlRowFromTuples(rdr.sch, key.(types.Tuple), val.(types.Tuple))
+}
+
+// Close implements the TableReadCloser interface.
+func (rdr partitionTableReader) Close(_ context.Context) error {
+	return nil
 }
