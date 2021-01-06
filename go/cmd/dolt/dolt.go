@@ -23,11 +23,10 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
+	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/profile"
-
 	"github.com/uber/jaeger-client-go"
 	"github.com/uber/jaeger-client-go/transport"
-	"github.com/opentracing/opentracing-go"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
