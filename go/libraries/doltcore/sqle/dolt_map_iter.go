@@ -106,10 +106,13 @@ func (conv *KVToSqlRowConverter) ConvertKVToSqlRow(k, v types.Value) (sql.Row, e
 		}
 	}
 
+	tupItr := types.TupleItrPool.Get().(*types.TupleIterator)
+	defer types.TupleItrPool.Put(tupItr)
+
 	cols := make([]interface{}, conv.rowSize)
 	if conv.valsFromKey > 0 {
 		// keys are not in sorted order so cannot use max tag to early exit
-		err := conv.processTuple(cols, conv.valsFromKey, 0xFFFFFFFFFFFFFFFF, keyTup)
+		err := conv.processTuple(cols, conv.valsFromKey, 0xFFFFFFFFFFFFFFFF, keyTup, tupItr)
 
 		if err != nil {
 			return nil, err
@@ -117,7 +120,7 @@ func (conv *KVToSqlRowConverter) ConvertKVToSqlRow(k, v types.Value) (sql.Row, e
 	}
 
 	if conv.valsFromVal > 0 {
-		err := conv.processTuple(cols, conv.valsFromVal, conv.maxValTag, valTup)
+		err := conv.processTuple(cols, conv.valsFromVal, conv.maxValTag, valTup, tupItr)
 
 		if err != nil {
 			return nil, err
@@ -127,8 +130,8 @@ func (conv *KVToSqlRowConverter) ConvertKVToSqlRow(k, v types.Value) (sql.Row, e
 	return cols, nil
 }
 
-func (conv *KVToSqlRowConverter) processTuple(cols []interface{}, valsToFill int, maxTag uint64, tup types.Tuple) error {
-	tupItr, err := tup.Iterator()
+func (conv *KVToSqlRowConverter) processTuple(cols []interface{}, valsToFill int, maxTag uint64, tup types.Tuple, tupItr *types.TupleIterator) error {
+	err := tupItr.InitForTuple(tup)
 
 	if err != nil {
 		return err
