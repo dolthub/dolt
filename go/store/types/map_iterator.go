@@ -21,7 +21,11 @@
 
 package types
 
-import "context"
+import (
+	"context"
+	"errors"
+	"golang.org/x/sync/errgroup"
+)
 
 // MapIterator is the interface used by iterators over Noms Maps.
 type MapIterator interface {
@@ -57,4 +61,81 @@ func (mi *mapIterator) Next(ctx context.Context) (k, v Value, err error) {
 	}
 
 	return mi.currentKey, mi.currentValue, nil
+}
+
+type mapKeyValuePair struct {
+	k Value
+	v Value
+}
+
+var errClosed = errors.New("closed")
+
+type readAheadRangeIter struct {
+	ctx  context.Context
+	eg   *errgroup.Group
+	kvCh chan mapKeyValuePair
+}
+
+func (itr *readAheadRangeIter) Next(context.Context) (Value, Value, error) {
+	select {
+	case kvp, ok := <-itr.kvCh:
+		if !ok {
+			return nil, nil, nil
+		}
+
+		return kvp.k, kvp.v, nil
+
+	case <-itr.ctx.Done():
+		err := itr.eg.Wait()
+
+		if err != errClosed {
+			return nil, nil, err
+		}
+
+		return nil, nil, nil
+	}
+}
+
+func (itr *readAheadRangeIter) Close() error {
+	itr.eg.Go(func() error {
+		return errClosed
+	})
+
+	_ = itr.eg.Wait()
+	close(itr.kvCh)
+	return nil
+}
+
+func (m Map) RangeIterator(ctx context.Context, readAhead int, startIdx, endIdx uint64) (MapIterator, error) {
+	eg, ctx := errgroup.WithContext(ctx)
+	keyValCh := make(chan mapKeyValuePair, readAhead)
+	eg.Go(func() error {
+		err := m.IterRange(ctx, startIdx, endIdx, func(key, value Value) error {
+			kvp := mapKeyValuePair{key, value}
+			select {
+			case keyValCh <- kvp:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+
+			return nil
+		})
+
+		if err != nil {
+			return err
+		}
+
+		// send an empty kvp to signify the end of the range
+		kvp := mapKeyValuePair{}
+		select {
+		case keyValCh <- kvp:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+
+		return nil
+	})
+
+	return &readAheadRangeIter{ctx, eg, keyValCh}, nil
 }

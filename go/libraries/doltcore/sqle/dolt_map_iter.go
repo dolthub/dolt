@@ -204,14 +204,16 @@ func GetGetFuncForMapIter(mapItr types.MapIterator) func(ctx context.Context) (t
 type DoltMapIter struct {
 	ctx   context.Context
 	kvGet KVGetFunc
+	closeKVGetter func() error
 	conv  *KVToSqlRowConverter
 }
 
 // NewDoltMapIter returns a new DoltMapIter
-func NewDoltMapIter(ctx context.Context, keyValGet KVGetFunc, conv *KVToSqlRowConverter) *DoltMapIter {
+func NewDoltMapIter(ctx context.Context, keyValGet KVGetFunc, closeKVGetter func() error, conv *KVToSqlRowConverter) *DoltMapIter {
 	return &DoltMapIter{
 		ctx:   ctx,
 		kvGet: keyValGet,
+		closeKVGetter: closeKVGetter,
 		conv:  conv,
 	}
 }
@@ -228,5 +230,9 @@ func (dmi *DoltMapIter) Next() (sql.Row, error) {
 }
 
 func (dmi *DoltMapIter) Close() error {
+	if dmi.closeKVGetter != nil {
+		return dmi.closeKVGetter()
+	}
+
 	return nil
 }
