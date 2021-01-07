@@ -1,0 +1,15 @@
+name: Release Notification
+
+on: release
+
+jobs:
+  notify:
+    name: Release Notification
+    steps:
+      - name: Discord Notify
+        if: always()
+        uses: dolthub/ga-discord-notify@master
+        with:
+          job-status: ${{ job.status }}
+          webhook-url: ${{ secrets.DISCORD_RELEASES_WEBHOOK }}
+          notify-on-success: true

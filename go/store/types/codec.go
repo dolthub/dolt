@@ -172,24 +172,96 @@ func (b *binaryNomsReader) skipFloat(nbf *NomsBinFormat) {
 }
 
 func (b *binaryNomsReader) skipInt() {
-	_, count := binary.Varint(b.buff[b.offset:])
+	_, count := unrolledDecodeVarint(b.buff[b.offset:])
 	b.offset += uint32(count)
 }
 
 func (b *binaryNomsReader) readInt() int64 {
-	v, count := binary.Varint(b.buff[b.offset:])
+	v, count := unrolledDecodeVarint(b.buff[b.offset:])
 	b.offset += uint32(count)
 	return v
 }
 
 func (b *binaryNomsReader) readUint() uint64 {
-	v, count := binary.Uvarint(b.buff[b.offset:])
+	v, count := unrolledDecodeUVarint(b.buff[b.offset:])
 	b.offset += uint32(count)
 	return v
 }
 
+func unrolledDecodeUVarint(buf []byte) (uint64, int) {
+	b := uint64(buf[0])
+	if b < 0x80 {
+		return b, 1
+	}
+
+	x := b & 0x7f
+	b = uint64(buf[1])
+	if b < 0x80 {
+		return x | (b << 7), 2
+	}
+
+	x |= (b & 0x7f) << 7
+	b = uint64(buf[2])
+	if b < 0x80 {
+		return x | (b << 14), 3
+	}
+
+	x |= (b & 0x7f) << 14
+	b = uint64(buf[3])
+	if b < 0x80 {
+		return x | (b << 21), 4
+	}
+
+	x |= (b & 0x7f) << 21
+	b = uint64(buf[4])
+	if b < 0x80 {
+		return x | (b << 28), 5
+	}
+
+	x |= (b & 0x7f) << 28
+	b = uint64(buf[5])
+	if b < 0x80 {
+		return x | (b << 35), 6
+	}
+
+	x |= (b & 0x7f) << 35
+	b = uint64(buf[6])
+	if b < 0x80 {
+		return x | (b << 42), 7
+	}
+
+	x |= (b & 0x7f) << 42
+	b = uint64(buf[7])
+	if b < 0x80 {
+		return x | (b << 49), 8
+	}
+
+	x |= (b & 0x7f) << 49
+	b = uint64(buf[8])
+	if b < 0x80 {
+		return x | (b << 56), 9
+	}
+
+	x |= (b & 0x7f) << 56
+	b = uint64(buf[9])
+	if b < 0x80 {
+		return x | (b << 63), 10
+	}
+
+	return 0, -10
+}
+
+func unrolledDecodeVarint(buf []byte) (int64, int) {
+	ux, n := unrolledDecodeUVarint(buf) // ok to continue in presence of error
+	x := int64(ux >> 1)
+	if ux&1 != 0 {
+		x = ^x
+	}
+	return x, n
+}
+
 func (b *binaryNomsReader) skipUint() {
-	_, count := binary.Uvarint(b.buff[b.offset:])
+	_, count := unrolledDecodeUVarint(b.buff[b.offset:])
 	b.offset += uint32(count)
 }
 

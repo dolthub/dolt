@@ -19,6 +19,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -345,11 +346,10 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 			2: types.Int(i),
 		})
 		require.NoError(t, err)
-		require.NoError(t, tableEditor.InsertRow(context.Background(), dRow))
+		err = tableEditor.InsertRow(context.Background(), dRow)
+		require.True(t, sql.ErrPrimaryKeyViolation.Is(err))
 	}
 
-	_, err = tableEditor.Table(context.Background())
-	require.Error(t, err)
 	_, err = tableEditor.Table(context.Background())
 	require.NoError(t, err)
 

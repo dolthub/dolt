@@ -25,6 +25,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -411,6 +412,11 @@ func (ms metaSequence) isLeaf() bool {
 
 // metaSequence interface
 func (ms metaSequence) getChildSequence(ctx context.Context, idx int) (sequence, error) {
+	span, ctx := tracing.StartSpan(ctx, "metaSequence.getChildSequence")
+	defer func() {
+		span.Finish()
+	}()
+
 	item, err := ms.getItem(idx)
 
 	if err != nil {
@@ -428,6 +434,12 @@ func (ms metaSequence) getChildSequence(ctx context.Context, idx int) (sequence,
 // Returns the sequences pointed to by all items[i], s.t. start <= i < end, and returns the
 // concatentation as one long composite sequence
 func (ms metaSequence) getCompositeChildSequence(ctx context.Context, start uint64, length uint64) (sequence, error) {
+	span, ctx := tracing.StartSpan(ctx, "metaSequence.getChildSequence")
+	span.LogKV("level", ms.treeLevel(), "length", length)
+	defer func() {
+		span.Finish()
+	}()
+
 	level := ms.treeLevel()
 	d.PanicIfFalse(level > 0)
 	if length == 0 {
@@ -470,6 +482,7 @@ func (ms metaSequence) getCompositeChildSequence(ctx context.Context, start uint
 		return newListLeafSequence(ms.vrw, valueItems...)
 	case MapKind:
 		var valueItems []mapEntry
+
 		for _, seq := range output {
 			entries, err := seq.(mapLeafSequence).entries()
 

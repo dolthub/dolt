@@ -19,6 +19,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -42,8 +43,6 @@ func limitTestQueriesTo(queries ...string) {
 }
 
 func TestQueries(t *testing.T) {
-	// limitTestQueriesTo(...) // whitelist queries you want run.
-
 	enginetest.TestQueries(t, newDoltHarness(t))
 }
 
@@ -86,6 +85,20 @@ func TestQueryPlans(t *testing.T) {
 		WHERE (SELECT i FROM mytable where i = mt.i and i > 2) IS NOT NULL
 		AND (SELECT i2 FROM othertable where i2 = i) IS NOT NULL`,
 		"SELECT pk,pk2, (SELECT pk from one_pk where pk = 1 limit 1) FROM one_pk t1, two_pk t2 WHERE pk=1 AND pk2=1 ORDER BY 1,2",
+		"SELECT pk,pk1,pk2 FROM one_pk LEFT JOIN two_pk ON pk=pk1",
+		"SELECT pk,i,f FROM one_pk LEFT JOIN niltable ON pk=i AND f IS NOT NULL",
+		"SELECT pk,i,f FROM one_pk RIGHT JOIN niltable ON pk=i and pk > 0",
+		"SELECT a.pk1,a.pk2,b.pk1,b.pk2 FROM two_pk a, two_pk b WHERE a.pk1=b.pk1 AND a.pk2=b.pk2 ORDER BY 1,2,3",
+		"SELECT a.pk1,a.pk2,b.pk1,b.pk2 FROM two_pk a, two_pk b WHERE a.pk1=b.pk2 AND a.pk2=b.pk1 ORDER BY 1,2,3",
+		"SELECT opk.c5,pk1,pk2 FROM one_pk opk, two_pk tpk WHERE pk=pk1 ORDER BY 1,2,3",
+		"SELECT one_pk.c5,pk1,pk2 FROM one_pk,two_pk WHERE pk=pk1 ORDER BY 1,2,3",
+		"SELECT pk,i,f FROM one_pk RIGHT JOIN niltable ON pk=i and pk > 0 ORDER BY 2,3",
+		"SELECT pk,pk1,pk2 FROM one_pk JOIN two_pk ON pk1-pk>0 AND pk2<1",
+		"SELECT pk,pk1,pk2 FROM one_pk JOIN two_pk ORDER BY 1,2,3",
+		"SELECT pk,pk1,pk2 FROM one_pk LEFT JOIN two_pk ON pk=pk1 ORDER BY 1,2,3",
+		"SELECT pk,pk1,pk2 FROM one_pk,two_pk WHERE one_pk.c1=two_pk.c1 ORDER BY 1,2,3",
+		"SELECT pk,pk1,pk2,one_pk.c1 AS foo, two_pk.c1 AS bar FROM one_pk JOIN two_pk ON one_pk.c1=two_pk.c1 ORDER BY 1,2,3",
+		"SELECT pk,pk1,pk2,one_pk.c1 AS foo,two_pk.c1 AS bar FROM one_pk JOIN two_pk ON one_pk.c1=two_pk.c1 WHERE one_pk.c1=10",
 	})
 
 	tests := make([]enginetest.QueryPlanTest, 0, len(enginetest.PlanTests))
@@ -110,6 +123,7 @@ func TestInfoSchema(t *testing.T) {
 }
 
 func TestColumnAliases(t *testing.T) {
+	assert.Equal(t, 1, 1, "msg", 1, 2)
 	enginetest.TestColumnAliases(t, newDoltHarness(t))
 }
 

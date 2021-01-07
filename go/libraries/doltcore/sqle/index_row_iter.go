@@ -50,7 +50,9 @@ func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsK
 		pkTags[tag] = i
 	}
 
-	conv := NewKVToSqlRowConverterForCols(idx.Schema().GetAllCols().GetColumns())
+	cols := idx.Schema().GetAllCols().GetColumns()
+	conv := NewKVToSqlRowConverterForCols(cols)
+
 	iter := &indexLookupRowIterAdapter{
 		idx:     idx,
 		keyIter: keyIter,
@@ -204,7 +206,7 @@ func (i *indexLookupRowIterAdapter) processKey(_ context.Context, valInt interfa
 type coveringIndexRowIterAdapter struct {
 	idx       DoltIndex
 	keyIter   nomsKeyIter
-	conv      KVToSqlRowConverter
+	conv      *KVToSqlRowConverter
 	ctx       *sql.Context
 	pkCols    *schema.ColCollection
 	nonPKCols *schema.ColCollection
@@ -213,6 +215,7 @@ type coveringIndexRowIterAdapter struct {
 
 func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsKeyIter, resultCols []string) *coveringIndexRowIterAdapter {
 	idxCols := idx.IndexSchema().GetPKCols()
+	tblPKCols := idx.Schema().GetPKCols()
 	sch := idx.Schema()
 	cols := sch.GetAllCols().GetColumns()
 	tagToSqlColIdx := make(map[uint64]int)
@@ -220,19 +223,23 @@ func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nom
 	resultColSet := set.NewCaseInsensitiveStrSet(resultCols)
 	for i, col := range cols {
 		_, partOfIdxKey := idxCols.GetByNameCaseInsensitive(col.Name)
-		if partOfIdxKey && resultColSet.Contains(col.Name) {
+		if partOfIdxKey && (len(resultCols) == 0 || resultColSet.Contains(col.Name)) {
 			tagToSqlColIdx[col.Tag] = i
 		}
 	}
 
+	for i, col := range cols {
+		_, partOfIndexKey := idxCols.GetByTag(col.Tag)
+		_, partOfTableKeys := tblPKCols.GetByTag(col.Tag)
+		if partOfIndexKey != partOfTableKeys {
+			cols[i], _ = schema.NewColumnWithTypeInfo(col.Name, col.Tag, col.TypeInfo, partOfIndexKey, col.Default, col.AutoIncrement, col.Comment, col.Constraints...)
+		}
+	}
+
 	return &coveringIndexRowIterAdapter{
-		idx:     idx,
-		keyIter: keyIter,
-		conv: KVToSqlRowConverter{
-			tagToSqlColIdx: tagToSqlColIdx,
-			cols:           cols,
-			rowSize:        len(cols),
-		},
+		idx:       idx,
+		keyIter:   keyIter,
+		conv:      NewKVToSqlRowConverter(tagToSqlColIdx, cols, len(cols)),
 		ctx:       ctx,
 		pkCols:    sch.GetPKCols(),
 		nonPKCols: sch.GetNonPKCols(),

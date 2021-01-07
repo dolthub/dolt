@@ -20,6 +20,13 @@ jobs:
           git config --global user.name dolt-release-bot
           git config --global user.email dolt-release-bot@dolthub.com
           ./go/utils/publishrelease/bump-version.sh ${{ github.event.inputs.version }}
+      - name: Discord Notify
+        if: always()
+        uses: dolthub/ga-discord-notify@master
+        with:
+          job-status: ${{ job.status }}
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
+          notify-on-success: false
 
   create-release:
     needs: bump-version
@@ -85,6 +92,13 @@ jobs:
           asset_path: go/out/install.sh
           asset_name: install.sh
           asset_content_type: text/plain
+      - name: Discord Notify
+        if: always()
+        uses: dolthub/ga-discord-notify@master
+        with:
+          job-status: ${{ job.status }}
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
+          notify-on-success: false
 
   homebrew-bump:
     needs: create-release
@@ -101,3 +115,10 @@ jobs:
           commit-message: ${{format('dolt v{0}', github.event.inputs.version)}}
         env:
           COMMITTER_TOKEN: ${{secrets.HOMEBREW_GITHUB_TOKEN}}
+      - name: Discord Notify
+        if: always()
+        uses: dolthub/ga-discord-notify@master
+        with:
+          job-status: ${{ job.status }}
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
+          notify-on-success: false

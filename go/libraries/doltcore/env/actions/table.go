@@ -24,7 +24,7 @@ import (
 )
 
 func CheckoutAllTables(ctx context.Context, dEnv *env.DoltEnv) error {
-	roots, err := getRoots(ctx, dEnv, WorkingRoot, StagedRoot, HeadRoot)
+	roots, err := getRoots(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), WorkingRoot, StagedRoot, HeadRoot)
 
 	if err != nil {
 		return err
@@ -43,7 +43,7 @@ func CheckoutAllTables(ctx context.Context, dEnv *env.DoltEnv) error {
 }
 
 func CheckoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tbls []string, docs []doltdb.DocDetails) error {
-	roots, err := getRoots(ctx, dEnv, WorkingRoot, StagedRoot, HeadRoot)
+	roots, err := getRoots(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), WorkingRoot, StagedRoot, HeadRoot)
 
 	if err != nil {
 		return err

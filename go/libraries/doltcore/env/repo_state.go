@@ -45,6 +45,7 @@ type DocsReadWriter interface {
 	GetAllValidDocDetails() ([]doltdb.DocDetails, error)
 	PutDocsToWorking(ctx context.Context, docDetails []doltdb.DocDetails) error
 	ResetWorkingDocsToStagedDocs(ctx context.Context) error
+	GetDocDetail(docName string) (doc doltdb.DocDetails, err error)
 }
 
 type DbData struct {

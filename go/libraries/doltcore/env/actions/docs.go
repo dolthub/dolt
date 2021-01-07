@@ -149,7 +149,7 @@ func GetUnstagedDocs(ctx context.Context, dEnv *env.DoltEnv) (env.Docs, error) {
 	}
 	unstagedDocs := env.Docs{}
 	for _, docName := range unstagedDocDiffs.Docs {
-		docDetail, err := dEnv.GetOneDocDetail(docName)
+		docDetail, err := dEnv.GetDocDetail(docName)
 		if err != nil {
 			return nil, err
 		}

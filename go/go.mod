@@ -18,7 +18,7 @@ require (
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078
 	github.com/dolthub/fslock v0.0.2
-	github.com/dolthub/go-mysql-server v0.6.1-0.20201221143725-9a89aaf765d7
+	github.com/dolthub/go-mysql-server v0.6.1-0.20210107193823-566f0ba75abc
 	github.com/dolthub/ishell v0.0.0-20201107004254-1592c0036c8d
 	github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66
 	github.com/dolthub/sqllogictest/go v0.0.0-20201105013724-5123fc66e12c
@@ -45,7 +45,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.9
 	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b
 	github.com/mitchellh/mapstructure v1.3.2 // indirect
-	github.com/opentracing/opentracing-go v1.2.0 // indirect
+	github.com/opentracing/opentracing-go v1.2.0
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/profile v1.5.0
 	github.com/rivo/uniseg v0.1.0
@@ -59,6 +59,8 @@ require (
 	github.com/stretchr/testify v1.6.1
 	github.com/tealeg/xlsx v1.0.5
 	github.com/tidwall/pretty v1.0.1 // indirect
+	github.com/uber/jaeger-client-go v2.25.0+incompatible
+	github.com/uber/jaeger-lib v2.4.0+incompatible // indirect
 	go.mongodb.org/mongo-driver v1.3.4 // indirect
 	go.uber.org/zap v1.15.0
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9

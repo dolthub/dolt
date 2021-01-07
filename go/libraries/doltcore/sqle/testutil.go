@@ -165,6 +165,10 @@ func drainIter(iter sql.RowIter) error {
 		if err == io.EOF {
 			break
 		} else if err != nil {
+			closeErr := iter.Close()
+			if closeErr != nil {
+				panic(fmt.Errorf("%v\n%v", err, closeErr))
+			}
 			return err
 		}
 	}
