@@ -134,8 +134,6 @@ func (m Map) RangeIterator(ctx context.Context, readAhead int, startIdx, endIdx 
 		case <-ctx.Done():
 			return ctx.Err()
 		}
-
-		return nil
 	})
 
 	return &readAheadRangeIter{ctx, eg, keyValCh}, nil
