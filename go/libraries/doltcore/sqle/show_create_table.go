@@ -18,10 +18,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/opentracing/opentracing-go"
-
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
 
 // These functions cannot be in the sqlfmt package as the reliance on the sqle package creates a circular reference.
@@ -32,7 +32,7 @@ func PrepareCreateTableStmt(ctx context.Context, sqlDb sql.Database) (*sql.Conte
 		sql.WithSession(dsess),
 		sql.WithIndexRegistry(sql.NewIndexRegistry()),
 		sql.WithViewRegistry(sql.NewViewRegistry()),
-		sql.WithTracer(opentracing.GlobalTracer()))
+		sql.WithTracer(tracing.Tracer(ctx)))
 	engine := sqle.NewDefault()
 	engine.AddDatabase(sqlDb)
 	dsess.SetCurrentDatabase(sqlDb.Name())

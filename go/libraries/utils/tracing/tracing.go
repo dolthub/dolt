@@ -20,6 +20,17 @@ import (
 	"github.com/opentracing/opentracing-go"
 )
 
+// Called throughout dolt to get the tracer. Default implementation returns
+// opentracing.GlobalTracer(), but another implementation could be installed to
+// return a context-specific tracer.
+var Tracer func(ctx context.Context) opentracing.Tracer
+
+func init() {
+	Tracer = func(ctx context.Context) opentracing.Tracer {
+		return opentracing.GlobalTracer()
+	}
+}
+
 // Start a new span, named `name`, as a child of the current span associated
 // with `ctx`. Starts a root span if there is no Span associated with `ctx`.
 // Returns the newly created Span and a new `ctx` associated with the Span.
@@ -29,7 +40,7 @@ func StartSpan(ctx context.Context, name string) (opentracing.Span, context.Cont
 	if parentSpan != nil {
 		opts = append(opts, opentracing.ChildOf(parentSpan.Context()))
 	}
-	span := opentracing.StartSpan(name, opts...)
+	span := Tracer(ctx).StartSpan(name, opts...)
 	ctx = opentracing.ContextWithSpan(ctx, span)
 	return span, ctx
 }

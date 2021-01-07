@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/information_schema"
 	"github.com/dolthub/vitess/go/mysql"
-	"github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -36,6 +35,7 @@ import (
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -178,7 +178,7 @@ func newSessionBuilder(sqlEngine *sqle.Engine, username, email string, autocommi
 			sql.WithIndexRegistry(ir),
 			sql.WithViewRegistry(vr),
 			sql.WithSession(doltSess),
-			sql.WithTracer(opentracing.GlobalTracer()))
+			sql.WithTracer(tracing.Tracer(ctx)))
 
 		dbs := dbsAsDSQLDBs(sqlEngine.Catalog.AllDatabases())
 		for _, db := range dbs {
