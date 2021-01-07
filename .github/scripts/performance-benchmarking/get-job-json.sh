@@ -42,7 +42,18 @@ echo '
             ]
           }
         ],
-        "restartPolicy": "Never"
+        "restartPolicy": "Never",
+        "nodeSelector": {
+          "performance-benchmarking-worker": "true"
+        },
+        "tolerations": [
+          {
+              "effect": "NoSchedule",
+              "key": "dedicated",
+              "operator": "Equal",
+              "value": "performance-benchmarking-worker"
+          }
+        ]
       }
     }
   }
