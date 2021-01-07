@@ -48,6 +48,7 @@ import (
 
 const (
 	Version = "0.22.8"
+)
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
 var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Command{
