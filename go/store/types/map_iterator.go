@@ -24,6 +24,7 @@ package types
 import (
 	"context"
 	"errors"
+
 	"golang.org/x/sync/errgroup"
 )
 
