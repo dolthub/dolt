@@ -230,7 +230,7 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	numElements := rowData.Len()
 
 	if numElements == 0 {
-		return newDoltTablePartitionIter(rowData, doltTablePartition{0, 1}), nil
+		return newDoltTablePartitionIter(rowData, doltTablePartition{0, 0}), nil
 	}
 
 	maxPartitions := uint64(partitionMultiplier * runtime.NumCPU())
@@ -254,10 +254,24 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	return newDoltTablePartitionIter(rowData, partitions...), nil
 }
 
+type emptyRowIterator struct{}
+
+func (itr emptyRowIterator) Next() (sql.Row, error) {
+	return nil, io.EOF
+}
+
+func (itr emptyRowIterator) Close() error {
+	return nil
+}
+
 // Returns the table rows for the partition given
 func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
 	switch typedPartition := partition.(type) {
 	case doltTablePartition:
+		if typedPartition.end == 0 {
+			return emptyRowIterator{}, nil
+		}
+
 		return newRowIterator(t, ctx, &typedPartition)
 	case sqlutil.SinglePartition:
 		return newRowIterator(t, ctx, nil)
@@ -509,7 +523,7 @@ func (p doltTablePartition) Key() []byte {
 // for index = start; index < end.  This iterator is not thread safe and should only be used from a single go routine
 // unless paired with a mutex
 func (p doltTablePartition) IteratorForPartition(ctx context.Context, m types.Map) (types.MapIterator, error) {
-	return newPartitionIter(ctx, m, p.start, p.end)
+	return m.RangeIterator(ctx, 64, p.start, p.end)
 }
 
 type partitionIter struct {
