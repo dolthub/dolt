@@ -27,10 +27,12 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cenkalti/backoff"
 	"golang.org/x/sync/errgroup"
+	"github.com/opentracing/opentracing-go"
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -167,6 +169,7 @@ func (dcs *DoltChunkStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 
 func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(*chunks.Chunk)) error {
 	ae := atomicerr.New()
+	decompressedSize := uint64(0)
 	err := dcs.GetManyCompressed(ctx, hashes, func(cc nbs.CompressedChunk) {
 		if ae.IsSet() {
 			return
@@ -175,8 +178,12 @@ func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 		if ae.SetIfErrAndCheck(err) {
 			return
 		}
+		atomic.AddUint64(&decompressedSize, uint64(len(c.Data())))
 		found(&c)
 	})
+	if span := opentracing.SpanFromContext(ctx); span != nil {
+		span.LogKV("decompressed_bytes", decompressedSize)
+	}
 	if err != nil {
 		return err
 	}
@@ -776,7 +783,10 @@ func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, resourceGets map[
 	originalBytes := uint64(0)
 	for _, r := range resourceGets {
 		chunkCount += r.NumChunks()
-		originalBytes += r.RangeLen()
+		for i := 0; i < r.NumChunks(); i++ {
+			s, e := r.ChunkByteRange(i)
+			originalBytes += e - s
+		}
 	}
 	downloadBytes := uint64(0)
 	for _, r := range gets {
