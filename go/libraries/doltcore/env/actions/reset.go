@@ -149,6 +149,7 @@ func ResetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 
 func ResetSoftTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, stagedRoot, headRoot *doltdb.RootValue) (*doltdb.RootValue, errhand.VerboseError) {
 	tables, verr := getUnionedTables(ctx, apr.Args(), stagedRoot, headRoot)
+	tables = RemoveDocsTbl(tables)
 
 	if verr != nil {
 		return nil, verr
@@ -233,7 +234,6 @@ func resetDocs(ctx context.Context, dEnv *env.DoltEnv, headRoot *doltdb.RootValu
 
 	return dEnv.PutDocsToStaged(ctx, docs)
 }
-
 
 func resetStaged(ctx context.Context, ddb *doltdb.DoltDB, rsw env.RepoStateWriter, tbls []string, staged, head *doltdb.RootValue) (*doltdb.RootValue, errhand.VerboseError) {
 	updatedRoot, err := MoveTablesBetweenRoots(ctx, tbls, head, staged)

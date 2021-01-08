@@ -63,7 +63,6 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	}
 
 	var verr errhand.VerboseError
-
 	if apr.ContainsAll(cli.HardResetParam, cli.SoftResetParam) {
 		return 1, fmt.Errorf("error: --%s and --%s are mutually exclusive options.", cli.HardResetParam, cli.SoftResetParam)
 	} else if apr.Contains(cli.HardResetParam) {
