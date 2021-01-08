@@ -31,8 +31,8 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
-	"golang.org/x/sync/errgroup"
 	"github.com/opentracing/opentracing-go"
+	"golang.org/x/sync/errgroup"
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
