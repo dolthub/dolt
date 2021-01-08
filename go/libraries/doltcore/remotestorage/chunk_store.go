@@ -772,7 +772,17 @@ func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, resourceGets map[
 	span, ctx := tracing.StartSpan(ctx, "remotestorage.downloadChunks")
 	defer span.Finish()
 	gets := aggregateDownloads(chunkAggDistance, resourceGets)
-	span.LogKV("num_ranges", len(resourceGets), "num_batches", len(gets))
+	chunkCount := 0
+	originalBytes := uint64(0)
+	for _, r := range resourceGets {
+		chunkCount += r.NumChunks()
+		originalBytes += r.RangeLen()
+	}
+	downloadBytes := uint64(0)
+	for _, r := range gets {
+		downloadBytes += r.RangeLen()
+	}
+	span.LogKV("num_files", len(resourceGets), "num_chunks", chunkCount, "num_batches", len(gets), "original_bytes", originalBytes, "download_bytes", downloadBytes)
 
 	// loop over all the gets that need to be downloaded and create a work function for each
 	work := make([]func() error, len(gets))
