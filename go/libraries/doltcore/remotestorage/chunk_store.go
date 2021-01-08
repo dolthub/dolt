@@ -309,6 +309,15 @@ func (gr *GetRange) RangeLen() uint64 {
 	return gr.ChunkEndOffset(gr.NumChunks()-1) - gr.ChunkStartOffset(0)
 }
 
+func (gr *GetRange) NumBytesInRanges() uint64 {
+	res := uint64(0)
+	for i := 0; i < len(gr.Ranges); i++ {
+		start, end := gr.ChunkByteRange(i)
+		res += start - end
+	}
+	return res
+}
+
 func (gr *GetRange) ChunkByteRange(i int) (uint64, uint64) {
 	start := gr.ChunkStartOffset(i) - gr.ChunkStartOffset(0)
 	end := gr.ChunkEndOffset(i) - gr.ChunkStartOffset(0)
@@ -801,26 +810,28 @@ const (
 	defaultDownloadConcurrency = 16
 )
 
+func logDownloadStats(span opentracing.Span, originalGets map[string]*GetRange, computedGets []*GetRange) {
+	chunkCount := 0
+	originalBytes := uint64(0)
+	for _, r := range originalGets {
+		chunkCount += r.NumChunks()
+		originalBytes += r.NumBytesInRanges()
+	}
+	downloadBytes := uint64(0)
+	for _, r := range computedGets {
+		downloadBytes += r.RangeLen()
+	}
+	span.LogKV("num_files", len(originalGets), "num_chunks", chunkCount, "num_batches", len(computedGets), "original_bytes", originalBytes, "download_bytes", downloadBytes)
+}
+
 // creates work functions for each download and executes them in parallel.  The work functions write downloaded chunks
 // to chunkChan
 func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, resourceGets map[string]*GetRange, chunkChan chan nbs.CompressedChunk) error {
 	span, ctx := tracing.StartSpan(ctx, "remotestorage.downloadChunks")
 	defer span.Finish()
+
 	gets := aggregateDownloads(chunkAggDistance, resourceGets)
-	chunkCount := 0
-	originalBytes := uint64(0)
-	for _, r := range resourceGets {
-		chunkCount += r.NumChunks()
-		for i := 0; i < r.NumChunks(); i++ {
-			s, e := r.ChunkByteRange(i)
-			originalBytes += e - s
-		}
-	}
-	downloadBytes := uint64(0)
-	for _, r := range gets {
-		downloadBytes += r.RangeLen()
-	}
-	span.LogKV("num_files", len(resourceGets), "num_chunks", chunkCount, "num_batches", len(gets), "original_bytes", originalBytes, "download_bytes", downloadBytes)
+	logDownloadStats(span, resourceGets, gets)
 
 	// loop over all the gets that need to be downloaded and create a work function for each
 	work := make([]func() error, len(gets))
