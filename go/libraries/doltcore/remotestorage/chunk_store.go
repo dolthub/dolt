@@ -219,10 +219,11 @@ func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 // which have been found. Any non-present chunks will silently be ignored.
 func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(nbs.CompressedChunk)) error {
 	span, ctx := tracing.StartSpan(ctx, "remotestorage.GetManyCompressed")
-	span.LogKV("num_hashes", len(hashes))
 	defer span.Finish()
 
 	hashToChunk := dcs.cache.Get(hashes)
+
+	span.LogKV("num_hashes", len(hashes), "cache_hits", len(hashToChunk))
 	atomic.AddUint32(&dcs.stats.Hits, uint32(len(hashToChunk)))
 
 	notCached := make([]hash.Hash, 0, len(hashes))
