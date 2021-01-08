@@ -34,6 +34,7 @@ import (
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -188,6 +189,10 @@ func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 // GetMany gets the Chunks with |hashes| from the store. On return, |foundChunks| will have been fully sent all chunks
 // which have been found. Any non-present chunks will silently be ignored.
 func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(nbs.CompressedChunk)) error {
+	span, ctx := tracing.StartSpan(ctx, "remotestorage.GetManyCompressed")
+	span.LogKV("num_hashes", len(hashes))
+	defer span.Finish()
+
 	hashToChunk := dcs.cache.Get(hashes)
 
 	notCached := make([]hash.Hash, 0, len(hashes))
@@ -361,6 +366,10 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (m
 		work = append(work, f)
 		return false
 	})
+
+	span, ctx := tracing.StartSpan(ctx, "remotestorage.getDLLocs")
+	span.LogKV("num_batches", len(work), "num_hashes", len(hashes))
+	defer span.Finish()
 
 	// execute the work and close the channel after as no more results will come in
 	eg.Go(func() error {
@@ -754,13 +763,16 @@ func aggregateDownloads(aggDistance uint64, resourceGets map[string]*GetRange) [
 
 const (
 	chunkAggDistance       = 8 * 1024
-	maxDownloadConcurrency = 16
+	maxDownloadConcurrency = 64
 )
 
 // creates work functions for each download and executes them in parallel.  The work functions write downloaded chunks
 // to chunkChan
 func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, resourceGets map[string]*GetRange, chunkChan chan nbs.CompressedChunk) error {
+	span, ctx := tracing.StartSpan(ctx, "remotestorage.downloadChunks")
+	defer span.Finish()
 	gets := aggregateDownloads(chunkAggDistance, resourceGets)
+	span.LogKV("num_ranges", len(resourceGets), "num_batches", len(gets))
 
 	// loop over all the gets that need to be downloaded and create a work function for each
 	work := make([]func() error, len(gets))
