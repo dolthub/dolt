@@ -21,7 +21,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -62,17 +61,16 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return 1, err
 	}
 
-	var verr errhand.VerboseError
 	if apr.ContainsAll(cli.HardResetParam, cli.SoftResetParam) {
 		return 1, fmt.Errorf("error: --%s and --%s are mutually exclusive options.", cli.HardResetParam, cli.SoftResetParam)
 	} else if apr.Contains(cli.HardResetParam) {
-		verr = actions.ResetHardTables(ctx, dbData, apr, working, staged, head)
+		err = actions.ResetHardTables(ctx, dbData, apr, working, staged, head)
 	} else {
-		_, verr = actions.ResetSoftTables(ctx, dbData, apr, staged, head)
+		_, err = actions.ResetSoftTables(ctx, dbData, apr, staged, head)
 	}
 
-	if verr != nil {
-		return 1, fmt.Errorf(verr.Error())
+	if err != nil {
+		return 1, err
 	}
 
 	return 0, nil

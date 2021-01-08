@@ -86,13 +86,15 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 	workingRoot, stagedRoot, headRoot, verr := getAllRoots(ctx, dEnv)
 
+	var err error
 	if verr == nil {
 		if apr.ContainsAll(HardResetParam, SoftResetParam) {
 			verr = errhand.BuildDError("error: --%s and --%s are mutually exclusive options.", HardResetParam, SoftResetParam).Build()
+			HandleVErrAndExitCode(verr, usage)
 		} else if apr.Contains(HardResetParam) {
-			verr = actions.ResetHard(ctx, dEnv, apr, workingRoot, stagedRoot, headRoot)
+			err = actions.ResetHard(ctx, dEnv, apr, workingRoot, stagedRoot, headRoot)
 		} else {
-			stagedRoot, verr = actions.ResetSoft(ctx, dEnv, apr, stagedRoot, headRoot)
+			stagedRoot, err = actions.ResetSoft(ctx, dEnv, apr, stagedRoot, headRoot)
 
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
@@ -102,7 +104,7 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		}
 	}
 
-	return HandleVErrAndExitCode(verr, usage)
+	return handleResetError(err, usage)
 }
 
 func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootValue) {
@@ -157,6 +159,26 @@ func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootV
 
 		cli.Println(strings.Join(lines, "\n"))
 	}
+}
+
+func handleResetError(err error, usage cli.UsagePrinter) int {
+	if actions.IsTblNotExist(err) {
+		tbls := actions.GetTablesForError(err)
+		bdr := errhand.BuildDError("Invalid Table(s):")
+
+		for _, tbl := range tbls {
+			bdr.AddDetails("\t" + tbl)
+		}
+
+		return HandleVErrAndExitCode(bdr.Build(), usage)
+	}
+
+	var verr errhand.VerboseError = nil
+	if err != nil {
+		verr = errhand.BuildDError("error: Failed to reset changes.").AddCause(err).Build()
+	}
+
+	return HandleVErrAndExitCode(verr, usage)
 }
 
 func getAllRoots(ctx context.Context, dEnv *env.DoltEnv) (*doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, errhand.VerboseError) {

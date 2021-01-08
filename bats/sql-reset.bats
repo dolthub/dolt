@@ -79,7 +79,6 @@ teardown() {
     [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
 }
 
-# Todo fix thix case.
 @test "DOLT_RESET --soft ignores staged docs" {
     echo ~license~ > LICENSE.md
     dolt add .
@@ -90,8 +89,7 @@ teardown() {
     run dolt status
     [ "$status" -eq 0 ]
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "Changes to be committed:" ]] || false
-    [[ "$output" =~ "Untracked files:" ]] || false
+    [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
 }
 
