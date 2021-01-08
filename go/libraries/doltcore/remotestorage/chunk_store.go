@@ -103,6 +103,7 @@ type DoltChunkStore struct {
 	nbf                 *types.NomsBinFormat
 	httpFetcher         HTTPFetcher
 	downloadConcurrency int
+	stats               cacheStats
 }
 
 func NewDoltChunkStoreFromPath(ctx context.Context, nbf *types.NomsBinFormat, path, host string, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
@@ -135,23 +136,23 @@ func NewDoltChunkStore(ctx context.Context, nbf *types.NomsBinFormat, org, repoN
 		return nil, err
 	}
 
-	return &DoltChunkStore{org, repoName, host, csClient, newMapChunkCache(), metadata, nbf, globalHttpFetcher, defaultDownloadConcurrency}, nil
+	return &DoltChunkStore{org, repoName, host, csClient, newMapChunkCache(), metadata, nbf, globalHttpFetcher, defaultDownloadConcurrency, cacheStats{}}, nil
 }
 
 func (dcs *DoltChunkStore) WithHTTPFetcher(fetcher HTTPFetcher) *DoltChunkStore {
-	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, dcs.cache, dcs.metadata, dcs.nbf, fetcher, dcs.downloadConcurrency}
+	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, dcs.cache, dcs.metadata, dcs.nbf, fetcher, dcs.downloadConcurrency, dcs.stats}
 }
 
 func (dcs *DoltChunkStore) WithNoopChunkCache() *DoltChunkStore {
-	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, noopChunkCache, dcs.metadata, dcs.nbf, dcs.httpFetcher, dcs.downloadConcurrency}
+	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, noopChunkCache, dcs.metadata, dcs.nbf, dcs.httpFetcher, dcs.downloadConcurrency, dcs.stats}
 }
 
 func (dcs *DoltChunkStore) WithChunkCache(cache ChunkCache) *DoltChunkStore {
-	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, cache, dcs.metadata, dcs.nbf, dcs.httpFetcher, dcs.downloadConcurrency}
+	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, cache, dcs.metadata, dcs.nbf, dcs.httpFetcher, dcs.downloadConcurrency, dcs.stats}
 }
 
 func (dcs *DoltChunkStore) WithDownloadConcurrency(concurrency int) *DoltChunkStore {
-	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, dcs.cache, dcs.metadata, dcs.nbf, dcs.httpFetcher, concurrency}
+	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, dcs.cache, dcs.metadata, dcs.nbf, dcs.httpFetcher, concurrency, dcs.stats}
 }
 
 func (dcs *DoltChunkStore) getRepoId() *remotesapi.RepoId {
@@ -159,6 +160,18 @@ func (dcs *DoltChunkStore) getRepoId() *remotesapi.RepoId {
 		Org:      dcs.org,
 		RepoName: dcs.repoName,
 	}
+}
+
+type cacheStats struct {
+	Hits uint32
+}
+
+func (s cacheStats) CacheHits() uint32 {
+	return s.Hits
+}
+
+type CacheStats interface {
+	CacheHits() uint32
 }
 
 // Get the Chunk for the value of the hash in the store. If the hash is absent from the store EmptyChunk is returned.
@@ -210,6 +223,7 @@ func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.Ha
 	defer span.Finish()
 
 	hashToChunk := dcs.cache.Get(hashes)
+	atomic.AddUint32(&dcs.stats.Hits, uint32(len(hashToChunk)))
 
 	notCached := make([]hash.Hash, 0, len(hashes))
 	for h := range hashes {
@@ -413,17 +427,21 @@ func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.H
 	// channel to receive chunks on
 	chunkChan := make(chan nbs.CompressedChunk, 128)
 
+	toSend := make(map[hash.Hash]struct{}, len(notCached))
+	for _, h := range notCached {
+		toSend[h] = struct{}{}
+	}
+
 	// start a go routine to receive the downloaded chunks on
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		for chunk := range chunkChan {
-			if !dcs.cache.PutChunk(chunk) {
-				continue
-			}
+			dcs.cache.PutChunk(chunk)
 
 			h := chunk.Hash()
-			if _, ok := hashes[h]; ok {
+
+			if _, send := toSend[h]; send {
 				found(chunk)
 			}
 		}
@@ -630,14 +648,14 @@ func (dcs *DoltChunkStore) Commit(ctx context.Context, current, last hash.Hash) 
 // ChunkStore instance. The type is implementation-dependent, and impls
 // may return nil
 func (dcs *DoltChunkStore) Stats() interface{} {
-	return nil
+	return cacheStats{atomic.LoadUint32(&dcs.stats.Hits)}
 }
 
 // StatsSummary may return a string containing summarized statistics for
 // this ChunkStore. It must return "Unsupported" if this operation is not
 // supported.
 func (dcs *DoltChunkStore) StatsSummary() string {
-	return "Unsupported"
+	return fmt.Sprintf("CacheHits: %v", dcs.Stats().(CacheStats).CacheHits())
 }
 
 // Close tears down any resources in use by the implementation. After
