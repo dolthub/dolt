@@ -131,7 +131,7 @@ func (r ResetHard) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	err = actions.SaveTrackedDocsFromWorking(context.Background(), dEnv.DbData())
+	err = actions.SaveTrackedDocsFromWorking(context.Background(), dEnv)
 	return err
 }
 
@@ -254,7 +254,7 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		err = dEnv.RepoState.Save(dEnv.FS)
 		assert.NoError(t, err)
 
-		err = actions.SaveTrackedDocsFromWorking(context.Background(), dEnv.DbData())
+		err = actions.SaveTrackedDocsFromWorking(context.Background(), dEnv)
 		assert.NoError(t, err)
 
 	} else {
