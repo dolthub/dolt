@@ -42,7 +42,7 @@ func NewTblInConflictError(tbls []string) TblError {
 }
 
 func (te TblError) Error() string {
-	return "error: the tables " + strings.Join(te.tables, ", ") + string(te.tblErrType)
+	return "error: the table(s) " + strings.Join(te.tables, ", ") + " " + string(te.tblErrType)
 }
 
 func getTblErrType(err error) tblErrorType {

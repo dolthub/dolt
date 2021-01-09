@@ -17,21 +17,14 @@ package actions
 import (
 	"context"
 	"errors"
-	"fmt"
-	"strings"
-
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
-var ErrMoreThanOneParamHard = errors.New("hard supports at most one additional param")
-var ErrWorkingTable = fmt.Errorf("error: failed to read '%s' from the working set")
-
 func resetHardTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, workingRoot, stagedRoot, headRoot *doltdb.RootValue) (*doltdb.Commit, error) {
 	if apr.NArg() > 1 {
-		return nil, ErrMoreThanOneParamHard
+		return nil, errors.New("--hard supports at most one additional param")
 	}
 
 	ddb := dbData.Ddb
@@ -61,21 +54,21 @@ func resetHardTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgP
 	wTblNames, err := workingRoot.GetTableNames(ctx)
 
 	if err != nil {
-		return nil, errhand.BuildDError("error: failed to read tables from the working set").AddCause(err).Build()
+		return nil, err
 	}
 
 	for _, tblName := range wTblNames {
 		untrackedTables[tblName], _, err = workingRoot.GetTable(ctx, tblName)
 
 		if err != nil {
-			return nil, errhand.BuildDError("error: failed to read '%s' from the working set", tblName).AddCause(err).Build()
+			return nil, err
 		}
 	}
 
 	headTblNames, err := stagedRoot.GetTableNames(ctx)
 
 	if err != nil {
-		return nil, errhand.BuildDError("error: failed to read tables from head").AddCause(err).Build()
+		return nil,err
 	}
 
 	for _, tblName := range headTblNames {
@@ -137,7 +130,7 @@ func ResetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 
 	err = SaveTrackedDocsFromWorking(ctx, dEnv)
 	if err != nil {
-		return errhand.BuildDError("error: failed to update docs on the filesystem.").AddCause(err).Build()
+		return err
 	}
 
 	ddb := dbData.Ddb
@@ -153,39 +146,39 @@ func ResetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 }
 
 func ResetSoftTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, stagedRoot, headRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
-	tables, verr := getUnionedTables(ctx, apr.Args(), stagedRoot, headRoot)
+	tables, err := getUnionedTables(ctx, apr.Args(), stagedRoot, headRoot)
 	tables = RemoveDocsTbl(tables)
-
-	if verr != nil {
-		return nil, verr
-	}
-
-	err := ValidateTables(context.TODO(), tables, stagedRoot, headRoot)
 
 	if err != nil {
 		return nil, err
 	}
 
-	stagedRoot, verr = resetStaged(ctx, dbData.Ddb, dbData.Rsw, tables, stagedRoot, headRoot)
+	err = ValidateTables(context.TODO(), tables, stagedRoot, headRoot)
 
-	if verr != nil {
-		return nil, verr
+	if err != nil {
+		return nil, err
+	}
+
+	stagedRoot, err = resetStaged(ctx, dbData.Ddb, dbData.Rsw, tables, stagedRoot, headRoot)
+
+	if err != nil {
+		return nil, err
 	}
 
 	return stagedRoot, nil
 }
 
 func ResetSoft(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, stagedRoot, headRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
-	tables, verr := getUnionedTables(ctx, apr.Args(), stagedRoot, headRoot)
+	tables, err := getUnionedTables(ctx, apr.Args(), stagedRoot, headRoot)
 
-	if verr != nil {
-		return nil, verr
+	if err != nil {
+		return nil, err
 	}
 
 	dbData := dEnv.DbData()
 	tables, docs, err := GetTblsAndDocDetails(dbData.Drw, tables)
 	if err != nil {
-		return nil, errhand.BuildDError("error: failed to get all tables").AddCause(err).Build()
+		return nil, err
 	}
 
 	if len(docs) > 0 {
@@ -200,14 +193,14 @@ func ResetSoft(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 
 	stagedRoot, err = resetDocs(ctx, dEnv, headRoot, docs)
 	if err != nil {
-		return nil, errhand.BuildDError("error: failed to reset docs").AddCause(err).Build()
+		return nil, err
 	}
 
 
-	stagedRoot, verr = resetStaged(ctx, dbData.Ddb, dbData.Rsw, tables, stagedRoot, headRoot)
+	stagedRoot, err = resetStaged(ctx, dbData.Ddb, dbData.Rsw, tables, stagedRoot, headRoot)
 
-	if verr != nil {
-		return nil, verr
+	if err != nil {
+		return nil, err
 	}
 
 	return stagedRoot, nil
@@ -219,7 +212,7 @@ func getUnionedTables(ctx context.Context, tables []string, stagedRoot, headRoot
 		tables, err = doltdb.UnionTableNames(ctx, stagedRoot, headRoot)
 
 		if err != nil {
-			return nil, errhand.BuildDError("error: failed to get all tables").AddCause(err).Build()
+			return nil, err
 		}
 	}
 
@@ -244,8 +237,7 @@ func resetStaged(ctx context.Context, ddb *doltdb.DoltDB, rsw env.RepoStateWrite
 	updatedRoot, err := MoveTablesBetweenRoots(ctx, tbls, head, staged)
 
 	if err != nil {
-		tt := strings.Join(tbls, ", ")
-		return nil, errhand.BuildDError("error: failed to unstage tables: %s", tt).AddCause(err).Build()
+		return nil, err
 	}
 
 	return updatedRoot, env.UpdateStagedRootWithVErr(ddb, rsw, updatedRoot)

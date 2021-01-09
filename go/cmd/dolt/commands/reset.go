@@ -96,8 +96,8 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		} else {
 			stagedRoot, err = actions.ResetSoft(ctx, dEnv, apr, stagedRoot, headRoot)
 
-			if verr != nil {
-				return HandleVErrAndExitCode(verr, usage)
+			if err != nil {
+				return handleResetError(err, usage)
 			}
 
 			printNotStaged(ctx, dEnv, stagedRoot)
