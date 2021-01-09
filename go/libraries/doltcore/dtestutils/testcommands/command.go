@@ -277,7 +277,7 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 			return err
 		}
 
-		err = actions.SaveTrackedDocsFromWorking(context.Background(), dEnv.DbData())
+		err = actions.SaveTrackedDocsFromWorking(context.Background(), dEnv)
 		if err != nil {
 			return err
 		}
