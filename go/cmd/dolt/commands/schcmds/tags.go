@@ -83,7 +83,7 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			return commands.HandleVErrAndExitCode(errhand.BuildDError("unable to get table names.").AddCause(err).Build(), usage)
 		}
 
-		tables = actions.RemoveDocsTbl(tables)
+		tables = actions.RemoveDocsTable(tables)
 		if len(tables) == 0 {
 			cli.Println("No tables in working set")
 			return 0
