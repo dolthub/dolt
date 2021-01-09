@@ -17,6 +17,7 @@ package actions
 import (
 	"context"
 	"errors"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -68,7 +69,7 @@ func resetHardTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgP
 	headTblNames, err := stagedRoot.GetTableNames(ctx)
 
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 
 	for _, tblName := range headTblNames {
@@ -122,7 +123,7 @@ func ResetHardTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgP
 func ResetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, workingRoot, stagedRoot, headRoot *doltdb.RootValue) error {
 	dbData := dEnv.DbData()
 
-	newHead, err := resetHardTables(ctx, dbData, apr,workingRoot, stagedRoot, headRoot)
+	newHead, err := resetHardTables(ctx, dbData, apr, workingRoot, stagedRoot, headRoot)
 
 	if err != nil {
 		return err
@@ -196,7 +197,6 @@ func ResetSoft(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 		return nil, err
 	}
 
-
 	stagedRoot, err = resetStaged(ctx, dbData.Ddb, dbData.Rsw, tables, stagedRoot, headRoot)
 
 	if err != nil {
@@ -206,7 +206,7 @@ func ResetSoft(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 	return stagedRoot, nil
 }
 
-func getUnionedTables(ctx context.Context, tables []string, stagedRoot, headRoot *doltdb.RootValue) ([]string, error){
+func getUnionedTables(ctx context.Context, tables []string, stagedRoot, headRoot *doltdb.RootValue) ([]string, error) {
 	if len(tables) == 0 || (len(tables) == 1 && tables[0] == ".") {
 		var err error
 		tables, err = doltdb.UnionTableNames(ctx, stagedRoot, headRoot)
