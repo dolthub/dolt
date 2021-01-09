@@ -419,7 +419,33 @@ type mapIterAllCallback func(key, value Value) error
 
 func (m Map) IterAll(ctx context.Context, cb mapIterAllCallback) error {
 	var k Value
-	err := iterAll(ctx, m, func(v Value, idx uint64) error {
+	err := iterAll(ctx, m, func(v Value, _ uint64) error {
+		if k != nil {
+			err := cb(k, v)
+
+			if err != nil {
+				return err
+			}
+
+			k = nil
+		} else {
+			k = v
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	d.PanicIfFalse(k == nil)
+	return nil
+}
+
+func (m Map) IterRange(ctx context.Context, startIdx, endIdx uint64, cb mapIterAllCallback) error {
+	var k Value
+	_, err := iterRange(ctx, m, startIdx, endIdx, func(v Value) error {
 		if k != nil {
 			err := cb(k, v)
 

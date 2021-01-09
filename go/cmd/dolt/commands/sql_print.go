@@ -15,6 +15,8 @@
 package commands
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -26,6 +28,7 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/dolthub/dolt/go/libraries/utils/pipeline"
 )
@@ -170,35 +173,32 @@ func csvProcessStageFunc(ctx context.Context, items []pipeline.ItemWithProps) ([
 		return nil, nil
 	}
 
-	sb := &strings.Builder{}
-	sb.Grow(2048)
+	var b bytes.Buffer
+	wr := bufio.NewWriter(&b)
+
 	for _, item := range items {
 		r := item.GetItem().(sql.Row)
+		colValStrs := make([]*string, len(r))
 
 		for colNum, col := range r {
 			if col != nil {
 				str := sqlColToStr(col)
-
-				if len(str) == 0 {
-					str = "\"\""
-				}
-
-				if strings.IndexRune(str, ',') != -1 {
-					str = "\"" + str + "\""
-				}
-
-				sb.WriteString(str)
-			}
-
-			if colNum != len(r)-1 {
-				sb.WriteRune(',')
+				colValStrs[colNum] = &str
+			} else {
+				colValStrs[colNum] = nil
 			}
 		}
 
-		sb.WriteRune('\n')
+		err := csv.WriteCSVRow(wr, colValStrs, ",", false)
+
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	str := sb.String()
+	wr.Flush()
+
+	str := b.String()
 	return []pipeline.ItemWithProps{pipeline.NewItemWithNoProps(&str)}, nil
 }
 
@@ -249,7 +249,9 @@ func getJSONProcessFunc(sch sql.Schema) pipeline.StageFunc {
 					}
 
 					validCols++
-					str := fmt.Sprintf(formats[colNum], sqlColToStr(col))
+					colStr := sqlColToStr(col)
+					colStr = strings.Replace(colStr, "\"", "\\\"", -1)
+					str := fmt.Sprintf(formats[colNum], colStr)
 					sb.WriteString(str)
 				}
 			}

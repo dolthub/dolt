@@ -34,22 +34,9 @@ const (
 	titleColTag  = 2
 )
 
-var lnVal = types.String("astley")
-var fnVal = types.String("rick")
-var addrVal = types.String("123 Fake St")
-var ageVal = types.Uint(53)
-var titleVal = types.NullValue
+var _, outSch = untyped.NewUntypedSchema(nameColName, ageColName, titleColName)
 
-func TestWriter(t *testing.T) {
-	const root = "/"
-	const path = "/file.csv"
-	const expected = `name,age,title
-Bill Billerson,32,Senior Dufus
-Rob Robertson,25,Dufus
-John Johnson,21,""
-Andy Anderson,27,
-`
-	info := NewCSVInfo()
+func getSampleRows() (rows []row.Row) {
 	var inCols = []schema.Column{
 		{Name: nameColName, Tag: nameColTag, Kind: types.StringKind, IsPartOfPK: true, Constraints: nil},
 		{Name: ageColName, Tag: ageColTag, Kind: types.UintKind, IsPartOfPK: false, Constraints: nil},
@@ -57,7 +44,7 @@ Andy Anderson,27,
 	}
 	colColl, _ := schema.NewColCollection(inCols...)
 	rowSch := schema.MustSchemaFromCols(colColl)
-	rows := []row.Row{
+	return []row.Row{
 		mustRow(row.New(types.Format_7_18, rowSch, row.TaggedValues{
 			nameColTag:  types.String("Bill Billerson"),
 			ageColTag:   types.Uint(32),
@@ -75,16 +62,9 @@ Andy Anderson,27,
 			ageColTag:  types.Uint(27),
 			/* title = NULL */})),
 	}
+}
 
-	_, outSch := untyped.NewUntypedSchema(nameColName, ageColName, titleColName)
-
-	fs := filesys.NewInMemFS(nil, nil, root)
-	csvWr, err := OpenCSVWriter(path, fs, outSch, info)
-
-	if err != nil {
-		t.Fatal("Could not open CSVWriter", err)
-	}
-
+func writeToCSV(csvWr *CSVWriter, rows []row.Row, t *testing.T) {
 	func() {
 		defer csvWr.Close(context.Background())
 
@@ -96,6 +76,58 @@ Andy Anderson,27,
 			}
 		}
 	}()
+}
+
+func TestWriter(t *testing.T) {
+	const root = "/"
+	const path = "/file.csv"
+	const expected = `name,age,title
+Bill Billerson,32,Senior Dufus
+Rob Robertson,25,Dufus
+John Johnson,21,""
+Andy Anderson,27,
+`
+	info := NewCSVInfo()
+
+	rows := getSampleRows()
+
+	fs := filesys.NewInMemFS(nil, nil, root)
+	csvWr, err := OpenCSVWriter(path, fs, outSch, info)
+
+	if err != nil {
+		t.Fatal("Could not open CSVWriter", err)
+	}
+
+	writeToCSV(csvWr, rows, t)
+
+	results, err := fs.ReadFile(path)
+	if string(results) != expected {
+		t.Errorf(`%s != %s`, results, expected)
+	}
+}
+
+func TestWriterDelim(t *testing.T) {
+	const root = "/"
+	const path = "/file.csv"
+	const expected = `name|age|title
+Bill Billerson|32|Senior Dufus
+Rob Robertson|25|Dufus
+John Johnson|21|""
+Andy Anderson|27|
+`
+	info := NewCSVInfo()
+	info.SetDelim("|")
+
+	rows := getSampleRows()
+
+	fs := filesys.NewInMemFS(nil, nil, root)
+	csvWr, err := OpenCSVWriter(path, fs, outSch, info)
+
+	if err != nil {
+		t.Fatal("Could not open CSVWriter", err)
+	}
+
+	writeToCSV(csvWr, rows, t)
 
 	results, err := fs.ReadFile(path)
 	if string(results) != expected {

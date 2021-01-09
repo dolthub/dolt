@@ -142,6 +142,7 @@ func (tbl *testMergeableIndexTable) GetIndexes(ctx *sql.Context) ([]sql.Index, e
 	}
 	return indexes, nil
 }
+
 func (tbl *testMergeableIndexTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 	il, ok := lookup.(*testMergeableIndexLookup)
 	require.True(tbl.t, ok)
@@ -152,9 +153,20 @@ func (tbl *testMergeableIndexTable) WithIndexLookup(lookup sql.IndexLookup) sql.
 		finalRanges:        tbl.finalRanges,
 	}
 }
+
+type testProjectedMergableIndexTable struct {
+	*testMergeableIndexTable
+	cols []string
+}
+
+func (tbl *testMergeableIndexTable) WithProjection(colNames []string) sql.Table {
+	return &testProjectedMergableIndexTable{tbl, colNames}
+}
+
 func (tbl *testMergeableIndexTable) Partitions(_ *sql.Context) (sql.PartitionIter, error) {
 	return sqlutil.NewSinglePartitionIter(), nil
 }
+
 func (tbl *testMergeableIndexTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
 	return tbl.il.RowIter(ctx)
 }

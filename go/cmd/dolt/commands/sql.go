@@ -53,6 +53,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 	"github.com/dolthub/dolt/go/libraries/utils/pipeline"
+	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
 
 var sqlDocs = cli.CommandDocumentationContent{
@@ -227,7 +228,8 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	sqlCtx := sql.NewContext(ctx,
 		sql.WithSession(dsess),
 		sql.WithIndexRegistry(sql.NewIndexRegistry()),
-		sql.WithViewRegistry(sql.NewViewRegistry()))
+		sql.WithViewRegistry(sql.NewViewRegistry()),
+		sql.WithTracer(tracing.Tracer(ctx)))
 	_ = sqlCtx.Set(sqlCtx, sql.AutoCommitSessionVar, sql.Boolean, true)
 
 	roots := make(map[string]*doltdb.RootValue)

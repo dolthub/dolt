@@ -23,7 +23,10 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
+	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/profile"
+	"github.com/uber/jaeger-client-go"
+	"github.com/uber/jaeger-client-go/transport"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -44,7 +47,7 @@ import (
 )
 
 const (
-	Version = "0.22.7"
+	Version = "0.22.8"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -93,6 +96,7 @@ func init() {
 }
 
 const chdirFlag = "--chdir"
+const jaegerFlag = "--jaeger"
 const profFlag = "--prof"
 const csMetricsFlag = "--csmetrics"
 const cpuProf = "cpu"
@@ -132,6 +136,30 @@ func runMain() int {
 					panic("Unexpected prof flag: " + args[1])
 				}
 				args = args[2:]
+
+			// Enable a global jaeger tracer for this run of Dolt,
+			// emitting traces to a collector running at
+			// localhost:14268. To visualize these traces, run:
+			// docker run -d --name jaeger \
+			//    -e COLLECTOR_ZIPKIN_HTTP_PORT=9411 \
+			//    -p 5775:5775/udp \
+			//    -p 6831:6831/udp \
+			//    -p 6832:6832/udp \
+			//    -p 5778:5778 \
+			//    -p 16686:16686 \
+			//    -p 14268:14268 \
+			//    -p 14250:14250 \
+			//    -p 9411:9411 \
+			//    jaegertracing/all-in-one:1.21
+			// and browse to http://localhost:16686
+			case jaegerFlag:
+				fmt.Println("running with jaeger tracing reporting to localhost")
+				transport := transport.NewHTTPTransport("http://localhost:14268/api/traces?format=jaeger.thrift", transport.HTTPBatchSize(128000))
+				reporter := jaeger.NewRemoteReporter(transport)
+				tracer, closer := jaeger.NewTracer("dolt", jaeger.NewConstSampler(true), reporter)
+				opentracing.SetGlobalTracer(tracer)
+				defer closer.Close()
+				args = args[1:]
 
 			// Currently goland doesn't support running with a different working directory when using go modules.
 			// This is a hack that allows a different working directory to be set after the application starts using

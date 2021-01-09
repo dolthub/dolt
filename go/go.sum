@@ -148,12 +148,8 @@ github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZm
 github.com/dgryski/go-sip13 v0.0.0-20181026042036-e10d5fee7954/go.mod h1:vAd38F8PWV+bWy6jNmig1y/TA+kYO4g3RSRF0IAv0no=
 github.com/dolthub/fslock v0.0.2 h1:8vUh47iKovgrtXNrXVIzsIoWLlspoXg+3nslhUzgKSw=
 github.com/dolthub/fslock v0.0.2/go.mod h1:0i7bsNkK+XHwFL3dIsSWeXSV7sykVzzVr6+jq8oeEo0=
-github.com/dolthub/go-mysql-server v0.6.1-0.20201206203230-59fe20b2e36d h1:Fgf5hHcVJTgQEXZlq8BA20HYpQw5HQhsmSKT0fuyueE=
-github.com/dolthub/go-mysql-server v0.6.1-0.20201206203230-59fe20b2e36d/go.mod h1:MRKd4z13XtaT7yLEx2GtR1IIt3WHXVqkzNvYD7WXt3o=
-github.com/dolthub/go-mysql-server v0.6.1-0.20201215145838-9b5cda56c934 h1:IP9nZPjUQieEy16B+E6ymmXEraaPwTJ3khvjnWODFfc=
-github.com/dolthub/go-mysql-server v0.6.1-0.20201215145838-9b5cda56c934/go.mod h1:MRKd4z13XtaT7yLEx2GtR1IIt3WHXVqkzNvYD7WXt3o=
-github.com/dolthub/go-mysql-server v0.6.1-0.20201221143725-9a89aaf765d7 h1:IqpC8QaLTHy5Fgs79jjXzE5fhwOCKZiBnYrjLfdgd+M=
-github.com/dolthub/go-mysql-server v0.6.1-0.20201221143725-9a89aaf765d7/go.mod h1:MRKd4z13XtaT7yLEx2GtR1IIt3WHXVqkzNvYD7WXt3o=
+github.com/dolthub/go-mysql-server v0.6.1-0.20210107193823-566f0ba75abc h1:owkT0Bkb1nJZdSbwLNQz+5OHqx24lgxRCm+uzIsyXJk=
+github.com/dolthub/go-mysql-server v0.6.1-0.20210107193823-566f0ba75abc/go.mod h1:MRKd4z13XtaT7yLEx2GtR1IIt3WHXVqkzNvYD7WXt3o=
 github.com/dolthub/ishell v0.0.0-20201107004254-1592c0036c8d h1:i0u1Ze9wZF/zLgyOB/aLkG01gDDNQ48PR0/a80mxEyQ=
 github.com/dolthub/ishell v0.0.0-20201107004254-1592c0036c8d/go.mod h1:dhGBqcCEfK5kuFmeO5+WOx3hqc1k3M29c1oS/R7N4ms=
 github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66 h1:WRPDbpJWEnPxPmiuOTndT+lUWUeGjx6eoNOK9O4tQQQ=
@@ -641,6 +637,7 @@ github.com/streadway/amqp v0.0.0-20190827072141-edfb9018d271/go.mod h1:AZpEONHx3
 github.com/streadway/handy v0.0.0-20190108123426-d5acb3125c2a/go.mod h1:qNTQ5P5JnDBl6z3cMAg/SywNDC5ABu5ApDIw6lUbRmI=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.1.1/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
+github.com/stretchr/objx v0.2.0 h1:Hbg2NidpLE8veEBkEZTL3CvlkUIVzuU9jDplZO54c48=
 github.com/stretchr/objx v0.2.0/go.mod h1:qt09Ya8vawLte6SNmTgCsAVtYtaKzEcn8ATUoHMkEqE=
 github.com/stretchr/testify v0.0.0-20161117074351-18a02ba4a312/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXfy6kDkUVs=
 github.com/stretchr/testify v1.2.2/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXfy6kDkUVs=
@@ -663,6 +660,10 @@ github.com/timakin/bodyclose v0.0.0-20190930140734-f7f2e9bca95e/go.mod h1:Qimiff
 github.com/tmc/grpc-websocket-proxy v0.0.0-20170815181823-89b8d40f7ca8/go.mod h1:ncp9v5uamzpCO7NfCPTXjqaC+bZgJeR0sMTm6dMHP7U=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5/go.mod h1:ncp9v5uamzpCO7NfCPTXjqaC+bZgJeR0sMTm6dMHP7U=
 github.com/tommy-muehle/go-mnd v1.3.1-0.20200224220436-e6f9a994e8fa/go.mod h1:dSUh0FtTP8VhvkL1S+gUR1OKd9ZnSaozuI6r3m6wOig=
+github.com/uber/jaeger-client-go v2.25.0+incompatible h1:IxcNZ7WRY1Y3G4poYlx24szfsn/3LvK9QHCq9oQw8+U=
+github.com/uber/jaeger-client-go v2.25.0+incompatible/go.mod h1:WVhlPFC8FDjOFMMWRy2pZqQJSXxYSwNYOkTr/Z6d3Kk=
+github.com/uber/jaeger-lib v2.4.0+incompatible h1:fY7QsGQWiCt8pajv4r7JEvmATdCVaWxXbjwyYwsNaLQ=
+github.com/uber/jaeger-lib v2.4.0+incompatible/go.mod h1:ComeNDZlWwrWnDv8aPp0Ba6+uUTzImX/AauajbLI56U=
 github.com/ugorji/go v1.1.4/go.mod h1:uQMGLiO92mf5W77hV/PUCpI3pbzQx3CRekS0kk+RGrc=
 github.com/ultraware/funlen v0.0.3/go.mod h1:Dp4UiAus7Wdb9KUZsYWZEWiRzGuM2kXM1lPbfaF6xhA=
 github.com/ultraware/whitespace v0.0.4/go.mod h1:aVMh/gQve5Maj9hQ/hg+F75lr/X5A89uZnzAmWSineA=

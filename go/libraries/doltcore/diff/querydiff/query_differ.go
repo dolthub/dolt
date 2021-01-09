@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 	"github.com/dolthub/dolt/go/store/atomicerr"
 )
 
@@ -254,7 +255,8 @@ func makeSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValu
 	sqlCtx := sql.NewContext(ctx,
 		sql.WithSession(dsqle.DefaultDoltSession()),
 		sql.WithIndexRegistry(sql.NewIndexRegistry()),
-		sql.WithViewRegistry(sql.NewViewRegistry()))
+		sql.WithViewRegistry(sql.NewViewRegistry()),
+		sql.WithTracer(tracing.Tracer(ctx)))
 	sqlCtx.SetCurrentDatabase("db")
 
 	engine := sqle.NewDefault()

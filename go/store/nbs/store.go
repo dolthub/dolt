@@ -38,6 +38,7 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -423,6 +424,11 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, h addr, data []byte) bo
 }
 
 func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
+	span, ctx := tracing.StartSpan(ctx, "nbs.Get")
+	defer func() {
+		span.Finish()
+	}()
+
 	t1 := time.Now()
 	defer func() {
 		nbs.stats.GetLatency.SampleTimeSince(t1)
@@ -467,12 +473,22 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 }
 
 func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(*chunks.Chunk)) error {
+	span, ctx := tracing.StartSpan(ctx, "nbs.GetMany")
+	span.LogKV("num_hashes", len(hashes))
+	defer func() {
+		span.Finish()
+	}()
 	return nbs.getManyWithFunc(ctx, hashes, func(ctx context.Context, cr chunkReader, eg *errgroup.Group, reqs []getRecord, stats *Stats) (bool, error) {
 		return cr.getMany(ctx, eg, reqs, found, nbs.stats)
 	})
 }
 
 func (nbs *NomsBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(CompressedChunk)) error {
+	span, ctx := tracing.StartSpan(ctx, "nbs.GetManyCompressed")
+	span.LogKV("num_hashes", len(hashes))
+	defer func() {
+		span.Finish()
+	}()
 	return nbs.getManyWithFunc(ctx, hashes, func(ctx context.Context, cr chunkReader, eg *errgroup.Group, reqs []getRecord, stats *Stats) (bool, error) {
 		return cr.getManyCompressed(ctx, eg, reqs, found, nbs.stats)
 	})
