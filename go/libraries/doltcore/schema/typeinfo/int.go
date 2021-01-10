@@ -66,6 +66,26 @@ func CreateIntTypeFromParams(params map[string]string) (TypeInfo, error) {
 	return nil, fmt.Errorf(`create int type info is missing "%v" param`, intTypeParams_Width)
 }
 
+func ConvertIntToValue(val int64, ti TypeInfo) (interface{}, error) {
+	iti, ok := ti.(*intType)
+	if !ok {
+		return ti.ConvertNomsValueToValue(types.Int(val))
+	}
+	switch iti.sqlIntType {
+	case sql.Int8:
+		return int8(val), nil
+	case sql.Int16:
+		return int16(val), nil
+	case sql.Int24:
+		return int32(val), nil
+	case sql.Int32:
+		return int32(val), nil
+	case sql.Int64:
+		return int64(val), nil
+	}
+	panic("unexpected")
+}
+
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *intType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Int); ok {

@@ -459,7 +459,7 @@ func (m Map) IterRange(ctx context.Context, startIdx, endIdx uint64, cb mapIterA
 		}
 
 		return nil
-	})
+	}, false)
 
 	if err != nil {
 		return err

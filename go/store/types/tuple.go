@@ -24,6 +24,7 @@ package types
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -134,6 +135,75 @@ func (itr *TupleIterator) Next() (uint64, Value, error) {
 	}
 
 	return itr.count, nil, nil
+}
+
+func (itr *TupleIterator) NextUint() (uint64, uint64, bool, error) {
+	if itr.pos < itr.count {
+		valPos := itr.pos
+		var val uint64
+
+		k := itr.dec.peekKind()
+		if k == UintKind {
+			itr.dec.skipKind()
+			val = itr.dec.readUint()
+		} else if k == NullKind {
+			itr.dec.skipKind()
+			return 0, 0, false, nil
+		} else {
+			return 0, 0, false, errors.New("TupleIterator.NextUint() requires next kind == Uint, was " + k.String())
+		}
+
+		itr.pos++
+		return valPos, val, true, nil
+	}
+
+	return itr.count, 0, false, nil
+}
+
+func (itr *TupleIterator) NextInt() (uint64, int64, bool, error) {
+	if itr.pos < itr.count {
+		valPos := itr.pos
+		var val int64
+
+		k := itr.dec.peekKind()
+		if k == IntKind {
+			itr.dec.skipKind()
+			val = itr.dec.readInt()
+		} else if k == NullKind {
+			itr.dec.skipKind()
+			return 0, 0, false, nil
+		} else {
+			return 0, 0, false, errors.New("TupleIterator.NextInt() requires next kind == Int, was " + k.String())
+		}
+
+		itr.pos++
+		return valPos, val, true, nil
+	}
+
+	return itr.count, 0, false, nil
+}
+
+func (itr *TupleIterator) NextString() (uint64, string, bool, error) {
+	if itr.pos < itr.count {
+		valPos := itr.pos
+		var val string
+
+		k := itr.dec.peekKind()
+		if k == StringKind {
+			itr.dec.skipKind()
+			val = itr.dec.readString()
+		} else if k == NullKind {
+			itr.dec.skipKind()
+			return 0, "", false, nil
+		} else {
+			return 0, "", false, errors.New("TupleIterator.NextString() requires next kind == String, was " + k.String())
+		}
+
+		itr.pos++
+		return valPos, val, true, nil
+	}
+
+	return itr.count, "", false, nil
 }
 
 func (itr *TupleIterator) Skip() error {
@@ -673,4 +743,8 @@ func (t Tuple) String() string {
 
 func (t Tuple) HumanReadableString() string {
 	return t.String()
+}
+
+func (t Tuple) Buff() []byte {
+	return t.buff
 }

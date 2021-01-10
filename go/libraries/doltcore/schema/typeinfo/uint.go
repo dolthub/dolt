@@ -66,6 +66,26 @@ func CreateUintTypeFromParams(params map[string]string) (TypeInfo, error) {
 	return nil, fmt.Errorf(`create uint type info is missing "%v" param`, uintTypeParam_Width)
 }
 
+func ConvertUintToValue(val uint64, ti TypeInfo) (interface{}, error) {
+	uti, ok := ti.(*uintType)
+	if !ok {
+		return ti.ConvertNomsValueToValue(types.Uint(val))
+	}
+	switch uti.sqlUintType {
+	case sql.Uint8:
+		return uint8(val), nil
+	case sql.Uint16:
+		return uint16(val), nil
+	case sql.Uint24:
+		return uint32(val), nil
+	case sql.Uint32:
+		return uint32(val), nil
+	case sql.Uint64:
+		return uint64(val), nil
+	}
+	panic("unexpected")
+}
+
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *uintType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Uint); ok {

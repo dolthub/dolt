@@ -24,9 +24,11 @@ package types
 import (
 	"context"
 	"sync/atomic"
+	"time"
+
+	"github.com/opentracing/opentracing-go"
 
 	"github.com/dolthub/dolt/go/store/atomicerr"
-
 	"github.com/dolthub/dolt/go/store/d"
 )
 
@@ -228,7 +230,7 @@ func (l List) IterRange(ctx context.Context, startIdx, endIdx uint64, f func(v V
 		return nil
 	}
 
-	_, err := iterRange(ctx, l, startIdx, endIdx, cb)
+	_, err := iterRange(ctx, l, startIdx, endIdx, cb, false)
 
 	if err != nil {
 		return err
@@ -278,7 +280,7 @@ func iterAll(ctx context.Context, col Collection, f func(v Value, index uint64) 
 				numBytes, iterErr := iterRange(ctx, col, start, start+blockLength, func(v Value) error {
 					vc <- v
 					return nil
-				})
+				}, true)
 
 				if ae.SetIfError(iterErr) {
 					return
@@ -311,7 +313,7 @@ func iterAll(ctx context.Context, col Collection, f func(v Value, index uint64) 
 	return ae.Get()
 }
 
-func iterRange(ctx context.Context, col Collection, startIdx, endIdx uint64, cb func(v Value) error) (uint64, error) {
+func iterRange(ctx context.Context, col Collection, startIdx, endIdx uint64, cb func(v Value) error, returnLen bool) (uint64, error) {
 	l := col.Len()
 	d.PanicIfTrue(startIdx > endIdx || endIdx > l)
 	if startIdx == endIdx {
@@ -329,10 +331,15 @@ func iterRange(ctx context.Context, col Collection, startIdx, endIdx uint64, cb 
 	numValues := 0
 	valuesPerIdx := uint64(getValuesPerIdx(col.Kind()))
 
+	var valuesDuration, cbDuration time.Duration
+
 	var numBytes uint64
 	for _, leaf := range leaves {
 		seq := leaf.asSequence()
+		s := time.Now()
 		values, err := seq.valuesSlice(startIdx, endIdx)
+		e := time.Now()
+		valuesDuration += e.Sub(s)
 
 		if err != nil {
 			return 0, err
@@ -340,6 +347,7 @@ func iterRange(ctx context.Context, col Collection, startIdx, endIdx uint64, cb 
 
 		numValues += len(values)
 
+		s = time.Now()
 		for _, v := range values {
 			err := cb(v)
 
@@ -347,18 +355,25 @@ func iterRange(ctx context.Context, col Collection, startIdx, endIdx uint64, cb 
 				return 0, err
 			}
 		}
+		e = time.Now()
+		cbDuration += e.Sub(s)
 
 		endIdx = endIdx - uint64(len(values))/valuesPerIdx - startIdx
 		startIdx = 0
 
-		w := binaryNomsWriter{make([]byte, 4), 0}
-		err = seq.writeTo(&w, seq.format())
+		if returnLen {
+			w := binaryNomsWriter{make([]byte, 4), 0}
+			err = seq.writeTo(&w, seq.format())
 
-		if err != nil {
-			return 0, err
+			if err != nil {
+				return 0, err
+			}
+
+			numBytes += uint64(w.offset) // note: should really only include |values|
 		}
-
-		numBytes += uint64(w.offset) // note: should really only include |values|
+	}
+	if span := opentracing.SpanFromContext(ctx); span != nil {
+		span.LogKV("values_duration", valuesDuration, "cb_duration", cbDuration)
 	}
 
 	return numBytes, nil

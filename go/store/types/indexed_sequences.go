@@ -25,6 +25,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/libraries/utils/tracing"
+
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -134,6 +136,9 @@ func orderedKeyFromSum(msd []metaTuple, nbf *NomsBinFormat) (orderedKey, error) 
 // [startIdx -> endIdx).  Returns the set of nodes and the offset within
 // the first sequence which corresponds to |startIdx|.
 func LoadLeafNodes(ctx context.Context, cols []Collection, startIdx, endIdx uint64) ([]Collection, uint64, error) {
+	span, ctx := tracing.StartSpan(ctx, "LoadLeafNodes")
+	defer span.Finish()
+
 	vrw := cols[0].asSequence().valueReadWriter()
 	d.PanicIfTrue(vrw == nil)
 

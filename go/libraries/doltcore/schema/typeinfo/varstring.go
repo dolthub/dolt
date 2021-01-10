@@ -80,6 +80,18 @@ func CreateVarStringTypeFromParams(params map[string]string) (TypeInfo, error) {
 	}
 }
 
+func ConvertStringToValue(str string, ti TypeInfo) (interface{}, error) {
+	if sti, ok := ti.(*varStringType); ok {
+		if sti.sqlStringType.Type() == sqltypes.Char {
+			return strings.TrimRightFunc(str, unicode.IsSpace), nil
+		}
+		return str, nil
+	} else if _, ok := ti.(*varBinaryType); ok {
+		return str, nil
+	}
+	return ti.ConvertNomsValueToValue(types.String(str))
+}
+
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *varStringType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.String); ok {

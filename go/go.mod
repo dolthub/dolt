@@ -23,6 +23,7 @@ require (
 	github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66
 	github.com/dolthub/sqllogictest/go v0.0.0-20201105013724-5123fc66e12c
 	github.com/dolthub/vitess v0.0.0-20201204232015-9e3805156304
+	github.com/dterei/gotsc v0.0.0-20160722215413-e78f872945c6
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.9.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
@@ -59,6 +60,7 @@ require (
 	github.com/stretchr/testify v1.6.1
 	github.com/tealeg/xlsx v1.0.5
 	github.com/tidwall/pretty v1.0.1 // indirect
+	github.com/uber-common/opentracing-go v0.0.0-20161020183646-2dabd126ebbe
 	github.com/uber/jaeger-client-go v2.25.0+incompatible
 	github.com/uber/jaeger-lib v2.4.0+incompatible // indirect
 	go.mongodb.org/mongo-driver v1.3.4 // indirect
@@ -77,5 +79,7 @@ require (
 )
 
 replace github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
+
+replace github.com/dolthub/go-mysql-server => ../../go-mysql-server
 
 go 1.13
