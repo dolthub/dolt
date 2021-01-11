@@ -55,15 +55,19 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 
 	apr := cli.ParseArgs(ap, args, nil)
 
+	// Check if problems with args first.
+	if apr.ContainsAll(cli.HardResetParam, cli.SoftResetParam) {
+		return 1, fmt.Errorf("error: --%s and --%s are mutually exclusive options.", cli.HardResetParam, cli.SoftResetParam)
+	}
+
+	// Get all the needed roots.
 	working, staged, head, err := env.GetRoots(ctx, dbData.Ddb, dbData.Rsr)
 
 	if err != nil {
 		return 1, err
 	}
 
-	if apr.ContainsAll(cli.HardResetParam, cli.SoftResetParam) {
-		return 1, fmt.Errorf("error: --%s and --%s are mutually exclusive options.", cli.HardResetParam, cli.SoftResetParam)
-	} else if apr.Contains(cli.HardResetParam) {
+	if apr.Contains(cli.HardResetParam) {
 		err = actions.ResetHardTables(ctx, dbData, apr, working, staged, head)
 	} else {
 		_, err = actions.ResetSoftTables(ctx, dbData, apr, staged, head)

@@ -265,20 +265,20 @@ func UpdateStagedRootWithVErr(ddb *doltdb.DoltDB, rsw RepoStateWriter, updatedRo
 	return nil
 }
 
-func GetRoots(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, error) {
-	working, err := WorkingRoot(ctx, ddb, rsr)
+func GetRoots(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (working *doltdb.RootValue, staged *doltdb.RootValue, head *doltdb.RootValue, err error) {
+	working, err = WorkingRoot(ctx, ddb, rsr)
 
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	staged, err := StagedRoot(ctx, ddb, rsr)
+	staged, err = StagedRoot(ctx, ddb, rsr)
 
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	head, err := HeadRoot(ctx, ddb, rsr)
+	head, err = HeadRoot(ctx, ddb, rsr)
 
 	if err != nil {
 		return nil, nil, nil, err
