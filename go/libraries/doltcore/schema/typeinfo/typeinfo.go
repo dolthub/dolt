@@ -73,6 +73,8 @@ type TypeInfo interface {
 	// the given type.
 	ConvertNomsValueToValue(v types.Value) (interface{}, error)
 
+	ReadNomsPrimitiveAsSql(reader types.PrimitiveNomsReader) (interface{}, error) {
+
 	// ConvertValueToNomsValue converts a go value or Noms value to a Noms value. The type of the Noms
 	// value will be equivalent to the NomsKind returned from NomsKind.
 	ConvertValueToNomsValue(v interface{}) (types.Value, error)

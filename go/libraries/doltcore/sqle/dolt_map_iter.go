@@ -137,21 +137,15 @@ func (conv *KVToSqlRowConverter) processTuple(cols []interface{}, valsToFill int
 		return err
 	}
 
+	primReader, numPrimitives := tupItr.PrimitiveReader()
+
 	filled := 0
-	var tag64 uint64
-	for filled < valsToFill && tag64 < maxTag {
-		_, tag, err := tupItr.Next()
-
-		if err != nil {
-			return err
-		}
-
-		if tag == nil {
+	for pos := uint64(0); pos + 1 < numPrimitives; pos += 2 {
+		if filled >= valsToFill {
 			break
 		}
 
-		tag64 = uint64(tag.(types.Uint))
-
+		tag64 := primReader.ReadUint()
 		if tag64 > maxTag {
 			break
 		}
@@ -169,7 +163,7 @@ func (conv *KVToSqlRowConverter) processTuple(cols []interface{}, valsToFill int
 				return err
 			}
 
-			cols[sqlColIdx], err = conv.cols[sqlColIdx].TypeInfo.ConvertNomsValueToValue(val)
+			cols[sqlColIdx], err = conv.cols[sqlColIdx].TypeInfo.ReadNomsPrimitiveAsSql(primReader)
 
 			if err != nil {
 				return err

@@ -136,6 +136,10 @@ func (itr *TupleIterator) Next() (uint64, Value, error) {
 	return itr.count, nil, nil
 }
 
+func (itr *TupleIterator) PrimitiveReader() (PrimitiveNomsReader, uint64) {
+	return (&itr.dec.binaryNomsReader, itr.count-itr.pos)
+}
+
 func (itr *TupleIterator) Skip() error {
 	if itr.pos < itr.count {
 		err := itr.dec.skipValue(itr.nbf)

@@ -275,22 +275,22 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 	// these very common primitive types.
 	case BoolKind:
 		r.skipKind()
-		return Bool(r.readBool()), nil
+		return Bool(r.ReadBool()), nil
 	case FloatKind:
 		r.skipKind()
-		return Float(r.readFloat(nbf)), nil
+		return Float(r.ReadFloat(nbf)), nil
 	case IntKind:
 		r.skipKind()
-		return Int(r.readInt()), nil
+		return Int(r.ReadInt()), nil
 	case UintKind:
 		r.skipKind()
-		return Uint(r.readUint()), nil
+		return Uint(r.ReadUint()), nil
 	case NullKind:
 		r.skipKind()
 		return NullValue, nil
 	case StringKind:
 		r.skipKind()
-		return String(r.readString()), nil
+		return String(r.ReadString()), nil
 	case ListKind:
 		seq, err := r.readListSequence(nbf)
 		if err != nil {
@@ -585,7 +585,7 @@ func (r *typedBinaryNomsReader) skipType() error {
 }
 
 func (r *typedBinaryNomsReader) readTypeInner(seenStructs map[string]*Type) (*Type, error) {
-	k := r.readKind()
+	k := r.ReadKind()
 
 	if supported := SupportedKinds[k]; !supported {
 		return nil, ErrUnknownType
@@ -649,7 +649,7 @@ func (r *typedBinaryNomsReader) readTypeInner(seenStructs map[string]*Type) (*Ty
 
 		return t, nil
 	case CycleKind:
-		name := r.readString()
+		name := r.ReadString()
 		d.PanicIfTrue(name == "") // cycles to anonymous structs are disallowed
 		t, ok := seenStructs[name]
 		d.PanicIfFalse(ok)
@@ -661,7 +661,7 @@ func (r *typedBinaryNomsReader) readTypeInner(seenStructs map[string]*Type) (*Ty
 }
 
 func (r *typedBinaryNomsReader) skipTypeInner() {
-	k := r.readKind()
+	k := r.ReadKind()
 	switch k {
 	case ListKind, RefKind, SetKind, TupleKind:
 		r.skipTypeInner()
@@ -680,7 +680,7 @@ func (r *typedBinaryNomsReader) skipTypeInner() {
 }
 
 func (r *typedBinaryNomsReader) readStructType(seenStructs map[string]*Type) (*Type, error) {
-	name := r.readString()
+	name := r.ReadString()
 	count := r.readCount()
 	fields := make(structTypeFields, count)
 
@@ -689,7 +689,7 @@ func (r *typedBinaryNomsReader) readStructType(seenStructs map[string]*Type) (*T
 
 	for i := uint64(0); i < count; i++ {
 		t.Desc.(StructDesc).fields[i] = StructField{
-			Name: r.readString(),
+			Name: r.ReadString(),
 		}
 	}
 	for i := uint64(0); i < count; i++ {
@@ -702,7 +702,7 @@ func (r *typedBinaryNomsReader) readStructType(seenStructs map[string]*Type) (*T
 		t.Desc.(StructDesc).fields[i].Type = inType
 	}
 	for i := uint64(0); i < count; i++ {
-		t.Desc.(StructDesc).fields[i].Optional = r.readBool()
+		t.Desc.(StructDesc).fields[i].Optional = r.ReadBool()
 	}
 
 	return t, nil

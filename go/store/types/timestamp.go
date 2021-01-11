@@ -92,13 +92,12 @@ func (v Timestamp) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 }
 
 func (v Timestamp) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
-	data := b.readBytes(timestampNumBytes)
-	t := time.Time{}
-	err := t.UnmarshalBinary(data)
+	t, err := b.ReadTimestamp()
 	if err != nil {
 		return nil, err
 	}
 	return Timestamp(t), nil
+
 }
 
 func (v Timestamp) skip(nbf *NomsBinFormat, b *binaryNomsReader) {

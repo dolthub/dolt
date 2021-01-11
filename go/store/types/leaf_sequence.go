@@ -116,7 +116,7 @@ func (seq leafSequence) getCompareFn(other sequence) compareFn {
 
 func (seq leafSequence) typeOf() (*Type, error) {
 	dec := seq.decoder()
-	kind := dec.readKind()
+	kind := dec.ReadKind()
 	dec.skipCount() // level
 	count := dec.readCount()
 	ts := make(typeSlice, 0, count)
