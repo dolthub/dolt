@@ -244,8 +244,8 @@ func unrolledDecodeUVarint(buf []byte) (uint64, int) {
 
 	x |= (b & 0x7f) << 56
 	b = uint64(buf[9])
-	if b < 0x80 {
-		return x | (b << 63), 10
+	if b == 1 {
+		return x | (1 << 63), 10
 	}
 
 	return 0, -10
