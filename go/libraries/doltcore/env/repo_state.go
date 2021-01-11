@@ -17,6 +17,7 @@ package env
 import (
 	"context"
 	"encoding/json"
+	"github.com/dolthub/dolt/go/store/types"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -48,6 +49,8 @@ type DocsReadWriter interface {
 	PutDocsToStaged(ctx context.Context, docDetails []doltdb.DocDetails) (*doltdb.RootValue, error)
 	ResetWorkingDocsToStagedDocs(ctx context.Context) error
 	GetDocDetail(docName string) (doc doltdb.DocDetails, err error)
+	GetDocsOnDisk(docs []string)  (Docs, error)
+	WriteDocsToDisk(ctx context.Context, vrw types.ValueReadWriter, docTbl *doltdb.Table, docDetails []doltdb.DocDetails) (*doltdb.Table, error)
 }
 
 type DbData struct {

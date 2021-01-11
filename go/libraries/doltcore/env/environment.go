@@ -58,6 +58,7 @@ var ErrStateUpdate = errors.New("error updating local data repo state")
 var ErrMarshallingSchema = errors.New("error marshalling schema")
 var ErrInvalidCredsFile = errors.New("invalid creds file")
 var ErrDocsUpdate = errors.New("error updating local docs")
+var ErrMapUpdateError = errors.New("error: updated map has no content.")
 
 // DoltEnv holds the state of the current environment used by the cli.
 type DoltEnv struct {
@@ -468,6 +469,23 @@ func (d *docsReadWriter) ResetWorkingDocsToStagedDocs(ctx context.Context) error
 // GetDocDetail returns the details of a specific document passed as docName.
 func (d *docsReadWriter) GetDocDetail(docName string) (doc doltdb.DocDetails, err error) {
 	return d.dEnv.GetDocDetail(docName)
+}
+
+func (d *docsReadWriter) GetDocsOnDisk(docs []string) (Docs, error) {
+	return d.dEnv.GetAllValidDocDetails()
+}
+
+func (d *docsReadWriter) createDocsTable() {
+
+}
+
+func (d *docsReadWriter) WriteDocsToDisk(ctx context.Context, vrw types.ValueReadWriter, docTbl *doltdb.Table, docDetails []doltdb.DocDetails) (*doltdb.Table, error) {
+	if docTbl == nil {
+		return createDocsTable(ctx, d.dEnv, vrw, docDetails)
+	}
+
+	// Otherwise update the docsTable.
+	return updateDocsTable(ctx, docTbl, docDetails)
 }
 
 func (dEnv *DoltEnv) DocsReadWriter() DocsReadWriter {
@@ -955,7 +973,7 @@ func (dEnv *DoltEnv) GetUpdatedRootWithDocs(ctx context.Context, root *doltdb.Ro
 	}
 
 	if found {
-		return updateDocsOnRoot(ctx, dEnv, root, docTbl, docDetails)
+		return updateDocsOnRoot(ctx, root, docTbl, docDetails)
 	}
 	return createDocsTableOnRoot(ctx, dEnv, root, docDetails)
 }
@@ -1044,7 +1062,8 @@ func (dEnv *DoltEnv) ResetWorkingDocsToStagedDocs(ctx context.Context) error {
 	return nil
 }
 
-func updateDocsOnRoot(ctx context.Context, dEnv *DoltEnv, root *doltdb.RootValue, docTbl *doltdb.Table, docDetails []doltdb.DocDetails) (*doltdb.RootValue, error) {
+// updateDocsTable takes in docTbl param and updates it with the value in docDetails. It returns the updated table.
+func updateDocsTable(ctx context.Context, docTbl *doltdb.Table, docDetails []doltdb.DocDetails) (*doltdb.Table, error) {
 	m, err := docTbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
@@ -1083,18 +1102,31 @@ func updateDocsOnRoot(ctx context.Context, dEnv *DoltEnv, root *doltdb.RootValue
 	}
 	updatedMap, err := me.Map(ctx)
 	if updatedMap.Len() == 0 {
-		return root.RemoveTables(ctx, doltdb.DocTableName)
+		return nil, ErrMapUpdateError
 	}
+
 	docTbl, err = docTbl.UpdateRows(ctx, updatedMap)
-	if err != nil {
+
+	return docTbl, err
+}
+
+func updateDocsOnRoot(ctx context.Context, root *doltdb.RootValue, docTbl *doltdb.Table, docDetails []doltdb.DocDetails) (*doltdb.RootValue, error) {
+	docTbl, err := updateDocsTable(ctx, docTbl, docDetails)
+
+	if errors.Is(err, ErrMapUpdateError) {
+		return root.RemoveTables(ctx, doltdb.DocTableName)
+	} else if err != nil {
 		return nil, err
 	}
+
 	return root.PutTable(ctx, doltdb.DocTableName, docTbl)
 }
 
-func createDocsTableOnRoot(ctx context.Context, dEnv *DoltEnv, root *doltdb.RootValue, docDetails []doltdb.DocDetails) (*doltdb.RootValue, error) {
+// createDocTable creates a new in memory table that stores the given doc details.
+func createDocsTable(ctx context.Context, dEnv *DoltEnv, vrw types.ValueReadWriter, docDetails []doltdb.DocDetails) (*doltdb.Table, error) {
 	imt := table.NewInMemTable(DoltDocsSchema)
 
+	// TODO: What does this code portion do?
 	createTable := false
 	for _, doc := range docDetails {
 		if doc.NewerText != nil {
@@ -1126,27 +1158,40 @@ func createDocsTableOnRoot(ctx context.Context, dEnv *DoltEnv, root *doltdb.Root
 		rd.Close(context.Background())
 		wr.Close(context.Background())
 
-		vrw := root.VRW()
 		schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, wr.GetSchema())
 
 		if err != nil {
 			return nil, ErrMarshallingSchema
 		}
 
-		empty, err := types.NewMap(ctx, root.VRW())
+		empty, err := types.NewMap(ctx, vrw)
 		if err != nil {
 			return nil, err
 		}
 
-		newDocsTbl, err := doltdb.NewTable(ctx, root.VRW(), schVal, wr.GetMap(), empty)
+		newDocsTbl, err := doltdb.NewTable(ctx, vrw, schVal, wr.GetMap(), empty)
 		if err != nil {
 			return nil, err
 		}
 
-		return root.PutTable(ctx, doltdb.DocTableName, newDocsTbl)
+		return newDocsTbl, nil
 	}
 
-	return root, nil
+	return nil, nil
+}
+
+func createDocsTableOnRoot(ctx context.Context, dEnv *DoltEnv, root *doltdb.RootValue, docDetails []doltdb.DocDetails) (*doltdb.RootValue, error) {
+	newDocsTbl, err := createDocsTable(ctx, dEnv, root.VRW(), docDetails)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if newDocsTbl == nil {
+		return root, nil
+	}
+
+	return root.PutTable(ctx, doltdb.DocTableName, newDocsTbl)
 }
 
 //UpdateFSDocsToRootDocs updates the provided docs from the root value, and then saves them to the filesystem.
