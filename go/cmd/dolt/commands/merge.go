@@ -418,7 +418,7 @@ func mergedRootToWorking(ctx context.Context, squash bool, dEnv *env.DoltEnv, me
 			if err != nil {
 				return errhand.BuildDError("error: failed to update docs to the new working root").AddCause(err).Build()
 			}
-			verr = UpdateStagedWithVErr(dEnv, mergedRoot)
+			verr = UpdateStagedWithVErr(dEnv.DoltDB, dEnv.RepoStateWriter(), mergedRoot)
 			if verr != nil {
 				// Log a new message here to indicate that merge was successful, only staging failed.
 				cli.Println("Unable to stage changes: add and commit to finish merge")

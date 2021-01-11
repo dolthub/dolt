@@ -457,6 +457,10 @@ func (d *docsReadWriter) PutDocsToWorking(ctx context.Context, docDetails []dolt
 	return d.dEnv.PutDocsToWorking(ctx, docDetails)
 }
 
+func (d *docsReadWriter) PutDocsToStaged(ctx context.Context, docDetails []doltdb.DocDetails) (*doltdb.RootValue, error) {
+	return d.dEnv.PutDocsToStaged(ctx, docDetails)
+}
+
 func (d *docsReadWriter) ResetWorkingDocsToStagedDocs(ctx context.Context) error {
 	return d.dEnv.ResetWorkingDocsToStagedDocs(ctx)
 }

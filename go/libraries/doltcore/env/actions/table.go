@@ -211,3 +211,14 @@ func validateTablesExist(ctx context.Context, currRoot *doltdb.RootValue, unknow
 
 	return nil
 }
+
+// RemoveDocsTable takes a slice of table names and returns a new slice with DocTableName removed.
+func RemoveDocsTable(tbls []string) []string {
+	var result []string
+	for _, tblName := range tbls {
+		if tblName != doltdb.DocTableName {
+			result = append(result, tblName)
+		}
+	}
+	return result
+}
