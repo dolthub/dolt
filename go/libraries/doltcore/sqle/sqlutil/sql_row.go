@@ -16,7 +16,6 @@ package sqlutil
 
 import (
 	"fmt"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -65,6 +64,7 @@ func pkDoltRowFromSqlRow(nbf *types.NomsBinFormat, r sql.Row, doltSchema schema.
 				return nil, err
 			}
 		} else if !schCol.IsNullable() {
+			// TODO: this isn't an error in the case of result set construction (where non-null columns can indeed be null)
 			return nil, fmt.Errorf("column <%v> received nil but is non-nullable", schCol.Name)
 		}
 	}
