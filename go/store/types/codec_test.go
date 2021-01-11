@@ -26,7 +26,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/dennwc/varint"
+	//"github.com/dennwc/varint"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -170,7 +170,7 @@ func BenchmarkUnrolledDecodeUVarint(b *testing.B) {
 	}{
 		{"binary.UVarint", binary.Uvarint, make([]result, len(toDecode))},
 		{"unrolled", unrolledDecodeUVarint, make([]result, len(toDecode))},
-		{"dennwc.varint.UVarint", varint.Uvarint, make([]result, len(toDecode))},
+		//{"dennwc.varint.UVarint", varint.Uvarint, make([]result, len(toDecode))},
 		{"noBranch", varuintNoBranch, make([]result, len(toDecode))},
 	}
 
