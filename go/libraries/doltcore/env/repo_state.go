@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -44,6 +45,7 @@ type RepoStateWriter interface {
 type DocsReadWriter interface {
 	GetAllValidDocDetails() ([]doltdb.DocDetails, error)
 	PutDocsToWorking(ctx context.Context, docDetails []doltdb.DocDetails) error
+	PutDocsToStaged(ctx context.Context, docDetails []doltdb.DocDetails) (*doltdb.RootValue, error)
 	ResetWorkingDocsToStagedDocs(ctx context.Context) error
 	GetDocDetail(docName string) (doc doltdb.DocDetails, err error)
 }
@@ -248,4 +250,39 @@ func UpdateStagedRoot(ctx context.Context, ddb *doltdb.DoltDB, rsw RepoStateWrit
 	}
 
 	return h, nil
+}
+
+func UpdateStagedRootWithVErr(ddb *doltdb.DoltDB, rsw RepoStateWriter, updatedRoot *doltdb.RootValue) errhand.VerboseError {
+	_, err := UpdateStagedRoot(context.Background(), ddb, rsw, updatedRoot)
+
+	switch err {
+	case doltdb.ErrNomsIO:
+		return errhand.BuildDError("fatal: failed to write value").Build()
+	case ErrStateUpdate:
+		return errhand.BuildDError("fatal: failed to update the staged root state").Build()
+	}
+
+	return nil
+}
+
+func GetRoots(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (working *doltdb.RootValue, staged *doltdb.RootValue, head *doltdb.RootValue, err error) {
+	working, err = WorkingRoot(ctx, ddb, rsr)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	staged, err = StagedRoot(ctx, ddb, rsr)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	head, err = HeadRoot(ctx, ddb, rsr)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return working, staged, head, nil
 }

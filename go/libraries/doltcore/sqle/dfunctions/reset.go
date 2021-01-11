@@ -26,22 +26,22 @@ import (
 )
 
 const (
-	resetFuncName = "dolt_reset"
+	resetFuncName = "reset"
 
 	resetHardParameter = "hard"
 )
 
-type DoltResetFunc struct {
+type ResetFunc struct {
 	expression.UnaryExpression
 }
 
-// NewDoltResetFunc creates a new DoltResetFunc expression.
-func NewDoltResetFunc(e sql.Expression) sql.Expression {
-	return DoltResetFunc{expression.UnaryExpression{Child: e}}
+// NewDoltResetFunc creates a new ResetFunc expression.
+func NewResetFunc(e sql.Expression) sql.Expression {
+	return ResetFunc{expression.UnaryExpression{Child: e}}
 }
 
 // Eval implements the Expression interface.
-func (rf DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
+func (rf ResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	val, err := rf.Child.Eval(ctx, row)
 	if err != nil {
 		return nil, err
@@ -55,7 +55,7 @@ func (rf DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	dSess := sqle.DSessFromSess(ctx.Session)
 
 	var h hash.Hash
-	if strings.ToLower(arg) != "hard" {
+	if strings.ToLower(arg) != resetHardParameter {
 		return nil, fmt.Errorf("invalid arugument to %s(): %s", resetFuncName, arg)
 	}
 
@@ -73,34 +73,34 @@ func (rf DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 }
 
 // Resolved implements the Expression interface.
-func (rf DoltResetFunc) Resolved() bool {
+func (rf ResetFunc) Resolved() bool {
 	return rf.Child.Resolved()
 }
 
 // String implements the Stringer interface.
-func (rf DoltResetFunc) String() string {
+func (rf ResetFunc) String() string {
 	return fmt.Sprintf("RESET_HARD(%s)", rf.Child.String())
 }
 
 // IsNullable implements the Expression interface.
-func (rf DoltResetFunc) IsNullable() bool {
+func (rf ResetFunc) IsNullable() bool {
 	return false
 }
 
 // Children implements the Expression interface.
-func (rf DoltResetFunc) Children() []sql.Expression {
+func (rf ResetFunc) Children() []sql.Expression {
 	return []sql.Expression{rf.Child}
 }
 
 // WithChildren implements the Expression interface.
-func (rf DoltResetFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
+func (rf ResetFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
 	if len(children) != 1 {
 		return nil, sql.ErrInvalidChildrenNumber.New(rf, len(children), 1)
 	}
-	return NewDoltResetFunc(children[0]), nil
+	return NewResetFunc(children[0]), nil
 }
 
 // Type implements the Expression interface.
-func (rf DoltResetFunc) Type() sql.Type {
+func (rf ResetFunc) Type() sql.Type {
 	return sql.Text
 }

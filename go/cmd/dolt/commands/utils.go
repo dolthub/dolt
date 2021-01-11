@@ -58,35 +58,14 @@ func UpdateWorkingWithVErr(dEnv *env.DoltEnv, updatedRoot *doltdb.RootValue) err
 	return nil
 }
 
-func UpdateStagedWithVErr(dEnv *env.DoltEnv, updatedRoot *doltdb.RootValue) errhand.VerboseError {
-	_, err := dEnv.UpdateStagedRoot(context.Background(), updatedRoot)
+func UpdateStagedWithVErr(ddb *doltdb.DoltDB, rsw env.RepoStateWriter, updatedRoot *doltdb.RootValue) errhand.VerboseError {
+	_, err := env.UpdateStagedRoot(context.Background(), ddb, rsw, updatedRoot)
 
 	switch err {
 	case doltdb.ErrNomsIO:
 		return errhand.BuildDError("fatal: failed to write value").Build()
 	case env.ErrStateUpdate:
 		return errhand.BuildDError("fatal: failed to update the staged root state").Build()
-	}
-
-	return nil
-}
-
-func ValidateTablesWithVErr(tbls []string, roots ...*doltdb.RootValue) errhand.VerboseError {
-	err := actions.ValidateTables(context.TODO(), tbls, roots...)
-
-	if err != nil {
-		if actions.IsTblNotExist(err) {
-			tbls := actions.GetTablesForError(err)
-			bdr := errhand.BuildDError("Invalid Table(s):")
-
-			for _, tbl := range tbls {
-				bdr.AddDetails("\t" + tbl)
-			}
-
-			return bdr.Build()
-		} else {
-			return errhand.BuildDError("fatal: " + err.Error()).Build()
-		}
 	}
 
 	return nil

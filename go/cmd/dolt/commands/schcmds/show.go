@@ -25,6 +25,7 @@ import (
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -126,7 +127,7 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 				return errhand.BuildDError("unable to get table names.").AddCause(err).Build()
 			}
 
-			tables = commands.RemoveDocsTbl(tables)
+			tables = actions.RemoveDocsTable(tables)
 			if len(tables) == 0 {
 				cli.Println("No tables in working set")
 				return nil
