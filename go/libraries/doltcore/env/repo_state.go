@@ -44,7 +44,6 @@ type RepoStateWriter interface {
 }
 
 type DocsReadWriter interface {
-	ResetWorkingDocsToStagedDocs(ctx context.Context) error
 	GetDocDetail(docName string) (doc doltdb.DocDetails, err error)
 	GetDocsOnDisk()  (Docs, error) // TODO: Add filter?
 	WriteDocsToDisk(ctx context.Context, vrw types.ValueReadWriter, docTbl *doltdb.Table, docDetails []doltdb.DocDetails) (*doltdb.Table, error)
@@ -300,5 +299,53 @@ func UpdateRootWithDocsTable(ctx context.Context, drw DocsReadWriter, root *dolt
 		return nil, err
 	}
 
-	return root.PutTable(ctx, doltdb.DocTableName, docTbl)
+	// There might not need be a need to create docs table if not docs have been created yet.
+	if docTbl != nil {
+		return root.PutTable(ctx, doltdb.DocTableName, docTbl)
+	}
+
+	return root, nil
+}
+
+// ResetWorkingDocsToStagedDocs resets the `dolt_docs` table on the working root to match the staged root.
+// If the `dolt_docs` table does not exist on the staged root, it will be removed from the working root.
+func ResetWorkingDocsToStagedDocs(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader, rsw RepoStateWriter) error {
+	wrkRoot, err := WorkingRoot(ctx, ddb, rsr)
+	if err != nil {
+		return err
+	}
+
+	stgRoot, err := StagedRoot(ctx, ddb, rsr)
+	if err != nil {
+		return err
+	}
+
+	stgDocTbl, stgDocsFound, err := stgRoot.GetTable(ctx, doltdb.DocTableName)
+	if err != nil {
+		return err
+	}
+
+	_, wrkDocsFound, err := wrkRoot.GetTable(ctx, doltdb.DocTableName)
+	if err != nil {
+		return err
+	}
+
+	if wrkDocsFound && !stgDocsFound {
+		newWrkRoot, err := wrkRoot.RemoveTables(ctx, doltdb.DocTableName)
+		if err != nil {
+			return err
+		}
+		_, err = UpdateWorkingRoot(ctx, ddb, rsw, newWrkRoot)
+		return err
+	}
+
+	if stgDocsFound {
+		newWrkRoot, err := wrkRoot.PutTable(ctx, doltdb.DocTableName, stgDocTbl)
+		if err != nil {
+			return err
+		}
+		_, err = UpdateWorkingRoot(ctx, ddb, rsw, newWrkRoot)
+		return err
+	}
+	return nil
 }

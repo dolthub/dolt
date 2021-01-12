@@ -49,7 +49,7 @@ func StageTables(ctx context.Context, dbData env.DbData, tbls []string) error {
 
 	err = stageTables(ctx, ddb, rsw, tables, staged, working)
 	if err != nil {
-		drw.ResetWorkingDocsToStagedDocs(ctx)
+		env.ResetWorkingDocsToStagedDocs(ctx, ddb, rsr, rsw)
 		return err
 	}
 	return nil
@@ -109,7 +109,7 @@ func StageAllTables(ctx context.Context, dbData env.DbData) error {
 
 	err = stageTables(ctx, ddb, rsw, tbls, staged, working)
 	if err != nil {
-		drw.ResetWorkingDocsToStagedDocs(ctx)
+		env.ResetWorkingDocsToStagedDocs(ctx, ddb, rsr, rsw)
 		return err
 	}
 
