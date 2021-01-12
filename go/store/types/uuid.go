@@ -103,10 +103,9 @@ func (v UUID) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	return nil
 }
 
-func (v UUID) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
-	id := UUID{}
-	copy(id[:uuidNumBytes], b.readBytes(uuidNumBytes))
-	return id, nil
+func (v UUID) readFrom(_ *NomsBinFormat, b *binaryNomsReader) (Value, error) {
+	id := b.ReadUUID()
+	return UUID(id), nil
 }
 
 func (v UUID) skip(nbf *NomsBinFormat, b *binaryNomsReader) {

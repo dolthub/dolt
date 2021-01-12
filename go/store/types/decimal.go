@@ -89,10 +89,7 @@ func (v Decimal) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 }
 
 func (v Decimal) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
-	size := uint32(b.readUint16())
-	db := b.readBytes(size)
-	dec := decimal.Decimal{}
-	err := dec.GobDecode(db)
+	dec, err := b.ReadDecimal()
 	if err != nil {
 		return nil, err
 	}

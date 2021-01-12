@@ -88,7 +88,7 @@ func (v Int) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 }
 
 func (v Int) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
-	return Int(b.readInt()), nil
+	return Int(b.ReadInt()), nil
 }
 
 func (v Int) skip(nbf *NomsBinFormat, b *binaryNomsReader) {

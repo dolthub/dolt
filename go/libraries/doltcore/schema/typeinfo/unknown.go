@@ -33,6 +33,11 @@ func (ti *unknownImpl) ConvertNomsValueToValue(types.Value) (interface{}, error)
 	return nil, fmt.Errorf(`"Unknown" cannot convert any Noms value to a go value`)
 }
 
+// ReadFrom reads a go value from a noms types.CodecReader directly
+func (ti *unknownImpl) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
+	return nil, fmt.Errorf(`"Unknown" cannot read any Noms value to a go value`)
+}
+
 // ConvertValueToNomsValue implements TypeInfo interface.
 func (ti *unknownImpl) ConvertValueToNomsValue(interface{}) (types.Value, error) {
 	return nil, fmt.Errorf(`"Unknown" cannot convert any go value to a Noms value`)
