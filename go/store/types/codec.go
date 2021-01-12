@@ -23,6 +23,7 @@ package types
 
 import (
 	"encoding/binary"
+	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"math"
 	"time"
@@ -93,18 +94,20 @@ type nomsWriter interface {
 	writeRaw(buff []byte)
 }
 
-type PrimitiveNomsReader interface {
+type CodecReader interface {
 	ReadKind() NomsKind
 	ReadUint() uint64
 	ReadInt() int64
 	ReadFloat(nbf *NomsBinFormat) float64
 	ReadBool() bool
+	ReadUUID() uuid.UUID
 	ReadString() string
+	ReadInlineBlob() []byte
 	ReadTimestamp() (time.Time, error)
 	ReadDecimal() (decimal.Decimal, error)
 }
 
-var _ PrimitiveNomsReader = (*binaryNomsReader)(nil)
+var _ CodecReader = (*binaryNomsReader)(nil)
 
 type binaryNomsReader struct {
 	buff   []byte
@@ -311,6 +314,19 @@ func (b *binaryNomsReader) ReadString() string {
 	v := string(b.buff[b.offset : b.offset+size])
 	b.offset += size
 	return v
+}
+
+func (b *binaryNomsReader) ReadInlineBlob() []byte {
+	size := uint32(b.readUint16())
+	bytes := b.buff[b.offset : b.offset+size]
+	b.offset += size
+	return bytes
+}
+
+func (b *binaryNomsReader) ReadUUID() uuid.UUID {
+	id := uuid.UUID{}
+	copy(id[:uuidNumBytes], b.readBytes(uuidNumBytes))
+	return id
 }
 
 func (b *binaryNomsReader) skipString() {

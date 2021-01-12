@@ -70,6 +70,25 @@ func (ti *datetimeType) ConvertNomsValueToValue(v types.Value) (interface{}, err
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 }
 
+
+func (ti *datetimeType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
+	k := reader.ReadKind()
+	switch k {
+	case types.UintKind:
+		t, err := reader.ReadTimestamp()
+
+		if err != nil {
+			return nil, err
+		}
+
+		return t.UTC(), nil
+	case types.NullKind:
+		return nil, nil
+	}
+
+	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
+}
+
 // ConvertValueToNomsValue implements TypeInfo interface.
 func (ti *datetimeType) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
 	//TODO: handle the zero value as a special case that is valid for all ranges

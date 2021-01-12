@@ -88,6 +88,30 @@ func (ti *uintType) ConvertNomsValueToValue(v types.Value) (interface{}, error) 
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 }
 
+func (ti *uintType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
+	k := reader.ReadKind()
+	switch k {
+	case types.UintKind:
+		val := reader.ReadUint()
+		switch ti.sqlUintType {
+		case sql.Uint8:
+			return uint8(val), nil
+		case sql.Uint16:
+			return uint16(val), nil
+		case sql.Uint24:
+			return uint32(val), nil
+		case sql.Uint32:
+			return uint32(val), nil
+		case sql.Uint64:
+			return val, nil
+		}
+	case types.NullKind:
+		return nil, nil
+	}
+
+	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
+}
+
 // ConvertValueToNomsValue implements TypeInfo interface.
 func (ti *uintType) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
 	if v == nil {

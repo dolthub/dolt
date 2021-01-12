@@ -44,6 +44,19 @@ func (ti *yearType) ConvertNomsValueToValue(v types.Value) (interface{}, error) 
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 }
 
+func (ti *yearType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
+	k := reader.ReadKind()
+	switch k {
+	case types.IntKind:
+		val := reader.ReadInt()
+		return int16(val), nil
+	case types.NullKind:
+		return nil, nil
+	}
+
+	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
+}
+
 // ConvertValueToNomsValue implements TypeInfo interface.
 func (ti *yearType) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
 	if v == nil {

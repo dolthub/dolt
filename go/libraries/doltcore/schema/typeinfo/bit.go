@@ -64,12 +64,12 @@ func (ti *bitType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 }
 
-func (ti *bitType) ReadNomsPrimitiveAsSql(reader types.PrimitiveNomsReader) (interface{}, error) {
+func (ti *bitType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
 	k := reader.ReadKind()
 	switch k {
 	case types.UintKind:
-		n := reader.ReadUint()
-		return n, nil
+		val := reader.ReadUint()
+		return val, nil
 	case types.NullKind:
 		return nil, nil
 	}

@@ -43,6 +43,19 @@ func (ti *inlineBlobType) ConvertNomsValueToValue(v types.Value) (interface{}, e
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 }
 
+func (ti *inlineBlobType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
+	k := reader.ReadKind()
+	switch k {
+	case types.InlineBlobKind:
+		bytes := reader.ReadInlineBlob()
+		return bytes, nil
+	case types.NullKind:
+		return nil, nil
+	}
+
+	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
+}
+
 // ConvertValueToNomsValue implements TypeInfo interface.
 func (ti *inlineBlobType) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
 	if v == nil {
