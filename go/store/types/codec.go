@@ -25,6 +25,7 @@ import (
 	"encoding/binary"
 	"math"
 	"time"
+	"unsafe"
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
@@ -101,6 +102,12 @@ type binaryNomsReader struct {
 }
 
 func (b *binaryNomsReader) readBytes(count uint32) []byte {
+	v := b.buff[b.offset : b.offset+count]
+	b.offset += count
+	return v
+}
+
+func (b *binaryNomsReader) readCopyOfBytes(count uint32) []byte {
 	v := make([]byte, count)
 	copy(v, b.buff[b.offset:b.offset+count])
 	b.offset += count
@@ -296,10 +303,9 @@ func (b *binaryNomsReader) skipBool() {
 
 func (b *binaryNomsReader) ReadString() string {
 	size := uint32(b.readCount())
-
-	v := string(b.buff[b.offset : b.offset+size])
+	strBytes := b.buff[b.offset : b.offset+size]
 	b.offset += size
-	return v
+	return *(*string)(unsafe.Pointer(&strBytes))
 }
 
 func (b *binaryNomsReader) ReadInlineBlob() []byte {
