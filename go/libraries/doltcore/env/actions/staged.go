@@ -35,17 +35,16 @@ func StageTables(ctx context.Context, dbData env.DbData, tbls []string) error {
 		return err
 	}
 
+	staged, working, err := getStagedAndWorking(ctx, ddb, rsr)
+	if err != nil {
+		return err
+	}
+
 	if len(docDetails) > 0 {
-		err = drw.PutDocsToWorking(ctx, docDetails)
+		working, err = env.UpdateRootWithDocsTable(ctx, drw, working, docDetails)
 		if err != nil {
 			return err
 		}
-	}
-
-	staged, working, err := getStagedAndWorking(ctx, ddb, rsr)
-
-	if err != nil {
-		return err
 	}
 
 	err = stageTables(ctx, ddb, rsw, tables, staged, working)
@@ -78,12 +77,6 @@ func StageAllTables(ctx context.Context, dbData env.DbData) error {
 	rsw := dbData.Rsw
 	drw := dbData.Drw
 
-	err := drw.PutDocsToWorking(ctx, nil)
-
-	if err != nil {
-		return err
-	}
-
 	staged, err := env.StagedRoot(ctx, ddb, rsr)
 
 	if err != nil {
@@ -91,6 +84,18 @@ func StageAllTables(ctx context.Context, dbData env.DbData) error {
 	}
 
 	working, err := env.WorkingRoot(ctx, ddb, rsr)
+
+	if err != nil {
+		return err
+	}
+
+	docDetails, err := drw.GetDocsOnDisk()
+
+	if err != nil {
+		return err
+	}
+
+	working, err = env.UpdateRootWithDocsTable(ctx, drw, working, docDetails)
 
 	if err != nil {
 		return err

@@ -44,12 +44,9 @@ type RepoStateWriter interface {
 }
 
 type DocsReadWriter interface {
-	GetAllValidDocDetails() ([]doltdb.DocDetails, error)
-	PutDocsToWorking(ctx context.Context, docDetails []doltdb.DocDetails) error
-	PutDocsToStaged(ctx context.Context, docDetails []doltdb.DocDetails) (*doltdb.RootValue, error)
 	ResetWorkingDocsToStagedDocs(ctx context.Context) error
 	GetDocDetail(docName string) (doc doltdb.DocDetails, err error)
-	GetDocsOnDisk(docs []string)  (Docs, error)
+	GetDocsOnDisk()  (Docs, error) // TODO: Add filter?
 	WriteDocsToDisk(ctx context.Context, vrw types.ValueReadWriter, docTbl *doltdb.Table, docDetails []doltdb.DocDetails) (*doltdb.Table, error)
 }
 
@@ -288,4 +285,20 @@ func GetRoots(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (wor
 	}
 
 	return working, staged, head, nil
+}
+
+func UpdateRootWithDocsTable(ctx context.Context, drw DocsReadWriter, root *doltdb.RootValue, docDetails []doltdb.DocDetails) (*doltdb.RootValue, error) {
+	docTbl, _, err := root.GetTable(ctx, doltdb.DocTableName)
+
+	if err != nil {
+		return nil, err
+	}
+
+	docTbl, err = drw.WriteDocsToDisk(ctx, root.VRW(), docTbl, docDetails)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return root.PutTable(ctx, doltdb.DocTableName, docTbl)
 }

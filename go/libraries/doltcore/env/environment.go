@@ -58,7 +58,7 @@ var ErrStateUpdate = errors.New("error updating local data repo state")
 var ErrMarshallingSchema = errors.New("error marshalling schema")
 var ErrInvalidCredsFile = errors.New("invalid creds file")
 var ErrDocsUpdate = errors.New("error updating local docs")
-var ErrMapUpdateError = errors.New("error: updated map has no content.")
+var ErrEmptyDocsTable = errors.New("error: All docs removed. Removing Docs Table")
 
 // DoltEnv holds the state of the current environment used by the cli.
 type DoltEnv struct {
@@ -450,18 +450,6 @@ type docsReadWriter struct {
 	dEnv *DoltEnv
 }
 
-func (d *docsReadWriter) GetAllValidDocDetails() ([]doltdb.DocDetails, error) {
-	return d.dEnv.GetAllValidDocDetails()
-}
-
-func (d *docsReadWriter) PutDocsToWorking(ctx context.Context, docDetails []doltdb.DocDetails) error {
-	return d.dEnv.PutDocsToWorking(ctx, docDetails)
-}
-
-func (d *docsReadWriter) PutDocsToStaged(ctx context.Context, docDetails []doltdb.DocDetails) (*doltdb.RootValue, error) {
-	return d.dEnv.PutDocsToStaged(ctx, docDetails)
-}
-
 func (d *docsReadWriter) ResetWorkingDocsToStagedDocs(ctx context.Context) error {
 	return d.dEnv.ResetWorkingDocsToStagedDocs(ctx)
 }
@@ -471,12 +459,8 @@ func (d *docsReadWriter) GetDocDetail(docName string) (doc doltdb.DocDetails, er
 	return d.dEnv.GetDocDetail(docName)
 }
 
-func (d *docsReadWriter) GetDocsOnDisk(docs []string) (Docs, error) {
+func (d *docsReadWriter) GetDocsOnDisk() (Docs, error) {
 	return d.dEnv.GetAllValidDocDetails()
-}
-
-func (d *docsReadWriter) createDocsTable() {
-
 }
 
 func (d *docsReadWriter) WriteDocsToDisk(ctx context.Context, vrw types.ValueReadWriter, docTbl *doltdb.Table, docDetails []doltdb.DocDetails) (*doltdb.Table, error) {
@@ -1102,7 +1086,7 @@ func updateDocsTable(ctx context.Context, docTbl *doltdb.Table, docDetails []dol
 	}
 	updatedMap, err := me.Map(ctx)
 	if updatedMap.Len() == 0 {
-		return nil, ErrMapUpdateError
+		return nil, ErrEmptyDocsTable
 	}
 
 	docTbl, err = docTbl.UpdateRows(ctx, updatedMap)
@@ -1113,7 +1097,7 @@ func updateDocsTable(ctx context.Context, docTbl *doltdb.Table, docDetails []dol
 func updateDocsOnRoot(ctx context.Context, root *doltdb.RootValue, docTbl *doltdb.Table, docDetails []doltdb.DocDetails) (*doltdb.RootValue, error) {
 	docTbl, err := updateDocsTable(ctx, docTbl, docDetails)
 
-	if errors.Is(err, ErrMapUpdateError) {
+	if errors.Is(err, ErrEmptyDocsTable) {
 		return root.RemoveTables(ctx, doltdb.DocTableName)
 	} else if err != nil {
 		return nil, err

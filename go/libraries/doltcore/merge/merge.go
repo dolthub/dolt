@@ -871,7 +871,7 @@ func GetTablesInConflict(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoSt
 }
 
 func GetDocsInConflict(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, drw env.DocsReadWriter) (*diff.DocDiffs, error) {
-	docDetails, err := drw.GetAllValidDocDetails()
+	docDetails, err := drw.GetDocsOnDisk()
 	if err != nil {
 		return nil, err
 	}
