@@ -139,9 +139,9 @@ func compareEncodedNomsValues(a, b []byte) int {
 		return bytes.Compare(a, b)
 	case IntKind:
 		reader := binaryNomsReader{a[1:], 0}
-		aNum := Int(reader.readInt())
+		aNum := Int(reader.ReadInt())
 		reader.buff, reader.offset = b[1:], 0
-		bNum := Int(reader.readInt())
+		bNum := Int(reader.ReadInt())
 		if aNum == bNum {
 			return 0
 		}
@@ -151,9 +151,9 @@ func compareEncodedNomsValues(a, b []byte) int {
 		return 1
 	case UintKind:
 		reader := binaryNomsReader{a[1:], 0}
-		aNum := Uint(reader.readUint())
+		aNum := Uint(reader.ReadUint())
 		reader.buff, reader.offset = b[1:], 0
-		bNum := Uint(reader.readUint())
+		bNum := Uint(reader.ReadUint())
 		if aNum == bNum {
 			return 0
 		}
@@ -163,9 +163,9 @@ func compareEncodedNomsValues(a, b []byte) int {
 		return 1
 	case FloatKind:
 		reader := binaryNomsReader{a[1:], 0}
-		aNum := Float(reader.readFloat(Format_7_18))
+		aNum := Float(reader.ReadFloat(Format_7_18))
 		reader.buff, reader.offset = b[1:], 0
-		bNum := Float(reader.readFloat(Format_7_18))
+		bNum := Float(reader.ReadFloat(Format_7_18))
 		if aNum == bNum {
 			return 0
 		}

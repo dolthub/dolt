@@ -92,9 +92,8 @@ func (v InlineBlob) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 }
 
 func (v InlineBlob) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
-	size := uint32(b.readUint16())
-	ib := b.readBytes(size)
-	return InlineBlob(ib), nil
+	bytes := b.ReadInlineBlob()
+	return InlineBlob(bytes), nil
 }
 
 func (v InlineBlob) skip(nbf *NomsBinFormat, b *binaryNomsReader) {

@@ -24,6 +24,10 @@ package types
 import (
 	"encoding/binary"
 	"math"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
@@ -135,7 +139,7 @@ func (b *binaryNomsReader) peekKind() NomsKind {
 	return NomsKind(b.peekUint8())
 }
 
-func (b *binaryNomsReader) readKind() NomsKind {
+func (b *binaryNomsReader) ReadKind() NomsKind {
 	return NomsKind(b.readUint8())
 }
 
@@ -144,22 +148,39 @@ func (b *binaryNomsReader) skipKind() {
 }
 
 func (b *binaryNomsReader) readCount() uint64 {
-	return b.readUint()
+	return b.ReadUint()
 }
 
 func (b *binaryNomsReader) skipCount() {
 	b.skipUint()
 }
 
-func (b *binaryNomsReader) readFloat(nbf *NomsBinFormat) float64 {
+func (b *binaryNomsReader) ReadFloat(nbf *NomsBinFormat) float64 {
 	if isFormat_7_18(nbf) {
-		i := b.readInt()
-		exp := b.readInt()
+		i := b.ReadInt()
+		exp := b.ReadInt()
 		return fracExpToFloat(i, int(exp))
 	} else {
 		floatbits := binary.BigEndian.Uint64(b.readBytes(8))
 		return math.Float64frombits(floatbits)
 	}
+}
+
+func (b *binaryNomsReader) ReadDecimal() (decimal.Decimal, error) {
+	size := uint32(b.readUint16())
+	db := b.readBytes(size)
+
+	var dec decimal.Decimal
+	err := dec.GobDecode(db)
+	return dec, err
+}
+
+func (b *binaryNomsReader) ReadTimestamp() (time.Time, error) {
+	data := b.readBytes(timestampNumBytes)
+
+	var t time.Time
+	err := t.UnmarshalBinary(data)
+	return t, err
 }
 
 func (b *binaryNomsReader) skipFloat(nbf *NomsBinFormat) {
@@ -176,13 +197,13 @@ func (b *binaryNomsReader) skipInt() {
 	b.offset += uint32(count)
 }
 
-func (b *binaryNomsReader) readInt() int64 {
+func (b *binaryNomsReader) ReadInt() int64 {
 	v, count := unrolledDecodeVarint(b.buff[b.offset:])
 	b.offset += uint32(count)
 	return v
 }
 
-func (b *binaryNomsReader) readUint() uint64 {
+func (b *binaryNomsReader) ReadUint() uint64 {
 	v, count := unrolledDecodeUVarint(b.buff[b.offset:])
 	b.offset += uint32(count)
 	return v
@@ -265,7 +286,7 @@ func (b *binaryNomsReader) skipUint() {
 	b.offset += uint32(count)
 }
 
-func (b *binaryNomsReader) readBool() bool {
+func (b *binaryNomsReader) ReadBool() bool {
 	return b.readUint8() == 1
 }
 
@@ -273,12 +294,25 @@ func (b *binaryNomsReader) skipBool() {
 	b.skipUint8()
 }
 
-func (b *binaryNomsReader) readString() string {
+func (b *binaryNomsReader) ReadString() string {
 	size := uint32(b.readCount())
 
 	v := string(b.buff[b.offset : b.offset+size])
 	b.offset += size
 	return v
+}
+
+func (b *binaryNomsReader) ReadInlineBlob() []byte {
+	size := uint32(b.readUint16())
+	bytes := b.buff[b.offset : b.offset+size]
+	b.offset += size
+	return bytes
+}
+
+func (b *binaryNomsReader) ReadUUID() uuid.UUID {
+	id := uuid.UUID{}
+	copy(id[:uuidNumBytes], b.readBytes(uuidNumBytes))
+	return id
 }
 
 func (b *binaryNomsReader) skipString() {

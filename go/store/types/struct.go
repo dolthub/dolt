@@ -64,7 +64,7 @@ func skipStruct(nbf *NomsBinFormat, dec *valueDecoder) error {
 	count := dec.readCount()
 	for i := uint64(0); i < count; i++ {
 		dec.skipString()
-		err := dec.skipValue(nbf)
+		err := dec.SkipValue(nbf)
 
 		if err != nil {
 			return err
@@ -242,11 +242,11 @@ func (s Struct) typeOf() (*Type, error) {
 
 func readStructTypeOfValue(nbf *NomsBinFormat, dec *valueDecoder) (*Type, error) {
 	dec.skipKind()
-	name := dec.readString()
+	name := dec.ReadString()
 	count := dec.readCount()
 	typeFields := make(structTypeFields, count)
 	for i := uint64(0); i < count; i++ {
-		fname := dec.readString()
+		fname := dec.ReadString()
 		t, err := dec.readTypeOfValue(nbf)
 
 		if err != nil {
@@ -281,7 +281,7 @@ func (s Struct) Len() int {
 func (s Struct) Name() string {
 	dec := s.decoder()
 	dec.skipKind()
-	return dec.readString()
+	return dec.ReadString()
 }
 
 // IterFields iterates over the fields, calling cb for every field in the
@@ -289,7 +289,7 @@ func (s Struct) Name() string {
 func (s Struct) IterFields(cb func(name string, value Value) error) error {
 	dec, count := s.decoderSkipToFields()
 	for i := uint64(0); i < count; i++ {
-		fldName := dec.readString()
+		fldName := dec.ReadString()
 		val, err := dec.readValue(s.format())
 
 		if err != nil {
@@ -317,11 +317,11 @@ type structPartCallbacks interface {
 func (s Struct) iterParts(ctx context.Context, cbs structPartCallbacks) error {
 	dec := s.decoder()
 	dec.skipKind()
-	cbs.name(ctx, dec.readString())
+	cbs.name(ctx, dec.ReadString())
 	count := dec.readCount()
 	cbs.count(count)
 	for i := uint64(0); i < count; i++ {
-		cbs.fieldName(dec.readString())
+		cbs.fieldName(dec.ReadString())
 		val, err := dec.readValue(s.format())
 
 		if err != nil {
@@ -343,7 +343,7 @@ func (s Struct) iterParts(ctx context.Context, cbs structPartCallbacks) error {
 func (s Struct) MaybeGet(n string) (v Value, found bool, err error) {
 	dec, count := s.decoderSkipToFields()
 	for i := uint64(0); i < count; i++ {
-		name := dec.readString()
+		name := dec.ReadString()
 		if name == n {
 			found = true
 			v, err = dec.readValue(s.format())
@@ -359,7 +359,7 @@ func (s Struct) MaybeGet(n string) (v Value, found bool, err error) {
 			return
 		}
 
-		err = dec.skipValue(s.format())
+		err = dec.SkipValue(s.format())
 
 		if err != nil {
 			return nil, false, err
@@ -413,8 +413,8 @@ func (s Struct) splitFieldsAt(name string) (prolog, head, tail []byte, count uin
 
 	for i := uint64(0); i < count; i++ {
 		beforeCurrent := dec.offset
-		fn := dec.readString()
-		err = dec.skipValue(s.format())
+		fn := dec.ReadString()
+		err = dec.SkipValue(s.format())
 
 		if err != nil {
 			return nil, nil, nil, 0, false, err
@@ -478,10 +478,10 @@ func (s Struct) Diff(ctx context.Context, last Struct, changes chan<- ValueChang
 
 	for i1 < count1 && i2 < count2 {
 		if fn1 == "" {
-			fn1 = dec1.readString()
+			fn1 = dec1.ReadString()
 		}
 		if fn2 == "" {
-			fn2 = dec2.readString()
+			fn2 = dec2.ReadString()
 		}
 		var change ValueChanged
 		if fn1 == fn2 {
@@ -534,7 +534,7 @@ func (s Struct) Diff(ctx context.Context, last Struct, changes chan<- ValueChang
 
 	for ; i1 < count1; i1++ {
 		if fn1 == "" {
-			fn1 = dec1.readString()
+			fn1 = dec1.ReadString()
 			fmt.Println(fn1)
 		}
 		v1, err := dec1.readValue(s.format())
@@ -550,7 +550,7 @@ func (s Struct) Diff(ctx context.Context, last Struct, changes chan<- ValueChang
 
 	for ; i2 < count2; i2++ {
 		if fn2 == "" {
-			fn2 = dec2.readString()
+			fn2 = dec2.ReadString()
 		}
 
 		v2, err := dec2.readValue(s.format())

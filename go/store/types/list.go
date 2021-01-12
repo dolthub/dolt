@@ -311,6 +311,73 @@ func iterAll(ctx context.Context, col Collection, f func(v Value, index uint64) 
 	return ae.Get()
 }
 
+type collRangeIter struct {
+	leaves         []Collection
+	currLeaf       int
+	startIdx       uint64
+	endIdx         uint64
+	valsPerIdx     uint64
+	currLeafValues []Value
+	leafValPos     int
+}
+
+func (itr *collRangeIter) Next() (Value, error) {
+	var err error
+	if itr.currLeafValues == nil {
+		if itr.currLeaf >= len(itr.leaves) {
+			// reached the end
+			return nil, nil
+		}
+
+		currLeaf := itr.leaves[itr.currLeaf]
+		itr.currLeaf++
+
+		seq := currLeaf.asSequence()
+		itr.currLeafValues, err = seq.valuesSlice(itr.startIdx, itr.endIdx)
+		itr.leafValPos = 0
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	v := itr.currLeafValues[itr.leafValPos]
+	itr.leafValPos++
+
+	if itr.leafValPos >= len(itr.currLeafValues) {
+		itr.endIdx = itr.endIdx - uint64(len(itr.currLeafValues))/itr.valsPerIdx - itr.startIdx
+		itr.startIdx = 0
+		itr.currLeafValues = nil
+	}
+
+	return v, nil
+}
+
+func newCollRangeIter(ctx context.Context, col Collection, startIdx, endIdx uint64) (*collRangeIter, error) {
+	l := col.Len()
+	d.PanicIfTrue(startIdx > endIdx || endIdx > l)
+	if startIdx == endIdx {
+		return nil, nil
+	}
+
+	leaves, localStart, err := LoadLeafNodes(ctx, []Collection{col}, startIdx, endIdx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	endIdx = localStart + endIdx - startIdx
+	startIdx = localStart
+	valuesPerIdx := uint64(getValuesPerIdx(col.Kind()))
+
+	return &collRangeIter{
+		leaves:     leaves,
+		startIdx:   startIdx,
+		endIdx:     endIdx,
+		valsPerIdx: valuesPerIdx,
+	}, nil
+}
+
 func iterRange(ctx context.Context, col Collection, startIdx, endIdx uint64, cb func(v Value) error) (uint64, error) {
 	l := col.Len()
 	d.PanicIfTrue(startIdx > endIdx || endIdx > l)
