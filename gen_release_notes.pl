@@ -3,16 +3,18 @@
 use warnings;
 use strict;
 
+use open ":std", ":encoding(UTF-8)";
+
 use JSON::Parse 'json_file_to_perl';
 use Data::Dumper;
 
 # no arg for changes since last release
 my $releaseTag = shift @ARGV;
 
-# fetch the most recent releases for dolt
 my $tmpDir = "/var/tmp";
 my $releasesFile = "/$tmpDir/releases-$$.json";
 my $doltPullsFile = "$tmpDir/dolt-prs-$$.json";
+my $doltIssuesFile = "$tmpDir/dolt-issues-$$.json";
 my $gmsPullsFile = "$tmpDir/gms-prs-$$.json";
 
 my $doltReleasesUrl = 'https://api.github.com/repos/dolthub/dolt/releases';
@@ -56,8 +58,36 @@ foreach my $pull (@$doltPullsJson) {
     push (@mergedDoltPrs, \%pr) if $pull->{merged_at} gt $toTime;
 }
 
+my $doltIssuesUrl = "https://api.github.com/repos/dolthub/dolt/issues?state=closed&since=$fromTime&perPage=100";
+my $curlDoltIssues = "curl -H 'Accept: application/vnd.github.v3+json' '$doltIssuesUrl' > $doltIssuesFile";
+system($curlDoltIssues) and die $!;
 
+my $doltIssuesJson = json_file_to_perl($doltIssuesFile);
+my @closedIssues;
+foreach my $issue (@$doltIssuesJson) {
+    next unless $issue->{closed_at};
+    last if $issue->{closed_at} lt $fromTime;
+    next if $issue->{html_url} =~ m|/pull/|; # the issues API also returns PR results
+    my %i = (
+        'url' => $issue->{html_url},
+        'number' => $issue->{number},
+        'title' => $issue->{title},
+        'body' => $issue->{body},
+    );
 
-print Dumper @mergedDoltPrs;
+    push (@closedIssues, \%i) if $issue->{closed_at} gt $toTime; 
+}
 
+print "# Merged PRs:\n\n";
+foreach my $pr (@mergedDoltPrs) {
+    if ($pr->{body}) {
+        print "* [$pr->{number}]($pr->{url}): $pr->{title} ($pr->{body})\n";        
+    } else {
+        print "* [$pr->{number}]($pr->{url}): $pr->{title}\n";
+    }
+}
 
+print "\n\n# Closed Issues\n\n";
+foreach my $pr (@closedIssues) {
+    print "* [$pr->{number}]($pr->{url}): $pr->{title}\n";
+}
