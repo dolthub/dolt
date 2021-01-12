@@ -49,7 +49,7 @@ func (ti *inlineBlobType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecRea
 	switch k {
 	case types.InlineBlobKind:
 		bytes := reader.ReadInlineBlob()
-		return bytes, nil
+		return string(bytes), nil
 	case types.NullKind:
 		return nil, nil
 	}
