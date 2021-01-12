@@ -550,7 +550,7 @@ func (r *valueDecoder) readStruct(nbf *NomsBinFormat) (Value, error) {
 	return readStruct(nbf, r)
 }
 
-func (r *valueDecoder) readTuple(nbf *NomsBinFormat) (Value, error) {
+func (r *valueDecoder) readTuple(nbf *NomsBinFormat) (Tuple, error) {
 	return readTuple(nbf, r)
 }
 

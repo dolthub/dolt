@@ -31,6 +31,12 @@ type MapIterator interface {
 	Next(ctx context.Context) (k, v Value, err error)
 }
 
+// MapTupleIterator is an iterator that returns map keys and values as types.Tuple instances and follow the standard go
+// convention of using io.EOF to mean that all the data has been read.
+type MapTupleIterator interface {
+	Next(ctx context.Context) (k, v Tuple, err error)
+}
+
 // mapIterator can efficiently iterate through a Noms Map.
 type mapIterator struct {
 	sequenceIter sequenceIterator
@@ -62,34 +68,29 @@ func (mi *mapIterator) Next(ctx context.Context) (k, v Value, err error) {
 	return mi.currentKey, mi.currentValue, nil
 }
 
-type mapKeyValuePair struct {
-	k Value
-	v Value
-}
-
 var errClosed = errors.New("closed")
 
 type mapRangeIter struct {
-	collItr *collRangeIter
+	collItr *collTupleRangeIter
 }
 
-func (itr *mapRangeIter) Next(context.Context) (Value, Value, error) {
-	k, err := itr.collItr.Next()
+func (itr *mapRangeIter) Next(ctx context.Context) (k, v Tuple, err error) {
+	k, err = itr.collItr.Next()
 
 	if err != nil {
-		return nil, nil, err
+		return Tuple{}, Tuple{}, err
 	}
 
-	v, err := itr.collItr.Next()
+	v, err = itr.collItr.Next()
 
 	if err != nil {
-		return nil, nil, err
+		return Tuple{}, Tuple{}, err
 	}
 
 	return k, v, nil
 }
 
-func (m Map) RangeIterator(ctx context.Context, startIdx, endIdx uint64) (MapIterator, error) {
+func (m Map) RangeIterator(ctx context.Context, startIdx, endIdx uint64) (MapTupleIterator, error) {
 	collItr, err := newCollRangeIter(ctx, m, startIdx, endIdx)
 
 	if err != nil {

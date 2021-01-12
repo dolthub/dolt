@@ -204,6 +204,13 @@ type Tuple struct {
 // readTuple reads the data provided by a decoder and moves the decoder forward.
 func readTuple(nbf *NomsBinFormat, dec *valueDecoder) (Tuple, error) {
 	start := dec.pos()
+	k := dec.peekKind()
+
+	if k == NullKind {
+		dec.skipKind()
+		return EmptyTuple(nbf), nil
+	}
+
 	err := skipTuple(nbf, dec)
 
 	if err != nil {
