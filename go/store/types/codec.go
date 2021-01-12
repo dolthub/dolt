@@ -94,21 +94,6 @@ type nomsWriter interface {
 	writeRaw(buff []byte)
 }
 
-type CodecReader interface {
-	ReadKind() NomsKind
-	ReadUint() uint64
-	ReadInt() int64
-	ReadFloat(nbf *NomsBinFormat) float64
-	ReadBool() bool
-	ReadUUID() uuid.UUID
-	ReadString() string
-	ReadInlineBlob() []byte
-	ReadTimestamp() (time.Time, error)
-	ReadDecimal() (decimal.Decimal, error)
-}
-
-var _ CodecReader = (*binaryNomsReader)(nil)
-
 type binaryNomsReader struct {
 	buff   []byte
 	offset uint32

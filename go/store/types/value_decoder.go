@@ -23,11 +23,30 @@ package types
 
 import (
 	"errors"
+	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
+	"time"
 
 	"github.com/dolthub/dolt/go/store/d"
 )
 
 var ErrUnknownType = errors.New("unknown type")
+
+type CodecReader interface {
+	ReadKind() NomsKind
+	SkipValue(nbf *NomsBinFormat) error
+	ReadUint() uint64
+	ReadInt() int64
+	ReadFloat(nbf *NomsBinFormat) float64
+	ReadBool() bool
+	ReadUUID() uuid.UUID
+	ReadString() string
+	ReadInlineBlob() []byte
+	ReadTimestamp() (time.Time, error)
+	ReadDecimal() (decimal.Decimal, error)
+}
+
+var _ CodecReader = (*valueDecoder)(nil)
 
 type valueDecoder struct {
 	typedBinaryNomsReader
@@ -71,7 +90,7 @@ func (r *valueDecoder) skipValueSequence(nbf *NomsBinFormat, elementsPerIndex in
 	offsets[0] = r.pos()
 	for i := uint64(0); i < count; i++ {
 		for j := 0; j < elementsPerIndex; j++ {
-			err := r.skipValue(nbf)
+			err := r.SkipValue(nbf)
 
 			if err != nil {
 				return nil, 0, err
@@ -225,7 +244,7 @@ func (r *valueDecoder) skipOrderedKey(nbf *NomsBinFormat) error {
 		r.skipKind()
 		r.skipHash()
 	default:
-		err := r.skipValue(nbf)
+		err := r.SkipValue(nbf)
 
 		if err != nil {
 			return err
@@ -335,7 +354,7 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 	return nil, ErrUnknownType
 }
 
-func (r *valueDecoder) skipValue(nbf *NomsBinFormat) error {
+func (r *valueDecoder) SkipValue(nbf *NomsBinFormat) error {
 	k := r.peekKind()
 	switch k {
 	case BlobKind:
@@ -497,7 +516,7 @@ func (r *valueDecoder) isValueSameTypeForSure(nbf *NomsBinFormat, t *Type) (bool
 
 	// Captures all other types that are not the above special cases
 	if IsPrimitiveKind(k) {
-		err := r.skipValue(nbf)
+		err := r.SkipValue(nbf)
 		if err != nil {
 			return false, err
 		}

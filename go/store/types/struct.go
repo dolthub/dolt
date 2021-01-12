@@ -64,7 +64,7 @@ func skipStruct(nbf *NomsBinFormat, dec *valueDecoder) error {
 	count := dec.readCount()
 	for i := uint64(0); i < count; i++ {
 		dec.skipString()
-		err := dec.skipValue(nbf)
+		err := dec.SkipValue(nbf)
 
 		if err != nil {
 			return err
@@ -359,7 +359,7 @@ func (s Struct) MaybeGet(n string) (v Value, found bool, err error) {
 			return
 		}
 
-		err = dec.skipValue(s.format())
+		err = dec.SkipValue(s.format())
 
 		if err != nil {
 			return nil, false, err
@@ -414,7 +414,7 @@ func (s Struct) splitFieldsAt(name string) (prolog, head, tail []byte, count uin
 	for i := uint64(0); i < count; i++ {
 		beforeCurrent := dec.offset
 		fn := dec.ReadString()
-		err = dec.skipValue(s.format())
+		err = dec.SkipValue(s.format())
 
 		if err != nil {
 			return nil, nil, nil, 0, false, err

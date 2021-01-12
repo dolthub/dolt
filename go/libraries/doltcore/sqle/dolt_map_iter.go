@@ -158,7 +158,7 @@ func (conv *KVToSqlRowConverter) processTuple(cols []interface{}, valsToFill int
 		}
 
 		if sqlColIdx, ok := conv.tagToSqlColIdx[tag64]; !ok {
-			err = tupItr.Skip()
+			err = primReader.SkipValue(nbf)
 
 			if err != nil {
 				return err

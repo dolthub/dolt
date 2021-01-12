@@ -316,7 +316,7 @@ func (ml mapLeafSequence) search(key orderedKey) (int, error) {
 
 func (ml mapLeafSequence) getValue(idx int) (Value, error) {
 	dec := ml.decoderSkipToIndex(idx)
-	err := dec.skipValue(ml.format())
+	err := dec.SkipValue(ml.format())
 
 	if err != nil {
 		return nil, err

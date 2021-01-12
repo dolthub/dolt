@@ -37,6 +37,7 @@ func (ti *tupleType) ConvertNomsValueToValue(v types.Value) (interface{}, error)
 	return v, nil
 }
 
+// ReadFrom reads a go value from a noms types.CodecReader directly
 func (ti *tupleType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
 	k := reader.ReadKind()
 	switch k {

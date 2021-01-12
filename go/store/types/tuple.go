@@ -137,12 +137,12 @@ func (itr *TupleIterator) Next() (uint64, Value, error) {
 }
 
 func (itr *TupleIterator) CodecReader() (CodecReader, uint64) {
-	return &itr.dec.binaryNomsReader, itr.count - itr.pos
+	return itr.dec, itr.count - itr.pos
 }
 
 func (itr *TupleIterator) Skip() error {
 	if itr.pos < itr.count {
-		err := itr.dec.skipValue(itr.nbf)
+		err := itr.dec.SkipValue(itr.nbf)
 
 		if err != nil {
 			return err
@@ -184,7 +184,7 @@ func (itr *TupleIterator) InitForTupleAt(t Tuple, pos uint64) error {
 	count := itr.dec.readCount()
 
 	for i := uint64(0); i < pos; i++ {
-		err := itr.dec.skipValue(t.format())
+		err := itr.dec.SkipValue(t.format())
 
 		if err != nil {
 			return err
@@ -217,7 +217,7 @@ func skipTuple(nbf *NomsBinFormat, dec *valueDecoder) error {
 	dec.skipKind()
 	count := dec.readCount()
 	for i := uint64(0); i < count; i++ {
-		err := dec.skipValue(nbf)
+		err := dec.SkipValue(nbf)
 
 		if err != nil {
 			return err
@@ -460,7 +460,7 @@ func (t Tuple) Get(n uint64) (Value, error) {
 	}
 
 	for i := uint64(0); i < n; i++ {
-		err := dec.skipValue(t.format())
+		err := dec.SkipValue(t.format())
 
 		if err != nil {
 			return nil, err
@@ -534,7 +534,7 @@ func (t Tuple) splitFieldsAt(n uint64) (prolog, head, tail []byte, count uint64,
 	fieldsOffset := dec.offset
 
 	for i := uint64(0); i < n; i++ {
-		err := dec.skipValue(t.format())
+		err := dec.SkipValue(t.format())
 
 		if err != nil {
 			return nil, nil, nil, 0, false, err
@@ -544,7 +544,7 @@ func (t Tuple) splitFieldsAt(n uint64) (prolog, head, tail []byte, count uint64,
 	head = dec.buff[fieldsOffset:dec.offset]
 
 	if n != count-1 {
-		err := dec.skipValue(t.format())
+		err := dec.SkipValue(t.format())
 
 		if err != nil {
 			return nil, nil, nil, 0, false, err

@@ -87,6 +87,8 @@ func (ti *intType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	}
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 }
+
+// ReadFrom reads a go value from a noms types.CodecReader directly
 func (ti *intType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
 	k := reader.ReadKind()
 	switch k {
