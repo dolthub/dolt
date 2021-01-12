@@ -23,9 +23,10 @@ package types
 
 import (
 	"errors"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
-	"time"
 
 	"github.com/dolthub/dolt/go/store/d"
 )

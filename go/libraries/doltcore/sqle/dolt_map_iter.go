@@ -141,7 +141,7 @@ func (conv *KVToSqlRowConverter) processTuple(cols []interface{}, valsToFill int
 	primReader, numPrimitives := tupItr.CodecReader()
 
 	filled := 0
-	for pos := uint64(0); pos + 1 < numPrimitives; pos += 2 {
+	for pos := uint64(0); pos+1 < numPrimitives; pos += 2 {
 		if filled >= valsToFill {
 			break
 		}

@@ -23,10 +23,11 @@ package types
 
 import (
 	"encoding/binary"
-	"github.com/google/uuid"
-	"github.com/shopspring/decimal"
 	"math"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
