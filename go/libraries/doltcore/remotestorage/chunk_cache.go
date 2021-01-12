@@ -19,8 +19,8 @@ import (
 	"github.com/dolthub/dolt/go/store/nbs"
 )
 
-// chunkCache is an interface used for caching chunks
-type chunkCache interface {
+// ChunkCache is an interface used for caching chunks
+type ChunkCache interface {
 	// Put puts a slice of chunks into the cache.
 	Put(c []nbs.CompressedChunk)
 
