@@ -11,10 +11,12 @@ use Data::Dumper;
 use Getopt::Long;
 
 my $token = "";
-GetOptions ("token=s" => \$token) or die "Error in command line args";
+GetOptions ("token|t=s" => \$token) or die "Error in command line args";
 
 # no arg for changes since last release
 my $releaseTag = shift @ARGV;
+
+print STDERR "Looking for changes since release $releaseTag\n" if $releaseTag;
 
 my $tmpDir = "/var/tmp";
 my $releasesFile = "$tmpDir/releases-$$.json";
@@ -45,10 +47,10 @@ die "Couldn't find release" unless $toTime;
 
 print STDERR "Looking for PRs and issues from $fromTime to $toTime\n";
 
-my $doltPullRequestsUrl = 'https://api.github.com/repos/dolthub/dolt/pulls?state=closed&per_page=100';
+my $doltPullRequestsUrl = 'https://api.github.com/repos/dolthub/dolt/pulls';
 my $mergedDoltPrs = getPRs($doltPullRequestsUrl, $fromTime, $toTime);
 
-my $doltIssuesUrl = "https://api.github.com/repos/dolthub/dolt/issues?state=closed&since=$fromTime&per_page=100";
+my $doltIssuesUrl = "https://api.github.com/repos/dolthub/dolt/issues";
 my $closedIssues = getIssues($doltIssuesUrl, $fromTime, $toTime);
 
 print "# Merged PRs:\n\n";
@@ -81,6 +83,8 @@ sub getPRs {
     my $baseUrl = shift;
     my $fromTime = shift;
     my $toTime = shift;
+
+    $baseUrl .= '?state=closed&sort=created&direction=desc&per_page=100';
     
     my $page = 1;
     my $more = 0;
@@ -97,7 +101,7 @@ sub getPRs {
         foreach my $pull (@$doltPullsJson) {
             $more = 1;
             next unless $pull->{merged_at};
-            return \@mergedDoltPrs if $pull->{merged_at} lt $fromTime;
+            return \@mergedDoltPrs if $pull->{created_at} lt $fromTime;
             my %pr = (
                 'url' => $pull->{html_url},
                 'number' => $pull->{number},
@@ -105,7 +109,8 @@ sub getPRs {
                 'body' => $pull->{body},
                 );
 
-            push (@mergedDoltPrs, \%pr) if $pull->{merged_at} lt $toTime;
+            # print STDERR "PR merged at $pull->{merged_at}\n";
+            push (@mergedDoltPrs, \%pr) if $pull->{merged_at} le $toTime;
         }
 
         $page++;
@@ -118,6 +123,8 @@ sub getIssues {
     my $baseUrl = shift;
     my $fromTime = shift;
     my $toTime = shift;
+
+    $baseUrl .= "?state=closed&sort=created&direction=desc&since=$fromTime&per_page=100";
     
     my $page = 1;
     my $more = 0;
@@ -134,7 +141,7 @@ sub getIssues {
         foreach my $issue (@$doltIssuesJson) {
             $more = 1;
             next unless $issue->{closed_at};
-            return \@closedIssues if $issue->{closed_at} lt $fromTime;
+            return \@closedIssues if $issue->{created_at} lt $fromTime;
             next if $issue->{html_url} =~ m|/pull/|; # the issues API also returns PR results
             my %i = (
                 'url' => $issue->{html_url},
@@ -143,7 +150,7 @@ sub getIssues {
                 'body' => $issue->{body},
                 );
             
-            push (@closedIssues, \%i) if $issue->{closed_at} lt $toTime; 
+            push (@closedIssues, \%i) if $issue->{closed_at} le $toTime; 
         }
 
         $page++;
