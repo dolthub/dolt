@@ -86,19 +86,20 @@ sub getPRs {
     my $page = 1;
     my $more = 0;
     
-    my @mergedDoltPrs;
+    my @mergedPrs;
     do {
         my $pullsUrl = "$baseUrl&page=$page";
-        my $curlDoltPulls = curlCmd($pullsUrl, $token);
-        print STDERR "$curlDoltPulls\n";
-        system($curlDoltPulls) and die $!;
+        my $curlPulls = curlCmd($pullsUrl, $token);
+        print STDERR "$curlPulls\n";
+        system($curlPulls) and die $!;
 
         $more = 0;
-        my $doltPullsJson = json_file_to_perl($curlFile);
-        foreach my $pull (@$doltPullsJson) {
+        my $pullsJson = json_file_to_perl($curlFile);
+        # TODO: error handling if this fails to parse
+        foreach my $pull (@$pullsJson) {
             $more = 1;
             next unless $pull->{merged_at};
-            return \@mergedDoltPrs if $pull->{created_at} lt $fromTime;
+            return \@mergedPrs if $pull->{created_at} lt $fromTime;
             my %pr = (
                 'url' => $pull->{html_url},
                 'number' => $pull->{number},
@@ -107,13 +108,13 @@ sub getPRs {
                 );
 
             # print STDERR "PR merged at $pull->{merged_at}\n";
-            push (@mergedDoltPrs, \%pr) if $pull->{merged_at} le $toTime;
+            push (@mergedPrs, \%pr) if $pull->{merged_at} le $toTime;
         }
 
         $page++;
     } while $more;
     
-    return \@mergedDoltPrs;
+    return \@mergedPrs;
 }
 
 sub getIssues {
@@ -129,13 +130,14 @@ sub getIssues {
     my @closedIssues;
     do {
         my $issuesUrl = "$baseUrl&page=$page";
-        my $curlDoltIssues = curlCmd($issuesUrl, $token);
-        print STDERR "$curlDoltIssues\n";
-        system($curlDoltIssues) and die $!;
+        my $curlIssues = curlCmd($issuesUrl, $token);
+        print STDERR "$curlIssues\n";
+        system($curlIssues) and die $!;
 
         $more = 0;
-        my $doltIssuesJson = json_file_to_perl($curlFile);
-        foreach my $issue (@$doltIssuesJson) {
+        my $issuesJson = json_file_to_perl($curlFile);
+        # TODO: error handling if this fails to parse
+        foreach my $issue (@$issuesJson) {
             $more = 1;
             next unless $issue->{closed_at};
             return \@closedIssues if $issue->{created_at} lt $fromTime;
