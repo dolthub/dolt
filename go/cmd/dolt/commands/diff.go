@@ -282,7 +282,7 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 
 func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string) (from, to *doltdb.RootValue, leftover []string, err error) {
 	headRoot, err := dEnv.StagedRoot(ctx)
-	workingRoot, err := dEnv.WorkingRootWithDocs(ctx)
+	workingRoot, err := env.WorkingRootWithDocs(ctx, dEnv.DbData())
 	if err != nil {
 		return nil, nil, nil, err
 	}

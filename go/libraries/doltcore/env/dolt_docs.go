@@ -17,6 +17,7 @@ package env
 import (
 	"context"
 	"errors"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -101,6 +102,40 @@ func IsValidDoc(docName string) bool {
 func hasDocFile(fs filesys.ReadWriteFS, file string) bool {
 	exists, isDir := fs.Exists(getDocFile(file))
 	return exists && !isDir
+}
+
+// WorkingRootWithDocs returns a copy of the working root that has been updated with the Dolt docs from the file system.
+func WorkingRootWithDocs(ctx context.Context, dbData DbData) (*doltdb.RootValue, error) {
+	drw := dbData.Drw
+
+	dds, err := drw.GetDocsOnDisk()
+	if err != nil {
+		return nil, err
+	}
+
+	return UpdateWorkingRootWithDocsTable(ctx, dbData, dds)
+}
+
+// UpdateWorkingRootWithDocsTable loads in the WorkingRoot and calls UpdateRootWithDocsTable.
+func UpdateWorkingRootWithDocsTable(ctx context.Context, dbData DbData, docDetails []doltdb.DocDetails) (*doltdb.RootValue, error) {
+	working, err := WorkingRoot(ctx, dbData.Ddb, dbData.Rsr)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return UpdateRootWithDocsTable(ctx, dbData, working, Working, docDetails)
+}
+
+// UpdateStagedRootWithDocsTable loads in the StagedRoot and calls UpdateRootWithDocsTable.
+func UpdateStagedRootWithDocsTable(ctx context.Context, dbData DbData, docDetails []doltdb.DocDetails) (*doltdb.RootValue, error) {
+	staged, err := StagedRoot(ctx, dbData.Ddb, dbData.Rsr)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return UpdateRootWithDocsTable(ctx, dbData, staged, Staged, docDetails)
 }
 
 // UpdateRootWithDocsTable takes in a root value, a drw, and some docs and writes those docs to the dolt_docs table

@@ -100,12 +100,12 @@ func AllBranches(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, 
 		return err
 	}
 
-	return rebaseRefs(ctx, dEnv, replay, nerf, branches...)
+	return rebaseRefs(ctx, dEnv.DbData(), replay, nerf, branches...)
 }
 
 // CurrentBranch rewrites the history of the current branch using the |replay| function.
 func CurrentBranch(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn) error {
-	return rebaseRefs(ctx, dEnv, replay, nerf, dEnv.RepoState.CWBHeadRef())
+	return rebaseRefs(ctx, dEnv.DbData(), replay, nerf, dEnv.RepoState.CWBHeadRef())
 }
 
 // AllBranchesByRoots rewrites the history of all branches in the repo using the |replay| function.
@@ -116,19 +116,23 @@ func AllBranchesByRoots(ctx context.Context, dEnv *env.DoltEnv, replay ReplayRoo
 	}
 
 	replayCommit := wrapReplayRootFn(replay)
-	return rebaseRefs(ctx, dEnv, replayCommit, nerf, branches...)
+	return rebaseRefs(ctx, dEnv.DbData(), replayCommit, nerf, branches...)
 }
 
 // CurrentBranchByRoot rewrites the history of the current branch using the |replay| function.
 func CurrentBranchByRoot(ctx context.Context, dEnv *env.DoltEnv, replay ReplayRootFn, nerf NeedsRebaseFn) error {
 	replayCommit := wrapReplayRootFn(replay)
-	return rebaseRefs(ctx, dEnv, replayCommit, nerf, dEnv.RepoState.CWBHeadRef())
+	return rebaseRefs(ctx, dEnv.DbData(), replayCommit, nerf, dEnv.RepoState.CWBHeadRef())
 }
 
-func rebaseRefs(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, nerf NeedsRebaseFn, refs ...ref.DoltRef) error {
-	ddb := dEnv.DoltDB
-	cwbRef := dEnv.RepoState.CWBHeadRef()
-	dd, err := dEnv.GetAllValidDocDetails()
+func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, nerf NeedsRebaseFn, refs ...ref.DoltRef) error {
+	ddb := dbData.Ddb
+	rsr := dbData.Rsr
+	rsw := dbData.Rsw
+	drw := dbData.Drw
+
+	cwbRef := rsr.CWBHeadRef()
+	dd, err := drw.GetDocsOnDisk()
 	if err != nil {
 		return err
 	}
@@ -165,7 +169,7 @@ func rebaseRefs(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, n
 		}
 	}
 
-	cm, err := dEnv.DoltDB.ResolveRef(ctx, cwbRef)
+	cm, err := ddb.ResolveRef(ctx, cwbRef)
 	if err != nil {
 		return err
 	}
@@ -175,22 +179,22 @@ func rebaseRefs(ctx context.Context, dEnv *env.DoltEnv, replay ReplayCommitFn, n
 		return err
 	}
 
-	_, err = dEnv.UpdateStagedRoot(ctx, r)
+	_, err = env.UpdateStagedRoot(ctx, ddb, rsw, r)
 	if err != nil {
 		return err
 	}
 
-	err = dEnv.UpdateWorkingRoot(ctx, r)
+	_, err = env.UpdateWorkingRoot(ctx, ddb, rsw, r)
 	if err != nil {
 		return err
 	}
 
-	err = dEnv.PutDocsToWorking(ctx, dd)
+	_, err = env.UpdateWorkingRootWithDocsTable(ctx, dbData, dd)
 	if err != nil {
 		return err
 	}
 
-	_, err = dEnv.PutDocsToStaged(ctx, dd)
+	_, err = env.UpdateStagedRootWithDocsTable(ctx, dbData, dd)
 	return err
 }
 

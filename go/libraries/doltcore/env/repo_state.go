@@ -17,6 +17,7 @@ package env
 import (
 	"context"
 	"encoding/json"
+
 	"github.com/dolthub/dolt/go/store/types"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
