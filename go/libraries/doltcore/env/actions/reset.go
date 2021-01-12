@@ -177,7 +177,7 @@ func ResetSoft(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 	}
 
 	dbData := dEnv.DbData()
-	tables, docs, err := GetTblsAndDocDetails(dbData.Drw, tables)
+	tables, docs, err := GetTablesAndDocDetails(dbData.Drw, tables)
 	if err != nil {
 		return nil, err
 	}

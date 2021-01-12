@@ -30,7 +30,7 @@ func StageTables(ctx context.Context, dbData env.DbData, tbls []string) error {
 	rsw := dbData.Rsw
 	drw := dbData.Drw
 
-	tables, docDetails, err := GetTblsAndDocDetails(drw, tbls)
+	tables, docDetails, err := GetTablesAndDocDetails(drw, tbls)
 	if err != nil {
 		return err
 	}
@@ -55,9 +55,9 @@ func StageTables(ctx context.Context, dbData env.DbData, tbls []string) error {
 	return nil
 }
 
-// GetTblsAndDocDetails takes a slice of strings where valid doc names are replaced with doc table name. Doc names are
+// GetTablesAndDocDetails takes a slice of strings where valid doc names are replaced with doc table name. Doc names are
 // appended to a docDetails slice. We return a tuple of tables, docDetails and error.
-func GetTblsAndDocDetails(drw env.DocsReadWriter, tbls []string) (tables []string, docDetails []doltdb.DocDetails, err error) {
+func GetTablesAndDocDetails(drw env.DocsReadWriter, tbls []string) (tables []string, docDetails []doltdb.DocDetails, err error) {
 	for i, tbl := range tbls {
 		docDetail, err := drw.GetDocDetail(tbl)
 		if err != nil {

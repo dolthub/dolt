@@ -121,7 +121,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return HandleVErrAndExitCode(verr, usagePrt)
 	}
 
-	tbls, docs, err := actions.GetTblsAndDocDetails(dEnv.DocsReadWriter(), args)
+	tbls, docs, err := actions.GetTablesAndDocDetails(dEnv.DocsReadWriter(), args)
 	if err != nil {
 		verr := errhand.BuildDError("error: unable to parse arguments.").AddCause(err).Build()
 		return HandleVErrAndExitCode(verr, usagePrt)
