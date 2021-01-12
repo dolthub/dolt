@@ -24,6 +24,7 @@ package types
 import (
 	"context"
 	"errors"
+	"io"
 )
 
 // MapIterator is the interface used by iterators over Noms Maps.
@@ -75,6 +76,11 @@ type mapRangeIter struct {
 }
 
 func (itr *mapRangeIter) Next(ctx context.Context) (k, v Tuple, err error) {
+	if itr.collItr == nil {
+		// only happens if there is nothing to iterate over
+		return Tuple{}, Tuple{}, io.EOF
+	}
+
 	k, err = itr.collItr.Next()
 
 	if err != nil {
@@ -91,6 +97,7 @@ func (itr *mapRangeIter) Next(ctx context.Context) (k, v Tuple, err error) {
 }
 
 func (m Map) RangeIterator(ctx context.Context, startIdx, endIdx uint64) (MapTupleIterator, error) {
+	// newCollRangeItr returns nil if the number of elements being iterated over is 0
 	collItr, err := newCollRangeIter(ctx, m, startIdx, endIdx)
 
 	if err != nil {
