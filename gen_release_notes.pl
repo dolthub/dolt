@@ -29,14 +29,15 @@ system($curlReleases) and die $!;
 
 my $releasesJson = json_file_to_perl($curlFile);
 
-my ($fromTime, $fromHash, $toTime, $toHash, $fromTag, $toTag);
+my ($fromTime, $fromHash, $toTime, $toHash);
 foreach my $release (@$releasesJson) {
     $fromTime = $release->{created_at};
-    $fromTag = $release->{tag_name};
+    $fromHash = $release->{target_commitish};
     last if $toTime;
 
     if ((! $releaseTag) || ($releaseTag eq $release->{tag_name})) {
         $toTime = $release->{created_at};
+        $toHash = $release->{target_commitish};
         last unless $releaseTag;
     }
 }
@@ -50,6 +51,23 @@ my $mergedDoltPrs = getPRs($doltPullRequestsUrl, $fromTime, $toTime);
 
 my $doltIssuesUrl = "https://api.github.com/repos/dolthub/dolt/issues";
 my $closedIssues = getIssues($doltIssuesUrl, $fromTime, $toTime);
+
+my $fromGmsHash = getDependencyVersion("github.com/dolthub/go-mysql-server", $fromHash);
+my $toGmsHash = getDependencyVersion("github.com/dolthub/go-mysql-server", $toHash);
+
+if ($fromGmsHash ne $toGmsHash) {
+    print STDERR "Looking for pulls in go-mysql-server from $fromGmsHash to $toGmsHash\n";
+    my $fromGmsTime = getCommitTime("dolthub/go-mysql-server", $fromGmsHash);
+    my $toGmsTime = getCommitTime("dolthub/go-mysql-server", $toGmsHash);
+
+    my $gmsPullsUrls = 'https://api.github.com/repos/dolthub/go-mysql-server/pulls';
+    my $mergedGmsPrs = getPRs($gmsPullsUrls, $fromTime, $toTime);
+    my $gmsIssuesUrl = "https://api.github.com/repos/dolthub/go-mysql-server/issues";
+    my $closedGmsIssues = getIssues($gmsIssuesUrl, $fromTime, $toTime);
+
+    push @$mergedDoltPrs, @$mergedGmsPrs;
+    push @$closedIssues, @$closedGmsIssues;
+}
 
 print "# Merged PRs:\n\n";
 foreach my $pr (@$mergedDoltPrs) {
@@ -117,6 +135,22 @@ sub getPRs {
     return \@mergedPrs;
 }
 
+sub getDependencyVersion {
+    my $dependency = shift;
+    my $hash = shift;
+
+    my $cmd = "git show $hash:go/go.mod | grep $dependency";
+    my $line = `$cmd`;
+
+    # TODO: this only works for commit versions, not actual releases like most software uses
+    # github.com/dolthub/go-mysql-server v0.6.1-0.20210107193823-566f0ba75abc
+    if ($line =~ m/\S+\s+.*-([0-9a-f]{12})/) {
+        return $1;
+    }
+
+    die "Couldn't determine dependency version in $line";
+}
+
 sub getIssues {
     my $baseUrl = shift;
     my $fromTime = shift;
@@ -156,4 +190,31 @@ sub getIssues {
     } while $more;
     
     return \@closedIssues;
+}
+
+sub getCommitTime {
+    my $repo = shift;
+    my $sha = shift;
+
+    my $commitCurl = curlCmd("https://api.github.com/repos/$repo/commits?sha=$sha&per_page=1", $token);
+    print STDERR "$commitCurl\n";
+    system($commitCurl) and die $!;
+    
+    my $commitJson = json_file_to_perl($curlFile);
+    # TODO: error handling if this fails to parse
+    foreach my $commit (@$commitJson) {
+        # [
+        #  {
+        #      "sha": "9a89aaf765d7868c8252d24462e371f575175658",
+        #          "node_id": "MDY6Q29tbWl0MTkzNzg0MzQxOjlhODlhYWY3NjVkNzg2OGM4MjUyZDI0NDYyZTM3MWY1NzUxNzU2NTg=",
+        #          "commit": {
+        #              "author": {
+        #                  "name": "Daylon Wilkins",
+        #                      "email": "daylon@liquidata.co",
+        #                      "date": "2020-12-21T14:33:08Z"
+        #              },
+        return $commit->{commit}{author}{date};
+    }
+
+    die "Couldn't find commit time";
 }
