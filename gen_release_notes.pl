@@ -19,17 +19,15 @@ my $releaseTag = shift @ARGV;
 print STDERR "Looking for changes since release $releaseTag\n" if $releaseTag;
 
 my $tmpDir = "/var/tmp";
-my $releasesFile = "$tmpDir/releases-$$.json";
-my $doltPullsFile = "$tmpDir/dolt-prs-$$.json";
-my $doltIssuesFile = "$tmpDir/dolt-issues-$$.json";
-my $gmsPullsFile = "$tmpDir/gms-prs-$$.json";
+my $curlFile = "$tmpDir/curl-$$.out";
 
 my $doltReleasesUrl = 'https://api.github.com/repos/dolthub/dolt/releases';
-my $curlReleases = "curl -H 'Accept: application/vnd.github.v3+json' '$doltReleasesUrl' > $releasesFile";
+my $curlReleases = curlCmd($doltReleasesUrl, $token);
+
 print STDERR "$curlReleases\n";
 system($curlReleases) and die $!;
 
-my $releasesJson = json_file_to_perl($releasesFile);
+my $releasesJson = json_file_to_perl($curlFile);
 
 my ($fromTime, $fromHash, $toTime, $toHash, $fromTag, $toTag);
 foreach my $release (@$releasesJson) {
@@ -69,12 +67,11 @@ foreach my $pr (@$closedIssues) {
 
 sub curlCmd {
     my $url = shift;
-    my $outFile = shift;
     my $token = shift;
-    
+
     my $baseCmd = "curl -H 'Accept: application/vnd.github.v3+json'";
     $baseCmd .= " -H 'Authorization: token $token'" if $token;
-    $baseCmd .= " '$url' > $outFile";
+    $baseCmd .= " '$url' > $curlFile";
 
     return $baseCmd;
 }
@@ -92,12 +89,12 @@ sub getPRs {
     my @mergedDoltPrs;
     do {
         my $pullsUrl = "$baseUrl&page=$page";
-        my $curlDoltPulls = curlCmd($pullsUrl, $doltPullsFile, $token);
+        my $curlDoltPulls = curlCmd($pullsUrl, $token);
         print STDERR "$curlDoltPulls\n";
         system($curlDoltPulls) and die $!;
 
         $more = 0;
-        my $doltPullsJson = json_file_to_perl($doltPullsFile);
+        my $doltPullsJson = json_file_to_perl($curlFile);
         foreach my $pull (@$doltPullsJson) {
             $more = 1;
             next unless $pull->{merged_at};
@@ -132,12 +129,12 @@ sub getIssues {
     my @closedIssues;
     do {
         my $issuesUrl = "$baseUrl&page=$page";
-        my $curlDoltIssues = curlCmd($issuesUrl, $doltIssuesFile, $token);
+        my $curlDoltIssues = curlCmd($issuesUrl, $token);
         print STDERR "$curlDoltIssues\n";
         system($curlDoltIssues) and die $!;
 
         $more = 0;
-        my $doltIssuesJson = json_file_to_perl($doltIssuesFile);
+        my $doltIssuesJson = json_file_to_perl($curlFile);
         foreach my $issue (@$doltIssuesJson) {
             $more = 1;
             next unless $issue->{closed_at};
