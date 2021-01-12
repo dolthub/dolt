@@ -74,7 +74,7 @@ func (ti *datetimeType) ConvertNomsValueToValue(v types.Value) (interface{}, err
 func (ti *datetimeType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
 	k := reader.ReadKind()
 	switch k {
-	case types.UintKind:
+	case types.TimestampKind:
 		t, err := reader.ReadTimestamp()
 
 		if err != nil {
