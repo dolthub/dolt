@@ -114,7 +114,7 @@ func getUntrackedDocs(docs []doltdb.DocDetails, docDiffs *diff.DocDiffs) []strin
 	return untracked
 }
 
-func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, dEnv *env.DoltEnv, working, staged, head *doltdb.RootValue, docDetails []doltdb.DocDetails) (currRoot, stgRoot *doltdb.RootValue, err error) {
+func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, dbData env.DbData, working, staged, head *doltdb.RootValue, docDetails []doltdb.DocDetails) (currRoot, stgRoot *doltdb.RootValue, err error) {
 	root := head
 	_, ok, err := staged.GetTable(ctx, doltdb.DocTableName)
 	if err != nil {
@@ -123,17 +123,17 @@ func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, dEnv *env.DoltEnv, 
 		root = staged
 	}
 
-	docs, err := dEnv.GetDocsWithNewerTextFromRoot(ctx, root, docDetails)
+	docs, err := env.GetDocsWithNewerTextFromRoot(ctx, root, docDetails)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	currRoot, err = dEnv.GetUpdatedRootWithDocs(ctx, working, docs)
+	currRoot, err = env.UpdateRootWithDocsTable(ctx, dbData, working, env.Working, docs)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	stgRoot, err = dEnv.GetUpdatedRootWithDocs(ctx, staged, docs)
+	stgRoot, err = env.UpdateRootWithDocsTable(ctx, dbData, staged, env.Staged, docs)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -1124,40 +1124,10 @@ func createDocsTableOnRoot(ctx context.Context, dEnv *DoltEnv, root *doltdb.Root
 //UpdateFSDocsToRootDocs updates the provided docs from the root value, and then saves them to the filesystem.
 // If docs == nil, all valid docs will be retrieved and written.
 func (dEnv *DoltEnv) UpdateFSDocsToRootDocs(ctx context.Context, root *doltdb.RootValue, docs Docs) error {
-	docs, err := dEnv.GetDocsWithNewerTextFromRoot(ctx, root, docs)
+	docs, err := GetDocsWithNewerTextFromRoot(ctx, root, docs)
 	if err != nil {
 		return nil
 	}
 	return docs.Save(dEnv.FS)
 }
 
-// GetDocsWithNewerTextFromRoot returns Docs with the NewerText value(s) from the provided root. If docs are provided,
-// only those docs will be retrieved and returned. Otherwise, all valid doc details are returned with the updated NewerText.
-func (dEnv *DoltEnv) GetDocsWithNewerTextFromRoot(ctx context.Context, root *doltdb.RootValue, docs Docs) (Docs, error) {
-	docTbl, docTblFound, err := root.GetTable(ctx, doltdb.DocTableName)
-	if err != nil {
-		return nil, err
-	}
-
-	var sch schema.Schema
-	if docTblFound {
-		docSch, err := docTbl.GetSchema(ctx)
-		if err != nil {
-			return nil, err
-		}
-		sch = docSch
-	}
-
-	if docs == nil {
-		docs = *AllValidDocDetails
-	}
-
-	for i, doc := range docs {
-		doc, err = doltdb.AddNewerTextToDocFromTbl(ctx, docTbl, &sch, doc)
-		if err != nil {
-			return nil, err
-		}
-		docs[i] = doc
-	}
-	return docs, nil
-}

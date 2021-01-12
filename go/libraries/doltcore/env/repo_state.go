@@ -17,7 +17,6 @@ package env
 import (
 	"context"
 	"encoding/json"
-
 	"github.com/dolthub/dolt/go/store/types"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -75,6 +74,16 @@ type RepoState struct {
 	Remotes  map[string]Remote       `json:"remotes"`
 	Branches map[string]BranchConfig `json:"branches"`
 }
+
+type RootType int
+
+const (
+	Working RootType = iota
+	Staged
+	Commit
+	Head
+	InvalidRoot
+)
 
 func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
 	path := getRepoStateFile()
@@ -285,71 +294,4 @@ func GetRoots(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (wor
 	}
 
 	return working, staged, head, nil
-}
-
-// UpdateRootWithDocsTable takes in a root value, a drw, and some docs and writes those docs to the dolt_docs table
-// (perhaps creating it in the process). The table might not necessarily need to be created if there are no docs in the
-// repo yet.
-func UpdateRootWithDocsTable(ctx context.Context, drw DocsReadWriter, root *doltdb.RootValue, docDetails []doltdb.DocDetails) (*doltdb.RootValue, error) {
-	docTbl, _, err := root.GetTable(ctx, doltdb.DocTableName)
-
-	if err != nil {
-		return nil, err
-	}
-
-	docTbl, err = drw.WriteDocsToDisk(ctx, root.VRW(), docTbl, docDetails)
-
-	if err != nil {
-		return nil, err
-	}
-
-	// There might not need be a need to create docs table if not docs have been created yet so check if docTbl != nil.
-	if docTbl != nil {
-		return root.PutTable(ctx, doltdb.DocTableName, docTbl)
-	}
-
-	return root, nil
-}
-
-// ResetWorkingDocsToStagedDocs resets the `dolt_docs` table on the working root to match the staged root.
-// If the `dolt_docs` table does not exist on the staged root, it will be removed from the working root.
-func ResetWorkingDocsToStagedDocs(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader, rsw RepoStateWriter) error {
-	wrkRoot, err := WorkingRoot(ctx, ddb, rsr)
-	if err != nil {
-		return err
-	}
-
-	stgRoot, err := StagedRoot(ctx, ddb, rsr)
-	if err != nil {
-		return err
-	}
-
-	stgDocTbl, stgDocsFound, err := stgRoot.GetTable(ctx, doltdb.DocTableName)
-	if err != nil {
-		return err
-	}
-
-	_, wrkDocsFound, err := wrkRoot.GetTable(ctx, doltdb.DocTableName)
-	if err != nil {
-		return err
-	}
-
-	if wrkDocsFound && !stgDocsFound {
-		newWrkRoot, err := wrkRoot.RemoveTables(ctx, doltdb.DocTableName)
-		if err != nil {
-			return err
-		}
-		_, err = UpdateWorkingRoot(ctx, ddb, rsw, newWrkRoot)
-		return err
-	}
-
-	if stgDocsFound {
-		newWrkRoot, err := wrkRoot.PutTable(ctx, doltdb.DocTableName, stgDocTbl)
-		if err != nil {
-			return err
-		}
-		_, err = UpdateWorkingRoot(ctx, ddb, rsw, newWrkRoot)
-		return err
-	}
-	return nil
 }
