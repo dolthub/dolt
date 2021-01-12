@@ -80,6 +80,24 @@ func (ti *setType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 }
 
+// ReadFrom reads a go value from a noms types.CodecReader directly
+func (ti *setType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
+	k := reader.ReadKind()
+	switch k {
+	case types.UintKind:
+		val := reader.ReadUint()
+		res, err := ti.sqlSetType.Unmarshal(uint64(val))
+		if err != nil {
+			return nil, fmt.Errorf(`"%v" cannot convert "%v" to value`, ti.String(), val)
+		}
+		return res, nil
+	case types.NullKind:
+		return nil, nil
+	}
+
+	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
+}
+
 // ConvertValueToNomsValue implements TypeInfo interface.
 func (ti *setType) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
 	if v == nil {

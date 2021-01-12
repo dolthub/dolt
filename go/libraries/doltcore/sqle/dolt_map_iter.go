@@ -137,39 +137,34 @@ func (conv *KVToSqlRowConverter) processTuple(cols []interface{}, valsToFill int
 		return err
 	}
 
+	nbf := tup.Format()
+	primReader, numPrimitives := tupItr.CodecReader()
+
 	filled := 0
-	var tag64 uint64
-	for filled < valsToFill && tag64 < maxTag {
-		_, tag, err := tupItr.Next()
-
-		if err != nil {
-			return err
-		}
-
-		if tag == nil {
+	for pos := uint64(0); pos+1 < numPrimitives; pos += 2 {
+		if filled >= valsToFill {
 			break
 		}
 
-		tag64 = uint64(tag.(types.Uint))
+		tagKind := primReader.ReadKind()
 
+		if tagKind != types.UintKind {
+			return errors.New("Encountered unexpected kind while attempting to read tag")
+		}
+
+		tag64 := primReader.ReadUint()
 		if tag64 > maxTag {
 			break
 		}
 
 		if sqlColIdx, ok := conv.tagToSqlColIdx[tag64]; !ok {
-			err = tupItr.Skip()
+			err = primReader.SkipValue(nbf)
 
 			if err != nil {
 				return err
 			}
 		} else {
-			_, val, err := tupItr.Next()
-
-			if err != nil {
-				return err
-			}
-
-			cols[sqlColIdx], err = conv.cols[sqlColIdx].TypeInfo.ConvertNomsValueToValue(val)
+			cols[sqlColIdx], err = conv.cols[sqlColIdx].TypeInfo.ReadFrom(nbf, primReader)
 
 			if err != nil {
 				return err

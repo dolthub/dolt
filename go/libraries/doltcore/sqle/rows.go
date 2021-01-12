@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"context"
-	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -106,11 +105,7 @@ func newKeyedRowIter(ctx context.Context, tbl *DoltTable, partition *doltTablePa
 	}
 
 	conv := NewKVToSqlRowConverter(tagToSqlColIdx, cols, len(cols))
-	var closer func() error
-	if cl, ok := mapIter.(io.Closer); ok {
-		closer = cl.Close
-	}
-	return NewDoltMapIter(ctx, GetGetFuncForMapIter(mapIter), closer, conv), nil
+	return NewDoltMapIter(ctx, GetGetFuncForMapIter(mapIter), nil, conv), nil
 }
 
 // Next returns the next row in this row iterator, or an io.EOF error if there aren't any more.

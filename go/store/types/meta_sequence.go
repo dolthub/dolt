@@ -232,7 +232,7 @@ func (ms metaSequence) tuples() ([]metaTuple, error) {
 
 func (ms metaSequence) getKey(idx int) (orderedKey, error) {
 	dec := ms.decoderSkipToIndex(idx)
-	err := dec.skipValue(ms.format()) // ref
+	err := dec.SkipValue(ms.format()) // ref
 
 	if err != nil {
 		return orderedKey{}, err
@@ -269,13 +269,13 @@ func (ms metaSequence) cumulativeNumberOfLeaves(idx int) (uint64, error) {
 	cum := uint64(0)
 	dec, _ := ms.decoderSkipToValues()
 	for i := 0; i <= idx; i++ {
-		err := dec.skipValue(ms.format()) // ref
+		err := dec.SkipValue(ms.format()) // ref
 
 		if err != nil {
 			return 0, err
 		}
 
-		err = dec.skipValue(ms.format()) // v
+		err = dec.SkipValue(ms.format()) // v
 
 		if err != nil {
 			return 0, err
@@ -337,7 +337,7 @@ func (ms metaSequence) getRefAt(dec *valueDecoder, idx int) (Ref, error) {
 
 func (ms metaSequence) getNumLeavesAt(idx int) (uint64, error) {
 	dec := ms.decoderSkipToIndex(idx)
-	err := dec.skipValue(ms.format())
+	err := dec.SkipValue(ms.format())
 
 	if err != nil {
 		return 0, err
