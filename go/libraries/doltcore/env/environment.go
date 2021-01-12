@@ -396,10 +396,6 @@ func (r *repoStateReader) GetMergeCommit() string {
 	return r.dEnv.RepoState.Merge.Commit
 }
 
-func (r *repoStateReader) GetAllValidDocDetails() ([]doltdb.DocDetails, error) {
-	return r.dEnv.GetAllValidDocDetails()
-}
-
 func (dEnv *DoltEnv) RepoStateReader() RepoStateReader {
 	return &repoStateReader{dEnv}
 }
@@ -434,14 +430,6 @@ func (r *repoStateWriter) ClearMerge() error {
 	return r.dEnv.RepoState.ClearMerge(r.dEnv.FS)
 }
 
-func (r *repoStateWriter) PutDocsToWorking(ctx context.Context, docDetails []doltdb.DocDetails) error {
-	return r.dEnv.PutDocsToWorking(ctx, docDetails)
-}
-
-func (r *repoStateWriter) ResetWorkingDocsToStagedDos(ctx context.Context) error {
-	return r.dEnv.ResetWorkingDocsToStagedDocs(ctx)
-}
-
 func (dEnv *DoltEnv) RepoStateWriter() RepoStateWriter {
 	return &repoStateWriter{dEnv}
 }
@@ -450,12 +438,8 @@ type docsReadWriter struct {
 	dEnv *DoltEnv
 }
 
-func (d *docsReadWriter) ResetWorkingDocsToStagedDocs(ctx context.Context) error {
-	return d.dEnv.ResetWorkingDocsToStagedDocs(ctx)
-}
-
 // GetDocDetail returns the details of a specific document passed as docName.
-func (d *docsReadWriter) GetDocDetail(docName string) (doc doltdb.DocDetails, err error) {
+func (d *docsReadWriter) GetDocDetailOnDisk(docName string) (doc doltdb.DocDetails, err error) {
 	return d.dEnv.GetDocDetail(docName)
 }
 
@@ -1005,47 +989,6 @@ func getDocDetails(dEnv *DoltEnv, docDetails []doltdb.DocDetails) ([]doltdb.DocD
 	return docDetails, nil
 }
 
-// ResetWorkingDocsToStagedDocs resets the `dolt_docs` table on the working root to match the staged root.
-// If the `dolt_docs` table does not exist on the staged root, it will be removed from the working root.
-func (dEnv *DoltEnv) ResetWorkingDocsToStagedDocs(ctx context.Context) error {
-	wrkRoot, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return err
-	}
-
-	stgRoot, err := dEnv.StagedRoot(ctx)
-	if err != nil {
-		return err
-	}
-
-	stgDocTbl, stgDocsFound, err := stgRoot.GetTable(ctx, doltdb.DocTableName)
-	if err != nil {
-		return err
-	}
-
-	_, wrkDocsFound, err := wrkRoot.GetTable(ctx, doltdb.DocTableName)
-	if err != nil {
-		return err
-	}
-
-	if wrkDocsFound && !stgDocsFound {
-		newWrkRoot, err := wrkRoot.RemoveTables(ctx, doltdb.DocTableName)
-		if err != nil {
-			return err
-		}
-		return dEnv.UpdateWorkingRoot(ctx, newWrkRoot)
-	}
-
-	if stgDocsFound {
-		newWrkRoot, err := wrkRoot.PutTable(ctx, doltdb.DocTableName, stgDocTbl)
-		if err != nil {
-			return err
-		}
-		return dEnv.UpdateWorkingRoot(ctx, newWrkRoot)
-	}
-	return nil
-}
-
 // updateDocsTable takes in docTbl param and updates it with the value in docDetails. It returns the updated table.
 func updateDocsTable(ctx context.Context, docTbl *doltdb.Table, docDetails []doltdb.DocDetails) (*doltdb.Table, error) {
 	m, err := docTbl.GetRowData(ctx)
@@ -1110,7 +1053,7 @@ func updateDocsOnRoot(ctx context.Context, root *doltdb.RootValue, docTbl *doltd
 func createDocsTable(ctx context.Context, dEnv *DoltEnv, vrw types.ValueReadWriter, docDetails []doltdb.DocDetails) (*doltdb.Table, error) {
 	imt := table.NewInMemTable(DoltDocsSchema)
 
-	// TODO: What does this code portion do?
+	// Determines if the table needs to be created at all and initializes a schema if it does.
 	createTable := false
 	for _, doc := range docDetails {
 		if doc.NewerText != nil {

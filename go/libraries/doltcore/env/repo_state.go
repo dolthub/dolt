@@ -17,6 +17,7 @@ package env
 import (
 	"context"
 	"encoding/json"
+
 	"github.com/dolthub/dolt/go/store/types"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -44,8 +45,8 @@ type RepoStateWriter interface {
 }
 
 type DocsReadWriter interface {
-	GetDocDetail(docName string) (doc doltdb.DocDetails, err error)
-	GetDocsOnDisk()  (Docs, error) // TODO: Add filter?
+	GetDocDetailOnDisk(docName string) (doc doltdb.DocDetails, err error)
+	GetDocsOnDisk() (Docs, error)
 	WriteDocsToDisk(ctx context.Context, vrw types.ValueReadWriter, docTbl *doltdb.Table, docDetails []doltdb.DocDetails) (*doltdb.Table, error)
 }
 
@@ -286,6 +287,9 @@ func GetRoots(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (wor
 	return working, staged, head, nil
 }
 
+// UpdateRootWithDocsTable takes in a root value, a drw, and some docs and writes those docs to the dolt_docs table
+// (perhaps creating it in the process). The table might not necessarily need to be created if there are no docs in the
+// repo yet.
 func UpdateRootWithDocsTable(ctx context.Context, drw DocsReadWriter, root *doltdb.RootValue, docDetails []doltdb.DocDetails) (*doltdb.RootValue, error) {
 	docTbl, _, err := root.GetTable(ctx, doltdb.DocTableName)
 
@@ -299,7 +303,7 @@ func UpdateRootWithDocsTable(ctx context.Context, drw DocsReadWriter, root *dolt
 		return nil, err
 	}
 
-	// There might not need be a need to create docs table if not docs have been created yet.
+	// There might not need be a need to create docs table if not docs have been created yet so check if docTbl != nil.
 	if docTbl != nil {
 		return root.PutTable(ctx, doltdb.DocTableName, docTbl)
 	}

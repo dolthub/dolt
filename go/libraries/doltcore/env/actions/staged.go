@@ -59,7 +59,7 @@ func StageTables(ctx context.Context, dbData env.DbData, tbls []string) error {
 // appended to a docDetails slice. We return a tuple of tables, docDetails and error.
 func GetTablesAndDocDetails(drw env.DocsReadWriter, tbls []string) (tables []string, docDetails []doltdb.DocDetails, err error) {
 	for i, tbl := range tbls {
-		docDetail, err := drw.GetDocDetail(tbl)
+		docDetail, err := drw.GetDocDetailOnDisk(tbl)
 		if err != nil {
 			return nil, nil, err
 		}
