@@ -24,6 +24,7 @@ package datas
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"io/ioutil"
 	"reflect"
@@ -371,6 +372,23 @@ func buildListOfHeight(height int, vrw types.ValueReadWriter) types.List {
 	return l
 }
 
+type TestFailingTableFile struct {
+	fileID    string
+	numChunks int
+}
+
+func (ttf *TestFailingTableFile) FileID() string {
+	return ttf.fileID
+}
+
+func (ttf *TestFailingTableFile) NumChunks() int {
+	return ttf.numChunks
+}
+
+func (ttf *TestFailingTableFile) Open(ctx context.Context) (io.ReadCloser, error) {
+	return ioutil.NopCloser(bytes.NewReader([]byte{0x00})), errors.New("this is a test error")
+}
+
 type TestTableFile struct {
 	fileID    string
 	numChunks int
@@ -455,6 +473,23 @@ func (ttfs *TestTableFileStore) SetRootChunk(ctx context.Context, root, previous
 	return nil
 }
 
+type FlakeyTestTableFileStore struct {
+	*TestTableFileStore
+	GoodNow bool
+}
+
+func (f *FlakeyTestTableFileStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableFile, error) {
+	if !f.GoodNow {
+		f.GoodNow = true
+		r, files, _ := f.TestTableFileStore.Sources(ctx)
+		for i := range files {
+			files[i] = &TestFailingTableFile{files[i].FileID(), files[i].NumChunks()}
+		}
+		return r, files, nil
+	}
+	return f.TestTableFileStore.Sources(ctx)
+}
+
 func (ttfs *TestTableFileStore) SupportedOperations() nbs.TableFileStoreOps {
 	return nbs.TableFileStoreOps{
 		CanRead:  true,
@@ -512,4 +547,25 @@ func TestClone(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.True(t, reflect.DeepEqual(src, dest))
+
+	t.Run("WithFlakeyTableFileStore", func(t *testing.T) {
+		// After a Clone()'s TableFile.Open() or a Read from the TableFile
+		// fails, we retry with newly fetched Sources().
+		flakeySrc := &FlakeyTestTableFileStore{
+			TestTableFileStore: src,
+		}
+
+		dest = &TestTableFileStore{
+			root:       hash.Hash{},
+			tableFiles: map[string]*TestTableFile{},
+		}
+
+		err := clone(ctx, flakeySrc, dest, nil)
+		require.NoError(t, err)
+
+		err = dest.SetRootChunk(ctx, flakeySrc.root, hash.Hash{})
+		require.NoError(t, err)
+
+		assert.True(t, reflect.DeepEqual(flakeySrc.TestTableFileStore, dest))
+	})
 }

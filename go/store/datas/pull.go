@@ -231,6 +231,8 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 		}
 		if _, tblFiles, err = srcTS.Sources(ctx); err != nil {
 			return err
+		} else {
+			_, fileIDToTF = mapTableFiles(tblFiles)
 		}
 	}
 
