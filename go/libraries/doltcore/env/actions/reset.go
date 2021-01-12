@@ -169,14 +169,13 @@ func ResetSoftTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgP
 	return stagedRoot, nil
 }
 
-func ResetSoft(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, stagedRoot, headRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
+func ResetSoft(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, stagedRoot, headRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
 	tables, err := getUnionedTables(ctx, apr.Args(), stagedRoot, headRoot)
 
 	if err != nil {
 		return nil, err
 	}
 
-	dbData := dEnv.DbData()
 	tables, docs, err := GetTablesAndDocDetails(dbData.Drw, tables)
 	if err != nil {
 		return nil, err

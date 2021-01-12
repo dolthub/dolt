@@ -29,9 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-//"github.com/dolthub/dolt/go/libraries/doltcore/table"
-//"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
-
 const (
 	ddbRootStructName = "dolt_db_root"
 

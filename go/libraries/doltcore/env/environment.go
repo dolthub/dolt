@@ -438,15 +438,17 @@ type docsReadWriter struct {
 	dEnv *DoltEnv
 }
 
-// GetDocDetail returns the details of a specific document passed as docName.
+// GetDocDetailOnDisk returns the details of a specific document passed as docName.
 func (d *docsReadWriter) GetDocDetailOnDisk(docName string) (doc doltdb.DocDetails, err error) {
 	return d.dEnv.GetDocDetail(docName)
 }
 
+// GetDocsOnDisk reads the filesystem and returns all docs.
 func (d *docsReadWriter) GetDocsOnDisk() (Docs, error) {
 	return d.dEnv.GetAllValidDocDetails()
 }
 
+// WriteDocsToDisk creates or updates the dolt_docs table with docDetails.
 func (d *docsReadWriter) WriteDocsToDisk(ctx context.Context, vrw types.ValueReadWriter, docTbl *doltdb.Table, docDetails []doltdb.DocDetails) (*doltdb.Table, error) {
 	if docTbl == nil {
 		return createDocsTable(ctx, d.dEnv, vrw, docDetails)
