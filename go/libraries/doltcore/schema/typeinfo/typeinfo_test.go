@@ -135,7 +135,7 @@ func testTypeInfoConvertRoundTrip(t *testing.T, tiArrays [][]TypeInfo, vaArrays 
 								require.NoError(t, err)
 
 								reader, n := itr.CodecReader()
-								require.Equal(t, 1, n)
+								require.Equal(t, uint64(1), n)
 
 								readVal, err := ti.ReadFrom(nbf, reader)
 								require.Equal(t, readVal, vInterface)
