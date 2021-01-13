@@ -10,10 +10,19 @@ use Data::Dumper;
 
 use Getopt::Long;
 
-# GitHub API rate limits to 60 requests an hour. Running this to
-# generate release notes for a single release shouldn't normally hit
-# this limit. If it does, you'll need to use a personal access token
-# with the --token flag. Details for how to create a token:
+# Usage: ./gen_release_notes.pl <version> to generate release notes
+# for an existing release
+#
+# ./gen_release_notes.pl to generate release notes for a new release
+# (everything since the last release)
+# 
+# Example: ./gen_release_notes.pl v0.22.9
+
+# GitHub API rate limits unauthed access to 60 requests an
+# hour. Running this to generate release notes for a single release
+# shouldn't normally hit this limit. If it does, you'll need to use a
+# personal access token with the --token flag. Details for how to
+# create a token:
 # https://docs.github.com/en/free-pro-team@latest/github/authenticating-to-github/creating-a-personal-access-token
 my $token = "";
 GetOptions ("token|t=s" => \$token) or die "Error in command line args";
@@ -52,6 +61,10 @@ die "Couldn't find release" unless $toTime;
 $fromHash = tagToCommitHash($fromTag);
 $toHash = tagToCommitHash($toTag);
 
+# If we don't have a release tag to generate notes for, there is no
+# upper bound for pulls and issues, only a lower bound.
+$toTime = "" unless $releaseTag;
+
 print STDERR "Looking for PRs and issues from $fromTime to $toTime\n";
 
 my $doltPullRequestsUrl = 'https://api.github.com/repos/dolthub/dolt/pulls';
@@ -69,9 +82,9 @@ if ($fromGmsHash ne $toGmsHash) {
     my $toGmsTime = getCommitTime("dolthub/go-mysql-server", $toGmsHash);
 
     my $gmsPullsUrls = 'https://api.github.com/repos/dolthub/go-mysql-server/pulls';
-    my $mergedGmsPrs = getPRs($gmsPullsUrls, $fromTime, $toTime);
+    my $mergedGmsPrs = getPRs($gmsPullsUrls, $fromGmsTime, $toGmsTime);
     my $gmsIssuesUrl = "https://api.github.com/repos/dolthub/go-mysql-server/issues";
-    my $closedGmsIssues = getIssues($gmsIssuesUrl, $fromTime, $toTime);
+    my $closedGmsIssues = getIssues($gmsIssuesUrl, $fromGmsTime, $toGmsTime);
 
     push @$mergedPrs, @$mergedGmsPrs;
     push @$closedIssues, @$closedGmsIssues;
@@ -93,6 +106,8 @@ print "\n# Closed Issues\n\n";
 foreach my $pr (@$closedIssues) {
     print "* [$pr->{number}]($pr->{url}): $pr->{title}\n";
 }
+
+exit 0;
 
 # Gets a curl command to access the github api with the URL with token given (optional).
 sub curlCmd {
@@ -140,7 +155,7 @@ sub getPRs {
                 );
 
             # print STDERR "PR merged at $pull->{merged_at}\n";
-            push (@mergedPrs, \%pr) if $pull->{merged_at} le $toTime;
+            push (@mergedPrs, \%pr) if !$toTime || $pull->{merged_at} le $toTime;
         }
 
         $page++;
@@ -200,7 +215,7 @@ sub getIssues {
                 'body' => $issue->{body},
                 );
             
-            push (@closedIssues, \%i) if $issue->{closed_at} le $toTime; 
+            push (@closedIssues, \%i) if !$toTime || $issue->{closed_at} le $toTime; 
         }
 
         $page++;
