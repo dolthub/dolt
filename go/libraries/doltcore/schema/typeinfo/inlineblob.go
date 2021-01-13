@@ -17,6 +17,7 @@ package typeinfo
 import (
 	"fmt"
 	"math"
+	"unsafe"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/sqltypes"
@@ -35,7 +36,7 @@ var InlineBlobType = &inlineBlobType{sql.MustCreateBinary(sqltypes.VarBinary, ma
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *inlineBlobType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.InlineBlob); ok {
-		return string(val), nil
+		return *(*string)(unsafe.Pointer(&val)), nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -49,7 +50,7 @@ func (ti *inlineBlobType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecRea
 	switch k {
 	case types.InlineBlobKind:
 		bytes := reader.ReadInlineBlob()
-		return string(bytes), nil
+		return *(*string)(unsafe.Pointer(&bytes)), nil
 	case types.NullKind:
 		return nil, nil
 	}
@@ -68,7 +69,7 @@ func (ti *inlineBlobType) ConvertValueToNomsValue(v interface{}) (types.Value, e
 	}
 	val, ok := strVal.(string)
 	if ok {
-		return types.InlineBlob(val), nil
+		return *(*types.InlineBlob)(unsafe.Pointer(&val)), nil
 	}
 	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
 }
@@ -137,7 +138,7 @@ func (ti *inlineBlobType) ParseValue(str *string) (types.Value, error) {
 		return nil, err
 	}
 	if val, ok := strVal.(string); ok {
-		return types.InlineBlob(val), nil
+		return *(*types.InlineBlob)(unsafe.Pointer(&val)), nil
 	}
 	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
 }
