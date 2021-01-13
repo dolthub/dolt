@@ -1,0 +1,12 @@
+#!/usr/bin/expect
+
+set timeout 1
+spawn dolt sql
+
+expect "doltsql> "
+send "CREATE TABLE test_expect (pk int primary key);\r"
+
+expect "doltsql> "
+send "select COUNT(*) from dolt_status;\r"
+
+expect eof

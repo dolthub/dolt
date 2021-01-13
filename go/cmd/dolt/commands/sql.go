@@ -332,7 +332,7 @@ func execShell(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots
 		return nil, errhand.VerboseErrorFromError(err)
 	}
 
-	err = runShell(sqlCtx, se, mrEnv)
+	err = runShell(sqlCtx, se, mrEnv, roots)
 	if err != nil {
 		return nil, errhand.BuildDError("unable to start shell").AddCause(err).Build()
 	}
@@ -601,7 +601,7 @@ func runBatchMode(ctx *sql.Context, se *sqlEngine, input io.Reader) error {
 
 // runShell starts a SQL shell. Returns when the user exits the shell. The Root of the sqlEngine may
 // be updated by any queries which were processed.
-func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv) error {
+func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initialRoots map[string]*doltdb.RootValue) error {
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
 	currentDB := ctx.Session.GetCurrentDatabase()
 	currEnv := mrEnv[currentDB]
@@ -679,6 +679,20 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv) error {
 		currPrompt := fmt.Sprintf("%s> ", ctx.GetCurrentDatabase())
 		shell.SetPrompt(currPrompt)
 		shell.SetMultiPrompt(fmt.Sprintf(fmt.Sprintf("%%%ds", len(currPrompt)), "-> "))
+		roots, err := se.getRoots(ctx)
+
+		if err != nil {
+			shell.Println(color.RedString(err.Error()))
+		}
+
+		// If the SQL session wrote a new root value, update the working set with it
+		for name, origRoot := range initialRoots {
+			root := roots[name]
+			if origRoot != root {
+				currEnv := mrEnv[name]
+				UpdateWorkingWithVErr(currEnv, root)
+			}
+		}
 	})
 
 	shell.Run()
