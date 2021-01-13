@@ -15,6 +15,7 @@
 package typeinfo
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
@@ -96,7 +97,7 @@ func (ti *decimalType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader
 }
 
 // ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *decimalType) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
+func (ti *decimalType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
 	if v == nil {
 		return types.NullValue, nil
 	}
@@ -172,11 +173,11 @@ func (ti *decimalType) NomsKind() types.NomsKind {
 }
 
 // ParseValue implements TypeInfo interface.
-func (ti *decimalType) ParseValue(str *string) (types.Value, error) {
+func (ti *decimalType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
 	if str == nil || *str == "" {
 		return types.NullValue, nil
 	}
-	return ti.ConvertValueToNomsValue(*str)
+	return ti.ConvertValueToNomsValue(context.Background(), nil, *str)
 }
 
 // Promote implements TypeInfo interface.
