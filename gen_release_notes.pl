@@ -35,7 +35,7 @@ print STDERR "Looking for changes for release $releaseTag\n" if $releaseTag;
 my $tmpDir = "/var/tmp";
 my $curlFile = "$tmpDir/curl-$$.out";
 
-my $doltReleasesUrl = 'https://api.github.com/repos/dolthub/dolt/releases';
+my $doltReleasesUrl = 'https://api.github.com/repos/dolthub/dolt/releases?per_page=100';
 my $curlReleases = curlCmd($doltReleasesUrl, $token);
 
 print STDERR "$curlReleases\n";
@@ -73,8 +73,8 @@ my $mergedPrs = getPRs($doltPullRequestsUrl, $fromTime, $toTime);
 my $doltIssuesUrl = "https://api.github.com/repos/dolthub/dolt/issues";
 my $closedIssues = getIssues($doltIssuesUrl, $fromTime, $toTime);
 
-my $fromGmsHash = getDependencyVersion("github.com/dolthub/go-mysql-server", $fromHash);
-my $toGmsHash = getDependencyVersion("github.com/dolthub/go-mysql-server", $toHash);
+my $fromGmsHash = getDependencyVersion("go-mysql-server", $fromHash);
+my $toGmsHash = getDependencyVersion("go-mysql-server", $toHash);
 
 if ($fromGmsHash ne $toGmsHash) {
     print STDERR "Looking for pulls in go-mysql-server from $fromGmsHash to $toGmsHash\n";
@@ -170,6 +170,7 @@ sub getDependencyVersion {
     my $hash = shift;
 
     my $cmd = "git show $hash:go/go.mod | grep $dependency";
+    print STDERR "$cmd\n";
     my $line = `$cmd`;
 
     # TODO: this only works for commit versions, not actual releases like most software uses
@@ -234,7 +235,8 @@ sub getCommitTime {
     system($commitCurl) and die $!;
     
     my $commitJson = json_file_to_perl($curlFile);
-    # TODO: error handling if this fails to parse
+    die "JSON file does not contain a list response" unless ref($commitJson) eq 'ARRAY';
+
     foreach my $commit (@$commitJson) {
         # [
         #  {
