@@ -362,6 +362,10 @@ func (ms metaSequence) valuesSlice(from, to uint64) ([]Value, error) {
 	panic("meta sequence")
 }
 
+func (seq metaSequence) kvTuples(from, to uint64, dest []Tuple) ([]Tuple, error) {
+	panic("meta sequence")
+}
+
 func (ms metaSequence) typeOf() (*Type, error) {
 	dec, count := ms.decoderSkipToValues()
 	ts := make(typeSlice, 0, count)
@@ -643,6 +647,10 @@ func (es emptySequence) Less(nbf *NomsBinFormat, other LesserValuable) (bool, er
 }
 
 func (es emptySequence) valuesSlice(from, to uint64) ([]Value, error) {
+	panic("empty sequence")
+}
+
+func (es emptySequence) kvTuples(from, to uint64, dest []Tuple) ([]Tuple, error) {
 	panic("empty sequence")
 }
 

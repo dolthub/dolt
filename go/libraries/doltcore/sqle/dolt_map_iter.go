@@ -36,8 +36,9 @@ func maxU64(x, y uint64) uint64 {
 // KVToSqlRowConverter takes noms types.Value key value pairs and converts them directly to a sql.Row.  It
 // can be configured to only process a portion of the columns and map columns to desired output columns.
 type KVToSqlRowConverter struct {
-	tagToSqlColIdx map[uint64]int
+	nbf            *types.NomsBinFormat
 	cols           []schema.Column
+	tagToSqlColIdx map[uint64]int
 	// rowSize is the number of columns in the output row.  This may be bigger than the number of columns being converted,
 	// but not less.  When rowSize is bigger than the number of columns being processed that means that some of the columns
 	// in the output row will be filled with nils
@@ -47,12 +48,13 @@ type KVToSqlRowConverter struct {
 	maxValTag   uint64
 }
 
-func NewKVToSqlRowConverter(tagToSqlColIdx map[uint64]int, cols []schema.Column, rowSize int) *KVToSqlRowConverter {
+func NewKVToSqlRowConverter(nbf *types.NomsBinFormat, tagToSqlColIdx map[uint64]int, cols []schema.Column, rowSize int) *KVToSqlRowConverter {
 	valsFromKey, valsFromVal, maxValTag := getValLocations(tagToSqlColIdx, cols)
 
 	return &KVToSqlRowConverter{
-		tagToSqlColIdx: tagToSqlColIdx,
+		nbf:            nbf,
 		cols:           cols,
+		tagToSqlColIdx: tagToSqlColIdx,
 		rowSize:        rowSize,
 		valsFromKey:    valsFromKey,
 		valsFromVal:    valsFromVal,
@@ -80,13 +82,13 @@ func getValLocations(tagToSqlColIdx map[uint64]int, cols []schema.Column) (int, 
 }
 
 // NewKVToSqlRowConverterForCols returns a KVToSqlConverter instance based on the list of columns passed in
-func NewKVToSqlRowConverterForCols(cols []schema.Column) *KVToSqlRowConverter {
+func NewKVToSqlRowConverterForCols(nbf *types.NomsBinFormat, cols []schema.Column) *KVToSqlRowConverter {
 	tagToSqlColIdx := make(map[uint64]int)
 	for i, col := range cols {
 		tagToSqlColIdx[col.Tag] = i
 	}
 
-	return NewKVToSqlRowConverter(tagToSqlColIdx, cols, len(cols))
+	return NewKVToSqlRowConverter(nbf, tagToSqlColIdx, cols, len(cols))
 }
 
 // ConvertKVToSqlRow returns a sql.Row generated from the key and value provided.
@@ -104,15 +106,22 @@ func (conv *KVToSqlRowConverter) ConvertKVToSqlRow(k, v types.Value) (sql.Row, e
 		if !ok {
 			return nil, errors.New("invalid value is not a tuple")
 		}
+	} else {
+		valTup = types.EmptyTuple(conv.nbf)
 	}
 
+	return conv.ConvertKVTuplesToSqlRow(keyTup, valTup)
+}
+
+// ConvertKVToSqlRow returns a sql.Row generated from the key and value provided.
+func (conv *KVToSqlRowConverter) ConvertKVTuplesToSqlRow(k, v types.Tuple) (sql.Row, error) {
 	tupItr := types.TupleItrPool.Get().(*types.TupleIterator)
 	defer types.TupleItrPool.Put(tupItr)
 
 	cols := make([]interface{}, conv.rowSize)
 	if conv.valsFromKey > 0 {
 		// keys are not in sorted order so cannot use max tag to early exit
-		err := conv.processTuple(cols, conv.valsFromKey, 0xFFFFFFFFFFFFFFFF, keyTup, tupItr)
+		err := conv.processTuple(cols, conv.valsFromKey, 0xFFFFFFFFFFFFFFFF, k, tupItr)
 
 		if err != nil {
 			return nil, err
@@ -120,7 +129,7 @@ func (conv *KVToSqlRowConverter) ConvertKVToSqlRow(k, v types.Value) (sql.Row, e
 	}
 
 	if conv.valsFromVal > 0 {
-		err := conv.processTuple(cols, conv.valsFromVal, conv.maxValTag, valTup, tupItr)
+		err := conv.processTuple(cols, conv.valsFromVal, conv.maxValTag, v, tupItr)
 
 		if err != nil {
 			return nil, err
@@ -178,19 +187,24 @@ func (conv *KVToSqlRowConverter) processTuple(cols []interface{}, valsToFill int
 }
 
 // KVGetFunc defines a function that returns a Key Value pair
-type KVGetFunc func(ctx context.Context) (types.Value, types.Value, error)
+type KVGetFunc func(ctx context.Context) (types.Tuple, types.Tuple, error)
 
-func GetGetFuncForMapIter(mapItr types.MapIterator) func(ctx context.Context) (types.Value, types.Value, error) {
-	return func(ctx context.Context) (types.Value, types.Value, error) {
+func GetGetFuncForMapIter(nbf *types.NomsBinFormat, mapItr types.MapIterator) func(ctx context.Context) (types.Tuple, types.Tuple, error) {
+	return func(ctx context.Context) (types.Tuple, types.Tuple, error) {
 		k, v, err := mapItr.Next(ctx)
 
 		if err != nil {
-			return nil, nil, err
+			return types.Tuple{}, types.Tuple{}, err
 		} else if k == nil {
-			return nil, nil, io.EOF
+			return types.Tuple{}, types.Tuple{}, io.EOF
 		}
 
-		return k, v, nil
+		valTup, ok := v.(types.Tuple)
+		if !ok {
+			valTup = types.EmptyTuple(nbf)
+		}
+
+		return k.(types.Tuple), valTup, nil
 	}
 }
 
@@ -221,7 +235,7 @@ func (dmi *DoltMapIter) Next() (sql.Row, error) {
 		return nil, err
 	}
 
-	return dmi.conv.ConvertKVToSqlRow(k, v)
+	return dmi.conv.ConvertKVTuplesToSqlRow(k, v)
 }
 
 func (dmi *DoltMapIter) Close() error {
