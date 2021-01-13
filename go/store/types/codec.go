@@ -135,7 +135,7 @@ func (b *binaryNomsReader) readUint16() uint16 {
 	return v
 }
 
-func (b *binaryNomsReader) peekKind() NomsKind {
+func (b *binaryNomsReader) PeekKind() NomsKind {
 	return NomsKind(b.peekUint8())
 }
 

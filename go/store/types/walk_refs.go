@@ -160,7 +160,7 @@ func (r *refWalker) walkMetaSequence(nbf *NomsBinFormat, k NomsKind, level uint6
 }
 
 func (r *refWalker) skipOrderedKey(nbf *NomsBinFormat) error {
-	switch r.peekKind() {
+	switch r.PeekKind() {
 	case hashKind:
 		r.skipKind()
 		r.skipHash()
@@ -172,7 +172,7 @@ func (r *refWalker) skipOrderedKey(nbf *NomsBinFormat) error {
 }
 
 func (r *refWalker) walkValue(nbf *NomsBinFormat, cb RefCallback) error {
-	k := r.peekKind()
+	k := r.PeekKind()
 	switch k {
 	case BlobKind:
 		return r.walkBlob(nbf, cb)

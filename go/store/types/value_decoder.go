@@ -34,6 +34,7 @@ import (
 var ErrUnknownType = errors.New("unknown type")
 
 type CodecReader interface {
+	PeekKind() NomsKind
 	ReadKind() NomsKind
 	SkipValue(nbf *NomsBinFormat) error
 	ReadUint() uint64
@@ -45,6 +46,7 @@ type CodecReader interface {
 	ReadInlineBlob() []byte
 	ReadTimestamp() (time.Time, error)
 	ReadDecimal() (decimal.Decimal, error)
+	ReadBlob() (Blob, error)
 }
 
 var _ CodecReader = (*valueDecoder)(nil)
@@ -67,6 +69,14 @@ func newValueDecoder(buff []byte, vrw ValueReadWriter) valueDecoder {
 
 func newValueDecoderWithValidation(nr binaryNomsReader, vrw ValueReadWriter) valueDecoder {
 	return valueDecoder{typedBinaryNomsReader{nr, true}, vrw}
+}
+
+func (r *valueDecoder) ReadBlob() (Blob, error) {
+	seq, err := r.readBlobSequence(r.vrw.Format())
+	if err != nil {
+		return Blob{}, err
+	}
+	return newBlob(seq), nil
 }
 
 func (r *valueDecoder) readRef(nbf *NomsBinFormat) (Ref, error) {
@@ -240,7 +250,7 @@ func (r *valueDecoder) skipSequence(nbf *NomsBinFormat, kind NomsKind, leafSkipp
 }
 
 func (r *valueDecoder) skipOrderedKey(nbf *NomsBinFormat) error {
-	switch r.peekKind() {
+	switch r.PeekKind() {
 	case hashKind:
 		r.skipKind()
 		r.skipHash()
@@ -280,7 +290,7 @@ func (r *valueDecoder) skipMetaSequence(nbf *NomsBinFormat, k NomsKind, level ui
 }
 
 func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
-	k := r.peekKind()
+	k := r.PeekKind()
 	switch k {
 	case BlobKind:
 		seq, err := r.readBlobSequence(nbf)
@@ -356,7 +366,7 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 }
 
 func (r *valueDecoder) SkipValue(nbf *NomsBinFormat) error {
-	k := r.peekKind()
+	k := r.PeekKind()
 	switch k {
 	case BlobKind:
 		err := r.skipBlob(nbf)
@@ -443,7 +453,7 @@ func (r *valueDecoder) SkipValue(nbf *NomsBinFormat) error {
 // readTypeOfValue is basically readValue().typeOf() but it ensures that we do
 // not allocate values where we do not need to.
 func (r *valueDecoder) readTypeOfValue(nbf *NomsBinFormat) (*Type, error) {
-	k := r.peekKind()
+	k := r.PeekKind()
 	switch k {
 	case BlobKind:
 		err := r.skipBlob(nbf)
@@ -496,7 +506,7 @@ func (r *valueDecoder) readTypeOfValue(nbf *NomsBinFormat) (*Type, error) {
 // If this returns false the decoder might not have visited the whole value and
 // its offset is no longer valid.
 func (r *valueDecoder) isValueSameTypeForSure(nbf *NomsBinFormat, t *Type) (bool, error) {
-	k := r.peekKind()
+	k := r.PeekKind()
 	if k != t.TargetKind() {
 		return false, nil
 	}
@@ -563,7 +573,7 @@ func (r *valueDecoder) skipTuple(nbf *NomsBinFormat) error {
 }
 
 func (r *valueDecoder) readOrderedKey(nbf *NomsBinFormat) (orderedKey, error) {
-	switch r.peekKind() {
+	switch r.PeekKind() {
 	case hashKind:
 		r.skipKind()
 		h := r.readHash()
