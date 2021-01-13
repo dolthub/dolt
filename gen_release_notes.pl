@@ -21,7 +21,7 @@ GetOptions ("token|t=s" => \$token) or die "Error in command line args";
 # no arg for changes since last release
 my $releaseTag = shift @ARGV;
 
-print STDERR "Looking for changes since release $releaseTag\n" if $releaseTag;
+print STDERR "Looking for changes for release $releaseTag\n" if $releaseTag;
 
 my $tmpDir = "/var/tmp";
 my $curlFile = "$tmpDir/curl-$$.out";
@@ -89,7 +89,7 @@ foreach my $pr (@$mergedPrs) {
     }
 }
 
-print "\n\n# Closed Issues\n\n";
+print "\n# Closed Issues\n\n";
 foreach my $pr (@$closedIssues) {
     print "* [$pr->{number}]($pr->{url}): $pr->{title}\n";
 }
