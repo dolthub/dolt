@@ -74,8 +74,20 @@ func (ti *varBinaryType) ConvertNomsValueToValue(v types.Value) (interface{}, er
 
 // ReadFrom reads a go value from a noms types.CodecReader directly
 func (ti *varBinaryType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
-	// todo - implement
-	panic("not implemented yet")
+	k := reader.PeekKind()
+	switch k {
+	case types.BlobKind:
+		val, err := reader.ReadBlob()
+		if err != nil {
+			return nil, err
+		}
+		return ti.fromBlob(val)
+	case types.NullKind:
+		_ = reader.ReadKind()
+		return nil, nil
+	}
+
+	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
 }
 
 // ConvertValueToNomsValue implements TypeInfo interface.
