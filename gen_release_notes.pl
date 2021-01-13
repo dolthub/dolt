@@ -10,6 +10,11 @@ use Data::Dumper;
 
 use Getopt::Long;
 
+# GitHub API rate limits to 60 requests an hour. Running this to
+# generate release notes for a single release shouldn't normally hit
+# this limit. If it does, you'll need to use a personal access token
+# with the --token flag. Details for how to create a token:
+# https://docs.github.com/en/free-pro-team@latest/github/authenticating-to-github/creating-a-personal-access-token
 my $token = "";
 GetOptions ("token|t=s" => \$token) or die "Error in command line args";
 
@@ -47,7 +52,7 @@ die "Couldn't find release" unless $toTime;
 print STDERR "Looking for PRs and issues from $fromTime to $toTime\n";
 
 my $doltPullRequestsUrl = 'https://api.github.com/repos/dolthub/dolt/pulls';
-my $mergedDoltPrs = getPRs($doltPullRequestsUrl, $fromTime, $toTime);
+my $mergedPrs = getPRs($doltPullRequestsUrl, $fromTime, $toTime);
 
 my $doltIssuesUrl = "https://api.github.com/repos/dolthub/dolt/issues";
 my $closedIssues = getIssues($doltIssuesUrl, $fromTime, $toTime);
@@ -65,16 +70,19 @@ if ($fromGmsHash ne $toGmsHash) {
     my $gmsIssuesUrl = "https://api.github.com/repos/dolthub/go-mysql-server/issues";
     my $closedGmsIssues = getIssues($gmsIssuesUrl, $fromTime, $toTime);
 
-    push @$mergedDoltPrs, @$mergedGmsPrs;
+    push @$mergedPrs, @$mergedGmsPrs;
     push @$closedIssues, @$closedGmsIssues;
 }
 
-print "# Merged PRs:\n\n";
-foreach my $pr (@$mergedDoltPrs) {
+print "# Merged PRs\n\n";
+foreach my $pr (@$mergedPrs) {
+    print "* [$pr->{number}]($pr->{url}): $pr->{title}\n";
+
     if ($pr->{body}) {
-        print "* [$pr->{number}]($pr->{url}): $pr->{title} ($pr->{body})\n";        
-    } else {
-        print "* [$pr->{number}]($pr->{url}): $pr->{title}\n";
+        my @lines = split (/\s*[\n\r]+\s*/, $pr->{body});
+        foreach my $line (@lines) {
+            print "  $line\n";
+        }
     }
 }
 
@@ -83,6 +91,7 @@ foreach my $pr (@$closedIssues) {
     print "* [$pr->{number}]($pr->{url}): $pr->{title}\n";
 }
 
+# Gets a curl command to access the github api with the URL with token given (optional).
 sub curlCmd {
     my $url = shift;
     my $token = shift;
@@ -94,6 +103,7 @@ sub curlCmd {
     return $baseCmd;
 }
 
+# Returns a list of closed PRs in the time range given, using the 
 sub getPRs {
     my $baseUrl = shift;
     my $fromTime = shift;
@@ -113,7 +123,8 @@ sub getPRs {
 
         $more = 0;
         my $pullsJson = json_file_to_perl($curlFile);
-        # TODO: error handling if this fails to parse
+        die "JSON file does not contain a list response" unless ref($pullsJson) eq 'ARRAY');
+        
         foreach my $pull (@$pullsJson) {
             $more = 1;
             next unless $pull->{merged_at};
@@ -135,6 +146,7 @@ sub getPRs {
     return \@mergedPrs;
 }
 
+# Returns the SHA version of the dependency named at the repository SHA given.
 sub getDependencyVersion {
     my $dependency = shift;
     my $hash = shift;
@@ -151,6 +163,7 @@ sub getDependencyVersion {
     die "Couldn't determine dependency version in $line";
 }
 
+# Returns a list of closed issues in the time frame given from the github API url given
 sub getIssues {
     my $baseUrl = shift;
     my $fromTime = shift;
@@ -168,9 +181,10 @@ sub getIssues {
         print STDERR "$curlIssues\n";
         system($curlIssues) and die $!;
 
-        $more = 0;
         my $issuesJson = json_file_to_perl($curlFile);
-        # TODO: error handling if this fails to parse
+        die "JSON file does not contain a list response" unless ref($issuesJson) eq 'ARRAY');
+
+        $more = 0;
         foreach my $issue (@$issuesJson) {
             $more = 1;
             next unless $issue->{closed_at};
@@ -192,6 +206,7 @@ sub getIssues {
     return \@closedIssues;
 }
 
+# Returns the commit time for the commit from the repo given with the sha given
 sub getCommitTime {
     my $repo = shift;
     my $sha = shift;
