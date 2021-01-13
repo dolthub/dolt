@@ -28,70 +28,71 @@ my $token = "";
 GetOptions ("token|t=s" => \$token) or die "Error in command line args";
 
 # no arg for changes since last release
-my $releaseTag = shift @ARGV;
+my $release_tag = shift @ARGV;
 
-print STDERR "Looking for changes for release $releaseTag\n" if $releaseTag;
+print STDERR "Looking for changes for release $release_tag\n" if $release_tag;
 
-my $tmpDir = "/var/tmp";
-my $curlFile = "$tmpDir/curl-$$.out";
+my $tmp_dir = "/var/tmp";
+my $curl_file = "$tmp_dir/curl-$$.out";
 
-my $doltReleasesUrl = 'https://api.github.com/repos/dolthub/dolt/releases?per_page=100';
-my $curlReleases = curlCmd($doltReleasesUrl, $token);
+my $dolt_releases_url = 'https://api.github.com/repos/dolthub/dolt/releases?per_page=100';
+my $curl_releases = curl_cmd($dolt_releases_url, $token);
 
-print STDERR "$curlReleases\n";
-system($curlReleases) and die $!;
+print STDERR "$curl_releases\n";
+system($curl_releases) and die $!;
 
-my $releasesJson = json_file_to_perl($curlFile);
+my $releases_json = json_file_to_perl($curl_file);
 
-my ($fromTime, $fromTag, $fromHash, $toTime, $toTag, $toHash);
-foreach my $release (@$releasesJson) {
-    $fromTime = $release->{created_at};
-    $fromTag = $release->{tag_name};
-    last if $toTime;
+my ($from_time, $from_tag, $from_hash, $to_time, $to_tag, $to_hash);
+foreach my $release (@$releases_json) {
+    $from_time = $release->{created_at};
+    $from_tag = $release->{tag_name};
+    last if $to_time;
 
-    if ((! $releaseTag) || ($releaseTag eq $release->{tag_name})) {
-        $toTime = $release->{created_at};
-        $toTag = $release->{tag_name};
-        last unless $releaseTag;
+    if ((! $release_tag) || ($release_tag eq $release->{tag_name})) {
+        $to_time = $release->{created_at};
+        $to_tag = $release->{tag_name};
+        last unless $release_tag;
     }
 }
 
-die "Couldn't find release" unless $toTime;
+die "Couldn't find release" unless $to_time;
 
-$fromHash = tagToCommitHash($fromTag);
-$toHash = tagToCommitHash($toTag);
+$from_hash = tag_to_commit_hash($from_tag);
+$to_hash = tag_to_commit_hash($to_tag);
 
 # If we don't have a release tag to generate notes for, there is no
 # upper bound for pulls and issues, only a lower bound.
-$toTime = "" unless $releaseTag;
+$to_time = "" unless $release_tag;
 
-print STDERR "Looking for PRs and issues from $fromTime to $toTime\n";
+print STDERR "Looking for PRs and issues from $from_time to $to_time\n";
 
-my $doltPullRequestsUrl = 'https://api.github.com/repos/dolthub/dolt/pulls';
-my $mergedPrs = getPRs($doltPullRequestsUrl, $fromTime, $toTime);
+my $dolt_pull_requests_url = 'https://api.github.com/repos/dolthub/dolt/pulls';
+my $merged_prs = get_prs($dolt_pull_requests_url, $from_time, $to_time);
 
-my $doltIssuesUrl = "https://api.github.com/repos/dolthub/dolt/issues";
-my $closedIssues = getIssues($doltIssuesUrl, $fromTime, $toTime);
+my $dolt_issues_url = "https://api.github.com/repos/dolthub/dolt/issues";
+my $closed_issues = get_issues($dolt_issues_url, $from_time, $to_time);
 
-my $fromGmsHash = getDependencyVersion("go-mysql-server", $fromHash);
-my $toGmsHash = getDependencyVersion("go-mysql-server", $toHash);
+my $from_gms_hash = get_dependency_version("go-mysql-server", $from_hash);
+my $to_gms_hash = get_dependency_version("go-mysql-server", $to_hash);
 
-if ($fromGmsHash ne $toGmsHash) {
-    print STDERR "Looking for pulls in go-mysql-server from $fromGmsHash to $toGmsHash\n";
-    my $fromGmsTime = getCommitTime("dolthub/go-mysql-server", $fromGmsHash);
-    my $toGmsTime = getCommitTime("dolthub/go-mysql-server", $toGmsHash);
+if ($from_gms_hash ne $to_gms_hash) {
+    print STDERR "Looking for commit times in go-mysql-server from $from_gms_hash to $to_gms_hash\n";
+    my $from_gms_time = get_commit_time("dolthub/go-mysql-server", $from_gms_hash);
+    my $to_gms_time = get_commit_time("dolthub/go-mysql-server", $to_gms_hash);
 
-    my $gmsPullsUrls = 'https://api.github.com/repos/dolthub/go-mysql-server/pulls';
-    my $mergedGmsPrs = getPRs($gmsPullsUrls, $fromGmsTime, $toGmsTime);
-    my $gmsIssuesUrl = "https://api.github.com/repos/dolthub/go-mysql-server/issues";
-    my $closedGmsIssues = getIssues($gmsIssuesUrl, $fromGmsTime, $toGmsTime);
+    print STDERR "Looking for pulls in go-mysql-server from $from_gms_time to $to_gms_time\n";
+    my $gms_pulls_urls = 'https://api.github.com/repos/dolthub/go-mysql-server/pulls';
+    my $merged_gms_prs = get_prs($gms_pulls_urls, $from_gms_time, $to_gms_time);
+    my $gms_issues_url = "https://api.github.com/repos/dolthub/go-mysql-server/issues";
+    my $closed_gms_issues = get_issues($gms_issues_url, $from_gms_time, $to_gms_time);
 
-    push @$mergedPrs, @$mergedGmsPrs;
-    push @$closedIssues, @$closedGmsIssues;
+    push @$merged_prs, @$merged_gms_prs;
+    push @$closed_issues, @$closed_gms_issues;
 }
 
 print "# Merged PRs\n\n";
-foreach my $pr (@$mergedPrs) {
+foreach my $pr (@$merged_prs) {
     print "* [$pr->{number}]($pr->{url}): $pr->{title}\n";
 
     if ($pr->{body}) {
@@ -103,50 +104,50 @@ foreach my $pr (@$mergedPrs) {
 }
 
 print "\n# Closed Issues\n\n";
-foreach my $pr (@$closedIssues) {
+foreach my $pr (@$closed_issues) {
     print "* [$pr->{number}]($pr->{url}): $pr->{title}\n";
 }
 
 exit 0;
 
 # Gets a curl command to access the github api with the URL with token given (optional).
-sub curlCmd {
+sub curl_cmd {
     my $url = shift;
     my $token = shift;
 
-    my $baseCmd = "curl -H 'Accept: application/vnd.github.v3+json'";
-    $baseCmd .= " -H 'Authorization: token $token'" if $token;
-    $baseCmd .= " '$url' > $curlFile";
+    my $base_cmd = "curl -H 'Accept: application/vnd.github.v3+json'";
+    $base_cmd .= " -H 'Authorization: token $token'" if $token;
+    $base_cmd .= " '$url' > $curl_file";
 
-    return $baseCmd;
+    return $base_cmd;
 }
 
 # Returns a list of closed PRs in the time range given, using the 
-sub getPRs {
-    my $baseUrl = shift;
-    my $fromTime = shift;
-    my $toTime = shift;
+sub get_prs {
+    my $base_url = shift;
+    my $from_time = shift;
+    my $to_time = shift;
 
-    $baseUrl .= '?state=closed&sort=created&direction=desc&per_page=100';
+    $base_url .= '?state=closed&sort=created&direction=desc&per_page=100';
     
     my $page = 1;
     my $more = 0;
     
-    my @mergedPrs;
+    my @merged_prs;
     do {
-        my $pullsUrl = "$baseUrl&page=$page";
-        my $curlPulls = curlCmd($pullsUrl, $token);
-        print STDERR "$curlPulls\n";
-        system($curlPulls) and die $!;
+        my $pulls_url = "$base_url&page=$page";
+        my $curl_pulls = curl_cmd($pulls_url, $token);
+        print STDERR "$curl_pulls\n";
+        system($curl_pulls) and die $!;
 
         $more = 0;
-        my $pullsJson = json_file_to_perl($curlFile);
-        die "JSON file does not contain a list response" unless ref($pullsJson) eq 'ARRAY';
+        my $pulls_json = json_file_to_perl($curl_file);
+        die "JSON file does not contain a list response" unless ref($pulls_json) eq 'ARRAY';
         
-        foreach my $pull (@$pullsJson) {
+        foreach my $pull (@$pulls_json) {
             $more = 1;
             next unless $pull->{merged_at};
-            return \@mergedPrs if $pull->{created_at} lt $fromTime;
+            return \@merged_prs if $pull->{created_at} lt $from_time;
             my %pr = (
                 'url' => $pull->{html_url},
                 'number' => $pull->{number},
@@ -155,17 +156,17 @@ sub getPRs {
                 );
 
             # print STDERR "PR merged at $pull->{merged_at}\n";
-            push (@mergedPrs, \%pr) if !$toTime || $pull->{merged_at} le $toTime;
+            push (@merged_prs, \%pr) if !$to_time || $pull->{merged_at} le $to_time;
         }
 
         $page++;
     } while $more;
     
-    return \@mergedPrs;
+    return \@merged_prs;
 }
 
 # Returns the SHA version of the dependency named at the repository SHA given.
-sub getDependencyVersion {
+sub get_dependency_version {
     my $dependency = shift;
     my $hash = shift;
 
@@ -183,31 +184,31 @@ sub getDependencyVersion {
 }
 
 # Returns a list of closed issues in the time frame given from the github API url given
-sub getIssues {
-    my $baseUrl = shift;
-    my $fromTime = shift;
-    my $toTime = shift;
+sub get_issues {
+    my $base_url = shift;
+    my $from_time = shift;
+    my $to_time = shift;
 
-    $baseUrl .= "?state=closed&sort=created&direction=desc&since=$fromTime&per_page=100";
+    $base_url .= "?state=closed&sort=created&direction=desc&since=$from_time&per_page=100";
     
     my $page = 1;
     my $more = 0;
 
-    my @closedIssues;
+    my @closed_issues;
     do {
-        my $issuesUrl = "$baseUrl&page=$page";
-        my $curlIssues = curlCmd($issuesUrl, $token);
-        print STDERR "$curlIssues\n";
-        system($curlIssues) and die $!;
+        my $issues_url = "$base_url&page=$page";
+        my $curl_issues = curl_cmd($issues_url, $token);
+        print STDERR "$curl_issues\n";
+        system($curl_issues) and die $!;
 
-        my $issuesJson = json_file_to_perl($curlFile);
-        die "JSON file does not contain a list response" unless ref($issuesJson) eq 'ARRAY';
+        my $issues_json = json_file_to_perl($curl_file);
+        die "JSON file does not contain a list response" unless ref($issues_json) eq 'ARRAY';
 
         $more = 0;
-        foreach my $issue (@$issuesJson) {
+        foreach my $issue (@$issues_json) {
             $more = 1;
             next unless $issue->{closed_at};
-            return \@closedIssues if $issue->{created_at} lt $fromTime;
+            return \@closed_issues if $issue->{created_at} lt $from_time;
             next if $issue->{html_url} =~ m|/pull/|; # the issues API also returns PR results
             my %i = (
                 'url' => $issue->{html_url},
@@ -216,45 +217,44 @@ sub getIssues {
                 'body' => $issue->{body},
                 );
             
-            push (@closedIssues, \%i) if !$toTime || $issue->{closed_at} le $toTime; 
+            push (@closed_issues, \%i) if !$to_time || $issue->{closed_at} le $to_time; 
         }
 
         $page++;
     } while $more;
     
-    return \@closedIssues;
+    return \@closed_issues;
 }
 
 # Returns the commit time for the commit from the repo given with the sha given
-sub getCommitTime {
+sub get_commit_time {
     my $repo = shift;
     my $sha = shift;
 
-    my $commitCurl = curlCmd("https://api.github.com/repos/$repo/commits?sha=$sha&per_page=1", $token);
-    print STDERR "$commitCurl\n";
-    system($commitCurl) and die $!;
+    my $commit_curl = curl_cmd("https://api.github.com/repos/$repo/commits?sha=$sha&per_page=1", $token);
+    print STDERR "$commit_curl\n";
+    system($commit_curl) and die $!;
     
-    my $commitJson = json_file_to_perl($curlFile);
-    die "JSON file does not contain a list response" unless ref($commitJson) eq 'ARRAY';
+    my $commit_json = json_file_to_perl($curl_file);
+    die "JSON file does not contain a list response" unless ref($commit_json) eq 'ARRAY';
 
-    foreach my $commit (@$commitJson) {
+    foreach my $commit (@$commit_json) {
         # [
         #  {
         #      "sha": "9a89aaf765d7868c8252d24462e371f575175658",
-        #          "node_id": "MDY6Q29tbWl0MTkzNzg0MzQxOjlhODlhYWY3NjVkNzg2OGM4MjUyZDI0NDYyZTM3MWY1NzUxNzU2NTg=",
-        #          "commit": {
-        #              "author": {
-        #                  "name": "Daylon Wilkins",
-        #                      "email": "daylon@liquidata.co",
-        #                      "date": "2020-12-21T14:33:08Z"
-        #              },
+        #      "commit": {
+        #          "author": {
+        #              "name": "Daylon Wilkins",
+        #              "email": "daylon@liquidata.co",
+        #              "date": "2020-12-21_t14:33:08_z"
+        #          },
         return $commit->{commit}{author}{date};
     }
 
     die "Couldn't find commit time";
 }
 
-sub tagToCommitHash {
+sub tag_to_commit_hash {
     my $tag = shift;
 
     my $line = `git rev-list -n 1 $tag`;
