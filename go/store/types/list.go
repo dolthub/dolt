@@ -23,6 +23,7 @@ package types
 
 import (
 	"context"
+	"io"
 	"sync/atomic"
 
 	"github.com/dolthub/dolt/go/store/atomicerr"
@@ -311,34 +312,38 @@ func iterAll(ctx context.Context, col Collection, f func(v Value, index uint64) 
 	return ae.Get()
 }
 
-type collRangeIter struct {
+type collTupleRangeIter struct {
 	leaves         []Collection
 	currLeaf       int
 	startIdx       uint64
 	endIdx         uint64
 	valsPerIdx     uint64
-	currLeafValues []Value
+	currLeafValues []Tuple
 	leafValPos     int
+	nbf            *NomsBinFormat
+	tupleBuffer    []Tuple
 }
 
-func (itr *collRangeIter) Next() (Value, error) {
+func (itr *collTupleRangeIter) Next() (Tuple, error) {
 	var err error
 	if itr.currLeafValues == nil {
 		if itr.currLeaf >= len(itr.leaves) {
 			// reached the end
-			return nil, nil
+			return Tuple{}, io.EOF
 		}
 
 		currLeaf := itr.leaves[itr.currLeaf]
 		itr.currLeaf++
 
 		seq := currLeaf.asSequence()
-		itr.currLeafValues, err = seq.valuesSlice(itr.startIdx, itr.endIdx)
-		itr.leafValPos = 0
+		itr.tupleBuffer, err = seq.kvTuples(itr.startIdx, itr.endIdx, itr.tupleBuffer)
 
 		if err != nil {
-			return nil, err
+			return Tuple{}, err
 		}
+
+		itr.currLeafValues = itr.tupleBuffer
+		itr.leafValPos = 0
 	}
 
 	v := itr.currLeafValues[itr.leafValPos]
@@ -353,7 +358,7 @@ func (itr *collRangeIter) Next() (Value, error) {
 	return v, nil
 }
 
-func newCollRangeIter(ctx context.Context, col Collection, startIdx, endIdx uint64) (*collRangeIter, error) {
+func newCollRangeIter(ctx context.Context, col Collection, startIdx, endIdx uint64) (*collTupleRangeIter, error) {
 	l := col.Len()
 	d.PanicIfTrue(startIdx > endIdx || endIdx > l)
 	if startIdx == endIdx {
@@ -370,11 +375,13 @@ func newCollRangeIter(ctx context.Context, col Collection, startIdx, endIdx uint
 	startIdx = localStart
 	valuesPerIdx := uint64(getValuesPerIdx(col.Kind()))
 
-	return &collRangeIter{
-		leaves:     leaves,
-		startIdx:   startIdx,
-		endIdx:     endIdx,
-		valsPerIdx: valuesPerIdx,
+	return &collTupleRangeIter{
+		leaves:      leaves,
+		startIdx:    startIdx,
+		endIdx:      endIdx,
+		valsPerIdx:  valuesPerIdx,
+		tupleBuffer: make([]Tuple, 32),
+		nbf:         col.asSequence().format(),
 	}, nil
 }
 

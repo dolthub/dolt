@@ -24,6 +24,7 @@ package types
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -204,11 +205,23 @@ type Tuple struct {
 // readTuple reads the data provided by a decoder and moves the decoder forward.
 func readTuple(nbf *NomsBinFormat, dec *valueDecoder) (Tuple, error) {
 	start := dec.pos()
+	k := dec.PeekKind()
+
+	if k == NullKind {
+		dec.skipKind()
+		return EmptyTuple(nbf), nil
+	}
+
+	if k != TupleKind {
+		return Tuple{}, errors.New("current value is not a tuple")
+	}
+
 	err := skipTuple(nbf, dec)
 
 	if err != nil {
-		return EmptyTuple(nbf), err
+		return Tuple{}, err
 	}
+
 	end := dec.pos()
 	return Tuple{valueImpl{dec.vrw, nbf, dec.byteSlice(start, end), nil}}, nil
 }

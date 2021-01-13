@@ -51,7 +51,7 @@ func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsK
 	}
 
 	cols := idx.Schema().GetAllCols().GetColumns()
-	conv := NewKVToSqlRowConverterForCols(cols)
+	conv := NewKVToSqlRowConverterForCols(idx.IndexRowData().Format(), cols)
 
 	iter := &indexLookupRowIterAdapter{
 		idx:     idx,
@@ -239,7 +239,7 @@ func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nom
 	return &coveringIndexRowIterAdapter{
 		idx:       idx,
 		keyIter:   keyIter,
-		conv:      NewKVToSqlRowConverter(tagToSqlColIdx, cols, len(cols)),
+		conv:      NewKVToSqlRowConverter(idx.IndexRowData().Format(), tagToSqlColIdx, cols, len(cols)),
 		ctx:       ctx,
 		pkCols:    sch.GetPKCols(),
 		nonPKCols: sch.GetNonPKCols(),
