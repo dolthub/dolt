@@ -34,20 +34,23 @@ system($curlReleases) and die $!;
 
 my $releasesJson = json_file_to_perl($curlFile);
 
-my ($fromTime, $fromHash, $toTime, $toHash);
+my ($fromTime, $fromTag, $fromHash, $toTime, $toTag, $toHash);
 foreach my $release (@$releasesJson) {
     $fromTime = $release->{created_at};
-    $fromHash = $release->{target_commitish};
+    $fromTag = $release->{tag_name};
     last if $toTime;
 
     if ((! $releaseTag) || ($releaseTag eq $release->{tag_name})) {
         $toTime = $release->{created_at};
-        $toHash = $release->{target_commitish};
+        $toTag = $release->{tag_name};
         last unless $releaseTag;
     }
 }
 
 die "Couldn't find release" unless $toTime;
+
+$fromHash = tagToCommitHash($fromTag);
+$toHash = tagToCommitHash($toTag);
 
 print STDERR "Looking for PRs and issues from $fromTime to $toTime\n";
 
@@ -123,7 +126,7 @@ sub getPRs {
 
         $more = 0;
         my $pullsJson = json_file_to_perl($curlFile);
-        die "JSON file does not contain a list response" unless ref($pullsJson) eq 'ARRAY');
+        die "JSON file does not contain a list response" unless ref($pullsJson) eq 'ARRAY';
         
         foreach my $pull (@$pullsJson) {
             $more = 1;
@@ -182,7 +185,7 @@ sub getIssues {
         system($curlIssues) and die $!;
 
         my $issuesJson = json_file_to_perl($curlFile);
-        die "JSON file does not contain a list response" unless ref($issuesJson) eq 'ARRAY');
+        die "JSON file does not contain a list response" unless ref($issuesJson) eq 'ARRAY';
 
         $more = 0;
         foreach my $issue (@$issuesJson) {
@@ -232,4 +235,16 @@ sub getCommitTime {
     }
 
     die "Couldn't find commit time";
+}
+
+sub tagToCommitHash {
+    my $tag = shift;
+
+    my $line = `git rev-list -n 1 $tag`;
+    
+    if ($line =~ m/([0-9a-f]+)/) {
+        return $1;
+    }
+
+    die "Couldn't determine dependency commit hash for tag $tag";
 }
