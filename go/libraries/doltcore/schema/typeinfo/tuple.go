@@ -15,6 +15,7 @@
 package typeinfo
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -49,7 +50,7 @@ func (ti *tupleType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) 
 }
 
 // ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *tupleType) ConvertValueToNomsValue(v interface{}) (types.Value, error) {
+func (ti *tupleType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
 	if tVal, ok := v.(types.Value); ok {
 		return tVal, nil
 	}
@@ -98,7 +99,7 @@ func (ti *tupleType) NomsKind() types.NomsKind {
 }
 
 // ParseValue implements TypeInfo interface.
-func (ti *tupleType) ParseValue(str *string) (types.Value, error) {
+func (ti *tupleType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
 	return nil, fmt.Errorf(`"%v" cannot parse strings`, ti.String())
 }
 
