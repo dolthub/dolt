@@ -23,6 +23,13 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+type DocDetails struct {
+	NewerText []byte
+	DocPk     string
+	Value     types.Value
+	File      string
+}
+
 func DocTblKeyFromName(fmt *types.NomsBinFormat, name string) (types.Tuple, error) {
 	return types.NewTuple(fmt, types.Uint(schema.DocNameTag), types.String(name))
 }

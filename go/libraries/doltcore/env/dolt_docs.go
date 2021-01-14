@@ -17,6 +17,7 @@ package env
 import (
 	"context"
 	"errors"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/docsTable"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -133,7 +134,7 @@ func UpdateRootWithDocs(ctx context.Context, dbData DbData, root *doltdb.RootVal
 
 	docTbl, err = dbData.Drw.WriteDocsToDisk(ctx, root.VRW(), docTbl, docDetails)
 
-	if errors.Is(ErrEmptyDocsTable, err) {
+	if errors.Is(docsTable.ErrEmptyDocsTable, err) {
 		root, err = root.RemoveTables(ctx, doltdb.DocTableName)
 	} else if err != nil {
 		return nil, err
@@ -227,4 +228,14 @@ func GetDocsWithNewerTextFromRoot(ctx context.Context, root *doltdb.RootValue, d
 		docs[i] = doc
 	}
 	return docs, nil
+}
+
+// UpdateFSDocsFromRootDocs updates the provided docs from the root value, and then saves them to the filesystem.
+// If docs == nil, all valid docs will be retrieved and written.
+func UpdateFSDocsFromRootDocs(ctx context.Context, root *doltdb.RootValue, docs Docs, FS filesys.Filesys) error {
+	docs, err := GetDocsWithNewerTextFromRoot(ctx, root, docs)
+	if err != nil {
+		return nil
+	}
+	return docs.Save(FS)
 }

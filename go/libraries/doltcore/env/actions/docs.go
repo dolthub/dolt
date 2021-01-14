@@ -47,7 +47,7 @@ func SaveDocsFromWorking(ctx context.Context, dEnv *env.DoltEnv) error {
 func SaveDocsFromRoot(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv) error {
 	localDocs := dEnv.Docs
 
-	err := dEnv.UpdateFSDocsToRootDocs(ctx, root, nil)
+	err := env.UpdateFSDocsFromRootDocs(ctx, root, nil, dEnv.FS)
 	if err != nil {
 		// If we can't update docs on disk, attempt to revert the change
 		localDocs.Save(dEnv.FS)
@@ -66,7 +66,7 @@ func SaveTrackedDocs(ctx context.Context, dEnv *env.DoltEnv, workRoot, targetRoo
 
 	docs := removeUntrackedDocs(localDocs, docDiffs)
 
-	err = dEnv.UpdateFSDocsToRootDocs(ctx, targetRoot, docs)
+	err = env.UpdateFSDocsFromRootDocs(ctx, targetRoot, docs, dEnv.FS)
 	if err != nil {
 		localDocs.Save(dEnv.FS)
 		return err

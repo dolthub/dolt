@@ -43,13 +43,6 @@ type RootValue struct {
 	fkc     *ForeignKeyCollection // cache the first load
 }
 
-type DocDetails struct {
-	NewerText []byte
-	DocPk     string
-	Value     types.Value
-	File      string
-}
-
 func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[string]hash.Hash, ssMap types.Map, fkMap types.Map) (*RootValue, error) {
 	values := make([]types.Value, 2*len(tables))
 
