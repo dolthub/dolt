@@ -16,6 +16,7 @@ package doltdb
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -42,7 +43,7 @@ func TestDocDiff(t *testing.T) {
 	}
 
 	// DocDiff between a root and itself should return no added, modified or removed docs.
-	added, modified, removed, err := root.DocDiff(ctx, root, docDetails)
+	added, modified, removed, err := diff.DocDiff(ctx, root, root, docDetails)
 	assert.NoError(t, err)
 
 	if len(added)+len(modified)+len(removed) != 0 {
@@ -61,7 +62,7 @@ func TestDocDiff(t *testing.T) {
 	assert.NoError(t, err)
 
 	// DocDiff between root and root2 should return one added doc, LICENSE.md
-	added, modified, removed, err = root.DocDiff(ctx, root2, docDetails)
+	added, modified, removed, err = diff.DocDiff(ctx, root, root2, docDetails)
 	assert.NoError(t, err)
 
 	if len(added) != 1 || added[0] != "LICENSE.md" || len(modified)+len(removed) != 0 {
@@ -79,7 +80,7 @@ func TestDocDiff(t *testing.T) {
 	assert.NoError(t, err)
 
 	// DocDiff between root2 and root3 should return one removed doc (license) and one added doc (readme).
-	added, modified, removed, err = root2.DocDiff(ctx, root3, docDetails)
+	added, modified, removed, err = diff.DocDiff(ctx, root2, root3, docDetails)
 	assert.NoError(t, err)
 
 	if len(removed) != 1 || removed[0] != "LICENSE.md" || len(added) != 1 || added[0] != "README.md" || len(modified) != 0 {
@@ -97,7 +98,7 @@ func TestDocDiff(t *testing.T) {
 	assert.NoError(t, err)
 
 	// DocDiff between root3 and root4 should return one added doc (license) and one modified doc (readme).
-	added, modified, removed, err = root3.DocDiff(ctx, root4, nil)
+	added, modified, removed, err = diff.DocDiff(ctx, root3, root4, nil)
 	assert.NoError(t, err)
 
 	if len(added) != 1 || added[0] != "LICENSE.md" || len(modified) != 1 || modified[0] != "README.md" || len(removed) != 0 {
@@ -105,7 +106,7 @@ func TestDocDiff(t *testing.T) {
 	}
 
 	// DocDiff between root4 and root shows 2 remove docs (license, readme)
-	added, modified, removed, err = root4.DocDiff(ctx, root, nil)
+	added, modified, removed, err = diff.DocDiff(ctx, root4, root, nil)
 	assert.NoError(t, err)
 
 	if len(removed) != 2 || len(modified) != 0 || len(added) != 0 {
@@ -123,7 +124,7 @@ func TestAddNewerTextAndValueFromTable(t *testing.T) {
 	doc1, err := AddNewerTextToDocFromTbl(ctx, nil, nil, doc1)
 	assert.NoError(t, err)
 	assert.Nil(t, doc1.NewerText)
-	doc1, err = AddValueToDocFromTbl(ctx, nil, nil, doc1)
+	doc1, err = diff.AddValueToDocFromTbl(ctx, nil, nil, doc1)
 	assert.NoError(t, err)
 	assert.Nil(t, doc1.Value)
 
@@ -139,7 +140,7 @@ func TestAddNewerTextAndValueFromTable(t *testing.T) {
 	doc2, err = AddNewerTextToDocFromTbl(ctx, tbl, &sch, doc2)
 	assert.NoError(t, err)
 	assert.Nil(t, doc2.NewerText)
-	doc2, err = AddValueToDocFromTbl(ctx, tbl, &sch, doc2)
+	doc2, err = diff.AddValueToDocFromTbl(ctx, tbl, &sch, doc2)
 	assert.NoError(t, err)
 	assert.Nil(t, doc2.Value)
 
@@ -148,7 +149,7 @@ func TestAddNewerTextAndValueFromTable(t *testing.T) {
 	doc3, err = AddNewerTextToDocFromTbl(ctx, tbl, &sch, doc3)
 	assert.NoError(t, err)
 	assert.Nil(t, doc3.NewerText)
-	doc3, err = AddValueToDocFromTbl(ctx, tbl, &sch, doc3)
+	doc3, err = diff.AddValueToDocFromTbl(ctx, tbl, &sch, doc3)
 	assert.NoError(t, err)
 	assert.Nil(t, doc3.Value)
 
@@ -163,7 +164,7 @@ func TestAddNewerTextAndValueFromTable(t *testing.T) {
 	doc4, err = AddNewerTextToDocFromTbl(ctx, tbl, &sch, doc4)
 	assert.NoError(t, err)
 	assert.Equal(t, "text in doc_text", string(doc4.NewerText))
-	doc4, err = AddValueToDocFromTbl(ctx, tbl, &sch, doc4)
+	doc4, err = diff.AddValueToDocFromTbl(ctx, tbl, &sch, doc4)
 	assert.NoError(t, err)
 	assert.Equal(t, types.String("text in doc_text"), doc4.Value)
 
@@ -172,7 +173,7 @@ func TestAddNewerTextAndValueFromTable(t *testing.T) {
 	doc5, err = AddNewerTextToDocFromTbl(ctx, tbl, &sch, doc5)
 	assert.NoError(t, err)
 	assert.Equal(t, "text in doc_text", string(doc5.NewerText))
-	doc5, err = AddValueToDocFromTbl(ctx, tbl, &sch, doc5)
+	doc5, err = diff.AddValueToDocFromTbl(ctx, tbl, &sch, doc5)
 	assert.NoError(t, err)
 	assert.Equal(t, types.String("text in doc_text"), doc5.Value)
 }

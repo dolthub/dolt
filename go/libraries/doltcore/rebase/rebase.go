@@ -189,12 +189,22 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, n
 		return err
 	}
 
-	_, err = env.UpdateWorkingRootWithDocsTable(ctx, dbData, dd)
+	working, err := env.WorkingRoot(ctx, dbData.Ddb, dbData.Rsr)
 	if err != nil {
 		return err
 	}
 
-	_, err = env.UpdateStagedRootWithDocsTable(ctx, dbData, dd)
+	staged, err := env.StagedRoot(ctx, dbData.Ddb, dbData.Rsr)
+	if err != nil {
+		return err
+	}
+
+	_, err = env.UpdateRootWithDocs(ctx, dbData, working, env.Working, dd)
+	if err != nil {
+		return err
+	}
+
+	_, err = env.UpdateRootWithDocs(ctx, dbData, staged, env.Staged, dd)
 	return err
 }
 

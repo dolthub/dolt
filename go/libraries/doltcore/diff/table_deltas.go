@@ -94,7 +94,7 @@ func NewDocDiffs(ctx context.Context, older *doltdb.RootValue, newer *doltdb.Roo
 	var removed []string
 	if older != nil {
 		if newer == nil {
-			a, m, r, err := older.DocDiff(ctx, nil, docDetails)
+			a, m, r, err := DocDiff(ctx, older,nil, docDetails)
 			if err != nil {
 				return nil, err
 			}
@@ -102,7 +102,7 @@ func NewDocDiffs(ctx context.Context, older *doltdb.RootValue, newer *doltdb.Roo
 			modified = m
 			removed = r
 		} else {
-			a, m, r, err := older.DocDiff(ctx, newer, docDetails)
+			a, m, r, err := DocDiff(ctx, older, newer, docDetails)
 			if err != nil {
 				return nil, err
 			}

@@ -221,12 +221,17 @@ func getUnionedTables(ctx context.Context, tables []string, stagedRoot, headRoot
 func resetDocs(ctx context.Context, dbData env.DbData, headRoot *doltdb.RootValue, staged *doltdb.RootValue, docDetails env.Docs) (newStgRoot *doltdb.RootValue, err error) {
 	docs, err := env.GetDocsWithNewerTextFromRoot(ctx, headRoot, docDetails)
 
-	_, err = env.UpdateWorkingRootWithDocsTable(ctx, dbData, docs)
+	working, err := env.WorkingRoot(ctx, dbData.Ddb, dbData.Rsr)
 	if err != nil {
 		return nil, err
 	}
 
-	return env.UpdateRootWithDocsTable(ctx, dbData, staged, env.Staged, docs)
+	_, err = env.UpdateRootWithDocs(ctx, dbData, working, env.Working, docs)
+	if err != nil {
+		return nil, err
+	}
+
+	return env.UpdateRootWithDocs(ctx, dbData, staged, env.Staged, docs)
 }
 
 func resetStaged(ctx context.Context, ddb *doltdb.DoltDB, rsw env.RepoStateWriter, tbls []string, staged, head *doltdb.RootValue) (*doltdb.RootValue, error) {

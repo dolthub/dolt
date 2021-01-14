@@ -911,7 +911,7 @@ func printDocDiffs(ctx context.Context, dEnv *env.DoltEnv, fromTbl, toTbl *doltd
 		}
 		if fromTbl != nil {
 			sch2, _ := fromTbl.GetSchema(ctx)
-			doc, _ = doltdb.AddValueToDocFromTbl(ctx, fromTbl, &sch2, doc)
+			doc, _ = diff.AddValueToDocFromTbl(ctx, fromTbl, &sch2, doc)
 		}
 
 		if doc.Value != nil {

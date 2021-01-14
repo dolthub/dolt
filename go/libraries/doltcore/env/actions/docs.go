@@ -128,12 +128,12 @@ func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, dbData env.DbData, 
 		return nil, nil, err
 	}
 
-	currRoot, err = env.UpdateRootWithDocsTable(ctx, dbData, working, env.Working, docs)
+	currRoot, err = env.UpdateRootWithDocs(ctx, dbData, working, env.Working, docs)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	stgRoot, err = env.UpdateRootWithDocsTable(ctx, dbData, staged, env.Staged, docs)
+	stgRoot, err = env.UpdateRootWithDocs(ctx, dbData, staged, env.Staged, docs)
 	if err != nil {
 		return nil, nil, err
 	}
