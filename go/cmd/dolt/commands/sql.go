@@ -827,7 +827,9 @@ func processQuery(ctx *sql.Context, query string, se *sqlEngine) (sql.Schema, sq
 	switch s := sqlStatement.(type) {
 	case *sqlparser.Select, *sqlparser.Insert, *sqlparser.Update, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union:
 		return se.query(ctx, query)
-	case *sqlparser.Use, *sqlparser.Set:
+	case *sqlparser.Set:
+		return nil, nil, fmt.Errorf("SET is not yet supported in the shell.")
+	case *sqlparser.Use:
 		sch, rowIter, err := se.query(ctx, query)
 
 		if rowIter != nil {
