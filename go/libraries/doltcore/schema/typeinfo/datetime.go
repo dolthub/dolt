@@ -63,6 +63,9 @@ func CreateDatetimeTypeFromParams(params map[string]string) (TypeInfo, error) {
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *datetimeType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Timestamp); ok {
+		if ti.Equals(DateType) {
+			return time.Time(val).Truncate(24 * time.Hour).UTC(), nil
+		}
 		return time.Time(val).UTC(), nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
@@ -82,6 +85,9 @@ func (ti *datetimeType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReade
 			return nil, err
 		}
 
+		if ti.Equals(DateType) {
+			return t.Truncate(24 * time.Hour).UTC(), nil
+		}
 		return t.UTC(), nil
 	case types.NullKind:
 		return nil, nil

@@ -105,6 +105,8 @@ func verifyTypeInfoArrays(t *testing.T, tiArrays [][]TypeInfo, vaArrays [][]type
 
 // assuming valid data, verifies that the To-From interface{} functions can round trip
 func testTypeInfoConvertRoundTrip(t *testing.T, tiArrays [][]TypeInfo, vaArrays [][]types.Value) {
+	nbf := types.Format_Default
+
 	for rowIndex, tiArray := range tiArrays {
 		t.Run(tiArray[0].GetTypeIdentifier().String(), func(t *testing.T) {
 			for _, ti := range tiArray {
@@ -125,6 +127,18 @@ func testTypeInfoConvertRoundTrip(t *testing.T, tiArrays [][]TypeInfo, vaArrays 
 								} else if ti.GetTypeIdentifier() != DecimalTypeIdentifier { // Any Decimal's on-disk representation varies by precision/scale
 									require.True(t, val.Equals(outVal), "\"%v\"\n\"%v\"", val, outVal)
 								}
+
+								tup, err := types.NewTuple(nbf, outVal)
+								require.NoError(t, err)
+
+								itr, err := tup.Iterator()
+								require.NoError(t, err)
+
+								reader, n := itr.CodecReader()
+								require.Equal(t, uint64(1), n)
+
+								readVal, err := ti.ReadFrom(nbf, reader)
+								require.Equal(t, readVal, vInterface)
 							}
 						})
 					}

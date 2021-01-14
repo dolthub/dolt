@@ -79,9 +79,9 @@ func newKeyedRowIter(ctx context.Context, tbl *DoltTable, partition *doltTablePa
 		return nil, err
 	}
 
-	var mapIter types.MapIterator
+	var mapIter types.MapTupleIterator
 	if partition == nil {
-		mapIter, err = rowData.BufferedIterator(ctx)
+		mapIter, err = rowData.RangeIterator(ctx, 0, rowData.Len())
 	} else {
 		mapIter, err = partition.IteratorForPartition(ctx, rowData)
 	}
@@ -104,8 +104,8 @@ func newKeyedRowIter(ctx context.Context, tbl *DoltTable, partition *doltTablePa
 		}
 	}
 
-	conv := NewKVToSqlRowConverter(tagToSqlColIdx, cols, len(cols))
-	return NewDoltMapIter(ctx, GetGetFuncForMapIter(mapIter), nil, conv), nil
+	conv := NewKVToSqlRowConverter(tbl.table.Format(), tagToSqlColIdx, cols, len(cols))
+	return NewDoltMapIter(ctx, mapIter.Next, nil, conv), nil
 }
 
 // Next returns the next row in this row iterator, or an io.EOF error if there aren't any more.
