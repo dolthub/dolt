@@ -29,6 +29,11 @@ type mapLeafSequence struct {
 	leafSequence
 }
 
+type tupleMapEntry struct {
+	key   Tuple
+	value Tuple
+}
+
 type mapEntry struct {
 	key   Value
 	value Value
@@ -58,6 +63,22 @@ func readMapEntry(r *valueDecoder, nbf *NomsBinFormat) (mapEntry, error) {
 	}
 
 	return mapEntry{k, v}, nil
+}
+
+func readTupleMapEntry(r *valueDecoder, nbf *NomsBinFormat) (tupleMapEntry, error) {
+	k, err := r.readTuple(nbf)
+
+	if err != nil {
+		return tupleMapEntry{}, err
+	}
+
+	v, err := r.readTuple(nbf)
+
+	if err != nil {
+		return tupleMapEntry{}, err
+	}
+
+	return tupleMapEntry{k, v}, nil
 }
 
 func (entry mapEntry) equals(other mapEntry) bool {
@@ -129,6 +150,11 @@ func (ml mapLeafSequence) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 func (ml mapLeafSequence) getItem(idx int) (sequenceItem, error) {
 	dec := ml.decoderSkipToIndex(idx)
 	return readMapEntry(&dec, ml.format())
+}
+
+func (ml mapLeafSequence) getTupleMapEntry(idx int) (tupleMapEntry, error) {
+	dec := ml.decoderSkipToIndex(idx)
+	return readTupleMapEntry(&dec, ml.format())
 }
 
 func (ml mapLeafSequence) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {

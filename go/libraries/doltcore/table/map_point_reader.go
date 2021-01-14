@@ -53,3 +53,8 @@ func (pr *PointReader) Next(ctx context.Context) (k, v types.Value, err error) {
 
 	return k, v, err
 }
+
+// Next implements types.MapIterator.
+func (pr *PointReader) NextTuple(ctx context.Context) (k, v types.Tuple, err error) {
+	panic("not implemented")
+}

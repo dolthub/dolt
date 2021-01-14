@@ -31,6 +31,7 @@ import (
 type sequenceIterator interface {
 	valid() bool
 	current() (sequenceItem, error)
+	currentTuple() (tupleMapEntry, error)
 	advance(ctx context.Context) (bool, error)
 	iter(ctx context.Context, cb cursorIterCallback) error
 }
@@ -99,6 +100,12 @@ func (cur *sequenceCursor) getChildSequence(ctx context.Context) (sequence, erro
 func (cur *sequenceCursor) current() (sequenceItem, error) {
 	d.PanicIfFalse(cur.valid())
 	return cur.getItem(cur.idx)
+}
+
+// current returns the value at the current cursor position
+func (cur *sequenceCursor) currentTuple() (tupleMapEntry, error) {
+	d.PanicIfFalse(cur.valid())
+	return cur.seq.(mapLeafSequence).getTupleMapEntry(cur.idx)
 }
 
 func (cur *sequenceCursor) valid() bool {

@@ -105,7 +105,7 @@ func newKeyedRowIter(ctx context.Context, tbl *DoltTable, partition *doltTablePa
 	}
 
 	conv := NewKVToSqlRowConverter(tbl.table.Format(), tagToSqlColIdx, cols, len(cols))
-	return NewDoltMapIter(ctx, mapIter.Next, nil, conv), nil
+	return NewDoltMapIter(ctx, mapIter.NextTuple, nil, conv), nil
 }
 
 // Next returns the next row in this row iterator, or an io.EOF error if there aren't any more.

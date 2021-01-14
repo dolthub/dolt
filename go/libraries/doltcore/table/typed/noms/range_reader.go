@@ -118,20 +118,20 @@ func (nrr *NomsRangeReader) ReadRow(ctx context.Context) (row.Row, error) {
 		return nil, err
 	}
 
-	return row.FromNoms(nrr.sch, k.(types.Tuple), v.(types.Tuple))
+	return row.FromNoms(nrr.sch, k, v)
 }
 
-func (nrr *NomsRangeReader) ReadKey(ctx context.Context) (types.Value, error) {
+func (nrr *NomsRangeReader) ReadKey(ctx context.Context) (types.Tuple, error) {
 	k, _, err := nrr.ReadKV(ctx)
 
 	return k, err
 }
 
-func (nrr *NomsRangeReader) ReadKV(ctx context.Context) (types.Value, types.Value, error) {
+func (nrr *NomsRangeReader) ReadKV(ctx context.Context) (types.Tuple, types.Tuple, error) {
 	var err error
+	var k types.Tuple
+	var v types.Tuple
 	for nrr.itr != nil || nrr.idx < len(nrr.ranges) {
-		var k types.Value
-		var v types.Value
 		if nrr.itr == nil {
 			r := nrr.ranges[nrr.idx]
 			nrr.idx++
@@ -143,46 +143,42 @@ func (nrr *NomsRangeReader) ReadKV(ctx context.Context) (types.Value, types.Valu
 			}
 
 			if err != nil {
-				return nil, nil, err
+				return types.Tuple{}, types.Tuple{}, err
 			}
 
 			nrr.currCheck = r.Check
 
-			k, v, err = nrr.itr.Next(ctx)
+			k, v, err = nrr.itr.NextTuple(ctx)
 
-			if !r.Inclusive && r.Start.Equals(k) {
-				k, v, err = nrr.itr.Next(ctx)
+			if err == nil && !r.Inclusive && r.Start.Compare(k) == 0 {
+				k, v, err = nrr.itr.NextTuple(ctx)
 			}
 		} else {
-			k, v, err = nrr.itr.Next(ctx)
+			k, v, err = nrr.itr.NextTuple(ctx)
 		}
 
-		if err != nil {
-			return nil, nil, err
+		if err != nil && err != io.EOF{
+			return types.Tuple{}, types.Tuple{}, err
 		}
 
 		var inRange bool
-		if k != nil {
-			inRange, err = nrr.currCheck(k.(types.Tuple))
+		if err != io.EOF {
+			inRange, err = nrr.currCheck(k)
 
 			if err != nil {
-				return nil, nil, err
+				return types.Tuple{}, types.Tuple{}, err
 			}
 
-			if !inRange {
-				nrr.itr = nil
-				nrr.currCheck = nil
-				continue
-			} else {
+			if inRange {
 				return k, v, nil
 			}
-		} else {
-			nrr.itr = nil
-			nrr.currCheck = nil
 		}
+
+		nrr.itr = nil
+		nrr.currCheck = nil
 	}
 
-	return nil, nil, io.EOF
+	return types.Tuple{}, types.Tuple{}, io.EOF
 }
 
 // VerifySchema checks that the incoming schema matches the schema from the existing table

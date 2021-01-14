@@ -26,6 +26,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 
@@ -135,6 +136,18 @@ func (itr *TupleIterator) Next() (uint64, Value, error) {
 	}
 
 	return itr.count, nil, nil
+}
+
+func (itr *TupleIterator) NextUint64() (uint64, uint64, error) {
+	if itr.pos < itr.count {
+		valPos := itr.pos
+		val := itr.dec.ReadUint()
+		itr.pos++
+
+		return valPos, val, nil
+	}
+
+	return itr.count, 0, io.EOF
 }
 
 func (itr *TupleIterator) CodecReader() (CodecReader, uint64) {
@@ -335,6 +348,10 @@ func (t Tuple) PrefixEquals(ctx context.Context, other Tuple, prefixCount uint64
 		}
 	}
 	return true, nil
+}
+
+func (t Tuple) Compare(other Tuple) int {
+	return bytes.Compare(t.buff, other.buff)
 }
 
 func (t Tuple) typeOf() (*Type, error) {
