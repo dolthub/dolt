@@ -2,11 +2,20 @@
 
 set timeout 1
 spawn dolt sql
+set id $spawn_id
 
-expect "doltsql> "
-send "CREATE TABLE test_expect (pk int primary key);\r"
+expect -i id "doltsql> "
+send -i id "CREATE TABLE test_expect (pk int primary key);\r"
 
-expect "doltsql> "
-send "select COUNT(*) from dolt_status;\r"
+expect -i id "doltsql> "
 
-expect eof
+# spawn the second process
+spawn dolt sql
+set id2 $spawn_id
+
+# Todo: Should this be a dolt ls instead ?
+expect -i id2 "doltsql> "
+send -i id2 "select COUNT(*) from dolt_status;\r"
+
+expect -i id eof
+expect -i id2 eof
