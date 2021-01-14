@@ -290,7 +290,7 @@ func (gr *GetRange) SplitAtGaps(maxGapBytes uint64) []*GetRange {
 	for i < len(gr.Ranges) {
 		j := i + 1
 		for j < len(gr.Ranges) {
-			if gr.GapBetween(i, j) > maxGapBytes {
+			if gr.GapBetween(j-1, j) > maxGapBytes {
 				break
 			}
 			j++
