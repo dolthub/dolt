@@ -93,12 +93,18 @@ func sqlColToStr(col interface{}) string {
 
 // getReadStageFunc is a general purpose stage func used by multiple pipelines to read the rows into batches
 func getReadStageFunc(iter sql.RowIter, batchSize int) pipeline.StageFunc {
+	isDone := false
 	return func(ctx context.Context, _ []pipeline.ItemWithProps) ([]pipeline.ItemWithProps, error) {
+		if isDone {
+			return nil, io.EOF
+		}
+
 		items := make([]pipeline.ItemWithProps, 0, batchSize)
 		for i := 0; i < 10; i++ {
 			r, err := iter.Next()
 
 			if err == io.EOF {
+				isDone = true
 				break
 			} else if err != nil {
 				return nil, err
