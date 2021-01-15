@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os: [ ubuntu-latest ]
+        os: [ ubuntu-18.04 ]
     steps:
       - name: Setup Go 1.x
         uses: actions/setup-go@v2

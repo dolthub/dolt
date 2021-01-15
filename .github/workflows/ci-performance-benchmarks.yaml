@@ -8,7 +8,7 @@ on:
 
 jobs:
   validate-commentor:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     outputs:
       valid: ${{ steps.set_valid.outputs.valid }}
     steps:
@@ -20,7 +20,7 @@ jobs:
           ACTOR: ${{ github.actor }}
 
   check-comments:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     needs: validate-commentor
     if: ${{ needs.validate-commentor.outputs.valid == 'true' }}
     outputs:
@@ -42,7 +42,7 @@ jobs:
           echo "::set-output name=benchmark::true"
 
   performance:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     needs: [validate-commentor, check-comments]
     if: ${{ needs.check-comments.outputs.benchmark == 'true' }}
     name: Benchmark Performance

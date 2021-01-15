@@ -4,7 +4,7 @@ on: [pull_request]
 
 jobs:
   mysql_client_integrations_job:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     name: Run tests
     steps:
       - name: Checkout
