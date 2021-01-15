@@ -296,6 +296,7 @@ func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string) (from, 
 
 	from, ok := maybeResolve(ctx, dEnv, args[0])
 
+	// TODO: Remove this comment
 	if !ok {
 		// `dolt diff ...tables`
 		from = headRoot
@@ -892,39 +893,40 @@ func diffDoltDocs(ctx context.Context, dEnv *env.DoltEnv, from, to *doltdb.RootV
 		return err
 	}
 
-	printDocDiffs(ctx, dEnv, fromDocTable, toDocTable, docDetails)
+	printDocDiffs(ctx, dEnv.DocsReadWriter(), fromDocTable, toDocTable, docDetails)
 	return nil
 }
 
-func printDocDiffs(ctx context.Context, dEnv *env.DoltEnv, fromTbl, toTbl *doltdb.Table, docDetails []doltdb.DocDetails) {
+func printDocDiffs(ctx context.Context, drw env.DocsReadWriter, fromTbl, toTbl *doltdb.Table, currentDocDetails []doltdb.DocDetails) {
 	bold := color.New(color.Bold)
 
-	if docDetails == nil {
-		docDetails, _ = dEnv.GetAllValidDocDetails()
+	if currentDocDetails == nil {
+		currentDocDetails, _ = drw.GetDocsOnDisk()
 	}
 
-	for _, doc := range docDetails {
-		if toTbl != nil {
-			sch1, _ := toTbl.GetSchema(ctx)
-			doc, _ = doltdb.AddNewerTextToDocFromTbl(ctx, toTbl, &sch1, doc)
-
-		}
-		if fromTbl != nil {
-			sch2, _ := fromTbl.GetSchema(ctx)
-			doc, _ = diff.AddValueToDocFromTbl(ctx, fromTbl, &sch2, doc)
-		}
-
-		if doc.Value != nil {
-			newer := string(doc.NewerText)
-			older, _ := strconv.Unquote(doc.Value.HumanReadableString())
-			lines := textdiff.LineDiffAsLines(older, newer)
-			if doc.NewerText == nil {
-				printDeletedDoc(bold, doc.DocPk, lines)
-			} else if len(lines) > 0 && newer != older {
-				printModifiedDoc(bold, doc.DocPk, lines)
-			}
-		} else if doc.Value == nil && doc.NewerText != nil {
+	for _, doc := range currentDocDetails {
+		if doc.Text != nil && fromTbl == nil {
 			printAddedDoc(bold, doc.DocPk)
+		} else if fromTbl != nil {
+			if toTbl != nil {
+				sch1, _ := toTbl.GetSchema(ctx)
+				doc, _ = doltdb.AddNewerTextToDocFromTbl(ctx, toTbl, &sch1, doc)
+			}
+
+			sch2, _ := fromTbl.GetSchema(ctx)
+			docToCompareTo, _ := doltdb.AddNewerTextToDocFromTbl(ctx, fromTbl, &sch2, doc)
+
+			if docToCompareTo.Text != nil {
+				newer := string(doc.Text)
+				older := string(docToCompareTo.Text)
+				lines := textdiff.LineDiffAsLines(older, newer)
+
+				if doc.Text == nil {
+					printDeletedDoc(bold, doc.DocPk, lines)
+				} else if len(lines) > 0 && newer != older {
+					printModifiedDoc(bold, doc.DocPk, lines)
+				}
+			}
 		}
 	}
 }

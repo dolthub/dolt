@@ -60,12 +60,12 @@ func UpdateDocsTable(ctx context.Context, docTbl *doltdb.Table, docDetails []dol
 			return nil, err
 		}
 
-		if exists && doc.NewerText == nil {
+		if exists && doc.Text == nil {
 			me = me.Remove(docRow.NomsMapKey(sch))
-		} else if doc.NewerText != nil {
+		} else if doc.Text != nil {
 			docTaggedVals := row.TaggedValues{
 				schema.DocNameTag: types.String(doc.DocPk),
-				schema.DocTextTag: types.String(doc.NewerText),
+				schema.DocTextTag: types.String(doc.Text),
 			}
 			docRow, err = row.New(types.Format_7_18, sch, docTaggedVals)
 			if err != nil {
@@ -91,11 +91,11 @@ func CreateDocsTable(ctx context.Context, vrw types.ValueReadWriter, docDetails 
 	// Determines if the table needs to be created at all and initializes a schema if it does.
 	createTable := false
 	for _, doc := range docDetails {
-		if doc.NewerText != nil {
+		if doc.Text != nil {
 			createTable = true
 			docTaggedVals := row.TaggedValues{
 				schema.DocNameTag: types.String(doc.DocPk),
-				schema.DocTextTag: types.String(doc.NewerText),
+				schema.DocTextTag: types.String(doc.Text),
 			}
 
 			docRow, err := row.New(types.Format_7_18, DoltDocsSchema, docTaggedVals)

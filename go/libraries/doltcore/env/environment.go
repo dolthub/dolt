@@ -888,7 +888,7 @@ func (dEnv *DoltEnv) GetAllValidDocDetails() (docs []doltdb.DocDetails, err erro
 		if err != nil {
 			return nil, err
 		}
-		doc.NewerText = newerText
+		doc.Text = newerText
 		docs = append(docs, doc)
 	}
 	return docs, nil
@@ -901,7 +901,7 @@ func (dEnv *DoltEnv) GetDocDetail(docName string) (doc doltdb.DocDetails, err er
 			if err != nil {
 				return doltdb.DocDetails{}, err
 			}
-			doc.NewerText = newerText
+			doc.Text = newerText
 			return doc, nil
 		}
 	}

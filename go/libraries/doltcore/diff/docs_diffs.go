@@ -128,7 +128,7 @@ func getDocDetailsBtwnRoots(ctx context.Context, newTbl *doltdb.Table, newSch sc
 				return err
 			}
 
-			if updated.Value != nil && updated.NewerText == nil {
+			if updated.Value != nil && updated.Text == nil {
 				docDetailsBtwnRoots = append(docDetailsBtwnRoots, updated)
 			}
 			return nil
@@ -165,7 +165,7 @@ func AddValueToDocFromTbl(ctx context.Context, tbl *doltdb.Table, sch *schema.Sc
 	return docDetail, nil
 }
 
-// AddNewerTextToDocFromTbl updates the NewerText field of a docDetail using the provided table and schema.
+// AddNewerTextToDocFromTbl updates the Text field of a docDetail using the provided table and schema.
 func AddNewerTextToDocFromTbl(ctx context.Context, tbl *doltdb.Table, sch *schema.Schema, doc doltdb.DocDetails) (doltdb.DocDetails, error) {
 	if tbl != nil && sch != nil {
 		key, err := doltdb.DocTblKeyFromName(tbl.Format(), doc.DocPk)
@@ -179,12 +179,12 @@ func AddNewerTextToDocFromTbl(ctx context.Context, tbl *doltdb.Table, sch *schem
 		}
 		if ok {
 			docValue, _ := docRow.GetColVal(schema.DocTextTag)
-			doc.NewerText = []byte(docValue.(types.String))
+			doc.Text = []byte(docValue.(types.String))
 		} else {
-			doc.NewerText = nil
+			doc.Text = nil
 		}
 	} else {
-		doc.NewerText = nil
+		doc.Text = nil
 	}
 	return doc, nil
 }
@@ -192,13 +192,13 @@ func AddNewerTextToDocFromTbl(ctx context.Context, tbl *doltdb.Table, sch *schem
 func addNewerTextToDocFromRow(ctx context.Context, r row.Row, doc *doltdb.DocDetails) (doltdb.DocDetails, error) {
 	docValue, ok := r.GetColVal(schema.DocTextTag)
 	if !ok {
-		doc.NewerText = nil
+		doc.Text = nil
 	} else {
 		docValStr, err := strconv.Unquote(docValue.HumanReadableString())
 		if err != nil {
 			return doltdb.DocDetails{}, err
 		}
-		doc.NewerText = []byte(docValStr)
+		doc.Text = []byte(docValStr)
 	}
 	return *doc, nil
 }
@@ -236,7 +236,7 @@ func GetDocDiffsFromDocDetails(docDetails []doltdb.DocDetails) (added, modified,
 	modified = []string{}
 	removed = []string{}
 	for _, doc := range docDetails {
-		added, modified, removed = appendDocDiffs(added, modified, removed, doc.Value, doc.NewerText, doc.DocPk)
+		added, modified, removed = appendDocDiffs(added, modified, removed, doc.Value, doc.Text, doc.DocPk)
 	}
 	return added, modified, removed
 }

@@ -24,10 +24,10 @@ import (
 )
 
 type DocDetails struct {
-	NewerText []byte
-	DocPk     string
-	Value     types.Value
-	File      string
+	Text  []byte
+	DocPk string
+	Value types.Value
+	File  string
 }
 
 func DocTblKeyFromName(fmt *types.NomsBinFormat, name string) (types.Tuple, error) {
@@ -50,7 +50,7 @@ func GetDocRow(ctx context.Context, docTbl *Table, sch schema.Schema, key types.
 	return
 }
 
-// AddNewerTextToDocFromTbl updates the NewerText field of a docDetail using the provided table and schema.
+// AddNewerTextToDocFromTbl updates the Text field of a docDetail using the provided table and schema.
 func AddNewerTextToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, doc DocDetails) (DocDetails, error) {
 	if tbl != nil && sch != nil {
 		key, err := DocTblKeyFromName(tbl.Format(), doc.DocPk)
@@ -64,12 +64,12 @@ func AddNewerTextToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schem
 		}
 		if ok {
 			docValue, _ := docRow.GetColVal(schema.DocTextTag)
-			doc.NewerText = []byte(docValue.(types.String))
+			doc.Text = []byte(docValue.(types.String))
 		} else {
-			doc.NewerText = nil
+			doc.Text = nil
 		}
 	} else {
-		doc.NewerText = nil
+		doc.Text = nil
 	}
 	return doc, nil
 }
@@ -77,13 +77,13 @@ func AddNewerTextToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schem
 func addNewerTextToDocFromRow(ctx context.Context, r row.Row, doc *DocDetails) (DocDetails, error) {
 	docValue, ok := r.GetColVal(schema.DocTextTag)
 	if !ok {
-		doc.NewerText = nil
+		doc.Text = nil
 	} else {
 		docValStr, err := strconv.Unquote(docValue.HumanReadableString())
 		if err != nil {
 			return DocDetails{}, err
 		}
-		doc.NewerText = []byte(docValStr)
+		doc.Text = []byte(docValStr)
 	}
 	return *doc, nil
 }

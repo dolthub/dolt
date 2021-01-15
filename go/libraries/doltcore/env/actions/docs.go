@@ -76,7 +76,7 @@ func SaveTrackedDocs(ctx context.Context, dEnv *env.DoltEnv, workRoot, targetRoo
 }
 
 // SaveDocsFromDocDetails saves the provided docs to the filesystem.
-// An untracked doc will be overwritten if doc.NewerText == nil.
+// An untracked doc will be overwritten if doc.Text == nil.
 func SaveDocsFromDocDetails(dEnv *env.DoltEnv, docs env.Docs) error {
 	return docs.Save(dEnv.FS)
 }

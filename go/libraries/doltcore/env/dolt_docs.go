@@ -50,7 +50,7 @@ func LoadDocs(fs filesys.ReadWriteFS) (Docs, error) {
 			if err != nil {
 				return nil, err
 			}
-			val.NewerText = data
+			val.Text = data
 			docsWithCurrentText[i] = val
 		}
 	}
@@ -63,8 +63,8 @@ func (docs Docs) Save(fs filesys.ReadWriteFS) error {
 			continue
 		}
 		filePath := getDocFile(doc.File)
-		if doc.NewerText != nil {
-			err := fs.WriteFile(filePath, doc.NewerText)
+		if doc.Text != nil {
+			err := fs.WriteFile(filePath, doc.Text)
 			if err != nil {
 				return err
 			}
@@ -199,8 +199,8 @@ func ResetWorkingDocsToStagedDocs(ctx context.Context, ddb *doltdb.DoltDB, rsr R
 	return nil
 }
 
-// GetDocsWithNewerTextFromRoot returns Docs with the NewerText value(s) from the provided root. If docs are provided,
-// only those docs will be retrieved and returned. Otherwise, all valid doc details are returned with the updated NewerText.
+// GetDocsWithNewerTextFromRoot returns Docs with the Text value(s) from the provided root. If docs are provided,
+// only those docs will be retrieved and returned. Otherwise, all valid doc details are returned with the updated Text.
 func GetDocsWithNewerTextFromRoot(ctx context.Context, root *doltdb.RootValue, docs Docs) (Docs, error) {
 	docTbl, docTblFound, err := root.GetTable(ctx, doltdb.DocTableName)
 	if err != nil {
