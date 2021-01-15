@@ -12,18 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 package doltdocs
 
 import (
 	"context"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestAddNewerTextAndValueFromTable(t *testing.T) {
@@ -67,7 +68,6 @@ func TestAddNewerTextAndValueFromTable(t *testing.T) {
 	doc4, err = GetDocTextFromTbl(ctx, tbl, &sch, doc4)
 	assert.NoError(t, err)
 	assert.Equal(t, "text in doc_text", string(doc4.Text))
-
 
 	// If a table has a doc row, and Text and Value are originally non-nil, they should be updated to the `doc_text` value.
 	doc5 := DocDetails{DocPk: doltdb.LicensePk}

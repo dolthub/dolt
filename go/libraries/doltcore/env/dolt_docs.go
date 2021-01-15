@@ -30,23 +30,6 @@ func hasDocFile(fs filesys.ReadWriteFS, file string) bool {
 	return exists && !isDir
 }
 
-// WorkingRootWithDocs returns a copy of the working root that has been updated with the Dolt docs from the file system.
-func WorkingRootWithDocs(ctx context.Context, dbData DbData) (*doltdb.RootValue, error) {
-	drw := dbData.Drw
-
-	dds, err := drw.GetDocsOnDisk()
-	if err != nil {
-		return nil, err
-	}
-
-	working, err := WorkingRoot(ctx, dbData.Ddb, dbData.Rsr)
-	if err != nil {
-		return nil, err
-	}
-
-	return UpdateRootWithDocs(ctx, dbData, working, Working, dds)
-}
-
 // UpdateRootWithDocs takes in a root value, a drw, and some docs and writes those docs to the dolt_docs table
 // (perhaps creating it in the process). The table might not necessarily need to be created if there are no docs in the
 // repo yet.

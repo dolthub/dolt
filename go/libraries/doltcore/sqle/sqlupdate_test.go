@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/docsTable"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -28,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	. "github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/docsTable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/store/types"
 )
