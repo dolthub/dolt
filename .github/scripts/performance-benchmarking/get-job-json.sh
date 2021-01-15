@@ -34,7 +34,9 @@ echo '
             "image": "407903926827.dkr.ecr.us-west-2.amazonaws.com/liquidata/performance-benchmarking:latest",
             "args": [
               "--schema=/schema.sql",
+              "--from-server=dolt",
               "--from-version='$fromVersion'",
+              "--to-server=dolt",
               "--to-version='$toVersion'",
               "--bucket=performance-benchmarking-github-actions-results",
               "--region=us-west-2",
