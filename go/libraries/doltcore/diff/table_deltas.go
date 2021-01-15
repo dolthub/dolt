@@ -17,14 +17,13 @@ package diff
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"sort"
 
-	"github.com/dolthub/dolt/go/libraries/utils/set"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -89,13 +88,13 @@ func (rvu RootValueUnreadable) Error() string {
 }
 
 // NewDocDiffs returns DocDiffs for Dolt Docs between two roots.
-func NewDocDiffs(ctx context.Context, older *doltdb.RootValue, newer *doltdb.RootValue, docDetails []doltdocs.DocDetails) (*DocDiffs, error) {
+func NewDocDiffs(ctx context.Context, older *doltdb.RootValue, newer *doltdb.RootValue, docDetails doltdocs.Docs) (*DocDiffs, error) {
 	var added []string
 	var modified []string
 	var removed []string
 	if older != nil {
 		if newer == nil {
-			a, m, r, err := DocDiff(ctx, older,nil, docDetails)
+			a, m, r, err := DocDiff(ctx, older, nil, docDetails)
 			if err != nil {
 				return nil, err
 			}

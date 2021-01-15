@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"reflect"
 	"strconv"
 	"strings"
@@ -31,6 +30,7 @@ import (
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -898,7 +898,7 @@ func diffDoltDocs(ctx context.Context, dEnv *env.DoltEnv, from, to *doltdb.RootV
 	return nil
 }
 
-func printDocDiffs(ctx context.Context, drw env.DocsReadWriter, fromTbl, toTbl *doltdb.Table, currentDocDetails []doltdocs.DocDetails) {
+func printDocDiffs(ctx context.Context, drw env.DocsReadWriter, fromTbl, toTbl *doltdb.Table, currentDocDetails doltdocs.Docs) {
 	bold := color.New(color.Bold)
 
 	if currentDocDetails == nil {
@@ -911,11 +911,11 @@ func printDocDiffs(ctx context.Context, drw env.DocsReadWriter, fromTbl, toTbl *
 		} else if fromTbl != nil {
 			if toTbl != nil {
 				sch1, _ := toTbl.GetSchema(ctx)
-				doc, _ = doltdocs.AddNewerTextToDocFromTbl(ctx, toTbl, &sch1, doc)
+				doc, _ = doltdocs.GetDocTextFromTbl(ctx, toTbl, &sch1, doc)
 			}
 
 			sch2, _ := fromTbl.GetSchema(ctx)
-			docToCompareTo, _ := doltdocs.AddNewerTextToDocFromTbl(ctx, fromTbl, &sch2, doc)
+			docToCompareTo, _ := doltdocs.GetDocTextFromTbl(ctx, fromTbl, &sch2, doc)
 
 			if docToCompareTo.Text != nil {
 				newer := string(doc.Text)

@@ -17,6 +17,7 @@ package actions
 import (
 	"context"
 	"errors"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -58,7 +59,7 @@ func StageTables(ctx context.Context, dbData env.DbData, tbls []string) error {
 
 // GetTablesAndDocDetails takes a slice of strings where valid doc names are replaced with doc table name. Doc names are
 // appended to a docDetails slice. We return a tuple of tables, docDetails and error.
-func GetTablesAndDocDetails(drw env.DocsReadWriter, tbls []string) (tables []string, docDetails []doltdocs.DocDetails, err error) {
+func GetTablesAndDocDetails(drw env.DocsReadWriter, tbls []string) (tables []string, docDetails doltdocs.Docs, err error) {
 	for i, tbl := range tbls {
 		docDetail, err := drw.GetDocDetailOnDisk(tbl)
 		if err != nil {

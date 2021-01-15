@@ -17,7 +17,6 @@ package env
 import (
 	"context"
 	"encoding/json"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -26,6 +25,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -177,7 +177,7 @@ func TestInitRepo(t *testing.T) {
 	}
 
 	for _, doc := range *doltdocs.AllValidDocDetails {
-		docPath := getDocFile(doc.File)
+		docPath := doltdocs.GetDocFile(doc.File)
 		if len(docPath) > 0 && !strings.Contains(doc.File, docPath) {
 			t.Error("Doc file path should exist: ", doc.File)
 		}

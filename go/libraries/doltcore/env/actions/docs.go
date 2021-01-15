@@ -16,6 +16,7 @@ package actions
 
 import (
 	"context"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -59,7 +60,7 @@ func SaveDocsFromRoot(ctx context.Context, root *doltdb.RootValue, dEnv *env.Dol
 }
 
 // SaveTrackedDocs writes the docs from the targetRoot to the filesystem. The working root is used to identify untracked docs, which are left unchanged.
-func SaveTrackedDocs(ctx context.Context, dEnv *env.DoltEnv, workRoot, targetRoot *doltdb.RootValue, localDocs env.Docs) error {
+func SaveTrackedDocs(ctx context.Context, dEnv *env.DoltEnv, workRoot, targetRoot *doltdb.RootValue, localDocs doltdocs.Docs) error {
 	docDiffs, err := diff.NewDocDiffs(ctx, workRoot, nil, localDocs)
 	if err != nil {
 		return err
@@ -78,7 +79,7 @@ func SaveTrackedDocs(ctx context.Context, dEnv *env.DoltEnv, workRoot, targetRoo
 
 // SaveDocsFromDocDetails saves the provided docs to the filesystem.
 // An untracked doc will be overwritten if doc.Text == nil.
-func SaveDocsFromDocDetails(dEnv *env.DoltEnv, docs env.Docs) error {
+func SaveDocsFromDocDetails(dEnv *env.DoltEnv, docs doltdocs.Docs) error {
 	return docs.Save(dEnv.FS)
 }
 
@@ -91,8 +92,8 @@ func docIsUntracked(doc string, untracked []string) bool {
 	return false
 }
 
-func removeUntrackedDocs(docs []doltdocs.DocDetails, docDiffs *diff.DocDiffs) []doltdocs.DocDetails {
-	result := []doltdocs.DocDetails{}
+func removeUntrackedDocs(docs doltdocs.Docs, docDiffs *diff.DocDiffs) doltdocs.Docs {
+	result := doltdocs.Docs{}
 	untracked := getUntrackedDocs(docs, docDiffs)
 
 	for _, doc := range docs {
@@ -103,7 +104,7 @@ func removeUntrackedDocs(docs []doltdocs.DocDetails, docDiffs *diff.DocDiffs) []
 	return result
 }
 
-func getUntrackedDocs(docs []doltdocs.DocDetails, docDiffs *diff.DocDiffs) []string {
+func getUntrackedDocs(docs doltdocs.Docs, docDiffs *diff.DocDiffs) []string {
 	untracked := []string{}
 	for _, docName := range docDiffs.Docs {
 		dt := docDiffs.DocToType[docName]
@@ -115,7 +116,7 @@ func getUntrackedDocs(docs []doltdocs.DocDetails, docDiffs *diff.DocDiffs) []str
 	return untracked
 }
 
-func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, dbData env.DbData, working, staged, head *doltdb.RootValue, docDetails []doltdocs.DocDetails) (currRoot, stgRoot *doltdb.RootValue, err error) {
+func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, dbData env.DbData, working, staged, head *doltdb.RootValue, docDetails doltdocs.Docs) (currRoot, stgRoot *doltdb.RootValue, err error) {
 	root := head
 	_, ok, err := staged.GetTable(ctx, doltdb.DocTableName)
 	if err != nil {
@@ -143,12 +144,12 @@ func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, dbData env.DbData, 
 }
 
 // GetUnstagedDocs retrieves the unstaged docs (docs from the filesystem).
-func GetUnstagedDocs(ctx context.Context, dEnv *env.DoltEnv) (env.Docs, error) {
+func GetUnstagedDocs(ctx context.Context, dEnv *env.DoltEnv) (doltdocs.Docs, error) {
 	_, unstagedDocDiffs, err := diff.GetDocDiffs(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.DocsReadWriter())
 	if err != nil {
 		return nil, err
 	}
-	unstagedDocs := env.Docs{}
+	unstagedDocs := doltdocs.Docs{}
 	for _, docName := range unstagedDocDiffs.Docs {
 		docDetail, err := dEnv.GetDocDetail(docName)
 		if err != nil {
@@ -161,13 +162,13 @@ func GetUnstagedDocs(ctx context.Context, dEnv *env.DoltEnv) (env.Docs, error) {
 
 // SaveDocsFromWorkingExcludingFSChanges saves docs from the working root to the filesystem, and does not overwrite changes to docs on the FS.
 // Intended to be called after checking that no conflicts exist (during a checkout or merge, i.e.).
-func SaveDocsFromWorkingExcludingFSChanges(ctx context.Context, dEnv *env.DoltEnv, docsToExclude env.Docs) error {
+func SaveDocsFromWorkingExcludingFSChanges(ctx context.Context, dEnv *env.DoltEnv, docsToExclude doltdocs.Docs) error {
 	workingRoot, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		return err
 	}
 
-	var docsToSave env.Docs
+	var docsToSave doltdocs.Docs
 	if len(docsToExclude) > 0 {
 		for _, doc := range dEnv.Docs {
 			for _, excludedDoc := range docsToExclude {

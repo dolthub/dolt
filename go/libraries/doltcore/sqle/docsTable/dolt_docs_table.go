@@ -17,8 +17,9 @@ package docsTable
 import (
 	"context"
 	"errors"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
@@ -38,7 +39,7 @@ var doltDocsColumns, _ = schema.NewColCollection(
 var DoltDocsSchema = schema.MustSchemaFromCols(doltDocsColumns)
 
 // updateDocsTable takes in docTbl param and updates it with the value in docDetails. It returns the updated table.
-func UpdateDocsTable(ctx context.Context, docTbl *doltdb.Table, docDetails []doltdocs.DocDetails) (*doltdb.Table, error) {
+func UpdateDocsTable(ctx context.Context, docTbl *doltdb.Table, docDetails doltdocs.Docs) (*doltdb.Table, error) {
 	m, err := docTbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
@@ -86,7 +87,7 @@ func UpdateDocsTable(ctx context.Context, docTbl *doltdb.Table, docDetails []dol
 }
 
 // createDocTable creates a new in memory table that stores the given doc details.
-func CreateDocsTable(ctx context.Context, vrw types.ValueReadWriter, docDetails []doltdocs.DocDetails) (*doltdb.Table, error) {
+func CreateDocsTable(ctx context.Context, vrw types.ValueReadWriter, docDetails doltdocs.Docs) (*doltdb.Table, error) {
 	imt := table.NewInMemTable(DoltDocsSchema)
 
 	// Determines if the table needs to be created at all and initializes a schema if it does.

@@ -17,7 +17,9 @@ package actions
 import (
 	"context"
 	"errors"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
@@ -217,7 +219,7 @@ func getUnionedTables(ctx context.Context, tables []string, stagedRoot, headRoot
 	return tables, nil
 }
 
-func resetDocs(ctx context.Context, dbData env.DbData, headRoot *doltdb.RootValue, staged *doltdb.RootValue, docDetails env.Docs) (newStgRoot *doltdb.RootValue, err error) {
+func resetDocs(ctx context.Context, dbData env.DbData, headRoot *doltdb.RootValue, staged *doltdb.RootValue, docDetails doltdocs.Docs) (newStgRoot *doltdb.RootValue, err error) {
 	docs, err := env.GetDocsWithNewerTextFromRoot(ctx, headRoot, docDetails)
 
 	working, err := env.WorkingRoot(ctx, dbData.Ddb, dbData.Rsr)

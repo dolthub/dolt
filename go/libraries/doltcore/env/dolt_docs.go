@@ -17,92 +17,16 @@ package env
 import (
 	"context"
 	"errors"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/docsTable"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/types"
 )
-
-var doltDocsColumns, _ = schema.NewColCollection(
-	schema.NewColumn(doltdb.DocPkColumnName, schema.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
-	schema.NewColumn(doltdb.DocTextColumnName, schema.DocTextTag, types.StringKind, false),
-)
-var DoltDocsSchema = schema.MustSchemaFromCols(doltDocsColumns)
-
-type Docs []doltdocs.DocDetails
-
-// AllValidDocDetails is a list of all valid docs with static fields DocPk and File. All other DocDetail fields
-// are dynamic and must be added, modified or removed as needed.
-var AllValidDocDetails = &Docs{
-	doltdocs.DocDetails{DocPk: doltdb.ReadmePk, File: ReadmeFile},
-	doltdocs.DocDetails{DocPk: doltdb.LicensePk, File: LicenseFile},
-}
-
-
-func LoadDocs(fs filesys.ReadWriteFS) (Docs, error) {
-	docsWithCurrentText := *AllValidDocDetails
-	for i, val := range docsWithCurrentText {
-		path := getDocFile(val.File)
-		exists, isDir := fs.Exists(path)
-		if exists && !isDir {
-			data, err := fs.ReadFile(path)
-			if err != nil {
-				return nil, err
-			}
-			val.Text = data
-			docsWithCurrentText[i] = val
-		}
-	}
-	return docsWithCurrentText, nil
-}
-
-func (docs Docs) Save(fs filesys.ReadWriteFS) error {
-	for _, doc := range docs {
-		if !IsValidDoc(doc.DocPk) {
-			continue
-		}
-		filePath := getDocFile(doc.File)
-		if doc.Text != nil {
-			err := fs.WriteFile(filePath, doc.Text)
-			if err != nil {
-				return err
-			}
-		} else {
-			err := DeleteDoc(fs, doc.DocPk)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func DeleteDoc(fs filesys.ReadWriteFS, docName string) error {
-	for _, doc := range *AllValidDocDetails {
-		if doc.DocPk == docName {
-			path := getDocFile(doc.File)
-			exists, isDir := fs.Exists(path)
-			if exists && !isDir {
-				return fs.DeleteFile(path)
-			}
-		}
-	}
-	return nil
-}
-
-func IsValidDoc(docName string) bool {
-	for _, doc := range *AllValidDocDetails {
-		if doc.DocPk == docName {
-			return true
-		}
-	}
-	return false
-}
 
 func hasDocFile(fs filesys.ReadWriteFS, file string) bool {
-	exists, isDir := fs.Exists(getDocFile(file))
+	exists, isDir := fs.Exists(doltdocs.GetDocFile(file))
 	return exists && !isDir
 }
 
@@ -126,7 +50,7 @@ func WorkingRootWithDocs(ctx context.Context, dbData DbData) (*doltdb.RootValue,
 // UpdateRootWithDocs takes in a root value, a drw, and some docs and writes those docs to the dolt_docs table
 // (perhaps creating it in the process). The table might not necessarily need to be created if there are no docs in the
 // repo yet.
-func UpdateRootWithDocs(ctx context.Context, dbData DbData, root *doltdb.RootValue, rootType RootType, docDetails []doltdocs.DocDetails) (*doltdb.RootValue, error) {
+func UpdateRootWithDocs(ctx context.Context, dbData DbData, root *doltdb.RootValue, rootType RootType, docDetails doltdocs.Docs) (*doltdb.RootValue, error) {
 	docTbl, _, err := root.GetTable(ctx, doltdb.DocTableName)
 
 	if err != nil {
@@ -202,7 +126,7 @@ func ResetWorkingDocsToStagedDocs(ctx context.Context, ddb *doltdb.DoltDB, rsr R
 
 // GetDocsWithNewerTextFromRoot returns Docs with the Text value(s) from the provided root. If docs are provided,
 // only those docs will be retrieved and returned. Otherwise, all valid doc details are returned with the updated Text.
-func GetDocsWithNewerTextFromRoot(ctx context.Context, root *doltdb.RootValue, docs Docs) (Docs, error) {
+func GetDocsWithNewerTextFromRoot(ctx context.Context, root *doltdb.RootValue, docs doltdocs.Docs) (doltdocs.Docs, error) {
 	docTbl, docTblFound, err := root.GetTable(ctx, doltdb.DocTableName)
 	if err != nil {
 		return nil, err
@@ -218,11 +142,11 @@ func GetDocsWithNewerTextFromRoot(ctx context.Context, root *doltdb.RootValue, d
 	}
 
 	if docs == nil {
-		docs = *AllValidDocDetails
+		docs = *doltdocs.AllValidDocDetails
 	}
 
 	for i, doc := range docs {
-		doc, err = doltdocs.AddNewerTextToDocFromTbl(ctx, docTbl, &sch, doc)
+		doc, err = doltdocs.GetDocTextFromTbl(ctx, docTbl, &sch, doc)
 		if err != nil {
 			return nil, err
 		}
@@ -233,7 +157,7 @@ func GetDocsWithNewerTextFromRoot(ctx context.Context, root *doltdb.RootValue, d
 
 // UpdateFSDocsFromRootDocs updates the provided docs from the root value, and then saves them to the filesystem.
 // If docs == nil, all valid docs will be retrieved and written.
-func UpdateFSDocsFromRootDocs(ctx context.Context, root *doltdb.RootValue, docs Docs, FS filesys.Filesys) error {
+func UpdateFSDocsFromRootDocs(ctx context.Context, root *doltdb.RootValue, docs doltdocs.Docs, FS filesys.Filesys) error {
 	docs, err := GetDocsWithNewerTextFromRoot(ctx, root, docs)
 	if err != nil {
 		return nil

@@ -16,6 +16,7 @@ package actions
 
 import (
 	"context"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -37,13 +38,13 @@ func CheckoutAllTables(ctx context.Context, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	docs := *env.AllValidDocDetails
+	docs := *doltdocs.AllValidDocDetails
 
 	return checkoutTablesAndDocs(ctx, dEnv, roots, tbls, docs)
 
 }
 
-func CheckoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tbls []string, docs []doltdocs.DocDetails) error {
+func CheckoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tbls []string, docs doltdocs.Docs) error {
 	roots, err := getRoots(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), WorkingRoot, StagedRoot, HeadRoot)
 
 	if err != nil {
@@ -128,7 +129,7 @@ func MoveTablesBetweenRoots(ctx context.Context, tbls []string, src, dest *doltd
 	return dest, nil
 }
 
-func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*doltdb.RootValue, tbls []string, docs []doltdocs.DocDetails) error {
+func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*doltdb.RootValue, tbls []string, docs doltdocs.Docs) error {
 	unknownTbls := []string{}
 
 	currRoot := roots[WorkingRoot]

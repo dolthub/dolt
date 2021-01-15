@@ -16,23 +16,24 @@ package diff
 
 import (
 	"context"
+	"strconv"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
-	"strconv"
 )
 
 type docComparison struct {
-	CurrentText  []byte
-	DocPk string
-	OldText []byte
+	CurrentText []byte
+	DocPk       string
+	OldText     []byte
 }
 
 // DocDiff returns the added, modified and removed docs when comparing a root value with an other (newer) value. If the other value,
 // is not provided, then we compare the docs on the root value to the docDetails provided.
-func DocDiff(ctx context.Context, root *doltdb.RootValue, other *doltdb.RootValue, docDetails []doltdocs.DocDetails) (added, modified, removed []string, err error) {
+func DocDiff(ctx context.Context, root *doltdb.RootValue, other *doltdb.RootValue, docDetails doltdocs.Docs) (added, modified, removed []string, err error) {
 	oldTbl, oldTblFound, err := root.GetTable(ctx, doltdb.DocTableName)
 	if err != nil {
 		return nil, nil, nil, err
@@ -92,11 +93,11 @@ func getDocComparisonsBtwnRoots(ctx context.Context, newTbl *doltdb.Table, newSc
 				return err
 			}
 			doc := doltdocs.DocDetails{}
-			updated, err := addDocPKToDocFromRow(newRow, &doc)
+			updated, err := getDocPKFromRow(newRow, &doc)
 			if err != nil {
 				return err
 			}
-			updated, err = addNewerTextToDocFromRow(newRow, &updated)
+			updated, err = getDocTextFromRow(newRow, &updated)
 			if err != nil {
 				return err
 			}
@@ -125,11 +126,11 @@ func getDocComparisonsBtwnRoots(ctx context.Context, newTbl *doltdb.Table, newSc
 				return err
 			}
 			doc := doltdocs.DocDetails{}
-			updated, err := addDocPKToDocFromRow(oldRow, &doc)
+			updated, err := getDocPKFromRow(oldRow, &doc)
 			if err != nil {
 				return err
 			}
-			updated, err = addTextToDocFromTbl(ctx, newTbl, &newSch, updated)
+			updated, err = doltdocs.GetDocTextFromTbl(ctx, newTbl, &newSch, updated)
 			if err != nil {
 				return err
 			}
@@ -151,7 +152,7 @@ func getDocComparisonsBtwnRoots(ctx context.Context, newTbl *doltdb.Table, newSc
 	return docComparisonBtwnRoots, nil
 }
 
-func getDocComparisons(ctx context.Context, tbl *doltdb.Table, sch *schema.Schema, docDetails []doltdocs.DocDetails) ([]docComparison, error) {
+func getDocComparisons(ctx context.Context, tbl *doltdb.Table, sch *schema.Schema, docDetails doltdocs.Docs) ([]docComparison, error) {
 	docComparisons := make([]docComparison, len(docDetails))
 
 	for i, _ := range docComparisons {
@@ -191,31 +192,7 @@ func getDocComparisonObjFromDocDetail(ctx context.Context, tbl *doltdb.Table, sc
 	return diff, nil
 }
 
-// addTextToDocFromTbl updates the Text field of a docDetail using the provided table and schema.
-func addTextToDocFromTbl(ctx context.Context, tbl *doltdb.Table, sch *schema.Schema, doc doltdocs.DocDetails) (doltdocs.DocDetails, error) {
-	if tbl != nil && sch != nil {
-		key, err := doltdocs.DocTblKeyFromName(tbl.Format(), doc.DocPk)
-		if err != nil {
-			return doltdocs.DocDetails{}, err
-		}
-
-		docRow, ok, err := doltdocs.GetDocRow(ctx, tbl, *sch, key)
-		if err != nil {
-			return doltdocs.DocDetails{}, err
-		}
-		if ok {
-			docValue, _ := docRow.GetColVal(schema.DocTextTag)
-			doc.Text = []byte(docValue.(types.String))
-		} else {
-			doc.Text = nil
-		}
-	} else {
-		doc.Text = nil
-	}
-	return doc, nil
-}
-
-func addNewerTextToDocFromRow(r row.Row, doc *doltdocs.DocDetails) (doltdocs.DocDetails, error) {
+func getDocTextFromRow(r row.Row, doc *doltdocs.DocDetails) (doltdocs.DocDetails, error) {
 	docValue, ok := r.GetColVal(schema.DocTextTag)
 	if !ok {
 		doc.Text = nil
@@ -229,7 +206,7 @@ func addNewerTextToDocFromRow(r row.Row, doc *doltdocs.DocDetails) (doltdocs.Doc
 	return *doc, nil
 }
 
-func addDocPKToDocFromRow(r row.Row, doc *doltdocs.DocDetails) (doltdocs.DocDetails, error) {
+func getDocPKFromRow(r row.Row, doc *doltdocs.DocDetails) (doltdocs.DocDetails, error) {
 	colVal, _ := r.GetColVal(schema.DocNameTag)
 	if colVal == nil {
 		doc.DocPk = ""
@@ -266,5 +243,3 @@ func appendDocDiffs(added, modified, removed []string, olderVal []byte, newerVal
 	}
 	return added, modified, removed
 }
-
-

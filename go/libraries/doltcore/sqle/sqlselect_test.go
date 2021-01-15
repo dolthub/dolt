@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"testing"
 	"time"
 
@@ -25,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/envtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"

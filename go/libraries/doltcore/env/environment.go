@@ -19,8 +19,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/docsTable"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -34,10 +32,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/creds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/grpcendpoint"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/docsTable"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -67,7 +67,7 @@ type DoltEnv struct {
 	RepoState *RepoState
 	RSLoadErr error
 
-	Docs        Docs
+	Docs        doltdocs.Docs
 	DocsLoadErr error
 
 	DoltDB      *doltdb.DoltDB
@@ -82,7 +82,7 @@ type DoltEnv struct {
 func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, version string) *DoltEnv {
 	config, cfgErr := loadDoltCliConfig(hdp, fs)
 	repoState, rsErr := LoadRepoState(fs)
-	docs, docsErr :=  LoadDocs(fs)
+	docs, docsErr := doltdocs.LoadDocs(fs)
 	ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, types.Format_Default, urlStr)
 
 	dEnv := &DoltEnv{
@@ -180,7 +180,7 @@ func (dEnv *DoltEnv) GetDoc(file string) string {
 	if !hasDocFile(dEnv.FS, file) {
 		return ""
 	}
-	return getDocFile(file)
+	return doltdocs.GetDocFile(file)
 }
 
 // GetLocalFileText returns a byte slice representing the contents of the provided file, if it exists
@@ -441,12 +441,12 @@ func (d *docsReadWriter) GetDocDetailOnDisk(docName string) (doc doltdocs.DocDet
 }
 
 // GetDocsOnDisk reads the filesystem and returns all docs.
-func (d *docsReadWriter) GetDocsOnDisk() (Docs, error) {
+func (d *docsReadWriter) GetDocsOnDisk() (doltdocs.Docs, error) {
 	return d.dEnv.GetAllValidDocDetails()
 }
 
 // WriteDocsToDisk creates or updates the dolt_docs table with docDetails.
-func (d *docsReadWriter) WriteDocsToDisk(ctx context.Context, vrw types.ValueReadWriter, docTbl *doltdb.Table, docDetails []doltdocs.DocDetails) (*doltdb.Table, error) {
+func (d *docsReadWriter) WriteDocsToDisk(ctx context.Context, vrw types.ValueReadWriter, docTbl *doltdb.Table, docDetails doltdocs.Docs) (*doltdb.Table, error) {
 	if docTbl == nil {
 		return docsTable.CreateDocsTable(ctx, vrw, docDetails)
 	}
@@ -882,9 +882,9 @@ func (dEnv *DoltEnv) TempTableFilesDir() string {
 	return mustAbs(dEnv, dEnv.GetDoltDir(), tempTablesDir)
 }
 
-func (dEnv *DoltEnv) GetAllValidDocDetails() (docs []doltdocs.DocDetails, err error) {
-	docs = []doltdocs.DocDetails{}
-	for _, doc := range *AllValidDocDetails {
+func (dEnv *DoltEnv) GetAllValidDocDetails() (docs doltdocs.Docs, err error) {
+	docs = doltdocs.Docs{}
+	for _, doc := range *doltdocs.AllValidDocDetails {
 		newerText, err := dEnv.GetLocalFileText(doc.File)
 		if err != nil {
 			return nil, err
@@ -896,7 +896,7 @@ func (dEnv *DoltEnv) GetAllValidDocDetails() (docs []doltdocs.DocDetails, err er
 }
 
 func (dEnv *DoltEnv) GetDocDetail(docName string) (doc doltdocs.DocDetails, err error) {
-	for _, doc := range *AllValidDocDetails {
+	for _, doc := range *doltdocs.AllValidDocDetails {
 		if doc.DocPk == docName {
 			newerText, err := dEnv.GetLocalFileText(doc.File)
 			if err != nil {
