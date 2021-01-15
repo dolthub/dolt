@@ -554,7 +554,7 @@ SQL
  }
 
 @test "dolt diff shows diffs between working root and file system docs" {
-    # 2 added doltdocs
+    # 2 added docs
     echo "testing readme" > README.md
     echo "testing license" > LICENSE.md
     run dolt diff
@@ -592,7 +592,7 @@ SQL
     dolt add .
     dolt commit -m "deleted LICENSE.md"
 
-    # 1 modified doc, no other doltdocs on working root
+    # 1 modified doc, no other docs on working root
     echo "A new README.md " > README.md
     run dolt diff
     [ "$status" -eq 0 ]
@@ -774,7 +774,7 @@ SQL
     dolt commit -m "Changed README.md on test-a branch"
     dolt checkout master
 
-    # On successful FF merge, doltdocs match the new working root
+    # On successful FF merge, docs match the new working root
     run dolt merge test-a
     [ "$status" -eq 0 ]
     [[ $output =~ "Fast-forward" ]] || false
@@ -782,7 +782,7 @@ SQL
     [[ "$output" =~ "test-a branch" ]] || false
 
     # A merge with conflicts does not change the working root.
-    # If the conflicts are resolved with --ours, the working root and the doltdocs on the filesystem remain the same.
+    # If the conflicts are resolved with --ours, the working root and the docs on the filesystem remain the same.
     run dolt merge test-b
     [ "$status" -eq 0 ]
     [[ $output =~ "CONFLICT" ]] || false
@@ -800,7 +800,7 @@ SQL
     dolt add dolt_docs
     dolt commit -m "Resolved docs conflict with --ours"
 
-    # If the conflicts are resolved with --theirs, the working root and the doltdocs on the filesystem are updated.
+    # If the conflicts are resolved with --theirs, the working root and the docs on the filesystem are updated.
     dolt branch test-a-again
     dolt branch test-b-again
     dolt checkout test-a-again
@@ -821,7 +821,7 @@ SQL
     dolt add .
     dolt commit -m "merge test-b-again with fixed conflicts"
 
-    # A merge with auto-resolved conflicts updates the working root. The doltdocs should match the new working root.
+    # A merge with auto-resolved conflicts updates the working root. The docs should match the new working root.
     dolt checkout test-b-again
     echo test-b-one-more-time > README.md
     dolt add .
