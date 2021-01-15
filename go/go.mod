@@ -49,6 +49,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/pkg/profile v1.5.0
 	github.com/rivo/uniseg v0.1.0
+	github.com/robskie/chd v0.0.0-20160208071517-83137e98bfc1
 	github.com/sergi/go-diff v1.1.0 // indirect
 	github.com/shirou/gopsutil v2.20.5+incompatible
 	github.com/shopspring/decimal v1.2.0
