@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -25,7 +26,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	. "github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
@@ -378,7 +378,7 @@ var systemTableUpdateTests = []UpdateTest{
 	{
 		Name: "update dolt_docs",
 		AdditionalSetup: CreateTableFn("dolt_docs",
-			env.DoltDocsSchema,
+			doltdocs.DoltDocsSchema,
 			NewRow(types.String("LICENSE.md"), types.String("A license"))),
 		UpdateQuery: "update dolt_docs set doc_text = 'Some text')",
 		ExpectedErr: "cannot insert into table",

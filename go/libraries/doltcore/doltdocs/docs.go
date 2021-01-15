@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package doltdb
+
+package doltdocs
 
 import (
 	"context"
-	"strconv"
-
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
@@ -33,7 +33,7 @@ func DocTblKeyFromName(fmt *types.NomsBinFormat, name string) (types.Tuple, erro
 	return types.NewTuple(fmt, types.Uint(schema.DocNameTag), types.String(name))
 }
 
-func GetDocRow(ctx context.Context, docTbl *Table, sch schema.Schema, key types.Tuple) (r row.Row, ok bool, err error) {
+func GetDocRow(ctx context.Context, docTbl *doltdb.Table, sch schema.Schema, key types.Tuple) (r row.Row, ok bool, err error) {
 	rowMap, err := docTbl.GetRowData(ctx)
 	if err != nil {
 		return nil, false, err
@@ -50,7 +50,7 @@ func GetDocRow(ctx context.Context, docTbl *Table, sch schema.Schema, key types.
 }
 
 // AddNewerTextToDocFromTbl updates the Text field of a docDetail using the provided table and schema.
-func AddNewerTextToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, doc DocDetails) (DocDetails, error) {
+func AddNewerTextToDocFromTbl(ctx context.Context, tbl *doltdb.Table, sch *schema.Schema, doc DocDetails) (DocDetails, error) {
 	if tbl != nil && sch != nil {
 		key, err := DocTblKeyFromName(tbl.Format(), doc.DocPk)
 		if err != nil {
@@ -71,33 +71,4 @@ func AddNewerTextToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schem
 		doc.Text = nil
 	}
 	return doc, nil
-}
-
-func addNewerTextToDocFromRow(ctx context.Context, r row.Row, doc *DocDetails) (DocDetails, error) {
-	docValue, ok := r.GetColVal(schema.DocTextTag)
-	if !ok {
-		doc.Text = nil
-	} else {
-		docValStr, err := strconv.Unquote(docValue.HumanReadableString())
-		if err != nil {
-			return DocDetails{}, err
-		}
-		doc.Text = []byte(docValStr)
-	}
-	return *doc, nil
-}
-
-func addDocPKToDocFromRow(r row.Row, doc *DocDetails) (DocDetails, error) {
-	colVal, _ := r.GetColVal(schema.DocNameTag)
-	if colVal == nil {
-		doc.DocPk = ""
-	} else {
-		docName, err := strconv.Unquote(colVal.HumanReadableString())
-		if err != nil {
-			return DocDetails{}, err
-		}
-		doc.DocPk = docName
-	}
-
-	return *doc, nil
 }

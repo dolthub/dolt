@@ -17,6 +17,7 @@ package diff
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"sort"
 
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -88,7 +89,7 @@ func (rvu RootValueUnreadable) Error() string {
 }
 
 // NewDocDiffs returns DocDiffs for Dolt Docs between two roots.
-func NewDocDiffs(ctx context.Context, older *doltdb.RootValue, newer *doltdb.RootValue, docDetails []doltdb.DocDetails) (*DocDiffs, error) {
+func NewDocDiffs(ctx context.Context, older *doltdb.RootValue, newer *doltdb.RootValue, docDetails []doltdocs.DocDetails) (*DocDiffs, error) {
 	var added []string
 	var modified []string
 	var removed []string

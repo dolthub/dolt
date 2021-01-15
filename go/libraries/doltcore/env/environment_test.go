@@ -17,6 +17,7 @@ package env
 import (
 	"context"
 	"encoding/json"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -175,7 +176,7 @@ func TestInitRepo(t *testing.T) {
 		t.Error("Failed to get staged root value.")
 	}
 
-	for _, doc := range *AllValidDocDetails {
+	for _, doc := range *doltdocs.AllValidDocDetails {
 		docPath := getDocFile(doc.File)
 		if len(docPath) > 0 && !strings.Contains(doc.File, docPath) {
 			t.Error("Doc file path should exist: ", doc.File)

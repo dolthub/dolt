@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -189,7 +190,7 @@ func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch string,
 	return checkoutBranch(ctx, dEnv, newBranch)
 }
 
-func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tables []string, docs []doltdb.DocDetails) errhand.VerboseError {
+func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tables []string, docs []doltdocs.DocDetails) errhand.VerboseError {
 	err := actions.CheckoutTablesAndDocs(ctx, dEnv, tables, docs)
 
 	if err != nil {

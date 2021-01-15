@@ -16,6 +16,7 @@ package actions
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -90,8 +91,8 @@ func docIsUntracked(doc string, untracked []string) bool {
 	return false
 }
 
-func removeUntrackedDocs(docs []doltdb.DocDetails, docDiffs *diff.DocDiffs) []doltdb.DocDetails {
-	result := []doltdb.DocDetails{}
+func removeUntrackedDocs(docs []doltdocs.DocDetails, docDiffs *diff.DocDiffs) []doltdocs.DocDetails {
+	result := []doltdocs.DocDetails{}
 	untracked := getUntrackedDocs(docs, docDiffs)
 
 	for _, doc := range docs {
@@ -102,7 +103,7 @@ func removeUntrackedDocs(docs []doltdb.DocDetails, docDiffs *diff.DocDiffs) []do
 	return result
 }
 
-func getUntrackedDocs(docs []doltdb.DocDetails, docDiffs *diff.DocDiffs) []string {
+func getUntrackedDocs(docs []doltdocs.DocDetails, docDiffs *diff.DocDiffs) []string {
 	untracked := []string{}
 	for _, docName := range docDiffs.Docs {
 		dt := docDiffs.DocToType[docName]
@@ -114,7 +115,7 @@ func getUntrackedDocs(docs []doltdb.DocDetails, docDiffs *diff.DocDiffs) []strin
 	return untracked
 }
 
-func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, dbData env.DbData, working, staged, head *doltdb.RootValue, docDetails []doltdb.DocDetails) (currRoot, stgRoot *doltdb.RootValue, err error) {
+func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, dbData env.DbData, working, staged, head *doltdb.RootValue, docDetails []doltdocs.DocDetails) (currRoot, stgRoot *doltdb.RootValue, err error) {
 	root := head
 	_, ok, err := staged.GetTable(ctx, doltdb.DocTableName)
 	if err != nil {

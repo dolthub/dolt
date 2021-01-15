@@ -42,7 +42,7 @@ teardown() {
 }
 
 @test "DOLT_RESET --hard does not ignore staged docs" {
-    # New docs gets referred as untracked file.
+    # New doltdocs gets referred as untracked file.
     echo ~license~ > LICENSE.md
     dolt add .
 

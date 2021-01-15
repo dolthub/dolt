@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"strings"
 	"testing"
 
@@ -982,7 +983,7 @@ func TestAlterSystemTables(t *testing.T) {
 	})
 
 	dtestutils.CreateTestTable(t, dEnv, "dolt_docs",
-		env.DoltDocsSchema,
+		doltdocs.DoltDocsSchema,
 		NewRow(types.String("LICENSE.md"), types.String("A license")))
 	dtestutils.CreateTestTable(t, dEnv, doltdb.DoltQueryCatalogTableName,
 		dtables.DoltQueryCatalogSchema,

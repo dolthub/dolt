@@ -430,7 +430,7 @@ SQL
 }
 
 @test "dolt fetch with docs" {
-    # Initial commit of docs on remote
+    # Initial commit of doltdocs on remote
     echo "initial-license" > LICENSE.md
     echo "initial-readme" > README.md
     dolt add .
@@ -447,7 +447,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "initial-license" ]] || false
 
-    # Clone the initial docs/repo into dolt-repo-clones/test-repo
+    # Clone the initial doltdocs/repo into dolt-repo-clones/test-repo
     cd "dolt-repo-clones"
     run dolt clone http://localhost:50051/test-org/test-repo
     cd test-repo
@@ -457,13 +457,13 @@ SQL
     run cat README.md
     [ "$status" -eq 0 ]
     [[ "$output" =~ "initial-readme" ]] || false
-    # Change the docs 
+    # Change the doltdocs
     echo "dolt-repo-clones-license" > LICENSE.md
     echo "dolt-repo-clones-readme" > README.md
     dolt add .
     dolt commit -m "dolt-repo-clones updated docs"
 
-    # Go back to original repo, and change the docs again
+    # Go back to original repo, and change the doltdocs again
     cd ../../
     echo "initial-license-updated" > LICENSE.md
     echo "initial-readme-updated" > README.md

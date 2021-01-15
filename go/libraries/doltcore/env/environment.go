@@ -19,6 +19,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/docsTable"
 	"path/filepath"
 	"runtime"
@@ -81,7 +82,7 @@ type DoltEnv struct {
 func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr, version string) *DoltEnv {
 	config, cfgErr := loadDoltCliConfig(hdp, fs)
 	repoState, rsErr := LoadRepoState(fs)
-	docs, docsErr := LoadDocs(fs)
+	docs, docsErr :=  LoadDocs(fs)
 	ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, types.Format_Default, urlStr)
 
 	dEnv := &DoltEnv{
@@ -435,7 +436,7 @@ type docsReadWriter struct {
 }
 
 // GetDocDetailOnDisk returns the details of a specific document passed as docName.
-func (d *docsReadWriter) GetDocDetailOnDisk(docName string) (doc doltdb.DocDetails, err error) {
+func (d *docsReadWriter) GetDocDetailOnDisk(docName string) (doc doltdocs.DocDetails, err error) {
 	return d.dEnv.GetDocDetail(docName)
 }
 
@@ -445,7 +446,7 @@ func (d *docsReadWriter) GetDocsOnDisk() (Docs, error) {
 }
 
 // WriteDocsToDisk creates or updates the dolt_docs table with docDetails.
-func (d *docsReadWriter) WriteDocsToDisk(ctx context.Context, vrw types.ValueReadWriter, docTbl *doltdb.Table, docDetails []doltdb.DocDetails) (*doltdb.Table, error) {
+func (d *docsReadWriter) WriteDocsToDisk(ctx context.Context, vrw types.ValueReadWriter, docTbl *doltdb.Table, docDetails []doltdocs.DocDetails) (*doltdb.Table, error) {
 	if docTbl == nil {
 		return docsTable.CreateDocsTable(ctx, vrw, docDetails)
 	}
@@ -881,8 +882,8 @@ func (dEnv *DoltEnv) TempTableFilesDir() string {
 	return mustAbs(dEnv, dEnv.GetDoltDir(), tempTablesDir)
 }
 
-func (dEnv *DoltEnv) GetAllValidDocDetails() (docs []doltdb.DocDetails, err error) {
-	docs = []doltdb.DocDetails{}
+func (dEnv *DoltEnv) GetAllValidDocDetails() (docs []doltdocs.DocDetails, err error) {
+	docs = []doltdocs.DocDetails{}
 	for _, doc := range *AllValidDocDetails {
 		newerText, err := dEnv.GetLocalFileText(doc.File)
 		if err != nil {
@@ -894,16 +895,16 @@ func (dEnv *DoltEnv) GetAllValidDocDetails() (docs []doltdb.DocDetails, err erro
 	return docs, nil
 }
 
-func (dEnv *DoltEnv) GetDocDetail(docName string) (doc doltdb.DocDetails, err error) {
+func (dEnv *DoltEnv) GetDocDetail(docName string) (doc doltdocs.DocDetails, err error) {
 	for _, doc := range *AllValidDocDetails {
 		if doc.DocPk == docName {
 			newerText, err := dEnv.GetLocalFileText(doc.File)
 			if err != nil {
-				return doltdb.DocDetails{}, err
+				return doltdocs.DocDetails{}, err
 			}
 			doc.Text = newerText
 			return doc, nil
 		}
 	}
-	return doltdb.DocDetails{}, err
+	return doltdocs.DocDetails{}, err
 }

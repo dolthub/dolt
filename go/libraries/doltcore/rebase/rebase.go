@@ -17,7 +17,6 @@ package rebase
 import (
 	"context"
 	"fmt"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 

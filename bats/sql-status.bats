@@ -101,7 +101,7 @@ teardown() {
      dolt commit -m "Changed README.md on test-a branch"
      dolt checkout master
 
-     # On successful FF merge, docs match the new working root
+     # On successful FF merge, doltdocs match the new working root
      run dolt merge test-a
      [ "$status" -eq 0 ]
      [[ $output =~ "Fast-forward" ]] || false
@@ -109,7 +109,7 @@ teardown() {
      [[ "$output" =~ "test-a branch" ]] || false
 
      # A merge with conflicts does not change the working root.
-     # If the conflicts are resolved with --ours, the working root and the docs on the filesystem remain the same.
+     # If the conflicts are resolved with --ours, the working root and the doltdocs on the filesystem remain the same.
      run dolt merge test-b
      [ "$status" -eq 0 ]
      [[ $output =~ "CONFLICT" ]] || false

@@ -17,15 +17,13 @@ package env
 import (
 	"context"
 	"errors"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/docsTable"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/docsTable"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
-
-type Docs []doltdb.DocDetails
 
 var doltDocsColumns, _ = schema.NewColCollection(
 	schema.NewColumn(doltdb.DocPkColumnName, schema.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
@@ -33,12 +31,15 @@ var doltDocsColumns, _ = schema.NewColCollection(
 )
 var DoltDocsSchema = schema.MustSchemaFromCols(doltDocsColumns)
 
+type Docs []doltdocs.DocDetails
+
 // AllValidDocDetails is a list of all valid docs with static fields DocPk and File. All other DocDetail fields
 // are dynamic and must be added, modified or removed as needed.
 var AllValidDocDetails = &Docs{
-	doltdb.DocDetails{DocPk: doltdb.ReadmePk, File: ReadmeFile},
-	doltdb.DocDetails{DocPk: doltdb.LicensePk, File: LicenseFile},
+	doltdocs.DocDetails{DocPk: doltdb.ReadmePk, File: ReadmeFile},
+	doltdocs.DocDetails{DocPk: doltdb.LicensePk, File: LicenseFile},
 }
+
 
 func LoadDocs(fs filesys.ReadWriteFS) (Docs, error) {
 	docsWithCurrentText := *AllValidDocDetails
@@ -125,7 +126,7 @@ func WorkingRootWithDocs(ctx context.Context, dbData DbData) (*doltdb.RootValue,
 // UpdateRootWithDocs takes in a root value, a drw, and some docs and writes those docs to the dolt_docs table
 // (perhaps creating it in the process). The table might not necessarily need to be created if there are no docs in the
 // repo yet.
-func UpdateRootWithDocs(ctx context.Context, dbData DbData, root *doltdb.RootValue, rootType RootType, docDetails []doltdb.DocDetails) (*doltdb.RootValue, error) {
+func UpdateRootWithDocs(ctx context.Context, dbData DbData, root *doltdb.RootValue, rootType RootType, docDetails []doltdocs.DocDetails) (*doltdb.RootValue, error) {
 	docTbl, _, err := root.GetTable(ctx, doltdb.DocTableName)
 
 	if err != nil {
@@ -221,7 +222,7 @@ func GetDocsWithNewerTextFromRoot(ctx context.Context, root *doltdb.RootValue, d
 	}
 
 	for i, doc := range docs {
-		doc, err = doltdb.AddNewerTextToDocFromTbl(ctx, docTbl, &sch, doc)
+		doc, err = doltdocs.AddNewerTextToDocFromTbl(ctx, docTbl, &sch, doc)
 		if err != nil {
 			return nil, err
 		}
