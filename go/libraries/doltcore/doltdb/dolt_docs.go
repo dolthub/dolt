@@ -26,7 +26,6 @@ import (
 type DocDetails struct {
 	Text  []byte
 	DocPk string
-	Value types.Value
 	File  string
 }
 

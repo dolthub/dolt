@@ -50,7 +50,7 @@ func DocDiff(ctx context.Context, root *doltdb.RootValue, other *doltdb.RootValu
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		a, m, r := ComputeDiffsFromDocComparisons(docComparisons)
+		a, m, r := computeDiffsFromDocComparisons(docComparisons)
 		return a, m, r, nil
 	}
 
@@ -73,7 +73,7 @@ func DocDiff(ctx context.Context, root *doltdb.RootValue, other *doltdb.RootValu
 		return nil, nil, nil, err
 	}
 
-	a, m, r := ComputeDiffsFromDocComparisons(docComparisonBtwnRoots)
+	a, m, r := computeDiffsFromDocComparisons(docComparisonBtwnRoots)
 	return a, m, r, nil
 }
 
@@ -95,7 +95,7 @@ func getDocComparisonsBtwnRoots(ctx context.Context, newTbl *doltdb.Table, newSc
 			if err != nil {
 				return err
 			}
-			updated, err = addNewerTextToDocFromRow(ctx, newRow, &updated)
+			updated, err = addNewerTextToDocFromRow(newRow, &updated)
 			if err != nil {
 				return err
 			}
@@ -128,7 +128,7 @@ func getDocComparisonsBtwnRoots(ctx context.Context, newTbl *doltdb.Table, newSc
 			if err != nil {
 				return err
 			}
-			updated, err = addNewerTextToDocFromRow(ctx, oldRow, &updated)
+			updated, err = addTextToDocFromTbl(ctx, newTbl, &newSch, updated)
 			if err != nil {
 				return err
 			}
@@ -190,33 +190,8 @@ func getDocComparisonObjFromDocDetail(ctx context.Context, tbl *doltdb.Table, sc
 	return diff, nil
 }
 
-// AddValueToDocFromTbl updates the Value field of a docDetail using the provided table and schema.
-func AddValueToDocFromTbl(ctx context.Context, tbl *doltdb.Table, sch *schema.Schema, docDetail doltdb.DocDetails) (doltdb.DocDetails, error) {
-	if tbl != nil && sch != nil {
-		key, err := doltdb.DocTblKeyFromName(tbl.Format(), docDetail.DocPk)
-		if err != nil {
-			return doltdb.DocDetails{}, err
-		}
-
-		docRow, ok, err := doltdb.GetDocRow(ctx, tbl, *sch, key)
-		if err != nil {
-			return doltdb.DocDetails{}, err
-		}
-
-		if ok {
-			docValue, _ := docRow.GetColVal(schema.DocTextTag)
-			docDetail.Value = docValue
-		} else {
-			docDetail.Value = nil
-		}
-	} else {
-		docDetail.Value = nil
-	}
-	return docDetail, nil
-}
-
-// AddNewerTextToDocFromTbl updates the Text field of a docDetail using the provided table and schema.
-func AddNewerTextToDocFromTbl(ctx context.Context, tbl *doltdb.Table, sch *schema.Schema, doc doltdb.DocDetails) (doltdb.DocDetails, error) {
+// addTextToDocFromTbl updates the Text field of a docDetail using the provided table and schema.
+func addTextToDocFromTbl(ctx context.Context, tbl *doltdb.Table, sch *schema.Schema, doc doltdb.DocDetails) (doltdb.DocDetails, error) {
 	if tbl != nil && sch != nil {
 		key, err := doltdb.DocTblKeyFromName(tbl.Format(), doc.DocPk)
 		if err != nil {
@@ -239,7 +214,7 @@ func AddNewerTextToDocFromTbl(ctx context.Context, tbl *doltdb.Table, sch *schem
 	return doc, nil
 }
 
-func addNewerTextToDocFromRow(ctx context.Context, r row.Row, doc *doltdb.DocDetails) (doltdb.DocDetails, error) {
+func addNewerTextToDocFromRow(r row.Row, doc *doltdb.DocDetails) (doltdb.DocDetails, error) {
 	docValue, ok := r.GetColVal(schema.DocTextTag)
 	if !ok {
 		doc.Text = nil
@@ -268,7 +243,7 @@ func addDocPKToDocFromRow(r row.Row, doc *doltdb.DocDetails) (doltdb.DocDetails,
 	return *doc, nil
 }
 
-func ComputeDiffsFromDocComparisons(docComparisons []docComparison) (added, modified, removed []string) {
+func computeDiffsFromDocComparisons(docComparisons []docComparison) (added, modified, removed []string) {
 	added = []string{}
 	modified = []string{}
 	removed = []string{}
