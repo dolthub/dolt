@@ -125,7 +125,7 @@ func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, dbData env.DbData, 
 		root = staged
 	}
 
-	docs, err := env.GetDocsWithNewerTextFromRoot(ctx, root, docDetails)
+	docs, err := env.GetDocsWithTextFromRoot(ctx, root, docDetails)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -182,4 +182,21 @@ func SaveDocsFromWorkingExcludingFSChanges(ctx context.Context, dEnv *env.DoltEn
 	}
 
 	return SaveTrackedDocs(ctx, dEnv, workingRoot, workingRoot, docsToSave)
+}
+
+// GetTablesOrDocs takes a slice of table or file names. Table names are returned as given. Valid doc names are
+// read from disk and their name replace with the names of the dolt_docs system table in the input slice. Valid Docs are
+// returned in the second return param.
+func GetTablesOrDocs(drw env.DocsReadWriter, tablesOrFiles []string) (tables []string, docDetails doltdocs.Docs, err error) {
+	for i, tbl := range tablesOrFiles {
+		docDetail, err := drw.GetDocDetailOnDisk(tbl)
+		if err != nil {
+			return nil, nil, err
+		}
+		if docDetail.DocPk != "" {
+			docDetails = append(docDetails, docDetail)
+			tablesOrFiles[i] = doltdb.DocTableName
+		}
+	}
+	return tablesOrFiles, docDetails, nil
 }

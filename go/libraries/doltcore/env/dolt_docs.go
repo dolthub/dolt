@@ -124,9 +124,9 @@ func ResetWorkingDocsToStagedDocs(ctx context.Context, ddb *doltdb.DoltDB, rsr R
 	return nil
 }
 
-// GetDocsWithNewerTextFromRoot returns Docs with the Text value(s) from the provided root. If docs are provided,
+// GetDocsWithTextFromRoot returns Docs with the Text value(s) from the provided root. If docs are provided,
 // only those docs will be retrieved and returned. Otherwise, all valid doc details are returned with the updated Text.
-func GetDocsWithNewerTextFromRoot(ctx context.Context, root *doltdb.RootValue, docs doltdocs.Docs) (doltdocs.Docs, error) {
+func GetDocsWithTextFromRoot(ctx context.Context, root *doltdb.RootValue, docs doltdocs.Docs) (doltdocs.Docs, error) {
 	docTbl, docTblFound, err := root.GetTable(ctx, doltdb.DocTableName)
 	if err != nil {
 		return nil, err
@@ -158,7 +158,7 @@ func GetDocsWithNewerTextFromRoot(ctx context.Context, root *doltdb.RootValue, d
 // UpdateFSDocsFromRootDocs updates the provided docs from the root value, and then saves them to the filesystem.
 // If docs == nil, all valid docs will be retrieved and written.
 func UpdateFSDocsFromRootDocs(ctx context.Context, root *doltdb.RootValue, docs doltdocs.Docs, FS filesys.Filesys) error {
-	docs, err := GetDocsWithNewerTextFromRoot(ctx, root, docs)
+	docs, err := GetDocsWithTextFromRoot(ctx, root, docs)
 	if err != nil {
 		return nil
 	}

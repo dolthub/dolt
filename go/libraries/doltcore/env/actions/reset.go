@@ -177,7 +177,7 @@ func ResetSoft(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseRe
 		return nil, err
 	}
 
-	tables, docs, err := GetTablesAndDocDetails(dbData.Drw, tables)
+	tables, docs, err := GetTablesOrDocs(dbData.Drw, tables)
 	if err != nil {
 		return nil, err
 	}
@@ -219,8 +219,9 @@ func getUnionedTables(ctx context.Context, tables []string, stagedRoot, headRoot
 	return tables, nil
 }
 
+// resetDocs resets the working and staged docs with docs from head.
 func resetDocs(ctx context.Context, dbData env.DbData, headRoot *doltdb.RootValue, staged *doltdb.RootValue, docDetails doltdocs.Docs) (newStgRoot *doltdb.RootValue, err error) {
-	docs, err := env.GetDocsWithNewerTextFromRoot(ctx, headRoot, docDetails)
+	docs, err := env.GetDocsWithTextFromRoot(ctx, headRoot, docDetails)
 
 	working, err := env.WorkingRoot(ctx, dbData.Ddb, dbData.Rsr)
 	if err != nil {

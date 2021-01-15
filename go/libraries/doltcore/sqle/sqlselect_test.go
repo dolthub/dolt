@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/docsTable"
 	"testing"
 	"time"
 
@@ -24,7 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/envtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -1465,15 +1465,15 @@ var systemTableSelectTests = []SelectTest{
 	{
 		Name: "select from dolt_docs",
 		AdditionalSetup: CreateTableFn("dolt_docs",
-			doltdocs.DoltDocsSchema,
-			NewRowWithSchema(doltdocs.DoltDocsSchema,
+			docsTable.DoltDocsSchema,
+			NewRowWithSchema(docsTable.DoltDocsSchema,
 				types.String("LICENSE.md"),
 				types.String("A license")),
 		),
 		Query: "select * from dolt_docs",
-		ExpectedRows: ToSqlRows(CompressSchema(doltdocs.DoltDocsSchema),
+		ExpectedRows: ToSqlRows(CompressSchema(docsTable.DoltDocsSchema),
 			NewRow(types.String("LICENSE.md"), types.String("A license"))),
-		ExpectedSchema: CompressSchema(doltdocs.DoltDocsSchema),
+		ExpectedSchema: CompressSchema(docsTable.DoltDocsSchema),
 	},
 	{
 		Name: "select from dolt_query_catalog",

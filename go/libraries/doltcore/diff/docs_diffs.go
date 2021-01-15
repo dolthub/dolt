@@ -93,11 +93,11 @@ func getDocComparisonsBtwnRoots(ctx context.Context, newTbl *doltdb.Table, newSc
 				return err
 			}
 			doc := doltdocs.DocDetails{}
-			updated, err := getDocPKFromRow(newRow, &doc)
+			updated, err := doltdocs.GetDocPKFromRow(newRow, &doc)
 			if err != nil {
 				return err
 			}
-			updated, err = getDocTextFromRow(newRow, &updated)
+			updated, err = doltdocs.GetDocTextFromRow(newRow, &updated)
 			if err != nil {
 				return err
 			}
@@ -126,7 +126,7 @@ func getDocComparisonsBtwnRoots(ctx context.Context, newTbl *doltdb.Table, newSc
 				return err
 			}
 			doc := doltdocs.DocDetails{}
-			updated, err := getDocPKFromRow(oldRow, &doc)
+			updated, err := doltdocs.GetDocPKFromRow(oldRow, &doc)
 			if err != nil {
 				return err
 			}
@@ -190,35 +190,6 @@ func getDocComparisonObjFromDocDetail(ctx context.Context, tbl *doltdb.Table, sc
 	}
 
 	return diff, nil
-}
-
-func getDocTextFromRow(r row.Row, doc *doltdocs.DocDetails) (doltdocs.DocDetails, error) {
-	docValue, ok := r.GetColVal(schema.DocTextTag)
-	if !ok {
-		doc.Text = nil
-	} else {
-		docValStr, err := strconv.Unquote(docValue.HumanReadableString())
-		if err != nil {
-			return doltdocs.DocDetails{}, err
-		}
-		doc.Text = []byte(docValStr)
-	}
-	return *doc, nil
-}
-
-func getDocPKFromRow(r row.Row, doc *doltdocs.DocDetails) (doltdocs.DocDetails, error) {
-	colVal, _ := r.GetColVal(schema.DocNameTag)
-	if colVal == nil {
-		doc.DocPk = ""
-	} else {
-		docName, err := strconv.Unquote(colVal.HumanReadableString())
-		if err != nil {
-			return doltdocs.DocDetails{}, err
-		}
-		doc.DocPk = docName
-	}
-
-	return *doc, nil
 }
 
 func computeDiffsFromDocComparisons(docComparisons []docComparison) (added, modified, removed []string) {

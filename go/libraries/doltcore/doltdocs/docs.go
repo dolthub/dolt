@@ -17,6 +17,7 @@ package doltdocs
 import (
 	"context"
 	"path/filepath"
+	"strconv"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -151,4 +152,35 @@ func GetDocTextFromTbl(ctx context.Context, tbl *doltdb.Table, sch *schema.Schem
 		doc.Text = nil
 	}
 	return doc, nil
+}
+
+// GetDocTextFromRow updates the Text field of a docDetail using the provided row.
+func GetDocTextFromRow(r row.Row, doc *DocDetails) (DocDetails, error) {
+	docValue, ok := r.GetColVal(schema.DocTextTag)
+	if !ok {
+		doc.Text = nil
+	} else {
+		docValStr, err := strconv.Unquote(docValue.HumanReadableString())
+		if err != nil {
+			return DocDetails{}, err
+		}
+		doc.Text = []byte(docValStr)
+	}
+	return *doc, nil
+}
+
+// GetDocPKFromRow updates the PK field of a docDetail using the provided row.
+func GetDocPKFromRow(r row.Row, doc *DocDetails) (DocDetails, error) {
+	colVal, _ := r.GetColVal(schema.DocNameTag)
+	if colVal == nil {
+		doc.DocPk = ""
+	} else {
+		docName, err := strconv.Unquote(colVal.HumanReadableString())
+		if err != nil {
+			return DocDetails{}, err
+		}
+		doc.DocPk = docName
+	}
+
+	return *doc, nil
 }
