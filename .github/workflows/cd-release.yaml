@@ -10,7 +10,7 @@ on:
 jobs:
   bump-version:
     name: Bump Version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -31,7 +31,7 @@ jobs:
   create-release:
     needs: bump-version
     name: Create Release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -103,7 +103,7 @@ jobs:
   homebrew-bump:
     needs: create-release
     name: Bump Dolt Homebrew formula
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     steps:
       - name: Create Homebrew PR
         uses: mislav/bump-homebrew-formula-action@v1

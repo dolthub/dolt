@@ -7,7 +7,7 @@ on:
 jobs:
   verify:
     name: Verify format and commiters
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     steps:
       - name: Setup Go 1.x
         uses: actions/setup-go@v2
