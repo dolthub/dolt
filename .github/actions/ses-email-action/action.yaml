@@ -1,0 +1,22 @@
+name: 'SES email action'
+description: 'Send email with aws ses'
+inputs:
+  region:
+    description: 'aws region'
+    required: true
+    default: ''
+  toAddresses:
+    description: 'json string list of to addresses'
+    required: true
+    default: "[]"
+  ccAddresses:
+    description: 'json string list of cc addresses'
+    required: false
+    default: "[]"
+  replyToAddresses:
+    description: 'json string list of reply to addresses'
+    required: false
+    default: "[]"
+runs:
+  using: 'node12'
+  main: 'dist/index.js'

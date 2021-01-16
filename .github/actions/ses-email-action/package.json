@@ -1,0 +1,16 @@
+{
+  "name": "ses-email-action",
+  "version": "0.1.0",
+  "description": "",
+  "main": "index.js",
+  "keywords": [],
+  "author": "dolthub",
+  "license": "ISC",
+  "scripts": {
+    "build": "ncc build index.js"
+  },
+  "dependencies": {
+    "@actions/core": "^1.2.6",
+    "aws-sdk": "^2.828.0"
+  }
+}
