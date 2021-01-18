@@ -326,7 +326,7 @@ func execShell(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots
 
 	err = runShell(sqlCtx, se, mrEnv, roots)
 	if err != nil {
-		return errhand.BuildDError("unable to start shell").AddCause(err).Build()
+		return errhand.BuildDError(err.Error()).Build()
 	}
 	return nil
 }
@@ -343,9 +343,7 @@ func execBatch(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots
 		return errhand.BuildDError("Error processing batch").Build()
 	}
 
-	verr := writeRoots(sqlCtx, se, mrEnv, roots)
-
-	return verr
+	return writeRoots(sqlCtx, se, mrEnv, roots)
 }
 
 type createDBFunc func(name string, dEnv *env.DoltEnv) dsqle.Database
@@ -367,8 +365,7 @@ func execQuery(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots
 
 	sqlSch, rowIter, err := processQuery(sqlCtx, query, se)
 	if err != nil {
-		verr := formatQueryError("", err)
-		return verr
+		return formatQueryError("", err)
 	}
 
 	if rowIter != nil {
@@ -378,9 +375,7 @@ func execQuery(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots
 		}
 	}
 
-	verr := writeRoots(sqlCtx, se, mrEnv, roots)
-
-	return verr
+	return writeRoots(sqlCtx, se, mrEnv, roots)
 }
 
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
@@ -641,7 +636,9 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initialRo
 		// https://github.com/cockroachdb/cockroach/issues/15460
 		// For now, we store all history entries as single-line strings to avoid the issue.
 		singleLine := strings.ReplaceAll(query, "\n", " ")
-		if err := shell.AddHistory(singleLine); err != nil {
+
+		var err error
+		if err = shell.AddHistory(singleLine); err != nil {
 			// TODO: handle better, like by turning off history writing for the rest of the session
 			shell.Println(color.RedString(err.Error()))
 		}
@@ -656,10 +653,13 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initialRo
 			}
 		}
 
-		verr := writeRoots(ctx, se, mrEnv, initialRoots)
+		if err == nil {
+			verr := writeRoots(ctx, se, mrEnv, initialRoots)
 
-		if verr != nil {
-			shell.Println(verr.Verbose())
+			if verr != nil {
+				shell.Println(verr.Verbose())
+				return
+			}
 		}
 
 		currPrompt := fmt.Sprintf("%s> ", ctx.GetCurrentDatabase())
@@ -673,7 +673,7 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initialRo
 	return nil
 }
 
-// writeRoots updates the working root values.
+// writeRoots updates the working root values using the sql context, the sql engine, a multi repo env and a root_val map.
 func writeRoots(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initialRoots map[string]*doltdb.RootValue) errhand.VerboseError {
 	roots, err := se.getRoots(ctx)
 
@@ -827,9 +827,7 @@ func processQuery(ctx *sql.Context, query string, se *sqlEngine) (sql.Schema, sq
 	switch s := sqlStatement.(type) {
 	case *sqlparser.Select, *sqlparser.Insert, *sqlparser.Update, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union:
 		return se.query(ctx, query)
-	case *sqlparser.Set:
-		return nil, nil, fmt.Errorf("SET is not yet supported in the shell.")
-	case *sqlparser.Use:
+	case *sqlparser.Use, *sqlparser.Set:
 		sch, rowIter, err := se.query(ctx, query)
 
 		if rowIter != nil {
