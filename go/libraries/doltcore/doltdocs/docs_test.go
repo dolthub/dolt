@@ -33,9 +33,10 @@ func TestAddNewerTextAndValueFromTable(t *testing.T) {
 	ddb.WriteEmptyRepo(ctx, "billy bob", "bigbillieb@fake.horse")
 
 	// If no tbl/schema is provided, doc Text and Value should be nil.
-	doc1 := DocDetails{DocPk: doltdb.LicensePk}
-	doc1, err := GetDocTextFromTbl(ctx, nil, nil, doc1)
+	doc1 := Doc{DocPk: doltdb.LicensePk}
+	doc1Text, err := GetDocTextFromTbl(ctx, nil, nil, doc1.DocPk)
 	assert.NoError(t, err)
+	doc1.Text = doc1Text
 	assert.Nil(t, doc1.Text)
 
 	// Create table with no rows
@@ -46,15 +47,17 @@ func TestAddNewerTextAndValueFromTable(t *testing.T) {
 	assert.NoError(t, err)
 
 	// If a table doesn't have doc row, doc Text and Value should remain nil
-	doc2 := DocDetails{DocPk: doltdb.LicensePk}
-	doc2, err = GetDocTextFromTbl(ctx, tbl, &sch, doc2)
+	doc2 := Doc{DocPk: doltdb.LicensePk}
+	doc2Text, err := GetDocTextFromTbl(ctx, tbl, &sch, doc2.DocPk)
 	assert.NoError(t, err)
+	doc2.Text = doc2Text
 	assert.Nil(t, doc2.Text)
 
 	// If a table doesn't have doc row, and Text and Value are originally non-nil, they should be updated to nil.
-	doc3 := DocDetails{DocPk: doltdb.LicensePk, Text: []byte("Something in newer text field")}
-	doc3, err = GetDocTextFromTbl(ctx, tbl, &sch, doc3)
+	doc3 := Doc{DocPk: doltdb.LicensePk, Text: []byte("Something in newer text field")}
+	doc3Text, err := GetDocTextFromTbl(ctx, tbl, &sch, doc3.DocPk)
 	assert.NoError(t, err)
+	doc3.Text = doc3Text
 	assert.Nil(t, doc3.Text)
 
 	// Update tbl to have 2 doc rows, readme and license
@@ -64,15 +67,17 @@ func TestAddNewerTextAndValueFromTable(t *testing.T) {
 	assert.NoError(t, err)
 
 	// If a table has a doc row, Text and Value and should be updated to the `doc_text` value in that row.
-	doc4 := DocDetails{DocPk: doltdb.LicensePk, Text: []byte("Something in newer text field")}
-	doc4, err = GetDocTextFromTbl(ctx, tbl, &sch, doc4)
+	doc4 := Doc{DocPk: doltdb.LicensePk, Text: []byte("Something in newer text field")}
+	doc4Text, err := GetDocTextFromTbl(ctx, tbl, &sch, doc4.DocPk)
 	assert.NoError(t, err)
+	doc4.Text = doc4Text
 	assert.Equal(t, "text in doc_text", string(doc4.Text))
 
 	// If a table has a doc row, and Text and Value are originally non-nil, they should be updated to the `doc_text` value.
-	doc5 := DocDetails{DocPk: doltdb.LicensePk}
-	doc5, err = GetDocTextFromTbl(ctx, tbl, &sch, doc5)
+	doc5 := Doc{DocPk: doltdb.LicensePk}
+	doc5Text, err := GetDocTextFromTbl(ctx, tbl, &sch, doc5.DocPk)
 	assert.NoError(t, err)
+	doc5.Text = doc5Text
 	assert.Equal(t, "text in doc_text", string(doc5.Text))
 }
 
@@ -86,12 +91,13 @@ func TestAddNewerTextAndDocPkFromRow(t *testing.T) {
 	emptyRow, err := row.New(types.Format_7_18, sch, row.TaggedValues{})
 
 	// Text and DocPk should be nil from an empty row
-	doc1 := DocDetails{}
-	doc1, err = GetDocTextFromRow(emptyRow, &doc1)
+	doc1 := Doc{}
+	text, err := GetDocTextFromRow(emptyRow)
 	assert.NoError(t, err)
-	assert.Nil(t, doc1.Text)
-	doc1, err = GetDocPKFromRow(emptyRow, &doc1)
+	assert.Nil(t, text)
+	docPk, err := GetDocPKFromRow(emptyRow)
 	assert.NoError(t, err)
+	doc1.DocPk = docPk
 	assert.Equal(t, "", doc1.DocPk)
 
 	licenseRow, err := row.New(types.Format_7_18, sch, row.TaggedValues{
@@ -101,21 +107,25 @@ func TestAddNewerTextAndDocPkFromRow(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Text and DocPk should be added to doc from row
-	doc2 := DocDetails{}
-	doc2, err = GetDocTextFromRow(licenseRow, &doc2)
+	doc2 := Doc{}
+	text, err = GetDocTextFromRow(licenseRow)
 	assert.NoError(t, err)
+	doc2.Text = text
 	assert.Equal(t, "license!", string(doc2.Text))
-	doc1, err = GetDocPKFromRow(licenseRow, &doc2)
+	docPk, err = GetDocPKFromRow(licenseRow)
 	assert.NoError(t, err)
+	doc2.DocPk = docPk
 	assert.Equal(t, doltdb.LicensePk, doc2.DocPk)
 
 	// When Text and DocPk are non-nil, they should be updated from the row provided.
-	doc3 := DocDetails{DocPk: "invalid", Text: []byte("something")}
-	doc3, err = GetDocTextFromRow(licenseRow, &doc3)
+	doc3 := Doc{DocPk: "invalid", Text: []byte("something")}
+	text, err = GetDocTextFromRow(licenseRow)
 	assert.NoError(t, err)
+	doc3.Text = text
 	assert.Equal(t, "license!", string(doc3.Text))
-	doc3, err = GetDocPKFromRow(licenseRow, &doc3)
+	docPk, err = GetDocPKFromRow(licenseRow)
 	assert.NoError(t, err)
+	doc3.DocPk = docPk
 	assert.Equal(t, doltdb.LicensePk, doc3.DocPk)
 }
 

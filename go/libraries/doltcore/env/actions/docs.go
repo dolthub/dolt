@@ -125,7 +125,7 @@ func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, dbData env.DbData, 
 		root = staged
 	}
 
-	docs, err := env.GetDocsWithTextFromRoot(ctx, root, docDetails)
+	docs, err := doltdocs.GetDocsWithTextFromRoot(ctx, root, docDetails)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -144,14 +144,14 @@ func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, dbData env.DbData, 
 }
 
 // GetUnstagedDocs retrieves the unstaged docs (docs from the filesystem).
-func GetUnstagedDocs(ctx context.Context, dEnv *env.DoltEnv) (doltdocs.Docs, error) {
-	_, unstagedDocDiffs, err := diff.GetDocDiffs(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), dEnv.DocsReadWriter())
+func GetUnstagedDocs(ctx context.Context, dbData env.DbData) (doltdocs.Docs, error) {
+	_, unstagedDocDiffs, err := diff.GetDocDiffs(ctx, dbData.Ddb, dbData.Rsr, dbData.Drw)
 	if err != nil {
 		return nil, err
 	}
 	unstagedDocs := doltdocs.Docs{}
 	for _, docName := range unstagedDocDiffs.Docs {
-		docDetail, err := dEnv.GetDocDetail(docName)
+		docDetail, err := dbData.Drw.GetDocDetailOnDisk(docName)
 		if err != nil {
 			return nil, err
 		}

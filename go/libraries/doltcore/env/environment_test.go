@@ -177,7 +177,7 @@ func TestInitRepo(t *testing.T) {
 	}
 
 	for _, doc := range *doltdocs.AllValidDocDetails {
-		docPath := doltdocs.GetDocFile(doc.File)
+		docPath := doltdocs.GetDocFilePath(doc.File)
 		if len(docPath) > 0 && !strings.Contains(doc.File, docPath) {
 			t.Error("Doc file path should exist: ", doc.File)
 		}

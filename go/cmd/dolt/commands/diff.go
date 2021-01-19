@@ -908,32 +908,42 @@ func diffDoltDocs(ctx context.Context, dEnv *env.DoltEnv, from, to *doltdb.RootV
 		return err
 	}
 
-	printDocDiffs(ctx, dEnv.DocsReadWriter(), fromDocTable, toDocTable, docDetails)
-	return nil
+	return printDocDiffs(ctx, fromDocTable, toDocTable, docDetails)
 }
 
-func printDocDiffs(ctx context.Context, drw env.DocsReadWriter, fromTbl, toTbl *doltdb.Table, currentDocDetails doltdocs.Docs) {
+func printDocDiffs(ctx context.Context, fromTbl, toTbl *doltdb.Table, currentDocDetails doltdocs.Docs) error {
 	bold := color.New(color.Bold)
-
-	if currentDocDetails == nil {
-		currentDocDetails, _ = drw.GetDocsOnDisk()
-	}
 
 	for _, doc := range currentDocDetails {
 		if doc.Text != nil && fromTbl == nil {
 			printAddedDoc(bold, doc.DocPk)
 		} else if fromTbl != nil {
 			if toTbl != nil {
-				sch1, _ := toTbl.GetSchema(ctx)
-				doc, _ = doltdocs.GetDocTextFromTbl(ctx, toTbl, &sch1, doc)
+				sch1, err := toTbl.GetSchema(ctx)
+				if err != nil {
+					return err
+				}
+
+				docText, err := doltdocs.GetDocTextFromTbl(ctx, toTbl, &sch1, doc.DocPk)
+				if err != nil {
+					return err
+				}
+				doc.Text = docText
 			}
 
-			sch2, _ := fromTbl.GetSchema(ctx)
-			docToCompareTo, _ := doltdocs.GetDocTextFromTbl(ctx, fromTbl, &sch2, doc)
+			sch2, err := fromTbl.GetSchema(ctx)
+			if err != nil {
+				return err
+			}
 
-			if docToCompareTo.Text != nil {
+			olderText, err := doltdocs.GetDocTextFromTbl(ctx, fromTbl, &sch2, doc.DocPk)
+			if err != nil {
+				return err
+			}
+
+			if olderText != nil {
 				newer := string(doc.Text)
-				older := string(docToCompareTo.Text)
+				older := string(olderText)
 				lines := textdiff.LineDiffAsLines(older, newer)
 
 				if doc.Text == nil {
@@ -944,6 +954,8 @@ func printDocDiffs(ctx context.Context, drw env.DocsReadWriter, fromTbl, toTbl *
 			}
 		}
 	}
+
+	return nil
 }
 
 func printDiffLines(bold *color.Color, lines []string) {

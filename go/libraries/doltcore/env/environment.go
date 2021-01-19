@@ -175,23 +175,6 @@ func (dEnv *DoltEnv) HasLocalConfig() bool {
 	return ok
 }
 
-// GetDoc returns the path to the provided file, if it exists
-func (dEnv *DoltEnv) GetDoc(file string) string {
-	if !hasDocFile(dEnv.FS, file) {
-		return ""
-	}
-	return doltdocs.GetDocFile(file)
-}
-
-// GetLocalFileText returns a byte slice representing the contents of the provided file, if it exists
-func (dEnv *DoltEnv) GetLocalFileText(file string) ([]byte, error) {
-	path := dEnv.GetDoc(file)
-	if path != "" {
-		return dEnv.FS.ReadFile(path)
-	}
-	return nil, nil
-}
-
 func (dEnv *DoltEnv) bestEffortDeleteAll(dir string) {
 	fileToIsDir := make(map[string]bool)
 	dEnv.FS.Iter(dir, false, func(path string, size int64, isDir bool) (stop bool) {
@@ -436,13 +419,13 @@ type docsReadWriter struct {
 }
 
 // GetDocDetailOnDisk returns the details of a specific document passed as docName.
-func (d *docsReadWriter) GetDocDetailOnDisk(docName string) (doc doltdocs.DocDetails, err error) {
-	return d.dEnv.GetDocDetail(docName)
+func (d *docsReadWriter) GetDocDetailOnDisk(docName string) (doc doltdocs.Doc, err error) {
+	return doltdocs.GetDoc(d.dEnv.FS, docName)
 }
 
 // GetDocsOnDisk reads the filesystem and returns all docs.
 func (d *docsReadWriter) GetDocsOnDisk() (doltdocs.Docs, error) {
-	return d.dEnv.GetAllValidDocDetails()
+	return doltdocs.GetAllValidDocs(d.dEnv.FS)
 }
 
 // WriteDocsToDisk creates or updates the dolt_docs table with docDetails.
@@ -880,31 +863,4 @@ func (dEnv *DoltEnv) GetUserHomeDir() (string, error) {
 
 func (dEnv *DoltEnv) TempTableFilesDir() string {
 	return mustAbs(dEnv, dEnv.GetDoltDir(), tempTablesDir)
-}
-
-func (dEnv *DoltEnv) GetAllValidDocDetails() (docs doltdocs.Docs, err error) {
-	docs = doltdocs.Docs{}
-	for _, doc := range *doltdocs.AllValidDocDetails {
-		newerText, err := dEnv.GetLocalFileText(doc.File)
-		if err != nil {
-			return nil, err
-		}
-		doc.Text = newerText
-		docs = append(docs, doc)
-	}
-	return docs, nil
-}
-
-func (dEnv *DoltEnv) GetDocDetail(docName string) (doc doltdocs.DocDetails, err error) {
-	for _, doc := range *doltdocs.AllValidDocDetails {
-		if doc.DocPk == docName {
-			newerText, err := dEnv.GetLocalFileText(doc.File)
-			if err != nil {
-				return doltdocs.DocDetails{}, err
-			}
-			doc.Text = newerText
-			return doc, nil
-		}
-	}
-	return doltdocs.DocDetails{}, err
 }

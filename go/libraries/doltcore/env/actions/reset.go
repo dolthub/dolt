@@ -221,7 +221,7 @@ func getUnionedTables(ctx context.Context, tables []string, stagedRoot, headRoot
 
 // resetDocs resets the working and staged docs with docs from head.
 func resetDocs(ctx context.Context, dbData env.DbData, headRoot *doltdb.RootValue, staged *doltdb.RootValue, docDetails doltdocs.Docs) (newStgRoot *doltdb.RootValue, err error) {
-	docs, err := env.GetDocsWithTextFromRoot(ctx, headRoot, docDetails)
+	docs, err := doltdocs.GetDocsWithTextFromRoot(ctx, headRoot, docDetails)
 
 	working, err := env.WorkingRoot(ctx, dbData.Ddb, dbData.Rsr)
 	if err != nil {

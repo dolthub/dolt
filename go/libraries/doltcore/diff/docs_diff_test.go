@@ -39,7 +39,7 @@ func TestDocDiff(t *testing.T) {
 	root, err := cm.GetRootValue()
 	assert.NoError(t, err)
 
-	docDetails := []doltdocs.DocDetails{
+	docDetails := []doltdocs.Doc{
 		{DocPk: doltdb.LicensePk},
 		{DocPk: doltdb.ReadmePk},
 	}

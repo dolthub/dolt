@@ -45,7 +45,7 @@ type RepoStateWriter interface {
 }
 
 type DocsReadWriter interface {
-	GetDocDetailOnDisk(docName string) (doc doltdocs.DocDetails, err error)
+	GetDocDetailOnDisk(docName string) (doc doltdocs.Doc, err error)
 	GetDocsOnDisk() (doltdocs.Docs, error)
 	WriteDocsToDisk(ctx context.Context, vrw types.ValueReadWriter, docTbl *doltdb.Table, docDetails doltdocs.Docs) (*doltdb.Table, error)
 }
