@@ -5,6 +5,10 @@ inputs:
     description: 'aws region'
     required: true
     default: ''
+  version:
+    description: 'dolt version being benchmarked'
+    required: true
+    default: ''
   dataFile:
     required: true
     description: 'path to email data file'

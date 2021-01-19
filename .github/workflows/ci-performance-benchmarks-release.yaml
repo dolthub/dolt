@@ -26,5 +26,6 @@ jobs:
         uses: ./.github/actions/ses-email-action
         with:
           region: us-west-2
+          version: 'test-version-0.22.11'
           toAddresses: '["dustin@dolthub.com"]'
           dataFile: ${{ format('{0}/results.log', github.workspace) }}

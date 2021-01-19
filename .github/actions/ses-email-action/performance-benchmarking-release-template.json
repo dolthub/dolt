@@ -1,0 +1,8 @@
+{
+  "Template": {
+    "TemplateName": "PerformanceBenchmarkingReleaseTemplate",
+    "SubjectPart": "Performance Benchmarks for {{version}}!",
+    "HtmlPart": "<h1>Results for {{version}},</h1><div>{{results}}.</div>",
+    "TextPart": "Results for {{version}},\r\n{{results}}"
+  }
+}
