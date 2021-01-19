@@ -393,6 +393,25 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager
 	return nbs, nil
 }
 
+// WithoutConjoiner returns a new *NomsBlockStore instance that will not
+// conjoin table files during manifest updates. Used in some server-side
+// contexts when things like table file maintenance is done out-of-process. Not
+// safe for use outside of NomsBlockStore construction.
+func (nbs *NomsBlockStore) WithoutConjoiner() *NomsBlockStore {
+	return &NomsBlockStore{
+		mm:       nbs.mm,
+		p:        nbs.p,
+		c:        noopConjoiner{},
+		mu:       sync.RWMutex{},
+		mt:       nbs.mt,
+		tables:   nbs.tables,
+		upstream: nbs.upstream,
+		mtSize:   nbs.mtSize,
+		putCount: nbs.putCount,
+		stats:    nbs.stats,
+	}
+}
+
 func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk) error {
 	t1 := time.Now()
 	a := addr(c.Hash())
