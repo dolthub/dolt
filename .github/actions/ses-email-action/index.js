@@ -31,7 +31,7 @@ const params = {
             Data: 'Test email'
         }
     },
-    Source: 'github-actions-bot@dolthub.com', /* required */
+    Source: 'dustin@dolthub.com', /* required */
     ReplyToAddresses,
 };
 
