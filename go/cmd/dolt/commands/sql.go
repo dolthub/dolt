@@ -625,6 +625,7 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initialRo
 		}
 	})
 
+	var returnedVerr errhand.VerboseError = nil // Verr that cannot be just printed but needs to be returned.
 	shell.Uninterpreted(func(c *ishell.Context) {
 		query := c.Args[0]
 		if len(strings.TrimSpace(query)) == 0 {
@@ -654,10 +655,10 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initialRo
 		}
 
 		if err == nil {
-			verr := writeRoots(ctx, se, mrEnv, initialRoots)
+			returnedVerr = writeRoots(ctx, se, mrEnv, initialRoots)
 
-			if verr != nil {
-				shell.Println(verr.Verbose())
+			if returnedVerr != nil {
+				shell.Println(returnedVerr.Verbose())
 				return
 			}
 		}
@@ -670,7 +671,7 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initialRo
 	shell.Run()
 	_ = iohelp.WriteLine(cli.CliOut, "Bye")
 
-	return nil
+	return returnedVerr
 }
 
 // writeRoots updates the working root values using the sql context, the sql engine, a multi repo env and a root_val map.
