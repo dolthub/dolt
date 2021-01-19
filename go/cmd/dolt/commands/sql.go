@@ -658,7 +658,6 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initialRo
 			returnedVerr = writeRoots(ctx, se, mrEnv, initialRoots)
 
 			if returnedVerr != nil {
-				shell.Println(returnedVerr.Verbose())
 				return
 			}
 		}
