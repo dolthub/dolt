@@ -129,7 +129,7 @@ func writeToCliOutStageFunc(ctx context.Context, items []pipeline.ItemWithProps)
 
 	for _, item := range items {
 		str := *item.GetItem().(*string)
-		cli.Printf(str)
+		cli.Print(str)
 	}
 
 	return nil, nil
@@ -279,20 +279,20 @@ func writeJSONToCliOutStageFunc(ctx context.Context, items []pipeline.ItemWithPr
 
 	if items == nil {
 		if hasRun {
-			cli.Printf("]}")
+			cli.Print("]}")
 		} else {
-			cli.Printf("{\"rows\":[]}")
+			cli.Print("{\"rows\":[]}")
 		}
 	} else {
 		for _, item := range items {
 			if hasRun {
-				cli.Printf(",")
+				cli.Print(",")
 			} else {
-				cli.Printf("{\"rows\": [")
+				cli.Print("{\"rows\": [")
 			}
 
 			str := *item.GetItem().(*string)
-			cli.Printf(str)
+			cli.Print(str)
 
 			hasRun = true
 		}

@@ -40,3 +40,26 @@ teardown() {
     [ $status -eq 1 ]
     [[ "$output" =~ "Invalid Argument:" ]] || false
 }
+
+@test "validate string formatting" {
+      dolt sql <<SQL
+CREATE TABLE test2 (
+  str varchar(256) NOT NULL,
+  PRIMARY KEY (str)
+);
+SQL
+  TESTSTR='0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ`~!@#$%^&*()){}[]/=?+|,.<>;:_-_%d%s%f'
+  dolt sql -q "INSERT INTO test2 (str) VALUES ('$TESTSTR')"
+
+  run dolt sql -q "SELECT * FROM test2"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "$TESTSTR" ]] || false
+
+  run dolt sql -q "SELECT * FROM test2" -r csv
+  [ $status -eq 0 ]
+  [[ "$output" =~ "$TESTSTR" ]] || false
+
+  run dolt sql -q "SELECT * FROM test2" -r json
+  [ $status -eq 0 ]
+  [[ "$output" =~ "$TESTSTR" ]] || false
+}
