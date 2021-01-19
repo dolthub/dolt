@@ -217,7 +217,6 @@ func GetDocTextFromRow(r row.Row) ([]byte, error) {
 		}
 		return []byte(docValStr), nil
 	}
-	return nil, nil
 }
 
 // GetDocPKFromRow updates returns the docPk field of a given row.
