@@ -21,7 +21,7 @@ jobs:
           echo "Get benchmark results here: $KEY"
           aws s3api get-object --bucket=performance-benchmarking-github-actions-results --key="$KEY" results.log
         env:
-          KEY: '2021/01/15/coffeegoddd/87d9626ed0eca11bb602ff820c74db4cf918d578/comparison-results.log'
+          KEY: '2021/01/19/coffeegoddd/0.22.11/comparison-results.log'
       - name: Send Email
         uses: ./.github/actions/ses-email-action
         with:
