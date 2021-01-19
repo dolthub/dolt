@@ -1,4 +1,3 @@
-
 require("dolt_common")
 
 dolt_prepare = prepare
@@ -12,7 +11,7 @@ function thread_init()
     drv = sysbench.sql.driver()
     con = drv:connect()
 
-    stmt = con:prepare('SELECT * FROM sbtest1 WHERE small_int_col > 0')
+    stmt = con:prepare('SELECT * FROM sbtest1 WHERE big_int_col > 0')
 end
 
 function thread_done()
