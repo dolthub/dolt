@@ -27,6 +27,20 @@ teardown() {
     [[ "$output" =~ "pk" ]] || false
 }
 
+@test "sql shell writes to disk after every iteration (autocommit)" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    run $BATS_TEST_DIRNAME/sql-shell.expect
+    echo "$output"
+
+    # 2 tables are created. 1 from above and 1 in the expect file.
+    [[ "$output" =~ "+-------------+" ]] || false
+    [[ "$output" =~ "| Table       |" ]] || false
+    [[ "$output" =~ "+-------------+" ]] || false
+    [[ "$output" =~ "| test        |" ]] || false
+    [[ "$output" =~ "| test_expect |" ]] || false
+    [[ "$output" =~ "+-------------+" ]] || false
+}
+
 @test "bad sql in sql shell should error" {
     run dolt sql <<< "This is bad sql"
     [ $status -eq 1 ]
