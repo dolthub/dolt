@@ -15,8 +15,16 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-2
+      - name: Get benchmark results
+        id: get-results
+        run: |
+          echo "Get benchmark results here: $KEY"
+          aws s3api get-object --bucket=performance-benchmarking-github-actions-results --key="$KEY" results.log
+        env:
+          KEY: '2021/01/15/coffeegoddd/87d9626ed0eca11bb602ff820c74db4cf918d578/comparison-results.log'
       - name: Send Email
         uses: ./.github/actions/ses-email-action
         with:
           region: us-west-2
           toAddresses: '["dustin@dolthub.com"]'
+          dataFile: ${{ format('{0}/results.log', github.workspace) }}
