@@ -36,7 +36,12 @@ timeprefix=$(date +%Y/%m/%d)
 
 actorprefix="$MODE/$ACTOR/$TO_VERSION"
 
-source "$TEMPLATE_SCRIPT" "$jobname" "$FROM_SERVER" "$FROM_VERSION" "$TO_SERVER" "$TO_VERSION" "$timeprefix" "$actorprefix" > job.json
+format="markdown"
+if [ "$MODE" = "release" ]; then
+  format="html"
+fi
+
+source "$TEMPLATE_SCRIPT" "$jobname" "$FROM_SERVER" "$FROM_VERSION" "$TO_SERVER" "$TO_VERSION" "$timeprefix" "$actorprefix" "$format" > job.json
 
 KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json
 

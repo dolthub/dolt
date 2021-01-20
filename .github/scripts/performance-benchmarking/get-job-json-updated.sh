@@ -2,8 +2,8 @@
 
 set -e
 
-if [ "$#" -ne 7 ]; then
-    echo  "Usage: ./get-job-json.sh <jobname> <fromServer> <fromVersion> <toServer> <toVersion> <timeprefix> <actorprefix>"
+if [ "$#" -ne 8 ]; then
+    echo  "Usage: ./get-job-json.sh <jobname> <fromServer> <fromVersion> <toServer> <toVersion> <timeprefix> <actorprefix> <format>"
     exit 1
 fi
 
@@ -14,6 +14,7 @@ toServer="$4"
 toVersion="$5"
 timeprefix="$6"
 actorprefix="$7"
+format="$8"
 
 average_time_change_query="select f.test_name as test_name, ROUND(100 * (1.0 - ((AVG(t.latency_sum_ms) / (AVG(cast(t.sql_transactions_total as decimal)) + .000001)) / (AVG(f.latency_sum_ms) / (AVG(cast(f.sql_transactions_total as decimal)) + .000001))))) as average_time_percent_change, case when (100 * (1.0 - ((AVG(t.latency_sum_ms) / (AVG(cast(t.sql_transactions_total as decimal)) + .000001)) / (AVG(f.latency_sum_ms) / (AVG(cast(f.sql_transactions_total as decimal)) + .000001))))) < 0 then true else false end as is_faster from from_results as f join to_results as t on f.test_name = t.test_name group by f.test_name;"
 
@@ -36,7 +37,9 @@ echo '
             "image": "407903926827.dkr.ecr.us-west-2.amazonaws.com/liquidata/performance-benchmarking:latest",
             "args": [
               "--schema=/schema.sql",
-              "--output=html",
+              "--output='$format'",
+              "--mysql-exec=/usr/sbin/mysqld",
+              "--mysql-protocol=unix",
               "--from-server='$fromServer'",
               "--from-version='$fromVersion'",
               "--to-server='$toServer'",
