@@ -59,6 +59,17 @@ func (c inlineConjoiner) Conjoin(ctx context.Context, upstream manifestContents,
 	return conjoin(ctx, upstream, mm, p, stats)
 }
 
+type noopConjoiner struct {
+}
+
+func (c noopConjoiner) ConjoinRequired(ts tableSet) bool {
+	return false
+}
+
+func (c noopConjoiner) Conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) (manifestContents, error) {
+	return manifestContents{}, errors.New("unsupported conjoin operation on noopConjoiner")
+}
+
 func conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) (manifestContents, error) {
 	var conjoined tableSpec
 	var conjoinees, keepers []tableSpec
