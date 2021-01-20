@@ -25,7 +25,7 @@ const params = {
         CcAddresses,
         ToAddresses,
     },
-    Source: 'dustin@dolthub.com', /* required */
+    Source: 'github-actions-bot@corp.ld-corp.com', /* required */
     Template: 'PerformanceBenchmarkingReleaseTemplate',
     TemplateData: JSON.stringify(templated),
     ReplyToAddresses,
