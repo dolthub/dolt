@@ -16,6 +16,7 @@ package cnfcmds
 
 import (
 	"context"
+
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
