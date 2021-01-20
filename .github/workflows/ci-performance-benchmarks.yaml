@@ -77,11 +77,14 @@ jobs:
         id: run-benchmarks
         run: ./.github/scripts/performance-benchmarking/run-benchmarks.sh
         env:
+          FROM_SERVER: 'dolt'
           FROM_VERSION: ${{ github.sha }}
+          TO_SERVER: 'dolt'
           TO_VERSION: ${{ steps.comment-branch.outputs.head_sha }}
+          MODE: 'pullRequest'
           ACTOR: ${{ github.actor }}
           KUBECONFIG: "./kubeconfig"
-          TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-job-json.sh"
+          TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-dolt-dolt-job-json.sh"
       - name: Get benchmark results
         id: get-results
         run: |

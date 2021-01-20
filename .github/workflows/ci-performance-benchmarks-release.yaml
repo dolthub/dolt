@@ -31,7 +31,7 @@ jobs:
           CONFIG: ${{ secrets.CORP_KUBECONFIG }}
       - name: Run benchmarks
         id: run-benchmarks
-        run: ./.github/scripts/performance-benchmarking/run-benchmarks-updated.sh
+        run: ./.github/scripts/performance-benchmarking/run-benchmarks.sh
         env:
           FROM_SERVER: 'mysql'
           FROM_VERSION: '8.0.22'
@@ -40,7 +40,7 @@ jobs:
           MODE: 'release'
           ACTOR: ${{ github.actor }}
           KUBECONFIG: "./kubeconfig"
-          TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-job-json-updated.sh"
+          TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-mysql-dolt-job-json.sh"
       - name: Get benchmark results
         id: get-results
         run: |
