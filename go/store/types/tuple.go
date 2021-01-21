@@ -140,6 +140,12 @@ func (itr *TupleIterator) Next() (uint64, Value, error) {
 
 func (itr *TupleIterator) NextUint64() (uint64, uint64, error) {
 	if itr.pos < itr.count {
+		k := itr.dec.ReadKind()
+
+		if k != UintKind {
+			return 0, 0, errors.New("NextUint64 called when the next value is not a Uint64")
+		}
+
 		valPos := itr.pos
 		val := itr.dec.ReadUint()
 		itr.pos++
