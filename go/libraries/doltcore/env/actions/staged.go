@@ -30,7 +30,7 @@ func StageTables(ctx context.Context, dbData env.DbData, tbls []string) error {
 	rsw := dbData.Rsw
 	drw := dbData.Drw
 
-	tables, docDetails, err := GetTablesOrDocs(drw, tbls)
+	tables, docs, err := GetTablesOrDocs(drw, tbls)
 	if err != nil {
 		return err
 	}
@@ -40,8 +40,8 @@ func StageTables(ctx context.Context, dbData env.DbData, tbls []string) error {
 		return err
 	}
 
-	if len(docDetails) > 0 {
-		working, err = env.UpdateRootWithDocs(ctx, dbData, working, env.Working, docDetails)
+	if len(docs) > 0 {
+		working, err = env.UpdateRootWithDocs(ctx, dbData, working, env.Working, docs)
 		if err != nil {
 			return err
 		}
@@ -73,13 +73,13 @@ func StageAllTables(ctx context.Context, dbData env.DbData) error {
 		return err
 	}
 
-	docDetails, err := drw.GetDocsOnDisk()
+	docs, err := drw.GetDocsOnDisk()
 
 	if err != nil {
 		return err
 	}
 
-	working, err = env.UpdateRootWithDocs(ctx, dbData, working, env.Working, docDetails)
+	working, err = env.UpdateRootWithDocs(ctx, dbData, working, env.Working, docs)
 
 	if err != nil {
 		return err

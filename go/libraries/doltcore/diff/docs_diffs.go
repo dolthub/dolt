@@ -26,14 +26,14 @@ import (
 )
 
 type docComparison struct {
-	CurrentText []byte
 	DocPk       string
+	CurrentText []byte
 	OldText     []byte
 }
 
-// DocDiff returns the added, modified and removed docs when comparing a root value with an other (newer) value. If the other value,
+// DocsDiff returns the added, modified and removed docs when comparing a root value with an other (newer) value. If the other value,
 // is not provided, then we compare the docs on the root value to the docDetails provided.
-func DocDiff(ctx context.Context, root *doltdb.RootValue, other *doltdb.RootValue, docDetails doltdocs.Docs) (added, modified, removed []string, err error) {
+func DocsDiff(ctx context.Context, root *doltdb.RootValue, other *doltdb.RootValue, docDetails doltdocs.Docs) (added, modified, removed []string, err error) {
 	oldTbl, oldTblFound, err := root.GetTable(ctx, doltdb.DocTableName)
 	if err != nil {
 		return nil, nil, nil, err
@@ -106,7 +106,7 @@ func getDocComparisonsBtwnRoots(ctx context.Context, newTbl *doltdb.Table, newSc
 			}
 			doc.Text = text
 
-			docComparison, err := getDocComparisonObjFromDocDetail(ctx, oldTbl, &oldSch, doc)
+			docComparison, err := newDocComparison(ctx, oldTbl, &oldSch, doc)
 			if err != nil {
 				return err
 			}
@@ -143,7 +143,7 @@ func getDocComparisonsBtwnRoots(ctx context.Context, newTbl *doltdb.Table, newSc
 			}
 			doc.Text = docText
 
-			docComparison, err := getDocComparisonObjFromDocDetail(ctx, oldTbl, &oldSch, doc)
+			docComparison, err := newDocComparison(ctx, oldTbl, &oldSch, doc)
 			if err != nil {
 				return err
 			}
@@ -164,7 +164,7 @@ func getDocComparisons(ctx context.Context, tbl *doltdb.Table, sch *schema.Schem
 	docComparisons := make([]docComparison, len(docDetails))
 
 	for i, _ := range docComparisons {
-		cmp, err := getDocComparisonObjFromDocDetail(ctx, tbl, sch, docDetails[i])
+		cmp, err := newDocComparison(ctx, tbl, sch, docDetails[i])
 
 		if err != nil {
 			return nil, err
@@ -176,7 +176,7 @@ func getDocComparisons(ctx context.Context, tbl *doltdb.Table, sch *schema.Schem
 	return docComparisons, nil
 }
 
-func getDocComparisonObjFromDocDetail(ctx context.Context, tbl *doltdb.Table, sch *schema.Schema, doc doltdocs.Doc) (docComparison, error) {
+func newDocComparison(ctx context.Context, tbl *doltdb.Table, sch *schema.Schema, doc doltdocs.Doc) (docComparison, error) {
 	diff := docComparison{DocPk: doc.DocPk, CurrentText: doc.Text, OldText: nil}
 
 	if tbl != nil && sch != nil {

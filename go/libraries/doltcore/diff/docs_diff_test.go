@@ -44,8 +44,8 @@ func TestDocDiff(t *testing.T) {
 		{DocPk: doltdb.ReadmePk},
 	}
 
-	// DocDiff between a root and itself should return no added, modified or removed docs.
-	added, modified, removed, err := DocDiff(ctx, root, root, docDetails)
+	// DocsDiff between a root and itself should return no added, modified or removed docs.
+	added, modified, removed, err := DocsDiff(ctx, root, root, docDetails)
 	assert.NoError(t, err)
 
 	if len(added)+len(modified)+len(removed) != 0 {
@@ -63,8 +63,8 @@ func TestDocDiff(t *testing.T) {
 	root2, err := root.PutTable(ctx, doltdb.DocTableName, tbl1)
 	assert.NoError(t, err)
 
-	// DocDiff between root and root2 should return one added doc, LICENSE.md
-	added, modified, removed, err = DocDiff(ctx, root, root2, docDetails)
+	// DocsDiff between root and root2 should return one added doc, LICENSE.md
+	added, modified, removed, err = DocsDiff(ctx, root, root2, docDetails)
 	assert.NoError(t, err)
 
 	if len(added) != 1 || added[0] != "LICENSE.md" || len(modified)+len(removed) != 0 {
@@ -81,8 +81,8 @@ func TestDocDiff(t *testing.T) {
 	root3, err := root.PutTable(ctx, doltdb.DocTableName, tbl2)
 	assert.NoError(t, err)
 
-	// DocDiff between root2 and root3 should return one removed doc (license) and one added doc (readme).
-	added, modified, removed, err = DocDiff(ctx, root2, root3, docDetails)
+	// DocsDiff between root2 and root3 should return one removed doc (license) and one added doc (readme).
+	added, modified, removed, err = DocsDiff(ctx, root2, root3, docDetails)
 	assert.NoError(t, err)
 
 	if len(removed) != 1 || removed[0] != "LICENSE.md" || len(added) != 1 || added[0] != "README.md" || len(modified) != 0 {
@@ -99,16 +99,16 @@ func TestDocDiff(t *testing.T) {
 	root4, err := root3.PutTable(ctx, doltdb.DocTableName, tbl3)
 	assert.NoError(t, err)
 
-	// DocDiff between root3 and root4 should return one added doc (license) and one modified doc (readme).
-	added, modified, removed, err = DocDiff(ctx, root3, root4, nil)
+	// DocsDiff between root3 and root4 should return one added doc (license) and one modified doc (readme).
+	added, modified, removed, err = DocsDiff(ctx, root3, root4, nil)
 	assert.NoError(t, err)
 
 	if len(added) != 1 || added[0] != "LICENSE.md" || len(modified) != 1 || modified[0] != "README.md" || len(removed) != 0 {
 		t.Error("Bad table diff after adding a single table")
 	}
 
-	// DocDiff between root4 and root shows 2 remove docs (license, readme)
-	added, modified, removed, err = DocDiff(ctx, root4, root, nil)
+	// DocsDiff between root4 and root shows 2 remove docs (license, readme)
+	added, modified, removed, err = DocsDiff(ctx, root4, root, nil)
 	assert.NoError(t, err)
 
 	if len(removed) != 2 || len(modified) != 0 || len(added) != 0 {

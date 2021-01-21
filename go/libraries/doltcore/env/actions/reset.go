@@ -220,20 +220,20 @@ func getUnionedTables(ctx context.Context, tables []string, stagedRoot, headRoot
 }
 
 // resetDocs resets the working and staged docs with docs from head.
-func resetDocs(ctx context.Context, dbData env.DbData, headRoot *doltdb.RootValue, staged *doltdb.RootValue, docDetails doltdocs.Docs) (newStgRoot *doltdb.RootValue, err error) {
-	docs, err := doltdocs.GetDocsWithTextFromRoot(ctx, headRoot, docDetails)
+func resetDocs(ctx context.Context, dbData env.DbData, headRoot *doltdb.RootValue, staged *doltdb.RootValue, docs doltdocs.Docs) (newStgRoot *doltdb.RootValue, err error) {
+	docsWithText, err := doltdocs.GetDocsWithTextFromRoot(ctx, headRoot, docs)
 
 	working, err := env.WorkingRoot(ctx, dbData.Ddb, dbData.Rsr)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = env.UpdateRootWithDocs(ctx, dbData, working, env.Working, docs)
+	_, err = env.UpdateRootWithDocs(ctx, dbData, working, env.Working, docsWithText)
 	if err != nil {
 		return nil, err
 	}
 
-	return env.UpdateRootWithDocs(ctx, dbData, staged, env.Staged, docs)
+	return env.UpdateRootWithDocs(ctx, dbData, staged, env.Staged, docsWithText)
 }
 
 func resetStaged(ctx context.Context, ddb *doltdb.DoltDB, rsw env.RepoStateWriter, tbls []string, staged, head *doltdb.RootValue) (*doltdb.RootValue, error) {

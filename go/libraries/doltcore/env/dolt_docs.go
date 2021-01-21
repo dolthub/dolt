@@ -68,7 +68,7 @@ func ResetWorkingDocsToStagedDocs(ctx context.Context, ddb *doltdb.DoltDB, rsr R
 }
 
 // UpdateFSDocsFromRootDocs updates the provided docs from the root value, and then saves them to the filesystem.
-// If docs == nil, all valid docs will be retrieved and written.
+// If docs == nil, all supported docs will be retrieved and written.
 func UpdateFSDocsFromRootDocs(ctx context.Context, root *doltdb.RootValue, docs doltdocs.Docs, FS filesys.Filesys) error {
 	docs, err := doltdocs.GetDocsWithTextFromRoot(ctx, root, docs)
 	if err != nil {

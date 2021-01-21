@@ -88,13 +88,13 @@ func (rvu RootValueUnreadable) Error() string {
 }
 
 // NewDocDiffs returns DocDiffs for Dolt Docs between two roots.
-func NewDocDiffs(ctx context.Context, older *doltdb.RootValue, newer *doltdb.RootValue, docDetails doltdocs.Docs) (*DocDiffs, error) {
+func NewDocDiffs(ctx context.Context, older *doltdb.RootValue, newer *doltdb.RootValue, docs doltdocs.Docs) (*DocDiffs, error) {
 	var added []string
 	var modified []string
 	var removed []string
 	if older != nil {
 		if newer == nil {
-			a, m, r, err := DocDiff(ctx, older, nil, docDetails)
+			a, m, r, err := DocsDiff(ctx, older, nil, docs)
 			if err != nil {
 				return nil, err
 			}
@@ -102,7 +102,7 @@ func NewDocDiffs(ctx context.Context, older *doltdb.RootValue, newer *doltdb.Roo
 			modified = m
 			removed = r
 		} else {
-			a, m, r, err := DocDiff(ctx, older, newer, docDetails)
+			a, m, r, err := DocsDiff(ctx, older, newer, docs)
 			if err != nil {
 				return nil, err
 			}
@@ -111,11 +111,11 @@ func NewDocDiffs(ctx context.Context, older *doltdb.RootValue, newer *doltdb.Roo
 			removed = r
 		}
 	}
-	var docs []string
-	docs = append(docs, added...)
-	docs = append(docs, modified...)
-	docs = append(docs, removed...)
-	sort.Strings(docs)
+	var docNames []string
+	docNames = append(docNames, added...)
+	docNames = append(docNames, modified...)
+	docNames = append(docNames, removed...)
+	sort.Strings(docNames)
 
 	docsToType := make(map[string]DocDiffType)
 	for _, nt := range added {
@@ -130,7 +130,7 @@ func NewDocDiffs(ctx context.Context, older *doltdb.RootValue, newer *doltdb.Roo
 		docsToType[nt] = RemovedDoc
 	}
 
-	return &DocDiffs{len(added), len(modified), len(removed), docsToType, docs}, nil
+	return &DocDiffs{len(added), len(modified), len(removed), docsToType, docNames}, nil
 }
 
 // Len returns the number of docs in a DocDiffs

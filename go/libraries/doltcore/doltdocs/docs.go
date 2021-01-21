@@ -40,7 +40,7 @@ type Doc struct {
 
 type Docs []Doc
 
-var AllValidDocDetails = &Docs{
+var SupportedDocs = &Docs{
 	{DocPk: doltdb.ReadmePk, File: ReadmeFile},
 	{DocPk: doltdb.LicensePk, File: LicenseFile},
 }
@@ -50,9 +50,9 @@ func GetDocFilePath(filename string) string {
 	return filepath.Join(dbfactory.DoltDir, filename)
 }
 
-// LoadDocs takes in a fs object and reads all the docs (ex. README.md) defined in AllValidDocDetails.
+// LoadDocs takes in a fs object and reads all the docs (ex. README.md) defined in SupportedDocs.
 func LoadDocs(fs filesys.ReadWriteFS) (Docs, error) {
-	docsWithCurrentText := *AllValidDocDetails
+	docsWithCurrentText := *SupportedDocs
 	for i, val := range docsWithCurrentText {
 		path := GetDocFilePath(val.File)
 		exists, isDir := fs.Exists(path)
@@ -68,10 +68,10 @@ func LoadDocs(fs filesys.ReadWriteFS) (Docs, error) {
 	return docsWithCurrentText, nil
 }
 
-// Save takes in a fs object and saves all the docs in the filesystem.
+// Save takes in a fs object and saves all the docs to the filesystem, overwriting any existing files.
 func (docs Docs) Save(fs filesys.ReadWriteFS) error {
 	for _, doc := range docs {
-		if !isValidDoc(doc.DocPk) {
+		if _, ok := IsSupportedDoc(doc.DocPk); !ok {
 			continue
 		}
 		filePath := GetDocFilePath(doc.File)
@@ -90,9 +90,9 @@ func (docs Docs) Save(fs filesys.ReadWriteFS) error {
 	return nil
 }
 
-// DeleteDoc takes in a filesytem object and deletes the document with docName.
+// DeleteDoc takes in a filesytem object and deletes the file with docName, if it's a SupportedDoc.
 func DeleteDoc(fs filesys.ReadWriteFS, docName string) error {
-	for _, doc := range *AllValidDocDetails {
+	if doc, ok := IsSupportedDoc(docName); ok {
 		if doc.DocPk == docName {
 			path := GetDocFilePath(doc.File)
 			exists, isDir := fs.Exists(path)
@@ -104,16 +104,16 @@ func DeleteDoc(fs filesys.ReadWriteFS, docName string) error {
 	return nil
 }
 
-func isValidDoc(docName string) bool {
-	for _, doc := range *AllValidDocDetails {
+func IsSupportedDoc(docName string) (Doc, bool) {
+	for _, doc := range *SupportedDocs {
 		if doc.DocPk == docName {
-			return true
+			return doc, true
 		}
 	}
-	return false
+	return Doc{}, false
 }
 
-func hasDocFile(fs filesys.ReadWriteFS, file string) bool {
+func docFileExists(fs filesys.ReadWriteFS, file string) bool {
 	exists, isDir := fs.Exists(GetDocFilePath(file))
 	return exists && !isDir
 }
@@ -121,7 +121,7 @@ func hasDocFile(fs filesys.ReadWriteFS, file string) bool {
 // GetLocalFileText returns a byte slice representing the contents of the provided file, if it exists
 func GetLocalFileText(fs filesys.Filesys, file string) ([]byte, error) {
 	path := ""
-	if hasDocFile(fs, file) {
+	if docFileExists(fs, file) {
 		path = GetDocFilePath(file)
 	}
 
@@ -132,10 +132,10 @@ func GetLocalFileText(fs filesys.Filesys, file string) ([]byte, error) {
 	return nil, nil
 }
 
-// GetAllValidDocs takes in a filesystem and returns the contents of all docs on disk.
-func GetAllValidDocs(fs filesys.Filesys) (docs Docs, err error) {
+// GetSupportedDocs takes in a filesystem and returns the contents of all docs on disk.
+func GetSupportedDocs(fs filesys.Filesys) (docs Docs, err error) {
 	docs = Docs{}
-	for _, doc := range *AllValidDocDetails {
+	for _, doc := range *SupportedDocs {
 		newerText, err := GetLocalFileText(fs, doc.File)
 		if err != nil {
 			return nil, err
@@ -148,7 +148,7 @@ func GetAllValidDocs(fs filesys.Filesys) (docs Docs, err error) {
 
 // GetDoc takes in a filesystem and a docName and returns the doc's contents.
 func GetDoc(fs filesys.Filesys, docName string) (doc Doc, err error) {
-	for _, doc := range *AllValidDocDetails {
+	for _, doc := range *SupportedDocs {
 		if doc.DocPk == docName {
 			newerText, err := GetLocalFileText(fs, doc.File)
 			if err != nil {
@@ -235,7 +235,8 @@ func GetDocPKFromRow(r row.Row) (string, error) {
 }
 
 // GetDocsWithTextFromRoot returns Docs with the Text value(s) from the provided root. If docs are provided,
-// only those docs will be retrieved and returned. Otherwise, all valid doc details are returned with the updated Text.
+// only those docs will be retrieved and returned. Otherwise, all supported doc details are returned with the updated
+// Text.
 func GetDocsWithTextFromRoot(ctx context.Context, root *doltdb.RootValue, docs Docs) (Docs, error) {
 	docTbl, docTblFound, err := root.GetTable(ctx, doltdb.DocTableName)
 	if err != nil {
@@ -252,7 +253,7 @@ func GetDocsWithTextFromRoot(ctx context.Context, root *doltdb.RootValue, docs D
 	}
 
 	if docs == nil {
-		docs = *AllValidDocDetails
+		docs = *SupportedDocs
 	}
 
 	for i, doc := range docs {
@@ -263,5 +264,6 @@ func GetDocsWithTextFromRoot(ctx context.Context, root *doltdb.RootValue, docs D
 		doc.Text = docText
 		docs[i] = doc
 	}
+
 	return docs, nil
 }

@@ -911,10 +911,10 @@ func diffDoltDocs(ctx context.Context, dEnv *env.DoltEnv, from, to *doltdb.RootV
 	return printDocDiffs(ctx, fromDocTable, toDocTable, docDetails)
 }
 
-func printDocDiffs(ctx context.Context, fromTbl, toTbl *doltdb.Table, currentDocDetails doltdocs.Docs) error {
+func printDocDiffs(ctx context.Context, fromTbl, toTbl *doltdb.Table, currentDocs doltdocs.Docs) error {
 	bold := color.New(color.Bold)
 
-	for _, doc := range currentDocDetails {
+	for _, doc := range currentDocs {
 		if doc.Text != nil && fromTbl == nil {
 			printAddedDoc(bold, doc.DocPk)
 		} else if fromTbl != nil {

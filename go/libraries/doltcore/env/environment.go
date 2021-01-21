@@ -425,7 +425,7 @@ func (d *docsReadWriter) GetDocDetailOnDisk(docName string) (doc doltdocs.Doc, e
 
 // GetDocsOnDisk reads the filesystem and returns all docs.
 func (d *docsReadWriter) GetDocsOnDisk() (doltdocs.Docs, error) {
-	return doltdocs.GetAllValidDocs(d.dEnv.FS)
+	return doltdocs.GetSupportedDocs(d.dEnv.FS)
 }
 
 // WriteDocsToDisk creates or updates the dolt_docs table with docDetails.

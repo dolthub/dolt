@@ -16,6 +16,7 @@ package actions
 
 import (
 	"context"
+	"errors"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 
@@ -184,16 +185,19 @@ func SaveDocsFromWorkingExcludingFSChanges(ctx context.Context, dEnv *env.DoltEn
 	return SaveTrackedDocs(ctx, dEnv, workingRoot, workingRoot, docsToSave)
 }
 
-// GetTablesOrDocs takes a slice of table or file names. Table names are returned as given. Valid doc names are
-// read from disk and their name replace with the names of the dolt_docs system table in the input slice. Valid Docs are
-// returned in the second return param.
+// GetTablesOrDocs takes a slice of table or file names. Table names are returned as given. Supported doc names are
+// read from disk and their name replace with the names of the dolt_docs system table in the input slice. Supported docs
+// are returned in the second return param.
 func GetTablesOrDocs(drw env.DocsReadWriter, tablesOrFiles []string) (tables []string, docDetails doltdocs.Docs, err error) {
 	for i, tbl := range tablesOrFiles {
-		docDetail, err := drw.GetDocDetailOnDisk(tbl)
-		if err != nil {
-			return nil, nil, err
-		}
-		if docDetail.DocPk != "" {
+		if _, ok := doltdocs.IsSupportedDoc(tbl); ok {
+			docDetail, err := drw.GetDocDetailOnDisk(tbl)
+			if err != nil {
+				return nil, nil, err
+			}
+			if docDetail.DocPk == "" {
+				return nil, nil, errors.New("Supported doc not found on disk.")
+			}
 			docDetails = append(docDetails, docDetail)
 			tablesOrFiles[i] = doltdb.DocTableName
 		}
