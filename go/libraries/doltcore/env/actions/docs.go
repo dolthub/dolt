@@ -148,7 +148,7 @@ func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, working, staged, he
 		return nil, nil, nil, err
 	}
 
-	return currRoot, stgRoot,  docs, nil
+	return currRoot, stgRoot, docs, nil
 }
 
 // GetUnstagedDocs retrieves the unstaged docs (docs from the filesystem).
@@ -159,11 +159,11 @@ func GetUnstagedDocs(ctx context.Context, dbData env.DbData) (doltdocs.Docs, err
 	}
 	unstagedDocs := doltdocs.Docs{}
 	for _, docName := range unstagedDocDiffs.Docs {
-		docDetail, err := dbData.Drw.GetDocDetailOnDisk(docName)
+		docAr, err := dbData.Drw.GetDocsOnDisk(docName)
 		if err != nil {
 			return nil, err
 		}
-		unstagedDocs = append(unstagedDocs, docDetail)
+		unstagedDocs = append(unstagedDocs, docAr[0])
 	}
 	return unstagedDocs, nil
 }
@@ -198,10 +198,11 @@ func SaveDocsFromWorkingExcludingFSChanges(ctx context.Context, dEnv *env.DoltEn
 func GetTablesOrDocs(drw env.DocsReadWriter, tablesOrFiles []string) (tables []string, docs doltdocs.Docs, err error) {
 	for i, tbl := range tablesOrFiles {
 		if _, ok := doltdocs.IsSupportedDoc(tbl); ok {
-			doc, err := drw.GetDocDetailOnDisk(tbl)
+			docAr, err := drw.GetDocsOnDisk(tbl)
 			if err != nil {
 				return nil, nil, err
 			}
+			doc := docAr[0]
 			if doc.DocPk == "" {
 				return nil, nil, errors.New("Supported doc not found on disk.")
 			}

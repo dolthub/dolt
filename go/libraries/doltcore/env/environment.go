@@ -417,13 +417,22 @@ type docsReadWriter struct {
 	FS filesys.Filesys
 }
 
-// GetDocDetailOnDisk returns the details of a specific document passed as docName.
-func (d *docsReadWriter) GetDocDetailOnDisk(docName string) (doc doltdocs.Doc, err error) {
-	return doltdocs.GetDoc(d.FS, docName)
-}
-
 // GetDocsOnDisk reads the filesystem and returns all docs.
-func (d *docsReadWriter) GetDocsOnDisk() (doltdocs.Docs, error) {
+func (d *docsReadWriter) GetDocsOnDisk(docNames ...string) (doltdocs.Docs, error) {
+	if docNames != nil {
+		ret := make(doltdocs.Docs, len(docNames))
+
+		for i, name := range docNames {
+			doc, err := doltdocs.GetDoc(d.FS, name)
+			if err != nil {
+				return nil, err
+			}
+			ret[i] = doc
+		}
+
+		return ret, nil
+	}
+
 	return doltdocs.GetSupportedDocs(d.FS)
 }
 
