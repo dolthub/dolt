@@ -37,6 +37,7 @@ echo '
             "image": "407903926827.dkr.ecr.us-west-2.amazonaws.com/liquidata/performance-benchmarking:latest",
             "args": [
               "--schema=/schema.sql",
+              "--script-dir=/scripts/lua",
               "--output='$format'",
               "--mysql-exec=/usr/sbin/mysqld",
               "--mysql-protocol=unix",
