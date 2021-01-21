@@ -730,12 +730,37 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 	if err != nil {
 		return err
 	}
-	declaresFk, _ := fkCollection.KeysForTable(t.name)
+	declaresFk, referencedByFk := fkCollection.KeysForTable(t.name)
 	for _, foreignKey := range declaresFk {
 		if (foreignKey.OnUpdate == doltdb.ForeignKeyReferenceOption_SetNull || foreignKey.OnDelete == doltdb.ForeignKeyReferenceOption_SetNull) &&
 			col.IsNullable() {
 			return fmt.Errorf("foreign key `%s` has SET NULL thus column `%s` cannot be altered to accept null values", foreignKey.Name, col.Name)
 		}
+	}
+
+	if !existingCol.TypeInfo.Equals(col.TypeInfo) {
+		for _, foreignKey := range declaresFk {
+			for _, tag := range foreignKey.TableColumns {
+				if tag == existingCol.Tag {
+					return fmt.Errorf("cannot alter a column's type when it is used in a foreign key")
+				}
+			}
+		}
+		for _, foreignKey := range referencedByFk {
+			for _, tag := range foreignKey.ReferencedTableColumns {
+				if tag == existingCol.Tag {
+					return fmt.Errorf("cannot alter a column's type when it is used in a foreign key")
+				}
+			}
+		}
+		tags, err := root.GenerateTagsForNewColumns(ctx, t.name, []string{col.Name}, []types.NomsKind{col.Kind})
+		if err != nil {
+			return err
+		}
+		if len(tags) != 1 {
+			return fmt.Errorf("expected a generated tag length of 1")
+		}
+		col.Tag = tags[0]
 	}
 
 	updatedTable, err := alterschema.ModifyColumn(ctx, table, existingCol, col, orderToOrder(order))

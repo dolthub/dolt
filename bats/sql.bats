@@ -510,12 +510,6 @@ SQL
     [[ "$output" =~ "c6" ]] || false
 }
 
-@test "sql alter table to change column type not supported" {
-    run dolt sql -q "alter table one_pk modify column c5 varchar(80)"
-    [ $status -eq 1 ]
-    [[ "$output" =~ "unsupported feature: column types cannot be changed" ]] || false
-}
-
 @test "sql alter table modify column with no actual change" {
     # this specifically tests a previous bug where we would get a name collision and fail
     dolt sql -q "alter table one_pk modify column c5 bigint"

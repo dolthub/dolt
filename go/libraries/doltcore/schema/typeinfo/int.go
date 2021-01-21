@@ -255,3 +255,41 @@ func (ti *intType) String() string {
 func (ti *intType) ToSqlType() sql.Type {
 	return ti.sqlIntType
 }
+
+// intTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
+func intTypeConverter(ctx context.Context, src *intType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
+	switch dest := destTi.(type) {
+	case *bitType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *boolType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *datetimeType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *decimalType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *enumType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *floatType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *inlineBlobType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *intType:
+		return wrapIsValid(dest.IsValid, src, dest)
+	case *setType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *timeType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *uintType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *uuidType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *varBinaryType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *varStringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *yearType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	default:
+		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
+	}
+}
