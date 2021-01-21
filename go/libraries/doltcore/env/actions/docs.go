@@ -124,7 +124,7 @@ func getUntrackedDocs(docs doltdocs.Docs, docDiffs *diff.DocDiffs) []string {
 	return untracked
 }
 
-func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, dbData env.DbData, working, staged, head *doltdb.RootValue, docs doltdocs.Docs) (currRoot, stgRoot *doltdb.RootValue, retDocs doltdocs.Docs, err error) {
+func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, working, staged, head *doltdb.RootValue, docs doltdocs.Docs) (currRoot, stgRoot *doltdb.RootValue, retDocs doltdocs.Docs, err error) {
 	root := head
 	_, ok, err := staged.GetTable(ctx, doltdb.DocTableName)
 	if err != nil {
@@ -138,12 +138,12 @@ func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, dbData env.DbData, 
 		return nil, nil, nil, err
 	}
 
-	currRoot, err = env.UpdateRootWithDocs(ctx, dbData, working, env.Working, docs)
+	currRoot, err = env.UpdateRootWithDocs(ctx, working, docs)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	stgRoot, err = env.UpdateRootWithDocs(ctx, dbData, staged, env.Staged, docs)
+	stgRoot, err = env.UpdateRootWithDocs(ctx, staged, docs)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -195,19 +195,19 @@ func SaveDocsFromWorkingExcludingFSChanges(ctx context.Context, dEnv *env.DoltEn
 // GetTablesOrDocs takes a slice of table or file names. Table names are returned as given. Supported doc names are
 // read from disk and their name replace with the names of the dolt_docs system table in the input slice. Supported docs
 // are returned in the second return param.
-func GetTablesOrDocs(drw env.DocsReadWriter, tablesOrFiles []string) (tables []string, docDetails doltdocs.Docs, err error) {
+func GetTablesOrDocs(drw env.DocsReadWriter, tablesOrFiles []string) (tables []string, docs doltdocs.Docs, err error) {
 	for i, tbl := range tablesOrFiles {
 		if _, ok := doltdocs.IsSupportedDoc(tbl); ok {
-			docDetail, err := drw.GetDocDetailOnDisk(tbl)
+			doc, err := drw.GetDocDetailOnDisk(tbl)
 			if err != nil {
 				return nil, nil, err
 			}
-			if docDetail.DocPk == "" {
+			if doc.DocPk == "" {
 				return nil, nil, errors.New("Supported doc not found on disk.")
 			}
-			docDetails = append(docDetails, docDetail)
+			docs = append(docs, doc)
 			tablesOrFiles[i] = doltdb.DocTableName
 		}
 	}
-	return tablesOrFiles, docDetails, nil
+	return tablesOrFiles, docs, nil
 }

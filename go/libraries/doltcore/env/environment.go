@@ -427,7 +427,7 @@ func (d *docsReadWriter) GetDocsOnDisk() (doltdocs.Docs, error) {
 	return doltdocs.GetSupportedDocs(d.FS)
 }
 
-// WriteDocsToDisk creates or updates the dolt_docs table with docDetails.
+// WriteDocsToDisk creates or updates the dolt_docs table with docs.
 func (d *docsReadWriter) WriteDocsToDisk(docs doltdocs.Docs) error {
 	return docs.Save(d.FS)
 }

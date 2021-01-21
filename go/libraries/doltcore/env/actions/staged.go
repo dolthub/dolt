@@ -41,7 +41,7 @@ func StageTables(ctx context.Context, dbData env.DbData, tbls []string) error {
 	}
 
 	if len(docs) > 0 {
-		working, err = env.UpdateRootWithDocs(ctx, dbData, working, env.Working, docs)
+		working, err = env.UpdateRootWithDocs(ctx, working, docs)
 		if err != nil {
 			return err
 		}
@@ -79,7 +79,7 @@ func StageAllTables(ctx context.Context, dbData env.DbData) error {
 		return err
 	}
 
-	working, err = env.UpdateRootWithDocs(ctx, dbData, working, env.Working, docs)
+	working, err = env.UpdateRootWithDocs(ctx, working, docs)
 
 	if err != nil {
 		return err

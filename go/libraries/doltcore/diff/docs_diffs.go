@@ -32,8 +32,8 @@ type docComparison struct {
 }
 
 // DocsDiff returns the added, modified and removed docs when comparing a root value with an other (newer) value. If the other value,
-// is not provided, then we compare the docs on the root value to the docDetails provided.
-func DocsDiff(ctx context.Context, root *doltdb.RootValue, other *doltdb.RootValue, docDetails doltdocs.Docs) (added, modified, removed []string, err error) {
+// is not provided, then we compare the docs on the root value to the docs provided.
+func DocsDiff(ctx context.Context, root *doltdb.RootValue, other *doltdb.RootValue, docs doltdocs.Docs) (added, modified, removed []string, err error) {
 	oldTbl, oldTblFound, err := root.GetTable(ctx, doltdb.DocTableName)
 	if err != nil {
 		return nil, nil, nil, err
@@ -48,7 +48,7 @@ func DocsDiff(ctx context.Context, root *doltdb.RootValue, other *doltdb.RootVal
 	}
 
 	if other == nil {
-		docComparisons, err := getDocComparisons(ctx, oldTbl, &oldSch, docDetails)
+		docComparisons, err := getDocComparisons(ctx, oldTbl, &oldSch, docs)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -160,11 +160,11 @@ func getDocComparisonsBtwnRoots(ctx context.Context, newTbl *doltdb.Table, newSc
 	return docComparisonBtwnRoots, nil
 }
 
-func getDocComparisons(ctx context.Context, tbl *doltdb.Table, sch *schema.Schema, docDetails doltdocs.Docs) ([]docComparison, error) {
-	docComparisons := make([]docComparison, len(docDetails))
+func getDocComparisons(ctx context.Context, tbl *doltdb.Table, sch *schema.Schema, docs doltdocs.Docs) ([]docComparison, error) {
+	docComparisons := make([]docComparison, len(docs))
 
 	for i, _ := range docComparisons {
-		cmp, err := newDocComparison(ctx, tbl, sch, docDetails[i])
+		cmp, err := newDocComparison(ctx, tbl, sch, docs[i])
 
 		if err != nil {
 			return nil, err

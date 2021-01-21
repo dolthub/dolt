@@ -75,16 +75,6 @@ type RepoState struct {
 	Branches map[string]BranchConfig `json:"branches"`
 }
 
-type RootType int
-
-const (
-	Working RootType = iota
-	Staged
-	Commit
-	Head
-	InvalidRoot
-)
-
 func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
 	path := getRepoStateFile()
 	data, err := fs.ReadFile(path)

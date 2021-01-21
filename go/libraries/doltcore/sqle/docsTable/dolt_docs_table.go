@@ -38,7 +38,7 @@ var doltDocsColumns, _ = schema.NewColCollection(
 )
 var DoltDocsSchema = schema.MustSchemaFromCols(doltDocsColumns)
 
-// updateDocsTable takes in docTbl param and updates it with the value in docDetails. It returns the updated table.
+// updateDocsTable takes in docTbl param and updates it with the value in docs. It returns the updated table.
 func updateDocsTable(ctx context.Context, docTbl *doltdb.Table, docs doltdocs.Docs) (*doltdb.Table, error) {
 	m, err := docTbl.GetRowData(ctx)
 	if err != nil {

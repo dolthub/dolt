@@ -297,7 +297,7 @@ func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string) (from, 
 		return nil, nil, nil, err
 	}
 
-	workingRoot, err = env.UpdateRootWithDocs(ctx, dEnv.DbData(), workingRoot, env.Working, docs)
+	workingRoot, err = env.UpdateRootWithDocs(ctx, workingRoot, docs)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -890,7 +890,7 @@ func createSplitter(fromSch schema.Schema, toSch schema.Schema, joiner *rowconv.
 }
 
 func diffDoltDocs(ctx context.Context, dEnv *env.DoltEnv, from, to *doltdb.RootValue, dArgs *diffArgs) error {
-	_, docDetails, err := actions.GetTablesOrDocs(dEnv.DocsReadWriter(), dArgs.docSet.AsSlice())
+	_, docs, err := actions.GetTablesOrDocs(dEnv.DocsReadWriter(), dArgs.docSet.AsSlice())
 
 	if err != nil {
 		return err
@@ -908,7 +908,7 @@ func diffDoltDocs(ctx context.Context, dEnv *env.DoltEnv, from, to *doltdb.RootV
 		return err
 	}
 
-	return printDocDiffs(ctx, fromDocTable, toDocTable, docDetails)
+	return printDocDiffs(ctx, fromDocTable, toDocTable, docs)
 }
 
 func printDocDiffs(ctx context.Context, fromTbl, toTbl *doltdb.Table, currentDocs doltdocs.Docs) error {

@@ -66,41 +66,10 @@ func ResetWorkingDocsToStagedDocs(ctx context.Context, ddb *doltdb.DoltDB, rsr R
 	return nil
 }
 
-// UpdateRootWithDocs takes in a root value, a drw, and some docs and writes those docs to the dolt_docs table
+// UpdateRootWithDocs takes in a root value, and some docs and writes those docs to the dolt_docs table
 // (perhaps creating it in the process). The table might not necessarily need to be created if there are no docs in the
 // repo yet.
-func UpdateRootWithDocs(ctx context.Context, dbData DbData, root *doltdb.RootValue, rootType RootType, docs doltdocs.Docs) (*doltdb.RootValue, error) {
-	docTbl, _, err := root.GetTable(ctx, doltdb.DocTableName)
-
-	if err != nil {
-		return nil, err
-	}
-
-	docTbl, err = docsTable.CreateOrUpdateDocsTable(ctx, root.VRW(), docs, docTbl)
-
-	if errors.Is(docsTable.ErrEmptyDocsTable, err) {
-		root, err = root.RemoveTables(ctx, doltdb.DocTableName)
-	} else if err != nil {
-		return nil, err
-	}
-
-	// There might not need be a need to create docs table if not docs have been created yet so check if docTbl != nil.
-	if docTbl != nil {
-		root, err = root.PutTable(ctx, doltdb.DocTableName, docTbl)
-	}
-
-	switch rootType {
-	case Working:
-		_, err = UpdateWorkingRoot(ctx, dbData.Ddb, dbData.Rsw, root)
-	case Staged:
-		_, err = UpdateStagedRoot(ctx, dbData.Ddb, dbData.Rsw, root)
-	default:
-		return nil, errors.New("Root type not supported with docs update.")
-	}
-	return root, nil
-}
-
-func UpdateRootToDocs(ctx context.Context, root *doltdb.RootValue, docs doltdocs.Docs) (*doltdb.RootValue, error) {
+func UpdateRootWithDocs(ctx context.Context, root *doltdb.RootValue, docs doltdocs.Docs) (*doltdb.RootValue, error) {
 	docTbl, _, err := root.GetTable(ctx, doltdb.DocTableName)
 
 	if err != nil {

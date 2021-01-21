@@ -228,12 +228,17 @@ func resetDocs(ctx context.Context, dbData env.DbData, headRoot *doltdb.RootValu
 		return nil, err
 	}
 
-	_, err = env.UpdateRootWithDocs(ctx, dbData, working, env.Working, docs)
+	working, err = env.UpdateRootWithDocs(ctx, working, docs)
 	if err != nil {
 		return nil, err
 	}
 
-	return env.UpdateRootWithDocs(ctx, dbData, staged, env.Staged, docs)
+	_, err = env.UpdateWorkingRoot(ctx, dbData.Ddb, dbData.Rsw, working)
+	if err != nil {
+		return nil, err
+	}
+
+	return env.UpdateRootWithDocs(ctx, staged, docs)
 }
 
 func resetStaged(ctx context.Context, ddb *doltdb.DoltDB, rsw env.RepoStateWriter, tbls []string, staged, head *doltdb.RootValue) (*doltdb.RootValue, error) {

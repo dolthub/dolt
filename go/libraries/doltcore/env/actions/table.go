@@ -137,7 +137,7 @@ func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, roots map[Roo
 	head := roots[HeadRoot]
 
 	if len(docs) > 0 {
-		currRootWithDocs, stagedWithDocs, updatedDocs, err := getUpdatedWorkingAndStagedWithDocs(ctx, dEnv.DbData(), currRoot, staged, head, docs)
+		currRootWithDocs, stagedWithDocs, updatedDocs, err := getUpdatedWorkingAndStagedWithDocs(ctx, currRoot, staged, head, docs)
 		if err != nil {
 			return err
 		}

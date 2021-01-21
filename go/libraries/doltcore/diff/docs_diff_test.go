@@ -39,13 +39,13 @@ func TestDocDiff(t *testing.T) {
 	root, err := cm.GetRootValue()
 	assert.NoError(t, err)
 
-	docDetails := []doltdocs.Doc{
+	docs := doltdocs.Docs{
 		{DocPk: doltdb.LicensePk},
 		{DocPk: doltdb.ReadmePk},
 	}
 
 	// DocsDiff between a root and itself should return no added, modified or removed docs.
-	added, modified, removed, err := DocsDiff(ctx, root, root, docDetails)
+	added, modified, removed, err := DocsDiff(ctx, root, root, docs)
 	assert.NoError(t, err)
 
 	if len(added)+len(modified)+len(removed) != 0 {
@@ -64,7 +64,7 @@ func TestDocDiff(t *testing.T) {
 	assert.NoError(t, err)
 
 	// DocsDiff between root and root2 should return one added doc, LICENSE.md
-	added, modified, removed, err = DocsDiff(ctx, root, root2, docDetails)
+	added, modified, removed, err = DocsDiff(ctx, root, root2, docs)
 	assert.NoError(t, err)
 
 	if len(added) != 1 || added[0] != "LICENSE.md" || len(modified)+len(removed) != 0 {
@@ -82,7 +82,7 @@ func TestDocDiff(t *testing.T) {
 	assert.NoError(t, err)
 
 	// DocsDiff between root2 and root3 should return one removed doc (license) and one added doc (readme).
-	added, modified, removed, err = DocsDiff(ctx, root2, root3, docDetails)
+	added, modified, removed, err = DocsDiff(ctx, root2, root3, docs)
 	assert.NoError(t, err)
 
 	if len(removed) != 1 || removed[0] != "LICENSE.md" || len(added) != 1 || added[0] != "README.md" || len(modified) != 0 {
