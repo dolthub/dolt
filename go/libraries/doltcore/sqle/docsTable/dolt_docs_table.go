@@ -39,7 +39,7 @@ var doltDocsColumns, _ = schema.NewColCollection(
 var DoltDocsSchema = schema.MustSchemaFromCols(doltDocsColumns)
 
 // updateDocsTable takes in docTbl param and updates it with the value in docDetails. It returns the updated table.
-func UpdateDocsTable(ctx context.Context, docTbl *doltdb.Table, docDetails doltdocs.Docs) (*doltdb.Table, error) {
+func updateDocsTable(ctx context.Context, docTbl *doltdb.Table, docs doltdocs.Docs) (*doltdb.Table, error) {
 	m, err := docTbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
@@ -51,7 +51,7 @@ func UpdateDocsTable(ctx context.Context, docTbl *doltdb.Table, docDetails doltd
 	}
 
 	me := m.Edit()
-	for _, doc := range docDetails {
+	for _, doc := range docs {
 		key, err := doltdocs.DocTblKeyFromName(docTbl.Format(), doc.DocPk)
 		if err != nil {
 			return nil, err
@@ -87,7 +87,7 @@ func UpdateDocsTable(ctx context.Context, docTbl *doltdb.Table, docDetails doltd
 }
 
 // createDocTable creates a new in memory table that stores the given doc details.
-func CreateDocsTable(ctx context.Context, vrw types.ValueReadWriter, docs doltdocs.Docs) (*doltdb.Table, error) {
+func createDocsTable(ctx context.Context, vrw types.ValueReadWriter, docs doltdocs.Docs) (*doltdb.Table, error) {
 	imt := table.NewInMemTable(DoltDocsSchema)
 
 	// Determines if the table needs to be created at all and initializes a schema if it does.
@@ -142,4 +142,12 @@ func CreateDocsTable(ctx context.Context, vrw types.ValueReadWriter, docs doltdo
 	}
 
 	return nil, nil
+}
+
+func CreateOrUpdateDocsTable(ctx context.Context, vrw types.ValueReadWriter, docs doltdocs.Docs, docsTbl *doltdb.Table) (*doltdb.Table, error) {
+	if docsTbl == nil {
+		return createDocsTable(ctx, vrw, docs)
+	} else {
+		return updateDocsTable(ctx, docsTbl, docs)
+	}
 }

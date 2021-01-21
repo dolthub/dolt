@@ -137,12 +137,13 @@ func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, roots map[Roo
 	head := roots[HeadRoot]
 
 	if len(docs) > 0 {
-		currRootWithDocs, stagedWithDocs, err := getUpdatedWorkingAndStagedWithDocs(ctx, dEnv.DbData(), currRoot, staged, head, docs)
+		currRootWithDocs, stagedWithDocs, updatedDocs, err := getUpdatedWorkingAndStagedWithDocs(ctx, dEnv.DbData(), currRoot, staged, head, docs)
 		if err != nil {
 			return err
 		}
 		currRoot = currRootWithDocs
 		staged = stagedWithDocs
+		docs = updatedDocs
 	}
 
 	for _, tblName := range tbls {
@@ -194,7 +195,7 @@ func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, roots map[Roo
 		return err
 	}
 
-	return SaveDocsFromDocDetails(dEnv, docs)
+	return dEnv.DocsReadWriter().WriteDocsToDisk(docs)
 }
 
 func validateTablesExist(ctx context.Context, currRoot *doltdb.RootValue, unknown []string) error {

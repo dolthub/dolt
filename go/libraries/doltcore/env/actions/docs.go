@@ -33,7 +33,7 @@ func SaveTrackedDocsFromWorking(ctx context.Context, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	return SaveTrackedDocs(ctx, dEnv, workingRoot, workingRoot, localDocs)
+	return SaveTrackedDocs(ctx, dEnv.DocsReadWriter(), workingRoot, workingRoot, localDocs)
 }
 
 // SaveDocsFromWorking saves docs from the working root to the filesystem, and could overwrite untracked docs.
@@ -49,11 +49,17 @@ func SaveDocsFromWorking(ctx context.Context, dEnv *env.DoltEnv) error {
 // SaveDocsFromRoot saves docs from the root given to the filesystem, and could overwrite untracked docs.
 func SaveDocsFromRoot(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv) error {
 	localDocs := dEnv.Docs
+	drw := dEnv.DocsReadWriter()
 
-	err := env.UpdateFSDocsFromRootDocs(ctx, root, nil, dEnv.FS)
+	docs, err := doltdocs.GetDocsFromRoot(ctx, root, doltdocs.GetDocNamesFromDocs(*doltdocs.SupportedDocs))
+	if err != nil {
+		return err
+	}
+
+	err = drw.WriteDocsToDisk(docs)
 	if err != nil {
 		// If we can't update docs on disk, attempt to revert the change
-		localDocs.Save(dEnv.FS)
+		drw.WriteDocsToDisk(localDocs)
 		return err
 	}
 
@@ -61,7 +67,7 @@ func SaveDocsFromRoot(ctx context.Context, root *doltdb.RootValue, dEnv *env.Dol
 }
 
 // SaveTrackedDocs writes the docs from the targetRoot to the filesystem. The working root is used to identify untracked docs, which are left unchanged.
-func SaveTrackedDocs(ctx context.Context, dEnv *env.DoltEnv, workRoot, targetRoot *doltdb.RootValue, localDocs doltdocs.Docs) error {
+func SaveTrackedDocs(ctx context.Context, drw env.DocsReadWriter, workRoot, targetRoot *doltdb.RootValue, localDocs doltdocs.Docs) error {
 	docDiffs, err := diff.NewDocDiffs(ctx, workRoot, nil, localDocs)
 	if err != nil {
 		return err
@@ -69,19 +75,20 @@ func SaveTrackedDocs(ctx context.Context, dEnv *env.DoltEnv, workRoot, targetRoo
 
 	docs := removeUntrackedDocs(localDocs, docDiffs)
 
-	err = env.UpdateFSDocsFromRootDocs(ctx, targetRoot, docs, dEnv.FS)
+	docs, err = doltdocs.GetDocsFromRoot(ctx, targetRoot, doltdocs.GetDocNamesFromDocs(docs))
 	if err != nil {
-		localDocs.Save(dEnv.FS)
+		return err
+	}
+
+	err = drw.WriteDocsToDisk(docs)
+
+	if err != nil {
+		// If we can't update docs on disk, attempt to revert the change
+		_ = drw.WriteDocsToDisk(localDocs)
 		return err
 	}
 
 	return nil
-}
-
-// SaveDocsFromDocDetails saves the provided docs to the filesystem.
-// An untracked doc will be overwritten if doc.Text == nil.
-func SaveDocsFromDocDetails(dEnv *env.DoltEnv, docs doltdocs.Docs) error {
-	return docs.Save(dEnv.FS)
 }
 
 func docIsUntracked(doc string, untracked []string) bool {
@@ -117,31 +124,31 @@ func getUntrackedDocs(docs doltdocs.Docs, docDiffs *diff.DocDiffs) []string {
 	return untracked
 }
 
-func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, dbData env.DbData, working, staged, head *doltdb.RootValue, docDetails doltdocs.Docs) (currRoot, stgRoot *doltdb.RootValue, err error) {
+func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, dbData env.DbData, working, staged, head *doltdb.RootValue, docs doltdocs.Docs) (currRoot, stgRoot *doltdb.RootValue, retDocs doltdocs.Docs, err error) {
 	root := head
 	_, ok, err := staged.GetTable(ctx, doltdb.DocTableName)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	} else if ok {
 		root = staged
 	}
 
-	docs, err := doltdocs.GetDocsWithTextFromRoot(ctx, root, docDetails)
+	docs, err = doltdocs.GetDocsFromRoot(ctx, root, doltdocs.GetDocNamesFromDocs(docs))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	currRoot, err = env.UpdateRootWithDocs(ctx, dbData, working, env.Working, docs)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	stgRoot, err = env.UpdateRootWithDocs(ctx, dbData, staged, env.Staged, docs)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	return currRoot, stgRoot, nil
+	return currRoot, stgRoot,  docs, nil
 }
 
 // GetUnstagedDocs retrieves the unstaged docs (docs from the filesystem).
@@ -182,7 +189,7 @@ func SaveDocsFromWorkingExcludingFSChanges(ctx context.Context, dEnv *env.DoltEn
 		docsToSave = dEnv.Docs
 	}
 
-	return SaveTrackedDocs(ctx, dEnv, workingRoot, workingRoot, docsToSave)
+	return SaveTrackedDocs(ctx, dEnv.DocsReadWriter(), workingRoot, workingRoot, docsToSave)
 }
 
 // GetTablesOrDocs takes a slice of table or file names. Table names are returned as given. Supported doc names are

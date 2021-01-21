@@ -16,6 +16,7 @@ package doltdocs
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strconv"
 
@@ -234,10 +235,22 @@ func GetDocPKFromRow(r row.Row) (string, error) {
 	}
 }
 
-// GetDocsWithTextFromRoot returns Docs with the Text value(s) from the provided root. If docs are provided,
-// only those docs will be retrieved and returned. Otherwise, all supported doc details are returned with the updated
-// Text.
-func GetDocsWithTextFromRoot(ctx context.Context, root *doltdb.RootValue, docs Docs) (Docs, error) {
+func GetDocNamesFromDocs(docs Docs) []string {
+	if docs == nil {
+		return nil
+	}
+
+	ret := make([]string, len(docs))
+
+	for i, doc := range docs {
+		ret[i] = doc.DocPk
+	}
+
+	return ret
+}
+
+// GetDocsFromRoot takes in a root value and returns the docs stored in its dolt_docs table.
+func GetDocsFromRoot(ctx context.Context, root *doltdb.RootValue, docNames []string) (Docs, error) {
 	docTbl, docTblFound, err := root.GetTable(ctx, doltdb.DocTableName)
 	if err != nil {
 		return nil, err
@@ -252,15 +265,22 @@ func GetDocsWithTextFromRoot(ctx context.Context, root *doltdb.RootValue, docs D
 		sch = docSch
 	}
 
-	if docs == nil {
-		docs = *SupportedDocs
+	if docNames == nil {
+		docNames = GetDocNamesFromDocs(*SupportedDocs)
 	}
 
-	for i, doc := range docs {
-		docText, err := GetDocTextFromTbl(ctx, docTbl, &sch, doc.DocPk)
+	docs := make(Docs, len(docNames))
+	for i, name := range docNames {
+		doc, isSupported := IsSupportedDoc(name)
+		if !isSupported {
+			return nil, fmt.Errorf("%s is not a supported doc", name)
+		}
+
+		docText, err := GetDocTextFromTbl(ctx, docTbl, &sch, name)
 		if err != nil {
 			return nil, err
 		}
+
 		doc.Text = docText
 		docs[i] = doc
 	}

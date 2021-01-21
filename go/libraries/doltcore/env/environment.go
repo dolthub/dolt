@@ -37,7 +37,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/docsTable"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -415,31 +414,26 @@ func (dEnv *DoltEnv) RepoStateWriter() RepoStateWriter {
 }
 
 type docsReadWriter struct {
-	dEnv *DoltEnv
+	FS filesys.Filesys
 }
 
 // GetDocDetailOnDisk returns the details of a specific document passed as docName.
 func (d *docsReadWriter) GetDocDetailOnDisk(docName string) (doc doltdocs.Doc, err error) {
-	return doltdocs.GetDoc(d.dEnv.FS, docName)
+	return doltdocs.GetDoc(d.FS, docName)
 }
 
 // GetDocsOnDisk reads the filesystem and returns all docs.
 func (d *docsReadWriter) GetDocsOnDisk() (doltdocs.Docs, error) {
-	return doltdocs.GetSupportedDocs(d.dEnv.FS)
+	return doltdocs.GetSupportedDocs(d.FS)
 }
 
 // WriteDocsToDisk creates or updates the dolt_docs table with docDetails.
-func (d *docsReadWriter) WriteDocsToDisk(ctx context.Context, vrw types.ValueReadWriter, docTbl *doltdb.Table, docDetails doltdocs.Docs) (*doltdb.Table, error) {
-	if docTbl == nil {
-		return docsTable.CreateDocsTable(ctx, vrw, docDetails)
-	}
-
-	// Otherwise update the docsTable.
-	return docsTable.UpdateDocsTable(ctx, docTbl, docDetails)
+func (d *docsReadWriter) WriteDocsToDisk(docs doltdocs.Docs) error {
+	return docs.Save(d.FS)
 }
 
 func (dEnv *DoltEnv) DocsReadWriter() DocsReadWriter {
-	return &docsReadWriter{dEnv}
+	return &docsReadWriter{dEnv.FS}
 }
 
 func (dEnv *DoltEnv) HeadRoot(ctx context.Context) (*doltdb.RootValue, error) {

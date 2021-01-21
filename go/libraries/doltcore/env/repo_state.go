@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 type RepoStateReader interface {
@@ -47,7 +46,7 @@ type RepoStateWriter interface {
 type DocsReadWriter interface {
 	GetDocDetailOnDisk(docName string) (doc doltdocs.Doc, err error)
 	GetDocsOnDisk() (doltdocs.Docs, error)
-	WriteDocsToDisk(ctx context.Context, vrw types.ValueReadWriter, docTbl *doltdb.Table, docDetails doltdocs.Docs) (*doltdb.Table, error)
+	WriteDocsToDisk(docs doltdocs.Docs) error
 }
 
 type DbData struct {
