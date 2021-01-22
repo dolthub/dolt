@@ -128,13 +128,12 @@ func (t *WritableIndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIt
 }
 
 func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	return partitionIndexedTableRows(ctx, t, nil, part)
+}
+
+func partitionIndexedTableRows(ctx *sql.Context, t *WritableIndexedDoltTable, projectedCols []string, part sql.Partition) (sql.RowIter, error) {
 	switch typed := part.(type) {
 	case rangePartition:
-		var projectedCols []string
-		if projTbl, ok := interface{}(t).(projected); ok {
-			projectedCols = projTbl.Project()
-		}
-
 		return t.indexLookup.RowIterForRanges(ctx, []lookup.Range{typed.partitionRange}, projectedCols)
 	case sqlutil.SinglePartition:
 		return t.indexLookup.RowIter(ctx)
@@ -154,4 +153,8 @@ func (t *projectedWritableIndexedDoltTable) Projection() []string {
 
 func (t *WritableIndexedDoltTable) WithProjection(colNames []string) sql.Table {
 	return &projectedWritableIndexedDoltTable{t, colNames}
+}
+
+func (t *projectedWritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	return partitionIndexedTableRows(ctx, t.WritableIndexedDoltTable, t.projectedCols, part)
 }
