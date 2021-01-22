@@ -36,6 +36,17 @@ echo '
           {
             "name": "performance-benchmarking",
             "image": "407903926827.dkr.ecr.us-west-2.amazonaws.com/liquidata/performance-benchmarking:latest",
+            "resources": {
+              "limits": {
+                "cpu": "7000m"
+              }
+            },
+            "env": [
+              {
+                "name": "GOMAXPROCS",
+                "value": "7"
+              }
+            ],
             "args": [
               "--schema=/schema.sql",
               "--script-dir=/scripts/lua",
