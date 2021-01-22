@@ -17,7 +17,9 @@ package types
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -283,5 +285,24 @@ func TestTupleStartsWith(t *testing.T) {
 				assert.False(t, tpl1.StartsWith(tpl2))
 			}
 		})
+	}
+}
+
+func BenchmarkLess(b *testing.B) {
+	nbf := Format_Default
+	rng := rand.New(rand.NewSource(0))
+
+	tuples := make([]Tuple, b.N+1)
+	for i := 0; i < len(tuples); i++ {
+		randf := rng.Float64()
+		v, err := NewTuple(nbf, Uint(1), Float(randf), Uint(2), Bool(i%2 == 0), Uint(3), String(uuid.New().String()), Uint(4), Timestamp(time.Now()), Uint(6), Int(-100), Uint(7), Int(-1000), Uint(8), Int(-10000), Uint(9), Int(-1000000))
+		require.NoError(b, err)
+
+		tuples[i] = v
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		tuples[i].Less(nbf, tuples[i+1])
 	}
 }
