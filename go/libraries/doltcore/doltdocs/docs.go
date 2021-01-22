@@ -16,22 +16,26 @@ package doltdocs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
-	"strconv"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-const (
-	ReadmeFile  = "../README.md"
-	LicenseFile = "../LICENSE.md"
+var ErrDocsUpdate = errors.New("error updating local docs")
+var ErrEmptyDocsTable = errors.New("error: All docs removed. Removing Docs Table")
+var ErrMarshallingSchema = errors.New("error marshalling schema")
+
+var doltDocsColumns, _ = schema.NewColCollection(
+	schema.NewColumn(doltdb.DocPkColumnName, schema.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
+	schema.NewColumn(doltdb.DocTextColumnName, schema.DocTextTag, types.StringKind, false),
 )
+var DoltDocsSchema = schema.MustSchemaFromCols(doltDocsColumns)
 
 type Doc struct {
 	Text  []byte
@@ -41,88 +45,20 @@ type Doc struct {
 
 type Docs []Doc
 
+const (
+	ReadmeFile  = "../README.md"
+	LicenseFile = "../LICENSE.md"
+)
+
 var SupportedDocs = &Docs{
 	{DocPk: doltdb.ReadmePk, File: ReadmeFile},
 	{DocPk: doltdb.LicensePk, File: LicenseFile},
 }
 
-// GetDocFilePath takes in a filename and appends it to the DoltDir filepath.
-func GetDocFilePath(filename string) string {
-	return filepath.Join(dbfactory.DoltDir, filename)
-}
-
-// LoadDocs takes in a fs object and reads all the docs (ex. README.md) defined in SupportedDocs.
-func LoadDocs(fs filesys.ReadWriteFS) (Docs, error) {
-	docsWithCurrentText := *SupportedDocs
-	for i, val := range docsWithCurrentText {
-		path := GetDocFilePath(val.File)
-		exists, isDir := fs.Exists(path)
-		if exists && !isDir {
-			data, err := fs.ReadFile(path)
-			if err != nil {
-				return nil, err
-			}
-			val.Text = data
-			docsWithCurrentText[i] = val
-		}
-	}
-	return docsWithCurrentText, nil
-}
-
-// Save takes in a fs object and saves all the docs to the filesystem, overwriting any existing files.
-func (docs Docs) Save(fs filesys.ReadWriteFS) error {
-	for _, doc := range docs {
-		if _, ok := IsSupportedDoc(doc.DocPk); !ok {
-			continue
-		}
-		filePath := GetDocFilePath(doc.File)
-		if doc.Text != nil {
-			err := fs.WriteFile(filePath, doc.Text)
-			if err != nil {
-				return err
-			}
-		} else {
-			err := DeleteDoc(fs, doc.DocPk)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-// DeleteDoc takes in a filesytem object and deletes the file with docName, if it's a SupportedDoc.
-func DeleteDoc(fs filesys.ReadWriteFS, docName string) error {
-	if doc, ok := IsSupportedDoc(docName); ok {
-		if doc.DocPk == docName {
-			path := GetDocFilePath(doc.File)
-			exists, isDir := fs.Exists(path)
-			if exists && !isDir {
-				return fs.DeleteFile(path)
-			}
-		}
-	}
-	return nil
-}
-
-func IsSupportedDoc(docName string) (Doc, bool) {
-	for _, doc := range *SupportedDocs {
-		if doc.DocPk == docName {
-			return doc, true
-		}
-	}
-	return Doc{}, false
-}
-
-func docFileExists(fs filesys.ReadWriteFS, file string) bool {
-	exists, isDir := fs.Exists(GetDocFilePath(file))
-	return exists && !isDir
-}
-
 // GetLocalFileText returns a byte slice representing the contents of the provided file, if it exists
 func GetLocalFileText(fs filesys.Filesys, file string) ([]byte, error) {
 	path := ""
-	if docFileExists(fs, file) {
+	if DocFileExists(fs, file) {
 		path = GetDocFilePath(file)
 	}
 
@@ -160,79 +96,6 @@ func GetDoc(fs filesys.Filesys, docName string) (doc Doc, err error) {
 		}
 	}
 	return Doc{}, err
-}
-
-func DocTblKeyFromName(fmt *types.NomsBinFormat, name string) (types.Tuple, error) {
-	return types.NewTuple(fmt, types.Uint(schema.DocNameTag), types.String(name))
-}
-
-// GetDocRow returns the associated row of a particular doc from the docTbl given.
-func GetDocRow(ctx context.Context, docTbl *doltdb.Table, sch schema.Schema, key types.Tuple) (r row.Row, ok bool, err error) {
-	rowMap, err := docTbl.GetRowData(ctx)
-	if err != nil {
-		return nil, false, err
-	}
-
-	var fields types.Value
-	fields, ok, err = rowMap.MaybeGet(ctx, key)
-	if err != nil || !ok {
-		return nil, ok, err
-	}
-
-	r, err = row.FromNoms(sch, key, fields.(types.Tuple))
-	return r, ok, err
-}
-
-// GetDocTextFromTbl returns the Text field of a doc using the provided table and schema and primary key.
-func GetDocTextFromTbl(ctx context.Context, tbl *doltdb.Table, sch *schema.Schema, docPk string) ([]byte, error) {
-	if tbl != nil && sch != nil {
-		key, err := DocTblKeyFromName(tbl.Format(), docPk)
-		if err != nil {
-			return nil, err
-		}
-
-		docRow, ok, err := GetDocRow(ctx, tbl, *sch, key)
-		if err != nil {
-			return nil, err
-		}
-		if ok {
-			docValue, _ := docRow.GetColVal(schema.DocTextTag)
-			return []byte(docValue.(types.String)), nil
-		} else {
-			return nil, nil
-		}
-	} else {
-		return nil, nil
-	}
-}
-
-// GetDocTextFromRow updates return the text field of a provided row.
-func GetDocTextFromRow(r row.Row) ([]byte, error) {
-	docValue, ok := r.GetColVal(schema.DocTextTag)
-	if !ok {
-		return nil, nil
-	} else {
-		docValStr, err := strconv.Unquote(docValue.HumanReadableString())
-		if err != nil {
-			return nil, err
-		}
-		return []byte(docValStr), nil
-	}
-}
-
-// GetDocPKFromRow updates returns the docPk field of a given row.
-func GetDocPKFromRow(r row.Row) (string, error) {
-	colVal, _ := r.GetColVal(schema.DocNameTag)
-	if colVal == nil {
-		return "", nil
-	} else {
-		docName, err := strconv.Unquote(colVal.HumanReadableString())
-		if err != nil {
-			return "", err
-		}
-
-		return docName, nil
-	}
 }
 
 func GetDocNamesFromDocs(docs Docs) []string {
@@ -286,4 +149,77 @@ func GetDocsFromRoot(ctx context.Context, root *doltdb.RootValue, docNames []str
 	}
 
 	return docs, nil
+}
+
+// Save takes in a fs object and saves all the docs to the filesystem, overwriting any existing files.
+func (docs Docs) Save(fs filesys.ReadWriteFS) error {
+	for _, doc := range docs {
+		if _, ok := IsSupportedDoc(doc.DocPk); !ok {
+			continue
+		}
+		filePath := GetDocFilePath(doc.File)
+		if doc.Text != nil {
+			err := fs.WriteFile(filePath, doc.Text)
+			if err != nil {
+				return err
+			}
+		} else {
+			err := DeleteDoc(fs, doc.DocPk)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// GetDocFilePath takes in a filename and appends it to the DoltDir filepath.
+func GetDocFilePath(filename string) string {
+	return filepath.Join(dbfactory.DoltDir, filename)
+}
+
+// LoadDocs takes in a fs object and reads all the docs (ex. README.md) defined in SupportedDocs.
+func LoadDocs(fs filesys.ReadWriteFS) (Docs, error) {
+	docsWithCurrentText := *SupportedDocs
+	for i, val := range docsWithCurrentText {
+		path := GetDocFilePath(val.File)
+		exists, isDir := fs.Exists(path)
+		if exists && !isDir {
+			data, err := fs.ReadFile(path)
+			if err != nil {
+				return nil, err
+			}
+			val.Text = data
+			docsWithCurrentText[i] = val
+		}
+	}
+	return docsWithCurrentText, nil
+}
+
+func IsSupportedDoc(docName string) (Doc, bool) {
+	for _, doc := range *SupportedDocs {
+		if doc.DocPk == docName {
+			return doc, true
+		}
+	}
+	return Doc{}, false
+}
+
+func DocFileExists(fs filesys.ReadWriteFS, file string) bool {
+	exists, isDir := fs.Exists(GetDocFilePath(file))
+	return exists && !isDir
+}
+
+// DeleteDoc takes in a filesytem object and deletes the file with docName, if it's a SupportedDoc.
+func DeleteDoc(fs filesys.ReadWriteFS, docName string) error {
+	if doc, ok := IsSupportedDoc(docName); ok {
+		if doc.DocPk == docName {
+			path := GetDocFilePath(doc.File)
+			exists, isDir := fs.Exists(path)
+			if exists && !isDir {
+				return fs.DeleteFile(path)
+			}
+		}
+	}
+	return nil
 }

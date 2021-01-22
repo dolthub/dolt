@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package docsTable
+package doltdocs
 
 import (
 	"context"
-	"errors"
+	"strconv"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
@@ -28,18 +27,8 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-var ErrDocsUpdate = errors.New("error updating local docs")
-var ErrEmptyDocsTable = errors.New("error: All docs removed. Removing Docs Table")
-var ErrMarshallingSchema = errors.New("error marshalling schema")
-
-var doltDocsColumns, _ = schema.NewColCollection(
-	schema.NewColumn(doltdb.DocPkColumnName, schema.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
-	schema.NewColumn(doltdb.DocTextColumnName, schema.DocTextTag, types.StringKind, false),
-)
-var DoltDocsSchema = schema.MustSchemaFromCols(doltDocsColumns)
-
 // updateDocsTable takes in docTbl param and updates it with the value in docs. It returns the updated table.
-func updateDocsTable(ctx context.Context, docTbl *doltdb.Table, docs doltdocs.Docs) (*doltdb.Table, error) {
+func updateDocsTable(ctx context.Context, docTbl *doltdb.Table, docs Docs) (*doltdb.Table, error) {
 	m, err := docTbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
@@ -52,7 +41,7 @@ func updateDocsTable(ctx context.Context, docTbl *doltdb.Table, docs doltdocs.Do
 
 	me := m.Edit()
 	for _, doc := range docs {
-		key, err := doltdocs.DocTblKeyFromName(docTbl.Format(), doc.DocPk)
+		key, err := DocTblKeyFromName(docTbl.Format(), doc.DocPk)
 		if err != nil {
 			return nil, err
 		}
@@ -86,8 +75,8 @@ func updateDocsTable(ctx context.Context, docTbl *doltdb.Table, docs doltdocs.Do
 	return docTbl, err
 }
 
-// createDocTable creates a new in memory table that stores the given doc details.
-func createDocsTable(ctx context.Context, vrw types.ValueReadWriter, docs doltdocs.Docs) (*doltdb.Table, error) {
+// createDocsTable creates a new in memory table that stores the given doc details.
+func createDocsTable(ctx context.Context, vrw types.ValueReadWriter, docs Docs) (*doltdb.Table, error) {
 	imt := table.NewInMemTable(DoltDocsSchema)
 
 	// Determines if the table needs to be created at all and initializes a schema if it does.
@@ -144,10 +133,83 @@ func createDocsTable(ctx context.Context, vrw types.ValueReadWriter, docs doltdo
 	return nil, nil
 }
 
-func CreateOrUpdateDocsTable(ctx context.Context, vrw types.ValueReadWriter, docs doltdocs.Docs, docsTbl *doltdb.Table) (*doltdb.Table, error) {
+func CreateOrUpdateDocsTable(ctx context.Context, vrw types.ValueReadWriter, docs Docs, docsTbl *doltdb.Table) (*doltdb.Table, error) {
 	if docsTbl == nil {
 		return createDocsTable(ctx, vrw, docs)
 	} else {
 		return updateDocsTable(ctx, docsTbl, docs)
+	}
+}
+
+func DocTblKeyFromName(fmt *types.NomsBinFormat, name string) (types.Tuple, error) {
+	return types.NewTuple(fmt, types.Uint(schema.DocNameTag), types.String(name))
+}
+
+// GetDocTextFromTbl returns the Text field of a doc using the provided table and schema and primary key.
+func GetDocTextFromTbl(ctx context.Context, tbl *doltdb.Table, sch *schema.Schema, docPk string) ([]byte, error) {
+	if tbl != nil && sch != nil {
+		key, err := DocTblKeyFromName(tbl.Format(), docPk)
+		if err != nil {
+			return nil, err
+		}
+
+		docRow, ok, err := GetDocRow(ctx, tbl, *sch, key)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			docValue, _ := docRow.GetColVal(schema.DocTextTag)
+			return []byte(docValue.(types.String)), nil
+		} else {
+			return nil, nil
+		}
+	} else {
+		return nil, nil
+	}
+}
+
+// GetDocRow returns the associated row of a particular doc from the docTbl given.
+func GetDocRow(ctx context.Context, docTbl *doltdb.Table, sch schema.Schema, key types.Tuple) (r row.Row, ok bool, err error) {
+	rowMap, err := docTbl.GetRowData(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+
+	var fields types.Value
+	fields, ok, err = rowMap.MaybeGet(ctx, key)
+	if err != nil || !ok {
+		return nil, ok, err
+	}
+
+	r, err = row.FromNoms(sch, key, fields.(types.Tuple))
+	return r, ok, err
+}
+
+// GetDocTextFromRow updates return the text field of a provided row.
+func GetDocTextFromRow(r row.Row) ([]byte, error) {
+	docValue, ok := r.GetColVal(schema.DocTextTag)
+	if !ok {
+		return nil, nil
+	} else {
+		docValStr, err := strconv.Unquote(docValue.HumanReadableString())
+		if err != nil {
+			return nil, err
+		}
+		return []byte(docValStr), nil
+	}
+}
+
+// GetDocPKFromRow updates returns the docPk field of a given row.
+func GetDocPKFromRow(r row.Row) (string, error) {
+	colVal, _ := r.GetColVal(schema.DocNameTag)
+	if colVal == nil {
+		return "", nil
+	} else {
+		docName, err := strconv.Unquote(colVal.HumanReadableString())
+		if err != nil {
+			return "", err
+		}
+
+		return docName, nil
 	}
 }

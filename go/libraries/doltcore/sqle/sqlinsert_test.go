@@ -24,11 +24,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	. "github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/docsTable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
@@ -401,7 +401,7 @@ var systemTableInsertTests = []InsertTest{
 	{
 		Name: "insert into dolt_docs",
 		AdditionalSetup: CreateTableFn("dolt_docs",
-			docsTable.DoltDocsSchema,
+			doltdocs.DoltDocsSchema,
 			NewRow(types.String("LICENSE.md"), types.String("A license"))),
 		InsertQuery: "insert into dolt_docs (doc_name, doc_text) values ('README.md', 'Some text')",
 		ExpectedErr: "cannot insert into table",

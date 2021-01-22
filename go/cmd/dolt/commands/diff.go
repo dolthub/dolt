@@ -311,7 +311,6 @@ func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string) (from, 
 
 	from, ok := maybeResolve(ctx, dEnv, args[0])
 
-	// TODO: Remove this comment
 	if !ok {
 		// `dolt diff ...tables`
 		from = headRoot

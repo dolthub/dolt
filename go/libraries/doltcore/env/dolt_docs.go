@@ -18,9 +18,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/docsTable"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
 // ResetWorkingDocsToStagedDocs resets the `dolt_docs` table on the working root to match the staged root.
@@ -76,9 +76,9 @@ func UpdateRootWithDocs(ctx context.Context, root *doltdb.RootValue, docs doltdo
 		return nil, err
 	}
 
-	docTbl, err = docsTable.CreateOrUpdateDocsTable(ctx, root.VRW(), docs, docTbl)
+	docTbl, err = doltdocs.CreateOrUpdateDocsTable(ctx, root.VRW(), docs, docTbl)
 
-	if errors.Is(docsTable.ErrEmptyDocsTable, err) {
+	if errors.Is(doltdocs.ErrEmptyDocsTable, err) {
 		root, err = root.RemoveTables(ctx, doltdb.DocTableName)
 	} else if err != nil {
 		return nil, err
