@@ -16,7 +16,7 @@ timeprefix="$6"
 actorprefix="$7"
 format="$8"
 
-medianLatencyMultiplierQuery="select f.test_name as test_name, avg(f.latency_percentile) as from_latency_median, avg(t.latency_percentile) as to_latency_median, ROUND(avg(f.latency_percentile) / (avg(t.latency_percentile) + .000001)) as multiplier from from_results as f join to_results as t on f.test_name = t.test_name group by f.test_name;"
+medianLatencyMultiplierQuery="select f.test_name as test_name, f.server_name, f.server_version, avg(f.latency_percentile) as from_latency_median, t.server_name, t.server_version, avg(t.latency_percentile) as to_latency_median, ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001)) as multiplier from from_results as f join to_results as t on f.test_name = t.test_name group by f.test_name;"
 
 echo '
 {
