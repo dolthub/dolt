@@ -157,7 +157,7 @@ func (nrr *NomsRangeReader) ReadKV(ctx context.Context) (types.Tuple, types.Tupl
 			k, v, err = nrr.itr.NextTuple(ctx)
 		}
 
-		if err != nil && err != io.EOF{
+		if err != nil && err != io.EOF {
 			return types.Tuple{}, types.Tuple{}, err
 		}
 

@@ -25,6 +25,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/d"
