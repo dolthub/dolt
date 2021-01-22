@@ -266,19 +266,24 @@ func (itr emptyRowIterator) Close() error {
 
 // Returns the table rows for the partition given
 func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
+	return partitionRows(ctx, t, nil, partition)
+}
+
+func partitionRows(ctx *sql.Context, t *DoltTable, projCols []string, partition sql.Partition) (sql.RowIter, error) {
 	switch typedPartition := partition.(type) {
 	case doltTablePartition:
 		if typedPartition.end == 0 {
 			return emptyRowIterator{}, nil
 		}
 
-		return newRowIterator(t, ctx, &typedPartition)
+		return newRowIterator(t, ctx, projCols, &typedPartition)
 	case sqlutil.SinglePartition:
-		return newRowIterator(t, ctx, nil)
+		return newRowIterator(t, ctx, projCols, nil)
 	}
 
 	return nil, errors.New("unsupported partition type")
 }
+
 
 // WritableDoltTable allows updating, deleting, and inserting new rows. It implements sql.UpdatableTable and friends.
 type WritableDoltTable struct {
@@ -469,6 +474,11 @@ func (t *projectedDoltTable) Projection() []string {
 
 func (t *DoltTable) WithProjection(colNames []string) sql.Table {
 	return &projectedDoltTable{t, colNames}
+}
+
+// Returns the table rows for the partition given
+func (t *projectedDoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
+	return partitionRows(ctx, t.DoltTable, t.projectedCols, partition)
 }
 
 var _ sql.PartitionIter = (*doltTablePartitionIter)(nil)
