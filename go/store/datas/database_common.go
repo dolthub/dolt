@@ -128,7 +128,7 @@ func (db *database) Datasets(ctx context.Context) (types.Map, error) {
 func (db *database) GetDataset(ctx context.Context, datasetID string) (Dataset, error) {
 	// precondition checks
 	if !DatasetFullRe.MatchString(datasetID) {
-		d.Panic("Invalid dataset ID: %s", datasetID)
+		return Dataset{}, fmt.Errorf("Invalid dataset ID: %s", datasetID)
 	}
 
 	datasets, err := db.Datasets(ctx)
