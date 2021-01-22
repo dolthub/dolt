@@ -592,7 +592,170 @@ func (t Tuple) splitFieldsAt(n uint64) (prolog, head, tail []byte, count uint64,
 	return
 }
 
+func (t Tuple) tupleLess(nbf *NomsBinFormat, otherTuple Tuple) (bool, error) {
+	itrs := tupItrPairPool.Get().(*tupleItrPair)
+	defer tupItrPairPool.Put(itrs)
+
+	itr := itrs.thisItr
+	err := itr.InitForTuple(t)
+
+	if err != nil {
+		return false, err
+	}
+
+	otherItr := itrs.otherItr
+	err = otherItr.InitForTuple(otherTuple)
+
+	if err != nil {
+		return false, err
+	}
+
+	smallerCount := itr.count
+	if otherItr.count < smallerCount {
+		smallerCount = otherItr.count
+	}
+
+	dec := itr.dec
+	otherDec := otherItr.dec
+	for i := uint64(0); i < smallerCount; i++ {
+		kind := dec.ReadKind()
+		otherKind := otherDec.ReadKind()
+
+		if kind != otherKind {
+			return kind < otherKind, nil
+		}
+
+		var res int
+		switch kind {
+		case NullKind:
+			continue
+
+		case BoolKind:
+			res = int(dec.buff[dec.offset]) - int(otherDec.buff[otherDec.offset])
+			dec.offset += 1
+			otherDec.offset += 1
+
+		case StringKind, InlineBlobKind:
+			size, otherSize := uint32(dec.readCount()), uint32(otherDec.readCount())
+			start, otherStart := dec.offset, otherDec.offset
+			dec.offset += size
+			otherDec.offset += otherSize
+			res = bytes.Compare(dec.buff[start:dec.offset], otherDec.buff[otherStart:otherDec.offset])
+
+		case UUIDKind:
+			start, otherStart := dec.offset, otherDec.offset
+			dec.offset += uuidNumBytes
+			otherDec.offset += uuidNumBytes
+			res = bytes.Compare(dec.buff[start:dec.offset], otherDec.buff[otherStart:otherDec.offset])
+
+		case IntKind:
+			n := dec.ReadInt()
+			otherN := otherDec.ReadInt()
+
+			if n == otherN {
+				continue
+			} else if n < otherN {
+				return true, nil
+			} else {
+				return false, nil
+			}
+
+		case UintKind:
+			n := dec.ReadUint()
+			otherN := otherDec.ReadUint()
+
+			if n == otherN {
+				continue
+			} else if n < otherN {
+				return true, nil
+			} else {
+				return false, nil
+			}
+
+		case DecimalKind:
+			d, err := dec.ReadDecimal()
+
+			if err != nil {
+				return false, err
+			}
+
+			otherD, err := otherDec.ReadDecimal()
+
+			if err != nil {
+				return false, err
+			}
+
+			res = d.Cmp(otherD)
+
+		case FloatKind:
+			f := dec.ReadFloat(nbf)
+			otherF := otherDec.ReadFloat(nbf)
+			res = int(f - otherF)
+
+			if f == otherF {
+				continue
+			} else if f < otherF {
+				return true, nil
+			} else {
+				return false, nil
+			}
+
+		case TimestampKind:
+			tm, err := dec.ReadTimestamp()
+
+			if err != nil {
+				return false, err
+			}
+
+			otherTm, err := otherDec.ReadTimestamp()
+
+			if err != nil {
+				return false, err
+			}
+
+			if tm.Equal(otherTm) {
+				continue
+			} else if tm.Before(otherTm) {
+				return true, nil
+			} else {
+				return false, nil
+			}
+
+		default:
+			panic("Not implemented")
+
+			// will need to implement these probably
+			//BlobKind
+			//RefKind
+
+		}
+
+		if res != 0 {
+			return res < 0, nil
+		}
+	}
+
+	return itr.Len() < otherItr.Len(), nil
+}
+
 func (t Tuple) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+	var isLess bool
+	var err error
+
+	if otherTuple, ok := other.(Tuple); ok {
+		return t.tupleLess(nbf, otherTuple)
+	}
+
+	isLess = TupleKind < other.Kind()
+
+	if err != nil {
+		return false, err
+	}
+
+	return isLess, nil
+}
+
+func (t Tuple) oldLess(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if otherTuple, ok := other.(Tuple); ok {
 		itrs := tupItrPairPool.Get().(*tupleItrPair)
 		defer tupItrPairPool.Put(itrs)
