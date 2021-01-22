@@ -45,7 +45,7 @@ source "$TEMPLATE_SCRIPT" "$jobname" "$FROM_SERVER" "$FROM_VERSION" "$TO_SERVER"
 
 KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json
 
-out=$(KUBECONFIG="$KUBECONFIG" kubectl wait job/"$jobname" --for=condition=complete -n performance-benchmarking --timeout=1500s || true)
+out=$(KUBECONFIG="$KUBECONFIG" kubectl wait job/"$jobname" --for=condition=complete -n performance-benchmarking --timeout=5400s || true)
 
 if [ "$out" != "job.batch/$jobname condition met" ]; then
   echo "output of kubectl wait: $out"
