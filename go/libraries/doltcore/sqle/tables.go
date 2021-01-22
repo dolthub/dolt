@@ -284,7 +284,6 @@ func partitionRows(ctx *sql.Context, t *DoltTable, projCols []string, partition 
 	return nil, errors.New("unsupported partition type")
 }
 
-
 // WritableDoltTable allows updating, deleting, and inserting new rows. It implements sql.UpdatableTable and friends.
 type WritableDoltTable struct {
 	DoltTable
