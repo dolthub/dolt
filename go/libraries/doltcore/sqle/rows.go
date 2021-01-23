@@ -33,7 +33,7 @@ type doltTableRowIter struct {
 }
 
 // Returns a new row iterator for the table given
-func newRowIterator(tbl *DoltTable, ctx *sql.Context, partition *doltTablePartition) (sql.RowIter, error) {
+func newRowIterator(tbl *DoltTable, ctx *sql.Context, projCols []string, partition *doltTablePartition) (sql.RowIter, error) {
 	sch, err := tbl.table.GetSchema(ctx)
 
 	if err != nil {
@@ -41,9 +41,10 @@ func newRowIterator(tbl *DoltTable, ctx *sql.Context, partition *doltTablePartit
 	}
 
 	if schema.IsKeyless(sch) {
+		// would be more optimal to project columns into keyless tables also
 		return newKeylessRowIterator(ctx, tbl, partition)
 	} else {
-		return newKeyedRowIter(ctx, tbl, partition)
+		return newKeyedRowIter(ctx, tbl, projCols, partition)
 	}
 }
 
@@ -66,7 +67,7 @@ func newKeylessRowIterator(ctx *sql.Context, tbl *DoltTable, partition *doltTabl
 	}, nil
 }
 
-func newKeyedRowIter(ctx context.Context, tbl *DoltTable, partition *doltTablePartition) (sql.RowIter, error) {
+func newKeyedRowIter(ctx context.Context, tbl *DoltTable, projectedCols []string, partition *doltTablePartition) (sql.RowIter, error) {
 	sch, err := tbl.table.GetSchema(ctx)
 
 	if err != nil {
@@ -93,10 +94,6 @@ func newKeyedRowIter(ctx context.Context, tbl *DoltTable, partition *doltTablePa
 	cols := sch.GetAllCols().GetColumns()
 	tagToSqlColIdx := make(map[uint64]int)
 
-	var projectedCols []string
-	if projTbl, ok := interface{}(tbl).(projected); ok {
-		projectedCols = projTbl.Project()
-	}
 	resultColSet := set.NewCaseInsensitiveStrSet(projectedCols)
 	for i, col := range cols {
 		if len(projectedCols) == 0 || resultColSet.Contains(col.Name) {
