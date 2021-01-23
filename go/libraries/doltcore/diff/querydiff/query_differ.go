@@ -17,6 +17,7 @@ package querydiff
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"io"
 	"math"
 	"strings"
@@ -249,6 +250,14 @@ func nullSafeRowEquality(left, right sql.Row, sch sql.Schema) (bool, error) {
 	return left.Equals(right, sch)
 }
 
+func engineForQueryDiffing() *sqle.Engine {
+	c := sql.NewCatalog()
+	ab := analyzer.NewBuilder(c).RemoveOnceAfterRule("pushdown_projections")
+	a := ab.Build()
+
+	return sqle.New(c, a, nil)
+}
+
 func makeSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue) (*sql.Context, *sqle.Engine, error) {
 	doltSqlDB := dsqle.NewDatabase("db", dEnv.DbData())
 
@@ -259,7 +268,7 @@ func makeSqlEngine(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValu
 		sql.WithTracer(tracing.Tracer(ctx)))
 	sqlCtx.SetCurrentDatabase("db")
 
-	engine := sqle.NewDefault()
+	engine := engineForQueryDiffing()
 	engine.AddDatabase(information_schema.NewInformationSchemaDatabase(engine.Catalog))
 
 	dsess := dsqle.DSessFromSess(sqlCtx.Session)
