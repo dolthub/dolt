@@ -37,7 +37,7 @@ func CheckoutAllTables(ctx context.Context, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	docs := *doltdocs.SupportedDocs
+	docs := doltdocs.SupportedDocs
 
 	return checkoutTablesAndDocs(ctx, dEnv, roots, tbls, docs)
 

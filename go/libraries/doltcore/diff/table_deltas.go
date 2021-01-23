@@ -141,7 +141,7 @@ func (nd *DocDiffs) Len() int {
 
 // GetDocDiffs retrieves staged and unstaged DocDiffs.
 func GetDocDiffs(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, drw env.DocsReadWriter) (*DocDiffs, *DocDiffs, error) {
-	docs, err := drw.GetDocsOnDisk()
+	docsOnDisk, err := drw.GetDocsOnDisk()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -151,7 +151,7 @@ func GetDocDiffs(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReade
 		return nil, nil, err
 	}
 
-	notStagedDocDiffs, err := NewDocDiffs(ctx, workingRoot, nil, docs)
+	notStagedDocDiffs, err := NewDocDiffs(ctx, workingRoot, nil, docsOnDisk)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -166,7 +166,7 @@ func GetDocDiffs(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReade
 		return nil, nil, err
 	}
 
-	stagedDocDiffs, err := NewDocDiffs(ctx, headRoot, stagedRoot, docs)
+	stagedDocDiffs, err := NewDocDiffs(ctx, headRoot, stagedRoot, docsOnDisk)
 	if err != nil {
 		return nil, nil, err
 	}

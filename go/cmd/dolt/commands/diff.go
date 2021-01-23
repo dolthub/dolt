@@ -244,7 +244,7 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	dArgs.docSet = set.NewStrSet(nil)
 
 	for _, arg := range leftover {
-		if arg == doltdb.ReadmePk || arg == doltdb.LicensePk {
+		if arg == doltdocs.ReadmeDoc || arg == doltdocs.LicenseDoc {
 			dArgs.docSet.Add(arg)
 			continue
 		}
@@ -275,7 +275,7 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 			return nil, nil, nil, err
 		}
 		dArgs.tableSet.Add(utn...)
-		dArgs.docSet.Add(doltdb.ReadmePk, doltdb.LicensePk)
+		dArgs.docSet.Add(doltdocs.ReadmeDoc, doltdocs.LicenseDoc)
 	}
 
 	return from, to, dArgs, nil
@@ -913,6 +913,7 @@ func diffDoltDocs(ctx context.Context, dEnv *env.DoltEnv, from, to *doltdb.RootV
 func printDocDiffs(ctx context.Context, fromTbl, toTbl *doltdb.Table, currentDocs doltdocs.Docs) error {
 	bold := color.New(color.Bold)
 
+	// TODO: Convert this all to doc comparison
 	for _, doc := range currentDocs {
 		if doc.Text != nil && fromTbl == nil {
 			printAddedDoc(bold, doc.DocPk)

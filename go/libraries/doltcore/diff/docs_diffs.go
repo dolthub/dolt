@@ -50,7 +50,7 @@ func DocsDiff(ctx context.Context, root *doltdb.RootValue, other *doltdb.RootVal
 
 // compareRootWithDocs compares a root and set of new docs.
 func compareRootWithDocs(ctx context.Context, root *doltdb.RootValue, docs doltdocs.Docs) ([]docComparison, error) {
-	oldDocs, found, err := doltdocs.GetDocsAvailableInRoot(ctx, root)
+	oldDocs, found, err := doltdocs.GetAllDocs(ctx, root)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +63,7 @@ func compareRootWithDocs(ctx context.Context, root *doltdb.RootValue, docs doltd
 
 // compareDocsBtwnRoots takes an oldRoot and a newRoot and compares the docs tables between the two.
 func compareDocsBtwnRoots(ctx context.Context, oldRoot *doltdb.RootValue, newRoot *doltdb.RootValue) ([]docComparison, error) {
-	oldDocs, found, err := doltdocs.GetDocsAvailableInRoot(ctx, oldRoot)
+	oldDocs, found, err := doltdocs.GetAllDocs(ctx, oldRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +71,7 @@ func compareDocsBtwnRoots(ctx context.Context, oldRoot *doltdb.RootValue, newRoo
 		oldDocs = make(doltdocs.Docs, 0)
 	}
 
-	newDocs, found, err := doltdocs.GetDocsAvailableInRoot(ctx, newRoot)
+	newDocs, found, err := doltdocs.GetAllDocs(ctx, newRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +89,7 @@ func getDocComparisons(oldDocs doltdocs.Docs, newDocs doltdocs.Docs) []docCompar
 	// First case is looking at the old docs and seeing what was modified or removed
 	for _, oldDoc := range oldDocs {
 		dc := docComparison{DocName: oldDoc.DocPk, OldText: oldDoc.Text, CurrentText: getMatchingText(oldDoc, newDocs)}
-		docComparisons = append(docComparisons,  dc)
+		docComparisons = append(docComparisons, dc)
 	}
 
 	// Second case is looking back at the old docs and seeing what was added
@@ -97,7 +97,7 @@ func getDocComparisons(oldDocs doltdocs.Docs, newDocs doltdocs.Docs) []docCompar
 		oldText := getMatchingText(newDoc, oldDocs)
 		if oldText == nil {
 			dc := docComparison{DocName: newDoc.DocPk, OldText: nil, CurrentText: newDoc.Text}
-			docComparisons = append(docComparisons,  dc)
+			docComparisons = append(docComparisons, dc)
 		}
 	}
 

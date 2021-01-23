@@ -51,7 +51,7 @@ func SaveDocsFromRoot(ctx context.Context, root *doltdb.RootValue, dEnv *env.Dol
 	localDocs := dEnv.Docs
 	drw := dEnv.DocsReadWriter()
 
-	docs, err := doltdocs.GetDocsFromRoot(ctx, root, doltdocs.GetDocNamesFromDocs(*doltdocs.SupportedDocs))
+	docs, err := doltdocs.GetDocsFromRoot(ctx, root, doltdocs.GetDocNamesFromDocs(doltdocs.SupportedDocs)...)
 	if err != nil {
 		return err
 	}
@@ -75,7 +75,7 @@ func SaveTrackedDocs(ctx context.Context, drw env.DocsReadWriter, workRoot, targ
 
 	docs := removeUntrackedDocs(localDocs, docDiffs)
 
-	docs, err = doltdocs.GetDocsFromRoot(ctx, targetRoot, doltdocs.GetDocNamesFromDocs(docs))
+	docs, err = doltdocs.GetDocsFromRoot(ctx, targetRoot, doltdocs.GetDocNamesFromDocs(docs)...)
 	if err != nil {
 		return err
 	}
@@ -133,7 +133,7 @@ func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, working, staged, he
 		root = staged
 	}
 
-	docs, err = doltdocs.GetDocsFromRoot(ctx, root, doltdocs.GetDocNamesFromDocs(docs))
+	docs, err = doltdocs.GetDocsFromRoot(ctx, root, doltdocs.GetDocNamesFromDocs(docs)...)
 	if err != nil {
 		return nil, nil, nil, err
 	}

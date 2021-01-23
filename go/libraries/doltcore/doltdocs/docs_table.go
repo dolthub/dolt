@@ -42,7 +42,7 @@ func updateDocsTable(ctx context.Context, docTbl *doltdb.Table, docs Docs) (*dol
 
 	me := m.Edit()
 	for _, doc := range docs {
-		key, err := DocTblKeyFromName(docTbl.Format(), doc.DocPk)
+		key, err := docTblKeyFromName(docTbl.Format(), doc.DocPk)
 		if err != nil {
 			return nil, err
 		}
@@ -134,27 +134,33 @@ func createDocsTable(ctx context.Context, vrw types.ValueReadWriter, docs Docs) 
 	return nil, nil
 }
 
-func CreateOrUpdateDocsTable(ctx context.Context, vrw types.ValueReadWriter, docs Docs, docsTbl *doltdb.Table) (*doltdb.Table, error) {
-	if docsTbl == nil {
-		return createDocsTable(ctx, vrw, docs)
-	} else {
+// CreateOrUpdateDocsTable takes a root value and a set of docs and either creates the docs table or updates it with docs.
+func CreateOrUpdateDocsTable(ctx context.Context, root *doltdb.RootValue, docs Docs) (*doltdb.Table, error) {
+	docsTbl, found, err := root.GetTable(ctx, doltdb.DocTableName)
+	if err != nil {
+		return nil, err
+	}
+
+	if found {
 		return updateDocsTable(ctx, docsTbl, docs)
+	} else {
+		return createDocsTable(ctx, root.VRW(), docs)
 	}
 }
 
-func DocTblKeyFromName(fmt *types.NomsBinFormat, name string) (types.Tuple, error) {
+func docTblKeyFromName(fmt *types.NomsBinFormat, name string) (types.Tuple, error) {
 	return types.NewTuple(fmt, types.Uint(schema.DocNameTag), types.String(name))
 }
 
 // GetDocTextFromTbl returns the Text field of a doc using the provided table and schema and primary key.
 func GetDocTextFromTbl(ctx context.Context, tbl *doltdb.Table, sch *schema.Schema, docPk string) ([]byte, error) {
 	if tbl != nil && sch != nil {
-		key, err := DocTblKeyFromName(tbl.Format(), docPk)
+		key, err := docTblKeyFromName(tbl.Format(), docPk)
 		if err != nil {
 			return nil, err
 		}
 
-		docRow, ok, err := GetDocRow(ctx, tbl, *sch, key)
+		docRow, ok, err := getDocRow(ctx, tbl, *sch, key)
 		if err != nil {
 			return nil, err
 		}
@@ -169,8 +175,8 @@ func GetDocTextFromTbl(ctx context.Context, tbl *doltdb.Table, sch *schema.Schem
 	}
 }
 
-// GetDocRow returns the associated row of a particular doc from the docTbl given.
-func GetDocRow(ctx context.Context, docTbl *doltdb.Table, sch schema.Schema, key types.Tuple) (r row.Row, ok bool, err error) {
+// getDocRow returns the associated row of a particular doc from the docTbl given.
+func getDocRow(ctx context.Context, docTbl *doltdb.Table, sch schema.Schema, key types.Tuple) (r row.Row, ok bool, err error) {
 	rowMap, err := docTbl.GetRowData(ctx)
 	if err != nil {
 		return nil, false, err
@@ -186,8 +192,8 @@ func GetDocRow(ctx context.Context, docTbl *doltdb.Table, sch schema.Schema, key
 	return r, ok, err
 }
 
-// GetDocTextFromRow updates return the text field of a provided row.
-func GetDocTextFromRow(r row.Row) ([]byte, error) {
+// getDocTextFromRow updates return the text field of a provided row.
+func getDocTextFromRow(r row.Row) ([]byte, error) {
 	docValue, ok := r.GetColVal(schema.DocTextTag)
 	if !ok {
 		return nil, nil
@@ -200,8 +206,8 @@ func GetDocTextFromRow(r row.Row) ([]byte, error) {
 	}
 }
 
-// GetDocPKFromRow updates returns the docPk field of a given row.
-func GetDocPKFromRow(r row.Row) (string, error) {
+// getDocPKFromRow updates returns the docPk field of a given row.
+func getDocPKFromRow(r row.Row) (string, error) {
 	colVal, _ := r.GetColVal(schema.DocNameTag)
 	if colVal == nil {
 		return "", nil
@@ -224,8 +230,8 @@ func getFileFromDoc(docName string) (string, error) {
 	return "", fmt.Errorf("Doc name not provided %s", docName)
 }
 
-// GetDocsAvailableInRoot
-func GetDocsAvailableInRoot(ctx context.Context, root *doltdb.RootValue) (Docs, bool, error) {
+// GetAllDocs takes a root value and returns all the docs available in the root.
+func GetAllDocs(ctx context.Context, root *doltdb.RootValue) (Docs, bool, error) {
 	if root == nil {
 		return nil, false, nil
 	}
@@ -264,13 +270,13 @@ func getDocsFromTable(ctx context.Context, table *doltdb.Table) (Docs, error) {
 		}
 		doc := Doc{}
 
-		docPk, err := GetDocPKFromRow(newRow)
+		docPk, err := getDocPKFromRow(newRow)
 		if err != nil {
 			return err
 		}
 		doc.DocPk = docPk
 
-		text, err := GetDocTextFromRow(newRow)
+		text, err := getDocTextFromRow(newRow)
 		if err != nil {
 			return err
 		}

@@ -48,11 +48,16 @@ type Docs []Doc
 const (
 	ReadmeFile  = "../README.md"
 	LicenseFile = "../LICENSE.md"
+
+	// LicenseDoc is the key for accessing the license within the docs table
+	LicenseDoc = "LICENSE.md"
+	// ReadmeDoc is the key for accessing the readme within the docs table
+	ReadmeDoc = "README.md"
 )
 
-var SupportedDocs = &Docs{
-	{DocPk: doltdb.ReadmePk, File: ReadmeFile},
-	{DocPk: doltdb.LicensePk, File: LicenseFile},
+var SupportedDocs = Docs{
+	{DocPk: ReadmeDoc, File: ReadmeFile},
+	{DocPk: LicenseDoc, File: LicenseFile},
 }
 
 // GetLocalFileText returns a byte slice representing the contents of the provided file, if it exists
@@ -72,7 +77,7 @@ func GetLocalFileText(fs filesys.Filesys, file string) ([]byte, error) {
 // GetSupportedDocs takes in a filesystem and returns the contents of all docs on disk.
 func GetSupportedDocs(fs filesys.Filesys) (docs Docs, err error) {
 	docs = Docs{}
-	for _, doc := range *SupportedDocs {
+	for _, doc := range SupportedDocs {
 		newerText, err := GetLocalFileText(fs, doc.File)
 		if err != nil {
 			return nil, err
@@ -85,7 +90,7 @@ func GetSupportedDocs(fs filesys.Filesys) (docs Docs, err error) {
 
 // GetDoc takes in a filesystem and a docName and returns the doc's contents.
 func GetDoc(fs filesys.Filesys, docName string) (doc Doc, err error) {
-	for _, doc := range *SupportedDocs {
+	for _, doc := range SupportedDocs {
 		if doc.DocPk == docName {
 			newerText, err := GetLocalFileText(fs, doc.File)
 			if err != nil {
@@ -113,7 +118,7 @@ func GetDocNamesFromDocs(docs Docs) []string {
 }
 
 // GetDocsFromRoot takes in a root value and returns the docs stored in its dolt_docs table.
-func GetDocsFromRoot(ctx context.Context, root *doltdb.RootValue, docNames []string) (Docs, error) {
+func GetDocsFromRoot(ctx context.Context, root *doltdb.RootValue, docNames ...string) (Docs, error) {
 	docTbl, docTblFound, err := root.GetTable(ctx, doltdb.DocTableName)
 	if err != nil {
 		return nil, err
@@ -129,7 +134,7 @@ func GetDocsFromRoot(ctx context.Context, root *doltdb.RootValue, docNames []str
 	}
 
 	if docNames == nil {
-		docNames = GetDocNamesFromDocs(*SupportedDocs)
+		docNames = GetDocNamesFromDocs(SupportedDocs)
 	}
 
 	docs := make(Docs, len(docNames))
@@ -180,7 +185,7 @@ func GetDocFilePath(filename string) string {
 
 // LoadDocs takes in a fs object and reads all the docs (ex. README.md) defined in SupportedDocs.
 func LoadDocs(fs filesys.ReadWriteFS) (Docs, error) {
-	docsWithCurrentText := *SupportedDocs
+	docsWithCurrentText := SupportedDocs
 	for i, val := range docsWithCurrentText {
 		path := GetDocFilePath(val.File)
 		exists, isDir := fs.Exists(path)
@@ -197,7 +202,7 @@ func LoadDocs(fs filesys.ReadWriteFS) (Docs, error) {
 }
 
 func IsSupportedDoc(docName string) (Doc, bool) {
-	for _, doc := range *SupportedDocs {
+	for _, doc := range SupportedDocs {
 		if doc.DocPk == docName {
 			return doc, true
 		}

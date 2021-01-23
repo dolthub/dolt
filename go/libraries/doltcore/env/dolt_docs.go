@@ -70,13 +70,7 @@ func ResetWorkingDocsToStagedDocs(ctx context.Context, ddb *doltdb.DoltDB, rsr R
 // (perhaps creating it in the process). The table might not necessarily need to be created if there are no docs in the
 // repo yet.
 func UpdateRootWithDocs(ctx context.Context, root *doltdb.RootValue, docs doltdocs.Docs) (*doltdb.RootValue, error) {
-	docTbl, _, err := root.GetTable(ctx, doltdb.DocTableName)
-
-	if err != nil {
-		return nil, err
-	}
-
-	docTbl, err = doltdocs.CreateOrUpdateDocsTable(ctx, root.VRW(), docs, docTbl)
+	docTbl, err := doltdocs.CreateOrUpdateDocsTable(ctx, root, docs)
 
 	if errors.Is(doltdocs.ErrEmptyDocsTable, err) {
 		root, err = root.RemoveTables(ctx, doltdb.DocTableName)
