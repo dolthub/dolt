@@ -90,7 +90,7 @@ func TestAddNewerTextAndDocPkFromRow(t *testing.T) {
 
 	emptyRow, err := row.New(types.Format_7_18, sch, row.TaggedValues{})
 
-	// Text and DocPk should be nil from an empty row
+	// Text and DocName should be nil from an empty row
 	doc1 := Doc{}
 	text, err := GetDocTextFromRow(emptyRow)
 	assert.NoError(t, err)
@@ -106,7 +106,7 @@ func TestAddNewerTextAndDocPkFromRow(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	// Text and DocPk should be added to doc from row
+	// Text and DocName should be added to doc from row
 	doc2 := Doc{}
 	text, err = GetDocTextFromRow(licenseRow)
 	assert.NoError(t, err)
@@ -117,7 +117,7 @@ func TestAddNewerTextAndDocPkFromRow(t *testing.T) {
 	doc2.DocPk = docPk
 	assert.Equal(t, doltdb.LicensePk, doc2.DocPk)
 
-	// When Text and DocPk are non-nil, they should be updated from the row provided.
+	// When Text and DocName are non-nil, they should be updated from the row provided.
 	doc3 := Doc{DocPk: "invalid", Text: []byte("something")}
 	text, err = GetDocTextFromRow(licenseRow)
 	assert.NoError(t, err)

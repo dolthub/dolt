@@ -16,6 +16,7 @@ package doltdocs
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -212,4 +213,79 @@ func GetDocPKFromRow(r row.Row) (string, error) {
 
 		return docName, nil
 	}
+}
+
+// getFileFromDoc returns the file obj associated with the doc
+func getFileFromDoc(docName string) (string, error) {
+	if doc, ok := IsSupportedDoc(docName); ok {
+		return doc.File, nil
+	}
+
+	return "", fmt.Errorf("Doc name not provided %s", docName)
+}
+
+// GetDocsAvailableInRoot
+func GetDocsAvailableInRoot(ctx context.Context, root *doltdb.RootValue) (Docs, bool, error) {
+	if root == nil {
+		return nil, false, nil
+	}
+
+	docsTbl, found, err := root.GetTable(ctx, doltdb.DocTableName)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if !found {
+		return nil, false, err
+	}
+
+	docs, err := getDocsFromTable(ctx, docsTbl)
+	return docs, true, err
+}
+
+// getDocsFromTable takes the doltdocs table and a schema and return all docs in the dolt_docs table.
+func getDocsFromTable(ctx context.Context, table *doltdb.Table) (Docs, error) {
+	ret := make(Docs, 0)
+
+	sch, err := table.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := table.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	err = rows.IterAll(ctx, func(key, val types.Value) error {
+		newRow, err := row.FromNoms(sch, key.(types.Tuple), val.(types.Tuple))
+		if err != nil {
+			return err
+		}
+		doc := Doc{}
+
+		docPk, err := GetDocPKFromRow(newRow)
+		if err != nil {
+			return err
+		}
+		doc.DocPk = docPk
+
+		text, err := GetDocTextFromRow(newRow)
+		if err != nil {
+			return err
+		}
+		doc.Text = text
+
+		fileName, err := getFileFromDoc(docPk)
+		if err != nil {
+			return err
+		}
+		doc.File = fileName
+
+		ret = append(ret, doc)
+
+		return nil
+	})
+
+	return ret, err
 }

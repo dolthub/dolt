@@ -21,13 +21,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 type docComparison struct {
-	DocPk       string
+	DocName     string
 	CurrentText []byte
 	OldText     []byte
 }
@@ -35,178 +32,96 @@ type docComparison struct {
 // DocsDiff returns the added, modified and removed docs when comparing a root value with an other (newer) value. If the other value,
 // is not provided, then we compare the docs on the root value to the docs provided.
 func DocsDiff(ctx context.Context, root *doltdb.RootValue, other *doltdb.RootValue, docs doltdocs.Docs) (added, modified, removed []string, err error) {
-	oldTbl, oldTblFound, err := root.GetTable(ctx, doltdb.DocTableName)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	var oldSch schema.Schema
-	if oldTblFound {
-		sch, err := oldTbl.GetSchema(ctx)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		oldSch = sch
-	}
+	var docComparisons []docComparison
 
 	if other == nil {
-		docComparisons, err := getDocComparisons(ctx, oldTbl, &oldSch, docs)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		a, m, r := computeDiffsFromDocComparisons(docComparisons)
-		return a, m, r, nil
+		docComparisons, err = compareRootWithDocs(ctx, root, docs)
+	} else {
+		docComparisons, err = compareDocsBtwnRoots(ctx, root, other)
 	}
 
-	newTbl, newTblFound, err := other.GetTable(ctx, doltdb.DocTableName)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	var newSch schema.Schema
-	if newTblFound {
-		sch, err := newTbl.GetSchema(ctx)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		newSch = sch
-	}
-
-	docComparisonBtwnRoots, err := getDocComparisonsBtwnRoots(ctx, newTbl, newSch, newTblFound, oldTbl, oldSch, oldTblFound)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	a, m, r := computeDiffsFromDocComparisons(docComparisonBtwnRoots)
+	a, m, r := computeDiffsFromDocComparisons(docComparisons)
 	return a, m, r, nil
 }
 
-func getDocComparisonsBtwnRoots(ctx context.Context, newTbl *doltdb.Table, newSch schema.Schema, newTblFound bool, oldTbl *doltdb.Table, oldSch schema.Schema, oldTblFound bool) ([]docComparison, error) {
-	var docComparisonBtwnRoots []docComparison
-
-	if newTblFound {
-		newRows, err := newTbl.GetRowData(ctx)
-		if err != nil {
-			return nil, err
-		}
-		err = newRows.IterAll(ctx, func(key, val types.Value) error {
-			newRow, err := row.FromNoms(newSch, key.(types.Tuple), val.(types.Tuple))
-			if err != nil {
-				return err
-			}
-			doc := doltdocs.Doc{}
-
-			docPk, err := doltdocs.GetDocPKFromRow(newRow)
-			if err != nil {
-				return err
-			}
-			doc.DocPk = docPk
-
-			text, err := doltdocs.GetDocTextFromRow(newRow)
-			if err != nil {
-				return err
-			}
-			doc.Text = text
-
-			docComparison, err := newDocComparison(ctx, oldTbl, &oldSch, doc)
-			if err != nil {
-				return err
-			}
-			docComparisonBtwnRoots = append(docComparisonBtwnRoots, docComparison)
-
-			return nil
-		})
-		if err != nil {
-			return nil, err
-		}
+// compareRootWithDocs compares a root and set of new docs.
+func compareRootWithDocs(ctx context.Context, root *doltdb.RootValue, docs doltdocs.Docs) ([]docComparison, error) {
+	oldDocs, found, err := doltdocs.GetDocsAvailableInRoot(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		oldDocs = make(doltdocs.Docs, 0)
 	}
 
-	if oldTblFound {
-		oldRows, err := oldTbl.GetRowData(ctx)
-		if err != nil {
-			return nil, err
-		}
-		err = oldRows.IterAll(ctx, func(key, val types.Value) error {
-			oldRow, err := row.FromNoms(oldSch, key.(types.Tuple), val.(types.Tuple))
-			if err != nil {
-				return err
-			}
-			doc := doltdocs.Doc{}
-
-			docPk, err := doltdocs.GetDocPKFromRow(oldRow)
-			if err != nil {
-				return err
-			}
-			doc.DocPk = docPk
-
-			docText, err := doltdocs.GetDocTextFromTbl(ctx, newTbl, &newSch, doc.DocPk)
-			if err != nil {
-				return err
-			}
-			doc.Text = docText
-
-			docComparison, err := newDocComparison(ctx, oldTbl, &oldSch, doc)
-			if err != nil {
-				return err
-			}
-
-			if docComparison.OldText != nil && docComparison.CurrentText == nil {
-				docComparisonBtwnRoots = append(docComparisonBtwnRoots, docComparison)
-			}
-			return nil
-		})
-		if err != nil {
-			return nil, err
-		}
-	}
-	return docComparisonBtwnRoots, nil
+	return getDocComparisons(oldDocs, docs), nil
 }
 
-func getDocComparisons(ctx context.Context, tbl *doltdb.Table, sch *schema.Schema, docs doltdocs.Docs) ([]docComparison, error) {
-	docComparisons := make([]docComparison, len(docs))
-
-	for i, _ := range docComparisons {
-		cmp, err := newDocComparison(ctx, tbl, sch, docs[i])
-
-		if err != nil {
-			return nil, err
-		}
-
-		docComparisons[i] = cmp
+// compareDocsBtwnRoots takes an oldRoot and a newRoot and compares the docs tables between the two.
+func compareDocsBtwnRoots(ctx context.Context, oldRoot *doltdb.RootValue, newRoot *doltdb.RootValue) ([]docComparison, error) {
+	oldDocs, found, err := doltdocs.GetDocsAvailableInRoot(ctx, oldRoot)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		oldDocs = make(doltdocs.Docs, 0)
 	}
 
-	return docComparisons, nil
+	newDocs, found, err := doltdocs.GetDocsAvailableInRoot(ctx, newRoot)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		newDocs = make(doltdocs.Docs, 0)
+	}
+
+	return getDocComparisons(oldDocs, newDocs), nil
 }
 
-func newDocComparison(ctx context.Context, tbl *doltdb.Table, sch *schema.Schema, doc doltdocs.Doc) (docComparison, error) {
-	diff := docComparison{DocPk: doc.DocPk, CurrentText: doc.Text, OldText: nil}
+// getDocComparisons compares two sets of docs looking for modifications, removals, and additions as docComparisons
+func getDocComparisons(oldDocs doltdocs.Docs, newDocs doltdocs.Docs) []docComparison {
+	docComparisons := make([]docComparison, 0)
 
-	if tbl != nil && sch != nil {
-		key, err := doltdocs.DocTblKeyFromName(tbl.Format(), doc.DocPk)
-		if err != nil {
-			return docComparison{}, err
-		}
+	// First case is looking at the old docs and seeing what was modified or removed
+	for _, oldDoc := range oldDocs {
+		dc := docComparison{DocName: oldDoc.DocPk, OldText: oldDoc.Text, CurrentText: getMatchingText(oldDoc, newDocs)}
+		docComparisons = append(docComparisons,  dc)
+	}
 
-		docRow, ok, err := doltdocs.GetDocRow(ctx, tbl, *sch, key)
-		if err != nil {
-			return docComparison{}, err
-		}
-
-		if ok {
-			docValue, _ := docRow.GetColVal(schema.DocTextTag)
-			docStr, _ := strconv.Unquote(docValue.HumanReadableString())
-			diff.OldText = []byte(docStr)
+	// Second case is looking back at the old docs and seeing what was added
+	for _, newDoc := range newDocs {
+		oldText := getMatchingText(newDoc, oldDocs)
+		if oldText == nil {
+			dc := docComparison{DocName: newDoc.DocPk, OldText: nil, CurrentText: newDoc.Text}
+			docComparisons = append(docComparisons,  dc)
 		}
 	}
 
-	return diff, nil
+	return docComparisons
 }
 
+// getMatchingText matches a doc in a set of other docs and returns the relevant text.
+func getMatchingText(doc doltdocs.Doc, docs doltdocs.Docs) []byte {
+	for _, toCompare := range docs {
+		if doc.DocPk == toCompare.DocPk {
+			return toCompare.Text
+		}
+	}
+
+	return nil
+}
+
+// computeDiffsFromDocComparisons takes the docComparisons and returns the final add, modified, removed count.
 func computeDiffsFromDocComparisons(docComparisons []docComparison) (added, modified, removed []string) {
 	added = []string{}
 	modified = []string{}
 	removed = []string{}
 	for _, doc := range docComparisons {
-		added, modified, removed = appendDocDiffs(added, modified, removed, doc.OldText, doc.CurrentText, doc.DocPk)
+		added, modified, removed = appendDocDiffs(added, modified, removed, doc.OldText, doc.CurrentText, doc.DocName)
 	}
 	return added, modified, removed
 }
