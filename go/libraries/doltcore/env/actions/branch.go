@@ -17,10 +17,11 @@ package actions
 import (
 	"context"
 	"errors"
-
+	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -155,10 +156,30 @@ func DeleteBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltRef,
 	return ddb.DeleteBranch(ctx, dref)
 }
 
-func CreateBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startingPoint string, force bool) error {
-	newRef := ref.NewBranchRef(newBranch)
+func CreateBranchWithStartPt(ctx context.Context, dbData env.DbData, newBranch, startPt string, force bool) error {
+	err := createBranch(ctx, dbData, newBranch, startPt, force)
 
-	hasRef, err := dEnv.DoltDB.HasRef(ctx, newRef)
+	if err != nil {
+		if err == ErrAlreadyExists {
+			return fmt.Errorf("fatal: A branch named '%s' already exists.", newBranch)
+		} else if err == doltdb.ErrInvBranchName {
+			return fmt.Errorf("fatal: '%s' is an invalid branch name.", newBranch)
+		} else if err == doltdb.ErrInvHash || doltdb.IsNotACommit(err) {
+			return fmt.Errorf("fatal: '%s' is not a commit and a branch '%s' cannot be created from it", startPt, newBranch)
+		} else {
+			return fmt.Errorf("fatal: Unexpected error creating branch '%s' : %v", newBranch, err)
+		}
+	}
+
+	return nil
+}
+
+
+func createBranch(ctx context.Context, DbData env.DbData, newBranch, startingPoint string, force bool) error {
+	newRef := ref.NewBranchRef(newBranch)
+	ddb := DbData.Ddb
+
+	hasRef, err := ddb.HasRef(ctx, newRef)
 
 	if err != nil {
 		return err
@@ -178,28 +199,47 @@ func CreateBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startingPoi
 		return err
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
+	cm, err := ddb.Resolve(ctx, cs, DbData.Rsr.CWBHeadRef())
 
 	if err != nil {
 		return err
 	}
 
-	return dEnv.DoltDB.NewBranchAtCommit(ctx, newRef, cm)
+	return ddb.NewBranchAtCommit(ctx, newRef, cm)
+}
+
+func CheckoutNewBranch(ctx context.Context, dbData env.DbData, newBranch string, apr *argparser.ArgParseResults) error {
+	startPt := "head"
+	if apr.NArg() == 1 {
+		startPt = apr.Arg(0)
+	}
+
+	err := CreateBranchWithStartPt(ctx, dbData, newBranch, startPt, false)
+
+	if err != nil {
+		return err
+	}
+
+	// TODO: Fix
+	// return checkoutBranch(ctx, dEnv, newBranch)
+	return nil
 }
 
 func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error {
+	dbData := dEnv.DbData()
+
 	dref := ref.NewBranchRef(brName)
 
-	hasRef, err := dEnv.DoltDB.HasRef(ctx, dref)
+	hasRef, err := dbData.Ddb.HasRef(ctx, dref)
 	if !hasRef {
 		return doltdb.ErrBranchNotFound
 	}
 
-	if ref.Equals(dEnv.RepoState.CWBHeadRef(), dref) {
+	if ref.Equals(dbData.Rsr.CWBHeadRef(), dref) {
 		return doltdb.ErrAlreadyOnBranch
 	}
 
-	currRoots, err := getRoots(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), HeadRoot, WorkingRoot, StagedRoot)
+	currRoots, err := getRoots(ctx, dbData.Ddb, dEnv.RepoStateReader(), HeadRoot, WorkingRoot, StagedRoot)
 
 	if err != nil {
 		return err
@@ -211,7 +251,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return RootValueUnreadable{HeadRoot, err}
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
+	cm, err := dbData.Ddb.Resolve(ctx, cs, nil)
 
 	if err != nil {
 		return RootValueUnreadable{HeadRoot, err}
@@ -269,12 +309,17 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return err
 	}
 
-	dEnv.RepoState.Head = ref.MarshalableRef{Ref: dref}
-	dEnv.RepoState.Working = wrkHash.String()
-	dEnv.RepoState.Staged = stgHash.String()
+	err = dbData.Rsw.SetWorkingHash(wrkHash)
+	if err != nil {
+		return err
+	}
 
-	err = dEnv.RepoState.Save(dEnv.FS)
+	err = dbData.Rsw.SetStagedHash(stgHash)
+	if err != nil {
+		return err
+	}
 
+	err = dbData.Rsw.SetCWBHeadRef(ref.MarshalableRef{Ref: dref})
 	if err != nil {
 		return err
 	}
@@ -392,9 +437,9 @@ func RootsWithTable(ctx context.Context, dEnv *env.DoltEnv, table string) (RootT
 	return NewRootTypeSet(rootsWithTable...), nil
 }
 
-func IsBranch(ctx context.Context, dEnv *env.DoltEnv, str string) (bool, error) {
+func IsBranch(ctx context.Context, ddb *doltdb.DoltDB, str string) (bool, error) {
 	dref := ref.NewBranchRef(str)
-	return dEnv.DoltDB.HasRef(ctx, dref)
+	return ddb.HasRef(ctx, dref)
 }
 
 func MaybeGetCommit(ctx context.Context, dEnv *env.DoltEnv, str string) (*doltdb.Commit, error) {

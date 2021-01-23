@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
@@ -113,7 +112,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return HandleVErrAndExitCode(verr, usagePrt)
 	}
 
-	if isBranch, err := actions.IsBranch(ctx, dEnv, name); err != nil {
+	if isBranch, err := actions.IsBranch(ctx, dEnv.DoltDB, name); err != nil {
 		verr := errhand.BuildDError("error: unable to determine type of checkout").AddCause(err).Build()
 		return HandleVErrAndExitCode(verr, usagePrt)
 	} else if isBranch {
@@ -138,7 +137,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 }
 
 func checkoutRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, name string) errhand.VerboseError {
-	if ref, refExists, err := getRemoteBranchRef(ctx, dEnv, name); err != nil {
+	if ref, refExists, err := actions.GetRemoteBranchRef(ctx, dEnv.DoltDB, name); err != nil {
 		return errhand.BuildDError("fatal: unable to read from data repository.").AddCause(err).Build()
 	} else if refExists {
 		return checkoutNewBranchFromStartPt(ctx, dEnv, name, ref.String())
@@ -147,28 +146,12 @@ func checkoutRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, name string) e
 	}
 }
 
-func getRemoteBranchRef(ctx context.Context, dEnv *env.DoltEnv, name string) (ref.DoltRef, bool, error) {
-	remoteRefFilter := map[ref.RefType]struct{}{ref.RemoteRefType: {}}
-	refs, err := dEnv.DoltDB.GetRefsOfType(ctx, remoteRefFilter)
-
-	if err != nil {
-		return nil, false, err
-	}
-
-	for _, rf := range refs {
-		if remRef, ok := rf.(ref.RemoteRef); ok && remRef.GetBranch() == name {
-			return rf, true, nil
-		}
-	}
-
-	return nil, false, err
-}
-
 func checkoutNewBranchFromStartPt(ctx context.Context, dEnv *env.DoltEnv, newBranch, startPt string) errhand.VerboseError {
-	verr := createBranchWithStartPt(ctx, dEnv, newBranch, startPt, false)
+	err := actions.CreateBranchWithStartPt(ctx, dEnv.DbData(), newBranch, startPt, false)
 
-	if verr != nil {
-		return verr
+	// TODO: Is this the right syntax.
+	if err != nil {
+		return errhand.BuildDError("Error creating new branch").AddCause(err).Build()
 	}
 
 	return checkoutBranch(ctx, dEnv, newBranch)
@@ -180,10 +163,10 @@ func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch string,
 		startPt = apr.Arg(0)
 	}
 
-	verr := createBranchWithStartPt(ctx, dEnv, newBranch, startPt, false)
+	err := actions.CreateBranchWithStartPt(ctx, dEnv.DbData(), newBranch, startPt, false)
 
-	if verr != nil {
-		return verr
+	if err != nil {
+		return errhand.BuildDError("Error creating new branch").AddCause(err).Build()
 	}
 
 	return checkoutBranch(ctx, dEnv, newBranch)

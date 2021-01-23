@@ -16,6 +16,7 @@ package actions
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -221,4 +222,23 @@ func RemoveDocsTable(tbls []string) []string {
 		}
 	}
 	return result
+}
+
+
+// GetRemoteBranchRef returns the ref of a branch and ensures it matched with name
+func GetRemoteBranchRef(ctx context.Context, ddb *doltdb.DoltDB, name string) (ref.DoltRef, bool, error) {
+	remoteRefFilter := map[ref.RefType]struct{}{ref.RemoteRefType: {}}
+	refs, err := ddb.GetRefsOfType(ctx, remoteRefFilter)
+
+	if err != nil {
+		return nil, false, err
+	}
+
+	for _, rf := range refs {
+		if remRef, ok := rf.(ref.RemoteRef); ok && remRef.GetBranch() == name {
+			return rf, true, nil
+		}
+	}
+
+	return nil, false, err
 }

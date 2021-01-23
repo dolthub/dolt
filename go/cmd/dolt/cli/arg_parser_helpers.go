@@ -80,6 +80,7 @@ const (
 	AllFlag          = "all"
 	HardResetParam   = "hard"
 	SoftResetParam   = "soft"
+	CheckoutCoBranch = "b"
 )
 
 // Creates the argparser shared dolt commit cli and DOLT_COMMIT.
@@ -105,5 +106,11 @@ func CreateResetArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(HardResetParam, "", "Resets the working tables and staged tables. Any changes to tracked tables in the working tree since {{.LessThan}}commit{{.GreaterThan}} are discarded.")
 	ap.SupportsFlag(SoftResetParam, "", "Does not touch the working tables, but removes all tables staged to be committed.")
+	return ap
+}
+
+func CreateCheckoutArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsString(CheckoutCoBranch, "", "branch", "Create a new branch named {{.LessThan}}new_branch{{.GreaterThan}} and start it at {{.LessThan}}start_point{{.GreaterThan}}.")
 	return ap
 }

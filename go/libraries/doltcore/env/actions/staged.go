@@ -129,7 +129,7 @@ func stageTables(ctx context.Context, db *doltdb.DoltDB, rsw env.RepoStateWriter
 
 	if _, err := env.UpdateWorkingRoot(ctx, db, rsw, working); err == nil {
 		if sh, err := env.UpdateStagedRoot(ctx, db, rsw, staged); err == nil {
-			err = rsw.SetStagedHash(ctx, sh)
+			err = rsw.SetStagedHash(sh)
 
 			if err != nil {
 				return env.ErrStateUpdate
