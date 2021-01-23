@@ -17,13 +17,13 @@ package querydiff
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"io"
 	"math"
 	"strings"
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/expression/function"
 	"github.com/dolthub/go-mysql-server/sql/information_schema"
 	"github.com/dolthub/go-mysql-server/sql/parse"
