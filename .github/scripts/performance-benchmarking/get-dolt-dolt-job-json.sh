@@ -16,7 +16,7 @@ timePrefix="$6"
 actorPrefix="$7"
 format="$8"
 
-medianLatencyChangeQuery="select f.test_name as test_name, avg(f.latency_percentile) as from_latency_median, avg(t.latency_percentile) as to_latency_median, case when ((avg(t.latency_percentile) - avg(f.latency_percentile)) / (avg(f.latency_percentile) + .0000001)) < -10.0 then 1 when ((avg(t.latency_percentile) - avg(f.latency_percentile)) / (avg(f.latency_percentile) + .0000001)) > 10.0 then -1 else 0 end as is_faster from from_results as f join to_results as t on f.test_name = t.test_name group by f.test_name;"
+medianLatencyChangeQuery="select f.test_name as test_name, avg(f.latency_percentile) as from_latency_median, avg(t.latency_percentile) as to_latency_median, case when ((avg(t.latency_percentile) - avg(f.latency_percentile)) / (avg(f.latency_percentile) + .0000001)) < -0.1 then 1 when ((avg(t.latency_percentile) - avg(f.latency_percentile)) / (avg(f.latency_percentile) + .0000001)) > 0.1 then -1 else 0 end as is_faster from from_results as f join to_results as t on f.test_name = t.test_name group by f.test_name;"
 
 echo '
 {
