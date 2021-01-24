@@ -32,13 +32,7 @@ type docComparison struct {
 // DocsDiff returns the added, modified and removed docs when comparing a root value with an other (newer) value. If the other value,
 // is not provided, then we compare the docs on the root value to the docs provided.
 func DocsDiff(ctx context.Context, root *doltdb.RootValue, other *doltdb.RootValue, docs doltdocs.Docs) (added, modified, removed []string, err error) {
-	var docComparisons []docComparison
-
-	if other == nil {
-		docComparisons, err = compareRootWithDocs(ctx, root, docs)
-	} else {
-		docComparisons, err = compareDocsBtwnRoots(ctx, root, other)
-	}
+	docComparisons, err := DocsDiffToComparisons(ctx, root, other, docs)
 
 	if err != nil {
 		return nil, nil, nil, err
@@ -46,6 +40,16 @@ func DocsDiff(ctx context.Context, root *doltdb.RootValue, other *doltdb.RootVal
 
 	a, m, r := computeDiffsFromDocComparisons(docComparisons)
 	return a, m, r, nil
+}
+
+// DocsDiffToComparisons returns the docComparisons between an old root, a new root, and a set of docs. It is exported
+// due to the cli usage of doc diffs.
+func DocsDiffToComparisons(ctx context.Context, root *doltdb.RootValue, other *doltdb.RootValue, docs doltdocs.Docs) ([]docComparison, error) {
+	if other == nil {
+		return compareRootWithDocs(ctx, root, docs)
+	} else {
+		return compareDocsBtwnRoots(ctx, root, other)
+	}
 }
 
 // compareRootWithDocs compares a root and set of new docs.

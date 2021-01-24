@@ -18,10 +18,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -179,7 +179,7 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, n
 		return err
 	}
 
-	_, err = env.UpdateRootWithDocs(ctx, r, dd)
+	_, err = doltdocs.UpdateRootWithDocs(ctx, r, dd)
 	if err != nil {
 		return err
 	}

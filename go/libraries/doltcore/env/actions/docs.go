@@ -138,12 +138,12 @@ func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, working, staged, he
 		return nil, nil, nil, err
 	}
 
-	currRoot, err = env.UpdateRootWithDocs(ctx, working, docs)
+	currRoot, err = doltdocs.UpdateRootWithDocs(ctx, working, docs)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	stgRoot, err = env.UpdateRootWithDocs(ctx, staged, docs)
+	stgRoot, err = doltdocs.UpdateRootWithDocs(ctx, staged, docs)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -163,6 +163,10 @@ func GetUnstagedDocs(ctx context.Context, dbData env.DbData) (doltdocs.Docs, err
 		if err != nil {
 			return nil, err
 		}
+		if len(docAr) < 1 {
+			return nil, errors.New("error: Failed getting unstaged docs")
+		}
+
 		unstagedDocs = append(unstagedDocs, docAr[0])
 	}
 	return unstagedDocs, nil
@@ -202,6 +206,10 @@ func GetTablesOrDocs(drw env.DocsReadWriter, tablesOrFiles []string) (tables []s
 			if err != nil {
 				return nil, nil, err
 			}
+			if len(docAr) < 1 {
+				return nil, nil, errors.New("error: Failed getting docs")
+			}
+
 			doc := docAr[0]
 			if doc.DocPk == "" {
 				return nil, nil, errors.New("Supported doc not found on disk.")

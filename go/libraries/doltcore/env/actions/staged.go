@@ -18,6 +18,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
@@ -41,7 +43,7 @@ func StageTables(ctx context.Context, dbData env.DbData, tbls []string) error {
 	}
 
 	if len(docs) > 0 {
-		working, err = env.UpdateRootWithDocs(ctx, working, docs)
+		working, err = doltdocs.UpdateRootWithDocs(ctx, working, docs)
 		if err != nil {
 			return err
 		}
@@ -79,7 +81,7 @@ func StageAllTables(ctx context.Context, dbData env.DbData) error {
 		return err
 	}
 
-	working, err = env.UpdateRootWithDocs(ctx, working, docs)
+	working, err = doltdocs.UpdateRootWithDocs(ctx, working, docs)
 
 	if err != nil {
 		return err

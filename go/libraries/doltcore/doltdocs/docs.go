@@ -144,7 +144,7 @@ func GetDocsFromRoot(ctx context.Context, root *doltdb.RootValue, docNames ...st
 			return nil, fmt.Errorf("%s is not a supported doc", name)
 		}
 
-		docText, err := GetDocTextFromTbl(ctx, docTbl, &sch, name)
+		docText, err := getDocTextFromTbl(ctx, docTbl, &sch, name)
 		if err != nil {
 			return nil, err
 		}
@@ -227,4 +227,24 @@ func DeleteDoc(fs filesys.ReadWriteFS, docName string) error {
 		}
 	}
 	return nil
+}
+
+// UpdateRootWithDocs takes in a root value, and some docs and writes those docs to the dolt_docs table
+// (perhaps creating it in the process). The table might not necessarily need to be created if there are no docs in the
+// repo yet.
+func UpdateRootWithDocs(ctx context.Context, root *doltdb.RootValue, docs Docs) (*doltdb.RootValue, error) {
+	docTbl, err := CreateOrUpdateDocsTable(ctx, root, docs)
+
+	if errors.Is(ErrEmptyDocsTable, err) {
+		root, err = root.RemoveTables(ctx, doltdb.DocTableName)
+	} else if err != nil {
+		return nil, err
+	}
+
+	// There might not need be a need to create docs table if not docs have been created yet so check if docTbl != nil.
+	if docTbl != nil {
+		root, err = root.PutTable(ctx, doltdb.DocTableName, docTbl)
+	}
+
+	return root, nil
 }

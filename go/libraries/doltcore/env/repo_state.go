@@ -44,7 +44,9 @@ type RepoStateWriter interface {
 }
 
 type DocsReadWriter interface {
+	// GetDocsOnDisk returns the docs in the filesytem optionally filtered by docNames.
 	GetDocsOnDisk(docNames ...string) (doltdocs.Docs, error)
+	// WriteDocsToDisk updates the documents stored in the filesystem with the contents in docs.
 	WriteDocsToDisk(docs doltdocs.Docs) error
 }
 

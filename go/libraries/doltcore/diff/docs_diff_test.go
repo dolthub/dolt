@@ -40,8 +40,8 @@ func TestDocDiff(t *testing.T) {
 	assert.NoError(t, err)
 
 	docs := doltdocs.Docs{
-		{DocPk: doltdb.LicensePk},
-		{DocPk: doltdb.ReadmePk},
+		{DocPk: doltdocs.LicenseDoc},
+		{DocPk: doltdocs.ReadmeDoc},
 	}
 
 	// DocsDiff between a root and itself should return no added, modified or removed docs.
@@ -54,7 +54,7 @@ func TestDocDiff(t *testing.T) {
 
 	// Create tbl1 with one license row
 	sch := createTestDocsSchema()
-	licRow := makeDocRow(t, sch, doltdb.LicensePk, types.String("license row"))
+	licRow := makeDocRow(t, sch, doltdocs.LicenseDoc, types.String("license row"))
 	m, _ := createTestRows(t, ddb.ValueReadWriter(), sch, []row.Row{licRow})
 	tbl1, err := CreateTestTable(ddb.ValueReadWriter(), sch, m)
 	assert.NoError(t, err)
@@ -72,7 +72,7 @@ func TestDocDiff(t *testing.T) {
 	}
 
 	// Create tbl2 with one readme row
-	readmeRow := makeDocRow(t, sch, doltdb.ReadmePk, types.String("readme row"))
+	readmeRow := makeDocRow(t, sch, doltdocs.ReadmeDoc, types.String("readme row"))
 	m, _ = createTestRows(t, ddb.ValueReadWriter(), sch, []row.Row{readmeRow})
 	tbl2, err := CreateTestTable(ddb.ValueReadWriter(), sch, m)
 	assert.NoError(t, err)
@@ -90,7 +90,7 @@ func TestDocDiff(t *testing.T) {
 	}
 
 	// Create tbl3 with 2 doc rows (readme, license)
-	readmeRowUpdated := makeDocRow(t, sch, doltdb.ReadmePk, types.String("a different readme"))
+	readmeRowUpdated := makeDocRow(t, sch, doltdocs.ReadmeDoc, types.String("a different readme"))
 	m, _ = createTestRows(t, ddb.ValueReadWriter(), sch, []row.Row{readmeRowUpdated, licRow})
 	tbl3, err := CreateTestTable(ddb.ValueReadWriter(), sch, m)
 	assert.NoError(t, err)

@@ -297,7 +297,7 @@ func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string) (from, 
 		return nil, nil, nil, err
 	}
 
-	workingRoot, err = env.UpdateRootWithDocs(ctx, workingRoot, docs)
+	workingRoot, err = doltdocs.UpdateRootWithDocs(ctx, workingRoot, docs)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -895,61 +895,33 @@ func diffDoltDocs(ctx context.Context, dEnv *env.DoltEnv, from, to *doltdb.RootV
 		return err
 	}
 
-	fromDocTable, _, err := from.GetTable(ctx, doltdb.DocTableName)
-
-	if err != nil {
-		return err
-	}
-
-	toDocTable, _, err := to.GetTable(ctx, doltdb.DocTableName)
-
-	if err != nil {
-		return err
-	}
-
-	return printDocDiffs(ctx, fromDocTable, toDocTable, docs)
+	return printDocDiffs(ctx, from, to, docs)
 }
 
-func printDocDiffs(ctx context.Context, fromTbl, toTbl *doltdb.Table, currentDocs doltdocs.Docs) error {
+func printDocDiffs(ctx context.Context, from, to *doltdb.RootValue, docsFilter doltdocs.Docs) error {
 	bold := color.New(color.Bold)
 
-	// TODO: Convert this all to doc comparison
-	for _, doc := range currentDocs {
-		if doc.Text != nil && fromTbl == nil {
-			printAddedDoc(bold, doc.DocPk)
-		} else if fromTbl != nil {
-			if toTbl != nil {
-				sch1, err := toTbl.GetSchema(ctx)
-				if err != nil {
-					return err
-				}
+	comparisons, err := diff.DocsDiffToComparisons(ctx, from, to, docsFilter)
+	if err != nil {
+		return err
+	}
 
-				docText, err := doltdocs.GetDocTextFromTbl(ctx, toTbl, &sch1, doc.DocPk)
-				if err != nil {
-					return err
-				}
-				doc.Text = docText
-			}
+	for _, doc := range docsFilter {
+		for _, comparison := range comparisons {
+			if doc.DocPk == comparison.DocName {
+				if comparison.OldText == nil && comparison.CurrentText != nil {
+					printAddedDoc(bold, comparison.DocName)
+				} else if comparison.OldText != nil {
+					older := string(comparison.OldText)
+					newer := string(comparison.CurrentText)
 
-			sch2, err := fromTbl.GetSchema(ctx)
-			if err != nil {
-				return err
-			}
+					lines := textdiff.LineDiffAsLines(older, newer)
 
-			olderText, err := doltdocs.GetDocTextFromTbl(ctx, fromTbl, &sch2, doc.DocPk)
-			if err != nil {
-				return err
-			}
-
-			if olderText != nil {
-				newer := string(doc.Text)
-				older := string(olderText)
-				lines := textdiff.LineDiffAsLines(older, newer)
-
-				if doc.Text == nil {
-					printDeletedDoc(bold, doc.DocPk, lines)
-				} else if len(lines) > 0 && newer != older {
-					printModifiedDoc(bold, doc.DocPk, lines)
+					if comparison.CurrentText == nil {
+						printDeletedDoc(bold, comparison.DocName, lines)
+					} else if len(lines) > 0 && newer != older {
+						printModifiedDoc(bold, comparison.DocName, lines)
+					}
 				}
 			}
 		}

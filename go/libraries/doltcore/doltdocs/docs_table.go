@@ -152,8 +152,8 @@ func docTblKeyFromName(fmt *types.NomsBinFormat, name string) (types.Tuple, erro
 	return types.NewTuple(fmt, types.Uint(schema.DocNameTag), types.String(name))
 }
 
-// GetDocTextFromTbl returns the Text field of a doc using the provided table and schema and primary key.
-func GetDocTextFromTbl(ctx context.Context, tbl *doltdb.Table, sch *schema.Schema, docPk string) ([]byte, error) {
+// getDocTextFromTbl returns the Text field of a doc using the provided table and schema and primary key.
+func getDocTextFromTbl(ctx context.Context, tbl *doltdb.Table, sch *schema.Schema, docPk string) ([]byte, error) {
 	if tbl != nil && sch != nil {
 		key, err := docTblKeyFromName(tbl.Format(), docPk)
 		if err != nil {
