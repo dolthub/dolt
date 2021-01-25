@@ -9,7 +9,7 @@ teardown() {
     teardown_common
 }
 
-@test "dolt status and ls to view valid docs on dolt init" {
+@test "dolt status and ls to view supported docs on dolt init" {
     echo license-text > LICENSE.md
     echo readme-text > README.md
     run ls

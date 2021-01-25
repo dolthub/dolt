@@ -147,10 +147,6 @@ var generatedSystemTablePrefixes = []string{
 const (
 	// DocTableName is the name of the dolt table containing documents such as the license and readme
 	DocTableName = "dolt_docs"
-	// LicensePk is the key for accessing the license within the docs table
-	LicensePk = "LICENSE.md"
-	// ReadmePk is the key for accessing the readme within the docs table
-	ReadmePk = "README.md"
 	// DocPkColumnName is the name of the pk column in the docs table
 	DocPkColumnName = "doc_name"
 	//DocTextColumnName is the name of the column containing the document contents in the docs table
