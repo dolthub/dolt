@@ -199,7 +199,12 @@ func (c Checkout) CommandString() string { return fmt.Sprintf("checkout: %s", c.
 
 // Exec executes a Checkout command on a test dolt environment.
 func (c Checkout) Exec(_ *testing.T, dEnv *env.DoltEnv) error {
-	return actions.CheckoutBranch(context.Background(), dEnv, c.BranchName)
+	err := actions.CheckoutBranch(context.Background(), dEnv.DbData(), c.BranchName)
+	if err != nil {
+		return err
+	}
+
+	return actions.CheckoutUnstagedDocs(context.Background(), dEnv)
 }
 
 type Merge struct {

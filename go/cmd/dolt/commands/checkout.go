@@ -197,7 +197,7 @@ func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tables []stri
 }
 
 func checkoutBranch(ctx context.Context, dEnv *env.DoltEnv, name string) errhand.VerboseError {
-	err := actions.CheckoutBranch(ctx, dEnv, name)
+	err := actions.CheckoutBranch(ctx, dEnv.DbData(), name)
 
 	if err != nil {
 		if err == doltdb.ErrBranchNotFound {
@@ -221,6 +221,12 @@ func checkoutBranch(ctx context.Context, dEnv *env.DoltEnv, name string) errhand
 			bdr.AddCause(err)
 			return bdr.Build()
 		}
+	}
+
+	err = actions.CheckoutUnstagedDocs(ctx, dEnv)
+	if err != nil {
+		bdr := errhand.BuildDError("fatal: Unexpected error checking out branch '%s'", name).AddCause(err)
+		return bdr.Build()
 	}
 
 	cli.Printf("Switched to branch '%s'\n", name)

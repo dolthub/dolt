@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -27,6 +28,8 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"strings"
 )
+
+const DoltCheckoutFuncName = "dolt_checkout"
 
 type DoltCheckoutFunc struct {
 	expression.NaryExpression
@@ -80,12 +83,20 @@ func (d DoltCheckoutFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, erro
 		return 1, errors.New("error: cannot checkout empty string")
 	}
 
+	// Check if user wants to checkout branch.
 	if isBranch, err := actions.IsBranch(ctx, dbData.Ddb, name); err != nil {
 		return 1, err
 	} else if isBranch {
-		//verr := checkoutBranch(ctx, dEnv, name) // TODO
-		//return HandleVErrAndExitCode(verr, usagePrt)
+		err = checkoutBranch(ctx, dbData, name)
+		if err != nil {
+			return 1, err
+		}
+		return 0, nil
 	}
+
+	// Check if user want to checkout table or docs.
+
+
 
 	return 0, nil
 }
@@ -97,15 +108,31 @@ func checkoutNewBranch(ctx context.Context, dbData env.DbData, newBranch string,
 	}
 
 	err := actions.CreateBranchWithStartPt(ctx, dbData, newBranch, startPt, false)
-
 	if err != nil {
 		return err
 	}
 
-	// TODO: checkout to branch
-	// err = actions.CheckoutBranch()
+	return checkoutBranch(ctx, dbData, newBranch)
+}
 
-	fmt.Sprintf("Switched to branch '%s'\n", newBranch)
+func checkoutBranch(ctx context.Context, dbData env.DbData, branchName string) error {
+	err := actions.CheckoutBranch(ctx, dbData, branchName)
+
+	if err != nil {
+		if err == doltdb.ErrBranchNotFound {
+			return fmt.Errorf("fatal: Branch '%s' not found.", branchName)
+		} else if actions.IsRootValUnreachable(err) {
+			rt := actions.GetUnreachableRootType(err)
+			return fmt.Errorf("error: unable to read the %s", rt.String())
+		} else if actions.IsCheckoutWouldOverwrite(err) {
+			return errors.New("error: Your local changes to the following tables would be overwritten by checkout")
+		} else if err == doltdb.ErrAlreadyOnBranch {
+			return fmt.Errorf("Already on branch '%s'", branchName)
+		} else {
+			return fmt.Errorf("fatal: Unexpected error checking out branch '%s'", branchName)
+		}
+	}
+
 	return nil
 }
 
