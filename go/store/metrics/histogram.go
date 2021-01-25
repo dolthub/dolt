@@ -51,6 +51,10 @@ type Histogram struct {
 	sum      uint64
 	buckets  [bucketCount]uint64
 	ToString ToStringFunc
+
+	// padding this structure so it is a multiple of 8 bytes in size. This is necessary for 32-bit architectures and
+	// guarantees 8 byte alignment for multiple Histograms laid out side by side in memory.
+	pad32 uint32
 }
 
 type ToStringFunc func(v uint64) string
