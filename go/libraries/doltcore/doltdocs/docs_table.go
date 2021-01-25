@@ -16,6 +16,7 @@ package doltdocs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -268,26 +269,24 @@ func getDocsFromTable(ctx context.Context, table *doltdb.Table) (Docs, error) {
 		if err != nil {
 			return err
 		}
+
+		cols := sch.GetAllCols().GetColumns()
+		colVals := make([]types.Value, len(cols))
+		for i, col := range cols {
+			colval, ok := newRow.GetColVal(col.Tag)
+			if !ok {
+				return errors.New("error: could not get doc column value")
+			}
+			colVals[i] = colval
+		}
+
+		if len(colVals) < 2 {
+			return errors.New("error: not enough values read from the table")
+		}
+
 		doc := Doc{}
-
-		docPk, err := getDocPKFromRow(newRow)
-		if err != nil {
-			return err
-		}
-		doc.DocPk = docPk
-
-		text, err := getDocTextFromRow(newRow)
-		if err != nil {
-			return err
-		}
-		doc.Text = text
-
-		fileName, err := getFileFromDoc(docPk)
-		if err != nil {
-			return err
-		}
-		doc.File = fileName
-
+		doc.DocPk = string(colVals[0].(types.String))
+		doc.Text = []byte(colVals[1].(types.String))
 		ret = append(ret, doc)
 
 		return nil
