@@ -493,7 +493,7 @@ func tabularSchemaDiff(ctx context.Context, td diff.TableDelta, fromSchemas, toS
 		}
 	}
 
-	if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
+	if !schema.ColCollsAreCompatible(fromSch.GetPKCols(), toSch.GetPKCols()) {
 		panic("primary key sets must be the same")
 	}
 	pkStr := strings.Join(fromSch.GetPKCols().GetColumnNames(), ", ")

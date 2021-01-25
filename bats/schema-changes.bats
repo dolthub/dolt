@@ -134,3 +134,57 @@ SQL
     run dolt sql -q "INSERT INTO test2 (pk1, pk2new) VALUES (1, null)"
     [ "$status" -eq 1 ]
 }
+
+@test "changing column types in place works" {
+    dolt sql <<SQL
+CREATE TABLE test2(
+  pk1 BIGINT,
+  pk2 BIGINT,
+  v1 VARCHAR(100) NOT NULL,
+  v2 VARCHar(120) NULL,
+  PRIMARY KEY(pk1, pk2)
+);
+SQL
+    run dolt sql -q "INSERT INTO test2 (pk1, pk2, v1, v2) VALUES (1, 1, 'abc', 'def')"
+    [ "$status" -eq 0 ]
+    dolt add .
+    dolt commit -m "Created table with one row"
+
+    dolt branch original
+
+    dolt schema change-type Test2 V1 'varchar(300)'
+    dolt schema change-type TEST2 PK2 'tinyint'
+    dolt schema change-type Test2 V2 'varchar(1024)'
+
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ '<   `pk2`  BIGINT NOT NULL' ]] || false
+    [[ "$output" =~ '>   `pk2` TINYINT NOT NULL' ]] || false
+    [[ "$output" =~ '<   `v1` VARCHAR(100) NOT NULL' ]] || false
+    [[ "$output" =~ '>   `v1` VARCHAR(300) NOT NULL' ]] || false
+    [[ "$output" =~ '<   `v2`  VARCHAR(120)' ]] || false
+    [[ "$output" =~ '>   `v2` VARCHAR(1024)' ]] || false
+    [[ "$output" =~ 'PRIMARY KEY' ]] || false
+
+    dolt add .
+    dolt commit -m "Changed types"
+
+    dolt checkout original
+    run dolt sql -q "INSERT INTO test2 (pk1, pk2, v1, v2) VALUES (2, 2, 'abc', 'def')"
+    dolt diff
+    dolt add .
+    dolt commit -m "Created table with one row"
+
+    dolt merge master
+
+    run dolt sql -q 'show create table test2'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ '`pk2` tinyint NOT NULL' ]] || false
+    [[ "$output" =~ '`v1` varchar(300) NOT NULL' ]] || false
+
+    run dolt sql -q 'select * from test2' -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "$output" =~ '1,1,abc,def' ]] || false
+    [[ "$output" =~ '2,2,abc,def' ]] || false
+}

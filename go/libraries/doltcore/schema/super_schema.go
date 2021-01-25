@@ -62,9 +62,7 @@ func (ss *SuperSchema) AddColumn(col Column) (err error) {
 	ac := ss.allCols
 	existingCol, found := ac.GetByTag(ct)
 	if found {
-		if col.IsPartOfPK != existingCol.IsPartOfPK ||
-			col.Kind != existingCol.Kind ||
-			!col.TypeInfo.Equals(existingCol.TypeInfo) {
+		if !existingCol.Compatible(col) {
 			ecName := ss.tagNames[col.Tag][0]
 			return fmt.Errorf("tag collision for columns %s and %s, different definitions (tag: %d)",
 				ecName, col.Name, col.Tag)

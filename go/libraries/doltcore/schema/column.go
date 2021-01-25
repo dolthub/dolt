@@ -145,6 +145,14 @@ func (c Column) Equals(other Column) bool {
 		ColConstraintsAreEqual(c.Constraints, other.Constraints)
 }
 
+// Compatible tests compatibility between two columns. Compatible columns have the same tag and can store the same
+// kinds of values at the storage layer, but may have different constraints or type parameters.
+func (c Column) Compatible(other Column) bool {
+	return c.Tag == other.Tag &&
+			c.Kind == other.Kind &&
+			c.IsPartOfPK == other.IsPartOfPK
+}
+
 // KindString returns the string representation of the NomsKind stored in the column.
 func (c Column) KindString() string {
 	return KindToLwrStr[c.Kind]

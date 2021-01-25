@@ -91,7 +91,7 @@ func NewColCollection(cols ...Column) (*ColCollection, error) {
 			if _, ok := lowerNameToCol[lowerCaseName]; !ok {
 				lowerNameToCol[lowerCaseName] = cols[i]
 			}
-		} else if !val.Equals(col) {
+		} else if !val.Compatible(col) {
 			return nil, ErrColTagCollision
 		}
 	}
@@ -239,6 +239,28 @@ func ColCollsAreEqual(cc1, cc2 *ColCollection) bool {
 		col2, ok := cc2.GetByTag(tag)
 
 		if !ok || !col1.Equals(col2) {
+			areEqual = false
+			return true, nil
+		}
+
+		return false, nil
+	})
+
+	return areEqual
+}
+
+// ColCollsAreCompatible determines whether two ColCollections are compatible with each other. Compatible columns have
+// the same tags and storage types, but may have different names, constraints or SQL type parameters.
+func ColCollsAreCompatible(cc1, cc2 *ColCollection) bool {
+	if cc1.Size() != cc2.Size() {
+		return false
+	}
+
+	areEqual := true
+	_ = cc1.Iter(func(tag uint64, col1 Column) (stop bool, err error) {
+		col2, ok := cc2.GetByTag(tag)
+
+		if !ok || !col1.Compatible(col2) {
 			areEqual = false
 			return true, nil
 		}
