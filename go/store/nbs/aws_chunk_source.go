@@ -68,7 +68,7 @@ func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectRead
 		size := indexSize(chunkCount) + footerSize
 		buff := make([]byte, size)
 
-		n, err := s3.ReadFromEnd(ctx, name, buff, stats)
+		n, _, err := s3.ReadFromEnd(ctx, name, buff, stats)
 
 		if err != nil {
 			return nil, &dynamoTableReaderAt{}, err
