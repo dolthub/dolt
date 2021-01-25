@@ -23,10 +23,11 @@ package metrics
 
 import (
 	"fmt"
-	"github.com/dustin/go-humanize"
 	"strconv"
 	"sync/atomic"
 	"time"
+
+	"github.com/dustin/go-humanize"
 
 	"github.com/dolthub/dolt/go/store/d"
 )
