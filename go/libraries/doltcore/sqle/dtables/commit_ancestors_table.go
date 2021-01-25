@@ -106,7 +106,7 @@ func (itr *CommitAncestorsRowItr) Next() (sql.Row, error) {
 
 		if len(parents) == 0 {
 			// init commit
-			return sql.NewRow(ch.String(), nil), nil
+			return sql.NewRow(ch.String(), nil, 0), nil
 		}
 
 		itr.cache = make([]sql.Row, len(parents))
