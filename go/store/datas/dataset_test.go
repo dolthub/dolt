@@ -175,9 +175,8 @@ func TestIdValidation(t *testing.T) {
 
 	invalidDatasetNames := []string{" ", "", "a ", " a", "$", "#", ":", "\n", "💩"}
 	for _, id := range invalidDatasetNames {
-		assert.Panics(func() {
-			store.GetDataset(context.Background(), id)
-		})
+		_, err := store.GetDataset(context.Background(), id)
+		assert.Error(err)
 	}
 }
 

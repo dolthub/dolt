@@ -16,7 +16,8 @@ timeprefix="$6"
 actorprefix="$7"
 format="$8"
 
-average_time_change_query="select f.test_name as test_name, ROUND(100 * (1.0 - ((AVG(t.latency_sum_ms) / (AVG(cast(t.sql_transactions_total as decimal)) + .000001)) / (AVG(f.latency_sum_ms) / (AVG(cast(f.sql_transactions_total as decimal)) + .000001))))) as average_time_percent_change, case when (100 * (1.0 - ((AVG(t.latency_sum_ms) / (AVG(cast(t.sql_transactions_total as decimal)) + .000001)) / (AVG(f.latency_sum_ms) / (AVG(cast(f.sql_transactions_total as decimal)) + .000001))))) < 0 then true else false end as is_faster from from_results as f join to_results as t on f.test_name = t.test_name group by f.test_name;"
+medianLatencyMultiplierQuery="select f.test_name as test_name, f.server_name, f.server_version, avg(f.latency_percentile) as from_latency_median, t.server_name, t.server_version, avg(t.latency_percentile) as to_latency_median, ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001)) as multiplier from from_results as f join to_results as t on f.test_name = t.test_name group by f.test_name;"
+meanMultiplierQuery="select round(avg(multipliers)) as mean_multiplier from (select (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001))) as multipliers from from_results as f join to_results as t on f.test_name = t.test_name group by f.test_name)"
 
 echo '
 {
@@ -35,6 +36,17 @@ echo '
           {
             "name": "performance-benchmarking",
             "image": "407903926827.dkr.ecr.us-west-2.amazonaws.com/liquidata/performance-benchmarking:latest",
+            "resources": {
+              "limits": {
+                "cpu": "7000m"
+              }
+            },
+            "env": [
+              {
+                "name": "GOMAXPROCS",
+                "value": "7"
+              }
+            ],
             "args": [
               "--schema=/schema.sql",
               "--script-dir=/scripts/lua",
@@ -49,7 +61,8 @@ echo '
               "--region=us-west-2",
               "--results-dir='$timeprefix'",
               "--results-prefix='$actorprefix'",
-              "'"$average_time_change_query"'"
+              "'"$medianLatencyMultiplierQuery"'",
+              "'"$meanMultiplierQuery"'"
             ]
           }
         ],

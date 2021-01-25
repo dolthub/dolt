@@ -23,6 +23,7 @@ package metrics
 
 import (
 	"testing"
+	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -110,4 +111,9 @@ func TestHistogramString(t *testing.T) {
 	bh := NewByteHistogram()
 	bh.Add(h)
 	assert.Equal("Mean: 758 MB, Sum: 3.0 GB, Samples: 4", bh.String())
+}
+
+func TestHistogramStructSize(t *testing.T) {
+	size := unsafe.Sizeof(Histogram{})
+	assert.True(t, size%8 == 0)
 }

@@ -30,6 +30,7 @@ import (
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -244,7 +245,7 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	dArgs.docSet = set.NewStrSet(nil)
 
 	for _, arg := range leftover {
-		if arg == doltdb.ReadmePk || arg == doltdb.LicensePk {
+		if arg == doltdocs.ReadmeDoc || arg == doltdocs.LicenseDoc {
 			dArgs.docSet.Add(arg)
 			continue
 		}
@@ -275,7 +276,7 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 			return nil, nil, nil, err
 		}
 		dArgs.tableSet.Add(utn...)
-		dArgs.docSet.Add(doltdb.ReadmePk, doltdb.LicensePk)
+		dArgs.docSet.Add(doltdocs.ReadmeDoc, doltdocs.LicenseDoc)
 	}
 
 	return from, to, dArgs, nil
@@ -283,7 +284,21 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 
 func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string) (from, to *doltdb.RootValue, leftover []string, err error) {
 	headRoot, err := dEnv.StagedRoot(ctx)
-	workingRoot, err := dEnv.WorkingRootWithDocs(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	workingRoot, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	docs, err := dEnv.DocsReadWriter().GetDocsOnDisk()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	workingRoot, err = doltdocs.UpdateRootWithDocs(ctx, workingRoot, docs)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -876,59 +891,45 @@ func createSplitter(ctx context.Context, vrw types.ValueReadWriter, fromSch sche
 }
 
 func diffDoltDocs(ctx context.Context, dEnv *env.DoltEnv, from, to *doltdb.RootValue, dArgs *diffArgs) error {
-	_, docDetails, err := actions.GetTblsAndDocDetails(dEnv.DocsReadWriter(), dArgs.docSet.AsSlice())
+	_, docs, err := actions.GetTablesOrDocs(dEnv.DocsReadWriter(), dArgs.docSet.AsSlice())
 
 	if err != nil {
 		return err
 	}
 
-	fromDocTable, _, err := from.GetTable(ctx, doltdb.DocTableName)
-
-	if err != nil {
-		return err
-	}
-
-	toDocTable, _, err := to.GetTable(ctx, doltdb.DocTableName)
-
-	if err != nil {
-		return err
-	}
-
-	printDocDiffs(ctx, dEnv, fromDocTable, toDocTable, docDetails)
-	return nil
+	return printDocDiffs(ctx, from, to, docs)
 }
 
-func printDocDiffs(ctx context.Context, dEnv *env.DoltEnv, fromTbl, toTbl *doltdb.Table, docDetails []doltdb.DocDetails) {
+func printDocDiffs(ctx context.Context, from, to *doltdb.RootValue, docsFilter doltdocs.Docs) error {
 	bold := color.New(color.Bold)
 
-	if docDetails == nil {
-		docDetails, _ = dEnv.GetAllValidDocDetails()
+	comparisons, err := diff.DocsDiffToComparisons(ctx, from, to, docsFilter)
+	if err != nil {
+		return err
 	}
 
-	for _, doc := range docDetails {
-		if toTbl != nil {
-			sch1, _ := toTbl.GetSchema(ctx)
-			doc, _ = doltdb.AddNewerTextToDocFromTbl(ctx, toTbl, &sch1, doc)
+	for _, doc := range docsFilter {
+		for _, comparison := range comparisons {
+			if doc.DocPk == comparison.DocName {
+				if comparison.OldText == nil && comparison.CurrentText != nil {
+					printAddedDoc(bold, comparison.DocName)
+				} else if comparison.OldText != nil {
+					older := string(comparison.OldText)
+					newer := string(comparison.CurrentText)
 
-		}
-		if fromTbl != nil {
-			sch2, _ := fromTbl.GetSchema(ctx)
-			doc, _ = doltdb.AddValueToDocFromTbl(ctx, fromTbl, &sch2, doc)
-		}
+					lines := textdiff.LineDiffAsLines(older, newer)
 
-		if doc.Value != nil {
-			newer := string(doc.NewerText)
-			older, _ := strconv.Unquote(doc.Value.HumanReadableString())
-			lines := textdiff.LineDiffAsLines(older, newer)
-			if doc.NewerText == nil {
-				printDeletedDoc(bold, doc.DocPk, lines)
-			} else if len(lines) > 0 && newer != older {
-				printModifiedDoc(bold, doc.DocPk, lines)
+					if comparison.CurrentText == nil {
+						printDeletedDoc(bold, comparison.DocName, lines)
+					} else if len(lines) > 0 && newer != older {
+						printModifiedDoc(bold, comparison.DocName, lines)
+					}
+				}
 			}
-		} else if doc.Value == nil && doc.NewerText != nil {
-			printAddedDoc(bold, doc.DocPk)
 		}
 	}
+
+	return nil
 }
 
 func printDiffLines(bold *color.Color, lines []string) {

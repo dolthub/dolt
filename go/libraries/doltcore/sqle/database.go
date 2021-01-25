@@ -845,7 +845,7 @@ func RegisterSchemaFragments(ctx *sql.Context, db Database, root *doltdb.RootVal
 	}
 
 	tbl := stbl.(*WritableDoltTable)
-	iter, err := newRowIterator(&tbl.DoltTable, ctx, nil)
+	iter, err := newRowIterator(&tbl.DoltTable, ctx, nil, nil)
 	if err != nil {
 		return err
 	}

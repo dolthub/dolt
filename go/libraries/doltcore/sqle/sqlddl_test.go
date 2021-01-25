@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -982,7 +983,7 @@ func TestAlterSystemTables(t *testing.T) {
 	})
 
 	dtestutils.CreateTestTable(t, dEnv, "dolt_docs",
-		env.DoltDocsSchema,
+		doltdocs.DoltDocsSchema,
 		NewRow(types.String("LICENSE.md"), types.String("A license")))
 	dtestutils.CreateTestTable(t, dEnv, doltdb.DoltQueryCatalogTableName,
 		dtables.DoltQueryCatalogSchema,
