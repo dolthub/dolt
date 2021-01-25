@@ -12,4 +12,4 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           repository: dolthub/dolt
           event-type: release-dolt
-          client-payload: '{"version": "fake-version-1.0.0"}'
+          client-payload: '{"version": "fake-version-1.0.0", "actor": "${{ github.actor }}"}'
