@@ -17,6 +17,7 @@ package untyped
 import (
 	"testing"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -113,7 +114,9 @@ func TestUntypedSchemaUnion(t *testing.T) {
 		schema.NewColumn("e", 4, types.StringKind, false))
 
 	unequalColCollumn := cols[1]
-	unequalColCollumn.Name = "bad"
+	unequalColCollumn.Name = "incompatible_type"
+	unequalColCollumn.TypeInfo = typeinfo.DatetimeType
+	unequalColCollumn.Kind = types.TimestampKind
 
 	untypedSch := schema.MustSchemaFromCols(untypedColColl)
 
