@@ -15,7 +15,6 @@
 package dfunctions
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -26,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/vitess/go/vt/proto/query"
 	"strings"
 )
 
@@ -101,7 +101,7 @@ func (d DoltCheckoutFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, erro
 	return 0, nil
 }
 
-func checkoutNewBranch(ctx context.Context, dbData env.DbData, newBranch string, apr *argparser.ArgParseResults) error {
+func checkoutNewBranch(ctx *sql.Context, dbData env.DbData, newBranch string, apr *argparser.ArgParseResults) error {
 	startPt := "head"
 	if apr.NArg() == 1 {
 		startPt = apr.Arg(0)
@@ -115,7 +115,7 @@ func checkoutNewBranch(ctx context.Context, dbData env.DbData, newBranch string,
 	return checkoutBranch(ctx, dbData, newBranch)
 }
 
-func checkoutBranch(ctx context.Context, dbData env.DbData, branchName string) error {
+func checkoutBranch(ctx *sql.Context, dbData env.DbData, branchName string) error {
 	err := actions.CheckoutBranch(ctx, dbData, branchName)
 
 	if err != nil {
@@ -133,7 +133,32 @@ func checkoutBranch(ctx context.Context, dbData env.DbData, branchName string) e
 		}
 	}
 
-	return nil
+
+	working, err := env.WorkingRoot(ctx, dbData.Ddb, dbData.Rsr)
+	return setRoot(ctx, working)
+}
+
+func setRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
+	h, err := newRoot.HashOf()
+
+	if err != nil {
+		return err
+	}
+
+	hashStr := h.String()
+	key := ctx.GetCurrentDatabase() + sqle.WorkingKeySuffix
+
+	// Refactor from sqle.database.go
+	hashType := sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
+
+	// TODO: Is this correct.
+	err = ctx.Session.Set(ctx, key, hashType, hashStr)
+	if err != nil {
+		return err
+	}
+
+	dsess := sqle.DSessFromSess(ctx.Session)
+	return dsess.SetSqlRoot(ctx, hashStr, newRoot)
 }
 
 func (d DoltCheckoutFunc) String() string {
