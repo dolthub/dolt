@@ -176,6 +176,56 @@ type valueReadWriter interface {
 	valueReadWriter() ValueReadWriter
 }
 
+type TupleSlice []Tuple
+
+func (vs TupleSlice) Equals(other TupleSlice) bool {
+	if len(vs) != len(other) {
+		return false
+	}
+
+	for i, v := range vs {
+		if !v.Equals(other[i]) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (vs TupleSlice) Contains(nbf *NomsBinFormat, v Tuple) bool {
+	for _, v := range vs {
+		if v.Equals(v) {
+			return true
+		}
+	}
+	return false
+}
+
+type TupleSort struct {
+	Tuples []Tuple
+	Nbf    *NomsBinFormat
+}
+
+func (vs TupleSort) Len() int {
+	return len(vs.Tuples)
+}
+
+func (vs TupleSort) Swap(i, j int) {
+	vs.Tuples[i], vs.Tuples[j] = vs.Tuples[j], vs.Tuples[i]
+}
+
+func (vs TupleSort) Less(i, j int) (bool, error) {
+	return vs.Tuples[i].Less(vs.Nbf, vs.Tuples[j])
+}
+
+func (vs TupleSort) Equals(other TupleSort) bool {
+	return TupleSlice(vs.Tuples).Equals(other.Tuples)
+}
+
+func (vs TupleSort) Contains(v Tuple) bool {
+	return TupleSlice(vs.Tuples).Contains(vs.Nbf, v)
+}
+
 type valueImpl struct {
 	vrw     ValueReadWriter
 	nbf     *NomsBinFormat

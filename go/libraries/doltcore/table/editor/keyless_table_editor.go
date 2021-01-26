@@ -281,13 +281,13 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc) (*do
 	}
 
 	idx := 0
-	keys := make([]types.Value, len(acc.deltas))
+	keys := make([]types.Tuple, len(acc.deltas))
 	for _, vd := range acc.deltas {
 		keys[idx] = vd.key
 		idx++
 	}
 
-	err = types.SortWithErroringLess(types.ValueSort{Values: keys, Nbf: acc.nbf})
+	err = types.SortWithErroringLess(types.TupleSort{Tuples: keys, Nbf: acc.nbf})
 	if err != nil {
 		return nil, err
 	}
@@ -296,25 +296,26 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc) (*do
 	iter := table.NewMapPointReader(rowData, keys...)
 
 	for {
-		k, v, err := iter.Next(ctx)
+		k, v, err := iter.NextTuple(ctx)
 		if err == io.EOF {
 			break
 		}
+
 		if err != nil {
 			return nil, err
 		}
 
-		delta, err := acc.getRowDelta(k.(types.Tuple))
+		delta, err := acc.getRowDelta(k)
 		if err != nil {
 			return nil, err
 		}
 
 		var ok bool
-		if v == nil {
+		if v.Empty() {
 			// row does not yet exist
 			v, ok, err = initializeCardinality(delta.val, delta.delta)
 		} else {
-			v, ok, err = modifyCardinalityWithDelta(v.(types.Tuple), delta.delta)
+			v, ok, err = modifyCardinalityWithDelta(v, delta.delta)
 		}
 		if err != nil {
 			return nil, err
