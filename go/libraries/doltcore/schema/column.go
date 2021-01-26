@@ -149,8 +149,8 @@ func (c Column) Equals(other Column) bool {
 // kinds of values at the storage layer, but may have different constraints or type parameters.
 func (c Column) Compatible(other Column) bool {
 	return c.Tag == other.Tag &&
-			c.Kind == other.Kind &&
-			c.IsPartOfPK == other.IsPartOfPK
+		c.Kind == other.Kind &&
+		c.IsPartOfPK == other.IsPartOfPK
 }
 
 // KindString returns the string representation of the NomsKind stored in the column.
