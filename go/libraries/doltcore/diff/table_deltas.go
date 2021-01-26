@@ -19,11 +19,12 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -88,13 +89,13 @@ func (rvu RootValueUnreadable) Error() string {
 }
 
 // NewDocDiffs returns DocDiffs for Dolt Docs between two roots.
-func NewDocDiffs(ctx context.Context, older *doltdb.RootValue, newer *doltdb.RootValue, docDetails []doltdb.DocDetails) (*DocDiffs, error) {
+func NewDocDiffs(ctx context.Context, older *doltdb.RootValue, newer *doltdb.RootValue, docs doltdocs.Docs) (*DocDiffs, error) {
 	var added []string
 	var modified []string
 	var removed []string
 	if older != nil {
 		if newer == nil {
-			a, m, r, err := older.DocDiff(ctx, nil, docDetails)
+			a, m, r, err := DocsDiff(ctx, older, nil, docs)
 			if err != nil {
 				return nil, err
 			}
@@ -102,7 +103,7 @@ func NewDocDiffs(ctx context.Context, older *doltdb.RootValue, newer *doltdb.Roo
 			modified = m
 			removed = r
 		} else {
-			a, m, r, err := older.DocDiff(ctx, newer, docDetails)
+			a, m, r, err := DocsDiff(ctx, older, newer, docs)
 			if err != nil {
 				return nil, err
 			}
@@ -111,11 +112,11 @@ func NewDocDiffs(ctx context.Context, older *doltdb.RootValue, newer *doltdb.Roo
 			removed = r
 		}
 	}
-	var docs []string
-	docs = append(docs, added...)
-	docs = append(docs, modified...)
-	docs = append(docs, removed...)
-	sort.Strings(docs)
+	var docNames []string
+	docNames = append(docNames, added...)
+	docNames = append(docNames, modified...)
+	docNames = append(docNames, removed...)
+	sort.Strings(docNames)
 
 	docsToType := make(map[string]DocDiffType)
 	for _, nt := range added {
@@ -130,7 +131,7 @@ func NewDocDiffs(ctx context.Context, older *doltdb.RootValue, newer *doltdb.Roo
 		docsToType[nt] = RemovedDoc
 	}
 
-	return &DocDiffs{len(added), len(modified), len(removed), docsToType, docs}, nil
+	return &DocDiffs{len(added), len(modified), len(removed), docsToType, docNames}, nil
 }
 
 // Len returns the number of docs in a DocDiffs
@@ -140,7 +141,7 @@ func (nd *DocDiffs) Len() int {
 
 // GetDocDiffs retrieves staged and unstaged DocDiffs.
 func GetDocDiffs(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, drw env.DocsReadWriter) (*DocDiffs, *DocDiffs, error) {
-	docDetails, err := drw.GetAllValidDocDetails()
+	docsOnDisk, err := drw.GetDocsOnDisk()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -150,7 +151,7 @@ func GetDocDiffs(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReade
 		return nil, nil, err
 	}
 
-	notStagedDocDiffs, err := NewDocDiffs(ctx, workingRoot, nil, docDetails)
+	notStagedDocDiffs, err := NewDocDiffs(ctx, workingRoot, nil, docsOnDisk)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -165,7 +166,7 @@ func GetDocDiffs(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReade
 		return nil, nil, err
 	}
 
-	stagedDocDiffs, err := NewDocDiffs(ctx, headRoot, stagedRoot, docDetails)
+	stagedDocDiffs, err := NewDocDiffs(ctx, headRoot, stagedRoot, docsOnDisk)
 	if err != nil {
 		return nil, nil, err
 	}

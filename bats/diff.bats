@@ -393,13 +393,12 @@ SQL
 }
 
 @test "diff --cached" {
-    skip "diff --cached not supported"
     run dolt diff --cached
-    [ $status -wq 0 ]
-    [ $output -eq "" ]
+    [ $status -eq 0 ]
+    [ "$output" = "" ]
     dolt add test
     run dolt diff --cached
-    [ $status -wq 0 ]
+    [ $status -eq 0 ]
     [[ $output =~ "added table" ]] || false  
     dolt commit -m "First commit"
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
@@ -409,7 +408,12 @@ SQL
     dolt add test
     run dolt diff --cached
     [ $status -eq 0 ]
-    [ $output -eq $CORRECT_DIFF ]
+    [ "$output" = "$CORRECT_DIFF" ]
+    # Make sure it ignores changes to the working set that aren't staged
+    dolt sql -q "create table test2 (pk int, c1 int, primary key(pk))"
+    run dolt diff --cached
+    [ $status -eq 0 ]
+    [ "$output" = "$CORRECT_DIFF" ]
 }
 
 @test "diff with invalid ref does not panic" {

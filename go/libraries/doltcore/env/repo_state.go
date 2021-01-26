@@ -20,6 +20,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -43,11 +44,10 @@ type RepoStateWriter interface {
 }
 
 type DocsReadWriter interface {
-	GetAllValidDocDetails() ([]doltdb.DocDetails, error)
-	PutDocsToWorking(ctx context.Context, docDetails []doltdb.DocDetails) error
-	PutDocsToStaged(ctx context.Context, docDetails []doltdb.DocDetails) (*doltdb.RootValue, error)
-	ResetWorkingDocsToStagedDocs(ctx context.Context) error
-	GetDocDetail(docName string) (doc doltdb.DocDetails, err error)
+	// GetDocsOnDisk returns the docs in the filesytem optionally filtered by docNames.
+	GetDocsOnDisk(docNames ...string) (doltdocs.Docs, error)
+	// WriteDocsToDisk updates the documents stored in the filesystem with the contents in docs.
+	WriteDocsToDisk(docs doltdocs.Docs) error
 }
 
 type DbData struct {

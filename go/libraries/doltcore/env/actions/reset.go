@@ -19,6 +19,7 @@ import (
 	"errors"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
@@ -169,15 +170,14 @@ func ResetSoftTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgP
 	return stagedRoot, nil
 }
 
-func ResetSoft(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, stagedRoot, headRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
+func ResetSoft(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, stagedRoot, headRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
 	tables, err := getUnionedTables(ctx, apr.Args(), stagedRoot, headRoot)
 
 	if err != nil {
 		return nil, err
 	}
 
-	dbData := dEnv.DbData()
-	tables, docs, err := GetTblsAndDocDetails(dbData.Drw, tables)
+	tables, docs, err := GetTablesOrDocs(dbData.Drw, tables)
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +192,7 @@ func ResetSoft(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 		return nil, err
 	}
 
-	stagedRoot, err = resetDocs(ctx, dEnv, headRoot, docs)
+	stagedRoot, err = resetDocs(ctx, dbData, headRoot, stagedRoot, docs)
 	if err != nil {
 		return nil, err
 	}
@@ -219,18 +219,26 @@ func getUnionedTables(ctx context.Context, tables []string, stagedRoot, headRoot
 	return tables, nil
 }
 
-func resetDocs(ctx context.Context, dEnv *env.DoltEnv, headRoot *doltdb.RootValue, docDetails env.Docs) (newStgRoot *doltdb.RootValue, err error) {
-	docs, err := dEnv.GetDocsWithNewerTextFromRoot(ctx, headRoot, docDetails)
+// resetDocs resets the working and staged docs with docs from head.
+func resetDocs(ctx context.Context, dbData env.DbData, headRoot *doltdb.RootValue, staged *doltdb.RootValue, docs doltdocs.Docs) (newStgRoot *doltdb.RootValue, err error) {
+	docs, err = doltdocs.GetDocsFromRoot(ctx, headRoot, doltdocs.GetDocNamesFromDocs(docs)...)
+
+	working, err := env.WorkingRoot(ctx, dbData.Ddb, dbData.Rsr)
 	if err != nil {
 		return nil, err
 	}
 
-	err = dEnv.PutDocsToWorking(ctx, docs)
+	working, err = doltdocs.UpdateRootWithDocs(ctx, working, docs)
 	if err != nil {
 		return nil, err
 	}
 
-	return dEnv.PutDocsToStaged(ctx, docs)
+	_, err = env.UpdateWorkingRoot(ctx, dbData.Ddb, dbData.Rsw, working)
+	if err != nil {
+		return nil, err
+	}
+
+	return doltdocs.UpdateRootWithDocs(ctx, staged, docs)
 }
 
 func resetStaged(ctx context.Context, ddb *doltdb.DoltDB, rsw env.RepoStateWriter, tbls []string, staged, head *doltdb.RootValue) (*doltdb.RootValue, error) {

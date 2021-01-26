@@ -322,7 +322,7 @@ func executeFFMerge(ctx context.Context, squash bool, dEnv *env.DoltEnv, cm2 *do
 		}
 	}
 
-	unstagedDocs, err := actions.GetUnstagedDocs(ctx, dEnv)
+	unstagedDocs, err := actions.GetUnstagedDocs(ctx, dEnv.DbData())
 	if err != nil {
 		return errhand.BuildDError("error: unable to determine unstaged docs").AddCause(err).Build()
 	}
@@ -401,7 +401,7 @@ func mergedRootToWorking(ctx context.Context, squash bool, dEnv *env.DoltEnv, me
 		}
 	}
 
-	unstagedDocs, err := actions.GetUnstagedDocs(ctx, dEnv)
+	unstagedDocs, err := actions.GetUnstagedDocs(ctx, dEnv.DbData())
 	if err != nil {
 		return errhand.BuildDError("error: failed to determine unstaged docs").AddCause(err).Build()
 	}
