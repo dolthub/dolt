@@ -152,6 +152,12 @@ SQL
 
     dolt branch original
 
+    # push to a file based remote, clone a copy to pull to later
+    mkdir remotedir
+    dolt remote add origin file://remotedir
+    dolt push origin master
+    dolt clone file://remotedir original
+    
     dolt schema change-type Test2 V1 'varchar(300)'
     dolt schema change-type TEST2 PK2 'tinyint'
     dolt schema change-type Test2 V2 'varchar(1024)'
@@ -187,4 +193,37 @@ SQL
     [ "${#lines[@]}" -eq 3 ]
     [[ "$output" =~ '1,1,abc,def' ]] || false
     [[ "$output" =~ '2,2,abc,def' ]] || false
+
+    dolt add .
+    dolt commit -m "merge master"
+
+    # push to remote
+    dolt checkout master
+    dolt merge original
+    dolt push origin master
+
+    # pull from the remote and make sure there's no issue
+    cd original
+    dolt pull
+    run dolt sql -q 'show create table test2'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ '`pk2` tinyint NOT NULL' ]] || false
+    [[ "$output" =~ '`v1` varchar(300) NOT NULL' ]] || false
+
+    run dolt sql -q 'select * from test2' -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "$output" =~ '1,1,abc,def' ]] || false
+    [[ "$output" =~ '2,2,abc,def' ]] || false
+
+    # make sure diff works as expected for schema change on clone
+    run dolt diff HEAD~2
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ '<   `pk2`  BIGINT NOT NULL' ]] || false
+    [[ "$output" =~ '>   `pk2` TINYINT NOT NULL' ]] || false
+    [[ "$output" =~ '<   `v1` VARCHAR(100) NOT NULL' ]] || false
+    [[ "$output" =~ '>   `v1` VARCHAR(300) NOT NULL' ]] || false
+    [[ "$output" =~ '<   `v2`  VARCHAR(120)' ]] || false
+    [[ "$output" =~ '>   `v2` VARCHAR(1024)' ]] || false
+    [[ "$output" =~ 'PRIMARY KEY' ]] || false
 }
