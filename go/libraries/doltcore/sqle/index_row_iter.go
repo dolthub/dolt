@@ -254,7 +254,7 @@ func (ci *coveringIndexRowIterAdapter) Next() (sql.Row, error) {
 		return nil, err
 	}
 
-	return ci.conv.ConvertKVToSqlRow(key, nil)
+	return ci.conv.ConvertKVTuplesToSqlRow(key, types.Tuple{})
 }
 
 func (ci *coveringIndexRowIterAdapter) Close() error {
