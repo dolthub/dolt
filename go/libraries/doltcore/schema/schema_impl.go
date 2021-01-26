@@ -93,7 +93,7 @@ func ValidateForInsert(allCols *ColCollection) error {
 		}
 		colTags[tag] = true
 
-		if _, ok := colNames[col.Name]; ok {
+		if _, ok := colNames[strings.ToLower(col.Name)]; ok {
 			return true, ErrColNameCollision
 		}
 		colNames[col.Name] = true

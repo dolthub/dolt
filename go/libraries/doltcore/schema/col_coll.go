@@ -68,7 +68,7 @@ type ColCollection struct {
 // any columns have the same name, by-name lookups from this collection will not function correctly. If any columns
 // have the same case-insensitive name, case-insensitive lookups will be unable to return the correct column in all
 // cases.
-// TODO: this no longer returns an err in any case
+// TODO: this no longer returns an error in any case
 func NewColCollection(cols ...Column) (*ColCollection, error) {
 	var tags []uint64
 	var sortedTags []uint64
@@ -78,28 +78,24 @@ func NewColCollection(cols ...Column) (*ColCollection, error) {
 	lowerNameToCol := make(map[string]Column, len(cols))
 	tagToIdx := make(map[uint64]int, len(cols))
 
-	var uniqueCols []Column
 	for i, col := range cols {
-		if _, ok := tagToCol[col.Tag]; !ok {
-			uniqueCols = append(uniqueCols, col)
-			tagToCol[col.Tag] = col
-			tagToIdx[col.Tag] = i
-			tags = append(tags, col.Tag)
-			sortedTags = append(sortedTags, col.Tag)
-			nameToCol[col.Name] = cols[i]
+		tagToCol[col.Tag] = col
+		tagToIdx[col.Tag] = i
+		tags = append(tags, col.Tag)
+		sortedTags = append(sortedTags, col.Tag)
+		nameToCol[col.Name] = cols[i]
 
-			// If multiple columns have the same lower case name, the first one is used for case-insensitive matching.
-			lowerCaseName := strings.ToLower(col.Name)
-			if _, ok := lowerNameToCol[lowerCaseName]; !ok {
-				lowerNameToCol[lowerCaseName] = cols[i]
-			}
+		// If multiple columns have the same lower case name, the first one is used for case-insensitive matching.
+		lowerCaseName := strings.ToLower(col.Name)
+		if _, ok := lowerNameToCol[lowerCaseName]; !ok {
+			lowerNameToCol[lowerCaseName] = cols[i]
 		}
 	}
 
 	sort.Slice(sortedTags, func(i, j int) bool { return sortedTags[i] < sortedTags[j] })
 
 	return &ColCollection{
-		cols:           uniqueCols,
+		cols:           cols,
 		Tags:           tags,
 		SortedTags:     sortedTags,
 		TagToCol:       tagToCol,

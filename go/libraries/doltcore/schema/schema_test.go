@@ -16,6 +16,7 @@ package schema
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -123,6 +124,26 @@ func TestValidateForInsert(t *testing.T) {
 		err = ValidateForInsert(colColl)
 		assert.Error(t, err)
 		assert.Equal(t, err, ErrColNameCollision)
+	})
+
+	t.Run("Case insensitive collision", func(t *testing.T) {
+		cols := append(allCols, Column{strings.ToUpper(titleColName), 100, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil})
+		colColl, err := NewColCollection(cols...)
+		require.NoError(t, err)
+
+		err = ValidateForInsert(colColl)
+		assert.Error(t, err)
+		assert.Equal(t, err, ErrColNameCollision)
+	})
+
+	t.Run("Tag collision", func(t *testing.T) {
+		cols := append(allCols, Column{"newCol", lnColTag, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil})
+		colColl, err := NewColCollection(cols...)
+		require.NoError(t, err)
+
+		err = ValidateForInsert(colColl)
+		assert.Error(t, err)
+		assert.Equal(t, err, ErrColTagCollision)
 	})
 }
 
