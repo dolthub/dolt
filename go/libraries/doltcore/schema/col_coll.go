@@ -63,10 +63,12 @@ type ColCollection struct {
 	TagToIdx map[uint64]int
 }
 
-// NewColCollection creates a new collection from a list of columns. All columns must have unique tags or this method
-// returns an error. If any columns have the same name, by-name lookups from this collection will not function
-// correctly, and this column collection cannot be used to create a schema. If any columns have the same case-
-// insensitive name, case-insensitive lookups will be unable to return the correct column in all cases.
+// NewColCollection creates a new collection from a list of columns. If any columns have the same tag, their types must
+// be compatible. If any columns have the same tag, by-tag lookups in this collection will not function correctly. If
+// any columns have the same name, by-name lookups from this collection will not function correctly. If any columns
+// have the same case-insensitive name, case-insensitive lookups will be unable to return the correct column in all
+// cases.
+// TODO: this no longer returns an err in any case
 func NewColCollection(cols ...Column) (*ColCollection, error) {
 	var tags []uint64
 	var sortedTags []uint64
@@ -78,7 +80,7 @@ func NewColCollection(cols ...Column) (*ColCollection, error) {
 
 	var uniqueCols []Column
 	for i, col := range cols {
-		if val, ok := tagToCol[col.Tag]; !ok {
+		if _, ok := tagToCol[col.Tag]; !ok {
 			uniqueCols = append(uniqueCols, col)
 			tagToCol[col.Tag] = col
 			tagToIdx[col.Tag] = i
@@ -91,8 +93,6 @@ func NewColCollection(cols ...Column) (*ColCollection, error) {
 			if _, ok := lowerNameToCol[lowerCaseName]; !ok {
 				lowerNameToCol[lowerCaseName] = cols[i]
 			}
-		} else if !val.Compatible(col) {
-			return nil, ErrColTagCollision
 		}
 	}
 
@@ -256,19 +256,19 @@ func ColCollsAreCompatible(cc1, cc2 *ColCollection) bool {
 		return false
 	}
 
-	areEqual := true
+	areCompatible := true
 	_ = cc1.Iter(func(tag uint64, col1 Column) (stop bool, err error) {
 		col2, ok := cc2.GetByTag(tag)
 
 		if !ok || !col1.Compatible(col2) {
-			areEqual = false
+			areCompatible = false
 			return true, nil
 		}
 
 		return false, nil
 	})
 
-	return areEqual
+	return areCompatible
 }
 
 // MapColCollection applies a function to each column in a ColCollection and creates a new ColCollection from the results.

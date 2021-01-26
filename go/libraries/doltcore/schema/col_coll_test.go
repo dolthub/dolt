@@ -103,28 +103,6 @@ func TestGetByNameCaseInsensitive(t *testing.T) {
 	}
 }
 
-func TestNewColCollectionErrorHandling(t *testing.T) {
-	tests := []struct {
-		name        string
-		cols        []Column
-		expectedErr error
-	}{
-		{
-			name:        "tag collision",
-			cols:        []Column{firstNameCol, lastNameCol, {"collision", 0, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil}},
-			expectedErr: ErrColTagCollision,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			_, err := NewColCollection(test.cols...)
-			assert.Error(t, err)
-			assert.Equal(t, err, test.expectedErr)
-		})
-	}
-}
-
 func TestAppendAndItrInSortOrder(t *testing.T) {
 	cols := []Column{
 		{"0", 0, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil},
