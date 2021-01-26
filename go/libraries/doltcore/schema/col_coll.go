@@ -68,6 +68,7 @@ type ColCollection struct {
 // any columns have the same name, by-name lookups from this collection will not function correctly. If any columns
 // have the same case-insensitive name, case-insensitive lookups will be unable to return the correct column in all
 // cases.
+// For this collection to be used as a Dolt schema, it must pass schema.ValidateForInsert.
 // TODO: this no longer returns an error in any case
 func NewColCollection(cols ...Column) (*ColCollection, error) {
 	var tags []uint64
