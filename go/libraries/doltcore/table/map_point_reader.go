@@ -58,7 +58,7 @@ func (pr *PointReader) Next(ctx context.Context) (k, v types.Value, err error) {
 	return k, v, nil
 }
 
-// Next implements types.MapIterator.
+// NextTuple implements types.MapIterator.
 func (pr *PointReader) NextTuple(ctx context.Context) (k, v types.Tuple, err error) {
 	if pr.idx >= len(pr.keys) {
 		return types.Tuple{}, types.Tuple{}, io.EOF
