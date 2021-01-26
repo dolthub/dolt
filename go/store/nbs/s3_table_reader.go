@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2019-2021 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,10 +27,10 @@ import (
 	"io"
 	"net"
 	"os"
-	"syscall"
+	"strconv"
 	"strings"
 	"sync/atomic"
-	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -124,7 +124,7 @@ func s3RangeHeader(off, length int64) string {
 	return fmt.Sprintf("%s=%d-%d", s3RangePrefix, off, lastByte)
 }
 
-const maxS3ReadFromEndReqSize = 256 * 1024 * 1024 // 256MB
+const maxS3ReadFromEndReqSize = 256 * 1024 * 1024       // 256MB
 const preferredS3ReadFromEndReqSize = 128 * 1024 * 1024 // 128MB
 
 func (s3or *s3ObjectReader) ReadFromEnd(ctx context.Context, name addr, p []byte, stats *Stats) (n int, sz uint64, err error) {
@@ -136,19 +136,19 @@ func (s3or *s3ObjectReader) ReadFromEnd(ctx context.Context, name addr, p []byte
 	totalN := uint64(0)
 	if len(p) > maxS3ReadFromEndReqSize {
 		// If we're bigger than 256MB, parallelize the read...
-		// Read the 20 byte footer first, and capture the size of the entire table file.
-		n, sz, err := s3or.readRange(ctx, name, p[len(p)-20:], "bytes=-20")
+		// Read the footer first and capture the size of the entire table file.
+		n, sz, err := s3or.readRange(ctx, name, p[len(p)-footerSize:], fmt.Sprintf("%s=-%d", s3RangePrefix, footerSize))
 		if err != nil {
 			return n, sz, err
 		}
 		totalN += uint64(n)
 		eg, egctx := errgroup.WithContext(ctx)
 		start := 0
-		for start < len(p) - 20 {
+		for start < len(p)-footerSize {
 			// Make parallel read requests of up to 128MB.
 			end := start + preferredS3ReadFromEndReqSize
-			if end > len(p) - 20 {
-				end = len(p) - 20
+			if end > len(p)-footerSize {
+				end = len(p) - footerSize
 			}
 			bs := p[start:end]
 			rangeStart := sz - uint64(len(p)) + uint64(start)
