@@ -102,7 +102,7 @@ func (cur *sequenceCursor) current() (sequenceItem, error) {
 	return cur.getItem(cur.idx)
 }
 
-// current returns the value at the current cursor position
+// currentTuple returns the tupleMapEntry at the current cursor position
 func (cur *sequenceCursor) currentTuple() (tupleMapEntry, error) {
 	d.PanicIfFalse(cur.valid())
 	return cur.seq.(mapLeafSequence).getTupleMapEntry(cur.idx)
