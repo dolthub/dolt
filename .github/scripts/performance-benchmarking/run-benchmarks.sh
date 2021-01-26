@@ -12,8 +12,8 @@ if [ -z "$TEMPLATE_SCRIPT" ]; then
     exit 1
 fi
 
-if [ -z "$FROM_VERSION" ] || [ -z "$TO_VERSION" ]; then
-    echo  "Must set FROM_VERSION and TO_VERSION"
+if [ -z "$FROM_SERVER" ] || [ -z "$FROM_VERSION" ] || [ -z "$TO_SERVER" ] || [ -z "$TO_VERSION" ]; then
+    echo  "Must set FROM_SERVER FROM_VERSION TO_SERVER and TO_VERSION"
     exit 1
 fi
 
@@ -22,20 +22,30 @@ if [ -z "$ACTOR" ]; then
     exit 1
 fi
 
-echo "Setting from version to: $FROM_VERSION"
-echo "Setting to version to: $TO_VERSION"
+if [ -z "$MODE" ]; then
+    echo  "Must set MODE"
+    exit 1
+fi
+
+echo "Setting from $FROM_SERVER: $FROM_VERSION"
+echo "Setting to $TO_SERVER: $TO_VERSION"
 
 jobname="performance-benchmarking-$ACTOR"
 
 timeprefix=$(date +%Y/%m/%d)
 
-actorprefix="$ACTOR/$TO_VERSION"
+actorprefix="$MODE/$ACTOR/$TO_VERSION"
 
-source "$TEMPLATE_SCRIPT" "$jobname" "$FROM_VERSION" "$TO_VERSION" "$timeprefix" "$actorprefix" > job.json
+format="markdown"
+if [ "$MODE" = "release" ]; then
+  format="html"
+fi
+
+source "$TEMPLATE_SCRIPT" "$jobname" "$FROM_SERVER" "$FROM_VERSION" "$TO_SERVER" "$TO_VERSION" "$timeprefix" "$actorprefix" "$format" > job.json
 
 KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json
 
-out=$(KUBECONFIG="$KUBECONFIG" kubectl wait job/"$jobname" --for=condition=complete -n performance-benchmarking --timeout=1500s || true)
+out=$(KUBECONFIG="$KUBECONFIG" kubectl wait job/"$jobname" --for=condition=complete -n performance-benchmarking --timeout=5400s || true)
 
 if [ "$out" != "job.batch/$jobname condition met" ]; then
   echo "output of kubectl wait: $out"

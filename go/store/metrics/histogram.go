@@ -23,6 +23,7 @@ package metrics
 
 import (
 	"fmt"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -47,16 +48,20 @@ import (
 
 const bucketCount = 64
 
+type HistogramType uint64
+
+const (
+	UnspecifiedHistogram HistogramType = iota
+	TimeHistogram
+	ByteHistogram
+)
+
 type Histogram struct {
+	// this structure needs to be a multiple of 8 bytes in size. This is necessary for 32-bit architectures and
+	// guarantees 8 byte alignment for multiple Histograms laid out side by side in memory.
 	sum      uint64
 	buckets  [bucketCount]uint64
-	ToString ToStringFunc
-}
-
-type ToStringFunc func(v uint64) string
-
-func identToString(v uint64) string {
-	return fmt.Sprintf("%d", v)
+	histType HistogramType
 }
 
 // Sample adds a uint64 data point to the histogram
@@ -130,23 +135,33 @@ func (h Histogram) Samples() uint64 {
 	return s
 }
 
-func (h Histogram) String() string {
-	f := h.ToString
-	if f == nil {
-		f = identToString
-	}
-	return fmt.Sprintf("Mean: %s, Sum: %s, Samples: %d", f(h.Mean()), f(h.Sum()), h.Samples())
-}
-
-func NewTimeHistogram() Histogram {
-	return Histogram{ToString: timeToString}
+func uintToString(v uint64) string {
+	return strconv.FormatUint(v, 10)
 }
 
 func timeToString(v uint64) string {
 	return time.Duration(v).String()
 }
 
+func (h Histogram) String() string {
+	var f func(uint64) string
+	switch h.histType {
+	case UnspecifiedHistogram:
+		f = uintToString
+	case ByteHistogram:
+		f = humanize.Bytes
+	case TimeHistogram:
+		f = timeToString
+	}
+
+	return fmt.Sprintf("Mean: %s, Sum: %s, Samples: %d", f(h.Mean()), f(h.Sum()), h.Samples())
+}
+
+func NewTimeHistogram() Histogram {
+	return Histogram{histType: TimeHistogram}
+}
+
 // NewByteHistogram stringifies values using humanize over byte values
 func NewByteHistogram() Histogram {
-	return Histogram{ToString: humanize.Bytes}
+	return Histogram{histType: ByteHistogram}
 }

@@ -94,7 +94,7 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		} else if apr.Contains(HardResetParam) {
 			err = actions.ResetHard(ctx, dEnv, apr, workingRoot, stagedRoot, headRoot)
 		} else {
-			stagedRoot, err = actions.ResetSoft(ctx, dEnv, apr, stagedRoot, headRoot)
+			stagedRoot, err = actions.ResetSoft(ctx, dEnv.DbData(), apr, stagedRoot, headRoot)
 
 			if err != nil {
 				return handleResetError(err, usage)

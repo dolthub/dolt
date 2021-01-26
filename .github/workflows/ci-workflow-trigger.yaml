@@ -1,0 +1,14 @@
+on:
+  push:
+    branches:
+      - 'db/*'
+jobs:
+  test-trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repository Dispatch
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          event-type: release-dolt
+          client-payload: '{"version": "fake-version-1.0.0", "actor": "${{ github.actor }}"}'

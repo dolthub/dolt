@@ -1,0 +1,10 @@
+on:
+  repository_dispatch:
+    types: [release-dolt]
+jobs:
+  test-reception:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo ${{ github.event.client_payload.version }}
+          echo ${{ github.event.client_payload.actor }}
