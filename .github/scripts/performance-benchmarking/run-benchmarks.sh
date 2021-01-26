@@ -30,11 +30,16 @@ fi
 echo "Setting from $FROM_SERVER: $FROM_VERSION"
 echo "Setting to $TO_SERVER: $TO_VERSION"
 
-jobname="performance-benchmarking-$ACTOR"
+# use first 8 characters of TO_VERSION to differentiate
+# jobs
+short=${TO_VERSION:0:8}
+actorShort="$ACTOR-$short"
+
+jobname="$actorShort"
 
 timeprefix=$(date +%Y/%m/%d)
 
-actorprefix="$MODE/$ACTOR/$TO_VERSION"
+actorprefix="$MODE/$ACTOR/$actorShort"
 
 format="markdown"
 if [ "$MODE" = "release" ]; then
