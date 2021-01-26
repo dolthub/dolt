@@ -174,7 +174,7 @@ func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch string,
 }
 
 func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tables []string, docs doltdocs.Docs) errhand.VerboseError {
-	err := actions.CheckoutTablesAndDocs(ctx, dEnv, tables, docs)
+	err := actions.CheckoutTables(ctx, dEnv.DbData(), tables)
 
 	if err != nil {
 		if actions.IsRootValUnreachable(err) {
@@ -191,6 +191,13 @@ func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tables []stri
 			bdr.AddCause(err)
 			return bdr.Build()
 		}
+	}
+
+	err = actions.CheckoutDocs(ctx, dEnv.DbData(), docs)
+
+	if err != nil {
+		bdr := errhand.BuildDError("error: Docs did not checkout properly").AddCause(err)
+		return bdr.Build()
 	}
 
 	return nil

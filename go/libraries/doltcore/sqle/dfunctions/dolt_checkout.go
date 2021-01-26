@@ -18,11 +18,11 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/vitess/go/vt/proto/query"
@@ -67,7 +67,7 @@ func (d DoltCheckoutFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, erro
 		if len(newBranch) == 0 {
 			err = errors.New("error: cannot checkout empty string")
 		} else {
-			err = checkoutNewBranch(ctx, dbData, newBranch, apr)
+			err = checkoutNewBranch(ctx, dbData, newBranch, "")
 		}
 
 		if err != nil {
@@ -95,16 +95,41 @@ func (d DoltCheckoutFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, erro
 	}
 
 	// Check if user want to checkout table or docs.
+	tbls, docs, err := actions.GetTablesOrDocs(dbData.Drw, args)
+	if err != nil {
+		return 1, errors.New("error: unable to parse arguments.")
+	}
 
+	if len(docs) > 0 {
+		return 1, errors.New("error: docs not supported in this mode.")
+	}
 
+	err = checkoutTables(ctx, dbData, tbls)
+
+	if err != nil  && apr.NArg() == 1  {
+		err = checkoutRemoteBranch(ctx, dbData, name)
+	}
+
+	if err != nil {
+		return 1, err
+	}
 
 	return 0, nil
 }
 
-func checkoutNewBranch(ctx *sql.Context, dbData env.DbData, newBranch string, apr *argparser.ArgParseResults) error {
-	startPt := "head"
-	if apr.NArg() == 1 {
-		startPt = apr.Arg(0)
+func checkoutRemoteBranch(ctx *sql.Context, dbData env.DbData, branchName string) error {
+	if ref, refExists, err := actions.GetRemoteBranchRef(ctx, dbData.Ddb, branchName); err != nil {
+		return errhand.BuildDError("fatal: unable to read from data repository.").AddCause(err).Build()
+	} else if refExists {
+		return checkoutNewBranch(ctx, dbData, branchName, ref.String())
+	} else {
+		return errhand.BuildDError("error: could not find %s", branchName).Build()
+	}
+}
+
+func checkoutNewBranch(ctx *sql.Context, dbData env.DbData, newBranch, startPt string) error {
+	if startPt == "" {
+		startPt = "head"
 	}
 
 	err := actions.CreateBranchWithStartPt(ctx, dbData, newBranch, startPt, false)
@@ -138,6 +163,24 @@ func checkoutBranch(ctx *sql.Context, dbData env.DbData, branchName string) erro
 	return setRoot(ctx, working)
 }
 
+func checkoutTables(ctx *sql.Context, dbData env.DbData, tables []string) error {
+	err := actions.CheckoutTables(ctx, dbData, tables)
+
+	if err != nil {
+		if actions.IsRootValUnreachable(err) {
+			rt := actions.GetUnreachableRootType(err)
+			return fmt.Errorf("error: unable to read the %s", rt.String())
+		} else if actions.IsTblNotExist(err) {
+			return fmt.Errorf("error: given tables do not exist")
+		} else {
+			return fmt.Errorf("fatal: Unexpected error checking out tables")
+		}
+	}
+
+	working, err := env.WorkingRoot(ctx, dbData.Ddb, dbData.Rsr)
+	return setRoot(ctx, working)
+}
+
 func setRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 	h, err := newRoot.HashOf()
 
@@ -151,7 +194,7 @@ func setRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 	// Refactor from sqle.database.go
 	hashType := sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
 
-	// TODO: Is this correct.
+	// TODO: Is this correct?
 	err = ctx.Session.Set(ctx, key, hashType, hashStr)
 	if err != nil {
 		return err
