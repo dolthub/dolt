@@ -200,8 +200,13 @@ func (b *binaryNomsReader) skipFloat(nbf *NomsBinFormat) {
 }
 
 func (b *binaryNomsReader) skipInt() {
-	_, count := unrolledDecodeVarint(b.buff[b.offset:])
-	b.offset += uint32(count)
+	maxOffset := b.offset + 10
+	for ; b.offset < maxOffset; b.offset++ {
+		if b.buff[b.offset]&0x80 == 0 {
+			b.offset++
+			return
+		}
+	}
 }
 
 func (b *binaryNomsReader) ReadInt() int64 {
@@ -289,8 +294,13 @@ func unrolledDecodeVarint(buf []byte) (int64, int) {
 }
 
 func (b *binaryNomsReader) skipUint() {
-	_, count := unrolledDecodeUVarint(b.buff[b.offset:])
-	b.offset += uint32(count)
+	maxOffset := b.offset + 10
+	for ; b.offset < maxOffset; b.offset++ {
+		if b.buff[b.offset]&0x80 == 0 {
+			b.offset++
+			return
+		}
+	}
 }
 
 func (b *binaryNomsReader) ReadBool() bool {
