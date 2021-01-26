@@ -215,7 +215,7 @@ func (vs TupleSort) Swap(i, j int) {
 }
 
 func (vs TupleSort) Less(i, j int) (bool, error) {
-	return vs.Tuples[i].Less(vs.Nbf, vs.Tuples[j])
+	return vs.Tuples[i].TupleLess(vs.Nbf, vs.Tuples[j])
 }
 
 func (vs TupleSort) Equals(other TupleSort) bool {

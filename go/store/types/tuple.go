@@ -592,12 +592,7 @@ func (t Tuple) splitFieldsAt(n uint64) (prolog, head, tail []byte, count uint64,
 	return
 }
 
-func (t Tuple) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
-	otherTuple, ok := other.(Tuple)
-	if !ok {
-		return TupleKind < other.Kind(), nil
-	}
-
+func (t Tuple) TupleLess(nbf *NomsBinFormat, otherTuple Tuple) (bool, error) {
 	itrs := tupItrPairPool.Get().(*tupleItrPair)
 	defer tupItrPairPool.Put(itrs)
 
@@ -746,52 +741,13 @@ func (t Tuple) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	return itr.Len() < otherItr.Len(), nil
 }
 
-func (t Tuple) oldLess(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
-	if otherTuple, ok := other.(Tuple); ok {
-		itrs := tupItrPairPool.Get().(*tupleItrPair)
-		defer tupItrPairPool.Put(itrs)
-
-		itr := itrs.thisItr
-		err := itr.InitForTuple(t)
-
-		if err != nil {
-			return false, err
-		}
-
-		otherItr := itrs.otherItr
-		err = otherItr.InitForTuple(otherTuple)
-
-		if err != nil {
-			return false, err
-		}
-
-		for itr.HasMore() {
-			if !otherItr.HasMore() {
-				// equal up til the end of other. other is shorter, therefore it is less
-				return false, nil
-			}
-
-			_, currVal, err := itr.Next()
-
-			if err != nil {
-				return false, err
-			}
-
-			_, currOthVal, err := otherItr.Next()
-
-			if err != nil {
-				return false, err
-			}
-
-			if !currVal.Equals(currOthVal) {
-				return currVal.Less(nbf, currOthVal)
-			}
-		}
-
-		return itr.Len() < otherItr.Len(), nil
+func (t Tuple) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+	otherTuple, ok := other.(Tuple)
+	if !ok {
+		return TupleKind < other.Kind(), nil
 	}
 
-	return TupleKind < other.Kind(), nil
+	return t.TupleLess(nbf, otherTuple)
 }
 
 func (t Tuple) StartsWith(otherTuple Tuple) bool {
