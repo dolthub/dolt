@@ -592,7 +592,12 @@ func (t Tuple) splitFieldsAt(n uint64) (prolog, head, tail []byte, count uint64,
 	return
 }
 
-func (t Tuple) tupleLess(nbf *NomsBinFormat, otherTuple Tuple) (bool, error) {
+func (t Tuple) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+	otherTuple, ok := other.(Tuple)
+	if !ok {
+		return TupleKind < other.Kind(), nil
+	}
+
 	itrs := tupItrPairPool.Get().(*tupleItrPair)
 	defer tupItrPairPool.Put(itrs)
 
@@ -654,10 +659,8 @@ func (t Tuple) tupleLess(nbf *NomsBinFormat, otherTuple Tuple) (bool, error) {
 
 			if n == otherN {
 				continue
-			} else if n < otherN {
-				return true, nil
 			} else {
-				return false, nil
+				return n < otherN, nil
 			}
 
 		case UintKind:
@@ -666,10 +669,8 @@ func (t Tuple) tupleLess(nbf *NomsBinFormat, otherTuple Tuple) (bool, error) {
 
 			if n == otherN {
 				continue
-			} else if n < otherN {
-				return true, nil
 			} else {
-				return false, nil
+				return n < otherN, nil
 			}
 
 		case DecimalKind:
@@ -694,10 +695,8 @@ func (t Tuple) tupleLess(nbf *NomsBinFormat, otherTuple Tuple) (bool, error) {
 
 			if f == otherF {
 				continue
-			} else if f < otherF {
-				return true, nil
 			} else {
-				return false, nil
+				return f < otherF, nil
 			}
 
 		case TimestampKind:
@@ -715,19 +714,28 @@ func (t Tuple) tupleLess(nbf *NomsBinFormat, otherTuple Tuple) (bool, error) {
 
 			if tm.Equal(otherTm) {
 				continue
-			} else if tm.Before(otherTm) {
-				return true, nil
 			} else {
-				return false, nil
+				return tm.Before(otherTm), nil
 			}
 
 		default:
-			panic("Not implemented")
+			v, err := dec.readValue(nbf)
 
-			// will need to implement these probably
-			//BlobKind
-			//RefKind
+			if err != nil {
+				return false, err
+			}
 
+			otherV, err := otherDec.readValue(nbf)
+
+			if err != nil {
+				return false, err
+			}
+
+			if v.Equals(otherV) {
+				continue
+			} else {
+				return v.Less(nbf, otherV)
+			}
 		}
 
 		if res != 0 {
@@ -736,23 +744,6 @@ func (t Tuple) tupleLess(nbf *NomsBinFormat, otherTuple Tuple) (bool, error) {
 	}
 
 	return itr.Len() < otherItr.Len(), nil
-}
-
-func (t Tuple) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
-	var isLess bool
-	var err error
-
-	if otherTuple, ok := other.(Tuple); ok {
-		return t.tupleLess(nbf, otherTuple)
-	}
-
-	isLess = TupleKind < other.Kind()
-
-	if err != nil {
-		return false, err
-	}
-
-	return isLess, nil
 }
 
 func (t Tuple) oldLess(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
