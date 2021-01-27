@@ -1,3 +1,5 @@
+name: Benchmark Dolt vs MySQL
+
 on:
   repository_dispatch:
     types: [ release-dolt ]
@@ -5,6 +7,10 @@ on:
     inputs:
       version:
         description: 'SemVer format release tag, i.e. 0.23.4'
+        required: true
+        default: ''
+      email:
+        description: 'Email address to receive results'
         required: true
         default: ''
 
@@ -69,10 +75,19 @@ jobs:
           aws s3api get-object --bucket=performance-benchmarking-github-actions-results --key="$KEY" results.log
         env:
           KEY: ${{ steps.run-benchmarks.outputs.object-key }}
-      - name: Send Email
+      - name: Send Email on Release
+        if: ${{ github.event_name == 'repository_dispatch' }}
         uses: ./.github/actions/ses-email-action
         with:
           region: us-west-2
           version: ${{ needs.set-version-actor.outputs.version }}
-          toAddresses: '["dustin@dolthub.com"]'
+          toAddresses: '["${{ secrets.PERF_REPORTS_EMAIL_ADDRESS }}"]'
+          dataFile: ${{ format('{0}/results.log', github.workspace) }}
+      - name: Send Email
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: ./.github/actions/ses-email-action
+        with:
+          region: us-west-2
+          version: ${{ needs.set-version-actor.outputs.version }}
+          toAddresses: '["${{ github.event.inputs.email }}"]'
           dataFile: ${{ format('{0}/results.log', github.workspace) }}
