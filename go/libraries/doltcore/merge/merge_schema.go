@@ -229,7 +229,7 @@ func mergeColumns(ourCC, theirCC, ancCC *schema.ColCollection) (merged *schema.C
 }
 
 func columnsInCommon(ourCC, theirCC, ancCC *schema.ColCollection) (common *schema.ColCollection, conflicts []ColConflict, err error) {
-	common, _ = schema.NewColCollection()
+	common = schema.NewColCollection()
 	_ = ourCC.Iter(func(tag uint64, ourCol schema.Column) (stop bool, err error) {
 		theirCol, ok := theirCC.GetByTag(ourCol.Tag)
 		if !ok {

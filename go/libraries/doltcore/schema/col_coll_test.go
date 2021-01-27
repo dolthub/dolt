@@ -19,11 +19,9 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/stretchr/testify/assert"
 )
 
 var firstNameCol = Column{"first", 0, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil}
@@ -33,8 +31,7 @@ var lastNameCapsCol = Column{"LAST", 3, types.StringKind, false, typeinfo.String
 
 func TestGetByNameAndTag(t *testing.T) {
 	cols := []Column{firstNameCol, lastNameCol, firstNameCapsCol, lastNameCapsCol}
-	colColl, err := NewColCollection(cols...)
-	require.NoError(t, err)
+	colColl := NewColCollection(cols...)
 
 	tests := []struct {
 		name       string
@@ -73,8 +70,7 @@ func TestGetByNameAndTag(t *testing.T) {
 
 func TestGetByNameCaseInsensitive(t *testing.T) {
 	cols := []Column{firstNameCol, lastNameCol, firstNameCapsCol, lastNameCapsCol}
-	colColl, err := NewColCollection(cols...)
-	require.NoError(t, err)
+	colColl := NewColCollection(cols...)
 
 	tests := []struct {
 		name       string
@@ -119,7 +115,7 @@ func TestAppendAndItrInSortOrder(t *testing.T) {
 		{"6", 6, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil},
 	}
 
-	colColl, _ := NewColCollection(cols...)
+	colColl := NewColCollection(cols...)
 	validateIter(len(cols), colColl, t)
 	colColl2, _ := colColl.Append(cols2...)
 	validateIter(len(cols), colColl, t) //validate immutability

@@ -23,7 +23,7 @@ import (
 
 type Docs []doltdb.DocDetails
 
-var doltDocsColumns, _ = schema.NewColCollection(
+var doltDocsColumns = schema.NewColCollection(
 	schema.NewColumn(doltdb.DocPkColumnName, schema.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
 	schema.NewColumn(doltdb.DocTextColumnName, schema.DocTextTag, types.StringKind, false),
 )

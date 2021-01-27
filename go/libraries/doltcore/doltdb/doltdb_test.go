@@ -52,7 +52,7 @@ var id2, _ = uuid.NewRandom()
 var id3, _ = uuid.NewRandom()
 
 func createTestSchema(t *testing.T) schema.Schema {
-	colColl, _ := schema.NewColCollection(
+	colColl := schema.NewColCollection(
 		schema.NewColumn("id", idTag, types.UUIDKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("first", firstTag, types.StringKind, false, schema.NotNullConstraint{}),
 		schema.NewColumn("last", lastTag, types.StringKind, false, schema.NotNullConstraint{}),

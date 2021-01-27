@@ -221,7 +221,7 @@ func TestAddNewerTextAndDocPkFromRow(t *testing.T) {
 }
 
 func createTestDocsSchema() schema.Schema {
-	typedColColl, _ := schema.NewColCollection(
+	typedColColl := schema.NewColCollection(
 		schema.NewColumn(DocPkColumnName, schema.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn(DocTextColumnName, schema.DocTextTag, types.StringKind, false),
 	)

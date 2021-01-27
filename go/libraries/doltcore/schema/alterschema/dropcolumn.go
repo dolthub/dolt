@@ -88,11 +88,7 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 		return nil, err
 	}
 
-	colColl, err := schema.NewColCollection(cols...)
-	if err != nil {
-		return nil, err
-	}
-
+	colColl := schema.NewColCollection(cols...)
 	newSch, err := schema.SchemaFromCols(colColl)
 	if err != nil {
 		return nil, err

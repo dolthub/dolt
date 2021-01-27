@@ -106,7 +106,7 @@ func TestUntypedSchemaUnion(t *testing.T) {
 		schema.NewColumn("e", 4, types.BoolKind, false),
 	}
 
-	untypedColColl, _ := schema.NewColCollection(
+	untypedColColl := schema.NewColCollection(
 		schema.NewColumn("a", 0, types.StringKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("b", 1, types.StringKind, true),
 		schema.NewColumn("c", 2, types.StringKind, true),
@@ -131,8 +131,8 @@ func TestUntypedSchemaUnion(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		colCollA, _ := schema.NewColCollection(test.colsA...)
-		colCollB, _ := schema.NewColCollection(test.colsB...)
+		colCollA := schema.NewColCollection(test.colsA...)
+		colCollB := schema.NewColCollection(test.colsB...)
 		schA := schema.MustSchemaFromCols(colCollA)
 		schB := schema.MustSchemaFromCols(colCollB)
 

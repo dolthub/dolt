@@ -193,11 +193,7 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 		}
 	}
 
-	colColl, err := schema.NewColCollection(cols...)
-
-	if err != nil {
-		return nil, err
-	}
+	colColl := schema.NewColCollection(cols...)
 
 	sch, err := schema.SchemaFromCols(colColl)
 	if err != nil {
@@ -299,11 +295,7 @@ func (ssd superSchemaData) decodeSuperSchema() (*schema.SuperSchema, error) {
 		cols[i] = c
 	}
 
-	colColl, err := schema.NewColCollection(cols...)
-
-	if err != nil {
-		return nil, err
-	}
+	colColl := schema.NewColCollection(cols...)
 
 	if ssd.TagNames == nil {
 		ssd.TagNames = make(map[uint64][]string)

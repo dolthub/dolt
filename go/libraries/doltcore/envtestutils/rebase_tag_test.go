@@ -74,11 +74,7 @@ var createPeopleTable = `
 	);`
 
 func columnCollection(cols ...schema.Column) *schema.ColCollection {
-	pcc, err := schema.NewColCollection(cols...)
-	if err != nil {
-		panic(err)
-	}
-	return pcc
+	return schema.NewColCollection(cols...)
 }
 
 func newRow(vals row.TaggedValues, cc *schema.ColCollection) row.Row {

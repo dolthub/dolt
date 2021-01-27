@@ -193,12 +193,9 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 		return false, nil
 	})
 
-	collection, err := schema.NewColCollection(newCols...)
-	if err != nil {
-		return nil, err
-	}
+	collection := schema.NewColCollection(newCols...)
 
-	err = schema.ValidateForInsert(collection)
+	err := schema.ValidateForInsert(collection)
 	if err != nil {
 		return nil, err
 	}

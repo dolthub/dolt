@@ -156,10 +156,7 @@ func addColumnToSchema(sch schema.Schema, tag uint64, newColName string, typeInf
 		newCols = append(newCols, newCol)
 	}
 
-	collection, err := schema.NewColCollection(newCols...)
-	if err != nil {
-		return nil, err
-	}
+	collection := schema.NewColCollection(newCols...)
 
 	err = schema.ValidateForInsert(collection)
 	if err != nil {

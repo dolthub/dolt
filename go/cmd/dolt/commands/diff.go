@@ -624,7 +624,7 @@ func dumbDownSchema(in schema.Schema) (schema.Schema, error) {
 		return nil, err
 	}
 
-	dumbColColl, _ := schema.NewColCollection(dumbCols...)
+	dumbColColl := schema.NewColCollection(dumbCols...)
 
 	return schema.SchemaFromCols(dumbColColl)
 }

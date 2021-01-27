@@ -39,10 +39,7 @@ func NewResultSetSchema(colNamesAndTypes ...interface{}) schema.Schema {
 		cols[i/2] = schema.NewColumn(name, uint64(i/2), nomsKind, false)
 	}
 
-	collection, err := schema.NewColCollection(cols...)
-	if err != nil {
-		panic("unexpected error " + err.Error())
-	}
+	collection := schema.NewColCollection(cols...)
 	return schema.UnkeyedSchemaFromCols(collection)
 }
 
@@ -56,10 +53,7 @@ func NewResultSetRow(colVals ...types.Value) row.Row {
 		cols[i] = schema.NewColumn(fmt.Sprintf("%v", i), uint64(i), nomsKind, false)
 	}
 
-	collection, err := schema.NewColCollection(cols...)
-	if err != nil {
-		panic("unexpected error " + err.Error())
-	}
+	collection := schema.NewColCollection(cols...)
 	sch := schema.UnkeyedSchemaFromCols(collection)
 
 	r, err := row.New(types.Format_7_18, sch, taggedVals)
@@ -97,11 +91,7 @@ func NewRowWithPks(pkColVals []types.Value, nonPkVals ...types.Value) row.Row {
 		tag++
 	}
 
-	colColl, err := schema.NewColCollection(cols...)
-	if err != nil {
-		panic(err.Error())
-	}
-
+	colColl := schema.NewColCollection(cols...)
 	sch := schema.MustSchemaFromCols(colColl)
 
 	r, err := row.New(types.Format_7_18, sch, taggedVals)
@@ -165,11 +155,7 @@ func NewSchemaForTable(tableName string, colNamesAndTypes ...interface{}) schema
 		cols[i/2] = schema.NewColumn(name, tag, nomsKind, isPk, constraints...)
 	}
 
-	colColl, err := schema.NewColCollection(cols...)
-	if err != nil {
-		panic(err.Error())
-	}
-
+	colColl := schema.NewColCollection(cols...)
 	return schema.MustSchemaFromCols(colColl)
 }
 
@@ -200,11 +186,7 @@ func ConcatRows(schemasAndRows ...interface{}) row.Row {
 		})
 	}
 
-	colCol, err := schema.NewColCollection(cols...)
-	if err != nil {
-		panic(err.Error())
-	}
-
+	colCol := schema.NewColCollection(cols...)
 	r, err := row.New(types.Format_7_18, schema.UnkeyedSchemaFromCols(colCol), taggedVals)
 
 	if err != nil {
@@ -277,11 +259,7 @@ func CompressSchema(sch schema.Schema, colNames ...string) schema.Schema {
 		})
 	}
 
-	colCol, err := schema.NewColCollection(cols...)
-	if err != nil {
-		panic(err.Error())
-	}
-
+	colCol := schema.NewColCollection(cols...)
 	return schema.UnkeyedSchemaFromCols(colCol)
 }
 
@@ -300,10 +278,6 @@ func CompressSchemas(schs ...schema.Schema) schema.Schema {
 		})
 	}
 
-	colCol, err := schema.NewColCollection(cols...)
-	if err != nil {
-		panic(err.Error())
-	}
-
+	colCol := schema.NewColCollection(cols...)
 	return schema.UnkeyedSchemaFromCols(colCol)
 }

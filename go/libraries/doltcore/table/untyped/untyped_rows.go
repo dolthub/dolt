@@ -40,7 +40,7 @@ func NewUntypedSchemaWithFirstTag(firstTag uint64, colNames ...string) (map[stri
 		nameToTag[name] = tag
 	}
 
-	colColl, _ := schema.NewColCollection(cols...)
+	colColl := schema.NewColCollection(cols...)
 	sch := schema.MustSchemaFromCols(colColl)
 
 	return nameToTag, sch
@@ -91,11 +91,7 @@ func UntypeSchema(sch schema.Schema) (schema.Schema, error) {
 		return nil, err
 	}
 
-	colColl, err := schema.NewColCollection(cols...)
-
-	if err != nil {
-		return nil, err
-	}
+	colColl := schema.NewColCollection(cols...)
 
 	return schema.SchemaFromCols(colColl)
 }
@@ -115,11 +111,7 @@ func UnkeySchema(sch schema.Schema) (schema.Schema, error) {
 		return nil, err
 	}
 
-	colColl, err := schema.NewColCollection(cols...)
-
-	if err != nil {
-		return nil, err
-	}
+	colColl := schema.NewColCollection(cols...)
 
 	return schema.UnkeyedSchemaFromCols(colColl), nil
 }
@@ -141,11 +133,7 @@ func UntypeUnkeySchema(sch schema.Schema) (schema.Schema, error) {
 		return nil, err
 	}
 
-	colColl, err := schema.NewColCollection(cols...)
-
-	if err != nil {
-		return nil, err
-	}
+	colColl := schema.NewColCollection(cols...)
 
 	return schema.UnkeyedSchemaFromCols(colColl), nil
 }
@@ -174,7 +162,7 @@ func UntypedSchemaUnion(schemas ...schema.Schema) (schema.Schema, error) {
 		}
 	}
 
-	allColColl, _ := schema.NewColCollection(allCols...)
+	allColColl := schema.NewColCollection(allCols...)
 	sch, err := schema.SchemaFromCols(allColColl)
 	if err != nil {
 		return nil, err

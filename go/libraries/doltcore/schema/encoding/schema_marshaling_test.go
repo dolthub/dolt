@@ -42,7 +42,7 @@ func createTestSchema() schema.Schema {
 		schema.NewColumn("age", 3, types.UintKind, false),
 	}
 
-	colColl, _ := schema.NewColCollection(columns...)
+	colColl := schema.NewColCollection(columns...)
 	sch := schema.MustSchemaFromCols(colColl)
 	_, _ = sch.Indexes().AddIndexByColTags("idx_age", []uint64{3}, schema.IndexProperties{IsUnique: false, Comment: ""})
 	return sch
@@ -148,8 +148,7 @@ func TestTypeInfoMarshalling(t *testing.T) {
 			require.NoError(t, err)
 			col, err := schema.NewColumnWithTypeInfo("pk", 1, ti, true, "", false, "")
 			require.NoError(t, err)
-			colColl, err := schema.NewColCollection(col)
-			require.NoError(t, err)
+			colColl := schema.NewColCollection(col)
 			originalSch, err := schema.SchemaFromCols(colColl)
 			require.NoError(t, err)
 
@@ -257,11 +256,7 @@ func (tsd testSchemaData) decodeSchema() (schema.Schema, error) {
 		}
 	}
 
-	colColl, err := schema.NewColCollection(cols...)
-
-	if err != nil {
-		return nil, err
-	}
+	colColl := schema.NewColCollection(cols...)
 
 	sch, err := schema.SchemaFromCols(colColl)
 	if err != nil {

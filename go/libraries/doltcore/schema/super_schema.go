@@ -37,7 +37,7 @@ type SuperSchema struct {
 
 // NewSuperSchema creates a SuperSchema from the columns of schemas.
 func NewSuperSchema(schemas ...Schema) (*SuperSchema, error) {
-	cc, _ := NewColCollection()
+	cc := NewColCollection()
 	tn := make(map[uint64][]string)
 	ss := SuperSchema{cc, tn}
 
@@ -202,7 +202,7 @@ func (ss *SuperSchema) nameColumns() map[uint64]string {
 // Each column is assigned its latest name from its name history.
 func (ss *SuperSchema) GenerateColCollection() (*ColCollection, error) {
 	uniqNames := ss.nameColumns()
-	cc, _ := NewColCollection()
+	cc := NewColCollection()
 	err := ss.Iter(func(tag uint64, col Column) (stop bool, err error) {
 		col.Name = uniqNames[tag]
 		cc, err = cc.Append(col)
@@ -268,18 +268,14 @@ func (ss *SuperSchema) RebaseTag(tagMapping map[uint64]uint64) (*SuperSchema, er
 		return nil, err
 	}
 
-	ac, err := NewColCollection(cc...)
-
-	if err != nil {
-		return nil, err
-	}
+	ac := NewColCollection(cc...)
 
 	return &SuperSchema{ac, tn}, nil
 }
 
 // SuperSchemaUnion combines multiple SuperSchemas.
 func SuperSchemaUnion(superSchemas ...*SuperSchema) (*SuperSchema, error) {
-	cc, _ := NewColCollection()
+	cc := NewColCollection()
 	tagNameSets := make(map[uint64]*set.StrSet)
 	latestNames := make(map[uint64]string)
 	for _, ss := range superSchemas {

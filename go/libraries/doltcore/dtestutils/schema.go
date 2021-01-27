@@ -35,7 +35,7 @@ import (
 
 // CreateSchema returns a schema from the columns given, panicking on any errors.
 func CreateSchema(columns ...schema.Column) schema.Schema {
-	colColl, _ := schema.NewColCollection(columns...)
+	colColl := schema.NewColCollection(columns...)
 	return schema.MustSchemaFromCols(colColl)
 }
 
@@ -80,10 +80,7 @@ func RemoveColumnFromSchema(sch schema.Schema, tagToRemove uint64) schema.Schema
 		panic(err)
 	}
 
-	columns, err := schema.NewColCollection(newCols...)
-	if err != nil {
-		panic(err)
-	}
+	columns := schema.NewColCollection(newCols...)
 	return schema.MustSchemaFromCols(columns)
 }
 
@@ -145,11 +142,7 @@ func MustSchema(cols ...schema.Column) schema.Schema {
 		}
 	}
 
-	colColl, err := schema.NewColCollection(cols...)
-
-	if err != nil {
-		panic(err)
-	}
+	colColl := schema.NewColCollection(cols...)
 
 	if !hasPKCols {
 		return schema.UnkeyedSchemaFromCols(colColl)

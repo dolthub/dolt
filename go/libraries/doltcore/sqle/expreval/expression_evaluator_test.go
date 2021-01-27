@@ -203,7 +203,7 @@ func TestNewAndAndOrFuncs(t *testing.T) {
 }
 
 func TestNewComparisonFunc(t *testing.T) {
-	colColl, _ := schema.NewColCollection(
+	colColl := schema.NewColCollection(
 		schema.NewColumn("col0", 0, types.IntKind, true),
 		schema.NewColumn("col1", 1, types.IntKind, false),
 		schema.NewColumn("date", 2, types.TimestampKind, false),

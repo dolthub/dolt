@@ -68,8 +68,7 @@ type ColCollection struct {
 // will not function correctly. If any columns have the same case-insensitive name, case-insensitive lookups will be
 // unable to return the correct column in all cases.
 // For this collection to be used as a Dolt schema, it must pass schema.ValidateForInsert.
-// TODO: this no longer returns an error in any case
-func NewColCollection(cols ...Column) (*ColCollection, error) {
+func NewColCollection(cols ...Column) *ColCollection {
 	var tags []uint64
 	var sortedTags []uint64
 
@@ -105,7 +104,7 @@ func NewColCollection(cols ...Column) (*ColCollection, error) {
 		NameToCol:      nameToCol,
 		LowerNameToCol: lowerNameToCol,
 		TagToIdx:       tagToIdx,
-	}, nil
+	}
 }
 
 // GetColumns returns the underlying list of columns. The list returned is a copy.
@@ -134,15 +133,17 @@ func (cc *ColCollection) AppendColl(colColl *ColCollection) (*ColCollection, err
 }
 
 // Append returns a new collection with the additional columns appended
+// TODO: this doesn't return an error anymore
 func (cc *ColCollection) Append(cols ...Column) (*ColCollection, error) {
 	allCols := make([]Column, 0, len(cols)+len(cc.cols))
 	allCols = append(allCols, cc.cols...)
 	allCols = append(allCols, cols...)
 
-	return NewColCollection(allCols...)
+	return NewColCollection(allCols...), nil
 }
 
 // Replace will replace one column of the schema with another.
+// TODO: this doesn't return an error anymore
 func (cc *ColCollection) Replace(old, new Column) (*ColCollection, error) {
 	allCols := make([]Column, 0, len(cc.cols))
 
@@ -154,7 +155,7 @@ func (cc *ColCollection) Replace(old, new Column) (*ColCollection, error) {
 		}
 	}
 
-	return NewColCollection(allCols...)
+	return NewColCollection(allCols...), nil
 }
 
 // Iter iterates over all the columns in the supplied ordering
@@ -280,7 +281,7 @@ func MapColCollection(cc *ColCollection, cb func(col Column) (Column, error)) (*
 		}
 		mapped[i] = mc
 	}
-	return NewColCollection(mapped...)
+	return NewColCollection(mapped...), nil
 }
 
 // FilterColCollection applies a boolean function to column in a ColCollection, it creates a new ColCollection from the
@@ -296,12 +297,12 @@ func FilterColCollection(cc *ColCollection, cb func(col Column) (bool, error)) (
 			filtered = append(filtered, c)
 		}
 	}
-	return NewColCollection(filtered...)
+	return NewColCollection(filtered...), nil
 }
+
 
 func ColCollUnion(colColls ...*ColCollection) (*ColCollection, error) {
 	var allCols []Column
-	// TODO: error on tag collision
 	for _, sch := range colColls {
 		err := sch.Iter(func(tag uint64, col Column) (stop bool, err error) {
 			allCols = append(allCols, col)
@@ -313,7 +314,7 @@ func ColCollUnion(colColls ...*ColCollection) (*ColCollection, error) {
 		}
 	}
 
-	return NewColCollection(allCols...)
+	return NewColCollection(allCols...), nil
 }
 
 // ColCollectionSetDifference returns the set difference leftCC - rightCC.

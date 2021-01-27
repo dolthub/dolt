@@ -388,16 +388,12 @@ func selectFuncForFilters(nbf *types.NomsBinFormat, filters []sql.Expression) (p
 		fromCommitDateTag
 	)
 
-	colColl, err := schema.NewColCollection(
+	colColl := schema.NewColCollection(
 		schema.NewColumn(toCommit, toCommitTag, types.StringKind, false),
 		schema.NewColumn(fromCommit, fromCommitTag, types.StringKind, false),
 		schema.NewColumn(toCommitDate, toCommitDateTag, types.TimestampKind, false),
 		schema.NewColumn(fromCommitDate, fromCommitDateTag, types.TimestampKind, false),
 	)
-
-	if err != nil {
-		return nil, err
-	}
 
 	expFunc, err := expreval.ExpressionFuncFromSQLExpressions(nbf, schema.UnkeyedSchemaFromCols(colColl), filters)
 

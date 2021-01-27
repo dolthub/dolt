@@ -42,7 +42,7 @@ func getSampleRows() (rows []row.Row) {
 		{Name: ageColName, Tag: ageColTag, Kind: types.UintKind, IsPartOfPK: false, Constraints: nil},
 		{Name: titleColName, Tag: titleColTag, Kind: types.StringKind, IsPartOfPK: false, Constraints: nil},
 	}
-	colColl, _ := schema.NewColCollection(inCols...)
+	colColl := schema.NewColCollection(inCols...)
 	rowSch := schema.MustSchemaFromCols(colColl)
 	return []row.Row{
 		mustRow(row.New(types.Format_7_18, rowSch, row.TaggedValues{

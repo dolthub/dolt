@@ -93,10 +93,7 @@ func (cmd ChangeTypeCmd) Exec(ctx context.Context, commandStr string, args []str
 		return false, nil
 	})
 
-	collection, err := schema.NewColCollection(cols...)
-	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.BuildDError("unable to create new schema '%s'", tableName).AddCause(err).Build(), usage)
-	}
+	collection := schema.NewColCollection(cols...)
 
 	newSch, err := schema.SchemaFromCols(collection)
 	if err != nil {
