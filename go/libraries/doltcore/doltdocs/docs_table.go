@@ -79,7 +79,7 @@ func updateDocsTable(ctx context.Context, docTbl *doltdb.Table, docs Docs) (*dol
 
 // createDocsTable creates a new in memory table that stores the given doc details.
 func createDocsTable(ctx context.Context, vrw types.ValueReadWriter, docs Docs) (*doltdb.Table, error) {
-	imt := table.NewInMemTable(DoltDocsSchema)
+	imt := table.NewInMemTable(Schema)
 
 	// Determines if the table needs to be created at all and initializes a schema if it does.
 	createTable := false
@@ -91,7 +91,7 @@ func createDocsTable(ctx context.Context, vrw types.ValueReadWriter, docs Docs) 
 				schema.DocTextTag: types.String(doc.Text),
 			}
 
-			docRow, err := row.New(types.Format_7_18, DoltDocsSchema, docTaggedVals)
+			docRow, err := row.New(types.Format_7_18, Schema, docTaggedVals)
 			if err != nil {
 				return nil, err
 			}
@@ -104,7 +104,7 @@ func createDocsTable(ctx context.Context, vrw types.ValueReadWriter, docs Docs) 
 
 	if createTable {
 		rd := table.NewInMemTableReader(imt)
-		wr := noms.NewNomsMapCreator(context.Background(), vrw, DoltDocsSchema)
+		wr := noms.NewNomsMapCreator(context.Background(), vrw, Schema)
 
 		_, _, err := table.PipeRows(context.Background(), rd, wr, false)
 		if err != nil {
