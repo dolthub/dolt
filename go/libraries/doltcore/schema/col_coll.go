@@ -63,11 +63,10 @@ type ColCollection struct {
 	TagToIdx map[uint64]int
 }
 
-// NewColCollection creates a new collection from a list of columns. If any columns have the same tag, their types must
-// be compatible. If any columns have the same tag, by-tag lookups in this collection will not function correctly. If
-// any columns have the same name, by-name lookups from this collection will not function correctly. If any columns
-// have the same case-insensitive name, case-insensitive lookups will be unable to return the correct column in all
-// cases.
+// NewColCollection creates a new collection from a list of columns. If any columns have the same tag, by-tag lookups in
+// this collection will not function correctly. If any columns have the same name, by-name lookups from this collection
+// will not function correctly. If any columns have the same case-insensitive name, case-insensitive lookups will be
+// unable to return the correct column in all cases.
 // For this collection to be used as a Dolt schema, it must pass schema.ValidateForInsert.
 // TODO: this no longer returns an error in any case
 func NewColCollection(cols ...Column) (*ColCollection, error) {
@@ -80,6 +79,8 @@ func NewColCollection(cols ...Column) (*ColCollection, error) {
 	tagToIdx := make(map[uint64]int, len(cols))
 
 	for i, col := range cols {
+		// If multiple columns have the same tag, the last one is used for tag lookups.
+		// Columns must have unique tags to pass schema.ValidateForInsert.
 		tagToCol[col.Tag] = col
 		tagToIdx[col.Tag] = i
 		tags = append(tags, col.Tag)
@@ -87,6 +88,7 @@ func NewColCollection(cols ...Column) (*ColCollection, error) {
 		nameToCol[col.Name] = cols[i]
 
 		// If multiple columns have the same lower case name, the first one is used for case-insensitive matching.
+		// Column names must all be case-insensitive different to pass schema.ValidateForInsert.
 		lowerCaseName := strings.ToLower(col.Name)
 		if _, ok := lowerNameToCol[lowerCaseName]; !ok {
 			lowerNameToCol[lowerCaseName] = cols[i]

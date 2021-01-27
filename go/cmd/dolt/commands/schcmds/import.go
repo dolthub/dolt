@@ -417,6 +417,12 @@ func CombineColCollections(ctx context.Context, root *doltdb.RootValue, inferred
 	if err != nil {
 		return nil, errhand.BuildDError("failed to generate new schema").AddCause(err).Build()
 	}
+
+	err = schema.ValidateForInsert(combined)
+	if err != nil {
+		return nil, errhand.BuildDError("invalid schema").AddCause(err).Build()
+	}
+
 	sch, err := schema.SchemaFromCols(combined)
 	if err != nil {
 		return nil, errhand.BuildDError("failed to get schema from cols").AddCause(err).Build()
