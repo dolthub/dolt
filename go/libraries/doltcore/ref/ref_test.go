@@ -40,6 +40,10 @@ func TestJsonMarshalAndUnmarshal(t *testing.T) {
 			NewInternalRef("create"),
 			`{"test":"refs/internal/create"}`,
 		},
+		{
+			NewWorkspaceRef("newworkspace"),
+			`{"test":"refs/workspaces/newworkspace"}`,
+		},
 	}
 
 	for _, test := range tests {
@@ -133,6 +137,26 @@ func TestEqualsStr(t *testing.T) {
 			NewInternalRef("refs/internal/create"),
 			"refs/internal/create",
 			true,
+		},
+		{
+			NewWorkspaceRef("newworkspace"),
+			"refs/workspaces/newworkspace",
+			true,
+		},
+		{
+			NewWorkspaceRef("refs/workspaces/newworkspace"),
+			"refs/workspaces/newworkspace",
+			true,
+		},
+		{
+			NewWorkspaceRef("newworkspace"),
+			"refs/workspaces/notnewworkspace",
+			false,
+		},
+		{
+			NewWorkspaceRef("newworkspace"),
+			"refs/remotes/origin/newworkspace",
+			false,
 		},
 	}
 
