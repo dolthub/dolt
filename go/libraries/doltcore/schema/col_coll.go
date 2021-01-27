@@ -128,34 +128,17 @@ func (cc *ColCollection) GetColumnNames() []string {
 }
 
 // AppendColl returns a new collection with the additional ColCollection's columns appended
-func (cc *ColCollection) AppendColl(colColl *ColCollection) (*ColCollection, error) {
+func (cc *ColCollection) AppendColl(colColl *ColCollection) *ColCollection {
 	return cc.Append(colColl.cols...)
 }
 
 // Append returns a new collection with the additional columns appended
-// TODO: this doesn't return an error anymore
-func (cc *ColCollection) Append(cols ...Column) (*ColCollection, error) {
+func (cc *ColCollection) Append(cols ...Column) *ColCollection {
 	allCols := make([]Column, 0, len(cols)+len(cc.cols))
 	allCols = append(allCols, cc.cols...)
 	allCols = append(allCols, cols...)
 
-	return NewColCollection(allCols...), nil
-}
-
-// Replace will replace one column of the schema with another.
-// TODO: this doesn't return an error anymore
-func (cc *ColCollection) Replace(old, new Column) (*ColCollection, error) {
-	allCols := make([]Column, 0, len(cc.cols))
-
-	for _, curr := range cc.cols {
-		if curr.Tag == old.Tag {
-			allCols = append(allCols, new)
-		} else {
-			allCols = append(allCols, curr)
-		}
-	}
-
-	return NewColCollection(allCols...), nil
+	return NewColCollection(allCols...)
 }
 
 // Iter iterates over all the columns in the supplied ordering
@@ -272,32 +255,24 @@ func ColCollsAreCompatible(cc1, cc2 *ColCollection) bool {
 }
 
 // MapColCollection applies a function to each column in a ColCollection and creates a new ColCollection from the results.
-func MapColCollection(cc *ColCollection, cb func(col Column) (Column, error)) (*ColCollection, error) {
+func MapColCollection(cc *ColCollection, cb func(col Column) Column) *ColCollection {
 	mapped := make([]Column, cc.Size())
 	for i, c := range cc.cols {
-		mc, err := cb(c)
-		if err != nil {
-			return nil, err
-		}
-		mapped[i] = mc
+		mapped[i] = cb(c)
 	}
-	return NewColCollection(mapped...), nil
+	return NewColCollection(mapped...)
 }
 
 // FilterColCollection applies a boolean function to column in a ColCollection, it creates a new ColCollection from the
 // set of columns for which the function returned true.
-func FilterColCollection(cc *ColCollection, cb func(col Column) (bool, error)) (*ColCollection, error) {
+func FilterColCollection(cc *ColCollection, cb func(col Column) bool) *ColCollection {
 	filtered := make([]Column, 0, cc.Size())
 	for _, c := range cc.cols {
-		keep, err := cb(c)
-		if err != nil {
-			return nil, err
-		}
-		if keep {
+		if cb(c) {
 			filtered = append(filtered, c)
 		}
 	}
-	return NewColCollection(filtered...), nil
+	return NewColCollection(filtered...)
 }
 
 
@@ -319,9 +294,9 @@ func ColCollUnion(colColls ...*ColCollection) (*ColCollection, error) {
 
 // ColCollectionSetDifference returns the set difference leftCC - rightCC.
 func ColCollectionSetDifference(leftCC, rightCC *ColCollection) (d *ColCollection) {
-	d, _ = FilterColCollection(leftCC, func(col Column) (b bool, err error) {
+	d = FilterColCollection(leftCC, func(col Column) bool {
 		_, ok := rightCC.GetByTag(col.Tag)
-		return !ok, nil
+		return !ok
 	})
 	return d
 }

@@ -117,7 +117,7 @@ func TestAppendAndItrInSortOrder(t *testing.T) {
 
 	colColl := NewColCollection(cols...)
 	validateIter(len(cols), colColl, t)
-	colColl2, _ := colColl.Append(cols2...)
+	colColl2 := colColl.Append(cols2...)
 	validateIter(len(cols), colColl, t) //validate immutability
 	validateIter(len(cols)+len(cols2), colColl2, t)
 }

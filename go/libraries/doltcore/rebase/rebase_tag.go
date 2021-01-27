@@ -260,10 +260,7 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 			if newTag, found := tableMapping[tag]; found {
 				col.Tag = newTag
 			}
-			schCC, err = schCC.Append(col)
-			if err != nil {
-				return true, err
-			}
+			schCC = schCC.Append(col)
 			return false, nil
 		})
 

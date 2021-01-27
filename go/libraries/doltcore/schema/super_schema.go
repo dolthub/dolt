@@ -83,7 +83,7 @@ func (ss *SuperSchema) AddColumn(col Column) (err error) {
 
 	// we haven't seen this column before
 	ss.tagNames[col.Tag] = append(names, col.Name)
-	ss.allCols, err = ss.allCols.Append(simpleColumn(col))
+	ss.allCols = ss.allCols.Append(simpleColumn(col))
 
 	return err
 }
@@ -205,7 +205,7 @@ func (ss *SuperSchema) GenerateColCollection() (*ColCollection, error) {
 	cc := NewColCollection()
 	err := ss.Iter(func(tag uint64, col Column) (stop bool, err error) {
 		col.Name = uniqNames[tag]
-		cc, err = cc.Append(col)
+		cc = cc.Append(col)
 		stop = err != nil
 		return stop, err
 	})
@@ -284,7 +284,7 @@ func SuperSchemaUnion(superSchemas ...*SuperSchema) (*SuperSchema, error) {
 
 			if !found {
 				tagNameSets[tag] = set.NewStrSet(ss.AllColumnNames(tag))
-				cc, err = cc.Append(simpleColumn(col))
+				cc = cc.Append(simpleColumn(col))
 			} else {
 				tagNameSets[tag].Add(ss.AllColumnNames(tag)...)
 			}

@@ -192,10 +192,7 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 
 func mergeColumns(ourCC, theirCC, ancCC *schema.ColCollection) (merged *schema.ColCollection, conflicts []ColConflict, err error) {
 	var common *schema.ColCollection
-	common, conflicts, err = columnsInCommon(ourCC, theirCC, ancCC)
-	if err != nil {
-		return nil, nil, err
-	}
+	common, conflicts = columnsInCommon(ourCC, theirCC, ancCC)
 
 	ourNewCols := schema.ColCollectionSetDifference(ourCC, ancCC)
 	theirNewCols := schema.ColCollectionSetDifference(theirCC, ancCC)
@@ -228,7 +225,7 @@ func mergeColumns(ourCC, theirCC, ancCC *schema.ColCollection) (merged *schema.C
 	return merged, conflicts, nil
 }
 
-func columnsInCommon(ourCC, theirCC, ancCC *schema.ColCollection) (common *schema.ColCollection, conflicts []ColConflict, err error) {
+func columnsInCommon(ourCC, theirCC, ancCC *schema.ColCollection) (common *schema.ColCollection, conflicts []ColConflict) {
 	common = schema.NewColCollection()
 	_ = ourCC.Iter(func(tag uint64, ourCol schema.Column) (stop bool, err error) {
 		theirCol, ok := theirCC.GetByTag(ourCol.Tag)
@@ -237,8 +234,8 @@ func columnsInCommon(ourCC, theirCC, ancCC *schema.ColCollection) (common *schem
 		}
 
 		if ourCol.Equals(theirCol) {
-			common, err = common.Append(ourCol)
-			return false, err
+			common = common.Append(ourCol)
+			return false, nil
 		}
 
 		ancCol, ok := ancCC.GetByTag(ourCol.Tag)
@@ -262,9 +259,9 @@ func columnsInCommon(ourCC, theirCC, ancCC *schema.ColCollection) (common *schem
 					Theirs: col,
 				})
 			} else {
-				common, err = common.Append(ourCol)
+				common = common.Append(ourCol)
 			}
-			return false, err
+			return false, nil
 		}
 
 		if ancCol.Equals(ourCol) {
@@ -277,9 +274,9 @@ func columnsInCommon(ourCC, theirCC, ancCC *schema.ColCollection) (common *schem
 					Theirs: theirCol,
 				})
 			} else {
-				common, err = common.Append(theirCol)
+				common = common.Append(theirCol)
 			}
-			return false, err
+			return false, nil
 		}
 
 		// col modified on our branch and their branch with different def
@@ -291,7 +288,7 @@ func columnsInCommon(ourCC, theirCC, ancCC *schema.ColCollection) (common *schem
 		return false, nil
 	})
 
-	return common, conflicts, err
+	return common, conflicts
 }
 
 // assumes indexes are unique over their column sets

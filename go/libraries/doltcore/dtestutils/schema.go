@@ -58,10 +58,7 @@ func NewRow(sch schema.Schema, values ...types.Value) row.Row {
 // schema, e.g. tag collision.
 func AddColumnToSchema(sch schema.Schema, col schema.Column) schema.Schema {
 	columns := sch.GetAllCols()
-	columns, err := columns.Append(col)
-	if err != nil {
-		panic(err)
-	}
+	columns = columns.Append(col)
 	return schema.MustSchemaFromCols(columns)
 }
 
