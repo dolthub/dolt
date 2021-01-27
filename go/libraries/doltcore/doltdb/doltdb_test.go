@@ -69,7 +69,7 @@ func createTestSchema(t *testing.T) schema.Schema {
 	return sch
 }
 
-func createTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData types.Map) (*Table, error) {
+func CreateTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData types.Map) (*Table, error) {
 	schemaVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), vrw, tSchema)
 
 	if err != nil {
@@ -290,7 +290,7 @@ func TestLDNoms(t *testing.T) {
 
 		tSchema := createTestSchema(t)
 		rowData, _ := createTestRowData(t, ddb.db, tSchema)
-		tbl, err = createTestTable(ddb.db, tSchema, rowData)
+		tbl, err = CreateTestTable(ddb.db, tSchema, rowData)
 
 		if err != nil {
 			t.Fatal("Failed to create test table with data")

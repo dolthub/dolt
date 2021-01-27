@@ -92,13 +92,13 @@ func (i *indexLookupRowIterAdapter) queueRows() {
 		shouldBreak := false
 		pos := 0
 		for ; pos < len(i.buffer); pos++ {
-			var indexKey types.Value
+			var indexKey types.Tuple
 			indexKey, err = i.keyIter.ReadKey(i.ctx)
 			if err != nil {
 				break
 			}
 			exec.Execute(keyPos{
-				key:      indexKey.(types.Tuple),
+				key:      indexKey,
 				position: pos,
 			})
 		}
@@ -131,42 +131,41 @@ func (i *indexLookupRowIterAdapter) queueRows() {
 	}
 }
 
-func (i *indexLookupRowIterAdapter) indexKeyToTableKey(nbf *types.NomsBinFormat, indexKey types.Tuple) (types.Value, error) {
+func (i *indexLookupRowIterAdapter) indexKeyToTableKey(nbf *types.NomsBinFormat, indexKey types.Tuple) (types.Tuple, error) {
 	tplItr, err := indexKey.Iterator()
 
 	if err != nil {
-		return nil, err
+		return types.Tuple{}, err
 	}
 
 	resVals := make([]types.Value, len(i.pkTags)*2)
 	for {
-		_, tagVal, err := tplItr.Next()
+		_, tag, err := tplItr.NextUint64()
 
 		if err != nil {
-			return nil, err
+			if err == io.EOF {
+				break
+			}
+
+			return types.Tuple{}, err
 		}
 
-		if tagVal == nil {
-			break
-		}
-
-		tag := uint64(tagVal.(types.Uint))
 		idx, inPK := i.pkTags[tag]
 
 		if inPK {
 			_, valVal, err := tplItr.Next()
 
 			if err != nil {
-				return nil, err
+				return types.Tuple{}, err
 			}
 
-			resVals[idx*2] = tagVal
+			resVals[idx*2] = types.Uint(tag)
 			resVals[idx*2+1] = valVal
 		} else {
 			err := tplItr.Skip()
 
 			if err != nil {
-				return nil, err
+				return types.Tuple{}, err
 			}
 		}
 	}
@@ -185,16 +184,16 @@ func (i *indexLookupRowIterAdapter) processKey(_ context.Context, valInt interfa
 		return err
 	}
 
-	fieldsVal, _, err := tableData.MaybeGet(i.ctx, pkTupleVal)
+	fieldsVal, ok, err := tableData.MaybeGetTuple(i.ctx, pkTupleVal)
 	if err != nil {
 		return err
 	}
 
-	if fieldsVal == nil {
+	if !ok {
 		return nil
 	}
 
-	sqlRow, err := i.conv.ConvertKVToSqlRow(pkTupleVal, fieldsVal)
+	sqlRow, err := i.conv.ConvertKVTuplesToSqlRow(pkTupleVal, fieldsVal)
 	if err != nil {
 		return err
 	}
@@ -255,7 +254,7 @@ func (ci *coveringIndexRowIterAdapter) Next() (sql.Row, error) {
 		return nil, err
 	}
 
-	return ci.conv.ConvertKVToSqlRow(key, nil)
+	return ci.conv.ConvertKVTuplesToSqlRow(key, types.Tuple{})
 }
 
 func (ci *coveringIndexRowIterAdapter) Close() error {

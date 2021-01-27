@@ -24,8 +24,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	. "github.com/dolthub/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
@@ -256,7 +256,7 @@ var systemTableReplaceTests = []ReplaceTest{
 	{
 		Name: "replace into dolt_docs",
 		AdditionalSetup: CreateTableFn("dolt_docs",
-			env.DoltDocsSchema,
+			doltdocs.DoltDocsSchema,
 			NewRow(types.String("LICENSE.md"), types.String("A license"))),
 		ReplaceQuery: "replace into dolt_docs (doc_name, doc_text) values ('README.md', 'Some text')",
 		ExpectedErr:  "cannot insert into table",

@@ -168,5 +168,5 @@ func (il *doltIndexLookup) RowIterForRanges(ctx *sql.Context, ranges []lookup.Ra
 }
 
 type nomsKeyIter interface {
-	ReadKey(ctx context.Context) (types.Value, error)
+	ReadKey(ctx context.Context) (types.Tuple, error)
 }

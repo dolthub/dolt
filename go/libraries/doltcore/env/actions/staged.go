@@ -18,6 +18,8 @@ import (
 	"context"
 	"errors"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
@@ -30,46 +32,29 @@ func StageTables(ctx context.Context, dbData env.DbData, tbls []string) error {
 	rsw := dbData.Rsw
 	drw := dbData.Drw
 
-	tables, docDetails, err := GetTblsAndDocDetails(drw, tbls)
+	tables, docs, err := GetTablesOrDocs(drw, tbls)
 	if err != nil {
 		return err
 	}
 
-	if len(docDetails) > 0 {
-		err = drw.PutDocsToWorking(ctx, docDetails)
+	staged, working, err := getStagedAndWorking(ctx, ddb, rsr)
+	if err != nil {
+		return err
+	}
+
+	if len(docs) > 0 {
+		working, err = doltdocs.UpdateRootWithDocs(ctx, working, docs)
 		if err != nil {
 			return err
 		}
 	}
 
-	staged, working, err := getStagedAndWorking(ctx, ddb, rsr)
-
-	if err != nil {
-		return err
-	}
-
 	err = stageTables(ctx, ddb, rsw, tables, staged, working)
 	if err != nil {
-		drw.ResetWorkingDocsToStagedDocs(ctx)
+		env.ResetWorkingDocsToStagedDocs(ctx, ddb, rsr, rsw)
 		return err
 	}
 	return nil
-}
-
-// GetTblsAndDocDetails takes a slice of strings where valid doc names are replaced with doc table name. Doc names are
-// appended to a docDetails slice. We return a tuple of tables, docDetails and error.
-func GetTblsAndDocDetails(drw env.DocsReadWriter, tbls []string) (tables []string, docDetails []doltdb.DocDetails, err error) {
-	for i, tbl := range tbls {
-		docDetail, err := drw.GetDocDetail(tbl)
-		if err != nil {
-			return nil, nil, err
-		}
-		if docDetail.DocPk != "" {
-			docDetails = append(docDetails, docDetail)
-			tbls[i] = doltdb.DocTableName
-		}
-	}
-	return tbls, docDetails, nil
 }
 
 func StageAllTables(ctx context.Context, dbData env.DbData) error {
@@ -77,12 +62,6 @@ func StageAllTables(ctx context.Context, dbData env.DbData) error {
 	rsr := dbData.Rsr
 	rsw := dbData.Rsw
 	drw := dbData.Drw
-
-	err := drw.PutDocsToWorking(ctx, nil)
-
-	if err != nil {
-		return err
-	}
 
 	staged, err := env.StagedRoot(ctx, ddb, rsr)
 
@@ -96,6 +75,18 @@ func StageAllTables(ctx context.Context, dbData env.DbData) error {
 		return err
 	}
 
+	docs, err := drw.GetDocsOnDisk()
+
+	if err != nil {
+		return err
+	}
+
+	working, err = doltdocs.UpdateRootWithDocs(ctx, working, docs)
+
+	if err != nil {
+		return err
+	}
+
 	tbls, err := doltdb.UnionTableNames(ctx, staged, working)
 
 	if err != nil {
@@ -104,7 +95,7 @@ func StageAllTables(ctx context.Context, dbData env.DbData) error {
 
 	err = stageTables(ctx, ddb, rsw, tbls, staged, working)
 	if err != nil {
-		drw.ResetWorkingDocsToStagedDocs(ctx)
+		env.ResetWorkingDocsToStagedDocs(ctx, ddb, rsr, rsw)
 		return err
 	}
 

@@ -264,7 +264,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return err
 	}
 
-	unstagedDocs, err := GetUnstagedDocs(ctx, dEnv)
+	unstagedDocs, err := GetUnstagedDocs(ctx, dEnv.DbData())
 	if err != nil {
 		return err
 	}

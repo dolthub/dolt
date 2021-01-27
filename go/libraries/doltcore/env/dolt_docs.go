@@ -15,88 +15,50 @@
 package env
 
 import (
+	"context"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
-type Docs []doltdb.DocDetails
-
-var doltDocsColumns = schema.NewColCollection(
-	schema.NewColumn(doltdb.DocPkColumnName, schema.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
-	schema.NewColumn(doltdb.DocTextColumnName, schema.DocTextTag, types.StringKind, false),
-)
-var DoltDocsSchema = schema.MustSchemaFromCols(doltDocsColumns)
-
-// AllValidDocDetails is a list of all valid docs with static fields DocPk and File. All other DocDetail fields
-// are dynamic and must be added, modified or removed as needed.
-var AllValidDocDetails = &Docs{
-	doltdb.DocDetails{DocPk: doltdb.ReadmePk, File: ReadmeFile},
-	doltdb.DocDetails{DocPk: doltdb.LicensePk, File: LicenseFile},
-}
-
-func LoadDocs(fs filesys.ReadWriteFS) (Docs, error) {
-	docsWithCurrentText := *AllValidDocDetails
-	for i, val := range docsWithCurrentText {
-		path := getDocFile(val.File)
-		exists, isDir := fs.Exists(path)
-		if exists && !isDir {
-			data, err := fs.ReadFile(path)
-			if err != nil {
-				return nil, err
-			}
-			val.NewerText = data
-			docsWithCurrentText[i] = val
-		}
+// ResetWorkingDocsToStagedDocs resets the `dolt_docs` table on the working root to match the staged root.
+// If the `dolt_docs` table does not exist on the staged root, it will be removed from the working root.
+func ResetWorkingDocsToStagedDocs(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader, rsw RepoStateWriter) error {
+	wrkRoot, err := WorkingRoot(ctx, ddb, rsr)
+	if err != nil {
+		return err
 	}
-	return docsWithCurrentText, nil
-}
 
-func (docs Docs) Save(fs filesys.ReadWriteFS) error {
-	for _, doc := range docs {
-		if !IsValidDoc(doc.DocPk) {
-			continue
+	stgRoot, err := StagedRoot(ctx, ddb, rsr)
+	if err != nil {
+		return err
+	}
+
+	stgDocTbl, stgDocsFound, err := stgRoot.GetTable(ctx, doltdb.DocTableName)
+	if err != nil {
+		return err
+	}
+
+	_, wrkDocsFound, err := wrkRoot.GetTable(ctx, doltdb.DocTableName)
+	if err != nil {
+		return err
+	}
+
+	if wrkDocsFound && !stgDocsFound {
+		newWrkRoot, err := wrkRoot.RemoveTables(ctx, doltdb.DocTableName)
+		if err != nil {
+			return err
 		}
-		filePath := getDocFile(doc.File)
-		if doc.NewerText != nil {
-			err := fs.WriteFile(filePath, doc.NewerText)
-			if err != nil {
-				return err
-			}
-		} else {
-			err := DeleteDoc(fs, doc.DocPk)
-			if err != nil {
-				return err
-			}
+		_, err = UpdateWorkingRoot(ctx, ddb, rsw, newWrkRoot)
+		return err
+	}
+
+	if stgDocsFound {
+		newWrkRoot, err := wrkRoot.PutTable(ctx, doltdb.DocTableName, stgDocTbl)
+		if err != nil {
+			return err
 		}
+		_, err = UpdateWorkingRoot(ctx, ddb, rsw, newWrkRoot)
+		return err
 	}
 	return nil
-}
-
-func DeleteDoc(fs filesys.ReadWriteFS, docName string) error {
-	for _, doc := range *AllValidDocDetails {
-		if doc.DocPk == docName {
-			path := getDocFile(doc.File)
-			exists, isDir := fs.Exists(path)
-			if exists && !isDir {
-				return fs.DeleteFile(path)
-			}
-		}
-	}
-	return nil
-}
-
-func IsValidDoc(docName string) bool {
-	for _, doc := range *AllValidDocDetails {
-		if doc.DocPk == docName {
-			return true
-		}
-	}
-	return false
-}
-
-func hasDocFile(fs filesys.ReadWriteFS, file string) bool {
-	exists, isDir := fs.Exists(getDocFile(file))
-	return exists && !isDir
 }

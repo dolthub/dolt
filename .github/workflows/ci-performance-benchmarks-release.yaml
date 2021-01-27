@@ -1,13 +1,39 @@
+name: Benchmark Dolt vs MySQL
+
 on:
+  repository_dispatch:
+    types: [ release-dolt ]
   workflow_dispatch:
     inputs:
       version:
         description: 'SemVer format release tag, i.e. 0.23.4'
         required: true
+        default: ''
+      email:
+        description: 'Email address to receive results'
+        required: true
+        default: ''
 
 jobs:
+  set-version-actor:
+    name: Set Version and Actor
+    runs-on: ubuntu-18.04
+    outputs:
+      version: ${{ steps.set-vars.outputs.version }}
+      actor: ${{ steps.set-vars.outputs.actor }}
+    steps:
+      - name: Set variables
+        id: set-vars
+        run: |
+          echo "::set-output name=version::$VERSION"
+          echo "::set-output name=actor::$ACTOR"
+        env:
+          VERSION: ${{ github.event.inputs.version || github.event.client_payload.version }}
+          ACTOR: ${{ github.event.client_payload.actor || github.actor }}
+
   benchmark-release-mysql:
     runs-on: ubuntu-18.04
+    needs: set-version-actor
     name: Benchmark Dolt Release vs MySQL 8
     steps:
       - uses: actions/checkout@v2
@@ -38,22 +64,30 @@ jobs:
           FROM_SERVER: 'mysql'
           FROM_VERSION: '8.0.22'
           TO_SERVER: 'dolt'
-          TO_VERSION: ${{ github.event.inputs.version }}
+          TO_VERSION: ${{ needs.set-version-actor.outputs.version }}
           MODE: 'release'
-          ACTOR: ${{ github.actor }}
+          ACTOR: ${{ needs.set-version-actor.outputs.actor }}
           KUBECONFIG: "./kubeconfig"
           TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-mysql-dolt-job-json.sh"
       - name: Get benchmark results
         id: get-results
         run: |
-          echo "Get benchmark results here: $KEY"
           aws s3api get-object --bucket=performance-benchmarking-github-actions-results --key="$KEY" results.log
         env:
           KEY: ${{ steps.run-benchmarks.outputs.object-key }}
-      - name: Send Email
+      - name: Send Email on Release
+        if: ${{ github.event_name == 'repository_dispatch' }}
         uses: ./.github/actions/ses-email-action
         with:
           region: us-west-2
-          version: ${{ github.event.inputs.version }}
-          toAddresses: '["dustin@dolthub.com"]'
+          version: ${{ needs.set-version-actor.outputs.version }}
+          toAddresses: '["${{ secrets.PERF_REPORTS_EMAIL_ADDRESS }}"]'
+          dataFile: ${{ format('{0}/results.log', github.workspace) }}
+      - name: Send Email
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: ./.github/actions/ses-email-action
+        with:
+          region: us-west-2
+          version: ${{ needs.set-version-actor.outputs.version }}
+          toAddresses: '["${{ github.event.inputs.email }}"]'
           dataFile: ${{ format('{0}/results.log', github.workspace) }}
