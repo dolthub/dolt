@@ -129,6 +129,19 @@ DELIM
     [[ "$output" =~ "Error creating reader" ]] || false
 }
 
+@test "try to create a table with duplicate column names" {
+    cat <<CSV > duplicate-names.csv
+pk,abc,Abc
+1,2,3
+4,5,6
+CSV
+    
+    run dolt table import -c --pk=pk test duplicate-names.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "name" ]] || false
+    [[ "$output" =~ "invalid schema" ]] || false
+}
+
 @test "try to create a table with dolt table import with a bad file name" {
     run dolt table import -c test `batshelper bad.data`
     [ "$status" -eq 1 ]
