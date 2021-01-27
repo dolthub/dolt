@@ -88,6 +88,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.GarbageCollectionCmd{},
 	commands.FilterBranchCmd{},
 	commands.VerifyConstraintsCmd{},
+	commands.WorkspaceCmd{},
 })
 
 func init() {
