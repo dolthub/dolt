@@ -210,6 +210,7 @@ sub get_issues {
             next unless $issue->{closed_at};
             return \@closed_issues if $issue->{created_at} lt $from_time;
             next if $issue->{html_url} =~ m|/pull/|; # the issues API also returns PR results
+            next if index($issue->{title}, "[no-release-notes]") != -1; # skip operational prs
             my %i = (
                 'url' => $issue->{html_url},
                 'number' => $issue->{number},
