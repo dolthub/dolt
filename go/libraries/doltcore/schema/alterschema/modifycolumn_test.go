@@ -93,6 +93,12 @@ func TestModifyColumn(t *testing.T) {
 			expectedRows: dtestutils.TypedRows,
 		},
 		{
+			name:           "tag collision",
+			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+			newColumn:      schema.NewColumn("newId", dtestutils.NameTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+			expectedErr:    "two different columns with the same tag",
+		},
+		{
 			name:           "name collision",
 			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
 			newColumn:      schema.NewColumn("name", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
