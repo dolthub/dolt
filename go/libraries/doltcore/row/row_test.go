@@ -101,7 +101,7 @@ func TestIsValid(t *testing.T) {
 		nonPkCols := []schema.Column{
 			{Name: addrColName, Tag: addrColTag, Kind: types.BoolKind, IsPartOfPK: false, Constraints: nil},
 		}
-		nonKeyColColl, _ := schema.NewColCollection(nonPkCols...)
+		nonKeyColColl := schema.NewColCollection(nonPkCols...)
 		newSch, err := schema.SchemaFromPKAndNonPKCols(testKeyColColl, nonKeyColColl)
 		require.NoError(t, err)
 

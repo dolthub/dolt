@@ -17,6 +17,7 @@ package alterschema
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -155,10 +156,13 @@ func addColumnToSchema(sch schema.Schema, tag uint64, newColName string, typeInf
 		newCols = append(newCols, newCol)
 	}
 
-	collection, err := schema.NewColCollection(newCols...)
+	collection := schema.NewColCollection(newCols...)
+
+	err = schema.ValidateForInsert(collection)
 	if err != nil {
 		return nil, err
 	}
+
 	newSch, err := schema.SchemaFromCols(collection)
 	if err != nil {
 		return nil, err
@@ -192,8 +196,7 @@ func validateNewColumn(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.
 	err = cols.Iter(func(currColTag uint64, currCol schema.Column) (stop bool, err error) {
 		if currColTag == tag {
 			return false, schema.ErrTagPrevUsed(tag, newColName, tblName)
-		} else if currCol.Name == newColName {
-
+		} else if strings.ToLower(currCol.Name) == strings.ToLower(newColName) {
 			return true, fmt.Errorf("A column with the name %s already exists in table %s.", newColName, tblName)
 		}
 

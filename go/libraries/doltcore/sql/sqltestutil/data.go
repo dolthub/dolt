@@ -86,7 +86,7 @@ var untypedAppearacesSch, _ = untyped.UntypeUnkeySchema(AppearancesTestSchema)
 var AppearancesTableName = "appearances"
 
 func createPeopleTestSchema() schema.Schema {
-	colColl, _ := schema.NewColCollection(
+	colColl := schema.NewColCollection(
 		schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("first_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 		schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
@@ -100,7 +100,7 @@ func createPeopleTestSchema() schema.Schema {
 }
 
 func createEpisodesTestSchema() schema.Schema {
-	colColl, _ := schema.NewColCollection(
+	colColl := schema.NewColCollection(
 		schema.NewColumn("id", EpisodeIdTag, types.IntKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("name", EpNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 		newColumnWithTypeInfo("air_date", EpAirDateTag, typeinfo.DatetimeType, false),
@@ -110,7 +110,7 @@ func createEpisodesTestSchema() schema.Schema {
 }
 
 func createAppearancesTestSchema() schema.Schema {
-	colColl, _ := schema.NewColCollection(
+	colColl := schema.NewColCollection(
 		schema.NewColumn("character_id", AppCharacterTag, types.IntKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("episode_id", AppEpTag, types.IntKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("comments", AppCommentsTag, types.StringKind, false),

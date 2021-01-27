@@ -378,7 +378,7 @@ var systemTableUpdateTests = []UpdateTest{
 	{
 		Name: "update dolt_docs",
 		AdditionalSetup: CreateTableFn("dolt_docs",
-			doltdocs.DoltDocsSchema,
+			doltdocs.Schema,
 			NewRow(types.String("LICENSE.md"), types.String("A license"))),
 		UpdateQuery: "update dolt_docs set doc_text = 'Some text')",
 		ExpectedErr: "cannot insert into table",

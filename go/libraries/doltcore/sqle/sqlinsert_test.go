@@ -401,7 +401,7 @@ var systemTableInsertTests = []InsertTest{
 	{
 		Name: "insert into dolt_docs",
 		AdditionalSetup: CreateTableFn("dolt_docs",
-			doltdocs.DoltDocsSchema,
+			doltdocs.Schema,
 			NewRow(types.String("LICENSE.md"), types.String("A license"))),
 		InsertQuery: "insert into dolt_docs (doc_name, doc_text) values ('README.md', 'Some text')",
 		ExpectedErr: "cannot insert into table",

@@ -259,7 +259,7 @@ func InferSchema(ctx context.Context, root *doltdb.RootValue, rd table.TableRead
 	}
 
 	pkSet := set.NewStrSet(pks)
-	newCols, _ := schema.MapColCollection(infCols, func(col schema.Column) (schema.Column, error) {
+	newCols := schema.MapColCollection(infCols, func(col schema.Column) schema.Column {
 		col.IsPartOfPK = pkSet.Contains(col.Name)
 		if col.IsPartOfPK {
 			hasNotNull := false
@@ -273,7 +273,7 @@ func InferSchema(ctx context.Context, root *doltdb.RootValue, rd table.TableRead
 				col.Constraints = append(col.Constraints, schema.NotNullConstraint{})
 			}
 		}
-		return col, nil
+		return col
 	})
 
 	// check that all provided primary keys are being used
@@ -287,6 +287,11 @@ func InferSchema(ctx context.Context, root *doltdb.RootValue, rd table.TableRead
 	newCols, err = root.GenerateTagsForNewColColl(ctx, tableName, newCols)
 	if err != nil {
 		return nil, errhand.BuildDError("failed to generate new schema").AddCause(err).Build()
+	}
+
+	err = schema.ValidateForInsert(newCols)
+	if err != nil {
+		return nil, errhand.BuildDError("invalid schema").AddCause(err).Build()
 	}
 
 	return schema.SchemaFromCols(newCols)

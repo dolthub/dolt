@@ -26,7 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-var queryCatalogCols, _ = schema.NewColCollection(
+var queryCatalogCols = schema.NewColCollection(
 	// QueryCatalogIdCol is the name of the primary key column of the query catalog table
 	schema.NewColumn(doltdb.QueryCatalogIdCol, schema.QueryCatalogIdTag, types.StringKind, true, schema.NotNullConstraint{}),
 	// QueryCatalogOrderCol is the column containing the order of the queries in the catalog

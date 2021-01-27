@@ -509,9 +509,3 @@ func TestInferSchema(t *testing.T) {
 		})
 	}
 }
-
-func mustColColl(t *testing.T, cols ...schema.Column) *schema.ColCollection {
-	cc, err := schema.NewColCollection(cols...)
-	require.NoError(t, err)
-	return cc
-}

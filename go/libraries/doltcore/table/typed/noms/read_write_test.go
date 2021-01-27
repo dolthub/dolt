@@ -39,7 +39,7 @@ const (
 	titleColTag = 1
 )
 
-var colColl, _ = schema.NewColCollection(
+var colColl = schema.NewColCollection(
 	schema.NewColumn(idCol, idColTag, types.UUIDKind, true, schema.NotNullConstraint{}),
 	schema.NewColumn(nameCol, nameColTag, types.StringKind, false),
 	schema.NewColumn(ageCol, ageColTag, types.UintKind, false),

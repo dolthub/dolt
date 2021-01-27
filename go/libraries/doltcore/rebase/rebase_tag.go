@@ -255,15 +255,12 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		parentTblName := tblName
 
 		// schema rebase
-		schCC, _ := schema.NewColCollection()
+		schCC := schema.NewColCollection()
 		err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 			if newTag, found := tableMapping[tag]; found {
 				col.Tag = newTag
 			}
-			schCC, err = schCC.Append(col)
-			if err != nil {
-				return true, err
-			}
+			schCC = schCC.Append(col)
 			return false, nil
 		})
 

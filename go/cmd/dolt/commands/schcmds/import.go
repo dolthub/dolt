@@ -413,10 +413,13 @@ func CombineColCollections(ctx context.Context, root *doltdb.RootValue, inferred
 		return nil, errhand.BuildDError("failed to generate new schema").AddCause(err).Build()
 	}
 
-	combined, err := oldCols.AppendColl(newCols)
+	combined := oldCols.AppendColl(newCols)
+
+	err = schema.ValidateForInsert(combined)
 	if err != nil {
-		return nil, errhand.BuildDError("failed to generate new schema").AddCause(err).Build()
+		return nil, errhand.BuildDError("invalid schema").AddCause(err).Build()
 	}
+
 	sch, err := schema.SchemaFromCols(combined)
 	if err != nil {
 		return nil, errhand.BuildDError("failed to get schema from cols").AddCause(err).Build()
@@ -426,9 +429,9 @@ func CombineColCollections(ctx context.Context, root *doltdb.RootValue, inferred
 
 func columnsForSchemaCreate(inferredCols *schema.ColCollection, pkNames []string) (newCols *schema.ColCollection) {
 	pks := set.NewStrSet(pkNames)
-	newCols, _ = schema.MapColCollection(inferredCols, func(col schema.Column) (schema.Column, error) {
+	newCols = schema.MapColCollection(inferredCols, func(col schema.Column) schema.Column {
 		col.IsPartOfPK = pks.Contains(col.Name)
-		return col, nil
+		return col
 	})
 	return newCols
 }
@@ -453,15 +456,15 @@ func columnsForSchemaUpdate(existingCols, inferredCols *schema.ColCollection, ke
 
 	if keepTypes {
 		oldCols = existingCols
-		newCols, _ = schema.FilterColCollection(inferredCols, func(col schema.Column) (bool, error) {
-			return right.Contains(col.Name), nil
+		newCols = schema.FilterColCollection(inferredCols, func(col schema.Column) bool {
+			return right.Contains(col.Name)
 		})
 	} else {
-		oldCols, _ = schema.FilterColCollection(existingCols, func(col schema.Column) (bool, error) {
-			return left.Contains(col.Name) || sameType.Contains(col.Name), nil
+		oldCols = schema.FilterColCollection(existingCols, func(col schema.Column) bool {
+			return left.Contains(col.Name) || sameType.Contains(col.Name)
 		})
-		newCols, _ = schema.FilterColCollection(inferredCols, func(col schema.Column) (bool, error) {
-			return !sameType.Contains(col.Name), nil
+		newCols = schema.FilterColCollection(inferredCols, func(col schema.Column) bool {
+			return !sameType.Contains(col.Name)
 		})
 	}
 
@@ -492,18 +495,18 @@ func columnsForSchemaReplace(existingCols, inferredCols *schema.ColCollection, k
 	})
 
 	if keepTypes {
-		oldCols, _ = schema.FilterColCollection(existingCols, func(col schema.Column) (bool, error) {
-			return inter.Contains(col.Name), nil
+		oldCols = schema.FilterColCollection(existingCols, func(col schema.Column) bool {
+			return inter.Contains(col.Name)
 		})
-		newCols, _ = schema.FilterColCollection(inferredCols, func(col schema.Column) (bool, error) {
-			return right.Contains(col.Name), nil
+		newCols = schema.FilterColCollection(inferredCols, func(col schema.Column) bool {
+			return right.Contains(col.Name)
 		})
 	} else {
-		oldCols, _ = schema.FilterColCollection(existingCols, func(col schema.Column) (bool, error) {
-			return sameType.Contains(col.Name), nil
+		oldCols = schema.FilterColCollection(existingCols, func(col schema.Column) bool {
+			return sameType.Contains(col.Name)
 		})
-		newCols, _ = schema.FilterColCollection(inferredCols, func(col schema.Column) (bool, error) {
-			return !sameType.Contains(col.Name), nil
+		newCols = schema.FilterColCollection(inferredCols, func(col schema.Column) bool {
+			return !sameType.Contains(col.Name)
 		})
 	}
 
@@ -526,11 +529,11 @@ func verifyPKsUnchanged(existingCols, oldCols, newCols *schema.ColCollection) er
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	existingPKs, _ := schema.FilterColCollection(existingCols, func(col schema.Column) (b bool, err error) {
-		return col.IsPartOfPK, nil
+	existingPKs := schema.FilterColCollection(existingCols, func(col schema.Column) bool {
+		return col.IsPartOfPK
 	})
-	newPKs, _ := schema.FilterColCollection(oldCols, func(col schema.Column) (b bool, err error) {
-		return col.IsPartOfPK, nil
+	newPKs := schema.FilterColCollection(oldCols, func(col schema.Column) bool {
+		return col.IsPartOfPK
 	})
 	if !schema.ColCollsAreEqual(existingPKs, newPKs) {
 		return errhand.BuildDError("input primary keys do not match primary keys of existing table").Build()
