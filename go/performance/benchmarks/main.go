@@ -29,6 +29,7 @@ const (
 	largeSet  = 10000000
 )
 
+// TESTING
 var outputPath = flag.String("outputPath", "./", "the path where the serialized results file will be stored.")
 var outputFormat = flag.String("outputFormat", ".csv", "the format used to serialize the benchmarking results.")
 var resultsTableName = flag.String("resultsTableName", "results", "the name of the results table.")
