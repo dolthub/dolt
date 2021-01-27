@@ -275,7 +275,6 @@ func FilterColCollection(cc *ColCollection, cb func(col Column) bool) *ColCollec
 	return NewColCollection(filtered...)
 }
 
-
 func ColCollUnion(colColls ...*ColCollection) (*ColCollection, error) {
 	var allCols []Column
 	for _, sch := range colColls {
