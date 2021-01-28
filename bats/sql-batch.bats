@@ -123,12 +123,19 @@ SQL
 
 @test "batch mode detects subqueries and decides not to do batch insert." {
   # create the second table.
-  run dolt sql << SQL
+  dolt sql << SQL
 CREATE TABLE test2 (
   pk bigint NOT NULL,
   c1 bigint,
   PRIMARY KEY (pk)
 );
+SQL
+
+  run dolt status
+  [ "$status" -eq 0 ]
+
+  # Create the table and base subquery on recently inserted row.
+  run dolt sql << SQL
 INSERT INTO TEST VALUES (1,1,0,0,0,0);
 INSERT INTO TEST2 VALUES (1, (SELECT c1 FROM TEST WHERE c1=1));
 SQL
