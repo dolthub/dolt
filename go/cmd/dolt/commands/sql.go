@@ -1004,7 +1004,6 @@ func processBatchInsert(ctx *sql.Context, se *sqlEngine, query string, sqlStatem
 	if batchEditStats.shouldFlush() {
 		return flushBatchedEdits(ctx, se)
 	}
-	//return flushBatchedEdits(ctx, se)
 
 	return nil
 }
