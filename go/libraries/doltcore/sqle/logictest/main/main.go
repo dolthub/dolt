@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"encoding/csv"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 
@@ -26,12 +27,15 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/logictest/dolt"
 )
 
+var resultFormat = flag.String("r", "json", "format of parsed results")
+
 // Runs all sqllogictest test files (or directories containing them) given as arguments.
 // Usage: $command (run|parse) [version] [file1.test dir1/ dir2/]
 // In run mode, runs the tests and prints results to stdout.
 // In parse mode, parses test results from the file given and prints them to STDOUT in a format to be imported by dolt.
 func main() {
-	args := os.Args[1:]
+	flag.Parse()
+	args := flag.Args()
 
 	if len(args) < 1 {
 		panic("Usage: logictest (run|parse) [version] file1 file2 ...")
@@ -42,7 +46,7 @@ func main() {
 		logictest.RunTestFiles(h, args[1:]...)
 	} else if args[0] == "parse" {
 		if len(args) < 3 {
-			panic("Usage: logictest parse <version> (file | dir/)")
+			panic("Usage: logictest [-r(csv|json)] parse <version> (file | dir/)")
 		}
 		parseTestResults(args[1], args[2])
 	} else {
@@ -61,7 +65,7 @@ func parseTestResults(version, f string) {
 		records[i] = NewDoltRecordResult(e, version)
 	}
 
-	if os.Getenv("FORMAT") == "csv" {
+	if *resultFormat == "csv" {
 		err := writeResultsCsv(records)
 		if err != nil {
 			panic(err)
