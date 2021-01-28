@@ -114,6 +114,7 @@ var _ sql.IndexedTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.UpdatableTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.DeletableTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.ReplaceableTable = (*WritableIndexedDoltTable)(nil)
+var _ sql.StatisticsTable = (*WritableIndexedDoltTable)(nil)
 
 type WritableIndexedDoltTable struct {
 	*WritableDoltTable
@@ -129,6 +130,17 @@ func (t *WritableIndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIt
 
 func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	return partitionIndexedTableRows(ctx, t, nil, part)
+}
+
+// NumRows returns the unfiltered count of rows contained in the table
+func (t *WritableIndexedDoltTable) NumRows(ctx *sql.Context) (uint64, error) {
+	m, err := t.table.GetRowData(ctx)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return m.Len(), nil
 }
 
 func partitionIndexedTableRows(ctx *sql.Context, t *WritableIndexedDoltTable, projectedCols []string, part sql.Partition) (sql.RowIter, error) {

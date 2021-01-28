@@ -102,6 +102,7 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatab
 var _ sql.Table = (*DoltTable)(nil)
 var _ sql.IndexedTable = (*DoltTable)(nil)
 var _ sql.ForeignKeyTable = (*DoltTable)(nil)
+var _ sql.StatisticsTable = (*DoltTable)(nil)
 
 // projected tables disabled for now.  Looks like some work needs to be done in the analyzer as there are cases
 // where the projected columns do not contain every column needed.  Seed this with natural and other joins.  There
@@ -197,6 +198,17 @@ func (t *DoltTable) Name() string {
 // String returns a human-readable string to display the name of this SQL node.
 func (t *DoltTable) String() string {
 	return t.name
+}
+
+// NumRows returns the unfiltered count of rows contained in the table
+func (t *DoltTable) NumRows(ctx *sql.Context) (uint64, error) {
+	m, err := t.table.GetRowData(ctx)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return m.Len(), nil
 }
 
 // Schema returns the schema for this table.
