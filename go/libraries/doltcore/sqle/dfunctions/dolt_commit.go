@@ -16,8 +16,8 @@ package dfunctions
 
 import (
 	"fmt"
-
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -126,6 +126,20 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		Email:            email,
 	})
 
+	err = setHeadRoot(ctx, h)
+
+	if err != nil {
+		return nil, err
+	}
+	//
+	//working, err := env.WorkingRoot(ctx, dbData.Ddb, dbData.Rsr)
+	//if err != nil {
+	//	return nil, err
+	//}
+
+	//wh, _ := working.HashOf()
+	//err = setWorkingRoot(ctx, wh.String())
+
 	return h, err
 }
 
@@ -203,4 +217,33 @@ func (d DoltCommitFunc) Resolved() bool {
 
 func (d DoltCommitFunc) Children() []sql.Expression {
 	return d.children
+}
+
+func setHeadRoot(ctx *sql.Context, headHashStr string) error {
+	// TODO: Should this be the head key?
+	key := ctx.GetCurrentDatabase() + sqle.HeadKeySuffix
+	workingKey := ctx.GetCurrentDatabase() + sqle.WorkingKeySuffix
+
+	dsess := sqle.DSessFromSess(ctx.Session)
+
+	// Refactor from sqle.database.go
+	hashType := sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
+
+	err := dsess.Set(ctx, key, hashType, headHashStr)
+	if err != nil {
+		return err
+	}
+
+	return dsess.Set(ctx, workingKey, hashType, headHashStr)
+}
+
+func setWorkingRoot(ctx *sql.Context, workingHashStr string) error {
+	// TODO: Should this be the head key?
+	key := ctx.GetCurrentDatabase() + sqle.WorkingKeySuffix
+	dsess := sqle.DSessFromSess(ctx.Session)
+
+	// Refactor from sqle.database.go
+	hashType := sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
+
+	return dsess.Set(ctx, key, hashType, workingHashStr)
 }

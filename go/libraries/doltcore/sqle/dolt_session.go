@@ -368,6 +368,14 @@ func (sess *DoltSession) AddDB(ctx context.Context, db Database) error {
 	return sess.Set(ctx, name+HeadKeySuffix, sql.Text, h.String())
 }
 
+func (sess *DoltSession) SetSqlRoot(ctx *sql.Context, rootHash string, rootValue *doltdb.RootValue) error {
+	dbName := ctx.GetCurrentDatabase()
+
+	sess.dbRoots[dbName] = dbRoot{rootHash, rootValue}
+
+	return sess.dbEditors[dbName].SetRoot(ctx, rootValue)
+}
+
 func newTableCache() TableCache {
 	return tableCache{
 		mu:     &sync.Mutex{},

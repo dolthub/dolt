@@ -116,3 +116,11 @@ teardown() {
     [ $status -eq 0 ]
     [[ "$output" =~ "Commit1" ]] || false
 }
+
+#@test "DOLT_COMMIT updates session variables keep system tables fresh" {
+#    run dolt sql -q "SELECT DOLT_ADD('.')"
+#    [ $status -eq 0 ]
+#
+#    run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
+#    [ $status -eq 0 ]
+#}
