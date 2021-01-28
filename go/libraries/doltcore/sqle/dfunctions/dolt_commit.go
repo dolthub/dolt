@@ -222,28 +222,12 @@ func (d DoltCommitFunc) Children() []sql.Expression {
 func setHeadRoot(ctx *sql.Context, headHashStr string) error {
 	// TODO: Should this be the head key?
 	key := ctx.GetCurrentDatabase() + sqle.HeadKeySuffix
-	workingKey := ctx.GetCurrentDatabase() + sqle.WorkingKeySuffix
+	//workingKey := ctx.GetCurrentDatabase() + sqle.WorkingKeySuffix
 
 	dsess := sqle.DSessFromSess(ctx.Session)
 
 	// Refactor from sqle.database.go
 	hashType := sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
 
-	err := dsess.Set(ctx, key, hashType, headHashStr)
-	if err != nil {
-		return err
-	}
-
-	return dsess.Set(ctx, workingKey, hashType, headHashStr)
-}
-
-func setWorkingRoot(ctx *sql.Context, workingHashStr string) error {
-	// TODO: Should this be the head key?
-	key := ctx.GetCurrentDatabase() + sqle.WorkingKeySuffix
-	dsess := sqle.DSessFromSess(ctx.Session)
-
-	// Refactor from sqle.database.go
-	hashType := sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
-
-	return dsess.Set(ctx, key, hashType, workingHashStr)
+	return dsess.Set(ctx, key, hashType, headHashStr)
 }
