@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 	"io"
 	"os"
 	"path/filepath"
@@ -52,6 +51,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 	"github.com/dolthub/dolt/go/libraries/utils/pipeline"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
