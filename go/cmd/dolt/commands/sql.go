@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 	"io"
 	"os"
 	"path/filepath"
@@ -51,7 +52,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 	"github.com/dolthub/dolt/go/libraries/utils/pipeline"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
@@ -1004,6 +1004,7 @@ func processBatchInsert(ctx *sql.Context, se *sqlEngine, query string, sqlStatem
 	if batchEditStats.shouldFlush() {
 		return flushBatchedEdits(ctx, se)
 	}
+	//return flushBatchedEdits(ctx, se)
 
 	return nil
 }
@@ -1024,10 +1025,42 @@ func canProcessAsBatchInsert(ctx *sql.Context, sqlStatement sqlparser.Statement,
 		if hasAutoInc {
 			return false, nil
 		}
+
+		hasSubquery, err := checkForInsertSubqueries(query)
+		if err != nil {
+			return false, err
+		}
+		if hasSubquery {
+			return false, nil
+		}
+
 		return true, nil
 	default:
 		return false, nil
 	}
+}
+
+// checkForInsertSubqueries parses the insert query to check for a subquery.
+func checkForInsertSubqueries(insertQuery string) (bool, error) {
+	p, err := sqlparser.Parse(insertQuery)
+
+	if err != nil {
+		return false, nil
+	}
+
+	return hasSubquery(p), nil
+}
+
+func hasSubquery(node sqlparser.SQLNode) bool {
+	has := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (keepGoing bool, err error) {
+		if _, ok := node.(*sqlparser.Subquery); ok {
+			has = true
+			return false, nil
+		}
+		return true, nil
+	}, node)
+	return has
 }
 
 // parses the query to check if it inserts into a table with AUTO_INCREMENT

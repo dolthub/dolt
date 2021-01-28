@@ -120,3 +120,19 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "working tree clean" ]] || false
 }
+
+@test "batch mode detects subqueries and decides not to do batch insert." {
+  # create the second table.
+  run dolt sql << SQL
+CREATE TABLE test2 (
+  pk bigint NOT NULL,
+  c1 bigint,
+  PRIMARY KEY (pk)
+);
+INSERT INTO TEST VALUES (1,1,0,0,0,0);
+INSERT INTO TEST2 VALUES (1, (SELECT c1 FROM TEST WHERE c1=1));
+SQL
+
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Rows inserted: 2" ]] || false
+}
