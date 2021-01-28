@@ -29,6 +29,7 @@ import (
 var ErrAlreadyExists = errors.New("already exists")
 var ErrCOBranchDelete = errors.New("attempted to delete checked out branch")
 var ErrUnmergedBranchDelete = errors.New("attempted to delete a branch that is not fully merged into master; use `-f` to force")
+var ErrWorkspaceNameExists = errors.New("branch name must not be existing workspace name")
 
 func MoveBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
 	oldRef := ref.NewBranchRef(oldBranch)
@@ -155,10 +156,10 @@ func DeleteBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltRef,
 	return ddb.DeleteBranch(ctx, dref)
 }
 
-func CreateBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startingPoint string, force bool) error {
+func CreateBranchWithDdb(ctx context.Context, ddb *doltdb.DoltDB, newBranch, startingPoint string, force bool, headRef ref.DoltRef) error {
 	newRef := ref.NewBranchRef(newBranch)
 
-	hasRef, err := dEnv.DoltDB.HasRef(ctx, newRef)
+	hasRef, err := ddb.HasRef(ctx, newRef)
 
 	if err != nil {
 		return err
@@ -166,6 +167,14 @@ func CreateBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startingPoi
 
 	if !force && hasRef {
 		return ErrAlreadyExists
+	}
+
+	isWorkspace, err := IsWorkspaceWithDdb(ctx, ddb, newBranch)
+	if err != nil {
+		return err
+	}
+	if isWorkspace {
+		return ErrWorkspaceNameExists
 	}
 
 	if !doltdb.IsValidUserBranchName(newBranch) {
@@ -178,13 +187,17 @@ func CreateBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startingPoi
 		return err
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
+	cm, err := ddb.Resolve(ctx, cs, headRef)
 
 	if err != nil {
 		return err
 	}
 
-	return dEnv.DoltDB.NewBranchAtCommit(ctx, newRef, cm)
+	return ddb.NewBranchAtCommit(ctx, newRef, cm)
+}
+
+func CreateBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startingPoint string, force bool) error {
+	return CreateBranchWithDdb(ctx, dEnv.DoltDB, newBranch, startingPoint, force, dEnv.RepoState.CWBHeadRef())
 }
 
 func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error {
@@ -393,8 +406,12 @@ func RootsWithTable(ctx context.Context, dEnv *env.DoltEnv, table string) (RootT
 }
 
 func IsBranch(ctx context.Context, dEnv *env.DoltEnv, str string) (bool, error) {
+	return IsBranchWithDdb(ctx, dEnv.DoltDB, str)
+}
+
+func IsBranchWithDdb(ctx context.Context, ddb *doltdb.DoltDB, str string) (bool, error) {
 	dref := ref.NewBranchRef(str)
-	return dEnv.DoltDB.HasRef(ctx, dref)
+	return ddb.HasRef(ctx, dref)
 }
 
 func MaybeGetCommit(ctx context.Context, dEnv *env.DoltEnv, str string) (*doltdb.Commit, error) {

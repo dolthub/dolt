@@ -44,3 +44,21 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "another-workspace" ]] || false
 }
+
+@test "dolt create workspace for invalid name" {
+  run dolt workspace master
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "fatal: Workspace name 'master' cannot be the name of an existing branch" ]] || false
+
+  run dolt workspace invalid^name
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "fatal: 'invalid^name' is an invalid workspace name." ]] || false
+
+  run dolt workspace new-workspace
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "successfully created workspace: new-workspace" ]] || false
+
+  run dolt workspace new-workspace
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "fatal: A workspace named 'new-workspace' already exists" ]] || false
+}

@@ -21,16 +21,32 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
 var ErrUnmergedWorkspaceDelete = errors.New("attempted to delete a workspace that is not fully merged into master; use `-f` to force")
 var ErrCOWorkspaceDelete = errors.New("attempted to delete checked out workspace")
+var ErrBranchNameExists = errors.New("workspace name must not be existing branch name")
 
 func CreateWorkspace(ctx context.Context, dEnv *env.DoltEnv, name, startPoint string) error {
+	return CreateWorkspaceWithDdb(ctx, dEnv.DoltDB, name, startPoint, dEnv.RepoState.CWBHeadRef())
+}
+
+func CreateWorkspaceWithDdb(ctx context.Context, ddb *doltdb.DoltDB, name, startPoint string, headRef ref.DoltRef) error {
+	isBranch, err := IsBranchWithDdb(ctx, ddb, name)
+	if err != nil {
+		return err
+	}
+	if isBranch {
+		return ErrBranchNameExists
+	}
+
+	if !doltdb.IsValidUserBranchName(name) {
+		return doltdb.ErrInvWorkspaceName
+	}
+
 	workRef := ref.NewWorkspaceRef(name)
 
-	hasRef, err := dEnv.DoltDB.HasRef(ctx, workRef)
+	hasRef, err := ddb.HasRef(ctx, workRef)
 	if err != nil {
 		return err
 	}
@@ -43,17 +59,21 @@ func CreateWorkspace(ctx context.Context, dEnv *env.DoltEnv, name, startPoint st
 		return err
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
+	cm, err := ddb.Resolve(ctx, cs, headRef)
 	if err != nil {
 		return err
 	}
 
-	return dEnv.DoltDB.NewWorkspaceAtCommit(ctx, workRef, cm)
+	return ddb.NewWorkspaceAtCommit(ctx, workRef, cm)
+}
+
+func IsWorkspaceWithDdb(ctx context.Context, ddb *doltdb.DoltDB, str string) (bool, error) {
+	dref := ref.NewWorkspaceRef(str)
+	return ddb.HasRef(ctx, dref)
 }
 
 func IsWorkspace(ctx context.Context, dEnv *env.DoltEnv, str string) (bool, error) {
-	dref := ref.NewWorkspaceRef(str)
-	return dEnv.DoltDB.HasRef(ctx, dref)
+	return IsWorkspaceWithDdb(ctx, dEnv.DoltDB, str)
 }
 
 func DeleteWorkspace(ctx context.Context, dEnv *env.DoltEnv, workspaceName string, opts DeleteOptions) error {
@@ -114,87 +134,4 @@ func DeleteWorkspaceOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltR
 	}
 
 	return ddb.DeleteWorkspace(ctx, dref)
-}
-
-func CheckoutWorkspace(ctx context.Context, dEnv *env.DoltEnv, wrkName string) error {
-	dref := ref.NewWorkspaceRef(wrkName)
-
-	hasRef, err := dEnv.DoltDB.HasRef(ctx, dref)
-	if !hasRef {
-		return doltdb.ErrWorkspaceNotFound
-	}
-
-	if ref.Equals(dEnv.RepoState.CWBHeadRef(), dref) {
-		return doltdb.ErrAlreadyOnWorkspace
-	}
-
-	currRoots, err := getRoots(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), HeadRoot, WorkingRoot, StagedRoot)
-	if err != nil {
-		return err
-	}
-
-	cs, err := doltdb.NewCommitSpec(wrkName)
-	if err != nil {
-		return RootValueUnreadable{HeadRoot, err}
-	}
-
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
-	if err != nil {
-		return RootValueUnreadable{HeadRoot, err}
-	}
-
-	newRoot, err := cm.GetRootValue()
-	if err != nil {
-		return err
-	}
-
-	ssMap, err := newRoot.GetSuperSchemaMap(ctx)
-	if err != nil {
-		return err
-	}
-
-	fkMap, err := newRoot.GetForeignKeyCollectionMap(ctx)
-	if err != nil {
-		return err
-	}
-
-	conflicts := set.NewStrSet([]string{})
-	wrkTblHashes, err := tblHashesForCO(ctx, currRoots[HeadRoot], newRoot, currRoots[WorkingRoot], conflicts)
-	if err != nil {
-		return err
-	}
-
-	stgTblHashes, err := tblHashesForCO(ctx, currRoots[HeadRoot], newRoot, currRoots[StagedRoot], conflicts)
-	if err != nil {
-		return err
-	}
-	if conflicts.Size() > 0 {
-		return CheckoutWouldOverwrite{conflicts.AsSlice()}
-	}
-
-	wrkHash, err := writeRoot(ctx, dEnv, wrkTblHashes, ssMap, fkMap)
-	if err != nil {
-		return err
-	}
-
-	stgHash, err := writeRoot(ctx, dEnv, stgTblHashes, ssMap, fkMap)
-	if err != nil {
-		return err
-	}
-
-	unstagedDocs, err := GetUnstagedDocs(ctx, dEnv.DbData())
-	if err != nil {
-		return err
-	}
-
-	dEnv.RepoState.Head = ref.MarshalableRef{Ref: dref}
-	dEnv.RepoState.Working = wrkHash.String()
-	dEnv.RepoState.Staged = stgHash.String()
-
-	err = dEnv.RepoState.Save(dEnv.FS)
-	if err != nil {
-		return err
-	}
-
-	return SaveDocsFromWorkingExcludingFSChanges(ctx, dEnv, unstagedDocs)
 }
