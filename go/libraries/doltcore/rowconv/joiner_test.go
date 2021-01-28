@@ -31,7 +31,7 @@ const (
 	cityTag
 )
 
-var peopleCols, _ = schema.NewColCollection(
+var peopleCols = schema.NewColCollection(
 	schema.NewColumn("last", lastTag, types.StringKind, true),
 	schema.NewColumn("first", firstTag, types.StringKind, true),
 	schema.NewColumn("age", ageTag, types.IntKind, false),

@@ -31,11 +31,11 @@ var ErrDocsUpdate = errors.New("error updating local docs")
 var ErrEmptyDocsTable = errors.New("error: All docs removed. Removing Docs Table")
 var ErrMarshallingSchema = errors.New("error marshalling schema")
 
-var doltDocsColumns, _ = schema.NewColCollection(
+var doltDocsColumns = schema.NewColCollection(
 	schema.NewColumn(doltdb.DocPkColumnName, schema.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
 	schema.NewColumn(doltdb.DocTextColumnName, schema.DocTextTag, types.StringKind, false),
 )
-var DoltDocsSchema = schema.MustSchemaFromCols(doltDocsColumns)
+var Schema = schema.MustSchemaFromCols(doltDocsColumns)
 
 type Doc struct {
 	Text  []byte

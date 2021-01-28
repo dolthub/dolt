@@ -327,3 +327,15 @@ JSON
     [[ ! "$output" =~ "\`b\`" ]] || false
     [[ ! "$output" =~ "\`c\`" ]] || false
 }
+
+@test "failed import, duplicate column name" {
+    cat <<CSV > import.csv
+abc,Abc,d
+1,2,3
+4,5,6
+CSV
+    run dolt schema import -c -pks=abc test import.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "name" ]] || false
+    [[ "$output" =~ "invalid schema" ]] || false
+}

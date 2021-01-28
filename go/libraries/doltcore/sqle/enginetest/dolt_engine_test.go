@@ -206,6 +206,7 @@ func TestDropColumn(t *testing.T) {
 }
 
 func TestCreateForeignKeys(t *testing.T) {
+	t.Skipf("Unsupported")
 	enginetest.TestCreateForeignKeys(t, newDoltHarness(t))
 }
 

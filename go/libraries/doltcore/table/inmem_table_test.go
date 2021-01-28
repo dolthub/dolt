@@ -32,7 +32,7 @@ const (
 	greatTag
 )
 
-var fields, _ = schema.NewColCollection(
+var fields = schema.NewColCollection(
 	schema.Column{Name: "name", Tag: nameTag, Kind: types.StringKind, IsPartOfPK: true, TypeInfo: typeinfo.StringDefaultType, Constraints: nil},
 	schema.Column{Name: "age", Tag: ageTag, Kind: types.UintKind, IsPartOfPK: true, TypeInfo: typeinfo.Uint64Type, Constraints: nil},
 	schema.Column{Name: "title", Tag: titleTag, Kind: types.StringKind, IsPartOfPK: true, TypeInfo: typeinfo.StringDefaultType, Constraints: nil},

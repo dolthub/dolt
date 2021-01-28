@@ -193,11 +193,7 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 		}
 	}
 
-	colColl, err := schema.NewColCollection(cols...)
-
-	if err != nil {
-		return nil, err
-	}
+	colColl := schema.NewColCollection(cols...)
 
 	sch, err := schema.SchemaFromCols(colColl)
 	if err != nil {
@@ -224,6 +220,13 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 
 // MarshalSchemaAsNomsValue takes a Schema and converts it to a types.Value
 func MarshalSchemaAsNomsValue(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) (types.Value, error) {
+	// Anyone calling this is going to serialize this to disk, so it's our last line of defense against defective schemas.
+	// Business logic should catch errors before this point, but this is a failsafe.
+	err := schema.ValidateForInsert(sch.GetAllCols())
+	if err != nil {
+		return nil, err
+	}
+
 	sd, err := toSchemaData(sch)
 
 	if err != nil {
@@ -292,11 +295,7 @@ func (ssd superSchemaData) decodeSuperSchema() (*schema.SuperSchema, error) {
 		cols[i] = c
 	}
 
-	colColl, err := schema.NewColCollection(cols...)
-
-	if err != nil {
-		return nil, err
-	}
+	colColl := schema.NewColCollection(cols...)
 
 	if ssd.TagNames == nil {
 		ssd.TagNames = make(map[uint64][]string)

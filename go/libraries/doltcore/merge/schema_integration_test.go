@@ -421,11 +421,7 @@ var mergeForeignKeyTests = []mergeForeignKeyTest{
 }
 
 func colCollection(cols ...schema.Column) *schema.ColCollection {
-	pcc, err := schema.NewColCollection(cols...)
-	if err != nil {
-		panic(err)
-	}
-	return pcc
+	return schema.NewColCollection(cols...)
 }
 
 // SchemaFromColsAndIdxs creates a Schema from a ColCollection and an IndexCollection.

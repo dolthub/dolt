@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
@@ -33,8 +32,7 @@ var lastNameCapsCol = Column{"LAST", 3, types.StringKind, false, typeinfo.String
 
 func TestGetByNameAndTag(t *testing.T) {
 	cols := []Column{firstNameCol, lastNameCol, firstNameCapsCol, lastNameCapsCol}
-	colColl, err := NewColCollection(cols...)
-	require.NoError(t, err)
+	colColl := NewColCollection(cols...)
 
 	tests := []struct {
 		name       string
@@ -73,8 +71,7 @@ func TestGetByNameAndTag(t *testing.T) {
 
 func TestGetByNameCaseInsensitive(t *testing.T) {
 	cols := []Column{firstNameCol, lastNameCol, firstNameCapsCol, lastNameCapsCol}
-	colColl, err := NewColCollection(cols...)
-	require.NoError(t, err)
+	colColl := NewColCollection(cols...)
 
 	tests := []struct {
 		name       string
@@ -103,28 +100,6 @@ func TestGetByNameCaseInsensitive(t *testing.T) {
 	}
 }
 
-func TestNewColCollectionErrorHandling(t *testing.T) {
-	tests := []struct {
-		name        string
-		cols        []Column
-		expectedErr error
-	}{
-		{
-			name:        "tag collision",
-			cols:        []Column{firstNameCol, lastNameCol, {"collision", 0, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil}},
-			expectedErr: ErrColTagCollision,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			_, err := NewColCollection(test.cols...)
-			assert.Error(t, err)
-			assert.Equal(t, err, test.expectedErr)
-		})
-	}
-}
-
 func TestAppendAndItrInSortOrder(t *testing.T) {
 	cols := []Column{
 		{"0", 0, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil},
@@ -141,9 +116,9 @@ func TestAppendAndItrInSortOrder(t *testing.T) {
 		{"6", 6, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil},
 	}
 
-	colColl, _ := NewColCollection(cols...)
+	colColl := NewColCollection(cols...)
 	validateIter(len(cols), colColl, t)
-	colColl2, _ := colColl.Append(cols2...)
+	colColl2 := colColl.Append(cols2...)
 	validateIter(len(cols), colColl, t) //validate immutability
 	validateIter(len(cols)+len(cols2), colColl2, t)
 }

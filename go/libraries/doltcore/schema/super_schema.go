@@ -37,7 +37,7 @@ type SuperSchema struct {
 
 // NewSuperSchema creates a SuperSchema from the columns of schemas.
 func NewSuperSchema(schemas ...Schema) (*SuperSchema, error) {
-	cc, _ := NewColCollection()
+	cc := NewColCollection()
 	tn := make(map[uint64][]string)
 	ss := SuperSchema{cc, tn}
 
@@ -62,9 +62,7 @@ func (ss *SuperSchema) AddColumn(col Column) (err error) {
 	ac := ss.allCols
 	existingCol, found := ac.GetByTag(ct)
 	if found {
-		if col.IsPartOfPK != existingCol.IsPartOfPK ||
-			col.Kind != existingCol.Kind ||
-			!col.TypeInfo.Equals(existingCol.TypeInfo) {
+		if !existingCol.Compatible(col) {
 			ecName := ss.tagNames[col.Tag][0]
 			return fmt.Errorf("tag collision for columns %s and %s, different definitions (tag: %d)",
 				ecName, col.Name, col.Tag)
@@ -85,7 +83,7 @@ func (ss *SuperSchema) AddColumn(col Column) (err error) {
 
 	// we haven't seen this column before
 	ss.tagNames[col.Tag] = append(names, col.Name)
-	ss.allCols, err = ss.allCols.Append(simpleColumn(col))
+	ss.allCols = ss.allCols.Append(simpleColumn(col))
 
 	return err
 }
@@ -204,10 +202,10 @@ func (ss *SuperSchema) nameColumns() map[uint64]string {
 // Each column is assigned its latest name from its name history.
 func (ss *SuperSchema) GenerateColCollection() (*ColCollection, error) {
 	uniqNames := ss.nameColumns()
-	cc, _ := NewColCollection()
+	cc := NewColCollection()
 	err := ss.Iter(func(tag uint64, col Column) (stop bool, err error) {
 		col.Name = uniqNames[tag]
-		cc, err = cc.Append(col)
+		cc = cc.Append(col)
 		stop = err != nil
 		return stop, err
 	})
@@ -270,18 +268,14 @@ func (ss *SuperSchema) RebaseTag(tagMapping map[uint64]uint64) (*SuperSchema, er
 		return nil, err
 	}
 
-	ac, err := NewColCollection(cc...)
-
-	if err != nil {
-		return nil, err
-	}
+	ac := NewColCollection(cc...)
 
 	return &SuperSchema{ac, tn}, nil
 }
 
 // SuperSchemaUnion combines multiple SuperSchemas.
 func SuperSchemaUnion(superSchemas ...*SuperSchema) (*SuperSchema, error) {
-	cc, _ := NewColCollection()
+	cc := NewColCollection()
 	tagNameSets := make(map[uint64]*set.StrSet)
 	latestNames := make(map[uint64]string)
 	for _, ss := range superSchemas {
@@ -290,7 +284,7 @@ func SuperSchemaUnion(superSchemas ...*SuperSchema) (*SuperSchema, error) {
 
 			if !found {
 				tagNameSets[tag] = set.NewStrSet(ss.AllColumnNames(tag))
-				cc, err = cc.Append(simpleColumn(col))
+				cc = cc.Append(simpleColumn(col))
 			} else {
 				tagNameSets[tag].Add(ss.AllColumnNames(tag)...)
 			}

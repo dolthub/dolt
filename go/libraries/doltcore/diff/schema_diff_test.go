@@ -43,8 +43,8 @@ func TestDiffSchemas(t *testing.T) {
 		schema.NewColumn("added", 6, types.StringKind, false),
 	}
 
-	oldColColl, _ := schema.NewColCollection(oldCols...)
-	newColColl, _ := schema.NewColCollection(newCols...)
+	oldColColl := schema.NewColCollection(oldCols...)
+	newColColl := schema.NewColCollection(newCols...)
 
 	oldSch, err := schema.SchemaFromCols(oldColColl)
 	require.NoError(t, err)

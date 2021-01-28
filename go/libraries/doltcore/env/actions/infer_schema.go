@@ -130,7 +130,7 @@ func (inf *inferrer) inferColumnTypes(ctx context.Context, root *doltdb.RootValu
 		return false, nil
 	})
 
-	return schema.NewColCollection(cols...)
+	return schema.NewColCollection(cols...), nil
 }
 
 func (inf *inferrer) sinkRow(p *pipeline.Pipeline, ch <-chan pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure) {

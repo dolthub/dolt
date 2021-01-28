@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 
@@ -94,7 +95,7 @@ func validateModifyColumn(ctx context.Context, tbl *doltdb.Table, existingCol sc
 	err = cols.Iter(func(currColTag uint64, currCol schema.Column) (stop bool, err error) {
 		if currColTag == modifiedCol.Tag {
 			return false, nil
-		} else if currCol.Name == modifiedCol.Name {
+		} else if strings.ToLower(currCol.Name) == strings.ToLower(modifiedCol.Name) {
 			return true, fmt.Errorf("A column with the name %s already exists.", modifiedCol.Name)
 		}
 
@@ -192,7 +193,9 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 		return false, nil
 	})
 
-	collection, err := schema.NewColCollection(newCols...)
+	collection := schema.NewColCollection(newCols...)
+
+	err := schema.ValidateForInsert(collection)
 	if err != nil {
 		return nil, err
 	}

@@ -35,11 +35,10 @@ func TestCompositeTableReader(t *testing.T) {
 
 	ctx := context.Background()
 
-	coll, err := schema.NewColCollection(
+	coll := schema.NewColCollection(
 		schema.NewColumn("id", 0, types.UintKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("val", 1, types.IntKind, false),
 	)
-	require.NoError(t, err)
 	sch, err := schema.SchemaFromCols(coll)
 	require.NoError(t, err)
 

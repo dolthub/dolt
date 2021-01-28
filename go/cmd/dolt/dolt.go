@@ -99,6 +99,7 @@ const chdirFlag = "--chdir"
 const jaegerFlag = "--jaeger"
 const profFlag = "--prof"
 const csMetricsFlag = "--csmetrics"
+const stdInFlag = "--stdin"
 const cpuProf = "cpu"
 const memProf = "mem"
 const blockingProf = "blocking"
@@ -171,6 +172,19 @@ func runMain() int {
 					panic(err)
 				}
 
+				args = args[2:]
+
+			case stdInFlag:
+				stdInFile := args[1]
+				fmt.Println("Using file contents as stdin:", stdInFile)
+
+				f, err := os.Open(stdInFile)
+
+				if err != nil {
+					panic(err)
+				}
+
+				os.Stdin = f
 				args = args[2:]
 
 			case csMetricsFlag:
