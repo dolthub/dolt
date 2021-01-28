@@ -20,6 +20,7 @@ import (
 )
 
 var ErrInvBranchName = errors.New("not a valid user branch name")
+var ErrInvWorkspaceName = errors.New("not a valid user workspace name")
 var ErrInvTagName = errors.New("not a valid user tag name")
 var ErrInvTableName = errors.New("not a valid table name")
 var ErrInvHash = errors.New("not a valid hash")

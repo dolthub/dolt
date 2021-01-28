@@ -177,6 +177,11 @@ func createWorkspaceWithStartPt(ctx context.Context, dEnv *env.DoltEnv, newWorks
 	if err != nil {
 		if err == actions.ErrAlreadyExists {
 			return errhand.BuildDError("fatal: A workspace named '%s' already exists.", newWorkspace).Build()
+		} else if err == doltdb.ErrInvWorkspaceName {
+			bdr := errhand.BuildDError("fatal: '%s' is an invalid workspace name.", newWorkspace)
+			return bdr.Build()
+		} else if err == actions.ErrBranchNameExists {
+			return errhand.BuildDError("fatal: Workspace name '%s' cannot be the name of an existing branch", newWorkspace).Build()
 		} else if err == doltdb.ErrInvHash || doltdb.IsNotACommit(err) {
 			bdr := errhand.BuildDError("fatal: '%s' is not a commit and a workspace '%s' cannot be created from it", startPt, newWorkspace)
 			return bdr.Build()
