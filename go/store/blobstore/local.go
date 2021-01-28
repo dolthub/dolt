@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -151,6 +152,7 @@ func (bs *LocalBlobstore) Put(ctx context.Context, key string, reader io.Reader)
 	// written as temp file and renamed so the file corresponding to this key
 	// never exists in a partially written state
 	tempFile, err := func() (string, error) {
+		fmt.Printf("Doing some temp file shenanigans...")
 		temp, err := tempfiles.MovableTempFileProvider.NewFile("", ver.String())
 
 		if err != nil {
@@ -163,12 +165,13 @@ func (bs *LocalBlobstore) Put(ctx context.Context, key string, reader io.Reader)
 		verReader := bytes.NewReader(verBytes[:lfsVerSize])
 		return temp.Name(), writeAll(temp, verReader, reader)
 	}()
-
+	fmt.Printf("Made it passed temp file shenanigans...")
 	if err != nil {
 		return "", err
 	}
 
 	path := filepath.Join(bs.RootDir, key) + bsExt
+	fmt.Printf("About to rename ")
 	err = os.Rename(tempFile, path)
 
 	if err != nil {

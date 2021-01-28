@@ -17,6 +17,7 @@ package blobstore
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"io/ioutil"
 )
@@ -38,6 +39,7 @@ func GetBytes(ctx context.Context, bs Blobstore, key string, br BlobRange) ([]by
 		return nil, ver, err
 	}
 
+	fmt.Printf("Inside get bytes below bs.get...")
 	defer rc.Close()
 	data, err := ioutil.ReadAll(rc)
 
