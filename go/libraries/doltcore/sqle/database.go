@@ -314,6 +314,8 @@ func (db Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]stri
 	return filterDoltInternalTables(tblNames), nil
 }
 
+var signalNetwork sql.Table
+
 // getTable gets the table with the exact name given at the root value given. The database caches tables for all root
 // values to avoid doing schema lookups on every table lookup, which are expensive.
 func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName string) (sql.Table, bool, error) {
@@ -348,7 +350,19 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 	var table sql.Table
 
 	readonlyTable := NewDoltTable(tableName, sch, tbl, db)
-	if doltdb.IsReadOnlySystemTable(tableName) {
+	if tableName == "signaling_network" {
+		if signalNetwork != nil {
+			return signalNetwork, true, nil
+		}
+
+		signalNetwork, err =  CreateInMemTable(ctx, &readonlyTable)
+
+		if err != nil {
+			return nil, false, err
+		}
+
+		return signalNetwork, true, nil
+	} else if doltdb.IsReadOnlySystemTable(tableName) {
 		table = &readonlyTable
 	} else if doltdb.HasDoltPrefix(tableName) {
 		table = &WritableDoltTable{DoltTable: readonlyTable, db: db}

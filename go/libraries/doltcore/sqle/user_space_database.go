@@ -51,6 +51,16 @@ func (db *UserSpaceDatabase) GetTableInsensitive(ctx *sql.Context, tableName str
 		return nil, false, err
 	}
 	dt := NewDoltTable(tableName, sch, table, db)
+	if tableName == "signaling_network" {
+		inMemTbl, err :=  CreateInMemTable(ctx, &dt)
+
+		if err != nil {
+			return nil, false, err
+		}
+
+		return inMemTbl, true, nil
+	}
+
 	return &dt, true, nil
 }
 

@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"runtime"
 	"strconv"
@@ -39,6 +40,66 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
 )
+
+var _ sql.RowIter = (*inMemRowItr)(nil)
+
+type inMemRowItr struct {
+	pos uint64
+	numRows uint64
+	rows []sql.Row
+}
+
+func (i *inMemRowItr) Next() (sql.Row, error) {
+	if i.pos >= i.numRows {
+		return nil, io.EOF
+	}
+
+	r := i.rows[i.pos]
+	i.pos++
+
+	return r, nil
+}
+
+func (i *inMemRowItr) Close() error {
+	return nil
+}
+
+var _ sql.Table = (*inMemTable)(nil)
+
+type inMemTable struct {
+	name string
+	sqlSchema sql.Schema
+	rows []sql.Row
+}
+
+// Name returns the name of the table.
+func (t *inMemTable) Name() string {
+	return t.name
+}
+
+// String returns a human-readable string to display the name of this SQL node.
+func (t *inMemTable) String() string {
+	return t.name
+}
+
+// Schema returns the schema for this table.
+func (t *inMemTable) Schema() sql.Schema {
+	return t.sqlSchema
+}
+
+func (i *inMemTable) Partitions(c *sql.Context) (sql.PartitionIter, error) {
+	return partitionElements(uint64(len(i.rows)))
+}
+
+func (i *inMemTable) PartitionRows(c *sql.Context, partition sql.Partition) (sql.RowIter, error) {
+	dtp := partition.(doltTablePartition)
+	rows := i.rows[dtp.start: dtp.end]
+
+	return &inMemRowItr{
+		numRows: dtp.end - dtp.start,
+		rows:    rows,
+	}, nil
+}
 
 const (
 	partitionMultiplier = 2.0
@@ -97,6 +158,50 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatab
 		sch:        sch,
 		autoIncCol: autoCol,
 	}
+}
+
+func CreateInMemTable(ctx context.Context, t *DoltTable) (sql.Table, error) {
+	log.Println("creating in mem table")
+
+	sqlCtx := sql.NewContext(ctx)
+	rowData, err := t.table.GetRowData(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	numRows := rowData.Len()
+	rows := make([]sql.Row, numRows)
+	rowItr, err := t.PartitionRows(sqlCtx, sqlutil.SinglePartition{})
+
+	for err != nil {
+		return nil, err
+	}
+
+	for i := uint64(0); i < numRows; i++ {
+		rows[i], err = rowItr.Next()
+
+		if err == io.EOF {
+			return nil, errors.New("less data available than expected")
+		} else if err != nil {
+			return nil, err
+		}
+	}
+
+	_, err = rowItr.Next()
+
+	if err != io.EOF {
+		panic("more data available than expected")
+	}
+
+	rowItr.Close()
+
+	return &inMemTable{
+		name:      t.name,
+		sqlSchema: t.Schema(),
+		rows:      rows,
+	}, nil
+
 }
 
 var _ sql.Table = (*DoltTable)(nil)
@@ -227,10 +332,18 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 		return nil, err
 	}
 
+	if schema.IsKeyless(t.sch) {
+		return sqlutil.NewSinglePartitionIter(), nil
+	}
+
 	numElements := rowData.Len()
 
+	return partitionElements(numElements)
+}
+
+func partitionElements(numElements uint64) (sql.PartitionIter, error) {
 	if numElements == 0 {
-		return newDoltTablePartitionIter(rowData, doltTablePartition{0, 0}), nil
+		return newDoltTablePartitionIter(doltTablePartition{0, 0}), nil
 	}
 
 	maxPartitions := uint64(partitionMultiplier * runtime.NumCPU())
@@ -240,9 +353,6 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 		numPartitions = maxPartitions
 	}
 
-	if schema.IsKeyless(t.sch) {
-		numPartitions = 1
-	}
 
 	partitions := make([]doltTablePartition, numPartitions)
 	itemsPerPartition := numElements / numPartitions
@@ -251,7 +361,7 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	}
 	partitions[numPartitions-1] = doltTablePartition{(numPartitions - 1) * itemsPerPartition, numElements}
 
-	return newDoltTablePartitionIter(rowData, partitions...), nil
+	return newDoltTablePartitionIter(partitions...), nil
 }
 
 type emptyRowIterator struct{}
@@ -486,12 +596,11 @@ var _ sql.PartitionIter = (*doltTablePartitionIter)(nil)
 type doltTablePartitionIter struct {
 	i          int
 	mu         *sync.Mutex
-	rowData    types.Map
 	partitions []doltTablePartition
 }
 
-func newDoltTablePartitionIter(rowData types.Map, partitions ...doltTablePartition) *doltTablePartitionIter {
-	return &doltTablePartitionIter{0, &sync.Mutex{}, rowData, partitions}
+func newDoltTablePartitionIter(partitions ...doltTablePartition) *doltTablePartitionIter {
+	return &doltTablePartitionIter{0, &sync.Mutex{}, partitions}
 }
 
 // Close is required by the sql.PartitionIter interface. Does nothing.
