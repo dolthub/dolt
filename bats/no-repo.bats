@@ -35,7 +35,7 @@ teardown() {
     [[ "$output" =~ "merge - Merge a branch." ]] || false
     [[ "$output" =~ "branch - Create, list, edit, delete branches." ]] || false
     [[ "$output" =~ "tag - Create, list, delete tags" ]] || false
-    [[ "$output" =~ "checkout - Checkout a branch or overwrite a table from HEAD." ]] || false
+    [[ "$output" =~ "checkout - Checkout a branch (or workspace) or overwrite a table from HEAD." ]] || false
     [[ "$output" =~ "remote - Manage set of tracked repositories." ]] || false
     [[ "$output" =~ "push - Push to a dolt remote." ]] || false
     [[ "$output" =~ "pull - Fetch from a dolt remote data repository and merge." ]] || false
@@ -52,6 +52,7 @@ teardown() {
     [[ "$output" =~ "migrate - Executes a repository migration to update to the latest format." ]] || false
     [[ "$output" =~ "gc - Cleans up unreferenced data from the repository." ]] || false
     [[ "$output" =~ "filter-branch - Edits the commit history using the provided query." ]] || false
+    [[ "$output" =~ "workspace - Create, list, delete workspaces." ]] || false
 }
 
 @test "check all commands for valid help text" {
