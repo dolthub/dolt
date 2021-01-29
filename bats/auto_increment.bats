@@ -294,3 +294,34 @@ SQL
     [[ "$output" =~ "30,30" ]] || false
     [[ "$output" =~ "31,31" ]] || false
 }
+
+@test "AUTO_INCREMENT with parent-child FK" {
+    skip "something wrong with FK flushes"
+    dolt sql <<SQL
+CREATE TABLE parent (
+    pk int PRIMARY KEY AUTO_INCREMENT,
+    c0 int
+);
+
+INSERT INTO parent (c0) VALUES (1),(2),(3);
+
+CREATE TABLE child (
+    pk int PRIMARY KEY,
+    c0 int,
+    FOREIGN KEY (pk)
+    REFERENCES parent(pk)
+);
+
+INSERT INTO parent (c0) VALUES (4),(5),(6);
+SQL
+
+    run dolt sql -q "select * from parent" -r csv
+    [ "$status" -eq 0 ]
+    [ "$output" = "pk,c0" ]
+    [ "$output" = "1,1" ]
+    [ "$output" = "2,2" ]
+    [ "$output" = "3,3" ]
+    [ "$output" = "4,4" ]
+    [ "$output" = "5,5" ]
+    [ "$output" = "6,6" ]
+}
