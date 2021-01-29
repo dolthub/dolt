@@ -23,14 +23,29 @@ teardown() {
     teardown_common
 }
 
-@test "dolt create and list workspace" {
+@test "dolt create, checkout, and list workspaces" {
     run dolt workspace new-workspace
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "successfully created workspace: new-workspace" ]] || false
+    [[ "$output" =~ "Successfully created workspace: new-workspace" ]] || false
 
-     run dolt workspace another-workspace
+    run dolt checkout new-workspace
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "successfully created workspace: another-workspace" ]] || false
+    [[ "$output" =~ "Switched to workspace 'new-workspace'" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On workspace new-workspace" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    run dolt checkout -w another-workspace
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully created workspace: another-workspace" ]] || false
+    [[ "$output" =~ "Switched to workspace 'another-workspace'" ]] || false
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On workspace another-workspace" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
     run dolt workspace
     [ "$status" -eq 0 ]
@@ -56,7 +71,7 @@ teardown() {
 
   run dolt workspace new-workspace
   [ "$status" -eq 0 ]
-  [[ "$output" =~ "successfully created workspace: new-workspace" ]] || false
+  [[ "$output" =~ "Successfully created workspace: new-workspace" ]] || false
 
   run dolt workspace new-workspace
   [ "$status" -eq 1 ]
