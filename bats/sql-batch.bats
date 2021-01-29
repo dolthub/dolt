@@ -126,7 +126,7 @@ SQL
   dolt sql << SQL
 CREATE TABLE test2 (
   pk bigint NOT NULL,
-  c1 bigint,
+  c1 bigint NOT NULL,
   PRIMARY KEY (pk)
 );
 SQL
@@ -136,10 +136,15 @@ SQL
 
   # Create the table and base subquery on recently inserted row.
   run dolt sql << SQL
-INSERT INTO TEST VALUES (1,1,0,0,0,0);
+INSERT INTO TEST VALUES (1,1,1,1,1,1);
+INSERT INTO TEST2 VALUES (2,2);
 INSERT INTO TEST2 VALUES (1, (SELECT c1 FROM TEST WHERE c1=1));
 SQL
 
   [ "$status" -eq 0 ]
   [[ "$output" =~ "Rows inserted: 2" ]] || false
+
+  run dolt sql -r csv -q "select * from test2"
+  [[ "$output" =~ "pk,c1" ]] || false
+  [[ "$output" =~ "1,1" ]] || false
 }
