@@ -41,7 +41,7 @@ func (br WorkspaceRef) GetType() RefType {
 	return WorkspaceRefType
 }
 
-// GetPath returns the name of the tag
+// GetPath returns the name of the workspace
 func (br WorkspaceRef) GetPath() string {
 	return br.workspace
 }

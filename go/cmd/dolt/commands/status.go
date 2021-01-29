@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -128,6 +129,7 @@ var docDiffTypeToShortLabel = map[diff.DocDiffType]string{
 
 const (
 	branchHeader     = "On branch %s\n"
+	workspaceHeader  = "On workspace %s\n"
 	stagedHeader     = `Changes to be committed:`
 	stagedHeaderHelp = `  (use "dolt reset <table>..." to unstage)`
 
@@ -327,7 +329,12 @@ func getAddedNotStaged(notStagedTbls []diff.TableDelta, notStagedDocs *diff.DocD
 }
 
 func printStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTbls []diff.TableDelta, workingTblsInConflict []string, workingDocsInConflict *diff.DocDiffs, stagedDocs, notStagedDocs *diff.DocDiffs) {
-	cli.Printf(branchHeader, dEnv.RepoState.CWBHeadRef().GetPath())
+	switch dEnv.RepoState.CWBHeadRef().GetType() {
+	case ref.WorkspaceRefType:
+		cli.Printf(workspaceHeader, dEnv.RepoState.CWBHeadRef().GetPath())
+	case ref.BranchRefType:
+		cli.Printf(branchHeader, dEnv.RepoState.CWBHeadRef().GetPath())
+	}
 
 	if dEnv.RepoState.Merge != nil {
 		if len(workingTblsInConflict) > 0 {

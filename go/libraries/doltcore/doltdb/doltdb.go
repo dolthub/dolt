@@ -312,12 +312,13 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 		// If it starts with `refs/`, we look for an exact match before
 		// we try any suffix matches. After that, we try a match on the
 		// user supplied input, with the following four prefixes, in
-		// order: `refs/`, `refs/heads/`, `refs/tags/`, `refs/remotes/`.
+		// order: `refs/`, `refs/heads/`, `refs/tags/`, `refs/remotes/`, `refs/workspaces/`.
 		candidates := []string{
 			"refs/" + cs.baseSpec,
 			"refs/heads/" + cs.baseSpec,
 			"refs/tags/" + cs.baseSpec,
 			"refs/remotes/" + cs.baseSpec,
+			"refs/workspaces/" + cs.baseSpec,
 		}
 		if strings.HasPrefix(cs.baseSpec, "refs/") {
 			candidates = []string{
@@ -326,6 +327,7 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 				"refs/heads/" + cs.baseSpec,
 				"refs/tags/" + cs.baseSpec,
 				"refs/remotes/" + cs.baseSpec,
+				"refs/workspaces/" + cs.baseSpec,
 			}
 		}
 		for _, candidate := range candidates {

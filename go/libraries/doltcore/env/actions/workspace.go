@@ -135,3 +135,21 @@ func DeleteWorkspaceOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltR
 
 	return ddb.DeleteWorkspace(ctx, dref)
 }
+
+func CheckoutWorkspace(ctx context.Context, dEnv *env.DoltEnv, wrkName string) error {
+	dref := ref.NewWorkspaceRef(wrkName)
+
+	hasRef, err := dEnv.DoltDB.HasRef(ctx, dref)
+	if err != nil {
+		return err
+	}
+	if !hasRef {
+		return doltdb.ErrWorkspaceNotFound
+	}
+
+	if ref.Equals(dEnv.RepoState.CWBHeadRef(), dref) {
+		return doltdb.ErrAlreadyOnWorkspace
+	}
+
+	return checkoutRef(ctx, dEnv, dref)
+}

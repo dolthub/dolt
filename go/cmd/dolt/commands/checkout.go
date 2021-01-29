@@ -30,27 +30,32 @@ import (
 )
 
 var checkoutDocs = cli.CommandDocumentationContent{
-	ShortDesc: `Switch branches or restore working tree tables`,
+	ShortDesc: `Switch branches, workspaces, or restore working tree tables`,
 	LongDesc: `
-Updates tables in the working set to match the staged versions. If no paths are given, dolt checkout will also update HEAD to set the specified branch as the current branch.
+Updates tables in the working set to match the staged versions. If no paths are given, dolt checkout will also update HEAD to set the specified branch as the current branch (or specified workspace as the current workspace).
 
-dolt checkout {{.LessThan}}branch{{.GreaterThan}}
-   To prepare for working on {{.LessThan}}branch{{.GreaterThan}}, switch to it by updating the index and the tables in the working tree, and by pointing HEAD at the branch. Local modifications to the tables in the working
-   tree are kept, so that they can be committed to the {{.LessThan}}branch{{.GreaterThan}}.
+dolt checkout {{.LessThan}}branch|workspace{{.GreaterThan}}
+   To prepare for working on {{.LessThan}}branch|workspace{{.GreaterThan}}, switch to it by updating the index and the tables in the working tree, and by pointing HEAD at the branch or workspace. Local modifications to the tables in the working
+   tree are kept, so that they can be committed to the {{.LessThan}}branch|workspace{{.GreaterThan}}.
 
 dolt checkout -b {{.LessThan}}new_branch{{.GreaterThan}} [{{.LessThan}}start_point{{.GreaterThan}}]
    Specifying -b causes a new branch to be created as if dolt branch were called and then checked out.
 
+dolt checkout -w {{.LessThan}}new_workspace{{.GreaterThan}} [{{.LessThan}}start_point{{.GreaterThan}}]
+   Specifying -w causes a new workspace to be created as if dolt workspace were called and then checked out.
+
 dolt checkout {{.LessThan}}table{{.GreaterThan}}...
   To update table(s) with their values in HEAD `,
 	Synopsis: []string{
-		`{{.LessThan}}branch{{.GreaterThan}}`,
+		`{{.LessThan}}branch|workspace{{.GreaterThan}}`,
 		`{{.LessThan}}table{{.GreaterThan}}...`,
 		`-b {{.LessThan}}new-branch{{.GreaterThan}} [{{.LessThan}}start-point{{.GreaterThan}}]`,
+		`-w {{.LessThan}}new-workspace{{.GreaterThan}} [{{.LessThan}}start-point{{.GreaterThan}}]`,
 	},
 }
 
 const coBranchArg = "b"
+const coWorkspaceArg = "w"
 
 type CheckoutCmd struct{}
 
@@ -61,7 +66,7 @@ func (cmd CheckoutCmd) Name() string {
 
 // Description returns a description of the command
 func (cmd CheckoutCmd) Description() string {
-	return "Checkout a branch or overwrite a table from HEAD."
+	return "Checkout a branch (or workspace) or overwrite a table from HEAD."
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
@@ -73,6 +78,7 @@ func (cmd CheckoutCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr strin
 func (cmd CheckoutCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(coBranchArg, "", "branch", "Create a new branch named {{.LessThan}}new_branch{{.GreaterThan}} and start it at {{.LessThan}}start_point{{.GreaterThan}}.")
+	ap.SupportsString(coWorkspaceArg, "", "workspace", "Create a new workspace named {{.LessThan}}new_workspace{{.GreaterThan}} and start it at {{.LessThan}}start_point{{.GreaterThan}}.")
 	return ap
 }
 
@@ -87,7 +93,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	helpPrt, usagePrt := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, checkoutDocs, ap))
 	apr := cli.ParseArgs(ap, args, helpPrt)
 
-	if (apr.Contains(coBranchArg) && apr.NArg() > 1) || (!apr.Contains(coBranchArg) && apr.NArg() == 0) {
+	if ((apr.Contains(coBranchArg) || apr.Contains(coWorkspaceArg)) && apr.NArg() > 1) || ((!apr.Contains(coBranchArg) && !apr.Contains(coWorkspaceArg)) && apr.NArg() == 0) {
 		usagePrt()
 		return 1
 	}
@@ -107,6 +113,16 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return HandleVErrAndExitCode(verr, usagePrt)
 	}
 
+	if newWorkspace, newWorkspaceOk := apr.GetValue(coWorkspaceArg); newWorkspaceOk {
+		var verr errhand.VerboseError
+		if len(newWorkspace) == 0 {
+			verr = errhand.BuildDError("error: cannot checkout empty string").Build()
+		} else {
+			verr = checkoutNewWorkspace(ctx, dEnv, newWorkspace, apr)
+		}
+		return HandleVErrAndExitCode(verr, usagePrt)
+	}
+
 	name := apr.Arg(0)
 
 	if len(name) == 0 {
@@ -119,6 +135,14 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return HandleVErrAndExitCode(verr, usagePrt)
 	} else if isBranch {
 		verr := checkoutBranch(ctx, dEnv, name)
+		return HandleVErrAndExitCode(verr, usagePrt)
+	}
+
+	if isWorkspace, err := actions.IsWorkspace(ctx, dEnv, name); err != nil {
+		verr := errhand.BuildDError("error: unable to determine type of checkout").AddCause(err).Build()
+		return HandleVErrAndExitCode(verr, usagePrt)
+	} else if isWorkspace {
+		verr := checkoutWorkspace(ctx, dEnv, name)
 		return HandleVErrAndExitCode(verr, usagePrt)
 	}
 
@@ -190,6 +214,21 @@ func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch string,
 	return checkoutBranch(ctx, dEnv, newBranch)
 }
 
+func checkoutNewWorkspace(ctx context.Context, dEnv *env.DoltEnv, newWorkspace string, apr *argparser.ArgParseResults) errhand.VerboseError {
+	startPt := "head"
+	if apr.NArg() == 1 {
+		startPt = apr.Arg(0)
+	}
+
+	verr := createWorkspaceWithStartPt(ctx, dEnv, newWorkspace, startPt)
+
+	if verr != nil {
+		return verr
+	}
+
+	return checkoutWorkspace(ctx, dEnv, newWorkspace)
+}
+
 func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tables []string, docs doltdocs.Docs) errhand.VerboseError {
 	err := actions.CheckoutTablesAndDocs(ctx, dEnv, tables, docs)
 
@@ -241,6 +280,38 @@ func checkoutBranch(ctx context.Context, dEnv *env.DoltEnv, name string) errhand
 	}
 
 	cli.Printf("Switched to branch '%s'\n", name)
+
+	return nil
+}
+
+func checkoutWorkspace(ctx context.Context, dEnv *env.DoltEnv, name string) errhand.VerboseError {
+	err := actions.CheckoutWorkspace(ctx, dEnv, name)
+
+	if err != nil {
+		if err == doltdb.ErrWorkspaceNotFound {
+			return errhand.BuildDError("fatal: Workspace '%s' not found.", name).Build()
+		} else if actions.IsRootValUnreachable(err) {
+			return unreadableRootToVErr(err)
+		} else if actions.IsCheckoutWouldOverwrite(err) {
+			tbls := actions.CheckoutWouldOverwriteTables(err)
+			bdr := errhand.BuildDError("error: Your local changes to the following tables would be overwritten by checkout:")
+			for _, tbl := range tbls {
+				bdr.AddDetails("\t" + tbl)
+			}
+
+			bdr.AddDetails("Please commit your changes or stash them before you switch workspaces.")
+			bdr.AddDetails("Aborting")
+			return bdr.Build()
+		} else if err == doltdb.ErrAlreadyOnWorkspace {
+			return errhand.BuildDError("Already on workspace '%s'", name).Build()
+		} else {
+			bdr := errhand.BuildDError("fatal: Unexpected error checking out workspace '%s'", name)
+			bdr.AddCause(err)
+			return bdr.Build()
+		}
+	}
+
+	cli.Printf("Switched to workspace '%s'\n", name)
 
 	return nil
 }

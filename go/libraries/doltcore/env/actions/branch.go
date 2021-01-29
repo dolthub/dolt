@@ -204,6 +204,9 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 	dref := ref.NewBranchRef(brName)
 
 	hasRef, err := dEnv.DoltDB.HasRef(ctx, dref)
+	if err != nil {
+		return err
+	}
 	if !hasRef {
 		return doltdb.ErrBranchNotFound
 	}
@@ -212,67 +215,60 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return doltdb.ErrAlreadyOnBranch
 	}
 
-	currRoots, err := getRoots(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), HeadRoot, WorkingRoot, StagedRoot)
+	return checkoutRef(ctx, dEnv, dref)
+}
 
+func checkoutRef(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRef) error {
+	currRoots, err := getRoots(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), HeadRoot, WorkingRoot, StagedRoot)
 	if err != nil {
 		return err
 	}
 
-	cs, err := doltdb.NewCommitSpec(brName)
-
+	cs, err := doltdb.NewCommitSpec(dref.GetPath())
 	if err != nil {
 		return RootValueUnreadable{HeadRoot, err}
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
-
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs, dref)
 	if err != nil {
 		return RootValueUnreadable{HeadRoot, err}
 	}
 
 	newRoot, err := cm.GetRootValue()
-
 	if err != nil {
 		return err
 	}
 
 	ssMap, err := newRoot.GetSuperSchemaMap(ctx)
-
 	if err != nil {
 		return err
 	}
 
 	fkMap, err := newRoot.GetForeignKeyCollectionMap(ctx)
-
 	if err != nil {
 		return err
 	}
 
 	conflicts := set.NewStrSet([]string{})
 	wrkTblHashes, err := tblHashesForCO(ctx, currRoots[HeadRoot], newRoot, currRoots[WorkingRoot], conflicts)
-
 	if err != nil {
 		return err
 	}
 
 	stgTblHashes, err := tblHashesForCO(ctx, currRoots[HeadRoot], newRoot, currRoots[StagedRoot], conflicts)
-
 	if err != nil {
 		return err
 	}
-
 	if conflicts.Size() > 0 {
 		return CheckoutWouldOverwrite{conflicts.AsSlice()}
 	}
 
 	wrkHash, err := writeRoot(ctx, dEnv, wrkTblHashes, ssMap, fkMap)
-
 	if err != nil {
 		return err
 	}
 
 	stgHash, err := writeRoot(ctx, dEnv, stgTblHashes, ssMap, fkMap)
-
 	if err != nil {
 		return err
 	}
@@ -287,7 +283,6 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 	dEnv.RepoState.Staged = stgHash.String()
 
 	err = dEnv.RepoState.Save(dEnv.FS)
-
 	if err != nil {
 		return err
 	}

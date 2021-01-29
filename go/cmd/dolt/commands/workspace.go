@@ -193,7 +193,7 @@ func createWorkspaceWithStartPt(ctx context.Context, dEnv *env.DoltEnv, newWorks
 		}
 	}
 
-	success := color.GreenString("successfully created workspace: %s", newWorkspace)
+	success := color.GreenString("Successfully created workspace: %s", newWorkspace)
 
 	cli.Println(success)
 
