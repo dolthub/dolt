@@ -144,7 +144,8 @@ SQL
   [ "$status" -eq 0 ]
   [[ "$output" =~ "Rows inserted: 3" ]] || false
 
-  run dolt sql -r csv -q "select * from test2"
+  run dolt sql -r csv -q "select * from test2 ORDER BY pk"
   [[ "$output" =~ "pk,c1" ]] || false
   [[ "$output" =~ "1,1" ]] || false
+  [[ "$output" =~ "2,2" ]] || false
 }
