@@ -87,8 +87,16 @@ func updateTableWithNewSchema(ctx context.Context, tblName string, tbl *doltdb.T
 		return nil, err
 	}
 
+	var autoVal types.Value
+	if schema.HasAutoIncrement(newSchema) {
+		autoVal, err = tbl.GetAutoIncrementValue(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	if defaultVal == "" {
-		return doltdb.NewTable(ctx, vrw, newSchemaVal, rowData, indexData)
+		return doltdb.NewTable(ctx, vrw, newSchemaVal, rowData, indexData, autoVal)
 	}
 
 	me := rowData.Edit()
@@ -131,7 +139,7 @@ func updateTableWithNewSchema(ctx context.Context, tblName string, tbl *doltdb.T
 		return nil, err
 	}
 
-	return doltdb.NewTable(ctx, vrw, newSchemaVal, m, indexData)
+	return doltdb.NewTable(ctx, vrw, newSchemaVal, m, indexData, autoVal)
 }
 
 // addColumnToSchema creates a new schema with a column as specified by the params.

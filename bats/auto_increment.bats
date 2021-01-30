@@ -296,7 +296,6 @@ SQL
 }
 
 @test "AUTO_INCREMENT with parent-child FK" {
-    skip "something wrong with FK flushes"
     dolt sql <<SQL
 CREATE TABLE parent (
     pk int PRIMARY KEY AUTO_INCREMENT,
@@ -317,11 +316,11 @@ SQL
 
     run dolt sql -q "select * from parent" -r csv
     [ "$status" -eq 0 ]
-    [ "$output" = "pk,c0" ]
-    [ "$output" = "1,1" ]
-    [ "$output" = "2,2" ]
-    [ "$output" = "3,3" ]
-    [ "$output" = "4,4" ]
-    [ "$output" = "5,5" ]
-    [ "$output" = "6,6" ]
+    [[ "$output" =~ "pk,c0" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+    [[ "$output" =~ "3,3" ]] || false
+    [[ "$output" =~ "4,4" ]] || false
+    [[ "$output" =~ "5,5" ]] || false
+    [[ "$output" =~ "6,6" ]] || false
 }

@@ -55,7 +55,7 @@ func TestTableEditorConcurrency(t *testing.T) {
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap)
+	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
 	for i := 0; i < tableEditorConcurrencyIterations; i++ {
@@ -151,7 +151,7 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap)
+	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
 	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName)
@@ -245,7 +245,7 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap)
+	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
 	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName)
@@ -316,7 +316,7 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap)
+	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
 	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName)

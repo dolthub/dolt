@@ -19,6 +19,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/store/types"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
@@ -108,7 +110,16 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 	if err != nil {
 		return nil, err
 	}
-	newTable, err := doltdb.NewTable(ctx, vrw, schemaVal, rd, indexData)
+
+	var autoVal types.Value
+	if schema.HasAutoIncrement(newSch) {
+		autoVal, err = tbl.GetAutoIncrementValue(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	newTable, err := doltdb.NewTable(ctx, vrw, schemaVal, rd, indexData, autoVal)
 
 	if err != nil {
 		return nil, err

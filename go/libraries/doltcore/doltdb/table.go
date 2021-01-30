@@ -55,7 +55,7 @@ type Table struct {
 }
 
 // NewTable creates a noms Struct which stores row data, index data, and schema.
-func NewTable(ctx context.Context, vrw types.ValueReadWriter, schemaVal types.Value, rowData types.Map, indexData types.Map) (*Table, error) {
+func NewTable(ctx context.Context, vrw types.ValueReadWriter, schemaVal types.Value, rowData types.Map, indexData types.Map, autoVal types.Value) (*Table, error) {
 	schemaRef, err := WriteValAndGetRef(ctx, vrw, schemaVal)
 	if err != nil {
 		return nil, err
@@ -75,6 +75,10 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, schemaVal types.Va
 		schemaRefKey: schemaRef,
 		tableRowsKey: rowDataRef,
 		indexesKey:   indexesRef,
+	}
+
+	if autoVal != nil {
+		sd[autoIncrementKey] = autoVal
 	}
 
 	tableStruct, err := types.NewStruct(vrw.Format(), tableStructName, sd)
@@ -293,19 +297,18 @@ func (t *Table) UpdateSchema(ctx context.Context, sch schema.Schema) (*Table, er
 	if err != nil {
 		return nil, err
 	}
-	rowData, err := t.GetRowData(ctx)
+
+	schRef, err := WriteValAndGetRef(ctx, t.vrw, newSchemaVal)
 	if err != nil {
 		return nil, err
 	}
-	indexData, err := t.GetIndexData(ctx)
+
+	newTableStruct, err := t.tableStruct.Set(schemaRefKey, schRef)
 	if err != nil {
 		return nil, err
 	}
-	newTable, err := NewTable(ctx, t.vrw, newSchemaVal, rowData, indexData)
-	if err != nil {
-		return nil, err
-	}
-	return newTable, nil
+
+	return &Table{t.vrw, newTableStruct}, nil
 }
 
 // HasTheSameSchema tests the schema within 2 tables for equality

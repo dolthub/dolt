@@ -148,7 +148,15 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, newSc
 		return nil, err
 	}
 
-	return doltdb.NewTable(ctx, vrw, newSchemaVal, rowData, indexData)
+	var autoVal types.Value
+	if schema.HasAutoIncrement(newSchema) {
+		autoVal, err = tbl.GetAutoIncrementValue(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return doltdb.NewTable(ctx, vrw, newSchemaVal, rowData, indexData, autoVal)
 }
 
 // replaceColumnInSchema replaces the column with the name given with its new definition, optionally reordering it.
