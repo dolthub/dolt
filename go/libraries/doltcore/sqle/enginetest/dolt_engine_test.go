@@ -136,6 +136,7 @@ func TestAmbiguousColumnResolution(t *testing.T) {
 }
 
 func TestInsertInto(t *testing.T) {
+	t.Skipf("WARNING: DATA RACE")
 	enginetest.TestInsertInto(t, newDoltHarness(t))
 }
 
