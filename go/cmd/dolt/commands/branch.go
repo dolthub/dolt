@@ -333,8 +333,6 @@ func createBranchWithStartPt(ctx context.Context, dEnv *env.DoltEnv, newBranch, 
 		} else if err == doltdb.ErrInvBranchName {
 			bdr := errhand.BuildDError("fatal: '%s' is an invalid branch name.", newBranch)
 			return bdr.Build()
-		} else if err == actions.ErrWorkspaceNameExists {
-			return errhand.BuildDError("fatal: Branch name '%s' cannot be the name of an existing workspace", newBranch).Build()
 		} else if err == doltdb.ErrInvHash || doltdb.IsNotACommit(err) {
 			bdr := errhand.BuildDError("fatal: '%s' is not a commit and a branch '%s' cannot be created from it", startPt, newBranch)
 			return bdr.Build()

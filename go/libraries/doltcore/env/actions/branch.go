@@ -29,7 +29,6 @@ import (
 var ErrAlreadyExists = errors.New("already exists")
 var ErrCOBranchDelete = errors.New("attempted to delete checked out branch")
 var ErrUnmergedBranchDelete = errors.New("attempted to delete a branch that is not fully merged into master; use `-f` to force")
-var ErrWorkspaceNameExists = errors.New("branch name must not be existing workspace name")
 
 func MoveBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
 	oldRef := ref.NewBranchRef(oldBranch)
@@ -167,14 +166,6 @@ func CreateBranchWithDdb(ctx context.Context, ddb *doltdb.DoltDB, newBranch, sta
 
 	if !force && hasRef {
 		return ErrAlreadyExists
-	}
-
-	isWorkspace, err := IsWorkspaceWithDdb(ctx, ddb, newBranch)
-	if err != nil {
-		return err
-	}
-	if isWorkspace {
-		return ErrWorkspaceNameExists
 	}
 
 	if !doltdb.IsValidUserBranchName(newBranch) {
