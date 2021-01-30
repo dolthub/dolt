@@ -142,7 +142,7 @@ INSERT INTO TEST2 VALUES (1, (SELECT c1 FROM TEST WHERE c1=1));
 SQL
 
   [ "$status" -eq 0 ]
-  [[ "$output" =~ "Rows inserted: 2" ]] || false
+  [[ "$output" =~ "Rows inserted: 3" ]] || false
 
   run dolt sql -r csv -q "select * from test2"
   [[ "$output" =~ "pk,c1" ]] || false

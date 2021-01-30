@@ -1017,19 +1017,20 @@ func canProcessAsBatchInsert(ctx *sql.Context, sqlStatement sqlparser.Statement,
 		if _, ok := s.Rows.(sqlparser.Values); !ok {
 			return false, nil
 		}
+		foundSubquery, err := checkForInsertSubqueries(query)
+		if err != nil {
+			return false, err
+		}
+		if foundSubquery {
+			return false, nil
+		}
+
+		// TODO: This check coming first seems to cost problems. Perhaps in the analyzer.
 		hasAutoInc, err := insertsIntoAutoIncrementCol(ctx, se, query)
 		if err != nil {
 			return false, err
 		}
 		if hasAutoInc {
-			return false, nil
-		}
-
-		hasSubquery, err := checkForInsertSubqueries(query)
-		if err != nil {
-			return false, err
-		}
-		if hasSubquery {
 			return false, nil
 		}
 
@@ -1047,10 +1048,10 @@ func checkForInsertSubqueries(insertQuery string) (bool, error) {
 		return false, nil
 	}
 
-	return hasSubquery(p), nil
+	return foundSubquery(p), nil
 }
 
-func hasSubquery(node sqlparser.SQLNode) bool {
+func foundSubquery(node sqlparser.SQLNode) bool {
 	has := false
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (keepGoing bool, err error) {
 		if _, ok := node.(*sqlparser.Subquery); ok {
