@@ -22,7 +22,8 @@ type WorkspaceRef struct {
 
 var _ DoltRef = WorkspaceRef{}
 
-// NewWorkspaceRef creates a reference to a local workspace from a workspace name or a workspace ref e.g. v1, or refs/workspace/v1
+// NewWorkspaceRef creates a reference to a local workspace from a workspace
+// name or a workspace ref e.g. my-workspace, or refs/workspace/my-workspace
 func NewWorkspaceRef(workspace string) WorkspaceRef {
 	if IsRef(workspace) {
 		prefix := PrefixForType(WorkspaceRefType)
@@ -41,12 +42,13 @@ func (br WorkspaceRef) GetType() RefType {
 	return WorkspaceRefType
 }
 
-// GetPath returns the name of the tag
+// GetPath returns the name of the workspace
 func (br WorkspaceRef) GetPath() string {
 	return br.workspace
 }
 
-// String returns the fully qualified reference name e.g. refs/workspace/v1
+// String returns the fully qualified reference name e.g.
+// refs/workspace/my-workspace
 func (br WorkspaceRef) String() string {
 	return String(br)
 }
