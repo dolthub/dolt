@@ -77,9 +77,11 @@ func NewColCollection(cols ...Column) *ColCollection {
 	lowerNameToCol := make(map[string]Column, len(cols))
 	tagToIdx := make(map[uint64]int, len(cols))
 
+	var columns []Column
 	for i, col := range cols {
 		// If multiple columns have the same tag, the last one is used for tag lookups.
 		// Columns must have unique tags to pass schema.ValidateForInsert.
+		columns = append(columns, col)
 		tagToCol[col.Tag] = col
 		tagToIdx[col.Tag] = i
 		tags = append(tags, col.Tag)
@@ -97,7 +99,7 @@ func NewColCollection(cols ...Column) *ColCollection {
 	sort.Slice(sortedTags, func(i, j int) bool { return sortedTags[i] < sortedTags[j] })
 
 	return &ColCollection{
-		cols:           cols,
+		cols:           columns,
 		Tags:           tags,
 		SortedTags:     sortedTags,
 		TagToCol:       tagToCol,
