@@ -28,11 +28,11 @@ var ErrCOWorkspaceDelete = errors.New("attempted to delete checked out workspace
 var ErrBranchNameExists = errors.New("workspace name must not be existing branch name")
 
 func CreateWorkspace(ctx context.Context, dEnv *env.DoltEnv, name, startPoint string) error {
-	return CreateWorkspaceWithDdb(ctx, dEnv.DoltDB, name, startPoint, dEnv.RepoState.CWBHeadRef())
+	return CreateWorkspaceOnDB(ctx, dEnv.DoltDB, name, startPoint, dEnv.RepoState.CWBHeadRef())
 }
 
-func CreateWorkspaceWithDdb(ctx context.Context, ddb *doltdb.DoltDB, name, startPoint string, headRef ref.DoltRef) error {
-	isBranch, err := IsBranchWithDdb(ctx, ddb, name)
+func CreateWorkspaceOnDB(ctx context.Context, ddb *doltdb.DoltDB, name, startPoint string, headRef ref.DoltRef) error {
+	isBranch, err := IsBranchOnDB(ctx, ddb, name)
 	if err != nil {
 		return err
 	}
@@ -67,13 +67,13 @@ func CreateWorkspaceWithDdb(ctx context.Context, ddb *doltdb.DoltDB, name, start
 	return ddb.NewWorkspaceAtCommit(ctx, workRef, cm)
 }
 
-func IsWorkspaceWithDdb(ctx context.Context, ddb *doltdb.DoltDB, str string) (bool, error) {
+func IsWorkspaceOnDB(ctx context.Context, ddb *doltdb.DoltDB, str string) (bool, error) {
 	dref := ref.NewWorkspaceRef(str)
 	return ddb.HasRef(ctx, dref)
 }
 
 func IsWorkspace(ctx context.Context, dEnv *env.DoltEnv, str string) (bool, error) {
-	return IsWorkspaceWithDdb(ctx, dEnv.DoltDB, str)
+	return IsWorkspaceOnDB(ctx, dEnv.DoltDB, str)
 }
 
 func DeleteWorkspace(ctx context.Context, dEnv *env.DoltEnv, workspaceName string, opts DeleteOptions) error {
