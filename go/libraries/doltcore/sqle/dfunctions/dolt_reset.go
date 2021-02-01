@@ -68,7 +68,13 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	}
 
 	if apr.Contains(cli.HardResetParam) {
-		err = actions.ResetHardTables(ctx, dbData, apr, working, staged, head)
+		h, err := actions.ResetHardTables(ctx, dbData, apr, working, staged, head)
+
+		if err != nil {
+			return 1, err
+		}
+
+		err = setHeadRoot(ctx, h)
 	} else {
 		_, err = actions.ResetSoftTables(ctx, dbData, apr, staged, head)
 	}

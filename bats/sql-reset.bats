@@ -172,3 +172,81 @@ teardown() {
      [[ "$output" =~ pk ]] || false
      [[ "$output" != 1  ]] || false
 }
+
+@test "DOLT_RESET --hard properly wipes diff system table immediately" {
+      run dolt sql << SQL
+INSERT INTO test VALUES (1);
+SELECT DOLT_RESET('--hard');
+SELECT count(*) FROM dolt_diff_test;
+SQL
+    [ $status -eq 0 ]
+    # Represents that the diff table marks a change from the recent commit.
+    [[ "$output" =~ "0" ]] || false
+}
+
+@test "DOLT_RESET --hard properly wipes status table immediately" {
+      run dolt sql << SQL
+INSERT INTO test VALUES (1);
+SELECT DOLT_RESET('--hard');
+SELECT count(*) FROM dolt_status;
+SQL
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0" ]] || false
+}
+
+@test "DOLT_RESET --hard properly maintains session variables." {
+      head_variable=@@dolt_repo_$$_head
+      head_hash=$(get_head_commit)
+      run dolt sql << SQL
+INSERT INTO test VALUES (1);
+SELECT DOLT_RESET('--hard');
+SELECT $head_variable;
+SQL
+    echo $output
+    [ $status -eq 0 ]
+    # Represents that the diff table marks a change from the recent commit.
+    [[ "$output" =~ $head_hash ]] || false
+}
+
+@test "DOLT_RESET soft does not wipe status table" {
+        run dolt sql << SQL
+INSERT INTO test VALUES (1);
+SELECT DOLT_RESET('test');
+SELECT table_name FROM dolt_status;
+SQL
+    [ $status -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
+}
+
+@test "DOLT_RESET soft maintains staged session variable" {
+    pid=$$
+    working_hash_var=@@dolt_repo_"$pid"_working
+    run dolt sql -q "SELECT $working_hash_var"
+    working_hash=$output
+
+    run dolt sql << SQL
+INSERT INTO test VALUES (1);
+SELECT DOLT_ADD('.');
+SELECT DOLT_RESET('test');
+SELECT $working_hash_var
+SQL
+
+    [ $status -eq 0 ]
+
+    # These should not match as @@_working should become a new staged hash different from the original working.
+    [[ ! "$output" =~ $working_hash ]] || false
+
+    run dolt sql -q "SELECT DOLT_RESET('--hard');"
+    [ $status -eq 0 ]
+
+    run dolt sql -q "SELECT $working_hash_var"
+    [ $status -eq 0 ]
+
+    # Matches exactly.
+    [[ "$output" = "$working_hash" ]] || false
+}
+
+get_head_commit() {
+    dolt log -n 1 | grep -m 1 commit | cut -c 8-
+}
+
