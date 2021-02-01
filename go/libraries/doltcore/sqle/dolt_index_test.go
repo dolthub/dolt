@@ -922,7 +922,7 @@ func TestDoltIndexBetween(t *testing.T) {
 			require.NoError(t, err)
 			dil, ok := indexLookup.(*doltIndexLookup)
 			require.True(t, ok)
-			indexIter, err := dil.RowIter(NewTestSQLCtx(context.Background()))
+			indexIter, err := dil.RowIter(NewTestSQLCtx(context.Background()), nil)
 			require.NoError(t, err)
 
 			var readRows []sql.Row
@@ -938,7 +938,7 @@ func TestDoltIndexBetween(t *testing.T) {
 			require.NoError(t, err)
 			dil, ok = indexLookup.(*doltIndexLookup)
 			require.True(t, ok)
-			indexIter, err = dil.RowIter(NewTestSQLCtx(context.Background()))
+			indexIter, err = dil.RowIter(NewTestSQLCtx(context.Background()), nil)
 			require.NoError(t, err)
 
 			readRows = nil
@@ -957,7 +957,7 @@ func testDoltIndex(t *testing.T, keys []interface{}, expectedRows []sql.Row, ind
 	require.NoError(t, err)
 	dil, ok := indexLookup.(*doltIndexLookup)
 	require.True(t, ok)
-	indexIter, err := dil.RowIter(NewTestSQLCtx(context.Background()))
+	indexIter, err := dil.RowIter(NewTestSQLCtx(context.Background()), nil)
 	require.NoError(t, err)
 
 	var readRows []sql.Row
