@@ -20,6 +20,7 @@ import (
 )
 
 var ErrInvBranchName = errors.New("not a valid user branch name")
+var ErrInvWorkspaceName = errors.New("not a valid user workspace name")
 var ErrInvTagName = errors.New("not a valid user tag name")
 var ErrInvTableName = errors.New("not a valid table name")
 var ErrInvHash = errors.New("not a valid hash")
@@ -32,9 +33,11 @@ var ErrFoundHashNotACommit = errors.New("the value retrieved for this hash is no
 var ErrHashNotFound = errors.New("could not find a value for this hash")
 var ErrBranchNotFound = errors.New("branch not found")
 var ErrTagNotFound = errors.New("tag not found")
+var ErrWorkspaceNotFound = errors.New("workspace not found")
 var ErrTableNotFound = errors.New("table not found")
 var ErrTableExists = errors.New("table already exists")
 var ErrAlreadyOnBranch = errors.New("Already on branch")
+var ErrAlreadyOnWorkspace = errors.New("Already on workspace")
 
 var ErrNomsIO = errors.New("error reading from or writing to noms")
 

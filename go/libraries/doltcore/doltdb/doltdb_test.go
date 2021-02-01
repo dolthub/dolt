@@ -308,12 +308,12 @@ func TestLDNoms(t *testing.T) {
 		ddb, _ := LoadDoltDB(context.Background(), types.Format_7_18, LocalDirDoltDB)
 		meta, err := NewCommitMeta(committerName, committerEmail, "Sample data")
 		if err != nil {
-			t.Error("Failled to commit")
+			t.Error("Failed to commit")
 		}
 
 		commit, err := ddb.Commit(context.Background(), valHash, ref.NewBranchRef("master"), meta)
 		if err != nil {
-			t.Error("Failled to commit")
+			t.Error("Failed to commit")
 		}
 
 		numParents, err := commit.NumParents()

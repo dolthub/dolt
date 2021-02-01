@@ -929,6 +929,33 @@ func (ddb *DoltDB) DeleteTag(ctx context.Context, tag ref.DoltRef) error {
 	return err
 }
 
+// NewWorkspaceAtCommit create a new workspace at the commit given.
+func (ddb *DoltDB) NewWorkspaceAtCommit(ctx context.Context, workRef ref.DoltRef, c *Commit) error {
+	ds, err := ddb.db.GetDataset(ctx, workRef.String())
+	if err != nil {
+		return err
+	}
+
+	r, err := types.NewRef(c.commitSt, ddb.Format())
+	if err != nil {
+		return err
+	}
+
+	ds, err = ddb.db.SetHead(ctx, ds, r)
+
+	return err
+}
+
+func (ddb *DoltDB) DeleteWorkspace(ctx context.Context, workRef ref.DoltRef) error {
+	err := ddb.deleteRef(ctx, workRef)
+
+	if err == ErrBranchNotFound {
+		return ErrWorkspaceNotFound
+	}
+
+	return err
+}
+
 // GC performs garbage collection on this ddb. Values passed in |uncommitedVals| will be temporarily saved during gc.
 func (ddb *DoltDB) GC(ctx context.Context, uncommitedVals ...hash.Hash) error {
 	collector, ok := ddb.db.(datas.GarbageCollector)

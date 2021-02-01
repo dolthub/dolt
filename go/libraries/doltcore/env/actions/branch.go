@@ -155,10 +155,10 @@ func DeleteBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltRef,
 	return ddb.DeleteBranch(ctx, dref)
 }
 
-func CreateBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startingPoint string, force bool) error {
+func CreateBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, newBranch, startingPoint string, force bool, headRef ref.DoltRef) error {
 	newRef := ref.NewBranchRef(newBranch)
 
-	hasRef, err := dEnv.DoltDB.HasRef(ctx, newRef)
+	hasRef, err := ddb.HasRef(ctx, newRef)
 
 	if err != nil {
 		return err
@@ -178,13 +178,17 @@ func CreateBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startingPoi
 		return err
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoState.CWBHeadRef())
+	cm, err := ddb.Resolve(ctx, cs, headRef)
 
 	if err != nil {
 		return err
 	}
 
-	return dEnv.DoltDB.NewBranchAtCommit(ctx, newRef, cm)
+	return ddb.NewBranchAtCommit(ctx, newRef, cm)
+}
+
+func CreateBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startingPoint string, force bool) error {
+	return CreateBranchOnDB(ctx, dEnv.DoltDB, newBranch, startingPoint, force, dEnv.RepoState.CWBHeadRef())
 }
 
 func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error {
@@ -393,8 +397,12 @@ func RootsWithTable(ctx context.Context, dEnv *env.DoltEnv, table string) (RootT
 }
 
 func IsBranch(ctx context.Context, dEnv *env.DoltEnv, str string) (bool, error) {
+	return IsBranchOnDB(ctx, dEnv.DoltDB, str)
+}
+
+func IsBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, str string) (bool, error) {
 	dref := ref.NewBranchRef(str)
-	return dEnv.DoltDB.HasRef(ctx, dref)
+	return ddb.HasRef(ctx, dref)
 }
 
 func MaybeGetCommit(ctx context.Context, dEnv *env.DoltEnv, str string) (*doltdb.Commit, error) {
