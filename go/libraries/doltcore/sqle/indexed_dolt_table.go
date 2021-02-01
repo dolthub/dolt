@@ -62,7 +62,7 @@ func (idt *IndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, er
 }
 
 func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
-	return idt.indexLookup.RowIter(ctx)
+	return idt.indexLookup.RowIter(ctx, nil)
 }
 
 type rangePartition struct {
@@ -148,7 +148,7 @@ func partitionIndexedTableRows(ctx *sql.Context, t *WritableIndexedDoltTable, pr
 	case rangePartition:
 		return t.indexLookup.RowIterForRanges(ctx, []lookup.Range{typed.partitionRange}, projectedCols)
 	case sqlutil.SinglePartition:
-		return t.indexLookup.RowIter(ctx)
+		return t.indexLookup.RowIter(ctx, projectedCols)
 	}
 
 	return nil, errors.New("unknown partition type")
