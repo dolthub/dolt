@@ -243,7 +243,7 @@ func (kte *keylessTableEditor) Close() error {
 func (kte *keylessTableEditor) autoFlush(ctx context.Context) error {
 	// work is proportional to number of deltas
 	// not the number of row operations
-	if len(kte.acc.deltas) >= tableEditorMaxOps {
+	if len(kte.acc.deltas) >= int(tableEditorMaxOps) {
 		return kte.flush(ctx)
 	}
 	return nil
