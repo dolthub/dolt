@@ -22,8 +22,10 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+type TupleFormatFunc func(ctx context.Context, t types.Tuple) string
 type RowFormatFunc func(ctx context.Context, r Row, sch schema.Schema) string
 
+var TupleFmt = FieldSeparatedTupleFmt(',')
 var Fmt = FieldSeparatedFmt(':')
 var fieldDelim = []byte(" | ")
 
@@ -34,7 +36,6 @@ func FieldSeparatedFmt(delim rune) RowFormatFunc {
 		}
 
 		allCols := sch.GetAllCols()
-		kvps := make([]string, 0, allCols.Size())
 
 		var backingBuffer [512]byte
 		buf := bytes.NewBuffer(backingBuffer[:0])
@@ -52,10 +53,29 @@ func FieldSeparatedFmt(delim rune) RowFormatFunc {
 				buf.Write([]byte(col.Name))
 				buf.WriteRune(delim)
 				types.WriteEncodedValue(ctx, buf, val)
-				kvps = append(kvps, buf.String())
 			}
 
 			return false
+		})
+
+		return buf.String()
+	}
+}
+
+func FieldSeparatedTupleFmt(delim rune) TupleFormatFunc {
+	return func(ctx context.Context, t types.Tuple) string {
+		var backingBuffer [512]byte
+		buf := bytes.NewBuffer(backingBuffer[:0])
+
+		_ = t.IterFields(func(index uint64, val types.Value) (stop bool, err error) {
+			if index%2 == 1 {
+				if index != 1 {
+					buf.WriteRune(delim)
+				}
+				types.WriteEncodedValue(ctx, buf, val)
+			}
+
+			return false, nil
 		})
 
 		return buf.String()

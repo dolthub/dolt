@@ -30,7 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-var srcCols, _ = schema.NewColCollection(
+var srcCols = schema.NewColCollection(
 	schema.NewColumn("uuidtostr", 0, types.UUIDKind, true),
 	schema.NewColumn("floattostr", 1, types.FloatKind, false),
 	schema.NewColumn("uinttostr", 2, types.UintKind, false),
@@ -108,7 +108,7 @@ func TestSpecialBoolHandling(t *testing.T) {
 	require.NoError(t, err)
 	col2, err := schema.NewColumnWithTypeInfo("v", 1, typeinfo.PseudoBoolType, false, "", false, "")
 	require.NoError(t, err)
-	colColl, _ := schema.NewColCollection(col1, col2)
+	colColl := schema.NewColCollection(col1, col2)
 	sch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
 	untypedSch, err := untyped.UntypeSchema(sch)

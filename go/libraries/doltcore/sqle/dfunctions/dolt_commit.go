@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -126,7 +127,17 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		Email:            email,
 	})
 
-	return h, err
+	if allFlag {
+		err = setHeadAndWorkingSessionRoot(ctx, h)
+	} else {
+		err = setHeadSessionRoot(ctx, h)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return h, nil
 }
 
 func hasWorkingSetChanges(rsr env.RepoStateReader) bool {
@@ -203,4 +214,21 @@ func (d DoltCommitFunc) Resolved() bool {
 
 func (d DoltCommitFunc) Children() []sql.Expression {
 	return d.children
+}
+
+// setHeadAndWorkingSessionRoot takes in a ctx and the new head hashstring and updates the session head and working hashes.
+func setHeadAndWorkingSessionRoot(ctx *sql.Context, headHashStr string) error {
+	key := ctx.GetCurrentDatabase() + sqle.HeadKeySuffix
+	dsess := sqle.DSessFromSess(ctx.Session)
+	hashType := sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
+
+	return dsess.Set(ctx, key, hashType, headHashStr)
+}
+
+func setHeadSessionRoot(ctx *sql.Context, headHashStr string) error {
+	key := ctx.GetCurrentDatabase() + sqle.HeadKeySuffix
+	dsess := sqle.DSessFromSess(ctx.Session)
+	hashType := sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
+
+	return dsess.Session.Set(ctx, key, hashType, headHashStr)
 }

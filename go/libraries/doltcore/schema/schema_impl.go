@@ -51,8 +51,8 @@ func SchemaFromCols(allCols *ColCollection) (Schema, error) {
 		return nil, ErrNoPrimaryKeyColumns
 	}
 
-	pkColColl, _ := NewColCollection(pkCols...)
-	nonPKColColl, _ := NewColCollection(nonPKCols...)
+	pkColColl := NewColCollection(pkCols...)
+	nonPKColColl := NewColCollection(nonPKCols...)
 
 	return &schemaImpl{
 		pkCols:          pkColColl,
@@ -93,7 +93,7 @@ func ValidateForInsert(allCols *ColCollection) error {
 		}
 		colTags[tag] = true
 
-		if _, ok := colNames[col.Name]; ok {
+		if _, ok := colNames[strings.ToLower(col.Name)]; ok {
 			return true, ErrColNameCollision
 		}
 		colNames[col.Name] = true
@@ -115,8 +115,8 @@ func UnkeyedSchemaFromCols(allCols *ColCollection) Schema {
 		nonPKCols = append(nonPKCols, c)
 	}
 
-	pkColColl, _ := NewColCollection()
-	nonPKColColl, _ := NewColCollection(nonPKCols...)
+	pkColColl := NewColCollection()
+	nonPKColColl := NewColCollection(nonPKCols...)
 
 	return &schemaImpl{
 		pkCols:          pkColColl,
@@ -149,11 +149,7 @@ func SchemaFromPKAndNonPKCols(pkCols, nonPKCols *ColCollection) (Schema, error) 
 		i++
 	}
 
-	allColColl, err := NewColCollection(allCols...)
-
-	if err != nil {
-		return nil, err
-	}
+	allColColl := NewColCollection(allCols...)
 
 	return &schemaImpl{
 		pkCols:          pkCols,

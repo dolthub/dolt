@@ -71,12 +71,12 @@ func doltSchWithPKFromSqlSchema(sch sql.Schema) schema.Schema {
 	dSch, _ := sqlutil.ToDoltResultSchema(sch)
 	// make the first col the PK
 	pk := false
-	newCC, _ := schema.MapColCollection(dSch.GetAllCols(), func(col schema.Column) (column schema.Column, err error) {
+	newCC := schema.MapColCollection(dSch.GetAllCols(), func(col schema.Column) schema.Column {
 		if !pk {
 			col.IsPartOfPK = true
 			pk = true
 		}
-		return col, nil
+		return col
 	})
 	return schema.MustSchemaFromCols(newCC)
 }

@@ -39,14 +39,14 @@ const (
 	c1Tag   = 2
 )
 
-var oneIntPKSch = schema.MustSchemaFromCols(mustColColl(schema.NewColCollection(
+var oneIntPKSch = schema.MustSchemaFromCols(schema.NewColCollection(
 	schema.NewColumn(pk0Name, pk0Tag, types.IntKind, true),
-	schema.NewColumn(c1Name, c1Tag, types.IntKind, false))))
+	schema.NewColumn(c1Name, c1Tag, types.IntKind, false)))
 
-var twoIntPKSch = schema.MustSchemaFromCols(mustColColl(schema.NewColCollection(
+var twoIntPKSch = schema.MustSchemaFromCols(schema.NewColCollection(
 	schema.NewColumn(pk0Name, pk0Tag, types.IntKind, true),
 	schema.NewColumn(pk1Name, pk1Tag, types.IntKind, true),
-	schema.NewColumn(c1Name, c1Tag, types.IntKind, false))))
+	schema.NewColumn(c1Name, c1Tag, types.IntKind, false)))
 
 func int64Range(start, end, stride int64) []int64 {
 	vals := make([]int64, 0, end-start)
@@ -98,14 +98,6 @@ func genTwoIntPKRows(pks ...[2]int64) []row.Row {
 	}
 
 	return rows
-}
-
-func mustColColl(coll *schema.ColCollection, err error) *schema.ColCollection {
-	if err != nil {
-		panic(err)
-	}
-
-	return coll
 }
 
 func mapFromRows(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rows ...row.Row) (types.Map, error) {

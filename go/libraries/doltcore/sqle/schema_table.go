@@ -38,15 +38,12 @@ func SchemasTableSqlSchema() sql.Schema {
 
 // The fixed dolt schema for the `dolt_schemas` table.
 func SchemasTableSchema() schema.Schema {
-	colColl, err := schema.NewColCollection(
+	colColl := schema.NewColCollection(
 		schema.NewColumn(doltdb.SchemasTablesTypeCol, schema.DoltSchemasTypeTag, types.StringKind, false),
 		schema.NewColumn(doltdb.SchemasTablesNameCol, schema.DoltSchemasNameTag, types.StringKind, false),
 		schema.NewColumn(doltdb.SchemasTablesFragmentCol, schema.DoltSchemasFragmentTag, types.StringKind, false),
 		schema.NewColumn(doltdb.SchemasTablesIdCol, schema.DoltSchemasIdTag, types.IntKind, true, schema.NotNullConstraint{}),
 	)
-	if err != nil {
-		panic(err) // should never happen
-	}
 	return schema.MustSchemaFromCols(colColl)
 }
 

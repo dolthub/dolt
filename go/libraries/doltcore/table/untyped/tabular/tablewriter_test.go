@@ -51,7 +51,7 @@ func TestWriter(t *testing.T) {
 		{Name: ageColName, Tag: ageColTag, Kind: types.StringKind, IsPartOfPK: false, Constraints: nil},
 		{Name: titleColName, Tag: titleColTag, Kind: types.StringKind, IsPartOfPK: false, Constraints: nil},
 	}
-	colColl, _ := schema.NewColCollection(inCols...)
+	colColl := schema.NewColCollection(inCols...)
 	rowSch := schema.UnkeyedSchemaFromCols(colColl)
 
 	// Simulate fixed-width string values that the table writer needs to function.
@@ -215,7 +215,7 @@ func TestEastAsianLanguages(t *testing.T) {
 		{Name: ageColName, Tag: ageColTag, Kind: types.StringKind, IsPartOfPK: false, Constraints: nil},
 		{Name: titleColName, Tag: titleColTag, Kind: types.StringKind, IsPartOfPK: false, Constraints: nil},
 	}
-	colColl, _ := schema.NewColCollection(inCols...)
+	colColl := schema.NewColCollection(inCols...)
 	rowSch := schema.UnkeyedSchemaFromCols(colColl)
 
 	// Simulate fixed-width string values that the table writer needs to function.

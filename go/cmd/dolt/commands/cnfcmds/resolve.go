@@ -18,7 +18,9 @@ import (
 	"context"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/types"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -191,11 +193,15 @@ func manualResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 	}
 
 	for _, key := range invalid {
-		cli.Println(key, "is not a valid key")
+		cli.Printf("(%s) is not a valid key\n", row.TupleFmt(ctx, key.(types.Tuple)))
 	}
 
 	for _, key := range notFound {
-		cli.Println(key, "is not the primary key of a conflicting row")
+		cli.Printf("(%s) is not the primary key of a conflicting row\n", row.TupleFmt(ctx, key.(types.Tuple)))
+	}
+
+	if updatedTbl == nil {
+		return errhand.BuildDError("error: No changes were resolved").Build()
 	}
 
 	updatedHash, err := updatedTbl.HashOf()

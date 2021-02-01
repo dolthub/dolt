@@ -134,7 +134,7 @@ func CreateTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData t
 }
 
 func createTestDocsSchema() schema.Schema {
-	typedColColl, _ := schema.NewColCollection(
+	typedColColl := schema.NewColCollection(
 		schema.NewColumn(doltdb.DocPkColumnName, schema.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn(doltdb.DocTextColumnName, schema.DocTextTag, types.StringKind, false),
 	)

@@ -100,10 +100,9 @@ func mustTuple(id int64) types.Tuple {
 
 func TestRangeReader(t *testing.T) {
 	ctx := context.Background()
-	colColl, err := schema.NewColCollection(
+	colColl := schema.NewColCollection(
 		schema.NewColumn("id", pkTag, types.IntKind, true),
 		schema.NewColumn("val", valTag, types.IntKind, false))
-	require.NoError(t, err)
 
 	sch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
@@ -158,10 +157,9 @@ func TestRangeReader(t *testing.T) {
 
 func TestRangeReaderOnEmptyMap(t *testing.T) {
 	ctx := context.Background()
-	colColl, err := schema.NewColCollection(
+	colColl := schema.NewColCollection(
 		schema.NewColumn("id", pkTag, types.IntKind, true),
 		schema.NewColumn("val", valTag, types.IntKind, false))
-	require.NoError(t, err)
 
 	sch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)

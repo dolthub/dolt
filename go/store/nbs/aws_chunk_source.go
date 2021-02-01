@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2019-2021 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -68,7 +68,7 @@ func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectRead
 		size := indexSize(chunkCount) + footerSize
 		buff := make([]byte, size)
 
-		n, err := s3.ReadFromEnd(ctx, name, buff, stats)
+		n, _, err := s3.ReadFromEnd(ctx, name, buff, stats)
 
 		if err != nil {
 			return nil, &dynamoTableReaderAt{}, err

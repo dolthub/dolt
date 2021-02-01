@@ -70,6 +70,7 @@ const (
 	whereParam  = "where"
 	limitParam  = "limit"
 	SQLFlag     = "sql"
+	CachedFlag  = "cached"
 )
 
 type DiffSink interface {
@@ -144,6 +145,7 @@ func (cmd DiffCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
 	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
 	ap.SupportsString(QueryFlag, "q", "query", "diffs the results of a query at two commits")
+	ap.SupportsFlag(CachedFlag, "c", "Show only the unstaged data changes.")
 	return ap
 }
 
@@ -198,6 +200,8 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", QueryFlag, SummaryFlag)
 		case apr.Contains(SQLFlag):
 			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", QueryFlag, SQLFlag)
+		case apr.Contains(CachedFlag):
+			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", QueryFlag, CachedFlag)
 		}
 		dArgs.query = q
 	}
@@ -231,7 +235,7 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	dArgs.limit, _ = apr.GetInt(limitParam)
 	dArgs.where = apr.GetValueOrDefault(whereParam, "")
 
-	from, to, leftover, err := getDiffRoots(ctx, dEnv, apr.Args())
+	from, to, leftover, err := getDiffRoots(ctx, dEnv, apr.Args(), apr.Contains(CachedFlag))
 
 	if err != nil {
 		return nil, nil, nil, err
@@ -282,13 +286,11 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	return from, to, dArgs, nil
 }
 
-func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string) (from, to *doltdb.RootValue, leftover []string, err error) {
-	headRoot, err := dEnv.StagedRoot(ctx)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
+func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string, isCached bool) (from, to *doltdb.RootValue, leftover []string, err error) {
+	headRoot, err := dEnv.HeadRoot(ctx)
+	stagedRoot, err := dEnv.StagedRoot(ctx)
 	workingRoot, err := dEnv.WorkingRoot(ctx)
+
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -305,8 +307,12 @@ func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string) (from, 
 
 	if len(args) == 0 {
 		// `dolt diff`
-		from = headRoot
+		from = stagedRoot
 		to = workingRoot
+		if isCached {
+			from = headRoot
+			to = stagedRoot
+		}
 		return from, to, nil, nil
 	}
 
@@ -314,8 +320,12 @@ func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string) (from, 
 
 	if !ok {
 		// `dolt diff ...tables`
-		from = headRoot
+		from = stagedRoot
 		to = workingRoot
+		if isCached {
+			from = headRoot
+			to = stagedRoot
+		}
 		leftover = args
 		return from, to, leftover, nil
 	}
@@ -323,6 +333,9 @@ func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string) (from, 
 	if len(args) == 1 {
 		// `dolt diff from_commit`
 		to = workingRoot
+		if isCached {
+			to = stagedRoot
+		}
 		return from, to, nil, nil
 	}
 
@@ -331,6 +344,9 @@ func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string) (from, 
 	if !ok {
 		// `dolt diff from_commit ...tables`
 		to = workingRoot
+		if isCached {
+			to = stagedRoot
+		}
 		leftover = args[1:]
 		return from, to, leftover, nil
 	}
@@ -508,7 +524,7 @@ func tabularSchemaDiff(ctx context.Context, td diff.TableDelta, fromSchemas, toS
 		}
 	}
 
-	if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
+	if !schema.ColCollsAreCompatible(fromSch.GetPKCols(), toSch.GetPKCols()) {
 		panic("primary key sets must be the same")
 	}
 	pkStr := strings.Join(fromSch.GetPKCols().GetColumnNames(), ", ")
@@ -639,7 +655,7 @@ func dumbDownSchema(in schema.Schema) (schema.Schema, error) {
 		return nil, err
 	}
 
-	dumbColColl, _ := schema.NewColCollection(dumbCols...)
+	dumbColColl := schema.NewColCollection(dumbCols...)
 
 	return schema.SchemaFromCols(dumbColColl)
 }

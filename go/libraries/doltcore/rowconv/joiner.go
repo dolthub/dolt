@@ -90,11 +90,7 @@ func NewJoiner(namedSchemas []NamedSchema, namers map[string]ColNamingFunc) (*Jo
 		return nil, err
 	}
 
-	colColl, err := schema.NewColCollection(cols...)
-
-	if err != nil {
-		return nil, err
-	}
+	colColl := schema.NewColCollection(cols...)
 
 	joined := schema.UnkeyedSchemaFromCols(colColl)
 

@@ -279,6 +279,10 @@ teardown() {
 }
 
 @test "query dolt_ancestor_commits" {
+    run dolt sql -q "SELECT count(*) FROM dolt_commit_ancestors;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+
     run dolt sql -q "SELECT count(*) FROM dolt_commit_ancestors;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1" ]] || false

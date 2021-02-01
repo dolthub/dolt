@@ -53,7 +53,7 @@ func TestParseKeyValues(t *testing.T) {
 		mnColTag  = 2
 	)
 
-	testKeyColColl, _ := schema.NewColCollection(
+	testKeyColColl := schema.NewColCollection(
 		schema.NewColumn(lnColName, lnColTag, types.StringKind, true),
 		schema.NewColumn(fnColName, fnColTag, types.StringKind, true),
 		schema.NewColumn(mnColName, mnColTag, types.StringKind, true),
@@ -62,7 +62,7 @@ func TestParseKeyValues(t *testing.T) {
 	sch, err := schema.SchemaFromCols(testKeyColColl)
 	require.NoError(t, err)
 
-	singleKeyColColl, _ := schema.NewColCollection(
+	singleKeyColColl := schema.NewColCollection(
 		schema.NewColumn(lnColName, lnColTag, types.StringKind, true),
 	)
 

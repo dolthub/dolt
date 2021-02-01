@@ -370,3 +370,42 @@ SQL
     [[ "$output" =~ "\`v1\` bigint COMMENT 'other'" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
+
+@test "sql-create-tables: duplicate column errors" {
+    run dolt sql <<SQL
+CREATE TABLE test1 (
+  a bigint primary key,
+  A bigint
+);
+SQL
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "same name" ]] || false
+
+    run dolt sql <<SQL
+CREATE TABLE test1 (
+  a bigint primary key,
+  a bigint
+);
+SQL
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "same name" ]] || false
+
+    dolt sql <<SQL
+CREATE TABLE test1 (
+  a bigint primary key,
+  b bigint
+);
+SQL
+
+    run dolt sql -q "alter table test1 rename column b to a"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "name" ]] || false
+    
+    run dolt sql -q "alter table test1 add column A int"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "name" ]] || false
+
+    run dolt sql -q "alter table test1 change column b A bigint"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "name" ]] || false
+}

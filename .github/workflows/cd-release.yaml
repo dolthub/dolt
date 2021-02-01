@@ -125,3 +125,14 @@ jobs:
           job-status: ${{ job.status }}
           webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
           notify-on-success: false
+
+  trigger-performance-benchmark-email:
+    needs: create-release
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Repository Dispatch
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          event-type: release-dolt
+          client-payload: '{"version": "${{ github.event.inputs.version }}", "actor": "${{ github.actor }}"}'

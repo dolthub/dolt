@@ -213,11 +213,11 @@ func (root *RootValue) GenerateTagsForNewColColl(ctx context.Context, tableName 
 	}
 
 	idx := 0
-	return schema.MapColCollection(cc, func(col schema.Column) (column schema.Column, err error) {
+	return schema.MapColCollection(cc, func(col schema.Column) schema.Column {
 		col.Tag = newTags[idx]
 		idx++
-		return col, nil
-	})
+		return col
+	}), nil
 }
 
 // GenerateTagsForNewColumns deterministically generates a slice of new tags that are unique within the history of this root. The names and NomsKinds of

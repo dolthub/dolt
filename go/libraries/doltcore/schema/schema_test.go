@@ -16,6 +16,7 @@ package schema
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -60,15 +61,14 @@ var nonPkCols = []Column{
 var allCols = append(append([]Column(nil), pkCols...), nonPkCols...)
 
 func TestSchema(t *testing.T) {
-	colColl, err := NewColCollection(allCols...)
-	require.NoError(t, err)
+	colColl := NewColCollection(allCols...)
 	schFromCols, err := SchemaFromCols(colColl)
 	require.NoError(t, err)
 
 	testSchema("SchemaFromCols", schFromCols, t)
 
-	testKeyColColl, _ := NewColCollection(pkCols...)
-	testNonKeyColsColl, _ := NewColCollection(nonPkCols...)
+	testKeyColColl := NewColCollection(pkCols...)
+	testNonKeyColsColl := NewColCollection(nonPkCols...)
 	schFromPKAndNonPKCols, _ := SchemaFromPKAndNonPKCols(testKeyColColl, testNonKeyColsColl)
 
 	testSchema("SchemaFromPKAndNonPKCols", schFromPKAndNonPKCols, t)
@@ -79,10 +79,8 @@ func TestSchema(t *testing.T) {
 }
 
 func TestSchemaWithNoPKs(t *testing.T) {
-	colColl, err := NewColCollection(nonPkCols...)
-	require.NoError(t, err)
-
-	_, err = SchemaFromCols(colColl)
+	colColl := NewColCollection(nonPkCols...)
+	_, _ = SchemaFromCols(colColl)
 
 	assert.NotPanics(t, func() {
 		UnkeyedSchemaFromCols(colColl)
@@ -90,16 +88,14 @@ func TestSchemaWithNoPKs(t *testing.T) {
 }
 
 func TestIsKeyless(t *testing.T) {
-	cc, err := NewColCollection(allCols...)
-	require.NoError(t, err)
+	cc := NewColCollection(allCols...)
 	pkSch, err := SchemaFromCols(cc)
 	require.NoError(t, err)
 
 	ok := IsKeyless(pkSch)
 	assert.False(t, ok)
 
-	cc, err = NewColCollection(nonPkCols...)
-	require.NoError(t, err)
+	cc = NewColCollection(nonPkCols...)
 
 	keylessSch, err := SchemaFromCols(cc)
 	assert.NoError(t, err)
@@ -110,19 +106,35 @@ func TestIsKeyless(t *testing.T) {
 
 func TestValidateForInsert(t *testing.T) {
 	t.Run("Validate good", func(t *testing.T) {
-		colColl, err := NewColCollection(allCols...)
-		require.NoError(t, err)
+		colColl := NewColCollection(allCols...)
 		assert.NoError(t, ValidateForInsert(colColl))
 	})
 
 	t.Run("Name collision", func(t *testing.T) {
 		cols := append(allCols, Column{titleColName, 100, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil})
-		colColl, err := NewColCollection(cols...)
-		require.NoError(t, err)
+		colColl := NewColCollection(cols...)
 
-		err = ValidateForInsert(colColl)
+		err := ValidateForInsert(colColl)
 		assert.Error(t, err)
 		assert.Equal(t, err, ErrColNameCollision)
+	})
+
+	t.Run("Case insensitive collision", func(t *testing.T) {
+		cols := append(allCols, Column{strings.ToUpper(titleColName), 100, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil})
+		colColl := NewColCollection(cols...)
+
+		err := ValidateForInsert(colColl)
+		assert.Error(t, err)
+		assert.Equal(t, err, ErrColNameCollision)
+	})
+
+	t.Run("Tag collision", func(t *testing.T) {
+		cols := append(allCols, Column{"newCol", lnColTag, types.StringKind, false, typeinfo.StringDefaultType, "", false, "", nil})
+		colColl := NewColCollection(cols...)
+
+		err := ValidateForInsert(colColl)
+		assert.Error(t, err)
+		assert.Equal(t, err, ErrColTagCollision)
 	})
 }
 

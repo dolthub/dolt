@@ -111,7 +111,7 @@ func createRowMergeStruct(name string, vals, mergeVals, ancVals, expected []type
 		cols[tag] = schema.NewColumn(strconv.FormatInt(int64(tag), 10), uint64(tag), val.Kind(), false)
 	}
 
-	colColl, _ := schema.NewColCollection(cols...)
+	colColl := schema.NewColCollection(cols...)
 	sch := schema.MustSchemaFromCols(colColl)
 
 	tpl := valsToTestTupleWithPks(vals)
@@ -225,7 +225,7 @@ const (
 	titleTag = 1
 )
 
-var colColl, _ = schema.NewColCollection(
+var colColl = schema.NewColCollection(
 	schema.NewColumn("id", idTag, types.UUIDKind, true, schema.NotNullConstraint{}),
 	schema.NewColumn("name", nameTag, types.StringKind, false, schema.NotNullConstraint{}),
 	schema.NewColumn("title", titleTag, types.StringKind, false),

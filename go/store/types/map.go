@@ -310,6 +310,17 @@ func (m Map) MaybeGet(ctx context.Context, key Value) (v Value, ok bool, err err
 	return entry.value, true, nil
 }
 
+func (m Map) MaybeGetTuple(ctx context.Context, key Tuple) (v Tuple, ok bool, err error) {
+	var val Value
+	val, ok, err = m.MaybeGet(ctx, key)
+
+	if val != nil {
+		return val.(Tuple), ok, err
+	}
+
+	return Tuple{}, ok, err
+}
+
 func (m Map) Has(ctx context.Context, key Value) (bool, error) {
 	cur, err := newCursorAtValue(ctx, m.orderedSequence, key, false, false)
 

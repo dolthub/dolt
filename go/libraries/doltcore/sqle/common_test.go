@@ -123,7 +123,7 @@ func SubsetSchema(sch schema.Schema, colNames ...string) schema.Schema {
 			cols = append(cols, col)
 		}
 	}
-	colColl, _ := schema.NewColCollection(cols...)
+	colColl := schema.NewColCollection(cols...)
 	return schema.UnkeyedSchemaFromCols(colColl)
 }
 
