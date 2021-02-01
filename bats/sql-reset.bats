@@ -219,8 +219,7 @@ SQL
 }
 
 @test "DOLT_RESET soft maintains staged session variable" {
-    pid=$$
-    working_hash_var=@@dolt_repo_"$pid"_working
+    working_hash_var=@@dolt_repo_$$_working
     run dolt sql -q "SELECT $working_hash_var"
     working_hash=$output
 

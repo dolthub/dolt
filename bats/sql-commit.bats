@@ -118,6 +118,7 @@ teardown() {
 SELECT DOLT_COMMIT('-a', '-m', 'Commit1');
 SELECT * FROM dolt_log;
 SQL
+
     [ $status -eq 0 ]
     [[ "$output" =~ "Commit1" ]] || false
 }
@@ -127,6 +128,7 @@ SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Commit1');
 SELECT count(*) FROM dolt_diff_test WHERE to_commit = hashof('head');
 SQL
+
     [ $status -eq 0 ]
     # Represents that the diff table marks a change from the recent commit.
     [[ "$output" =~ "1" ]] || false
@@ -138,7 +140,27 @@ SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Commit1');
 SELECT $head_variable = HASHOF('head');
 SQL
+
     [ $status -eq 0 ]
-    echo $output
     [[ "$output" =~ "true" ]] || false
+}
+
+@test "DOLT_COMMIT with unstaged tables correctly gets new head root but does not overwrite working" {
+    head_variable=@@dolt_repo_$$_head
+
+    run dolt sql << SQL
+CREATE TABLE test2 (
+    pk int primary key
+);
+SELECT DOLT_ADD('test');
+SELECT DOLT_COMMIT('-m', 'Commit1');
+SELECT $head_variable = HASHOF('head');
+SQL
+
+    [ $status -eq 0 ]
+    [[ "$output" =~ "true" ]] || false
+
+    run dolt sql -r csv -q "select * from dolt_status;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ 'test2,false,new table' ]] || false
 }

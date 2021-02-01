@@ -74,7 +74,7 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 			return 1, err
 		}
 
-		err = setHeadRoot(ctx, h)
+		err = setHeadAndWorkingSessionRoot(ctx, h)
 	} else {
 		_, err = actions.ResetSoftTables(ctx, dbData, apr, staged, head)
 	}

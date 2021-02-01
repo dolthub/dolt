@@ -127,12 +127,17 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 		Email:            email,
 	})
 
-	err = setHeadRoot(ctx, h)
+	if allFlag {
+		err = setHeadAndWorkingSessionRoot(ctx, h)
+	} else {
+		err = setHeadSessionRoot(ctx, h)
+	}
+
 	if err != nil {
 		return nil, err
 	}
 
-	return h, err
+	return h, nil
 }
 
 func hasWorkingSetChanges(rsr env.RepoStateReader) bool {
@@ -211,11 +216,19 @@ func (d DoltCommitFunc) Children() []sql.Expression {
 	return d.children
 }
 
-// setHeadRoot takes in a ctx and the new head hashstring and updates the session head and working hashes.
-func setHeadRoot(ctx *sql.Context, headHashStr string) error {
+// setHeadAndWorkingSessionRoot takes in a ctx and the new head hashstring and updates the session head and working hashes.
+func setHeadAndWorkingSessionRoot(ctx *sql.Context, headHashStr string) error {
 	key := ctx.GetCurrentDatabase() + sqle.HeadKeySuffix
 	dsess := sqle.DSessFromSess(ctx.Session)
 	hashType := sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
 
 	return dsess.Set(ctx, key, hashType, headHashStr)
+}
+
+func setHeadSessionRoot(ctx *sql.Context, headHashStr string) error {
+	key := ctx.GetCurrentDatabase() + sqle.HeadKeySuffix
+	dsess := sqle.DSessFromSess(ctx.Session)
+	hashType := sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
+
+	return dsess.Session.Set(ctx, key, hashType, headHashStr)
 }
