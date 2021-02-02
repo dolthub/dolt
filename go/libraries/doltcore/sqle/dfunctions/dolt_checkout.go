@@ -1,4 +1,4 @@
-// Copyright 2020 Dolthub, Inc.
+// Copyright 2021 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -179,13 +179,14 @@ func checkoutTables(ctx *sql.Context, dbData env.DbData, tables []string) error 
 	return updateHeadAndWorkingSessionVars(ctx, dbData)
 }
 
+// updateHeadAndWorkingSessionVars explicitly sets the head and working hash.
 func updateHeadAndWorkingSessionVars(ctx *sql.Context, dbData env.DbData) error {
-	headHash, err := getHeadCommitString(ctx, dbData)
+	headHash, err := dbData.Rsr.CWBHeadHash(ctx)
 	if err != nil {
 		return err
 	}
 
-	err = setSessionRootExplicit(ctx, headHash, sqle.HeadKeySuffix)
+	err = setSessionRootExplicit(ctx, headHash.String(), sqle.HeadKeySuffix)
 	if err != nil {
 		return err
 	}
@@ -193,23 +194,6 @@ func updateHeadAndWorkingSessionVars(ctx *sql.Context, dbData env.DbData) error 
 	workingHash := dbData.Rsr.WorkingHash().String()
 
 	return setSessionRootExplicit(ctx, workingHash, sqle.WorkingKeySuffix)
-}
-
-func getHeadCommitString(ctx *sql.Context, dbData env.DbData) (string, error) {
-	ref := dbData.Rsr.CWBHeadRef()
-	cm, err := dbData.Ddb.ResolveRef(ctx, ref)
-
-	if err != nil {
-		return "", err
-	}
-
-	hash, err := cm.HashOf()
-
-	if err != nil {
-		return "", err
-	}
-
-	return hash.String(), nil
 }
 
 func (d DoltCheckoutFunc) String() string {

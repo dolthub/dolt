@@ -49,8 +49,6 @@ dolt checkout {{.LessThan}}table{{.GreaterThan}}...
 	},
 }
 
-const coBranchArg = "b"
-
 type CheckoutCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -65,14 +63,8 @@ func (cmd CheckoutCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd CheckoutCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cli.CreateCheckoutArgParser()
 	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, checkoutDocs, ap))
-}
-
-func (cmd CheckoutCmd) createArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.SupportsString(coBranchArg, "", "branch", "Create a new branch named {{.LessThan}}new_branch{{.GreaterThan}} and start it at {{.LessThan}}start_point{{.GreaterThan}}.")
-	return ap
 }
 
 // EventType returns the type of the event to log
@@ -82,11 +74,11 @@ func (cmd CheckoutCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cli.CreateCheckoutArgParser()
 	helpPrt, usagePrt := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, checkoutDocs, ap))
 	apr := cli.ParseArgs(ap, args, helpPrt)
 
-	if (apr.Contains(coBranchArg) && apr.NArg() > 1) || (!apr.Contains(coBranchArg) && apr.NArg() == 0) {
+	if (apr.Contains(cli.CheckoutCoBranch) && apr.NArg() > 1) || (!apr.Contains(cli.CheckoutCoBranch) && apr.NArg() == 0) {
 		usagePrt()
 		return 1
 	}
@@ -96,7 +88,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return HandleVErrAndExitCode(verr, usagePrt)
 	}
 
-	if newBranch, newBranchOk := apr.GetValue(coBranchArg); newBranchOk {
+	if newBranch, newBranchOk := apr.GetValue(cli.CheckoutCoBranch); newBranchOk {
 		var verr errhand.VerboseError
 		if len(newBranch) == 0 {
 			verr = errhand.BuildDError("error: cannot checkout empty string").Build()

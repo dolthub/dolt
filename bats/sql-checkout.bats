@@ -167,3 +167,8 @@ get_head_commit() {
 get_working_hash() {
   dolt sql -q "select @@dolt_repo_$$_working" | sed -n 4p | sed -e 's/|//' -e 's/|//'  -e 's/ //'
 }
+
+## todo:
+#@test "DOLT_CHECKOUT works with remote branch" {
+#
+#}
