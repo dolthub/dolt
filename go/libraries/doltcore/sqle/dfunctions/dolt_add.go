@@ -63,7 +63,7 @@ func (d DoltAddFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 			return 1, err
 		}
 
-		hashString, err := getStagedCommitString(ctx, dbData)
+		hashString := dbData.Rsr.StagedHash().String()
 		if err != nil {
 			return 1, err
 		}

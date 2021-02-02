@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -172,7 +173,6 @@ func CreateBranchWithStartPt(ctx context.Context, dbData env.DbData, newBranch, 
 
 	return nil
 }
-
 
 func createBranch(ctx context.Context, DbData env.DbData, newBranch, startingPoint string, force bool) error {
 	newRef := ref.NewBranchRef(newBranch)

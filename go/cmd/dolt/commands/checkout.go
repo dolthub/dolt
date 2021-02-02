@@ -150,9 +150,8 @@ func checkoutRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, name string) e
 func checkoutNewBranchFromStartPt(ctx context.Context, dEnv *env.DoltEnv, newBranch, startPt string) errhand.VerboseError {
 	err := actions.CreateBranchWithStartPt(ctx, dEnv.DbData(), newBranch, startPt, false)
 
-	// TODO: Is this the right syntax.
 	if err != nil {
-		return errhand.BuildDError("Error creating new branch").AddCause(err).Build()
+		return errhand.BuildDError("fatal: Unexpected error checking out branch %s", newBranch).AddCause(err).Build()
 	}
 
 	return checkoutBranch(ctx, dEnv, newBranch)

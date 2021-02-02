@@ -17,15 +17,17 @@ package dfunctions
 import (
 	"errors"
 	"fmt"
+	"strings"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression"
-	"strings"
 )
 
 const DoltCheckoutFuncName = "dolt_checkout"
@@ -105,7 +107,7 @@ func (d DoltCheckoutFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, erro
 
 	err = checkoutTables(ctx, dbData, tbls)
 
-	if err != nil  && apr.NArg() == 1  {
+	if err != nil && apr.NArg() == 1 {
 		err = checkoutRemoteBranch(ctx, dbData, name)
 	}
 
@@ -157,7 +159,6 @@ func checkoutBranch(ctx *sql.Context, dbData env.DbData, branchName string) erro
 		}
 	}
 
-
 	return updateHeadAndWorkingSessionVars(ctx, dbData)
 }
 
@@ -189,10 +190,7 @@ func updateHeadAndWorkingSessionVars(ctx *sql.Context, dbData env.DbData) error 
 		return err
 	}
 
-	workingHash, err := getWorkingCommitString(ctx, dbData)
-	if err != nil {
-		return err
-	}
+	workingHash := dbData.Rsr.WorkingHash().String()
 
 	return setSessionRootExplicit(ctx, workingHash, sqle.WorkingKeySuffix)
 }
@@ -206,38 +204,6 @@ func getHeadCommitString(ctx *sql.Context, dbData env.DbData) (string, error) {
 	}
 
 	hash, err := cm.HashOf()
-
-	if err != nil {
-		return "", err
-	}
-
-	return hash.String(), nil
-}
-
-func getWorkingCommitString(ctx *sql.Context, dbData env.DbData) (string, error) {
-	working, err := env.WorkingRoot(ctx, dbData.Ddb, dbData.Rsr)
-
-	if err != nil {
-		return "", err
-	}
-
-	hash, err := working.HashOf()
-
-	if err != nil {
-		return "", err
-	}
-
-	return hash.String(), nil
-}
-
-func getStagedCommitString(ctx *sql.Context, dbData env.DbData) (string, error) {
-	staged, err := env.StagedRoot(ctx, dbData.Ddb, dbData.Rsr)
-
-	if err != nil {
-		return "", err
-	}
-
-	hash, err := staged.HashOf()
 
 	if err != nil {
 		return "", err
