@@ -102,11 +102,13 @@ func resetHardTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgP
 	return newHead, nil
 }
 
-func ResetHardTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, workingRoot, stagedRoot, headRoot *doltdb.RootValue) error {
+// ResetHardTables resets the tables in working, staged, and head based on the given parameters. Returns the commit hash
+// if head is updated.
+func ResetHardTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, workingRoot, stagedRoot, headRoot *doltdb.RootValue) (string, error) {
 	newHead, err := resetHardTables(ctx, dbData, apr, workingRoot, stagedRoot, headRoot)
 
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	ddb := dbData.Ddb
@@ -114,11 +116,18 @@ func ResetHardTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgP
 
 	if newHead != nil {
 		if err := ddb.SetHeadToCommit(ctx, rsr.CWBHeadRef(), newHead); err != nil {
-			return err
+			return "", err
 		}
+
+		h, err := newHead.HashOf()
+		if err != nil {
+			return "", err
+		}
+
+		return h.String(), nil
 	}
 
-	return nil
+	return "", nil
 }
 
 func ResetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, workingRoot, stagedRoot, headRoot *doltdb.RootValue) error {

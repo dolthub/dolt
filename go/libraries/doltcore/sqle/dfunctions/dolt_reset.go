@@ -68,7 +68,29 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	}
 
 	if apr.Contains(cli.HardResetParam) {
-		err = actions.ResetHardTables(ctx, dbData, apr, working, staged, head)
+		h, err := actions.ResetHardTables(ctx, dbData, apr, working, staged, head)
+		if err != nil {
+			return 1, err
+		}
+
+		// In this case we preserve untracked tables.
+		if h == "" {
+			headHash, err := dbData.Rsr.CWBHeadHash(ctx)
+			if err != nil {
+				return 1, err
+			}
+
+			h = headHash.String()
+			err = setSessionRootExplicit(ctx, h, sqle.HeadKeySuffix)
+			if err != nil {
+				return 1, err
+			}
+
+			workingHash := dbData.Rsr.WorkingHash()
+			err = setSessionRootExplicit(ctx, workingHash.String(), sqle.WorkingKeySuffix)
+		} else {
+			err = setHeadAndWorkingSessionRoot(ctx, h)
+		}
 	} else {
 		_, err = actions.ResetSoftTables(ctx, dbData, apr, staged, head)
 	}

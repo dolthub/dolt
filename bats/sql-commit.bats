@@ -11,10 +11,6 @@ CREATE TABLE test (
 
 INSERT INTO test VALUES (0),(1),(2);
 SQL
-    dolt sql <<SQL
-DELETE FROM test WHERE pk = 0;
-INSERT INTO test VALUES (3);
-SQL
 }
 
 teardown() {
@@ -115,4 +111,70 @@ teardown() {
     run dolt sql -q "SELECT * from dolt_commits ORDER BY Date DESC;"
     [ $status -eq 0 ]
     [[ "$output" =~ "Commit1" ]] || false
+}
+
+@test "DOLT_COMMIT immediately updates dolt log system table." {
+    run dolt sql << SQL
+SELECT DOLT_COMMIT('-a', '-m', 'Commit1');
+SELECT * FROM dolt_log;
+SQL
+
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Commit1" ]] || false
+}
+
+@test "DOLT_COMMIT immediately updates dolt diff system table." {
+    original_hash=$(get_head_commit)
+    run dolt sql << SQL
+SELECT DOLT_COMMIT('-a', '-m', 'Commit1');
+SELECT from_commit FROM dolt_diff_test WHERE to_commit = hashof('head');
+SQL
+
+    [ $status -eq 0 ]
+    # Represents that the diff table marks a change from the recent commit.
+    [[ "$output" =~ $original_hash ]] || false
+}
+
+@test "DOLT_COMMIT updates session variables" {
+    head_variable=@@dolt_repo_$$_head
+    head_commit=$(get_head_commit)
+    run dolt sql << SQL
+SELECT DOLT_COMMIT('-a', '-m', 'Commit1');
+SELECT $head_variable = HASHOF('head');
+SELECT $head_variable
+SQL
+
+    [ $status -eq 0 ]
+    [[ "$output" =~ "true" ]] || false
+
+    # Verify that the head commit changes.
+    [[ ! "$output" =~ $head_commit ]] || false
+
+    # Verify that head on log matches the new session variable.
+    head_commit=$(get_head_commit)
+    [[ "$output" =~ $head_commit ]] || false
+}
+
+@test "DOLT_COMMIT with unstaged tables correctly gets new head root but does not overwrite working" {
+    head_variable=@@dolt_repo_$$_head
+
+    run dolt sql << SQL
+CREATE TABLE test2 (
+    pk int primary key
+);
+SELECT DOLT_ADD('test');
+SELECT DOLT_COMMIT('-m', 'Commit1');
+SELECT $head_variable = HASHOF('head');
+SQL
+
+    [ $status -eq 0 ]
+    [[ "$output" =~ "true" ]] || false
+
+    run dolt sql -r csv -q "select * from dolt_status;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ 'test2,false,new table' ]] || false
+}
+
+get_head_commit() {
+    dolt log -n 1 | grep -m 1 commit | cut -c 8-
 }
