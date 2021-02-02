@@ -39,6 +39,17 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "On branch master" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    dolt sql -q "INSERT INTO test VALUES (1)"
+
+    # Reset to head results in clean master.
+    run dolt sql -q "SELECT DOLT_RESET('--hard', 'head');"
+    [ "$status" -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
 @test "DOLT_RESET --hard does not ignore staged docs" {
@@ -134,88 +145,112 @@ teardown() {
 }
 
 @test "DOLT_RESET --soft and --hard on the same table" {
-     # Make a change to the table and do a soft reset
-     dolt sql -q "INSERT INTO test VALUES (1)"
+    # Make a change to the table and do a soft reset
+    dolt sql -q "INSERT INTO test VALUES (1)"
 
-     run dolt sql -q "SELECT DOLT_RESET('test')"
-     [ "$status" -eq 0 ]
+    run dolt sql -q "SELECT DOLT_RESET('test')"
+    [ "$status" -eq 0 ]
 
-     run dolt status
-     [ "$status" -eq 0 ]
-     [[ "$output" =~ "Changes not staged for commit:" ]] || false
-     [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
 
-      # Add and unstage the table with a soft reset. Make sure the same data exists.
-     dolt add .
+    # Add and unstage the table with a soft reset. Make sure the same data exists.
+    dolt add .
 
-     run dolt sql -q "SELECT DOLT_RESET('test')"
-     [ "$status" -eq 0 ]
+    run dolt sql -q "SELECT DOLT_RESET('test')"
+    [ "$status" -eq 0 ]
 
-     run dolt status
-     [ "$status" -eq 0 ]
-     [[ "$output" =~ "Changes not staged for commit:" ]] || false
-     [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
 
-     run dolt sql -r csv -q "select * from test"
-     [[ "$output" =~ pk ]] || false
-     [[ "$output" =~ 1  ]] || false
+    run dolt sql -r csv -q "select * from test"
+    [[ "$output" =~ pk ]] || false
+    [[ "$output" =~ 1  ]] || false
 
-     # Do a hard reset and validate the insert was wiped properly
-     run dolt sql -q "SELECT DOLT_RESET('--hard')"
+    # Do a hard reset and validate the insert was wiped properly
+    run dolt sql -q "SELECT DOLT_RESET('--hard')"
 
-     run dolt status
-     [ "$status" -eq 0 ]
-     [[ "$output" =~ "On branch master" ]] || false
-     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
-     run dolt sql -r csv -q "select * from test"
-     [[ "$output" =~ pk ]] || false
-     [[ "$output" != 1  ]] || false
+    run dolt sql -r csv -q "select * from test"
+    [[ "$output" =~ pk ]] || false
+    [[ "$output" != 1  ]] || false
 }
 
-@test "DOLT_RESET --hard properly wipes diff system table immediately" {
-      run dolt sql << SQL
+@test "DOLT_RESET('--hard') doesn't remove newly created table." {
+    dolt sql << SQL
+CREATE TABLE test2 (
+    pk int primary key
+);
+SQL
+    dolt sql -q "SELECT DOLT_RESET('--hard');"
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Untracked files:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*test2) ]] || false
+
+    dolt add .
+    dolt sql -q "SELECT DOLT_RESET('--hard');"
+    run dolt status
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+}
+
+@test "No rows in dolt_diff table after DOLT_RESET('--hard') on committed table." {
+    run dolt sql << SQL
 INSERT INTO test VALUES (1);
 SELECT DOLT_RESET('--hard');
-SELECT count(*) FROM dolt_diff_test;
+SELECT count(*)=0 FROM dolt_diff_test;
 SQL
     [ $status -eq 0 ]
     # Represents that the diff table marks a change from the recent commit.
-    [[ "$output" =~ "0" ]] || false
+    [[ "$output" =~ "true" ]] || false
 }
 
-@test "DOLT_RESET --hard properly wipes status table immediately" {
+@test "No rows in dolt_status table after DOLT_RESET('--hard') on committed table." {
       run dolt sql << SQL
 INSERT INTO test VALUES (1);
 SELECT DOLT_RESET('--hard');
-SELECT count(*) FROM dolt_status;
+SELECT count(*)=0 FROM dolt_status;
 SQL
     [ $status -eq 0 ]
-    [[ "$output" =~ "0" ]] || false
+    [[ "$output" =~ "true" ]] || false
 }
 
 @test "DOLT_RESET --hard properly maintains session variables." {
-      head_variable=@@dolt_repo_$$_head
-      head_hash=$(get_head_commit)
-      run dolt sql << SQL
+    head_variable=@@dolt_repo_$$_head
+    head_hash=$(get_head_commit)
+    run dolt sql << SQL
 INSERT INTO test VALUES (1);
 SELECT DOLT_RESET('--hard');
 SELECT $head_variable;
 SQL
-    echo $output
+
     [ $status -eq 0 ]
-    # Represents that the diff table marks a change from the recent commit.
     [[ "$output" =~ $head_hash ]] || false
 }
 
-@test "DOLT_RESET soft does not wipe status table" {
-        run dolt sql << SQL
+@test "dolt_status still has the same information in the face of a DOLT_RESET" {
+    run dolt sql << SQL
 INSERT INTO test VALUES (1);
-SELECT DOLT_RESET('test');
-SELECT table_name FROM dolt_status;
 SQL
+
+    dolt sql -q "SELECT DOLT_RESET('test');"
+    run dolt sql -q "SELECT * FROM dolt_status;"
+
     [ $status -eq 0 ]
-    [[ "$output" =~ "test" ]] || false
+    [[ "$output" =~ "false" ]] || false
 }
 
 @test "DOLT_RESET soft maintains staged session variable" {

@@ -338,6 +338,18 @@ func (sess *DoltSession) Set(ctx context.Context, key string, typ sql.Type, valu
 	return sess.Session.Set(ctx, key, typ, value)
 }
 
+// SetSessionVarDirectly directly updates sess.Session. This is useful in the context of the sql shell where
+// the working and head session variable may be updated at different times.
+func (sess *DoltSession) SetSessionVarDirectly(ctx context.Context, key string, typ sql.Type, value interface{}) error {
+	valStr, isStr := value.(string)
+
+	if !isStr {
+		return doltdb.ErrInvalidHash
+	}
+
+	return sess.Session.Set(ctx, key, typ, valStr)
+}
+
 func (sess *DoltSession) AddDB(ctx context.Context, db Database) error {
 	name := db.Name()
 	rsr := db.GetStateReader()

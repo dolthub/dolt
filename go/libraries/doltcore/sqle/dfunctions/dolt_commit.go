@@ -29,6 +29,8 @@ import (
 
 const DoltCommitFuncName = "dolt_commit"
 
+var hashType = sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
+
 type DoltCommitFunc struct {
 	children []sql.Expression
 }
@@ -220,7 +222,6 @@ func (d DoltCommitFunc) Children() []sql.Expression {
 func setHeadAndWorkingSessionRoot(ctx *sql.Context, headHashStr string) error {
 	key := ctx.GetCurrentDatabase() + sqle.HeadKeySuffix
 	dsess := sqle.DSessFromSess(ctx.Session)
-	hashType := sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
 
 	return dsess.Set(ctx, key, hashType, headHashStr)
 }
@@ -230,7 +231,6 @@ func setHeadAndWorkingSessionRoot(ctx *sql.Context, headHashStr string) error {
 func setSessionRootExplicit(ctx *sql.Context, hashString string, suffix string) error {
 	key := ctx.GetCurrentDatabase() + suffix
 	dsess := sqle.DSessFromSess(ctx.Session)
-	hashType := sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
 
-	return dsess.Session.Set(ctx, key, hashType, hashString)
+	return dsess.SetSessionVarDirectly(ctx, key, hashType, hashString)
 }

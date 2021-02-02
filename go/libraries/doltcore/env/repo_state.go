@@ -29,6 +29,7 @@ import (
 type RepoStateReader interface {
 	CWBHeadRef() ref.DoltRef
 	CWBHeadSpec() *doltdb.CommitSpec
+	CWBHeadHash(ctx context.Context) (hash.Hash, error)
 	WorkingHash() hash.Hash
 	StagedHash() hash.Hash
 	IsMergeActive() bool
