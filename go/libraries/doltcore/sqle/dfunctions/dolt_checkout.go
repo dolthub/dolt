@@ -175,7 +175,6 @@ func checkoutTables(ctx *sql.Context, dbData env.DbData, tables []string) error 
 		}
 	}
 
-	// TODO: Is this correct? Probably not lol.
 	return updateHeadAndWorkingSessionVars(ctx, dbData)
 }
 
@@ -257,11 +256,9 @@ func (d DoltCheckoutFunc) String() string {
 	return fmt.Sprintf("DOLT_CHECKOUT(%s)", strings.Join(childrenStrings, ","))
 }
 
-// TODO: This might not a branch
 func (d DoltCheckoutFunc) Type() sql.Type {
 	return sql.Int8
 }
-
 
 func (d DoltCheckoutFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
 	return NewDoltCheckoutFunc(children...)
