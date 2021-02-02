@@ -18,76 +18,76 @@ teardown() {
 }
 
 @test "DOLT_CHECKOUT just works" {
-  run dolt sql -q "SELECT DOLT_CHECKOUT('-b', 'feature-branch')"
-  [ $status -eq 0 ]
+    run dolt sql -q "SELECT DOLT_CHECKOUT('-b', 'feature-branch')"
+    [ $status -eq 0 ]
 
-  run dolt sql -q "SELECT DOLT_CHECKOUT('master');"
-  [ $status -eq 0 ]
+    run dolt sql -q "SELECT DOLT_CHECKOUT('master');"
+    [ $status -eq 0 ]
 }
 
 @test "DOLT_CHECKOUT -b throws error on branches that already exist" {
-  run dolt sql -q "SELECT DOLT_CHECKOUT('-b', 'master')"
-  [ $status -eq 1 ]
+    run dolt sql -q "SELECT DOLT_CHECKOUT('-b', 'master')"
+    [ $status -eq 1 ]
 }
 
 @test "DOLT_CHECKOUT throws error on branches that don't exist" {
-  run dolt sql -q "SELECT DOLT_CHECKOUT('feature-branch')"
-  [ $status -eq 1 ]
+    run dolt sql -q "SELECT DOLT_CHECKOUT('feature-branch')"
+    [ $status -eq 1 ]
 }
 
 @test "DOLT_CHECKOUT -b throws error on empty branch" {
-  run dolt sql -q "SELECT DOLT_CHECKOUT('-b', '')"
-  [ $status -eq 1 ]
+    run dolt sql -q "SELECT DOLT_CHECKOUT('-b', '')"
+    [ $status -eq 1 ]
 }
 
 
 @test "DOLT_CHECKOUT properly carries unstaged and staged changes between new and existing branches." {
-  run dolt sql -q "SELECT DOLT_CHECKOUT('-b', 'feature-branch')"
-  [ $status -eq 0 ]
+    run dolt sql -q "SELECT DOLT_CHECKOUT('-b', 'feature-branch')"
+    [ $status -eq 0 ]
 
-  run dolt ls
-  [ $status -eq 0 ]
-  [[ "$output" =~ "test" ]] || false
+    run dolt ls
+    [ $status -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
 
-  run dolt status
-  [ $status -eq 0 ]
-  [[ "$output" =~ "On branch feature-branch" ]] || false
-  [[ "$output" =~ "Untracked files" ]] || false
-  [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*test) ]] || false
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "On branch feature-branch" ]] || false
+    [[ "$output" =~ "Untracked files" ]] || false
+    [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*test) ]] || false
 
-  run dolt add .
-  [ $status -eq 0 ]
+    run dolt add .
+    [ $status -eq 0 ]
 
-  run dolt sql -q "SELECT DOLT_CHECKOUT('-b', 'feature-branch2')"
-  [ $status -eq 0 ]
+    run dolt sql -q "SELECT DOLT_CHECKOUT('-b', 'feature-branch2')"
+    [ $status -eq 0 ]
 
-  run dolt ls
-  [ $status -eq 0 ]
-  [[ "$output" =~ "test" ]] || false
+    run dolt ls
+    [ $status -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
 
-  run dolt status
-  [ $status -eq 0 ]
-  [[ "$output" =~ "Changes to be committed" ]] || false
-  [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*test) ]] || false
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Changes to be committed" ]] || false
+    [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*test) ]] || false
 
-  run dolt sql -q "SELECT DOLT_CHECKOUT('master')"
-  [ $status -eq 0 ]
+    run dolt sql -q "SELECT DOLT_CHECKOUT('master')"
+    [ $status -eq 0 ]
 
-  run dolt ls
-  [ $status -eq 0 ]
-  [[ "$output" =~ "test" ]] || false
+    run dolt ls
+    [ $status -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
 
-  run dolt status
-  [ $status -eq 0 ]
-  [[ "$output" =~ "Changes to be committed" ]] || false
-  [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*test) ]] || false
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Changes to be committed" ]] || false
+    [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*test) ]] || false
 }
 
 @test "DOLT CHECKOUT -b properly maintains session variables" {
-   head_variable=@@dolt_repo_$$_head
-   head_hash=$(get_head_commit)
-   working_variable=@@dolt_repo_$$_working
-   working_hash=$(get_working_hash)
+    head_variable=@@dolt_repo_$$_head
+    head_hash=$(get_head_commit)
+    working_variable=@@dolt_repo_$$_working
+    working_hash=$(get_working_hash)
 
     run dolt sql << SQL
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
@@ -116,31 +116,49 @@ SQL
 }
 
 @test "DOLT_CHECKOUT paired with commit, add, reset, and merge causes no problems." {
-      run dolt sql << SQL
+    run dolt sql << SQL
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 INSERT INTO test VALUES (4);
 SELECT DOLT_ADD('.');
 SELECT DOLT_COMMIT('-m', 'Commit1', '--author', 'John Doe <john@doe.com>');
 SQL
 
-      [ $status -eq 0 ]
+    [ $status -eq 0 ]
 
-      run dolt log -n 1
-      [ $status -eq 0 ]
-      [[ "$output" =~ "Commit1" ]] || false
-      [[ "$output" =~ "John Doe" ]] || false
+    run dolt log -n 1
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Commit1" ]] || false
+    [[ "$output" =~ "John Doe" ]] || false
 
-      dolt log -n 1
-      dolt checkout master
-      run dolt merge feature-branch
+    dolt log -n 1
+    dolt checkout master
+    run dolt merge feature-branch
 
-      [ $status -eq 0 ]
-      run dolt log -n 1
-      [[ "$output" =~ "Commit1" ]] || false
-      [[ "$output" =~ "John Doe" ]] || false
+    [ $status -eq 0 ]
+    run dolt log -n 1
+    [[ "$output" =~ "Commit1" ]] || false
+    [[ "$output" =~ "John Doe" ]] || false
 }
 
-# TODO: test cases for actual files
+@test "DOLT_CHECKOUT works with tables." {
+    run dolt sql << SQL
+SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+SELECT DOLT_COMMIT('-a', '-m', 'commit');
+INSERT INTO test VALUES (4);
+SELECT DOLT_CHECKOUT('test');
+SQL
+
+    [ $status -eq 0 ]
+
+    run dolt sql -q "SELECT * FROM test;" -r csv
+    echo $output
+    [ $status -eq 0 ]
+    [[ "$output" =~ "pk" ]] || false
+    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "2" ]] || false
+    [[ "$output" =~ "2" ]] || false
+    [[ ! "$output" =~ "4" ]] || false
+}
 
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 8-
