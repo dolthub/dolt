@@ -175,6 +175,7 @@ func checkoutTables(ctx *sql.Context, dbData env.DbData, tables []string) error 
 		}
 	}
 
+	// TODO: Is this correct? Probably not lol.
 	return updateHeadAndWorkingSessionVars(ctx, dbData)
 }
 
@@ -222,6 +223,22 @@ func getWorkingCommitString(ctx *sql.Context, dbData env.DbData) (string, error)
 	}
 
 	hash, err := working.HashOf()
+
+	if err != nil {
+		return "", err
+	}
+
+	return hash.String(), nil
+}
+
+func getStagedCommitString(ctx *sql.Context, dbData env.DbData) (string, error) {
+	staged, err := env.StagedRoot(ctx, dbData.Ddb, dbData.Rsr)
+
+	if err != nil {
+		return "", err
+	}
+
+	hash, err := staged.HashOf()
 
 	if err != nil {
 		return "", err

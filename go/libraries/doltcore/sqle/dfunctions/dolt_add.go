@@ -59,6 +59,17 @@ func (d DoltAddFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return 1, fmt.Errorf("Nothing specified, nothing added. Maybe you wanted to say 'dolt add .'?")
 	} else if allFlag || apr.NArg() == 1 && apr.Arg(0) == "." {
 		err = actions.StageAllTables(ctx, dbData)
+		if err != nil {
+			return 1, err
+		}
+
+		hashString, err := getStagedCommitString(ctx, dbData)
+		if err != nil {
+			return 1, err
+		}
+
+		// Sets @@_working to staged.
+		err = setSessionRootExplicit(ctx, hashString, sqle.WorkingKeySuffix)
 	} else {
 		err = actions.StageTables(ctx, dbData, apr.Args())
 	}
