@@ -113,7 +113,7 @@ teardown() {
     [[ "$output" =~ "Commit1" ]] || false
 }
 
-@test "DOLT_COMMIT updates session variables and keeps dolt log fresh" {
+@test "DOLT_COMMIT immediately updates dolt log system table." {
     run dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Commit1');
 SELECT * FROM dolt_log;
@@ -123,15 +123,16 @@ SQL
     [[ "$output" =~ "Commit1" ]] || false
 }
 
-@test "DOLT_COMMIT updates session variables and keeps dolt_diff fresh" {
+@test "DOLT_COMMIT immediately updates dolt diff system table." {
+    original_hash=$(get_head_commit)
     run dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Commit1');
-SELECT count(*) FROM dolt_diff_test WHERE to_commit = hashof('head');
+SELECT from_commit FROM dolt_diff_test WHERE to_commit = hashof('head');
 SQL
 
     [ $status -eq 0 ]
     # Represents that the diff table marks a change from the recent commit.
-    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ $original_hash ]] || false
 }
 
 @test "DOLT_COMMIT updates session variables" {
@@ -163,4 +164,8 @@ SQL
     run dolt sql -r csv -q "select * from dolt_status;"
     [ $status -eq 0 ]
     [[ "$output" =~ 'test2,false,new table' ]] || false
+}
+
+get_head_commit() {
+    dolt log -n 1 | grep -m 1 commit | cut -c 8-
 }

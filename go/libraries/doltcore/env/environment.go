@@ -359,6 +359,17 @@ func (r *repoStateReader) CWBHeadSpec() *doltdb.CommitSpec {
 	return r.dEnv.RepoState.CWBHeadSpec()
 }
 
+func (r *repoStateReader) CWBHeadHash(ctx context.Context) (hash.Hash, error) {
+	ref := r.CWBHeadRef()
+	cm, err := r.dEnv.DoltDB.ResolveRef(ctx, ref)
+
+	if err != nil {
+		return hash.Hash{}, err
+	}
+
+	return cm.HashOf()
+}
+
 func (r *repoStateReader) WorkingHash() hash.Hash {
 	return r.dEnv.RepoState.WorkingHash()
 }

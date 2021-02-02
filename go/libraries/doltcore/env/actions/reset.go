@@ -102,6 +102,8 @@ func resetHardTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgP
 	return newHead, nil
 }
 
+// ResetHardTables resets the tables in working, staged, and head based on the given parameters. Returns the commit hash
+// if head is updated.
 func ResetHardTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, workingRoot, stagedRoot, headRoot *doltdb.RootValue) (string, error) {
 	newHead, err := resetHardTables(ctx, dbData, apr, workingRoot, stagedRoot, headRoot)
 
