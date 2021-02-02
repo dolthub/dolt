@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
-	"github.com/dolthub/vitess/go/vt/proto/query"
 	"strings"
 )
 
@@ -159,8 +158,7 @@ func checkoutBranch(ctx *sql.Context, dbData env.DbData, branchName string) erro
 	}
 
 
-	working, err := env.WorkingRoot(ctx, dbData.Ddb, dbData.Rsr)
-	return setRoot(ctx, working)
+	return updateHeadAndWorkingSessionVars(ctx, dbData)
 }
 
 func checkoutTables(ctx *sql.Context, dbData env.DbData, tables []string) error {
@@ -177,31 +175,59 @@ func checkoutTables(ctx *sql.Context, dbData env.DbData, tables []string) error 
 		}
 	}
 
-	working, err := env.WorkingRoot(ctx, dbData.Ddb, dbData.Rsr)
-	return setRoot(ctx, working)
+	return updateHeadAndWorkingSessionVars(ctx, dbData)
 }
 
-func setRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
-	h, err := newRoot.HashOf()
-
+func updateHeadAndWorkingSessionVars(ctx *sql.Context, dbData env.DbData) error {
+	headHash, err := getHeadCommitString(ctx, dbData)
 	if err != nil {
 		return err
 	}
 
-	hashStr := h.String()
-	key := ctx.GetCurrentDatabase() + sqle.WorkingKeySuffix
-
-	// Refactor from sqle.database.go
-	hashType := sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
-
-	// TODO: Is this correct?
-	err = ctx.Session.Set(ctx, key, hashType, hashStr)
+	err = setSessionRootExplicit(ctx, headHash, sqle.HeadKeySuffix)
 	if err != nil {
 		return err
 	}
 
-	dsess := sqle.DSessFromSess(ctx.Session)
-	return dsess.SetSqlRoot(ctx, hashStr, newRoot)
+	workingHash, err := getWorkingCommitString(ctx, dbData)
+	if err != nil {
+		return err
+	}
+
+	return setSessionRootExplicit(ctx, workingHash, sqle.WorkingKeySuffix)
+}
+
+func getHeadCommitString(ctx *sql.Context, dbData env.DbData) (string, error) {
+	ref := dbData.Rsr.CWBHeadRef()
+	cm, err := dbData.Ddb.ResolveRef(ctx, ref)
+
+	if err != nil {
+		return "", err
+	}
+
+	hash, err := cm.HashOf()
+
+	if err != nil {
+		return "", err
+	}
+
+	return hash.String(), nil
+}
+
+func getWorkingCommitString(ctx *sql.Context, dbData env.DbData) (string, error) {
+	working, err := env.WorkingRoot(ctx, dbData.Ddb, dbData.Rsr)
+
+	if err != nil {
+		return "", err
+	}
+
+	hash, err := working.HashOf()
+
+	if err != nil {
+		return "", err
+	}
+
+	return hash.String(), nil
 }
 
 func (d DoltCheckoutFunc) String() string {
