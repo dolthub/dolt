@@ -204,7 +204,6 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "On branch master" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
-
 }
 
 @test "No rows in dolt_diff table after DOLT_RESET('--hard') on committed table." {
@@ -253,7 +252,7 @@ SQL
     [[ "$output" =~ "false" ]] || false
 }
 
-@test "DOLT_RESET soft maintains staged session variable" {
+@test "DOLT_RESET correctly manipulates the @@_working session variable." {
     working_hash_var=@@dolt_repo_$$_working
     run dolt sql -q "SELECT $working_hash_var"
     working_hash=$output
