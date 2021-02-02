@@ -828,6 +828,35 @@ SQL
     [ "$status" -eq 0 ]
 }
 
+@test "DOLT_CHECKOUT to checkout to a remote branch." {
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt checkout -b test-branch
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt add test
+    dolt commit -m "test commit"
+    dolt push test-remote test-branch
+    cd "dolt-repo-clones"
+    run dolt clone http://localhost:50051/test-org/test-repo
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "cloning http://localhost:50051/test-org/test-repo" ]] || false
+    cd test-repo
+    run dolt sql -q "SELECT DOLT_CHECKOUT('test-branch');"
+    [ "$status" -eq 0 ]
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test commit" ]] || false
+}
+
 create_master_remote_branch() {
     dolt remote add origin http://localhost:50051/test-org/test-repo
     dolt sql -q 'create table test (id int primary key);'
