@@ -285,7 +285,7 @@ func (il *testMergeableIndexLookup) Union(indexLookups ...sql.IndexLookup) (sql.
 }
 func (il *testMergeableIndexLookup) RowIter(ctx *sql.Context) (sql.RowIter, error) {
 	il.finalRanges(il.ranges) // this is where the ranges turn into noms.ReadRanges, so we return the final slice here
-	return il.doltIndexLookup.RowIter(ctx)
+	return il.doltIndexLookup.RowIter(ctx, nil)
 }
 
 // indexTuple converts integers into the appropriate tuple for comparison against ranges

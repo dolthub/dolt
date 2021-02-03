@@ -51,12 +51,9 @@ func TestSingleQuery(t *testing.T) {
 
 	var test enginetest.QueryTest
 	test = enginetest.QueryTest{
-		Query: `SELECT i FROM mytable mt 
-						 WHERE (SELECT i FROM mytable where i = mt.i and i > 2) IS NOT NULL
-						 AND (SELECT i2 FROM othertable where i2 = i) IS NOT NULL
-						 ORDER BY i`,
+		Query: "SELECT s, (select i from mytable mt where sub.i = mt.i) as subi FROM (select i,s,'hello' FROM mytable where s = 'first row') as sub;",
 		Expected: []sql.Row{
-			{3},
+			{"first row", int64(1)},
 		},
 	}
 
@@ -75,7 +72,9 @@ func TestVersionedQueries(t *testing.T) {
 // Tests of choosing the correct execution plan independent of result correctness. Mostly useful for confirming that
 // the right indexes are being used for joining tables.
 func TestQueryPlans(t *testing.T) {
-	// TODO: FIX THESE TESTS!!!
+	// TODO: Fix these. Most of them are broken because Dolt tables implement a slightly different set of interfaces
+	//  than the in-memory go-mysql-server tables, so they produce slightly different query plans. It's possible to
+	//  write a set of query plan tests that are robust in the face of these minor differences, but we haven't yet.
 	skipped := set.NewStrSet([]string{
 		"SELECT * FROM mytable mt INNER JOIN othertable ot ON mt.i = ot.i2 AND mt.i > 2",
 		"SELECT pk,i,f FROM one_pk LEFT JOIN niltable ON pk=i WHERE pk > 1",
@@ -99,6 +98,7 @@ func TestQueryPlans(t *testing.T) {
 		"SELECT pk,pk1,pk2 FROM one_pk,two_pk WHERE one_pk.c1=two_pk.c1 ORDER BY 1,2,3",
 		"SELECT pk,pk1,pk2,one_pk.c1 AS foo, two_pk.c1 AS bar FROM one_pk JOIN two_pk ON one_pk.c1=two_pk.c1 ORDER BY 1,2,3",
 		"SELECT pk,pk1,pk2,one_pk.c1 AS foo,two_pk.c1 AS bar FROM one_pk JOIN two_pk ON one_pk.c1=two_pk.c1 WHERE one_pk.c1=10",
+		"SELECT pk,pk1,pk2 FROM one_pk t1, two_pk t2 WHERE pk=1 AND pk2=1 AND pk1=1 ORDER BY 1,2",
 	})
 
 	tests := make([]enginetest.QueryPlanTest, 0, len(enginetest.PlanTests))
@@ -206,6 +206,7 @@ func TestDropColumn(t *testing.T) {
 }
 
 func TestCreateForeignKeys(t *testing.T) {
+	t.Skipf("Unsupported")
 	enginetest.TestCreateForeignKeys(t, newDoltHarness(t))
 }
 

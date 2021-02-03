@@ -18,6 +18,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -32,9 +34,17 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-const (
-	tableEditorMaxOps = 16384
+var (
+	tableEditorMaxOps uint64 = 16384
 )
+
+func init() {
+	if maxOpsEnv := os.Getenv("DOLT_EDIT_TABLE_BUFFER_ROWS"); maxOpsEnv != "" {
+		if v, err := strconv.ParseUint(maxOpsEnv, 10, 64); err == nil {
+			tableEditorMaxOps = v
+		}
+	}
+}
 
 type TableEditor interface {
 	InsertRow(ctx context.Context, r row.Row) error

@@ -62,7 +62,7 @@ func (idt *IndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, er
 }
 
 func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
-	return idt.indexLookup.RowIter(ctx)
+	return idt.indexLookup.RowIter(ctx, nil)
 }
 
 type rangePartition struct {
@@ -114,6 +114,7 @@ var _ sql.IndexedTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.UpdatableTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.DeletableTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.ReplaceableTable = (*WritableIndexedDoltTable)(nil)
+var _ sql.StatisticsTable = (*WritableIndexedDoltTable)(nil)
 
 type WritableIndexedDoltTable struct {
 	*WritableDoltTable
@@ -131,12 +132,23 @@ func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Part
 	return partitionIndexedTableRows(ctx, t, nil, part)
 }
 
+// NumRows returns the unfiltered count of rows contained in the table
+func (t *WritableIndexedDoltTable) NumRows(ctx *sql.Context) (uint64, error) {
+	m, err := t.table.GetRowData(ctx)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return m.Len(), nil
+}
+
 func partitionIndexedTableRows(ctx *sql.Context, t *WritableIndexedDoltTable, projectedCols []string, part sql.Partition) (sql.RowIter, error) {
 	switch typed := part.(type) {
 	case rangePartition:
 		return t.indexLookup.RowIterForRanges(ctx, []lookup.Range{typed.partitionRange}, projectedCols)
 	case sqlutil.SinglePartition:
-		return t.indexLookup.RowIter(ctx)
+		return t.indexLookup.RowIter(ctx, projectedCols)
 	}
 
 	return nil, errors.New("unknown partition type")

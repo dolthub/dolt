@@ -48,11 +48,14 @@ const (
 
 	// TagRefType is a reference to commit tag
 	TagRefType RefType = "tags"
+
+	// WorkspaceRefType is a reference to a workspace
+	WorkspaceRefType RefType = "workspaces"
 )
 
 // RefTypes is the set of all supported reference types.  External RefTypes can be added to this map in order to add
 // RefTypes for external tooling
-var RefTypes = map[RefType]struct{}{BranchRefType: {}, RemoteRefType: {}, InternalRefType: {}, TagRefType: {}}
+var RefTypes = map[RefType]struct{}{BranchRefType: {}, RemoteRefType: {}, InternalRefType: {}, TagRefType: {}, WorkspaceRefType: {}}
 
 // PrefixForType returns what a reference string for a given type should start with
 func PrefixForType(refType RefType) string {
@@ -143,6 +146,8 @@ func Parse(str string) (DoltRef, error) {
 				return NewInternalRef(str), nil
 			case TagRefType:
 				return NewTagRef(str), nil
+			case WorkspaceRefType:
+				return NewWorkspaceRef(str), nil
 			default:
 				panic("unknown type " + rType)
 			}

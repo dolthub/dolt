@@ -24,6 +24,7 @@ import (
 	"math/rand"
 	"os"
 	"reflect"
+	"runtime"
 	"testing"
 
 	"cloud.google.com/go/storage"
@@ -286,6 +287,9 @@ func testConcurrentCheckAndPuts(t *testing.T, bsTest BlobstoreTest, key string) 
 }
 
 func TestConcurrentCheckAndPuts(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping on windows due to flakiness")
+	}
 	for _, bsTest := range newBlobStoreTests() {
 		t.Run(bsTest.bsType, func(t *testing.T) {
 			if bsTest.rmwIterations*bsTest.rmwConcurrency > 255 {

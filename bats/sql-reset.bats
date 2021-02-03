@@ -147,7 +147,6 @@ teardown() {
 @test "DOLT_RESET --soft and --hard on the same table" {
     # Make a change to the table and do a soft reset
     dolt sql -q "INSERT INTO test VALUES (1)"
-
     run dolt sql -q "SELECT DOLT_RESET('test')"
     [ "$status" -eq 0 ]
 

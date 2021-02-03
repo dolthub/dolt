@@ -203,7 +203,7 @@ func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType str
 	if err != nil {
 		return nil, false, err
 	}
-	rowIter, err := indexLookup.(*doltIndexLookup).RowIter(ctx)
+	rowIter, err := indexLookup.(*doltIndexLookup).RowIter(ctx, nil)
 	if err != nil {
 		return nil, false, err
 	}

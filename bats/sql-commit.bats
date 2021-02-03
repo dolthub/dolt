@@ -137,13 +137,22 @@ SQL
 
 @test "DOLT_COMMIT updates session variables" {
     head_variable=@@dolt_repo_$$_head
+    head_commit=$(get_head_commit)
     run dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Commit1');
 SELECT $head_variable = HASHOF('head');
+SELECT $head_variable
 SQL
 
     [ $status -eq 0 ]
     [[ "$output" =~ "true" ]] || false
+
+    # Verify that the head commit changes.
+    [[ ! "$output" =~ $head_commit ]] || false
+
+    # Verify that head on log matches the new session variable.
+    head_commit=$(get_head_commit)
+    [[ "$output" =~ $head_commit ]] || false
 }
 
 @test "DOLT_COMMIT with unstaged tables correctly gets new head root but does not overwrite working" {

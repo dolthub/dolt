@@ -122,9 +122,9 @@ test_mutation() {
     run dolt sql -q "explain $dml"
     [ "$status" -eq "0" ]
     if ! [ -z "$uses_pk" ]; then
-        [[ "$output" =~ "Indexed table access " ]] || exit 1
+        [[ "$output" =~ "IndexedTableAccess" ]] || exit 1
     else
-        if [[ "$output" =~ "Indexed table access " ]]; then exit 1; fi
+        if [[ "$output" =~ "IndexedTableAccess" ]]; then exit 1; fi
     fi
 }
 
