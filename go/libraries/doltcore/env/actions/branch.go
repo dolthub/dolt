@@ -420,7 +420,6 @@ func RootsWithTable(ctx context.Context, dEnv *env.DoltEnv, table string) (RootT
 	return NewRootTypeSet(rootsWithTable...), nil
 }
 
-
 func IsBranch(ctx context.Context, ddb *doltdb.DoltDB, str string) (bool, error) {
 	return IsBranchOnDB(ctx, ddb, str)
 }

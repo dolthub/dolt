@@ -321,9 +321,11 @@ func createBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	}
 
 	err := actions.CreateBranchWithStartPt(ctx, dEnv.DbData(), newBranch, startPt, apr.Contains(forceFlag))
-	verr := errhand.BuildDError("Error creating new branch").AddCause(err)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.BuildDError("Error creating new branch").AddCause(err).Build(), usage)
+	}
 
-	return HandleVErrAndExitCode(verr.Build(), usage)
+	return HandleVErrAndExitCode(nil, usage)
 }
 
 func HandleVErrAndExitCode(verr errhand.VerboseError, usage cli.UsagePrinter) int {
