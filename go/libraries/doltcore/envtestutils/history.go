@@ -149,7 +149,7 @@ func UpdateTables(t *testing.T, ctx context.Context, root *doltdb.RootValue, tbl
 			indexData, err = tbl.GetIndexData(ctx)
 			require.NoError(t, err)
 		}
-		tbl, err = doltdb.NewTable(ctx, root.VRW(), schVal, rowData, indexData)
+		tbl, err = doltdb.NewTable(ctx, root.VRW(), schVal, rowData, indexData, nil)
 		require.NoError(t, err)
 
 		root, err = root.PutTable(ctx, tblName, tbl)

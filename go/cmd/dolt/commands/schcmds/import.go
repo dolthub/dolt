@@ -317,7 +317,7 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 			}
 		}
 
-		tbl, err = doltdb.NewTable(ctx, root.VRW(), schVal, empty, indexData)
+		tbl, err = doltdb.NewTable(ctx, root.VRW(), schVal, empty, indexData, nil)
 
 		if err != nil {
 			return errhand.BuildDError("error: failed to create table.").AddCause(err).Build()

@@ -1170,6 +1170,13 @@ func newSqlEngine(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, ro
 	engine := sqle.New(c, analyzer.NewBuilder(c).WithParallelism(parallelism).Build(), &sqle.Config{Auth: au})
 	engine.AddDatabase(information_schema.NewInformationSchemaDatabase(engine.Catalog))
 
+	if dbg, ok := os.LookupEnv("DOLT_SQL_DEBUG_LOG"); ok && strings.ToLower(dbg) == "true" {
+		engine.Analyzer.Debug = true
+		if verbose, ok := os.LookupEnv("DOLT_SQL_DEBUG_LOG_VERBOSE"); ok && strings.ToLower(verbose) == "true" {
+			engine.Analyzer.Verbose = true
+		}
+	}
+
 	dsess := dsqle.DSessFromSess(sqlCtx.Session)
 
 	nameToDB := make(map[string]dsqle.Database)

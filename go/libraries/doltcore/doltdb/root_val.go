@@ -725,7 +725,7 @@ func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch s
 		return nil, err
 	}
 
-	tbl, err := NewTable(ctx, root.VRW(), schVal, empty, indexes)
+	tbl, err := NewTable(ctx, root.VRW(), schVal, empty, indexes, nil)
 	if err != nil {
 		return nil, err
 	}

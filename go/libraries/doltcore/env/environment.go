@@ -359,6 +359,17 @@ func (r *repoStateReader) CWBHeadSpec() *doltdb.CommitSpec {
 	return r.dEnv.RepoState.CWBHeadSpec()
 }
 
+func (r *repoStateReader) CWBHeadHash(ctx context.Context) (hash.Hash, error) {
+	ref := r.CWBHeadRef()
+	cm, err := r.dEnv.DoltDB.ResolveRef(ctx, ref)
+
+	if err != nil {
+		return hash.Hash{}, err
+	}
+
+	return cm.HashOf()
+}
+
 func (r *repoStateReader) WorkingHash() hash.Hash {
 	return r.dEnv.RepoState.WorkingHash()
 }
@@ -486,7 +497,7 @@ func (dEnv *DoltEnv) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootV
 }
 
 // todo: move this out of env to actions
-func (dEnv *DoltEnv) PutTableToWorking(ctx context.Context, sch schema.Schema, rows types.Map, indexData types.Map, tableName string) error {
+func (dEnv *DoltEnv) PutTableToWorking(ctx context.Context, sch schema.Schema, rows types.Map, indexData types.Map, tableName string, autoVal types.Value) error {
 	root, err := dEnv.WorkingRoot(ctx)
 
 	if err != nil {
@@ -500,7 +511,7 @@ func (dEnv *DoltEnv) PutTableToWorking(ctx context.Context, sch schema.Schema, r
 		return ErrMarshallingSchema
 	}
 
-	tbl, err := doltdb.NewTable(ctx, vrw, schVal, rows, indexData)
+	tbl, err := doltdb.NewTable(ctx, vrw, schVal, rows, indexData, autoVal)
 
 	if err != nil {
 		return err
