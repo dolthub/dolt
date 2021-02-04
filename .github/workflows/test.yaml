@@ -13,7 +13,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Update dolt version
-        run: sed -i 's/Version =.*/Version = "$VERSION"/' "$FILE"
+        run: sed -i 's/Version =.*/Version = "'"$VERSION"'"/' "$FILE"
         env:
           FILE: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
           VERSION: ${{ github.event.inputs.version }}
