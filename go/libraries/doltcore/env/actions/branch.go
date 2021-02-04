@@ -209,79 +209,122 @@ func createBranch(ctx context.Context, dbData env.DbData, newBranch, startingPoi
 	return CreateBranchOnDB(ctx, dbData.Ddb, newBranch, startingPoint, force, dbData.Rsr.CWBHeadRef())
 }
 
-func CheckoutBranch(ctx context.Context, dbData env.DbData, brName string) error {
-	dref := ref.NewBranchRef(brName)
-
+func getCheckoutHashes(ctx context.Context, dbData env.DbData, dref ref.DoltRef, brName string) (wrkHash hash.Hash, stgHash hash.Hash, err error) {
 	hasRef, err := dbData.Ddb.HasRef(ctx, dref)
 	if !hasRef {
-		return doltdb.ErrBranchNotFound
+		return hash.Hash{}, hash.Hash{}, doltdb.ErrBranchNotFound
 	}
 
 	if ref.Equals(dbData.Rsr.CWBHeadRef(), dref) {
-		return doltdb.ErrAlreadyOnBranch
+		return hash.Hash{}, hash.Hash{}, doltdb.ErrAlreadyOnBranch
 	}
 
 	currRoots, err := getRoots(ctx, dbData.Ddb, dbData.Rsr, HeadRoot, WorkingRoot, StagedRoot)
 
 	if err != nil {
-		return err
+		return hash.Hash{}, hash.Hash{}, err
 	}
 
 	cs, err := doltdb.NewCommitSpec(brName)
 
 	if err != nil {
-		return RootValueUnreadable{HeadRoot, err}
+		return hash.Hash{}, hash.Hash{}, RootValueUnreadable{HeadRoot, err}
 	}
 
 	cm, err := dbData.Ddb.Resolve(ctx, cs, nil)
 
 	if err != nil {
-		return RootValueUnreadable{HeadRoot, err}
+		return hash.Hash{}, hash.Hash{}, RootValueUnreadable{HeadRoot, err}
 	}
 
 	newRoot, err := cm.GetRootValue()
 
 	if err != nil {
-		return err
+		return hash.Hash{}, hash.Hash{}, err
 	}
 
 	ssMap, err := newRoot.GetSuperSchemaMap(ctx)
 
 	if err != nil {
-		return err
+		return hash.Hash{}, hash.Hash{}, err
 	}
 
 	fkMap, err := newRoot.GetForeignKeyCollectionMap(ctx)
 
 	if err != nil {
-		return err
+		return hash.Hash{}, hash.Hash{}, err
 	}
 
 	conflicts := set.NewStrSet([]string{})
 	wrkTblHashes, err := tblHashesForCO(ctx, currRoots[HeadRoot], newRoot, currRoots[WorkingRoot], conflicts)
 
 	if err != nil {
-		return err
+		return hash.Hash{}, hash.Hash{}, err
 	}
 
 	stgTblHashes, err := tblHashesForCO(ctx, currRoots[HeadRoot], newRoot, currRoots[StagedRoot], conflicts)
 
 	if err != nil {
-		return err
+		return hash.Hash{}, hash.Hash{}, err
 	}
 
 	if conflicts.Size() > 0 {
-		return CheckoutWouldOverwrite{conflicts.AsSlice()}
+		return hash.Hash{}, hash.Hash{}, CheckoutWouldOverwrite{conflicts.AsSlice()}
 	}
 
-	wrkHash, err := writeRoot(ctx, dbData.Ddb, wrkTblHashes, ssMap, fkMap)
+	wrkHash, err = writeRoot(ctx, dbData.Ddb, wrkTblHashes, ssMap, fkMap)
 
+	if err != nil {
+		return hash.Hash{}, hash.Hash{}, err
+	}
+
+	stgHash, err = writeRoot(ctx, dbData.Ddb, stgTblHashes, ssMap, fkMap)
+
+	if err != nil {
+		return hash.Hash{}, hash.Hash{}, err
+	}
+
+	return wrkHash, stgHash, nil
+}
+
+func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error {
+	dbData := dEnv.DbData()
+	dref := ref.NewBranchRef(brName)
+
+	wrkHash, stgHash, err := getCheckoutHashes(ctx, dbData, dref, brName)
 	if err != nil {
 		return err
 	}
 
-	stgHash, err := writeRoot(ctx, dbData.Ddb, stgTblHashes, ssMap, fkMap)
+	unstagedDocs, err := GetUnstagedDocs(ctx, dbData)
+	if err != nil {
+		return err
+	}
 
+	err = dbData.Rsw.SetWorkingHash(wrkHash)
+	if err != nil {
+		return err
+	}
+
+	err = dbData.Rsw.SetStagedHash(stgHash)
+	if err != nil {
+		return err
+	}
+
+	err = dbData.Rsw.SetCWBHeadRef(ref.MarshalableRef{Ref: dref})
+	if err != nil {
+		return err
+	}
+
+	return SaveDocsFromWorkingExcludingFSChanges(ctx, dEnv, unstagedDocs)
+}
+
+// CheckoutBranchWithoutDocs checkouts a branch without considering any working changes to the local docs. Used
+// with DOLT_CHECKOUT.
+func CheckoutBranchWithoutDocs(ctx context.Context, dbData env.DbData, brName string) error {
+	dref := ref.NewBranchRef(brName)
+
+	wrkHash, stgHash, err := getCheckoutHashes(ctx, dbData, dref, brName)
 	if err != nil {
 		return err
 	}

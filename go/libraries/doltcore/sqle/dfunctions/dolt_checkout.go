@@ -142,7 +142,7 @@ func checkoutNewBranch(ctx *sql.Context, dbData env.DbData, newBranch, startPt s
 }
 
 func checkoutBranch(ctx *sql.Context, dbData env.DbData, branchName string) error {
-	err := actions.CheckoutBranch(ctx, dbData, branchName)
+	err := actions.CheckoutBranchWithoutDocs(ctx, dbData, branchName)
 
 	if err != nil {
 		if err == doltdb.ErrBranchNotFound {
