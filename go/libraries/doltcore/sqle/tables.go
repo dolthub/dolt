@@ -384,7 +384,8 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	newTable, err := doltdb.NewTable(ctx, t.table.ValueReadWriter(), schVal, empty, empty)
+	// truncate table resets auto-increment value
+	newTable, err := doltdb.NewTable(ctx, t.table.ValueReadWriter(), schVal, empty, empty, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -1208,19 +1209,7 @@ func createIndexForTable(
 	}
 
 	// update the table schema with the new index
-	newSchemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, table.ValueReadWriter(), sch)
-	if err != nil {
-		return nil, err
-	}
-	tableRowData, err := table.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-	indexData, err := table.GetIndexData(ctx)
-	if err != nil {
-		return nil, err
-	}
-	newTable, err := doltdb.NewTable(ctx, table.ValueReadWriter(), newSchemaVal, tableRowData, indexData)
+	newTable, err := table.UpdateSchema(ctx, sch)
 	if err != nil {
 		return nil, err
 	}

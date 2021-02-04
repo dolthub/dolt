@@ -59,6 +59,17 @@ func IsKeyless(sch Schema) bool {
 		sch.GetAllCols().Size() != 0
 }
 
+func HasAutoIncrement(sch Schema) (ok bool) {
+	_ = sch.GetAllCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
+		if col.AutoIncrement {
+			ok = true
+			stop = true
+		}
+		return
+	})
+	return
+}
+
 // TODO: this function never returns an error
 // SchemasAreEqual tests equality of two schemas.
 func SchemasAreEqual(sch1, sch2 Schema) (bool, error) {

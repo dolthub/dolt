@@ -294,3 +294,28 @@ SQL
     [[ "$output" =~ "30,30" ]] || false
     [[ "$output" =~ "31,31" ]] || false
 }
+
+@test "adding index to AUTO_INCREMENT doesn't reset sequence" {
+    dolt sql <<SQL
+CREATE TABLE index_test (
+    pk int PRIMARY KEY AUTO_INCREMENT,
+    c0 int
+);
+
+INSERT INTO index_test (c0) VALUES (1),(2),(3);
+
+ALTER TABLE index_test ADD INDEX (c0);
+
+INSERT INTO index_test (c0) VALUES (4),(5),(6);
+SQL
+
+    run dolt sql -q "select * from index_test" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "pk,c0" ]] || false
+    [[ "${lines[1]}" =~ "1,1" ]] || false
+    [[ "${lines[2]}" =~ "2,2" ]] || false
+    [[ "${lines[3]}" =~ "3,3" ]] || false
+    [[ "${lines[4]}" =~ "4,4" ]] || false
+    [[ "${lines[5]}" =~ "5,5" ]] || false
+    [[ "${lines[6]}" =~ "6,6" ]] || false
+}
