@@ -322,7 +322,7 @@ func createBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 
 	err := actions.CreateBranchWithStartPt(ctx, dEnv.DbData(), newBranch, startPt, apr.Contains(forceFlag))
 	if err != nil {
-		return HandleVErrAndExitCode(errhand.BuildDError("Error creating new branch").AddCause(err).Build(), usage)
+		return HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), usage)
 	}
 
 	return HandleVErrAndExitCode(nil, usage)
