@@ -352,32 +352,8 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 	te.tea.affectedKeys[keyHash] = key
 
 	if te.hasAutoInc {
-		tupItr, err := key.Iterator()
-
-		if err != nil {
-			return err
-		}
-
-		var insertVal types.Value
-		var ok bool
-		for !ok && tupItr.HasMore() {
-			_, tag, err := tupItr.NextUint64()
-
-			if err != nil {
-				return err
-			}
-
-			if tag == te.autoIncCol.Tag {
-				_, insertVal, err = tupItr.Next()
-
-				if err != nil {
-					return err
-				}
-
-				ok = true
-			}
-		}
-
+		// autoIncVal = max(autoIncVal, insertVal)
+		insertVal, ok := tagToVal[te.autoIncCol.Tag]
 		if ok {
 			less, err := te.autoIncVal.Less(te.nbf, insertVal)
 			if err != nil {
