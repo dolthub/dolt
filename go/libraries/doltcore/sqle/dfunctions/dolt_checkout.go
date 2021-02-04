@@ -160,7 +160,12 @@ func checkoutBranch(ctx *sql.Context, dbData env.DbData, branchName string) erro
 			rt := actions.GetUnreachableRootType(err)
 			return fmt.Errorf("error: unable to read the %s", rt.String())
 		} else if actions.IsCheckoutWouldOverwrite(err) {
-			return errors.New("error: Your local changes to the following tables would be overwritten by checkout")
+			tbls := actions.CheckoutWouldOverwriteTables(err)
+			msg := "error: Your local changes to the following tables would be overwritten by checkout: \n"
+			for _, tbl := range tbls {
+				msg = msg + tbl + "\n"
+			}
+			return errors.New(msg)
 		} else if err == doltdb.ErrAlreadyOnBranch {
 			return fmt.Errorf("Already on branch '%s'", branchName)
 		} else {
