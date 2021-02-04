@@ -302,11 +302,11 @@ func (ste *sessionedTableEditor) reduceRowAndConvert(nbf *types.NomsBinFormat, o
 	return tpl, false, nil
 }
 
-// reduceRowAndConvert takes in a row and returns a Tuple containing only the values from the tags given. The returned
-// items have tags from newTags, while the tags from dRow are expected to match originalTags. Both parameter slices are
-// assumed to have equivalent ordering and length. If the key contains any nulls, then we return true to indicate that
-// we do not propagate an ON DELETE/UPDATE.
-func (ste *sessionedTableEditor) reduceRowAndConvert2(nbf *types.NomsBinFormat, originalTags []uint64, newTags []uint64, tagToVal map[uint64]types.Value) (types.Tuple, bool, error) {
+// tupleforTags takes in a map of tags to values and returns a Tuple containing only the values from the tags
+// given. The returned items have tags from newTags, while the tags from dRow are expected to match originalTags. Both
+// parameter slices are assumed to have equivalent ordering and length. If the key contains any nulls, then we return
+// true to indicate that we do not propagate an ON DELETE/UPDATE. (functionality matches reduceRowAndConvert)
+func (ste *sessionedTableEditor) tupleforTags(nbf *types.NomsBinFormat, originalTags []uint64, newTags []uint64, tagToVal map[uint64]types.Value) (types.Tuple, bool, error) {
 	keyVals := make([]types.Value, len(originalTags)*2)
 	for i, colTag := range originalTags {
 		val, ok := tagToVal[colTag]
@@ -317,10 +317,12 @@ func (ste *sessionedTableEditor) reduceRowAndConvert2(nbf *types.NomsBinFormat, 
 		keyVals[2*i] = types.Uint(newTag)
 		keyVals[2*i+1] = val
 	}
+
 	tpl, err := types.NewTuple(nbf, keyVals...)
 	if err != nil {
-		return types.EmptyTuple(nbf), false, err
+		return types.Tuple{}, false, err
 	}
+
 	return tpl, false, nil
 }
 
@@ -345,7 +347,7 @@ func (ste *sessionedTableEditor) validateKeyValForInsert(ctx context.Context, ke
 		return nil
 	}
 	for _, foreignKey := range ste.referencedTables {
-		indexKey, hasNulls, err := ste.reduceRowAndConvert2(ste.tableEditor.Format(), foreignKey.TableColumns, foreignKey.ReferencedTableColumns, tagToVal)
+		indexKey, hasNulls, err := ste.tupleforTags(ste.tableEditor.Format(), foreignKey.TableColumns, foreignKey.ReferencedTableColumns, tagToVal)
 		if err != nil {
 			return err
 		}

@@ -313,6 +313,7 @@ func GetIndexedRows(ctx context.Context, te TableEditor, key types.Tuple, indexN
 	return rows, nil
 }
 
+// TODO - Deduplicate this code.  It is largely a copy of insert
 func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value) error {
 	defer te.autoFlush()
 	te.flushMutex.RLock()

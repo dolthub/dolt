@@ -16,6 +16,7 @@ package sqlutil
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -53,23 +54,22 @@ func SqlRowToDoltRow(ctx context.Context, vrw types.ValueReadWriter, r sql.Row, 
 	return pkDoltRowFromSqlRow(ctx, vrw, r, doltSchema)
 }
 
-func DoltKeyAndValueFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, r sql.Row, doltSchema schema.Schema) (types.Tuple, types.Tuple, error) {
-	key, val, _, err := DoltKeyValueAndMappingFromSqlRow(ctx, vrw, r, doltSchema)
-	return key, val, err
-}
-
+// DoltKeyValueAndMappingFromSqlRow converts a sql.Row to key and value tuples and keeps a mapping from tag to value that
+// can be used to speed up index key generation for foreign key checks.
 func DoltKeyValueAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, r sql.Row, doltSchema schema.Schema) (types.Tuple, types.Tuple, map[uint64]types.Value, error) {
 	allCols := doltSchema.GetAllCols()
-	pkCols := doltSchema.GetPKCols()
+	nonPKCols := doltSchema.GetNonPKCols()
 
 	numCols := allCols.Size()
 	vals := make([]types.Value, numCols*2)
 	tagToVal := make(map[uint64]types.Value, numCols)
 
-	numPKVals := pkCols.Size() * 2
-	pkVals := vals[:0]
-	nonPKVals := vals[numPKVals:numPKVals]
+	numNonPKVals := nonPKCols.Size() * 2
+	nonPKVals := vals[:numNonPKVals]
+	pkVals := vals[numNonPKVals:]
 
+	// values for the pk tuple are in schema order
+	pkIdx := 0
 	for i := 0; i < numCols; i++ {
 		schCol := allCols.GetAtIndex(i)
 		val := r[i]
@@ -77,26 +77,45 @@ func DoltKeyValueAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWr
 			if !schCol.IsNullable() {
 				return types.Tuple{}, types.Tuple{}, nil, fmt.Errorf("column <%v> received nil but is non-nullable", schCol.Name)
 			}
-
 			continue
 		}
 
 		tag := schCol.Tag
-		nomsTag := types.Uint(tag)
 		nomsVal, err := schCol.TypeInfo.ConvertValueToNomsValue(ctx, vrw, val)
 
 		if err != nil {
 			return types.Tuple{}, types.Tuple{}, nil, err
 		}
 
-		if schCol.IsPartOfPK {
-			pkVals = append(pkVals, nomsTag, nomsVal)
-		} else {
-			nonPKVals = append(nonPKVals, nomsTag, nomsVal)
-		}
-
 		tagToVal[tag] = nomsVal
+
+		if schCol.IsPartOfPK {
+			pkVals[pkIdx] = types.Uint(tag)
+			pkVals[pkIdx+1] = nomsVal
+			pkIdx += 2
+		}
 	}
+
+	// no nulls in keys
+	if pkIdx != len(pkVals) {
+		return types.Tuple{}, types.Tuple{}, nil, errors.New("not all pk columns have a value")
+	}
+
+	// non pk values in tag sorted order
+	nonPKIdx := 0
+	nonPKTags := len(tagToVal) - (pkIdx / 2)
+	for i := 0; i < len(nonPKCols.SortedTags) && nonPKIdx < (nonPKTags*2); i++ {
+		tag := nonPKCols.SortedTags[i]
+		val, ok := tagToVal[tag]
+
+		if ok {
+			nonPKVals[nonPKIdx] = types.Uint(tag)
+			nonPKVals[nonPKIdx+1] = val
+			nonPKIdx += 2
+		}
+	}
+
+	nonPKVals = nonPKVals[:nonPKIdx]
 
 	nbf := vrw.Format()
 	keyTuple, err := types.NewTuple(nbf, pkVals...)
