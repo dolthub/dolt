@@ -55,7 +55,7 @@ type Table struct {
 }
 
 // NewTable creates a noms Struct which stores row data, index data, and schema.
-func NewTable(ctx context.Context, vrw types.ValueReadWriter, schemaVal types.Value, rowData types.Map, indexData types.Map, autoVal types.Value) (*Table, error) {
+func NewTable(ctx context.Context, vrw types.ValueReadWriter, schemaVal types.Value, rowData types.Map, indexData types.Map, autoIncVal types.Value) (*Table, error) {
 	schemaRef, err := WriteValAndGetRef(ctx, vrw, schemaVal)
 	if err != nil {
 		return nil, err
@@ -77,8 +77,8 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, schemaVal types.Va
 		indexesKey:   indexesRef,
 	}
 
-	if autoVal != nil {
-		sd[autoIncrementKey] = autoVal
+	if autoIncVal != nil {
+		sd[autoIncrementKey] = autoIncVal
 	}
 
 	tableStruct, err := types.NewStruct(vrw.Format(), tableStructName, sd)

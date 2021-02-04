@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -58,23 +57,14 @@ func ModifyColumn(
 		return nil, err
 	}
 
-	updatedTable, err := updateTableWithModifiedColumn(ctx, tbl, newSchema, newCol)
+	updatedTable, err := tbl.UpdateSchema(ctx, newSchema)
 	if err != nil {
 		return nil, err
 	}
 
-	if !newCol.TypeInfo.Equals(existingCol.TypeInfo) ||
-		newCol.IsNullable() != existingCol.IsNullable() {
-		for _, index := range sch.Indexes().IndexesWithTag(existingCol.Tag) {
-			rebuiltIndexData, err := editor.RebuildIndex(ctx, updatedTable, index.Name())
-			if err != nil {
-				return nil, err
-			}
-			updatedTable, err = updatedTable.SetIndexRowData(ctx, index.Name(), rebuiltIndexData)
-			if err != nil {
-				return nil, err
-			}
-		}
+	updatedTable, err = handleNotNullConstraint(ctx, updatedTable, newSchema, existingCol, newCol)
+	if err != nil {
+		return nil, err
 	}
 
 	return updatedTable, nil
@@ -109,54 +99,47 @@ func validateModifyColumn(ctx context.Context, tbl *doltdb.Table, existingCol sc
 	return nil
 }
 
-// updateTableWithModifiedColumn updates the existing table with the new schema. No data is changed.
-// TODO: type changes
-func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, newSchema schema.Schema, modifiedCol schema.Column) (*doltdb.Table, error) {
-	vrw := tbl.ValueReadWriter()
-	newSchemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, newSchema)
-	if err != nil {
-		return nil, err
-	}
-
+// handleNotNullConstraint validates that rows do not violate a NOT NULL constraint, if one exists, and
+// rebuild indexes on the modified column if necessary
+func handleNotNullConstraint(ctx context.Context, tbl *doltdb.Table, newSchema schema.Schema, oldCol, newCol schema.Column) (*doltdb.Table, error) {
 	rowData, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	// Iterate over the rows in the table, checking for nils (illegal if the column is declared not null)
-	if !modifiedCol.IsNullable() {
+	if !newCol.IsNullable() {
 		err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-			row, err := row.FromNoms(newSchema, key.(types.Tuple), value.(types.Tuple))
+			r, err := row.FromNoms(newSchema, key.(types.Tuple), value.(types.Tuple))
 			if err != nil {
 				return false, err
 			}
-			val, ok := row.GetColVal(modifiedCol.Tag)
-			if (!ok || val == nil) && !modifiedCol.IsNullable() {
+			val, ok := r.GetColVal(newCol.Tag)
+			if (!ok || val == nil) && !newCol.IsNullable() {
 				return true, fmt.Errorf("cannot change column to NOT NULL when one or more values is NULL")
 			}
 
 			return false, nil
 		})
+	}
 
-		if err != nil {
-			return nil, err
+	if !newCol.TypeInfo.Equals(oldCol.TypeInfo) ||
+		newCol.IsNullable() != oldCol.IsNullable() {
+
+		for _, index := range newSchema.Indexes().IndexesWithTag(oldCol.Tag) {
+			rebuiltIndexData, err := editor.RebuildIndex(ctx, tbl, index.Name())
+			if err != nil {
+				return nil, err
+			}
+
+			tbl, err = tbl.SetIndexRowData(ctx, index.Name(), rebuiltIndexData)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
-	indexData, err := tbl.GetIndexData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var autoVal types.Value
-	if schema.HasAutoIncrement(newSchema) {
-		autoVal, err = tbl.GetAutoIncrementValue(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return doltdb.NewTable(ctx, vrw, newSchemaVal, rowData, indexData, autoVal)
+	return tbl, err
 }
 
 // replaceColumnInSchema replaces the column with the name given with its new definition, optionally reordering it.

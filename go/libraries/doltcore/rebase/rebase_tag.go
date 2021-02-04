@@ -362,7 +362,9 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 			return nil, err
 		}
 
-		var autoVal types.Value = nil // migration predates secondary indexes
+		// migration predates AUTO_INCREMENT support
+		// so we don't need to copy the value here
+		var autoVal types.Value = nil
 
 		rebasedTable, err := doltdb.NewTable(ctx, rebasedParentRoot.VRW(), rebasedSchVal, rebasedRows, emptyMap, autoVal)
 

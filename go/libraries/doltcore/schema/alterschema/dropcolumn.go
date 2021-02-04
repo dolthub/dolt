@@ -19,11 +19,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/store/types"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 )
 
 var ErrKeylessAltTbl = errors.New("schema alterations not supported for keyless tables")
@@ -34,19 +31,17 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 		panic("invalid parameters")
 	}
 
-	tblSch, err := tbl.GetSchema(ctx)
+	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	if schema.IsKeyless(tblSch) {
+	if schema.IsKeyless(sch) {
 		return nil, ErrKeylessAltTbl
 	}
 
-	allCols := tblSch.GetAllCols()
-
 	var dropTag uint64
-	if col, ok := allCols.GetByName(colName); !ok {
+	if col, ok := sch.GetAllCols().GetByName(colName); !ok {
 		return nil, schema.ErrColNotFound
 	} else if col.IsPartOfPK {
 		return nil, errors.New("Cannot drop column in primary key")
@@ -67,8 +62,8 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 		}
 	}
 
-	for _, index := range tblSch.Indexes().IndexesWithColumn(colName) {
-		_, err = tblSch.Indexes().RemoveIndex(index.Name())
+	for _, index := range sch.Indexes().IndexesWithColumn(colName) {
+		_, err = sch.Indexes().RemoveIndex(index.Name())
 		if err != nil {
 			return nil, err
 		}
@@ -79,7 +74,7 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 	}
 
 	cols := make([]schema.Column, 0)
-	err = allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+	err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.Name != colName {
 			cols = append(cols, col)
 		}
@@ -95,35 +90,7 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 	if err != nil {
 		return nil, err
 	}
-	newSch.Indexes().AddIndex(tblSch.Indexes().AllIndexes()...)
+	newSch.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
 
-	vrw := tbl.ValueReadWriter()
-	schemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, newSch)
-
-	if err != nil {
-		return nil, err
-	}
-
-	rd, err := tbl.GetRowData(ctx)
-
-	indexData, err := tbl.GetIndexData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var autoVal types.Value
-	if schema.HasAutoIncrement(newSch) {
-		autoVal, err = tbl.GetAutoIncrementValue(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	newTable, err := doltdb.NewTable(ctx, vrw, schemaVal, rd, indexData, autoVal)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return newTable, nil
+	return tbl.UpdateSchema(ctx, newSch)
 }

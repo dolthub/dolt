@@ -295,32 +295,27 @@ SQL
     [[ "$output" =~ "31,31" ]] || false
 }
 
-@test "AUTO_INCREMENT with parent-child FK" {
+@test "adding index to AUTO_INCREMENT doesn't reset sequence" {
     dolt sql <<SQL
-CREATE TABLE parent (
+CREATE TABLE index_test (
     pk int PRIMARY KEY AUTO_INCREMENT,
     c0 int
 );
 
-INSERT INTO parent (c0) VALUES (1),(2),(3);
+INSERT INTO index_test (c0) VALUES (1),(2),(3);
 
-CREATE TABLE child (
-    pk int PRIMARY KEY,
-    c0 int,
-    FOREIGN KEY (pk)
-    REFERENCES parent(pk)
-);
+ALTER TABLE index_test ADD INDEX (c0);
 
-INSERT INTO parent (c0) VALUES (4),(5),(6);
+INSERT INTO index_test (c0) VALUES (4),(5),(6);
 SQL
 
-    run dolt sql -q "select * from parent" -r csv
+    run dolt sql -q "select * from index_test" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "pk,c0" ]] || false
-    [[ "$output" =~ "1,1" ]] || false
-    [[ "$output" =~ "2,2" ]] || false
-    [[ "$output" =~ "3,3" ]] || false
-    [[ "$output" =~ "4,4" ]] || false
-    [[ "$output" =~ "5,5" ]] || false
-    [[ "$output" =~ "6,6" ]] || false
+    [[ "${lines[0]}" =~ "pk,c0" ]] || false
+    [[ "${lines[1]}" =~ "1,1" ]] || false
+    [[ "${lines[2]}" =~ "2,2" ]] || false
+    [[ "${lines[3]}" =~ "3,3" ]] || false
+    [[ "${lines[4]}" =~ "4,4" ]] || false
+    [[ "${lines[5]}" =~ "5,5" ]] || false
+    [[ "${lines[6]}" =~ "6,6" ]] || false
 }

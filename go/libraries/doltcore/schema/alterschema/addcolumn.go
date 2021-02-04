@@ -22,7 +22,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
@@ -71,75 +70,20 @@ func AddColumnToTable(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.T
 // updateTableWithNewSchema updates the existing table with a new schema and new values for the new column as necessary,
 // and returns the new table.
 func updateTableWithNewSchema(ctx context.Context, tblName string, tbl *doltdb.Table, tag uint64, newSchema schema.Schema, defaultVal string) (*doltdb.Table, error) {
-	vrw := tbl.ValueReadWriter()
-	newSchemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, newSchema)
+	var err error
+	tbl, err = tbl.UpdateSchema(ctx, newSchema)
 	if err != nil {
 		return nil, err
 	}
 
-	rowData, err := tbl.GetRowData(ctx)
+	if defaultVal != "" {
+		tbl, err = applyDefaultValue(ctx, tblName, tbl, tag, newSchema)
+	}
 	if err != nil {
 		return nil, err
 	}
 
-	indexData, err := tbl.GetIndexData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var autoVal types.Value
-	if schema.HasAutoIncrement(newSchema) {
-		autoVal, err = tbl.GetAutoIncrementValue(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if defaultVal == "" {
-		return doltdb.NewTable(ctx, vrw, newSchemaVal, rowData, indexData, autoVal)
-	}
-
-	me := rowData.Edit()
-
-	newSqlSchema, err := sqlutil.FromDoltSchema(tblName, newSchema)
-	if err != nil {
-		return nil, err
-	}
-	columnIndex := -1
-	for i, colTag := range newSchema.GetAllCols().Tags {
-		if colTag == tag {
-			columnIndex = i
-			break
-		}
-	}
-	if columnIndex == -1 {
-		return nil, fmt.Errorf("could not find tag `%d` in new schema", tag)
-	}
-
-	err = rowData.Iter(ctx, func(k, v types.Value) (stop bool, err error) {
-		oldRow, err := row.FromNoms(newSchema, k.(types.Tuple), v.(types.Tuple))
-		if err != nil {
-			return true, err
-		}
-		newRow, err := sqlutil.ApplyDefaults(ctx, vrw, newSchema, newSqlSchema, []int{columnIndex}, oldRow)
-		if err != nil {
-			return true, err
-		}
-		me.Set(newRow.NomsMapKey(newSchema), newRow.NomsMapValue(newSchema))
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	m, err := me.Map(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return doltdb.NewTable(ctx, vrw, newSchemaVal, m, indexData, autoVal)
+	return tbl, nil
 }
 
 // addColumnToSchema creates a new schema with a column as specified by the params.
@@ -224,4 +168,52 @@ func validateNewColumn(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.
 	}
 
 	return nil
+}
+
+func applyDefaultValue(ctx context.Context, tblName string, tbl *doltdb.Table, tag uint64, newSchema schema.Schema) (*doltdb.Table, error) {
+	rowData, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	me := rowData.Edit()
+
+	newSqlSchema, err := sqlutil.FromDoltSchema(tblName, newSchema)
+	if err != nil {
+		return nil, err
+	}
+
+	columnIndex := -1
+	for i, colTag := range newSchema.GetAllCols().Tags {
+		if colTag == tag {
+			columnIndex = i
+			break
+		}
+	}
+	if columnIndex == -1 {
+		return nil, fmt.Errorf("could not find tag `%d` in new schema", tag)
+	}
+
+	err = rowData.Iter(ctx, func(k, v types.Value) (stop bool, err error) {
+		oldRow, err := row.FromNoms(newSchema, k.(types.Tuple), v.(types.Tuple))
+		if err != nil {
+			return true, err
+		}
+		newRow, err := sqlutil.ApplyDefaults(ctx, tbl.ValueReadWriter(), newSchema, newSqlSchema, []int{columnIndex}, oldRow)
+		if err != nil {
+			return true, err
+		}
+		me.Set(newRow.NomsMapKey(newSchema), newRow.NomsMapValue(newSchema))
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	newRowData, err := me.Map(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return tbl.UpdateRows(ctx, newRowData)
 }
