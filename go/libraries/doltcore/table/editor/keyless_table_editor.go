@@ -133,6 +133,10 @@ func newKeylessTableEditor(ctx context.Context, tbl *doltdb.Table, sch schema.Sc
 	return te, nil
 }
 
+func (kte *keylessTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value) error {
+	panic("not implemented")
+}
+
 // InsertRow implements TableEditor.
 func (kte *keylessTableEditor) InsertRow(ctx context.Context, r row.Row) (err error) {
 	kte.mu.Lock()
