@@ -53,6 +53,67 @@ func SqlRowToDoltRow(ctx context.Context, vrw types.ValueReadWriter, r sql.Row, 
 	return pkDoltRowFromSqlRow(ctx, vrw, r, doltSchema)
 }
 
+func DoltKeyAndValueFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, r sql.Row, doltSchema schema.Schema) (types.Tuple, types.Tuple, error) {
+	key, val, _, err := DoltKeyValueAndMappingFromSqlRow(ctx, vrw, r, doltSchema)
+	return key, val, err
+}
+
+func DoltKeyValueAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, r sql.Row, doltSchema schema.Schema) (types.Tuple, types.Tuple, map[uint64]types.Value, error) {
+	allCols := doltSchema.GetAllCols()
+	pkCols := doltSchema.GetPKCols()
+
+	numCols := allCols.Size()
+	vals := make([]types.Value, numCols*2)
+	tagToVal := make(map[uint64]types.Value, numCols)
+
+	numPKVals := pkCols.Size() * 2
+	pkVals := vals[:0]
+	nonPKVals := vals[numPKVals:numPKVals]
+
+	for i := 0; i < numCols; i++ {
+		schCol := allCols.GetAtIndex(i)
+		val := r[i]
+		if val == nil {
+			if !schCol.IsNullable() {
+				return types.Tuple{}, types.Tuple{}, nil, fmt.Errorf("column <%v> received nil but is non-nullable", schCol.Name)
+			}
+
+			continue
+		}
+
+		tag := schCol.Tag
+		nomsTag := types.Uint(tag)
+		nomsVal, err := schCol.TypeInfo.ConvertValueToNomsValue(ctx, vrw, val)
+
+		if err != nil {
+			return types.Tuple{}, types.Tuple{}, nil, err
+		}
+
+		if schCol.IsPartOfPK {
+			pkVals = append(pkVals, nomsTag, nomsVal)
+		} else {
+			nonPKVals = append(nonPKVals, nomsTag, nomsVal)
+		}
+
+		tagToVal[tag] = nomsVal
+	}
+
+	nbf := vrw.Format()
+	keyTuple, err := types.NewTuple(nbf, pkVals...)
+
+	if err != nil {
+		return types.Tuple{}, types.Tuple{}, nil, err
+	}
+
+	valTuple, err := types.NewTuple(nbf, nonPKVals...)
+
+	if err != nil {
+		return types.Tuple{}, types.Tuple{}, nil, err
+	}
+
+	return keyTuple, valTuple, tagToVal, nil
+}
+
 func pkDoltRowFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, r sql.Row, doltSchema schema.Schema) (row.Row, error) {
 	taggedVals := make(row.TaggedValues)
 	allCols := doltSchema.GetAllCols()

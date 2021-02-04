@@ -47,6 +47,8 @@ func init() {
 }
 
 type TableEditor interface {
+	InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value) error
+
 	InsertRow(ctx context.Context, r row.Row) error
 	UpdateRow(ctx context.Context, old, new row.Row) error
 	DeleteRow(ctx context.Context, r row.Row) error
@@ -309,6 +311,87 @@ func GetIndexedRows(ctx context.Context, te TableEditor, key types.Tuple, indexN
 	}
 
 	return rows, nil
+}
+
+func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value) error {
+	defer te.autoFlush()
+	te.flushMutex.RLock()
+	defer te.flushMutex.RUnlock()
+
+	keyHash, err := key.Hash(te.nbf)
+	if err != nil {
+		return err
+	}
+
+	// We allow each write operation to perform as much work as possible before acquiring the lock. This minimizes the
+	// lock time and slightly increases throughput. Although this introduces variability in the amount of time before
+	// the lock is acquired, this is a non-issue, which is elaborated on using this example function.
+	// func Example(ctx context.Context, te *pkTableEditor, someRow row.Row) {
+	//     go te.Insert(ctx, someRow)
+	//     go te.Delete(ctx, someRow)
+	// }
+	// Let's pretend the table already has someRow. Go will run goroutines in any arbitrary order, sequentially or
+	// concurrently, and thus running Example() may see that Delete() executes before Insert(), causing a different
+	// result as Insert() executing first would result in an error. Such an issue must be handled above the pkTableEditor.
+	// Since we cannot guarantee any of that here, we can delay our lock acquisition.
+	te.writeMutex.Lock()
+	defer te.writeMutex.Unlock()
+
+	if pkExists, err := te.tea.Has(ctx, keyHash, key); err != nil {
+		return err
+	} else if pkExists {
+		keyStr, err := formatKey(ctx, key)
+		if err != nil {
+			return err
+		}
+		return sql.ErrPrimaryKeyViolation.New(keyStr)
+	}
+	te.tea.insertedKeys[keyHash] = key
+	te.tea.addedKeys[keyHash] = key
+	te.tea.affectedKeys[keyHash] = key
+
+	if te.hasAutoInc {
+		tupItr, err := key.Iterator()
+
+		if err != nil {
+			return err
+		}
+
+		var insertVal types.Value
+		var ok bool
+		for !ok && tupItr.HasMore() {
+			_, tag, err := tupItr.NextUint64()
+
+			if err != nil {
+				return err
+			}
+
+			if tag == te.autoIncCol.Tag {
+				_, insertVal, err = tupItr.Next()
+
+				if err != nil {
+					return err
+				}
+
+				ok = true
+			}
+		}
+
+		if ok {
+			less, err := te.autoIncVal.Less(te.nbf, insertVal)
+			if err != nil {
+				return err
+			}
+			if less {
+				te.autoIncVal = types.Round(insertVal)
+			}
+			te.autoIncVal = types.Increment(te.autoIncVal)
+		}
+	}
+
+	te.tea.ed.AddEdit(key, val)
+	te.tea.opCount++
+	return nil
 }
 
 // InsertRow adds the given row to the table. If the row already exists, use UpdateRow.
