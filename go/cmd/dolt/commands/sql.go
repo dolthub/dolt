@@ -566,6 +566,7 @@ func runBatchMode(ctx *sql.Context, se *sqlEngine, input io.Reader) error {
 	}
 
 	updateBatchInsertOutput()
+	cli.Println() // need a newline after all updates are executed
 
 	if err := scanner.Err(); err != nil {
 		cli.Println(err.Error())
@@ -1093,7 +1094,7 @@ func insertsIntoAutoIncrementCol(ctx *sql.Context, se *sqlEngine, query string) 
 }
 
 func updateBatchInsertOutput() {
-	displayStr := fmt.Sprintf("Rows inserted: %d Rows updated: %d Rows deleted: %d\n",
+	displayStr := fmt.Sprintf("Rows inserted: %d Rows updated: %d Rows deleted: %d",
 		batchEditStats.rowsInserted, batchEditStats.rowsUpdated, batchEditStats.rowsDeleted)
 	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
 	batchEditStats.unprintedEdits = 0

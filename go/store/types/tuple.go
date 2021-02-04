@@ -138,7 +138,7 @@ func (itr *TupleIterator) Next() (uint64, Value, error) {
 	return itr.count, nil, nil
 }
 
-func (itr *TupleIterator) NextUint64() (uint64, uint64, error) {
+func (itr *TupleIterator) NextUint64() (pos uint64, val uint64, err error) {
 	if itr.pos < itr.count {
 		k := itr.dec.ReadKind()
 
