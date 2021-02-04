@@ -566,6 +566,7 @@ func runBatchMode(ctx *sql.Context, se *sqlEngine, input io.Reader) error {
 	}
 
 	updateBatchInsertOutput()
+	cli.Println() // need a newline after all updates are executed
 
 	if err := scanner.Err(); err != nil {
 		cli.Println(err.Error())
