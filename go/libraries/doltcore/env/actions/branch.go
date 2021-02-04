@@ -209,6 +209,7 @@ func createBranch(ctx context.Context, dbData env.DbData, newBranch, startingPoi
 	return CreateBranchOnDB(ctx, dbData.Ddb, newBranch, startingPoint, force, dbData.Rsr.CWBHeadRef())
 }
 
+// getCheckoutHashes writes the roots needed for a checkout and returns the updated work and staged hash.
 func getCheckoutHashes(ctx context.Context, dbData env.DbData, dref ref.DoltRef, brName string) (wrkHash hash.Hash, stgHash hash.Hash, err error) {
 	hasRef, err := dbData.Ddb.HasRef(ctx, dref)
 	if !hasRef {
@@ -340,17 +341,6 @@ func CheckoutBranchWithoutDocs(ctx context.Context, dbData env.DbData, brName st
 	}
 
 	return dbData.Rsw.SetCWBHeadRef(ref.MarshalableRef{Ref: dref})
-}
-
-func CheckoutUnstagedDocs(ctx context.Context, dEnv *env.DoltEnv) error {
-	dbData := dEnv.DbData()
-
-	unstagedDocs, err := GetUnstagedDocs(ctx, dbData)
-	if err != nil {
-		return err
-	}
-
-	return SaveDocsFromWorkingExcludingFSChanges(ctx, dEnv, unstagedDocs)
 }
 
 var emptyHash = hash.Hash{}

@@ -96,7 +96,7 @@ teardown() {
      run cat README.md
      [[ $output =~ "a readme" ]] || false
      [[ ! $output =~ "test-a branch" ]] || false
-     echo est-b branch > README.md
+     echo test-b branch > README.md
      dolt add .
      dolt commit -m "Changed README.md on test-a branch"
      dolt checkout master

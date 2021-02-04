@@ -203,7 +203,6 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "On branch master" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
-
 }
 
 @test "No rows in dolt_diff table after DOLT_RESET('--hard') on committed table." {

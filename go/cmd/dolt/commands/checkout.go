@@ -143,7 +143,7 @@ func checkoutNewBranchFromStartPt(ctx context.Context, dEnv *env.DoltEnv, newBra
 	err := actions.CreateBranchWithStartPt(ctx, dEnv.DbData(), newBranch, startPt, false)
 
 	if err != nil {
-		return errhand.BuildDError("fatal: Unexpected error checking out branch %s", newBranch).AddCause(err).Build()
+		return errhand.BuildDError(err.Error()).Build()
 	}
 
 	return checkoutBranch(ctx, dEnv, newBranch)
@@ -158,14 +158,14 @@ func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch string,
 	err := actions.CreateBranchWithStartPt(ctx, dEnv.DbData(), newBranch, startPt, false)
 
 	if err != nil {
-		return errhand.BuildDError("Error creating new branch").AddCause(err).Build()
+		return errhand.BuildDError(err.Error()).Build()
 	}
 
 	return checkoutBranch(ctx, dEnv, newBranch)
 }
 
 func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tables []string, docs doltdocs.Docs) errhand.VerboseError {
-	err := actions.CheckoutTables(ctx, dEnv.DbData(), tables)
+	err := actions.CheckoutTablesAndDocs(ctx, dEnv.DbData(), tables, docs)
 
 	if err != nil {
 		if actions.IsRootValUnreachable(err) {
@@ -182,13 +182,6 @@ func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tables []stri
 			bdr.AddCause(err)
 			return bdr.Build()
 		}
-	}
-
-	err = actions.CheckoutDocs(ctx, dEnv.DbData(), docs)
-
-	if err != nil {
-		bdr := errhand.BuildDError("error: Docs did not checkout properly").AddCause(err)
-		return bdr.Build()
 	}
 
 	return nil

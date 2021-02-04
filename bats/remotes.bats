@@ -869,7 +869,7 @@ SQL
 }
 
 create_master_remote_branch() {
-    dolt remote add origin http://localhost:50051/test-org/test-repoco
+    dolt remote add origin http://localhost:50051/test-org/test-repo
     dolt sql -q 'create table test (id int primary key);'
     dolt add .
     dolt commit -m 'create test table.'

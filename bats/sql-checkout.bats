@@ -40,7 +40,6 @@ teardown() {
     [ $status -eq 1 ]
 }
 
-
 @test "DOLT_CHECKOUT properly carries unstaged and staged changes between new and existing branches." {
     run dolt sql -q "SELECT DOLT_CHECKOUT('-b', 'feature-branch')"
     [ $status -eq 0 ]
@@ -115,7 +114,7 @@ SQL
     [[ "$output" =~ "$diff" ]] || false
 }
 
-@test "DOLT_CHECKOUT paired with commit, add, reset, and merge causes no problems." {
+@test "DOLT_CHECKOUT paired with commit, add, reset, and merge works with no problems." {
     run dolt sql << SQL
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 INSERT INTO test VALUES (4);
