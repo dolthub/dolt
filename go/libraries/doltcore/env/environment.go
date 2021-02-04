@@ -431,6 +431,10 @@ func (r *repoStateWriter) ClearMerge() error {
 	return r.dEnv.RepoState.ClearMerge(r.dEnv.FS)
 }
 
+func (r *repoStateWriter) StartMerge(commit string) error {
+	return r.dEnv.RepoState.StartMerge(commit, r.dEnv.FS)
+}
+
 func (dEnv *DoltEnv) RepoStateWriter() RepoStateWriter {
 	return &repoStateWriter{dEnv}
 }
