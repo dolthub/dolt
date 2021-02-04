@@ -15,6 +15,7 @@
 package dfunctions
 
 import (
+	"errors"
 	"fmt"
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -160,6 +161,41 @@ func (d DoltMergeFunc) WithChildren(children ...sql.Expression) (sql.Expression,
 
 func NewDoltMergeFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &DoltMergeFunc{expression.NaryExpression{ChildExpressions: args}}, nil
+}
+
+func executeFFMerge(ctx *sql.Context, squash bool, dbData env.DbData, mergeRoot *doltdb.RootValue, cm2 *doltdb.Commit) error {
+	rv, err := cm2.GetRootValue()
+
+	if err != nil {
+		return errors.New("Failed to return root value.")
+	}
+
+	stagedHash, err := dbData.Ddb.WriteRootValue(ctx, rv)
+
+	if err != nil {
+		return errors.New("Failed to write database.")
+	}
+
+	workingHash := stagedHash
+	if !squash {
+		err = dbData.Ddb.FastForward(ctx, dbData.Rsr.CWBHeadRef(), cm2)
+
+		if err != nil {
+			return errors.New("Failed to write database")
+		}
+	}
+
+	err = dbData.Rsw.SetWorkingHash(workingHash)
+	if err != nil {
+		return err
+	}
+
+	err = dbData.Rsw.SetStagedHash(stagedHash)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func mergedRootToWorking(ctx *sql.Context, dbData env.DbData, mergeRoot *doltdb.RootValue, cm2 *doltdb.Commit) error {
