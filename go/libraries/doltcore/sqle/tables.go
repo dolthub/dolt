@@ -78,6 +78,8 @@ type DoltTable struct {
 	table      *doltdb.Table
 	sch        schema.Schema
 	autoIncCol schema.Column
+
+	projectedCols []string
 }
 
 func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase) DoltTable {
@@ -91,11 +93,12 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatab
 	})
 
 	return DoltTable{
-		name:       name,
-		db:         db,
-		table:      tbl,
-		sch:        sch,
-		autoIncCol: autoCol,
+		name:          name,
+		db:            db,
+		table:         tbl,
+		sch:           sch,
+		autoIncCol:    autoCol,
+		projectedCols: nil,
 	}
 }
 
@@ -278,7 +281,7 @@ func (itr emptyRowIterator) Close() error {
 
 // Returns the table rows for the partition given
 func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
-	return partitionRows(ctx, t, nil, partition)
+	return partitionRows(ctx, t, t.projectedCols, partition)
 }
 
 func partitionRows(ctx *sql.Context, t *DoltTable, projCols []string, partition sql.Partition) (sql.RowIter, error) {
@@ -318,6 +321,14 @@ func (t *WritableDoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 	return &WritableIndexedDoltTable{
 		WritableDoltTable: t,
 		indexLookup:       dil,
+	}
+}
+
+func (t *WritableDoltTable) WithProjection(colNames []string) sql.Table {
+	return &WritableDoltTable{
+		DoltTable: *t.DoltTable.WithProjection(colNames).(*DoltTable),
+		db:        t.db,
+		ed:        t.ed,
 	}
 }
 
@@ -475,22 +486,19 @@ func (t *DoltTable) GetForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint
 	return toReturn, nil
 }
 
-type projectedDoltTable struct {
-	*DoltTable
-	projectedCols []string
-}
-
-func (t *projectedDoltTable) Projection() []string {
+func (t *DoltTable) Projection() []string {
 	return t.projectedCols
 }
 
 func (t *DoltTable) WithProjection(colNames []string) sql.Table {
-	return &projectedDoltTable{t, colNames}
-}
-
-// Returns the table rows for the partition given
-func (t *projectedDoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
-	return partitionRows(ctx, t.DoltTable, t.projectedCols, partition)
+	return &DoltTable{
+		name:          t.name,
+		db:            t.db,
+		table:         t.table,
+		sch:           t.sch,
+		autoIncCol:    t.autoIncCol,
+		projectedCols: colNames,
+	}
 }
 
 var _ sql.PartitionIter = (*doltTablePartitionIter)(nil)

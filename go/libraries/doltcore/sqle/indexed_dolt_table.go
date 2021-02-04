@@ -129,7 +129,7 @@ func (t *WritableIndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIt
 }
 
 func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	return partitionIndexedTableRows(ctx, t, nil, part)
+	return partitionIndexedTableRows(ctx, t, t.projectedCols, part)
 }
 
 // NumRows returns the unfiltered count of rows contained in the table
@@ -154,19 +154,9 @@ func partitionIndexedTableRows(ctx *sql.Context, t *WritableIndexedDoltTable, pr
 	return nil, errors.New("unknown partition type")
 }
 
-type projectedWritableIndexedDoltTable struct {
-	*WritableIndexedDoltTable
-	projectedCols []string
-}
-
-func (t *projectedWritableIndexedDoltTable) Projection() []string {
-	return t.projectedCols
-}
-
 func (t *WritableIndexedDoltTable) WithProjection(colNames []string) sql.Table {
-	return &projectedWritableIndexedDoltTable{t, colNames}
-}
-
-func (t *projectedWritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	return partitionIndexedTableRows(ctx, t.WritableIndexedDoltTable, t.projectedCols, part)
+	return &WritableIndexedDoltTable{
+		WritableDoltTable: t.WithProjection(colNames).(*WritableDoltTable),
+		indexLookup:       t.indexLookup,
+	}
 }
