@@ -344,7 +344,7 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.Root
 		return doltdb.ErrNomsIO
 	}
 
-	return dEnv.RepoStateWriter().SetWorkingHash(h)
+	return dEnv.RepoStateWriter().SetWorkingHash(ctx, h)
 }
 
 type repoStateReader struct {
@@ -394,7 +394,7 @@ type repoStateWriter struct {
 	dEnv *DoltEnv
 }
 
-func (r *repoStateWriter) SetStagedHash(h hash.Hash) error {
+func (r *repoStateWriter) SetStagedHash(ctx context.Context, h hash.Hash) error {
 	r.dEnv.RepoState.Staged = h.String()
 	err := r.dEnv.RepoState.Save(r.dEnv.FS)
 
@@ -405,7 +405,7 @@ func (r *repoStateWriter) SetStagedHash(h hash.Hash) error {
 	return nil
 }
 
-func (r *repoStateWriter) SetWorkingHash(h hash.Hash) error {
+func (r *repoStateWriter) SetWorkingHash(ctx context.Context, h hash.Hash) error {
 	r.dEnv.RepoState.Working = h.String()
 	err := r.dEnv.RepoState.Save(r.dEnv.FS)
 
@@ -416,7 +416,7 @@ func (r *repoStateWriter) SetWorkingHash(h hash.Hash) error {
 	return nil
 }
 
-func (r *repoStateWriter) SetCWBHeadRef(marshalableRef ref.MarshalableRef) error {
+func (r *repoStateWriter) SetCWBHeadRef(ctx context.Context, marshalableRef ref.MarshalableRef) error {
 	r.dEnv.RepoState.Head = marshalableRef
 	err := r.dEnv.RepoState.Save(r.dEnv.FS)
 

@@ -38,9 +38,9 @@ type RepoStateReader interface {
 
 type RepoStateWriter interface {
 	// SetCWBHeadSpec(context.Context, *doltdb.CommitSpec) error
-	SetStagedHash(hash.Hash) error
-	SetWorkingHash(hash.Hash) error
-	SetCWBHeadRef(ref.MarshalableRef) error
+	SetStagedHash(context.Context, hash.Hash) error
+	SetWorkingHash(context.Context, hash.Hash) error
+	SetCWBHeadRef(context.Context, ref.MarshalableRef) error
 	ClearMerge() error
 }
 
@@ -211,7 +211,7 @@ func UpdateWorkingRoot(ctx context.Context, ddb *doltdb.DoltDB, rsw RepoStateWri
 		return hash.Hash{}, doltdb.ErrNomsIO
 	}
 
-	err = rsw.SetWorkingHash(h)
+	err = rsw.SetWorkingHash(ctx, h)
 
 	if err != nil {
 		return hash.Hash{}, ErrStateUpdate
@@ -244,7 +244,7 @@ func UpdateStagedRoot(ctx context.Context, ddb *doltdb.DoltDB, rsw RepoStateWrit
 		return hash.Hash{}, doltdb.ErrNomsIO
 	}
 
-	err = rsw.SetStagedHash(h)
+	err = rsw.SetStagedHash(ctx, h)
 
 	if err != nil {
 		return hash.Hash{}, ErrStateUpdate

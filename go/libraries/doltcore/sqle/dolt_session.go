@@ -134,7 +134,7 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context) error {
 		return err
 	}
 
-	return dbData.Rsw.SetWorkingHash(h)
+	return dbData.Rsw.SetWorkingHash(ctx, h)
 }
 
 // GetDoltDB returns the *DoltDB for a given database by name

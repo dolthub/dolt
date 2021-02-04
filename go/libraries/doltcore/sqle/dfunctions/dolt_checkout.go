@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -31,6 +30,8 @@ import (
 )
 
 const DoltCheckoutFuncName = "dolt_checkout"
+
+var ErrEmptyBranchName = errors.New("error: cannot checkout empty string")
 
 type DoltCheckoutFunc struct {
 	expression.NaryExpression
@@ -80,10 +81,6 @@ func (d DoltCheckoutFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, erro
 
 	name := apr.Arg(0)
 
-	if len(name) == 0 {
-		return 1, errors.New("error: cannot checkout empty string")
-	}
-
 	// Check if user wants to checkout branch.
 	if isBranch, err := actions.IsBranch(ctx, dbData.Ddb, name); err != nil {
 		return 1, err
@@ -102,7 +99,7 @@ func (d DoltCheckoutFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, erro
 	}
 
 	if len(docs) > 0 {
-		return 1, errors.New("error: docs not supported in this mode.")
+		return 1, errors.New("error: docs not supported in sql mode")
 	}
 
 	err = checkoutTables(ctx, dbData, tbls)
@@ -119,29 +116,41 @@ func (d DoltCheckoutFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, erro
 }
 
 func checkoutRemoteBranch(ctx *sql.Context, dbData env.DbData, branchName string) error {
+	if len(branchName) == 0 {
+		return ErrEmptyBranchName
+	}
+
 	if ref, refExists, err := actions.GetRemoteBranchRef(ctx, dbData.Ddb, branchName); err != nil {
-		return errhand.BuildDError("fatal: unable to read from data repository.").AddCause(err).Build()
+		return errors.New("fatal: unable to read from data repository")
 	} else if refExists {
 		return checkoutNewBranch(ctx, dbData, branchName, ref.String())
 	} else {
-		return errhand.BuildDError("error: could not find %s", branchName).Build()
+		return fmt.Errorf("error: could not find %s", branchName)
 	}
 }
 
-func checkoutNewBranch(ctx *sql.Context, dbData env.DbData, newBranch, startPt string) error {
+func checkoutNewBranch(ctx *sql.Context, dbData env.DbData, branchName, startPt string) error {
+	if len(branchName) == 0 {
+		return ErrEmptyBranchName
+	}
+
 	if startPt == "" {
 		startPt = "head"
 	}
 
-	err := actions.CreateBranchWithStartPt(ctx, dbData, newBranch, startPt, false)
+	err := actions.CreateBranchWithStartPt(ctx, dbData, branchName, startPt, false)
 	if err != nil {
 		return err
 	}
 
-	return checkoutBranch(ctx, dbData, newBranch)
+	return checkoutBranch(ctx, dbData, branchName)
 }
 
 func checkoutBranch(ctx *sql.Context, dbData env.DbData, branchName string) error {
+	if len(branchName) == 0 {
+		return ErrEmptyBranchName
+	}
+
 	err := actions.CheckoutBranchWithoutDocs(ctx, dbData, branchName)
 
 	if err != nil {

@@ -91,11 +91,13 @@ teardown() {
     run dolt sql << SQL
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 SELECT $working_variable;
-SELECT $head_variable;
 SQL
 
     [ $status -eq 0 ]
     [[ "$output" =~ "$working_hash" ]] || false
+
+    run dolt sql -q "SELECT $head_variable"
+    [ $status -eq 0 ]
     [[ "$output" =~ "$head_hash" ]] || false
 }
 
@@ -104,12 +106,10 @@ SQL
     [ $status -eq 0 ]
     diff=$output
 
-
     run dolt sql << SQL
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 SELECT * FROM dolt_diff_test;
 SQL
-
     [ $status -eq 0 ]
     [[ "$output" =~ "$diff" ]] || false
 }
@@ -152,8 +152,8 @@ SQL
     run dolt sql -q "SELECT * FROM test;" -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ "pk" ]] || false
+    [[ "$output" =~ "0" ]] || false
     [[ "$output" =~ "1" ]] || false
-    [[ "$output" =~ "2" ]] || false
     [[ "$output" =~ "2" ]] || false
     [[ ! "$output" =~ "4" ]] || false
 }
