@@ -227,6 +227,12 @@ func checkoutTablesAndDocs(ctx context.Context, dbData env.DbData, roots map[Roo
 		return err
 	}
 
+	roots, err = getRoots(ctx, dbData.Ddb, dbData.Rsr, WorkingRoot, StagedRoot, HeadRoot)
+
+	if err != nil {
+		return err
+	}
+
 	return checkoutDocs(ctx, dbData, roots, docs)
 }
 
