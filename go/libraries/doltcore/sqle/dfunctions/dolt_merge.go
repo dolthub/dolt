@@ -17,13 +17,15 @@ package dfunctions
 import (
 	"errors"
 	"fmt"
+	"strings"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression"
-	"strings"
 )
 
 const DoltMergeFuncName = "dolt_merge"
@@ -95,7 +97,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 			return nil, err
 		}
 		return cmh.String(), err
-	} else  {
+	} else {
 		return nil, errors.New("Cannot handle this case yet.")
 	}
 }

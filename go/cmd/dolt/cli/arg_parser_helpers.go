@@ -81,7 +81,7 @@ const (
 	HardResetParam   = "hard"
 	SoftResetParam   = "soft"
 	CheckoutCoBranch = "b"
-	NoFFParam   = "no-ff"
+	NoFFParam        = "no-ff"
 )
 
 // Creates the argparser shared dolt commit cli and DOLT_COMMIT.
