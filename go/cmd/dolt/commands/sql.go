@@ -891,9 +891,49 @@ func (s *stats) shouldFlush() bool {
 	return s.unflushedEdits >= maxBatchSize
 }
 
+// updateRepoState takes in a context and database and updates repo state if autocommit is on
+func updateRepoState(ctx *sql.Context, db dsqle.Database) error {
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	h, err := root.HashOf()
+	if err != nil {
+		return err
+	}
+
+	_, value := ctx.Get(sql.AutoCommitSessionVar)
+	bval, isBool := value.(bool)
+	ival, isInt := value.(int)
+
+	condition := (bval && isBool) || (ival == 1 && isInt)
+
+	// Only update the working hash if autocommit is true.
+	if condition {
+		dsess := dsqle.DSessFromSess(ctx.Session)
+		rsw, ok := dsess.GetDoltDBRepoStateWriter(db.Name())
+		if ok {
+			err = rsw.SetWorkingHash(ctx, h)
+		}
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func flushBatchedEdits(ctx *sql.Context, se *sqlEngine) error {
 	err := se.iterDBs(func(_ string, db dsqle.Database) (bool, error) {
 		err := db.Flush(ctx)
+
+		if err != nil {
+			return false, err
+		}
+
+		err = updateRepoState(ctx, db)
 
 		if err != nil {
 			return false, err

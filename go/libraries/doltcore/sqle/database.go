@@ -478,20 +478,6 @@ func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 	dsess := DSessFromSess(ctx.Session)
 	dsess.dbRoots[db.name] = dbRoot{hashStr, newRoot}
 
-	_, value := ctx.Get(sql.AutoCommitSessionVar)
-	bval, isBool := value.(bool)
-	ival, isInt := value.(int)
-
-	condition := (bval && isBool) || (ival == 1 && isInt)
-
-	// Only update the working hash if autocommit is true.
-	if condition {
-		err = dsess.dbDatas[db.name].Rsw.SetWorkingHash(ctx, h)
-		if err != nil {
-			return err
-		}
-	}
-
 	_, err = dsess.dbDatas[db.name].Ddb.WriteRootValue(ctx, newRoot)
 	if err != nil {
 		return err
