@@ -20,7 +20,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -47,8 +46,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	// TODO: Move to a separate MERGE argparser.
-	ap := cli.CreateCommitArgParser()
+	ap := cli.CreateMergeArgParser()
 	args, err := getDoltArgs(ctx, row, d.Children())
 
 	if err != nil {
@@ -60,17 +58,6 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	// The fist argument should be the branch name.
 	branchName := apr.Arg(0)
 
-	var name, email string
-	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err = cli.ParseAuthor(authorStr)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		name = sess.Username
-		email = sess.Email
-	}
-
 	ddb, ok := sess.GetDoltDB(dbName)
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
@@ -81,7 +68,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	parent, ph, parentRoot, err := getParent(ctx, err, sess, dbName)
+	parent, _, parentRoot, err := getParent(ctx, err, sess, dbName)
 	if err != nil {
 		return nil, err
 	}
@@ -97,48 +84,20 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	}
 
 	// No need to write a merge commit, if the parent can ffw to the commit coming from the branch.
-	//canFF, err := parent.CanFastForwardTo(ctx, cm)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//if canFF {
-	//	return cmh.String(), nil
-	//}
-
-	mergeRoot, _, err := merge.MergeCommits(ctx, parent, cm)
-
+	canFF, err := parent.CanFastForwardTo(ctx, cm)
 	if err != nil {
 		return nil, err
 	}
 
-	h, err := ddb.WriteRootValue(ctx, mergeRoot)
-	if err != nil {
-		return nil, err
+	if canFF {
+		err = executeFFMerge(ctx, false, dbData, cm)
+		if err != nil {
+			return nil, err
+		}
+		return cmh.String(), err
+	} else  {
+		return nil, errors.New("Cannot handle this case yet.")
 	}
-
-	commitMessage := fmt.Sprintf("SQL Generated commit merging %s into %s", ph.String(), cmh.String())
-	meta, err := doltdb.NewCommitMeta(name, email, commitMessage)
-	if err != nil {
-		return nil, err
-	}
-
-	mergeCommit, err := ddb.WriteDanglingCommit(ctx, h, []*doltdb.Commit{parent, cm}, meta)
-	if err != nil {
-		return nil, err
-	}
-
-	h, err = mergeCommit.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
-	err = mergedRootToWorking(ctx, dbData, mergeRoot, cm)
-	if err != nil {
-		return nil, err
-	}
-
-	return h.String(), nil
 }
 
 func (d DoltMergeFunc) String() string {
@@ -152,7 +111,7 @@ func (d DoltMergeFunc) String() string {
 }
 
 func (d DoltMergeFunc) Type() sql.Type {
-	return sql.Int8
+	return sql.Text
 }
 
 func (d DoltMergeFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
@@ -163,7 +122,7 @@ func NewDoltMergeFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &DoltMergeFunc{expression.NaryExpression{ChildExpressions: args}}, nil
 }
 
-func executeFFMerge(ctx *sql.Context, squash bool, dbData env.DbData, mergeRoot *doltdb.RootValue, cm2 *doltdb.Commit) error {
+func executeFFMerge(ctx *sql.Context, squash bool, dbData env.DbData, cm2 *doltdb.Commit) error {
 	rv, err := cm2.GetRootValue()
 
 	if err != nil {
@@ -191,36 +150,6 @@ func executeFFMerge(ctx *sql.Context, squash bool, dbData env.DbData, mergeRoot 
 	}
 
 	err = dbData.Rsw.SetStagedHash(stagedHash)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func mergedRootToWorking(ctx *sql.Context, dbData env.DbData, mergeRoot *doltdb.RootValue, cm2 *doltdb.Commit) error {
-	workingRoot := mergeRoot
-
-	// TODO: apply changes on top of working?
-
-	h2, err := cm2.HashOf()
-
-	if err != nil {
-		return err
-	}
-
-	err = dbData.Rsw.StartMerge(h2.String())
-
-	if err != nil {
-		return err
-	}
-
-	_, err = env.UpdateWorkingRoot(ctx, dbData.Ddb, dbData.Rsw, workingRoot)
-	if err != nil {
-		return err
-	}
-
-	_, err = env.UpdateStagedRoot(ctx, dbData.Ddb, dbData.Rsw, workingRoot)
 	if err != nil {
 		return err
 	}
