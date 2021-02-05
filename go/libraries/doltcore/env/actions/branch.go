@@ -17,6 +17,7 @@ package actions
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -155,9 +156,26 @@ func DeleteBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltRef,
 	return ddb.DeleteBranch(ctx, dref)
 }
 
+func CreateBranchWithStartPt(ctx context.Context, dbData env.DbData, newBranch, startPt string, force bool) error {
+	err := createBranch(ctx, dbData, newBranch, startPt, force)
+
+	if err != nil {
+		if err == ErrAlreadyExists {
+			return fmt.Errorf("fatal: A branch named '%s' already exists.", newBranch)
+		} else if err == doltdb.ErrInvBranchName {
+			return fmt.Errorf("fatal: '%s' is an invalid branch name.", newBranch)
+		} else if err == doltdb.ErrInvHash || doltdb.IsNotACommit(err) {
+			return fmt.Errorf("fatal: '%s' is not a commit and a branch '%s' cannot be created from it", startPt, newBranch)
+		} else {
+			return fmt.Errorf("fatal: Unexpected error creating branch '%s' : %v", newBranch, err)
+		}
+	}
+
+	return nil
+}
+
 func CreateBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, newBranch, startingPoint string, force bool, headRef ref.DoltRef) error {
 	newRef := ref.NewBranchRef(newBranch)
-
 	hasRef, err := ddb.HasRef(ctx, newRef)
 
 	if err != nil {
@@ -187,103 +205,142 @@ func CreateBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, newBranch, starti
 	return ddb.NewBranchAtCommit(ctx, newRef, cm)
 }
 
-func CreateBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startingPoint string, force bool) error {
-	return CreateBranchOnDB(ctx, dEnv.DoltDB, newBranch, startingPoint, force, dEnv.RepoState.CWBHeadRef())
+func createBranch(ctx context.Context, dbData env.DbData, newBranch, startingPoint string, force bool) error {
+	return CreateBranchOnDB(ctx, dbData.Ddb, newBranch, startingPoint, force, dbData.Rsr.CWBHeadRef())
 }
 
-func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error {
-	dref := ref.NewBranchRef(brName)
-
-	hasRef, err := dEnv.DoltDB.HasRef(ctx, dref)
+// updateRootsForBranch writes the roots needed for a checkout and returns the updated work and staged hash.
+func updateRootsForBranch(ctx context.Context, dbData env.DbData, dref ref.DoltRef, brName string) (wrkHash hash.Hash, stgHash hash.Hash, err error) {
+	hasRef, err := dbData.Ddb.HasRef(ctx, dref)
 	if !hasRef {
-		return doltdb.ErrBranchNotFound
+		return hash.Hash{}, hash.Hash{}, doltdb.ErrBranchNotFound
 	}
 
-	if ref.Equals(dEnv.RepoState.CWBHeadRef(), dref) {
-		return doltdb.ErrAlreadyOnBranch
+	if ref.Equals(dbData.Rsr.CWBHeadRef(), dref) {
+		return hash.Hash{}, hash.Hash{}, doltdb.ErrAlreadyOnBranch
 	}
 
-	currRoots, err := getRoots(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), HeadRoot, WorkingRoot, StagedRoot)
+	currRoots, err := getRoots(ctx, dbData.Ddb, dbData.Rsr, HeadRoot, WorkingRoot, StagedRoot)
 
 	if err != nil {
-		return err
+		return hash.Hash{}, hash.Hash{}, err
 	}
 
 	cs, err := doltdb.NewCommitSpec(brName)
 
 	if err != nil {
-		return RootValueUnreadable{HeadRoot, err}
+		return hash.Hash{}, hash.Hash{}, RootValueUnreadable{HeadRoot, err}
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
+	cm, err := dbData.Ddb.Resolve(ctx, cs, nil)
 
 	if err != nil {
-		return RootValueUnreadable{HeadRoot, err}
+		return hash.Hash{}, hash.Hash{}, RootValueUnreadable{HeadRoot, err}
 	}
 
 	newRoot, err := cm.GetRootValue()
 
 	if err != nil {
-		return err
+		return hash.Hash{}, hash.Hash{}, err
 	}
 
 	ssMap, err := newRoot.GetSuperSchemaMap(ctx)
 
 	if err != nil {
-		return err
+		return hash.Hash{}, hash.Hash{}, err
 	}
 
 	fkMap, err := newRoot.GetForeignKeyCollectionMap(ctx)
 
 	if err != nil {
-		return err
+		return hash.Hash{}, hash.Hash{}, err
 	}
 
 	conflicts := set.NewStrSet([]string{})
 	wrkTblHashes, err := tblHashesForCO(ctx, currRoots[HeadRoot], newRoot, currRoots[WorkingRoot], conflicts)
 
 	if err != nil {
-		return err
+		return hash.Hash{}, hash.Hash{}, err
 	}
 
 	stgTblHashes, err := tblHashesForCO(ctx, currRoots[HeadRoot], newRoot, currRoots[StagedRoot], conflicts)
 
 	if err != nil {
-		return err
+		return hash.Hash{}, hash.Hash{}, err
 	}
 
 	if conflicts.Size() > 0 {
-		return CheckoutWouldOverwrite{conflicts.AsSlice()}
+		return hash.Hash{}, hash.Hash{}, CheckoutWouldOverwrite{conflicts.AsSlice()}
 	}
 
-	wrkHash, err := writeRoot(ctx, dEnv, wrkTblHashes, ssMap, fkMap)
+	wrkHash, err = writeRoot(ctx, dbData.Ddb, wrkTblHashes, ssMap, fkMap)
 
+	if err != nil {
+		return hash.Hash{}, hash.Hash{}, err
+	}
+
+	stgHash, err = writeRoot(ctx, dbData.Ddb, stgTblHashes, ssMap, fkMap)
+
+	if err != nil {
+		return hash.Hash{}, hash.Hash{}, err
+	}
+
+	return wrkHash, stgHash, nil
+}
+
+func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error {
+	dbData := dEnv.DbData()
+	dref := ref.NewBranchRef(brName)
+
+	wrkHash, stgHash, err := updateRootsForBranch(ctx, dbData, dref, brName)
 	if err != nil {
 		return err
 	}
 
-	stgHash, err := writeRoot(ctx, dEnv, stgTblHashes, ssMap, fkMap)
-
+	unstagedDocs, err := GetUnstagedDocs(ctx, dbData)
 	if err != nil {
 		return err
 	}
 
-	unstagedDocs, err := GetUnstagedDocs(ctx, dEnv.DbData())
+	err = dbData.Rsw.SetWorkingHash(ctx, wrkHash)
 	if err != nil {
 		return err
 	}
 
-	dEnv.RepoState.Head = ref.MarshalableRef{Ref: dref}
-	dEnv.RepoState.Working = wrkHash.String()
-	dEnv.RepoState.Staged = stgHash.String()
+	err = dbData.Rsw.SetStagedHash(ctx, stgHash)
+	if err != nil {
+		return err
+	}
 
-	err = dEnv.RepoState.Save(dEnv.FS)
-
+	err = dbData.Rsw.SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: dref})
 	if err != nil {
 		return err
 	}
 
 	return SaveDocsFromWorkingExcludingFSChanges(ctx, dEnv, unstagedDocs)
+}
+
+// CheckoutBranchWithoutDocs checkouts a branch without considering any working changes to the local docs. Used
+// with DOLT_CHECKOUT.
+func CheckoutBranchWithoutDocs(ctx context.Context, dbData env.DbData, brName string) error {
+	dref := ref.NewBranchRef(brName)
+
+	wrkHash, stgHash, err := updateRootsForBranch(ctx, dbData, dref, brName)
+	if err != nil {
+		return err
+	}
+
+	err = dbData.Rsw.SetWorkingHash(ctx, wrkHash)
+	if err != nil {
+		return err
+	}
+
+	err = dbData.Rsw.SetStagedHash(ctx, stgHash)
+	if err != nil {
+		return err
+	}
+
+	return dbData.Rsw.SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: dref})
 }
 
 var emptyHash = hash.Hash{}
@@ -357,14 +414,14 @@ func tblHashesForCO(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.R
 	return resultMap, nil
 }
 
-func writeRoot(ctx context.Context, dEnv *env.DoltEnv, tblHashes map[string]hash.Hash, ssMap types.Map, fkMap types.Map) (hash.Hash, error) {
+func writeRoot(ctx context.Context, ddb *doltdb.DoltDB, tblHashes map[string]hash.Hash, ssMap types.Map, fkMap types.Map) (hash.Hash, error) {
 	for k, v := range tblHashes {
 		if v == emptyHash {
 			delete(tblHashes, k)
 		}
 	}
 
-	root, err := doltdb.NewRootValue(ctx, dEnv.DoltDB.ValueReadWriter(), tblHashes, ssMap, fkMap)
+	root, err := doltdb.NewRootValue(ctx, ddb.ValueReadWriter(), tblHashes, ssMap, fkMap)
 	if err != nil {
 		if err == doltdb.ErrHashNotFound {
 			return emptyHash, errors.New("corrupted database? Can't find hash of current table")
@@ -372,7 +429,7 @@ func writeRoot(ctx context.Context, dEnv *env.DoltEnv, tblHashes map[string]hash
 		return emptyHash, doltdb.ErrNomsIO
 	}
 
-	return dEnv.DoltDB.WriteRootValue(ctx, root)
+	return ddb.WriteRootValue(ctx, root)
 
 }
 
@@ -396,8 +453,8 @@ func RootsWithTable(ctx context.Context, dEnv *env.DoltEnv, table string) (RootT
 	return NewRootTypeSet(rootsWithTable...), nil
 }
 
-func IsBranch(ctx context.Context, dEnv *env.DoltEnv, str string) (bool, error) {
-	return IsBranchOnDB(ctx, dEnv.DoltDB, str)
+func IsBranch(ctx context.Context, ddb *doltdb.DoltDB, str string) (bool, error) {
+	return IsBranchOnDB(ctx, ddb, str)
 }
 
 func IsBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, str string) (bool, error) {

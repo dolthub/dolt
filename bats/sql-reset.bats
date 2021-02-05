@@ -147,7 +147,6 @@ teardown() {
 @test "DOLT_RESET --soft and --hard on the same table" {
     # Make a change to the table and do a soft reset
     dolt sql -q "INSERT INTO test VALUES (1)"
-
     run dolt sql -q "SELECT DOLT_RESET('test')"
     [ "$status" -eq 0 ]
 
@@ -252,7 +251,7 @@ SQL
     [[ "$output" =~ "false" ]] || false
 }
 
-@test "DOLT_RESET correctly manipulates the @@_working session variable." {
+@test "DOLT_RESET soft maintains staged session variable" {
     working_hash_var=@@dolt_repo_$$_working
     run dolt sql -q "SELECT $working_hash_var"
     working_hash=$output

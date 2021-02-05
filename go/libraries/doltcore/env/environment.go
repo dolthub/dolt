@@ -416,6 +416,17 @@ func (r *repoStateWriter) SetWorkingHash(ctx context.Context, h hash.Hash) error
 	return nil
 }
 
+func (r *repoStateWriter) SetCWBHeadRef(ctx context.Context, marshalableRef ref.MarshalableRef) error {
+	r.dEnv.RepoState.Head = marshalableRef
+	err := r.dEnv.RepoState.Save(r.dEnv.FS)
+
+	if err != nil {
+		return ErrStateUpdate
+	}
+
+	return nil
+}
+
 func (r *repoStateWriter) ClearMerge() error {
 	return r.dEnv.RepoState.ClearMerge(r.dEnv.FS)
 }

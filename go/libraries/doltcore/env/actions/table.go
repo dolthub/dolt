@@ -17,41 +17,12 @@ package actions
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
-
-func CheckoutAllTables(ctx context.Context, dEnv *env.DoltEnv) error {
-	roots, err := getRoots(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), WorkingRoot, StagedRoot, HeadRoot)
-
-	if err != nil {
-		return err
-	}
-
-	tbls, err := doltdb.UnionTableNames(ctx, roots[WorkingRoot], roots[StagedRoot], roots[HeadRoot])
-
-	if err != nil {
-		return err
-	}
-
-	docs := doltdocs.SupportedDocs
-
-	return checkoutTablesAndDocs(ctx, dEnv, roots, tbls, docs)
-
-}
-
-func CheckoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tbls []string, docs doltdocs.Docs) error {
-	roots, err := getRoots(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), WorkingRoot, StagedRoot, HeadRoot)
-
-	if err != nil {
-		return err
-	}
-
-	return checkoutTablesAndDocs(ctx, dEnv, roots, tbls, docs)
-}
 
 // MoveTablesBetweenRoots copies tables with names in tbls from the src RootValue to the dest RootValue.
 // It matches tables between roots by column tags.
@@ -128,75 +99,6 @@ func MoveTablesBetweenRoots(ctx context.Context, tbls []string, src, dest *doltd
 	return dest, nil
 }
 
-func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*doltdb.RootValue, tbls []string, docs doltdocs.Docs) error {
-	unknownTbls := []string{}
-
-	currRoot := roots[WorkingRoot]
-	staged := roots[StagedRoot]
-	head := roots[HeadRoot]
-
-	if len(docs) > 0 {
-		currRootWithDocs, stagedWithDocs, updatedDocs, err := getUpdatedWorkingAndStagedWithDocs(ctx, currRoot, staged, head, docs)
-		if err != nil {
-			return err
-		}
-		currRoot = currRootWithDocs
-		staged = stagedWithDocs
-		docs = updatedDocs
-	}
-
-	for _, tblName := range tbls {
-		if tblName == doltdb.DocTableName {
-			continue
-		}
-		tbl, ok, err := staged.GetTable(ctx, tblName)
-
-		if err != nil {
-			return err
-		}
-
-		if !ok {
-			tbl, ok, err = head.GetTable(ctx, tblName)
-
-			if err != nil {
-				return err
-			}
-
-			if !ok {
-				unknownTbls = append(unknownTbls, tblName)
-				continue
-			}
-		}
-
-		currRoot, err = currRoot.PutTable(ctx, tblName, tbl)
-
-		if err != nil {
-			return err
-		}
-	}
-
-	if len(unknownTbls) > 0 {
-		// Return table not exist error before RemoveTables, which fails silently if the table is not on the root.
-		err := validateTablesExist(ctx, currRoot, unknownTbls)
-		if err != nil {
-			return err
-		}
-
-		currRoot, err = currRoot.RemoveTables(ctx, unknownTbls...)
-
-		if err != nil {
-			return err
-		}
-	}
-
-	err := dEnv.UpdateWorkingRoot(ctx, currRoot)
-	if err != nil {
-		return err
-	}
-
-	return dEnv.DocsReadWriter().WriteDocsToDisk(docs)
-}
-
 func validateTablesExist(ctx context.Context, currRoot *doltdb.RootValue, unknown []string) error {
 	notExist := []string{}
 	for _, tbl := range unknown {
@@ -223,4 +125,23 @@ func RemoveDocsTable(tbls []string) []string {
 		}
 	}
 	return result
+}
+
+// GetRemoteBranchRef returns the ref of a branch and ensures it matched with name. It will also return boolean value
+// representing whether there is not match or not and an error if there is one.
+func GetRemoteBranchRef(ctx context.Context, ddb *doltdb.DoltDB, name string) (ref.DoltRef, bool, error) {
+	remoteRefFilter := map[ref.RefType]struct{}{ref.RemoteRefType: {}}
+	refs, err := ddb.GetRefsOfType(ctx, remoteRefFilter)
+
+	if err != nil {
+		return nil, false, err
+	}
+
+	for _, rf := range refs {
+		if remRef, ok := rf.(ref.RemoteRef); ok && remRef.GetBranch() == name {
+			return rf, true, nil
+		}
+	}
+
+	return nil, false, nil
 }
