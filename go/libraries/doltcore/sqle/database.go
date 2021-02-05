@@ -477,7 +477,7 @@ func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 
 	dsess := DSessFromSess(ctx.Session)
 	dsess.dbRoots[db.name] = dbRoot{hashStr, newRoot}
-	
+
 	_, value := ctx.Get(sql.AutoCommitSessionVar)
 	bval, isBool := value.(bool)
 	ival, isInt := value.(int)
