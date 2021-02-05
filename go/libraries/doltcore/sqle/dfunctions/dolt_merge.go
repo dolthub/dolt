@@ -57,7 +57,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 
 	apr := cli.ParseArgs(ap, args, nil)
 
-	// The fist argument should be the branch name.
+	// The first argument should be the branch name.
 	branchName := apr.Arg(0)
 
 	ddb, ok := sess.GetDoltDB(dbName)
