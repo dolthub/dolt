@@ -83,7 +83,7 @@ func CreateEnvWithSeedData(t *testing.T) *env.DoltEnv {
 	require.NoError(t, err)
 	empty, err := types.NewMap(ctx, vrw)
 	require.NoError(t, err)
-	tbl, err := doltdb.NewTable(ctx, vrw, schVal, wr.GetMap(), empty)
+	tbl, err := doltdb.NewTable(ctx, vrw, schVal, wr.GetMap(), empty, nil)
 	require.NoError(t, err)
 	tbl, err = editor.RebuildAllIndexes(ctx, tbl)
 	require.NoError(t, err)
@@ -94,7 +94,7 @@ func CreateEnvWithSeedData(t *testing.T) *env.DoltEnv {
 	require.NoError(t, err)
 	indexes, err := tbl.GetIndexData(ctx)
 	require.NoError(t, err)
-	err = dEnv.PutTableToWorking(ctx, sch, rows, indexes, TableName)
+	err = dEnv.PutTableToWorking(ctx, sch, rows, indexes, TableName, nil)
 	require.NoError(t, err)
 
 	return dEnv

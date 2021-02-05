@@ -832,19 +832,14 @@ SQL
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
     CREATE TABLE test (
-      pk BIGINT NOT NULL COMMENT 'tag:0',
-      c1 BIGINT COMMENT 'tag:1',
-      c2 BIGINT COMMENT 'tag:2',
-      c3 BIGINT COMMENT 'tag:3',
-      c4 BIGINT COMMENT 'tag:4',
-      c5 BIGINT COMMENT 'tag:5',
+      pk BIGINT NOT NULL,
       PRIMARY KEY (pk)
     );
 SQL
     dolt commit -a -m "master commit"
     dolt push test-remote master
     dolt checkout -b test-branch
-    dolt sql -q "INSERT INTO test VALUES (1,1,1,1,1,1);"
+    dolt sql -q "INSERT INTO test VALUES (1);"
     dolt commit -a -m "test commit"
     dolt push test-remote test-branch
     cd "dolt-repo-clones"
@@ -864,8 +859,8 @@ SQL
     # Confirm the table has the right information.
     run dolt sql -q "SELECT * FROM test" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "pk,c1,c2,c3,c4,c5" ]] || false
-    [[ "$output" =~ "1,1,1,1,1,1" ]] || false
+    [[ "$output" =~ "pk" ]] || false
+    [[ "$output" =~ "1" ]] || false
 }
 
 create_master_remote_branch() {

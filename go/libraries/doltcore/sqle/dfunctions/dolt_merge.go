@@ -144,12 +144,12 @@ func executeFFMerge(ctx *sql.Context, squash bool, dbData env.DbData, cm2 *doltd
 		}
 	}
 
-	err = dbData.Rsw.SetWorkingHash(workingHash)
+	err = dbData.Rsw.SetWorkingHash(ctx, workingHash)
 	if err != nil {
 		return err
 	}
 
-	err = dbData.Rsw.SetStagedHash(stagedHash)
+	err = dbData.Rsw.SetStagedHash(ctx, stagedHash)
 	if err != nil {
 		return err
 	}

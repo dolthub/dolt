@@ -124,7 +124,7 @@ func createDocsTable(ctx context.Context, vrw types.ValueReadWriter, docs Docs) 
 			return nil, err
 		}
 
-		newDocsTbl, err := doltdb.NewTable(ctx, vrw, schVal, wr.GetMap(), empty)
+		newDocsTbl, err := doltdb.NewTable(ctx, vrw, schVal, wr.GetMap(), empty, nil)
 		if err != nil {
 			return nil, err
 		}

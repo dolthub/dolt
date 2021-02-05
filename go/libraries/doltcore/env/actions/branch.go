@@ -209,8 +209,8 @@ func createBranch(ctx context.Context, dbData env.DbData, newBranch, startingPoi
 	return CreateBranchOnDB(ctx, dbData.Ddb, newBranch, startingPoint, force, dbData.Rsr.CWBHeadRef())
 }
 
-// getCheckoutHashes writes the roots needed for a checkout and returns the updated work and staged hash.
-func getCheckoutHashes(ctx context.Context, dbData env.DbData, dref ref.DoltRef, brName string) (wrkHash hash.Hash, stgHash hash.Hash, err error) {
+// updateRootsForBranch writes the roots needed for a checkout and returns the updated work and staged hash.
+func updateRootsForBranch(ctx context.Context, dbData env.DbData, dref ref.DoltRef, brName string) (wrkHash hash.Hash, stgHash hash.Hash, err error) {
 	hasRef, err := dbData.Ddb.HasRef(ctx, dref)
 	if !hasRef {
 		return hash.Hash{}, hash.Hash{}, doltdb.ErrBranchNotFound
@@ -292,7 +292,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 	dbData := dEnv.DbData()
 	dref := ref.NewBranchRef(brName)
 
-	wrkHash, stgHash, err := getCheckoutHashes(ctx, dbData, dref, brName)
+	wrkHash, stgHash, err := updateRootsForBranch(ctx, dbData, dref, brName)
 	if err != nil {
 		return err
 	}
@@ -302,17 +302,17 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return err
 	}
 
-	err = dbData.Rsw.SetWorkingHash(wrkHash)
+	err = dbData.Rsw.SetWorkingHash(ctx, wrkHash)
 	if err != nil {
 		return err
 	}
 
-	err = dbData.Rsw.SetStagedHash(stgHash)
+	err = dbData.Rsw.SetStagedHash(ctx, stgHash)
 	if err != nil {
 		return err
 	}
 
-	err = dbData.Rsw.SetCWBHeadRef(ref.MarshalableRef{Ref: dref})
+	err = dbData.Rsw.SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: dref})
 	if err != nil {
 		return err
 	}
@@ -325,22 +325,22 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 func CheckoutBranchWithoutDocs(ctx context.Context, dbData env.DbData, brName string) error {
 	dref := ref.NewBranchRef(brName)
 
-	wrkHash, stgHash, err := getCheckoutHashes(ctx, dbData, dref, brName)
+	wrkHash, stgHash, err := updateRootsForBranch(ctx, dbData, dref, brName)
 	if err != nil {
 		return err
 	}
 
-	err = dbData.Rsw.SetWorkingHash(wrkHash)
+	err = dbData.Rsw.SetWorkingHash(ctx, wrkHash)
 	if err != nil {
 		return err
 	}
 
-	err = dbData.Rsw.SetStagedHash(stgHash)
+	err = dbData.Rsw.SetStagedHash(ctx, stgHash)
 	if err != nil {
 		return err
 	}
 
-	return dbData.Rsw.SetCWBHeadRef(ref.MarshalableRef{Ref: dref})
+	return dbData.Rsw.SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: dref})
 }
 
 var emptyHash = hash.Hash{}

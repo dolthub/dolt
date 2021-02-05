@@ -35,6 +35,19 @@ type sessionedTableEditor struct {
 
 var _ TableEditor = &sessionedTableEditor{}
 
+func (ste *sessionedTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value) error {
+	ste.tableEditSession.writeMutex.RLock()
+	defer ste.tableEditSession.writeMutex.RUnlock()
+
+	err := ste.validateKeyValForInsert(ctx, key, val, tagToVal)
+	if err != nil {
+		return err
+	}
+
+	ti := ste.tableEditor
+	return ti.InsertKeyVal(ctx, key, val, tagToVal)
+}
+
 // InsertRow adds the given row to the table. If the row already exists, use UpdateRow.
 func (ste *sessionedTableEditor) InsertRow(ctx context.Context, dRow row.Row) error {
 	ste.tableEditSession.writeMutex.RLock()
@@ -289,6 +302,30 @@ func (ste *sessionedTableEditor) reduceRowAndConvert(nbf *types.NomsBinFormat, o
 	return tpl, false, nil
 }
 
+// tupleforTags takes in a map of tags to values and returns a Tuple containing only the values from the tags
+// given. The returned items have tags from newTags, while the tags from dRow are expected to match originalTags. Both
+// parameter slices are assumed to have equivalent ordering and length. If the key contains any nulls, then we return
+// true to indicate that we do not propagate an ON DELETE/UPDATE. (functionality matches reduceRowAndConvert)
+func (ste *sessionedTableEditor) tupleforTags(nbf *types.NomsBinFormat, originalTags []uint64, newTags []uint64, tagToVal map[uint64]types.Value) (types.Tuple, bool, error) {
+	keyVals := make([]types.Value, len(originalTags)*2)
+	for i, colTag := range originalTags {
+		val, ok := tagToVal[colTag]
+		if !ok {
+			return types.EmptyTuple(nbf), true, nil
+		}
+		newTag := newTags[i]
+		keyVals[2*i] = types.Uint(newTag)
+		keyVals[2*i+1] = val
+	}
+
+	tpl, err := types.NewTuple(nbf, keyVals...)
+	if err != nil {
+		return types.Tuple{}, false, err
+	}
+
+	return tpl, false, nil
+}
+
 func (ste *sessionedTableEditor) updateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row, checkReferences bool) error {
 	if checkReferences {
 		err := ste.validateForInsert(ctx, dNewRow)
@@ -303,6 +340,34 @@ func (ste *sessionedTableEditor) updateRow(ctx context.Context, dOldRow row.Row,
 	}
 
 	return ste.tableEditor.UpdateRow(ctx, dOldRow, dNewRow)
+}
+
+func (ste *sessionedTableEditor) validateKeyValForInsert(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value) error {
+	if ste.tableEditSession.Props.ForeignKeyChecksDisabled {
+		return nil
+	}
+	for _, foreignKey := range ste.referencedTables {
+		indexKey, hasNulls, err := ste.tupleforTags(ste.tableEditor.Format(), foreignKey.TableColumns, foreignKey.ReferencedTableColumns, tagToVal)
+		if err != nil {
+			return err
+		}
+		if hasNulls {
+			continue
+		}
+		referencingSte, ok := ste.tableEditSession.tables[foreignKey.ReferencedTableName]
+		if !ok {
+			return fmt.Errorf("unable to get table editor as `%s` is missing", foreignKey.ReferencedTableName)
+		}
+		exists, err := ContainsIndexedKey(ctx, referencingSte.tableEditor, indexKey, foreignKey.ReferencedTableIndex)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			indexKeyStr, _ := types.EncodedValue(ctx, indexKey)
+			return fmt.Errorf("foreign key violation on `%s`.`%s`: `%s`", foreignKey.TableName, foreignKey.Name, indexKeyStr)
+		}
+	}
+	return nil
 }
 
 // validateForInsert returns whether the given row is able to be inserted into the target table.

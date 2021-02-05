@@ -15,6 +15,8 @@
 package sqle
 
 import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -49,6 +51,7 @@ func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor,
 	if err != nil {
 		return nil, err
 	}
+
 	return &sqlTableEditor{
 		t:           t,
 		tableEditor: tableEditor,
@@ -57,7 +60,18 @@ func newSqlTableEditor(ctx *sql.Context, t *WritableDoltTable) (*sqlTableEditor,
 }
 
 func (te *sqlTableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
+	if !schema.IsKeyless(te.t.sch) {
+		k, v, tagToVal, err := sqlutil.DoltKeyValueAndMappingFromSqlRow(ctx, te.t.table.ValueReadWriter(), sqlRow, te.t.sch)
+
+		if err != nil {
+			return err
+		}
+
+		return te.tableEditor.InsertKeyVal(ctx, k, v, tagToVal)
+	}
+
 	dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.t.table.ValueReadWriter(), sqlRow, te.t.sch)
+
 	if err != nil {
 		return err
 	}

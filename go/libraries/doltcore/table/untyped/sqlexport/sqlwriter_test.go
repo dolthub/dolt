@@ -88,7 +88,7 @@ func TestEndToEnd(t *testing.T) {
 			require.NoError(t, err)
 			idxMap, err := types.NewMap(ctx, root.VRW(), types.String(dtestutils.IndexName), idxRef)
 			require.NoError(t, err)
-			tbl, err := doltdb.NewTable(ctx, root.VRW(), schVal, empty, idxMap)
+			tbl, err := doltdb.NewTable(ctx, root.VRW(), schVal, empty, idxMap, nil)
 			require.NoError(t, err)
 			root, err = root.PutTable(ctx, tableName, tbl)
 			require.NoError(t, err)

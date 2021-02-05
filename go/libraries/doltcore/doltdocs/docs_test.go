@@ -137,7 +137,7 @@ func CreateTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData t
 	}
 
 	empty, _ := types.NewMap(context.Background(), vrw)
-	tbl, err := doltdb.NewTable(context.Background(), vrw, schemaVal, rowData, empty)
+	tbl, err := doltdb.NewTable(context.Background(), vrw, schemaVal, rowData, empty, nil)
 
 	if err != nil {
 		return nil, err

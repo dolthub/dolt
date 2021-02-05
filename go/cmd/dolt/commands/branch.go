@@ -325,7 +325,7 @@ func createBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		return HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), usage)
 	}
 
-	return HandleVErrAndExitCode(nil, usage)
+	return 0
 }
 
 func HandleVErrAndExitCode(verr errhand.VerboseError, usage cli.UsagePrinter) int {
