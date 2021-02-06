@@ -57,6 +57,39 @@ SQL
     [[ "$output" =~ $head_hash ]] || false
 }
 
+@test "DOLT_MERGE correctly merges branches with differing content in same table without conflicts" {
+    dolt sql << SQL
+SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
+SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+INSERT INTO test VALUES (3);
+SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
+SELECT DOLT_CHECKOUT('master');
+INSERT INTO test VALUES (500000);
+SELECT DOLT_COMMIT('-a', '-m', 'Insert 500000');
+SELECT DOLT_MERGE('feature-branch');
+SQL
+
+    run dolt sql -q "SELECT * FROM test" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "pk" ]] || false
+    [[ "$output" =~ "0" ]] || false
+    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "2" ]] || false
+    [[ "$output" =~ "3" ]] || false
+    [[ "$output" =~ "500000" ]] || false
+
+
+    run dolt log -n 1
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Insert 500000" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) FROM dolt_log"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "3" ]] || false
+
+}
+
+
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 8-
 }

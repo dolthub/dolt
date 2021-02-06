@@ -430,6 +430,9 @@ func (r *repoStateWriter) SetCWBHeadRef(ctx context.Context, marshalableRef ref.
 func (r *repoStateWriter) ClearMerge() error {
 	return r.dEnv.RepoState.ClearMerge(r.dEnv.FS)
 }
+func (r *repoStateWriter) StartMerge(commitStr string) error {
+	return r.dEnv.RepoState.StartMerge(commitStr, r.dEnv.FS)
+}
 
 func (dEnv *DoltEnv) RepoStateWriter() RepoStateWriter {
 	return &repoStateWriter{dEnv}

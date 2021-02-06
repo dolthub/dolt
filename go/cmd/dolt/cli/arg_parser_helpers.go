@@ -82,6 +82,7 @@ const (
 	SoftResetParam   = "soft"
 	CheckoutCoBranch = "b"
 	NoFFParam        = "no-ff"
+	SquashParam      = "squash"
 )
 
 // Creates the argparser shared dolt commit cli and DOLT_COMMIT.
@@ -99,6 +100,7 @@ func CreateCommitArgParser() *argparser.ArgParser {
 func CreateMergeArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(NoFFParam, "", "Create a merge commit even when the merge resolves as a fast-forward.")
+	ap.SupportsFlag(SquashParam, "", "Merges changes to the working set without updating the commit history")
 	return ap
 }
 

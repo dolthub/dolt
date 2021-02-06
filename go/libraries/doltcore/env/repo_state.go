@@ -42,6 +42,7 @@ type RepoStateWriter interface {
 	SetWorkingHash(context.Context, hash.Hash) error
 	SetCWBHeadRef(context.Context, ref.MarshalableRef) error
 	ClearMerge() error
+	StartMerge(commitStr string) error
 }
 
 type DocsReadWriter interface {
