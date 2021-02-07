@@ -44,12 +44,8 @@ const (
 	MasterBranch     = "master"
 	CommitStructName = "Commit"
 
-	FeatureVersion featureVersion = 0
-
 	defaultChunksPerTF = 256 * 1024
 )
-
-type featureVersion int64
 
 // LocalDirDoltDB stores the db in the current directory
 var LocalDirDoltDB = "file://./" + dbfactory.DoltDataDir
