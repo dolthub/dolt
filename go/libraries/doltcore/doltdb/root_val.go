@@ -34,11 +34,13 @@ const (
 	superSchemasKey = "super_schemas"
 	foreignKeyKey   = "foreign_key"
 	featureVersKey  = "feature_ver"
-
-	FeatureVersion featureVersion = 0
 )
 
 type featureVersion int64
+
+// FeatureVersion is described in feature_version.md.
+// only variable for testing.
+var FeatureVersion featureVersion = 0
 
 // RootValue defines the structure used inside all Dolthub noms dbs
 type RootValue struct {
