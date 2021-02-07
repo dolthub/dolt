@@ -34,7 +34,11 @@ const (
 	superSchemasKey = "super_schemas"
 	foreignKeyKey   = "foreign_key"
 	featureVersKey  = "feature_ver"
+
+	FeatureVersion featureVersion = 0
 )
+
+type featureVersion int64
 
 // RootValue defines the structure used inside all Dolthub noms dbs
 type RootValue struct {
@@ -132,6 +136,16 @@ func (root *RootValue) GetFeatureVersion(ctx context.Context) (ver int64, ok boo
 	ver = int64(v.(types.Int))
 	return ver, ok, err
 }
+
+func (root *RootValue) SetFeatureVersion(ctx context.Context) (*RootValue, error) {
+   st, err := root.valueSt.Set(featureVersKey, types.Int(FeatureVersion))
+   if err != nil {
+	   return nil, err
+   }
+
+   return newRootValue(root.vrw, st), nil
+}
+
 
 func (root *RootValue) HasTable(ctx context.Context, tName string) (bool, error) {
 	val, found, err := root.valueSt.MaybeGet(tablesKey)
