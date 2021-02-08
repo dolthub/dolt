@@ -1127,8 +1127,6 @@ func checkForDoltSQLFunction(query string) (bool, error) {
 	default:
 		return false, nil
 	}
-
-	return false, nil
 }
 
 func hasDoltSQLFunction(node sqlparser.SQLNode) bool {
