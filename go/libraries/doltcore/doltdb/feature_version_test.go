@@ -16,7 +16,6 @@ package doltdb_test
 
 import (
 	"context"
-	"fmt"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/stretchr/testify/assert"
@@ -30,16 +29,22 @@ import (
 )
 
 const (
-	newVersion doltdb.FeatureVersion = 19
-	oldVersion doltdb.FeatureVersion = 13
+	newVersion doltdb.FeatureVersion = 1 << 19
+	oldVersion doltdb.FeatureVersion = 1 << 13
 )
 
-type fvUser struct {
-	vers doltdb.FeatureVersion
-}
+// |doltdb.FeatureVersion| is manipulated during these integration tests.
+// Save a copy here to assert that it was correctly restored.
+var DoltFeatureVersionCopy = doltdb.DoltFeatureVersion
 
-var NewClient = fvUser{vers: newVersion}
-var OldClient = fvUser{vers: oldVersion}
+type fvTest struct {
+	name   string
+	setup  []fvCommand
+	expVer doltdb.FeatureVersion
+
+	// for error path testing
+	errCmds []fvCommand
+}
 
 type args []string
 
@@ -49,21 +54,26 @@ type fvCommand struct {
 	args args
 }
 
-func (cmd fvCommand) exec(t *testing.T, ctx context.Context, dEnv *env.DoltEnv) {
+func (cmd fvCommand) exec(t *testing.T, ctx context.Context, dEnv *env.DoltEnv) int {
 	// execute the command using |cmd.user|'s Feature Version
 	doltdb.DoltFeatureVersion, cmd.user.vers = cmd.user.vers, doltdb.DoltFeatureVersion
 	defer func() { doltdb.DoltFeatureVersion = cmd.user.vers }()
 
-	act := doltdb.DoltFeatureVersion
-	fmt.Println(act)
-	exitCode := cmd.cmd.Exec(ctx, cmd.cmd.Name(), cmd.args, dEnv)
-	require.Equal(t, 0, exitCode)
+	return cmd.cmd.Exec(ctx, cmd.cmd.Name(), cmd.args, dEnv)
 }
 
-type fvTest struct {
-	name     string
-	setup    []fvCommand
-	expected doltdb.FeatureVersion
+type fvUser struct {
+	vers doltdb.FeatureVersion
+}
+
+var NewClient = fvUser{vers: newVersion}
+var OldClient = fvUser{vers: oldVersion}
+
+func TestFeatureVersionSanityCheck(t *testing.T) {
+	assert.Equal(t, DoltFeatureVersionCopy, doltdb.DoltFeatureVersion)
+
+	assert.NotEqual(t, DoltFeatureVersionCopy, oldVersion)
+	assert.NotEqual(t, DoltFeatureVersionCopy, newVersion)
 }
 
 func TestFeatureVersion(t *testing.T) {
@@ -73,9 +83,90 @@ func TestFeatureVersion(t *testing.T) {
 			name: "smoke test",
 			setup: []fvCommand{
 				{OldClient, commands.SqlCmd{}, args{"-q", "CREATE TABLE test (pk int PRIMARY KEY);"}},
-				{OldClient, commands.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (0);"}},
 			},
-			expected: oldVersion,
+			expVer: oldVersion,
+		},
+		{
+			name: "CREATE TABLE statements write feature version",
+			setup: []fvCommand{
+				{OldClient, commands.SqlCmd{}, args{"-q", "CREATE TABLE test (pk int PRIMARY KEY);"}},
+				{NewClient, commands.SqlCmd{}, args{"-q", "CREATE TABLE quiz (pk int PRIMARY KEY);"}},
+			},
+			expVer: newVersion,
+		},
+		{
+			name: "DROP TABLE statements write feature version",
+			setup: []fvCommand{
+				{OldClient, commands.SqlCmd{}, args{"-q", "CREATE TABLE test (pk int PRIMARY KEY);"}},
+				{NewClient, commands.SqlCmd{}, args{"-q", "DROP TABLE test;"}},
+			},
+			expVer: newVersion,
+		},
+		{
+			name: "schema changes write feature version",
+			setup: []fvCommand{
+				{OldClient, commands.SqlCmd{}, args{"-q", "CREATE TABLE test (pk int PRIMARY KEY);"}},
+				{NewClient, commands.SqlCmd{}, args{"-q", "ALTER TABLE test ADD COLUMN c0 int;"}},
+			},
+			expVer: newVersion,
+		},
+		{
+			name: "INSERT statements write feature version",
+			setup: []fvCommand{
+				{OldClient, commands.SqlCmd{}, args{"-q", "CREATE TABLE test (pk int PRIMARY KEY);"}},
+				{NewClient, commands.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (0);"}},
+			},
+			expVer: newVersion,
+		},
+		{
+			name: "UPDATE statements write feature version",
+			setup: []fvCommand{
+				{OldClient, commands.SqlCmd{}, args{"-q", "CREATE TABLE test (pk int PRIMARY KEY);"}},
+				{OldClient, commands.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (0);"}},
+				{NewClient, commands.SqlCmd{}, args{"-q", "UPDATE test SET pk = 1;"}},
+			},
+			expVer: newVersion,
+		},
+		{
+			name: "DELETE statements write feature version",
+			setup: []fvCommand{
+				{OldClient, commands.SqlCmd{}, args{"-q", "CREATE TABLE test (pk int PRIMARY KEY);"}},
+				{OldClient, commands.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (0);"}},
+				{NewClient, commands.SqlCmd{}, args{"-q", "DELETE FROM test WHERE pk = 0;"}},
+			},
+			expVer: newVersion,
+		},
+		{
+			name: "Commit does not update feature version",
+			setup: []fvCommand{
+				{OldClient, commands.SqlCmd{}, args{"-q", "CREATE TABLE test (pk int PRIMARY KEY);"}},
+				{NewClient, commands.CommitCmd{}, args{"-a", "-m", "created table"}},
+			},
+			expVer: oldVersion,
+		},
+		{
+			name: "Branch does not update feature version",
+			setup: []fvCommand{
+				{OldClient, commands.SqlCmd{}, args{"-q", "CREATE TABLE test (pk int PRIMARY KEY);"}},
+				{OldClient, commands.CommitCmd{}, args{"-a", "-m", "created table"}},
+				{NewClient, commands.BranchCmd{}, args{"other"}},
+			},
+			expVer: oldVersion,
+		},
+		{
+			name: "new client writes to table, locking out old client",
+			setup: []fvCommand{
+				{OldClient, commands.SqlCmd{}, args{"-q", "CREATE TABLE test (pk int PRIMARY KEY);"}},
+				{OldClient, commands.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (0);"}},
+				{NewClient, commands.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (1);"}},
+			},
+			errCmds: []fvCommand{
+				// old client can't write
+				{OldClient, commands.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (2);"}},
+				// old client can't read
+				{OldClient, commands.SqlCmd{}, args{"-q", "SELECT * FROM test;"}},
+			},
+			expVer: newVersion,
 		},
 	}
 
@@ -85,11 +176,20 @@ func TestFeatureVersion(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
 
 			for _, cmd := range test.setup {
-				cmd.exec(t, ctx, dEnv)
+				code := cmd.exec(t, ctx, dEnv)
+				require.Equal(t, 0, code)
 			}
+			for _, cmd := range test.errCmds {
+				code := cmd.exec(t, ctx, dEnv)
+				require.NotEqual(t, 0, code)
+			}
+
+			// ensure |doltdb.DoltFeatureVersion| was restored
+			assert.Equal(t, DoltFeatureVersionCopy, doltdb.DoltFeatureVersion)
 
 			// execute assertions with max feature version
 			doltdb.DoltFeatureVersion = math.MaxInt64
+			defer func() { doltdb.DoltFeatureVersion = DoltFeatureVersionCopy }()
 
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
@@ -97,7 +197,7 @@ func TestFeatureVersion(t *testing.T) {
 			act, ok, err := root.GetFeatureVersion(ctx)
 			require.NoError(t, err)
 			assert.True(t, ok)
-			assert.Equal(t, test.expected, act)
+			assert.Equal(t, test.expVer, act)
 		})
 	}
 }

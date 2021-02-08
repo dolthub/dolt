@@ -47,13 +47,13 @@ var ErrIsAhead = errors.New("current fast forward from a to b. a is ahead of b a
 var ErrIsBehind = errors.New("cannot reverse from b to a. b is a is behind a already")
 
 type ErrClientOutOfDate struct {
-	repoVer   FeatureVersion
-	clientVer FeatureVersion
+	RepoVer   FeatureVersion
+	ClientVer FeatureVersion
 }
 
 func (e ErrClientOutOfDate) Error() string {
 	return fmt.Sprintf(`client (version: %d) is out of date and must upgrade to read this repo (version: %d).
-	visit https://github.com/dolthub/dolt/releases/latest/`, e.clientVer, e.repoVer)
+	visit https://github.com/dolthub/dolt/releases/latest/`, e.ClientVer, e.RepoVer)
 }
 
 func IsInvalidFormatErr(err error) bool {
