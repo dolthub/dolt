@@ -86,10 +86,57 @@ SQL
     run dolt sql -q "SELECT COUNT(*) FROM dolt_log"
     [ $status -eq 0 ]
     [[ "$output" =~ "3" ]] || false
-
 }
 
+@test "DOLT_MERGE works with no-ff" {
+        run dolt sql << SQL
+SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
+SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+INSERT INTO test VALUES (3);
+SELECT DOLT_COMMIT('-a', '-m', 'update feature-branch');
+SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_MERGE('feature-branch', '-no-ff', '-m', 'this is a no-ff');
+SQL
+    [ $status -eq 0 ]
+
+    run dolt log -n 1
+    [ $status -eq 0 ]
+    [[ "$output" =~ "this is a no-ff" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) FROM dolt_log"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "4" ]] || false
+}
+
+@test "DOLT_MERGE no-ff changes head and working session variables." {
+    dolt sql << SQL
+SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
+SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+INSERT INTO test VALUES (3);
+SELECT DOLT_COMMIT('-a', '-m', 'update feature-branch');
+SELECT DOLT_CHECKOUT('master');
+SQL
+    head_variable=@@dolt_repo_$$_head
+    head_hash=$(get_head_commit)
+    working_variable=@@dolt_repo_$$_working
+    working_hash=$(get_working_hash)
+
+    run dolt sql -q "SELECT DOLT_MERGE('feature-branch', '-no-ff', '-m', 'this is a no-ff');"
+    [ $status -eq 0 ]
+
+    run dolt sql -q "SELECT $head_variable"
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ $head_hash ]] || false
+
+    run dolt sql -q "SELECT $working_variable"
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ $working_hash ]] || false
+}
 
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 8-
+}
+
+get_working_hash() {
+  dolt sql -q "select @@dolt_repo_$$_working" | sed -n 4p | sed -e 's/|//' -e 's/|//'  -e 's/ //'
 }
