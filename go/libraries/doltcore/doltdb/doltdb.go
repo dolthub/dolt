@@ -428,8 +428,8 @@ func (ddb *DoltDB) ReadRootValue(ctx context.Context, h hash.Hash) (*RootValue, 
 		ver := FeatureVersion(v.(types.Int))
 		if DoltFeatureVersion < ver {
 			return nil, ErrClientOutOfDate{
-				clientVer: DoltFeatureVersion,
-				repoVer:   ver,
+				ClientVer: DoltFeatureVersion,
+				RepoVer:   ver,
 			}
 		}
 	}
