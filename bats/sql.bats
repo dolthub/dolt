@@ -707,6 +707,32 @@ SQL
     $BATS_TEST_DIRNAME/sql-works-after-failing-query.expect
 }
 
+@test "sql shell delimiter" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    mkdir doltsql
+    cd doltsql
+    dolt init
+
+    $BATS_TEST_DIRNAME/sql-delimiter.expect
+    echo "$output"
+    [[ ! "$output" =~ "Error" ]] || false
+    [[ ! "$output" =~ "error" ]] || false
+
+    run dolt sql -q "SELECT * FROM test ORDER BY 1" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+
+    run dolt sql -q "SHOW TRIGGERS"
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "SET NEW.v1 = NEW.v1 * 11" ]] || false
+
+    cd ..
+    rm -rf doltsql
+}
+
 @test "sql insert on duplicate key inserts data by column" {
     run dolt sql -q "CREATE TABLE test (col_a varchar(2) not null, col_b varchar(2), col_c varchar(2), primary key(col_a));"
     [ $status -eq 0 ]

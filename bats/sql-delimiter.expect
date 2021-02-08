@@ -1,0 +1,38 @@
+#!/usr/bin/expect
+
+set timeout 1
+spawn dolt sql
+expect {
+  "doltsql> " { send "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT);\r"; }
+}
+expect {
+  "doltsql> " { send "INSERT INTO test VALUES (0,0);\r"; }
+}
+expect {
+  "doltsql> " { send "DELIMITER $$ ;\r"; }
+}
+expect {
+  "doltsql> " { send "INSERT INTO test VALUES (1,1)$$\r"; }
+}
+expect {
+  "doltsql> " { send "delimiter # $$\r"; }
+}
+expect {
+  "doltsql> " { send "CREATE TRIGGER tt BEFORE INSERT ON test FOR EACH ROW\r"; }
+}
+expect {
+  "      -> " { send "BEGIN\r"; }
+}
+expect {
+  "      -> " { send "SET NEW.v1 = NEW.v1 * 11;\r"; }
+}
+expect {
+  "      -> " { send "SET NEW.v1 = NEW.v1 * -10;\r"; }
+}
+expect {
+  "      -> " { send "END; #\r"; }
+}
+expect {
+  "doltsql> " { send "DeLiMiTeR ; #\r"; }
+}
+expect eof
