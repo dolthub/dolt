@@ -569,7 +569,7 @@ SQL
 @test "explain simple join" {
     run dolt sql -q "explain select op.pk,pk1,pk2 from one_pk,two_pk join one_pk as op on op.pk=pk1"
     [ $status -eq 0 ]
-    [[ "$output" =~ "InnerJoin" ]] || false
+    [[ "$output" =~ "IndexedJoin" ]] || false
 }
 
 @test "sql replace count" {
