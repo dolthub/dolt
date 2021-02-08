@@ -892,48 +892,46 @@ func (s *stats) shouldFlush() bool {
 }
 
 // updateRepoState takes in a context and database and updates repo state if autocommit is on
-func updateRepoState(ctx *sql.Context, db dsqle.Database) error {
-	root, err := db.GetRoot(ctx)
-	if err != nil {
-		return err
-	}
-
-	h, err := root.HashOf()
-	if err != nil {
-		return err
-	}
-
-	_, value := ctx.Get(sql.AutoCommitSessionVar)
-	bval, isBool := value.(bool)
-	ival, isInt := value.(int)
-
-	condition := (bval && isBool) || (ival == 1 && isInt)
-
-	// Only update the working hash if autocommit is true.
-	if condition {
-		dsess := dsqle.DSessFromSess(ctx.Session)
-		rsw, ok := dsess.GetDoltDBRepoStateWriter(db.Name())
-		if ok {
-			err = rsw.SetWorkingHash(ctx, h)
-		}
-	}
-
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func flushBatchedEdits(ctx *sql.Context, se *sqlEngine) error {
+func updateRepoState(ctx *sql.Context, se *sqlEngine) error {
 	err := se.iterDBs(func(_ string, db dsqle.Database) (bool, error) {
-		err := db.Flush(ctx)
+		root, err := db.GetRoot(ctx)
+		if err != nil {
+			return false, err
+		}
+
+		h, err := root.HashOf()
+		if err != nil {
+			return false, err
+		}
+
+		_, value := ctx.Get(sql.AutoCommitSessionVar)
+		bval, isBool := value.(bool)
+		ival, isInt := value.(int)
+
+		condition := (bval && isBool) || (ival == 1 && isInt)
+
+		// Only update the working hash if autocommit is true.
+		if condition {
+			dsess := dsqle.DSessFromSess(ctx.Session)
+			rsw, ok := dsess.GetDoltDBRepoStateWriter(db.Name())
+			if ok {
+				err = rsw.SetWorkingHash(ctx, h)
+			}
+		}
 
 		if err != nil {
 			return false, err
 		}
 
-		err = updateRepoState(ctx, db)
+		return false, nil
+	})
+
+	return err
+}
+
+func flushBatchedEdits(ctx *sql.Context, se *sqlEngine) error {
+	err := se.iterDBs(func(_ string, db dsqle.Database) (bool, error) {
+		err := db.Flush(ctx)
 
 		if err != nil {
 			return false, err
@@ -986,6 +984,18 @@ func processNonInsertBatchQuery(ctx *sql.Context, se *sqlEngine, query string, s
 	err := flushBatchedEdits(ctx, se)
 	if err != nil {
 		return err
+	}
+
+	foundDoltSQLFunc, err := checkForDoltSQLFunction(query)
+	if err != nil {
+		return err
+	}
+
+	if foundDoltSQLFunc {
+		err = updateRepoState(ctx, se)
+		if err != nil {
+			return err
+		}
 	}
 
 	sqlSch, rowIter, err := processQuery(ctx, query, se)
@@ -1101,6 +1111,39 @@ func foundSubquery(node sqlparser.SQLNode) bool {
 		}
 		return true, nil
 	}, node)
+	return has
+}
+
+// hasDoltSQLFunction checks if a function is a dolt SQL function as defined in the dfunc package.
+func checkForDoltSQLFunction(query string) (bool, error) {
+	statement, err := sqlparser.Parse(query)
+	if err != nil {
+		return false, err
+	}
+
+	switch node := statement.(type) {
+	case *sqlparser.Select:
+		return hasDoltSQLFunction(node), nil
+	default:
+		return false, nil
+	}
+
+	return false, nil
+}
+
+func hasDoltSQLFunction(node sqlparser.SQLNode) bool {
+	has := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (keepGoing bool, err error) {
+		if f, ok := node.(*sqlparser.FuncExpr); ok {
+			name := strings.ToLower(f.Name.String())
+			if strings.Contains(name, "dolt_") {
+				has = true
+			}
+			return false, nil
+		}
+		return true, nil
+	}, node)
+
 	return has
 }
 
