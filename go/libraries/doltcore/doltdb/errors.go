@@ -47,8 +47,8 @@ var ErrIsAhead = errors.New("current fast forward from a to b. a is ahead of b a
 var ErrIsBehind = errors.New("cannot reverse from b to a. b is a is behind a already")
 
 type ErrClientOutOfDate struct {
-	repoVer   featureVersion
-	clientVer featureVersion
+	repoVer   FeatureVersion
+	clientVer FeatureVersion
 }
 
 func (e ErrClientOutOfDate) Error() string {
