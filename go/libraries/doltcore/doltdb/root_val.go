@@ -36,11 +36,11 @@ const (
 	featureVersKey  = "feature_ver"
 )
 
-type featureVersion int64
+type FeatureVersion int64
 
-// FeatureVersion is described in feature_version.md.
+// DoltFeatureVersion is described in feature_version.md.
 // only variable for testing.
-var FeatureVersion featureVersion = 0
+var DoltFeatureVersion FeatureVersion = 0
 
 // RootValue defines the structure used inside all Dolthub noms dbs
 type RootValue struct {
@@ -130,17 +130,17 @@ func (root *RootValue) VRW() types.ValueReadWriter {
 }
 
 // GetFeatureVersion returns the feature version of this root, if one is written
-func (root *RootValue) GetFeatureVersion(ctx context.Context) (ver int64, ok bool, err error) {
+func (root *RootValue) GetFeatureVersion(ctx context.Context) (ver FeatureVersion, ok bool, err error) {
 	v, ok, err := root.valueSt.MaybeGet(featureVersKey)
 	if err != nil || !ok {
 		return ver, ok, err
 	}
-	ver = int64(v.(types.Int))
+	ver = FeatureVersion(v.(types.Int))
 	return ver, ok, err
 }
 
 func (root *RootValue) SetFeatureVersion(ctx context.Context) (*RootValue, error) {
-   st, err := root.valueSt.Set(featureVersKey, types.Int(FeatureVersion))
+   st, err := root.valueSt.Set(featureVersKey, types.Int(DoltFeatureVersion))
    if err != nil {
 	   return nil, err
    }
