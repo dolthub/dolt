@@ -217,22 +217,22 @@ var joinTests = []queryDifferTest{
 			{from: nil, to: sql.Row{int64(81), int32(9), int32(99)}},
 		},
 	},
-// TODO: This broken with indexed joins using a SubqueryAlias projection. The
-// lazy query mutations we do on the tree for this diff functionality do not
-// work to maintain the indexed join. (aaron@, 2021/02/08)
-//	{
-//		name:  "join a view",
-//		query: "select c0c0, pk, c0 from squared join quiz on sqrt(squared.c0c0) = quiz.pk",
-//		setup: []testCommand{
-//			{commands.SqlCmd{}, []string{"-q", "delete from test where pk = 1"}},
-//			{commands.SqlCmd{}, []string{"-q", "insert into test values (-2,-2)"}},
-//			{commands.SqlCmd{}, []string{"-q", "insert into test values (9,9)"}},
-//		},
-//		diffRows: []rowDiff{
-//			{from: nil, to: sql.Row{int64(4), int32(2), int32(22)}},
-//			{from: sql.Row{int64(1), int32(1), int32(11)}, to: nil},
-//		},
-//	},
+	// TODO: This broken with indexed joins using a SubqueryAlias projection. The
+	// lazy query mutations we do on the tree for this diff functionality do not
+	// work to maintain the indexed join. (aaron@, 2021/02/08)
+	//	{
+	//		name:  "join a view",
+	//		query: "select c0c0, pk, c0 from squared join quiz on sqrt(squared.c0c0) = quiz.pk",
+	//		setup: []testCommand{
+	//			{commands.SqlCmd{}, []string{"-q", "delete from test where pk = 1"}},
+	//			{commands.SqlCmd{}, []string{"-q", "insert into test values (-2,-2)"}},
+	//			{commands.SqlCmd{}, []string{"-q", "insert into test values (9,9)"}},
+	//		},
+	//		diffRows: []rowDiff{
+	//			{from: nil, to: sql.Row{int64(4), int32(2), int32(22)}},
+	//			{from: sql.Row{int64(1), int32(1), int32(11)}, to: nil},
+	//		},
+	//	},
 	{
 		name:  "join two views with explosions",
 		query: "select v1.three, v1.one*test.c0, POW(test.c0,3) from v1 join test on v1.one = test.c0;",
