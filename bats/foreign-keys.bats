@@ -1213,3 +1213,17 @@ SQL
     [ "$status" -eq "1" ]
     [[ "$output" =~ "violation" ]] || false
 }
+
+@test "foreign-keys: FKs move with the working set on checkout" {
+    dolt add . && dolt commit -m "added parent and child tables"
+    dolt branch other
+    dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_v1 FOREIGN KEY (v1) REFERENCES parent(v1);"
+
+    run dolt checkout other
+    [ "$status" -eq "0" ]
+
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    skip "foreign keys don't travel with the working set when checking out a new branch"
+    [[ "$output" =~ "fk_v1" ]] || false
+}
