@@ -488,6 +488,8 @@ func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 		return err
 	}
 
+	dsess.caches[db.name].Clear()
+
 	return nil
 }
 

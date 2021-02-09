@@ -200,14 +200,15 @@ func updateHeadAndWorkingSessionVars(ctx *sql.Context, dbData env.DbData) error 
 		return err
 	}
 
-	err = setSessionRootExplicit(ctx, headHash.String(), sqle.HeadKeySuffix)
+	workingHash := dbData.Rsr.WorkingHash().String()
+	stagedHash := dbData.Rsr.StagedHash().String()
+
+	err = setSessionRootExplicit(ctx, headHash.String(), sqle.HeadKeySuffix, workingHash == stagedHash)
 	if err != nil {
 		return err
 	}
 
-	workingHash := dbData.Rsr.WorkingHash().String()
-
-	return setSessionRootExplicit(ctx, workingHash, sqle.WorkingKeySuffix)
+	return setSessionRootExplicit(ctx, workingHash, sqle.WorkingKeySuffix, false)
 }
 
 func (d DoltCheckoutFunc) String() string {

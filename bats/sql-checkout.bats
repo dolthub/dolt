@@ -19,6 +19,7 @@ teardown() {
 
 @test "DOLT_CHECKOUT just works" {
     run dolt sql -q "SELECT DOLT_CHECKOUT('-b', 'feature-branch')"
+    echo $output
     [ $status -eq 0 ]
 
     run dolt sql -q "SELECT DOLT_CHECKOUT('master');"
@@ -122,6 +123,7 @@ SELECT DOLT_ADD('.');
 SELECT DOLT_COMMIT('-m', 'Commit1', '--author', 'John Doe <john@doe.com>');
 SQL
 
+    echo $output
     [ $status -eq 0 ]
 
     run dolt log -n 1
@@ -174,6 +176,7 @@ SELECT DOLT_COMMIT('-a', '-m', 'changed master');
 SELECT DOLT_CHECKOUT('feature-branch');
 INSERT INTO one_pk (pk1,c1,c2) VALUES (0,1,1);
 SQL
+    echo $output
     [ $status -eq 0 ]
 }
 

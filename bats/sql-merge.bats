@@ -70,6 +70,7 @@ SELECT DOLT_MERGE('feature-branch');
 SQL
 
     run dolt sql -q "SELECT * FROM test" -r csv
+    echo $output
     [ $status -eq 0 ]
     [[ "$output" =~ "pk" ]] || false
     [[ "$output" =~ "0" ]] || false

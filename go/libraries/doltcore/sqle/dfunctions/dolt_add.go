@@ -69,7 +69,7 @@ func (d DoltAddFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		}
 
 		// Sets @@_working to staged.
-		err = setSessionRootExplicit(ctx, hashString, sqle.WorkingKeySuffix)
+		err = setSessionRootExplicit(ctx, hashString, sqle.WorkingKeySuffix, false)
 	} else {
 		err = actions.StageTables(ctx, dbData, apr.Args())
 	}
