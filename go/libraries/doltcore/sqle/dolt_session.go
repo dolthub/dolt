@@ -341,64 +341,64 @@ func (sess *DoltSession) Set(ctx context.Context, key string, typ sql.Type, valu
 // SetSessionVarDirectly directly updates sess.Session. This is useful in the context of the sql shell where
 // the working and head session variable may be updated at different times.
 func (sess *DoltSession) SetSessionVarDirectly(ctx context.Context, key string, typ sql.Type, value interface{}, updateRoot bool) error {
-	if isHead, dbName := IsHeadKey(key); isHead {
-		dbd, dbFound := sess.dbDatas[dbName]
-
-		if !dbFound {
-			return sql.ErrDatabaseNotFound.New(dbName)
-		}
-
-		valStr, isStr := value.(string)
-
-		if !isStr || !hash.IsValid(valStr) {
-			return doltdb.ErrInvalidHash
-		}
-
-		cs, err := doltdb.NewCommitSpec(valStr)
-
-		if err != nil {
-			return err
-		}
-
-		cm, err := dbd.Ddb.Resolve(ctx, cs, nil)
-
-		if err != nil {
-			return err
-		}
-
-		root, err := cm.GetRootValue()
-
-		if err != nil {
-			return err
-		}
-
-		h, err := root.HashOf()
-
-		if err != nil {
-			return err
-		}
-
-		err = sess.Session.Set(ctx, key, typ, value)
-
-		if err != nil {
-			return err
-		}
-
-		hashStr := h.String()
-
-		if updateRoot {
-			sess.dbRoots[dbName] = dbRoot{hashStr, root}
-
-			err = sess.dbEditors[dbName].SetRoot(ctx, root)
-			if err != nil {
-				return err
-			}
-
-			sess.caches[dbName].Clear()
-		}
-
-		return nil
-	}
+	//if isHead, dbName := IsHeadKey(key); isHead {
+	//	dbd, dbFound := sess.dbDatas[dbName]
+	//
+	//	if !dbFound {
+	//		return sql.ErrDatabaseNotFound.New(dbName)
+	//	}
+	//
+	//	valStr, isStr := value.(string)
+	//
+	//	if !isStr || !hash.IsValid(valStr) {
+	//		return doltdb.ErrInvalidHash
+	//	}
+	//
+	//	cs, err := doltdb.NewCommitSpec(valStr)
+	//
+	//	if err != nil {
+	//		return err
+	//	}
+	//
+	//	cm, err := dbd.Ddb.Resolve(ctx, cs, nil)
+	//
+	//	if err != nil {
+	//		return err
+	//	}
+	//
+	//	root, err := cm.GetRootValue()
+	//
+	//	if err != nil {
+	//		return err
+	//	}
+	//
+	//	h, err := root.HashOf()
+	//
+	//	if err != nil {
+	//		return err
+	//	}
+	//
+	//	err = sess.Session.Set(ctx, key, typ, value)
+	//
+	//	if err != nil {
+	//		return err
+	//	}
+	//
+	//	hashStr := h.String()
+	//
+	//	if updateRoot {
+	//		sess.dbRoots[dbName] = dbRoot{hashStr, root}
+	//
+	//		err = sess.dbEditors[dbName].SetRoot(ctx, root)
+	//		if err != nil {
+	//			return err
+	//		}
+	//
+	//		sess.caches[dbName].Clear()
+	//	}
+	//
+	//	return nil
+	//}
 
 	valStr, isStr := value.(string)
 

@@ -251,7 +251,7 @@ func mergedRootToWorking(ctx *sql.Context, squash bool, dbData env.DbData, merge
 		}
 	}
 
-	_, err = env.UpdateWorkingRoot(ctx, dbData.Ddb, dbData.Rsw, workingRoot)
+	workingHash, err := env.UpdateWorkingRoot(ctx, dbData.Ddb, dbData.Rsw, workingRoot)
 	if err != nil {
 		return err
 	}
@@ -267,7 +267,7 @@ func mergedRootToWorking(ctx *sql.Context, squash bool, dbData env.DbData, merge
 		return err
 	}
 
-	return nil
+	return setSessionRootExplicit(ctx, workingHash.String(), sqle.WorkingKeySuffix, false)
 }
 
 func checkForConflicts(tblToStats map[string]*merge.MergeStats) bool {

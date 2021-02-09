@@ -199,9 +199,21 @@ func updateHeadAndWorkingSessionVars(ctx *sql.Context, dbData env.DbData) error 
 	if err != nil {
 		return err
 	}
+	hs := headHash.String()
+
+	hasWorkingChanges := hasWorkingSetChanges(dbData.Rsr)
+	hasStagedChanges, err  := hasStagedSetChanges(ctx, dbData.Ddb, dbData.Rsr)
+
+	if err != nil {
+		return err
+	}
 
 	workingHash := dbData.Rsr.WorkingHash().String()
-	dbData.Rsr.StagedHash().String()
+	//stagedHash := dbData.Rsr.StagedHash().String()
+
+	if !hasStagedChanges && !hasWorkingChanges {
+		return setHeadAndWorkingSessionRoot(ctx, hs)
+	}
 
 	err = setSessionRootExplicit(ctx, headHash.String(), sqle.HeadKeySuffix, false)
 	if err != nil {
