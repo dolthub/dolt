@@ -80,6 +80,30 @@ func TestMerge(t *testing.T) {
 				{int32(22), int32(22)},
 			},
 		},
+		{
+			name: "create the same table schema, with different row data, on two branches",
+			setup: []testCommand{
+				{cmd.BranchCmd{}, args{"other"}},
+				{cmd.SqlCmd{}, args{"-q", "CREATE TABLE quiz (pk varchar(120) primary key);"}},
+				{cmd.SqlCmd{}, args{"-q", "INSERT INTO quiz VALUES ('a'),('b'),('c');"}},
+				{cmd.CommitCmd{}, args{"-am", "added rows on master"}},
+				{cmd.CheckoutCmd{}, args{"other"}},
+				{cmd.SqlCmd{}, args{"-q", "CREATE TABLE quiz (pk varchar(120) primary key);"}},
+				{cmd.SqlCmd{}, args{"-q", "INSERT INTO quiz VALUES ('x'),('y'),('z');"}},
+				{cmd.CommitCmd{}, args{"-am", "added rows on other"}},
+				{cmd.CheckoutCmd{}, args{"master"}},
+				{cmd.MergeCmd{}, args{"other"}},
+			},
+			query: "SELECT * FROM quiz ORDER BY pk",
+			expected: []sql.Row{
+				{"a"},
+				{"b"},
+				{"c"},
+				{"x"},
+				{"y"},
+				{"z"},
+			},
+		},
 	}
 
 	for _, test := range tests {

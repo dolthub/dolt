@@ -277,15 +277,15 @@ INSERT INTO quiz VALUES (10),(11),(12);
 SQL
     dolt add . && dolt commit -m "added table quiz on master";
 
-    dolt checkout master
+    dolt checkout other
     dolt sql <<SQL
 CREATE TABLE quiz (pk int PRIMARY KEY);
 INSERT INTO quiz VALUES (20),(21),(22);
 SQL
     dolt add . && dolt commit -m "added table quiz on other"
 
-    dolt checkout other
-    run dolt merge master
+    dolt checkout master
+    run dolt merge other
     [ "$status" -eq 0 ]
     run dolt sql -q "SELECT * FROM quiz;" -r csv
     [[ "${lines[0]}" =~ "pk" ]] || false
@@ -308,6 +308,27 @@ SQL
 
     dolt checkout master
     run dolt merge other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CONFLICT" ]] || false
+    run dolt conflicts resolve --theirs dolt_schemas
+    [ "$status" -eq 0 ]
+    run dolt sql -q "select name from dolt_schemas" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "c1c1" ]] || false
+}
+
+@test "Add views on two branches, merge without conflicts" {
+    dolt branch other
+    dolt sql -q "CREATE VIEW pkpk AS SELECT pk*pk FROM test1;"
+    dolt add . && dolt commit -m "added view on table test1"
+
+    dolt checkout other
+    dolt sql -q "CREATE VIEW c1c1 AS SELECT c1*c1 FROM test2;"
+    dolt add . && dolt commit -m "added view on table test2"
+
+    dolt checkout master
+    run dolt merge other
+    skip "key collision in dolt_schemas"
     [ "$status" -eq 0 ]
     run dolt sql -q "select name from dolt_schemas" -r csv
     [ "$status" -eq 0 ]
