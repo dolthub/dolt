@@ -160,7 +160,7 @@ SQL
     [[ ! "$output" =~ "4" ]] || false
 }
 
-@test "DOLT_CHECKOUT with one the same table name" {
+@test "DOLT_CHECKOUT one the same table name causes no problems" {
     run dolt sql << SQL
 CREATE TABLE one_pk (
   pk1 BIGINT NOT NULL,
@@ -176,8 +176,21 @@ SELECT DOLT_COMMIT('-a', '-m', 'changed master');
 SELECT DOLT_CHECKOUT('feature-branch');
 INSERT INTO one_pk (pk1,c1,c2) VALUES (0,1,1);
 SQL
-    echo $output
     [ $status -eq 0 ]
+
+    run dolt sql -q "SELECT * FROM one_pk" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "pk1,c1,c2" ]] || false
+    [[ "$output" =~ "0,1,1" ]] || false
+    [[ ! "$output" =~ "0,0,0" ]] || false
+
+    dolt commit -a -m "changed feature branch"
+    dolt checkout master
+    run dolt sql -q "SELECT * FROM one_pk" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "pk1,c1,c2" ]] || false
+    [[ ! "$output" =~ "0,1,1" ]] || false
+    [[ "$output" =~ "0,0,0" ]] || false
 }
 
 get_head_commit() {

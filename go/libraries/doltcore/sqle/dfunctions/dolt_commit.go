@@ -68,8 +68,9 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	allFlag := apr.Contains(cli.AllFlag)
 	allowEmpty := apr.Contains(cli.AllowEmptyFlag)
 
-	// Check if there are no changes in the working set but the -a flag is true
-	if allFlag && !hasWorkingSetChanges(rsr) && !allowEmpty {
+	// Check if there are no changes in the working set but the -a flag is true.
+	// The -a flag is fine when a merge is active.
+	if allFlag && !hasWorkingSetChanges(rsr) && !allowEmpty && !rsr.IsMergeActive() {
 		return nil, fmt.Errorf("Cannot commit an empty commit. See the --allow-empty if you want to.")
 	}
 

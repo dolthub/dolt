@@ -35,6 +35,10 @@ SQL
     run dolt sql -q "SELECT COUNT(*) FROM dolt_log"
     [ $status -eq 0 ]
     [[ "$output" =~ "3" ]] || false
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
 @test "DOLT_MERGE correctly returns head and working session variables." {
@@ -86,6 +90,22 @@ SQL
     run dolt sql -q "SELECT COUNT(*) FROM dolt_log"
     [ $status -eq 0 ]
     [[ "$output" =~ "3" ]] || false
+
+    run dolt status
+    [[ "$output" =~ "All conflicts fixed but you are still merging." ]] || false
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
+
+    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Finish up Merge')";
+    [ $status -eq 0 ]
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    run dolt log -n 1
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Finish up Merge" ]] || false
 }
 
 @test "DOLT_MERGE works with no-ff" {
@@ -131,6 +151,29 @@ SQL
     run dolt sql -q "SELECT $working_variable"
     [ $status -eq 0 ]
     [[ ! "$output" =~ $working_hash ]] || false
+}
+
+@test "DOLT_MERGE properly detects merge conflicts, returns and error and then aborts." {
+    run dolt sql << SQL
+CREATE TABLE one_pk (
+  pk1 BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
+  PRIMARY KEY (pk1)
+);
+SELECT DOLT_COMMIT('-a', '-m', 'add tables');
+SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+SELECT DOLT_CHECKOUT('master');
+INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0);
+SELECT DOLT_COMMIT('-a', '-m', 'changed master');
+SELECT DOLT_CHECKOUT('feature-branch');
+INSERT INTO one_pk (pk1,c1,c2) VALUES (0,1,1);
+SELECT DOLT_COMMIT('-a', '-m', 'changed feature branch');
+SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_MERGE('feature-branch');
+SQL
+    [ $status -eq 1 ]
+    [[ $output =~ "merge has conflicts" ]] || false
 }
 
 get_head_commit() {
