@@ -103,12 +103,12 @@ func (root *RootValue) GetFeatureVersion(ctx context.Context) (ver FeatureVersio
 }
 
 func (root *RootValue) SetFeatureVersion(ctx context.Context) (*RootValue, error) {
-   st, err := root.valueSt.Set(featureVersKey, types.Int(DoltFeatureVersion))
-   if err != nil {
-	   return nil, err
-   }
+	st, err := root.valueSt.Set(featureVersKey, types.Int(DoltFeatureVersion))
+	if err != nil {
+		return nil, err
+	}
 
-   return newRootValue(root.vrw, st)
+	return newRootValue(root.vrw, st)
 }
 
 func (root *RootValue) HasTable(ctx context.Context, tName string) (bool, error) {

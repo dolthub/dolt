@@ -64,31 +64,26 @@ func StageAllTables(ctx context.Context, dbData env.DbData) error {
 	drw := dbData.Drw
 
 	staged, err := env.StagedRoot(ctx, ddb, rsr)
-
 	if err != nil {
 		return err
 	}
 
 	working, err := env.WorkingRoot(ctx, ddb, rsr)
-
 	if err != nil {
 		return err
 	}
 
 	docs, err := drw.GetDocsOnDisk()
-
 	if err != nil {
 		return err
 	}
 
 	working, err = doltdocs.UpdateRootWithDocs(ctx, working, docs)
-
 	if err != nil {
 		return err
 	}
 
 	tbls, err := doltdb.UnionTableNames(ctx, staged, working)
-
 	if err != nil {
 		return err
 	}
@@ -114,6 +109,11 @@ func stageTables(ctx context.Context, db *doltdb.DoltDB, rsw env.RepoStateWriter
 	}
 
 	staged, err = MoveTablesBetweenRoots(ctx, tbls, working, staged)
+	if err != nil {
+		return err
+	}
+
+	staged, err = maybeBumpFeatureVersion(ctx, staged, working)
 	if err != nil {
 		return err
 	}
@@ -174,6 +174,29 @@ func checkTablesForConflicts(ctx context.Context, tbls []string, working *doltdb
 	}
 
 	return working, nil
+}
+
+// maybeBumpFeatureVersion compares the FeatureVersions of |staged| and |working| and
+// updates |staged|'s FeatureVersion if they differ.
+func maybeBumpFeatureVersion(ctx context.Context, staged, working *doltdb.RootValue) (*doltdb.RootValue, error) {
+	sfv, ok1, err := staged.GetFeatureVersion(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	wfv, ok2, err := working.GetFeatureVersion(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if ok1 != ok2 || sfv != wfv {
+		staged, err = staged.SetFeatureVersion(ctx)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return staged, nil
 }
 
 // ValidateTables checks that all tables passed exist in at least one of the roots passed.

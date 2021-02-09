@@ -16,15 +16,16 @@ package doltdb_test
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/stretchr/testify/assert"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/stretchr/testify/require"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
 const (
@@ -67,13 +68,6 @@ type fvUser struct {
 
 var NewClient = fvUser{vers: newVersion}
 var OldClient = fvUser{vers: oldVersion}
-
-func TestFeatureVersionSanityCheck(t *testing.T) {
-	assert.Equal(t, DoltFeatureVersionCopy, doltdb.DoltFeatureVersion)
-
-	assert.NotEqual(t, DoltFeatureVersionCopy, oldVersion)
-	assert.NotEqual(t, DoltFeatureVersionCopy, newVersion)
-}
 
 func TestFeatureVersion(t *testing.T) {
 
@@ -164,11 +158,87 @@ func TestFeatureVersion(t *testing.T) {
 			expVer: oldVersion,
 		},
 		{
+			name: "reset --hard reverts feature version",
+			setup: []fvCommand{
+				{OldClient, commands.SqlCmd{}, args{"-q", "CREATE TABLE test (pk int PRIMARY KEY);"}},
+				{OldClient, commands.CommitCmd{}, args{"-a", "-m", "created table"}},
+				{NewClient, commands.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (0);"}},
+				{NewClient, commands.ResetCmd{}, args{"--hard"}},
+			},
+			expVer: oldVersion,
+		},
+		{
 			name: "new client writes to table, locking out old client",
 			setup: []fvCommand{
 				{OldClient, commands.SqlCmd{}, args{"-q", "CREATE TABLE test (pk int PRIMARY KEY);"}},
 				{OldClient, commands.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (0);"}},
 				{NewClient, commands.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (1);"}},
+			},
+			errCmds: []fvCommand{
+				// old client can't write
+				{OldClient, commands.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (2);"}},
+				// old client can't read
+				{OldClient, commands.SqlCmd{}, args{"-q", "SELECT * FROM test;"}},
+			},
+			expVer: newVersion,
+		},
+		{
+			name: "old client cannot checkout branch written by new client",
+			setup: []fvCommand{
+				{OldClient, commands.SqlCmd{}, args{"-q", "CREATE TABLE test (pk int PRIMARY KEY);"}},
+				{OldClient, commands.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (0);"}},
+				{OldClient, commands.CommitCmd{}, args{"-a", "-m", "created table test"}},
+				{OldClient, commands.BranchCmd{}, args{"other"}},
+				{NewClient, commands.CheckoutCmd{}, args{"other"}},
+				{NewClient, commands.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (10), (11);"}},
+				{NewClient, commands.CommitCmd{}, args{"-a", "-m", "added data to test"}},
+				{NewClient, commands.CheckoutCmd{}, args{"master"}},
+				// OldClient can read from master
+				{OldClient, commands.SqlCmd{}, args{"-q", "SELECT * FROM test"}},
+			},
+			errCmds: []fvCommand{
+				// old client can't checkout 'other'
+				{OldClient, commands.CheckoutCmd{}, args{"other"}},
+				// old client can't merge 'other'
+				{OldClient, commands.MergeCmd{}, args{"other"}},
+			},
+			expVer: oldVersion,
+		},
+		{
+			name: "fast-forward merge writes feature version",
+			setup: []fvCommand{
+				{OldClient, commands.SqlCmd{}, args{"-q", "CREATE TABLE test (pk int PRIMARY KEY);"}},
+				{OldClient, commands.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (0);"}},
+				{OldClient, commands.CommitCmd{}, args{"-a", "-m", "created table test"}},
+				{OldClient, commands.BranchCmd{}, args{"other"}},
+				{NewClient, commands.CheckoutCmd{}, args{"other"}},
+				{NewClient, commands.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (10), (11);"}},
+				{NewClient, commands.CommitCmd{}, args{"-a", "-m", "added data to test"}},
+				{NewClient, commands.CheckoutCmd{}, args{"master"}},
+				{NewClient, commands.MergeCmd{}, args{"other"}},
+			},
+			errCmds: []fvCommand{
+				// old client can't write
+				{OldClient, commands.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (2);"}},
+				// old client can't read
+				{OldClient, commands.SqlCmd{}, args{"-q", "SELECT * FROM test;"}},
+			},
+			expVer: newVersion,
+		},
+		{
+			name: "3way merge writes feature version",
+			setup: []fvCommand{
+				{OldClient, commands.SqlCmd{}, args{"-q", "CREATE TABLE test (pk int PRIMARY KEY);"}},
+				{OldClient, commands.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (0);"}},
+				{OldClient, commands.CommitCmd{}, args{"-a", "-m", "created table test"}},
+				{OldClient, commands.BranchCmd{}, args{"other"}},
+				{OldClient, commands.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (1);"}},
+				{OldClient, commands.CommitCmd{}, args{"-a", "-m", "added another row"}},
+				{NewClient, commands.CheckoutCmd{}, args{"other"}},
+				{NewClient, commands.SqlCmd{}, args{"-q", "INSERT INTO test VALUES (10), (11);"}},
+				{NewClient, commands.CommitCmd{}, args{"-a", "-m", "added data to test"}},
+				{NewClient, commands.CheckoutCmd{}, args{"master"}},
+				{NewClient, commands.MergeCmd{}, args{"other"}},
 			},
 			errCmds: []fvCommand{
 				// old client can't write
@@ -201,13 +271,16 @@ func TestFeatureVersion(t *testing.T) {
 			doltdb.DoltFeatureVersion = newVersion
 			defer func() { doltdb.DoltFeatureVersion = DoltFeatureVersionCopy }()
 
-			root, err := dEnv.WorkingRoot(ctx)
-			require.NoError(t, err)
+			assertFeatureVersion := func(r *doltdb.RootValue) {
+				act, ok, err := r.GetFeatureVersion(ctx)
+				require.NoError(t, err)
+				require.True(t, ok)
+				assert.Equal(t, test.expVer, act)
+			}
 
-			act, ok, err := root.GetFeatureVersion(ctx)
+			working, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
-			require.True(t, ok)
-			assert.Equal(t, test.expVer, act)
+			assertFeatureVersion(working)
 		})
 
 		// ensure |doltdb.DoltFeatureVersion| was restored
