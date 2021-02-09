@@ -100,6 +100,15 @@ teardown() {
     dolt diff
 }
 
+@test "dolt diff on schema changes rename primary key" {
+    dolt add test
+    dolt commit -m "committed table so we can see diffs"
+    dolt sql -q "alter table test rename column pk to pk1"
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "pk1" ]] || false
+}
+
 @test "adding and dropping column should produce no diff" {
     dolt add test
     dolt commit -m "committed table so we can see diffs"
