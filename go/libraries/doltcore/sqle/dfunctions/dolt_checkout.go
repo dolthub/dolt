@@ -201,9 +201,9 @@ func updateHeadAndWorkingSessionVars(ctx *sql.Context, dbData env.DbData) error 
 	}
 
 	workingHash := dbData.Rsr.WorkingHash().String()
-	stagedHash := dbData.Rsr.StagedHash().String()
+	dbData.Rsr.StagedHash().String()
 
-	err = setSessionRootExplicit(ctx, headHash.String(), sqle.HeadKeySuffix, workingHash == stagedHash)
+	err = setSessionRootExplicit(ctx, headHash.String(), sqle.HeadKeySuffix, false)
 	if err != nil {
 		return err
 	}
