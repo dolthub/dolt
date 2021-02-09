@@ -277,7 +277,7 @@ INSERT INTO quiz VALUES (10),(11),(12);
 SQL
     dolt add . && dolt commit -m "added table quiz on master";
 
-    dolt checkout other
+    dolt checkout master
     dolt sql <<SQL
 CREATE TABLE quiz (pk int PRIMARY KEY);
 INSERT INTO quiz VALUES (20),(21),(22);
