@@ -5,17 +5,17 @@ setup() {
     setup_common
     dolt sql <<SQL
 CREATE TABLE test1 (
-  pk BIGINT NOT NULL,
-  c1 BIGINT,
-  c2 BIGINT,
+  pk int NOT NULL,
+  c1 int,
+  c2 int,
   PRIMARY KEY (pk)
 );
 SQL
     dolt sql <<SQL
 CREATE TABLE test2 (
-  pk BIGINT NOT NULL,
-  c1 BIGINT,
-  c2 BIGINT,
+  pk int NOT NULL,
+  c1 int,
+  c2 int,
   PRIMARY KEY (pk)
 );
 SQL
@@ -267,4 +267,50 @@ teardown() {
 
     run dolt merge merge_branch
     [ "$status" -eq 1 ]
+}
+
+@test "Add tables with same schema on two branches, merge" {
+    dolt branch other
+    dolt sql <<SQL
+CREATE TABLE quiz (pk int PRIMARY KEY);
+INSERT INTO quiz VALUES (10),(11),(12);
+SQL
+    dolt add . && dolt commit -m "added table quiz on master";
+
+    dolt checkout other
+    dolt sql <<SQL
+CREATE TABLE quiz (pk int PRIMARY KEY);
+INSERT INTO quiz VALUES (20),(21),(22);
+SQL
+    dolt add . && dolt commit -m "added table quiz on other"
+
+    dolt checkout other
+    run dolt merge master
+    [ "$status" -eq 0 ]
+    run dolt sql -q "SELECT * FROM quiz;" -r csv
+    [[ "${lines[0]}" =~ "pk" ]] || false
+    [[ "${lines[1]}" =~ "10" ]] || false
+    [[ "${lines[2]}" =~ "11" ]] || false
+    [[ "${lines[3]}" =~ "12" ]] || false
+    [[ "${lines[4]}" =~ "20" ]] || false
+    [[ "${lines[5]}" =~ "21" ]] || false
+    [[ "${lines[6]}" =~ "22" ]] || false
+}
+
+@test "Add views on two branches, merge" {
+    dolt branch other
+    dolt sql -q "CREATE VIEW pkpk AS SELECT pk*pk FROM test1;"
+    dolt add . && dolt commit -m "added view on table test1"
+
+    dolt checkout other
+    dolt sql -q "CREATE VIEW c1c1 AS SELECT c1*c1 FROM test2;"
+    dolt add . && dolt commit -m "added view on table test2"
+
+    dolt checkout master
+    run dolt merge other
+    [ "$status" -eq 0 ]
+    run dolt sql -q "select name from dolt_schemas" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "pkpk" ]] || false
+    [[ "$output" =~ "c1c1" ]] || false
 }
