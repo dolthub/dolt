@@ -64,7 +64,20 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return 1, fmt.Errorf("error: Flags '--%s' and '--%s' cannot be used together.\n", cli.SquashParam, cli.NoFFParam)
 	}
 
-	// TODO: Need to deal with merge aborts.
+	if apr.Contains(cli.AbortParam) {
+		if !dbData.Rsr.IsMergeActive() {
+			return 1, fmt.Errorf("fatal: There is no merge to abort")
+		}
+
+		err = abortMerge(ctx, dbData)
+
+		if err != nil {
+			return 1, err
+		}
+
+		return "Merge aborted", nil
+	}
+
 	// The first argument should be the branch name.
 	branchName := apr.Arg(0)
 
@@ -78,7 +91,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	parent, _, parentRoot, err := getParent(ctx, err, sess, dbName)
+	parent, ph, parentRoot, err := getParent(ctx, err, sess, dbName)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +130,29 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return nil, err
 	}
 
-	return "success", nil
+	returnMsg := fmt.Sprintf("Updating %s..%s", cmh.String(), ph.String())
+
+	return returnMsg, nil
+}
+
+func abortMerge(ctx *sql.Context, dbData env.DbData) error {
+	err := actions.CheckoutAllTables(ctx, dbData)
+
+	if err != nil {
+		return err
+	}
+
+	err = dbData.Rsw.ClearMerge()
+	if err != nil {
+		return err
+	}
+
+	hh, err := dbData.Rsr.CWBHeadHash(ctx)
+	if err != nil {
+		return err
+	}
+
+	return setHeadAndWorkingSessionRoot(ctx, hh.String())
 }
 
 func executeMerge(ctx *sql.Context, parent, cm *doltdb.Commit, dbData env.DbData) error {

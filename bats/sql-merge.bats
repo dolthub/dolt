@@ -174,6 +174,13 @@ SELECT DOLT_MERGE('feature-branch');
 SQL
     [ $status -eq 1 ]
     [[ $output =~ "merge has conflicts" ]] || false
+
+    run dolt sql -q "SELECT DOLT_MERGE('--abort');"
+    [ $status -eq 0 ]
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
 get_head_commit() {
