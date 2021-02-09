@@ -198,11 +198,3 @@ teardown() {
     [ "$status" -eq 1 ]
     [ "$output" = "fatal: 'dots.are.not.supported' is an invalid branch name." ]
 }
-
-# pd.to_sql checks missing table with describe syntax
-@test "describe missing table does not raise" {
-    run dolt -q "describe missing_table"
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
-}
-

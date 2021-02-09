@@ -751,3 +751,11 @@ SQL
     CLI=$(dolt version | cut -f 3 -d ' ')
     [ "$SQL" == "$CLI" ]
 }
+
+# pd.to_sql checks missing table with describe syntax
+@test "describe missing table does not raise" {
+    run dolt -q "DESCRIBE missing_table"
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+}
+
