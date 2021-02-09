@@ -28,6 +28,20 @@ SQL
     [ "$status" -eq 0 ]
 }
 
+@test "can't drop dolt_schemas" {
+    run dolt sql -q "create view four as select 2+2 as res from dual;"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "select name from dolt_schemas" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ 'four' ]] || false
+    run dolt sql -q "drop table dolt_schemas"
+    skip "dropping dolt_schemas is currently unprotected"
+    [ "$status" -ne 0 ]
+    run dolt sql -q "select name from dolt_schemas" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ 'four' ]] || false
+}
+
 @test "join two views" {
     run dolt sql <<SQL
 create view four as select 2+2 as res from dual;
