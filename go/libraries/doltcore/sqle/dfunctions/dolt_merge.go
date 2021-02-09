@@ -91,6 +91,19 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
+	hasConflicts, err := root.HasConflicts(ctx)
+	if err != nil {
+		return 1, err
+	}
+
+	if hasConflicts {
+		return 1, errors.New("error: merge has unresolved conflicts")
+	}
+
+	if dbData.Rsr.IsMergeActive() {
+		return 1, errors.New("error: Merging is not possible because you have not committed an active merge")
+	}
+
 	parent, ph, parentRoot, err := getParent(ctx, err, sess, dbName)
 	if err != nil {
 		return nil, err
