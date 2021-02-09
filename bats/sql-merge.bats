@@ -287,13 +287,73 @@ SQL
     [[ $output =~ "merging is not possible because you have not committed an active merge" ]] || false
 }
 
-@test "DOLT_MERGE with squash works" {
+@test "DOLT_MERGE works with ff and squash" {
+        dolt sql << SQL
+SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
+SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+INSERT INTO test VALUES (3);
+SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');
+SELECT DOLT_CHECKOUT('master');
+SQL
+    run dolt sql -q "SELECT DOLT_MERGE('feature-branch', '--squash');"
+    [ $status -eq 0 ]
 
+    run dolt log -n 1
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Step 1" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) FROM dolt_log"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
+
+    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'hi');"
+    echo $output
+    [ $status -eq 0 ]
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
-@test "DOLT_MERGE with working set changes works." {
+@test "DOLT_MERGE with nom-ff and squash works." {
+    dolt sql << SQL
+SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
+SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+INSERT INTO test VALUES (3);
+SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
+SELECT DOLT_CHECKOUT('master');
+INSERT INTO test VALUES (500000);
+SELECT DOLT_COMMIT('-a', '-m', 'Insert 500000');
+SELECT DOLT_MERGE('feature-branch', '--squash');
+SQL
 
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
+
+    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Finish up Merge')";
+    [ $status -eq 0 ]
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    run dolt log -n 1
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Finish up Merge" ]] || false
 }
+
+#@test "DOLT_MERGE with working set changes works." {
+#
+#}
 
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 8-

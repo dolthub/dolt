@@ -51,6 +51,23 @@ teardown() {
     [[ "$output" =~ "$regex" ]] || false
 }
 
+@test "DOLT_ADD all w/ . combined with DOLT_COMMIT -a works" {
+    run dolt sql -q "SELECT DOLT_ADD('.')"
+    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
+
+    # Check that everything was added
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+
+    run dolt log
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Commit1" ]] || false
+    regex='Bats Tests <bats@email.fake>'
+    [[ "$output" =~ "$regex" ]] || false
+}
+
+
 @test "DOLT_ADD can take in one table" {
     run dolt sql -q "SELECT DOLT_ADD('test')"
     run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"

@@ -138,7 +138,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return cmh.String(), err
 	}
 
-	err = executeMerge(ctx, parent, cm, dbData)
+	err = executeMerge(ctx, apr.Contains(cli.SquashParam), parent, cm, dbData)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +168,7 @@ func abortMerge(ctx *sql.Context, dbData env.DbData) error {
 	return setHeadAndWorkingSessionRoot(ctx, hh.String())
 }
 
-func executeMerge(ctx *sql.Context, parent, cm *doltdb.Commit, dbData env.DbData) error {
+func executeMerge(ctx *sql.Context, squash bool, parent, cm *doltdb.Commit, dbData env.DbData) error {
 	mergeRoot, mergeStats, err := merge.MergeCommits(ctx, parent, cm)
 
 	if err != nil {
@@ -182,7 +182,7 @@ func executeMerge(ctx *sql.Context, parent, cm *doltdb.Commit, dbData env.DbData
 		}
 	}
 
-	return mergedRootToWorking(ctx, false, dbData, mergeRoot, cm, mergeStats)
+	return mergedRootToWorking(ctx, squash, dbData, mergeRoot, cm, mergeStats)
 }
 
 func executeFFMerge(ctx *sql.Context, squash bool, dbData env.DbData, cm2 *doltdb.Commit) error {
@@ -283,7 +283,7 @@ func executeNoFFMerge(ctx *sql.Context, dSess *sqle.DoltSession, apr *argparser.
 	return setHeadAndWorkingSessionRoot(ctx, h)
 }
 
-func mergedRootToWorking(ctx *sql.Context, squash bool, dbData env.DbData, mergedRoot *doltdb.RootValue, cm2 *doltdb.Commit, mergeStats map[string]*merge.MergeStats) error {
+func 	mergedRootToWorking(ctx *sql.Context, squash bool, dbData env.DbData, mergedRoot *doltdb.RootValue, cm2 *doltdb.Commit, mergeStats map[string]*merge.MergeStats) error {
 	h2, err := cm2.HashOf()
 	workingRoot := mergedRoot
 
