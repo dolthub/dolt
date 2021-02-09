@@ -101,7 +101,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	}
 
 	if dbData.Rsr.IsMergeActive() {
-		return 1, errors.New("error: Merging is not possible because you have not committed an active merge")
+		return 1, errors.New("error: merging is not possible because you have not committed an active merge")
 	}
 
 	parent, ph, parentRoot, err := getParent(ctx, err, sess, dbName)

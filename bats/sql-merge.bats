@@ -236,6 +236,63 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "pk1,c1,c2" ]] || false
     [[ "$output" =~ "0,1,1" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) from dolt_status;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0" ]] || false
+}
+
+@test "DOLT_MERGE with unresolved conflicts throws an error" {
+      run dolt sql << SQL
+CREATE TABLE one_pk (
+  pk1 BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
+  PRIMARY KEY (pk1)
+);
+SELECT DOLT_COMMIT('-a', '-m', 'add tables');
+SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+SELECT DOLT_CHECKOUT('master');
+INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0);
+SELECT DOLT_COMMIT('-a', '-m', 'changed master');
+SELECT DOLT_CHECKOUT('feature-branch');
+INSERT INTO one_pk (pk1,c1,c2) VALUES (0,1,1);
+SELECT DOLT_COMMIT('-a', '-m', 'changed feature branch');
+SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_MERGE('feature-branch');
+SQL
+    [ $status -eq 1 ]
+    [[ $output =~ "merge has conflicts" ]] || false
+
+    run dolt sql -q "SELECT DOLT_MERGE('feature-branch');"
+    [ $status -eq 1 ]
+    echo $output
+    [[ $output =~ "merge has unresolved conflicts" ]] || false
+}
+
+@test "DOLT_MERGE during an active merge throws an error" {
+    run dolt sql << SQL
+SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
+SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+INSERT INTO test VALUES (3);
+SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
+SELECT DOLT_CHECKOUT('master');
+INSERT INTO test VALUES (500000);
+SELECT DOLT_COMMIT('-a', '-m', 'Insert 500000');
+SELECT DOLT_MERGE('feature-branch');
+SELECT DOLT_MERGE('feature-branch');
+SQL
+
+    [ $status -eq 1 ]
+    [[ $output =~ "merging is not possible because you have not committed an active merge" ]] || false
+}
+
+@test "DOLT_MERGE with squash works" {
+
+}
+
+@test "DOLT_MERGE with working set changes works." {
+
 }
 
 get_head_commit() {
