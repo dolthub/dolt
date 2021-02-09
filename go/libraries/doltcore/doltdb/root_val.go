@@ -49,8 +49,22 @@ type RootValue struct {
 	fkc     *ForeignKeyCollection // cache the first load
 }
 
-func newRootValue(vrw types.ValueReadWriter, st types.Struct) *RootValue {
-	return &RootValue{vrw, st, nil}
+func newRootValue(vrw types.ValueReadWriter, st types.Struct) (*RootValue, error) {
+	v, ok, err := st.MaybeGet(featureVersKey)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		ver := FeatureVersion(v.(types.Int))
+		if DoltFeatureVersion < ver {
+			return nil, ErrClientOutOfDate{
+				ClientVer: DoltFeatureVersion,
+				RepoVer:   ver,
+			}
+		}
+	}
+
+	return &RootValue{vrw, st, nil}, nil
 }
 
 func emptyRootValue(ctx context.Context, vrw types.ValueReadWriter) (*RootValue, error) {
@@ -71,7 +85,7 @@ func emptyRootValue(ctx context.Context, vrw types.ValueReadWriter) (*RootValue,
 		return nil, err
 	}
 
-	return newRootValue(vrw, st), err
+	return newRootValue(vrw, st)
 }
 
 func (root *RootValue) VRW() types.ValueReadWriter {
@@ -94,9 +108,8 @@ func (root *RootValue) SetFeatureVersion(ctx context.Context) (*RootValue, error
 	   return nil, err
    }
 
-   return newRootValue(root.vrw, st), nil
+   return newRootValue(root.vrw, st)
 }
-
 
 func (root *RootValue) HasTable(ctx context.Context, tName string) (bool, error) {
 	val, found, err := root.valueSt.MaybeGet(tablesKey)
@@ -608,7 +621,7 @@ func (root *RootValue) PutSuperSchema(ctx context.Context, tName string, ss *sch
 		return nil, err
 	}
 
-	return newRootValue(root.vrw, newRootSt), nil
+	return newRootValue(root.vrw, newRootSt)
 }
 
 // PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
@@ -655,7 +668,7 @@ func putTable(ctx context.Context, root *RootValue, tName string, tableRef types
 		return nil, err
 	}
 
-	return newRootValue(root.vrw, rootValSt), nil
+	return newRootValue(root.vrw, rootValSt)
 }
 
 // CreateEmptyTable creates an empty table in this root with the name and schema given, returning the new root value.
@@ -778,7 +791,7 @@ func (root *RootValue) UpdateSuperSchemasFromOther(ctx context.Context, tblNames
 		return nil, err
 	}
 
-	return newRootValue(root.vrw, newRootSt), nil
+	return newRootValue(root.vrw, newRootSt)
 }
 
 // RenameTable renames a table by changing its string key in the RootValue's table map. In order to preserve
@@ -852,10 +865,10 @@ func (root *RootValue) RenameTable(ctx context.Context, oldName, newName string)
 		if err != nil {
 			return nil, err
 		}
-		return newRootValue(root.vrw, rootValSt), nil
+		return newRootValue(root.vrw, rootValSt)
 	}
 
-	return newRootValue(root.vrw, rootValSt), nil
+	return newRootValue(root.vrw, rootValSt)
 }
 
 func (root *RootValue) RemoveTables(ctx context.Context, tables ...string) (*RootValue, error) {
@@ -890,7 +903,10 @@ func (root *RootValue) RemoveTables(ctx context.Context, tables ...string) (*Roo
 		return nil, err
 	}
 
-	newRoot := newRootValue(root.vrw, rootValSt)
+	newRoot, err := newRootValue(root.vrw, rootValSt)
+	if err != nil {
+		return nil, err
+	}
 
 	fkc, err := newRoot.GetForeignKeyCollection(ctx)
 

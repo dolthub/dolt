@@ -420,21 +420,7 @@ func (ddb *DoltDB) ReadRootValue(ctx context.Context, h hash.Hash) (*RootValue, 
 		return nil, errors.New("there is no dolt root value at that hash")
 	}
 
-	v, ok, err := rootSt.MaybeGet(featureVersKey)
-	if err != nil {
-		return nil, err
-	}
-	if ok {
-		ver := FeatureVersion(v.(types.Int))
-		if DoltFeatureVersion < ver {
-			return nil, ErrClientOutOfDate{
-				ClientVer: DoltFeatureVersion,
-				RepoVer:   ver,
-			}
-		}
-	}
-
-	return &RootValue{ddb.db, rootSt, nil}, nil
+	return newRootValue(ddb.db, rootSt)
 }
 
 // Commit will update a branch's head value to be that of a previously committed root value hash
