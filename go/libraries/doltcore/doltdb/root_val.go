@@ -102,6 +102,7 @@ func (root *RootValue) GetFeatureVersion(ctx context.Context) (ver FeatureVersio
 	return ver, ok, err
 }
 
+// SetFeatureVersion writes the Dolt client's FeatureVersion to |root|.
 func (root *RootValue) SetFeatureVersion(ctx context.Context) (*RootValue, error) {
 	st, err := root.valueSt.Set(featureVersKey, types.Int(DoltFeatureVersion))
 	if err != nil {
