@@ -105,7 +105,6 @@ teardown() {
     dolt commit -m "committed table so we can see diffs"
     dolt sql -q "alter table test rename column pk to pk1"
     run dolt diff
-    skip "this panics right now with panic: primary key sets must be the same"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "pk1" ]] || false
 }
