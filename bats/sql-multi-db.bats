@@ -83,3 +83,19 @@ seed_repos_with_tables_with_use_statements() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED" ]] || false
 }
+
+# tonicai creates tmp databases when generating tables as a locking mechanism i think
+# a no op might work?
+@test "sql create new database" {
+    run dolt sql -q "CREATE DATABASE tmp1"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "DROP DATABASE tmp1"
+    [ "$status" -eq 0 ]
+}
+
+@test "sql create new database via SCHEMA alias" {
+    run dolt sql -q "CREATE SCHEMA tmp1"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "DROP SCHEMA tmp1"
+    [ "$status" -eq 0 ]
+}
