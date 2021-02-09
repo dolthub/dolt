@@ -35,6 +35,14 @@ SQL
     run dolt sql -q "SELECT COUNT(*) FROM dolt_log"
     [ $status -eq 0 ]
     [[ "$output" =~ "3" ]] || false
+
+     run dolt sql -q "SELECT * FROM test;" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "pk" ]] || false
+    [[ "$output" =~ "0" ]] || false
+    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "2" ]] || false
+    [[ "$output" =~ "3" ]] || false
 }
 
 @test "DOLT_MERGE correctly returns head and working session variables." {
@@ -55,6 +63,13 @@ SQL
     run dolt sql -q "SELECT $head_variable"
     [ $status -eq 0 ]
     [[ "$output" =~ $head_hash ]] || false
+}
+
+@test "DOLT_MERGE with unknown branch name name throws an error" {
+    dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Step 1');"
+
+    run dolt sql -q "SELECT DOLT_MERGE('feature-branch');"
+    [ $status -eq 1 ]
 }
 
 get_head_commit() {

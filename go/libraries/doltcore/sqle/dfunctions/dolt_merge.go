@@ -98,7 +98,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		}
 		return cmh.String(), err
 	} else {
-		return nil, errors.New("Cannot handle this case yet.")
+		return nil, errors.New("DOLT_MERGE only supports fast forwards right now")
 	}
 }
 
@@ -134,7 +134,7 @@ func executeFFMerge(ctx *sql.Context, squash bool, dbData env.DbData, cm2 *doltd
 	stagedHash, err := dbData.Ddb.WriteRootValue(ctx, rv)
 
 	if err != nil {
-		return errors.New("Failed to write database.")
+		return err
 	}
 
 	workingHash := stagedHash
@@ -142,7 +142,7 @@ func executeFFMerge(ctx *sql.Context, squash bool, dbData env.DbData, cm2 *doltd
 		err = dbData.Ddb.FastForward(ctx, dbData.Rsr.CWBHeadRef(), cm2)
 
 		if err != nil {
-			return errors.New("Failed to write database")
+			return err
 		}
 	}
 

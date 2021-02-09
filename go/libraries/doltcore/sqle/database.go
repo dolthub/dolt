@@ -478,11 +478,6 @@ func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 	dsess := DSessFromSess(ctx.Session)
 	dsess.dbRoots[db.name] = dbRoot{hashStr, newRoot}
 
-	_, err = dsess.dbDatas[db.name].Ddb.WriteRootValue(ctx, newRoot)
-	if err != nil {
-		return err
-	}
-
 	err = dsess.dbEditors[db.name].SetRoot(ctx, newRoot)
 	if err != nil {
 		return err

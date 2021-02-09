@@ -916,11 +916,18 @@ func updateRepoState(ctx *sql.Context, se *sqlEngine) error {
 			rsw, ok := dsess.GetDoltDBRepoStateWriter(db.Name())
 			if ok {
 				err = rsw.SetWorkingHash(ctx, h)
+				if err != nil {
+					return false, err
+				}
 			}
-		}
 
-		if err != nil {
-			return false, err
+			ddb, ok := dsess.GetDoltDB(db.Name())
+			if ok {
+				_, err = ddb.WriteRootValue(ctx, root)
+				if err != nil {
+					return false, err
+				}
+			}
 		}
 
 		return false, nil
@@ -986,7 +993,7 @@ func processNonInsertBatchQuery(ctx *sql.Context, se *sqlEngine, query string, s
 		return err
 	}
 
-	foundDoltSQLFunc, err := checkForDoltSQLFunction(query)
+	foundDoltSQLFunc, err := checkForDoltSQLFunction(sqlStatement)
 	if err != nil {
 		return err
 	}
@@ -1115,12 +1122,7 @@ func foundSubquery(node sqlparser.SQLNode) bool {
 }
 
 // hasDoltSQLFunction checks if a function is a dolt SQL function as defined in the dfunc package.
-func checkForDoltSQLFunction(query string) (bool, error) {
-	statement, err := sqlparser.Parse(query)
-	if err != nil {
-		return false, err
-	}
-
+func checkForDoltSQLFunction(statement sqlparser.Statement) (bool, error) {
 	switch node := statement.(type) {
 	case *sqlparser.Select:
 		return hasDoltSQLFunction(node), nil
@@ -1134,7 +1136,7 @@ func hasDoltSQLFunction(node sqlparser.SQLNode) bool {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (keepGoing bool, err error) {
 		if f, ok := node.(*sqlparser.FuncExpr); ok {
 			name := strings.ToLower(f.Name.String())
-			if strings.Contains(name, "dolt_") {
+			if strings.HasPrefix(name, "dolt_") {
 				has = true
 			}
 			return false, nil
