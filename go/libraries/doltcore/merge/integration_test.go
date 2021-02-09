@@ -16,16 +16,16 @@ package merge_test
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"testing"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
 
 	cmd "github.com/dolthub/dolt/go/cmd/dolt/commands"
 	dtu "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
-
 
 func TestMerge(t *testing.T) {
 
@@ -35,14 +35,14 @@ func TestMerge(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		setup    []testCommand
+		name  string
+		setup []testCommand
 
 		query    string
 		expected []sql.Row
 	}{
 		{
-			name: "smoke test",
+			name:  "smoke test",
 			query: "SELECT * FROM test;",
 		},
 		{
