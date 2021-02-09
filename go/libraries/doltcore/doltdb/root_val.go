@@ -49,75 +49,24 @@ type RootValue struct {
 	fkc     *ForeignKeyCollection // cache the first load
 }
 
-func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[string]hash.Hash, ssMap types.Map, fkMap types.Map) (*RootValue, error) {
-	values := make([]types.Value, 2*len(tables))
-
-	index := 0
-	for k, v := range tables {
-		values[index] = types.String(k)
-		valForHash, err := vrw.ReadValue(ctx, v)
-
-		if err != nil {
-			return nil, err
-		}
-
-		if valForHash == nil {
-			return nil, ErrHashNotFound
-		}
-
-		values[index+1], err = types.NewRef(valForHash, vrw.Format())
-
-		if err != nil {
-			return nil, err
-		}
-
-		index += 2
-	}
-
-	tblMap, err := types.NewMap(ctx, vrw, values...)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return newRootFromMaps(vrw, tblMap, ssMap, fkMap)
-}
-
 func newRootValue(vrw types.ValueReadWriter, st types.Struct) *RootValue {
 	return &RootValue{vrw, st, nil}
 }
 
 func emptyRootValue(ctx context.Context, vrw types.ValueReadWriter) (*RootValue, error) {
-	m, err := types.NewMap(ctx, vrw)
-
+	empty, err := types.NewMap(ctx, vrw)
 	if err != nil {
 		return nil, err
 	}
 
-	mm, err := types.NewMap(ctx, vrw)
-
-	if err != nil {
-		return nil, err
-	}
-
-	mmm, err := types.NewMap(ctx, vrw)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return newRootFromMaps(vrw, m, mm, mmm)
-}
-
-func newRootFromMaps(vrw types.ValueReadWriter, tblMap types.Map, ssMap types.Map, fkMap types.Map) (*RootValue, error) {
 	sd := types.StructData{
-		tablesKey:       tblMap,
-		superSchemasKey: ssMap,
-		foreignKeyKey:   fkMap,
+		tablesKey:       empty,
+		superSchemasKey: empty,
+		foreignKeyKey:   empty,
+		featureVersKey:  types.Int(DoltFeatureVersion),
 	}
 
 	st, err := types.NewStruct(vrw.Format(), ddbRootStructName, sd)
-
 	if err != nil {
 		return nil, err
 	}
@@ -757,79 +706,6 @@ func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch s
 // HashOf gets the hash of the root value
 func (root *RootValue) HashOf() (hash.Hash, error) {
 	return root.valueSt.Hash(root.vrw.Format())
-}
-
-// UpdateTablesFromOther takes the tables from the given root and applies them to the calling root, along with any
-// foreign keys and other table-related data.
-func (root *RootValue) UpdateTablesFromOther(ctx context.Context, tblNames []string, other *RootValue) (*RootValue, error) {
-	tableMap, err := root.getTableMap()
-	if err != nil {
-		return nil, err
-	}
-	fkCollection, err := root.GetForeignKeyCollection(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	otherMap, err := other.getTableMap()
-	if err != nil {
-		return nil, err
-	}
-	otherFkCollection, err := other.GetForeignKeyCollection(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var fksToAdd []ForeignKey
-	var fksToRemove []ForeignKey
-
-	me := tableMap.Edit()
-	for _, tblName := range tblNames {
-		key := types.String(tblName)
-		if val, ok, err := otherMap.MaybeGet(ctx, key); err != nil {
-			return nil, err
-		} else if ok {
-			me = me.Set(key, val)
-			newFks, _ := otherFkCollection.KeysForTable(tblName)
-			fksToAdd = append(fksToAdd, newFks...)
-			// must remove deleted fks too
-			currentFks, _ := fkCollection.KeysForTable(tblName)
-			newFksSet := make(map[string]struct{})
-			for _, newFk := range newFks {
-				newFksSet[newFk.Name] = struct{}{}
-			}
-			for _, currentFk := range currentFks {
-				_, ok := newFksSet[currentFk.Name]
-				if !ok {
-					fksToRemove = append(fksToRemove, currentFk)
-				}
-			}
-		} else if _, ok, err := tableMap.MaybeGet(ctx, key); err != nil {
-			return nil, err
-		} else if ok {
-			me = me.Remove(key)
-			fks, _ := fkCollection.KeysForTable(tblName)
-			fksToRemove = append(fksToRemove, fks...)
-		}
-	}
-
-	m, err := me.Map(ctx)
-	if err != nil {
-		return nil, err
-	}
-	rootValSt, err := root.valueSt.Set(tablesKey, m)
-	if err != nil {
-		return nil, err
-	}
-
-	newRoot := newRootValue(root.vrw, rootValSt)
-	fkCollection.Stage(ctx, fksToAdd, fksToRemove)
-	newRoot, err = newRoot.PutForeignKeyCollection(ctx, fkCollection)
-	if err != nil {
-		return nil, err
-	}
-
-	return newRoot, nil
 }
 
 // UpdateSuperSchemasFromOther updates SuperSchemas of tblNames using SuperSchemas from other.

@@ -19,7 +19,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/stretchr/testify/assert"
-	"math"
 	"testing"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -54,10 +53,10 @@ type fvCommand struct {
 	args args
 }
 
-func (cmd fvCommand) exec(t *testing.T, ctx context.Context, dEnv *env.DoltEnv) int {
+func (cmd fvCommand) exec(ctx context.Context, dEnv *env.DoltEnv) int {
 	// execute the command using |cmd.user|'s Feature Version
-	doltdb.DoltFeatureVersion, cmd.user.vers = cmd.user.vers, doltdb.DoltFeatureVersion
-	defer func() { doltdb.DoltFeatureVersion = cmd.user.vers }()
+	doltdb.DoltFeatureVersion = cmd.user.vers
+	defer func() { doltdb.DoltFeatureVersion = DoltFeatureVersionCopy }()
 
 	return cmd.cmd.Exec(ctx, cmd.cmd.Name(), cmd.args, dEnv)
 }
@@ -154,6 +153,17 @@ func TestFeatureVersion(t *testing.T) {
 			expVer: oldVersion,
 		},
 		{
+			name: "Checkout does not update feature version",
+			setup: []fvCommand{
+				{OldClient, commands.SqlCmd{}, args{"-q", "CREATE TABLE test (pk int PRIMARY KEY);"}},
+				{OldClient, commands.CommitCmd{}, args{"-a", "-m", "created table"}},
+				{OldClient, commands.BranchCmd{}, args{"other"}},
+				{NewClient, commands.CheckoutCmd{}, args{"other"}},
+				{NewClient, commands.CheckoutCmd{}, args{"master"}},
+			},
+			expVer: oldVersion,
+		},
+		{
 			name: "new client writes to table, locking out old client",
 			setup: []fvCommand{
 				{OldClient, commands.SqlCmd{}, args{"-q", "CREATE TABLE test (pk int PRIMARY KEY);"}},
@@ -173,22 +183,22 @@ func TestFeatureVersion(t *testing.T) {
 	ctx := context.Background()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+
+			doltdb.DoltFeatureVersion = oldVersion
 			dEnv := dtestutils.CreateTestEnv()
+			doltdb.DoltFeatureVersion = DoltFeatureVersionCopy
 
 			for _, cmd := range test.setup {
-				code := cmd.exec(t, ctx, dEnv)
+				code := cmd.exec(ctx, dEnv)
 				require.Equal(t, 0, code)
 			}
 			for _, cmd := range test.errCmds {
-				code := cmd.exec(t, ctx, dEnv)
+				code := cmd.exec(ctx, dEnv)
 				require.NotEqual(t, 0, code)
 			}
 
-			// ensure |doltdb.DoltFeatureVersion| was restored
-			assert.Equal(t, DoltFeatureVersionCopy, doltdb.DoltFeatureVersion)
-
-			// execute assertions with max feature version
-			doltdb.DoltFeatureVersion = math.MaxInt64
+			// execute assertions with newVersion to avoid OutOfDate errors
+			doltdb.DoltFeatureVersion = newVersion
 			defer func() { doltdb.DoltFeatureVersion = DoltFeatureVersionCopy }()
 
 			root, err := dEnv.WorkingRoot(ctx)
@@ -196,8 +206,11 @@ func TestFeatureVersion(t *testing.T) {
 
 			act, ok, err := root.GetFeatureVersion(ctx)
 			require.NoError(t, err)
-			assert.True(t, ok)
+			require.True(t, ok)
 			assert.Equal(t, test.expVer, act)
 		})
+
+		// ensure |doltdb.DoltFeatureVersion| was restored
+		assert.Equal(t, DoltFeatureVersionCopy, doltdb.DoltFeatureVersion)
 	}
 }
