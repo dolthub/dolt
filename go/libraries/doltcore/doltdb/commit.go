@@ -172,7 +172,7 @@ func (c *Commit) GetRootValue() (*RootValue, error) {
 
 	if rootVal != nil {
 		if rootSt, ok := rootVal.(types.Struct); ok {
-			return newRootValue(c.vrw, rootSt), nil
+			return newRootValue(c.vrw, rootSt)
 		}
 	}
 
