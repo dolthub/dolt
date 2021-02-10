@@ -910,6 +910,42 @@ func (s *stats) shouldFlush() bool {
 	return s.unflushedEdits >= maxBatchSize
 }
 
+// updateRepoState takes in a context and database and updates repo state if autocommit is on
+func updateRepoState(ctx *sql.Context, se *sqlEngine) error {
+	err := se.iterDBs(func(_ string, db dsqle.Database) (bool, error) {
+		root, err := db.GetRoot(ctx)
+		if err != nil {
+			return false, err
+		}
+
+		h, err := root.HashOf()
+		if err != nil {
+			return false, err
+		}
+
+		dsess := dsqle.DSessFromSess(ctx.Session)
+		rsw, ok := dsess.GetDoltDBRepoStateWriter(db.Name())
+		if ok {
+			err = rsw.SetWorkingHash(ctx, h)
+			if err != nil {
+				return false, err
+			}
+		}
+
+		ddb, ok := dsess.GetDoltDB(db.Name())
+		if ok {
+			_, err = ddb.WriteRootValue(ctx, root)
+			if err != nil {
+				return false, err
+			}
+		}
+
+		return false, nil
+	})
+
+	return err
+}
+
 func flushBatchedEdits(ctx *sql.Context, se *sqlEngine) error {
 	err := se.iterDBs(func(_ string, db dsqle.Database) (bool, error) {
 		err := db.Flush(ctx)
@@ -965,6 +1001,19 @@ func processNonInsertBatchQuery(ctx *sql.Context, se *sqlEngine, query string, s
 	err := flushBatchedEdits(ctx, se)
 	if err != nil {
 		return err
+	}
+
+	foundDoltSQLFunc, err := checkForDoltSQLFunction(sqlStatement)
+	if err != nil {
+		return err
+	}
+
+	// DOLT SQL functions like DOLT_COMMIT require an updated repo state to work correctly.
+	if foundDoltSQLFunc {
+		err = updateRepoState(ctx, se)
+		if err != nil {
+			return err
+		}
 	}
 
 	sqlSch, rowIter, err := processQuery(ctx, query, se)
@@ -1045,7 +1094,7 @@ func canProcessAsBatchInsert(ctx *sql.Context, sqlStatement sqlparser.Statement,
 			return false, nil
 		}
 
-		// TODO: This check coming first seems to cost problems. Perhaps in the analyzer.
+		// TODO: This check coming first seems to cause problems with ctx.Session. Perhaps in the analyzer.
 		hasAutoInc, err := insertsIntoAutoIncrementCol(ctx, se, query)
 		if err != nil {
 			return false, err
@@ -1080,6 +1129,30 @@ func foundSubquery(node sqlparser.SQLNode) bool {
 		}
 		return true, nil
 	}, node)
+	return has
+}
+
+func checkForDoltSQLFunction(statement sqlparser.Statement) (bool, error) {
+	switch node := statement.(type) {
+	default:
+		return hasDoltSQLFunction(node), nil
+	}
+}
+
+// hasDoltSQLFunction checks if a function is a dolt SQL function as defined in the dfunc package.
+func hasDoltSQLFunction(node sqlparser.SQLNode) bool {
+	has := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (keepGoing bool, err error) {
+		if f, ok := node.(*sqlparser.FuncExpr); ok {
+			name := strings.ToLower(f.Name.String())
+			if strings.HasPrefix(name, "dolt_") {
+				has = true
+			}
+			return false, nil
+		}
+		return true, nil
+	}, node)
+
 	return has
 }
 

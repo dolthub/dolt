@@ -81,6 +81,7 @@ const (
 	HardResetParam   = "hard"
 	SoftResetParam   = "soft"
 	CheckoutCoBranch = "b"
+	NoFFParam        = "no-ff"
 )
 
 // Creates the argparser shared dolt commit cli and DOLT_COMMIT.
@@ -92,6 +93,12 @@ func CreateCommitArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(ForceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
 	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor <author@example.com> format.")
 	ap.SupportsFlag(AllFlag, "a", "Adds all edited files in working to staged.")
+	return ap
+}
+
+func CreateMergeArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(NoFFParam, "", "Create a merge commit even when the merge resolves as a fast-forward.")
 	return ap
 }
 
