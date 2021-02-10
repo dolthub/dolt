@@ -64,7 +64,7 @@ func CreateVarBinaryTypeFromParams(params map[string]string) (TypeInfo, error) {
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *varBinaryType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Blob); ok {
-		return ti.fromBlob(val)
+		return fromBlob(val)
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -81,7 +81,7 @@ func (ti *varBinaryType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecRead
 		if err != nil {
 			return nil, err
 		}
-		return ti.fromBlob(val)
+		return fromBlob(val)
 	case types.NullKind:
 		_ = reader.ReadKind()
 		return nil, nil
@@ -101,7 +101,7 @@ func (ti *varBinaryType) ConvertValueToNomsValue(ctx context.Context, vrw types.
 	}
 	val, ok := strVal.(string)
 	if ok {
-		return ti.toBlob(ctx, vrw, val)
+		return toBlob(ctx, vrw, val)
 	}
 	return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
 }
@@ -120,7 +120,7 @@ func (ti *varBinaryType) Equals(other TypeInfo) bool {
 // FormatValue implements TypeInfo interface.
 func (ti *varBinaryType) FormatValue(v types.Value) (*string, error) {
 	if val, ok := v.(types.Blob); ok {
-		resStr, err := ti.fromBlob(val)
+		resStr, err := fromBlob(val)
 		if err != nil {
 			return nil, err
 		}
@@ -147,7 +147,7 @@ func (ti *varBinaryType) GetTypeParams() map[string]string {
 // IsValid implements TypeInfo interface.
 func (ti *varBinaryType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Blob); ok {
-		strLen, err := ti.fromBlobLength(val)
+		strLen, err := fromBlobLength(val)
 		if err != nil {
 			return false
 		}
@@ -176,7 +176,7 @@ func (ti *varBinaryType) ParseValue(ctx context.Context, vrw types.ValueReadWrit
 		return nil, err
 	}
 	if val, ok := strVal.(string); ok {
-		return ti.toBlob(ctx, vrw, val)
+		return toBlob(ctx, vrw, val)
 	}
 	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
 }
@@ -197,8 +197,8 @@ func (ti *varBinaryType) ToSqlType() sql.Type {
 }
 
 // fromBlob returns a string from a types.Blob.
-func (ti *varBinaryType) fromBlob(b types.Blob) (string, error) {
-	strLength, err := ti.fromBlobLength(b)
+func fromBlob(b types.Blob) (string, error) {
+	strLength, err := fromBlobLength(b)
 	if err != nil {
 		return "", err
 	}
@@ -224,7 +224,7 @@ func (ti *varBinaryType) fromBlob(b types.Blob) (string, error) {
 }
 
 // fromBlobLength returns a string's length from a types.Blob.
-func (ti *varBinaryType) fromBlobLength(b types.Blob) (uint64, error) {
+func fromBlobLength(b types.Blob) (uint64, error) {
 	countBytes := make([]byte, 8)
 	n, err := b.ReadAt(context.Background(), countBytes, 0)
 	if err == io.EOF {
@@ -240,9 +240,47 @@ func (ti *varBinaryType) fromBlobLength(b types.Blob) (uint64, error) {
 }
 
 // toBlob returns a types.Blob from a string.
-func (ti *varBinaryType) toBlob(ctx context.Context, vrw types.ValueReadWriter, s string) (types.Blob, error) {
+func toBlob(ctx context.Context, vrw types.ValueReadWriter, s string) (types.Blob, error) {
 	data := make([]byte, 8+len(s))
 	binary.LittleEndian.PutUint64(data[:8], uint64(len(s)))
 	copy(data[8:], s)
 	return types.NewBlob(ctx, vrw, bytes.NewReader(data))
+}
+
+// varBinaryTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
+func varBinaryTypeConverter(ctx context.Context, src *varBinaryType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
+	switch dest := destTi.(type) {
+	case *bitType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *boolType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *datetimeType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *decimalType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *enumType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *floatType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *inlineBlobType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *intType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *setType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *timeType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *uintType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *uuidType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *varBinaryType:
+		return wrapIsValid(dest.IsValid, src, dest)
+	case *varStringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *yearType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	default:
+		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
+	}
 }

@@ -510,12 +510,6 @@ SQL
     [[ "$output" =~ "c6" ]] || false
 }
 
-@test "sql alter table to change column type not supported" {
-    run dolt sql -q "alter table one_pk modify column c5 varchar(80)"
-    [ $status -eq 1 ]
-    [[ "$output" =~ "unsupported feature: column types cannot be changed" ]] || false
-}
-
 @test "sql alter table modify column with no actual change" {
     # this specifically tests a previous bug where we would get a name collision and fail
     dolt sql -q "alter table one_pk modify column c5 bigint"
@@ -544,6 +538,55 @@ SQL
     [[ "$output" =~ 'PRIMARY KEY (`pk`)' ]] || false
 }
 
+@test "sql alter table modify column type success" {
+    dolt sql <<SQL
+CREATE TABLE t1(pk BIGINT PRIMARY KEY, v1 INT, INDEX(v1));
+CREATE TABLE t2(pk BIGINT PRIMARY KEY, v1 VARCHAR(20), INDEX(v1));
+CREATE TABLE t3(pk BIGINT PRIMARY KEY, v1 DATETIME, INDEX(v1));
+INSERT INTO t1 VALUES (0,-1),(1,1);
+INSERT INTO t2 VALUES (0,'hi'),(1,'bye');
+INSERT INTO t3 VALUES (0,'1999-11-02 17:39:38'),(1,'2021-01-08 02:59:27');
+ALTER TABLE t1 MODIFY COLUMN v1 BIGINT;
+ALTER TABLE t2 MODIFY COLUMN v1 VARCHAR(2000);
+ALTER TABLE t3 MODIFY COLUMN v1 TIMESTAMP;
+SQL
+    run dolt sql -q "SELECT * FROM t1 ORDER BY pk" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "0,-1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+    run dolt sql -q "SELECT * FROM t2 ORDER BY pk" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "0,hi" ]] || false
+    [[ "$output" =~ "1,bye" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+    run dolt sql -q "SELECT * FROM t3 ORDER BY pk" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "0,1999-11-02 17:39:38" ]] || false
+    [[ "$output" =~ "1,2021-01-08 02:59:27" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+}
+
+@test "sql alter table modify column type failure" {
+    dolt sql <<SQL
+CREATE TABLE t1(pk BIGINT PRIMARY KEY, v1 INT, INDEX(v1));
+CREATE TABLE t2(pk BIGINT PRIMARY KEY, v1 VARCHAR(20), INDEX(v1));
+CREATE TABLE t3(pk BIGINT PRIMARY KEY, v1 DATETIME, INDEX(v1));
+INSERT INTO t1 VALUES (0,-1),(1,1);
+INSERT INTO t2 VALUES (0,'hi'),(1,'bye');
+INSERT INTO t3 VALUES (0,'1999-11-02 17:39:38'),(1,'3021-01-08 02:59:27');
+SQL
+    run dolt sql -q "ALTER TABLE t1 MODIFY COLUMN v1 INT UNSIGNED"
+    [ "$status" -eq "1" ]
+    run dolt sql -q "ALTER TABLE t2 MODIFY COLUMN v1 VARCHAR(2)"
+    [ "$status" -eq "1" ]
+    run dolt sql -q "ALTER TABLE t3 MODIFY COLUMN v1 TIMESTAMP"
+    [ "$status" -eq "1" ]
+}
+
 @test "sql drop table" {
     dolt sql -q "drop table one_pk"
     run dolt ls
@@ -569,7 +612,7 @@ SQL
 @test "explain simple join" {
     run dolt sql -q "explain select op.pk,pk1,pk2 from one_pk,two_pk join one_pk as op on op.pk=pk1"
     [ $status -eq 0 ]
-    [[ "$output" =~ "InnerJoin" ]] || false
+    [[ "$output" =~ "IndexedJoin" ]] || false
 }
 
 @test "sql replace count" {
@@ -705,6 +748,32 @@ SQL
 @test "sql shell works after failing query" {
     skiponwindows "Need to install expect and make this script work on windows."
     $BATS_TEST_DIRNAME/sql-works-after-failing-query.expect
+}
+
+@test "sql shell delimiter" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    mkdir doltsql
+    cd doltsql
+    dolt init
+
+    run $BATS_TEST_DIRNAME/sql-delimiter.expect
+    [ "$status" -eq "0" ]
+    [[ ! "$output" =~ "Error" ]] || false
+    [[ ! "$output" =~ "error" ]] || false
+
+    run dolt sql -q "SELECT * FROM test ORDER BY 1" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+
+    run dolt sql -q "SHOW TRIGGERS"
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "SET NEW.v1 = NEW.v1 * 11" ]] || false
+
+    cd ..
+    rm -rf doltsql
 }
 
 @test "sql insert on duplicate key inserts data by column" {

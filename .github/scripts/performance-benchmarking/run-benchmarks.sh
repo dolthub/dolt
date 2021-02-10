@@ -33,7 +33,8 @@ echo "Setting to $TO_SERVER: $TO_VERSION"
 # use first 8 characters of TO_VERSION to differentiate
 # jobs
 short=${TO_VERSION:0:8}
-actorShort="$ACTOR-$short"
+lowered=$(echo "$ACTOR" | tr '[:upper:]' '[:lower:]')
+actorShort="$lowered-$short"
 
 jobname="$actorShort"
 

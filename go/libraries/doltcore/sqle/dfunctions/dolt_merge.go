@@ -195,16 +195,15 @@ func executeFFMerge(ctx *sql.Context, squash bool, dbData env.DbData, cm2 *doltd
 	stagedHash, err := dbData.Ddb.WriteRootValue(ctx, rv)
 
 	if err != nil {
-		return errors.New("Failed to write database.")
+		return err
 	}
 
 	workingHash := stagedHash
-
 	if !squash {
 		err = dbData.Ddb.FastForward(ctx, dbData.Rsr.CWBHeadRef(), cm2)
 
 		if err != nil {
-			return errors.New("Failed to write database")
+			return err
 		}
 	}
 

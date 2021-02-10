@@ -17,6 +17,7 @@ package actions
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"time"
 
@@ -130,7 +131,7 @@ func CommitStaged(ctx context.Context, dbData env.DbData, props CommitStagedProp
 	}
 
 	if props.CheckForeignKeys {
-		srt, err = srt.ValidateForeignKeys(ctx)
+		srt, err = ValidateForeignKeysOnCommit(ctx, srt, stagedTblNames)
 		if err != nil {
 			return "", err
 		}
@@ -177,6 +178,70 @@ func CommitStaged(ctx context.Context, dbData env.DbData, props CommitStagedProp
 	h, err = c.HashOf()
 
 	return h.String(), err
+}
+
+func ValidateForeignKeysOnCommit(ctx context.Context, srt *doltdb.RootValue, stagedTblNames []string) (*doltdb.RootValue, error) {
+	// Validate schemas
+	srt, err := srt.ValidateForeignKeysOnSchemas(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// Validate data
+	//TODO: make this more efficient, perhaps by leveraging diffs?
+	fkColl, err := srt.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+	fksToCheck := make(map[string]doltdb.ForeignKey)
+	for _, tblName := range stagedTblNames {
+		declaredFk, referencedByFk := fkColl.KeysForTable(tblName)
+		for _, fk := range declaredFk {
+			fksToCheck[fk.Name] = fk
+		}
+		for _, fk := range referencedByFk {
+			fksToCheck[fk.Name] = fk
+		}
+	}
+
+	for _, fk := range fksToCheck {
+		childTbl, _, ok, err := srt.GetTableInsensitive(ctx, fk.TableName)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, fmt.Errorf("foreign key '%s' references missing table '%s'", fk.Name, fk.TableName)
+		}
+		childSch, err := childTbl.GetSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
+		childIdx := childSch.Indexes().GetByName(fk.TableIndex)
+		childIdxRowData, err := childTbl.GetIndexRowData(ctx, fk.TableIndex)
+		if err != nil {
+			return nil, err
+		}
+		parentTbl, _, ok, err := srt.GetTableInsensitive(ctx, fk.ReferencedTableName)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, fmt.Errorf("foreign key '%s' references missing table '%s'", fk.Name, fk.ReferencedTableName)
+		}
+		parentTblSch, err := parentTbl.GetSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
+		parentIdx := parentTblSch.Indexes().GetByName(fk.ReferencedTableIndex)
+		parentIdxRowData, err := parentTbl.GetIndexRowData(ctx, fk.ReferencedTableIndex)
+		if err != nil {
+			return nil, err
+		}
+		err = fk.ValidateData(ctx, childIdxRowData, parentIdxRowData, childIdx, parentIdx)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return srt, nil
 }
 
 // TimeSortedCommits returns a reverse-chronological (latest-first) list of the most recent `n` ancestors of `commit`.

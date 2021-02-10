@@ -69,6 +69,9 @@ func CreateEnumTypeFromParams(params map[string]string) (TypeInfo, error) {
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *enumType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Uint); ok {
+		if val == 0 {
+			return "", nil
+		}
 		res, err := ti.sqlEnumType.Unmarshal(int64(val))
 		if err != nil {
 			return nil, fmt.Errorf(`"%v" cannot convert "%v" to value`, ti.String(), val)
@@ -87,6 +90,9 @@ func (ti *enumType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (
 	switch k {
 	case types.UintKind:
 		n := reader.ReadUint()
+		if n == 0 {
+			return "", nil
+		}
 		res, err := ti.sqlEnumType.Unmarshal(int64(n))
 		if err != nil {
 			return nil, nil
@@ -211,4 +217,59 @@ func (ti *enumType) String() string {
 // ToSqlType implements TypeInfo interface.
 func (ti *enumType) ToSqlType() sql.Type {
 	return ti.sqlEnumType
+}
+
+// enumTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
+func enumTypeConverter(ctx context.Context, src *enumType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
+	switch dest := destTi.(type) {
+	case *bitType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *boolType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *datetimeType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *decimalType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *enumType:
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			if v == nil || v == types.NullValue {
+				return types.NullValue, nil
+			}
+			val, ok := v.(types.Uint)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type converting enum to other enum: %T", v)
+			}
+			valStr, err := src.sqlEnumType.Unmarshal(int64(val))
+			if err != nil {
+				return nil, err
+			}
+			newVal, err := dest.sqlEnumType.Marshal(valStr)
+			if err != nil {
+				return nil, err
+			}
+			return types.Uint(newVal), nil
+		}, true, nil
+	case *floatType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *inlineBlobType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *intType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *setType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *timeType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *uintType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *uuidType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *varBinaryType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *varStringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *yearType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	default:
+		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
+	}
 }

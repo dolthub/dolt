@@ -17,7 +17,9 @@ package typeinfo
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/sqltypes"
@@ -210,4 +212,101 @@ func (ti *floatType) String() string {
 // ToSqlType implements TypeInfo interface.
 func (ti *floatType) ToSqlType() sql.Type {
 	return ti.sqlFloatType
+}
+
+// floatTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
+func floatTypeConverter(ctx context.Context, src *floatType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
+	switch dest := destTi.(type) {
+	case *bitType:
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			if v == nil || v == types.NullValue {
+				return types.NullValue, nil
+			}
+			val, ok := v.(types.Float)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type converting float to enum: %T", v)
+			}
+			fltVal := floatTypeRoundToZero(float64(val))
+			intVal, err := sql.Int64.Convert(fltVal)
+			if err != nil {
+				return nil, err
+			}
+			return dest.ConvertValueToNomsValue(ctx, vrw, uint64(intVal.(int64)))
+		}, true, nil
+	case *boolType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *datetimeType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *decimalType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *enumType:
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			if v == nil || v == types.NullValue {
+				return types.NullValue, nil
+			}
+			val, ok := v.(types.Float)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type converting float to enum: %T", v)
+			}
+			if val == 0 {
+				return types.Uint(0), nil
+			}
+			return dest.ConvertValueToNomsValue(ctx, vrw, float64(val))
+		}, true, nil
+	case *floatType:
+		return wrapIsValid(dest.IsValid, src, dest)
+	case *inlineBlobType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *intType:
+		return floatTypeConverterRoundToZero(ctx, src, destTi)
+	case *setType:
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			if v == nil || v == types.NullValue {
+				return types.NullValue, nil
+			}
+			val, ok := v.(types.Float)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type converting float to set: %T", v)
+			}
+			if float64(val) != math.Trunc(float64(val)) { // not a whole number
+				return nil, fmt.Errorf("invalid set value: %v", float64(val))
+			}
+			return dest.ConvertValueToNomsValue(ctx, vrw, float64(val))
+		}, true, nil
+	case *timeType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *uintType:
+		return floatTypeConverterRoundToZero(ctx, src, destTi)
+	case *uuidType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *varBinaryType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *varStringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *yearType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	default:
+		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
+	}
+}
+
+func floatTypeRoundToZero(val float64) float64 {
+	truncated := math.Trunc(val)
+	if math.Abs(val-truncated) > 0.5 {
+		return truncated + math.Copysign(1, val)
+	}
+	return truncated
+}
+
+func floatTypeConverterRoundToZero(ctx context.Context, src *floatType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
+	return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+		if v == nil || v == types.NullValue {
+			return types.NullValue, nil
+		}
+		val, ok := v.(types.Float)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type converting float to %s: %T", strings.ToLower(destTi.String()), v)
+		}
+		return destTi.ConvertValueToNomsValue(ctx, vrw, floatTypeRoundToZero(float64(val)))
+	}, true, nil
 }

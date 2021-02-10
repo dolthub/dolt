@@ -22,7 +22,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
@@ -114,7 +113,7 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 				return HandleVErrAndExitCode(errhand.BuildDError("Unable to get index data for %s.", fk.ReferencedTableIndex).AddCause(err).Build(), nil)
 			}
 
-			err = table.ForeignKeyIsSatisfied(ctx, fk, childIdxRowData, parentIdxRowData, childIdx, parentIdx)
+			err = fk.ValidateData(ctx, childIdxRowData, parentIdxRowData, childIdx, parentIdx)
 			if err != nil {
 				accumulatedConstraintErrors = append(accumulatedConstraintErrors, err.Error())
 			}

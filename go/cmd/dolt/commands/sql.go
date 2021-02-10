@@ -20,6 +20,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 
@@ -626,6 +627,7 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initialRo
 		}
 	})
 
+	delimiterRegex := regexp.MustCompile(`(?i)^DELIMITER\s+(\S+)\s+\S+\s*$`)
 	var returnedVerr errhand.VerboseError = nil // Verr that cannot be just printed but needs to be returned.
 	shell.Uninterpreted(func(c *ishell.Context) {
 		query := c.Args[0]
@@ -639,27 +641,44 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initialRo
 		// For now, we store all history entries as single-line strings to avoid the issue.
 		singleLine := strings.ReplaceAll(query, "\n", " ")
 
-		var err error
-		if err = shell.AddHistory(singleLine); err != nil {
+		if err := shell.AddHistory(singleLine); err != nil {
 			// TODO: handle better, like by turning off history writing for the rest of the session
 			shell.Println(color.RedString(err.Error()))
 		}
 
-		if sqlSch, rowIter, err := processQuery(ctx, query, se); err != nil {
-			verr := formatQueryError("", err)
-			shell.Println(verr.Verbose())
-		} else if rowIter != nil {
-			err = PrettyPrintResults(ctx, se.resultFormat, sqlSch, rowIter)
-			if err != nil {
-				shell.Println(color.RedString(err.Error()))
-			}
+		shouldProcessQuery := true
+		//TODO: Handle comments and enforce the current line terminator
+		if matches := delimiterRegex.FindStringSubmatch(query); len(matches) == 2 {
+			// If we don't match from anything, then we just pass to the SQL engine and let it complain.
+			shell.SetLineTerminator(matches[1])
+			shouldProcessQuery = false
 		}
 
-		if err == nil {
-			returnedVerr = writeRoots(ctx, se, mrEnv, initialRoots)
+		if shouldProcessQuery {
+			var sqlSch sql.Schema
+			var rowIter sql.RowIter
+			var err error
 
-			if returnedVerr != nil {
-				return
+			// The SQL parser does not understand any other terminator besides semicolon, so we remove it.
+			if shell.LineTerminator() != ";" && strings.HasSuffix(query, shell.LineTerminator()) {
+				query = query[:len(query)-len(shell.LineTerminator())]
+			}
+
+			if sqlSch, rowIter, err = processQuery(ctx, query, se); err != nil {
+				verr := formatQueryError("", err)
+				shell.Println(verr.Verbose())
+			} else if rowIter != nil {
+				err = PrettyPrintResults(ctx, se.resultFormat, sqlSch, rowIter)
+				if err != nil {
+					shell.Println(color.RedString(err.Error()))
+				}
+			}
+
+			if err == nil {
+				returnedVerr = writeRoots(ctx, se, mrEnv, initialRoots)
+				if returnedVerr != nil {
+					return
+				}
 			}
 		}
 
@@ -891,49 +910,44 @@ func (s *stats) shouldFlush() bool {
 	return s.unflushedEdits >= maxBatchSize
 }
 
-// updateRepoState takes in a context and database and updates repo state if autocommit is on
-func updateRepoState(ctx *sql.Context, db dsqle.Database) error {
-	root, err := db.GetRoot(ctx)
-	if err != nil {
-		return err
-	}
-
-	h, err := root.HashOf()
-	if err != nil {
-		return err
-	}
-
-	_, value := ctx.Get(sql.AutoCommitSessionVar)
-	bval, isBool := value.(bool)
-	ival, isInt := value.(int)
-
-	condition := (bval && isBool) || (ival == 1 && isInt)
-
-	// Only update the working hash if autocommit is true.
-	if condition {
-		dsess := dsqle.DSessFromSess(ctx.Session)
-		rsw, ok := dsess.GetDoltDBRepoStateWriter(db.Name())
-		if ok {
-			err = rsw.SetWorkingHash(ctx, h)
-		}
-	}
-
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func flushBatchedEdits(ctx *sql.Context, se *sqlEngine) error {
+// updateRepoState takes in a context and database and updates repo state.
+func updateRepoState(ctx *sql.Context, se *sqlEngine) error {
 	err := se.iterDBs(func(_ string, db dsqle.Database) (bool, error) {
-		err := db.Flush(ctx)
-
+		root, err := db.GetRoot(ctx)
 		if err != nil {
 			return false, err
 		}
 
-		err = updateRepoState(ctx, db)
+		h, err := root.HashOf()
+		if err != nil {
+			return false, err
+		}
+
+		dsess := dsqle.DSessFromSess(ctx.Session)
+		rsw, ok := dsess.GetDoltDBRepoStateWriter(db.Name())
+		if ok {
+			err = rsw.SetWorkingHash(ctx, h)
+			if err != nil {
+				return false, err
+			}
+		}
+
+		ddb, ok := dsess.GetDoltDB(db.Name())
+		if ok {
+			_, err = ddb.WriteRootValue(ctx, root)
+			if err != nil {
+				return false, err
+			}
+		}
+
+		return false, nil
+	})
+
+	return err
+}
+func flushBatchedEdits(ctx *sql.Context, se *sqlEngine) error {
+	err := se.iterDBs(func(_ string, db dsqle.Database) (bool, error) {
+		err := db.Flush(ctx)
 
 		if err != nil {
 			return false, err
@@ -986,6 +1000,19 @@ func processNonInsertBatchQuery(ctx *sql.Context, se *sqlEngine, query string, s
 	err := flushBatchedEdits(ctx, se)
 	if err != nil {
 		return err
+	}
+
+	foundDoltSQLFunc, err := checkForDoltSQLFunction(sqlStatement)
+	if err != nil {
+		return err
+	}
+
+	// DOLT SQL functions like DOLT_COMMIT require an updated repo state to work correctly.
+	if foundDoltSQLFunc {
+		err = updateRepoState(ctx, se)
+		if err != nil {
+			return err
+		}
 	}
 
 	sqlSch, rowIter, err := processQuery(ctx, query, se)
@@ -1066,7 +1093,7 @@ func canProcessAsBatchInsert(ctx *sql.Context, sqlStatement sqlparser.Statement,
 			return false, nil
 		}
 
-		// TODO: This check coming first seems to cost problems. Perhaps in the analyzer.
+		// TODO: This check coming first seems to cause problems with ctx.Session. Perhaps in the analyzer.
 		hasAutoInc, err := insertsIntoAutoIncrementCol(ctx, se, query)
 		if err != nil {
 			return false, err
@@ -1101,6 +1128,30 @@ func foundSubquery(node sqlparser.SQLNode) bool {
 		}
 		return true, nil
 	}, node)
+	return has
+}
+
+func checkForDoltSQLFunction(statement sqlparser.Statement) (bool, error) {
+	switch node := statement.(type) {
+	default:
+		return hasDoltSQLFunction(node), nil
+	}
+}
+
+// hasDoltSQLFunction checks if a function is a dolt SQL function as defined in the dfunc package.
+func hasDoltSQLFunction(node sqlparser.SQLNode) bool {
+	has := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (keepGoing bool, err error) {
+		if f, ok := node.(*sqlparser.FuncExpr); ok {
+			name := strings.ToLower(f.Name.String())
+			if strings.HasPrefix(name, "dolt_") {
+				has = true
+			}
+			return false, nil
+		}
+		return true, nil
+	}, node)
+
 	return has
 }
 

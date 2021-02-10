@@ -35,6 +35,27 @@ func TestForeignKeys(t *testing.T) {
 	}
 }
 
+func TestForeignKeyErrors(t *testing.T) {
+	cmds := []testCommand{
+		{commands.SqlCmd{}, []string{"-q", `CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX (v1));`}},
+		{commands.SqlCmd{}, []string{"-q", `CREATE TABLE test2(pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX (v1),` +
+			`CONSTRAINT child_fk FOREIGN KEY (v1) REFERENCES test(v1));`}},
+	}
+
+	ctx := context.Background()
+	dEnv := dtestutils.CreateTestEnv()
+
+	for _, c := range cmds {
+		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
+		require.Equal(t, 0, exitCode)
+	}
+
+	exitCode := commands.SqlCmd{}.Exec(ctx, commands.SqlCmd{}.Name(), []string{"-q", `ALTER TABLE test MODIFY v1 INT;`}, dEnv)
+	require.Equal(t, 1, exitCode)
+	exitCode = commands.SqlCmd{}.Exec(ctx, commands.SqlCmd{}.Name(), []string{"-q", `ALTER TABLE test2 MODIFY v1 INT;`}, dEnv)
+	require.Equal(t, 1, exitCode)
+}
+
 type foreignKeyTest struct {
 	name  string
 	setup []testCommand

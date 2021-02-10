@@ -149,3 +149,41 @@ func (ti *uuidType) String() string {
 func (ti *uuidType) ToSqlType() sql.Type {
 	return ti.sqlCharType
 }
+
+// uuidTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
+func uuidTypeConverter(ctx context.Context, src *uuidType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
+	switch dest := destTi.(type) {
+	case *bitType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *boolType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *datetimeType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *decimalType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *enumType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *floatType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *inlineBlobType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *intType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *setType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *timeType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *uintType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *uuidType:
+		return wrapIsValid(dest.IsValid, src, dest)
+	case *varBinaryType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *varStringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *yearType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	default:
+		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
+	}
+}

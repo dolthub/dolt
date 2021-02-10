@@ -255,3 +255,53 @@ func (ti *uintType) String() string {
 func (ti *uintType) ToSqlType() sql.Type {
 	return ti.sqlUintType
 }
+
+// uintTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
+func uintTypeConverter(ctx context.Context, src *uintType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
+	switch dest := destTi.(type) {
+	case *bitType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *boolType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *datetimeType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *decimalType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *enumType:
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			if v == nil || v == types.NullValue {
+				return types.NullValue, nil
+			}
+			val, ok := v.(types.Uint)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type converting uint to enum: %T", v)
+			}
+			if val == 0 {
+				return types.Uint(0), nil
+			}
+			return dest.ConvertValueToNomsValue(ctx, vrw, uint64(val))
+		}, true, nil
+	case *floatType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *inlineBlobType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *intType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *setType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *timeType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *uintType:
+		return wrapIsValid(dest.IsValid, src, dest)
+	case *uuidType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *varBinaryType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *varStringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *yearType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	default:
+		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
+	}
+}

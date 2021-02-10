@@ -18,17 +18,38 @@ import (
 	"context"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 func TestModifyColumn(t *testing.T) {
+	alteredTypeSch := dtestutils.CreateSchema(
+		schema.NewColumn("newId", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("name", dtestutils.NameTag, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
+	)
+	ti, err := typeinfo.FromSqlType(sql.TinyText)
+	require.NoError(t, err)
+	newNameColSameTag, err := schema.NewColumnWithTypeInfo("name", dtestutils.NameTag, ti, false, "", false, "", schema.NotNullConstraint{})
+	require.NoError(t, err)
+	alteredTypeSch2 := dtestutils.CreateSchema(
+		schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+		newNameColSameTag,
+		schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
+	)
+
 	tests := []struct {
 		name           string
 		existingColumn schema.Column
@@ -53,12 +74,12 @@ func TestModifyColumn(t *testing.T) {
 		},
 		{
 			name:           "remove null constraint",
-			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
-			newColumn:      schema.NewColumn("newId", dtestutils.IdTag, types.UUIDKind, true),
+			existingColumn: schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
+			newColumn:      schema.NewColumn("newAge", dtestutils.AgeTag, types.UintKind, false),
 			expectedSchema: dtestutils.CreateSchema(
-				schema.NewColumn("newId", dtestutils.IdTag, types.UUIDKind, true),
+				schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("name", dtestutils.NameTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("newAge", dtestutils.AgeTag, types.UintKind, false),
 				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 			),
@@ -108,7 +129,40 @@ func TestModifyColumn(t *testing.T) {
 			name:           "type change",
 			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
 			newColumn:      schema.NewColumn("newId", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
-			expectedErr:    "unsupported feature: column types cannot be changed",
+			expectedSchema: alteredTypeSch,
+			expectedRows: []row.Row{
+				dtestutils.NewRow(
+					alteredTypeSch,
+					types.String("00000000-0000-0000-0000-000000000000"),
+					types.String("Bill Billerson"),
+					types.Uint(32),
+					types.Bool(true),
+					types.String("Senior Dufus"),
+				),
+				dtestutils.NewRow(
+					alteredTypeSch,
+					types.String("00000000-0000-0000-0000-000000000001"),
+					types.String("John Johnson"),
+					types.Uint(25),
+					types.Bool(false),
+					types.String("Dufus"),
+				),
+				dtestutils.NewRow(
+					alteredTypeSch,
+					types.String("00000000-0000-0000-0000-000000000002"),
+					types.String("Rob Robertson"),
+					types.Uint(21),
+					types.Bool(false),
+					types.String(""),
+				),
+			},
+		},
+		{
+			name:           "type change same tag",
+			existingColumn: schema.NewColumn("name", dtestutils.NameTag, types.StringKind, false, schema.NotNullConstraint{}),
+			newColumn:      newNameColSameTag,
+			expectedSchema: alteredTypeSch2,
+			expectedRows:   dtestutils.TypedRows,
 		},
 	}
 

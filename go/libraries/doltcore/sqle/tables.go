@@ -34,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
@@ -725,7 +724,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		return err
 	}
 
-	existingCol, ok := sch.GetAllCols().GetByName(columnName)
+	existingCol, ok := sch.GetAllCols().GetByNameCaseInsensitive(columnName)
 	if !ok {
 		panic(fmt.Sprintf("Column %s not found. This is a bug.", columnName))
 	}
@@ -739,11 +738,38 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 	if err != nil {
 		return err
 	}
-	declaresFk, _ := fkCollection.KeysForTable(t.name)
+	declaresFk, referencedByFk := fkCollection.KeysForTable(t.name)
 	for _, foreignKey := range declaresFk {
 		if (foreignKey.OnUpdate == doltdb.ForeignKeyReferenceOption_SetNull || foreignKey.OnDelete == doltdb.ForeignKeyReferenceOption_SetNull) &&
 			col.IsNullable() {
 			return fmt.Errorf("foreign key `%s` has SET NULL thus column `%s` cannot be altered to accept null values", foreignKey.Name, col.Name)
+		}
+	}
+
+	if !existingCol.TypeInfo.Equals(col.TypeInfo) {
+		for _, foreignKey := range declaresFk {
+			for _, tag := range foreignKey.TableColumns {
+				if tag == existingCol.Tag {
+					return fmt.Errorf("cannot alter a column's type when it is used in a foreign key")
+				}
+			}
+		}
+		for _, foreignKey := range referencedByFk {
+			for _, tag := range foreignKey.ReferencedTableColumns {
+				if tag == existingCol.Tag {
+					return fmt.Errorf("cannot alter a column's type when it is used in a foreign key")
+				}
+			}
+		}
+		if existingCol.Kind != col.Kind { // We only change the tag when the underlying Noms kind changes
+			tags, err := root.GenerateTagsForNewColumns(ctx, t.name, []string{col.Name}, []types.NomsKind{col.Kind})
+			if err != nil {
+				return err
+			}
+			if len(tags) != 1 {
+				return fmt.Errorf("expected a generated tag length of 1")
+			}
+			col.Tag = tags[0]
 		}
 	}
 
@@ -1036,7 +1062,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	if err != nil {
 		return err
 	}
-	err = table.ForeignKeyIsSatisfied(ctx, foreignKey, tableIndexData, refTableIndexData, tableIndex, refTableIndex)
+	err = foreignKey.ValidateData(ctx, tableIndexData, refTableIndexData, tableIndex, refTableIndex)
 	if err != nil {
 		return err
 	}

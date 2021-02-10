@@ -16,15 +16,15 @@ package alterschema
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -37,12 +37,14 @@ func ModifyColumn(
 	newCol schema.Column,
 	order *ColumnOrder,
 ) (*doltdb.Table, error) {
-
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err
 	}
 
+	if strings.ToLower(existingCol.Name) == strings.ToLower(newCol.Name) {
+		newCol.Name = existingCol.Name
+	}
 	if err := validateModifyColumn(ctx, tbl, existingCol, newCol); err != nil {
 		return nil, err
 	}
@@ -50,6 +52,16 @@ func ModifyColumn(
 	// Modify statements won't include key info, so fill it in from the old column
 	if existingCol.IsPartOfPK {
 		newCol.IsPartOfPK = true
+		foundNotNullConstraint := false
+		for _, constraint := range newCol.Constraints {
+			if _, ok := constraint.(schema.NotNullConstraint); ok {
+				foundNotNullConstraint = true
+				break
+			}
+		}
+		if !foundNotNullConstraint {
+			newCol.Constraints = append(newCol.Constraints, schema.NotNullConstraint{})
+		}
 	}
 
 	newSchema, err := replaceColumnInSchema(sch, existingCol, newCol, order)
@@ -57,12 +69,7 @@ func ModifyColumn(
 		return nil, err
 	}
 
-	updatedTable, err := tbl.UpdateSchema(ctx, newSchema)
-	if err != nil {
-		return nil, err
-	}
-
-	updatedTable, err = handleNotNullConstraint(ctx, updatedTable, newSchema, existingCol, newCol)
+	updatedTable, err := updateTableWithModifiedColumn(ctx, tbl, sch, newSchema, existingCol, newCol)
 	if err != nil {
 		return nil, err
 	}
@@ -77,69 +84,183 @@ func validateModifyColumn(ctx context.Context, tbl *doltdb.Table, existingCol sc
 		return err
 	}
 
-	if existingCol.Kind != modifiedCol.Kind || !existingCol.TypeInfo.Equals(modifiedCol.TypeInfo) {
-		return errors.New("unsupported feature: column types cannot be changed")
-	}
+	if existingCol.Name != modifiedCol.Name {
+		cols := sch.GetAllCols()
+		err = cols.Iter(func(currColTag uint64, currCol schema.Column) (stop bool, err error) {
+			if currColTag == modifiedCol.Tag {
+				return false, nil
+			} else if strings.ToLower(currCol.Name) == strings.ToLower(modifiedCol.Name) {
+				return true, fmt.Errorf("A column with the name %s already exists.", modifiedCol.Name)
+			}
 
-	cols := sch.GetAllCols()
-	err = cols.Iter(func(currColTag uint64, currCol schema.Column) (stop bool, err error) {
-		if currColTag == modifiedCol.Tag {
 			return false, nil
-		} else if strings.ToLower(currCol.Name) == strings.ToLower(modifiedCol.Name) {
-			return true, fmt.Errorf("A column with the name %s already exists.", modifiedCol.Name)
+		})
+		if err != nil {
+			return err
 		}
-
-		return false, nil
-	})
-
-	if err != nil {
-		return err
 	}
 
 	return nil
 }
 
-// handleNotNullConstraint validates that rows do not violate a NOT NULL constraint, if one exists, and
-// rebuild indexes on the modified column if necessary
-func handleNotNullConstraint(ctx context.Context, tbl *doltdb.Table, newSchema schema.Schema, oldCol, newCol schema.Column) (*doltdb.Table, error) {
+// updateTableWithModifiedColumn updates the existing table with the new schema. If the column type has changed, then
+// the data is updated.
+func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSch, newSch schema.Schema, oldCol, modifiedCol schema.Column) (*doltdb.Table, error) {
+	vrw := tbl.ValueReadWriter()
+	newSchemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, newSch)
+	if err != nil {
+		return nil, err
+	}
+
 	rowData, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Iterate over the rows in the table, checking for nils (illegal if the column is declared not null)
-	if !newCol.IsNullable() {
+	if !oldCol.TypeInfo.Equals(modifiedCol.TypeInfo) {
+		if schema.IsKeyless(newSch) {
+			return nil, fmt.Errorf("keyless table column type alteration is not yet supported")
+		}
+		rowData, err = updateRowDataWithNewType(ctx, rowData, tbl.ValueReadWriter(), oldSch, newSch, oldCol, modifiedCol)
+		if err != nil {
+			return nil, err
+		}
+	} else if !modifiedCol.IsNullable() {
 		err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-			r, err := row.FromNoms(newSchema, key.(types.Tuple), value.(types.Tuple))
+			r, err := row.FromNoms(newSch, key.(types.Tuple), value.(types.Tuple))
 			if err != nil {
 				return false, err
 			}
-			val, ok := r.GetColVal(newCol.Tag)
-			if (!ok || val == nil) && !newCol.IsNullable() {
+			val, ok := r.GetColVal(modifiedCol.Tag)
+			if !ok || val == nil || val == types.NullValue {
 				return true, fmt.Errorf("cannot change column to NOT NULL when one or more values is NULL")
 			}
-
 			return false, nil
 		})
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	if !newCol.TypeInfo.Equals(oldCol.TypeInfo) ||
-		newCol.IsNullable() != oldCol.IsNullable() {
+	indexData, err := tbl.GetIndexData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var autoVal types.Value
+	if schema.HasAutoIncrement(newSch) {
+		autoVal, err = tbl.GetAutoIncrementValue(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+	updatedTable, err := doltdb.NewTable(ctx, vrw, newSchemaVal, rowData, indexData, autoVal)
+	if err != nil {
+		return nil, err
+	}
 
-		for _, index := range newSchema.Indexes().IndexesWithTag(oldCol.Tag) {
-			rebuiltIndexData, err := editor.RebuildIndex(ctx, tbl, index.Name())
-			if err != nil {
-				return nil, err
+	if !oldCol.TypeInfo.Equals(modifiedCol.TypeInfo) {
+		// If we're modifying the primary key then all indexes are affected. Otherwise we just want to update the
+		// touched ones.
+		if modifiedCol.IsPartOfPK {
+			for _, index := range newSch.Indexes().AllIndexes() {
+				indexRowData, err := editor.RebuildIndex(ctx, updatedTable, index.Name())
+				if err != nil {
+					return nil, err
+				}
+				updatedTable, err = updatedTable.SetIndexRowData(ctx, index.Name(), indexRowData)
+				if err != nil {
+					return nil, err
+				}
 			}
-
-			tbl, err = tbl.SetIndexRowData(ctx, index.Name(), rebuiltIndexData)
-			if err != nil {
-				return nil, err
+		} else {
+			for _, index := range newSch.Indexes().IndexesWithTag(modifiedCol.Tag) {
+				indexRowData, err := editor.RebuildIndex(ctx, updatedTable, index.Name())
+				if err != nil {
+					return nil, err
+				}
+				updatedTable, err = updatedTable.SetIndexRowData(ctx, index.Name(), indexRowData)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
 
-	return tbl, err
+	return updatedTable, nil
+}
+
+// updateRowDataWithNewType returns a new map of row data containing the updated rows from the changed schema column type.
+func updateRowDataWithNewType(
+	ctx context.Context,
+	rowData types.Map,
+	vrw types.ValueReadWriter,
+	oldSch, newSch schema.Schema,
+	oldCol, newCol schema.Column,
+) (types.Map, error) {
+	// If there are no rows then we can immediately return. All type conversions are valid for tables without rows, but
+	// when rows are present then it is no longer true. GetTypeConverter assumes that there are rows present, so it
+	// will return a failure on a type conversion that should work for the empty table.
+	if rowData.Len() == 0 {
+		return rowData, nil
+	}
+	convFunc, _, err := typeinfo.GetTypeConverter(ctx, oldCol.TypeInfo, newCol.TypeInfo)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	if !newCol.IsNullable() {
+		originalConvFunc := convFunc
+		convFunc = func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			if v == nil || v == types.NullValue {
+				return nil, fmt.Errorf("cannot change column to NOT NULL when one or more values is NULL")
+			}
+			return originalConvFunc(ctx, vrw, v)
+		}
+	}
+
+	var lastKey types.Value
+	mapEditor := rowData.Edit()
+	err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+		r, err := row.FromNoms(oldSch, key.(types.Tuple), value.(types.Tuple))
+		if err != nil {
+			return true, err
+		}
+		taggedVals, err := row.GetTaggedVals(r)
+		if err != nil {
+			return true, err
+		}
+		// We skip the "ok" check as nil is returned if the value does not exist, and we still want to check nil.
+		// The underscore is important, otherwise a missing value would result in a panic.
+		val, _ := taggedVals[oldCol.Tag]
+		delete(taggedVals, oldCol.Tag) // If there was no value then delete is a no-op so this is safe
+		newVal, err := convFunc(ctx, vrw, val)
+		if err != nil {
+			return true, err
+		}
+		taggedVals[newCol.Tag] = newVal
+		r, err = row.New(rowData.Format(), newSch, taggedVals)
+		if err != nil {
+			return true, err
+		}
+
+		newRowKey, err := r.NomsMapKey(newSch).Value(ctx)
+		if err != nil {
+			return true, err
+		}
+		if newCol.IsPartOfPK {
+			mapEditor.Remove(key)
+			if newRowKey.Equals(lastKey) {
+				return true, fmt.Errorf("pk violation when altering column type and rewriting values")
+			}
+		}
+		lastKey = newRowKey
+		mapEditor.Set(newRowKey, r.NomsMapValue(newSch))
+		return false, nil
+	})
+	if err != nil {
+		return types.EmptyMap, err
+	}
+	return mapEditor.Map(ctx)
 }
 
 // replaceColumnInSchema replaces the column with the name given with its new definition, optionally reordering it.
@@ -195,6 +316,21 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 	if err != nil {
 		return nil, err
 	}
-	newSch.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
+	for _, index := range sch.Indexes().AllIndexes() {
+		tags := index.IndexedColumnTags()
+		for i := range tags {
+			if tags[i] == oldCol.Tag {
+				tags[i] = newCol.Tag
+			}
+		}
+		_, err = newSch.Indexes().AddIndexByColTags(index.Name(), tags, schema.IndexProperties{
+			IsUnique:      index.IsUnique(),
+			IsUserDefined: index.IsUserDefined(),
+			Comment:       index.Comment(),
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
 	return newSch, nil
 }

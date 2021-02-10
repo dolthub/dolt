@@ -1065,10 +1065,10 @@ func (root *RootValue) PutForeignKeyCollection(ctx context.Context, fkc *Foreign
 	return &RootValue{root.vrw, rootValSt, fkc.copy()}, nil
 }
 
-// ValidateForeignKeys ensures that all foreign keys' tables are present, removing any foreign keys where the declared
-// table is missing, and returning an error if a key is in an invalid state or a referenced table is missing.
-//TODO: validate that rows that were not modified still adhere to the foreign key constraints
-func (root *RootValue) ValidateForeignKeys(ctx context.Context) (*RootValue, error) {
+// ValidateForeignKeysOnSchemas ensures that all foreign keys' tables are present, removing any foreign keys where the declared
+// table is missing, and returning an error if a key is in an invalid state or a referenced table is missing. Does not
+// check any tables' row data.
+func (root *RootValue) ValidateForeignKeysOnSchemas(ctx context.Context) (*RootValue, error) {
 	fkCollection, err := root.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, err

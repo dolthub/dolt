@@ -164,7 +164,6 @@ SQL
     [ "$status" -eq "1" ]
     [[ "$output" =~ "not valid type" ]] || false
 
-    skip "TEXT passed, BLOB not yet supported"
     dolt sql <<SQL
 CREATE TABLE parent2 (
   id INT PRIMARY KEY,
@@ -442,6 +441,19 @@ SQL
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk1` FOREIGN KEY (`v1_new`) REFERENCES `parent` (`v1_new`)' ]] || false
 }
 
+@test "foreign-keys: ALTER TABLE MODIFY COLUMN type change not allowed" {
+    dolt sql <<SQL
+ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1);
+SQL
+
+    run dolt sql -q "ALTER TABLE parent MODIFY v1 MEDIUMINT;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "type" ]] || false
+    run dolt sql -q "ALTER TABLE child MODIFY v1 MEDIUMINT;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "type" ]] || false
+}
+
 @test "foreign-keys: DROP COLUMN" {
     dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1)"
     dolt add -A
@@ -462,15 +474,12 @@ SQL
 
 @test "foreign-keys: Disallow change column type when SET NULL" {
     dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE SET NULL ON UPDATE SET NULL"
-    skip "column type changes are not yet supported"
     run dolt sql -q "ALTER TABLE child CHANGE COLUMN parent_extra parent_extra BIGINT"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "SET NULL" ]] || false
     [[ "$output" =~ "parent_extra" ]] || false
     
     run dolt sql -q "ALTER TABLE child CHANGE COLUMN parent_extra parent_extra BIGINT NULL"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "SET NULL" ]] || false
     [[ "$output" =~ "parent_extra" ]] || false
 }
 
@@ -939,6 +948,22 @@ SQL
     dolt commit -m "passes now"
 }
 
+@test "foreign-keys: Add data to two tables and commit only one" {
+    dolt sql <<SQL
+ALTER TABLE child ADD CONSTRAINT fk_v1 FOREIGN KEY (v1) REFERENCES parent(v1);
+SQL
+    dolt add -A
+    dolt commit -m "added tables"
+    dolt sql <<SQL
+INSERT INTO parent VALUES (0,0,0),(1,1,1);
+INSERT INTO child VALUES (0,0,0),(1,1,1);
+SQL
+    dolt add child
+    run dolt commit -m "should fail"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "foreign key violation" ]] || false
+}
+
 @test "foreign-keys: Merge valid onto parent" {
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE CASCADE ON UPDATE CASCADE;
@@ -962,7 +987,7 @@ SET FOREIGN_KEY_CHECKS=0;
 UPDATE parent SET v1 = v1 - 1;
 SQL
     dolt add -A
-    dolt commit -m "updated parent"
+    dolt commit --force -m "updated parent"
     dolt checkout master
     dolt merge other
     
@@ -1006,7 +1031,7 @@ SET FOREIGN_KEY_CHECKS=0;
 UPDATE parent SET v1 = v1 - 1;
 SQL
     dolt add -A
-    dolt commit -m "updated parent"
+    dolt commit --force -m "updated parent"
     dolt checkout master
     run dolt merge other
     [ "$status" -eq "1" ]
@@ -1037,7 +1062,7 @@ SET FOREIGN_KEY_CHECKS=0;
 UPDATE child SET v1 = v1 + 1;
 SQL
     dolt add -A
-    dolt commit -m "updated child"
+    dolt commit --force -m "updated child"
     dolt checkout master
     dolt merge other
     
@@ -1081,7 +1106,7 @@ SET FOREIGN_KEY_CHECKS=0;
 UPDATE child SET v1 = v1 - 1;
 SQL
     dolt add -A
-    dolt commit -m "updated child"
+    dolt commit --force -m "updated child"
     dolt checkout master
     run dolt merge other
     [ "$status" -eq "1" ]
@@ -1113,7 +1138,7 @@ UPDATE parent SET v1 = v1 - 1;
 UPDATE child SET v1 = v1 + 1;
 SQL
     dolt add -A
-    dolt commit -m "updated both"
+    dolt commit --force -m "updated both"
     dolt checkout master
     dolt merge other
     
@@ -1159,10 +1184,56 @@ UPDATE parent SET v1 = v1 - 1;
 UPDATE child SET v1 = v1 + 1;
 SQL
     dolt add -A
-    dolt commit -m "updated both"
+    dolt commit --force -m "updated both"
     dolt checkout master
     run dolt merge other
     [ "$status" -eq "1" ]
     [[ "$output" =~ "violation" ]] || false
     [[ "$output" =~ "4" ]] || false
+}
+
+@test "foreign-keys: Resolve catches violations" {
+    dolt sql <<SQL
+ALTER TABLE child ADD CONSTRAINT fk_v1 FOREIGN KEY (v1) REFERENCES parent(v1);
+INSERT INTO parent VALUES (0,0,0);
+INSERT INTO child VALUES (0,0,0);
+SQL
+    dolt add -A
+    dolt commit -m "added tables"
+    dolt branch other
+    dolt sql <<SQL
+INSERT INTO parent VALUES (1,1,1);
+INSERT INTO child VALUES (1,1,1);
+SQL
+    dolt add -A
+    dolt commit -m "added 1s"
+    dolt checkout other
+    dolt sql <<SQL
+INSERT INTO parent VALUES (1,2,2);
+INSERT INTO child VALUES (1,2,2);
+SQL
+    dolt add -A
+    dolt commit -m "added 2s"
+    dolt checkout master
+    dolt merge other
+    run dolt conflicts resolve --theirs parent
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+    run dolt conflicts resolve --theirs child
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+}
+
+@test "foreign-keys: FKs move with the working set on checkout" {
+    dolt add . && dolt commit -m "added parent and child tables"
+    dolt branch other
+    dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_v1 FOREIGN KEY (v1) REFERENCES parent(v1);"
+
+    run dolt checkout other
+    [ "$status" -eq "0" ]
+
+    run dolt schema show child
+    [ "$status" -eq "0" ]
+    skip "foreign keys don't travel with the working set when checking out a new branch"
+    [[ "$output" =~ "fk_v1" ]] || false
 }
