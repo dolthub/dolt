@@ -112,7 +112,7 @@ SQL
     [[ "$output" =~ "3" ]] || false
 
     run dolt status
-    [[ "$output" =~ "All conflicts fixed but you are still merging." ]] || false
+    [[ "$output" =~ "All conflicts fixed but you are still merging" ]] || false
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
 
@@ -377,7 +377,7 @@ SQL
     [[ "$output" =~ "Finish up Merge" ]] || false
 }
 
-@test "DOLT_MERGE  throws errors with working set changes." {
+@test "DOLT_MERGE throws errors with working set changes." {
     run dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
@@ -391,6 +391,58 @@ SELECT DOLT_MERGE('feature-branch');
 SQL
     [ $status -eq 1 ]
     [[ "$output" =~ "cannot merge with uncommitted changes" ]] || false
+}
+
+@test "DOLT_MERGE with a long series of operations works.." {
+    dolt sql << SQL
+SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
+SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+INSERT INTO test VALUES (3);
+INSERT INTO test VALUES (4);
+INSERT INTO test VALUES (21232);
+DELETE FROM test WHERE pk=4;
+UPDATE test SET pk=21 WHERE pk=21232;
+SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
+SELECT DOLT_CHECKOUT('master');
+INSERT INTO test VALUES (500000);
+INSERT INTO test VALUES (500001);
+DELETE FROM test WHERE pk=500001;
+UPDATE test SET pk=60 WHERE pk=500000;
+SELECT DOLT_COMMIT('-a', '-m', 'Insert 60');
+SELECT DOLT_MERGE('feature-branch');
+SQL
+
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
+
+    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Finish up Merge')";
+    [ $status -eq 0 ]
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    run dolt log -n 1
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Finish up Merge" ]] || false
+
+    run dolt sql -q "SELECT * FROM test;" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "pk" ]] || false
+    [[ "$output" =~ "0" ]] || false
+    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "2" ]] || false
+    [[ "$output" =~ "3" ]] || false
+    [[ "$output" =~ "21" ]] || false
+    [[ "$output" =~ "60" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) FROM test;" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "6" ]] || false
 }
 
 get_head_commit() {
