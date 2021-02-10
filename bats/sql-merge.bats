@@ -292,7 +292,6 @@ SQL
 
     run dolt sql -q "SELECT DOLT_MERGE('feature-branch');"
     [ $status -eq 1 ]
-    echo $output
     [[ $output =~ "merge has unresolved conflicts" ]] || false
 }
 
@@ -339,7 +338,6 @@ SQL
     [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*test) ]] || false
 
     run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'hi');"
-    echo $output
     [ $status -eq 0 ]
 
     run dolt status
