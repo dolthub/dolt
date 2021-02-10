@@ -15,9 +15,10 @@
 package sqlutil
 
 import (
-	"github.com/dolthub/dolt/go/store/types"
 	"io"
 	"sync"
+
+	"github.com/dolthub/dolt/go/store/types"
 
 	"github.com/dolthub/go-mysql-server/sql"
 )

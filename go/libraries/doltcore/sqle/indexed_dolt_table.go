@@ -17,7 +17,6 @@ package sqle
 import (
 	"encoding/binary"
 	"errors"
-	"github.com/dolthub/dolt/go/store/types"
 	"io"
 	"sync"
 
@@ -25,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/lookup"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // IndexedDoltTable is a wrapper for a DoltTable and a doltIndexLookup. It implements the sql.Table interface like
