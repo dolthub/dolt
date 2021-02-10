@@ -351,9 +351,35 @@ SQL
     [[ "$output" =~ "Finish up Merge" ]] || false
 }
 
-#@test "DOLT_MERGE with working set changes works." {
-#
-#}
+@test "DOLT_MERGE ff with working set changes works." {
+    run dolt sql << SQL
+SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
+SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+INSERT INTO test VALUES (3);
+SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');
+SELECT DOLT_CHECKOUT('master');
+CREATE TABLE tbl (
+    pk int primary key
+);
+SELECT DOLT_MERGE('feature-branch');
+SQL
+    [ $status -eq 0 ]
+
+    run dolt log -n 1
+    [ $status -eq 0 ]
+    [[ "$output" =~ "this is a ff" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) FROM dolt_log"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "3" ]] || false
+
+    run dolt status
+    [ $status -eq 0 ]
+    echo $output
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*tbl) ]] || false
+}
 
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 8-

@@ -566,14 +566,14 @@ func (dEnv *DoltEnv) GetTablesWithConflicts(ctx context.Context) ([]string, erro
 	return root.TablesInConflict(ctx)
 }
 
-func (dEnv *DoltEnv) MergeWouldStompChanges(ctx context.Context, mergeCommit *doltdb.Commit) ([]string, map[string]hash.Hash, error) {
-	headRoot, err := dEnv.HeadRoot(ctx)
+func MergeWouldStompChanges(ctx context.Context, mergeCommit *doltdb.Commit, dbData DbData) ([]string, map[string]hash.Hash, error) {
+	headRoot, err := HeadRoot(ctx, dbData.Ddb, dbData.Rsr)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	workingRoot, err := dEnv.WorkingRoot(ctx)
+	workingRoot, err := WorkingRoot(ctx, dbData.Ddb, dbData.Rsr)
 
 	if err != nil {
 		return nil, nil, err
