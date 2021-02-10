@@ -16,6 +16,7 @@ package dtables
 
 import (
 	"errors"
+	"github.com/dolthub/dolt/go/store/types"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -67,7 +68,7 @@ func (bt *BranchesTable) Schema() sql.Schema {
 
 // Partitions is a sql.Table interface function that returns a partition of the data.  Currently the data is unpartitioned.
 func (bt *BranchesTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
-	return sqlutil.NewSinglePartitionIter(), nil
+	return sqlutil.NewSinglePartitionIter(types.Map{}), nil
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition

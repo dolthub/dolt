@@ -88,6 +88,11 @@ func newKeylessTableReader(ctx context.Context, tbl *doltdb.Table, sch schema.Sc
 		return nil, err
 	}
 
+	return newKeylessTableReaderForRows(ctx, rows, sch, buffered)
+}
+
+func newKeylessTableReaderForRows(ctx context.Context, rows types.Map, sch schema.Schema, buffered bool) (*keylessTableReader, error) {
+	var err error
 	var iter types.MapIterator
 	if buffered {
 		iter, err = rows.Iterator(ctx)

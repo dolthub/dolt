@@ -15,6 +15,7 @@
 package dtables
 
 import (
+	"github.com/dolthub/dolt/go/store/types"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -62,7 +63,7 @@ func (dt *LogTable) Schema() sql.Schema {
 
 // Partitions is a sql.Table interface function that returns a partition of the data.  Currently the data is unpartitioned.
 func (dt *LogTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
-	return sqlutil.NewSinglePartitionIter(), nil
+	return sqlutil.NewSinglePartitionIter(types.Map{}), nil
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition

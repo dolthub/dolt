@@ -15,6 +15,7 @@
 package sqlutil
 
 import (
+	"github.com/dolthub/dolt/go/store/types"
 	"io"
 	"sync"
 
@@ -23,7 +24,9 @@ import (
 
 var _ sql.Partition = SinglePartition{}
 
-type SinglePartition struct{}
+type SinglePartition struct {
+	RowData types.Map
+}
 
 // Key returns the key for this partition, which must uniquely identity the partition. We have only a single partition
 // per table, so we use a constant.
@@ -34,11 +37,12 @@ func (sp SinglePartition) Key() []byte {
 var _ sql.PartitionIter = SinglePartitionIter{}
 
 type SinglePartitionIter struct {
-	once *sync.Once
+	once    *sync.Once
+	RowData types.Map
 }
 
-func NewSinglePartitionIter() SinglePartitionIter {
-	return SinglePartitionIter{&sync.Once{}}
+func NewSinglePartitionIter(rowData types.Map) SinglePartitionIter {
+	return SinglePartitionIter{&sync.Once{}, rowData}
 }
 
 // Close is required by the sql.PartitionIter interface. Does nothing.
@@ -57,5 +61,5 @@ func (itr SinglePartitionIter) Next() (sql.Partition, error) {
 		return nil, io.EOF
 	}
 
-	return SinglePartition{}, nil
+	return SinglePartition{itr.RowData}, nil
 }

@@ -16,6 +16,7 @@ package dtables
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/store/types"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -51,7 +52,7 @@ func (s StatusTable) Schema() sql.Schema {
 }
 
 func (s StatusTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
-	return sqlutil.NewSinglePartitionIter(), nil
+	return sqlutil.NewSinglePartitionIter(types.Map{}), nil
 }
 
 func (s StatusTable) PartitionRows(context *sql.Context, _ sql.Partition) (sql.RowIter, error) {

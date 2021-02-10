@@ -164,11 +164,12 @@ func (tbl *testMergeableIndexTable) WithProjection(colNames []string) sql.Table 
 }
 
 func (tbl *testMergeableIndexTable) Partitions(_ *sql.Context) (sql.PartitionIter, error) {
-	return sqlutil.NewSinglePartitionIter(), nil
+	rowData := tbl.il.IndexRowData()
+	return sqlutil.NewSinglePartitionIter(rowData), nil
 }
 
-func (tbl *testMergeableIndexTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
-	return tbl.il.RowIter(ctx)
+func (tbl *testMergeableIndexTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	return tbl.il.RowIter(ctx, part.(sqlutil.SinglePartition).RowData)
 }
 
 // Index made to test mergeable indexes by intercepting all calls that return lookups and returning modified lookups.
@@ -283,9 +284,9 @@ func (il *testMergeableIndexLookup) Union(indexLookups ...sql.IndexLookup) (sql.
 		finalRanges:     il.finalRanges,
 	}, nil
 }
-func (il *testMergeableIndexLookup) RowIter(ctx *sql.Context) (sql.RowIter, error) {
+func (il *testMergeableIndexLookup) RowIter(ctx *sql.Context, rowData types.Map) (sql.RowIter, error) {
 	il.finalRanges(il.ranges) // this is where the ranges turn into noms.ReadRanges, so we return the final slice here
-	return il.doltIndexLookup.RowIter(ctx, nil)
+	return il.doltIndexLookup.RowIter(ctx, rowData, nil)
 }
 
 // indexTuple converts integers into the appropriate tuple for comparison against ranges
