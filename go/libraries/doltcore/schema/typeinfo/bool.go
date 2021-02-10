@@ -183,3 +183,51 @@ func (ti *boolType) String() string {
 func (ti *boolType) ToSqlType() sql.Type {
 	return ti.sqlBitType
 }
+
+// boolTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
+func boolTypeConverter(ctx context.Context, src *boolType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
+	switch dest := destTi.(type) {
+	case *bitType:
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			if v == nil || v == types.NullValue {
+				return types.NullValue, nil
+			}
+			val := v.(types.Bool)
+			if val {
+				return types.Uint(1), nil
+			} else {
+				return types.Uint(0), nil
+			}
+		}, true, nil
+	case *boolType:
+		return identityTypeConverter, false, nil
+	case *datetimeType:
+		return nil, false, IncompatibleTypeConversion.New(src.String(), destTi.String())
+	case *decimalType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *enumType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *floatType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *inlineBlobType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *intType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *setType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *timeType:
+		return nil, false, IncompatibleTypeConversion.New(src.String(), destTi.String())
+	case *uintType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *uuidType:
+		return nil, false, IncompatibleTypeConversion.New(src.String(), destTi.String())
+	case *varBinaryType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *varStringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *yearType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	default:
+		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
+	}
+}
