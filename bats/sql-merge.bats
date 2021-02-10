@@ -201,6 +201,12 @@ SQL
     run dolt status
     [ $status -eq 0 ]
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    run dolt sql -q "SELECT * FROM one_pk;" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "pk1,c1,c2" ]] || false
+    [[ "$output" =~ "0,0,0" ]] || false
+    [[ ! "$output" =~ "0,1,1" ]] || false
 }
 
 @test "DOLT_MERGE properly detects merge conflicts and renders the conflicts in dolt_conflicts." {

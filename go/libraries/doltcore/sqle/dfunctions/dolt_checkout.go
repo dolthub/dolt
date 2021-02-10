@@ -209,18 +209,17 @@ func updateHeadAndWorkingSessionVars(ctx *sql.Context, dbData env.DbData) error 
 	}
 
 	workingHash := dbData.Rsr.WorkingHash().String()
-	//stagedHash := dbData.Rsr.StagedHash().String()
 
 	if !hasStagedChanges && !hasWorkingChanges {
 		return setHeadAndWorkingSessionRoot(ctx, hs)
 	}
 
-	err = setSessionRootExplicit(ctx, headHash.String(), sqle.HeadKeySuffix, false)
+	err = setSessionRootExplicit(ctx, hs, sqle.HeadKeySuffix)
 	if err != nil {
 		return err
 	}
 
-	return setSessionRootExplicit(ctx, workingHash, sqle.WorkingKeySuffix, false)
+	return setSessionRootExplicit(ctx, workingHash, sqle.WorkingKeySuffix)
 }
 
 func (d DoltCheckoutFunc) String() string {

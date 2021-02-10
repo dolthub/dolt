@@ -19,7 +19,6 @@ teardown() {
 
 @test "DOLT_CHECKOUT just works" {
     run dolt sql -q "SELECT DOLT_CHECKOUT('-b', 'feature-branch')"
-    echo $output
     [ $status -eq 0 ]
 
     run dolt sql -q "SELECT DOLT_CHECKOUT('master');"
@@ -123,7 +122,6 @@ SELECT DOLT_ADD('.');
 SELECT DOLT_COMMIT('-m', 'Commit1', '--author', 'John Doe <john@doe.com>');
 SQL
 
-    echo $output
     [ $status -eq 0 ]
 
     run dolt log -n 1

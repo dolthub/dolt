@@ -314,7 +314,7 @@ func mergedRootToWorking(ctx *sql.Context, squash bool, dbData env.DbData, merge
 		return err
 	}
 
-	return setSessionRootExplicit(ctx, workingHash.String(), sqle.WorkingKeySuffix, false)
+	return setSessionRootExplicit(ctx, workingHash.String(), sqle.WorkingKeySuffix)
 }
 
 func checkForConflicts(tblToStats map[string]*merge.MergeStats) bool {

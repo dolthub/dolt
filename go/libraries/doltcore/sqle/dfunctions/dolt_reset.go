@@ -81,13 +81,13 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 			}
 
 			h = headHash.String()
-			err = setSessionRootExplicit(ctx, h, sqle.HeadKeySuffix, false)
+			err = setSessionRootExplicit(ctx, h, sqle.HeadKeySuffix)
 			if err != nil {
 				return 1, err
 			}
 
 			workingHash := dbData.Rsr.WorkingHash()
-			err = setSessionRootExplicit(ctx, workingHash.String(), sqle.WorkingKeySuffix, false)
+			err = setSessionRootExplicit(ctx, workingHash.String(), sqle.WorkingKeySuffix)
 		} else {
 			err = setHeadAndWorkingSessionRoot(ctx, h)
 		}

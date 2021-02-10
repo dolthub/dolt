@@ -133,7 +133,7 @@ func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 	if allFlag {
 		err = setHeadAndWorkingSessionRoot(ctx, h)
 	} else {
-		err = setSessionRootExplicit(ctx, h, sqle.HeadKeySuffix, false)
+		err = setSessionRootExplicit(ctx, h, sqle.HeadKeySuffix)
 	}
 
 	if err != nil {
@@ -229,9 +229,9 @@ func setHeadAndWorkingSessionRoot(ctx *sql.Context, headHashStr string) error {
 
 // setSessionRootExplicit sets a session variable (either HEAD or WORKING) to a hash string. For HEAD, the hash string
 // should come from the commit string. For working the commit string needs to come from the root.
-func setSessionRootExplicit(ctx *sql.Context, hashString string, suffix string, updateRoot bool) error {
+func setSessionRootExplicit(ctx *sql.Context, hashString string, suffix string) error {
 	key := ctx.GetCurrentDatabase() + suffix
 	dsess := sqle.DSessFromSess(ctx.Session)
 
-	return dsess.SetSessionVarDirectly(ctx, key, hashType, hashString, updateRoot)
+	return dsess.SetSessionVarDirectly(ctx, key, hashType, hashString)
 }
