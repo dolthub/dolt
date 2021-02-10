@@ -14,6 +14,7 @@
 
 package querydiff_test
 
+/*
 import (
 	"context"
 	"io"
@@ -455,7 +456,7 @@ CREATE TABLE people (
 		"(4, 4, 'false')," +
 		"(5, 5, NULL)," +
 		"(6, NULL, '2');"}},
-	{commands.SqlCmd{}, []string{"-q", `insert into reservedWordsTable values 
+	{commands.SqlCmd{}, []string{"-q", `insert into reservedWordsTable values
 		("1", "1.1", "aaa", "create");`}},
 	{commands.SqlCmd{}, []string{"-q", `
 INSERT INTO people (dob,first_name,last_name,middle_name,height_inches,gender)
@@ -667,4 +668,4 @@ func sortExpectedResults(sch sql.Schema, rows []sql.Row) []sql.Row {
 	}
 	sort.Stable(s)
 	return s.Rows
-}
+}*/

@@ -144,7 +144,7 @@ func (cmd DiffCmd) createArgParser() *argparser.ArgParser {
 	ap.SupportsString(FormatFlag, "r", "result output format", "How to format diff output. Valid values are tabular & sql. Defaults to tabular. ")
 	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
 	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
-	ap.SupportsString(QueryFlag, "q", "query", "diffs the results of a query at two commits")
+	//ap.SupportsString(QueryFlag, "q", "query", "diffs the results of a query at two commits")
 	ap.SupportsFlag(CachedFlag, "c", "Show only the unstaged data changes.")
 	return ap
 }
