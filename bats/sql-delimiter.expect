@@ -1,38 +1,60 @@
 #!/usr/bin/expect
 
-set timeout 1
+set timeout 2
 spawn dolt sql
 expect {
   "doltsql> " { send "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT);\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
 }
 expect {
   "doltsql> " { send "INSERT INTO test VALUES (0,0);\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
 }
 expect {
   "doltsql> " { send "DELIMITER $$ ;\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
 }
 expect {
   "doltsql> " { send "INSERT INTO test VALUES (1,1)$$\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
 }
 expect {
   "doltsql> " { send "delimiter # $$\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
 }
 expect {
   "doltsql> " { send "CREATE TRIGGER tt BEFORE INSERT ON test FOR EACH ROW\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
 }
 expect {
   "      -> " { send "BEGIN\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
 }
 expect {
   "      -> " { send "SET NEW.v1 = NEW.v1 * 11;\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
 }
 expect {
   "      -> " { send "SET NEW.v1 = NEW.v1 * -10;\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
 }
 expect {
   "      -> " { send "END; #\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
 }
 expect {
   "doltsql> " { send "DeLiMiTeR ; #\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
 }
 expect eof
