@@ -202,7 +202,7 @@ func updateHeadAndWorkingSessionVars(ctx *sql.Context, dbData env.DbData) error 
 	hs := headHash.String()
 
 	hasWorkingChanges := hasWorkingSetChanges(dbData.Rsr)
-	hasStagedChanges, err  := hasStagedSetChanges(ctx, dbData.Ddb, dbData.Rsr)
+	hasStagedChanges, err := hasStagedSetChanges(ctx, dbData.Ddb, dbData.Rsr)
 
 	if err != nil {
 		return err

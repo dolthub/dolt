@@ -83,7 +83,7 @@ const (
 	CheckoutCoBranch = "b"
 	NoFFParam        = "no-ff"
 	SquashParam      = "squash"
-	AbortParam  	 = "abort"
+	AbortParam       = "abort"
 )
 
 var abortDetails = `Abort the current conflict resolution process, and try to reconstruct the pre-merge state.
