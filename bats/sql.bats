@@ -713,8 +713,8 @@ SQL
     cd doltsql
     dolt init
 
-    $BATS_TEST_DIRNAME/sql-delimiter.expect
-    echo "$output"
+    run $BATS_TEST_DIRNAME/sql-delimiter.expect
+    [ "$status" -eq "0" ]
     [[ ! "$output" =~ "Error" ]] || false
     [[ ! "$output" =~ "error" ]] || false
 
