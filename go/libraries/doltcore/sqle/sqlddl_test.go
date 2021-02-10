@@ -711,7 +711,7 @@ func TestModifyColumnType(t *testing.T) {
 			name: "alter modify column type different types reversed",
 			setupStmts: []string{
 				"create table test(pk bigint primary key, v1 varchar(20), index (v1))",
-				"insert into test values (0, 3), (1, 2)",
+				`insert into test values (0, "3"), (1, "2")`,
 			},
 			alterStmt: "alter table test modify column v1 bigint",
 			tableName: "test",

@@ -199,7 +199,16 @@ func (ti *decimalType) ToSqlType() sql.Type {
 func decimalTypeConverter(ctx context.Context, src *decimalType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
 	switch dest := destTi.(type) {
 	case *bitType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			if v == nil || v == types.NullValue {
+				return types.NullValue, nil
+			}
+			val, ok := v.(types.Decimal)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type converting decimal to bit: %T", v)
+			}
+			return dest.ConvertValueToNomsValue(ctx, vrw, decimal.Decimal(val))
+		}, true, nil
 	case *boolType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *datetimeType:
@@ -207,27 +216,101 @@ func decimalTypeConverter(ctx context.Context, src *decimalType, destTi TypeInfo
 	case *decimalType:
 		return wrapIsValid(dest.IsValid, src, dest)
 	case *enumType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		if src.sqlDecimalType.Scale() > 0 {
+			return nil, false, IncompatibleTypeConversion.New(src.String(), destTi.String())
+		}
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			if v == nil || v == types.NullValue {
+				return types.NullValue, nil
+			}
+			val, ok := v.(types.Decimal)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type converting decimal to enum: %T", v)
+			}
+			uintVal, err := sql.Uint64.Convert(decimal.Decimal(val))
+			if err != nil {
+				return nil, err
+			}
+			if uintVal.(uint64) == 0 {
+				return types.Uint(0), nil
+			}
+			return dest.ConvertValueToNomsValue(ctx, vrw, uintVal)
+		}, true, nil
 	case *floatType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *inlineBlobType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			s, err := src.ConvertNomsValueToValue(v)
+			if err != nil {
+				return nil, err
+			}
+			return dest.ConvertValueToNomsValue(ctx, vrw, s)
+		}, true, nil
 	case *intType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			if v == nil || v == types.NullValue {
+				return types.NullValue, nil
+			}
+			val, ok := v.(types.Decimal)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type converting decimal to int: %T", v)
+			}
+			return dest.ConvertValueToNomsValue(ctx, vrw, decimal.Decimal(val).Round(0))
+		}, true, nil
 	case *setType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			s, err := src.ConvertNomsValueToValue(v)
+			if err != nil {
+				return nil, err
+			}
+			return dest.ConvertValueToNomsValue(ctx, vrw, s)
+		}, true, nil
 	case *timeType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *uintType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			if v == nil || v == types.NullValue {
+				return types.NullValue, nil
+			}
+			val, ok := v.(types.Decimal)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type converting decimal to uint: %T", v)
+			}
+			return dest.ConvertValueToNomsValue(ctx, vrw, decimal.Decimal(val).Round(0))
+		}, true, nil
 	case *uuidType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *varBinaryType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			s, err := src.ConvertNomsValueToValue(v)
+			if err != nil {
+				return nil, err
+			}
+			return dest.ConvertValueToNomsValue(ctx, vrw, s)
+		}, true, nil
 	case *varStringType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			s, err := src.ConvertNomsValueToValue(v)
+			if err != nil {
+				return nil, err
+			}
+			return dest.ConvertValueToNomsValue(ctx, vrw, s)
+		}, true, nil
 	case *yearType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			if v == nil || v == types.NullValue {
+				return types.NullValue, nil
+			}
+			val, ok := v.(types.Decimal)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type converting decimal to year: %T", v)
+			}
+			intVal, err := sql.Int64.Convert(decimal.Decimal(val))
+			if err != nil {
+				return nil, err
+			}
+			return dest.ConvertValueToNomsValue(ctx, vrw, intVal)
+		}, true, nil
 	default:
 		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
 	}

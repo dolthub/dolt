@@ -23,7 +23,6 @@ import (
 var Commands = cli.NewSubCommandHandler("schema", "Commands for showing and importing table schemas.", []cli.Command{
 	ExportCmd{},
 	ImportCmd{},
-	ChangeTypeCmd{},
 	ShowCmd{},
 	TagsCmd{},
 })

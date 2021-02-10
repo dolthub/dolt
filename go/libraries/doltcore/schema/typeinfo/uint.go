@@ -268,7 +268,19 @@ func uintTypeConverter(ctx context.Context, src *uintType, destTi TypeInfo) (tc 
 	case *decimalType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *enumType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			if v == nil || v == types.NullValue {
+				return types.NullValue, nil
+			}
+			val, ok := v.(types.Uint)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type converting uint to enum: %T", v)
+			}
+			if val == 0 {
+				return types.Uint(0), nil
+			}
+			return dest.ConvertValueToNomsValue(ctx, vrw, uint64(val))
+		}, true, nil
 	case *floatType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *inlineBlobType:
