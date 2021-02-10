@@ -63,10 +63,8 @@ teardown() {
     run dolt log
     [ $status -eq 0 ]
     [[ "$output" =~ "Commit1" ]] || false
-    regex='Bats Tests <bats@email.fake>'
-    [[ "$output" =~ "$regex" ]] || false
+    [[ "$output" =~ "Bats Tests <bats@email.fake>" ]] || false
 }
-
 
 @test "DOLT_ADD can take in one table" {
     run dolt sql -q "SELECT DOLT_ADD('test')"
@@ -84,7 +82,6 @@ teardown() {
     regex='Bats Tests <bats@email.fake>'
     [[ "$output" =~ "$regex" ]] || false
 }
-
 
 @test "DOLT_ADD can take in multiple tables" {
     run dolt sql -q "SELECT DOLT_ADD('test', 'test2')"

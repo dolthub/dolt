@@ -102,7 +102,6 @@ SQL
     [[ "$output" =~ "3" ]] || false
     [[ "$output" =~ "500000" ]] || false
 
-
     run dolt log -n 1
     [ $status -eq 0 ]
     [[ "$output" =~ "Insert 500000" ]] || false
@@ -148,7 +147,7 @@ SQL
     [[ "$output" =~ "4" ]] || false
 }
 
-@test "DOLT_MERGE -no-ff correctly returns head and working session variables." {
+@test "DOLT_MERGE -no-ff correctly changes head and working session variables." {
     dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
@@ -242,10 +241,10 @@ SQL
     [[ "$output" =~ "table,num_conflicts" ]] || false
     [[ "$output" =~ "one_pk,1" ]] || false
 
-    # Go through the process of resolving commmits
+    # Go through the process of resolving commits
     run dolt sql << SQL
 REPLACE INTO one_pk (pk1, c1, c2) SELECT their_pk1, their_c1, their_c2 FROM dolt_conflicts_one_pk WHERE their_pk1 IS NOT NULL;
-DELETE FROM one_pk WHERE pk1 in ( SELECT base_pk1 FROM dolt_conflicts_one_pk WHERE their_pk1 IS NULL);
+DELETE FROM one_pk WHERE pk1 in (SELECT base_pk1 FROM dolt_conflicts_one_pk WHERE their_pk1 IS NULL);
 DELETE FROM dolt_conflicts_one_pk;
 SQL
     [ $status -eq 0 ]
@@ -391,7 +390,7 @@ SQL
     [[ "$output" =~ "cannot merge with uncommitted changes" ]] || false
 }
 
-@test "DOLT_MERGE with a long series of operations works.." {
+@test "DOLT_MERGE with a long series of changing operations works." {
     dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');

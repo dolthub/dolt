@@ -210,6 +210,7 @@ func updateHeadAndWorkingSessionVars(ctx *sql.Context, dbData env.DbData) error 
 
 	workingHash := dbData.Rsr.WorkingHash().String()
 
+	// This will update the session table editor's root and clear its cache.
 	if !hasStagedChanges && !hasWorkingChanges {
 		return setHeadAndWorkingSessionRoot(ctx, hs)
 	}
