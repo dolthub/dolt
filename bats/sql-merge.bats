@@ -22,6 +22,7 @@ teardown() {
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 INSERT INTO test VALUES (3);
+UPDATE test SET pk=1000 WHERE pk=0;
 SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');
 SELECT DOLT_CHECKOUT('master');
 SQL
@@ -36,13 +37,17 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "3" ]] || false
 
-     run dolt sql -q "SELECT * FROM test;" -r csv
+    run dolt sql -q "SELECT COUNT(*) FROM test;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "4" ]] || false
+
+    run dolt sql -q "SELECT * FROM test;" -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ "pk" ]] || false
-    [[ "$output" =~ "0" ]] || false
     [[ "$output" =~ "1" ]] || false
     [[ "$output" =~ "2" ]] || false
     [[ "$output" =~ "3" ]] || false
+    [[ "$output" =~ "1000" ]] || false
 }
 
 @test "DOLT_MERGE correctly returns head and working session variables." {

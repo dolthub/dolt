@@ -98,7 +98,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		}
 		return cmh.String(), err
 	} else {
-		return nil, errors.New("DOLT_MERGE only supports fast forwards right now")
+		return nil, errors.New("DOLT_MERGE only supports fast forwards")
 	}
 }
 
