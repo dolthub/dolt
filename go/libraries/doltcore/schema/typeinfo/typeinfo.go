@@ -262,6 +262,8 @@ func FromTypeParams(id Identifier, params map[string]string) (TypeInfo, error) {
 // FromKind returns the default TypeInfo for a given types.Value.
 func FromKind(kind types.NomsKind) TypeInfo {
 	switch kind {
+	case types.BlobKind:
+		return &varBinaryType{sql.LongBlob}
 	case types.BoolKind:
 		return BoolType
 	case types.FloatKind:

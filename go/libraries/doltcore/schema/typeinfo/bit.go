@@ -193,3 +193,45 @@ func (ti *bitType) String() string {
 func (ti *bitType) ToSqlType() sql.Type {
 	return ti.sqlBitType
 }
+
+// bitTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
+func bitTypeConverter(ctx context.Context, src *bitType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
+	switch dest := destTi.(type) {
+	case *bitType:
+		if src.sqlBitType.NumberOfBits() <= dest.sqlBitType.NumberOfBits() {
+			return identityTypeConverter, false, nil
+		} else {
+			return wrapIsValid(dest.IsValid, src, dest)
+		}
+	case *boolType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *datetimeType:
+		return nil, false, IncompatibleTypeConversion.New(src.String(), destTi.String())
+	case *decimalType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *enumType:
+		return wrapIsValid(dest.IsValid, src, dest)
+	case *floatType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *inlineBlobType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *intType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *setType:
+		return wrapIsValid(dest.IsValid, src, dest)
+	case *timeType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *uintType:
+		return wrapIsValid(dest.IsValid, src, dest)
+	case *uuidType:
+		return nil, false, IncompatibleTypeConversion.New(src.String(), destTi.String())
+	case *varBinaryType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *varStringType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *yearType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	default:
+		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
+	}
+}

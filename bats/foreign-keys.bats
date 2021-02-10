@@ -441,6 +441,19 @@ SQL
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk1` FOREIGN KEY (`v1_new`) REFERENCES `parent` (`v1_new`)' ]] || false
 }
 
+@test "foreign-keys: ALTER TABLE MODIFY COLUMN" {
+    dolt sql <<SQL
+ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1);
+SQL
+
+    run dolt sql -q "ALTER TABLE parent MODIFY v1 MEDIUMINT;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "type" ]] || false
+    run dolt sql -q "ALTER TABLE child MODIFY v1 MEDIUMINT;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "type" ]] || false
+}
+
 @test "foreign-keys: DROP COLUMN" {
     dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1)"
     dolt add -A
@@ -461,15 +474,12 @@ SQL
 
 @test "foreign-keys: Disallow change column type when SET NULL" {
     dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE SET NULL ON UPDATE SET NULL"
-    skip "column type changes are not yet supported"
     run dolt sql -q "ALTER TABLE child CHANGE COLUMN parent_extra parent_extra BIGINT"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "SET NULL" ]] || false
     [[ "$output" =~ "parent_extra" ]] || false
     
     run dolt sql -q "ALTER TABLE child CHANGE COLUMN parent_extra parent_extra BIGINT NULL"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "SET NULL" ]] || false
     [[ "$output" =~ "parent_extra" ]] || false
 }
 

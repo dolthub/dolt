@@ -29,6 +29,14 @@ import (
 )
 
 func TestModifyColumn(t *testing.T) {
+	alteredTypeSch := dtestutils.CreateSchema(
+		schema.NewColumn("newId", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("name", dtestutils.NameTag, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
+	)
+
 	tests := []struct {
 		name           string
 		existingColumn schema.Column
@@ -108,7 +116,33 @@ func TestModifyColumn(t *testing.T) {
 			name:           "type change",
 			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
 			newColumn:      schema.NewColumn("newId", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
-			expectedErr:    "unsupported feature: column types cannot be changed",
+			expectedSchema: alteredTypeSch,
+			expectedRows: []row.Row{
+				dtestutils.NewRow(
+					alteredTypeSch,
+					types.String("00000000-0000-0000-0000-000000000000"),
+					types.String("Bill Billerson"),
+					types.Uint(32),
+					types.Bool(true),
+					types.String("Senior Dufus"),
+				),
+				dtestutils.NewRow(
+					alteredTypeSch,
+					types.String("00000000-0000-0000-0000-000000000001"),
+					types.String("John Johnson"),
+					types.Uint(25),
+					types.Bool(false),
+					types.String("Dufus"),
+				),
+				dtestutils.NewRow(
+					alteredTypeSch,
+					types.String("00000000-0000-0000-0000-000000000002"),
+					types.String("Rob Robertson"),
+					types.Uint(21),
+					types.Bool(false),
+					types.String(""),
+				),
+			},
 		},
 	}
 
