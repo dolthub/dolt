@@ -351,7 +351,7 @@ SQL
     [[ "$output" =~ "Finish up Merge" ]] || false
 }
 
-@test "DOLT_MERGE ff with working set changes works." {
+@test "DOLT_MERGE ff throws errors with working set changes." {
     run dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
@@ -363,22 +363,8 @@ CREATE TABLE tbl (
 );
 SELECT DOLT_MERGE('feature-branch');
 SQL
-    [ $status -eq 0 ]
-
-    run dolt log -n 1
-    [ $status -eq 0 ]
-    [[ "$output" =~ "this is a ff" ]] || false
-
-    run dolt sql -q "SELECT COUNT(*) FROM dolt_log"
-    [ $status -eq 0 ]
-    [[ "$output" =~ "3" ]] || false
-
-    run dolt status
-    [ $status -eq 0 ]
-    echo $output
-    [[ "$output" =~ "On branch master" ]] || false
-    [[ "$output" =~ "Changes to be committed:" ]] || false
-    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*tbl) ]] || false
+    [ $status -eq 1 ]
+    [[ "$output" =~ "cannot merge with uncommitted changes" ]] || false
 }
 
 get_head_commit() {

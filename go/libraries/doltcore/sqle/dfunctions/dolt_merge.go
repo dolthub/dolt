@@ -17,7 +17,6 @@ package dfunctions
 import (
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/hash"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -105,30 +104,19 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return 1, errors.New("error: merging is not possible because you have not committed an active merge")
 	}
 
-	parent, ph, _, err := getParent(ctx, err, sess, dbName)
+	parent, ph, parentRoot, err := getParent(ctx, err, sess, dbName)
 	if err != nil {
 		return nil, err
 	}
 
-	//err = checkForUncommittedChanges(root, parentRoot)
-	//if err != nil {
-	//	return nil, err
-	//}
+	err = checkForUncommittedChanges(root, parentRoot)
+	if err != nil {
+		return nil, err
+	}
 
 	cm, cmh, err := getBranchCommit(ctx, ok, branchName, err, ddb)
 	if err != nil {
 		return nil, err
-	}
-
-	tblNames, workingDiffs, err := env.MergeWouldStompChanges(ctx, cm, dbData)
-
-	if len(tblNames) != 0 {
-		emsg := "error: Your local changes to the following tables would be overwritten by merge: \n"
-		for _, tName := range tblNames {
-			emsg += tName + "\n"
-		}
-		emsg += "Please commit your changes before you merge."
-		return 1, errors.New(emsg)
 	}
 
 	// No need to write a merge commit, if the parent can ffw to the commit coming from the branch.
@@ -139,9 +127,9 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 
 	if canFF {
 		if apr.Contains(cli.NoFFParam) {
-			err = executeNoFFMerge(ctx, sess, apr, dbData, parent, cm, workingDiffs)
+			err = executeNoFFMerge(ctx, sess, apr, dbData, parent, cm)
 		} else {
-			err = executeFFMerge(ctx, apr.Contains(cli.SquashParam), dbData, cm, workingDiffs)
+			err = executeFFMerge(ctx, apr.Contains(cli.SquashParam), dbData, cm)
 		}
 
 		if err != nil {
@@ -150,7 +138,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return cmh.String(), err
 	}
 
-	err = executeMerge(ctx, apr.Contains(cli.SquashParam), parent, cm, dbData, workingDiffs)
+	err = executeMerge(ctx, apr.Contains(cli.SquashParam), parent, cm, dbData)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +168,7 @@ func abortMerge(ctx *sql.Context, dbData env.DbData) error {
 	return setHeadAndWorkingSessionRoot(ctx, hh.String())
 }
 
-func executeMerge(ctx *sql.Context, squash bool, parent, cm *doltdb.Commit, dbData env.DbData, workingDiffs map[string]hash.Hash) error {
+func executeMerge(ctx *sql.Context, squash bool, parent, cm *doltdb.Commit, dbData env.DbData) error {
 	mergeRoot, mergeStats, err := merge.MergeCommits(ctx, parent, cm)
 
 	if err != nil {
@@ -194,10 +182,10 @@ func executeMerge(ctx *sql.Context, squash bool, parent, cm *doltdb.Commit, dbDa
 		}
 	}
 
-	return mergedRootToWorking(ctx, squash, dbData, mergeRoot, cm, mergeStats, workingDiffs)
+	return mergedRootToWorking(ctx, squash, dbData, mergeRoot, cm, mergeStats)
 }
 
-func executeFFMerge(ctx *sql.Context, squash bool, dbData env.DbData, cm2 *doltdb.Commit, workingDiffs map[string]hash.Hash) error {
+func executeFFMerge(ctx *sql.Context, squash bool, dbData env.DbData, cm2 *doltdb.Commit) error {
 	rv, err := cm2.GetRootValue()
 
 	if err != nil {
@@ -211,19 +199,6 @@ func executeFFMerge(ctx *sql.Context, squash bool, dbData env.DbData, cm2 *doltd
 	}
 
 	workingHash := stagedHash
-	if len(workingDiffs) > 0 {
-		rv, err = applyChanges(ctx, rv, workingDiffs)
-
-		if err != nil {
-			return err
-		}
-
-		workingHash, err = dbData.Ddb.WriteRootValue(ctx, rv)
-
-		if err != nil {
-			return err
-		}
-	}
 
 	if !squash {
 		err = dbData.Ddb.FastForward(ctx, dbData.Rsr.CWBHeadRef(), cm2)
@@ -246,13 +221,13 @@ func executeFFMerge(ctx *sql.Context, squash bool, dbData env.DbData, cm2 *doltd
 	return nil
 }
 
-func executeNoFFMerge(ctx *sql.Context, dSess *sqle.DoltSession, apr *argparser.ArgParseResults, dbData env.DbData, pr, cm2 *doltdb.Commit, workingDiffs map[string]hash.Hash) error {
+func executeNoFFMerge(ctx *sql.Context, dSess *sqle.DoltSession, apr *argparser.ArgParseResults, dbData env.DbData, pr, cm2 *doltdb.Commit) error {
 	mergedRoot, err := cm2.GetRootValue()
 	if err != nil {
 		return errors.New("Failed to return root value.")
 	}
 
-	err = mergedRootToWorking(ctx, false, dbData, mergedRoot, cm2, map[string]*merge.MergeStats{}, workingDiffs)
+	err = mergedRootToWorking(ctx, false, dbData, mergedRoot, cm2, map[string]*merge.MergeStats{})
 	if err != nil {
 		return err
 	}
@@ -309,20 +284,13 @@ func executeNoFFMerge(ctx *sql.Context, dSess *sqle.DoltSession, apr *argparser.
 	return setHeadAndWorkingSessionRoot(ctx, h)
 }
 
-func mergedRootToWorking(ctx *sql.Context, squash bool, dbData env.DbData, mergedRoot *doltdb.RootValue, cm2 *doltdb.Commit, mergeStats map[string]*merge.MergeStats, workingDiffs map[string]hash.Hash) error {
+func mergedRootToWorking(ctx *sql.Context, squash bool, dbData env.DbData, mergedRoot *doltdb.RootValue, cm2 *doltdb.Commit, mergeStats map[string]*merge.MergeStats) error {
 	h2, err := cm2.HashOf()
 	if err != nil {
 		return err
 	}
 
 	workingRoot := mergedRoot
-	if len(workingDiffs) > 0 {
-		workingRoot, err = applyChanges(ctx, mergedRoot, workingDiffs)
-		if err != nil {
-			return err
-		}
-	}
-
 	if !squash {
 		err = dbData.Rsw.StartMerge(h2.String())
 
@@ -359,20 +327,6 @@ func checkForConflicts(tblToStats map[string]*merge.MergeStats) bool {
 
 	return false
 }
-
-func applyChanges(ctx *sql.Context, root *doltdb.RootValue, workingDiffs map[string]hash.Hash) (*doltdb.RootValue, error) {
-	var err error
-	for tblName, h := range workingDiffs {
-		root, err = root.SetTableHash(ctx, tblName, h)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return root, nil
-}
-
 
 func (d DoltMergeFunc) String() string {
 	childrenStrings := make([]string, len(d.Children()))
