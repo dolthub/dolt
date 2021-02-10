@@ -724,7 +724,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		return err
 	}
 
-	existingCol, ok := sch.GetAllCols().GetByName(columnName)
+	existingCol, ok := sch.GetAllCols().GetByNameCaseInsensitive(columnName)
 	if !ok {
 		panic(fmt.Sprintf("Column %s not found. This is a bug.", columnName))
 	}
@@ -761,14 +761,16 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 				}
 			}
 		}
-		tags, err := root.GenerateTagsForNewColumns(ctx, t.name, []string{col.Name}, []types.NomsKind{col.Kind})
-		if err != nil {
-			return err
+		if existingCol.Kind != col.Kind { // We only change the tag when the underlying Noms kind changes
+			tags, err := root.GenerateTagsForNewColumns(ctx, t.name, []string{col.Name}, []types.NomsKind{col.Kind})
+			if err != nil {
+				return err
+			}
+			if len(tags) != 1 {
+				return fmt.Errorf("expected a generated tag length of 1")
+			}
+			col.Tag = tags[0]
 		}
-		if len(tags) != 1 {
-			return fmt.Errorf("expected a generated tag length of 1")
-		}
-		col.Tag = tags[0]
 	}
 
 	updatedTable, err := alterschema.ModifyColumn(ctx, table, existingCol, col, orderToOrder(order))

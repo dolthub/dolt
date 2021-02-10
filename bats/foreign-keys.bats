@@ -441,7 +441,7 @@ SQL
     [[ `echo "$output" | tr -d "\n" | tr -s " "` =~ 'CONSTRAINT `fk1` FOREIGN KEY (`v1_new`) REFERENCES `parent` (`v1_new`)' ]] || false
 }
 
-@test "foreign-keys: ALTER TABLE MODIFY COLUMN" {
+@test "foreign-keys: ALTER TABLE MODIFY COLUMN type change not allowed" {
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1);
 SQL

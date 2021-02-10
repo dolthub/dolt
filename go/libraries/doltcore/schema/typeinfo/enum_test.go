@@ -61,7 +61,7 @@ func TestEnumConvertNomsValueToValue(t *testing.T) {
 			generateEnumType(t, 2),
 			0,
 			"",
-			true,
+			false,
 		},
 		{
 			generateEnumType(t, 3),
@@ -178,7 +178,7 @@ func TestEnumFormatValue(t *testing.T) {
 			generateEnumType(t, 2),
 			0,
 			"",
-			true,
+			false,
 		},
 		{
 			generateEnumType(t, 3),

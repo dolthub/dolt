@@ -42,6 +42,9 @@ func ModifyColumn(
 		return nil, err
 	}
 
+	if strings.ToLower(existingCol.Name) == strings.ToLower(newCol.Name) {
+		newCol.Name = existingCol.Name
+	}
 	if err := validateModifyColumn(ctx, tbl, existingCol, newCol); err != nil {
 		return nil, err
 	}
@@ -49,6 +52,16 @@ func ModifyColumn(
 	// Modify statements won't include key info, so fill it in from the old column
 	if existingCol.IsPartOfPK {
 		newCol.IsPartOfPK = true
+		foundNotNullConstraint := false
+		for _, constraint := range newCol.Constraints {
+			if _, ok := constraint.(schema.NotNullConstraint); ok {
+				foundNotNullConstraint = true
+				break
+			}
+		}
+		if !foundNotNullConstraint {
+			newCol.Constraints = append(newCol.Constraints, schema.NotNullConstraint{})
+		}
 	}
 
 	newSchema, err := replaceColumnInSchema(sch, existingCol, newCol, order)
@@ -105,6 +118,9 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 	}
 
 	if !oldCol.TypeInfo.Equals(modifiedCol.TypeInfo) {
+		if schema.IsKeyless(newSch) {
+			return nil, fmt.Errorf("keyless table column type alteration is not yet supported")
+		}
 		rowData, err = updateRowDataWithNewType(ctx, rowData, tbl.ValueReadWriter(), oldSch, newSch, oldCol, modifiedCol)
 		if err != nil {
 			return nil, err
