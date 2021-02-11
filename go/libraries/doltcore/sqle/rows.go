@@ -33,7 +33,7 @@ type doltTableRowIter struct {
 }
 
 // Returns a new row iterator for the table given
-func newRowIterator(tbl *DoltTable, ctx *sql.Context, projCols []string, partition *doltTablePartition) (sql.RowIter, error) {
+func newRowIterator(ctx *sql.Context, tbl *DoltTable, projCols []string, partition *doltTablePartition) (sql.RowIter, error) {
 	sch, err := tbl.table.GetSchema(ctx)
 
 	if err != nil {
@@ -51,7 +51,7 @@ func newRowIterator(tbl *DoltTable, ctx *sql.Context, projCols []string, partiti
 func newKeylessRowIterator(ctx *sql.Context, tbl *DoltTable, partition *doltTablePartition) (*doltTableRowIter, error) {
 	var iter table.SqlTableReader
 	var err error
-	if partition == nil {
+	if partition.end == NoUpperBound {
 		iter, err = table.NewBufferedTableReader(ctx, tbl.table)
 	} else {
 		iter, err = table.NewBufferedTableReaderForPartition(ctx, tbl.table, partition.start, partition.end)
@@ -68,20 +68,10 @@ func newKeylessRowIterator(ctx *sql.Context, tbl *DoltTable, partition *doltTabl
 }
 
 func newKeyedRowIter(ctx context.Context, tbl *DoltTable, projectedCols []string, partition *doltTablePartition) (sql.RowIter, error) {
-	sch, err := tbl.table.GetSchema(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	rowData, err := tbl.table.GetRowData(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
+	var err error
 	var mapIter types.MapTupleIterator
-	if partition == nil {
+	rowData := partition.rowData
+	if partition.end == NoUpperBound {
 		mapIter, err = rowData.RangeIterator(ctx, 0, rowData.Len())
 	} else {
 		mapIter, err = partition.IteratorForPartition(ctx, rowData)
@@ -91,7 +81,7 @@ func newKeyedRowIter(ctx context.Context, tbl *DoltTable, projectedCols []string
 		return nil, err
 	}
 
-	cols := sch.GetAllCols().GetColumns()
+	cols := tbl.sch.GetAllCols().GetColumns()
 	tagToSqlColIdx := make(map[uint64]int)
 
 	resultColSet := set.NewCaseInsensitiveStrSet(projectedCols)
@@ -101,7 +91,7 @@ func newKeyedRowIter(ctx context.Context, tbl *DoltTable, projectedCols []string
 		}
 	}
 
-	conv := NewKVToSqlRowConverter(tbl.table.Format(), tagToSqlColIdx, cols, len(cols))
+	conv := NewKVToSqlRowConverter(tbl.nbf, tagToSqlColIdx, cols, len(cols))
 	return NewDoltMapIter(ctx, mapIter.NextTuple, nil, conv), nil
 }
 

@@ -74,6 +74,7 @@ type DoltTable struct {
 	sqlSch sql.Schema
 	db     SqlDatabase
 
+	nbf        *types.NomsBinFormat
 	table      *doltdb.Table
 	sch        schema.Schema
 	autoIncCol schema.Column
@@ -95,6 +96,7 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatab
 		name:          name,
 		db:            db,
 		table:         tbl,
+		nbf:           tbl.Format(),
 		sch:           sch,
 		autoIncCol:    autoCol,
 		projectedCols: nil,
@@ -213,6 +215,11 @@ func (t *DoltTable) NumRows(ctx *sql.Context) (uint64, error) {
 	return m.Len(), nil
 }
 
+// Format returns the NomsBinFormat for the underlying table
+func (t *DoltTable) Format() *types.NomsBinFormat {
+	return t.nbf
+}
+
 // Schema returns the schema for this table.
 func (t *DoltTable) Schema() sql.Schema {
 	return t.sqlSchema()
@@ -244,7 +251,7 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	numElements := rowData.Len()
 
 	if numElements == 0 {
-		return newDoltTablePartitionIter(rowData, doltTablePartition{0, 0}), nil
+		return newDoltTablePartitionIter(rowData, doltTablePartition{0, 0, rowData}), nil
 	}
 
 	maxPartitions := uint64(partitionMultiplier * runtime.NumCPU())
@@ -261,9 +268,9 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	partitions := make([]doltTablePartition, numPartitions)
 	itemsPerPartition := numElements / numPartitions
 	for i := uint64(0); i < numPartitions-1; i++ {
-		partitions[i] = doltTablePartition{i * itemsPerPartition, (i + 1) * itemsPerPartition}
+		partitions[i] = doltTablePartition{i * itemsPerPartition, (i + 1) * itemsPerPartition, rowData}
 	}
-	partitions[numPartitions-1] = doltTablePartition{(numPartitions - 1) * itemsPerPartition, numElements}
+	partitions[numPartitions-1] = doltTablePartition{(numPartitions - 1) * itemsPerPartition, numElements, rowData}
 
 	return newDoltTablePartitionIter(rowData, partitions...), nil
 }
@@ -290,9 +297,9 @@ func partitionRows(ctx *sql.Context, t *DoltTable, projCols []string, partition 
 			return emptyRowIterator{}, nil
 		}
 
-		return newRowIterator(t, ctx, projCols, &typedPartition)
+		return newRowIterator(ctx, t, projCols, &typedPartition)
 	case sqlutil.SinglePartition:
-		return newRowIterator(t, ctx, projCols, nil)
+		return newRowIterator(ctx, t, projCols, &doltTablePartition{rowData: typedPartition.RowData, end: NoUpperBound})
 	}
 
 	return nil, errors.New("unsupported partition type")
@@ -536,11 +543,14 @@ func (itr *doltTablePartitionIter) Next() (sql.Partition, error) {
 
 var _ sql.Partition = (*doltTablePartition)(nil)
 
+const NoUpperBound = 0xffffffffffffffff
+
 type doltTablePartition struct {
 	// start is the first index of this partition (inclusive)
 	start uint64
 	// all elements in the partition will be less than end (exclusive)
-	end uint64
+	end     uint64
+	rowData types.Map
 }
 
 // Key returns the key for this partition, which must uniquely identity the partition.
