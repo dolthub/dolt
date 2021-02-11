@@ -752,10 +752,17 @@ SQL
     [ "$SQL" == "$CLI" ]
 }
 
-# pd.to_sql checks missing table with describe syntax
-@test "describe missing table does not raise" {
-    run dolt -q "DESCRIBE missing_table"
+# tonic acesses column name as a dict with key `current_user` (currently `CURRENT_USER()`)
+@test "sql select current_user returns mysql syntax" {
+    run dolt -q "select current_user" -r csv
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [ "${lines[0]}" = "current_user" ]
+}
+
+@test "sql show grants" {
+    run dolt -q "show grants for current_user" -r csv
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "Grants for root@%" ]
+    [ "${lines[1]}" = "GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION" ]
 }
 
