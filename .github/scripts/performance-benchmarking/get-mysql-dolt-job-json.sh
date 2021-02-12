@@ -20,9 +20,12 @@ readTests="('oltp_read_only', 'oltp_point_select', 'select_random_points', 'sele
 medianLatencyMultiplierReadsQuery="select f.test_name as test_name, f.server_name, f.server_version, case when avg(f.latency_percentile) < 0.001 then 0.001 else avg(f.latency_percentile) end as from_latency_median, t.server_name, t.server_version, case when avg(t.latency_percentile) < 0.001 then 0.001 else avg(t.latency_percentile) end as to_latency_median, case when ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001)) < 1.0 then 1.0 else ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001)) end as multiplier from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name in $readTests group by f.test_name;"
 meanMultiplierReadsQuery="select round(avg(multipliers)) as mean_multiplier from (select case when (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001))) < 1.0 then 1.0 else (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001))) end as multipliers from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name in $readTests group by f.test_name)"
 
-writeTests="('oltp_read_write', 'oltp_update_index', 'oltp_update_non_index', 'oltp_insert', 'bulk_insert', 'oltp_write_only', 'oltp_delete')"
+writeTests="('oltp_read_write', 'oltp_update_index', 'oltp_update_non_index', 'oltp_insert', 'bulk_insert', 'oltp_write_only')"
 medianLatencyMultiplierWritesQuery="select f.test_name as test_name, f.server_name, f.server_version, case when avg(f.latency_percentile) < 0.001 then 0.001 else avg(f.latency_percentile) end as from_latency_median, t.server_name, t.server_version, case when avg(t.latency_percentile) < 0.001 then 0.001 else avg(t.latency_percentile) end as to_latency_median, case when ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001)) < 1.0 then 1.0 else ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001)) end as multiplier from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name in $writeTests group by f.test_name;"
 meanMultiplierWritesQuery="select round(avg(multipliers)) as mean_multiplier from (select case when (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001))) < 1.0 then 1.0 else (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001))) end as multipliers from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name in $writeTests group by f.test_name)"
+
+deleteTests="('oltp_delete')"
+medianLatencyMultiplierDeletesQuery="select f.test_name as test_name, f.server_name, f.server_version, case when avg(f.latency_percentile) < 0.001 then 0.001 else avg(f.latency_percentile) end as from_latency_median, t.server_name, t.server_version, case when avg(t.latency_percentile) < 0.001 then 0.001 else avg(t.latency_percentile) end as to_latency_median, case when ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001)) < 1.0 then 1.0 else ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001)) end as multiplier from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name in $deleteTests group by f.test_name;"
 
 echo '
 {
@@ -69,7 +72,8 @@ echo '
               "'"$medianLatencyMultiplierReadsQuery"'",
               "'"$meanMultiplierReadsQuery"'",
               "'"$medianLatencyMultiplierWritesQuery"'",
-              "'"$meanMultiplierWritesQuery"'"
+              "'"$meanMultiplierWritesQuery"'",
+              "'"$medianLatencyMultiplierDeletesQuery"'"
             ]
           }
         ],
