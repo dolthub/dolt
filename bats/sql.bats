@@ -838,8 +838,33 @@ SQL
     [[ "$output" =~ "2020-02-17 00:00:00" ]] || false
 }
 
-@test "dolt_version() func" {
-    SQL=$(dolt sql -q 'select dolt_version() from dual;' -r csv | tail -n 1)
-    CLI=$(dolt version | cut -f 3 -d ' ')
-    [ "$SQL" == "$CLI" ]
+#GE
+@test "sql `datetime` col without backticks" {
+    dolt sql -r csv -q "CREATE TABLE `test` (datetime DATETIME)"
+    [ $status -eq 0 ]
 }
+
+@test "sql `value` col without backticks" {
+    dolt sql -r csv -q "CREATE TABLE `test` (value INTEGER)"
+    [ $status -eq 0 ]
+}
+
+@test "sql `count` col without backticks" {
+    dolt sql -r csv -q "CREATE TABLE `test` (count INTEGER)"
+    [ $status -eq 0 ]
+}
+
+# verbatim from GE, i don't understand the constraint context
+@test "sql datetime col without backticks" {
+    dolt sql -r csv -q "CREATE TABLE `test_data_IqoMyiSk` ( x DECIMAL, y INTEGER, z INTEGER, n INTEGER, b BOOL, CHECK (b IN (0, 1)) )"
+    [ $status -eq 0 ]
+}
+
+@test "float with precision" {
+    dolt sql -r csv -q "CREATE TABLE `test` (`pk` FLOAT(53))"
+    [ $status -eq 0 ]
+}
+
+# TODO: window statement for quantile
+# TODO: with statement for quantile
+# TODO: one more built-in function for quantile that i need to track down
