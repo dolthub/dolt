@@ -192,11 +192,6 @@ func (tes *TableEditSession) flush(ctx context.Context) (*doltdb.RootValue, erro
 		return nil, rootErr
 	}
 
-	newRoot, rootErr = newRoot.SetFeatureVersion(ctx)
-	if rootErr != nil {
-		return nil, rootErr
-	}
-
 	tes.root = newRoot
 	return newRoot, nil
 }

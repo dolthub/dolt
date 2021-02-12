@@ -462,11 +462,6 @@ func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 // basic SQL execution engine. If |newRoot|'s FeatureVersion is
 // out-of-date with the client, SetRoot will update it.
 func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
-	newRoot, err := newRoot.SetFeatureVersion(ctx)
-	if err != nil {
-		return err
-	}
-
 	h, err := newRoot.HashOf()
 
 	if err != nil {

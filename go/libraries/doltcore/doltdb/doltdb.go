@@ -386,6 +386,12 @@ func (ddb *DoltDB) ResolveTag(ctx context.Context, tagRef ref.TagRef) (*Tag, err
 // WriteRootValue will write a doltdb.RootValue instance to the database.  This value will not be associated with a commit
 // and can be committed by hash at a later time.  Returns the hash of the value written.
 func (ddb *DoltDB) WriteRootValue(ctx context.Context, rv *RootValue) (hash.Hash, error) {
+	var err error
+	rv.valueSt, err = rv.valueSt.Set(featureVersKey, types.Int(DoltFeatureVersion))
+	if err != nil {
+		return hash.Hash{}, err
+	}
+
 	valRef, err := ddb.db.WriteValue(ctx, rv.valueSt)
 
 	if err != nil {

@@ -102,16 +102,6 @@ func (root *RootValue) GetFeatureVersion(ctx context.Context) (ver FeatureVersio
 	return ver, ok, err
 }
 
-// SetFeatureVersion writes the Dolt client's FeatureVersion to |root|.
-func (root *RootValue) SetFeatureVersion(ctx context.Context) (*RootValue, error) {
-	st, err := root.valueSt.Set(featureVersKey, types.Int(DoltFeatureVersion))
-	if err != nil {
-		return nil, err
-	}
-
-	return newRootValue(root.vrw, st)
-}
-
 func (root *RootValue) HasTable(ctx context.Context, tName string) (bool, error) {
 	val, found, err := root.valueSt.MaybeGet(tablesKey)
 
