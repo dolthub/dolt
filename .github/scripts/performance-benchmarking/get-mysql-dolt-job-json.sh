@@ -16,8 +16,8 @@ timeprefix="$6"
 actorprefix="$7"
 format="$8"
 
-medianLatencyMultiplierQuery="select f.test_name as test_name, f.server_name, f.server_version, avg(f.latency_percentile) as from_latency_median, t.server_name, t.server_version, avg(t.latency_percentile) as to_latency_median, ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001)) as multiplier from from_results as f join to_results as t on f.test_name = t.test_name group by f.test_name;"
-meanMultiplierQuery="select round(avg(multipliers)) as mean_multiplier from (select (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001))) as multipliers from from_results as f join to_results as t on f.test_name = t.test_name group by f.test_name)"
+medianLatencyMultiplierQuery="select f.test_name as test_name, f.server_name, f.server_version, case when avg(f.latency_percentile) < 0.001 then 0.001 else avg(f.latency_percentile) end as from_latency_median, t.server_name, t.server_version, case when avg(t.latency_percentile) < 0.001 then 0.001 else avg(t.latency_percentile) end as to_latency_median, case when ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001)) < 1.0 then 1.0 else ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001)) end as multiplier from from_results as f join to_results as t on f.test_name = t.test_name group by f.test_name;"
+meanMultiplierQuery="select round(avg(multipliers)) as mean_multiplier from (select case when (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001))) < 1.0 then 1.0 else (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001))) end as multipliers from from_results as f join to_results as t on f.test_name = t.test_name group by f.test_name)"
 
 echo '
 {
