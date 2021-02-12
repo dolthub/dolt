@@ -83,3 +83,98 @@ seed_repos_with_tables_with_use_statements() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED" ]] || false
 }
+
+@test "sql create new database" {
+    dolt init
+
+    run dolt sql << SQL
+CREATE DATABASE test;
+SHOW DATABASES;
+USE test;
+CREATE TABLE test (
+    pk int primary key
+);
+INSERT INTO test VALUES (222);
+SELECT COUNT(*) FROM test WHERE pk=222;
+DROP DATABASE test;
+SQL
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_repo_$$" ]] || false
+    [[ "$output" =~ "information_schema" ]] || false
+    [[ "$output" =~ "test" ]] || false
+    # From COUNT
+    [[ "$output" =~ "1" ]] || false
+
+    run dolt sql -q "SHOW DATABASES"
+    [[ ! "$output" =~ "tmp1" ]] || false
+}
+
+@test "sql create new database IF EXISTS works" {
+    dolt init
+
+    # Test bad syntax.
+    run dolt sql -q "CREATE DATABASE IF EXISTS test;"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Error parsing SQL" ]] || false
+
+    run dolt sql << SQL
+CREATE DATABASE IF NOT EXISTS test;
+SHOW DATABASES;
+USE test;
+CREATE TABLE test (
+    pk int primary key
+);
+INSERT INTO test VALUES (222);
+SELECT COUNT(*) FROM test WHERE pk=222;
+DROP DATABASE test;
+SQL
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_repo_$$" ]] || false
+    [[ "$output" =~ "information_schema" ]] || false
+    [[ "$output" =~ "test" ]] || false
+    # From COUNT
+    [[ "$output" =~ "1" ]] || false
+
+    run dolt sql << SQL
+CREATE DATABASE IF NOT EXISTS test;
+SHOW DATABASES;
+USE test;
+DROP DATABASE IF EXISTS test;
+DROP DATABASE IF EXISTS test;
+SQL
+    # The second drop database should just return a warning resulting in a status of 0.
+    [ "$status" -eq 0 ]
+
+    run dolt sql << SQL
+CREATE DATABASE IF NOT EXISTS test;
+SHOW DATABASES;
+USE test;
+DROP DATABASE IF NOT EXISTS test;
+SQL
+    # IF NOT should not work with drop.
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Error parsing SQL" ]] || false
+}
+
+@test "sql create new database via SCHEMA alias" {
+    dolt init
+
+    run dolt sql << SQL
+CREATE SCHEMA test;
+SHOW DATABASES;
+USE test;
+CREATE TABLE test (
+    pk int primary key
+);
+INSERT INTO test VALUES (222);
+SELECT COUNT(*) FROM test WHERE pk=222;
+DROP SCHEMA test;
+SQL
+    [[ "$output" =~ "dolt_repo_$$" ]] || false
+    [[ "$output" =~ "information_schema" ]] || false
+    [[ "$output" =~ "test" ]] || false
+    [[ "$output" =~ "1" ]] || false
+
+    run dolt sql -q "SHOW DATABASES"
+    [[ ! "$output" =~ "tmp1" ]] || false
+}
