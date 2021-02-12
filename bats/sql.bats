@@ -838,6 +838,12 @@ SQL
     [[ "$output" =~ "2020-02-17 00:00:00" ]] || false
 }
 
+@test "dolt_version() func" {
+    SQL=$(dolt sql -q 'select dolt_version() from dual;' -r csv | tail -n 1)
+    CLI=$(dolt version | cut -f 3 -d ' ')
+    [ "$SQL" == "$CLI" ]
+}
+
 #GE
 @test "sql `datetime` col without backticks" {
     dolt sql -r csv -q "CREATE TABLE `test` (datetime DATETIME)"
