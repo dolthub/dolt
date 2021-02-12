@@ -39,7 +39,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -105,7 +104,7 @@ const memProf = "mem"
 const blockingProf = "blocking"
 const traceProf = "trace"
 
-const keylessFeatureFlag = "--keyless"
+const featureVersionFlag = "--feature-version"
 
 func main() {
 	os.Exit(runMain())
@@ -191,9 +190,13 @@ func runMain() int {
 				csMetrics = true
 				args = args[1:]
 
-			case keylessFeatureFlag:
-				schema.FeatureFlagKeylessSchema = true
-				args = args[1:]
+			case featureVersionFlag:
+				if featureVersion, err := strconv.Atoi(args[1]); err == nil {
+					doltdb.DoltFeatureVersion = doltdb.FeatureVersion(featureVersion)
+				} else {
+					panic(err)
+				}
+				args = args[2:]
 
 			default:
 				doneDebugFlags = true
@@ -204,7 +207,7 @@ func runMain() int {
 	restoreIO := cli.InitIO()
 	defer restoreIO()
 
-	warnIfMaxFilesTooLow()
+	//warnIfMaxFilesTooLow()
 
 	ctx := context.Background()
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
@@ -253,7 +256,7 @@ func runMain() int {
 		return 1
 	}
 
-	err = reconfigIfTempFileMoveFails(dEnv)
+	//err = reconfigIfTempFileMoveFails(dEnv)
 
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to setup the temporary directory. %v`", err))

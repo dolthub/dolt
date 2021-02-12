@@ -8,6 +8,7 @@ setup() {
 }
 
 teardown() {
+    cd ../
     teardown_common
     rm -rf $BATS_TMPDIR/no-dolt-dir-$$
 }
@@ -250,6 +251,7 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [ -f .dolt/repo_state.json ]
     [ ! -f README.md ]
     [ ! -f LICENSE.md ]
+    cd ../
     rm -rf $BATS_TMPDIR/dolt-repo-$$-new
 }
 
