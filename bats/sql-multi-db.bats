@@ -88,25 +88,25 @@ seed_repos_with_tables_with_use_statements() {
     dolt init
 
     run dolt sql << SQL
-CREATE DATABASE test;
+CREATE DATABASE mydb;
 SHOW DATABASES;
-USE test;
+USE mydb;
 CREATE TABLE test (
     pk int primary key
 );
 INSERT INTO test VALUES (222);
 SELECT COUNT(*) FROM test WHERE pk=222;
-DROP DATABASE test;
+DROP DATABASE mydb;
 SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "dolt_repo_$$" ]] || false
     [[ "$output" =~ "information_schema" ]] || false
-    [[ "$output" =~ "test" ]] || false
+    [[ "$output" =~ "mydb" ]] || false
     # From COUNT
     [[ "$output" =~ "1" ]] || false
 
     run dolt sql -q "SHOW DATABASES"
-    [[ ! "$output" =~ "tmp1" ]] || false
+    [[ ! "$output" =~ "mydb" ]] || false
 }
 
 @test "sql create new database IF EXISTS works" {
@@ -154,6 +154,18 @@ SQL
     # IF NOT should not work with drop.
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error parsing SQL" ]] || false
+}
+
+@test "sql drop database errors for non memory databases" {
+    dolt init
+
+    run dolt sql -q "DROP DATABASE dolt_repo_$$"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "DROP DATABASE isn't supported for database dolt_repo_$$" ]] || false
+
+    run dolt sql -q "DROP DATABASE information_schema"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "DROP DATABASE isn't supported for database information_schema" ]] || false
 }
 
 @test "sql create new database via SCHEMA alias" {

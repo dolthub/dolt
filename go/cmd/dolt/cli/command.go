@@ -180,7 +180,7 @@ func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []
 	return 1
 }
 
-// CheckEnvIsValid validates that a DoltEnv has been initialized properly and no errors occur during load, and prints
+// CheckEnvIsValid validates that a DoltEnv ha s been initialized properly and no errors occur during load, and prints
 // error messages to the user if there are issues with the environment or if errors were encountered while loading it.
 func CheckEnvIsValid(dEnv *env.DoltEnv) bool {
 	if !dEnv.HasDoltDir() {

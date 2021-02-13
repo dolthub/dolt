@@ -27,6 +27,7 @@ import (
 	"github.com/abiosoft/readline"
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/auth"
+	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -880,19 +881,7 @@ func processQuery(ctx *sql.Context, query string, se *sqlEngine) (sql.Schema, sq
 		}
 		return se.ddl(ctx, s, query)
 	case *sqlparser.DBDDL:
-		sch, rowIter, err := se.query(ctx, query)
-
-		if rowIter != nil {
-			err = rowIter.Close()
-			if err != nil {
-				return nil, nil, err
-			}
-		}
-
-		if err != nil {
-			return nil, nil, err
-		}
-		return sch, nil, err
+		return se.dbddl(ctx, s, query)
 	default:
 		return nil, nil, fmt.Errorf("Unsupported SQL statement: '%v'.", query)
 	}
@@ -1416,6 +1405,66 @@ func printOKResult(iter sql.RowIter) (returnErr error) {
 
 func isOkResult(sch sql.Schema) bool {
 	return sch.Equals(sql.OkResultSchema)
+}
+
+func (se *sqlEngine) dbddl(ctx *sql.Context, dbddl *sqlparser.DBDDL, query string) (sql.Schema, sql.RowIter, error) {
+	switch strings.ToLower(dbddl.Action) {
+	case sqlparser.DropStr:
+		// Should not be allowed to delete repo name and information schema
+		if dbddl.DBName == information_schema.InformationSchemaDatabaseName {
+			return nil, nil, fmt.Errorf("DROP DATABASE isn't supported for database %s", information_schema.InformationSchemaDatabaseName)
+		}
+
+		var rowIter sql.RowIter = nil
+		var err error = nil
+		if dbddl.DBName == ctx.GetCurrentDatabase() {
+			db, err := se.engine.Catalog.Database(ctx.GetCurrentDatabase())
+			if err != nil {
+				return nil, nil, err
+			}
+			// Check if it's an in memory database
+			switch interface{}(db).(type) {
+			case *memory.Database:
+				_, rowIter, err = se.query(ctx, query)
+			default:
+				return nil, nil, fmt.Errorf("DROP DATABASE isn't supported for database %s", db.Name())
+			}
+		}
+
+		if rowIter != nil {
+			err = rowIter.Close()
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if dbddl.DBName == ctx.GetCurrentDatabase() {
+			ctx.SetCurrentDatabase("")
+		}
+
+		return nil, nil, nil
+	case sqlparser.CreateStr:
+		sch, rowIter, err := se.query(ctx, query)
+
+		if rowIter != nil {
+			err = rowIter.Close()
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		return sch, nil, nil
+	default:
+		return nil, nil, fmt.Errorf("Unsupported SQL operation")
+	}
 }
 
 // Executes a SQL DDL statement (create, update, etc.). Updates the new root value in
