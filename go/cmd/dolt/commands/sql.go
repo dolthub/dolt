@@ -1410,14 +1410,13 @@ func isOkResult(sch sql.Schema) bool {
 func (se *sqlEngine) dbddl(ctx *sql.Context, dbddl *sqlparser.DBDDL, query string) (sql.Schema, sql.RowIter, error) {
 	switch strings.ToLower(dbddl.Action) {
 	case sqlparser.DropStr:
+		var rowIter sql.RowIter = nil
+		var err error = nil
+
 		// Should not be allowed to delete repo name and information schema
 		if dbddl.DBName == information_schema.InformationSchemaDatabaseName {
 			return nil, nil, fmt.Errorf("DROP DATABASE isn't supported for database %s", information_schema.InformationSchemaDatabaseName)
-		}
-
-		var rowIter sql.RowIter = nil
-		var err error = nil
-		if dbddl.DBName == ctx.GetCurrentDatabase() {
+		} else if dbddl.DBName == ctx.GetCurrentDatabase() {
 			db, err := se.engine.Catalog.Database(ctx.GetCurrentDatabase())
 			if err != nil {
 				return nil, nil, err
@@ -1429,6 +1428,8 @@ func (se *sqlEngine) dbddl(ctx *sql.Context, dbddl *sqlparser.DBDDL, query strin
 			default:
 				return nil, nil, fmt.Errorf("DROP DATABASE isn't supported for database %s", db.Name())
 			}
+		} else {
+			_, rowIter, err = se.query(ctx, query)
 		}
 
 		if rowIter != nil {
@@ -1440,10 +1441,6 @@ func (se *sqlEngine) dbddl(ctx *sql.Context, dbddl *sqlparser.DBDDL, query strin
 
 		if err != nil {
 			return nil, nil, err
-		}
-
-		if dbddl.DBName == ctx.GetCurrentDatabase() {
-			ctx.SetCurrentDatabase("")
 		}
 
 		return nil, nil, nil

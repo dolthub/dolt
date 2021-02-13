@@ -109,6 +109,18 @@ SQL
     [[ ! "$output" =~ "mydb" ]] || false
 }
 
+@test "sql create and dropnew database" {
+    dolt init
+
+    run dolt sql << SQL
+CREATE DATABASE mydb;
+DROP DATABASE mydb;
+USE mydb;
+SQL
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "database not found: mydb" ]] || false
+}
+
 @test "sql create new database IF EXISTS works" {
     dolt init
 
@@ -172,21 +184,21 @@ SQL
     dolt init
 
     run dolt sql << SQL
-CREATE SCHEMA test;
+CREATE SCHEMA mydb;
 SHOW DATABASES;
-USE test;
+USE mydb;
 CREATE TABLE test (
     pk int primary key
 );
 INSERT INTO test VALUES (222);
 SELECT COUNT(*) FROM test WHERE pk=222;
-DROP SCHEMA test;
+DROP SCHEMA mydb;
 SQL
     [[ "$output" =~ "dolt_repo_$$" ]] || false
     [[ "$output" =~ "information_schema" ]] || false
-    [[ "$output" =~ "test" ]] || false
+    [[ "$output" =~ "mydb" ]] || false
     [[ "$output" =~ "1" ]] || false
 
     run dolt sql -q "SHOW DATABASES"
-    [[ ! "$output" =~ "tmp1" ]] || false
+    [[ ! "$output" =~ "mydb" ]] || false
 }
