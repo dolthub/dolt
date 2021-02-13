@@ -73,8 +73,7 @@ func TestSchema(t *testing.T) {
 
 	testSchema("SchemaFromPKAndNonPKCols", schFromPKAndNonPKCols, t)
 
-	eq, err := SchemasAreEqual(schFromCols, schFromPKAndNonPKCols)
-	assert.NoError(t, err)
+	eq := SchemasAreEqual(schFromCols, schFromPKAndNonPKCols)
 	assert.True(t, eq, "schemas should be equal")
 }
 

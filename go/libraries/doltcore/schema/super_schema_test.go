@@ -178,7 +178,7 @@ func testSuperSchema(t *testing.T, test SuperSchemaTest) {
 		require.NoError(t, err)
 		assert.Equal(t, test.ExpectedGeneratedSchema, gs)
 
-		eq, err := SchemasAreEqual(test.ExpectedGeneratedSchema, gs)
+		eq := SchemasAreEqual(test.ExpectedGeneratedSchema, gs)
 		require.NoError(t, err)
 		assert.True(t, eq)
 	}
