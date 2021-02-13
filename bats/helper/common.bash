@@ -52,7 +52,6 @@ setup_common() {
 }
 
 teardown_common() {
-    assert_feature_version
     rm -rf "$BATS_TMPDIR/dolt-repo-$$"
 }
 

@@ -6,7 +6,7 @@ setup() {
 }
 
 teardown() {
-     rm -rf "$BATS_TMPDIR/dolt-repo-$$"
+     teardown_common
 }
 
 # client FeatureVersion must be >= repo FeatureVersion to read
