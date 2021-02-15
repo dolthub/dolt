@@ -861,7 +861,7 @@ SQL
 }
 
 # verbatim from GE, i don't understand the constraint context
-@test "sql datetime col without backticks" {
+@test "sql `CHECK` constraint" {
     dolt sql -r csv -q "CREATE TABLE `test_data_IqoMyiSk` ( x DECIMAL, y INTEGER, z INTEGER, n INTEGER, b BOOL, CHECK (b IN (0, 1)) )"
     [ $status -eq 0 ]
 }
