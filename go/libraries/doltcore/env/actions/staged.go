@@ -198,34 +198,34 @@ func ValidateTables(ctx context.Context, tbls []string, roots ...*doltdb.RootVal
 }
 
 func getStagedAndWorking(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (*doltdb.RootValue, *doltdb.RootValue, error) {
-	roots, err := getRoots(ctx, ddb, rsr, StagedRoot, WorkingRoot)
+	roots, err := getRoots(ctx, ddb, rsr, doltdb.StagedRoot, doltdb.WorkingRoot)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return roots[StagedRoot], roots[WorkingRoot], nil
+	return roots[doltdb.StagedRoot], roots[doltdb.WorkingRoot], nil
 }
 
 // getRoots returns a RootValue object for each root type passed in rootTypes.
-func getRoots(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, rootTypes ...RootType) (map[RootType]*doltdb.RootValue, error) {
-	roots := make(map[RootType]*doltdb.RootValue)
+func getRoots(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, rootTypes ...doltdb.RootType) (map[doltdb.RootType]*doltdb.RootValue, error) {
+	roots := make(map[doltdb.RootType]*doltdb.RootValue)
 	for _, rt := range rootTypes {
 		var err error
 		var root *doltdb.RootValue
 		switch rt {
-		case StagedRoot:
+		case doltdb.StagedRoot:
 			root, err = env.StagedRoot(ctx, ddb, rsr)
-		case WorkingRoot:
+		case doltdb.WorkingRoot:
 			root, err = env.WorkingRoot(ctx, ddb, rsr)
-		case HeadRoot:
+		case doltdb.HeadRoot:
 			root, err = env.HeadRoot(ctx, ddb, rsr)
 		default:
 			panic("Method does not support this root type.")
 		}
 
 		if err != nil {
-			return nil, RootValueUnreadable{rt, err}
+			return nil, doltdb.RootValueUnreadable{rt, err}
 		}
 
 		roots[rt] = root

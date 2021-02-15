@@ -82,3 +82,94 @@ func IsNotACommit(err error) bool {
 		return false
 	}
 }
+
+type RootType int
+
+const (
+	WorkingRoot RootType = iota
+	StagedRoot
+	CommitRoot
+	HeadRoot
+	InvalidRoot
+)
+
+func (rt RootType) String() string {
+	switch rt {
+	case WorkingRoot:
+		return "working root"
+	case StagedRoot:
+		return "staged root"
+	case CommitRoot:
+		return "root value for commit"
+	case HeadRoot:
+		return "HEAD commit root value"
+	}
+
+	return "unknown"
+}
+
+type RootTypeSet map[RootType]struct{}
+
+func NewRootTypeSet(rts ...RootType) RootTypeSet {
+	mp := make(map[RootType]struct{})
+
+	for _, rt := range rts {
+		mp[rt] = struct{}{}
+	}
+
+	return RootTypeSet(mp)
+}
+
+func (rts RootTypeSet) Contains(rt RootType) bool {
+	_, ok := rts[rt]
+	return ok
+}
+
+func (rts RootTypeSet) First(rtList []RootType) RootType {
+	for _, rt := range rtList {
+		if _, ok := rts[rt]; ok {
+			return rt
+		}
+	}
+
+	return InvalidRoot
+}
+
+func (rts RootTypeSet) IsEmpty() bool {
+	return len(rts) == 0
+}
+
+type RootValueUnreadable struct {
+	RootType RootType
+	Cause    error
+}
+
+func (rvu RootValueUnreadable) Error() string {
+	rs, es := rvu.RootType.String(), rvu.Cause.Error()
+	return fmt.Sprintf("unable to read %s: %s", rs, es)
+}
+
+func IsRootValUnreachable(err error) bool {
+	_, ok := err.(RootValueUnreadable)
+	return ok
+}
+
+func GetUnreachableRootType(err error) RootType {
+	rvu, ok := err.(RootValueUnreadable)
+
+	if !ok {
+		panic("Must validate with IsRootValUnreachable before calling GetUnreachableRootType")
+	}
+
+	return rvu.RootType
+}
+
+func GetUnreachableRootCause(err error) error {
+	rvu, ok := err.(RootValueUnreadable)
+
+	if !ok {
+		panic("Must validate with IsRootValUnreachable before calling GetUnreachableRootCause")
+	}
+
+	return rvu.Cause
+}

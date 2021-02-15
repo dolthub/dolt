@@ -92,10 +92,10 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 func toAddVErr(err error) errhand.VerboseError {
 	switch {
-	case actions.IsRootValUnreachable(err):
-		rt := actions.GetUnreachableRootType(err)
+	case doltdb.IsRootValUnreachable(err):
+		rt := doltdb.GetUnreachableRootType(err)
 		bdr := errhand.BuildDError("Unable to read %s.", rt.String())
-		bdr.AddCause(actions.GetUnreachableRootCause(err))
+		bdr.AddCause(doltdb.GetUnreachableRootCause(err))
 		return bdr.Build()
 
 	case actions.IsTblNotExist(err):

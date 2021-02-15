@@ -218,19 +218,19 @@ func updateRootsForBranch(ctx context.Context, dbData env.DbData, dref ref.DoltR
 		return hash.Hash{}, hash.Hash{}, doltdb.ErrAlreadyOnBranch
 	}
 
-	currRoots, err := getRoots(ctx, dbData.Ddb, dbData.Rsr, HeadRoot, WorkingRoot, StagedRoot)
+	currRoots, err := getRoots(ctx, dbData.Ddb, dbData.Rsr, doltdb.HeadRoot, doltdb.WorkingRoot, doltdb.StagedRoot)
 	if err != nil {
 		return hash.Hash{}, hash.Hash{}, err
 	}
 
 	cs, err := doltdb.NewCommitSpec(brName)
 	if err != nil {
-		return hash.Hash{}, hash.Hash{}, RootValueUnreadable{HeadRoot, err}
+		return hash.Hash{}, hash.Hash{}, doltdb.RootValueUnreadable{doltdb.HeadRoot, err}
 	}
 
 	cm, err := dbData.Ddb.Resolve(ctx, cs, nil)
 	if err != nil {
-		return hash.Hash{}, hash.Hash{}, RootValueUnreadable{HeadRoot, err}
+		return hash.Hash{}, hash.Hash{}, doltdb.RootValueUnreadable{doltdb.HeadRoot, err}
 	}
 
 	newRoot, err := cm.GetRootValue()
@@ -240,12 +240,12 @@ func updateRootsForBranch(ctx context.Context, dbData env.DbData, dref ref.DoltR
 
 	conflicts := set.NewStrSet([]string{})
 
-	wrkTblHashes, err := moveModifiedTables(ctx, currRoots[HeadRoot], newRoot, currRoots[WorkingRoot], conflicts)
+	wrkTblHashes, err := moveModifiedTables(ctx, currRoots[doltdb.HeadRoot], newRoot, currRoots[doltdb.WorkingRoot], conflicts)
 	if err != nil {
 		return hash.Hash{}, hash.Hash{}, err
 	}
 
-	stgTblHashes, err := moveModifiedTables(ctx, currRoots[HeadRoot], newRoot, currRoots[StagedRoot], conflicts)
+	stgTblHashes, err := moveModifiedTables(ctx, currRoots[doltdb.HeadRoot], newRoot, currRoots[doltdb.StagedRoot], conflicts)
 	if err != nil {
 		return hash.Hash{}, hash.Hash{}, err
 	}
