@@ -225,7 +225,7 @@ func getRoots(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader, 
 		}
 
 		if err != nil {
-			return nil, doltdb.RootValueUnreadable{rt, err}
+			return nil, doltdb.RootValueUnreadable{RootType: rt, Cause: err}
 		}
 
 		roots[rt] = root

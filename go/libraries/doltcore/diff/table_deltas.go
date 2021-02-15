@@ -263,17 +263,17 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 func GetStagedUnstagedTableDeltas(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (staged, unstaged []TableDelta, err error) {
 	headRoot, err := env.HeadRoot(ctx, ddb, rsr)
 	if err != nil {
-		return nil, nil, doltdb.RootValueUnreadable{doltdb.HeadRoot, err}
+		return nil, nil, doltdb.RootValueUnreadable{RootType: doltdb.HeadRoot, Cause: err}
 	}
 
 	stagedRoot, err := env.StagedRoot(ctx, ddb, rsr)
 	if err != nil {
-		return nil, nil, doltdb.RootValueUnreadable{doltdb.StagedRoot, err}
+		return nil, nil, doltdb.RootValueUnreadable{RootType: doltdb.StagedRoot, Cause: err}
 	}
 
 	workingRoot, err := env.WorkingRoot(ctx, ddb, rsr)
 	if err != nil {
-		return nil, nil, doltdb.RootValueUnreadable{doltdb.WorkingRoot, err}
+		return nil, nil, doltdb.RootValueUnreadable{RootType: doltdb.WorkingRoot, Cause: err}
 	}
 
 	staged, err = GetTableDeltas(ctx, headRoot, stagedRoot)

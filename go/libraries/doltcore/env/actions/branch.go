@@ -225,12 +225,12 @@ func updateRootsForBranch(ctx context.Context, dbData env.DbData, dref ref.DoltR
 
 	cs, err := doltdb.NewCommitSpec(brName)
 	if err != nil {
-		return hash.Hash{}, hash.Hash{}, doltdb.RootValueUnreadable{doltdb.HeadRoot, err}
+		return hash.Hash{}, hash.Hash{}, doltdb.RootValueUnreadable{RootType: doltdb.HeadRoot, Cause: err}
 	}
 
 	cm, err := dbData.Ddb.Resolve(ctx, cs, nil)
 	if err != nil {
-		return hash.Hash{}, hash.Hash{}, doltdb.RootValueUnreadable{doltdb.HeadRoot, err}
+		return hash.Hash{}, hash.Hash{}, doltdb.RootValueUnreadable{RootType: doltdb.HeadRoot, Cause: err}
 	}
 
 	newRoot, err := cm.GetRootValue()
