@@ -17,11 +17,9 @@ package sqle
 import (
 	"context"
 	"fmt"
-	"io"
-	"runtime"
-	"sync"
-
+	"github.com/dolthub/dolt/go/libraries/utils/async"
 	"github.com/dolthub/go-mysql-server/sql"
+	"runtime"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -32,81 +30,12 @@ type lookupResult struct {
 	err error
 }
 
-// resultChanWithBacklog is used to receive lookup results. Unlike a normal channel it has a backlog which is written
-// to when a channel's buffer is full and can't be written to immediately. It tracks the number of results it is expecting,
-// whether any more lookups will be requested, and the number of results that have been written to it.
-type resultChanWithBacklog struct {
-	mu         *sync.Mutex
-	resChan    chan lookupResult
-	backlog    []lookupResult
-	backlogPos int
-}
-
-func newResultChanWithBacklog(resChanBuffSize, backlogSize int) *resultChanWithBacklog {
-	return &resultChanWithBacklog{
-		mu:      &sync.Mutex{},
-		backlog: make([]lookupResult, 0, backlogSize),
-		resChan: make(chan lookupResult, resChanBuffSize),
-	}
-}
-
-// Write is ussed to send a lookup result to the channel.
-func (r *resultChanWithBacklog) Write(result lookupResult) {
-	// try to write a result to the result channel. If the channel cannot be written to immediately then write it to the backlog
-	select {
-	case r.resChan <- result:
-	default:
-		func() {
-			r.mu.Lock()
-			defer r.mu.Unlock()
-
-			r.backlog = append(r.backlog, result)
-		}()
-	}
-}
-
-// safeWrite recovers from panics and returns recoverevd objects
-func (r *resultChanWithBacklog) safeWrite(result lookupResult) (recovered interface{}) {
-	defer func() {
-		recovered = recover()
-	}()
-
-	r.Write(result)
-	return
-}
-
-// Read will read read the next lookupResult from the channel. When all results have been read returns io.EOF
-func (r *resultChanWithBacklog) Read(ctx context.Context) (lookupResult, error) {
-	// try to read a result from the result channel
-	select {
-	case res, ok := <-r.resChan:
-		if ok {
-			return res, nil
-		}
-
-		// !ok then the resChan has been closed and results need to be read from the backlog
-
-	case <-ctx.Done():
-		return lookupResult{}, ctx.Err()
-	}
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if len(r.backlog) > r.backlogPos {
-		res := r.backlog[r.backlogPos]
-		r.backlogPos++
-		return res, nil
-	}
-
-	return lookupResult{}, io.EOF
-}
-
 // toLookup represents an table lookup that should be performed by one of the global asyncLookups instance's worker routines
 type toLookup struct {
 	idx        uint64
 	t          types.Tuple
 	tupleToRow func(types.Tuple) (sql.Row, error)
-	resChan    *resultChanWithBacklog
+	resBuf     *async.RingBuffer
 }
 
 // asyncLookups is a pool of worker routines reading from a channel doing table lookups
@@ -139,11 +68,11 @@ func (art *asyncLookups) workerFunc() {
 
 		defer func() {
 			if r := recover(); r != nil {
-				// Attempt to write a failure to the channel and discard any additional panics
+				// Attempt to write a failure to the channel and discard any additional errors
 				if err, ok := r.(error); ok {
-					_ = curr.resChan.safeWrite(lookupResult{idx: curr.idx, r: nil, err: err})
+					_ = curr.resBuf.Push(lookupResult{idx: curr.idx, r: nil, err: err})
 				} else {
-					_ = curr.resChan.safeWrite(lookupResult{idx: curr.idx, r: nil, err: fmt.Errorf("%v", r)})
+					_ = curr.resBuf.Push(lookupResult{idx: curr.idx, r: nil, err: fmt.Errorf("%v", r)})
 				}
 			}
 
@@ -161,7 +90,7 @@ func (art *asyncLookups) workerFunc() {
 			}
 
 			r, err := curr.tupleToRow(curr.t)
-			curr.resChan.Write(lookupResult{idx: curr.idx, r: r, err: err})
+			_ = curr.resBuf.Push(lookupResult{idx: curr.idx, r: r, err: err})
 		}
 	}
 

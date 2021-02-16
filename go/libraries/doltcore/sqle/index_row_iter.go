@@ -17,18 +17,25 @@ package sqle
 import (
 	"context"
 	"io"
+	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/utils/async"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
-	resChBuffSize = 16
-	backlogSize   = 128
+	ringBufferAllocSize = 1024
 )
+
+var resultBufferPool = &sync.Pool{
+	New: func() interface{} {
+		return async.NewRingBuffer(ringBufferAllocSize)
+	},
+}
 
 type indexLookupRowIterAdapter struct {
 	idx     DoltIndex
@@ -40,7 +47,7 @@ type indexLookupRowIterAdapter struct {
 	read  uint64
 	count uint64
 
-	resultCh *resultChanWithBacklog
+	resultBuf *async.RingBuffer
 }
 
 // NewIndexLookupRowIterAdapter returns a new indexLookupRowIterAdapter.
@@ -52,15 +59,16 @@ func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsK
 
 	cols := idx.Schema().GetAllCols().GetColumns()
 	conv := NewKVToSqlRowConverterForCols(idx.IndexRowData().Format(), cols)
-	resCh := newResultChanWithBacklog(resChBuffSize, backlogSize)
+	resBuf := resultBufferPool.Get().(*async.RingBuffer)
+	resBuf.Reset()
 
 	iter := &indexLookupRowIterAdapter{
-		idx:      idx,
-		keyIter:  keyIter,
-		conv:     conv,
-		pkTags:   pkTags,
-		ctx:      ctx,
-		resultCh: resCh,
+		idx:       idx,
+		keyIter:   keyIter,
+		conv:      conv,
+		pkTags:    pkTags,
+		ctx:       ctx,
+		resultBuf: resBuf,
 	}
 
 	go iter.queueRows(ctx)
@@ -70,29 +78,32 @@ func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsK
 // Next returns the next row from the iterator.
 func (i *indexLookupRowIterAdapter) Next() (sql.Row, error) {
 	for i.count == 0 || i.read < i.count {
-		lookupResult, err := i.resultCh.Read(i.ctx)
+		item, err := i.resultBuf.Pop()
 
 		if err != nil {
 			return nil, err
 		}
 
+		res := item.(lookupResult)
+
 		i.read++
-		if lookupResult.err != nil {
-			if lookupResult.err == io.EOF {
-				i.count = lookupResult.idx
+		if res.err != nil {
+			if res.err == io.EOF {
+				i.count = res.idx
 				continue
 			}
 
-			return nil, lookupResult.err
+			return nil, res.err
 		}
 
-		return lookupResult.r, lookupResult.err
+		return res.r, res.err
 	}
 
 	return nil, io.EOF
 }
 
 func (i *indexLookupRowIterAdapter) Close() error {
+	resultBufferPool.Put(i.resultBuf)
 	return nil
 }
 
@@ -102,7 +113,7 @@ func (i *indexLookupRowIterAdapter) queueRows(ctx context.Context) {
 		indexKey, err := i.keyIter.ReadKey(i.ctx)
 
 		if err != nil {
-			i.resultCh.Write(lookupResult{
+			i.resultBuf.Push(lookupResult{
 				idx: idx,
 				r:   nil,
 				err: err,
@@ -115,13 +126,13 @@ func (i *indexLookupRowIterAdapter) queueRows(ctx context.Context) {
 			idx:        idx,
 			t:          indexKey,
 			tupleToRow: i.processKey,
-			resChan:    i.resultCh,
+			resBuf:     i.resultBuf,
 		}
 
 		select {
 		case lookups.toLookupCh <- lookup:
 		case <-ctx.Done():
-			i.resultCh.Write(lookupResult{
+			i.resultBuf.Push(lookupResult{
 				idx: idx,
 				r:   nil,
 				err: ctx.Err(),
