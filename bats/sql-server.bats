@@ -446,28 +446,14 @@ SQL
     cd repo1
     start_sql_server repo1
 
-    server_query 1 "CREATE DATABASE memdb" ""
-    server_query 1 "USE memdb" ""
-    server_query 1 "CREATE TABLE one_pk (
-        pk BIGINT NOT NULL,
-        c1 BIGINT,
-        c2 BIGINT,
-        PRIMARY KEY (pk)
-    )" ""
-    server_query 1 "SHOW tables" "Table\none_pk"
-    insert_query 1 "INSERT INTO one_pk (pk) VALUES (0)"
-    server_query 1 "SELECT * FROM one_pk ORDER BY pk" "pk,c1,c2\n0,None,None"
+    multi_query 1 "
+    CREATE DATABASE memdb;
+    USE memdb;
+    CREATE TABLE pk(pk int primary key);
+    INSERT INTO pk (pk) VALUES (0);
+    "
 
-    server_query 1 "CREATE DATABASE IF NOT EXISTS memdb2" ""
-    server_query 1 "USE memdb2" ""
-    server_query 1 "DROP DATABASE IF EXISTS memdb2" ""
-
-    server_query 1 "SHOW TABLES" "Table\n"
-
-
-
-#    insert_query 1 "INSERT INTO one_pk (pk,c1) VALUES (1,1)"
-#    insert_query 1 "INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3)"
-#    server_query 1 "SELECT * FROM one_pk ORDER by pk" "pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
-#    update_query 1 "UPDATE one_pk SET c2=c1 WHERE c2 is NULL and c1 IS NOT NULL"
+    server_query 1 "SELECT * FROM memdb.pk ORDER BY pk" "pk\n0"
+    server_query 1 "DROP DATABASE memdb" ""
+    server_query 1 "SHOW DATABASES" "Database\ninformation_schema\nrepo1"
 }
