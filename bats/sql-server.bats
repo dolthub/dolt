@@ -439,3 +439,35 @@ SQL
     server_query 1 "SELECT * FROM repo1.r1_one_pk" "pk,c1,c2\n1,1,1\n2,2,2\n3,3,3"
     server_query 1 "SELECT * FROM repo2.r2_one_pk" "pk,c3,c4\n1,1,1\n2,2,2\n3,3,3"
 }
+
+@test "test CREATE and DROP database via sql-server" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+    start_sql_server repo1
+
+    server_query 1 "CREATE DATABASE memdb" ""
+    server_query 1 "USE memdb" ""
+    server_query 1 "CREATE TABLE one_pk (
+        pk BIGINT NOT NULL,
+        c1 BIGINT,
+        c2 BIGINT,
+        PRIMARY KEY (pk)
+    )" ""
+    server_query 1 "SHOW tables" "Table\none_pk"
+    insert_query 1 "INSERT INTO one_pk (pk) VALUES (0)"
+    server_query 1 "SELECT * FROM one_pk ORDER BY pk" "pk,c1,c2\n0,None,None"
+
+    server_query 1 "CREATE DATABASE IF NOT EXISTS memdb2" ""
+    server_query 1 "USE memdb2" ""
+    server_query 1 "DROP DATABASE IF EXISTS memdb2" ""
+
+    server_query 1 "SHOW TABLES" "Table\n"
+
+
+
+#    insert_query 1 "INSERT INTO one_pk (pk,c1) VALUES (1,1)"
+#    insert_query 1 "INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3)"
+#    server_query 1 "SELECT * FROM one_pk ORDER by pk" "pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
+#    update_query 1 "UPDATE one_pk SET c2=c1 WHERE c2 is NULL and c1 IS NOT NULL"
+}

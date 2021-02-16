@@ -109,7 +109,31 @@ SQL
     [[ ! "$output" =~ "mydb" ]] || false
 }
 
-@test "sql create and dropnew database" {
+@test "sql create database that already exists throws an error" {
+    dolt init
+
+    run dolt sql << SQL
+CREATE DATABASE mydb;
+CREATE DATABASE mydb;
+SQL
+
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "can't create database mydb; database exists" ]] || false
+
+}
+
+@test "sql create database IF NOT EXISTS on database that already exists doesn't throw an error" {
+    dolt init
+
+    run dolt sql << SQL
+CREATE DATABASE mydb;
+CREATE DATABASE IF NOT EXISTS mydb;
+SQL
+
+    [ "$status" -eq 0 ]
+}
+
+@test "sql create and drop new database" {
     dolt init
 
     run dolt sql << SQL
@@ -168,6 +192,14 @@ SQL
     [[ "$output" =~ "Error parsing SQL" ]] || false
 }
 
+@test "sql drop database throws error for database that doesn't exist" {
+    dolt init
+
+    run dolt sql -q "DROP DATABASE mydb;"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "can't drop database mydb; database doesn't exist" ]] || false
+}
+
 @test "sql drop database errors for non memory databases" {
     dolt init
 
@@ -201,4 +233,28 @@ SQL
 
     run dolt sql -q "SHOW DATABASES"
     [[ ! "$output" =~ "mydb" ]] || false
+}
+
+@test "sql use for non existing datbase throws an error" {
+    dolt init
+
+    run dolt sql -q "USE test"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "database not found: test" ]] || false
+}
+
+@test "SHOW DATABASES works after CREATE and DROP" {
+    dolt init
+
+    run dolt sql -q "SHOW DATABASES"
+    before=$output
+
+    run dolt sql << SQL
+CREATE DATABASE hi;
+DROP DATABASE hi;
+SHOW DATABASES;
+SQL
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$before" ]] || false
 }
