@@ -26,7 +26,6 @@ import (
 
 const (
 	resChBuffSize = 16
-	backlogSize   = 128
 )
 
 type indexLookupRowIterAdapter struct {
@@ -35,8 +34,9 @@ type indexLookupRowIterAdapter struct {
 	pkTags  map[uint64]int
 	conv    *KVToSqlRowConverter
 	ctx     *sql.Context
+	worker  *asyncLookups
 
-	resultCh *resultChanWithBacklog
+	resultCh chan lookupResult
 }
 
 // NewIndexLookupRowIterAdapter returns a new indexLookupRowIterAdapter.
@@ -48,7 +48,7 @@ func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsK
 
 	cols := idx.Schema().GetAllCols().GetColumns()
 	conv := NewKVToSqlRowConverterForCols(idx.IndexRowData().Format(), cols)
-	resCh := newResultChanWithBacklog(resChBuffSize, backlogSize)
+	resCh := make(chan lookupResult, resChBuffSize)
 
 	iter := &indexLookupRowIterAdapter{
 		idx:      idx,
@@ -57,6 +57,7 @@ func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsK
 		pkTags:   pkTags,
 		ctx:      ctx,
 		resultCh: resCh,
+		worker:   lookupWorkerPool.Get().(*asyncLookups),
 	}
 
 	go iter.queueRows()
@@ -65,46 +66,46 @@ func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsK
 
 // Next returns the next row from the iterator.
 func (i *indexLookupRowIterAdapter) Next() (sql.Row, error) {
-	lookupResult, err := i.resultCh.Read(i.ctx)
+	select {
+	case lookupResult, ok := <-i.resultCh:
+		if !ok {
+			return nil, io.EOF
+		}
 
-	if err != nil {
-		return nil, err
+		return lookupResult.r, lookupResult.err
+
+	case <-i.ctx.Done():
+		return nil, i.ctx.Err()
 	}
-
-	return lookupResult.r, lookupResult.err
 }
 
 func (i *indexLookupRowIterAdapter) Close() error {
+	lookupWorkerPool.Put(i.worker)
 	return nil
 }
 
 // queueRows reads each key from the key iterator and runs a goroutine for each logical processor to process the keys.
 func (i *indexLookupRowIterAdapter) queueRows() {
-	nextKey, nextErr := i.keyIter.ReadKey(i.ctx)
+	for {
+		indexKey, err := i.keyIter.ReadKey(i.ctx)
 
-	if nextErr == io.EOF {
-		close(i.resultCh.resChan)
-		return
-	}
+		processFunc := i.processKey
+		if err != nil {
+			processFunc = func(indexKey types.Tuple) (sql.Row, error) {
+				close(i.resultCh)
+				return nil, err
+			}
+		}
 
-	for nextErr == nil {
-		indexKey := nextKey
-		nextKey, nextErr = i.keyIter.ReadKey(i.ctx)
-
-		i.resultCh.LookupEnqueued(nextErr == io.EOF)
-
-		lookup := toLookup{
+		i.worker.toLookupCh <- toLookup{
 			t:          indexKey,
-			tupleToRow: i.processKey,
+			tupleToRow: processFunc,
 			resChan:    i.resultCh,
 		}
 
-		lookups.toLookupCh <- lookup
-	}
-
-	if nextErr != io.EOF {
-		i.resultCh.LookupEnqueued(true)
-		i.resultCh.Write(lookupResult{err: nextErr})
+		if err != nil {
+			break
+		}
 	}
 }
 
