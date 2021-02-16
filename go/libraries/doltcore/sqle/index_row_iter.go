@@ -15,6 +15,7 @@
 package sqle
 
 import (
+	"context"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -35,6 +36,9 @@ type indexLookupRowIterAdapter struct {
 	pkTags  map[uint64]int
 	conv    *KVToSqlRowConverter
 	ctx     *sql.Context
+
+	read  uint64
+	count uint64
 
 	resultCh *resultChanWithBacklog
 }
@@ -59,19 +63,33 @@ func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsK
 		resultCh: resCh,
 	}
 
-	go iter.queueRows()
+	go iter.queueRows(ctx)
 	return iter
 }
 
 // Next returns the next row from the iterator.
 func (i *indexLookupRowIterAdapter) Next() (sql.Row, error) {
-	lookupResult, err := i.resultCh.Read(i.ctx)
+	for i.count == 0 || i.read < i.count {
+		lookupResult, err := i.resultCh.Read(i.ctx)
 
-	if err != nil {
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
+
+		i.read++
+		if lookupResult.err != nil {
+			if lookupResult.err == io.EOF {
+				i.count = lookupResult.idx
+				continue
+			}
+
+			return nil, lookupResult.err
+		}
+
+		return lookupResult.r, lookupResult.err
 	}
 
-	return lookupResult.r, lookupResult.err
+	return nil, io.EOF
 }
 
 func (i *indexLookupRowIterAdapter) Close() error {
@@ -79,32 +97,38 @@ func (i *indexLookupRowIterAdapter) Close() error {
 }
 
 // queueRows reads each key from the key iterator and runs a goroutine for each logical processor to process the keys.
-func (i *indexLookupRowIterAdapter) queueRows() {
-	nextKey, nextErr := i.keyIter.ReadKey(i.ctx)
+func (i *indexLookupRowIterAdapter) queueRows(ctx context.Context) {
+	for idx := uint64(1); ; idx++ {
+		indexKey, err := i.keyIter.ReadKey(i.ctx)
 
-	if nextErr == io.EOF {
-		close(i.resultCh.resChan)
-		return
-	}
+		if err != nil {
+			i.resultCh.Write(lookupResult{
+				idx: idx,
+				r:   nil,
+				err: err,
+			})
 
-	for nextErr == nil {
-		indexKey := nextKey
-		nextKey, nextErr = i.keyIter.ReadKey(i.ctx)
-
-		i.resultCh.LookupEnqueued(nextErr == io.EOF)
+			return
+		}
 
 		lookup := toLookup{
+			idx:        idx,
 			t:          indexKey,
 			tupleToRow: i.processKey,
 			resChan:    i.resultCh,
 		}
 
-		lookups.toLookupCh <- lookup
-	}
+		select {
+		case lookups.toLookupCh <- lookup:
+		case <-ctx.Done():
+			i.resultCh.Write(lookupResult{
+				idx: idx,
+				r:   nil,
+				err: ctx.Err(),
+			})
 
-	if nextErr != io.EOF {
-		i.resultCh.LookupEnqueued(true)
-		i.resultCh.Write(lookupResult{err: nextErr})
+			return
+		}
 	}
 }
 

@@ -17,17 +17,16 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 	"runtime"
 	"sync"
-	"sync/atomic"
-
-	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 type lookupResult struct {
+	idx uint64
 	r   sql.Row
 	err error
 }
@@ -36,10 +35,6 @@ type lookupResult struct {
 // to when a channel's buffer is full and can't be written to immediately. It tracks the number of results it is expecting,
 // whether any more lookups will be requested, and the number of results that have been written to it.
 type resultChanWithBacklog struct {
-	writeCount      uint64
-	lookupCount     uint64
-	isFullyEnqueued uint64
-
 	mu         *sync.Mutex
 	resChan    chan lookupResult
 	backlog    []lookupResult
@@ -51,16 +46,6 @@ func newResultChanWithBacklog(resChanBuffSize, backlogSize int) *resultChanWithB
 		mu:      &sync.Mutex{},
 		backlog: make([]lookupResult, 0, backlogSize),
 		resChan: make(chan lookupResult, resChanBuffSize),
-	}
-}
-
-// LookupEnqueued is called when a lookup is written to the global asyncLookup instance with a reference to this
-// instance and a corresponding write should be expected. If this is the final lookup then `done` will be true
-func (r *resultChanWithBacklog) LookupEnqueued(done bool) {
-	atomic.AddUint64(&r.lookupCount, 1)
-
-	if done {
-		atomic.StoreUint64(&r.isFullyEnqueued, 1)
 	}
 }
 
@@ -76,17 +61,6 @@ func (r *resultChanWithBacklog) Write(result lookupResult) {
 
 			r.backlog = append(r.backlog, result)
 		}()
-	}
-
-	written := atomic.AddUint64(&r.writeCount, 1)
-	fullyEnqueued := atomic.LoadUint64(&r.isFullyEnqueued)
-
-	if fullyEnqueued == 1 {
-		lookupCount := atomic.LoadUint64(&r.lookupCount)
-
-		if lookupCount == written {
-			close(r.resChan)
-		}
 	}
 }
 
@@ -128,71 +102,78 @@ func (r *resultChanWithBacklog) Read(ctx context.Context) (lookupResult, error) 
 
 // toLookup represents an table lookup that should be performed by one of the global asyncLookups instance's worker routines
 type toLookup struct {
-	// key read f
+	idx        uint64
 	t          types.Tuple
 	tupleToRow func(types.Tuple) (sql.Row, error)
 	resChan    *resultChanWithBacklog
 }
 
-// a global asyncLookups struct handles all lookups
+// asyncLookups is a pool of worker routines reading from a channel doing table lookups
 type asyncLookups struct {
 	ctx        context.Context
-	toLookupCh chan<- toLookup
+	toLookupCh chan toLookup
 }
 
 // newAsyncLookups kicks off a number of worker routines and creates a channel for sending lookups to workers.  The
 // routines live for the life of the program
-func newAsyncLookups(numWorkers, bufferSize int) *asyncLookups {
+func newAsyncLookups(bufferSize int) *asyncLookups {
 	toLookupCh := make(chan toLookup, bufferSize)
 	art := &asyncLookups{toLookupCh: toLookupCh}
 
+	return art
+}
+
+func (art *asyncLookups) start(numWorkers int) {
 	for i := 0; i < numWorkers; i++ {
 		go func() {
-			f := func() {
-				var curr toLookup
-				var ok bool
+			art.workerFunc()
+		}()
+	}
+}
 
-				defer func() {
-					if r := recover(); r != nil {
-						// Attempt to write a failure to the channel and discard any additional panics
-						if err, ok := r.(error); ok {
-							_ = curr.resChan.safeWrite(lookupResult{r: nil, err: err})
-						} else {
-							_ = curr.resChan.safeWrite(lookupResult{r: nil, err: fmt.Errorf("%v", r)})
-						}
-					}
+func (art *asyncLookups) workerFunc() {
+	f := func() {
+		var curr toLookup
+		var ok bool
 
-					// if the channel used for lookups is closed then fail spectacularly
-					if !ok {
-						panic("toLookup channel closed.  All lookups will fail and will result in a deadlock")
-					}
-				}()
-
-				for {
-					curr, ok = <-toLookupCh
-
-					if !ok {
-						break
-					}
-
-					r, err := curr.tupleToRow(curr.t)
-					curr.resChan.Write(lookupResult{r: r, err: err})
+		defer func() {
+			if r := recover(); r != nil {
+				// Attempt to write a failure to the channel and discard any additional panics
+				if err, ok := r.(error); ok {
+					_ = curr.resChan.safeWrite(lookupResult{idx: curr.idx, r: nil, err: err})
+				} else {
+					_ = curr.resChan.safeWrite(lookupResult{idx: curr.idx, r: nil, err: fmt.Errorf("%v", r)})
 				}
 			}
 
-			// these routines will run forever unless f is allowed to panic which only happens when the lookup channel is closed
-			for {
-				f()
+			// if the channel used for lookups is closed then fail spectacularly
+			if !ok {
+				panic("toLookup channel closed.  All lookups will fail and will result in a deadlock")
 			}
 		}()
+
+		for {
+			curr, ok = <-art.toLookupCh
+
+			if !ok {
+				break
+			}
+
+			r, err := curr.tupleToRow(curr.t)
+			curr.resChan.Write(lookupResult{idx: curr.idx, r: r, err: err})
+		}
 	}
 
-	return art
+	// these routines will run forever unless f is allowed to panic which only happens when the lookup channel is closed
+	for {
+		f()
+	}
 }
 
 // lookups is a global asyncLookups instance which is used by the indexLookupRowIterAdapter
 var lookups *asyncLookups
 
 func init() {
-	lookups = newAsyncLookups(runtime.NumCPU(), runtime.NumCPU()*256)
+	lookups = newAsyncLookups(runtime.NumCPU() * 256)
+	lookups.start(runtime.NumCPU())
 }
