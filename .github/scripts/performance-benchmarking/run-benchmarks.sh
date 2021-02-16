@@ -58,8 +58,7 @@ if [ "$out" != "job.batch/$jobname condition met" ]; then
   KUBECONFIG="$KUBECONFIG" kubectl logs job/"$jobname" -n performance-benchmarking
 else
   echo "::set-output name=object-key::$timeprefix/$actorprefix/comparison-results.log"
+  KUBECONFIG="$KUBECONFIG" kubectl delete job/"$jobname" -n performance-benchmarking
 fi
-
-KUBECONFIG="$KUBECONFIG" kubectl delete job/"$jobname" -n performance-benchmarking
 
 exit 0
