@@ -1408,11 +1408,11 @@ func isOkResult(sch sql.Schema) bool {
 }
 
 func (se *sqlEngine) dbddl(ctx *sql.Context, dbddl *sqlparser.DBDDL, query string) (sql.Schema, sql.RowIter, error) {
-	switch strings.ToLower(dbddl.Action) {
-	case sqlparser.DropStr:
-		var rowIter sql.RowIter = nil
-		var err error = nil
+	action := strings.ToLower(dbddl.Action)
+	var rowIter sql.RowIter = nil
+	var err error = nil
 
+	if action == sqlparser.DropStr {
 		// Should not be allowed to delete repo name and information schema
 		if dbddl.DBName == information_schema.InformationSchemaDatabaseName {
 			return nil, nil, fmt.Errorf("DROP DATABASE isn't supported for database %s", information_schema.InformationSchemaDatabaseName)
@@ -1421,47 +1421,34 @@ func (se *sqlEngine) dbddl(ctx *sql.Context, dbddl *sqlparser.DBDDL, query strin
 			if err != nil {
 				return nil, nil, err
 			}
+
 			// Check if it's an in memory database
 			switch interface{}(db).(type) {
 			case *memory.Database:
-				_, rowIter, err = se.query(ctx, query)
 			default:
 				return nil, nil, fmt.Errorf("DROP DATABASE isn't supported for database %s", db.Name())
 			}
-		} else {
-			_, rowIter, err = se.query(ctx, query)
 		}
-
-		if rowIter != nil {
-			err = rowIter.Close()
-			if err != nil {
-				return nil, nil, err
-			}
-		}
-
-		if err != nil {
-			return nil, nil, err
-		}
-
-		return nil, nil, nil
-	case sqlparser.CreateStr:
-		sch, rowIter, err := se.query(ctx, query)
-
-		if rowIter != nil {
-			err = rowIter.Close()
-			if err != nil {
-				return nil, nil, err
-			}
-		}
-
-		if err != nil {
-			return nil, nil, err
-		}
-
-		return sch, nil, nil
-	default:
-		return nil, nil, fmt.Errorf("Unsupported SQL operation")
 	}
+
+	if action != sqlparser.CreateStr && action != sqlparser.DropStr {
+		return nil, nil, fmt.Errorf("Unhandled DBDDL action %v in query %v", action, query)
+	}
+
+	sch, rowIter, err := se.query(ctx, query)
+
+	if rowIter != nil {
+		err = rowIter.Close()
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return sch, nil, nil
 }
 
 // Executes a SQL DDL statement (create, update, etc.). Updates the new root value in
