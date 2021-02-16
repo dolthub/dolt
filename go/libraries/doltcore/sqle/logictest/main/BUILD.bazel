@@ -1,5 +1,5 @@
 filegroup(
     name = "logictest",
-    srcs = glob(["**"]),
+    srcs = ["main.go"],
     visibility = ["//visibility:public"],
 )
