@@ -4,6 +4,7 @@ const fs = require('fs');
 
 const region = core.getInput('region');
 const version = core.getInput('version');
+const Template = core.getInput('template');
 const dataFilePath = core.getInput('dataFile');
 const CcAddresses = JSON.parse(core.getInput('ccAddresses'));
 const ToAddresses = JSON.parse(core.getInput('toAddresses'));
@@ -26,7 +27,7 @@ const params = {
         ToAddresses,
     },
     Source: 'github-actions-bot@corp.ld-corp.com', /* required */
-    Template: 'PerformanceBenchmarkingReleaseTemplate',
+    Template,
     TemplateData: JSON.stringify(templated),
     ReplyToAddresses,
 };
