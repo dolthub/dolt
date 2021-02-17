@@ -42,6 +42,7 @@ type RepoStateWriter interface {
 	SetWorkingHash(context.Context, hash.Hash) error
 	SetCWBHeadRef(context.Context, ref.MarshalableRef) error
 	ClearMerge() error
+	StartMerge(commitStr string) error
 }
 
 type DocsReadWriter interface {
@@ -286,4 +287,102 @@ func GetRoots(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (wor
 	}
 
 	return working, staged, head, nil
+}
+
+func MergeWouldStompChanges(ctx context.Context, mergeCommit *doltdb.Commit, dbData DbData) ([]string, map[string]hash.Hash, error) {
+	headRoot, err := HeadRoot(ctx, dbData.Ddb, dbData.Rsr)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	workingRoot, err := WorkingRoot(ctx, dbData.Ddb, dbData.Rsr)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	mergeRoot, err := mergeCommit.GetRootValue()
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	headTableHashes, err := mapTableHashes(ctx, headRoot)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	workingTableHashes, err := mapTableHashes(ctx, workingRoot)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	mergeTableHashes, err := mapTableHashes(ctx, mergeRoot)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	headWorkingDiffs := diffTableHashes(headTableHashes, workingTableHashes)
+	mergeWorkingDiffs := diffTableHashes(headTableHashes, mergeTableHashes)
+
+	stompedTables := make([]string, 0, len(headWorkingDiffs))
+	for tName, _ := range headWorkingDiffs {
+		if _, ok := mergeWorkingDiffs[tName]; ok {
+			// even if the working changes match the merge changes, don't allow (matches git behavior).
+			stompedTables = append(stompedTables, tName)
+		}
+	}
+
+	return stompedTables, headWorkingDiffs, nil
+}
+
+func mapTableHashes(ctx context.Context, root *doltdb.RootValue) (map[string]hash.Hash, error) {
+	names, err := root.GetTableNames(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	nameToHash := make(map[string]hash.Hash)
+	for _, name := range names {
+		h, ok, err := root.GetTableHash(ctx, name)
+
+		if err != nil {
+			return nil, err
+		} else if !ok {
+			panic("GetTableNames returned a table that GetTableHash says isn't there.")
+		} else {
+			nameToHash[name] = h
+		}
+	}
+
+	return nameToHash, nil
+}
+
+func diffTableHashes(headTableHashes, otherTableHashes map[string]hash.Hash) map[string]hash.Hash {
+	diffs := make(map[string]hash.Hash)
+	for tName, hh := range headTableHashes {
+		if h, ok := otherTableHashes[tName]; ok {
+			if h != hh {
+				// modification
+				diffs[tName] = h
+			}
+		} else {
+			// deletion
+			diffs[tName] = hash.Hash{}
+		}
+	}
+
+	for tName, h := range otherTableHashes {
+		if _, ok := headTableHashes[tName]; !ok {
+			// addition
+			diffs[tName] = h
+		}
+	}
+
+	return diffs
 }

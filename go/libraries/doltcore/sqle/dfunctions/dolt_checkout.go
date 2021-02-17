@@ -199,13 +199,26 @@ func updateHeadAndWorkingSessionVars(ctx *sql.Context, dbData env.DbData) error 
 	if err != nil {
 		return err
 	}
+	hs := headHash.String()
 
-	err = setSessionRootExplicit(ctx, headHash.String(), sqle.HeadKeySuffix)
+	hasWorkingChanges := hasWorkingSetChanges(dbData.Rsr)
+	hasStagedChanges, err := hasStagedSetChanges(ctx, dbData.Ddb, dbData.Rsr)
+
 	if err != nil {
 		return err
 	}
 
 	workingHash := dbData.Rsr.WorkingHash().String()
+
+	// This will update the session table editor's root and clear its cache.
+	if !hasStagedChanges && !hasWorkingChanges {
+		return setHeadAndWorkingSessionRoot(ctx, hs)
+	}
+
+	err = setSessionRootExplicit(ctx, hs, sqle.HeadKeySuffix)
+	if err != nil {
+		return err
+	}
 
 	return setSessionRootExplicit(ctx, workingHash, sqle.WorkingKeySuffix)
 }

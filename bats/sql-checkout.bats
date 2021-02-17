@@ -158,6 +158,39 @@ SQL
     [[ ! "$output" =~ "4" ]] || false
 }
 
+@test "DOLT_CHECKOUT between branches operating on the same table works." {
+    run dolt sql << SQL
+CREATE TABLE one_pk (
+  pk1 BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
+  PRIMARY KEY (pk1)
+);
+SELECT DOLT_COMMIT('-a', '-m', 'add tables');
+SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+SELECT DOLT_CHECKOUT('master');
+INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0);
+SELECT DOLT_COMMIT('-a', '-m', 'changed master');
+SELECT DOLT_CHECKOUT('feature-branch');
+INSERT INTO one_pk (pk1,c1,c2) VALUES (0,1,1);
+SQL
+    [ $status -eq 0 ]
+
+    run dolt sql -q "SELECT * FROM one_pk" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "pk1,c1,c2" ]] || false
+    [[ "$output" =~ "0,1,1" ]] || false
+    [[ ! "$output" =~ "0,0,0" ]] || false
+
+    dolt commit -a -m "changed feature branch"
+    dolt checkout master
+    run dolt sql -q "SELECT * FROM one_pk" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "pk1,c1,c2" ]] || false
+    [[ ! "$output" =~ "0,1,1" ]] || false
+    [[ "$output" =~ "0,0,0" ]] || false
+}
+
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 8-
 }
