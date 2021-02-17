@@ -22,8 +22,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
-func CheckoutAllTables(ctx context.Context, dEnv *env.DoltEnv) error {
-	roots, err := getRoots(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), doltdb.WorkingRoot, doltdb.StagedRoot, doltdb.HeadRoot)
+func CheckoutAllTables(ctx context.Context, dbData env.DbData) error {
+	roots, err := getRoots(ctx, dbData.Ddb, dbData.Rsr, doltdb.WorkingRoot, doltdb.StagedRoot, doltdb.HeadRoot)
 
 	if err != nil {
 		return err
@@ -37,7 +37,7 @@ func CheckoutAllTables(ctx context.Context, dEnv *env.DoltEnv) error {
 
 	docs := doltdocs.SupportedDocs
 
-	return checkoutTablesAndDocs(ctx, dEnv.DbData(), roots, tbls, docs)
+	return checkoutTablesAndDocs(ctx, dbData, roots, tbls, docs)
 
 }
 

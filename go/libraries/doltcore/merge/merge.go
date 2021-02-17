@@ -56,8 +56,13 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 	}
 
 	var h hash.Hash
+	var tblSchema schema.Schema
 	if ok {
 		h, err = tbl.HashOf()
+		if err != nil {
+			return nil, nil, err
+		}
+		tblSchema, err = tbl.GetSchema(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -69,8 +74,13 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 	}
 
 	var mh hash.Hash
+	var mergeTblSchema schema.Schema
 	if mergeOk {
 		mh, err = mergeTbl.HashOf()
+		if err != nil {
+			return nil, nil, err
+		}
+		mergeTblSchema, err = mergeTbl.GetSchema(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -83,12 +93,17 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 
 	var anch hash.Hash
 	var ancTblSchema schema.Schema
+	var ancRows types.Map
 	if ancOk {
 		anch, err = ancTbl.HashOf()
 		if err != nil {
 			return nil, nil, err
 		}
 		ancTblSchema, err = ancTbl.GetSchema(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		ancRows, err = ancTbl.GetRowData(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -107,7 +122,13 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 
 		if !ancOk {
 			if mergeOk && ok {
-				return nil, nil, ErrSameTblAddedTwice
+				if schema.SchemasAreEqual(tblSchema, mergeTblSchema) {
+					// hackity hack
+					ancTblSchema, ancTbl = tblSchema, tbl
+					ancRows, _ = types.NewMap(ctx, merger.vrw)
+				} else {
+					return nil, nil, ErrSameTblAddedTwice
+				}
 			} else if ok {
 				// fast-forward
 				return tbl, &MergeStats{Operation: TableUnmodified}, nil
@@ -135,16 +156,6 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 		}
 	}
 
-	tblSchema, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	mergeTblSchema, err := mergeTbl.GetSchema(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	postMergeSchema, schConflicts, err := SchemaMerge(tblSchema, mergeTblSchema, ancTblSchema, tblName)
 	if err != nil {
 		return nil, nil, err
@@ -160,11 +171,6 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 	}
 
 	mergeRows, err := mergeTbl.GetRowData(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	ancRows, err := ancTbl.GetRowData(ctx)
 	if err != nil {
 		return nil, nil, err
 	}

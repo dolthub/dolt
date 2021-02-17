@@ -557,11 +557,7 @@ func (dp *diffPartitions) Close() error {
 
 // creates a RowConverter for transforming rows with the the given schema to this super schema.
 func rowConvForSchema(ctx context.Context, vrw types.ValueReadWriter, ss *schema.SuperSchema, sch schema.Schema) (*rowconv.RowConverter, error) {
-	eq, err := schema.SchemasAreEqual(sch, schema.EmptySchema)
-	if err != nil {
-		return nil, err
-	}
-	if eq {
+	if schema.SchemasAreEqual(sch, schema.EmptySchema) {
 		return rowconv.IdentityConverter, nil
 	}
 

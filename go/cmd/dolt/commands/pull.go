@@ -57,7 +57,7 @@ func (cmd PullCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) e
 
 func (cmd PullCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsFlag(squashParam, "", "Merges changes to the working set without updating the commit history")
+	ap.SupportsFlag(cli.SquashParam, "", "Merges changes to the working set without updating the commit history")
 	return ap
 }
 

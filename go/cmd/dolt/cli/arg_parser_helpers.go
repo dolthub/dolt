@@ -82,7 +82,14 @@ const (
 	SoftResetParam   = "soft"
 	CheckoutCoBranch = "b"
 	NoFFParam        = "no-ff"
+	SquashParam      = "squash"
+	AbortParam       = "abort"
 )
+
+var mergeAbortDetails = `Abort the current conflict resolution process, and try to reconstruct the pre-merge state.
+
+If there were uncommitted working set changes present when the merge started, {{.EmphasisLeft}}dolt merge --abort{{.EmphasisRight}} will be unable to reconstruct these changes. It is therefore recommended to always commit or stash your changes before running dolt merge.
+`
 
 // Creates the argparser shared dolt commit cli and DOLT_COMMIT.
 func CreateCommitArgParser() *argparser.ArgParser {
@@ -99,6 +106,9 @@ func CreateCommitArgParser() *argparser.ArgParser {
 func CreateMergeArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(NoFFParam, "", "Create a merge commit even when the merge resolves as a fast-forward.")
+	ap.SupportsFlag(SquashParam, "", "Merges changes to the working set without updating the commit history")
+	ap.SupportsString(CommitMessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
+	ap.SupportsFlag(AbortParam, "", mergeAbortDetails)
 	return ap
 }
 

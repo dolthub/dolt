@@ -9,6 +9,10 @@ inputs:
     description: 'dolt version being benchmarked'
     required: true
     default: ''
+  template:
+    description: 'email template'
+    required: false
+    default: 'PerformanceBenchmarkingReleaseTemplate'
   dataFile:
     required: true
     description: 'path to email data file'

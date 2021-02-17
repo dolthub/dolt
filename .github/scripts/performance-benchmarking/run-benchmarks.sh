@@ -51,15 +51,14 @@ source "$TEMPLATE_SCRIPT" "$jobname" "$FROM_SERVER" "$FROM_VERSION" "$TO_SERVER"
 
 KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json
 
-out=$(KUBECONFIG="$KUBECONFIG" kubectl wait job/"$jobname" --for=condition=complete -n performance-benchmarking --timeout=5400s || true)
+out=$(KUBECONFIG="$KUBECONFIG" kubectl wait job/"$jobname" --for=condition=complete -n performance-benchmarking --timeout=7200s || true)
 
 if [ "$out" != "job.batch/$jobname condition met" ]; then
   echo "output of kubectl wait: $out"
   KUBECONFIG="$KUBECONFIG" kubectl logs job/"$jobname" -n performance-benchmarking
 else
   echo "::set-output name=object-key::$timeprefix/$actorprefix/comparison-results.log"
+  KUBECONFIG="$KUBECONFIG" kubectl delete job/"$jobname" -n performance-benchmarking
 fi
-
-KUBECONFIG="$KUBECONFIG" kubectl delete job/"$jobname" -n performance-benchmarking
 
 exit 0

@@ -17,7 +17,7 @@ package sqle
 import (
 	"context"
 	"io"
-	"runtime"
+	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -27,20 +27,27 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+const (
+	ringBufferAllocSize = 1024
+)
+
+var resultBufferPool = &sync.Pool{
+	New: func() interface{} {
+		return async.NewRingBuffer(ringBufferAllocSize)
+	},
+}
+
 type indexLookupRowIterAdapter struct {
 	idx     DoltIndex
 	keyIter nomsKeyIter
 	pkTags  map[uint64]int
 	conv    *KVToSqlRowConverter
 	ctx     *sql.Context
-	rowChan chan sql.Row
-	err     error
-	buffer  []sql.Row
-}
 
-type keyPos struct {
-	key      types.Tuple
-	position int
+	read  uint64
+	count uint64
+
+	resultBuf *async.RingBuffer
 }
 
 // NewIndexLookupRowIterAdapter returns a new indexLookupRowIterAdapter.
@@ -52,81 +59,87 @@ func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsK
 
 	cols := idx.Schema().GetAllCols().GetColumns()
 	conv := NewKVToSqlRowConverterForCols(idx.IndexRowData().Format(), cols)
+	resBuf := resultBufferPool.Get().(*async.RingBuffer)
+	resBuf.Reset()
 
 	iter := &indexLookupRowIterAdapter{
-		idx:     idx,
-		keyIter: keyIter,
-		conv:    conv,
-		pkTags:  pkTags,
-		ctx:     ctx,
-		rowChan: make(chan sql.Row, runtime.NumCPU()*10),
-		buffer:  make([]sql.Row, runtime.NumCPU()*5),
+		idx:       idx,
+		keyIter:   keyIter,
+		conv:      conv,
+		pkTags:    pkTags,
+		ctx:       ctx,
+		resultBuf: resBuf,
 	}
-	go iter.queueRows()
+
+	go iter.queueRows(ctx)
 	return iter
 }
 
 // Next returns the next row from the iterator.
 func (i *indexLookupRowIterAdapter) Next() (sql.Row, error) {
-	r, ok := <-i.rowChan
-	if !ok { // Only closes when we are finished iterating over the keys or an error has occurred.
-		if i.err != nil {
-			return nil, i.err
+	for i.count == 0 || i.read < i.count {
+		item, err := i.resultBuf.Pop()
+
+		if err != nil {
+			return nil, err
 		}
-		return nil, io.EOF
+
+		res := item.(lookupResult)
+
+		i.read++
+		if res.err != nil {
+			if res.err == io.EOF {
+				i.count = res.idx
+				continue
+			}
+
+			return nil, res.err
+		}
+
+		return res.r, res.err
 	}
-	return r, nil
+
+	return nil, io.EOF
 }
 
-func (*indexLookupRowIterAdapter) Close() error {
+func (i *indexLookupRowIterAdapter) Close() error {
+	resultBufferPool.Put(i.resultBuf)
 	return nil
 }
 
-// queueRows reads each key from the key iterator and runs a goroutine for each logical processor to process the keys.
-func (i *indexLookupRowIterAdapter) queueRows() {
-	defer close(i.rowChan)
-	exec := async.NewActionExecutor(i.ctx, i.processKey, uint32(runtime.NumCPU()), 0)
+// queueRows reads each key from the key iterator and writes it to lookups.toLookupCh which manages a pool of worker
+// routines which will process the requests in parallel.
+func (i *indexLookupRowIterAdapter) queueRows(ctx context.Context) {
+	for idx := uint64(1); ; idx++ {
+		indexKey, err := i.keyIter.ReadKey(i.ctx)
 
-	var err error
-	for {
-		shouldBreak := false
-		pos := 0
-		for ; pos < len(i.buffer); pos++ {
-			var indexKey types.Tuple
-			indexKey, err = i.keyIter.ReadKey(i.ctx)
-			if err != nil {
-				break
-			}
-			exec.Execute(keyPos{
-				key:      indexKey,
-				position: pos,
+		if err != nil {
+			i.resultBuf.Push(lookupResult{
+				idx: idx,
+				r:   nil,
+				err: err,
 			})
+
+			return
 		}
-		if err != nil {
-			if err == io.EOF {
-				shouldBreak = true
-			} else {
-				i.err = err
-				return
-			}
+
+		lookup := toLookup{
+			idx:        idx,
+			t:          indexKey,
+			tupleToRow: i.processKey,
+			resBuf:     i.resultBuf,
 		}
-		i.err = exec.WaitForEmpty()
-		if err != nil {
-			if err == io.EOF {
-				shouldBreak = true
-			} else {
-				i.err = err
-				return
-			}
-		}
-		for idx, r := range i.buffer {
-			if idx == pos {
-				break
-			}
-			i.rowChan <- r
-		}
-		if shouldBreak {
-			break
+
+		select {
+		case lookups.toLookupCh <- lookup:
+		case <-ctx.Done():
+			i.resultBuf.Push(lookupResult{
+				idx: idx,
+				r:   nil,
+				err: ctx.Err(),
+			})
+
+			return
 		}
 	}
 }
@@ -174,32 +187,29 @@ func (i *indexLookupRowIterAdapter) indexKeyToTableKey(nbf *types.NomsBinFormat,
 }
 
 // processKey is called within queueRows and processes each key, sending the resulting row to the row channel.
-func (i *indexLookupRowIterAdapter) processKey(_ context.Context, valInt interface{}) error {
-	val := valInt.(keyPos)
-
+func (i *indexLookupRowIterAdapter) processKey(indexKey types.Tuple) (sql.Row, error) {
 	tableData := i.idx.TableData()
-	pkTupleVal, err := i.indexKeyToTableKey(tableData.Format(), val.key)
+	pkTupleVal, err := i.indexKeyToTableKey(tableData.Format(), indexKey)
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	fieldsVal, ok, err := tableData.MaybeGetTuple(i.ctx, pkTupleVal)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if !ok {
-		return nil
+		return nil, nil
 	}
 
 	sqlRow, err := i.conv.ConvertKVTuplesToSqlRow(pkTupleVal, fieldsVal)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	i.buffer[val.position] = sqlRow
-	return nil
+	return sqlRow, nil
 }
 
 type coveringIndexRowIterAdapter struct {
