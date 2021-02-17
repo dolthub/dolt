@@ -54,14 +54,4 @@ source "$TEMPLATE_SCRIPT" "$jobname" "$FROM_VERSION" "$TO_VERSION" "$timeprefix"
 
 KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json
 
-out=$(KUBECONFIG="$KUBECONFIG" kubectl wait job/"$jobname" --for=condition=complete -n sql-correctness --timeout=7200s || true)
-
-if [ "$out" != "job.batch/$jobname condition met" ]; then
-  echo "output of kubectl wait: $out"
-  KUBECONFIG="$KUBECONFIG" kubectl logs job/"$jobname" -n sql-correctness
-else
-  echo "::set-output name=object-key::$timeprefix/$actorprefix/correctness-results.log"
-  KUBECONFIG="$KUBECONFIG" kubectl delete job/"$jobname" -n sql-correctness
-fi
-
 exit 0
