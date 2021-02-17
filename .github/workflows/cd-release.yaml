@@ -19,9 +19,8 @@ jobs:
         env:
           FILE: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
           VERSION: ${{ github.event.inputs.version }}
-      - uses: EndBug/add-and-commit@v6
+      - uses: EndBug/add-and-commit@v7
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           message: ${{ format('[ga-bump-release] update dolt version to {0}', github.event.inputs.version) }}
           add: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
           cwd: "."
