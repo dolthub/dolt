@@ -38,6 +38,10 @@ SQL
     run dolt --feature-version $OLD sql -q "INSERT INTO test VALUES (13);"
     [ "$status" -ne 0 ]
     [[ ! "$output" =~ "panic" ]] || false
+
+    run dolt --feature-version $MAX version --feature
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "feature version: $NEW" ]] || false
 }
 
 setup_remote_tests() {
@@ -69,7 +73,7 @@ SQL
 
     pushd first_repo
     dolt --feature-version $NEW sql -q "INSERT INTO test VALUES (20);"
-    dolt --feature-version $NEW commit -am "added row with new FeatureVersion"
+    dolt --feature-version $NEW commit -am "added row with new FeatureVersion on master"
     dolt --feature-version $NEW push origin master
     popd
 
@@ -95,4 +99,30 @@ SQL
     run dolt --feature-version $MAX version --feature
     [ "$status" -eq 0 ]
     [[ "$output" =~ "feature version: $NEW" ]] || false
+}
+
+@test "older client maintains access to feature branch" {
+    setup_remote_tests
+
+    pushd clone_repo
+    dolt --feature-version $OLD checkout -b other
+    dolt --feature-version $OLD sql -q "INSERT INTO test VALUES (13);"
+    dolt --feature-version $OLD commit -am "made some changes on branch other"
+    popd
+
+    pushd first_repo
+    dolt --feature-version $NEW sql -q "INSERT INTO test VALUES (20);"
+    dolt --feature-version $NEW commit -am "added row with new FeatureVersion on master"
+    dolt --feature-version $NEW push origin master
+    popd
+
+    pushd clone_repo
+    dolt --feature-version $OLD fetch
+    dolt --feature-version $OLD checkout master
+    run dolt --feature-version $OLD pull
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "visit https://github.com/dolthub/dolt/releases/latest/" ]] || false
+    dolt --feature-version $OLD sql -q "SELECT * FROM test"
+    dolt --feature-version $OLD checkout other
+    popd
 }
