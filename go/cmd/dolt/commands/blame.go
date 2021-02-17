@@ -430,11 +430,7 @@ func rowChanged(ctx context.Context, input blameInput, rowPK types.Value) (bool,
 	}
 
 	// if the table schema has changed, every row has changed (according to our current definition of blame)
-	schemasEql, err := schema.SchemasAreEqual(input.ParentSchema, input.Schema)
-	if err != nil {
-		return false, err
-	}
-	if !schemasEql {
+	if !schema.SchemasAreEqual(input.ParentSchema, input.Schema) {
 		return true, nil
 	}
 

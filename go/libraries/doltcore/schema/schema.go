@@ -70,19 +70,18 @@ func HasAutoIncrement(sch Schema) (ok bool) {
 	return
 }
 
-// TODO: this function never returns an error
 // SchemasAreEqual tests equality of two schemas.
-func SchemasAreEqual(sch1, sch2 Schema) (bool, error) {
+func SchemasAreEqual(sch1, sch2 Schema) bool {
 	if sch1 == nil && sch2 == nil {
-		return true, nil
+		return true
 	} else if sch1 == nil || sch2 == nil {
-		return false, nil
+		return false
 	}
 	colCollIsEqual := ColCollsAreEqual(sch1.GetAllCols(), sch2.GetAllCols())
 	if !colCollIsEqual {
-		return false, nil
+		return false
 	}
-	return sch1.Indexes().Equals(sch2.Indexes()), nil
+	return sch1.Indexes().Equals(sch2.Indexes())
 }
 
 // TODO: this function never returns an error

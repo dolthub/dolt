@@ -34,12 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-const (
-	abortParam  = "abort"
-	squashParam = "squash"
-	noFFParam   = "no-ff"
-)
-
 var mergeDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Join two or more development histories together",
 	LongDesc: `Incorporates changes from the named commits (since the time their histories diverged from the current branch) into the current branch.
@@ -56,11 +50,6 @@ The second syntax ({{.LessThan}}dolt merge --abort{{.GreaterThan}}) can only be 
 	},
 }
 
-var abortDetails = `Abort the current conflict resolution process, and try to reconstruct the pre-merge state.
-
-If there were uncommitted working set changes present when the merge started, {{.EmphasisLeft}}dolt merge --abort{{.EmphasisRight}} will be unable to reconstruct these changes. It is therefore recommended to always commit or stash your changes before running dolt merge.
-`
-
 type MergeCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -75,17 +64,8 @@ func (cmd MergeCmd) Description() string {
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd MergeCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
-	ap := cmd.createArgParser()
+	ap := cli.CreateMergeArgParser()
 	return CreateMarkdown(fs, path, cli.GetCommandDocumentation(commandStr, mergeDocs, ap))
-}
-
-func (cmd MergeCmd) createArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.SupportsFlag(abortParam, "", abortDetails)
-	ap.SupportsFlag(squashParam, "", "Merges changes to the working set without updating the commit history")
-	ap.SupportsFlag(noFFParam, "", "Create a merge commit even when the merge resolves as a fast-forward.")
-	ap.SupportsString(cli.CommitMessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
-	return ap
 }
 
 // EventType returns the type of the event to log
@@ -95,17 +75,17 @@ func (cmd MergeCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := cmd.createArgParser()
+	ap := cli.CreateMergeArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, mergeDocs, ap))
 	apr := cli.ParseArgs(ap, args, help)
 
-	if apr.ContainsAll(squashParam, noFFParam) {
-		cli.PrintErrf("error: Flags '--%s' and '--%s' cannot be used together.\n", squashParam, noFFParam)
+	if apr.ContainsAll(cli.SquashParam, cli.NoFFParam) {
+		cli.PrintErrf("error: Flags '--%s' and '--%s' cannot be used together.\n", cli.SquashParam, cli.NoFFParam)
 		return 1
 	}
 
 	var verr errhand.VerboseError
-	if apr.Contains(abortParam) {
+	if apr.Contains(cli.AbortParam) {
 		if !dEnv.IsMergeActive() {
 			cli.PrintErrln("fatal: There is no merge to abort")
 			return 1
@@ -149,7 +129,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 }
 
 func abortMerge(ctx context.Context, doltEnv *env.DoltEnv) errhand.VerboseError {
-	err := actions.CheckoutAllTables(ctx, doltEnv)
+	err := actions.CheckoutAllTables(ctx, doltEnv.DbData())
 
 	if err == nil {
 		err = doltEnv.RepoState.ClearMerge(doltEnv.FS)
@@ -194,12 +174,12 @@ func mergeCommitSpec(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 
 	cli.Println("Updating", h1.String()+".."+h2.String())
 
-	squash := apr.Contains(squashParam)
+	squash := apr.Contains(cli.SquashParam)
 	if squash {
 		cli.Println("Squash commit -- not updating HEAD")
 	}
 
-	tblNames, workingDiffs, err := dEnv.MergeWouldStompChanges(ctx, cm2)
+	tblNames, workingDiffs, err := env.MergeWouldStompChanges(ctx, cm2, dEnv.DbData())
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to determine mergability.").AddCause(err).Build()
@@ -215,7 +195,7 @@ func mergeCommitSpec(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 	}
 
 	if ok, err := cm1.CanFastForwardTo(ctx, cm2); ok {
-		if apr.Contains(noFFParam) {
+		if apr.Contains(cli.NoFFParam) {
 			return execNoFFMerge(ctx, apr, dEnv, cm2, verr, workingDiffs)
 		} else {
 			return executeFFMerge(ctx, squash, dEnv, cm2, workingDiffs)

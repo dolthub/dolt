@@ -456,4 +456,86 @@ SQL
     server_query 1 "SELECT * FROM memdb.pk ORDER BY pk" "pk\n0"
     server_query 1 "DROP DATABASE memdb" ""
     server_query 1 "SHOW DATABASES" "Database\ninformation_schema\nrepo1"
+
+}
+
+@test "DOLT_ADD, DOLT_COMMIT, DOLT_CHECKOUT, DOLT_MERGE work together in server mode" {
+      skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+     cd repo1
+     start_sql_server repo1
+
+
+     multi_query 1 "
+     CREATE TABLE test (
+         pk int primary key
+     );
+     INSERT INTO test VALUES (0),(1),(2);
+     SELECT DOLT_ADD('.');
+     SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
+     SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+     "
+
+     server_query 1 "SELECT * FROM test" "pk\n0\n1\n2"
+     run dolt branch
+     [ "$status" -eq 0 ]
+     [[ "$output" =~ "* feature-branch" ]] || false
+
+     multi_query 1 "
+     INSERT INTO test VALUES (3);
+     INSERT INTO test VALUES (4);
+     INSERT INTO test VALUES (21232);
+     DELETE FROM test WHERE pk=4;
+     UPDATE test SET pk=21 WHERE pk=21232;
+     "
+     server_query 1 "SELECT * FROM test" "pk\n0\n1\n2\n3\n21"
+
+     multi_query 1 "
+     SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
+     SELECT DOLT_CHECKOUT('master');
+     "
+     server_query 1 "SELECT * FROM test" "pk\n0\n1\n2"
+
+     multi_query 1 "
+     INSERT INTO test VALUES (500000);
+     INSERT INTO test VALUES (500001);
+     DELETE FROM test WHERE pk=500001;
+     UPDATE test SET pk=60 WHERE pk=500000;
+     SELECT DOLT_ADD('.');
+     SELECT DOLT_COMMIT('-m', 'Insert 60');
+     SELECT DOLT_MERGE('feature-branch');
+     SELECT DOLT_COMMIT('-a', '-m', 'Finish up Merge');
+     "
+     server_query 1 "SELECT * FROM test" "pk\n0\n1\n2\n3\n21\n60"
+
+     run dolt status
+     [ $status -eq 0 ]
+     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "DOLT_MERGE ff works" {
+      skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+     cd repo1
+     start_sql_server repo1
+
+
+     multi_query 1 "
+     CREATE TABLE test (
+          pk int primary key
+     );
+     INSERT INTO test VALUES (0),(1),(2);
+     SELECT DOLT_ADD('.');
+     SELECT DOLT_COMMIT('-m', 'Step 1');
+     SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+     INSERT INTO test VALUES (3);
+     UPDATE test SET pk=1000 WHERE pk=0;
+     SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');
+     SELECT DOLT_CHECKOUT('master');
+     SELECT DOLT_MERGE('feature-branch');
+     "
+
+     server_query 1 "SELECT * FROM test" "pk\n1\n2\n3\n1000"
+
+     server_query 1 "SELECT COUNT(*) FROM dolt_log" "COUNT(*)\n3"
 }

@@ -160,8 +160,7 @@ func TestTypeInfoMarshalling(t *testing.T) {
 			require.NoError(t, err)
 			unmarshalledSch, err := UnmarshalSchemaNomsValue(context.Background(), nbf, val)
 			require.NoError(t, err)
-			ok, err := schema.SchemasAreEqual(originalSch, unmarshalledSch)
-			assert.NoError(t, err)
+			ok := schema.SchemasAreEqual(originalSch, unmarshalledSch)
 			assert.True(t, ok)
 		})
 	}

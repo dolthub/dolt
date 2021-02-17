@@ -39,11 +39,7 @@ func NewCompositeTableReader(readers []TableReadCloser) (*CompositeTableReader, 
 	sch := readers[0].GetSchema()
 	for i := 1; i < len(readers); i++ {
 		otherSch := readers[i].GetSchema()
-		eq, err := schema.SchemasAreEqual(sch, otherSch)
-
-		if err != nil {
-			return nil, err
-		} else if !eq {
+		if !schema.SchemasAreEqual(sch, otherSch) {
 			panic("readers must have the same schema")
 		}
 	}

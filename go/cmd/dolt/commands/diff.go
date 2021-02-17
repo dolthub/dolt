@@ -475,7 +475,7 @@ func tabularSchemaDiff(ctx context.Context, td diff.TableDelta, fromSchemas, toS
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
 	}
 
-	eq, _ := schema.SchemasAreEqual(fromSch, toSch)
+	eq := schema.SchemasAreEqual(fromSch, toSch)
 	if eq && !td.HasFKChanges() {
 		return nil
 	}
@@ -582,7 +582,7 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 			cli.Println(sqlfmt.RenameTableStmt(td.FromName, td.ToName))
 		}
 
-		eq, _ := schema.SchemasAreEqual(fromSch, toSch)
+		eq := schema.SchemasAreEqual(fromSch, toSch)
 		if eq && !td.HasFKChanges() {
 			return nil
 		}

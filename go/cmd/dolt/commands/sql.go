@@ -913,7 +913,7 @@ func (s *stats) shouldFlush() bool {
 	return s.unflushedEdits >= maxBatchSize
 }
 
-// updateRepoState takes in a context and database and updates repo state if autocommit is on
+// updateRepoState takes in a context and database and updates repo state.
 func updateRepoState(ctx *sql.Context, se *sqlEngine) error {
 	err := se.iterDBs(func(_ string, db dsqle.Database) (bool, error) {
 		root, err := db.GetRoot(ctx)
@@ -948,7 +948,6 @@ func updateRepoState(ctx *sql.Context, se *sqlEngine) error {
 
 	return err
 }
-
 func flushBatchedEdits(ctx *sql.Context, se *sqlEngine) error {
 	err := se.iterDBs(func(_ string, db dsqle.Database) (bool, error) {
 		err := db.Flush(ctx)
