@@ -107,7 +107,8 @@ func (i *indexLookupRowIterAdapter) Close() error {
 	return nil
 }
 
-// queueRows reads each key from the key iterator and runs a goroutine for each logical processor to process the keys.
+// queueRows reads each key from the key iterator and writes it to lookups.toLookupCh which manages a pool of worker
+// routines which will process the requests in parallel.
 func (i *indexLookupRowIterAdapter) queueRows(ctx context.Context) {
 	for idx := uint64(1); ; idx++ {
 		indexKey, err := i.keyIter.ReadKey(i.ctx)

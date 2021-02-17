@@ -17,10 +17,11 @@ package sqle
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/utils/async"
-	"github.com/dolthub/go-mysql-server/sql"
 	"runtime"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/utils/async"
 	"github.com/dolthub/dolt/go/store/types"
 )
 

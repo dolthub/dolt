@@ -2,10 +2,11 @@ package async
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSingleThread(t *testing.T) {
