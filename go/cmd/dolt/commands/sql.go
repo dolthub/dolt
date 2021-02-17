@@ -1411,6 +1411,10 @@ func (se *sqlEngine) dbddl(ctx *sql.Context, dbddl *sqlparser.DBDDL, query strin
 	var rowIter sql.RowIter = nil
 	var err error = nil
 
+	if action != sqlparser.CreateStr && action != sqlparser.DropStr {
+		return nil, nil, fmt.Errorf("Unhandled DBDDL action %v in query %v", action, query)
+	}
+
 	if action == sqlparser.DropStr {
 		// Should not be allowed to delete repo name and information schema
 		if dbddl.DBName == information_schema.InformationSchemaDatabaseName {
@@ -1421,17 +1425,13 @@ func (se *sqlEngine) dbddl(ctx *sql.Context, dbddl *sqlparser.DBDDL, query strin
 				return nil, nil, err
 			}
 
-			// Check if it's an in memory database
+			// Check if it's an in memory database. Those are the only databases that are allowed to be dropped.
 			switch interface{}(db).(type) {
 			case *memory.Database:
 			default:
 				return nil, nil, fmt.Errorf("DROP DATABASE isn't supported for database %s", db.Name())
 			}
 		}
-	}
-
-	if action != sqlparser.CreateStr && action != sqlparser.DropStr {
-		return nil, nil, fmt.Errorf("Unhandled DBDDL action %v in query %v", action, query)
 	}
 
 	sch, rowIter, err := se.query(ctx, query)
