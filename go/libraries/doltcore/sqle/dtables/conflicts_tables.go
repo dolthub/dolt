@@ -120,7 +120,7 @@ func (itr conflictRowIter) Next() (sql.Row, error) {
 }
 
 // Close the iterator.
-func (itr conflictRowIter) Close() error {
+func (itr conflictRowIter) Close(*sql.Context) error {
 	return itr.rd.Close()
 }
 

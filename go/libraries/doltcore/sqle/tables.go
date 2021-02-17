@@ -281,7 +281,7 @@ func (itr emptyRowIterator) Next() (sql.Row, error) {
 	return nil, io.EOF
 }
 
-func (itr emptyRowIterator) Close() error {
+func (itr emptyRowIterator) Close(*sql.Context) error {
 	return nil
 }
 
@@ -522,7 +522,7 @@ func newDoltTablePartitionIter(rowData types.Map, partitions ...doltTablePartiti
 }
 
 // Close is required by the sql.PartitionIter interface. Does nothing.
-func (itr *doltTablePartitionIter) Close() error {
+func (itr *doltTablePartitionIter) Close(*sql.Context) error {
 	return nil
 }
 

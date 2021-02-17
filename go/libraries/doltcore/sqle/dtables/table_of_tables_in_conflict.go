@@ -80,7 +80,7 @@ func (p *tableInConflict) Next() (sql.Row, error) {
 }
 
 // Close the iterator.
-func (p *tableInConflict) Close() error {
+func (p *tableInConflict) Close(*sql.Context) error {
 	return nil
 }
 
@@ -104,7 +104,7 @@ func (p *tablesInConflict) Next() (sql.Partition, error) {
 }
 
 // Close closes the PartitionIter
-func (p *tablesInConflict) Close() error {
+func (p *tablesInConflict) Close(*sql.Context) error {
 	return nil
 }
 

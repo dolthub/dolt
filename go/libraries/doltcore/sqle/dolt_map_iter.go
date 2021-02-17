@@ -238,7 +238,7 @@ func (dmi *DoltMapIter) Next() (sql.Row, error) {
 	return dmi.conv.ConvertKVTuplesToSqlRow(k, v)
 }
 
-func (dmi *DoltMapIter) Close() error {
+func (dmi *DoltMapIter) Close(*sql.Context) error {
 	if dmi.closeKVGetter != nil {
 		return dmi.closeKVGetter()
 	}

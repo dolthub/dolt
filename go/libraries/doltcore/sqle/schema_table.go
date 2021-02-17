@@ -208,7 +208,7 @@ func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType str
 	if err != nil {
 		return nil, false, err
 	}
-	defer rowIter.Close()
+	defer rowIter.Close(ctx)
 	sqlRow, err := rowIter.Next()
 	if err == nil {
 		return sqlRow, true, nil

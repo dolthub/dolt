@@ -47,7 +47,7 @@ func NewSinglePartitionIter(rowData types.Map) SinglePartitionIter {
 }
 
 // Close is required by the sql.PartitionIter interface. Does nothing.
-func (itr SinglePartitionIter) Close() error {
+func (itr SinglePartitionIter) Close(*sql.Context) error {
 	return nil
 }
 

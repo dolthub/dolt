@@ -102,7 +102,7 @@ func (i *indexLookupRowIterAdapter) Next() (sql.Row, error) {
 	return nil, io.EOF
 }
 
-func (i *indexLookupRowIterAdapter) Close() error {
+func (i *indexLookupRowIterAdapter) Close(*sql.Context) error {
 	resultBufferPool.Put(i.resultBuf)
 	return nil
 }
@@ -267,6 +267,6 @@ func (ci *coveringIndexRowIterAdapter) Next() (sql.Row, error) {
 	return ci.conv.ConvertKVTuplesToSqlRow(key, types.Tuple{})
 }
 
-func (ci *coveringIndexRowIterAdapter) Close() error {
+func (ci *coveringIndexRowIterAdapter) Close(*sql.Context) error {
 	return nil
 }

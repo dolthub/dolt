@@ -97,7 +97,7 @@ func NewRangePartitionIter(ranges []lookup.Range, rowData types.Map) *rangeParti
 }
 
 // Close is required by the sql.PartitionIter interface. Does nothing.
-func (itr *rangePartitionIter) Close() error {
+func (itr *rangePartitionIter) Close(*sql.Context) error {
 	return nil
 }
 

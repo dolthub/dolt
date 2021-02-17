@@ -103,6 +103,6 @@ func (itr CommitsRowItr) Next() (sql.Row, error) {
 }
 
 // Close closes the iterator.
-func (itr CommitsRowItr) Close() error {
+func (itr CommitsRowItr) Close(*sql.Context) error {
 	return nil
 }

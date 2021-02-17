@@ -189,7 +189,8 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 				return
 			}
 			if wrapper.HasMoreRows() {
-				err = commands.PrettyPrintResults(ctx, 0, wrapper.Schema(), wrapper)
+				sqlCtx := sql.NewContext(ctx)
+				err = commands.PrettyPrintResults(sqlCtx, 0, wrapper.Schema(), wrapper)
 				if err != nil {
 					shell.Println(color.RedString(err.Error()))
 					return
@@ -282,6 +283,6 @@ func (s *MysqlRowWrapper) HasMoreRows() bool {
 	return !s.finished
 }
 
-func (s *MysqlRowWrapper) Close() error {
+func (s *MysqlRowWrapper) Close(*sql.Context) error {
 	return s.rows.Close()
 }
