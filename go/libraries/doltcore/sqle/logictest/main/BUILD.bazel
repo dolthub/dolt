@@ -1,5 +1,0 @@
-filegroup(
-    name = "logictest",
-    srcs = ["main.go"],
-    visibility = ["//visibility:public"],
-)
