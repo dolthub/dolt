@@ -182,7 +182,7 @@ func executeMerge(ctx *sql.Context, squash bool, parent, cm *doltdb.Commit, dbDa
 		}
 	}
 
-	return mergedRootToWorking(ctx, squash, dbData, mergeRoot, cm, mergeStats)
+	return mergeRootToWorking(ctx, squash, dbData, mergeRoot, cm, mergeStats)
 }
 
 func executeFFMerge(ctx *sql.Context, squash bool, dbData env.DbData, cm2 *doltdb.Commit) error {
@@ -226,7 +226,7 @@ func executeNoFFMerge(ctx *sql.Context, dSess *sqle.DoltSession, apr *argparser.
 		return errors.New("Failed to return root value.")
 	}
 
-	err = mergedRootToWorking(ctx, false, dbData, mergedRoot, cm2, map[string]*merge.MergeStats{})
+	err = mergeRootToWorking(ctx, false, dbData, mergedRoot, cm2, map[string]*merge.MergeStats{})
 	if err != nil {
 		return err
 	}
@@ -283,7 +283,7 @@ func executeNoFFMerge(ctx *sql.Context, dSess *sqle.DoltSession, apr *argparser.
 	return setHeadAndWorkingSessionRoot(ctx, h)
 }
 
-func mergedRootToWorking(ctx *sql.Context, squash bool, dbData env.DbData, mergedRoot *doltdb.RootValue, cm2 *doltdb.Commit, mergeStats map[string]*merge.MergeStats) error {
+func mergeRootToWorking(ctx *sql.Context, squash bool, dbData env.DbData, mergedRoot *doltdb.RootValue, cm2 *doltdb.Commit, mergeStats map[string]*merge.MergeStats) error {
 	h2, err := cm2.HashOf()
 	if err != nil {
 		return err

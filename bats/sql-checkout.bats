@@ -158,7 +158,7 @@ SQL
     [[ ! "$output" =~ "4" ]] || false
 }
 
-@test "DOLT_CHECKOUT and differening updates on the same table name works" {
+@test "DOLT_CHECKOUT between branches operating on the same table works." {
     run dolt sql << SQL
 CREATE TABLE one_pk (
   pk1 BIGINT NOT NULL,
