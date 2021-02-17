@@ -8,6 +8,7 @@ teardown() {
     teardown_common
 }
 
+# These tests use batch mode since the in memory db spawned by CREATE DATABASE expire after each session.
 @test "sql create new database" {
     run dolt sql << SQL
 CREATE DATABASE mydb;
