@@ -292,7 +292,7 @@ func (itr *diffRowItr) Next() (sql.Row, error) {
 }
 
 // Close closes the iterator
-func (itr *diffRowItr) Close() (err error) {
+func (itr *diffRowItr) Close(*sql.Context) (err error) {
 	defer itr.ad.Close()
 	defer func() {
 		closeErr := itr.diffSrc.Close()
@@ -551,7 +551,7 @@ func (dp *diffPartitions) Next() (sql.Partition, error) {
 	}
 }
 
-func (dp *diffPartitions) Close() error {
+func (dp *diffPartitions) Close(*sql.Context) error {
 	return nil
 }
 

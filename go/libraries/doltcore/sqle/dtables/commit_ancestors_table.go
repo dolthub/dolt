@@ -127,6 +127,6 @@ func (itr *CommitAncestorsRowItr) Next() (sql.Row, error) {
 }
 
 // Close closes the iterator.
-func (itr *CommitAncestorsRowItr) Close() error {
+func (itr *CommitAncestorsRowItr) Close(*sql.Context) error {
 	return nil
 }

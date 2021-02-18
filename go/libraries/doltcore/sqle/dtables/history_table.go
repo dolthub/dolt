@@ -285,7 +285,7 @@ func (cp commitPartitioner) Next() (sql.Partition, error) {
 }
 
 // Close closes the partitioner
-func (cp commitPartitioner) Close() error {
+func (cp commitPartitioner) Close(*sql.Context) error {
 	return nil
 }
 
@@ -426,7 +426,7 @@ func (tblItr *rowItrForTableAtCommit) Next() (sql.Row, error) {
 }
 
 // Close the iterator.
-func (tblItr *rowItrForTableAtCommit) Close() error {
+func (tblItr *rowItrForTableAtCommit) Close(*sql.Context) error {
 	if tblItr.rd != nil {
 		return tblItr.rd.Close(tblItr.ctx)
 	}

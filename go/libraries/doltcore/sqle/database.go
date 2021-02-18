@@ -855,7 +855,7 @@ func RegisterSchemaFragments(ctx *sql.Context, db Database, root *doltdb.RootVal
 	if err != nil {
 		return err
 	}
-	defer iter.Close()
+	defer iter.Close(ctx)
 
 	var parseErrors []error
 

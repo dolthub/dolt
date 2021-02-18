@@ -47,7 +47,7 @@ func (i *StaticErrorRowIter) Next() (sql.Row, error) {
 	return nil, i.err
 }
 
-func (i *StaticErrorRowIter) Close() error {
+func (i *StaticErrorRowIter) Close(*sql.Context) error {
 	// Or i.err?
 	return nil
 }

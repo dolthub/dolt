@@ -210,6 +210,6 @@ func (itr *StatusItr) Next() (sql.Row, error) {
 }
 
 // Close closes the iterator.
-func (itr *StatusItr) Close() error {
+func (itr *StatusItr) Close(*sql.Context) error {
 	return nil
 }

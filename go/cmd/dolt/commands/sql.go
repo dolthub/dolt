@@ -851,7 +851,7 @@ func processQuery(ctx *sql.Context, query string, se *sqlEngine) (sql.Schema, sq
 		sch, rowIter, err := se.query(ctx, query)
 
 		if rowIter != nil {
-			err = rowIter.Close()
+			err = rowIter.Close(ctx)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -1039,7 +1039,7 @@ func processNonInsertBatchQuery(ctx *sql.Context, se *sqlEngine, query string, s
 				return err
 			}
 		default:
-			err = rowIter.Close()
+			err = rowIter.Close(ctx)
 			if err != nil {
 				return err
 			}
@@ -1058,7 +1058,7 @@ func processBatchInsert(ctx *sql.Context, se *sqlEngine, query string, sqlStatem
 
 	if rowIter != nil {
 		defer func() {
-			err := rowIter.Close()
+			err := rowIter.Close(ctx)
 			if returnErr == nil {
 				returnErr = err
 			}
@@ -1346,9 +1346,9 @@ func (se *sqlEngine) query(ctx *sql.Context, query string) (sql.Schema, sql.RowI
 	return se.engine.Query(ctx, query)
 }
 
-func PrettyPrintResults(ctx context.Context, resultFormat resultFormat, sqlSch sql.Schema, rowIter sql.RowIter) (rerr error) {
+func PrettyPrintResults(ctx *sql.Context, resultFormat resultFormat, sqlSch sql.Schema, rowIter sql.RowIter) (rerr error) {
 	defer func() {
-		closeErr := rowIter.Close()
+		closeErr := rowIter.Close(ctx)
 		if rerr == nil && closeErr != nil {
 			rerr = closeErr
 		}
@@ -1413,9 +1413,9 @@ func (se *sqlEngine) ddl(ctx *sql.Context, ddl *sqlparser.DDL, query string) (sq
 			for _, err = ri.Next(); err == nil; _, err = ri.Next() {
 			}
 			if err == io.EOF {
-				err = ri.Close()
+				err = ri.Close(ctx)
 			} else {
-				closeErr := ri.Close()
+				closeErr := ri.Close(ctx)
 				if closeErr != nil {
 					err = errhand.BuildDError("error while executing ddl").AddCause(err).AddCause(closeErr).Build()
 				}

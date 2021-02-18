@@ -136,7 +136,7 @@ func (itr *BranchItr) Next() (sql.Row, error) {
 }
 
 // Close closes the iterator.
-func (itr *BranchItr) Close() error {
+func (itr *BranchItr) Close(*sql.Context) error {
 	return nil
 }
 

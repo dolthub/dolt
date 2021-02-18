@@ -116,6 +116,6 @@ func (itr *LogItr) Next() (sql.Row, error) {
 }
 
 // Close closes the iterator.
-func (itr *LogItr) Close() error {
+func (itr *LogItr) Close(*sql.Context) error {
 	return nil
 }

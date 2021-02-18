@@ -47,11 +47,11 @@ func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.E
 		INDEX idxv2v1 (v2,v1)
 	)`, tableName))
 	require.NoError(t, err)
-	require.NoError(t, drainIter(iter))
+	require.NoError(t, drainIter(sqlCtx, iter))
 
 	_, iter, err = engine.Query(sqlCtx, insertQuery)
 	require.NoError(t, err)
-	require.NoError(t, drainIter(iter))
+	require.NoError(t, drainIter(sqlCtx, iter))
 
 	sqlTbl, ok, err := db.GetTableInsensitive(sqlCtx, tableName)
 	require.NoError(t, err)

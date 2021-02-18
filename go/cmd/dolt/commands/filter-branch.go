@@ -214,7 +214,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 			return nil, err
 		}
 	}
-	err = itr.Close()
+	err = itr.Close(sqlCtx)
 	if err != nil {
 		return nil, err
 	}

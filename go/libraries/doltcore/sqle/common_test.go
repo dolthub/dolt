@@ -90,7 +90,7 @@ func executeModify(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValu
 		}
 	}
 
-	err = iter.Close()
+	err = iter.Close(sqlCtx)
 	if err != nil {
 		return nil, err
 	}

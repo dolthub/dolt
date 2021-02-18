@@ -165,7 +165,7 @@ func (q Query) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 		}
 	}
 
-	err = iter.Close()
+	err = iter.Close(sqlCtx)
 	if err != nil {
 		return err
 	}

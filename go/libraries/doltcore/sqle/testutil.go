@@ -59,13 +59,13 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 			var rowIter sql.RowIter
 			_, rowIter, execErr = engine.Query(ctx, query)
 			if execErr == nil {
-				execErr = drainIter(rowIter)
+				execErr = drainIter(ctx, rowIter)
 			}
 		case *sqlparser.DDL:
 			var rowIter sql.RowIter
 			_, rowIter, execErr = engine.Query(ctx, query)
 			if execErr == nil {
-				execErr = drainIter(rowIter)
+				execErr = drainIter(ctx, rowIter)
 			}
 			if err = db.Flush(ctx); err != nil {
 				return nil, err
@@ -159,18 +159,18 @@ func ExecuteSelect(dEnv *env.DoltEnv, ddb *doltdb.DoltDB, root *doltdb.RootValue
 	return rows, nil
 }
 
-func drainIter(iter sql.RowIter) error {
+func drainIter(ctx *sql.Context, iter sql.RowIter) error {
 	for {
 		_, err := iter.Next()
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			closeErr := iter.Close()
+			closeErr := iter.Close(ctx)
 			if closeErr != nil {
 				panic(fmt.Errorf("%v\n%v", err, closeErr))
 			}
 			return err
 		}
 	}
-	return iter.Close()
+	return iter.Close(ctx)
 }
