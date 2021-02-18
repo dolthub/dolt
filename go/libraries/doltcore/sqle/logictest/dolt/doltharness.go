@@ -75,7 +75,7 @@ func (h *DoltHarness) ExecuteStatement(statement string) error {
 		return err
 	}
 
-	return drainIterator(rowIter)
+	return drainIterator(ctx, rowIter)
 }
 
 func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []string, err error) {
@@ -202,7 +202,7 @@ func normalizeStatement(statement string) string {
 	return normalized
 }
 
-func drainIterator(iter sql.RowIter) error {
+func drainIterator(ctx *sql.Context, iter sql.RowIter) error {
 	if iter == nil {
 		return nil
 	}
@@ -216,7 +216,7 @@ func drainIterator(iter sql.RowIter) error {
 		}
 	}
 
-	return iter.Close()
+	return iter.Close(ctx)
 }
 
 // This shouldn't be necessary -- the fact that an iterator can return an error but not clean up after itself in all
