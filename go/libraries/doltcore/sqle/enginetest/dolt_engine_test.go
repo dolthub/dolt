@@ -103,6 +103,9 @@ func TestQueryPlans(t *testing.T) {
 		`SELECT i FROM mytable mt
 		WHERE (SELECT i FROM mytable where i = mt.i) IS NOT NULL
 		AND (SELECT i2 FROM othertable where i2 = i and i > 2) IS NOT NULL`,
+		"SELECT mytable.i, mytable.s FROM mytable WHERE mytable.i = (SELECT i2 FROM othertable LIMIT 1)",
+		"SELECT mytable.i, mytable.s FROM mytable WHERE mytable.i IN (SELECT i2 FROM othertable)",
+		"SELECT mytable.i, mytable.s FROM mytable WHERE mytable.i IN (SELECT i2 FROM othertable WHERE mytable.i = othertable.i2)",
 	})
 
 	tests := make([]enginetest.QueryPlanTest, 0, len(enginetest.PlanTests))
