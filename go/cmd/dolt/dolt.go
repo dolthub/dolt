@@ -46,7 +46,7 @@ import (
 )
 
 const (
-	Version = "0.23.4"
+	Version = "0.23.3"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -192,7 +192,7 @@ func runMain() int {
 
 			case featureVersionFlag:
 				if featureVersion, err := strconv.Atoi(args[1]); err == nil {
-					doltdb.DoltFeatureVersion = "0.23.4"
+					doltdb.DoltFeatureVersion = "0.23.3"
 				} else {
 					panic(err)
 				}
