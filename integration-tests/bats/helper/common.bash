@@ -1,5 +1,7 @@
 load helper/windows-compat
 
+
+
 if [ -z "$BATS_TMPDIR" ]; then
     export BATS_TMPDIR=$HOME/batstmp/
     mkdir $BATS_TMPDIR
