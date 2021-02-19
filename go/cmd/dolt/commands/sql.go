@@ -1437,7 +1437,7 @@ func (se *sqlEngine) dbddl(ctx *sql.Context, dbddl *sqlparser.DBDDL, query strin
 	sch, rowIter, err := se.query(ctx, query)
 
 	if rowIter != nil {
-		err = rowIter.Close()
+		err = rowIter.Close(ctx)
 		if err != nil {
 			return nil, nil, err
 		}

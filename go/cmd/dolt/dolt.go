@@ -192,7 +192,7 @@ func runMain() int {
 
 			case featureVersionFlag:
 				if featureVersion, err := strconv.Atoi(args[1]); err == nil {
-					doltdb.DoltFeatureVersion = "0.23.4"
+					doltdb.DoltFeatureVersion = doltdb.FeatureVersion(featureVersion)
 				} else {
 					panic(err)
 				}

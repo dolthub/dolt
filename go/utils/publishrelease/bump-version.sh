@@ -18,9 +18,9 @@ git checkout -b $release_branch
 echo "Updating the version to $version_str"
 # Note this if statement is for cross platform support between Linux/OSX
 if [[ "$OSTYPE" == "darwin"* ]]; then
-  sed -i '' -e 's/Version = ".*"/Version = "'"$version_str"'"/' $dolt_cmd_entry_point
+  sed -i '' -e 's/	Version = ".*"/	Version = "'"$version_str"'"/' $dolt_cmd_entry_point
 else
-  sed -i -e 's/Version = ".*"/Version = "'"$version_str"'"/' $dolt_cmd_entry_point
+  sed -i -e 's/	Version = ".*"/	Version = "'"$version_str"'"/' $dolt_cmd_entry_point
 fi
 
 echo "Creating commit for $release_branch"
