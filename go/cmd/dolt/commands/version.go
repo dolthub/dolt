@@ -70,7 +70,10 @@ func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string
 	apr := cli.ParseArgs(ap, args, usage)
 
 	var verr errhand.VerboseError
-	if apr.Contains(featureVersionFlag) && cli.CheckEnvIsValid(dEnv) {
+	if apr.Contains(featureVersionFlag) {
+		if !cli.CheckEnvIsValid(dEnv) {
+			return 2
+		}
 		wr, err := dEnv.WorkingRoot(ctx)
 		if err != nil {
 			verr = errhand.BuildDError("could not read working root").AddCause(err).Build()
