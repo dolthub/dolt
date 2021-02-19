@@ -62,6 +62,20 @@ SQL
     [[ "$output" =~ "4" ]] || false
 }
 
+@test "DOLT_MERGE works in the session for fastforward." {
+     run dolt sql << SQL
+SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
+SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+INSERT INTO test VALUES (3);
+SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');
+SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_MERGE('feature-branch');
+SELECT COUNT(*) > 0 FROM test WHERE pk=3;
+SQL
+    [ $status -eq 0 ]
+    [[ "$output" =~ "true" ]] || false
+}
+
 @test "DOLT_MERGE correctly returns head and working session variables." {
     dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
@@ -83,16 +97,20 @@ SQL
 }
 
 @test "DOLT_MERGE correctly merges branches with differing content in same table without conflicts" {
-    dolt sql << SQL
+    run dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 INSERT INTO test VALUES (3);
 SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
 SELECT DOLT_CHECKOUT('master');
-INSERT INTO test VALUES (500000);
-SELECT DOLT_COMMIT('-a', '-m', 'Insert 500000');
+INSERT INTO test VALUES (10000);
+SELECT DOLT_COMMIT('-a', '-m', 'Insert 10000');
 SELECT DOLT_MERGE('feature-branch');
+SELECT COUNT(*) = 2 FROM test WHERE pk > 2;
 SQL
+
+    [ $status -eq 0 ]
+    [[ "$output" =~ "true" ]] || false
 
     run dolt sql -q "SELECT * FROM test" -r csv
     [ $status -eq 0 ]
@@ -101,11 +119,11 @@ SQL
     [[ "$output" =~ "1" ]] || false
     [[ "$output" =~ "2" ]] || false
     [[ "$output" =~ "3" ]] || false
-    [[ "$output" =~ "500000" ]] || false
+    [[ "$output" =~ "10000" ]] || false
 
     run dolt log -n 1
     [ $status -eq 0 ]
-    [[ "$output" =~ "Insert 500000" ]] || false
+    [[ "$output" =~ "Insert 10000" ]] || false
 
     run dolt sql -q "SELECT COUNT(*) FROM dolt_log"
     [ $status -eq 0 ]
@@ -136,16 +154,14 @@ INSERT INTO test VALUES (3);
 SELECT DOLT_COMMIT('-a', '-m', 'update feature-branch');
 SELECT DOLT_CHECKOUT('master');
 SELECT DOLT_MERGE('feature-branch', '-no-ff', '-m', 'this is a no-ff');
+SELECT COUNT(*) = 4 FROM dolt_log
 SQL
     [ $status -eq 0 ]
+    [[ "$output" =~ "true" ]] || false
 
     run dolt log -n 1
     [ $status -eq 0 ]
     [[ "$output" =~ "this is a no-ff" ]] || false
-
-    run dolt sql -q "SELECT COUNT(*) FROM dolt_log"
-    [ $status -eq 0 ]
-    [[ "$output" =~ "4" ]] || false
 }
 
 @test "DOLT_MERGE -no-ff correctly changes head and working session variables." {
@@ -313,15 +329,17 @@ SQL
 }
 
 @test "DOLT_MERGE works with ff and squash" {
-        dolt sql << SQL
+        run dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 INSERT INTO test VALUES (3);
 SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');
 SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_MERGE('feature-branch', '--squash');
+SELECT COUNT(*) > 0 FROM test WHERE pk=3;
 SQL
-    run dolt sql -q "SELECT DOLT_MERGE('feature-branch', '--squash');"
     [ $status -eq 0 ]
+    [[ "$output" =~ "true" ]] || false
 
     run dolt log -n 1
     [ $status -eq 0 ]
