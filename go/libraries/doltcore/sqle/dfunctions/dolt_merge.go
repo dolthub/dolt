@@ -222,10 +222,10 @@ func executeFFMerge(ctx *sql.Context, squash bool, dbData env.DbData, cm2 *doltd
 		return err
 	}
 
-	if !squash {
-		return setHeadAndWorkingSessionRoot(ctx, hh.String())
-	} else {
+	if squash {
 		return setSessionRootExplicit(ctx, workingHash.String(), sqle.WorkingKeySuffix)
+	} else {
+		return setHeadAndWorkingSessionRoot(ctx, hh.String())
 	}
 }
 
