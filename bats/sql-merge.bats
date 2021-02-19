@@ -105,11 +105,11 @@ SELECT DOLT_CHECKOUT('master');
 INSERT INTO test VALUES (10000);
 SELECT DOLT_COMMIT('-a', '-m', 'Insert 10000');
 SELECT DOLT_MERGE('feature-branch');
-SELECT COUNT(*) FROM test;
+SELECT COUNT(*) = 2 FROM test WHERE pk > 2;
 SQL
 
     [ $status -eq 0 ]
-    [[ "$output" =~ "5" ]] || false
+    [[ "$output" =~ "true" ]] || false
 
     run dolt sql -q "SELECT * FROM test" -r csv
     [ $status -eq 0 ]
