@@ -122,8 +122,10 @@ func (sess *DoltSession) CommitTransaction(ctx *sql.Context) error {
 	}
 
 	dbRoot, ok := sess.dbRoots[currentDb]
+	// It's possible that this returns false if the user has created an in-Memory database. Moreover,
+	// the analyzer will check for us whether a db exists or not.
 	if !ok {
-		return sql.ErrDatabaseNotFound.New(currentDb)
+		return nil
 	}
 
 	dbData := sess.dbDatas[currentDb]

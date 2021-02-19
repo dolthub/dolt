@@ -440,6 +440,25 @@ SQL
     server_query 1 "SELECT * FROM repo2.r2_one_pk" "pk,c3,c4\n1,1,1\n2,2,2\n3,3,3"
 }
 
+@test "test CREATE and DROP database via sql-server" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+    start_sql_server repo1
+
+    multi_query 1 "
+    CREATE DATABASE memdb;
+    USE memdb;
+    CREATE TABLE pk(pk int primary key);
+    INSERT INTO pk (pk) VALUES (0);
+    "
+
+    server_query 1 "SELECT * FROM memdb.pk ORDER BY pk" "pk\n0"
+    server_query 1 "DROP DATABASE memdb" ""
+    server_query 1 "SHOW DATABASES" "Database\ninformation_schema\nrepo1"
+
+}
+
 @test "DOLT_ADD, DOLT_COMMIT, DOLT_CHECKOUT, DOLT_MERGE work together in server mode" {
       skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
