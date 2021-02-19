@@ -217,7 +217,16 @@ func executeFFMerge(ctx *sql.Context, squash bool, dbData env.DbData, cm2 *doltd
 		return err
 	}
 
-	return nil
+	hh, err := dbData.Rsr.CWBHeadHash(ctx)
+	if err != nil {
+		return err
+	}
+
+	if !squash {
+		return setHeadAndWorkingSessionRoot(ctx, hh.String())
+	} else {
+		return nil
+	}
 }
 
 func executeNoFFMerge(ctx *sql.Context, dSess *sqle.DoltSession, apr *argparser.ArgParseResults, dbData env.DbData, pr, cm2 *doltdb.Commit) error {
