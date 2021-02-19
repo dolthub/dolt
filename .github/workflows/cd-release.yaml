@@ -14,16 +14,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-      - name: Update dolt version
-        run: sed -i 's/Version =.*/Version = "'"$VERSION"'"/' "$FILE"
-        env:
-          FILE: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
-          VERSION: ${{ github.event.inputs.version }}
-      - uses: EndBug/add-and-commit@v7
-        with:
-          message: ${{ format('[ga-bump-release] update dolt version to {0}', github.event.inputs.version) }}
-          add: ${{ format('{0}/go/cmd/dolt/dolt.go', github.workspace) }}
-          cwd: "."
+      - name: Bump Version
+        id: bump-version
+        run: |
+          git config --global user.name dolt-release-bot
+          git config --global user.email dolt-release-bot@dolthub.com
+          ./go/utils/publishrelease/bump-version.sh ${{ github.event.inputs.version }}
       - name: Discord Notify
         if: always()
         uses: dolthub/ga-discord-notify@master
