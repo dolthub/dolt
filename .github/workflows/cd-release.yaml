@@ -35,6 +35,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+      - name: Set up Go 1.x
+        uses: actions/setup-go@v2
+        with:
+          go-version: ^1.15
       - name: Checkout release tag
         run: |
           git fetch --tags --all
