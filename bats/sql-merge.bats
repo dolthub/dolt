@@ -153,10 +153,10 @@ INSERT INTO test VALUES (3);
 SELECT DOLT_COMMIT('-a', '-m', 'update feature-branch');
 SELECT DOLT_CHECKOUT('master');
 SELECT DOLT_MERGE('feature-branch', '-no-ff', '-m', 'this is a no-ff');
-SELECT COUNT(*) FROM dolt_log
+SELECT COUNT(*) = 4 FROM dolt_log
 SQL
     [ $status -eq 0 ]
-    [[ "$output" =~ "4" ]] || false
+    [[ "$output" =~ "true" ]] || false
 
     run dolt log -n 1
     [ $status -eq 0 ]
