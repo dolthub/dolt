@@ -225,7 +225,7 @@ func executeFFMerge(ctx *sql.Context, squash bool, dbData env.DbData, cm2 *doltd
 	if !squash {
 		return setHeadAndWorkingSessionRoot(ctx, hh.String())
 	} else {
-		return nil
+		return setSessionRootExplicit(ctx, workingHash.String(), sqle.WorkingKeySuffix)
 	}
 }
 

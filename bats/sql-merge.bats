@@ -69,10 +69,10 @@ INSERT INTO test VALUES (3);
 SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');
 SELECT DOLT_CHECKOUT('master');
 SELECT DOLT_MERGE('feature-branch');
-SELECT COUNT(*) FROM test;
+SELECT COUNT(*) > 0 FROM test WHERE pk=3;
 SQL
     [ $status -eq 0 ]
-    [[ "$output" =~ "4" ]] || false
+    [[ "$output" =~ "true" ]] || false
 }
 
 @test "DOLT_MERGE correctly returns head and working session variables." {
@@ -328,15 +328,17 @@ SQL
 }
 
 @test "DOLT_MERGE works with ff and squash" {
-        dolt sql << SQL
+        run dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 INSERT INTO test VALUES (3);
 SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');
 SELECT DOLT_CHECKOUT('master');
+SELECT DOLT_MERGE('feature-branch', '--squash');
+SELECT COUNT(*) > 0 FROM test WHERE pk=3;
 SQL
-    run dolt sql -q "SELECT DOLT_MERGE('feature-branch', '--squash');"
     [ $status -eq 0 ]
+    [[ "$output" =~ "true" ]] || false
 
     run dolt log -n 1
     [ $status -eq 0 ]
