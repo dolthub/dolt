@@ -826,7 +826,6 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 	}
 
 	newRoot, err = newRoot.UpdateSuperSchemasFromOther(ctx, unconflicted, theirRoot)
-
 	if err != nil {
 		return nil, nil, err
 	}

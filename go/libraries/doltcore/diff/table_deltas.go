@@ -54,40 +54,6 @@ type DocDiffs struct {
 	Docs        []string
 }
 
-type RootType int
-
-func (rt RootType) String() string {
-	switch rt {
-	case WorkingRoot:
-		return "working root"
-	case StagedRoot:
-		return "staged root"
-	case CommitRoot:
-		return "root value for commit"
-	case HeadRoot:
-		return "HEAD commit root value"
-	}
-
-	return "unknown"
-}
-
-const (
-	WorkingRoot RootType = iota
-	StagedRoot
-	CommitRoot
-	HeadRoot
-	InvalidRoot
-)
-
-type RootValueUnreadable struct {
-	rootType RootType
-	Cause    error
-}
-
-func (rvu RootValueUnreadable) Error() string {
-	return "error: Unable to read " + rvu.rootType.String()
-}
-
 // NewDocDiffs returns DocDiffs for Dolt Docs between two roots.
 func NewDocDiffs(ctx context.Context, older *doltdb.RootValue, newer *doltdb.RootValue, docs doltdocs.Docs) (*DocDiffs, error) {
 	var added []string
@@ -297,17 +263,17 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot *doltdb.RootValue) (de
 func GetStagedUnstagedTableDeltas(ctx context.Context, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (staged, unstaged []TableDelta, err error) {
 	headRoot, err := env.HeadRoot(ctx, ddb, rsr)
 	if err != nil {
-		return nil, nil, RootValueUnreadable{HeadRoot, err}
+		return nil, nil, doltdb.RootValueUnreadable{RootType: doltdb.HeadRoot, Cause: err}
 	}
 
 	stagedRoot, err := env.StagedRoot(ctx, ddb, rsr)
 	if err != nil {
-		return nil, nil, RootValueUnreadable{StagedRoot, err}
+		return nil, nil, doltdb.RootValueUnreadable{RootType: doltdb.StagedRoot, Cause: err}
 	}
 
 	workingRoot, err := env.WorkingRoot(ctx, ddb, rsr)
 	if err != nil {
-		return nil, nil, RootValueUnreadable{WorkingRoot, err}
+		return nil, nil, doltdb.RootValueUnreadable{RootType: doltdb.WorkingRoot, Cause: err}
 	}
 
 	staged, err = GetTableDeltas(ctx, headRoot, stagedRoot)

@@ -41,6 +41,11 @@ setup_no_dolt_init() {
     cd "dolt-repo-$$"
 }
 
+assert_feature_version() {
+    run dolt version --feature
+    [[ "$output" =~ "feature version: 0" ]] || exit 1
+}
+
 setup_common() {
     setup_no_dolt_init
     dolt init

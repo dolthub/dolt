@@ -12,6 +12,7 @@ setup() {
 }
 
 teardown() {
+    assert_feature_version
     teardown_common
 }
 
@@ -160,4 +161,5 @@ SQL
     run dolt clone localbs://../remotedir test-repo
     [ "$status" -eq 1 ]
     [ ! -d test-repo ]
+    cd ..
 }

@@ -156,8 +156,8 @@ func checkoutBranch(ctx *sql.Context, dbData env.DbData, branchName string) erro
 	if err != nil {
 		if err == doltdb.ErrBranchNotFound {
 			return fmt.Errorf("fatal: Branch '%s' not found.", branchName)
-		} else if actions.IsRootValUnreachable(err) {
-			rt := actions.GetUnreachableRootType(err)
+		} else if doltdb.IsRootValUnreachable(err) {
+			rt := doltdb.GetUnreachableRootType(err)
 			return fmt.Errorf("error: unable to read the %s", rt.String())
 		} else if actions.IsCheckoutWouldOverwrite(err) {
 			tbls := actions.CheckoutWouldOverwriteTables(err)
@@ -180,8 +180,8 @@ func checkoutTables(ctx *sql.Context, dbData env.DbData, tables []string) error 
 	err := actions.CheckoutTables(ctx, dbData, tables)
 
 	if err != nil {
-		if actions.IsRootValUnreachable(err) {
-			rt := actions.GetUnreachableRootType(err)
+		if doltdb.IsRootValUnreachable(err) {
+			rt := doltdb.GetUnreachableRootType(err)
 			return fmt.Errorf("error: unable to read the %s", rt.String())
 		} else if actions.IsTblNotExist(err) {
 			return fmt.Errorf("error: given tables do not exist")

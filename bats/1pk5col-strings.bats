@@ -17,6 +17,7 @@ SQL
 }
 
 teardown() {
+    assert_feature_version
     teardown_common
 }
 

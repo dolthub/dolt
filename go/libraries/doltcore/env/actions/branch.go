@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var ErrAlreadyExists = errors.New("already exists")
@@ -215,72 +214,51 @@ func updateRootsForBranch(ctx context.Context, dbData env.DbData, dref ref.DoltR
 	if !hasRef {
 		return hash.Hash{}, hash.Hash{}, doltdb.ErrBranchNotFound
 	}
-
 	if ref.Equals(dbData.Rsr.CWBHeadRef(), dref) {
 		return hash.Hash{}, hash.Hash{}, doltdb.ErrAlreadyOnBranch
 	}
 
-	currRoots, err := getRoots(ctx, dbData.Ddb, dbData.Rsr, HeadRoot, WorkingRoot, StagedRoot)
-
+	currRoots, err := getRoots(ctx, dbData.Ddb, dbData.Rsr, doltdb.HeadRoot, doltdb.WorkingRoot, doltdb.StagedRoot)
 	if err != nil {
 		return hash.Hash{}, hash.Hash{}, err
 	}
 
 	cs, err := doltdb.NewCommitSpec(brName)
-
 	if err != nil {
-		return hash.Hash{}, hash.Hash{}, RootValueUnreadable{HeadRoot, err}
+		return hash.Hash{}, hash.Hash{}, doltdb.RootValueUnreadable{RootType: doltdb.HeadRoot, Cause: err}
 	}
 
 	cm, err := dbData.Ddb.Resolve(ctx, cs, nil)
-
 	if err != nil {
-		return hash.Hash{}, hash.Hash{}, RootValueUnreadable{HeadRoot, err}
+		return hash.Hash{}, hash.Hash{}, doltdb.RootValueUnreadable{RootType: doltdb.HeadRoot, Cause: err}
 	}
 
 	newRoot, err := cm.GetRootValue()
-
-	if err != nil {
-		return hash.Hash{}, hash.Hash{}, err
-	}
-
-	ssMap, err := newRoot.GetSuperSchemaMap(ctx)
-
-	if err != nil {
-		return hash.Hash{}, hash.Hash{}, err
-	}
-
-	fkMap, err := newRoot.GetForeignKeyCollectionMap(ctx)
-
 	if err != nil {
 		return hash.Hash{}, hash.Hash{}, err
 	}
 
 	conflicts := set.NewStrSet([]string{})
-	wrkTblHashes, err := tblHashesForCO(ctx, currRoots[HeadRoot], newRoot, currRoots[WorkingRoot], conflicts)
 
+	wrkTblHashes, err := moveModifiedTables(ctx, currRoots[doltdb.HeadRoot], newRoot, currRoots[doltdb.WorkingRoot], conflicts)
 	if err != nil {
 		return hash.Hash{}, hash.Hash{}, err
 	}
 
-	stgTblHashes, err := tblHashesForCO(ctx, currRoots[HeadRoot], newRoot, currRoots[StagedRoot], conflicts)
-
+	stgTblHashes, err := moveModifiedTables(ctx, currRoots[doltdb.HeadRoot], newRoot, currRoots[doltdb.StagedRoot], conflicts)
 	if err != nil {
 		return hash.Hash{}, hash.Hash{}, err
 	}
-
 	if conflicts.Size() > 0 {
 		return hash.Hash{}, hash.Hash{}, CheckoutWouldOverwrite{conflicts.AsSlice()}
 	}
 
-	wrkHash, err = writeRoot(ctx, dbData.Ddb, wrkTblHashes, ssMap, fkMap)
-
+	wrkHash, err = writeRoot(ctx, dbData.Ddb, newRoot, wrkTblHashes)
 	if err != nil {
 		return hash.Hash{}, hash.Hash{}, err
 	}
 
-	stgHash, err = writeRoot(ctx, dbData.Ddb, stgTblHashes, ssMap, fkMap)
-
+	stgHash, err = writeRoot(ctx, dbData.Ddb, newRoot, stgTblHashes)
 	if err != nil {
 		return hash.Hash{}, hash.Hash{}, err
 	}
@@ -345,29 +323,29 @@ func CheckoutBranchWithoutDocs(ctx context.Context, dbData env.DbData, brName st
 
 var emptyHash = hash.Hash{}
 
-func tblHashesForCO(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.RootValue, conflicts *set.StrSet) (map[string]hash.Hash, error) {
+// moveModifiedTables handles working set changes during a branch change.
+// When moving between branches, changes in the working set should travel with you.
+// Working set changes cannot be moved if the table differs between the old and new head,
+// in this case, we throw a conflict and error (as per Git).
+func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.RootValue, conflicts *set.StrSet) (map[string]hash.Hash, error) {
 	resultMap := make(map[string]hash.Hash)
 	tblNames, err := newRoot.GetTableNames(ctx)
-
 	if err != nil {
 		return nil, err
 	}
 
 	for _, tblName := range tblNames {
 		oldHash, _, err := oldRoot.GetTableHash(ctx, tblName)
-
 		if err != nil {
 			return nil, err
 		}
 
 		newHash, _, err := newRoot.GetTableHash(ctx, tblName)
-
 		if err != nil {
 			return nil, err
 		}
 
 		changedHash, _, err := changedRoot.GetTableHash(ctx, tblName)
-
 		if err != nil {
 			return nil, err
 		}
@@ -384,7 +362,6 @@ func tblHashesForCO(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.R
 	}
 
 	tblNames, err = changedRoot.GetTableNames(ctx)
-
 	if err != nil {
 		return nil, err
 	}
@@ -392,13 +369,11 @@ func tblHashesForCO(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.R
 	for _, tblName := range tblNames {
 		if _, exists := resultMap[tblName]; !exists {
 			oldHash, _, err := oldRoot.GetTableHash(ctx, tblName)
-
 			if err != nil {
 				return nil, err
 			}
 
 			changedHash, _, err := changedRoot.GetTableHash(ctx, tblName)
-
 			if err != nil {
 				return nil, err
 			}
@@ -414,43 +389,36 @@ func tblHashesForCO(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.R
 	return resultMap, nil
 }
 
-func writeRoot(ctx context.Context, ddb *doltdb.DoltDB, tblHashes map[string]hash.Hash, ssMap types.Map, fkMap types.Map) (hash.Hash, error) {
+func writeRoot(ctx context.Context, ddb *doltdb.DoltDB, head *doltdb.RootValue, tblHashes map[string]hash.Hash) (hash.Hash, error) {
+	names, err := head.GetTableNames(ctx)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+
+	var toDrop []string
+	for _, name := range names {
+		if _, ok := tblHashes[name]; !ok {
+			toDrop = append(toDrop, name)
+		}
+	}
+
+	head, err = head.RemoveTables(ctx, toDrop...)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+
 	for k, v := range tblHashes {
 		if v == emptyHash {
-			delete(tblHashes, k)
+			continue
+		}
+
+		head, err = head.SetTableHash(ctx, k, v)
+		if err != nil {
+			return hash.Hash{}, err
 		}
 	}
 
-	root, err := doltdb.NewRootValue(ctx, ddb.ValueReadWriter(), tblHashes, ssMap, fkMap)
-	if err != nil {
-		if err == doltdb.ErrHashNotFound {
-			return emptyHash, errors.New("corrupted database? Can't find hash of current table")
-		}
-		return emptyHash, doltdb.ErrNomsIO
-	}
-
-	return ddb.WriteRootValue(ctx, root)
-
-}
-
-func RootsWithTable(ctx context.Context, dEnv *env.DoltEnv, table string) (RootTypeSet, error) {
-	roots, err := getRoots(ctx, dEnv.DoltDB, dEnv.RepoStateReader(), ActiveRoots...)
-
-	if err != nil {
-		return nil, err
-	}
-
-	rootsWithTable := make([]RootType, 0, len(roots))
-
-	for rt, root := range roots {
-		if has, err := root.HasTable(ctx, table); err != nil {
-			return nil, err
-		} else if has {
-			rootsWithTable = append(rootsWithTable, rt)
-		}
-	}
-
-	return NewRootTypeSet(rootsWithTable...), nil
+	return ddb.WriteRootValue(ctx, head)
 }
 
 func IsBranch(ctx context.Context, ddb *doltdb.DoltDB, str string) (bool, error) {

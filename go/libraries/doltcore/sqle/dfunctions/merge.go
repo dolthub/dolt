@@ -120,7 +120,7 @@ func (cf *MergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, err
 	}
 
-	mergeCommit, err := ddb.WriteDanglingCommit(ctx, h, []*doltdb.Commit{parent, cm}, meta)
+	mergeCommit, err := ddb.CommitDanglingWithParentCommits(ctx, h, []*doltdb.Commit{parent, cm}, meta)
 	if err != nil {
 		return nil, err
 	}

@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/libraries/utils/pantoerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -45,12 +44,8 @@ const (
 	MasterBranch     = "master"
 	CommitStructName = "Commit"
 
-	FeatureVersion featureVersion = 0
-
 	defaultChunksPerTF = 256 * 1024
 )
-
-type featureVersion int64
 
 // LocalDirDoltDB stores the db in the current directory
 var LocalDirDoltDB = "file://./" + dbfactory.DoltDataDir
@@ -391,6 +386,12 @@ func (ddb *DoltDB) ResolveTag(ctx context.Context, tagRef ref.TagRef) (*Tag, err
 // WriteRootValue will write a doltdb.RootValue instance to the database.  This value will not be associated with a commit
 // and can be committed by hash at a later time.  Returns the hash of the value written.
 func (ddb *DoltDB) WriteRootValue(ctx context.Context, rv *RootValue) (hash.Hash, error) {
+	var err error
+	rv.valueSt, err = rv.valueSt.Set(featureVersKey, types.Int(DoltFeatureVersion))
+	if err != nil {
+		return hash.Hash{}, err
+	}
+
 	valRef, err := ddb.db.WriteValue(ctx, rv.valueSt)
 
 	if err != nil {
@@ -425,21 +426,7 @@ func (ddb *DoltDB) ReadRootValue(ctx context.Context, h hash.Hash) (*RootValue, 
 		return nil, errors.New("there is no dolt root value at that hash")
 	}
 
-	v, ok, err := rootSt.MaybeGet(featureVersKey)
-	if err != nil {
-		return nil, err
-	}
-	if ok {
-		ver := featureVersion(v.(types.Int))
-		if FeatureVersion < ver {
-			return nil, ErrClientOutOfDate{
-				clientVer: FeatureVersion,
-				repoVer:   ver,
-			}
-		}
-	}
-
-	return &RootValue{ddb.db, rootSt, nil}, nil
+	return newRootValue(ddb.db, rootSt)
 }
 
 // Commit will update a branch's head value to be that of a previously committed root value hash
@@ -448,7 +435,6 @@ func (ddb *DoltDB) Commit(ctx context.Context, valHash hash.Hash, dref ref.DoltR
 		panic("can't commit to ref that isn't branch atm.  will probably remove this.")
 	}
 
-	// TODO: this nil seems wrong
 	return ddb.CommitWithParentSpecs(ctx, valHash, dref, nil, cm)
 }
 
@@ -522,58 +508,6 @@ func (ddb *DoltDB) CommitWithParentSpecs(ctx context.Context, valHash hash.Hash,
 		parentCommits = append(parentCommits, cm)
 	}
 	return ddb.CommitWithParentCommits(ctx, valHash, dref, parentCommits, cm)
-}
-
-// todo: merge with CommitDanglingWithParentCommits
-func (ddb *DoltDB) WriteDanglingCommit(ctx context.Context, valHash hash.Hash, parentCommits []*Commit, cm *CommitMeta) (*Commit, error) {
-	var commitSt types.Struct
-	val, err := ddb.db.ReadValue(ctx, valHash)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if st, ok := val.(types.Struct); !ok || st.Name() != ddbRootStructName {
-		return nil, errors.New("can't commit a value that is not a valid root value")
-	}
-
-	l, err := types.NewList(ctx, ddb.db)
-
-	if err != nil {
-		return nil, err
-	}
-
-	parentEditor := l.Edit()
-
-	for _, cm := range parentCommits {
-		rf, err := types.NewRef(cm.commitSt, ddb.db.Format())
-
-		if err != nil {
-			return nil, err
-		}
-
-		parentEditor = parentEditor.Append(rf)
-	}
-
-	parents, err := parentEditor.List(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	st, err := cm.toNomsStruct(ddb.db.Format())
-
-	if err != nil {
-		return nil, err
-	}
-
-	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: st, Policy: nil}
-	commitSt, err = ddb.db.CommitDangling(ctx, val, commitOpts)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return NewCommit(ddb.db, commitSt), nil
 }
 
 func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Hash, dref ref.DoltRef, parentCommits []*Commit, cm *CommitMeta) (*Commit, error) {
@@ -660,55 +594,42 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 // such as rebase. You must create a ref to a dangling commit for it to be reachable
 func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash hash.Hash, parentCommits []*Commit, cm *CommitMeta) (*Commit, error) {
 	var commitSt types.Struct
-	err := pantoerr.PanicToError("error committing value "+valHash.String(), func() error {
-		val, err := ddb.db.ReadValue(ctx, valHash)
+	val, err := ddb.db.ReadValue(ctx, valHash)
+	if err != nil {
+		return nil, err
+	}
+	if st, ok := val.(types.Struct); !ok || st.Name() != ddbRootStructName {
+		return nil, errors.New("can't commit a value that is not a valid root value")
+	}
 
+	l, err := types.NewList(ctx, ddb.db)
+	if err != nil {
+		return nil, err
+	}
+
+	parentEditor := l.Edit()
+
+	for _, cm := range parentCommits {
+		rf, err := types.NewRef(cm.commitSt, ddb.db.Format())
 		if err != nil {
-			return err
+			return nil, err
 		}
 
-		if st, ok := val.(types.Struct); !ok || st.Name() != ddbRootStructName {
-			return errors.New("can't commit a value that is not a valid root value")
-		}
+		parentEditor = parentEditor.Append(rf)
+	}
 
-		l, err := types.NewList(ctx, ddb.db)
+	parents, err := parentEditor.List(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-		if err != nil {
-			return err
-		}
+	st, err := cm.toNomsStruct(ddb.db.Format())
+	if err != nil {
+		return nil, err
+	}
 
-		parentEditor := l.Edit()
-
-		for _, cm := range parentCommits {
-			rf, err := types.NewRef(cm.commitSt, ddb.db.Format())
-
-			if err != nil {
-				return err
-			}
-
-			parentEditor = parentEditor.Append(rf)
-		}
-
-		// even orphans have parents
-		parents, err := parentEditor.List(ctx)
-
-		if err != nil {
-			return err
-		}
-
-		st, err := cm.toNomsStruct(ddb.db.Format())
-
-		if err != nil {
-			return err
-		}
-
-		commitOpts := datas.CommitOptions{ParentsList: parents, Meta: st, Policy: nil}
-
-		commitSt, err = ddb.db.CommitDangling(ctx, val, commitOpts)
-
-		return err
-	})
-
+	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: st, Policy: nil}
+	commitSt, err = ddb.db.CommitDangling(ctx, val, commitOpts)
 	if err != nil {
 		return nil, err
 	}

@@ -36,6 +36,12 @@ const (
 	featureVersKey  = "feature_ver"
 )
 
+type FeatureVersion int64
+
+// DoltFeatureVersion is described in feature_version.md.
+// only variable for testing.
+var DoltFeatureVersion FeatureVersion = 0
+
 // RootValue defines the structure used inside all Dolthub noms dbs
 type RootValue struct {
 	vrw     types.ValueReadWriter
@@ -43,80 +49,43 @@ type RootValue struct {
 	fkc     *ForeignKeyCollection // cache the first load
 }
 
-func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[string]hash.Hash, ssMap types.Map, fkMap types.Map) (*RootValue, error) {
-	values := make([]types.Value, 2*len(tables))
-
-	index := 0
-	for k, v := range tables {
-		values[index] = types.String(k)
-		valForHash, err := vrw.ReadValue(ctx, v)
-
-		if err != nil {
-			return nil, err
-		}
-
-		if valForHash == nil {
-			return nil, ErrHashNotFound
-		}
-
-		values[index+1], err = types.NewRef(valForHash, vrw.Format())
-
-		if err != nil {
-			return nil, err
-		}
-
-		index += 2
-	}
-
-	tblMap, err := types.NewMap(ctx, vrw, values...)
-
+func newRootValue(vrw types.ValueReadWriter, st types.Struct) (*RootValue, error) {
+	v, ok, err := st.MaybeGet(featureVersKey)
 	if err != nil {
 		return nil, err
 	}
+	if ok {
+		ver := FeatureVersion(v.(types.Int))
+		if DoltFeatureVersion < ver {
+			return nil, ErrClientOutOfDate{
+				ClientVer: DoltFeatureVersion,
+				RepoVer:   ver,
+			}
+		}
+	}
 
-	return newRootFromMaps(vrw, tblMap, ssMap, fkMap)
-}
-
-func newRootValue(vrw types.ValueReadWriter, st types.Struct) *RootValue {
-	return &RootValue{vrw, st, nil}
+	return &RootValue{vrw, st, nil}, nil
 }
 
 func emptyRootValue(ctx context.Context, vrw types.ValueReadWriter) (*RootValue, error) {
-	m, err := types.NewMap(ctx, vrw)
-
+	empty, err := types.NewMap(ctx, vrw)
 	if err != nil {
 		return nil, err
 	}
 
-	mm, err := types.NewMap(ctx, vrw)
-
-	if err != nil {
-		return nil, err
-	}
-
-	mmm, err := types.NewMap(ctx, vrw)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return newRootFromMaps(vrw, m, mm, mmm)
-}
-
-func newRootFromMaps(vrw types.ValueReadWriter, tblMap types.Map, ssMap types.Map, fkMap types.Map) (*RootValue, error) {
 	sd := types.StructData{
-		tablesKey:       tblMap,
-		superSchemasKey: ssMap,
-		foreignKeyKey:   fkMap,
+		tablesKey:       empty,
+		superSchemasKey: empty,
+		foreignKeyKey:   empty,
+		featureVersKey:  types.Int(DoltFeatureVersion),
 	}
 
 	st, err := types.NewStruct(vrw.Format(), ddbRootStructName, sd)
-
 	if err != nil {
 		return nil, err
 	}
 
-	return newRootValue(vrw, st), err
+	return newRootValue(vrw, st)
 }
 
 func (root *RootValue) VRW() types.ValueReadWriter {
@@ -124,12 +93,12 @@ func (root *RootValue) VRW() types.ValueReadWriter {
 }
 
 // GetFeatureVersion returns the feature version of this root, if one is written
-func (root *RootValue) GetFeatureVersion(ctx context.Context) (ver int64, ok bool, err error) {
+func (root *RootValue) GetFeatureVersion(ctx context.Context) (ver FeatureVersion, ok bool, err error) {
 	v, ok, err := root.valueSt.MaybeGet(featureVersKey)
 	if err != nil || !ok {
 		return ver, ok, err
 	}
-	ver = int64(v.(types.Int))
+	ver = FeatureVersion(v.(types.Int))
 	return ver, ok, err
 }
 
@@ -643,7 +612,7 @@ func (root *RootValue) PutSuperSchema(ctx context.Context, tName string, ss *sch
 		return nil, err
 	}
 
-	return newRootValue(root.vrw, newRootSt), nil
+	return newRootValue(root.vrw, newRootSt)
 }
 
 // PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
@@ -690,7 +659,7 @@ func putTable(ctx context.Context, root *RootValue, tName string, tableRef types
 		return nil, err
 	}
 
-	return newRootValue(root.vrw, rootValSt), nil
+	return newRootValue(root.vrw, rootValSt)
 }
 
 // CreateEmptyTable creates an empty table in this root with the name and schema given, returning the new root value.
@@ -741,79 +710,6 @@ func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch s
 // HashOf gets the hash of the root value
 func (root *RootValue) HashOf() (hash.Hash, error) {
 	return root.valueSt.Hash(root.vrw.Format())
-}
-
-// UpdateTablesFromOther takes the tables from the given root and applies them to the calling root, along with any
-// foreign keys and other table-related data.
-func (root *RootValue) UpdateTablesFromOther(ctx context.Context, tblNames []string, other *RootValue) (*RootValue, error) {
-	tableMap, err := root.getTableMap()
-	if err != nil {
-		return nil, err
-	}
-	fkCollection, err := root.GetForeignKeyCollection(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	otherMap, err := other.getTableMap()
-	if err != nil {
-		return nil, err
-	}
-	otherFkCollection, err := other.GetForeignKeyCollection(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var fksToAdd []ForeignKey
-	var fksToRemove []ForeignKey
-
-	me := tableMap.Edit()
-	for _, tblName := range tblNames {
-		key := types.String(tblName)
-		if val, ok, err := otherMap.MaybeGet(ctx, key); err != nil {
-			return nil, err
-		} else if ok {
-			me = me.Set(key, val)
-			newFks, _ := otherFkCollection.KeysForTable(tblName)
-			fksToAdd = append(fksToAdd, newFks...)
-			// must remove deleted fks too
-			currentFks, _ := fkCollection.KeysForTable(tblName)
-			newFksSet := make(map[string]struct{})
-			for _, newFk := range newFks {
-				newFksSet[newFk.Name] = struct{}{}
-			}
-			for _, currentFk := range currentFks {
-				_, ok := newFksSet[currentFk.Name]
-				if !ok {
-					fksToRemove = append(fksToRemove, currentFk)
-				}
-			}
-		} else if _, ok, err := tableMap.MaybeGet(ctx, key); err != nil {
-			return nil, err
-		} else if ok {
-			me = me.Remove(key)
-			fks, _ := fkCollection.KeysForTable(tblName)
-			fksToRemove = append(fksToRemove, fks...)
-		}
-	}
-
-	m, err := me.Map(ctx)
-	if err != nil {
-		return nil, err
-	}
-	rootValSt, err := root.valueSt.Set(tablesKey, m)
-	if err != nil {
-		return nil, err
-	}
-
-	newRoot := newRootValue(root.vrw, rootValSt)
-	fkCollection.Stage(ctx, fksToAdd, fksToRemove)
-	newRoot, err = newRoot.PutForeignKeyCollection(ctx, fkCollection)
-	if err != nil {
-		return nil, err
-	}
-
-	return newRoot, nil
 }
 
 // UpdateSuperSchemasFromOther updates SuperSchemas of tblNames using SuperSchemas from other.
@@ -886,7 +782,7 @@ func (root *RootValue) UpdateSuperSchemasFromOther(ctx context.Context, tblNames
 		return nil, err
 	}
 
-	return newRootValue(root.vrw, newRootSt), nil
+	return newRootValue(root.vrw, newRootSt)
 }
 
 // RenameTable renames a table by changing its string key in the RootValue's table map. In order to preserve
@@ -960,10 +856,10 @@ func (root *RootValue) RenameTable(ctx context.Context, oldName, newName string)
 		if err != nil {
 			return nil, err
 		}
-		return newRootValue(root.vrw, rootValSt), nil
+		return newRootValue(root.vrw, rootValSt)
 	}
 
-	return newRootValue(root.vrw, rootValSt), nil
+	return newRootValue(root.vrw, rootValSt)
 }
 
 func (root *RootValue) RemoveTables(ctx context.Context, tables ...string) (*RootValue, error) {
@@ -998,7 +894,10 @@ func (root *RootValue) RemoveTables(ctx context.Context, tables ...string) (*Roo
 		return nil, err
 	}
 
-	newRoot := newRootValue(root.vrw, rootValSt)
+	newRoot, err := newRootValue(root.vrw, rootValSt)
+	if err != nil {
+		return nil, err
+	}
 
 	fkc, err := newRoot.GetForeignKeyCollection(ctx)
 

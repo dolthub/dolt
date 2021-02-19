@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -346,16 +345,7 @@ func printStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTb
 }
 
 func toStatusVErr(err error) errhand.VerboseError {
-	switch {
-	case actions.IsRootValUnreachable(err):
-		rt := actions.GetUnreachableRootType(err)
-		bdr := errhand.BuildDError("Unable to read %s.", rt.String())
-		bdr.AddCause(actions.GetUnreachableRootCause(err))
-		return bdr.Build()
-
-	default:
-		return errhand.BuildDError("Unknown error").AddCause(err).Build()
-	}
+	return errhand.VerboseErrorFromError(err)
 }
 
 func docCnfsOnWorkingRoot(ctx context.Context, dEnv *env.DoltEnv) (bool, error) {

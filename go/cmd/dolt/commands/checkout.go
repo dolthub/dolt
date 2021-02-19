@@ -168,7 +168,7 @@ func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tables []stri
 	err := actions.CheckoutTablesAndDocs(ctx, dEnv.DbData(), tables, docs)
 
 	if err != nil {
-		if actions.IsRootValUnreachable(err) {
+		if doltdb.IsRootValUnreachable(err) {
 			return unreadableRootToVErr(err)
 		} else if actions.IsTblNotExist(err) {
 			badTbls := actions.GetTablesForError(err)
@@ -193,7 +193,7 @@ func checkoutBranch(ctx context.Context, dEnv *env.DoltEnv, name string) errhand
 	if err != nil {
 		if err == doltdb.ErrBranchNotFound {
 			return errhand.BuildDError("fatal: Branch '%s' not found.", name).Build()
-		} else if actions.IsRootValUnreachable(err) {
+		} else if doltdb.IsRootValUnreachable(err) {
 			return unreadableRootToVErr(err)
 		} else if actions.IsCheckoutWouldOverwrite(err) {
 			tbls := actions.CheckoutWouldOverwriteTables(err)
@@ -220,7 +220,7 @@ func checkoutBranch(ctx context.Context, dEnv *env.DoltEnv, name string) errhand
 }
 
 func unreadableRootToVErr(err error) errhand.VerboseError {
-	rt := actions.GetUnreachableRootType(err)
+	rt := doltdb.GetUnreachableRootType(err)
 	bdr := errhand.BuildDError("error: unable to read the %s", rt.String())
-	return bdr.AddCause(actions.GetUnreachableRootCause(err)).Build()
+	return bdr.AddCause(doltdb.GetUnreachableRootCause(err)).Build()
 }

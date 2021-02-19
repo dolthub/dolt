@@ -457,8 +457,10 @@ func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	}
 }
 
-// Set a new root value for the database. Can be used if the dolt working
-// set value changes outside of the basic SQL execution engine.
+// Set a new root value for the database.
+// Can be used if the dolt working set value changes outside of the
+// basic SQL execution engine. If |newRoot|'s FeatureVersion is
+// out-of-date with the client, SetRoot will update it.
 func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
 	h, err := newRoot.HashOf()
 
