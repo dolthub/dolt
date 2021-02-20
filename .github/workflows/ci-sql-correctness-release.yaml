@@ -62,6 +62,8 @@ jobs:
           TO_VERSION: ${{ needs.set-version-actor.outputs.version }}
           MODE: 'release'
           ACTOR: ${{ needs.set-version-actor.outputs.actor }}
+          ACTOR_EMAIL: ${{ github.event.inputs.email }}
+          REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
           KUBECONFIG: "./kubeconfig"
           TEMPLATE_SCRIPT: "./.github/scripts/sql-correctness/get-dolt-correctness-job-json.sh"
 #      - name: Get correctness results

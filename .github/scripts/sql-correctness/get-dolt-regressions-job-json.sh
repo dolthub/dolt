@@ -33,6 +33,11 @@ echo '
           {
             "name": "sql-correctness",
             "image": "407903926827.dkr.ecr.us-west-2.amazonaws.com/liquidata/sql-correctness:latest",
+            "env": [
+              { "name": "REPO_ACCESS_TOKEN", "value": "'$REPO_ACCESS_TOKEN'"},
+              { "name": "ACTOR", "value": "'$ACTOR'"},
+              { "name": "ACTOR_EMAIL", "value": "'$ACTOR_EMAIL'"}
+            ],
             "args": [
               "--schema=/regressions.sql",
               "--output='$format'",
