@@ -26,7 +26,7 @@ jobs:
         id: get-addresses
         run: |
           addresses="$TEAM"
-          if [ ! -z "$RECIPIENT"]; then
+          if [ ! -z "$RECIPIENT" ]; then
             addresses="'[\"$RECIPIENT\"]'"
           fi
           echo "::set-output name=addresses::$addresses"
