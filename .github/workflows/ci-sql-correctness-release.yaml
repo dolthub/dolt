@@ -66,27 +66,3 @@ jobs:
           REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
           KUBECONFIG: "./kubeconfig"
           TEMPLATE_SCRIPT: "./.github/scripts/sql-correctness/get-dolt-correctness-job-json.sh"
-#      - name: Get correctness results
-#        id: get-results
-#        run: |
-#          aws s3api get-object --bucket=sql-correctness-github-actions-results --key="$KEY" results.log
-#        env:
-#          KEY: ${{ steps.run-correctness.outputs.object-key }}
-#      - name: Send Email on Release
-#        if: ${{ github.event_name == 'repository_dispatch' }}
-#        uses: ./.github/actions/ses-email-action
-#        with:
-#          region: us-west-2
-#          version: ${{ needs.set-version-actor.outputs.version }}
-#          template: 'SqlCorrectnessReleaseTemplate'
-#          toAddresses: '["${{ secrets.PERF_REPORTS_EMAIL_ADDRESS }}"]'
-#          dataFile: ${{ format('{0}/results.log', github.workspace) }}
-#      - name: Send Email
-#        if: ${{ github.event_name == 'workflow_dispatch' }}
-#        uses: ./.github/actions/ses-email-action
-#        with:
-#          region: us-west-2
-#          version: ${{ needs.set-version-actor.outputs.version }}
-#          template: 'SqlCorrectnessReleaseTemplate'
-#          toAddresses: '["${{ github.event.inputs.email }}"]'
-#          dataFile: ${{ format('{0}/results.log', github.workspace) }}
