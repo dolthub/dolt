@@ -56,6 +56,7 @@ out=$(KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json || true)
 
 if [ "$out" != "job.batch/$jobname created" ]; then
   echo "something went wrong creating job... this job likely already exists in the cluster"
+  echo "$out"
   exit 1
 else
   echo "$out"
