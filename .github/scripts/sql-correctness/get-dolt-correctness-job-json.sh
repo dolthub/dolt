@@ -42,7 +42,6 @@ echo '
               "--schema=/correctness.sql",
               "--output='$format'",
               "--version='$toVersion'",
-              "--test-dir=test/select1.test",
               "--bucket=sql-correctness-github-actions-results",
               "--region=us-west-2",
               "--results-dir='$timeprefix'",
