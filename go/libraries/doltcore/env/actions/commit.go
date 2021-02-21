@@ -183,7 +183,11 @@ func CommitStaged(ctx context.Context, dbData env.DbData, props CommitStagedProp
 
 	h, err = c.HashOf()
 
-	return h.String(), err
+	if err != nil {
+		return "", err
+	}
+
+	return h.String(), nil
 }
 
 func ValidateForeignKeysOnCommit(ctx context.Context, srt *doltdb.RootValue, stagedTblNames []string) (*doltdb.RootValue, error) {
