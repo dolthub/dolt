@@ -340,6 +340,20 @@ func MergeWouldStompChanges(ctx context.Context, mergeCommit *doltdb.Commit, dbD
 	return stompedTables, headWorkingDiffs, nil
 }
 
+func ResolveMergeCommitHash(ctx context.Context, rsr RepoStateReader, ddb *doltdb.DoltDB) (h hash.Hash, err error) {
+	spec, err := doltdb.NewCommitSpec(rsr.GetMergeCommit())
+	if err != nil {
+		return h, err
+	}
+
+	cm, err := ddb.Resolve(ctx, spec, nil)
+	if err != nil {
+		return h, err
+	}
+
+	return cm.HashOf()
+}
+
 func mapTableHashes(ctx context.Context, root *doltdb.RootValue) (map[string]hash.Hash, error) {
 	names, err := root.GetTableNames(ctx)
 

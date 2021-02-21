@@ -17,6 +17,8 @@ package commands
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/store/hash"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -114,11 +116,21 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 			return HandleVErrAndExitCode(verr, usage)
 		}
 
-		w := dEnv.RepoState.WorkingHash()
-		s := dEnv.RepoState.StagedHash()
+		keepers := []hash.Hash{
+			dEnv.RepoState.WorkingHash(),
+			dEnv.RepoState.StagedHash(),
+		}
 
-		err = dEnv.DoltDB.GC(ctx, w, s)
+		if dEnv.IsMergeActive() {
+			m, err := env.ResolveMergeCommitHash(ctx, dEnv.RepoStateReader(), dEnv.DoltDB)
+			if err != nil {
+				verr = errhand.BuildDError("an error occurred while saving an active merge commit").AddCause(err).Build()
+				return HandleVErrAndExitCode(verr, usage)
+			}
+			keepers = append(keepers, m)
+		}
 
+		err = dEnv.DoltDB.GC(ctx, keepers...)
 		if err != nil {
 			verr = errhand.BuildDError("an error occurred during garbage collection").AddCause(err).Build()
 		}
