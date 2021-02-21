@@ -171,13 +171,23 @@ func CommitStaged(ctx context.Context, dbData env.DbData, props CommitStagedProp
 	// Any commit specs in mergeCmSpec are also resolved and added.
 	c, err := ddb.CommitWithParentSpecs(ctx, h, rsr.CWBHeadRef(), mergeCmSpec, meta)
 
-	if err == nil {
-		err = rsw.ClearMerge()
+	if err != nil {
+		return "", err
+	}
+
+	err = rsw.ClearMerge()
+
+	if err != nil {
+		return "", err
 	}
 
 	h, err = c.HashOf()
 
-	return h.String(), err
+	if err != nil {
+		return "", err
+	}
+
+	return h.String(), nil
 }
 
 func ValidateForeignKeysOnCommit(ctx context.Context, srt *doltdb.RootValue, stagedTblNames []string) (*doltdb.RootValue, error) {
