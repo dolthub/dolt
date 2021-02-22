@@ -962,7 +962,7 @@ SQL
     dolt add child
     run dolt commit -m "should fail"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "foreign key violation" ]] || false
+    [[ "$output" =~ "Foreign key violation" ]] || false
 }
 
 @test "foreign-keys: Merge valid onto parent" {
