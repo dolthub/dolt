@@ -302,6 +302,12 @@ func (te *tableEditorWriteCloser) GC(ctx context.Context) error {
 			return err
 		}
 		keepers = append(keepers, m)
+
+		p, err := env.ResolvePreMergeWorkingRoot(ctx, te.dEnv.RepoStateReader(), te.dEnv.DoltDB)
+		if err != nil {
+			return err
+		}
+		keepers = append(keepers, p)
 	}
 
 	return te.dEnv.DoltDB.GC(ctx, keepers...)

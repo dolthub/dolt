@@ -17,6 +17,7 @@ package env
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -34,6 +35,7 @@ type RepoStateReader interface {
 	StagedHash() hash.Hash
 	IsMergeActive() bool
 	GetMergeCommit() string
+	GetPreMergeWorking() string
 }
 
 type RepoStateWriter interface {
@@ -353,6 +355,20 @@ func ResolveMergeCommitHash(ctx context.Context, rsr RepoStateReader, ddb *doltd
 	}
 
 	return cm.HashOf()
+}
+
+func ResolvePreMergeWorkingRoot(ctx context.Context, rsr RepoStateReader, ddb *doltdb.DoltDB) (h hash.Hash, err error) {
+	h = hash.Parse(rsr.GetPreMergeWorking())
+
+	val, err := ddb.ValueReadWriter().ReadValue(ctx, h)
+	if err != nil {
+		return h, err
+	}
+	if val == nil {
+		return h, fmt.Errorf("MergeState.PreMergeWorking is a dangling hash")
+	}
+
+	return h, nil
 }
 
 func mapTableHashes(ctx context.Context, root *doltdb.RootValue) (map[string]hash.Hash, error) {

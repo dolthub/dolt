@@ -386,6 +386,10 @@ func (r *repoStateReader) GetMergeCommit() string {
 	return r.dEnv.RepoState.Merge.Commit
 }
 
+func (r *repoStateReader) GetPreMergeWorking() string {
+	return r.dEnv.RepoState.Merge.PreMergeWorking
+}
+
 func (dEnv *DoltEnv) RepoStateReader() RepoStateReader {
 	return &repoStateReader{dEnv}
 }

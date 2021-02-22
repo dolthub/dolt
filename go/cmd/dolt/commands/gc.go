@@ -128,6 +128,13 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 				return HandleVErrAndExitCode(verr, usage)
 			}
 			keepers = append(keepers, m)
+
+			p, err := env.ResolvePreMergeWorkingRoot(ctx, dEnv.RepoStateReader(), dEnv.DoltDB)
+			if err != nil {
+				verr = errhand.BuildDError("an error occurred while saving an active merge commit").AddCause(err).Build()
+				return HandleVErrAndExitCode(verr, usage)
+			}
+			keepers = append(keepers, p)
 		}
 
 		err = dEnv.DoltDB.GC(ctx, keepers...)
