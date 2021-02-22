@@ -19,8 +19,6 @@ import (
 	"errors"
 	"sync/atomic"
 
-	"github.com/dolthub/dolt/go/store/hash"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -290,25 +288,12 @@ func (te *tableEditorWriteCloser) GC(ctx context.Context) error {
 		return err
 	}
 
-	keepers := []hash.Hash{
-		te.dEnv.RepoState.WorkingHash(),
-		te.dEnv.RepoState.StagedHash(),
-		inProgressHash,
+	keepers, err := env.GetGCKeepers(ctx, te.dEnv.RepoStateReader(), te.dEnv.DoltDB)
+	if err != nil {
+		return err
 	}
 
-	if te.dEnv.IsMergeActive() {
-		m, err := env.ResolveMergeCommitHash(ctx, te.dEnv.RepoStateReader(), te.dEnv.DoltDB)
-		if err != nil {
-			return err
-		}
-		keepers = append(keepers, m)
-
-		p, err := env.ResolvePreMergeWorkingRoot(ctx, te.dEnv.RepoStateReader(), te.dEnv.DoltDB)
-		if err != nil {
-			return err
-		}
-		keepers = append(keepers, p)
-	}
+	keepers = append(keepers, inProgressHash)
 
 	return te.dEnv.DoltDB.GC(ctx, keepers...)
 }

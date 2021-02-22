@@ -17,8 +17,6 @@ package commands
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/store/hash"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -116,25 +114,10 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 			return HandleVErrAndExitCode(verr, usage)
 		}
 
-		keepers := []hash.Hash{
-			dEnv.RepoState.WorkingHash(),
-			dEnv.RepoState.StagedHash(),
-		}
-
-		if dEnv.IsMergeActive() {
-			m, err := env.ResolveMergeCommitHash(ctx, dEnv.RepoStateReader(), dEnv.DoltDB)
-			if err != nil {
-				verr = errhand.BuildDError("an error occurred while saving an active merge commit").AddCause(err).Build()
-				return HandleVErrAndExitCode(verr, usage)
-			}
-			keepers = append(keepers, m)
-
-			p, err := env.ResolvePreMergeWorkingRoot(ctx, dEnv.RepoStateReader(), dEnv.DoltDB)
-			if err != nil {
-				verr = errhand.BuildDError("an error occurred while saving an active merge commit").AddCause(err).Build()
-				return HandleVErrAndExitCode(verr, usage)
-			}
-			keepers = append(keepers, p)
+		keepers, err := env.GetGCKeepers(ctx, dEnv.RepoStateReader(), nil)
+		if err != nil {
+			verr = errhand.BuildDError("an error occurred while saving working set").AddCause(err).Build()
+			return HandleVErrAndExitCode(verr, usage)
 		}
 
 		err = dEnv.DoltDB.GC(ctx, keepers...)

@@ -343,32 +343,42 @@ func MergeWouldStompChanges(ctx context.Context, mergeCommit *doltdb.Commit, dbD
 	return stompedTables, headWorkingDiffs, nil
 }
 
-func ResolveMergeCommitHash(ctx context.Context, rsr RepoStateReader, ddb *doltdb.DoltDB) (h hash.Hash, err error) {
-	spec, err := doltdb.NewCommitSpec(rsr.GetMergeCommit())
-	if err != nil {
-		return h, err
+// GetGCKeepers queries |rsr| to find a list of values that need to be temporarily saved during GC.
+func GetGCKeepers(ctx context.Context, rsr RepoStateReader, ddb *doltdb.DoltDB) ([]hash.Hash, error) {
+	keepers := []hash.Hash{
+		rsr.WorkingHash(),
+		rsr.StagedHash(),
 	}
 
-	cm, err := ddb.Resolve(ctx, spec, nil)
-	if err != nil {
-		return h, err
+	if rsr.IsMergeActive() {
+		spec, err := doltdb.NewCommitSpec(rsr.GetMergeCommit())
+		if err != nil {
+			return nil, err
+		}
+
+		cm, err := ddb.Resolve(ctx, spec, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		ch, err := cm.HashOf()
+		if err != nil {
+			return nil, err
+		}
+
+		pmw := hash.Parse(rsr.GetPreMergeWorking())
+		val, err := ddb.ValueReadWriter().ReadValue(ctx, pmw)
+		if err != nil {
+			return nil, err
+		}
+		if val == nil {
+			return nil, fmt.Errorf("MergeState.PreMergeWorking is a dangling hash")
+		}
+
+		keepers = append(keepers, ch, pmw)
 	}
 
-	return cm.HashOf()
-}
-
-func ResolvePreMergeWorkingRoot(ctx context.Context, rsr RepoStateReader, ddb *doltdb.DoltDB) (h hash.Hash, err error) {
-	h = hash.Parse(rsr.GetPreMergeWorking())
-
-	val, err := ddb.ValueReadWriter().ReadValue(ctx, h)
-	if err != nil {
-		return h, err
-	}
-	if val == nil {
-		return h, fmt.Errorf("MergeState.PreMergeWorking is a dangling hash")
-	}
-
-	return h, nil
+	return keepers, nil
 }
 
 func mapTableHashes(ctx context.Context, root *doltdb.RootValue) (map[string]hash.Hash, error) {
