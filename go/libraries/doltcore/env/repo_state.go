@@ -41,6 +41,7 @@ type RepoStateWriter interface {
 	SetStagedHash(context.Context, hash.Hash) error
 	SetWorkingHash(context.Context, hash.Hash) error
 	SetCWBHeadRef(context.Context, ref.MarshalableRef) error
+	AbortMerge() error
 	ClearMerge() error
 	StartMerge(commitStr string) error
 }
