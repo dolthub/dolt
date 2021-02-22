@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/fkconstrain"
 	"sort"
 	"time"
 
@@ -124,6 +125,12 @@ func CommitStaged(ctx context.Context, dbData env.DbData, props CommitStagedProp
 		return "", err
 	}
 
+	hrt, err := env.HeadRoot(ctx, ddb, rsr)
+
+	if err != nil {
+		return "", err
+	}
+
 	srt, err = srt.UpdateSuperSchemasFromOther(ctx, stagedTblNames, srt)
 
 	if err != nil {
@@ -131,7 +138,14 @@ func CommitStaged(ctx context.Context, dbData env.DbData, props CommitStagedProp
 	}
 
 	if props.CheckForeignKeys {
-		srt, err = ValidateForeignKeysOnCommit(ctx, srt, stagedTblNames)
+		srt, err = srt.ValidateForeignKeysOnSchemas(ctx)
+
+		if err != nil {
+			return "", err
+		}
+
+		err = fkconstrain.Validate(ctx, hrt, srt)
+
 		if err != nil {
 			return "", err
 		}
@@ -192,6 +206,7 @@ func ValidateForeignKeysOnCommit(ctx context.Context, srt *doltdb.RootValue, sta
 	if err != nil {
 		return nil, err
 	}
+
 	fksToCheck := make(map[string]doltdb.ForeignKey)
 	for _, tblName := range stagedTblNames {
 		declaredFk, referencedByFk := fkColl.KeysForTable(tblName)
