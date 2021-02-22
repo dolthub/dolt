@@ -17,6 +17,7 @@ package env
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -34,6 +35,7 @@ type RepoStateReader interface {
 	StagedHash() hash.Hash
 	IsMergeActive() bool
 	GetMergeCommit() string
+	GetPreMergeWorking() string
 }
 
 type RepoStateWriter interface {
@@ -41,6 +43,7 @@ type RepoStateWriter interface {
 	SetStagedHash(context.Context, hash.Hash) error
 	SetWorkingHash(context.Context, hash.Hash) error
 	SetCWBHeadRef(context.Context, ref.MarshalableRef) error
+	AbortMerge() error
 	ClearMerge() error
 	StartMerge(commitStr string) error
 }
@@ -338,6 +341,44 @@ func MergeWouldStompChanges(ctx context.Context, mergeCommit *doltdb.Commit, dbD
 	}
 
 	return stompedTables, headWorkingDiffs, nil
+}
+
+// GetGCKeepers queries |rsr| to find a list of values that need to be temporarily saved during GC.
+func GetGCKeepers(ctx context.Context, rsr RepoStateReader, ddb *doltdb.DoltDB) ([]hash.Hash, error) {
+	keepers := []hash.Hash{
+		rsr.WorkingHash(),
+		rsr.StagedHash(),
+	}
+
+	if rsr.IsMergeActive() {
+		spec, err := doltdb.NewCommitSpec(rsr.GetMergeCommit())
+		if err != nil {
+			return nil, err
+		}
+
+		cm, err := ddb.Resolve(ctx, spec, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		ch, err := cm.HashOf()
+		if err != nil {
+			return nil, err
+		}
+
+		pmw := hash.Parse(rsr.GetPreMergeWorking())
+		val, err := ddb.ValueReadWriter().ReadValue(ctx, pmw)
+		if err != nil {
+			return nil, err
+		}
+		if val == nil {
+			return nil, fmt.Errorf("MergeState.PreMergeWorking is a dangling hash")
+		}
+
+		keepers = append(keepers, ch, pmw)
+	}
+
+	return keepers, nil
 }
 
 func mapTableHashes(ctx context.Context, root *doltdb.RootValue) (map[string]hash.Hash, error) {

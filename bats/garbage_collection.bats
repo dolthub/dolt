@@ -132,3 +132,59 @@ SQL
     echo "$AFTER"
     [ "$BEFORE" -gt "$AFTER" ]
 }
+
+setup_merge() {
+    dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY, c0 int);"
+    dolt sql -q "CREATE TABLE quiz (pk int PRIMARY KEY, c0 int);"
+    dolt add . && dolt commit -m "created tables test & quiz"
+    dolt branch other
+
+    dolt sql -q "INSERT INTO test VALUES (0,10),(1,11),(2,12);"
+    dolt commit -am "added rows on master"
+
+    dolt checkout other
+    dolt sql -q "INSERT INTO test VALUES (0,20),(1,21),(2,22);"
+    dolt commit -am "added rows on other"
+
+    dolt checkout master
+}
+
+@test "dolt gc leave merge commit" {
+    setup_merge
+    dolt merge other
+
+    dolt gc
+
+    dolt conflicts resolve --ours .
+    dolt add .
+    dolt commit -am "resolved conflicts with ours"
+
+    run dolt sql -q "SELECT * FROM test;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "0,10" ]] || false
+    [[ "${lines[2]}" =~ "1,11" ]] || false
+    [[ "${lines[3]}" =~ "2,12" ]] || false
+}
+
+@test "dolt gc leave working pre-merge" {
+    setup_merge
+
+    # make a dirty working set with table quiz
+    dolt sql -q "INSERT INTO quiz VALUES (9,99)"
+
+    dolt merge other
+    dolt gc
+    run dolt merge --abort
+    [ "$status" -eq 0 ]
+
+    dolt sql -q "SELECT * FROM test;" -r csv
+    run dolt sql -q "SELECT * FROM test;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "0,10" ]] || false
+    [[ "${lines[2]}" =~ "1,11" ]] || false
+    [[ "${lines[3]}" =~ "2,12" ]] || false
+    dolt sql -q "SELECT * FROM quiz;" -r csv
+    run dolt sql -q "SELECT * FROM quiz;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "9,99" ]] || false
+}

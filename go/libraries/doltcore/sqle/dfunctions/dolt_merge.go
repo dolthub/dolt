@@ -155,7 +155,7 @@ func abortMerge(ctx *sql.Context, dbData env.DbData) error {
 		return err
 	}
 
-	err = dbData.Rsw.ClearMerge()
+	err = dbData.Rsw.AbortMerge()
 	if err != nil {
 		return err
 	}

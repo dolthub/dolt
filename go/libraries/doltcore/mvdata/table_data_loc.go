@@ -278,20 +278,24 @@ func (te *tableEditorWriteCloser) GC(ctx context.Context) error {
 		return nil
 	}
 
-	w := te.dEnv.RepoState.WorkingHash()
-	s := te.dEnv.RepoState.StagedHash()
-
-	inProgresRoot, err := te.sess.Flush(ctx)
+	inProgressRoot, err := te.sess.Flush(ctx)
 	if err != nil {
 		return err
 	}
 
-	i, err := te.dEnv.DoltDB.WriteRootValue(ctx, inProgresRoot)
+	inProgressHash, err := te.dEnv.DoltDB.WriteRootValue(ctx, inProgressRoot)
 	if err != nil {
 		return err
 	}
 
-	return te.dEnv.DoltDB.GC(ctx, w, s, i)
+	keepers, err := env.GetGCKeepers(ctx, te.dEnv.RepoStateReader(), te.dEnv.DoltDB)
+	if err != nil {
+		return err
+	}
+
+	keepers = append(keepers, inProgressHash)
+
+	return te.dEnv.DoltDB.GC(ctx, keepers...)
 }
 
 // Close implements TableWriteCloser

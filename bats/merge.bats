@@ -10,8 +10,6 @@ CREATE TABLE test1 (
   c2 int,
   PRIMARY KEY (pk)
 );
-SQL
-    dolt sql <<SQL
 CREATE TABLE test2 (
   pk int NOT NULL,
   c1 int,
@@ -64,6 +62,30 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "add pk 0 to test1" ]] || false
     [[ "$output" =~ "add pk 1 to test1" ]] || false
+}
+
+@test "merge --abort restores working changes" {
+    dolt branch other
+
+    dolt sql -q "INSERT INTO test1 VALUES (0,10,10),(1,11,11);"
+    dolt commit -am "added rows to test1 on master"
+
+    dolt checkout other
+    dolt sql -q "INSERT INTO test1 VALUES (0,20,20),(1,21,21);"
+    dolt commit -am "added rows to test1 on other"
+
+    dolt checkout master
+    # dirty the working set with changes to test2
+    dolt sql -q "INSERT INTO test2 VALUES (9,9,9);"
+
+    dolt merge other
+    dolt merge --abort
+
+    # per Git, working set changes to test2 should remain
+    dolt sql -q "SELECT * FROM test2" -r csv
+    run dolt sql -q "SELECT * FROM test2" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "9,9,9" ]] || false
 }
 
 @test "squash merge" {

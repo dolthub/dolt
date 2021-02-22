@@ -386,6 +386,10 @@ func (r *repoStateReader) GetMergeCommit() string {
 	return r.dEnv.RepoState.Merge.Commit
 }
 
+func (r *repoStateReader) GetPreMergeWorking() string {
+	return r.dEnv.RepoState.Merge.PreMergeWorking
+}
+
 func (dEnv *DoltEnv) RepoStateReader() RepoStateReader {
 	return &repoStateReader{dEnv}
 }
@@ -427,9 +431,14 @@ func (r *repoStateWriter) SetCWBHeadRef(ctx context.Context, marshalableRef ref.
 	return nil
 }
 
+func (r *repoStateWriter) AbortMerge() error {
+	return r.dEnv.RepoState.AbortMerge(r.dEnv.FS)
+}
+
 func (r *repoStateWriter) ClearMerge() error {
 	return r.dEnv.RepoState.ClearMerge(r.dEnv.FS)
 }
+
 func (r *repoStateWriter) StartMerge(commitStr string) error {
 	return r.dEnv.RepoState.StartMerge(commitStr, r.dEnv.FS)
 }

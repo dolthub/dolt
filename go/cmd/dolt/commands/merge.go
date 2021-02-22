@@ -132,7 +132,7 @@ func abortMerge(ctx context.Context, doltEnv *env.DoltEnv) errhand.VerboseError 
 	err := actions.CheckoutAllTables(ctx, doltEnv.DbData())
 
 	if err == nil {
-		err = doltEnv.RepoState.ClearMerge(doltEnv.FS)
+		err = doltEnv.RepoState.AbortMerge(doltEnv.FS)
 
 		if err == nil {
 			return nil
