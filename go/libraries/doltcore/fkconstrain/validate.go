@@ -16,12 +16,13 @@ package fkconstrain
 
 import (
 	"context"
+	"time"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	nomsdiff "github.com/dolthub/dolt/go/store/diff"
 	"github.com/dolthub/dolt/go/store/types"
-	"time"
 )
 
 func Validate(ctx context.Context, parentCommitRoot, root *doltdb.RootValue) error {
