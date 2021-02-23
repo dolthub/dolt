@@ -184,6 +184,49 @@ func TaggedValuesFromTupleValueSlice(vals types.TupleValueSlice) (TaggedValues, 
 	return taggedTuple, nil
 }
 
+func TaggedValuesFromTupleKeyAndValue(key, value types.Tuple) (TaggedValues, error) {
+	tv := make(TaggedValues)
+	err := AddToTaggedVals(tv, key)
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = AddToTaggedVals(tv, value)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return tv, nil
+}
+
+func AddToTaggedVals(tv TaggedValues, t types.Tuple) error {
+	itr, err := t.Iterator()
+
+	if err != nil {
+		return err
+	}
+
+	for itr.HasMore() {
+		_, tag, err := itr.NextUint64()
+
+		if err != nil {
+			return err
+		}
+
+		_, currVal, err := itr.Next()
+
+		if err != nil {
+			return err
+		}
+
+		tv[tag] = currVal
+	}
+
+	return nil
+}
+
 func (tt TaggedValues) String() string {
 	str := "{"
 	for k, v := range tt {

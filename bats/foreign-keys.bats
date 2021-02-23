@@ -25,6 +25,198 @@ teardown() {
     teardown_common
 }
 
+
+@test "test foreign-key on commit checks" {
+    dolt reset --hard
+    dolt sql <<SQL
+      CREATE TABLE colors (
+          id INT NOT NULL,
+          color VARCHAR(32) NOT NULL,
+
+          PRIMARY KEY (id),
+          INDEX color_index(color)
+      );
+      CREATE TABLE objects (
+          id INT NOT NULL,
+          name VARCHAR(64) NOT NULL,
+          color VARCHAR(32),
+
+          PRIMARY KEY(id),
+          FOREIGN KEY (color) REFERENCES colors(color)
+      );
+      INSERT INTO colors (id,color) VALUES (1,'red'),(2,'green'),(3,'blue'),(4,'purple');
+      INSERT INTO objects (id,name,color) VALUES (1,'truck','red'),(2,'ball','green'),(3,'shoe','blue');
+SQL
+
+    dolt add .
+    dolt commit -m "initialize"
+
+    # delete a color that isn't used
+    # delete a color that is used, and replace it with a new row with the same value
+    # modify a used color and the corresponding object using it
+    # add an object and point to an old color that has not been modified
+    # add an object and point to the new color
+    # add an object with a null color
+    dolt sql <<SQL
+      SET FOREIGN_KEY_CHECKS=0;
+      DELETE FROM colors where id = 3 or id = 4;
+      INSERT INTO colors (id,color) VALUES (5,'blue');
+      UPDATE colors SET color='orange' WHERE color = 'green';
+      UPDATE objects SET color='orange' WHERE color = 'green';
+      INSERT INTO objects (id,name,color) VALUES (4,'car','red'),(5,'dress','orange');
+      INSERT INTO objects (id,name) VALUES (6,'glass slipper')
+SQL
+
+    dolt sql -q 'select * from colors'
+    dolt sql -q 'select * from objects'
+    dolt add .
+    dolt commit -m 'update 1'
+}
+
+@test "test multi-field foreign-key on commit checks" {
+    dolt reset --hard
+    dolt sql <<SQL
+      CREATE TABLE colors (
+          id INT NOT NULL,
+          color VARCHAR(32) NOT NULL,
+
+          PRIMARY KEY (id),
+          INDEX color_index(color)
+      );
+      CREATE TABLE materials (
+          id INT NOT NULL,
+          material VARCHAR(32) NOT NULL,
+          color VARCHAR(32),
+
+          PRIMARY KEY(id),
+          FOREIGN KEY (color) REFERENCES colors(color),
+          INDEX color_mat_index(color, material)
+      );
+      CREATE TABLE objects (
+          id INT NOT NULL,
+          name VARCHAR(64) NOT NULL,
+          color VARCHAR(32),
+          material VARCHAR(32),
+
+          PRIMARY KEY(id),
+          FOREIGN KEY (color,material) REFERENCES materials(color,material)
+      );
+      INSERT INTO colors (id,color) VALUES (1,'red'),(2,'green'),(3,'blue'),(4,'purple'),(10,'brown');
+      INSERT INTO materials (id,material,color) VALUES (1,'steel','red'),(2,'rubber','green'),(3,'leather','blue'),(10,'dirt','brown'),(11,'air',NULL);
+      INSERT INTO objects (id,name,color,material) VALUES (1,'truck','red','steel'),(2,'ball','green','rubber'),(3,'shoe','blue','leather'),(11,'tornado',NULL,'air');
+SQL
+
+    dolt add .
+    dolt commit -m "initialize"
+
+    dolt sql <<SQL
+      SET FOREIGN_KEY_CHECKS=0;
+      DELETE FROM colors where id = 3 or id = 4;
+      INSERT INTO colors (id,color) VALUES (5,'blue');
+      DELETE FROM materials WHERE id IN (1,10);
+      INSERT INTO materials (id,material,color) VALUES (4,'steel','red'),(5,'fiber glass','red'),(6,'cotton','orange');
+      UPDATE colors SET color='orange' WHERE color = 'green';
+      UPDATE materials SET color='orange' WHERE color = 'green';
+      UPDATE objects SET color='orange' WHERE color = 'green';
+      INSERT INTO objects (id,name,color,material) VALUES (4,'car','red','fiber glass'),(5,'dress','orange','cotton');
+      INSERT INTO materials (id,material) VALUES (7,'glass');
+      INSERT INTO objects (id,name,material) VALUES (6,'glass slipper','glass');
+      DELETE FROM objects WHERE material = 'air';
+      DELETE FROM materials WHERE material = 'air'
+SQL
+
+    dolt sql -q 'select * from colors'
+    dolt sql -q 'select * from materials'
+    dolt sql -q 'select * from objects'
+    dolt add .
+    dolt commit -m 'update 1'
+}
+
+@test "test foreign-key on commit errors" {
+    dolt reset --hard
+    dolt sql <<SQL
+      CREATE TABLE colors (
+          id INT NOT NULL,
+          color VARCHAR(32) NOT NULL,
+
+          PRIMARY KEY (id),
+          INDEX color_index(color)
+      );
+      CREATE TABLE materials (
+          id INT NOT NULL,
+          material VARCHAR(32) NOT NULL,
+          color VARCHAR(32),
+
+          PRIMARY KEY(id),
+          FOREIGN KEY (color) REFERENCES colors(color),
+          INDEX color_mat_index(color, material)
+      );
+      CREATE TABLE objects (
+          id INT NOT NULL,
+          name VARCHAR(64) NOT NULL,
+          color VARCHAR(32),
+          material VARCHAR(32),
+
+          PRIMARY KEY(id),
+          FOREIGN KEY (color,material) REFERENCES materials(color,material)
+      );
+      INSERT INTO colors (id,color) VALUES (1,'red'),(2,'green'),(3,'blue'),(4,'purple'),(10,'brown');
+      INSERT INTO materials (id,material,color) VALUES (1,'steel','red'),(2,'rubber','green'),(3,'leather','blue'),(10,'dirt','brown'),(11,'air',NULL);
+      INSERT INTO objects (id,name,color,material) VALUES (1,'truck','red','steel'),(2,'ball','green','rubber'),(3,'shoe','blue','leather'),(11,'tornado',NULL,'air');
+SQL
+
+    dolt add .
+    dolt commit -m "initialize"
+
+    # delete a referenced color
+    dolt sql <<SQL
+      SET FOREIGN_KEY_CHECKS=0;
+      DELETE FROM colors where id = 1;
+SQL
+
+    dolt add .
+    run dolt commit -m 'expect failure'
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "Foreign key violation" ]] || false
+    dolt reset --hard
+
+    # delete a referenced material
+    dolt sql <<SQL
+      SET FOREIGN_KEY_CHECKS=0;
+      DELETE FROM materials WHERE material = 'rubber'
+SQL
+
+    dolt add .
+    run dolt commit -m 'expect failure'
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "Foreign key violation" ]] || false
+    dolt reset --hard
+
+    # add a material referencing non-existant color
+    dolt sql <<SQL
+      SET FOREIGN_KEY_CHECKS=0;
+      INSERT INTO materials (id,material,color) VALUES (100,'aluminum','silver')
+SQL
+
+    dolt add .
+    run dolt commit -m 'expect failure'
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "Foreign key violation" ]] || false
+    dolt reset --hard
+
+    # add an object referencing non-existant material
+    dolt sql <<SQL
+      SET FOREIGN_KEY_CHECKS=0;
+      INSERT INTO objects (id,name,color,material) VALUES (100,'truck','red','plastic')
+SQL
+
+    dolt add .
+    run dolt commit -m 'expect failure'
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "Foreign key violation" ]] || false
+    dolt reset --hard
+}
+
 @test "foreign-keys: ALTER TABLE Single Named FOREIGN KEY" {
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk_named FOREIGN KEY (v1) REFERENCES parent(v1);
@@ -962,7 +1154,7 @@ SQL
     dolt add child
     run dolt commit -m "should fail"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "foreign key violation" ]] || false
+    [[ "$output" =~ "Foreign key violation" ]] || false
 }
 
 @test "foreign-keys: Merge valid onto parent" {
@@ -1238,3 +1430,4 @@ SQL
     skip "foreign keys don't travel with the working set when checking out a new branch"
     [[ "$output" =~ "fk_v1" ]] || false
 }
+
