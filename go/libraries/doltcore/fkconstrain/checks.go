@@ -136,7 +136,8 @@ func (declFKC declaredFKCheck) Check(ctx context.Context, _, newTV row.TaggedVal
 		if val, ok := newTV[declTag]; ok {
 			keyTupVals[i*2+1] = val
 		} else {
-			keyTupVals[i*2+1] = types.NullValue
+			// full key is not present.  skip check
+			return nil
 		}
 	}
 
@@ -186,7 +187,8 @@ func (refFKC referencedFKCheck) Check(ctx context.Context, oldTV, _ row.TaggedVa
 		if val, ok := oldTV[tag]; ok {
 			keyTupVals[i*2+1] = val
 		} else {
-			keyTupVals[i*2+1] = types.NullValue
+			// full key is not present.  skip check
+			return nil
 		}
 	}
 

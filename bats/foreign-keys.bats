@@ -64,7 +64,7 @@ SQL
       UPDATE colors SET color='orange' WHERE color = 'green';
       UPDATE objects SET color='orange' WHERE color = 'green';
       INSERT INTO objects (id,name,color) VALUES (4,'car','red'),(5,'dress','orange');
-      --INSERT INTO objects (id,name) VALUES (6,'glass slipper')
+      INSERT INTO objects (id,name) VALUES (6,'glass slipper')
 SQL
 
     dolt sql -q 'select * from colors'
@@ -102,8 +102,8 @@ SQL
           FOREIGN KEY (color,material) REFERENCES materials(color,material)
       );
       INSERT INTO colors (id,color) VALUES (1,'red'),(2,'green'),(3,'blue'),(4,'purple'),(10,'brown');
-      INSERT INTO materials (id,material,color) VALUES (1,'steel','red'),(2,'rubber','green'),(3,'leather','blue'),(10,'dirt','brown');
-      INSERT INTO objects (id,name,color,material) VALUES (1,'truck','red','steel'),(2,'ball','green','rubber'),(3,'shoe','blue','leather');
+      INSERT INTO materials (id,material,color) VALUES (1,'steel','red'),(2,'rubber','green'),(3,'leather','blue'),(10,'dirt','brown'),(11,'air',NULL);
+      INSERT INTO objects (id,name,color,material) VALUES (1,'truck','red','steel'),(2,'ball','green','rubber'),(3,'shoe','blue','leather'),(11,'tornado',NULL,'air');
 SQL
 
     dolt add .
@@ -119,8 +119,10 @@ SQL
       UPDATE materials SET color='orange' WHERE color = 'green';
       UPDATE objects SET color='orange' WHERE color = 'green';
       INSERT INTO objects (id,name,color,material) VALUES (4,'car','red','fiber glass'),(5,'dress','orange','cotton');
-      --INSERT INTO materials (id,name) VALUES (6,'glass')
-      --INSERT INTO objects (id,name,material) VALUES (6,'glass slipper','glass')
+      INSERT INTO materials (id,material) VALUES (7,'glass');
+      INSERT INTO objects (id,name,material) VALUES (6,'glass slipper','glass');
+      DELETE FROM objects WHERE material = 'air';
+      DELETE FROM materials WHERE material = 'air'
 SQL
 
     dolt sql -q 'select * from colors'
