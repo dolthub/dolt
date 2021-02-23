@@ -36,6 +36,7 @@ jobs:
       - name: Send Email
         uses: ./.github/actions/ses-email-action
         with:
+          template: ${{ github.event.client_payload.template }}
           region: us-west-2
           version: ${{ github.event.client_payload.version }}
           toAddresses: ${{ steps.get-addresses.outputs.addresses }}
