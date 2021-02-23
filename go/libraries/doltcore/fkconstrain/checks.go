@@ -177,7 +177,7 @@ func newRefFKCheck(ctx context.Context, root *doltdb.RootValue, fk doltdb.Foreig
 
 // Check checks that either the value coming from the old tagged values is present in a new row in the referenced index
 // or the value is no longer referenced by rows in the declared index.
-func (refFKC referencedFKCheck) Check(ctx context.Context, oldTV, newTV row.TaggedValues) error {
+func (refFKC referencedFKCheck) Check(ctx context.Context, oldTV, _ row.TaggedValues) error {
 	indexColTags := refFKC.referencedIndex.IndexedColumnTags()
 	keyTupVals := make([]types.Value, len(refFKC.fk.ReferencedTableColumns)*2)
 	for i, tag := range indexColTags {
@@ -206,17 +206,14 @@ func (refFKC referencedFKCheck) Check(ctx context.Context, oldTV, newTV row.Tagg
 		return nil
 	}
 
-	if newTV == nil {
-		return refFKC.NewErrForKey(key)
-	}
-
+	// If there is not a new value with the old key then make sure no rows in the table point to the old value
 	declIndexTags := refFKC.declaredIndex.IndexedColumnTags()
 	keyTupVals = make([]types.Value, len(indexColTags)*2)
 	for i, declTag := range declIndexTags {
 		refTag := refFKC.declTagsToRefTags[declTag]
 		keyTupVals[i*2] = types.Uint(declTag)
 
-		if val, ok := newTV[refTag]; ok {
+		if val, ok := oldTV[refTag]; ok {
 			keyTupVals[i*2+1] = val
 		} else {
 			keyTupVals[i*2+1] = types.NullValue
@@ -235,7 +232,8 @@ func (refFKC referencedFKCheck) Check(ctx context.Context, oldTV, newTV row.Tagg
 		return err
 	}
 
-	if !found {
+	if found {
+		// found a row referencing a key that no longer exists
 		return refFKC.NewErrForKey(key)
 	}
 

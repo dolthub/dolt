@@ -234,7 +234,7 @@ func parseDiff(d *nomsdiff.Difference) (oldTV, newTV row.TaggedValues, changes m
 		}
 	}
 
-	return newTV, oldTV, changes, nil
+	return oldTV, newTV, changes, nil
 }
 
 type fkValidationInfo struct {
