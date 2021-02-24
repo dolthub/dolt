@@ -344,7 +344,8 @@ func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, tblName stri
 
 				if mkNilOrKeyLess {
 					// change will already be in the map
-					// TODO(andy) apply changes to ancestor instead of "ours"
+					// we apply changes directly to "ours"
+					// instead of to ancestor
 					change = types.ValueChanged{}
 					processed = true
 				}
@@ -393,11 +394,6 @@ func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, tblName stri
 					if err != nil {
 						return err
 					}
-				}
-
-				_, err = sess.Flush(ctx)
-				if err != nil {
-					return err
 				}
 
 				change = types.ValueChanged{}
