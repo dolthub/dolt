@@ -722,6 +722,13 @@ func (ddb *DoltDB) GetTags(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, tagsRefFilter)
 }
 
+var workspacesRefFilter = map[ref.RefType]struct{}{ref.WorkspaceRefType: {}}
+
+// GetWorkspaces returns a list of all workspaces in the database.
+func (ddb *DoltDB) GetWorkspaces(ctx context.Context) ([]ref.DoltRef, error) {
+	return ddb.GetRefsOfType(ctx, workspacesRefFilter)
+}
+
 // GetRefs returns a list of all refs in the database.
 func (ddb *DoltDB) GetRefs(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, ref.RefTypes)
