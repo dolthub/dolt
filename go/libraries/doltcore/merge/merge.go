@@ -816,11 +816,6 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 		return root.PutForeignKeyCollection(ctx, mergedFKColl)
 	})
 
-	err = tableEditSession.ValidateForeignKeys(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	newRoot, err = newRoot.UpdateSuperSchemasFromOther(ctx, unconflicted, theirRoot)
 	if err != nil {
 		return nil, nil, err
