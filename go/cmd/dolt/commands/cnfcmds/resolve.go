@@ -16,6 +16,7 @@ package cnfcmds
 
 import (
 	"context"
+	"strings"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -119,9 +120,10 @@ func autoResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.
 	funcFlags := apr.FlagsEqualTo(autoResolverParams, true)
 
 	if funcFlags.Size() > 1 {
-		return errhand.BuildDError("").SetPrintUsage().Build()
+		ff := strings.Join(autoResolverParams, ", ")
+		return errhand.BuildDError("specify a resolver func from [ %s ]", ff).SetPrintUsage().Build()
 	} else if apr.NArg() == 0 {
-		return errhand.BuildDError("").SetPrintUsage().Build()
+		return errhand.BuildDError("specify at least one table to resolve conflicts").SetPrintUsage().Build()
 	}
 
 	autoResolveFlag := funcFlags.AsSlice()[0]
@@ -151,11 +153,10 @@ func manualResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 	args := apr.Args()
 
 	if len(args) < 2 {
-		return errhand.BuildDError("").SetPrintUsage().Build()
+		return errhand.BuildDError("at least two args are required").SetPrintUsage().Build()
 	}
 
 	root, verr := commands.GetWorkingWithVErr(dEnv)
-
 	if verr != nil {
 		return verr
 	}
@@ -169,49 +170,43 @@ func manualResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 	}
 
 	tbl, _, err := root.GetTable(ctx, tblName)
-
 	if err != nil {
 		return errhand.BuildDError("error: failed to get table '%s'", tblName).AddCause(err).Build()
 	}
 
 	sch, err := tbl.GetSchema(ctx)
-
 	if err != nil {
 		return errhand.BuildDError("error: failed to get schema").AddCause(err).Build()
 	}
 
 	keysToResolve, err := cli.ParseKeyValues(ctx, root.VRW(), sch, args[1:])
-
 	if err != nil {
 		return errhand.BuildDError("error: parsing command line").AddCause(err).Build()
 	}
+	if keysToResolve == nil {
+		return errhand.BuildDError("no primary keys were given to be resolved").Build()
+	}
 
 	invalid, notFound, updatedTbl, err := tbl.ResolveConflicts(ctx, keysToResolve)
-
 	if err != nil {
 		return errhand.BuildDError("fatal: Failed to resolve conflicts").AddCause(err).Build()
 	}
-
 	for _, key := range invalid {
 		cli.Printf("(%s) is not a valid key\n", row.TupleFmt(ctx, key.(types.Tuple)))
 	}
-
 	for _, key := range notFound {
 		cli.Printf("(%s) is not the primary key of a conflicting row\n", row.TupleFmt(ctx, key.(types.Tuple)))
 	}
-
 	if updatedTbl == nil {
 		return errhand.BuildDError("error: No changes were resolved").Build()
 	}
 
 	updatedHash, err := updatedTbl.HashOf()
-
 	if err != nil {
 		return errhand.BuildDError("error: failed to get table hash").AddCause(err).Build()
 	}
 
 	hash, err := tbl.HashOf()
-
 	if err != nil {
 		return errhand.BuildDError("error: failed to get table hash").AddCause(err).Build()
 	}
