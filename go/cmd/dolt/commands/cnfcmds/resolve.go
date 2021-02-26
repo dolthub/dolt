@@ -120,7 +120,7 @@ func autoResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.
 	funcFlags := apr.FlagsEqualTo(autoResolverParams, true)
 
 	if funcFlags.Size() > 1 {
-		ff := strings.Join(autoResolverParams,  ", ")
+		ff := strings.Join(autoResolverParams, ", ")
 		return errhand.BuildDError("specify a resolver func from [ %s ]", ff).SetPrintUsage().Build()
 	} else if apr.NArg() == 0 {
 		return errhand.BuildDError("specify at least one table to resolve conflicts").SetPrintUsage().Build()
