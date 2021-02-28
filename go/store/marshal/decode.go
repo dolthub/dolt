@@ -462,8 +462,13 @@ func marshalerDecoder(t reflect.Type) decoderFunc {
 func iterListOrSlice(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, t reflect.Type, f func(c types.Value, i uint64) error) error {
 	switch v := v.(type) {
 	case types.List:
-		err := v.IterAll(ctx, f)
-
+		err := v.Iter(ctx, func(v types.Value, idx uint64) (stop bool, err error) {
+			err = f(v, idx)
+			if err != nil {
+				return false, err
+			}
+			return
+		})
 		if err != nil {
 			return err
 		}

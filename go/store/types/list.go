@@ -197,7 +197,7 @@ func (l List) isPrimitive() bool {
 
 // Iter iterates over the list and calls f for every element in the list. If f returns true then the
 // iteration stops.
-func (l List) Iter(ctx context.Context, f func(v Value, index uint64) (stop bool)) error {
+func (l List) Iter(ctx context.Context, f func(v Value, index uint64) (stop bool, err error)) error {
 	idx := uint64(0)
 	cur, err := newSequenceIteratorAtIndex(ctx, l.sequence, idx)
 
@@ -206,11 +206,9 @@ func (l List) Iter(ctx context.Context, f func(v Value, index uint64) (stop bool
 	}
 
 	err = cur.iter(ctx, func(v interface{}) (bool, error) {
-		if f(v.(Value), uint64(idx)) {
-			return true, nil
-		}
+		stop, err := f(v.(Value), idx)
 		idx++
-		return false, nil
+		return stop, err
 	})
 
 	return err
