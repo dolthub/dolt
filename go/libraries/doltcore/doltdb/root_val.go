@@ -417,7 +417,7 @@ func (root *RootValue) GetTableByColTag(ctx context.Context, tag uint64) (tbl *T
 		return nil, "", false, err
 	}
 
-	_ = root.iterSuperSchemas(ctx, func(tn string, ss *schema.SuperSchema) (bool, error) {
+	err = root.iterSuperSchemas(ctx, func(tn string, ss *schema.SuperSchema) (bool, error) {
 		_, found = ss.GetByTag(tag)
 		if found {
 			name = tn
@@ -425,6 +425,9 @@ func (root *RootValue) GetTableByColTag(ctx context.Context, tag uint64) (tbl *T
 
 		return found, nil
 	})
+	if err != nil {
+		return nil, "", false, err
+	}
 
 	return tbl, name, found, nil
 }
@@ -1113,20 +1116,23 @@ func validateTagUniqueness(ctx context.Context, root *RootValue, tableName strin
 	}
 
 	var ee []string
-	_ = root.iterSuperSchemas(ctx, func(tn string, ss *schema.SuperSchema) (stop bool, err error) {
+	err = root.iterSuperSchemas(ctx, func(tn string, ss *schema.SuperSchema) (stop bool, err error) {
 		if tn == tableName {
 			return false, nil
 		}
 
-		_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 			_, ok := ss.GetByTag(tag)
 			if ok {
 				ee = append(ee, schema.ErrTagPrevUsed(tag, col.Name, tn).Error())
 			}
 			return false, nil
 		})
-		return false, nil
+		return false, err
 	})
+	if err != nil {
+		return err
+	}
 
 	if len(ee) > 0 {
 		return fmt.Errorf(strings.Join(ee, "\n"))
