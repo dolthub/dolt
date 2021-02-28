@@ -140,7 +140,6 @@ func (root *RootValue) GetSuperSchema(ctx context.Context, tName string) (*schem
 	}
 
 	t, tblFound, err := root.GetTable(ctx, tName)
-
 	if err != nil {
 		return nil, false, err
 	}
@@ -152,13 +151,11 @@ func (root *RootValue) GetSuperSchema(ctx context.Context, tName string) (*schem
 
 	if tblFound {
 		sch, err := t.GetSchema(ctx)
-
 		if err != nil {
 			return nil, false, err
 		}
 
 		err = ss.AddSchemas(sch)
-
 		if err != nil {
 			return nil, false, err
 		}
@@ -237,13 +234,11 @@ func (root *RootValue) GetSuperSchemaMap(ctx context.Context) (types.Map, error)
 // SuperSchemas are only persisted on commit.
 func (root *RootValue) getSuperSchemaAtLastCommit(ctx context.Context, tName string) (*schema.SuperSchema, bool, error) {
 	ssm, err := root.getOrCreateSuperSchemaMap(ctx)
-
 	if err != nil {
 		return nil, false, err
 	}
 
 	v, found, err := ssm.MaybeGet(ctx, types.String(tName))
-
 	if err != nil {
 		return nil, false, err
 	}
@@ -254,13 +249,11 @@ func (root *RootValue) getSuperSchemaAtLastCommit(ctx context.Context, tName str
 
 	ssValRef := v.(types.Ref)
 	ssVal, err := ssValRef.TargetValue(ctx, root.vrw)
-
 	if err != nil {
 		return nil, false, err
 	}
 
 	ss, err := encoding.UnmarshalSuperSchemaNomsValue(ctx, root.vrw.Format(), ssVal)
-
 	if err != nil {
 		return nil, false, err
 	}
@@ -573,6 +566,9 @@ func (root *RootValue) iterSuperSchemas(ctx context.Context, cb func(name string
 
 		// use GetSuperSchema() to pickup uncommitted SuperSchemas
 		ss, _, err := root.GetSuperSchema(ctx, name)
+		if err != nil {
+			return false, err
+		}
 
 		return cb(name, ss)
 	})
