@@ -667,19 +667,19 @@ func mapDecoder(t reflect.Type, tags nomsTags) (decoderFunc, error) {
 
 		init.RLock()
 		defer init.RUnlock()
-		err := nomsMap.IterAll(ctx, func(k, v types.Value) error {
+		err := nomsMap.Iter(ctx, func(k, v types.Value) (stop bool, err error) {
 			keyRv := reflect.New(t.Key()).Elem()
-			err := keyDecoder(ctx, nbf, k, keyRv)
+			err = keyDecoder(ctx, nbf, k, keyRv)
 
 			if err != nil {
-				return err
+				return
 			}
 
 			valueRv := reflect.New(t.Elem()).Elem()
 			err = valueDecoder(ctx, nbf, v, valueRv)
 
 			if err != nil {
-				return err
+				return
 			}
 
 			if m.IsNil() {
@@ -687,7 +687,7 @@ func mapDecoder(t reflect.Type, tags nomsTags) (decoderFunc, error) {
 			}
 
 			m.SetMapIndex(keyRv, valueRv)
-			return nil
+			return
 		})
 
 		if err != nil {
