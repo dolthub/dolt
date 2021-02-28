@@ -113,8 +113,9 @@ func (mes mapEntrySlice) Equals(other mapEntrySlice) bool {
 
 func newMapLeafSequence(vrw ValueReadWriter, data ...mapEntry) (orderedSequence, error) {
 	d.PanicIfTrue(vrw == nil)
-	offsets := make([]uint32, len(data)+sequencePartValues+1)
-	w := newBinaryNomsWriter()
+	dataLen := len(data)
+	offsets := make([]uint32, dataLen+sequencePartValues+1)
+	w := newBinaryNomsWriterWithSizeHint(uint64(dataLen) * 16)
 	offsets[sequencePartKind] = w.offset
 	err := MapKind.writeTo(&w, vrw.Format())
 
