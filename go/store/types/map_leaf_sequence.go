@@ -550,27 +550,27 @@ func (mes mapEntrySequence) getCompareFn(other sequence) compareFn {
 }
 
 func (mes mapEntrySequence) typeOf() (*Type, error) {
-	panic("implement me")
+	panic("not implemented")
 }
 
 func (mes mapEntrySequence) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
-	panic("implement me")
+	panic("not implemented")
 }
 
 func (mes mapEntrySequence) writeTo(writer nomsWriter, format *NomsBinFormat) error {
-	panic("implement me")
+	panic("not implemented")
 }
 
 func (mes mapEntrySequence) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
-	panic("implement me")
+	panic("not implemented")
 }
 
 func (mes mapEntrySequence) Hash(format *NomsBinFormat) (hash.Hash, error) {
-	panic("implement me")
+	panic("not implemented")
 }
 
 func (mes mapEntrySequence) Equals(other Value) bool {
-	panic("implement me")
+	panic("not implemented")
 }
 
 func (mes mapEntrySequence) asValueImpl() valueImpl {
