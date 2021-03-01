@@ -356,9 +356,21 @@ type binaryNomsWriter struct {
 	offset uint32
 }
 
+func newBinaryNomsWriterWithSizeHint(sizeHint uint64) binaryNomsWriter {
+	size := uint32(initialBufferSize)
+	if sizeHint >= math.MaxUint32 {
+		size = math.MaxUint32
+	} else if sizeHint > uint64(size) {
+		size = uint32(sizeHint)
+	}
+
+	return binaryNomsWriter{make([]byte, size), 0}
+}
+
 func newBinaryNomsWriter() binaryNomsWriter {
 	return binaryNomsWriter{make([]byte, initialBufferSize), 0}
 }
+
 func (b *binaryNomsWriter) data() []byte {
 	return b.buff[0:b.offset]
 }
@@ -374,7 +386,7 @@ const (
 
 func (b *binaryNomsWriter) ensureCapacity(n uint32) {
 	length := uint64(len(b.buff))
-	minLength := uint64(b.offset + n)
+	minLength := uint64(b.offset) + uint64(n)
 	if length >= minLength {
 		return
 	}
@@ -389,6 +401,7 @@ func (b *binaryNomsWriter) ensureCapacity(n uint32) {
 		length = length * 2
 
 		if length >= Gigs2 {
+			length = Gigs2
 			break
 		}
 	}

@@ -186,8 +186,12 @@ func getCurrentKey(cur *sequenceCursor) (orderedKey, error) {
 	return seq.getKey(cur.idx)
 }
 
+type mapSeqWithValues interface {
+	getValue(idx int) (Value, error)
+}
+
 func getMapValue(cur *sequenceCursor) (Value, error) {
-	if ml, ok := cur.seq.(mapLeafSequence); ok {
+	if ml, ok := cur.seq.(mapSeqWithValues); ok {
 		return ml.getValue(cur.idx)
 	}
 
