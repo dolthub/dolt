@@ -24,7 +24,6 @@ package types
 import (
 	"context"
 	"fmt"
-
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -496,7 +495,9 @@ func (ms metaSequence) getCompositeChildSequence(ctx context.Context, start uint
 
 			valueItems = append(valueItems, entries.entries...)
 		}
-		return newMapLeafSequence(ms.vrw, valueItems...)
+
+		return newMapEntrySequence(ms.vrw, valueItems...)
+
 	case SetKind:
 		var valueItems []Value
 		for _, seq := range output {
