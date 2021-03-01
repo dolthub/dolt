@@ -24,6 +24,7 @@ package types
 import (
 	"context"
 	"fmt"
+
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"

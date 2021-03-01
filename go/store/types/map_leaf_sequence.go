@@ -24,6 +24,7 @@ package types
 import (
 	"context"
 	"errors"
+
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 )
