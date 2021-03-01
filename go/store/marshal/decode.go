@@ -464,9 +464,6 @@ func iterListOrSlice(ctx context.Context, nbf *types.NomsBinFormat, v types.Valu
 	case types.List:
 		err := v.Iter(ctx, func(v types.Value, idx uint64) (stop bool, err error) {
 			err = f(v, idx)
-			if err != nil {
-				return false, err
-			}
 			return
 		})
 		if err != nil {

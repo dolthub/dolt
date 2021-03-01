@@ -820,6 +820,11 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 		return nil, nil, err
 	}
 
+	newRoot, err = tableEditSession.Flush(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	return newRoot, tblToStats, nil
 }
 
