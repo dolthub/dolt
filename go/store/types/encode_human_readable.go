@@ -210,31 +210,22 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) error {
 		w.writeSize(v)
 		w.indent()
 
-		var err error
-		iterErr := v.(List).Iter(ctx, func(v Value, i uint64) bool {
+		err := v.(List).Iter(ctx, func(v Value, i uint64) (bool, error) {
 			if i == 0 {
 				w.newLine()
 			}
 
-			err = w.Write(ctx, v)
-
-			if err != nil {
-				return true
+			if err := w.Write(ctx, v); err != nil {
+				return true, err
 			}
 
 			w.write(",")
 			w.newLine()
-			err = w.err
 
-			return err != nil
+			return false, w.err
 		})
-
 		if err != nil {
 			return err
-		}
-
-		if iterErr != nil {
-			return iterErr
 		}
 
 		w.outdent()
