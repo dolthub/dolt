@@ -410,3 +410,31 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "name" ]] || false
 }
+
+
+# from tonic:
+# LOAD DATA LOCAL INFILE ':SOURCE:9fa1415b62a44b53b86cffbccb210b51' INTO TABLE `test`
+# CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '' ESCAPED BY '' LINES TERMINATED BY '' IGNORE 0 LINES (`pk`)
+@test "load data from file into table" {
+    cat <<DELIM > 1pk5col-ints.csv
+pk||c1||c2||c3||c4||c5
+0||1||2||3||4||5
+1||1||2||3||4||5
+DELIM
+
+    run dolt sql -q "CREATE TABLE test(pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int)"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "LOAD DATA INFILE '1pk5col-ints.csv' INTO TABLE test
+    CHARACTER SET UTF8MB4
+    FIELDS TERMINATED BY '||' ESCAPED BY '' LINES TERMINATED BY '\n'
+    IGNORE 1 LINES;"
+    echo $output
+    [ $status -eq 0 ]
+
+    run dolt sql -r csv -q "select * from test"
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "pk,c1,c2,c3,c4,c5" ]
+    [ "${lines[1]}" = "0,1,2,3,4,5" ]
+    [ "${lines[2]}" = "1,1,2,3,4,5" ]
+}

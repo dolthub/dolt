@@ -882,6 +882,8 @@ func processQuery(ctx *sql.Context, query string, se *sqlEngine) (sql.Schema, sq
 		return se.ddl(ctx, s, query)
 	case *sqlparser.DBDDL:
 		return se.dbddl(ctx, s, query)
+	case *sqlparser.Load:
+		return se.query(ctx, query)
 	default:
 		return nil, nil, fmt.Errorf("Unsupported SQL statement: '%v'.", query)
 	}
