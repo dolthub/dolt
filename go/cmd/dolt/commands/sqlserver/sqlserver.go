@@ -21,7 +21,6 @@ import (
 	"strconv"
 
 	"github.com/fatih/color"
-	"gopkg.in/yaml.v2"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -246,14 +245,11 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 
 func getYAMLServerConfig(fs filesys.Filesys, path string) (ServerConfig, error) {
 	data, err := fs.ReadFile(path)
-
 	if err != nil {
 		return nil, fmt.Errorf("Failed to read file '%s'. Error: %s", path, err.Error())
 	}
 
-	var cfg YAMLConfig
-	err = yaml.Unmarshal(data, &cfg)
-
+	cfg, err := newYamlConfig(data)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse yaml file '%s'. Error: %s", path, err.Error())
 	}
