@@ -588,6 +588,21 @@ SQL
     [ "$status" -eq "1" ]
 }
 
+@test "sql alter table modify column type no data change" {
+    # there was a bug on NULLs where it would register a change
+    dolt sql <<SQL
+CREATE TABLE t1(pk BIGINT PRIMARY KEY, v1 VARCHAR(64), INDEX(v1));
+INSERT INTO t1 VALUES (0,NULL),(1,NULL);
+SQL
+    dolt add -A
+    dolt commit -m "commit"
+    dolt sql -q "ALTER TABLE t1 MODIFY COLUMN v1 VARCHAR(100) NULL"
+    run dolt diff -d
+    [ "$status" -eq "0" ]
+    [[ ! "$output" =~ "|  <  |" ]] || false
+    [[ ! "$output" =~ "|  >  |" ]] || false
+}
+
 @test "sql drop table" {
     dolt sql -q "drop table one_pk"
     run dolt ls
