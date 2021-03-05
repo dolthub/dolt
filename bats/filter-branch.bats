@@ -24,7 +24,7 @@ teardown() {
     teardown_common
 }
 
-@test "dolt filter-branch smoke-test" {
+@test "filter-branch: smoke-test" {
     dolt sql -q "INSERT INTO test VALUES (7,7),(8,8),(9,9);"
     dolt add -A && dolt commit -m "added more rows"
 
@@ -39,7 +39,7 @@ teardown() {
     [[ "$output" =~ "1,1" ]] || false
 }
 
-@test "filter multiple branches" {
+@test "filter-branch: filter multiple branches" {
     dolt branch other
 
     dolt sql -q "INSERT INTO test VALUES (7,7),(8,8),(9,9);"
@@ -73,7 +73,7 @@ teardown() {
     [[ "$output" =~ "4,4" ]] || false
 }
 
-@test "filter-branch with missing table" {
+@test "filter-branch: with missing table" {
     dolt sql -q "DROP TABLE test;"
     dolt add -A && dolt commit -m "dropped test"
 
@@ -87,7 +87,7 @@ teardown() {
     [[ "$output" =~ "2" ]] || false
 }
 
-@test "filter-branch forks history" {
+@test "filter-branch: forks history" {
     dolt branch other
 
     dolt sql -q "INSERT INTO test VALUES (7,7),(8,8),(9,9);"
@@ -101,7 +101,7 @@ teardown() {
     [[ "$output" =~ "2,2" ]] || false
 }
 
-@test "filter-branch until commit" {
+@test "filter-branch: filter until commit" {
     dolt sql -q "INSERT INTO test VALUES (7,7)"
     dolt add -A && dolt commit -m "added (7,7)"
     dolt sql -q "INSERT INTO test VALUES (8,8)"
@@ -130,7 +130,7 @@ function setup_write_test {
     dolt add -A && dolt commit -m "5"
 }
 
-@test "filter-branch INSERT INTO" {
+@test "filter-branch: INSERT INTO" {
     setup_write_test
 
     dolt filter-branch "INSERT INTO test VALUES (9,9);"
@@ -143,7 +143,7 @@ function setup_write_test {
     [[ "$output" =~ "5,5" ]] || false
 }
 
-@test "filter-branch UPDATE" {
+@test "filter-branch: UPDATE" {
     setup_write_test
 
     dolt filter-branch "UPDATE test SET c0 = 9 WHERE pk = 2;"
@@ -156,7 +156,7 @@ function setup_write_test {
     [[ "$output" =~ "5,5" ]] || false
 }
 
-@test "filter-branch ADD/DROP column" {
+@test "filter-branch: ADD/DROP column" {
     setup_write_test
 
     dolt filter-branch "ALTER TABLE TEST ADD COLUMN c1 int;"
@@ -176,7 +176,7 @@ function setup_write_test {
     done
 }
 
-@test "filter-branch ADD/DROP table" {
+@test "filter-branch: ADD/DROP table" {
     setup_write_test
 
     for commit in HEAD HEAD~1 HEAD~2; do
@@ -209,7 +209,7 @@ function setup_write_test {
     done
 }
 
-@test "filter-branch error on conflict" {
+@test "filter-branch: error on conflict" {
     setup_write_test
 
     run dolt filter-branch "INSERT INTO test VALUES (1,2);"
@@ -226,7 +226,7 @@ function setup_write_test {
     [[ "$output" =~ "1,2" ]] || false
 }
 
-@test "filter-branch error on incorrect schema" {
+@test "filter-branch: error on incorrect schema" {
     setup_write_test
 
     dolt sql <<SQL

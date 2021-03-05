@@ -10,13 +10,13 @@ teardown() {
     teardown_common
 }
 
-@test "dolt log on initialized repo" {
+@test "log: on initialized repo" {
     run dolt log
     [ "$status" -eq "0" ]
     [[ "$output" =~ "Initialize data repository" ]] || false
 }
 
-@test "dolt log with -n specified" {
+@test "log: with -n specified" {
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test
     dolt commit -m "first commit"
@@ -30,7 +30,7 @@ teardown() {
     [[ ! "$output" =~ "Initialize data repository" ]] || false
 }
 
-@test "dolt log on fast-forward merge commits" {
+@test "log: on fast-forward merge commits" {
     dolt sql -q	"create table test (pk int, c1 int, primary key(pk))"
     dolt add test
     dolt commit -m "Commit1"
@@ -48,7 +48,7 @@ teardown() {
     [[ ! "$output" =~ "Merge:" ]] || false
 }
 
-@test "dolt log properly orders merge commits" {
+@test "log: properly orders merge commits" {
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test
     dolt commit -m "Commit1"

@@ -41,7 +41,7 @@ teardown() {
     teardown_common
 }
 
-@test "update table using csv" {
+@test "import-update-tables: update table using csv" {
     dolt sql < 1pk5col-ints-sch.sql
     run dolt table import -u test `batshelper 1pk5col-ints.csv`
     [ "$status" -eq 0 ]
@@ -49,14 +49,14 @@ teardown() {
     [[ "$output" =~ "Import completed successfully." ]] || false
 }
 
-@test "update table using schema with csv" {
+@test "import-update-tables: update table using schema with csv" {
     dolt sql < 1pk5col-ints-sch.sql
     run dolt table import -u -s `batshelper 1pk5col-ints-schema.json` test `batshelper 1pk5col-ints.csv`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "fatal: schema is not supported for update or replace operations" ]] || false
 }
 
-@test "update table using csv with newlines" {
+@test "import-update-tables: update table using csv with newlines" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk LONGTEXT NOT NULL COMMENT 'tag:0',
@@ -72,7 +72,7 @@ SQL
     [ "$status" -eq 0 ]
 }
 
-@test "update table using json" {
+@test "import-update-tables: update table using json" {
     dolt sql < employees-sch.sql
     run dolt table import -u employees `batshelper employees-tbl.json`
     [ "$status" -eq 0 ]
@@ -80,7 +80,7 @@ SQL
     [[ "$output" =~ "Import completed successfully." ]] || false
 }
 
-@test "update table using wrong json" {
+@test "import-update-tables: update table using wrong json" {
     dolt sql <<SQL
 CREATE TABLE employees (
   \`idz\` LONGTEXT NOT NULL COMMENT 'tag:0',
@@ -97,14 +97,14 @@ SQL
     [[ "$output" =~ "not found in schema" ]] || false
 }
 
-@test "update table using schema with json" {
+@test "import-update-tables: update table using schema with json" {
     dolt sql < employees-sch.sql
     run dolt table import -u -s employees-sch.sql employees `batshelper employees-tbl.json`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "fatal: schema is not supported for update or replace operations" ]] || false
 }
 
-@test "update table with existing imported data with different schema" {
+@test "import-update-tables: update table with existing imported data with different schema" {
   run dolt table import -c -s employees-sch.sql employees `batshelper employees-tbl.json`
   [ "$status" -eq 0 ]
   [[ "$output" =~ "Import completed successfully." ]] || false
@@ -113,13 +113,13 @@ SQL
   [[ "$output" =~ "not found in schema" ]] || false
 }
 
-@test "update table with json when table does not exist" {
+@test "import-update-tables: update table with json when table does not exist" {
     run dolt table import -u employees `batshelper employees-tbl.json`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "The following table could not be found:" ]] || false
 }
 
-@test "update table with a json with columns in different order" {
+@test "import-update-tables: update table with a json with columns in different order" {
     dolt sql <<SQL
 CREATE TABLE employees (
   \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
@@ -146,7 +146,7 @@ SQL
     [[ "${lines[6]}" =~ "end date" ]]   || false
 }
 
-@test "update table with a csv with columns in different order" {
+@test "import-update-tables: update table with a csv with columns in different order" {
     dolt sql <<SQL
 CREATE TABLE employees (
   \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
@@ -172,7 +172,7 @@ SQL
     [[ "${lines[6]}" =~ "end date" ]]   || false
 }
 
-@test "update table with repeat pk in csv throws error" {
+@test "import-update-tables: update table with repeat pk in csv throws error" {
     cat <<DELIM > 1pk5col-rpt-ints.csv
 pk,c1,c2,c3,c4,c5
 1,1,2,3,4,5

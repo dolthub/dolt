@@ -13,7 +13,7 @@ teardown() {
     teardown_common
 }
 
-@test "Add a file system based remote" {
+@test "remotes-file-system: Add a file system based remote" {
     mkdir remote
     dolt remote add origin file://remote/
     run dolt remote -v
@@ -22,13 +22,13 @@ teardown() {
     [[ "$output" =~ $regex ]] || false 
 }
 
-@test "Add a file system remote with a bad path" {
+@test "remotes-file-system: Add a file system remote with a bad path" {
     run dolt remote add origin file:///poop/
     [ $status -ne 0 ]
     [[ "$output" =~ "'file:///poop/' is not valid" ]] || false
 }
 
-@test "push, pull, and clone file based remotes" {
+@test "remotes-file-system: push, pull, and clone file based remotes" {
     # seed with some data
     dolt sql <<SQL
 CREATE TABLE test (
@@ -71,7 +71,7 @@ SQL
     [[ "$output" = "$master_state1" ]] || false
 }
 
-@test "clone, fetch, and push from multiple file system remotes" {
+@test "remotes-file-system: clone, fetch, and push from multiple file system remotes" {
     # seed with some data
     dolt sql <<SQL
 CREATE TABLE test (
@@ -118,7 +118,7 @@ SQL
     [[ "$output" =~ "remotes/something/master" ]] || false
 }
 
-@test "fetch displays and updates branch list" {
+@test "remotes-file-system: fetch displays and updates branch list" {
     # create a new branch
     run dolt checkout -b tester
     [ "$status" -eq 0 ]
@@ -165,7 +165,7 @@ SQL
     [[ "$output" =~ "remotes/origin/master" ]] || false
 }
 
-@test "clone from a directory that is not a dolt repo" {
+@test "remotes-file-system: clone from a directory that is not a dolt repo" {
     mkdir remotedir
     touch remotedir/some-junk
 

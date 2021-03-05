@@ -22,7 +22,7 @@ teardown() {
     teardown_common
 }
 
-@test "changing column types should not produce a data diff error" {
+@test "schema-changes: changing column types should not produce a data diff error" {
     dolt sql -q 'insert into test values (0,0,0,0,0,0)'
     dolt add test
     dolt commit -m 'made table'
@@ -35,7 +35,7 @@ teardown() {
     [[ ! "$ouput" =~ "Failed to merge schemas" ]] || false
 }
 
-@test "dolt schema rename column" {
+@test "schema-changes: dolt schema rename column" {
     dolt sql -q 'insert into test values (1,1,1,1,1,1)'
     run dolt sql -q "alter table test rename column c1 to c0"
     [ "$status" -eq 0 ]
@@ -54,7 +54,7 @@ teardown() {
     dolt sql -q "select * from test"
 }
 
-@test "dolt schema delete column" {
+@test "schema-changes: dolt schema delete column" {
     dolt sql -q 'insert into test values (1,1,1,1,1,1)'
     run dolt sql -q "alter table test drop column c1"
     [ "$status" -eq 0 ]
@@ -72,7 +72,7 @@ teardown() {
     dolt sql -q "select * from test"
 }
 
-@test "dolt diff on schema changes" {
+@test "schema-changes: dolt diff on schema changes" {
     dolt add test
     dolt commit -m "committed table so we can see diffs"
     dolt sql -q "alter table test add c0 bigint"
@@ -101,7 +101,7 @@ teardown() {
     dolt diff
 }
 
-@test "dolt diff on schema changes rename primary key" {
+@test "schema-changes: dolt diff on schema changes rename primary key" {
     dolt add test
     dolt commit -m "committed table so we can see diffs"
     dolt sql -q "alter table test rename column pk to pk1"
@@ -110,7 +110,7 @@ teardown() {
     [[ "$output" =~ "pk1" ]] || false
 }
 
-@test "adding and dropping column should produce no diff" {
+@test "schema-changes: adding and dropping column should produce no diff" {
     dolt add test
     dolt commit -m "committed table so we can see diffs"
     dolt sql -q "alter table test add c0 bigint"
@@ -120,7 +120,7 @@ teardown() {
     [ "$output" = "" ]
 }
 
-@test "schema diff should show primary keys in output" {
+@test "schema-changes: schema diff should show primary keys in output" {
     dolt add test
     dolt commit -m "committed table so we can see diffs"
     dolt sql -q 'alter table test rename column c2 to column2'
@@ -129,7 +129,7 @@ teardown() {
     [[ "$output" =~ "PRIMARY KEY" ]] || false
 }
 
-@test "changing column does not allow nulls in primary key" {
+@test "schema-changes: changing column does not allow nulls in primary key" {
     dolt sql <<SQL
 CREATE TABLE test2(
   pk1 BIGINT,
@@ -145,7 +145,7 @@ SQL
     [ "$status" -eq 1 ]
 }
 
-@test "changing column types in place works" {
+@test "schema-changes: changing column types in place works" {
     dolt sql <<SQL
 CREATE TABLE test2(
   pk1 BIGINT,

@@ -16,13 +16,13 @@ MAX=1000
 OLD=10
 NEW=20
 
-@test "set feature version with CLI flag" {
+@test "feature-version: set feature version with CLI flag" {
     dolt --feature-version 19 sql -q "CREATE TABLE test (pk int PRIMARY KEY)"
     run dolt --feature-version $MAX version --feature
     [[ "$output" =~ "feature version: 19" ]] || false
 }
 
-@test "new client writes to table, locking out old client" {
+@test "feature-version: new client writes to table, locking out old client" {
     run dolt --feature-version $OLD sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);
 INSERT INTO test VALUES (10),(11),(12);
@@ -68,7 +68,7 @@ SQL
     dolt --feature-version $OLD clone file://remote clone_repo
 }
 
-@test "pulling newer FeatureVersion locks out old client" {
+@test "feature-version: pulling newer FeatureVersion locks out old client" {
     setup_remote_tests
 
     pushd first_repo
@@ -101,7 +101,7 @@ SQL
     [[ "$output" =~ "feature version: $NEW" ]] || false
 }
 
-@test "older client maintains access to feature branch" {
+@test "feature-version: older client maintains access to feature branch" {
     setup_remote_tests
 
     pushd clone_repo

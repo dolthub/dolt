@@ -44,13 +44,13 @@ SQL
     restore_stashed_dolt_user
 }
 
-@test "dolt blame with no arguments shows usage" {
+@test "blame: no arguments shows usage" {
     run dolt blame
     [ "$status" -eq 1 ]
     [[ "$output" =~ "usage" ]] || false
 }
 
-@test "dolt blame annotates a small table with simple history" {
+@test "blame: annotates a small table with simple history" {
     # should be the same as dolt blame HEAD blame_test
     run dolt blame -- blame_test
     [ "$status" -eq 0 ]
@@ -66,7 +66,7 @@ SQL
     [[ "$output" =~ "add more people" ]] || false
 }
 
-@test "dolt blame blames HEAD when commit ref omitted" {
+@test "blame: blames HEAD when commit ref omitted" {
     run dolt blame blame_test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Thomas Foolery" ]] || false
@@ -79,7 +79,7 @@ SQL
     [[ "$output" =~ "add more people" ]] || false
 }
 
-@test "dolt blame works with HEAD as the commit ref" {
+@test "blame: works with HEAD as the commit ref" {
     run dolt blame HEAD blame_test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Thomas Foolery" ]] || false
@@ -92,7 +92,7 @@ SQL
     [[ "$output" =~ "add more people" ]] || false
 }
 
-@test "dolt blame works with HEAD~1 as the commit ref" {
+@test "blame: works with HEAD~1 as the commit ref" {
     run dolt blame HEAD~1 blame_test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Thomas Foolery" ]] || false
@@ -105,7 +105,7 @@ SQL
     [[ ! "$output" =~ "add more people" ]] || false
 }
 
-@test "dolt blame works with HEAD~2 as the commit ref" {
+@test "blame: works with HEAD~2 as the commit ref" {
     run dolt blame HEAD~2 blame_test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Thomas Foolery" ]] || false
@@ -118,7 +118,7 @@ SQL
     [[ ! "$output" =~ "add more people" ]] || false
 }
 
-@test "dolt blame works with HEAD~3 as the commit ref" {
+@test "blame: works with HEAD~3 as the commit ref" {
     run dolt blame HEAD~3 blame_test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Thomas Foolery" ]] || false
@@ -131,7 +131,7 @@ SQL
     [[ ! "$output" =~ "add more people" ]] || false
 }
 
-@test "dolt blame returns an error when the table is not found in the given revision" {
+@test "blame: returns an error when the table is not found in the given revision" {
     run dolt blame HEAD~4 blame_test
     [ "$status" -eq 1 ]
     [[ "$output" =~ "no table named blame_test found" ]] || false

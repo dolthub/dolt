@@ -28,14 +28,14 @@ seed_repos_with_tables_with_use_statements() {
             INSERT INTO r2_t1 (pk, c1) values (2,200),(3,300),(4,400);"
 }
 
-@test "sql multi-db test show databases" {
+@test "sql-multi-db: sql multi-db test show databases" {
     EXPECTED=$(echo -e "Database\ninformation_schema\nrepo1\nrepo2")
     run dolt sql -r csv --multi-db-dir ./ -q "SHOW DATABASES"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED" ]] || false
 }
 
-@test "sql use statement and table accessibility" {
+@test "sql-multi-db: sql use statement and table accessibility" {
     seed_repos_with_tables_with_use_statements
 
     EXPECTED_R1T1=$(echo -e "pk\n0\n1\n2")
@@ -63,7 +63,7 @@ seed_repos_with_tables_with_use_statements() {
     [[ "$output" =~ "$EXPECTED_R1T1" ]] || false
 }
 
-@test "sql test use invalid db name" {
+@test "sql-multi-db: sql test use invalid db name" {
     seed_repos_with_tables_with_use_statements
 
     run dolt sql -r csv --multi-db-dir ./ -q "USE invalid_db_name;"
@@ -72,7 +72,7 @@ seed_repos_with_tables_with_use_statements() {
     [[ "$output" =~ "database not found: invalid_db_name" ]] || false
 }
 
-@test "sql join tables in different databases" {
+@test "sql-multi-db: sql join tables in different databases" {
     seed_repos_with_tables_with_use_statements
 
     EXPECTED=$(echo -e "pk,c1\n2,200")

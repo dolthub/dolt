@@ -25,7 +25,7 @@ teardown() {
     teardown_common
 }
 
-@test "create a tag with a explicit ref" {
+@test "commit_tags: create a tag with a explicit ref" {
     run dolt tag v1 HEAD^
     [ $status -eq 0 ]
     run dolt tag
@@ -33,7 +33,7 @@ teardown() {
     [[ "$output" =~ "v1" ]] || false
 }
 
-@test "create a tag with implicit head ref" {
+@test "commit_tags: create a tag with implicit head ref" {
     run dolt tag v1
     [ $status -eq 0 ]
     run dolt tag
@@ -41,13 +41,13 @@ teardown() {
     [[ "$output" =~ "v1" ]] || false
 }
 
-@test "create tag v1.2.3" {
+@test "commit_tags: create tag v1.2.3" {
     skip "Noms doesn't support '.' in dataset names"
     run dolt tag v1.2.3
     [ $status -eq 0 ]
 }
 
-@test "delete a tag" {
+@test "commit_tags: delete a tag" {
     dolt tag v1
     dolt tag -d v1
     run dolt tag
@@ -55,7 +55,7 @@ teardown() {
     [ "$output" = "" ]
 }
 
-@test "checkout a tag" {
+@test "commit_tags: checkout a tag" {
     dolt branch comp HEAD^
     dolt tag v1 HEAD^
     skip "need to implelement detached head first"
@@ -66,7 +66,7 @@ teardown() {
     [ "$output" = "" ]
 }
 
-@test "commit onto checked out tag" {
+@test "commit_tags: commit onto checked out tag" {
     dolt tag v1 HEAD^
     skip "need to implement detached head first"
     dolt checkout v1
@@ -77,7 +77,7 @@ teardown() {
     [ $status -eq 0 ]
 }
 
-@test "use a tag as ref for diff" {
+@test "commit_tags: use a tag as ref for diff" {
     dolt tag v1 HEAD^
     run dolt diff v1
     [ $status -eq 0 ]
@@ -85,7 +85,7 @@ teardown() {
     [[ "$output" =~ "+  | 3" ]]
 }
 
-@test "use a tag as a ref for merge" {
+@test "commit_tags: use a tag as a ref for merge" {
     dolt tag v1 HEAD
     dolt checkout -b other HEAD^
     dolt sql -q "insert into test values (8),(9)"
@@ -101,7 +101,7 @@ teardown() {
     [[ "$output" =~ "9" ]]
 }
 
-@test "push/pull tags to/from a remote" {
+@test "commit_tags: push/pull tags to/from a remote" {
     # reset env
     rm -rf .dolt
     mkdir repo remote

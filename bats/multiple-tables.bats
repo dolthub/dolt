@@ -32,7 +32,7 @@ teardown() {
     teardown_common
 }
 
-@test "examine a multi table repo" {
+@test "multiple-tables: examine a multi table repo" {
       run dolt ls
       [ "$status" -eq 0 ]
       [[ "$output" =~ "test1" ]] || false
@@ -48,7 +48,7 @@ teardown() {
       [[ "$output" =~ "test2" ]] || false
 }
 
-@test "modify both tables, commit only one" {
+@test "multiple-tables: modify both tables, commit only one" {
     dolt sql -q "insert into test1 values (0, 1, 2, 3, 4, 5)"
     dolt sql -q "insert into test2 values (0, 1, 2, 3, 4, 5)"
     dolt add test1
@@ -71,7 +71,7 @@ teardown() {
     [ "${#lines[@]}" -eq 2 ]
 }
 
-@test "dolt add --all, dolt add -A, and dolt add . adds all changes" {
+@test "multiple-tables: dolt add --all, dolt add -A, and dolt add . adds all changes" {
     dolt sql -q "insert into test1 values (0, 1, 2, 3, 4, 5)"
     dolt sql -q "insert into test2 values (0, 1, 2, 3, 4, 5)"
     dolt add --all
@@ -99,7 +99,7 @@ teardown() {
     [[ ! "$output" =~ "Untracked files" ]] || false
 }
 
-@test "dolt commit with -a flag adds all changes" {
+@test "multiple-tables: dolt commit with -a flag adds all changes" {
     dolt sql -q "insert into test1 values (0, 1, 2, 3, 4, 5)"
     dolt sql -q "insert into test2 values (0, 1, 2, 3, 4, 5)"
     run dolt commit -a -m "Commit1"
@@ -111,7 +111,7 @@ teardown() {
     [[ ! "$output" =~ "Untracked files" ]] || false
 }
 
-@test "dolt reset . resets all tables" {
+@test "multiple-tables: dolt reset . resets all tables" {
     dolt add --all
     run dolt status
     [[ "$output" =~ "Changes to be committed" ]] || false
@@ -124,7 +124,7 @@ teardown() {
     [[ "$output" =~ "Untracked files" ]] || false
 }
 
-@test "dolt reset --hard" {
+@test "multiple-tables: dolt reset --hard" {
     dolt add --all
     run dolt status
     [[ "$output" =~ "Changes to be committed" ]] || false
@@ -181,7 +181,7 @@ SQL
     [[ "$output" =~ file.*test4 ]] || false
 }
 
-@test "dolt reset --hard on new tables" {
+@test "multiple-tables: dolt reset --hard on new tables" {
     # Per Git, dolt reset --hard on an untracked table should do nothing
     dolt reset --hard
     run dolt status

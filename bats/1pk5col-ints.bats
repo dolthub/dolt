@@ -22,7 +22,7 @@ teardown() {
 }
 
 # Create a single primary key table and do stuff
-@test "create a table with a schema file and examine repo" {
+@test "1pk5col-ints: create a table with a schema file and examine repo" {
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "test" ]] || false
@@ -39,7 +39,7 @@ teardown() {
     [[ "$output" =~ new[[:space:]]table:[[:space:]]+test ]] || false
 }
 
-@test "create a table, dolt add, dolt reset, and dolt commit" {
+@test "1pk5col-ints: create a table, dolt add, dolt reset, and dolt commit" {
     run dolt add test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
@@ -70,7 +70,7 @@ teardown() {
 
 }
 
-@test "add a row to a created table using dolt table put-row" {
+@test "1pk5col-ints: add a row to a created table using dolt table put-row" {
     dolt add test
     dolt commit -m "create table"
     run dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
@@ -80,7 +80,7 @@ teardown() {
     [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+0[[:space:]]+\|[[:space:]]+1 ]] || false
 }
 
-@test "dolt sql all manner of inserts" {
+@test "1pk5col-ints: dolt sql all manner of inserts" {
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Query OK, 1 row affected" ]] || false
@@ -108,13 +108,13 @@ teardown() {
     [[ "$output" =~ "duplicate primary key" ]] || false
 }
 
-@test "dolt sql insert same column twice" {
+@test "1pk5col-ints: dolt sql insert same column twice" {
     run dolt sql -q "insert into test (pk,c1,c1) values (3,1,2)"
     [ "$status" -eq 1 ]
     [ "$output" = "duplicate column name c1" ]
 }
 
-@test "dolt sql insert no columns specified" {
+@test "1pk5col-ints: dolt sql insert no columns specified" {
     run dolt sql -q "insert into test values (0,0,0,0,0,0)"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Query OK, 1 row affected" ]] || false
@@ -125,7 +125,7 @@ teardown() {
     [ "$output" = "number of values does not match number of columns provided" ]
 }
 
-@test "dolt sql with insert ignore" {
+@test "1pk5col-ints: dolt sql with insert ignore" {
     skip "New engine does not support insert ignore"
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     run dolt sql -q "insert ignore into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6),(11,111,111,111,111,111)"
@@ -136,7 +136,7 @@ teardown() {
     [[ "$output" =~ "111" ]] || false
 }
 
-@test "dolt sql replace into" {
+@test "1pk5col-ints: dolt sql replace into" {
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     run dolt sql -q "replace into test (pk,c1,c2,c3,c4,c5) values (0,7,7,7,7,7),(1,8,8,8,8,8)"
     [ "$status" -eq 0 ]
@@ -150,7 +150,7 @@ teardown() {
     skip "replace into output is incorrect" 
 }
 
-@test "dolt sql insert and dolt sql select" {
+@test "1pk5col-ints: dolt sql insert and dolt sql select" {
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5)"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Query OK, 1 row affected" ]] || false
@@ -195,7 +195,7 @@ teardown() {
     [ "${#lines[@]}" -eq 4 ]
 }
 
-@test "dolt sql select as" {
+@test "1pk5col-ints: dolt sql select as" {
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
     run dolt sql -q "select c1 as column1, c2 as column2 from test"
     [ "$status" -eq 0 ]
@@ -209,7 +209,7 @@ teardown() {
     [ "${#lines[@]}" -eq 5 ]
 }
 
-@test "dolt sql select csv output" {
+@test "1pk5col-ints: dolt sql select csv output" {
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
     run dolt sql -q "select c1 as column1, c2 as column2 from test" -r csv
     [ "$status" -eq 0 ]
@@ -230,7 +230,7 @@ teardown() {
     [[ "$output" =~ "1,," ]] || false
 }
 
-@test "dolt sql select json output" {
+@test "1pk5col-ints: dolt sql select json output" {
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
     run dolt sql -q "select c1 as column1, c2 as column2 from test" -r json
     [ "$status" -eq 0 ]
@@ -247,14 +247,14 @@ teardown() {
     [ "$output" == '{"rows": [{"column1":1}]}' ]
 }
 
-@test "dolt sql select with inverted where clause" {
+@test "1pk5col-ints: dolt sql select with inverted where clause" {
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
     run dolt sql -q "select * from test where 5 > c1"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
 }
 
-@test "dolt sql update queries" {
+@test "1pk5col-ints: dolt sql update queries" {
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
     run dolt sql -q "update test set c1=6,c2=7,c3=8,c4=9,c5=10 where pk=0"
     [ "$status" -eq 0 ]
@@ -297,7 +297,7 @@ teardown() {
     [[ ! "$output" =~ "11" ]] || false
 }
 
-@test "dolt sql delete queries" {
+@test "1pk5col-ints: dolt sql delete queries" {
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
     run dolt sql -q "delete from test where pk=2"
     [ "$status" -eq 0 ]
@@ -321,7 +321,7 @@ teardown() {
     [[ "$output" =~ "Query OK, 0 rows affected" ]] || false    
 }
 
-@test "dolt checkout to put a table back to its checked in state" {
+@test "1pk5col-ints: dolt checkout to put a table back to its checked in state" {
     dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
     dolt add test
     dolt commit -m "Added table and test row"
@@ -334,7 +334,7 @@ teardown() {
     [[ ! "$output" =~ "10" ]] || false
 }
 
-@test "dolt checkout branch and table name collision" {
+@test "1pk5col-ints: dolt checkout branch and table name collision" {
     dolt branch test
     run dolt checkout test
     [ "$status" -eq 0 ]
@@ -347,7 +347,7 @@ teardown() {
     # git checkout test
 }
 
-@test "make a change on a different branch, commit, and merge to master" {
+@test "1pk5col-ints: make a change on a different branch, commit, and merge to master" {
     dolt branch test-branch
     dolt checkout test-branch
     dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
@@ -362,7 +362,7 @@ teardown() {
     [[ "$output" =~ "added test row" ]] || false
 }
 
-@test "create a branch off an older commit than HEAD" {
+@test "1pk5col-ints: create a branch off an older commit than HEAD" {
     dolt add test
     dolt commit -m "first commit"
     dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
@@ -376,7 +376,7 @@ teardown() {
     [[ "$output" =~ "first commit" ]] || false
 }
 
-@test "delete an unmerged branch" {
+@test "1pk5col-ints: delete an unmerged branch" {
     dolt checkout -b test-branch
     dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
     dolt add test
@@ -392,7 +392,7 @@ teardown() {
     [ "$output" = "" ]
 }
 
-@test "generate a merge conflict and resolve with ours" {
+@test "1pk5col-ints: generate a merge conflict and resolve with ours" {
     dolt add test
     dolt commit -m "added test table"
     dolt branch test-branch
@@ -436,7 +436,7 @@ teardown() {
     [[ "$output" =~ "Merge:" ]] || false
 }
 
-@test "generate a merge conflict and try to roll back using dolt merge --abort" {
+@test "1pk5col-ints: generate a merge conflict and try to roll back using dolt merge --abort" {
     dolt add test
     dolt commit -m "added test table"
     dolt branch test-branch
@@ -467,7 +467,7 @@ teardown() {
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
-@test "generate a merge conflict and resolve with theirs" {
+@test "1pk5col-ints: generate a merge conflict and resolve with theirs" {
     dolt add test
     dolt commit -m "added test table"
     dolt branch test-branch
@@ -488,17 +488,17 @@ teardown() {
     [[ ! "$output" =~ "|5" ]] || false
 }
 
-@test "put a row that violates the schema" {
+@test "1pk5col-ints: put a row that violates the schema" {
     run dolt sql -q "insert into test values (0, 1, 2, 3, 4, 'foo')"
     [ "$status" -ne 0 ]
 }
 
-@test "put a row that has a column not in the schema" {
+@test "1pk5col-ints: put a row that has a column not in the schema" {
     run dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5, 10)"
     [ "$status" -ne 0 ]
 }
 
-@test "import data from a csv file after table created" {
+@test "1pk5col-ints: import data from a csv file after table created" {
     run dolt table import test -u `batshelper 1pk5col-ints.csv`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
@@ -508,7 +508,7 @@ teardown() {
     [ "${#lines[@]}" -eq 6 ]
 }
 
-@test "import data from a csv file with a bad line" {
+@test "1pk5col-ints: import data from a csv file with a bad line" {
     cat <<DELIM > badline.csv
 pk,c1,c2,c3,c4,c5
 0,1,2,3,4,5
@@ -523,7 +523,7 @@ DELIM
     [[ "${lines[2]}" =~ "line only has 1 value" ]] || false
 }
 
-@test "import data from a csv file with a bad header" {
+@test "1pk5col-ints: import data from a csv file with a bad header" {
 cat <<DELIM > bad.csv
 ,c1,c2,c3,c4,c5
 0,1,2,3,4,5
@@ -561,7 +561,7 @@ DELIM
     [[ ! "$output" =~ "panic" ]] || false
 }
 
-@test "import data from a psv file after table created" {
+@test "1pk5col-ints: import data from a psv file after table created" {
     cat <<DELIM > 1pk5col-ints.psv
 pk|c1|c2|c3|c4|c5
 0|1|2|3|4|5
@@ -577,7 +577,7 @@ DELIM
     [ "${#lines[@]}" -eq 6 ]
 }
 
-@test "overwrite a row. make sure it updates not inserts" {
+@test "1pk5col-ints: overwrite a row. make sure it updates not inserts" {
     dolt table import test -u `batshelper 1pk5col-ints.csv`
     run dolt sql -q "replace into test values (1, 2, 4, 6, 8, 10)"
     [ "$status" -eq 0 ]
@@ -587,7 +587,7 @@ DELIM
     [ "${#lines[@]}" -eq 6 ]
 }
 
-@test "dolt schema show" {
+@test "1pk5col-ints: dolt schema show" {
     run dolt schema show
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test @ working" ]] || false
@@ -612,13 +612,13 @@ DELIM
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
-@test "dolt schema show on non existant table" {
+@test "1pk5col-ints: dolt schema show on non existant table" {
     run dolt schema show foo
     [ "$status" -eq 0 ]
     [ "$output" = "foo not found" ]
 }
 
-@test "rm a staged but uncommitted table" {
+@test "1pk5col-ints: rm a staged but uncommitted table" {
     run dolt add test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
@@ -633,7 +633,7 @@ DELIM
     [ "${lines[1]}" = "nothing to commit, working tree clean" ]
 }
 
-@test "create and view a table with NULL values" {
+@test "1pk5col-ints: create and view a table with NULL values" {
     dolt sql -q "insert into test (pk) values (0)"
     dolt sql -q "insert into test (pk) values (1)"
     dolt sql -q "insert into test (pk) values (2)"
@@ -650,7 +650,7 @@ DELIM
     [[ ! "$output" =~ "|||||" ]] || false
 }
 
-@test "using dolt sql to select rows with NULL values" {
+@test "1pk5col-ints: using dolt sql to select rows with NULL values" {
     dolt sql -q "insert into test (pk) values (0)"
     dolt sql -q "insert into test (pk) values (1)"
     dolt sql -q "insert into test values (2, 0, 0, 0, 0, 0)"
@@ -660,7 +660,7 @@ DELIM
     [[ "$output" =~ "NULL" ]] || false
 }
 
-@test "display correct merge stats" {
+@test "1pk5col-ints: display correct merge stats" {
     dolt checkout -b test-branch
     dolt add test
     dolt commit -m "added test table"
@@ -689,7 +689,7 @@ DELIM
     [ "${lines[2]}" = "1 tables changed, 1 rows added(+), 0 rows modified(*), 0 rows deleted(-)" ]
 }
 
-@test "checkout table with branch of same name" {
+@test "1pk5col-ints: checkout table with branch of same name" {
     dolt checkout -b test
     dolt add .
     dolt commit -m "added test table"

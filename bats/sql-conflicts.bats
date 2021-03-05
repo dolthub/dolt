@@ -30,7 +30,7 @@ teardown() {
 	teardown_common
 }
 
-@test "add conflict" {
+@test "sql-conflicts: add conflict" {
   dolt branch feature_branch master
   dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0)"
   dolt SQL -q "INSERT INTO two_pk (pk1,pk2,c1,c2) VALUES (0,0,0,0)"
@@ -81,7 +81,7 @@ teardown() {
 }
 
 
-@test "modify conflict" {
+@test "sql-conflicts: modify conflict" {
   dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0)"
   dolt SQL -q "INSERT INTO two_pk (pk1,pk2,c1,c2) VALUES (0,0,0,0)"
   dolt add .
@@ -135,7 +135,7 @@ teardown() {
   [[ "$output" =~ "$EXPECTED" ]] || false
 }
 
-@test "delete modify conflict" {
+@test "sql-conflicts: delete modify conflict" {
   dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0)"
   dolt SQL -q "INSERT INTO two_pk (pk1,pk2,c1,c2) VALUES (0,0,0,0)"
   dolt add .
@@ -189,7 +189,7 @@ teardown() {
   [[ "$output" =~ "$EXPECTED" ]] || false
 }
 
-@test "multiple conflicts" {
+@test "sql-conflicts: multiple conflicts" {
   dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0)"
   dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (1,0,0)"
   dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (2,0,0)"
