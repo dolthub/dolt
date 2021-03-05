@@ -254,3 +254,7 @@ func TestColumnDefaults(t *testing.T) {
 func TestTriggers(t *testing.T) {
 	enginetest.TestTriggers(t, newDoltHarness(t))
 }
+
+func TestStoredProcedures(t *testing.T) {
+	enginetest.TestStoredProcedures(t, newDoltHarness(t))
+}
