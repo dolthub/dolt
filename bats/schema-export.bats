@@ -37,7 +37,7 @@ teardown() {
     teardown_common
 }
 
-@test "dolt schema export one table to file" {
+@test "schema-export: export one table to file" {
     run dolt schema export test1 export.schema
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
@@ -54,7 +54,7 @@ teardown() {
     [[ "$output" =~ "BATS query" ]] || false
 }
 
-@test "dolt schema export all tables to file" {
+@test "schema-export: export all tables to file" {
     run dolt schema export export.schema
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
@@ -67,7 +67,7 @@ teardown() {
     [[ ! "$output" =~ "dolt_" ]] || false
 }
 
-@test "dolt schema export one table to std out" {
+@test "schema-export: export one table to std out" {
     run dolt schema export test1
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test1\`" ]] || false
@@ -75,7 +75,7 @@ teardown() {
     [[ ! "$output" =~ "dolt_" ]] || false
 }
 
-@test "dolt schema export all tables to std out" {
+@test "schema-export: export all tables to std out" {
     run dolt schema export
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test1\`" ]] || false

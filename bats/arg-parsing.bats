@@ -10,7 +10,7 @@ teardown() {
     teardown_common
 }
 
-@test "dolt supports Nix style argument parsing" {
+@test "arg-parsing: dolt supports Nix style argument parsing" {
     dolt checkout -b this-should-work
     run dolt branch
     [ $status -eq 0 ]
@@ -47,12 +47,12 @@ DELIM
     dolt table import -cpk=pk this-should-work ints.csv
 }
 
-@test "dolt supports chaining of modal arguments" {
+@test "arg-parsing: dolt supports chaining of modal arguments" {
     dolt sql -q "create table test(pk int, primary key (pk))"
     dolt table import -fc -pk=pk test `batshelper 1pk5col-ints.csv`
 }
 
-@test "dolt checkout with empty string returns error" {
+@test "arg-parsing: dolt checkout with empty string returns error" {
     run dolt checkout ""
     [[ "$output" =~ "error: cannot checkout empty string" ]] || false
     [ $status -ne 0 ]

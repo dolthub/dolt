@@ -10,7 +10,7 @@ teardown() {
     teardown_common
 }
 
-@test "dolt version --feature" {
+@test "status: dolt version --feature" {
     # bump this test with feature version bumps
     run dolt version --feature
     [ "$status" -eq 0 ]
@@ -18,7 +18,7 @@ teardown() {
     [[ "$output" =~ "feature version: 0" ]] || false
 }
 
-@test "no changes" {
+@test "status: no changes" {
     dolt status
     run dolt status
     [ "$status" -eq 0 ]
@@ -36,7 +36,7 @@ SQL
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
-@test "staged, unstaged, untracked tables" {
+@test "status: staged, unstaged, untracked tables" {
     dolt sql <<SQL
 CREATE TABLE t (pk int PRIMARY KEY);
 CREATE TABLE u (pk int PRIMARY KEY);
@@ -63,7 +63,7 @@ SQL
     [[ "$output" =~ "	new table:      v" ]] || false
 }
 
-@test "deleted table" {
+@test "status: deleted table" {
     dolt sql <<SQL
 CREATE TABLE t (pk int PRIMARY KEY);
 CREATE TABLE u (pk int PRIMARY KEY);
@@ -83,7 +83,7 @@ SQL
     [[ "$output" =~ "	deleted:        u" ]] || false
 }
 
-@test "tables in conflict" {
+@test "status: tables in conflict" {
     dolt sql <<SQL
 CREATE TABLE t (pk int PRIMARY KEY, c0 int);
 INSERT INTO t VALUES (1,1);
@@ -109,7 +109,7 @@ SQL
     [[ "$output" =~ "	both modified:  t" ]] || false
 }
 
-@test "renamed table" {
+@test "status: renamed table" {
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);
 SQL
@@ -127,7 +127,7 @@ SQL
     [[ "$output" =~ "renamed:        test -> quiz" ]] || false
 }
 
-@test "unstaged changes after reset" {
+@test "status: unstaged changes after reset" {
     dolt sql <<SQL
 CREATE TABLE one (pk int PRIMARY KEY);
 CREATE TABLE two (pk int PRIMARY KEY);
@@ -152,7 +152,7 @@ SQL
     [[ "$output" =~ "D	two" ]] || false
 }
 
-@test "dolt reset --hard <commit-spec>" {
+@test "status: dolt reset --hard <commit-spec>" {
     dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY);"
     dolt add -A && dolt commit -m "made table test"
     dolt sql -q "INSERT INTO test VALUES (1);"

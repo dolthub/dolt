@@ -22,7 +22,7 @@ teardown() {
     teardown_common
 }
 
-@test "diff clean working set" {
+@test "diff: clean working set" {
     dolt add .
     dolt commit -m table
     dolt sql -q 'insert into test values (0,0,0,0,0,0)'
@@ -46,7 +46,7 @@ teardown() {
     [[ "$output" =~ "-  | 0" ]] || false
 }
 
-@test "diff dirty working set" {
+@test "diff: dirty working set" {
     dolt add .
     dolt commit -m table
     dolt sql -q 'insert into test values (0,0,0,0,0,0)'
@@ -65,7 +65,7 @@ teardown() {
     [[ "$output" =~ "+  | 0" ]] || false
 }
 
-@test "diff with table args" {
+@test "diff: with table args" {
     dolt sql -q 'create table other (pk int not null primary key)'
     dolt add .
     dolt commit -m tables
@@ -98,7 +98,7 @@ teardown() {
     [[ "$output" =~ "table fake does not exist in either diff root" ]] || false
 }
 
-@test "diff with table and branch of the same name" {
+@test "diff: with table and branch of the same name" {
     dolt sql -q 'create table dolomite (pk int not null primary key)'
     dolt add .
     dolt commit -m tables
@@ -132,7 +132,7 @@ teardown() {
     [[ ! "$output" =~ "+  | 0" ]] || false
 }
 
-@test "diff with index and foreign key changes" {
+@test "diff: with index and foreign key changes" {
     dolt sql <<SQL
 CREATE TABLE parent (
     pk bigint PRIMARY KEY,
@@ -166,7 +166,7 @@ SQL
     [[ "$output" =~ "+    INDEX \`c2\` (\`c2\`)" ]] || false
 }
 
-@test "diff summary comparing working table to last commit" {
+@test "diff: summary comparing working table to last commit" {
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt add test
@@ -207,7 +207,7 @@ SQL
     [[ "$output" =~ "(4 Entries vs 3 Entries)" ]] || false
 }
 
-@test "diff summary comparing row with a deleted cell and an added cell" {
+@test "diff: summary comparing row with a deleted cell and an added cell" {
     dolt add test
     dolt commit -m "create table"
     dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
@@ -235,7 +235,7 @@ SQL
     [[ "$output" =~ "(1 Entry vs 1 Entry)" ]] || false
 }
 
-@test "diff summary comparing two branches" {
+@test "diff: summary comparing two branches" {
     dolt checkout -b firstbranch
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt add test
@@ -254,7 +254,7 @@ SQL
     [[ "$output" =~ "(1 Entry vs 2 Entries)" ]] || false
 }
 
-@test "diff summary shows correct changes after schema change" {
+@test "diff: summary shows correct changes after schema change" {
     cat <<DELIM > employees.csv
 "id","first name","last name","title","start date","end date"
 0,tim,sehn,ceo,"",""
@@ -285,7 +285,7 @@ DELIM
     [[ "$output" =~ "(3 Entries vs 4 Entries)" ]] || false
 }
 
-@test "diff summary gets summaries for all tables with changes" {
+@test "diff: summary gets summaries for all tables with changes" {
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt sql <<SQL
@@ -314,7 +314,7 @@ SQL
     [[ "$output" =~ "+++ b/employees @" ]] || false
 }
 
-@test "diff with where clause" {
+@test "diff: with where clause" {
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt add test
@@ -372,7 +372,7 @@ SQL
     ! [[ "$output" =~ "55" ]] || false
 }
 
-@test "diff with where clause errors" {
+@test "diff: with where clause errors" {
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt add test
@@ -393,7 +393,7 @@ SQL
     [[ "$output" =~ "failed to parse where clause" ]] || false
 }
 
-@test "diff --cached" {
+@test "diff: --cached" {
     run dolt diff --cached
     [ $status -eq 0 ]
     [ "$output" = "" ]
@@ -417,7 +417,7 @@ SQL
     [ "$output" = "$CORRECT_DIFF" ]
 }
 
-@test "diff with invalid ref does not panic" {
+@test "diff: with invalid ref does not panic" {
     dolt add .
     dolt commit -m table
     dolt checkout -b test-branch
@@ -436,7 +436,7 @@ SQL
     [[ ! $output =~ "panic" ]]
 }
 
-@test "diff with foreign key and sql output" {
+@test "diff: with foreign key and sql output" {
     dolt sql <<SQL
 CREATE TABLE parent (
   id int PRIMARY KEY,

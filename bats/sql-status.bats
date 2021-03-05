@@ -22,7 +22,7 @@ teardown() {
     teardown_common
 }
 
-@test "status properly works with working and staged tables" {
+@test "sql-status: status properly works with working and staged tables" {
     run dolt sql -r csv -q "select * from dolt_status"
     [ "$status" -eq 0 ]
     [[ "$output" =~ 'test,false,new table' ]] || false
@@ -34,7 +34,7 @@ teardown() {
     [[ "$output" =~ 'test,true,new table' ]] || false
 }
 
-@test "table that has staged and unstaged changes shows up twice" {
+@test "sql-status: table that has staged and unstaged changes shows up twice" {
     # Stage one set of changes.
     dolt add test
 
@@ -48,7 +48,7 @@ teardown() {
     [[ "$output" =~ 'test,false,modified' ]] || false
 }
 
-@test "status properly works with staged and not staged doc diffs" {
+@test "sql-status: status properly works with staged and not staged doc diffs" {
     echo readme-text > README.md
     echo license-text > LICENSE.md
 
@@ -60,7 +60,7 @@ teardown() {
     [[ "$output" =~ 'README.md,false,new doc' ]] || false
 }
 
-@test "status works property with working tables in conflict" {
+@test "sql-status: status works property with working tables in conflict" {
     # Start by causing the conflict.
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt add test
@@ -83,7 +83,7 @@ teardown() {
     [[ "$output" =~ 'test,false,conflict' ]] || false
 }
 
-@test "status works properly with working docs in conflict" {
+@test "sql-status: status works properly with working docs in conflict" {
      echo "a readme" > README.md
      dolt add .
      dolt commit -m "Committing initial docs"

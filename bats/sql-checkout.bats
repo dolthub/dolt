@@ -18,7 +18,7 @@ teardown() {
     teardown_common
 }
 
-@test "DOLT_CHECKOUT just works" {
+@test "sql-checkout: DOLT_CHECKOUT just works" {
     run dolt sql -q "SELECT DOLT_CHECKOUT('-b', 'feature-branch')"
     [ $status -eq 0 ]
 
@@ -26,22 +26,22 @@ teardown() {
     [ $status -eq 0 ]
 }
 
-@test "DOLT_CHECKOUT -b throws error on branches that already exist" {
+@test "sql-checkout: DOLT_CHECKOUT -b throws error on branches that already exist" {
     run dolt sql -q "SELECT DOLT_CHECKOUT('-b', 'master')"
     [ $status -eq 1 ]
 }
 
-@test "DOLT_CHECKOUT throws error on branches that don't exist" {
+@test "sql-checkout: DOLT_CHECKOUT throws error on branches that don't exist" {
     run dolt sql -q "SELECT DOLT_CHECKOUT('feature-branch')"
     [ $status -eq 1 ]
 }
 
-@test "DOLT_CHECKOUT -b throws error on empty branch" {
+@test "sql-checkout: DOLT_CHECKOUT -b throws error on empty branch" {
     run dolt sql -q "SELECT DOLT_CHECKOUT('-b', '')"
     [ $status -eq 1 ]
 }
 
-@test "DOLT_CHECKOUT properly carries unstaged and staged changes between new and existing branches." {
+@test "sql-checkout: DOLT_CHECKOUT properly carries unstaged and staged changes between new and existing branches." {
     run dolt sql -q "SELECT DOLT_CHECKOUT('-b', 'feature-branch')"
     [ $status -eq 0 ]
 
@@ -83,7 +83,7 @@ teardown() {
     [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*test) ]] || false
 }
 
-@test "DOLT CHECKOUT -b properly maintains session variables" {
+@test "sql-checkout: DOLT CHECKOUT -b properly maintains session variables" {
     head_variable=@@dolt_repo_$$_head
     head_hash=$(get_head_commit)
     working_variable=@@dolt_repo_$$_working
@@ -102,7 +102,7 @@ SQL
     [[ "$output" =~ "$head_hash" ]] || false
 }
 
-@test "DOLT_CHECKOUT -b maintains system tables between two branches" {
+@test "sql-checkout: DOLT_CHECKOUT -b maintains system tables between two branches" {
     run dolt sql -q "SELECT * FROM dolt_diff_test";
     [ $status -eq 0 ]
     diff=$output
@@ -115,7 +115,7 @@ SQL
     [[ "$output" =~ "$diff" ]] || false
 }
 
-@test "DOLT_CHECKOUT paired with commit, add, reset, and merge works with no problems." {
+@test "sql-checkout: DOLT_CHECKOUT paired with commit, add, reset, and merge works with no problems." {
     run dolt sql << SQL
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 INSERT INTO test VALUES (4);
@@ -140,7 +140,7 @@ SQL
     [[ "$output" =~ "John Doe" ]] || false
 }
 
-@test "DOLT_CHECKOUT works with tables." {
+@test "sql-checkout: DOLT_CHECKOUT works with tables." {
     run dolt sql << SQL
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 SELECT DOLT_COMMIT('-a', '-m', 'commit');
@@ -159,7 +159,7 @@ SQL
     [[ ! "$output" =~ "4" ]] || false
 }
 
-@test "DOLT_CHECKOUT between branches operating on the same table works." {
+@test "sql-checkout: DOLT_CHECKOUT between branches operating on the same table works." {
     run dolt sql << SQL
 CREATE TABLE one_pk (
   pk1 BIGINT NOT NULL,

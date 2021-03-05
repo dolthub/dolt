@@ -10,7 +10,7 @@ teardown() {
     teardown_common
 }
 
-@test "rename a table with sql" {
+@test "rename-tables: rename a table with sql" {
     dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY);"
     run dolt sql -q "ALTER TABLE test RENAME quiz;"
     [ "$status" -eq 0 ]
@@ -30,7 +30,7 @@ teardown() {
 
 # see 'cp-and-mv.bats' for renaming a table with `dolt mv`
 
-@test "diff a renamed table" {
+@test "rename-tables: diff a renamed table" {
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);
 SQL
@@ -45,7 +45,7 @@ SQL
     [[ "${lines[2]}" =~ "+++ b/quiz @" ]] || false
 }
 
-@test "sql diff a renamed table" {
+@test "rename-tables: sql diff a renamed table" {
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);
 SQL
@@ -59,7 +59,7 @@ SQL
     [[ "$output" =~ "RENAME TABLE \`test\` TO \`quiz\`" ]] || false
 }
 
-@test "merge a renamed table" {
+@test "rename-tables: merge a renamed table" {
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);
 INSERT INTO test VALUES (0),(1);
@@ -89,7 +89,7 @@ SQL
     [[ "$output" =~ "9" ]] || false
 }
 
-@test "Reusing a table name should NOT fail" {
+@test "rename-tables: Reusing a table name should NOT fail" {
     dolt sql -q "CREATE TABLE one (pk int PRIMARY KEY);"
     dolt sql -q "CREATE TABLE two (pk int PRIMARY KEY);"
     dolt add -A && dolt commit -m "create test tables"

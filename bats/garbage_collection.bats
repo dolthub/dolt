@@ -21,17 +21,17 @@ teardown() {
     rm -rf $BATS_TMPDIR/remotes-$$
 }
 
-@test "dolt remotes server is running" {
+@test "garbage_collection: dolt remotes server is running" {
     ps -p $remotesrv_pid | grep remotesrv
 }
 
-@test "gc on empty dir" {
+@test "garbage_collection: gc on empty dir" {
     dolt gc
     dolt gc
     dolt gc -s
 }
 
-@test "dolt gc smoke test" {
+@test "garbage_collection: smoke test" {
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);
 INSERT INTO test VALUES
@@ -67,7 +67,7 @@ SQL
     [ "$status" -eq "0" ]
 }
 
-@test "clone a remote" {
+@test "garbage_collection: clone a remote" {
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);
 INSERT INTO test VALUES (0),(1),(2);
@@ -100,7 +100,7 @@ SQL
     [[ "$output" =~ "6" ]] || false
 }
 
-@test "dolt gc leave committed and uncommitted data" {
+@test "garbage_collection: leave committed and uncommitted data" {
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);
 INSERT INTO test VALUES
@@ -149,7 +149,7 @@ setup_merge() {
     dolt checkout master
 }
 
-@test "dolt gc leave merge commit" {
+@test "garbage_collection: leave merge commit" {
     setup_merge
     dolt merge other
 
@@ -166,7 +166,7 @@ setup_merge() {
     [[ "${lines[3]}" =~ "2,12" ]] || false
 }
 
-@test "dolt gc leave working pre-merge" {
+@test "garbage_collection: leave working pre-merge" {
     setup_merge
 
     # make a dirty working set with table quiz

@@ -26,7 +26,7 @@ teardown() {
     teardown_common
 }
 
-@test "cp table" {
+@test "cp-and-mv: cp table" {
     run dolt table cp test1 test_new
     [ "$status" -eq 0 ]
     run dolt sql -q 'show tables';
@@ -39,7 +39,7 @@ teardown() {
     [ "${#lines[@]}" -eq 2 ]
 }
 
-@test "mv table" {
+@test "cp-and-mv: mv table" {
     run dolt table mv test1 test_new
     [ "$status" -eq 0 ]
     run dolt sql -q 'show tables';
@@ -52,31 +52,31 @@ teardown() {
     [ "${#lines[@]}" -eq 2 ]
 }
 
-@test "cp table with the existing name" {
+@test "cp-and-mv: cp table with the existing name" {
     run dolt table cp test1 test2
     [ "$status" -ne 0 ]
     [[ "$output" =~ "already exists" ]] || false
 }
 
-@test "mv table with the existing name" {
+@test "cp-and-mv: mv table with the existing name" {
     run dolt table mv test1 test2
     [ "$status" -ne 0 ]
     [[ "$output" =~ "already exists" ]] || false
 }
 
-@test "cp nonexistent table" {
+@test "cp-and-mv: cp nonexistent table" {
     run dolt table cp not_found test2
     [ "$status" -ne 0 ]
     [[ "$output" =~ "not found" ]] || false
 }
 
-@test "mv non_existent table" {
+@test "cp-and-mv: mv non_existent table" {
     run dolt table mv not_found test2
     [ "$status" -ne 0 ]
     [[ "$output" =~ "not found" ]] || false
 }
 
-@test "cp table with invalid name" {
+@test "cp-and-mv: cp table with invalid name" {
     run dolt table cp test1 123
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Invalid table name" ]] || false
@@ -94,7 +94,7 @@ teardown() {
     [[ "$output" =~ "reserved" ]] || false
 }
 
-@test "mv table with invalid name" {
+@test "cp-and-mv: mv table with invalid name" {
     run dolt table mv test1 123
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Invalid table name" ]] || false
@@ -112,7 +112,7 @@ teardown() {
     [[ "$output" =~ "reserved" ]] || false
 }
 
-@test "rm table" {
+@test "cp-and-mv: rm table" {
     run dolt table rm test1
     [ "$status" -eq 0 ]
     run dolt sql -q 'show tables';
@@ -121,7 +121,7 @@ teardown() {
     [[ "$output" =~ "test2" ]] || false
 }
 
-@test "rm tables" {
+@test "cp-and-mv: rm tables" {
     run dolt table rm test1 test2
     [ "$status" -eq 0 ]
     run dolt ls;
@@ -129,7 +129,7 @@ teardown() {
     [[ "$output" =~ "No tables" ]] || false
 }
 
-@test "rm nonexistent table" {
+@test "cp-and-mv: rm nonexistent table" {
     run dolt table rm abcdefz
     [ "$status" -eq 1 ]
     [[ "$output" =~ "not found" ]] || false

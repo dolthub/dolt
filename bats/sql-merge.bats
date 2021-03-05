@@ -18,14 +18,14 @@ teardown() {
     teardown_common
 }
 
-@test "DOLT_MERGE with unknown branch name throws an error" {
+@test "sql-merge: DOLT_MERGE with unknown branch name throws an error" {
     dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Step 1');"
 
     run dolt sql -q "SELECT DOLT_MERGE('feature-branch');"
     [ $status -eq 1 ]
 }
 
-@test "DOLT_MERGE works with ff" {
+@test "sql-merge: DOLT_MERGE works with ff" {
         dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
@@ -62,7 +62,7 @@ SQL
     [[ "$output" =~ "4" ]] || false
 }
 
-@test "DOLT_MERGE works in the session for fastforward." {
+@test "sql-merge: DOLT_MERGE works in the session for fastforward." {
      run dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
@@ -76,7 +76,7 @@ SQL
     [[ "$output" =~ "true" ]] || false
 }
 
-@test "DOLT_MERGE correctly returns head and working session variables." {
+@test "sql-merge: DOLT_MERGE correctly returns head and working session variables." {
     dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
@@ -96,7 +96,7 @@ SQL
     [[ "$output" =~ $head_hash ]] || false
 }
 
-@test "DOLT_MERGE correctly merges branches with differing content in same table without conflicts" {
+@test "sql-merge: DOLT_MERGE correctly merges branches with differing content in same table without conflicts" {
     run dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
@@ -146,7 +146,7 @@ SQL
     [[ "$output" =~ "Finish up Merge" ]] || false
 }
 
-@test "DOLT_MERGE works with no-ff" {
+@test "sql-merge: DOLT_MERGE works with no-ff" {
         run dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
@@ -164,7 +164,7 @@ SQL
     [[ "$output" =~ "this is a no-ff" ]] || false
 }
 
-@test "DOLT_MERGE -no-ff correctly changes head and working session variables." {
+@test "sql-merge: DOLT_MERGE -no-ff correctly changes head and working session variables." {
     dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
@@ -189,7 +189,7 @@ SQL
     [[ ! "$output" =~ $working_hash ]] || false
 }
 
-@test "DOLT_MERGE properly detects merge conflicts, returns and error and then aborts." {
+@test "sql-merge: DOLT_MERGE properly detects merge conflicts, returns and error and then aborts." {
     run dolt sql << SQL
 CREATE TABLE one_pk (
   pk1 BIGINT NOT NULL,
@@ -225,7 +225,7 @@ SQL
     [[ ! "$output" =~ "0,1,1" ]] || false
 }
 
-@test "DOLT_MERGE properly detects merge conflicts and renders the conflicts in dolt_conflicts." {
+@test "sql-merge: DOLT_MERGE properly detects merge conflicts and renders the conflicts in dolt_conflicts." {
     run dolt sql << SQL
 CREATE TABLE one_pk (
   pk1 BIGINT NOT NULL,
@@ -284,7 +284,7 @@ SQL
     [[ "$output" =~ "0" ]] || false
 }
 
-@test "DOLT_MERGE with unresolved conflicts throws an error" {
+@test "sql-merge: DOLT_MERGE with unresolved conflicts throws an error" {
       run dolt sql << SQL
 CREATE TABLE one_pk (
   pk1 BIGINT NOT NULL,
@@ -311,7 +311,7 @@ SQL
     [[ $output =~ "merge has unresolved conflicts" ]] || false
 }
 
-@test "DOLT_MERGE during an active merge throws an error" {
+@test "sql-merge: DOLT_MERGE during an active merge throws an error" {
     run dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
@@ -328,7 +328,7 @@ SQL
     [[ $output =~ "merging is not possible because you have not committed an active merge" ]] || false
 }
 
-@test "DOLT_MERGE works with ff and squash" {
+@test "sql-merge: DOLT_MERGE works with ff and squash" {
         run dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
@@ -363,7 +363,7 @@ SQL
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
-@test "DOLT_MERGE with no-ff and squash works." {
+@test "sql-merge: DOLT_MERGE with no-ff and squash works." {
     dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
@@ -393,7 +393,7 @@ SQL
     [[ "$output" =~ "Finish up Merge" ]] || false
 }
 
-@test "DOLT_MERGE throws errors with working set changes." {
+@test "sql-merge: DOLT_MERGE throws errors with working set changes." {
     run dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
@@ -409,7 +409,7 @@ SQL
     [[ "$output" =~ "cannot merge with uncommitted changes" ]] || false
 }
 
-@test "DOLT_MERGE with a long series of changing operations works." {
+@test "sql-merge: DOLT_MERGE with a long series of changing operations works." {
     dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');

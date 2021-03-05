@@ -26,7 +26,7 @@ teardown() {
 }
 
 
-@test "test foreign-key on commit checks" {
+@test "foreign-keys: test foreign-key on commit checks" {
     dolt reset --hard
     dolt sql <<SQL
       CREATE TABLE colors (
@@ -73,7 +73,7 @@ SQL
     dolt commit -m 'update 1'
 }
 
-@test "test multi-field foreign-key on commit checks" {
+@test "foreign-keys: test multi-field foreign-key on commit checks" {
     dolt reset --hard
     dolt sql <<SQL
       CREATE TABLE colors (
@@ -132,7 +132,7 @@ SQL
     dolt commit -m 'update 1'
 }
 
-@test "test foreign-key on commit errors" {
+@test "foreign-keys: test foreign-key on commit errors" {
     dolt reset --hard
     dolt sql <<SQL
       CREATE TABLE colors (
@@ -1428,7 +1428,7 @@ SQL
     [[ "$output" =~ "fk_v1" ]] || false
 }
 
-@test "fk constraint merge warning only for merges with fk constraints" {
+@test "foreign-keys: fk constraint merge warning only for merges with fk constraints" {
   dolt reset --hard
 
   dolt checkout -b no_fk

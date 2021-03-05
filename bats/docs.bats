@@ -10,7 +10,7 @@ teardown() {
     teardown_common
 }
 
-@test "dolt status and ls to view supported docs on dolt init" {
+@test "docs: dolt status and ls to view supported docs on dolt init" {
     echo license-text > LICENSE.md
     echo readme-text > README.md
     run ls
@@ -36,7 +36,7 @@ teardown() {
     [[ ! "$output" =~ "INVALID.md" ]] || false
 }
 
-@test "dolt add . and dolt commit dolt docs" {
+@test "docs: dolt add . and dolt commit dolt docs" {
     echo testing123 > LICENSE.md
     echo testing456 > README.md
     run dolt add dolt_docs
@@ -70,7 +70,7 @@ teardown() {
     [[ ! "$output" =~ "LICENSE.md" ]] || false
 }
 
-@test "dolt add . and dolt commit dolt docs with another table" {
+@test "docs: dolt add . and dolt commit dolt docs with another table" {
     echo license-text > LICENSE.md
     echo readme-text > README.md
     dolt add .
@@ -105,7 +105,7 @@ SQL
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
-@test "dolt add LICENSE.md stages license" {
+@test "docs: dolt add LICENSE.md stages license" {
     echo "new license" > LICENSE.md
     echo "new readme" > README.md
     dolt add LICENSE.md
@@ -121,7 +121,7 @@ SQL
     [[ "$output" =~ "license commit" ]] || false
 }
 
-@test "dolt add README.md stages readme" {
+@test "docs: dolt add README.md stages readme" {
     echo "new license" > LICENSE.md
     echo "new readme" > README.md
     dolt add README.md
@@ -137,7 +137,7 @@ SQL
     [[ "$output" =~ "readme commit" ]] || false
 }
 
-@test "dolt add doesn't add files that are not LICENSE.md or README.md" {
+@test "docs: dolt add doesn't add files that are not LICENSE.md or README.md" {
     touch README.md
     touch LICENSE.md
     touch invalid
@@ -167,7 +167,7 @@ SQL
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
 }
 
-@test "dolt reset --hard should move doc files to untracked files when there are no doc values on the head commit" {
+@test "docs: dolt reset --hard should move doc files to untracked files when there are no doc values on the head commit" {
     echo readme-content > README.md
     echo license-content > LICENSE.md
     dolt reset --hard
@@ -193,7 +193,7 @@ SQL
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
 }
 
-@test "dolt reset --hard should update doc files on the fs when doc values exist on the head commit" {
+@test "docs: dolt reset --hard should update doc files on the fs when doc values exist on the head commit" {
     echo license-text > LICENSE.md
     echo readme-text > README.md
     dolt add .
@@ -230,7 +230,7 @@ SQL
     [ "$output" = "license-text" ]
  }
 
-@test "dolt reset . should remove docs from staging area" {
+@test "docs: dolt reset . should remove docs from staging area" {
     echo ~license~ > LICENSE.md
     echo ~readme~ > README.md
     dolt add .
@@ -259,7 +259,7 @@ SQL
     [[ "$output" =~ "~new-text~" ]]
 }
 
-@test "dolt reset --soft should remove docs from staging area" {
+@test "docs: dolt reset --soft should remove docs from staging area" {
     echo ~license~ > LICENSE.md
     echo ~readme~ > README.md
     dolt add .
@@ -285,7 +285,7 @@ SQL
     [[ "$output" =~ "~new-text~" ]]
 }
 
-@test "dolt reset should remove docs from staging area" {
+@test "docs: dolt reset should remove docs from staging area" {
     echo ~license~ > LICENSE.md
     echo ~readme~ > README.md
     dolt add .
@@ -310,7 +310,7 @@ SQL
     [[ "$output" =~ "~new-text~" ]]
 }
 
-@test "dolt reset <doc> should remove doc from staging area" {
+@test "docs: dolt reset <doc> should remove doc from staging area" {
     echo "license" > LICENSE.md
     echo "readme" > README.md
     dolt add LICENSE.md
@@ -358,7 +358,7 @@ SQL
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
 }
 
-@test "dolt reset <table> <doc> resets tables and docs from staging area" {
+@test "docs: dolt reset <table> <doc> resets tables and docs from staging area" {
     echo readme > README.md
     echo license > LICENSE.md
     dolt add .
@@ -389,7 +389,7 @@ SQL
     [[ "$output" =~ (new doc:[[:space:]]*README.md) ]] || false
 }
 
- @test "dolt checkout <doc> should save the staged docs to the filesystem if the doc has already been added" {
+ @test "docs: dolt checkout <doc> should save the staged docs to the filesystem if the doc has already been added" {
     echo "this is my license" > LICENSE.md
     echo "this is my readme" > README.md
     dolt add .
@@ -408,7 +408,7 @@ SQL
     [[ "$output" =~ "this is my readme" ]] || false
  }
 
- @test "dolt checkout <doc> should save the head docs to the filesystem when the doc exists on the head, and has not been staged" {
+ @test "docs: dolt checkout <doc> should save the head docs to the filesystem when the doc exists on the head, and has not been staged" {
     echo "this is my license" > LICENSE.md
     echo "this is my readme" > README.md
     dolt add .
@@ -424,7 +424,7 @@ SQL
     [[ "$output" =~  "this is my readme" ]] || false
  }
 
- @test "dolt checkout <doc> should delete the doc from filesystem if it doesn't exist on staged or head roots" {
+ @test "docs: dolt checkout <doc> should delete the doc from filesystem if it doesn't exist on staged or head roots" {
     echo "readme" > README.md
     echo "license" > LICENSE.md
     dolt checkout README.md
@@ -436,7 +436,7 @@ SQL
     [[ "$output" =~ "LICENSE.md" ]] || false
  }
 
-  @test "dolt checkout <doc> <table> should checkout both doc and table" {
+  @test "docs: dolt checkout <doc> <table> should checkout both doc and table" {
     echo "a license" > LICENSE.md
     echo "a readme" > README.md
     dolt sql <<SQL
@@ -485,7 +485,7 @@ SQL
     [[ ! "$output" =~ "100" ]] || false
  }
 
- @test "dolt checkout <doc> <invalid_arg> should return an error and leave doc unchanged" {
+ @test "docs: dolt checkout <doc> <invalid_arg> should return an error and leave doc unchanged" {
      echo original readme text > README.md
      echo original license text > LICENSE.md
      dolt add .
@@ -500,7 +500,7 @@ SQL
      [[ "$output" =~ "original readme text" ]] || false
  }
 
- @test "dolt checkout <branch> should save docs to the file system, leaving any untracked files" {
+ @test "docs: dolt checkout <branch> should save docs to the file system, leaving any untracked files" {
      echo readme > README.md
      echo license > LICENSE.md
      dolt add LICENSE.md
@@ -530,7 +530,7 @@ SQL
      [[ "$output" =~ "new-license" ]] || false
  }
 
- @test "dolt checkout <branch>, assuming no conflicts, should preserve changes in the working set (on the filesystem)" {
+ @test "docs: dolt checkout <branch>, assuming no conflicts, should preserve changes in the working set (on the filesystem)" {
      echo readme > README.md
      echo license > LICENSE.md
      dolt add LICENSE.md README.md
@@ -554,7 +554,7 @@ SQL
      [[ "$output" =~ "another new README!" ]] || false
  }
 
-@test "dolt diff shows diffs between working root and file system docs" {
+@test "docs: dolt diff shows diffs between working root and file system docs" {
     # 2 added docs
     echo "testing readme" > README.md
     echo "testing license" > LICENSE.md
@@ -603,7 +603,7 @@ SQL
     [[ ! "$output" =~  "LICENSE.md" ]] || false
 }
 
-@test "dolt diff <doc> shows diff of one <doc> between working root and file system docs" {
+@test "docs: dolt diff <doc> shows diff of one <doc> between working root and file system docs" {
     echo "testing readme" > README.md
     echo "testing license" > LICENSE.md
     run dolt diff README.md
@@ -652,7 +652,7 @@ SQL
     [[ ! "$output" =~ "LICENSE" ]] || false
 }
 
-@test "dolt table commands do not allow write operations on dolt_docs" {
+@test "docs: dolt table commands do not allow write operations on dolt_docs" {
     echo "a readme" > README.md
     echo "a license" > LICENSE.md
     dolt add .
@@ -672,7 +672,7 @@ SQL
     [[ "$output" =~ "system table" ]] || false
 }
 
-@test "dolt schema command does not show dolt_docs" {
+@test "docs: dolt schema command does not show dolt_docs" {
     echo "a readme" > README.md
     echo "a license" > LICENSE.md
     dolt add .
@@ -693,7 +693,7 @@ SQL
     [[ ! "$output" =~ "dolt_docs" ]] || false
 }
 
-@test "dolt ls should not show dolt_docs table" {
+@test "docs: dolt ls should not show dolt_docs table" {
     echo "a readme" > README.md
     echo "a license" > LICENSE.md
     run dolt ls
@@ -710,7 +710,7 @@ SQL
  }
 
 
-@test "dolt sql operation on dolt_docs" {
+@test "docs: dolt sql operation on dolt_docs" {
     echo "a readme" > README.md
     echo "a license" > LICENSE.md
     run dolt sql -q "show tables"
@@ -755,7 +755,7 @@ SQL
     [[ "$output" =~ "system tables cannot be dropped or altered" ]] || false
 }
 
-@test "dolt branch/merge with conflicts for docs" {
+@test "docs: dolt branch/merge with conflicts for docs" {
     echo "a readme" > README.md
     echo "a license" > LICENSE.md
     dolt add .

@@ -30,7 +30,7 @@ teardown() {
     teardown_common
 }
 
-@test "table export sql datetime" {
+@test "export-tables: table export sql datetime" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT PRIMARY KEY,
@@ -52,7 +52,7 @@ SQL
     [ "$output" = '{"rows": [{"pk":1,"v1":"2020-04-08","v2":"11:11:11","v3":"2020","v4":"2020-04-08 11:11:11"},{"pk":2,"v1":"2020-04-08","v2":"12:12:12","v3":"2020","v4":"2020-04-08 12:12:12"}]}' ]
 }
 
-@test "dolt table import from stdin export to stdout" {
+@test "export-tables: dolt table import from stdin export to stdout" {
     skiponwindows "Need to install python before this test will work."
     echo 'pk,c1,c2,c3,c4,c5
 0,1,2,3,4,5
@@ -81,7 +81,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
 '
 }
 
-@test "dolt table export" {
+@test "export-tables: dolt table export" {
     dolt sql -q "insert into test_int values (0, 1, 2, 3, 4, 5)"
     run dolt table export test_int export.csv
     [ "$status" -eq 0 ]
@@ -99,7 +99,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     [ -f export.csv ]
 }
 
-@test "dolt table SQL export" {
+@test "export-tables: dolt table SQL export" {
     dolt sql -q "insert into test_int values (0, 1, 2, 3, 4, 5)"
     run dolt table export test_int export.sql
     [ "$status" -eq 0 ]
@@ -108,7 +108,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     diff --strip-trailing-cr $BATS_TEST_DIRNAME/helper/1pk5col-ints.sql export.sql
 }
 
-@test "export a table with a string with commas to csv" {
+@test "export-tables: export a table with a string with commas to csv" {
     run dolt sql -q "insert into test_string values ('tim', 'is', 'super', 'duper', 'rad', 'a,b,c,d,e')"
     [ "$status" -eq 0 ]
     run dolt table export test_string export.csv
@@ -117,7 +117,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     grep -E \"a,b,c,d,e\" export.csv
 }
 
-@test "export a table with a string with double quotes to csv" {
+@test "export-tables: export a table with a string with double quotes to csv" {
     run dolt sql -q 'insert into test_string (pk,c1,c5) values ("this", "is", "a ""quotation""");'
     [ "$status" -eq 0 ]
     run dolt table export test_string export.csv
@@ -126,7 +126,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     grep '"a ""quotation"""' export.csv
 }
 
-@test "export a table with a string with new lines to csv" {
+@test "export-tables: export a table with a string with new lines to csv" {
     run dolt sql -q 'insert into test_string (pk,c1,c5) values ("this", "is", "a new \n line");'
     [ "$status" -eq 0 ]
     run dolt table export test_string export.csv
@@ -138,7 +138,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     grep ' line"' export.csv
 }
 
-@test "table with column with not null constraint can be exported and reimported" {
+@test "export-tables: table with column with not null constraint can be exported and reimported" {
     dolt sql -q "CREATE TABLE person_info(name VARCHAR(255) NOT NULL,location VARCHAR(255) NOT NULL,age BIGINT NOT NULL,PRIMARY KEY (name));"
     dolt add .
     dolt commit -m 'add person_info table'

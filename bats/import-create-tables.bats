@@ -52,7 +52,7 @@ teardown() {
     teardown_common
 }
 
-@test "create a table with json import" {
+@test "import-create-tables: create a table with json import" {
     run dolt table import -c -s `batshelper employees-sch.sql` employees `batshelper employees-tbl.json`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
@@ -65,13 +65,13 @@ teardown() {
     [ "${#lines[@]}" -eq 7 ]
 }
 
-@test "create a table with json import. no schema." {
+@test "import-create-tables: create a table with json import. no schema." {
     run dolt table import -c employees `batshelper employees-tbl.json`
     [ "$status" -ne 0 ]
     [ "$output" = "Please specify schema file for .json tables." ]
 }
 
-@test "create a table with json data import. bad json data." {
+@test "import-create-tables: create a table with json data import. bad json data." {
     run dolt table import -c -s `batshelper employees-sch.sql` employees `batshelper employees-tbl-bad.json`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "cause: invalid character after object key:value pair: 'b'" ]] || false
@@ -80,14 +80,14 @@ teardown() {
     [[ ! "$output" =~ "employees" ]] || false
 }
 
-@test "create a table with json import. bad schema." {
+@test "import-create-tables: create a table with json import. bad schema." {
     run dolt table import -c -s `batshelper employees-sch-bad.sql` employees `batshelper employees-tbl.json`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error determining the output schema" ]] || false
     [[ "$output" =~ "employees-sch-bad.sql" ]] || false
 }
 
-@test "import data from csv and create the table" {
+@test "import-create-tables: import data from csv and create the table" {
     run dolt table import -c --pk=pk test 1pk5col-ints.csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
@@ -99,7 +99,7 @@ teardown() {
     [ "${#lines[@]}" -eq 6 ]
 }
 
-@test "use -f to overwrite data in existing table" {
+@test "import-create-tables: use -f to overwrite data in existing table" {
     cat <<DELIM > other.csv
 pk,c1,c2,c3,c4,c5
 8,1,2,3,4,5
@@ -124,13 +124,13 @@ DELIM
     [ ! "${lines[2]}" = "1,1,2,3,4,5" ]
 }
 
-@test "try to create a table with a bad csv" {
+@test "import-create-tables: try to create a table with a bad csv" {
     run dolt table import -c --pk=pk test `batshelper bad.csv`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error creating reader" ]] || false
 }
 
-@test "try to create a table with duplicate column names" {
+@test "import-create-tables: try to create a table with duplicate column names" {
     cat <<CSV > duplicate-names.csv
 pk,abc,Abc
 1,2,3
@@ -143,12 +143,12 @@ CSV
     [[ "$output" =~ "invalid schema" ]] || false
 }
 
-@test "try to create a table with dolt table import with a bad file name" {
+@test "import-create-tables: try to create a table with dolt table import with a bad file name" {
     run dolt table import -c test `batshelper bad.data`
     [ "$status" -eq 1 ]
 }
 
-@test "try to create a table with dolt table import with invalid name" {
+@test "import-create-tables: try to create a table with dolt table import with invalid name" {
     run dolt table import -c --pk=pk 123 1pk5col-ints.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "not a valid table name" ]] || false
@@ -166,7 +166,7 @@ CSV
     [[ "$output" =~ "reserved" ]] || false
 }
 
-@test "try to table import with nonexistant --pk arg" {
+@test "import-create-tables: try to table import with nonexistant --pk arg" {
     run dolt table import -c -pk="batmansparents" test 1pk5col-ints.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error determining the output schema." ]] || false
@@ -174,7 +174,7 @@ CSV
     [[ "$output" =~ "column 'batmansparents' not found" ]] || false
 }
 
-@test "try to table import with one valid and one nonexistant --pk arg" {
+@test "import-create-tables: try to table import with one valid and one nonexistant --pk arg" {
     run dolt table import -c -pk="pk,batmansparents" test 1pk5col-ints.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error determining the output schema." ]] || false
@@ -182,7 +182,7 @@ CSV
     [[ "$output" =~ "column 'batmansparents' not found" ]] || false
 }
 
-@test "create a table with two primary keys from csv import" {
+@test "import-create-tables: create a table with two primary keys from csv import" {
     run dolt table import -c --pk=pk1,pk2 test `batshelper 2pk5col-ints.csv`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
@@ -194,7 +194,7 @@ CSV
     [[ "$output" =~ "test" ]] || false
 }
 
-@test "import data from psv and create the table" {
+@test "import-create-tables: import data from psv and create the table" {
     cat <<DELIM > 1pk5col-ints.psv
 pk|c1|c2|c3|c4|c5
 0|1|2|3|4|5
@@ -211,7 +211,7 @@ DELIM
     [ "${#lines[@]}" -eq 6 ]
 }
 
-@test "import table using --delim" {
+@test "import-create-tables: import table using --delim" {
     cat <<DELIM > 1pk5col-ints.csv
 pk||c1||c2||c3||c4||c5
 0||1||2||3||4||5
@@ -226,7 +226,7 @@ DELIM
     [ "${lines[2]}" = "1,1,2,3,4,5" ]
 }
 
-@test "create a table with a name map" {
+@test "import-create-tables: create a table with a name map" {
     run dolt table import -c -pk=pk -m=name-map.json test name-map-data.csv
     [ "$status" -eq 0 ]
     run dolt sql -r csv -q 'select * from test'
@@ -238,7 +238,7 @@ DELIM
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
-@test "use a name map with missing and extra entries" {
+@test "import-create-tables: use a name map with missing and extra entries" {
     cat <<JSON > partial-map.json
 {
     "one":"pk",
@@ -256,7 +256,7 @@ JSON
     [[ "${lines[4]}" =~ "four" ]] || false
 }
 
-@test "create a table with a schema file" {
+@test "import-create-tables: create a table with a schema file" {
     cat <<DELIM > sch-data.csv
 pk,c1,c2,c3
 0,1,2,3
@@ -275,7 +275,7 @@ DELIM
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
-@test "create a table with a name map and a schema file" {
+@test "import-create-tables: create a table with a name map and a schema file" {
     run dolt table import -c -s=name-map-sch.sql -m=name-map.json test name-map-data.csv
     [ "$status" -eq 0 ]
     run dolt sql -r csv -q 'select * from test'
@@ -290,7 +290,7 @@ DELIM
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
-@test "create a table from CSV with common column name patterns" {
+@test "import-create-tables: create a table from CSV with common column name patterns" {
     run dolt table import -c --pk=UPPERCASE test `batshelper caps-column-names.csv`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
@@ -299,7 +299,7 @@ DELIM
     [[ "$output" =~ "UPPERCASE" ]] || false
 }
 
-@test "create a table from excel import with multiple sheets" {
+@test "import-create-tables: create a table from excel import with multiple sheets" {
     run dolt table import -c --pk=id employees `batshelper employees.xlsx`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
@@ -323,7 +323,7 @@ DELIM
     [ "${#lines[@]}" -eq 8 ]
 }
 
-@test "specify incorrect sheet name on excel import" {
+@test "import-create-tables: specify incorrect sheet name on excel import" {
     run dolt table import -c --pk=id bad-sheet-name `batshelper employees.xlsx`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "table name must match excel sheet name" ]] || false
@@ -332,7 +332,7 @@ DELIM
     [[ ! "$output" =~ "bad-sheet-name" ]] || false
 }
 
-@test "import an .xlsx file that is not a valid excel spreadsheet" {
+@test "import-create-tables: import an .xlsx file that is not a valid excel spreadsheet" {
     run dolt table import -c --pk=id test `batshelper bad.xlsx`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "not a valid xlsx file" ]] || false
@@ -341,7 +341,7 @@ DELIM
     [[ ! "$output" =~ "test" ]] || false
 }
 
-@test "import a table with non UTF-8 characters in it" {
+@test "import-create-tables: import a table with non UTF-8 characters in it" {
     skiponwindows "windows can't find bad-characters.csv"
     run dolt table import -c --pk=pk test `batshelper bad-characters.csv`
     [ "$status" -eq 0 ]
@@ -350,7 +350,7 @@ DELIM
     diff compare.csv `batshelper bad-characters.csv`
 }
 
-@test "dolt diff on a newly created table" {
+@test "import-create-tables: dolt diff on a newly created table" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -368,7 +368,7 @@ SQL
     [[ "$output" =~ "added table" ]] || false
 }
 
-@test "create a table with null values from csv import" {
+@test "import-create-tables: create a table with null values from csv import" {
     run dolt table import -c -pk=pk test empty-strings-null-values.csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
@@ -387,7 +387,7 @@ SQL
     [ "${lines[9]}" = "| g  | NULL      | NULL      |" ]
 }
 
-@test "table import with schema different from data file" {
+@test "import-create-tables: table import with schema different from data file" {
     cat <<SQL > schema.sql
 CREATE TABLE subset (
     pk INT NOT NULL,
@@ -408,7 +408,7 @@ SQL
     [ "${lines[2]}" = "1,1,3," ]
 }
 
-@test "create a table with null values from csv import with json file" {
+@test "import-create-tables: create a table with null values from csv import with json file" {
     cat <<SQL > schema.sql
 CREATE TABLE empty_strings_null_values (
     pk VARCHAR(120) NOT NULL COMMENT 'tag:0',
@@ -435,7 +435,7 @@ SQL
     [ "${lines[9]}" = "| g  | NULL      | NULL      |" ]
 }
 
-@test "create a table with null values from json import with json file" {
+@test "import-create-tables: create a table with null values from json import with json file" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk LONGTEXT NOT NULL,
@@ -462,7 +462,7 @@ SQL
     [ "${lines[9]}" = "| g  | NULL      | NULL      |" ]
 }
 
-@test "fail to create a table with null values from json import with json file" {
+@test "import-create-tables: fail to create a table with null values from json import with json file" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk LONGTEXT NOT NULL,
@@ -475,7 +475,7 @@ SQL
     [ "$status" -eq 1 ]
 }
 
-@test "fail on import table creation when defined pk has a NULL value" {
+@test "import-create-tables: fail on import table creation when defined pk has a NULL value" {
     cat <<DELIM > null-pk-1.csv
 pk,v1
 "a",1
@@ -494,7 +494,7 @@ DELIM
     [[ "$output" =~ "pk2" ]]
 }
 
-@test "table import -c infers types from data" {
+@test "import-create-tables: table import -c infers types from data" {
     cat <<DELIM > types.csv
 pk,str,int,bool,float, date, time, datetime
 0,abc,123,false,3.14,2020-02-02,12:12:12.12,2020-02-02 12:12:12
@@ -514,7 +514,7 @@ DELIM
     [[ "$output" =~ "\`datetime\` datetime" ]]
 }
 
-@test "table import -c collects garbage" {
+@test "import-create-tables: table import -c collects garbage" {
     echo "pk" > pk.csv
     seq 0 100000 >> pk.csv
 

@@ -12,7 +12,7 @@ teardown() {
 }
 
 # Test that event dir locks correctly during concurrent flushes
-@test "test event flush locking" {
+@test "send-metrics: test event flush locking" {
     # copy test event files to appropriate dir
     cp -a $BATS_TEST_DIRNAME/helper/testEvents/* $BATS_TMPDIR/config-$$/.dolt/eventsData/
 

@@ -21,7 +21,7 @@ teardown() {
     teardown_common
 }
 
-@test "dolt sql -b and -batch are a valid commands" {
+@test "sql-batch: dolt sql -b and -batch are a valid commands" {
     run dolt sql -b -q "insert into test values (0,0,0,0,0,0)"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Rows inserted: 1" ]] || false
@@ -39,7 +39,7 @@ teardown() {
     [[ $lastline =~ $'\n'$ ]] || false
 }
 
-@test "Piped SQL files interpreted in batch mode" {
+@test "sql-batch: Piped SQL files interpreted in batch mode" {
     run dolt sql <<SQL
 insert into test values (0,0,0,0,0,0);
 insert into test values (1,0,0,0,0,0);
@@ -48,7 +48,7 @@ SQL
     [[ "$output" =~ "Rows inserted: 2" ]] || false
 }
 
-@test "Line number and bad query displayed on error in batch sql" {
+@test "sql-batch: Line number and bad query displayed on error in batch sql" {
     run dolt sql <<SQL
 insert into test values (0,0,0,0,0,0);
 insert into test values (1,0,0,0,0,0);
@@ -81,7 +81,7 @@ SQL
     [[ "$output" =~ "poop" ]] || false
 }
 
-@test "sql reset('hard') function" {
+@test "sql-batch: sql reset('hard') function" {
     mkdir test && cd test && dolt init
     dolt sql <<SQL
 CREATE TABLE test (
@@ -122,7 +122,7 @@ SQL
     [[ "$output" =~ "working tree clean" ]] || false
 }
 
-@test "batch mode detects subqueries and decides not to do batch insert." {
+@test "sql-batch: batch mode detects subqueries and decides not to do batch insert." {
   # create the second table.
   dolt sql << SQL
 CREATE TABLE test2 (

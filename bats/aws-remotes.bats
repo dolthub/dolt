@@ -16,31 +16,31 @@ skip_if_no_aws_tests() {
     fi
 }
 
-@test "can add remote with aws url" {
+@test "aws-remotes: can add remote with aws url" {
     dolt remote add origin 'aws://[dynamo_db_table:s3_bucket]/repo_name'
 }
 
-@test "can fetch existing aws remote" {
+@test "aws-remotes: can fetch existing aws remote" {
     skip_if_no_aws_tests
     dolt remote add origin 'aws://['"$DOLT_BATS_AWS_TABLE"':'"$DOLT_BATS_AWS_BUCKET"']/'"$DOLT_BATS_AWS_EXISTING_REPO"
     dolt fetch origin
 }
 
-@test "fetch with non-existant dynamo table fails" {
+@test "aws-remotes: fetch with non-existant dynamo table fails" {
     skip_if_no_aws_tests
     dolt remote add origin 'aws://['"this_dynamodb_table_does_not_exist_b612c34f055f4b458"':'"$DOLT_BATS_AWS_BUCKET"']/'"$DOLT_BATS_AWS_EXISTING_REPO"
     run dolt fetch origin
     [ "$status" -eq 1 ]
 }
 
-@test "fetch with non-existant s3 bucket fails" {
+@test "aws-remotes: fetch with non-existant s3 bucket fails" {
     skip_if_no_aws_tests
     dolt remote add origin 'aws://['"$DOLT_BATS_AWS_TABLE"':'"this_s3_bucket_does_not_exist_5883eaaa20a4797bb"']/'"$DOLT_BATS_AWS_EXISTING_REPO"
     run dolt fetch origin
     [ "$status" -eq 1 ]
 }
 
-@test "can clone an existing aws remote" {
+@test "aws-remotes: can clone an existing aws remote" {
     skip_if_no_aws_tests
     rm -rf .dolt
     dolt clone 'aws://['"$DOLT_BATS_AWS_TABLE"':'"$DOLT_BATS_AWS_BUCKET"']/'"$DOLT_BATS_AWS_EXISTING_REPO"
@@ -49,7 +49,7 @@ skip_if_no_aws_tests() {
 }
 
 # Matches behavior of other remote types
-@test "clone empty aws remote fails" {
+@test "aws-remotes: clone empty aws remote fails" {
     skip_if_no_aws_tests
     rm -rf .dolt
     random_repo=`openssl rand -hex 32`
@@ -59,7 +59,7 @@ skip_if_no_aws_tests() {
     [[ "$output" =~ "cause: remote at that url contains no Dolt data" ]] || false
 }
 
-@test "can push to new remote" {
+@test "aws-remotes: can push to new remote" {
     skip_if_no_aws_tests
     random_repo=`openssl rand -hex 32`
     dolt remote add origin 'aws://['"$DOLT_BATS_AWS_TABLE"':'"$DOLT_BATS_AWS_BUCKET"']/'"$random_repo"
