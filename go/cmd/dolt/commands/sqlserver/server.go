@@ -19,6 +19,7 @@ import (
 	"net"
 	"strconv"
 	"time"
+	"fmt"
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/auth"
@@ -124,7 +125,14 @@ func Serve(ctx context.Context, version string, serverConfig ServerConfig, serve
 
 	sqlEngine.AddDatabase(information_schema.NewInformationSchemaDatabase(sqlEngine.Catalog))
 
-	hostPort := net.JoinHostPort(serverConfig.Host(), strconv.Itoa(serverConfig.Port()))
+	portAsString := strconv.Itoa(serverConfig.Port())
+	hostPort := net.JoinHostPort(serverConfig.Host(), portAsString)
+
+	if (IsPortInUse(hostPort)) {
+		portInUseError := fmt.Errorf("Port %s already in use.", portAsString)
+		return portInUseError, nil
+	}
+
 	readTimeout := time.Duration(serverConfig.ReadTimeout()) * time.Millisecond
 	writeTimeout := time.Duration(serverConfig.WriteTimeout()) * time.Millisecond
 	mySQLServer, startError = server.NewServer(

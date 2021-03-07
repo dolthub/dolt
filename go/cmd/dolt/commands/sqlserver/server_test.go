@@ -17,6 +17,7 @@ package sqlserver
 import (
 	"strings"
 	"testing"
+	"net/http"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gocraft/dbr/v2"
@@ -215,4 +216,23 @@ func TestServerSelect(t *testing.T) {
 			assert.ElementsMatch(t, peoples, test.expectedRes)
 		})
 	}
+}
+
+// If a port is already in use, throw error "Port XXXX already in use."
+func TestServerFailsIfPortInUse(t *testing.T) {
+	serverController := CreateServerController()
+	go http.ListenAndServe(":15200", nil)
+	go func() {
+		startServer(context.Background(), "test", "dolt sql-server", []string{
+			"-H", "localhost",
+			"-P", "15200",
+			"-u", "username",
+			"-p", "password",
+			"-t", "5",
+			"-l", "info",
+			"-r",
+		}, dtestutils.CreateEnvWithSeedData(t), serverController)
+	}()
+	err := serverController.WaitForStart()
+	require.Error(t, err)
 }
