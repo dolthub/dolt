@@ -221,7 +221,11 @@ func TestServerSelect(t *testing.T) {
 // If a port is already in use, throw error "Port XXXX already in use."
 func TestServerFailsIfPortInUse(t *testing.T) {
 	serverController := CreateServerController()
-	go http.ListenAndServe(":15200", nil)
+	server := &http.Server{
+        Addr:    ":15200",
+        Handler: http.DefaultServeMux,
+    }
+    go server.ListenAndServe()
 	go func() {
 		startServer(context.Background(), "test", "dolt sql-server", []string{
 			"-H", "localhost",
@@ -235,4 +239,5 @@ func TestServerFailsIfPortInUse(t *testing.T) {
 	}()
 	err := serverController.WaitForStart()
 	require.Error(t, err)
+	server.Close()
 }
