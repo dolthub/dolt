@@ -356,11 +356,11 @@ DoltHub](https://docs.dolthub.com/). Some of the topics we didn't
 cover here:
 
 * [Querying past revisions of your
-  tables](https://docs.dolthub.com/reference/sql/dolt-system-tables#dolt_history_usdtablename)
+  tables](https://docs.dolthub.com/interfaces/sql#querying-non-head-revisions-of-a-database)
 * [Starting a SQL
   server](https://docs.dolthub.com/reference/cli#dolt-sql-server)
 * [Selecting the diff between two
-  commits](https://docs.dolthub.com/reference/sql/dolt-system-tables#dolt_diff_usdtablename)
+  commits](https://docs.dolthub.com/interfaces/sql/dolt-system-tables#dolt_diff_usdtablename)
 * [Documentation for all CLI
   commands](https://docs.dolthub.com/reference/cli)
 
