@@ -39,6 +39,16 @@ type MapIterator interface {
 	Next(ctx context.Context) (k, v Value, err error)
 }
 
+type EmptyMapIterator struct{}
+
+func (mtItr EmptyMapIterator) Next(ctx context.Context) (k, v Value, err error) {
+	return nil, nil, nil
+}
+
+func (mtItr EmptyMapIterator) NextTuple(ctx context.Context) (k, v Tuple, err error) {
+	return Tuple{}, Tuple{}, io.EOF
+}
+
 // mapIterator can efficiently iterate through a Noms Map.
 type mapIterator struct {
 	sequenceIter sequenceIterator

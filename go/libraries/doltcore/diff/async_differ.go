@@ -17,6 +17,7 @@ package diff
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -59,6 +60,8 @@ type AsyncDiffer struct {
 	eg       *errgroup.Group
 	egCtx    context.Context
 	egCancel func()
+
+	diffStats map[types.DiffChangeType]uint64
 }
 
 var _ RowDiffer = &AsyncDiffer{}
@@ -66,11 +69,11 @@ var _ RowDiffer = &AsyncDiffer{}
 // todo: make package private once dolthub is migrated
 func NewAsyncDiffer(bufferedDiffs int) *AsyncDiffer {
 	return &AsyncDiffer{
-		make(chan diff.Difference, bufferedDiffs),
-		bufferedDiffs,
-		nil,
-		context.Background(),
-		func() {},
+		diffChan:   make(chan diff.Difference, bufferedDiffs),
+		bufferSize: bufferedDiffs,
+		egCtx:      context.Background(),
+		egCancel:   func() {},
+		diffStats:  make(map[types.DiffChangeType]uint64),
 	}
 }
 
@@ -80,6 +83,18 @@ func tableDontDescendLists(v1, v2 types.Value) bool {
 }
 
 func (ad *AsyncDiffer) Start(ctx context.Context, from, to types.Map) {
+	ad.start(ctx, func() error {
+		return diff.Diff(ctx, from, to, ad.diffChan, true, tableDontDescendLists)
+	})
+}
+
+func (ad *AsyncDiffer) StartWithRange(ctx context.Context, from, to types.Map, start types.Value, inRange func(types.Value) (bool, error)) {
+	ad.start(ctx, func() error {
+		return diff.DiffMapRange(ctx, from, to, start, inRange, ad.diffChan, true, tableDontDescendLists)
+	})
+}
+
+func (ad *AsyncDiffer) start(ctx context.Context, diffFunc func() error) {
 	ad.eg, ad.egCtx = errgroup.WithContext(ctx)
 	ad.egCancel = async.GoWithCancel(ad.egCtx, ad.eg, func(ctx context.Context) (err error) {
 		defer close(ad.diffChan)
@@ -88,7 +103,7 @@ func (ad *AsyncDiffer) Start(ctx context.Context, from, to types.Map) {
 				err = fmt.Errorf("panic in diff.Diff: %v", r)
 			}
 		}()
-		return diff.Diff(ctx, from, to, ad.diffChan, true, tableDontDescendLists)
+		return diffFunc()
 	})
 }
 
@@ -98,12 +113,16 @@ func (ad *AsyncDiffer) Close() error {
 }
 
 func (ad *AsyncDiffer) GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Difference, bool, error) {
+	if timeout < 0 {
+		timeout = time.Duration(math.MaxInt64)
+	}
 	diffs := make([]*diff.Difference, 0, ad.bufferSize)
 	timeoutChan := time.After(timeout)
 	for {
 		select {
 		case d, more := <-ad.diffChan:
 			if more {
+				ad.diffStats[d.ChangeType]++
 				diffs = append(diffs, &d)
 				if numDiffs != 0 && numDiffs == len(diffs) {
 					return diffs, true, nil

@@ -192,12 +192,19 @@ func orderedSequenceDiffInternalNodes(ctx context.Context, last orderedSequence,
 // Streams the diff from |last| to |current| into |changes|, using a left-right approach.
 // Left-right immediately descends to the first change and starts streaming changes, but compared to top-down it's serial and much slower to calculate the full diff.
 func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, current orderedSequence, changes chan<- ValueChanged) error {
-	lastCur, err := newCursorAt(ctx, last, emptyKey, false, false)
+	trueFunc := func(Value) (bool, error) {
+		return true, nil
+	}
+	return orderedSequenceDiffLeftRightInRange(ctx, last, current, emptyKey, trueFunc, changes)
+}
+
+func orderedSequenceDiffLeftRightInRange(ctx context.Context, last orderedSequence, current orderedSequence, startKey orderedKey, inRange func(Value) (bool, error), changes chan<- ValueChanged) error {
+	lastCur, err := newCursorAt(ctx, last, startKey, false, false)
 	if err != nil {
 		return err
 	}
 
-	currentCur, err := newCursorAt(ctx, current, emptyKey, false, false)
+	currentCur, err := newCursorAt(ctx, current, startKey, false, false)
 	if err != nil {
 		return err
 	}
@@ -231,6 +238,13 @@ func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, cur
 			if isLess, err := currentKey.Less(last.format(), lastKey); err != nil {
 				return err
 			} else if isLess {
+				isInRange, err := inRange(currentKey.v)
+				if err != nil {
+					return err
+				} else if !isInRange {
+					break
+				}
+
 				mv, err := getMapValue(currentCur)
 				if err != nil {
 					return err
@@ -245,6 +259,13 @@ func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, cur
 					return err
 				}
 			} else {
+				isInRange, err := inRange(lastKey.v)
+				if !isInRange {
+					return err
+				} else if !isInRange {
+					break
+				}
+
 				if isLess, err := lastKey.Less(last.format(), currentKey); err != nil {
 					return err
 				} else if isLess {
@@ -296,6 +317,13 @@ func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, cur
 			return err
 		}
 
+		isInRange, err := inRange(lastKey.v)
+		if err != nil {
+			return err
+		} else if !isInRange {
+			break
+		}
+
 		mv, err := getMapValue(lastCur)
 		if err != nil {
 			return err
@@ -315,6 +343,13 @@ func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, cur
 		currKey, err := getCurrentKey(currentCur)
 		if err != nil {
 			return err
+		}
+
+		isInRange, err := inRange(currKey.v)
+		if err != nil {
+			return err
+		} else if !isInRange {
+			break
 		}
 
 		mv, err := getMapValue(currentCur)
