@@ -107,10 +107,3 @@ jobs:
         run: |
           bats --tap .
         working-directory: ./bats
-      - name: Discord Notify
-        if: always()
-#        uses: dolthub/ga-discord-notify@master
-        with:
-          job-status: ${{ job.status }}
-          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
-          notify-on-success: false

@@ -24,10 +24,3 @@ jobs:
     - name: Test All
       working-directory: ./go
       run: go test -timeout 30m -race ./...
-    - name: Discord Notify
-      if: always()
-#      uses: dolthub/ga-discord-notify@master
-      with:
-        job-status: ${{ job.status }}
-        webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
-        notify-on-success: false

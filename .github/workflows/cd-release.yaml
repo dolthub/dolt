@@ -20,13 +20,6 @@ jobs:
           git config --global user.name dolt-release-bot
           git config --global user.email dolt-release-bot@dolthub.com
           ./go/utils/publishrelease/bump-version.sh ${{ github.event.inputs.version }}
-      - name: Discord Notify
-        if: always()
-#        uses: dolthub/ga-discord-notify@master
-        with:
-          job-status: ${{ job.status }}
-          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
-          notify-on-success: false
 
   create-release:
     needs: bump-version
@@ -96,13 +89,6 @@ jobs:
           asset_path: go/out/install.sh
           asset_name: install.sh
           asset_content_type: text/plain
-      - name: Discord Notify
-        if: always()
-#        uses: dolthub/ga-discord-notify@master
-        with:
-          job-status: ${{ job.status }}
-          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
-          notify-on-success: false
 
   homebrew-bump:
     needs: create-release
@@ -122,13 +108,6 @@ jobs:
             Created by https://github.com/mislav/bump-homebrew-formula-action
         env:
           COMMITTER_TOKEN: ${{secrets.HOMEBREW_GITHUB_TOKEN}}
-      - name: Discord Notify
-        if: always()
-#        uses: dolthub/ga-discord-notify@master
-        with:
-          job-status: ${{ job.status }}
-          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
-          notify-on-success: false
 
   trigger-performance-benchmark-email:
     needs: create-release
