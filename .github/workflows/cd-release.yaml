@@ -22,7 +22,7 @@ jobs:
           ./go/utils/publishrelease/bump-version.sh ${{ github.event.inputs.version }}
       - name: Discord Notify
         if: always()
-        uses: dolthub/ga-discord-notify@master
+#        uses: dolthub/ga-discord-notify@master
         with:
           job-status: ${{ job.status }}
           webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
@@ -98,7 +98,7 @@ jobs:
           asset_content_type: text/plain
       - name: Discord Notify
         if: always()
-        uses: dolthub/ga-discord-notify@master
+#        uses: dolthub/ga-discord-notify@master
         with:
           job-status: ${{ job.status }}
           webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
@@ -124,7 +124,7 @@ jobs:
           COMMITTER_TOKEN: ${{secrets.HOMEBREW_GITHUB_TOKEN}}
       - name: Discord Notify
         if: always()
-        uses: dolthub/ga-discord-notify@master
+#        uses: dolthub/ga-discord-notify@master
         with:
           job-status: ${{ job.status }}
           webhook-url: ${{ secrets.DISCORD_WEBHOOK }}

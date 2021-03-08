@@ -44,7 +44,7 @@ jobs:
         working-directory: ./bats/compatibility
       - name: Discord Notify
         if: always()
-        uses: dolthub/ga-discord-notify@master
+#        uses: dolthub/ga-discord-notify@master
         with:
           job-status: ${{ job.status }}
           webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
