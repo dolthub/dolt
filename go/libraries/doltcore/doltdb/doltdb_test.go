@@ -341,3 +341,7 @@ func TestLDNoms(t *testing.T) {
 		}
 	}
 }
+
+func TestNoop(t *testing.T) {
+	assert.True(t, 0 == 0)
+}
