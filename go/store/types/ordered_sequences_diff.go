@@ -209,6 +209,7 @@ func orderedSequenceDiffLeftRightInRange(ctx context.Context, last orderedSequen
 		return err
 	}
 
+VALIDRANGES:
 	for lastCur.valid() && currentCur.valid() {
 		err := fastForward(ctx, lastCur, currentCur)
 		if err != nil {
@@ -242,7 +243,7 @@ func orderedSequenceDiffLeftRightInRange(ctx context.Context, last orderedSequen
 				if err != nil {
 					return err
 				} else if !isInRange {
-					break
+					break VALIDRANGES
 				}
 
 				mv, err := getMapValue(currentCur)
@@ -263,7 +264,7 @@ func orderedSequenceDiffLeftRightInRange(ctx context.Context, last orderedSequen
 				if !isInRange {
 					return err
 				} else if !isInRange {
-					break
+					break VALIDRANGES
 				}
 
 				if isLess, err := lastKey.Less(last.format(), currentKey); err != nil {
