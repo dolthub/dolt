@@ -1,3 +1,17 @@
+// Copyright 2021 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package valuefile
 
 import (
@@ -15,8 +29,10 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+// ErrCorruptNVF is the error used when the file being read is corrupt
 var ErrCorruptNVF = errors.New("nvf file is corrupt")
 
+// WritePrimitiveValueFile writes values to the filepath provided
 func WritePrimitiveValueFile(ctx context.Context, filepath string, values ...types.Value) error {
 	for _, v := range values {
 		if !types.IsPrimitiveKind(v.Kind()) {
@@ -31,9 +47,10 @@ func WritePrimitiveValueFile(ctx context.Context, filepath string, values ...typ
 		return err
 	}
 
-	return WriteValueFile(ctx, filepath, store)
+	return WriteValueFile(ctx, filepath, store, values...)
 }
 
+// WriteValueFile writes the values stored in the *FileValueStore to the filepath provided
 func WriteValueFile(ctx context.Context, filepath string, store *FileValueStore, values ...types.Value) (err error) {
 
 	f, err := os.OpenFile(filepath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
@@ -51,6 +68,7 @@ func WriteValueFile(ctx context.Context, filepath string, store *FileValueStore,
 	return WriteToWriter(ctx, f, store, values...)
 }
 
+// WriteToWriter writes the values out to the provided writer in the value file format
 func WriteToWriter(ctx context.Context, wr io.Writer, store *FileValueStore, values ...types.Value) error {
 	db := datas.NewDatabase(store)
 	ds, err := db.GetDataset(ctx, "master")
@@ -86,7 +104,20 @@ func WriteToWriter(ctx context.Context, wr io.Writer, store *FileValueStore, val
 	return nil
 }
 
+// write writes out:
+// NomsBinFormat version string length
+// NomsBinFormat version String
+// Root Hash
+// uint32 num chunks
+//
+// for each chunk:
+//   hash of chunk
+//   len of chunk
+//
+// for each chunk
+//   chunk bytes
 func write(wr io.Writer, h hash.Hash, store *FileValueStore) error {
+	// The Write*IfNoErr functions makes the error handling code less annoying
 	err := iohelp.WritePrimIfNoErr(wr, uint32(len(store.nbf.VersionString())), nil)
 	err = iohelp.WriteIfNoErr(wr, []byte(store.nbf.VersionString()), err)
 	err = iohelp.WriteIfNoErr(wr, h[:], err)
@@ -109,6 +140,7 @@ func write(wr io.Writer, h hash.Hash, store *FileValueStore) error {
 	return err
 }
 
+// ReadValueFile reads from the provided file and returns the values stored in the file
 func ReadValueFile(ctx context.Context, filepath string) ([]types.Value, error) {
 	f, err := os.Open(filepath)
 
@@ -121,6 +153,8 @@ func ReadValueFile(ctx context.Context, filepath string) ([]types.Value, error) 
 	return ReadFromReader(ctx, f)
 }
 
+// ReadFromReader reads from the provided reader which should provided access to data in the value file format and returns
+// the values
 func ReadFromReader(ctx context.Context, rd io.Reader) ([]types.Value, error) {
 	h, store, err := read(ctx, rd)
 
@@ -161,10 +195,18 @@ func ReadFromReader(ctx context.Context, rd io.Reader) ([]types.Value, error) {
 	return values, nil
 }
 
+// see the write section to see the value file
 func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error) {
+	// ErrPreservingReader allows me to ignore errors until I need to use the data
 	errRd := iohelp.NewErrPreservingReader(rd)
 
-	fmtLen, _ := errRd.ReadUint32(binary.BigEndian)
+	// read len of NBF version string and then read the version string and check it
+	fmtLen, err := errRd.ReadUint32(binary.BigEndian)
+
+	if err != nil {
+		return hash.Hash{}, nil, err
+	}
+
 	data, err := iohelp.ReadNBytes(errRd, int(fmtLen))
 
 	if err != nil {
@@ -187,6 +229,7 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 		return hash.Hash{}, nil, err
 	}
 
+	// read the root hash and the chunk count
 	hashBytes, _ := iohelp.ReadNBytes(errRd, hash.ByteLen)
 	numChunks, err := errRd.ReadUint32(binary.BigEndian)
 
@@ -194,6 +237,7 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 		return hash.Hash{}, nil, err
 	}
 
+	// read the hashes and sizes
 	type hashAndSize struct {
 		h    hash.Hash
 		size uint32
@@ -210,6 +254,7 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 		hashesAndSizes[i] = hashAndSize{hash.New(chHashBytes), size}
 	}
 
+	// read the data and validate it against the expected hashes
 	for _, hashAndSize := range hashesAndSizes {
 		h := hashAndSize.h
 		size := hashAndSize.size

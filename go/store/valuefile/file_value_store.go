@@ -1,3 +1,17 @@
+// Copyright 2021 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package valuefile
 
 import (
@@ -13,6 +27,8 @@ import (
 var _ chunks.ChunkStore = (*FileValueStore)(nil)
 var _ types.ValueReadWriter = (*FileValueStore)(nil)
 
+// FileValueStore implements a trivial in memory chunks.ChunkStore and types.ValueReadWriter in order to allow easy
+// serialization / deserialization of noms data to and from a file
 type FileValueStore struct {
 	nbf *types.NomsBinFormat
 
@@ -24,6 +40,7 @@ type FileValueStore struct {
 	chunks    map[hash.Hash][]byte
 }
 
+// NewFileValueStore creates a new FileValueStore
 func NewFileValueStore(nbf *types.NomsBinFormat) (*FileValueStore, error) {
 	return &FileValueStore{
 		nbf:       nbf,
@@ -34,10 +51,12 @@ func NewFileValueStore(nbf *types.NomsBinFormat) (*FileValueStore, error) {
 	}, nil
 }
 
+// Gets the NomsBinaryFormat for the Store
 func (f *FileValueStore) Format() *types.NomsBinFormat {
 	return f.nbf
 }
 
+// ReadValue reads a value from the store
 func (f *FileValueStore) ReadValue(ctx context.Context, h hash.Hash) (types.Value, error) {
 	f.valLock.Lock()
 	defer f.valLock.Unlock()
@@ -46,6 +65,8 @@ func (f *FileValueStore) ReadValue(ctx context.Context, h hash.Hash) (types.Valu
 	return v, nil
 }
 
+// ReadManyValues reads and decodes Values indicated by |hashes| from lvs and returns the found Values in the same order.
+// Any non-present Values will be represented by nil.
 func (f *FileValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice) (types.ValueSlice, error) {
 	f.valLock.Lock()
 	defer f.valLock.Unlock()
@@ -58,6 +79,7 @@ func (f *FileValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSli
 	return vals, nil
 }
 
+// WriteValue adds a value to the store
 func (f *FileValueStore) WriteValue(ctx context.Context, v types.Value) (types.Ref, error) {
 	f.valLock.Lock()
 	defer f.valLock.Unlock()
@@ -68,23 +90,28 @@ func (f *FileValueStore) WriteValue(ctx context.Context, v types.Value) (types.R
 		return types.Ref{}, err
 	}
 
-	f.values[h] = v
+	_, ok := f.values[h]
 
-	c, err := types.EncodeValue(v, f.nbf)
+	if !ok {
+		f.values[h] = v
 
-	if err != nil {
-		return types.Ref{}, err
-	}
+		c, err := types.EncodeValue(v, f.nbf)
 
-	err = f.Put(ctx, c)
+		if err != nil {
+			return types.Ref{}, err
+		}
 
-	if err != nil {
-		return types.Ref{}, err
+		err = f.Put(ctx, c)
+
+		if err != nil {
+			return types.Ref{}, err
+		}
 	}
 
 	return types.NewRef(v, f.nbf)
 }
 
+// Get gets a chunk by it's hash
 func (f *FileValueStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
 	f.chunkLock.Lock()
 	defer f.chunkLock.Unlock()
@@ -98,6 +125,7 @@ func (f *FileValueStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, er
 	}
 }
 
+// GetMany gets chunks by their hashes. Chunks that are found are written to the channel.
 func (f *FileValueStore) GetMany(ctx context.Context, hashes hash.HashSet, found func(*chunks.Chunk)) error {
 	f.chunkLock.Lock()
 	defer f.chunkLock.Unlock()
@@ -114,6 +142,7 @@ func (f *FileValueStore) GetMany(ctx context.Context, hashes hash.HashSet, found
 	return nil
 }
 
+// Has returns true if a chunk is present in the store, false if not
 func (f *FileValueStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	f.chunkLock.Lock()
 	defer f.chunkLock.Unlock()
@@ -122,6 +151,7 @@ func (f *FileValueStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	return ok, nil
 }
 
+// HasMany returns the set of hashes that are absent from the store
 func (f *FileValueStore) HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet, err error) {
 	f.chunkLock.Lock()
 	defer f.chunkLock.Unlock()
@@ -138,6 +168,7 @@ func (f *FileValueStore) HasMany(ctx context.Context, hashes hash.HashSet) (abse
 	return absent, nil
 }
 
+// Put puts a chunk inton the store
 func (f *FileValueStore) Put(ctx context.Context, c chunks.Chunk) error {
 	f.chunkLock.Lock()
 	defer f.chunkLock.Unlock()
@@ -146,22 +177,26 @@ func (f *FileValueStore) Put(ctx context.Context, c chunks.Chunk) error {
 	return nil
 }
 
+// Version returns the nbf version string
 func (f *FileValueStore) Version() string {
 	return f.nbf.VersionString()
 }
 
+// Rebase brings this ChunkStore into sync with the persistent storage's current root.  Has no impact here
 func (f *FileValueStore) Rebase(ctx context.Context) error {
 	f.chunkLock.Lock()
 	defer f.chunkLock.Unlock()
 	return nil
 }
 
+// Root returns the root hash
 func (f *FileValueStore) Root(ctx context.Context) (hash.Hash, error) {
 	f.chunkLock.Lock()
 	defer f.chunkLock.Unlock()
 	return f.rootHash, nil
 }
 
+// Commit sets the root hash
 func (f *FileValueStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
 	f.chunkLock.Lock()
 	defer f.chunkLock.Unlock()
@@ -174,14 +209,17 @@ func (f *FileValueStore) Commit(ctx context.Context, current, last hash.Hash) (b
 	return false, nil
 }
 
+// Stats doesn't do anything
 func (f *FileValueStore) Stats() interface{} {
 	return nil
 }
 
+// StatsSummary doesn't do anything
 func (f *FileValueStore) StatsSummary() string {
 	return ""
 }
 
+// Close doesn't do anything
 func (f *FileValueStore) Close() error {
 	f.chunkLock.Lock()
 	defer f.chunkLock.Unlock()
