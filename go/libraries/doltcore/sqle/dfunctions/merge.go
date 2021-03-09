@@ -154,6 +154,10 @@ func checkForUncommittedChanges(root *doltdb.RootValue, parentRoot *doltdb.RootV
 }
 
 func getBranchCommit(ctx *sql.Context, ok bool, val interface{}, err error, ddb *doltdb.DoltDB) (*doltdb.Commit, hash.Hash, error) {
+	if err != nil {
+		return nil, hash.Hash{}, err
+	}
+
 	paramStr, ok := val.(string)
 
 	if !ok {
@@ -182,6 +186,10 @@ func getBranchCommit(ctx *sql.Context, ok bool, val interface{}, err error, ddb 
 }
 
 func getParent(ctx *sql.Context, err error, sess *sqle.DoltSession, dbName string) (*doltdb.Commit, hash.Hash, *doltdb.RootValue, error) {
+	if err != nil {
+		return nil, hash.Hash{}, nil, err
+	}
+
 	parent, ph, err := sess.GetParentCommit(ctx, dbName)
 
 	if err != nil {
