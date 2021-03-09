@@ -101,6 +101,9 @@ Andy Anderson,27,
 	writeToCSV(csvWr, rows, t)
 
 	results, err := fs.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if string(results) != expected {
 		t.Errorf(`%s != %s`, results, expected)
 	}
@@ -130,6 +133,9 @@ Andy Anderson|27|
 	writeToCSV(csvWr, rows, t)
 
 	results, err := fs.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if string(results) != expected {
 		t.Errorf(`%s != %s`, results, expected)
 	}
