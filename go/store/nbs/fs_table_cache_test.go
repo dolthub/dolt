@@ -31,6 +31,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFSTableCache(t *testing.T) {
@@ -48,15 +49,15 @@ func TestFSTableCache(t *testing.T) {
 		}
 
 		tc, err := newFSTableCache(dir, uint64(sum), len(datas))
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		for _, d := range datas {
 			err := tc.store(computeAddr(d), bytes.NewReader(d), uint64(len(d)))
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 
 		expiredName := computeAddr(datas[0])
 		r, err := tc.checkout(expiredName)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Nil(t, r)
 		_, fserr := os.Stat(filepath.Join(dir, expiredName.String()))
 		assert.True(t, os.IsNotExist(fserr))
@@ -64,7 +65,7 @@ func TestFSTableCache(t *testing.T) {
 		for _, d := range datas[1:] {
 			name := computeAddr(d)
 			r, err := tc.checkout(name)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.NotNil(t, r)
 			assertDataInReaderAt(t, d, r)
 			_, fserr := os.Stat(filepath.Join(dir, name.String()))
@@ -82,12 +83,12 @@ func TestFSTableCache(t *testing.T) {
 			var names []addr
 			for i := byte(0); i < 4; i++ {
 				name := computeAddr([]byte{i})
-				assert.NoError(ioutil.WriteFile(filepath.Join(dir, name.String()), nil, 0666))
+				require.NoError(t, ioutil.WriteFile(filepath.Join(dir, name.String()), nil, 0666))
 				names = append(names, name)
 			}
 
 			ftc, err := newFSTableCache(dir, 1024, 4)
-			assert.NoError(err)
+			require.NoError(t, err)
 			assert.NotNil(ftc)
 
 			for _, name := range names {
@@ -100,7 +101,7 @@ func TestFSTableCache(t *testing.T) {
 			dir := makeTempDir(t)
 			defer os.RemoveAll(dir)
 
-			assert.NoError(t, ioutil.WriteFile(filepath.Join(dir, "boo"), nil, 0666))
+			require.NoError(t, ioutil.WriteFile(filepath.Join(dir, "boo"), nil, 0666))
 			_, err := newFSTableCache(dir, 1024, 4)
 			assert.Error(t, err)
 		})
@@ -111,9 +112,9 @@ func TestFSTableCache(t *testing.T) {
 			defer os.RemoveAll(dir)
 
 			tempFile := filepath.Join(dir, tempTablePrefix+"boo")
-			assert.NoError(t, ioutil.WriteFile(tempFile, nil, 0666))
+			require.NoError(t, ioutil.WriteFile(tempFile, nil, 0666))
 			_, err := newFSTableCache(dir, 1024, 4)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			_, fserr := os.Stat(tempFile)
 			assert.True(t, os.IsNotExist(fserr))
 		})
@@ -122,7 +123,7 @@ func TestFSTableCache(t *testing.T) {
 			t.Parallel()
 			dir := makeTempDir(t)
 			defer os.RemoveAll(dir)
-			assert.NoError(t, os.Mkdir(filepath.Join(dir, "sub"), 0777))
+			require.NoError(t, os.Mkdir(filepath.Join(dir, "sub"), 0777))
 			_, err := newFSTableCache(dir, 1024, 4)
 			assert.Error(t, err)
 		})
@@ -132,7 +133,7 @@ func TestFSTableCache(t *testing.T) {
 func assertDataInReaderAt(t *testing.T, data []byte, r io.ReaderAt) {
 	p := make([]byte, len(data))
 	n, err := r.ReadAt(p, 0)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, len(data), n)
 	assert.Equal(t, data, p)
 }

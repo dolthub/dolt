@@ -29,6 +29,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/util/sizecache"
 )
@@ -43,7 +44,7 @@ func TestDynamoTableReaderAt(t *testing.T) {
 	}
 
 	tableData, h, err := buildTable(chunks)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	ddb.putData(fmtTableName(h), tableData)
 
 	t.Run("ddbTableStore", func(t *testing.T) {
@@ -51,7 +52,7 @@ func TestDynamoTableReaderAt(t *testing.T) {
 			test := func(dts *ddbTableStore) {
 				assert := assert.New(t)
 				data, err := dts.ReadTable(context.Background(), h, &Stats{})
-				assert.NoError(err)
+				require.NoError(t, err)
 				assert.Equal(tableData, data)
 
 				data, err = dts.ReadTable(context.Background(), computeAddr([]byte{}), &Stats{})
@@ -76,7 +77,7 @@ func TestDynamoTableReaderAt(t *testing.T) {
 				// Table should have been cached on read
 				baseline := ddb.NumGets()
 				_, err := dts.ReadTable(context.Background(), h, &Stats{})
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Zero(t, ddb.NumGets()-baseline)
 			})
 		})
@@ -86,10 +87,10 @@ func TestDynamoTableReaderAt(t *testing.T) {
 				assert := assert.New(t)
 
 				dts := &ddbTableStore{makeFakeDDB(t), "table", nil, nil}
-				assert.NoError(dts.Write(context.Background(), h, tableData))
+				require.NoError(t, dts.Write(context.Background(), h, tableData))
 
 				data, err := dts.ReadTable(context.Background(), h, &Stats{})
-				assert.NoError(err)
+				require.NoError(t, err)
 				assert.Equal(tableData, data)
 			})
 
@@ -98,12 +99,12 @@ func TestDynamoTableReaderAt(t *testing.T) {
 
 				tc := sizecache.New(uint64(2 * len(tableData)))
 				dts := &ddbTableStore{makeFakeDDB(t), "table", nil, tc}
-				assert.NoError(dts.Write(context.Background(), h, tableData))
+				require.NoError(t, dts.Write(context.Background(), h, tableData))
 
 				// Table should have been cached on write
 				baseline := ddb.NumGets()
 				data, err := dts.ReadTable(context.Background(), h, &Stats{})
-				assert.NoError(err)
+				require.NoError(t, err)
 				assert.Equal(tableData, data)
 				assert.Zero(ddb.NumGets() - baseline)
 			})
@@ -121,13 +122,13 @@ func TestDynamoTableReaderAt(t *testing.T) {
 		scratch := make([]byte, len(tableData)/4)
 		baseline := ddb.NumGets()
 		_, err := tra.ReadAtWithStats(context.Background(), scratch, 0, stats)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.True(ddb.NumGets() > baseline)
 
 		// Table should have been cached on read so read again, a different slice this time
 		baseline = ddb.NumGets()
 		_, err = tra.ReadAtWithStats(context.Background(), scratch, int64(len(scratch)), stats)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Zero(ddb.NumGets() - baseline)
 	})
 }

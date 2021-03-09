@@ -32,6 +32,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -39,7 +40,7 @@ import (
 
 func makeFileManifestTempDir(t *testing.T) fileManifestV5 {
 	dir, err := ioutil.TempDir("", "")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	return fileManifestV5{dir: dir} //, cache: newManifestCache(defaultManifestCacheSize)}
 }
 
@@ -50,7 +51,7 @@ func TestFileManifestLoadIfExists(t *testing.T) {
 	stats := &Stats{}
 
 	exists, upstream, err := fm.ParseIfExists(context.Background(), stats, nil)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.False(exists)
 
 	// Simulate another process writing a manifest (with an old Noms version).
@@ -60,11 +61,11 @@ func TestFileManifestLoadIfExists(t *testing.T) {
 	gcGen := addr{}
 	m := strings.Join([]string{StorageVersion, "0", jerk.String(), newRoot.String(), gcGen.String(), tableName.String(), "0"}, ":")
 	err = clobberManifest(fm.dir, m)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	// ParseIfExists should now reflect the manifest written above.
 	exists, upstream, err = fm.ParseIfExists(context.Background(), stats, nil)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(exists)
 	assert.Equal("0", upstream.vers)
 	assert.Equal(jerk, upstream.lock)
@@ -88,7 +89,7 @@ func TestFileManifestLoadIfExistsHoldsLock(t *testing.T) {
 	gcGen := addr{}
 	m := strings.Join([]string{StorageVersion, constants.NomsVersion, lock.String(), newRoot.String(), gcGen.String(), tableName.String(), "0"}, ":")
 	err := clobberManifest(fm.dir, m)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	// ParseIfExists should now reflect the manifest written above.
 	exists, upstream, err := fm.ParseIfExists(context.Background(), stats, func() error {
@@ -97,11 +98,11 @@ func TestFileManifestLoadIfExistsHoldsLock(t *testing.T) {
 		badRoot := hash.Of([]byte("bad root"))
 		m = strings.Join([]string{StorageVersion, "0", lock.String(), badRoot.String(), gcGen.String(), tableName.String(), "0"}, ":")
 		b, err := tryClobberManifest(fm.dir, m)
-		assert.NoError(err, string(b))
+		require.NoError(t, err, string(b))
 		return err
 	})
 
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(exists)
 	assert.Equal(constants.NomsVersion, upstream.vers)
 	assert.Equal(newRoot, upstream.root)
@@ -120,7 +121,7 @@ func TestFileManifestUpdateWontClobberOldVersion(t *testing.T) {
 	// Simulate another process having already put old Noms data in dir/.
 	m := strings.Join([]string{StorageVersion, "0", addr{}.String(), hash.Hash{}.String(), addr{}.String()}, ":")
 	err := clobberManifest(fm.dir, m)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	_, err = fm.Update(context.Background(), addr{}, manifestContents{}, stats, nil)
 	assert.Error(err)
@@ -134,14 +135,14 @@ func TestFileManifestUpdateEmpty(t *testing.T) {
 
 	l := computeAddr([]byte{0x01})
 	upstream, err := fm.Update(context.Background(), addr{}, manifestContents{vers: constants.NomsVersion, lock: l}, stats, nil)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(l, upstream.lock)
 	assert.True(upstream.root.IsEmpty())
 	assert.Empty(upstream.specs)
 
 	fm2 := fileManifestV5{fm.dir} // Open existent, but empty manifest
 	exists, upstream, err := fm2.ParseIfExists(context.Background(), stats, nil)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(exists)
 	assert.Equal(l, upstream.lock)
 	assert.True(upstream.root.IsEmpty())
@@ -149,7 +150,7 @@ func TestFileManifestUpdateEmpty(t *testing.T) {
 
 	l2 := computeAddr([]byte{0x02})
 	upstream, err = fm2.Update(context.Background(), l, manifestContents{vers: constants.NomsVersion, lock: l2}, stats, nil)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(l2, upstream.lock)
 	assert.True(upstream.root.IsEmpty())
 	assert.Empty(upstream.specs)
@@ -175,10 +176,10 @@ func TestFileManifestUpdate(t *testing.T) {
 		gcGen := addr{}
 		m := strings.Join([]string{StorageVersion, constants.NomsVersion, lock.String(), newRoot2.String(), gcGen.String()}, ":")
 		b, err := tryClobberManifest(fm.dir, m)
-		assert.NoError(err, string(b))
+		require.NoError(t, err, string(b))
 		return nil
 	})
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(contents.lock, upstream.lock)
 	assert.Equal(contents.root, upstream.root)
 	assert.Equal(contents.specs, upstream.specs)
@@ -186,12 +187,12 @@ func TestFileManifestUpdate(t *testing.T) {
 	// Now, test the case where the optimistic lock fails, and someone else updated the root since last we checked.
 	contents2 := manifestContents{lock: computeAddr([]byte("locker 2")), root: hash.Of([]byte("new root 2")), vers: constants.NomsVersion}
 	upstream, err = fm.Update(context.Background(), addr{}, contents2, stats, nil)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(contents.lock, upstream.lock)
 	assert.Equal(contents.root, upstream.root)
 	assert.Equal(contents.specs, upstream.specs)
 	upstream, err = fm.Update(context.Background(), upstream.lock, contents2, stats, nil)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(contents2.lock, upstream.lock)
 	assert.Equal(contents2.root, upstream.root)
 	assert.Empty(upstream.specs)
@@ -202,11 +203,11 @@ func TestFileManifestUpdate(t *testing.T) {
 	gcGen := addr{}
 	m := strings.Join([]string{StorageVersion, constants.NomsVersion, jerkLock.String(), contents2.root.String(), gcGen.String(), tableName.String(), "1"}, ":")
 	err = clobberManifest(fm.dir, m)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	contents3 := manifestContents{lock: computeAddr([]byte("locker 3")), root: hash.Of([]byte("new root 3")), vers: constants.NomsVersion}
 	upstream, err = fm.Update(context.Background(), upstream.lock, contents3, stats, nil)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(jerkLock, upstream.lock)
 	assert.Equal(contents2.root, upstream.root)
 	assert.Equal([]tableSpec{{tableName, 1}}, upstream.specs)

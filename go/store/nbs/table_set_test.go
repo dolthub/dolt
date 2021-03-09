@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var testChunks = [][]byte{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2")}
@@ -33,7 +34,7 @@ var testChunks = [][]byte{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2"
 func TestTableSetPrependEmpty(t *testing.T) {
 	ts := newFakeTableSet().Prepend(context.Background(), newMemTable(testMemTableSize), &Stats{})
 	specs, err := ts.ToSpecs()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Empty(t, specs)
 }
 
@@ -41,14 +42,14 @@ func TestTableSetPrepend(t *testing.T) {
 	assert := assert.New(t)
 	ts := newFakeTableSet()
 	specs, err := ts.ToSpecs()
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Empty(specs)
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
 	ts = ts.Prepend(context.Background(), mt, &Stats{})
 
 	firstSpecs, err := ts.ToSpecs()
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Len(firstSpecs, 1)
 
 	mt = newMemTable(testMemTableSize)
@@ -57,7 +58,7 @@ func TestTableSetPrepend(t *testing.T) {
 	ts = ts.Prepend(context.Background(), mt, &Stats{})
 
 	secondSpecs, err := ts.ToSpecs()
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Len(secondSpecs, 2)
 	assert.Equal(firstSpecs, secondSpecs[1:])
 }
@@ -80,7 +81,7 @@ func TestTableSetToSpecsExcludesEmptyTable(t *testing.T) {
 	ts = ts.Prepend(context.Background(), mt, &Stats{})
 
 	specs, err = ts.ToSpecs()
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Len(specs, 2)
 }
 
@@ -88,7 +89,7 @@ func TestTableSetFlattenExcludesEmptyTable(t *testing.T) {
 	assert := assert.New(t)
 	ts := newFakeTableSet()
 	specs, err := ts.ToSpecs()
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Empty(specs)
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
@@ -103,7 +104,7 @@ func TestTableSetFlattenExcludesEmptyTable(t *testing.T) {
 	ts = ts.Prepend(context.Background(), mt, &Stats{})
 
 	ts, err = ts.Flatten()
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.EqualValues(ts.Size(), 2)
 }
 
@@ -111,7 +112,7 @@ func TestTableSetExtract(t *testing.T) {
 	assert := assert.New(t)
 	ts := newFakeTableSet()
 	specs, err := ts.ToSpecs()
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Empty(specs)
 
 	// Put in one table
@@ -130,7 +131,7 @@ func TestTableSetExtract(t *testing.T) {
 		defer close(chunkChan)
 		err := ts.extract(context.Background(), chunkChan)
 
-		assert.NoError(err)
+		require.NoError(t, err)
 	}()
 	i := 0
 	for rec := range chunkChan {
@@ -156,22 +157,22 @@ func TestTableSetRebase(t *testing.T) {
 	}
 	fullTS := newTableSet(persister)
 	specs, err := fullTS.ToSpecs()
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Empty(specs)
 	fullTS = insert(fullTS, testChunks...)
 	fullTS, err = fullTS.Flatten()
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	ts := newTableSet(persister)
 	ts = insert(ts, testChunks[0])
 	assert.Equal(1, ts.Size())
 	ts, err = ts.Flatten()
-	assert.NoError(err)
+	require.NoError(t, err)
 	ts = insert(ts, []byte("novel"))
 
 	specs, err = fullTS.ToSpecs()
 	ts, err = ts.Rebase(context.Background(), specs, nil)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(4, ts.Size())
 }
 
@@ -179,7 +180,7 @@ func TestTableSetPhysicalLen(t *testing.T) {
 	assert := assert.New(t)
 	ts := newFakeTableSet()
 	specs, err := ts.ToSpecs()
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Empty(specs)
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
