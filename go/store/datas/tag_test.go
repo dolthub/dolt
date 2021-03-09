@@ -39,10 +39,10 @@ func TestNewTag(t *testing.T) {
 
 	parents := mustList(types.NewList(context.Background(), db))
 	commit, err := NewCommit(context.Background(), types.Float(1), parents, types.EmptyStruct(types.Format_7_18))
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	cmRef, err := types.NewRef(commit, types.Format_7_18)
-	assert.NoError(err)
+	require.NoError(t, err)
 	tag, err := NewTag(context.Background(), cmRef, types.EmptyStruct(types.Format_7_18))
 	require.NoError(t, err)
 
@@ -52,14 +52,14 @@ func TestNewTag(t *testing.T) {
 		mustType(types.MakeListType(mustType(types.MakeUnionType()))),
 		types.PrimitiveTypeMap[types.FloatKind],
 	)
-	assert.NoError(err)
+	require.NoError(t, err)
 	et, err := makeTagStructType(
 		types.EmptyStructType,
 		mustType(types.MakeRefType(ct)),
 	)
-	assert.NoError(err)
+	require.NoError(t, err)
 	at, err := types.TypeOf(tag)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	assertTypeEquals(et, at)
 }
