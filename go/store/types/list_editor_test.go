@@ -27,6 +27,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func listOfInts(vrw ValueReadWriter, vals ...int) (List, error) {
@@ -54,7 +55,7 @@ func assertState(t *testing.T, vrw ValueReadWriter, le *ListEditor, expectItems 
 
 	for i, v := range expectItems {
 		item, err := le.Get(context.Background(), uint64(i))
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, Float(v), item)
 	}
 
@@ -66,9 +67,9 @@ func assertState(t *testing.T, vrw ValueReadWriter, le *ListEditor, expectItems 
 	assert.Equal(t, expectEditCount, actualEditCount)
 
 	l, err := listOfInts(vrw, expectItems...)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	l2, err := le.List(context.Background())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, l.Equals(l2))
 }
 
@@ -114,13 +115,13 @@ func TestListEditorBasic(t *testing.T) {
 		le.Append(NullValue)
 		le.Append(Float(4))
 		l, err := le.List(context.Background())
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		v3, err := l.Get(context.Background(), 3)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, IsNull(v3))
 		v4, err := l.Get(context.Background(), 4)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, v4.Equals(Float(4)))
 	})
 }
@@ -249,7 +250,7 @@ func TestListSpliceFuzzer(t *testing.T) {
 	for i := 0; i < rounds; i++ {
 		tl := newTestList(startCount)
 		l, err := tl.toList(vrw)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		le := l.Edit()
 
 		for j := 0; j < splices; j++ {
@@ -258,9 +259,9 @@ func TestListSpliceFuzzer(t *testing.T) {
 			le.Splice(idx, removed, AsValuables(insert)...)
 		}
 		expect, err := tl.toList(vrw)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		actual, err := le.List(context.Background())
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, expect.Equals(actual))
 	}
 }

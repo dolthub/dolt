@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRefByHeight(t *testing.T) {
@@ -47,13 +48,13 @@ func TestRefByHeight(t *testing.T) {
 	h := RefByHeight{}
 
 	r1, err := newRefWithHeight(1)
-	assert.NoError(err)
+	require.NoError(t, err)
 	r2, err := newRefWithHeight(2)
-	assert.NoError(err)
+	require.NoError(t, err)
 	r3, err := newRefWithHeight(3)
-	assert.NoError(err)
+	require.NoError(t, err)
 	r4, err := newRefWithHeight(2)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	h.PushBack(r1)
 	assert.Equal(r1, h.PeekEnd())
@@ -101,7 +102,7 @@ func TestDropIndices(t *testing.T) {
 	h := &RefByHeight{}
 	for i := 0; i < 10; i++ {
 		ref, err := NewRef(Float(i), Format_7_18)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		h.PushBack(ref)
 	}
 	sort.Sort(h)
@@ -119,9 +120,9 @@ func TestPopRefsOfHeight(t *testing.T) {
 	h := &RefByHeight{}
 	for i, n := range []int{6, 3, 6, 6, 2} {
 		hsh, err := Float(i).Hash(Format_7_18)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		r, err := constructRef(Format_7_18, hsh, PrimitiveTypeMap[FloatKind], uint64(n))
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		h.PushBack(r)
 	}
 	sort.Sort(h)
