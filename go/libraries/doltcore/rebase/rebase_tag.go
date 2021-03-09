@@ -247,6 +247,9 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 
 		if !tableNeedsRebasing {
 			newRoot, err = newRoot.PutTable(ctx, tblName, tbl)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		parentTblName := tblName
@@ -293,10 +296,17 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		}
 
 		rebasedSS, err := ss.RebaseTag(tableMapping)
+		if err != nil {
+			return nil, err
+		}
 
 		// row rebase
 		var parentRows types.Map
 		parentTbl, found, err := parentRoot.GetTable(ctx, tblName)
+		if err != nil {
+			return nil, err
+		}
+
 		if found && parentTbl != nil {
 			parentRows, err = parentTbl.GetRowData(ctx)
 		} else {
@@ -311,6 +321,9 @@ func replayCommitWithNewTag(ctx context.Context, root, parentRoot, rebasedParent
 		var rebasedParentRows types.Map
 		var rebasedParentSch schema.Schema
 		rebasedParentTbl, found, err := rebasedParentRoot.GetTable(ctx, parentTblName)
+		if err != nil {
+			return nil, err
+		}
 		if found && rebasedParentTbl != nil {
 			rebasedParentRows, err = rebasedParentTbl.GetRowData(ctx)
 			if err != nil {

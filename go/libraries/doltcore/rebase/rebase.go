@@ -234,6 +234,9 @@ func rebaseRecursive(ctx context.Context, ddb *doltdb.DoltDB, replay ReplayCommi
 	}
 
 	allParents, err := ddb.ResolveAllParents(ctx, commit)
+	if err != nil {
+		return nil, err
+	}
 
 	if len(allParents) < 1 {
 		panic(fmt.Sprintf("commit: %s has no parents", commitHash.String()))
