@@ -200,3 +200,105 @@ SQL
     [ "${lines[1]}" = "1,hi" ]
     [ "${lines[2]}" = "2,hello" ]
 }
+
+@test "load data with different column types that uses optionally" {
+    skip "This functionality is not present yet."
+    cat <<DELIM > complex.csv
+1,"a string",100.20
+2,"a string containing a , comma",102.20
+3,"a string containing a \" quote",102.20
+4,"a string containing a \", quote and comma",102.20
+DELIM
+
+     run dolt sql << SQL
+SET secure_file_priv='./';
+CREATE TABLE test(pk int, c1 longtext, c2 float);
+LOAD DATA INFILE 'complex.csv' INTO TABLE test FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"';
+SQL
+
+    echo $output
+    [ "$status" -eq 0 ]
+
+    run dolt sql -r csv -q "select * from test"
+
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "pk,c1,c2" ]
+    [ "${lines[1]}" = "1,a string,100.20" ]
+    [ "${lines[2]}" = "2,a string containing a , comma,100.20" ]
+    [ "${lines[3]}" = "3,a string containing a \" quote,100.20" ]
+    [ "${lines[4]}" = "4,a string containing a \", quote and comma,100.20" ]
+}
+
+@test "load data works with escaped columns" {
+    skip "This functionality is not present yet."
+    cat <<DELIM > escape.txt
+"hi"
+"\hello"
+"Try\\N"
+"new\ns"
+DELIM
+
+     run dolt sql << SQL
+SET secure_file_priv='./testdata';
+CREATE TABLE loadtable(pk longtext);
+LOAD DATA INFILE 'test5.txt' INTO TABLE loadtable FIELDS ENCLOSED BY '\"';
+SQL
+
+    [ "$status" -eq 0 ]
+
+    run dolt sql -r csv -q "select * from test"
+
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "pk" ]
+    [ "${lines[1]}" = "hi" ]
+    [ "${lines[2]}" = "hello" ]
+    [ "${lines[3]}" = "TryN" ]
+    [ "${lines[4]}" = "new\ns" ]
+}
+
+@test "load data additional columns in file are ignored" {
+   skip "This functionality is not present yet."
+   cat <<DELIM > 1pk5col-ints.csv
+pk||c1||c2||c3||c4||c5
+0||1||2||3||4||5||6
+1||1||2||3||4||5||6
+DELIM
+
+    run dolt sql << SQL
+SET secure_file_priv='./';
+CREATE TABLE test(pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int);
+LOAD DATA INFILE '1pk5col-ints.csv' INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '||' ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES;
+SQL
+
+    [ "$status" -eq 0 ]
+
+    run dolt sql -r csv -q "select * from test"
+
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "pk,c1,c2,c3,c4,c5" ]
+    [ "${lines[1]}" = "0,1,2,3,4,5" ]
+    [ "${lines[2]}" = "1,1,2,3,4,5" ]
+}
+
+@test "load data with file that has less columns than table is ok" {
+   cat <<DELIM > 1pk5col-ints.csv
+pk||c1||c2||c3||c4
+0||1||2||3||4
+1||1||2||3||4
+DELIM
+
+    run dolt sql << SQL
+SET secure_file_priv='./';
+CREATE TABLE test(pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int);
+LOAD DATA INFILE '1pk5col-ints.csv' INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '||' ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES;
+SQL
+
+    [ "$status" -eq 0 ]
+
+    run dolt sql -r csv -q "select * from test"
+
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "pk,c1,c2,c3,c4,c5" ]
+    [ "${lines[1]}" = "0,1,2,3,4," ]
+    [ "${lines[2]}" = "1,1,2,3,4," ]
+}

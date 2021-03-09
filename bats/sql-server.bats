@@ -539,7 +539,7 @@ SQL
      server_query 1 "SELECT COUNT(*) FROM dolt_log" "COUNT(*)\n3"
 }
 
-@test "SIMPLE LOAD DATA via LOCAL INFILE works" {
+@test "LOAD DATA via LOCAL INFILE works" {
      skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
      cd repo1
