@@ -407,6 +407,9 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 		return 0, err
 	}
 	newTable, err = editor.RebuildAllIndexes(ctx, newTable)
+	if err != nil {
+		return 0, err
+	}
 
 	root, err := t.db.GetRoot(ctx)
 	if err != nil {
@@ -1099,6 +1102,9 @@ func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string) err
 		return err
 	}
 	newRoot, err := root.PutForeignKeyCollection(ctx, fkc)
+	if err != nil {
+		return err
+	}
 
 	err = t.db.SetRoot(ctx, newRoot)
 	if err != nil {
