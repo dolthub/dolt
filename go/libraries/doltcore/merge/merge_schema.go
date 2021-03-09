@@ -178,9 +178,16 @@ func ForeignKeysMerge(ctx context.Context, mergedRoot, ourRoot, theirRoot, ancRo
 	err = ourNewFKs.Iter(func(ourFK doltdb.ForeignKey) (stop bool, err error) {
 		return false, common.AddKeys(ourFK)
 	})
+	if err != nil {
+		return nil, nil, err
+	}
+
 	err = theirNewFKs.Iter(func(theirFK doltdb.ForeignKey) (stop bool, err error) {
 		return false, common.AddKeys(theirFK)
 	})
+	if err != nil {
+		return nil, nil, err
+	}
 
 	common, err = pruneInvalidForeignKeys(ctx, common, mergedRoot)
 	if err != nil {

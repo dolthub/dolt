@@ -579,4 +579,5 @@ func testMergeForeignKeys(t *testing.T, test mergeForeignKeyTest) {
 		assert.Equal(t, expFK, actFK)
 		return false, nil
 	})
+	assert.NoError(t, err)
 }
