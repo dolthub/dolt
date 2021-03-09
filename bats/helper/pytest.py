@@ -8,7 +8,7 @@ from multiprocessing import Process
 
 
 def _connect(user, host, port, database):
-    return mysql.connector.connect(user=user, host=host, port=port, database=database)
+    return mysql.connector.connect(user=user, host=host, port=port, database=database, allow_local_infile=True)
 
 
 def _print_err_and_exit(e):

@@ -543,23 +543,13 @@ SQL
      skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
      cd repo1
-     cat <<DELIM > 1pk5col-ints.csv
-pk||c1||c2
-0||1||2
-1||1||2
-DELIM
-
      start_sql_server repo1
 
      multi_query 1 "
-     CREATE TABLE test(pk int primary key, c1 int, c2 int);
+     CREATE TABLE test(pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int);
      SET local_infile=1;
-     SET secure_file_priv='/tmp';
-     SHOW VARIABLES;
-     LOAD DATA LOCAL INFILE '1pk5col-ints.csv' INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '||' ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES;
-SQL"
+     LOAD DATA LOCAL INFILE '$BATS_TEST_DIRNAME/helper/1pk5col-ints.csv' INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY ',' ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES;
+     "
 
-
-     server_query 1 "SELECT * FROM test" "pk,c1,c1\n0,1,2\n1,1,2"
-
+     server_query 1 "SELECT * FROM test" "pk,c1,c2,c3,c4,c5\n0,1,2,3,4,5\n1,1,2,3,4,5"
 }
