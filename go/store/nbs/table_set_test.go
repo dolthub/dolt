@@ -67,6 +67,7 @@ func TestTableSetToSpecsExcludesEmptyTable(t *testing.T) {
 	assert := assert.New(t)
 	ts := newFakeTableSet()
 	specs, err := ts.ToSpecs()
+	require.NoError(t, err)
 	assert.Empty(specs)
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
@@ -171,6 +172,7 @@ func TestTableSetRebase(t *testing.T) {
 	ts = insert(ts, []byte("novel"))
 
 	specs, err = fullTS.ToSpecs()
+	require.NoError(t, err)
 	ts, err = ts.Rebase(context.Background(), specs, nil)
 	require.NoError(t, err)
 	assert.Equal(4, ts.Size())
