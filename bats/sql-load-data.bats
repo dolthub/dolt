@@ -44,7 +44,7 @@ SQL
 }
 
 @test "load data without unknown file throws error" {
-      run dolt sql << SQL
+    run dolt sql << SQL
 SET secure_file_priv='./';
 CREATE TABLE test(pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int);
 LOAD DATA INFILE 'hello-ints.csv' INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '||' ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES;
@@ -67,7 +67,6 @@ CREATE TABLE test(pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int);
 LOAD DATA INFILE '1pk5col-ints.csv' INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '||' ENCLOSED BY '"'  ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES;
 SQL
 
-    echo $output
     [ "$status" -eq 0 ]
 
     run dolt sql -r csv -q "select * from test"
@@ -77,7 +76,6 @@ SQL
     [ "${lines[1]}" = "0,1,2,3,4,5" ]
     [ "${lines[2]}" = "1,1,2,3,4,5" ]
 }
-
 
 @test "load data works with prefixed terms" {
     cat <<DELIM > prefixed.txt
@@ -94,7 +92,6 @@ CREATE TABLE test(pk longtext);
 LOAD DATA INFILE 'prefixed.txt' INTO TABLE test CHARACTER SET UTF8MB4 LINES STARTING BY 'sss' IGNORE 1 LINES;
 SQL
 
-    echo $output
     [ "$status" -eq 0 ]
 
     run dolt sql -r csv -q "select * from test ORDER BY pk"
@@ -119,7 +116,6 @@ CREATE TABLE test(pk int primary key, c1 int, c2 int);
 LOAD DATA INFILE '1pk2col-ints.csv' INTO TABLE test FIELDS TERMINATED BY ',' IGNORE 1 LINES;
 SQL
 
-    echo $output
     [ "$status" -eq 0 ]
 
     run dolt sql -r csv -q "select * from test"
@@ -131,8 +127,7 @@ SQL
 }
 
 @test "load data works with fields separated by tabs" {
-  skip "This needs to be fixed."
-
+    skip "This needs to be fixed."
     cat <<DELIM > 1pk2col-ints.csv
 pk  c1
 0 1
@@ -141,19 +136,18 @@ DELIM
 
     run dolt sql << SQL
 SET secure_file_priv='./';
-CREATE TABLE test(pk int primary key, c1 int, c2 int);
+CREATE TABLE test(pk int primary key, c1 int);
 LOAD DATA INFILE '1pk2col-ints.csv' INTO TABLE test FIELDS TERMINATED BY '\t' IGNORE 1 LINES;
 SQL
 
-    echo $output
     [ "$status" -eq 0 ]
 
     run dolt sql -r csv -q "select * from test"
 
     [ "$status" -eq 0 ]
-    [ "${lines[0]}" = "pk,c1,c2" ]
-    [ "${lines[1]}" = "0,1," ]
-    [ "${lines[2]}" = "1,1," ]
+    [ "${lines[0]}" = "pk,c1" ]
+    [ "${lines[1]}" = "0,1" ]
+    [ "${lines[2]}" = "1,1" ]
 }
 
 @test "load data recognizes certain nulls" {
@@ -216,7 +210,6 @@ CREATE TABLE test(pk int, c1 longtext, c2 float);
 LOAD DATA INFILE 'complex.csv' INTO TABLE test FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"';
 SQL
 
-    echo $output
     [ "$status" -eq 0 ]
 
     run dolt sql -r csv -q "select * from test"
@@ -256,7 +249,7 @@ SQL
     [ "${lines[4]}" = "new\ns" ]
 }
 
-@test "load data additional columns in file are ignored" {
+@test "load data when the number of input columns in the file is greater than the number of schema columns" {
    skip "This functionality is not present yet."
    cat <<DELIM > 1pk5col-ints.csv
 pk||c1||c2||c3||c4||c5
@@ -278,27 +271,4 @@ SQL
     [ "${lines[0]}" = "pk,c1,c2,c3,c4,c5" ]
     [ "${lines[1]}" = "0,1,2,3,4,5" ]
     [ "${lines[2]}" = "1,1,2,3,4,5" ]
-}
-
-@test "load data with file that has less columns than table is ok" {
-   cat <<DELIM > 1pk5col-ints.csv
-pk||c1||c2||c3||c4
-0||1||2||3||4
-1||1||2||3||4
-DELIM
-
-    run dolt sql << SQL
-SET secure_file_priv='./';
-CREATE TABLE test(pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int);
-LOAD DATA INFILE '1pk5col-ints.csv' INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '||' ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES;
-SQL
-
-    [ "$status" -eq 0 ]
-
-    run dolt sql -r csv -q "select * from test"
-
-    [ "$status" -eq 0 ]
-    [ "${lines[0]}" = "pk,c1,c2,c3,c4,c5" ]
-    [ "${lines[1]}" = "0,1,2,3,4," ]
-    [ "${lines[2]}" = "1,1,2,3,4," ]
 }
