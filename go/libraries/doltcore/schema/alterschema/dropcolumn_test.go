@@ -92,6 +92,7 @@ func TestDropColumn(t *testing.T) {
 			var foundRows []row.Row
 			err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
 				tpl, err := row.FromNoms(dtestutils.TypedSchema, key.(types.Tuple), value.(types.Tuple))
+				assert.NoError(t, err)
 				foundRows = append(foundRows, tpl)
 				return false, nil
 			})
@@ -170,6 +171,7 @@ func TestDropColumnUsedByIndex(t *testing.T) {
 			var foundRows []row.Row
 			err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
 				tpl, err := row.FromNoms(dtestutils.TypedSchema, key.(types.Tuple), value.(types.Tuple))
+				assert.NoError(t, err)
 				foundRows = append(foundRows, tpl)
 				return false, nil
 			})
