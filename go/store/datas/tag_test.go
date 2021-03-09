@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/types"
@@ -43,6 +44,7 @@ func TestNewTag(t *testing.T) {
 	cmRef, err := types.NewRef(commit, types.Format_7_18)
 	assert.NoError(err)
 	tag, err := NewTag(context.Background(), cmRef, types.EmptyStruct(types.Format_7_18))
+	require.NoError(t, err)
 
 	ct, err := makeCommitStructType(
 		types.EmptyStructType,
