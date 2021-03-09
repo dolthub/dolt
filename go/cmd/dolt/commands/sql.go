@@ -882,6 +882,12 @@ func processQuery(ctx *sql.Context, query string, se *sqlEngine) (sql.Schema, sq
 		return se.ddl(ctx, s, query)
 	case *sqlparser.DBDDL:
 		return se.dbddl(ctx, s, query)
+	case *sqlparser.Load:
+		if s.Local {
+			return nil, nil, fmt.Errorf("LOCAL supported only in sql-server mode")
+		}
+
+		return se.query(ctx, query)
 	default:
 		return nil, nil, fmt.Errorf("Unsupported SQL statement: '%v'.", query)
 	}
@@ -1106,6 +1112,8 @@ func canProcessAsBatchInsert(ctx *sql.Context, sqlStatement sqlparser.Statement,
 		}
 
 		return true, nil
+	case *sqlparser.Load:
+		return true, nil
 	default:
 		return false, nil
 	}
@@ -1197,7 +1205,7 @@ func updateBatchInsertOutput() {
 // Updates the batch insert stats with the results of an INSERT, UPDATE, or DELETE statement.
 func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s *stats) error {
 	switch statement.(type) {
-	case *sqlparser.Insert, *sqlparser.Delete, *sqlparser.Update:
+	case *sqlparser.Insert, *sqlparser.Delete, *sqlparser.Update, *sqlparser.Load:
 		break
 	default:
 		return nil
