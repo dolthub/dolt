@@ -514,11 +514,10 @@ SQL
 }
 
 @test "DOLT_MERGE ff works" {
-      skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
      cd repo1
      start_sql_server repo1
-
 
      multi_query 1 "
      CREATE TABLE test (
@@ -538,4 +537,29 @@ SQL
      server_query 1 "SELECT * FROM test" "pk\n1\n2\n3\n1000"
 
      server_query 1 "SELECT COUNT(*) FROM dolt_log" "COUNT(*)\n3"
+}
+
+@test "SIMPLE LOAD DATA via LOCAL INFILE works" {
+     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+     cd repo1
+     cat <<DELIM > 1pk5col-ints.csv
+pk||c1||c2
+0||1||2
+1||1||2
+DELIM
+
+     start_sql_server repo1
+
+     multi_query 1 "
+     CREATE TABLE test(pk int primary key, c1 int, c2 int);
+     SET local_infile=1;
+     SET secure_file_priv='/tmp';
+     SHOW VARIABLES;
+     LOAD DATA LOCAL INFILE '1pk5col-ints.csv' INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '||' ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES;
+SQL"
+
+
+     server_query 1 "SELECT * FROM test" "pk,c1,c1\n0,1,2\n1,1,2"
+
 }
