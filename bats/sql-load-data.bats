@@ -43,7 +43,7 @@ SQL
     [[ "$output" =~  "table not found: test" ]] || false
 }
 
-@test "load data without unknown file throws error" {
+@test "load data with unknown file throws error" {
     run dolt sql << SQL
 SET secure_file_priv='./';
 CREATE TABLE test(pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int);
