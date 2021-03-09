@@ -273,6 +273,7 @@ func TestBlobConcat(t *testing.T) {
 
 	b7, b8 := split(b, 1e6/2)
 	b78, err := b7.Concat(context.Background(), b8)
+	assert.NoError(err)
 	assert.True(b.Equals(b78))
 }
 

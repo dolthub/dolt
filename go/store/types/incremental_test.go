@@ -102,6 +102,7 @@ func SkipTestIncrementalLoadSet(t *testing.T) {
 	expected, err := NewSet(context.Background(), vs, getTestVals(vs)...)
 	assert.NoError(err)
 	ref, err := vs.WriteValue(context.Background(), expected)
+	assert.NoError(err)
 	refHash := ref.TargetHash()
 
 	actualVar, err := vs.ReadValue(context.Background(), refHash)

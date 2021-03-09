@@ -128,6 +128,7 @@ func TestSetIteratorFrom(t *testing.T) {
 	s, err := NewSet(context.Background(), vs, numbers...)
 	assert.NoError(err)
 	i, err := s.IteratorFrom(context.Background(), Float(0))
+	assert.NoError(err)
 	vals, err := iterToSlice(i)
 	assert.NoError(err)
 	assert.True(vals.Equals(numbers), "Expected: %v != actual: %v", numbers, vs)

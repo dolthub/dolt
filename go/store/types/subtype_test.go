@@ -115,6 +115,7 @@ func TestAssertTypeList(tt *testing.T) {
 	vs := newTestValueStore()
 
 	listOfNumberType, err := MakeListType(PrimitiveTypeMap[FloatKind])
+	assert.NoError(tt, err)
 	l, err := NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))
 	assert.NoError(tt, err)
 	assertSubtype(context.Background(), Format_7_18, listOfNumberType, l)
@@ -499,10 +500,12 @@ func TestIsSubtypeOptionalFields(tt *testing.T) {
 	assert.False(IsSubtype(Format_7_18, s2, s1))
 
 	s3, err := MakeStructType("", StructField{"a", PrimitiveTypeMap[StringKind], false})
+	assert.NoError(err)
 	assert.False(IsSubtype(Format_7_18, s1, s3))
 	assert.False(IsSubtype(Format_7_18, s3, s1))
 
 	s4, err := MakeStructType("", StructField{"a", PrimitiveTypeMap[StringKind], true})
+	assert.NoError(err)
 	assert.False(IsSubtype(Format_7_18, s1, s4))
 	assert.False(IsSubtype(Format_7_18, s4, s1))
 

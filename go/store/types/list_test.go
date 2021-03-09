@@ -1161,6 +1161,7 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 	_, err = vs2.Commit(context.Background(), rt, rt)
 	assert.NoError(err)
 	v, err = vs2.ReadValue(context.Background(), hash2)
+	assert.NoError(err)
 	refList2 := v.(List)
 
 	// diff lists without value store
@@ -1193,6 +1194,7 @@ func TestListDiffAllValuesInSequenceRemoved(t *testing.T) {
 		ref, err := vrw.WriteValue(context.Background(), list)
 		assert.NoError(err)
 		ordKey, err := orderedKeyFromInt(len(vs), Format_7_18)
+		assert.NoError(err)
 		mt, err := newMetaTuple(ref, ordKey, uint64(len(vs)))
 		assert.NoError(err)
 
@@ -1263,6 +1265,7 @@ func TestListRemoveLastWhenNotLoaded(t *testing.T) {
 		ref, err := vs.WriteValue(context.Background(), l)
 		assert.NoError(err)
 		v, err := vs.ReadValue(context.Background(), ref.TargetHash())
+		assert.NoError(err)
 		return v.(List)
 	}
 

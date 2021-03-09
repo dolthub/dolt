@@ -74,6 +74,7 @@ func TestGenericStructNew(t *testing.T) {
 	assert.False(ok)
 
 	s2, err := NewStruct(Format_7_18, "S2", StructData{"b": Bool(false), "o": String("hi")})
+	assert.NoError(err)
 	v2, _, err := s2.MaybeGet("b")
 	assert.NoError(err)
 	assert.True(v2.Equals(Bool(false)))

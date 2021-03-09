@@ -783,6 +783,7 @@ func TestSetIter(t *testing.T) {
 	s, err := NewSet(context.Background(), vs, Float(0), Float(1), Float(2), Float(3), Float(4))
 	assert.NoError(err)
 	acc, err := NewSet(context.Background(), vs)
+	assert.NoError(err)
 	err = s.Iter(context.Background(), func(v Value) (bool, error) {
 		_, ok := v.(Float)
 		assert.True(ok)
@@ -792,6 +793,7 @@ func TestSetIter(t *testing.T) {
 		assert.NoError(err)
 		return false, nil
 	})
+	assert.NoError(err)
 	assert.True(s.Equals(acc))
 
 	acc, err = NewSet(context.Background(), vs)
@@ -1065,6 +1067,7 @@ func TestSetChunks(t *testing.T) {
 	assert.Len(c1, 0)
 
 	ref, err := NewRef(Float(0), Format_7_18)
+	assert.NoError(err)
 	l2, err := NewSet(context.Background(), vs, ref)
 	assert.NoError(err)
 	c2 := getChunks(l2)
@@ -1174,6 +1177,7 @@ func TestSetTypeAfterMutations(t *testing.T) {
 		se, err := s.Edit().Insert(String("a"))
 		assert.NoError(err)
 		s, err = se.Set(context.Background())
+		assert.NoError(err)
 		assert.Equal(s.Len(), uint64(n+1))
 		assert.IsType(c, s.asSequence())
 		assert.True(mustType(TypeOf(s)).Equals(mustType(MakeSetType(mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind]))))))
