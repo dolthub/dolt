@@ -78,6 +78,9 @@ func OpenXLSXReader(ctx context.Context, vrw types.ValueReadWriter, path string,
 	br := bufio.NewReaderSize(r, ReadBufSize)
 
 	colStrs, err := getColHeadersFromPath(path, info.SheetName)
+	if err != nil {
+		return nil, err
+	}
 
 	data, err := getXlsxRowsFromPath(path, info.SheetName)
 	if err != nil {
