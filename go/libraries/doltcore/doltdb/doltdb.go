@@ -54,7 +54,7 @@ var LocalDirDoltDB = "file://./" + dbfactory.DoltDataDir
 var InMemDoltDB = "mem://"
 
 // DoltDB wraps access to the underlying noms database and hides some of the details of the underlying storage.
-// Additionally the noms codebase uses panics in a way that is non idiomatic and I've opted to recover and return
+// Additionally the noms codebase uses panics in a way that is non idiomatic and We've opted to recover and return
 // errors in many cases.
 type DoltDB struct {
 	db datas.Database
@@ -720,6 +720,13 @@ var tagsRefFilter = map[ref.RefType]struct{}{ref.TagRefType: {}}
 // GetTags returns a list of all tags in the database.
 func (ddb *DoltDB) GetTags(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, tagsRefFilter)
+}
+
+var workspacesRefFilter = map[ref.RefType]struct{}{ref.WorkspaceRefType: {}}
+
+// GetWorkspaces returns a list of all workspaces in the database.
+func (ddb *DoltDB) GetWorkspaces(ctx context.Context) ([]ref.DoltRef, error) {
+	return ddb.GetRefsOfType(ctx, workspacesRefFilter)
 }
 
 // GetRefs returns a list of all refs in the database.

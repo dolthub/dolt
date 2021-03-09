@@ -13,11 +13,11 @@ teardown() {
     rm -rf $BATS_TMPDIR/no-dolt-dir-$$
 }
 
-@test "checking we have a dolt executable available" {
+@test "no-repo: checking we have a dolt executable available" {
     command -v dolt
 }
 
-@test "invoking dolt with no arguments" {
+@test "no-repo: invoking dolt with no arguments" {
     run dolt
     [ "$status" -eq 1 ]
     [ "${lines[0]}" = "Valid commands for dolt are" ]
@@ -55,7 +55,7 @@ teardown() {
     [[ "$output" =~ "filter-branch - Edits the commit history using the provided query." ]] || false
 }
 
-@test "check all commands for valid help text" {
+@test "no-repo: check all commands for valid help text" {
     # pipe all commands to a file
     # cut -s suppresses the line if it doesn't contain the delim
     dolt | cut -f 1 -d " - " -s | sed "s/ //g" > all.txt
@@ -82,7 +82,7 @@ teardown() {
     done
 }
 
-@test "testing dolt version output" {
+@test "no-repo: testing dolt version output" {
     run dolt version
     [ "$status" -eq 0 ]
     regex='dolt version [0-9]+.[0-9]+.[0-9]+'
@@ -92,97 +92,97 @@ teardown() {
 
 # Tests for dolt commands outside of a dolt repository
 NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
-@test "dolt status outside of a dolt repository" {
+@test "no-repo: dolt status outside of a dolt repository" {
     run dolt status
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "dolt add outside of a dolt repository" {
+@test "no-repo: dolt add outside of a dolt repository" {
     run dolt add
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "dolt reset outside of a dolt repository" {
+@test "no-repo: dolt reset outside of a dolt repository" {
     run dolt reset
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "dolt commit outside of a dolt repository" {
+@test "no-repo: dolt commit outside of a dolt repository" {
     run dolt commit
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "dolt log outside of a dolt repository" {
+@test "no-repo: dolt log outside of a dolt repository" {
     run dolt log
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "dolt diff outside of a dolt repository" {
+@test "no-repo: dolt diff outside of a dolt repository" {
     run dolt diff
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "dolt merge outside of a dolt repository" {
+@test "no-repo: dolt merge outside of a dolt repository" {
     run dolt merge
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "dolt branch outside of a dolt repository" {
+@test "no-repo: dolt branch outside of a dolt repository" {
     run dolt branch
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "dolt sql outside of a dolt repository" {
+@test "no-repo: dolt sql outside of a dolt repository" {
     run dolt sql
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "dolt checkout outside of a dolt repository" {
+@test "no-repo: dolt checkout outside of a dolt repository" {
     run dolt checkout
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "dolt remote outside of a dolt repository" {
+@test "no-repo: dolt remote outside of a dolt repository" {
     run dolt remote
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "dolt push outside of a dolt repository" {
+@test "no-repo: dolt push outside of a dolt repository" {
     run dolt push
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "dolt pull outside of a dolt repository" {
+@test "no-repo: dolt pull outside of a dolt repository" {
     run dolt pull
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "dolt fetch outside of a dolt repository" {
+@test "no-repo: dolt fetch outside of a dolt repository" {
     run dolt fetch
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "dolt ls outside of a dolt repository" {
+@test "no-repo: dolt ls outside of a dolt repository" {
     run dolt ls
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "dolt table outside of a dolt repository" {
+@test "no-repo: dolt table outside of a dolt repository" {
     run dolt table
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "Valid commands for dolt table are" ]
@@ -194,37 +194,37 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [[ "$output" =~ "cp -" ]] || false
 }
 
-@test "dolt table import outside of a dolt repository" {
+@test "no-repo: dolt table import outside of a dolt repository" {
     run dolt table import
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "dolt table rm outside of a dolt repository" {
+@test "no-repo: dolt table rm outside of a dolt repository" {
     run dolt table rm
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "dolt table mv outside of a dolt repository" {
+@test "no-repo: dolt table mv outside of a dolt repository" {
     run dolt table mv
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "dolt table cp outside of a dolt repository" {
+@test "no-repo: dolt table cp outside of a dolt repository" {
     run dolt table cp
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "dolt schema show outside of a dolt repository" {
+@test "no-repo: dolt schema show outside of a dolt repository" {
     run dolt schema show
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "dolt conflicts outside of a dolt repository" {
+@test "no-repo: dolt conflicts outside of a dolt repository" {
     run dolt conflicts
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "Valid commands for dolt conflicts are" ]
@@ -233,13 +233,13 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [[ "$output" =~ "resolve -" ]] || false
 }
 
-@test "dolt migrate outside of a dolt repository" {
+@test "no-repo: dolt migrate outside of a dolt repository" {
     run dolt migrate
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "initializing a dolt repository" {
+@test "no-repo: initializing a dolt repository" {
     mkdir dolt-repo-$$-new
     cd dolt-repo-$$-new
     run dolt init
@@ -255,7 +255,7 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     rm -rf $BATS_TMPDIR/dolt-repo-$$-new
 }
 
-@test "dolt init should not stomp existing LICENSE.md and README.md" {
+@test "no-repo: dolt init should not stomp existing LICENSE.md and README.md" {
     echo "greatest README ever" > README.md
     echo "greatest LICENSE ever" > LICENSE.md
     dolt init
@@ -263,7 +263,7 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     grep "greatest LICENSE ever" LICENSE.md
 }
 
-@test "all versions of help work outside a repository" {
+@test "no-repo: all versions of help work outside a repository" {
     dolt checkout --help
     run dolt checkout -help
     [ "$status" -eq 0 ]

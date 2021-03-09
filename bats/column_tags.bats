@@ -10,7 +10,7 @@ teardown() {
     teardown_common
 }
 
-@test "Renaming a column should preserve the tag number" {
+@test "column_tags: Renaming a column should preserve the tag number" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -26,7 +26,7 @@ SQL
     [[ "$output" =~ "test,c0,8201" ]] || false
 }
 
-@test "Renaming a table should preserve the tag number" {
+@test "column_tags: Renaming a table should preserve the tag number" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -44,7 +44,7 @@ SQL
     [[ "$output" =~ "new_name,c1,8201" ]] || false
 }
 
-@test "Schema tags should be case insensitive to tables" {
+@test "column_tags: Schema tags should be case insensitive to tables" {
     dolt sql <<SQL
 CREATE TABLE TeSt (
   pk BIGINT NOT NULL,
@@ -58,7 +58,7 @@ SQL
 }
 
 
-@test "Merging two branches that added same tag, name, type, and constraints" {
+@test "column_tags: Merging two branches that added same tag, name, type, and constraints" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -82,7 +82,7 @@ SQL
     dolt merge branch2
 }
 
-@test "Merging branches that use the same tag referring to different schema fails" {
+@test "column_tags: Merging branches that use the same tag referring to different schema fails" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:1234',
@@ -107,7 +107,7 @@ SQL
     [ $status -ne 0 ]
 }
 
-@test "Merging branches that use the same tag referring to different column names fails" {
+@test "column_tags: Merging branches that use the same tag referring to different column names fails" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:1234',
@@ -133,7 +133,7 @@ SQL
     [ $status -eq 1 ]
 }
 
-@test "Merging branches that both created the same column succeeds" {
+@test "column_tags: Merging branches that both created the same column succeeds" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -166,7 +166,7 @@ SQL
     [[ "${lines[5]}" =~ "\`c3\` double" ]] || false
 }
 
-@test "Merging branches that both created the same table succeeds" {
+@test "column_tags: Merging branches that both created the same table succeeds" {
     dolt branch branch1
     dolt branch branch2
     dolt checkout branch1
@@ -198,7 +198,7 @@ SQL
     [[ "${lines[3]}" =~ "\`c1\` bigint" ]] || false
 }
 
-@test "Deterministic tag generation produces consistent results" {
+@test "column_tags: Deterministic tag generation produces consistent results" {
     dolt branch other
     dolt sql <<SQL
 CREATE TABLE test1 (
@@ -220,7 +220,7 @@ SQL
     [[ "$output" =~ "test1,c3,11314" ]] || false
 }
 
-@test "dolt table import -c uses deterministic tag generation" {
+@test "column_tags: dolt table import -c uses deterministic tag generation" {
     cat <<DELIM > data.csv
 pk,c1,c2,c3,c4,c5
 0,1,2,3,4,5

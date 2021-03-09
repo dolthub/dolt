@@ -160,11 +160,11 @@ func (suite *listTestSuite) TestIter() {
 	list := suite.col.(List)
 	expectIdx := uint64(0)
 	endAt := suite.expectLen / 2
-	err := list.Iter(context.Background(), func(v Value, idx uint64) bool {
+	err := list.Iter(context.Background(), func(v Value, idx uint64) (bool, error) {
 		suite.Equal(expectIdx, idx)
 		expectIdx++
 		suite.Equal(suite.elems[idx], v)
-		return expectIdx == endAt
+		return expectIdx == endAt, nil
 	})
 
 	suite.NoError(err)
@@ -311,7 +311,7 @@ func TestStreamingListCreation(t *testing.T) {
 	assert.True(ok)
 	assert.NoError(ae.Get())
 	assert.True(cl.Equals(sl))
-	err = cl.Iter(context.Background(), func(v Value, idx uint64) (done bool) {
+	err = cl.Iter(context.Background(), func(v Value, idx uint64) (done bool, err error) {
 		done = !assert.True(v.Equals(mustValue(sl.Get(context.Background(), idx))))
 		return
 	})

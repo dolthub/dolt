@@ -22,7 +22,7 @@ teardown() {
     teardown_common
 }
 
-@test "create a table with a schema file and examine repo" {
+@test "2pk5cols-ints: create a table with a schema file and examine repo" {
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "test" ]] || false
@@ -39,7 +39,7 @@ teardown() {
     [[ "$output" =~ "new table:" ]] || false
 }
 
-@test "add a row to a two primary table using dolt table put-row" {
+@test "2pk5cols-ints: add a row to a two primary table using dolt table put-row" {
     dolt add test
     dolt commit -m "added test table"
     run dolt sql -q "insert into test values (0, 0, 1, 2, 3, 4, 5)"
@@ -49,7 +49,7 @@ teardown() {
     [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+0[[:space:]]+\|[[:space:]]+0 ]] || false
 }
 
-@test "add a row where one of the primary keys is different, not both" {
+@test "2pk5cols-ints: add a row where one of the primary keys is different, not both" {
     dolt sql -q "insert into test values (0, 0, 1, 2, 3, 4, 5)"
     run dolt sql -q "insert into test values (0, 1, 1, 2, 3, 4, 10)"
     [ "$status" -eq 0 ]
@@ -60,7 +60,7 @@ teardown() {
     [[ "$output" =~ \|[[:space:]]+10 ]] || false
 }
 
-@test "overwrite a row with two primary keys" {
+@test "2pk5cols-ints: overwrite a row with two primary keys" {
     dolt sql -q "insert into test values (0, 0, 1, 2, 3, 4, 5)"
     run dolt sql -q "replace into test values (0, 0, 1, 2, 3, 4, 10)"
     [ "$status" -eq 0 ]
@@ -71,7 +71,7 @@ teardown() {
     [[ "$output" =~ \|[[:space:]]+10 ]] || false
 }
 
-@test "interact with a multiple primary key table with sql" {
+@test "2pk5cols-ints: interact with a multiple primary key table with sql" {
     run dolt sql -q "insert into test (pk1,pk2,c1,c2,c3,c4,c5) values (0,0,6,6,6,6,6)"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Query OK, 1 row affected" ]] || false

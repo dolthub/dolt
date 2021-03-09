@@ -26,7 +26,7 @@ teardown() {
 }
 
 
-@test "test foreign-key on commit checks" {
+@test "foreign-keys: test foreign-key on commit checks" {
     dolt reset --hard
     dolt sql <<SQL
       CREATE TABLE colors (
@@ -73,7 +73,7 @@ SQL
     dolt commit -m 'update 1'
 }
 
-@test "test multi-field foreign-key on commit checks" {
+@test "foreign-keys: test multi-field foreign-key on commit checks" {
     dolt reset --hard
     dolt sql <<SQL
       CREATE TABLE colors (
@@ -132,7 +132,7 @@ SQL
     dolt commit -m 'update 1'
 }
 
-@test "test foreign-key on commit errors" {
+@test "foreign-keys: test foreign-key on commit errors" {
     dolt reset --hard
     dolt sql <<SQL
       CREATE TABLE colors (
@@ -1227,9 +1227,8 @@ SQL
     dolt commit --force -m "updated parent"
     dolt checkout master
     run dolt merge other
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "violation" ]] || false
-    [[ "$output" =~ "3" ]] || false
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "Warning" ]] || false
 }
 
 @test "foreign-keys: Merge valid onto child" {
@@ -1302,9 +1301,8 @@ SQL
     dolt commit --force -m "updated child"
     dolt checkout master
     run dolt merge other
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "violation" ]] || false
-    [[ "$output" =~ "0" ]] || false
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "Warning" ]] || false
 }
 
 @test "foreign-keys: Merge valid onto parent and child" {
@@ -1380,9 +1378,8 @@ SQL
     dolt commit --force -m "updated both"
     dolt checkout master
     run dolt merge other
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "violation" ]] || false
-    [[ "$output" =~ "4" ]] || false
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "Warning" ]] || false
 }
 
 @test "foreign-keys: Resolve catches violations" {
@@ -1431,3 +1428,86 @@ SQL
     [[ "$output" =~ "fk_v1" ]] || false
 }
 
+@test "foreign-keys: fk constraint merge warning only for merges with fk constraints" {
+  dolt reset --hard
+
+  dolt checkout -b no_fk
+  dolt sql <<SQL
+    CREATE TABLE colors (
+        id INT NOT NULL,
+        color VARCHAR(32) NOT NULL,
+
+        PRIMARY KEY (id),
+        INDEX color_index(color)
+    );
+    CREATE TABLE objects (
+        id INT NOT NULL,
+        name VARCHAR(64) NOT NULL,
+        color VARCHAR(32),
+
+        PRIMARY KEY(id)
+    );
+SQL
+  dolt add .
+  dolt commit -m "schema added"
+
+  dolt checkout -b b1_no_fk
+  dolt sql -b -q "INSERT INTO colors (id,color) VALUES (1,'red');
+    INSERT INTO objects (id,name,color) VALUES (1,'truck','red');"
+  dolt add .
+  dolt commit -m 'person 1 changes'
+
+  dolt branch b2_no_fk no_fk
+  dolt checkout b2_no_fk
+  dolt sql -b -q "INSERT INTO colors (id,color) VALUES (1,'blue');
+    INSERT INTO objects (id,name,color) VALUES (1,'ball','blue'),(2,'shoe','blue');"
+  dolt add .
+  dolt commit -m 'person 2 changes'
+
+  dolt checkout b1_no_fk
+  run dolt merge b2_no_fk
+  [ "$status" -eq "0" ]
+  [[ ! "$output" =~ "Warning" ]] || false
+
+  dolt reset --hard
+
+  dolt branch fk master
+  dolt checkout fk
+  dolt sql <<SQL
+    CREATE TABLE colors (
+        id INT NOT NULL,
+        color VARCHAR(32) NOT NULL,
+
+        PRIMARY KEY (id),
+        INDEX color_index(color)
+    );
+    CREATE TABLE objects (
+        id INT NOT NULL,
+        name VARCHAR(64) NOT NULL,
+        color VARCHAR(32),
+
+        PRIMARY KEY(id),
+        FOREIGN KEY (color) REFERENCES colors(color)
+    );
+SQL
+  dolt add .
+  dolt commit -m "schema added"
+
+  dolt checkout -b b1_fk
+  dolt sql -b -q "INSERT INTO colors (id,color) VALUES (1,'red');
+    INSERT INTO objects (id,name,color) VALUES (1,'truck','red');"
+  dolt add .
+  dolt commit -m 'person 1 changes'
+
+  dolt branch b2_fk fk
+  dolt checkout b2_fk
+  dolt sql -b -q "INSERT INTO colors (id,color) VALUES (1,'blue');
+    INSERT INTO objects (id,name,color) VALUES (1,'ball','blue'),(2,'shoe','blue');"
+  dolt add .
+  dolt commit -m 'person 2 changes'
+
+  dolt checkout b1_fk
+  run dolt merge b2_fk
+  [ "$status" -eq "0" ]
+  [[ "$output" =~ "Warning" ]] || false
+}

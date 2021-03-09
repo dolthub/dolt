@@ -18,7 +18,7 @@ teardown() {
     teardown_common
 }
 
-@test "DOLT_COMMIT without a message throws error" {
+@test "sql-commit: DOLT_COMMIT without a message throws error" {
     run dolt sql -q "SELECT DOLT_ADD('.')"
     [ $status -eq 0 ]
 
@@ -30,7 +30,7 @@ teardown() {
     [[ "$output" =~ "$regex" ]] || false
 }
 
-@test "DOLT_COMMIT with just a message reads session parameters" {
+@test "sql-commit: DOLT_COMMIT with just a message reads session parameters" {
     run dolt sql -q "SELECT DOLT_ADD('.')"
     [ $status -eq 0 ]
 
@@ -43,7 +43,7 @@ teardown() {
     [[ "$output" =~ "$regex" ]] || false
 }
 
-@test "DOLT_COMMIT with the all flag performs properly" {
+@test "sql-commit: DOLT_COMMIT with the all flag performs properly" {
     run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
 
     # Check that everything was added
@@ -58,7 +58,7 @@ teardown() {
     [[ "$output" =~ "$regex" ]] || false
 }
 
-@test "DOLT_COMMIT with all flag, message and author" {
+@test "sql-commit: DOLT_COMMIT with all flag, message and author" {
     run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1', '--author', 'John Doe <john@doe.com>')"
     [ $status -eq 0 ]
     DCOMMIT=$output
@@ -84,7 +84,7 @@ teardown() {
     [[ "$output" =~ "Commit1" ]] || false
 }
 
-@test "DOLT_COMMIT works with --author without config variables set" {
+@test "sql-commit: DOLT_COMMIT works with --author without config variables set" {
     dolt config --global --unset user.name
     dolt config --global --unset user.email
 
@@ -114,7 +114,7 @@ teardown() {
     [[ "$output" =~ "Commit1" ]] || false
 }
 
-@test "DOLT_COMMIT immediately updates dolt log system table." {
+@test "sql-commit: DOLT_COMMIT immediately updates dolt log system table." {
     run dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Commit1');
 SELECT * FROM dolt_log;
@@ -124,7 +124,7 @@ SQL
     [[ "$output" =~ "Commit1" ]] || false
 }
 
-@test "DOLT_COMMIT immediately updates dolt diff system table." {
+@test "sql-commit: DOLT_COMMIT immediately updates dolt diff system table." {
     original_hash=$(get_head_commit)
     run dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Commit1');
@@ -136,7 +136,7 @@ SQL
     [[ "$output" =~ $original_hash ]] || false
 }
 
-@test "DOLT_COMMIT updates session variables" {
+@test "sql-commit: DOLT_COMMIT updates session variables" {
     head_variable=@@dolt_repo_$$_head
     head_commit=$(get_head_commit)
     run dolt sql << SQL
@@ -156,7 +156,7 @@ SQL
     [[ "$output" =~ $head_commit ]] || false
 }
 
-@test "DOLT_COMMIT with unstaged tables correctly gets new head root but does not overwrite working" {
+@test "sql-commit: DOLT_COMMIT with unstaged tables correctly gets new head root but does not overwrite working" {
     head_variable=@@dolt_repo_$$_head
 
     run dolt sql << SQL

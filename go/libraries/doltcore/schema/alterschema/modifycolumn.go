@@ -237,7 +237,20 @@ func updateRowDataWithNewType(
 		if err != nil {
 			return true, err
 		}
-		taggedVals[newCol.Tag] = newVal
+		// convFunc returns types.NullValue rather than nil so it's always safe to compare
+		if newVal.Equals(val) {
+			newRowKey, err := r.NomsMapKey(newSch).Value(ctx)
+			if err != nil {
+				return true, err
+			}
+			if newCol.IsPartOfPK && newRowKey.Equals(lastKey) {
+				return true, fmt.Errorf("pk violation when altering column type and rewriting values")
+			}
+			lastKey = newRowKey
+			return false, nil
+		} else if newVal != types.NullValue {
+			taggedVals[newCol.Tag] = newVal
+		}
 		r, err = row.New(rowData.Format(), newSch, taggedVals)
 		if err != nil {
 			return true, err

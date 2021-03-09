@@ -20,11 +20,11 @@ teardown() {
     rm -rf $BATS_TMPDIR/remotes-$$
 }
 
-@test "dolt remotes server is running" {
+@test "remotes: dolt remotes server is running" {
     ps -p $remotesrv_pid | grep remotesrv
 }
 
-@test "add a remote using dolt remote" {
+@test "remotes: add a remote using dolt remote" {
     run dolt remote add test-remote http://localhost:50051/test-org/test-repo
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
@@ -36,7 +36,7 @@ teardown() {
     [[ "$output" =~ "usage:" ]] || false
 }
 
-@test "remove a remote" {
+@test "remotes: remove a remote" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     run dolt remote remove test-remote
     [ "$status" -eq 0 ]
@@ -49,7 +49,7 @@ teardown() {
     [[ "$output" =~ "unknown remote poop" ]] || false
 }
 
-@test "push and pull an unknown remote" {
+@test "remotes: push and pull an unknown remote" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     run dolt push poop master
     [ "$status" -eq 1 ]
@@ -59,7 +59,7 @@ teardown() {
     [[ "$output" =~ "unknown remote" ]] || false
 }
 
-@test "push with only one argument" {
+@test "remotes: push with only one argument" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     run dolt push test-remote
     [ "$status" -eq 1 ]
@@ -68,7 +68,7 @@ teardown() {
     [[ "$output" =~ "dolt push --set-upstream test-remote master" ]] || false
 }
 
-@test "push and pull master branch from a remote" {
+@test "remotes: push and pull master branch from a remote" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     run dolt push test-remote master
     [ "$status" -eq 0 ]
@@ -78,7 +78,7 @@ teardown() {
     [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 
-@test "push and pull non-master branch from remote" {
+@test "remotes: push and pull non-master branch from remote" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt checkout -b test-branch
     run dolt push test-remote test-branch
@@ -88,7 +88,7 @@ teardown() {
     [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 
-@test "push and pull from non-master branch and use --set-upstream" {
+@test "remotes: push and pull from non-master branch and use --set-upstream" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt checkout -b test-branch
     run dolt push --set-upstream test-remote test-branch
@@ -101,7 +101,7 @@ teardown() {
     [ "$status" -eq 0 ]
 }
 
-@test "push and pull with docs from remote" {
+@test "remotes: push and pull with docs from remote" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     echo "license-text" > LICENSE.md
     echo "readme-text" > README.md
@@ -138,7 +138,7 @@ teardown() {
     [[ "$output" =~ "this text should remain after pull :p" ]] || false
 }
 
-@test "push and pull tags to/from remote" {
+@test "remotes: push and pull tags to/from remote" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);
@@ -162,7 +162,7 @@ SQL
     [[ "$output" =~ "v1" ]] || false
 }
 
-@test "tags are only pulled if their commit is pulled" {
+@test "remotes: tags are only pulled if their commit is pulled" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);
@@ -200,7 +200,7 @@ SQL
     [[ "$output" =~ "other message" ]] || false
 }
 
-@test "clone a remote" {
+@test "remotes: clone a remote" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (
@@ -234,7 +234,7 @@ SQL
     [[ ! "$output" =~ "README.md" ]] || false
 }
 
-@test "read tables test" {
+@test "remotes: read tables test" {
     # create table t1 and commit
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
@@ -301,7 +301,7 @@ SQL
     cd ..
 }
 
-@test "clone a remote with docs" {
+@test "remotes: clone a remote with docs" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     echo "license-text" > LICENSE.md
     echo "readme-text" > README.md
@@ -332,14 +332,14 @@ SQL
     [[ "$output" =~ "readme-text" ]] || false
 }
 
-@test "clone an empty remote" {
+@test "remotes: clone an empty remote" {
     run dolt clone http://localhost:50051/test-org/empty
     [ "$status" -eq 1 ]
     [[ "$output" =~ "error: clone failed" ]] || false
     [[ "$output" =~ "cause: remote at that url contains no Dolt data" ]] || false
 }
 
-@test "clone a non-existent remote" {
+@test "remotes: clone a non-existent remote" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     cd "dolt-repo-clones"
     run dolt clone http://localhost:50051/foo/bar
@@ -348,7 +348,7 @@ SQL
     [[ "$output" =~ "cause: remote at that url contains no Dolt data" ]] || false
 }
 
-@test "clone a different branch than master" {
+@test "remotes: clone a different branch than master" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt checkout -b test-branch
     dolt sql <<SQL
@@ -379,7 +379,7 @@ SQL
     [[ "$output" =~ "test commit" ]] || false
 }
 
-@test "call a clone's remote something other than origin" {
+@test "remotes: call a clone's remote something other than origin" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (
@@ -409,7 +409,7 @@ SQL
     [[ ! "$output" =~ "origin" ]] || false
 }
 
-@test "dolt fetch" {
+@test "remotes: dolt fetch" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push test-remote master
     run dolt fetch test-remote
@@ -429,7 +429,7 @@ SQL
     [[ "$output" =~ "remotes/test-remote/poop" ]] || false
 }
 
-@test "dolt fetch with docs" {
+@test "remotes: dolt fetch with docs" {
     # Initial commit of docs on remote
     echo "initial-license" > LICENSE.md
     echo "initial-readme" > README.md
@@ -481,7 +481,7 @@ SQL
     [[ "$output" =~ "dolt-repo-clones-readme" ]] || false
 }
 
-@test "dolt merge with origin/master syntax." {
+@test "remotes: dolt merge with origin/master syntax." {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push test-remote master
     dolt fetch test-remote
@@ -520,7 +520,7 @@ SQL
     [[ "$output" =~ "test commit" ]] || false
 }
 
-@test "dolt fetch and merge with remotes/origin/master syntax" {
+@test "remotes: dolt fetch and merge with remotes/origin/master syntax" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push test-remote master
     cd "dolt-repo-clones"
@@ -552,7 +552,7 @@ SQL
     [[ "$output" =~ "Fast-forward" ]]
 }
 
-@test "try to push a remote that is behind tip" {
+@test "remotes: try to push a remote that is behind tip" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push test-remote master
     cd "dolt-repo-clones"
@@ -582,7 +582,7 @@ SQL
     [[ "$output" =~ "tip of your current branch is behind" ]] || false
 }
 
-@test "generate a merge with no conflict with a remote branch" {
+@test "remotes: generate a merge with no conflict with a remote branch" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push test-remote master
     cd "dolt-repo-clones"
@@ -621,7 +621,7 @@ SQL
     [[ "$output" =~ "Updating" ]] || false
 }
 
-@test "generate a merge with a conflict with a remote branch" {
+@test "remotes: generate a merge with a conflict with a remote branch" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (
@@ -661,7 +661,7 @@ SQL
     [[ "$output" =~ "Fixed conflicts" ]] || false
 }
 
-@test "clone sets your current branch appropriately" {
+@test "remotes: clone sets your current branch appropriately" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (
@@ -701,7 +701,7 @@ SQL
     [[ "$output" =~ "* master" ]] || false
 }
 
-@test "dolt pull onto a dirty working set fails" {
+@test "remotes: dolt pull onto a dirty working set fails" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (
@@ -733,7 +733,7 @@ SQL
     [[ "$output" =~ "Please commit your changes before you merge." ]] || false
 }
 
-@test "force push to master" {
+@test "remotes: force push to master" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push test-remote master
 
@@ -779,7 +779,7 @@ SQL
 }
 
 
-@test "force fetch from master" {
+@test "remotes: force fetch from master" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push test-remote master
 
@@ -828,7 +828,7 @@ SQL
     [ "$status" -eq 0 ]
 }
 
-@test "DOLT_CHECKOUT to checkout to a remote branch." {
+@test "remotes: DOLT_CHECKOUT to checkout to a remote branch." {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
     CREATE TABLE test (
@@ -885,7 +885,7 @@ create_three_remote_branches() {
     create_two_more_remote_branches
 }
 
-@test "clone creates remotes refs for all remote branches" {
+@test "remotes: clone creates remotes refs for all remote branches" {
     create_three_remote_branches
     cd dolt-repo-clones
     dolt clone http://localhost:50051/test-org/test-repo
@@ -900,7 +900,7 @@ create_three_remote_branches() {
     [[ "$output" =~ "remotes/origin/branch-two" ]] || false
 }
 
-@test "fetch creates new remote refs for new remote branches" {
+@test "remotes: fetch creates new remote refs for new remote branches" {
     create_master_remote_branch
 
     cd dolt-repo-clones
@@ -933,55 +933,55 @@ setup_ref_test() {
     cd test-repo
 }
 
-@test "can use refs/remotes/origin/... as commit reference for log" {
+@test "remotes: can use refs/remotes/origin/... as commit reference for log" {
     setup_ref_test
     dolt log refs/remotes/origin/master
 }
 
-@test "can use refs/remotes/origin/... as commit reference for diff" {
+@test "remotes: can use refs/remotes/origin/... as commit reference for diff" {
     setup_ref_test
     dolt diff HEAD refs/remotes/origin/master
     dolt diff refs/remotes/origin/master HEAD
 }
 
-@test "can use refs/remotes/origin/... as commit reference for merge" {
+@test "remotes: can use refs/remotes/origin/... as commit reference for merge" {
     setup_ref_test
     dolt merge refs/remotes/origin/master
 }
 
-@test "can use remotes/origin/... as commit reference for log" {
+@test "remotes: can use remotes/origin/... as commit reference for log" {
     setup_ref_test
     dolt log remotes/origin/master
 }
 
-@test "can use remotes/origin/... as commit reference for diff" {
+@test "remotes: can use remotes/origin/... as commit reference for diff" {
     setup_ref_test
     dolt diff HEAD remotes/origin/master
     dolt diff remotes/origin/master HEAD
 }
 
-@test "can use remotes/origin/... as commit reference for merge" {
+@test "remotes: can use remotes/origin/... as commit reference for merge" {
     setup_ref_test
     dolt merge remotes/origin/master
 }
 
-@test "can use origin/... as commit reference for log" {
+@test "remotes: can use origin/... as commit reference for log" {
     setup_ref_test
     dolt log origin/master
 }
 
-@test "can use origin/... as commit reference for diff" {
+@test "remotes: can use origin/... as commit reference for diff" {
     setup_ref_test
     dolt diff HEAD origin/master
     dolt diff origin/master HEAD
 }
 
-@test "can use origin/... as commit reference for merge" {
+@test "remotes: can use origin/... as commit reference for merge" {
     setup_ref_test
     dolt merge origin/master
 }
 
-@test "can delete remote reference branch as origin/..." {
+@test "remotes: can delete remote reference branch as origin/..." {
     setup_ref_test
     cd ../../
     create_two_more_remote_branches
@@ -1004,7 +1004,7 @@ setup_ref_test() {
     [[ ! "$output" =~ "remotes/origin/branch-two" ]] || false
 }
 
-@test "can list remote reference branches with -r" {
+@test "remotes: can list remote reference branches with -r" {
     setup_ref_test
     cd ../../
     create_two_more_remote_branches

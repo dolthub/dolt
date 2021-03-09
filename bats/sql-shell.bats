@@ -21,14 +21,14 @@ teardown() {
     teardown_common
 }
 
-@test "run a query in sql shell" {
+@test "sql-shell: run a query in sql shell" {
     skiponwindows "Works on Windows command prompt but not the WSL terminal used during bats"
     run bash -c "echo 'select * from test;' | dolt sql"
     [ $status -eq 0 ]
     [[ "$output" =~ "pk" ]] || false
 }
 
-@test "sql shell writes to disk after every iteration (autocommit)" {
+@test "sql-shell: sql shell writes to disk after every iteration (autocommit)" {
     skiponwindows "Need to install expect and make this script work on windows."
     run $BATS_TEST_DIRNAME/sql-shell.expect
     echo "$output"
@@ -42,7 +42,7 @@ teardown() {
     [[ "$output" =~ "+-------------+" ]] || false
 }
 
-@test "bad sql in sql shell should error" {
+@test "sql-shell: bad sql in sql shell should error" {
     run dolt sql <<< "This is bad sql"
     [ $status -eq 1 ]
     run dolt sql <<< "select * from test; This is bad sql; insert into test (pk) values (666); select * from test;"
@@ -50,13 +50,13 @@ teardown() {
     [[ ! "$output" =~ "666" ]] || false
 }
 
-@test "inline query with missing -q flag should error" {
+@test "sql-shell: inline query with missing -q flag should error" {
     run dolt sql "SELECT * FROM test;"
     [ $status -eq 1 ]
     [[ "$output" =~ "Invalid Argument:" ]] || false
 }
 
-@test "validate string formatting" {
+@test "sql-shell: validate string formatting" {
       dolt sql <<SQL
 CREATE TABLE test2 (
   str varchar(256) NOT NULL,

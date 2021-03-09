@@ -35,7 +35,6 @@ var verifyConstraintsDocs = cli.CommandDocumentationContent{
 type VerifyConstraintsCmd struct{}
 
 var _ cli.Command = VerifyConstraintsCmd{}
-var _ cli.HiddenCommand = VerifyConstraintsCmd{}
 
 func (cmd VerifyConstraintsCmd) Name() string {
 	return "verify-constraints"
@@ -126,8 +125,4 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 		return HandleVErrAndExitCode(dErr.Build(), nil)
 	}
 	return 0
-}
-
-func (cmd VerifyConstraintsCmd) Hidden() bool {
-	return true
 }

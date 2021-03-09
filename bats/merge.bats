@@ -27,7 +27,7 @@ teardown() {
     teardown_common
 }
 
-@test "3way merge doesn't stomp working changes" {
+@test "merge: 3way merge doesn't stomp working changes" {
     dolt checkout -b merge_branch
     dolt SQL -q "INSERT INTO test1 values (0,1,2)"
     dolt add test1
@@ -64,7 +64,7 @@ teardown() {
     [[ "$output" =~ "add pk 1 to test1" ]] || false
 }
 
-@test "merge --abort restores working changes" {
+@test "merge: --abort restores working changes" {
     dolt branch other
 
     dolt sql -q "INSERT INTO test1 VALUES (0,10,10),(1,11,11);"
@@ -88,7 +88,7 @@ teardown() {
     [[ "${lines[1]}" =~ "9,9,9" ]] || false
 }
 
-@test "squash merge" {
+@test "merge: squash merge" {
     dolt checkout -b merge_branch
     dolt SQL -q "INSERT INTO test1 values (0,1,2)"
     dolt add test1
@@ -125,7 +125,7 @@ teardown() {
     [[ ! "$output" =~ "add pk 0 to test1" ]] || false
 }
 
-@test "can merge commit spec with ancestor spec" {
+@test "merge: can merge commit spec with ancestor spec" {
     dolt checkout -b merge_branch
     dolt SQL -q "INSERT INTO test1 values (0,1,2)"
     dolt add test1
@@ -145,7 +145,7 @@ teardown() {
     [[ "$output" =~ "| 0 " ]] || false
 }
 
-@test "dolt add fails on table with conflict" {
+@test "merge: dolt add fails on table with conflict" {
     dolt checkout -b merge_branch
     dolt SQL -q "INSERT INTO test1 values (0,1,1)"
     dolt add test1
@@ -166,7 +166,7 @@ teardown() {
     [[ "$output" =~ "test1" ]] || false
 }
 
-@test "dolt commit fails with unmerged tables in working set" {
+@test "merge: dolt commit fails with unmerged tables in working set" {
     dolt checkout -b merge_branch
     dolt SQL -q "INSERT INTO test1 values (0,1,1)"
     dolt add test1
@@ -187,7 +187,7 @@ teardown() {
     [[ "$output" =~ "test1" ]] || false
 }
 
-@test "ff merge doesn't stomp working changes" {
+@test "merge: ff merge doesn't stomp working changes" {
     dolt checkout -b merge_branch
     dolt SQL -q "INSERT INTO test1 values (0,1,2)"
     dolt add test1
@@ -210,7 +210,7 @@ teardown() {
     [[ ! "$output" =~ "test1" ]] || false
 }
 
-@test "no-ff merge" {
+@test "merge: no-ff merge" {
     dolt checkout -b merge_branch
     dolt SQL -q "INSERT INTO test1 values (0,1,2)"
     dolt add test1
@@ -226,7 +226,7 @@ teardown() {
     [[ "$output" =~ "no-ff merge" ]] || false
 }
 
-@test "no-ff merge doesn't stomp working changes and doesn't fast forward" {
+@test "merge: no-ff merge doesn't stomp working changes and doesn't fast forward" {
     dolt checkout -b merge_branch
     dolt SQL -q "INSERT INTO test1 values (0,1,2)"
     dolt add test1
@@ -253,7 +253,7 @@ teardown() {
     [[ "$output" =~ "no-ff merge" ]] || false
 }
 
-@test "3way merge rejected when working changes touch same tables" {
+@test "merge: 3way merge rejected when working changes touch same tables" {
     dolt checkout -b merge_branch
     dolt SQL -q "INSERT INTO test1 values (0,1,2)"
     dolt add test1
@@ -274,7 +274,7 @@ teardown() {
     [ "$status" -eq 1 ]
 }
 
-@test "ff merge rejected when working changes touch same tables" {
+@test "merge: ff merge rejected when working changes touch same tables" {
     dolt checkout -b merge_branch
     dolt SQL -q "INSERT INTO test1 values (0,1,2)"
     dolt add test1
@@ -292,7 +292,7 @@ teardown() {
     [ "$status" -eq 1 ]
 }
 
-@test "Add tables with same schema on two branches, merge" {
+@test "merge: Add tables with same schema on two branches, merge" {
     dolt branch other
     dolt sql <<SQL
 CREATE TABLE quiz (pk int PRIMARY KEY);
@@ -320,7 +320,7 @@ SQL
     [[ "${lines[6]}" =~ "22" ]] || false
 }
 
-@test "Add views on two branches, merge" {
+@test "merge: Add views on two branches, merge" {
     dolt branch other
     dolt sql -q "CREATE VIEW pkpk AS SELECT pk*pk FROM test1;"
     dolt add . && dolt commit -m "added view on table test1"
@@ -340,7 +340,7 @@ SQL
     [[ "$output" =~ "c1c1" ]] || false
 }
 
-@test "Add views on two branches, merge without conflicts" {
+@test "merge: Add views on two branches, merge without conflicts" {
     dolt branch other
     dolt sql -q "CREATE VIEW pkpk AS SELECT pk*pk FROM test1;"
     dolt add . && dolt commit -m "added view on table test1"

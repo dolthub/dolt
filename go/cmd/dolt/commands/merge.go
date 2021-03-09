@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/fatih/color"
 
@@ -31,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -49,6 +51,10 @@ The second syntax ({{.LessThan}}dolt merge --abort{{.GreaterThan}}) can only be 
 		"--abort",
 	},
 }
+
+var fkWarningMessage = "Warning: This merge is being applied to tables that have foreign key constraints. These constraints " +
+	"will not be enforced during the merge process to allow you to fix constraint issues that arise from merge conflicts. " +
+	"to check for foreign key constraint violations run `dolt verify-constraints` on this repo after merging."
 
 type MergeCmd struct{}
 
@@ -114,7 +120,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				return 1
 			} else if dEnv.IsMergeActive() {
 				cli.Println("error: Merging is not possible because you have not committed an active merge.")
-				cli.Println("hint: add affected tables using 'dolt add <table>' and commit using {{.EmphasisLeft}}dolt commit -m <msg>{{.EmphasisRight}}")
+				cli.Println("hint: add affected tables using 'dolt add <table>' and commit using 'dolt commit -m <msg>'")
 				cli.Println("fatal: Exiting because of active merge")
 				return 1
 			}
@@ -339,6 +345,12 @@ and take the hash for your current branch and use it for the value for "staged" 
 }
 
 func executeMerge(ctx context.Context, squash bool, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, workingDiffs map[string]hash.Hash) errhand.VerboseError {
+	verr := fkConstraintWarning(ctx, cm1, cm2)
+
+	if verr != nil {
+		return verr
+	}
+
 	mergedRoot, tblToStats, err := merge.MergeCommits(ctx, cm1, cm2)
 
 	if err != nil {
@@ -353,6 +365,98 @@ func executeMerge(ctx context.Context, squash bool, dEnv *env.DoltEnv, cm1, cm2 
 	}
 
 	return mergedRootToWorking(ctx, squash, dEnv, mergedRoot, workingDiffs, cm2, tblToStats)
+}
+
+func fkConstraintWarning(ctx context.Context, cm1, cm2 *doltdb.Commit) errhand.VerboseError {
+	verrBuild := errhand.BuildDError("failed to read from database.")
+	r1, err := cm1.GetRootValue()
+
+	if err != nil {
+		return verrBuild.AddCause(err).Build()
+	}
+
+	r2, err := cm2.GetRootValue()
+
+	if err != nil {
+		return verrBuild.AddCause(err).Build()
+	}
+
+	fks1, err := r1.GetForeignKeyCollection(ctx)
+
+	if err != nil {
+		return verrBuild.AddCause(err).Build()
+	}
+
+	fks2, err := r2.GetForeignKeyCollection(ctx)
+
+	if err != nil {
+		return verrBuild.AddCause(err).Build()
+	}
+
+	tblNames1, err := r1.GetTableNames(ctx)
+
+	if err != nil {
+		return verrBuild.AddCause(err).Build()
+	}
+
+	tblNames2, err := r2.GetTableNames(ctx)
+
+	if err != nil {
+		return verrBuild.AddCause(err).Build()
+	}
+
+	allNames := set.NewStrSet(tblNames1)
+	allNames.Add(tblNames2...)
+
+	var warnTables []string
+	for _, name := range allNames.AsSlice() {
+		tbl1, ok1, err := r1.GetTable(ctx, name)
+
+		if err != nil {
+			return verrBuild.AddCause(err).Build()
+		}
+
+		tbl2, ok2, err := r2.GetTable(ctx, name)
+
+		if err != nil {
+			return verrBuild.AddCause(err).Build()
+		}
+
+		var h1, h2 hash.Hash
+		var fkOnTbl1, fkOnTbl2 bool
+		if ok1 {
+			h1, err = tbl1.HashOf()
+
+			if err != nil {
+				return verrBuild.AddCause(err).Build()
+			}
+
+			decl, refd := fks1.KeysForTable(name)
+			fkOnTbl1 = (len(decl) + len(refd)) > 0
+		}
+
+		if ok2 {
+			h2, err = tbl2.HashOf()
+
+			if err != nil {
+				return verrBuild.AddCause(err).Build()
+			}
+
+			decl, refd := fks2.KeysForTable(name)
+			fkOnTbl2 = (len(decl) + len(refd)) > 0
+		}
+
+		if h1 != h2 && (fkOnTbl1 || fkOnTbl2) {
+			warnTables = append(warnTables, name)
+		}
+	}
+
+	if len(warnTables) > 0 {
+		cli.Println(color.YellowString(fkWarningMessage))
+		cli.Println(color.YellowString("You are seeing this message due to changes in the following table(s): " + strings.Join(warnTables, ",")))
+	}
+
+	return nil
 }
 
 func mergedRootToWorking(ctx context.Context, squash bool, dEnv *env.DoltEnv, mergedRoot *doltdb.RootValue, workingDiffs map[string]hash.Hash, cm2 *doltdb.Commit, tblToStats map[string]*merge.MergeStats) errhand.VerboseError {

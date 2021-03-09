@@ -82,6 +82,12 @@ type YAMLConfig struct {
 	PerformanceConfig PerformanceYAMLConfig `yaml:"performance"`
 }
 
+func newYamlConfig(configFileData []byte) (YAMLConfig, error) {
+	var cfg YAMLConfig
+	err := yaml.UnmarshalStrict(configFileData, &cfg)
+	return cfg, err
+}
+
 func serverConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
 	return YAMLConfig{
 		LogLevelStr:    strPtr(string(cfg.LogLevel())),

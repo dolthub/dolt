@@ -140,7 +140,6 @@ func (root *RootValue) GetSuperSchema(ctx context.Context, tName string) (*schem
 	}
 
 	t, tblFound, err := root.GetTable(ctx, tName)
-
 	if err != nil {
 		return nil, false, err
 	}
@@ -152,13 +151,11 @@ func (root *RootValue) GetSuperSchema(ctx context.Context, tName string) (*schem
 
 	if tblFound {
 		sch, err := t.GetSchema(ctx)
-
 		if err != nil {
 			return nil, false, err
 		}
 
 		err = ss.AddSchemas(sch)
-
 		if err != nil {
 			return nil, false, err
 		}
@@ -237,13 +234,11 @@ func (root *RootValue) GetSuperSchemaMap(ctx context.Context) (types.Map, error)
 // SuperSchemas are only persisted on commit.
 func (root *RootValue) getSuperSchemaAtLastCommit(ctx context.Context, tName string) (*schema.SuperSchema, bool, error) {
 	ssm, err := root.getOrCreateSuperSchemaMap(ctx)
-
 	if err != nil {
 		return nil, false, err
 	}
 
 	v, found, err := ssm.MaybeGet(ctx, types.String(tName))
-
 	if err != nil {
 		return nil, false, err
 	}
@@ -254,13 +249,11 @@ func (root *RootValue) getSuperSchemaAtLastCommit(ctx context.Context, tName str
 
 	ssValRef := v.(types.Ref)
 	ssVal, err := ssValRef.TargetValue(ctx, root.vrw)
-
 	if err != nil {
 		return nil, false, err
 	}
 
 	ss, err := encoding.UnmarshalSuperSchemaNomsValue(ctx, root.vrw.Format(), ssVal)
-
 	if err != nil {
 		return nil, false, err
 	}
@@ -424,7 +417,7 @@ func (root *RootValue) GetTableByColTag(ctx context.Context, tag uint64) (tbl *T
 		return nil, "", false, err
 	}
 
-	_ = root.iterSuperSchemas(ctx, func(tn string, ss *schema.SuperSchema) (bool, error) {
+	err = root.iterSuperSchemas(ctx, func(tn string, ss *schema.SuperSchema) (bool, error) {
 		_, found = ss.GetByTag(tag)
 		if found {
 			name = tn
@@ -432,6 +425,9 @@ func (root *RootValue) GetTableByColTag(ctx context.Context, tag uint64) (tbl *T
 
 		return found, nil
 	})
+	if err != nil {
+		return nil, "", false, err
+	}
 
 	return tbl, name, found, nil
 }
@@ -573,6 +569,9 @@ func (root *RootValue) iterSuperSchemas(ctx context.Context, cb func(name string
 
 		// use GetSuperSchema() to pickup uncommitted SuperSchemas
 		ss, _, err := root.GetSuperSchema(ctx, name)
+		if err != nil {
+			return false, err
+		}
 
 		return cb(name, ss)
 	})
@@ -1117,20 +1116,23 @@ func validateTagUniqueness(ctx context.Context, root *RootValue, tableName strin
 	}
 
 	var ee []string
-	_ = root.iterSuperSchemas(ctx, func(tn string, ss *schema.SuperSchema) (stop bool, err error) {
+	err = root.iterSuperSchemas(ctx, func(tn string, ss *schema.SuperSchema) (stop bool, err error) {
 		if tn == tableName {
 			return false, nil
 		}
 
-		_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 			_, ok := ss.GetByTag(tag)
 			if ok {
 				ee = append(ee, schema.ErrTagPrevUsed(tag, col.Name, tn).Error())
 			}
 			return false, nil
 		})
-		return false, nil
+		return false, err
 	})
+	if err != nil {
+		return err
+	}
 
 	if len(ee) > 0 {
 		return fmt.Errorf(strings.Join(ee, "\n"))

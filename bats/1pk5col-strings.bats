@@ -21,7 +21,7 @@ teardown() {
     teardown_common
 }
 
-@test "dolt sql with string comparison operators" {
+@test "1pk5col-strings: dolt sql with string comparison operators" {
     dolt sql -q "insert into test values ('tim', 'is', 'super', 'duper', 'rad', 'fo sho')"
     dolt sql -q "insert into test values ('zach', 'is', 'super', 'duper', 'not', 'rad')"
     dolt sql -q "insert into test values ('this', 'test', 'is', 'a', 'good', 'test')"
@@ -46,7 +46,7 @@ teardown() {
     [ "${#lines[@]}" -eq 4 ]
 }
 
-@test "interact with a strings type table with sql" {
+@test "1pk5col-strings: interact with a strings type table with sql" {
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values ('tim','is','super','duper','rad','fo sho')"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Query OK, 1 row affected" ]] || false
@@ -61,13 +61,13 @@ teardown() {
     [[ ! "$output" =~ "super" ]] || false
 }
 
-@test "insert must use quoted strings" {
+@test "1pk5col-strings: insert must use quoted strings" {
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (tim,is,super,duper,rad,'fo sho')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error parsing SQL" ]] || false
 }
 
-@test "create and view a table with NULL and empty string values" {
+@test "1pk5col-strings: create and view a table with NULL and empty string values" {
     dolt sql -q "insert into test values ('tim', '', '', '', '', '')"
     dolt sql -q "insert into test (pk) values ('aaron')"
     dolt sql -q "insert into test (pk) values ('brian')"
@@ -86,7 +86,7 @@ teardown() {
     [[ ! "$output" =~ "|||||" ]] || false
 }
 
-@test "semicolons in quoted sql statements" {
+@test "1pk5col-strings: semicolons in quoted sql statements" {
     run dolt sql -q "insert into test (pk,c1) values ('test', 'this; should; work')"
     [ "$status" -eq 0 ]
     run dolt sql <<< "insert into test (pk,c1) values ('test2', 'this; should; work')"

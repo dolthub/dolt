@@ -846,7 +846,7 @@ func processQuery(ctx *sql.Context, query string, se *sqlEngine) (sql.Schema, sq
 	}
 
 	switch s := sqlStatement.(type) {
-	case *sqlparser.Select, *sqlparser.Insert, *sqlparser.Update, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union:
+	case *sqlparser.Select, *sqlparser.Insert, *sqlparser.Update, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union, *sqlparser.Call:
 		return se.query(ctx, query)
 	case *sqlparser.Use, *sqlparser.Set:
 		sch, rowIter, err := se.query(ctx, query)

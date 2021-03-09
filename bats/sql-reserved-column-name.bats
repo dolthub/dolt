@@ -11,7 +11,7 @@ teardown() {
     teardown_common
 }
 
-@test "run sql select on a table with a column name that is an sql reserved word" {
+@test "sql-reserved-column-name: run sql select on a table with a column name that is an sql reserved word" {
       run dolt sql -q "select * from test where \`Timestamp\`='1'"
       [ "$status" -eq 0 ]
       [[ "$output" =~ "Timestamp" ]] || false

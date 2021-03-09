@@ -36,7 +36,8 @@ type TypeConverter func(ctx context.Context, vrw types.ValueReadWriter, v types.
 // GetTypeConverter returns a TypeConverter that will convert a Noms value from the source type to the destination type.
 // If the source type does not have a valid converter for the destination type, then this returns an error. When the
 // given types are similar enough, no conversion is needed, thus this will return false. In such cases, although a valid
-// TypeConverter will still be returned, it is equivalent to calling IsValid on the destination TypeInfo.
+// TypeConverter will still be returned, it is equivalent to calling IsValid on the destination TypeInfo. Rather than
+// returning nil values, any such returned nils will instead be types.NullValue.
 func GetTypeConverter(ctx context.Context, srcTi TypeInfo, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
 	switch dest := destTi.(type) {
 	case *tupleType, *unknownType:

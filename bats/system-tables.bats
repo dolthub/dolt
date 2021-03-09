@@ -10,7 +10,7 @@ teardown() {
     teardown_common
 }
 
-@test "Show list of system tables using dolt ls --system or --all" {
+@test "system-tables: Show list of system tables using dolt ls --system or --all" {
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt sql -q "show tables" --save "BATS query"
     dolt ls --system
@@ -46,7 +46,7 @@ teardown() {
     [[ "$output" =~ "dolt_commit_diff_test" ]] || false
 }
 
-@test "dolt ls --system -v shows history and diff systems tables for deleted tables" {
+@test "system-tables: dolt ls --system -v shows history and diff systems tables for deleted tables" {
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test
     dolt commit -m "Added test table"
@@ -70,7 +70,7 @@ teardown() {
     [[ "$output" =~ "dolt_commit_diff_test" ]] || false
 }
 
-@test "dolt ls --system -v shows history and diff systems tables for tables on other branches" {
+@test "system-tables: dolt ls --system -v shows history and diff systems tables for tables on other branches" {
     dolt checkout -b add-table-branch
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test
@@ -94,7 +94,7 @@ teardown() {
     [[ "$output" =~ "dolt_commit_diff_test" ]] || false
 }
 
-@test "query dolt_log system table" {
+@test "system-tables: query dolt_log system table" {
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test
     dolt commit -m "Added test table"
@@ -106,7 +106,7 @@ teardown() {
     [[ ! "$output" =~ "Added test table" ]] || false
 }
 
-@test "query dolt_branches system table" {
+@test "system-tables: query dolt_branches system table" {
     dolt checkout -b create-table-branch
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test
@@ -125,7 +125,7 @@ teardown() {
     [[ "$output" =~ "create-table-branch" ]] || false
 }
 
-@test "query dolt_diff_ system table" {
+@test "system-tables: query dolt_diff_ system table" {
     dolt sql -q "CREATE TABLE test (pk INT, c1 INT, PRIMARY KEY(pk))"
     dolt add test
     dolt commit -m "Added test table"
@@ -154,7 +154,7 @@ teardown() {
     [[ "$output" =~ "$EXPECTED" ]] || false
 }
 
-@test "query dolt_diff_ and dolt_commit_diff_ highlighting differences" {
+@test "system-tables: query dolt_diff_ and dolt_commit_diff_ highlighting differences" {
     dolt branch before_creation master
     dolt sql -q "CREATE TABLE test (pk INT, c1 INT, PRIMARY KEY(pk))"
     dolt add test
@@ -218,7 +218,7 @@ teardown() {
     [ ! "$status" -eq 0 ]
 }
 
-@test "query dolt_diff_ system table without committing table" {
+@test "system-tables: query dolt_diff_ system table without committing table" {
     dolt sql -q "create table test (pk int not null primary key);"
     dolt sql -q "insert into test values (0), (1);"
 
@@ -230,7 +230,7 @@ teardown() {
 
 
 
-@test "query dolt_history_ system table" {
+@test "system-tables: query dolt_history_ system table" {
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test
     dolt commit -m "Added test table"
@@ -257,7 +257,7 @@ teardown() {
     [ "${#lines[@]}" -eq 6 ]
 }
 
-@test "query dolt_commits" {
+@test "system-tables: query dolt_commits" {
     run dolt sql -q "SELECT count(*) FROM dolt_commits;" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1" ]] || false
@@ -279,7 +279,7 @@ teardown() {
     [[ "$output" =~ "4" ]] || false
 }
 
-@test "query dolt_ancestor_commits" {
+@test "system-tables: query dolt_ancestor_commits" {
     run dolt sql -q "SELECT count(*) FROM dolt_commit_ancestors;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1" ]] || false
@@ -316,7 +316,7 @@ teardown() {
     [[ "$output" =~ "6" ]] || false
 }
 
-@test "join dolt_commits and dolt_commit_ancestors" {
+@test "system-tables: join dolt_commits and dolt_commit_ancestors" {
     dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY);"
     dolt add -A && dolt commit -m "commit A"
 

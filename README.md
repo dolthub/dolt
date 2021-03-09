@@ -235,9 +235,9 @@ Date:   Wed Nov 11 13:42:27 -0800 2020
 commit 9hgk7jb7hlkvvkbornpldcopqh2gn6jo
 Author: Zach Musgrave <zach@dolthub.com>
 Date:   Wed Nov 11 13:40:53 -0800 2020
-        
+
     initial data
-                
+
 commit 8o8ldh58pjovn8uvqvdq2olf7dm63dj9
 Author: Zach Musgrave <zach@dolthub.com>
 Date:   Wed Nov 11 13:36:24 -0800 2020
@@ -313,7 +313,7 @@ And then push to it.
 $ dolt push origin master
 ```
 
-## Other remotes 
+## Other remotes
 
 `dolt` also supports directory, aws, and gcs based remotes:
 
@@ -352,17 +352,17 @@ explore and clone. Here are some of our favorites.
 
 There's a lot more to Dolt than can fit in a README file! For full
 documentation, check out the [docs on
-DoltHub](https://www.dolthub.com/docs/). Some of the topics we didn't
+DoltHub](https://docs.dolthub.com/). Some of the topics we didn't
 cover here:
 
 * [Querying past revisions of your
-  tables](https://www.dolthub.com/docs/reference/sql/#querying-non-head-revisions-of-a-database)
+  tables](https://docs.dolthub.com/interfaces/sql#querying-non-head-revisions-of-a-database)
 * [Starting a SQL
-  server](https://www.dolthub.com/docs/tutorials/using-sql/#getting-started_mysql-server)
+  server](https://docs.dolthub.com/reference/cli#dolt-sql-server)
 * [Selecting the diff between two
-  commits](https://www.dolthub.com/docs/reference/sql/#dolt-system-tables)
+  commits](https://docs.dolthub.com/interfaces/sql/dolt-system-tables#dolt_diff_usdtablename)
 * [Documentation for all CLI
-  commands](https://www.dolthub.com/docs/reference/cli/)
+  commands](https://docs.dolthub.com/reference/cli)
 
 # Credits and License
 

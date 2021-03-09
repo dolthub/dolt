@@ -25,7 +25,7 @@ teardown() {
     rm -rf $BATS_TMPDIR/remotes-$$
 }
 
-@test "git dolt install sets up a smudge filter in the current git repository" {
+@test "git-dolt: install sets up a smudge filter in the current git repository" {
     init_git_repo
 
     run git dolt install
@@ -42,7 +42,7 @@ teardown() {
     [[ "${lines[len-1]}" =~ "smudge = git-dolt-smudge" ]] || false
 }
 
-@test "git dolt install works in subdirectories of the git repository" {
+@test "git-dolt: install works in subdirectories of the git repository" {
     init_git_repo
     mkdir -p deeply/nested/directory
     pushd deeply/nested/directory
@@ -59,13 +59,13 @@ teardown() {
     [[ "${lines[len-1]}" =~ "smudge = git-dolt-smudge" ]] || false
 }
 
-@test "git dolt install fails with a helpful error when executed outside of a git repo" {
+@test "git-dolt: install fails with a helpful error when executed outside of a git repo" {
     run git dolt install
     [ "$status" -eq 1 ]
     [[ "$output" =~ "couldn't find a .git directory" ]] || false
 }
 
-@test "git dolt link takes a remote url (and an optional revspec and destination directory), clones the repo, and outputs a pointer file" {
+@test "git-dolt: link takes a remote url (and an optional revspec and destination directory), clones the repo, and outputs a pointer file" {
     init_git_repo
     run git dolt link $REMOTE
     [ "$status" -eq 0 ]
@@ -86,7 +86,7 @@ teardown() {
     [[ "${lines[0]}" =~ "test-repo" ]] || false
 }
 
-@test "git dolt's smudge filter automatically clones dolt repositories referenced in checked out git-dolt pointer files" {
+@test "git-dolt: smudge filter automatically clones dolt repositories referenced in checked out git-dolt pointer files" {
     init_git_repo
     git dolt install
     git dolt link $REMOTE
@@ -103,7 +103,7 @@ teardown() {
     [ `get_head_commit` = "$DOLT_HEAD_COMMIT" ]
 }
 
-@test "git dolt fetch takes the name of a git-dolt pointer file and clones the repo to the specified revision if it doesn't exist" {
+@test "git-dolt: fetch takes the name of a git-dolt pointer file and clones the repo to the specified revision if it doesn't exist" {
     init_git_repo
     create_test_pointer
 
@@ -116,7 +116,7 @@ teardown() {
     [ `get_head_commit` = "$DOLT_HEAD_COMMIT" ]
 }
 
-@test "git dolt update updates the specified pointer file to the specified revision" {
+@test "git-dolt: update updates the specified pointer file to the specified revision" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -145,7 +145,7 @@ SQL
     [ "${lines[2]}" = "revision $NEW_DOLT_HEAD_COMMIT" ]
 }
 
-@test "git dolt fails helpfully when dolt is not installed" {
+@test "git-dolt: fails helpfully when dolt is not installed" {
     mkdir TMP_PATH
     pushd TMP_PATH
     cp `which git` ./git
@@ -165,12 +165,12 @@ SQL
     [[ "$output" =~ "It looks like Dolt is not installed on your system" ]] || false
 }
 
-@test "git dolt shows usage on unknown commands" {
+@test "git-dolt: shows usage on unknown commands" {
     run git dolt nonsense
     [[ "$output" =~ Usage ]] || false
 }
 
-@test "git dolt prints usage information with no arguments" {
+@test "git-dolt: prints usage information with no arguments" {
     run git dolt
     [[ "$output" =~ Usage ]] || false
 }

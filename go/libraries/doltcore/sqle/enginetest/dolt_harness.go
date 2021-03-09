@@ -66,18 +66,10 @@ func (d *DoltHarness) WithParallelism(parallelism int) *DoltHarness {
 func (d *DoltHarness) SkipQueryTest(query string) bool {
 	lowerQuery := strings.ToLower(query)
 	return strings.Contains(lowerQuery, "typestable") || // we don't support all the required types
-		strings.Contains(lowerQuery, "show full columns") || // we set extra comment info
 		lowerQuery == "show variables" || // we set extra variables
-		strings.Contains(lowerQuery, "show create table") || // we set extra comment info
+		strings.Contains(lowerQuery, "show create table fk_tbl") || // we create an extra key for the FK that vanilla gms does not
 		strings.Contains(lowerQuery, "show indexes from") || // we create / expose extra indexes (for foreign keys)
-		query == `SELECT i FROM mytable mt 
-						 WHERE (SELECT i FROM mytable where i = mt.i and i > 2) IS NOT NULL
-						 AND (SELECT i2 FROM othertable where i2 = i) IS NOT NULL
-						 ORDER BY i` || // broken for unknown reasons
-		query == `SELECT i FROM mytable mt 
-						 WHERE (SELECT i FROM mytable where i = mt.i and i > 1) IS NOT NULL
-						 AND (SELECT i2 FROM othertable where i2 = i and i < 3) IS NOT NULL
-						 ORDER BY i` // broken for unknown reasons
+		strings.Contains(lowerQuery, "json_arrayagg")
 }
 
 func (d *DoltHarness) Parallelism() int {

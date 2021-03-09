@@ -120,12 +120,14 @@ func GetAllTableNames(ctx context.Context, root *RootValue) ([]string, error) {
 var writeableSystemTables = []string{
 	DoltQueryCatalogTableName,
 	SchemasTableName,
+	ProceduresTableName,
 }
 
 var persistedSystemTables = []string{
 	DocTableName,
 	DoltQueryCatalogTableName,
 	SchemasTableName,
+	ProceduresTableName,
 }
 
 var generatedSystemTables = []string{
@@ -218,4 +220,17 @@ const (
 
 	// StatusTableName is the status system table name.
 	StatusTableName = "dolt_status"
+)
+
+const (
+	// ProceduresTableName is the name of the dolt stored procedures table.
+	ProceduresTableName = "dolt_procedures"
+	// ProceduresTableNameCol is the name of the stored procedure. Using CREATE PROCEDURE, will always be lowercase.
+	ProceduresTableNameCol = "name"
+	// ProceduresTableCreateStmtCol is the CREATE PROCEDURE statement for this stored procedure.
+	ProceduresTableCreateStmtCol = "create_stmt"
+	// ProceduresTableCreatedAtCol is the time that the stored procedure was created at, in UTC.
+	ProceduresTableCreatedAtCol = "created_at"
+	// ProceduresTableModifiedAtCol is the time that the stored procedure was last modified, in UTC.
+	ProceduresTableModifiedAtCol = "modified_at"
 )

@@ -10,7 +10,7 @@ teardown() {
   teardown_common
 }
 
-@test "replace table using csv" {
+@test "import-replace-tables: replace table using csv" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -28,7 +28,7 @@ SQL
     [[ "$output" =~ "Import completed successfully." ]] || false
 }
 
-@test "replace table using csv with wrong schema" {
+@test "import-replace-tables: replace table using csv with wrong schema" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -46,7 +46,7 @@ SQL
     [[ "$output" =~ "cause: input primary keys do not match primary keys of existing table" ]] || false
 }
 
-@test "replace table using psv" {
+@test "import-replace-tables: replace table using psv" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -64,7 +64,7 @@ SQL
     [[ "$output" =~ "Import completed successfully." ]] || false
 }
 
-@test "replace table using psv with wrong schema" {
+@test "import-replace-tables: replace table using psv with wrong schema" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk1 BIGINT NOT NULL COMMENT 'tag:0',
@@ -83,7 +83,7 @@ SQL
     [[ "$output" =~ "cause: input primary keys do not match primary keys of existing table" ]] || false
 }
 
-@test "replace table using schema with csv" {
+@test "import-replace-tables: replace table using schema with csv" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -100,7 +100,7 @@ SQL
     [[ "$output" =~ "schema is not supported for update or replace operations" ]] || false
 }
 
-@test "replace table using json" {
+@test "import-replace-tables: replace table using json" {
     dolt sql <<SQL
 CREATE TABLE employees (
   \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
@@ -118,7 +118,7 @@ SQL
     [[ "$output" =~ "Import completed successfully." ]] || false
 }
 
-@test "replace table using json with wrong schema" {
+@test "import-replace-tables: replace table using json with wrong schema" {
     dolt sql <<SQL
 CREATE TABLE employees (
   \`idz\` LONGTEXT NOT NULL COMMENT 'tag:0',
@@ -137,7 +137,7 @@ SQL
     [[ "$output" =~ "cause: input primary keys do not match primary keys of existing table" ]] || false
 }
 
-@test "replace table using schema with json" {
+@test "import-replace-tables: replace table using schema with json" {
     dolt sql <<SQL
 CREATE TABLE employees (
   \`idz\` LONGTEXT NOT NULL COMMENT 'tag:0',
@@ -154,13 +154,13 @@ SQL
     [[ "$output" =~ "fatal: schema is not supported for update or replace operations" ]] || false
 }
 
-@test "replace table with json when table does not exist" {
+@test "import-replace-tables: replace table with json when table does not exist" {
     run dolt table import -r employees `batshelper employees-tbl.json`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "The following table could not be found:" ]] || false
 }
 
-@test "replace table with existing data using json" {
+@test "import-replace-tables: replace table with existing data using json" {
     run dolt table import -c -s `batshelper employees-sch.sql` employees `batshelper employees-tbl.json`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
@@ -170,7 +170,7 @@ SQL
     [[ "$output" =~ "Import completed successfully." ]] || false
 }
 
-@test "replace table with existing data with different schema" {
+@test "import-replace-tables: replace table with existing data with different schema" {
     run dolt table import -c -s `batshelper employees-sch.sql` employees `batshelper employees-tbl.json`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
@@ -179,7 +179,7 @@ SQL
     [[ "$output" =~ "cause: column position not found in schema" ]] || false
 }
 
-@test "replace table with bad json" {
+@test "import-replace-tables: replace table with bad json" {
     dolt sql <<SQL
 CREATE TABLE employees (
   \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
@@ -196,7 +196,7 @@ SQL
     [[ "$output" =~ "An error occurred moving data" ]] || false
 }
 
-@test "replace table using xlsx file" {
+@test "import-replace-tables: replace table using xlsx file" {
     dolt sql <<SQL
 CREATE TABLE employees (
   \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
@@ -214,7 +214,7 @@ SQL
     [[ "$output" =~ "Import completed successfully." ]] || false
 }
 
-@test "replace table using xlsx file with wrong schema" {
+@test "import-replace-tables: replace table using xlsx file with wrong schema" {
     dolt sql <<SQL
 CREATE TABLE employees (
   \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
@@ -230,7 +230,7 @@ SQL
     [ "$status" -eq 0 ]
 }
 
-@test "replace table with 2 primary keys with a csv with one primary key" {
+@test "import-replace-tables: replace table with 2 primary keys with a csv with one primary key" {
     run dolt table import -c --pk=pk1,pk2 test `batshelper 2pk5col-ints.csv`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
@@ -240,7 +240,7 @@ SQL
     [[ "$output" =~ "cause: input primary keys do not match primary keys of existing table" ]] || false
 }
 
-@test "replace table with 2 primary keys with a csv with 2 primary keys" {
+@test "import-replace-tables: replace table with 2 primary keys with a csv with 2 primary keys" {
     run dolt table import -c --pk=pk1,pk2 test `batshelper 2pk5col-ints.csv`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
@@ -250,7 +250,7 @@ SQL
     [[ "$output" =~ "Import completed successfully." ]] || false
 }
 
-@test "replace table with a json with columns in different order" {
+@test "import-replace-tables: replace table with a json with columns in different order" {
     dolt sql <<SQL
 CREATE TABLE employees (
   \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
@@ -268,7 +268,7 @@ SQL
     [[ "$output" =~ "Import completed successfully." ]] || false
 }
 
-@test "replace table with a csv with columns in different order" {
+@test "import-replace-tables: replace table with a csv with columns in different order" {
     dolt sql <<SQL
 CREATE TABLE employees (
   \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',

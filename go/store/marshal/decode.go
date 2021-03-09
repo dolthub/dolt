@@ -462,8 +462,10 @@ func marshalerDecoder(t reflect.Type) decoderFunc {
 func iterListOrSlice(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, t reflect.Type, f func(c types.Value, i uint64) error) error {
 	switch v := v.(type) {
 	case types.List:
-		err := v.IterAll(ctx, f)
-
+		err := v.Iter(ctx, func(v types.Value, idx uint64) (stop bool, err error) {
+			err = f(v, idx)
+			return
+		})
 		if err != nil {
 			return err
 		}
@@ -662,19 +664,19 @@ func mapDecoder(t reflect.Type, tags nomsTags) (decoderFunc, error) {
 
 		init.RLock()
 		defer init.RUnlock()
-		err := nomsMap.IterAll(ctx, func(k, v types.Value) error {
+		err := nomsMap.Iter(ctx, func(k, v types.Value) (stop bool, err error) {
 			keyRv := reflect.New(t.Key()).Elem()
-			err := keyDecoder(ctx, nbf, k, keyRv)
+			err = keyDecoder(ctx, nbf, k, keyRv)
 
 			if err != nil {
-				return err
+				return
 			}
 
 			valueRv := reflect.New(t.Elem()).Elem()
 			err = valueDecoder(ctx, nbf, v, valueRv)
 
 			if err != nil {
-				return err
+				return
 			}
 
 			if m.IsNil() {
@@ -682,7 +684,7 @@ func mapDecoder(t reflect.Type, tags nomsTags) (decoderFunc, error) {
 			}
 
 			m.SetMapIndex(keyRv, valueRv)
-			return nil
+			return
 		})
 
 		if err != nil {

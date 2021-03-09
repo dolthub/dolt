@@ -344,7 +344,8 @@ func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, tblName stri
 
 				if mkNilOrKeyLess {
 					// change will already be in the map
-					// TODO(andy) apply changes to ancestor instead of "ours"
+					// we apply changes directly to "ours"
+					// instead of to ancestor
 					change = types.ValueChanged{}
 					processed = true
 				}
@@ -393,11 +394,6 @@ func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, tblName stri
 					if err != nil {
 						return err
 					}
-				}
-
-				_, err = sess.Flush(ctx)
-				if err != nil {
-					return err
 				}
 
 				change = types.ValueChanged{}
@@ -767,7 +763,6 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 	tableEditSession := editor.CreateTableEditSession(ourRoot, editor.TableEditSessionProps{
 		ForeignKeyChecksDisabled: true,
 	})
-	var unconflicted []string
 	// need to validate merges can be done on all tables before starting the actual merges.
 	for _, tblName := range tblNames {
 		mergedTable, stats, err := merger.MergeTable(ctx, tblName, tableEditSession)
@@ -778,10 +773,6 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 
 		if mergedTable != nil {
 			tblToStats[tblName] = stats
-
-			if stats.Conflicts == 0 {
-				unconflicted = append(unconflicted, tblName)
-			}
 
 			err = tableEditSession.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
 				return root.PutTable(ctx, tblName, mergedTable)
@@ -817,15 +808,19 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 		if len(conflicts) > 0 {
 			return nil, fmt.Errorf("foreign key conflicts")
 		}
-		return root.PutForeignKeyCollection(ctx, mergedFKColl)
-	})
 
-	err = tableEditSession.ValidateForeignKeys(ctx)
+		root, err = root.PutForeignKeyCollection(ctx, mergedFKColl)
+		if err != nil {
+			return nil, err
+		}
+
+		return root.UpdateSuperSchemasFromOther(ctx, tblNames, theirRoot)
+	})
 	if err != nil {
 		return nil, nil, err
 	}
 
-	newRoot, err = newRoot.UpdateSuperSchemasFromOther(ctx, unconflicted, theirRoot)
+	newRoot, err = tableEditSession.Flush(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
