@@ -23,7 +23,9 @@ teardown() {
 @test "active_branch() func" {
     run dolt sql -q 'select active_branch()' -r csv
     [ $status -eq 0 ]
-    [[ "$output" =~ "active_branch()" ]] || false
+    # TODO: Get rid of this echo.
+    echo $output
+    [[ "$output" =~ "ACTIVE_BRANCH()" ]] || false
     [[ "$output" =~ "master" ]] || false
 }
 
@@ -32,6 +34,6 @@ teardown() {
     run dolt checkout tmp_br
     run dolt sql -q 'select active_branch()' -r csv
     [ $status -eq 0 ]
-    [[ "$output" =~ "active_branch()" ]] || false
+    [[ "$output" =~ "ACTIVE_BRANCH()" ]] || false
     [[ "$output" =~ "tmp_br" ]] || false
 }
