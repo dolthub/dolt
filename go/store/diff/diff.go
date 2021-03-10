@@ -105,6 +105,27 @@ type differ struct {
 //        <some code>
 //    }
 func Diff(ctx context.Context, v1, v2 types.Value, dChan chan<- Difference, leftRight bool, descFunc ShouldDescFunc) error {
+	f := func(ctx context.Context, d differ, v1, v2 types.Value) error {
+		return d.diff(ctx, nil, v1, v2)
+	}
+
+	return diff(ctx, f, v1, v2, dChan, leftRight, descFunc)
+}
+
+func DiffMapRange(ctx context.Context, m1, m2 types.Map, start types.Value, inRange types.ValueInRange, dChan chan<- Difference, leftRight bool, descFunc ShouldDescFunc) error {
+	f := func(ctx context.Context, d differ, v1, v2 types.Value) error {
+		return d.diffMapsInRange(ctx, nil, m1, m2, start, inRange)
+	}
+
+	return diff(ctx, f, m1, m2, dChan, leftRight, descFunc)
+}
+
+func diff(ctx context.Context,
+	f func(ctx context.Context, d differ, v1, v2 types.Value) error,
+	v1, v2 types.Value,
+	dChan chan<- Difference,
+	leftRight bool,
+	descFunc ShouldDescFunc) error {
 	if descFunc == nil {
 		descFunc = ShouldDescend
 	}
@@ -123,7 +144,7 @@ func Diff(ctx context.Context, v1, v2 types.Value, dChan chan<- Difference, left
 			return d.sendDiff(ctx, Difference{Path: nil, ChangeType: types.DiffChangeModified, OldValue: v1, NewValue: v2})
 		} else {
 			d.GoCatchPanic(func() error {
-				return d.diff(ctx, nil, v1, v2)
+				return f(ctx, d, v1, v2)
 			})
 			return d.Wait()
 		}
@@ -254,6 +275,14 @@ func (d differ) diffLists(ctx context.Context, p types.Path, v1, v2 types.List) 
 }
 
 func (d differ) diffMaps(ctx context.Context, p types.Path, v1, v2 types.Map) error {
+	trueFunc := func(value types.Value) (bool, error) {
+		return true, nil
+	}
+
+	return d.diffMapsInRange(ctx, p, v1, v2, nil, trueFunc)
+}
+
+func (d differ) diffMapsInRange(ctx context.Context, p types.Path, v1, v2 types.Map, start types.Value, inRange types.ValueInRange) error {
 	return d.diffOrdered(ctx, p,
 		func(v types.Value) (types.PathPart, error) {
 			if types.ValueCanBePathIndex(v) {
@@ -270,8 +299,12 @@ func (d differ) diffMaps(ctx context.Context, p types.Path, v1, v2 types.Map) er
 		},
 		func(ctx context.Context, cc chan<- types.ValueChanged) error {
 			if d.leftRight {
-				return v2.DiffLeftRight(ctx, v1, cc)
+				return v2.DiffLeftRightInRange(ctx, v1, start, inRange, cc)
 			} else {
+				if start != nil {
+					panic("not implemented")
+				}
+
 				return v2.DiffHybrid(ctx, v1, cc)
 			}
 		},

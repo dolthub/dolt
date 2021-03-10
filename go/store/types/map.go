@@ -31,6 +31,8 @@ import (
 	"github.com/dolthub/dolt/go/store/d"
 )
 
+type ValueInRange func(Value) (bool, error)
+
 var ErrKeysNotOrdered = errors.New("streaming map keys not ordered")
 
 var EmptyMap Map
@@ -205,10 +207,28 @@ func (m Map) DiffHybrid(ctx context.Context, last Map, changes chan<- ValueChang
 // streaming approach, optimised for returning results early, but not
 // completing quickly.
 func (m Map) DiffLeftRight(ctx context.Context, last Map, changes chan<- ValueChanged) error {
+	trueFunc := func(Value) (bool, error) {
+		return true, nil
+	}
+	return m.DiffLeftRightInRange(ctx, last, nil, trueFunc, changes)
+}
+
+func (m Map) DiffLeftRightInRange(ctx context.Context, last Map, start Value, inRange ValueInRange, changes chan<- ValueChanged) error {
 	if m.Equals(last) {
 		return nil
 	}
-	return orderedSequenceDiffLeftRight(ctx, last.orderedSequence, m.orderedSequence, changes)
+
+	startKey := emptyKey
+	if !IsNull(start) {
+		var err error
+		startKey, err = newOrderedKey(start, m.Format())
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return orderedSequenceDiffLeftRightInRange(ctx, last.orderedSequence, m.orderedSequence, startKey, inRange, changes)
 }
 
 // Collection interface

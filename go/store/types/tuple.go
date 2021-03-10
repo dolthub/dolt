@@ -296,6 +296,25 @@ func NewTuple(nbf *NomsBinFormat, values ...Value) (Tuple, error) {
 	return Tuple{valueImpl{vrw, nbf, w.data(), nil}}, nil
 }
 
+// CopyOf creates a copy of a tuple.  This is necessary in cases where keeping a reference to the original tuple is
+// preventing larger objects from being collected.
+func (t Tuple) CopyOf(vrw ValueReadWriter) Tuple {
+	buff := make([]byte, len(t.buff))
+	offsets := make([]uint32, len(t.offsets))
+
+	copy(buff, t.buff)
+	copy(offsets, t.offsets)
+
+	return Tuple{
+		valueImpl{
+			buff:    buff,
+			offsets: offsets,
+			vrw:     vrw,
+			nbf:     t.nbf,
+		},
+	}
+}
+
 func (t Tuple) Empty() bool {
 	return t.Len() == 0
 }
