@@ -53,6 +53,7 @@ func (cf *ActiveBranchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, er
 	currentBranch := rsr.CWBHeadRef()
 
 	branches, err := ddb.GetBranches(ctx)
+
 	if err != nil {
 		return nil, err
 	}
@@ -62,6 +63,7 @@ func (cf *ActiveBranchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, er
 			return br.GetPath(), nil
 		}
 	}
+
 	return nil, fmt.Errorf("active branch not found")
 }
 
