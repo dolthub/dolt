@@ -20,6 +20,12 @@ Dolt databases. We host public data for free!
 [Join us on Discord](https://discord.com/invite/RFwfYpu) to say hi and
 ask questions!
 
+# What's it for?
+
+Lots of things! Git for Data is a generally useful tool with countless 
+applications. But if you want some ideas, [here's how people are using 
+it so far](https://www.dolthub.com/blog/2021-03-09-dolt-use-cases-in-the-wild/).
+
 # Dolt CLI
 
 ```
