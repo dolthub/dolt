@@ -31,6 +31,8 @@ import (
 	"github.com/dolthub/dolt/go/store/d"
 )
 
+type ValueInRange func(Value) (bool, error)
+
 var ErrKeysNotOrdered = errors.New("streaming map keys not ordered")
 
 var EmptyMap Map
@@ -211,7 +213,7 @@ func (m Map) DiffLeftRight(ctx context.Context, last Map, changes chan<- ValueCh
 	return m.DiffLeftRightInRange(ctx, last, nil, trueFunc, changes)
 }
 
-func (m Map) DiffLeftRightInRange(ctx context.Context, last Map, start Value, inRange func(Value) (bool, error), changes chan<- ValueChanged) error {
+func (m Map) DiffLeftRightInRange(ctx context.Context, last Map, start Value, inRange ValueInRange, changes chan<- ValueChanged) error {
 	if m.Equals(last) {
 		return nil
 	}

@@ -198,7 +198,7 @@ func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, cur
 	return orderedSequenceDiffLeftRightInRange(ctx, last, current, emptyKey, trueFunc, changes)
 }
 
-func orderedSequenceDiffLeftRightInRange(ctx context.Context, last orderedSequence, current orderedSequence, startKey orderedKey, inRange func(Value) (bool, error), changes chan<- ValueChanged) error {
+func orderedSequenceDiffLeftRightInRange(ctx context.Context, last orderedSequence, current orderedSequence, startKey orderedKey, inRange ValueInRange, changes chan<- ValueChanged) error {
 	lastCur, err := newCursorAt(ctx, last, startKey, false, false)
 	if err != nil {
 		return err

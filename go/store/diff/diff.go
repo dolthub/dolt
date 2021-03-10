@@ -112,7 +112,7 @@ func Diff(ctx context.Context, v1, v2 types.Value, dChan chan<- Difference, left
 	return diff(ctx, f, v1, v2, dChan, leftRight, descFunc)
 }
 
-func DiffMapRange(ctx context.Context, m1, m2 types.Map, start types.Value, inRange func(types.Value) (bool, error), dChan chan<- Difference, leftRight bool, descFunc ShouldDescFunc) error {
+func DiffMapRange(ctx context.Context, m1, m2 types.Map, start types.Value, inRange types.ValueInRange, dChan chan<- Difference, leftRight bool, descFunc ShouldDescFunc) error {
 	f := func(ctx context.Context, d differ, v1, v2 types.Value) error {
 		return d.diffMapsInRange(ctx, nil, m1, m2, start, inRange)
 	}
@@ -282,7 +282,7 @@ func (d differ) diffMaps(ctx context.Context, p types.Path, v1, v2 types.Map) er
 	return d.diffMapsInRange(ctx, p, v1, v2, nil, trueFunc)
 }
 
-func (d differ) diffMapsInRange(ctx context.Context, p types.Path, v1, v2 types.Map, start types.Value, inRange func(types.Value) (bool, error)) error {
+func (d differ) diffMapsInRange(ctx context.Context, p types.Path, v1, v2 types.Map, start types.Value, inRange types.ValueInRange) error {
 	return d.diffOrdered(ctx, p,
 		func(v types.Value) (types.PathPart, error) {
 			if types.ValueCanBePathIndex(v) {
