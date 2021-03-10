@@ -33,6 +33,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
@@ -416,12 +417,12 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		}
 		chunkChan := make(chan extractRecord, mustUint32(rdrs.count()))
 		err := rdrs.extract(context.Background(), chunkChan)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		close(chunkChan)
 
 		for rec := range chunkChan {
 			ok, err := store.Has(context.Background(), hash.Hash(rec.a))
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.True(t, ok)
 		}
 	}
@@ -438,18 +439,18 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		c := &fakeConjoiner{}
 
 		smallTableStore, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, mm, p, c, testMemTableSize)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		root, err := smallTableStore.Root(context.Background())
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		err = smallTableStore.Put(context.Background(), newChunk)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		success, err := smallTableStore.Commit(context.Background(), newChunk.Hash(), root)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, success)
 
 		ok, err := smallTableStore.Has(context.Background(), newChunk.Hash())
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, ok)
 	})
 
@@ -457,11 +458,11 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		srcs := chunkSources{}
 		for _, sp := range conjoinees {
 			cs, err := p.Open(context.Background(), sp.name, sp.chunkCount, nil)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			srcs = append(srcs, cs)
 		}
 		conjoined, err := p.ConjoinAll(context.Background(), srcs, stats)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		cannedSpecs := []tableSpec{{mustAddr(conjoined.hash()), mustUint32(conjoined.count())}}
 		return cannedConjoin{true, append(cannedSpecs, keepers...)}
 	}
@@ -472,29 +473,29 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 
 		srcs := makeTestSrcs(t, []uint32{1, 1, 3, 7}, p)
 		upstream, err := toSpecs(srcs)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		fm.set(constants.NomsVersion, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream)
 		c := &fakeConjoiner{
 			[]cannedConjoin{makeCanned(upstream[:2], upstream[2:], p)},
 		}
 
 		smallTableStore, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, makeManifestManager(fm), p, c, testMemTableSize)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		root, err := smallTableStore.Root(context.Background())
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		err = smallTableStore.Put(context.Background(), newChunk)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		success, err := smallTableStore.Commit(context.Background(), newChunk.Hash(), root)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, success)
 		ok, err := smallTableStore.Has(context.Background(), newChunk.Hash())
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, ok)
 		assertContainAll(t, smallTableStore, srcs...)
 		for _, src := range srcs {
 			err := src.Close()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 	})
 
@@ -504,7 +505,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 
 		srcs := makeTestSrcs(t, []uint32{1, 1, 3, 7, 13}, p)
 		upstream, err := toSpecs(srcs)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		fm.set(constants.NomsVersion, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream)
 		c := &fakeConjoiner{
 			[]cannedConjoin{
@@ -514,22 +515,22 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		}
 
 		smallTableStore, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, makeManifestManager(fm), p, c, testMemTableSize)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		root, err := smallTableStore.Root(context.Background())
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		err = smallTableStore.Put(context.Background(), newChunk)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		success, err := smallTableStore.Commit(context.Background(), newChunk.Hash(), root)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, success)
 		ok, err := smallTableStore.Has(context.Background(), newChunk.Hash())
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, ok)
 		assertContainAll(t, smallTableStore, srcs...)
 		for _, src := range srcs {
 			err := src.Close()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 	})
 }

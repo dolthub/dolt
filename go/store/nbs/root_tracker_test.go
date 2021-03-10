@@ -28,6 +28,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/constants"
@@ -41,7 +42,7 @@ func TestChunkStoreZeroValue(t *testing.T) {
 
 	// No manifest file gets written until the first call to Commit(). Prior to that, Root() will simply return hash.Hash{}.
 	h, err := store.Root(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(hash.Hash{}, h)
 	assert.Equal(constants.NomsVersion, store.Version())
 }
@@ -64,26 +65,26 @@ func TestChunkStoreRebase(t *testing.T) {
 	defer store.Close()
 
 	h, err := store.Root(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(hash.Hash{}, h)
 	assert.Equal(constants.NomsVersion, store.Version())
 
 	// Simulate another process writing a manifest behind store's back.
 	newRoot, chunks, err := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	// state in store shouldn't change
 	h, err = store.Root(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(hash.Hash{}, h)
 	assert.Equal(constants.NomsVersion, store.Version())
 
 	err = store.Rebase(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	// NOW it should
 	h, err = store.Root(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(newRoot, h)
 	assert.Equal(constants.NomsVersion, store.Version())
 	assertDataInStore(chunks, store, assert)
@@ -95,39 +96,39 @@ func TestChunkStoreCommit(t *testing.T) {
 	defer store.Close()
 
 	h, err := store.Root(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(hash.Hash{}, h)
 
 	newRootChunk := chunks.NewChunk([]byte("new root"))
 	newRoot := newRootChunk.Hash()
 	err = store.Put(context.Background(), newRootChunk)
-	assert.NoError(err)
+	require.NoError(t, err)
 	success, err := store.Commit(context.Background(), newRoot, hash.Hash{})
-	assert.NoError(err)
+	require.NoError(t, err)
 	if assert.True(success) {
 		has, err := store.Has(context.Background(), newRoot)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.True(has)
 		h, err := store.Root(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(newRoot, h)
 	}
 
 	secondRootChunk := chunks.NewChunk([]byte("newer root"))
 	secondRoot := secondRootChunk.Hash()
 	err = store.Put(context.Background(), secondRootChunk)
-	assert.NoError(err)
+	require.NoError(t, err)
 	success, err = store.Commit(context.Background(), secondRoot, newRoot)
-	assert.NoError(err)
+	require.NoError(t, err)
 	if assert.True(success) {
 		h, err := store.Root(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(secondRoot, h)
 		has, err := store.Has(context.Background(), newRoot)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.True(has)
 		has, err = store.Has(context.Background(), secondRoot)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.True(has)
 	}
 }
@@ -138,7 +139,7 @@ func TestChunkStoreManifestAppearsAfterConstruction(t *testing.T) {
 	defer store.Close()
 
 	h, err := store.Root(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(hash.Hash{}, h)
 	assert.Equal(constants.NomsVersion, store.Version())
 
@@ -147,7 +148,7 @@ func TestChunkStoreManifestAppearsAfterConstruction(t *testing.T) {
 
 	// state in store shouldn't change
 	h, err = store.Root(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(hash.Hash{}, h)
 	assert.Equal(constants.NomsVersion, store.Version())
 }
@@ -160,14 +161,14 @@ func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 
 	// Simulate another process writing a manifest behind store's back.
 	newRoot, chunks, err := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	store, err := newNomsBlockStore(context.Background(), constants.Format718String, mm, p, inlineConjoiner{defaultMaxTables}, defaultMemTableSize)
-	assert.NoError(err)
+	require.NoError(t, err)
 	defer store.Close()
 
 	h, err := store.Root(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(newRoot, h)
 	assert.Equal(constants.NomsVersion, store.Version())
 	assertDataInStore(chunks, store, assert)
@@ -180,15 +181,15 @@ func TestChunkStoreCommitOptimisticLockFail(t *testing.T) {
 
 	// Simulate another process writing a manifest behind store's back.
 	newRoot, chunks, err := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	newRoot2 := hash.Of([]byte("new root 2"))
 	success, err := store.Commit(context.Background(), newRoot2, hash.Hash{})
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.False(success)
 	assertDataInStore(chunks, store, assert)
 	success, err = store.Commit(context.Background(), newRoot2, newRoot)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(success)
 }
 
@@ -200,36 +201,36 @@ func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
 	c := inlineConjoiner{defaultMaxTables}
 
 	store, err := newNomsBlockStore(context.Background(), constants.Format718String, mm, p, c, defaultMemTableSize)
-	assert.NoError(err)
+	require.NoError(t, err)
 	defer store.Close()
 
 	// Simulate another goroutine writing a manifest behind store's back.
 	interloper, err := newNomsBlockStore(context.Background(), constants.Format718String, mm, p, c, defaultMemTableSize)
-	assert.NoError(err)
+	require.NoError(t, err)
 	defer interloper.Close()
 
 	chunk := chunks.NewChunk([]byte("hello"))
 	err = interloper.Put(context.Background(), chunk)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(interloper.Commit(context.Background(), chunk.Hash(), hash.Hash{}))
 
 	// Try to land a new chunk in store, which should fail AND not persist the contents of store.mt
 	chunk = chunks.NewChunk([]byte("goodbye"))
 	err = store.Put(context.Background(), chunk)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.NotNil(store.mt)
 	assert.False(store.Commit(context.Background(), chunk.Hash(), hash.Hash{}))
 	assert.NotNil(store.mt)
 
 	h, err := store.Root(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	success, err := store.Commit(context.Background(), chunk.Hash(), h)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(success)
 	assert.Nil(store.mt)
 
 	h, err = store.Root(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(chunk.Hash(), h)
 	assert.Equal(constants.NomsVersion, store.Version())
 }
@@ -243,7 +244,7 @@ func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
 	c := inlineConjoiner{defaultMaxTables}
 
 	store, err := newNomsBlockStore(context.Background(), constants.Format718String, mm, p, c, defaultMemTableSize)
-	assert.NoError(err)
+	require.NoError(t, err)
 	defer store.Close()
 
 	// store.Commit() should lock out calls to mm.Fetch()
@@ -255,22 +256,22 @@ func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
 			defer wg.Done()
 			var err error
 			_, fetched, err = mm.Fetch(context.Background(), nil)
-			assert.NoError(err)
+			require.NoError(t, err)
 		}()
 	}
 
 	rootChunk := chunks.NewChunk([]byte("new root"))
 	err = store.Put(context.Background(), rootChunk)
-	assert.NoError(err)
+	require.NoError(t, err)
 	h, err := store.Root(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	success, err := store.Commit(context.Background(), rootChunk.Hash(), h)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(success)
 
 	wg.Wait()
 	h, err = store.Root(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(h, fetched.root)
 }
 
@@ -284,7 +285,7 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 	c := inlineConjoiner{defaultMaxTables}
 
 	store, err := newNomsBlockStore(context.Background(), constants.Format718String, manifestManager{upm, mc, l}, p, c, defaultMemTableSize)
-	assert.NoError(err)
+	require.NoError(t, err)
 	defer store.Close()
 
 	storeChunk := chunks.NewChunk([]byte("store"))
@@ -300,7 +301,7 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 		p,
 		c,
 		defaultMemTableSize)
-	assert.NoError(err)
+	require.NoError(t, err)
 	defer interloper.Close()
 
 	wg := sync.WaitGroup{}
@@ -309,11 +310,11 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			err := interloper.Put(context.Background(), interloperChunk)
-			assert.NoError(err)
+			require.NoError(t, err)
 			h, err := interloper.Root(context.Background())
-			assert.NoError(err)
+			require.NoError(t, err)
 			success, err := interloper.Commit(context.Background(), h, h)
-			assert.NoError(err)
+			require.NoError(t, err)
 			assert.True(success)
 		}()
 
@@ -321,11 +322,11 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 	}
 
 	err = store.Put(context.Background(), storeChunk)
-	assert.NoError(err)
+	require.NoError(t, err)
 	h, err := store.Root(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	success, err := store.Commit(context.Background(), h, h)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(success)
 
 	wg.Wait()
@@ -339,7 +340,7 @@ func makeStoreWithFakes(t *testing.T) (fm *fakeManifest, p tablePersister, store
 	mm := manifestManager{fm, newManifestCache(0), newManifestLocks()}
 	p = newFakeTablePersister()
 	store, err := newNomsBlockStore(context.Background(), constants.Format718String, mm, p, inlineConjoiner{defaultMaxTables}, 0)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	return
 }
 

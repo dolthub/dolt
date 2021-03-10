@@ -29,6 +29,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -62,7 +63,7 @@ func makeTestSrcs(t *testing.T, tableSizes []uint32, p tablePersister) (srcs chu
 			mt.addChunk(computeAddr(c), c)
 		}
 		cs, err := p.Persist(context.Background(), mt, nil, &Stats{})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		srcs = append(srcs, cs.Clone())
 	}
 	return
@@ -74,7 +75,7 @@ func TestConjoin(t *testing.T) {
 		for _, src := range makeTestSrcs(t, tableSizes, p) {
 			specs = append(specs, tableSpec{mustAddr(src.hash()), mustUint32(src.count())})
 			err := src.Close()
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		return
 	}
@@ -95,7 +96,7 @@ func TestConjoin(t *testing.T) {
 				cs, err := p.Open(context.Background(), sp.name, sp.chunkCount, nil)
 
 				if err != nil {
-					assert.NoError(t, err)
+					require.NoError(t, err)
 				}
 
 				srcs = append(srcs, cs)
@@ -105,12 +106,12 @@ func TestConjoin(t *testing.T) {
 		expectSrcs, actualSrcs := open(expect), open(actual)
 		chunkChan := make(chan extractRecord, mustUint32(expectSrcs.count()))
 		err := expectSrcs.extract(context.Background(), chunkChan)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		close(chunkChan)
 
 		for rec := range chunkChan {
 			has, err := actualSrcs.has(rec.a)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.True(t, has)
 		}
 	}
@@ -122,7 +123,7 @@ func TestConjoin(t *testing.T) {
 
 		var err error
 		_, upstream, err = fm.ParseIfExists(context.Background(), nil, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		return
 	}
@@ -149,9 +150,9 @@ func TestConjoin(t *testing.T) {
 				fm, p, upstream := setup(startLock, startRoot, c.precompact)
 
 				_, err := conjoin(context.Background(), upstream, fm, p, stats)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.True(t, exists)
 				assert.Equal(t, c.postcompact, getSortedSizes(newUpstream.specs))
 				assertContainAll(t, p, upstream.specs, newUpstream.specs)
@@ -166,7 +167,7 @@ func TestConjoin(t *testing.T) {
 			data := []byte{0xde, 0xad}
 			mt.addChunk(computeAddr(data), data)
 			src, err := p.Persist(context.Background(), mt, nil, &Stats{})
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			return tableSpec{mustAddr(src.hash()), mustUint32(src.count())}
 		}
 		for _, c := range tc {
@@ -179,9 +180,9 @@ func TestConjoin(t *testing.T) {
 					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, append(specs, newTable))
 				}}
 				_, err := conjoin(context.Background(), upstream, u, p, stats)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.True(t, exists)
 				assert.Equal(t, append([]uint32{1}, c.postcompact...), getSortedSizes(newUpstream.specs))
 				assertContainAll(t, p, append(upstream.specs, newTable), newUpstream.specs)
@@ -199,9 +200,9 @@ func TestConjoin(t *testing.T) {
 					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, upstream.specs[1:])
 				}}
 				_, err := conjoin(context.Background(), upstream, u, p, stats)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.True(t, exists)
 				assert.Equal(t, c.precompact[1:], getSortedSizes(newUpstream.specs))
 			})
