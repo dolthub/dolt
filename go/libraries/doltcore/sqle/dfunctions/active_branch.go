@@ -56,7 +56,7 @@ func (cf *ActiveBranchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, er
 		return nil, err
 	}
 
-	for _, br := range(branches) {
+	for _, br := range branches {
 		if ref.Equals(br, currentBranch) {
 			return br.GetPath(), nil
 		}
@@ -87,6 +87,7 @@ func (cf *ActiveBranchFunc) Type() sql.Type {
 func (*ActiveBranchFunc) Children() []sql.Expression {
 	return nil
 }
+
 // WithChildren implements the Expression interface.
 func (v *ActiveBranchFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
 	if len(children) != 0 {
