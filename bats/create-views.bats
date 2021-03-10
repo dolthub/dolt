@@ -10,7 +10,7 @@ teardown() {
     teardown_common
 }
 
-@test "create a single view" {
+@test "create-views: create a single view" {
     run dolt sql <<SQL
 create view four as select 2+2 as res from dual;
 select * from four;
@@ -21,7 +21,7 @@ SQL
     [[ "${lines[3]}" =~ ' 4 ' ]] || false
 }
 
-@test "drop a single view" {
+@test "create-views: drop a single view" {
     run dolt sql <<SQL
 create view four as select 2+2 as res from dual;
 drop view four;
@@ -29,7 +29,7 @@ SQL
     [ "$status" -eq 0 ]
 }
 
-@test "can't drop dolt_schemas" {
+@test "create-views: can't drop dolt_schemas" {
     run dolt sql -q "create view four as select 2+2 as res from dual;"
     [ "$status" -eq 0 ]
     run dolt sql -q "select name from dolt_schemas" -r csv
@@ -43,7 +43,7 @@ SQL
     [[ "${lines[1]}" =~ 'four' ]] || false
 }
 
-@test "join two views" {
+@test "create-views: join two views" {
     run dolt sql <<SQL
 create view four as select 2+2 as res from dual;
 create view now as select now() from dual;
@@ -55,7 +55,7 @@ SQL
     [[ "${lines[3]}" =~ ' 4 ' ]] || false
 }
 
-@test "cannot create view referencing non-existant table" {
+@test "create-views: cannot create view referencing non-existant table" {
     run dolt sql <<SQL
 create view broken as select id from my_users;
 SQL
@@ -63,7 +63,7 @@ SQL
     [[ "$output" =~ "table not found: my_users" ]] || false
 }
 
-@test "can create view with escaped name" {
+@test "create-views: can create view with escaped name" {
     run dolt sql -q 'create table `my-users` (id int primary key);'
     [ "$status" -eq 0 ]
 
@@ -77,7 +77,7 @@ SQL
     [[ ! "$output" =~ "panic" ]] || false
 }
 
-@test "can create view referencing table" {
+@test "create-views: can create view referencing table" {
     run dolt sql <<SQL
 create table my_users (id int primary key);
 create view will_work as select id from my_users;
@@ -85,7 +85,7 @@ SQL
     [ "$status" -eq 0 ]
 }
 
-@test "can drop table with view referencing it" {
+@test "create-views: can drop table with view referencing it" {
     run dolt sql <<SQL
 create table my_users (id int primary key);
 create view will_be_broken as select id from my_users;
@@ -94,7 +94,7 @@ SQL
     [ "$status" -eq 0 ]
 }
 
-@test "view referencing table selects values present when it was created" {
+@test "create-views: view referencing table selects values present when it was created" {
     run dolt sql <<SQL
 create table my_users (id int primary key);
 insert into my_users values (1), (2), (3);
@@ -109,7 +109,7 @@ SQL
     [[ "${lines[5]}" =~ ' 3 ' ]] || false
 }
 
-@test "view referencing table selects values inserted after it was created" {
+@test "create-views: view referencing table selects values inserted after it was created" {
     run dolt sql <<SQL
 create table my_users (id int primary key);
 insert into my_users values (1), (2), (3);
@@ -128,7 +128,7 @@ SQL
     [[ "${lines[8]}" =~ ' 6 ' ]] || false
 }
 
-@test "select view with alias" {
+@test "create-views: select view with alias" {
     run dolt sql <<SQL
 create table my_users (id int primary key);
 insert into my_users values (1), (2), (3);
@@ -147,7 +147,7 @@ SQL
     [[ "${lines[8]}" =~ ' 6 ' ]] || false
 }
 
-@test "selecting from broken view fails" {
+@test "create-views: selecting from broken view fails" {
     run dolt sql <<SQL
 create table my_users (id int primary key);
 create view will_be_broken as select id from my_users;
@@ -157,7 +157,7 @@ SQL
     [ "$status" -eq 1 ]
 }
 
-@test "creating view creates creates dolt_schemas table" {
+@test "create-views: creating view creates creates dolt_schemas table" {
     run dolt sql -q 'create view testing as select 2+2 from dual'
     [ "$status" -eq 0 ]
     run dolt status
@@ -171,7 +171,7 @@ SQL
     [[ "$output" =~ "select 2+2 from dual" ]] || false
 }
 
-@test "created view is queryable from next session" {
+@test "create-views: created view is queryable from next session" {
     run dolt sql -q 'create view testing as select 2+2 from dual'
     [ "$status" -eq 0 ]
     run dolt sql -q 'select * from testing'
@@ -181,7 +181,7 @@ SQL
     [[ "${lines[3]}" =~ ' 4 ' ]] || false
 }
 
-@test "created view is droppable from next session" {
+@test "create-views: created view is droppable from next session" {
     run dolt sql -q 'create view testing as select 2+2 from dual'
     [ "$status" -eq 0 ]
     run dolt sql -q 'drop view testing'
@@ -190,7 +190,7 @@ SQL
     [ "$status" -eq 1 ]
 }
 
-@test "database with broken view can be used" {
+@test "create-views: database with broken view can be used" {
     run dolt sql -q 'create table users (id longtext primary key)'
     [ "$status" -eq 0 ]
     run dolt sql -q 'create view all_users as select * from users'
@@ -208,7 +208,7 @@ SQL
     [ "$status" -eq 0 ]
 }
 
-@test "Use a committed view" {
+@test "create-views: Use a committed view" {
     dolt sql -q "create view four as select 2+2 as res from dual"
     dolt add .
     dolt commit -m "Checked in a view"

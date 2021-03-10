@@ -148,16 +148,16 @@ github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZm
 github.com/dgryski/go-sip13 v0.0.0-20181026042036-e10d5fee7954/go.mod h1:vAd38F8PWV+bWy6jNmig1y/TA+kYO4g3RSRF0IAv0no=
 github.com/dolthub/fslock v0.0.2 h1:8vUh47iKovgrtXNrXVIzsIoWLlspoXg+3nslhUzgKSw=
 github.com/dolthub/fslock v0.0.2/go.mod h1:0i7bsNkK+XHwFL3dIsSWeXSV7sykVzzVr6+jq8oeEo0=
-github.com/dolthub/go-mysql-server v0.8.1-0.20210301185422-c8a395d5b370 h1:C7hkb/Ui4ayhhsHcuABtQv4GOw5purjnG7kQBHgr2Ew=
-github.com/dolthub/go-mysql-server v0.8.1-0.20210301185422-c8a395d5b370/go.mod h1:L0qJ2mvtGNWMwQZ+hsefCyi6D++emk2TI/KupbVNCHg=
+github.com/dolthub/go-mysql-server v0.8.1-0.20210310033321-3dc1fa9a7a7d h1:ZvzR1AVy4m/bvhgKgUqGUfr0WmB2865DEWjwup63S8k=
+github.com/dolthub/go-mysql-server v0.8.1-0.20210310033321-3dc1fa9a7a7d/go.mod h1:WjNGQ7bj8F/x/d6gj2y5L52CTL08LkhazvO1Mbue43w=
 github.com/dolthub/ishell v0.0.0-20210205014355-16a4ce758446 h1:0ol5pj+QlKUKAtqs1LiPM3ZJKs+rHPgLSsMXmhTrCAM=
 github.com/dolthub/ishell v0.0.0-20210205014355-16a4ce758446/go.mod h1:dhGBqcCEfK5kuFmeO5+WOx3hqc1k3M29c1oS/R7N4ms=
 github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66 h1:WRPDbpJWEnPxPmiuOTndT+lUWUeGjx6eoNOK9O4tQQQ=
 github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66/go.mod h1:N5ZIbMGuDUpTpOFQ7HcsN6WSIpTGQjHP+Mz27AfmAgk=
 github.com/dolthub/sqllogictest/go v0.0.0-20201105013724-5123fc66e12c h1:ZIo6IOXU3/rJK4lp83QRq1zGhQrjQQtlmE2b7H1Vv/k=
 github.com/dolthub/sqllogictest/go v0.0.0-20201105013724-5123fc66e12c/go.mod h1:siLfyv2c92W1eN/R4QqG/+RjjX5W2+gCTRjZxBjI3TY=
-github.com/dolthub/vitess v0.0.0-20210218042642-d99ce5b7b004 h1:q0eAoMtzoMShK2tzCYSISEfoIgOWtIOaNvlnC+lFQCE=
-github.com/dolthub/vitess v0.0.0-20210218042642-d99ce5b7b004/go.mod h1:hUE8oSk2H5JZnvtlLBhJPYC8WZCA5AoSntdLTcBvdBM=
+github.com/dolthub/vitess v0.0.0-20210306002241-df17fc5cd13d h1:PhfTuYvjE+JMMX+Z/lDpGSAiRKTKL9HqDBwAd+UnyiM=
+github.com/dolthub/vitess v0.0.0-20210306002241-df17fc5cd13d/go.mod h1:hUE8oSk2H5JZnvtlLBhJPYC8WZCA5AoSntdLTcBvdBM=
 github.com/dustin/go-humanize v0.0.0-20171111073723-bb3d318650d4/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
 github.com/dustin/go-humanize v1.0.0 h1:VSnTsYCnlFHaM2/igO1h6X3HA71jcobQuxemgkq4zYo=
 github.com/dustin/go-humanize v1.0.0/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
@@ -383,7 +383,6 @@ github.com/jirfag/go-printf-func-name v0.0.0-20191110105641-45db9963cdd3/go.mod 
 github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af/go.mod h1:Nht3zPeWKUH0NzdCt2Blrr5ys8VGpn0CEB0cQHVjt7k=
 github.com/jmespath/go-jmespath v0.3.0 h1:OS12ieG61fsCg5+qLJ+SsW9NicxNkg3b25OyT2yCeUc=
 github.com/jmespath/go-jmespath v0.3.0/go.mod h1:9QtRXoHjLGCJ5IBSaohpXITPlowMeeYCZ7fLUTSywik=
-github.com/jmoiron/sqlx v1.2.0 h1:41Ip0zITnmWNR/vHV+S4m+VoUivnWY5E4OJfLZjCJMA=
 github.com/jmoiron/sqlx v1.2.0/go.mod h1:1FEQNm3xlJgrMD+FBdI9+xvCksHtbpVBBw5dYhBSsks=
 github.com/jmoiron/sqlx v1.2.1-0.20190826204134-d7d95172beb5 h1:lrdPtrORjGv1HbbEvKWDUAy97mPpFm4B8hp77tcCUJY=
 github.com/jmoiron/sqlx v1.2.1-0.20190826204134-d7d95172beb5/go.mod h1:1FEQNm3xlJgrMD+FBdI9+xvCksHtbpVBBw5dYhBSsks=
@@ -436,7 +435,6 @@ github.com/lightstep/lightstep-tracer-common/golang/gogo v0.0.0-20190605223551-b
 github.com/lightstep/lightstep-tracer-go v0.18.1/go.mod h1:jlF1pusYV4pidLvZ+XD0UBX0ZE6WURAspgAczcDHrL4=
 github.com/logrusorgru/aurora v0.0.0-20181002194514-a7b3b318ed4e/go.mod h1:7rIyQOR62GCctdiQpZ/zOJlFyk6y+94wXzv6RNZgaR4=
 github.com/lyft/protoc-gen-validate v0.0.13/go.mod h1:XbGvPuh87YZc5TdIa2/I4pLk0QoUACkjt2znoq26NVQ=
-github.com/magiconair/properties v1.8.0 h1:LLgXmsheXeRoUOBOjtwPQCWIYqM/LU1ayDtDePerRcY=
 github.com/magiconair/properties v1.8.0/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czPbwD3XqdrwzmxQ=
 github.com/magiconair/properties v1.8.1/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czPbwD3XqdrwzmxQ=
 github.com/maratori/testpackage v1.0.1/go.mod h1:ddKdw+XG0Phzhx8BFDTKgpWP4i7MpApTE5fXSKAqwDU=
@@ -1091,7 +1089,6 @@ honnef.co/go/tools v0.0.0-20190418001031-e561f6794a2a/go.mod h1:rf3lG4BRIbNafJWh
 honnef.co/go/tools v0.0.0-20190523083050-ea95bdfd59fc/go.mod h1:rf3lG4BRIbNafJWhAfAdb/ePZxsR/4RtNHQocxwk9r4=
 honnef.co/go/tools v0.0.1-2019.2.3/go.mod h1:a3bituU0lyd329TUQxRnasdCoJDkEUEAqEt0JzvZhAg=
 honnef.co/go/tools v0.0.1-2020.1.3/go.mod h1:X/FiERA/W4tHapMX5mGpAtMSVEeEUOyHaw9vFzvIQ3k=
-honnef.co/go/tools v0.0.1-2020.1.4 h1:UoveltGrhghAA7ePc+e+QYDHXrBps2PqFZiHkGR/xK8=
 honnef.co/go/tools v0.0.1-2020.1.4/go.mod h1:X/FiERA/W4tHapMX5mGpAtMSVEeEUOyHaw9vFzvIQ3k=
 honnef.co/go/tools v0.0.1-2020.1.5 h1:nI5egYTGJakVyOryqLs1cQO5dO0ksin5XXs2pspk75k=
 honnef.co/go/tools v0.0.1-2020.1.5/go.mod h1:X/FiERA/W4tHapMX5mGpAtMSVEeEUOyHaw9vFzvIQ3k=

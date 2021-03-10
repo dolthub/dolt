@@ -35,7 +35,7 @@ teardown() {
     teardown_common
 }
 
-@test "save query" {
+@test "query-catalog: save query" {
     run dolt sql -q "desc dolt_query_catalog"
     [ "$status" -eq 1 ]
     run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1" -s "my name" -m "my message"
@@ -70,7 +70,7 @@ teardown() {
     [ "${#lines[@]}" -eq 2 ]
 }
 
-@test "query catalog conflict" {
+@test "query-catalog: conflict" {
     dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1" -s "name1" -m "my message"
     dolt add .
     dolt commit -m 'Added a test query'
@@ -98,7 +98,7 @@ teardown() {
     [[ "$output" =~ "name_b" ]] || false
 }
 
-@test "executed saved" {
+@test "query-catalog: executed saved" {
     Q1="select pk, pk1, pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1 order by 1"
     Q2="select pk from one_pk"
     dolt sql -q "$Q1" -s name1

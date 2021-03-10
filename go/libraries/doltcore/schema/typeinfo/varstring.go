@@ -57,6 +57,10 @@ func CreateVarStringTypeFromParams(params map[string]string) (TypeInfo, error) {
 	}
 	if maxLengthStr, ok := params[varStringTypeParam_Length]; ok {
 		length, err = strconv.ParseInt(maxLengthStr, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+
 	} else {
 		return nil, fmt.Errorf(`create varstring type info is missing param "%v"`, varStringTypeParam_Length)
 	}

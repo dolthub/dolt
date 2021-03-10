@@ -20,7 +20,7 @@ teardown() {
     teardown_common
 }
 
-@test "DOLT_ADD all flag works" {
+@test "sql-add: DOLT_ADD all flag works" {
     run dolt sql -q "SELECT DOLT_ADD('-A')"
     run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
 
@@ -36,7 +36,7 @@ teardown() {
     [[ "$output" =~ "$regex" ]] || false
 }
 
-@test "DOLT_ADD all w/ . works" {
+@test "sql-add: DOLT_ADD all w/ . works" {
     run dolt sql -q "SELECT DOLT_ADD('.')"
     run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
 
@@ -52,7 +52,7 @@ teardown() {
     [[ "$output" =~ "$regex" ]] || false
 }
 
-@test "DOLT_ADD all w/ . combined with DOLT_COMMIT -a works" {
+@test "sql-add: DOLT_ADD all w/ . combined with DOLT_COMMIT -a works" {
     run dolt sql -q "SELECT DOLT_ADD('.')"
     run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
 
@@ -67,7 +67,7 @@ teardown() {
     [[ "$output" =~ "Bats Tests <bats@email.fake>" ]] || false
 }
 
-@test "DOLT_ADD can take in one table" {
+@test "sql-add: DOLT_ADD can take in one table" {
     run dolt sql -q "SELECT DOLT_ADD('test')"
     run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
 
@@ -84,7 +84,7 @@ teardown() {
     [[ "$output" =~ "$regex" ]] || false
 }
 
-@test "DOLT_ADD can take in multiple tables" {
+@test "sql-add: DOLT_ADD can take in multiple tables" {
     run dolt sql -q "SELECT DOLT_ADD('test', 'test2')"
     run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
 
@@ -100,7 +100,7 @@ teardown() {
     [[ "$output" =~ "$regex" ]] || false
 }
 
-@test "Check that Dolt add works with docs" {
+@test "sql-add: Check that Dolt add works with docs" {
      echo readme-text > README.md
      run ls
      [[ "$output" =~ "README.md" ]] || false

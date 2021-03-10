@@ -9,7 +9,7 @@ teardown() {
 }
 
 # These tests use batch mode since the in memory db spawned by CREATE DATABASE expire after each session.
-@test "sql create new database" {
+@test "sql-create-database: create new database" {
     run dolt sql << SQL
 CREATE DATABASE mydb;
 SHOW DATABASES;
@@ -32,7 +32,7 @@ SQL
     [[ ! "$output" =~ "mydb" ]] || false
 }
 
-@test "sql create database that already exists throws an error" {
+@test "sql-create-database: create database that already exists throws an error" {
     run dolt sql << SQL
 CREATE DATABASE mydb;
 CREATE DATABASE mydb;
@@ -43,7 +43,7 @@ SQL
 
 }
 
-@test "sql create database IF NOT EXISTS on database that already exists doesn't throw an error" {
+@test "sql-create-database: create database IF NOT EXISTS on database that already exists doesn't throw an error" {
     run dolt sql << SQL
 CREATE DATABASE mydb;
 CREATE DATABASE IF NOT EXISTS mydb;
@@ -52,7 +52,7 @@ SQL
     [ "$status" -eq 0 ]
 }
 
-@test "sql create and drop new database" {
+@test "sql-create-database: create and drop new database" {
     run dolt sql << SQL
 CREATE DATABASE mydb;
 DROP DATABASE mydb;
@@ -62,7 +62,7 @@ SQL
     [[ "$output" =~ "database not found: mydb" ]] || false
 }
 
-@test "sql create new database IF EXISTS works" {
+@test "sql-create-database: create new database IF EXISTS works" {
     # Test bad syntax.
     run dolt sql -q "CREATE DATABASE IF EXISTS test;"
     [ "$status" -eq 1 ]
@@ -107,13 +107,13 @@ SQL
     [[ "$output" =~ "Error parsing SQL" ]] || false
 }
 
-@test "sql drop database throws error for database that doesn't exist" {
+@test "sql-create-database: drop database throws error for database that doesn't exist" {
     run dolt sql -q "DROP DATABASE mydb;"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "can't drop database mydb; database doesn't exist" ]] || false
 }
 
-@test "sql drop database errors for non memory databases" {
+@test "sql-create-database: sql drop database errors for non memory databases" {
     run dolt sql -q "DROP DATABASE dolt_repo_$$"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "DROP DATABASE isn't supported for database dolt_repo_$$" ]] || false
@@ -123,7 +123,7 @@ SQL
     [[ "$output" =~ "DROP DATABASE isn't supported for database information_schema" ]] || false
 }
 
-@test "sql create new database via SCHEMA alias" {
+@test "sql-create-database: create new database via SCHEMA alias" {
     run dolt sql << SQL
 CREATE SCHEMA mydb;
 SHOW DATABASES;
@@ -144,13 +144,13 @@ SQL
     [[ ! "$output" =~ "mydb" ]] || false
 }
 
-@test "sql use for non existing datbase throws an error" {
+@test "sql-create-database: use for non existing datbase throws an error" {
     run dolt sql -q "USE test"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "database not found: test" ]] || false
 }
 
-@test "SHOW DATABASES works after CREATE and DROP" {
+@test "sql-create-database: SHOW DATABASES works after CREATE and DROP" {
     run dolt sql -q "SHOW DATABASES"
     before=$output
 

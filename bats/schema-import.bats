@@ -35,7 +35,7 @@ teardown() {
     teardown_common
 }
 
-@test "schema import create" {
+@test "schema-import: create" {
     run dolt schema import -c --pks=pk test 1pk5col-ints.csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Created table successfully." ]] || false
@@ -55,7 +55,7 @@ teardown() {
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
-@test "schema import dry run" {
+@test "schema-import: dry run" {
     run dolt schema import --dry-run -c --pks=pk test 1pk5col-ints.csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 9 ]
@@ -72,7 +72,7 @@ teardown() {
     ! [[ "$output" =~ "test" ]] || false
 }
 
-@test "schema import with a bunch of types" {
+@test "schema-import: with a bunch of types" {
     run dolt schema import --dry-run -c --pks=pk test 1pksupportedtypes.csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 10 ]
@@ -86,7 +86,7 @@ teardown() {
     [[ "$output" =~ "\`uuid\` char(36) character set ascii collate ascii_bin" ]] || false
 }
 
-@test "schema import with an empty csv" {
+@test "schema-import: with an empty csv" {
     cat <<DELIM > empty.csv
 DELIM
     run dolt schema import --dry-run -c --pks=pk test empty.csv
@@ -94,7 +94,7 @@ DELIM
     [[ "$output" =~ "Header line is empty" ]] || false
 }
 
-@test "schema import replace" {
+@test "schema-import: replace" {
     dolt schema import -c --pks=pk test 1pk5col-ints.csv
     run dolt schema import -r --pks=pk test 1pksupportedtypes.csv
     [ "$status" -eq 0 ]
@@ -111,7 +111,7 @@ DELIM
     [[ "$output" =~ "\`uuid\` char(36) character set ascii collate ascii_bin" ]] || false
 }
 
-@test "schema import with invalid names" {
+@test "schema-import: with invalid names" {
     run dolt schema import -c --pks=pk 123 1pk5col-ints.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "not a valid table name" ]] || false
@@ -129,7 +129,7 @@ DELIM
     [[ "$output" =~ "reserved" ]] || false
 }
 
-@test "schema import with multiple primary keys" {
+@test "schema-import: with multiple primary keys" {
     cat <<DELIM > 2pk5col-ints.csv
 pk1,pk2,c1,c2,c3,c4,c5
 0,0,1,2,3,4,5
@@ -152,7 +152,7 @@ DELIM
     [[ "$output" =~ "PRIMARY KEY (\`pk1\`,\`pk2\`)" ]] || false
 }
 
-@test "schema import missing values in CSV rows" {
+@test "schema-import: missing values in CSV rows" {
     cat <<DELIM > empty-strings-null-values.csv
 pk,headerOne,headerTwo
 a,"""""",1
@@ -172,7 +172,7 @@ DELIM
     [[ "$output" =~ "\`headerTwo\` int" ]] || false
 }
 
-@test "schema import --keep-types" {
+@test "schema-import: --keep-types" {
     cat <<DELIM > 1pk5col-strings.csv
 pk,c1,c2,c3,c4,c5,c6
 "0","foo","bar","baz","car","dog","tim"
@@ -197,7 +197,7 @@ DELIM
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
-@test "schema import with strings in csv" {
+@test "schema-import: with strings in csv" {
     cat <<DELIM > 1pk5col-strings.csv
 pk,c1,c2,c3,c4,c5,c6
 "0","foo","bar","baz","car","dog","tim"
@@ -218,7 +218,7 @@ DELIM
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
-@test "schema import supports dates and times" {
+@test "schema-import: supports dates and times" {
     cat <<DELIM > 1pk-datetime.csv
 pk, test_date
 0, 2013-09-24 00:01:35
@@ -231,7 +231,7 @@ DELIM
     [[ "$output" =~ "datetime" ]] || false;
 }
 
-@test "schema import uses specific date/time types" {
+@test "schema-import: uses specific date/time types" {
     cat <<DELIM > chrono.csv
 pk, c_date, c_time, c_datetime, c_date+time
 0, "2018-04-13", "13:17:42",     "2011-10-24 13:17:42.123", "2018-04-13"
@@ -245,12 +245,12 @@ DELIM
     [[ "$output" =~ "\`c_date+time\` datetime" ]] || false
 }
 
-@test "schema import of two tables" {
+@test "schema-import: import of two tables" {
     dolt schema import -c --pks=pk test1 1pksupportedtypes.csv
     dolt schema import -c --pks=pk test2 1pk5col-ints.csv
 }
 
-@test "schema import --update adds new columns" {
+@test "schema-import: --update adds new columns" {
     dolt table import -c -pk=pk test abc.csv
     dolt add test
     dolt commit -m "added table"
@@ -271,7 +271,7 @@ DELIM
     [[ "$output" =~ "1,blue,2.2,false,,," ]] || false
 }
 
-@test "schema import --replace adds new columns" {
+@test "schema-import: --replace adds new columns" {
     dolt table import -c -pk=pk test abc.csv
     dolt add test
     dolt commit -m "added table"
@@ -290,7 +290,7 @@ DELIM
     [[ "$output" =~ "0" ]] || false
 }
 
-@test "schema import --replace drops missing columns" {
+@test "schema-import: --replace drops missing columns" {
     cat <<DELIM > xyz.csv
 pk,x,y,z
 0,green,3.14,-1
@@ -310,7 +310,7 @@ DELIM
     [[ ! "$output" = "+    \`" ]] || false
 }
 
-@test "schema import with name map" {
+@test "schema-import: with name map" {
     cat <<JSON > name-map.json
 {
     "a":"aa",
@@ -329,7 +329,7 @@ JSON
     [[ ! "$output" =~ "\`c\`" ]] || false
 }
 
-@test "failed import, duplicate column name" {
+@test "schema-import: failed import, duplicate column name" {
     cat <<CSV > import.csv
 abc,Abc,d
 1,2,3

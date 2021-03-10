@@ -10,7 +10,7 @@ teardown() {
     teardown_common
 }
 
-@test "sql engine can parse all numeric data literals" {
+@test "types: sql engine can parse all numeric data literals" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,

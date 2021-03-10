@@ -18,7 +18,7 @@ teardown() {
     teardown_common
 }
 
-@test "insert into auto_increment table" {
+@test "auto_increment: insert into auto_increment table" {
     dolt sql -q "INSERT INTO test VALUES (1,11),(2,22),(3,33);"
 
     run dolt sql -q "INSERT INTO test (c0) VALUES (44);"
@@ -35,7 +35,7 @@ teardown() {
     [[ "$output" =~ "6,66" ]] || false
 }
 
-@test "create auto_increment table with out-of-line PK def" {
+@test "auto_increment: create auto_increment table with out-of-line PK def" {
     run dolt sql <<SQL
 CREATE TABLE ai (
     pk int AUTO_INCREMENT,
@@ -52,7 +52,7 @@ SQL
     [[ "$output" =~ "3,3" ]] || false
 }
 
-@test "insert into empty auto_increment table" {
+@test "auto_increment: insert into empty auto_increment table" {
     run dolt sql -q "INSERT INTO test (c0) VALUES (1);"
     [ "$status" -eq 0 ]
     run dolt sql -q "SELECT * FROM test WHERE c0 = 1;" -r csv
@@ -60,7 +60,7 @@ SQL
     [[ "$output" =~ "1,1" ]] || false
 }
 
-@test "insert into auto_increment table with skipped keys" {
+@test "auto_increment: insert into auto_increment table with skipped keys" {
     dolt sql -q "INSERT INTO test VALUES (1,1),(100,100);"
 
     run dolt sql -q "INSERT INTO test (c0) VALUES (101);"
@@ -75,7 +75,7 @@ SQL
     [[ "$output" =~ "101,101" ]] || false
 }
 
-@test "insert into auto_increment table with NULL" {
+@test "auto_increment: insert into auto_increment table with NULL" {
     dolt sql -q "INSERT INTO test VALUES (1,1);"
 
     run dolt sql -q "INSERT INTO test (pk,c0) VALUES (NULL,2);"
@@ -93,7 +93,7 @@ SQL
     [[ "$output" =~ "11,11" ]] || false
 }
 
-@test "insert into auto_increment table with 0" {
+@test "auto_increment: insert into auto_increment table with 0" {
     dolt sql -q "INSERT INTO test VALUES (1,1);"
 
     run dolt sql -q "INSERT INTO test (pk,c0) VALUES (0,2);"
@@ -111,7 +111,7 @@ SQL
     [[ "$output" =~ "11,11" ]] || false
 }
 
-@test "insert into auto_increment table via batch mode" {
+@test "auto_increment: insert into auto_increment table via batch mode" {
     run dolt sql <<SQL
 INSERT INTO test (c0) VALUES (1);
 INSERT INTO test (c0) VALUES (2);
@@ -130,7 +130,7 @@ SQL
     [[ "$output" =~ "21,21" ]] || false
 }
 
-@test "insert into table via batch mode" {
+@test "auto_increment: insert into table via batch mode" {
     # asserts proper batch mode handling
     run dolt sql <<SQL
 CREATE TABLE test2 (
@@ -156,7 +156,7 @@ SQL
     [[ "$output" =~ "23,3" ]] || false
 }
 
-@test "insert into auto_increment table with correct floating point rounding" {
+@test "auto_increment: insert into auto_increment table with correct floating point rounding" {
     dolt sql <<SQL
 CREATE TABLE auto_float (
     pk float NOT NULL PRIMARY KEY AUTO_INCREMENT,
@@ -179,7 +179,7 @@ SQL
     [[ "$output" =~ "5,5" ]] || false
 }
 
-@test "create auto_increment tables with all numeric types" {
+@test "auto_increment: create auto_increment tables with all numeric types" {
     # signed integer types and floating point
     for TYPE in TINYINT SMALLINT MEDIUMINT INT BIGINT FLOAT DOUBLE
     do
@@ -217,7 +217,7 @@ SQL
     done
 }
 
-@test "invalid AUTO_INCREMENT definitions fail" {
+@test "auto_increment: invalid AUTO_INCREMENT definitions fail" {
     run dolt sql -q "CREATE TABLE bad (pk int PRIMARY KEY, c0 int AUTO_INCREMENT);"
     [ "$status" -ne 0 ]
     [[ "$output" =~ "there can be only one auto_increment column and it must be defined as a key" ]] || false
@@ -231,7 +231,7 @@ SQL
     [[ "$output" =~ "there can be only one auto_increment column and it must be defined as a key" ]] || false
 }
 
-@test "AUTO_INCREMENT merge master branch ahead" {
+@test "auto_increment: AUTO_INCREMENT merge master branch ahead" {
     dolt sql -q "INSERT INTO test (c0) VALUES (0),(1),(2)"
     dolt add -A
     dolt commit -m "made some inserts"
@@ -253,7 +253,7 @@ SQL
     [[ "$output" =~ "22" ]] || false
 }
 
-@test "AUTO_INCREMENT merge other branch ahead" {
+@test "auto_increment: AUTO_INCREMENT merge other branch ahead" {
     dolt sql -q "INSERT INTO test (c0) VALUES (0),(1),(2)"
     dolt add -A
     dolt commit -m "made some inserts"
@@ -276,7 +276,7 @@ SQL
     [[ "$output" =~ "22" ]] || false
 }
 
-@test "AUTO_INCREMENT with ALTER TABLE" {
+@test "auto_increment: AUTO_INCREMENT with ALTER TABLE" {
     run dolt sql -q "ALTER TABLE test AUTO_INCREMENT = 10;"
     [ "$status" -eq 0 ]
     dolt sql -q "INSERT INTO test VALUES (NULL,10);"
@@ -296,7 +296,7 @@ SQL
     [[ "$output" =~ "31,31" ]] || false
 }
 
-@test "adding index to AUTO_INCREMENT doesn't reset sequence" {
+@test "auto_increment: adding index to AUTO_INCREMENT doesn't reset sequence" {
     dolt sql <<SQL
 CREATE TABLE index_test (
     pk int PRIMARY KEY AUTO_INCREMENT,

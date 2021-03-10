@@ -326,6 +326,7 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltd
 		keyTuples[11], mustGetValue(updatedRows.MaybeGet(context.Background(), keyTuples[11])), // added same in both
 		keyTuples[12], mustGetValue(updatedRows.MaybeGet(context.Background(), keyTuples[12])), // conflict
 	)
+	require.NoError(t, err)
 
 	updateConflict := doltdb.NewConflict(
 		mustGetValue(initialRows.MaybeGet(context.Background(), keyTuples[8])),

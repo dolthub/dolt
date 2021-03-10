@@ -16,6 +16,7 @@ package iohelp
 
 import (
 	"bufio"
+	"encoding/binary"
 	"errors"
 	"io"
 	"sync"
@@ -50,6 +51,22 @@ func (r *ErrPreservingReader) Read(p []byte) (int, error) {
 	}
 
 	return n, r.Err
+}
+
+// Read
+func (r *ErrPreservingReader) ReadUint32(order binary.ByteOrder) (uint32, error) {
+	if r.Err != nil {
+		return 0, r.Err
+	}
+
+	bytes, err := ReadNBytes(r, 4)
+
+	if err != nil {
+		r.Err = err
+		return 0, r.Err
+	}
+
+	return order.Uint32(bytes), nil
 }
 
 // ReadNBytes will read n bytes from the given reader and return a new slice containing the data. ReadNBytes will always

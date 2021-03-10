@@ -19,7 +19,7 @@ teardown() {
     teardown_common
 }
 
-@test "feature gate add/drop column" {
+@test "keyless: feature gate add/drop column" {
     run dolt sql -q "ALTER TABLE keyless DROP COLUMN c0;"
     [ $status -ne 0 ]
     [[ ! "$output" =~ "panic" ]] || false
@@ -29,7 +29,7 @@ teardown() {
     [[ ! "$output" =~ "panic" ]] || false
 }
 
-@test "feature indexes and foreign keys" {
+@test "keyless: feature indexes and foreign keys" {
     run dolt sql -q "ALTER TABLE keyless ADD INDEX (c1);"
     [ $status -ne 0 ]
     [[ ! "$output" =~ "panic" ]] || false
@@ -43,7 +43,7 @@ teardown() {
     [[ ! "$output" =~ "panic" ]] || false
 }
 
-@test "create keyless table" {
+@test "keyless: create keyless table" {
     # created in setup()
 
     run dolt ls
@@ -64,7 +64,7 @@ teardown() {
     [[ "${lines[1]}" =~ "4,4" ]] || false
 }
 
-@test "delete from keyless" {
+@test "keyless: delete from keyless" {
     run dolt sql -q "DELETE FROM keyless WHERE c0 = 2;"
     [ $status -eq 0 ]
 
@@ -75,7 +75,7 @@ teardown() {
     [[ "${lines[3]}" = "1,1" ]] || false
 }
 
-@test "update keyless" {
+@test "keyless: update keyless" {
     run dolt sql -q "UPDATE keyless SET c0 = 9 WHERE c0 = 2;"
     [ $status -eq 0 ]
 
@@ -87,7 +87,7 @@ teardown() {
     [[ "${lines[4]}" = "9,2" ]] || false
 }
 
-@test "keyless column add/drop" {
+@test "keyless: column add/drop" {
     skip "unimplemented"
     run dolt sql <<SQL
 ALTER TABLE keyless ADD COLUMN c2 int;
@@ -106,7 +106,7 @@ SQL
 }
 
 # keyless tables allow duplicate rows
-@test "keyless table import" {
+@test "keyless: table import" {
     cat <<CSV > data.csv
 c0,c1
 0,0
@@ -139,7 +139,7 @@ CSV
 }
 
 # updates are always appends
-@test "keyless table update" {
+@test "keyless: table update" {
     cat <<CSV > data.csv
 c0,c1
 0,0
@@ -165,7 +165,7 @@ CSV
     [[ "${lines[8]}" = "2,2" ]] || false
 }
 
-@test "keyless table export CSV" {
+@test "keyless: table export CSV" {
     dolt table export keyless
     run dolt table export keyless
     [ $status -eq 0 ]
@@ -176,7 +176,7 @@ CSV
     [[ "${lines[4]}" = "2,2" ]] || false
 }
 
-@test "keyless table export SQL" {
+@test "keyless: table export SQL" {
     dolt table export keyless export.sql
     cat export.sql
     run cat export.sql
@@ -192,7 +192,7 @@ CSV
 
 }
 
-@test "keyless diff against working set" {
+@test "keyless: diff against working set" {
     dolt sql <<SQL
 DELETE FROM keyless WHERE c0 = 0;
 INSERT INTO keyless VALUES (8,8);
@@ -209,7 +209,7 @@ SQL
     [[ "${lines[11]}" =~ "|  -  | 0  | 0  |" ]] || false
 }
 
-@test "keyless diff --summary" {
+@test "keyless: diff --summary" {
     dolt sql <<SQL
 DELETE FROM keyless WHERE c0 = 0;
 INSERT INTO keyless VALUES (8,8);
@@ -221,7 +221,7 @@ SQL
     [[ "$output" =~ "3 Rows Deleted" ]] || false
 }
 
-@test "keyless dolt_diff_ table" {
+@test "keyless: dolt_diff_ table" {
     dolt sql <<SQL
 DELETE FROM keyless WHERE c0 = 0;
 INSERT INTO keyless VALUES (8,8);
@@ -246,7 +246,7 @@ SQL
     [[ "${lines[10]}" = "2,2,,"  ]] || false
 }
 
-@test "keyless diff column add/drop" {
+@test "keyless: diff column add/drop" {
     skip "unimplemented"
     run dolt sql <<SQL
 ALTER TABLE keyless ADD COLUMN c2 int;
@@ -268,7 +268,7 @@ SQL
     [[ "${lines[11]}" =~ "|  >  | c1 | c2 |    |" ]] || false
 }
 
-@test "keyless merge fast-forward" {
+@test "keyless: merge fast-forward" {
     dolt checkout -b other
     dolt sql -q "INSERT INTO keyless VALUES (9,9);"
     dolt commit -am "9,9"
@@ -280,7 +280,7 @@ SQL
     [[ "${lines[1]}" = "9,9" ]] || false
 }
 
-@test "keyless diff branches with identical mutation history" {
+@test "keyless: diff branches with identical mutation history" {
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -296,7 +296,7 @@ SQL
     [ "$output" = "" ]
 }
 
-@test "keyless merge branches with identical mutation history" {
+@test "keyless: merge branches with identical mutation history" {
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -315,7 +315,7 @@ SQL
     [[ "${lines[3]}" = "9,9" ]] || false
 }
 
-@test "keyless diff deletes from two branches" {
+@test "keyless: diff deletes from two branches" {
     dolt branch left
     dolt checkout -b right
 
@@ -335,7 +335,7 @@ SQL
     [[ "$output" =~ "|  -  | 2  | 2  |" ]] || false
 }
 
-@test "keyless merge deletes from two branches" {
+@test "keyless: merge deletes from two branches" {
     dolt branch left
     dolt checkout -b right
 
@@ -367,7 +367,7 @@ SQL
     dolt commit -am "created table dupe"
 }
 
-@test "keyless diff duplicate deletes" {
+@test "keyless: diff duplicate deletes" {
     make_dupe_table
 
     dolt branch left
@@ -397,7 +397,7 @@ SQL
 
 }
 
-@test "keyless merge duplicate deletes" {
+@test "keyless: merge duplicate deletes" {
     make_dupe_table
 
     dolt branch left
@@ -422,7 +422,7 @@ SQL
     [[ "${lines[1]}" = "6,6" ]] || false
 }
 
-@test "keyless diff duplicate updates" {
+@test "keyless: diff duplicate updates" {
     make_dupe_table
 
     dolt branch left
@@ -444,7 +444,7 @@ SQL
     [ "${#lines[@]}" -eq 15 ] # 8 diffs + 6 header + 1 footer
 }
 
-@test "keyless merge duplicate updates" {
+@test "keyless: merge duplicate updates" {
     make_dupe_table
 
     dolt branch left
@@ -469,7 +469,7 @@ SQL
     [[ "${lines[1]}" = "10,12" ]] || false
 }
 
-@test "keyless sql diff" {
+@test "keyless: sql diff" {
     skip "unimplemented"
     dolt sql <<SQL
 DELETE FROM keyless WHERE c0 = 2;
@@ -489,7 +489,7 @@ SQL
     [[ "$lines[@]" = "INSERT INTO keyless VALUES (3,13)" ]] || false
 }
 
-@test "keyless sql diff as a patch" {
+@test "keyless: sql diff as a patch" {
     skip "unimplemented"
     dolt branch left
     dolt checkout -b right
@@ -509,7 +509,7 @@ SQL
     [ "$output" = "" ]
 }
 
-@test "keyless table replace" {
+@test "keyless: table replace" {
     cat <<CSV > data.csv
 c0,c1
 0,0
@@ -540,7 +540,7 @@ CSV
 }
 
 # in-place updates create become drop/add
-@test "keyless diff with in-place updates (working set)" {
+@test "keyless: diff with in-place updates (working set)" {
     dolt sql -q "UPDATE keyless SET c1 = 9 where c0 = 2;"
     run dolt diff
     [ $status -eq 0 ]
@@ -549,7 +549,7 @@ CSV
 }
 
 # in-place updates create become drop/add
-@test "keyless sql diff with in-place updates (working set)" {
+@test "keyless: sql diff with in-place updates (working set)" {
     skip "unimplemented"
     dolt sql -q "UPDATE keyless SET c1 = 9 where c0 = 2;"
     run dolt diff -r sql
@@ -559,7 +559,7 @@ CSV
 }
 
 # update patch always recreates identical branches
-@test "keyless updates as a sql diff patch" {
+@test "keyless: updates as a sql diff patch" {
     skip "unimplemented"
     dolt branch left
     dolt checkout -b right
@@ -582,7 +582,7 @@ CSV
 }
 
 # in-place updates diff as drop/add
-@test "keyless diff with in-place updates (branches)" {
+@test "keyless: diff with in-place updates (branches)" {
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
     dolt commit -am "added rows"
     dolt branch other
@@ -605,7 +605,7 @@ CSV
     [[ "$output" =~ "|  +  | 8  | 28 |" ]] || false
 }
 
-@test "keyless merge with in-place updates (branches)" {
+@test "keyless: merge with in-place updates (branches)" {
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
     dolt commit -am "added rows"
     dolt branch other
@@ -639,7 +639,7 @@ CSV
     [[ "${lines[1]}" = "9,19" ]] || false
 }
 
-@test "keyless diff branches with reordered mutation history" {
+@test "keyless: diff branches with reordered mutation history" {
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -654,7 +654,7 @@ CSV
     [ "$output" = "" ]
 }
 
-@test "keyless merge branches with reordered mutation history" {
+@test "keyless: merge branches with reordered mutation history" {
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -676,7 +676,7 @@ CSV
     [[ "${lines[3]}" = "9,9" ]] || false
 }
 
-@test "keyless diff branches with convergent mutation history" {
+@test "keyless: diff branches with convergent mutation history" {
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -696,7 +696,7 @@ SQL
     [ "$output" = "" ]
 }
 
-@test "keyless merge branches with convergent mutation history" {
+@test "keyless: merge branches with convergent mutation history" {
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -724,7 +724,7 @@ SQL
     [[ "${lines[3]}" = "9,9" ]] || false
 }
 
-@test "keyless diff branches with offset mutation history" {
+@test "keyless: diff branches with offset mutation history" {
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -740,7 +740,7 @@ SQL
     [[ "${lines[6]}" =~ "|  +  | 7  | 7  |" ]] || false
 }
 
-@test "keyless merge branches with offset mutation history" {
+@test "keyless: merge branches with offset mutation history" {
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -765,7 +765,7 @@ SQL
     [[ "${lines[4]}" = "9,9" ]] || false
 }
 
-@test "keyless diff delete+add against working" {
+@test "keyless: diff delete+add against working" {
     dolt sql <<SQL
 DELETE FROM keyless WHERE c0 = 2;
 INSERT INTO keyless VALUES (2,2)
@@ -775,7 +775,7 @@ SQL
     [ "$output" = "" ]
 }
 
-@test "keyless diff delete+add on two branches" {
+@test "keyless: diff delete+add on two branches" {
     dolt branch left
     dolt checkout -b right
 
@@ -795,7 +795,7 @@ SQL
     [[ "${lines[6]}" = "|  +  | 2  | 2  |" ]] || false
 }
 
-@test "keyless merge delete+add on two branches" {
+@test "keyless: merge delete+add on two branches" {
     dolt branch left
     dolt checkout -b right
 

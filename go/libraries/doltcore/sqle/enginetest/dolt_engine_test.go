@@ -93,6 +93,11 @@ func TestQueryPlans(t *testing.T) {
 		"SELECT mytable.i, mytable.s FROM mytable WHERE mytable.i = (SELECT i2 FROM othertable LIMIT 1)",
 		"SELECT mytable.i, mytable.s FROM mytable WHERE mytable.i IN (SELECT i2 FROM othertable)",
 		"SELECT mytable.i, mytable.s FROM mytable WHERE mytable.i IN (SELECT i2 FROM othertable WHERE mytable.i = othertable.i2)",
+		"SELECT s2, i2, i FROM mytable INNER JOIN (SELECT * FROM othertable) othertable ON i2 = i",
+		"SELECT s2, i2, i FROM mytable RIGHT JOIN (SELECT * FROM othertable) othertable ON i2 = i",
+		"SELECT /*+ JOIN_ORDER(mytable, othertable) */ s2, i2, i FROM mytable INNER JOIN (SELECT * FROM othertable) othertable ON i2 = i",
+		"SELECT s2, i2, i FROM mytable LEFT JOIN (SELECT * FROM othertable) othertable ON i2 = i",
+		"SELECT othertable.s2, othertable.i2, mytable.i FROM mytable INNER JOIN (SELECT * FROM othertable) othertable ON othertable.i2 = mytable.i WHERE othertable.s2 > 'a'",
 	})
 
 	tests := make([]enginetest.QueryPlanTest, 0, len(enginetest.PlanTests))
@@ -248,4 +253,8 @@ func TestColumnDefaults(t *testing.T) {
 
 func TestTriggers(t *testing.T) {
 	enginetest.TestTriggers(t, newDoltHarness(t))
+}
+
+func TestStoredProcedures(t *testing.T) {
+	enginetest.TestStoredProcedures(t, newDoltHarness(t))
 }

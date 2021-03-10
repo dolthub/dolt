@@ -20,6 +20,12 @@ Dolt databases. We host public data for free!
 [Join us on Discord](https://discord.com/invite/RFwfYpu) to say hi and
 ask questions!
 
+### What's it for?
+
+Lots of things! Dolt is a generally useful tool with countless 
+applications. But if you want some ideas, [here's how people are using 
+it so far](https://www.dolthub.com/blog/2021-03-09-dolt-use-cases-in-the-wild/).
+
 # Dolt CLI
 
 ```
@@ -356,11 +362,11 @@ DoltHub](https://docs.dolthub.com/). Some of the topics we didn't
 cover here:
 
 * [Querying past revisions of your
-  tables](https://docs.dolthub.com/reference/sql/dolt-system-tables#dolt_history_usdtablename)
+  tables](https://docs.dolthub.com/interfaces/sql#querying-non-head-revisions-of-a-database)
 * [Starting a SQL
   server](https://docs.dolthub.com/reference/cli#dolt-sql-server)
 * [Selecting the diff between two
-  commits](https://docs.dolthub.com/reference/sql/dolt-system-tables#dolt_diff_usdtablename)
+  commits](https://docs.dolthub.com/interfaces/sql/dolt-system-tables#dolt_diff_usdtablename)
 * [Documentation for all CLI
   commands](https://docs.dolthub.com/reference/cli)
 

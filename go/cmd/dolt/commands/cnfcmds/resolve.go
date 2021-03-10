@@ -95,7 +95,7 @@ func (cmd ResolveCmd) createArgParser() *argparser.ArgParser {
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "List of tables to be printed. When in auto-resolve mode, '.' can be used to resolve all tables."})
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"key", "key(s) of rows within a table whose conflicts have been resolved"})
 	ap.SupportsFlag("ours", "", "For all conflicts, take the version from our branch and resolve the conflict")
-	ap.SupportsFlag("theirs", "", "Fol all conflicts, take the version from our branch and resolve the conflict")
+	ap.SupportsFlag("theirs", "", "For all conflicts, take the version from their branch and resolve the conflict")
 
 	return ap
 }

@@ -143,6 +143,9 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 			ms := MergeStats{Operation: TableModified}
 			if h != mh {
 				ms, err = calcTableMergeStats(ctx, tbl, mergeTbl)
+				if err != nil {
+					return nil, nil, err
+				}
 			}
 			// force load the table editor since this counts as a change
 			_, err := sess.GetTableEditor(ctx, tblName, nil)
@@ -183,6 +186,9 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, sess *edit
 	err = sess.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
 		return root.PutTable(ctx, tblName, updatedTbl)
 	})
+	if err != nil {
+		return nil, nil, err
+	}
 
 	updatedTblEditor, err := sess.GetTableEditor(ctx, tblName, nil)
 	if err != nil {
@@ -542,6 +548,9 @@ func applyKeylessChange(ctx context.Context, sch schema.Schema, tableEditor edit
 
 	var card uint64
 	change, card, err = convertValueChanged(change)
+	if err != nil {
+		return err
+	}
 
 	for card > 0 {
 		if err = apply(change); err != nil {
@@ -791,6 +800,9 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 			err = tableEditSession.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
 				return root.RemoveTables(ctx, tblName)
 			})
+			if err != nil {
+				return nil, nil, err
+			}
 			newRoot, err = tableEditSession.Flush(ctx)
 			if err != nil {
 				return nil, nil, err

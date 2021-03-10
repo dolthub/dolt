@@ -10,7 +10,7 @@ teardown() {
     teardown_common
 }
 
-@test "diff sql output reconciles INSERT query" {
+@test "sql-diff: output reconciles INSERT query" {
     dolt checkout -b firstbranch
     dolt sql <<SQL
 CREATE TABLE test (
@@ -50,7 +50,7 @@ SQL
     [ "$output" = "" ]
 }
 
-@test "diff sql output reconciles UPDATE query" {
+@test "sql-diff: output reconciles UPDATE query" {
     dolt checkout -b firstbranch
     dolt sql <<SQL
 CREATE TABLE test (
@@ -90,7 +90,7 @@ SQL
     [ "$output" = "" ]
 }
 
-@test "diff sql output reconciles DELETE query" {
+@test "sql-diff: output reconciles DELETE query" {
     dolt checkout -b firstbranch
     dolt sql <<SQL
 CREATE TABLE test (
@@ -130,7 +130,7 @@ SQL
     [ "$output" = "" ]
 }
 
-@test "diff sql output reconciles change to PRIMARY KEY field in row " {
+@test "sql-diff: output reconciles change to PRIMARY KEY field in row " {
     dolt checkout -b firstbranch
     dolt sql <<SQL
 CREATE TABLE test (
@@ -170,7 +170,7 @@ SQL
     [ "$output" = "" ]
 }
 
-@test "diff sql output reconciles column rename" {
+@test "sql-diff: output reconciles column rename" {
 
     dolt checkout -b firstbranch
     dolt sql <<SQL
@@ -211,7 +211,7 @@ SQL
     [ "$output" = "" ]
 }
 
-@test "diff sql output reconciles DROP column query" {
+@test "sql-diff: output reconciles DROP column query" {
     dolt checkout -b firstbranch
     dolt sql <<SQL
 CREATE TABLE test (
@@ -251,7 +251,7 @@ SQL
     [ "$output" = "" ]
 }
 
-@test "diff sql output reconciles ADD column query" {
+@test "sql-diff: output reconciles ADD column query" {
     dolt checkout -b firstbranch
     dolt sql <<SQL
 CREATE TABLE test (
@@ -291,7 +291,7 @@ SQL
     [ "$output" = "" ]
 }
 
-@test "diff sql reconciles CREATE TABLE" {
+@test "sql-diff: reconciles CREATE TABLE" {
     dolt checkout -b firstbranch
     dolt checkout -b newbranch
     dolt sql <<SQL
@@ -328,7 +328,7 @@ SQL
     [ "$output" = "" ]
 }
 
-@test "diff sql includes row INSERTSs to new tables after CREATE TABLE" {
+@test "sql-diff: includes row INSERTSs to new tables after CREATE TABLE" {
     dolt checkout -b firstbranch
     dolt checkout -b newbranch
     dolt sql <<SQL
@@ -367,7 +367,7 @@ SQL
     [ "$output" = "" ]
 }
 
-@test "diff sql reconciles DROP TABLE" {
+@test "sql-diff: reconciles DROP TABLE" {
     dolt checkout -b firstbranch
     dolt sql <<SQL
 CREATE TABLE test (
@@ -408,7 +408,7 @@ SQL
     [ "$output" = "" ]
 }
 
-@test "diff sql reconciles RENAME TABLE" {
+@test "sql-diff: reconciles RENAME TABLE" {
     dolt checkout -b firstbranch
     dolt sql <<SQL
 CREATE TABLE test (
@@ -450,7 +450,7 @@ SQL
     grep 'RENAME' query
 }
 
-@test "diff sql reconciles RENAME TABLE with schema changes" {
+@test "sql-diff: reconciles RENAME TABLE with schema changes" {
     dolt checkout -b firstbranch
     dolt sql <<SQL
 CREATE TABLE test (
@@ -496,7 +496,7 @@ SQL
     grep 'RENAME' query
 }
 
-@test "diff sql reconciles CREATE/ALTER/DROP VIEW" {
+@test "sql-diff: reconciles CREATE/ALTER/DROP VIEW" {
     dolt sql -q 'create table test (pk int not null primary key)'
     dolt sql -q 'create view double as select pk*2 from test'
     run dolt diff -r sql
@@ -505,7 +505,7 @@ SQL
     [[ "$output" =~ "CREATE VIEW `double`" ]] || false
 }
 
-@test "diff sql recreates tables with all types" {
+@test "sql-diff: diff sql recreates tables with all types" {
     dolt checkout -b firstbranch
     dolt checkout -b newbranch
     dolt sql <<SQL
@@ -543,7 +543,7 @@ SQL
     [ "$output" = "" ]
 }
 
-@test "sql diff supports all types" {
+@test "sql-diff: supports all types" {
     dolt checkout -b firstbranch
     dolt sql <<SQL
 CREATE TABLE test (
@@ -590,7 +590,7 @@ SQL
     done
 }
 
-@test "sql diff supports multiple primary keys" {
+@test "sql-diff: supports multiple primary keys" {
     dolt checkout -b firstbranch
     dolt sql <<SQL
 CREATE TABLE test (
@@ -639,7 +639,7 @@ SQL
     done
 }
 
-@test "sql diff escapes values for MySQL string literals" {
+@test "sql-diff: escapes values for MySQL string literals" {
     # https://dev.mysql.com/doc/refman/8.0/en/string-literals.html
     dolt sql <<SQL
 CREATE TABLE test (
@@ -677,7 +677,7 @@ SQL
     [ "$output" = "" ]
 }
 
-@test "sql diff ignores dolt docs" {
+@test "sql-diff: sql diff ignores dolt docs" {
     echo "This is a README" > README.md 
     run dolt diff -r sql
     [ "$status" -eq 0 ]
@@ -685,7 +685,7 @@ SQL
     [[ ! "$output" =~ "dolt_docs" ]] || false;
 }
 
-@test "sql diff handles NULL cells" {
+@test "sql-diff: handles NULL cells" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk INT NOT NULL COMMENT 'tag:0',

@@ -54,7 +54,7 @@ var LocalDirDoltDB = "file://./" + dbfactory.DoltDataDir
 var InMemDoltDB = "mem://"
 
 // DoltDB wraps access to the underlying noms database and hides some of the details of the underlying storage.
-// Additionally the noms codebase uses panics in a way that is non idiomatic and I've opted to recover and return
+// Additionally the noms codebase uses panics in a way that is non idiomatic and We've opted to recover and return
 // errors in many cases.
 type DoltDB struct {
 	db datas.Database

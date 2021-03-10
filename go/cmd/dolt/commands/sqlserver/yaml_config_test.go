@@ -61,10 +61,39 @@ databases:
 		},
 	}
 
-	config := YAMLConfig{}
-	err := yaml.Unmarshal([]byte(testStr), &config)
+	config, err := newYamlConfig([]byte(testStr))
 	require.NoError(t, err)
 	assert.Equal(t, expected, config)
+}
+
+// Tests that a common YAML error (incorrect indentation) throws an error
+func TestUnmarshallError(t *testing.T) {
+	testStr := `
+log_level: info
+
+behavior:
+read_only: false
+autocommit: true
+
+user:
+    name: root
+    password: ""
+
+listener:
+    host: localhost
+    port: 3306
+    max_connections: 1
+    read_timeout_millis: 28800000
+    write_timeout_millis: 28800000
+    
+databases:
+    - name: irs_soi
+      path: ./datasets/irs-soi
+    - name: noaa
+      path: /Users/brian/datasets/noaa
+`
+	_, err := newYamlConfig([]byte(testStr))
+	assert.Error(t, err)
 }
 
 func TestYAMLConfigDefaults(t *testing.T) {

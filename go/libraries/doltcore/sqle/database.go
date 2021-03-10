@@ -94,6 +94,7 @@ var _ sql.TableDropper = Database{}
 var _ sql.TableCreator = Database{}
 var _ sql.TableRenamer = Database{}
 var _ sql.TriggerDatabase = Database{}
+var _ sql.StoredProcedureDatabase = Database{}
 
 // NewDatabase returns a new dolt database to use in queries.
 func NewDatabase(name string, dbData env.DbData) Database {
@@ -746,6 +747,74 @@ func (db Database) CreateTrigger(ctx *sql.Context, definition sql.TriggerDefinit
 func (db Database) DropTrigger(ctx *sql.Context, name string) error {
 	//TODO: add a sql error and use that as the param error instead
 	return db.dropFragFromSchemasTable(ctx, "trigger", name, sql.ErrTriggerDoesNotExist.New(name))
+}
+
+// GetStoredProcedures implements sql.StoredProcedureDatabase.
+func (db Database) GetStoredProcedures(ctx *sql.Context) ([]sql.StoredProcedureDetails, error) {
+	missingValue := errors.NewKind("missing `%s` value for procedure row: (%s)")
+
+	sqlTbl, ok, err := db.GetTableInsensitive(ctx, doltdb.ProceduresTableName)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, nil
+	}
+	tbl := sqlTbl.(*WritableDoltTable)
+
+	rowData, err := tbl.table.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var spds []sql.StoredProcedureDetails
+	err = rowData.Iter(ctx, func(key, val types.Value) (stop bool, err error) {
+		dRow, err := row.FromNoms(tbl.sch, key.(types.Tuple), val.(types.Tuple))
+		if err != nil {
+			return true, err
+		}
+		taggedVals, err := row.GetTaggedVals(dRow)
+		if err != nil {
+			return true, err
+		}
+
+		name, ok := dRow.GetColVal(schema.DoltProceduresNameTag)
+		if !ok {
+			return true, missingValue.New(doltdb.ProceduresTableNameCol, taggedVals)
+		}
+		createStmt, ok := dRow.GetColVal(schema.DoltProceduresCreateStmtTag)
+		if !ok {
+			return true, missingValue.New(doltdb.ProceduresTableCreateStmtCol, taggedVals)
+		}
+		createdAt, ok := dRow.GetColVal(schema.DoltProceduresCreatedAtTag)
+		if !ok {
+			return true, missingValue.New(doltdb.ProceduresTableCreatedAtCol, taggedVals)
+		}
+		modifiedAt, ok := dRow.GetColVal(schema.DoltProceduresModifiedAtTag)
+		if !ok {
+			return true, missingValue.New(doltdb.ProceduresTableModifiedAtCol, taggedVals)
+		}
+		spds = append(spds, sql.StoredProcedureDetails{
+			Name:            string(name.(types.String)),
+			CreateStatement: string(createStmt.(types.String)),
+			CreatedAt:       time.Time(createdAt.(types.Timestamp)),
+			ModifiedAt:      time.Time(modifiedAt.(types.Timestamp)),
+		})
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return spds, nil
+}
+
+// SaveStoredProcedure implements sql.StoredProcedureDatabase.
+func (db Database) SaveStoredProcedure(ctx *sql.Context, spd sql.StoredProcedureDetails) error {
+	return DoltProceduresAddProcedure(ctx, db, spd)
+}
+
+// DropStoredProcedure implements sql.StoredProcedureDatabase.
+func (db Database) DropStoredProcedure(ctx *sql.Context, name string) error {
+	return DoltProceduresDropProcedure(ctx, db, name)
 }
 
 func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, definition string, existingErr error) (retErr error) {

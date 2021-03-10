@@ -9,14 +9,14 @@ teardown() {
     teardown_common
 }
 
-@test "merge non-existant branch errors" {
+@test "conflict-detection: merge non-existant branch errors" {
     run dolt merge batmans-parents
     [ $status -eq 1 ]
     [[ "$output" =~ "unknown branch" ]] || false
     [[ ! "$output" =~ "panic" ]] || false
 }
 
-@test "cannot merge into dirty working table" {
+@test "conflict-detection: cannot merge into dirty working table" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -57,7 +57,7 @@ SQL
 
 }
 
-@test "two branches modify different cell different row. merge. no conflict" {
+@test "conflict-detection: two branches modify different cell different row. merge. no conflict" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -93,7 +93,7 @@ SQL
     [[ "$output" =~ "Changes to be committed:" ]] || false
 }
 
-@test "two branches modify different cell same row. merge. no conflict" {
+@test "conflict-detection: two branches modify different cell same row. merge. no conflict" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -128,7 +128,7 @@ SQL
     [[ "$output" =~ "Changes to be committed:" ]] || false
 }
 
-@test "two branches modify same cell. merge. conflict" {
+@test "conflict-detection: two branches modify same cell. merge. conflict" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -160,7 +160,7 @@ SQL
     [[ "$output" =~ "Unmerged paths:" ]] || false
 }
 
-@test "two branches add a different row. merge. no conflict" {
+@test "conflict-detection: two branches add a different row. merge. no conflict" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -191,7 +191,7 @@ SQL
     [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
-@test "two branches add same row. merge. no conflict" {
+@test "conflict-detection: two branches add same row. merge. no conflict" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -220,7 +220,7 @@ SQL
     [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
-@test "one branch add table, other modifies table. merge. no conflict" {
+@test "conflict-detection: one branch add table, other modifies table. merge. no conflict" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -261,7 +261,7 @@ SQL
     [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
-@test "two branches add same column. merge. no conflict" {
+@test "conflict-detection: two branches add same column. merge. no conflict" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -290,7 +290,7 @@ SQL
     [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
-@test "two branches add different column. merge. no conflict" {
+@test "conflict-detection: two branches add different column. merge. no conflict" {
     skip https://github.com/dolthub/dolt/issues/773
     dolt sql <<SQL
 CREATE TABLE test (
@@ -326,7 +326,7 @@ SQL
     [[ "${lines[3]}" =~ "| 0  | 1  | 2  | 3  | 4  | 5  |  NULL  |  NULL  |" ]] || false
 }
 
-@test "two branches add same column, different types. merge. conflict" {
+@test "conflict-detection: two branches add same column, different types. merge. conflict" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -355,7 +355,7 @@ SQL
     [[ "$output" =~ "CONFLICT" ]] || false
 }
 
-@test "two branches delete same column. merge. no conflict" {
+@test "conflict-detection: two branches delete same column. merge. no conflict" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -384,7 +384,7 @@ SQL
     [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
-@test "two branches delete different column. merge. no conflict" {
+@test "conflict-detection: two branches delete different column. merge. no conflict" {
     skip https://github.com/dolthub/dolt/issues/773
     dolt sql <<SQL
 CREATE TABLE test (
@@ -427,7 +427,7 @@ SQL
     [[ "${lines[7]}" =~ ");" ]] || false
 }
 
-@test "two branches rename same column to same name. merge. no conflict" {
+@test "conflict-detection: two branches rename same column to same name. merge. no conflict" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -456,7 +456,7 @@ SQL
     [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
-@test "two branches rename same column to different name. merge. conflict" {
+@test "conflict-detection: two branches rename same column to different name. merge. conflict" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -487,7 +487,7 @@ SQL
     [[ "$output" =~ "CONFLICT" ]] || false
 }
 
-@test "two branches rename different column to same name. merge. conflict" {
+@test "conflict-detection: two branches rename different column to same name. merge. conflict" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -520,7 +520,7 @@ SQL
 
 # Altering types and properties of the schema are not really supported by the
 # command line. Have to upload schema files for these next few tests.
-@test "two branches change type of same column to same type. merge. no conflict" {
+@test "conflict-detection: two branches change type of same column to same type. merge. no conflict" {
     skip "type changes are not allowed without changing tag"
     dolt sql <<SQL
 CREATE TABLE test (
@@ -572,7 +572,7 @@ SQL
     [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
-@test "two branches change type of same column to different type. merge. conflict" {
+@test "conflict-detection: two branches change type of same column to different type. merge. conflict" {
     skip "type changes are not allowed without changing tag"
     dolt sql <<SQL
 CREATE TABLE test (
@@ -626,7 +626,7 @@ SQL
     [[ "$output" =~ "CONFLICT" ]] || false
 }
 
-@test "two branches make same column primary key. merge. no conflict" {
+@test "conflict-detection: two branches make same column primary key. merge. no conflict" {
     skip "cannot resuse tags on table drop/add"
     dolt sql <<SQL
 CREATE TABLE test (
@@ -678,7 +678,7 @@ SQL
     [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
-@test "two branches add same primary key column. merge. no conflict" {
+@test "conflict-detection: two branches add same primary key column. merge. no conflict" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -732,7 +732,7 @@ SQL
     [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
-@test "two branches make different columns primary key. merge. conflict" {
+@test "conflict-detection: two branches make different columns primary key. merge. conflict" {
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -786,7 +786,7 @@ SQL
     [[ "$output" =~ "CONFLICT" ]] || false
 }
 
-@test "two branches both create different tables. merge. no conflict" {
+@test "conflict-detection: two branches both create different tables. merge. no conflict" {
     dolt branch table1
     dolt branch table2
     dolt checkout table1
@@ -828,7 +828,7 @@ SQL
     [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
-@test "two branches drop different tables. merge. no conflict" {
+@test "conflict-detection: two branches drop different tables. merge. no conflict" {
   dolt sql <<SQL
 CREATE TABLE foo (
   pk BIGINT NOT NULL PRIMARY KEY
@@ -859,7 +859,7 @@ SQL
     [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
-@test "two branch rename different tables. merge. no conflict" {
+@test "conflict-detection: two branch rename different tables. merge. no conflict" {
     dolt sql <<SQL
 CREATE TABLE foo (
   pk BIGINT NOT NULL PRIMARY KEY
@@ -890,7 +890,7 @@ SQL
     [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
-@test "two branches, one deletes rows, one modifies those same rows. merge. conflict" {
+@test "conflict-detection: two branches, one deletes rows, one modifies those same rows. merge. conflict" {
     dolt sql <<SQL
 CREATE TABLE foo (
   pk INT PRIMARY KEY,

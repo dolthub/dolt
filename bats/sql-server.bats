@@ -20,7 +20,7 @@ teardown() {
     teardown_common
 }
 
-@test "multi-client" {
+@test "sql-server: multi-client" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
@@ -31,7 +31,7 @@ teardown() {
     python3 server_multiclient_test.py $PORT
 }
 
-@test "test autocommit" {
+@test "sql-server: test autocommit" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
@@ -66,7 +66,7 @@ teardown() {
 }
 
 
-@test "test dolt sql interface works properly with autocommit" {
+@test "sql-server: test dolt sql interface works properly with autocommit" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
@@ -127,7 +127,7 @@ teardown() {
     [[ "$output" =~ "Commit1" ]] || false
 }
 
-@test "test basic querying via dolt sql-server" {
+@test "sql-server: test basic querying via dolt sql-server" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
@@ -149,7 +149,7 @@ teardown() {
     update_query 1 "UPDATE one_pk SET c2=c1 WHERE c2 is NULL and c1 IS NOT NULL"
 }
 
-@test "test multiple queries on the same connection" {
+@test "sql-server: test multiple queries on the same connection" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
@@ -168,7 +168,7 @@ teardown() {
     server_query 1 "SELECT * FROM one_pk ORDER by pk" "pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
 }
 
-@test "test manual commit" {
+@test "sql-server: test manual commit" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
@@ -212,7 +212,7 @@ teardown() {
     server_query 0 "SET @@repo1_head=hashof('test_branch');SELECT * FROM one_pk ORDER by pk" ";pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
 }
 
-@test "test manual merge" {
+@test "sql-server: test manual merge" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
@@ -285,7 +285,7 @@ teardown() {
     server_query 0 "select COUNT(hash) from dolt_branches where hash IN (select hash from dolt_branches WHERE name = 'test_branch')" "COUNT(dolt_branches.hash)\n1"
 }
 
-@test "test reset_hard" {
+@test "sql-server: test reset_hard" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
@@ -330,7 +330,7 @@ SQL
     [[ "$output" =~ "6,6" ]] || false
 }
 
-@test "test multi db with use statements" {
+@test "sql-server: test multi db with use statements" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     start_multi_db_server repo1
@@ -386,7 +386,7 @@ SQL
 }
 
 
-@test "test multi db without use statements" {
+@test "sql-server: test multi db without use statements" {
     skip "autocommit fails when the current db is not the one being written"
     start_multi_db_server repo1
 
@@ -440,7 +440,7 @@ SQL
     server_query 1 "SELECT * FROM repo2.r2_one_pk" "pk,c3,c4\n1,1,1\n2,2,2\n3,3,3"
 }
 
-@test "test CREATE and DROP database via sql-server" {
+@test "sql-server: test CREATE and DROP database via sql-server" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
@@ -459,7 +459,7 @@ SQL
 
 }
 
-@test "DOLT_ADD, DOLT_COMMIT, DOLT_CHECKOUT, DOLT_MERGE work together in server mode" {
+@test "sql-server: DOLT_ADD, DOLT_COMMIT, DOLT_CHECKOUT, DOLT_MERGE work together in server mode" {
       skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
      cd repo1
@@ -513,12 +513,11 @@ SQL
      [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
-@test "DOLT_MERGE ff works" {
-      skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+@test "sql-server: DOLT_MERGE ff works" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
      cd repo1
      start_sql_server repo1
-
 
      multi_query 1 "
      CREATE TABLE test (
@@ -538,4 +537,19 @@ SQL
      server_query 1 "SELECT * FROM test" "pk\n1\n2\n3\n1000"
 
      server_query 1 "SELECT COUNT(*) FROM dolt_log" "COUNT(*)\n3"
+}
+
+@test "sql-server: LOAD DATA LOCAL INFILE works" {
+     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+     cd repo1
+     start_sql_server repo1
+
+     multi_query 1 "
+     CREATE TABLE test(pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int);
+     SET local_infile=1;
+     LOAD DATA LOCAL INFILE '$BATS_TEST_DIRNAME/helper/1pk5col-ints.csv' INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY ',' ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES;
+     "
+
+     server_query 1 "SELECT * FROM test" "pk,c1,c2,c3,c4,c5\n0,1,2,3,4,5\n1,1,2,3,4,5"
 }

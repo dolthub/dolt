@@ -13,19 +13,19 @@ teardown() {
     rm -rf "$BATS_TMPDIR/config-test$$"
 }
 
-@test "make sure no dolt configuration for simulated fresh user" {
+@test "config: make sure no dolt configuration for simulated fresh user" {
     run dolt config --list
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
 
-@test "try to initialize a repository with no configuration" {
+@test "config: try to initialize a repository with no configuration" {
     run dolt init
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Could not determine user.name" ]] || false
 }
 
-@test "set a global config variable" {
+@test "config: set a global config variable" {
     run dolt config --global --add test test
     [ "$status" -eq 0 ]
     # Need to make this a regex because of the coloring
@@ -45,7 +45,7 @@ teardown() {
     [[ "$output" =~ "wrong number of arguments" ]] || false
 }
 
-@test "delete a config variable" {
+@test "config: delete a config variable" {
     dolt config --global --add test test
     run dolt config --global --unset test
     [ "$status" -eq 0 ]
@@ -58,7 +58,7 @@ teardown() {
     [ "$output" = "" ]
 }
 
-@test "set and delete multiple config variables" {
+@test "config: set and delete multiple config variables" {
     dolt config --global --add test1 test1
     dolt config --global --add test2 test2
     dolt config --global --add test3 test3
@@ -73,7 +73,7 @@ teardown() {
     [ "$output" = "" ]
 }
 
-@test "set a user and email and init a repo" {
+@test "config: set a user and email and init a repo" {
     dolt config --global --add user.name "bats tester"
     run dolt init
     [ "$status" -eq 1 ]
@@ -84,7 +84,7 @@ teardown() {
     [[ "$output" =~ "Successfully initialized dolt data repository." ]] || false
 }
 
-@test "set a local config variable" {
+@test "config: set a local config variable" {
     dolt config --global --add user.name "bats tester"
     dolt config --global --add user.email "bats-tester@liquidata.co"
     dolt init
@@ -101,7 +101,7 @@ teardown() {
     [ "$output" = "testlocal" ]
 }
 
-@test "override a global config variable with a local config variable" {
+@test "config: override a global config variable with a local config variable" {
     dolt config --global --add user.name "bats tester"
     dolt config --global --add user.email "bats-tester@liquidata.co"
     dolt init
@@ -132,7 +132,7 @@ teardown() {
     [[ ! "$output" =~ "global" ]] || false
 }
 
-@test "Commit to repo w/ ---author and without config vars sets" {
+@test "config: Commit to repo w/ ---author and without config vars sets" {
     dolt config --global --add user.name "bats tester"
     dolt config --global --add user.email "joshn@doe.com"
 
