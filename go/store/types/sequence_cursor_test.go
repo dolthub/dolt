@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -158,7 +159,7 @@ func TestTestCursor(t *testing.T) {
 		assert.Equal(expectOk, cur.valid())
 		if cur.valid() {
 			seq, err := cur.current()
-			assert.NoError(err)
+			require.NoError(t, err)
 			assert.Equal(expectVal, seq)
 		}
 	}

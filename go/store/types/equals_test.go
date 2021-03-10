@@ -27,6 +27,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestValueEquals(t *testing.T) {
@@ -98,17 +99,17 @@ func TestValueEquals(t *testing.T) {
 	for i, f1 := range values {
 		for j, f2 := range values {
 			v1, err := f1()
-			assert.NoError(err)
+			require.NoError(t, err)
 			v2, err := f2()
-			assert.NoError(err)
+			require.NoError(t, err)
 			assert.Equal(v1.Equals(v2), i == j)
 		}
 
 		v, err := f1()
-		assert.NoError(err)
+		require.NoError(t, err)
 		if v != nil {
 			r, err := NewRef(v, Format_7_18)
-			assert.NoError(err)
+			require.NoError(t, err)
 			assert.False(r.Equals(v))
 			assert.False(v.Equals(r))
 		}
