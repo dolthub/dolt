@@ -28,7 +28,7 @@ const ActiveBranchFuncName = "active_branch"
 type ActiveBranchFunc struct {
 }
 
-// NewCommitFunc creates a new CommitFunc expression.
+// NewActiveBranchFunc creates a new ActiveBranchFunc expression.
 func NewActiveBranchFunc() sql.Expression {
 	return &ActiveBranchFunc{}
 }
