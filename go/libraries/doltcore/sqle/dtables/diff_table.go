@@ -194,9 +194,11 @@ func tableData(ctx *sql.Context, tbl *doltdb.Table, ddb *doltdb.DoltDB) (types.M
 	var err error
 	if tbl == nil {
 		data, err = types.NewMap(ctx, ddb.ValueReadWriter())
+		if err != nil {
+			return types.EmptyMap, nil, err
+		}
 	} else {
 		data, err = tbl.GetRowData(ctx)
-
 		if err != nil {
 			return types.EmptyMap, nil, err
 		}
@@ -243,11 +245,13 @@ func (itr *diffRowItr) Next() (sql.Row, error) {
 	}
 
 	toAndFromRows, err := itr.joiner.Split(r)
+	if err != nil {
+		return nil, err
+	}
 	_, hasTo := toAndFromRows[diff.To]
 	_, hasFrom := toAndFromRows[diff.From]
 
 	r, err = r.SetColVal(itr.toCommitInfo.nameTag, types.String(itr.toCommitInfo.name), itr.sch)
-
 	if err != nil {
 		return nil, err
 	}
