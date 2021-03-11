@@ -946,3 +946,19 @@ SQL
     [[ ! "$output" =~ ',p2,PROCEDURE,' ]] || false
     [[ "${#lines[@]}" = "1" ]] || false
 }
+
+@test "sql: active_branch() func" {
+    run dolt sql -q 'select active_branch()' -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "ACTIVE_BRANCH()" ]] || false
+    [[ "$output" =~ "master" ]] || false
+}
+
+@test "sql: active_branch() func on feature branch" {
+    run dolt branch tmp_br
+    run dolt checkout tmp_br
+    run dolt sql -q 'select active_branch()' -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "ACTIVE_BRANCH()" ]] || false
+    [[ "$output" =~ "tmp_br" ]] || false
+}
