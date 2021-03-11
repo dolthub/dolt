@@ -1025,6 +1025,7 @@ func TestRenameColumn(t *testing.T) {
 			table, _, err := updatedRoot.GetTable(ctx, PeopleTableName)
 			assert.NoError(t, err)
 			sch, err := table.GetSchema(ctx)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expectedSchema, sch)
 
 			updatedTable, ok, err := updatedRoot.GetTable(ctx, "people")

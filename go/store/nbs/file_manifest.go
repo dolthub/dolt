@@ -245,18 +245,19 @@ func (fm5 fileManifestV5) parseManifest(r io.Reader) (manifestContents, error) {
 	}
 
 	specs, err := parseSpecs(slices[prefixLen:])
-
 	if err != nil {
 		return manifestContents{}, err
 	}
 
 	lock, err := parseAddr(slices[2])
-
 	if err != nil {
 		return manifestContents{}, err
 	}
 
 	gcGen, err := parseAddr(slices[4])
+	if err != nil {
+		return manifestContents{}, err
+	}
 
 	return manifestContents{
 		vers:  slices[1],

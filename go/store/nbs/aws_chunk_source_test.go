@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAWSChunkSource(t *testing.T) {
@@ -35,7 +36,7 @@ func TestAWSChunkSource(t *testing.T) {
 		[]byte("badbye2"),
 	}
 	tableData, h, err := buildTable(chunks)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	s3 := makeFakeS3(t)
 	ddb := makeFakeDDB(t)
@@ -58,7 +59,7 @@ func TestAWSChunkSource(t *testing.T) {
 			},
 		)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		return cs
 	}
@@ -74,7 +75,7 @@ func TestAWSChunkSource(t *testing.T) {
 		t.Run("WithIndexCache", func(t *testing.T) {
 			assert := assert.New(t)
 			index, err := parseTableIndex(tableData)
-			assert.NoError(err)
+			require.NoError(t, err)
 			cache := newIndexCache(1024)
 			cache.put(h, index)
 
@@ -98,7 +99,7 @@ func TestAWSChunkSource(t *testing.T) {
 		t.Run("WithIndexCache", func(t *testing.T) {
 			assert := assert.New(t)
 			index, err := parseTableIndex(tableData)
-			assert.NoError(err)
+			require.NoError(t, err)
 			cache := newIndexCache(1024)
 			cache.put(h, index)
 

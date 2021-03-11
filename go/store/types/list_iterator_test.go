@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestListIterator(t *testing.T) {
@@ -34,20 +35,20 @@ func TestListIterator(t *testing.T) {
 
 	numbers := append(generateNumbersAsValues(10), Float(20), Float(25))
 	l, err := NewList(context.Background(), vrw, numbers...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	i, err := l.Iterator(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	vs, err := iterToSlice(i)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(vs.Equals(numbers), "Expected: %v != actual: %v", numbers, vs)
 
 	i, err = l.IteratorAt(context.Background(), 3)
-	assert.NoError(err)
+	require.NoError(t, err)
 	vs, err = iterToSlice(i)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(vs.Equals(numbers[3:]), "Expected: %v != actual: %v", numbers, vs)
 
 	i, err = l.IteratorAt(context.Background(), l.Len())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Nil(i.Next(context.Background()))
 }

@@ -33,6 +33,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -195,7 +196,7 @@ func validateMap(t *testing.T, vrw ValueReadWriter, m Map, entries mapEntrySlice
 		return nil
 	})
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, out.Equals(entries))
 }
 
@@ -474,7 +475,7 @@ func TestMapDiff(t *testing.T) {
 	map2 := testMap2.toMap(vrw)
 
 	mapDiffAdded, mapDiffRemoved, mapDiffModified, err := accumulateMapDiffChanges(map1, map2)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, testMapAdded, mapDiffAdded, "testMap.diff != map.diff")
 	assert.Equal(t, testMapRemoved, mapDiffRemoved, "testMap.diff != map.diff")
 	assert.Equal(t, testMapModified, mapDiffModified, "testMap.diff != map.diff")
@@ -502,26 +503,26 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 	numEdits := 10000
 	vals := make([]Value, 0, numEdits)
 	m, err := NewMap(context.Background(), vs)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	me := m.Edit()
 	for i := 0; i < 10000; i++ {
 		s, err := newLargeStruct(i)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		vals = append(vals, s)
 		me.Set(Float(i), s)
 	}
 	m, err = me.Map(context.Background())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	r, err := vs.WriteValue(context.Background(), m)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	rt, err := vs.Root(context.Background())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = vs.Commit(context.Background(), rt, rt)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	v, err := r.TargetValue(context.Background(), vs)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	m = v.(Map)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	every := 100
 
@@ -531,10 +532,10 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 			k := Float(i)
 			s := vals[i].(Struct)
 			n, ok, err := s.MaybeGet("Number")
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.True(t, ok)
 			s, err = s.Set("Number", Float(float64(n.(Float))+1))
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			me.Set(k, s)
 		}
 	}
@@ -543,15 +544,15 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 	rdCnt := cs.Reads()
 
 	m, err = me.Map(context.Background())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	rt, err = vs.Root(context.Background())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	_, err = vs.Commit(context.Background(), rt, rt)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	ref, err := NewRef(m, Format_7_18)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, uint64(3), ref.Height())
 	assert.Equal(t, 105, cs.Reads()-rdCnt)
 	assert.Equal(t, 62, cs.Writes()-wrCnt)
@@ -573,7 +574,7 @@ func TestMapInfiniteChunkBug(t *testing.T) {
 	prefix := buff.String()
 
 	m, err := NewMap(context.Background(), vrw)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	me := m.Edit()
 
 	for i := 0; i < 10000; i++ {
@@ -581,7 +582,7 @@ func TestMapInfiniteChunkBug(t *testing.T) {
 	}
 
 	_, err = me.Map(context.Background())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestNewMap(t *testing.T) {
@@ -589,17 +590,17 @@ func TestNewMap(t *testing.T) {
 	vrw := newTestValueStore()
 
 	m, err := NewMap(context.Background(), vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(uint64(0), m.Len())
 	m, err = NewMap(context.Background(), vrw, String("foo1"), String("bar1"), String("foo2"), String("bar2"))
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(uint64(2), m.Len())
 	foo1Str, ok, err := m.MaybeGet(context.Background(), String("foo1"))
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(ok)
 	assert.True(String("bar1").Equals(foo1Str))
 	foo2Str, ok, err := m.MaybeGet(context.Background(), String("foo2"))
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(ok)
 	assert.True(String("bar2").Equals(foo2Str))
 }
@@ -615,10 +616,10 @@ func TestMapUniqueKeysString(t *testing.T) {
 		String("hello"), String("foo"),
 	}
 	m, err := NewMap(context.Background(), vrw, l...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(uint64(3), m.Len())
 	v, ok, err := m.MaybeGet(context.Background(), String("hello"))
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(ok)
 	assert.True(String("foo").Equals(v))
 }
@@ -635,10 +636,10 @@ func TestMapUniqueKeysNumber(t *testing.T) {
 		Float(1), Float(5),
 	}
 	m, err := NewMap(context.Background(), vrw, l...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(uint64(4), m.Len())
 	v, ok, err := m.MaybeGet(context.Background(), Float(1))
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(ok)
 	assert.True(Float(5).Equals(v))
 }
@@ -660,19 +661,19 @@ func TestMapHas(t *testing.T) {
 		tm := toTestMap(scale, vrw)
 		m := tm.toMap(vrw)
 		ref, err := vrw.WriteValue(context.Background(), m)
-		assert.NoError(err)
+		require.NoError(t, err)
 		mval2, err := vrw.ReadValue(context.Background(), ref.TargetHash())
 		m2 := mval2.(Map)
 		for _, entry := range tm.entries.entries {
 			k, v := entry.key, entry.value
 			assert.True(m.Has(context.Background(), k))
 			kv, ok, err := m.MaybeGet(context.Background(), k)
-			assert.NoError(err)
+			require.NoError(t, err)
 			assert.True(ok)
 			assert.True(kv.Equals(v))
 			assert.True(m2.Has(context.Background(), k))
 			kv, ok, err = m2.MaybeGet(context.Background(), k)
-			assert.NoError(err)
+			require.NoError(t, err)
 			assert.True(ok)
 			assert.True(kv.Equals(v))
 		}
@@ -716,7 +717,7 @@ func TestMapHasRemove(t *testing.T) {
 	vrw := newTestValueStore()
 
 	m, err := NewMap(context.Background(), vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 	me := m.Edit()
 
 	initial := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m"}
@@ -726,7 +727,7 @@ func TestMapHasRemove(t *testing.T) {
 	}
 
 	m, err = me.Map(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(m.Len() == uint64(len(initial)))
 	assert.True(hasAll(m, initial...))
 	assert.True(hasNone(m, initialUnexpected...))
@@ -759,7 +760,7 @@ func TestMapHasRemove(t *testing.T) {
 	me.Set(String("r"), Int(1))
 
 	m, err = me.Map(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	expected := []string{"a", "c", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "p", "q", "r", "s"}
 	unexpected := []string{"b", "d", "o"}
 	assert.True(hasAll(m, expected...))
@@ -785,7 +786,7 @@ func TestMapRemove(t *testing.T) {
 		run := func(i int) {
 			expected := tm.Remove(i, i+1).toMap(vs)
 			actual, err := whole.Edit().Remove(tm.entries.entries[i].key).Map(context.Background())
-			assert.NoError(err)
+			require.NoError(t, err)
 			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
 			diffMapTest(assert, expected, actual, 0, 0, 0)
@@ -813,7 +814,7 @@ func TestMapRemoveNonexistentKey(t *testing.T) {
 	tm := getTestNativeOrderMap(2, vrw)
 	original := tm.toMap(vrw)
 	actual, err := original.Edit().Remove(Float(-1)).Map(context.Background()) // rand.Int63 returns non-negative numbers.
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	assert.Equal(original.Len(), actual.Len())
 	assert.True(original.Equals(actual))
@@ -828,16 +829,16 @@ func TestMapFirst(t *testing.T) {
 	vrw := newTestValueStore()
 
 	m1, err := NewMap(context.Background(), vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 	k, v, err := m1.First(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Nil(k)
 	assert.Nil(v)
 
 	m1, err = m1.Edit().Set(String("foo"), String("bar")).Set(String("hot"), String("dog")).Map(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	ak, av, err := m1.First(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	var ek, ev Value
 
 	err = m1.Iter(context.Background(), func(k, v Value) (stop bool, err error) {
@@ -845,7 +846,7 @@ func TestMapFirst(t *testing.T) {
 		return true, nil
 	})
 
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(ek.Equals(ak))
 	assert.True(ev.Equals(av))
 }
@@ -864,9 +865,9 @@ func TestMapFirst2(t *testing.T) {
 		tm := toTestMap(scale, vrw)
 		m := tm.toMap(vrw)
 		err := SortWithErroringLess(tm.entries)
-		assert.NoError(err)
+		require.NoError(t, err)
 		actualKey, actualValue, err := m.First(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.True(tm.entries.entries[0].key.Equals(actualKey))
 		assert.True(tm.entries.entries[0].value.Equals(actualValue))
 	}
@@ -886,16 +887,16 @@ func TestMapLast(t *testing.T) {
 	vrw := newTestValueStore()
 
 	m1, err := NewMap(context.Background(), vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 	k, v, err := m1.First(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Nil(k)
 	assert.Nil(v)
 
 	m1, err = m1.Edit().Set(String("foo"), String("bar")).Set(String("hot"), String("dog")).Map(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	ak, av, err := m1.Last(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	var ek, ev Value
 
 	err = m1.Iter(context.Background(), func(k, v Value) (stop bool, err error) {
@@ -903,7 +904,7 @@ func TestMapLast(t *testing.T) {
 		return false, nil
 	})
 
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(ek.Equals(ak))
 	assert.True(ev.Equals(av))
 }
@@ -922,9 +923,9 @@ func TestMapLast2(t *testing.T) {
 		tm := toTestMap(scale, vrw)
 		m := tm.toMap(vrw)
 		err := SortWithErroringLess(tm.entries)
-		assert.NoError(err)
+		require.NoError(t, err)
 		actualKey, actualValue, err := m.Last(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.True(tm.entries.entries[len(tm.entries.entries)-1].key.Equals(actualKey))
 		assert.True(tm.entries.entries[len(tm.entries.entries)-1].value.Equals(actualValue))
 	}
@@ -946,16 +947,16 @@ func TestMapSetGet(t *testing.T) {
 
 	assertMapVal := func(me *MapEditor, k, expectedVal Value) *MapEditor {
 		m, err := me.Map(ctx)
-		assert.NoError(err)
+		require.NoError(t, err)
 		mV, ok, err := m.MaybeGet(ctx, k)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.True(ok == (expectedVal != nil))
 		assert.True((expectedVal == nil && mV == nil) || expectedVal.Equals(mV))
 		return m.Edit()
 	}
 
 	m, err := NewMap(ctx, vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 	me := m.Edit()
 	me = assertMapVal(me, String("a"), nil)
 
@@ -997,7 +998,7 @@ func TestMapSetGet(t *testing.T) {
 	me = assertMapVal(me, String("never-inserted"), nil)
 
 	m, err = me.Map(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(m.Len() == 0)
 }
 
@@ -1006,10 +1007,10 @@ func validateMapInsertion(t *testing.T, tm testMap) {
 	ctx := context.Background()
 
 	allMap, err := NewMap(context.Background(), vrw)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	allMe := allMap.Edit()
 	incrMap, err := NewMap(context.Background(), vrw)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	incrMe := incrMap.Edit()
 
 	for _, entry := range tm.entries.entries {
@@ -1017,14 +1018,14 @@ func validateMapInsertion(t *testing.T, tm testMap) {
 		incrMe.Set(entry.key, entry.value)
 
 		currIncrMap, err := incrMe.Map(ctx)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		incrMe = currIncrMap.Edit()
 	}
 
 	m1, err := allMe.Map(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	m2, err := incrMe.Map(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	validateMap(t, vrw, m1, tm.entries)
 	validateMap(t, vrw, m2, tm.entries)
@@ -1057,7 +1058,7 @@ func TestMapSet(t *testing.T) {
 		expected := tm.toMap(vrw)
 		run := func(from, to int) {
 			actual, err := tm.Remove(from, to).toMap(vrw).Edit().SetM(toValuable(tm.Flatten(from, to))...).Map(context.Background())
-			assert.NoError(err)
+			require.NoError(t, err)
 			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
 			diffMapTest(assert, expected, actual, 0, 0, 0)
@@ -1080,23 +1081,23 @@ func TestMapSetM(t *testing.T) {
 	vrw := newTestValueStore()
 
 	m1, err := NewMap(context.Background(), vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 	m2, err := m1.Edit().SetM().Map(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(m1.Equals(m2))
 	m3, err := m2.Edit().SetM(String("foo"), String("bar"), String("hot"), String("dog")).Map(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(uint64(2), m3.Len())
 	fooStr, ok, err := m3.MaybeGet(context.Background(), String("foo"))
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(ok)
 	assert.True(String("bar").Equals(fooStr))
 	hotStr, ok, err := m3.MaybeGet(context.Background(), String("hot"))
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(ok)
 	assert.True(String("dog").Equals(hotStr))
 	m4, err := m3.Edit().SetM(String("mon"), String("key")).Map(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(uint64(2), m3.Len())
 	assert.Equal(uint64(3), m4.Len())
 }
@@ -1124,7 +1125,7 @@ func TestMapSetExistingKeyToNewValue(t *testing.T) {
 
 		var err error
 		actual, err = actual.Edit().Set(entry.key, newValue).Map(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 	}
 
 	expected := expectedWorking.toMap(vrw)
@@ -1140,7 +1141,7 @@ func TestMapDuplicateSet(t *testing.T) {
 	vrw := newTestValueStore()
 
 	m1, err := NewMap(context.Background(), vrw, Bool(true), Bool(true), Float(42), Float(42), Float(42), Float(42))
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(uint64(2), m1.Len())
 }
 
@@ -1160,13 +1161,13 @@ func TestMapMaybeGet(t *testing.T) {
 		m := tm.toMap(vrw)
 		for _, entry := range tm.entries.entries {
 			v, ok, err := m.MaybeGet(context.Background(), entry.key)
-			assert.NoError(err)
+			require.NoError(t, err)
 			if assert.True(ok, "%v should have been in the map!", entry.key) {
 				assert.True(v.Equals(entry.value), "%v != %v", v, entry.value)
 			}
 		}
 		_, ok, err := m.MaybeGet(context.Background(), tm.knownBadKey)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.False(ok, "m should not contain %v", tm.knownBadKey)
 	}
 
@@ -1182,7 +1183,7 @@ func TestMapIter(t *testing.T) {
 
 	m, err := NewMap(context.Background(), vrw)
 
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	type entry struct {
 		key   Value
@@ -1207,13 +1208,13 @@ func TestMapIter(t *testing.T) {
 	}
 
 	err = m.Iter(context.Background(), cb)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(0, len(results))
 
 	m, err = m.Edit().Set(String("a"), Float(0)).Set(String("b"), Float(1)).Map(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	err = m.Iter(context.Background(), cb)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(2, len(results))
 	assert.True(got(String("a"), Float(0)))
 	assert.True(got(String("b"), Float(1)))
@@ -1221,7 +1222,7 @@ func TestMapIter(t *testing.T) {
 	results = resultList{}
 	stop = true
 	err = m.Iter(context.Background(), cb)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(1, len(results))
 	// Iteration order not guaranteed, but it has to be one of these.
 	assert.True(got(String("a"), Float(0)) || got(String("b"), Float(1)))
@@ -1238,7 +1239,7 @@ func TestMapIter2(t *testing.T) {
 		tm := toTestMap(scale, vrw)
 		m := tm.toMap(vrw)
 		err := SortWithErroringLess(tm.entries)
-		assert.NoError(err)
+		require.NoError(t, err)
 		idx := uint64(0)
 		endAt := uint64(64)
 
@@ -1252,7 +1253,7 @@ func TestMapIter2(t *testing.T) {
 			return done, nil
 		})
 
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(endAt, idx-1)
 	}
 
@@ -1291,7 +1292,7 @@ func TestMapIterAll(t *testing.T) {
 		tm := toTestMap(scale, vrw)
 		m := tm.toMap(vrw)
 		err := SortWithErroringLess(tm.entries)
-		assert.NoError(err)
+		require.NoError(t, err)
 		idx := uint64(0)
 
 		err = m.IterAll(context.Background(), func(k, v Value) error {
@@ -1302,7 +1303,7 @@ func TestMapIterAll(t *testing.T) {
 			return nil
 		})
 
-		assert.NoError(err)
+		require.NoError(t, err)
 	}
 
 	doTest(getTestNativeOrderMap, 16)
@@ -1317,10 +1318,10 @@ func TestMapEquals(t *testing.T) {
 	vrw := newTestValueStore()
 
 	m1, err := NewMap(context.Background(), vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 	m2 := m1
 	m3, err := NewMap(context.Background(), vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	assert.True(m1.Equals(m2))
 	assert.True(m2.Equals(m1))
@@ -1334,9 +1335,9 @@ func TestMapEquals(t *testing.T) {
 	diffMapTest(assert, m3, m2, 0, 0, 0)
 
 	m1, err = NewMap(context.Background(), vrw, String("foo"), Float(0.0), String("bar"), mustList(NewList(context.Background(), vrw)))
-	assert.NoError(err)
+	require.NoError(t, err)
 	m2, err = m2.Edit().Set(String("foo"), Float(0.0)).Set(String("bar"), mustList(NewList(context.Background(), vrw))).Map(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(m1.Equals(m2))
 	assert.True(m2.Equals(m1))
 	assert.False(m2.Equals(m3))
@@ -1355,9 +1356,9 @@ func TestMapNotStringKeys(t *testing.T) {
 	vrw := newTestValueStore()
 
 	b1, err := NewBlob(context.Background(), vrw, bytes.NewBufferString("blob1"))
-	assert.NoError(err)
+	require.NoError(t, err)
 	b2, err := NewBlob(context.Background(), vrw, bytes.NewBufferString("blob2"))
-	assert.NoError(err)
+	require.NoError(t, err)
 	l := []Value{
 		Bool(true), String("true"),
 		Bool(false), String("false"),
@@ -1373,16 +1374,16 @@ func TestMapNotStringKeys(t *testing.T) {
 		mustValue(NewSet(context.Background(), vrw, mustValue(NewSet(context.Background(), vrw)))), String("map of set/set"),
 	}
 	m1, err := NewMap(context.Background(), vrw, l...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(uint64(12), m1.Len())
 	for i := 0; i < len(l); i += 2 {
 		v, ok, err := m1.MaybeGet(context.Background(), l[i])
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.True(ok)
 		assert.True(v.Equals(l[i+1]))
 	}
 	v, ok, err := m1.MaybeGet(context.Background(), Float(42))
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.False(ok)
 	assert.Nil(v)
 }
@@ -1692,27 +1693,27 @@ func TestMapEmpty(t *testing.T) {
 	ctx := context.Background()
 
 	m, err := NewMap(ctx, vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 	me := m.Edit()
 
 	m, err = me.Map(ctx)
-	assert.NoError(err)
+	require.NoError(t, err)
 	me = m.Edit()
 	assert.True(m.Empty())
 
 	me.Set(Bool(false), String("hi"))
 	m, err = me.Map(ctx)
-	assert.NoError(err)
+	require.NoError(t, err)
 	me = m.Edit()
 	assert.False(m.Empty())
 
 	l, err := NewList(ctx, vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 	m2, err := NewMap(ctx, vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 	me.Set(l, m2)
 	m, err = me.Map(ctx)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.False(m.Empty())
 }
 
@@ -1723,30 +1724,30 @@ func TestMapType(t *testing.T) {
 
 	emptyMapType := mustType(MakeMapType(mustType(MakeUnionType()), mustType(MakeUnionType())))
 	m, err := NewMap(context.Background(), vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 	mt, err := TypeOf(m)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(mt.Equals(emptyMapType))
 
 	m2, err := m.Edit().Remove(String("B")).Map(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(emptyMapType.Equals(mustType(TypeOf(m2))))
 
 	tr, err := MakeMapType(PrimitiveTypeMap[StringKind], PrimitiveTypeMap[FloatKind])
-	assert.NoError(err)
+	require.NoError(t, err)
 	m2, err = m.Edit().Set(String("A"), Float(1)).Map(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(tr.Equals(mustType(TypeOf(m2))))
 
 	m2, err = m.Edit().Set(String("B"), Float(2)).Set(String("C"), Float(2)).Map(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(tr.Equals(mustType(TypeOf(m2))))
 
 	m3, err := m2.Edit().Set(String("A"), Bool(true)).Map(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(mustType(MakeMapType(PrimitiveTypeMap[StringKind], mustType(MakeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind])))).Equals(mustType(TypeOf(m3))), mustString(mustType(TypeOf(m3)).Describe(context.Background())))
 	m4, err := m3.Edit().Set(Bool(true), Float(1)).Map(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(mustType(MakeMapType(mustType(MakeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[StringKind])), mustType(MakeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind])))).Equals(mustType(TypeOf(m4))))
 }
 
@@ -1756,21 +1757,21 @@ func TestMapChunks(t *testing.T) {
 	vrw := newTestValueStore()
 
 	l1, err := NewMap(context.Background(), vrw, Float(0), Float(1))
-	assert.NoError(err)
+	require.NoError(t, err)
 	c1 := getChunks(l1)
 	assert.Len(c1, 0)
 
 	ref1, err := NewRef(Float(0), Format_7_18)
-	assert.NoError(err)
+	require.NoError(t, err)
 	l2, err := NewMap(context.Background(), vrw, ref1, Float(1))
-	assert.NoError(err)
+	require.NoError(t, err)
 	c2 := getChunks(l2)
 	assert.Len(c2, 1)
 
 	ref2, err := NewRef(Float(1), Format_7_18)
-	assert.NoError(err)
+	require.NoError(t, err)
 	l3, err := NewMap(context.Background(), vrw, Float(0), ref2)
-	assert.NoError(err)
+	require.NoError(t, err)
 	c3 := getChunks(l3)
 	assert.Len(c3, 1)
 }
@@ -1789,7 +1790,7 @@ func TestMapFirstNNumbers(t *testing.T) {
 	}
 
 	m, err := NewMap(context.Background(), vrw, kvs...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(deriveCollectionHeight(m), getRefHeightOfCollection(m))
 }
 
@@ -1803,16 +1804,16 @@ func TestMapRefOfStructFirstNNumbers(t *testing.T) {
 	kvs := []Value{}
 	for i := 0; i < testMapSize; i++ {
 		k, err := vs.WriteValue(context.Background(), mustValue(NewStruct(Format_7_18, "num", StructData{"n": Float(i)})))
-		assert.NoError(err)
+		require.NoError(t, err)
 		v, err := vs.WriteValue(context.Background(), mustValue(NewStruct(Format_7_18, "num", StructData{"n": Float(i + 1)})))
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.NotNil(k)
 		assert.NotNil(v)
 		kvs = append(kvs, k, v)
 	}
 
 	m, err := NewMap(context.Background(), vs, kvs...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	// height + 1 because the leaves are Ref values (with height 1).
 	assert.Equal(deriveCollectionHeight(m)+1, getRefHeightOfCollection(m))
 }
@@ -1828,24 +1829,24 @@ func TestMapModifyAfterRead(t *testing.T) {
 	// Drop chunk values.
 
 	ref, err := vs.WriteValue(context.Background(), m)
-	assert.NoError(err)
+	require.NoError(t, err)
 	v, err := vs.ReadValue(context.Background(), ref.TargetHash())
-	assert.NoError(err)
+	require.NoError(t, err)
 	m = v.(Map)
 
 	// Modify/query. Once upon a time this would crash.
 	fst, fstval, err := m.First(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	m, err = m.Edit().Remove(fst).Map(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.False(m.Has(context.Background(), fst))
 
 	fst2, _, err := m.First(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(m.Has(context.Background(), fst2))
 
 	m, err = m.Edit().Set(fst, fstval).Map(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(m.Has(context.Background(), fst))
 }
 
@@ -1862,19 +1863,19 @@ func TestMapTypeAfterMutations(t *testing.T) {
 		}
 
 		m, err := NewMap(context.Background(), vrw, values...)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(m.Len(), uint64(n))
 		assert.IsType(c, m.asSequence())
 		assert.True(mustType(TypeOf(m)).Equals(mustType(MakeMapType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[FloatKind]))))
 
 		m, err = m.Edit().Set(String("a"), String("a")).Map(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(m.Len(), uint64(n+1))
 		assert.IsType(c, m.asSequence())
 		assert.True(mustType(TypeOf(m)).Equals(mustType(MakeMapType(mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind])), mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind]))))))
 
 		m, err = m.Edit().Remove(String("a")).Map(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(m.Len(), uint64(n))
 		assert.IsType(c, m.asSequence())
 		assert.True(mustType(TypeOf(m)).Equals(mustType(MakeMapType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[FloatKind]))))
@@ -1912,17 +1913,17 @@ func TestCompoundMapWithValuesOfEveryType(t *testing.T) {
 	}
 
 	m, err := NewMap(context.Background(), vrw, kvs...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	for i := 1; m.asSequence().isLeaf(); i++ {
 		k := Float(i)
 		kvs = append(kvs, k, v)
 		m, err = m.Edit().Set(k, v).Map(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 	}
 
 	assert.Equal(len(kvs)/2, int(m.Len()))
 	fk, fv, err := m.First(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(bool(fk.(Bool)))
 	assert.True(v.Equals(fv))
 
@@ -1931,7 +1932,7 @@ func TestCompoundMapWithValuesOfEveryType(t *testing.T) {
 			assert.True(m.Has(context.Background(), keyOrValue))
 			retrievedVal, ok, err := m.MaybeGet(context.Background(), keyOrValue)
 			assert.True(ok)
-			assert.NoError(err)
+			require.NoError(t, err)
 			assert.True(v.Equals(retrievedVal))
 		} else {
 			assert.True(v.Equals(keyOrValue))
@@ -1942,7 +1943,7 @@ func TestCompoundMapWithValuesOfEveryType(t *testing.T) {
 		k := kvs[0]
 		kvs = kvs[2:]
 		m, err = m.Edit().Remove(k).Map(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.False(m.Has(context.Background(), k))
 		assert.Equal(len(kvs)/2, int(m.Len()))
 	}
@@ -1980,9 +1981,9 @@ func TestMapRemoveLastWhenNotLoaded(t *testing.T) {
 		entr = entr[:len(entr)-1]
 		tm.entries.entries = entr
 		m, err := nm.Edit().Remove(last.key).Map(context.Background())
-		assert.NoError(err)
+		require.NoError(t, err)
 		nm, err = reload(m)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.True(tm.toMap(vs).Equals(nm))
 	}
 }
@@ -2007,13 +2008,13 @@ func TestMapIterFrom(t *testing.T) {
 			res = append(res, k, v)
 			return false, nil
 		})
-		assert.NoError(err)
+		require.NoError(t, err)
 		return res
 	}
 
 	kvs := generateNumbersAsValuesFromToBy(-50, 50, 1)
 	m1, err := NewMap(context.Background(), vrw, kvs...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(kvs.Equals(test(m1, nil, Float(1000))))
 	assert.True(kvs.Equals(test(m1, Float(-1000), Float(1000))))
 	assert.True(kvs.Equals(test(m1, Float(-50), Float(1000))))
@@ -2032,11 +2033,11 @@ func TestMapAt(t *testing.T) {
 
 	values := []Value{Bool(false), Float(42), String("a"), String("b"), String("c"), String("d")}
 	m, err := NewMap(context.Background(), vrw, values...)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	for i := 0; i < len(values); i += 2 {
 		k, v, err := m.At(context.Background(), uint64(i/2))
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(values[i], k)
 		assert.Equal(values[i+1], v)
 	}
