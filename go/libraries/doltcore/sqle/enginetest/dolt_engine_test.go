@@ -172,7 +172,6 @@ func TestTruncate(t *testing.T) {
 }
 
 func TestCreateTable(t *testing.T) {
-	t.Skipf("Skipping: no support for BLOB type")
 	enginetest.TestCreateTable(t, newDoltHarness(t))
 }
 
@@ -185,12 +184,10 @@ func TestRenameTable(t *testing.T) {
 }
 
 func TestRenameColumn(t *testing.T) {
-	t.Skipf("DDL tests break because of column comments")
 	enginetest.TestRenameColumn(t, newDoltHarness(t))
 }
 
 func TestAddColumn(t *testing.T) {
-	t.Skipf("DDL tests break because of column comments")
 	enginetest.TestAddColumn(t, newDoltHarness(t))
 }
 
@@ -200,7 +197,6 @@ func TestModifyColumn(t *testing.T) {
 }
 
 func TestDropColumn(t *testing.T) {
-	t.Skipf("DDL tests break because of column comments")
 	enginetest.TestDropColumn(t, newDoltHarness(t))
 }
 
@@ -243,7 +239,6 @@ func TestNaturalJoinDisjoint(t *testing.T) {
 }
 
 func TestInnerNestedInNaturalJoins(t *testing.T) {
-	t.Skip("No primary key in test tables")
 	enginetest.TestInnerNestedInNaturalJoins(t, newDoltHarness(t))
 }
 
