@@ -78,3 +78,32 @@ SQL
     [[ "$output" =~ "child2_parent2" ]] || false
     [[ ! "$output" =~ "child1_parent1" ]] || false
 }
+
+@test "verify-constraints: Ignores NULLs" {
+    dolt sql <<SQL
+CREATE TABLE parent (
+    id BIGINT PRIMARY KEY,
+    v1 BIGINT,
+    v2 BIGINT,
+    INDEX idx1 (v1, v2)
+);
+CREATE TABLE child (
+    id BIGINT primary key,
+    v1 BIGINT,
+    v2 BIGINT,
+    CONSTRAINT fk_named FOREIGN KEY (v1,v2) REFERENCES parent(v1,v2)
+);
+INSERT INTO parent VALUES (1, 1, 1), (2, 2, 2);
+INSERT INTO child VALUES (1, 1, 1), (2, 20, NULL);
+SQL
+    dolt verify-constraints child
+
+    dolt sql <<SQL
+SET foreign_key_checks=0;
+INSERT INTO child VALUES (3, 30, 30);
+SET foreign_key_checks=1;
+SQL
+    run dolt verify-constraints child
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "fk_named" ]] || false
+}
