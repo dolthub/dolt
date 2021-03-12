@@ -1354,7 +1354,8 @@ func (se *sqlEngine) getRoots(sqlCtx *sql.Context) (map[string]*doltdb.RootValue
 
 // Execute a SQL statement and return values for printing.
 func (se *sqlEngine) query(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, error) {
-	return se.engine.Query(ctx, query)
+	_, sc, ri, err := se.engine.Query(ctx, query)
+	return sc, ri, err
 }
 
 func PrettyPrintResults(ctx *sql.Context, resultFormat resultFormat, sqlSch sql.Schema, rowIter sql.RowIter) (rerr error) {
