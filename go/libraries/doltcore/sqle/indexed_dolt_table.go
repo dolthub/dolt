@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/lookup"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
@@ -150,6 +151,68 @@ func (t *WritableIndexedDoltTable) NumRows(ctx *sql.Context) (uint64, error) {
 	}
 
 	return m.Len(), nil
+}
+
+// NextAutoIncrementValue returns next autoincrement value
+func (t *WritableIndexedDoltTable) NextAutoIncrementValue(ctx *sql.Context) (int64, error) {
+	val, err := t.table.GetAutoIncrementValue(ctx)
+	if errors.Is(err, doltdb.ErrNoAutoIncrementValue) {
+		return 0, nil
+	} else if err != nil {
+		return 0, err
+	}
+
+	if types.IsNull(val) {
+		return 0, nil
+	}
+
+	v, err := t.autoIncCol.TypeInfo.ConvertNomsValueToValue(val)
+	if err != nil {
+		return 0, err
+	}
+
+	num, ok := v.(int32)
+	if !ok {
+		return 0, nil
+	}
+
+	return int64(num) + 1, nil
+}
+
+func (t *WritableIndexedDoltTable) DataLength(ctx *sql.Context) (uint64, error) {
+	schema := t.Schema()
+	var numBytesPerRow uint64 = 0
+	for _, col := range schema {
+		switch n := col.Type.(type) {
+		case sql.NumberType:
+			numBytesPerRow += 8
+		case sql.StringType:
+			numBytesPerRow += uint64(n.MaxByteLength())
+		case sql.BitType:
+			numBytesPerRow += 1
+		case sql.DatetimeType:
+			numBytesPerRow += 8
+		case sql.DecimalType:
+			numBytesPerRow += uint64(n.MaximumScale())
+		case sql.EnumType:
+			numBytesPerRow += 2
+		case sql.JsonType:
+			numBytesPerRow += 20
+		case sql.NullType:
+			numBytesPerRow += 1
+		case sql.TimeType:
+			numBytesPerRow += 5
+		case sql.YearType:
+			numBytesPerRow += 8
+		}
+	}
+
+	numRows, err := t.NumRows(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	return numBytesPerRow * numRows, nil
 }
 
 func partitionIndexedTableRows(ctx *sql.Context, t *WritableIndexedDoltTable, projectedCols []string, part sql.Partition) (sql.RowIter, error) {
