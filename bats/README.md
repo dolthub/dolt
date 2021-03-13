@@ -1,6 +1,21 @@
 # BATS - Bash Automated Testing System #
 
-We are going to use bats to test the dolt command line. 
+BATS is used to integration test `dolt`. Our BATS tests started as a humble suite of integration tests. Over two years
+of development the suite has grown to over 1,000 tests. When we find a customer facing bug in the `dolt` command line or
+SQL implementation, we cover it with a BATS test. These tests are run on every `dolt` PR on Windows and Linux using
+GitHub Actions. 
+
+These tests are also useful documentation. If you are wondering how a certain command or feature works in practice,
+using `grep` to find the appropriate BATS test can give you some simple examples of happy path and error case behavior.
+
+The naming conventions for the test files have evolved over time. Generally, the files are named after the feature the
+file intends to test. However, some of the early tests are named after the schema of the table they implement 
+ie. `1pk5col-ints.bats`. These files were implemented to reuse setup and teardown logic. This scheme was quickly 
+abandoned but the legacy remains.
+
+If you find a bug in `dolt`, we would love a skipped bats test PR in addition to a GutHub issue.
+
+# Running for yourself
 
 First you need to install bats. 
 ```
@@ -41,3 +56,8 @@ Various tests are skipped as TODOs and/or as documentation of known bugs. Eg:
 }
 ```
 Skipped BATS can still be partially useful for testing as they execute normally up to `skip` statement.
+
+## More Information
+
+We published a [blog entry](https://www.dolthub.com/blog/2020-03-23-testing-dolt-bats/) on BATS with 
+more information and some useful tips and tricks.
