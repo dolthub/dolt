@@ -88,7 +88,7 @@ func (cf *MergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, err
 	}
 
-	cm, cmh, err := getBranchCommit(ctx, ok, branchName, err, ddb)
+	cm, cmh, err := getBranchCommit(ctx, branchName, ddb)
 	if err != nil {
 		return nil, err
 	}
@@ -153,11 +153,7 @@ func checkForUncommittedChanges(root *doltdb.RootValue, parentRoot *doltdb.RootV
 	return nil
 }
 
-func getBranchCommit(ctx *sql.Context, ok bool, val interface{}, err error, ddb *doltdb.DoltDB) (*doltdb.Commit, hash.Hash, error) {
-	if err != nil {
-		return nil, hash.Hash{}, err
-	}
-
+func getBranchCommit(ctx *sql.Context, val interface{}, ddb *doltdb.DoltDB) (*doltdb.Commit, hash.Hash, error) {
 	paramStr, ok := val.(string)
 
 	if !ok {

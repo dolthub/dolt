@@ -114,7 +114,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return nil, err
 	}
 
-	cm, cmh, err := getBranchCommit(ctx, ok, branchName, err, ddb)
+	cm, cmh, err := getBranchCommit(ctx, branchName, ddb)
 	if err != nil {
 		return nil, err
 	}
