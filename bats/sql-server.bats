@@ -578,4 +578,7 @@ SQL
 
      unselected_update_query 1 "DELETE FROM repo1.one_pk WHERE pk=3"
      unselected_server_query 1 "SELECT * FROM repo1.one_pk" "pk\n0\n1"
+
+     # We don't have transactions but some editors will throws this commit statement along
+     unselected_server_query 1 "commit"
 }
