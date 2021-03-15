@@ -1,5 +1,5 @@
 Jenkinsfile
-bats/
+integration-tests/bats/
 proto/
 samples/
 benchmark/
