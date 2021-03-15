@@ -1,0 +1,12 @@
+col: foo
+
+tab: foo
+
+all: 1 in (1,2,3)
+
+all: 1 in ("a", "b", "c")
+
+all: 1+1 = 2
+
+tab: foo->'$.bar'
+

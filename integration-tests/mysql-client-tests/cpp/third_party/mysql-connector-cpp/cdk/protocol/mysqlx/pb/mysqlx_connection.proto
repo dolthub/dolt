@@ -1,0 +1,88 @@
+/*
+ * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License, version 2.0,
+ * as published by the Free Software Foundation.
+ *
+ * This program is also distributed with certain software (including
+ * but not limited to OpenSSL) that is licensed under separate terms,
+ * as designated in a particular file or component or in included license
+ * documentation.  The authors of MySQL hereby grant you an additional
+ * permission to link the program and your derivative works with the
+ * separately licensed software that they have included with MySQL.
+ *  
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License, version 2.0, for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+ */
+syntax = "proto2";
+
+// ifdef PROTOBUF_LITE: option optimize_for = LITE_RUNTIME;
+
+import "mysqlx_datatypes.proto";
+import "mysqlx.proto";
+
+package Mysqlx.Connection;
+option java_package = "com.mysql.cj.x.protobuf";
+
+// a Capability
+//
+// a tuple of a ``name`` and a :protobuf:msg:`Mysqlx.Datatypes::Any`
+message Capability {
+  required string name = 1;
+  required Mysqlx.Datatypes.Any value = 2;
+}
+
+// Capabilities
+message Capabilities {
+  repeated Capability capabilities = 1;
+
+  option (server_message_id) = CONN_CAPABILITIES; // comment_out_if PROTOBUF_LITE
+}
+
+// get supported connection capabilities and their current state
+//
+//   :returns: :protobuf:msg:`Mysqlx.Connection::Capabilities` or :protobuf:msg:`Mysqlx::Error`
+//
+message CapabilitiesGet {
+  option (client_message_id) = CON_CAPABILITIES_GET; // comment_out_if PROTOBUF_LITE
+};
+
+// sets connection capabilities atomically
+//
+// only provided values are changed, other values are left unchanged.
+// If any of the changes fails, all changes are discarded.
+//
+// :precond: active sessions == 0
+// :returns: :protobuf:msg:`Mysqlx::Ok` or :protobuf:msg:`Mysqlx::Error`
+message CapabilitiesSet {
+  required Capabilities capabilities = 1;
+
+  option (client_message_id) = CON_CAPABILITIES_SET; // comment_out_if PROTOBUF_LITE
+};
+
+// announce to the server that the client wants to close the connection
+//
+// it discards any session state of the server
+//
+// :Returns: :protobuf:msg:`Mysqlx::Ok`
+message Close {
+  option (client_message_id) = CON_CLOSE; // comment_out_if PROTOBUF_LITE
+};
+
+message Compression {
+  optional uint64 uncompressed_size = 1;
+  optional Mysqlx.ServerMessages.Type server_messages = 2;
+  optional Mysqlx.ClientMessages.Type client_messages = 3;
+  required bytes payload = 4;
+  
+  option (server_message_id) = COMPRESSION; // comment_out_if PROTOBUF_LITE
+  option (client_message_id) = COMPRESSION; // comment_out_if PROTOBUF_LITE
+}
+

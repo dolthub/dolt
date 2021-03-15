@@ -1,0 +1,7 @@
+MySQL Connector/C++ Build Information
+
+build-date           :  @INFO_DATE@
+os-info              :  @CMAKE_SYSTEM_NAME@-@CMAKE_SYSTEM_VERSION@
+compiler             :  @CMAKE_CXX_COMPILER_ID@ @CMAKE_CXX_COMPILER_VERSION@
+protobuf-version     :  3.6.1
+@INFO_BUILD_TYPE@@INFO_SSL@@INFO_MACOS_VERSION@@INFO_MACOS_BUILD@@INFO_MACOS_TARGET@@INFO_MYSQL_VERSION@@INFO_BOOST@

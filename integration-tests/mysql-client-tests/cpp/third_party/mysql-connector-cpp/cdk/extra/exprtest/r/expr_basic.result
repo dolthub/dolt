@@ -1,0 +1,147 @@
+## col: foo
+OK
+type: IDENT
+identifier {
+  document_path {
+    type: MEMBER
+    value: "foo"
+  }
+}
+
+
+## tab: foo
+OK
+type: IDENT
+identifier {
+  name: "foo"
+}
+
+
+## all: 1 in (1,2,3)
+OK
+type: OPERATOR
+operator {
+  name: "in"
+  param {
+    type: LITERAL
+    literal {
+      type: V_UINT
+      v_unsigned_int: 1
+    }
+  }
+  param {
+    type: LITERAL
+    literal {
+      type: V_UINT
+      v_unsigned_int: 1
+    }
+  }
+  param {
+    type: LITERAL
+    literal {
+      type: V_UINT
+      v_unsigned_int: 2
+    }
+  }
+  param {
+    type: LITERAL
+    literal {
+      type: V_UINT
+      v_unsigned_int: 3
+    }
+  }
+}
+
+
+## all: 1 in ("a", "b", "c")
+OK
+type: OPERATOR
+operator {
+  name: "in"
+  param {
+    type: LITERAL
+    literal {
+      type: V_UINT
+      v_unsigned_int: 1
+    }
+  }
+  param {
+    type: LITERAL
+    literal {
+      type: V_OCTETS
+      v_octets {
+        value: "a"
+        content_type: 0
+      }
+    }
+  }
+  param {
+    type: LITERAL
+    literal {
+      type: V_OCTETS
+      v_octets {
+        value: "b"
+        content_type: 0
+      }
+    }
+  }
+  param {
+    type: LITERAL
+    literal {
+      type: V_OCTETS
+      v_octets {
+        value: "c"
+        content_type: 0
+      }
+    }
+  }
+}
+
+
+## all: 1+1 = 2
+OK
+type: OPERATOR
+operator {
+  name: "=="
+  param {
+    type: OPERATOR
+    operator {
+      name: "+"
+      param {
+        type: LITERAL
+        literal {
+          type: V_UINT
+          v_unsigned_int: 1
+        }
+      }
+      param {
+        type: LITERAL
+        literal {
+          type: V_UINT
+          v_unsigned_int: 1
+        }
+      }
+    }
+  }
+  param {
+    type: LITERAL
+    literal {
+      type: V_UINT
+      v_unsigned_int: 2
+    }
+  }
+}
+
+
+## tab: foo->'$.bar'
+OK
+type: IDENT
+identifier {
+  document_path {
+    type: MEMBER
+    value: "bar"
+  }
+  name: "foo"
+}
+
+

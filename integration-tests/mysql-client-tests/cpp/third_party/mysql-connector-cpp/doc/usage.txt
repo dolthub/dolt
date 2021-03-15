@@ -1,0 +1,283 @@
+Using Connector/C++ 8.0  {#usage}
+=======================
+
+Connector/C++ 8.0 implements new APIs for accessing document store of
+MySQL Server 8: X DevAPI for applications written in C++11 and X DevAPI for C
+for applications written in plain C. The same APIs can be also used to execute
+traditional SQL queries. Connector/C++ 8.0 also implements the legacy C++ API
+based on JDBC4 which is backward compatible with version 1.1 of the connector.
+
+The choice of the API is done by including appropriate public headers.
+For X DevAPI include:
+~~~~~~
+  #include <mysqlx/xdevapi.h>
+~~~~~~
+For X DevAPI for C include:
+~~~~~~
+  #include <mysqlx/xapi.h>
+~~~~~~
+And for legacy API include:
+~~~~~~
+  #include <jdbc/mysql_driver.h>
+  #include <jdbc/mysql_connection.h>
+  #include <jdbc/cppconn/*.h>
+~~~~~~
+The preceding include directives work under the assumption that the include path
+contains `$MYSQL_CPPCONN_DIR/include`, where `$MYSQL_CPPCONN_DIR` is
+the location where Connector/C++ was installed. Pass
+the `-I $MYSQL_CPPCONN_DIR/include` option on the compiler invocation line
+to ensure this.
+
+@note The legacy code that uses Connector/C++ 1.1 has includes of the form
+~~~~
+#include <mysql_driver.h>
+#include <mysql_connection.h>
+#include <cppconn/*.h>
+~~~~
+To build such code with Connector/C++ 8 without modifying it, add
+`$MYSQL_CPPCONN_DIR/include/jdbc` to the include path.
+
+
+The X DevAPI uses C++11 language features. For that reason enable C++11 support
+in the compiler using the `-std=c++11` option when building code that uses X DevAPI.
+This is not needed for X DevAPI for C (which is a plain C API) nor for
+the legacy JDBC API which is based on plain C++.
+
+
+@note The legacy API requires Boost headers. The location of these headers needs
+to be added to the include path to correctly compile legacy code. Only
+the headers from Boost are needed -- the Boost libraries are not used during
+linking phase.
+
+
+Using the shared library
+------------------------
+Depending on the platform, the shared Connector/C++ library is named:
+
+- `libmysqlcppconn8.so` on Unix platforms (soname `libmysqlcppconn8.so.1`)
+- `libmysqlcppconn8.dylib` on the OSX platform (link name `libmysqlcppconn8.1.dylib`)
+- `mysqlcppconn8-1-vsXX.dll` on Windows platforms
+  (with import library vsXX/mysqlcppconn8.lib)
+
+This library implements the new X DevAPI and X DevAPI for C. Connector/C++ 8.0
+also includes the legacy connector library `libmsysqlcppconn(.so/.dylib/.dll)`
+which implements the legacy JDBC4 API.
+
+To build code that uses new APIs, add `-lmysqlcppconn8` to the linker options
+(add `-lmysqlcppconn` when building legacy code). This requires that
+`$MYSQL_CONCPP_DIR/lib` or `$MYSQL_CONCPP_DIR/lib64` (the latter on a 64-bit
+platform) is added to the linker path (`-L $MYSQL_CPPCONN_DIR/lib64` linker
+option).
+
+Due to ABI incompatiblities between different compiler versions, the code
+that uses Connector/C++ libraries should be built with the same compiler
+version as the connector itself. The information about compiler version used
+to build connector libraries can be found inside `INFO_BIN` file
+distributed with the connector. In principle a different version of the
+compiler can be used provided that it is ABI compatible, but it is difficult to
+determine which versions of the compiler are ABI compatible with each other.
+
+
+An example `Makefile` to build an application which uses Connector/C++ X DevAPI,
+with sources in `app.cc` is shown below:
+
+~~~~~~~
+MYSQL_CONCPP_DIR= ...
+CPPFLAGS = -I $(MYSQL_CONCPP_DIR)/include -L $(MYSQL_CONCPP_DIR)/lib64
+LDLIBS = -lmysqlcppconn8
+CXXFLAGS = -std=c++11
+
+app : app.cc
+~~~~~~~
+
+It generates the following compiler invocation:
+
+~~~~~~~~
+g++ -std=c++11 -I .../include -L .../lib64  app.cc  -lmysqlcppconn8 -o app
+~~~~~~~~
+
+@note For linking against the legacy C++ JDBC4 library the library name is
+`-lmysqlcppconn`. Also, the option `-std=c++11` could be omitted unless the user
+code utilizes C++11.
+
+The connector can be also used with plain C code written against X DevAPI for C.
+An example `Makefile` to build a plain C application from sources in `app.c`
+might look like this:
+
+~~~~~~~
+MYSQL_CONCPP_DIR= ...
+CPPFLAGS = -I $(MYSQL_CONCPP_DIR)/include -L $(MYSQL_CONCPP_DIR)/lib64
+LDLIBS = -lmysqlcppconn8
+
+app : app.c
+~~~~~~~
+
+which generates the following compiler invocation:
+
+~~~~~~~
+cc  -I .../include -L .../lib64  app.c  -lmysqlcppconn8 -o app
+~~~~~~~
+
+Note that the resulting code, even though it is compiled as plain C, will
+depend on the C++ runtime (`libstdc++`).
+
+
+@note
+When running an application which uses the shared Connector/C++ library,
+the library and its runtime dependencies must be found by the dynamic linker.
+The dynamic linker must be properly configured to find Connector/C++ libraries
+and their dependencies.
+
+@note
+Connector/C++ libraries built by MySQL depend on OpenSSL libraries. The latter
+must be installed on the system in order to run code that links against
+Connector/C++ libraries. Another option is to put OpenSSL libraries in the same
+location as Connector/C++. In this case the dynamic linker should find them
+next to the connector library.
+
+
+Using the static library
+------------------------
+
+It is possible to link your application with the static connector library. This
+way there is no runtime dependency on the connector and the resulting binary
+can run on systems where Connector/C++ is not installed.
+
+@note
+However, even when linking statically, the resulting code still depends
+on OpenSSL libraries and all other runtime dependencies of the Connector/C++
+library.
+
+When compiling code which is linked with the connector library statically,
+define `STATIC_CONCPP` macro before including Connector/C++ public headers.
+This macro adjusts API declarations in the headers for usage with
+the static library.
+
+@note For the legacy API, one can define `CPPCONN_PUBLIC_FUNC` as empty macro
+instead (the same way as when using static Connector/C++ 1.1 library)
+
+The static library names are:
+
+- `libmysqlcppconn8-static.a` on OSX and  Unix platforms.
+- `mysqlcppconn8-static.lib` on Windows platforms.
+
+The legacy static library names are `libmysqlcppconn-static.a` and
+`mysqlcppconn-static.lib`, respectively.
+
+An example `Makefile` to build a C++ application that links to the connector
+library statically is shown below:
+
+~~~~~~~
+MYSQL_CONCPP_DIR= ...
+CPPFLAGS = -DSTATIC_CONCPP -I $(MYSQL_CONCPP_DIR)/include
+LDLIBS = $(MYSQL_CONCPP_DIR)/lib64/libmysqlcppconn8-static.a -lssl -lcrypto -lpthread
+CXXFLAGS = -std=c++11
+
+app : app.cc
+~~~~~~~
+
+It generates the following compiler invocation:
+
+~~~~~~~
+g++ -std=c++11 -DSTATIC_CONCPP -I .../include  app.cc  .../lib64/libmysqlcppconn8-static.a -lssl -lcrypto -lpthread -o app
+~~~~~~~
+
+@note For linking against the legacy C++ JDBC4 library the library name is
+`-lmysqlcppconn`. Also, the option `-std=c++11` could be omitted unless the user
+code requires C++11.
+
+Note that we need to add to the compile line the OpenSSL libraries and
+the pthread library on which Connector/C++ code depends. Otherwise linker
+reports unresolved symbols.
+
+@note
+Clearly, OpenSSL libraries are not needed if Connector/C++ is built without
+them. But Connector/C++ built and distributed by MySQL depends on OpenSSL.
+
+@note
+The exact list of libraries required by Connector/C++ library depends on
+the platform. For example on Solaris `socket`, `rt` and `nsl` libraries might
+be needed.
+
+When building plain C code it is important to additionally take care
+of connector's dependency on the C++ runtime, which is introduced by
+the connector library even though the code that uses it is plain C. One approach
+is to ensure that a C++ linker is used to build the final code. This approach
+is taken in the example `Makefile` below:
+
+~~~~~~~
+MYSQL_CONCPP_DIR= ...
+CPPFLAGS = -DSTATIC_CONCPP -I $(MYSQL_CONCPP_DIR)/include
+LDLIBS = $(MYSQL_CONCPP_DIR)/lib64/libmysqlcppconn8-static.a -lssl -lcrypto -lpthread
+LINK.o = $(LINK.cc) # use C++ linker
+
+app : app.o
+~~~~~~~
+
+With this `Makefile` the build process has two steps: first the application
+source in `app.c` is compiled using plain C compiler, then the final executable
+is linked using the C++ linker which takes care of the dependency on the
+C++ runtime:
+
+~~~~~~~
+cc  -DSTATIC_CONCPP -I .../include  -c -o app.o app.c
+g++  -DSTATIC_CONCPP -I .../include  app.o  .../libmysqlcppconn8-static.a -lssl -lcrypto -lpthread -o app
+~~~~~~~
+
+
+Another approach is to use plain C compiler and linker, but add the C++ runtime
+library `libstdc++` as an explicit input to the linker:
+
+~~~~~~~
+MYSQL_CONCPP_DIR= ...
+CPPFLAGS = -I $(MYSQL_CONCPP_DIR)/include
+LDLIBS = $(MYSQL_CONCPP_DIR)/lib64/libmysqlcppconn8-static.a -lssl -lcrypto -lpthread -lstdc++
+
+app : app.c
+~~~~~~~
+
+With this `Makefile` the compiler is invoked as follows:
+
+~~~~~~~
+cc  -DSTATIC_CONCPP -I .../include  app.c  .../libmysqlcppconn8-static.a -lssl -lcrypto -lpthread -lstdc++ -o app
+~~~~~~~
+
+@note Even if the application that uses Connector/C++ is written in plain C, the
+final executable will depend on the C++ runtime which must be installed on the
+target computer on which the application will run.
+
+
+For more information on building code that uses Connector/C++ consult our
+[online documentation]
+(https://dev.mysql.com/doc/connector-cpp/8.0/en/connector-cpp-apps.html).
+
+
+<!--
+  Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License, version 2.0, as
+  published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an
+  additional permission to link the program and your derivative works
+  with the separately licensed software that they have included with
+  MySQL.
+
+  Without limiting anything contained in the foregoing, this file,
+  which is part of MySQL Connector/C++, is also subject to the
+  Universal FOSS Exception, version 1.0, a copy of which can be found at
+  http://oss.oracle.com/licenses/universal-foss-exception.
+
+  This program is distributed in the hope that it will be useful, but
+  WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+  See the GNU General Public License, version 2.0, for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software Foundation, Inc.,
+  51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+-->

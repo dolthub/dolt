@@ -1,0 +1,35 @@
+@startuml
+
+class bytes {
+  Contiguous area
+  in memory
+  --
+  bytes(byte*, size_t)
+  bytes(byte*, byte*)
+  ..
+  begin() : byte*
+  end()   : byte*
+  size()  : size_t
+}
+
+@enduml
+
+
+@startuml
+
+class buffers {
+  Sequence of input
+  or output buffers
+  --
+  buffers(byte*, size_t)
+  buffers(byte*, byte*)
+  buffers(bytes)
+  buffers(bytes, buffers)
+  buffers(buffers, size_t)
+  ..
+  buf_count() : unsigned
+  get_buffer(unsigned) : bytes
+  length() : size_t
+}
+
+@enduml

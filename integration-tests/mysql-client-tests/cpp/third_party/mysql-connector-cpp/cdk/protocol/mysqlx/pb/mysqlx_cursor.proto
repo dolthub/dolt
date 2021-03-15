@@ -1,0 +1,111 @@
+/*
+ * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License, version 2.0,
+ * as published by the Free Software Foundation.
+ *
+ * This program is also distributed with certain software (including
+ * but not limited to OpenSSL) that is licensed under separate terms,
+ * as designated in a particular file or component or in included license
+ * documentation.  The authors of MySQL hereby grant you an additional
+ * permission to link the program and your derivative works with the
+ * separately licensed software that they have included with MySQL.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License, version 2.0, for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+ */
+syntax = "proto2";
+
+
+// ifdef PROTOBUF_LITE: option optimize_for = LITE_RUNTIME;
+
+// Handling of Cursors
+package Mysqlx.Cursor;
+option java_package = "com.mysql.cj.x.protobuf";
+
+import "mysqlx.proto"; // comment_out_if PROTOBUF_LITE
+import "mysqlx_prepare.proto";
+
+
+// Open a cursor
+//
+// .. uml::
+//
+//   client -> server: Open
+//   alt Success
+//     ... none or partial Resultsets or full Resultsets ...
+//     client <- server: StmtExecuteOk
+//  else Failure
+//     client <- server: Error
+//  end
+//
+// :param cursor_id: client side assigned cursor id, the ID is going to represent new cursor and assigned to it statement
+// :param stmt: statement which resultset is going to be iterated through the cursor
+// :param fetch_rows: number of rows which should be retrieved from sequential cursor
+// :Returns: :protobuf:msg:`Mysqlx.Ok::`
+message Open {
+  required uint32 cursor_id = 1;
+
+  message OneOfMessage {
+    enum Type {
+      PREPARE_EXECUTE = 0;
+    }
+    required Type type = 1;
+
+    optional Mysqlx.Prepare.Execute prepare_execute = 2;
+  }
+
+  required OneOfMessage stmt = 4;
+  optional uint64 fetch_rows = 5;
+
+  option (client_message_id) = CURSOR_OPEN; // comment_out_if PROTOBUF_LITE
+}
+
+
+// Fetch next portion of data from a cursor
+//
+// .. uml::
+//
+//   client -> server: Fetch
+//   alt Success
+//     ... none or partial Resultsets or full Resultsets ...
+//     client <- server: StmtExecuteOk
+//   else
+//    client <- server: Error
+//   end
+//
+// :param cursor_id: client side assigned cursor id, must be already open
+// :param fetch_rows: number of rows which should be retrieved from sequential cursor
+message Fetch {
+  required uint32 cursor_id = 1;
+  optional uint64 fetch_rows = 5;
+
+  option (client_message_id) = CURSOR_FETCH; // comment_out_if PROTOBUF_LITE
+}
+
+
+// Close cursor
+//
+// .. uml::
+//
+//   client -> server: Close
+//   alt Success
+//     client <- server: Ok
+//   else Failure
+//     client <- server: Error
+//   end
+//
+// :param cursor_id: client side assigned cursor id, must be allocated/open
+// :Returns: :protobuf:msg:`Mysqlx.Ok|Mysqlx.Error`
+message Close {
+  required uint32 cursor_id = 1;
+
+  option (client_message_id) = CURSOR_CLOSE; // comment_out_if PROTOBUF_LITE
+}

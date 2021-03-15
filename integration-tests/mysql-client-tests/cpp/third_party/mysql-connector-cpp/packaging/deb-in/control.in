@@ -1,0 +1,39 @@
+Source: mysql-connector-c++@DEB_PRODUCTNAME@
+Maintainer: MySQL Release Engineering <mysql-build@oss.oracle.com>
+Section: database
+Priority: optional
+Standards-Version: 3.9.8
+Homepage: https://dev.mysql.com/doc/connector-cpp/en/
+Build-Depends: cmake, debhelper (>= 10), libboost-dev, libmysqlclient-dev, libssl-dev
+
+Package: libmysqlcppconn8-@ABI_VERSION_MAJOR@
+Architecture: any
+Section: libs
+Pre-Depends: ${misc:Pre-Depends}
+Multi-Arch: same
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: MySQL database connector for C++
+ A C++ interface for communicating with MySQL servers.
+
+Package: libmysqlcppconn@JDBC_ABI_VERSION_MAJOR@
+Architecture: any
+Section: libs
+Pre-Depends: ${misc:Pre-Depends}
+Multi-Arch: same
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Breaks: libmysqlcppconn7v5
+ReplaceS: libmysqlcppconn7v5
+Description: MySQL Driver for C++ which mimics the JDBC 4.0 API
+ This MySQL Driver for C++ mimics the JDBC 4.0 API.
+
+Package: libmysqlcppconn-dev
+Architecture: any
+Section: libdevel
+Pre-Depends: ${misc:Pre-Depends}
+Multi-Arch: same
+Depends: libmysqlcppconn@JDBC_ABI_VERSION_MAJOR@ (= ${binary:Version}), libmysqlcppconn8-@ABI_VERSION_MAJOR@ (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
+Description: Development header files and libraries for MySQL C++ client applications
+ This package contains the development header files and libraries necessary
+ to develop MySQL client applications in C++.
+
+@DEB_CONTROL_DBGSYM@

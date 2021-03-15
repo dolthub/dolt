@@ -1,0 +1,61 @@
+@startuml
+
+interface Async_op<T> {
+  Monitor and control
+  ongoing asynchronous
+  operation that returns
+  result of type T
+  --
+  is_completed() : bool
+  cont() : bool
+  wait()
+  wait(time_t)
+  cancel()
+  get_result() : T
+  waits_for() : Event_info*
+}
+
+Async_op "Async_op_listener" --|> Event_source
+
+@enduml
+
+
+@startuml
+
+interface Async_op_listener {
+  Get notifications about asynchronous operation state
+  --
+  ready()
+  ...
+}
+
+Async_op_listener "Async_op" --|> Listener
+
+@enduml
+
+
+@startuml
+
+interface Event_info {
+  Information about event
+  for which an asynchronous
+  operation can wait
+  --
+  type() : event_type
+}
+
+@enduml
+
+
+@startuml
+
+interface Async_op_event {
+  Event: Completion of
+  an asynchronous operation
+  --
+  async_op() : Async_op
+}
+
+Async_op_event --|> Event_info
+
+@enduml

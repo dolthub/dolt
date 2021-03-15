@@ -1,0 +1,20 @@
+@startuml
+
+interface Event_source<Listener> {
+  set_listener(Listener)
+  unset_listener()
+}
+
+@enduml
+
+@startuml
+
+interface Listener<Source> {
+  Listen to events from given Source
+  --
+  registered(Source);
+  unregistered(Source);
+  error(Source, Error);
+}
+
+@enduml

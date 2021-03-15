@@ -1,0 +1,188 @@
+/*
+ * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License, version 2.0,
+ * as published by the Free Software Foundation.
+ *
+ * This program is also distributed with certain software (including
+ * but not limited to OpenSSL) that is licensed under separate terms,
+ * as designated in a particular file or component or in included license
+ * documentation.  The authors of MySQL hereby grant you an additional
+ * permission to link the program and your derivative works with the
+ * separately licensed software that they have included with MySQL.
+ *  
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License, version 2.0, for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+ */
+
+// tell protobuf 3.0 to use protobuf 2.x rules
+syntax = "proto2";
+
+import "mysqlx.proto"; // comment_out_if PROTOBUF_LITE
+
+// ifdef PROTOBUF_LITE: option optimize_for = LITE_RUNTIME;
+
+// Notices
+//
+// A notice
+//
+// * is sent from the server to the client
+// * may be global or relate to the current message sequence
+package Mysqlx.Notice;
+option java_package = "com.mysql.cj.x.protobuf";
+
+import "mysqlx_datatypes.proto";
+
+// Common Frame for all Notices
+//
+// ===================================================== =====
+// .type                                                 value
+// ===================================================== =====
+// :protobuf:msg:`Mysqlx.Notice::Warning`                1
+// :protobuf:msg:`Mysqlx.Notice::SessionVariableChanged` 2
+// :protobuf:msg:`Mysqlx.Notice::SessionStateChanged`    3
+// ===================================================== =====
+//
+// :param type: the type of the payload
+// :param payload: the payload of the notification
+// :param scope: global or local notification
+//
+message Frame {
+  enum Scope {
+    GLOBAL = 1;
+    LOCAL = 2;
+  };
+  enum Type {
+    WARNING = 1;
+    SESSION_VARIABLE_CHANGED = 2;
+    SESSION_STATE_CHANGED = 3;
+    GROUP_REPLICATION_STATE_CHANGED = 4;
+  };
+  required uint32 type = 1;
+  optional Scope  scope = 2 [ default = GLOBAL ];
+  optional bytes payload = 3;
+
+  option (server_message_id) = NOTICE; // comment_out_if PROTOBUF_LITE
+}
+
+// Server-side warnings and notes
+//
+// ``.scope`` == ``local``
+//   ``.level``, ``.code`` and ``.msg`` map the content of
+//
+//   .. code-block:: sql
+//
+//     SHOW WARNINGS
+//
+// ``.scope`` == ``global``
+//   (undefined) will be used for global, unstructured messages like:
+//
+//   * server is shutting down
+//   * a node disconnected from group
+//   * schema or table dropped
+//
+// ========================================== =======================
+// :protobuf:msg:`Mysqlx.Notice::Frame` field value
+// ========================================== =======================
+// ``.type``                                  1
+// ``.scope``                                 ``local`` or ``global``
+// ========================================== =======================
+//
+// :param level: warning level: Note or Warning
+// :param code: warning code
+// :param msg: warning message
+message Warning {
+  enum Level {
+    NOTE = 1;
+    WARNING = 2;
+    ERROR = 3;
+  };
+  optional Level  level = 1 [ default = WARNING ];
+  required uint32 code = 2;
+  required string msg = 3;
+}
+
+// Notify clients about changes to the current session variables
+//
+// Every change to a variable that is accessible through:
+//
+// .. code-block:: sql
+//
+//   SHOW SESSION VARIABLES
+//
+// ========================================== =========
+// :protobuf:msg:`Mysqlx.Notice::Frame` field value
+// ========================================== =========
+// ``.type``                                  2
+// ``.scope``                                 ``local``
+// ========================================== =========
+//
+// :param namespace: namespace that param belongs to
+// :param param: name of the variable
+// :param value: the changed value of param
+message SessionVariableChanged {
+  required string param = 1;
+  optional Mysqlx.Datatypes.Scalar value = 2;
+}
+
+
+// Notify clients about changes to the internal session state
+//
+// ========================================== =========
+// :protobuf:msg:`Mysqlx.Notice::Frame` field value
+// ========================================== =========
+// ``.type``                                  3
+// ``.scope``                                 ``local``
+// ========================================== =========
+//
+// :param param: parameter key
+// :param value: updated value
+message SessionStateChanged {
+  enum Parameter {
+     CURRENT_SCHEMA = 1;
+     ACCOUNT_EXPIRED = 2;
+     GENERATED_INSERT_ID = 3;
+     ROWS_AFFECTED = 4;
+     ROWS_FOUND = 5;
+     ROWS_MATCHED = 6;
+     TRX_COMMITTED = 7;
+     TRX_ROLLEDBACK = 9;
+     PRODUCED_MESSAGE = 10;
+     CLIENT_ID_ASSIGNED = 11;
+     GENERATED_DOCUMENT_IDS = 12;
+     // .. more to be added
+  }
+  required Parameter param = 1;
+  repeated Mysqlx.Datatypes.Scalar value = 2;
+}
+
+// Notify clients about group replication state changes
+//
+// ========================================== ==========
+// :protobuf:msg:`Mysqlx.Notice::Frame` field value
+// ========================================== ==========
+// ``.type``                                  4
+// ``.scope``                                 ``global``
+// ========================================== ==========
+//
+// :param type: type of group replication event
+// :param view_id: view identifier
+message GroupReplicationStateChanged {
+  enum Type {
+    MEMBERSHIP_QUORUM_LOSS = 1;
+    MEMBERSHIP_VIEW_CHANGE = 2;
+    MEMBER_ROLE_CHANGE = 3;
+    MEMBER_STATE_CHANGE = 4;
+  }
+  required uint32 type = 1;
+
+  optional string view_id = 2;
+}
+

@@ -1,0 +1,66 @@
+MySQL Connector/C++ Documentation  {#mainpage}
+=================================
+
+MySQL Connector/C++ is a library for applications written in C or C++ that
+communicate with MySQL database servers. Version 8.0 of Connector/C++
+implements three different APIs which can be used by applications:
+
+- The new [X DevAPI] (@ref devapi_ref) for applications written in C++.
+- The new [X DevAPI for C] (@ref xapi_ref) for applications written in plain C.
+- The [legacy JDBC4-based API] (@ref jdbc_ref)
+  also implemented in version 1.1 of the connector.
+
+The new APIs give access to MySQL implementing a [document store]
+(https://dev.mysql.com/doc/refman/8.0/en/document-store.html). Internally
+these APIs use the new X Protocol to communicate with the MySQL Server.
+Consequently, code written against these APIs can work only with MySQL Server 8
+with the X Plugin enabled in it. Apart from accessing the document store, the
+new APIs allow executing traditional SQL queries as well.
+
+Applications written against the JDBC4 based API of Connector/C++ 1.1 can be also
+compiled with Connector/C++ 8.0 which is backward compatible with the earlier
+version. Such code does not require the X Plugin and can communicate with older
+versions of the MySQL Server using the legacy protocol.
+
+The API to be used is chosen by including appropriate set of headers, as
+explained in @ref usage.
+
+More information:
+
+- [Connector/C++ X DevAPI Reference] (@ref devapi)
+- [Connector/C++ X DevAPI for C Reference] (@ref xapi)
+- [How to build code that uses Connector/C++](@ref usage)
+- [Indexing Document Collections] (@ref indexing)
+
+See also our
+[online documentation] (https://dev.mysql.com/doc/connector-cpp/8.0/en/)
+
+<!--
+  Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License, version 2.0, as
+  published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an
+  additional permission to link the program and your derivative works
+  with the separately licensed software that they have included with
+  MySQL.
+
+  Without limiting anything contained in the foregoing, this file,
+  which is part of MySQL Connector/C++, is also subject to the
+  Universal FOSS Exception, version 1.0, a copy of which can be found at
+  http://oss.oracle.com/licenses/universal-foss-exception.
+
+  This program is distributed in the hope that it will be useful, but
+  WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+  See the GNU General Public License, version 2.0, for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software Foundation, Inc.,
+  51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+-->

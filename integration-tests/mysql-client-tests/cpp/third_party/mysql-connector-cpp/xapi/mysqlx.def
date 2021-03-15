@@ -1,0 +1,62 @@
+; Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
+;
+; This program is free software; you can redistribute it and/or modify
+; it under the terms of the GNU General Public License, version 2.0, as
+; published by the Free Software Foundation.
+;
+; This program is also distributed with certain software (including
+; but not limited to OpenSSL) that is licensed under separate terms,
+; as designated in a particular file or component or in included license
+; documentation.  The authors of MySQL hereby grant you an
+; additional permission to link the program and your derivative works
+; with the separately licensed software that they have included with
+; MySQL.
+;
+; Without limiting anything contained in the foregoing, this file,
+; which is part of MySQL Connector/C++, is also subject to the
+; Universal FOSS Exception, version 1.0, a copy of which can be found at
+; http://oss.oracle.com/licenses/universal-foss-exception.
+;
+; This program is distributed in the hope that it will be useful, but
+; WITHOUT ANY WARRANTY; without even the implied warranty of
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+; See the GNU General Public License, version 2.0, for more details.
+;
+; You should have received a copy of the GNU General Public License
+; along with this program; if not, write to the Free Software Foundation, Inc.,
+; 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+LIBRARY		mysqlx_cc
+VERSION		1.0
+EXPORTS
+  mysqlx_column_get_catalog
+  mysqlx_column_get_collation
+  mysqlx_column_get_count
+  mysqlx_column_get_flags
+  mysqlx_column_get_length
+  mysqlx_column_get_precision
+  mysqlx_column_get_type
+  mysqlx_column_get_name
+  mysqlx_column_get_original_name
+  mysqlx_column_get_original_table
+  mysqlx_column_get_schema
+  mysqlx_column_get_table
+  mysqlx_crud_execute
+  mysqlx_crud_error
+  mysqlx_crud_error_message
+  mysqlx_crud_free
+  mysqlx_get_affected_count
+  mysqlx_get_bytes
+  mysqlx_get_session_s
+  mysqlx_get_double
+  mysqlx_get_float
+  mysqlx_get_sint
+  mysqlx_get_uint
+  mysqlx_table_select_new
+  mysqlx_table_delete_new
+  mysqlx_result_free
+  mysqlx_set_where
+  mysqlx_set_order_by
+  mysqlx_set_limit_and_offset
+  mysqlx_session_close
+  mysqlx_sql_bind
+  mysqlx_sql_query

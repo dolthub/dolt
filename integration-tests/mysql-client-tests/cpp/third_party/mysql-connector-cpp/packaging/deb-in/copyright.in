@@ -1,0 +1,24 @@
+Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: @DEB_COPYRIGHT_UPSTREAMNAME@
+Upstream-Contact: MySQL Release Engineering <mysql-build@oss.oracle.com>
+Source: https://dev.mysql.com/doc/connector-cpp/en/
+
+Files: *
+Copyright: 2008, 2020, Oracle and/or its affiliates. All rights reserved.
+License: @DEB_LICENSENAME@
+ This is a release of MySQL Connector/C++, the C++ interface for communicating
+ with MySQL servers.
+ .
+ License information can be found in the LICENSE.txt file.
+ .
+ This distribution may include materials developed by third parties.
+ For license and attribution notices for these materials, please refer to the LICENSE.txt file.
+ .
+ For more information on MySQL Connector/C++, visit
+  https://dev.mysql.com/doc/connector-cpp/en/
+ .
+ For additional downloads and the source of MySQL Connector/C++, visit
+  http://dev.mysql.com/downloads
+ .
+ MySQL Connector/C++ is brought to you by the MySQL team at Oracle.
+

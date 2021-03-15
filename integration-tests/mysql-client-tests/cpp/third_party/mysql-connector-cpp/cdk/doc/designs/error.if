@@ -1,0 +1,17 @@
+@startuml
+
+class Error {
+  Error with numeric error code and textual description
+  code() : error_code
+  describe(ostream) : ostream&
+  description() : string
+}
+
+class runtime_error as "std::runtime_error" {
+  what() : const char*
+}
+
+Error --|>  runtime_error
+
+@enduml
+

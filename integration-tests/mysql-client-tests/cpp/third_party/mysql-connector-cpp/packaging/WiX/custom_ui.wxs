@@ -1,0 +1,136 @@
+<Include xmlns="http://schemas.microsoft.com/wix/2006/wi"
+         xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+
+<!--
+   Copyright (c) 2010, 2018, Oracle and/or its affiliates. All rights reserved.
+   
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have included with MySQL.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License, version 2.0, for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+-->
+
+  <UI Id="WixUI_Mondo_Custom">
+    <Dialog Id="CustomWelcomeDlg" Width="370" Height="270" Title="[ProductName] Setup" NoMinimize="yes">
+      <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="!(loc.WixUICancel)">
+        <Publish Event="SpawnDialog" Value="CancelDlg">1</Publish>
+      </Control>
+      <Control Id="Next" Type="PushButton" X="220" Y="243" Width="56" Height="17" Default="yes" Text="!(loc.WixUINext)">
+        <Publish Event="NewDialog" Value="LicenseAgreementDlg">NOT OLDERVERSIONBEINGUPGRADED AND NOT OLDERVERSIONBEINGUPGRADED_OLD</Publish>
+        <Publish Event="NewDialog" Value="UpgradeDlg">OLDERVERSIONBEINGUPGRADED</Publish>
+        <Publish Event="NewDialog" Value="UpgradeDlg">OLDERVERSIONBEINGUPGRADED_OLD</Publish>
+	  </Control>	  
+      <Control Id="Back" Type="PushButton" X="156" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)" Disabled="yes" />
+      <Control Id="Description" Type="Text" X="135" Y="80" Width="220" Height="60" Transparent="yes" NoPrefix="yes" Text="!(loc.WelcomeDlgDescription)" />
+      <Control Id="Title" Type="Text" X="135" Y="20" Width="220" Height="60" Transparent="yes" NoPrefix="yes" Text="!(loc.WelcomeDlgTitle)" />
+      <Control Id="CopyrightText" Type="Text" X="135" Y="200" Width="220" Height="40" Transparent="yes" Text="Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved." />
+      <Control Id="Bitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="234" TabSkip="no" Text="!(loc.WelcomeDlgBitmap)" />
+      <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+    </Dialog>
+
+    <Dialog Id="UpgradeDlg" Width="370" Height="270" Title="[ProductName] Setup" NoMinimize="yes">
+      <Control Id="Install" Type="PushButton" ElevationShield="yes" X="212" Y="243" Width="80" Height="17" Default="yes"  Text="Upgrade">
+        <Publish Event="EndDialog" Value="Return"><![CDATA[OutOfDiskSpace <> 1]]></Publish>
+        <Publish Event="SpawnDialog" Value="OutOfRbDiskDlg">OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND (PROMPTROLLBACKCOST="P" OR NOT PROMPTROLLBACKCOST)</Publish>
+        <Publish Event="EndDialog" Value="Return">OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST="D"</Publish>
+        <Publish Event="EnableRollback" Value="False">OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 0 AND PROMPTROLLBACKCOST="D"</Publish>
+        <Publish Event="SpawnDialog" Value="OutOfDiskDlg">(OutOfDiskSpace = 1 AND OutOfNoRbDiskSpace = 1) OR (OutOfDiskSpace = 1 AND PROMPTROLLBACKCOST="F")</Publish>
+      </Control>
+      <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="!(loc.WixUICancel)">
+        <Publish Event="SpawnDialog" Value="CancelDlg">1</Publish>
+      </Control>
+      <Control Id="Back" Type="PushButton" X="156" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)">
+        <Condition Action="default">WixUI_InstallMode = "Remove"</Condition>
+      </Control>
+      <Control Id="InstallTitle" Type="Text" X="15" Y="15" Width="300" Height="15" Transparent="yes" NoPrefix="yes" Hidden="yes" Text="!(loc.VerifyReadyDlgInstallTitle)">
+        <Condition Action="show">NOT Installed</Condition>
+      </Control>
+      <Control Id="InstallText" Type="Text" X="25" Y="70" Width="320" Height="80" Hidden="yes" Text="!(loc.VerifyReadyDlgInstallText)">
+        <Condition Action="show">NOT Installed</Condition>
+      </Control>
+      <Control Id="UpgradeText" Type="Text" X="25" Y="70" Width="320" Height="80" Hidden="no" NoPrefix="yes"
+      Text="Click Upgrade to upgrade your installation from version [OLDERVERSION] to version [ProductVersion]. Click Cancel to exit the upgrade."/>
+      <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="!(loc.VerifyReadyDlgBannerBitmap)" />
+      <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+      <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+    </Dialog>
+
+    <Dialog Id="DevDllWarningDlg" Width="284" Height="73" Title="Warning" NoMinimize="yes">
+      <Control Id="Text" Type="Text" X="38" Y="8" Width="240" Height="40" TabSkip="no">
+        <Text>You've selected the developement and not the dll components</Text>
+      </Control>
+      <Control Id="OK" Type="PushButton" X="84" Y="52" Width="56" Height="17" Default="yes"  Cancel="yes" Text="OK"/>
+      <Control Id="Back" Type="PushButton" X="144" Y="52" Width="56" Height="17" Cancel="yes" Text="Back"/>
+    </Dialog>
+
+    <TextStyle Id="WixUI_Font_Normal" FaceName="Tahoma" Size="8" />
+    <TextStyle Id="WixUI_Font_Bigger" FaceName="Tahoma" Size="12" />
+    <TextStyle Id="WixUI_Font_Title" FaceName="Tahoma" Size="9" Bold="yes" />
+
+    <Property Id="DefaultUIFont" Value="WixUI_Font_Normal" />
+    <Property Id="WixUI_Mode" Value="Mondo" />
+
+    <DialogRef Id="ErrorDlg" />
+    <DialogRef Id="FatalError" />
+    <DialogRef Id="FilesInUse" />
+    <DialogRef Id="MsiRMFilesInUse" />
+    <DialogRef Id="PrepareDlg" />
+    <DialogRef Id="ProgressDlg" />
+    <DialogRef Id="ResumeDlg" />
+    <DialogRef Id="UserExit" />
+
+    <Publish Dialog="ExitDialog" Control="Finish" Event="EndDialog" Value="Return" Order="999">1</Publish>
+
+    <Publish Dialog="LicenseAgreementDlg" Control="Back" Event="NewDialog" Value="CustomWelcomeDlg">1</Publish>
+    <Publish Dialog="LicenseAgreementDlg" Control="Next" Event="NewDialog" Value="SetupTypeDlg" Order="2">LicenseAccepted = "1"</Publish>
+
+    <Publish Dialog="SetupTypeDlg" Control="Back" Event="NewDialog" Value="LicenseAgreementDlg">1</Publish>
+    <Publish Dialog="SetupTypeDlg" Control="TypicalButton" Event="NewDialog" Value="VerifyReadyDlg">1</Publish>
+    <Publish Dialog="SetupTypeDlg" Control="CustomButton" Event="NewDialog" Value="CustomizeDlg">1</Publish>
+    <Publish Dialog="SetupTypeDlg" Control="CompleteButton" Event="NewDialog" Value="VerifyReadyDlg">1</Publish>
+
+    <Publish Dialog="CustomizeDlg" Control="Back" Event="NewDialog" Value="MaintenanceTypeDlg" Order="1">WixUI_InstallMode = "Change"</Publish>
+    <Publish Dialog="CustomizeDlg" Control="Back" Event="NewDialog" Value="SetupTypeDlg" Order="2">WixUI_InstallMode = "InstallCustom"</Publish>
+    <Publish Dialog="CustomizeDlg" Control="Next" Event="NewDialog" Value="DevDllWarningDlg">((&amp;JDBCDev=3) AND NOT(&amp;JDBCDll=3)) OR ((&amp;XDevAPIDev=3) AND NOT(&amp;XDevAPIDll=3))</Publish>
+    <Publish Dialog="CustomizeDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg">(NOT(&amp;JDBCDev=3) OR (&amp;JDBCDll=3)) AND (NOT(&amp;XDevAPIDev=3) OR (&amp;XDevAPIDll=3))</Publish>
+
+    <Publish Dialog="DevDllWarningDlg" Control="OK" Event="NewDialog" Value="VerifyReadyDlg">1</Publish>
+    <Publish Dialog="DevDllWarningDlg" Control="Back" Event="NewDialog" Value="CustomizeDlg">1</Publish>
+
+    <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="CustomizeDlg" Order="1">WixUI_InstallMode = "InstallCustom"</Publish>
+    <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="SetupTypeDlg" Order="2">WixUI_InstallMode = "InstallTypical" OR WixUI_InstallMode = "InstallComplete"</Publish>
+    <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="CustomizeDlg" Order="3">WixUI_InstallMode = "Change"</Publish>
+    <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="MaintenanceTypeDlg" Order="4">WixUI_InstallMode = "Repair" OR WixUI_InstallMode = "Remove"</Publish>
+
+    <Publish Dialog="MaintenanceWelcomeDlg" Control="Next" Event="NewDialog" Value="MaintenanceTypeDlg">1</Publish>
+
+    <Publish Dialog="MaintenanceTypeDlg" Control="ChangeButton" Event="NewDialog" Value="CustomizeDlg">1</Publish>
+    <Publish Dialog="MaintenanceTypeDlg" Control="RepairButton" Event="NewDialog" Value="VerifyReadyDlg">1</Publish>
+    <Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton" Event="NewDialog" Value="VerifyReadyDlg">1</Publish>
+    <Publish Dialog="MaintenanceTypeDlg" Control="Back" Event="NewDialog" Value="MaintenanceWelcomeDlg">1</Publish>
+
+    <Publish Dialog="UpgradeDlg" Control="Back" Event="NewDialog" Value="CustomWelcomeDlg">1</Publish>
+	
+    <InstallUISequence>
+      <Show Dialog="CustomWelcomeDlg" Before="ProgressDlg">NOT Installed</Show>
+    </InstallUISequence>
+  </UI>
+
+  <UIRef Id="WixUI_Common" />
+
+</Include>

@@ -1,0 +1,4 @@
+MySQL Connector/C++ Sources Information
+
+version              :  @INFO_VERSION@
+@INFO_DATE@@INFO_BRANCH@@INFO_COMMIT@@INFO_SHORT@

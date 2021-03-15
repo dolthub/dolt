@@ -1,0 +1,4 @@
+
+col: foo->'$.bar'
+
+all: foo+

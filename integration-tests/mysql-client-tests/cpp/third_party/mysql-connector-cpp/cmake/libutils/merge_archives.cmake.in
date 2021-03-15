@@ -1,0 +1,762 @@
+# Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License, version 2.0, as
+# published by the Free Software Foundation.
+#
+# This program is also distributed with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an
+# additional permission to link the program and your derivative works
+# with the separately licensed software that they have included with
+# MySQL.
+#
+# Without limiting anything contained in the foregoing, this file,
+# which is part of MySQL Connector/C++, is also subject to the
+# Universal FOSS Exception, version 1.0, a copy of which can be found at
+# http://oss.oracle.com/licenses/universal-foss-exception.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License, version 2.0, for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+
+##########################################################################
+#
+# This script is called by infrastructure set up by merge_libraries()
+# command (libutils.cmake).
+# The list of static libraries to merge is extracted from a BUILD_LOG file
+# generated prior to this script invocation. The file
+# contains saved log of linker invocation that contains all library
+# dependencies computed by cmake.
+#
+# Parameters provided by the caller of this script. TARGET, TYPE and BUILD_LOG
+# are required.
+#
+# TARGET
+#   Location of the target static library that is to be merged with its
+#   dependencies.
+#
+# TYPE
+#   Type of the library to merge (STATIC or SHARED)
+#
+# BUILD_LOG
+#   Saved data from linker invocation for a helper target that links to
+#   the target library. This contains information about dependent static
+#   libraries that need to be merged.
+#
+# MSBUILD
+#   Set to ON if MSVC is used. This also determines the contents of BUILD_LOG.
+#
+# INFO
+#   Location of binary info file where additional information detected
+#   during library merge process will be appended.
+#
+# INFO_PREFIX
+#   Can be used to differentiate keys used for generated binary info in case
+#   it is generated for several libraries (for example legacy Con/C++ library
+#   uses "jdbc-" prefix)
+#
+
+if(POLICY CMP0007)
+  cmake_policy(SET CMP0007 NEW)
+endif()
+
+
+# Nothing nees to be done if merging into DLL on Windows
+
+if(MSBUILD AND TYPE STREQUAL "SHARED")
+  return()
+endif()
+
+
+#
+# Extra parameters that are taken form cmake environment or set by libutils.
+#
+
+set(CMAKE_AR @CMAKE_AR@)
+set(CMAKE_RANLIB @CMAKE_RANLIB@)
+set(libext "@CMAKE_STATIC_LIBRARY_SUFFIX@")
+set(CMAKE_CXX_COMPILER "@CMAKE_CXX_COMPILER@")
+set(CMAKE_LINKER "@CMAKE_LINKER@")
+set(LIB_TOOL "@LIB_TOOL@")
+
+
+if(NOT DEFINED TARGET)
+  message(FATAL_ERROR
+    "Merged library target file not specified, set TARGET parameter"
+  )
+endif()
+
+if(NOT DEFINED TYPE)
+  message(FATAL_ERROR
+    "Type of library to be merged not specified, set TYPE parameter"
+    " to either SHARED or STATIC"
+  )
+endif()
+
+if(NOT DEFINED BUILD_LOG OR NOT EXISTS "${BUILD_LOG}")
+  message(FATAL_ERROR "Could not find saved linker invocation data: ${BUILD_LOG}")
+endif()
+
+
+get_filename_component(NAME "${TARGET}" NAME_WE)
+get_filename_component(TARGET "${TARGET}" ABSOLUTE)
+get_filename_component(BASE_DIR "${TARGET}" PATH)
+
+file(TO_NATIVE_PATH "${TARGET}" TARGET)
+
+#
+# Main logic driving merge process
+#
+
+function(main)
+
+  message("Merging ${TYPE} library: ${TARGET}")
+  #message("Link flags: ${LINK_FLAGS}")
+
+  #
+  # If a file containing build log was passed, we parse it to find dependencies
+  # and link options. This is used only in case of building with MSBuild.
+  #
+
+  if(MSBUILD)
+    parse_build_log_msbuild("${BUILD_LOG}")
+  else()
+    # In this case BUILD_LOG contains extracted linker options, one per line
+    file(STRINGS "${BUILD_LOG}" DEPS)
+  endif()
+
+  #
+  # At this point we should have list of potential dependencies in DEPS and
+  # list of linker options in LINK_OPTIONS
+  #
+
+  #message("-- deps: ${DEPS}")
+  if(NOT DEPS)
+    message(FATAL_ERROR "No dependency data available when merging static library ${TARGET}")
+  endif()
+
+  #
+  # If not building with MSBUILD, we assume gcc-compatible tools are used.
+  #
+  # TODO: This assumption is probably too simplistic. What about, e.g., using
+  # nmake on Windows.
+  #
+
+  if(MSBUILD)
+    process_deps_msbuild()
+  else()
+    process_deps_gcc()
+  endif()
+
+  #
+  # At this point the following variables should be prepared:
+  #
+  # TARGET   - path to the resulting merged library
+  # TYPE     - type of the library (SHARED or STATIC)
+  # NAME     - base name of the library
+  # BASE_DIR - folder where library is stored
+  # LIBS          - list of static libraries to be merged
+  # LIBS1         - additional libraries that are needed by LIBS but which
+  #                 do not contribute directly to the final library
+  # LINK_OPTIONS  - linker options relevant for merging
+  #
+
+  #message("Merging static libraries into: ${NAME}")
+  foreach(lib ${LIBS} ${LIBS1})
+    message("- ${lib}")
+  endforeach()
+  message("Merge options: ${LINK_OPTIONS}")
+
+  if(MSBUILD)
+    merge_libraries_win()
+  elseif(APPLE)
+    merge_libraries_apple()
+  else()
+
+    # Note: merge_libraries_gcc() expects LINKER_LINE to contain the original
+    # linker invocation line with all merged libraries replaced by single
+    # "<LIBS>" entry. This is used to construct the same linker invocation as
+    # would be used by cmake but with special handling of the merged libraries.
+
+    merge_libraries_gcc()
+
+  endif()
+
+endfunction(main)
+
+
+# -------------------------------------------------------------------------
+#
+# Merging libraries with gcc tools (ar, ranlib)
+#
+
+function(merge_libraries_gcc)
+
+  if(TYPE STREQUAL "SHARED")
+
+    # Use original LINKER_LINE to construct the same linker invocation as
+    # cmake would use, but with merged libraries surrounded by
+    # -Wl,--whole-archive option. This causes all object from the merged
+    # static libraries to be included in the resulting shared library, even
+    # if they are not referenced anywhere.
+
+    set(link_line)
+
+    foreach(item ${LINK_LINE})
+      #message("-- looking at: ${item}")
+      if(item STREQUAL "<LIBS>")
+        list(APPEND link_line
+          "-Wl,--whole-archive" ${LIBS} "-Wl,--no-whole-archive" ${LIBS1}
+        )
+      else()
+        list(APPEND link_line ${item})
+      endif()
+    endforeach()
+
+    # Now invoke linker to produce shared library.
+
+    #message("-- link_line: ${CMAKE_CXX_COMPILER} -o \"${TARGET}\" ${link_line}")
+    execute_process(
+      COMMAND ${CMAKE_CXX_COMPILER}
+        -o "${TARGET}"
+        ${link_line}
+      RESULT_VARIABLE res
+    )
+
+    if(res)
+      message(FATAL_ERROR "Failed to link shared library ${NAME}")
+    endif()
+
+    return()
+
+  endif()
+
+  #
+  # Code for building static library.
+  #
+
+  if(NOT EXISTS "${CMAKE_AR}")
+    message(FATAL_ERROR "Could not find ar tool required to merge libraries: ${CMAKE_AR}")
+  endif()
+
+  if(NOT EXISTS "${CMAKE_RANLIB}")
+    message(FATAL_ERROR "Could not find ranlib tool required to merge libraries: ${CMAKE_RANLIB}")
+  endif()
+
+  #
+  # We extract objects from all libraries into ${merge_dir} and then store
+  # them all into the merged library. There is a complication that each object
+  # stored in a library must have unique name. It can happen that objects
+  # from different libraries have the same name (e.g., utils.o). To handle this
+  # we add library name as prefix to each object name.
+  #
+
+  set(merge_dir "${BASE_DIR}/${NAME}-libmerge")
+
+  #message("-- merging in: ${merge_dir}")
+
+  execute_process(
+    COMMAND ${CMAKE_COMMAND} -E remove_directory ${merge_dir}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${merge_dir}
+  )
+
+  set(merge_objs "")
+
+  foreach(lib ${LIBS} ${LIBS1})
+
+    get_filename_component(name "${lib}" NAME_WE)
+    # Make sure path is absolute
+    get_filename_component(lib "${lib}" ABSOLUTE)
+
+    #message("-- processing lib: ${name} (${lib})")
+
+    file(MAKE_DIRECTORY "${merge_dir}/${name}")
+
+    # list objects in the library
+
+    execute_process(
+      COMMAND ${CMAKE_AR} -t ${lib}
+      OUTPUT_VARIABLE objs
+    )
+
+    # split output into cmake list
+
+    string(REGEX MATCHALL "[^\n]+" objs "${objs}")
+
+    #message("-- objects: ${objs}")
+
+    foreach(obj ${objs})
+
+      # extract object from the library ...
+
+      execute_process(
+        COMMAND ${CMAKE_AR} x ${lib} ${obj}
+        WORKING_DIRECTORY "${merge_dir}/${name}"
+      )
+
+      # ... and rename it
+
+      file(RENAME
+        "${merge_dir}/${name}/${obj}"
+        "${merge_dir}/${name}_${obj}"
+      )
+
+      list(APPEND merge_objs "${merge_dir}/${name}_${obj}")
+
+    endforeach()
+
+  endforeach()
+
+  # Now merge all objects into single library and finish it up with
+  # ranlib.
+  #
+  # TODO: Do we need any linking options to pass here?
+
+  execute_process(
+    COMMAND ${CMAKE_AR} -r ${TARGET} ${merge_objs}
+    RESULT_VARIABLE res
+  )
+  execute_process(
+    COMMAND ${CMAKE_RANLIB} ${TARGET}
+    RESULT_VARIABLE res1
+  )
+
+  if(res OR res1)
+    message(FATAL_ERROR "Failed to create static library ${NAME}")
+  endif()
+
+endfunction(merge_libraries_gcc)
+
+
+# -------------------------------------------------------------------------
+#
+#  Merging libraries on Windows (using lib.exe)
+#
+
+function(merge_libraries_win)
+
+  if(TYPE STREQUAL "SHARED")
+    message(FATAL_ERROR
+      "On Windows merge_archives script can be used only for merging into"
+      " static library"
+    )
+  endif()
+
+  if(NOT EXISTS "${LIB_TOOL}")
+    message(FATAL_ERROR "The lib tool required to merge static libraries could not be found: ${LIB_TOOL}")
+  endif()
+
+  #
+  # Execute lib tool which merges all libraries into one. We run it in verbose
+  # mode and capture output to be able to detect DLL dependencies of the merged
+  # library
+  #
+  # TODO: spaces in paths in ${libs}
+
+  execute_process(
+    COMMAND ${LIB_TOOL} /verbose ${LINK_OPTIONS} "/out:${TARGET}" ${LIBS} ${LIBS1}
+    OUTPUT_VARIABLE merge_out
+    ERROR_VARIABLE  merge_err
+    RESULT_VARIABLE merge_res
+  )
+ #message("-- merge_res: ${merge_res}")
+
+  if(merge_res)
+    message("${merge_err}")
+    message(FATAL_ERROR "Merging of static libraries failed (lib tool exist status ${merge_res})!")
+  endif()
+
+  # Analyze DLLs reported by lib tool and list them in the bin info file
+
+  string(REGEX MATCHALL "Appending [^\n]*.dll\n" dlls_in " ${merge_out}\n")
+  list(REMOVE_DUPLICATES dlls_in)
+
+  if(dlls_in)
+
+    add_info("${INFO_PREFIX}dependencies:")
+
+    foreach(dll ${dlls_in})
+      string(REGEX REPLACE "Appending +(.*.dll)\n" "\\1" dll ${dll})
+      message("-- dependency: ${dll}")
+      add_info(" ${dll}")
+    endforeach()
+
+    add_info("\n")
+
+  endif()
+
+endfunction(merge_libraries_win)
+
+
+# -------------------------------------------------------------------------
+#
+#  Merging libraries on macOS (using libtool)
+#
+
+function(merge_libraries_apple)
+
+  if(TYPE STREQUAL "SHARED")
+
+    # Use original LINKER_LINE to construct the same linker invocation as
+    # cmake would use, but with merged libraries preceded with -force_load
+    # option to make sure that all objects from the merged static libraries
+    # to be included in the resulting shared library, even if they are
+    # not referenced anywhere.
+
+    set(link_line)
+
+    foreach(item ${LINK_LINE})
+      #message("-- looking at: ${item}")
+      if(item STREQUAL "<LIBS>")
+        foreach(lib ${LIBS})
+          list(APPEND link_line "-force_load" ${lib})
+        endforeach()
+        list(APPEND link_line ${LIBS1})
+      else()
+        list(APPEND link_line ${item})
+      endif()
+    endforeach()
+
+    # Now invoke linker to produce shared library.
+
+    #message("-- link_line: ${CMAKE_CXX_COMPILER} -o \"${TARGET}\" ${link_line}")
+    execute_process(
+      COMMAND ${CMAKE_CXX_COMPILER}
+        -o "${TARGET}"
+        ${link_line}
+      RESULT_VARIABLE res
+    )
+
+    if(res)
+      message(FATAL_ERROR "Failed to link shared library ${NAME}")
+    endif()
+
+    return()
+
+  endif()
+
+  if(NOT EXISTS "${LIB_TOOL}")
+    message(FATAL_ERROR "The lib tool required to merge static libraries could not be found: ${LIB_TOOL}")
+  endif()
+
+  #
+  # Execute lib tool which merges all libraries into one. We run it in verbose
+  # mode and capture output to be able to detect DLL dependencies of the merged
+  # library
+  #
+  # TODO: spaces in paths in ${libs}
+
+  execute_process(
+    COMMAND ${LIB_TOOL} -static -o "${TARGET}" ${LIBS} ${LIBS1}
+    #OUTPUT_VARIABLE merge_out
+    ERROR_VARIABLE  merge_err
+    RESULT_VARIABLE merge_res
+    ERROR_QUIET
+  )
+  #message("-- merge_res: ${merge_res}")
+
+
+  if(merge_res)
+    message("${merge_err}")
+    message(FATAL_ERROR "Merging of static libraries failed (lib tool exit status ${merge_res})!")
+  endif()
+
+endfunction(merge_libraries_apple)
+
+
+# -------------------------------------------------------------------------
+#
+#  These functions compute final LIBS and LINK_OPTIONS for
+#  the merge_libraries_*() function.
+#
+#  The logic for processing library dependencies is common for all platforms
+#  and captured in process_deps() function. Logic for processing linker options
+#  differs per platform.
+#
+
+# input:
+#   DEPS - list of detected dependencies
+#
+# output:
+#   LIBS - static libraries to be merged to the base library target
+#   LIBS1 - additional utility libraries needed by ones from LIBS
+
+function(process_deps)
+
+  #
+  # Rename the main library as it will be replaced by the result of the merge
+  #
+
+  #file(TO_NATIVE_PATH "${BASE_DIR}/${NAME}-base${libext}" name)
+  #file(RENAME "${TARGET}" "${name}")
+
+  set(LIBS)
+  set(LIBS1)
+
+  while(DEPS)
+
+    list(GET DEPS 0 lib)
+    list(REMOVE_AT DEPS 0)
+
+    # Remove surrounding space and quotes, if any
+    string(REGEX REPLACE " *\"?([^\"]+)\"? *$" "\\1" lib ${lib})
+    #message("-- lib: ${lib}")
+
+    #
+    # If ${lib} looks like a static library it can be a library in the project,
+    # or dependency that should be an absolute path, or a system library
+    # such as kernel32.lib. To filter out system libraries, we take only
+    # these which can be found on disk (so, either absolute path or inside
+    # build directory). We also do not want to include the target library in
+    # the ${libs} list as we add it later.
+    #
+    # Note: This might break if dependencies are not given by absolute or
+    # relative paths but instead rely on the lib path passed to the linker.
+    # Fortunately, cmake normally uses absolute/relative paths for static libs.
+    #
+    # Note: On Windows, static libraries we collect here can be in fact import
+    # libraries for DLLs. We ignore this for the moment and merge import
+    # libraries too. This way the resulting merged lib should already contain
+    # required DLL stubs and there is no need to specify import libraries
+    # for dependent DLLS when linking to it.
+    #
+
+    if(
+      lib MATCHES "${libext}$"
+      AND NOT lib MATCHES "${NAME}${libext}$"
+      AND EXISTS "${lib}"
+    )
+
+      if(lib MATCHES "protobuf|uuid_gen")
+        list(APPEND LIBS1 "${lib}")
+      else()
+        list(APPEND LIBS "${lib}")
+      endif()
+    endif()
+
+  endwhile()
+
+  #message("-- computed dependencies: ${LIBS} ${LIBS1}")
+  set(LIBS ${LIBS} PARENT_SCOPE)
+  set(LIBS1 ${LIBS1} PARENT_SCOPE)
+
+endfunction(process_deps)
+
+
+function(process_deps_gcc)
+
+  # process items from DEPS, looking at options and extracting everything
+  # else as potential libraries. Also, LINK_LINE contains all original items
+  # in DEPS in the same order, but with extracted libraries replaced by
+  # "<LIBS>" entry (this is used by merge_libraries_gcc()).
+
+  set(deps_in ${DEPS})
+  set(DEPS "")
+  set(ext_deps "")
+  set(LINK_LINE "")
+
+  foreach(opt ${deps_in})
+
+    if(opt MATCHES "^-")
+
+     list(APPEND LINK_LINE ${opt})
+
+     if(opt MATCHES "^-l")
+
+       string(REGEX REPLACE "^-l(.*)$" "\\1" lib ${opt})
+
+       if(NOT "${lib}" MATCHES "^c(\\+\\+)?$|^gcc|^m$|^stdc")
+         #message("-- ext dependency: ${lib}")
+         list(APPEND ext_deps "${lib}")
+       endif()
+
+     endif()
+
+      # note: ignoring any other options
+
+    elseif(opt MATCHES "${libext}$")
+
+      list(APPEND LINK_LINE "<LIBS>")
+      list(APPEND DEPS "${opt}")
+
+    else()
+
+      list(APPEND LINK_LINE "${opt}")
+
+    endif()
+
+  endforeach()
+
+  list(REMOVE_DUPLICATES LINK_LINE)
+
+  process_deps()
+
+  #message("-- computed dependencies: ${LIBS} ${LIBS1}")
+
+  if(ext_deps)
+
+    add_info("${INFO_PREFIX}dependencies:")
+
+    foreach(lib ${ext_deps})
+      add_info(" ${lib}")
+    endforeach()
+
+    add_info("\n")
+
+  endif()
+
+  set(LIBS ${LIBS} PARENT_SCOPE)
+  set(LIBS1 ${LIBS1} PARENT_SCOPE)
+  set(LINK_OPTIONS "" PARENT_SCOPE)
+  set(LINK_LINE ${LINK_LINE} PARENT_SCOPE)
+
+endfunction(process_deps_gcc)
+
+
+function(process_deps_msbuild)
+
+  process_deps()
+
+  set(opts "")
+
+  foreach(opt ${LINK_OPTIONS})
+
+    if(opt MATCHES "^/MACHINE")
+      list(APPEND opts ${opt})
+      string(REGEX REPLACE "^/MACHINE:([^ ]*)" "\\1" val ${opt})
+      add_info("${INFO_PREFIX}architecture: ${val}\n")
+    endif()
+
+    if(opt MATCHES "^/SUBSYSTEM")
+      list(APPEND opts ${opt})
+      string(REGEX REPLACE "^/SUBSYSTEM:([^ ]*)" "\\1" val ${opt})
+      add_info("${INFO_PREFIX}subsystem: ${val}\n")
+    endif()
+
+  endforeach()
+
+  set(LIBS ${LIBS} PARENT_SCOPE)
+  set(LIBS1 ${LIBS1} PARENT_SCOPE)
+  set(LINK_OPTIONS ${opts} PARENT_SCOPE)
+
+endfunction(process_deps_msbuild)
+
+
+# -------------------------------------------------------------------------
+# This function parses build log and extract LIBS and LINK_FLAGS from
+# it.
+#
+
+function(parse_build_log_msbuild BUILD_LOG)
+
+  #message("-- build log: ${BUILD_LOG}")
+  # Read the linker invocation line from the log
+
+  file(STRINGS ${BUILD_LOG} link_line
+    LIMIT_COUNT 1
+    REGEX "\\link.exe "
+  )
+
+  #
+  # Process the linker invocation line to extract individual options
+  # and library names into ${options} list. Quoted strings that can
+  # contain spaces have special handling and are extracted to ${qstrings} list.
+  #
+
+  set(string_regex "\"[^\"]*\"")  # regex to match quoted strings
+
+  # Remove initial linker executable, leaving only options
+
+  string(REGEX REPLACE "^.*\\link.exe " "" link_line "${link_line}")
+  #message("-- link line: ${link_line}")
+
+  # Extract quoted strings and replace each by QSTR so that we do not have
+  # issues with spaces inside strings. Note that we store in qstrings only
+  # these strings that are not part of options (only these are potential
+  # library paths)
+
+  string(REGEX MATCHALL " ${string_regex}" qstrings "${link_line}")
+  string(REGEX REPLACE "${string_regex}" "QSTR" link_line "${link_line}")
+
+  # Now turn remaining options into list, assuming that they are separated
+  # by spaces
+
+  string(REGEX MATCHALL "[^ ]+" link_opts "${link_line}")
+
+  unset(DEPS)
+  unset(LINK_OPTIONS)
+
+  foreach(opt ${qstrings} ${link_opts})
+
+    # Remove surrounding quotes, if any
+    string(REGEX REPLACE " *\"?([^\"]+)\"? *$" "\\1" opt ${opt})
+
+    #message("-- looking at: ${opt}")
+
+    if(opt MATCHES "^/")
+      list(APPEND LINK_OPTIONS ${opt})
+    elseif(opt MATCHES "${libext}$")
+      list(APPEND DEPS "${opt}")
+    endif()
+
+  endforeach()
+
+  #message("-- extracted deps: ${DEPS}")
+  #message("-- extracted options: ${LINK_OPTIONS}")
+
+  set(DEPS "${DEPS}" PARENT_SCOPE)
+  set(LINK_OPTIONS "${LINK_OPTIONS}" PARENT_SCOPE)
+
+endfunction(parse_build_log_msbuild)
+
+
+# -------------------------------------------------------------------------
+
+#
+# Handle ${INFO} file. If it is set, information about detected external
+# dependencies is written to that file using add_info() command.
+#
+
+# On Unix, values of INFO and INFO_PREFIX are passed via LINK_FLAGS, not as
+# normal cmake variable.
+
+if(NOT INFO AND DEFINED LINK_FLAGS)
+  list(GET LINK_FLAGS 0 INFO)
+  list(GET LINK_FLAGS 1 INFO_PREFIX)
+endif()
+
+#message("-- INFO: ${INFO}")
+
+if(INFO AND NOT EXISTS "${INFO}")
+
+  message(WARNING "Specified INFO file does not exists, no build information will be generated: ${INFO}")
+  set(INFO OFF)
+
+endif()
+
+
+function(add_info)
+
+  if(NOT INFO)
+    return()
+  endif()
+
+  #message("-- adding info: ${ARGN}")
+  file(APPEND "${INFO}" ${ARGN})
+
+endfunction()
+
+
+#
+#  Call main processing logic.
+#
+
+main()
+return()

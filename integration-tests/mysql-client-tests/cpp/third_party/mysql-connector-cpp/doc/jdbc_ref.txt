@@ -1,0 +1,138 @@
+Connector/C++ 8.0 legacy C++ API based on JDBC4 {#jdbc_ref}
+=======================================
+
+Connector/C++ 8.0 supports the legacy C++ API based on the JDBC4 specification.
+
+This allows an easy migration to Connector/C++ version 8.0 for applications
+that use Connector/C++ version 1.1.
+
+More detailed information about the legacy C++ API can be found in the
+[X MySQL Connector/C++ Developer Guide]
+(https://dev.mysql.com/doc/connector-cpp/en/)
+of MySQL online manual.
+
+
+### Sample code which uses Connector/C++ with legacy C++ API ###
+
+The following code demonstrates how to connect to MySQL Server using the
+legacy C++ API.
+
+@note
+  The connection is established over the legacy protocol and therefore
+  X Plugin is not needed and the server does not need to support X Protocol.
+
+After the connection is established the code executes a simple SQL statement
+and reads the result from the server. The source file can be found in
+testapp/jdbc_test.cc in the source distribution of Connector/C++ 8.0.
+See @ref usage for instructions on how to build the sample code.
+
+Each program which uses the legacy C++ API has to include this header:
+
+@dontinclude jdbc_test.cc
+@skip #include <mysql/jdbc.h>
+@until #include <mysql/jdbc.h>
+
+Define the credentials for connecting, process command line parameters and
+other housekeeping:
+
+@skip #define DEFAULT_URI "tcp://127.0.0.1"
+@until try {
+
+To establish a connection to MySQL Server, retrieve an instance of
+`sql::Connection` from a `sql::mysql::MySQL_Driver` object.
+A `sql::mysql::MySQL_Driver` object is returned by
+`sql::mysql::get_mysql_driver_instance()`:
+
+@skip sql::Driver
+@until con(driver->connect(url, user, pass));
+
+Make sure that you free con, the `sql::Connection` object, as soon as you do
+not need it any more. But do not explicitly free driver, the connector object.
+Connector/C++ takes care of freeing that.
+
+@note `get_mysql_driver_instance()` calls `get_driver_instance()`, which is
+not thread-safe. Either avoid invoking these methods from within multiple
+threads at once, or surround the calls with a mutex to prevent simultaneous
+execution in multiple threads.
+
+ These methods can be used to check the connection state or reconnect:
+
+ - `sql::Connection::isValid()` checks whether the connection is alive
+
+ - `sql::Connection::reconnect()` reconnects if the connection has gone down
+
+The `sql::Connection` is used to set the schema and create a statement:
+
+@skip con->setSchema(database);
+@until boost::scoped_ptr< sql::Statement > stmt(con->createStatement());
+
+To run simple queries, you can use the `sql::Statement::execute()`,
+`sql::Statement::executeQuery()`, and `sql::Statement::executeUpdate()` methods.
+Use the method `sql::Statement::execute()` if your query does not return
+a result set or if your query returns more than one result set:
+
+@skip boost::scoped_ptr< sql::ResultSet >
+@until res(stmt->executeQuery("SELECT 'Welcome to Connector/C++' AS _message"));
+
+@note The Statement and ResultSet objects are temporary, but they are
+dynamically allocated. Therefore we use boost::scoped_ptr<> to free memory
+when they are not needed anymore.
+
+The API for fetching result sets is identical for (simple) statements and
+prepared statements. If your query returns one result set, use
+`sql::Statement::executeQuery()` or `sql::PreparedStatement::executeQuery()`
+to run your query. Both methods return `sql::ResultSet` objects.
+By default, Connector/C++ buffers all result sets on the client to support
+cursors.
+
+The code below walks through the entire result set row by row using
+`sql::ResultSet::next()` method, which returns `true` if the row was
+successfully read. Otherwise it returns `false`, which means we reached the end
+of the result set and there are no more rows to read.
+
+The actual data is obtained through the getXxxx() functions such as
+`getInt(), getString()`, etc. The columns can be indexed by numbers in the
+order they are given inside the result set starting from 1.
+Alternatively the column name can be used as a string index.
+
+@skip while
+@until }
+
+Error handling is done through the standard try/catch blocks:
+
+@skip catch
+@until }
+
+Here is the complete C++ code of the test sample for the legacy C++ API:
+
+@include jdbc_test.cc
+
+<!--
+  Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License, version 2.0, as
+  published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an
+  additional permission to link the program and your derivative works
+  with the separately licensed software that they have included with
+  MySQL.
+
+  Without limiting anything contained in the foregoing, this file,
+  which is part of MySQL Connector/C++, is also subject to the
+  Universal FOSS Exception, version 1.0, a copy of which can be found at
+  http://oss.oracle.com/licenses/universal-foss-exception.
+
+  This program is distributed in the hope that it will be useful, but
+  WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+  See the GNU General Public License, version 2.0, for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software Foundation, Inc.,
+  51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+-->

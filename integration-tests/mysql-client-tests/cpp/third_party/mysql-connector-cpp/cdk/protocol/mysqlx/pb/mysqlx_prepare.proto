@@ -1,0 +1,126 @@
+/*
+ * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License, version 2.0,
+ * as published by the Free Software Foundation.
+ *
+ * This program is also distributed with certain software (including
+ * but not limited to OpenSSL) that is licensed under separate terms,
+ * as designated in a particular file or component or in included license
+ * documentation.  The authors of MySQL hereby grant you an additional
+ * permission to link the program and your derivative works with the
+ * separately licensed software that they have included with MySQL.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License, version 2.0, for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+ */
+syntax = "proto2";
+
+
+// ifdef PROTOBUF_LITE: option optimize_for = LITE_RUNTIME;
+
+// Handling of prepared statments
+package Mysqlx.Prepare;
+option java_package = "com.mysql.cj.x.protobuf";
+
+import "mysqlx.proto"; // comment_out_if PROTOBUF_LITE
+import "mysqlx_sql.proto";
+import "mysqlx_crud.proto";
+import "mysqlx_datatypes.proto";
+
+
+// Prepare a new statement
+//
+// .. uml::
+//
+//   client -> server: Prepare
+//   alt Success
+//     client <- server: Ok
+//   else Failure
+//     client <- server: Error
+//   end
+//
+// :param stmt_id: client side assigned statement id, which is going to identify the result of preparation
+// :param stmt: defines one of following messages to be prepared - Crud.Find, Crud.Insert, Crud.Delete, Crud.Upsert, Sql.StmtExecute
+// :Returns: :protobuf:msg:`Mysqlx.Ok|Mysqlx.Error`
+message Prepare {
+  required uint32 stmt_id = 1;
+
+  message OneOfMessage {
+    // Determine which of optional fields was set by the client
+    // (Workaround for missing "oneof" keyword in pb2.5)
+    enum Type {
+      FIND = 0;
+      INSERT = 1;
+      UPDATE = 2;
+      DELETE = 4;
+      STMT = 5;
+    }
+    required Type type = 1;
+
+    optional Mysqlx.Crud.Find find = 2;
+    optional Mysqlx.Crud.Insert insert = 3;
+    optional Mysqlx.Crud.Update update = 4;
+    optional Mysqlx.Crud.Delete delete = 5;
+    optional Mysqlx.Sql.StmtExecute stmt_execute = 6;
+  }
+
+  required OneOfMessage stmt = 2;
+
+  option (client_message_id) = PREPARE_PREPARE; // comment_out_if PROTOBUF_LITE
+}
+
+
+// Execute already prepared statement
+//
+// .. uml::
+//
+//   client -> server: Execute
+//   alt Success
+//     ... Resultsets...
+//     client <- server: StmtExecuteOk
+//  else Failure
+//     client <- server: Error
+//  end
+//
+// :param stmt_id: client side assigned statement id, must be already prepared
+// :param args_list: Arguments to bind to the prepared statement
+// :param compact_metadata: send only type information for :protobuf:msg:`Mysqlx.Resultset::ColumnMetadata`, skipping names and others
+// :Returns: :protobuf:msg:`Mysqlx.Ok::`
+message Execute {
+  required uint32 stmt_id = 1;
+
+  repeated Mysqlx.Datatypes.Any args = 2;
+  optional bool compact_metadata = 3 [ default = false ];
+
+  option (client_message_id) = PREPARE_EXECUTE; // comment_out_if PROTOBUF_LITE
+}
+
+
+// Deallocate already prepared statement
+//
+// Deallocating the statement.
+//
+// .. uml::
+//
+//   client -> server: Deallocate
+//   alt Success
+//     client <- server: Ok
+//   else Failure
+//     client <- server: Error
+//   end
+//
+// :param stmt_id: client side assigned statement id, must be already prepared
+// :Returns: :protobuf:msg:`Mysqlx.Ok|Mysqlx.Error`
+message Deallocate {
+  required uint32 stmt_id = 1;
+
+  option (client_message_id) = PREPARE_DEALLOCATE; // comment_out_if PROTOBUF_LITE
+}

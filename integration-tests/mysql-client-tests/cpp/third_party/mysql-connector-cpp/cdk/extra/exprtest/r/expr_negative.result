@@ -1,0 +1,8 @@
+## col: foo->'$.bar'
+ERROR
+After seeing ' foo', looking at '->'$.b...': Unexpected characters after expression (cdk:8)
+
+## all: foo+
+ERROR
+After seeing ' foo+', with no more characters in the string: Expected an expression (cdk:8)
+

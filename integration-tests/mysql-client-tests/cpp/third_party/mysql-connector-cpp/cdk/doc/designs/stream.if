@@ -1,0 +1,43 @@
+@startuml
+
+interface Input_stream {
+  has_bytes() : bool
+  eos() : bool
+}
+
+Input_stream "Input_stream_listener" --|> Event_source
+
+interface Input_stream_listener
+
+Input_stream_listener "Input_stream" --|> Listener
+
+interface Output_stream {
+  has_space() : bool
+  is_ended() : bool
+  flush()
+}
+
+Output_stream "Output_stream_listener" --|> Event_source
+
+interface Output_stream_listener
+
+Output_stream_listener "Output_stream" --|> Listener
+
+
+interface Connection {
+  Stream based, bi-directional
+  communication channel
+  --
+  connect() : bool
+  close()
+  destroy()
+  is_connected() : bool
+  is_closed() : bool
+  is_valid() : option_t
+  check_valid() : option_t
+}
+
+Connection --|> Input_stream
+Connection --|> Output_stream
+
+@enduml

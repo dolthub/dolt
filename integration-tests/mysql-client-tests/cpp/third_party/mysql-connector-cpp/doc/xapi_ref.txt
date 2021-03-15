@@ -1,0 +1,283 @@
+Connector/C++ 8.0 X DevAPI for C Reference {#xapi_ref}
+================================
+
+Connector/C++ implements a variant of X DevAPI that can be used by applications
+written in plain C - the X DevAPI for C. It allows one to work with MySQL
+Servers implementing a document store via the X Plugin. One can also execute
+plain SQL queries using this API.
+
+To get started, check out some of the main X DevAPI for C functions:
+
+- To access data first create a session using one of @link mysqlx_get_session
+  `mysqlx_get_session_xxx()`@endlink functions. These functions return a pointer
+  to an opaque session handle of type `mysqlx_session_t`.
+
+- To work with documents in a collection or rows in a table, create a
+  handle to the collection or the table using the `mysqlx_get_collection()` or
+  the `mysqlx_get_table()` function. One first needs to obtain a schema handle
+  with the `mysqlx_get_schema()` function.
+
+- Given a handle to a collection or a table object, one can execute queries and
+  statements on that object directly, using functions like
+  `mysqlx_collection_find()`, or one can create a statement handle with
+  a function like `mysqlx_collection_find_new()` and execute it later with
+  `mysqlx_execute()` after specifying additional statement parameters.
+
+- Collection or table statements can use named parameters. Values of these
+  parameters must be defined using `mysqlx_stmt_bind()` before statement
+  is executed.
+
+- To execute SQL, use the function `mysqlx_sql()`. SQL queries can contain `?`
+  placeholders whose values need to be specified either with
+  `mysqlx_stmt_bind()`, prior to query execution, or directly in the
+  function `mysqlx_sql_param()` which executes such a query.
+
+- Executing a statement produces a result handle of type `mysqlx_result_t`. It
+  can be used to fetch result's data with functions `mysqlx_row_fetch_one()` or
+  `mysqlx_json_fetch_one()`. It can be also used to examine the result metadata
+  (in case of results of table queries) with the @link mysqlx_column_get_type
+  `mysqlx_column_get_xxx`@endlink family of functions.
+
+- Documents are represented as JSON strings. When getting data from rows with
+  @link mysqlx_get_sint `mysqlx_get_xxx()`@endlink functions, conversion from
+  database types to the indicated C native type is performed. Both types must
+  match, otherwise result might be corrupted (there are no automatic type
+  conversions). It is also possible to get raw bytes representing the value
+  using the `mysqlx_get_bytes()` function.
+
+- Data items are fetched from the result one-by-one without storing complete
+  result in memory. It is however possible to buffer a complete result with
+  the `mysqlx_store_result()` function.
+
+Many functions in X DevAPI for C have a variable parameters list allowing
+passing arguments in a flexible way. A good illustration of this approach
+is binding values to `?` placeholders in an SQL query. The function
+`mysqlx_stmt_bind()` can bind the corresponding values to all parameters
+in just one call. For example:
+
+~~~~~~
+mysqlx_stmt_bind(stmt, PARAM_SINT(v_sint),
+                       PARAM_UINT(v_uint),
+                       PARAM_FLOAT(v_float),
+                       PARAM_DOUBLE(v_double),
+                       PARAM_STRING(v_str),
+                       PARAM_END);
+~~~~~~
+
+There are several things to keep in mind:
+
+* In order to be able to correctly recognize the native parameter type
+  in the parameter list each parameter must carry the type information.
+  This is done using `PARAM_TTT()` macros. It is important to use the
+  correct macro for each type such as `PARAM_DOUBLE(v_double)` can only be
+  used if `v_double` is declared to have type `double` or
+  `PARAM_STRING(v_str)` can only be used on `v_str` declared as `char*`.
+
+* The variable parameters functions in C do not have the means to know the
+  exact number of given parameters on their own. Therefore, it is
+  the caller's responsibility to put `PARAM_END` as the last parameter and
+  in this way mark the end of the variable parameters list. Failure to do
+  so cannot be detected at the build time, but it will most likely result
+  in an abnormal program termination.
+
+A more complete example of code that access MySQL Database using the X DevAPI
+for C is presented below. See also
+[the list of X DevAPI for C Functions] (@ref xapi).
+
+
+### Sample code which uses Connector/C++ with X DevAPI for C ###
+
+The following plain C application uses X DevAPI for C to connect to a MySQL
+Server with X Plugin, create a table, add a few rows into it using different
+ways such as plain SQL with parameters and table INSERT statements. Next,
+the code reads the table rows and displays the result.
+
+The sample code can be found in file `testapp/xapi_test.cc` in the source
+distribution of Connector/C++ 8.0. See @ref usage for instructions on how
+to build the sample code.
+
+@dontinclude xapi_test.c
+
+Code which uses the Connector/C++ X DevAPI for C should include
+the `mysqlx/xapi.h` header.
+
+@skipline mysqlx/xapi.h
+
+Checking for errors is an essential part of any program, but in this sample
+code it can take too much space, therefore we introduce the convenience macros
+that check for statement errors, result errors and general errors:
+
+@skipline Error processing
+@until _WIN32
+
+Start with creating a session handle using one of the
+@link mysqlx_get_session_from_url `mysqlx_get_session_xxx()`@endlink
+functions. Session parameters are specified within `mysqlx` connection string.
+In this case connection string specifies a session on the local host as user
+`root`. Alternative connection string can be given as command line argument.
+
+If session could not be established, `mysqlx_get_session_from_url()`
+returns NULL handle while error message and code are stored in provided buffers.
+
+@skipline *url =
+@skipline conn_error
+@until conn_err_code
+@skipline get_session
+@until }
+
+Once created, the session is ready to be used. If the session cannot be
+established the program prints the error and exits.
+
+Use the session to execute SQL queries -- here we create a test table.
+After executing a query, we check its status with the `RESULT_CHECK()` macro
+(which checks if returned result handle is not NULL).
+
+@note If a query is a null-terminated string the query length parameter can
+      be `MYSQLX_NULL_TERMINATED`, in which case query length is determined
+      by the function.
+
+@skipline mysqlx_sql
+@until RESULT_CHECK
+@until RESULT_CHECK
+
+The plain SQL queries executed before did not have any parameters. Next thing
+to do is to execute an SQL insert statement with `?` placeholders. One way of
+doing this is to first create a statement handle with `mysqlx_sql_new()`.
+Such statement is not executed right away -- it will be executed later, after
+binding the placeholder values first.
+
+@skipline mysqlx_sql_new
+@until CRUD_CHECK
+
+The placeholder values for the above statement are specified through a call to
+the `mysqlx_stmt_bind()` function. Parameters list consists of <type, value>
+pairs. We use convenience macros `PARAM_TTT()` to generate such pairs. The list
+of placeholder values is terminated with `PARAM_END`.
+
+@skipline stmt_bind
+@until IS_OK
+
+@note The type identifier of the parameter must correspond to the actual C type
+  of the value. Otherwise the parameters stack might be corrupted. For instance
+  `MYSQLX_TYPE_SINT` indicates that the next parameter will have the type of
+  signed 64-bit integer (in this case `v_sint` declared as `int64_t`).
+
+Once the placeholder values are specified, the statement can be executed with
+`mysqlx_execute()`. Attempt to execute statement with placeholders, without
+binding values to these placeholders will result in an error. Similar, if
+the number of bound values is less than the number of placeholders, the attempt
+to execute such a statement will result in an error. The fact that all
+placeholders are bound to values is checked only when the statement is executed,
+not when binding the values.
+
+@skipline mysqlx_execute
+@until RESULT_CHECK
+
+For the purpose of demonstration we will insert the next row using a specialized
+table INSERT statement. First, get a handle to the table object with
+`mysqlx_get_schema()` and `mysqlx_get_table()` functions. The third parameter
+to these functions is a Boolean flag specifying if an error should be reported
+if indicated objects do not exist in the database. Without such a check it
+is possible to create a handle to a non-existing object but then the handle
+creation is cheap and does not involve any communication with the database.
+Errors would be reported later, when one attempts to execute a statement for
+such a non-existent handle.
+
+@skipline get_schema
+@until RESULT_CHECK
+@until RESULT_CHECK
+
+Create a table INSERT statement using `mysqlx_table_insert_new()`.
+
+@skipline mysqlx_table_insert_new
+
+The next step is to provide the row data using the `mysqlx_set_insert_row()`
+function, which can be called multiple times on the same statement handle before
+the statement is executed. In this way a multi-row insert will be performed.
+
+In our example we will do a single-row insert. Same as in case of
+`mysqlx_stmt_bind()` the row data is specified as <type, value> pairs and
+the list of function parameters is terminated by `PARAM_END`. After specifying
+the row data, the insert statement is executed:
+
+@skipline Change values
+@until RESULT_CHECK
+
+After the inserts are finished the code will read the rows. To do so execute
+table SELECT statement with `mysqlx_table_select_limit()`. This limits
+the number of returned rows to 500:
+
+@skipline table_select
+@until RESULT_CHECK
+
+Note that `mysqlx_table_select_limit()` executes the statement right away,
+returning its result. Before we were first creating a statement handle, then
+adding information to the statement and then executing it.
+
+Now fetch rows one by one. Function `mysqlx_row_fetch_one()` returns NULL
+handle when there are no more rows in the result:
+
+@skipline while
+
+The actual data is read using @link mysqlx_get_sint `mysqlx_get_xxx()`@endlink
+functions. These functions return the values through the output parameters.
+
+Along with the data the code can get metadata such as the column names.
+In this example we just print the column name returned by
+`mysqlx_column_get_name()`:
+
+@skipline {
+@until }
+
+Close the session using `mysqlx_session_close()`. This implicitly frees all
+handles associated with the session (results, rows, etc):
+
+@skipline mysqlx_session_close
+
+The complete code of the example is presented below:
+
+@include xapi_test.c
+
+A sample output produced by this code:
+
+~~~~~~~
+Connected...
+Table created...
+Rows inserted...
+
+Reading Rows:
+Row # 1: [sint: -17] [uint: 101] [flv: 3.310000][dbv: 170000000.000000][strv: just some text [15 bytes]]
+Row # 2: [sint: -232] [uint: 789] [flv: 99.339996][dbv: 0.000028][strv: some more text [15 bytes]]
+Session closed
+~~~~~~~
+
+
+<!--
+  Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
+
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License, version 2.0, as
+  published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an
+  additional permission to link the program and your derivative works
+  with the separately licensed software that they have included with
+  MySQL.
+
+  Without limiting anything contained in the foregoing, this file,
+  which is part of MySQL Connector/C++, is also subject to the
+  Universal FOSS Exception, version 1.0, a copy of which can be found at
+  http://oss.oracle.com/licenses/universal-foss-exception.
+
+  This program is distributed in the hope that it will be useful, but
+  WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+  See the GNU General Public License, version 2.0, for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software Foundation, Inc.,
+  51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+-->

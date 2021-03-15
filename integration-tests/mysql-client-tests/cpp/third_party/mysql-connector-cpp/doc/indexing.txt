@@ -1,0 +1,140 @@
+Indexing Document Collections {#indexing}
+=============================
+
+Similar to indexes on relational tables, it is possible to define indexes
+on document collections to improve efficiency of accessing documents
+in the collection. To define such an index call X DevAPI method
+`Collection::createIndex()` or X DevAPI for C function
+`mysqlx_collection_create_index()` and pass a JSON document which specifies
+the index. The format of the index specification document is described below.
+The index can include one or more fields within indexed documents and it
+is possible to specify whether indexed fields are required to always exist.
+For indexing to work, values inside documents must be converted to SQL values.
+For that reason you must specify an SQL type to be used for each indexed field. 
+
+Index Specification
+-------------------
+
+An example index specification might look as follows:
+~~~~~~
+  {
+    "type": "INDEX",
+    "fields": [
+      { "field": "$.zip", "type": "TEXT(10)" },
+      { "field": "$.count", "type": "INT UNSIGNED" }
+    ]
+  }
+~~~~~~
+
+Specification for an index on a document collection is a JSON document with
+the following members:
+
+- fields (an array of objects): Describes document fields to be included in
+  the index (see below)
+
+- type (a string, optional): The type of index. One of "INDEX" or "SPATIAL".
+  Default is "INDEX" and may be omitted.
+
+A single field description consists of the following members:
+
+- field (a string): A path to the document field to be indexed.
+
+- type (a string): One of the supported SQL column types to map the field
+  into (see below for a list). For numeric types, the optional UNSIGNED
+  keyword may follow. For the TEXT type, the length to consider for indexing
+  must be specified.
+
+- required (a Boolean, optional): True if the field is required to exist
+  in the document. Defaults to false, except for GEOJSON where it defaults
+  to true
+
+- options (an integer, optional): Special option flags for use when  decoding
+  GEOJSON data (see below).
+
+- srid (an integer, optional): A "srid" value used when decoding GEOJSON data
+  (see below).
+
+It is an error to include other fields not described above in an index
+specification.
+
+If the index type is not specified, or is set to "INDEX" then a plain index
+is created as by SQL command "CREATE INDEX ...". If the index type is set
+to "SPATIAL" then the created index is like one created by SQL command
+"CREATE SPATIAL INDEX ...", see
+https://dev.mysql.com/doc/refman/8.0/en/spatial-index-optimization.html
+and
+https://dev.mysql.com/doc/refman/8.0/en/creating-spatial-indexes.html.
+In this case it is not allowed to set the "required" field to false in field
+descriptions.
+
+Values of indexed fields are converted from JSON to the type specified
+in the index field description using standard MySQL type conversions (see
+https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html). Note that
+this means that, for example, when using a numeric type in an index field
+description and the actual field value is non-numeric, it will be usually
+converted to 0.
+
+For index fields with GEOJSON type MySQL function ST_GeomFromGeoJSON() is used
+for conversion (see
+ https://dev.mysql.com/doc/refman/8.0/en/spatial-geojson-functions.html#function_st-geomfromgeojson).
+In this case, the "options" and "srid" fields might be present in the field
+description and if this is the case they are used as parameters for
+ST_GeomFromGeoJSON() during conversion.
+
+
+Field Data Types
+----------------
+
+The following data types may be used for document fields. Type descriptions
+are case insensitive.
+
+- INT [UNSIGNED]
+- TINYINT [UNSIGNED]
+- SMALLINT [UNSIGNED]
+- MEDIUMINT [UNSIGNED]
+- INTEGER [UNSIGNED]
+- BIGINT [UNSIGNED]
+- REAL [UNSIGNED]
+- FLOAT [UNSIGNED]
+- DOUBLE [UNSIGNED]
+- DECIMAL [UNSIGNED]
+- NUMERIC [UNSIGNED]
+- DATE
+- TIME
+- TIMESTAMP
+- DATETIME
+- TEXT(length)
+- GEOJSON
+
+
+<!--
+
+   Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License, version 2.0, as
+   published by the Free Software Foundation.
+
+   This program is also distributed with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an
+   additional permission to link the program and your derivative works
+   with the separately licensed software that they have included with
+   MySQL.
+
+   Without limiting anything contained in the foregoing, this file,
+   which is part of MySQL Connector/C++, is also subject to the
+   Universal FOSS Exception, version 1.0, a copy of which can be found at
+   http://oss.oracle.com/licenses/universal-foss-exception.
+
+   This program is distributed in the hope that it will be useful, but
+   WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+   See the GNU General Public License, version 2.0, for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software Foundation, Inc.,
+   51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+
+-->

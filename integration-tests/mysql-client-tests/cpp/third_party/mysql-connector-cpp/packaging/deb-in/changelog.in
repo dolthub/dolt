@@ -1,0 +1,6 @@
+mysql-connector-c++@DEB_PRODUCTNAME@ (@CONCPP_VERSION@@DEB_VERSION@@DEB_PLATFORMRELEASE@) @DEB_CODENAME@; urgency=low
+
+  * New Release. For release notes, please refer to
+    https://dev.mysql.com/doc/relnotes/connector-cpp/en/news-@CONCPP_VERSION_MAJOR@-@CONCPP_VERSION_MINOR@-@CONCPP_VERSION_MICRO@.html
+
+ -- MySQL Release Engineering <mysql-build@oss.oracle.com>  @DEB_CHANGELOG_TIMESTAMP@

@@ -1,0 +1,34 @@
+@startuml
+
+interface Diagnostics {
+  Examine diagnostics information
+  --
+  entry_count(Level level =ERROR) : uint
+  get_entries(Level level =ERROR) : Iterator
+  get_error() : Error
+}
+
+@enduml
+
+
+@startuml
+
+class "Diagnostics::Entry" {
+  severity() : Level
+}
+
+"Diagnostics::Entry" --|> Error
+
+interface "Diagnostics::Iterator" {
+  entry() : Entry
+}
+
+"Diagnostics::Iterator" --|> Iterator
+
+enum "Diagnostics::Level" {
+  ERROR
+  WARNING
+  INFO
+}
+
+@enduml

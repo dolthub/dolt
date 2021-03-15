@@ -1,0 +1,91 @@
+#!/usr/bin/make -f
+
+# Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License, version 2.0,
+# as published by the Free Software Foundation.
+#
+# This program is also distributed with certain software (including
+# but not limited to OpenSSL) that is licensed under separate terms,
+# as designated in a particular file or component or in included license
+# documentation.  The authors of MySQL hereby grant you an additional
+# permission to link the program and your derivative works with the
+# separately licensed software that they have included with MySQL.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License, version 2.0, for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+
+%:
+	dh $@
+
+export DH_VERBOSE=1
+export CFLAGS=
+export CXXFLAGS=
+
+override_dh_auto_configure:
+	@echo "RULES.$@"
+
+	mkdir release && cd release && \
+	cmake .. \
+		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
+		-DCMAKE_INSTALL_PREFIX=/usr \
+		-DINSTALL_LIB_DIR=lib/$(DEB_HOST_MULTIARCH) \
+		-DWITH_JDBC=ON \
+		-DWITH_SSL=system \
+		@DEB_CMAKE_EXTRAS@
+
+	mkdir static && cd static && \
+	cmake .. \
+		-DBUILD_STATIC=ON \
+		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
+		-DCMAKE_INSTALL_PREFIX=/usr \
+		-DINSTALL_LIB_DIR_STATIC=lib/$(DEB_HOST_MULTIARCH) \
+		-DWITH_JDBC=ON \
+		-DWITH_SSL=system \
+		@DEB_CMAKE_EXTRAS@
+
+	touch $@
+
+override_dh_auto_build:
+	@echo "RULES.$@"
+	@DEB_RULES_DEBUG_MAKE@
+	cd release && \
+	$(MAKE) -j8 VERBOSE=1
+	cd static && \
+	$(MAKE) -j8 VERBOSE=1
+	touch $@
+
+override_dh_auto_test:
+	@echo "RULES.$@"
+	export CTEST_OUTPUT_ON_FAILURE=1
+	cd release && \
+	make test || true
+	touch $@
+
+@DEB_RULES_STRIP@
+
+override_dh_auto_install:
+
+	@echo "RULES.$@"
+	# complete install first
+	cd release && \
+	$(MAKE) install DESTDIR=../debian/tmp
+	cd static && \
+	$(MAKE) install DESTDIR=../debian/tmp
+	install README.txt debian/tmp/usr/README.txt
+	install LICENSE.txt debian/tmp/usr/LICENSE.txt
+	touch $@
+
+override_dh_installinit:
+	@echo "RULES.$@"
+	touch $@
+
+override_dh_install:
+	dh_install --fail-missing

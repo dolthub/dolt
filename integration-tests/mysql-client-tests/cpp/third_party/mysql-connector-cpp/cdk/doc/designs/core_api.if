@@ -1,0 +1,96 @@
+@startuml
+
+interface Session {
+  Basic operations on data store session
+  --
+  is_valid() : option_t
+  check_valid() : option_t
+  clear_errors()
+  close()
+}
+
+Session --|> Diagnostics
+Session "Session_listener" --|> Event_source
+
+@enduml
+
+
+@startuml
+
+interface Transaction {
+  Manipulating transaction state
+  --
+  has_changes() : bool
+  commit() : transaction_id_t
+  rollback(savepoint_id_t sp =0)
+  savepoint(savepoint_id_t id)
+}
+
+Transaction --|> Diagnostics
+Transaction "Trx_listener" --|> Event_source
+
+@enduml
+
+@startuml
+
+interface Reply {
+  Examining data store reply to a command
+  --
+  has_results() : bool
+  skip_result()
+  has_out_params() : bool
+  get_out_params(Out_param_processor)
+  affected_rows() : row_count_t
+  get_statistics() : Op_statistics
+  get_time_info() : Op_time_info
+  discard()
+}
+
+Reply --|> Diagnostics
+Reply "Reply_listener" --|> Event_source
+Reply -|> Async_op
+
+@enduml
+
+@startuml
+
+interface Batch_reply {
+  Examining reply to a batch of commands
+  --
+  reply_for() : batch_pos_t
+}
+
+Batch_reply --|> Reply
+Batch_reply -|> Iterator
+
+@enduml
+
+@startuml
+
+interface Cursor {
+  Iterate over rows of a result set
+  --
+  get_rows(Row_processor rp, row_count_t count)
+  get_row(Row_processor rp) : bool
+  close()
+  rewind()
+  seek(from, count =0, direction =FORWARD)
+}
+
+Cursor -|> Async_op
+Cursor --|> Meta_data
+
+@enduml
+
+@startuml
+
+interface Meta_data {
+  Describes a column in a result set
+  --
+  col_count() : field_pos_t
+  type(field_pos_t pos) : Type_info
+  format(field_pos_t pos) : Format_info
+  col_info(field_pos_t pos) : Column_info
+}
+
+@enduml
