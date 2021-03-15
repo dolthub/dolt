@@ -163,14 +163,14 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf 
 	asOfString, ok := asOf.(string)
 	require.True(d.t, ok)
 	ctx := enginetest.NewContext(d)
-	_, iter, err := e.Query(ctx,
+	_, _, iter, err := e.Query(ctx,
 		"set @@"+ddb.HeadKey()+" = COMMIT('-m', 'test commit');")
 	require.NoError(d.t, err)
 	_, err = sql.RowIterToRows(ctx, iter)
 	require.NoError(d.t, err)
 
 	ctx = enginetest.NewContext(d)
-	_, iter, err = e.Query(ctx,
+	_, _, iter, err = e.Query(ctx,
 		"insert into dolt_branches (name, hash) values ('"+asOfString+"', @@"+ddb.HeadKey()+")")
 	require.NoError(d.t, err)
 	_, err = sql.RowIterToRows(ctx, iter)
