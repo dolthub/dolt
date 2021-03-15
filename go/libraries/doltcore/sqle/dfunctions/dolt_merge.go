@@ -104,7 +104,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return 1, errors.New("error: merging is not possible because you have not committed an active merge")
 	}
 
-	parent, ph, parentRoot, err := getParent(ctx, err, sess, dbName)
+	parent, ph, parentRoot, err := getParent(ctx, sess, dbName)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +114,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return nil, err
 	}
 
-	cm, cmh, err := getBranchCommit(ctx, ok, branchName, err, ddb)
+	cm, cmh, err := getBranchCommit(ctx, branchName, ddb)
 	if err != nil {
 		return nil, err
 	}
