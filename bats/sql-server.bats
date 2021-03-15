@@ -553,3 +553,29 @@ SQL
 
      server_query 1 "SELECT * FROM test" "pk,c1,c2,c3,c4,c5\n0,1,2,3,4,5\n1,1,2,3,4,5"
 }
+
+@test "sql-server: Run queries on database without ever selecting it" {
+     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+     cd repo1
+     start_sql_server repo1
+
+     # create table with autocommit on and verify table creation
+     unselected_server_query 1 "CREATE TABLE repo1.one_pk (
+        pk int,
+        PRIMARY KEY (pk)
+      )" ""
+
+     run dolt ls
+     [ "$status" -eq 0 ]
+     [[ "$output" =~ "one_pk" ]] || false
+
+     insert_query 1 "INSERT INTO repo1.one_pk VALUES (0), (1), (2)"
+     unselected_server_query 1 "SELECT * FROM repo1.one_pk" "pk\n0\n1\n2"
+
+     unselected_update_query 1 "UPDATE repo1.one_pk SET pk=3 WHERE pk=2"
+     unselected_server_query 1 "SELECT * FROM repo1.one_pk" "pk\n0\n1\n3"
+
+     unselected_update_query 1 "DELETE FROM repo1.one_pk WHERE pk=3"
+     unselected_server_query 1 "SELECT * FROM repo1.one_pk" "pk\n0\n1"
+}

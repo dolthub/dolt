@@ -161,3 +161,18 @@ update_query() {
 insert_query() {
     server_query $1 "$2" ""
 }
+
+unselected_server_query() {
+    let PORT="$$ % (65536-1024) + 1024"
+    PYTEST_DIR="$BATS_TEST_DIRNAME/helper"
+    echo Executing server_query
+    python3 -c "$PYTHON_QUERY_SCRIPT" -- "$PYTEST_DIR" "" "$PORT" "$1" "$2" "$3"
+}
+
+unselected_update_query() {
+    unselected_server_query $1 "$2" ""
+}
+
+unselected_insert_query() {
+    unselected_server_query $1 "$2" ""
+}
