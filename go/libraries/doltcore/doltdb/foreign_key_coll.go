@@ -469,6 +469,22 @@ func (fk ForeignKey) ValidateData(ctx context.Context, childIdx, parentIdx types
 			return err
 		}
 
+		// Check if there are any NULL values, as they should be skipped
+		hasNulls := false
+		_, err = childIdxRow.IterSchema(childDef.Schema(), func(tag uint64, val types.Value) (stop bool, err error) {
+			if types.IsNull(val) {
+				hasNulls = true
+				return true, nil
+			}
+			return false, nil
+		})
+		if err != nil {
+			return err
+		}
+		if hasNulls {
+			continue
+		}
+
 		parentIdxRow, err := rc.Convert(childIdxRow)
 		if err != nil {
 			return err
