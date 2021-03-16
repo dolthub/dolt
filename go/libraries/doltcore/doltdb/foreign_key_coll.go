@@ -112,6 +112,11 @@ func (fk ForeignKey) HashOf() hash.Hash {
 	return hash.Of(bb.Bytes())
 }
 
+// IsSelfReferential returns whether the table declaring the foreign key is also referenced by the foreign key.
+func (fk ForeignKey) IsSelfReferential() bool {
+	return strings.ToLower(fk.TableName) == strings.ToLower(fk.ReferencedTableName)
+}
+
 // ValidateReferencedTableSchema verifies that the given schema matches the expectation of the referenced table.
 func (fk ForeignKey) ValidateReferencedTableSchema(sch schema.Schema) error {
 	allSchCols := sch.GetAllCols()
@@ -198,9 +203,6 @@ func (fkc *ForeignKeyCollection) AddKeys(fks ...ForeignKey) error {
 		}
 		if len(key.TableColumns) != len(key.ReferencedTableColumns) {
 			return fmt.Errorf("foreign keys must have the same number of columns declared and referenced")
-		}
-		if key.TableName == key.ReferencedTableName {
-			return fmt.Errorf("inter-table foreign keys are not yet supported")
 		}
 
 		fkc.foreignKeys[key.HashOf().String()] = key

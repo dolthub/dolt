@@ -225,7 +225,7 @@ func updateRowDataWithNewType(
 		if err != nil {
 			return true, err
 		}
-		taggedVals, err := row.GetTaggedVals(r)
+		taggedVals, err := r.TaggedValues()
 		if err != nil {
 			return true, err
 		}

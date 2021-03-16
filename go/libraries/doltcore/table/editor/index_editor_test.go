@@ -128,7 +128,7 @@ func TestIndexEditorConcurrency(t *testing.T) {
 			_ = newIndexData.IterAll(context.Background(), func(key, value types.Value) error {
 				dReadRow, err := row.FromNoms(indexSch, key.(types.Tuple), value.(types.Tuple))
 				require.NoError(t, err)
-				dReadVals, err := row.GetTaggedVals(dReadRow)
+				dReadVals, err := dReadRow.TaggedValues()
 				require.NoError(t, err)
 				assert.Equal(t, row.TaggedValues{
 					0: types.Int(iterIndex),
@@ -212,7 +212,7 @@ func TestIndexEditorConcurrencyPostInsert(t *testing.T) {
 			_ = newIndexData.IterAll(context.Background(), func(key, value types.Value) error {
 				dReadRow, err := row.FromNoms(indexSch, key.(types.Tuple), value.(types.Tuple))
 				require.NoError(t, err)
-				dReadVals, err := row.GetTaggedVals(dReadRow)
+				dReadVals, err := dReadRow.TaggedValues()
 				require.NoError(t, err)
 				assert.Equal(t, row.TaggedValues{
 					0: types.Int(iterIndex),
@@ -299,7 +299,7 @@ func TestIndexEditorConcurrencyUnique(t *testing.T) {
 			_ = newIndexData.IterAll(context.Background(), func(key, value types.Value) error {
 				dReadRow, err := row.FromNoms(indexSch, key.(types.Tuple), value.(types.Tuple))
 				require.NoError(t, err)
-				dReadVals, err := row.GetTaggedVals(dReadRow)
+				dReadVals, err := dReadRow.TaggedValues()
 				require.NoError(t, err)
 				assert.Equal(t, row.TaggedValues{
 					0: types.Int(iterIndex),
@@ -343,7 +343,7 @@ func TestIndexEditorUniqueMultipleNil(t *testing.T) {
 		_ = newIndexData.IterAll(context.Background(), func(key, value types.Value) error {
 			dReadRow, err := row.FromNoms(indexSch, key.(types.Tuple), value.(types.Tuple))
 			require.NoError(t, err)
-			dReadVals, err := row.GetTaggedVals(dReadRow)
+			dReadVals, err := dReadRow.TaggedValues()
 			require.NoError(t, err)
 			assert.Equal(t, row.TaggedValues{
 				1: types.Int(index), // We don't encode NULL values
@@ -400,7 +400,7 @@ func TestIndexEditorWriteAfterFlush(t *testing.T) {
 		_ = newIndexData.IterAll(context.Background(), func(key, value types.Value) error {
 			dReadRow, err := row.FromNoms(indexSch, key.(types.Tuple), value.(types.Tuple))
 			require.NoError(t, err)
-			dReadVals, err := row.GetTaggedVals(dReadRow)
+			dReadVals, err := dReadRow.TaggedValues()
 			require.NoError(t, err)
 			assert.Equal(t, row.TaggedValues{
 				0: types.Int(iterIndex),

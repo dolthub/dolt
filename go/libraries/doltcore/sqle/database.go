@@ -712,12 +712,12 @@ func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error
 		if typeColVal, ok := dRow.GetColVal(typeCol.Tag); ok && typeColVal.Equals(types.String("trigger")) {
 			name, ok := dRow.GetColVal(nameCol.Tag)
 			if !ok {
-				taggedVals, _ := row.GetTaggedVals(dRow)
+				taggedVals, _ := dRow.TaggedValues()
 				return true, fmt.Errorf("missing `%s` value for trigger row: (%s)", doltdb.SchemasTablesNameCol, taggedVals)
 			}
 			createStmt, ok := dRow.GetColVal(fragCol.Tag)
 			if !ok {
-				taggedVals, _ := row.GetTaggedVals(dRow)
+				taggedVals, _ := dRow.TaggedValues()
 				return true, fmt.Errorf("missing `%s` value for trigger row: (%s)", doltdb.SchemasTablesFragmentCol, taggedVals)
 			}
 			triggers = append(triggers, sql.TriggerDefinition{
@@ -772,7 +772,7 @@ func (db Database) GetStoredProcedures(ctx *sql.Context) ([]sql.StoredProcedureD
 		if err != nil {
 			return true, err
 		}
-		taggedVals, err := row.GetTaggedVals(dRow)
+		taggedVals, err := dRow.TaggedValues()
 		if err != nil {
 			return true, err
 		}
