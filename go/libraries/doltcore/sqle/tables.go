@@ -938,6 +938,12 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	if len(columns) != len(refColumns) {
 		return fmt.Errorf("the foreign key must reference an equivalent number of columns")
 	}
+	isSelfFk := strings.ToLower(t.name) == strings.ToLower(refTblName)
+	if isSelfFk {
+		if len(columns) > 1 {
+			return fmt.Errorf("support for self referential composite foreign keys is not yet implemented")
+		}
+	}
 
 	tblCols := make([]schema.Column, len(columns))
 	colTags := make([]uint64, len(columns))
@@ -964,16 +970,24 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	if err != nil {
 		return err
 	}
-	refTbl, _, ok, err := root.GetTableInsensitive(ctx, refTblName)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return fmt.Errorf("referenced table `%s` does not exist", refTblName)
-	}
-	refSch, err := refTbl.GetSchema(ctx)
-	if err != nil {
-		return err
+	var refTbl *doltdb.Table
+	var ok bool
+	var refSch schema.Schema
+	if isSelfFk {
+		refTbl = t.table
+		refSch = t.sch
+	} else {
+		refTbl, _, ok, err = root.GetTableInsensitive(ctx, refTblName)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("referenced table `%s` does not exist", refTblName)
+		}
+		refSch, err = refTbl.GetSchema(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	refColTags := make([]uint64, len(refColumns))
@@ -990,6 +1004,14 @@ func (t *AlterableDoltTable) CreateForeignKey(
 			return fmt.Errorf("TEXT/BLOB are not valid types for foreign keys")
 		}
 		refColTags[i] = refCol.Tag
+	}
+
+	if isSelfFk {
+		for i := range colTags {
+			if colTags[i] == refColTags[i] {
+				return fmt.Errorf("the same column `%s` cannot be used in self referential foreign keys", tblCols[i].Name)
+			}
+		}
 	}
 
 	onUpdateRefOp, err := parseFkReferenceOption(onUpdate)

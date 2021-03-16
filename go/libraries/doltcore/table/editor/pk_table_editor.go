@@ -283,7 +283,7 @@ func GetIndexedRows(ctx context.Context, te TableEditor, key types.Tuple, indexN
 			return nil, err
 		}
 
-		indexRowTaggedValues, err := row.GetTaggedVals(r)
+		indexRowTaggedValues, err := r.TaggedValues()
 		if err != nil {
 			return nil, err
 		}

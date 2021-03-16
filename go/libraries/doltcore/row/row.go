@@ -53,6 +53,9 @@ type Row interface {
 
 	// Returns the noms map value for this row, using the schema provided.
 	NomsMapValue(sch schema.Schema) types.Valuable
+
+	// TaggedValues returns the row as TaggedValues.
+	TaggedValues() (TaggedValues, error)
 }
 
 func New(nbf *types.NomsBinFormat, sch schema.Schema, colVals TaggedValues) (Row, error) {
@@ -225,18 +228,4 @@ func AreEqual(row1, row2 Row, sch schema.Schema) bool {
 	}
 
 	return true
-}
-
-func GetTaggedVals(row Row) (TaggedValues, error) {
-	taggedVals := make(TaggedValues)
-	_, err := row.IterCols(func(tag uint64, val types.Value) (stop bool, err error) {
-		taggedVals[tag] = val
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return taggedVals, nil
 }
