@@ -297,7 +297,7 @@ func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 		case sql.NullType:
 			numBytesPerRow += 1
 		case sql.TimeType:
-			numBytesPerRow += 5
+			numBytesPerRow += 16
 		case sql.YearType:
 			numBytesPerRow += 8
 		}

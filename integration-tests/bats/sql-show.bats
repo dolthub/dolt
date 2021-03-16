@@ -57,8 +57,10 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
 
-    dolt sql -q "INSERT INTO test (c1) VALUES (0)"
-   run dolt sql -q "show table status where \`Data_length\`>0"
+    dolt sql -q "INSERT INTO test (c1) VALUES (0),(1)"
+    run dolt sql -q "show table status where \`Data_length\`>0"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "test" ]] || false
+
+    # Looking for 32 bytes (2 cols * 2 * rows * 8 int bytes)
+    [[ "$output" =~ "32" ]] || false
 }

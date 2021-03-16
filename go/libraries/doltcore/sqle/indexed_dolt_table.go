@@ -152,42 +152,6 @@ func (t *WritableIndexedDoltTable) NumRows(ctx *sql.Context) (uint64, error) {
 	return m.Len(), nil
 }
 
-func (t *WritableIndexedDoltTable) DataLength(ctx *sql.Context) (uint64, error) {
-	schema := t.Schema()
-	var numBytesPerRow uint64 = 0
-	for _, col := range schema {
-		switch n := col.Type.(type) {
-		case sql.NumberType:
-			numBytesPerRow += 8
-		case sql.StringType:
-			numBytesPerRow += uint64(n.MaxByteLength())
-		case sql.BitType:
-			numBytesPerRow += 1
-		case sql.DatetimeType:
-			numBytesPerRow += 8
-		case sql.DecimalType:
-			numBytesPerRow += uint64(n.MaximumScale())
-		case sql.EnumType:
-			numBytesPerRow += 2
-		case sql.JsonType:
-			numBytesPerRow += 20
-		case sql.NullType:
-			numBytesPerRow += 1
-		case sql.TimeType:
-			numBytesPerRow += 5
-		case sql.YearType:
-			numBytesPerRow += 8
-		}
-	}
-
-	numRows, err := t.NumRows(ctx)
-	if err != nil {
-		return 0, err
-	}
-
-	return numBytesPerRow * numRows, nil
-}
-
 func partitionIndexedTableRows(ctx *sql.Context, t *WritableIndexedDoltTable, projectedCols []string, part sql.Partition) (sql.RowIter, error) {
 	switch typed := part.(type) {
 	case rangePartition:
