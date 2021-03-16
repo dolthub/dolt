@@ -122,7 +122,7 @@ var _ sql.IndexedTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.UpdatableTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.DeletableTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.ReplaceableTable = (*WritableIndexedDoltTable)(nil)
-var _ sql.StatisticsTable = (*WritableIndexedDoltTable)(nil)
+//var _ sql.StatisticsTable = (*WritableIndexedDoltTable)(nil)
 
 type WritableIndexedDoltTable struct {
 	*WritableDoltTable

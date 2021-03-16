@@ -106,7 +106,7 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatab
 var _ sql.Table = (*DoltTable)(nil)
 var _ sql.IndexedTable = (*DoltTable)(nil)
 var _ sql.ForeignKeyTable = (*DoltTable)(nil)
-var _ sql.StatisticsTable = (*DoltTable)(nil)
+//var _ sql.StatisticsTable = (*DoltTable)(nil)
 
 // projected tables disabled for now.  Looks like some work needs to be done in the analyzer as there are cases
 // where the projected columns do not contain every column needed.  Seed this with natural and other joins.  There

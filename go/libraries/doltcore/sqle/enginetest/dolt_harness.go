@@ -69,7 +69,8 @@ func (d *DoltHarness) SkipQueryTest(query string) bool {
 		lowerQuery == "show variables" || // we set extra variables
 		strings.Contains(lowerQuery, "show create table fk_tbl") || // we create an extra key for the FK that vanilla gms does not
 		strings.Contains(lowerQuery, "show indexes from") || // we create / expose extra indexes (for foreign keys)
-		strings.Contains(lowerQuery, "json_arrayagg")
+		strings.Contains(lowerQuery, "json_arrayagg") ||
+		strings.Contains(lowerQuery, "show table status")
 }
 
 func (d *DoltHarness) Parallelism() int {
