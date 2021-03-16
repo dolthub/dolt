@@ -71,8 +71,8 @@ RUN curl -L -o /mysql-client-tests/java/mysql-connector-java-8.0.21.jar \
   https://repo1.maven.org/maven2/mysql/mysql-connector-java/8.0.21/mysql-connector-java-8.0.21.jar
 
 # install node deps
-COPY ./integration-tests/mysql-client-tests/node/package.json /mysql-client-tests/node/
-COPY ./integration-tests/mysql-client-tests/node/package-lock.json /mysql-client-tests/node/
+COPY mysql-client-tests/node/package.json /mysql-client-tests/node/
+COPY mysql-client-tests/node/package-lock.json /mysql-client-tests/node/
 WORKDIR /mysql-client-tests/node
 RUN npm install
 
@@ -80,20 +80,20 @@ RUN npm install
 RUN cpanm DBD::mysql
 
 # install ruby dependencies
-COPY ./integration-tests/mysql-client-tests/ruby/Gemfile /mysql-client-tests/ruby/
-COPY ./integration-tests/mysql-client-tests/ruby/Gemfile.lock /mysql-client-tests/ruby/
+COPY mysql-client-tests/ruby/Gemfile /mysql-client-tests/ruby/
+COPY mysql-client-tests/ruby/Gemfile.lock /mysql-client-tests/ruby/
 WORKDIR /mysql-client-tests/ruby
 RUN gem install bundler -v 2.1.4
 RUN bundle install
 
 # install dolt from source
 WORKDIR /root/building
-COPY ./go/ .
+COPY ./go .
 ENV GOFLAGS="-mod=readonly"
 RUN go build -o /usr/local/bin/dolt ./cmd/dolt
 
-COPY ./integration-tests/mysql-client-tests /mysql-client-tests
-COPY ./integration-tests/mysql-client-tests/mysql-client-tests-entrypoint.sh /mysql-client-tests/entrypoint.sh
+COPY mysql-client-tests /mysql-client-tests
+COPY mysql-client-tests/mysql-client-tests-entrypoint.sh /mysql-client-tests/entrypoint.sh
 
 WORKDIR /mysql-client-tests
 ENTRYPOINT ["/mysql-client-tests/entrypoint.sh"]
