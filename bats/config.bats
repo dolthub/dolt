@@ -165,7 +165,7 @@ teardown() {
     [[ "$output" =~ "$regex" ]] || false
 }
 
-@test "sql-server: starting test without server throws error" {
+@test "COMMIT correctly errors when user.name or user.email is unset." {
     dolt config --global --add user.name "bats tester"
     dolt config --global --add user.email "joshn@doe.com"
 
@@ -179,7 +179,12 @@ teardown() {
     dolt config --global --unset user.email
 
     run dolt sql -q "SET @@dolt_repo_$$_head = COMMIT('-a', '-m', 'updated stuff')"
-    echo $output
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Aborting commit due to empty committer name. Is your config set" ]] || false
+
+
+    dolt config --global --add user.name "bats tester"
+    run dolt sql -q "SET @@dolt_repo_$$_head = COMMIT('-a', '-m', 'updated stuff')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Aborting commit due to empty committer email. Is your config set" ]] || false
 }
