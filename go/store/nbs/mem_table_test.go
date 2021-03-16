@@ -30,6 +30,7 @@ import (
 
 	"github.com/golang/snappy"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -96,7 +97,7 @@ func TestMemTableAddHasGetChunk(t *testing.T) {
 
 	for _, c := range chunks {
 		data, err := mt.get(context.Background(), computeAddr(c), &Stats{})
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(bytes.Compare(c, data), 0)
 	}
 
@@ -149,25 +150,25 @@ func TestMemTableWrite(t *testing.T) {
 	}
 
 	td1, _, err := buildTable(chunks[1:2])
-	assert.NoError(err)
+	require.NoError(t, err)
 	ti1, err := parseTableIndex(td1)
-	assert.NoError(err)
+	require.NoError(t, err)
 	tr1 := newTableReader(ti1, tableReaderAtFromBytes(td1), fileBlockSize)
 	assert.True(tr1.has(computeAddr(chunks[1])))
 
 	td2, _, err := buildTable(chunks[2:])
-	assert.NoError(err)
+	require.NoError(t, err)
 	ti2, err := parseTableIndex(td2)
-	assert.NoError(err)
+	require.NoError(t, err)
 	tr2 := newTableReader(ti2, tableReaderAtFromBytes(td2), fileBlockSize)
 	assert.True(tr2.has(computeAddr(chunks[2])))
 
 	_, data, count, err := mt.write(chunkReaderGroup{tr1, tr2}, &Stats{})
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(uint32(1), count)
 
 	ti, err := parseTableIndex(data)
-	assert.NoError(err)
+	require.NoError(t, err)
 	outReader := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
 	assert.True(outReader.has(computeAddr(chunks[0])))
 	assert.False(outReader.has(computeAddr(chunks[1])))

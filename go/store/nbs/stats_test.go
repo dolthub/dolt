@@ -28,6 +28,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/constants"
@@ -42,9 +43,9 @@ func TestStats(t *testing.T) {
 	}
 
 	dir, err := ioutil.TempDir("", "")
-	assert.NoError(err)
+	require.NoError(t, err)
 	store, err := NewLocalStore(context.Background(), constants.FormatDefaultString, dir, testMemTableSize)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	assert.EqualValues(1, stats(store).OpenLatency.Samples())
 
@@ -57,11 +58,11 @@ func TestStats(t *testing.T) {
 
 	// These just go to mem table, only operation stats
 	err = store.Put(context.Background(), c1)
-	assert.NoError(err)
+	require.NoError(t, err)
 	err = store.Put(context.Background(), c2)
-	assert.NoError(err)
+	require.NoError(t, err)
 	err = store.Put(context.Background(), c3)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(uint64(3), stats(store).PutLatency.Samples())
 	assert.Equal(uint64(0), stats(store).PersistLatency.Samples())
 
@@ -72,22 +73,22 @@ func TestStats(t *testing.T) {
 	assert.Equal(uint64(3), stats(store).AddressesPerHas.Sum())
 
 	c, err := store.Get(context.Background(), c1.Hash())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.False(c.IsEmpty())
 	c, err = store.Get(context.Background(), c2.Hash())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.False(c.IsEmpty())
 	c, err = store.Get(context.Background(), c3.Hash())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.False(c.IsEmpty())
 	assert.Equal(uint64(3), stats(store).GetLatency.Samples())
 	assert.Equal(uint64(0), stats(store).FileReadLatency.Samples())
 	assert.Equal(uint64(3), stats(store).ChunksPerGet.Sum())
 
 	h, err := store.Root(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	_, err = store.Commit(context.Background(), h, h)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	// Commit will update the manifest
 	assert.EqualValues(1, stats(store).WriteManifestLatency.Samples())
@@ -100,11 +101,11 @@ func TestStats(t *testing.T) {
 
 	// Now some gets that will incur read IO
 	_, err = store.Get(context.Background(), c1.Hash())
-	assert.NoError(err)
+	require.NoError(t, err)
 	_, err = store.Get(context.Background(), c2.Hash())
-	assert.NoError(err)
+	require.NoError(t, err)
 	_, err = store.Get(context.Background(), c3.Hash())
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(uint64(3), stats(store).FileReadLatency.Samples())
 	assert.Equal(uint64(27), stats(store).FileBytesPerRead.Sum())
 
@@ -119,25 +120,25 @@ func TestStats(t *testing.T) {
 	}
 	chunkChan := make(chan *chunks.Chunk, 3)
 	err = store.GetMany(context.Background(), hashes.HashSet(), func(c *chunks.Chunk) { chunkChan <- c })
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(uint64(4), stats(store).FileReadLatency.Samples())
 	assert.Equal(uint64(54), stats(store).FileBytesPerRead.Sum())
 
 	// Force a conjoin
 	store.c = inlineConjoiner{2}
 	err = store.Put(context.Background(), c4)
-	assert.NoError(err)
+	require.NoError(t, err)
 	h, err = store.Root(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	_, err = store.Commit(context.Background(), h, h)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	err = store.Put(context.Background(), c5)
-	assert.NoError(err)
+	require.NoError(t, err)
 	h, err = store.Root(context.Background())
-	assert.NoError(err)
+	require.NoError(t, err)
 	_, err = store.Commit(context.Background(), h, h)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	assert.Equal(uint64(1), stats(store).ConjoinLatency.Samples())
 	// TODO: Once random conjoin hack is out, test other conjoin stats

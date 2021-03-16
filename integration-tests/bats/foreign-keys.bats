@@ -25,7 +25,6 @@ teardown() {
     teardown_common
 }
 
-
 @test "foreign-keys: test foreign-key on commit checks" {
     dolt reset --hard
     dolt sql <<SQL
@@ -1510,4 +1509,155 @@ SQL
   run dolt merge b2_fk
   [ "$status" -eq "0" ]
   [[ "$output" =~ "Warning" ]] || false
+}
+
+@test "foreign-keys: self-referential same column(s)" {
+    dolt sql <<SQL
+CREATE INDEX v1v2 ON parent(v1, v2);
+SQL
+    run dolt sql -q "ALTER TABLE parent ADD CONSTRAINT fk_named FOREIGN KEY (v1) REFERENCES parent(v1);"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ 'the same column `v1` cannot be used in self referential foreign keys' ]] || false
+    run dolt sql -q "ALTER TABLE parent ADD CONSTRAINT fk_named FOREIGN KEY (v1, v2) REFERENCES parent(v1, v2);"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "self referential" ]] || false
+}
+
+@test "foreign-keys: self-referential child column follows parent RESTRICT" {
+    # default reference option is RESTRICT
+    dolt sql <<SQL
+ALTER TABLE parent ADD CONSTRAINT fk_named FOREIGN KEY (v2) REFERENCES parent(v1);
+INSERT INTO parent VALUES (1,1,1), (2, 2, 1), (3, 3, NULL);
+UPDATE parent SET v1 = 1 WHERE id = 1;
+UPDATE parent SET v1 = 4 WHERE id = 3;
+DELETE FROM parent WHERE id = 3;
+SQL
+    run dolt sql -q "SELECT * FROM parent" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "id,v1,v2" ]] || false
+    [[ "$output" =~ "1,1,1" ]] || false
+    [[ "$output" =~ "2,2,1" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+
+    run dolt sql -q "DELETE FROM parent WHERE v1 = 1;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+    run dolt sql -q "UPDATE parent SET v1 = 2;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+    run dolt sql -q "REPLACE INTO parent VALUES (1, 1, 1);"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+}
+
+@test "foreign-keys: self-referential child column follows parent CASCADE" {
+    dolt sql <<SQL
+ALTER TABLE parent ADD CONSTRAINT fk_named FOREIGN KEY (v2) REFERENCES parent(v1) ON UPDATE CASCADE ON DELETE CASCADE;
+INSERT INTO parent VALUES (1,1,1), (2, 2, 1), (3, 3, NULL);
+UPDATE parent SET v1 = 1 WHERE id = 1;
+UPDATE parent SET v1 = 4 WHERE id = 3;
+DELETE FROM parent WHERE id = 3;
+SQL
+
+    run dolt sql -q "UPDATE parent SET v1 = 2;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+    dolt sql -q "REPLACE INTO parent VALUES (1, 1, 1), (2, 2, 2);"
+    run dolt sql -q "SELECT * FROM parent" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "id,v1,v2" ]] || false
+    [[ "$output" =~ "1,1,1" ]] || false
+    [[ "$output" =~ "2,2,2" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+
+    run dolt sql -q "UPDATE parent SET v1 = 2;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+    run dolt sql -q "UPDATE parent SET v1 = 2 WHERE id = 1;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+    run dolt sql -q "REPLACE INTO parent VALUES (1,1,2), (2,2,1);"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+
+    dolt sql <<SQL
+UPDATE parent SET v2 = 2 WHERE id = 1;
+UPDATE parent SET v2 = 1 WHERE id = 2;
+SQL
+    run dolt sql -q "SELECT * FROM parent" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "id,v1,v2" ]] || false
+    [[ "$output" =~ "1,1,2" ]] || false
+    [[ "$output" =~ "2,2,1" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+
+    # Seems like it should work but this is what MySQL does
+    run dolt sql -q "UPDATE parent SET v1 = 2;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+    run dolt sql -q "UPDATE parent SET v1 = 2 WHERE id = 1;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+
+    dolt sql -q "DELETE FROM parent WHERE v1 = 1;"
+    run dolt sql -q "SELECT * FROM parent" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "id,v1,v2" ]] || false
+    [[ "${#lines[@]}" = "1" ]] || false
+}
+
+@test "foreign-keys: self-referential child column follows parent SET NULL" {
+    dolt sql <<SQL
+ALTER TABLE parent ADD CONSTRAINT fk_named FOREIGN KEY (v2) REFERENCES parent(v1) ON UPDATE SET NULL ON DELETE SET NULL;
+INSERT INTO parent VALUES (1,1,1), (2, 2, 1), (3, 3, NULL);
+UPDATE parent SET v1 = 1 WHERE id = 1;
+UPDATE parent SET v1 = 4 WHERE id = 3;
+DELETE FROM parent WHERE id = 3;
+SQL
+
+    run dolt sql -q "UPDATE parent SET v1 = 2;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+    dolt sql -q "REPLACE INTO parent VALUES (1, 1, 1), (2, 2, 2);"
+    run dolt sql -q "SELECT * FROM parent" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "id,v1,v2" ]] || false
+    [[ "$output" =~ "1,1,1" ]] || false
+    [[ "$output" =~ "2,2,2" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+
+    run dolt sql -q "UPDATE parent SET v1 = 2;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+    run dolt sql -q "UPDATE parent SET v1 = 2 WHERE id = 1;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+    dolt sql -q "REPLACE INTO parent VALUES (1,1,2), (2,2,1);"
+    run dolt sql -q "SELECT * FROM parent ORDER BY 1" -r=json
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ '{"rows": [{"id":1,"v1":1},{"id":2,"v1":2,"v2":1}]}' ]] || false
+
+    dolt sql <<SQL
+UPDATE parent SET v2 = 2 WHERE id = 1;
+UPDATE parent SET v2 = 1 WHERE id = 2;
+SQL
+    run dolt sql -q "SELECT * FROM parent" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "id,v1,v2" ]] || false
+    [[ "$output" =~ "1,1,2" ]] || false
+    [[ "$output" =~ "2,2,1" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+
+    # Seems like it should work but this is what MySQL does
+    run dolt sql -q "UPDATE parent SET v1 = 2;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+    run dolt sql -q "UPDATE parent SET v1 = 2 WHERE id = 1;"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "violation" ]] || false
+
+    dolt sql -q "DELETE FROM parent WHERE v1 = 1;"
+    run dolt sql -q "SELECT * FROM parent" -r=json
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ '{"rows": [{"id":2,"v1":2}]}' ]] || false
 }

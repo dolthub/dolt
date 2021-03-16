@@ -27,6 +27,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -221,11 +222,11 @@ func TestOrderedSequencesDiffCloseWithoutReading(t *testing.T) {
 
 	runTest := func(t *testing.T, df diffFn) {
 		set1, err := NewSet(context.Background(), vs)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		s1 := set1.orderedSequence
 		// A single item should be enough, but generate lots anyway.
 		set2, err := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(0, 1000, 1)...)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		s2 := set2.orderedSequence
 
 		changeChan := make(chan ValueChanged)
@@ -279,15 +280,15 @@ func TestOrderedSequenceDiffWithMetaNodeGap(t *testing.T) {
 	}
 
 	m1, err := newSetSequenceMt(Float(1), Float(2))
-	assert.NoError(err)
+	require.NoError(t, err)
 	m2, err := newSetSequenceMt(Float(3), Float(4))
-	assert.NoError(err)
+	require.NoError(t, err)
 	m3, err := newSetSequenceMt(Float(5), Float(6))
-	assert.NoError(err)
+	require.NoError(t, err)
 	s1, err := newSetMetaSequence(1, []metaTuple{m1, m3}, vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 	s2, err := newSetMetaSequence(1, []metaTuple{m1, m2, m3}, vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	runTest := func(df diffFn) {
 		var err error
@@ -316,7 +317,7 @@ func TestOrderedSequenceDiffWithMetaNodeGap(t *testing.T) {
 			i++
 		}
 		assert.Equal(len(expected), i)
-		assert.NoError(err)
+		require.NoError(t, err)
 	}
 
 	runTest(orderedSequenceDiffBest)

@@ -41,4 +41,4 @@ jobs:
           dolt config --global --add user.email 'actions@liquidata.co'
       - name: Test all
         run: ./runner.sh
-        working-directory: ./bats/compatibility
+        working-directory: ./integration-tests/bats/compatibility
