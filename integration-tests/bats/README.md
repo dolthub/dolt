@@ -2,7 +2,7 @@
 
 BATS is used to integration test `dolt`. Our BATS tests started as a humble suite of integration tests. Over two years
 of development the suite has grown to over 1,000 tests. When we find a customer facing bug in the `dolt` command line or
-SQL implementation, we cover it with a BATS test. These tests are run on every `dolt` PR on Windows and Linux using
+SQL implementation, we cover it with a BATS test. These tests are run on every `dolt` PR on Mac, Windows, and Linux using
 GitHub Actions. 
 
 These tests are also useful documentation. If you are wondering how a certain command or feature works in practice,

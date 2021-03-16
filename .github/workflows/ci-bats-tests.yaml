@@ -98,7 +98,7 @@ jobs:
         if: matrix.os == 'windows-2019'
         run: |
           bats --tap .
-        working-directory: ./bats
+        working-directory: ./integration-tests/bats
         env:
           IS_WINDOWS: true
           WINDOWS_BASE_DIR: "/d/a"
@@ -106,4 +106,4 @@ jobs:
         if: matrix.os != 'windows-2019'
         run: |
           bats --tap .
-        working-directory: ./bats
+        working-directory: ./integration-tests/bats
