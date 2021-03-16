@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestContainCommonSupertype(t *testing.T) {
@@ -185,9 +186,9 @@ func TestContainCommonSupertype(t *testing.T) {
 	for i, c := range cases {
 		act := ContainCommonSupertype(Format_7_18, c.a, c.b)
 		aDesc, err := c.a.Describe(context.Background())
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		bDesc, err := c.b.Describe(context.Background())
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, c.out, act, "Test case at position %d; \n\ta:%s\n\tb:%s", i, aDesc, bDesc)
 	}
 }

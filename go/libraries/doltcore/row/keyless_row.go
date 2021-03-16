@@ -251,6 +251,16 @@ func (r keylessRow) SetColVal(updateTag uint64, updateVal types.Value, sch schem
 	return keylessRowWithCardinality(r.val.Format(), card, vals[:i]...)
 }
 
+// TaggedValues implements the Row interface.
+func (r keylessRow) TaggedValues() (TaggedValues, error) {
+	tv := make(TaggedValues)
+	_, err := r.IterCols(func(tag uint64, val types.Value) (stop bool, err error) {
+		tv[tag] = val
+		return false, nil
+	})
+	return tv, err
+}
+
 func (r keylessRow) Format() *types.NomsBinFormat {
 	return r.val.Format()
 }

@@ -97,7 +97,7 @@ func (suite *TableSinkSuite) TestWriteAndFlush() {
 
 	bb := bytes.NewBuffer(nil)
 	err = sink.Flush(bb)
-	assert.NoError(suite.t, err)
+	require.NoError(suite.t, err)
 
 	verifyContents(suite.t, bb.Bytes())
 }

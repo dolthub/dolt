@@ -89,3 +89,14 @@ SQL
   echo $output
   [[ "$output" =~ "$TESTSTR" ]] || false
 }
+
+@test "sql-shell: active branch after checkout" {
+    run dolt sql <<< "select active_branch()"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "ACTIVE_BRANCH()" ]] || false
+    [[ "$output" =~ "master" ]] || false
+    run dolt sql <<< "select dolt_checkout('-b', 'tmp_br'); select active_branch()"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "ACTIVE_BRANCH()" ]] || false
+    [[ "$output" =~ "tmp_br" ]] || false
+}

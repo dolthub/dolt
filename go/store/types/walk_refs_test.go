@@ -29,6 +29,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -42,7 +43,7 @@ func TestWalkRefs(t *testing.T) {
 			return nil
 		})
 		val, err := EncodeValue(v, Format_7_18)
-		assert.NoError(err)
+		require.NoError(t, err)
 		err = WalkRefs(val, Format_7_18, func(r Ref) error {
 			if assert.True(len(expected) > 0) {
 				assert.Equal(expected[0], r.TargetHash())
@@ -51,7 +52,7 @@ func TestWalkRefs(t *testing.T) {
 
 			return nil
 		})
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Len(expected, 0)
 	}
 
@@ -60,7 +61,7 @@ func TestWalkRefs(t *testing.T) {
 		t.Run("Typed", func(t *testing.T) {
 			vrw := newTestValueStore()
 			s, err := NewStruct(Format_7_18, "", StructData{"n": Float(1)})
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			runTest(mustRef(NewRef(mustMap(NewMap(context.Background(), vrw, s, Float(2))), Format_7_18)), t)
 		})
 		t.Run("OfValue", func(t *testing.T) {
@@ -75,7 +76,7 @@ func TestWalkRefs(t *testing.T) {
 			"num": Float(42),
 		}
 		st, err := NewStruct(Format_7_18, "nom", data)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		runTest(st, t)
 	})
 
@@ -85,7 +86,7 @@ func TestWalkRefs(t *testing.T) {
 		for i := range vs {
 			var err error
 			vs[i], err = NewStruct(Format_7_18, "", StructData{"n": Float(r.Uint64())})
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		return vs
 	}
@@ -97,16 +98,16 @@ func TestWalkRefs(t *testing.T) {
 
 		t.Run("OfRefs", func(t *testing.T) {
 			l, err := NewList(context.Background(), vrw, mustValue(vrw.WriteValue(context.Background(), Float(42))), mustValue(vrw.WriteValue(context.Background(), Float(0))))
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			runTest(l, t)
 		})
 
 		t.Run("Chunked", func(t *testing.T) {
 			l, err := NewList(context.Background(), vrw, newValueSlice(r)...)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			for l.sequence.isLeaf() {
 				l, err = l.Concat(context.Background(), mustList(NewList(context.Background(), vrw, newValueSlice(r)...)))
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 			runTest(l, t)
 		})
@@ -119,19 +120,19 @@ func TestWalkRefs(t *testing.T) {
 
 		t.Run("OfRefs", func(t *testing.T) {
 			s, err := NewSet(context.Background(), vrw, mustValue(vrw.WriteValue(context.Background(), Float(42))), mustValue(vrw.WriteValue(context.Background(), Float(0))))
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			runTest(s, t)
 		})
 
 		t.Run("Chunked", func(t *testing.T) {
 			s, err := NewSet(context.Background(), vrw, newValueSlice(r)...)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			for s.isLeaf() {
 				e := s.Edit()
 				e, err = e.Insert(newValueSlice(r)...)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				s, err = e.Set(context.Background())
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 			runTest(s, t)
 		})
@@ -144,13 +145,13 @@ func TestWalkRefs(t *testing.T) {
 
 		t.Run("OfRefs", func(t *testing.T) {
 			m, err := NewMap(context.Background(), vrw, mustValue(vrw.WriteValue(context.Background(), Float(42))), mustValue(vrw.WriteValue(context.Background(), Float(0))))
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			runTest(m, t)
 		})
 
 		t.Run("Chunked", func(t *testing.T) {
 			m, err := NewMap(context.Background(), vrw, newValueSlice(r)...)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			for m.isLeaf() {
 				e := m.Edit()
 				vs := newValueSlice(r)
@@ -158,7 +159,7 @@ func TestWalkRefs(t *testing.T) {
 					e = e.Set(vs[i], vs[i+1])
 				}
 				m, err = e.Map(context.Background())
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 			runTest(m, t)
 		})
@@ -175,11 +176,11 @@ func TestWalkRefs(t *testing.T) {
 			return bytes.NewReader(scratch)
 		}
 		b, err := NewBlob(context.Background(), vrw, freshRandomBytes())
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		for b.sequence.isLeaf() {
 			var err error
 			b, err = b.Concat(context.Background(), mustBlob(NewBlob(context.Background(), vrw, freshRandomBytes())))
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 		runTest(b, t)
 	})

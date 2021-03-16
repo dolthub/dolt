@@ -34,7 +34,7 @@ const (
 func TestTupleEquality(t *testing.T) {
 	values := []Value{String("aoeu"), Int(-1234), Uint(1234)}
 	tpl, err := NewTuple(Format_7_18, values...)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	if !tpl.Equals(tpl) {
 		t.Error("Tuple not equal to itself")
@@ -42,7 +42,7 @@ func TestTupleEquality(t *testing.T) {
 
 	id := UUID(uuid.MustParse(ZeroUUID))
 	tpl2, err := tpl.Append(id)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	idIdx := tpl2.Len() - 1
 
 	if tpl.Equals(tpl2) {
@@ -50,41 +50,41 @@ func TestTupleEquality(t *testing.T) {
 	}
 
 	temp, err := tpl2.Set(idIdx, id)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	temp, err = temp.Set(0, String("aoeu"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	temp, err = temp.Set(1, Int(-1234))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	tpl3, err := temp.Set(2, Uint(1234))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	if !tpl2.Equals(tpl3) {
 		t.Error("")
 	}
 
 	tpl3, err = tpl2.Set(0, String("aoeu"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	if !tpl2.Equals(tpl3) {
 		t.Error("")
 	}
 
 	tpl3, err = tpl2.Set(1, Int(-1234))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	if !tpl2.Equals(tpl3) {
 		t.Error("")
 	}
 
 	tpl3, err = tpl2.Set(2, Uint(1234))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	if !tpl2.Equals(tpl3) {
 		t.Error("")
 	}
 
 	tpl3, err = tpl2.Set(idIdx, id)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	if !tpl2.Equals(tpl3) {
 		t.Error("")
@@ -95,7 +95,7 @@ func TestTupleEquality(t *testing.T) {
 	}
 
 	idVal, err := tpl3.Get(idIdx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	if idVal.Kind() != UUIDKind {
 		t.Error("Unexpected type")
@@ -117,7 +117,7 @@ func TestTupleEquality(t *testing.T) {
 		return false, nil
 	})
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestTupleLess(t *testing.T) {
@@ -166,13 +166,13 @@ func TestTupleLess(t *testing.T) {
 	for _, test := range tests {
 		tpl1, err := NewTuple(Format_7_18, test.vals1...)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		tpl2, err := NewTuple(Format_7_18, test.vals2...)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		actual, err := tpl1.Less(Format_7_18, tpl2)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		if actual != test.expected {
 			t.Error("tpl1:", mustString(EncodedValue(context.Background(), tpl1)), "tpl2:", mustString(EncodedValue(context.Background(), tpl2)), "expected", test.expected, "actual:", actual)

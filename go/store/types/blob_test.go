@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/store/d"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -97,25 +98,25 @@ func newBlobTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff in
 
 func TestBlobSuite4K(t *testing.T) {
 	s, err := newBlobTestSuite(12, 2, 2, 2)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	suite.Run(t, s)
 }
 
 func TestBlobSuite64K(t *testing.T) {
 	s, err := newBlobTestSuite(16, 15, 2, 2)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	suite.Run(t, s)
 }
 
 func TestBlobSuite256K(t *testing.T) {
 	s, err := newBlobTestSuite(18, 64, 2, 2)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	suite.Run(t, s)
 }
 
 func TestBlobSuite1M(t *testing.T) {
 	s, err := newBlobTestSuite(20, 245, 2, 2)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	suite.Run(t, s)
 }
 
@@ -212,11 +213,11 @@ func TestBlobFromReaderThatReturnsDataAndError(t *testing.T) {
 	tr := &testReader{buf: &bytes.Buffer{}}
 
 	b, err := NewBlob(context.Background(), vrw, tr)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	actual := &bytes.Buffer{}
 	_, err = io.Copy(actual, b.Reader(context.Background()))
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	assert.True(bytes.Equal(actual.Bytes(), tr.buf.Bytes()))
 	assert.Equal(byte(2), actual.Bytes()[len(actual.Bytes())-1])
@@ -236,11 +237,11 @@ func TestBlobConcat(t *testing.T) {
 	split := func(b Blob, at int64) (Blob, Blob) {
 		read1, read2 := b.Reader(context.Background()), b.Reader(context.Background())
 		b1, err := NewBlob(context.Background(), vs, &io.LimitedReader{R: read1, N: at})
-		assert.NoError(err)
+		require.NoError(t, err)
 		_, err = read2.Seek(at, 0)
-		assert.NoError(err)
+		require.NoError(t, err)
 		b2, err := NewBlob(context.Background(), vs, read2)
-		assert.NoError(err)
+		require.NoError(t, err)
 		return reload(b1), reload(b2)
 	}
 
@@ -248,31 +249,32 @@ func TestBlobConcat(t *testing.T) {
 	// Note that List.Concat is exhaustively tested, don't worry here.
 	r := rand.New(rand.NewSource(0))
 	b, err := NewBlob(context.Background(), vs, &io.LimitedReader{R: r, N: 1e6})
-	assert.NoError(err)
+	require.NoError(t, err)
 	b = reload(b)
 
 	b1, err := NewEmptyBlob(vs)
-	assert.NoError(err)
+	require.NoError(t, err)
 	b1, err = b1.Concat(context.Background(), b)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(b.Equals(b1))
 
 	b2, err := b.Concat(context.Background(), mustBlob(NewEmptyBlob(vs)))
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(b.Equals(b2))
 
 	b3, b4 := split(b, 10)
 	b34, err := b3.Concat(context.Background(), b4)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(b.Equals(b34))
 
 	b5, b6 := split(b, 1e6-10)
 	b56, err := b5.Concat(context.Background(), b6)
+	require.NoError(t, err)
 	assert.True(b.Equals(b56))
-	assert.NoError(err)
 
 	b7, b8 := split(b, 1e6/2)
 	b78, err := b7.Concat(context.Background(), b8)
+	require.NoError(t, err)
 	assert.True(b.Equals(b78))
 }
 
@@ -282,27 +284,27 @@ func TestBlobNewParallel(t *testing.T) {
 
 	readAll := func(b Blob) []byte {
 		data, err := ioutil.ReadAll(b.Reader(context.Background()))
-		assert.NoError(err)
+		require.NoError(t, err)
 		return data
 	}
 
 	b, err := NewBlob(context.Background(), vrw)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(b.Len() == 0)
 
 	b, err = NewBlob(context.Background(), vrw, strings.NewReader("abc"))
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal("abc", string(readAll(b)))
 
 	b, err = NewBlob(context.Background(), vrw, strings.NewReader("abc"), strings.NewReader("def"))
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal("abcdef", string(readAll(b)))
 
 	p, size := 100, 1024
 	r := rand.New(rand.NewSource(0))
 	data := make([]byte, p*size)
 	_, err = r.Read(data)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	readers := make([]io.Reader, p)
 	for i := range readers {
@@ -310,7 +312,7 @@ func TestBlobNewParallel(t *testing.T) {
 	}
 
 	b, err = NewBlob(context.Background(), vrw, readers...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(data, readAll(b))
 }
 
@@ -328,9 +330,9 @@ func TestStreamingParallelBlob(t *testing.T) {
 
 	vs := newTestValueStore()
 	blob, err := NewBlob(context.Background(), vs, readers...)
-	assert.NoError(err)
+	require.NoError(t, err)
 	outBuff := &bytes.Buffer{}
 	_, err = blob.Copy(context.Background(), outBuff)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(bytes.Equal(buff, outBuff.Bytes()))
 }

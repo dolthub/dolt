@@ -180,7 +180,7 @@ func TestNBSPruneTableFiles(t *testing.T) {
 	}
 
 	err = st.PruneTableFiles(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	postGC := currTableFiles(nomsDir)
 	for _, tf := range sources {
@@ -227,11 +227,11 @@ func TestNBSCopyGC(t *testing.T) {
 
 	for _, c := range keepers {
 		err := st.Put(ctx, c)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 	for h, c := range keepers {
 		out, err := st.Get(ctx, h)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, c, out)
 	}
 
@@ -243,16 +243,16 @@ func TestNBSCopyGC(t *testing.T) {
 	}
 	for _, c := range tossers {
 		err := st.Put(ctx, c)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 	for h, c := range tossers {
 		out, err := st.Get(ctx, h)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, c, out)
 	}
 
 	r, err := st.Root(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	keepChan := make(chan []hash.Hash, 16)
 	var msErr error
@@ -267,7 +267,7 @@ func TestNBSCopyGC(t *testing.T) {
 	}
 	close(keepChan)
 	wg.Wait()
-	assert.NoError(t, msErr)
+	require.NoError(t, msErr)
 
 	for h, c := range keepers {
 		out, err := st.Get(ctx, h)

@@ -27,6 +27,7 @@ var DoltFunctions = []sql.Function{
 	sql.FunctionN{Name: DoltResetFuncName, Fn: NewDoltResetFunc},
 	sql.FunctionN{Name: DoltCheckoutFuncName, Fn: NewDoltCheckoutFunc},
 	sql.FunctionN{Name: DoltMergeFuncName, Fn: NewDoltMergeFunc},
+	sql.Function0{Name: ActiveBranchFuncName, Fn: NewActiveBranchFunc},
 }
 
 // These are the DoltFunctions that get exposed to Dolthub Api.

@@ -123,7 +123,7 @@ func TestTableEditorConcurrency(t *testing.T) {
 			_ = newTableData.IterAll(context.Background(), func(key, value types.Value) error {
 				dReadRow, err := row.FromNoms(tableSch, key.(types.Tuple), value.(types.Tuple))
 				require.NoError(t, err)
-				dReadVals, err := row.GetTaggedVals(dReadRow)
+				dReadVals, err := dReadRow.TaggedValues()
 				require.NoError(t, err)
 				assert.Equal(t, row.TaggedValues{
 					0: types.Int(iterIndex),
@@ -217,7 +217,7 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 			_ = newTableData.IterAll(context.Background(), func(key, value types.Value) error {
 				dReadRow, err := row.FromNoms(tableSch, key.(types.Tuple), value.(types.Tuple))
 				require.NoError(t, err)
-				dReadVals, err := row.GetTaggedVals(dReadRow)
+				dReadVals, err := dReadRow.TaggedValues()
 				require.NoError(t, err)
 				assert.Equal(t, row.TaggedValues{
 					0: types.Int(iterIndex),
@@ -283,7 +283,7 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 		_ = newTableData.IterAll(context.Background(), func(key, value types.Value) error {
 			dReadRow, err := row.FromNoms(tableSch, key.(types.Tuple), value.(types.Tuple))
 			require.NoError(t, err)
-			dReadVals, err := row.GetTaggedVals(dReadRow)
+			dReadVals, err := dReadRow.TaggedValues()
 			require.NoError(t, err)
 			assert.Equal(t, row.TaggedValues{
 				0: types.Int(iterIndex),
@@ -368,7 +368,7 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 		_ = newTableData.IterAll(context.Background(), func(key, value types.Value) error {
 			dReadRow, err := row.FromNoms(tableSch, key.(types.Tuple), value.(types.Tuple))
 			require.NoError(t, err)
-			dReadVals, err := row.GetTaggedVals(dReadRow)
+			dReadVals, err := dReadRow.TaggedValues()
 			require.NoError(t, err)
 			assert.Equal(t, row.TaggedValues{
 				0: types.Int(iterIndex),

@@ -34,6 +34,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestS3TableReaderAt(t *testing.T) {
@@ -46,7 +47,7 @@ func TestS3TableReaderAt(t *testing.T) {
 	}
 
 	tableData, h, err := buildTable(chunks)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	s3.data[h.String()] = tableData
 
 	t.Run("TolerateFailingReads", func(t *testing.T) {
@@ -56,7 +57,7 @@ func TestS3TableReaderAt(t *testing.T) {
 		tra := &s3TableReaderAt{&s3ObjectReader{makeFlakyS3(s3), "bucket", nil, nil, ""}, h}
 		scratch := make([]byte, len(tableData))
 		_, err := tra.ReadAtWithStats(context.Background(), scratch, 0, &Stats{})
-		assert.NoError(err)
+		require.NoError(t, err)
 		// constructing the table reader should have resulted in 2 reads
 		assert.Equal(2, s3.getCount-baseline)
 		assert.Equal(tableData, scratch)
@@ -69,22 +70,22 @@ func TestS3TableReaderAt(t *testing.T) {
 		stats := &Stats{}
 
 		tc, err := newFSTableCache(dir, uint64(2*len(tableData)), 4)
-		assert.NoError(err)
+		require.NoError(t, err)
 		tra := &s3TableReaderAt{&s3ObjectReader{s3, "bucket", nil, tc, ""}, h}
 
 		// First, read when table is not yet cached
 		scratch := make([]byte, len(tableData))
 		baseline := s3.getCount
 		_, err = tra.ReadAtWithStats(context.Background(), scratch, 0, stats)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.True(s3.getCount > baseline)
 
 		// Cache the table and read again
 		err = tc.store(h, bytes.NewReader(tableData), uint64(len(tableData)))
-		assert.NoError(err)
+		require.NoError(t, err)
 		baseline = s3.getCount
 		_, err = tra.ReadAtWithStats(context.Background(), scratch, 0, stats)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Zero(s3.getCount - baseline)
 	})
 }
@@ -103,13 +104,13 @@ func TestS3TableReaderAtNamespace(t *testing.T) {
 	ns := "a-prefix-here"
 
 	tableData, h, err := buildTable(chunks)
-	assert.NoError(err)
+	require.NoError(t, err)
 	s3.data["a-prefix-here/"+h.String()] = tableData
 
 	tra := &s3TableReaderAt{&s3ObjectReader{s3, "bucket", nil, nil, ns}, h}
 	scratch := make([]byte, len(tableData))
 	_, err = tra.ReadAtWithStats(context.Background(), scratch, 0, &Stats{})
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(tableData, scratch)
 }
 

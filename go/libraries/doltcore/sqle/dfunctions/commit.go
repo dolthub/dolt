@@ -44,6 +44,9 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	//  Get the params associated with COMMIT.
 	ap := cli.CreateCommitArgParser()
 	args, err := getDoltArgs(ctx, row, cf.Children())
+	if err != nil {
+		return nil, err
+	}
 	apr := cli.ParseArgs(ap, args, nil)
 
 	var name, email string

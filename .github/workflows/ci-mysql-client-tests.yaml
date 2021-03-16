@@ -9,5 +9,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+      - name: Copy go package
+        run: cp -r ./go ./integration-tests/go
       - name: Test mysql client integrations
         uses: ./.github/actions/mysql-client-tests

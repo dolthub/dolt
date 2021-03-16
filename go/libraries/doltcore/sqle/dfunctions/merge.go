@@ -78,7 +78,7 @@ func (cf *MergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	parent, ph, parentRoot, err := getParent(ctx, err, sess, dbName)
+	parent, ph, parentRoot, err := getParent(ctx, sess, dbName)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +88,7 @@ func (cf *MergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, err
 	}
 
-	cm, cmh, err := getBranchCommit(ctx, ok, branchName, err, ddb)
+	cm, cmh, err := getBranchCommit(ctx, branchName, ddb)
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +153,7 @@ func checkForUncommittedChanges(root *doltdb.RootValue, parentRoot *doltdb.RootV
 	return nil
 }
 
-func getBranchCommit(ctx *sql.Context, ok bool, val interface{}, err error, ddb *doltdb.DoltDB) (*doltdb.Commit, hash.Hash, error) {
+func getBranchCommit(ctx *sql.Context, val interface{}, ddb *doltdb.DoltDB) (*doltdb.Commit, hash.Hash, error) {
 	paramStr, ok := val.(string)
 
 	if !ok {
@@ -181,15 +181,13 @@ func getBranchCommit(ctx *sql.Context, ok bool, val interface{}, err error, ddb 
 	return cm, cmh, nil
 }
 
-func getParent(ctx *sql.Context, err error, sess *sqle.DoltSession, dbName string) (*doltdb.Commit, hash.Hash, *doltdb.RootValue, error) {
+func getParent(ctx *sql.Context, sess *sqle.DoltSession, dbName string) (*doltdb.Commit, hash.Hash, *doltdb.RootValue, error) {
 	parent, ph, err := sess.GetParentCommit(ctx, dbName)
-
 	if err != nil {
 		return nil, hash.Hash{}, nil, err
 	}
 
 	parentRoot, err := parent.GetRootValue()
-
 	if err != nil {
 		return nil, hash.Hash{}, nil, err
 	}

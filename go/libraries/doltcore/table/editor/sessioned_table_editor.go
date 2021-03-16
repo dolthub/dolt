@@ -18,6 +18,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/store/hash"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -39,7 +41,7 @@ func (ste *sessionedTableEditor) InsertKeyVal(ctx context.Context, key, val type
 	ste.tableEditSession.writeMutex.RLock()
 	defer ste.tableEditSession.writeMutex.RUnlock()
 
-	err := ste.validateKeyValForInsert(ctx, key, val, tagToVal)
+	err := ste.validateForInsert(ctx, tagToVal)
 	if err != nil {
 		return err
 	}
@@ -53,7 +55,11 @@ func (ste *sessionedTableEditor) InsertRow(ctx context.Context, dRow row.Row) er
 	ste.tableEditSession.writeMutex.RLock()
 	defer ste.tableEditSession.writeMutex.RUnlock()
 
-	err := ste.validateForInsert(ctx, dRow)
+	dRowTaggedVals, err := dRow.TaggedValues()
+	if err != nil {
+		return err
+	}
+	err = ste.validateForInsert(ctx, dRowTaggedVals)
 	if err != nil {
 		return err
 	}
@@ -128,8 +134,13 @@ func (ste *sessionedTableEditor) Close() error {
 
 // handleReferencingRowsOnDelete handles updating referencing foreign keys on delete operations
 func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Context, dRow row.Row) error {
+	//TODO: all self referential logic assumes non-composite keys
 	if ste.tableEditSession.Props.ForeignKeyChecksDisabled {
 		return nil
+	}
+	dRowTaggedVals, err := dRow.TaggedValues()
+	if err != nil {
+		return err
 	}
 
 	for _, foreignKey := range ste.referencingTables {
@@ -137,7 +148,7 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 		if !ok {
 			return fmt.Errorf("unable to get table editor as `%s` is missing", foreignKey.TableName)
 		}
-		indexKey, hasNulls, err := ste.reduceRowAndConvert(ste.tableEditor.Format(), foreignKey.ReferencedTableColumns, foreignKey.TableColumns, dRow)
+		indexKey, hasNulls, err := ste.reduceRowAndConvert(ste.tableEditor.Format(), foreignKey.ReferencedTableColumns, foreignKey.TableColumns, dRowTaggedVals)
 		if err != nil {
 			return err
 		}
@@ -152,24 +163,35 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 			continue
 		}
 
+		var shouldSkip bool
 		switch foreignKey.OnDelete {
 		case doltdb.ForeignKeyReferenceOption_Cascade:
 			for _, rowToDelete := range referencingRows {
+				ctx, shouldSkip, err = ste.shouldSkipDeleteCascade(ctx, foreignKey, dRow, rowToDelete)
+				if err != nil {
+					return err
+				}
+				if shouldSkip {
+					continue
+				}
 				err = referencingSte.DeleteRow(ctx, rowToDelete)
 				if err != nil {
 					return err
 				}
 			}
 		case doltdb.ForeignKeyReferenceOption_SetNull:
-			for _, oldRow := range referencingRows {
-				newRow := oldRow
+			for _, unalteredNewRow := range referencingRows {
+				if foreignKey.IsSelfReferential() && row.AreEqual(dRow, unalteredNewRow, ste.tableEditor.Schema()) {
+					continue
+				}
+				newRow := unalteredNewRow
 				for _, colTag := range foreignKey.TableColumns {
 					newRow, err = newRow.SetColVal(colTag, types.NullValue, referencingSte.tableEditor.Schema())
 					if err != nil {
 						return err
 					}
 				}
-				err = referencingSte.updateRow(ctx, oldRow, newRow, false)
+				err = referencingSte.updateRow(ctx, unalteredNewRow, newRow, false)
 				if err != nil {
 					return err
 				}
@@ -187,8 +209,13 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnDelete(ctx context.Conte
 }
 
 func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Context, dOldRow row.Row, dNewRow row.Row) error {
+	//TODO: all self referential logic assumes non-composite keys
 	if ste.tableEditSession.Props.ForeignKeyChecksDisabled {
 		return nil
+	}
+	dOldRowTaggedVals, err := dOldRow.TaggedValues()
+	if err != nil {
+		return err
 	}
 
 	for _, foreignKey := range ste.referencingTables {
@@ -196,7 +223,7 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 		if !ok {
 			return fmt.Errorf("unable to get table editor as `%s` is missing", foreignKey.TableName)
 		}
-		indexKey, hasNulls, err := ste.reduceRowAndConvert(ste.tableEditor.Format(), foreignKey.ReferencedTableColumns, foreignKey.TableColumns, dOldRow)
+		indexKey, hasNulls, err := ste.reduceRowAndConvert(ste.tableEditor.Format(), foreignKey.ReferencedTableColumns, foreignKey.TableColumns, dOldRowTaggedVals)
 		if err != nil {
 			return err
 		}
@@ -213,7 +240,7 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 
 		valueChanged := false
 		for _, colTag := range foreignKey.ReferencedTableColumns {
-			oldVal, oldOk := dOldRow.GetColVal(colTag)
+			oldVal, oldOk := dOldRowTaggedVals[colTag]
 			newVal, newOk := dNewRow.GetColVal(colTag)
 			if (oldOk != newOk) || (oldOk && newOk && !oldVal.Equals(newVal)) {
 				valueChanged = true
@@ -226,6 +253,10 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 
 		switch foreignKey.OnUpdate {
 		case doltdb.ForeignKeyReferenceOption_Cascade:
+			if foreignKey.IsSelfReferential() {
+				return fmt.Errorf("foreign key constraint violation on `%s`.`%s`: cascading updates always violate self referential foreign keys",
+					foreignKey.TableName, foreignKey.Name)
+			}
 			// NULL handling is usually done higher, so if a new value is NULL then we need to error
 			for i := range foreignKey.ReferencedTableColumns {
 				if incomingVal, _ := dNewRow.GetColVal(foreignKey.ReferencedTableColumns[i]); types.IsNull(incomingVal) {
@@ -255,6 +286,10 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 				}
 			}
 		case doltdb.ForeignKeyReferenceOption_SetNull:
+			if foreignKey.IsSelfReferential() {
+				return fmt.Errorf("foreign key constraint violation on `%s`.`%s`: SET NULL updates always violate self referential foreign keys",
+					foreignKey.TableName, foreignKey.Name)
+			}
 			for _, oldRow := range referencingRows {
 				newRow := oldRow
 				for _, colTag := range foreignKey.TableColumns {
@@ -280,14 +315,59 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 	return nil
 }
 
+// shouldSkipDeleteCascade determines whether the next row should be deleted, based on if a loop has been detected in
+// cascading deletes. Stores the previous delete hashes in the context, and returns a new context if the old one did not
+// have any hashes. Only applies to self referential foreign keys.
+func (ste *sessionedTableEditor) shouldSkipDeleteCascade(ctx context.Context, foreignKey doltdb.ForeignKey, oldRow, newRow row.Row) (context.Context, bool, error) {
+	//TODO: all self referential logic assumes non-composite keys
+	if !foreignKey.IsSelfReferential() {
+		return ctx, false, nil
+	}
+
+	const contextValueName = "SELF_FOREIGN_KEY_DELETION"
+	var deleteKeys map[hash.Hash]struct{}
+	mapInterface := ctx.Value(contextValueName)
+	if mapInterface != nil {
+		deleteKeys = mapInterface.(map[hash.Hash]struct{})
+	} else {
+		deleteKeys = make(map[hash.Hash]struct{})
+		ctx = context.WithValue(ctx, contextValueName, deleteKeys)
+	}
+
+	// We immediately store the old key in the map. We don't need to see if it was already there.
+	// We can also catch deletions that loop on the same row this way.
+	oldKey, err := oldRow.NomsMapKey(ste.tableEditor.Schema()).Value(ctx)
+	if err != nil {
+		return ctx, false, err
+	}
+	oldKeyHash, err := oldKey.Hash(oldRow.Format())
+	if err != nil {
+		return ctx, false, err
+	}
+	deleteKeys[oldKeyHash] = struct{}{}
+
+	// We don't need to store the new key. If it also causes a cascade then it will become an old key as the logic
+	// progresses. We're only interested in whether the new key is already present in the map.
+	newKey, err := newRow.NomsMapKey(ste.tableEditor.Schema()).Value(ctx)
+	if err != nil {
+		return ctx, false, err
+	}
+	newKeyHash, err := newKey.Hash(newRow.Format())
+	if err != nil {
+		return ctx, false, err
+	}
+	_, ok := deleteKeys[newKeyHash]
+	return ctx, ok, nil
+}
+
 // reduceRowAndConvert takes in a row and returns a Tuple containing only the values from the tags given. The returned
 // items have tags from newTags, while the tags from dRow are expected to match originalTags. Both parameter slices are
 // assumed to have equivalent ordering and length. If the key contains any nulls, then we return true to indicate that
 // we do not propagate an ON DELETE/UPDATE.
-func (ste *sessionedTableEditor) reduceRowAndConvert(nbf *types.NomsBinFormat, originalTags []uint64, newTags []uint64, dRow row.Row) (types.Tuple, bool, error) {
+func (ste *sessionedTableEditor) reduceRowAndConvert(nbf *types.NomsBinFormat, originalTags []uint64, newTags []uint64, taggedVals row.TaggedValues) (types.Tuple, bool, error) {
 	keyVals := make([]types.Value, len(originalTags)*2)
 	for i, colTag := range originalTags {
-		val, ok := dRow.GetColVal(colTag)
+		val, ok := taggedVals[colTag]
 		if !ok {
 			return types.EmptyTuple(nbf), true, nil
 		}
@@ -302,33 +382,13 @@ func (ste *sessionedTableEditor) reduceRowAndConvert(nbf *types.NomsBinFormat, o
 	return tpl, false, nil
 }
 
-// tupleforTags takes in a map of tags to values and returns a Tuple containing only the values from the tags
-// given. The returned items have tags from newTags, while the tags from dRow are expected to match originalTags. Both
-// parameter slices are assumed to have equivalent ordering and length. If the key contains any nulls, then we return
-// true to indicate that we do not propagate an ON DELETE/UPDATE. (functionality matches reduceRowAndConvert)
-func (ste *sessionedTableEditor) tupleforTags(nbf *types.NomsBinFormat, originalTags []uint64, newTags []uint64, tagToVal map[uint64]types.Value) (types.Tuple, bool, error) {
-	keyVals := make([]types.Value, len(originalTags)*2)
-	for i, colTag := range originalTags {
-		val, ok := tagToVal[colTag]
-		if !ok {
-			return types.EmptyTuple(nbf), true, nil
-		}
-		newTag := newTags[i]
-		keyVals[2*i] = types.Uint(newTag)
-		keyVals[2*i+1] = val
-	}
-
-	tpl, err := types.NewTuple(nbf, keyVals...)
-	if err != nil {
-		return types.Tuple{}, false, err
-	}
-
-	return tpl, false, nil
-}
-
 func (ste *sessionedTableEditor) updateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row, checkReferences bool) error {
 	if checkReferences {
-		err := ste.validateForInsert(ctx, dNewRow)
+		dNewRowTaggedVals, err := dNewRow.TaggedValues()
+		if err != nil {
+			return err
+		}
+		err = ste.validateForInsert(ctx, dNewRowTaggedVals)
 		if err != nil {
 			return err
 		}
@@ -342,41 +402,13 @@ func (ste *sessionedTableEditor) updateRow(ctx context.Context, dOldRow row.Row,
 	return ste.tableEditor.UpdateRow(ctx, dOldRow, dNewRow)
 }
 
-func (ste *sessionedTableEditor) validateKeyValForInsert(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value) error {
-	if ste.tableEditSession.Props.ForeignKeyChecksDisabled {
-		return nil
-	}
-	for _, foreignKey := range ste.referencedTables {
-		indexKey, hasNulls, err := ste.tupleforTags(ste.tableEditor.Format(), foreignKey.TableColumns, foreignKey.ReferencedTableColumns, tagToVal)
-		if err != nil {
-			return err
-		}
-		if hasNulls {
-			continue
-		}
-		referencingSte, ok := ste.tableEditSession.tables[foreignKey.ReferencedTableName]
-		if !ok {
-			return fmt.Errorf("unable to get table editor as `%s` is missing", foreignKey.ReferencedTableName)
-		}
-		exists, err := ContainsIndexedKey(ctx, referencingSte.tableEditor, indexKey, foreignKey.ReferencedTableIndex)
-		if err != nil {
-			return err
-		}
-		if !exists {
-			indexKeyStr, _ := types.EncodedValue(ctx, indexKey)
-			return fmt.Errorf("foreign key violation on `%s`.`%s`: `%s`", foreignKey.TableName, foreignKey.Name, indexKeyStr)
-		}
-	}
-	return nil
-}
-
 // validateForInsert returns whether the given row is able to be inserted into the target table.
-func (ste *sessionedTableEditor) validateForInsert(ctx context.Context, dRow row.Row) error {
+func (ste *sessionedTableEditor) validateForInsert(ctx context.Context, taggedVals row.TaggedValues) error {
 	if ste.tableEditSession.Props.ForeignKeyChecksDisabled {
 		return nil
 	}
 	for _, foreignKey := range ste.referencedTables {
-		indexKey, hasNulls, err := ste.reduceRowAndConvert(ste.tableEditor.Format(), foreignKey.TableColumns, foreignKey.ReferencedTableColumns, dRow)
+		indexKey, hasNulls, err := ste.reduceRowAndConvert(ste.tableEditor.Format(), foreignKey.TableColumns, foreignKey.ReferencedTableColumns, taggedVals)
 		if err != nil {
 			return err
 		}
@@ -392,6 +424,20 @@ func (ste *sessionedTableEditor) validateForInsert(ctx context.Context, dRow row
 			return err
 		}
 		if !exists {
+			if foreignKey.IsSelfReferential() {
+				rowContainsValues := true
+				for i := range foreignKey.TableColumns {
+					val := taggedVals[foreignKey.TableColumns[i]] // Null & non-existent values are caught earlier
+					refVal, ok := taggedVals[foreignKey.ReferencedTableColumns[i]]
+					if !ok || !val.Equals(refVal) {
+						rowContainsValues = false
+						break
+					}
+				}
+				if rowContainsValues {
+					continue
+				}
+			}
 			indexKeyStr, _ := types.EncodedValue(ctx, indexKey)
 			return fmt.Errorf("foreign key violation on `%s`.`%s`: `%s`", foreignKey.TableName, foreignKey.Name, indexKeyStr)
 		}

@@ -112,6 +112,11 @@ func (fk ForeignKey) HashOf() hash.Hash {
 	return hash.Of(bb.Bytes())
 }
 
+// IsSelfReferential returns whether the table declaring the foreign key is also referenced by the foreign key.
+func (fk ForeignKey) IsSelfReferential() bool {
+	return strings.ToLower(fk.TableName) == strings.ToLower(fk.ReferencedTableName)
+}
+
 // ValidateReferencedTableSchema verifies that the given schema matches the expectation of the referenced table.
 func (fk ForeignKey) ValidateReferencedTableSchema(sch schema.Schema) error {
 	allSchCols := sch.GetAllCols()
@@ -198,9 +203,6 @@ func (fkc *ForeignKeyCollection) AddKeys(fks ...ForeignKey) error {
 		}
 		if len(key.TableColumns) != len(key.ReferencedTableColumns) {
 			return fmt.Errorf("foreign keys must have the same number of columns declared and referenced")
-		}
-		if key.TableName == key.ReferencedTableName {
-			return fmt.Errorf("inter-table foreign keys are not yet supported")
 		}
 
 		fkc.foreignKeys[key.HashOf().String()] = key
@@ -467,6 +469,22 @@ func (fk ForeignKey) ValidateData(ctx context.Context, childIdx, parentIdx types
 		}
 		if err != nil {
 			return err
+		}
+
+		// Check if there are any NULL values, as they should be skipped
+		hasNulls := false
+		_, err = childIdxRow.IterSchema(childDef.Schema(), func(tag uint64, val types.Value) (stop bool, err error) {
+			if types.IsNull(val) {
+				hasNulls = true
+				return true, nil
+			}
+			return false, nil
+		})
+		if err != nil {
+			return err
+		}
+		if hasNulls {
+			continue
 		}
 
 		parentIdxRow, err := rc.Convert(childIdxRow)

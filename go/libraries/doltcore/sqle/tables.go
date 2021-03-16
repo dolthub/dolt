@@ -275,32 +275,6 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	return newDoltTablePartitionIter(rowData, partitions...), nil
 }
 
-// NextAutoIncrementValue returns next autoincrement value
-func (t *DoltTable) NextAutoIncrementValue(ctx *sql.Context) (int64, error) {
-	val, err := t.table.GetAutoIncrementValue(ctx)
-	if errors.Is(err, doltdb.ErrNoAutoIncrementValue) {
-		return 0, nil
-	} else if err != nil {
-		return 0, err
-	}
-
-	if types.IsNull(val) {
-		return 0, nil
-	}
-
-	v, err := t.autoIncCol.TypeInfo.ConvertNomsValueToValue(val)
-	if err != nil {
-		return 0, err
-	}
-
-	num, ok := v.(int32)
-	if !ok {
-		return 0, nil
-	}
-
-	return int64(num), nil
-}
-
 func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 	schema := t.Schema()
 	var numBytesPerRow uint64 = 0
@@ -323,7 +297,7 @@ func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 		case sql.NullType:
 			numBytesPerRow += 1
 		case sql.TimeType:
-			numBytesPerRow += 5
+			numBytesPerRow += 16
 		case sql.YearType:
 			numBytesPerRow += 8
 		}
@@ -469,6 +443,9 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 		return 0, err
 	}
 	newTable, err = editor.RebuildAllIndexes(ctx, newTable)
+	if err != nil {
+		return 0, err
+	}
 
 	root, err := t.db.GetRoot(ctx)
 	if err != nil {
@@ -507,7 +484,7 @@ func (t *WritableDoltTable) AutoIncrementSetter(ctx *sql.Context) sql.AutoIncrem
 // GetAutoIncrementValue gets the last AUTO_INCREMENT value
 func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
 	if !t.autoIncCol.AutoIncrement {
-		return nil, fmt.Errorf("this table has no AUTO_INCREMENT columns")
+		return nil, sql.ErrNoAutoIncrementCol
 	}
 	if t.ed != nil {
 		return t.ed.GetAutoIncrementValue()
@@ -997,6 +974,12 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	if len(columns) != len(refColumns) {
 		return fmt.Errorf("the foreign key must reference an equivalent number of columns")
 	}
+	isSelfFk := strings.ToLower(t.name) == strings.ToLower(refTblName)
+	if isSelfFk {
+		if len(columns) > 1 {
+			return fmt.Errorf("support for self referential composite foreign keys is not yet implemented")
+		}
+	}
 
 	tblCols := make([]schema.Column, len(columns))
 	colTags := make([]uint64, len(columns))
@@ -1023,16 +1006,24 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	if err != nil {
 		return err
 	}
-	refTbl, _, ok, err := root.GetTableInsensitive(ctx, refTblName)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return fmt.Errorf("referenced table `%s` does not exist", refTblName)
-	}
-	refSch, err := refTbl.GetSchema(ctx)
-	if err != nil {
-		return err
+	var refTbl *doltdb.Table
+	var ok bool
+	var refSch schema.Schema
+	if isSelfFk {
+		refTbl = t.table
+		refSch = t.sch
+	} else {
+		refTbl, _, ok, err = root.GetTableInsensitive(ctx, refTblName)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("referenced table `%s` does not exist", refTblName)
+		}
+		refSch, err = refTbl.GetSchema(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	refColTags := make([]uint64, len(refColumns))
@@ -1049,6 +1040,14 @@ func (t *AlterableDoltTable) CreateForeignKey(
 			return fmt.Errorf("TEXT/BLOB are not valid types for foreign keys")
 		}
 		refColTags[i] = refCol.Tag
+	}
+
+	if isSelfFk {
+		for i := range colTags {
+			if colTags[i] == refColTags[i] {
+				return fmt.Errorf("the same column `%s` cannot be used in self referential foreign keys", tblCols[i].Name)
+			}
+		}
 	}
 
 	onUpdateRefOp, err := parseFkReferenceOption(onUpdate)
@@ -1161,6 +1160,9 @@ func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string) err
 		return err
 	}
 	newRoot, err := root.PutForeignKeyCollection(ctx, fkc)
+	if err != nil {
+		return err
+	}
 
 	err = t.db.SetRoot(ctx, newRoot)
 	if err != nil {
