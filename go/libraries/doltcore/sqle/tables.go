@@ -275,32 +275,6 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	return newDoltTablePartitionIter(rowData, partitions...), nil
 }
 
-// NextAutoIncrementValue returns next autoincrement value
-func (t *DoltTable) NextAutoIncrementValue(ctx *sql.Context) (int64, error) {
-	val, err := t.table.GetAutoIncrementValue(ctx)
-	if errors.Is(err, doltdb.ErrNoAutoIncrementValue) {
-		return 0, nil
-	} else if err != nil {
-		return 0, err
-	}
-
-	if types.IsNull(val) {
-		return 0, nil
-	}
-
-	v, err := t.autoIncCol.TypeInfo.ConvertNomsValueToValue(val)
-	if err != nil {
-		return 0, err
-	}
-
-	num, ok := v.(int32)
-	if !ok {
-		return 0, nil
-	}
-
-	return int64(num), nil
-}
-
 func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 	schema := t.Schema()
 	var numBytesPerRow uint64 = 0
@@ -507,7 +481,7 @@ func (t *WritableDoltTable) AutoIncrementSetter(ctx *sql.Context) sql.AutoIncrem
 // GetAutoIncrementValue gets the last AUTO_INCREMENT value
 func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
 	if !t.autoIncCol.AutoIncrement {
-		return nil, fmt.Errorf("this table has no AUTO_INCREMENT columns")
+		return nil, sql.ErrNoAutoIncrementCol
 	}
 	if t.ed != nil {
 		return t.ed.GetAutoIncrementValue()
