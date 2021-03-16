@@ -18,7 +18,7 @@ require (
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078
 	github.com/dolthub/fslock v0.0.2
-	github.com/dolthub/go-mysql-server v0.8.1-0.20210310033321-3dc1fa9a7a7d
+	github.com/dolthub/go-mysql-server v0.8.1-0.20210316175716-59103b8fc7fc
 	github.com/dolthub/ishell v0.0.0-20210205014355-16a4ce758446
 	github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66
 	github.com/dolthub/sqllogictest/go v0.0.0-20201105013724-5123fc66e12c
@@ -77,9 +77,5 @@ require (
 )
 
 replace github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
-
-replace github.com/dolthub/go-mysql-server => /Users/vinairachakonda/go/src/dolthub/go-mysql-server
-
-replace github.com/dolthub/vitess => /Users/vinairachakonda/go/src/dolthub/vitess
 
 go 1.13
