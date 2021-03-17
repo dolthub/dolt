@@ -23,6 +23,7 @@ package types
 
 import (
 	"context"
+
 	"github.com/dolthub/dolt/go/store/d"
 )
 
