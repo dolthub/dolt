@@ -28,8 +28,9 @@ it so far](https://www.dolthub.com/blog/2021-03-09-dolt-use-cases-in-the-wild/).
 
 ### How do I use it?
 
-Check out our [quick-start guide](docs/quick-start.md) to skip the
-docs and get started as fast as humanly possible!
+Check out our [quick-start guide](docs/quickstart.md) to skip the docs
+and get started as fast as humanly possible! Or keep reading for a
+high level overview of how to use the command line tool.
 
 Having problems? Read the [FAQ](docs/faq.md) to find answers.
 
