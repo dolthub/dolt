@@ -55,7 +55,7 @@ Get familiar with the tables and their columns. The easiest way to do
 this is by using SQL commands. `show tables` and `describe
 <tablename>` are good commands to use when exploring a new database.
 
-```sh
+```sql
 % dolt sql
 # Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
