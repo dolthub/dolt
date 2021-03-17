@@ -1,6 +1,6 @@
 # Dolt
 
-<img align="left" height="300" src="./dolt_hi.svg"/>
+<img align="left" height="300" src="./docs/dolt_hi.svg"/>
 
 ### Dolt is Git for Data!
 
@@ -26,7 +26,17 @@ Lots of things! Dolt is a generally useful tool with countless
 applications. But if you want some ideas, [here's how people are using 
 it so far](https://www.dolthub.com/blog/2021-03-09-dolt-use-cases-in-the-wild/).
 
+### How do I use it?
+
+Check out our [quick-start guide](docs/quickstart.md) to skip the docs
+and get started as fast as humanly possible! Or keep reading for a
+high level overview of how to use the command line tool.
+
+Having problems? Read the [FAQ](docs/faq.md) to find answers.
+
 # Dolt CLI
+
+The `dolt` CLI has the same commands as `git`, with some extras.
 
 ```
 $ dolt
@@ -91,7 +101,7 @@ Download the latest Microsoft Installer (`.msi` file) in
 [releases](https://github.com/dolthub/dolt/releases) and run
 it. Package manager releases coming soon!
 
-For information on running on Windows, see [here](windows.md).
+For information on running on Windows, see [here](./docs/windows.md).
 
 ## From Source
 
