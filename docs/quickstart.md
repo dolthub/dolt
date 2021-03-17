@@ -125,11 +125,12 @@ make your edits.
 ## See your changes
 
 After you've inserted some data, you can inspect the changes you made
-using `dolt diff`. If you added a lot of rows, use the `--summary` to
-get a summary instead.
+using `dolt diff`. If you added a lot of rows, use the `--summary` flag
+to get a summary instead.
 
 ```sh
 % dolt diff
+% dolt diff --summary
 ```
 
 ## Commit your changes
