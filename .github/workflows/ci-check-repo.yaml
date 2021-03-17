@@ -6,7 +6,7 @@ on:
 
 jobs:
   verify:
-    name: Verify format and commiters
+    name: Verify format and committers
     runs-on: ubuntu-18.04
     steps:
       - name: Setup Go 1.x
