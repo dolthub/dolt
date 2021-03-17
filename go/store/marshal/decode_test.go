@@ -33,6 +33,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
@@ -96,7 +97,7 @@ func TestDecode(tt *testing.T) {
 		p := reflect.ValueOf(ptr)
 		assert.Equal(reflect.Ptr, p.Type().Kind())
 		err := Unmarshal(context.Background(), types.Format_7_18, v, p.Interface())
-		assert.NoError(err)
+		require.NoError(tt, err)
 		if expectedValue, ok := expected.(types.Value); ok {
 			assert.True(expectedValue.Equals(p.Elem().Interface().(types.Value)))
 		} else {
@@ -106,7 +107,7 @@ func TestDecode(tt *testing.T) {
 		// Also test that types.Value is passed through
 		var v2 types.Value
 		err = Unmarshal(context.Background(), types.Format_7_18, v, &v2)
-		assert.NoError(err)
+		require.NoError(tt, err)
 		assert.True(v.Equals(v2))
 	}
 
@@ -185,22 +186,22 @@ func TestDecode(tt *testing.T) {
 
 	var list types.List
 	list2, err := types.NewList(context.Background(), vs, types.Float(42))
-	assert.NoError(err)
+	require.NoError(tt, err)
 	t(list2, &list, list2)
 
 	var m types.Map
 	map2, err := types.NewMap(context.Background(), vs, types.Float(42), types.String("Hi"))
-	assert.NoError(err)
+	require.NoError(tt, err)
 	t(map2, &m, map2)
 
 	var set types.Set
 	set2, err := types.NewSet(context.Background(), vs, types.String("Bye"))
-	assert.NoError(err)
+	require.NoError(tt, err)
 	t(set2, &set, set2)
 
 	var blob types.Blob
 	blob2, err := types.NewBlob(context.Background(), vs, bytes.NewBufferString("hello"))
-	assert.NoError(err)
+	require.NoError(tt, err)
 	t(blob2, &blob, blob2)
 
 	type TestStruct struct {
@@ -433,7 +434,7 @@ func TestDecodeEmbeddedStruct(tt *testing.T) {
 	err := Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"x": types.Float(1),
 	})), &ts)
-	assert.NoError(err)
+	require.NoError(tt, err)
 	assert.Equal(TestStruct{EmbeddedStruct{1}}, ts)
 
 	type OuterTest struct {
@@ -445,7 +446,7 @@ func TestDecodeEmbeddedStruct(tt *testing.T) {
 		"x": types.Float(2),
 		"y": types.Bool(true),
 	})), &ts2)
-	assert.NoError(err)
+	require.NoError(tt, err)
 	assert.Equal(OuterTest{true, TestStruct{EmbeddedStruct{2}}}, ts2)
 }
 
@@ -463,7 +464,7 @@ func TestDecodeEmbeddedStructSkip(tt *testing.T) {
 	err := Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"y": types.Float(2),
 	})), &ts)
-	assert.NoError(err)
+	require.NoError(tt, err)
 	assert.Equal(TestStruct{EmbeddedStruct{42}, 2}, ts)
 }
 
@@ -484,7 +485,7 @@ func TestDecodeEmbeddedStructNamed(tt *testing.T) {
 		})),
 		"y": types.Float(2),
 	})), &ts)
-	assert.NoError(err)
+	require.NoError(tt, err)
 	assert.Equal(TestStruct{EmbeddedStruct{1}, 2}, ts)
 }
 
@@ -503,7 +504,7 @@ func TestDecodeEmbeddedStructOriginal(tt *testing.T) {
 		"x": types.Float(1),
 	}))
 	err := Unmarshal(context.Background(), types.Format_7_18, nomsStruct, &ts)
-	assert.NoError(err)
+	require.NoError(tt, err)
 	expected := TestStruct{
 		EmbeddedStruct: EmbeddedStruct{
 			X: 1,
@@ -533,7 +534,7 @@ func TestDecodeTaggingSkip(t *testing.T) {
 	err := Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"b": types.Bool(true),
 	})), &s)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(S{0, true}, s)
 
 	var s2 S
@@ -541,7 +542,7 @@ func TestDecodeTaggingSkip(t *testing.T) {
 		"a": types.Float(42),
 		"b": types.Bool(true),
 	})), &s2)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(S{0, true}, s2)
 
 	s3 := S{555, true}
@@ -549,7 +550,7 @@ func TestDecodeTaggingSkip(t *testing.T) {
 		"a": types.Float(42),
 		"b": types.Bool(false),
 	})), &s3)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(S{555, false}, s3)
 }
 
@@ -567,7 +568,7 @@ func TestDecodeNamedFields(t *testing.T) {
 		"B":   types.Bool(true),
 		"ccc": types.String("Hi"),
 	})), &s)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(S{42, true, "Hi"}, s)
 }
 
@@ -599,7 +600,7 @@ func TestDecodeNomsTypePtr(t *testing.T) {
 
 	testUnmarshal := func(v types.Value, dest interface{}, expected interface{}) {
 		err := Unmarshal(context.Background(), types.Format_7_18, v, dest)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(expected, dest)
 	}
 
@@ -646,11 +647,11 @@ func TestDecodeSlice(t *testing.T) {
 	var s []string
 
 	err := Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewList(context.Background(), vs, types.String("a"), types.String("b"), types.String("c"))), &s)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal([]string{"a", "b", "c"}, s)
 
 	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewSet(context.Background(), vs, types.String("a"), types.String("b"), types.String("c"))), &s)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal([]string{"a", "b", "c"}, s)
 }
 
@@ -663,20 +664,20 @@ func TestDecodeSliceEmpty(t *testing.T) {
 	var s []string
 
 	err := Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewList(context.Background(), vs)), &s)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal([]string(nil), s)
 
 	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewSet(context.Background(), vs)), &s)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal([]string(nil), s)
 
 	s2 := []string{}
 	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewList(context.Background(), vs)), &s2)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal([]string{}, s2)
 
 	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewSet(context.Background(), vs)), &s2)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal([]string{}, s2)
 }
 
@@ -689,12 +690,12 @@ func TestDecodeSliceReuse(t *testing.T) {
 	s := []string{"A", "B", "C", "D"}
 	s2 := s[1:3]
 	err := Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewList(context.Background(), vs, types.String("a"), types.String("b"))), &s)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal([]string{"a", "b"}, s)
 	assert.Equal([]string{"b", "C"}, s2)
 
 	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewSet(context.Background(), vs, types.String("a"), types.String("b"))), &s)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal([]string{"a", "b"}, s)
 	assert.Equal([]string{"b", "C"}, s2)
 }
@@ -708,11 +709,11 @@ func TestDecodeArray(t *testing.T) {
 	s := [3]string{"", "", ""}
 
 	err := Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewList(context.Background(), vs, types.String("a"), types.String("b"), types.String("c"))), &s)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal([3]string{"a", "b", "c"}, s)
 
 	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewSet(context.Background(), vs, types.String("a"), types.String("b"), types.String("c"))), &s)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal([3]string{"a", "b", "c"}, s)
 }
 
@@ -725,11 +726,11 @@ func TestDecodeArrayEmpty(t *testing.T) {
 	var s [0]string
 
 	err := Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewList(context.Background(), vs)), &s)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal([0]string{}, s)
 
 	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewSet(context.Background(), vs)), &s)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal([0]string{}, s)
 }
 
@@ -746,13 +747,13 @@ func TestDecodeStructWithSlice(t *testing.T) {
 	err := Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"list": mustValue(types.NewList(context.Background(), vs, types.Float(1), types.Float(2), types.Float(3))),
 	})), &s)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(S{[]int{1, 2, 3}}, s)
 
 	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"list": mustValue(types.NewSet(context.Background(), vs, types.Float(1), types.Float(2), types.Float(3))),
 	})), &s)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(S{[]int{1, 2, 3}}, s)
 }
 
@@ -769,7 +770,7 @@ func TestDecodeStructWithArrayOfNomsValue(t *testing.T) {
 	err := Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"list": mustValue(types.NewList(context.Background(), vs, mustValue(types.NewSet(context.Background(), vs, types.Bool(true))))),
 	})), &s)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(S{[1]types.Set{mustSet(types.NewSet(context.Background(), vs, types.Bool(true)))}}, s)
 }
 
@@ -841,7 +842,7 @@ func TestDecodeRecursive(t *testing.T) {
 
 	var n Node
 	err := Unmarshal(context.Background(), types.Format_7_18, v, &n)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	assert.Equal(Node{
 		1, []Node{
@@ -864,10 +865,10 @@ func TestDecodeMap(t *testing.T) {
 		types.String("a"), types.Float(1),
 		types.String("b"), types.Float(2),
 		types.String("c"), types.Float(3))
-	assert.NoError(err)
+	require.NoError(t, err)
 	expectedMap := map[string]int{"a": 1, "b": 2, "c": 3}
 	err = Unmarshal(context.Background(), types.Format_7_18, testMap, &m)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(expectedMap, m)
 
 	m = map[string]int{"b": 2, "c": 333}
@@ -875,7 +876,7 @@ func TestDecodeMap(t *testing.T) {
 		vs,
 		types.String("a"), types.Float(1),
 		types.String("c"), types.Float(3))), &m)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(expectedMap, m)
 
 	type S struct {
@@ -887,7 +888,7 @@ func TestDecodeMap(t *testing.T) {
 		vs,
 		mustStruct(types.NewStruct(types.Format_7_18, "S", types.StructData{"n": types.String("Yes")})), types.Bool(true),
 		mustStruct(types.NewStruct(types.Format_7_18, "S", types.StructData{"n": types.String("No")})), types.Bool(false))), &m2)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(map[S]bool{S{"Yes"}: true, S{"No"}: false}, m2)
 }
 
@@ -899,12 +900,12 @@ func TestDecodeMapEmpty(t *testing.T) {
 
 	var m map[string]int
 	err := Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewMap(context.Background(), vs)), &m)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(map[string]int(nil), m)
 
 	m2 := map[string]int{}
 	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewMap(context.Background(), vs)), &m2)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(map[string]int{}, m2)
 }
 
@@ -924,31 +925,31 @@ func TestDecodeOntoInterface(t *testing.T) {
 
 	var i interface{}
 	err := Unmarshal(context.Background(), types.Format_7_18, types.Float(1), &i)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(float64(1), i)
 
 	err = Unmarshal(context.Background(), types.Format_7_18, types.String("abc"), &i)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal("abc", i)
 
 	err = Unmarshal(context.Background(), types.Format_7_18, types.Bool(true), &i)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(true, i)
 
 	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewList(context.Background(), vs, types.String("abc"))), &i)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal([]string{"abc"}, i)
 
 	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewMap(context.Background(), vs, types.String("abc"), types.Float(1))), &i)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(map[string]float64{"abc": float64(1)}, i)
 
 	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewList(context.Background(), vs, types.String("a"), types.Bool(true), types.Float(42))), &i)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal([]interface{}{"a", true, float64(42)}, i)
 
 	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewMap(context.Background(), vs, types.String("a"), types.Bool(true), types.Float(42), mustValue(types.NewList(context.Background(), vs)))), &i)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(map[interface{}]interface{}{"a": true, float64(42): []interface{}(nil)}, i)
 }
 
@@ -1160,7 +1161,7 @@ func TestDecodeOmitEmpty(t *testing.T) {
 			"baz": types.Float(42),
 		})),
 	})), &actual)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(expected, actual)
 }
 
@@ -1182,7 +1183,7 @@ func TestDecodeOriginal(t *testing.T) {
 	}
 	var actual S
 	err := Unmarshal(context.Background(), types.Format_7_18, input, &actual)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.True(expected.Bar.Equals(actual.Bar))
 }
 
@@ -1210,7 +1211,7 @@ func TestDecodeCanSkipUnexportedField(t *testing.T) {
 	err := Unmarshal(context.Background(), types.Format_7_18, mustStruct(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"abc": types.Float(42),
 	})), &s)
-	assert.NoError(err)
+	require.NoError(t, err)
 	assert.Equal(S{42, false}, s)
 }
 
@@ -1266,7 +1267,7 @@ func TestUnmarshalerPrimitiveMapType(t *testing.T) {
 	defer vs.Close()
 
 	v, err := types.NewSet(context.Background(), vs, types.String("a,foo"), types.String("b,bar"))
-	assert.NoError(err)
+	require.NoError(t, err)
 	u := primitiveMapType{}
 	assert.NoError(Unmarshal(context.Background(), types.Format_7_18, v, &u))
 	assert.Equal(primitiveMapType(map[string]string{
