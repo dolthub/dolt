@@ -70,7 +70,7 @@ func (h *DoltHarness) ExecuteStatement(statement string) error {
 
 	statement = normalizeStatement(statement)
 
-	_, _, rowIter, err := h.engine.Query(ctx, statement)
+	_, rowIter, err := h.engine.Query(ctx, statement)
 	if err != nil {
 		return err
 	}
@@ -97,7 +97,7 @@ func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []s
 		}
 	}()
 
-	_, sch, rowIter, err = h.engine.Query(ctx, statement)
+	sch, rowIter, err = h.engine.Query(ctx, statement)
 	if err != nil {
 		return "", nil, err
 	}

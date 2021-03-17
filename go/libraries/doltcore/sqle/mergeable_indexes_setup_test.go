@@ -39,7 +39,7 @@ func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.E
 	engine, sqlCtx, err := NewTestEngine(context.Background(), db, root)
 	require.NoError(t, err)
 
-	_, _, iter, err := engine.Query(sqlCtx, fmt.Sprintf(`CREATE TABLE %s (
+	_, iter, err := engine.Query(sqlCtx, fmt.Sprintf(`CREATE TABLE %s (
 		pk bigint PRIMARY KEY,
 		v1 bigint,
 		v2 bigint,
@@ -49,7 +49,7 @@ func setupMergeableIndexes(t *testing.T, tableName, insertQuery string) (*sqle.E
 	require.NoError(t, err)
 	require.NoError(t, drainIter(sqlCtx, iter))
 
-	_, _, iter, err = engine.Query(sqlCtx, insertQuery)
+	_, iter, err = engine.Query(sqlCtx, insertQuery)
 	require.NoError(t, err)
 	require.NoError(t, drainIter(sqlCtx, iter))
 

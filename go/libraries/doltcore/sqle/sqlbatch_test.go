@@ -68,7 +68,7 @@ func TestSqlBatchInserts(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, stmt := range insertStatements {
-		_, _, rowIter, err := engine.Query(sqlCtx, stmt)
+		_, rowIter, err := engine.Query(sqlCtx, stmt)
 		require.NoError(t, err)
 		require.NoError(t, drainIter(sqlCtx, rowIter))
 	}
@@ -156,7 +156,7 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, stmt := range insertStatements {
-		_, _, rowIter, err := engine.Query(sqlCtx, stmt)
+		_, rowIter, err := engine.Query(sqlCtx, stmt)
 		require.NoError(t, err)
 		drainIter(sqlCtx, rowIter)
 	}
@@ -193,13 +193,13 @@ func TestSqlBatchInsertErrors(t *testing.T) {
 	engine, sqlCtx, err := NewTestEngine(ctx, db, root)
 	require.NoError(t, err)
 
-	_, _, rowIter, err := engine.Query(sqlCtx, `insert into people (id, first_name, last_name, is_married, age, rating, uuid, num_episodes) values
+	_, rowIter, err := engine.Query(sqlCtx, `insert into people (id, first_name, last_name, is_married, age, rating, uuid, num_episodes) values
 					(0, "Maggie", "Simpson", false, 1, 5.1, '00000000-0000-0000-0000-000000000007', 677)`)
 	assert.NoError(t, err)
 	assert.Error(t, drainIter(sqlCtx, rowIter))
 
 	// This generates an error at insert time because of the bad type for the uuid column
-	_, _, rowIter, err = engine.Query(sqlCtx, `insert into people values
+	_, rowIter, err = engine.Query(sqlCtx, `insert into people values
 					(2, "Milhouse", "VanHouten", false, 1, 5.1, true, 677)`)
 	assert.NoError(t, err)
 	assert.Error(t, drainIter(sqlCtx, rowIter))

@@ -1256,7 +1256,7 @@ func TestMergeableIndexes(t *testing.T) {
 
 			ctx := context.Background()
 			sqlCtx := NewTestSQLCtx(ctx)
-			_, _, iter, err := engine.Query(sqlCtx, fmt.Sprintf(`SELECT pk FROM test WHERE %s ORDER BY 1`, test.whereStmt))
+			_, iter, err := engine.Query(sqlCtx, fmt.Sprintf(`SELECT pk FROM test WHERE %s ORDER BY 1`, test.whereStmt))
 			require.NoError(t, err)
 			res, err := sql.RowIterToRows(sqlCtx, iter)
 			require.NoError(t, err)
@@ -1454,7 +1454,7 @@ func TestMergeableIndexesNulls(t *testing.T) {
 
 			ctx := context.Background()
 			sqlCtx := NewTestSQLCtx(ctx)
-			_, _, iter, err := engine.Query(sqlCtx, fmt.Sprintf(`SELECT pk FROM test WHERE %s ORDER BY 1`, test.whereStmt))
+			_, iter, err := engine.Query(sqlCtx, fmt.Sprintf(`SELECT pk FROM test WHERE %s ORDER BY 1`, test.whereStmt))
 			require.NoError(t, err)
 			res, err := sql.RowIterToRows(sqlCtx, iter)
 			require.NoError(t, err)
