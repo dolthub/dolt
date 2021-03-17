@@ -581,4 +581,28 @@ SQL
 
      # We don't have transactions but some editors will throws this commit statement along
      unselected_server_query 1 "commit"
+
+     # create a new database and table and rerun
+     unselected_server_query 1 "CREATE DATABASE testdb" ""
+     unselected_server_query 1 "CREATE TABLE testdb.one_pk (
+        pk int,
+        PRIMARY KEY (pk)
+      )" ""
+
+     run dolt ls
+     [ "$status" -eq 0 ]
+     [[ "$output" =~ "one_pk" ]] || false
+
+     insert_query 1 "INSERT INTO testdb.one_pk VALUES (0), (1), (2)"
+     unselected_server_query 1 "SELECT * FROM testdb.one_pk" "pk\n0\n1\n2"
+
+     unselected_update_query 1 "UPDATE testdb.one_pk SET pk=3 WHERE pk=2"
+     unselected_server_query 1 "SELECT * FROM testdb.one_pk" "pk\n0\n1\n3"
+
+     unselected_update_query 1 "DELETE FROM testdb.one_pk WHERE pk=3"
+     unselected_server_query 1 "SELECT * FROM testdb.one_pk" "pk\n0\n1"
+
+     # one last query on insert db.
+     insert_query 1 "INSERT INTO repo1.one_pk VALUES (4)"
+     unselected_server_query 1 "SELECT * FROM repo1.one_pk" "pk\n0\n1\n4"
 }
