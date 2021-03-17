@@ -162,8 +162,8 @@ insert_query() {
     server_query $1 "$2" ""
 }
 
-# server_query connects to a running mysql server, but not to a particular database, executes a query and compares the
-# results against what is expected.
+# unselected_server_query connects to a running mysql server, but not to a particular database, executes a query and
+# compares the results against what is expected.
 # In the event that the results do not match expectations, the python process will exit with an exit code of 1
 #  * param1 is 1 for autocommit = true, 0 for autocommit = false
 #  * param2 is the query_str
