@@ -64,11 +64,11 @@ func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*Commi
 	d := strings.TrimSpace(desc)
 
 	if n == "" {
-		return nil, errors.New("Aborting commit due to empty committer name.")
+		return nil, errors.New("Aborting commit due to empty committer name. Is your config set?")
 	}
 
 	if e == "" {
-		return nil, errors.New("Aborting commit due to empty committer email.")
+		return nil, errors.New("Aborting commit due to empty committer email. Is your config set?")
 	}
 
 	if d == "" {
