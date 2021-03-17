@@ -191,7 +191,7 @@ func (m Map) Diff(ctx context.Context, last Map, changes chan<- ValueChanged) er
 	if m.Equals(last) {
 		return nil
 	}
-	return orderedSequenceDiffTopDown(ctx, last.orderedSequence, m.orderedSequence, changes)
+	return orderedSequenceDiffLeftRight(ctx, last.orderedSequence, m.orderedSequence, changes)
 }
 
 // DiffHybrid computes the diff from |last| to |m| using a hybrid algorithm
