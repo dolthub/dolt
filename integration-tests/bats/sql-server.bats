@@ -560,6 +560,8 @@ SQL
      cd repo1
      start_sql_server repo1
 
+     unselected_server_query 1 "SELECT DATABASE() = ''" "DATABASE() = \"\"\n1"
+
      # create table with autocommit on and verify table creation
      unselected_server_query 1 "CREATE TABLE repo1.one_pk (
         pk int,

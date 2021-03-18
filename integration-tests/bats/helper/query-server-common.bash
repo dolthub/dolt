@@ -29,7 +29,11 @@ else:
 
 from pytest import DoltConnection, csv_to_row_maps
 
-dc = DoltConnection(port=int(port_str), database=database, user='dolt', auto_commit=auto_commit)
+if not database:
+    dc = DoltConnection(port=int(port_str), database=None, user='dolt', auto_commit=auto_commit)
+else:
+    dc = DoltConnection(port=int(port_str), database=database, user='dolt', auto_commit=auto_commit)
+
 dc.connect()
 
 queries = query_strs.split(';')

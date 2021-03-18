@@ -22,7 +22,7 @@ require (
 	github.com/dolthub/ishell v0.0.0-20210205014355-16a4ce758446
 	github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66
 	github.com/dolthub/sqllogictest/go v0.0.0-20201105013724-5123fc66e12c
-	github.com/dolthub/vitess v0.0.0-20210316150645-9bf20be78424
+	github.com/dolthub/vitess v0.0.0-20210317175908-b2663b2c4d9c
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.9.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
