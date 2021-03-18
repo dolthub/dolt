@@ -48,7 +48,7 @@ to disk, updating the working set. HEAD stays the same, but your
 working set changes. This means your edits will persist after this
 session ends.
 
-`COMMIT()` creates a new dolt commit, but doesn't references it
+`COMMIT()` creates a new dolt commit, but doesn't reference it
 anywhere. If you want to reference it, you have to take the value
 returned by the function and create a branch with it (by inserting
 into `dolt_branches`)
@@ -57,8 +57,7 @@ into `dolt_branches`)
 command line. It updates HEAD.
 
 See the [docs on
-concurrency](https://docs.dolthub.com/interfaces/sql/concurrency) for
-more detail.
+concurrency](https://docs.dolthub.com/interfaces/sql/concurrency).
 
 ## I want each of my connected SQL users to get their own branch to make changes on, then merge them back into `master` when they're done making edits. How do I do that?
 
