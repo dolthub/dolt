@@ -1,8 +1,10 @@
 # Dolt quickstart guide
 
 This is a one-page guide to getting you started with Dolt as quickly
-as possible. If you're trying to participate in a data bounty, this
-will get you up and running.
+as possible. If you're trying to participate in a 
+[data bounty](https://www.dolthub.com/bounties), this will get you 
+up and running. We think bounties are the most engaging way to get 
+started using Dolt and DoltHub and understand how it all works.
 
 This guide is intended for new data bounty participants, and is geared
 to that use case. You can find more complete documentation on how to
