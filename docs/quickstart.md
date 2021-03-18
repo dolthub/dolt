@@ -37,7 +37,7 @@ left.
 ## Clone your fork
 
 Cloning your fork of the database downloads it to your local computer
-so you can make changes to it. [DoltHub](https://dolthub.com). Click
+so you can make changes to it. Click
 "Clone" to find the command to copy and paste into your terminal. This
 clone command will be different for every fork, so you can't just copy
 and paste the command in the text below.
