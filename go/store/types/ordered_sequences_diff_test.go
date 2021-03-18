@@ -111,9 +111,7 @@ func (suite *diffTestSuite) TestDiff() {
 	}
 
 	runTest := func(name string, vf valFn, cf colFn) {
-		//runTestDf(name, vf, cf, orderedSequenceDiffTopDown)
 		runTestDf(name, vf, cf, orderedSequenceDiffLeftRight)
-		//runTestDf(name, vf, cf, orderedSequenceDiffBest)
 	}
 
 	newSetAsCol := func(vals []Value) (Collection, error) { return NewSet(context.Background(), vs, vals...) }
@@ -246,9 +244,7 @@ func TestOrderedSequencesDiffCloseWithoutReading(t *testing.T) {
 		assert.Equal(t, err, context.Canceled)
 	}
 
-	t.Run("Best", func(t *testing.T) { runTest(t, orderedSequenceDiffBest) })
 	t.Run("LeftRight", func(t *testing.T) { runTest(t, orderedSequenceDiffLeftRight) })
-	t.Run("TopDown", func(t *testing.T) { runTest(t, orderedSequenceDiffTopDown) })
 }
 
 func TestOrderedSequenceDiffWithMetaNodeGap(t *testing.T) {
@@ -320,7 +316,5 @@ func TestOrderedSequenceDiffWithMetaNodeGap(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	runTest(orderedSequenceDiffBest)
 	runTest(orderedSequenceDiffLeftRight)
-	runTest(orderedSequenceDiffTopDown)
 }
