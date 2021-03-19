@@ -1010,7 +1010,7 @@ SQL
 @test "sql: active_branch() func" {
     run dolt sql -q 'select active_branch()' -r csv
     [ $status -eq 0 ]
-    [[ "$output" =~ "ACTIVE_BRANCH()" ]] || false
+    [[ "$output" =~ "active_branch()" ]] || false
     [[ "$output" =~ "master" ]] || false
 }
 
@@ -1019,6 +1019,6 @@ SQL
     run dolt checkout tmp_br
     run dolt sql -q 'select active_branch()' -r csv
     [ $status -eq 0 ]
-    [[ "$output" =~ "ACTIVE_BRANCH()" ]] || false
+    [[ "$output" =~ "active_branch()" ]] || false
     [[ "$output" =~ "tmp_br" ]] || false
 }
