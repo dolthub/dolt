@@ -557,31 +557,24 @@ SQL
 @test "sql-server: Run queries on database without ever selecting it" {
      skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
-     cd repo1
-     start_sql_server repo1
-
-     unselected_server_query 1 "SELECT DATABASE() = ''" "DATABASE() = \"\"\n1"
+     start_multi_db_server repo1
 
      # create table with autocommit on and verify table creation
-     unselected_server_query 1 "CREATE TABLE repo1.one_pk (
+     unselected_server_query 1 "CREATE TABLE repo2.one_pk (
         pk int,
         PRIMARY KEY (pk)
       )" ""
 
-     run dolt ls
-     [ "$status" -eq 0 ]
-     [[ "$output" =~ "one_pk" ]] || false
+     insert_query 1 "INSERT INTO repo2.one_pk VALUES (0), (1), (2)"
+     unselected_server_query 1 "SELECT * FROM repo2.one_pk" "pk\n0\n1\n2"
 
-     insert_query 1 "INSERT INTO repo1.one_pk VALUES (0), (1), (2)"
-     unselected_server_query 1 "SELECT * FROM repo1.one_pk" "pk\n0\n1\n2"
+     unselected_update_query 1 "UPDATE repo2.one_pk SET pk=3 WHERE pk=2"
+     unselected_server_query 1 "SELECT * FROM repo2.one_pk" "pk\n0\n1\n3"
 
-     unselected_update_query 1 "UPDATE repo1.one_pk SET pk=3 WHERE pk=2"
-     unselected_server_query 1 "SELECT * FROM repo1.one_pk" "pk\n0\n1\n3"
+     unselected_update_query 1 "DELETE FROM repo2.one_pk WHERE pk=3"
+     unselected_server_query 1 "SELECT * FROM repo2.one_pk" "pk\n0\n1"
 
-     unselected_update_query 1 "DELETE FROM repo1.one_pk WHERE pk=3"
-     unselected_server_query 1 "SELECT * FROM repo1.one_pk" "pk\n0\n1"
-
-     # We don't have transactions but some editors will throws this commit statement along
+     # Empty commit statements should not error
      unselected_server_query 1 "commit"
 
      # create a new database and table and rerun
@@ -590,10 +583,6 @@ SQL
         pk int,
         PRIMARY KEY (pk)
       )" ""
-
-     run dolt ls
-     [ "$status" -eq 0 ]
-     [[ "$output" =~ "one_pk" ]] || false
 
      insert_query 1 "INSERT INTO testdb.one_pk VALUES (0), (1), (2)"
      unselected_server_query 1 "SELECT * FROM testdb.one_pk" "pk\n0\n1\n2"
@@ -605,6 +594,6 @@ SQL
      unselected_server_query 1 "SELECT * FROM testdb.one_pk" "pk\n0\n1"
 
      # one last query on insert db.
-     insert_query 1 "INSERT INTO repo1.one_pk VALUES (4)"
-     unselected_server_query 1 "SELECT * FROM repo1.one_pk" "pk\n0\n1\n4"
+     insert_query 1 "INSERT INTO repo2.one_pk VALUES (4)"
+     unselected_server_query 1 "SELECT * FROM repo2.one_pk" "pk\n0\n1\n4"
 }
