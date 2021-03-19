@@ -305,7 +305,7 @@ func (d differ) diffMapsInRange(ctx context.Context, p types.Path, v1, v2 types.
 					panic("not implemented")
 				}
 
-				return v2.DiffHybrid(ctx, v1, cc)
+				return v2.Diff(ctx, v1, cc)
 			}
 		},
 		func(k types.Value) (types.Value, error) {
@@ -364,7 +364,7 @@ func (d differ) diffSets(ctx context.Context, p types.Path, v1, v2 types.Set) er
 			if d.leftRight {
 				return v2.DiffLeftRight(ctx, v1, cc)
 			} else {
-				return v2.DiffHybrid(ctx, v1, cc)
+				return v2.Diff(ctx, v1, cc)
 			}
 		},
 		func(k types.Value) (types.Value, error) { return k, nil },
