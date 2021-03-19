@@ -78,7 +78,7 @@ seed_repos_with_tables_with_use_statements() {
     EXPECTED=$(echo -e "pk,c1\n2,200")
     run dolt sql -r csv --multi-db-dir ./ -b -q "
         USE repo1;
-        SELECT r1_t1.pk, repo2.r2_t1.c1 FROM r1_t1 JOIN repo2.r2_t1 ON r1_t1.pk=repo2.r2_t1.pk;"
+        SELECT r1_t1.pk as pk, repo2.r2_t1.c1 as c1 FROM r1_t1 JOIN repo2.r2_t1 ON r1_t1.pk=repo2.r2_t1.pk;"
     echo \"\"\"$output\"\"\"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED" ]] || false
