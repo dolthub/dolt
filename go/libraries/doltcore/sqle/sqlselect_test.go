@@ -433,7 +433,7 @@ var BasicSelectTests = []SelectTest{
 		Query:        "select is_married and age >= 40 from people where last_name = 'Simpson' order by id limit 2",
 		ExpectedRows: []sql.Row{{true}, {false}},
 		ExpectedSqlSchema: sql.Schema{
-			&sql.Column{Name: "people.is_married AND people.age >= 40", Type: sql.Int8},
+			&sql.Column{Name: "is_married and age >= 40", Type: sql.Int8},
 		},
 	},
 	{
@@ -574,7 +574,6 @@ var BasicSelectTests = []SelectTest{
 		Name:            "duplicate table selection",
 		Query:           "select first_name as f, last_name as f from people, people where age >= 40",
 		ExpectedErr:     "Non-unique table name / alias: people",
-		SkipOnSqlEngine: true, // this should be an error (table name selected twice without an alias)
 	},
 	{
 		Name:        "duplicate table alias",
