@@ -717,16 +717,12 @@ SQL
     [[ "$output" =~ " 5 " ]] || false
     [[ "$output" =~ " 0 " ]] || false
     [[ ! "$output" =~ " 4 " ]] || false
-    run dolt sql -q "select max(pk),c2 from one_pk group by c1"
-    [ $status -eq 1 ]
-    [[ "$output" =~ "doesn't appear in the grouping columns" ]] || false
-    skip "group by behavior is inconsistent"
-    run dolt sql -q "select max(pk),c2 from one_pk group by c1 limit 1"
-    [ $status -eq 1 ]
-    [[ "$output" =~ "doesn't appear in the grouping columns" ]] || false
-    run dolt sql -q "select max(pk) as broke_group_by, c2 from one_pk group by c1"
-    [ $status -eq 1 ]
-    [[ "$output" =~ "doesn't appear in the grouping columns" ]] || false
+    run dolt sql -r csv -q "select max(pk),c2 from one_pk group by c1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "5,0" ]] || false
+    [[ "$output" =~ "1,10" ]] || false
+    [[ "$output" =~ "2,20" ]] || false
+    [[ "$output" =~ "3,30" ]] || false
 }
 
 @test "sql: substr() and cast() functions" {
