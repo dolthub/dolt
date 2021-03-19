@@ -571,9 +571,9 @@ var BasicSelectTests = []SelectTest{
 		ExpectedSchema: NewResultSetSchema("first_name", types.StringKind, "first_name", types.StringKind),
 	},
 	{
-		Name:            "duplicate table selection",
-		Query:           "select first_name as f, last_name as f from people, people where age >= 40",
-		ExpectedErr:     "Non-unique table name / alias: people",
+		Name:        "duplicate table selection",
+		Query:       "select first_name as f, last_name as f from people, people where age >= 40",
+		ExpectedErr: "Non-unique table name / alias: people",
 	},
 	{
 		Name:        "duplicate table alias",
