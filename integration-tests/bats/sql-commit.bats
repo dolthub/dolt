@@ -59,7 +59,7 @@ teardown() {
 }
 
 @test "sql-commit: DOLT_COMMIT with all flag, message and author" {
-    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1', '--author', 'John Doe <john@doe.com>')"
+    run dolt sql -r csv -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1', '--author', 'John Doe <john@doe.com>') as commit_hash"
     [ $status -eq 0 ]
     DCOMMIT=$output
 
@@ -75,7 +75,7 @@ teardown() {
     [[ "$output" =~ "$regex" ]] || false
 
     # Check that dolt_log has the same hash as the output of DOLT_COMMIT
-    run dolt sql -q "SELECT commit_hash from dolt_log LIMIT 1"
+    run dolt sql -r csv -q "SELECT commit_hash from dolt_log LIMIT 1"
     [ $status -eq 0 ]
     [[ "$output" =~ "$DCOMMIT" ]] || false
 
@@ -90,7 +90,7 @@ teardown() {
 
     run dolt sql -q "SELECT DOLT_ADD('.')"
 
-    run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1', '--author', 'John Doe <john@doe.com>')"
+    run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1', '--author', 'John Doe <john@doe.com>') as commit_hash"
     [ "$status" -eq 0 ]
     DCOMMIT=$output
 
