@@ -93,10 +93,10 @@ SQL
 @test "sql-shell: active branch after checkout" {
     run dolt sql <<< "select active_branch()"
     [ $status -eq 0 ]
-    [[ "$output" =~ "ACTIVE_BRANCH()" ]] || false
+    [[ "$output" =~ "active_branch()" ]] || false
     [[ "$output" =~ "master" ]] || false
-    run dolt sql <<< "select dolt_checkout('-b', 'tmp_br'); select active_branch()"
+    run dolt sql <<< "select dolt_checkout('-b', 'tmp_br') as co; select active_branch()"
     [ $status -eq 0 ]
-    [[ "$output" =~ "ACTIVE_BRANCH()" ]] || false
+    [[ "$output" =~ "active_branch()" ]] || false
     [[ "$output" =~ "tmp_br" ]] || false
 }

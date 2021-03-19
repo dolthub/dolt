@@ -286,7 +286,7 @@ DELIM
     [[ ! "$output" = "-    \`" ]] || false
     run dolt sql -r csv -q 'select count(*) from test'
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "COUNT(*)" ]] || false
+    [[ "$output" =~ "count(*)" ]] || false
     [[ "$output" =~ "0" ]] || false
 }
 
