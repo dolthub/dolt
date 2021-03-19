@@ -45,6 +45,7 @@ teardown() {
 
 @test "sql-commit: DOLT_COMMIT with the all flag performs properly" {
     run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
+    [ "$status" -eq 0 ]
 
     # Check that everything was added
     run dolt diff
@@ -59,7 +60,9 @@ teardown() {
 }
 
 @test "sql-commit: DOLT_COMMIT with all flag, message and author" {
-    DCOMMIT=$(sql_commit_and_get_hash)
+    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1', '--author', 'John Doe <john@doe.com>') as commit_hash"
+    DCOMMIT=$output
+
     # Check that everything was added
     run dolt diff
     [ "$status" -eq 0 ]
@@ -74,9 +77,8 @@ teardown() {
     # Check that dolt_log has the same hash as the output of DOLT_COMMIT
     run dolt sql -q "SELECT commit_hash from dolt_log LIMIT 1"
     [ $status -eq 0 ]
-    echo ${lines[3]}
-    echo $DCOMMIT
-    [[ "${lines[3]}" =~ $DCOMMIT ]] || false
+
+    [[ "$output" = $DCOMMIT ]] || false
 
     run dolt sql -q "SELECT * from dolt_commits ORDER BY Date DESC;"
     [ $status -eq 0 ]
@@ -89,7 +91,9 @@ teardown() {
 
     run dolt sql -q "SELECT DOLT_ADD('.')"
 
-    DCOMMIT==$(sql_commit_and_get_hash)
+    run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1', '--author', 'John Doe <john@doe.com>') as commit_hash"
+    [ "$status" -eq 0 ]
+    DCOMMIT=$output
 
     run dolt log
     [ "$status" -eq 0 ]
@@ -104,7 +108,7 @@ teardown() {
     # Check that dolt_log has the same hash as the output of DOLT_COMMIT
     run dolt sql -q "SELECT commit_hash from dolt_log LIMIT 1"
     [ $status -eq 0 ]
-    [[ "${lines[1]}" =~ $DCOMMIT ]] || false
+    [[ "$output" = $DCOMMIT ]] || false
 
     run dolt sql -q "SELECT * from dolt_commits ORDER BY Date DESC;"
     [ $status -eq 0 ]
@@ -175,8 +179,4 @@ SQL
 
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 8-
-}
-
-sql_commit_and_get_hash() {
-    dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1', '--author', 'John Doe <john@doe.com>')" | sed -n 4p | sed -e 's/|//' -e 's/|//'  -e 's/ //'
 }
