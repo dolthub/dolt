@@ -258,7 +258,7 @@ teardown() {
     server_query 0 "SET @@repo1_head=hashof('master');SELECT * FROM one_pk ORDER by pk" ";pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3"
 
     # Validate the commit master matches that of test_branch (this is a fast forward) by matching commit hashes.
-    server_query 0 "select COUNT(hash) from dolt_branches where hash IN (select hash from dolt_branches WHERE name = 'test_branch')" "COUNT(dolt_branches.hash)\n2"
+    server_query 0 "select COUNT(hash) from dolt_branches where hash IN (select hash from dolt_branches WHERE name = 'test_branch')" "COUNT(hash)\n2"
 
     # make some changes to test_branch and commit. Make some changes to master and commit. Merge.
     multi_query 0 "
@@ -282,7 +282,7 @@ teardown() {
     server_query 0 "SET @@repo1_head=hashof('master');SELECT * FROM one_pk ORDER by pk" ";pk,c1,c2\n0,None,None\n1,1,None\n2,10,2\n3,3,3\n4,4,4"
 
     # Validate the a merge commit was written by making sure the hashes of the two branches don't match
-    server_query 0 "select COUNT(hash) from dolt_branches where hash IN (select hash from dolt_branches WHERE name = 'test_branch')" "COUNT(dolt_branches.hash)\n1"
+    server_query 0 "select COUNT(hash) from dolt_branches where hash IN (select hash from dolt_branches WHERE name = 'test_branch')" "COUNT(hash)\n1"
 }
 
 @test "sql-server: test reset_hard" {

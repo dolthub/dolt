@@ -81,5 +81,6 @@ seed_repos_with_tables_with_use_statements() {
         SELECT r1_t1.pk, repo2.r2_t1.c1 FROM r1_t1 JOIN repo2.r2_t1 ON r1_t1.pk=repo2.r2_t1.pk;"
     echo \"\"\"$output\"\"\"
     [ "$status" -eq 0 ]
+    echo $output
     [[ "$output" =~ "$EXPECTED" ]] || false
 }
