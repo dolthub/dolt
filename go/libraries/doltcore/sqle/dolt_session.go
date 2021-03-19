@@ -115,20 +115,21 @@ func TableCacheFromSess(sess sql.Session, dbName string) TableCache {
 	return sess.(*DoltSession).caches[dbName]
 }
 
-func (sess *DoltSession) CommitTransaction(ctx *sql.Context) error {
-	currentDb := sess.GetCurrentDatabase()
-	if currentDb == "" {
-		return sql.ErrNoDatabaseSelected.New()
+func (sess *DoltSession) CommitTransaction(ctx *sql.Context, dbName string) error {
+	// This is triggered when certain commands are sent to the server (ex. commit) when a database is not selected.
+	// These commands should not error.
+	if dbName == "" {
+		return nil
 	}
 
-	dbRoot, ok := sess.dbRoots[currentDb]
+	dbRoot, ok := sess.dbRoots[dbName]
 	// It's possible that this returns false if the user has created an in-Memory database. Moreover,
 	// the analyzer will check for us whether a db exists or not.
 	if !ok {
 		return nil
 	}
 
-	dbData := sess.dbDatas[currentDb]
+	dbData := sess.dbDatas[dbName]
 
 	root := dbRoot.root
 	h, err := dbData.Ddb.WriteRootValue(ctx, root)

@@ -29,7 +29,11 @@ else:
 
 from pytest import DoltConnection, csv_to_row_maps
 
-dc = DoltConnection(port=int(port_str), database=database, user='dolt', auto_commit=auto_commit)
+if not database:
+    dc = DoltConnection(port=int(port_str), database=None, user='dolt', auto_commit=auto_commit)
+else:
+    dc = DoltConnection(port=int(port_str), database=database, user='dolt', auto_commit=auto_commit)
+
 dc.connect()
 
 queries = query_strs.split(';')
@@ -160,4 +164,30 @@ update_query() {
 #   * param2 is the query string
 insert_query() {
     server_query $1 "$2" ""
+}
+
+# unselected_server_query connects to a running mysql server, but not to a particular database, executes a query and
+# compares the results against what is expected.
+# In the event that the results do not match expectations, the python process will exit with an exit code of 1
+#  * param1 is 1 for autocommit = true, 0 for autocommit = false
+#  * param2 is the query_str
+unselected_server_query() {
+    let PORT="$$ % (65536-1024) + 1024"
+    PYTEST_DIR="$BATS_TEST_DIRNAME/helper"
+    echo Executing server_query
+    python3 -c "$PYTHON_QUERY_SCRIPT" -- "$PYTEST_DIR" "" "$PORT" "$1" "$2" "$3"
+}
+
+# unselected_update_query runs an update query and should be called with 2 parameters
+#   * param1 is 1 for autocommit = true, 0 for autocommit = false
+#   * param2 is the query string
+unselected_update_query() {
+    unselected_server_query $1 "$2" ""
+}
+
+# unselected_insert_query runs an insert query and should be called with 2 parameters
+#   * param1 is 1 for autocommit = true, 0 for autocommit = false
+#   * param2 is the query string
+unselected_insert_query() {
+    unselected_server_query $1 "$2" ""
 }
