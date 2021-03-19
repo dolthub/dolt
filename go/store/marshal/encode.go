@@ -368,7 +368,6 @@ func structEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[str
 			if ret.IsZeroValue() {
 				var err error
 				ret, err = types.NewStruct(nbf, structName, nil)
-
 				if err != nil {
 					return nil, err
 				}
@@ -380,8 +379,11 @@ func structEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[str
 				}
 
 				encVal, err := f.encoder(ctx, fv, vrw)
-				ret, err = ret.Set(f.name, encVal)
+				if err != nil {
+					return nil, err
+				}
 
+				ret, err = ret.Set(f.name, encVal)
 				if err != nil {
 					return nil, err
 				}

@@ -172,16 +172,6 @@ func overflowError(nbf *types.NomsBinFormat, v types.Float, t reflect.Type) *Unm
 	return &UnmarshalTypeMismatchError{v, t, fmt.Sprintf("(%g does not fit in %s)", v, t), nbf}
 }
 
-// unmarshalNomsError wraps errors from Marshaler.UnmarshalNoms. These should
-// be unwrapped and never leak to the caller of Unmarshal.
-type unmarshalNomsError struct {
-	err error
-}
-
-func (e *unmarshalNomsError) Error() string {
-	return e.err.Error()
-}
-
 type decoderFunc func(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, rv reflect.Value) error
 
 func typeDecoder(t reflect.Type, tags nomsTags) (decoderFunc, error) {
