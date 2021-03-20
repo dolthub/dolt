@@ -13,7 +13,7 @@ git](https://en.wikipedia.org/wiki/Git#Naming):
 We wanted a word meaning "idiot", starting with D for Data, 
 short enough to type on the command line, and
 not taken in the standard command line lexicon. So,
-dolt.
+`dolt`.
 
 ## Why does my connection to the server hang / time out?
 
