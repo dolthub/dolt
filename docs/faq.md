@@ -10,7 +10,9 @@ git](https://en.wikipedia.org/wiki/Git#Naming):
 > bastard, and I name all my projects after myself. First 'Linux',
 > now 'git'."
 
-We wanted a word that meant "idiot" and started with D for Data. So,
+We wanted a word meaning "idiot", starting with D for Data, 
+short enough to type on the command line, and
+not taken in the standard command line lexicon. So,
 dolt.
 
 ## Why does my connection to the server hang / time out?
