@@ -55,6 +55,7 @@ const (
 	InlineBlobKind
 	TimestampKind
 	DecimalKind
+	JSONDocKind
 
 	UnknownKind NomsKind = 255
 )
@@ -81,6 +82,7 @@ func init() {
 	KindToType[InlineBlobKind] = InlineBlob{}
 	KindToType[TimestampKind] = Timestamp{}
 	KindToType[DecimalKind] = Decimal{}
+	KindToType[JSONDocKind] = JSONDoc{}
 
 	SupportedKinds[BlobKind] = true
 	SupportedKinds[BoolKind] = true
@@ -103,6 +105,7 @@ func init() {
 	SupportedKinds[InlineBlobKind] = true
 	SupportedKinds[TimestampKind] = true
 	SupportedKinds[DecimalKind] = true
+	SupportedKinds[JSONDocKind] = true
 }
 
 var KindToTypeSlice []Value
@@ -130,6 +133,7 @@ var KindToString = map[NomsKind]string{
 	InlineBlobKind: "InlineBlob",
 	TimestampKind:  "Timestamp",
 	DecimalKind:    "Decimal",
+	JSONDocKind:    "JSON",
 }
 
 // String returns the name of the kind.
