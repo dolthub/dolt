@@ -16,6 +16,7 @@ package dfunctions
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -77,6 +78,24 @@ func (s SquashFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	h, err := ddb.WriteRootValue(ctx, mergeRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	meta, err := doltdb.NewCommitMeta("ds", "ds", "ds")
+
+	if err != nil {
+		return nil, err
+	}
+
+	cm, err = ddb.CommitDanglingWithParentCommits(ctx, h, []*doltdb.Commit{parent}, meta)
+
+	if err != nil {
+		return nil, err
+	}
+
+	h, err = cm.HashOf()
+
 	if err != nil {
 		return nil, err
 	}

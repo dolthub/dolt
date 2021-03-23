@@ -328,9 +328,8 @@ teardown() {
 
     # Squash the test_branch into master even though it is a fast-forward merge.
     multi_query 0 "
-    SET @@repo1_working = squash('test_branch');
-    SET @@repo1_head = commit('-m', 'FF squash merge.');
-    INSERT INTO dolt_branches (name, hash) VALUES('master', @@repo1_head);"
+    SET @@repo1_head = squash('test_branch');
+    UPDATE dolt_branches SET hash = @@repo1_head WHERE name= 'master';"
 
     # Validate tables and data on master
     server_query 0 "SET @@repo1_head=hashof('master');SHOW tables" ";Table\none_pk"
