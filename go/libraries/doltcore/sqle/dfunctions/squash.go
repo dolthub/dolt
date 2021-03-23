@@ -72,7 +72,6 @@ func (s SquashFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	mergeRoot, _, err := merge.MergeCommits(ctx, parent, cm)
-
 	if err != nil {
 		return nil, err
 	}
