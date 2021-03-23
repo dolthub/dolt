@@ -60,23 +60,20 @@ func EmptyJSONDoc(nbf *NomsBinFormat) JSONDoc {
 	return JSONDoc{valueImpl{nil, nbf, w.data(), nil}}
 }
 
-// readJSONDoc reads the data provided by a decoder and moves the decoder forward.
-func readJSONDoc(nbf *NomsBinFormat, dec *valueDecoder) (JSONDoc, error) {
+// readJSON reads the data provided by a decoder and moves the decoder forward.
+func readJSON(nbf *NomsBinFormat, dec *valueDecoder) (JSONDoc, error) {
 	start := dec.pos()
-	k := dec.PeekKind()
 
+	k := dec.PeekKind()
 	if k == NullKind {
 		dec.skipKind()
 		return EmptyJSONDoc(nbf), nil
 	}
-
 	if k != JSONDocKind {
 		return JSONDoc{}, errors.New("current value is not a JSONDoc")
 	}
 
-	err := skipJSONDoc(nbf, dec)
-
-	if err != nil {
+	if err := skipJSON(nbf, dec); err != nil {
 		return JSONDoc{}, err
 	}
 
@@ -84,7 +81,7 @@ func readJSONDoc(nbf *NomsBinFormat, dec *valueDecoder) (JSONDoc, error) {
 	return JSONDoc{valueImpl{dec.vrw, nbf, dec.byteSlice(start, end), nil}}, nil
 }
 
-func skipJSONDoc(nbf *NomsBinFormat, dec *valueDecoder) error {
+func skipJSON(nbf *NomsBinFormat, dec *valueDecoder) error {
 	dec.skipKind()
 	count := dec.readCount()
 	for i := uint64(0); i < count; i++ {
@@ -97,7 +94,8 @@ func skipJSONDoc(nbf *NomsBinFormat, dec *valueDecoder) error {
 	return nil
 }
 
-func walkJSONDoc(nbf *NomsBinFormat, r *refWalker, cb RefCallback) error {
+
+func walkJSON(nbf *NomsBinFormat, r *refWalker, cb RefCallback) error {
 	r.skipKind()
 	count := r.readCount()
 	for i := uint64(0); i < count; i++ {
@@ -109,6 +107,7 @@ func walkJSONDoc(nbf *NomsBinFormat, r *refWalker, cb RefCallback) error {
 	}
 	return nil
 }
+
 
 // CopyOf creates a copy of a JSONDoc.  This is necessary in cases where keeping a reference to the original JSONDoc is
 // preventing larger objects from being collected.
@@ -163,6 +162,10 @@ func (t JSONDoc) typeOf() (*Type, error) {
 		return nil, err
 	}
 	return val.typeOf()
+}
+
+func (t JSONDoc) Kind() NomsKind {
+	return JSONDocKind
 }
 
 func (t JSONDoc) decoderSkipToFields() (valueDecoder, uint64) {

@@ -31,7 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/store/d"
 )
 
-var ErrUnknownType = errors.New("unknown type")
+var ErrUnknownType = errors.New("unknown type $@")
 
 type CodecReader interface {
 	PeekKind() NomsKind
@@ -47,6 +47,7 @@ type CodecReader interface {
 	ReadTimestamp() (time.Time, error)
 	ReadDecimal() (decimal.Decimal, error)
 	ReadBlob() (Blob, error)
+	ReadJSON() (JSONDoc, error)
 }
 
 var _ CodecReader = (*valueDecoder)(nil)
@@ -79,7 +80,11 @@ func (r *valueDecoder) ReadBlob() (Blob, error) {
 	return newBlob(seq), nil
 }
 
-func (r *valueDecoder) readRef(nbf *NomsBinFormat) (Ref, error) {
+func (r *valueDecoder) ReadJSON() (JSONDoc, error) {
+	return readJSON(r.vrw.Format(), r)
+}
+
+func (r *valueDecoder) readRef(nbf *NomsBinFormat) (Ref, error) 	{
 	return readRef(nbf, &(r.typedBinaryNomsReader))
 }
 
@@ -229,6 +234,10 @@ func (r *valueDecoder) skipBlob(nbf *NomsBinFormat) error {
 	return r.skipSequence(nbf, BlobKind, r.skipBlobLeafSequence)
 }
 
+func (r *valueDecoder) skipJSON(nbf *NomsBinFormat) error {
+	return skipJSON(nbf, r)
+}
+
 func (r *valueDecoder) skipSequence(nbf *NomsBinFormat, kind NomsKind, leafSkipper func(nbf *NomsBinFormat) ([]uint32, uint64, error)) error {
 	r.skipKind()
 	level := r.readCount()
@@ -345,6 +354,8 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 		return r.readStruct(nbf)
 	case TupleKind:
 		return r.readTuple(nbf)
+	case JSONDocKind:
+		return r.ReadJSON()
 	case TypeKind:
 		r.skipKind()
 		return r.readType()
@@ -361,7 +372,6 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 			}
 		}
 	}
-
 	return nil, ErrUnknownType
 }
 
@@ -425,6 +435,11 @@ func (r *valueDecoder) SkipValue(nbf *NomsBinFormat) error {
 		if err != nil {
 			return err
 		}
+	case JSONDocKind:
+		err := r.skipJSON(nbf)
+		if err != nil {
+			return err
+		}
 	case TypeKind:
 		r.skipKind()
 		err := r.skipType()
@@ -472,6 +487,13 @@ func (r *valueDecoder) readTypeOfValue(nbf *NomsBinFormat) (*Type, error) {
 	case StructKind:
 		return readStructTypeOfValue(nbf, r)
 	case TupleKind:
+		val, err := r.readValue(nbf)
+		if err != nil {
+			return nil, err
+		}
+		d.Chk.True(val != nil)
+		return val.typeOf()
+	case JSONDocKind:
 		val, err := r.readValue(nbf)
 		if err != nil {
 			return nil, err
@@ -572,6 +594,7 @@ func (r *valueDecoder) skipTuple(nbf *NomsBinFormat) error {
 	return skipTuple(nbf, r)
 }
 
+
 func (r *valueDecoder) readOrderedKey(nbf *NomsBinFormat) (orderedKey, error) {
 	switch r.PeekKind() {
 	case hashKind:
@@ -670,6 +693,14 @@ func (r *typedBinaryNomsReader) readTypeInner(seenStructs map[string]*Type) (*Ty
 		}
 
 		return makeCompoundType(TupleKind, t)
+	case JSONDocKind:
+		t, err := r.readTypeInner(seenStructs)
+
+		if err != nil {
+			return nil, err
+		}
+
+		return makeCompoundType(JSONDocKind, t)
 	case UnionKind:
 		t, err := r.readUnionType(seenStructs)
 
@@ -693,7 +724,7 @@ func (r *typedBinaryNomsReader) readTypeInner(seenStructs map[string]*Type) (*Ty
 func (r *typedBinaryNomsReader) skipTypeInner() {
 	k := r.ReadKind()
 	switch k {
-	case ListKind, RefKind, SetKind, TupleKind:
+	case ListKind, RefKind, SetKind, TupleKind, JSONDocKind:
 		r.skipTypeInner()
 	case MapKind:
 		r.skipTypeInner()

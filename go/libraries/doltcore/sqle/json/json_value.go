@@ -31,12 +31,23 @@ const (
 	JSONNull = "null"
 )
 
+// TODO "NomsJSONValue" -> "NomsJSON"
+// TODO "types.JSONDoc" -> "types.JSON"
 type NomsJSONValue types.JSONDoc
 
 var _ sql.JSONValue = NomsJSONValue{}
 
-func NomsJSONValueFromJSONDocument(ctx context.Context, vrw types.ValueReadWriter, val sql.JSONDocument) (NomsJSONValue, error) {
-	v, err := marshalJSON(ctx, vrw, val.Val)
+func NomsJSONFromJSONValue(ctx context.Context, vrw types.ValueReadWriter, val sql.JSONValue) (NomsJSONValue, error) {
+	if noms, ok := val.(NomsJSONValue); ok {
+		return noms, nil
+	}
+
+	sqlDoc, err := val.Unmarshall()
+	if err != nil {
+		return NomsJSONValue{}, err
+	}
+
+	v, err := marshalJSON(ctx, vrw, sqlDoc.Val)
 	if err != nil {
 		return NomsJSONValue{}, err
 	}

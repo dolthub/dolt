@@ -65,6 +65,8 @@ func GetTypeConverter(ctx context.Context, srcTi TypeInfo, destTi TypeInfo) (tc 
 		return inlineBlobTypeConverter(ctx, src, destTi)
 	case *intType:
 		return intTypeConverter(ctx, src, destTi)
+	case *jsonType:
+		return jsonTypeConverter(ctx, src, destTi)
 	case *setType:
 		return setTypeConverter(ctx, src, destTi)
 	case *timeType:

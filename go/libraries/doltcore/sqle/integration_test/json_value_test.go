@@ -16,6 +16,7 @@ package integration_test
 
 import (
 	"context"
+	cmd "github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -36,9 +37,13 @@ type jsonValueTest struct {
 func TestJsonValues(t *testing.T) {
 	tests := []jsonValueTest{
 		{
-			name:  "smoke test",
-			query: "select 1 = 1 from dual;",
-			rows:  []sql.Row{{true}},
+			name: "create JSON table",
+			setup: []testCommand{
+				{cmd.SqlCmd{}, args{"-q", `create table js (pk int primary key, js json);`}},
+				{cmd.SqlCmd{}, args{"-q", `insert into js values (1, '[]'), (2, '{"a":1}');`}},
+			},
+			query: "select count(*) from js",
+			rows: []sql.Row{{int64(2)}},
 		},
 	}
 

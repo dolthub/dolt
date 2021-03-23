@@ -268,6 +268,8 @@ func varStringTypeConverter(ctx context.Context, src *varStringType, destTi Type
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *intType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *jsonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *setType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *timeType:

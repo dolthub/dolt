@@ -78,7 +78,7 @@ func TestJSONValueMarshallingRoundTrip(t *testing.T) {
 	for _, test := range tests {
 
 		t.Run(test.name, func(t *testing.T) {
-			nomsVal, err := NomsJSONValueFromJSONDocument(ctx, vrw, test.doc)
+			nomsVal, err := NomsJSONFromJSONValue(ctx, vrw, test.doc)
 			assert.NoError(t, err)
 
 			// sql.JSONDocument -> NomsJSONValue -> sql.JSONDocument

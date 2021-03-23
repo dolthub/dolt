@@ -176,6 +176,8 @@ func (r *refWalker) walkValue(nbf *NomsBinFormat, cb RefCallback) error {
 	switch k {
 	case BlobKind:
 		return r.walkBlob(nbf, cb)
+	case JSONDocKind:
+		return r.walkJSON(nbf, cb)
 	case ListKind:
 		return r.walkList(nbf, cb)
 	case MapKind:
@@ -213,4 +215,8 @@ func (r *refWalker) walkStruct(nbf *NomsBinFormat, cb RefCallback) error {
 
 func (r *refWalker) walkTuple(nbf *NomsBinFormat, cb RefCallback) error {
 	return walkTuple(nbf, r, cb)
+}
+
+func (r *refWalker) walkJSON(nbf *NomsBinFormat, cb RefCallback) error {
+	return walkJSON(nbf, r, cb)
 }
