@@ -1017,4 +1017,9 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "active_branch()" ]] || false
     [[ "$output" =~ "tmp_br" ]] || false
+
+    run dolt sql -q 'select name from dolt_branches where name = (select active_branch())' -r csv
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "tmp_br" ]] || false
 }
