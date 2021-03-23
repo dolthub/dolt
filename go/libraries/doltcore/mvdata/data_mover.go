@@ -18,7 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/fatih/color"
 	"sync/atomic"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -124,7 +124,7 @@ func (imp *DataMover) Move(ctx context.Context, sch schema.Schema) (badRowCount 
 		r := pipeline.GetTransFailureRow(trf)
 		bdr.AddDetails("Bad Row:" + row.Fmt(ctx, r, sch))
 		verr := bdr.Build()
-		cli.PrintErrln(verr.Verbose())
+		fmt.Fprintln(color.Output, verr.Verbose())
 		atomic.AddInt64(&badCount, 1)
 		return false
 	}
