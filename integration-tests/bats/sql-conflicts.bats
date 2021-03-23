@@ -78,6 +78,12 @@ teardown() {
   run dolt sql -r csv -q "SELECT * FROM dolt_conflicts"
   [ "$status" -eq 0 ]
   [[ "$output" =~ "$EXPECTED" ]] || false
+
+  # delete an already resolved conflict a 2nd time should not cause problems
+  run dolt sql -q "DELETE from dolt_conflicts_one_pk WHERE our_pk1 = 0"
+  [ "$status" -eq 0 ]
+  echo $output
+  [[ "$output" =~ "Query OK, 0 rows affected" ]] || false
 }
 
 
