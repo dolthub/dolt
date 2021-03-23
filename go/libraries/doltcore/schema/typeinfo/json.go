@@ -31,8 +31,8 @@ var JSONType = &jsonType{sql.JSON}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *jsonType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
-	if val, ok := v.(types.JSONDoc); ok {
-		return json.NomsJSONValue(val), nil
+	if val, ok := v.(types.JSON); ok {
+		return json.NomsJSON(val), nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -44,12 +44,12 @@ func (ti *jsonType) ConvertNomsValueToValue(v types.Value) (interface{}, error) 
 func (ti *jsonType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
 	k := reader.PeekKind()
 	switch k {
-	case types.JSONDocKind:
+	case types.JSONKind:
 		js, err := reader.ReadJSON()
 		if err != nil {
 			return nil, err
 		}
-		return json.NomsJSONValue(js), nil
+		return json.NomsJSON(js), nil
 	case types.NullKind:
 		_ = reader.ReadKind()
 		return nil, nil
@@ -79,7 +79,7 @@ func (ti *jsonType) ConvertValueToNomsValue(ctx context.Context, vrw types.Value
 		return nil, err
 	}
 
-	return types.JSONDoc(noms), err
+	return types.JSON(noms), err
 }
 
 // Equals implements TypeInfo interface.
@@ -89,8 +89,8 @@ func (ti *jsonType) Equals(other TypeInfo) bool {
 
 // FormatValue implements TypeInfo interface.
 func (ti *jsonType) FormatValue(v types.Value) (*string, error) {
-	if noms, ok := v.(types.JSONDoc); ok {
-		s, err := json.NomsJSONValue(noms).ToString()
+	if noms, ok := v.(types.JSON); ok {
+		s, err := json.NomsJSON(noms).ToString()
 		if err != nil {
 			return nil, err
 		}
@@ -114,7 +114,7 @@ func (ti *jsonType) GetTypeParams() map[string]string {
 // IsValid implements TypeInfo interface.
 func (ti *jsonType) IsValid(v types.Value) bool {
 	switch v.(type) {
-	case types.JSONDoc:
+	case types.JSON:
 		return true
 	case types.Null:
 		return true
@@ -125,7 +125,7 @@ func (ti *jsonType) IsValid(v types.Value) bool {
 
 // NomsKind implements TypeInfo interface.
 func (ti *jsonType) NomsKind() types.NomsKind {
-	return types.JSONDocKind
+	return types.JSONKind
 }
 
 // ParseValue implements TypeInfo interface.

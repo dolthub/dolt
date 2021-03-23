@@ -47,7 +47,7 @@ type CodecReader interface {
 	ReadTimestamp() (time.Time, error)
 	ReadDecimal() (decimal.Decimal, error)
 	ReadBlob() (Blob, error)
-	ReadJSON() (JSONDoc, error)
+	ReadJSON() (JSON, error)
 }
 
 var _ CodecReader = (*valueDecoder)(nil)
@@ -80,7 +80,7 @@ func (r *valueDecoder) ReadBlob() (Blob, error) {
 	return newBlob(seq), nil
 }
 
-func (r *valueDecoder) ReadJSON() (JSONDoc, error) {
+func (r *valueDecoder) ReadJSON() (JSON, error) {
 	return readJSON(r.vrw.Format(), r)
 }
 
@@ -354,7 +354,7 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 		return r.readStruct(nbf)
 	case TupleKind:
 		return r.readTuple(nbf)
-	case JSONDocKind:
+	case JSONKind:
 		return r.ReadJSON()
 	case TypeKind:
 		r.skipKind()
@@ -435,7 +435,7 @@ func (r *valueDecoder) SkipValue(nbf *NomsBinFormat) error {
 		if err != nil {
 			return err
 		}
-	case JSONDocKind:
+	case JSONKind:
 		err := r.skipJSON(nbf)
 		if err != nil {
 			return err
@@ -493,7 +493,7 @@ func (r *valueDecoder) readTypeOfValue(nbf *NomsBinFormat) (*Type, error) {
 		}
 		d.Chk.True(val != nil)
 		return val.typeOf()
-	case JSONDocKind:
+	case JSONKind:
 		val, err := r.readValue(nbf)
 		if err != nil {
 			return nil, err
@@ -693,14 +693,14 @@ func (r *typedBinaryNomsReader) readTypeInner(seenStructs map[string]*Type) (*Ty
 		}
 
 		return makeCompoundType(TupleKind, t)
-	case JSONDocKind:
+	case JSONKind:
 		t, err := r.readTypeInner(seenStructs)
 
 		if err != nil {
 			return nil, err
 		}
 
-		return makeCompoundType(JSONDocKind, t)
+		return makeCompoundType(JSONKind, t)
 	case UnionKind:
 		t, err := r.readUnionType(seenStructs)
 
@@ -724,7 +724,7 @@ func (r *typedBinaryNomsReader) readTypeInner(seenStructs map[string]*Type) (*Ty
 func (r *typedBinaryNomsReader) skipTypeInner() {
 	k := r.ReadKind()
 	switch k {
-	case ListKind, RefKind, SetKind, TupleKind, JSONDocKind:
+	case ListKind, RefKind, SetKind, TupleKind, JSONKind:
 		r.skipTypeInner()
 	case MapKind:
 		r.skipTypeInner()

@@ -297,10 +297,10 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) error {
 		w.outdent()
 		w.write("}")
 
-	case JSONDocKind:
+	case JSONKind:
 		w.write("json {")
 		w.indent()
-		vv, err := v.(JSONDoc).Inner()
+		vv, err := v.(JSON).Inner()
 		if err != nil {
 			return err
 		}
@@ -441,7 +441,7 @@ func (w *hrsWriter) writeSize(v Value) {
 
 func (w *hrsWriter) writeType(t *Type, seenStructs map[*Type]struct{}) {
 	switch t.TargetKind() {
-	case ListKind, RefKind, SetKind, MapKind, TupleKind, JSONDocKind:
+	case ListKind, RefKind, SetKind, MapKind, TupleKind, JSONKind:
 		w.write(t.TargetKind().String())
 		w.write("<")
 		for i, et := range t.Desc.(CompoundDesc).ElemTypes {

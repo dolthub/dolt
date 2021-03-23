@@ -30,13 +30,13 @@ import (
 	"github.com/dolthub/dolt/go/store/d"
 )
 
-type JSONDoc struct {
+type JSON struct {
 	valueImpl
 }
 
-func NewJSONDoc(nbf *NomsBinFormat, value Value) (JSONDoc, error) {
+func NewJSONDoc(nbf *NomsBinFormat, value Value) (JSON, error) {
 	w := newBinaryNomsWriter()
-	if err := JSONDocKind.writeTo(&w, nbf); err != nil {
+	if err := JSONKind.writeTo(&w, nbf); err != nil {
 		return EmptyJSONDoc(nbf), err
 	}
 
@@ -47,21 +47,21 @@ func NewJSONDoc(nbf *NomsBinFormat, value Value) (JSONDoc, error) {
 	}
 
 	vrw := value.(valueReadWriter).valueReadWriter()
-	return JSONDoc{valueImpl{vrw, nbf, w.data(), nil}}, nil
+	return JSON{valueImpl{vrw, nbf, w.data(), nil}}, nil
 }
 
-func EmptyJSONDoc(nbf *NomsBinFormat) JSONDoc {
+func EmptyJSONDoc(nbf *NomsBinFormat) JSON {
 	w := newBinaryNomsWriter()
-	if err := JSONDocKind.writeTo(&w, nbf); err != nil {
+	if err := JSONKind.writeTo(&w, nbf); err != nil {
 		d.PanicIfError(err)
 	}
 	w.writeCount(uint64(0))
 
-	return JSONDoc{valueImpl{nil, nbf, w.data(), nil}}
+	return JSON{valueImpl{nil, nbf, w.data(), nil}}
 }
 
 // readJSON reads the data provided by a decoder and moves the decoder forward.
-func readJSON(nbf *NomsBinFormat, dec *valueDecoder) (JSONDoc, error) {
+func readJSON(nbf *NomsBinFormat, dec *valueDecoder) (JSON, error) {
 	start := dec.pos()
 
 	k := dec.PeekKind()
@@ -69,16 +69,16 @@ func readJSON(nbf *NomsBinFormat, dec *valueDecoder) (JSONDoc, error) {
 		dec.skipKind()
 		return EmptyJSONDoc(nbf), nil
 	}
-	if k != JSONDocKind {
-		return JSONDoc{}, errors.New("current value is not a JSONDoc")
+	if k != JSONKind {
+		return JSON{}, errors.New("current value is not a JSON")
 	}
 
 	if err := skipJSON(nbf, dec); err != nil {
-		return JSONDoc{}, err
+		return JSON{}, err
 	}
 
 	end := dec.pos()
-	return JSONDoc{valueImpl{dec.vrw, nbf, dec.byteSlice(start, end), nil}}, nil
+	return JSON{valueImpl{dec.vrw, nbf, dec.byteSlice(start, end), nil}}, nil
 }
 
 func skipJSON(nbf *NomsBinFormat, dec *valueDecoder) error {
@@ -108,17 +108,16 @@ func walkJSON(nbf *NomsBinFormat, r *refWalker, cb RefCallback) error {
 	return nil
 }
 
-
-// CopyOf creates a copy of a JSONDoc.  This is necessary in cases where keeping a reference to the original JSONDoc is
+// CopyOf creates a copy of a JSON.  This is necessary in cases where keeping a reference to the original JSON is
 // preventing larger objects from being collected.
-func (t JSONDoc) CopyOf(vrw ValueReadWriter) JSONDoc {
+func (t JSON) CopyOf(vrw ValueReadWriter) JSON {
 	buff := make([]byte, len(t.buff))
 	offsets := make([]uint32, len(t.offsets))
 
 	copy(buff, t.buff)
 	copy(offsets, t.offsets)
 
-	return JSONDoc{
+	return JSON{
 		valueImpl{
 			buff:    buff,
 			offsets: offsets,
@@ -128,27 +127,27 @@ func (t JSONDoc) CopyOf(vrw ValueReadWriter) JSONDoc {
 	}
 }
 
-func (t JSONDoc) Empty() bool {
+func (t JSON) Empty() bool {
 	return t.Len() == 0
 }
 
-func (t JSONDoc) Format() *NomsBinFormat {
+func (t JSON) Format() *NomsBinFormat {
 	return t.format()
 }
 
 // Value interface
-func (t JSONDoc) Value(ctx context.Context) (Value, error) {
+func (t JSON) Value(ctx context.Context) (Value, error) {
 	return t, nil
 }
 
-func (t JSONDoc) Inner() (Value, error) {
+func (t JSON) Inner() (Value, error) {
 	dec := newValueDecoder(t.buff, t.vrw)
 	dec.skipKind()
 	dec.skipCount()
 	return dec.readValue(t.nbf)
 }
 
-func (t JSONDoc) WalkValues(ctx context.Context, cb ValueCallback) error {
+func (t JSON) WalkValues(ctx context.Context, cb ValueCallback) error {
 	val, err := t.Inner()
 	if err != nil {
 		return err
@@ -156,7 +155,7 @@ func (t JSONDoc) WalkValues(ctx context.Context, cb ValueCallback) error {
 	return val.WalkValues(ctx, cb)
 }
 
-func (t JSONDoc) typeOf() (*Type, error) {
+func (t JSON) typeOf() (*Type, error) {
 	val, err := t.Inner()
 	if err != nil {
 		return nil, err
@@ -164,29 +163,29 @@ func (t JSONDoc) typeOf() (*Type, error) {
 	return val.typeOf()
 }
 
-func (t JSONDoc) Kind() NomsKind {
-	return JSONDocKind
+func (t JSON) Kind() NomsKind {
+	return JSONKind
 }
 
-func (t JSONDoc) decoderSkipToFields() (valueDecoder, uint64) {
+func (t JSON) decoderSkipToFields() (valueDecoder, uint64) {
 	dec := t.decoder()
 	dec.skipKind()
 	count := dec.readCount()
 	return dec, count
 }
 
-func (t JSONDoc) Len() uint64 {
+func (t JSON) Len() uint64 {
 	return 1
 }
 
-func (t JSONDoc) isPrimitive() bool {
+func (t JSON) isPrimitive() bool {
 	return false
 }
 
-func (t JSONDoc) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
-	otherJSONDoc, ok := other.(JSONDoc)
+func (t JSON) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+	otherJSONDoc, ok := other.(JSON)
 	if !ok {
-		return JSONDocKind < other.Kind(), nil
+		return JSONKind < other.Kind(), nil
 	}
 
 	cmp, err := t.Compare(otherJSONDoc)
@@ -197,7 +196,7 @@ func (t JSONDoc) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	return cmp == -1, nil
 }
 
-func (t JSONDoc) Compare(other JSONDoc) (int, error) {
+func (t JSON) Compare(other JSON) (int, error) {
 	left, err := t.Inner()
 	if err != nil {
 		return 0, err
@@ -211,15 +210,15 @@ func (t JSONDoc) Compare(other JSONDoc) (int, error) {
 	return compareJSON(left, right)
 }
 
-func (t JSONDoc) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
+func (t JSON) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	panic("unreachable")
 }
 
-func (t JSONDoc) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
+func (t JSON) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
 	panic("unreachable")
 }
 
-func (t JSONDoc) HumanReadableString() string {
+func (t JSON) HumanReadableString() string {
 	val, err := t.Inner()
 	if err != nil {
 		d.PanicIfError(err)

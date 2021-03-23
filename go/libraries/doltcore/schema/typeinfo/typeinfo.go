@@ -282,7 +282,7 @@ func FromKind(kind types.NomsKind) TypeInfo {
 		return &inlineBlobType{sql.MustCreateBinary(sqltypes.VarBinary, math.MaxUint16)}
 	case types.IntKind:
 		return Int64Type
-	case types.JSONDocKind:
+	case types.JSONKind:
 		return JSONType
 	case types.NullKind:
 		return UnknownType

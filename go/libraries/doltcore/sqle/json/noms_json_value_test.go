@@ -81,12 +81,12 @@ func TestJSONValueMarshallingRoundTrip(t *testing.T) {
 			nomsVal, err := NomsJSONFromJSONValue(ctx, vrw, test.doc)
 			assert.NoError(t, err)
 
-			// sql.JSONDocument -> NomsJSONValue -> sql.JSONDocument
+			// sql.JSONDocument -> NomsJSON -> sql.JSONDocument
 			jsDoc, err := nomsVal.Unmarshall()
 			assert.NoError(t, err)
 			assert.Equal(t, test.doc.Val, jsDoc.Val)
 
-			// sql.JSONDocument -> NomsJSONValue -> string -> sql.JSONDocument
+			// sql.JSONDocument -> NomsJSON -> string -> sql.JSONDocument
 			str, err := nomsVal.ToString()
 			assert.NoError(t, err)
 

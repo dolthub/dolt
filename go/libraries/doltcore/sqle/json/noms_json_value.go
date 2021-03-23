@@ -31,33 +31,33 @@ const (
 	JSONNull = "null"
 )
 
-// TODO "NomsJSONValue" -> "NomsJSON"
-// TODO "types.JSONDoc" -> "types.JSON"
-type NomsJSONValue types.JSONDoc
+// NomsJSON is a type alias for types.JSON. The alias allows MySQL-specific
+// logic to be kept separate from the storage-layer code in pkg types.
+type NomsJSON types.JSON
 
-var _ sql.JSONValue = NomsJSONValue{}
+var _ sql.JSONValue = NomsJSON{}
 
-func NomsJSONFromJSONValue(ctx context.Context, vrw types.ValueReadWriter, val sql.JSONValue) (NomsJSONValue, error) {
-	if noms, ok := val.(NomsJSONValue); ok {
+func NomsJSONFromJSONValue(ctx context.Context, vrw types.ValueReadWriter, val sql.JSONValue) (NomsJSON, error) {
+	if noms, ok := val.(NomsJSON); ok {
 		return noms, nil
 	}
 
 	sqlDoc, err := val.Unmarshall()
 	if err != nil {
-		return NomsJSONValue{}, err
+		return NomsJSON{}, err
 	}
 
 	v, err := marshalJSON(ctx, vrw, sqlDoc.Val)
 	if err != nil {
-		return NomsJSONValue{}, err
+		return NomsJSON{}, err
 	}
 
 	doc, err := types.NewJSONDoc(vrw.Format(), v)
 	if err != nil {
-		return NomsJSONValue{}, err
+		return NomsJSON{}, err
 	}
 
-	return NomsJSONValue(doc), nil
+	return NomsJSON(doc), nil
 }
 
 func marshalJSON(ctx context.Context, vrw types.ValueReadWriter, val interface{}) (types.Value, error) {
@@ -133,8 +133,8 @@ func marshalJSONObject(ctx context.Context, vrw types.ValueReadWriter, obj map[s
 }
 
 // TODO(andy) thread ctx in GMS
-func (v NomsJSONValue) Unmarshall() (doc sql.JSONDocument, err error) {
-	nomsVal, err := types.JSONDoc(v).Inner()
+func (v NomsJSON) Unmarshall() (doc sql.JSONDocument, err error) {
+	nomsVal, err := types.JSON(v).Inner()
 	if err != nil {
 		return sql.JSONDocument{}, err
 	}
@@ -190,8 +190,8 @@ func unmarshalJSONObject(ctx context.Context, m types.Map) (obj map[string]inter
 	return
 }
 
-func (v NomsJSONValue) Compare(other sql.JSONValue) (cmp int, err error) {
-	noms, ok := other.(NomsJSONValue)
+func (v NomsJSON) Compare(other sql.JSONValue) (cmp int, err error) {
+	noms, ok := other.(NomsJSON)
 	if !ok {
 		doc, err := v.Unmarshall()
 		if err != nil {
@@ -200,11 +200,11 @@ func (v NomsJSONValue) Compare(other sql.JSONValue) (cmp int, err error) {
 		return doc.Compare(other)
 	}
 
-	return types.JSONDoc(v).Compare(types.JSONDoc(noms))
+	return types.JSON(v).Compare(types.JSON(noms))
 }
 
-func (v NomsJSONValue) ToString() (string, error) {
-	jd, err := types.JSONDoc(v).Inner()
+func (v NomsJSON) ToString() (string, error) {
+	jd, err := types.JSON(v).Inner()
 	if err != nil {
 		return "", err
 	}
