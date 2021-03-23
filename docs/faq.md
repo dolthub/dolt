@@ -27,6 +27,15 @@ field in the config.yaml file you pass to the `dolt sql-server`
 command, [as described in the
 docs](https://docs.dolthub.com/interfaces/cli#dolt-sql-server).
 
+## The MySQL shell gives me an error: Can't connect to local MySQL server through socket '/tmp/mysql.sock' (2)
+
+The MySQL shell will try to connect through a socket file on many OSes. 
+To force it to use TCP instead, give it the loopback address like this:
+
+```bash
+% mysql --host 127.0.0.1 ...
+```
+
 ## What does `@@autocommit` do?
 
 This is a SQL variable that you can turn on for your SQL session like so:
