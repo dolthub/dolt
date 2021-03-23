@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"sync/atomic"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -97,7 +98,7 @@ type GCTableWriteCloser interface {
 
 // Move is the method that executes the pipeline which will move data from the pipeline's source DataLocation to it's
 // dest DataLocation.  It returns the number of bad rows encountered during import, and an error.
-func (imp *DataMover) Move(ctx context.Context) (badRowCount int64, err error) {
+func (imp *DataMover) Move(ctx context.Context, sch schema.Schema) (badRowCount int64, err error) {
 	defer imp.Rd.Close(ctx)
 	defer func() {
 		closeErr := imp.Wr.Close(ctx)
@@ -119,7 +120,11 @@ func (imp *DataMover) Move(ctx context.Context) (badRowCount int64, err error) {
 			rowErr = trf
 			return true
 		}
-
+		bdr := errhand.BuildDError("")
+		r := pipeline.GetTransFailureRow(trf)
+		bdr.AddDetails("Bad Row:" + row.Fmt(ctx, r, sch))
+		verr := bdr.Build()
+		cli.PrintErrln(verr.Verbose())
 		atomic.AddInt64(&badCount, 1)
 		return false
 	}
@@ -149,7 +154,7 @@ func MoveDataToRoot(ctx context.Context, mover *DataMover, mvOpts DataMoverOptio
 	var err error
 	newRoot := &doltdb.RootValue{}
 
-	badCount, err = mover.Move(ctx)
+	badCount, err = mover.Move(ctx, mover.Rd.GetSchema())
 
 	if err != nil {
 		if pipeline.IsTransformFailure(err) {
