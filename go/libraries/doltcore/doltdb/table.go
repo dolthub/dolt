@@ -42,7 +42,7 @@ const (
 
 var tableNameRegex, _ = regexp.Compile(TableNameRegexStr)
 
-var ErrNoConflictsResolved = errors.New("no comments resolved")
+var ErrNoConflictsResolved = errors.New("no conflicts resolved")
 var ErrNoAutoIncrementValue = fmt.Errorf("auto increment set for non-numeric column type")
 
 // IsValidTableName returns true if the name matches the regular expression TableNameRegexStr.
