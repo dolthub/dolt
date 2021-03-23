@@ -27,7 +27,7 @@ field in the config.yaml file you pass to the `dolt sql-server`
 command, [as described in the
 docs](https://docs.dolthub.com/interfaces/cli#dolt-sql-server).
 
-## The MySQL shell gives me an error: Can't connect to local MySQL server through socket '/tmp/mysql.sock' (2)
+## The MySQL shell gives me an error: `Can't connect to local MySQL server through socket '/tmp/mysql.sock'`
 
 The MySQL shell will try to connect through a socket file on many OSes. 
 To force it to use TCP instead, give it the loopback address like this:
