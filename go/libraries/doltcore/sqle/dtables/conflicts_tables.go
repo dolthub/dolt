@@ -15,6 +15,7 @@ package dtables
 // limitations under the License.
 
 import (
+	"errors"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -159,6 +160,10 @@ func (cd *conflictDeleter) Close(ctx *sql.Context) error {
 	_, _, updatedTbl, err := cd.ct.tbl.ResolveConflicts(ctx, cd.pks)
 
 	if err != nil {
+		if errors.Is(err, doltdb.ErrNoConflictsResolved) {
+			return nil
+		}
+
 		return err
 	}
 
