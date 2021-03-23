@@ -336,32 +336,33 @@ teardown() {
     server_query 0 "SET @@repo1_head=hashof('master');SELECT * FROM one_pk ORDER by pk" ";pk,c1,c2\n0,None,None\n1,1,None\n2,2,2\n3,3,3\n4,4,4\n5,5,5"
 
     # Validate that the squash operations resulted in one commit to master than before
-    server_query 0 "select COUNT(*) from dolt_log" "COUNT(*)\n2"
+    server_query 0 "SET @@repo1_head=hashof('master');select COUNT(*) from dolt_log" ";COUNT(*)\n2"
 
-    # make some changes to test_branch and commit. Make some changes to master and commit. Squash/Merge.
+    # make some changes to master and commit. Make some changes to test_branch and commit. Squash/Merge.
     multi_query 0 "
     SET @@repo1_head=hashof('master');
     UPDATE one_pk SET c1=10 WHERE pk=2;
     SET @@repo1_head=commit('-m', 'Change c 1 to 10');
-    INSERT INTO dolt_branches (name,hash) VALUES ('master', @@repo1_head);
+    UPDATE dolt_branches SET hash = @@repo1_head WHERE name= 'master';
 
     SET @@repo1_head=hashof('test_branch');
     INSERT INTO one_pk (pk,c1,c2) VALUES (6,6,6);
     SET @@repo1_head=commit('-m', 'add 6');
+    INSERT INTO one_pk (pk,c1,c2) VALUES (7,7,7);
+    SET @@repo1_head=commit('-m', 'add 7');
     INSERT INTO dolt_branches (name,hash) VALUES ('test_branch', @@repo1_head);"
 
     multi_query 0 "
     SET @@repo1_head=hashof('master');
-    SET @@repo1_working=squash('test_branch');
-    SET @@repo1_head=commit('-m', 'squash #2');
-    INSERT INTO dolt_branches (name, hash) VALUES('master', @@repo1_head);"
+    SET @@repo1_head=squash('test_branch');
+    UPDATE dolt_branches SET hash = @@repo1_head WHERE name= 'master';"
 
     # Validate tables and data on master
     server_query 0 "SET @@repo1_head=hashof('master');SHOW tables" ";Table\none_pk"
-    server_query 0 "SET @@repo1_head=hashof('master');SELECT * FROM one_pk ORDER by pk" ";pk,c1,c2\n0,None,None\n1,1,None\n2,10,2\n3,3,3\n4,4,4\n5,5,5\n6,6,6"
+    server_query 0 "SET @@repo1_head=hashof('master');SELECT * FROM one_pk ORDER by pk" ";pk,c1,c2\n0,None,None\n1,1,None\n2,10,2\n3,3,3\n4,4,4\n5,5,5\n6,6,6\n7,7,7"
 
     # Validate that the squash operations resulted in one commit to master than before
-    server_query 0 "select COUNT(*) from dolt_log" "COUNT(*)\n3"
+    server_query 0 "select COUNT(*) from dolt_log" "COUNT(*)\n4"
 
     # Validate the a merge commit was written by making sure the hashes of the two branches don't match
     server_query 0 "select COUNT(hash) from dolt_branches where hash IN (select hash from dolt_branches WHERE name = 'test_branch')" "COUNT(hash)\n1"
