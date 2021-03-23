@@ -926,7 +926,7 @@ SQL
     # Test resolve nonexistant key
     run dolt conflicts resolve foo 999
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "not the primary key of a conflicting row" ]] || false
+    [[ "$output" =~ "no conflicts resolved" ]] || false
 
     dolt conflicts resolve --theirs foo
     run dolt sql -q 'select count(*) from foo'

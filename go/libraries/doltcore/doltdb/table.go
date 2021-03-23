@@ -42,6 +42,7 @@ const (
 
 var tableNameRegex, _ = regexp.Compile(TableNameRegexStr)
 
+var ErrNoConflictsResolved = errors.New("no conflicts resolved")
 var ErrNoAutoIncrementValue = fmt.Errorf("auto increment set for non-numeric column type")
 
 // IsValidTableName returns true if the name matches the regular expression TableNameRegexStr.
@@ -398,7 +399,7 @@ func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (i
 	}
 
 	if removed == 0 {
-		return invalid, notFound, tbl, nil
+		return invalid, notFound, tbl, ErrNoConflictsResolved
 	}
 
 	conflicts, err := confEdit.Map(ctx)
