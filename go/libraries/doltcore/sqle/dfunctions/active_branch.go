@@ -83,7 +83,7 @@ func (*ActiveBranchFunc) Resolved() bool {
 }
 
 func (cf *ActiveBranchFunc) Type() sql.Type {
-	return sql.Boolean
+	return sql.Text
 }
 
 // Children implements the Expression interface.

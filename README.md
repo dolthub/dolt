@@ -356,7 +356,8 @@ dolt remote add <remote> gs://gcs-bucket/database
 [DoltHub](https://dolthub.com) has lots of interesting datasets to
 explore and clone. Here are some of our favorites.
 
-- Coronavirus: https://www.dolthub.com/repositories/dolthub/corona-virus
+- Hospital Price Transparency: https://www.dolthub.com/repositories/dolthub/hospital-price-transparency
+- US Presidential Election Precinct Results: https://www.dolthub.com/repositories/dolthub/us-president-precinct-results
 - WordNet: https://www.dolthub.com/repositories/dolthub/word-net
 - ImageNet: https://www.dolthub.com/repositories/dolthub/image-net
 - Google Open Images: https://www.dolthub.com/repositories/dolthub/open-images

@@ -10,8 +10,10 @@ git](https://en.wikipedia.org/wiki/Git#Naming):
 > bastard, and I name all my projects after myself. First 'Linux',
 > now 'git'."
 
-We wanted a word that meant "idiot" and started with D for Data. So,
-dolt.
+We wanted a word meaning "idiot", starting with D for Data, 
+short enough to type on the command line, and
+not taken in the standard command line lexicon. So,
+`dolt`.
 
 ## Why does my connection to the server hang / time out?
 
@@ -24,6 +26,15 @@ To allow multiple simultaneous connections, set the `max_connections`
 field in the config.yaml file you pass to the `dolt sql-server`
 command, [as described in the
 docs](https://docs.dolthub.com/interfaces/cli#dolt-sql-server).
+
+## The MySQL shell gives me an error: `Can't connect to local MySQL server through socket '/tmp/mysql.sock'`
+
+The MySQL shell will try to connect through a socket file on many OSes. 
+To force it to use TCP instead, give it the loopback address like this:
+
+```bash
+% mysql --host 127.0.0.1 ...
+```
 
 ## What does `@@autocommit` do?
 
