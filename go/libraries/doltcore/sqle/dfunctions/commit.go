@@ -84,7 +84,16 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	h, err := ddb.WriteRootValue(ctx, root)
+	h, err := root.HashOf()
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = ddb.ReadRootValue(ctx, h)
+
+	if err != nil {
+		h, err = ddb.WriteRootValue(ctx, root)
+	}
 
 	if err != nil {
 		return nil, err

@@ -225,6 +225,25 @@ func (sess *DoltSession) GetRoot(dbName string) (*doltdb.RootValue, bool) {
 	return dbRoot.root, true
 }
 
+// SetRoot updates the *RootValue for a given database associated with the session.
+func (sess *DoltSession) SetRoot(dbName string, hashString string, root *doltdb.RootValue) {
+	sess.dbRoots[dbName] = dbRoot{hashStr: hashString, root: root}
+}
+
+// SetEditorRoot sets the editor's root for a given database associated with the session.
+func (sess *DoltSession) SetEditorRoot(ctx context.Context, dbName string, root *doltdb.RootValue) error {
+	err := sess.dbEditors[dbName].SetRoot(ctx, root)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ClearCache clears the cache for a particular root
+func (sess *DoltSession) ClearCache(dbName string) {
+	sess.caches[dbName].Clear()
+}
+
 // GetParentCommit returns the parent commit of the current session.
 func (sess *DoltSession) GetParentCommit(ctx context.Context, dbName string) (*doltdb.Commit, hash.Hash, error) {
 	dbd, dbFound := sess.dbDatas[dbName]

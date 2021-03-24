@@ -16,7 +16,6 @@ package dfunctions
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -82,25 +81,20 @@ func (s SquashFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, err
 	}
 
-	meta, err := doltdb.NewCommitMeta("ds", "ds", "ds")
+	hashStr := h.String()
 
+	// Update the session and editor with the new root.
+	sess.SetRoot(dbName, hashStr, mergeRoot)
+
+	err = sess.SetEditorRoot(ctx, dbName, root)
 	if err != nil {
 		return nil, err
 	}
 
-	cm, err = ddb.CommitDanglingWithParentCommits(ctx, h, []*doltdb.Commit{parent}, meta)
+	// Clear the cache associated with the DB.
+	sess.ClearCache(dbName)
 
-	if err != nil {
-		return nil, err
-	}
-
-	h, err = cm.HashOf()
-
-	if err != nil {
-		return nil, err
-	}
-
-	return h.String(), nil
+	return hashStr, nil
 }
 
 func (s SquashFunc) Resolved() bool {
