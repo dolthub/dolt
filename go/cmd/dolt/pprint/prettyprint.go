@@ -85,7 +85,7 @@ func printOKResult(iter sql.RowIter) (returnErr error) {
 		if okResult.RowsAffected != 1 {
 			rowNoun = "rows"
 		}
-		// TODO: Move this back to cli
+
 		fmt.Fprintf(color.Output, "Query OK, %d %s affected\n", okResult.RowsAffected, rowNoun)
 
 		if okResult.Info != nil {
@@ -196,7 +196,7 @@ func writeToCliOutStageFunc(ctx context.Context, items []pipeline.ItemWithProps)
 
 	for _, item := range items {
 		str := *item.GetItem().(*string)
-		fmt.Fprintf(color.Output, str)
+		fmt.Fprint(color.Output, str)
 	}
 
 	return nil, nil
@@ -346,20 +346,20 @@ func writeJSONToCliOutStageFunc(ctx context.Context, items []pipeline.ItemWithPr
 
 	if items == nil {
 		if hasRun {
-			fmt.Fprintf(color.Output, "]}")
+			fmt.Fprint(color.Output, "]}")
 		} else {
-			fmt.Fprintf(color.Output, "{\"rows\":[]}")
+			fmt.Fprint(color.Output, "{\"rows\":[]}")
 		}
 	} else {
 		for _, item := range items {
 			if hasRun {
-				fmt.Fprintf(color.Output, ",")
+				fmt.Fprint(color.Output, ",")
 			} else {
-				fmt.Fprintf(color.Output, "{\"rows\": [")
+				fmt.Fprint(color.Output, "{\"rows\": [")
 			}
 
 			str := *item.GetItem().(*string)
-			fmt.Fprintf(color.Output, str)
+			fmt.Fprint(color.Output, str)
 
 			hasRun = true
 		}
