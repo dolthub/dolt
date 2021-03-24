@@ -18,7 +18,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/fatih/color"
+	"github.com/dolthub/dolt/go/cmd/dolt/pprint"
+	"github.com/dolthub/go-mysql-server/sql"
 	"sync/atomic"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -115,16 +116,23 @@ func (imp *DataMover) Move(ctx context.Context, sch schema.Schema) (badRowCount 
 
 	var badCount int64
 	var rowErr error
+	var badRows []sql.Row
 	badRowCB := func(trf *pipeline.TransformRowFailure) (quit bool) {
 		if !imp.ContOnErr {
 			rowErr = trf
 			return true
 		}
-		bdr := errhand.BuildDError("")
 		r := pipeline.GetTransFailureRow(trf)
-		bdr.AddDetails("Bad Row:" + row.Fmt(ctx, r, sch))
-		verr := bdr.Build()
-		fmt.Fprintln(color.Output, verr.Verbose())
+
+		// TODO: This is not thread safe.
+		if r != nil {
+			sqlRow, err := sqlutil.DoltRowToSqlRow(r, sch)
+			if err != nil {
+				return true
+			}
+			badRows = append(badRows, sqlRow)
+		}
+
 		atomic.AddInt64(&badCount, 1)
 		return false
 	}
@@ -137,13 +145,21 @@ func (imp *DataMover) Move(ctx context.Context, sch schema.Schema) (badRowCount 
 	p.Start()
 
 	err = p.Wait()
-
 	if err != nil {
 		return 0, err
 	}
 
 	if rowErr != nil {
 		return 0, rowErr
+	}
+
+	itr := sql.RowsToRowIter(badRows...)
+	ss, _ := sqlutil.FromDoltSchema("badRows", sch)
+	sCtx := sql.NewContext(ctx)
+	err = pprint.PrettyPrintResults(sCtx, 1, ss, itr)
+
+	if err != nil {
+		return 0, err
 	}
 
 	return badCount, nil
@@ -154,7 +170,7 @@ func MoveDataToRoot(ctx context.Context, mover *DataMover, mvOpts DataMoverOptio
 	var err error
 	newRoot := &doltdb.RootValue{}
 
-	badCount, err = mover.Move(ctx, mover.Rd.GetSchema())
+	badCount, err = mover.Move(ctx, mover.Wr.GetSchema())
 
 	if err != nil {
 		if pipeline.IsTransformFailure(err) {
@@ -162,7 +178,7 @@ func MoveDataToRoot(ctx context.Context, mover *DataMover, mvOpts DataMoverOptio
 
 			r := pipeline.GetTransFailureRow(err)
 			if r != nil {
-				bdr.AddDetails("Bad Row:" + row.Fmt(ctx, r, mover.Rd.GetSchema()))
+				bdr.AddDetails("Bad Row:" + row.Fmt(ctx, r, mover.Wr.GetSchema()))
 			}
 
 			details := pipeline.GetTransFailureDetails(err)
