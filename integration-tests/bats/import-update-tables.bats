@@ -204,5 +204,6 @@ DELIM
     [[ "$output" =~ "The following rows were skipped:" ]] || false
     [[ "$output" =~ "pk,c1,c2,c3,c4,c5" ]] || false
     [[ "$output" =~ "1,1,2,3,4,7" ]] || false
+    [[ "$output" =~ "Lines skipped: 1" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
 }

@@ -196,7 +196,7 @@ func MoveDataToRoot(ctx context.Context, mover *DataMover, mvOpts DataMoverOptio
 		}
 
 		sCtx := sql.NewContext(ctx)
-		fmt.Fprintln(color.Output, "\nThe following rows were skipped:")
+		fmt.Fprintln(color.Error, "\nThe following rows were skipped:")
 		err = pprint.PrettyPrintResults(sCtx, pprint.FormatCsv, ss, itr)
 
 		if err != nil {
