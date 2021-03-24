@@ -33,6 +33,7 @@ func NewJSONDoc(nbf *NomsBinFormat, vrw ValueReadWriter, value Value) (JSON, err
 		return EmptyJSONDoc(nbf), err
 	}
 
+	// TODO(andy): do we need to write count?
 	w.writeCount(uint64(1))
 
 	if err := value.writeTo(&w, nbf); err != nil {
@@ -187,6 +188,7 @@ func (t JSON) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	return cmp == -1, nil
 }
 
+// Compare implements MySQL JSON type compare semantics.
 func (t JSON) Compare(other JSON) (int, error) {
 	left, err := t.Inner()
 	if err != nil {

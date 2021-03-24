@@ -135,7 +135,6 @@ func marshalJSONObject(ctx context.Context, vrw types.ValueReadWriter, obj map[s
 	return types.NewMap(ctx, vrw, vals...)
 }
 
-// TODO(andy) thread ctx in GMS
 func (v NomsJSON) Unmarshall(ctx *sql.Context) (doc sql.JSONDocument, err error) {
 	nomsVal, err := types.JSON(v).Inner()
 	if err != nil {
