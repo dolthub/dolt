@@ -366,7 +366,7 @@ teardown() {
     # Validate that the squash operations resulted in one commit to master than before
     server_query 0 "select COUNT(*) from dolt_log" "COUNT(*)\n4"
 
-    # Validate the a merge commit was written by making sure the hashes of the two branches don't match
+    # Validate the a squash commit was written by making sure the hashes of the two branches don't match
     server_query 0 "select COUNT(hash) from dolt_branches where hash IN (select hash from dolt_branches WHERE name = 'test_branch')" "COUNT(hash)\n1"
 }
 
