@@ -15,7 +15,6 @@
 package json
 
 import (
-	"context"
 	js "encoding/json"
 	"testing"
 
@@ -72,7 +71,7 @@ func TestJSONValueMarshallingRoundTrip(t *testing.T) {
 		},
 	}
 
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	vrw := types.NewMemoryValueStore()
 
 	for _, test := range tests {
@@ -82,12 +81,12 @@ func TestJSONValueMarshallingRoundTrip(t *testing.T) {
 			assert.NoError(t, err)
 
 			// sql.JSONDocument -> NomsJSON -> sql.JSONDocument
-			jsDoc, err := nomsVal.Unmarshall()
+			jsDoc, err := nomsVal.Unmarshall(ctx)
 			assert.NoError(t, err)
 			assert.Equal(t, test.doc.Val, jsDoc.Val)
 
 			// sql.JSONDocument -> NomsJSON -> string -> sql.JSONDocument
-			str, err := nomsVal.ToString()
+			str, err := nomsVal.ToString(ctx)
 			assert.NoError(t, err)
 
 			var val interface{}

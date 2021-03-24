@@ -42,7 +42,7 @@ func NomsJSONFromJSONValue(ctx context.Context, vrw types.ValueReadWriter, val s
 		return noms, nil
 	}
 
-	sqlDoc, err := val.Unmarshall()
+	sqlDoc, err := val.Unmarshall(sql.NewContext(ctx))
 	if err != nil {
 		return NomsJSON{}, err
 	}
@@ -133,13 +133,12 @@ func marshalJSONObject(ctx context.Context, vrw types.ValueReadWriter, obj map[s
 }
 
 // TODO(andy) thread ctx in GMS
-func (v NomsJSON) Unmarshall() (doc sql.JSONDocument, err error) {
+func (v NomsJSON) Unmarshall(ctx *sql.Context) (doc sql.JSONDocument, err error) {
 	nomsVal, err := types.JSON(v).Inner()
 	if err != nil {
 		return sql.JSONDocument{}, err
 	}
 
-	ctx := context.Background()
 	val, err := unmarshalJSON(ctx, nomsVal)
 	if err != nil {
 		return sql.JSONDocument{}, err
@@ -190,28 +189,26 @@ func unmarshalJSONObject(ctx context.Context, m types.Map) (obj map[string]inter
 	return
 }
 
-func (v NomsJSON) Compare(other sql.JSONValue) (cmp int, err error) {
+func (v NomsJSON) Compare(ctx *sql.Context, other sql.JSONValue) (cmp int, err error) {
 	noms, ok := other.(NomsJSON)
 	if !ok {
-		doc, err := v.Unmarshall()
+		doc, err := v.Unmarshall(ctx)
 		if err != nil {
 			return 0, err
 		}
-		return doc.Compare(other)
+		return doc.Compare(ctx, other)
 	}
 
 	return types.JSON(v).Compare(types.JSON(noms))
 }
 
-func (v NomsJSON) ToString() (string, error) {
+func (v NomsJSON) ToString(ctx *sql.Context) (string, error) {
 	jd, err := types.JSON(v).Inner()
 	if err != nil {
 		return "", err
 	}
 
 	sb := &strings.Builder{}
-	ctx := context.Background()
-
 	if err = marshalToString(ctx, sb, jd); err != nil {
 		return "", err
 	}
