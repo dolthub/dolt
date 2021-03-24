@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/fatih/color"
 	"sync"
 	"sync/atomic"
 
@@ -195,7 +196,8 @@ func MoveDataToRoot(ctx context.Context, mover *DataMover, mvOpts DataMoverOptio
 		}
 
 		sCtx := sql.NewContext(ctx)
-		err = pprint.PrettyPrintResults(sCtx, 1, ss, itr)
+		fmt.Fprintln(color.Output, "\nThe following rows were skipped:")
+		err = pprint.PrettyPrintResults(sCtx, pprint.FormatCsv, ss, itr)
 
 		if err != nil {
 			return nil, 0, errhand.BuildDError("Error pretty printing: ").AddDetails(err.Error()).Build()

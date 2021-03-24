@@ -529,3 +529,19 @@ DELIM
     # less than 10% smaller
     [ "$BEFORE" -lt $(($AFTER * 11 / 10)) ]
 }
+
+@test "import-create-table: table import -c --continue logs bad rows" {
+    cat <<DELIM > 1pk5col-rpt-ints.csv
+pk,c1,c2,c3,c4,c5
+1,1,2,3,4,5
+1,1,2,3,4,7
+DELIM
+
+    run dolt table import -c --continue --pk=pk test 1pk5col-rpt-ints.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "The following rows were skipped:" ]] || false
+    [[ "$output" =~ "pk,c1,c2,c3,c4,c5" ]] || false
+    [[ "$output" =~ "1,1,2,3,4,7" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+}

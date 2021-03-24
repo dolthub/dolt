@@ -85,6 +85,7 @@ func printOKResult(iter sql.RowIter) (returnErr error) {
 		if okResult.RowsAffected != 1 {
 			rowNoun = "rows"
 		}
+		// TODO: Move this back to cli
 		fmt.Fprintf(color.Output, "Query OK, %d %s affected\n", okResult.RowsAffected, rowNoun)
 
 		if okResult.Info != nil {
