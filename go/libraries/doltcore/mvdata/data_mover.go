@@ -18,11 +18,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/fatih/color"
 	"sync"
 	"sync/atomic"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/cmd/dolt/pprint"
