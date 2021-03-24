@@ -161,3 +161,20 @@ func TestNProducersNConsumers(t *testing.T) {
 		})
 	}
 }
+
+func TestRingBufferEpoch(t *testing.T) {
+	rb := NewRingBuffer(1024)
+	epoch := rb.Reset()
+	err := rb.Push(1, epoch)
+	assert.NoError(t, err)
+	err = rb.Push(2, epoch+1)
+	assert.Error(t, err)
+	assert.Equal(t, ErrWrongEpoch, err)
+	v, ok := rb.TryPop()
+	assert.True(t, ok)
+	assert.Equal(t, 1, v)
+	_, ok = rb.TryPop()
+	assert.False(t, ok)
+	newEpoch := rb.Reset()
+	assert.NotEqual(t, epoch, newEpoch)
+}

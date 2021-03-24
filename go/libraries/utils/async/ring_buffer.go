@@ -15,6 +15,7 @@
 package async
 
 import (
+	"errors"
 	"io"
 	"os"
 	"sync"
@@ -34,6 +35,10 @@ type RingBuffer struct {
 
 	items [][]interface{}
 }
+
+// Returned from Push() when the supplied epoch does not match the
+// buffer's current epoch.
+var ErrWrongEpoch = errors.New("ring buffer: wrong epoch")
 
 // NewRingBuffer creates a new RingBuffer instance
 func NewRingBuffer(allocSize int) *RingBuffer {
@@ -93,7 +98,7 @@ func (rb *RingBuffer) Push(item interface{}, epoch int) error {
 		return os.ErrClosed
 	}
 	if epoch != rb.epoch {
-		return nil
+		return ErrWrongEpoch
 	}
 
 	rb.items[rb.headSlice][rb.headPos] = item
