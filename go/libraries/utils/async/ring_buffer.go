@@ -26,6 +26,7 @@ type RingBuffer struct {
 	allocSize int
 
 	closed    bool
+	epoch     int
 	headPos   int
 	tailPos   int
 	headSlice int
@@ -47,7 +48,7 @@ func NewRingBuffer(allocSize int) *RingBuffer {
 }
 
 // Reset clears a ring buffer so that it can be reused
-func (rb *RingBuffer) Reset() {
+func (rb *RingBuffer) Reset() int {
 	rb.cond.L.Lock()
 	defer rb.cond.L.Unlock()
 
@@ -56,12 +57,15 @@ func (rb *RingBuffer) Reset() {
 	rb.tailPos = 0
 	rb.headSlice = 0
 	rb.tailSlice = 0
+	rb.epoch += 1
 
 	for i := 0; i < len(rb.items); i++ {
 		for j := 0; j < len(rb.items[i]); j++ {
 			rb.items[i][j] = nil
 		}
 	}
+
+	return rb.epoch
 }
 
 // Close closes a RingBuffer so that no new items can be pushed onto it.  Items that are already in the buffer can still
@@ -81,12 +85,15 @@ func (rb *RingBuffer) Close() error {
 }
 
 // Push will add a new item to the RingBuffer and signal a go routine waiting inside Pop that new data is available
-func (rb *RingBuffer) Push(item interface{}) error {
+func (rb *RingBuffer) Push(item interface{}, epoch int) error {
 	rb.cond.L.Lock()
 	defer rb.cond.L.Unlock()
 
 	if rb.closed {
 		return os.ErrClosed
+	}
+	if epoch != rb.epoch {
+		return nil
 	}
 
 	rb.items[rb.headSlice][rb.headPos] = item

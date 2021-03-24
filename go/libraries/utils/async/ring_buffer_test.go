@@ -39,7 +39,7 @@ func TestSingleThread(t *testing.T) {
 			rb := NewRingBuffer(test.allocSize)
 
 			for i := 0; i < test.numItems; i++ {
-				err := rb.Push(i)
+				err := rb.Push(i, rb.epoch)
 				assert.NoError(t, err)
 			}
 
@@ -75,7 +75,7 @@ func TestOneProducerOneConsumer(t *testing.T) {
 				defer rb.Close()
 
 				for i := 0; i < test.numItems; i++ {
-					err := rb.Push(i)
+					err := rb.Push(i, rb.epoch)
 					assert.NoError(t, err)
 				}
 			}()
@@ -118,7 +118,7 @@ func TestNProducersNConsumers(t *testing.T) {
 				go func() {
 					defer producerGroup.Done()
 					for i := 0; i < test.itemsPerProducer; i++ {
-						err := rb.Push(i)
+						err := rb.Push(i, rb.epoch)
 						assert.NoError(t, err)
 					}
 				}()
