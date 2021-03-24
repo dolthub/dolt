@@ -52,7 +52,7 @@ func NomsJSONFromJSONValue(ctx context.Context, vrw types.ValueReadWriter, val s
 		return NomsJSON{}, err
 	}
 
-	doc, err := types.NewJSONDoc(vrw.Format(), v)
+	doc, err := types.NewJSONDoc(vrw.Format(), vrw, v)
 	if err != nil {
 		return NomsJSON{}, err
 	}

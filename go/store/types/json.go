@@ -34,7 +34,7 @@ type JSON struct {
 	valueImpl
 }
 
-func NewJSONDoc(nbf *NomsBinFormat, value Value) (JSON, error) {
+func NewJSONDoc(nbf *NomsBinFormat, vrw ValueReadWriter, value Value) (JSON, error) {
 	w := newBinaryNomsWriter()
 	if err := JSONKind.writeTo(&w, nbf); err != nil {
 		return EmptyJSONDoc(nbf), err
@@ -46,7 +46,6 @@ func NewJSONDoc(nbf *NomsBinFormat, value Value) (JSON, error) {
 		return EmptyJSONDoc(nbf), err
 	}
 
-	vrw := value.(valueReadWriter).valueReadWriter()
 	return JSON{valueImpl{vrw, nbf, w.data(), nil}}, nil
 }
 
@@ -93,7 +92,6 @@ func skipJSON(nbf *NomsBinFormat, dec *valueDecoder) error {
 	}
 	return nil
 }
-
 
 func walkJSON(nbf *NomsBinFormat, r *refWalker, cb RefCallback) error {
 	r.skipKind()
@@ -223,7 +221,11 @@ func (t JSON) HumanReadableString() string {
 	if err != nil {
 		d.PanicIfError(err)
 	}
-	return fmt.Sprintf("JSON(%s)", val.HumanReadableString())
+	h, err := val.Hash(t.nbf)
+	if err != nil {
+		d.PanicIfError(err)
+	}
+	return fmt.Sprintf("JSON(%s)", h.String())
 }
 
 func compareJSON(a, b Value) (int, error) {

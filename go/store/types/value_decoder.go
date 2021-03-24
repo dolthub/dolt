@@ -84,7 +84,7 @@ func (r *valueDecoder) ReadJSON() (JSON, error) {
 	return readJSON(r.vrw.Format(), r)
 }
 
-func (r *valueDecoder) readRef(nbf *NomsBinFormat) (Ref, error) 	{
+func (r *valueDecoder) readRef(nbf *NomsBinFormat) (Ref, error) {
 	return readRef(nbf, &(r.typedBinaryNomsReader))
 }
 
@@ -593,7 +593,6 @@ func (r *valueDecoder) skipStruct(nbf *NomsBinFormat) error {
 func (r *valueDecoder) skipTuple(nbf *NomsBinFormat) error {
 	return skipTuple(nbf, r)
 }
-
 
 func (r *valueDecoder) readOrderedKey(nbf *NomsBinFormat) (orderedKey, error) {
 	switch r.PeekKind() {

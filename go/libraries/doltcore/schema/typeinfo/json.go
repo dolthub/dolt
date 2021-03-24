@@ -17,9 +17,11 @@ package typeinfo
 import (
 	"context"
 	"fmt"
+
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type jsonType struct {
@@ -89,6 +91,9 @@ func (ti *jsonType) Equals(other TypeInfo) bool {
 
 // FormatValue implements TypeInfo interface.
 func (ti *jsonType) FormatValue(v types.Value) (*string, error) {
+	if _, ok := v.(types.Null); ok || v == nil {
+		return nil, nil
+	}
 	if noms, ok := v.(types.JSON); ok {
 		s, err := json.NomsJSON(noms).ToString()
 		if err != nil {
@@ -96,9 +101,7 @@ func (ti *jsonType) FormatValue(v types.Value) (*string, error) {
 		}
 		return &s, nil
 	}
-
-	s := v.HumanReadableString()
-	return &s, nil
+	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
 }
 
 // GetTypeIdentifier implements TypeInfo interface.
@@ -113,6 +116,9 @@ func (ti *jsonType) GetTypeParams() map[string]string {
 
 // IsValid implements TypeInfo interface.
 func (ti *jsonType) IsValid(v types.Value) bool {
+	if v == nil {
+		return true
+	}
 	switch v.(type) {
 	case types.JSON:
 		return true
@@ -134,7 +140,7 @@ func (ti *jsonType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, s
 		return types.NullValue, nil
 	}
 	// TODO(andy) 2 step conversion here gonna be slow
-	return ti.ConvertValueToNomsValue(context.Background(), nil, *str)
+	return ti.ConvertValueToNomsValue(context.Background(), vrw, *str)
 }
 
 // Promote implements TypeInfo interface.

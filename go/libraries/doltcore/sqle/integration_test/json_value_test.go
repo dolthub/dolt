@@ -16,13 +16,13 @@ package integration_test
 
 import (
 	"context"
-	cmd "github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	cmd "github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
@@ -43,7 +43,7 @@ func TestJsonValues(t *testing.T) {
 				{cmd.SqlCmd{}, args{"-q", `insert into js values (1, '[]'), (2, '{"a":1}');`}},
 			},
 			query: "select count(*) from js",
-			rows: []sql.Row{{int64(2)}},
+			rows:  []sql.Row{{int64(2)}},
 		},
 	}
 

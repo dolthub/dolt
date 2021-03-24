@@ -36,23 +36,23 @@ func TestJSONValueMarshallingRoundTrip(t *testing.T) {
 		},
 		{
 			name: "null",
-			doc: sql.MustJSON(`null`),
+			doc:  sql.MustJSON(`null`),
 		},
 		{
 			name: "boolean",
-			doc: sql.MustJSON(`false`),
+			doc:  sql.MustJSON(`false`),
 		},
 		{
 			name: "string",
-			doc: sql.MustJSON(`"lorem ipsum"`),
+			doc:  sql.MustJSON(`"lorem ipsum"`),
 		},
 		{
 			name: "number",
-			doc: sql.MustJSON(`2.71`),
+			doc:  sql.MustJSON(`2.71`),
 		},
 		{
 			name: "type homogenous object",
-			doc: sql.MustJSON(`{"a": 2, "b": 3, "c": 4}`),
+			doc:  sql.MustJSON(`{"a": 2, "b": 3, "c": 4}`),
 		},
 		{
 			name: "type heterogeneous object",
@@ -60,7 +60,7 @@ func TestJSONValueMarshallingRoundTrip(t *testing.T) {
 		},
 		{
 			name: "homogenous array",
-			doc: sql.MustJSON(`[1, 2, 3]`),
+			doc:  sql.MustJSON(`[1, 2, 3]`),
 		},
 		{
 			name: "heterogeneous array",
@@ -68,7 +68,7 @@ func TestJSONValueMarshallingRoundTrip(t *testing.T) {
 		},
 		{
 			name: "nested",
-			doc: sql.MustJSON(`[{"a":1}, {"b":2}, null, [false, 3.14, [], {"c": [0]}], ""]`),
+			doc:  sql.MustJSON(`[{"a":1}, {"b":2}, null, [false, 3.14, [], {"c": [0]}], ""]`),
 		},
 	}
 
