@@ -25,6 +25,7 @@ import (
 	cmd "github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 )
 
 type jsonValueTest struct {
@@ -35,6 +36,9 @@ type jsonValueTest struct {
 }
 
 func TestJsonValues(t *testing.T) {
+	json.FeatureFlag = true
+	defer func() { json.FeatureFlag = false }()
+
 	tests := []jsonValueTest{
 		{
 			name: "create JSON table",

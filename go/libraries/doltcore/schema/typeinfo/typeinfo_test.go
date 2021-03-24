@@ -252,6 +252,9 @@ func testTypeInfoFormatParseRoundTrip(t *testing.T, tiArrays [][]TypeInfo, vaArr
 
 // verify that FromTypeParams can reconstruct the exact same TypeInfo from the params
 func testTypeInfoGetTypeParams(t *testing.T, tiArrays [][]TypeInfo) {
+	json.FeatureFlag = true
+	defer func() { json.FeatureFlag = false }()
+
 	for _, tiArray := range tiArrays {
 		t.Run(tiArray[0].GetTypeIdentifier().String(), func(t *testing.T) {
 			for _, ti := range tiArray {
