@@ -355,7 +355,7 @@ teardown() {
 
     multi_query 0 "
     SET @@repo1_head=hashof('master');
-   SET @@repo1_working = squash('test_branch');
+    SET @@repo1_working = squash('test_branch');
     SET @@repo1_head = COMMIT('-m', 'cm2');
     UPDATE dolt_branches SET hash = @@repo1_head WHERE name= 'master';"
 
