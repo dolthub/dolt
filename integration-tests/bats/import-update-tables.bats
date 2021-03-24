@@ -186,7 +186,11 @@ DELIM
     # Works with --continue
     run dolt table import -u --continue test 1pk5col-rpt-ints.csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0Lines skipped: 1" ]] || false
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "The following rows were skipped:" ]] || false
+    [[ "$output" =~ "pk,c1,c2,c3,c4,c5" ]] || false
+    [[ "$output" =~ "1,1,2,3,4,5" ]] || false
+    [[ "$output" =~ "Lines skipped: 1" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
 }
 
