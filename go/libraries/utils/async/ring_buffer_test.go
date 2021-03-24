@@ -39,7 +39,7 @@ func TestSingleThread(t *testing.T) {
 			rb := NewRingBuffer(test.allocSize)
 
 			for i := 0; i < test.numItems; i++ {
-				err := rb.Push(i)
+				err := rb.Push(i, rb.epoch)
 				assert.NoError(t, err)
 			}
 
@@ -75,7 +75,7 @@ func TestOneProducerOneConsumer(t *testing.T) {
 				defer rb.Close()
 
 				for i := 0; i < test.numItems; i++ {
-					err := rb.Push(i)
+					err := rb.Push(i, rb.epoch)
 					assert.NoError(t, err)
 				}
 			}()
@@ -118,7 +118,7 @@ func TestNProducersNConsumers(t *testing.T) {
 				go func() {
 					defer producerGroup.Done()
 					for i := 0; i < test.itemsPerProducer; i++ {
-						err := rb.Push(i)
+						err := rb.Push(i, rb.epoch)
 						assert.NoError(t, err)
 					}
 				}()
@@ -160,4 +160,21 @@ func TestNProducersNConsumers(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRingBufferEpoch(t *testing.T) {
+	rb := NewRingBuffer(1024)
+	epoch := rb.Reset()
+	err := rb.Push(1, epoch)
+	assert.NoError(t, err)
+	err = rb.Push(2, epoch+1)
+	assert.Error(t, err)
+	assert.Equal(t, ErrWrongEpoch, err)
+	v, ok := rb.TryPop()
+	assert.True(t, ok)
+	assert.Equal(t, 1, v)
+	_, ok = rb.TryPop()
+	assert.False(t, ok)
+	newEpoch := rb.Reset()
+	assert.NotEqual(t, epoch, newEpoch)
 }
