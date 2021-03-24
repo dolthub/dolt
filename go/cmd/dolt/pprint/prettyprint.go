@@ -19,29 +19,30 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/fwt"
-	"github.com/dolthub/dolt/go/libraries/utils/pipeline"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/vitess/go/sqltypes"
-	"github.com/fatih/color"
 	"io"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
+	"github.com/fatih/color"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/fwt"
+	"github.com/dolthub/dolt/go/libraries/utils/pipeline"
 )
 
-type resultFormat byte
+type ResultFormat byte
 
 const (
-	FormatTabular resultFormat = iota
+	FormatTabular ResultFormat = iota
 	FormatCsv
 	FormatJson
 	FormatNull // used for profiling
 )
 
-
-func PrettyPrintResults(ctx *sql.Context, resultFormat resultFormat, sqlSch sql.Schema, rowIter sql.RowIter) (rerr error) {
+func PrettyPrintResults(ctx *sql.Context, resultFormat ResultFormat, sqlSch sql.Schema, rowIter sql.RowIter) (rerr error) {
 	defer func() {
 		closeErr := rowIter.Close(ctx)
 		if rerr == nil && closeErr != nil {

@@ -18,11 +18,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/cmd/dolt/pprint"
-	"github.com/dolthub/go-mysql-server/sql"
+	"sync"
 	"sync/atomic"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/cmd/dolt/pprint"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -99,7 +101,7 @@ type GCTableWriteCloser interface {
 
 // Move is the method that executes the pipeline which will move data from the pipeline's source DataLocation to it's
 // dest DataLocation.  It returns the number of bad rows encountered during import, and an error.
-func (imp *DataMover) Move(ctx context.Context, sch schema.Schema) (badRowCount int64, err error) {
+func (imp *DataMover) Move(ctx context.Context, sch schema.Schema) (badRowCount int64, badRows []sql.Row, err error) {
 	defer imp.Rd.Close(ctx)
 	defer func() {
 		closeErr := imp.Wr.Close(ctx)
@@ -116,7 +118,7 @@ func (imp *DataMover) Move(ctx context.Context, sch schema.Schema) (badRowCount 
 
 	var badCount int64
 	var rowErr error
-	var badRows []sql.Row
+	var mu = &sync.Mutex{}
 	badRowCB := func(trf *pipeline.TransformRowFailure) (quit bool) {
 		if !imp.ContOnErr {
 			rowErr = trf
@@ -124,13 +126,14 @@ func (imp *DataMover) Move(ctx context.Context, sch schema.Schema) (badRowCount 
 		}
 		r := pipeline.GetTransFailureRow(trf)
 
-		// TODO: This is not thread safe.
 		if r != nil {
 			sqlRow, err := sqlutil.DoltRowToSqlRow(r, sch)
 			if err != nil {
 				return true
 			}
+			mu.Lock()
 			badRows = append(badRows, sqlRow)
+			mu.Unlock()
 		}
 
 		atomic.AddInt64(&badCount, 1)
@@ -146,31 +149,23 @@ func (imp *DataMover) Move(ctx context.Context, sch schema.Schema) (badRowCount 
 
 	err = p.Wait()
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 
 	if rowErr != nil {
-		return 0, rowErr
+		return 0, nil, rowErr
 	}
 
-	itr := sql.RowsToRowIter(badRows...)
-	ss, _ := sqlutil.FromDoltSchema("badRows", sch)
-	sCtx := sql.NewContext(ctx)
-	err = pprint.PrettyPrintResults(sCtx, 1, ss, itr)
-
-	if err != nil {
-		return 0, err
-	}
-
-	return badCount, nil
+	return badCount, badRows, nil
 }
 
 func MoveDataToRoot(ctx context.Context, mover *DataMover, mvOpts DataMoverOptions, root *doltdb.RootValue, updateRoot func(c context.Context, r *doltdb.RootValue) error) (*doltdb.RootValue, int64, errhand.VerboseError) {
 	var badCount int64
+	var badRows []sql.Row
 	var err error
 	newRoot := &doltdb.RootValue{}
 
-	badCount, err = mover.Move(ctx, mover.Wr.GetSchema())
+	badCount, badRows, err = mover.Move(ctx, mover.Wr.GetSchema())
 
 	if err != nil {
 		if pipeline.IsTransformFailure(err) {
@@ -189,6 +184,22 @@ func MoveDataToRoot(ctx context.Context, mover *DataMover, mvOpts DataMoverOptio
 			return nil, badCount, bdr.Build()
 		}
 		return nil, badCount, errhand.BuildDError("An error occurred moving data:\n").AddCause(err).Build()
+	}
+
+	if len(badRows) > 0 {
+		itr := sql.RowsToRowIter(badRows...)
+		ss, err := sqlutil.FromDoltSchema("badRows", mover.Wr.GetSchema())
+
+		if err != nil {
+			return nil, badCount, errhand.BuildDError(err.Error()).Build()
+		}
+
+		sCtx := sql.NewContext(ctx)
+		err = pprint.PrettyPrintResults(sCtx, 1, ss, itr)
+
+		if err != nil {
+			return nil, 0, errhand.BuildDError("Error pretty printing: ").AddDetails(err.Error()).Build()
+		}
 	}
 
 	if mvOpts.WritesToTable() {

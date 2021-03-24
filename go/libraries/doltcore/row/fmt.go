@@ -58,16 +58,16 @@ func FieldSeparatedFmt(delim rune) RowFormatFunc {
 			return false
 		})
 
-		r.IterCols(func(tag uint64, val types.Value) (stop bool, err error) {
-			buf.WriteRune(delim)
-			err = types.WriteEncodedValue(ctx, buf, val)
-
-			if err != nil {
-				return true, err
-			}
-
-			return false, nil
-		})
+		//r.IterCols(func(tag uint64, val types.Value) (stop bool, err error) {
+		//	buf.WriteRune(delim)
+		//	err = types.WriteEncodedValue(ctx, buf, val)
+		//
+		//	if err != nil {
+		//		return true, err
+		//	}
+		//
+		//	return false, nil
+		//})
 
 		return buf.String()
 	}

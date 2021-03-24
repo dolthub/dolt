@@ -43,6 +43,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/cmd/dolt/pprint"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -54,7 +55,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
-	"github.com/dolthub/dolt/go/libraries/utils/pipeline"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
 
@@ -157,7 +157,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	args = apr.Args()
 
 	var verr errhand.VerboseError
-	format := FormatTabular
+	format := pprint.FormatTabular
 	if formatSr, ok := apr.GetValue(FormatFlag); ok {
 		format, verr = GetResultFormat(formatSr)
 		if verr != nil {
@@ -321,7 +321,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func execShell(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, format resultFormat) errhand.VerboseError {
+func execShell(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, format pprint.ResultFormat) errhand.VerboseError {
 	dbs := CollectDBs(mrEnv, newDatabase)
 	se, err := newSqlEngine(sqlCtx, readOnly, mrEnv, roots, format, dbs...)
 	if err != nil {
@@ -335,7 +335,7 @@ func execShell(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots
 	return nil
 }
 
-func execBatch(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, batchInput io.Reader, format resultFormat) errhand.VerboseError {
+func execBatch(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, batchInput io.Reader, format pprint.ResultFormat) errhand.VerboseError {
 	dbs := CollectDBs(mrEnv, newBatchedDatabase)
 	se, err := newSqlEngine(sqlCtx, readOnly, mrEnv, roots, format, dbs...)
 	if err != nil {
@@ -360,7 +360,7 @@ func newBatchedDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
 	return dsqle.NewBatchedDatabase(name, dEnv.DbData())
 }
 
-func execQuery(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, query string, format resultFormat) errhand.VerboseError {
+func execQuery(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, query string, format pprint.ResultFormat) errhand.VerboseError {
 	dbs := CollectDBs(mrEnv, newDatabase)
 	se, err := newSqlEngine(sqlCtx, readOnly, mrEnv, roots, format, dbs...)
 	if err != nil {
@@ -373,7 +373,7 @@ func execQuery(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots
 	}
 
 	if rowIter != nil {
-		err = PrettyPrintResults(sqlCtx, se.resultFormat, sqlSch, rowIter)
+		err = pprint.PrettyPrintResults(sqlCtx, se.resultFormat, sqlSch, rowIter)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -454,18 +454,18 @@ func formatQueryError(message string, err error) errhand.VerboseError {
 	}
 }
 
-func GetResultFormat(format string) (resultFormat, errhand.VerboseError) {
+func GetResultFormat(format string) (pprint.ResultFormat, errhand.VerboseError) {
 	switch strings.ToLower(format) {
 	case "tabular":
-		return FormatTabular, nil
+		return pprint.FormatTabular, nil
 	case "csv":
-		return FormatCsv, nil
+		return pprint.FormatCsv, nil
 	case "json":
-		return FormatJson, nil
+		return pprint.FormatJson, nil
 	case "null":
-		return FormatNull, nil
+		return pprint.FormatNull, nil
 	default:
-		return FormatTabular, errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular, csv, json").Build()
+		return pprint.FormatTabular, errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular, csv, json").Build()
 	}
 }
 
@@ -678,7 +678,7 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initialRo
 				verr := formatQueryError("", err)
 				shell.Println(verr.Verbose())
 			} else if rowIter != nil {
-				err = PrettyPrintResults(ctx, se.resultFormat, sqlSch, rowIter)
+				err = pprint.PrettyPrintResults(ctx, se.resultFormat, sqlSch, rowIter)
 				if err != nil {
 					shell.Println(color.RedString(err.Error()))
 				}
@@ -1052,7 +1052,7 @@ func processNonInsertBatchQuery(ctx *sql.Context, se *sqlEngine, query string, s
 				cli.Print("\n")
 				displayStrLen = 0
 			}
-			err = PrettyPrintResults(ctx, se.resultFormat, sqlSch, rowIter)
+			err = pprint.PrettyPrintResults(ctx, se.resultFormat, sqlSch, rowIter)
 			if err != nil {
 				return err
 			}
@@ -1242,26 +1242,17 @@ func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s 
 	}
 }
 
-type resultFormat byte
-
-const (
-	FormatTabular resultFormat = iota
-	FormatCsv
-	FormatJson
-	FormatNull // used for profiling
-)
-
 type sqlEngine struct {
 	dbs          map[string]dsqle.Database
 	mrEnv        env.MultiRepoEnv
 	engine       *sqle.Engine
-	resultFormat resultFormat
+	resultFormat pprint.ResultFormat
 }
 
 var ErrDBNotFoundKind = errors.NewKind("database '%s' not found")
 
 // sqlEngine packages up the context necessary to run sql queries against sqle.
-func newSqlEngine(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, format resultFormat, dbs ...dsqle.Database) (*sqlEngine, error) {
+func newSqlEngine(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, format pprint.ResultFormat, dbs ...dsqle.Database) (*sqlEngine, error) {
 	c := sql.NewCatalog()
 	var au auth.Auth
 
@@ -1364,63 +1355,6 @@ func (se *sqlEngine) getRoots(sqlCtx *sql.Context) (map[string]*doltdb.RootValue
 // Execute a SQL statement and return values for printing.
 func (se *sqlEngine) query(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, error) {
 	return se.engine.Query(ctx, query)
-}
-
-func PrettyPrintResults(ctx *sql.Context, resultFormat resultFormat, sqlSch sql.Schema, rowIter sql.RowIter) (rerr error) {
-	defer func() {
-		closeErr := rowIter.Close(ctx)
-		if rerr == nil && closeErr != nil {
-			rerr = closeErr
-		}
-	}()
-
-	if isOkResult(sqlSch) {
-		return printOKResult(rowIter)
-	}
-
-	// For some output formats, we want to convert everything to strings to be processed by the pipeline. For others,
-	// we want to leave types alone and let the writer figure out how to format it for output.
-	var p *pipeline.Pipeline
-	switch resultFormat {
-	case FormatCsv:
-		p = createCSVPipeline(ctx, sqlSch, rowIter)
-	case FormatJson:
-		p = createJSONPipeline(ctx, sqlSch, rowIter)
-	case FormatTabular:
-		p = createTabularPipeline(ctx, sqlSch, rowIter)
-	case FormatNull:
-		p = createNullPipeline(ctx, sqlSch, rowIter)
-	}
-
-	p.Start(ctx)
-	rerr = p.Wait()
-
-	return rerr
-}
-
-func printOKResult(iter sql.RowIter) (returnErr error) {
-	row, err := iter.Next()
-	if err != nil {
-		return err
-	}
-
-	if okResult, ok := row[0].(sql.OkResult); ok {
-		rowNoun := "row"
-		if okResult.RowsAffected != 1 {
-			rowNoun = "rows"
-		}
-		cli.Printf("Query OK, %d %s affected\n", okResult.RowsAffected, rowNoun)
-
-		if okResult.Info != nil {
-			cli.Printf("%s\n", okResult.Info)
-		}
-	}
-
-	return nil
-}
-
-func isOkResult(sch sql.Schema) bool {
-	return sch.Equals(sql.OkResultSchema)
 }
 
 func (se *sqlEngine) dbddl(ctx *sql.Context, dbddl *sqlparser.DBDDL, query string) (sql.Schema, sql.RowIter, error) {
