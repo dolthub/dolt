@@ -24,6 +24,9 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+var FeatureFlag = false
+var ErrUnsupported = errors.New("JSON type is not supported")
+
 var ErrUnexpectedJSONTypeIn = errors.New("unexpected type during JSON marshalling")
 var ErrUnexpectedJSONTypeOut = errors.New("unexpected type during JSON unmarshalling")
 

@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/sqltypes"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -247,6 +248,9 @@ func FromTypeParams(id Identifier, params map[string]string) (TypeInfo, error) {
 	case IntTypeIdentifier:
 		return CreateIntTypeFromParams(params)
 	case JSONTypeIdentifier:
+		if !json.FeatureFlag {
+			return nil, json.ErrUnsupported
+		}
 		return JSONType, nil
 	case SetTypeIdentifier:
 		return CreateSetTypeFromParams(params)
@@ -283,6 +287,9 @@ func FromKind(kind types.NomsKind) TypeInfo {
 	case types.IntKind:
 		return Int64Type
 	case types.JSONKind:
+		if !json.FeatureFlag {
+			panic(json.ErrUnsupported)
+		}
 		return JSONType
 	case types.NullKind:
 		return UnknownType
