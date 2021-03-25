@@ -140,8 +140,7 @@ func (ti *jsonType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, s
 	if str == nil {
 		return types.NullValue, nil
 	}
-	// TODO(andy) 2 step conversion here gonna be slow
-	return ti.ConvertValueToNomsValue(context.Background(), vrw, *str)
+	return ti.ConvertValueToNomsValue(ctx, vrw, *str)
 }
 
 // Promote implements TypeInfo interface.

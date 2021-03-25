@@ -386,7 +386,7 @@ func generateTypeInfoArrays(t *testing.T) ([][]TypeInfo, [][]types.Value) {
 			{types.InlineBlob{0}, types.InlineBlob{21}, types.InlineBlob{1, 17}, types.InlineBlob{72, 42}, types.InlineBlob{21, 122, 236}}, //InlineBlob
 			{types.Int(20), types.Int(215), types.Int(237493), types.Int(2035753568), types.Int(2384384576063)},                            //Int
 			{json.MustTypesJSON(`null`), json.MustTypesJSON(`[]`), json.MustTypesJSON(`"lorem ipsum"`), json.MustTypesJSON(`2.71`),
-				json.MustTypesJSON(`false`), json.MustTypesJSON(`{"a": 1, "b": []}`)},
+				json.MustTypesJSON(`false`), json.MustTypesJSON(`{"a": 1, "b": []}`)}, //JSON
 			{types.Uint(1), types.Uint(5), types.Uint(64), types.Uint(42), types.Uint(192)},                                                                                                //Set
 			{types.Int(0), types.Int(1000000 /*"00:00:01"*/), types.Int(113000000 /*"00:01:53"*/), types.Int(247019000000 /*"68:36:59"*/), types.Int(458830485214 /*"127:27:10.485214"*/)}, //Time
 			{types.Uint(20), types.Uint(275), types.Uint(328395), types.Uint(630257298), types.Uint(93897259874)},                                                                          //Uint

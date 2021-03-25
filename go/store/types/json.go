@@ -27,6 +27,7 @@ type JSON struct {
 	valueImpl
 }
 
+// NewJSONDoc wraps |value| in a JSON value.
 func NewJSONDoc(nbf *NomsBinFormat, vrw ValueReadWriter, value Value) (JSON, error) {
 	w := newBinaryNomsWriter()
 	if err := JSONKind.writeTo(&w, nbf); err != nil {
@@ -40,6 +41,7 @@ func NewJSONDoc(nbf *NomsBinFormat, vrw ValueReadWriter, value Value) (JSON, err
 	return JSON{valueImpl{vrw, nbf, w.data(), nil}}, nil
 }
 
+// EmptyJSONDoc creates and empty JSON value.
 func EmptyJSONDoc(nbf *NomsBinFormat) JSON {
 	w := newBinaryNomsWriter()
 	if err := JSONKind.writeTo(&w, nbf); err != nil {
@@ -99,25 +101,29 @@ func (t JSON) CopyOf(vrw ValueReadWriter) JSON {
 	}
 }
 
+// Empty implements the Emptyable interface.
 func (t JSON) Empty() bool {
 	return t.Len() == 0
 }
 
+// Format returns this values NomsBinFormat.
 func (t JSON) Format() *NomsBinFormat {
 	return t.format()
 }
 
-// Value interface
+// Value implements the Value interface.
 func (t JSON) Value(ctx context.Context) (Value, error) {
 	return t, nil
 }
 
+// Inner returns the JSON value's inner value.
 func (t JSON) Inner() (Value, error) {
 	dec := newValueDecoder(t.buff, t.vrw)
 	dec.skipKind()
 	return dec.readValue(t.nbf)
 }
 
+// WalkValues implements the Value interface.
 func (t JSON) WalkValues(ctx context.Context, cb ValueCallback) error {
 	val, err := t.Inner()
 	if err != nil {
@@ -126,6 +132,7 @@ func (t JSON) WalkValues(ctx context.Context, cb ValueCallback) error {
 	return val.WalkValues(ctx, cb)
 }
 
+// typeOf implements the Value interface.
 func (t JSON) typeOf() (*Type, error) {
 	val, err := t.Inner()
 	if err != nil {
@@ -134,6 +141,7 @@ func (t JSON) typeOf() (*Type, error) {
 	return val.typeOf()
 }
 
+// Kind implements the Valuable interface.
 func (t JSON) Kind() NomsKind {
 	return JSONKind
 }
@@ -144,7 +152,9 @@ func (t JSON) decoderSkipToFields() (valueDecoder, uint64) {
 	return dec, uint64(1)
 }
 
+// Len implements the Value interface.
 func (t JSON) Len() uint64 {
+	// TODO(andy): is this ever 0?
 	return 1
 }
 
@@ -152,6 +162,7 @@ func (t JSON) isPrimitive() bool {
 	return false
 }
 
+// Less implements the LesserValuable interface.
 func (t JSON) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	otherJSONDoc, ok := other.(JSON)
 	if !ok {
@@ -189,6 +200,7 @@ func (t JSON) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
 	panic("unreachable")
 }
 
+// HumanReadableString implements the Value interface.
 func (t JSON) HumanReadableString() string {
 	val, err := t.Inner()
 	if err != nil {

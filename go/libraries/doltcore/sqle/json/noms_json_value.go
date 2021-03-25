@@ -40,6 +40,7 @@ type NomsJSON types.JSON
 
 var _ sql.JSONValue = NomsJSON{}
 
+// NomsJSONFromJSONValue converts a sql.JSONValue to a NomsJSON value.
 func NomsJSONFromJSONValue(ctx context.Context, vrw types.ValueReadWriter, val sql.JSONValue) (NomsJSON, error) {
 	if noms, ok := val.(NomsJSON); ok {
 		return noms, nil
@@ -135,6 +136,7 @@ func marshalJSONObject(ctx context.Context, vrw types.ValueReadWriter, obj map[s
 	return types.NewMap(ctx, vrw, vals...)
 }
 
+// Unmarshall implements the sql.JSONValue interface.
 func (v NomsJSON) Unmarshall(ctx *sql.Context) (doc sql.JSONDocument, err error) {
 	nomsVal, err := types.JSON(v).Inner()
 	if err != nil {
@@ -191,6 +193,7 @@ func unmarshalJSONObject(ctx context.Context, m types.Map) (obj map[string]inter
 	return
 }
 
+// Compare implements the sql.JSONValue interface.
 func (v NomsJSON) Compare(ctx *sql.Context, other sql.JSONValue) (cmp int, err error) {
 	noms, ok := other.(NomsJSON)
 	if !ok {
@@ -204,6 +207,7 @@ func (v NomsJSON) Compare(ctx *sql.Context, other sql.JSONValue) (cmp int, err e
 	return types.JSON(v).Compare(types.JSON(noms))
 }
 
+// ToString implements the sql.JSONValue interface.
 func (v NomsJSON) ToString(ctx *sql.Context) (string, error) {
 	jd, err := types.JSON(v).Inner()
 	if err != nil {
