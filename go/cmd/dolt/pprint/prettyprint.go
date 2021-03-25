@@ -34,6 +34,7 @@ import (
 )
 
 type ResultFormat byte
+type CliOutput byte
 
 const (
 	FormatTabular ResultFormat = iota
@@ -42,7 +43,12 @@ const (
 	FormatNull // used for profiling
 )
 
-func PrettyPrintResults(ctx *sql.Context, resultFormat ResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, isStdOutput bool) (rerr error) {
+const (
+	StdOutput CliOutput = iota
+	StdError
+)
+
+func PrettyPrintResults(ctx *sql.Context, resultFormat ResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, output CliOutput) (rerr error) {
 	defer func() {
 		closeErr := rowIter.Close(ctx)
 		if rerr == nil && closeErr != nil {
@@ -59,11 +65,11 @@ func PrettyPrintResults(ctx *sql.Context, resultFormat ResultFormat, sqlSch sql.
 	var p *pipeline.Pipeline
 	switch resultFormat {
 	case FormatCsv:
-		p = createCSVPipeline(ctx, sqlSch, rowIter, isStdOutput)
+		p = createCSVPipeline(ctx, sqlSch, rowIter, output)
 	case FormatJson:
-		p = createJSONPipeline(ctx, sqlSch, rowIter, isStdOutput)
+		p = createJSONPipeline(ctx, sqlSch, rowIter, output)
 	case FormatTabular:
-		p = createTabularPipeline(ctx, sqlSch, rowIter, isStdOutput)
+		p = createTabularPipeline(ctx, sqlSch, rowIter, output)
 	case FormatNull:
 		p = createNullPipeline(ctx, sqlSch, rowIter)
 	}
@@ -231,13 +237,13 @@ func dropOnFloor(ctx context.Context, items []pipeline.ItemWithProps) ([]pipelin
 
 // CSV Pipeline creation and stage functions
 
-func createCSVPipeline(ctx context.Context, sch sql.Schema, iter sql.RowIter, isOutput bool) *pipeline.Pipeline {
+func createCSVPipeline(ctx context.Context, sch sql.Schema, iter sql.RowIter, output CliOutput) *pipeline.Pipeline {
 	var stages = []*pipeline.Stage{
 		pipeline.NewStage("read", noParallelizationInitFunc, getReadStageFunc(iter, readBatchSize), 0, 0, 0),
 		pipeline.NewStage("process", nil, csvProcessStageFunc, 2, 1000, readBatchSize),
 	}
 
-	if isOutput {
+	if output == StdOutput {
 		stages = append(stages, pipeline.NewStage("write", noParallelizationInitFunc, writeToCliOutStageFunc, 0, 100, writeBatchSize))
 	} else {
 		stages = append(stages, pipeline.NewStage("write", noParallelizationInitFunc, writeToCliErrStageFunc, 0, 100, writeBatchSize))
@@ -297,13 +303,13 @@ func csvProcessStageFunc(ctx context.Context, items []pipeline.ItemWithProps) ([
 }
 
 // JSON pipeline creation and stage functions
-func createJSONPipeline(_ context.Context, sch sql.Schema, iter sql.RowIter, isOutput bool) *pipeline.Pipeline {
+func createJSONPipeline(_ context.Context, sch sql.Schema, iter sql.RowIter, output CliOutput) *pipeline.Pipeline {
 	var stages = []*pipeline.Stage{
 		pipeline.NewStage("read", noParallelizationInitFunc, getReadStageFunc(iter, readBatchSize), 0, 0, 0),
 		pipeline.NewStage("process", nil, getJSONProcessFunc(sch), 2, 1000, readBatchSize),
 	}
 
-	if isOutput {
+	if output == StdOutput {
 		stages = append(stages, pipeline.NewStage("write", noParallelizationInitFunc, writeJSONToCliOutStageFunc, 0, 100, writeBatchSize))
 	} else {
 		stages = append(stages, pipeline.NewStage("write", noParallelizationInitFunc, writeJSONToCliErrStageFunc, 0, 100, writeBatchSize))
@@ -427,7 +433,7 @@ func writeJSONToCliErrStageFunc(ctx context.Context, items []pipeline.ItemWithPr
 }
 
 // tabular pipeline creation and pipeline functions
-func createTabularPipeline(_ context.Context, sch sql.Schema, iter sql.RowIter, isOutput bool) *pipeline.Pipeline {
+func createTabularPipeline(_ context.Context, sch sql.Schema, iter sql.RowIter, output CliOutput) *pipeline.Pipeline {
 	const samplesForAutoSizing = 10000
 	tps := &tabularPipelineStages{}
 
@@ -438,7 +444,7 @@ func createTabularPipeline(_ context.Context, sch sql.Schema, iter sql.RowIter, 
 		pipeline.NewStage("cell_borders", noParallelizationInitFunc, tps.getBorderFunc(), 0, 1000, readBatchSize),
 	}
 
-	if isOutput {
+	if output == StdOutput {
 		stages = append(stages, pipeline.NewStage("write", noParallelizationInitFunc, writeToCliOutStageFunc, 0, 100, writeBatchSize))
 	} else {
 		stages = append(stages, pipeline.NewStage("write", noParallelizationInitFunc, writeToCliErrStageFunc, 0, 100, writeBatchSize))
