@@ -211,7 +211,7 @@ DELIM
     [[ "$output" =~ "Lines skipped: 1" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
 
-    # Output to a file descriptor
+    # Output to a file from the error stderr
     dolt sql -q "DELETE FROM test WHERE pk = 1"
     dolt table import -u --continue test 1pk5col-rpt-ints.csv 2> skipped.csv
     run cat skipped.csv
