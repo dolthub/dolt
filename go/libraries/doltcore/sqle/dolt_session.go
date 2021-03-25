@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -225,25 +226,6 @@ func (sess *DoltSession) GetRoot(dbName string) (*doltdb.RootValue, bool) {
 	return dbRoot.root, true
 }
 
-// SetRoot updates the *RootValue for a given database associated with the session.
-func (sess *DoltSession) SetRoot(dbName string, hashString string, root *doltdb.RootValue) {
-	sess.dbRoots[dbName] = dbRoot{hashStr: hashString, root: root}
-}
-
-// SetEditorRoot sets the editor's root for a given database associated with the session.
-func (sess *DoltSession) SetEditorRoot(ctx context.Context, dbName string, root *doltdb.RootValue) error {
-	err := sess.dbEditors[dbName].SetRoot(ctx, root)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// ClearCache clears the cache for a particular root
-func (sess *DoltSession) ClearCache(dbName string) {
-	sess.caches[dbName].Clear()
-}
-
 // GetParentCommit returns the parent commit of the current session.
 func (sess *DoltSession) GetParentCommit(ctx context.Context, dbName string) (*doltdb.Commit, hash.Hash, error) {
 	dbd, dbFound := sess.dbDatas[dbName]
@@ -327,6 +309,42 @@ func (sess *DoltSession) Set(ctx context.Context, key string, typ sql.Type, valu
 		}
 
 		sess.dbRoots[dbName] = dbRoot{hashStr, root}
+
+		err = sess.dbEditors[dbName].SetRoot(ctx, root)
+		if err != nil {
+			return err
+		}
+
+		sess.caches[dbName].Clear()
+
+		return nil
+	}
+
+	if isWorking, dbName := IsWorkingKey(key); isWorking {
+		valStr, isStr := value.(string) // valStr represents a root val hash
+		if !isStr || !hash.IsValid(valStr) {
+			return doltdb.ErrInvalidHash
+		}
+
+		err := sess.Session.Set(ctx, key, sql.Text, valStr)
+		if err != nil {
+			return err
+		}
+
+		// If there's a Root Value that's associated with this hash update dbRoots to include it
+		dbd, dbFound := sess.dbDatas[dbName]
+		if !dbFound {
+			return sql.ErrDatabaseNotFound.New(dbName)
+		}
+
+		root, err := dbd.Ddb.ReadRootValue(ctx, hash.Parse(valStr))
+		if errors.Is(doltdb.ErrNoRootValAtHash, err) {
+			return nil
+		} else if err != nil {
+			return err
+		}
+
+		sess.dbRoots[dbName] = dbRoot{valStr, root}
 
 		err = sess.dbEditors[dbName].SetRoot(ctx, root)
 		if err != nil {

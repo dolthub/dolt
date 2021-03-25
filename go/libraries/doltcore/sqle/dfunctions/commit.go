@@ -16,7 +16,6 @@ package dfunctions
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/store/hash"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -74,24 +73,11 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	root, ok := dSess.GetRoot(dbName)
-
-	hr, _ := root.HashOf()
-	hs := hr.String()
-	fmt.Println(hs)
-
 	if !ok {
 		return nil, fmt.Errorf("unknown database '%s'", dbName)
 	}
 
 	ddb, ok := dSess.GetDoltDB(dbName)
-
-	workingHashStr := getWorkingSessionHashStr(ctx)
-	if hs != workingHashStr {
-		root, err = ddb.ReadRootValue(ctx, hash.Parse(workingHashStr))
-		if err != nil {
-			return nil, err
-		}
-	}
 
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)

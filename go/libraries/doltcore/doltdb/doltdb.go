@@ -53,6 +53,8 @@ var LocalDirDoltDB = "file://./" + dbfactory.DoltDataDir
 // InMemDoltDB stores the DoltDB db in memory and is primarily used for testing
 var InMemDoltDB = "mem://"
 
+var ErrNoRootValAtHash = errors.New("there is no dolt root value at that hash")
+
 // DoltDB wraps access to the underlying noms database and hides some of the details of the underlying storage.
 // Additionally the noms codebase uses panics in a way that is non idiomatic and We've opted to recover and return
 // errors in many cases.
@@ -418,12 +420,12 @@ func (ddb *DoltDB) ReadRootValue(ctx context.Context, h hash.Hash) (*RootValue, 
 		return nil, err
 	}
 	if val == nil {
-		return nil, errors.New("there is no dolt root value at that hash")
+		return nil, ErrNoRootValAtHash
 	}
 
 	rootSt, ok := val.(types.Struct)
 	if !ok || rootSt.Name() != ddbRootStructName {
-		return nil, errors.New("there is no dolt root value at that hash")
+		return nil, ErrNoRootValAtHash
 	}
 
 	return newRootValue(ddb.db, rootSt)

@@ -353,6 +353,10 @@ teardown() {
     SET @@repo1_head=commit('-m', 'add 7');
     INSERT INTO dolt_branches (name,hash) VALUES ('test_branch', @@repo1_head);"
 
+    # Validate that running a squash operation without updating the working variable itself alone does not
+    # change the working root value
+    server_query 0 "SET @@repo1_head=hashof('master');SET @junk = squash('test_branch');SELECT * FROM one_pk ORDER by pk" ";;pk,c1,c2\n0,None,None\n1,1,None\n2,10,2\n3,3,3\n4,4,4\n5,5,5"
+
     multi_query 0 "
     SET @@repo1_head=hashof('master');
     SET @@repo1_working = squash('test_branch');
