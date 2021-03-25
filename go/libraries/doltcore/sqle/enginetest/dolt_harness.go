@@ -69,6 +69,7 @@ func (d *DoltHarness) SkipQueryTest(query string) bool {
 		strings.Contains(lowerQuery, "show create table fk_tbl") || // we create an extra key for the FK that vanilla gms does not
 		strings.Contains(lowerQuery, "show indexes from") || // we create / expose extra indexes (for foreign keys)
 		strings.Contains(lowerQuery, "json_arrayagg") || // TODO: aggregation ordering
+		strings.Contains(lowerQuery, "json_objectagg") || // TODO: aggregation ordering
 		strings.Contains(lowerQuery, "typestable") // Bit type isn't working?
 }
 

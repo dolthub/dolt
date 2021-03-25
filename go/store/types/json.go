@@ -33,9 +33,6 @@ func NewJSONDoc(nbf *NomsBinFormat, vrw ValueReadWriter, value Value) (JSON, err
 		return EmptyJSONDoc(nbf), err
 	}
 
-	// TODO(andy): do we need to write count?
-	w.writeCount(uint64(1))
-
 	if err := value.writeTo(&w, nbf); err != nil {
 		return EmptyJSONDoc(nbf), err
 	}
@@ -48,7 +45,6 @@ func EmptyJSONDoc(nbf *NomsBinFormat) JSON {
 	if err := JSONKind.writeTo(&w, nbf); err != nil {
 		d.PanicIfError(err)
 	}
-	w.writeCount(uint64(0))
 
 	return JSON{valueImpl{nil, nbf, w.data(), nil}}
 }
@@ -76,28 +72,12 @@ func readJSON(nbf *NomsBinFormat, dec *valueDecoder) (JSON, error) {
 
 func skipJSON(nbf *NomsBinFormat, dec *valueDecoder) error {
 	dec.skipKind()
-	count := dec.readCount()
-	for i := uint64(0); i < count; i++ {
-		err := dec.SkipValue(nbf)
-
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return dec.SkipValue(nbf)
 }
 
 func walkJSON(nbf *NomsBinFormat, r *refWalker, cb RefCallback) error {
 	r.skipKind()
-	count := r.readCount()
-	for i := uint64(0); i < count; i++ {
-		err := r.walkValue(nbf, cb)
-
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return r.walkValue(nbf, cb)
 }
 
 // CopyOf creates a copy of a JSON.  This is necessary in cases where keeping a reference to the original JSON is
@@ -135,7 +115,6 @@ func (t JSON) Value(ctx context.Context) (Value, error) {
 func (t JSON) Inner() (Value, error) {
 	dec := newValueDecoder(t.buff, t.vrw)
 	dec.skipKind()
-	dec.skipCount()
 	return dec.readValue(t.nbf)
 }
 
@@ -162,8 +141,7 @@ func (t JSON) Kind() NomsKind {
 func (t JSON) decoderSkipToFields() (valueDecoder, uint64) {
 	dec := t.decoder()
 	dec.skipKind()
-	count := dec.readCount()
-	return dec, count
+	return dec, uint64(1)
 }
 
 func (t JSON) Len() uint64 {
