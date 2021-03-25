@@ -415,3 +415,53 @@ func nextLevelMissingChunks(ctx context.Context, sinkDB Database, nextLevel hash
 
 	return absent, nil
 }
+
+// UpdateAppendix updates the sinkDB's appendix to match the source's,
+// if the source has an appendix. Only writes appendixes if both sources support appendixes,
+// and silently fails if they dont
+func UpdateAppendix(ctx context.Context, srcDB, sinkDB Database) error {
+	srcCS := srcDB.chunkStore().(interface{})
+	sinkCS := sinkDB.chunkStore().(interface{})
+
+	srcTS, srcOK := srcCS.(nbs.TableFileStoreWithAppendix)
+	if !srcOK {
+		return nil
+	}
+
+	sinkTS, sinkOK := sinkCS.(nbs.TableFileStoreWithAppendix)
+	if !sinkOK {
+		return nil
+	}
+
+	_, srcAppendixFiles, err := srcTS.AppendixSources(ctx)
+	if err != nil {
+		return err
+	}
+
+	if srcAppendixFiles != nil {
+		g, gCtx := errgroup.WithContext(ctx)
+		for _, tf := range srcAppendixFiles {
+			tf := tf
+			g.Go(func() error {
+				var r io.ReadCloser
+				var err error
+
+				r, err = tf.Open(gCtx)
+				if err != nil {
+					return err
+				}
+
+				defer func() {
+					closeErr := r.Close()
+					if err == nil {
+						err = closeErr
+					}
+				}()
+
+				return sinkTS.WriteAppendixTableFile(ctx, tf.FileID(), tf.NumChunks(), r, 0, nil)
+			})
+		}
+		return g.Wait()
+	}
+	return nil
+}

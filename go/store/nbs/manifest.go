@@ -34,6 +34,8 @@ import (
 )
 
 var ErrCorruptManifest = errors.New("corrupt manifest")
+var ErrCorruptAppendix = errors.New("corrupt appendix")
+var ErrAppendixNotFound = errors.New("appendix not found")
 
 type manifest interface {
 	// Name returns a stable, unique identifier for the store this manifest describes.
@@ -87,6 +89,39 @@ type manifestGCGenUpdater interface {
 	// guaranteeing exclusive access to the manifest. This allows for testing
 	// of race conditions.
 	UpdateGCGen(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error)
+}
+
+type appendixUpdater interface {
+	// ParseAppendixIfExists extracts and returns values from a NomsBlockStore
+	// appendix, if one exists. Concrete implementations are responsible for
+	// defining how to find and parse the desired appendix, e.g. a
+	// particularly-named file in a given directory. Implementations are also
+	// responsible for managing whatever concurrency guarantees they require
+	// for correctness. If the appendix exists, |exists| is set to true and
+	// appendix data is returned, including the version of the Noms data in
+	// the store, the root root hash.Hash of the store, and a tableSpec
+	// describing every table that comprises the store.
+	// If the appendix doesn't exist, |exists| is set to false and the other
+	// return values are undefined. The |readHook| parameter allows race
+	// condition testing. If it is non-nil, it will be invoked while the
+	// implementation is guaranteeing exclusive access to the manifest.
+	ParseAppendixIfExists(ctx context.Context, stats *Stats, readHook func() error) (exists bool, contents manifestContents, err error)
+	// UpdateAppendix tries to write a new appendix containing
+	// |newContents|. If |lastLock| matches the lock hash in the currently
+	// persisted manifest (logically, the lock that would be returned by
+	// ParseAppendixIfExists), then UpdateAppendix succeeds and subsequent calls to both
+	// UpdateAppendix and ParseAppendixIfExists will reflect a manifest containing
+	// |newContents|. If not, UpdateAppendix fails. Regardless, the returned
+	// manifestContents will reflect the current state of the world. Callers
+	// should check that the returned root == the proposed root and, if not,
+	// merge any desired new table information with the contents of the
+	// returned []tableSpec before trying again.
+	// Concrete implementations are responsible for ensuring that concurrent
+	// Update calls (and ParseIfExists calls) are correct.
+	// If writeHook is non-nil, it will be invoked while the implementation is
+	// guaranteeing exclusive access to the manifest. This allows for testing
+	// of race conditions.
+	UpdateAppendix(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error)
 }
 
 // ManifestInfo is an interface for retrieving data from a manifest outside of this package
@@ -277,6 +312,29 @@ func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (exists bool,
 	return
 }
 
+func (mm manifestManager) FetchAppendix(ctx context.Context, stats *Stats) (exists bool, contents manifestContents, err error) {
+	updater, ok := mm.m.(appendixUpdater)
+	if !ok {
+		return false, manifestContents{}, errors.New("manifest does not support appendices")
+	}
+
+	mm.lockOutFetch()
+	defer func() {
+		afErr := mm.allowFetch()
+
+		if err == nil {
+			err = afErr
+		}
+	}()
+
+	f := func() (bool, manifestContents, error) {
+		return updater.ParseAppendixIfExists(ctx, stats, nil)
+	}
+
+	exists, contents, err = f()
+	return
+}
+
 // Update attempts to write a new manifest.
 // Callers MUST protect uses of Update with Lock/UnlockForUpdate.
 // Update does not call Lock/UnlockForUpdate() on its own because it is
@@ -312,6 +370,31 @@ func (mm manifestManager) Update(ctx context.Context, lastLock addr, newContents
 		}
 
 		return contents, nil
+	}
+
+	contents, err = f()
+	return
+}
+
+// UpdateAppendix attempts to write a new appendix.
+// Callers MUST protect uses of UpdateAppendix with Lock/UnlockForUpdate.
+func (mm manifestManager) UpdateAppendix(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (contents manifestContents, err error) {
+	updater, ok := mm.m.(appendixUpdater)
+	if !ok {
+		return manifestContents{}, errors.New("manifest does not support appendices")
+	}
+
+	mm.lockOutFetch()
+	defer func() {
+		afErr := mm.allowFetch()
+
+		if err == nil {
+			err = afErr
+		}
+	}()
+
+	f := func() (manifestContents, error) {
+		return updater.UpdateAppendix(ctx, lastLock, newContents, stats, writeHook)
 	}
 
 	contents, err = f()

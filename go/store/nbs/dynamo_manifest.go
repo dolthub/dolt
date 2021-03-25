@@ -41,22 +41,30 @@ const (
 	// DynamoManifest does not yet include GC Generation
 	AWSStorageVersion = "4"
 
-	dbAttr         = "db"
-	lockAttr       = "lck" // 'lock' is a reserved word in dynamo
-	rootAttr       = "root"
-	versAttr       = "vers"
-	nbsVersAttr    = "nbsVers"
-	tableSpecsAttr = "specs"
+	dbAttr                      = "db"
+	lockAttr                    = "lck" // 'lock' is a reserved word in dynamo
+	rootAttr                    = "root"
+	versAttr                    = "vers"
+	nbsVersAttr                 = "nbsVers"
+	tableSpecsAttr              = "specs"
+	appendixAttr                = "appendix"
+	updateExpressionNamesKey    = "#A"
+	updateExpressionValuesKey   = ":a"
+	prevLockExpressionValuesKey = ":prev"
+	versExpressionValuesKey     = ":vers"
 )
 
 var (
-	valueEqualsExpression            = fmt.Sprintf("(%s = :prev) and (%s = :vers)", lockAttr, versAttr)
+	updateExpression = fmt.Sprintf("SET %s = %s", updateExpressionNamesKey, updateExpressionValuesKey)
+
+	valueEqualsExpression            = fmt.Sprintf("(%s = %s) and (%s = %s)", lockAttr, prevLockExpressionValuesKey, versAttr, versExpressionValuesKey)
 	valueNotExistsOrEqualsExpression = fmt.Sprintf("attribute_not_exists("+lockAttr+") or %s", valueEqualsExpression)
 )
 
 type ddbsvc interface {
 	GetItemWithContext(ctx aws.Context, input *dynamodb.GetItemInput, opts ...request.Option) (*dynamodb.GetItemOutput, error)
 	PutItemWithContext(ctx aws.Context, input *dynamodb.PutItemInput, opts ...request.Option) (*dynamodb.PutItemOutput, error)
+	UpdateItemWithContext(ctx aws.Context, input *dynamodb.UpdateItemInput, opts ...request.Option) (*dynamodb.UpdateItemOutput, error)
 }
 
 // dynamoManifest assumes the existence of a DynamoDB table whose primary partition key is in String format and named `db`.
@@ -64,6 +72,8 @@ type dynamoManifest struct {
 	table, db string
 	ddbsvc    ddbsvc
 }
+
+var _ appendixUpdater = &dynamoManifest{}
 
 func newDynamoManifest(table, namespace string, ddb ddbsvc) manifest {
 	d.PanicIfTrue(table == "")
@@ -116,18 +126,80 @@ func (dm dynamoManifest) ParseIfExists(ctx context.Context, stats *Stats, readHo
 	return exists, contents, nil
 }
 
+func (dm dynamoManifest) ParseAppendixIfExists(ctx context.Context, stats *Stats, readHook func() error) (bool, manifestContents, error) {
+	t1 := time.Now()
+	defer func() { stats.ReadAppendixLatency.SampleTimeSince(t1) }()
+
+	result, err := dm.ddbsvc.GetItemWithContext(ctx, &dynamodb.GetItemInput{
+		ConsistentRead: aws.Bool(true), // This doubles the cost :-(
+		TableName:      aws.String(dm.table),
+		Key: map[string]*dynamodb.AttributeValue{
+			dbAttr: {S: aws.String(dm.db)},
+		},
+	})
+	if err != nil {
+		return false, manifestContents{}, err
+	}
+
+	var exists bool
+	var valid bool
+	var hasSpecs bool
+	var contents manifestContents
+
+	if len(result.Item) > 0 {
+		appendix := result.Item[appendixAttr].M
+
+		if appendix != nil {
+			exists, valid, hasSpecs = validateAppendix(appendix)
+			if !exists {
+				return false, contents, nil
+			}
+			if !valid {
+				return false, contents, ErrCorruptAppendix
+			}
+
+			contents.vers = *appendix[versAttr].S
+			contents.root = hash.New(appendix[rootAttr].B)
+			copy(contents.lock[:], appendix[lockAttr].B)
+			if hasSpecs {
+				contents.specs, err = parseSpecs(strings.Split(*appendix[tableSpecsAttr].S, ":"))
+				if err != nil {
+					return false, manifestContents{}, ErrCorruptAppendix
+				}
+			}
+		}
+	}
+
+	return exists, contents, nil
+}
+
 func validateManifest(item map[string]*dynamodb.AttributeValue) (valid, hasSpecs bool) {
 	if item[nbsVersAttr] != nil && item[nbsVersAttr].S != nil &&
 		AWSStorageVersion == *item[nbsVersAttr].S &&
 		item[versAttr] != nil && item[versAttr].S != nil &&
 		item[lockAttr] != nil && item[lockAttr].B != nil &&
 		item[rootAttr] != nil && item[rootAttr].B != nil {
-		if len(item) == 6 && item[tableSpecsAttr] != nil && item[tableSpecsAttr].S != nil {
-			return true, true
+		if len(item) == 6 || len(item) == 7 {
+			if item[tableSpecsAttr] != nil && item[tableSpecsAttr].S != nil {
+				return true, true
+			}
+			return true, false
 		}
 		return len(item) == 5, false
 	}
 	return false, false
+}
+
+func validateAppendix(item map[string]*dynamodb.AttributeValue) (exists, valid, hasSpecs bool) {
+	if item[versAttr] != nil && item[versAttr].S != nil &&
+		item[lockAttr] != nil && item[lockAttr].B != nil &&
+		item[rootAttr] != nil && item[rootAttr].B != nil {
+		if len(item) == 4 && item[tableSpecsAttr] != nil && item[tableSpecsAttr].S != nil {
+			return true, true, true
+		}
+		return true, len(item) == 3, false
+	}
+	return false, false, false
 }
 
 func (dm dynamoManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
@@ -157,8 +229,8 @@ func (dm dynamoManifest) Update(ctx context.Context, lastLock addr, newContents 
 
 	putArgs.ConditionExpression = aws.String(expr)
 	putArgs.ExpressionAttributeValues = map[string]*dynamodb.AttributeValue{
-		":prev": {B: lastLock[:]},
-		":vers": {S: aws.String(newContents.vers)},
+		prevLockExpressionValuesKey: {B: lastLock[:]},
+		versExpressionValuesKey:     {S: aws.String(newContents.vers)},
 	}
 
 	_, ddberr := dm.ddbsvc.PutItemWithContext(ctx, &putArgs)
@@ -186,6 +258,77 @@ func (dm dynamoManifest) Update(ctx context.Context, lastLock addr, newContents 
 		}
 	}
 
+	return newContents, nil
+}
+
+func (dm dynamoManifest) UpdateAppendix(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+	t1 := time.Now()
+	defer func() { stats.WriteAppendixLatency.SampleTimeSince(t1) }()
+
+	manifestOk, _, err := dm.ParseIfExists(ctx, stats, nil)
+	if err != nil {
+		return manifestContents{}, err
+	}
+	if !manifestOk {
+		return manifestContents{}, errors.New("manifest must exist to support appendices")
+	}
+
+	appendix := map[string]*dynamodb.AttributeValue{
+		versAttr: {S: aws.String(newContents.vers)},
+		rootAttr: {B: newContents.root[:]},
+		lockAttr: {B: newContents.lock[:]},
+	}
+
+	if len(newContents.specs) > 0 {
+		tableInfo := make([]string, 2*len(newContents.specs))
+		formatSpecs(newContents.specs, tableInfo)
+		appendix[tableSpecsAttr] = &dynamodb.AttributeValue{S: aws.String(strings.Join(tableInfo, ":"))}
+	}
+
+	args := dynamodb.UpdateItemInput{
+		TableName:                aws.String(dm.table),
+		ExpressionAttributeNames: map[string]*string{updateExpressionNamesKey: aws.String(appendixAttr)},
+		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+			updateExpressionValuesKey:   {M: appendix},
+			prevLockExpressionValuesKey: {B: lastLock[:]},
+			versExpressionValuesKey:     {S: aws.String(newContents.vers)},
+		},
+		Key: map[string]*dynamodb.AttributeValue{dbAttr: {S: aws.String(dm.db)}},
+		//ReturnValues: aws.String("ALL_NEW"),
+		UpdateExpression: aws.String(updateExpression),
+	}
+
+	expr := valueEqualsExpression
+	if lastLock == (addr{}) {
+		expr = valueNotExistsOrEqualsExpression
+	}
+
+	args.ConditionExpression = aws.String(expr)
+
+	_, ddberr := dm.ddbsvc.UpdateItemWithContext(ctx, &args)
+	if ddberr != nil {
+		if errIsConditionalCheckFailed(ddberr) {
+			exists, upstream, err := dm.ParseAppendixIfExists(ctx, stats, nil)
+
+			if err != nil {
+				return manifestContents{}, err
+			}
+
+			if !exists {
+				return manifestContents{}, errors.New("appendix not found")
+			}
+
+			if upstream.vers != newContents.vers {
+				return manifestContents{}, errors.New("version mismatch")
+			}
+
+			return upstream, nil
+		}
+
+		if ddberr != nil {
+			return manifestContents{}, ddberr
+		}
+	}
 	return newContents, nil
 }
 

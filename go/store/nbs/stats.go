@@ -68,6 +68,9 @@ type Stats struct {
 
 	ReadManifestLatency  metrics.Histogram
 	WriteManifestLatency metrics.Histogram
+
+	ReadAppendixLatency  metrics.Histogram
+	WriteAppendixLatency metrics.Histogram
 }
 
 func NewStats() *Stats {
@@ -95,6 +98,8 @@ func NewStats() *Stats {
 		BytesPerConjoin:                  metrics.NewByteHistogram(),
 		ReadManifestLatency:              metrics.NewTimeHistogram(),
 		WriteManifestLatency:             metrics.NewTimeHistogram(),
+		ReadAppendixLatency:              metrics.NewTimeHistogram(),
+		WriteAppendixLatency:             metrics.NewTimeHistogram(),
 	}
 }
 

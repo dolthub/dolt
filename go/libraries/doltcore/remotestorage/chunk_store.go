@@ -67,6 +67,7 @@ var globalHttpFetcher HTTPFetcher = &http.Client{}
 var _ nbs.TableFileStore = (*DoltChunkStore)(nil)
 var _ datas.NBSCompressedChunkStore = (*DoltChunkStore)(nil)
 var _ chunks.ChunkStore = (*DoltChunkStore)(nil)
+var _ nbs.TableFileStoreWithAppendix = (*DoltChunkStore)(nil)
 
 // We may need this to be configurable for users with really bad internet
 var downThroughputCheck = iohelp.MinThroughputCheckParams{
@@ -994,6 +995,11 @@ func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, nu
 	return nil
 }
 
+// WriteAppendixTableFile reads a table file from the provided reader and writes it to the chunk store.
+func (dcs *DoltChunkStore) WriteAppendixTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader, contentLength uint64, contentHash []byte) error {
+	return chunks.ErrUnsupportedOperation
+}
+
 // PruneTableFiles deletes old table files that are no longer referenced in the manifest.
 func (dcs *DoltChunkStore) PruneTableFiles(ctx context.Context) error {
 	return chunks.ErrUnsupportedOperation
@@ -1012,8 +1018,12 @@ func (dcs *DoltChunkStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableF
 	for _, nfo := range resp.TableFileInfo {
 		tblFiles = append(tblFiles, DoltRemoteTableFile{dcs, nfo})
 	}
-
 	return hash.New(resp.RootHash), tblFiles, nil
+}
+
+// AppendixSources retrieves the current root hash of the appendix, and a list of its table files
+func (dcs *DoltChunkStore) AppendixSources(ctx context.Context) (hash.Hash, []nbs.TableFile, error) {
+	return hash.New([]byte("")), nil, chunks.ErrUnsupportedOperation
 }
 
 func (dcs *DoltChunkStore) Size(ctx context.Context) (uint64, error) {

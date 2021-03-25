@@ -42,7 +42,8 @@ const (
 	manifestFileName = "manifest"
 	lockFileName     = "LOCK"
 
-	storageVersion4 = "4"
+	appendixFileName = "appendix"
+	storageVersion4  = "4"
 
 	prefixLen = 5
 )
@@ -144,6 +145,8 @@ type fileManifestV5 struct {
 	dir string
 }
 
+var _ appendixUpdater = &fileManifestV5{}
+
 func newLock(dir string) *fslock.Lock {
 	lockPath := filepath.Join(dir, lockFileName)
 	return fslock.New(lockPath)
@@ -194,7 +197,22 @@ func (fm5 fileManifestV5) ParseIfExists(ctx context.Context, stats *Stats, readH
 		stats.ReadManifestLatency.SampleTimeSince(t1)
 	}()
 
-	return parseIfExistsWithParser(ctx, fm5.dir, fm5.parseManifest, readHook)
+	return parseIfExistsWithParser(ctx, fm5.dir, fm5.parseManifest, manifestFileName, readHook)
+}
+
+// ParseAppendixIfExists looks for a LOCK and appendix file in fm.dir. If it finds
+// them, it takes the lock, parses the appendix and returns its contents,
+// setting |exists| to true. If not, it sets |exists| to false and returns. In
+// that case, the other return values are undefined. If |readHook| is non-nil,
+// it will be executed while ParseAppendixIfExists() holds the appendix file lock.
+// This is to allow for race condition testing.
+func (fm5 fileManifestV5) ParseAppendixIfExists(ctx context.Context, stats *Stats, readHook func() error) (exists bool, contents manifestContents, err error) {
+	t1 := time.Now()
+	defer func() {
+		stats.ReadAppendixLatency.SampleTimeSince(t1)
+	}()
+
+	return parseIfExistsWithParser(ctx, fm5.dir, fm5.parseManifest, appendixFileName, readHook)
 }
 
 func (fm5 fileManifestV5) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
@@ -209,6 +227,13 @@ func (fm5 fileManifestV5) Update(ctx context.Context, lastLock addr, newContents
 	}
 
 	return updateWithParseWriterAndChecker(ctx, fm5.dir, fm5.writeManifest, fm5.parseManifest, checker, lastLock, newContents, writeHook)
+}
+
+func (fm5 fileManifestV5) UpdateAppendix(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
+	t1 := time.Now()
+	defer func() { stats.WriteAppendixLatency.SampleTimeSince(t1) }()
+
+	return updateAppendix(ctx, fm5.dir, fm5.writeManifest, fm5.parseManifest, lastLock, newContents, writeHook)
 }
 
 func (fm5 fileManifestV5) UpdateGCGen(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
@@ -287,6 +312,8 @@ type fileManifestV4 struct {
 	dir string
 }
 
+var _ appendixUpdater = &fileManifestV4{}
+
 func (fm4 fileManifestV4) Name() string {
 	return fm4.dir
 }
@@ -297,7 +324,16 @@ func (fm4 fileManifestV4) ParseIfExists(ctx context.Context, stats *Stats, readH
 		stats.ReadManifestLatency.SampleTimeSince(t1)
 	}()
 
-	return parseIfExistsWithParser(ctx, fm4.dir, fm4.parseManifest, readHook)
+	return parseIfExistsWithParser(ctx, fm4.dir, fm4.parseManifest, manifestFile, readHook)
+}
+
+func (fm4 fileManifestV4) ParseAppendixIfExists(ctx context.Context, stats *Stats, readHook func() error) (exists bool, contents manifestContents, err error) {
+	t1 := time.Now()
+	defer func() {
+		stats.ReadAppendixLatency.SampleTimeSince(t1)
+	}()
+
+	return parseIfExistsWithParser(ctx, fm4.dir, fm4.parseManifest, appendixFileName, readHook)
 }
 
 func (fm4 fileManifestV4) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
@@ -309,6 +345,13 @@ func (fm4 fileManifestV4) Update(ctx context.Context, lastLock addr, newContents
 	}
 
 	return updateWithParseWriterAndChecker(ctx, fm4.dir, fm4.writeManifest, fm4.parseManifest, noop, lastLock, newContents, writeHook)
+}
+
+func (fm4 fileManifestV4) UpdateAppendix(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
+	t1 := time.Now()
+	defer func() { stats.WriteAppendixLatency.SampleTimeSince(t1) }()
+
+	return updateAppendix(ctx, fm4.dir, fm4.writeManifest, fm4.parseManifest, lastLock, newContents, writeHook)
 }
 
 func (fm4 fileManifestV4) parseManifest(r io.Reader) (manifestContents, error) {
@@ -357,7 +400,7 @@ func (fm4 fileManifestV4) writeManifest(temp io.Writer, contents manifestContent
 	return err
 }
 
-func parseIfExistsWithParser(_ context.Context, dir string, parse manifestParser, readHook func() error) (exists bool, contents manifestContents, err error) {
+func parseIfExistsWithParser(_ context.Context, dir string, parse manifestParser, filename string, readHook func() error) (exists bool, contents manifestContents, err error) {
 	var locked bool
 	locked, err = lockFileExists(dir)
 
@@ -367,18 +410,16 @@ func parseIfExistsWithParser(_ context.Context, dir string, parse manifestParser
 
 	// !exists(lockFileName) => unitialized store
 	if locked {
-		var f io.ReadCloser
+		var f *os.File
 		err = func() (ferr error) {
 			lck := newLock(dir)
 			ferr = lck.Lock()
-
 			if ferr != nil {
 				return ferr
 			}
 
 			defer func() {
 				unlockErr := lck.Unlock()
-
 				if ferr == nil {
 					ferr = unlockErr
 				}
@@ -392,11 +433,10 @@ func parseIfExistsWithParser(_ context.Context, dir string, parse manifestParser
 				}
 			}
 
-			f, ferr = openIfExists(filepath.Join(dir, manifestFileName))
+			f, ferr = openIfExists(filepath.Join(dir, filename))
 			if ferr != nil {
 				return ferr
 			}
-
 			return nil
 		}()
 
@@ -422,7 +462,6 @@ func parseIfExistsWithParser(_ context.Context, dir string, parse manifestParser
 			}
 		}
 	}
-
 	return exists, contents, nil
 }
 
@@ -539,6 +578,97 @@ func updateWithParseWriterAndChecker(_ context.Context, dir string, write manife
 
 	err = os.Rename(tempManifestPath, manifestPath)
 
+	if err != nil {
+		return manifestContents{}, err
+	}
+
+	return newContents, nil
+}
+
+func updateAppendix(_ context.Context, dir string, write manifestWriter, parse manifestParser, lastLock addr, newContents manifestContents, writeHook func() error) (mc manifestContents, err error) {
+	var tempPath string
+
+	// Write a temporary file, to be renamed over fileName upon success.
+	// The closure here ensures this file is closed before moving on.
+	tempPath, err = func() (name string, ferr error) {
+		var temp *os.File
+		temp, ferr = tempfiles.MovableTempFileProvider.NewFile(dir, "nbs_appendix_")
+
+		if ferr != nil {
+			return "", ferr
+		}
+
+		defer func() {
+			closeErr := temp.Close()
+
+			if ferr == nil {
+				ferr = closeErr
+			}
+		}()
+
+		ferr = write(temp, newContents)
+
+		if ferr != nil {
+			return "", ferr
+		}
+
+		return temp.Name(), nil
+	}()
+
+	if err != nil {
+		return manifestContents{}, err
+	}
+
+	defer os.Remove(tempPath) // If we rename below, this will be a no-op
+
+	// Take manifest file lock
+	lck := newLock(dir)
+	err = lck.Lock()
+
+	if err != nil {
+		return manifestContents{}, err
+	}
+
+	defer func() {
+		unlockErr := lck.Unlock()
+
+		if err == nil {
+			err = unlockErr
+		}
+	}()
+
+	// writeHook is for testing, allowing other code to slip in and try to do stuff while we hold the lock.
+	if writeHook != nil {
+		err = writeHook()
+		if err != nil {
+			return manifestContents{}, err
+		}
+	}
+
+	var upstream manifestContents
+	appendixPath := filepath.Join(dir, appendixFileName)
+	upstream, err = func() (upstream manifestContents, ferr error) {
+		f, ferr := openIfExists(appendixPath)
+		if ferr != nil {
+			return manifestContents{}, ferr
+		}
+		if f != nil {
+			defer func() {
+				ferr = f.Close()
+			}()
+			return parse(f)
+		}
+		return manifestContents{}, nil
+	}()
+	if err != nil {
+		return manifestContents{}, err
+	}
+
+	if lastLock != upstream.lock {
+		return upstream, nil
+	}
+
+	err = os.Rename(tempPath, appendixPath)
 	if err != nil {
 		return manifestContents{}, err
 	}

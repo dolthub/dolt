@@ -95,6 +95,7 @@ type NomsBlockStore struct {
 }
 
 var _ TableFileStore = &NomsBlockStore{}
+var _ TableFileStoreWithAppendix = &NomsBlockStore{}
 var _ chunks.ChunkStoreGarbageCollector = &NomsBlockStore{}
 
 type Range struct {
@@ -246,6 +247,133 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 	}
 
 	return updatedContents, nil
+}
+
+func (nbs *NomsBlockStore) UpdateManifestPrependSpecs(ctx context.Context, updates map[hash.Hash]uint32) (mi ManifestInfo, err error) {
+	nbs.mm.LockForUpdate()
+	defer func() {
+		unlockErr := nbs.mm.UnlockForUpdate()
+
+		if err == nil {
+			err = unlockErr
+		}
+	}()
+
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+
+	var stats Stats
+	var ok bool
+	var contents manifestContents
+	ok, contents, err = nbs.mm.Fetch(ctx, &stats)
+
+	if err != nil {
+		return manifestContents{}, err
+	} else if !ok {
+		contents = manifestContents{vers: nbs.upstream.vers}
+	}
+
+	currSpecs := contents.getSpecSet()
+
+	ordered := make([]tableSpec, 0)
+	var addCount int
+	for h, count := range updates {
+		a := addr(h)
+
+		if _, ok := currSpecs[a]; !ok {
+			addCount++
+			ordered = append(ordered, tableSpec{a, count})
+		}
+	}
+	if addCount == 0 {
+		return contents, nil
+	}
+	ordered = append(ordered, contents.specs...)
+	contents.specs = ordered
+
+	var updatedContents manifestContents
+	updatedContents, err = nbs.mm.Update(ctx, contents.lock, contents, &stats, nil)
+
+	if err != nil {
+		return manifestContents{}, err
+	}
+
+	newTables, err := nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
+
+	if err != nil {
+		return manifestContents{}, err
+	}
+
+	nbs.upstream = updatedContents
+	oldTables := nbs.tables
+	nbs.tables = newTables
+	err = oldTables.Close()
+	if err != nil {
+		return manifestContents{}, err
+	}
+
+	return updatedContents, nil
+}
+
+func (nbs *NomsBlockStore) UpdateAppendix(ctx context.Context, updates map[hash.Hash]uint32) (mi ManifestInfo, err error) {
+	nbs.mm.LockForUpdate()
+	defer func() {
+		unlockErr := nbs.mm.UnlockForUpdate()
+
+		if err == nil {
+			err = unlockErr
+		}
+	}()
+
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+
+	var stats Stats
+	var appendixOk bool
+	var contents manifestContents
+	appendixOk, contents, err = nbs.mm.FetchAppendix(ctx, &stats)
+
+	if err != nil {
+		return manifestContents{}, err
+	} else if !appendixOk {
+		// fetch manifest and get info
+		ok, mc, mErr := nbs.mm.Fetch(ctx, &stats)
+		if mErr != nil {
+			return nil, mErr
+		}
+		if !ok {
+			return nil, errors.New("unable to retrieve manifest during appendix update")
+		}
+		contents = manifestContents{
+			vers:  mc.vers,
+			root:  mc.root,
+			specs: make([]tableSpec, 0),
+		}
+	}
+
+	// will either be the lock found in the current appendix
+	// or zero value lock if this is the first appendix
+	lastLock := contents.lock
+
+	currSpecs := contents.getSpecSet()
+	var addCount int
+	for h, count := range updates {
+		a := addr(h)
+
+		if _, ok := currSpecs[a]; !ok {
+			addCount++
+			contents.specs = append(contents.specs, tableSpec{a, count})
+		}
+	}
+
+	if addCount == 0 {
+		return contents, nil
+	}
+
+	// generate new lock based on updated specs
+	contents.lock = generateLockHash(contents.root, contents.specs)
+
+	return nbs.mm.UpdateAppendix(ctx, lastLock, contents, &stats, nil)
 }
 
 func NewAWSStoreWithMMapIndex(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64) (*NomsBlockStore, error) {
@@ -1037,6 +1165,57 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []TableFile,
 	return contents.GetRoot(), tableFiles, nil
 }
 
+// AppendixSources retrieves the current root hash, and a list of all the table files
+func (nbs *NomsBlockStore) AppendixSources(ctx context.Context) (hash.Hash, []TableFile, error) {
+	parser, ok := nbs.mm.m.(appendixUpdater)
+	if !ok {
+		return hash.Hash{}, nil, nil
+	}
+
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+
+	stats := &Stats{}
+	exists, contents, err := parser.ParseAppendixIfExists(ctx, stats, nil)
+	if err != nil {
+		return hash.Hash{}, nil, err
+	}
+
+	if !exists {
+		return hash.Hash{}, nil, nil
+	}
+
+	css, err := nbs.chunkSourcesByAddr()
+	if err != nil {
+		return hash.Hash{}, nil, err
+	}
+
+	numSpecs := contents.NumTableSpecs()
+
+	var tableFiles []TableFile
+	for i := 0; i < numSpecs; i++ {
+		info := contents.getSpec(i)
+		cs, ok := css[info.name]
+		if !ok {
+			return hash.Hash{}, nil, errors.New("manifest referenced table file for which there is no chunkSource.")
+		}
+		tf := tableFile{
+			info: info,
+			open: func(ctx context.Context) (io.ReadCloser, error) {
+				r, err := cs.reader(ctx)
+				if err != nil {
+					return nil, err
+				}
+
+				return ioutil.NopCloser(r), nil
+			},
+		}
+		tableFiles = append(tableFiles, tf)
+	}
+
+	return contents.GetRoot(), tableFiles, nil
+}
+
 func (nbs *NomsBlockStore) Size(ctx context.Context) (uint64, error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
@@ -1148,6 +1327,56 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, nu
 
 	_, err = nbs.UpdateManifest(ctx, map[hash.Hash]uint32{fileIdHash: uint32(numChunks)})
 
+	return err
+}
+
+// WriteAppendixTableFile will read a table file from the provided reader and write it to the TableFileStore
+func (nbs *NomsBlockStore) WriteAppendixTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader, contentLength uint64, contentHash []byte) error {
+	fsPersister, ok := nbs.p.(*fsTablePersister)
+
+	if !ok {
+		return errors.New("Not implemented")
+	}
+
+	path := filepath.Join(fsPersister.dir, fileId)
+
+	err := func() (err error) {
+		var f *os.File
+		f, err = os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
+
+		if err != nil {
+			return err
+		}
+
+		defer func() {
+			closeErr := f.Close()
+
+			if err == nil {
+				err = closeErr
+			}
+		}()
+
+		_, err = io.Copy(f, rd)
+
+		return err
+	}()
+
+	if err != nil {
+		return err
+	}
+
+	fileIdHash, ok := hash.MaybeParse(fileId)
+
+	if !ok {
+		return errors.New("invalid base32 encoded hash: " + fileId)
+	}
+
+	_, err = nbs.UpdateAppendix(ctx, map[hash.Hash]uint32{fileIdHash: uint32(numChunks)})
+	if err != nil {
+		return err
+	}
+
+	_, err = nbs.UpdateManifestPrependSpecs(ctx, map[hash.Hash]uint32{fileIdHash: uint32(numChunks)})
 	return err
 }
 

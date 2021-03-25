@@ -1037,3 +1037,7 @@ func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB
 func (ddb *DoltDB) Clone(ctx context.Context, destDB *DoltDB, eventCh chan<- datas.TableFileEvent) error {
 	return datas.Clone(ctx, ddb.db, destDB.db, eventCh)
 }
+
+func (ddb *DoltDB) UpdateAppendix(ctx context.Context, srcDB, destDB *DoltDB) error {
+	return datas.UpdateAppendix(ctx, srcDB.db, destDB.db)
+}

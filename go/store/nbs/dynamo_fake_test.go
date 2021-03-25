@@ -40,9 +40,15 @@ type fakeDDB struct {
 	numPuts, numGets int64
 }
 
+type appendix struct {
+	lock, root  []byte
+	vers, specs string
+}
+
 type record struct {
 	lock, root  []byte
 	vers, specs string
+	appendix
 }
 
 func makeFakeDDB(t *testing.T) *fakeDDB {
@@ -72,6 +78,7 @@ func (m *fakeDDB) GetItemWithContext(ctx aws.Context, input *dynamodb.GetItemInp
 	assert.NotNil(m.t, key, "key should have been a String: %+v", input.Key[dbAttr])
 
 	item := map[string]*dynamodb.AttributeValue{}
+	app := map[string]*dynamodb.AttributeValue{}
 	if e, present := m.data[*key]; present {
 		item[dbAttr] = &dynamodb.AttributeValue{S: key}
 		switch e := e.(type) {
@@ -83,6 +90,13 @@ func (m *fakeDDB) GetItemWithContext(ctx aws.Context, input *dynamodb.GetItemInp
 			if e.specs != "" {
 				item[tableSpecsAttr] = &dynamodb.AttributeValue{S: aws.String(e.specs)}
 			}
+			app[versAttr] = &dynamodb.AttributeValue{S: aws.String(e.appendix.vers)}
+			app[rootAttr] = &dynamodb.AttributeValue{B: e.appendix.root}
+			app[lockAttr] = &dynamodb.AttributeValue{B: e.appendix.lock}
+			if e.appendix.specs != "" {
+				app[tableSpecsAttr] = &dynamodb.AttributeValue{S: aws.String(e.appendix.specs)}
+			}
+			item[appendixAttr] = &dynamodb.AttributeValue{M: app}
 		case []byte:
 			item[dataAttr] = &dynamodb.AttributeValue{B: e}
 		}
@@ -91,12 +105,97 @@ func (m *fakeDDB) GetItemWithContext(ctx aws.Context, input *dynamodb.GetItemInp
 	return &dynamodb.GetItemOutput{Item: item}, nil
 }
 
+func (m *fakeDDB) hasRecord(k string) bool {
+	_, found := m.data[k]
+	return found
+}
+
+func (m *fakeDDB) getRecordAppendix(k string) appendix {
+	r, found := m.data[k]
+	if found {
+		rSt, rStOk := r.(record)
+		if rStOk {
+			return rSt.appendix
+		}
+	}
+	return appendix{}
+}
+
 func (m *fakeDDB) putRecord(k string, l, r []byte, v string, s string) {
-	m.data[k] = record{l, r, v, s}
+	m.data[k] = record{l, r, v, s, m.getRecordAppendix(k)}
+}
+
+func (m *fakeDDB) updateRecord(k string, a appendix) {
+	r, ok := m.data[k]
+	if ok {
+		rSt, rStOk := r.(record)
+		if rStOk {
+			rSt.appendix = a
+			m.data[k] = rSt
+		}
+	}
 }
 
 func (m *fakeDDB) putData(k string, d []byte) {
 	m.data[k] = d
+}
+
+func (m *fakeDDB) UpdateItemWithContext(ctx aws.Context, input *dynamodb.UpdateItemInput, opts ...request.Option) (*dynamodb.UpdateItemOutput, error) {
+	assert.NotNil(m.t, input.Key[dbAttr], "%s should have been present", dbAttr)
+	assert.NotNil(m.t, input.Key[dbAttr].S, "key should have been a String: %+v", input.Key[dbAttr])
+
+	key := *input.Key[dbAttr].S
+	assert.True(m.t, m.hasRecord(key))
+
+	assert.NotNil(m.t, input.ExpressionAttributeNames, "ExpressionAttributesNames should have been present")
+	assert.NotNil(m.t, input.ExpressionAttributeNames[updateExpressionNamesKey], "%s should have been present", updateExpressionNamesKey)
+	assert.Equal(m.t, *input.ExpressionAttributeNames[updateExpressionNamesKey], appendixAttr)
+
+	assert.NotNil(m.t, input.ExpressionAttributeValues, "ExpressionAttributesValues should have been present")
+	assert.NotNil(m.t, input.ExpressionAttributeValues[updateExpressionValuesKey], "%s should have been present", updateExpressionValuesKey)
+	assert.NotNil(m.t, input.ExpressionAttributeValues[updateExpressionValuesKey].M, "value should have been a Map: %+v", input.ExpressionAttributeValues[updateExpressionValuesKey])
+	assert.NotNil(m.t, input.UpdateExpression, "%s should have been present", updateExpressionValuesKey)
+
+	app := appendix{}
+	appMap := input.ExpressionAttributeValues[updateExpressionValuesKey].M
+
+	assert.NotNil(m.t, appMap[versAttr], "%s should have been present", versAttr)
+	assert.NotNil(m.t, appMap[versAttr].S, "nbsVers should have been a String: %+v", appMap[versAttr])
+	assert.Equal(m.t, constants.NomsVersion, *appMap[versAttr].S)
+	app.vers = *appMap[versAttr].S
+
+	assert.NotNil(m.t, appMap[lockAttr], "%s should have been present", lockAttr)
+	assert.NotNil(m.t, appMap[lockAttr].B, "lock should have been a blob: %+v", appMap[lockAttr])
+	app.lock = appMap[lockAttr].B
+
+	assert.NotNil(m.t, appMap[rootAttr], "%s should have been present", rootAttr)
+	assert.NotNil(m.t, appMap[rootAttr].B, "root should have been a blob: %+v", appMap[rootAttr])
+	app.root = appMap[rootAttr].B
+
+	if specsAttr, ok := appMap[tableSpecsAttr]; ok {
+		assert.NotNil(m.t, specsAttr.S, "specs should have been a String: %+v", appMap[tableSpecsAttr])
+		app.specs = *specsAttr.S
+	}
+
+	mustNotExist := *(input.ConditionExpression) == valueNotExistsOrEqualsExpression
+	current := m.getRecordAppendix(key)
+
+	if mustNotExist {
+		if current.lock != nil || len(current.lock) > 0 ||
+			current.root != nil || len(current.root) > 0 ||
+			current.vers != "" {
+			return nil, mockAWSError("ConditionalCheckFailedException")
+		}
+	}
+
+	if !mustNotExist && !checkCondition(current, input.ExpressionAttributeValues) {
+		return nil, mockAWSError("ConditionalCheckFailedException")
+	}
+
+	m.updateRecord(key, app)
+
+	atomic.AddInt64(&m.numPuts, 1)
+	return &dynamodb.UpdateItemOutput{}, nil
 }
 
 func (m *fakeDDB) PutItemWithContext(ctx aws.Context, input *dynamodb.PutItemInput, opts ...request.Option) (*dynamodb.PutItemOutput, error) {
@@ -137,18 +236,24 @@ func (m *fakeDDB) PutItemWithContext(ctx aws.Context, input *dynamodb.PutItemInp
 
 	if mustNotExist && present {
 		return nil, mockAWSError("ConditionalCheckFailedException")
-	} else if !mustNotExist && !checkCondition(current.(record), input.ExpressionAttributeValues) {
+	} else if !mustNotExist && !checkCondition(current, input.ExpressionAttributeValues) {
 		return nil, mockAWSError("ConditionalCheckFailedException")
 	}
 
 	m.putRecord(key, lock, root, constants.NomsVersion, specs)
-	atomic.AddInt64(&m.numPuts, 1)
 
+	atomic.AddInt64(&m.numPuts, 1)
 	return &dynamodb.PutItemOutput{}, nil
 }
 
-func checkCondition(current record, expressionAttrVals map[string]*dynamodb.AttributeValue) bool {
-	return current.vers == *expressionAttrVals[":vers"].S && bytes.Equal(current.lock, expressionAttrVals[":prev"].B)
+func checkCondition(current interface{}, expressionAttrVals map[string]*dynamodb.AttributeValue) bool {
+	switch c := current.(type) {
+	case record:
+		return c.vers == *expressionAttrVals[versExpressionValuesKey].S && bytes.Equal(c.lock, expressionAttrVals[prevLockExpressionValuesKey].B)
+	case appendix:
+		return c.vers == *expressionAttrVals[versExpressionValuesKey].S && bytes.Equal(c.lock, expressionAttrVals[prevLockExpressionValuesKey].B)
+	}
+	return false
 }
 
 func (m *fakeDDB) NumGets() int64 {

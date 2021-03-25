@@ -41,6 +41,38 @@ type Map struct {
 	orderedSequence
 }
 
+func VisitMapBFS(m Map) ([]string, error) {
+	curLevel := []Map{m}
+	allhashes := []string{}
+	for len(curLevel) > 0 {
+		nextLevel := []Map{}
+		for _, m := range curLevel {
+			if metaSeq, ok := m.orderedSequence.(metaSequence); ok {
+				ts, err := metaSeq.tuples()
+				if err != nil {
+					return nil, err
+				}
+				for _, t := range ts {
+					r, err := t.ref()
+					if err != nil {
+						return nil, err
+					}
+					allhashes = append(allhashes, r.TargetHash().String())
+					v, err := r.TargetValue(context.Background(), m.valueReadWriter())
+					if err != nil {
+						return nil, err
+					}
+					nextLevel = append(nextLevel, v.(Map))
+				}
+			} else if _, ok := m.orderedSequence.(mapLeafSequence); ok {
+
+			}
+		}
+		curLevel = nextLevel
+	}
+	return allhashes, nil
+}
+
 func newMap(seq orderedSequence) Map {
 	return Map{seq}
 }

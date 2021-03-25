@@ -40,10 +40,16 @@ func NewNBSMetricWrapper(nbs *NomsBlockStore) *NBSMetricWrapper {
 
 var _ TableFileStore = &NBSMetricWrapper{}
 var _ chunks.ChunkStoreGarbageCollector = &NBSMetricWrapper{}
+var _ TableFileStoreWithAppendix = &NBSMetricWrapper{}
 
 // Sources retrieves the current root hash, and a list of all the table files
 func (nbsMW *NBSMetricWrapper) Sources(ctx context.Context) (hash.Hash, []TableFile, error) {
 	return nbsMW.nbs.Sources(ctx)
+}
+
+// AppendixSources retrieves the current root hash of the appendix, and a list of all its table files
+func (nbsMW *NBSMetricWrapper) AppendixSources(ctx context.Context) (hash.Hash, []TableFile, error) {
+	return nbsMW.nbs.AppendixSources(ctx)
 }
 
 func (nbsMW *NBSMetricWrapper) Size(ctx context.Context) (uint64, error) {
@@ -53,6 +59,11 @@ func (nbsMW *NBSMetricWrapper) Size(ctx context.Context) (uint64, error) {
 // WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
 func (nbsMW *NBSMetricWrapper) WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader, contentLength uint64, contentHash []byte) error {
 	return nbsMW.nbs.WriteTableFile(ctx, fileId, numChunks, rd, contentLength, contentHash)
+}
+
+// WriteAppendixTableFile will read a table file from the provided reader and write it to the TableFileStore
+func (nbsMW *NBSMetricWrapper) WriteAppendixTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader, contentLength uint64, contentHash []byte) error {
+	return nbsMW.nbs.WriteAppendixTableFile(ctx, fileId, numChunks, rd, contentLength, contentHash)
 }
 
 // SetRootChunk changes the root chunk hash from the previous value to the new root.

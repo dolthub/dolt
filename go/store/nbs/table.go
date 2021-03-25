@@ -318,3 +318,13 @@ type TableFileStore interface {
 	// SupportedOperations returns a description of the support TableFile operations. Some stores only support reading table files, not writing.
 	SupportedOperations() TableFileStoreOps
 }
+
+type TableFileStoreWithAppendix interface {
+	TableFileStore
+
+	// AppendixSources retrieves the current root hash, and a list of all the table files.
+	AppendixSources(ctx context.Context) (hash.Hash, []TableFile, error)
+
+	// WriteAppendixTableFile will read a table file from the provided reader and write it to the TableFileStore.
+	WriteAppendixTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader, contentLength uint64, contentHash []byte) error
+}
