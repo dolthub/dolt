@@ -174,7 +174,7 @@ func MoveDataToRoot(ctx context.Context, mover *DataMover, mvOpts DataMoverOptio
 
 			r := pipeline.GetTransFailureRow(err)
 			if r != nil {
-				bdr.AddDetails("Bad Row:" + row.Fmt(ctx, r, mover.Wr.GetSchema()))
+				bdr.AddDetails("Bad Row: " + row.Fmt(ctx, r, mover.Wr.GetSchema()))
 			}
 
 			details := pipeline.GetTransFailureDetails(err)

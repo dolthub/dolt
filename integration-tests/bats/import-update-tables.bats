@@ -185,6 +185,8 @@ DELIM
     dolt sql < 1pk5col-ints-sch.sql
     run dolt table import -u test 1pk5col-rpt-ints.csv
     [ "$status" -eq 1 ]
+    [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
+    [[ "$output" =~ "Bad Row: c4:4 | pk:1 | c3:3 | c5:5 | c1:1 | c2:2" ]] || false
 
     # Works with --continue
     run dolt table import -u --continue test 1pk5col-rpt-ints.csv
