@@ -368,6 +368,18 @@ teardown() {
 
     # Validate the a squash commit was written by making sure the hashes of the two branches don't match
     server_query 0 "select COUNT(hash) from dolt_branches where hash IN (select hash from dolt_branches WHERE name = 'test_branch')" "COUNT(hash)\n1"
+
+    # check that squash with unknown branch throws an error
+    run server_query 0 "SET @@repo1_working = squash('fake');" ""
+    [ "$status" -eq 1 ]
+
+    multi_query 0 "
+    SET @@repo1_head=hashof('master');
+    INSERT INTO one_pk values (8,8,8);"
+
+    # check that squash with uncommitted changes throws an error
+    run server_query 0 "SET @@repo1_working = squash('test_branch');" ""
+    [ "$status" -eq 1 ]
 }
 
 @test "sql-server: test reset_hard" {
