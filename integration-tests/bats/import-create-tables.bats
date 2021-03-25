@@ -530,7 +530,7 @@ DELIM
     [ "$BEFORE" -lt $(($AFTER * 11 / 10)) ]
 }
 
-@test "import-create-table: table import -c --continue logs bad rows" {
+@test "import-create-tables: table import -c --continue logs bad rows" {
     cat <<DELIM > 1pk5col-rpt-ints.csv
 pk,c1,c2,c3,c4,c5
 1,1,2,3,4,5
