@@ -13,7 +13,7 @@ file intends to test. However, some of the early tests are named after the schem
 ie. `1pk5col-ints.bats`. These files were implemented to reuse setup and teardown logic. This scheme was quickly 
 abandoned but the legacy remains.
 
-If you find a bug in `dolt`, we would love a skipped bats test PR in addition to a GutHub issue.
+If you find a bug in `dolt`, we would love a skipped bats test PR in addition to a GitHub issue.
 
 # Running for yourself
 
