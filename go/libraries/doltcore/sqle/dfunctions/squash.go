@@ -83,9 +83,7 @@ func (s SquashFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, err
 	}
 
-	hashStr := h.String()
-
-	return hashStr, nil
+	return h.String(), nil
 }
 
 func (s SquashFunc) Resolved() bool {

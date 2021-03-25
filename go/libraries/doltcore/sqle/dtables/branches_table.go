@@ -215,7 +215,6 @@ func (bWr branchWriter) Insert(ctx *sql.Context, r sql.Row) error {
 	}
 
 	branchRef := ref.NewBranchRef(branchName)
-
 	return ddb.NewBranchAtCommit(ctx, branchRef, cm)
 }
 
