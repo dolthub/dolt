@@ -26,7 +26,7 @@ teardown() {
 # "SELECT * FROM `{table}` ASOF '{commit}'"
 
 # verifying the output comparison to dolt log would be nice
-@test "doltcli: Dolt.log" {
+@test "doltpy: Dolt.log" {
     run dolt sql -r csv <<SQL
 SELECT
     dc.commit_hash as commit_hash,
@@ -48,13 +48,13 @@ SQL
     [[ "$output" =~ "commit_hash,parent_hash,committer,email,date,message" ]] || false
 }
 
-@test "doltcli: Dolt.head" {
+@test "doltpy: Dolt.head" {
     run dolt sql -r csv -q "select HASHOF('HEAD') as hash"
     [[ $output =~ "hash" ]]
     [[ "${#lines[@]}" = "2" ]] || false
 }
 
-@test "doltcli: Dolt.active_branch" {
+@test "doltpy: Dolt.active_branch" {
     run dolt sql -r csv -q "select * from dolt_branches where name = (select active_branch())"
     echo $output
     [[ $output =~ "name,hash,latest_committer,latest_committer_email,latest_commit_date,latest_commit_message" ]] || false
