@@ -238,3 +238,12 @@ func setSessionRootExplicit(ctx *sql.Context, hashString string, suffix string) 
 
 	return dsess.SetSessionVarDirectly(ctx, key, hashType, hashString)
 }
+
+func getWorkingSessionHashStr(ctx *sql.Context) string {
+	key := ctx.GetCurrentDatabase() + sqle.WorkingKeySuffix
+	dsess := sqle.DSessFromSess(ctx.Session)
+
+	_, val := dsess.Session.Get(key)
+
+	return val.(string)
+}

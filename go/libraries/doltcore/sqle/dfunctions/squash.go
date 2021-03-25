@@ -85,16 +85,16 @@ func (s SquashFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 
 	hashStr := h.String()
 
-	// Update the session and editor with the new root.
-	sess.SetRoot(dbName, hashStr, mergeRoot)
-
-	err = sess.SetEditorRoot(ctx, dbName, root)
-	if err != nil {
-		return nil, err
-	}
-
-	// Clear the cache associated with the DB.
-	sess.ClearCache(dbName)
+	//// Update the session and editor with the new root.
+	//sess.SetRoot(dbName, hashStr, mergeRoot)
+	//
+	//err = sess.SetEditorRoot(ctx, dbName, root)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//// Clear the cache associated with the DB.
+	//sess.ClearCache(dbName)
 
 	return hashStr, nil
 }
