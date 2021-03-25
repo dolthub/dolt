@@ -26,7 +26,7 @@ teardown() {
 # "SELECT * FROM `{table}` ASOF '{commit}'"
 
 # verifying the output comparison to dolt log would be nice
-@test "doltpy: Dolt.log" {
+@test "doltpy: log query returns expected header names" {
     run dolt sql -r csv <<SQL
 SELECT
     dc.commit_hash as commit_hash,
@@ -43,20 +43,17 @@ FROM
     ORDER BY date DESC
     LIMIT 1;
 SQL
-    echo $status
-    echo $output
     [[ "$output" =~ "commit_hash,parent_hash,committer,email,date,message" ]] || false
 }
 
-@test "doltpy: Dolt.head" {
+@test "doltpy: hashof returns expected header names" {
     run dolt sql -r csv -q "select HASHOF('HEAD') as hash"
     [[ $output =~ "hash" ]]
     [[ "${#lines[@]}" = "2" ]] || false
 }
 
-@test "doltpy: Dolt.active_branch" {
+@test "doltpy: active branch query returns one row and expected header names" {
     run dolt sql -r csv -q "select * from dolt_branches where name = (select active_branch())"
-    echo $output
     [[ $output =~ "name,hash,latest_committer,latest_committer_email,latest_commit_date,latest_commit_message" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
 }
