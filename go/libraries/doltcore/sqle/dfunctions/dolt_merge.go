@@ -104,12 +104,12 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return 1, errors.New("error: merging is not possible because you have not committed an active merge")
 	}
 
-	parent, ph, parentRoot, err := getParent(ctx, sess, dbName)
+	head, hh, headRoot, err := getHead(ctx, sess, dbName)
 	if err != nil {
 		return nil, err
 	}
 
-	err = checkForUncommittedChanges(root, parentRoot)
+	err = checkForUncommittedChanges(root, headRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -119,15 +119,15 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return nil, err
 	}
 
-	// No need to write a merge commit, if the parent can ffw to the commit coming from the branch.
-	canFF, err := parent.CanFastForwardTo(ctx, cm)
+	// No need to write a merge commit, if the head can ffw to the commit coming from the branch.
+	canFF, err := head.CanFastForwardTo(ctx, cm)
 	if err != nil {
 		return nil, err
 	}
 
 	if canFF {
 		if apr.Contains(cli.NoFFParam) {
-			err = executeNoFFMerge(ctx, sess, apr, dbData, parent, cm)
+			err = executeNoFFMerge(ctx, sess, apr, dbData, head, cm)
 		} else {
 			err = executeFFMerge(ctx, apr.Contains(cli.SquashParam), dbData, cm)
 		}
@@ -138,12 +138,12 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return cmh.String(), err
 	}
 
-	err = executeMerge(ctx, apr.Contains(cli.SquashParam), parent, cm, dbData)
+	err = executeMerge(ctx, apr.Contains(cli.SquashParam), head, cm, dbData)
 	if err != nil {
 		return nil, err
 	}
 
-	returnMsg := fmt.Sprintf("Updating %s..%s", cmh.String(), ph.String())
+	returnMsg := fmt.Sprintf("Updating %s..%s", cmh.String(), hh.String())
 
 	return returnMsg, nil
 }
@@ -168,8 +168,8 @@ func abortMerge(ctx *sql.Context, dbData env.DbData) error {
 	return setHeadAndWorkingSessionRoot(ctx, hh.String())
 }
 
-func executeMerge(ctx *sql.Context, squash bool, parent, cm *doltdb.Commit, dbData env.DbData) error {
-	mergeRoot, mergeStats, err := merge.MergeCommits(ctx, parent, cm)
+func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, dbData env.DbData) error {
+	mergeRoot, mergeStats, err := merge.MergeCommits(ctx, head, cm)
 
 	if err != nil {
 		switch err {
@@ -242,7 +242,7 @@ func executeNoFFMerge(ctx *sql.Context, dSess *sqle.DoltSession, apr *argparser.
 
 	msg, msgOk := apr.GetValue(cli.CommitMessageArg)
 	if !msgOk {
-		ph, err := pr.HashOf()
+		hh, err := pr.HashOf()
 		if err != nil {
 			return err
 		}
@@ -252,7 +252,7 @@ func executeNoFFMerge(ctx *sql.Context, dSess *sqle.DoltSession, apr *argparser.
 			return err
 		}
 
-		msg = fmt.Sprintf("SQL Generated commit merging %s into %s", ph.String(), cmh.String())
+		msg = fmt.Sprintf("SQL Generated commit merging %s into %s", hh.String(), cmh.String())
 	}
 
 	var name, email string

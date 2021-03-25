@@ -58,12 +58,12 @@ func (s SquashFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	parent, _, parentRoot, err := getParent(ctx, sess, dbName)
+	head, _, headRoot, err := getHead(ctx, sess, dbName)
 	if err != nil {
 		return nil, err
 	}
 
-	err = checkForUncommittedChanges(root, parentRoot)
+	err = checkForUncommittedChanges(root, headRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +73,7 @@ func (s SquashFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, err
 	}
 
-	mergeRoot, _, err := merge.MergeCommits(ctx, parent, cm)
+	mergeRoot, _, err := merge.MergeCommits(ctx, head, cm)
 	if err != nil {
 		return nil, err
 	}
@@ -84,17 +84,6 @@ func (s SquashFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	hashStr := h.String()
-
-	//// Update the session and editor with the new root.
-	//sess.SetRoot(dbName, hashStr, mergeRoot)
-	//
-	//err = sess.SetEditorRoot(ctx, dbName, root)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//// Clear the cache associated with the DB.
-	//sess.ClearCache(dbName)
 
 	return hashStr, nil
 }

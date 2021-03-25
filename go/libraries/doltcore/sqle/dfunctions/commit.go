@@ -66,7 +66,7 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, fmt.Errorf("Must provide commit message.")
 	}
 
-	parent, _, err := dSess.GetParentCommit(ctx, dbName)
+	parent, _, err := dSess.GetHeadCommit(ctx, dbName)
 
 	if err != nil {
 		return nil, err

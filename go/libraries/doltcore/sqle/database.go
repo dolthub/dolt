@@ -160,7 +160,7 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.RootValue, tblName string) (dt sql.Table, found bool, err error) {
 	lwrName := strings.ToLower(tblName)
 
-	head, _, err := DSessFromSess(ctx.Session).GetParentCommit(ctx, db.name)
+	head, _, err := DSessFromSess(ctx.Session).GetHeadCommit(ctx, db.name)
 	if err != nil {
 		return nil, false, err
 	}

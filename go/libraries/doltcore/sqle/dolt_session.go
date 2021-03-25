@@ -226,8 +226,8 @@ func (sess *DoltSession) GetRoot(dbName string) (*doltdb.RootValue, bool) {
 	return dbRoot.root, true
 }
 
-// GetParentCommit returns the parent commit of the current session.
-func (sess *DoltSession) GetParentCommit(ctx context.Context, dbName string) (*doltdb.Commit, hash.Hash, error) {
+// GetHeadCommit returns the parent commit of the current session.
+func (sess *DoltSession) GetHeadCommit(ctx context.Context, dbName string) (*doltdb.Commit, hash.Hash, error) {
 	dbd, dbFound := sess.dbDatas[dbName]
 
 	if !dbFound {
