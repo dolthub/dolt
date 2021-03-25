@@ -47,6 +47,9 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Rows Processed: 2, Additions: 2, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
+
+    # Validate that a successful import with no bad rows does not print the following
+    ! [[ "$output" =~ "The following rows were skipped:" ]] || false
 }
 
 @test "import-update-tables: update table using schema with csv" {
