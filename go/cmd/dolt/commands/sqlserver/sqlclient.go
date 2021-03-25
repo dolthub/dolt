@@ -191,7 +191,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			}
 			if wrapper.HasMoreRows() {
 				sqlCtx := sql.NewContext(ctx)
-				err = pprint.PrettyPrintResults(sqlCtx, 0, wrapper.Schema(), wrapper)
+				err = pprint.PrettyPrintResults(sqlCtx, 0, wrapper.Schema(), wrapper, true)
 				if err != nil {
 					shell.Println(color.RedString(err.Error()))
 					return

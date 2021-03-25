@@ -210,4 +210,11 @@ DELIM
     [[ "$output" =~ "1,1,2,3,4,7" ]] || false
     [[ "$output" =~ "Lines skipped: 1" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
+
+    # Output to a file descriptor
+    dolt sql -q "DELETE FROM test WHERE pk = 1"
+    dolt table import -u --continue test 1pk5col-rpt-ints.csv 2> skipped.csv
+    run cat skipped.csv
+    [[ "$output" =~ "pk,c1,c2,c3,c4,c5" ]] || false
+    [[ "$output" =~ "1,1,2,3,4,7" ]] || false
 }
