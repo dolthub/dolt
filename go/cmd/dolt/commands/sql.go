@@ -372,7 +372,7 @@ func execQuery(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots
 	}
 
 	if rowIter != nil {
-		err = PrettyPrintResults(sqlCtx, se.resultFormat, sqlSch, rowIter, StdOutput)
+		err = PrettyPrintResults(sqlCtx, se.resultFormat, sqlSch, rowIter)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -677,7 +677,7 @@ func runShell(ctx *sql.Context, se *sqlEngine, mrEnv env.MultiRepoEnv, initialRo
 				verr := formatQueryError("", err)
 				shell.Println(verr.Verbose())
 			} else if rowIter != nil {
-				err = PrettyPrintResults(ctx, se.resultFormat, sqlSch, rowIter, StdOutput)
+				err = PrettyPrintResults(ctx, se.resultFormat, sqlSch, rowIter)
 				if err != nil {
 					shell.Println(color.RedString(err.Error()))
 				}
@@ -1051,7 +1051,7 @@ func processNonInsertBatchQuery(ctx *sql.Context, se *sqlEngine, query string, s
 				cli.Print("\n")
 				displayStrLen = 0
 			}
-			err = PrettyPrintResults(ctx, se.resultFormat, sqlSch, rowIter, StdOutput)
+			err = PrettyPrintResults(ctx, se.resultFormat, sqlSch, rowIter)
 			if err != nil {
 				return err
 			}
