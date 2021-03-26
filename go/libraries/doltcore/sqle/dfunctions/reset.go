@@ -59,7 +59,7 @@ func (rf ResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, fmt.Errorf("invalid arugument to %s(): %s", resetFuncName, arg)
 	}
 
-	parent, _, err := dSess.GetParentCommit(ctx, dbName)
+	parent, _, err := dSess.GetHeadCommit(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
