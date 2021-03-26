@@ -380,10 +380,10 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	skipped, verr := mvdata.MoveData(ctx, dEnv, mover, mvOpts)
 
 	if skipped > 0 {
-		cli.Println(color.YellowString("Lines skipped: %d", skipped))
+		cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))
 	}
 	if verr == nil {
-		cli.Println(color.CyanString("Import completed successfully."))
+		cli.PrintErrln(color.CyanString("Import completed successfully."))
 	}
 
 	return commands.HandleVErrAndExitCode(verr, usage)

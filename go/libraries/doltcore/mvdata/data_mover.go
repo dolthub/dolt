@@ -128,7 +128,7 @@ func (imp *DataMover) Move(ctx context.Context, sch schema.Schema) (badRowCount 
 		}
 
 		if !printStarted {
-			cli.Println("The following rows were skipped:")
+			cli.PrintErrln("The following rows were skipped:")
 			printStarted = true
 		}
 
