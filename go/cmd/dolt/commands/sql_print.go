@@ -172,7 +172,7 @@ func dropOnFloor(ctx context.Context, items []pipeline.ItemWithProps) ([]pipelin
 
 // CSV Pipeline creation and stage functions
 
-func createCSVPipeline(ctx context.Context, sch sql.Schema, iter sql.RowIter) *pipeline.Pipeline {
+func createCSVPipeline(_ context.Context, sch sql.Schema, iter sql.RowIter) *pipeline.Pipeline {
 	p := pipeline.NewPipeline(
 		pipeline.NewStage("read", noParallelizationInitFunc, getReadStageFunc(iter, readBatchSize), 0, 0, 0),
 		pipeline.NewStage("process", nil, csvProcessStageFunc, 2, 1000, readBatchSize),
