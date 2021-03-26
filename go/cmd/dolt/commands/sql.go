@@ -320,7 +320,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func execShell(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, format ResultFormat) errhand.VerboseError {
+func execShell(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, format resultFormat) errhand.VerboseError {
 	dbs := CollectDBs(mrEnv, newDatabase)
 	se, err := newSqlEngine(sqlCtx, readOnly, mrEnv, roots, format, dbs...)
 	if err != nil {
@@ -334,7 +334,7 @@ func execShell(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots
 	return nil
 }
 
-func execBatch(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, batchInput io.Reader, format ResultFormat) errhand.VerboseError {
+func execBatch(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, batchInput io.Reader, format resultFormat) errhand.VerboseError {
 	dbs := CollectDBs(mrEnv, newBatchedDatabase)
 	se, err := newSqlEngine(sqlCtx, readOnly, mrEnv, roots, format, dbs...)
 	if err != nil {
@@ -359,7 +359,7 @@ func newBatchedDatabase(name string, dEnv *env.DoltEnv) dsqle.Database {
 	return dsqle.NewBatchedDatabase(name, dEnv.DbData())
 }
 
-func execQuery(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, query string, format ResultFormat) errhand.VerboseError {
+func execQuery(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, query string, format resultFormat) errhand.VerboseError {
 	dbs := CollectDBs(mrEnv, newDatabase)
 	se, err := newSqlEngine(sqlCtx, readOnly, mrEnv, roots, format, dbs...)
 	if err != nil {
@@ -453,7 +453,7 @@ func formatQueryError(message string, err error) errhand.VerboseError {
 	}
 }
 
-func GetResultFormat(format string) (ResultFormat, errhand.VerboseError) {
+func GetResultFormat(format string) (resultFormat, errhand.VerboseError) {
 	switch strings.ToLower(format) {
 	case "tabular":
 		return FormatTabular, nil
@@ -1245,13 +1245,13 @@ type sqlEngine struct {
 	dbs          map[string]dsqle.Database
 	mrEnv        env.MultiRepoEnv
 	engine       *sqle.Engine
-	resultFormat ResultFormat
+	resultFormat resultFormat
 }
 
 var ErrDBNotFoundKind = errors.NewKind("database '%s' not found")
 
 // sqlEngine packages up the context necessary to run sql queries against sqle.
-func newSqlEngine(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, format ResultFormat, dbs ...dsqle.Database) (*sqlEngine, error) {
+func newSqlEngine(sqlCtx *sql.Context, readOnly bool, mrEnv env.MultiRepoEnv, roots map[string]*doltdb.RootValue, format resultFormat, dbs ...dsqle.Database) (*sqlEngine, error) {
 	c := sql.NewCatalog()
 	var au auth.Auth
 

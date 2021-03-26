@@ -32,16 +32,21 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/pipeline"
 )
 
-type ResultFormat byte
+type resultFormat byte
 
 const (
-	FormatTabular ResultFormat = iota
+	FormatTabular resultFormat = iota
 	FormatCsv
 	FormatJson
 	FormatNull // used for profiling
 )
 
-func PrettyPrintResults(ctx *sql.Context, resultFormat ResultFormat, sqlSch sql.Schema, rowIter sql.RowIter) (rerr error) {
+const (
+	readBatchSize  = 10
+	writeBatchSize = 1
+)
+
+func PrettyPrintResults(ctx *sql.Context, resultFormat resultFormat, sqlSch sql.Schema, rowIter sql.RowIter) (rerr error) {
 	defer func() {
 		closeErr := rowIter.Close(ctx)
 		if rerr == nil && closeErr != nil {
@@ -99,11 +104,6 @@ func isOkResult(sch sql.Schema) bool {
 	return sch.Equals(sql.OkResultSchema)
 }
 
-const (
-	readBatchSize  = 10
-	writeBatchSize = 1
-)
-
 // noParallelizationInitFunc only exists to validate the routine wasn't parallelized
 func noParallelizationInitFunc(ctx context.Context, index int) error {
 	if index != 0 {
@@ -151,21 +151,7 @@ func writeToCliOutStageFunc(ctx context.Context, items []pipeline.ItemWithProps)
 
 	for _, item := range items {
 		str := *item.GetItem().(*string)
-		cli.Printf(str)
-	}
-
-	return nil, nil
-}
-
-// writeToCliErrStageFunc is a general purpose stage func to write the output of a pipeline to stderr
-func writeToCliErrStageFunc(_ context.Context, items []pipeline.ItemWithProps) ([]pipeline.ItemWithProps, error) {
-	if items == nil {
-		return nil, nil
-	}
-
-	for _, item := range items {
-		str := *item.GetItem().(*string)
-		cli.PrintErr(str)
+		cli.Print(str)
 	}
 
 	return nil, nil
@@ -187,13 +173,11 @@ func dropOnFloor(ctx context.Context, items []pipeline.ItemWithProps) ([]pipelin
 // CSV Pipeline creation and stage functions
 
 func createCSVPipeline(ctx context.Context, sch sql.Schema, iter sql.RowIter) *pipeline.Pipeline {
-	var stages = []*pipeline.Stage{
+	p := pipeline.NewPipeline(
 		pipeline.NewStage("read", noParallelizationInitFunc, getReadStageFunc(iter, readBatchSize), 0, 0, 0),
 		pipeline.NewStage("process", nil, csvProcessStageFunc, 2, 1000, readBatchSize),
 		pipeline.NewStage("write", noParallelizationInitFunc, writeToCliOutStageFunc, 0, 100, writeBatchSize),
-	}
-
-	p := pipeline.NewPipeline(stages...)
+	)
 
 	writeIn, _ := p.GetInputChannel("write")
 	sb := strings.Builder{}
@@ -248,13 +232,11 @@ func csvProcessStageFunc(ctx context.Context, items []pipeline.ItemWithProps) ([
 
 // JSON pipeline creation and stage functions
 func createJSONPipeline(_ context.Context, sch sql.Schema, iter sql.RowIter) *pipeline.Pipeline {
-	var stages = []*pipeline.Stage{
+	p := pipeline.NewPipeline(
 		pipeline.NewStage("read", noParallelizationInitFunc, getReadStageFunc(iter, readBatchSize), 0, 0, 0),
 		pipeline.NewStage("process", nil, getJSONProcessFunc(sch), 2, 1000, readBatchSize),
 		pipeline.NewStage("write", noParallelizationInitFunc, writeJSONToCliOutStageFunc, 0, 100, writeBatchSize),
-	}
-
-	p := pipeline.NewPipeline(stages...)
+	)
 
 	return p
 }
@@ -318,51 +300,20 @@ func writeJSONToCliOutStageFunc(ctx context.Context, items []pipeline.ItemWithPr
 
 	if items == nil {
 		if hasRun {
-			cli.Printf("]}")
+			cli.Print("]}")
 		} else {
-			cli.Printf("{\"rows\":[]}")
+			cli.Print("{\"rows\":[]}")
 		}
 	} else {
 		for _, item := range items {
 			if hasRun {
-				cli.Printf(",")
+				cli.Print(",")
 			} else {
-				cli.Printf("{\"rows\": [")
+				cli.Print("{\"rows\": [")
 			}
 
 			str := *item.GetItem().(*string)
-			cli.Printf(str)
-
-			hasRun = true
-		}
-	}
-
-	return nil, nil
-}
-
-func writeJSONToCliErrStageFunc(ctx context.Context, items []pipeline.ItemWithProps) ([]pipeline.ItemWithProps, error) {
-	const hasRunKey = 0
-
-	ls := pipeline.GetLocalStorage(ctx)
-	_, hasRun := ls.Get(hasRunKey)
-	ls.Put(hasRunKey, true)
-
-	if items == nil {
-		if hasRun {
-			cli.PrintErr("]}")
-		} else {
-			cli.PrintErr("{\"rows\":[]}")
-		}
-	} else {
-		for _, item := range items {
-			if hasRun {
-				cli.PrintErr(",")
-			} else {
-				cli.PrintErr("{\"rows\": [")
-			}
-
-			str := *item.GetItem().(*string)
-			cli.PrintErr(str)
+			cli.Print(str)
 
 			hasRun = true
 		}
@@ -376,15 +327,13 @@ func createTabularPipeline(_ context.Context, sch sql.Schema, iter sql.RowIter) 
 	const samplesForAutoSizing = 10000
 	tps := &tabularPipelineStages{}
 
-	var stages = []*pipeline.Stage{
+	p := pipeline.NewPipeline(
 		pipeline.NewStage("read", nil, getReadStageFunc(iter, readBatchSize), 0, 0, 0),
 		pipeline.NewStage("stringify", nil, rowsToStringSlices, 0, 1000, 1000),
 		pipeline.NewStage("fix_width", noParallelizationInitFunc, tps.getFixWidthStageFunc(samplesForAutoSizing), 0, 1000, readBatchSize),
 		pipeline.NewStage("cell_borders", noParallelizationInitFunc, tps.getBorderFunc(), 0, 1000, readBatchSize),
 		pipeline.NewStage("write", noParallelizationInitFunc, writeToCliOutStageFunc, 0, 100, writeBatchSize),
-	}
-
-	p := pipeline.NewPipeline(stages...)
+	)
 
 	writeIn, _ := p.GetInputChannel("fix_width")
 	headers := make([]string, len(sch))
