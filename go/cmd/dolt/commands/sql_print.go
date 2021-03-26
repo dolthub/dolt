@@ -1,4 +1,4 @@
-// Copyright 2021 Dolthub, Inc.
+// Copyright 2020 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package pprint
+package commands
 
 import (
 	"bufio"
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"io"
 	"strconv"
 	"strings"
@@ -27,8 +26,8 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/sqltypes"
-	"github.com/fatih/color"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/dolthub/dolt/go/libraries/utils/pipeline"
@@ -96,7 +95,7 @@ func printOKResult(iter sql.RowIter) (returnErr error) {
 		cli.Printf("Query OK, %d %s affected\n", okResult.RowsAffected, rowNoun)
 
 		if okResult.Info != nil {
-			fmt.Fprintf(color.Output, "%s\n", okResult.Info)
+			cli.Printf("%s\n", okResult.Info)
 		}
 	}
 
@@ -203,7 +202,7 @@ func writeToCliOutStageFunc(ctx context.Context, items []pipeline.ItemWithProps)
 
 	for _, item := range items {
 		str := *item.GetItem().(*string)
-		fmt.Fprint(color.Output, str)
+		cli.Printf(str)
 	}
 
 	return nil, nil
@@ -217,7 +216,7 @@ func writeToCliErrStageFunc(_ context.Context, items []pipeline.ItemWithProps) (
 
 	for _, item := range items {
 		str := *item.GetItem().(*string)
-		fmt.Fprint(color.Error, str)
+		cli.PrintErr(str)
 	}
 
 	return nil, nil
@@ -380,20 +379,20 @@ func writeJSONToCliOutStageFunc(ctx context.Context, items []pipeline.ItemWithPr
 
 	if items == nil {
 		if hasRun {
-			fmt.Fprint(color.Output, "]}")
+			cli.Printf("]}")
 		} else {
-			fmt.Fprint(color.Output, "{\"rows\":[]}")
+			cli.Printf("{\"rows\":[]}")
 		}
 	} else {
 		for _, item := range items {
 			if hasRun {
-				fmt.Fprint(color.Output, ",")
+				cli.Printf(",")
 			} else {
-				fmt.Fprint(color.Output, "{\"rows\": [")
+				cli.Printf("{\"rows\": [")
 			}
 
 			str := *item.GetItem().(*string)
-			fmt.Fprint(color.Output, str)
+			cli.Printf(str)
 
 			hasRun = true
 		}
@@ -411,20 +410,20 @@ func writeJSONToCliErrStageFunc(ctx context.Context, items []pipeline.ItemWithPr
 
 	if items == nil {
 		if hasRun {
-			fmt.Fprint(color.Error, "]}")
+			cli.PrintErr("]}")
 		} else {
-			fmt.Fprint(color.Error, "{\"rows\":[]}")
+			cli.PrintErr("{\"rows\":[]}")
 		}
 	} else {
 		for _, item := range items {
 			if hasRun {
-				fmt.Fprint(color.Error, ",")
+				cli.PrintErr(",")
 			} else {
-				fmt.Fprint(color.Error, "{\"rows\": [")
+				cli.PrintErr("{\"rows\": [")
 			}
 
 			str := *item.GetItem().(*string)
-			fmt.Fprint(color.Error, str)
+			cli.PrintErr(str)
 
 			hasRun = true
 		}
