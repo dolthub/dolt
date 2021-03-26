@@ -54,7 +54,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
-	"github.com/dolthub/dolt/go/libraries/utils/pipeline"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
 
@@ -1242,15 +1241,6 @@ func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s 
 	}
 }
 
-type resultFormat byte
-
-const (
-	FormatTabular resultFormat = iota
-	FormatCsv
-	FormatJson
-	FormatNull // used for profiling
-)
-
 type sqlEngine struct {
 	dbs          map[string]dsqle.Database
 	mrEnv        env.MultiRepoEnv
@@ -1364,63 +1354,6 @@ func (se *sqlEngine) getRoots(sqlCtx *sql.Context) (map[string]*doltdb.RootValue
 // Execute a SQL statement and return values for printing.
 func (se *sqlEngine) query(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, error) {
 	return se.engine.Query(ctx, query)
-}
-
-func PrettyPrintResults(ctx *sql.Context, resultFormat resultFormat, sqlSch sql.Schema, rowIter sql.RowIter) (rerr error) {
-	defer func() {
-		closeErr := rowIter.Close(ctx)
-		if rerr == nil && closeErr != nil {
-			rerr = closeErr
-		}
-	}()
-
-	if isOkResult(sqlSch) {
-		return printOKResult(rowIter)
-	}
-
-	// For some output formats, we want to convert everything to strings to be processed by the pipeline. For others,
-	// we want to leave types alone and let the writer figure out how to format it for output.
-	var p *pipeline.Pipeline
-	switch resultFormat {
-	case FormatCsv:
-		p = createCSVPipeline(ctx, sqlSch, rowIter)
-	case FormatJson:
-		p = createJSONPipeline(ctx, sqlSch, rowIter)
-	case FormatTabular:
-		p = createTabularPipeline(ctx, sqlSch, rowIter)
-	case FormatNull:
-		p = createNullPipeline(ctx, sqlSch, rowIter)
-	}
-
-	p.Start(ctx)
-	rerr = p.Wait()
-
-	return rerr
-}
-
-func printOKResult(iter sql.RowIter) (returnErr error) {
-	row, err := iter.Next()
-	if err != nil {
-		return err
-	}
-
-	if okResult, ok := row[0].(sql.OkResult); ok {
-		rowNoun := "row"
-		if okResult.RowsAffected != 1 {
-			rowNoun = "rows"
-		}
-		cli.Printf("Query OK, %d %s affected\n", okResult.RowsAffected, rowNoun)
-
-		if okResult.Info != nil {
-			cli.Printf("%s\n", okResult.Info)
-		}
-	}
-
-	return nil
-}
-
-func isOkResult(sch sql.Schema) bool {
-	return sch.Equals(sql.OkResultSchema)
 }
 
 func (se *sqlEngine) dbddl(ctx *sql.Context, dbddl *sqlparser.DBDDL, query string) (sql.Schema, sql.RowIter, error) {
