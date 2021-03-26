@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"io"
 	"strconv"
 	"strings"
@@ -92,7 +93,7 @@ func printOKResult(iter sql.RowIter) (returnErr error) {
 			rowNoun = "rows"
 		}
 
-		fmt.Fprintf(color.Output, "Query OK, %d %s affected\n", okResult.RowsAffected, rowNoun)
+		cli.Printf("Query OK, %d %s affected\n", okResult.RowsAffected, rowNoun)
 
 		if okResult.Info != nil {
 			fmt.Fprintf(color.Output, "%s\n", okResult.Info)

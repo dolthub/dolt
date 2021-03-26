@@ -15,17 +15,16 @@
 package mvdata
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"sync"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
+	"github.com/fatih/color"
 	"sync/atomic"
 
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/fatih/color"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-	"github.com/dolthub/dolt/go/cmd/dolt/pprint"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -102,7 +101,7 @@ type GCTableWriteCloser interface {
 
 // Move is the method that executes the pipeline which will move data from the pipeline's source DataLocation to it's
 // dest DataLocation.  It returns the number of bad rows encountered during import, and an error.
-func (imp *DataMover) Move(ctx context.Context, sch schema.Schema) (badRowCount int64, badRows []sql.Row, err error) {
+func (imp *DataMover) Move(ctx context.Context, sch schema.Schema) (badRowCount int64, err error) {
 	defer imp.Rd.Close(ctx)
 	defer func() {
 		closeErr := imp.Wr.Close(ctx)
@@ -119,22 +118,25 @@ func (imp *DataMover) Move(ctx context.Context, sch schema.Schema) (badRowCount 
 
 	var badCount int64
 	var rowErr error
-	var mu = &sync.Mutex{}
+	var printStarted bool
 	badRowCB := func(trf *pipeline.TransformRowFailure) (quit bool) {
 		if !imp.ContOnErr {
 			rowErr = trf
 			return true
 		}
+
+		if !printStarted {
+			fmt.Fprintln(color.Output, "\nThe following rows were skipped:")
+			printStarted = true
+		}
+
 		r := pipeline.GetTransFailureRow(trf)
 
 		if r != nil {
-			sqlRow, err := sqlutil.DoltRowToSqlRow(r, sch)
+			err = writeBadRowToCli(r, sch)
 			if err != nil {
 				return true
 			}
-			mu.Lock()
-			badRows = append(badRows, sqlRow)
-			mu.Unlock()
 		}
 
 		atomic.AddInt64(&badCount, 1)
@@ -150,23 +152,60 @@ func (imp *DataMover) Move(ctx context.Context, sch schema.Schema) (badRowCount 
 
 	err = p.Wait()
 	if err != nil {
-		return 0, nil, err
+		return 0, err
 	}
 
 	if rowErr != nil {
-		return 0, nil, rowErr
+		return 0, rowErr
 	}
 
-	return badCount, badRows, nil
+	return badCount, nil
+}
+
+// writeBadRowToCli prints a bad row in a csv form to STDERR.
+func writeBadRowToCli(r row.Row, sch schema.Schema) error {
+	sqlRow, err := sqlutil.DoltRowToSqlRow(r, sch)
+	if err != nil {
+		return err
+	}
+
+	// TODO: Inefficient to do reallocate?
+	var b bytes.Buffer
+	wr := bufio.NewWriter(&b)
+
+	colValStrs := make([]*string, len(sqlRow))
+
+	for colNum, col := range sqlRow {
+		if col != nil {
+			str := sqlutil.SqlColToStr(col)
+			colValStrs[colNum] = &str
+		} else {
+			colValStrs[colNum] = nil
+		}
+	}
+
+	err = csv.WriteCSVRow(wr, colValStrs, ",", false)
+	if err != nil {
+		return err
+	}
+
+	err = wr.Flush()
+	if err != nil {
+		return err
+	}
+
+	str := b.String()
+	fmt.Fprintf(color.Error, str)
+
+	return nil
 }
 
 func MoveDataToRoot(ctx context.Context, mover *DataMover, mvOpts DataMoverOptions, root *doltdb.RootValue, updateRoot func(c context.Context, r *doltdb.RootValue) error) (*doltdb.RootValue, int64, errhand.VerboseError) {
 	var badCount int64
-	var badRows []sql.Row
 	var err error
 	newRoot := &doltdb.RootValue{}
 
-	badCount, badRows, err = mover.Move(ctx, mover.Wr.GetSchema())
+	badCount, err = mover.Move(ctx, mover.Wr.GetSchema())
 
 	if err != nil {
 		if pipeline.IsTransformFailure(err) {
@@ -185,22 +224,6 @@ func MoveDataToRoot(ctx context.Context, mover *DataMover, mvOpts DataMoverOptio
 			return nil, badCount, bdr.Build()
 		}
 		return nil, badCount, errhand.BuildDError("An error occurred moving data:\n").AddCause(err).Build()
-	}
-
-	if len(badRows) > 0 {
-		itr := sql.RowsToRowIter(badRows...)
-		ss, err := sqlutil.FromDoltSchema("badRows", mover.Wr.GetSchema())
-
-		if err != nil {
-			return nil, badCount, errhand.BuildDError(err.Error()).Build()
-		}
-
-		fmt.Fprintln(color.Output, "\nThe following rows were skipped:")
-		err = pprint.PrettyPrintResults(sql.NewContext(ctx), pprint.FormatCsv, ss, itr, pprint.StdError) // write to StdError
-
-		if err != nil {
-			return nil, 0, errhand.BuildDError("Error pretty printing: ").AddDetails(err.Error()).Build()
-		}
 	}
 
 	if mvOpts.WritesToTable() {
