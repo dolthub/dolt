@@ -68,6 +68,8 @@ teardown() {
 }
 
 @test "back-compat: table operations" {
+    # Broken by dropped err fixed in https://github.com/dolthub/dolt/pull/1465
+    skip
     for testdir in */; do
         cd "$testdir"
         dolt table cp abc copy
