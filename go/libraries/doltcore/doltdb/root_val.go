@@ -285,14 +285,16 @@ func (root *RootValue) getTableSt(ctx context.Context, tName string) (*types.Str
 	}
 
 	tVal, found, err := tableMap.MaybeGet(ctx, types.String(tName))
-
-	if tVal == nil || !found || err != nil {
+	if err != nil {
 		return nil, false, err
+	}
+
+	if tVal == nil || !found {
+		return nil, false, nil
 	}
 
 	tValRef := tVal.(types.Ref)
 	val, err := tValRef.TargetValue(ctx, root.vrw)
-
 	if err != nil {
 		return nil, false, err
 	}
@@ -322,8 +324,12 @@ func (root *RootValue) GetTableHash(ctx context.Context, tName string) (hash.Has
 	}
 
 	tVal, found, err := tableMap.MaybeGet(ctx, types.String(tName))
-	if tVal == nil || !found || err != nil {
+	if err != nil {
 		return hash.Hash{}, false, err
+	}
+
+	if tVal == nil || !found {
+		return hash.Hash{}, false, nil
 	}
 
 	tValRef := tVal.(types.Ref)
@@ -1059,14 +1065,12 @@ func GetRootValueSuperSchema(ctx context.Context, root *RootValue) (*schema.Supe
 	}
 
 	rootSuperSchema, err := schema.SuperSchemaUnion(sss...)
-
 	if err != nil {
 		return nil, err
 	}
 
 	// super schemas are only persisted on commit, so add in working schemas
 	tblMap, err := root.getTableMap()
-
 	if err != nil {
 		return nil, err
 	}
@@ -1086,8 +1090,11 @@ func GetRootValueSuperSchema(ctx context.Context, root *RootValue) (*schema.Supe
 		}
 		return false, nil
 	})
+	if err != nil {
+		return nil, err
+	}
 
-	return rootSuperSchema, err
+	return rootSuperSchema, nil
 }
 
 // UnionTableNames returns an array of all table names in all roots passed as params.
