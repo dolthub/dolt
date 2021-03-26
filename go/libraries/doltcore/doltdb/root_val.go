@@ -274,7 +274,7 @@ func (root *RootValue) getOrCreateSuperSchemaMap(ctx context.Context) (types.Map
 	} else {
 		ssm, err = types.NewMap(ctx, root.vrw)
 	}
-	return ssm, nil
+	return ssm, err
 }
 
 func (root *RootValue) getTableSt(ctx context.Context, tName string) (*types.Struct, bool, error) {
@@ -285,6 +285,9 @@ func (root *RootValue) getTableSt(ctx context.Context, tName string) (*types.Str
 	}
 
 	tVal, found, err := tableMap.MaybeGet(ctx, types.String(tName))
+	if err != nil {
+		return nil, false, err
+	}
 
 	if tVal == nil || !found {
 		return nil, false, nil
@@ -292,7 +295,6 @@ func (root *RootValue) getTableSt(ctx context.Context, tName string) (*types.Str
 
 	tValRef := tVal.(types.Ref)
 	val, err := tValRef.TargetValue(ctx, root.vrw)
-
 	if err != nil {
 		return nil, false, err
 	}
@@ -317,12 +319,14 @@ func (root *RootValue) GetAllSchemas(ctx context.Context) (map[string]schema.Sch
 
 func (root *RootValue) GetTableHash(ctx context.Context, tName string) (hash.Hash, bool, error) {
 	tableMap, err := root.getTableMap()
-
 	if err != nil {
 		return hash.Hash{}, false, err
 	}
 
 	tVal, found, err := tableMap.MaybeGet(ctx, types.String(tName))
+	if err != nil {
+		return hash.Hash{}, false, err
+	}
 
 	if tVal == nil || !found {
 		return hash.Hash{}, false, nil
@@ -1061,14 +1065,12 @@ func GetRootValueSuperSchema(ctx context.Context, root *RootValue) (*schema.Supe
 	}
 
 	rootSuperSchema, err := schema.SuperSchemaUnion(sss...)
-
 	if err != nil {
 		return nil, err
 	}
 
 	// super schemas are only persisted on commit, so add in working schemas
 	tblMap, err := root.getTableMap()
-
 	if err != nil {
 		return nil, err
 	}
@@ -1088,6 +1090,9 @@ func GetRootValueSuperSchema(ctx context.Context, root *RootValue) (*schema.Supe
 		}
 		return false, nil
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	return rootSuperSchema, nil
 }
