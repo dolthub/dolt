@@ -20,9 +20,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
-	"github.com/fatih/color"
 	"sync/atomic"
+
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -119,6 +120,7 @@ func (imp *DataMover) Move(ctx context.Context, sch schema.Schema) (badRowCount 
 	var badCount int64
 	var rowErr error
 	var printStarted bool
+	var b bytes.Buffer
 	badRowCB := func(trf *pipeline.TransformRowFailure) (quit bool) {
 		if !imp.ContOnErr {
 			rowErr = trf
@@ -126,14 +128,14 @@ func (imp *DataMover) Move(ctx context.Context, sch schema.Schema) (badRowCount 
 		}
 
 		if !printStarted {
-			fmt.Fprintln(color.Output, "\nThe following rows were skipped:")
+			cli.Printf("The following rows were skipped:")
 			printStarted = true
 		}
 
 		r := pipeline.GetTransFailureRow(trf)
 
 		if r != nil {
-			err = writeBadRowToCli(r, sch)
+			err = writeBadRowToCli(r, sch, &b)
 			if err != nil {
 				return true
 			}
@@ -163,15 +165,13 @@ func (imp *DataMover) Move(ctx context.Context, sch schema.Schema) (badRowCount 
 }
 
 // writeBadRowToCli prints a bad row in a csv form to STDERR.
-func writeBadRowToCli(r row.Row, sch schema.Schema) error {
+func writeBadRowToCli(r row.Row, sch schema.Schema, b *bytes.Buffer) error {
 	sqlRow, err := sqlutil.DoltRowToSqlRow(r, sch)
 	if err != nil {
 		return err
 	}
 
-	// TODO: Inefficient to do reallocate?
-	var b bytes.Buffer
-	wr := bufio.NewWriter(&b)
+	wr := bufio.NewWriter(b)
 
 	colValStrs := make([]*string, len(sqlRow))
 
@@ -195,7 +195,7 @@ func writeBadRowToCli(r row.Row, sch schema.Schema) error {
 	}
 
 	str := b.String()
-	fmt.Fprintf(color.Error, str)
+	cli.PrintErr(str)
 
 	return nil
 }

@@ -191,10 +191,9 @@ DELIM
     # Works with --continue
     run dolt table import -u --continue test 1pk5col-rpt-ints.csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "The following rows were skipped:" ]] || false
-    [[ "$output" =~ "pk,c1,c2,c3,c4,c5" ]] || false
     [[ "$output" =~ "1,1,2,3,4,5" ]] || false
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Lines skipped: 1" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
 }
@@ -204,22 +203,23 @@ DELIM
 pk,c1,c2,c3,c4,c5
 1,1,2,3,4,5
 1,1,2,3,4,7
+1,1,2,3,4,8
 DELIM
 
     dolt sql < 1pk5col-ints-sch.sql
     run dolt table import -u --continue test 1pk5col-rpt-ints.csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "The following rows were skipped:" ]] || false
-    [[ "$output" =~ "pk,c1,c2,c3,c4,c5" ]] || false
     [[ "$output" =~ "1,1,2,3,4,7" ]] || false
-    [[ "$output" =~ "Lines skipped: 1" ]] || false
+    [[ "$output" =~ "1,1,2,3,4,8" ]] || false
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Lines skipped: 2" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
 
     # Output to a file from the error stderr
     dolt sql -q "DELETE FROM test WHERE pk = 1"
     dolt table import -u --continue test 1pk5col-rpt-ints.csv 2> skipped.csv
     run cat skipped.csv
-    [[ "$output" =~ "pk,c1,c2,c3,c4,c5" ]] || false
     [[ "$output" =~ "1,1,2,3,4,7" ]] || false
+    [[ "$output" =~ "1,1,2,3,4,8" ]] || false
 }
