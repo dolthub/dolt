@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'SemVer format release tag, i.e. 0.24.3'
+        description: 'SemVer format release tag, i.e. 0.24.4'
         required: true
 
 jobs:
