@@ -114,7 +114,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	}
 
 	// Check if the user executed `dolt checkout .`
-	if apr.NArg() == 1  && name == "." {
+	if apr.NArg() == 1 && name == "." {
 		working, staged, head, err := getAllRoots(ctx, dEnv)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), usagePrt)
