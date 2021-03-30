@@ -1,4 +1,4 @@
-// Copyright 2020 Dolthub, Inc.
+// Copyright 2021 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,24 +19,22 @@ import (
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/vitess/go/sqltypes"
-	"github.com/google/uuid"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-type uuidType struct {
-	sqlCharType sql.StringType
+type jsonType struct {
+	jsonType sql.JsonType
 }
 
-var _ TypeInfo = (*uuidType)(nil)
-
-var UuidType = &uuidType{sql.MustCreateString(sqltypes.Char, 36, sql.Collation_ascii_bin)}
+var _ TypeInfo = (*jsonType)(nil)
+var JSONType = &jsonType{sql.JSON}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
-func (ti *uuidType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
-	if val, ok := v.(types.UUID); ok {
-		return val.String(), nil
+func (ti *jsonType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
+	if val, ok := v.(types.JSON); ok {
+		return json.NomsJSON(val), nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -45,13 +43,17 @@ func (ti *uuidType) ConvertNomsValueToValue(v types.Value) (interface{}, error) 
 }
 
 // ReadFrom reads a go value from a noms types.CodecReader directly
-func (ti *uuidType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
-	k := reader.ReadKind()
+func (ti *jsonType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
+	k := reader.PeekKind()
 	switch k {
-	case types.UUIDKind:
-		val := reader.ReadUUID()
-		return val.String(), nil
+	case types.JSONKind:
+		js, err := reader.ReadJSON()
+		if err != nil {
+			return nil, err
+		}
+		return json.NomsJSON(js), nil
 	case types.NullKind:
+		_ = reader.ReadKind()
 		return nil, nil
 	}
 
@@ -59,99 +61,105 @@ func (ti *uuidType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (
 }
 
 // ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *uuidType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
-	switch val := v.(type) {
-	case nil:
+func (ti *jsonType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
+	if v == nil {
 		return types.NullValue, nil
-	case string:
-		valUuid, err := uuid.Parse(val)
-		if err != nil {
-			return nil, err
-		}
-		return types.UUID(valUuid), err
-	case uuid.UUID:
-		return types.UUID(val), nil
-	default:
+	}
+
+	jsDoc, err := ti.jsonType.Convert(v)
+	if err != nil {
+		return nil, err
+	}
+
+	jsVal, ok := jsDoc.(sql.JSONValue)
+	if !ok {
 		return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
 	}
+
+	noms, err := json.NomsJSONFromJSONValue(ctx, vrw, jsVal)
+	if err != nil {
+		return nil, err
+	}
+
+	return types.JSON(noms), err
 }
 
 // Equals implements TypeInfo interface.
-func (ti *uuidType) Equals(other TypeInfo) bool {
-	if other == nil {
-		return false
-	}
-	_, ok := other.(*uuidType)
-	return ok
+func (ti *jsonType) Equals(other TypeInfo) bool {
+	return ti.GetTypeIdentifier() == other.GetTypeIdentifier()
 }
 
 // FormatValue implements TypeInfo interface.
-func (ti *uuidType) FormatValue(v types.Value) (*string, error) {
-	if val, ok := v.(types.UUID); ok {
-		res := val.String()
-		return &res, nil
-	}
+func (ti *jsonType) FormatValue(v types.Value) (*string, error) {
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti.String(), v.Kind())
+	if noms, ok := v.(types.JSON); ok {
+		// TODO(andy) fix context
+		s, err := json.NomsJSON(noms).ToString(sql.NewEmptyContext())
+		if err != nil {
+			return nil, err
+		}
+		return &s, nil
+	}
+	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
 }
 
 // GetTypeIdentifier implements TypeInfo interface.
-func (ti *uuidType) GetTypeIdentifier() Identifier {
-	return UuidTypeIdentifier
+func (ti *jsonType) GetTypeIdentifier() Identifier {
+	return JSONTypeIdentifier
 }
 
 // GetTypeParams implements TypeInfo interface.
-func (ti *uuidType) GetTypeParams() map[string]string {
+func (ti *jsonType) GetTypeParams() map[string]string {
 	return nil
 }
 
 // IsValid implements TypeInfo interface.
-func (ti *uuidType) IsValid(v types.Value) bool {
-	if _, ok := v.(types.UUID); ok {
+func (ti *jsonType) IsValid(v types.Value) bool {
+	if v == nil {
 		return true
 	}
-	if _, ok := v.(types.Null); ok || v == nil {
+	switch v.(type) {
+	case types.JSON:
 		return true
+	case types.Null:
+		return true
+	default:
+		return false
 	}
-	return false
 }
 
 // NomsKind implements TypeInfo interface.
-func (ti *uuidType) NomsKind() types.NomsKind {
-	return types.UUIDKind
+func (ti *jsonType) NomsKind() types.NomsKind {
+	return types.JSONKind
 }
 
 // ParseValue implements TypeInfo interface.
-func (ti *uuidType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
-	if str == nil || *str == "" {
+func (ti *jsonType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
+	if str == nil {
 		return types.NullValue, nil
 	}
-	uuidVal, err := uuid.Parse(*str)
-	if err != nil {
-		return nil, err
-	}
-	return types.UUID(uuidVal), nil
+	return ti.ConvertValueToNomsValue(ctx, vrw, *str)
 }
 
 // Promote implements TypeInfo interface.
-func (ti *uuidType) Promote() TypeInfo {
-	return ti
+func (ti *jsonType) Promote() TypeInfo {
+	return &jsonType{ti.jsonType.Promote().(sql.JsonType)}
 }
 
 // String implements TypeInfo interface.
-func (ti *uuidType) String() string {
-	return "Uuid"
+func (ti *jsonType) String() string {
+	return "JSON"
 }
 
 // ToSqlType implements TypeInfo interface.
-func (ti *uuidType) ToSqlType() sql.Type {
-	return ti.sqlCharType
+func (ti *jsonType) ToSqlType() sql.Type {
+	return ti.jsonType
 }
 
-// uuidTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
-func uuidTypeConverter(ctx context.Context, src *uuidType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
+// jsonTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
+func jsonTypeConverter(ctx context.Context, src *jsonType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
 	switch dest := destTi.(type) {
 	case *bitType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
@@ -170,7 +178,7 @@ func uuidTypeConverter(ctx context.Context, src *uuidType, destTi TypeInfo) (tc 
 	case *intType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *jsonType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		return wrapIsValid(dest.IsValid, src, dest)
 	case *setType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *timeType:
@@ -178,7 +186,7 @@ func uuidTypeConverter(ctx context.Context, src *uuidType, destTi TypeInfo) (tc 
 	case *uintType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *uuidType:
-		return wrapIsValid(dest.IsValid, src, dest)
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *varBinaryType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *varStringType:
