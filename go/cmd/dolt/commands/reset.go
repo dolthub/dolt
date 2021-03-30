@@ -92,7 +92,14 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			verr = errhand.BuildDError("error: --%s and --%s are mutually exclusive options.", HardResetParam, SoftResetParam).Build()
 			HandleVErrAndExitCode(verr, usage)
 		} else if apr.Contains(HardResetParam) {
-			err = actions.ResetHard(ctx, dEnv, apr, workingRoot, stagedRoot, headRoot)
+			arg := ""
+			if apr.NArg() > 1 {
+				return handleResetError(fmt.Errorf("--hard supports at most one additional param"), usage)
+			} else if apr.NArg() == 1 {
+				arg = apr.Arg(0)
+			}
+
+			err = actions.ResetHard(ctx, dEnv, arg, workingRoot, stagedRoot, headRoot)
 		} else {
 			stagedRoot, err = actions.ResetSoft(ctx, dEnv.DbData(), apr, stagedRoot, headRoot)
 

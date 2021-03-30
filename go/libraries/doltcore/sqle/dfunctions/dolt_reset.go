@@ -67,7 +67,15 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	}
 
 	if apr.Contains(cli.HardResetParam) {
-		h, err := actions.ResetHardTables(ctx, dbData, apr, working, staged, head)
+		// Get the commitSpec for the branch if it exists
+		arg := ""
+		if apr.NArg() > 1 {
+			return 1, fmt.Errorf("--hard supports at most one additional param")
+		} else if apr.NArg() == 1 {
+			arg = apr.Arg(0)
+		}
+
+		h, err := actions.ResetHardTables(ctx, dbData, arg, working, staged, head)
 		if err != nil {
 			return 1, err
 		}

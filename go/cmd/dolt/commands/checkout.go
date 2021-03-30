@@ -115,12 +115,11 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 
 	// Check if the user executed `dolt checkout .`
 	if apr.NArg() == 1  && name == "." {
-		apr.Args()[0] = "HEAD" // set the arg to head.
 		working, staged, head, err := getAllRoots(ctx, dEnv)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), usagePrt)
 		}
-		verr := actions.ResetHard(ctx, dEnv, apr, working, staged, head)
+		verr := actions.ResetHard(ctx, dEnv, "HEAD", working, staged, head)
 		return handleResetError(verr, usagePrt)
 	}
 
