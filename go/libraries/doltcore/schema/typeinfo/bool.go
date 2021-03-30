@@ -211,6 +211,8 @@ func boolTypeConverter(ctx context.Context, src *boolType, destTi TypeInfo) (tc 
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *inlineBlobType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *jsonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *intType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *setType:

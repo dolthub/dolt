@@ -183,6 +183,8 @@ func yearTypeConverter(ctx context.Context, src *yearType, destTi TypeInfo) (tc 
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *intType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *jsonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *setType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *timeType:

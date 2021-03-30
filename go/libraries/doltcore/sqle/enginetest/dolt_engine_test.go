@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
@@ -171,6 +172,10 @@ func TestTruncate(t *testing.T) {
 	enginetest.TestTruncate(t, newDoltHarness(t))
 }
 
+func TestScripts(t *testing.T) {
+	enginetest.TestScripts(t, newDoltHarness(t))
+}
+
 func TestCreateTable(t *testing.T) {
 	enginetest.TestCreateTable(t, newDoltHarness(t))
 }
@@ -244,6 +249,13 @@ func TestInnerNestedInNaturalJoins(t *testing.T) {
 
 func TestColumnDefaults(t *testing.T) {
 	enginetest.TestColumnDefaults(t, newDoltHarness(t))
+}
+
+func TestJsonScripts(t *testing.T) {
+	json.FeatureFlag = true
+	defer func() { json.FeatureFlag = false }()
+
+	enginetest.TestJsonScripts(t, newDoltHarness(t))
 }
 
 func TestTriggers(t *testing.T) {

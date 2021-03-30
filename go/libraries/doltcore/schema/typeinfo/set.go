@@ -231,6 +231,8 @@ func setTypeConverter(ctx context.Context, src *setType, destTi TypeInfo) (tc Ty
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *intType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *jsonType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *setType:
 		return wrapIsValid(dest.IsValid, src, dest)
 	case *timeType:
