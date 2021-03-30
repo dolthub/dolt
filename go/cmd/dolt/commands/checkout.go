@@ -113,6 +113,17 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return HandleVErrAndExitCode(verr, usagePrt)
 	}
 
+	// Check if the user executed `dolt checkout .`
+	if apr.NArg() == 1  && name == "." {
+		apr.Args()[0] = "HEAD" // set the arg to head.
+		working, staged, head, err := getAllRoots(ctx, dEnv)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.BuildDError(err.Error()).Build(), usagePrt)
+		}
+		verr := actions.ResetHard(ctx, dEnv, apr, working, staged, head)
+		return handleResetError(verr, usagePrt)
+	}
+
 	tbls, docs, err := actions.GetTablesOrDocs(dEnv.DocsReadWriter(), args)
 	if err != nil {
 		verr := errhand.BuildDError("error: unable to parse arguments.").AddCause(err).Build()
