@@ -68,6 +68,9 @@ func updateDocsTable(ctx context.Context, docTbl *doltdb.Table, docs Docs) (*dol
 		}
 	}
 	updatedMap, err := me.Map(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if updatedMap.Len() == 0 {
 		return nil, ErrEmptyDocsTable
 	}

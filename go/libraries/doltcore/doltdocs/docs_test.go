@@ -89,6 +89,7 @@ func TestAddNewerTextAndDocPkFromRow(t *testing.T) {
 	sch := createTestDocsSchema()
 
 	emptyRow, err := row.New(types.Format_7_18, sch, row.TaggedValues{})
+	assert.NoError(t, err)
 
 	// Text and DocName should be nil from an empty row
 	doc1 := Doc{}
