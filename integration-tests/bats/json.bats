@@ -9,7 +9,7 @@ teardown() {
     teardown_common
 }
 
-@test "json: JSON not yet supported " {
+@test "json: JSON hidden behind feature flag" {
     run dolt sql <<SQL
     CREATE TABLE js (
         pk int PRIMARY KEY,
@@ -17,4 +17,12 @@ teardown() {
     );
 SQL
     [ $status -ne 0 ]
+
+    run dolt --json sql <<SQL
+    CREATE TABLE js (
+        pk int PRIMARY KEY,
+        js json
+    );
+SQL
+    [ $status -eq 0 ]
 }

@@ -40,6 +40,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
@@ -105,6 +106,7 @@ const blockingProf = "blocking"
 const traceProf = "trace"
 
 const featureVersionFlag = "--feature-version"
+const jsonFeatureFlag = "--json"
 
 func main() {
 	os.Exit(runMain())
@@ -188,6 +190,10 @@ func runMain() int {
 
 			case csMetricsFlag:
 				csMetrics = true
+				args = args[1:]
+
+			case jsonFeatureFlag:
+				json.FeatureFlag = true
 				args = args[1:]
 
 			case featureVersionFlag:
