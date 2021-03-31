@@ -42,7 +42,7 @@ const (
 )
 
 func TestTableEditorConcurrency(t *testing.T) {
-	format := types.Format_7_18
+	format := types.Format_Default
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	colColl := schema.NewColCollection(
@@ -138,7 +138,7 @@ func TestTableEditorConcurrency(t *testing.T) {
 }
 
 func TestTableEditorConcurrencyPostInsert(t *testing.T) {
-	format := types.Format_7_18
+	format := types.Format_Default
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	colColl := schema.NewColCollection(
@@ -232,7 +232,7 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 }
 
 func TestTableEditorWriteAfterFlush(t *testing.T) {
-	format := types.Format_7_18
+	format := types.Format_Default
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	colColl := schema.NewColCollection(
@@ -303,7 +303,7 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 }
 
 func TestTableEditorDuplicateKeyHandling(t *testing.T) {
-	format := types.Format_7_18
+	format := types.Format_Default
 	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	colColl := schema.NewColCollection(

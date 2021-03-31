@@ -45,7 +45,7 @@ func NewRow(sch schema.Schema, values ...types.Value) row.Row {
 	for i := range values {
 		taggedVals[uint64(i)] = values[i]
 	}
-	r, err := row.New(types.Format_7_18, sch, taggedVals)
+	r, err := row.New(types.Format_Default, sch, taggedVals)
 
 	if err != nil {
 		panic(err)

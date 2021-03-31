@@ -75,7 +75,7 @@ func TestNewUntypedSchema(t *testing.T) {
 	name := "Billy Bob"
 	city := "Fargo"
 	blurb := "Billy Bob is a scholar."
-	r, err := NewRowFromStrings(types.Format_7_18, sch, []string{name, city, blurb})
+	r, err := NewRowFromStrings(types.Format_Default, sch, []string{name, city, blurb})
 	assert.NoError(t, err)
 
 	nameVal, _ := r.GetColVal(nameToTag["name"])

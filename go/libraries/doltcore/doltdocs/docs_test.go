@@ -30,7 +30,7 @@ import (
 
 func TestAddNewerTextAndValueFromTable(t *testing.T) {
 	ctx := context.Background()
-	ddb, _ := doltdb.LoadDoltDB(ctx, types.Format_7_18, doltdb.InMemDoltDB)
+	ddb, _ := doltdb.LoadDoltDB(ctx, types.Format_Default, doltdb.InMemDoltDB)
 	ddb.WriteEmptyRepo(ctx, "billy bob", "bigbillieb@fake.horse")
 
 	// If no tbl/schema is provided, doc Text and Value should be nil.
@@ -84,12 +84,12 @@ func TestAddNewerTextAndValueFromTable(t *testing.T) {
 
 func TestAddNewerTextAndDocPkFromRow(t *testing.T) {
 	ctx := context.Background()
-	ddb, _ := doltdb.LoadDoltDB(ctx, types.Format_7_18, doltdb.InMemDoltDB)
+	ddb, _ := doltdb.LoadDoltDB(ctx, types.Format_Default, doltdb.InMemDoltDB)
 	ddb.WriteEmptyRepo(ctx, "billy bob", "bigbillieb@fake.horse")
 
 	sch := createTestDocsSchema()
 
-	emptyRow, err := row.New(types.Format_7_18, sch, row.TaggedValues{})
+	emptyRow, err := row.New(types.Format_Default, sch, row.TaggedValues{})
 	require.NoError(t, err)
 
 	// Text and DocName should be nil from an empty row
@@ -102,7 +102,7 @@ func TestAddNewerTextAndDocPkFromRow(t *testing.T) {
 	doc1.DocPk = docPk
 	assert.Equal(t, "", doc1.DocPk)
 
-	licenseRow, err := row.New(types.Format_7_18, sch, row.TaggedValues{
+	licenseRow, err := row.New(types.Format_Default, sch, row.TaggedValues{
 		schema.DocNameTag: types.String(LicenseDoc),
 		schema.DocTextTag: types.String("license!"),
 	})
@@ -171,7 +171,7 @@ func getDocRows(t *testing.T, sch schema.Schema, rowVal types.Value) []row.Row {
 }
 
 func makeDocRow(t *testing.T, sch schema.Schema, pk string, rowVal types.Value) row.Row {
-	row, err := row.New(types.Format_7_18, sch, row.TaggedValues{
+	row, err := row.New(types.Format_Default, sch, row.TaggedValues{
 		schema.DocNameTag: types.String(pk),
 		schema.DocTextTag: rowVal,
 	})

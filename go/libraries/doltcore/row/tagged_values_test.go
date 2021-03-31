@@ -95,12 +95,12 @@ func TestTupleValsLess(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 
-			lesserTplVals := test.lesserTVs.nomsTupleForTags(types.Format_7_18, test.tags, true)
-			greaterTplVals := test.greaterTVs.nomsTupleForTags(types.Format_7_18, test.tags, true)
+			lesserTplVals := test.lesserTVs.nomsTupleForTags(types.Format_Default, test.tags, true)
+			greaterTplVals := test.greaterTVs.nomsTupleForTags(types.Format_Default, test.tags, true)
 
-			lessLTGreater, err := lesserTplVals.Less(types.Format_7_18, greaterTplVals)
+			lessLTGreater, err := lesserTplVals.Less(types.Format_Default, greaterTplVals)
 			assert.NoError(t, err)
-			greaterLTLess, err := greaterTplVals.Less(types.Format_7_18, lesserTplVals)
+			greaterLTLess, err := greaterTplVals.Less(types.Format_Default, lesserTplVals)
 			assert.NoError(t, err)
 
 			assert.True(t, test.areEqual && !lessLTGreater || !test.areEqual && lessLTGreater)
@@ -111,9 +111,9 @@ func TestTupleValsLess(t *testing.T) {
 			greaterTpl, err := greaterTplVals.Value(ctx)
 			assert.NoError(t, err)
 
-			lesserLess, err := lesserTpl.Less(types.Format_7_18, greaterTpl)
+			lesserLess, err := lesserTpl.Less(types.Format_Default, greaterTpl)
 			assert.NoError(t, err)
-			greaterLess, err := greaterTpl.Less(types.Format_7_18, lesserTpl)
+			greaterLess, err := greaterTpl.Less(types.Format_Default, lesserTpl)
 			assert.NoError(t, err)
 
 			// needs to match with the types.Tuple Less implementation.
@@ -144,18 +144,18 @@ func TestTaggedTuple_NomsTupleForTags(t *testing.T) {
 		encodeNulls bool
 		want        types.Tuple
 	}{
-		{[]uint64{}, true, mustTuple(types.NewTuple(types.Format_7_18))},
-		{[]uint64{1}, true, mustTuple(types.NewTuple(types.Format_7_18, types.Uint(1), types.String("1")))},
-		{[]uint64{0, 1, 2}, true, mustTuple(types.NewTuple(types.Format_7_18, types.Uint(0), types.String("0"), types.Uint(1), types.String("1"), types.Uint(2), types.String("2")))},
-		{[]uint64{2, 1, 0}, true, mustTuple(types.NewTuple(types.Format_7_18, types.Uint(2), types.String("2"), types.Uint(1), types.String("1"), types.Uint(0), types.String("0")))},
-		{[]uint64{1, 3}, true, mustTuple(types.NewTuple(types.Format_7_18, types.Uint(1), types.String("1"), types.Uint(3), types.NullValue))},
-		{[]uint64{1, 3}, false, mustTuple(types.NewTuple(types.Format_7_18, types.Uint(1), types.String("1")))},
+		{[]uint64{}, true, mustTuple(types.NewTuple(types.Format_Default))},
+		{[]uint64{1}, true, mustTuple(types.NewTuple(types.Format_Default, types.Uint(1), types.String("1")))},
+		{[]uint64{0, 1, 2}, true, mustTuple(types.NewTuple(types.Format_Default, types.Uint(0), types.String("0"), types.Uint(1), types.String("1"), types.Uint(2), types.String("2")))},
+		{[]uint64{2, 1, 0}, true, mustTuple(types.NewTuple(types.Format_Default, types.Uint(2), types.String("2"), types.Uint(1), types.String("1"), types.Uint(0), types.String("0")))},
+		{[]uint64{1, 3}, true, mustTuple(types.NewTuple(types.Format_Default, types.Uint(1), types.String("1"), types.Uint(3), types.NullValue))},
+		{[]uint64{1, 3}, false, mustTuple(types.NewTuple(types.Format_Default, types.Uint(1), types.String("1")))},
 		//{[]uint64{0, 1, 2}, types.NewTuple(types.Uint(0), types.String("0"), )},
 		//{map[uint64]types.Value{}, []uint64{}, types.NewTuple()},
 		//{map[uint64]types.Value{}, []uint64{}, types.NewTuple()},
 	}
 	for _, test := range tests {
-		if got, err := tt.nomsTupleForTags(types.Format_7_18, test.tags, test.encodeNulls).Value(ctx); err != nil {
+		if got, err := tt.nomsTupleForTags(types.Format_Default, test.tags, test.encodeNulls).Value(ctx); err != nil {
 			t.Error(err)
 		} else if !reflect.DeepEqual(got, test.want) {
 			gotStr, err := types.EncodedValue(ctx, got)
@@ -261,15 +261,15 @@ func TestParseTaggedTuple(t *testing.T) {
 		want TaggedValues
 	}{
 		{
-			mustTuple(types.NewTuple(types.Format_7_18)),
+			mustTuple(types.NewTuple(types.Format_Default)),
 			TaggedValues{},
 		},
 		{
-			mustTuple(types.NewTuple(types.Format_7_18, types.Uint(0), types.String("0"))),
+			mustTuple(types.NewTuple(types.Format_Default, types.Uint(0), types.String("0"))),
 			TaggedValues{0: types.String("0")},
 		},
 		{
-			mustTuple(types.NewTuple(types.Format_7_18, types.Uint(0), types.String("0"), types.Uint(5), types.Uint(5), types.Uint(60), types.Int(60))),
+			mustTuple(types.NewTuple(types.Format_Default, types.Uint(0), types.String("0"), types.Uint(5), types.Uint(5), types.Uint(60), types.Int(60))),
 			TaggedValues{0: types.String("0"), 5: types.Uint(5), 60: types.Int(60)},
 		},
 	}

@@ -56,7 +56,7 @@ func NewResultSetRow(colVals ...types.Value) row.Row {
 	collection := schema.NewColCollection(cols...)
 	sch := schema.UnkeyedSchemaFromCols(collection)
 
-	r, err := row.New(types.Format_7_18, sch, taggedVals)
+	r, err := row.New(types.Format_Default, sch, taggedVals)
 
 	if err != nil {
 		panic(err)
@@ -94,7 +94,7 @@ func NewRowWithPks(pkColVals []types.Value, nonPkVals ...types.Value) row.Row {
 	colColl := schema.NewColCollection(cols...)
 	sch := schema.MustSchemaFromCols(colColl)
 
-	r, err := row.New(types.Format_7_18, sch, taggedVals)
+	r, err := row.New(types.Format_Default, sch, taggedVals)
 
 	if err != nil {
 		panic(err)
@@ -113,7 +113,7 @@ func NewRowWithSchema(sch schema.Schema, vals ...types.Value) row.Row {
 		return false, nil
 	})
 
-	r, err := row.New(types.Format_7_18, sch, tv)
+	r, err := row.New(types.Format_Default, sch, tv)
 	if err != nil {
 		panic(err)
 	}
@@ -187,7 +187,7 @@ func ConcatRows(schemasAndRows ...interface{}) row.Row {
 	}
 
 	colCol := schema.NewColCollection(cols...)
-	r, err := row.New(types.Format_7_18, schema.UnkeyedSchemaFromCols(colCol), taggedVals)
+	r, err := row.New(types.Format_Default, schema.UnkeyedSchemaFromCols(colCol), taggedVals)
 
 	if err != nil {
 		panic(err)
@@ -213,7 +213,7 @@ func CompressRow(sch schema.Schema, r row.Row) row.Row {
 	})
 
 	// call to compress schema is a no-op in most cases
-	r, err := row.New(types.Format_7_18, CompressSchema(sch), compressedRow)
+	r, err := row.New(types.Format_Default, CompressSchema(sch), compressedRow)
 
 	if err != nil {
 		panic(err)
