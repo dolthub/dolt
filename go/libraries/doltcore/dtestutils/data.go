@@ -78,7 +78,7 @@ func init() {
 			IsMarriedTag: types.Bool(MaritalStatus[i]),
 		}
 
-		r, err := row.New(types.Format_7_18, TypedSchema, taggedVals)
+		r, err := row.New(types.Format_Default, TypedSchema, taggedVals)
 
 		if err != nil {
 			panic(err)
@@ -94,7 +94,7 @@ func init() {
 			IsMarriedTag: types.Bool(MaritalStatus[i]),
 		}
 
-		r, err = row.New(types.Format_7_18, TypedSchema, taggedVals)
+		r, err = row.New(types.Format_Default, TypedSchema, taggedVals)
 
 		if err != nil {
 			panic(err)
@@ -127,7 +127,7 @@ func NewTypedRow(id uuid.UUID, name string, age uint, isMarried bool, title *str
 		TitleTag:     titleVal,
 	}
 
-	r, err := row.New(types.Format_7_18, TypedSchema, taggedVals)
+	r, err := row.New(types.Format_Default, TypedSchema, taggedVals)
 
 	if err != nil {
 		panic(err)
@@ -191,7 +191,7 @@ func ConvertToSchema(sch schema.Schema, rs ...row.Row) []row.Row {
 			panic(err)
 		}
 
-		newRows[i], err = row.New(types.Format_7_18, sch, taggedVals)
+		newRows[i], err = row.New(types.Format_Default, sch, taggedVals)
 
 		if err != nil {
 			panic(err)

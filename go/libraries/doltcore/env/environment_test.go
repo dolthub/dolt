@@ -158,7 +158,7 @@ func TestRepoDirNoLocal(t *testing.T) {
 
 func TestInitRepo(t *testing.T) {
 	dEnv := createTestEnv(false, false)
-	err := dEnv.InitRepo(context.Background(), types.Format_7_18, "aoeu aoeu", "aoeu@aoeu.org")
+	err := dEnv.InitRepo(context.Background(), types.Format_Default, "aoeu aoeu", "aoeu@aoeu.org")
 
 	if err != nil {
 		t.Error("Failed to init repo.", err.Error())

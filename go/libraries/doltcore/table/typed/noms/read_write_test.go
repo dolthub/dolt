@@ -74,7 +74,7 @@ func createRows(t *testing.T, onlyUpdated, updatedAge bool) []row.Row {
 				titleColTag: types.String(titles[i]),
 			}
 
-			r, err := row.New(types.Format_7_18, sch, rowVals)
+			r, err := row.New(types.Format_Default, sch, rowVals)
 			assert.NoError(t, err)
 
 			rows = append(rows, r)
@@ -85,7 +85,7 @@ func createRows(t *testing.T, onlyUpdated, updatedAge bool) []row.Row {
 }
 
 func TestReadWrite(t *testing.T) {
-	db, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_7_18, nil, nil)
+	db, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_Default, nil, nil)
 
 	rows := createRows(t, false, false)
 

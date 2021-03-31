@@ -30,7 +30,7 @@ import (
 
 func TestDocDiff(t *testing.T) {
 	ctx := context.Background()
-	ddb, _ := doltdb.LoadDoltDB(ctx, types.Format_7_18, doltdb.InMemDoltDB)
+	ddb, _ := doltdb.LoadDoltDB(ctx, types.Format_Default, doltdb.InMemDoltDB)
 	ddb.WriteEmptyRepo(ctx, "billy bob", "bigbillieb@fake.horse")
 
 	cs, _ := doltdb.NewCommitSpec("master")
@@ -146,7 +146,7 @@ func createTestDocsSchema() schema.Schema {
 }
 
 func makeDocRow(t *testing.T, sch schema.Schema, pk string, rowVal types.Value) row.Row {
-	row, err := row.New(types.Format_7_18, sch, row.TaggedValues{
+	row, err := row.New(types.Format_Default, sch, row.TaggedValues{
 		schema.DocNameTag: types.String(pk),
 		schema.DocTextTag: rowVal,
 	})

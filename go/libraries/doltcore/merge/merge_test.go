@@ -89,7 +89,7 @@ func valsToTestTuple(vals []types.Value, includePrimaryKeys bool) types.Value {
 		}
 	}
 
-	return mustTuple(types.NewTuple(types.Format_7_18, tplVals...))
+	return mustTuple(types.NewTuple(types.Format_Default, tplVals...))
 }
 
 func createRowMergeStruct(name string, vals, mergeVals, ancVals, expected []types.Value, expectCnf bool) RowMergeTest {
@@ -197,9 +197,9 @@ func TestRowMerge(t *testing.T) {
 		),
 		createRowMergeStruct(
 			"modify row where initial value wasn't given",
-			[]types.Value{mustTuple(types.NewTuple(types.Format_7_18, types.String("one"), types.Uint(2), types.String("a")))},
-			[]types.Value{mustTuple(types.NewTuple(types.Format_7_18, types.String("one"), types.Uint(2), types.String("b")))},
-			[]types.Value{mustTuple(types.NewTuple(types.Format_7_18, types.String("one"), types.Uint(2), types.NullValue))},
+			[]types.Value{mustTuple(types.NewTuple(types.Format_Default, types.String("one"), types.Uint(2), types.String("a")))},
+			[]types.Value{mustTuple(types.NewTuple(types.Format_Default, types.String("one"), types.Uint(2), types.String("b")))},
+			[]types.Value{mustTuple(types.NewTuple(types.Format_Default, types.String("one"), types.Uint(2), types.NullValue))},
 			nil,
 			true,
 		),
@@ -207,7 +207,7 @@ func TestRowMerge(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actualResult, isConflict, err := pkRowMerge(context.Background(), types.Format_7_18, test.sch, test.row, test.mergeRow, test.ancRow)
+			actualResult, isConflict, err := pkRowMerge(context.Background(), types.Format_Default, test.sch, test.row, test.mergeRow, test.ancRow)
 			assert.NoError(t, err)
 			assert.Equal(t, test.expectedResult, actualResult, "expected "+mustString(types.EncodedValue(context.Background(), test.expectedResult))+"got "+mustString(types.EncodedValue(context.Background(), actualResult)))
 			assert.Equal(t, test.expectConflict, isConflict)
@@ -256,14 +256,14 @@ func init() {
 	keyTag := types.Uint(idTag)
 
 	for i, id := range uuids {
-		keyTuples[i] = mustTuple(types.NewTuple(types.Format_7_18, keyTag, id))
+		keyTuples[i] = mustTuple(types.NewTuple(types.Format_Default, keyTag, id))
 	}
 
 	index, _ = sch.Indexes().AddIndexByColTags("idx_name", []uint64{nameTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
 }
 
 func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, types.Map, types.Map) {
-	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_7_18, doltdb.InMemDoltDB)
+	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_Default, doltdb.InMemDoltDB)
 	vrw := ddb.ValueReadWriter()
 
 	err := ddb.WriteEmptyRepo(context.Background(), name, email)
