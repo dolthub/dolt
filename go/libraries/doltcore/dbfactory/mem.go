@@ -31,7 +31,7 @@ type MemFactory struct {
 func (fact MemFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]string) (datas.Database, error) {
 	var db datas.Database
 	storage := &chunks.MemoryStorage{}
-	db = datas.NewDatabase(storage.NewView())
+	db = datas.NewDatabase(storage.NewViewWithDefaultFormat())
 
 	return db, nil
 }
