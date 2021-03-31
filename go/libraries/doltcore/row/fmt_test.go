@@ -18,16 +18,16 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFmt(t *testing.T) {
 	r, err := newTestRow()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	expected := `first:"rick" | last:"astley" | age:53 | address:"123 Fake St" | title:null_value | `
 	actual := Fmt(context.Background(), r, sch)
 	if expected != actual {
-		t.Errorf("expected: '%s', actual: '%s'", expected, actual)
+		t.Fatalf("expected: '%s', actual: '%s'", expected, actual)
 	}
 }
