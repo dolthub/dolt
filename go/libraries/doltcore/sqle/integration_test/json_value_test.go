@@ -45,7 +45,7 @@ func TestJsonValues(t *testing.T) {
 
 	tests := []jsonValueTest{
 		{
-			name: "create JSON table",
+			name:  "create JSON table",
 			setup: []testCommand{},
 			query: "select * from js",
 			rows:  []sql.Row{},
@@ -56,7 +56,7 @@ func TestJsonValues(t *testing.T) {
 				{cmd.SqlCmd{}, args{"-q", `insert into js values (1, '{"a":1}'), (2, '{"b":2}');`}},
 			},
 			query: "select * from js",
-			rows:  []sql.Row{
+			rows: []sql.Row{
 				{int32(1), json.MustNomsJSON(`{"a":1}`)},
 				{int32(2), json.MustNomsJSON(`{"b":2}`)},
 			},
@@ -68,9 +68,40 @@ func TestJsonValues(t *testing.T) {
 				{cmd.SqlCmd{}, args{"-q", `update js set js = '{"c":3}' where pk = 2;`}},
 			},
 			query: "select * from js",
-			rows:  []sql.Row{
+			rows: []sql.Row{
 				{int32(1), json.MustNomsJSON(`{"a":1}`)},
 				{int32(2), json.MustNomsJSON(`{"c":3}`)},
+			},
+		},
+		{
+			name: "delete from a JSON table",
+			setup: []testCommand{
+				{cmd.SqlCmd{}, args{"-q", `insert into js values (1, '{"a":1}'), (2, '{"b":2}');`}},
+				{cmd.SqlCmd{}, args{"-q", `delete from js where pk = 2;`}},
+			},
+			query: "select * from js",
+			rows: []sql.Row{
+				{int32(1), json.MustNomsJSON(`{"a":1}`)},
+			},
+		},
+		{
+			name: "merge a JSON table",
+			setup: []testCommand{
+				{cmd.SqlCmd{}, args{"-q", `insert into js values (1, '{"a":1}'), (2, '{"b":2}');`}},
+				{cmd.AddCmd{}, args{"."}},
+				{cmd.CommitCmd{}, args{"-m", "added a JSON table"}},
+				{cmd.CheckoutCmd{}, args{"-b", "other"}},
+				{cmd.SqlCmd{}, args{"-q", `update js set js = '{"b":22}' where pk = 2;`}},
+				{cmd.CommitCmd{}, args{"-am", "update row pk = 2"}},
+				{cmd.CheckoutCmd{}, args{"master"}},
+				{cmd.SqlCmd{}, args{"-q", `update js set js = '{"a":11}' where pk = 1;`}},
+				{cmd.CommitCmd{}, args{"-am", "update row pk = 1"}},
+				{cmd.MergeCmd{}, args{"other"}},
+			},
+			query: "select * from js",
+			rows: []sql.Row{
+				{int32(1), json.MustNomsJSON(`{"a":11}`)},
+				{int32(2), json.MustNomsJSON(`{"b":22}`)},
 			},
 		},
 	}
@@ -98,7 +129,7 @@ func TestJsonValues(t *testing.T) {
 				for j := range test.rows[i] {
 					exp, act := test.rows[i][j], actRows[i][j]
 
-					// special logic JSONValues
+					// special logic for comparing JSONValues
 					if js, ok := exp.(json.NomsJSON); ok {
 						cmp, err := js.Compare(sql.NewEmptyContext(), act.(json.NomsJSON))
 						require.NoError(t, err)
