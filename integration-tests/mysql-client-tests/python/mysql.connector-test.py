@@ -8,7 +8,13 @@ QUERY_RESPONSE = [
         ('value', 'int', 'YES', '', '', '')
     ] },
     { "insert into test (pk, `value`) values (0,0)": [] },
-    { "select * from test": [(0,0)] }
+    { "select * from test": [(0,0)] },
+    # We used to have a bug where spaces after a semicolon in a query
+    # would cause a client/server disconnect.
+    # https://github.com/dolthub/vitess/pull/65
+    # The following regression tests it.
+    { "select * from test;    ": [(0,0)] },
+    { "select * from test;    ": [(0,0)] },
 ]
     
 def main():
