@@ -356,7 +356,7 @@ func interloperWrite(fm *fakeManifest, p tablePersister, rootChunk []byte, chunk
 		return hash.Hash{}, nil, err
 	}
 
-	fm.set(constants.NomsVersion, newLock, newRoot, []tableSpec{{mustAddr(src.hash()), uint32(len(chunks))}})
+	fm.set(constants.NomsVersion, newLock, newRoot, []tableSpec{{mustAddr(src.hash()), uint32(len(chunks))}}, nil)
 	return
 }
 
@@ -406,15 +406,19 @@ func (fm *fakeManifest) Update(ctx context.Context, lastLock addr, newContents m
 	fm.mu.Lock()
 	defer fm.mu.Unlock()
 	if fm.contents.lock == lastLock {
-		fm.contents = manifestContents{newContents.vers, newContents.lock, newContents.root, addr(hash.Hash{}), nil}
+		fm.contents = manifestContents{newContents.vers, newContents.lock, newContents.root, addr(hash.Hash{}), nil, nil}
 		fm.contents.specs = make([]tableSpec, len(newContents.specs))
 		copy(fm.contents.specs, newContents.specs)
+		if newContents.appendix != nil && len(newContents.appendix) > 0 {
+			fm.contents.appendix = make([]tableSpec, len(newContents.appendix))
+			copy(fm.contents.appendix, newContents.appendix)
+		}
 	}
 	return fm.contents, nil
 }
 
-func (fm *fakeManifest) set(version string, lock addr, root hash.Hash, specs []tableSpec) {
-	fm.contents = manifestContents{version, lock, root, addr(hash.Hash{}), specs}
+func (fm *fakeManifest) set(version string, lock addr, root hash.Hash, specs, appendix []tableSpec) {
+	fm.contents = manifestContents{version, lock, root, addr(hash.Hash{}), specs, appendix}
 }
 
 func newFakeTableSet() tableSet {

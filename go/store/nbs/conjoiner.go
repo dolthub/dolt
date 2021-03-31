@@ -72,10 +72,19 @@ func (c noopConjoiner) Conjoin(ctx context.Context, upstream manifestContents, m
 
 func conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) (manifestContents, error) {
 	var conjoined tableSpec
-	var conjoinees, keepers []tableSpec
+	var conjoinees, keepers, appendixSpecs []tableSpec
+	var appendixSet map[addr]struct{}
 
 	for {
 		if conjoinees == nil {
+			// Appendix table files should never be conjoined
+			// so we remove them before conjoining and add them
+			// back after
+			if upstream.NumAppendixSpecs() != 0 {
+				appendixSet = upstream.getAppendixSet()
+				upstream, appendixSpecs = upstream.removeAppendixSpecs()
+			}
+
 			var err error
 			conjoined, conjoinees, keepers, err = conjoinTables(ctx, p, upstream.specs, stats)
 
@@ -85,19 +94,24 @@ func conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater,
 		}
 
 		specs := append(make([]tableSpec, 0, len(keepers)+1), conjoined)
+		if appendixSpecs != nil && len(appendixSpecs) > 0 {
+			specs = append(make([]tableSpec, 0, len(specs)+len(appendixSpecs)), appendixSpecs...)
+			specs = append(specs, conjoined)
+		}
+
 		specs = append(specs, keepers...)
 
 		newContents := manifestContents{
-			vers:  upstream.vers,
-			root:  upstream.root,
-			lock:  generateLockHash(upstream.root, specs),
-			gcGen: upstream.gcGen,
-			specs: specs,
+			vers:     upstream.vers,
+			root:     upstream.root,
+			lock:     generateLockHash(upstream.root, specs),
+			gcGen:    upstream.gcGen,
+			specs:    specs,
+			appendix: appendixSpecs,
 		}
 
 		var err error
 		upstream, err = mm.Update(ctx, upstream.lock, newContents, stats, nil)
-
 		if err != nil {
 			return manifestContents{}, err
 		}
@@ -105,6 +119,7 @@ func conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater,
 		if newContents.lock == upstream.lock {
 			return upstream, nil
 		}
+
 		// Optimistic lock failure. Someone else moved to the root, the set of tables, or both out from under us.
 		// If we can re-use the conjoin we already performed, we want to try again. Currently, we will only do so if ALL conjoinees are still present upstream. If we can't re-use...then someone else almost certainly landed a conjoin upstream. In this case, bail and let clients ask again if they think they still can't proceed.
 		conjoineeSet := map[addr]struct{}{}
@@ -123,7 +138,31 @@ func conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater,
 		keepers = make([]tableSpec, 0, len(upstream.specs)-len(conjoinees))
 		for _, spec := range upstream.specs {
 			if _, present := conjoineeSet[spec.name]; !present {
-				keepers = append(keepers, spec)
+				if appendixSet != nil {
+					if _, present = appendixSet[spec.name]; !present {
+						keepers = append(keepers, spec)
+					}
+				} else {
+					keepers = append(keepers, spec)
+				}
+			}
+		}
+
+		if appendixSet != nil {
+			// Bail if old appendix specs not found in latest appendix set
+			updatedAppendixSet := upstream.getAppendixSet()
+			for _, c := range appendixSpecs {
+				if _, present := updatedAppendixSet[c.name]; !present {
+					return upstream, nil // Bail!
+				}
+			}
+
+			// Pickup changes to the appendix
+			for _, spec := range upstream.appendix {
+				if _, present := appendixSet[spec.name]; !present {
+					appendixSpecs = append(appendixSpecs, spec)
+					appendixSet[spec.name] = struct{}{}
+				}
 			}
 		}
 	}

@@ -280,3 +280,243 @@ func TestNBSCopyGC(t *testing.T) {
 		assert.Equal(t, chunks.EmptyChunk, out)
 	}
 }
+
+func persistTableFileSources(t *testing.T, p tablePersister, numTableFiles int) (map[hash.Hash]uint32, []hash.Hash) {
+	tableFileMap := make(map[hash.Hash]uint32, numTableFiles)
+	mapIds := make([]hash.Hash, numTableFiles)
+
+	for i := 0; i < numTableFiles; i++ {
+		var chunkData [][]byte
+		for j := 0; j < i+1; j++ {
+			chunkData = append(chunkData, []byte(fmt.Sprintf("%d:%d", i, j)))
+		}
+		_, addr, err := buildTable(chunkData)
+		require.NoError(t, err)
+		fileIDHash, ok := hash.MaybeParse(addr.String())
+		require.True(t, ok)
+		tableFileMap[fileIDHash] = uint32(i + 1)
+		mapIds[i] = fileIDHash
+		_, err = p.Persist(context.Background(), createMemTable(chunkData), nil, &Stats{})
+		require.NoError(t, err)
+	}
+	return tableFileMap, mapIds
+}
+
+func prepStore(ctx context.Context, t *testing.T, assert *assert.Assertions) (*fakeManifest, tablePersister, *NomsBlockStore, *Stats, chunks.Chunk) {
+	fm, p, store := makeStoreWithFakes(t)
+	h, err := store.Root(ctx)
+	require.NoError(t, err)
+	assert.Equal(hash.Hash{}, h)
+
+	rootChunk := chunks.NewChunk([]byte("root"))
+	rootHash := rootChunk.Hash()
+	err = store.Put(ctx, rootChunk)
+	require.NoError(t, err)
+	success, err := store.Commit(ctx, rootHash, hash.Hash{})
+	require.NoError(t, err)
+	if assert.True(success) {
+		has, err := store.Has(ctx, rootHash)
+		require.NoError(t, err)
+		assert.True(has)
+		h, err := store.Root(ctx)
+		require.NoError(t, err)
+		assert.Equal(rootHash, h)
+	}
+
+	stats := &Stats{}
+
+	_, upstream, err := fm.ParseIfExists(ctx, stats, nil)
+	require.NoError(t, err)
+	// expect single spec for initial commit
+	assert.Equal(1, upstream.NumTableSpecs())
+	// Start with no appendixes
+	assert.Equal(0, upstream.NumAppendixSpecs())
+	return fm, p, store, stats, rootChunk
+}
+
+func TestNBSUpdateManifestWithAppendixOptions(t *testing.T) {
+	assert := assert.New(t)
+	ctx := context.Background()
+
+	_, p, store, _, _ := prepStore(ctx, t, assert)
+	defer store.Close()
+
+	// persist tablefiles to tablePersister
+	appendixUpdates, appendixIds := persistTableFileSources(t, p, 4)
+
+	tests := []struct {
+		description                   string
+		option                        ManifestAppendixOption
+		appendixSpecIds               []hash.Hash
+		expectedNumberOfSpecs         int
+		expectedNumberOfAppendixSpecs int
+		expectedError                 error
+	}{
+		{
+			description:     "should error on unsupported appendix option",
+			appendixSpecIds: appendixIds[:1],
+			expectedError:   ErrUnsupportedManifestAppendixOption,
+		},
+		{
+			description:                   "should append to appendix",
+			option:                        ManifestAppendixOption_AppendOnly,
+			appendixSpecIds:               appendixIds[:2],
+			expectedNumberOfSpecs:         3,
+			expectedNumberOfAppendixSpecs: 2,
+		},
+		{
+			description:                   "should replace appendix",
+			option:                        ManifestAppendixOption_ReplaceAll,
+			appendixSpecIds:               appendixIds[3:],
+			expectedNumberOfSpecs:         2,
+			expectedNumberOfAppendixSpecs: 1,
+		},
+		{
+			description:                   "should set appendix to nil",
+			option:                        ManifestAppendixOption_SetNone,
+			appendixSpecIds:               []hash.Hash{},
+			expectedNumberOfSpecs:         1,
+			expectedNumberOfAppendixSpecs: 0,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			updates := make(map[hash.Hash]uint32)
+			for _, id := range test.appendixSpecIds {
+				updates[id] = appendixUpdates[id]
+			}
+
+			if test.expectedError == nil {
+				info, err := store.UpdateManifestWithAppendix(ctx, updates, test.option)
+				require.NoError(t, err)
+				assert.Equal(test.expectedNumberOfSpecs, info.NumTableSpecs())
+				assert.Equal(test.expectedNumberOfAppendixSpecs, info.NumAppendixSpecs())
+			} else {
+				_, err := store.UpdateManifestWithAppendix(ctx, updates, test.option)
+				assert.Equal(test.expectedError, err)
+			}
+		})
+	}
+}
+
+func TestNBSUpdateManifestWithAppendix(t *testing.T) {
+	assert := assert.New(t)
+	ctx := context.Background()
+
+	fm, p, store, stats, _ := prepStore(ctx, t, assert)
+	defer store.Close()
+
+	_, upstream, err := fm.ParseIfExists(ctx, stats, nil)
+	require.NoError(t, err)
+
+	// persist tablefile to tablePersister
+	appendixUpdates, appendixIds := persistTableFileSources(t, p, 1)
+
+	// Ensure appendix (and specs) are updated
+	appendixFileId := appendixIds[0]
+	updates := map[hash.Hash]uint32{appendixFileId: appendixUpdates[appendixFileId]}
+	newContents, err := store.UpdateManifestWithAppendix(ctx, updates, ManifestAppendixOption_AppendOnly)
+	require.NoError(t, err)
+	assert.Equal(upstream.NumTableSpecs()+1, newContents.NumTableSpecs())
+	assert.Equal(1, newContents.NumAppendixSpecs())
+	assert.Equal(newContents.GetTableSpecInfo(0), newContents.GetAppendixTableSpecInfo(0))
+}
+
+func TestNBSUpdateManifestRetainsAppendix(t *testing.T) {
+	assert := assert.New(t)
+	ctx := context.Background()
+
+	fm, p, store, stats, _ := prepStore(ctx, t, assert)
+	defer store.Close()
+
+	_, upstream, err := fm.ParseIfExists(ctx, stats, nil)
+	require.NoError(t, err)
+
+	// persist tablefile to tablePersister
+	specUpdates, specIds := persistTableFileSources(t, p, 3)
+
+	// Update the manifest
+	firstSpecId := specIds[0]
+	newContents, err := store.UpdateManifest(ctx, map[hash.Hash]uint32{firstSpecId: specUpdates[firstSpecId]})
+	require.NoError(t, err)
+	assert.Equal(1+upstream.NumTableSpecs(), newContents.NumTableSpecs())
+	assert.Equal(0, upstream.NumAppendixSpecs())
+
+	_, upstream, err = fm.ParseIfExists(ctx, stats, nil)
+	require.NoError(t, err)
+
+	// Update the appendix
+	appendixSpecId := specIds[1]
+	newContents, err = store.UpdateManifestWithAppendix(ctx, map[hash.Hash]uint32{appendixSpecId: specUpdates[appendixSpecId]}, ManifestAppendixOption_AppendOnly)
+	require.NoError(t, err)
+	assert.Equal(1+upstream.NumTableSpecs(), newContents.NumTableSpecs())
+	assert.Equal(1+upstream.NumAppendixSpecs(), newContents.NumAppendixSpecs())
+	assert.Equal(newContents.GetAppendixTableSpecInfo(0), newContents.GetTableSpecInfo(0))
+
+	_, upstream, err = fm.ParseIfExists(ctx, stats, nil)
+	require.NoError(t, err)
+
+	// Update the manifest again to show
+	// it successfully retains the appendix
+	// and the appendix specs are properly prepended
+	// to the |manifestContents.specs|
+	secondSpecId := specIds[2]
+	newContents, err = store.UpdateManifest(ctx, map[hash.Hash]uint32{secondSpecId: specUpdates[secondSpecId]})
+	require.NoError(t, err)
+	assert.Equal(1+upstream.NumTableSpecs(), newContents.NumTableSpecs())
+	assert.Equal(upstream.NumAppendixSpecs(), newContents.NumAppendixSpecs())
+	assert.Equal(newContents.GetAppendixTableSpecInfo(0), newContents.GetTableSpecInfo(0))
+}
+
+func TestNBSCommitRetainsAppendix(t *testing.T) {
+	assert := assert.New(t)
+	ctx := context.Background()
+
+	fm, p, store, stats, rootChunk := prepStore(ctx, t, assert)
+	defer store.Close()
+
+	_, upstream, err := fm.ParseIfExists(ctx, stats, nil)
+	require.NoError(t, err)
+
+	// persist tablefile to tablePersister
+	appendixUpdates, appendixIds := persistTableFileSources(t, p, 1)
+
+	// Update the appendix
+	appendixFileId := appendixIds[0]
+	updates := map[hash.Hash]uint32{appendixFileId: appendixUpdates[appendixFileId]}
+	newContents, err := store.UpdateManifestWithAppendix(ctx, updates, ManifestAppendixOption_AppendOnly)
+	require.NoError(t, err)
+	assert.Equal(1+upstream.NumTableSpecs(), newContents.NumTableSpecs())
+	assert.Equal(1, newContents.NumAppendixSpecs())
+
+	_, upstream, err = fm.ParseIfExists(ctx, stats, nil)
+	require.NoError(t, err)
+
+	// Make second Commit
+	secondRootChunk := chunks.NewChunk([]byte("newer root"))
+	secondRoot := secondRootChunk.Hash()
+	err = store.Put(ctx, secondRootChunk)
+	require.NoError(t, err)
+	success, err := store.Commit(ctx, secondRoot, rootChunk.Hash())
+	require.NoError(t, err)
+	if assert.True(success) {
+		h, err := store.Root(ctx)
+		require.NoError(t, err)
+		assert.Equal(secondRoot, h)
+		has, err := store.Has(context.Background(), rootChunk.Hash())
+		require.NoError(t, err)
+		assert.True(has)
+		has, err = store.Has(context.Background(), secondRoot)
+		require.NoError(t, err)
+		assert.True(has)
+	}
+
+	// Ensure commit did not blow away appendix
+	_, newUpstream, err := fm.ParseIfExists(ctx, stats, nil)
+	require.NoError(t, err)
+	assert.Equal(1+upstream.NumTableSpecs(), newUpstream.NumTableSpecs())
+	assert.Equal(upstream.NumAppendixSpecs(), newUpstream.NumAppendixSpecs())
+	assert.Equal(upstream.GetAppendixTableSpecInfo(0), newUpstream.GetTableSpecInfo(0))
+	assert.Equal(newUpstream.GetTableSpecInfo(0), newUpstream.GetAppendixTableSpecInfo(0))
+}

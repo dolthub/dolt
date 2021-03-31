@@ -617,3 +617,36 @@ func (m Map) String() string {
 func (m Map) HumanReadableString() string {
 	panic("unreachable")
 }
+
+// VisitMapLevelOrder returns a list hash strings for all map chunks in level order
+func VisitMapLevelOrder(m Map) ([]string, error) {
+	curLevel := []Map{m}
+	allhashes := []string{}
+	for len(curLevel) > 0 {
+		nextLevel := []Map{}
+		for _, m := range curLevel {
+			if metaSeq, ok := m.orderedSequence.(metaSequence); ok {
+				ts, err := metaSeq.tuples()
+				if err != nil {
+					return nil, err
+				}
+				for _, t := range ts {
+					r, err := t.ref()
+					if err != nil {
+						return nil, err
+					}
+					allhashes = append(allhashes, r.TargetHash().String())
+					v, err := r.TargetValue(context.Background(), m.valueReadWriter())
+					if err != nil {
+						return nil, err
+					}
+					nextLevel = append(nextLevel, v.(Map))
+				}
+			} else if _, ok := m.orderedSequence.(mapLeafSequence); ok {
+
+			}
+		}
+		curLevel = nextLevel
+	}
+	return allhashes, nil
+}

@@ -367,18 +367,16 @@ func parseIfExistsWithParser(_ context.Context, dir string, parse manifestParser
 
 	// !exists(lockFileName) => unitialized store
 	if locked {
-		var f io.ReadCloser
+		var f *os.File
 		err = func() (ferr error) {
 			lck := newLock(dir)
 			ferr = lck.Lock()
-
 			if ferr != nil {
 				return ferr
 			}
 
 			defer func() {
 				unlockErr := lck.Unlock()
-
 				if ferr == nil {
 					ferr = unlockErr
 				}
@@ -396,7 +394,6 @@ func parseIfExistsWithParser(_ context.Context, dir string, parse manifestParser
 			if ferr != nil {
 				return ferr
 			}
-
 			return nil
 		}()
 
@@ -422,7 +419,6 @@ func parseIfExistsWithParser(_ context.Context, dir string, parse manifestParser
 			}
 		}
 	}
-
 	return exists, contents, nil
 }
 
