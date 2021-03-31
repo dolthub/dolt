@@ -274,6 +274,7 @@ func TestSetColVal(t *testing.T) {
 		assert.Equal(t, r, r3)
 		expected[lnColTag] = updatedVal
 		r4, err := New(types.Format_Default, sch, expected)
+		require.NoError(t, err)
 		assert.Equal(t, updated, r4)
 
 		// set to a nil value
@@ -281,6 +282,7 @@ func TestSetColVal(t *testing.T) {
 		assert.NoError(t, err)
 		delete(expected, titleColTag)
 		r5, err := New(types.Format_Default, sch, expected)
+		require.NoError(t, err)
 		assert.Equal(t, updated, r5)
 	})
 

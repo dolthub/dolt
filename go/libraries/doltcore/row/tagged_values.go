@@ -259,8 +259,11 @@ func (tt TaggedValues) String() string {
 func CountCellDiffs(from, to types.Tuple) (uint64, error) {
 	changed := 0
 	f, err := ParseTaggedValues(from)
-	t, err := ParseTaggedValues(to)
+	if err != nil {
+		return 0, err
+	}
 
+	t, err := ParseTaggedValues(to)
 	if err != nil {
 		return 0, err
 	}
