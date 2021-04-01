@@ -229,6 +229,9 @@ func NameMapperFromFile(mappingFile string, FS filesys.ReadableFS) (NameMapper, 
 // TypedToUntypedMapping takes a schema and creates a mapping to an untyped schema with all the same columns.
 func TypedToUntypedMapping(sch schema.Schema) (*FieldMapping, error) {
 	untypedSch, err := untyped.UntypeSchema(sch)
+	if err != nil {
+		return nil, err
+	}
 
 	identityMap := make(map[uint64]uint64)
 	err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {

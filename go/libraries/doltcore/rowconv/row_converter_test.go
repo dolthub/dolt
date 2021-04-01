@@ -90,16 +90,17 @@ func TestRowConverter(t *testing.T) {
 
 func TestUnneccessaryConversion(t *testing.T) {
 	mapping, err := TagMapping(srcSch, srcSch)
-
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	vrw := types.NewMemoryValueStore()
 	rconv, err := NewRowConverter(context.Background(), vrw, mapping)
-
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !rconv.IdentityConverter {
-		t.Error("expected identity converter")
+		t.Fatal("expected identity converter")
 	}
 }
 
