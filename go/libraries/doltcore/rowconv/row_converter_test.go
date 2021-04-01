@@ -45,7 +45,7 @@ var srcSch = schema.MustSchemaFromCols(srcCols)
 func TestRowConverter(t *testing.T) {
 	mapping, err := TypedToUntypedMapping(srcSch)
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	vrw := types.NewMemoryValueStore()
 	rConv, err := NewRowConverter(context.Background(), vrw, mapping)
@@ -66,9 +66,9 @@ func TestRowConverter(t *testing.T) {
 		6: tt,
 	})
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	outData, err := rConv.Convert(inRow)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	destSch := mapping.DestSch
 	expected, err := row.New(vrw.Format(), destSch, row.TaggedValues{
@@ -81,7 +81,7 @@ func TestRowConverter(t *testing.T) {
 		6: types.String(tt.String()),
 	})
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	if !row.AreEqual(outData, expected, destSch) {
 		t.Error("\n", row.Fmt(context.Background(), expected, destSch), "!=\n", row.Fmt(context.Background(), outData, destSch))
