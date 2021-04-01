@@ -28,6 +28,7 @@ import (
 
 func init() {
 	sqle.MinRowsPerPartition = 2
+	json.FeatureFlag = true
 }
 
 func TestQueries(t *testing.T) {
