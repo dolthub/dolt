@@ -105,7 +105,7 @@ func TestHedgerObeysMaxHedges(t *testing.T) {
 		})
 		assert.NoError(t, err)
 		assert.Equal(t, 1, i.(int))
-		assert.Equal(t, int32(max), cnt)
+		assert.Equal(t, int32(max), atomic.LoadInt32(&cnt))
 	}
 	try(1)
 	try(2)
