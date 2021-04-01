@@ -16,10 +16,12 @@ package json
 
 import (
 	js "encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -98,4 +100,64 @@ func TestJSONValueMarshallingRoundTrip(t *testing.T) {
 		})
 	}
 
+}
+
+func TestJSONCompare(t *testing.T) {
+	tests := []struct {
+		left  string
+		right string
+		cmp   int
+	}{
+		// type precedence hierarchy: BOOLEAN, ARRAY, OBJECT, STRING, DOUBLE, NULL
+		{`true`, `[0]`, 1},
+		{`[0]`, `{"a": 0}`, 1},
+		{`{"a": 0}`, `"a"`, 1},
+		{`"a"`, `0`, 1},
+		{`0`, `null`, 1},
+
+		// null
+		{`null`, `0`, -1},
+		{`0`, `null`, 1},
+		{`null`, `null`, 0},
+
+		// boolean
+		{`true`, `false`, 1},
+		{`true`, `true`, 0},
+		{`false`, `false`, 0},
+
+		// strings
+		{`"A"`, `"B"`, -1},
+		{`"A"`, `"A"`, 0},
+		{`"C"`, `"B"`, 1},
+
+		// numbers
+		{`0`, `0.0`, 0},
+		{`0`, `-1`, 1},
+		{`0`, `3.14`, -1},
+
+		// TODO(andy): ordering NomsJSON objects and arrays
+		//  differs from sql.JSONDocument
+		//  MySQL doesn't specify order of unequal objects/arrays
+
+		// arrays
+		{`[1,2]`, `[1,2]`, 0},
+		// deterministic array ordering by hash
+		{`[1,2]`, `[1,9]`, 1},
+
+		// objects
+		{`{"a": 0}`, `{"a": 0}`, 0},
+		// deterministic object ordering by hash
+		{`{"a": 1}`, `{"a": 0}`, 1},
+	}
+
+	ctx := sql.NewEmptyContext()
+	for _, test := range tests {
+		name := fmt.Sprintf("%v_%v__%d", test.left, test.right, test.cmp)
+		t.Run(name, func(t *testing.T) {
+			left, right := MustNomsJSON(test.left), MustNomsJSON(test.right)
+			cmp, err := left.Compare(ctx, right)
+			require.NoError(t, err)
+			assert.Equal(t, test.cmp, cmp)
+		})
+	}
 }
