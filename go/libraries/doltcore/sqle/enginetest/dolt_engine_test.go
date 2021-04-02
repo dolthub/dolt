@@ -53,6 +53,48 @@ func TestSingleQuery(t *testing.T) {
 	enginetest.TestQuery(t, harness, engine, test.Query, test.Expected, test.ExpectedColumns, test.Bindings)
 }
 
+// Convenience test for debugging a single query. Unskip and set to the desired query.
+func TestSingleScript(t *testing.T) {
+	t.Skip()
+
+	var scripts = []enginetest.ScriptTest{
+		{
+			Name: "row_count() behavior",
+			SetUpScript: []string{
+				"create table b (x int primary key)",
+				"insert into b values (1), (2), (3), (4)",
+			},
+			Assertions: []enginetest.ScriptTestAssertion{
+				{
+					Query:    "delete from b where x <> 2",
+					Expected: []sql.Row{{sql.NewOkResult(3)}},
+				},
+				{
+					Query:    "select * from b where x <> 2",
+					Expected: []sql.Row{},
+				},
+				{
+					Query:    "replace into b values (1)",
+					Expected: []sql.Row{{sql.NewOkResult(1)}},
+				},
+				{
+					Query:    "select row_count()",
+					Expected: []sql.Row{{1}},
+				},
+			},
+		},
+	}
+
+	for _, test := range scripts {
+		harness := newDoltHarness(t)
+		engine := enginetest.NewEngine(t, harness)
+		engine.Analyzer.Debug = true
+		engine.Analyzer.Verbose = true
+
+		enginetest.TestScriptWithEngine(t, engine, harness, test)
+	}
+}
+
 func TestVersionedQueries(t *testing.T) {
 	enginetest.TestVersionedQueries(t, newDoltHarness(t))
 }
