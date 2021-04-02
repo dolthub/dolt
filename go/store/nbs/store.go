@@ -224,6 +224,14 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 		return contents, nil
 	}
 
+	// ensure we dont drop existing appendices
+	if contents.appendix != nil && len(contents.appendix) > 0 {
+		contents, err = fromManifestAppendixOptionNewContents(contents, contents.appendix, ManifestAppendixOption_Set)
+		if err != nil {
+			return manifestContents{}, err
+		}
+	}
+
 	var updatedContents manifestContents
 	updatedContents, err = nbs.mm.Update(ctx, contents.lock, contents, &stats, nil)
 
@@ -246,6 +254,129 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 	}
 
 	return updatedContents, nil
+}
+
+func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updates map[hash.Hash]uint32, option ManifestAppendixOption) (mi ManifestInfo, err error) {
+	nbs.mm.LockForUpdate()
+	defer func() {
+		unlockErr := nbs.mm.UnlockForUpdate()
+
+		if err == nil {
+			err = unlockErr
+		}
+	}()
+
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+
+	var stats Stats
+	var ok bool
+	var contents manifestContents
+	ok, contents, err = nbs.mm.Fetch(ctx, &stats)
+
+	if err != nil {
+		return manifestContents{}, err
+	} else if !ok {
+		contents = manifestContents{vers: nbs.upstream.vers}
+	}
+
+	currAppendixSpecs := contents.getAppendixSet()
+
+	appendixSpecs := make([]tableSpec, 0)
+	var addCount int
+	for h, count := range updates {
+		a := addr(h)
+
+		if option == ManifestAppendixOption_Set {
+			appendixSpecs = append(appendixSpecs, tableSpec{a, count})
+		} else {
+			if _, ok := currAppendixSpecs[a]; !ok {
+				addCount++
+				appendixSpecs = append(appendixSpecs, tableSpec{a, count})
+			}
+		}
+	}
+
+	if addCount == 0 && option != ManifestAppendixOption_Set {
+		return contents, nil
+	}
+
+	contents, err = fromManifestAppendixOptionNewContents(contents, appendixSpecs, option)
+	if err != nil {
+		return manifestContents{}, err
+	}
+
+	var updatedContents manifestContents
+	updatedContents, err = nbs.mm.Update(ctx, contents.lock, contents, &stats, nil)
+	if err != nil {
+		return manifestContents{}, err
+	}
+
+	newTables, err := nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
+	if err != nil {
+		return manifestContents{}, err
+	}
+
+	nbs.upstream = updatedContents
+	oldTables := nbs.tables
+	nbs.tables = newTables
+	err = oldTables.Close()
+	if err != nil {
+		return manifestContents{}, err
+	}
+	return updatedContents, nil
+}
+
+func fromManifestAppendixOptionNewContents(upstream manifestContents, appendixSpecs []tableSpec, option ManifestAppendixOption) (manifestContents, error) {
+	contents, upstreamAppendixSpecs := upstream.removeAppendixSpecs()
+	switch option {
+	case ManifestAppendixOption_Append:
+		// prepend all appendix specs to contents.specs
+		specs := append([]tableSpec{}, appendixSpecs...)
+		specs = append(specs, upstreamAppendixSpecs...)
+		contents.specs = append(specs, contents.specs...)
+
+		// append all appendix specs to contents.appendix
+		newAppendixSpecs := append([]tableSpec{}, upstreamAppendixSpecs...)
+		contents.appendix = append(newAppendixSpecs, appendixSpecs...)
+
+		return contents, nil
+	case ManifestAppendixOption_Set:
+		if len(appendixSpecs) < 1 {
+			return contents, nil
+		}
+
+		// prepend new appendix specs to contents.specs
+		// dropping all upstream appendix specs
+		specs := append([]tableSpec{}, appendixSpecs...)
+		contents.specs = append(specs, contents.specs...)
+
+		// append new appendix specs to contents.appendix
+		contents.appendix = append([]tableSpec{}, appendixSpecs...)
+		return contents, nil
+	default:
+		return manifestContents{}, ErrUnsupportedManifestAppendixOption
+	}
+}
+
+// GetManifestStorageVersion returns the manifest storage version or an error if the operation
+// is not supported
+func (nbs *NomsBlockStore) GetManifestStorageVersion(ctx context.Context) (version string, err error) {
+	info, ok := nbs.mm.m.(ManifestInfo)
+	if !ok {
+		return "", chunks.ErrUnsupportedOperation
+	}
+
+	// possibly unnecessary
+	nbs.mm.LockForUpdate()
+	defer func() {
+		err = nbs.mm.UnlockForUpdate()
+	}()
+
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+
+	return info.GetVersion(), nil
 }
 
 func NewAWSStoreWithMMapIndex(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64) (*NomsBlockStore, error) {
@@ -890,6 +1021,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 
 	if nbs.c.ConjoinRequired(nbs.tables) {
 		var err error
+
 		newUpstream, err := nbs.c.Conjoin(ctx, nbs.upstream, nbs.mm, nbs.p, nbs.stats)
 
 		if err != nil {
@@ -914,17 +1046,34 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 	}
 
 	specs, err := nbs.tables.ToSpecs()
-
 	if err != nil {
 		return err
 	}
 
+	// ensure we dont drop appendices on commit
+	var appendixSpecs []tableSpec
+	if nbs.upstream.appendix != nil && len(nbs.upstream.appendix) > 0 {
+		appendixSet := nbs.upstream.getAppendixSet()
+
+		filtered := make([]tableSpec, 0, len(specs))
+		for _, s := range specs {
+			if _, present := appendixSet[s.name]; !present {
+				filtered = append(filtered, s)
+			}
+		}
+
+		_, appendixSpecs = nbs.upstream.removeAppendixSpecs()
+		prepended := append([]tableSpec{}, appendixSpecs...)
+		specs = append(prepended, filtered...)
+	}
+
 	newContents := manifestContents{
-		vers:  nbs.upstream.vers,
-		root:  current,
-		lock:  generateLockHash(current, specs),
-		gcGen: nbs.upstream.gcGen,
-		specs: specs,
+		vers:     nbs.upstream.vers,
+		root:     current,
+		lock:     generateLockHash(current, specs),
+		gcGen:    nbs.upstream.gcGen,
+		specs:    specs,
+		appendix: appendixSpecs,
 	}
 
 	upstream, err := nbs.mm.Update(ctx, nbs.upstream.lock, newContents, nbs.stats, nil)
@@ -1016,6 +1165,53 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []TableFile,
 	var tableFiles []TableFile
 	for i := 0; i < numSpecs; i++ {
 		info := contents.getSpec(i)
+		cs, ok := css[info.name]
+		if !ok {
+			return hash.Hash{}, nil, errors.New("manifest referenced table file for which there is no chunkSource.")
+		}
+		tf := tableFile{
+			info: info,
+			open: func(ctx context.Context) (io.ReadCloser, error) {
+				r, err := cs.reader(ctx)
+				if err != nil {
+					return nil, err
+				}
+
+				return ioutil.NopCloser(r), nil
+			},
+		}
+		tableFiles = append(tableFiles, tf)
+	}
+
+	return contents.GetRoot(), tableFiles, nil
+}
+
+// AppendixSources retrieves the current root hash, and a list of all the table files in the manifest appendix
+func (nbs *NomsBlockStore) AppendixSources(ctx context.Context) (hash.Hash, []TableFile, error) {
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+
+	stats := &Stats{}
+	exists, contents, err := nbs.mm.m.ParseIfExists(ctx, stats, nil)
+
+	if err != nil {
+		return hash.Hash{}, nil, err
+	}
+
+	if !exists {
+		return hash.Hash{}, nil, nil
+	}
+
+	css, err := nbs.chunkSourcesByAddr()
+	if err != nil {
+		return hash.Hash{}, nil, err
+	}
+
+	numSpecs := contents.NumAppendixSpecs()
+
+	var tableFiles []TableFile
+	for i := 0; i < numSpecs; i++ {
+		info := contents.getAppendixSpec(i)
 		cs, ok := css[info.name]
 		if !ok {
 			return hash.Hash{}, nil, errors.New("manifest referenced table file for which there is no chunkSource.")

@@ -474,7 +474,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		srcs := makeTestSrcs(t, []uint32{1, 1, 3, 7}, p)
 		upstream, err := toSpecs(srcs)
 		require.NoError(t, err)
-		fm.set(constants.NomsVersion, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream)
+		fm.set(constants.NomsVersion, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream, nil)
 		c := &fakeConjoiner{
 			[]cannedConjoin{makeCanned(upstream[:2], upstream[2:], p)},
 		}
@@ -506,7 +506,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		srcs := makeTestSrcs(t, []uint32{1, 1, 3, 7, 13}, p)
 		upstream, err := toSpecs(srcs)
 		require.NoError(t, err)
-		fm.set(constants.NomsVersion, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream)
+		fm.set(constants.NomsVersion, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream, nil)
 		c := &fakeConjoiner{
 			[]cannedConjoin{
 				makeCanned(upstream[:2], upstream[2:], p),

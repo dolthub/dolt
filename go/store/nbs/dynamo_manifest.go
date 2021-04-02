@@ -41,16 +41,19 @@ const (
 	// DynamoManifest does not yet include GC Generation
 	AWSStorageVersion = "4"
 
-	dbAttr         = "db"
-	lockAttr       = "lck" // 'lock' is a reserved word in dynamo
-	rootAttr       = "root"
-	versAttr       = "vers"
-	nbsVersAttr    = "nbsVers"
-	tableSpecsAttr = "specs"
+	dbAttr                      = "db"
+	lockAttr                    = "lck" // 'lock' is a reserved word in dynamo
+	rootAttr                    = "root"
+	versAttr                    = "vers"
+	nbsVersAttr                 = "nbsVers"
+	tableSpecsAttr              = "specs"
+	appendixAttr                = "appendix"
+	prevLockExpressionValuesKey = ":prev"
+	versExpressionValuesKey     = ":vers"
 )
 
 var (
-	valueEqualsExpression            = fmt.Sprintf("(%s = :prev) and (%s = :vers)", lockAttr, versAttr)
+	valueEqualsExpression            = fmt.Sprintf("(%s = %s) and (%s = %s)", lockAttr, prevLockExpressionValuesKey, versAttr, versExpressionValuesKey)
 	valueNotExistsOrEqualsExpression = fmt.Sprintf("attribute_not_exists("+lockAttr+") or %s", valueEqualsExpression)
 )
 
@@ -96,17 +99,24 @@ func (dm dynamoManifest) ParseIfExists(ctx context.Context, stats *Stats, readHo
 
 	// !exists(dbAttr) => unitialized store
 	if len(result.Item) > 0 {
-		valid, hasSpecs := validateManifest(result.Item)
+		valid, hasSpecs, hasAppendix := validateManifest(result.Item)
 		if !valid {
 			return false, contents, ErrCorruptManifest
 		}
+
 		exists = true
 		contents.vers = *result.Item[versAttr].S
 		contents.root = hash.New(result.Item[rootAttr].B)
 		copy(contents.lock[:], result.Item[lockAttr].B)
 		if hasSpecs {
 			contents.specs, err = parseSpecs(strings.Split(*result.Item[tableSpecsAttr].S, ":"))
+			if err != nil {
+				return false, manifestContents{}, ErrCorruptManifest
+			}
+		}
 
+		if hasAppendix {
+			contents.appendix, err = parseSpecs(strings.Split(*result.Item[appendixAttr].S, ":"))
 			if err != nil {
 				return false, manifestContents{}, ErrCorruptManifest
 			}
@@ -116,18 +126,24 @@ func (dm dynamoManifest) ParseIfExists(ctx context.Context, stats *Stats, readHo
 	return exists, contents, nil
 }
 
-func validateManifest(item map[string]*dynamodb.AttributeValue) (valid, hasSpecs bool) {
+func validateManifest(item map[string]*dynamodb.AttributeValue) (valid, hasSpecs, hasAppendix bool) {
 	if item[nbsVersAttr] != nil && item[nbsVersAttr].S != nil &&
 		AWSStorageVersion == *item[nbsVersAttr].S &&
 		item[versAttr] != nil && item[versAttr].S != nil &&
 		item[lockAttr] != nil && item[lockAttr].B != nil &&
 		item[rootAttr] != nil && item[rootAttr].B != nil {
-		if len(item) == 6 && item[tableSpecsAttr] != nil && item[tableSpecsAttr].S != nil {
-			return true, true
+		if len(item) == 6 || len(item) == 7 {
+			if item[tableSpecsAttr] != nil && item[tableSpecsAttr].S != nil {
+				hasSpecs = true
+			}
+			if item[appendixAttr] != nil && item[appendixAttr].S != nil {
+				hasAppendix = true
+			}
+			return true, hasSpecs, hasAppendix
 		}
-		return len(item) == 5, false
+		return len(item) == 5, false, false
 	}
-	return false, false
+	return false, false, false
 }
 
 func (dm dynamoManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
@@ -144,10 +160,17 @@ func (dm dynamoManifest) Update(ctx context.Context, lastLock addr, newContents 
 			lockAttr:    {B: newContents.lock[:]},
 		},
 	}
+
 	if len(newContents.specs) > 0 {
 		tableInfo := make([]string, 2*len(newContents.specs))
 		formatSpecs(newContents.specs, tableInfo)
 		putArgs.Item[tableSpecsAttr] = &dynamodb.AttributeValue{S: aws.String(strings.Join(tableInfo, ":"))}
+	}
+
+	if len(newContents.appendix) > 0 {
+		tableInfo := make([]string, 2*len(newContents.appendix))
+		formatSpecs(newContents.appendix, tableInfo)
+		putArgs.Item[appendixAttr] = &dynamodb.AttributeValue{S: aws.String(strings.Join(tableInfo, ":"))}
 	}
 
 	expr := valueEqualsExpression
@@ -157,8 +180,8 @@ func (dm dynamoManifest) Update(ctx context.Context, lastLock addr, newContents 
 
 	putArgs.ConditionExpression = aws.String(expr)
 	putArgs.ExpressionAttributeValues = map[string]*dynamodb.AttributeValue{
-		":prev": {B: lastLock[:]},
-		":vers": {S: aws.String(newContents.vers)},
+		prevLockExpressionValuesKey: {B: lastLock[:]},
+		versExpressionValuesKey:     {S: aws.String(newContents.vers)},
 	}
 
 	_, ddberr := dm.ddbsvc.PutItemWithContext(ctx, &putArgs)

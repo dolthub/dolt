@@ -72,10 +72,17 @@ func (c noopConjoiner) Conjoin(ctx context.Context, upstream manifestContents, m
 
 func conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) (manifestContents, error) {
 	var conjoined tableSpec
-	var conjoinees, keepers []tableSpec
+	var conjoinees, keepers, appendixSpecs []tableSpec
 
 	for {
 		if conjoinees == nil {
+			// Appendix table files should never be conjoined
+			// so we remove them before conjoining and add them
+			// back after
+			if upstream.NumAppendixSpecs() != 0 {
+				upstream, appendixSpecs = upstream.removeAppendixSpecs()
+			}
+
 			var err error
 			conjoined, conjoinees, keepers, err = conjoinTables(ctx, p, upstream.specs, stats)
 
@@ -85,19 +92,24 @@ func conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater,
 		}
 
 		specs := append(make([]tableSpec, 0, len(keepers)+1), conjoined)
+		if len(appendixSpecs) > 0 {
+			specs = append(make([]tableSpec, 0, len(specs)+len(appendixSpecs)), appendixSpecs...)
+			specs = append(specs, conjoined)
+		}
+
 		specs = append(specs, keepers...)
 
 		newContents := manifestContents{
-			vers:  upstream.vers,
-			root:  upstream.root,
-			lock:  generateLockHash(upstream.root, specs),
-			gcGen: upstream.gcGen,
-			specs: specs,
+			vers:     upstream.vers,
+			root:     upstream.root,
+			lock:     generateLockHash(upstream.root, specs),
+			gcGen:    upstream.gcGen,
+			specs:    specs,
+			appendix: appendixSpecs,
 		}
 
 		var err error
 		upstream, err = mm.Update(ctx, upstream.lock, newContents, stats, nil)
-
 		if err != nil {
 			return manifestContents{}, err
 		}
@@ -105,8 +117,28 @@ func conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater,
 		if newContents.lock == upstream.lock {
 			return upstream, nil
 		}
+
 		// Optimistic lock failure. Someone else moved to the root, the set of tables, or both out from under us.
 		// If we can re-use the conjoin we already performed, we want to try again. Currently, we will only do so if ALL conjoinees are still present upstream. If we can't re-use...then someone else almost certainly landed a conjoin upstream. In this case, bail and let clients ask again if they think they still can't proceed.
+
+		// If the appendix has changed we simply bail
+		// and let the client retry
+		if len(appendixSpecs) > 0 {
+			if len(upstream.appendix) != len(appendixSpecs) {
+				return upstream, nil
+			}
+			for i := range upstream.appendix {
+				if upstream.appendix[i].name != appendixSpecs[i].name {
+					return upstream, nil
+				}
+			}
+
+			// No appendix change occured, so we remove the appendix
+			// on the "latest" upstream which will be added back
+			// before the conjoin completes
+			upstream, appendixSpecs = upstream.removeAppendixSpecs()
+		}
+
 		conjoineeSet := map[addr]struct{}{}
 		upstreamNames := map[addr]struct{}{}
 		for _, spec := range upstream.specs {
