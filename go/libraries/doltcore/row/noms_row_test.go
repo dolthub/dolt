@@ -83,14 +83,14 @@ func newTestRow() (Row, error) {
 
 func TestItrRowCols(t *testing.T) {
 	r, err := newTestRow()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	itrVals := make(TaggedValues)
 	_, err = r.IterCols(func(tag uint64, val types.Value) (stop bool, err error) {
 		itrVals[tag] = val
 		return false, nil
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, TaggedValues{
 		lnColTag:    lnVal,
@@ -110,14 +110,14 @@ func TestFromNoms(t *testing.T) {
 		addrColTag: addrVal,
 		ageColTag:  ageVal,
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	t.Run("all values specified", func(t *testing.T) {
 		keys, err := types.NewTuple(types.Format_Default,
 			types.Uint(fnColTag), fnVal,
 			types.Uint(lnColTag), lnVal,
 		)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		vals, err := types.NewTuple(types.Format_Default,
 			types.Uint(addrColTag), addrVal,
@@ -125,10 +125,10 @@ func TestFromNoms(t *testing.T) {
 			types.Uint(titleColTag), titleVal,
 		)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		r, err := FromNoms(sch, keys, vals)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, expectedRow, r)
 	})
 
@@ -137,18 +137,18 @@ func TestFromNoms(t *testing.T) {
 			types.Uint(fnColTag), fnVal,
 			types.Uint(lnColTag), lnVal,
 		)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		vals, err := types.NewTuple(types.Format_Default)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		expectedRow, err := New(types.Format_Default, sch, TaggedValues{
 			fnColTag: fnVal,
 			lnColTag: lnVal,
 		})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		r, err := FromNoms(sch, keys, vals)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, expectedRow, r)
 	})
 
@@ -158,7 +158,7 @@ func TestFromNoms(t *testing.T) {
 			types.Uint(lnColTag), lnVal,
 		)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		vals, err := types.NewTuple(types.Format_Default,
 			types.Uint(addrColTag), addrVal,
@@ -167,10 +167,10 @@ func TestFromNoms(t *testing.T) {
 			types.Uint(unusedTag), fnVal,
 		)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		r, err := FromNoms(sch, keys, vals)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, expectedRow, r)
 	})
 
@@ -179,12 +179,12 @@ func TestFromNoms(t *testing.T) {
 			types.Uint(fnColTag), fnVal,
 			types.Uint(lnColTag), lnVal,
 		)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		vals, err := types.NewTuple(types.Format_Default,
 			types.Uint(addrColTag), addrVal,
 			types.Uint(ageColTag), fnVal,
 		)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		_, err = FromNoms(sch, keys, vals)
 		assert.Error(t, err)
@@ -195,12 +195,12 @@ func TestFromNoms(t *testing.T) {
 			types.Uint(fnColTag), fnVal,
 			types.Uint(lnColTag), lnVal,
 		)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		vals, err := types.NewTuple(types.Format_Default,
 			types.Uint(addrColTag), addrVal,
 			types.Uint(fnColTag), fnVal,
 		)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		_, err = FromNoms(sch, keys, vals)
 		assert.Error(t, err)
@@ -213,7 +213,7 @@ func TestFromNoms(t *testing.T) {
 			types.Uint(unusedTag), fnVal,
 		)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		vals, err := types.NewTuple(types.Format_Default,
 			types.Uint(addrColTag), addrVal,
@@ -221,7 +221,7 @@ func TestFromNoms(t *testing.T) {
 			types.Uint(titleColTag), titleVal,
 		)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		_, err = FromNoms(sch, keys, vals)
 		assert.Error(t, err)
@@ -234,14 +234,14 @@ func TestFromNoms(t *testing.T) {
 			types.Uint(ageColTag), ageVal,
 		)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		vals, err := types.NewTuple(types.Format_Default,
 			types.Uint(addrColTag), addrVal,
 			types.Uint(titleColTag), titleVal,
 		)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		_, err = FromNoms(sch, keys, vals)
 		assert.Error(t, err)
@@ -260,27 +260,29 @@ func TestSetColVal(t *testing.T) {
 		updatedVal := types.String("sanchez")
 
 		r, err := newTestRow()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		r2, err := New(types.Format_Default, sch, expected)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, r, r2)
 
 		updated, err := r.SetColVal(lnColTag, updatedVal, sch)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		// validate calling set does not mutate the original row
 		r3, err := New(types.Format_Default, sch, expected)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, r, r3)
 		expected[lnColTag] = updatedVal
 		r4, err := New(types.Format_Default, sch, expected)
+		require.NoError(t, err)
 		assert.Equal(t, updated, r4)
 
 		// set to a nil value
 		updated, err = updated.SetColVal(titleColTag, nil, sch)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		delete(expected, titleColTag)
 		r5, err := New(types.Format_Default, sch, expected)
+		require.NoError(t, err)
 		assert.Equal(t, updated, r5)
 	})
 
@@ -293,27 +295,27 @@ func TestSetColVal(t *testing.T) {
 			titleColTag: titleVal}
 
 		r, err := newTestRow()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		r2, err := New(types.Format_Default, sch, expected)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, r, r2)
 
 		// SetColVal allows an incorrect type to be set for a column
 		updatedRow, err := r.SetColVal(lnColTag, types.Bool(true), sch)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		// IsValid fails for the type problem
 		isv, err := IsValid(updatedRow, sch)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.False(t, isv)
 		invalidCol, err := GetInvalidCol(updatedRow, sch)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, invalidCol)
 		assert.Equal(t, uint64(lnColTag), invalidCol.Tag)
 
 		// validate calling set does not mutate the original row
 		r3, err := New(types.Format_Default, sch, expected)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, r, r3)
 	})
 }
@@ -322,16 +324,16 @@ func TestConvToAndFromTuple(t *testing.T) {
 	ctx := context.Background()
 
 	r, err := newTestRow()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	keyTpl := r.NomsMapKey(sch).(TupleVals)
 	valTpl := r.NomsMapValue(sch).(TupleVals)
 	keyVal, err := keyTpl.Value(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	valVal, err := valTpl.Value(ctx)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	r2, err := FromNoms(sch, keyVal.(types.Tuple), valVal.(types.Tuple))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	fmt.Println(Fmt(context.Background(), r, sch))
 	fmt.Println(Fmt(context.Background(), r2, sch))
@@ -400,7 +402,7 @@ func TestReduceToIndex(t *testing.T) {
 		expectedIndex, err := New(types.Format_Default, index.Schema(), tvCombo.expectedIndex)
 		require.NoError(t, err)
 		indexRow, err := ReduceToIndex(index, row)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, AreEqual(expectedIndex, indexRow, index.Schema()))
 	}
 }

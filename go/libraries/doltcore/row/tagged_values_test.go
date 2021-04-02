@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -99,22 +100,21 @@ func TestTupleValsLess(t *testing.T) {
 			greaterTplVals := test.greaterTVs.nomsTupleForTags(types.Format_Default, test.tags, true)
 
 			lessLTGreater, err := lesserTplVals.Less(types.Format_Default, greaterTplVals)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			greaterLTLess, err := greaterTplVals.Less(types.Format_Default, lesserTplVals)
-			assert.NoError(t, err)
-
+			require.NoError(t, err)
 			assert.True(t, test.areEqual && !lessLTGreater || !test.areEqual && lessLTGreater)
 			assert.True(t, !greaterLTLess)
 
 			lesserTpl, err := lesserTplVals.Value(ctx)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			greaterTpl, err := greaterTplVals.Value(ctx)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			lesserLess, err := lesserTpl.Less(types.Format_Default, greaterTpl)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			greaterLess, err := greaterTpl.Less(types.Format_Default, lesserTpl)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			// needs to match with the types.Tuple Less implementation.
 			assert.True(t, lessLTGreater == lesserLess)
@@ -191,7 +191,7 @@ func TestTaggedTuple_Iter(t *testing.T) {
 		return false, nil
 	})
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	if sum != 6 {
 		t.Error("Did not iterate all tags.")
