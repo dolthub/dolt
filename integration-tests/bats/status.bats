@@ -200,3 +200,8 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "3" ]] || false
 }
+
+@test "status: dolt reset --hard with more than one additional arg throws an error " {
+    run dolt reset --hard HEAD HEAD2
+    [ "$status" -eq 1 ]
+}
