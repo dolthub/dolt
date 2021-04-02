@@ -17,6 +17,7 @@ package commands
 import (
 	"bufio"
 	"io"
+	"regexp"
 	"unicode"
 )
 
@@ -53,6 +54,8 @@ const (
 	backtick       = '`'
 )
 
+var scannerDelimiterRegex = regexp.MustCompile(`(?i)^\s*DELIMITER\s+(\S+)[ \t]*([\n]+|\S+\s*)?`)
+
 // ScanStatements is a split function for a Scanner that returns each SQL statement in the input as a token.
 func (s *statementScanner) scanStatements(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	if atEOF && len(data) == 0 {
@@ -69,6 +72,10 @@ func (s *statementScanner) scanStatements(data []byte, atEOF bool) (advance int,
 	)
 
 	s.startLineNum = s.lineNum
+
+	if idxs := scannerDelimiterRegex.FindIndex(data); len(idxs) == 2 {
+		return idxs[1], data[0:idxs[1]], nil
+	}
 
 	for i := 0; i < len(data); i++ {
 		if !ignoreNextChar {
