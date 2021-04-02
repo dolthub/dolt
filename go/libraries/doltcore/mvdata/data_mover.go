@@ -135,7 +135,7 @@ func (imp *DataMover) Move(ctx context.Context, sch schema.Schema) (badRowCount 
 		r := pipeline.GetTransFailureRow(trf)
 
 		if r != nil {
-			err = writeBadRowToCli(r, sch, &b)
+			err = writeBadRowToCli(ctx, r, sch, &b)
 			if err != nil {
 				return true
 			}
@@ -165,7 +165,7 @@ func (imp *DataMover) Move(ctx context.Context, sch schema.Schema) (badRowCount 
 }
 
 // writeBadRowToCli prints a bad row in a csv form to STDERR.
-func writeBadRowToCli(r row.Row, sch schema.Schema, b *bytes.Buffer) error {
+func writeBadRowToCli(ctx context.Context, r row.Row, sch schema.Schema, b *bytes.Buffer) error {
 	sqlRow, err := sqlutil.DoltRowToSqlRow(r, sch)
 	if err != nil {
 		return err
@@ -177,7 +177,7 @@ func writeBadRowToCli(r row.Row, sch schema.Schema, b *bytes.Buffer) error {
 
 	for colNum, col := range sqlRow {
 		if col != nil {
-			str := sqlutil.SqlColToStr(col)
+			str := sqlutil.SqlColToStr(ctx, col)
 			colValStrs[colNum] = &str
 		} else {
 			colValStrs[colNum] = nil

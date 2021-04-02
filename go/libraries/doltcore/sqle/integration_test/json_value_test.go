@@ -39,15 +39,70 @@ func TestJsonValues(t *testing.T) {
 	json.FeatureFlag = true
 	defer func() { json.FeatureFlag = false }()
 
+	setupCommon := []testCommand{
+		{cmd.SqlCmd{}, args{"-q", `create table js (pk int primary key, js json);`}},
+	}
+
 	tests := []jsonValueTest{
 		{
-			name: "create JSON table",
+			name:  "create JSON table",
+			setup: []testCommand{},
+			query: "select * from js",
+			rows:  []sql.Row{},
+		},
+		{
+			name: "insert into a JSON table",
 			setup: []testCommand{
-				{cmd.SqlCmd{}, args{"-q", `create table js (pk int primary key, js json);`}},
-				{cmd.SqlCmd{}, args{"-q", `insert into js values (1, '[]'), (2, '{"a":1}');`}},
+				{cmd.SqlCmd{}, args{"-q", `insert into js values (1, '{"a":1}'), (2, '{"b":2}');`}},
 			},
-			query: "select count(*) from js",
-			rows:  []sql.Row{{int64(2)}},
+			query: "select * from js",
+			rows: []sql.Row{
+				{int32(1), json.MustNomsJSON(`{"a":1}`)},
+				{int32(2), json.MustNomsJSON(`{"b":2}`)},
+			},
+		},
+		{
+			name: "update a JSON table",
+			setup: []testCommand{
+				{cmd.SqlCmd{}, args{"-q", `insert into js values (1, '{"a":1}'), (2, '{"b":2}');`}},
+				{cmd.SqlCmd{}, args{"-q", `update js set js = '{"c":3}' where pk = 2;`}},
+			},
+			query: "select * from js",
+			rows: []sql.Row{
+				{int32(1), json.MustNomsJSON(`{"a":1}`)},
+				{int32(2), json.MustNomsJSON(`{"c":3}`)},
+			},
+		},
+		{
+			name: "delete from a JSON table",
+			setup: []testCommand{
+				{cmd.SqlCmd{}, args{"-q", `insert into js values (1, '{"a":1}'), (2, '{"b":2}');`}},
+				{cmd.SqlCmd{}, args{"-q", `delete from js where pk = 2;`}},
+			},
+			query: "select * from js",
+			rows: []sql.Row{
+				{int32(1), json.MustNomsJSON(`{"a":1}`)},
+			},
+		},
+		{
+			name: "merge a JSON table",
+			setup: []testCommand{
+				{cmd.SqlCmd{}, args{"-q", `insert into js values (1, '{"a":1}'), (2, '{"b":2}');`}},
+				{cmd.AddCmd{}, args{"."}},
+				{cmd.CommitCmd{}, args{"-m", "added a JSON table"}},
+				{cmd.CheckoutCmd{}, args{"-b", "other"}},
+				{cmd.SqlCmd{}, args{"-q", `update js set js = '{"b":22}' where pk = 2;`}},
+				{cmd.CommitCmd{}, args{"-am", "update row pk = 2"}},
+				{cmd.CheckoutCmd{}, args{"master"}},
+				{cmd.SqlCmd{}, args{"-q", `update js set js = '{"a":11}' where pk = 1;`}},
+				{cmd.CommitCmd{}, args{"-am", "update row pk = 1"}},
+				{cmd.MergeCmd{}, args{"other"}},
+			},
+			query: "select * from js",
+			rows: []sql.Row{
+				{int32(1), json.MustNomsJSON(`{"a":11}`)},
+				{int32(2), json.MustNomsJSON(`{"b":22}`)},
+			},
 		},
 	}
 
@@ -56,7 +111,8 @@ func TestJsonValues(t *testing.T) {
 			ctx := context.Background()
 			dEnv := dtestutils.CreateTestEnv()
 
-			for _, c := range test.setup {
+			setup := append(setupCommon, test.setup...)
+			for _, c := range setup {
 				exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
 				require.Equal(t, 0, exitCode)
 			}
@@ -69,7 +125,19 @@ func TestJsonValues(t *testing.T) {
 
 			require.Equal(t, len(test.rows), len(actRows))
 			for i := range test.rows {
-				assert.Equal(t, test.rows[i], actRows[i])
+				assert.Equal(t, len(test.rows[i]), len(actRows[i]))
+				for j := range test.rows[i] {
+					exp, act := test.rows[i][j], actRows[i][j]
+
+					// special logic for comparing JSONValues
+					if js, ok := exp.(json.NomsJSON); ok {
+						cmp, err := js.Compare(sql.NewEmptyContext(), act.(json.NomsJSON))
+						require.NoError(t, err)
+						assert.Zero(t, cmp)
+					} else {
+						assert.Equal(t, exp, act)
+					}
+				}
 			}
 		})
 	}

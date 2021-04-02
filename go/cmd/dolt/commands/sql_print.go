@@ -210,7 +210,7 @@ func csvProcessStageFunc(ctx context.Context, items []pipeline.ItemWithProps) ([
 
 		for colNum, col := range r {
 			if col != nil {
-				str := sqlutil.SqlColToStr(col)
+				str := sqlutil.SqlColToStr(ctx, col)
 				colValStrs[colNum] = &str
 			} else {
 				colValStrs[colNum] = nil
@@ -276,8 +276,13 @@ func getJSONProcessFunc(sch sql.Schema) pipeline.StageFunc {
 					}
 
 					validCols++
-					colStr := sqlutil.SqlColToStr(col)
-					colStr = strings.Replace(colStr, "\"", "\\\"", -1)
+					colStr := sqlutil.SqlColToStr(ctx, col)
+
+					if _, ok := col.(sql.JSONValue); !ok {
+						// don't escape for JSONValue literals
+						colStr = strings.Replace(colStr, "\"", "\\\"", -1)
+					}
+
 					str := fmt.Sprintf(formats[colNum], colStr)
 					sb.WriteString(str)
 				}
@@ -348,7 +353,7 @@ func createTabularPipeline(_ context.Context, sch sql.Schema, iter sql.RowIter) 
 	return p
 }
 
-func rowsToStringSlices(_ context.Context, items []pipeline.ItemWithProps) ([]pipeline.ItemWithProps, error) {
+func rowsToStringSlices(ctx context.Context, items []pipeline.ItemWithProps) ([]pipeline.ItemWithProps, error) {
 	if items == nil {
 		return nil, nil
 	}
@@ -370,7 +375,7 @@ func rowsToStringSlices(_ context.Context, items []pipeline.ItemWithProps) ([]pi
 			}
 
 			if !isNull {
-				cols[colNum] = sqlutil.SqlColToStr(col)
+				cols[colNum] = sqlutil.SqlColToStr(ctx, col)
 			} else {
 				cols[colNum] = "NULL"
 			}

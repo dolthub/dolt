@@ -177,7 +177,7 @@ func keylessDoltRowFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, sq
 }
 
 // SqlColToStr is a utility function for converting a sql column of type interface{} to a string
-func SqlColToStr(col interface{}) string {
+func SqlColToStr(ctx context.Context, col interface{}) string {
 	if col != nil {
 		switch typedCol := col.(type) {
 		case int:
@@ -214,6 +214,12 @@ func SqlColToStr(col interface{}) string {
 			}
 		case time.Time:
 			return typedCol.Format("2006-01-02 15:04:05.999999 -0700 MST")
+		case sql.JSONValue:
+			s, err := typedCol.ToString(sql.NewContext(ctx))
+			if err != nil {
+				s = err.Error()
+			}
+			return s
 		default:
 			return fmt.Sprintf("%v", typedCol)
 		}
