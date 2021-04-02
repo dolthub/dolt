@@ -359,21 +359,21 @@ func TestNBSUpdateManifestWithAppendixOptions(t *testing.T) {
 		},
 		{
 			description:                   "should append to appendix",
-			option:                        ManifestAppendixOption_AppendOnly,
+			option:                        ManifestAppendixOption_Append,
 			appendixSpecIds:               appendixIds[:2],
 			expectedNumberOfSpecs:         3,
 			expectedNumberOfAppendixSpecs: 2,
 		},
 		{
 			description:                   "should replace appendix",
-			option:                        ManifestAppendixOption_ReplaceAll,
+			option:                        ManifestAppendixOption_Set,
 			appendixSpecIds:               appendixIds[3:],
 			expectedNumberOfSpecs:         2,
 			expectedNumberOfAppendixSpecs: 1,
 		},
 		{
 			description:                   "should set appendix to nil",
-			option:                        ManifestAppendixOption_SetNone,
+			option:                        ManifestAppendixOption_Set,
 			appendixSpecIds:               []hash.Hash{},
 			expectedNumberOfSpecs:         1,
 			expectedNumberOfAppendixSpecs: 0,
@@ -416,7 +416,7 @@ func TestNBSUpdateManifestWithAppendix(t *testing.T) {
 	// Ensure appendix (and specs) are updated
 	appendixFileId := appendixIds[0]
 	updates := map[hash.Hash]uint32{appendixFileId: appendixUpdates[appendixFileId]}
-	newContents, err := store.UpdateManifestWithAppendix(ctx, updates, ManifestAppendixOption_AppendOnly)
+	newContents, err := store.UpdateManifestWithAppendix(ctx, updates, ManifestAppendixOption_Append)
 	require.NoError(t, err)
 	assert.Equal(upstream.NumTableSpecs()+1, newContents.NumTableSpecs())
 	assert.Equal(1, newContents.NumAppendixSpecs())
@@ -448,7 +448,8 @@ func TestNBSUpdateManifestRetainsAppendix(t *testing.T) {
 
 	// Update the appendix
 	appendixSpecId := specIds[1]
-	newContents, err = store.UpdateManifestWithAppendix(ctx, map[hash.Hash]uint32{appendixSpecId: specUpdates[appendixSpecId]}, ManifestAppendixOption_AppendOnly)
+	updates := map[hash.Hash]uint32{appendixSpecId: specUpdates[appendixSpecId]}
+	newContents, err = store.UpdateManifestWithAppendix(ctx, updates, ManifestAppendixOption_Append)
 	require.NoError(t, err)
 	assert.Equal(1+upstream.NumTableSpecs(), newContents.NumTableSpecs())
 	assert.Equal(1+upstream.NumAppendixSpecs(), newContents.NumAppendixSpecs())
@@ -485,7 +486,7 @@ func TestNBSCommitRetainsAppendix(t *testing.T) {
 	// Update the appendix
 	appendixFileId := appendixIds[0]
 	updates := map[hash.Hash]uint32{appendixFileId: appendixUpdates[appendixFileId]}
-	newContents, err := store.UpdateManifestWithAppendix(ctx, updates, ManifestAppendixOption_AppendOnly)
+	newContents, err := store.UpdateManifestWithAppendix(ctx, updates, ManifestAppendixOption_Append)
 	require.NoError(t, err)
 	assert.Equal(1+upstream.NumTableSpecs(), newContents.NumTableSpecs())
 	assert.Equal(1, newContents.NumAppendixSpecs())

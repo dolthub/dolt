@@ -226,7 +226,7 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 
 	// ensure we dont drop existing appendices
 	if contents.appendix != nil && len(contents.appendix) > 0 {
-		contents, err = fromManifestAppendixOptionNewContents(contents, contents.appendix, ManifestAppendixOption_ReplaceAll)
+		contents, err = fromManifestAppendixOptionNewContents(contents, contents.appendix, ManifestAppendixOption_Set)
 		if err != nil {
 			return manifestContents{}, err
 		}
@@ -282,22 +282,26 @@ func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updat
 
 	currAppendixSpecs := contents.getAppendixSet()
 
-	toAdd := make([]tableSpec, 0)
+	appendixSpecs := make([]tableSpec, 0)
 	var addCount int
 	for h, count := range updates {
 		a := addr(h)
 
-		if _, ok := currAppendixSpecs[a]; !ok {
-			addCount++
-			toAdd = append(toAdd, tableSpec{a, count})
+		if option == ManifestAppendixOption_Set {
+			appendixSpecs = append(appendixSpecs, tableSpec{a, count})
+		} else {
+			if _, ok := currAppendixSpecs[a]; !ok {
+				addCount++
+				appendixSpecs = append(appendixSpecs, tableSpec{a, count})
+			}
 		}
 	}
 
-	if addCount == 0 && option != ManifestAppendixOption_SetNone {
+	if addCount == 0 && option != ManifestAppendixOption_Set {
 		return contents, nil
 	}
 
-	contents, err = fromManifestAppendixOptionNewContents(contents, toAdd, option)
+	contents, err = fromManifestAppendixOptionNewContents(contents, appendixSpecs, option)
 	if err != nil {
 		return manifestContents{}, err
 	}
@@ -326,7 +330,7 @@ func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updat
 func fromManifestAppendixOptionNewContents(upstream manifestContents, appendixSpecs []tableSpec, option ManifestAppendixOption) (manifestContents, error) {
 	contents, upstreamAppendixSpecs := upstream.removeAppendixSpecs()
 	switch option {
-	case ManifestAppendixOption_AppendOnly:
+	case ManifestAppendixOption_Append:
 		// prepend all appendix specs to contents.specs
 		specs := append([]tableSpec{}, appendixSpecs...)
 		specs = append(specs, upstreamAppendixSpecs...)
@@ -337,7 +341,11 @@ func fromManifestAppendixOptionNewContents(upstream manifestContents, appendixSp
 		contents.appendix = append(newAppendixSpecs, appendixSpecs...)
 
 		return contents, nil
-	case ManifestAppendixOption_ReplaceAll:
+	case ManifestAppendixOption_Set:
+		if len(appendixSpecs) < 1 {
+			return contents, nil
+		}
+
 		// prepend new appendix specs to contents.specs
 		// dropping all upstream appendix specs
 		specs := append([]tableSpec{}, appendixSpecs...)
@@ -345,9 +353,6 @@ func fromManifestAppendixOptionNewContents(upstream manifestContents, appendixSp
 
 		// append new appendix specs to contents.appendix
 		contents.appendix = append([]tableSpec{}, appendixSpecs...)
-		return contents, nil
-
-	case ManifestAppendixOption_SetNone:
 		return contents, nil
 	default:
 		return manifestContents{}, ErrUnsupportedManifestAppendixOption

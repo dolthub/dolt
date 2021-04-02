@@ -106,17 +106,22 @@ type ManifestAppendixOption int
 
 const (
 	ManifestAppendixOption_Unspecified ManifestAppendixOption = iota
-	ManifestAppendixOption_AppendOnly
-	ManifestAppendixOption_ReplaceAll
-	ManifestAppendixOption_SetNone
+	ManifestAppendixOption_Set
+	ManifestAppendixOption_Append
 )
 
 type manifestContents struct {
-	vers     string
-	lock     addr
-	root     hash.Hash
-	gcGen    addr
-	specs    []tableSpec
+	vers  string
+	lock  addr
+	root  hash.Hash
+	gcGen addr
+	specs []tableSpec
+
+	// An appendix is a list of |tableSpecs| that track an auxillary collection of
+	// table files used _only_ for query performance optimizations. These appendix |tableSpecs| can be safely
+	// managed with nbs.UpdateManifestWithAppendix, however generation and removal of the actual table files
+	// the appendix |tableSpecs| reference is done manually. All appendix |tableSpecs| will be prepended to the
+	// manifest.specs across manifest updates.
 	appendix []tableSpec
 }
 
