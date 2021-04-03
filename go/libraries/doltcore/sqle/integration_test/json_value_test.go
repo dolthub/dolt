@@ -16,6 +16,12 @@ package integration_test
 
 import (
 	"context"
+	"encoding/base32"
+	json2 "encoding/json"
+	"fmt"
+	"math/rand"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -108,37 +114,128 @@ func TestJsonValues(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ctx := context.Background()
-			dEnv := dtestutils.CreateTestEnv()
-
-			setup := append(setupCommon, test.setup...)
-			for _, c := range setup {
-				exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
-				require.Equal(t, 0, exitCode)
-			}
-
-			root, err := dEnv.WorkingRoot(ctx)
-			require.NoError(t, err)
-
-			actRows, err := sqle.ExecuteSelect(dEnv, dEnv.DoltDB, root, test.query)
-			require.NoError(t, err)
-
-			require.Equal(t, len(test.rows), len(actRows))
-			for i := range test.rows {
-				assert.Equal(t, len(test.rows[i]), len(actRows[i]))
-				for j := range test.rows[i] {
-					exp, act := test.rows[i][j], actRows[i][j]
-
-					// special logic for comparing JSONValues
-					if js, ok := exp.(json.NomsJSON); ok {
-						cmp, err := js.Compare(sql.NewEmptyContext(), act.(json.NomsJSON))
-						require.NoError(t, err)
-						assert.Zero(t, cmp)
-					} else {
-						assert.Equal(t, exp, act)
-					}
-				}
-			}
+			testJsonValue(t, test, setupCommon)
 		})
+	}
+}
+
+func testJsonValue(t *testing.T, test jsonValueTest, setupCommon []testCommand) {
+	ctx := context.Background()
+	dEnv := dtestutils.CreateTestEnv()
+
+	setup := append(setupCommon, test.setup...)
+	for _, c := range setup {
+		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv)
+		require.Equal(t, 0, exitCode)
+	}
+
+	root, err := dEnv.WorkingRoot(ctx)
+	require.NoError(t, err)
+
+	actRows, err := sqle.ExecuteSelect(dEnv, dEnv.DoltDB, root, test.query)
+	require.NoError(t, err)
+
+	require.Equal(t, len(test.rows), len(actRows))
+	for i := range test.rows {
+		assert.Equal(t, len(test.rows[i]), len(actRows[i]))
+		for j := range test.rows[i] {
+			exp, act := test.rows[i][j], actRows[i][j]
+
+			// special logic for comparing JSONValues
+			if js, ok := exp.(json.NomsJSON); ok {
+				cmp, err := js.Compare(sql.NewEmptyContext(), act.(json.NomsJSON))
+				require.NoError(t, err)
+				assert.Zero(t, cmp)
+			} else {
+				assert.Equal(t, exp, act)
+			}
+		}
+	}
+}
+
+// round-trips large random JSON objects through the SQL engine
+func TestLargeJsonObjects(t *testing.T) {
+	json.FeatureFlag = true
+	defer func() { json.FeatureFlag = false }()
+
+	setupCommon := []testCommand{
+		{cmd.SqlCmd{}, args{"-q", `create table js (pk int primary key, js json);`}},
+	}
+
+	// Generate large random JSON values
+	const iterations = 25  // number of test iteration
+	const numRows = 100    // number of rows/objects per test
+	const objSize = 100    // number of key:value pairs per row/object
+	const strLen = 10      // size of key, value strings
+
+	k := 0
+	for k < iterations {
+
+		// generate a random byte string to slice into
+		// JSON object key:value pairs
+		bb := make([]byte, numRows*objSize*strLen*2)
+		rand.Read(bb)
+		// encode as base32 (longer than we need)
+		ss := base32.StdEncoding.EncodeToString(bb)
+
+		i := 0
+		vals := make([]string, numRows)
+		for i < numRows {
+
+			// for each row, generate a big random object
+			obj := make(map[string]interface{}, objSize)
+
+			j := 0
+			for j < objSize {
+				start := strLen * 2 * i * j
+				k := ss[start : start+strLen]
+				v := ss[start+strLen : start+(strLen*2)]
+				obj[k] = v
+				j++
+			}
+
+			// marshal the random object into a string
+			js, err := json2.Marshal(obj)
+			require.NoError(t, err)
+			vals[i] = string(js)
+
+			i++
+		}
+
+		// for each row/object:
+		// - create an expected output rows
+		// - add an insert tuple to the setup query
+		expected := make([]sql.Row, numRows)
+
+		query := strings.Builder{}
+		query.WriteString("insert into js values (")
+		seenOne := false
+
+		for i, val := range vals {
+			expected[i] = sql.NewRow(int32(i), json.MustNomsJSON(val))
+
+			if seenOne {
+				query.WriteString("'),(")
+			}
+			seenOne = true
+			query.WriteString(strconv.Itoa(i))
+			query.WriteString(",'")
+			query.WriteString(val)
+		}
+		query.WriteString("');")
+
+		test := jsonValueTest{
+			name: fmt.Sprintf("test large json objects (%d)", k),
+			setup: []testCommand{
+				{cmd.SqlCmd{}, args{"-q", query.String()}},
+			},
+			query: "select * from js;",
+			rows:  expected,
+		}
+
+		t.Run(test.name, func(t *testing.T) {
+			testJsonValue(t, test, setupCommon)
+		})
+		k++
 	}
 }
