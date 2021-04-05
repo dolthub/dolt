@@ -189,6 +189,10 @@ func TestJSONStructuralSharing(t *testing.T) {
 		require.NoError(t, err)
 		before := ts.Len()
 
+		// assert |val| is chunked given that
+		// Database.Flush() writes a chunk itself
+		assert.GreaterOrEqual(t, before, 2)
+
 		i = 0
 		const tuples = 20
 		for i < tuples {
