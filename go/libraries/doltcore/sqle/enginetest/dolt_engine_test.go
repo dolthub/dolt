@@ -22,13 +22,11 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
 func init() {
 	sqle.MinRowsPerPartition = 2
-	json.FeatureFlag = true
 }
 
 func TestQueries(t *testing.T) {
@@ -295,9 +293,6 @@ func TestColumnDefaults(t *testing.T) {
 }
 
 func TestJsonScripts(t *testing.T) {
-	json.FeatureFlag = true
-	defer func() { json.FeatureFlag = false }()
-
 	enginetest.TestJsonScripts(t, newDoltHarness(t))
 }
 
