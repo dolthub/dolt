@@ -15,14 +15,18 @@
 package json
 
 import (
+	"context"
 	js "encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -160,4 +164,46 @@ func TestJSONCompare(t *testing.T) {
 			assert.Equal(t, test.cmp, cmp)
 		})
 	}
+}
+
+func TestJSONStructuralSharing(t *testing.T) {
+	// runs test with avg chunk size of 256 bytes
+	types.TestWithSmallChunks(func() {
+		sb := strings.Builder{}
+		sb.WriteString(`{"0000":"0000"`)
+		i := 1
+		const jsonSize = 100
+		for i < jsonSize {
+			sb.WriteString(fmt.Sprintf(`,"%04d":"%04d"`, i, i))
+			i++
+		}
+		sb.WriteRune('}')
+
+		ctx := context.Background()
+		ts := &chunks.TestStorage{}
+		db := datas.NewDatabase(ts.NewViewWithDefaultFormat())
+
+		val := MustNomsJSONWithVRW(db, sb.String())
+
+		err := db.Flush(ctx)
+		require.NoError(t, err)
+		before := ts.Len()
+
+		i = 0
+		const tuples = 20
+		for i < tuples {
+			tup, err := types.NewTuple(types.Format_Default, types.Int(i), types.JSON(val))
+			require.NoError(t, err)
+			_, err = db.WriteValue(ctx, tup)
+			require.NoError(t, err)
+			i++
+		}
+
+		err = db.Flush(ctx)
+		require.NoError(t, err)
+		after := ts.Len()
+
+		// flush creates a single chunk
+		assert.Equal(t, before+tuples+1, after)
+	})
 }

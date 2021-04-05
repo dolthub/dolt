@@ -163,10 +163,10 @@ func TestLargeJsonObjects(t *testing.T) {
 	}
 
 	// Generate large random JSON values
-	const iterations = 25  // number of test iteration
-	const numRows = 100    // number of rows/objects per test
-	const objSize = 100    // number of key:value pairs per row/object
-	const strLen = 10      // size of key, value strings
+	const iterations = 25 // number of test iteration
+	const numRows = 100   // number of rows/objects per test
+	const objSize = 100   // number of key:value pairs per row/object
+	const strLen = 10     // size of key, value strings
 
 	k := 0
 	for k < iterations {
