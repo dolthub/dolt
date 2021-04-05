@@ -23,10 +23,13 @@ import (
 )
 
 func MustNomsJSON(str string) NomsJSON {
-	doc := sql.MustJSON(str)
-
-	ctx := context.Background()
 	vrw := types.NewMemoryValueStore()
+	return MustNomsJSONWithVRW(vrw, str)
+}
+
+func MustNomsJSONWithVRW(vrw types.ValueReadWriter, str string) NomsJSON {
+	ctx := context.Background()
+	doc := sql.MustJSON(str)
 	noms, err := NomsJSONFromJSONValue(ctx, vrw, doc)
 	if err != nil {
 		panic(err)
