@@ -42,9 +42,6 @@ type jsonValueTest struct {
 }
 
 func TestJsonValues(t *testing.T) {
-	json.FeatureFlag = true
-	defer func() { json.FeatureFlag = false }()
-
 	setupCommon := []testCommand{
 		{cmd.SqlCmd{}, args{"-q", `create table js (pk int primary key, js json);`}},
 	}
@@ -155,9 +152,6 @@ func testJsonValue(t *testing.T, test jsonValueTest, setupCommon []testCommand) 
 
 // round-trips large random JSON objects through the SQL engine
 func TestLargeJsonObjects(t *testing.T) {
-	json.FeatureFlag = true
-	defer func() { json.FeatureFlag = false }()
-
 	setupCommon := []testCommand{
 		{cmd.SqlCmd{}, args{"-q", `create table js (pk int primary key, js json);`}},
 	}
