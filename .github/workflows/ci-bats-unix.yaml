@@ -1,4 +1,4 @@
-name: Test Bats
+name: Test Bats Unix
 
 on:
   pull_request:
@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os: [ ubuntu-18.04, macos-10.15, windows-2019 ]
+        os: [ ubuntu-18.04, macos-10.15 ]
     env:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
     steps:
@@ -39,7 +39,7 @@ jobs:
       - name: Setup Go 1.x
         uses: actions/setup-go@v2
         with:
-          go-version: ^1.13
+          go-version: ^1.15
         id: go
       - name: Setup Python 3.x
         uses: actions/setup-python@v2
@@ -53,31 +53,15 @@ jobs:
         run: |
           mkdir -p ./.ci_bin
           echo "$(pwd)/.ci_bin" >> $GITHUB_PATH
-      - name: Install Bats Unix
-        if: matrix.os != 'windows-2019'
+      - name: Install Bats
         run: |
           npm i bats
           echo "$(pwd)/node_modules/.bin" >> $GITHUB_PATH
         working-directory: ./.ci_bin
-      - name: Install Bats Windows
-        if: matrix.os == 'windows-2019'
-        run: |
-          git clone https://github.com/bats-core/bats-core.git
-          cd bats-core
-          ./install.sh $HOME
-        working-directory: ./.ci_bin
-      - name: Install wslpath
-        if: matrix.os == 'windows-2019'
-        run: |
-          choco install wget
-          wget 'https://raw.githubusercontent.com/laurent22/wslpath/master/wslpath'
-          chmod 755 wslpath
-          mv wslpath /usr/bin/
-          cp /c/tools/php/php /usr/bin/
       - name: Install Doltpy
         run: |
           pip install doltpy
-      - name: Install Dolt Unix
+      - name: Install Dolt
         working-directory: ./go
         run: |
           go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
@@ -89,21 +73,10 @@ jobs:
           dolt config --global --add user.name 'Dolthub Actions'
           dolt config --global --add user.email 'actions@dolthub.com'
       - name: Install expect
-        if: matrix.os == 'ubuntu-18.04'
         run: sudo apt-get install -y expect
       - name: Check expect
-        if: matrix.os != 'windows-2019'
         run: expect -v
-      - name: Test all Windows
-        if: matrix.os == 'windows-2019'
-        run: |
-          bats --tap .
-        working-directory: ./integration-tests/bats
-        env:
-          IS_WINDOWS: true
-          WINDOWS_BASE_DIR: "/d/a"
       - name: Test all Unix
-        if: matrix.os != 'windows-2019'
         run: |
           bats --tap .
         working-directory: ./integration-tests/bats
