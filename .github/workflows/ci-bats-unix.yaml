@@ -73,6 +73,7 @@ jobs:
           dolt config --global --add user.name 'Dolthub Actions'
           dolt config --global --add user.email 'actions@dolthub.com'
       - name: Install expect
+        if: matrix.os == 'ubuntu-18.04'
         run: sudo apt-get install -y expect
       - name: Check expect
         run: expect -v

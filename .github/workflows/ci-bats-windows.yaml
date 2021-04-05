@@ -6,7 +6,7 @@ on:
 
 jobs:
   test-bats-head:
-    name: Bats tests
+    name: Bats tests part 1
     defaults:
       run:
         shell: bash
@@ -103,7 +103,7 @@ jobs:
           IS_WINDOWS: true
           WINDOWS_BASE_DIR: "/d/a"
   test-bats-tail:
-    name: Bats tests
+    name: Bats tests part 2
     defaults:
       run:
         shell: bash
