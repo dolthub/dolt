@@ -211,7 +211,8 @@ func ResetSoft(ctx context.Context, dbData env.DbData, tables []string, stagedRo
 	return stagedRoot, nil
 }
 
-// ResetSoftToRef
+// ResetSoftToRef matches the `git reset --soft <REF>` pattern. It resets both staged and head to the previous ref
+// and leaves the working unset. The user can then choose to create a commit that contains all changes since the ref.
 func ResetSoftToRef(ctx context.Context, dbData env.DbData, cSpecStr string) error {
 	cs, err := doltdb.NewCommitSpec(cSpecStr)
 	if err != nil {
@@ -228,7 +229,7 @@ func ResetSoftToRef(ctx context.Context, dbData env.DbData, cSpecStr string) err
 		return err
 	}
 
-	// Changed the stage to old the root. Leave the working as is
+	// Changed the stage to old the root. Leave the working as is.
 	_, err = env.UpdateStagedRoot(ctx, dbData.Ddb, dbData.Rsw, foundRoot)
 	if err != nil {
 		return err
@@ -287,8 +288,8 @@ func resetStaged(ctx context.Context, ddb *doltdb.DoltDB, rsw env.RepoStateWrite
 	return updatedRoot, env.UpdateStagedRootWithVErr(ddb, rsw, updatedRoot)
 }
 
-// ValidateIfRef validates whether the input parameter is a valid cString
-func ValidateIfRef(ctx context.Context, cSpecStr string, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (bool, error) {
+// ValidateIsRef validates whether the input parameter is a valid cString
+func ValidateIsRef(ctx context.Context, cSpecStr string, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (bool, error) {
 	cs, err := doltdb.NewCommitSpec(cSpecStr)
 	if err != nil {
 		return false, err
@@ -297,8 +298,8 @@ func ValidateIfRef(ctx context.Context, cSpecStr string, ddb *doltdb.DoltDB, rsr
 	_, err = ddb.Resolve(ctx, cs, rsr.CWBHeadRef())
 	if err != nil {
 		return false, nil
+
 	}
 
 	return true, nil
 }
-

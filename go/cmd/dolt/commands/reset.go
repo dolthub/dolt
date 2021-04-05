@@ -101,12 +101,11 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 			err = actions.ResetHard(ctx, dEnv, arg, workingRoot, stagedRoot, headRoot)
 		} else {
-			// If there's one arg check whether that arg is a ref or a table/doc. If there's more than one
-			// check the last element
+			// Check whether the input argument is a ref.
 			if apr.NArg() == 1 {
 				argToCheck := apr.Arg(0)
 
-				ok, err := actions.ValidateIfRef(ctx, argToCheck, dEnv.DoltDB, dEnv.RepoStateReader())
+				ok, err := actions.ValidateIsRef(ctx, argToCheck, dEnv.DoltDB, dEnv.RepoStateReader())
 				if err != nil {
 					return handleResetError(err, usage)
 				}
@@ -190,7 +189,12 @@ func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootV
 func handleResetError(err error, usage cli.UsagePrinter) int {
 	if actions.IsTblNotExist(err) {
 		tbls := actions.GetTablesForError(err)
-		bdr := errhand.BuildDError("Invalid Table(s):")
+
+		// In case the ref does not exist/.
+		bdr := errhand.BuildDError("Invalid Ref or Table:")
+		if len(tbls) > 1 {
+			bdr = errhand.BuildDError("Invalid Table(s):")
+		}
 
 		for _, tbl := range tbls {
 			bdr.AddDetails("\t" + tbl)

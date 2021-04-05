@@ -288,3 +288,11 @@ SQL
     run dolt sql -q "SELECT count(*) from dolt_log"
     [[ "$output" =~ "1" ]] || false
 }
+
+@test "status: dolt reset throws errors for unknown ref/table" {
+    run dolt reset test
+
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Invalid Ref or Table" ]] || false
+    [[ "$output" =~ "test" ]] || false
+}
