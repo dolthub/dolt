@@ -105,10 +105,7 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			if apr.NArg() == 1 {
 				argToCheck := apr.Arg(0)
 
-				ok, err := actions.ValidateIsRef(ctx, argToCheck, dEnv.DoltDB, dEnv.RepoStateReader())
-				if err != nil {
-					return handleResetError(err, usage)
-				}
+				ok := actions.ValidateIsRef(ctx, argToCheck, dEnv.DoltDB, dEnv.RepoStateReader())
 
 				// This is a valid ref
 				if ok {
@@ -190,7 +187,7 @@ func handleResetError(err error, usage cli.UsagePrinter) int {
 	if actions.IsTblNotExist(err) {
 		tbls := actions.GetTablesForError(err)
 
-		// In case the ref does not exist/.
+		// In case the ref does not exist.
 		bdr := errhand.BuildDError("Invalid Ref or Table:")
 		if len(tbls) > 1 {
 			bdr = errhand.BuildDError("Invalid Table(s):")

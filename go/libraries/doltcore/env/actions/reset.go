@@ -289,17 +289,17 @@ func resetStaged(ctx context.Context, ddb *doltdb.DoltDB, rsw env.RepoStateWrite
 }
 
 // ValidateIsRef validates whether the input parameter is a valid cString
-func ValidateIsRef(ctx context.Context, cSpecStr string, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (bool, error) {
+func ValidateIsRef(ctx context.Context, cSpecStr string, ddb *doltdb.DoltDB, rsr env.RepoStateReader) bool {
 	cs, err := doltdb.NewCommitSpec(cSpecStr)
 	if err != nil {
-		return false, err
+		return false
 	}
 
 	_, err = ddb.Resolve(ctx, cs, rsr.CWBHeadRef())
 	if err != nil {
-		return false, nil
+		return false
 
 	}
 
-	return true, nil
+	return true
 }
