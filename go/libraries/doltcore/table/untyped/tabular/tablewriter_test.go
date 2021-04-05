@@ -82,7 +82,7 @@ func TestWriter(t *testing.T) {
 	rows := make([]row.Row, len(ages))
 	for i := range ages {
 		var err error
-		rows[i], err = row.New(types.Format_7_18, rowSch, row.TaggedValues{
+		rows[i], err = row.New(types.Format_Default, rowSch, row.TaggedValues{
 			nameColTag:  types.String(names[i]),
 			ageColTag:   types.String(ages[i]),
 			titleColTag: types.String(titles[i]),
@@ -249,7 +249,7 @@ func TestEastAsianLanguages(t *testing.T) {
 	rows := make([]row.Row, len(ages))
 	for i := range ages {
 		var err error
-		rows[i], err = row.New(types.Format_7_18, rowSch, row.TaggedValues{
+		rows[i], err = row.New(types.Format_Default, rowSch, row.TaggedValues{
 			nameColTag:  types.String(names[i]),
 			ageColTag:   types.String(ages[i]),
 			titleColTag: types.String(titles[i]),

@@ -29,7 +29,7 @@ func TestBadRow(t *testing.T) {
 	sch, err := schema.SchemaFromCols(cols)
 	assert.NoError(t, err)
 
-	emptyRow, err := row.New(types.Format_7_18, sch, row.TaggedValues{})
+	emptyRow, err := row.New(types.Format_Default, sch, row.TaggedValues{})
 	assert.NoError(t, err)
 
 	err = NewBadRow(emptyRow, "details")

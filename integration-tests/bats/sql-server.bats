@@ -698,3 +698,21 @@ SQL
      insert_query 1 "INSERT INTO repo2.one_pk VALUES (4)"
      unselected_server_query 1 "SELECT * FROM repo2.one_pk" "pk\n0\n1\n4"
 }
+
+@test "sql-server: JSON queries" {
+    cd repo1
+    start_sql_server repo1
+
+    # create table with autocommit on and verify table creation
+    server_query 1 "CREATE TABLE js_test (
+        pk int NOT NULL,
+        js json,
+        PRIMARY KEY (pk)
+    )" ""
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "js_test" ]] || false
+
+    insert_query 1 "INSERT INTO js_test VALUES (1, '{\"a\":1}');"
+    server_query 1 "SELECT * FROM js_test;" "pk,js\n1,{\"a\": 1}"
+}

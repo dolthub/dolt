@@ -61,6 +61,13 @@ func normalProductionChunks() {
 	chunkPattern = defaultChunkPattern
 }
 
+// TestWithSmallChunks allows testing with small chunks outside of pkg types.
+func TestWithSmallChunks(cb func()) {
+	smallTestChunks()
+	defer normalProductionChunks()
+	cb()
+}
+
 type rollingValueHasher struct {
 	bw              binaryNomsWriter
 	bz              *buzhash.BuzHash

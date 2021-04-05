@@ -49,7 +49,49 @@ func TestSingleQuery(t *testing.T) {
 	engine.Analyzer.Debug = true
 	engine.Analyzer.Verbose = true
 
-	enginetest.TestQuery(t, harness, engine, test.Query, test.Expected, nil)
+	enginetest.TestQuery(t, harness, engine, test.Query, test.Expected, test.ExpectedColumns, test.Bindings)
+}
+
+// Convenience test for debugging a single query. Unskip and set to the desired query.
+func TestSingleScript(t *testing.T) {
+	t.Skip()
+
+	var scripts = []enginetest.ScriptTest{
+		{
+			Name: "row_count() behavior",
+			SetUpScript: []string{
+				"create table b (x int primary key)",
+				"insert into b values (1), (2), (3), (4)",
+			},
+			Assertions: []enginetest.ScriptTestAssertion{
+				{
+					Query:    "delete from b where x <> 2",
+					Expected: []sql.Row{{sql.NewOkResult(3)}},
+				},
+				{
+					Query:    "select * from b where x <> 2",
+					Expected: []sql.Row{},
+				},
+				{
+					Query:    "replace into b values (1)",
+					Expected: []sql.Row{{sql.NewOkResult(1)}},
+				},
+				{
+					Query:    "select row_count()",
+					Expected: []sql.Row{{1}},
+				},
+			},
+		},
+	}
+
+	for _, test := range scripts {
+		harness := newDoltHarness(t)
+		engine := enginetest.NewEngine(t, harness)
+		engine.Analyzer.Debug = true
+		engine.Analyzer.Verbose = true
+
+		enginetest.TestScriptWithEngine(t, engine, harness, test)
+	}
 }
 
 func TestVersionedQueries(t *testing.T) {
@@ -171,6 +213,10 @@ func TestTruncate(t *testing.T) {
 	enginetest.TestTruncate(t, newDoltHarness(t))
 }
 
+func TestScripts(t *testing.T) {
+	enginetest.TestScripts(t, newDoltHarness(t))
+}
+
 func TestCreateTable(t *testing.T) {
 	enginetest.TestCreateTable(t, newDoltHarness(t))
 }
@@ -244,6 +290,10 @@ func TestInnerNestedInNaturalJoins(t *testing.T) {
 
 func TestColumnDefaults(t *testing.T) {
 	enginetest.TestColumnDefaults(t, newDoltHarness(t))
+}
+
+func TestJsonScripts(t *testing.T) {
+	enginetest.TestJsonScripts(t, newDoltHarness(t))
 }
 
 func TestTriggers(t *testing.T) {

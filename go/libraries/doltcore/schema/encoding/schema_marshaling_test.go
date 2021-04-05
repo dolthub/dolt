@@ -50,7 +50,7 @@ func createTestSchema() schema.Schema {
 
 func TestNomsMarshalling(t *testing.T) {
 	tSchema := createTestSchema()
-	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_7_18, nil, nil)
+	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_Default, nil, nil)
 
 	if err != nil {
 		t.Fatal("Could not create in mem noms db.")
@@ -62,7 +62,7 @@ func TestNomsMarshalling(t *testing.T) {
 		t.Fatal("Failed to marshal Schema as a types.Value.")
 	}
 
-	unMarshalled, err := UnmarshalSchemaNomsValue(context.Background(), types.Format_7_18, val)
+	unMarshalled, err := UnmarshalSchemaNomsValue(context.Background(), types.Format_Default, val)
 
 	if err != nil {
 		t.Fatal("Failed to unmarshal types.Value as Schema")
@@ -72,7 +72,7 @@ func TestNomsMarshalling(t *testing.T) {
 		t.Error("Value different after marshalling and unmarshalling.")
 	}
 
-	validated, err := validateUnmarshaledNomsValue(context.Background(), types.Format_7_18, val)
+	validated, err := validateUnmarshaledNomsValue(context.Background(), types.Format_Default, val)
 
 	if err != nil {
 		t.Fatal(fmt.Sprintf("Failed compatibility test. Schema could not be unmarshalled with mirror type, error: %s", err.Error()))
@@ -88,7 +88,7 @@ func TestNomsMarshalling(t *testing.T) {
 	ssVal, err := MarshalSuperSchemaAsNomsValue(context.Background(), db, tSuperSchema)
 	require.NoError(t, err)
 
-	unMarshalledSS, err := UnmarshalSuperSchemaNomsValue(context.Background(), types.Format_7_18, ssVal)
+	unMarshalledSS, err := UnmarshalSuperSchemaNomsValue(context.Background(), types.Format_Default, ssVal)
 	require.NoError(t, err)
 
 	if !reflect.DeepEqual(tSuperSchema, unMarshalledSS) {

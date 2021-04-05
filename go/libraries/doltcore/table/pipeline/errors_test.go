@@ -26,7 +26,7 @@ import (
 
 func TestTransformRowFailure(t *testing.T) {
 	_, sch := untyped.NewUntypedSchema("a", "b", "c")
-	r, err := untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"1", "2", "3"})
+	r, err := untyped.NewRowFromStrings(types.Format_Default, sch, []string{"1", "2", "3"})
 
 	assert.NoError(t, err)
 

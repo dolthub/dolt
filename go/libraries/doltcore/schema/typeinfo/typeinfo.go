@@ -35,6 +35,7 @@ const (
 	DecimalTypeIdentifier    Identifier = "decimal"
 	EnumTypeIdentifier       Identifier = "enum"
 	FloatTypeIdentifier      Identifier = "float"
+	JSONTypeIdentifier       Identifier = "json"
 	InlineBlobTypeIdentifier Identifier = "inlineblob"
 	IntTypeIdentifier        Identifier = "int"
 	SetTypeIdentifier        Identifier = "set"
@@ -55,6 +56,7 @@ var Identifiers = map[Identifier]struct{}{
 	DecimalTypeIdentifier:    {},
 	EnumTypeIdentifier:       {},
 	FloatTypeIdentifier:      {},
+	JSONTypeIdentifier:       {},
 	InlineBlobTypeIdentifier: {},
 	IntTypeIdentifier:        {},
 	SetTypeIdentifier:        {},
@@ -202,6 +204,12 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 			return nil, fmt.Errorf(`expected "BitTypeIdentifier" from SQL basetype "Bit"`)
 		}
 		return &bitType{bitSQLType}, nil
+	case sqltypes.TypeJSON:
+		js, ok := sqlType.(sql.JsonType)
+		if !ok {
+			return nil, fmt.Errorf(`expected "JsonType" from SQL basetype "TypeJSON"`)
+		}
+		return &jsonType{js}, nil
 	case sqltypes.Enum:
 		enumSQLType, ok := sqlType.(sql.EnumType)
 		if !ok {
@@ -238,6 +246,8 @@ func FromTypeParams(id Identifier, params map[string]string) (TypeInfo, error) {
 		return CreateInlineBlobTypeFromParams(params)
 	case IntTypeIdentifier:
 		return CreateIntTypeFromParams(params)
+	case JSONTypeIdentifier:
+		return JSONType, nil
 	case SetTypeIdentifier:
 		return CreateSetTypeFromParams(params)
 	case TimeTypeIdentifier:
@@ -272,6 +282,8 @@ func FromKind(kind types.NomsKind) TypeInfo {
 		return &inlineBlobType{sql.MustCreateBinary(sqltypes.VarBinary, math.MaxUint16)}
 	case types.IntKind:
 		return Int64Type
+	case types.JSONKind:
+		return JSONType
 	case types.NullKind:
 		return UnknownType
 	case types.StringKind:

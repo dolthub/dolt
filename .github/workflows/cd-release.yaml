@@ -92,22 +92,14 @@ jobs:
 
   homebrew-bump:
     needs: create-release
-    name: Bump Dolt Homebrew formula
     runs-on: ubuntu-18.04
     steps:
-      - name: Create Homebrew PR
-        uses: mislav/bump-homebrew-formula-action@v1
+      - name: Repository Dispatch
+        uses: peter-evans/repository-dispatch@v1
         with:
-          formula-name: dolt
-          homebrew-tap: Homebrew/homebrew-core
-          base-branch: main
-          download-url: ${{format('https://github.com/dolthub/dolt/archive/v{0}.tar.gz', github.event.inputs.version)}}
-          commit-message: |
-            ${{format('dolt {0}', github.event.inputs.version)}}
-
-            Created by https://github.com/mislav/bump-homebrew-formula-action
-        env:
-          COMMITTER_TOKEN: ${{secrets.HOMEBREW_GITHUB_TOKEN}}
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          event-type: bump-homebrew
+          client-payload: '{"version": "${{ github.event.inputs.version }}"}'
 
   trigger-performance-benchmark-email:
     needs: create-release

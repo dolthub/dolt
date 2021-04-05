@@ -78,7 +78,7 @@ func columnCollection(cols ...schema.Column) *schema.ColCollection {
 }
 
 func newRow(vals row.TaggedValues, cc *schema.ColCollection) row.Row {
-	r, err := row.New(types.Format_7_18, schema.MustSchemaFromCols(cc), vals)
+	r, err := row.New(types.Format_Default, schema.MustSchemaFromCols(cc), vals)
 	if err != nil {
 		panic(err)
 	}

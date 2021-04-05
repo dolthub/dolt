@@ -173,3 +173,35 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1" ]] || false
 }
+
+@test "status: dolt checkout . should result in empty status" {
+    dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY);"
+    dolt sql -q "INSERT INTO test VALUES (1)"
+    dolt add -A && dolt commit -m "made table test"
+
+    dolt sql -q "INSERT INTO test VALUES (2)"
+    run dolt checkout .
+    [ "$status" -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    run dolt sql -q "SELECT sum(pk) FROM test" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+
+    dolt checkout -b test
+    dolt sql -q "INSERT INTO test VALUES (2)"
+    dolt add -A && dolt commit -m "insert into test value 2"
+
+    run dolt sql -q "SELECT sum(pk) FROM test" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]] || false
+}
+
+@test "status: dolt reset --hard with more than one additional arg throws an error " {
+    run dolt reset --hard HEAD HEAD2
+    [ "$status" -eq 1 ]
+}

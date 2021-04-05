@@ -24,18 +24,14 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
-func resetHardTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, workingRoot, stagedRoot, headRoot *doltdb.RootValue) (*doltdb.Commit, error) {
-	if apr.NArg() > 1 {
-		return nil, errors.New("--hard supports at most one additional param")
-	}
-
+func resetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, workingRoot, stagedRoot, headRoot *doltdb.RootValue) (*doltdb.Commit, error) {
 	ddb := dbData.Ddb
 	rsr := dbData.Rsr
 	rsw := dbData.Rsw
 
 	var newHead *doltdb.Commit
-	if apr.NArg() == 1 {
-		cs, err := doltdb.NewCommitSpec(apr.Arg(0))
+	if cSpecStr != "" {
+		cs, err := doltdb.NewCommitSpec(cSpecStr)
 		if err != nil {
 			return nil, err
 		}
@@ -104,8 +100,8 @@ func resetHardTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgP
 
 // ResetHardTables resets the tables in working, staged, and head based on the given parameters. Returns the commit hash
 // if head is updated.
-func ResetHardTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, workingRoot, stagedRoot, headRoot *doltdb.RootValue) (string, error) {
-	newHead, err := resetHardTables(ctx, dbData, apr, workingRoot, stagedRoot, headRoot)
+func ResetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, workingRoot, stagedRoot, headRoot *doltdb.RootValue) (string, error) {
+	newHead, err := resetHardTables(ctx, dbData, cSpecStr, workingRoot, stagedRoot, headRoot)
 
 	if err != nil {
 		return "", err
@@ -130,10 +126,10 @@ func ResetHardTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgP
 	return "", nil
 }
 
-func ResetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, workingRoot, stagedRoot, headRoot *doltdb.RootValue) error {
+func ResetHard(ctx context.Context, dEnv *env.DoltEnv, cSpecStr string, workingRoot, stagedRoot, headRoot *doltdb.RootValue) error {
 	dbData := dEnv.DbData()
 
-	newHead, err := resetHardTables(ctx, dbData, apr, workingRoot, stagedRoot, headRoot)
+	newHead, err := resetHardTables(ctx, dbData, cSpecStr, workingRoot, stagedRoot, headRoot)
 
 	if err != nil {
 		return err

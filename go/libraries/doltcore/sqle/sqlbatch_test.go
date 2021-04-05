@@ -274,7 +274,7 @@ func newPeopleRow(id int, firstName, lastName string) row.Row {
 		LastNameTag:  types.String(lastName),
 	}
 
-	r, err := row.New(types.Format_7_18, PeopleTestSchema, vals)
+	r, err := row.New(types.Format_Default, PeopleTestSchema, vals)
 
 	if err != nil {
 		panic(err)
@@ -289,7 +289,7 @@ func newEpsRow(id int, name string) row.Row {
 		EpNameTag:    types.String(name),
 	}
 
-	r, err := row.New(types.Format_7_18, EpisodesTestSchema, vals)
+	r, err := row.New(types.Format_Default, EpisodesTestSchema, vals)
 
 	if err != nil {
 		panic(err)
@@ -304,7 +304,7 @@ func newAppsRow(charId int, epId int) row.Row {
 		AppEpTag:        types.Int(epId),
 	}
 
-	r, err := row.New(types.Format_7_18, AppearancesTestSchema, vals)
+	r, err := row.New(types.Format_Default, AppearancesTestSchema, vals)
 
 	if err != nil {
 		panic(err)

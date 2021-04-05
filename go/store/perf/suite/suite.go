@@ -190,6 +190,7 @@ func (r nopWriter) Write(p []byte) (int, error) {
 
 // Run runs suiteT and writes results to dataset datasetID in the database given by the -perf command line flag.
 func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
+	t.Skip()
 	assert := assert.New(t)
 
 	if !assert.NotEqual("", datasetID) {

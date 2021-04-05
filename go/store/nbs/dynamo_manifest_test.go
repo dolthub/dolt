@@ -52,11 +52,13 @@ func TestDynamoManifestParseIfExists(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(exists)
 
-	// Simulate another process writing a manifest (with an old Noms version).
+	// Simulate another process writing a manifest and appendix (with an old Noms version).
 	newLock := computeAddr([]byte("locker"))
 	newRoot := hash.Of([]byte("new root"))
 	tableName := hash.Of([]byte("table1"))
-	ddb.putRecord(db, newLock[:], newRoot[:], "0", tableName.String()+":"+"0")
+	app := tableName.String() + ":" + "0"
+	specsWithAppendix := app + ":" + tableName.String() + ":" + "0"
+	ddb.putRecord(db, newLock[:], newRoot[:], "0", specsWithAppendix, app)
 
 	// ParseIfExists should now reflect the manifest written above.
 	exists, contents, err := mm.ParseIfExists(context.Background(), stats, nil)
@@ -65,18 +67,25 @@ func TestDynamoManifestParseIfExists(t *testing.T) {
 	assert.Equal("0", contents.vers)
 	assert.Equal(newLock, contents.lock)
 	assert.Equal(newRoot, contents.root)
-	if assert.Len(contents.specs, 1) {
+	if assert.Len(contents.appendix, 1) {
 		assert.Equal(tableName.String(), contents.specs[0].name.String())
 		assert.Equal(uint32(0), contents.specs[0].chunkCount)
+		assert.Equal(tableName.String(), contents.appendix[0].name.String())
+		assert.Equal(uint32(0), contents.appendix[0].chunkCount)
+	}
+	if assert.Len(contents.specs, 2) {
+		assert.Equal(tableName.String(), contents.specs[1].name.String())
+		assert.Equal(uint32(0), contents.specs[1].chunkCount)
 	}
 }
 
-func makeContents(lock, root string, specs []tableSpec) manifestContents {
+func makeContents(lock, root string, specs, appendix []tableSpec) manifestContents {
 	return manifestContents{
-		vers:  constants.NomsVersion,
-		lock:  computeAddr([]byte(lock)),
-		root:  hash.Of([]byte(root)),
-		specs: specs,
+		vers:     constants.NomsVersion,
+		lock:     computeAddr([]byte(lock)),
+		root:     hash.Of([]byte(root)),
+		specs:    specs,
+		appendix: appendix,
 	}
 }
 
@@ -88,7 +97,7 @@ func TestDynamoManifestUpdateWontClobberOldVersion(t *testing.T) {
 	// Simulate another process having already put old Noms data in dir/.
 	lock := computeAddr([]byte("locker"))
 	badRoot := hash.Of([]byte("bad root"))
-	ddb.putRecord(db, lock[:], badRoot[:], "0", "")
+	ddb.putRecord(db, lock[:], badRoot[:], "0", "", "")
 
 	_, err := mm.Update(context.Background(), lock, manifestContents{vers: constants.NomsVersion}, stats, nil)
 	assert.Error(err)
@@ -100,12 +109,12 @@ func TestDynamoManifestUpdate(t *testing.T) {
 	stats := &Stats{}
 
 	// First, test winning the race against another process.
-	contents := makeContents("locker", "nuroot", []tableSpec{{computeAddr([]byte("a")), 3}})
+	contents := makeContents("locker", "nuroot", []tableSpec{{computeAddr([]byte("a")), 3}}, nil)
 	upstream, err := mm.Update(context.Background(), addr{}, contents, stats, func() error {
 		// This should fail to get the lock, and therefore _not_ clobber the manifest. So the Update should succeed.
 		lock := computeAddr([]byte("nolock"))
 		newRoot2 := hash.Of([]byte("noroot"))
-		ddb.putRecord(db, lock[:], newRoot2[:], constants.NomsVersion, "")
+		ddb.putRecord(db, lock[:], newRoot2[:], constants.NomsVersion, "", "")
 		return nil
 	})
 	require.NoError(t, err)
@@ -114,7 +123,7 @@ func TestDynamoManifestUpdate(t *testing.T) {
 	assert.Equal(contents.specs, upstream.specs)
 
 	// Now, test the case where the optimistic lock fails, and someone else updated the root since last we checked.
-	rejected := makeContents("locker 2", "new root 2", nil)
+	rejected := makeContents("locker 2", "new root 2", nil, nil)
 	upstream, err = mm.Update(context.Background(), addr{}, rejected, stats, nil)
 	require.NoError(t, err)
 	assert.Equal(contents.lock, upstream.lock)
@@ -129,14 +138,74 @@ func TestDynamoManifestUpdate(t *testing.T) {
 	// Now, test the case where the optimistic lock fails because someone else updated only the tables since last we checked
 	jerkLock := computeAddr([]byte("jerk"))
 	tableName := computeAddr([]byte("table1"))
-	ddb.putRecord(db, jerkLock[:], upstream.root[:], constants.NomsVersion, tableName.String()+":1")
+	ddb.putRecord(db, jerkLock[:], upstream.root[:], constants.NomsVersion, tableName.String()+":1", "")
 
-	newContents3 := makeContents("locker 3", "new root 3", nil)
+	newContents3 := makeContents("locker 3", "new root 3", nil, nil)
 	upstream, err = mm.Update(context.Background(), upstream.lock, newContents3, stats, nil)
 	require.NoError(t, err)
 	assert.Equal(jerkLock, upstream.lock)
 	assert.Equal(rejected.root, upstream.root)
 	assert.Equal([]tableSpec{{tableName, 1}}, upstream.specs)
+}
+
+func TestDynamoManifestUpdateAppendix(t *testing.T) {
+	assert := assert.New(t)
+	mm, ddb := makeDynamoManifestFake(t)
+	stats := &Stats{}
+
+	// First, test winning the race against another process.
+	specs := []tableSpec{
+		{computeAddr([]byte("app-a")), 3},
+		{computeAddr([]byte("a")), 3},
+	}
+
+	app := []tableSpec{{computeAddr([]byte("app-a")), 3}}
+	contents := makeContents("locker", "nuroot", specs, app)
+
+	upstream, err := mm.Update(context.Background(), addr{}, contents, stats, func() error {
+		// This should fail to get the lock, and therefore _not_ clobber the manifest. So the Update should succeed.
+		lock := computeAddr([]byte("nolock"))
+		newRoot2 := hash.Of([]byte("noroot"))
+		ddb.putRecord(db, lock[:], newRoot2[:], constants.NomsVersion, "", "")
+		return nil
+	})
+	require.NoError(t, err)
+	assert.Equal(contents.lock, upstream.lock)
+	assert.Equal(contents.root, upstream.root)
+	assert.Equal(contents.specs, upstream.specs)
+	assert.Equal(contents.appendix, upstream.appendix)
+
+	// Now, test the case where the optimistic lock fails, and someone else updated the root since last we checked.
+	rejected := makeContents("locker 2", "new root 2", nil, nil)
+	upstream, err = mm.Update(context.Background(), addr{}, rejected, stats, nil)
+	require.NoError(t, err)
+	assert.Equal(contents.lock, upstream.lock)
+	assert.Equal(contents.root, upstream.root)
+	assert.Equal(contents.specs, upstream.specs)
+	assert.Equal(contents.appendix, upstream.appendix)
+
+	upstream, err = mm.Update(context.Background(), upstream.lock, rejected, stats, nil)
+	require.NoError(t, err)
+	assert.Equal(rejected.lock, upstream.lock)
+	assert.Equal(rejected.root, upstream.root)
+	assert.Empty(upstream.specs)
+	assert.Empty(upstream.appendix)
+
+	// Now, test the case where the optimistic lock fails because someone else updated only the tables since last we checked
+	jerkLock := computeAddr([]byte("jerk"))
+	tableName := computeAddr([]byte("table1"))
+	appTableName := computeAddr([]byte("table1-appendix"))
+	appStr := appTableName.String() + ":1"
+	specsStr := appStr + ":" + tableName.String() + ":1"
+	ddb.putRecord(db, jerkLock[:], upstream.root[:], constants.NomsVersion, specsStr, appStr)
+
+	newContents3 := makeContents("locker 3", "new root 3", nil, nil)
+	upstream, err = mm.Update(context.Background(), upstream.lock, newContents3, stats, nil)
+	require.NoError(t, err)
+	assert.Equal(jerkLock, upstream.lock)
+	assert.Equal(rejected.root, upstream.root)
+	assert.Equal([]tableSpec{{appTableName, 1}, {tableName, 1}}, upstream.specs)
+	assert.Equal([]tableSpec{{appTableName, 1}}, upstream.appendix)
 }
 
 func TestDynamoManifestCaching(t *testing.T) {
@@ -152,7 +221,7 @@ func TestDynamoManifestCaching(t *testing.T) {
 	assert.Equal(reads+1, ddb.NumGets())
 
 	lock, root := computeAddr([]byte("lock")), hash.Of([]byte("root"))
-	ddb.putRecord(db, lock[:], root[:], constants.NomsVersion, "")
+	ddb.putRecord(db, lock[:], root[:], constants.NomsVersion, "", "")
 
 	reads = ddb.NumGets()
 	exists, _, err = mm.ParseIfExists(context.Background(), stats, nil)
@@ -162,7 +231,7 @@ func TestDynamoManifestCaching(t *testing.T) {
 
 	// When failing the optimistic lock, we should hit persistent storage.
 	reads = ddb.NumGets()
-	contents := makeContents("lock2", "nuroot", []tableSpec{{computeAddr([]byte("a")), 3}})
+	contents := makeContents("lock2", "nuroot", []tableSpec{{computeAddr([]byte("a")), 3}}, nil)
 	upstream, err := mm.Update(context.Background(), addr{}, contents, stats, nil)
 	require.NoError(t, err)
 	assert.NotEqual(contents.lock, upstream.lock)
@@ -187,4 +256,5 @@ func TestDynamoManifestUpdateEmpty(t *testing.T) {
 	assert.Equal(contents.lock, upstream.lock)
 	assert.True(upstream.root.IsEmpty())
 	assert.Empty(upstream.specs)
+	assert.Empty(upstream.appendix)
 }

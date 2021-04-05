@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	cmd "github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -41,36 +41,38 @@ func TestHistoryTable(t *testing.T) {
 
 type historyTableTest struct {
 	name  string
-	query string
 	setup []testCommand
+	query string
 	rows  []sql.Row
 }
 
 type testCommand struct {
 	cmd  cli.Command
-	args []string
+	args args
 }
 
+type args []string
+
 var setupCommon = []testCommand{
-	{commands.SqlCmd{}, []string{"-q", "create table test (" +
+	{cmd.SqlCmd{}, args{"-q", "create table test (" +
 		"pk int not null primary key," +
 		"c0 int);"}},
-	{commands.AddCmd{}, []string{"."}},
-	{commands.CommitCmd{}, []string{"-m", "first"}},
-	{commands.SqlCmd{}, []string{"-q", "insert into test values " +
+	{cmd.AddCmd{}, args{"."}},
+	{cmd.CommitCmd{}, args{"-m", "first"}},
+	{cmd.SqlCmd{}, args{"-q", "insert into test values " +
 		"(0,0)," +
 		"(1,1);"}},
-	{commands.AddCmd{}, []string{"."}},
-	{commands.CommitCmd{}, []string{"-m", "second"}},
-	{commands.SqlCmd{}, []string{"-q", "insert into test values " +
+	{cmd.AddCmd{}, args{"."}},
+	{cmd.CommitCmd{}, args{"-m", "second"}},
+	{cmd.SqlCmd{}, args{"-q", "insert into test values " +
 		"(2,2)," +
 		"(3,3);"}},
-	{commands.AddCmd{}, []string{"."}},
-	{commands.CommitCmd{}, []string{"-m", "third"}},
-	{commands.SqlCmd{}, []string{"-q", "update test set c0 = c0+10 where c0 % 2 = 0"}},
-	{commands.AddCmd{}, []string{"."}},
-	{commands.CommitCmd{}, []string{"-m", "fourth"}},
-	{commands.LogCmd{}, []string{}},
+	{cmd.AddCmd{}, args{"."}},
+	{cmd.CommitCmd{}, args{"-m", "third"}},
+	{cmd.SqlCmd{}, args{"-q", "update test set c0 = c0+10 where c0 % 2 = 0"}},
+	{cmd.AddCmd{}, args{"."}},
+	{cmd.CommitCmd{}, args{"-m", "fourth"}},
+	{cmd.LogCmd{}, args{}},
 }
 
 func historyTableTests() []historyTableTest {

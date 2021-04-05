@@ -810,7 +810,9 @@ DELIMITER ;   $
 INSERT INTO test VALUES (3, 3, 3);
 DELIMITER ********** ;
 INSERT INTO test VALUES (4, 4, 4)**********
-INSERT INTO test VALUES (5, 5, 5)
+DELIMITER &
+INSERT INTO test VALUES (5, 5, 5)&
+INSERT INTO test VALUES (6, 6, 6)
 SQL
     run dolt sql -q "CALL p1(3)" -r=csv
     [ "$status" -eq "0" ]
@@ -820,7 +822,8 @@ SQL
     [[ "$output" =~ "13,13,13" ]] || false
     [[ "$output" =~ "14,14,14" ]] || false
     [[ "$output" =~ "15,15,15" ]] || false
-    [[ "${#lines[@]}" = "6" ]] || false
+    [[ "$output" =~ "16,16,16" ]] || false
+    [[ "${#lines[@]}" = "7" ]] || false
 
     run dolt sql -q "CALL p1(20)" -r=csv
     [ "$status" -eq "0" ]
@@ -830,7 +833,8 @@ SQL
     [[ "$output" =~ "23,23,23" ]] || false
     [[ "$output" =~ "24,24,24" ]] || false
     [[ "$output" =~ "25,25,25" ]] || false
-    [[ "${#lines[@]}" = "6" ]] || false
+    [[ "$output" =~ "26,26,26" ]] || false
+    [[ "${#lines[@]}" = "7" ]] || false
 
     dolt sql <<SQL
 DELIMITER // ;
