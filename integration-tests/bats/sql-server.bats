@@ -699,18 +699,9 @@ SQL
      unselected_server_query 1 "SELECT * FROM repo2.one_pk" "pk\n0\n1\n4"
 }
 
-# TODO(andy): remove when feature flag removed
-start_sql_server_with_json_flag() {
-    DEFAULT_DB="$1"
-    let PORT="$$ % (65536-1024) + 1024"
-    dolt --json sql-server --host 0.0.0.0 --port=$PORT --user dolt &
-    SERVER_PID=$!
-    wait_for_connection $PORT 5000
-}
-
 @test "sql-server: JSON queries" {
     cd repo1
-    start_sql_server_with_json_flag repo1
+    start_sql_server repo1
 
     # create table with autocommit on and verify table creation
     server_query 1 "CREATE TABLE js_test (
