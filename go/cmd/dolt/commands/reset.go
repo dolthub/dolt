@@ -101,7 +101,26 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 			err = actions.ResetHard(ctx, dEnv, arg, workingRoot, stagedRoot, headRoot)
 		} else {
-			stagedRoot, err = actions.ResetSoft(ctx, dEnv.DbData(), apr, stagedRoot, headRoot)
+			// If there's one arg check whether that arg is a ref or a table/doc. If there's more than one
+			// check the last element
+			if apr.NArg() == 1 {
+				argToCheck := apr.Arg(0)
+
+				ok, err := actions.ValidateIfRef(ctx, argToCheck, dEnv.DoltDB, dEnv.RepoStateReader())
+				if err != nil {
+					return handleResetError(err, usage)
+				}
+
+				// This is a valid ref
+				if ok {
+					err = actions.ResetSoftToRef(ctx, dEnv.DbData(), apr.Arg(0))
+					return handleResetError(err, usage)
+				}
+			}
+
+			tables := apr.Args()
+
+			stagedRoot, err = actions.ResetSoft(ctx, dEnv.DbData(), tables, stagedRoot, headRoot)
 
 			if err != nil {
 				return handleResetError(err, usage)

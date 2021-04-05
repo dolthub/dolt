@@ -205,3 +205,86 @@ SQL
     run dolt reset --hard HEAD HEAD2
     [ "$status" -eq 1 ]
 }
+
+@test "status: dolt reset hard with ~ works" {
+    dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY);"
+    dolt commit -am "cm1"
+
+    dolt sql -q "INSERT INTO test values (1);"
+    dolt commit -am "cm2"
+
+    dolt sql -q "INSERT INTO test VALUES (2);"
+    dolt commit -am "cm3"
+
+    # Do a hard reset back one commit and confirm the appropriate values.
+    run dolt reset --hard HEAD~1
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT sum(pk) FROM test;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+
+    # Since this is a hard reset double check the status
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    # Run again with ~2 this time
+    dolt sql -q "INSERT INTO test VALUES (2);"
+    dolt commit -am "cm3"
+
+    # Do a hard reset back one commit and confirm the appropriate values.
+    run dolt reset --hard HEAD~2
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT sum(pk) FROM test;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "NULL" ]] || false
+
+    # Since this is a hard reset double check the status
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "status: dolt reset soft with ~ works" {
+    dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY);"
+    dolt commit -am "cm1"
+
+    dolt sql -q "INSERT INTO test values (1);"
+    dolt commit -am "cm2"
+
+    # Make a dirty change
+    dolt sql -q "INSERT INTO test values (2)"
+    run dolt reset HEAD~
+    [ "$status" -eq 0 ]
+
+    # Verify that the changes are still there
+    run dolt sql -q "SELECT sum(pk) FROM test;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]] || false
+
+    # Now verify that commit log has changes
+    run dolt sql -q "SELECT count(*) from dolt_log"
+    [[ "$output" =~ "2" ]] || false
+
+    run dolt reset HEAD~1
+    [ "$status" -eq 0 ]
+
+    # Verify that the changes are still there
+    run dolt sql -q "SELECT sum(pk) FROM test;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]] || false
+
+    # This should be a tracked file...
+    run dolt status
+    [[ "$output" =~ "Untracked files:" ]] || false
+    [[ "$output" =~ "  (use \"dolt add <table|doc>\" to include in what will be committed)" ]] || false
+    [[ "$output" =~ "	new table:      test" ]] || false
+
+    # Now verify that commit log has changes
+    run dolt sql -q "SELECT count(*) from dolt_log"
+    [[ "$output" =~ "1" ]] || false
+}

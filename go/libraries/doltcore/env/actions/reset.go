@@ -175,8 +175,8 @@ func ResetSoftTables(ctx context.Context, dbData env.DbData, apr *argparser.ArgP
 	return stagedRoot, nil
 }
 
-func ResetSoft(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseResults, stagedRoot, headRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
-	tables, err := getUnionedTables(ctx, apr.Args(), stagedRoot, headRoot)
+func ResetSoft(ctx context.Context, dbData env.DbData, tables []string, stagedRoot, headRoot *doltdb.RootValue) (*doltdb.RootValue, error) {
+	tables, err := getUnionedTables(ctx, tables, stagedRoot, headRoot)
 
 	if err != nil {
 		return nil, err
@@ -209,6 +209,37 @@ func ResetSoft(ctx context.Context, dbData env.DbData, apr *argparser.ArgParseRe
 	}
 
 	return stagedRoot, nil
+}
+
+// ResetSoftToRef
+func ResetSoftToRef(ctx context.Context, dbData env.DbData, cSpecStr string) error {
+	cs, err := doltdb.NewCommitSpec(cSpecStr)
+	if err != nil {
+		return err
+	}
+
+	newHead, err := dbData.Ddb.Resolve(ctx, cs, dbData.Rsr.CWBHeadRef())
+	if err != nil {
+		return err
+	}
+
+	foundRoot, err := newHead.GetRootValue()
+	if err != nil {
+		return err
+	}
+
+	// Changed the stage to old the root. Leave the working as is
+	_, err = env.UpdateStagedRoot(ctx, dbData.Ddb, dbData.Rsw, foundRoot)
+	if err != nil {
+		return err
+	}
+
+	// Update the head to this commit
+	if err = dbData.Ddb.SetHeadToCommit(ctx, dbData.Rsr.CWBHeadRef(), newHead); err != nil {
+		return err
+	}
+
+	return err
 }
 
 func getUnionedTables(ctx context.Context, tables []string, stagedRoot, headRoot *doltdb.RootValue) ([]string, error) {
@@ -255,3 +286,19 @@ func resetStaged(ctx context.Context, ddb *doltdb.DoltDB, rsw env.RepoStateWrite
 
 	return updatedRoot, env.UpdateStagedRootWithVErr(ddb, rsw, updatedRoot)
 }
+
+// ValidateIfRef validates whether the input parameter is a valid cString
+func ValidateIfRef(ctx context.Context, cSpecStr string, ddb *doltdb.DoltDB, rsr env.RepoStateReader) (bool, error) {
+	cs, err := doltdb.NewCommitSpec(cSpecStr)
+	if err != nil {
+		return false, err
+	}
+
+	_, err = ddb.Resolve(ctx, cs, rsr.CWBHeadRef())
+	if err != nil {
+		return false, nil
+	}
+
+	return true, nil
+}
+
