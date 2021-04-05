@@ -234,7 +234,7 @@ SQL
     dolt sql -q "INSERT INTO test VALUES (2);"
     dolt commit -am "cm3"
 
-    # Do a hard reset back one commit and confirm the appropriate values.
+    # Do a hard reset back two commits and confirm the appropriate values.
     run dolt reset --hard HEAD~2
     [ "$status" -eq 0 ]
 
