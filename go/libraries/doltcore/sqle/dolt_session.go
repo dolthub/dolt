@@ -361,7 +361,10 @@ func (sess *DoltSession) Set(ctx context.Context, key string, typ sql.Type, valu
 		if err != nil {
 			return err
 		}
-		intVal := convertedVal.(int64)
+		intVal := int64(0)
+		if convertedVal != nil {
+			intVal = convertedVal.(int64)
+		}
 		if intVal == 0 {
 			for _, tableEditSession := range sess.dbEditors {
 				tableEditSession.Props.ForeignKeyChecksDisabled = true
