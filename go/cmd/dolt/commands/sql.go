@@ -174,7 +174,10 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			return 2
 		}
 
-		mrEnv = env.DoltEnvAsMultiEnv(dEnv)
+		mrEnv, err = env.DoltEnvAsMultiEnv(dEnv)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
 
 		if apr.NArg() > 0 {
 			cs, err := parseCommitSpec(dEnv, apr)
