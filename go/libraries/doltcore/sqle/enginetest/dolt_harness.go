@@ -35,6 +35,7 @@ type DoltHarness struct {
 	session     *sqle.DoltSession
 	mrEnv       env.MultiRepoEnv
 	parallelism int
+	skippedQueries []string
 }
 
 var _ enginetest.Harness = (*DoltHarness)(nil)
@@ -51,26 +52,43 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 		t:       t,
 		session: session,
 		mrEnv:   make(env.MultiRepoEnv),
+		skippedQueries: defaultSkippedQueries,
 	}
+}
+
+var defaultSkippedQueries = []string{
+	"show variables",           // we set extra variables
+	"show create table fk_tbl", // we create an extra key for the FK that vanilla gms does not
+	"show indexes from",        // we create / expose extra indexes (for foreign keys)
+	"json_arrayagg",            // TODO: aggregation ordering
+	"json_objectagg",           // TODO: aggregation ordering
+	"typestable",               // Bit type isn't working?
 }
 
 // WithParallelism returns a copy of the harness with parallelism set to the given number of threads. A value of 0 or
 // less means to use the system parallelism settings.
-func (d *DoltHarness) WithParallelism(parallelism int) *DoltHarness {
-	nd := *d
-	nd.parallelism = parallelism
-	return &nd
+func (d DoltHarness) WithParallelism(parallelism int) *DoltHarness {
+	d.parallelism = parallelism
+	return &d
+}
+
+// WithParallelism returns a copy of the harness with parallelism set to the given number of threads. A value of 0 or
+// less means to use the system parallelism settings.
+func (d DoltHarness) WithSkippedQueries(queries []string) *DoltHarness {
+	d.skippedQueries = queries
+	return &d
 }
 
 // Logic to skip unsupported queries
 func (d *DoltHarness) SkipQueryTest(query string) bool {
 	lowerQuery := strings.ToLower(query)
-	return lowerQuery == "show variables" || // we set extra variables
-		strings.Contains(lowerQuery, "show create table fk_tbl") || // we create an extra key for the FK that vanilla gms does not
-		strings.Contains(lowerQuery, "show indexes from") || // we create / expose extra indexes (for foreign keys)
-		strings.Contains(lowerQuery, "json_arrayagg") || // TODO: aggregation ordering
-		strings.Contains(lowerQuery, "json_objectagg") || // TODO: aggregation ordering
-		strings.Contains(lowerQuery, "typestable") // Bit type isn't working?
+	for _, skipped := range d.skippedQueries {
+		if strings.Contains(lowerQuery, strings.ToLower(skipped)) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (d *DoltHarness) Parallelism() int {
