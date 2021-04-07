@@ -278,7 +278,6 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "3" ]] || false
 
-    # This should be a tracked file...
     run dolt status
     [[ "$output" =~ "Untracked files:" ]] || false
     [[ "$output" =~ "  (use \"dolt add <table|doc>\" to include in what will be committed)" ]] || false
