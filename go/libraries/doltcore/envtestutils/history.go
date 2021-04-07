@@ -142,6 +142,7 @@ func UpdateTables(t *testing.T, ctx context.Context, root *doltdb.RootValue, tbl
 		}
 
 		schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, root.VRW(), sch)
+		require.NoError(t, err)
 
 		indexData, err := types.NewMap(ctx, root.VRW())
 		require.NoError(t, err)
