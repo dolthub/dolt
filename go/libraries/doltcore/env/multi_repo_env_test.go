@@ -92,7 +92,7 @@ func initRepoWithRelativePath(t *testing.T, envPath string, hdp HomeDirProvider)
 	err = dEnv.InitRepo(context.Background(), types.Format_Default, name, email)
 	require.NoError(t, err)
 
-	return dEnv
+	return Load(context.Background(), hdp, fs, urlStr, "test")
 }
 
 func TestDoltEnvAsMultiEnv(t *testing.T) {
@@ -103,7 +103,8 @@ func TestDoltEnvAsMultiEnv(t *testing.T) {
 	envPath := filepath.Join(rootPath, " test---name _ 123")
 	dEnv := initRepoWithRelativePath(t, envPath, hdp)
 
-	mrEnv := DoltEnvAsMultiEnv(dEnv)
+	mrEnv, err := DoltEnvAsMultiEnv(dEnv)
+	require.NoError(t, err)
 	assert.Len(t, mrEnv, 1)
 
 	for k, v := range mrEnv {
