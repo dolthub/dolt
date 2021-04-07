@@ -301,7 +301,6 @@ func ValidateIsRef(ctx context.Context, cSpecStr string, ddb *doltdb.DoltDB, rsr
 	_, err = ddb.Resolve(ctx, cs, rsr.CWBHeadRef())
 	if err != nil {
 		return false
-
 	}
 
 	return true
