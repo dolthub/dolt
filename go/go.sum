@@ -141,10 +141,8 @@ github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZm
 github.com/dgryski/go-sip13 v0.0.0-20181026042036-e10d5fee7954/go.mod h1:vAd38F8PWV+bWy6jNmig1y/TA+kYO4g3RSRF0IAv0no=
 github.com/dolthub/fslock v0.0.2 h1:8vUh47iKovgrtXNrXVIzsIoWLlspoXg+3nslhUzgKSw=
 github.com/dolthub/fslock v0.0.2/go.mod h1:0i7bsNkK+XHwFL3dIsSWeXSV7sykVzzVr6+jq8oeEo0=
-github.com/dolthub/go-mysql-server v0.9.1-0.20210406110201-0bcb0eb66f80 h1:JH9v/LWXUyqka+nSXTrv4eBz2XrxUgKsW+6C25zuF1g=
-github.com/dolthub/go-mysql-server v0.9.1-0.20210406110201-0bcb0eb66f80/go.mod h1:44ueL8vpS1wc/YN02RvRB+G0rjq1nC/IAKEoDPoEZbg=
-github.com/dolthub/go-mysql-server v0.9.1-0.20210406194548-d7331e72befd h1:E823Fd6wkieFFnoJJ7ahuqc1C4p3mcSvZ5Lu/NqyQbw=
-github.com/dolthub/go-mysql-server v0.9.1-0.20210406194548-d7331e72befd/go.mod h1:44ueL8vpS1wc/YN02RvRB+G0rjq1nC/IAKEoDPoEZbg=
+github.com/dolthub/go-mysql-server v0.9.1-0.20210407215342-cf396ae74c61 h1:noGlmT++VHYsWt14Vl6v5UavA/OkW04/rxKmTHH7BiY=
+github.com/dolthub/go-mysql-server v0.9.1-0.20210407215342-cf396ae74c61/go.mod h1:44ueL8vpS1wc/YN02RvRB+G0rjq1nC/IAKEoDPoEZbg=
 github.com/dolthub/ishell v0.0.0-20210205014355-16a4ce758446 h1:0ol5pj+QlKUKAtqs1LiPM3ZJKs+rHPgLSsMXmhTrCAM=
 github.com/dolthub/ishell v0.0.0-20210205014355-16a4ce758446/go.mod h1:dhGBqcCEfK5kuFmeO5+WOx3hqc1k3M29c1oS/R7N4ms=
 github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66 h1:WRPDbpJWEnPxPmiuOTndT+lUWUeGjx6eoNOK9O4tQQQ=
@@ -434,7 +432,6 @@ github.com/lyft/protoc-gen-validate v0.0.13/go.mod h1:XbGvPuh87YZc5TdIa2/I4pLk0Q
 github.com/magiconair/properties v1.8.0/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czPbwD3XqdrwzmxQ=
 github.com/magiconair/properties v1.8.1/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czPbwD3XqdrwzmxQ=
 github.com/maratori/testpackage v1.0.1/go.mod h1:ddKdw+XG0Phzhx8BFDTKgpWP4i7MpApTE5fXSKAqwDU=
-github.com/markbates/oncer v0.0.0-20181203154359-bf2de49a0be2 h1:JgVTCPf0uBVcUSWpyXmGpgOc62nK5HWUBKAGc3Qqa5k=
 github.com/markbates/oncer v0.0.0-20181203154359-bf2de49a0be2/go.mod h1:Ld9puTsIW75CHf65OeIOkyKbteujpZVXDpWK6YGZbxE=
 github.com/markbates/safe v1.0.1/go.mod h1:nAqgmRi7cY2nqMc92/bSEeQA+R4OheNU2T1kNSCBdG0=
 github.com/matoous/godox v0.0.0-20190911065817-5d6d842e92eb/go.mod h1:1BELzlh859Sh1c6+90blK8lbYy0kwQf1bYlBhBysy1s=
