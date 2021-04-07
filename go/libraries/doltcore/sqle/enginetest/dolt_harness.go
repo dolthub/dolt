@@ -31,10 +31,10 @@ import (
 )
 
 type DoltHarness struct {
-	t           *testing.T
-	session     *sqle.DoltSession
-	mrEnv       env.MultiRepoEnv
-	parallelism int
+	t              *testing.T
+	session        *sqle.DoltSession
+	mrEnv          env.MultiRepoEnv
+	parallelism    int
 	skippedQueries []string
 }
 
@@ -49,9 +49,9 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 	session, err := sqle.NewDoltSession(context.Background(), enginetest.NewBaseSession(), "test", "email@test.com")
 	require.NoError(t, err)
 	return &DoltHarness{
-		t:       t,
-		session: session,
-		mrEnv:   make(env.MultiRepoEnv),
+		t:              t,
+		session:        session,
+		mrEnv:          make(env.MultiRepoEnv),
 		skippedQueries: defaultSkippedQueries,
 	}
 }
