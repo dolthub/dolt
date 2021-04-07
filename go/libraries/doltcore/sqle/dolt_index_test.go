@@ -225,6 +225,16 @@ func TestDoltIndexEqual(t *testing.T) {
 			[]interface{}{4, 3},
 			[]sql.Row{{1, 2, 3, 4}},
 		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{3},
+			[]sql.Row{{1, 1, 3, 3}, {2, 2, 4, 3}},
+		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{4},
+			[]sql.Row{{1, 2, 3, 4}, {2, 1, 4, 4}},
+		},
 	}
 
 	for _, typesTest := range typesTests {
@@ -335,6 +345,16 @@ func TestDoltIndexGreaterThan(t *testing.T) {
 			"twopk:idx_v2v1",
 			[]interface{}{4, 3},
 			[]sql.Row{{2, 1, 4, 4}},
+		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{3},
+			[]sql.Row{{1, 2, 3, 4}, {2, 1, 4, 4}},
+		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{4},
+			nil,
 		},
 	}
 
@@ -455,6 +475,16 @@ func TestDoltIndexGreaterThanOrEqual(t *testing.T) {
 		{
 			"twopk:idx_v2v1",
 			[]interface{}{4, 3},
+			[]sql.Row{{1, 2, 3, 4}, {2, 1, 4, 4}},
+		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{3},
+			[]sql.Row{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
+		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{4},
 			[]sql.Row{{1, 2, 3, 4}, {2, 1, 4, 4}},
 		},
 	}
@@ -584,6 +614,16 @@ func TestDoltIndexLessThan(t *testing.T) {
 			[]interface{}{4, 3},
 			[]sql.Row{{2, 2, 4, 3}, {1, 1, 3, 3}},
 		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{3},
+			nil,
+		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{4},
+			[]sql.Row{{2, 2, 4, 3}, {1, 1, 3, 3}},
+		},
 	}
 
 	for _, typesTest := range typesTests {
@@ -704,6 +744,16 @@ func TestDoltIndexLessThanOrEqual(t *testing.T) {
 			"twopk:idx_v2v1",
 			[]interface{}{4, 3},
 			[]sql.Row{{1, 2, 3, 4}, {2, 2, 4, 3}, {1, 1, 3, 3}},
+		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{3},
+			[]sql.Row{{1, 1, 3, 3}, {2, 2, 4, 3}},
+		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{4},
+			[]sql.Row{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
 		},
 	}
 
@@ -849,6 +899,24 @@ func TestDoltIndexBetween(t *testing.T) {
 			[]interface{}{3, 4},
 			[]interface{}{4, 4},
 			[]sql.Row{{2, 2, 4, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}},
+		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{3},
+			[]interface{}{3},
+			[]sql.Row{{1, 1, 3, 3}, {2, 2, 4, 3}},
+		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{4},
+			[]interface{}{4},
+			[]sql.Row{{1, 2, 3, 4}, {2, 1, 4, 4}},
+		},
+		{
+			"twopk:idx_v2v1_PARTIAL_1",
+			[]interface{}{3},
+			[]interface{}{4},
+			[]sql.Row{{1, 1, 3, 3}, {1, 2, 3, 4}, {2, 1, 4, 4}, {2, 2, 4, 3}},
 		},
 	}
 
@@ -1338,6 +1406,21 @@ INSERT INTO types VALUES (1, 4, '2020-05-14 12:00:03', 1.1, 'd', 1.1, 'a,c', '00
 			tableData:    tableDataMap[indexDetails.tableName],
 			tableName:    indexDetails.tableName,
 			tableSch:     tableSchemaMap[indexDetails.tableName],
+		}
+		for i := 1; i < len(indexCols); i++ {
+			indexId := fmt.Sprintf("%s:%s_PARTIAL_%d", indexDetails.tableName, index.Name(), i)
+			indexMap[indexId] = &doltIndex{
+				cols:         indexCols[:i],
+				db:           db,
+				id:           indexId,
+				indexRowData: indexData,
+				indexSch:     index.Schema(),
+				table:        tableMap[indexDetails.tableName],
+				tableData:    tableDataMap[indexDetails.tableName],
+				tableName:    indexDetails.tableName,
+				tableSch:     tableSchemaMap[indexDetails.tableName],
+				generated:    true,
+			}
 		}
 	}
 

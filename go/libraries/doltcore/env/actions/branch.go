@@ -211,6 +211,9 @@ func createBranch(ctx context.Context, dbData env.DbData, newBranch, startingPoi
 // updateRootsForBranch writes the roots needed for a checkout and returns the updated work and staged hash.
 func updateRootsForBranch(ctx context.Context, dbData env.DbData, dref ref.DoltRef, brName string) (wrkHash hash.Hash, stgHash hash.Hash, err error) {
 	hasRef, err := dbData.Ddb.HasRef(ctx, dref)
+	if err != nil {
+		return hash.Hash{}, hash.Hash{}, err
+	}
 	if !hasRef {
 		return hash.Hash{}, hash.Hash{}, doltdb.ErrBranchNotFound
 	}

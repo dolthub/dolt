@@ -9,16 +9,8 @@ teardown() {
     teardown_common
 }
 
-@test "json: JSON hidden behind feature flag" {
+@test "json: Create table with JSON column" {
     run dolt sql <<SQL
-    CREATE TABLE js (
-        pk int PRIMARY KEY,
-        js json
-    );
-SQL
-    [ $status -ne 0 ]
-
-    run dolt --json sql <<SQL
     CREATE TABLE js (
         pk int PRIMARY KEY,
         js json
@@ -28,36 +20,36 @@ SQL
 }
 
 @test "json: query JSON values" {
-    dolt --json sql <<SQL
+    dolt sql <<SQL
     CREATE TABLE js (
         pk int PRIMARY KEY,
         js json
     );
     INSERT INTO js VALUES (1, '{"a":1}'), (2, '{"b":2}');
 SQL
-    run dolt --json sql -q "SELECT * FROM js;" -r csv
+    run dolt sql -q "SELECT * FROM js;" -r csv
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = '1,"{""a"": 1}"' ]
     [ "${lines[2]}" = '2,"{""b"": 2}"' ]
 
-    dolt --json sql <<SQL
+    dolt sql <<SQL
     UPDATE js SET js = '{"c":3}' WHERE pk = 2;
 SQL
-    run dolt --json sql -q "SELECT * FROM js;" -r csv
+    run dolt sql -q "SELECT * FROM js;" -r csv
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = '1,"{""a"": 1}"' ]
     [ "${lines[2]}" = '2,"{""c"": 3}"' ]
 
-    dolt --json sql <<SQL
+    dolt sql <<SQL
     DELETE FROM js WHERE pk = 2;
 SQL
-    run dolt --json sql -q "SELECT * FROM js;" -r csv
+    run dolt sql -q "SELECT * FROM js;" -r csv
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = '1,"{""a"": 1}"' ]
 }
 
 @test "json: JSON value printing" {
-    dolt --json sql <<SQL
+    dolt sql <<SQL
     CREATE TABLE js (
         pk int PRIMARY KEY,
         js json
@@ -65,7 +57,7 @@ SQL
     INSERT INTO js VALUES (1, '{"a":1}'), (2, '{"b":2}');
 SQL
 
-    run dolt --json sql -q "SELECT * FROM js;"
+    run dolt sql -q "SELECT * FROM js;"
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = '+----+----------+' ]
     [ "${lines[1]}" = '| pk | js       |' ]
@@ -74,35 +66,35 @@ SQL
     [ "${lines[4]}" = '| 2  | {"b": 2} |' ]
     [ "${lines[5]}" = '+----+----------+' ]
 
-    run dolt --json sql -q "SELECT * FROM js;" -r csv
+    run dolt sql -q "SELECT * FROM js;" -r csv
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = 'pk,js' ]
     [ "${lines[1]}" = '1,"{""a"": 1}"' ]
     [ "${lines[2]}" = '2,"{""b"": 2}"' ]
 
-    run dolt --json sql -q "SELECT * FROM js;" -r json
+    run dolt sql -q "SELECT * FROM js;" -r json
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = '{"rows": [{"pk":1,"js":{"a": 1}},{"pk":2,"js":{"b": 2}}]}' ]
 }
 
 @test "json: diff JSON values" {
-    dolt --json sql <<SQL
+    dolt sql <<SQL
     CREATE TABLE js (
         pk int PRIMARY KEY,
         js json
     );
     INSERT INTO js VALUES (1, '{"a":1}'), (2, '{"b":2}');
 SQL
-    dolt --json add .
-    dolt --json commit -am "added JSON table"
+    dolt add .
+    dolt commit -am "added JSON table"
 
-    dolt --json sql <<SQL
+    dolt sql <<SQL
     UPDATE js SET js = '{"a":11}' WHERE pk = 1;
     DELETE FROM js WHERE pk = 2;
     INSERT INTO js VALUES (3, '{"c":3}');
 SQL
 
-   run dolt --json diff
+   run dolt diff
    [ "$status" -eq 0 ]
    [ "${lines[0]}"  = 'diff --dolt a/js b/js' ]
    [ "${lines[1]}"  = '--- a/js @ hkngn01jojsm81hqrtbqnvr1buhooove' ]
@@ -118,50 +110,50 @@ SQL
 }
 
 @test "json: merge JSON values" {
-    dolt --json sql <<SQL
+    dolt sql <<SQL
     CREATE TABLE js (
         pk int PRIMARY KEY,
         js json
     );
     INSERT INTO js VALUES (1, '{"a":1}'), (2, '{"b":2}');
 SQL
-    dolt --json add .
-    dolt --json commit -am "added JSON table"
-    dolt --json branch other
-    dolt --json branch another
+    dolt add .
+    dolt commit -am "added JSON table"
+    dolt branch other
+    dolt branch another
 
-    dolt --json sql <<SQL
+    dolt sql <<SQL
     UPDATE js SET js = '{"a":11}' WHERE pk = 1;
 SQL
-    dolt --json commit -am "made changes on branch master"
+    dolt commit -am "made changes on branch master"
 
-    dolt --json checkout other
-    dolt --json sql <<SQL
+    dolt checkout other
+    dolt sql <<SQL
     UPDATE js SET js = '{"b":22}' WHERE pk = 2;
 SQL
-    dolt --json commit -am "made changes on branch other"
+    dolt commit -am "made changes on branch other"
 
-    dolt --json checkout master
-    dolt --json merge other
-    run dolt --json sql -q "SELECT * FROM js;" -r csv
+    dolt checkout master
+    dolt merge other
+    run dolt sql -q "SELECT * FROM js;" -r csv
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = '1,"{""a"": 11}"' ]
     [ "${lines[2]}" = '2,"{""b"": 22}"' ]
-    dolt --json commit -am "merged other into master"
+    dolt commit -am "merged other into master"
 
     # test merge conflicts
-    dolt --json checkout another
-    dolt --json sql <<SQL
+    dolt checkout another
+    dolt sql <<SQL
     UPDATE js SET js = '{"b":99}' WHERE pk = 2;
 SQL
-    dolt --json commit -am "made changes on branch another"
+    dolt commit -am "made changes on branch another"
 
-    run dolt --json merge other
+    run dolt merge other
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
-    run dolt --json conflicts resolve --ours js
+    run dolt conflicts resolve --ours js
     [ "$status" -eq 0 ]
-    run dolt --json sql -q "SELECT * FROM js;" -r csv
+    run dolt sql -q "SELECT * FROM js;" -r csv
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = '1,"{""a"": 1}"' ]
     [ "${lines[2]}" = '2,"{""b"": 99}"' ]

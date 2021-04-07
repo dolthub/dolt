@@ -138,7 +138,7 @@ test_mutation() {
 }
 
 @test "index-on-writes: delete all two_pk, <>, pk" {
-    test_mutation "delete from two_pk where pk1 <> 1024 and pk2 <> 1024" "two_pk" "$two_pk_header"
+    test_mutation "delete from two_pk where pk1 <> 1024 and pk2 <> 1024" "two_pk" "$two_pk_header"  "yes"
 }
 
 @test "index-on-writes: delete all one_pk, <>, pk" {
@@ -218,7 +218,7 @@ test_mutation() {
 }
 
 @test "index-on-writes: delete all two_pk, <>, pk + non-pk" {
-    test_mutation "delete from two_pk where pk1 <> 1024 and pk2 <> 1024 and c1 <> 1024" "two_pk" "$two_pk_header"
+    test_mutation "delete from two_pk where pk1 <> 1024 and pk2 <> 1024 and c1 <> 1024" "two_pk" "$two_pk_header" "yes"
 }
 
 @test "index-on-writes: delete all one_pk, <>, pk + non-pk" {
@@ -266,7 +266,7 @@ test_mutation() {
 }
 
 @test "index-on-writes: update all two_pk, <>, pk" {
-    test_mutation "update two_pk set c2 = 256 where pk1 <> 1024 and pk2 <> 1024" "two_pk" "$two_pk_all_updated"
+    test_mutation "update two_pk set c2 = 256 where pk1 <> 1024 and pk2 <> 1024" "two_pk" "$two_pk_all_updated" "yes"
 }
 
 @test "index-on-writes: update all one_pk, <>, pk" {
@@ -346,7 +346,7 @@ test_mutation() {
 }
 
 @test "index-on-writes: update all two_pk, <>, pk + non-pk" {
-    test_mutation "update two_pk set c2 = 256 where pk1 <> 1024 and pk2 <> 1024 and c1 <> 1024" "two_pk" "$two_pk_all_updated"
+    test_mutation "update two_pk set c2 = 256 where pk1 <> 1024 and pk2 <> 1024 and c1 <> 1024" "two_pk" "$two_pk_all_updated" "yes"
 }
 
 @test "index-on-writes: update all one_pk, <>, pk + non-pk" {

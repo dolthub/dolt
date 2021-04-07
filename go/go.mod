@@ -18,7 +18,7 @@ require (
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078
 	github.com/dolthub/fslock v0.0.2
-	github.com/dolthub/go-mysql-server v0.9.0
+	github.com/dolthub/go-mysql-server v0.9.1-0.20210406194548-d7331e72befd
 	github.com/dolthub/ishell v0.0.0-20210205014355-16a4ce758446
 	github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66
 	github.com/dolthub/sqllogictest/go v0.0.0-20201105013724-5123fc66e12c
@@ -41,7 +41,6 @@ require (
 	github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/lestrrat-go/strftime v1.0.3 // indirect
-	github.com/markbates/oncer v0.0.0-20181203154359-bf2de49a0be2
 	github.com/mattn/go-isatty v0.0.12
 	github.com/mattn/go-runewidth v0.0.9
 	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b
