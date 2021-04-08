@@ -53,3 +53,25 @@ SELECT DISTINCT YM.YW AS YW, (SELECT YW FROM YF WHERE YF.XB = YM.XB) AS YF_YW,
     [[ "$output" =~ '"","",,"","","","",""' ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
 }
+
+@test "regression-tests: VARBINARY incorrect length reading" {
+    # caught by fuzzer
+    dolt sql <<SQL
+CREATE TABLE TBXjogjbUk (
+  pKVZ7F set('rxb9@ud94.t','py1lf7n1t*dfr') NOT NULL,
+  OrYQI7 mediumint NOT NULL,
+  wEU2wL varbinary(9219) NOT NULL,
+  nE3O6H int NOT NULL,
+  iIMgVg varchar(11833),
+  PRIMARY KEY (pKVZ7F,OrYQI7,wEU2wL,nE3O6H)
+);
+SQL
+    dolt sql -q "REPLACE INTO TBXjogjbUk VALUES (1,-5667274,'wRL',-1933632415,'H');"
+    dolt sql -q "REPLACE INTO TBXjogjbUk VALUES (1,-5667274,'wR',-1933632415,'H');"
+    run dolt sql -q "SELECT * FROM TBXjogjbUk;" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pKVZ7F,OrYQI7,wEU2wL,nE3O6H,iIMgVg" ]] || false
+    [[ "$output" =~ "rxb9@ud94.t,-5667274,wR,-1933632415,H" ]] || false
+    [[ "$output" =~ "rxb9@ud94.t,-5667274,wRL,-1933632415,H" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+}
