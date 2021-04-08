@@ -1115,6 +1115,27 @@ func UnionTableNames(ctx context.Context, roots ...*RootValue) ([]string, error)
 
 // validateTagUniqueness checks for tag collisions between the given table and the set of tables in then given root.
 func validateTagUniqueness(ctx context.Context, root *RootValue, tableName string, table *Table) error {
+	prev, ok, err := root.GetTable(ctx, tableName)
+	if err != nil {
+		return err
+	}
+	if ok {
+		prevRef, err := prev.GetSchemaRef()
+		if err != nil {
+			return err
+		}
+
+		newRef, err := table.GetSchemaRef()
+		if err != nil {
+			return err
+		}
+
+		// short-circuit if schema unchanged
+		if prevRef.Equals(newRef) {
+			return nil
+		}
+	}
+
 	sch, err := table.GetSchema(ctx)
 	if err != nil {
 		return err
