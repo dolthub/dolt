@@ -1130,7 +1130,7 @@ func validateTagUniqueness(ctx context.Context, root *RootValue, tableName strin
 			return err
 		}
 
-		// short-circuit if schema unchanged
+		// short-circuit if schema is unchanged
 		if prevRef.Equals(newRef) {
 			return nil
 		}
