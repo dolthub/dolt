@@ -94,7 +94,7 @@ func (dm dynamoManifest) ParseIfExists(ctx context.Context, stats *Stats, readHo
 	})
 
 	if err != nil {
-		return false, manifestContents{}, err
+		return false, manifestContents{}, fmt.Errorf("failed to get dynamo table: '%s' - %w", dm.table, err)
 	}
 
 	// !exists(dbAttr) => unitialized store
