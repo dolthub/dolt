@@ -328,7 +328,7 @@ SQL
     dolt add .
     run dolt reset LICENSE.md invalid
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Invalid Table(s)" ]] || false
+    [[ "$output" =~ "Invalid Ref or Table" ]] || false
     [[ "$output" =~ "invalid" ]] || false
     run dolt status
     [ "$status" -eq 0 ]

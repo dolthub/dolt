@@ -205,6 +205,8 @@ func TestJSONStructuralSharing(t *testing.T) {
 
 		err = db.Flush(ctx)
 		require.NoError(t, err)
+		err = db.(datas.GarbageCollector).GC(ctx)
+		require.NoError(t, err)
 		after := ts.Len()
 
 		// flush creates a single chunk

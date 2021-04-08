@@ -205,3 +205,200 @@ SQL
     run dolt reset --hard HEAD HEAD2
     [ "$status" -eq 1 ]
 }
+
+@test "status: dolt reset hard with ~ works" {
+    dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY);"
+    dolt commit -am "cm1"
+
+    dolt sql -q "INSERT INTO test values (1);"
+    dolt commit -am "cm2"
+
+    dolt sql -q "INSERT INTO test VALUES (2);"
+    dolt commit -am "cm3"
+
+    # Do a hard reset back one commit and confirm the appropriate values.
+    run dolt reset --hard HEAD~1
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT sum(pk) FROM test;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+
+    # Since this is a hard reset double check the status
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    # Run again with ~2 this time
+    dolt sql -q "INSERT INTO test VALUES (2);"
+    dolt commit -am "cm3"
+
+    # Do a hard reset back two commits and confirm the appropriate values.
+    run dolt reset --hard HEAD~2
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT sum(pk) FROM test;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "NULL" ]] || false
+
+    # Since this is a hard reset double check the status
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "status: dolt reset soft with ~ works" {
+    dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY);"
+    dolt commit -am "cm1"
+
+    dolt sql -q "INSERT INTO test values (1);"
+    dolt commit -am "cm2"
+
+    # Make a dirty change
+    dolt sql -q "INSERT INTO test values (2)"
+    run dolt reset HEAD~
+    [ "$status" -eq 0 ]
+
+    # Verify that the changes are still there
+    run dolt sql -q "SELECT sum(pk) FROM test;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]] || false
+
+    # Now verify that commit log has changes
+    run dolt sql -q "SELECT count(*) from dolt_log"
+    [[ "$output" =~ "2" ]] || false
+
+    run dolt reset HEAD~1
+    [ "$status" -eq 0 ]
+
+    # Verify that the changes are still there
+    run dolt sql -q "SELECT sum(pk) FROM test;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]] || false
+
+    run dolt status
+    [[ "$output" =~ "Untracked files:" ]] || false
+    [[ "$output" =~ "  (use \"dolt add <table|doc>\" to include in what will be committed)" ]] || false
+    [[ "$output" =~ "	new table:      test" ]] || false
+
+    # Now verify that commit log has changes
+    run dolt sql -q "SELECT count(*) from dolt_log"
+    [[ "$output" =~ "1" ]] || false
+}
+
+@test "status: dolt reset works with commit hash ref" {
+    dolt sql -q "CREATE TABLE tb1 (pk int PRIMARY KEY);"
+    dolt sql -q "INSERT INTO tb1 values (1);"
+    dolt commit -am "cm1"
+
+    cm1=$(get_head_commit)
+
+    dolt sql -q "CREATE TABLE tb2 (pk int PRIMARY KEY);"
+    dolt sql -q "INSERT INTO tb2 values (11);"
+    dolt commit -am "cm2"
+
+    cm2=$(get_head_commit)
+
+    dolt sql -q "CREATE TABLE tb3 (pk int PRIMARY KEY);"
+    dolt sql -q "INSERT INTO tb3 values (11);"
+    dolt commit -am "cm3"
+
+    cm3=$(get_head_commit)
+
+    # Try a soft reset to commit 3. Nothing should change
+    dolt reset $cm3
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    # Do a soft reset to commit 2.
+    dolt reset $cm2
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Untracked files:" ]] || false
+    [[ "$output" =~ "  (use \"dolt add <table|doc>\" to include in what will be committed)" ]] || false
+    [[ "$output" =~ "	new table:      tb3" ]] || false
+    ! [[ "$output" =~ "	new table:      tb2" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) FROM tb3"
+    [[ "$output" =~ "1" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) FROM dolt_log"
+    [[ "$output" =~ "3" ]] || false # includes init commit
+
+    dolt commit -am "commit 3"
+
+    # Do a soft reset to commit 1
+    dolt reset $cm1
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Untracked files:" ]] || false
+    [[ "$output" =~ "  (use \"dolt add <table|doc>\" to include in what will be committed)" ]] || false
+    [[ "$output" =~ "	new table:      tb3" ]] || false
+    [[ "$output" =~ "	new table:      tb2" ]] || false
+    ! [[ "$output" =~ "	new table:      tb1" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) FROM dolt_log"
+    [[ "$output" =~ "2" ]] || false # includes init commit
+}
+
+@test "status: dolt reset works with branch ref" {
+    dolt sql -q "CREATE TABLE tbl(pk int);"
+    dolt sql -q "INSERT into tbl VALUES (1)"
+    dolt commit -am "cm1"
+
+    # create a new branch and make a change
+    dolt checkout -b test
+    dolt sql -q "INSERT INTO tbl VALUES (2),(3)"
+    dolt sql -q "CREATE TABLE tbl2(pk int);"
+    dolt commit -am "test cm1"
+
+    # go back to master and merge
+    dolt checkout master
+    dolt merge test
+    dolt sql -q "INSERT INTO tbl VALUES (4)"
+    dolt commit -am "cm2"
+
+    # execute the reset
+    dolt reset test
+    run dolt status
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ "  (use \"dolt add <table>\" to update what will be committed)" ]] || false
+    [[ "$output" =~ "  (use \"dolt checkout <table>\" to discard changes in working directory)" ]] || false
+    [[ "$output" =~ "	modified:       tbl" ]] || false
+    ! [[ "$output" =~ "	new table:      tb2" ]] || false
+}
+
+@test "status: dolt reset ref properly manages staged changes as well" {
+    dolt sql -q "CREATE TABLE tbl(pk int);"
+    dolt sql -q "INSERT into tbl VALUES (1)"
+    dolt commit -am "cm1"
+
+    dolt sql -q "INSERT INTO tbl VALUES (2)"
+    dolt add .
+
+    dolt reset HEAD
+    run dolt status
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ "  (use \"dolt add <table>\" to update what will be committed)" ]] || false
+    [[ "$output" =~ "  (use \"dolt checkout <table>\" to discard changes in working directory)" ]] || false
+    [[ "$output" =~ "	modified:       tbl" ]] || false
+}
+
+@test "status: dolt reset throws errors for unknown ref/table" {
+    run dolt reset test
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Invalid Ref or Table" ]] || false
+    [[ "$output" =~ "test" ]] || false
+}
+
+get_head_commit() {
+    dolt log -n 1 | grep -m 1 commit | cut -c 8-
+}
