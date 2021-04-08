@@ -82,18 +82,18 @@ func tableDontDescendLists(v1, v2 types.Value) bool {
 }
 
 func (ad *AsyncDiffer) Start(ctx context.Context, from, to types.Map) {
-	ad.start(ctx, func() error {
+	ad.start(ctx, func(ctx context.Context) error {
 		return diff.Diff(ctx, from, to, ad.diffChan, true, tableDontDescendLists)
 	})
 }
 
 func (ad *AsyncDiffer) StartWithRange(ctx context.Context, from, to types.Map, start types.Value, inRange types.ValueInRange) {
-	ad.start(ctx, func() error {
+	ad.start(ctx, func(ctx context.Context) error {
 		return diff.DiffMapRange(ctx, from, to, start, inRange, ad.diffChan, true, tableDontDescendLists)
 	})
 }
 
-func (ad *AsyncDiffer) start(ctx context.Context, diffFunc func() error) {
+func (ad *AsyncDiffer) start(ctx context.Context, diffFunc func(ctx context.Context) error) {
 	ad.eg, ad.egCtx = errgroup.WithContext(ctx)
 	ad.egCancel = async.GoWithCancel(ad.egCtx, ad.eg, func(ctx context.Context) (err error) {
 		defer close(ad.diffChan)
@@ -102,7 +102,7 @@ func (ad *AsyncDiffer) start(ctx context.Context, diffFunc func() error) {
 				err = fmt.Errorf("panic in diff.Diff: %v", r)
 			}
 		}()
-		return diffFunc()
+		return diffFunc(ctx)
 	})
 }
 
