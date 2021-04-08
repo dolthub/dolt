@@ -201,6 +201,9 @@ func parseDiff(d *nomsdiff.Difference) (oldTV, newTV row.TaggedValues, changes m
 				currNewTag = MaxTag
 			} else {
 				currNewTag, currNewVal, err = nextTagAndValue(newItr)
+				if err != nil {
+					return nil, nil, nil, err
+				}
 			}
 		}
 
@@ -213,6 +216,9 @@ func parseDiff(d *nomsdiff.Difference) (oldTV, newTV row.TaggedValues, changes m
 				currOldTag = MaxTag
 			} else {
 				currOldTag, currOldVal, err = nextTagAndValue(oldItr)
+				if err != nil {
+					return nil, nil, nil, err
+				}
 			}
 		}
 
