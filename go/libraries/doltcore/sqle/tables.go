@@ -388,6 +388,7 @@ var _ sql.InsertableTable = (*WritableDoltTable)(nil)
 var _ sql.ReplaceableTable = (*WritableDoltTable)(nil)
 var _ sql.AutoIncrementTable = (*WritableDoltTable)(nil)
 var _ sql.TruncateableTable = (*WritableDoltTable)(nil)
+var _ sql.CheckTable = (*WritableDoltTable)(nil)
 
 func (t *WritableDoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 	dil, ok := lookup.(*doltIndexLookup)
@@ -524,6 +525,24 @@ func (t *WritableDoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}
 		return t.ed.GetAutoIncrementValue()
 	}
 	return t.DoltTable.GetAutoIncrementValue(ctx)
+}
+
+func (t *WritableDoltTable) GetChecks(ctx *sql.Context) ([]sql.CheckDefinition, error) {
+	sch, err := t.table.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	checks := make([]sql.CheckDefinition, sch.Checks().Count())
+	for i, check := range sch.Checks().AllChecks() {
+		checks[i] = sql.CheckDefinition{
+			Name: check.Name(),
+			CheckExpression: check.Expression(),
+			Enforced: check.Enforced(),
+		}
+	}
+
+	return checks, nil
 }
 
 // GetForeignKeys implements sql.ForeignKeyTable
@@ -677,6 +696,7 @@ var _ sql.AlterableTable = (*AlterableDoltTable)(nil)
 var _ sql.IndexAlterableTable = (*AlterableDoltTable)(nil)
 var _ sql.ForeignKeyAlterableTable = (*AlterableDoltTable)(nil)
 var _ sql.ForeignKeyTable = (*AlterableDoltTable)(nil)
+var _ sql.CheckAlterableTable = (*AlterableDoltTable)(nil)
 
 // AddColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, order *sql.ColumnOrder) error {
@@ -1421,4 +1441,72 @@ func (t *AlterableDoltTable) updateFromRoot(ctx *sql.Context, root *doltdb.RootV
 	}
 	t.WritableDoltTable.DoltTable = updatedTable.WritableDoltTable.DoltTable
 	return nil
+}
+
+func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefinition) error {
+	sch, err := t.table.GetSchema(ctx)
+	if err != nil {
+		return err
+	}
+
+	_, err = sch.Checks().AddCheck(check.Name, check.CheckExpression, check.Enforced)
+	if err != nil {
+		return err
+	}
+
+	newTable, err := t.table.UpdateSchema(ctx, sch)
+	if err != nil {
+		return err
+	}
+
+	root, err := t.db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	newRoot, err := root.PutTable(ctx, t.name, newTable)
+	if err != nil {
+		return err
+	}
+
+	err = t.db.SetRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
+
+	return t.updateFromRoot(ctx, newRoot)
+}
+
+func (t *AlterableDoltTable) DropCheck(ctx *sql.Context, chName string) error {
+	sch, err := t.table.GetSchema(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = sch.Checks().DropCheck(chName)
+	if err != nil {
+		return err
+	}
+
+	newTable, err := t.table.UpdateSchema(ctx, sch)
+	if err != nil {
+		return err
+	}
+
+	root, err := t.db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	newRoot, err := root.PutTable(ctx, t.name, newTable)
+	if err != nil {
+		return err
+	}
+
+	err = t.db.SetRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
+
+	return t.updateFromRoot(ctx, newRoot)
 }

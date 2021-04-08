@@ -220,6 +220,23 @@ func TestDropForeignKeys(t *testing.T) {
 	enginetest.TestDropForeignKeys(t, newDoltHarness(t))
 }
 
+func TestCreateCheckConstraints(t *testing.T) {
+	enginetest.TestCreateCheckConstraints(t, newDoltHarness(t))
+}
+
+func TestChecksOnInsert(t *testing.T) {
+	enginetest.TestChecksOnInsert(t, newDoltHarness(t))
+}
+
+func TestTestDisallowedCheckConstraints(t *testing.T) {
+	enginetest.TestDisallowedCheckConstraints(t, newDoltHarness(t))
+}
+
+func TestDropCheckConstraints(t *testing.T) {
+	enginetest.TestDropCheckConstraints(t, newDoltHarness(t))
+}
+
+
 func TestExplode(t *testing.T) {
 	t.Skipf("Unsupported types")
 	enginetest.TestExplode(t, newDoltHarness(t))

@@ -32,6 +32,7 @@ var EmptySchema = &schemaImpl{
 type schemaImpl struct {
 	pkCols, nonPKCols, allCols *ColCollection
 	indexCollection            IndexCollection
+	checkCollection 			CheckCollection
 }
 
 // SchemaFromCols creates a Schema from a collection of columns
@@ -59,6 +60,7 @@ func SchemaFromCols(allCols *ColCollection) (Schema, error) {
 		nonPKCols:       nonPKColColl,
 		allCols:         allCols,
 		indexCollection: NewIndexCollection(allCols),
+		checkCollection: NewCheckCollection(),
 	}, nil
 }
 
@@ -123,6 +125,7 @@ func UnkeyedSchemaFromCols(allCols *ColCollection) Schema {
 		nonPKCols:       nonPKColColl,
 		allCols:         nonPKColColl,
 		indexCollection: NewIndexCollection(nil),
+		checkCollection: NewCheckCollection(),
 	}
 }
 
@@ -156,6 +159,7 @@ func SchemaFromPKAndNonPKCols(pkCols, nonPKCols *ColCollection) (Schema, error) 
 		nonPKCols:       nonPKCols,
 		allCols:         allColColl,
 		indexCollection: NewIndexCollection(allColColl),
+		checkCollection: NewCheckCollection(),
 	}, nil
 }
 
@@ -206,4 +210,8 @@ func (si *schemaImpl) String() string {
 
 func (si *schemaImpl) Indexes() IndexCollection {
 	return si.indexCollection
+}
+
+func (si *schemaImpl) Checks() CheckCollection {
+	return si.checkCollection
 }
