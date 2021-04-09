@@ -327,7 +327,6 @@ SQL
     INSERT INTO other VALUES (1),(2),(3);
 SQL
 
-    skip "*expression.AutoIncrement is unsupported for inserts"
     dolt sql -q "INSERT INTO test (c0) SELECT pk FROM other;"
 
     run dolt sql -q "SELECT * FROM test;" -r csv
