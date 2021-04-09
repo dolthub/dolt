@@ -1329,10 +1329,6 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, nu
 			}
 		}()
 
-		// so slow
-		// _, err = io.Copy(f, rd)
-		// return err
-
 		return writeTo(f, rd, copyTableFileBufferSize)
 	}()
 
