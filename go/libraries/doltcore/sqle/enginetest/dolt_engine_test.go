@@ -236,7 +236,6 @@ func TestDropCheckConstraints(t *testing.T) {
 	enginetest.TestDropCheckConstraints(t, newDoltHarness(t))
 }
 
-
 func TestExplode(t *testing.T) {
 	t.Skipf("Unsupported types")
 	enginetest.TestExplode(t, newDoltHarness(t))
