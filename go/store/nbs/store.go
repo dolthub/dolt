@@ -60,6 +60,8 @@ const (
 	defaultIndexCacheSize    = (1 << 20) * 64 // 64MB
 	defaultManifestCacheSize = 1 << 23        // 8MB
 	preflushChunkCount       = 8
+
+	copyTableFileBufferSize = 128 * 1024 * 1024
 )
 
 var (
@@ -1327,9 +1329,11 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, nu
 			}
 		}()
 
-		_, err = io.Copy(f, rd)
+		// so slow
+		// _, err = io.Copy(f, rd)
+		// return err
 
-		return err
+		return writeTo(f, rd, copyTableFileBufferSize)
 	}()
 
 	if err != nil {
@@ -1345,6 +1349,36 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, nu
 	_, err = nbs.UpdateManifest(ctx, map[hash.Hash]uint32{fileIdHash: uint32(numChunks)})
 
 	return err
+}
+
+func writeTo(wr io.Writer, rd io.Reader, bufferSize uint32) error {
+	buf := make([]byte, bufferSize)
+
+	for {
+		// can return bytes and an io.EOF
+		n, err := rd.Read(buf)
+
+		if err != nil && err != io.EOF {
+			return err
+		}
+
+		pos := 0
+		for pos < n {
+			n, wrErr := wr.Write(buf[pos:n])
+
+			if wrErr != nil {
+				return wrErr
+			}
+
+			pos += n
+		}
+
+		if err == io.EOF {
+			break
+		}
+	}
+
+	return nil
 }
 
 // PruneTableFiles deletes old table files that are no longer referenced in the manifest.
