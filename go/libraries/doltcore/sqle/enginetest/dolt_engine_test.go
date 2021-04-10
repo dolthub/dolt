@@ -203,7 +203,7 @@ func TestAddColumn(t *testing.T) {
 }
 
 func TestModifyColumn(t *testing.T) {
-	t.Skip("Type changes aren't supported")
+	t.Skip("Type changes not supported")
 	enginetest.TestModifyColumn(t, newDoltHarness(t))
 }
 
@@ -212,7 +212,6 @@ func TestDropColumn(t *testing.T) {
 }
 
 func TestCreateForeignKeys(t *testing.T) {
-	t.Skipf("Unsupported")
 	enginetest.TestCreateForeignKeys(t, newDoltHarness(t))
 }
 
