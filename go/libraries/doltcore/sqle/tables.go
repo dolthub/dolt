@@ -15,28 +15,30 @@
 package sqle
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"io"
-	"os"
-	"runtime"
-	"strconv"
-	"strings"
-	"sync"
+		"bytes"
+		"context"
+		"errors"
+		"fmt"
+		"io"
+		"os"
+		"runtime"
+		"strconv"
+		"strings"
+		"sync"
 
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/vitess/go/sqltypes"
+		"github.com/dolthub/dolt/go/store/hash"
+		"github.com/dolthub/go-mysql-server/sql"
+		"github.com/dolthub/vitess/go/sqltypes"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
-	"github.com/dolthub/dolt/go/store/types"
+		"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+		"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+		"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
+		"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
+		"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+		"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+		"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+		"github.com/dolthub/dolt/go/libraries/utils/set"
+		"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -1449,6 +1451,14 @@ func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefin
 		return err
 	}
 
+	check = &(*check)
+	if check.Name == "" {
+		check.Name, err = t.generateCheckName(ctx, check)
+			if err != nil {
+					return err
+			}
+	}
+
 	_, err = sch.Checks().AddCheck(check.Name, check.CheckExpression, check.Enforced)
 	if err != nil {
 		return err
@@ -1509,4 +1519,54 @@ func (t *AlterableDoltTable) DropCheck(ctx *sql.Context, chName string) error {
 	}
 
 	return t.updateFromRoot(ctx, newRoot)
+}
+
+func (t *AlterableDoltTable) generateCheckName(ctx *sql.Context, check *sql.CheckDefinition) (string, error) {
+		var bb bytes.Buffer
+		bb.Write([]byte(check.CheckExpression))
+		hash := hash.Of(bb.Bytes())
+
+		hashedName := fmt.Sprintf("chk_%s", hash.String()[:8])
+		name := hashedName
+
+		var i int
+		for {
+				exists, err := t.constraintNameExists(ctx, name)
+				if err != nil {
+						return "", err
+				}
+				if !exists {
+						break
+				}
+
+				name = fmt.Sprintf("%s_%d", hashedName, i)
+		}
+
+		return name, nil
+}
+
+func (t *AlterableDoltTable) constraintNameExists(ctx *sql.Context, name string) (bool, error) {
+		keys, err := t.GetForeignKeys(ctx)
+		if err != nil {
+				return false, err
+		}
+
+		for _, key := range keys {
+				if strings.ToLower(key.Name) == strings.ToLower(name) {
+						return true, nil
+				}
+		}
+
+		checks, err := t.GetChecks(ctx)
+		if err != nil {
+				return false, err
+		}
+
+		for _, check := range checks {
+				if strings.ToLower(check.Name) == strings.ToLower(name) {
+						return true, nil
+				}
+		}
+
+		return false, nil
 }

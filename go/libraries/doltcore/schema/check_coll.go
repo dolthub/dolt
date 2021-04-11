@@ -16,6 +16,7 @@ package schema
 
 import (
 	"fmt"
+		"strings"
 )
 
 type Check interface {
@@ -28,8 +29,11 @@ type Check interface {
 type CheckCollection interface {
 	// AddCheck adds a check to this collection and returns it
 	AddCheck(name, expression string, enforce bool) (Check, error)
+	// DropCheck removes the check with the name given
 	DropCheck(name string) error
+	// AllChecks returns all the checks in the collection
 	AllChecks() []Check
+	// Count returns the size of the collection
 	Count() int
 }
 
@@ -52,43 +56,50 @@ func (c check) Enforced() bool {
 }
 
 type checkCollection struct {
-	checks map[string]check
+	checks []check
 }
 
-func (c checkCollection) AddCheck(name, expression string, enforce bool) (Check, error) {
-	if _, ok := c.checks[name]; ok {
-		return nil, fmt.Errorf("name %s in use", name)
-	}
-	c.checks[name] = check{
-		name:       name,
-		expression: expression,
-		enforced:   enforce,
-	}
+func (c *checkCollection) AddCheck(name, expression string, enforce bool) (Check, error) {
+		for _, chk := range c.checks {
+				if strings.ToLower(name) == strings.ToLower(chk.name) {
+						return nil, fmt.Errorf("name %s in use", name)
+				}
+		}
 
-	return c.checks[name], nil
+		newCheck := check{
+				name:       name,
+				expression: expression,
+				enforced:   enforce,
+		}
+		c.checks = append(c.checks, newCheck)
+
+	return newCheck, nil
 }
 
-func (c checkCollection) DropCheck(name string) error {
-	delete(c.checks, name)
-	return nil
+func (c *checkCollection) DropCheck(name string) error {
+		for i, chk := range c.checks {
+				if strings.ToLower(name) == strings.ToLower(chk.name) {
+						c.checks = append(c.checks[:i], c.checks[i+1:]...)
+						return nil
+				}
+		}
+		return nil
 }
 
-func (c checkCollection) AllChecks() []Check {
+func (c *checkCollection) AllChecks() []Check {
 	checks := make([]Check, len(c.checks))
-	i := 0
-	for _, check := range c.checks {
+	for i, check := range c.checks {
 		checks[i] = check
-		i++
 	}
 	return checks
 }
 
-func (c checkCollection) Count() int {
+func (c *checkCollection) Count() int {
 	return len(c.checks)
 }
 
 func NewCheckCollection() CheckCollection {
-	return checkCollection{
-		checks: make(map[string]check),
+	return &checkCollection{
+		checks: make([]check, 0),
 	}
 }
