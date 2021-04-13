@@ -75,3 +75,26 @@ SQL
     [[ "$output" =~ "rxb9@ud94.t,-5667274,wRL,-1933632415,H" ]] || false
     [[ "${#lines[@]}" = "3" ]] || false
 }
+
+@test "regression-tests: UNIQUE index violations do not break future INSERTs" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    mkdir doltsql
+    cd doltsql
+    dolt init
+
+    run $BATS_TEST_DIRNAME/sql-unique-error.expect
+    [ "$status" -eq "0" ]
+    [[ ! "$output" =~ "Error" ]] || false
+    [[ ! "$output" =~ "error" ]] || false
+
+    run dolt sql -q "SELECT * FROM test ORDER BY 1" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+
+    cd ..
+    rm -rf doltsql
+}
