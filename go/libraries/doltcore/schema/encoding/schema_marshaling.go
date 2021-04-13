@@ -147,15 +147,15 @@ type encodedIndex struct {
 }
 
 type encodedCheck struct {
-	Name            string `noms:"name" json:"name"`
-	Expression      string `noms:"expression" json:"expression"`
-	Enforced        bool   `noms:"enforced" json:"enforced"`
+	Name       string `noms:"name" json:"name"`
+	Expression string `noms:"expression" json:"expression"`
+	Enforced   bool   `noms:"enforced" json:"enforced"`
 }
 
 type schemaData struct {
-	Columns         []encodedColumn `noms:"columns" json:"columns"`
-	IndexCollection []encodedIndex  `noms:"idxColl,omitempty" json:"idxColl,omitempty"`
-	CheckConstraints []encodedCheck `noms:"checks,omitempty" json:"checks,omitempty"`
+	Columns          []encodedColumn `noms:"columns" json:"columns"`
+	IndexCollection  []encodedIndex  `noms:"idxColl,omitempty" json:"idxColl,omitempty"`
+	CheckConstraints []encodedCheck  `noms:"checks,omitempty" json:"checks,omitempty"`
 }
 
 func toSchemaData(sch schema.Schema) (schemaData, error) {
@@ -196,8 +196,8 @@ func toSchemaData(sch schema.Schema) (schemaData, error) {
 	}
 
 	return schemaData{
-		Columns: encCols,
-		IndexCollection: encodedIndexes,
+		Columns:          encCols,
+		IndexCollection:  encodedIndexes,
 		CheckConstraints: encodedChecks,
 	}, nil
 }

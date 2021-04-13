@@ -16,7 +16,7 @@ package schema
 
 import (
 	"fmt"
-		"strings"
+	"strings"
 )
 
 type Check interface {
@@ -38,9 +38,9 @@ type CheckCollection interface {
 }
 
 type check struct {
-	name string
+	name       string
 	expression string
-	enforced bool
+	enforced   bool
 }
 
 func (c check) Name() string {
@@ -60,30 +60,30 @@ type checkCollection struct {
 }
 
 func (c *checkCollection) AddCheck(name, expression string, enforce bool) (Check, error) {
-		for _, chk := range c.checks {
-				if strings.ToLower(name) == strings.ToLower(chk.name) {
-						return nil, fmt.Errorf("name %s in use", name)
-				}
+	for _, chk := range c.checks {
+		if strings.ToLower(name) == strings.ToLower(chk.name) {
+			return nil, fmt.Errorf("name %s in use", name)
 		}
+	}
 
-		newCheck := check{
-				name:       name,
-				expression: expression,
-				enforced:   enforce,
-		}
-		c.checks = append(c.checks, newCheck)
+	newCheck := check{
+		name:       name,
+		expression: expression,
+		enforced:   enforce,
+	}
+	c.checks = append(c.checks, newCheck)
 
 	return newCheck, nil
 }
 
 func (c *checkCollection) DropCheck(name string) error {
-		for i, chk := range c.checks {
-				if strings.ToLower(name) == strings.ToLower(chk.name) {
-						c.checks = append(c.checks[:i], c.checks[i+1:]...)
-						return nil
-				}
+	for i, chk := range c.checks {
+		if strings.ToLower(name) == strings.ToLower(chk.name) {
+			c.checks = append(c.checks[:i], c.checks[i+1:]...)
+			return nil
 		}
-		return nil
+	}
+	return nil
 }
 
 func (c *checkCollection) AllChecks() []Check {

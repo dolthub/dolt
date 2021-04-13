@@ -32,7 +32,7 @@ var EmptySchema = &schemaImpl{
 type schemaImpl struct {
 	pkCols, nonPKCols, allCols *ColCollection
 	indexCollection            IndexCollection
-	checkCollection 			CheckCollection
+	checkCollection            CheckCollection
 }
 
 // SchemaFromCols creates a Schema from a collection of columns
