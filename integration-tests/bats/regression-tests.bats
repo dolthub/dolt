@@ -54,6 +54,27 @@ SELECT DISTINCT YM.YW AS YW, (SELECT YW FROM YF WHERE YF.XB = YM.XB) AS YF_YW,
     [[ "${#lines[@]}" = "2" ]] || false
 }
 
+@test "regression-tests: TINYBLOB skipping BlobKind for some values" {
+    # caught by fuzzer
+    dolt sql <<SQL
+CREATE TABLE ClgialBovK (
+  CIQgW0 TINYBLOB,
+  Hg6qI0 DECIMAL(19,12),
+  UJ46Q1 VARCHAR(2) COLLATE utf8mb4_0900_ai_ci,
+  YEGomx TINYINT,
+  PRIMARY KEY (CIQgW0, Hg6qI0)
+);
+REPLACE INTO ClgialBovK VALUES ("WN4*Zx.NI4a|MLLwRc:A9|rsl%3:r_gxLb-YY3c*OaTyuL=-ui!PBRhF0ymVW6!Uey*5DNM9O-Qo=0@#nkK","9993429.437834949734","",-104);
+REPLACE INTO ClgialBovK VALUES ("z$=kjmZtGlCbJ:=o9vRCZe70a:1o6tMrV% 2np! CK@NytnPE9BU03iu1@f@Uch=CwB$3|8RLXfnnKh.+H:9oy6X1*IyU_jP|ji4KuG .DOsiO.hk~lBlm5hBxeBQXe-NzNmj=%2c!:V7%asxX!A6Kg@l+Uxd9^9t3a^NUsr3GD5xc=hqyb*QbZk||frmQ+_:","3475975.285903026799","",-9);
+SQL
+    run dolt sql -q "SELECT * FROM ClgialBovK;" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "CIQgW0,Hg6qI0,UJ46Q1,YEGomx" ]] || false
+    [[ "$output" =~ 'WN4*Zx.NI4a|MLLwRc:A9|rsl%3:r_gxLb-YY3c*OaTyuL=-ui!PBRhF0ymVW6!Uey*5DNM9O-Qo=0@#nkK,9993429.437834949734,"",-104' ]] || false
+    [[ "$output" =~ 'z$=kjmZtGlCbJ:=o9vRCZe70a:1o6tMrV% 2np! CK@NytnPE9BU03iu1@f@Uch=CwB|8RLXfnnKh.+H:9oy6X1*IyU_jP|ji4KuG .DOsiO.hk~lBlm5hBxeBQXe-NzNmj=%2c!:V7%asxX!A6Kg@l+Uxd9^9t3a^NUsr3GD5xc=hqyb*QbZk||frmQ+_:,3475975.285903026799,"",-9' ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+}
+
 @test "regression-tests: VARBINARY incorrect length reading" {
     # caught by fuzzer
     dolt sql <<SQL
