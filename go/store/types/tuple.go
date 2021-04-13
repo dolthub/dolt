@@ -739,6 +739,24 @@ func (t Tuple) TupleLess(nbf *NomsBinFormat, otherTuple Tuple) (bool, error) {
 				return tm.Before(otherTm), nil
 			}
 
+		case BlobKind:
+			// readValue expects the Kind to still be there, so we put it back by decrementing the offset
+			dec.offset--
+			otherDec.offset--
+			v, err := dec.readValue(nbf)
+			if err != nil {
+				return false, err
+			}
+			otherV, err := otherDec.readValue(nbf)
+			if err != nil {
+				return false, err
+			}
+			if v.Equals(otherV) {
+				continue
+			} else {
+				return v.Less(nbf, otherV)
+			}
+
 		default:
 			v, err := dec.readValue(nbf)
 
