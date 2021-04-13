@@ -227,6 +227,10 @@ func TestChecksOnInsert(t *testing.T) {
 	enginetest.TestChecksOnInsert(t, newDoltHarness(t))
 }
 
+func TestChecksOnUpdate(t *testing.T) {
+	enginetest.TestChecksOnUpdate(t, enginetest.NewDefaultMemoryHarness())
+}
+
 func TestTestDisallowedCheckConstraints(t *testing.T) {
 	enginetest.TestDisallowedCheckConstraints(t, newDoltHarness(t))
 }
