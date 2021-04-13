@@ -1540,6 +1540,7 @@ func (t *AlterableDoltTable) generateCheckName(ctx *sql.Context, check *sql.Chec
 		}
 
 		name = fmt.Sprintf("%s_%d", hashedName, i)
+		i++
 	}
 
 	return name, nil

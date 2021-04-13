@@ -1065,12 +1065,14 @@ SQL
     [ $status -eq 1 ]
     [[ "$output" =~ "constraint" ]] || false
 
-    dolt sql <<SQL
-ALTER TABLE t2 DROP CONSTRAINT chk1;
-ALTER TABLE t2 drop CONSTRAINT chk2;
-SQL
-
+    dolt sql -q "ALTER TABLE t2 DROP CONSTRAINT chk1;"
     dolt sql -q "insert into t2 values (3, 4)"
+    
+    run dolt sql -q "insert into t2 values (4, 2)"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "constraint" ]] || false
+
+    dolt sql -q "ALTER TABLE t2 DROP CONSTRAINT chk2;"    
     dolt sql -q "insert into t2 values (4, 2)"
 
     # t1 should still have its constraints
