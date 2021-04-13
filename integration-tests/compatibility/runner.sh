@@ -41,29 +41,36 @@ get_platform_tuple() {
 
 PLATFORM_TUPLE=`get_platform_tuple`
 
-setup_test_repos() {
-  ./setup_repo.sh "$1"
-  mkdir "$1-remote"
-  pushd "$1"
-  dolt remote add origin "file://../$1-remote"
-  # branches created in setup_repo.sh
-  dolt push origin init
-  dolt push origin master
-  dolt push origin other
-  popd
-  dolt clone "file://$1-remote" "$1-clone"
+function list_dolt_versions() {
+  grep -v '^ *#' < test_files/dolt_versions.txt
 }
 
-TOP_DIR=`pwd`
 function cleanup() {
-  pushd $TOP_DIR
-  rm -rf binaries
-  rm -rf repo*
-  popd
+  rm -rf repos binaries
 }
-mkdir binaries
+mkdir repos binaries
 trap cleanup "EXIT"
 
-bin=`download_release "v0.15.2"`
-PATH="`pwd`"/"$bin":"$PATH" setup_test_repos "repo"
-TEST_REPO="repo" bats migrate.bats
+function setup_repo() {
+  dir=repos/"$1"
+  ./test_files/setup_repo.sh "$dir"
+}
+
+setup_repo HEAD
+
+function test_dolt_version() {
+  ver=$1
+  bin=`download_release "$ver"`
+  echo testing "$ver" at "$bin"
+  PATH="`pwd`"/"$bin":"$PATH" setup_repo "$ver"
+
+  echo "Run the bats tests using older Dolt version $ver hitting repositories from the current Dolt version"
+  PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/HEAD bats ./test_files/bats
+
+  echo "Run the bats tests with current Dolt version hitting repositories from older Dolt version $ver"
+  REPO_DIR="`pwd`"/repos/"$ver" bats ./test_files/bats
+}
+
+list_dolt_versions | while IFS= read -r ver; do
+  test_dolt_version "$ver"
+done
