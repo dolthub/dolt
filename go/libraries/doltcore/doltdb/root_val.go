@@ -919,6 +919,7 @@ func (root *RootValue) RemoveTables(ctx context.Context, tables ...string) (*Roo
 
 // GetForeignKeyCollection returns the ForeignKeyCollection for this root. As collections are meant to be modified
 // in-place, each returned collection may freely be altered without affecting future returned collections from this root.
+// TODO: Track this method
 func (root *RootValue) GetForeignKeyCollection(ctx context.Context) (*ForeignKeyCollection, error) {
 	if root.fkc == nil {
 		fkMap, err := root.GetForeignKeyCollectionMap(ctx)

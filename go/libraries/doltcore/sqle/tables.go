@@ -1047,6 +1047,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 		refTbl = t.table
 		refSch = t.sch
 	} else {
+		// TODO: Look here to see that then when the referenced table does not exist an error is thrown
 		refTbl, _, ok, err = root.GetTableInsensitive(ctx, refTblName)
 		if err != nil {
 			return err
@@ -1177,6 +1178,18 @@ func (t *AlterableDoltTable) CreateForeignKey(
 		return err
 	}
 	return t.updateFromRoot(ctx, newRoot)
+}
+
+func isForeignKeyChecksDisabled(ctx *sql.Context) bool {
+	_, val := ctx.Get("foreign_key_checks")
+
+	asInt := int(val.(int64))
+
+	if asInt == 0 {
+		return true
+	} else {
+		return false
+	}
 }
 
 // DropForeignKey implements sql.ForeignKeyAlterableTable
