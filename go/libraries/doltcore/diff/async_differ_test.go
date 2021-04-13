@@ -18,6 +18,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -198,6 +199,17 @@ func TestAsyncDiffer(t *testing.T) {
 			require.Equal(t, test.expectedStats, ad.diffStats)
 		})
 	}
+
+	t.Run("can close without reading all", func(t *testing.T) {
+		ad := NewAsyncDiffer(1)
+		ad.Start(ctx, m1, m2)
+		res, more, err := ad.GetDiffs(1, -1)
+		require.NoError(t, err)
+		assert.True(t, more)
+		assert.Len(t, res, 1)
+		err = ad.Close()
+		assert.NoError(t, err)
+	})
 }
 
 func readAll(ad *AsyncDiffer) error {

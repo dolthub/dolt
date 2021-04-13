@@ -654,8 +654,15 @@ func (t Tuple) TupleLess(nbf *NomsBinFormat, otherTuple Tuple) (bool, error) {
 			dec.offset += 1
 			otherDec.offset += 1
 
-		case StringKind, InlineBlobKind:
+		case StringKind:
 			size, otherSize := uint32(dec.readCount()), uint32(otherDec.readCount())
+			start, otherStart := dec.offset, otherDec.offset
+			dec.offset += size
+			otherDec.offset += otherSize
+			res = bytes.Compare(dec.buff[start:dec.offset], otherDec.buff[otherStart:otherDec.offset])
+
+		case InlineBlobKind:
+			size, otherSize := uint32(dec.readUint16()), uint32(otherDec.readUint16())
 			start, otherStart := dec.offset, otherDec.offset
 			dec.offset += size
 			otherDec.offset += otherSize
@@ -730,6 +737,24 @@ func (t Tuple) TupleLess(nbf *NomsBinFormat, otherTuple Tuple) (bool, error) {
 				continue
 			} else {
 				return tm.Before(otherTm), nil
+			}
+
+		case BlobKind:
+			// readValue expects the Kind to still be there, so we put it back by decrementing the offset
+			dec.offset--
+			otherDec.offset--
+			v, err := dec.readValue(nbf)
+			if err != nil {
+				return false, err
+			}
+			otherV, err := otherDec.readValue(nbf)
+			if err != nil {
+				return false, err
+			}
+			if v.Equals(otherV) {
+				continue
+			} else {
+				return v.Less(nbf, otherV)
 			}
 
 		default:

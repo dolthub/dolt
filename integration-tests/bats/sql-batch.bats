@@ -150,3 +150,29 @@ SQL
   [[ "$output" =~ "1,1" ]] || false
   [[ "$output" =~ "2,2" ]] || false
 }
+
+@test "sql-batch: delete and insert batching" {
+  run dolt sql -r csv << SQL
+INSERT INTO TEST VALUES (1,1,1,1,1,1);
+INSERT INTO TEST VALUES (2,1,1,1,1,1);
+INSERT INTO TEST VALUES (3,1,1,1,1,1);
+SELECT * FROM TEST;
+DELETE FROM TEST WHERE pk = 1;
+DELETE FROM TEST WHERE pk = 2;
+SELECT * FROM TEST;
+INSERT INTO TEST VALUES (4,1,1,1,1,1);
+INSERT INTO TEST VALUES (5,1,1,1,1,1);
+INSERT INTO TEST VALUES (6,1,1,1,1,1);
+DELETE FROM TEST WHERE pk=3;
+DELETE FROM TEST WHERE pk=4;
+INSERT INTO TEST VALUES (7,1,1,1,1,1);
+INSERT INTO TEST VALUES (8,1,1,1,1,1);
+INSERT INTO TEST VALUES (9,1,1,1,1,1);
+SQL
+  [ "$status" -eq 0 ]
+
+  EXPECTED=$(echo -e "pk\n5\n6\n7\n8\n9")
+  run dolt sql -r csv -q 'SELECT pk FROM TEST ORDER BY pk;'
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "$EXPECTED" ]] || false
+}

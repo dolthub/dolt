@@ -53,3 +53,69 @@ SELECT DISTINCT YM.YW AS YW, (SELECT YW FROM YF WHERE YF.XB = YM.XB) AS YF_YW,
     [[ "$output" =~ '"","",,"","","","",""' ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
 }
+
+@test "regression-tests: TINYBLOB skipping BlobKind for some values" {
+    # caught by fuzzer
+    dolt sql <<SQL
+CREATE TABLE ClgialBovK (
+  CIQgW0 TINYBLOB,
+  Hg6qI0 DECIMAL(19,12),
+  UJ46Q1 VARCHAR(2) COLLATE utf8mb4_0900_ai_ci,
+  YEGomx TINYINT,
+  PRIMARY KEY (CIQgW0, Hg6qI0)
+);
+REPLACE INTO ClgialBovK VALUES ("WN4*Zx.NI4a|MLLwRc:A9|rsl%3:r_gxLb-YY3c*OaTyuL=-ui!PBRhF0ymVW6!Uey*5DNM9O-Qo=0@#nkK","9993429.437834949734","",-104);
+REPLACE INTO ClgialBovK VALUES ("z$=kjmZtGlCbJ:=o9vRCZe70a:1o6tMrV% 2np! CK@NytnPE9BU03iu1@f@Uch=CwB$3|8RLXfnnKh.+H:9oy6X1*IyU_jP|ji4KuG .DOsiO.hk~lBlm5hBxeBQXe-NzNmj=%2c!:V7%asxX!A6Kg@l+Uxd9^9t3a^NUsr3GD5xc=hqyb*QbZk||frmQ+_:","3475975.285903026799","",-9);
+SQL
+    run dolt sql -q "SELECT * FROM ClgialBovK;" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "CIQgW0,Hg6qI0,UJ46Q1,YEGomx" ]] || false
+    [[ "$output" =~ 'WN4*Zx.NI4a|MLLwRc:A9|rsl%3:r_gxLb-YY3c*OaTyuL=-ui!PBRhF0ymVW6!Uey*5DNM9O-Qo=0@#nkK,9993429.437834949734,"",-104' ]] || false
+    [[ "$output" =~ 'z$=kjmZtGlCbJ:=o9vRCZe70a:1o6tMrV% 2np! CK@NytnPE9BU03iu1@f@Uch=CwB|8RLXfnnKh.+H:9oy6X1*IyU_jP|ji4KuG .DOsiO.hk~lBlm5hBxeBQXe-NzNmj=%2c!:V7%asxX!A6Kg@l+Uxd9^9t3a^NUsr3GD5xc=hqyb*QbZk||frmQ+_:,3475975.285903026799,"",-9' ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+}
+
+@test "regression-tests: VARBINARY incorrect length reading" {
+    # caught by fuzzer
+    dolt sql <<SQL
+CREATE TABLE TBXjogjbUk (
+  pKVZ7F set('rxb9@ud94.t','py1lf7n1t*dfr') NOT NULL,
+  OrYQI7 mediumint NOT NULL,
+  wEU2wL varbinary(9219) NOT NULL,
+  nE3O6H int NOT NULL,
+  iIMgVg varchar(11833),
+  PRIMARY KEY (pKVZ7F,OrYQI7,wEU2wL,nE3O6H)
+);
+SQL
+    dolt sql -q "REPLACE INTO TBXjogjbUk VALUES (1,-5667274,'wRL',-1933632415,'H');"
+    dolt sql -q "REPLACE INTO TBXjogjbUk VALUES (1,-5667274,'wR',-1933632415,'H');"
+    run dolt sql -q "SELECT * FROM TBXjogjbUk;" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pKVZ7F,OrYQI7,wEU2wL,nE3O6H,iIMgVg" ]] || false
+    [[ "$output" =~ "rxb9@ud94.t,-5667274,wR,-1933632415,H" ]] || false
+    [[ "$output" =~ "rxb9@ud94.t,-5667274,wRL,-1933632415,H" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+}
+
+@test "regression-tests: UNIQUE index violations do not break future INSERTs" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    mkdir doltsql
+    cd doltsql
+    dolt init
+
+    run $BATS_TEST_DIRNAME/sql-unique-error.expect
+    [ "$status" -eq "0" ]
+    [[ ! "$output" =~ "Error" ]] || false
+    [[ ! "$output" =~ "error" ]] || false
+
+    run dolt sql -q "SELECT * FROM test ORDER BY 1" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+
+    cd ..
+    rm -rf doltsql
+}

@@ -320,3 +320,19 @@ SQL
     [[ "${lines[5]}" =~ "5,5" ]] || false
     [[ "${lines[6]}" =~ "6,6" ]] || false
 }
+
+@test "auto_increment: INSERT INTO SELECT ..." {
+    dolt sql <<SQL
+    CREATE TABLE other (pk int PRIMARY KEY);
+    INSERT INTO other VALUES (1),(2),(3);
+SQL
+
+    dolt sql -q "INSERT INTO test (c0) SELECT pk FROM other;"
+
+    run dolt sql -q "SELECT * FROM test;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "pk,c0" ]] || false
+    [[ "${lines[1]}" =~ "1,1" ]] || false
+    [[ "${lines[2]}" =~ "2,2" ]] || false
+    [[ "${lines[3]}" =~ "3,3" ]] || false
+}
