@@ -40,7 +40,7 @@ type FeatureVersion int64
 
 // DoltFeatureVersion is described in feature_version.md.
 // only variable for testing.
-var DoltFeatureVersion FeatureVersion = 0
+var DoltFeatureVersion FeatureVersion = 1
 
 // RootValue defines the structure used inside all Dolthub noms dbs
 type RootValue struct {
