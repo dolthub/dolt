@@ -41,10 +41,6 @@ get_platform_tuple() {
 
 PLATFORM_TUPLE=`get_platform_tuple`
 
-function list_dolt_versions() {
-  grep -v '^ *#' < test_files/dolt_versions.txt
-}
-
 function cleanup() {
   rm -rf repos binaries
 }
@@ -56,21 +52,56 @@ function setup_repo() {
   ./test_files/setup_repo.sh "$dir"
 }
 
-setup_repo HEAD
 
-function test_dolt_version() {
+#
+#   Backward Compatibility
+#
+
+function list_backward_compatible_versions() {
+  grep -v '^ *#' < test_files/backward_compatible_versions.txt
+}
+
+function test_backward_compatibility() {
   ver=$1
   bin=`download_release "$ver"`
-  echo testing "$ver" at "$bin"
-  PATH="`pwd`"/"$bin":"$PATH" setup_repo "$ver"
 
-  echo "Run the bats tests using older Dolt version $ver hitting repositories from the current Dolt version"
-  PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/HEAD bats ./test_files/bats
+  # create a Dolt repository using version "$ver"
+  PATH="`pwd`"/"$bin":"$PATH" setup_repo "$ver"
 
   echo "Run the bats tests with current Dolt version hitting repositories from older Dolt version $ver"
   REPO_DIR="`pwd`"/repos/"$ver" bats ./test_files/bats
 }
 
-list_dolt_versions | while IFS= read -r ver; do
-  test_dolt_version "$ver"
+list_backward_compatible_versions | while IFS= read -r ver; do
+  test_backward_compatibility "$ver"
 done
+
+
+#
+#   Forward Compatibility
+#
+
+setup_repo HEAD
+
+function list_forward_compatible_versions() {
+  grep -v '^ *#' < test_files/forward_compatible_versions.txt
+}
+
+function test_forward_compatibility() {
+  ver=$1
+  bin=`download_release "$ver"`
+
+  echo "Run the bats tests using older Dolt version $ver hitting repositories from the current Dolt version"
+  PATH="`pwd`"/"$bin":"$PATH" dolt version
+  PATH="`pwd`"/"$bin":"$PATH" REPO_DIR="`pwd`"/repos/HEAD bats ./test_files/bats
+}
+
+if [ -s "test_files/forward_compatible_versions.txt" ]; then
+    list_forward_compatible_versions | while IFS= read -r ver; do
+      test_forward_compatibility "$ver"
+    done
+fi
+
+# sanity check
+echo "Run the bats tests using current Dolt version hitting repositories from the current Dolt version"
+REPO_DIR="`pwd`"/repos/HEAD bats ./test_files/bats
