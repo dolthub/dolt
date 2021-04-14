@@ -15,7 +15,7 @@ teardown() {
     run dolt version --feature
     [ "$status" -eq 0 ]
     [[ "$output" =~ "dolt version" ]] || false
-    [[ "$output" =~ "feature version: 0" ]] || false
+    [[ "$output" =~ "feature version: 1" ]] || false
 }
 
 @test "status: no changes" {

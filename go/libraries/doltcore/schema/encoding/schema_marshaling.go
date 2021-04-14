@@ -146,9 +146,16 @@ type encodedIndex struct {
 	IsSystemDefined bool     `noms:"hidden,omitempty" json:"hidden,omitempty"` // Was previously named Hidden, do not change noms name
 }
 
+type encodedCheck struct {
+	Name       string `noms:"name" json:"name"`
+	Expression string `noms:"expression" json:"expression"`
+	Enforced   bool   `noms:"enforced" json:"enforced"`
+}
+
 type schemaData struct {
-	Columns         []encodedColumn `noms:"columns" json:"columns"`
-	IndexCollection []encodedIndex  `noms:"idxColl,omitempty" json:"idxColl,omitempty"`
+	Columns          []encodedColumn `noms:"columns" json:"columns"`
+	IndexCollection  []encodedIndex  `noms:"idxColl,omitempty" json:"idxColl,omitempty"`
+	CheckConstraints []encodedCheck  `noms:"checks,omitempty" json:"checks,omitempty"`
 }
 
 func toSchemaData(sch schema.Schema) (schemaData, error) {
@@ -178,7 +185,21 @@ func toSchemaData(sch schema.Schema) (schemaData, error) {
 		}
 	}
 
-	return schemaData{encCols, encodedIndexes}, nil
+	encodedChecks := make([]encodedCheck, sch.Checks().Count())
+	checks := sch.Checks()
+	for i, check := range checks.AllChecks() {
+		encodedChecks[i] = encodedCheck{
+			Name:       check.Name(),
+			Expression: check.Expression(),
+			Enforced:   check.Enforced(),
+		}
+	}
+
+	return schemaData{
+		Columns:          encCols,
+		IndexCollection:  encodedIndexes,
+		CheckConstraints: encodedChecks,
+	}, nil
 }
 
 func (sd schemaData) decodeSchema() (schema.Schema, error) {
@@ -209,6 +230,17 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 				IsUserDefined: !encodedIndex.IsSystemDefined,
 				Comment:       encodedIndex.Comment,
 			},
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	for _, encodedCheck := range sd.CheckConstraints {
+		_, err = sch.Checks().AddCheck(
+			encodedCheck.Name,
+			encodedCheck.Expression,
+			encodedCheck.Enforced,
 		)
 		if err != nil {
 			return nil, err
