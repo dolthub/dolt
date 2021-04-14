@@ -90,6 +90,7 @@ func runRoot(ctx context.Context, args []string) int {
 	util.CheckErrorNoUsage(err)
 	defer db.Close()
 	v, err := db.ReadValue(ctx, h)
+	util.CheckErrorNoUsage(err)
 	if !validate(ctx, db.Format(), v) {
 		return 1
 	}
