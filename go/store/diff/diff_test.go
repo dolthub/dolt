@@ -29,6 +29,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/types"
@@ -204,6 +205,7 @@ func TestNomsDiffPrintSet(t *testing.T) {
 	h3, err := mm3.Hash(types.Format_7_18)
 	assert.NoError(err)
 	h3x, err := mm3x.Hash(types.Format_7_18)
+	require.NoError(t, err)
 	expectedPaths2 := []string{
 		fmt.Sprintf("[#%s]", h3),
 		fmt.Sprintf("[#%s]", h3x),
