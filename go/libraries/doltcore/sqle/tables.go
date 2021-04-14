@@ -1036,12 +1036,28 @@ func (t *AlterableDoltTable) CreateForeignKey(
 		}
 	}
 
+
 	root, err := t.db.GetRoot(ctx)
 	if err != nil {
 		return err
 	}
+
+	tableIndex, ok := t.sch.Indexes().GetIndexByTags(colTags...)
+	if !ok {
+		// if child index doesn't exist, create it
+		ret, err := createIndexForTable(ctx, t.table, "", sql.IndexUsing_Default, sql.IndexConstraint_None, sqlColNames, false, "")
+		if err != nil {
+			return err
+		}
+		t.table = ret.newTable
+		tableIndex = ret.newIndex
+		root, err = root.PutTable(ctx, t.name, t.table)
+		if err != nil {
+			return err
+		}
+	}
+
 	var refTbl *doltdb.Table
-	var ok bool
 	var refSch schema.Schema
 	if isSelfFk {
 		refTbl = t.table
@@ -1052,7 +1068,12 @@ func (t *AlterableDoltTable) CreateForeignKey(
 		if err != nil {
 			return err
 		}
+
+		checksDisabled := isForeignKeyChecksDisabled(ctx)
 		if !ok {
+			if checksDisabled {
+				return addEmptyForeignKeyToCollection(ctx, t, fkName, tableIndex.Name(), colTags, refTblName, onUpdate, onDelete)
+			}
 			return fmt.Errorf("referenced table `%s` does not exist", refTblName)
 		}
 		refSch, err = refTbl.GetSchema(ctx)
@@ -1094,20 +1115,6 @@ func (t *AlterableDoltTable) CreateForeignKey(
 		return err
 	}
 
-	tableIndex, ok := t.sch.Indexes().GetIndexByTags(colTags...)
-	if !ok {
-		// if child index doesn't exist, create it
-		ret, err := createIndexForTable(ctx, t.table, "", sql.IndexUsing_Default, sql.IndexConstraint_None, sqlColNames, false, "")
-		if err != nil {
-			return err
-		}
-		t.table = ret.newTable
-		tableIndex = ret.newIndex
-		root, err = root.PutTable(ctx, t.name, t.table)
-		if err != nil {
-			return err
-		}
-	}
 
 	refTableIndex, ok := refSch.Indexes().GetIndexByTags(refColTags...)
 	if !ok {
@@ -1180,10 +1187,64 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	return t.updateFromRoot(ctx, newRoot)
 }
 
+func addEmptyForeignKeyToCollection(ctx *sql.Context, t *AlterableDoltTable, fkName string, tableIndexName string, colTags []uint64, refTblName string, onUpdate, onDelete sql.ForeignKeyReferenceOption) error {
+	onUpdateRefOp, err := parseFkReferenceOption(onUpdate)
+	if err != nil {
+		return err
+	}
+	onDeleteRefOp, err := parseFkReferenceOption(onDelete)
+	if err != nil {
+		return err
+	}
+
+	foreignKey := doltdb.ForeignKey{
+		Name:                   fkName,
+		TableName:              t.name,
+		TableIndex:             tableIndexName,
+		TableColumns:           colTags,
+		ReferencedTableName:    refTblName,
+		ReferencedTableIndex:   "",
+		ReferencedTableColumns: nil,
+		OnUpdate:               onUpdateRefOp,
+		OnDelete:               onDeleteRefOp,
+	}
+
+	root, err := t.db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	foreignKeyCollection, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = foreignKeyCollection.AddKeys(foreignKey)
+	if err != nil {
+		return err
+	}
+
+	newRoot, err := root.PutForeignKeyCollection(ctx, foreignKeyCollection)
+	if err != nil {
+		return err
+	}
+
+	err = t.db.SetRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
+
+	return t.updateFromRoot(ctx, newRoot)
+}
+
 func isForeignKeyChecksDisabled(ctx *sql.Context) bool {
 	_, val := ctx.Get("foreign_key_checks")
 
-	asInt := int(val.(int64))
+	if val == nil {
+		return false
+	}
+
+	asInt := int(val.(int8))
 
 	if asInt == 0 {
 		return true

@@ -201,9 +201,11 @@ func (fkc *ForeignKeyCollection) AddKeys(fks ...ForeignKey) error {
 		if _, ok := fkc.GetByNameCaseInsensitive(key.Name); ok {
 			return fmt.Errorf("a foreign key with the name `%s` already exists", key.Name)
 		}
-		if len(key.TableColumns) != len(key.ReferencedTableColumns) {
-			return fmt.Errorf("foreign keys must have the same number of columns declared and referenced")
-		}
+
+		// Todo: Gottta fix this check
+		//if len(key.TableColumns) != len(key.ReferencedTableColumns) {
+		//	return fmt.Errorf("foreign keys must have the same number of columns declared and referenced")
+		//}
 
 		fkc.foreignKeys[key.HashOf().String()] = key
 	}
