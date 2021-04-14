@@ -379,8 +379,10 @@ func (t Tuple) Compare(other Tuple) int {
 	return bytes.Compare(t.buff, other.buff)
 }
 
+var tupleType = newType(CompoundDesc{UnionKind, nil})
+
 func (t Tuple) typeOf() (*Type, error) {
-	return PrimitiveTypeMap[TupleKind], nil
+	return tupleType, nil
 }
 
 func (t Tuple) decoderSkipToFields() (valueDecoder, uint64) {
@@ -400,7 +402,7 @@ func (t Tuple) Len() uint64 {
 }
 
 func (t Tuple) isPrimitive() bool {
-	return true
+	return false
 }
 
 func (t Tuple) Iterator() (*TupleIterator, error) {
