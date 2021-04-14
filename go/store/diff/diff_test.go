@@ -156,7 +156,7 @@ func TestNomsDiffPrintMap(t *testing.T) {
 		assert.Equal(expected, buf.String())
 
 		paths, err := pathsFromDiff(m1, m2, leftRight)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(expectedPaths, paths)
 	}
 
@@ -203,7 +203,7 @@ func TestNomsDiffPrintSet(t *testing.T) {
   }
 `
 	h3, err := mm3.Hash(types.Format_7_18)
-	assert.NoError(err)
+	require.NoError(t, err)
 	h3x, err := mm3x.Hash(types.Format_7_18)
 	require.NoError(t, err)
 	expectedPaths2 := []string{
@@ -222,16 +222,16 @@ func TestNomsDiffPrintSet(t *testing.T) {
 		assert.Equal(expected1, buf.String())
 
 		paths, err := pathsFromDiff(s1, s2, leftRight)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(expectedPaths1, paths)
 
 		buf = &bytes.Buffer{}
 		err = PrintDiff(context.Background(), buf, s3, s4, leftRight)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(expected2, buf.String())
 
 		paths, err = pathsFromDiff(s3, s4, leftRight)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(expectedPaths2, paths)
 	}
 
@@ -334,16 +334,16 @@ func TestNomsDiffPrintStruct(t *testing.T) {
 		assert.Equal(expected1, buf.String())
 
 		paths, err := pathsFromDiff(m1, m2, leftRight)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(expectedPaths1, paths)
 
 		buf = &bytes.Buffer{}
 		err = PrintDiff(context.Background(), buf, s3, s4, leftRight)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(expected2, buf.String())
 
 		paths, err = pathsFromDiff(s3, s4, leftRight)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(expectedPaths2, paths)
 	}
 
@@ -372,9 +372,9 @@ func TestNomsDiffPrintMapWithStructKeys(t *testing.T) {
 `
 
 	m1, err := types.NewMap(context.Background(), vs, k1, types.Bool(true))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	m2, err := types.NewMap(context.Background(), vs, k1, types.Bool(false))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
 		PrintDiff(context.Background(), buf, m1, m2, leftRight)
@@ -432,29 +432,29 @@ func TestNomsDiffPrintList(t *testing.T) {
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
 		err := PrintDiff(context.Background(), buf, l1, l2, leftRight)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(expected1, buf.String())
 
 		paths, err := pathsFromDiff(l1, l2, leftRight)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(expectedPaths1, paths)
 
 		buf = &bytes.Buffer{}
 		err = PrintDiff(context.Background(), buf, l3, l4, leftRight)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(expected2, buf.String())
 
 		paths, err = pathsFromDiff(l3, l4, leftRight)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(expectedPaths2, paths)
 
 		buf = &bytes.Buffer{}
 		err = PrintDiff(context.Background(), buf, l5, l6, leftRight)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(expected3, buf.String())
 
 		paths, err = pathsFromDiff(l5, l6, leftRight)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(expectedPaths3, paths)
 	}
 
@@ -471,18 +471,18 @@ func TestNomsDiffPrintBlob(t *testing.T) {
 	expected := "-   Blob (2.0 kB)\n+   Blob (11 B)\n"
 	expectedPaths1 := []string{``}
 	b1, err := types.NewBlob(context.Background(), vs, strings.NewReader(strings.Repeat("x", 2*1024)))
-	assert.NoError(err)
+	require.NoError(t, err)
 	b2, err := types.NewBlob(context.Background(), vs, strings.NewReader("Hello World"))
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
 		err = PrintDiff(context.Background(), buf, b1, b2, leftRight)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(expected, buf.String())
 
 		paths, err := pathsFromDiff(b1, b2, leftRight)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(expectedPaths1, paths)
 	}
 
@@ -496,34 +496,34 @@ func TestNomsDiffPrintType(t *testing.T) {
 	expected1 := "-   List<Float>\n+   List<String>\n"
 	expectedPaths1 := []string{""}
 	t1, err := types.MakeListType(types.PrimitiveTypeMap[types.FloatKind])
-	assert.NoError(err)
+	require.NoError(t, err)
 	t2, err := types.MakeListType(types.PrimitiveTypeMap[types.StringKind])
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	expected2 := "-   List<Float>\n+   Set<String>\n"
 	expectedPaths2 := []string{``}
 	t3, err := types.MakeListType(types.PrimitiveTypeMap[types.FloatKind])
-	assert.NoError(err)
+	require.NoError(t, err)
 	t4, err := types.MakeSetType(types.PrimitiveTypeMap[types.StringKind])
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
 		err = PrintDiff(context.Background(), buf, t1, t2, leftRight)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(expected1, buf.String())
 
 		paths, err := pathsFromDiff(t1, t2, leftRight)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(expectedPaths1, paths)
 
 		buf = &bytes.Buffer{}
 		err = PrintDiff(context.Background(), buf, t3, t4, leftRight)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(expected2, buf.String())
 
 		paths, err = pathsFromDiff(t3, t4, leftRight)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(expectedPaths2, paths)
 	}
 
@@ -539,18 +539,18 @@ func TestNomsDiffPrintRef(t *testing.T) {
 	l1 := createList(1)
 	l2 := createList(2)
 	r1, err := types.NewRef(l1, types.Format_7_18)
-	assert.NoError(err)
+	require.NoError(t, err)
 	r2, err := types.NewRef(l2, types.Format_7_18)
-	assert.NoError(err)
+	require.NoError(t, err)
 
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
 		err := PrintDiff(context.Background(), buf, r1, r2, leftRight)
-		assert.NoError(err)
+		require.NoError(t, err)
 		test.EqualsIgnoreHashes(t, expected, buf.String())
 
 		paths, err := pathsFromDiff(r1, r2, leftRight)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(expectedPaths1, paths)
 	}
 

@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
@@ -71,7 +72,7 @@ func TestCommonPrefixCount(t *testing.T) {
 	for i, tc := range testCases {
 		path, expected := tc[0].(string), tc[1].(int)
 		p, err := types.ParsePath(path)
-		assert.NoError(err)
+		require.NoError(t, err)
 		assert.Equal(expected, commonPrefixCount(lastPath, p), "failed for paths[%d]: %s", i, path)
 		lastPath = p
 	}
@@ -216,7 +217,7 @@ func TestUpdateNode(t *testing.T) {
 		stack := &patchStack{}
 		se := &stackElem{path: []types.PathPart{pp}, pathPart: pp, changeType: types.DiffChangeModified, oldValue: ov, newValue: nv}
 		updated, err := stack.updateNode(context.Background(), se, parent)
-		assert.NoError(err)
+		require.NoError(t, err)
 		testVal := f(updated)
 		assert.True(exp.Equals(testVal), "%s != %s", nv, testVal)
 	}
@@ -226,57 +227,57 @@ func TestUpdateNode(t *testing.T) {
 	newVal := types.String("YooHoo")
 
 	s1, err := types.NewStruct(types.Format_7_18, "TestStruct", types.StructData{"f1": types.Float(1), "f2": oldVal})
-	assert.NoError(err)
+	require.NoError(t, err)
 	pp = types.FieldPath{Name: "f2"}
 	doTest(pp, s1, oldVal, newVal, newVal, func(parent types.Value) types.Value {
 		return mustGetValue(parent.(types.Struct).MaybeGet("f2"))
 	})
 
 	l1, err := types.NewList(context.Background(), vs, types.String("one"), oldVal, types.String("three"))
-	assert.NoError(err)
+	require.NoError(t, err)
 	pp = types.IndexPath{Index: types.Float(1)}
 	doTest(pp, l1, oldVal, newVal, newVal, func(parent types.Value) types.Value {
 		return mustValue(parent.(types.List).Get(context.Background(), 1))
 	})
 
 	m1, err := types.NewMap(context.Background(), vs, types.String("k1"), types.Float(1), types.String("k2"), oldVal)
-	assert.NoError(err)
+	require.NoError(t, err)
 	pp = types.IndexPath{Index: types.String("k2")}
 	doTest(pp, m1, oldVal, newVal, newVal, func(parent types.Value) types.Value {
 		return mustGetValue(parent.(types.Map).MaybeGet(context.Background(), types.String("k2")))
 	})
 
 	k1, err := types.NewStruct(types.Format_7_18, "Sizes", types.StructData{"height": types.Float(200), "width": types.Float(300)})
-	assert.NoError(err)
+	require.NoError(t, err)
 	_, err = vs.WriteValue(context.Background(), k1)
-	assert.NoError(err)
+	require.NoError(t, err)
 	m1, err = types.NewMap(context.Background(), vs, k1, oldVal)
-	assert.NoError(err)
+	require.NoError(t, err)
 	h, err := k1.Hash(types.Format_7_18)
-	assert.NoError(err)
+	require.NoError(t, err)
 	pp = types.HashIndexPath{Hash: h}
 	doTest(pp, m1, oldVal, newVal, newVal, func(parent types.Value) types.Value {
 		return mustGetValue(parent.(types.Map).MaybeGet(context.Background(), k1))
 	})
 
 	set1, err := types.NewSet(context.Background(), vs, oldVal, k1)
-	assert.NoError(err)
+	require.NoError(t, err)
 	pp = types.IndexPath{Index: oldVal}
 	exp, err := types.NewSet(context.Background(), vs, newVal, k1)
-	assert.NoError(err)
+	require.NoError(t, err)
 	doTest(pp, set1, oldVal, newVal, exp, func(parent types.Value) types.Value {
 		return parent
 	})
 
 	k2, err := types.NewStruct(types.Format_7_18, "Sizes", types.StructData{"height": types.Float(300), "width": types.Float(500)})
-	assert.NoError(err)
+	require.NoError(t, err)
 	set1, err = types.NewSet(context.Background(), vs, oldVal, k1)
-	assert.NoError(err)
+	require.NoError(t, err)
 	h, err = k1.Hash(types.Format_7_18)
-	assert.NoError(err)
+	require.NoError(t, err)
 	pp = types.HashIndexPath{Hash: h}
 	exp, err = types.NewSet(context.Background(), vs, oldVal, k2)
-	assert.NoError(err)
+	require.NoError(t, err)
 	doTest(pp, set1, k1, k2, exp, func(parent types.Value) types.Value {
 		return parent
 	})
