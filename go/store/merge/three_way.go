@@ -198,11 +198,13 @@ func ThreeWay(ctx context.Context, a, b, parent types.Value, vrw types.ValueRead
 	return m.threeWay(ctx, a, b, parent, types.Path{})
 }
 
-// a and b cannot be merged if they are of different NomsKind, or if at least one of the two is nil, or if either is a Noms primitive.
+// a and b cannot be merged if they are of different NomsKind, or if at least one of the two is nil, or if either is a Noms primitive other than a tuple.
 func unmergeable(a, b types.Value) bool {
 	if a != nil && b != nil {
 		aKind, bKind := a.Kind(), b.Kind()
-		return aKind != bKind || types.IsPrimitiveKind(aKind) || types.IsPrimitiveKind(bKind)
+		aPrimNotTuple := types.IsPrimitiveKind(aKind) && aKind != types.TupleKind
+		bPrimNotTuple := types.IsPrimitiveKind(bKind) && bKind != types.TupleKind
+		return aKind != bKind || aPrimNotTuple || bPrimNotTuple
 	}
 	return true
 }
